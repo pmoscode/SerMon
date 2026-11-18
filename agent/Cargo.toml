@@ -1,0 +1,36 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.100"
+license = "AGPL-3.0-only"
+repository = "https://github.com/pmoscode/SerMon"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_qualifications = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Robustness: no hidden panics in production code (allowed in tests via clippy.toml).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+# Explicit conversions only.
+as_conversions = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
+# Keep unwinding: modules are isolated with catch_unwind (KONZEPT §15).
+panic = "unwind"

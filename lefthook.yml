@@ -1,5 +1,5 @@
 # Git hooks – installed via `just setup` (runs `lefthook install`).
-# Further hooks (rustfmt, gofumpt, prettier, fast tests) are added in M0-02..M0-04.
+# Further hooks (gofumpt, prettier, fast tests) are added in M0-03..M0-04.
 
 pre-commit:
   parallel: true
@@ -9,6 +9,10 @@ pre-commit:
     shellcheck:
       glob: "*.sh"
       run: shellcheck {staged_files}
+    rustfmt:
+      glob: "agent/**/*.rs"
+      root: "agent/"
+      run: cargo fmt --all -- --check
 
 commit-msg:
   commands:

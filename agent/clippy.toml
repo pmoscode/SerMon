@@ -1,0 +1,4 @@
+# Panicking helpers are fine in tests, never in production code (see workspace lints).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

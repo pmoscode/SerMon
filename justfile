@@ -17,7 +17,7 @@ setup:
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "✗ $tool fehlt"; missing=1; fi
     done
     # Needed from M0-02..M0-05 on – reported, but not fatal yet.
-    for tool in cargo go pnpm buf docker; do
+    for tool in cargo cargo-zigbuild cargo-deny zig go pnpm buf docker; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "… $tool fehlt (ab M0-02..M0-07 nötig)"; fi
     done
     [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook gitleaks shellcheck)." >&2; exit 1; }
@@ -63,10 +63,46 @@ security-secrets:
 
 # --- agent (Rust) ------------------------------------------------------------
 
-fmt-agent: (_pending "agent" "M0-02")
-lint-agent: (_pending "agent" "M0-02")
-test-agent: (_pending "agent" "M0-02")
-security-agent: (_pending "agent" "M0-06")
+agent_targets := "x86_64-unknown-linux-musl aarch64-unknown-linux-musl"
+
+# Format the agent code
+[working-directory: 'agent']
+fmt-agent:
+    cargo fmt --all
+
+# Check formatting and run clippy on the agent
+[working-directory: 'agent']
+lint-agent:
+    cargo fmt --all -- --check
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+
+# Run the agent tests
+[working-directory: 'agent']
+test-agent:
+    cargo test --workspace --locked
+
+# Check agent dependencies: advisories, licenses, bans, sources
+[working-directory: 'agent']
+security-agent:
+    cargo deny check
+
+# Build static release binaries for amd64 and arm64 (cargo-zigbuild, see ADR 0002)
+[working-directory: 'agent']
+build-agent:
+    cargo zigbuild --release --locked {{ prepend("--target ", agent_targets) }}
+    @for t in {{ agent_targets }}; do \
+        for b in sermon-agent sermon-helper; do \
+            f="target/$t/release/$b"; \
+            file -b "$f" | grep -q "statically linked" || { echo "✗ $f is not statically linked" >&2; exit 1; }; \
+            echo "✓ $f ($(du -h "$f" | cut -f1), static)"; \
+        done; \
+    done
+
+# Run the release binaries in amd64 (Debian) and arm64 (Alpine) containers
+[working-directory: 'agent']
+smoke-agent: build-agent
+    docker run --rm -q --platform linux/amd64 -v "$PWD/target/x86_64-unknown-linux-musl/release:/b:ro" debian:13-slim /b/sermon-agent --version
+    docker run --rm -q --platform linux/arm64 -v "$PWD/target/aarch64-unknown-linux-musl/release:/b:ro" alpine:3.22 /b/sermon-agent --version
 
 # --- server (Go) -------------------------------------------------------------
 

@@ -1,0 +1,14 @@
+[package]
+name = "sermon-core"
+description = "Domain types and ports (Collector, LogSource, EventParser, Clock) shared by all agent crates."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

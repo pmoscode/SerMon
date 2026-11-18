@@ -1,0 +1,14 @@
+[package]
+name = "sermon-transport"
+description = "gRPC transport to the SerMon server: enrollment, mTLS stream, certificate rotation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

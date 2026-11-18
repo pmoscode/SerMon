@@ -1,0 +1,162 @@
+package httpserver_test
+
+import (
+	"context"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/pmoscode/SerMon/server/internal/transport/httpserver"
+)
+
+// testTimeout bounds every wait so a broken shutdown fails the test instead of hanging it.
+const testTimeout = 5 * time.Second
+
+func listen(t *testing.T) net.Listener {
+	t.Helper()
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	return ln
+}
+
+func get(t *testing.T, url string) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	return http.DefaultClient.Do(req)
+}
+
+func discardLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
+
+func TestServe_ServesRequestsAndStopsGracefullyOnCancel(t *testing.T) {
+	ln := listen(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ping", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "pong") })
+
+	var shutdownCalled atomic.Bool
+	srv := httpserver.New(mux, discardLogger(), time.Second, func() { shutdownCalled.Store(true) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx, ln) }()
+
+	resp, err := get(t, "http://"+ln.Addr().String()+"/ping")
+	if err != nil {
+		t.Fatalf("GET /ping: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if string(body) != "pong" {
+		t.Errorf("body = %q, want pong", body)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Serve() = %v, want nil after graceful shutdown", err)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("Serve() did not return after cancel")
+	}
+	if !shutdownCalled.Load() {
+		t.Error("onShutdown was not called")
+	}
+}
+
+func TestServe_WaitsForInFlightRequests(t *testing.T) {
+	ln := listen(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /slow", func(w http.ResponseWriter, _ *http.Request) {
+		close(entered)
+		<-release
+		_, _ = io.WriteString(w, "done")
+	})
+	srv := httpserver.New(mux, discardLogger(), testTimeout, func() {})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx, ln) }()
+
+	respCh := make(chan string, 1)
+	go func() {
+		resp, err := get(t, "http://"+ln.Addr().String()+"/slow")
+		if err != nil {
+			respCh <- "error: " + err.Error()
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		b, _ := io.ReadAll(resp.Body)
+		respCh <- string(b)
+	}()
+
+	<-entered
+	cancel()
+	close(release)
+
+	select {
+	case got := <-respCh:
+		if got != "done" {
+			t.Errorf("in-flight response = %q, want done", got)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("in-flight request did not complete")
+	}
+	if err := <-done; err != nil {
+		t.Errorf("Serve() = %v, want nil", err)
+	}
+}
+
+func TestServe_ReturnsErrorWhenShutdownTimesOut(t *testing.T) {
+	ln := listen(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /stuck", func(http.ResponseWriter, *http.Request) {
+		close(entered)
+		<-release
+	})
+	srv := httpserver.New(mux, discardLogger(), 50*time.Millisecond, func() {})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx, ln) }()
+	go func() {
+		if resp, err := get(t, "http://"+ln.Addr().String()+"/stuck"); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+
+	<-entered
+	cancel()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("Serve() = nil, want error when shutdown times out")
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("Serve() did not return after shutdown timeout")
+	}
+}
+
+func TestNew_SetsProtectiveTimeouts(t *testing.T) {
+	srv := httpserver.New(http.NewServeMux(), discardLogger(), time.Second, func() {})
+	hs := srv.HTTPServer()
+
+	if hs.ReadHeaderTimeout <= 0 || hs.ReadTimeout <= 0 || hs.WriteTimeout <= 0 || hs.IdleTimeout <= 0 {
+		t.Errorf("timeouts must be set: %+v", hs)
+	}
+	if hs.MaxHeaderBytes <= 0 || hs.MaxHeaderBytes > 1<<16 {
+		t.Errorf("MaxHeaderBytes = %d, want 1..64KiB", hs.MaxHeaderBytes)
+	}
+}

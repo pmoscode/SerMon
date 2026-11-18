@@ -35,10 +35,13 @@ nennen die Aufgaben-ID im Implementierungsplan.
 - `just security` – Security-Scans (gosec, govulncheck, cargo-audit/deny, pnpm audit, gitleaks)
 
 Voraussetzungen: `just`, `lefthook`, `gitleaks`, Rust (rustup; Version über `agent/rust-toolchain.toml` gepinnt),
-`zig` + `cargo-zigbuild` (Cross-Build, ADR 0002), `cargo-deny`, Go, Node + pnpm, `buf`, `shellcheck`, Docker.
+`zig` + `cargo-zigbuild` (Cross-Build, ADR 0002), `cargo-deny`, Go, `golangci-lint` (v2), `govulncheck`,
+Node + pnpm, `buf`, `shellcheck`, Docker.
 `just setup` prüft, was fehlt.
 
 Agent bauen: `just build-agent` (statische musl-Binaries für amd64 und arm64), `just smoke-agent` (Start im Container).
+Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just smoke-server` (Start, Health-Probes, SIGTERM).
+Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.
 
 ## Arbeitsweise
 

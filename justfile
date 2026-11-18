@@ -17,7 +17,7 @@ setup:
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "✗ $tool fehlt"; missing=1; fi
     done
     # Needed from M0-02..M0-05 on – reported, but not fatal yet.
-    for tool in cargo cargo-zigbuild cargo-deny zig go pnpm buf docker; do
+    for tool in cargo cargo-zigbuild cargo-deny zig go golangci-lint govulncheck pnpm buf docker; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "… $tool fehlt (ab M0-02..M0-07 nötig)"; fi
     done
     [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook gitleaks shellcheck)." >&2; exit 1; }
@@ -106,10 +106,49 @@ smoke-agent: build-agent
 
 # --- server (Go) -------------------------------------------------------------
 
-fmt-server: (_pending "server" "M0-03")
-lint-server: (_pending "server" "M0-03")
-test-server: (_pending "server" "M0-03")
-security-server: (_pending "server" "M0-06")
+server_version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
+
+# Format the server code (gofumpt, goimports)
+[working-directory: 'server']
+fmt-server:
+    golangci-lint fmt ./...
+
+# Check formatting and lint the server
+[working-directory: 'server']
+lint-server:
+    golangci-lint fmt --diff ./...
+    golangci-lint run ./...
+
+# Run the server tests with race detector and coverage
+[working-directory: 'server']
+test-server:
+    go test -race -count=1 -coverprofile=coverage.out ./...
+    @go tool cover -func=coverage.out | tail -1
+
+# Check the server for known vulnerabilities in dependencies and stdlib
+[working-directory: 'server']
+security-server:
+    govulncheck ./...
+
+# Build a static server binary into server/bin/
+[working-directory: 'server']
+build-server:
+    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version={{ server_version }}" -o bin/sermon-server ./cmd/sermon-server
+    @echo "✓ server/bin/sermon-server ({{ server_version }})"
+
+# Start the server binary, probe /healthz and /readyz, stop it with SIGTERM
+[working-directory: 'server']
+smoke-server: build-server
+    #!/usr/bin/env bash
+    set -euo pipefail
+    addr=127.0.0.1:18080
+    SERMON_HTTP_ADDR=$addr SERMON_LOG_FORMAT=text bin/sermon-server & pid=$!
+    trap 'kill $pid 2>/dev/null || true' EXIT
+    for _ in $(seq 1 50); do curl -fsS "http://$addr/healthz" >/dev/null 2>&1 && break; sleep 0.1; done
+    echo "healthz: $(curl -fsS "http://$addr/healthz")"
+    echo "readyz:  $(curl -fsS "http://$addr/readyz")"
+    kill -TERM $pid
+    wait $pid && echo "✓ stopped cleanly on SIGTERM"
 
 # --- web (SvelteKit) ---------------------------------------------------------
 

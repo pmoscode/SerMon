@@ -1,5 +1,5 @@
 # Git hooks – installed via `just setup` (runs `lefthook install`).
-# Further hooks (gofumpt, prettier, fast tests) are added in M0-03..M0-04.
+# Further hooks (prettier, fast tests) are added in M0-04.
 
 pre-commit:
   parallel: true
@@ -13,6 +13,10 @@ pre-commit:
       glob: "agent/**/*.rs"
       root: "agent/"
       run: cargo fmt --all -- --check
+    gofmt:
+      glob: "server/**/*.go"
+      root: "server/"
+      run: golangci-lint fmt --diff ./...
 
 commit-msg:
   commands:

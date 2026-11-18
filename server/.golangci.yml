@@ -1,0 +1,53 @@
+# golangci-lint v2 configuration – run with `just lint-server`.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - exhaustive
+    - forcetypeassert
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - nolintlint
+    - revive
+    - sloglint
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wrapcheck
+  settings:
+    gosec:
+      excludes: []
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    sloglint:
+      kv-only: true
+      context: scope
+    wrapcheck:
+      ignore-sig-regexps:
+        - '\.Errorf\('
+        - 'errors\.Join\('
+  exclusions:
+    rules:
+      # Test code may ignore errors of best-effort cleanup and returns from helpers.
+      - path: _test\.go
+        linters: [wrapcheck, errcheck, gosec, bodyclose]
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/pmoscode/SerMon/server

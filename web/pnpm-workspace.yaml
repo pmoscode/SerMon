@@ -1,0 +1,8 @@
+engineStrict: true
+# Supply chain: only install releases that are at least 3 days old (time to detect malicious versions).
+minimumReleaseAge: 4320
+# Pin exact versions in package.json; the lockfile is committed.
+savePrefix: ''
+# Install scripts are blocked unless explicitly allowed here.
+allowBuilds:
+  esbuild: true

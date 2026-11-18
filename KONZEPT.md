@@ -103,6 +103,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/`
 | D24 | Reihenfolge    | **Metriken → Alerts → Logs → Updates**                                                       |                                                                                                       |
 | D25 | Repo/CI        | **GitHub-Monorepo + GitHub Actions**                                                         |                                                                                                       |
 | D26 | API            | **Connect-RPC/Protobuf** für Agent ↔ Server (gRPC) und Web ↔ Server (Connect)                | Ein Schema, typisiert von Ende zu Ende                                                                |
+| D27 | UI-Ressourcen  | **Alles lokal ausgeliefert:** keine CDNs, keine externen Schriften, Skripte, Styles, Bilder oder Icons | Datenschutz (keine IP-Weitergabe an Dritte, DSGVO), Air-Gap-fähig, strikte CSP, keine Supply-Chain über fremde Server |
 
 ---
 
@@ -203,7 +204,7 @@ eine Fake-Implementierung für Tests.
 
 ### 4.4 Web-UI (`web/`, SvelteKit)
 
-- SvelteKit 2 + Svelte 5 (Runes), `adapter-static` als SPA; das Ergebnis wird per `embed.FS` in die Go-Binary
+- SvelteKit 3 + Svelte 5 (Runes), `adapter-static` als SPA; das Ergebnis wird per `embed.FS` in die Go-Binary
   eingebettet.
 - Tailwind CSS 4, shadcn-svelte (Bits UI) für die Komponenten, **uPlot** für Zeitreihen (schnell, Canvas-basiert).
 - Connect-Web-Client, aus `proto/` generiert (`buf generate`).
@@ -793,6 +794,10 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
   skaliert (KiB/MiB/GiB, bit/s vs. Byte/s umschaltbar).
 - **Performance:** Erstes Laden < 200 KB JS (gzip); Charts mit Downsampling im Client (uPlot), Virtualisierung für lange
   Listen (Logs, Prozesse).
+- **Keine externen Ressourcen (D27):** Alle Bibliotheken, Schriften (über `@fontsource`-Pakete), Icons und Bilder kommen
+  per npm ins Projekt. Sie werden beim Build gebündelt und vom SerMon-Server selbst ausgeliefert. Es gibt keine CDNs,
+  keine Google Fonts und kein Analytics. Abgesichert wird das durch eine CSP ohne fremde Origins und einen E2E-Test,
+  der jeden Request an einen fremden Host als Fehler wertet.
 
 ---
 
@@ -829,6 +834,10 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
 - **Security-Header:**
   `Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-…'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`,
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy` restriktiv, COOP/CORP.
+  Die Hashes der Inline-Skripte und der festen `style`-Attribute aus dem eigenen Bundle berechnet der Server beim
+  Start aus dem eingebetteten Build (`'unsafe-hashes'` nur für genau diese Werte; ADR 0003).
+- **Keine Drittanbieter-Origins (D27):** Die CSP erlaubt nur `'self'`; die UI lädt nichts von externen Servern.
+  Externe Links (z. B. zur Doku) sind nur normale Links mit `rel="noopener noreferrer"`.
 - **CSRF:** SameSite-Cookies, Connect-Requests mit `Content-Type: application/proto|json` (kein „simple request“) und
   **Origin-Prüfung** im Server.
 - **Autorisierung:** zentral (`authz`), standardmäßig verweigernd (deny by default), getestet über Rollen-Matrix-Tests
@@ -1038,6 +1047,8 @@ SerMon/
 
 - **Actions per Commit-SHA gepinnt**, minimale `permissions:`, OIDC statt langlebiger Secrets.
 - **Renovate** für Abhängigkeiten (gruppiert, Auto-Merge nur für Patch-Releases von Dev-Dependencies).
+- **npm:** nur Releases, die mindestens 3 Tage alt sind (`minimumReleaseAge`), exakte Versionen, committetes Lockfile,
+  Install-Skripte nur per Allowlist (ADR 0003).
 - Reproduzierbare Builds anstreben (`SOURCE_DATE_EPOCH`, `--locked`, `-trimpath`).
 
 ### Versionierung

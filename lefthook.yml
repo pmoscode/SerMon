@@ -1,5 +1,4 @@
 # Git hooks – installed via `just setup` (runs `lefthook install`).
-# Further hooks (prettier, fast tests) are added in M0-04.
 
 pre-commit:
   parallel: true
@@ -17,6 +16,10 @@ pre-commit:
       glob: "server/**/*.go"
       root: "server/"
       run: golangci-lint fmt --diff ./...
+    prettier:
+      glob: "web/**/*.{ts,js,svelte,css,json,html}"
+      root: "web/"
+      run: pnpm exec prettier --check --ignore-unknown {staged_files}
 
 commit-msg:
   commands:

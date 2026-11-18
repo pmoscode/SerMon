@@ -1,0 +1,7 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"welcome_title": "Welcome to SerMon",
+	"welcome_subtitle": "Lean, self-hosted server monitoring – security first.",
+	"status_under_construction": "Under construction: milestone M0 (foundation).",
+	"language_label": "Language"
+}

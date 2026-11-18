@@ -17,7 +17,7 @@ setup:
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "✗ $tool fehlt"; missing=1; fi
     done
     # Needed from M0-02..M0-05 on – reported, but not fatal yet.
-    for tool in cargo cargo-zigbuild cargo-deny zig go golangci-lint govulncheck pnpm buf docker; do
+    for tool in cargo cargo-zigbuild cargo-deny zig go golangci-lint govulncheck node pnpm buf docker; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "… $tool fehlt (ab M0-02..M0-07 nötig)"; fi
     done
     [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook gitleaks shellcheck)." >&2; exit 1; }
@@ -41,8 +41,10 @@ test: test-scripts test-agent test-server test-web
 # Run integration tests (Testcontainers)
 test-integration: (_todo "test-integration" "M0-08")
 
-# Run end-to-end tests (Playwright, agent containers)
-e2e: (_todo "e2e" "M0-04")
+# Run end-to-end tests against sermon-server with the embedded UI (Playwright)
+[working-directory: 'web']
+e2e:
+    pnpm run test:e2e
 
 # Run security scans (secrets now; gosec, govulncheck, cargo-audit/deny, pnpm audit follow)
 security: security-secrets security-agent security-server security-web
@@ -130,9 +132,9 @@ test-server:
 security-server:
     govulncheck ./...
 
-# Build a static server binary into server/bin/
+# Build a static server binary with the embedded web UI into server/bin/
 [working-directory: 'server']
-build-server:
+build-server: build-web
     CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version={{ server_version }}" -o bin/sermon-server ./cmd/sermon-server
     @echo "✓ server/bin/sermon-server ({{ server_version }})"
 
@@ -152,10 +154,36 @@ smoke-server: build-server
 
 # --- web (SvelteKit) ---------------------------------------------------------
 
-fmt-web: (_pending "web" "M0-04")
-lint-web: (_pending "web" "M0-04")
-test-web: (_pending "web" "M0-04")
-security-web: (_pending "web" "M0-06")
+# Format the web code (prettier)
+[working-directory: 'web']
+fmt-web:
+    pnpm run format
+
+# Lint the web UI: prettier, eslint, svelte-check
+[working-directory: 'web']
+lint-web:
+    pnpm run lint
+    pnpm run check
+
+# Run the web unit and component tests (Vitest, Chromium)
+[working-directory: 'web']
+test-web:
+    pnpm test
+
+# Check web dependencies for known vulnerabilities
+[working-directory: 'web']
+security-web:
+    pnpm audit --prod
+
+# Build the web UI, check the bundle budget and copy it into the server for embedding
+[working-directory: 'web']
+build-web:
+    pnpm install --frozen-lockfile --silent
+    pnpm run build
+    pnpm run check:size
+    find ../server/web/dist -mindepth 1 ! -name .gitkeep -delete
+    cp -R build/. ../server/web/dist/
+    @echo "✓ web UI copied to server/web/dist"
 
 # --- helpers -----------------------------------------------------------------
 

@@ -110,7 +110,8 @@ flowchart LR
 **Ziel:** Alle Skelette bauen, testen und linten in CI. Die Entwicklungsumgebung startet mit einem Befehl. Die beiden kritischen Annahmen (TimescaleDB-Last, journald über `journalctl`) und der musl-Build für arm64 sind durch Spikes geprüft.
 
 ### ◐ M0-01 – Repo-Grundgerüst · X · S
-> Umgesetzt bis auf GitHub Private Vulnerability Reporting: Das setzt ein GitHub-Remote voraus. Zusätzlich gibt es
+> Umgesetzt bis auf GitHub Private Vulnerability Reporting: Die Funktion gibt es nur für **öffentliche** Repos, und
+> `pmoscode/SerMon` ist privat (API-Antwort 404). Einschalten, sobald das Repo öffentlich wird. Zusätzlich gibt es
 > `just setup`, eine PR-Vorlage und einen Commit-Message-Check (`scripts/check-commit-msg.sh` mit Tests).
 
 - **Ziel:** Struktur nach KONZEPT §20; `LICENSE` (AGPL-3.0), `README.md`, `SECURITY.md` (Responsible Disclosure), `.editorconfig`, `.gitignore`, `CODEOWNERS`, `justfile` mit Ziel-Stubs (`dev`, `gen`, `lint`, `test`, `e2e`, `security`), `lefthook.yml` (Format, gitleaks).
@@ -139,7 +140,13 @@ flowchart LR
 - **Tests zuerst:** Config-Parsing (Tabellen-Tests, auch fehlende oder ungültige Werte); Health-Handler.
 - **Abnahme:** `go test ./...` und Lint grün; Binary startet und beendet sich sauber per SIGTERM.
 
-### ☐ M0-04 – Web-Skelett · W · M
+### ☑ M0-04 – Web-Skelett · W · M
+> Erledigt mit **SvelteKit 3**, Vite 8 und Paraglide 3 (aktuelle Versionen der `sv`-CLI). Eine Startseite mit
+> Sprachwahl DE/EN ist in die Server-Binary eingebettet; strikte CSP ohne `unsafe-inline`, alle Ressourcen lokal (D27,
+> [ADR 0003](adr/0003-ui-auslieferung-und-csp.md)). 10 Unit-/Komponententests und 7 E2E-Tests gegen die echte Binary,
+> inklusive Netzwerk-Wächter, CSP-Prüfung und axe. Bundle 54 KiB gzip.
+> Abweichung: Das JS-Budget prüft ein eigenes Skript (`pnpm run check:size`) statt Lighthouse; Lighthouse kommt bei
+> Bedarf mit der CI (M0-06).
 - **Ziel:** SvelteKit 2 + Svelte 5, `adapter-static`, Tailwind 4, shadcn-svelte, Paraglide (de/en), ESLint, Prettier, `svelte-check`, Vitest, Playwright mit `@axe-core/playwright`. Build-Ergebnis wird per `embed.FS` in den Server eingebettet (`server/web/`).
 - **Abhängig von:** M0-01, M0-03
 - **Tests zuerst:** Komponenten-Test für eine Platzhalter-Seite; Playwright-Smoke-Test inkl. axe.

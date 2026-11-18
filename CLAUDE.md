@@ -42,6 +42,16 @@ Node + pnpm, `buf`, `shellcheck`, Docker.
 Agent bauen: `just build-agent` (statische musl-Binaries für amd64 und arm64), `just smoke-agent` (Start im Container).
 Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just smoke-server` (Start, Health-Probes, SIGTERM).
 Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.
+Web: `just build-web` (Build, Größenbudget, Kopie nach `server/web/dist` zum Einbetten), `just e2e` (Playwright gegen
+die echte Server-Binary mit eingebetteter UI), `cd web && pnpm dev` (Vite-Dev-Server).
+
+Web-Besonderheiten:
+- SvelteKit 3: Die Konfiguration steht in `web/vite.config.ts` (es gibt keine `svelte.config.js`).
+- Imports über `#lib/...` (package.json-Subpath-Imports) brauchen die Endung `.js`, z. B. `#lib/i18n/locale.svelte.js`.
+- npm: Nur Releases, die mindestens 3 Tage alt sind, werden installiert. Schlägt `pnpm add` mit `NO_MATURE_MATCHING_VERSION`
+  fehl, eine ältere Version wählen statt die Regel zu lockern.
+- shadcn-svelte-Komponenten mit `pnpm dlx shadcn-svelte@1.8.1 add <name> --yes --no-deps-install` hinzufügen und
+  danach die Abhängigkeiten exakt gepinnt per `pnpm add` installieren.
 
 ## Arbeitsweise
 
@@ -72,5 +82,7 @@ Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als D
 - Keine freien Kommandos zum Agent oder Helper, kein `sh -c`, keine Raw-Queries von Usern.
 - Secrets verschlüsselt (`secrets.Box`), nie loggen, nie an die UI zurückgeben.
 - Ausgehende HTTP-Requests nur über `safehttp` (SSRF-Schutz).
+- **UI lädt nichts von fremden Servern (D27):** keine CDNs, keine Google Fonts, kein Analytics. Libraries, Schriften
+  (`@fontsource`), Icons und Bilder per npm installieren und mitbündeln; die CSP erlaubt nur `'self'`.
 - Keine neuen Abhängigkeiten ohne Prüfung (Pflege, Lizenz AGPL-kompatibel, `cargo-deny`/`govulncheck`).
 - Keine Secrets, echten IPs oder Usernamen in Fixtures (192.0.2.0/24, 2001:db8::/32, `alice`, `bob`).

@@ -21,7 +21,10 @@ Reference: KONZEPT.md §4.4, §16 (dashboards), §17 (UX & help), §18.3 (web se
 
 ## Security
 - **Never** use `{@html}` for data from the API (log lines, hostnames, process names, usernames, alert text). Markdown help is rendered at build time from repo files only.
-- No inline scripts/styles that would require weakening CSP; no new external origins (fonts/CDNs) – bundle assets.
+- No inline scripts/styles that would require weakening CSP.
+- **Everything is served locally (decision D27):** never load anything from a CDN or third-party host – no Google Fonts,
+  no `<script src="https://…">`, no remote images/icons, no analytics. Install libraries, fonts (`@fontsource/*`) and
+  icon sets via pnpm so Vite bundles them. The E2E network guard (`web/tests/e2e/`) fails on any request to a foreign host.
 - Don't store tokens in localStorage; session is an HttpOnly cookie.
 - Hide UI actions the role can't perform, but remember the server is the authority.
 

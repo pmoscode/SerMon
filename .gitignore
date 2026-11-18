@@ -12,6 +12,9 @@ agent/target/
 
 # Go
 server/bin/
+# Embedded UI build output (filled by `just build-web`)
+server/web/dist/*
+!server/web/dist/.gitkeep
 *.test
 coverage.out
 coverage.html
@@ -22,9 +25,10 @@ web/.svelte-kit/
 web/build/
 web/test-results/
 web/playwright-report/
+web/src/lib/paraglide/
 
 # Build / release artifacts
-dist/
+/dist/
 
 # Local environment & secrets – never commit
 .env

@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,8 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
 	"github.com/pmoscode/SerMon/server/internal/transport/httpserver"
+	"github.com/pmoscode/SerMon/server/internal/transport/spa"
+	"github.com/pmoscode/SerMon/server/web"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".
@@ -70,6 +73,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	healthHandler := health.New(logger)
 	mux := http.NewServeMux()
 	healthHandler.Register(mux)
+	if err := mountUI(ctx, mux, logger); err != nil {
+		return err
+	}
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
@@ -81,6 +87,24 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err := srv.Serve(ctx, ln); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}
+	return nil
+}
+
+// mountUI serves the embedded web UI; without a UI build the server runs API-only.
+func mountUI(ctx context.Context, mux *http.ServeMux, logger *slog.Logger) error {
+	assets, err := web.Assets()
+	if err != nil {
+		return fmt.Errorf("load web UI: %w", err)
+	}
+	ui, err := spa.New(assets)
+	if errors.Is(err, spa.ErrNoIndex) {
+		logger.WarnContext(ctx, "web UI not built – serving API and health endpoints only")
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("prepare web UI: %w", err)
+	}
+	mux.Handle("GET /", ui)
 	return nil
 }
 

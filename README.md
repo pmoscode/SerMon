@@ -1,0 +1,50 @@
+# SerMon
+
+**Schlankes, selbst gehostetes und mandantenfähiges Server-Monitoring für Linux.**
+Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Gebot**.
+
+> ⚠️ **Status: in früher Entwicklung (Meilenstein M0).** Noch nicht für den produktiven Einsatz geeignet.
+
+*A lean, self-hosted, multi-tenant monitoring for Linux servers – security first. Documentation is in German.*
+
+## Geplante Features
+
+- **Zero-Config-Agent** (Rust, eine statische Binary): Installation per Einzeiler mit Enrollment-Token, mTLS zum Server
+- **Metriken** im Sekundentakt: CPU, Memory, Disk-IO, Netzwerk, Load, Uptime – mit Detailansichten und Live-Ansicht („top“)
+- **Logs**: systemd-journal, klassische Log-Dateien, Docker
+- **Alerting** mit Standardregeln (CPU, RAM, Disk, Netz, Reboot, Updates) und **Security-Events** wie fehlgeschlagenen SSH-Logins;
+  Benachrichtigung per E-Mail, Webhook, Slack, Teams, Discord, Mattermost, Telegram, ntfy, Gotify, Pushover
+- **Anomalie-Erkennung** (statistisch, erklärbar)
+- **Paket-Updates** per Policy (apt, dnf, apk) mit Wartungsfenstern
+- **Mandanten, Gruppen und Rollen**; Anmeldung lokal mit TOTP/Passkeys oder per OIDC
+- Moderne Web-UI (SvelteKit) auf Deutsch und Englisch, mit Kontexthilfe
+
+Unterstützte Systeme: Debian, Ubuntu, RHEL/Rocky/Alma/Fedora, Alpine – jeweils amd64 und arm64.
+
+## Dokumentation
+
+| Dokument | Inhalt |
+|---|---|
+| [Konzept](docs/KONZEPT.md) | Architektur, Entscheidungen, Security-Konzept, Qualitätsregeln |
+| [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md) | Meilensteine, Aufgaben, Abnahmekriterien |
+| [ADRs](docs/adr/) | Architekturentscheidungen |
+| [Security Policy](SECURITY.md) | Schwachstellen melden |
+
+## Entwicklung
+
+Voraussetzungen: [`just`](https://github.com/casey/just), [`lefthook`](https://github.com/evilmartians/lefthook),
+[`gitleaks`](https://github.com/gitleaks/gitleaks), `shellcheck` – später zusätzlich Rust, Go, Node + pnpm, `buf`, Docker.
+
+```bash
+just setup   # prüft Voraussetzungen und installiert die Git-Hooks
+just --list  # alle Befehle
+just lint    # Lint
+just test    # Tests
+```
+
+Beiträge: Commits folgen [Conventional Commits](https://www.conventionalcommits.org/), Arbeit erfolgt testgetrieben (TDD).
+Details in [KONZEPT §19](docs/KONZEPT.md#19-qualität-clean-code-tdd-und-prozess).
+
+## Lizenz
+
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).

@@ -109,7 +109,10 @@ flowchart LR
 
 **Ziel:** Alle Skelette bauen, testen und linten in CI. Die Entwicklungsumgebung startet mit einem Befehl. Die beiden kritischen Annahmen (TimescaleDB-Last, journald über `journalctl`) und der musl-Build für arm64 sind durch Spikes geprüft.
 
-### ☐ M0-01 – Repo-Grundgerüst · X · S
+### ◐ M0-01 – Repo-Grundgerüst · X · S
+> Umgesetzt bis auf GitHub Private Vulnerability Reporting: Das setzt ein GitHub-Remote voraus. Zusätzlich gibt es
+> `just setup`, eine PR-Vorlage und einen Commit-Message-Check (`scripts/check-commit-msg.sh` mit Tests).
+
 - **Ziel:** Struktur nach KONZEPT §20; `LICENSE` (AGPL-3.0), `README.md`, `SECURITY.md` (Responsible Disclosure), `.editorconfig`, `.gitignore`, `CODEOWNERS`, `justfile` mit Ziel-Stubs (`dev`, `gen`, `lint`, `test`, `e2e`, `security`), `lefthook.yml` (Format, gitleaks).
 - **Abhängig von:** –
 - **Abnahme:** `just --list` zeigt alle Ziele; lefthook-Hooks greifen; GitHub Private Vulnerability Reporting ist aktiviert.

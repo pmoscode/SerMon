@@ -1,0 +1,16 @@
+# Git hooks – installed via `just setup` (runs `lefthook install`).
+# Further hooks (rustfmt, gofumpt, prettier, fast tests) are added in M0-02..M0-04.
+
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks:
+      run: gitleaks git --pre-commit --staged --redact --no-banner
+    shellcheck:
+      glob: "*.sh"
+      run: shellcheck {staged_files}
+
+commit-msg:
+  commands:
+    conventional-commits:
+      run: sh scripts/check-commit-msg.sh {1}

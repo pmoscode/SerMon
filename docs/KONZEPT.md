@@ -1012,6 +1012,7 @@ SerMon/
 │   ├── help/{de,en}/              # Hilfetexte (Single Source of Truth)
 │   ├── security/                  # Threat Model, Hardening-Guide
 │   └── user/ admin/
+├── scripts/                       # Hilfsskripte (Git-Hooks, CI)
 ├── .claude/skills/                # Agent-Skills (siehe §25)
 ├── .github/workflows/
 ├── justfile

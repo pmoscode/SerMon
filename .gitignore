@@ -1,1 +1,34 @@
-.idea
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Claude Code (local, per-user settings)
+.claude/settings.local.json
+
+# Rust
+agent/target/
+
+# Go
+server/bin/
+*.test
+coverage.out
+coverage.html
+
+# Web
+node_modules/
+web/.svelte-kit/
+web/build/
+web/test-results/
+web/playwright-report/
+
+# Build / release artifacts
+dist/
+
+# Local environment & secrets – never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key

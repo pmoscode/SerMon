@@ -1,0 +1,1129 @@
+# SerMon – Konzept
+
+> **SerMon** (Server Monitor) ist ein schlankes, selbst gehostetes und mandantenfähiges Monitoring für Linux-Server.
+> Netdata dient als Vorbild, der Funktionsumfang ist aber bewusst kleiner. Oberstes Gebot ist **Security**, gefolgt von
+> Einfachheit im Betrieb.
+
+|        |              |
+|--------|--------------|
+| Status | Entwurf v0.1 |
+| Datum  | 2026-11-18   |
+| Lizenz | AGPL-3.0     |
+
+---
+
+## Inhalt
+
+1. [Ziele und Nicht-Ziele](#1-ziele-und-nicht-ziele)
+2. [Entscheidungslog](#2-entscheidungslog)
+3. [Architektur](#3-architektur)
+4. [Komponenten](#4-komponenten)
+5. [Kommunikation und Protokoll](#5-kommunikation-und-protokoll)
+6. [Zero-Config-Installation und Enrollment](#6-zero-config-installation-und-enrollment)
+7. [Mandanten, User und Rechte](#7-mandanten-user-und-rechte)
+8. [Metriken](#8-metriken)
+9. [Live-Ansicht („top“)](#9-live-ansicht-top)
+10. [Logs](#10-logs)
+11. [Security-Events](#11-security-events)
+12. [Alerting](#12-alerting)
+13. [Anomalie-Erkennung](#13-anomalie-erkennung)
+14. [Paket-Updates und Auto-Update](#14-paket-updates-und-auto-update)
+15. [Integrationen und Module](#15-integrationen-und-module)
+16. [Dashboards](#16-dashboards)
+17. [UI/UX und Hilfe](#17-uiux-und-hilfe)
+18. [Security-Konzept](#18-security-konzept)
+19. [Qualität: Clean Code, TDD und Prozess](#19-qualität-clean-code-tdd-und-prozess)
+20. [Repository-Struktur](#20-repository-struktur)
+21. [CI/CD, Release und Supply Chain](#21-cicd-release-und-supply-chain)
+22. [Deployment und Betrieb](#22-deployment-und-betrieb)
+23. [Roadmap](#23-roadmap)
+24. [Offene Punkte und Risiken](#24-offene-punkte-und-risiken)
+25. [Agent-Skills (Claude Code)](#25-agent-skills-claude-code)
+
+---
+
+## 1. Ziele und Nicht-Ziele
+
+### Ziele
+
+- **Zero-Config-Agent:** Ein Einzeiler mit Token, danach liefert der Agent Metriken, ohne dass etwas konfiguriert werden
+  muss.
+- **Zentraler Server** mit moderner Web-UI, Mandanten (Orgs), Gruppen und Rollen. User sehen nur „ihre“ Nodes.
+- **Basis-Metriken** (CPU, Memory, Disk-IO, Netzwerk, Load, Uptime) mit Detailansichten und einer **Live-Ansicht** wie
+  `top`.
+- **Logs:** systemd-journal, klassische Log-Dateien und Docker-Logs.
+- **Alerting** mit sinnvollen Standardregeln nach dem Vorbild von Netdata, darunter **Security-Events** (SSH-Logins) und
+  **Update-/Reboot-Status**.
+- **Statistische Anomalie-Erkennung**, die erklärbar ist und ohne Training auskommt.
+- **Policy-gesteuerte Paket-Updates** (apt/dnf/apk) mit Wartungsfenstern.
+- **Optionale Integrationen** (nginx, PostgreSQL, Docker usw.), die im Agent eingebaut sind und zentral aktiviert
+  werden.
+- **Security by Design:** mTLS, Least Privilege, Mandantentrennung, sichere Supply Chain.
+
+### Nicht-Ziele (v1)
+
+- Keine Skalierung über ca. 50 Nodes pro Installation; die Architektur verbaut das aber nicht.
+- Kein APM/Tracing und kein vollwertiger Ersatz für Prometheus/Grafana.
+- Keine Remote-Shell und keine frei definierbaren Remote-Kommandos, auch keine Prozess-Kills aus der Live-Ansicht.
+- Kein Windows- oder macOS-Agent.
+- Keine Hochverfügbarkeit des Servers. Ziel ist ein Single-Instance-Betrieb mit sauberem Backup und Restore.
+- Kein Fremdcode im Agent (keine externen Plugins; WASM ist frühestens in v2 denkbar).
+
+---
+
+## 2. Entscheidungslog
+
+Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/` angelegt.
+
+| #   | Thema          | Entscheidung                                                                                 | Begründung                                                                                            |
+|-----|----------------|----------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
+| D1  | Agent          | **Rust** (statisch, musl)                                                                    | Speichersicherheit, kleiner Footprint, eine Binary für alle Distros                                   |
+| D2  | Server         | **Go**                                                                                       | Einfache Nebenläufigkeit, starkes Netzwerk-Ökosystem, eine statische Binary                           |
+| D3  | Frontend       | **SvelteKit (SPA, adapter-static)**, Tailwind, shadcn-svelte, uPlot                          | Kleine Bundles, wenig Boilerplate, schnelle Live-Updates; wird in die Server-Binary eingebettet       |
+| D4  | Topologie      | **Zentraler Server, Agents pushen, mit lokalem Puffer**                                      | Auf den Clients sind keine eingehenden Ports nötig; bei Verbindungsverlust gehen keine Daten verloren |
+| D5  | Betriebsmodell | **Self-hosted, mandantenfähig** (Org als Konzept von Anfang an)                              | Später SaaS-fähig, ohne das Datenmodell umzubauen                                                     |
+| D6  | Skalierung     | **< 50 Nodes** als Zielgröße                                                                 | Hält den Betrieb einfach                                                                              |
+| D7  | Zielsysteme    | Debian/Ubuntu, RHEL/Fedora/Rocky/Alma, Alpine, **amd64 + arm64**                             |                                                                                                       |
+| D8  | Installation   | **Einzeiler mit Enrollment-Token** (`curl … \| sh`), optional Pakete                         | Zero-Config                                                                                           |
+| D9  | Agent-Rechte   | **Privilegien getrennt:** Agent als User `sermon`, minimaler root-Helper nur für Updates     | Least Privilege                                                                                       |
+| D10 | Auth           | **Lokal (Argon2id) + TOTP + Passkeys/WebAuthn, OIDC/SSO**                                    |                                                                                                       |
+| D11 | Rechte         | **Org → Node-Gruppen → Rollen** (Viewer / Operator / Admin)                                  |                                                                                                       |
+| D12 | Retention      | **Gestaffelt:** 1 s / 24 h, 1 min / 30 Tage, 1 h / 1 Jahr; Logs 14 Tage; Events 1 Jahr       | konfigurierbar                                                                                        |
+| D13 | Storage        | **PostgreSQL 17 + TimescaleDB** (Stamm-, Event- und Metrikdaten), **Loki** (Logs)            | Eine DB statt fünf Komponenten; Downsampling und Retention nativ; Metrik-Speicher austauschbar ([ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md)) |
+| D14 | Alert-Kanäle   | E-Mail, Webhook, Slack/Teams/Discord/Mattermost, Telegram/ntfy/Gotify/Pushover               |                                                                                                       |
+| D15 | Updates        | **Policy-basiert** pro Gruppe (report / security-auto / all-auto), Wartungsfenster           |                                                                                                       |
+| D16 | Anomalien      | **Statistisch, serverseitig** (robuster Z-Score, saisonale Baselines)                        | Erklärbar, ohne Training, gut testbar                                                                 |
+| D17 | Logs           | journald, klassische Dateien, Docker, beliebige Dateien per Glob                             |                                                                                                       |
+| D18 | Module         | **Im Agent eingebaut, standardmäßig aus**, zentral konfiguriert; dazu ein Prometheus-Scraper | Kein Fremdcode                                                                                        |
+| D19 | Live-Ansicht   | **Nur lesen**                                                                                | Kleinere Angriffsfläche                                                                               |
+| D20 | UI-Sprache     | **DE + EN**, i18n von Anfang an; Kontexthilfe                                                |                                                                                                       |
+| D21 | Lizenz         | **AGPL-3.0**                                                                                 |                                                                                                       |
+| D22 | Alert-Regeln   | **UI + YAML-Import/Export**                                                                  | GitOps-fähig                                                                                          |
+| D23 | Deployment     | **docker-compose**                                                                           |                                                                                                       |
+| D24 | Reihenfolge    | **Metriken → Alerts → Logs → Updates**                                                       |                                                                                                       |
+| D25 | Repo/CI        | **GitHub-Monorepo + GitHub Actions**                                                         |                                                                                                       |
+| D26 | API            | **Connect-RPC/Protobuf** für Agent ↔ Server (gRPC) und Web ↔ Server (Connect)                | Ein Schema, typisiert von Ende zu Ende                                                                |
+
+---
+
+## 3. Architektur
+
+```
+ ┌──────────────────────── Linux-Node (n×) ────────────────────────┐
+ │                                                                 │
+ │  ┌──────────────────────┐   Unix-Socket   ┌──────────────────┐  │
+ │  │ sermon-agent (Rust)  │ ──────────────▶ │ sermon-helper    │  │
+ │  │ user: sermon         │  (feste Ops,    │ (root, minimal)  │  │
+ │  │ • Collectors /proc   │   SO_PEERCRED)  │ • apt/dnf/apk    │  │
+ │  │ • journald / Files   │                 │ • reboot         │  │
+ │  │ • Security-Events    │                 └──────────────────┘  │
+ │  │ • Module (opt.)      │                                       │
+ │  │ • WAL-Puffer (disk)  │                                       │
+ │  └──────────┬───────────┘                                       │
+ └─────────────┼───────────────────────────────────────────────────┘
+               │ ausgehend: gRPC über HTTP/2 + mTLS (bidirektionaler Stream)
+               ▼
+ ┌──────────────────────── Server (docker-compose) ────────────────┐
+ │  ┌───────────┐   ┌──────────────────────────────────────────┐   │
+ │  │  Caddy    │──▶│ sermon-server (Go)                       │   │
+ │  │ TLS / ACME│   │ • Agent-API (gRPC, mTLS, interne CA)     │   │
+ │  └───────────┘   │ • Web-API (Connect) + eingebettete SPA   │   │
+ │                  │ • Ingest → TimescaleDB / Loki            │   │
+ │                  │ • Alert-Engine, Anomalie-Worker          │   │
+ │                  │ • Notifier, Update-Orchestrierung        │   │
+ │                  └───┬───────────────────────────┬──────────┘   │
+ │                      ▼                           ▼              │
+ │              ┌─────────────────────┐       ┌─────────────┐      │
+ │              │ PostgreSQL 17       │       │    Loki     │      │
+ │              │ + TimescaleDB       │       │    Logs     │      │
+ │              │ Stamm-, Event- und  │       │             │      │
+ │              │ Metrikdaten         │       │             │      │
+ │              └─────────────────────┘       └─────────────┘      │
+ └─────────────────────────────────────────────────────────────────┘
+               ▲
+               │ HTTPS (Browser)
+          ┌────┴────┐
+          │  Web-UI │  SvelteKit-SPA
+          └─────────┘
+```
+
+**Grundprinzipien**
+
+- Der Agent baut **immer** die Verbindung auf. Der Server erreicht Nodes ausschließlich über den bestehenden Stream.
+- **Nur der Server** spricht mit PostgreSQL und Loki. Diese Systeme sind nie von außen erreichbar und
+  haben ein eigenes internes Netz in docker-compose.
+- Der Server prüft Rechte und Mandanten bei **jeder** Anfrage. Die Datenbanken selbst kennen keine User.
+- **Org-ID und Node-ID** stammen beim Ingest ausschließlich aus dem Client-Zertifikat, niemals aus dem Payload.
+
+---
+
+## 4. Komponenten
+
+### 4.1 Agent (`sermon-agent`, Rust)
+
+| Aspekt         | Festlegung                                                                                                                                                  |
+|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Build          | `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`; statisch gelinkt                                                                                 |
+| Runtime        | `tokio`; gRPC-Client mit `tonic` + `rustls` (kein OpenSSL)                                                                                                  |
+| Collectors     | Eigene Parser für `/proc` und `/sys`. Das Wurzelverzeichnis ist injizierbar (`ProcRoot`), dadurch sind Tests mit Fixtures möglich                           |
+| Journal        | Kindprozess `journalctl -o json -f --cursor-file=…`. Kein Linken gegen libsystemd, damit die musl-Binary statisch bleibt                                    |
+| Dateien        | Tailing mit inotify, Rotationserkennung (inode/size) und Offsets persistiert                                                                                |
+| Puffer         | Write-Ahead-Log auf Disk (`/var/lib/sermon-agent/wal`), segmentiert, Obergrenze z. B. 24 h oder 200 MB (was zuerst erreicht ist); FIFO-Verwerfen mit Zähler |
+| Config         | Fast nichts lokal (`/etc/sermon/agent.toml`: Server-URL, Pfade, lokale Verbote). Alles Weitere kommt **versioniert vom Server**                             |
+| Ressourcenziel | < 30 MB RSS und < 1 % eines Kerns bei 1-s-Sammlung                                                                                                          |
+| Init-Systeme   | systemd-Unit (gehärtet, siehe §18.4) und OpenRC-Script für Alpine                                                                                           |
+
+**Interne Struktur (Traits/Ports):**
+`Collector` (Metriken), `LogSource`, `EventParser` (Security-Events), `Transport`, `Buffer`, `Clock`. Jeder Port hat
+eine Fake-Implementierung für Tests.
+
+### 4.2 Root-Helper (`sermon-helper`, Rust)
+
+- Ein eigener, **winziger** Prozess (Ziel: < 1 000 LoC) mit eigener systemd-Unit, der als root läuft.
+- Er lauscht auf `/run/sermon/helper.sock` (Rechte `root:sermon 0660`) und prüft per `SO_PEERCRED`, dass der Aufrufer
+  die UID `sermon` hat.
+- Er nimmt **nur ein festes Enum an Operationen** an: `ListUpdates`, `ApplyUpdates{scope: security|all}`,
+  `Reboot{reason}`, `SelfUpdate{version, signature}`. Freie Kommandos gibt es nicht.
+- **Lokale Hoheit:** In `/etc/sermon/helper.toml` gelten z. B. `allow_remote_updates = false` und
+  `allow_remote_reboot = false`. Diese Werte kann der Server **nicht** überschreiben.
+- Jede Operation wird lokal (journald) und zentral (Audit-Log) protokolliert.
+
+### 4.3 Server (`sermon-server`, Go)
+
+| Aspekt          | Festlegung                                                                                                                                                                                                                            |
+|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Architektur     | Hexagonal / Clean Architecture: `domain` (rein, ohne Abhängigkeiten) → `app` (Use-Cases) → `adapters` (Postgres/Timescale, Loki, Notify, OIDC) → `transport` (gRPC/Connect)                                                                       |
+| HTTP/RPC        | `net/http` (stdlib) + `connectrpc.com/connect`                                                                                                                                                                                        |
+| DB              | PostgreSQL 17 + TimescaleDB-Extension, `pgx`, `sqlc` (typisierte Queries), `goose` (Migrationen); Row-Level-Security als zweite Verteidigungslinie                                                                                    |
+| Metriken        | Port `MetricStore` mit Implementierung auf TimescaleDB-Hypertables (selbe PG-Instanz). Schreiben gebündelt per `COPY`, Lesen **nur über die typisierte Query-Schicht**. Die Implementierung ist austauschbar (z. B. VictoriaMetrics bei Wachstum, siehe ADR 0001) |
+| Logs            | Loki-Push-API mit `X-Scope-OrgID = <org-uuid>`                                                                                                                                                                                        |
+| Background-Jobs | Alert-Engine, Anomalie-Worker, Notifier, Update-Orchestrator, Zertifikatsrotation, Retention. Implementiert als In-Process-Worker mit Leases in PG (`SELECT … FOR UPDATE SKIP LOCKED`), sodass später mehrere Instanzen möglich wären |
+| Konfiguration   | Environment-Variablen plus optionale YAML-Datei; Secrets über `*_FILE` (Docker-Secrets)                                                                                                                                               |
+| Observability   | Eigene `/metrics` (Prometheus), strukturierte Logs (`slog`, JSON), Health-Endpunkte `/healthz` und `/readyz`                                                                                                                          |
+
+### 4.4 Web-UI (`web/`, SvelteKit)
+
+- SvelteKit 2 + Svelte 5 (Runes), `adapter-static` als SPA; das Ergebnis wird per `embed.FS` in die Go-Binary
+  eingebettet.
+- Tailwind CSS 4, shadcn-svelte (Bits UI) für die Komponenten, **uPlot** für Zeitreihen (schnell, Canvas-basiert).
+- Connect-Web-Client, aus `proto/` generiert (`buf generate`).
+- i18n mit **Paraglide JS** (typsicher, Tree-Shaking).
+- Tests: Vitest + Testing Library (Komponenten), Playwright (E2E), axe-core (Accessibility).
+
+### 4.5 Datenhaltung
+
+| Daten                                                                               | System                                   | Retention                                        |
+|-------------------------------------------------------------------------------------|------------------------------------------|--------------------------------------------------|
+| Orgs, User, Gruppen, Rollen, Nodes, Zertifikate, Regeln, Policies, Kanäle, Sessions | PostgreSQL                               | dauerhaft                                        |
+| Alert-Instanzen, Security-Events, Update-Läufe, Audit-Log                           | PostgreSQL (partitioniert nach Monat)    | 1 Jahr (Audit: konfigurierbar, Standard 2 Jahre) |
+| Metriken 1 s                                                                        | TimescaleDB-Hypertable `metrics_raw`                         | 24 h                                             |
+| Metriken 1 min                                                                      | Continuous Aggregate `metrics_1m`                            | 30 Tage                                          |
+| Metriken 1 h                                                                        | Continuous Aggregate `metrics_1h` (hierarchisch auf `metrics_1m`) | 1 Jahr                                      |
+| Logs                                                                                | Loki (Multi-Tenant, Compactor-Retention)                     | 14 Tage                                          |
+
+**Metrik-Schema in TimescaleDB** (Details in [ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md)):
+
+- **Schmales Schema mit Integer-IDs:**
+  - `series(id int, org_id, node_id, metric text, labels jsonb)`, eindeutig über `(org_id, node_id, metric, labels)`
+  - `metrics_raw(ts timestamptz, series_id int, value double precision)`
+- **Hypertable** mit **1-h-Chunks**. **Kompression nach 2 h** (`segmentby = series_id`, `orderby = ts`).
+- **Continuous Aggregates** speichern `avg`, `min`, `max` und `last` je Bucket. Jede Stufe hat eine eigene **Retention-Policy**, die Aktualisierung läuft per Refresh-Policy.
+- **Counter rechnet der Agent in Raten pro Sekunde um** (§8), damit in den Aggregaten keine Window-Funktionen nötig sind.
+- **Ingest:** Der Server sammelt die Batches aller Agents und schreibt **einmal pro Sekunde per `COPY`**. Unbekannte Serien werden vorab in `series` angelegt (mit Cache).
+- **Ringpuffer im Server-Speicher** (letzte 15 min, 1 s) für Live-Charts und kurze Alert-Fenster. Das entlastet die DB beim Lesen.
+- **Spike in M0** mit 50 simulierten Agents. Ziele:
+  - Ingest-Lag < 2 s
+  - DB-CPU < 50 % von 4 vCPU
+  - Plattenbedarf und WAL-Volumen messen
+  - p95 < 300 ms für einen 24-h-Chart
+  - Row-Level-Security auf Hypertables und Continuous Aggregates prüfen
+- **Fallback:** 1-s-Werte nur im Ringpuffer halten und erst ab 5–10 s in der DB speichern.
+
+**Mengengerüst (50 Nodes):**
+
+- Etwa 400 Serien pro Node ergeben 20 000 Samples/s, also ca. 1,7 Mrd. Zeilen pro Tag in `metrics_raw`.
+- Komprimiert (ca. 2–4 Byte/Sample) sind das ca. 3–7 GB für 24 h Rohdaten. Hinzu kommen ca. 10–15 GB für die noch unkomprimierten Chunks der letzten 2 h und ein hohes WAL-Volumen, daher ist eine **NVMe-SSD Pflicht**.
+- `metrics_1m` braucht für 30 Tage ca. 5–15 GB, `metrics_1h` für 1 Jahr < 5 GB.
+- Logs schwanken stark; geschätzt werden 0,5–5 GB/Tag.
+
+---
+
+## 5. Kommunikation und Protokoll
+
+- **Schema:** `proto/sermon/agent/v1/*.proto` und `proto/sermon/web/v1/*.proto`, verwaltet mit `buf` (Lint und
+  Breaking-Change-Check in CI).
+- **Agent ↔ Server:** Ein langlebiger **bidirektionaler gRPC-Stream** `AgentService.Connect`.
+    - Agent → Server: `Hello{agent_version, host_facts, config_version}`, `MetricBatch`, `LogBatch`,
+      `SecurityEventBatch`, `UpdateReport`, `ProcessSnapshot`, `CommandResult`, `Heartbeat`
+    - Server → Agent: `ConfigUpdate{version, config}`, `StartLiveView{interval}`, `StopLiveView`,
+      `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`, `RotateCertificate`
+- **Batching:** Metriken werden jede Sekunde gesendet, Logs alle 1 s oder bei 256 KB (je nachdem, was zuerst eintritt).
+  Komprimiert wird mit zstd oder gzip auf gRPC-Ebene.
+- **Zuverlässigkeit:** Jeder Batch hat eine monoton steigende Sequenznummer, der Server bestätigt (`Ack{seq}`). Der
+  Agent löscht erst nach dem Ack aus dem WAL (*at-least-once*); der Server dedupliziert über `(node_id, seq)`.
+- **Backpressure und Quotas:** Der Server limitiert pro Node (Samples/s, Log-Bytes/s, Anzahl Serien). Bei Überschreitung
+  schickt er `Throttle`, der Agent drosselt und meldet das.
+- **Versionierung:** Protokollversion im `Hello`. Der Server unterstützt die aktuelle und die vorherige Minor-Version
+  des Agents.
+- **Keepalive:** HTTP/2-Pings alle 15 s. Nach 60 s ohne Heartbeat gilt der Node als „offline“ (Alert-Quelle).
+
+---
+
+## 6. Zero-Config-Installation und Enrollment
+
+### Ablauf
+
+1. Ein Admin bzw. Operator klickt in der UI auf **„Node hinzufügen“** und wählt die Ziel-Gruppe. Der Server erzeugt
+   einen **Enrollment-Token**:
+    - zufällig (256 Bit); in der DB wird nur der **SHA-256-Hash** gespeichert
+    - **gültig 1 h** (konfigurierbar), Nutzung **einmalig** oder N-mal (für Massen-Rollouts, z. B. mit Ansible)
+    - gebunden an Org und Node-Gruppe
+2. Die UI zeigt den Befehl an:
+   ```bash
+   curl -fsSL https://sermon.example.com/install.sh | sudo sh -s -- \
+     --token sme_XXXXXXXX \
+     --ca-fingerprint sha256:AB:CD:…   # nur nötig bei selbstsigniertem Server-Zertifikat
+   ```
+   Daneben gibt es einen Link **„Skript erst ansehen“** und die Alternative per Paket-Repo
+   (`apt install sermon-agent && sermon-agent enroll …`).
+3. `install.sh` (POSIX-sh, ShellCheck-geprüft):
+    - erkennt Distro, Architektur und Init-System
+    - lädt die Agent- und Helper-Binary samt **Signatur** und prüft sie gegen den **im Skript fest eingebetteten Public
+      Key** (minisign/cosign). Schlägt die Prüfung fehl, bricht das Skript ab.
+    - legt den User `sermon` an und setzt die Gruppen (`systemd-journal`, `adm`)
+    - installiert die Units (systemd/OpenRC) und ruft `sermon-agent enroll` auf
+4. `enroll`:
+    - erzeugt **lokal** ein Schlüsselpaar (ECDSA P-256), das den Host nie verlässt, und daraus eine CSR
+    - sendet Token, CSR und Host-Fakten (Hostname, OS, Kernel, CPU, RAM, machine-id) über TLS. Das Server-Zertifikat
+      wird gegen die System-CA **oder** den gepinnten Fingerprint geprüft.
+    - Der Server prüft den Token, legt den Node an und signiert die CSR mit der **internen Agent-CA**:
+        - Subject/SAN: `URI:spiffe://sermon/org/<org-id>/node/<node-id>`
+        - Laufzeit **30 Tage**; automatische Rotation nach 2/3 der Laufzeit über den bestehenden Stream
+    - Der Agent speichert Zertifikat und Schlüssel (`0600`, Owner `sermon`) sowie die CA-Kette und startet.
+5. Nach wenigen Sekunden erscheint der Node in der UI. Die Onboarding-Ansicht zeigt live: „Verbindung hergestellt ✓ –
+   erste Metriken ✓“.
+
+### Widerruf und Lebenszyklus
+
+- Node löschen oder deaktivieren → Zertifikats-Serial auf die **Denylist** (wird bei jedem Verbindungsaufbau geprüft).
+  Wegen der kurzen Laufzeiten bleibt die Liste klein.
+- Re-Enrollment (z. B. nach Neuinstallation) erkennt die `machine-id` und bietet in der UI „bestehenden Node übernehmen“
+  an. Das geschieht nie automatisch.
+- Deinstallation: `sermon-agent uninstall` bzw. Paket entfernen; optional mit Abmeldung beim Server.
+
+---
+
+## 7. Mandanten, User und Rechte
+
+### Datenmodell (vereinfacht)
+
+```
+Organization 1─n NodeGroup 1─n Node
+Organization 1─n Membership n─1 User
+Membership   1─n RoleBinding (NodeGroup | "*", Role)
+Organization 1─n AlertRule, NotificationChannel, NotificationPolicy, UpdatePolicy, ModuleConfig
+User         1─n Credential (password | totp | webauthn) , Session, ApiToken (später)
+```
+
+- Ein User kann Mitglied **mehrerer Orgs** sein und wechselt zwischen ihnen (Org-Switcher).
+- Ein **Superadmin** (Instanz-Ebene) verwaltet Orgs, sieht aber **keine** Daten einer Org, solange er nicht selbst
+  Mitglied ist.
+- Ein Node gehört genau einer Gruppe. Zusätzlich gibt es **Tags** (frei, z. B. `env=prod`, `role=db`) für Filter und
+  Regel-Matching, aber nicht für Rechte.
+
+### Rollen
+
+| Recht                                       | Viewer | Operator | Admin (Org) |
+|---------------------------------------------|:------:|:--------:|:-----------:|
+| Nodes, Metriken, Dashboards ansehen         |   ✓   |    ✓    |     ✓      |
+| Logs und Security-Events ansehen            |  ✓¹   |    ✓    |     ✓      |
+| Live-Ansicht                                |   ✓   |    ✓    |     ✓      |
+| Alerts quittieren und stummschalten         |   –    |    ✓    |     ✓      |
+| Updates manuell auslösen, Reboot            |   –    |    ✓    |     ✓      |
+| Enrollment-Token erzeugen                   |   –    |    ✓    |     ✓      |
+| Regeln, Kanäle, Policies, Module bearbeiten |   –    |    –     |     ✓      |
+| User, Gruppen, Rollen verwalten             |   –    |    –     |     ✓      |
+| Audit-Log ansehen                           |   –    |    –     |     ✓      |
+
+¹ Pro Org abschaltbar („Viewer dürfen keine Logs sehen“), weil Logs personenbezogene Daten enthalten.
+
+Rollen werden **pro Node-Gruppe** vergeben (oder für `*` = alle Gruppen der Org). Die Prüfung erfolgt ausschließlich
+serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar als Tabelle).
+
+### Authentifizierung
+
+- **Lokal:** Passwort mit Argon2id (memory 64 MiB, t=3, p=1; Parameter konfigurierbar), mindestens 12 Zeichen, Prüfung
+  gegen eine Liste häufiger Passwörter (offline, mitgeliefert).
+- **2FA:** TOTP (RFC 6238) und **WebAuthn/Passkeys** (`go-webauthn`). Pro Org kann 2FA verpflichtend gemacht werden. Bei
+  Einrichtung werden Recovery-Codes erzeugt (gehasht gespeichert).
+- **OIDC/SSO:** `coreos/go-oidc` mit Authorization Code + PKCE. **Gruppen-Claim-Mapping** (OIDC-Gruppe →
+  Org/NodeGroup/Rolle) ist konfigurierbar; Just-in-Time-Provisioning ist optional.
+- **Sessions:** serverseitig in PG, Cookie `__Host-sermon_session` (Secure, HttpOnly, SameSite=Lax). Idle-Timeout 30
+  min, absolut 12 h. **Step-up-Authentifizierung** (erneute 2FA) für sensible Aktionen wie Updates, Reboot oder
+  Rechteänderungen.
+- **Brute-Force-Schutz:** Rate-Limit pro IP und pro Account, progressive Verzögerung, Benachrichtigung bei verdächtigen
+  Logins.
+
+---
+
+## 8. Metriken
+
+**Namensschema** angelehnt an die *OpenTelemetry System Semantic Conventions*, umgesetzt in Prometheus-Notation:
+`sermon_<bereich>_<name>_<einheit>`, z. B. `sermon_cpu_utilization_ratio{mode="iowait"}` oder
+`sermon_network_receive_bytes_per_second{interface="eth0"}`.
+Pflicht-Labels: `org_id` und `node_id` (setzt der Server, nicht der Agent). Fachliche Labels: `cpu`, `device`,
+`interface`, `mountpoint`, `mode`. **Cardinality-Limits** pro Node (z. B. max. 2 000 Serien); Interfaces wie `veth*` und
+Loop-Devices werden standardmäßig gefiltert.
+
+### 8.1 Basis-Metriken (immer aktiv, Intervall 1 s)
+
+| Bereich                                  | Metriken                                                                                                                                                    | Quelle                                                                                              |
+|------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| **CPU**                                  | Auslastung gesamt und pro Kern nach Modus (user, system, iowait, irq, softirq, steal, nice, idle); Context-Switches; Interrupts; CPU-Pressure (PSI)         | `/proc/stat`, `/proc/pressure/cpu`                                                                  |
+| **Load**                                 | load1/5/15, normiert auf die Kernzahl; laufende und blockierte Prozesse                                                                                     | `/proc/loadavg`, `/proc/stat`                                                                       |
+| **Memory**                               | total, used, free, available, buffers, cached, shared, slab; Swap used/total; Swap-In/-Out; Page-Faults (major); OOM-Kills; Memory-Pressure (PSI)           | `/proc/meminfo`, `/proc/vmstat`, `/proc/pressure/memory`                                            |
+| **Disk-IO**                              | pro Device: read/write Bytes/s, IOPS, await (Latenz), Utilization %, Queue-Länge; IO-Pressure (PSI)                                                         | `/proc/diskstats`, `/proc/pressure/io`                                                              |
+| **Dateisysteme**                         | pro Mountpoint: size, used, avail, Inodes used/total, read-only-Flag                                                                                        | `statvfs` + `/proc/self/mountinfo`                                                                  |
+| **Netzwerk**                             | pro Interface: rx/tx Bytes/s, Pakete/s, Errors, Drops, Link-Status, Speed; TCP: established, time_wait, Retransmits, Listen-Overflows; conntrack-Auslastung | `/proc/net/dev`, `/sys/class/net`, `/proc/net/snmp`, `/proc/net/netstat`, `/proc/sys/net/netfilter` |
+| **System**                               | Uptime, Boot-ID (Reboot-Erkennung), Prozess- und Thread-Anzahl, Zombies, File-Descriptors (genutzt/max), Entropy, Zeit-Synchronisation (NTP synced, Offset) | `/proc/uptime`, `/proc/sys/kernel/random/boot_id`, `/proc/sys/fs/file-nr`, `adjtimex`               |
+| **systemd**                              | Anzahl failed Units und deren Namen (Event)                                                                                                                 | D-Bus *oder* `systemctl --failed -o json` (alle 30 s)                                               |
+| **Hardware** (opt., automatisch erkannt) | Temperaturen, Lüfter                                                                                                                                        | `/sys/class/hwmon`, `/sys/class/thermal`                                                            |
+
+**Counter** (z. B. Bytes total) rechnet der Agent beim Messen selbst in **Raten pro Sekunde** um, inklusive Reset-
+und Wrap-Erkennung, und sendet sie als Gauge. Prozentwerte wie die CPU-Auslastung berechnet er ebenfalls aus Deltas.
+Das hat drei Vorteile:
+
+- Die Werte bleiben auch nach einer Zwischenspeicherung im WAL-Puffer korrekt.
+- Die Continuous Aggregates kommen mit einfachen `avg`/`min`/`max`/`last` aus.
+- Der Server braucht keine Window-Funktionen.
+
+Für Summen über Zeiträume (z. B. „übertragene GB heute“) wird `avg × Bucket-Dauer` aufsummiert.
+
+### 8.2 Detailansichten
+
+Jede Detailseite hat oben eine Kopfzeile mit Kennzahlen und darunter synchronisierte Charts (gemeinsamer Zeitraum,
+Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
+
+- **CPU:** gestapelte Modi; Heatmap pro Kern; Load vs. Kernzahl; PSI; Top-Prozesse nach CPU (aus Live-Snapshots, wenn
+  aktiv); Steal-Time-Hinweis bei VMs.
+- **Memory:** Zusammensetzung (used/cache/buffers/available) gestapelt; Swap; Page-Faults; OOM-Kill-Events als Marker;
+  PSI; Top-Prozesse nach RSS.
+- **Disk:** pro Device Durchsatz, IOPS, Latenz und Utilization; pro Mountpoint Füllstand und Inodes; **Füllprognose**
+  („voll in ~3 Tagen“, lineare Regression über 6 h/24 h).
+- **Netzwerk:** pro Interface Durchsatz, Pakete, Fehler und Drops; TCP-Zustände; Retransmits; conntrack.
+
+---
+
+## 9. Live-Ansicht („top“)
+
+- **Wird nur bei Bedarf aktiviert:** Öffnet ein User die Live-Ansicht, schickt der Server `StartLiveView{interval=2s}`
+  an den Agent. Mehrere Betrachter teilen sich einen Stream (Fan-out im Server). 30 s nach dem letzten Betrachter folgt
+  `StopLiveView`. Die Daten werden **nicht gespeichert**.
+- **Inhalt:** Prozessliste mit PID, PPID, User, Status, CPU %, MEM % / RSS, Threads, Laufzeit, Befehlszeile (gekürzt);
+  Kopfzeile mit CPU, Mem, Swap, Load und Uptime (wie `top`).
+- **Bedienung:** Sortieren, Filtern (User, Name, Regex), Baumansicht (pstree), Pause; Detail-Drawer pro Prozess
+  (vollständige cmdline, cgroup/Unit, Container-Zuordnung, offene FDs, falls lesbar).
+- **Nur lesen.** Es gibt keine Kill- oder Restart-Aktionen (D19).
+- **Datenschutz:** Kommandozeilen können Secrets enthalten. Die agentseitige **Redaction** (§10.3) gilt auch hier;
+  zusätzlich kann pro Org „cmdline ausblenden“ aktiviert werden.
+- **Rechte-Hinweis:** Als User `sermon` sind `/proc/<pid>/io` und `fd/` fremder Prozesse nicht lesbar. Diese Felder
+  zeigen „n/a“ mit erklärendem ⓘ. Es gibt bewusst **kein** `CAP_SYS_PTRACE` (siehe §24).
+
+---
+
+## 10. Logs
+
+### 10.1 Quellen
+
+| Quelle                 | Umsetzung                                                                                                                                  | Default                                                   |
+|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
+| **systemd-journal**    | `journalctl -o json -f` mit persistiertem Cursor; Felder: `_SYSTEMD_UNIT`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `_PID`, `_HOSTNAME`, `MESSAGE` | an (falls vorhanden)                                      |
+| **Klassische Dateien** | `/var/log/syslog`, `/var/log/messages`, `/var/log/auth.log`, `/var/log/secure` (je nach Distro automatisch erkannt)                        | an, wenn kein journald (Alpine)                           |
+| **Docker**             | über die Docker-API (`/var/run/docker.sock`), stdout/stderr pro Container mit Labels `container`, `image`, `compose_project`               | **aus** (Modul, siehe §15 – Socket bedeutet root-Rechte!) |
+| **Beliebige Dateien**  | Globs pro Node-Gruppe zentral konfiguriert, z. B. `/var/log/nginx/*.log`; Multiline-Regeln (z. B. Java-Stacktraces)                        | aus                                                       |
+
+### 10.2 Verarbeitung
+
+- Der Agent normalisiert jede Zeile zu `{ts, source, unit/file, severity, message, fields}`.
+- Loki-Labels werden **bewusst sparsam** gewählt (niedrige Cardinality): `node_id`, `source`, `unit`, `severity`. Alles
+  andere steht als *structured metadata* bzw. in der Zeile.
+- **Begrenzungen:** Zeilenlänge max. 16 KB (danach gekürzt + Flag), Rate-Limit pro Node.
+
+### 10.3 Redaction (im Agent, vor dem Versand)
+
+- Standardregeln für Muster wie `password=`, `passwd`, `secret`, `token`, `Authorization: Bearer …`, AWS-Keys, private
+  Schlüsselblöcke und Connection-Strings mit Passwort.
+- Zusätzliche Regeln pro Org konfigurierbar (Regex mit Ersatz `***`). Regeln werden **kompiliert und getestet**, bevor
+  der Server sie verteilt; ReDoS-sicher durch die Rust-`regex`-Crate (lineare Laufzeit).
+
+### 10.4 Log-UI
+
+- Explorer mit Zeitbereich, Node/Gruppe, Quelle/Unit, Severity und Volltextsuche. Die LogQL-Abfrage wird
+  **serverseitig** aus strukturierten Filtern gebaut; User schreiben kein LogQL.
+- Live-Tail (Server-Streaming), Kontext-Ansicht („± 50 Zeilen um diesen Eintrag“), Histogramm der Log-Rate nach
+  Severity.
+- Darstellung **immer als Text** (kein HTML), ANSI-Codes werden entfernt oder sicher gerendert. Lange Zeilen werden
+  umbrochen.
+- Absprung aus Charts und Alerts: „Logs dieses Nodes um diesen Zeitpunkt“.
+
+---
+
+## 11. Security-Events
+
+Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log geparst und als **strukturierte Events**
+übertragen. Das funktioniert auch, wenn der Log-Versand ansonsten abgeschaltet ist. Gespeichert werden sie in PostgreSQL
+(abfragbar und für 1 Jahr aufbewahrt).
+
+| Event                                 | Erkennung (Beispiele)                                                                   | Felder                                      |
+|---------------------------------------|-----------------------------------------------------------------------------------------|---------------------------------------------|
+| `ssh.login.failed`                    | `Failed password for (invalid user )?<u> from <ip> port <p> ssh2`, `Failed publickey …` | ts, user, ip, port, method, invalid_user    |
+| `ssh.login.invalid_user`              | `Invalid user <u> from <ip> port <p>`                                                   | ts, user, ip, port                          |
+| `ssh.login.success`                   | `Accepted (password\|publickey\|keyboard-interactive/pam) for <u> from <ip> port <p>`   | ts, user, ip, port, method, key_fingerprint |
+| `ssh.preauth.disconnect`              | `Connection closed by authenticating user … [preauth]`                                  | ts, user, ip, port                          |
+| `sudo.auth.failed`                    | `pam_unix(sudo:auth): authentication failure … user=<u>`                                | ts, user, tty                               |
+| `sudo.command`                        | `sudo: <u> : … COMMAND=<cmd>` (optional, standardmäßig aus)                             | ts, user, target, cmd (redacted)            |
+| `account.created` / `account.deleted` | `useradd`/`userdel`-Meldungen                                                           | ts, user                                    |
+| `system.reboot`                       | Wechsel der Boot-ID                                                                     | ts, previous_boot, uptime_before            |
+| `system.oom_kill`                     | Kernel `Out of memory: Killed process <pid> (<name>)`                                   | ts, pid, process                            |
+
+**Parser-Anforderungen:** Sie müssen sowohl `sshd` als auch `sshd-session` erkennen (Prozessname ab OpenSSH 9.8), IPv4
+und IPv6, und Distro-Varianten. **Jeder Parser wird mit echten Logzeilen aus allen Zieldistros als Fixtures getestet und
+gefuzzt** (`cargo-fuzz`).
+
+**Anreicherung im Server (optional):** GeoIP (Land/ASN) über eine **lokale** MaxMind-GeoLite2-Datenbank, ohne externe
+Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von neuer IP“ zu erkennen.
+
+---
+
+## 12. Alerting
+
+### 12.1 Konzepte
+
+- **Regel (Rule):** Definition mit Typ, Bedingung, Schwellen, Dauer und Labels. Sie gilt für alle Nodes oder für einen
+  Selektor (Gruppe/Tags).
+- **Alert-Instanz:** Regel × Node (× ggf. Dimension wie Mountpoint/Interface) mit Zustand.
+- **Zustandsautomat:** `OK → PENDING → WARNING | CRITICAL → RESOLVED → OK`, dazu `SILENCED` und `ACKNOWLEDGED` als
+  Flags.
+    - `for:` legt die Mindestdauer bis zum Feuern fest, `clear:` eine eigene Rückfall-Schwelle (**Hysterese**).
+    - **Flapping-Erkennung:** Mehr als N Wechsel in M Minuten setzen den Status `FLAPPING`; Benachrichtigungen werden
+      dann gedrosselt.
+- **Notification-Policy (Routing):** Matcher auf Labels (`severity`, `group`, `rule`, `tags`) → Kanäle. Dazu
+  Wiederholungsintervall, Gruppierung (pro Node oder Digest) und eine einfache **Eskalation** („nach 15 min ohne
+  Quittierung zusätzlich an Kanal X“).
+- **Silences und Wartungsfenster:** zeitlich begrenzt, per Selektor. Während Update-Wartungsfenstern wird
+  **automatisch** stummgeschaltet (Reboot- und Offline-Alerts).
+- **Auswertung:** Die Engine läuft im Server alle 10 s. Schwellwert-Regeln fragen den `MetricStore` über die typisierte
+  Query-Schicht ab (Fenster bis 15 min aus dem Ringpuffer, längere aus TimescaleDB), Event-Regeln laufen über einen Event-Stream (sofortige Auswertung beim Ingest).
+
+### 12.2 Regeltypen (YAML-Format)
+
+User schreiben **keine freien Queries** (Security und Einfachheit). Stattdessen gibt es typisierte Regelarten:
+
+```yaml
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.cpu.usage_high
+  name: { de: "Hohe CPU-Auslastung", en: "High CPU usage" }
+  labels: { category: cpu }
+spec:
+  type: threshold            # threshold | rate | event | absence | state | anomaly | prediction
+  metric: sermon_cpu_utilization_ratio
+  aggregate: avg             # avg | max | min | sum | last
+  window: 10m
+  warning: { op: ">", value: 0.85 }
+  critical: { op: ">", value: 0.95 }
+  clear: { op: "<", value: 0.80 }
+  for: 5m
+  selector: { groups: [ "*" ], tags: { } }
+  help:
+    de: "Die CPU war über 10 Minuten im Mittel stark ausgelastet. Prüfe in der Live-Ansicht, welche Prozesse die Last erzeugen."
+    en: "…"
+---
+apiVersion: sermon/v1
+kind: AlertRule
+metadata: { id: security.ssh.bruteforce, name: { de: "SSH-Brute-Force", en: "SSH brute force" } }
+spec:
+  type: event
+  event: ssh.login.failed
+  groupBy: [ ip ]
+  count: { window: 5m, warning: 10, critical: 50 }
+  notifyFields: [ ts, user, ip, port ]
+```
+
+Import und Export laufen über die UI bzw. die API. Der Import wird **validiert** (JSON-Schema aus dem Proto) und zeigt
+einen **Dry-Run-Diff**. Mitgelieferte Standardregeln liegen in `rules/` und lassen sich pro Org überschreiben oder
+deaktivieren, ohne das Original zu verändern.
+
+### 12.3 Standardregeln (angelehnt an die Netdata-Health-Configs)
+
+| Kategorie         | Regel                                                          | Typ               | Warnung / Kritisch (Default)         |
+|-------------------|----------------------------------------------------------------|-------------------|--------------------------------------|
+| **Verfügbarkeit** | Node offline (kein Heartbeat)                                  | absence           | – / 60 s                             |
+|                   | Reboot erkannt                                                 | event             | Info                                 |
+|                   | Agent-Puffer läuft voll / Daten verworfen                      | threshold         | 50 % / 90 %                          |
+|                   | Uhrzeit nicht synchronisiert / Offset                          | state / threshold | > 100 ms / > 1 s                     |
+| **CPU**           | CPU-Auslastung (avg 10 min)                                    | threshold         | 85 % / 95 %                          |
+|                   | iowait (avg 10 min)                                            | threshold         | 20 % / 40 %                          |
+|                   | Steal-Time (VMs)                                               | threshold         | 10 % / 25 %                          |
+|                   | Load15 pro Kern                                                | threshold         | > 1,5 / > 3                          |
+| **Memory**        | RAM-Nutzung (avail)                                            | threshold         | 80 % / 90 %                          |
+|                   | Swap-Nutzung                                                   | threshold         | 50 % / 80 %                          |
+|                   | OOM-Kill                                                       | event             | – / jeder                            |
+|                   | Memory-Pressure (PSI some avg60)                               | threshold         | 10 % / 30 %                          |
+| **Disk**          | Dateisystem-Füllstand                                          | threshold         | 80 % / 90 %                          |
+|                   | Inodes                                                         | threshold         | 80 % / 90 %                          |
+|                   | Füllprognose: voll in < 24 h / < 6 h                           | prediction        | ✓ / ✓                              |
+|                   | Disk-Utilization (avg 10 min)                                  | threshold         | 90 % / 98 %                          |
+|                   | Dateisystem read-only geworden                                 | state             | – / ✓                               |
+|                   | RAID degradiert (`/proc/mdstat`)                               | state             | – / ✓                               |
+| **Netzwerk**      | Interface down (das vorher up war)                             | state             | ✓                                   |
+|                   | Empfangs-/Sende-Errors, Drops                                  | rate              | > 0,1 % / > 1 %                      |
+|                   | Bandbreiten-Sättigung (bei bekannter Speed)                    | threshold         | 80 % / 95 %                          |
+|                   | TCP-Listen-Queue-Overflows                                     | rate              | > 0 / > 10/min                       |
+|                   | conntrack-Tabelle                                              | threshold         | 80 % / 90 %                          |
+| **System**        | File-Descriptors                                               | threshold         | 80 % / 90 %                          |
+|                   | Zombie-Prozesse                                                | threshold         | > 10 / > 50                          |
+|                   | systemd-Unit failed                                            | state             | ✓                                   |
+|                   | Temperatur (falls vorhanden)                                   | threshold         | hwmon-Grenzen                        |
+| **Security**      | SSH-Brute-Force pro IP (5 min)                                 | event             | 10 / 50                              |
+|                   | Dieselbe IP auf ≥ 3 Nodes (Fleet-Korrelation)                  | event             | ✓                                   |
+|                   | **Erfolgreicher Login nach vielen Fehlversuchen** derselben IP | event             | – / ✓                               |
+|                   | Root-Login per SSH erfolgreich                                 | event             | ✓                                   |
+|                   | Login von neuer IP / neuem Land                                | event             | ✓ (Info)                            |
+|                   | sudo-Authentifizierungsfehler                                  | event             | 3 / 10 in 10 min                     |
+|                   | Neuer Benutzer angelegt                                        | event             | ✓                                   |
+| **Updates**       | Security-Updates verfügbar                                     | state             | > 0 seit 3 Tagen / > 0 seit 14 Tagen |
+|                   | Updates verfügbar (alle)                                       | state             | Info                                 |
+|                   | Reboot erforderlich                                            | state             | > 1 Tag / > 7 Tage                   |
+|                   | Update-Lauf fehlgeschlagen                                     | event             | – / ✓                               |
+| **Anomalien**     | Anomalie-Rate des Nodes hoch                                   | anomaly           | 10 % / 25 % der Metriken             |
+
+### 12.4 Benachrichtigungskanäle
+
+| Kanal                                       | Umsetzung                                                                                 |
+|---------------------------------------------|-------------------------------------------------------------------------------------------|
+| E-Mail                                      | SMTP mit STARTTLS/TLS-Pflicht (konfigurierbar), HTML- und Text-Template                   |
+| Webhook                                     | JSON-POST, Header `X-SerMon-Signature: t=<ts>,v1=<HMAC-SHA256>`, Retries mit Backoff      |
+| Slack, Microsoft Teams, Discord, Mattermost | Incoming Webhooks / Workflows; formatierte Nachrichten (Blocks / Adaptive Cards / Embeds) |
+| Telegram                                    | Bot-API (Token + Chat-ID)                                                                 |
+| ntfy, Gotify, Pushover                      | jeweilige HTTP-APIs, Priorität aus Severity                                               |
+
+- Alle Kanäle implementieren ein gemeinsames Interface `Notifier` (Adapter-Pattern) und haben einen **„Test
+  senden“-Button**.
+- Templates sind **i18n-fähig** (Sprache pro Kanal) und enthalten einen Deep-Link in die UI.
+- Zugangsdaten werden **verschlüsselt gespeichert** (§18.5). Ausgehende Requests sind **SSRF-geschützt** (§18.6).
+- Zustellungen werden protokolliert (Status, Fehlertext) und sind in der UI einsehbar.
+
+---
+
+## 13. Anomalie-Erkennung
+
+**Ziel:** Ungewöhnliches Verhalten erkennen, ohne Schwellen festzulegen. Die Erkennung soll **erklärbar** sein („CPU ist
+5× höher als dienstags um diese Uhrzeit üblich“).
+
+### Verfahren (serverseitig, Worker jede Minute auf den 1-min-Aggregaten)
+
+1. **Kandidaten-Metriken:** ein kuratierter Satz von ca. 30 Kernmetriken pro Node (CPU-Modi, Load, Mem available,
+   Swap-IO, Disk-IO/Latenz, Net rx/tx, TCP-Retransmits, Prozessanzahl, Log-Rate pro Severity, SSH-Fehlversuche/h).
+2. **Baselines pro (Node, Metrik):**
+    - *kurzfristig:* EWMA von Mittelwert und Varianz (Halbwertszeit ca. 1 h)
+    - *saisonal:* Median und **MAD** (Median Absolute Deviation) je **Stunde der Woche** (168 Buckets) über die letzten
+      4 Wochen
+3. **Score:** robuster Z-Score `z = |x − median| / (1,4826 · MAD)`. Die Metrik ist anomal, wenn **beide** Verfahren
+   übereinstimmen (z > 4 bzw. EWMA-Abweichung > 4σ). Das reduziert Fehlalarme.
+4. **Glättung:** anomal erst bei ≥ 3 von 5 Minuten (debounce).
+5. **Anomalie-Rate pro Node:** Anteil der anomalen Metriken in Prozent (wie die *Anomaly Rate* bei Netdata). Sie dient
+   als Alert-Quelle (§12.3).
+6. **Lernphase:** Neue Nodes und Metriken brauchen **7 Tage** Lernzeit. Bis dahin zeigt die UI „lernt noch (Tag 3/7)“
+   und es gibt keine Anomalie-Alerts.
+
+### UI
+
+- **Anomalie-Band** über jedem Chart (rote Markierung in anomalen Zeitabschnitten) und optional das **Baseline-Band**
+  (erwarteter Bereich) im Chart.
+- **„Was war ungewöhnlich?“:** Für einen markierten Zeitbereich werden alle Metriken eines Nodes (oder der Fleet) nach
+  Score sortiert. Das hilft bei der Ursachensuche (vergleichbar mit Netdatas *Metric Correlations*).
+
+### Qualitätssicherung
+
+- Synthetische Testreihen (Rauschen + Saisonalität + injizierte Spikes, Level-Shifts, Drifts) als Golden-Tests.
+- Ein Benchmark für Precision/Recall läuft in CI und darf nicht schlechter werden.
+- Ausbaustufe (v2): Isolation Forest bzw. k-means auf Feature-Vektoren als zusätzlicher Detektor hinter demselben
+  Interface `Detector`.
+
+---
+
+## 14. Paket-Updates und Auto-Update
+
+### 14.1 Erfassung (Agent → über den Helper)
+
+Alle 6 h, nach Paketmanager-Läufen (erkannt über Dateiänderungen an dpkg-/rpm-Datenbanken) und auf Anforderung:
+
+| Distro        | Verfügbare Updates                         | Security-Updates                         | Reboot nötig                            |
+|---------------|--------------------------------------------|------------------------------------------|-----------------------------------------|
+| Debian/Ubuntu | `apt-get update` + `apt list --upgradable` | Origin/Suite `*-security`                | `/var/run/reboot-required(.pkgs)`       |
+| RHEL-Familie  | `dnf check-update`                         | `dnf updateinfo list --security`         | `dnf needs-restarting -r`               |
+| Alpine        | `apk update` + `apk version -l '<'`        | ⚠️ keine Security-Metadaten → nur „alle“ | laufender Kernel ≠ installierter Kernel |
+
+Gemeldet werden: Anzahl gesamt und Security, Paketliste (Name, installiert, Kandidat, Quelle, Security-Flag), Reboot
+nötig samt Grund, Zeitpunkt des letzten erfolgreichen Updates.
+
+### 14.2 Update-Policies (pro Node-Gruppe)
+
+```yaml
+kind: UpdatePolicy
+spec:
+  mode: security-auto        # report | security-auto | all-auto
+  window: { days: [ sun ], start: "03:00", duration: 2h, timezone: "Europe/Berlin" }
+  autoReboot: true           # nur innerhalb des Fensters und nur wenn nötig
+  rollout: { maxParallel: 1, stopOnFailure: true, healthCheck: 10m }
+```
+
+- **Rolling Rollout:** Pro Gruppe laufen höchstens N Nodes gleichzeitig. Nach Update und Reboot muss der Node innerhalb
+  von `healthCheck` wieder online und ohne kritische Alerts sein, sonst stoppt der Rollout und ein Alert wird ausgelöst.
+- **Manuell:** Ein Operator kann „Jetzt aktualisieren“ auslösen (Step-up-2FA, Bestätigungsdialog mit Paketliste).
+- **Ausführung (Helper):**
+  `DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade`
+  (bzw. nur Security-Pakete); `dnf -y upgrade [--security]`; `apk upgrade`. Ausgabe und Exit-Code gehen an den Server,
+  gekürzt und redacted.
+- **Transparenz:** Updates-Dashboard (§16), Historie pro Node, vollständiges Audit-Log (wer, wann, was, Ergebnis).
+- **Lokales Veto:** `allow_remote_updates=false` im Helper (§4.2).
+
+### 14.3 Agent-Self-Update
+
+- Bei Installation per Paket-Repo aktualisiert sich der Agent über den normalen Paketmanager (und damit über die
+  Policy).
+- Bei Installation per Skript lädt der Helper die neue Binary, **prüft die Signatur gegen den eingebetteten Public
+  Key**, ersetzt sie atomar und startet sie neu. Ein Rollback erfolgt, wenn der Agent nach 2 min nicht verbunden ist.
+- **Kanäle:** `stable` / `beta` pro Gruppe; Ringe für einen gestaffelten Rollout.
+
+---
+
+## 15. Integrationen und Module
+
+- Module werden **in den Agent kompiliert** (Cargo-Features, alle im Release-Build enthalten), sind **standardmäßig
+  deaktiviert** und werden **zentral** pro Node-Gruppe aktiviert und konfiguriert (UI-Formular aus einem JSON-Schema).
+- **Auto-Discovery als Vorschlag:** Der Agent erkennt laufende Dienste (Port, Prozessname, Unit) und die UI zeigt „nginx
+  erkannt – Modul aktivieren?“. Er aktiviert **nichts** automatisch.
+- Einheitliches Trait `Module { fn schema(); fn validate(cfg); async fn collect(ctx) -> Metrics/Events }`. Panics werden
+  isoliert, jedes Modul hat ein eigenes Zeit- und Ressourcenbudget.
+- Zugangsdaten für Module (z. B. DB-Passwort) werden Ende-zu-Ende verschlüsselt an den Agent übertragen und dort nur im
+  Speicher gehalten. **Empfehlung in der UI:** einen read-only-Monitoring-User verwenden.
+
+| Modul (v1)                    | Inhalt                                                                 | Hinweis                                                                                                                         |
+|-------------------------------|------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| **Docker**                    | Container-Status, CPU/Mem/Net/IO pro Container, Restarts, Health; Logs | ⚠️ Zugriff auf `docker.sock` entspricht root-Rechten → deutliche Warnung; alternativ cgroup-basiert (ohne Socket, nur Metriken) |
+| **systemd-Units (erweitert)** | Zustand und Restarts ausgewählter Units                                | ohne Zusatzrechte                                                                                                               |
+| **nginx**                     | `stub_status`                                                          |                                                                                                                                 |
+| **Apache httpd**              | `server-status?auto`                                                   |                                                                                                                                 |
+| **PostgreSQL**                | Verbindungen, TPS, Cache-Hit, Replikations-Lag, DB-Größen, Locks       | Rolle `pg_monitor`                                                                                                              |
+| **MySQL/MariaDB**             | Verbindungen, Queries, Slow Queries, Replikation, InnoDB-Buffer        |                                                                                                                                 |
+| **Redis**                     | Speicher, Clients, Ops/s, Hit-Rate, Evictions                          |                                                                                                                                 |
+| **TLS-Zertifikate**           | Ablaufdatum lokaler Dateien und Endpunkte                              | Alert 21 / 7 Tage                                                                                                               |
+| **HTTP-/TCP-Check**           | Erreichbarkeit, Latenz und Statuscode lokaler Endpunkte                |                                                                                                                                 |
+| **SMART**                     | Gesundheit und Temperatur von Disks                                    | benötigt `smartctl` über den Helper (neue feste Op)                                                                             |
+| **Prometheus-Scraper**        | beliebige `/metrics`-Endpunkte (nur localhost bzw. Allowlist)          | deckt den „Rest der Welt“ ab; Serien-Limit                                                                                      |
+
+Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level), RabbitMQ, Elasticsearch.
+
+---
+
+## 16. Dashboards
+
+### Fest eingebaute Dashboards (v1)
+
+1. **Fleet-Übersicht (Startseite)**
+    - Kachel-Raster aller sichtbaren Nodes: Ampel (Alerts), CPU/Mem/Disk als Mini-Gauges, Sparkline der letzten 15 min,
+      Uptime, Badges für Updates und Reboot
+    - Kopfzeile: Nodes online/offline, aktive Alerts nach Severity, Nodes mit Security-Updates, Anomalie-Rate der Fleet
+    - Umschaltbar zwischen Kachel- und Tabellenansicht; gruppiert nach Gruppe/Tag; Filter und Suche
+2. **Node-Übersicht:** Kopfzeile (Host-Fakten, Uptime, Agent-Version), Kerncharts, aktive Alerts, letzte Events
+   (Reboots, Logins, Updates), Tabs: CPU · Memory · Disk · Netzwerk · Prozesse (Live) · Logs · Security · Updates ·
+   Module.
+3. **Alerts:** aktive Alerts (gruppiert, filterbar, quittierbar), Timeline/Historie, Statistik („lauteste Regeln“,
+   MTTA/MTTR).
+4. **Security-Dashboard:**
+    - Fehlgeschlagene Logins über Zeit (gestapelt nach Node), **Top-IPs, Top-Usernamen**, Länder (bei GeoIP), Weltkarte
+      optional
+    - Erfolgreiche Logins mit „neu“-Markierung, Root-Logins, sudo-Fehler
+    - Tabelle: Zeitstempel · Node · User · IP · Port · Methode · Ergebnis, mit Export als CSV
+    - Hinweise wie „Passwort-Login ist auf 4 Nodes erlaubt“ (später: SSH-Config-Audit)
+5. **Updates/Patch-Compliance:** Nodes nach Status (aktuell / Updates / Security-Updates / Reboot nötig), Alter offener
+   Security-Updates, nächste Wartungsfenster, Laufhistorie.
+6. **Kapazitätsplanung:** Füllprognosen aller Dateisysteme (sortiert nach „Tage bis voll“), RAM/CPU-Trends über 30 Tage,
+   Top-N-Verbraucher der Fleet.
+7. **Fleet-Heatmap:** Nodes × Zeit, eingefärbt nach CPU, Mem, IO oder Anomalie-Rate. Damit fallen Muster und „Noisy
+   Neighbors“ sofort auf.
+8. **Vergleich:** 2–4 Nodes nebeneinander bzw. übereinandergelegt (z. B. vor und nach einer Änderung, oder
+   Cluster-Mitglieder).
+9. **Anomalien:** Nodes nach Anomalie-Rate, „Was war ungewöhnlich?“ für einen Zeitraum.
+
+### Ausbau (v1.x)
+
+- **Eigene Dashboards:** Grid-Layout mit Drag & Drop, Widgets (Zeitreihe, Gauge, Stat, Tabelle, Log-Stream,
+  Alert-Liste), Variablen (Node/Gruppe), Teilen innerhalb der Org, Export/Import als JSON.
+- **Kiosk-/TV-Modus:** Vollbild, Auto-Rotation, ohne Bedienelemente; Zugriff über einen **schreibgeschützten,
+  widerrufbaren Kiosk-Token**, der an Dashboard und Org gebunden ist.
+- **SLA-/Uptime-Report:** monatlich als PDF/HTML pro Gruppe.
+
+---
+
+## 17. UI/UX und Hilfe
+
+- **Layout:** Linke Navigation (Übersicht · Nodes · Alerts · Logs · Security · Updates · Dashboards · Einstellungen),
+  Org-Switcher, globale Suche bzw. **Command-Palette (Ctrl/⌘+K)** für Nodes, Seiten und Aktionen.
+- **Zeit:** Globaler Zeitbereich-Picker (Presets + absolut), Live-Modus mit Auto-Refresh; alle Charts einer Seite sind
+  **synchronisiert** (Crosshair, Zoom).
+- **Design:** Light/Dark/System, klare Typografie, Statusfarben **nicht nur über Farbe** (zusätzlich Icon oder Text),
+  responsive bis Tablet; das Smartphone wird für Alerts und die Übersicht optimiert.
+- **Barrierefreiheit:** Ziel **WCAG 2.2 AA**, Tastaturbedienung, Screenreader-Labels, automatische axe-Checks in CI.
+- **Hilfe zum Inhalt:**
+    - **ⓘ-Tooltips** an jeder Metrik und Kennzahl („Was ist iowait?“, „Was bedeutet Steal-Time?“) mit kurzem Text und
+      Link „Mehr erfahren“
+    - **Kontexthilfe-Panel** (rechts ausklappbar, `?`-Taste) pro Seite: Wozu dient die Seite, wie lese ich die Charts,
+      typische Ursachen und nächste Schritte
+    - **Alert-Hilfe:** Jede Regel hat einen Hilfetext (`help`), der in UI und Benachrichtigung erscheint: Was bedeutet
+      der Alert, welche Ursachen sind typisch, was ist zu tun?
+    - **Single Source of Truth:** Hilfetexte als Markdown unter `docs/help/<locale>/…`. Daraus werden UI-Tooltips,
+      Panels und die Online-Doku gebaut, und ein Lint prüft auf fehlende Übersetzungen.
+    - **Empty States mit Anleitung** (z. B. „Noch keine Nodes – so installierst du den Agent“), Onboarding-Assistent für
+      den ersten Node, Tour optional
+- **i18n:** DE und EN von Anfang an (Paraglide). Zahlen, Einheiten und Datumsformate nach Locale; Einheiten automatisch
+  skaliert (KiB/MiB/GiB, bit/s vs. Byte/s umschaltbar).
+- **Performance:** Erstes Laden < 200 KB JS (gzip); Charts mit Downsampling im Client (uPlot), Virtualisierung für lange
+  Listen (Logs, Prozesse).
+
+---
+
+## 18. Security-Konzept
+
+> Ziel: **OWASP ASVS Level 2** für Server und UI, **Least Privilege** auf den Nodes, nachvollziehbare **Supply Chain**.
+
+### 18.1 Threat Model (STRIDE, Auszug)
+
+| Bedrohung              | Szenario                                        | Gegenmaßnahmen                                                                                                                                                                                |
+|------------------------|-------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Spoofing               | Fremder Agent gibt sich als Node aus            | mTLS mit Client-Zertifikat, Identität nur aus dem Zertifikat, Denylist, kurze Laufzeiten                                                                                                      |
+| Spoofing               | Gestohlener Enrollment-Token                    | 1 h TTL, einmalig, gruppengebunden, nur Hash in der DB, Audit + Benachrichtigung bei Nutzung                                                                                                  |
+| Tampering              | MITM zwischen Agent und Server                  | TLS 1.3, CA-Pinning bzw. Fingerprint, keine Downgrade-Optionen                                                                                                                                |
+| Tampering              | Manipulierte Agent-Binary                       | Signaturprüfung (minisign/cosign) im Install-Skript und beim Self-Update, signierte Paket-Repos                                                                                               |
+| Repudiation            | „Wer hat das Update ausgelöst?“                 | Append-only-Audit-Log (Hash-Kette), inkl. Helper-Ops                                                                                                                                          |
+| Information Disclosure | User sieht Nodes einer fremden Org/Gruppe       | Scope-Pflicht in jeder Repository-Methode, PG-RLS, Scope-Filter im `MetricStore`, `X-Scope-OrgID` bei Loki, **Tenant-Isolation-Tests** in CI                                                                              |
+| Information Disclosure | Secrets in Logs/cmdlines                        | Redaction im Agent, verschlüsselte Secrets, keine Secrets in Server-Logs                                                                                                                      |
+| DoS                    | Ein Agent flutet den Server                     | Quotas, Cardinality-Limits, Batch-Größenlimits, Throttle                                                                                                                                      |
+| DoS                    | Login-Brute-Force                               | Rate-Limits, progressive Delays, 2FA                                                                                                                                                          |
+| Elevation of Privilege | Kompromittierter Agent → root                   | Agent ohne root, systemd-Hardening, Helper mit festem Op-Enum + Peer-Credential-Check                                                                                                         |
+| Elevation of Privilege | Kompromittierter Server → alle Nodes            | **Keine freien Kommandos**; der Helper führt nur Paketmanager-Updates aus Distro-signierten Quellen aus; lokales Veto; Self-Update nur mit Signatur des **Release-Keys** (nicht des Servers!) |
+| XSS / Injection        | Präparierte Logzeile, Hostname oder Prozessname | Ausgabe nur als Text (Svelte escaped standardmäßig, **kein `{@html}`**), strikte CSP, parametrisierte SQL-Queries (sqlc), LogQL nur aus typisierten Bausteinen mit Escaping         |
+
+### 18.2 Transport
+
+- **Extern:** HTTPS über Caddy (automatisches ACME oder eigenes Zertifikat), TLS 1.2+ (bevorzugt 1.3), HSTS.
+- **Agent-Kanal:** eigener Port oder eigener Hostname mit **mTLS**, **TLS 1.3 only**, Client-Zertifikat Pflicht. Die
+  interne Agent-CA ist getrennt vom Web-Zertifikat. Der CA-Schlüssel ist verschlüsselt gespeichert, eine Intermediate-CA
+  ist für die Rotation vorgesehen.
+
+### 18.3 Web-Application-Security
+
+- **Security-Header:**
+  `Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-…'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy` restriktiv, COOP/CORP.
+- **CSRF:** SameSite-Cookies, Connect-Requests mit `Content-Type: application/proto|json` (kein „simple request“) und
+  **Origin-Prüfung** im Server.
+- **Autorisierung:** zentral (`authz`), standardmäßig verweigernd (deny by default), getestet über Rollen-Matrix-Tests
+  (jede RPC × jede Rolle).
+- **Eingaben:** Validierung an der Grenze (Protovalidate-Regeln im Schema), Größenlimits für alle Requests.
+- **Ausgaben:** keine Stacktraces an Clients, generische Fehlermeldungen mit Korrelations-ID.
+
+### 18.4 Agent-Hardening (systemd)
+
+```ini
+[Service]
+User=sermon
+Group=sermon
+SupplementaryGroups=systemd-journal adm
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+ReadWritePaths=/var/lib/sermon-agent
+ReadOnlyPaths=/etc/sermon
+MemoryMax=128M
+CPUQuota=20%
+```
+
+Ziel: `systemd-analyze security sermon-agent` mit einem Score **< 2,0** („OK“). Unter OpenRC wird der Agent über
+`supervise-daemon` mit `command_user=sermon` gestartet.
+
+### 18.5 Secrets
+
+- Zugangsdaten für Kanäle und Module, der TOTP-Seed und der CA-Schlüssel werden mit **AES-256-GCM** verschlüsselt. Der
+  Master-Key kommt aus `SERMON_MASTER_KEY_FILE` (Docker-Secret); Schlüsselrotation ist mit Key-ID im Ciphertext möglich.
+- Passwörter werden nie gespeichert oder geloggt; Tokens sind nur als Hash abgelegt.
+- Secrets werden in der UI nach dem Speichern **nie wieder angezeigt** (nur „gesetzt ✓ / ändern“).
+
+### 18.6 Ausgehende Verbindungen (SSRF)
+
+- Webhooks und Chat-Kanäle: Standardmäßig werden private, Loopback-, Link-local- und Metadata-Adressen
+  (`169.254.169.254` usw.) **blockiert**. Die IP wird aufgelöst und **gepinnt** (gegen DNS-Rebinding), Redirects sind
+  begrenzt, Timeouts gesetzt. Eine Allowlist für interne Ziele (z. B. internes Mattermost) konfiguriert der Superadmin.
+- Keine Telemetrie und keine „Phone-Home“-Funktion. Die Prüfung auf neue Versionen ist abschaltbar.
+
+### 18.7 Datenschutz (DSGVO)
+
+- IP-Adressen, Usernamen und Logs sind **personenbezogene Daten**. Daraus folgen: eine definierte Retention,
+  Rollenbeschränkung (Logs für Viewer abschaltbar), Löschfunktion, Export und eine Vorlage für das
+  Verarbeitungsverzeichnis in `docs/`.
+- GeoIP nur lokal. Optional werden IPs nach X Tagen pseudonymisiert (gekürzt).
+
+### 18.8 Prozess
+
+- **Security-Review-Checkliste** pro PR (siehe Agent-Skill `sermon-security-review`), SAST in CI (CodeQL, gosec, clippy,
+  semgrep), Dependency-Scans, Fuzzing der Parser.
+- Vor v1.0 ein **externer Pentest** bzw. ein Review durch eine zweite Person.
+- `SECURITY.md` mit Responsible-Disclosure-Prozess und GitHub Private Vulnerability Reporting.
+
+---
+
+## 19. Qualität: Clean Code, TDD und Prozess
+
+### 19.1 Prinzipien
+
+- **TDD (Red → Green → Refactor)** als Standard für Domänenlogik, Parser, Alert-Engine, Anomalie-Erkennung und Authz.
+  Für Adapter wird *test-first* auf Integrationsebene (Testcontainers) gearbeitet.
+- **Clean Architecture / Hexagonal:** Domäne ohne I/O; Abhängigkeiten zeigen nach innen; Ports und Adapter; Dependency
+  Injection per Konstruktor (Go: ohne Framework; Rust: Generics/Traits).
+- **SOLID, kleine Funktionen, sprechende Namen**, keine Magic Numbers (Konstanten bzw. Konfiguration), Fehler explizit
+  (Go: `errors.Is/As` mit Wrapping; Rust: `thiserror` in Libraries, `anyhow` nur in Binaries).
+- **Make illegal states unrepresentable:** starke Typen (`NodeID`, `OrgID`, `Percent`, `Bytes`) statt `string`/
+  `float64`.
+- **Boy-Scout-Rule**, aber Refactorings in eigenen Commits.
+- **Dokumentation als Code:** ADRs (`docs/adr/NNNN-titel.md`, MADR-Format), Architekturdiagramme als Mermaid bzw. C4 im
+  Repo.
+
+### 19.2 Teststrategie
+
+| Ebene                        | Rust (Agent)                                                                                             | Go (Server)                                                                                                     | Web                                      |
+|------------------------------|----------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|------------------------------------------|
+| Unit                         | `cargo test`; `/proc`-Fixtures pro Distro unter `agent/fixtures/`; `proptest`; `insta`-Snapshots         | Table-driven Tests, `testing/quick` bzw. `rapid`                                                                | Vitest + Testing Library                 |
+| Fuzzing                      | `cargo-fuzz` für alle Parser (proc, Logzeilen, Security-Events)                                          | `go test -fuzz` für Regel-Parser und Query-Builder                                                              | –                                        |
+| Integration                  | Agent gegen einen Mock-gRPC-Server                                                                       | **Testcontainers-go** mit PG/TimescaleDB und Loki                                                             | –                                        |
+| Contract                     | `buf breaking` gegen `main`                                                                              | dto.                                                                                                            | generierte Clients                       |
+| E2E                          | –                                                                                                        | **docker-compose-Testumgebung:** Server + Agents in Containern (Debian, Ubuntu, Rocky, Alpine; arm64 über QEMU) | **Playwright** (inkl. axe-Accessibility) |
+| Security                     | Rollen-Matrix-Tests, Tenant-Isolation-Tests (User A darf keine Daten aus Org B sehen – für **jede** RPC) |                                                                                                                 |                                          |
+| Performance                  | Benchmarks (`criterion`) für Collectors, Ressourcen-Budget-Test                                          | Ingest-Lasttest (k6 / eigenes Tool: 50 simulierte Agents)                                                       | Lighthouse-Budget                        |
+| Mutation (optional, nightly) | `cargo-mutants`                                                                                          | `gremlins`                                                                                                      | Stryker                                  |
+
+**Coverage-Ziele:** Domäne und Parser ≥ 90 %, gesamt ≥ 80 %. Coverage ist ein Indikator, kein Ziel an sich:
+Mutationstests zeigen die tatsächliche Testgüte.
+
+### 19.3 Tooling und Konventionen
+
+- **Format/Lint:** `rustfmt`, `clippy -D warnings` (dazu ausgewählte `pedantic`-Lints); `gofumpt`, `golangci-lint` (u.
+  a. `gosec`, `errcheck`, `revive`, `staticcheck`); `prettier`, `eslint`, `svelte-check`; `buf lint`; `shellcheck`;
+  `hadolint`; `markdownlint`.
+- **Task-Runner:** `just` (`just dev`, `just test`, `just lint`, `just e2e`, `just gen`).
+- **Git-Hooks:** `lefthook` (Format, Lint, schnelle Tests, Secret-Scan mit `gitleaks`).
+- **Commits:** Conventional Commits → automatischer Changelog und SemVer (`release-please`).
+- **Branching:** Trunk-based, kurze PRs; `main` ist geschützt (Reviews, grüne CI, signierte Commits empfohlen).
+- **Dev-Umgebung:** `deploy/dev/compose.yaml` (PG/TimescaleDB, Loki, Mailpit für SMTP-Tests, ntfy) und ein Devcontainer; ein
+  lokaler Agent-Simulator (`sermon-agent --simulate N`) erzeugt Fake-Nodes.
+
+### 19.4 Definition of Done
+
+- [ ] Tests geschrieben (zuerst), grün, Coverage nicht gesunken
+- [ ] Lint, Format und Typecheck grün; keine neuen `unsafe`/`unwrap()` ohne Begründung
+- [ ] Security-Checkliste durchlaufen (Authz, Tenant-Scope, Input-Validierung, Secrets, Logging)
+- [ ] i18n-Texte DE und EN vorhanden, Hilfetexte für neue Metriken und Regeln
+- [ ] Doku bzw. ADR aktualisiert, Changelog-Eintrag (über den Commit)
+- [ ] Bei Protokolländerungen: `buf breaking` grün oder bewusst versioniert
+
+---
+
+## 20. Repository-Struktur
+
+```
+SerMon/
+├── agent/                         # Rust-Workspace
+│   ├── Cargo.toml
+│   ├── crates/
+│   │   ├── sermon-agent/          # Binary: Orchestrierung, CLI (enroll, run, uninstall, simulate)
+│   │   ├── sermon-helper/         # Binary: root-Helper (minimal)
+│   │   ├── sermon-core/           # Domänentypen, Traits (Collector, LogSource, EventParser, Clock)
+│   │   ├── sermon-collectors/     # /proc-, /sys-Collectors
+│   │   ├── sermon-logs/           # journald, Dateien, Docker
+│   │   ├── sermon-security/       # Security-Event-Parser
+│   │   ├── sermon-buffer/         # WAL
+│   │   ├── sermon-transport/      # gRPC-Client, Enrollment, Zertifikatsrotation
+│   │   ├── sermon-updates/        # apt/dnf/apk-Adapter (vom Helper genutzt)
+│   │   └── sermon-modules/        # Integrationen (Feature-Flags)
+│   ├── fixtures/                  # echte /proc-Snapshots + Logzeilen je Distro
+│   └── fuzz/
+├── server/                        # Go-Modul
+│   ├── cmd/sermon-server/
+│   ├── internal/
+│   │   ├── domain/                # Entitäten, Value Objects, Regeln (rein)
+│   │   ├── app/                   # Use-Cases, authz
+│   │   ├── alerting/              # Engine, Zustandsautomat, Regeltypen
+│   │   ├── anomaly/               # Detektoren, Baselines
+│   │   ├── updates/               # Policy-/Rollout-Orchestrierung
+│   │   ├── adapters/
+│   │   │   ├── postgres/          # sqlc-Queries, Repositories, RLS
+│   │   │   ├── timescale/         # MetricStore: COPY-Ingest, Ringpuffer, typisierte Query-Schicht
+│   │   │   ├── loki/
+│   │   │   ├── notify/            # email, webhook, slack, teams, discord, mattermost, telegram, ntfy, gotify, pushover
+│   │   │   ├── oidc/
+│   │   │   └── pki/               # interne Agent-CA
+│   │   └── transport/
+│   │       ├── agentapi/          # gRPC/mTLS
+│   │       └── webapi/            # Connect, Sessions, Middleware (CSP, CSRF, Rate-Limit)
+│   ├── migrations/
+│   └── web/                       # embed der gebauten SPA
+├── web/                           # SvelteKit-SPA
+│   ├── src/lib/{components,charts,api,i18n,stores}
+│   ├── src/routes/
+│   └── tests/{unit,e2e}
+├── proto/                         # buf-Module (agent/v1, web/v1)
+├── rules/                         # mitgelieferte Alert-Regeln (YAML)
+├── packaging/                     # install.sh, nfpm (deb/rpm), apk, systemd-/OpenRC-Units
+├── deploy/
+│   ├── compose/                   # Produktions-Compose + Caddyfile
+│   └── dev/
+├── docs/
+│   ├── adr/
+│   ├── help/{de,en}/              # Hilfetexte (Single Source of Truth)
+│   ├── security/                  # Threat Model, Hardening-Guide
+│   └── user/ admin/
+├── .claude/skills/                # Agent-Skills (siehe §25)
+├── .github/workflows/
+├── justfile
+├── lefthook.yml
+├── KONZEPT.md
+├── SECURITY.md
+└── LICENSE                        # AGPL-3.0
+```
+
+---
+
+## 21. CI/CD, Release und Supply Chain
+
+### Pipelines (GitHub Actions)
+
+| Workflow       | Trigger                   | Inhalt                                                                                                                                                                                                                                                                       |
+|----------------|---------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ci.yml`       | PR, push                  | Lint, Format, Unit- und Integrationstests (Matrix: Rust, Go, Web), `buf lint/breaking`, Coverage-Report                                                                                                                                                                      |
+| `security.yml` | PR, nightly               | CodeQL (Go, JS/TS, Rust), `gosec`, `govulncheck`, `cargo-audit`, `cargo-deny` (Lizenzen und Advisories), `pnpm audit`, `gitleaks`, `trivy` (Images), OpenSSF Scorecard                                                                                                       |
+| `e2e.yml`      | PR (Label) und nightly    | Compose-Umgebung mit Agents auf allen Zieldistros (amd64; arm64 über QEMU nightly), Playwright                                                                                                                                                                               |
+| `fuzz.yml`     | nightly                   | `cargo-fuzz` / `go test -fuzz` mit Zeitbudget, Korpus als Artefakt                                                                                                                                                                                                           |
+| `release.yml`  | Tag `v*` (release-please) | Cross-Builds (musl amd64/arm64), Server-Image (multi-arch, distroless/static, non-root), `.deb`/`.rpm`/`.apk` (nfpm), **SBOM** (CycloneDX via syft), **cosign keyless signing** + **SLSA-Provenance** (L3), GitHub Release, Paket-Repos aktualisieren (signiert mit GPG/RSA) |
+
+- **Actions per Commit-SHA gepinnt**, minimale `permissions:`, OIDC statt langlebiger Secrets.
+- **Renovate** für Abhängigkeiten (gruppiert, Auto-Merge nur für Patch-Releases von Dev-Dependencies).
+- Reproduzierbare Builds anstreben (`SOURCE_DATE_EPOCH`, `--locked`, `-trimpath`).
+
+### Versionierung
+
+- SemVer für Server und Agent (gemeinsame Version). Der Server unterstützt Agent-Versionen `N` und `N-1` (Minor).
+- Datenbankmigrationen nur vorwärts, mit Upgrade-Tests (Fixture-DB der Vorversion → Migration → Tests).
+
+---
+
+## 22. Deployment und Betrieb
+
+### docker-compose (Produktion)
+
+```
+services:
+  caddy            # TLS (ACME), Reverse-Proxy für Web; Agent-Port als TLS-Passthrough (mTLS terminiert im Server)
+  sermon-server    # non-root, read-only root fs, no-new-privileges, cap_drop: ALL
+  postgres         # PostgreSQL 17 + TimescaleDB (Image timescale/timescaledb, pg17), Volume, nur internes Netz
+  loki             # auth_enabled: true, Compactor-Retention
+networks: public (caddy), internal (alles andere, internal: true)
+```
+
+- **Erstinstallation:** `sermon-server init` erzeugt Master-Key, Agent-CA und Superadmin (einmaliges Setup-Token im Log,
+  nur 30 min gültig).
+- **Backup:**
+  - `sermon-server backup` sichert Stammdaten, Events, CA und Konfiguration verschlüsselt per `pg_dump`, ohne Metrik-Rohdaten.
+  - Eine vollständige Sicherung inklusive Metriken läuft physisch per **pgBackRest**.
+  - Für Loki gibt es eine Anleitung zur Volume-Sicherung.
+  - Der Restore wird in CI getestet.
+- **Upgrade:** `docker compose pull && docker compose up -d`; Migrationen laufen automatisch mit Lock; Rollback-Hinweise
+  in den Release-Notes.
+- **Self-Monitoring:** Der Server überwacht sich selbst (Ingest-Lag, Queue-Größen, Fehlerraten der Notifier,
+  Disk-Füllstand der Volumes) mit eigenen Alerts. Optional läuft ein Agent auf dem Server-Host.
+- **Ressourcen (Richtwert für 50 Nodes):** 4 vCPU, 8 GB RAM, 200 GB NVMe-SSD. Wird im Spike in M0 bestätigt.
+
+---
+
+## 23. Roadmap
+
+Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
+[Implementierungsplan](IMPLEMENTIERUNGSPLAN.md).
+
+| Meilenstein                    | Inhalt                                                                                                                                                                                                                                            | Ergebnis                                        |
+|--------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------|
+| **M0 – Fundament**             | Monorepo, CI (Lint/Test/Security), `justfile`, Dev-Compose, Proto-Grundgerüst, ADRs D1–D26, Threat Model v1, **Spikes:** TimescaleDB-Ingest mit 50 simulierten Agents (ADR 0001), journald über `journalctl`, musl-Build arm64                                                        | lauffähige Skelette, grüne Pipeline             |
+| **M1 – Metriken**              | Enrollment (Token, CSR, mTLS, Rotation), Basis-Collectors (§8.1), WAL-Puffer, Ingest → TimescaleDB, Auth lokal + TOTP, Orgs/Gruppen/Rollen, Fleet-Übersicht, Node-Detail (CPU/Mem/Disk/Net), i18n-Gerüst, Hilfe-Tooltips; **Debian/Ubuntu amd64**          | Erster Node sichtbar in < 2 min ab Installation |
+| **M2 – Alerting**              | Alert-Engine, Regeltypen threshold/rate/state/absence/event/prediction, Standardregeln (§12.3 ohne Anomalie), Security-Events (SSH, sudo, Reboot, OOM), alle Kanäle, Routing, Silences, YAML-Import/Export, Alerts-Seite; **RHEL, Alpine, arm64** | SSH-Brute-Force-Alert landet in ntfy/Slack      |
+| **M3 – Logs und Live**         | journald/Datei-Logs → Loki, Redaction, Log-Explorer + Live-Tail, Live-Ansicht (top), Security-Dashboard, OIDC, Passkeys, Step-up-Auth                                                                                                             | Fehlersuche ohne SSH möglich                    |
+| **M4 – Updates und Anomalien** | Helper, Update-Erfassung, Policies + Rollout, Updates-Dashboard, Agent-Self-Update, Paket-Repos, Anomalie-Erkennung + UI, Kapazitäts-Dashboard, Heatmap                                                                                           | Patch-Compliance auf einen Blick                |
+| **M5 – Module und Ausbau**     | Modul-Framework + Docker/nginx/PG/MySQL/Redis/TLS/HTTP-Check/SMART/Prometheus-Scraper, Docker-Logs, eigene Dashboards, Kiosk-Modus, Vergleichsansicht                                                                                             | v1.0-Kandidat                                   |
+| **v1.0**                       | Pentest/Review, Doku komplett, Upgrade-/Restore-Tests, Performance-Nachweis (50 Nodes)                                                                                                                                                            | Release                                         |
+
+---
+
+## 24. Offene Punkte und Risiken
+
+| #   | Thema                        | Frage / Risiko                                                                   | Vorschlag                                                                                  |
+|-----|------------------------------|----------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
+| O1  | Last durch 1-s-Auflösung     | ca. 1,7 Mrd. Zeilen/Tag in TimescaleDB, hohes WAL-Volumen und viel I/O           | Spike in M0 (ADR 0001). Fallback: 1-s-Werte nur im Ringpuffer, in der DB erst ab 5–10 s    |
+| O2  | Timescale-Lizenz             | Kompression und Continuous Aggregates stehen unter der Timescale License (TSL), nicht Apache-2.0 | Erlaubt für Self-Hosting und SerMon als Produkt bzw. SaaS; verboten wäre nur, TimescaleDB selbst als DBaaS anzubieten. Vor einem SaaS-Start juristisch prüfen |
+| O3  | Prozessdetails               | Ohne `CAP_SYS_PTRACE` keine IO/FD-Infos fremder Prozesse                         | Akzeptiert („n/a“). Später ggf. eine feste Helper-Op „ProcessDetails(pid)“ mit Rate-Limit  |
+| O4  | Docker-Socket                | root-äquivalent                                                                  | Modul aus + Warnung; cgroup-Variante ohne Socket bevorzugen                                |
+| O5  | `curl \| sh`                 | Wird in Security-Kreisen kritisch gesehen                                        | Signaturprüfung im Skript, Option „erst ansehen“, Paket-Repo als gleichwertige Alternative |
+| O6  | Alpine-Security-Updates      | apk hat keine Security-Metadaten                                                 | Nur `report`/`all-auto`; ggf. später den secdb-Feed von Alpine auswerten                   |
+| O7  | Projekt-/Domainname          | „SerMon“ – Marke/Domain prüfen                                                   | vor dem ersten Release                                                                     |
+| O8  | Mandanten in den Metriken    | Row-Level-Security funktioniert eventuell nur eingeschränkt auf komprimierten Chunks und Continuous Aggregates | Primär die Scope-Pflicht in der typisierten Query-Schicht (keine Roh-SQL-Abfragen von Usern) + Tenant-Isolation-Tests; RLS, wo unterstützt (Spike) |
+| O9  | API-Tokens / Terraform       | Automatisierbarkeit (Nodes, Regeln)                                              | Nach v1.0: org-gebundene, gescopte API-Tokens                                              |
+| O10 | Mobile                       | Push-Benachrichtigungen reichen?                                                 | ntfy/Pushover/Telegram decken das für v1 ab                                                |
+| O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |
+| O12 | Wachstum über ca. 200 Nodes  | TimescaleDB stößt bei 1-s-Auflösung an Grenzen                                   | `MetricStore` auf VictoriaMetrics umstellen; die Domänenlogik bleibt unverändert (ADR 0001) |
+
+---
+
+## 25. Agent-Skills (Claude Code)
+
+Unter `.claude/skills/` liegen projektspezifische Skills. Sie halten die Konventionen aus diesem Konzept bei der
+Entwicklung mit Claude Code ein.
+
+| Skill                       | Wann                                                                                         |
+|-----------------------------|----------------------------------------------------------------------------------------------|
+| `sermon-tdd`                | Bei jeder Implementierung von Logik: Red → Green → Refactor für Rust, Go und Svelte          |
+| `sermon-security-review`    | Vor jedem PR bzw. Commit mit sicherheitsrelevanten Änderungen; projektspezifische Checkliste |
+| `sermon-add-collector`      | Neue Metrik bzw. neuen Collector im Agent hinzufügen (End-to-End bis zur UI)                 |
+| `sermon-add-alert-rule`     | Neue Standard-Alert-Regel inklusive Tests und Hilfetext                                      |
+| `sermon-add-security-event` | Neuen Security-Event-Parser (Logzeilen → strukturierte Events) mit Fixtures und Fuzzing      |
+| `sermon-add-notifier`       | Neuen Benachrichtigungskanal implementieren                                                  |
+| `sermon-add-module`         | Neues Integrationsmodul (nginx, PG, …)                                                       |
+| `sermon-proto-change`       | Änderungen an `proto/` (Kompatibilität, Codegen)                                             |
+| `sermon-ui-component`       | UI-Komponenten und Seiten (Svelte 5, i18n, Hilfe, A11y)                                      |
+| `sermon-adr`                | Architekturentscheidung dokumentieren                                                        |

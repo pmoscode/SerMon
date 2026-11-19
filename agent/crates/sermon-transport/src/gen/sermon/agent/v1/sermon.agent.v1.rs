@@ -129,5 +129,42 @@ impl Architecture {
         }
     }
 }
+/// EnrollRequest carries the token, the agent's CSR and its host facts.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct EnrollRequest {
+    /// token is the enrollment token ("sme_…").
+    #[prost(string, tag="1")]
+    pub token: ::prost::alloc::string::String,
+    /// csr is a PKCS#10 request in DER for an ECDSA P-256 key generated on the host. Only the
+    /// public key is used; subject and extensions are ignored.
+    #[prost(bytes="vec", tag="2")]
+    pub csr: ::prost::alloc::vec::Vec<u8>,
+    /// host_facts describe the host.
+    #[prost(message, optional, tag="3")]
+    pub host_facts: ::core::option::Option<HostFacts>,
+    /// agent_version is the version of the enrolling agent, e.g. "1.4.2".
+    #[prost(string, tag="4")]
+    pub agent_version: ::prost::alloc::string::String,
+}
+/// EnrollResponse returns the agent's identity and certificates.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct EnrollResponse {
+    /// node_id is the UUID the server assigned to the node.
+    #[prost(string, tag="1")]
+    pub node_id: ::prost::alloc::string::String,
+    /// certificate is the agent's client certificate (DER) for the mTLS agent API.
+    #[prost(bytes="vec", tag="2")]
+    pub certificate: ::prost::alloc::vec::Vec<u8>,
+    /// intermediates are the issuing CA certificates (DER), sent along with the client certificate.
+    #[prost(bytes="vec", repeated, tag="3")]
+    pub intermediates: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+    /// trust_anchor is the root certificate (DER) of the agent CA; the agent verifies the server
+    /// certificate of the mTLS agent API against it.
+    #[prost(bytes="vec", tag="4")]
+    pub trust_anchor: ::prost::alloc::vec::Vec<u8>,
+    /// not_after is when the certificate expires (rotation after two thirds of the lifetime).
+    #[prost(message, optional, tag="5")]
+    pub not_after: ::core::option::Option<::prost_types::Timestamp>,
+}
 include!("sermon.agent.v1.tonic.rs");
 // @@protoc_insertion_point(module)

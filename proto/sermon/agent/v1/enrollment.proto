@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package sermon.agent.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/agent/v1/agent.proto";
+
+// EnrollmentService registers a new agent (KONZEPT §6, ADR 0009). It is served on the public
+// HTTPS endpoint of the server (not on the mTLS agent port), because a new agent has no client
+// certificate and does not know the agent CA yet. The enrollment token is the only credential;
+// organization, group and node identity are decided by the server, never by the request.
+service EnrollmentService {
+  // Enroll checks the token, creates the node and signs the agent's CSR. UNAUTHENTICATED for an
+  // invalid, expired, revoked or used-up token; INVALID_ARGUMENT for a rejected CSR;
+  // ALREADY_EXISTS if the organization already has a node with this machine-id (the token is
+  // not used; a takeover needs a confirmation in the UI); RESOURCE_EXHAUSTED when rate limited.
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+}
+
+// EnrollRequest carries the token, the agent's CSR and its host facts.
+message EnrollRequest {
+  // token is the enrollment token ("sme_…").
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // csr is a PKCS#10 request in DER for an ECDSA P-256 key generated on the host. Only the
+  // public key is used; subject and extensions are ignored.
+  bytes csr = 2 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 4096
+  }];
+  // host_facts describe the host.
+  HostFacts host_facts = 3 [(buf.validate.field).required = true];
+  // agent_version is the version of the enrolling agent, e.g. "1.4.2".
+  string agent_version = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// EnrollResponse returns the agent's identity and certificates.
+message EnrollResponse {
+  // node_id is the UUID the server assigned to the node.
+  string node_id = 1;
+  // certificate is the agent's client certificate (DER) for the mTLS agent API.
+  bytes certificate = 2;
+  // intermediates are the issuing CA certificates (DER), sent along with the client certificate.
+  repeated bytes intermediates = 3;
+  // trust_anchor is the root certificate (DER) of the agent CA; the agent verifies the server
+  // certificate of the mTLS agent API against it.
+  bytes trust_anchor = 4;
+  // not_after is when the certificate expires (rotation after two thirds of the lifetime).
+  google.protobuf.Timestamp not_after = 5;
+}

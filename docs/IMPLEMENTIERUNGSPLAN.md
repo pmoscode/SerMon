@@ -393,7 +393,19 @@ flowchart LR
 - **Abhängig von:** M1-04
 - **Tests zuerst:** Ablauf, maximale Nutzungen, Vergleich in konstanter Zeit, Bindung an Org und Gruppe.
 
-#### ☐ M1-09 – Enrollment-Endpoint · S · M 🔒
+#### ☑ M1-09 – Enrollment-Endpoint · S · M 🔒
+> Erledigt (ADR 0009):
+> - `sermon.agent.v1.EnrollmentService.Enroll` auf dem Web-Listener: gRPC über h2c hinter Caddy, ohne Origin-Prüfung
+>   und Session, mit Rate-Limit pro IP und protovalidate (CSR höchstens 4 KiB).
+> - Der Server signiert die CSR (nur P-256, Inhalt der CSR wird ignoriert) für einen neuen Node der Org und Gruppe des
+>   Tokens.
+> - In einer Transaktion: Token einmal nutzen, Node anlegen (Tabelle `nodes`, RLS), Zertifikat aufzeichnen, Audit
+>   (`enrollment_token.use`, `node.enroll`).
+> - Antwort: Zertifikat, Intermediate, Root als Trust-Anker, Node-ID.
+> - `machine-id`-Konflikt → `ALREADY_EXISTS`; das Token bleibt unverbraucht, eine Übernahme kommt mit M1-32.
+> - End-to-End-Test über gRPC: Kette prüft gegen den Trust-Anker, SPIFFE-Identität stimmt, `max_uses` und Widerruf
+>   greifen. Abgelehnte Anfragen (RSA, manipulierte CSR, ungültiges Token) verbrauchen kein Token.
+> - Rust: tonic-Client für `EnrollmentService` und Roundtrip-Tests.
 - **Ziel:** `EnrollmentService.Enroll(token, csr, host_facts)` über TLS (Server-Zertifikat, noch ohne Client-Zertifikat). Der Endpoint legt den Node an und signiert das Zertifikat; bei Konflikt der `machine-id` gibt es eine Rückfrage, keine automatische Übernahme. Rate-Limit.
 - **Abhängig von:** M0-05, M1-07, M1-08
 - **Skill:** `sermon-proto-change`

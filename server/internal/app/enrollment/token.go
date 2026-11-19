@@ -8,12 +8,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -70,23 +68,15 @@ type Stored struct {
 	Hash  [32]byte
 }
 
-// Grant is what a redeemed token allows: a new node in this organization and group.
-type Grant struct {
-	Token TokenID
-	Org   tenant.OrgID
-	Group tenant.GroupID
-}
-
-// Store persists enrollment tokens. Create, Revoke and Consume write the audit entry in the same
+// Store persists enrollment tokens. Create and Revoke write the audit entry in the same
 // transaction. Revoke and List only see tokens of the scope's groups.
 type Store interface {
 	Create(ctx context.Context, scope tenant.Scope, t Token, hash [32]byte, audit access.AuditEntry) error
 	List(ctx context.Context, scope tenant.Scope) ([]Token, error)
 	Revoke(ctx context.Context, scope tenant.Scope, id TokenID, audit access.AuditEntry) error
-	// Lookup finds a token that is unexpired, not revoked and not used up at now.
+	// Lookup finds a token that is unexpired, not revoked and not used up at now. Using it is
+	// part of the enrollment transaction (Registry.Register).
 	Lookup(ctx context.Context, hash [32]byte, now time.Time) (Stored, bool, error)
-	// Consume uses the token once; ErrInvalidToken if it became invalid in the meantime.
-	Consume(ctx context.Context, s Stored, now time.Time, audit access.AuditEntry) error
 }
 
 // Service manages enrollment tokens.
@@ -163,28 +153,4 @@ func (s *Service) Revoke(ctx context.Context, c access.Caller, id TokenID) error
 		return fmt.Errorf("revoke enrollment token: %w", err)
 	}
 	return nil
-}
-
-// Redeem checks a token presented by an enrolling agent and uses it once.
-func (s *Service) Redeem(ctx context.Context, secret string) (Grant, error) {
-	if len(secret) != tokenLength || !strings.HasPrefix(secret, prefix) {
-		return Grant{}, ErrInvalidToken
-	}
-	hash := sha256.Sum256([]byte(secret))
-	stored, found, err := s.store.Lookup(ctx, hash, s.now())
-	if err != nil {
-		return Grant{}, fmt.Errorf("look up enrollment token: %w", err)
-	}
-	// The lookup is by hash; the constant-time comparison is defense in depth.
-	if !found || subtle.ConstantTimeCompare(stored.Hash[:], hash[:]) != 1 {
-		return Grant{}, ErrInvalidToken
-	}
-	audit := access.AuditEntry{
-		Action: "enrollment_token.use", Target: "enrollment_token:" + stored.ID.String(),
-		Details: map[string]string{"group": stored.Group.String()},
-	}
-	if err := s.store.Consume(ctx, stored, s.now(), audit); err != nil {
-		return Grant{}, fmt.Errorf("use enrollment token: %w", err)
-	}
-	return Grant{Token: stored.ID, Org: stored.Org, Group: stored.Group}, nil
 }

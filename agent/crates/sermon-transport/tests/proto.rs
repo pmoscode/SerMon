@@ -61,3 +61,41 @@ fn unknown_architecture_values_decode_without_panicking() {
 
     assert!(Architecture::try_from(decoded.architecture).is_err());
 }
+
+#[test]
+fn enroll_request_roundtrips_and_carries_no_identity() {
+    use sermon_transport::proto::agent::v1::{EnrollRequest, EnrollResponse};
+
+    let request = EnrollRequest {
+        token: "sme_example".into(),
+        csr: vec![0x30, 0x82, 0x01, 0x00],
+        host_facts: match hello().payload {
+            Some(Payload::Hello(h)) => h.host_facts,
+            _ => None,
+        },
+        agent_version: "0.0.0".into(),
+    };
+    let decoded = EnrollRequest::decode(request.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded, request);
+
+    let response = EnrollResponse {
+        node_id: "0193f5a0-0000-7000-8000-000000000001".into(),
+        certificate: vec![1, 2, 3],
+        intermediates: vec![vec![4], vec![5]],
+        trust_anchor: vec![6],
+        not_after: None,
+    };
+    let decoded = EnrollResponse::decode(response.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded, response);
+}
+
+#[test]
+fn the_enrollment_client_is_generated() {
+    // Compile-time check: the agent has a tonic client for EnrollmentService (M1-13).
+    fn assert_client<T>() {}
+    assert_client::<
+        sermon_transport::proto::agent::v1::enrollment_service_client::EnrollmentServiceClient<
+            tonic::transport::Channel,
+        >,
+    >();
+}

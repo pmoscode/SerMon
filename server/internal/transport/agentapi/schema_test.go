@@ -76,3 +76,29 @@ func TestSchema_RejectsInvalidMessages(t *testing.T) {
 		}
 	}
 }
+
+func enrollRequest() *agentv1.EnrollRequest {
+	return &agentv1.EnrollRequest{Token: "sme_x", Csr: []byte{0x30}, HostFacts: validHostFacts(), AgentVersion: "0.0.0"}
+}
+
+func TestSchema_EnrollRequest(t *testing.T) {
+	if err := protovalidate.Validate(enrollRequest()); err != nil {
+		t.Errorf("valid request: %v", err)
+	}
+	invalid := map[string]func(*agentv1.EnrollRequest){
+		"no token":          func(r *agentv1.EnrollRequest) { r.Token = "" },
+		"token too long":    func(r *agentv1.EnrollRequest) { r.Token = string(make([]byte, 65)) },
+		"no csr":            func(r *agentv1.EnrollRequest) { r.Csr = nil },
+		"csr too large":     func(r *agentv1.EnrollRequest) { r.Csr = make([]byte, 4097) },
+		"no host facts":     func(r *agentv1.EnrollRequest) { r.HostFacts = nil },
+		"invalid host fact": func(r *agentv1.EnrollRequest) { r.HostFacts.MachineId = "nope" },
+		"no agent version":  func(r *agentv1.EnrollRequest) { r.AgentVersion = "" },
+	}
+	for name, mutate := range invalid {
+		r := enrollRequest()
+		mutate(r)
+		if err := protovalidate.Validate(r); err == nil {
+			t.Errorf("%s: Validate() = nil, want validation error", name)
+		}
+	}
+}

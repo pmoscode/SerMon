@@ -48,6 +48,7 @@ type Querier interface {
 	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
+	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
 	GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
@@ -58,6 +59,8 @@ type Querier interface {
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
 	InsertEnrollmentToken(ctx context.Context, arg InsertEnrollmentTokenParams) error
+	// Nodes. All queries run inside InTenant (RLS on org_id).
+	InsertNode(ctx context.Context, arg InsertNodeParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)

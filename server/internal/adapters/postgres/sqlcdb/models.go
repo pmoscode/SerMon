@@ -71,6 +71,22 @@ type Membership struct {
 	CreatedAt time.Time
 }
 
+type Node struct {
+	ID            uuid.UUID
+	OrgID         uuid.UUID
+	GroupID       uuid.UUID
+	Hostname      string
+	MachineID     string
+	OsID          string
+	OsVersion     string
+	KernelRelease string
+	Architecture  string
+	CpuCount      int32
+	MemoryBytes   int64
+	EnrolledWith  *uuid.UUID
+	CreatedAt     time.Time
+}
+
 type NodeGroup struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID

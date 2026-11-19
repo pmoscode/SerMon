@@ -100,10 +100,11 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		defer db.Close()
 		checks = append(checks, health.Check{Name: "database", Fn: db.Ping})
-		if _, err := agentca.Bootstrap(ctx, postgres.NewAgentCAStore(db), cfg.MasterKeys, time.Now); err != nil {
+		ca, err := agentca.Bootstrap(ctx, postgres.NewAgentCAStore(db), cfg.MasterKeys, time.Now)
+		if err != nil {
 			return fmt.Errorf("agent CA: %w", err)
 		}
-		if err := mountAPI(ctx, mux, cfg, db, logger); err != nil {
+		if err := mountAPI(ctx, mux, cfg, db, ca, logger); err != nil {
 			return err
 		}
 	} else {
@@ -150,9 +151,14 @@ const (
 	// Invitation page requests per client IP (link tokens have 256 bits).
 	invitationAttemptsPerWindow = 30
 	invitationWindow            = time.Minute
+
+	// Agent enrollments per client IP: mass rollouts often come from one NAT address; tokens
+	// have 256 bits, so the limit is about load, not guessing.
+	enrollmentsPerWindow = 120
+	enrollmentWindow     = time.Minute
 )
 
-func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, logger *slog.Logger) error {
+func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service, logger *slog.Logger) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
 	}
@@ -187,6 +193,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID), logger),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
+		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
+			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
+			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(accessStore), logger),
 	})
 	return nil

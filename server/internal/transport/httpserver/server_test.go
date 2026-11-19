@@ -160,3 +160,31 @@ func TestNew_SetsProtectiveTimeouts(t *testing.T) {
 		t.Errorf("MaxHeaderBytes = %d, want 1..64KiB", hs.MaxHeaderBytes)
 	}
 }
+
+// gRPC clients (agents, behind a TLS-terminating proxy) need HTTP/2 without TLS (ADR 0009).
+func TestServer_AcceptsUnencryptedHTTP2(t *testing.T) {
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var proto string
+	srv := httpserver.New(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { proto = r.Proto }),
+		slog.New(slog.DiscardHandler), time.Second, func() {})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx, ln) }()
+	defer func() { cancel(); <-done }()
+
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	client := &http.Client{Transport: &http.Transport{Protocols: protocols}}
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+ln.Addr().String()+"/", nil)
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if proto != "HTTP/2.0" {
+		t.Errorf("request protocol = %q, want HTTP/2.0 (h2c)", proto)
+	}
+}

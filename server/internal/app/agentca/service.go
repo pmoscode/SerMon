@@ -104,17 +104,26 @@ func (s *Service) IssueAgentCertificate(ctx context.Context, scope tenant.Scope,
 	if !scope.Valid() {
 		return pki.Issued{}, errors.New("issuing an agent certificate requires a tenant scope")
 	}
-	issued, err := s.ca.SignAgentCSR(csrDER, scope.OrgID(), node, s.now())
+	issued, record, err := s.SignAgentCertificate(scope.OrgID(), csrDER, node)
 	if err != nil {
-		return pki.Issued{}, fmt.Errorf("sign agent certificate: %w", err)
+		return pki.Issued{}, err
 	}
-	err = s.store.RecordCertificate(ctx, scope, CertificateRecord{
-		Serial: issued.Serial, Org: scope.OrgID(), Node: node, NotBefore: issued.NotBefore, NotAfter: issued.NotAfter,
-	})
-	if err != nil {
+	if err := s.store.RecordCertificate(ctx, scope, record); err != nil {
 		return pki.Issued{}, fmt.Errorf("record agent certificate: %w", err)
 	}
 	return issued, nil
+}
+
+// SignAgentCertificate signs the CSR without recording it. The caller must record the returned
+// record in the same transaction that creates the node (enrollment); until then the certificate
+// is unusable because the agent API accepts recorded serials only.
+func (s *Service) SignAgentCertificate(org tenant.OrgID, csrDER []byte, node identity.NodeID) (pki.Issued, CertificateRecord, error) {
+	issued, err := s.ca.SignAgentCSR(csrDER, org, node, s.now())
+	if err != nil {
+		return pki.Issued{}, CertificateRecord{}, fmt.Errorf("sign agent certificate: %w", err)
+	}
+	record := CertificateRecord{Serial: issued.Serial, Org: org, Node: node, NotBefore: issued.NotBefore, NotAfter: issued.NotAfter}
+	return issued, record, nil
 }
 
 // Revoke makes the certificate unusable immediately.

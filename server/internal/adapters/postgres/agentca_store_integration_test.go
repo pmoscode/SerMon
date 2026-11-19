@@ -22,10 +22,43 @@ var caTime = time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
 
 func randomSerial() string { return strings.ReplaceAll(uuid.NewString(), "-", "") }
 
-func certificate(org uuid.UUID) agentca.CertificateRecord {
+// certificate returns a certificate record for a new node of org (created with the owner DSN;
+// certificates reference their node since migration 00010).
+func certificate(t *testing.T, ownerDSN string, org uuid.UUID) agentca.CertificateRecord {
+	t.Helper()
+	node := uuid.New()
+	createNode(t, ownerDSN, org, node)
 	return agentca.CertificateRecord{
-		Serial: randomSerial(), Org: tenant.OrgID(org), Node: identity.NodeID(uuid.New()),
+		Serial: randomSerial(), Org: tenant.OrgID(org), Node: identity.NodeID(node),
 		NotBefore: caTime.Add(-time.Minute), NotAfter: caTime.Add(30 * 24 * time.Hour),
+	}
+}
+
+// createNode inserts a node (and a group for it) into org as the schema owner.
+func createNode(t *testing.T, ownerDSN string, org, node uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, ownerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	group := uuid.New()
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{"SELECT set_config('sermon.org_id', $1, false)", []any{org.String()}},
+		{"INSERT INTO node_groups (id, org_id, name) VALUES ($1, $2, $3)", []any{group, org, "g-" + group.String()[:8]}},
+		{
+			`INSERT INTO nodes (id, org_id, group_id, hostname, machine_id, os_id, os_version, kernel_release, architecture, cpu_count, memory_bytes)
+		  VALUES ($1, $2, $3, 'host', $4, 'debian', '13', '6.12.0', 'amd64', 2, 1073741824)`,
+			[]any{node, org, group, strings.ReplaceAll(node.String(), "-", "")},
+		},
+	} {
+		if _, err := conn.Exec(ctx, stmt.sql, stmt.args...); err != nil {
+			t.Fatalf("%s: %v", stmt.sql, err)
+		}
 	}
 }
 
@@ -52,7 +85,7 @@ func TestAgentCAStore_CertificatesAreTenantIsolatedButCheckableWithoutTenant(t *
 	f := setup(t)
 	ctx := context.Background()
 	store := postgres.NewAgentCAStore(open(t, f.appDSN))
-	certA := certificate(orgA)
+	certA := certificate(t, f.db.OwnerDSN, orgA)
 
 	if err := store.RecordCertificate(ctx, scopeFor(t, orgA), certA); err != nil {
 		t.Fatalf("RecordCertificate() error = %v", err)
@@ -76,7 +109,7 @@ func TestAgentCAStore_CertificatesAreTenantIsolatedButCheckableWithoutTenant(t *
 	}
 
 	// Writing a certificate for Org A from Org B's scope is rejected by RLS.
-	if err := store.RecordCertificate(ctx, scopeFor(t, orgB), certificate(orgA)); err == nil {
+	if err := store.RecordCertificate(ctx, scopeFor(t, orgB), certificate(t, f.db.OwnerDSN, orgA)); err == nil {
 		t.Error("recording a certificate for another organization must fail")
 	}
 }
@@ -85,7 +118,7 @@ func TestAgentCAStore_UsableHonorsRevocationAndValidity(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	store := postgres.NewAgentCAStore(open(t, f.appDSN))
-	cert := certificate(orgA)
+	cert := certificate(t, f.db.OwnerDSN, orgA)
 	if err := store.RecordCertificate(ctx, scopeFor(t, orgA), cert); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +171,7 @@ func TestAgentCAStore_RevocationCheckWorksWithANonSuperuserOwner(t *testing.T) {
 	}
 
 	store := postgres.NewAgentCAStore(open(t, appDSN))
-	cert := certificate(orgA)
+	cert := certificate(t, ownerDSN, orgA)
 	if err := store.RecordCertificate(ctx, scopeFor(t, orgA), cert); err != nil {
 		t.Fatalf("RecordCertificate() error = %v", err)
 	}

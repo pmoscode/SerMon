@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,8 +14,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -64,13 +68,13 @@ func TestEnrollmentTokenStore_LookupHonorsExpiryUsesAndRevocation(t *testing.T) 
 	if _, found, _ := s.Lookup(ctx, hash, tok.ExpiresAt.Add(time.Second)); found {
 		t.Error("expired tokens must not be found")
 	}
-	if err := s.Consume(ctx, st, time.Now(), entry(o.admin, "enrollment_token.use")); err != nil {
-		t.Fatal(err)
+	registry := postgres.NewNodeRegistry(open(t, f.appDSN))
+	for i := range 2 {
+		if err := register(registry, st); err != nil {
+			t.Fatalf("use %d: %v", i+1, err)
+		}
 	}
-	if err := s.Consume(ctx, st, time.Now(), entry(o.admin, "enrollment_token.use")); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Consume(ctx, st, time.Now(), entry(o.admin, "enrollment_token.use")); !errors.Is(err, enrollment.ErrInvalidToken) {
+	if err := register(registry, st); !errors.Is(err, enrollment.ErrInvalidToken) {
 		t.Errorf("third use of a 2-use token: %v, want ErrInvalidToken", err)
 	}
 	if _, found, _ := s.Lookup(ctx, hash, time.Now()); found {
@@ -84,8 +88,72 @@ func TestEnrollmentTokenStore_LookupHonorsExpiryUsesAndRevocation(t *testing.T) 
 	if _, found, _ := s.Lookup(ctx, otherHash, time.Now()); found {
 		t.Error("a revoked token must not be found")
 	}
-	if got := auditActions(t, postgres.NewAccessStore(open(t, f.appDSN)), o.scope); len(got) != 7 || got[6] != "enrollment_token.revoke" {
+	if got := auditActions(t, postgres.NewAccessStore(open(t, f.appDSN)), o.scope); !equalStrings(got, []string{
+		"group.create", "group.create", "enrollment_token.create",
+		"enrollment_token.use", "node.enroll", "enrollment_token.use", "node.enroll",
+		"enrollment_token.create", "enrollment_token.revoke",
+	}) {
 		t.Errorf("audit = %v", got)
+	}
+}
+
+// register enrolls a new node with a random machine-id using the token.
+func register(r *postgres.NodeRegistry, st enrollment.Stored) error {
+	return registerMachine(r, st, strings.ReplaceAll(uuid.NewString(), "-", ""))
+}
+
+func registerMachine(r *postgres.NodeRegistry, st enrollment.Stored, machineID string) error {
+	node := identity.NodeID(uuid.New())
+	now := time.Now()
+	n := enrollment.Node{ID: node, Group: st.Group, Token: st.ID, Facts: enrollment.NodeFacts{
+		Hostname: "web", MachineID: machineID, OSID: "debian", OSVersion: "13", KernelRelease: "6.12.0",
+		Architecture: "amd64", CPUCount: 2, MemoryBytes: 1 << 30,
+	}}
+	cert := agentca.CertificateRecord{Serial: randomSerial(), Org: st.Org, Node: node, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour)}
+	return r.Register(context.Background(), st, n, cert, now, []access.AuditEntry{
+		{Action: "enrollment_token.use", Target: "t"}, {Action: "node.enroll", Target: "n"},
+	})
+}
+
+func TestNodeRegistry_CreatesTheNodeWithAUsableCertificate(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	s := postgres.NewEnrollmentTokenStore(db)
+	o := newTokenOrg(t, f)
+	_, hash := issue(t, s, o, o.group, 5)
+	st, _, _ := s.Lookup(ctx, hash, time.Now())
+	registry := postgres.NewNodeRegistry(db)
+	machine := strings.ReplaceAll(uuid.NewString(), "-", "")
+	node := identity.NodeID(uuid.New())
+	now := time.Now()
+	cert := agentca.CertificateRecord{Serial: randomSerial(), Org: st.Org, Node: node, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour)}
+	n := enrollment.Node{ID: node, Group: st.Group, Token: st.ID, Facts: enrollment.NodeFacts{
+		Hostname: "db-01", MachineID: machine, OSID: "debian", OSVersion: "13", KernelRelease: "6.12.0", Architecture: "arm64", CPUCount: 8, MemoryBytes: 16 << 30,
+	}}
+
+	if err := registry.Register(ctx, st, n, cert, now, []access.AuditEntry{{Action: "node.enroll", Target: "node:" + node.String()}}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if usable, err := postgres.NewAgentCAStore(db).Usable(ctx, cert.Serial, now); err != nil || !usable {
+		t.Errorf("recorded certificate usable = %v, %v", usable, err)
+	}
+	var hostname, arch string
+	if err := db.InTenant(ctx, o.scope, func(q *sqlcdb.Queries) error {
+		row, err := q.GetNode(ctx, uuid.UUID(node))
+		hostname, arch = row.Hostname, row.Architecture
+		return err
+	}); err != nil || hostname != "db-01" || arch != "arm64" {
+		t.Errorf("node = %q/%q, %v", hostname, arch, err)
+	}
+
+	// The same machine-id again: conflict, nothing created, the token use is rolled back.
+	if err := registerMachine(registry, st, machine); !errors.Is(err, enrollment.ErrMachineIDConflict) {
+		t.Errorf("duplicate machine-id: %v, want ErrMachineIDConflict", err)
+	}
+	list, _ := s.List(ctx, o.scope)
+	if len(list) != 1 || list[0].Uses != 1 {
+		t.Errorf("token uses = %+v, want 1 (conflict must not use the token)", list)
 	}
 }
 
@@ -96,6 +164,7 @@ func TestEnrollmentTokenStore_ConcurrentRedemptionsNeverExceedMaxUses(t *testing
 	o := newTokenOrg(t, f)
 	_, hash := issue(t, s, o, o.group, 3)
 	st, _, _ := s.Lookup(ctx, hash, time.Now())
+	registry := postgres.NewNodeRegistry(open(t, f.appDSN))
 
 	var wg sync.WaitGroup
 	errs := make([]error, 10)
@@ -103,7 +172,7 @@ func TestEnrollmentTokenStore_ConcurrentRedemptionsNeverExceedMaxUses(t *testing
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs[i] = s.Consume(ctx, st, time.Now(), entry(o.admin, "enrollment_token.use"))
+			errs[i] = register(registry, st)
 		}()
 	}
 	wg.Wait()

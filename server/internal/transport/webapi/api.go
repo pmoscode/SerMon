@@ -7,6 +7,7 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
 
+	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
 
@@ -20,14 +21,16 @@ type Config struct {
 
 // Handlers are the web API services.
 type Handlers struct {
-	Auth          *AuthHandler
-	System        *SystemHandler
-	Access        *AccessHandler
-	Setup         *SetupHandler
-	Invitation    *InvitationHandler
-	Organization  *OrganizationHandler
-	Enrollment    *EnrollmentTokenHandler
-	Authenticator *Authenticator // required for every service except AuthService
+	Auth         *AuthHandler
+	System       *SystemHandler
+	Access       *AccessHandler
+	Setup        *SetupHandler
+	Invitation   *InvitationHandler
+	Organization *OrganizationHandler
+	Enrollment   *EnrollmentTokenHandler
+	// AgentEnrollment serves sermon.agent.v1.EnrollmentService for new agents (ADR 0009).
+	AgentEnrollment *AgentEnrollmentHandler
+	Authenticator   *Authenticator // required for every service except AuthService
 }
 
 // Mount registers the web API on mux: protovalidate on every request, security headers, origin
@@ -47,4 +50,9 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewAccessServiceHandler(h.Access, authenticated))
 	mount(webv1connect.NewOrganizationServiceHandler(h.Organization, authenticated))
 	mount(webv1connect.NewEnrollmentTokenServiceHandler(h.Enrollment, authenticated))
+
+	// Agents send neither Origin nor cookies: no origin check (CSRF needs cookies), the
+	// enrollment token is the credential (ADR 0009).
+	path, handler := agentv1connect.NewEnrollmentServiceHandler(h.AgentEnrollment, connect.WithInterceptors(validation))
+	mux.Handle(path, ClientIP(cfg.TrustedProxies)(APIHeaders(handler)))
 }

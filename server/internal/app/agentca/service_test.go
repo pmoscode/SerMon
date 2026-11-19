@@ -345,3 +345,32 @@ func TestIssue_RejectsInvalidCSRs(t *testing.T) {
 		t.Error("nothing must be recorded for a rejected CSR")
 	}
 }
+
+func TestSign_ReturnsTheRecordWithoutStoringIt(t *testing.T) {
+	store, box, now := newFakeStore(), newBox(t), t0
+	svc, _ := agentca.Bootstrap(context.Background(), store, box, clockAt(&now))
+
+	issued, rec, err := svc.SignAgentCertificate(orgA, csrDER(t), node)
+	if err != nil {
+		t.Fatalf("SignAgentCertificate() error = %v", err)
+	}
+	if len(store.certs) != 0 {
+		t.Error("signing alone must not record the certificate (the caller records it in its transaction)")
+	}
+	if rec.Serial != issued.Serial || rec.Org != orgA || rec.Node != node || !rec.NotAfter.Equal(issued.NotAfter) {
+		t.Errorf("record = %+v, issued serial %s", rec, issued.Serial)
+	}
+	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial); usable {
+		t.Error("an unrecorded certificate must not be usable")
+	}
+	if _, _, err := svc.SignAgentCertificate(tenant.OrgID{}, csrDER(t), node); err == nil {
+		t.Error("signing without organization must fail")
+	}
+}
+
+func TestTrustChain_ContainsIntermediateAndRoot(t *testing.T) {
+	svc, _ := agentca.Bootstrap(context.Background(), newFakeStore(), newBox(t), clockAt(&t0))
+	if svc.Intermediate() == nil || svc.TrustAnchor() == nil || svc.Intermediate().CheckSignatureFrom(svc.TrustAnchor()) != nil {
+		t.Error("intermediate must be signed by the trust anchor")
+	}
+}

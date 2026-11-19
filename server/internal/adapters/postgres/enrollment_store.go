@@ -12,6 +12,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -103,21 +104,55 @@ func (s *EnrollmentTokenStore) Lookup(ctx context.Context, hash [32]byte, now ti
 	return stored, true, nil
 }
 
-// Consume uses a token once inside its organization (atomic: never more than max_uses).
-func (s *EnrollmentTokenStore) Consume(ctx context.Context, st enrollment.Stored, now time.Time, audit access.AuditEntry) error {
+// NodeRegistry runs the enrollment transaction (enrollment.Registry).
+type NodeRegistry struct{ db *DB }
+
+var _ enrollment.Registry = (*NodeRegistry)(nil)
+
+// NewNodeRegistry returns the PostgreSQL node registry.
+func NewNodeRegistry(db *DB) *NodeRegistry { return &NodeRegistry{db: db} }
+
+// Register uses the token once, creates the node, records its certificate and writes the audit
+// entries – all in one transaction of the token's organization. A machine-id conflict rolls
+// everything back, so the token stays usable.
+func (r *NodeRegistry) Register(ctx context.Context, st enrollment.Stored, n enrollment.Node, cert agentca.CertificateRecord, now time.Time, audits []access.AuditEntry) error {
 	scope, err := tenant.ForGroups(st.Org, st.Group)
 	if err != nil {
 		return enrollment.ErrInvalidToken
 	}
-	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		n, err := q.ConsumeEnrollmentToken(ctx, sqlcdb.ConsumeEnrollmentTokenParams{ID: uuid.UUID(st.ID), Now: now})
+	f := n.Facts
+	return r.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		used, err := q.ConsumeEnrollmentToken(ctx, sqlcdb.ConsumeEnrollmentTokenParams{ID: uuid.UUID(st.ID), Now: now})
 		if err != nil {
-			return fmt.Errorf("consume enrollment token: %w", err)
+			return fmt.Errorf("use enrollment token: %w", err)
 		}
-		if n == 0 {
-			return enrollment.ErrInvalidToken
+		if used == 0 {
+			return enrollment.ErrInvalidToken // revoked, expired or used up in the meantime
 		}
-		return appendAudit(ctx, q, audit)
+		token := uuid.UUID(n.Token)
+		err = q.InsertNode(ctx, sqlcdb.InsertNodeParams{
+			ID: uuid.UUID(n.ID), GroupID: uuid.UUID(n.Group), Hostname: f.Hostname, MachineID: f.MachineID,
+			OsID: f.OSID, OsVersion: f.OSVersion, KernelRelease: f.KernelRelease, Architecture: f.Architecture,
+			CpuCount: int32(f.CPUCount), MemoryBytes: f.MemoryBytes, EnrolledWith: &token, //nolint:gosec // G115: 1..4096 (protovalidate)
+		})
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "nodes_org_id_machine_id_key" {
+			return enrollment.ErrMachineIDConflict
+		}
+		if err != nil {
+			return fmt.Errorf("insert node: %w", err)
+		}
+		if err := q.InsertAgentCertificate(ctx, sqlcdb.InsertAgentCertificateParams{
+			Serial: cert.Serial, OrgID: uuid.UUID(cert.Org), NodeID: uuid.UUID(cert.Node), NotBefore: cert.NotBefore, NotAfter: cert.NotAfter,
+		}); err != nil {
+			return fmt.Errorf("record certificate: %w", err)
+		}
+		for _, a := range audits {
+			if err := appendAudit(ctx, q, a); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

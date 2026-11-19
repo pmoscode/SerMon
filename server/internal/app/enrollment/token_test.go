@@ -27,14 +27,12 @@ var (
 )
 
 type fakeStore struct {
-	created  enrollment.Token
-	hash     [32]byte
-	scope    tenant.Scope
-	audits   []access.AuditEntry
-	lookup   *enrollment.Stored
-	consumed enrollment.TokenID
-	consume  error
-	calls    int
+	created enrollment.Token
+	hash    [32]byte
+	scope   tenant.Scope
+	audits  []access.AuditEntry
+	lookup  *enrollment.Stored
+	calls   int
 }
 
 func (f *fakeStore) Create(_ context.Context, scope tenant.Scope, t enrollment.Token, hash [32]byte, a access.AuditEntry) error {
@@ -63,12 +61,6 @@ func (f *fakeStore) Lookup(_ context.Context, hash [32]byte, _ time.Time) (enrol
 		return enrollment.Stored{}, false, nil
 	}
 	return *f.lookup, true, nil
-}
-
-func (f *fakeStore) Consume(_ context.Context, s enrollment.Stored, _ time.Time, a access.AuditEntry) error {
-	f.consumed = s.ID
-	f.audits = append(f.audits, a)
-	return f.consume
 }
 
 func service(store *fakeStore) *enrollment.Service {
@@ -164,34 +156,5 @@ func TestListAndRevoke_UseTheGroupsWithOperatorRights(t *testing.T) {
 	}
 	if _, err := service(&fakeStore{}).List(context.Background(), caller(role.Viewer, group1)); err != nil {
 		t.Errorf("a viewer gets an empty list, not an error: %v", err)
-	}
-}
-
-func TestRedeem_ChecksTheTokenAndConsumesOneUse(t *testing.T) {
-	secret, hash := "sme_"+strings.Repeat("A", 43), sha256.Sum256([]byte("sme_"+strings.Repeat("A", 43)))
-	stored := &enrollment.Stored{ID: enrollment.TokenID(uuid.New()), Org: orgA, Group: group1, Hash: hash}
-	store := &fakeStore{lookup: stored}
-
-	grant, err := service(store).Redeem(context.Background(), secret)
-	if err != nil || grant.Org != orgA || grant.Group != group1 || store.consumed != stored.ID {
-		t.Fatalf("Redeem() = %+v, %v", grant, err)
-	}
-	if a := store.audits[0]; a.Action != "enrollment_token.use" || !a.Actor.IsZero() {
-		t.Errorf("audit = %+v (system action without actor)", a)
-	}
-
-	for name, tc := range map[string]struct {
-		secret string
-		store  *fakeStore
-	}{
-		"no prefix":      {strings.Repeat("A", 47), &fakeStore{lookup: stored}},
-		"wrong length":   {"sme_short", &fakeStore{lookup: stored}},
-		"unknown":        {secret, &fakeStore{}},
-		"hash mismatch":  {secret, &fakeStore{lookup: &enrollment.Stored{ID: stored.ID, Org: orgA, Group: group1}}},
-		"used up/racing": {secret, &fakeStore{lookup: stored, consume: enrollment.ErrInvalidToken}},
-	} {
-		if _, err := service(tc.store).Redeem(context.Background(), tc.secret); !errors.Is(err, enrollment.ErrInvalidToken) {
-			t.Errorf("%s: %v, want ErrInvalidToken", name, err)
-		}
 	}
 }

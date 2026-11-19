@@ -59,6 +59,8 @@ Erstinstallation: `sermon-server init` (Schlüssel, Migrationen, Agent-CA, Setup
 ist, steht ein Setup-Token im Server-Log (`just dev`: Ausgabe von `sermon-server`); damit legt `SetupService` den
 ersten Superadmin an.
 
+Agent-Enrollment (ADR 0009): `sermon.agent.v1.EnrollmentService` läuft auf dem Web-Listener (gRPC über h2c hinter
+Caddy), ohne Origin-Prüfung und Session, nur mit Enrollment-Token und Rate-Limit.
 Web-API: Connect-Services unter `server/internal/transport/webapi/`, eingehängt über `webapi.Mount`
 (Validierung, Origin-Prüfung, Security-Header). Die UI hängt auf `/` ohne Methode; Routen mit Methode wie `GET /`
 kollidieren mit den Präfixen der API.

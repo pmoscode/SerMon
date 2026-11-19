@@ -10,6 +10,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
@@ -29,6 +31,7 @@ import (
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
+	"github.com/pmoscode/SerMon/server/internal/secrets"
 	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
 )
 
@@ -42,6 +45,29 @@ const (
 type stack struct {
 	server *httptest.Server
 	origin string
+	ca     *agentca.Service
+	db     *postgres.DB
+}
+
+var (
+	testBoxOnce sync.Once
+	testBox     *secrets.Box
+)
+
+// masterKeys returns one master key per test process: the agent CA stored by the first stack
+// must be readable by every later one.
+func masterKeys(t *testing.T) *secrets.Box {
+	t.Helper()
+	testBoxOnce.Do(func() {
+		line, err := secrets.GenerateKeyLine(1)
+		if err == nil {
+			testBox, err = secrets.ParseKeys(line)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	return testBox
 }
 
 // httpClient returns a new client with its own cookie jar. httptest.Server.Client returns the
@@ -75,6 +101,10 @@ func newStack(t *testing.T, loginLimit int) stack {
 	})
 
 	invites := invitation.NewService(postgres.NewInvitationStore(pg), creds, authz.NewPolicy(), hasher, time.Now, access.NewID)
+	ca, err := agentca.Bootstrap(ctx, postgres.NewAgentCAStore(pg), masterKeys(t), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	srv := httptest.NewUnstartedServer(mux)
 	srv.StartTLS()
@@ -89,9 +119,12 @@ func newStack(t *testing.T, loginLimit int) stack {
 			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
+		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
+			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(pg), postgres.NewNodeRegistry(pg), ca, time.Now, access.NewID),
+			ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg)), slog.New(slog.DiscardHandler)),
 	})
-	return stack{server: srv, origin: srv.URL}
+	return stack{server: srv, origin: srv.URL, ca: ca, db: pg}
 }
 
 // ownerSQL runs statements on one owner connection (set_config persists between them).

@@ -33,8 +33,14 @@ type Server struct {
 // New creates a Server. onShutdown is called once the stop signal arrives, before
 // in-flight requests are drained (e.g. to fail readiness checks).
 func New(handler http.Handler, logger *slog.Logger, shutdownTimeout time.Duration, onShutdown func()) *Server {
+	// HTTP/1.1 for browsers and HTTP/2 without TLS (h2c) for gRPC clients behind the
+	// TLS-terminating reverse proxy (agents, ADR 0009). TLS itself ends at the proxy.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
 	return &Server{
 		srv: &http.Server{
+			Protocols:         protocols,
 			Handler:           handler,
 			ReadHeaderTimeout: readHeaderTimeout,
 			ReadTimeout:       readTimeout,

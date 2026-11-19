@@ -56,9 +56,10 @@ func New(handler http.Handler, logger *slog.Logger, shutdownTimeout time.Duratio
 	}
 }
 
-// Keepalive of long-lived streams (agent sessions): HTTP/2 pings detect dead connections.
+// Keepalive of long-lived streams (agent sessions): HTTP/2 pings detect dead connections
+// (KONZEPT §5: pings every 15 s).
 const (
-	streamPingInterval = 30 * time.Second
+	streamPingInterval = 15 * time.Second
 	streamPingTimeout  = 15 * time.Second
 )
 

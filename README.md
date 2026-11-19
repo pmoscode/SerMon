@@ -3,7 +3,9 @@
 **Schlankes, selbst gehostetes und mandantenfähiges Server-Monitoring für Linux.**
 Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Gebot**.
 
-> ⚠️ **Status: in früher Entwicklung (Meilenstein M0).** Noch nicht für den produktiven Einsatz geeignet.
+> ⚠️ **Status: in früher Entwicklung (Meilenstein M1).** Die Server-Seite für Anmeldung, Mandanten, Enrollment und die
+> mTLS-Agent-API steht; Agent, Metriken und UI folgen. Noch nicht für den produktiven Einsatz geeignet.
+> Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 
 *A lean, self-hosted, multi-tenant monitoring for Linux servers – security first. Documentation is in German.*
 

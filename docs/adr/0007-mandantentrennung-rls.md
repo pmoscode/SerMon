@@ -52,9 +52,18 @@ Manche Prüfungen laufen, bevor ein Mandant bekannt ist. Beispiele sind die Sper
 TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
 
 - **`SECURITY DEFINER`-Funktionen** mit festem `search_path`, die genau eine Frage minimal beantworten:
-  - `agent_certificate_usable(serial, at)`: ja/nein
+  - `agent_certificate_usable(serial, at)`: ja/nein. Seit M1-11 gilt eine Sperre mit Zeitpunkt in der Zukunft
+    (Übergangszeit nach einer Rotation) als noch gültig, und Zertifikate eines gesperrten Nodes sind unbrauchbar.
   - `auth_find_user(email)`: nur die User-ID
   - `auth_user_organizations(user)`: nur ID und Name der Orgs
+  - `auth_user_profile(user)`: nur E-Mail und Anzeigename (Session-Ansicht, M1-02)
+  - `invitation_by_token(hash, at)`: eine gültige Einladung zum Token-Hash (M1-04, ADR 0008)
+  - `enrollment_token_by_hash(hash, at)`: ein nutzbares Enrollment-Token zum Hash (M1-08)
+  - `admin_list_organizations()`: Name und Mitgliederzahl aller Orgs für den Superadmin, keine Mandantendaten (M1-04)
+  - `pki_certificates_in_use(authority, at)`: nur die Anzahl gültiger Zertifikate einer CA (M1-11b)
+
+  Suchen per Token gehen nur über den Hash; eine Liste lässt sich damit nicht abfragen. Die Berechtigung
+  (z. B. Superadmin) prüft die App-Schicht vor dem Aufruf.
 
   `PUBLIC` hat kein EXECUTE-Recht, nur `sermon_app`. Unbekannte Werte ergeben „nein“ bzw. nichts (fail closed).
 - **Eigentümerin dieser Funktionen ist die Rolle `sermon_definer`:**
@@ -69,10 +78,19 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
   angelegt (CREATEROLE), weist sie sie sich selbst zu. Existiert die Rolle schon, z. B. bei einem gemanagten
   PostgreSQL, ist einmalig `GRANT sermon_definer TO <owner>` nötig. Die Migration bricht sonst mit genau diesem
   Hinweis ab.
-- Instanzweite Tabellen ohne Mandantenbezug (`pki_authorities`, `user_credentials`, `sessions`) haben keine RLS:
-  - Private Schlüssel sind versiegelt.
-  - Passwörter liegen nur als Argon2id-Hash vor.
-  - Sessions werden über den Hash des Tokens gefunden.
+- Instanzweite Tabellen ohne Mandantenbezug haben keine RLS:
+  - `pki_authorities`: private Schlüssel sind versiegelt.
+  - `user_credentials`: Passwörter liegen nur als Argon2id-Hash vor.
+  - `sessions`: werden über den Hash des Tokens gefunden. Die Tabelle hat zwar `org_id`, ist aber als Ausnahme im
+    RLS-Test eingetragen.
+  - `instance_setup`: nur der Hash des Setup-Tokens (M1-05).
+  - `superadmins`: nur User-IDs; `sermon_app` darf lesen und einfügen (M1-05).
+
+  Ein Test prüft, dass **jede** Tabelle mit `org_id` RLS mit ENABLE und FORCE hat. Ausnahmen müssen dort mit
+  Begründung stehen.
+- **Einmalige Ausnahme in Migration 00012:** Für das Nachtragen von `agent_certificates.authority_id` über alle Orgs
+  wird `FORCE` nur für dieses eine `UPDATE` aufgehoben und direkt danach wieder gesetzt. Der Eigentümer umgeht RLS
+  ohne `FORCE`; mit `FORCE` würde das `UPDATE` bei einem Eigentümer ohne Superuser-Rechte still nichts ändern.
 - **Getestet mit einem Eigentümer ohne Superuser-Rechte (Produktionsfall gemanagter Datenbanken):**
   - Migration, Login-Lookups und Sperrprüfung funktionieren.
   - `FORCE` hindert auch den Eigentümer, ohne Mandant zu schreiben.

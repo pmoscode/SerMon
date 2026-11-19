@@ -106,6 +106,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/`
 | D27 | UI-Ressourcen  | **Alles lokal ausgeliefert:** keine CDNs, keine externen Schriften, Skripte, Styles, Bilder oder Icons | Datenschutz (keine IP-Weitergabe an Dritte, DSGVO), Air-Gap-fähig, strikte CSP, keine Supply-Chain über fremde Server |
 | D28 | Mitglieder     | **Einladungslink:** einmalig, 72 h gültig, nur als Hash gespeichert; die UI zeigt ihn zum Kopieren, Mail-Versand optional | Keine User-Enumeration, Admin kennt keine Passwörter, **SMTP nie Pflicht** ([ADR 0008](docs/adr/0008-einladungen.md)) |
 | D29 | Orgs löschen   | **Erst sperren, nach Frist endgültig löschen:** Sperre beendet Logins und Ingest sofort; nach der Frist (Standard 30 Tage) werden Stamm-, Event-, Metrik- und Loki-Daten gelöscht; das Audit-Log ist vorher exportierbar | Schutz vor Fehlbedienung und Missbrauch, Daten bleiben bis zum Löschen nachvollziehbar |
+| D30 | Enrollment     | **Über den öffentlichen HTTPS-Endpunkt**, danach mTLS auf dem Agent-Port | Neue Agents kennen die Agent-CA noch nicht; der mTLS-Port bleibt streng ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)) |
 
 ---
 
@@ -264,9 +265,13 @@ eine Fake-Implementierung für Tests.
   Breaking-Change-Check in CI).
 - **Agent ↔ Server:** Ein langlebiger **bidirektionaler gRPC-Stream** `AgentService.Session`.
     - Agent → Server: `Hello{agent_version, host_facts, config_version}`, `MetricBatch`, `LogBatch`,
-      `SecurityEventBatch`, `UpdateReport`, `ProcessSnapshot`, `CommandResult`, `Heartbeat`
-    - Server → Agent: `ConfigUpdate{version, config}`, `StartLiveView{interval}`, `StopLiveView`,
-      `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`, `RotateCertificate`
+      `SecurityEventBatch`, `UpdateReport`, `ProcessSnapshot`, `CommandResult`, `Heartbeat`,
+      `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“)
+    - Server → Agent: `TrustBundle{roots}` (zu Beginn jeder Session), `CertificateIssued`, `RotateNow`
+      (Rotation auf Abruf), `ConfigUpdate{version, config}`, `StartLiveView{interval}`, `StopLiveView`,
+      `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`
+- **Enrollment:** `EnrollmentService.Enroll{token, csr, host_facts}` ist ein einzelner Aufruf über den öffentlichen
+  HTTPS-Endpunkt, nicht über den mTLS-Port ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)).
 - **Batching:** Metriken werden jede Sekunde gesendet, Logs alle 1 s oder bei 256 KB (je nachdem, was zuerst eintritt).
   Komprimiert wird mit zstd oder gzip auf gRPC-Ebene.
 - **Zuverlässigkeit:** Jeder Batch hat eine monoton steigende Sequenznummer, der Server bestätigt (`Ack{seq}`). Der
@@ -304,8 +309,9 @@ eine Fake-Implementierung für Tests.
     - installiert die Units (systemd/OpenRC) und ruft `sermon-agent enroll` auf
 4. `enroll`:
     - erzeugt **lokal** ein Schlüsselpaar (ECDSA P-256), das den Host nie verlässt, und daraus eine CSR
-    - sendet Token, CSR und Host-Fakten (Hostname, OS, Kernel, CPU, RAM, machine-id) über TLS. Das Server-Zertifikat
-      wird gegen die System-CA **oder** den gepinnten Fingerprint geprüft.
+    - sendet Token, CSR und Host-Fakten (Hostname, OS, Kernel, CPU, RAM, machine-id) über TLS an den öffentlichen
+      HTTPS-Endpunkt des Servers ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)). Das Server-Zertifikat wird
+      gegen die System-CA **oder** den gepinnten Fingerprint geprüft.
     - Der Server prüft den Token, legt den Node an und signiert die CSR mit der **internen Agent-CA**:
         - Subject/SAN: `URI:spiffe://sermon/org/<org-id>/node/<node-id>`
         - Laufzeit **30 Tage**; automatische Rotation nach 2/3 der Laufzeit über den bestehenden Stream

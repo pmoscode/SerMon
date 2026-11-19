@@ -205,7 +205,8 @@ func TestStreamingServer_EndsOpenStreamsOnShutdown(t *testing.T) {
 		<-r.Context().Done() // a stream that only ends when the server says so
 	})
 	srv := httpserver.NewStreaming(context.Background(), handler, slog.New(slog.DiscardHandler), 5*time.Second, nil)
-	if srv.HTTPServer().WriteTimeout != 0 || srv.HTTPServer().ReadTimeout != 0 || srv.HTTPServer().HTTP2 == nil || srv.HTTPServer().HTTP2.SendPingTimeout == 0 {
+	if srv.HTTPServer().WriteTimeout != 0 || srv.HTTPServer().ReadTimeout != 0 || srv.HTTPServer().HTTP2 == nil ||
+		srv.HTTPServer().HTTP2.SendPingTimeout != 15*time.Second { // KONZEPT §5
 		t.Errorf("streaming server needs no read/write timeouts but HTTP/2 keepalive pings: %+v", srv.HTTPServer())
 	}
 	ctx, cancel := context.WithCancel(context.Background())

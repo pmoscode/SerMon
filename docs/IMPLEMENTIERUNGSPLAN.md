@@ -413,7 +413,7 @@ flowchart LR
 
 #### ☑ M1-10 – Agent-API mit mTLS · S · M 🔒
 > Erledigt:
-> - **Listener:** eigener Listener (`SERMON_AGENT_ADDR`), nur TLS 1.3 und HTTP/2, Keepalive per HTTP/2-Ping, keine
+> - **Listener:** eigener Listener (`SERMON_AGENT_ADDR`), nur TLS 1.3 und HTTP/2, Keepalive per HTTP/2-Ping alle 15 s, keine
 >   Lese- und Schreib-Timeouts für lange Streams. Beim Shutdown enden offene Streams sofort.
 > - **Server-Zertifikat:** von der Agent-CA für `SERMON_AGENT_HOSTNAMES`, 7 Tage gültig, im Speicher nach 2/3 der
 >   Laufzeit erneuert (volle Rotation mit M1-11b).

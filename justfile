@@ -202,10 +202,10 @@ lint-web:
 test-web:
     pnpm test
 
-# Check web dependencies for known vulnerabilities
+# Check all web dependencies (incl. dev tooling – it runs on dev machines and in CI) for known vulnerabilities
 [working-directory: 'web']
 security-web:
-    pnpm audit --prod
+    pnpm audit
 
 # Build the web UI, check the bundle budget and copy it into the server for embedding
 [working-directory: 'web']

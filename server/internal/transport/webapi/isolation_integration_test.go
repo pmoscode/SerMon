@@ -30,6 +30,9 @@ const (
 	kaiID     = "0193f5a0-0000-7000-8000-0000000001c1" // member of both, no roles in Beta
 	groupAl   = "0193f5a0-0000-7000-8000-0000000001a9"
 	bindingAl = "0193f5a0-0000-7000-8000-0000000001a8"
+	inviteAl  = "0193f5a0-0000-7000-8000-0000000001a7"
+	// inviteTokenAl is the link token of inviteAl (fixture, not a secret).
+	inviteTokenAl = "alphaInvitationTokenForCrossTenantTests0001" // betterleaks:allow
 )
 
 func seedAccessFixtures(t *testing.T) {
@@ -48,6 +51,8 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO role_bindings (id, org_id, user_id, group_id, role) VALUES ('"+bindingAl+"', '"+orgAlpha+"', '"+miaID+"', '"+groupAl+"', 'viewer')",
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgAlpha+"', '"+kaiID+"', 'viewer')",
 		"INSERT INTO audit_log (org_id, seq, action, target, details, prev_hash, hash) VALUES ('"+orgAlpha+"', 0, 'seed', 'by-a', '{}', '\\x', '\\x')",
+		"DELETE FROM invitations WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO invitations (id, org_id, email, role, token_hash, expires_at) VALUES ('"+inviteAl+"', '"+orgAlpha+"', 'invited-a@example.org', 'admin', sha256(convert_to('"+inviteTokenAl+"', 'UTF8')), now() + interval '1 day')",
 		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
 		"DELETE FROM role_bindings WHERE org_id = '"+orgBeta+"'",
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgBeta+"', '"+beaID+"', 'admin')",
@@ -55,23 +60,23 @@ func seedAccessFixtures(t *testing.T) {
 }
 
 type loggedIn struct {
-	auth   webv1connect.AuthServiceClient
-	access webv1connect.AccessServiceClient
-	system webv1connect.SystemServiceClient
-	jar    *cookiejar.Jar
+	auth       webv1connect.AuthServiceClient
+	access     webv1connect.AccessServiceClient
+	system     webv1connect.SystemServiceClient
+	invitation webv1connect.InvitationServiceClient
+	jar        *cookiejar.Jar
 }
 
 func login(t *testing.T, s stack, email string) loggedIn {
 	t.Helper()
 	jar, _ := cookiejar.New(nil)
-	hc := s.server.Client()
-	hc.Jar = jar
-	hc.Transport = originTransport{next: hc.Transport, origin: s.origin}
+	hc := s.httpClient(jar, s.origin)
 	l := loggedIn{
-		auth:   webv1connect.NewAuthServiceClient(hc, s.server.URL),
-		access: webv1connect.NewAccessServiceClient(hc, s.server.URL),
-		system: webv1connect.NewSystemServiceClient(hc, s.server.URL),
-		jar:    jar,
+		auth:       webv1connect.NewAuthServiceClient(hc, s.server.URL),
+		access:     webv1connect.NewAccessServiceClient(hc, s.server.URL),
+		system:     webv1connect.NewSystemServiceClient(hc, s.server.URL),
+		invitation: webv1connect.NewInvitationServiceClient(hc, s.server.URL),
+		jar:        jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
 		t.Fatalf("login %s: %v", email, err)
@@ -83,7 +88,10 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	s := newStack(t, 1000)
 	seedAccessFixtures(t)
 	bea := login(t, s, "bea@example.org")
-	env := isolationEnv{auth: bea.auth, access: bea.access, orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl}
+	env := isolationEnv{
+		auth: bea.auth, access: bea.access, invitation: bea.invitation,
+		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
+	}
 	ctx := context.Background()
 
 	procedures := make([]string, 0, len(tenantIsolationCases))
@@ -100,6 +108,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 			t.Errorf("%s leaks data of another organization", p)
 		case c.list && err != nil:
 			t.Errorf("%s: %v", p, err)
+		case c.tokenBound && code == connect.CodeUnauthenticated:
 		case !c.list && code != connect.CodeNotFound && code != connect.CodePermissionDenied:
 			t.Errorf("%s with foreign IDs: %v, want NOT_FOUND or PERMISSION_DENIED", p, err)
 		}
@@ -115,7 +124,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 		t.Fatal(err)
 	}
 	var name string
-	var bindings, members, foreignGroups int
+	var bindings, members, foreignGroups, invitations int
 	if err := conn.QueryRow(ctx, "SELECT name FROM node_groups WHERE id = $1", groupAl).Scan(&name); err != nil || name != "alpha-web" {
 		t.Errorf("group of Alpha = %q, %v", name, err)
 	}
@@ -123,8 +132,12 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE user_id = $1", miaID).Scan(&members)
 	// The owner is a superuser in the test container (RLS does not apply): filter explicitly.
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM node_groups WHERE org_id = $1 AND name LIKE 'created-by-b%'", orgAlpha).Scan(&foreignGroups)
-	if bindings != 1 || members != 1 || foreignGroups != 0 {
-		t.Errorf("Alpha changed: binding %d, membership %d, groups created by Beta %d", bindings, members, foreignGroups)
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM invitations WHERE id = $1", inviteAl).Scan(&invitations)
+	var beaInAlpha int
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE org_id = $1 AND user_id = $2", orgAlpha, beaID).Scan(&beaInAlpha)
+	if bindings != 1 || members != 1 || foreignGroups != 0 || invitations != 1 || beaInAlpha != 0 {
+		t.Errorf("Alpha changed: binding %d, membership %d, groups created by Beta %d, invitation %d, Beta admin joined %d",
+			bindings, members, foreignGroups, invitations, beaInAlpha)
 	}
 }
 

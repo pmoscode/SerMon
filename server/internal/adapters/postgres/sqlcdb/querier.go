@@ -14,6 +14,7 @@ type Querier interface {
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
 	ActiveAuthority(ctx context.Context) (ActiveAuthorityRow, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
+	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
 	AddSuperadmin(ctx context.Context, userID uuid.UUID) error
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
@@ -31,6 +32,7 @@ type Querier interface {
 	// (SELECT policy), so RETURNING would be rejected by RLS. Add the membership in the same
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
 	// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
@@ -44,14 +46,18 @@ type Querier interface {
 	GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
+	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
+	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
+	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Replaces a previous token; does nothing once the setup is completed.
 	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (int64, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
 	ListOrganizations(ctx context.Context) ([]Organization, error)
@@ -70,6 +76,9 @@ type Querier interface {
 	SetupCompleted(ctx context.Context) (bool, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
+	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
+	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
+	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)
 	UserProfile(ctx context.Context, userID uuid.UUID) (UserProfileRow, error)

@@ -253,14 +253,18 @@ func (s *Service) ListAudit(ctx context.Context, c Caller, beforeSeq int64, limi
 	return wrapResult(s.store.ListAudit(ctx, scope, beforeSeq, limit))
 }
 
-// authorize checks an organization-wide action (and the step-up for changes of rights) and
-// returns the scope of the caller's organization.
 func (s *Service) authorize(c Caller, action authz.Action, stepUp bool) (tenant.Scope, error) {
+	return Authorize(s.policy, c, action, stepUp, s.now())
+}
+
+// Authorize checks an organization-wide action (and, for changes of rights, a step-up within
+// StepUpMaxAge) and returns the scope of the caller's organization.
+func Authorize(policy authz.Policy, c Caller, action authz.Action, stepUp bool, now time.Time) (tenant.Scope, error) {
 	p := c.Principal
-	if !s.policy.Allowed(p, action, authz.InOrg(p.Org)) {
+	if !policy.Allowed(p, action, authz.InOrg(p.Org)) {
 		return tenant.Scope{}, ErrForbidden
 	}
-	if stepUp && s.now().Sub(c.StepUpAt) > StepUpMaxAge {
+	if stepUp && now.Sub(c.StepUpAt) > StepUpMaxAge {
 		return tenant.Scope{}, ErrStepUpRequired
 	}
 	scope, err := tenant.ForAllGroups(p.Org)

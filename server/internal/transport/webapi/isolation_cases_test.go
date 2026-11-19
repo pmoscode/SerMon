@@ -17,7 +17,9 @@ import (
 type isolationEnv struct {
 	auth                            webv1connect.AuthServiceClient
 	access                          webv1connect.AccessServiceClient
+	invitation                      webv1connect.InvitationServiceClient
 	orgA, groupA, memberA, bindingA string
+	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -25,13 +27,16 @@ type isolationEnv struct {
 // (they return errLeak otherwise).
 type isolationCase struct {
 	list bool
-	run  func(ctx context.Context, e isolationEnv) error
+	// tokenBound cases may also fail with UNAUTHENTICATED (invalid link for the caller).
+	tokenBound bool
+	run        func(ctx context.Context, e isolationEnv) error
 }
 
 var errLeak = errors.New("response contains data of another organization")
 
 func leaks(e isolationEnv, s string) bool {
-	return strings.Contains(s, e.groupA) || strings.Contains(s, e.memberA) || strings.Contains(s, e.bindingA) || strings.Contains(s, e.orgA)
+	return strings.Contains(s, e.groupA) || strings.Contains(s, e.memberA) || strings.Contains(s, e.bindingA) ||
+		strings.Contains(s, e.orgA) || strings.Contains(s, e.invitationA)
 }
 
 // tenantIsolationCases maps every tenant RPC to its cross-tenant case (isolation_integration_test.go).
@@ -78,6 +83,27 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.AccessService/RemoveMember": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.access.RemoveMember(ctx, connect.NewRequest(&webv1.RemoveMemberRequest{UserId: e.memberA}))
+		return err
+	}},
+	"/sermon.web.v1.AccessService/InviteMember": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.access.InviteMember(ctx, connect.NewRequest(&webv1.InviteMemberRequest{
+			Email: "x-" + uuid.NewString()[:8] + "@example.org", GroupId: e.groupA, Role: webv1.Role_ROLE_ADMIN,
+		}))
+		return err
+	}},
+	"/sermon.web.v1.AccessService/ListInvitations": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.access.ListInvitations(ctx, connect.NewRequest(&webv1.ListInvitationsRequest{}))
+		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), "invited-a@")) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.AccessService/RevokeInvitation": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.access.RevokeInvitation(ctx, connect.NewRequest(&webv1.RevokeInvitationRequest{InvitationId: e.invitationA}))
+		return err
+	}},
+	"/sermon.web.v1.InvitationService/JoinOrganization": {tokenBound: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.invitation.JoinOrganization(ctx, connect.NewRequest(&webv1.JoinOrganizationRequest{Token: e.inviteTokenA}))
 		return err
 	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {

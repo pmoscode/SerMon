@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -19,15 +20,16 @@ import (
 
 // AccessHandler implements sermon.web.v1.AccessService (mounted behind the Authenticator).
 type AccessHandler struct {
-	svc    *access.Service
-	logger *slog.Logger
+	svc     *access.Service
+	invites *invitation.Service
+	logger  *slog.Logger
 }
 
 var _ webv1connect.AccessServiceHandler = (*AccessHandler)(nil)
 
 // NewAccessHandler returns the AccessService handler.
-func NewAccessHandler(svc *access.Service, logger *slog.Logger) *AccessHandler {
-	return &AccessHandler{svc: svc, logger: logger}
+func NewAccessHandler(svc *access.Service, invites *invitation.Service, logger *slog.Logger) *AccessHandler {
+	return &AccessHandler{svc: svc, invites: invites, logger: logger}
 }
 
 // ListNodeGroups lists the visible node groups.
@@ -127,14 +129,9 @@ func (h *AccessHandler) GrantRole(ctx context.Context, req *connect.Request[webv
 	if err != nil {
 		return nil, err
 	}
-	var group *tenant.GroupID
-	if req.Msg.GetGroupId() != "" {
-		id, err := parseID(req.Msg.GetGroupId())
-		if err != nil {
-			return nil, err
-		}
-		g := tenant.GroupID(id)
-		group = &g
+	group, err := optionalGroup(req.Msg.GetGroupId())
+	if err != nil {
+		return nil, err
 	}
 	id, err := h.svc.GrantRole(ctx, c, identity.UserID(user), group, roleFrom(req.Msg.GetRole()))
 	if err != nil {
@@ -196,6 +193,82 @@ func (h *AccessHandler) ListAuditLog(ctx context.Context, req *connect.Request[w
 	return connect.NewResponse(res), nil
 }
 
+// InviteMember creates an invitation and returns its link token once.
+func (h *AccessHandler) InviteMember(ctx context.Context, req *connect.Request[webv1.InviteMemberRequest]) (*connect.Response[webv1.InviteMemberResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	group, err := optionalGroup(req.Msg.GetGroupId())
+	if err != nil {
+		return nil, err
+	}
+	token, inv, err := h.invites.Invite(ctx, c, req.Msg.GetEmail(), group, roleFrom(req.Msg.GetRole()))
+	if err != nil {
+		return nil, h.fail(ctx, "invite member", err)
+	}
+	return connect.NewResponse(&webv1.InviteMemberResponse{Invitation: invitationView(inv), Token: token}), nil
+}
+
+// ListInvitations lists the open invitations.
+func (h *AccessHandler) ListInvitations(ctx context.Context, _ *connect.Request[webv1.ListInvitationsRequest]) (*connect.Response[webv1.ListInvitationsResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	invs, err := h.invites.List(ctx, c)
+	if err != nil {
+		return nil, h.fail(ctx, "list invitations", err)
+	}
+	res := &webv1.ListInvitationsResponse{}
+	for _, inv := range invs {
+		res.Invitations = append(res.Invitations, invitationView(inv))
+	}
+	return connect.NewResponse(res), nil
+}
+
+// RevokeInvitation deletes an open invitation.
+func (h *AccessHandler) RevokeInvitation(ctx context.Context, req *connect.Request[webv1.RevokeInvitationRequest]) (*connect.Response[webv1.RevokeInvitationResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetInvitationId())
+	if err != nil {
+		return nil, err
+	}
+	if err := h.invites.Revoke(ctx, c, invitation.ID(id)); err != nil {
+		return nil, h.fail(ctx, "revoke invitation", err)
+	}
+	return connect.NewResponse(&webv1.RevokeInvitationResponse{}), nil
+}
+
+func invitationView(inv invitation.Invitation) *webv1.Invitation {
+	v := &webv1.Invitation{
+		Id: inv.ID.String(), Email: inv.Email, Role: roleView(inv.Role),
+		CreateTime: timestamppb.New(inv.CreatedAt), ExpireTime: timestamppb.New(inv.ExpiresAt),
+	}
+	if inv.Group != nil {
+		v.GroupId = inv.Group.String()
+	}
+	if inv.InvitedBy != nil {
+		v.InvitedBy = inv.InvitedBy.String()
+	}
+	return v
+}
+
+func optionalGroup(raw string) (*tenant.GroupID, error) {
+	if raw == "" {
+		return nil, nil //nolint:nilnil // no group means all groups
+	}
+	id, err := parseID(raw)
+	if err != nil {
+		return nil, err
+	}
+	g := tenant.GroupID(id)
+	return &g, nil
+}
+
 // fail maps use-case errors to Connect codes; unexpected errors are logged and generic.
 func (h *AccessHandler) fail(ctx context.Context, op string, err error) error {
 	switch {
@@ -213,6 +286,8 @@ func (h *AccessHandler) fail(ctx context.Context, op string, err error) error {
 		return connect.NewError(connect.CodeInvalidArgument, access.ErrInvalidName)
 	case errors.Is(err, access.ErrInvalidRole):
 		return connect.NewError(connect.CodeInvalidArgument, access.ErrInvalidRole)
+	case errors.Is(err, invitation.ErrInvalidEmail):
+		return connect.NewError(connect.CodeInvalidArgument, invitation.ErrInvalidEmail)
 	}
 	return internalError(ctx, h.logger, op, err)
 }

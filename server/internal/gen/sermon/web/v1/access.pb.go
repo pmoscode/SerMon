@@ -1182,6 +1182,391 @@ func (x *ListAuditLogResponse) GetEntries() []*AuditEntry {
 	return nil
 }
 
+// InviteMemberRequest names the address and the initial role.
+type InviteMemberRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// email is the address to invite.
+	Email string `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	// group_id is the UUID of the group; empty grants the role on all groups.
+	GroupId string `protobuf:"bytes,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// role is the initial role.
+	Role          Role `protobuf:"varint,3,opt,name=role,proto3,enum=sermon.web.v1.Role" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InviteMemberRequest) Reset() {
+	*x = InviteMemberRequest{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InviteMemberRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InviteMemberRequest) ProtoMessage() {}
+
+func (x *InviteMemberRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InviteMemberRequest.ProtoReflect.Descriptor instead.
+func (*InviteMemberRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *InviteMemberRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *InviteMemberRequest) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *InviteMemberRequest) GetRole() Role {
+	if x != nil {
+		return x.Role
+	}
+	return Role_ROLE_UNSPECIFIED
+}
+
+// InviteMemberResponse returns the invitation and its link token (shown only once).
+type InviteMemberResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// invitation is the stored invitation.
+	Invitation *Invitation `protobuf:"bytes,1,opt,name=invitation,proto3" json:"invitation,omitempty"`
+	// token is the secret part of the link; it cannot be retrieved again.
+	Token         string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InviteMemberResponse) Reset() {
+	*x = InviteMemberResponse{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InviteMemberResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InviteMemberResponse) ProtoMessage() {}
+
+func (x *InviteMemberResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InviteMemberResponse.ProtoReflect.Descriptor instead.
+func (*InviteMemberResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *InviteMemberResponse) GetInvitation() *Invitation {
+	if x != nil {
+		return x.Invitation
+	}
+	return nil
+}
+
+func (x *InviteMemberResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+// Invitation is an open invitation.
+type Invitation struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the invitation UUID.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// email is the invited address.
+	Email string `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	// group_id is the UUID of the group; empty means all groups.
+	GroupId string `protobuf:"bytes,3,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// role is the initial role.
+	Role Role `protobuf:"varint,4,opt,name=role,proto3,enum=sermon.web.v1.Role" json:"role,omitempty"`
+	// invited_by is the UUID of the inviting user; empty if the user was deleted.
+	InvitedBy string `protobuf:"bytes,5,opt,name=invited_by,json=invitedBy,proto3" json:"invited_by,omitempty"`
+	// create_time is when the invitation was created.
+	CreateTime *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
+	// expire_time is when the link stops working.
+	ExpireTime    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=expire_time,json=expireTime,proto3" json:"expire_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Invitation) Reset() {
+	*x = Invitation{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Invitation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Invitation) ProtoMessage() {}
+
+func (x *Invitation) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Invitation.ProtoReflect.Descriptor instead.
+func (*Invitation) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *Invitation) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Invitation) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *Invitation) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *Invitation) GetRole() Role {
+	if x != nil {
+		return x.Role
+	}
+	return Role_ROLE_UNSPECIFIED
+}
+
+func (x *Invitation) GetInvitedBy() string {
+	if x != nil {
+		return x.InvitedBy
+	}
+	return ""
+}
+
+func (x *Invitation) GetCreateTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreateTime
+	}
+	return nil
+}
+
+func (x *Invitation) GetExpireTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpireTime
+	}
+	return nil
+}
+
+// ListInvitationsRequest has no parameters.
+type ListInvitationsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInvitationsRequest) Reset() {
+	*x = ListInvitationsRequest{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInvitationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInvitationsRequest) ProtoMessage() {}
+
+func (x *ListInvitationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInvitationsRequest.ProtoReflect.Descriptor instead.
+func (*ListInvitationsRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{25}
+}
+
+// ListInvitationsResponse lists open invitations, newest first.
+type ListInvitationsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// invitations of the organization.
+	Invitations   []*Invitation `protobuf:"bytes,1,rep,name=invitations,proto3" json:"invitations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListInvitationsResponse) Reset() {
+	*x = ListInvitationsResponse{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListInvitationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListInvitationsResponse) ProtoMessage() {}
+
+func (x *ListInvitationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListInvitationsResponse.ProtoReflect.Descriptor instead.
+func (*ListInvitationsResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ListInvitationsResponse) GetInvitations() []*Invitation {
+	if x != nil {
+		return x.Invitations
+	}
+	return nil
+}
+
+// RevokeInvitationRequest names the invitation.
+type RevokeInvitationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// invitation_id is the UUID of the invitation.
+	InvitationId  string `protobuf:"bytes,1,opt,name=invitation_id,json=invitationId,proto3" json:"invitation_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeInvitationRequest) Reset() {
+	*x = RevokeInvitationRequest{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeInvitationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeInvitationRequest) ProtoMessage() {}
+
+func (x *RevokeInvitationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeInvitationRequest.ProtoReflect.Descriptor instead.
+func (*RevokeInvitationRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *RevokeInvitationRequest) GetInvitationId() string {
+	if x != nil {
+		return x.InvitationId
+	}
+	return ""
+}
+
+// RevokeInvitationResponse has no fields.
+type RevokeInvitationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeInvitationResponse) Reset() {
+	*x = RevokeInvitationResponse{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeInvitationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeInvitationResponse) ProtoMessage() {}
+
+func (x *RevokeInvitationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeInvitationResponse.ProtoReflect.Descriptor instead.
+func (*RevokeInvitationResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{28}
+}
+
 var File_sermon_web_v1_access_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_access_proto_rawDesc = "" +
@@ -1250,13 +1635,42 @@ const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\tpage_size\x18\x02 \x01(\x05B\n" +
 	"\xbaH\a\x1a\x05\x18\xf4\x03(\x00R\bpageSize\"K\n" +
 	"\x14ListAuditLogResponse\x123\n" +
-	"\aentries\x18\x01 \x03(\v2\x19.sermon.web.v1.AuditEntryR\aentries*P\n" +
+	"\aentries\x18\x01 \x03(\v2\x19.sermon.web.v1.AuditEntryR\aentries\"\x94\x01\n" +
+	"\x13InviteMemberRequest\x12 \n" +
+	"\x05email\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x03\x18\xc0\x02R\x05email\x12&\n" +
+	"\bgroup_id\x18\x02 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\agroupId\x123\n" +
+	"\x04role\x18\x03 \x01(\x0e2\x13.sermon.web.v1.RoleB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x04role\"g\n" +
+	"\x14InviteMemberResponse\x129\n" +
+	"\n" +
+	"invitation\x18\x01 \x01(\v2\x19.sermon.web.v1.InvitationR\n" +
+	"invitation\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\"\x8f\x02\n" +
+	"\n" +
+	"Invitation\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x19\n" +
+	"\bgroup_id\x18\x03 \x01(\tR\agroupId\x12'\n" +
+	"\x04role\x18\x04 \x01(\x0e2\x13.sermon.web.v1.RoleR\x04role\x12\x1d\n" +
+	"\n" +
+	"invited_by\x18\x05 \x01(\tR\tinvitedBy\x12;\n" +
+	"\vcreate_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"createTime\x12;\n" +
+	"\vexpire_time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"expireTime\"\x18\n" +
+	"\x16ListInvitationsRequest\"V\n" +
+	"\x17ListInvitationsResponse\x12;\n" +
+	"\vinvitations\x18\x01 \x03(\v2\x19.sermon.web.v1.InvitationR\vinvitations\"H\n" +
+	"\x17RevokeInvitationRequest\x12-\n" +
+	"\rinvitation_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\finvitationId\"\x1a\n" +
+	"\x18RevokeInvitationResponse*P\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vROLE_VIEWER\x10\x01\x12\x11\n" +
 	"\rROLE_OPERATOR\x10\x02\x12\x0e\n" +
 	"\n" +
-	"ROLE_ADMIN\x10\x032\xce\x06\n" +
+	"ROLE_ADMIN\x10\x032\xf3\b\n" +
 	"\rAccessService\x12b\n" +
 	"\x0eListNodeGroups\x12$.sermon.web.v1.ListNodeGroupsRequest\x1a%.sermon.web.v1.ListNodeGroupsResponse\"\x03\x90\x02\x01\x12`\n" +
 	"\x0fCreateNodeGroup\x12%.sermon.web.v1.CreateNodeGroupRequest\x1a&.sermon.web.v1.CreateNodeGroupResponse\x12`\n" +
@@ -1266,7 +1680,10 @@ const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\tGrantRole\x12\x1f.sermon.web.v1.GrantRoleRequest\x1a .sermon.web.v1.GrantRoleResponse\x12Q\n" +
 	"\n" +
 	"RevokeRole\x12 .sermon.web.v1.RevokeRoleRequest\x1a!.sermon.web.v1.RevokeRoleResponse\x12W\n" +
-	"\fRemoveMember\x12\".sermon.web.v1.RemoveMemberRequest\x1a#.sermon.web.v1.RemoveMemberResponse\x12\\\n" +
+	"\fRemoveMember\x12\".sermon.web.v1.RemoveMemberRequest\x1a#.sermon.web.v1.RemoveMemberResponse\x12W\n" +
+	"\fInviteMember\x12\".sermon.web.v1.InviteMemberRequest\x1a#.sermon.web.v1.InviteMemberResponse\x12e\n" +
+	"\x0fListInvitations\x12%.sermon.web.v1.ListInvitationsRequest\x1a&.sermon.web.v1.ListInvitationsResponse\"\x03\x90\x02\x01\x12c\n" +
+	"\x10RevokeInvitation\x12&.sermon.web.v1.RevokeInvitationRequest\x1a'.sermon.web.v1.RevokeInvitationResponse\x12\\\n" +
 	"\fListAuditLog\x12\".sermon.web.v1.ListAuditLogRequest\x1a#.sermon.web.v1.ListAuditLogResponse\"\x03\x90\x02\x01B\xba\x01\n" +
 	"\x11com.sermon.web.v1B\vAccessProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
@@ -1283,68 +1700,87 @@ func file_sermon_web_v1_access_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_access_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_access_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_sermon_web_v1_access_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_sermon_web_v1_access_proto_goTypes = []any{
-	(Role)(0),                       // 0: sermon.web.v1.Role
-	(*NodeGroup)(nil),               // 1: sermon.web.v1.NodeGroup
-	(*ListNodeGroupsRequest)(nil),   // 2: sermon.web.v1.ListNodeGroupsRequest
-	(*ListNodeGroupsResponse)(nil),  // 3: sermon.web.v1.ListNodeGroupsResponse
-	(*CreateNodeGroupRequest)(nil),  // 4: sermon.web.v1.CreateNodeGroupRequest
-	(*CreateNodeGroupResponse)(nil), // 5: sermon.web.v1.CreateNodeGroupResponse
-	(*RenameNodeGroupRequest)(nil),  // 6: sermon.web.v1.RenameNodeGroupRequest
-	(*RenameNodeGroupResponse)(nil), // 7: sermon.web.v1.RenameNodeGroupResponse
-	(*DeleteNodeGroupRequest)(nil),  // 8: sermon.web.v1.DeleteNodeGroupRequest
-	(*DeleteNodeGroupResponse)(nil), // 9: sermon.web.v1.DeleteNodeGroupResponse
-	(*RoleBinding)(nil),             // 10: sermon.web.v1.RoleBinding
-	(*Member)(nil),                  // 11: sermon.web.v1.Member
-	(*ListMembersRequest)(nil),      // 12: sermon.web.v1.ListMembersRequest
-	(*ListMembersResponse)(nil),     // 13: sermon.web.v1.ListMembersResponse
-	(*GrantRoleRequest)(nil),        // 14: sermon.web.v1.GrantRoleRequest
-	(*GrantRoleResponse)(nil),       // 15: sermon.web.v1.GrantRoleResponse
-	(*RevokeRoleRequest)(nil),       // 16: sermon.web.v1.RevokeRoleRequest
-	(*RevokeRoleResponse)(nil),      // 17: sermon.web.v1.RevokeRoleResponse
-	(*RemoveMemberRequest)(nil),     // 18: sermon.web.v1.RemoveMemberRequest
-	(*RemoveMemberResponse)(nil),    // 19: sermon.web.v1.RemoveMemberResponse
-	(*AuditEntry)(nil),              // 20: sermon.web.v1.AuditEntry
-	(*ListAuditLogRequest)(nil),     // 21: sermon.web.v1.ListAuditLogRequest
-	(*ListAuditLogResponse)(nil),    // 22: sermon.web.v1.ListAuditLogResponse
-	nil,                             // 23: sermon.web.v1.AuditEntry.DetailsEntry
-	(*timestamppb.Timestamp)(nil),   // 24: google.protobuf.Timestamp
+	(Role)(0),                        // 0: sermon.web.v1.Role
+	(*NodeGroup)(nil),                // 1: sermon.web.v1.NodeGroup
+	(*ListNodeGroupsRequest)(nil),    // 2: sermon.web.v1.ListNodeGroupsRequest
+	(*ListNodeGroupsResponse)(nil),   // 3: sermon.web.v1.ListNodeGroupsResponse
+	(*CreateNodeGroupRequest)(nil),   // 4: sermon.web.v1.CreateNodeGroupRequest
+	(*CreateNodeGroupResponse)(nil),  // 5: sermon.web.v1.CreateNodeGroupResponse
+	(*RenameNodeGroupRequest)(nil),   // 6: sermon.web.v1.RenameNodeGroupRequest
+	(*RenameNodeGroupResponse)(nil),  // 7: sermon.web.v1.RenameNodeGroupResponse
+	(*DeleteNodeGroupRequest)(nil),   // 8: sermon.web.v1.DeleteNodeGroupRequest
+	(*DeleteNodeGroupResponse)(nil),  // 9: sermon.web.v1.DeleteNodeGroupResponse
+	(*RoleBinding)(nil),              // 10: sermon.web.v1.RoleBinding
+	(*Member)(nil),                   // 11: sermon.web.v1.Member
+	(*ListMembersRequest)(nil),       // 12: sermon.web.v1.ListMembersRequest
+	(*ListMembersResponse)(nil),      // 13: sermon.web.v1.ListMembersResponse
+	(*GrantRoleRequest)(nil),         // 14: sermon.web.v1.GrantRoleRequest
+	(*GrantRoleResponse)(nil),        // 15: sermon.web.v1.GrantRoleResponse
+	(*RevokeRoleRequest)(nil),        // 16: sermon.web.v1.RevokeRoleRequest
+	(*RevokeRoleResponse)(nil),       // 17: sermon.web.v1.RevokeRoleResponse
+	(*RemoveMemberRequest)(nil),      // 18: sermon.web.v1.RemoveMemberRequest
+	(*RemoveMemberResponse)(nil),     // 19: sermon.web.v1.RemoveMemberResponse
+	(*AuditEntry)(nil),               // 20: sermon.web.v1.AuditEntry
+	(*ListAuditLogRequest)(nil),      // 21: sermon.web.v1.ListAuditLogRequest
+	(*ListAuditLogResponse)(nil),     // 22: sermon.web.v1.ListAuditLogResponse
+	(*InviteMemberRequest)(nil),      // 23: sermon.web.v1.InviteMemberRequest
+	(*InviteMemberResponse)(nil),     // 24: sermon.web.v1.InviteMemberResponse
+	(*Invitation)(nil),               // 25: sermon.web.v1.Invitation
+	(*ListInvitationsRequest)(nil),   // 26: sermon.web.v1.ListInvitationsRequest
+	(*ListInvitationsResponse)(nil),  // 27: sermon.web.v1.ListInvitationsResponse
+	(*RevokeInvitationRequest)(nil),  // 28: sermon.web.v1.RevokeInvitationRequest
+	(*RevokeInvitationResponse)(nil), // 29: sermon.web.v1.RevokeInvitationResponse
+	nil,                              // 30: sermon.web.v1.AuditEntry.DetailsEntry
+	(*timestamppb.Timestamp)(nil),    // 31: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_access_proto_depIdxs = []int32{
-	24, // 0: sermon.web.v1.NodeGroup.create_time:type_name -> google.protobuf.Timestamp
+	31, // 0: sermon.web.v1.NodeGroup.create_time:type_name -> google.protobuf.Timestamp
 	1,  // 1: sermon.web.v1.ListNodeGroupsResponse.groups:type_name -> sermon.web.v1.NodeGroup
 	1,  // 2: sermon.web.v1.CreateNodeGroupResponse.group:type_name -> sermon.web.v1.NodeGroup
 	0,  // 3: sermon.web.v1.RoleBinding.role:type_name -> sermon.web.v1.Role
 	10, // 4: sermon.web.v1.Member.bindings:type_name -> sermon.web.v1.RoleBinding
 	11, // 5: sermon.web.v1.ListMembersResponse.members:type_name -> sermon.web.v1.Member
 	0,  // 6: sermon.web.v1.GrantRoleRequest.role:type_name -> sermon.web.v1.Role
-	24, // 7: sermon.web.v1.AuditEntry.time:type_name -> google.protobuf.Timestamp
-	23, // 8: sermon.web.v1.AuditEntry.details:type_name -> sermon.web.v1.AuditEntry.DetailsEntry
+	31, // 7: sermon.web.v1.AuditEntry.time:type_name -> google.protobuf.Timestamp
+	30, // 8: sermon.web.v1.AuditEntry.details:type_name -> sermon.web.v1.AuditEntry.DetailsEntry
 	20, // 9: sermon.web.v1.ListAuditLogResponse.entries:type_name -> sermon.web.v1.AuditEntry
-	2,  // 10: sermon.web.v1.AccessService.ListNodeGroups:input_type -> sermon.web.v1.ListNodeGroupsRequest
-	4,  // 11: sermon.web.v1.AccessService.CreateNodeGroup:input_type -> sermon.web.v1.CreateNodeGroupRequest
-	6,  // 12: sermon.web.v1.AccessService.RenameNodeGroup:input_type -> sermon.web.v1.RenameNodeGroupRequest
-	8,  // 13: sermon.web.v1.AccessService.DeleteNodeGroup:input_type -> sermon.web.v1.DeleteNodeGroupRequest
-	12, // 14: sermon.web.v1.AccessService.ListMembers:input_type -> sermon.web.v1.ListMembersRequest
-	14, // 15: sermon.web.v1.AccessService.GrantRole:input_type -> sermon.web.v1.GrantRoleRequest
-	16, // 16: sermon.web.v1.AccessService.RevokeRole:input_type -> sermon.web.v1.RevokeRoleRequest
-	18, // 17: sermon.web.v1.AccessService.RemoveMember:input_type -> sermon.web.v1.RemoveMemberRequest
-	21, // 18: sermon.web.v1.AccessService.ListAuditLog:input_type -> sermon.web.v1.ListAuditLogRequest
-	3,  // 19: sermon.web.v1.AccessService.ListNodeGroups:output_type -> sermon.web.v1.ListNodeGroupsResponse
-	5,  // 20: sermon.web.v1.AccessService.CreateNodeGroup:output_type -> sermon.web.v1.CreateNodeGroupResponse
-	7,  // 21: sermon.web.v1.AccessService.RenameNodeGroup:output_type -> sermon.web.v1.RenameNodeGroupResponse
-	9,  // 22: sermon.web.v1.AccessService.DeleteNodeGroup:output_type -> sermon.web.v1.DeleteNodeGroupResponse
-	13, // 23: sermon.web.v1.AccessService.ListMembers:output_type -> sermon.web.v1.ListMembersResponse
-	15, // 24: sermon.web.v1.AccessService.GrantRole:output_type -> sermon.web.v1.GrantRoleResponse
-	17, // 25: sermon.web.v1.AccessService.RevokeRole:output_type -> sermon.web.v1.RevokeRoleResponse
-	19, // 26: sermon.web.v1.AccessService.RemoveMember:output_type -> sermon.web.v1.RemoveMemberResponse
-	22, // 27: sermon.web.v1.AccessService.ListAuditLog:output_type -> sermon.web.v1.ListAuditLogResponse
-	19, // [19:28] is the sub-list for method output_type
-	10, // [10:19] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	0,  // 10: sermon.web.v1.InviteMemberRequest.role:type_name -> sermon.web.v1.Role
+	25, // 11: sermon.web.v1.InviteMemberResponse.invitation:type_name -> sermon.web.v1.Invitation
+	0,  // 12: sermon.web.v1.Invitation.role:type_name -> sermon.web.v1.Role
+	31, // 13: sermon.web.v1.Invitation.create_time:type_name -> google.protobuf.Timestamp
+	31, // 14: sermon.web.v1.Invitation.expire_time:type_name -> google.protobuf.Timestamp
+	25, // 15: sermon.web.v1.ListInvitationsResponse.invitations:type_name -> sermon.web.v1.Invitation
+	2,  // 16: sermon.web.v1.AccessService.ListNodeGroups:input_type -> sermon.web.v1.ListNodeGroupsRequest
+	4,  // 17: sermon.web.v1.AccessService.CreateNodeGroup:input_type -> sermon.web.v1.CreateNodeGroupRequest
+	6,  // 18: sermon.web.v1.AccessService.RenameNodeGroup:input_type -> sermon.web.v1.RenameNodeGroupRequest
+	8,  // 19: sermon.web.v1.AccessService.DeleteNodeGroup:input_type -> sermon.web.v1.DeleteNodeGroupRequest
+	12, // 20: sermon.web.v1.AccessService.ListMembers:input_type -> sermon.web.v1.ListMembersRequest
+	14, // 21: sermon.web.v1.AccessService.GrantRole:input_type -> sermon.web.v1.GrantRoleRequest
+	16, // 22: sermon.web.v1.AccessService.RevokeRole:input_type -> sermon.web.v1.RevokeRoleRequest
+	18, // 23: sermon.web.v1.AccessService.RemoveMember:input_type -> sermon.web.v1.RemoveMemberRequest
+	23, // 24: sermon.web.v1.AccessService.InviteMember:input_type -> sermon.web.v1.InviteMemberRequest
+	26, // 25: sermon.web.v1.AccessService.ListInvitations:input_type -> sermon.web.v1.ListInvitationsRequest
+	28, // 26: sermon.web.v1.AccessService.RevokeInvitation:input_type -> sermon.web.v1.RevokeInvitationRequest
+	21, // 27: sermon.web.v1.AccessService.ListAuditLog:input_type -> sermon.web.v1.ListAuditLogRequest
+	3,  // 28: sermon.web.v1.AccessService.ListNodeGroups:output_type -> sermon.web.v1.ListNodeGroupsResponse
+	5,  // 29: sermon.web.v1.AccessService.CreateNodeGroup:output_type -> sermon.web.v1.CreateNodeGroupResponse
+	7,  // 30: sermon.web.v1.AccessService.RenameNodeGroup:output_type -> sermon.web.v1.RenameNodeGroupResponse
+	9,  // 31: sermon.web.v1.AccessService.DeleteNodeGroup:output_type -> sermon.web.v1.DeleteNodeGroupResponse
+	13, // 32: sermon.web.v1.AccessService.ListMembers:output_type -> sermon.web.v1.ListMembersResponse
+	15, // 33: sermon.web.v1.AccessService.GrantRole:output_type -> sermon.web.v1.GrantRoleResponse
+	17, // 34: sermon.web.v1.AccessService.RevokeRole:output_type -> sermon.web.v1.RevokeRoleResponse
+	19, // 35: sermon.web.v1.AccessService.RemoveMember:output_type -> sermon.web.v1.RemoveMemberResponse
+	24, // 36: sermon.web.v1.AccessService.InviteMember:output_type -> sermon.web.v1.InviteMemberResponse
+	27, // 37: sermon.web.v1.AccessService.ListInvitations:output_type -> sermon.web.v1.ListInvitationsResponse
+	29, // 38: sermon.web.v1.AccessService.RevokeInvitation:output_type -> sermon.web.v1.RevokeInvitationResponse
+	22, // 39: sermon.web.v1.AccessService.ListAuditLog:output_type -> sermon.web.v1.ListAuditLogResponse
+	28, // [28:40] is the sub-list for method output_type
+	16, // [16:28] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_access_proto_init() }
@@ -1358,7 +1794,7 @@ func file_sermon_web_v1_access_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_access_proto_rawDesc), len(file_sermon_web_v1_access_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   23,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

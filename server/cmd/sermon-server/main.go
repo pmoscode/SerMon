@@ -21,6 +21,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
+	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
@@ -143,6 +144,10 @@ func openDatabase(ctx context.Context, cfg config.Config, logger *slog.Logger) (
 const (
 	setupAttemptsPerWindow = 10
 	setupWindow            = time.Minute
+
+	// Invitation page requests per client IP (link tokens have 256 bits).
+	invitationAttemptsPerWindow = 30
+	invitationWindow            = time.Minute
 )
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, logger *slog.Logger) error {
@@ -166,13 +171,17 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		IPLimiter:   ratelimit.New(loginAttemptsPerWindow, loginWindow, time.Now),
 		Now:         time.Now,
 	})
+	accessStore := postgres.NewAccessStore(db)
+	policy := authz.NewPolicy()
+	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
 		Auth:   webapi.NewAuthHandler(login, sessions, credentials, logger),
 		System: webapi.NewSystemHandler(version),
-		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(db), authz.NewPolicy(), time.Now, access.NewID),
-			logger),
-		Setup:         webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
-		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(db)), logger),
+		Access: webapi.NewAccessHandler(access.NewService(accessStore, policy, time.Now, access.NewID), invites, logger),
+		Setup:  webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
+		Invitation: webapi.NewInvitationHandler(invites, sessions,
+			ratelimit.New(invitationAttemptsPerWindow, invitationWindow, time.Now), logger),
+		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(accessStore), logger),
 	})
 	return nil
 }

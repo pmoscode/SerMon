@@ -40,6 +40,18 @@ type InstanceSetup struct {
 	CompletedAt    *time.Time
 }
 
+type Invitation struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	Email     string
+	GroupID   *uuid.UUID
+	Role      string
+	TokenHash []byte
+	InvitedBy *uuid.UUID
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
 type Membership struct {
 	OrgID     uuid.UUID
 	UserID    uuid.UUID

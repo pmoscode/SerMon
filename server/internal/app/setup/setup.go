@@ -27,7 +27,6 @@ const TokenLifetime = 30 * time.Minute
 const (
 	tokenBytes  = 32
 	tokenLength = 43 // base64url without padding of 32 bytes
-	maxEmail    = 320
 	maxName     = 200
 )
 
@@ -118,8 +117,8 @@ func (s *Service) Complete(ctx context.Context, r Request) error {
 	if len(r.Token) != tokenLength {
 		return ErrInvalidToken
 	}
-	email := strings.ToLower(strings.TrimSpace(r.Email))
-	if !validEmail(email) {
+	email, ok := identity.NormalizeEmail(r.Email)
+	if !ok {
 		return ErrInvalidEmail
 	}
 	name, okName := cleanName(r.DisplayName)
@@ -142,12 +141,6 @@ func (s *Service) Complete(ctx context.Context, r Request) error {
 		return fmt.Errorf("complete setup: %w", err)
 	}
 	return nil
-}
-
-func validEmail(email string) bool {
-	local, domain, ok := strings.Cut(email, "@")
-	return ok && local != "" && strings.Contains(domain, ".") && !strings.ContainsAny(email, " \t\r\n") &&
-		len(email) <= maxEmail && !strings.Contains(domain, "@")
 }
 
 func cleanName(name string) (string, bool) {

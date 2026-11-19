@@ -23,6 +23,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
+	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -39,6 +40,12 @@ const (
 type stack struct {
 	server *httptest.Server
 	origin string
+}
+
+// httpClient returns a new client with its own cookie jar. httptest.Server.Client returns the
+// same *http.Client every time, so it must not be modified (clients would share cookies).
+func (s stack) httpClient(jar http.CookieJar, origin string) *http.Client {
+	return &http.Client{Jar: jar, Transport: originTransport{next: s.server.Client().Transport, origin: origin}}
 }
 
 // newStack starts the web API over TLS with a real database (Testcontainers).
@@ -65,6 +72,7 @@ func newStack(t *testing.T, loginLimit int) stack {
 		IPLimiter: ratelimit.New(loginLimit, time.Minute, time.Now), Now: time.Now,
 	})
 
+	invites := invitation.NewService(postgres.NewInvitationStore(pg), creds, authz.NewPolicy(), hasher, time.Now, access.NewID)
 	mux := http.NewServeMux()
 	srv := httptest.NewUnstartedServer(mux)
 	srv.StartTLS()
@@ -73,7 +81,8 @@ func newStack(t *testing.T, loginLimit int) stack {
 		Auth:   webapi.NewAuthHandler(login, sessions, creds, slog.New(slog.DiscardHandler)),
 		System: webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
-			slog.New(slog.DiscardHandler)),
+			invites, slog.New(slog.DiscardHandler)),
+		Invitation:    webapi.NewInvitationHandler(invites, sessions, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg)), slog.New(slog.DiscardHandler)),
 	})
 	return stack{server: srv, origin: srv.URL}
@@ -138,9 +147,7 @@ func seedUser(t *testing.T, ownerDSN string) {
 func client(t *testing.T, s stack, origin string) webv1connect.AuthServiceClient {
 	t.Helper()
 	jar, _ := cookiejar.New(nil)
-	hc := s.server.Client()
-	hc.Jar = jar
-	hc.Transport = originTransport{next: hc.Transport, origin: origin}
+	hc := s.httpClient(jar, origin)
 	return webv1connect.NewAuthServiceClient(hc, s.server.URL)
 }
 
@@ -246,9 +253,7 @@ func TestAuthAPI_RemovingTheMembershipEndsAccessImmediately(t *testing.T) {
 	s := newStack(t, 20)
 	t.Cleanup(func() { seedUser(t, pgtest.Shared(t).OwnerDSN) })
 	jar, _ := cookiejar.New(nil)
-	hc := s.server.Client()
-	hc.Jar = jar
-	hc.Transport = originTransport{next: hc.Transport, origin: s.origin}
+	hc := s.httpClient(jar, s.origin)
 	authc := webv1connect.NewAuthServiceClient(hc, s.server.URL)
 	system := webv1connect.NewSystemServiceClient(hc, s.server.URL)
 	ctx := context.Background()

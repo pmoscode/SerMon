@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/access.proto";
+
+// InvitationService is used by the invite page (ADR 0008). The token from the link fragment
+// is the only credential; all RPCs are rate limited per client and return UNAUTHENTICATED for
+// unknown, expired, used or revoked links.
+service InvitationService {
+  // GetInvitation describes the invitation of a link.
+  rpc GetInvitation(GetInvitationRequest) returns (GetInvitationResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // AcceptInvitation creates an account for the invited address and joins the organization.
+  // If the address already has an account, it fails like an invalid link; the owner logs in
+  // and uses JoinOrganization instead.
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
+  // JoinOrganization adds the logged-in user (session cookie) if the invitation is for the
+  // user's e-mail address.
+  rpc JoinOrganization(JoinOrganizationRequest) returns (JoinOrganizationResponse);
+}
+
+// GetInvitationRequest carries the link token.
+message GetInvitationRequest {
+  // token is the secret part of the invitation link.
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// GetInvitationResponse describes the invitation.
+message GetInvitationResponse {
+  // organization_name is the inviting organization.
+  string organization_name = 1;
+  // email is the invited address.
+  string email = 2;
+  // role is the initial role.
+  Role role = 3;
+  // expire_time is when the link stops working.
+  google.protobuf.Timestamp expire_time = 4;
+}
+
+// AcceptInvitationRequest creates the new account.
+message AcceptInvitationRequest {
+  // token is the secret part of the invitation link.
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // display_name is the new user's name.
+  string display_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // password is the new user's password (password policy, KONZEPT §7).
+  string password = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 1024
+  }];
+}
+
+// AcceptInvitationResponse names the joined organization.
+message AcceptInvitationResponse {
+  // organization_name is the joined organization; the user logs in next.
+  string organization_name = 1;
+}
+
+// JoinOrganizationRequest carries the link token.
+message JoinOrganizationRequest {
+  // token is the secret part of the invitation link.
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// JoinOrganizationResponse names the joined organization.
+message JoinOrganizationResponse {
+  // organization_id is the UUID of the joined organization (for SwitchOrganization).
+  string organization_id = 1;
+  // organization_name is the joined organization.
+  string organization_name = 2;
+}

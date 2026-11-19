@@ -56,6 +56,15 @@ const (
 	// AccessServiceRemoveMemberProcedure is the fully-qualified name of the AccessService's
 	// RemoveMember RPC.
 	AccessServiceRemoveMemberProcedure = "/sermon.web.v1.AccessService/RemoveMember"
+	// AccessServiceInviteMemberProcedure is the fully-qualified name of the AccessService's
+	// InviteMember RPC.
+	AccessServiceInviteMemberProcedure = "/sermon.web.v1.AccessService/InviteMember"
+	// AccessServiceListInvitationsProcedure is the fully-qualified name of the AccessService's
+	// ListInvitations RPC.
+	AccessServiceListInvitationsProcedure = "/sermon.web.v1.AccessService/ListInvitations"
+	// AccessServiceRevokeInvitationProcedure is the fully-qualified name of the AccessService's
+	// RevokeInvitation RPC.
+	AccessServiceRevokeInvitationProcedure = "/sermon.web.v1.AccessService/RevokeInvitation"
 	// AccessServiceListAuditLogProcedure is the fully-qualified name of the AccessService's
 	// ListAuditLog RPC.
 	AccessServiceListAuditLogProcedure = "/sermon.web.v1.AccessService/ListAuditLog"
@@ -82,6 +91,14 @@ type AccessServiceClient interface {
 	// RemoveMember removes a user from the organization and ends the user's sessions in it
 	// (org admin, step-up).
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
+	// InviteMember invites an e-mail address with an initial role (org admin, step-up). The
+	// response contains the link token once; the UI builds the link "<origin>/invite#<token>".
+	// The response is the same whether or not the address already has an account (ADR 0008).
+	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
+	// ListInvitations returns the open invitations (org admin).
+	ListInvitations(context.Context, *connect.Request[v1.ListInvitationsRequest]) (*connect.Response[v1.ListInvitationsResponse], error)
+	// RevokeInvitation deletes an open invitation (org admin).
+	RevokeInvitation(context.Context, *connect.Request[v1.RevokeInvitationRequest]) (*connect.Response[v1.RevokeInvitationResponse], error)
 	// ListAuditLog returns audit entries, newest first (org admin).
 	ListAuditLog(context.Context, *connect.Request[v1.ListAuditLogRequest]) (*connect.Response[v1.ListAuditLogResponse], error)
 }
@@ -147,6 +164,25 @@ func NewAccessServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(accessServiceMethods.ByName("RemoveMember")),
 			connect.WithClientOptions(opts...),
 		),
+		inviteMember: connect.NewClient[v1.InviteMemberRequest, v1.InviteMemberResponse](
+			httpClient,
+			baseURL+AccessServiceInviteMemberProcedure,
+			connect.WithSchema(accessServiceMethods.ByName("InviteMember")),
+			connect.WithClientOptions(opts...),
+		),
+		listInvitations: connect.NewClient[v1.ListInvitationsRequest, v1.ListInvitationsResponse](
+			httpClient,
+			baseURL+AccessServiceListInvitationsProcedure,
+			connect.WithSchema(accessServiceMethods.ByName("ListInvitations")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
+		revokeInvitation: connect.NewClient[v1.RevokeInvitationRequest, v1.RevokeInvitationResponse](
+			httpClient,
+			baseURL+AccessServiceRevokeInvitationProcedure,
+			connect.WithSchema(accessServiceMethods.ByName("RevokeInvitation")),
+			connect.WithClientOptions(opts...),
+		),
 		listAuditLog: connect.NewClient[v1.ListAuditLogRequest, v1.ListAuditLogResponse](
 			httpClient,
 			baseURL+AccessServiceListAuditLogProcedure,
@@ -159,15 +195,18 @@ func NewAccessServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // accessServiceClient implements AccessServiceClient.
 type accessServiceClient struct {
-	listNodeGroups  *connect.Client[v1.ListNodeGroupsRequest, v1.ListNodeGroupsResponse]
-	createNodeGroup *connect.Client[v1.CreateNodeGroupRequest, v1.CreateNodeGroupResponse]
-	renameNodeGroup *connect.Client[v1.RenameNodeGroupRequest, v1.RenameNodeGroupResponse]
-	deleteNodeGroup *connect.Client[v1.DeleteNodeGroupRequest, v1.DeleteNodeGroupResponse]
-	listMembers     *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
-	grantRole       *connect.Client[v1.GrantRoleRequest, v1.GrantRoleResponse]
-	revokeRole      *connect.Client[v1.RevokeRoleRequest, v1.RevokeRoleResponse]
-	removeMember    *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
-	listAuditLog    *connect.Client[v1.ListAuditLogRequest, v1.ListAuditLogResponse]
+	listNodeGroups   *connect.Client[v1.ListNodeGroupsRequest, v1.ListNodeGroupsResponse]
+	createNodeGroup  *connect.Client[v1.CreateNodeGroupRequest, v1.CreateNodeGroupResponse]
+	renameNodeGroup  *connect.Client[v1.RenameNodeGroupRequest, v1.RenameNodeGroupResponse]
+	deleteNodeGroup  *connect.Client[v1.DeleteNodeGroupRequest, v1.DeleteNodeGroupResponse]
+	listMembers      *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
+	grantRole        *connect.Client[v1.GrantRoleRequest, v1.GrantRoleResponse]
+	revokeRole       *connect.Client[v1.RevokeRoleRequest, v1.RevokeRoleResponse]
+	removeMember     *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
+	inviteMember     *connect.Client[v1.InviteMemberRequest, v1.InviteMemberResponse]
+	listInvitations  *connect.Client[v1.ListInvitationsRequest, v1.ListInvitationsResponse]
+	revokeInvitation *connect.Client[v1.RevokeInvitationRequest, v1.RevokeInvitationResponse]
+	listAuditLog     *connect.Client[v1.ListAuditLogRequest, v1.ListAuditLogResponse]
 }
 
 // ListNodeGroups calls sermon.web.v1.AccessService.ListNodeGroups.
@@ -210,6 +249,21 @@ func (c *accessServiceClient) RemoveMember(ctx context.Context, req *connect.Req
 	return c.removeMember.CallUnary(ctx, req)
 }
 
+// InviteMember calls sermon.web.v1.AccessService.InviteMember.
+func (c *accessServiceClient) InviteMember(ctx context.Context, req *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error) {
+	return c.inviteMember.CallUnary(ctx, req)
+}
+
+// ListInvitations calls sermon.web.v1.AccessService.ListInvitations.
+func (c *accessServiceClient) ListInvitations(ctx context.Context, req *connect.Request[v1.ListInvitationsRequest]) (*connect.Response[v1.ListInvitationsResponse], error) {
+	return c.listInvitations.CallUnary(ctx, req)
+}
+
+// RevokeInvitation calls sermon.web.v1.AccessService.RevokeInvitation.
+func (c *accessServiceClient) RevokeInvitation(ctx context.Context, req *connect.Request[v1.RevokeInvitationRequest]) (*connect.Response[v1.RevokeInvitationResponse], error) {
+	return c.revokeInvitation.CallUnary(ctx, req)
+}
+
 // ListAuditLog calls sermon.web.v1.AccessService.ListAuditLog.
 func (c *accessServiceClient) ListAuditLog(ctx context.Context, req *connect.Request[v1.ListAuditLogRequest]) (*connect.Response[v1.ListAuditLogResponse], error) {
 	return c.listAuditLog.CallUnary(ctx, req)
@@ -236,6 +290,14 @@ type AccessServiceHandler interface {
 	// RemoveMember removes a user from the organization and ends the user's sessions in it
 	// (org admin, step-up).
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
+	// InviteMember invites an e-mail address with an initial role (org admin, step-up). The
+	// response contains the link token once; the UI builds the link "<origin>/invite#<token>".
+	// The response is the same whether or not the address already has an account (ADR 0008).
+	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
+	// ListInvitations returns the open invitations (org admin).
+	ListInvitations(context.Context, *connect.Request[v1.ListInvitationsRequest]) (*connect.Response[v1.ListInvitationsResponse], error)
+	// RevokeInvitation deletes an open invitation (org admin).
+	RevokeInvitation(context.Context, *connect.Request[v1.RevokeInvitationRequest]) (*connect.Response[v1.RevokeInvitationResponse], error)
 	// ListAuditLog returns audit entries, newest first (org admin).
 	ListAuditLog(context.Context, *connect.Request[v1.ListAuditLogRequest]) (*connect.Response[v1.ListAuditLogResponse], error)
 }
@@ -297,6 +359,25 @@ func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(accessServiceMethods.ByName("RemoveMember")),
 		connect.WithHandlerOptions(opts...),
 	)
+	accessServiceInviteMemberHandler := connect.NewUnaryHandler(
+		AccessServiceInviteMemberProcedure,
+		svc.InviteMember,
+		connect.WithSchema(accessServiceMethods.ByName("InviteMember")),
+		connect.WithHandlerOptions(opts...),
+	)
+	accessServiceListInvitationsHandler := connect.NewUnaryHandler(
+		AccessServiceListInvitationsProcedure,
+		svc.ListInvitations,
+		connect.WithSchema(accessServiceMethods.ByName("ListInvitations")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
+	accessServiceRevokeInvitationHandler := connect.NewUnaryHandler(
+		AccessServiceRevokeInvitationProcedure,
+		svc.RevokeInvitation,
+		connect.WithSchema(accessServiceMethods.ByName("RevokeInvitation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	accessServiceListAuditLogHandler := connect.NewUnaryHandler(
 		AccessServiceListAuditLogProcedure,
 		svc.ListAuditLog,
@@ -322,6 +403,12 @@ func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect.HandlerOp
 			accessServiceRevokeRoleHandler.ServeHTTP(w, r)
 		case AccessServiceRemoveMemberProcedure:
 			accessServiceRemoveMemberHandler.ServeHTTP(w, r)
+		case AccessServiceInviteMemberProcedure:
+			accessServiceInviteMemberHandler.ServeHTTP(w, r)
+		case AccessServiceListInvitationsProcedure:
+			accessServiceListInvitationsHandler.ServeHTTP(w, r)
+		case AccessServiceRevokeInvitationProcedure:
+			accessServiceRevokeInvitationHandler.ServeHTTP(w, r)
 		case AccessServiceListAuditLogProcedure:
 			accessServiceListAuditLogHandler.ServeHTTP(w, r)
 		default:
@@ -363,6 +450,18 @@ func (UnimplementedAccessServiceHandler) RevokeRole(context.Context, *connect.Re
 
 func (UnimplementedAccessServiceHandler) RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.RemoveMember is not implemented"))
+}
+
+func (UnimplementedAccessServiceHandler) InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.InviteMember is not implemented"))
+}
+
+func (UnimplementedAccessServiceHandler) ListInvitations(context.Context, *connect.Request[v1.ListInvitationsRequest]) (*connect.Response[v1.ListInvitationsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.ListInvitations is not implemented"))
+}
+
+func (UnimplementedAccessServiceHandler) RevokeInvitation(context.Context, *connect.Request[v1.RevokeInvitationRequest]) (*connect.Response[v1.RevokeInvitationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.RevokeInvitation is not implemented"))
 }
 
 func (UnimplementedAccessServiceHandler) ListAuditLog(context.Context, *connect.Request[v1.ListAuditLogRequest]) (*connect.Response[v1.ListAuditLogResponse], error) {

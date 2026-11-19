@@ -13,7 +13,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/access.proto.
  */
 export const file_sermon_web_v1_access: GenFile = /*@__PURE__*/
-  fileDesc("ChpzZXJtb24vd2ViL3YxL2FjY2Vzcy5wcm90bxINc2VybW9uLndlYi52MSJWCglOb2RlR3JvdXASCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIvCgtjcmVhdGVfdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiFwoVTGlzdE5vZGVHcm91cHNSZXF1ZXN0IkIKFkxpc3ROb2RlR3JvdXBzUmVzcG9uc2USKAoGZ3JvdXBzGAEgAygLMhguc2VybW9uLndlYi52MS5Ob2RlR3JvdXAiMQoWQ3JlYXRlTm9kZUdyb3VwUmVxdWVzdBIXCgRuYW1lGAEgASgJQgm6SAZyBBABGGQiQgoXQ3JlYXRlTm9kZUdyb3VwUmVzcG9uc2USJwoFZ3JvdXAYASABKAsyGC5zZXJtb24ud2ViLnYxLk5vZGVHcm91cCJNChZSZW5hbWVOb2RlR3JvdXBSZXF1ZXN0EhoKCGdyb3VwX2lkGAEgASgJQgi6SAVyA7ABARIXCgRuYW1lGAIgASgJQgm6SAZyBBABGGQiGQoXUmVuYW1lTm9kZUdyb3VwUmVzcG9uc2UiNAoWRGVsZXRlTm9kZUdyb3VwUmVxdWVzdBIaCghncm91cF9pZBgBIAEoCUIIukgFcgOwAQEiGQoXRGVsZXRlTm9kZUdyb3VwUmVzcG9uc2UiTgoLUm9sZUJpbmRpbmcSCgoCaWQYASABKAkSEAoIZ3JvdXBfaWQYAiABKAkSIQoEcm9sZRgDIAEoDjITLnNlcm1vbi53ZWIudjEuUm9sZSJsCgZNZW1iZXISDwoHdXNlcl9pZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIUCgxkaXNwbGF5X25hbWUYAyABKAkSLAoIYmluZGluZ3MYBCADKAsyGi5zZXJtb24ud2ViLnYxLlJvbGVCaW5kaW5nIhQKEkxpc3RNZW1iZXJzUmVxdWVzdCI9ChNMaXN0TWVtYmVyc1Jlc3BvbnNlEiYKB21lbWJlcnMYASADKAsyFS5zZXJtb24ud2ViLnYxLk1lbWJlciJ7ChBHcmFudFJvbGVSZXF1ZXN0EhkKB3VzZXJfaWQYASABKAlCCLpIBXIDsAEBEh0KCGdyb3VwX2lkGAIgASgJQgu6SAjYAQFyA7ABARItCgRyb2xlGAMgASgOMhMuc2VybW9uLndlYi52MS5Sb2xlQgq6SAeCAQQQASAAIicKEUdyYW50Um9sZVJlc3BvbnNlEhIKCmJpbmRpbmdfaWQYASABKAkiMQoRUmV2b2tlUm9sZVJlcXVlc3QSHAoKYmluZGluZ19pZBgBIAEoCUIIukgFcgOwAQEiFAoSUmV2b2tlUm9sZVJlc3BvbnNlIjAKE1JlbW92ZU1lbWJlclJlcXVlc3QSGQoHdXNlcl9pZBgBIAEoCUIIukgFcgOwAQEiFgoUUmVtb3ZlTWVtYmVyUmVzcG9uc2Ui3gEKCkF1ZGl0RW50cnkSCwoDc2VxGAEgASgDEigKBHRpbWUYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhAKCGFjdG9yX2lkGAMgASgJEg4KBmFjdGlvbhgEIAEoCRIOCgZ0YXJnZXQYBSABKAkSNwoHZGV0YWlscxgGIAMoCzImLnNlcm1vbi53ZWIudjEuQXVkaXRFbnRyeS5EZXRhaWxzRW50cnkaLgoMRGV0YWlsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiUQoTTGlzdEF1ZGl0TG9nUmVxdWVzdBIbCgpiZWZvcmVfc2VxGAEgASgDQge6SAQiAigAEh0KCXBhZ2Vfc2l6ZRgCIAEoBUIKukgHGgUY9AMoACJCChRMaXN0QXVkaXRMb2dSZXNwb25zZRIqCgdlbnRyaWVzGAEgAygLMhkuc2VybW9uLndlYi52MS5BdWRpdEVudHJ5KlAKBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEg8KC1JPTEVfVklFV0VSEAESEQoNUk9MRV9PUEVSQVRPUhACEg4KClJPTEVfQURNSU4QAzLOBgoNQWNjZXNzU2VydmljZRJiCg5MaXN0Tm9kZUdyb3VwcxIkLnNlcm1vbi53ZWIudjEuTGlzdE5vZGVHcm91cHNSZXF1ZXN0GiUuc2VybW9uLndlYi52MS5MaXN0Tm9kZUdyb3Vwc1Jlc3BvbnNlIgOQAgESYAoPQ3JlYXRlTm9kZUdyb3VwEiUuc2VybW9uLndlYi52MS5DcmVhdGVOb2RlR3JvdXBSZXF1ZXN0GiYuc2VybW9uLndlYi52MS5DcmVhdGVOb2RlR3JvdXBSZXNwb25zZRJgCg9SZW5hbWVOb2RlR3JvdXASJS5zZXJtb24ud2ViLnYxLlJlbmFtZU5vZGVHcm91cFJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLlJlbmFtZU5vZGVHcm91cFJlc3BvbnNlEmAKD0RlbGV0ZU5vZGVHcm91cBIlLnNlcm1vbi53ZWIudjEuRGVsZXRlTm9kZUdyb3VwUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuRGVsZXRlTm9kZUdyb3VwUmVzcG9uc2USWQoLTGlzdE1lbWJlcnMSIS5zZXJtb24ud2ViLnYxLkxpc3RNZW1iZXJzUmVxdWVzdBoiLnNlcm1vbi53ZWIudjEuTGlzdE1lbWJlcnNSZXNwb25zZSIDkAIBEk4KCUdyYW50Um9sZRIfLnNlcm1vbi53ZWIudjEuR3JhbnRSb2xlUmVxdWVzdBogLnNlcm1vbi53ZWIudjEuR3JhbnRSb2xlUmVzcG9uc2USUQoKUmV2b2tlUm9sZRIgLnNlcm1vbi53ZWIudjEuUmV2b2tlUm9sZVJlcXVlc3QaIS5zZXJtb24ud2ViLnYxLlJldm9rZVJvbGVSZXNwb25zZRJXCgxSZW1vdmVNZW1iZXISIi5zZXJtb24ud2ViLnYxLlJlbW92ZU1lbWJlclJlcXVlc3QaIy5zZXJtb24ud2ViLnYxLlJlbW92ZU1lbWJlclJlc3BvbnNlElwKDExpc3RBdWRpdExvZxIiLnNlcm1vbi53ZWIudjEuTGlzdEF1ZGl0TG9nUmVxdWVzdBojLnNlcm1vbi53ZWIudjEuTGlzdEF1ZGl0TG9nUmVzcG9uc2UiA5ACAUK6AQoRY29tLnNlcm1vbi53ZWIudjFCC0FjY2Vzc1Byb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_buf_validate_validate, file_google_protobuf_timestamp]);
+  fileDesc("ChpzZXJtb24vd2ViL3YxL2FjY2Vzcy5wcm90bxINc2VybW9uLndlYi52MSJWCglOb2RlR3JvdXASCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIvCgtjcmVhdGVfdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiFwoVTGlzdE5vZGVHcm91cHNSZXF1ZXN0IkIKFkxpc3ROb2RlR3JvdXBzUmVzcG9uc2USKAoGZ3JvdXBzGAEgAygLMhguc2VybW9uLndlYi52MS5Ob2RlR3JvdXAiMQoWQ3JlYXRlTm9kZUdyb3VwUmVxdWVzdBIXCgRuYW1lGAEgASgJQgm6SAZyBBABGGQiQgoXQ3JlYXRlTm9kZUdyb3VwUmVzcG9uc2USJwoFZ3JvdXAYASABKAsyGC5zZXJtb24ud2ViLnYxLk5vZGVHcm91cCJNChZSZW5hbWVOb2RlR3JvdXBSZXF1ZXN0EhoKCGdyb3VwX2lkGAEgASgJQgi6SAVyA7ABARIXCgRuYW1lGAIgASgJQgm6SAZyBBABGGQiGQoXUmVuYW1lTm9kZUdyb3VwUmVzcG9uc2UiNAoWRGVsZXRlTm9kZUdyb3VwUmVxdWVzdBIaCghncm91cF9pZBgBIAEoCUIIukgFcgOwAQEiGQoXRGVsZXRlTm9kZUdyb3VwUmVzcG9uc2UiTgoLUm9sZUJpbmRpbmcSCgoCaWQYASABKAkSEAoIZ3JvdXBfaWQYAiABKAkSIQoEcm9sZRgDIAEoDjITLnNlcm1vbi53ZWIudjEuUm9sZSJsCgZNZW1iZXISDwoHdXNlcl9pZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIUCgxkaXNwbGF5X25hbWUYAyABKAkSLAoIYmluZGluZ3MYBCADKAsyGi5zZXJtb24ud2ViLnYxLlJvbGVCaW5kaW5nIhQKEkxpc3RNZW1iZXJzUmVxdWVzdCI9ChNMaXN0TWVtYmVyc1Jlc3BvbnNlEiYKB21lbWJlcnMYASADKAsyFS5zZXJtb24ud2ViLnYxLk1lbWJlciJ7ChBHcmFudFJvbGVSZXF1ZXN0EhkKB3VzZXJfaWQYASABKAlCCLpIBXIDsAEBEh0KCGdyb3VwX2lkGAIgASgJQgu6SAjYAQFyA7ABARItCgRyb2xlGAMgASgOMhMuc2VybW9uLndlYi52MS5Sb2xlQgq6SAeCAQQQASAAIicKEUdyYW50Um9sZVJlc3BvbnNlEhIKCmJpbmRpbmdfaWQYASABKAkiMQoRUmV2b2tlUm9sZVJlcXVlc3QSHAoKYmluZGluZ19pZBgBIAEoCUIIukgFcgOwAQEiFAoSUmV2b2tlUm9sZVJlc3BvbnNlIjAKE1JlbW92ZU1lbWJlclJlcXVlc3QSGQoHdXNlcl9pZBgBIAEoCUIIukgFcgOwAQEiFgoUUmVtb3ZlTWVtYmVyUmVzcG9uc2Ui3gEKCkF1ZGl0RW50cnkSCwoDc2VxGAEgASgDEigKBHRpbWUYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhAKCGFjdG9yX2lkGAMgASgJEg4KBmFjdGlvbhgEIAEoCRIOCgZ0YXJnZXQYBSABKAkSNwoHZGV0YWlscxgGIAMoCzImLnNlcm1vbi53ZWIudjEuQXVkaXRFbnRyeS5EZXRhaWxzRW50cnkaLgoMRGV0YWlsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiUQoTTGlzdEF1ZGl0TG9nUmVxdWVzdBIbCgpiZWZvcmVfc2VxGAEgASgDQge6SAQiAigAEh0KCXBhZ2Vfc2l6ZRgCIAEoBUIKukgHGgUY9AMoACJCChRMaXN0QXVkaXRMb2dSZXNwb25zZRIqCgdlbnRyaWVzGAEgAygLMhkuc2VybW9uLndlYi52MS5BdWRpdEVudHJ5In4KE0ludml0ZU1lbWJlclJlcXVlc3QSGQoFZW1haWwYASABKAlCCrpIB3IFEAMYwAISHQoIZ3JvdXBfaWQYAiABKAlCC7pICNgBAXIDsAEBEi0KBHJvbGUYAyABKA4yEy5zZXJtb24ud2ViLnYxLlJvbGVCCrpIB4IBBBABIAAiVAoUSW52aXRlTWVtYmVyUmVzcG9uc2USLQoKaW52aXRhdGlvbhgBIAEoCzIZLnNlcm1vbi53ZWIudjEuSW52aXRhdGlvbhINCgV0b2tlbhgCIAEoCSLSAQoKSW52aXRhdGlvbhIKCgJpZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIQCghncm91cF9pZBgDIAEoCRIhCgRyb2xlGAQgASgOMhMuc2VybW9uLndlYi52MS5Sb2xlEhIKCmludml0ZWRfYnkYBSABKAkSLwoLY3JlYXRlX3RpbWUYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC2V4cGlyZV90aW1lGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIYChZMaXN0SW52aXRhdGlvbnNSZXF1ZXN0IkkKF0xpc3RJbnZpdGF0aW9uc1Jlc3BvbnNlEi4KC2ludml0YXRpb25zGAEgAygLMhkuc2VybW9uLndlYi52MS5JbnZpdGF0aW9uIjoKF1Jldm9rZUludml0YXRpb25SZXF1ZXN0Eh8KDWludml0YXRpb25faWQYASABKAlCCLpIBXIDsAEBIhoKGFJldm9rZUludml0YXRpb25SZXNwb25zZSpQCgRSb2xlEhQKEFJPTEVfVU5TUEVDSUZJRUQQABIPCgtST0xFX1ZJRVdFUhABEhEKDVJPTEVfT1BFUkFUT1IQAhIOCgpST0xFX0FETUlOEAMy8wgKDUFjY2Vzc1NlcnZpY2USYgoOTGlzdE5vZGVHcm91cHMSJC5zZXJtb24ud2ViLnYxLkxpc3ROb2RlR3JvdXBzUmVxdWVzdBolLnNlcm1vbi53ZWIudjEuTGlzdE5vZGVHcm91cHNSZXNwb25zZSIDkAIBEmAKD0NyZWF0ZU5vZGVHcm91cBIlLnNlcm1vbi53ZWIudjEuQ3JlYXRlTm9kZUdyb3VwUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuQ3JlYXRlTm9kZUdyb3VwUmVzcG9uc2USYAoPUmVuYW1lTm9kZUdyb3VwEiUuc2VybW9uLndlYi52MS5SZW5hbWVOb2RlR3JvdXBSZXF1ZXN0GiYuc2VybW9uLndlYi52MS5SZW5hbWVOb2RlR3JvdXBSZXNwb25zZRJgCg9EZWxldGVOb2RlR3JvdXASJS5zZXJtb24ud2ViLnYxLkRlbGV0ZU5vZGVHcm91cFJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkRlbGV0ZU5vZGVHcm91cFJlc3BvbnNlElkKC0xpc3RNZW1iZXJzEiEuc2VybW9uLndlYi52MS5MaXN0TWVtYmVyc1JlcXVlc3QaIi5zZXJtb24ud2ViLnYxLkxpc3RNZW1iZXJzUmVzcG9uc2UiA5ACARJOCglHcmFudFJvbGUSHy5zZXJtb24ud2ViLnYxLkdyYW50Um9sZVJlcXVlc3QaIC5zZXJtb24ud2ViLnYxLkdyYW50Um9sZVJlc3BvbnNlElEKClJldm9rZVJvbGUSIC5zZXJtb24ud2ViLnYxLlJldm9rZVJvbGVSZXF1ZXN0GiEuc2VybW9uLndlYi52MS5SZXZva2VSb2xlUmVzcG9uc2USVwoMUmVtb3ZlTWVtYmVyEiIuc2VybW9uLndlYi52MS5SZW1vdmVNZW1iZXJSZXF1ZXN0GiMuc2VybW9uLndlYi52MS5SZW1vdmVNZW1iZXJSZXNwb25zZRJXCgxJbnZpdGVNZW1iZXISIi5zZXJtb24ud2ViLnYxLkludml0ZU1lbWJlclJlcXVlc3QaIy5zZXJtb24ud2ViLnYxLkludml0ZU1lbWJlclJlc3BvbnNlEmUKD0xpc3RJbnZpdGF0aW9ucxIlLnNlcm1vbi53ZWIudjEuTGlzdEludml0YXRpb25zUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuTGlzdEludml0YXRpb25zUmVzcG9uc2UiA5ACARJjChBSZXZva2VJbnZpdGF0aW9uEiYuc2VybW9uLndlYi52MS5SZXZva2VJbnZpdGF0aW9uUmVxdWVzdBonLnNlcm1vbi53ZWIudjEuUmV2b2tlSW52aXRhdGlvblJlc3BvbnNlElwKDExpc3RBdWRpdExvZxIiLnNlcm1vbi53ZWIudjEuTGlzdEF1ZGl0TG9nUmVxdWVzdBojLnNlcm1vbi53ZWIudjEuTGlzdEF1ZGl0TG9nUmVzcG9uc2UiA5ACAUK6AQoRY29tLnNlcm1vbi53ZWIudjFCC0FjY2Vzc1Byb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_buf_validate_validate, file_google_protobuf_timestamp]);
 
 /**
  * NodeGroup is a group of nodes; roles are granted per group.
@@ -554,6 +554,204 @@ export const ListAuditLogResponseSchema: GenMessage<ListAuditLogResponse> = /*@_
   messageDesc(file_sermon_web_v1_access, 21);
 
 /**
+ * InviteMemberRequest names the address and the initial role.
+ *
+ * @generated from message sermon.web.v1.InviteMemberRequest
+ */
+export type InviteMemberRequest = Message<"sermon.web.v1.InviteMemberRequest"> & {
+  /**
+   * email is the address to invite.
+   *
+   * @generated from field: string email = 1;
+   */
+  email: string;
+
+  /**
+   * group_id is the UUID of the group; empty grants the role on all groups.
+   *
+   * @generated from field: string group_id = 2;
+   */
+  groupId: string;
+
+  /**
+   * role is the initial role.
+   *
+   * @generated from field: sermon.web.v1.Role role = 3;
+   */
+  role: Role;
+};
+
+/**
+ * Describes the message sermon.web.v1.InviteMemberRequest.
+ * Use `create(InviteMemberRequestSchema)` to create a new message.
+ */
+export const InviteMemberRequestSchema: GenMessage<InviteMemberRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_access, 22);
+
+/**
+ * InviteMemberResponse returns the invitation and its link token (shown only once).
+ *
+ * @generated from message sermon.web.v1.InviteMemberResponse
+ */
+export type InviteMemberResponse = Message<"sermon.web.v1.InviteMemberResponse"> & {
+  /**
+   * invitation is the stored invitation.
+   *
+   * @generated from field: sermon.web.v1.Invitation invitation = 1;
+   */
+  invitation?: Invitation | undefined;
+
+  /**
+   * token is the secret part of the link; it cannot be retrieved again.
+   *
+   * @generated from field: string token = 2;
+   */
+  token: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.InviteMemberResponse.
+ * Use `create(InviteMemberResponseSchema)` to create a new message.
+ */
+export const InviteMemberResponseSchema: GenMessage<InviteMemberResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_access, 23);
+
+/**
+ * Invitation is an open invitation.
+ *
+ * @generated from message sermon.web.v1.Invitation
+ */
+export type Invitation = Message<"sermon.web.v1.Invitation"> & {
+  /**
+   * id is the invitation UUID.
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * email is the invited address.
+   *
+   * @generated from field: string email = 2;
+   */
+  email: string;
+
+  /**
+   * group_id is the UUID of the group; empty means all groups.
+   *
+   * @generated from field: string group_id = 3;
+   */
+  groupId: string;
+
+  /**
+   * role is the initial role.
+   *
+   * @generated from field: sermon.web.v1.Role role = 4;
+   */
+  role: Role;
+
+  /**
+   * invited_by is the UUID of the inviting user; empty if the user was deleted.
+   *
+   * @generated from field: string invited_by = 5;
+   */
+  invitedBy: string;
+
+  /**
+   * create_time is when the invitation was created.
+   *
+   * @generated from field: google.protobuf.Timestamp create_time = 6;
+   */
+  createTime?: Timestamp | undefined;
+
+  /**
+   * expire_time is when the link stops working.
+   *
+   * @generated from field: google.protobuf.Timestamp expire_time = 7;
+   */
+  expireTime?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.Invitation.
+ * Use `create(InvitationSchema)` to create a new message.
+ */
+export const InvitationSchema: GenMessage<Invitation> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_access, 24);
+
+/**
+ * ListInvitationsRequest has no parameters.
+ *
+ * @generated from message sermon.web.v1.ListInvitationsRequest
+ */
+export type ListInvitationsRequest = Message<"sermon.web.v1.ListInvitationsRequest"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.ListInvitationsRequest.
+ * Use `create(ListInvitationsRequestSchema)` to create a new message.
+ */
+export const ListInvitationsRequestSchema: GenMessage<ListInvitationsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_access, 25);
+
+/**
+ * ListInvitationsResponse lists open invitations, newest first.
+ *
+ * @generated from message sermon.web.v1.ListInvitationsResponse
+ */
+export type ListInvitationsResponse = Message<"sermon.web.v1.ListInvitationsResponse"> & {
+  /**
+   * invitations of the organization.
+   *
+   * @generated from field: repeated sermon.web.v1.Invitation invitations = 1;
+   */
+  invitations: Invitation[];
+};
+
+/**
+ * Describes the message sermon.web.v1.ListInvitationsResponse.
+ * Use `create(ListInvitationsResponseSchema)` to create a new message.
+ */
+export const ListInvitationsResponseSchema: GenMessage<ListInvitationsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_access, 26);
+
+/**
+ * RevokeInvitationRequest names the invitation.
+ *
+ * @generated from message sermon.web.v1.RevokeInvitationRequest
+ */
+export type RevokeInvitationRequest = Message<"sermon.web.v1.RevokeInvitationRequest"> & {
+  /**
+   * invitation_id is the UUID of the invitation.
+   *
+   * @generated from field: string invitation_id = 1;
+   */
+  invitationId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.RevokeInvitationRequest.
+ * Use `create(RevokeInvitationRequestSchema)` to create a new message.
+ */
+export const RevokeInvitationRequestSchema: GenMessage<RevokeInvitationRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_access, 27);
+
+/**
+ * RevokeInvitationResponse has no fields.
+ *
+ * @generated from message sermon.web.v1.RevokeInvitationResponse
+ */
+export type RevokeInvitationResponse = Message<"sermon.web.v1.RevokeInvitationResponse"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.RevokeInvitationResponse.
+ * Use `create(RevokeInvitationResponseSchema)` to create a new message.
+ */
+export const RevokeInvitationResponseSchema: GenMessage<RevokeInvitationResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_access, 28);
+
+/**
  * Role is a role on a node group or on all groups.
  *
  * @generated from enum sermon.web.v1.Role
@@ -685,6 +883,38 @@ export const AccessService: GenService<{
     methodKind: "unary";
     input: typeof RemoveMemberRequestSchema;
     output: typeof RemoveMemberResponseSchema;
+  },
+  /**
+   * InviteMember invites an e-mail address with an initial role (org admin, step-up). The
+   * response contains the link token once; the UI builds the link "<origin>/invite#<token>".
+   * The response is the same whether or not the address already has an account (ADR 0008).
+   *
+   * @generated from rpc sermon.web.v1.AccessService.InviteMember
+   */
+  inviteMember: {
+    methodKind: "unary";
+    input: typeof InviteMemberRequestSchema;
+    output: typeof InviteMemberResponseSchema;
+  },
+  /**
+   * ListInvitations returns the open invitations (org admin).
+   *
+   * @generated from rpc sermon.web.v1.AccessService.ListInvitations
+   */
+  listInvitations: {
+    methodKind: "unary";
+    input: typeof ListInvitationsRequestSchema;
+    output: typeof ListInvitationsResponseSchema;
+  },
+  /**
+   * RevokeInvitation deletes an open invitation (org admin).
+   *
+   * @generated from rpc sermon.web.v1.AccessService.RevokeInvitation
+   */
+  revokeInvitation: {
+    methodKind: "unary";
+    input: typeof RevokeInvitationRequestSchema;
+    output: typeof RevokeInvitationResponseSchema;
   },
   /**
    * ListAuditLog returns audit entries, newest first (org admin).

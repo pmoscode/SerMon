@@ -33,6 +33,16 @@ service AccessService {
   // RemoveMember removes a user from the organization and ends the user's sessions in it
   // (org admin, step-up).
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+  // InviteMember invites an e-mail address with an initial role (org admin, step-up). The
+  // response contains the link token once; the UI builds the link "<origin>/invite#<token>".
+  // The response is the same whether or not the address already has an account (ADR 0008).
+  rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
+  // ListInvitations returns the open invitations (org admin).
+  rpc ListInvitations(ListInvitationsRequest) returns (ListInvitationsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // RevokeInvitation deletes an open invitation (org admin).
+  rpc RevokeInvitation(RevokeInvitationRequest) returns (RevokeInvitationResponse);
   // ListAuditLog returns audit entries, newest first (org admin).
   rpc ListAuditLog(ListAuditLogRequest) returns (ListAuditLogResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
@@ -211,3 +221,66 @@ message ListAuditLogResponse {
   // entries, newest first.
   repeated AuditEntry entries = 1;
 }
+
+// InviteMemberRequest names the address and the initial role.
+message InviteMemberRequest {
+  // email is the address to invite.
+  string email = 1 [(buf.validate.field).string = {
+    min_len: 3
+    max_len: 320
+  }];
+  // group_id is the UUID of the group; empty grants the role on all groups.
+  string group_id = 2 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.uuid = true
+  ];
+  // role is the initial role.
+  Role role = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+// InviteMemberResponse returns the invitation and its link token (shown only once).
+message InviteMemberResponse {
+  // invitation is the stored invitation.
+  Invitation invitation = 1;
+  // token is the secret part of the link; it cannot be retrieved again.
+  string token = 2;
+}
+
+// Invitation is an open invitation.
+message Invitation {
+  // id is the invitation UUID.
+  string id = 1;
+  // email is the invited address.
+  string email = 2;
+  // group_id is the UUID of the group; empty means all groups.
+  string group_id = 3;
+  // role is the initial role.
+  Role role = 4;
+  // invited_by is the UUID of the inviting user; empty if the user was deleted.
+  string invited_by = 5;
+  // create_time is when the invitation was created.
+  google.protobuf.Timestamp create_time = 6;
+  // expire_time is when the link stops working.
+  google.protobuf.Timestamp expire_time = 7;
+}
+
+// ListInvitationsRequest has no parameters.
+message ListInvitationsRequest {}
+
+// ListInvitationsResponse lists open invitations, newest first.
+message ListInvitationsResponse {
+  // invitations of the organization.
+  repeated Invitation invitations = 1;
+}
+
+// RevokeInvitationRequest names the invitation.
+message RevokeInvitationRequest {
+  // invitation_id is the UUID of the invitation.
+  string invitation_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// RevokeInvitationResponse has no fields.
+message RevokeInvitationResponse {}

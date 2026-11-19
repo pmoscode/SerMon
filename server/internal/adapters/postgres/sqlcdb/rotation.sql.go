@@ -32,6 +32,54 @@ func (q *Queries) LockNode(ctx context.Context, arg LockNodeParams) (int64, erro
 	return result.RowsAffected(), nil
 }
 
+const nodesForRotation = `-- name: NodesForRotation :many
+SELECT id, group_id FROM nodes
+WHERE ($1::boolean OR group_id = ANY ($2::uuid[]))
+  AND (NOT $3::boolean OR id = ANY ($4::uuid[]))
+  AND ($5::uuid IS NULL OR group_id = $5::uuid)
+ORDER BY id
+`
+
+type NodesForRotationParams struct {
+	AllGroups bool
+	GroupIds  []uuid.UUID
+	ByIds     bool
+	NodeIds   []uuid.UUID
+	GroupID   *uuid.UUID
+}
+
+type NodesForRotationRow struct {
+	ID      uuid.UUID
+	GroupID uuid.UUID
+}
+
+// Nodes of an on-demand rotation within the scope's groups.
+func (q *Queries) NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error) {
+	rows, err := q.db.Query(ctx, nodesForRotation,
+		arg.AllGroups,
+		arg.GroupIds,
+		arg.ByIds,
+		arg.NodeIds,
+		arg.GroupID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NodesForRotationRow{}
+	for rows.Next() {
+		var i NodesForRotationRow
+		if err := rows.Scan(&i.ID, &i.GroupID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeNodeCertificates = `-- name: RevokeNodeCertificates :exec
 UPDATE agent_certificates SET revoked_at = $1
 WHERE node_id = $2 AND (revoked_at IS NULL OR revoked_at > $1)

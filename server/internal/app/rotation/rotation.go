@@ -66,14 +66,19 @@ type Store interface {
 
 // Service rotates certificates.
 type Service struct {
-	store  Store
-	signer Signer
-	now    func() time.Time
+	store    Store
+	signer   Signer
+	now      func() time.Time
+	onDemand *onDemand
 }
 
 // NewService returns a Service.
-func NewService(store Store, signer Signer, now func() time.Time) *Service {
-	return &Service{store: store, signer: signer, now: now}
+func NewService(store Store, signer Signer, now func() time.Time, opts ...Option) *Service {
+	s := &Service{store: store, signer: signer, now: now}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // SessionOpened records the source IP of a new session and returns the previous session's IP.
@@ -85,10 +90,12 @@ func (s *Service) SessionOpened(ctx context.Context, id Identity, ip string) (st
 	return prev, nil
 }
 
-// Rotate issues a new certificate for the session's identity. A rotation with an already
-// replaced certificate means two parties hold the identity (stolen key or a lost race): the node
-// is locked. A rotation from another source IP than the previous session leaves a security note.
-func (s *Service) Rotate(ctx context.Context, id Identity, csrDER []byte, ip, previousIP string) (Rotated, error) {
+// Rotate issues a new certificate for the session's identity. The previous certificate stays
+// valid for Grace – or not at all for an on-demand rotation (immediate). A rotation with an
+// already replaced certificate means two parties hold the identity (stolen key or a lost race):
+// the node is locked. A rotation from another source IP than the previous session leaves a
+// security note.
+func (s *Service) Rotate(ctx context.Context, id Identity, csrDER []byte, ip, previousIP string, immediate bool) (Rotated, error) {
 	issued, record, err := s.signer.SignAgentCertificate(id.Org, csrDER, id.Node)
 	if errors.Is(err, pki.ErrInvalidCSR) {
 		return Rotated{}, ErrInvalidCSR
@@ -98,6 +105,9 @@ func (s *Service) Rotate(ctx context.Context, id Identity, csrDER []byte, ip, pr
 	}
 	now := s.now()
 	revokeOld := now.Add(Grace)
+	if immediate {
+		revokeOld = now
+	}
 	audit := access.AuditEntry{
 		Action: "certificate.rotate", Target: "node:" + id.Node.String(),
 		Details: map[string]string{"previous": id.Serial, "certificate": issued.Serial, "ip": ip},

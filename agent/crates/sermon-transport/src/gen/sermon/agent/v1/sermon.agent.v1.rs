@@ -29,7 +29,7 @@ pub mod session_request {
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1, 2")]
+    #[prost(oneof="session_response::Payload", tags="1, 2, 3")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
@@ -44,6 +44,11 @@ pub mod session_response {
         /// short grace period so that the agent can reconnect with the new one.
         #[prost(message, tag="2")]
         CertificateIssued(super::CertificateIssued),
+        /// rotate_now asks the agent to rotate its certificate immediately (on-demand rotation by an
+        /// operator, KONZEPT §6). The agent answers with rotate_certificate; afterwards the server
+        /// revokes the previous certificate at once and ends the session.
+        #[prost(message, tag="3")]
+        RotateNow(super::RotateNow),
     }
 }
 /// Hello is the first message of every stream.
@@ -120,6 +125,10 @@ pub struct CertificateIssued {
     /// previous_valid_until is when the previous certificate stops working.
     #[prost(message, optional, tag="4")]
     pub previous_valid_until: ::core::option::Option<::prost_types::Timestamp>,
+}
+/// RotateNow has no fields.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RotateNow {
 }
 /// Ack confirms persisted agent data; the agent may then drop it from its buffer.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

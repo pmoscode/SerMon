@@ -28,10 +28,12 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
+	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/secrets"
+	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
 	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
 )
 
@@ -119,6 +121,8 @@ func newStack(t *testing.T, loginLimit int) stack {
 			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
+		Node: webapi.NewNodeHandler(rotation.NewService(postgres.NewRotationStore(pg), ca, time.Now,
+			rotation.WithOnDemand(postgres.NewRotationStore(pg), agentapi.NewSessions(0), authz.NewPolicy())), slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(pg), postgres.NewNodeRegistry(pg), ca, time.Now, access.NewID),
 			ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),

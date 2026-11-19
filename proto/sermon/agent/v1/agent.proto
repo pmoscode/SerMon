@@ -47,6 +47,10 @@ message SessionResponse {
     // certificate_issued answers rotate_certificate. The previous certificate stays valid for a
     // short grace period so that the agent can reconnect with the new one.
     CertificateIssued certificate_issued = 2;
+    // rotate_now asks the agent to rotate its certificate immediately (on-demand rotation by an
+    // operator, KONZEPT §6). The agent answers with rotate_certificate; afterwards the server
+    // revokes the previous certificate at once and ends the session.
+    RotateNow rotate_now = 3;
   }
 }
 
@@ -137,6 +141,9 @@ message CertificateIssued {
   // previous_valid_until is when the previous certificate stops working.
   google.protobuf.Timestamp previous_valid_until = 4;
 }
+
+// RotateNow has no fields.
+message RotateNow {}
 
 // Ack confirms persisted agent data; the agent may then drop it from its buffer.
 message Ack {

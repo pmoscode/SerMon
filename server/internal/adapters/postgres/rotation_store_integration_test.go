@@ -105,3 +105,58 @@ func TestRotationStore_RecordSessionReturnsThePreviousIP(t *testing.T) {
 		t.Error("unknown node must fail")
 	}
 }
+
+func TestRotationStore_NodesForRotationStayInTheScope(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	a, _ := enrolledNode(t, f)
+	b, _ := enrolledNode(t, f) // another organization
+	s := postgres.NewRotationStore(open(t, f.appDSN))
+	scopeA := scopeFor(t, uuid.UUID(a.Org))
+
+	refs, err := s.NodesForRotation(ctx, scopeA, rotation.Target{Organization: true})
+	if err != nil || len(refs) != 1 || refs[0].Node != a.Node {
+		t.Errorf("organization = %+v, %v; want only Org A's node", refs, err)
+	}
+	if refs, _ := s.NodesForRotation(ctx, scopeA, rotation.Target{Nodes: []identity.NodeID{a.Node, b.Node}}); len(refs) != 1 {
+		t.Errorf("by ids = %+v; the foreign node must not appear", refs)
+	}
+	noGroups, _ := tenant.ForGroups(a.Org)
+	if refs, _ := s.NodesForRotation(ctx, noGroups, rotation.Target{Organization: true}); len(refs) != 0 {
+		t.Errorf("scope without groups = %+v, want none", refs)
+	}
+	group := refsGroup(t, s, scopeA)
+	if refs, _ := s.NodesForRotation(ctx, scopeA, rotation.Target{Group: &group}); len(refs) != 1 {
+		t.Errorf("by group = %+v", refs)
+	}
+}
+
+func refsGroup(t *testing.T, s *postgres.RotationStore, scope tenant.Scope) tenant.GroupID {
+	t.Helper()
+	refs, err := s.NodesForRotation(context.Background(), scope, rotation.Target{Organization: true})
+	if err != nil || len(refs) == 0 {
+		t.Fatal(err)
+	}
+	return refs[0].Group
+}
+
+func TestRotationStore_RevokeAllEndsEveryCertificateWithoutLocking(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	id, ca := enrolledNode(t, f)
+	s := postgres.NewRotationStore(open(t, f.appDSN))
+	if err := s.RevokeAll(ctx, id.Org, id.Node, caTime, access.AuditEntry{Action: "certificate.rotate_on_demand", Target: "n"}); err != nil {
+		t.Fatal(err)
+	}
+	if usable, _ := ca.Usable(ctx, id.Serial, caTime.Add(time.Minute)); usable {
+		t.Error("certificate still usable")
+	}
+	// Not locked: a newly issued certificate (re-enrollment) works.
+	fresh := nextCertificate(id)
+	if err := ca.RecordCertificate(ctx, scopeFor(t, uuid.UUID(id.Org)), fresh); err != nil {
+		t.Fatal(err)
+	}
+	if usable, _ := ca.Usable(ctx, fresh.Serial, caTime.Add(time.Minute)); !usable {
+		t.Error("a new certificate after RevokeAll must be usable (no lock)")
+	}
+}

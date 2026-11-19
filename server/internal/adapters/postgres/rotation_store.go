@@ -67,6 +67,42 @@ func (s *RotationStore) RecordSession(ctx context.Context, org tenant.OrgID, nod
 	return previous, err
 }
 
+var _ rotation.NodeStore = (*RotationStore)(nil)
+
+// NodesForRotation returns the target's nodes within the scope's groups.
+func (s *RotationStore) NodesForRotation(ctx context.Context, scope tenant.Scope, t rotation.Target) ([]rotation.NodeRef, error) {
+	ids := make([]uuid.UUID, 0, len(t.Nodes))
+	for _, n := range t.Nodes {
+		ids = append(ids, uuid.UUID(n))
+	}
+	var group *uuid.UUID
+	if t.Group != nil {
+		g := uuid.UUID(*t.Group)
+		group = &g
+	}
+	var refs []rotation.NodeRef
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		rows, err := q.NodesForRotation(ctx, sqlcdb.NodesForRotationParams{
+			AllGroups: scope.AllGroups(), GroupIds: groupIDs(scope), ByIds: len(t.Nodes) > 0, NodeIds: ids, GroupID: group,
+		})
+		for _, r := range rows {
+			refs = append(refs, rotation.NodeRef{Node: identity.NodeID(r.ID), Group: tenant.GroupID(r.GroupID)})
+		}
+		return wrap(err, "list nodes")
+	})
+	return refs, err
+}
+
+// RevokeAll revokes all certificates of the node now.
+func (s *RotationStore) RevokeAll(ctx context.Context, org tenant.OrgID, node identity.NodeID, now time.Time, audit access.AuditEntry) error {
+	return s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
+		if err := q.RevokeNodeCertificates(ctx, sqlcdb.RevokeNodeCertificatesParams{At: &now, NodeID: uuid.UUID(node)}); err != nil {
+			return fmt.Errorf("revoke certificates: %w", err)
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
 // Note writes a security note to the organization's audit log.
 func (s *RotationStore) Note(ctx context.Context, org tenant.OrgID, audit access.AuditEntry) error {
 	return s.inOrg(ctx, org, func(q *sqlcdb.Queries) error { return appendAudit(ctx, q, audit) })

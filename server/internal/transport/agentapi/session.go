@@ -87,17 +87,73 @@ type ActiveSession struct {
 
 type liveSession struct {
 	ActiveSession
-	end func(error) // ends the session with the given cause
+	end      func(error)   // ends the session with the given cause
+	commands chan struct{} // on-demand rotation requests for the stream
+
+	mu      sync.Mutex
+	pending *time.Timer // on-demand rotation in progress; fires on timeout
 }
+
+// takePending reports whether an on-demand rotation was requested and clears it.
+func (l *liveSession) takePending() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.pending == nil {
+		return false
+	}
+	l.pending.Stop()
+	l.pending = nil
+	return true
+}
+
+// DefaultRotationTimeout is how long a connected agent has to answer an on-demand rotation.
+const DefaultRotationTimeout = time.Minute
 
 // Sessions tracks connected agents; a node has at most one active session (KONZEPT §6).
 type Sessions struct {
-	mu     sync.Mutex
-	active map[identity.NodeID]*liveSession
+	mu              sync.Mutex
+	active          map[identity.NodeID]*liveSession
+	rotationTimeout time.Duration
 }
 
-// NewSessions returns an empty registry.
-func NewSessions() *Sessions { return &Sessions{active: map[identity.NodeID]*liveSession{}} }
+// NewSessions returns an empty registry; agents must answer on-demand rotations within
+// rotationTimeout (0 = DefaultRotationTimeout).
+func NewSessions(rotationTimeout time.Duration) *Sessions {
+	if rotationTimeout == 0 {
+		rotationTimeout = DefaultRotationTimeout
+	}
+	return &Sessions{active: map[identity.NodeID]*liveSession{}, rotationTimeout: rotationTimeout}
+}
+
+var _ rotation.Live = (*Sessions)(nil)
+
+// RequestRotation asks the node's connected agent to rotate now (rotation.Live). onTimeout runs
+// if the agent does not rotate within the timeout.
+func (s *Sessions) RequestRotation(org tenant.OrgID, node identity.NodeID, onTimeout func()) bool {
+	s.mu.Lock()
+	l := s.active[node]
+	s.mu.Unlock()
+	if l == nil || l.Org != org {
+		return false
+	}
+	l.mu.Lock()
+	if l.pending == nil {
+		l.pending = time.AfterFunc(s.rotationTimeout, func() {
+			if l.takePending() {
+				onTimeout()
+			}
+		})
+	}
+	l.mu.Unlock()
+	select {
+	case l.commands <- struct{}{}:
+	default: // a request is already queued
+	}
+	return true
+}
+
+// Terminate ends the node's session (rotation.Live).
+func (s *Sessions) Terminate(node identity.NodeID) { s.terminate(node, errRotationTimeout) }
 
 // Active returns the connected agents.
 func (s *Sessions) Active() []ActiveSession {
@@ -158,17 +214,19 @@ func (s *Sessions) terminate(node identity.NodeID, cause error) {
 }
 
 var (
-	errNoIdentity     = errors.New("no agent identity")
-	errHelloFirst     = errors.New("the first message must be a Hello")
-	errDuplicateHello = errors.New("hello may only be sent once per session")
-	errLocked         = errors.New("this node already has an active session elsewhere; the identity was locked as a precaution")
-	errReplaced       = errors.New("session replaced by a new connection of the same agent")
+	errNoIdentity      = errors.New("no agent identity")
+	errHelloFirst      = errors.New("the first message must be a Hello")
+	errDuplicateHello  = errors.New("hello may only be sent once per session")
+	errLocked          = errors.New("this node already has an active session elsewhere; the identity was locked as a precaution")
+	errReplaced        = errors.New("session replaced by a new connection of the same agent")
+	errRotationTimeout = errors.New("certificate revoked: the agent did not rotate in time; re-enroll the node")
+	errRotated         = errors.New("certificate rotated on demand; reconnect with the new certificate")
 )
 
 // Rotator renews certificates and locks identities (rotation.Service).
 type Rotator interface {
 	SessionOpened(ctx context.Context, id rotation.Identity, ip string) (string, error)
-	Rotate(ctx context.Context, id rotation.Identity, csrDER []byte, ip, previousIP string) (rotation.Rotated, error)
+	Rotate(ctx context.Context, id rotation.Identity, csrDER []byte, ip, previousIP string, immediate bool) (rotation.Rotated, error)
 	Lock(ctx context.Context, id rotation.Identity, reason string) error
 }
 
@@ -212,7 +270,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 
 	ctx, end := context.WithCancelCause(ctx)
 	defer end(nil)
-	live := &liveSession{end: end, ActiveSession: ActiveSession{
+	live := &liveSession{end: end, commands: make(chan struct{}, 1), ActiveSession: ActiveSession{
 		Org: id.Org, Node: id.Node, Serial: id.Serial, RemoteIP: id.RemoteIP,
 		AgentVersion: hello.GetAgentVersion(), Hostname: hello.GetHostFacts().GetHostname(), Since: time.Now(),
 	}}
@@ -257,6 +315,11 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 		select {
 		case <-ctx.Done():
 			return connect.NewError(connect.CodeAborted, context.Cause(ctx))
+		case <-live.commands:
+			h.logger.InfoContext(ctx, "on-demand rotation requested", "node", id.Node.String())
+			if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RotateNow{RotateNow: &agentv1.RotateNow{}}}); err != nil {
+				return err //nolint:wrapcheck // see above
+			}
 		case r := <-messages:
 			if errors.Is(r.err, io.EOF) {
 				return nil
@@ -264,39 +327,50 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 			if r.err != nil {
 				return r.err
 			}
-			if err := h.handle(ctx, id, previousIP, r.msg, stream); err != nil {
+			done, err := h.handle(ctx, id, live, previousIP, r.msg, stream)
+			if err != nil {
 				return err
+			}
+			if done {
+				return connect.NewError(connect.CodeAborted, errRotated)
 			}
 		}
 	}
 }
 
-func (h *SessionHandler) handle(ctx context.Context, id Identity, previousIP string, msg *agentv1.SessionRequest,
+// handle processes one agent message; done ends the session (after an on-demand rotation).
+func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSession, previousIP string, msg *agentv1.SessionRequest,
 	stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse],
-) error {
+) (bool, error) {
 	switch {
 	case msg.GetHello() != nil:
-		return connect.NewError(connect.CodeInvalidArgument, errDuplicateHello)
+		return false, connect.NewError(connect.CodeInvalidArgument, errDuplicateHello)
 	case msg.GetRotateCertificate() != nil:
-		rotated, err := h.rotator.Rotate(ctx, id.rotation(), msg.GetRotateCertificate().GetCsr(), id.RemoteIP, previousIP)
+		immediate := live.takePending()
+		rotated, err := h.rotator.Rotate(ctx, id.rotation(), msg.GetRotateCertificate().GetCsr(), id.RemoteIP, previousIP, immediate)
 		switch {
 		case errors.Is(err, rotation.ErrLocked):
 			h.logger.WarnContext(ctx, "security: rotation with a replaced certificate, identity locked", "node", id.Node.String(), "ip", id.RemoteIP)
 			h.sessions.terminate(id.Node, rotation.ErrLocked)
-			return connect.NewError(connect.CodePermissionDenied, rotation.ErrLocked)
+			return false, connect.NewError(connect.CodePermissionDenied, rotation.ErrLocked)
 		case errors.Is(err, rotation.ErrInvalidCSR):
-			return connect.NewError(connect.CodeInvalidArgument, rotation.ErrInvalidCSR)
+			return false, connect.NewError(connect.CodeInvalidArgument, rotation.ErrInvalidCSR)
 		case err != nil:
 			h.logger.ErrorContext(ctx, "certificate rotation failed", "node", id.Node.String(), "error", err)
-			return connect.NewError(connect.CodeInternal, errors.New("certificate rotation failed"))
+			return false, connect.NewError(connect.CodeInternal, errors.New("certificate rotation failed"))
 		}
-		h.logger.InfoContext(ctx, "agent certificate rotated", "node", id.Node.String())
+		h.logger.InfoContext(ctx, "agent certificate rotated", "node", id.Node.String(), "on_demand", immediate)
 		res := &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_CertificateIssued{CertificateIssued: &agentv1.CertificateIssued{
 			Certificate: rotated.Certificate, Intermediates: [][]byte{rotated.Intermediate},
 			NotAfter: timestamppb.New(rotated.NotAfter), PreviousValidUntil: timestamppb.New(rotated.PreviousValidUntil),
 		}}}
-		return stream.Send(res) //nolint:wrapcheck // connect errors must reach the client unchanged
+		if err := stream.Send(res); err != nil {
+			return false, err //nolint:wrapcheck // connect errors must reach the client unchanged
+		}
+		// After an on-demand rotation the old certificate is revoked: end this session so that
+		// the agent reconnects with the new one.
+		return immediate, nil
 	}
 	// Heartbeat: liveness and node status follow with M1-24.
-	return nil
+	return false, nil
 }

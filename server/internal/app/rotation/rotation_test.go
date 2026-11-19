@@ -75,7 +75,7 @@ func service(store *fakeStore, signer fakeSigner) *rotation.Service {
 
 func TestRotate_IssuesForTheSameIdentityAndKeepsTheOldCertificateForTheGracePeriod(t *testing.T) {
 	store := &fakeStore{}
-	res, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "192.0.2.1", "192.0.2.1")
+	res, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "192.0.2.1", "192.0.2.1", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRotate_IssuesForTheSameIdentityAndKeepsTheOldCertificateForTheGracePeri
 
 func TestRotate_WithAReplacedCertificateLocksTheNode(t *testing.T) {
 	store := &fakeStore{rotateErr: fmt.Errorf("store: %w", rotation.ErrSuperseded)}
-	_, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "192.0.2.1", "192.0.2.1")
+	_, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "192.0.2.1", "192.0.2.1", false)
 	if !errors.Is(err, rotation.ErrLocked) {
 		t.Fatalf("error = %v, want ErrLocked", err)
 	}
@@ -103,7 +103,7 @@ func TestRotate_WithAReplacedCertificateLocksTheNode(t *testing.T) {
 
 func TestRotate_FromANewSourceIPLeavesASecurityNote(t *testing.T) {
 	store := &fakeStore{}
-	if _, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "198.51.100.7", "192.0.2.1"); err != nil {
+	if _, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "198.51.100.7", "192.0.2.1", false); err != nil {
 		t.Fatal(err)
 	}
 	if len(store.audits) != 2 || store.audits[1].Action != "security.rotation_new_ip" || store.audits[1].Details["previous_ip"] != "192.0.2.1" {
@@ -113,7 +113,7 @@ func TestRotate_FromANewSourceIPLeavesASecurityNote(t *testing.T) {
 
 func TestRotate_RejectsBadCSRs(t *testing.T) {
 	store := &fakeStore{}
-	_, err := service(store, fakeSigner{err: fmt.Errorf("x: %w", pki.ErrInvalidCSR)}).Rotate(context.Background(), id, []byte("bad"), "192.0.2.1", "")
+	_, err := service(store, fakeSigner{err: fmt.Errorf("x: %w", pki.ErrInvalidCSR)}).Rotate(context.Background(), id, []byte("bad"), "192.0.2.1", "", false)
 	if !errors.Is(err, rotation.ErrInvalidCSR) || len(store.audits) != 0 {
 		t.Errorf("error = %v, audits %+v", err, store.audits)
 	}
@@ -133,5 +133,13 @@ func TestSessionOpened_ReturnsThePreviousIP(t *testing.T) {
 	prev, err := service(&fakeStore{previousIP: "192.0.2.1"}, fakeSigner{}).SessionOpened(context.Background(), id, "192.0.2.9")
 	if err != nil || prev != "192.0.2.1" {
 		t.Errorf("SessionOpened() = %q, %v", prev, err)
+	}
+}
+
+func TestRotate_ImmediateRevokesThePreviousCertificateAtOnce(t *testing.T) {
+	store := &fakeStore{}
+	res, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "192.0.2.1", "", true)
+	if err != nil || !store.revokeOld.Equal(now) || !res.PreviousValidUntil.Equal(now) {
+		t.Errorf("revoke old at %v (%v), want now", store.revokeOld, err)
 	}
 }

@@ -107,11 +107,15 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("agent CA: %w", err)
 		}
-		if err := mountAPI(ctx, mux, cfg, db, ca, logger); err != nil {
+		// Both listeners share the sessions: the web API reaches connected agents through them.
+		sessions := agentapi.NewSessions(0)
+		rotationStore := postgres.NewRotationStore(db)
+		rotator := rotation.NewService(rotationStore, ca, time.Now, rotation.WithOnDemand(rotationStore, sessions, authz.NewPolicy()))
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, logger); err != nil {
 			return err
 		}
 		if cfg.AgentAddr != "" {
-			agentServer, err := newAgentServer(ctx, cfg, db, ca, logger)
+			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger)
 			if err != nil {
 				return err
 			}
@@ -137,14 +141,15 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 }
 
 // newAgentServer prepares the mTLS agent API (M1-10) on its own listener.
-func newAgentServer(ctx context.Context, cfg config.Config, db *postgres.DB, ca *agentca.Service, logger *slog.Logger) (func(context.Context) error, error) {
+func newAgentServer(ctx context.Context, cfg config.Config, sessions *agentapi.Sessions, rotator *rotation.Service,
+	ca *agentca.Service, logger *slog.Logger,
+) (func(context.Context) error, error) {
 	tlsConfig, err := agentapi.TLSConfig(ca, cfg.AgentHostnames, logger) //nolint:contextcheck // TLS callbacks have no context
 	if err != nil {
 		return nil, fmt.Errorf("agent API TLS: %w", err)
 	}
 	mux := http.NewServeMux()
-	rotator := rotation.NewService(postgres.NewRotationStore(db), ca, time.Now)
-	agentapi.Mount(mux, agentapi.NewSessionHandler(agentapi.NewSessions(), rotator, logger))
+	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, logger))
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.AgentAddr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", cfg.AgentAddr, err)
@@ -204,7 +209,9 @@ const (
 	enrollmentWindow     = time.Minute
 )
 
-func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service, logger *slog.Logger) error {
+func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
+	rotator *rotation.Service, logger *slog.Logger,
+) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
 	}
@@ -239,6 +246,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID), logger),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
+		Node: webapi.NewNodeHandler(rotator, logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

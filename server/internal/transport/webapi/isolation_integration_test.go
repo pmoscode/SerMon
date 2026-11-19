@@ -32,6 +32,8 @@ const (
 	bindingAl = "0193f5a0-0000-7000-8000-0000000001a8"
 	inviteAl  = "0193f5a0-0000-7000-8000-0000000001a7"
 	tokenAl   = "0193f5a0-0000-7000-8000-0000000001a6" // enrollment token of Alpha
+	nodeAl    = "0193f5a0-0000-7000-8000-0000000001a5" // node of Alpha (offline)
+	certAl    = "7a0000000000000000000000000001a5"     // its certificate serial
 	// inviteTokenAl is the link token of inviteAl (fixture, not a secret).
 	inviteTokenAl = "alphaInvitationTokenForCrossTenantTests0001" // betterleaks:allow
 )
@@ -54,6 +56,9 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO audit_log (org_id, seq, action, target, details, prev_hash, hash) VALUES ('"+orgAlpha+"', 0, 'seed', 'by-a', '{}', '\\x', '\\x')",
 		"DELETE FROM invitations WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM enrollment_tokens WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO nodes (id, org_id, group_id, hostname, machine_id, os_id, os_version, kernel_release, architecture, cpu_count, memory_bytes) VALUES ('"+nodeAl+"', '"+orgAlpha+"', '"+groupAl+"', 'alpha-01', '"+strings.Repeat("a", 32)+"', 'debian', '13', '6.12.0', 'amd64', 2, 1073741824) ON CONFLICT DO NOTHING",
+		"DELETE FROM agent_certificates WHERE node_id = '"+nodeAl+"'",
+		"INSERT INTO agent_certificates (serial, org_id, node_id, not_before, not_after) VALUES ('"+certAl+"', '"+orgAlpha+"', '"+nodeAl+"', now() - interval '1 hour', now() + interval '30 days')",
 		"INSERT INTO enrollment_tokens (id, org_id, group_id, token_hash, expires_at, max_uses) VALUES ('"+tokenAl+"', '"+orgAlpha+"', '"+groupAl+"', sha256(convert_to('"+tokenAl+"', 'UTF8')), now() + interval '1 hour', 1)",
 		"INSERT INTO invitations (id, org_id, email, role, token_hash, expires_at) VALUES ('"+inviteAl+"', '"+orgAlpha+"', 'invited-a@example.org', 'admin', sha256(convert_to('"+inviteTokenAl+"', 'UTF8')), now() + interval '1 day')",
 		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
@@ -69,6 +74,7 @@ type loggedIn struct {
 	invitation   webv1connect.InvitationServiceClient
 	organization webv1connect.OrganizationServiceClient
 	enrollment   webv1connect.EnrollmentTokenServiceClient
+	node         webv1connect.NodeServiceClient
 	jar          *cookiejar.Jar
 }
 
@@ -83,6 +89,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		invitation:   webv1connect.NewInvitationServiceClient(hc, s.server.URL),
 		organization: webv1connect.NewOrganizationServiceClient(hc, s.server.URL),
 		enrollment:   webv1connect.NewEnrollmentTokenServiceClient(hc, s.server.URL),
+		node:         webv1connect.NewNodeServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
@@ -96,9 +103,9 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	seedAccessFixtures(t)
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
-		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment,
+		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
-		enrollmentTokenA: tokenAl,
+		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}
 	ctx := context.Background()
 
@@ -147,6 +154,11 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM invitations WHERE id = $1", inviteAl).Scan(&invitations)
 	var revokedTokens int
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM enrollment_tokens WHERE org_id = $1 AND (revoked_at IS NOT NULL OR group_id <> $2 OR id <> $3)", orgAlpha, groupAl, tokenAl).Scan(&revokedTokens)
+	var revokedCerts int
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM agent_certificates WHERE serial = $1 AND revoked_at IS NOT NULL", certAl).Scan(&revokedCerts)
+	if revokedCerts != 0 {
+		t.Error("the certificate of Alpha's node was revoked by Beta")
+	}
 	if revokedTokens != 0 {
 		t.Errorf("enrollment tokens of Alpha changed or added: %d", revokedTokens)
 	}

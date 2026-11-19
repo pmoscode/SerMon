@@ -20,3 +20,11 @@ UPDATE nodes n SET last_ip = sqlc.arg(ip)
 FROM (SELECT o.id, o.last_ip FROM nodes o WHERE o.id = sqlc.arg(node_id) FOR UPDATE) old
 WHERE n.id = old.id
 RETURNING COALESCE(old.last_ip, '')::text AS previous_ip;
+
+-- Nodes of an on-demand rotation within the scope's groups.
+-- name: NodesForRotation :many
+SELECT id, group_id FROM nodes
+WHERE (sqlc.arg(all_groups)::boolean OR group_id = ANY (sqlc.arg(group_ids)::uuid[]))
+  AND (NOT sqlc.arg(by_ids)::boolean OR id = ANY (sqlc.arg(node_ids)::uuid[]))
+  AND (sqlc.narg(group_id)::uuid IS NULL OR group_id = sqlc.narg(group_id)::uuid)
+ORDER BY id;

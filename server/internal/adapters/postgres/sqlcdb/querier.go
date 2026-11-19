@@ -79,6 +79,8 @@ type Querier interface {
 	// Serializes changes of rights within the organization (last-admin check without races).
 	LockAccessChanges(ctx context.Context) error
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
+	// Nodes of an on-demand rotation within the scope's groups.
+	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)

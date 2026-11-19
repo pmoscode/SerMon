@@ -79,6 +79,7 @@ type fakeRotator struct {
 	mu        sync.Mutex
 	locked    []string
 	rotated   []rotation.Identity
+	immediate []bool
 	rotateErr error
 }
 
@@ -86,10 +87,11 @@ func (f *fakeRotator) SessionOpened(context.Context, rotation.Identity, string) 
 	return "", nil
 }
 
-func (f *fakeRotator) Rotate(_ context.Context, id rotation.Identity, csr []byte, _, _ string) (rotation.Rotated, error) {
+func (f *fakeRotator) Rotate(_ context.Context, id rotation.Identity, csr []byte, _, _ string, immediate bool) (rotation.Rotated, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.rotated = append(f.rotated, id)
+	f.immediate = append(f.immediate, immediate)
 	if f.rotateErr != nil {
 		return rotation.Rotated{}, f.rotateErr
 	}
@@ -123,11 +125,13 @@ type server struct {
 	rotator  *fakeRotator
 }
 
-func startServer(t *testing.T) server {
+func startServer(t *testing.T) server { return startServerWithTimeout(t, 0) }
+
+func startServerWithTimeout(t *testing.T, rotationTimeout time.Duration) server {
 	t.Helper()
 	ca := newTestCA(t)
 	logger := slog.New(slog.DiscardHandler)
-	sessions := agentapi.NewSessions()
+	sessions := agentapi.NewSessions(rotationTimeout)
 	rotator := &fakeRotator{ca: ca}
 	tlsConfig, err := agentapi.TLSConfig(ca, []string{"localhost"}, logger)
 	if err != nil {
@@ -406,5 +410,74 @@ func TestTLS_RevocationAlsoAppliesToResumedSessions(t *testing.T) {
 		resumed := second.ConnectionState().DidResume
 		_ = second.Close()
 		t.Fatalf("revoked certificate accepted (resumed session: %v)", resumed)
+	}
+}
+
+func rotateMsg(t *testing.T) *agentv1.SessionRequest {
+	t.Helper()
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	csr, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_RotateCertificate{RotateCertificate: &agentv1.RotateCertificate{Csr: csr}}}
+}
+
+func TestOnDemand_AgentRotatesImmediatelyAndTheSessionEnds(t *testing.T) {
+	s := startServer(t)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	ctx := context.Background()
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(ctx)
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
+
+	timedOut := make(chan struct{}, 1)
+	if !s.sessions.RequestRotation(orgX, nodeX, func() { timedOut <- struct{}{} }) {
+		t.Fatal("the connected node must accept the request")
+	}
+	if s.sessions.RequestRotation(tenant.OrgID(uuid.New()), nodeX, func() {}) {
+		t.Error("a request for another organization must not reach the node")
+	}
+	res, err := stream.Receive()
+	if err != nil || res.GetRotateNow() == nil {
+		t.Fatalf("Receive() = %v, %v; want RotateNow", res, err)
+	}
+	if err := stream.Send(rotateMsg(t)); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := stream.Receive(); err != nil || res.GetCertificateIssued() == nil {
+		t.Fatalf("Receive() = %v, %v; want CertificateIssued", res, err)
+	}
+	if _, err := stream.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+		t.Errorf("after the on-demand rotation: %v, want ABORTED (reconnect)", err)
+	}
+	if len(s.rotator.immediate) != 1 || !s.rotator.immediate[0] {
+		t.Errorf("immediate = %v, want the old certificate revoked at once", s.rotator.immediate)
+	}
+	select {
+	case <-timedOut:
+		t.Error("the timeout must not fire after a successful rotation")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestOnDemand_AgentThatDoesNotAnswerTimesOut(t *testing.T) {
+	s := startServerWithTimeout(t, 100*time.Millisecond)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
+
+	timedOut := make(chan struct{}, 1)
+	s.sessions.RequestRotation(orgX, nodeX, func() { timedOut <- struct{}{}; s.sessions.Terminate(nodeX) })
+	select {
+	case <-timedOut:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout did not fire")
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
+	if s.sessions.RequestRotation(orgX, nodeX, func() {}) {
+		t.Error("an offline node must report false")
 	}
 }

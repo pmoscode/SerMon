@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+
+// NodeService manages nodes (KONZEPT §6, §7). Node listing and details follow with M1-26.
+service NodeService {
+  // RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
+  // backup). Online agents get a new certificate over their stream and the old one is revoked
+  // at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
+  // or admin on the affected groups and a recent re-authentication. Unknown or foreign nodes
+  // and groups are NOT_FOUND.
+  rpc RotateNodeKeys(RotateNodeKeysRequest) returns (RotateNodeKeysResponse);
+}
+
+// RotateNodeKeysRequest selects the nodes.
+message RotateNodeKeysRequest {
+  // target selects the nodes; exactly one must be set.
+  oneof target {
+    option (buf.validate.oneof).required = true;
+
+    // nodes are node UUIDs (at most 1000).
+    NodeIDs nodes = 1;
+    // group_id selects all nodes of a group.
+    string group_id = 2 [(buf.validate.field).string.uuid = true];
+    // organization selects all nodes of the caller's organization (needs operator on all groups).
+    bool organization = 3 [(buf.validate.field).bool.const = true];
+  }
+}
+
+// NodeIDs is a list of node UUIDs.
+message NodeIDs {
+  // ids are node UUIDs.
+  repeated string ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 1000
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+}
+
+// RotateNodeKeysResponse reports what happened.
+message RotateNodeKeysResponse {
+  // online is the number of connected nodes that were asked to rotate now.
+  int32 online = 1;
+  // offline is the number of nodes whose certificates were revoked (re-enrollment needed).
+  int32 offline = 2;
+}

@@ -449,9 +449,17 @@ flowchart LR
 > - **Test:** End-to-End mit der Server-Binary. Rotation, neue Verbindung mit dem neuen Zertifikat, ein „Angreifer“
 >   mit dem alten Schlüssel rotiert ebenfalls → Sperre, beide Schlüssel funktionieren nicht mehr.
 >
+> Teil b erledigt (Rotation auf Abruf):
+> - `NodeService.RotateNodeKeys` für Nodes, eine Gruppe oder die ganze Org: Operator auf den Gruppen (für die Org auf
+>   allen), Step-up, Audit pro Node. Unbekannte oder fremde Nodes → `NotFound`, ohne Änderung.
+> - **Online-Agents:** Sie bekommen `RotateNow` im Stream. Ihre nächste Rotation sperrt das alte Zertifikat sofort,
+>   danach endet die Session (Reconnect mit dem neuen Zertifikat). Antwortet ein Agent nicht innerhalb von 60 s,
+>   werden alle Zertifikate gesperrt.
+> - **Offline-Nodes:** Alle Zertifikate werden sofort gesperrt (Re-Enrollment nötig, keine Node-Sperre).
+> - Web- und Agent-Listener teilen sich die Sessions.
+>
 > Offen:
-> - Teil b: Rotation auf Abruf (Node, Gruppe oder Org; `RotateNow` an Online-Agents, sofortige Sperre, Step-up).
-> - Agent-Seite (Rotationszeitpunkt, Re-Enrollment-Hinweis) mit M1-14.
+> - Agent-Seite (Rotationszeitpunkt, `RotateNow` beantworten, Re-Enrollment-Hinweis) mit M1-14.
 > - Security-Events und Benachrichtigung mit E2.3/E2.4; die Sperre aufheben mit M1-32.
 - **Ziel** (KONZEPT §6 „Schlüsselrotation“):
   - **Automatisch:** Der Agent erneuert sein Zertifikat nach 2/3 der Laufzeit über den Stream (`RotateCertificate`,

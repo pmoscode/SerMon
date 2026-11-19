@@ -20,9 +20,11 @@ type isolationEnv struct {
 	invitation                      webv1connect.InvitationServiceClient
 	organization                    webv1connect.OrganizationServiceClient
 	enrollment                      webv1connect.EnrollmentTokenServiceClient
+	node                            webv1connect.NodeServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
+	nodeA                           string // a node of Org A
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -135,6 +137,12 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.EnrollmentTokenService/RevokeEnrollmentToken": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.enrollment.RevokeEnrollmentToken(ctx, connect.NewRequest(&webv1.RevokeEnrollmentTokenRequest{TokenId: e.enrollmentTokenA}))
+		return err
+	}},
+	"/sermon.web.v1.NodeService/RotateNodeKeys": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.RotateNodeKeys(ctx, connect.NewRequest(&webv1.RotateNodeKeysRequest{
+			Target: &webv1.RotateNodeKeysRequest_Nodes{Nodes: &webv1.NodeIDs{Ids: []string{e.nodeA}}},
+		}))
 		return err
 	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {

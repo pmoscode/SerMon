@@ -24,7 +24,27 @@ setup:
     lefthook install
 
 # Start the development environment (infra, server with hot reload, web dev server)
-dev: (_todo "dev" "M0-07")
+dev:
+    scripts/dev.sh
+
+# Start only the development containers (postgres/timescaledb, loki, mailpit, ntfy)
+dev-infra:
+    scripts/dev-secrets.sh
+    docker compose -f deploy/dev/compose.yaml up -d --wait
+
+# Stop the development containers (data is kept)
+dev-down:
+    docker compose -f deploy/dev/compose.yaml down
+
+# Delete all development data (containers, volumes, generated secrets)
+dev-reset:
+    docker compose -f deploy/dev/compose.yaml down --volumes
+    rm -rf deploy/dev/.secrets
+    @echo "✓ development data deleted – next \`just dev\` starts from scratch"
+
+# Show logs of the development containers
+dev-logs:
+    docker compose -f deploy/dev/compose.yaml logs -f
 
 # Generate code from proto/ for Rust, Go and TypeScript (local plugins only)
 [working-directory: 'proto']
@@ -46,7 +66,7 @@ install-proto-plugins:
 fmt: fmt-agent fmt-server fmt-web
 
 # Lint all parts
-lint: lint-shell lint-ci lint-proto lint-agent lint-server lint-web
+lint: lint-shell lint-ci lint-compose lint-proto lint-agent lint-server lint-web
 
 # Run all unit tests
 test: test-scripts test-agent test-server test-web
@@ -66,16 +86,21 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh
+    shellcheck scripts/*.sh .devcontainer/*.sh
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
     actionlint
     zizmor --offline --persona=pedantic .github/workflows
 
+# Check compose files: images pinned by digest, no telemetry, dev ports on 127.0.0.1 only
+lint-compose:
+    sh scripts/check-compose.sh --loopback-only deploy/dev/compose.yaml
+
 # Test helper scripts
 test-scripts:
     sh scripts/check-commit-msg_test.sh
+    sh scripts/check-compose_test.sh
 
 # Scan the git history for leaked secrets (betterleaks, ADR 0005; no live validation against provider APIs)
 security-secrets:

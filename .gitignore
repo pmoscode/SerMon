@@ -36,3 +36,11 @@ web/src/lib/paraglide/
 !.env.example
 *.pem
 *.key
+
+# Development secrets (scripts/dev-secrets.sh)
+deploy/dev/.secrets/
+# air build output
+server/tmp/
+
+# pnpm content store (never inside the repository; see .devcontainer/setup.sh)
+.pnpm-store/

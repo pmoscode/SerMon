@@ -51,7 +51,7 @@ jobs:
       - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
         with:
           tool: just@${{ env.JUST_VERSION }}
-      - run: just lint-shell test-scripts
+      - run: just lint-shell lint-compose test-scripts
 
   proto:
     name: protocol (buf)

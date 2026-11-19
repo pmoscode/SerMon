@@ -895,6 +895,9 @@ Ziel: `systemd-analyze security sermon-agent` mit einem Score **< 2,0** („OK�
   (`169.254.169.254` usw.) **blockiert**. Die IP wird aufgelöst und **gepinnt** (gegen DNS-Rebinding), Redirects sind
   begrenzt, Timeouts gesetzt. Eine Allowlist für interne Ziele (z. B. internes Mattermost) konfiguriert der Superadmin.
 - Keine Telemetrie und keine „Phone-Home“-Funktion. Die Prüfung auf neue Versionen ist abschaltbar.
+- Das gilt auch für die Fremdkomponenten: **TimescaleDB** (`TIMESCALEDB_TELEMETRY=off`) und **Loki**
+  (`analytics.reporting_enabled: false`) senden standardmäßig Nutzungsdaten. Beides wird in jeder Compose-Datei
+  abgeschaltet und durch einen Test geprüft (Entwicklungsumgebung: M0-07).
 
 ### 18.7 Datenschutz (DSGVO)
 

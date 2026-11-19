@@ -1,0 +1,32 @@
+{
+	"name": "SerMon",
+	"image": "mcr.microsoft.com/devcontainers/base:3.0.13-ubuntu24.04@sha256:48be4adec1c1ecbe030064700aef85382f5205786a8f82937fc44a7473717eae",
+	"features": {
+		"ghcr.io/devcontainers/features/go:1": { "version": "1.27" },
+		"ghcr.io/devcontainers/features/rust:1": { "version": "1.100.0", "profile": "minimal" },
+		"ghcr.io/devcontainers/features/node:1": { "version": "26.13.0", "nodeGypDependencies": false },
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
+	"postCreateCommand": "bash .devcontainer/setup.sh",
+	"forwardPorts": [5173, 8080, 8025, 8090],
+	"portsAttributes": {
+		"5173": { "label": "Web UI (Vite)" },
+		"8080": { "label": "sermon-server" },
+		"8025": { "label": "Mailpit" },
+		"8090": { "label": "ntfy" }
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"golang.go",
+				"rust-lang.rust-analyzer",
+				"svelte.svelte-vscode",
+				"bradlc.vscode-tailwindcss",
+				"bufbuild.vscode-buf",
+				"esbenp.prettier-vscode",
+				"dbaeumer.vscode-eslint",
+				"nefrob.vscode-just-syntax"
+			]
+		}
+	}
+}

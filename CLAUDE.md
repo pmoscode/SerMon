@@ -39,6 +39,12 @@ Voraussetzungen: `just`, `lefthook`, `betterleaks`, Rust (rustup; Version über 
 Node + pnpm, `buf`, `shellcheck`, Docker.
 `just setup` prüft, was fehlt.
 
+Entwicklungsumgebung: `just dev` startet die Container aus `deploy/dev/compose.yaml` (TimescaleDB, Loki, Mailpit,
+ntfy; nur auf 127.0.0.1), dazu `sermon-server` mit Hot-Reload (air) und den Vite-Dev-Server mit Proxy zum Server.
+`just dev-infra`, `just dev-down`, `just dev-reset` (löscht Daten) und `just dev-logs` gibt es zusätzlich. Das
+DB-Passwort wird beim ersten Start zufällig erzeugt (`deploy/dev/.secrets/`, git-ignoriert). Alternativ gibt es den
+Devcontainer (`.devcontainer/`) mit allen Werkzeugen.
+
 Agent bauen: `just build-agent` (statische musl-Binaries für amd64 und arm64), `just smoke-agent` (Start im Container).
 Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just smoke-server` (Start, Health-Probes, SIGTERM).
 Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.

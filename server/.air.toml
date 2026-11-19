@@ -1,0 +1,20 @@
+# Hot reload for development (`just dev`): rebuilds and restarts sermon-server on Go changes.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/sermon-server ./cmd/sermon-server"
+  entrypoint = ["./tmp/sermon-server"]
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "bin", "web/dist"]
+  exclude_regex = ["_test\\.go$"]
+  delay = 300
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

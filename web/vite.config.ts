@@ -6,6 +6,18 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
+	server: {
+		host: '127.0.0.1',
+		port: 5173,
+		strictPort: true,
+		// `just dev`: API and health endpoints are served by sermon-server (air, port 8080).
+		proxy: {
+			'/healthz': 'http://127.0.0.1:8080',
+			'/readyz': 'http://127.0.0.1:8080',
+			// Connect RPCs: /sermon.web.v1.<Service>/<Method>
+			'^/sermon\\.': 'http://127.0.0.1:8080'
+		}
+	},
 	build: {
 		// Never inline assets (fonts, images) as data: URIs – everything is a file served by
 		// sermon-server, so the CSP can stay at font-src/img-src 'self' (KONZEPT D27).

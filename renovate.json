@@ -59,9 +59,29 @@
 		},
 		{
 			"matchManagers": [
+				"docker-compose",
+				"devcontainer"
+			],
+			"groupName": "development environment images"
+		},
+		{
+			"matchManagers": [
 				"custom.regex"
 			],
 			"groupName": "build tools"
+		},
+		{
+			"description": "install-action must know the tool versions it installs, otherwise it falls back to cargo-binstall (ADR 0006) – update them together.",
+			"matchPackageNames": [
+				"taiki-e/install-action",
+				"casey/just",
+				"EmbarkStudios/cargo-deny",
+				"rust-cross/cargo-zigbuild"
+			],
+			"groupName": "install-action and installed tools",
+			"prBodyNotes": [
+				"⚠️ Check the CI annotations: no `fallback to cargo-binstall` warning may appear."
+			]
 		},
 		{
 			"description": "These projects tag releases with a v prefix; we pin the plain version.",
@@ -111,13 +131,14 @@
 	],
 	"customManagers": [
 		{
-			"description": "Tool versions in workflow env blocks, annotated with `# renovate: datasource=… depName=…`.",
+			"description": "Tool versions annotated with `# renovate: datasource=… depName=…` (workflow env blocks and the devcontainer setup script).",
 			"customType": "regex",
 			"managerFilePatterns": [
-				"/^\\.github/workflows/.+\\.ya?ml$/"
+				"/^\\.github/workflows/.+\\.ya?ml$/",
+				"/^\\.devcontainer/setup\\.sh$/"
 			],
 			"matchStrings": [
-				"# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+[A-Z_]+: (?<currentValue>\\S+)"
+				"# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+(?:: |=)(?<currentValue>\\S+)"
 			]
 		},
 		{

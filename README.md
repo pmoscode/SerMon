@@ -32,11 +32,14 @@ Unterstützte Systeme: Debian, Ubuntu, RHEL/Rocky/Alma/Fedora, Alpine – jeweil
 
 ## Entwicklung
 
+Alternativ: Devcontainer (`.devcontainer/`), dann sind alle Werkzeuge installiert.
+
 Voraussetzungen: [`just`](https://github.com/casey/just), [`lefthook`](https://github.com/evilmartians/lefthook),
 [`betterleaks`](https://github.com/betterleaks/betterleaks), `shellcheck` – später zusätzlich Rust, Go, Node + pnpm, `buf`, Docker.
 
 ```bash
 just setup   # prüft Voraussetzungen und installiert die Git-Hooks
+just dev     # Entwicklungsumgebung: Datenbank, Loki, Mailpit, ntfy, Server (Hot-Reload) und UI → http://127.0.0.1:5173
 just --list  # alle Befehle
 just lint    # Lint
 just test    # Tests

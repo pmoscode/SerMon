@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: timescale/timescaledb:2.32.0-pg17@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    environment: { TIMESCALEDB_TELEMETRY: "off" }
+    ports: ["127.0.0.1:55432:5432"]
+  loki:
+    image: grafana/loki:3.7.10@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes: ["./loki-good.yaml:/etc/loki/loki.yaml:ro"]

@@ -114,7 +114,27 @@ func TestRLS_WithoutTenantNothingIsVisible(t *testing.T) {
 	}
 	defer func() { _ = conn.Close(ctx) }()
 
-	for _, table := range []string{"organizations", "users", "memberships"} {
+	tables := []string{"organizations", "users"}
+	rows, err := conn.Query(ctx, `SELECT DISTINCT table_name FROM information_schema.columns
+		WHERE table_schema = 'public' AND column_name = 'org_id' ORDER BY 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		if name != "sessions" { // instance-level, no RLS (ADR 0007)
+			tables = append(tables, name)
+		}
+	}
+	rows.Close()
+	if len(tables) < 6 {
+		t.Fatalf("found only %v – tenant tables not visible to the test", tables)
+	}
+
+	for _, table := range tables {
 		var n int
 		if err := conn.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {
 			t.Fatalf("%s: %v", table, err)
@@ -122,6 +142,50 @@ func TestRLS_WithoutTenantNothingIsVisible(t *testing.T) {
 		if n != 0 {
 			t.Errorf("%s: %d rows visible without tenant, want 0", table, n)
 		}
+	}
+}
+
+// TestRLS_EveryTenantTableIsForced fails when a new table with org_id lacks ENABLE + FORCE ROW
+// LEVEL SECURITY (CLAUDE.md, ADR 0007).
+func TestRLS_EveryTenantTableIsForced(t *testing.T) {
+	// Instance-level tables that carry org_id without RLS, with their reason (ADR 0007).
+	exempt := map[string]string{
+		"sessions": "looked up by token hash before any tenant is known; only the session's own row is read",
+	}
+	f := setup(t)
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, f.db.OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+
+	rows, err := conn.Query(ctx, `SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
+		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+		  AND (c.relname IN ('organizations', 'users') OR EXISTS (
+		      SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attname = 'org_id' AND NOT a.attisdropped))`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	n := 0
+	for rows.Next() {
+		var name string
+		var enabled, forced bool
+		if err := rows.Scan(&name, &enabled, &forced); err != nil {
+			t.Fatal(err)
+		}
+		n++
+		if _, ok := exempt[name]; ok {
+			continue
+		}
+		if !enabled || !forced {
+			t.Errorf("%s: row level security enabled=%v forced=%v, want both", name, enabled, forced)
+		}
+	}
+	if n < 6 {
+		t.Errorf("checked only %d tables", n)
 	}
 }
 

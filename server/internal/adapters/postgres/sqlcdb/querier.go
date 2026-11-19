@@ -15,14 +15,21 @@ type Querier interface {
 	ActiveAuthority(ctx context.Context) (ActiveAuthorityRow, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
+	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
+	AuditChain(ctx context.Context) ([]AuditLog, error)
+	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
+	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
 	// Organizations. Row-level security limits every query to the organization of the tenant
 	// transaction (postgres.DB.InTenant); there is no way to read other organizations from here.
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
+	CreateRoleBinding(ctx context.Context, arg CreateRoleBindingParams) error
 	// Users and memberships. Users are visible only through a membership in the current organization.
 	// No RETURNING: a new user is invisible to the tenant until its membership exists
 	// (SELECT policy), so RETURNING would be rejected by RLS. Add the membership in the same
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
@@ -33,11 +40,16 @@ type Querier interface {
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
+	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
+	ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, error)
+	ListNodeGroups(ctx context.Context) ([]NodeGroup, error)
 	ListOrganizations(ctx context.Context) ([]Organization, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
+	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
+	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error

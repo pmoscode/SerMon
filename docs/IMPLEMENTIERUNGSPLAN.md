@@ -284,7 +284,18 @@ flowchart LR
 - **Abhängig von:** M1-02, M1-06
 - **Tests zuerst:** RFC-6238-Testvektoren, Zeitfenster und Schutz vor Replay, Recovery-Code nur einmal verwendbar.
 
-#### ☐ M1-04 – Orgs, Gruppen, Mitgliedschaften und Rollen · S · L 🔒
+#### ◐ M1-04 – Orgs, Gruppen, Mitgliedschaften und Rollen · S · L 🔒
+> Teil a erledigt (Grundlage):
+> - Tabellen `node_groups`, `role_bindings` (zusammengesetzte Fremdschlüssel: Bindungen nur auf Gruppen derselben
+>   Org) und `audit_log`, alle mit RLS (ENABLE + FORCE).
+> - Audit-Log nur anfügen (`sermon_app` hat nur INSERT/SELECT); die Hash-Kette pro Org berechnet ein Trigger unter
+>   Advisory-Lock mit fortlaufender `seq`; `VerifyAuditChain` erkennt Manipulationen, auch bei parallelem Schreiben.
+> - `access.Loader` baut den Principal bei jedem Request neu: Entzug von Mitgliedschaft oder Rolle wirkt sofort.
+> - `webapi.Authenticator` (Connect-Interceptor) verlangt für alle Services außer `AuthService` eine gültige Session.
+> - Testgerüst `TestTenantIsolation_EveryProcedureIsCovered`: jede Web-RPC braucht einen Cross-Tenant-Test oder eine
+>   begründete Ausnahme.
+>
+> Offen (Teil b): CRUD-RPCs für Gruppen, Mitglieder und Rollen mit Audit-Einträgen, Org-Switch, Cross-Tenant-Fälle.
 - **Ziel:** CRUD-Use-Cases und Connect-RPCs für Orgs, Node-Gruppen, Mitgliedschaften und Rollen-Bindungen; RLS-Policies; Audit-Log-Tabelle (nur anfügen, Hash-Kette); Org-Switch.
   - **Testgerüst für Mandantentrennung:** ein generischer Test, der **jede** Web-RPC mit einem User aus fremder Org aufruft und `NotFound` oder `PermissionDenied` erwartet. Neue RPCs ohne Eintrag lassen den Test fehlschlagen.
 - **Abhängig von:** M1-01, M1-02

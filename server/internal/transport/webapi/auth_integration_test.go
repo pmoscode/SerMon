@@ -18,6 +18,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
@@ -67,7 +68,11 @@ func newStack(t *testing.T, loginLimit int) stack {
 	srv := httptest.NewUnstartedServer(mux)
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
-	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.NewAuthHandler(login, sessions, creds, slog.New(slog.DiscardHandler)))
+	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
+		Auth:          webapi.NewAuthHandler(login, sessions, creds, slog.New(slog.DiscardHandler)),
+		System:        webapi.NewSystemHandler("test"),
+		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg)), slog.New(slog.DiscardHandler)),
+	})
 	return stack{server: srv, origin: srv.URL}
 }
 
@@ -94,18 +99,6 @@ func seedUser(t *testing.T, ownerDSN string) {
 		ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, failed_attempts = 0, locked_until = NULL`, hash); err != nil {
 		t.Fatal(err)
 	}
-}
-
-// originTransport adds the Origin header like a browser does.
-type originTransport struct {
-	next   http.RoundTripper
-	origin string
-}
-
-func (o originTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	r = r.Clone(r.Context())
-	r.Header.Set("Origin", o.origin)
-	return o.next.RoundTrip(r)
 }
 
 func client(t *testing.T, s stack, origin string) webv1connect.AuthServiceClient {
@@ -212,5 +205,39 @@ func TestAuthAPI_GetSessionWithoutCookieIsUnauthenticated(t *testing.T) {
 
 	if _, err := c.GetSession(context.Background(), connect.NewRequest(&webv1.GetSessionRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Errorf("error = %v, want unauthenticated", err)
+	}
+}
+
+func TestAuthAPI_RemovingTheMembershipEndsAccessImmediately(t *testing.T) {
+	s := newStack(t, 20)
+	t.Cleanup(func() { seedUser(t, pgtest.Shared(t).OwnerDSN) })
+	jar, _ := cookiejar.New(nil)
+	hc := s.server.Client()
+	hc.Jar = jar
+	hc.Transport = originTransport{next: hc.Transport, origin: s.origin}
+	authc := webv1connect.NewAuthServiceClient(hc, s.server.URL)
+	system := webv1connect.NewSystemServiceClient(hc, s.server.URL)
+	ctx := context.Background()
+
+	if _, err := system.GetVersion(ctx, connect.NewRequest(&webv1.GetVersionRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Fatalf("GetVersion() before login: %v, want unauthenticated", err)
+	}
+	if _, err := authc.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "erin@example.org", Password: userPassword})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := system.GetVersion(ctx, connect.NewRequest(&webv1.GetVersionRequest{})); err != nil {
+		t.Fatalf("GetVersion() after login: %v", err)
+	}
+
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := conn.Exec(ctx, `DELETE FROM memberships WHERE user_id = '0193f5a0-0000-7000-8000-0000000000e1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := system.GetVersion(ctx, connect.NewRequest(&webv1.GetVersionRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Errorf("GetVersion() after removal: %v, want unauthenticated", err)
 	}
 }

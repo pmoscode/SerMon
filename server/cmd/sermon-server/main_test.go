@@ -81,6 +81,10 @@ func TestRun_StopsCleanlyWhenContextIsCancelled(t *testing.T) {
 // a conflict – ServeMux panics on conflicting patterns at startup.
 func TestRoutes_UIAndAPIDoNotConflict(_ *testing.T) {
 	mux := http.NewServeMux()
-	webapi.Mount(mux, webapi.Config{}, webapi.NewAuthHandler(nil, nil, nil, slog.New(slog.DiscardHandler)))
+	webapi.Mount(mux, webapi.Config{}, webapi.Handlers{
+		Auth:          webapi.NewAuthHandler(nil, nil, nil, slog.New(slog.DiscardHandler)),
+		System:        webapi.NewSystemHandler("test"),
+		Authenticator: webapi.NewAuthenticator(nil, nil, slog.New(slog.DiscardHandler)),
+	})
 	registerUI(mux, http.NotFoundHandler()) // panics on a pattern conflict
 }

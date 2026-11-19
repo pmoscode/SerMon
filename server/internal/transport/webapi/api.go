@@ -18,9 +18,23 @@ type Config struct {
 	TrustedProxies []netip.Prefix
 }
 
+// Handlers are the web API services.
+type Handlers struct {
+	Auth          *AuthHandler
+	System        *SystemHandler
+	Authenticator *Authenticator // required for every service except AuthService
+}
+
 // Mount registers the web API on mux: protovalidate on every request, security headers, origin
-// check and client IP resolution.
-func Mount(mux *http.ServeMux, cfg Config, auth *AuthHandler) {
-	path, handler := webv1connect.NewAuthServiceHandler(auth, connect.WithInterceptors(validate.NewInterceptor()))
-	mux.Handle(path, ClientIP(cfg.TrustedProxies)(RequireOrigin(cfg.AllowedOrigins)(APIHeaders(handler))))
+// check and client IP resolution; every service except AuthService requires a session.
+func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
+	mount := func(path string, handler http.Handler) {
+		mux.Handle(path, ClientIP(cfg.TrustedProxies)(RequireOrigin(cfg.AllowedOrigins)(APIHeaders(handler))))
+	}
+	validation := validate.NewInterceptor()
+	// Authentication runs before validation: anonymous callers learn nothing about request rules.
+	authenticated := connect.WithInterceptors(h.Authenticator, validation)
+
+	mount(webv1connect.NewAuthServiceHandler(h.Auth, connect.WithInterceptors(validation)))
+	mount(webv1connect.NewSystemServiceHandler(h.System, authenticated))
 }

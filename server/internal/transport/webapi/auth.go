@@ -118,8 +118,13 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 
 // internal logs the cause with a correlation ID and returns a generic error to the client.
 func (h *AuthHandler) internal(ctx context.Context, op string, err error) error {
+	return internalError(ctx, h.logger, op, err)
+}
+
+// internalError logs the cause with a correlation ID and returns a generic error to the client.
+func internalError(ctx context.Context, logger *slog.Logger, op string, err error) error {
 	ref := correlationID()
-	h.logger.ErrorContext(ctx, "request failed", "op", op, "ref", ref, "error", err)
+	logger.ErrorContext(ctx, "request failed", "op", op, "ref", ref, "error", err)
 	return connect.NewError(connect.CodeInternal, errors.New("internal error (ref "+ref+")"))
 }
 
@@ -133,6 +138,10 @@ func sessionCookie(token string, maxAge time.Duration) *http.Cookie {
 		c.MaxAge = -1
 	}
 	return c
+}
+
+func cookieHeaderOnly(cookie string) http.Header {
+	return http.Header{"Cookie": []string{cookie}}
 }
 
 func tokenFrom(h http.Header) (string, bool) {

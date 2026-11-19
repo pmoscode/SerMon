@@ -20,9 +20,29 @@ type AgentCertificate struct {
 	CreatedAt time.Time
 }
 
+type AuditLog struct {
+	ID       int64
+	OrgID    uuid.UUID
+	Seq      int64
+	At       time.Time
+	ActorID  *uuid.UUID
+	Action   string
+	Target   string
+	Details  []byte
+	PrevHash []byte
+	Hash     []byte
+}
+
 type Membership struct {
 	OrgID     uuid.UUID
 	UserID    uuid.UUID
+	CreatedAt time.Time
+}
+
+type NodeGroup struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	Name      string
 	CreatedAt time.Time
 }
 
@@ -40,6 +60,15 @@ type PkiAuthority struct {
 	IntermediateKeySealed []byte
 	Active                bool
 	CreatedAt             time.Time
+}
+
+type RoleBinding struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	UserID    uuid.UUID
+	GroupID   *uuid.UUID
+	Role      string
+	CreatedAt time.Time
 }
 
 type Session struct {

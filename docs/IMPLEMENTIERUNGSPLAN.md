@@ -257,12 +257,19 @@ flowchart LR
 - **Tests zuerst:** Tabellen-Test „Aktion × Rolle × Gruppen-Bindung → erlaubt/verboten“, inkl. `*`-Bindung und fremder Org.
 - **Abnahme:** 100 % Abdeckung von `authz`.
 
-#### ◐ M1-02 – Lokale Anmeldung und Sessions · S · L 🔒
-> Stand:
-> - ☑ Passwörter (Argon2id, Regeln, Liste häufiger Passwörter)
-> - ☑ Sessions (Tokens nur als Hash gespeichert, Idle- und absolutes Timeout, Step-up)
-> - ☑ DB: Zugangsdaten, Sessions, Login-Lookups über `sermon_definer`; ADR 0007 überarbeitet
-> - ☐ Login-Use-Case (Sperre, Rate-Limit) und Web-API (Connect, Cookie, Origin-Prüfung, Security-Header)
+#### ☑ M1-02 – Lokale Anmeldung und Sessions · S · L 🔒
+> Erledigt in fünf Teilen:
+> - Passwörter: Argon2id, Regeln, Liste häufiger Passwörter.
+> - Sessions: Tokens nur als Hash gespeichert, Idle-Timeout 30 min, absolut 12 h, Step-up.
+> - DB mit `sermon_definer` für Zugriffe ohne Mandant (ADR 0007 überarbeitet).
+> - Login mit Kontosperre (ab dem 5. Fehlversuch, 1–15 min) und Rate-Limit pro IP; einheitliche Fehler und
+>   Dummy-Hash gegen Enumeration.
+> - Web-API `AuthService` (Login/Logout/GetSession) über Connect mit Cookie `__Host-sermon_session`,
+>   Origin-Prüfung (auch gegen Login-CSRF), Security-Header, protovalidate, vertrauenswürdige Proxies für die
+>   Client-IP; in `just dev` verdrahtet.
+>
+> E2E-Tests über HTTPS mit echter DB. Nebenbefund: Konflikt der Routen `GET /` und API (Panic beim Start) mit einem
+> Regressionstest behoben. connect-go bleibt vorerst bei v1 (ADR 0004).
 - **Ziel:**
   - User mit Argon2id; Login und Logout
   - Serverseitige Sessions (`__Host-sermon_session`, Idle-Timeout 30 min, absolut 12 h)

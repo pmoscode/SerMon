@@ -1,0 +1,216 @@
+//go:build integration
+
+package webapi_test
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"connectrpc.com/connect"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	"github.com/pmoscode/SerMon/server/internal/app/auth"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
+	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
+	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
+	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
+	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
+)
+
+// Test fixtures, not secrets.
+const (
+	userPassword  = "correct horse battery staple" // betterleaks:allow
+	wrongPassword = "wrong password here"          // betterleaks:allow
+	guessPassword = "guess guess guess"            // betterleaks:allow
+)
+
+type stack struct {
+	server *httptest.Server
+	origin string
+}
+
+// newStack starts the web API over TLS with a real database (Testcontainers).
+func newStack(t *testing.T, loginLimit int) stack {
+	t.Helper()
+	ctx := context.Background()
+	db := pgtest.Shared(t)
+	if err := postgres.Migrate(ctx, db.OwnerDSN); err != nil {
+		t.Fatal(err)
+	}
+	appDSN := pgtest.EnableAppRole(t, db)
+	seedUser(t, db.OwnerDSN)
+
+	pg, err := postgres.Open(ctx, appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pg.Close)
+	hasher, _ := password.NewHasher(password.Params{Memory: 8 * 1024, Time: 1, Threads: 1, SaltLength: 16, KeyLength: 32})
+	creds := postgres.NewCredentialStore(pg)
+	sessions := session.NewManager(postgres.NewSessionStore(pg), time.Now)
+	login := auth.NewService(auth.Deps{
+		Credentials: creds, Sessions: sessions, Hasher: hasher,
+		IPLimiter: ratelimit.New(loginLimit, time.Minute, time.Now), Now: time.Now,
+	})
+
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.NewAuthHandler(login, sessions, creds, slog.New(slog.DiscardHandler)))
+	return stack{server: srv, origin: srv.URL}
+}
+
+func seedUser(t *testing.T, ownerDSN string) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, ownerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	h, _ := password.NewHasher(password.Params{Memory: 8 * 1024, Time: 1, Threads: 1, SaltLength: 16, KeyLength: 32})
+	hash, _ := h.Hash(userPassword)
+	for _, sql := range []string{
+		`INSERT INTO organizations (id, name) VALUES ('0193f5a0-0000-7000-8000-00000000000a', 'Org A') ON CONFLICT DO NOTHING`,
+		`INSERT INTO users (id, email, display_name) VALUES ('0193f5a0-0000-7000-8000-0000000000e1', 'erin@example.org', 'Erin') ON CONFLICT DO NOTHING`,
+		`INSERT INTO memberships (org_id, user_id) VALUES ('0193f5a0-0000-7000-8000-00000000000a', '0193f5a0-0000-7000-8000-0000000000e1') ON CONFLICT DO NOTHING`,
+	} {
+		if _, err := conn.Exec(ctx, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO user_credentials (user_id, password_hash) VALUES ('0193f5a0-0000-7000-8000-0000000000e1', $1)
+		ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, failed_attempts = 0, locked_until = NULL`, hash); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// originTransport adds the Origin header like a browser does.
+type originTransport struct {
+	next   http.RoundTripper
+	origin string
+}
+
+func (o originTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Origin", o.origin)
+	return o.next.RoundTrip(r)
+}
+
+func client(t *testing.T, s stack, origin string) webv1connect.AuthServiceClient {
+	t.Helper()
+	jar, _ := cookiejar.New(nil)
+	hc := s.server.Client()
+	hc.Jar = jar
+	hc.Transport = originTransport{next: hc.Transport, origin: origin}
+	return webv1connect.NewAuthServiceClient(hc, s.server.URL)
+}
+
+func TestAuthAPI_LoginSessionLogout(t *testing.T) {
+	s := newStack(t, 20)
+	c := client(t, s, s.origin)
+	ctx := context.Background()
+
+	res, err := c.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "Erin@example.org", Password: userPassword}))
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if got := res.Msg.GetSession(); got.GetEmail() != "erin@example.org" || got.GetDisplayName() != "Erin" ||
+		got.GetActiveOrganizationId() != "0193f5a0-0000-7000-8000-00000000000a" || len(got.GetOrganizations()) != 1 {
+		t.Errorf("session = %+v", got)
+	}
+	cookie := res.Header().Get("Set-Cookie")
+	for _, attr := range []string{webapi.SessionCookie + "=", "Path=/", "HttpOnly", "Secure", "SameSite=Lax"} {
+		if !strings.Contains(cookie, attr) {
+			t.Errorf("Set-Cookie %q lacks %q", cookie, attr)
+		}
+	}
+	if strings.Contains(strings.ToLower(cookie), "domain=") {
+		t.Errorf("__Host- cookie must not have a Domain: %q", cookie)
+	}
+	if res.Header().Get("Cache-Control") != "no-store" {
+		t.Error("API responses must not be cached")
+	}
+
+	if _, err := c.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil {
+		t.Fatalf("GetSession() with cookie error = %v", err)
+	}
+	if _, err := c.Logout(ctx, connect.NewRequest(&webv1.LogoutRequest{})); err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+	if _, err := c.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Errorf("GetSession() after logout error = %v, want unauthenticated", err)
+	}
+}
+
+func TestAuthAPI_WrongPasswordAndUnknownUserAreIndistinguishable(t *testing.T) {
+	s := newStack(t, 20)
+	c := client(t, s, s.origin)
+	ctx := context.Background()
+
+	_, errWrong := c.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "erin@example.org", Password: wrongPassword}))
+	_, errUnknown := c.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "nobody@example.org", Password: wrongPassword}))
+
+	if connect.CodeOf(errWrong) != connect.CodeUnauthenticated || connect.CodeOf(errUnknown) != connect.CodeUnauthenticated {
+		t.Fatalf("codes = %v / %v, want unauthenticated", connect.CodeOf(errWrong), connect.CodeOf(errUnknown))
+	}
+	var a, b *connect.Error
+	if errors.As(errWrong, &a) && errors.As(errUnknown, &b) && a.Message() != b.Message() {
+		t.Errorf("messages differ: %q vs %q", a.Message(), b.Message())
+	}
+	seedUser(t, pgtest.Shared(t).OwnerDSN) // reset the failure counter for other tests
+}
+
+func TestAuthAPI_RejectsForeignOrigins(t *testing.T) {
+	s := newStack(t, 20)
+	c := client(t, s, "https://evil.example")
+
+	_, err := c.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: "erin@example.org", Password: userPassword}))
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("Login() from a foreign origin: error = %v, want permission denied", err)
+	}
+}
+
+func TestAuthAPI_ValidatesInput(t *testing.T) {
+	s := newStack(t, 20)
+	c := client(t, s, s.origin)
+
+	_, err := c.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: strings.Repeat("a", 330), Password: "x"}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("oversized e-mail: error = %v, want invalid argument", err)
+	}
+}
+
+func TestAuthAPI_RateLimitsLoginAttempts(t *testing.T) {
+	s := newStack(t, 3)
+	c := client(t, s, s.origin)
+	ctx := context.Background()
+	for range 3 {
+		_, _ = c.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "nobody@example.org", Password: guessPassword}))
+	}
+
+	_, err := c.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "erin@example.org", Password: userPassword}))
+	if connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Errorf("error = %v, want resource exhausted", err)
+	}
+}
+
+func TestAuthAPI_GetSessionWithoutCookieIsUnauthenticated(t *testing.T) {
+	s := newStack(t, 20)
+	c := client(t, s, s.origin)
+
+	if _, err := c.GetSession(context.Background(), connect.NewRequest(&webv1.GetSessionRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Errorf("error = %v, want unauthenticated", err)
+	}
+}

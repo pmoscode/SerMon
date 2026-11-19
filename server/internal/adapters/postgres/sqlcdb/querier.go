@@ -43,6 +43,7 @@ type Querier interface {
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)
+	UserProfile(ctx context.Context, userID uuid.UUID) (UserProfileRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

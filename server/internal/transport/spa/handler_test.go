@@ -207,3 +207,12 @@ func TestServe_CSPWithoutStyleAttributesHasNoHashExceptions(t *testing.T) {
 		t.Errorf("CSP %q should have a plain style-src 'self'", csp)
 	}
 }
+
+func TestServe_OnlyAllowsGetAndHead(t *testing.T) {
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
+		rec := do(t, newHandler(t), method, "/")
+		if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Allow") != "GET, HEAD" {
+			t.Errorf("%s / = %d (Allow %q), want 405 with Allow: GET, HEAD", method, rec.Code, rec.Header().Get("Allow"))
+		}
+	}
+}

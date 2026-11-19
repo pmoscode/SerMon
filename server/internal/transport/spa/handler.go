@@ -55,6 +55,11 @@ func New(files fs.FS) (*Handler, error) {
 // ServeHTTP implements http.Handler.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.setSecurityHeaders(w.Header())
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
 
 	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 	if name == "" || name == indexFile {

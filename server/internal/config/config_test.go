@@ -4,12 +4,20 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/config"
 )
+
+// testDBPassword is a test fixture (not a secret); URLs are built from it so that no credential
+// URI literal appears in the tests.
+const testDBPassword = "fixture-password" // betterleaks:allow
+
+func dbURL(user string) string { return "postgres://" + user + ":" + testDBPassword + "@db/sermon" }
 
 // fakeSource builds a config.Source from in-memory environment variables and files.
 func fakeSource(env, files map[string]string) config.Source {
@@ -40,7 +48,7 @@ func TestLoad_Defaults(t *testing.T) {
 		LogFormat:       config.LogFormatJSON,
 		ShutdownTimeout: 15 * time.Second,
 	}
-	if cfg != want {
+	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
 }
@@ -64,7 +72,7 @@ func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 		LogFormat:       config.LogFormatText,
 		ShutdownTimeout: 3 * time.Second,
 	}
-	if cfg != want {
+	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
 	}
 }
@@ -155,5 +163,58 @@ func TestLoad_ReportsAllErrorsAtOnce(t *testing.T) {
 	}
 	if !errors.Is(err, config.ErrInvalid) {
 		t.Errorf("Load() error = %v, want errors.Is(err, ErrInvalid)", err)
+	}
+}
+
+func TestLoad_DatabaseAndWebAPISettings(t *testing.T) {
+	env := map[string]string{
+		"SERMON_DATABASE_URL_FILE":         "/run/secrets/db",
+		"SERMON_DATABASE_MIGRATE_URL_FILE": "/run/secrets/db-migrate",
+		"SERMON_ALLOWED_ORIGINS":           "https://sermon.example.com, http://127.0.0.1:5173",
+		"SERMON_TRUSTED_PROXIES":           "172.18.0.0/16,10.0.0.1/32",
+	}
+	files := map[string]string{
+		"/run/secrets/db":         dbURL("sermon_app") + "\n",
+		"/run/secrets/db-migrate": dbURL("sermon"),
+	}
+
+	cfg, err := config.Load(fakeSource(env, files))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.DatabaseURL != dbURL("sermon_app") || cfg.DatabaseMigrateURL != dbURL("sermon") {
+		t.Errorf("database URLs = %q / %q", cfg.DatabaseURL, cfg.DatabaseMigrateURL)
+	}
+	if want := []string{"https://sermon.example.com", "http://127.0.0.1:5173"}; !reflect.DeepEqual(cfg.AllowedOrigins, want) {
+		t.Errorf("AllowedOrigins = %v, want %v", cfg.AllowedOrigins, want)
+	}
+	wantProxies := []netip.Prefix{netip.MustParsePrefix("172.18.0.0/16"), netip.MustParsePrefix("10.0.0.1/32")}
+	if !reflect.DeepEqual(cfg.TrustedProxies, wantProxies) {
+		t.Errorf("TrustedProxies = %v, want %v", cfg.TrustedProxies, wantProxies)
+	}
+}
+
+func TestLoad_WebAPISettingErrors(t *testing.T) {
+	cases := map[string]map[string]string{
+		"origin with path":      {"SERMON_ALLOWED_ORIGINS": "https://sermon.example.com/app"},
+		"origin without scheme": {"SERMON_ALLOWED_ORIGINS": "sermon.example.com"},
+		"origin with ftp":       {"SERMON_ALLOWED_ORIGINS": "ftp://sermon.example.com"},
+		"wildcard origin":       {"SERMON_ALLOWED_ORIGINS": "*"},
+		"proxy without prefix":  {"SERMON_TRUSTED_PROXIES": "10.0.0.1"},
+		"proxy garbage":         {"SERMON_TRUSTED_PROXIES": "everyone"},
+		"migrate without db":    {"SERMON_DATABASE_MIGRATE_URL": "postgres://x"},
+	}
+	for name, env := range cases {
+		if _, err := config.Load(fakeSource(env, nil)); err == nil {
+			t.Errorf("%s: Load() error = nil", name)
+		}
+	}
+}
+
+func TestLoad_ErrorsNeverContainDatabaseCredentials(t *testing.T) {
+	env := map[string]string{"SERMON_DATABASE_MIGRATE_URL": dbURL("sermon")}
+	_, err := config.Load(fakeSource(env, nil))
+	if err == nil || strings.Contains(err.Error(), testDBPassword) {
+		t.Errorf("error %v must not contain the password", err)
 	}
 }

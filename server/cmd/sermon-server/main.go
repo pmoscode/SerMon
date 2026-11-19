@@ -12,11 +12,18 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/app/auth"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/config"
+	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
 	"github.com/pmoscode/SerMon/server/internal/transport/httpserver"
 	"github.com/pmoscode/SerMon/server/internal/transport/spa"
+	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
 	"github.com/pmoscode/SerMon/server/web"
 )
 
@@ -69,9 +76,29 @@ func run(ctx context.Context, args []string, src config.Source, stdout, stderr i
 	return exitOK
 }
 
+// Login rate limit per client IP (brute-force protection, KONZEPT §7).
+const (
+	loginAttemptsPerWindow = 20
+	loginWindow            = time.Minute
+)
+
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	healthHandler := health.New(logger)
 	mux := http.NewServeMux()
+	var checks []health.Check
+	if cfg.DatabaseURL != "" {
+		db, err := openDatabase(ctx, cfg, logger)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		checks = append(checks, health.Check{Name: "database", Fn: db.Ping})
+		if err := mountAPI(mux, cfg, db, logger); err != nil {
+			return err
+		}
+	} else {
+		logger.WarnContext(ctx, "no database configured (SERMON_DATABASE_URL) – serving UI and health endpoints only")
+	}
+	healthHandler := health.New(logger, checks...)
 	healthHandler.Register(mux)
 	if err := mountUI(ctx, mux, logger); err != nil {
 		return err
@@ -90,6 +117,42 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	return nil
 }
 
+func openDatabase(ctx context.Context, cfg config.Config, logger *slog.Logger) (*postgres.DB, error) {
+	if cfg.DatabaseMigrateURL != "" {
+		if err := postgres.Migrate(ctx, cfg.DatabaseMigrateURL); err != nil {
+			return nil, fmt.Errorf("migrate database: %w", err)
+		}
+		logger.InfoContext(ctx, "database migrations applied")
+	}
+	db, err := postgres.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	return db, nil
+}
+
+func mountAPI(mux *http.ServeMux, cfg config.Config, db *postgres.DB, logger *slog.Logger) error {
+	if len(cfg.AllowedOrigins) == 0 {
+		logger.Warn("SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
+	}
+	hasher, err := password.NewHasher(password.DefaultParams)
+	if err != nil {
+		return fmt.Errorf("password hasher: %w", err)
+	}
+	credentials := postgres.NewCredentialStore(db)
+	sessions := session.NewManager(postgres.NewSessionStore(db), time.Now)
+	login := auth.NewService(auth.Deps{
+		Credentials: credentials,
+		Sessions:    sessions,
+		Hasher:      hasher,
+		IPLimiter:   ratelimit.New(loginAttemptsPerWindow, loginWindow, time.Now),
+		Now:         time.Now,
+	})
+	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies},
+		webapi.NewAuthHandler(login, sessions, credentials, logger))
+	return nil
+}
+
 // mountUI serves the embedded web UI; without a UI build the server runs API-only.
 func mountUI(ctx context.Context, mux *http.ServeMux, logger *slog.Logger) error {
 	assets, err := web.Assets()
@@ -104,8 +167,14 @@ func mountUI(ctx context.Context, mux *http.ServeMux, logger *slog.Logger) error
 	if err != nil {
 		return fmt.Errorf("prepare web UI: %w", err)
 	}
-	mux.Handle("GET /", ui)
+	registerUI(mux, ui)
 	return nil
+}
+
+// registerUI mounts the UI on "/" without a method: "GET /" would conflict with the API's
+// method-less prefix patterns. The UI handler itself only allows GET and HEAD.
+func registerUI(mux *http.ServeMux, ui http.Handler) {
+	mux.Handle("/", ui)
 }
 
 func newLogger(cfg config.Config, w io.Writer) *slog.Logger {

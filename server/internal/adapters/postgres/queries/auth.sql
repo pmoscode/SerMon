@@ -47,3 +47,6 @@ DELETE FROM sessions WHERE id = sqlc.arg(id);
 
 -- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = sqlc.arg(user_id);
+
+-- name: UserProfile :one
+SELECT email::text AS email, display_name::text AS display_name FROM auth_user_profile(sqlc.arg(user_id));

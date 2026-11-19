@@ -62,6 +62,14 @@ Zu entscheiden war:
 - **Namensregel:** RPC-Namen dürfen nicht mit Methoden der generierten Clients kollidieren.
   `Connect` kollidierte mit dem Konstruktor `connect()` des tonic-Clients; die Agent-RPC heißt deshalb `AgentService.Session`.
 
+### connect-go v1 statt v2 (Ergänzung M1-02, 2026-11-19)
+
+connect-go **v2** ist am 2026-10-07 erschienen und stellt die Go-API grundlegend um: keine Request-/Response-Wrapper
+mehr, Server und Transport neu aufgebaut. Das Protokoll auf der Leitung bleibt gleich. Wir bleiben vorerst bei
+**v1** (weiter unterstützt) und nutzen `connectrpc.com/validate` v0.7.0, die letzte Version für v1. Die Migration auf
+v2 ist eine eigene Aufgabe mit dem offiziellen Werkzeug `connect-go-v2-migrate`, sobald v2 im Ökosystem gereift ist.
+Renovate-PRs, die v2 einführen, werden nicht ungeprüft gemergt.
+
 ## Konsequenzen
 
 - **Positiv:**

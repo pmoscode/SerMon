@@ -74,6 +74,13 @@ func (f *fakeCredentials) Organizations(_ context.Context, user identity.UserID)
 	return f.orgs[user], nil
 }
 
+func (f *fakeCredentials) Profile(_ context.Context, user identity.UserID) (auth.Profile, bool, error) {
+	if user != alice {
+		return auth.Profile{}, false, nil
+	}
+	return auth.Profile{Email: "alice@example.org", DisplayName: "Alice"}, true, nil
+}
+
 type memSessions struct{ m map[string]session.Session }
 
 func (s *memSessions) Insert(_ context.Context, se session.Session) error {

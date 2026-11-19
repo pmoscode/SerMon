@@ -45,6 +45,12 @@ type Organization struct {
 	Name string
 }
 
+// Profile is the public part of a user identity.
+type Profile struct {
+	Email       string
+	DisplayName string
+}
+
 // CredentialRepository persists credentials and answers tenant-less login lookups.
 type CredentialRepository interface {
 	FindUserByEmail(ctx context.Context, email string) (identity.UserID, bool, error)
@@ -53,6 +59,7 @@ type CredentialRepository interface {
 	ResetFailedLogins(ctx context.Context, user identity.UserID) error
 	UpdatePasswordHash(ctx context.Context, user identity.UserID, hash string) error
 	Organizations(ctx context.Context, user identity.UserID) ([]Organization, error)
+	Profile(ctx context.Context, user identity.UserID) (Profile, bool, error)
 }
 
 // RateLimiter limits attempts per key (client IP).

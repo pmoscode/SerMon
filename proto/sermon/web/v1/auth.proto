@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+
+// AuthService handles local login sessions (KONZEPT §7). The session token travels only in the
+// HttpOnly cookie "__Host-sermon_session", never in message bodies.
+service AuthService {
+  // Login checks e-mail and password and sets the session cookie. All failures return
+  // UNAUTHENTICATED with the same message (no user enumeration); too many attempts from one
+  // client return RESOURCE_EXHAUSTED.
+  rpc Login(LoginRequest) returns (LoginResponse);
+  // Logout ends the current session and clears the cookie.
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  // GetSession describes the current session; UNAUTHENTICATED without a valid session.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// LoginRequest carries the credentials.
+message LoginRequest {
+  // email is the user's e-mail address (case-insensitive).
+  string email = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 320
+  }];
+  // password is the user's password.
+  string password = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 1024
+  }];
+}
+
+// LoginResponse describes the new session.
+message LoginResponse {
+  // session is the started session.
+  Session session = 1;
+}
+
+// LogoutRequest has no parameters.
+message LogoutRequest {}
+
+// LogoutResponse has no fields.
+message LogoutResponse {}
+
+// GetSessionRequest has no parameters.
+message GetSessionRequest {}
+
+// GetSessionResponse describes the current session.
+message GetSessionResponse {
+  // session is the current session.
+  Session session = 1;
+}
+
+// Session is the view of a login session for the UI.
+message Session {
+  // user_id is the UUID of the logged-in user.
+  string user_id = 1;
+  // email is the user's e-mail address.
+  string email = 2;
+  // display_name is the user's name.
+  string display_name = 3;
+  // active_organization_id is the organization the session acts in (empty without membership).
+  string active_organization_id = 4;
+  // organizations are all organizations the user is a member of.
+  repeated Organization organizations = 5;
+}
+
+// Organization is an organization the user belongs to.
+message Organization {
+  // id is the organization UUID.
+  string id = 1;
+  // name is the display name.
+  string name = 2;
+}

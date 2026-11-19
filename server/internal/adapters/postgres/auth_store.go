@@ -174,3 +174,15 @@ func orgPtr(org tenant.OrgID) *uuid.UUID {
 	id := uuid.UUID(org)
 	return &id
 }
+
+// Profile returns e-mail address and display name of a user (tenant-less, for the session view).
+func (s *CredentialStore) Profile(ctx context.Context, user identity.UserID) (auth.Profile, bool, error) {
+	row, err := s.db.withoutTenant().UserProfile(ctx, uuid.UUID(user))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return auth.Profile{}, false, nil
+	}
+	if err != nil {
+		return auth.Profile{}, false, fmt.Errorf("get user profile: %w", err)
+	}
+	return auth.Profile{Email: row.Email, DisplayName: row.DisplayName}, true, nil
+}

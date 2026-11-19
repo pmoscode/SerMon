@@ -3,10 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"log/slog"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/pmoscode/SerMon/server/internal/config"
+	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
 )
 
 func envSource(env map[string]string) config.Source {
@@ -72,4 +75,12 @@ func TestRun_StopsCleanlyWhenContextIsCancelled(t *testing.T) {
 			t.Errorf("log output %q does not contain %s", stdout.String(), msg)
 		}
 	}
+}
+
+// UI ("/") and the web API (method-less prefix patterns) must register on the same mux without
+// a conflict – ServeMux panics on conflicting patterns at startup.
+func TestRoutes_UIAndAPIDoNotConflict(_ *testing.T) {
+	mux := http.NewServeMux()
+	webapi.Mount(mux, webapi.Config{}, webapi.NewAuthHandler(nil, nil, nil, slog.New(slog.DiscardHandler)))
+	registerUI(mux, http.NotFoundHandler()) // panics on a pattern conflict
 }

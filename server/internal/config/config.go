@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +38,14 @@ type Config struct {
 	LogFormat LogFormat
 	// ShutdownTimeout bounds how long in-flight requests may take after a stop signal.
 	ShutdownTimeout time.Duration
+	// DatabaseURL connects as the unprivileged runtime role sermon_app (empty: no database, UI only).
+	DatabaseURL string
+	// DatabaseMigrateURL connects as the schema owner to apply migrations at startup (optional).
+	DatabaseMigrateURL string
+	// AllowedOrigins are the exact origins the web UI is served from (CSRF protection).
+	AllowedOrigins []string
+	// TrustedProxies may set X-Forwarded-For (reverse proxy networks).
+	TrustedProxies []netip.Prefix
 }
 
 // Source abstracts access to the environment and the file system for testability.
@@ -50,6 +60,10 @@ const (
 	envLogLevel        = "SERMON_LOG_LEVEL"
 	envLogFormat       = "SERMON_LOG_FORMAT"
 	envShutdownTimeout = "SERMON_SHUTDOWN_TIMEOUT"
+	envDatabaseURL     = "SERMON_DATABASE_URL"
+	envMigrateURL      = "SERMON_DATABASE_MIGRATE_URL"
+	envAllowedOrigins  = "SERMON_ALLOWED_ORIGINS"
+	envTrustedProxies  = "SERMON_TRUSTED_PROXIES"
 	fileSuffix         = "_FILE"
 )
 
@@ -71,6 +85,14 @@ func Load(src Source) (Config, error) {
 		LogLevel:        parseLevel(&l, l.string(envLogLevel, defaultLogLevel, nil)),
 		LogFormat:       parseFormat(&l, l.string(envLogFormat, defaultLogFormat, nil)),
 		ShutdownTimeout: parsePositiveDuration(&l, envShutdownTimeout, defaultShutdownTimeout),
+		DatabaseURL:     l.string(envDatabaseURL, "", nil),
+		// Validation messages must never echo the value: it contains a password.
+		DatabaseMigrateURL: l.string(envMigrateURL, "", nil),
+		AllowedOrigins:     parseOrigins(&l),
+		TrustedProxies:     parsePrefixes(&l),
+	}
+	if cfg.DatabaseMigrateURL != "" && cfg.DatabaseURL == "" {
+		l.fail(envMigrateURL, "requires %s (migrations run only together with the database connection)", envDatabaseURL)
 	}
 
 	if len(l.errs) > 0 {
@@ -170,4 +192,49 @@ func validateAddr(addr string) error {
 		return fmt.Errorf("invalid port %q", port)
 	}
 	return nil
+}
+
+func list(value string) []string {
+	var items []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func parseOrigins(l *loader) []string {
+	value, ok := l.raw(envAllowedOrigins)
+	if !ok {
+		return nil
+	}
+	var origins []string
+	for _, origin := range list(value) {
+		u, err := url.Parse(origin)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" ||
+			u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+			l.fail(envAllowedOrigins, "%q is not an origin (want scheme://host[:port])", origin)
+			continue
+		}
+		origins = append(origins, origin)
+	}
+	return origins
+}
+
+func parsePrefixes(l *loader) []netip.Prefix {
+	value, ok := l.raw(envTrustedProxies)
+	if !ok {
+		return nil
+	}
+	var prefixes []netip.Prefix
+	for _, item := range list(value) {
+		p, err := netip.ParsePrefix(item)
+		if err != nil {
+			l.fail(envTrustedProxies, "%q is not a CIDR prefix (e.g. 172.18.0.0/16)", item)
+			continue
+		}
+		prefixes = append(prefixes, p.Masked())
+	}
+	return prefixes
 }

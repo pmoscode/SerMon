@@ -226,3 +226,19 @@ func (q *Queries) UserOrganizations(ctx context.Context, userID uuid.UUID) ([]Us
 	}
 	return items, nil
 }
+
+const userProfile = `-- name: UserProfile :one
+SELECT email::text AS email, display_name::text AS display_name FROM auth_user_profile($1)
+`
+
+type UserProfileRow struct {
+	Email       string
+	DisplayName string
+}
+
+func (q *Queries) UserProfile(ctx context.Context, userID uuid.UUID) (UserProfileRow, error) {
+	row := q.db.QueryRow(ctx, userProfile, userID)
+	var i UserProfileRow
+	err := row.Scan(&i.Email, &i.DisplayName)
+	return i, err
+}

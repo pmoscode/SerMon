@@ -3,6 +3,7 @@ package httpserver
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -55,6 +56,41 @@ func New(handler http.Handler, logger *slog.Logger, shutdownTimeout time.Duratio
 	}
 }
 
+// Keepalive of long-lived streams (agent sessions): HTTP/2 pings detect dead connections.
+const (
+	streamPingInterval = 30 * time.Second
+	streamPingTimeout  = 15 * time.Second
+)
+
+// NewStreaming creates a server for long-lived bidirectional streams (the mTLS agent API):
+// no read/write deadlines (streams run for hours), HTTP/2 keepalive pings instead, and open
+// streams are cancelled when the shutdown starts so that draining does not wait for them.
+// With tlsConfig the server speaks TLS (HTTP/2 only); otherwise HTTP/1.1 and h2c (tests).
+func NewStreaming(ctx context.Context, handler http.Handler, logger *slog.Logger, shutdownTimeout time.Duration, tlsConfig *tls.Config) *Server {
+	// Streams outlive ctx's cancellation only until the shutdown cancels them.
+	base, cancelStreams := context.WithCancel(context.WithoutCancel(ctx))
+	protocols := new(http.Protocols)
+	if tlsConfig != nil {
+		protocols.SetHTTP2(true)
+	} else {
+		protocols.SetHTTP1(true)
+		protocols.SetUnencryptedHTTP2(true)
+	}
+	srv := &http.Server{
+		Handler:           handler,
+		TLSConfig:         tlsConfig,
+		Protocols:         protocols,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+		HTTP2:             &http.HTTP2Config{SendPingTimeout: streamPingInterval, PingTimeout: streamPingTimeout},
+		BaseContext:       func(net.Listener) context.Context { return base },
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
+	}
+	srv.RegisterOnShutdown(cancelStreams)
+	return &Server{srv: srv, logger: logger, shutdownTimeout: shutdownTimeout, onShutdown: func() {}}
+}
+
 // HTTPServer exposes the underlying server for inspection in tests.
 func (s *Server) HTTPServer() *http.Server {
 	return s.srv
@@ -64,7 +100,13 @@ func (s *Server) HTTPServer() *http.Server {
 // It returns nil after a clean shutdown and an error if serving or draining fails.
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	serveErr := make(chan error, 1)
-	go func() { serveErr <- s.srv.Serve(ln) }()
+	go func() {
+		if s.srv.TLSConfig != nil {
+			serveErr <- s.srv.ServeTLS(ln, "", "") // certificates come from TLSConfig
+			return
+		}
+		serveErr <- s.srv.Serve(ln)
+	}()
 
 	select {
 	case err := <-serveErr:

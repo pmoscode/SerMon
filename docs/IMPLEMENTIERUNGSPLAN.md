@@ -411,7 +411,25 @@ flowchart LR
 - **Skill:** `sermon-proto-change`
 - **Tests zuerst:** Gültiger Ablauf; ungültiger, abgelaufener oder aufgebrauchter Token; manipulierte CSR; Grenzwerte der Host-Fakten (protovalidate).
 
-#### ☐ M1-10 – Agent-API mit mTLS · S · M 🔒
+#### ☑ M1-10 – Agent-API mit mTLS · S · M 🔒
+> Erledigt:
+> - **Listener:** eigener Listener (`SERMON_AGENT_ADDR`), nur TLS 1.3 und HTTP/2, Keepalive per HTTP/2-Ping, keine
+>   Lese- und Schreib-Timeouts für lange Streams. Beim Shutdown enden offene Streams sofort.
+> - **Server-Zertifikat:** von der Agent-CA für `SERMON_AGENT_HOSTNAMES`, 7 Tage gültig, im Speicher nach 2/3 der
+>   Laufzeit erneuert (volle Rotation mit M1-11b).
+> - **Client-Zertifikat:** Pflicht. Bei jedem Handshake werden geprüft: Kette zur Agent-CA, Client-Auth-EKU, genau
+>   eine SPIFFE-Identität, aufgezeichnet und nicht gesperrt.
+> - **Identität:** Org und Node kommen nur aus dem Zertifikat in den Request-Kontext.
+> - **`AgentService.Session`:** `Hello` zuerst, danach Heartbeats. Höchstens eine aktive Session pro Node; eine zweite
+>   wird abgelehnt und als Security-Warnung geloggt.
+> - **Tests:**
+>   - Echte Handshakes: ohne Zertifikat, fremde CA, gesperrt und TLS 1.2 werden abgelehnt.
+>   - Sperre gilt auch für wiederaufgenommene TLS-Sessions: `VerifyConnection` statt `VerifyPeerCertificate`, dazu
+>     Session-Tickets aus. Den Befund lieferte gosec G123; die Gegenprobe zeigt die Umgehung über `DidResume`.
+>   - Gegenproben für Sperrprüfung und TLS-Version.
+>   - End-to-End mit der Server-Binary: Enrollment, mTLS-Session, Sperre greift bei der nächsten Verbindung.
+>
+> Ingest und Ack folgen mit M1-24, Node-Status mit M1-24/M1-30.
 - **Ziel:** Eigener Listener nur mit TLS 1.3; Client-Zertifikat Pflicht und gegen die Agent-CA validiert; Identität (Org, Node) aus der SAN in den Request-Kontext; Denylist bei jedem Verbindungsaufbau prüfen; Keepalive.
 - **Abhängig von:** M1-07, M1-09
 - **Tests zuerst:** Verbindung ohne, mit fremdem oder mit gesperrtem Zertifikat wird abgelehnt; Identität kommt aus dem Zertifikat, auch wenn der Payload eine andere enthält.

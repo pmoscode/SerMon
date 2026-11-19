@@ -29,6 +29,23 @@ const adminPassword = "first admin passphrase 2026" // betterleaks:allow
 
 var tokenPattern = regexp.MustCompile(`(?m)^\s+([A-Za-z0-9_-]{43})$`)
 
+// keysDir holds the master key file shared by all tests of this process: they use one
+// database, and the agent CA stored there can only be opened with the key that sealed it.
+var keysDir string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "sermon-master-keys-")
+	if err != nil {
+		panic(err)
+	}
+	keysDir = dir
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
+
+func sharedKeysFile() string { return filepath.Join(keysDir, "master_keys") }
+
 type syncBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer
@@ -73,9 +90,9 @@ func runInitOnce(t *testing.T, keysFile string) (int, string, string) {
 }
 
 func TestFirstInstallation_EndToEnd(t *testing.T) {
-	keysFile := filepath.Join(t.TempDir(), "master_keys")
+	keysFile := sharedKeysFile()
 
-	// 1. init creates the key and prints a token; a second run keeps the key and replaces the token.
+	// 1. init creates (or reuses) the key and prints a token; a second run keeps the key and replaces the token.
 	code, out1, errOut := runInitOnce(t, keysFile)
 	if code != exitOK || !tokenPattern.MatchString(out1) {
 		t.Fatalf("init = %d\nstdout %s\nstderr %s", code, out1, errOut)

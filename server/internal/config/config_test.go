@@ -253,3 +253,46 @@ func TestLoad_ErrorsNeverContainDatabaseCredentials(t *testing.T) {
 		t.Errorf("error %v must not contain the password", err)
 	}
 }
+
+func TestLoad_AgentAPI(t *testing.T) {
+	line := masterKeyLine(t)
+	base := map[string]string{"SERMON_DATABASE_URL": dbURL("sermon_app"), "SERMON_MASTER_KEYS": line}
+	with := func(extra map[string]string) map[string]string {
+		env := map[string]string{}
+		for k, v := range base {
+			env[k] = v
+		}
+		for k, v := range extra {
+			env[k] = v
+		}
+		return env
+	}
+
+	cfg, err := config.Load(fakeSource(with(map[string]string{
+		"SERMON_AGENT_ADDR": ":8443", "SERMON_AGENT_HOSTNAMES": "agents.example.org, 192.0.2.10",
+	}), nil))
+	if err != nil || cfg.AgentAddr != ":8443" || !reflect.DeepEqual(cfg.AgentHostnames, []string{"agents.example.org", "192.0.2.10"}) {
+		t.Errorf("Load() = %q %v, %v", cfg.AgentAddr, cfg.AgentHostnames, err)
+	}
+	if _, err := config.Load(fakeSource(with(map[string]string{
+		"SERMON_HTTP_ADDR": "127.0.0.1:0", "SERMON_AGENT_ADDR": "127.0.0.1:0", "SERMON_AGENT_HOSTNAMES": "localhost",
+	}), nil)); err != nil {
+		t.Errorf("two random ports do not conflict: %v", err)
+	}
+	if cfg, err := config.Load(fakeSource(base, nil)); err != nil || cfg.AgentAddr != "" {
+		t.Errorf("without SERMON_AGENT_ADDR the agent API is off: %q, %v", cfg.AgentAddr, err)
+	}
+
+	invalid := map[string]map[string]string{
+		"no hostnames":     with(map[string]string{"SERMON_AGENT_ADDR": ":8443"}),
+		"bad address":      with(map[string]string{"SERMON_AGENT_ADDR": "nope", "SERMON_AGENT_HOSTNAMES": "a.example.org"}),
+		"bad hostname":     with(map[string]string{"SERMON_AGENT_ADDR": ":8443", "SERMON_AGENT_HOSTNAMES": "under_score!.example"}),
+		"without database": {"SERMON_AGENT_ADDR": ":8443", "SERMON_AGENT_HOSTNAMES": "a.example.org"},
+		"same as http":     with(map[string]string{"SERMON_AGENT_ADDR": ":8080", "SERMON_AGENT_HOSTNAMES": "a.example.org"}),
+	}
+	for name, env := range invalid {
+		if _, err := config.Load(fakeSource(env, nil)); err == nil {
+			t.Errorf("%s: Load() error = nil", name)
+		}
+	}
+}

@@ -48,6 +48,10 @@ type Config struct {
 	AllowedOrigins []string
 	// TrustedProxies may set X-Forwarded-For (reverse proxy networks).
 	TrustedProxies []netip.Prefix
+	// AgentAddr is the listen address of the mTLS agent API (empty: agent API off).
+	AgentAddr string
+	// AgentHostnames are the DNS names or IPs agents use to reach the agent API (server certificate).
+	AgentHostnames []string
 	// MasterKeys encrypt secrets at rest (key file "<id>:<base64>" per line, newest first).
 	// Required together with the database; create the file with "sermon-server init".
 	MasterKeys *secrets.Box
@@ -70,6 +74,8 @@ const (
 	envAllowedOrigins  = "SERMON_ALLOWED_ORIGINS"
 	envTrustedProxies  = "SERMON_TRUSTED_PROXIES"
 	envMasterKeys      = "SERMON_MASTER_KEYS"
+	envAgentAddr       = "SERMON_AGENT_ADDR"
+	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
 	fileSuffix         = "_FILE"
 )
 
@@ -97,6 +103,18 @@ func Load(src Source) (Config, error) {
 		AllowedOrigins:     parseOrigins(&l),
 		TrustedProxies:     parsePrefixes(&l),
 		MasterKeys:         parseMasterKeys(&l),
+		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
+		AgentHostnames:     parseHostnames(&l),
+	}
+	if cfg.AgentAddr != "" {
+		switch {
+		case len(cfg.AgentHostnames) == 0:
+			l.fail(envAgentHostnames, "required with %s (names in the agent API's server certificate)", envAgentAddr)
+		case cfg.DatabaseURL == "":
+			l.fail(envAgentAddr, "requires %s (the agent CA lives in the database)", envDatabaseURL)
+		case cfg.AgentAddr == cfg.HTTPAddr && !strings.HasSuffix(cfg.AgentAddr, ":0"): // port 0 = random port each
+			l.fail(envAgentAddr, "must differ from %s", envHTTPAddr)
+		}
 	}
 	if cfg.DatabaseURL != "" && cfg.MasterKeys == nil {
 		l.fail(envMasterKeys, "required together with %s (set %s_FILE; create the file with \"sermon-server init\")", envDatabaseURL, envMasterKeys)
@@ -154,6 +172,42 @@ func (l *loader) string(key, fallback string, validate func(string) error) strin
 		}
 	}
 	return value
+}
+
+// parseHostnames reads DNS names (RFC 1123 labels) or IP addresses.
+func parseHostnames(l *loader) []string {
+	value, ok := l.raw(envAgentHostnames)
+	if !ok {
+		return nil
+	}
+	var hosts []string
+	for _, h := range list(value) {
+		if net.ParseIP(h) == nil && !validDNSName(h) {
+			l.fail(envAgentHostnames, "invalid host name or IP %q", h)
+			continue
+		}
+		hosts = append(hosts, strings.ToLower(h))
+	}
+	return hosts
+}
+
+func validDNSName(name string) bool {
+	if len(name) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(name, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		if strings.ContainsFunc(label, func(r rune) bool { return !isLabelRune(r) }) {
+			return false
+		}
+	}
+	return true
+}
+
+func isLabelRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-'
 }
 
 // parseMasterKeys reads the key file. Errors never contain key material (secrets.ParseKeys).

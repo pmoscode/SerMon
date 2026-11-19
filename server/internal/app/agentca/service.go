@@ -5,6 +5,7 @@ package agentca
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
@@ -124,6 +125,16 @@ func (s *Service) SignAgentCertificate(org tenant.OrgID, csrDER []byte, node ide
 	}
 	record := CertificateRecord{Serial: issued.Serial, Org: org, Node: node, NotBefore: issued.NotBefore, NotAfter: issued.NotAfter}
 	return issued, record, nil
+}
+
+// IssueServerCertificate issues a fresh server certificate for the agent API (not recorded:
+// it identifies the server, not an agent).
+func (s *Service) IssueServerCertificate(hosts []string) (tls.Certificate, error) {
+	cert, err := s.ca.IssueServerCertificate(hosts, s.now())
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("issue server certificate: %w", err)
+	}
+	return cert, nil
 }
 
 // Revoke makes the certificate unusable immediately.

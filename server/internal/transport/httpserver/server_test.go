@@ -188,3 +188,44 @@ func TestServer_AcceptsUnencryptedHTTP2(t *testing.T) {
 		t.Errorf("request protocol = %q, want HTTP/2.0 (h2c)", proto)
 	}
 }
+
+// Long-lived agent streams must not block a graceful shutdown (KONZEPT §6, M1-10).
+func TestStreamingServer_EndsOpenStreamsOnShutdown(t *testing.T) {
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		close(started)
+		<-r.Context().Done() // a stream that only ends when the server says so
+	})
+	srv := httpserver.NewStreaming(context.Background(), handler, slog.New(slog.DiscardHandler), 5*time.Second, nil)
+	if srv.HTTPServer().WriteTimeout != 0 || srv.HTTPServer().ReadTimeout != 0 || srv.HTTPServer().HTTP2 == nil || srv.HTTPServer().HTTP2.SendPingTimeout == 0 {
+		t.Errorf("streaming server needs no read/write timeouts but HTTP/2 keepalive pings: %+v", srv.HTTPServer())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx, ln) }()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+ln.Addr().String()+"/", nil)
+	go func() {
+		if res, err := http.DefaultClient.Do(req); err == nil {
+			_, _ = io.Copy(io.Discard, res.Body)
+			_ = res.Body.Close()
+		}
+	}()
+	<-started
+	begin := time.Now()
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("Serve() = %v, want a clean shutdown", err)
+	}
+	if took := time.Since(begin); took > 2*time.Second {
+		t.Errorf("shutdown took %v; open streams must end right away", took)
+	}
+}

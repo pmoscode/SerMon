@@ -26,6 +26,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
+	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
 	"github.com/pmoscode/SerMon/server/internal/transport/httpserver"
 	"github.com/pmoscode/SerMon/server/internal/transport/spa"
@@ -93,6 +94,7 @@ const (
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	mux := http.NewServeMux()
 	var checks []health.Check
+	var servers []func(context.Context) error
 	if cfg.DatabaseURL != "" {
 		db, err := openDatabase(ctx, cfg, logger)
 		if err != nil {
@@ -106,6 +108,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		if err := mountAPI(ctx, mux, cfg, db, ca, logger); err != nil {
 			return err
+		}
+		if cfg.AgentAddr != "" {
+			agentServer, err := newAgentServer(ctx, cfg, ca, logger)
+			if err != nil {
+				return err
+			}
+			servers = append(servers, agentServer)
 		}
 	} else {
 		logger.WarnContext(ctx, "no database configured (SERMON_DATABASE_URL) – serving UI and health endpoints only")
@@ -121,12 +130,47 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("listen on %s: %w", cfg.HTTPAddr, err)
 	}
 	logger.InfoContext(ctx, "listening", "addr", ln.Addr().String(), "version", version)
+	web := httpserver.New(mux, logger, cfg.ShutdownTimeout, healthHandler.SetDraining)
+	servers = append(servers, func(ctx context.Context) error { return web.Serve(ctx, ln) })
+	return runAll(ctx, servers)
+}
 
-	srv := httpserver.New(mux, logger, cfg.ShutdownTimeout, healthHandler.SetDraining)
-	if err := srv.Serve(ctx, ln); err != nil {
-		return fmt.Errorf("serve: %w", err)
+// newAgentServer prepares the mTLS agent API (M1-10) on its own listener.
+func newAgentServer(ctx context.Context, cfg config.Config, ca *agentca.Service, logger *slog.Logger) (func(context.Context) error, error) {
+	tlsConfig, err := agentapi.TLSConfig(ca, cfg.AgentHostnames, logger) //nolint:contextcheck // TLS callbacks have no context
+	if err != nil {
+		return nil, fmt.Errorf("agent API TLS: %w", err)
 	}
-	return nil
+	mux := http.NewServeMux()
+	agentapi.Mount(mux, agentapi.NewSessionHandler(agentapi.NewSessions(), logger))
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.AgentAddr)
+	if err != nil {
+		return nil, fmt.Errorf("listen on %s: %w", cfg.AgentAddr, err)
+	}
+	logger.InfoContext(ctx, "agent API listening", "addr", ln.Addr().String(), "hosts", cfg.AgentHostnames)
+	srv := httpserver.NewStreaming(ctx, mux, logger, cfg.ShutdownTimeout, tlsConfig)
+	return func(ctx context.Context) error { return srv.Serve(ctx, ln) }, nil
+}
+
+// runAll runs the servers until ctx ends or one of them fails; then all of them stop.
+func runAll(ctx context.Context, servers []func(context.Context) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	errs := make(chan error, len(servers))
+	for _, run := range servers {
+		go func() {
+			err := run(ctx)
+			cancel() // one server stopping stops the others
+			errs <- err
+		}()
+	}
+	var first error
+	for range servers {
+		if err := <-errs; err != nil && first == nil {
+			first = fmt.Errorf("serve: %w", err)
+		}
+	}
+	return first
 }
 
 func openDatabase(ctx context.Context, cfg config.Config, logger *slog.Logger) (*postgres.DB, error) {

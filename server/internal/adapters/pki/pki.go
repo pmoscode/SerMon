@@ -11,12 +11,14 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -30,8 +32,11 @@ import (
 // Lifetimes (KONZEPT §6).
 const (
 	AgentCertificateLifetime = 30 * 24 * time.Hour
-	intermediateLifetime     = 2 * 365 * 24 * time.Hour
-	rootLifetime             = 10 * 365 * 24 * time.Hour
+	// ServerCertificateLifetime is the lifetime of the agent API's server certificate; it is
+	// renewed automatically in memory (KONZEPT §6 "Rotation auf Server-Seite").
+	ServerCertificateLifetime = 7 * 24 * time.Hour
+	intermediateLifetime      = 2 * 365 * 24 * time.Hour
+	rootLifetime              = 10 * 365 * 24 * time.Hour
 	// clockSkew backdates NotBefore so agents with a slightly late clock accept new certificates.
 	clockSkew   = 5 * time.Minute
 	serialBytes = 16
@@ -168,6 +173,44 @@ func (a *Authority) SignAgentCSR(csrDER []byte, org tenant.OrgID, node identity.
 		return Issued{}, err
 	}
 	return Issued{DER: cert.Raw, Serial: hex.EncodeToString(serial.Bytes()), NotBefore: cert.NotBefore, NotAfter: cert.NotAfter}, nil
+}
+
+// IssueServerCertificate issues a TLS server certificate for the agent API with a fresh P-256
+// key. hosts are DNS names or IP addresses the agents connect to. The certificate carries no
+// agent identity (no URI SAN) and is only valid for server authentication.
+func (a *Authority) IssueServerCertificate(hosts []string, now time.Time) (tls.Certificate, error) {
+	if len(hosts) == 0 {
+		return tls.Certificate{}, errors.New("server certificate needs at least one host")
+	}
+	key, err := newKey()
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	serial, err := randomSerial()
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	template := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{Organization: []string{"SerMon"}, CommonName: "SerMon Agent API"},
+		NotBefore:             now.Add(-clockSkew),
+		NotAfter:              now.Add(ServerCertificateLifetime),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+	for _, h := range hosts {
+		if ip := net.ParseIP(h); ip != nil {
+			template.IPAddresses = append(template.IPAddresses, ip)
+		} else {
+			template.DNSNames = append(template.DNSNames, h)
+		}
+	}
+	cert, err := createCertificate(template, a.inter, &key.PublicKey, a.interKey)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return tls.Certificate{Certificate: [][]byte{cert.Raw, a.inter.Raw}, PrivateKey: key, Leaf: cert}, nil
 }
 
 // AgentIdentity extracts organization and node from a verified agent certificate. It accepts

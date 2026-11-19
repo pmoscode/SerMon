@@ -54,6 +54,7 @@ Wichtige Variablen:
 - `SERMON_ALLOWED_ORIGINS` (exakte Origins der UI; leer heißt: alle schreibenden API-Aufrufe werden abgelehnt)
 - `SERMON_TRUSTED_PROXIES` (CIDRs, die `X-Forwarded-For` setzen dürfen)
 - `SERMON_MASTER_KEYS_FILE` (Pflicht mit DB; anlegen mit `sermon-server init --master-keys-file PFAD`, nie ersetzen)
+- `SERMON_AGENT_ADDR` + `SERMON_AGENT_HOSTNAMES` (mTLS-Agent-API; leer heißt aus; `just dev`: `127.0.0.1:8443`)
 
 Erstinstallation: `sermon-server init` (Schlüssel, Migrationen, Agent-CA, Setup-Token). Solange die Einrichtung offen
 ist, steht ein Setup-Token im Server-Log (`just dev`: Ausgabe von `sermon-server`); damit legt `SetupService` den

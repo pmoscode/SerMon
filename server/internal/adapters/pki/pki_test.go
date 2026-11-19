@@ -299,3 +299,38 @@ func TestLoadAuthority_RejectsBrokenMaterial(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueServerCertificate_VerifiesForTheHostsAndOnlyForServerAuth(t *testing.T) {
+	ca := newCA(t)
+	cert, err := ca.IssueServerCertificate([]string{"agents.example.org", "192.0.2.10"}, now)
+	if err != nil {
+		t.Fatalf("IssueServerCertificate() error = %v", err)
+	}
+	leaf := cert.Leaf
+	roots, inters := x509.NewCertPool(), x509.NewCertPool()
+	roots.AddCert(ca.Root())
+	inters.AddCert(ca.Intermediate())
+	for _, host := range []string{"agents.example.org", "192.0.2.10"} {
+		if _, err := leaf.Verify(x509.VerifyOptions{
+			DNSName: host, Roots: roots, Intermediates: inters, CurrentTime: now,
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		}); err != nil {
+			t.Errorf("verify for %s: %v", host, err)
+		}
+	}
+	if _, err := leaf.Verify(x509.VerifyOptions{DNSName: "other.example.org", Roots: roots, Intermediates: inters, CurrentTime: now}); err == nil {
+		t.Error("certificate must not be valid for other hosts")
+	}
+	if len(leaf.ExtKeyUsage) != 1 || leaf.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth || len(leaf.URIs) != 0 {
+		t.Errorf("EKU %v, URIs %v: want server auth only and no agent identity", leaf.ExtKeyUsage, leaf.URIs)
+	}
+	if got := leaf.NotAfter.Sub(now); got > pki.ServerCertificateLifetime || got < pki.ServerCertificateLifetime-time.Hour {
+		t.Errorf("lifetime = %v, want about %v", got, pki.ServerCertificateLifetime)
+	}
+	if len(cert.Certificate) != 2 {
+		t.Errorf("chain has %d certificates, want leaf and intermediate", len(cert.Certificate))
+	}
+	if _, err := ca.IssueServerCertificate(nil, now); err == nil {
+		t.Error("a server certificate needs at least one host")
+	}
+}

@@ -374,3 +374,15 @@ func TestTrustChain_ContainsIntermediateAndRoot(t *testing.T) {
 		t.Error("intermediate must be signed by the trust anchor")
 	}
 }
+
+func TestIssueServerCertificate_UsesTheServiceClock(t *testing.T) {
+	now := t0
+	svc, _ := agentca.Bootstrap(context.Background(), newFakeStore(), newBox(t), clockAt(&now))
+	cert, err := svc.IssueServerCertificate([]string{"agents.example.org"})
+	if err != nil || !cert.Leaf.NotAfter.Equal(t0.Add(pki.ServerCertificateLifetime)) {
+		t.Errorf("IssueServerCertificate() = %v, %v", cert.Leaf, err)
+	}
+	if _, err := svc.IssueServerCertificate(nil); err == nil {
+		t.Error("no hosts must fail")
+	}
+}

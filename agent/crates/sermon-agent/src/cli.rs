@@ -34,6 +34,8 @@ pub enum Command {
     Run,
     /// Register this host with the server using an enrollment token from the UI.
     Enroll(EnrollArgs),
+    /// Run the collectors locally and print the samples (nothing is sent).
+    Collect(CollectArgs),
     /// Remove the local identity and buffered data of this agent.
     Uninstall(UninstallArgs),
     /// Print the version.
@@ -61,6 +63,14 @@ pub struct EnrollArgs {
     /// Replace an existing enrollment of this host.
     #[arg(long)]
     pub force: bool,
+}
+
+/// Arguments of `collect`.
+#[derive(Debug, Args)]
+pub struct CollectArgs {
+    /// Collect for this many seconds (at least 2, rates need two runs).
+    #[arg(long, default_value_t = 2)]
+    pub seconds: u32,
 }
 
 /// Arguments of `uninstall`.

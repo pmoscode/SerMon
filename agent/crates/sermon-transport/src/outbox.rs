@@ -51,6 +51,31 @@ impl Outbox {
         Ok(seq)
     }
 
+    /// Buffers the samples of one tick as metric batches (at most [`MAX_SAMPLES_PER_BATCH`] each);
+    /// returns the sequence numbers. No samples, no batch.
+    ///
+    /// # Errors
+    ///
+    /// [`WalError`] if a batch can't be written.
+    pub fn push_samples(
+        &self,
+        samples: &[sermon_core::Sample],
+        collected_at: SystemTime,
+    ) -> Result<Vec<Seq>, WalError> {
+        samples
+            .chunks(MAX_SAMPLES_PER_BATCH)
+            .map(|chunk| {
+                self.push_metrics(
+                    MetricBatch {
+                        collected_at: Some(collected_at.into()),
+                        samples: chunk.iter().map(Into::into).collect(),
+                    },
+                    collected_at,
+                )
+            })
+            .collect()
+    }
+
     /// Housekeeping, called periodically: fsync and the age limit (also while disconnected).
     ///
     /// # Errors
@@ -94,6 +119,9 @@ impl Outbox {
     }
 }
 
+/// Largest number of samples in one batch (protocol limit).
+pub const MAX_SAMPLES_PER_BATCH: usize = 2000;
+
 /// Bytes read from the log at once (several batches, bounded memory).
 const READ_BYTES: u64 = 1024 * 1024;
 
@@ -122,6 +150,29 @@ mod tests {
                 value: Some(sample::Value::IntValue(3)),
             }],
         }
+    }
+
+    #[test]
+    fn samples_are_split_into_batches_within_the_protocol_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let (wal, _) = Wal::open(dir.path(), WalConfig::default(), now).unwrap();
+        let outbox = Outbox::new(wal);
+        let samples = vec![sermon_core::Sample::int("sermon_x", 1); MAX_SAMPLES_PER_BATCH + 1];
+
+        let seqs = outbox.push_samples(&samples, now).unwrap();
+        assert_eq!(outbox.push_samples(&[], now).unwrap(), Vec::new());
+
+        assert_eq!(seqs.len(), 2);
+        let records = outbox.read_after(Seq::default(), 10).unwrap();
+        let sizes: Vec<usize> = records
+            .iter()
+            .map(|record| match batch_for(record).unwrap().content {
+                Some(batch::Content::Metrics(metrics)) => metrics.samples.len(),
+                None => 0,
+            })
+            .collect();
+        assert_eq!(sizes, vec![MAX_SAMPLES_PER_BATCH, 1]);
     }
 
     #[tokio::test]

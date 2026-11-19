@@ -122,6 +122,29 @@ impl ProcRoot {
         read_bounded(&self.etc(relative)?)
     }
 
+    /// Names in the directory `proc/<relative>` (`""` for `proc/` itself), sorted.
+    ///
+    /// # Errors
+    ///
+    /// [`ProcError::InvalidPath`] for an invalid path, [`ProcError::Io`] if it can't be listed.
+    pub fn list_proc(&self, relative: &str) -> Result<Vec<String>, ProcError> {
+        let dir = if relative.is_empty() {
+            self.root.join("proc")
+        } else {
+            self.proc(relative)?
+        };
+        list_dir(&dir)
+    }
+
+    /// Names in the directory `sys/<relative>`, sorted.
+    ///
+    /// # Errors
+    ///
+    /// [`ProcError::InvalidPath`] for an invalid path, [`ProcError::Io`] if it can't be listed.
+    pub fn list_sys(&self, relative: &str) -> Result<Vec<String>, ProcError> {
+        list_dir(&self.sys(relative)?)
+    }
+
     fn below(&self, area: &str, relative: &str) -> Result<PathBuf, ProcError> {
         let path = Path::new(relative);
         let only_names = path
@@ -132,6 +155,22 @@ impl ProcRoot {
         }
         Ok(self.root.join(area).join(path))
     }
+}
+
+/// Names of the entries in `dir` (non-UTF-8 names are skipped), sorted.
+fn list_dir(dir: &Path) -> Result<Vec<String>, ProcError> {
+    let io_error = |source| ProcError::Io {
+        path: dir.to_owned(),
+        source,
+    };
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(io_error)? {
+        if let Some(name) = entry.map_err(io_error)?.file_name().to_str() {
+            names.push(name.to_owned());
+        }
+    }
+    names.sort();
+    Ok(names)
 }
 
 /// Reads a text file of at most [`MAX_FILE_SIZE`] bytes; invalid UTF-8 is replaced.
@@ -253,6 +292,24 @@ mod tests {
             Err(ProcError::TooLarge { .. })
         ));
         assert_eq!(root.read_proc("exact").unwrap().len(), limit);
+    }
+
+    #[test]
+    fn lists_directories_sorted() {
+        let (dir, root) = fixture();
+        fs::create_dir_all(dir.path().join("proc/42")).unwrap();
+        fs::create_dir_all(dir.path().join("proc/7")).unwrap();
+
+        assert_eq!(
+            root.list_proc("").unwrap(),
+            vec!["42", "7", "loadavg", "net"]
+        );
+        assert_eq!(root.list_sys("class/net").unwrap(), vec!["eth0"]);
+        assert!(root.list_sys("class/missing").unwrap_err().is_not_found());
+        assert!(matches!(
+            root.list_proc("../x"),
+            Err(ProcError::InvalidPath(_))
+        ));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Conversions between domain types (`sermon-core`) and protocol messages.
 
-use sermon_core::{Architecture, HostFacts};
+use sermon_core::{Architecture, HostFacts, Sample, Value};
 
 use crate::proto::agent::v1 as pb;
 
@@ -28,11 +28,39 @@ impl From<Architecture> for pb::Architecture {
     }
 }
 
+impl From<&Sample> for pb::Sample {
+    fn from(sample: &Sample) -> Self {
+        Self {
+            metric: sample.metric.to_owned(),
+            labels: sample
+                .labels
+                .iter()
+                .map(|(name, value)| ((*name).to_owned(), value.clone()))
+                .collect(),
+            value: Some(match sample.value {
+                Value::Int(value) => pb::sample::Value::IntValue(value),
+                Value::Float(value) => pb::sample::Value::DoubleValue(value),
+            }),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use sermon_core::MachineId;
 
     use super::*;
+
+    #[test]
+    fn samples_keep_name_labels_and_value_type() {
+        let int = pb::Sample::from(&Sample::int("sermon_x", 7).label("cpu", "0"));
+        let float = pb::Sample::from(&Sample::float("sermon_y", 0.5));
+
+        assert_eq!(int.metric, "sermon_x");
+        assert_eq!(int.labels.get("cpu").map(String::as_str), Some("0"));
+        assert_eq!(int.value, Some(pb::sample::Value::IntValue(7)));
+        assert_eq!(float.value, Some(pb::sample::Value::DoubleValue(0.5)));
+    }
 
     #[test]
     fn host_facts_are_copied_field_by_field() {

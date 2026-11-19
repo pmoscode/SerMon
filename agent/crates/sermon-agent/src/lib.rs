@@ -8,6 +8,7 @@ pub mod config;
 pub mod enroll;
 pub mod identity;
 pub mod logging;
+pub mod scheduler;
 pub mod state;
 
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use std::time::Duration;
 
 use anyhow::{Context, bail};
 use sermon_buffer::{Wal, WalConfig};
+use sermon_collectors::default_collectors;
 use sermon_collectors::host::read_host_facts;
 use sermon_core::{Clock, ProcRoot, SystemClock};
 use sermon_transport::outbox::Outbox;
@@ -24,6 +26,7 @@ use tokio_util::sync::CancellationToken;
 use crate::cli::{Cli, Command, UninstallArgs};
 use crate::config::AgentConfig;
 use crate::identity::FileIdentity;
+use crate::scheduler::Scheduler;
 use crate::state::StateLayout;
 
 /// Name and version as printed by `--version`.
@@ -48,6 +51,10 @@ pub fn execute(cli: Cli) -> anyhow::Result<()> {
         Command::Enroll(args) => {
             let config = AgentConfig::load(&cli.config)?;
             enroll::enroll(&config, &args)
+        }
+        Command::Collect(args) => {
+            let config = AgentConfig::load(&cli.config)?;
+            collect(&config, args.seconds)
         }
         Command::Uninstall(args) => {
             let config = AgentConfig::load(&cli.config)?;
@@ -74,6 +81,11 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         .context("cannot open the buffer")?;
     let outbox = Outbox::new(wal);
     let host_root = ProcRoot::new(&config.host_root);
+    let scheduler = Scheduler::new(
+        default_collectors(),
+        host_root.clone(),
+        scheduler::SERIES_LIMIT,
+    );
     let facts: FactsSource = Arc::new(move || Ok(read_host_facts(&host_root)?));
     let transport = Transport::new(
         TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
@@ -104,8 +116,15 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             );
         }
         let maintenance = tokio::spawn(maintain(outbox.clone(), clock.clone(), shutdown.clone()));
+        let collection = tokio::spawn(scheduler::run(
+            scheduler,
+            outbox.clone(),
+            clock.clone(),
+            shutdown.clone(),
+        ));
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
+        collection.await.context("collection task failed")?;
         if let Err(error) = outbox.maintain(clock.now()) {
             tracing::warn!("cannot flush the buffer: {error}");
         }
@@ -129,6 +148,47 @@ async fn maintain(outbox: Outbox, clock: Arc<dyn Clock>, shutdown: CancellationT
             }
         }
     }
+}
+
+/// Runs the collectors for `seconds` without sending anything and prints the last samples
+/// (troubleshooting; also used to measure the resource budget).
+///
+/// # Errors
+///
+/// If the runtime can't be started.
+pub fn collect(config: &AgentConfig, seconds: u32) -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("cannot start the async runtime")?;
+    let clock = SystemClock::new();
+    let mut scheduler = Scheduler::new(
+        default_collectors(),
+        ProcRoot::new(&config.host_root),
+        scheduler::SERIES_LIMIT,
+    );
+    let samples = runtime.block_on(async {
+        let mut interval = tokio::time::interval(scheduler::TICK);
+        let mut samples = Vec::new();
+        for _ in 0..seconds.max(2) {
+            interval.tick().await;
+            samples = scheduler.tick(clock.monotonic());
+        }
+        samples
+    });
+    for sample in samples {
+        let labels: Vec<String> = sample
+            .labels
+            .iter()
+            .map(|(name, value)| format!("{name}={value:?}"))
+            .collect();
+        let value = match sample.value {
+            sermon_core::Value::Int(value) => value.to_string(),
+            sermon_core::Value::Float(value) => value.to_string(),
+        };
+        println!("{}{{{}}} {value}", sample.metric, labels.join(","));
+    }
+    Ok(())
 }
 
 /// Cancels `shutdown` on SIGTERM (systemd stop) or SIGINT (Ctrl+C).

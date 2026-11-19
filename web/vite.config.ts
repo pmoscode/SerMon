@@ -4,6 +4,8 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { fileURLToPath } from 'node:url';
+import { helpPlugin } from './scripts/help.js';
 
 export default defineConfig({
 	server: {
@@ -25,6 +27,8 @@ export default defineConfig({
 	},
 	plugins: [
 		tailwindcss(),
+		// Help texts from docs/help/<locale> (KONZEPT §17): virtual:sermon-help/<locale>.
+		helpPlugin({ root: fileURLToPath(new URL('../docs/help', import.meta.url)) }),
 		sveltekit({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.

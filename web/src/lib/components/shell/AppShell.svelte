@@ -1,13 +1,17 @@
 <script lang="ts">
+	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import HelpPanel from '#lib/components/help/HelpPanel.svelte';
 	import LanguageSwitcher from '#lib/components/LanguageSwitcher.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { pageHelp } from '#lib/help/pages.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { helpState } from '#lib/stores/help.svelte.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
 	import OrgSwitcher from './OrgSwitcher.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
@@ -16,7 +20,22 @@
 
 	const nav = [{ href: resolve('/(app)/fleet'), icon: Server, label: () => m.nav_fleet() }];
 	const name = $derived(sessionState.current?.displayName || sessionState.current?.email || '');
+	const helpTopic = $derived(page.route.id ? pageHelp[page.route.id] : undefined);
+
+	/** "?" opens the help of the page (KONZEPT §17), except while typing. */
+	function onKeydown(event: KeyboardEvent) {
+		if (event.key !== '?' || event.ctrlKey || event.metaKey || event.altKey || !helpTopic) return;
+		const target = event.target as HTMLElement | null;
+		if (
+			target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
+		)
+			return;
+		event.preventDefault();
+		helpState.open(helpTopic);
+	}
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <a
 	href="#content"
@@ -50,6 +69,18 @@
 					{m.command_palette()}
 					<kbd class="font-mono text-xs text-muted-foreground">⌘K</kbd>
 				</Button>
+				{#if helpTopic}
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						aria-label={m.help_page()}
+						title="{m.help_page()} (?)"
+						aria-keyshortcuts="?"
+						onclick={() => helpState.open(helpTopic)}
+					>
+						<CircleQuestionMark aria-hidden="true" />
+					</Button>
+				{/if}
 				<ThemeToggle />
 				<LanguageSwitcher />
 				<span class="max-w-40 truncate text-sm text-muted-foreground" title={m.user_menu({ name })}>
@@ -66,3 +97,5 @@
 		{@render children()}
 	</main>
 </div>
+
+<HelpPanel />

@@ -42,9 +42,26 @@ type PkiAuthority struct {
 	CreatedAt             time.Time
 }
 
+type Session struct {
+	ID         string
+	UserID     uuid.UUID
+	OrgID      *uuid.UUID
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	StepUpAt   time.Time
+}
+
 type User struct {
 	ID          uuid.UUID
 	Email       string
 	DisplayName string
 	CreatedAt   time.Time
+}
+
+type UserCredential struct {
+	UserID            uuid.UUID
+	PasswordHash      string
+	PasswordChangedAt time.Time
+	FailedAttempts    int32
+	LockedUntil       *time.Time
 }

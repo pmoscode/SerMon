@@ -119,15 +119,8 @@ func TestAgentCAStore_UsableHonorsRevocationAndValidity(t *testing.T) {
 func TestAgentCAStore_RevocationCheckWorksWithANonSuperuserOwner(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
-	ownerExec(t, f.db.OwnerDSN, "CREATE ROLE sermon_owner_nonsuper LOGIN PASSWORD 'owner-test' NOSUPERUSER CREATEROLE")
-	ownerExec(t, f.db.OwnerDSN, "CREATE DATABASE sermon_nonsuper OWNER sermon_owner_nonsuper")
+	ownerDSN, appDSN := nonSuperuserDatabase(t, f, "sermon_nonsuper")
 
-	ownerDSN := strings.Replace(
-		strings.Replace(f.db.OwnerDSN, "/sermon?", "/sermon_nonsuper?", 1),
-		"sermon:sermon-test@", "sermon_owner_nonsuper:owner-test@", 1)
-	if err := postgres.Migrate(ctx, ownerDSN); err != nil {
-		t.Fatalf("Migrate() as non-superuser owner error = %v", err)
-	}
 	// FORCE RLS applies to a non-superuser owner as well: the fixture needs the tenant set.
 	conn, err := pgx.Connect(ctx, ownerDSN)
 	if err != nil {
@@ -144,7 +137,6 @@ func TestAgentCAStore_RevocationCheckWorksWithANonSuperuserOwner(t *testing.T) {
 		t.Fatalf("insert organization with tenant: %v", err)
 	}
 
-	appDSN := strings.Replace(f.appDSN, "/sermon?", "/sermon_nonsuper?", 1)
 	store := postgres.NewAgentCAStore(open(t, appDSN))
 	cert := certificate(orgA)
 	if err := store.RecordCertificate(ctx, scopeFor(t, orgA), cert); err != nil {
@@ -152,5 +144,42 @@ func TestAgentCAStore_RevocationCheckWorksWithANonSuperuserOwner(t *testing.T) {
 	}
 	if usable, err := store.Usable(ctx, cert.Serial, caTime); err != nil || !usable {
 		t.Errorf("Usable() with non-superuser owner = %v, %v; want true", usable, err)
+	}
+}
+
+// nonSuperuserDatabase creates a database owned by a non-superuser role (managed PostgreSQL setup),
+// migrates it as that role and returns owner and app connection strings.
+func nonSuperuserDatabase(t *testing.T, f fixture, name string) (ownerDSN, appDSN string) {
+	t.Helper()
+	ownerExec(t, f.db.OwnerDSN, `DO $$ BEGIN
+		IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sermon_owner_nonsuper') THEN
+			CREATE ROLE sermon_owner_nonsuper LOGIN PASSWORD 'owner-test' NOSUPERUSER CREATEROLE;
+		END IF; END $$`)
+	// One-time provisioning by a superuser/DBA: sermon_definer exists cluster-wide (created by an
+	// earlier migration), so the non-superuser owner cannot grant it to itself.
+	ownerExec(t, f.db.OwnerDSN, "GRANT sermon_definer TO sermon_owner_nonsuper")
+	ownerExec(t, f.db.OwnerDSN, "CREATE DATABASE "+name+" OWNER sermon_owner_nonsuper")
+	ownerDSN = strings.Replace(strings.Replace(f.db.OwnerDSN, "/sermon?", "/"+name+"?", 1),
+		"sermon:sermon-test@", "sermon_owner_nonsuper:owner-test@", 1)
+	if err := postgres.Migrate(context.Background(), ownerDSN); err != nil {
+		t.Fatalf("Migrate() as non-superuser owner error = %v", err)
+	}
+	return ownerDSN, strings.Replace(f.appDSN, "/sermon?", "/"+name+"?", 1)
+}
+
+// Without the one-time GRANT the migration must stop with an actionable message.
+func TestMigrate_ExplainsTheMissingDefinerGrant(t *testing.T) {
+	f := setup(t)
+	ownerExec(t, f.db.OwnerDSN, `DO $$ BEGIN
+		IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sermon_owner_nogrant') THEN
+			CREATE ROLE sermon_owner_nogrant LOGIN PASSWORD 'owner-test' NOSUPERUSER CREATEROLE;
+		END IF; END $$`)
+	ownerExec(t, f.db.OwnerDSN, "CREATE DATABASE sermon_nogrant OWNER sermon_owner_nogrant")
+	dsn := strings.Replace(strings.Replace(f.db.OwnerDSN, "/sermon?", "/sermon_nogrant?", 1),
+		"sermon:sermon-test@", "sermon_owner_nogrant:owner-test@", 1)
+
+	err := postgres.Migrate(context.Background(), dsn)
+	if err == nil || !strings.Contains(err.Error(), "not a member of sermon_definer") {
+		t.Errorf("Migrate() error = %v, want a hint about GRANT sermon_definer", err)
 	}
 }

@@ -257,7 +257,12 @@ flowchart LR
 - **Tests zuerst:** Tabellen-Test „Aktion × Rolle × Gruppen-Bindung → erlaubt/verboten“, inkl. `*`-Bindung und fremder Org.
 - **Abnahme:** 100 % Abdeckung von `authz`.
 
-#### ☐ M1-02 – Lokale Anmeldung und Sessions · S · L 🔒
+#### ◐ M1-02 – Lokale Anmeldung und Sessions · S · L 🔒
+> Stand:
+> - ☑ Passwörter (Argon2id, Regeln, Liste häufiger Passwörter)
+> - ☑ Sessions (Tokens nur als Hash gespeichert, Idle- und absolutes Timeout, Step-up)
+> - ☑ DB: Zugangsdaten, Sessions, Login-Lookups über `sermon_definer`; ADR 0007 überarbeitet
+> - ☐ Login-Use-Case (Sperre, Rate-Limit) und Web-API (Connect, Cookie, Origin-Prüfung, Security-Header)
 - **Ziel:**
   - User mit Argon2id; Login und Logout
   - Serverseitige Sessions (`__Host-sermon_session`, Idle-Timeout 30 min, absolut 12 h)

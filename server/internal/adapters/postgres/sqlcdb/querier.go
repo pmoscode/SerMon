@@ -23,12 +23,26 @@ type Querier interface {
 	// (SELECT policy), so RETURNING would be rejected by RLS. Add the membership in the same
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeleteSession(ctx context.Context, id string) error
+	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
+	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
+	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
+	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error)
+	GetSession(ctx context.Context, id string) (Session, error)
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
+	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	ListOrganizations(ctx context.Context) ([]Organization, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
+	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
+	SetPassword(ctx context.Context, arg SetPasswordParams) error
+	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
+	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
+	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -1,0 +1,187 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+)
+
+// SessionStore implements session.Store (instance-level table, looked up by token hash).
+type SessionStore struct{ db *DB }
+
+var _ session.Store = (*SessionStore)(nil)
+
+// NewSessionStore returns the PostgreSQL session store.
+func NewSessionStore(db *DB) *SessionStore { return &SessionStore{db: db} }
+
+// Insert stores a new session.
+func (s *SessionStore) Insert(ctx context.Context, se session.Session) error {
+	err := s.db.withoutTenant().InsertSession(ctx, sqlcdb.InsertSessionParams{
+		ID: se.ID, UserID: uuid.UUID(se.User), OrgID: orgPtr(se.Org),
+		CreatedAt: se.CreatedAt, LastSeenAt: se.LastSeenAt, StepUpAt: se.StepUpAt,
+	})
+	if err != nil {
+		return fmt.Errorf("insert session: %w", err)
+	}
+	return nil
+}
+
+// Get loads a session by its ID (token hash).
+func (s *SessionStore) Get(ctx context.Context, id string) (session.Session, bool, error) {
+	row, err := s.db.withoutTenant().GetSession(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return session.Session{}, false, nil
+	}
+	if err != nil {
+		return session.Session{}, false, fmt.Errorf("get session: %w", err)
+	}
+	se := session.Session{
+		ID: row.ID, User: identity.UserID(row.UserID),
+		CreatedAt: row.CreatedAt, LastSeenAt: row.LastSeenAt, StepUpAt: row.StepUpAt,
+	}
+	if row.OrgID != nil {
+		se.Org = tenant.OrgID(*row.OrgID)
+	}
+	return se, true, nil
+}
+
+// Touch renews the last activity.
+func (s *SessionStore) Touch(ctx context.Context, id string, at time.Time) error {
+	if err := s.db.withoutTenant().TouchSession(ctx, sqlcdb.TouchSessionParams{ID: id, At: at}); err != nil {
+		return fmt.Errorf("touch session: %w", err)
+	}
+	return nil
+}
+
+// SetStepUp records a re-authentication.
+func (s *SessionStore) SetStepUp(ctx context.Context, id string, at time.Time) error {
+	if err := s.db.withoutTenant().SetSessionStepUp(ctx, sqlcdb.SetSessionStepUpParams{ID: id, At: at}); err != nil {
+		return fmt.Errorf("set step-up: %w", err)
+	}
+	return nil
+}
+
+// Delete removes a session.
+func (s *SessionStore) Delete(ctx context.Context, id string) error {
+	if err := s.db.withoutTenant().DeleteSession(ctx, id); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
+}
+
+// DeleteForUser removes all sessions of a user.
+func (s *SessionStore) DeleteForUser(ctx context.Context, user identity.UserID) error {
+	if err := s.db.withoutTenant().DeleteUserSessions(ctx, uuid.UUID(user)); err != nil {
+		return fmt.Errorf("delete user sessions: %w", err)
+	}
+	return nil
+}
+
+// Credentials of a user.
+type Credentials struct {
+	User           identity.UserID
+	PasswordHash   string
+	FailedAttempts int32
+	LockedUntil    *time.Time
+}
+
+// Organization is an organization a user belongs to.
+type Organization struct {
+	ID   tenant.OrgID
+	Name string
+}
+
+// CredentialStore persists password credentials and answers tenant-less login lookups.
+type CredentialStore struct{ db *DB }
+
+// NewCredentialStore returns the PostgreSQL credential store.
+func NewCredentialStore(db *DB) *CredentialStore { return &CredentialStore{db: db} }
+
+// FindUserByEmail returns the user with the e-mail address (case-insensitive).
+func (s *CredentialStore) FindUserByEmail(ctx context.Context, email string) (identity.UserID, bool, error) {
+	id, err := s.db.withoutTenant().FindUserByEmail(ctx, email)
+	if err != nil {
+		return identity.UserID{}, false, fmt.Errorf("find user: %w", err)
+	}
+	if id == uuid.Nil {
+		return identity.UserID{}, false, nil
+	}
+	return identity.UserID(id), true, nil
+}
+
+// Organizations returns the organizations the user is a member of.
+func (s *CredentialStore) Organizations(ctx context.Context, user identity.UserID) ([]Organization, error) {
+	rows, err := s.db.withoutTenant().UserOrganizations(ctx, uuid.UUID(user))
+	if err != nil {
+		return nil, fmt.Errorf("list user organizations: %w", err)
+	}
+	orgs := make([]Organization, 0, len(rows))
+	for _, r := range rows {
+		orgs = append(orgs, Organization{ID: tenant.OrgID(r.OrgID), Name: r.Name})
+	}
+	return orgs, nil
+}
+
+// Get returns the credentials of a user.
+func (s *CredentialStore) Get(ctx context.Context, user identity.UserID) (Credentials, bool, error) {
+	row, err := s.db.withoutTenant().GetCredentials(ctx, uuid.UUID(user))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Credentials{}, false, nil
+	}
+	if err != nil {
+		return Credentials{}, false, fmt.Errorf("get credentials: %w", err)
+	}
+	return Credentials{User: user, PasswordHash: row.PasswordHash, FailedAttempts: row.FailedAttempts, LockedUntil: row.LockedUntil}, true, nil
+}
+
+// SetPassword sets a new password hash and clears failed attempts and locks.
+func (s *CredentialStore) SetPassword(ctx context.Context, user identity.UserID, hash string, at time.Time) error {
+	err := s.db.withoutTenant().SetPassword(ctx, sqlcdb.SetPasswordParams{UserID: uuid.UUID(user), PasswordHash: hash, ChangedAt: at})
+	if err != nil {
+		return fmt.Errorf("set password: %w", err)
+	}
+	return nil
+}
+
+// UpdatePasswordHash replaces the hash (rehash with current parameters after a login).
+func (s *CredentialStore) UpdatePasswordHash(ctx context.Context, user identity.UserID, hash string) error {
+	err := s.db.withoutTenant().UpdatePasswordHash(ctx, sqlcdb.UpdatePasswordHashParams{UserID: uuid.UUID(user), PasswordHash: hash})
+	if err != nil {
+		return fmt.Errorf("update password hash: %w", err)
+	}
+	return nil
+}
+
+// RecordFailedLogin increments the failure counter and optionally locks the account.
+func (s *CredentialStore) RecordFailedLogin(ctx context.Context, user identity.UserID, lockedUntil *time.Time) error {
+	err := s.db.withoutTenant().RecordFailedLogin(ctx, sqlcdb.RecordFailedLoginParams{UserID: uuid.UUID(user), LockedUntil: lockedUntil})
+	if err != nil {
+		return fmt.Errorf("record failed login: %w", err)
+	}
+	return nil
+}
+
+// ResetFailedLogins clears the failure counter after a successful login.
+func (s *CredentialStore) ResetFailedLogins(ctx context.Context, user identity.UserID) error {
+	if err := s.db.withoutTenant().ResetFailedLogins(ctx, uuid.UUID(user)); err != nil {
+		return fmt.Errorf("reset failed logins: %w", err)
+	}
+	return nil
+}
+
+func orgPtr(org tenant.OrgID) *uuid.UUID {
+	if uuid.UUID(org) == uuid.Nil {
+		return nil
+	}
+	id := uuid.UUID(org)
+	return &id
+}

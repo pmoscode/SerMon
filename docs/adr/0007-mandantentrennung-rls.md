@@ -46,22 +46,38 @@ In der Standardkonfiguration des Postgres-Images ist der einzige Login-User Supe
   - Anlegen ist erlaubt (Einladung).
   - **Folge:** `INSERT … RETURNING` auf `users` scheitert, weil die neue Zeile ohne Mitgliedschaft unsichtbar ist. `CreateUser` gibt deshalb nichts zurück; die Mitgliedschaft wird in derselben Transaktion angelegt.
 
-### Zugriffe ohne Mandant (Ergänzung M1-07)
+### Zugriffe ohne Mandant (Ergänzung M1-07, überarbeitet mit M1-02)
 
-Manche Prüfungen laufen, bevor ein Mandant bekannt ist, z. B. die Sperrprüfung von Agent-Zertifikaten beim
-TLS-Handshake. Dafür gilt:
+Manche Prüfungen laufen, bevor ein Mandant bekannt ist. Beispiele sind die Sperrprüfung von Agent-Zertifikaten beim
+TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
 
-- Eine **`SECURITY DEFINER`-Funktion** mit festem `search_path` beantwortet genau eine Frage mit Ja/Nein
-  (`agent_certificate_usable(serial, at)`). `PUBLIC` hat kein EXECUTE-Recht, nur `sermon_app`. Unbekannte Werte
-  ergeben „nein“ (fail closed).
-- Damit die Funktion trotz RLS lesen kann, hat die betroffene Tabelle **RLS ohne `FORCE`**: Der Eigentümer, und damit
-  die Funktion, umgeht RLS, `sermon_app` als Nicht-Eigentümer bleibt eingeschränkt. Das ist eine bewusste,
-  dokumentierte Ausnahme pro Tabelle (bisher nur `agent_certificates`).
-- Instanzweite Tabellen ohne Mandantenbezug (`pki_authorities`) haben keine RLS. Private Schlüssel liegen dort nur
-  mit der Secrets-Box versiegelt, gebunden an den Hash ihres Zertifikats.
-- Getestet ist das auch mit einem **Eigentümer ohne Superuser-Rechte** (Produktionsfall). `FORCE` greift für ihn auf
-  den übrigen Tabellen, die Prüffunktion funktioniert trotzdem. Gegenprobe: Mit `SECURITY INVOKER` schlagen die
-  Tests fehl.
+- **`SECURITY DEFINER`-Funktionen** mit festem `search_path`, die genau eine Frage minimal beantworten:
+  - `agent_certificate_usable(serial, at)`: ja/nein
+  - `auth_find_user(email)`: nur die User-ID
+  - `auth_user_organizations(user)`: nur ID und Name der Orgs
+
+  `PUBLIC` hat kein EXECUTE-Recht, nur `sermon_app`. Unbekannte Werte ergeben „nein“ bzw. nichts (fail closed).
+- **Eigentümerin dieser Funktionen ist die Rolle `sermon_definer`:**
+  - kein Login, kein BYPASSRLS, kein CREATE im Schema (nur kurz während der Migration),
+  - SELECT nur auf die benötigten Tabellen und eine lesende Policy `definer_read` nur für sich,
+  - `sermon_app` ist kein Mitglied.
+
+  So bleibt `FORCE ROW LEVEL SECURITY` auf **allen** Mandanten-Tabellen aktiv, auch auf `agent_certificates`. Die
+  anfängliche Ausnahme ohne `FORCE` aus M1-07 ist entfallen. Sie hätte mit einem Eigentümer ohne Superuser-Rechte
+  ohnehin nicht funktioniert, weil `FORCE` dann auch für ihn gilt.
+- **Bereitstellung:** Die Migrationsrolle braucht Mitgliedschaft in `sermon_definer`. Hat sie die Rolle selbst
+  angelegt (CREATEROLE), weist sie sie sich selbst zu. Existiert die Rolle schon, z. B. bei einem gemanagten
+  PostgreSQL, ist einmalig `GRANT sermon_definer TO <owner>` nötig. Die Migration bricht sonst mit genau diesem
+  Hinweis ab.
+- Instanzweite Tabellen ohne Mandantenbezug (`pki_authorities`, `user_credentials`, `sessions`) haben keine RLS:
+  - Private Schlüssel sind versiegelt.
+  - Passwörter liegen nur als Argon2id-Hash vor.
+  - Sessions werden über den Hash des Tokens gefunden.
+- **Getestet mit einem Eigentümer ohne Superuser-Rechte (Produktionsfall gemanagter Datenbanken):**
+  - Migration, Login-Lookups und Sperrprüfung funktionieren.
+  - `FORCE` hindert auch den Eigentümer, ohne Mandant zu schreiben.
+  - Die Migration meldet die fehlende Rollenzuweisung verständlich.
+  - Gegenprobe: Mit `SECURITY INVOKER` schlagen die Tests fehl.
 
 ### Tests (Integration, Testcontainers mit demselben Image wie `deploy/dev/compose.yaml`)
 

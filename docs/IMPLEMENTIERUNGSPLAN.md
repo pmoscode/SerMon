@@ -477,7 +477,30 @@ flowchart LR
   - Zweite Session mit derselben Identität wird abgelehnt und erzeugt ein Security-Event; nach einer Rotation durch
     einen Angreifer wird der echte Agent erkannt und die Identität gesperrt.
 
-#### ☐ M1-11b – Rotation von Server-Zertifikat und Agent-CA · S · M 🔒
+#### ◐ M1-11b – Rotation von Server-Zertifikat und Agent-CA · S · M 🔒
+> Server-Seite erledigt:
+> - **Server-Zertifikat:** 7 Tage gültig, erneuert nach 2/3 der Laufzeit und bei jeder Änderung der vertrauten CAs.
+>   Offene Verbindungen laufen weiter (Test mit Fake-Clock).
+> - **Mehrere CAs:** eine ausstellende CA, daneben weitere vertraute. Jedes Agent-Zertifikat kennt seine CA
+>   (`authority_id`). Die Agent-API akzeptiert Zertifikate aller vertrauten CAs.
+> - **`AgentCAService` (Superadmin):**
+>   - `GetAgentCAStatus`: Fortschritt mit gültigen Zertifikaten pro CA.
+>   - `StartAgentCARollover` (Step-up): neue ausstellende CA, die alte bleibt vertraut. Nur ein Wechsel gleichzeitig,
+>     auch über mehrere Instanzen (Advisory-Lock).
+>   - `RetireAgentCA` (Step-up): verweigert, solange gültige Zertifikate der CA existieren, und für die ausstellende CA.
+> - **Trust-Bundle:** Während des Wechsels kommt das Server-Zertifikat von der ältesten vertrauten CA, damit Agents
+>   ohne neues Bundle weiter verbinden. Das Bundle (alle Wurzeln) gibt es beim Enrollment (`trust_anchors`) und zu
+>   Beginn jeder Session (`TrustBundle`).
+> - **Mehrere Instanzen:** Jede lädt die CAs alle 30 s neu.
+> - **End-to-End mit der Server-Binary:**
+>   - Ein Agent mit nur der alten Wurzel verbindet während des Wechsels und bekommt beide Wurzeln.
+>   - Er rotiert auf die neue CA; das Ausmustern wird in der Übergangszeit verweigert und gelingt danach.
+>   - Danach verbindet ein Agent mit nur der neuen Wurzel, die alte verifiziert den Server nicht mehr.
+>
+> Offen:
+> - Agent-Seite (Bundle speichern, beide Wurzeln akzeptieren) mit M1-14.
+> - Ein **instanzweites Audit-Log**: Die CA-Aktionen stehen bisher nur in `started_by`/`retired_by` und im Log; das
+>   Audit-Log ist pro Org.
 - **Ziel:** Das Server-Zertifikat der Agent-API ist kurzlebig und wird automatisch erneuert. Der CA-Wechsel läuft per
   Trust-Bundle (alte + neue CA über den Stream verteilt); nach dem Wechsel wird nur noch mit der neuen CA
   ausgestellt. Die alte CA wird entfernt, sobald kein gültiges Zertifikat mehr von ihr stammt; der Fortschritt ist

@@ -51,6 +51,9 @@ message SessionResponse {
     // operator, KONZEPT §6). The agent answers with rotate_certificate; afterwards the server
     // revokes the previous certificate at once and ends the session.
     RotateNow rotate_now = 3;
+    // trust_bundle lists the roots the agent must trust for the agent API; sent at the start of
+    // every session. During a CA rollover it contains the old and the new root (KONZEPT §6).
+    TrustBundle trust_bundle = 4;
   }
 }
 
@@ -140,6 +143,12 @@ message CertificateIssued {
   google.protobuf.Timestamp not_after = 3;
   // previous_valid_until is when the previous certificate stops working.
   google.protobuf.Timestamp previous_valid_until = 4;
+}
+
+// TrustBundle is the set of trusted agent CA roots.
+message TrustBundle {
+  // roots are root certificates (DER); the agent replaces its stored set with this one.
+  repeated bytes roots = 1;
 }
 
 // RotateNow has no fields.

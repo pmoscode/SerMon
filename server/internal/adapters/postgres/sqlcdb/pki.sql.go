@@ -12,35 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const activeAuthority = `-- name: ActiveAuthority :one
-
-SELECT id, root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed
-FROM pki_authorities
-WHERE active
-`
-
-type ActiveAuthorityRow struct {
-	ID                    int32
-	RootCert              []byte
-	RootKeySealed         []byte
-	IntermediateCert      []byte
-	IntermediateKeySealed []byte
-}
-
-// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
-func (q *Queries) ActiveAuthority(ctx context.Context) (ActiveAuthorityRow, error) {
-	row := q.db.QueryRow(ctx, activeAuthority)
-	var i ActiveAuthorityRow
-	err := row.Scan(
-		&i.ID,
-		&i.RootCert,
-		&i.RootKeySealed,
-		&i.IntermediateCert,
-		&i.IntermediateKeySealed,
-	)
-	return i, err
-}
-
 const agentCertificateUsable = `-- name: AgentCertificateUsable :one
 SELECT agent_certificate_usable($1, $2)::boolean AS usable
 `
@@ -57,17 +28,103 @@ func (q *Queries) AgentCertificateUsable(ctx context.Context, arg AgentCertifica
 	return usable, err
 }
 
+const allAuthorities = `-- name: AllAuthorities :many
+SELECT id, root_cert, active, created_at, retired_at,
+       pki_certificates_in_use(id, $1)::bigint AS in_use
+FROM pki_authorities
+ORDER BY id
+`
+
+type AllAuthoritiesRow struct {
+	ID        int32
+	RootCert  []byte
+	Active    bool
+	CreatedAt time.Time
+	RetiredAt *time.Time
+	InUse     int64
+}
+
+func (q *Queries) AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error) {
+	rows, err := q.db.Query(ctx, allAuthorities, at)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AllAuthoritiesRow{}
+	for rows.Next() {
+		var i AllAuthoritiesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RootCert,
+			&i.Active,
+			&i.CreatedAt,
+			&i.RetiredAt,
+			&i.InUse,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const authorityForRetirement = `-- name: AuthorityForRetirement :one
+SELECT active, pki_certificates_in_use(id, $1)::bigint AS in_use
+FROM pki_authorities WHERE id = $2 AND retired_at IS NULL
+`
+
+type AuthorityForRetirementParams struct {
+	At time.Time
+	ID int32
+}
+
+type AuthorityForRetirementRow struct {
+	Active bool
+	InUse  int64
+}
+
+func (q *Queries) AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error) {
+	row := q.db.QueryRow(ctx, authorityForRetirement, arg.At, arg.ID)
+	var i AuthorityForRetirementRow
+	err := row.Scan(&i.Active, &i.InUse)
+	return i, err
+}
+
+const countTrustedAuthorities = `-- name: CountTrustedAuthorities :one
+SELECT count(*) FROM pki_authorities WHERE retired_at IS NULL
+`
+
+func (q *Queries) CountTrustedAuthorities(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTrustedAuthorities)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deactivateIssuingAuthority = `-- name: DeactivateIssuingAuthority :exec
+UPDATE pki_authorities SET active = false WHERE active
+`
+
+func (q *Queries) DeactivateIssuingAuthority(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deactivateIssuingAuthority)
+	return err
+}
+
 const insertAgentCertificate = `-- name: InsertAgentCertificate :exec
-INSERT INTO agent_certificates (serial, org_id, node_id, not_before, not_after)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO agent_certificates (serial, org_id, node_id, authority_id, not_before, not_after)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type InsertAgentCertificateParams struct {
-	Serial    string
-	OrgID     uuid.UUID
-	NodeID    uuid.UUID
-	NotBefore time.Time
-	NotAfter  time.Time
+	Serial      string
+	OrgID       uuid.UUID
+	NodeID      uuid.UUID
+	AuthorityID int32
+	NotBefore   time.Time
+	NotAfter    time.Time
 }
 
 func (q *Queries) InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error {
@@ -75,6 +132,7 @@ func (q *Queries) InsertAgentCertificate(ctx context.Context, arg InsertAgentCer
 		arg.Serial,
 		arg.OrgID,
 		arg.NodeID,
+		arg.AuthorityID,
 		arg.NotBefore,
 		arg.NotAfter,
 	)
@@ -106,6 +164,55 @@ func (q *Queries) InsertAuthority(ctx context.Context, arg InsertAuthorityParams
 	return id, err
 }
 
+const insertIssuingAuthority = `-- name: InsertIssuingAuthority :exec
+INSERT INTO pki_authorities (root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed, started_by)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertIssuingAuthorityParams struct {
+	RootCert              []byte
+	RootKeySealed         []byte
+	IntermediateCert      []byte
+	IntermediateKeySealed []byte
+	StartedBy             *uuid.UUID
+}
+
+func (q *Queries) InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) error {
+	_, err := q.db.Exec(ctx, insertIssuingAuthority,
+		arg.RootCert,
+		arg.RootKeySealed,
+		arg.IntermediateCert,
+		arg.IntermediateKeySealed,
+		arg.StartedBy,
+	)
+	return err
+}
+
+const lockPKI = `-- name: LockPKI :exec
+SELECT pg_advisory_xact_lock(hashtextextended('sermon:pki', 0))
+`
+
+// Serializes rollover operations of all server instances.
+func (q *Queries) LockPKI(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockPKI)
+	return err
+}
+
+const retireAuthority = `-- name: RetireAuthority :exec
+UPDATE pki_authorities SET retired_at = $1, retired_by = $2 WHERE id = $3
+`
+
+type RetireAuthorityParams struct {
+	At        *time.Time
+	RetiredBy *uuid.UUID
+	ID        int32
+}
+
+func (q *Queries) RetireAuthority(ctx context.Context, arg RetireAuthorityParams) error {
+	_, err := q.db.Exec(ctx, retireAuthority, arg.At, arg.RetiredBy, arg.ID)
+	return err
+}
+
 const revokeAgentCertificate = `-- name: RevokeAgentCertificate :execrows
 UPDATE agent_certificates
 SET revoked_at = $1
@@ -123,4 +230,51 @@ func (q *Queries) RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCer
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const trustedAuthorities = `-- name: TrustedAuthorities :many
+
+SELECT id, root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed, active, created_at
+FROM pki_authorities
+WHERE retired_at IS NULL
+ORDER BY id
+`
+
+type TrustedAuthoritiesRow struct {
+	ID                    int32
+	RootCert              []byte
+	RootKeySealed         []byte
+	IntermediateCert      []byte
+	IntermediateKeySealed []byte
+	Active                bool
+	CreatedAt             time.Time
+}
+
+// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
+func (q *Queries) TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error) {
+	rows, err := q.db.Query(ctx, trustedAuthorities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TrustedAuthoritiesRow{}
+	for rows.Next() {
+		var i TrustedAuthoritiesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RootCert,
+			&i.RootKeySealed,
+			&i.IntermediateCert,
+			&i.IntermediateKeySealed,
+			&i.Active,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -123,6 +123,7 @@ func newStack(t *testing.T, loginLimit int) stack {
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Node: webapi.NewNodeHandler(rotation.NewService(postgres.NewRotationStore(pg), ca, time.Now,
 			rotation.WithOnDemand(postgres.NewRotationStore(pg), agentapi.NewSessions(0), authz.NewPolicy())), slog.New(slog.DiscardHandler)),
+		AgentCA: webapi.NewAgentCAHandler(ca, slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(pg), postgres.NewNodeRegistry(pg), ca, time.Now, access.NewID),
 			ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),

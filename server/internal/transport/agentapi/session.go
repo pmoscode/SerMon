@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -230,18 +231,24 @@ type Rotator interface {
 	Lock(ctx context.Context, id rotation.Identity, reason string) error
 }
 
+// TrustSource provides the trust bundle for agents (agentca.Service).
+type TrustSource interface {
+	TrustAnchors() []*x509.Certificate
+}
+
 // SessionHandler implements sermon.agent.v1.AgentService.
 type SessionHandler struct {
 	sessions *Sessions
 	rotator  Rotator
+	trust    TrustSource
 	logger   *slog.Logger
 }
 
 var _ agentv1connect.AgentServiceHandler = (*SessionHandler)(nil)
 
 // NewSessionHandler returns the AgentService handler.
-func NewSessionHandler(sessions *Sessions, rotator Rotator, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{sessions: sessions, rotator: rotator, logger: logger}
+func NewSessionHandler(sessions *Sessions, rotator Rotator, trust TrustSource, logger *slog.Logger) *SessionHandler {
+	return &SessionHandler{sessions: sessions, rotator: rotator, trust: trust, logger: logger}
 }
 
 type received struct {
@@ -294,6 +301,14 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 		h.logger.ErrorContext(ctx, "record session failed", "node", id.Node.String(), "error", err)
 	}
 	h.logger.InfoContext(ctx, "agent connected", "org", id.Org.String(), "node", id.Node.String(), "agent_version", hello.GetAgentVersion())
+	// The trust bundle first: during a CA rollover the agent learns the new root (KONZEPT §6).
+	bundle := &agentv1.TrustBundle{}
+	for _, root := range h.trust.TrustAnchors() {
+		bundle.Roots = append(bundle.Roots, root.Raw)
+	}
+	if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_TrustBundle{TrustBundle: bundle}}); err != nil {
+		return err //nolint:wrapcheck // connect errors must reach the client unchanged
+	}
 	defer h.logger.InfoContext(ctx, "agent disconnected", "org", id.Org.String(), "node", id.Node.String())
 
 	// Receive in the background, so that the session can be ended from outside (lock, replace).

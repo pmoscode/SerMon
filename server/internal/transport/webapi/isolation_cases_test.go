@@ -21,6 +21,7 @@ type isolationEnv struct {
 	organization                    webv1connect.OrganizationServiceClient
 	enrollment                      webv1connect.EnrollmentTokenServiceClient
 	node                            webv1connect.NodeServiceClient
+	agentCA                         webv1connect.AgentCAServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -112,6 +113,18 @@ var tenantIsolationCases = map[string]isolationCase{
 		return err
 	}},
 	// Instance-level RPCs: an org admin is not a superadmin.
+	"/sermon.web.v1.AgentCAService/GetAgentCAStatus": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.agentCA.GetAgentCAStatus(ctx, connect.NewRequest(&webv1.GetAgentCAStatusRequest{}))
+		return err
+	}},
+	"/sermon.web.v1.AgentCAService/StartAgentCARollover": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.agentCA.StartAgentCARollover(ctx, connect.NewRequest(&webv1.StartAgentCARolloverRequest{}))
+		return err
+	}},
+	"/sermon.web.v1.AgentCAService/RetireAgentCA": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.agentCA.RetireAgentCA(ctx, connect.NewRequest(&webv1.RetireAgentCARequest{Id: 1}))
+		return err
+	}},
 	"/sermon.web.v1.OrganizationService/ListOrganizations": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.organization.ListOrganizations(ctx, connect.NewRequest(&webv1.ListOrganizationsRequest{}))
 		return err

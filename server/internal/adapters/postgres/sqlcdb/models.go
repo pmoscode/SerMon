@@ -12,13 +12,14 @@ import (
 )
 
 type AgentCertificate struct {
-	Serial    string
-	OrgID     uuid.UUID
-	NodeID    uuid.UUID
-	NotBefore time.Time
-	NotAfter  time.Time
-	RevokedAt *time.Time
-	CreatedAt time.Time
+	Serial      string
+	OrgID       uuid.UUID
+	NodeID      uuid.UUID
+	NotBefore   time.Time
+	NotAfter    time.Time
+	RevokedAt   *time.Time
+	CreatedAt   time.Time
+	AuthorityID int32
 }
 
 type AuditLog struct {
@@ -112,6 +113,9 @@ type PkiAuthority struct {
 	IntermediateKeySealed []byte
 	Active                bool
 	CreatedAt             time.Time
+	RetiredAt             *time.Time
+	StartedBy             *uuid.UUID
+	RetiredBy             *uuid.UUID
 }
 
 type RoleBinding struct {

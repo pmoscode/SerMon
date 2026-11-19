@@ -29,6 +29,7 @@ type Handlers struct {
 	Organization *OrganizationHandler
 	Enrollment   *EnrollmentTokenHandler
 	Node         *NodeHandler
+	AgentCA      *AgentCAHandler
 	// AgentEnrollment serves sermon.agent.v1.EnrollmentService for new agents (ADR 0009).
 	AgentEnrollment *AgentEnrollmentHandler
 	Authenticator   *Authenticator // required for every service except AuthService
@@ -52,6 +53,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewOrganizationServiceHandler(h.Organization, authenticated))
 	mount(webv1connect.NewEnrollmentTokenServiceHandler(h.Enrollment, authenticated))
 	mount(webv1connect.NewNodeServiceHandler(h.Node, authenticated))
+	mount(webv1connect.NewAgentCAServiceHandler(h.AgentCA, authenticated))
 
 	// Agents send neither Origin nor cookies: no origin check (CSRF needs cookies), the
 	// enrollment token is the credential (ADR 0009).

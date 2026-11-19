@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// AgentCAService lets the superadmin roll the agent CA over (KONZEPT §6): a new CA issues all
+// new agent certificates while the old one stays trusted; agents receive both roots. The old CA
+// is retired once no valid certificate of it remains. Needs a superadmin; start and retire also
+// need a recent re-authentication.
+service AgentCAService {
+  // GetAgentCAStatus lists all CAs with their rollover progress.
+  rpc GetAgentCAStatus(GetAgentCAStatusRequest) returns (GetAgentCAStatusResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // StartAgentCARollover creates a new issuing CA. FAILED_PRECONDITION while a rollover is in
+  // progress (the previous CA is not retired yet).
+  rpc StartAgentCARollover(StartAgentCARolloverRequest) returns (StartAgentCARolloverResponse);
+  // RetireAgentCA stops trusting a previous CA. FAILED_PRECONDITION while it has valid
+  // certificates or if it is the issuing CA.
+  rpc RetireAgentCA(RetireAgentCARequest) returns (RetireAgentCAResponse);
+}
+
+// AgentCA describes one CA.
+message AgentCA {
+  // id identifies the CA.
+  int32 id = 1;
+  // issuing is true for the CA that signs new agent certificates.
+  bool issuing = 2;
+  // create_time is when the CA was created.
+  google.protobuf.Timestamp create_time = 3;
+  // retire_time is when the CA was retired; unset while it is trusted.
+  google.protobuf.Timestamp retire_time = 4;
+  // root_fingerprint is the SHA-256 of the root certificate (hex).
+  string root_fingerprint = 5;
+  // certificates_in_use is the number of valid agent certificates issued by this CA.
+  int64 certificates_in_use = 6;
+}
+
+// GetAgentCAStatusRequest has no parameters.
+message GetAgentCAStatusRequest {}
+
+// GetAgentCAStatusResponse lists the CAs, oldest first.
+message GetAgentCAStatusResponse {
+  // authorities of the instance.
+  repeated AgentCA authorities = 1;
+}
+
+// StartAgentCARolloverRequest has no parameters.
+message StartAgentCARolloverRequest {}
+
+// StartAgentCARolloverResponse has no fields.
+message StartAgentCARolloverResponse {}
+
+// RetireAgentCARequest names the CA.
+message RetireAgentCARequest {
+  // id identifies the CA.
+  int32 id = 1 [(buf.validate.field).int32.gt = 0];
+}
+
+// RetireAgentCAResponse has no fields.
+message RetireAgentCAResponse {}

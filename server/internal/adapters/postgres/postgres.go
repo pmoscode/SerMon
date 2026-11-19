@@ -122,3 +122,11 @@ func (db *DB) InTenant(ctx context.Context, scope tenant.Scope, fn func(q *sqlcd
 // withoutTenant returns queries outside any tenant transaction: tenant tables are invisible
 // (RLS), only instance-level tables and SECURITY DEFINER checks are usable.
 func (db *DB) withoutTenant() *sqlcdb.Queries { return sqlcdb.New(db.pool) }
+
+// instanceTx runs fn in a transaction without tenant: for instance-level tables only (no RLS).
+func (db *DB) instanceTx(ctx context.Context, fn func(q *sqlcdb.Queries) error) error {
+	if err := pgx.BeginFunc(ctx, db.pool, func(tx pgx.Tx) error { return fn(sqlcdb.New(tx)) }); err != nil {
+		return fmt.Errorf("instance transaction: %w", err)
+	}
+	return nil
+}

@@ -30,18 +30,82 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
 )
 
-// testCA wraps a pki.Authority as agentapi.CA with a set of usable serials.
+// testCA wraps pki.Authorities as agentapi.CA: the first one issues agent certificates,
+// all of them are trusted (a rollover adds one); serials must be marked usable.
 type testCA struct {
 	*pki.Authority
-	mu     sync.Mutex
-	usable map[string]bool
+	mu         sync.Mutex
+	usable     map[string]bool
+	extra      []*pki.Authority
+	generation uint64
+	now        func() time.Time
 }
 
 func (c *testCA) IssueServerCertificate(hosts []string) (tls.Certificate, error) {
-	return c.Authority.IssueServerCertificate(hosts, time.Now())
+	return c.Authority.IssueServerCertificate(hosts, c.clock())
 }
 
-func (c *testCA) TrustAnchor() *x509.Certificate { return c.Root() }
+func (c *testCA) clock() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
+}
+
+func (c *testCA) TrustAnchors() []*x509.Certificate {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	roots := []*x509.Certificate{c.Root()}
+	for _, a := range c.extra {
+		roots = append(roots, a.Root())
+	}
+	return roots
+}
+
+func (c *testCA) Intermediates() []*x509.Certificate {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	inters := []*x509.Certificate{c.Intermediate()}
+	for _, a := range c.extra {
+		inters = append(inters, a.Intermediate())
+	}
+	return inters
+}
+
+func (c *testCA) Generation() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.generation
+}
+
+// rollover adds a new trusted CA and returns it.
+func (c *testCA) rollover(t *testing.T) *pki.Authority {
+	t.Helper()
+	a, err := pki.NewAuthority(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	c.extra = append(c.extra, a)
+	c.generation++
+	c.mu.Unlock()
+	return a
+}
+
+// signWith issues an agent certificate with another authority and marks it usable.
+func (c *testCA) signWith(t *testing.T, a *pki.Authority, org tenant.OrgID, node identity.NodeID) tls.Certificate {
+	t.Helper()
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	csr, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	issued, err := a.SignAgentCSR(csr, org, node, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	c.usable[issued.Serial] = true
+	c.mu.Unlock()
+	return tls.Certificate{Certificate: [][]byte{issued.DER, a.Intermediate().Raw}, PrivateKey: key}
+}
 
 func (c *testCA) CertificateUsable(_ context.Context, serial string) (bool, error) {
 	c.mu.Lock()
@@ -129,16 +193,20 @@ func startServer(t *testing.T) server { return startServerWithTimeout(t, 0) }
 
 func startServerWithTimeout(t *testing.T, rotationTimeout time.Duration) server {
 	t.Helper()
-	ca := newTestCA(t)
+	return startServerWith(t, newTestCA(t), rotationTimeout)
+}
+
+func startServerWith(t *testing.T, ca *testCA, rotationTimeout time.Duration, opts ...agentapi.TLSOption) server {
+	t.Helper()
 	logger := slog.New(slog.DiscardHandler)
 	sessions := agentapi.NewSessions(rotationTimeout)
 	rotator := &fakeRotator{ca: ca}
-	tlsConfig, err := agentapi.TLSConfig(ca, []string{"localhost"}, logger)
+	tlsConfig, err := agentapi.TLSConfig(ca, []string{"localhost"}, logger, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, logger))
+	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger))
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -152,7 +220,9 @@ func startServerWithTimeout(t *testing.T, rotationTimeout time.Duration) server 
 func (s server) client(t *testing.T, cert *tls.Certificate, tlsVersion uint16) agentv1connect.AgentServiceClient {
 	t.Helper()
 	roots := x509.NewCertPool()
-	roots.AddCert(s.ca.Root())
+	for _, r := range s.ca.TrustAnchors() {
+		roots.AddCert(r)
+	}
 	cfg := &tls.Config{RootCAs: roots, ServerName: "localhost", MinVersion: tlsVersion, MaxVersion: tlsVersion}
 	if cert != nil {
 		cfg.Certificates = []tls.Certificate{*cert}
@@ -210,7 +280,7 @@ func TestSession_AcceptsAValidAgentAndTakesTheIdentityFromTheCertificate(t *test
 		t.Fatal(err)
 	}
 	_ = stream.CloseRequest()
-	if _, err := stream.Receive(); !errors.Is(err, io.EOF) {
+	if _, err := receive(stream); !errors.Is(err, io.EOF) {
 		t.Errorf("Receive() = %v, want EOF after the agent closed", err)
 	}
 	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
@@ -276,7 +346,7 @@ func TestSession_ASecondHolderOfTheIdentityLocksItAndEndsBothSessions(t *testing
 	if s.rotator.lockCount() != 1 {
 		t.Errorf("locks = %v, want one", s.rotator.locked)
 	}
-	if _, err := first.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+	if _, err := receive(first); connect.CodeOf(err) != connect.CodeAborted {
 		t.Errorf("first session: %v, want ABORTED", err)
 	}
 	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
@@ -298,7 +368,7 @@ func TestSession_TheSameAgentReconnectingReplacesItsOldSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := old.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+	if _, err := receive(old); connect.CodeOf(err) != connect.CodeAborted {
 		t.Errorf("old session: %v, want ABORTED (replaced)", err)
 	}
 	waitFor(t, func() bool { a := s.sessions.Active(); return len(a) == 1 && a[0].Serial == serial })
@@ -322,7 +392,7 @@ func TestSession_RotationReturnsANewCertificateForTheSameIdentity(t *testing.T) 
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	res, err := stream.Receive()
+	res, err := receive(stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,6 +426,16 @@ func TestSession_RotationWithAReplacedCertificateEndsTheSession(t *testing.T) {
 		t.Errorf("error = %v, want PERMISSION_DENIED", err)
 	}
 	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
+}
+
+// receive returns the next message after the trust bundle sent at session start.
+func receive(stream *connect.BidiStreamForClient[agentv1.SessionRequest, agentv1.SessionResponse]) (*agentv1.SessionResponse, error) {
+	for {
+		res, err := stream.Receive()
+		if err != nil || res.GetTrustBundle() == nil {
+			return res, err
+		}
+	}
 }
 
 func waitFor(t *testing.T, cond func() bool) {
@@ -437,17 +517,17 @@ func TestOnDemand_AgentRotatesImmediatelyAndTheSessionEnds(t *testing.T) {
 	if s.sessions.RequestRotation(tenant.OrgID(uuid.New()), nodeX, func() {}) {
 		t.Error("a request for another organization must not reach the node")
 	}
-	res, err := stream.Receive()
+	res, err := receive(stream)
 	if err != nil || res.GetRotateNow() == nil {
 		t.Fatalf("Receive() = %v, %v; want RotateNow", res, err)
 	}
 	if err := stream.Send(rotateMsg(t)); err != nil {
 		t.Fatal(err)
 	}
-	if res, err := stream.Receive(); err != nil || res.GetCertificateIssued() == nil {
+	if res, err := receive(stream); err != nil || res.GetCertificateIssued() == nil {
 		t.Fatalf("Receive() = %v, %v; want CertificateIssued", res, err)
 	}
-	if _, err := stream.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+	if _, err := receive(stream); connect.CodeOf(err) != connect.CodeAborted {
 		t.Errorf("after the on-demand rotation: %v, want ABORTED (reconnect)", err)
 	}
 	if len(s.rotator.immediate) != 1 || !s.rotator.immediate[0] {
@@ -479,5 +559,91 @@ func TestOnDemand_AgentThatDoesNotAnswerTimesOut(t *testing.T) {
 	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
 	if s.sessions.RequestRotation(orgX, nodeX, func() {}) {
 		t.Error("an offline node must report false")
+	}
+}
+
+func TestSession_StartsWithTheTrustBundle(t *testing.T) {
+	s := startServer(t)
+	s.ca.rollover(t)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := stream.Receive()
+	if err != nil || len(res.GetTrustBundle().GetRoots()) != 2 {
+		t.Fatalf("first message = %v, %v; want the trust bundle with both roots", res, err)
+	}
+	_ = stream.CloseRequest()
+}
+
+func TestTLS_AcceptsAgentsOfEveryTrustedCA(t *testing.T) {
+	s := startServer(t)
+	newCA := s.ca.rollover(t)
+	cert := s.ca.signWith(t, newCA, orgX, nodeX)
+	if err := runSession(context.Background(), s.client(t, &cert, tls.VersionTLS13), helloMsg()); err != nil {
+		t.Errorf("certificate of the new CA during the rollover: %v", err)
+	}
+}
+
+func serverSerial(t *testing.T, s server, cert tls.Certificate) string {
+	t.Helper()
+	roots := x509.NewCertPool()
+	for _, r := range s.ca.TrustAnchors() {
+		roots.AddCert(r)
+	}
+	conn, err := (&tls.Dialer{Config: &tls.Config{
+		RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS13,
+		Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2"}, Time: s.ca.clock,
+	}}).DialContext(context.Background(), "tcp", s.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	tc, _ := conn.(*tls.Conn)
+	return tc.ConnectionState().PeerCertificates[0].SerialNumber.String()
+}
+
+func TestTLS_RenewsTheServerCertificateWithoutDroppingOpenSessions(t *testing.T) {
+	var mu sync.Mutex
+	clock := time.Now()
+	now := func() time.Time { mu.Lock(); defer mu.Unlock(); return clock }
+	ca := newTestCA(t)
+	ca.now = now
+	s := startServerWith(t, ca, 0, agentapi.WithClock(now))
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	first := serverSerial(t, s, cert)
+
+	open := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := open.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
+
+	mu.Lock()
+	clock = clock.Add(pki.ServerCertificateLifetime * 3 / 4) // past two thirds
+	mu.Unlock()
+	if renewed := serverSerial(t, s, cert); renewed == first {
+		t.Error("new handshakes must get a renewed server certificate")
+	}
+	if err := open.Send(heartbeatMsg()); err != nil {
+		t.Errorf("the open session must keep running: %v", err)
+	}
+	if len(s.sessions.Active()) != 1 {
+		t.Error("the open session was dropped")
+	}
+	_ = open.CloseRequest()
+}
+
+func TestTLS_NewServerCertificateWhenTheTrustedCAsChange(t *testing.T) {
+	s := startServer(t)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	first := serverSerial(t, s, cert)
+	if serverSerial(t, s, cert) != first {
+		t.Fatal("without changes the server certificate is reused")
+	}
+	s.ca.rollover(t)
+	if serverSerial(t, s, cert) == first {
+		t.Error("a change of the trusted CAs must renew the server certificate")
 	}
 }

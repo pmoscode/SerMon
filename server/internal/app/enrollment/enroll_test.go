@@ -37,6 +37,10 @@ func (f *fakeSigner) SignAgentCertificate(org tenant.OrgID, _ []byte, node ident
 
 func (f *fakeSigner) TrustAnchor() *x509.Certificate { return &x509.Certificate{Raw: []byte("root")} }
 
+func (f *fakeSigner) TrustAnchors() []*x509.Certificate {
+	return []*x509.Certificate{{Raw: []byte("old-root")}, {Raw: []byte("root")}}
+}
+
 func (f *fakeSigner) Intermediate() *x509.Certificate {
 	return &x509.Certificate{Raw: []byte("intermediate")}
 }
@@ -84,7 +88,8 @@ func TestEnroll_SignsForTheTokensOrganizationAndRegistersTheNode(t *testing.T) {
 	if registry.node.ID != res.Node || registry.node.Group != group1 || registry.node.Facts.Hostname != "web-01" || registry.cert.Serial != "ab" {
 		t.Errorf("registered %+v / %+v", registry.node, registry.cert)
 	}
-	if string(res.Certificate) != "cert" || string(res.Intermediate) != "intermediate" || string(res.TrustAnchor) != "root" {
+	if string(res.Certificate) != "cert" || string(res.Intermediate) != "intermediate" || string(res.TrustAnchor) != "root" ||
+		len(res.TrustBundle) != 2 || string(res.TrustBundle[0]) != "old-root" {
 		t.Errorf("result chain = %q %q %q", res.Certificate, res.Intermediate, res.TrustAnchor)
 	}
 	actions := fmt.Sprint(registry.audits[0].Action, ",", registry.audits[1].Action)

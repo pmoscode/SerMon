@@ -18,11 +18,15 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
+// testAuthority is the issuing CA of the fixture certificates.
+var testAuthority int32
+
 func enrolledNode(t *testing.T, f fixture) (rotation.Identity, *postgres.AgentCAStore) {
 	t.Helper()
 	org := uuid.New()
 	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Rotation')", org)
 	cert := certificate(t, f.db.OwnerDSN, org)
+	testAuthority = cert.Authority
 	ca := postgres.NewAgentCAStore(open(t, f.appDSN))
 	if err := ca.RecordCertificate(context.Background(), scopeFor(t, org), cert); err != nil {
 		t.Fatal(err)
@@ -32,7 +36,7 @@ func enrolledNode(t *testing.T, f fixture) (rotation.Identity, *postgres.AgentCA
 
 func nextCertificate(id rotation.Identity) agentca.CertificateRecord {
 	return agentca.CertificateRecord{
-		Serial: randomSerial(), Org: id.Org, Node: id.Node,
+		Serial: randomSerial(), Org: id.Org, Node: id.Node, Authority: testAuthority,
 		NotBefore: caTime.Add(-time.Minute), NotAfter: caTime.Add(30 * 24 * time.Hour),
 	}
 }

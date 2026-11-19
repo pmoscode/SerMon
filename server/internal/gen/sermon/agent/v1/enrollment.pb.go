@@ -110,7 +110,10 @@ type EnrollResponse struct {
 	// certificate of the mTLS agent API against it.
 	TrustAnchor []byte `protobuf:"bytes,4,opt,name=trust_anchor,json=trustAnchor,proto3" json:"trust_anchor,omitempty"`
 	// not_after is when the certificate expires (rotation after two thirds of the lifetime).
-	NotAfter      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
+	NotAfter *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
+	// trust_anchors are all roots to trust for the mTLS agent API (a superset of trust_anchor;
+	// during a CA rollover the old and the new root).
+	TrustAnchors  [][]byte `protobuf:"bytes,6,rep,name=trust_anchors,json=trustAnchors,proto3" json:"trust_anchors,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -180,6 +183,13 @@ func (x *EnrollResponse) GetNotAfter() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *EnrollResponse) GetTrustAnchors() [][]byte {
+	if x != nil {
+		return x.TrustAnchors
+	}
+	return nil
+}
+
 var File_sermon_agent_v1_enrollment_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_enrollment_proto_rawDesc = "" +
@@ -191,13 +201,14 @@ const file_sermon_agent_v1_enrollment_proto_rawDesc = "" +
 	"\xbaH\az\x05\x10\x01\x18\x80 R\x03csr\x12A\n" +
 	"\n" +
 	"host_facts\x18\x03 \x01(\v2\x1a.sermon.agent.v1.HostFactsB\x06\xbaH\x03\xc8\x01\x01R\thostFacts\x12.\n" +
-	"\ragent_version\x18\x04 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\fagentVersion\"\xcd\x01\n" +
+	"\ragent_version\x18\x04 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\fagentVersion\"\xf2\x01\n" +
 	"\x0eEnrollResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12 \n" +
 	"\vcertificate\x18\x02 \x01(\fR\vcertificate\x12$\n" +
 	"\rintermediates\x18\x03 \x03(\fR\rintermediates\x12!\n" +
 	"\ftrust_anchor\x18\x04 \x01(\fR\vtrustAnchor\x127\n" +
-	"\tnot_after\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter2^\n" +
+	"\tnot_after\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\x12#\n" +
+	"\rtrust_anchors\x18\x06 \x03(\fR\ftrustAnchors2^\n" +
 	"\x11EnrollmentService\x12I\n" +
 	"\x06Enroll\x12\x1e.sermon.agent.v1.EnrollRequest\x1a\x1f.sermon.agent.v1.EnrollResponseB\xcc\x01\n" +
 	"\x13com.sermon.agent.v1B\x0fEnrollmentProtoP\x01ZFgithub.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1;agentv1\xa2\x02\x03SAX\xaa\x02\x0fSermon.Agent.V1\xca\x02\x0fSermon\\Agent\\V1\xe2\x02\x1bSermon\\Agent\\V1\\GPBMetadata\xea\x02\x11Sermon::Agent::V1b\x06proto3"

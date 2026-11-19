@@ -29,7 +29,7 @@ pub mod session_request {
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1, 2, 3")]
+    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
@@ -49,6 +49,10 @@ pub mod session_response {
         /// revokes the previous certificate at once and ends the session.
         #[prost(message, tag="3")]
         RotateNow(super::RotateNow),
+        /// trust_bundle lists the roots the agent must trust for the agent API; sent at the start of
+        /// every session. During a CA rollover it contains the old and the new root (KONZEPT §6).
+        #[prost(message, tag="4")]
+        TrustBundle(super::TrustBundle),
     }
 }
 /// Hello is the first message of every stream.
@@ -125,6 +129,13 @@ pub struct CertificateIssued {
     /// previous_valid_until is when the previous certificate stops working.
     #[prost(message, optional, tag="4")]
     pub previous_valid_until: ::core::option::Option<::prost_types::Timestamp>,
+}
+/// TrustBundle is the set of trusted agent CA roots.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TrustBundle {
+    /// roots are root certificates (DER); the agent replaces its stored set with this one.
+    #[prost(bytes="vec", repeated, tag="1")]
+    pub roots: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
 /// RotateNow has no fields.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -206,6 +217,10 @@ pub struct EnrollResponse {
     /// not_after is when the certificate expires (rotation after two thirds of the lifetime).
     #[prost(message, optional, tag="5")]
     pub not_after: ::core::option::Option<::prost_types::Timestamp>,
+    /// trust_anchors are all roots to trust for the mTLS agent API (a superset of trust_anchor;
+    /// during a CA rollover the old and the new root).
+    #[prost(bytes="vec", repeated, tag="6")]
+    pub trust_anchors: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
 }
 include!("sermon.agent.v1.tonic.rs");
 // @@protoc_insertion_point(module)

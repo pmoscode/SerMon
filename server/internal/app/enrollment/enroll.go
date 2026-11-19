@@ -52,9 +52,10 @@ type Node struct {
 type Enrolled struct {
 	Org          tenant.OrgID
 	Node         identity.NodeID
-	Certificate  []byte // DER
-	Intermediate []byte // DER, issuer of Certificate
-	TrustAnchor  []byte // DER, root of the agent CA (trust anchor for the mTLS agent API)
+	Certificate  []byte   // DER
+	Intermediate []byte   // DER, issuer of Certificate
+	TrustAnchor  []byte   // DER, root of the issuing agent CA
+	TrustBundle  [][]byte // DER, all roots to trust for the mTLS agent API (old and new during a rollover)
 	NotAfter     time.Time
 }
 
@@ -62,6 +63,7 @@ type Enrolled struct {
 type Signer interface {
 	SignAgentCertificate(org tenant.OrgID, csrDER []byte, node identity.NodeID) (pki.Issued, agentca.CertificateRecord, error)
 	TrustAnchor() *x509.Certificate
+	TrustAnchors() []*x509.Certificate
 	Intermediate() *x509.Certificate
 }
 
@@ -116,9 +118,13 @@ func (e *Enroller) Enroll(ctx context.Context, secret string, csrDER []byte, fac
 	if err := e.registry.Register(ctx, stored, node, record, e.now(), audits); err != nil {
 		return Enrolled{}, fmt.Errorf("register node: %w", err)
 	}
+	bundle := make([][]byte, 0, 2)
+	for _, root := range e.signer.TrustAnchors() {
+		bundle = append(bundle, root.Raw)
+	}
 	return Enrolled{
 		Org: stored.Org, Node: node.ID, Certificate: issued.DER, NotAfter: issued.NotAfter,
-		Intermediate: e.signer.Intermediate().Raw, TrustAnchor: e.signer.TrustAnchor().Raw,
+		Intermediate: e.signer.Intermediate().Raw, TrustAnchor: e.signer.TrustAnchor().Raw, TrustBundle: bundle,
 	}, nil
 }
 

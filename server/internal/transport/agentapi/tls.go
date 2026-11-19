@@ -16,11 +16,23 @@ import (
 
 // CA is the agent certificate authority as the agent API needs it (agentca.Service).
 type CA interface {
-	TrustAnchor() *x509.Certificate
-	Intermediate() *x509.Certificate
+	// TrustAnchors are the roots of all trusted CAs (old and new during a rollover).
+	TrustAnchors() []*x509.Certificate
+	// Intermediates are the issuing certificates of all trusted CAs.
+	Intermediates() []*x509.Certificate
 	IssueServerCertificate(hosts []string) (tls.Certificate, error)
 	// CertificateUsable reports whether a serial is recorded, not revoked and valid now.
 	CertificateUsable(ctx context.Context, serial string) (bool, error)
+	// Generation changes whenever the trusted CAs change.
+	Generation() uint64
+}
+
+// TLSOption configures TLSConfig.
+type TLSOption func(*serverCertificates)
+
+// WithClock sets the clock for the renewal of the server certificate (tests).
+func WithClock(now func() time.Time) TLSOption {
+	return func(s *serverCertificates) { s.now = now }
 }
 
 // usableCheckTimeout bounds the revocation check during a handshake.
@@ -33,8 +45,11 @@ var errUnusableCertificate = errors.New("agent certificate is revoked or unknown
 // client-auth usage, exactly one SPIFFE identity, recorded and not revoked). The server
 // certificate is issued by the agent CA for hosts and renewed in memory after two thirds of
 // its lifetime.
-func TLSConfig(ca CA, hosts []string, logger *slog.Logger) (*tls.Config, error) {
-	certs := &serverCertificates{ca: ca, hosts: hosts, logger: logger}
+func TLSConfig(ca CA, hosts []string, logger *slog.Logger, opts ...TLSOption) (*tls.Config, error) {
+	certs := &serverCertificates{ca: ca, hosts: hosts, logger: logger, now: time.Now}
+	for _, opt := range opts {
+		opt(certs)
+	}
 	if _, err := certs.get(nil); err != nil {
 		return nil, err
 	}
@@ -59,8 +74,12 @@ func verifyAgent(ca CA, logger *slog.Logger) func(tls.ConnectionState) error {
 		}
 		leaf := chain[0]
 		roots, intermediates := x509.NewCertPool(), x509.NewCertPool()
-		roots.AddCert(ca.TrustAnchor())
-		intermediates.AddCert(ca.Intermediate())
+		for _, r := range ca.TrustAnchors() {
+			roots.AddCert(r)
+		}
+		for _, i := range ca.Intermediates() {
+			intermediates.AddCert(i)
+		}
 		for _, c := range chain[1:] {
 			intermediates.AddCert(c)
 		}
@@ -89,20 +108,25 @@ func verifyAgent(ca CA, logger *slog.Logger) func(tls.ConnectionState) error {
 	}
 }
 
-// serverCertificates caches the agent API's server certificate and renews it in time.
+// serverCertificates caches the agent API's server certificate and renews it after two thirds
+// of its lifetime or when the trusted CAs change. Only new handshakes get the new certificate;
+// open connections keep running.
 type serverCertificates struct {
 	ca     CA
 	hosts  []string
 	logger *slog.Logger
+	now    func() time.Time
 	mu     sync.Mutex
 	cert   *tls.Certificate
+	gen    uint64
 }
 
 func (s *serverCertificates) get(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := time.Now()
-	if s.cert != nil && now.Before(renewAt(s.cert.Leaf)) {
+	now := s.now()
+	gen := s.ca.Generation()
+	if s.cert != nil && now.Before(renewAt(s.cert.Leaf)) && gen == s.gen {
 		return s.cert, nil
 	}
 	fresh, err := s.ca.IssueServerCertificate(s.hosts)
@@ -113,7 +137,7 @@ func (s *serverCertificates) get(*tls.ClientHelloInfo) (*tls.Certificate, error)
 		}
 		return nil, fmt.Errorf("agent API server certificate: %w", err)
 	}
-	s.cert = &fresh
+	s.cert, s.gen = &fresh, gen
 	return s.cert, nil
 }
 

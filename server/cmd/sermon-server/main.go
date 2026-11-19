@@ -114,6 +114,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, logger); err != nil {
 			return err
 		}
+		servers = append(servers, refreshCA(ca, logger))
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger)
 			if err != nil {
@@ -149,7 +150,7 @@ func newAgentServer(ctx context.Context, cfg config.Config, sessions *agentapi.S
 		return nil, fmt.Errorf("agent API TLS: %w", err)
 	}
 	mux := http.NewServeMux()
-	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, logger))
+	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger))
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.AgentAddr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", cfg.AgentAddr, err)
@@ -157,6 +158,28 @@ func newAgentServer(ctx context.Context, cfg config.Config, sessions *agentapi.S
 	logger.InfoContext(ctx, "agent API listening", "addr", ln.Addr().String(), "hosts", cfg.AgentHostnames)
 	srv := httpserver.NewStreaming(ctx, mux, logger, cfg.ShutdownTimeout, tlsConfig)
 	return func(ctx context.Context) error { return srv.Serve(ctx, ln) }, nil
+}
+
+// caRefreshInterval is how often every instance reloads the trusted agent CAs (a rollover by
+// another instance becomes visible within this time).
+const caRefreshInterval = 30 * time.Second
+
+// refreshCA reloads the agent CAs periodically until ctx ends.
+func refreshCA(ca *agentca.Service, logger *slog.Logger) func(context.Context) error {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(caRefreshInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-ticker.C:
+				if err := ca.Refresh(ctx); err != nil && ctx.Err() == nil {
+					logger.ErrorContext(ctx, "reload agent CAs failed", "error", err)
+				}
+			}
+		}
+	}
 }
 
 // runAll runs the servers until ctx ends or one of them fails; then all of them stop.
@@ -246,7 +269,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID), logger),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
-		Node: webapi.NewNodeHandler(rotator, logger),
+		Node:    webapi.NewNodeHandler(rotator, logger),
+		AgentCA: webapi.NewAgentCAHandler(ca, logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

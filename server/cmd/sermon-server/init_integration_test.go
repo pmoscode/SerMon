@@ -155,9 +155,10 @@ func TestFirstInstallation_EndToEnd(t *testing.T) {
 	}
 	defer func() { _ = conn.Close(context.Background()) }()
 	var authorities int
-	_ = conn.QueryRow(context.Background(), "SELECT count(*) FROM pki_authorities").Scan(&authorities)
+	// Exactly one issuing CA (other tests in this database may have rolled the CA over).
+	_ = conn.QueryRow(context.Background(), "SELECT count(*) FROM pki_authorities WHERE active").Scan(&authorities)
 	if authorities != 1 {
-		t.Errorf("%d agent CAs, want 1", authorities)
+		t.Errorf("%d issuing agent CAs, want 1", authorities)
 	}
 }
 

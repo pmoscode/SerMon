@@ -200,6 +200,7 @@ type SessionResponse struct {
 	//	*SessionResponse_Ack
 	//	*SessionResponse_CertificateIssued
 	//	*SessionResponse_RotateNow
+	//	*SessionResponse_TrustBundle
 	Payload       isSessionResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -269,6 +270,15 @@ func (x *SessionResponse) GetRotateNow() *RotateNow {
 	return nil
 }
 
+func (x *SessionResponse) GetTrustBundle() *TrustBundle {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_TrustBundle); ok {
+			return x.TrustBundle
+		}
+	}
+	return nil
+}
+
 type isSessionResponse_Payload interface {
 	isSessionResponse_Payload()
 }
@@ -291,11 +301,19 @@ type SessionResponse_RotateNow struct {
 	RotateNow *RotateNow `protobuf:"bytes,3,opt,name=rotate_now,json=rotateNow,proto3,oneof"`
 }
 
+type SessionResponse_TrustBundle struct {
+	// trust_bundle lists the roots the agent must trust for the agent API; sent at the start of
+	// every session. During a CA rollover it contains the old and the new root (KONZEPT §6).
+	TrustBundle *TrustBundle `protobuf:"bytes,4,opt,name=trust_bundle,json=trustBundle,proto3,oneof"`
+}
+
 func (*SessionResponse_Ack) isSessionResponse_Payload() {}
 
 func (*SessionResponse_CertificateIssued) isSessionResponse_Payload() {}
 
 func (*SessionResponse_RotateNow) isSessionResponse_Payload() {}
+
+func (*SessionResponse_TrustBundle) isSessionResponse_Payload() {}
 
 // Hello is the first message of every stream.
 type Hello struct {
@@ -645,6 +663,52 @@ func (x *CertificateIssued) GetPreviousValidUntil() *timestamppb.Timestamp {
 	return nil
 }
 
+// TrustBundle is the set of trusted agent CA roots.
+type TrustBundle struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// roots are root certificates (DER); the agent replaces its stored set with this one.
+	Roots         [][]byte `protobuf:"bytes,1,rep,name=roots,proto3" json:"roots,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrustBundle) Reset() {
+	*x = TrustBundle{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustBundle) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustBundle) ProtoMessage() {}
+
+func (x *TrustBundle) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustBundle.ProtoReflect.Descriptor instead.
+func (*TrustBundle) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TrustBundle) GetRoots() [][]byte {
+	if x != nil {
+		return x.Roots
+	}
+	return nil
+}
+
 // RotateNow has no fields.
 type RotateNow struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -654,7 +718,7 @@ type RotateNow struct {
 
 func (x *RotateNow) Reset() {
 	*x = RotateNow{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -666,7 +730,7 @@ func (x *RotateNow) String() string {
 func (*RotateNow) ProtoMessage() {}
 
 func (x *RotateNow) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -679,7 +743,7 @@ func (x *RotateNow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateNow.ProtoReflect.Descriptor instead.
 func (*RotateNow) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{7}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{8}
 }
 
 // Ack confirms persisted agent data; the agent may then drop it from its buffer.
@@ -693,7 +757,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +769,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +782,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{8}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Ack) GetSeq() uint64 {
@@ -737,12 +801,13 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x05hello\x18\x01 \x01(\v2\x16.sermon.agent.v1.HelloH\x00R\x05hello\x12:\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1a.sermon.agent.v1.HeartbeatH\x00R\theartbeat\x12S\n" +
 	"\x12rotate_certificate\x18\x03 \x01(\v2\".sermon.agent.v1.RotateCertificateH\x00R\x11rotateCertificateB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xdf\x01\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\xa2\x02\n" +
 	"\x0fSessionResponse\x12(\n" +
 	"\x03ack\x18\x01 \x01(\v2\x14.sermon.agent.v1.AckH\x00R\x03ack\x12S\n" +
 	"\x12certificate_issued\x18\x02 \x01(\v2\".sermon.agent.v1.CertificateIssuedH\x00R\x11certificateIssued\x12;\n" +
 	"\n" +
-	"rotate_now\x18\x03 \x01(\v2\x1a.sermon.agent.v1.RotateNowH\x00R\trotateNowB\x10\n" +
+	"rotate_now\x18\x03 \x01(\v2\x1a.sermon.agent.v1.RotateNowH\x00R\trotateNow\x12A\n" +
+	"\ftrust_bundle\x18\x04 \x01(\v2\x1c.sermon.agent.v1.TrustBundleH\x00R\vtrustBundleB\x10\n" +
 	"\apayload\x12\x05\xbaH\x02\b\x01\"\xd5\x01\n" +
 	"\x05Hello\x122\n" +
 	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
@@ -774,7 +839,9 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\vcertificate\x18\x01 \x01(\fR\vcertificate\x12$\n" +
 	"\rintermediates\x18\x02 \x03(\fR\rintermediates\x127\n" +
 	"\tnot_after\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\x12L\n" +
-	"\x14previous_valid_until\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x12previousValidUntil\"\v\n" +
+	"\x14previous_valid_until\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x12previousValidUntil\"#\n" +
+	"\vTrustBundle\x12\x14\n" +
+	"\x05roots\x18\x01 \x03(\fR\x05roots\"\v\n" +
 	"\tRotateNow\"\x17\n" +
 	"\x03Ack\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq*\\\n" +
@@ -800,7 +867,7 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(Architecture)(0),             // 0: sermon.agent.v1.Architecture
 	(*SessionRequest)(nil),        // 1: sermon.agent.v1.SessionRequest
@@ -810,29 +877,31 @@ var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(*Heartbeat)(nil),             // 5: sermon.agent.v1.Heartbeat
 	(*RotateCertificate)(nil),     // 6: sermon.agent.v1.RotateCertificate
 	(*CertificateIssued)(nil),     // 7: sermon.agent.v1.CertificateIssued
-	(*RotateNow)(nil),             // 8: sermon.agent.v1.RotateNow
-	(*Ack)(nil),                   // 9: sermon.agent.v1.Ack
-	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(*TrustBundle)(nil),           // 8: sermon.agent.v1.TrustBundle
+	(*RotateNow)(nil),             // 9: sermon.agent.v1.RotateNow
+	(*Ack)(nil),                   // 10: sermon.agent.v1.Ack
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
 	3,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
 	5,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
 	6,  // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
-	9,  // 3: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	10, // 3: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
 	7,  // 4: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	8,  // 5: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	4,  // 6: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
-	0,  // 7: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	10, // 8: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	10, // 9: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	10, // 10: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	1,  // 11: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	2,  // 12: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	12, // [12:13] is the sub-list for method output_type
-	11, // [11:12] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	9,  // 5: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	8,  // 6: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	4,  // 7: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	0,  // 8: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
+	11, // 9: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	11, // 10: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	11, // 11: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	1,  // 12: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	2,  // 13: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	13, // [13:14] is the sub-list for method output_type
+	12, // [12:13] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -849,6 +918,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionResponse_Ack)(nil),
 		(*SessionResponse_CertificateIssued)(nil),
 		(*SessionResponse_RotateNow)(nil),
+		(*SessionResponse_TrustBundle)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -856,7 +926,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

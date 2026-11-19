@@ -53,4 +53,7 @@ message EnrollResponse {
   bytes trust_anchor = 4;
   // not_after is when the certificate expires (rotation after two thirds of the lifetime).
   google.protobuf.Timestamp not_after = 5;
+  // trust_anchors are all roots to trust for the mTLS agent API (a superset of trust_anchor;
+  // during a CA rollover the old and the new root).
+  repeated bytes trust_anchors = 6;
 }

@@ -58,7 +58,7 @@ func (h *AgentEnrollmentHandler) Enroll(ctx context.Context, req *connect.Reques
 	h.logger.InfoContext(ctx, "agent enrolled", "org", res.Org.String(), "node", res.Node.String(), "client_ip", ip)
 	return connect.NewResponse(&agentv1.EnrollResponse{
 		NodeId: res.Node.String(), Certificate: res.Certificate, Intermediates: [][]byte{res.Intermediate},
-		TrustAnchor: res.TrustAnchor, NotAfter: timestamppb.New(res.NotAfter),
+		TrustAnchor: res.TrustAnchor, TrustAnchors: res.TrustBundle, NotAfter: timestamppb.New(res.NotAfter),
 	}), nil
 }
 

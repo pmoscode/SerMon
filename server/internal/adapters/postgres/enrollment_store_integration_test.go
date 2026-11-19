@@ -28,8 +28,12 @@ type tokenOrg struct {
 	other tenant.GroupID
 }
 
+// registryAuthority is the CA of certificates registered by register (set by newTokenOrg).
+var registryAuthority int32
+
 func newTokenOrg(t *testing.T, f fixture) tokenOrg {
 	t.Helper()
+	registryAuthority = issuingAuthority(t, f.db.OwnerDSN)
 	o := newMgmtOrg(t, f)
 	store := postgres.NewAccessStore(open(t, f.appDSN))
 	to := tokenOrg{mgmtOrg: o, group: tenant.GroupID(uuid.New()), other: tenant.GroupID(uuid.New())}
@@ -109,7 +113,10 @@ func registerMachine(r *postgres.NodeRegistry, st enrollment.Stored, machineID s
 		Hostname: "web", MachineID: machineID, OSID: "debian", OSVersion: "13", KernelRelease: "6.12.0",
 		Architecture: "amd64", CPUCount: 2, MemoryBytes: 1 << 30,
 	}}
-	cert := agentca.CertificateRecord{Serial: randomSerial(), Org: st.Org, Node: node, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour)}
+	cert := agentca.CertificateRecord{
+		Serial: randomSerial(), Org: st.Org, Node: node, Authority: registryAuthority,
+		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour),
+	}
 	return r.Register(context.Background(), st, n, cert, now, []access.AuditEntry{
 		{Action: "enrollment_token.use", Target: "t"}, {Action: "node.enroll", Target: "n"},
 	})
@@ -127,7 +134,10 @@ func TestNodeRegistry_CreatesTheNodeWithAUsableCertificate(t *testing.T) {
 	machine := strings.ReplaceAll(uuid.NewString(), "-", "")
 	node := identity.NodeID(uuid.New())
 	now := time.Now()
-	cert := agentca.CertificateRecord{Serial: randomSerial(), Org: st.Org, Node: node, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour)}
+	cert := agentca.CertificateRecord{
+		Serial: randomSerial(), Org: st.Org, Node: node, Authority: issuingAuthority(t, f.db.OwnerDSN),
+		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour),
+	}
 	n := enrollment.Node{ID: node, Group: st.Group, Token: st.ID, Facts: enrollment.NodeFacts{
 		Hostname: "db-01", MachineID: machine, OSID: "debian", OSVersion: "13", KernelRelease: "6.12.0", Architecture: "arm64", CPUCount: 8, MemoryBytes: 16 << 30,
 	}}

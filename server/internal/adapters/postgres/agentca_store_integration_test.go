@@ -29,9 +29,31 @@ func certificate(t *testing.T, ownerDSN string, org uuid.UUID) agentca.Certifica
 	node := uuid.New()
 	createNode(t, ownerDSN, org, node)
 	return agentca.CertificateRecord{
-		Serial: randomSerial(), Org: tenant.OrgID(org), Node: identity.NodeID(node),
+		Serial: randomSerial(), Org: tenant.OrgID(org), Node: identity.NodeID(node), Authority: issuingAuthority(t, ownerDSN),
 		NotBefore: caTime.Add(-time.Minute), NotAfter: caTime.Add(30 * 24 * time.Hour),
 	}
+}
+
+// issuingAuthority returns the ID of the issuing CA, creating a placeholder row if there is none
+// (certificates reference their CA since migration 00012).
+func issuingAuthority(t *testing.T, ownerDSN string) int32 {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, ownerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var id int32
+	err = conn.QueryRow(ctx, "SELECT id FROM pki_authorities WHERE active").Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = conn.QueryRow(ctx, `INSERT INTO pki_authorities (root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed)
+			VALUES ('\x01', '\x01', '\x01', '\x01') RETURNING id`).Scan(&id)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 // createNode inserts a node (and a group for it) into org as the schema owner.
@@ -65,6 +87,7 @@ func createNode(t *testing.T, ownerDSN string, org, node uuid.UUID) {
 func TestAgentCAStore_AuthorityIsStoredOnceAndLoadedAgain(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
+	ownerExec(t, f.db.OwnerDSN, "DELETE FROM agent_certificates") // they reference their CA
 	ownerExec(t, f.db.OwnerDSN, "DELETE FROM pki_authorities")
 	store := postgres.NewAgentCAStore(open(t, f.appDSN))
 	record := agentca.AuthorityRecord{RootCert: []byte("root"), RootKeySealed: []byte("rk"), IntermediateCert: []byte("int"), IntermediateKeySealed: []byte("ik")}
@@ -75,9 +98,67 @@ func TestAgentCAStore_AuthorityIsStoredOnceAndLoadedAgain(t *testing.T) {
 	if err := store.InsertAuthority(ctx, record); !errors.Is(err, agentca.ErrAuthorityExists) {
 		t.Errorf("second InsertAuthority() error = %v, want ErrAuthorityExists", err)
 	}
-	loaded, found, err := store.ActiveAuthority(ctx)
-	if err != nil || !found || string(loaded.IntermediateKeySealed) != "ik" {
-		t.Errorf("ActiveAuthority() = %+v, %v, %v", loaded, found, err)
+	trusted, err := store.TrustedAuthorities(ctx)
+	if err != nil || len(trusted) != 1 || !trusted[0].Issuing || string(trusted[0].Record.IntermediateKeySealed) != "ik" {
+		t.Errorf("TrustedAuthorities() = %+v, %v", trusted, err)
+	}
+}
+
+func TestAgentCAStore_RolloverAndRetirement(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	ownerExec(t, f.db.OwnerDSN, "DELETE FROM agent_certificates")
+	ownerExec(t, f.db.OwnerDSN, "DELETE FROM pki_authorities")
+	store := postgres.NewAgentCAStore(open(t, f.appDSN))
+	rec := func(name string) agentca.AuthorityRecord {
+		return agentca.AuthorityRecord{RootCert: []byte(name), RootKeySealed: []byte("k"), IntermediateCert: []byte("i"), IntermediateKeySealed: []byte("k")}
+	}
+	if err := store.InsertAuthority(ctx, rec("old")); err != nil {
+		t.Fatal(err)
+	}
+	cert := certificate(t, f.db.OwnerDSN, orgA) // issued by the old CA
+	if err := store.RecordCertificate(ctx, scopeFor(t, orgA), cert); err != nil {
+		t.Fatal(err)
+	}
+	super := identity.UserID(uuid.New())
+
+	// Two instances start a rollover at the same time: exactly one succeeds.
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() { errs <- store.StartRollover(ctx, rec("new"), super) }()
+	}
+	first, second := <-errs, <-errs
+	if (first == nil) == (second == nil) || (!errors.Is(first, agentca.ErrRolloverInProgress) && !errors.Is(second, agentca.ErrRolloverInProgress)) {
+		t.Fatalf("concurrent rollovers: %v / %v; want exactly one", first, second)
+	}
+	trusted, _ := store.TrustedAuthorities(ctx)
+	if len(trusted) != 2 || trusted[0].Issuing || !trusted[1].Issuing || string(trusted[1].Record.RootCert) != "new" {
+		t.Fatalf("trusted = %+v", trusted)
+	}
+	oldID, newID := trusted[0].ID, trusted[1].ID
+
+	if err := store.Retire(ctx, newID, super, caTime); !errors.Is(err, agentca.ErrIssuingAuthority) {
+		t.Errorf("retire issuing: %v", err)
+	}
+	if err := store.Retire(ctx, oldID, super, caTime); !errors.Is(err, agentca.ErrAuthorityInUse) {
+		t.Errorf("retire with a valid certificate: %v, want ErrAuthorityInUse", err)
+	}
+	states, _ := store.Authorities(ctx, caTime)
+	if len(states) != 2 || states[0].CertificatesInUse != 1 || states[0].RootFingerprint == "" {
+		t.Errorf("states = %+v", states)
+	}
+	// After expiry (or revocation) of the old certificates the old CA can be retired.
+	if err := store.Retire(ctx, oldID, super, cert.NotAfter.Add(time.Second)); err != nil {
+		t.Fatalf("Retire() after expiry: %v", err)
+	}
+	if err := store.Retire(ctx, oldID, super, cert.NotAfter.Add(time.Second)); !errors.Is(err, agentca.ErrUnknownAuthority) {
+		t.Errorf("second retire: %v, want ErrUnknownAuthority", err)
+	}
+	if trusted, _ := store.TrustedAuthorities(ctx); len(trusted) != 1 || trusted[0].ID != newID {
+		t.Errorf("after retirement trusted = %+v", trusted)
+	}
+	if err := store.StartRollover(ctx, rec("newer"), super); err != nil {
+		t.Errorf("a new rollover is possible after the retirement: %v", err)
 	}
 }
 

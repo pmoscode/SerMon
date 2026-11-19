@@ -35,7 +35,8 @@ func (s *RotationStore) Rotate(ctx context.Context, id rotation.Identity, next a
 			return rotation.ErrSuperseded
 		}
 		if err := q.InsertAgentCertificate(ctx, sqlcdb.InsertAgentCertificateParams{
-			Serial: next.Serial, OrgID: uuid.UUID(next.Org), NodeID: uuid.UUID(next.Node), NotBefore: next.NotBefore, NotAfter: next.NotAfter,
+			Serial: next.Serial, OrgID: uuid.UUID(next.Org), NodeID: uuid.UUID(next.Node), AuthorityID: next.Authority,
+			NotBefore: next.NotBefore, NotAfter: next.NotAfter,
 		}); err != nil {
 			return fmt.Errorf("record certificate: %w", err)
 		}

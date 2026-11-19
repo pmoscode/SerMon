@@ -84,6 +84,7 @@ fn enroll_request_roundtrips_and_carries_no_identity() {
         intermediates: vec![vec![4], vec![5]],
         trust_anchor: vec![6],
         not_after: None,
+        trust_anchors: vec![vec![6], vec![7]],
     };
     let decoded = EnrollResponse::decode(response.encode_to_vec().as_slice()).unwrap();
     assert_eq!(decoded, response);

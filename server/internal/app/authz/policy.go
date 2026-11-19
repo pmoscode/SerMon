@@ -46,6 +46,7 @@ const (
 
 	// Instance-level actions (superadmin).
 	ManageOrganizations
+	ManageAgentCA // agent CA rollover (KONZEPT §6)
 
 	actionEnd
 )
@@ -85,6 +86,7 @@ var rules = map[Action]rule{
 	ManageGroups:           {name: "manage_groups", minimum: role.Admin, scope: orgWide},
 	ViewAuditLog:           {name: "view_audit_log", minimum: role.Admin, scope: orgWide},
 	ManageOrganizations:    {name: "manage_organizations", scope: instanceLevel},
+	ManageAgentCA:          {name: "manage_agent_ca", scope: instanceLevel},
 }
 
 // AllActions returns all tenant actions (group-scoped and organization-wide).

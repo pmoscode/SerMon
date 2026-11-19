@@ -6,25 +6,27 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type Querier interface {
-	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
-	ActiveAuthority(ctx context.Context) (ActiveAuthorityRow, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
 	AddSuperadmin(ctx context.Context, userID uuid.UUID) error
 	// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
 	AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error)
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
+	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	AuditChain(ctx context.Context) ([]AuditLog, error)
+	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
 	ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error)
 	// Atomic: concurrent redemptions cannot exceed max_uses.
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
+	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
 	// Organizations. Row-level security limits every query to the organization of the tenant
@@ -36,6 +38,7 @@ type Querier interface {
 	// (SELECT policy), so RETURNING would be rejected by RLS. Add the membership in the same
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeactivateIssuingAuthority(ctx context.Context) error
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
@@ -59,6 +62,7 @@ type Querier interface {
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
 	InsertEnrollmentToken(ctx context.Context, arg InsertEnrollmentTokenParams) error
+	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) error
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
@@ -79,12 +83,15 @@ type Querier interface {
 	// Serializes changes of rights within the organization (last-admin check without races).
 	LockAccessChanges(ctx context.Context) error
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
+	// Serializes rollover operations of all server instances.
+	LockPKI(ctx context.Context) error
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
+	RetireAuthority(ctx context.Context, arg RetireAuthorityParams) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
 	RevokeEnrollmentToken(ctx context.Context, arg RevokeEnrollmentTokenParams) (int64, error)
 	RevokeNodeCertificates(ctx context.Context, arg RevokeNodeCertificatesParams) error
@@ -100,6 +107,8 @@ type Querier interface {
 	// Records the source IP of a new session and returns the previous one.
 	SwapNodeLastIP(ctx context.Context, arg SwapNodeLastIPParams) (string, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
+	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
+	TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).

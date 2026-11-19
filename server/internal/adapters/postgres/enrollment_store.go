@@ -143,7 +143,8 @@ func (r *NodeRegistry) Register(ctx context.Context, st enrollment.Stored, n enr
 			return fmt.Errorf("insert node: %w", err)
 		}
 		if err := q.InsertAgentCertificate(ctx, sqlcdb.InsertAgentCertificateParams{
-			Serial: cert.Serial, OrgID: uuid.UUID(cert.Org), NodeID: uuid.UUID(cert.Node), NotBefore: cert.NotBefore, NotAfter: cert.NotAfter,
+			Serial: cert.Serial, OrgID: uuid.UUID(cert.Org), NodeID: uuid.UUID(cert.Node), AuthorityID: cert.Authority,
+			NotBefore: cert.NotBefore, NotAfter: cert.NotAfter,
 		}); err != nil {
 			return fmt.Errorf("record certificate: %w", err)
 		}

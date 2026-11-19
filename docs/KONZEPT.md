@@ -312,6 +312,32 @@ eine Fake-Implementierung für Tests.
   an. Das geschieht nie automatisch.
 - Deinstallation: `sermon-agent uninstall` bzw. Paket entfernen; optional mit Abmeldung beim Server.
 
+### Schlüsselrotation (angelehnt an Komodo, verschärft)
+
+- **Automatisch nach Zeit:** Agent-Zertifikate gelten 30 Tage. Nach 2/3 der Laufzeit erzeugt der Agent ein **neues
+  Schlüsselpaar**, und der Server stellt ein neues Zertifikat aus. Nach einer kurzen Übergangszeit kommt das alte auf
+  die Denylist. Es gibt keinen Opt-out pro Node.
+- **Rotation auf Abruf** (z. B. nach Verdacht auf Kompromittierung oder einem Leak im Backup):
+  - „Schlüssel jetzt rotieren“ für einen Node, eine Gruppe oder alle Nodes einer Org.
+  - Nur für Operator und Admin, mit Step-up-2FA und Eintrag im Audit-Log.
+  - Das alte Zertifikat wird **sofort** gesperrt, auch für schon offene Sessions.
+  - Ist ein Node gerade offline, wird sein altes Zertifikat trotzdem sofort gesperrt; der Node muss danach neu
+    enrollt werden.
+- **Rotation auf Server-Seite:**
+  - Das Server-Zertifikat der Agent-API ist kurzlebig und wird automatisch erneuert.
+  - CA-Wechsel per **Trust-Bundle**: Der Server verteilt über den Stream ein Bundle mit alter **und** neuer CA. Danach
+    stellt er Agent-Zertifikate nur noch mit der neuen CA aus.
+  - Die alte CA wird erst entfernt, wenn kein gültiges Zertifikat der alten CA mehr existiert.
+  - Fortschritt und Abschluss sind in der UI sichtbar.
+- **Erkennung paralleler Nutzung derselben Identität:** Ein Angreifer mit gestohlenem Schlüssel könnte zuerst rotieren
+  und den echten Agent aussperren. Dagegen helfen:
+  - **höchstens eine aktive Session pro Node**;
+  - ein **Security-Alert**, wenn eine zweite Session mit derselben Identität aufgebaut wird oder die Rotation des echten
+    Agents scheitert, weil sein Zertifikat bereits ersetzt wurde;
+  - ein Hinweis, wenn eine Rotation von einer anderen Quell-IP kommt als die bisherige Session.
+
+  In diesen Fällen wird die Identität vorsorglich gesperrt, bis ein Admin den Node freigibt oder neu enrollt.
+
 ---
 
 ## 7. Mandanten, User und Rechte
@@ -810,6 +836,7 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
 | Bedrohung              | Szenario                                        | Gegenmaßnahmen                                                                                                                                                                                |
 |------------------------|-------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Spoofing               | Fremder Agent gibt sich als Node aus            | mTLS mit Client-Zertifikat, Identität nur aus dem Zertifikat, Denylist, kurze Laufzeiten                                                                                                      |
+| Spoofing               | Gestohlener Agent-Schlüssel wird parallel genutzt bzw. rotiert | Nur eine Session pro Node, Alert bei zweiter Session oder gescheiterter Rotation, Rotation auf Abruf mit sofortiger Sperre (§6) |
 | Spoofing               | Gestohlener Enrollment-Token                    | 1 h TTL, einmalig, gruppengebunden, nur Hash in der DB, Audit + Benachrichtigung bei Nutzung                                                                                                  |
 | Tampering              | MITM zwischen Agent und Server                  | TLS 1.3, CA-Pinning bzw. Fingerprint, keine Downgrade-Optionen                                                                                                                                |
 | Tampering              | Manipulierte Agent-Binary                       | Signaturprüfung (minisign/cosign) im Install-Skript und beim Self-Update, signierte Paket-Repos                                                                                               |
@@ -826,8 +853,9 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
 
 - **Extern:** HTTPS über Caddy (automatisches ACME oder eigenes Zertifikat), TLS 1.2+ (bevorzugt 1.3), HSTS.
 - **Agent-Kanal:** eigener Port oder eigener Hostname mit **mTLS**, **TLS 1.3 only**, Client-Zertifikat Pflicht. Die
-  interne Agent-CA ist getrennt vom Web-Zertifikat. Der CA-Schlüssel ist verschlüsselt gespeichert, eine Intermediate-CA
-  ist für die Rotation vorgesehen.
+  interne Agent-CA ist getrennt vom Web-Zertifikat. Der CA-Schlüssel ist verschlüsselt gespeichert; signiert wird mit
+  einer Intermediate-CA. Rotation von Agent-Zertifikaten, Server-Zertifikat und CA (Trust-Bundle) regelt §6
+  „Schlüsselrotation“.
 
 ### 18.3 Web-Application-Security
 

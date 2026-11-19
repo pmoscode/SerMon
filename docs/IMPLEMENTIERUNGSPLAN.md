@@ -301,10 +301,32 @@ flowchart LR
 - **Abhängig von:** M1-07, M1-09
 - **Tests zuerst:** Verbindung ohne, mit fremdem oder mit gesperrtem Zertifikat wird abgelehnt; Identität kommt aus dem Zertifikat, auch wenn der Payload eine andere enthält.
 
-#### ☐ M1-11 – Zertifikatsrotation · S+A · M 🔒
-- **Ziel:** Der Agent erneuert sein Zertifikat nach 2/3 der Laufzeit über den Stream (`RotateCertificate`, neues Schlüsselpaar); der Server stellt aus und sperrt das alte Zertifikat nach Übergangszeit.
+#### ☐ M1-11 – Zertifikatsrotation · S+A · L 🔒
+- **Ziel** (KONZEPT §6 „Schlüsselrotation“):
+  - **Automatisch:** Der Agent erneuert sein Zertifikat nach 2/3 der Laufzeit über den Stream (`RotateCertificate`,
+    neues Schlüsselpaar); der Server stellt aus und sperrt das alte Zertifikat nach Übergangszeit.
+  - **Auf Abruf:** Rotation für einen Node, eine Gruppe oder alle; das alte Zertifikat wird sofort gesperrt
+    (Operator/Admin, Step-up, Audit).
+  - **Parallele Nutzung erkennen:** höchstens eine aktive Session pro Node; Security-Event und vorsorgliche Sperre bei
+    zweiter Session, bei gescheiterter Rotation (Zertifikat bereits ersetzt) und bei einer Rotation von einer neuen
+    Quell-IP.
 - **Abhängig von:** M1-10, M1-14
-- **Tests zuerst:** Rotationszeitpunkt mit Fake-Clock; Rotation während eines Verbindungsabbruchs; abgelaufenes Zertifikat führt zu Re-Enrollment-Hinweis.
+- **Tests zuerst:**
+  - Rotationszeitpunkt mit Fake-Clock; Rotation während eines Verbindungsabbruchs; abgelaufenes Zertifikat führt zu
+    Re-Enrollment-Hinweis.
+  - Rotation auf Abruf sperrt sofort, auch offene Sessions und offline Nodes.
+  - Zweite Session mit derselben Identität wird abgelehnt und erzeugt ein Security-Event; nach einer Rotation durch
+    einen Angreifer wird der echte Agent erkannt und die Identität gesperrt.
+
+#### ☐ M1-11b – Rotation von Server-Zertifikat und Agent-CA · S · M 🔒
+- **Ziel:** Das Server-Zertifikat der Agent-API ist kurzlebig und wird automatisch erneuert. Der CA-Wechsel läuft per
+  Trust-Bundle (alte + neue CA über den Stream verteilt); nach dem Wechsel wird nur noch mit der neuen CA
+  ausgestellt. Die alte CA wird entfernt, sobald kein gültiges Zertifikat mehr von ihr stammt; der Fortschritt ist
+  sichtbar.
+- **Abhängig von:** M1-07, M1-11
+- **Tests zuerst:** Agent akzeptiert während des Wechsels beide CAs und danach nur die neue; der Server verweigert das
+  Entfernen der alten CA, solange noch gültige Zertifikate von ihr existieren; Erneuerung des Server-Zertifikats ohne
+  Verbindungsabbruch.
 
 ### 4.3 Agent
 

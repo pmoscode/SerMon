@@ -18,11 +18,13 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/metric"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -84,7 +86,7 @@ func DefaultConfig() Config {
 
 // Stats are counters for monitoring the ingest.
 type Stats struct {
-	Batches, Samples, Duplicates, Late, Rejected, DroppedSeries, WriteErrors atomic.Uint64
+	Batches, Samples, Duplicates, Late, Rejected, Unknown, DroppedSeries, WriteErrors atomic.Uint64
 	// LagMillis is the delay of the latest batch (server time − collection time).
 	LagMillis atomic.Int64
 }
@@ -98,11 +100,28 @@ type Service struct {
 	now    func() time.Time
 	logger *slog.Logger
 	stats  Stats
+
+	unknownMu sync.Mutex
+	unknown   map[string]struct{}
 }
 
 // NewService returns the ingest service.
 func NewService(store metrics.Store, ring *metrics.Ring, nodes Nodes, config Config, now func() time.Time, logger *slog.Logger) *Service {
-	return &Service{store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger}
+	return &Service{store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}}
+}
+
+// maxReportedUnknown bounds the metric names remembered for "logged once".
+const maxReportedUnknown = 100
+
+// reportUnknown reports whether an unknown metric should be logged (first time, bounded).
+func (s *Service) reportUnknown(name string) bool {
+	s.unknownMu.Lock()
+	defer s.unknownMu.Unlock()
+	if _, done := s.unknown[name]; done || len(s.unknown) >= maxReportedUnknown {
+		return false
+	}
+	s.unknown[name] = struct{}{}
+	return true
 }
 
 // Stats returns the counters.
@@ -230,7 +249,7 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		s.watermark = at
 	}
 	for _, sample := range batch.Samples {
-		if math.IsNaN(sample.Value) || math.IsInf(sample.Value, 0) || !s.admitSeries(sample) {
+		if math.IsNaN(sample.Value) || math.IsInf(sample.Value, 0) || !s.known(sample) || !s.admitSeries(sample) {
 			continue
 		}
 		stats.Samples.Add(1)
@@ -316,6 +335,20 @@ func (s *Session) seen(ctx context.Context, now time.Time) {
 		return
 	}
 	s.lastSeen = now
+}
+
+// known reports whether the metric is in the catalog with exactly its labels (KONZEPT §8: no
+// unbounded labels, no metrics the UI can't describe). Unknown ones are counted and logged once.
+func (s *Session) known(sample Sample) bool {
+	definition, ok := metric.Lookup(sample.Metric)
+	if ok && definition.AcceptsLabels(sample.Labels) {
+		return true
+	}
+	s.service.stats.Unknown.Add(1)
+	if s.service.reportUnknown(sample.Metric) {
+		s.service.logger.Warn("unknown metric or labels from agent, dropped", "node", s.node.String(), "metric", sample.Metric)
+	}
+	return false
 }
 
 // admitSeries applies the per-node series limit; known series always pass.

@@ -252,6 +252,10 @@ func TestAgentBinary_DeliversMetricsIntoTheDatabase(t *testing.T) {
 		WHERE s.node_id = $1 AND s.metric = 'sermon_memory_total_bytes' LIMIT 1`, nodeID).Scan(&memory); err != nil || memory != 8_123_740*1024 {
 		t.Errorf("memory window = %v, %v; want the fixture's MemTotal", memory, err)
 	}
+	// Every metric of the agent's collectors must be in the server's catalog (M1-25).
+	if strings.Contains(srv.logs.String(), "unknown metric") {
+		t.Errorf("the agent sends metrics missing from the catalog:\n%s", srv.logs.String())
+	}
 	if strings.Contains(srv.logs.String(), "level=ERROR") {
 		t.Errorf("server logged errors:\n%s", srv.logs.String())
 	}

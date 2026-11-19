@@ -259,7 +259,7 @@ func TestIngest_ThrottlesOverQuotaAndLiftsWhenCalm(t *testing.T) {
 	s := w.open(t)
 	big := ingest.Batch{Seq: 1, CollectedAt: t0, Samples: make([]ingest.Sample, 25)}
 	for i := range big.Samples {
-		big.Samples[i] = ingest.Sample{Metric: "sermon_x", Labels: metrics.Labels{"n": string(rune('a' + i))}, Value: 1}
+		big.Samples[i] = ingest.Sample{Metric: "sermon_disk_reads_per_second", Labels: metrics.Labels{"device": string(rune('a' + i))}, Value: 1}
 	}
 	w.clock.Set(t0)
 
@@ -280,7 +280,7 @@ func TestIngest_DropsNewSeriesBeyondTheLimit(t *testing.T) {
 	w := newWorld(t, config)
 	s := w.open(t)
 	samples := []ingest.Sample{
-		{Metric: "sermon_a", Value: 1}, {Metric: "sermon_b", Value: 1}, {Metric: "sermon_c", Value: 1},
+		{Metric: "sermon_tcp_established", Value: 1}, {Metric: "sermon_tcp_time_wait", Value: 1}, {Metric: "sermon_system_zombies", Value: 1},
 	}
 	s.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: samples})
 	s.Accept(context.Background(), batch(2, t0.Add(10*time.Second), 1))
@@ -292,7 +292,7 @@ func TestIngest_DropsNewSeriesBeyondTheLimit(t *testing.T) {
 	for _, a := range w.store.Aggregates() {
 		metricsStored[a.Metric] = true
 	}
-	if len(metricsStored) != 2 || metricsStored["sermon_c"] || w.svc.Stats().DroppedSeries.Load() == 0 {
+	if len(metricsStored) != 2 || metricsStored["sermon_system_zombies"] || w.svc.Stats().DroppedSeries.Load() == 0 {
 		t.Errorf("stored metrics %v, dropped %d", metricsStored, w.svc.Stats().DroppedSeries.Load())
 	}
 }
@@ -324,5 +324,28 @@ func TestOnline_AfterSixtySecondsWithoutContactANodeIsOffline(t *testing.T) {
 	seen := t0
 	if !ingest.Online(&seen, t0.Add(59*time.Second)) || ingest.Online(&seen, t0.Add(60*time.Second)) || ingest.Online(nil, t0) {
 		t.Error("online window wrong")
+	}
+}
+
+func TestIngest_DropsUnknownMetricsAndUnexpectedLabels(t *testing.T) {
+	w := newWorld(t, ingest.DefaultConfig())
+	s := w.open(t)
+	samples := []ingest.Sample{
+		{Metric: "sermon_load_average", Labels: metrics.Labels{"period": "1m"}, Value: 1},                // known
+		{Metric: "sermon_made_up", Value: 1},                                                             // unknown
+		{Metric: "sermon_load_average", Labels: metrics.Labels{"period": "1m", "pid": "4242"}, Value: 1}, // extra label
+		{Metric: "sermon_load_average", Value: 1},                                                        // missing label
+	}
+	s.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: samples})
+	s.Accept(context.Background(), batch(2, t0.Add(10*time.Second), 1))
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if a := w.store.Aggregates(); len(a) != 1 || len(a[0].Labels) != 1 {
+		t.Errorf("stored %+v, want only the known series", a)
+	}
+	if got := w.svc.Stats().Unknown.Load(); got != 3 {
+		t.Errorf("unknown = %d, want 3", got)
 	}
 }

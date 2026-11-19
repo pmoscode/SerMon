@@ -118,8 +118,9 @@ fn run_stops_cleanly_on_sigterm() {
         .expect("agent did not log its start");
     assert!(started.contains("agent started"), "{started}");
 
-    let status = Command::new("kill")
-        .args(["-TERM", &child.id().to_string()])
+    // The shell builtin: minimal images have no /bin/kill.
+    let status = Command::new("sh")
+        .args(["-c", &format!("kill -TERM {}", child.id())])
         .status()
         .expect("kill");
     assert!(status.success());

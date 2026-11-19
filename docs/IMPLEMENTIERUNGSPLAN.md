@@ -345,7 +345,7 @@ flowchart LR
 > - End-to-End-Test gegen echte DB: `init` zweimal, Serverstart, Token aus dem Log, Einrichtung über HTTP, Login,
 >   danach verweigert `init`.
 >
-> Die Seite des Setup-Assistenten entsteht mit M1-28 (App-Shell und Auth-Seiten); die API steht.
+> Die Seite des Setup-Assistenten ist mit M1-28 entstanden (`/setup`).
 - **Ziel:** Erzeugt Master-Key, Agent-CA (über M1-07) und den ersten Superadmin über ein einmaliges Setup-Token (30 min gültig, wird im Log ausgegeben); Setup-Assistent in der UI.
 - **Abhängig von:** M1-02, M1-06, M1-07
 - **Tests zuerst:** `init` ist idempotent und verweigert eine zweite Ausführung; das Token verfällt.
@@ -784,7 +784,25 @@ flowchart LR
 
 ### 4.6 Web-UI
 
-#### ☐ M1-28 – App-Shell und Auth-Seiten · W · L
+#### ☑ M1-28 – App-Shell und Auth-Seiten · W · L
+> Erledigt (`web/`):
+> - **Routen:** `/` leitet je nach Zustand zu Setup, Login oder Flotte; `/login`, `/setup` (Setup-Assistent mit
+>   Token, Organisation, Name, E-Mail, Passwort ≥ 12 Zeichen); `(app)/` mit Auth-Guard und `/fleet` als Empty State
+>   bis M1-30.
+> - **App-Shell:** Skip-Link, Navigation mit `aria-current`, Org-Switcher (neue Session per `SwitchOrganization`,
+>   Seiteninhalt wird danach neu aufgebaut), Light/Dark/System (localStorage, Inline-Skript vor dem ersten Paint, per
+>   CSP-Hash erlaubt), Sprache, Abmelden, deaktivierter Platzhalter für die Command-Palette.
+> - **Sessions:** Connect-Clients mit Cookie (`credentials: same-origin`, Connect-JSON); ein Interceptor erkennt
+>   `UNAUTHENTICATED` außerhalb von Auth/Setup als abgelaufene Session und führt zum Login mit Hinweis und Rücksprung.
+>   Rücksprungziele nur als Pfad dieser App (`safeRedirect`, kein Open Redirect).
+> - **Tests:** Komponenten-Tests für Login- und Setup-Formular (Validierung, Fehlercodes ohne Hinweis auf das falsche
+>   Feld), Session-Store inkl. Ablauf, Org-Switcher, Theme; Playwright gegen den echten Server mit gemockter API:
+>   Login mit Rücksprung, Setup-Durchlauf, Org-Wechsel, Logout, Open-Redirect-Abwehr, Dark-Theme ab dem ersten Paint
+>   (Gegenprobe ohne Inline-Skript schlägt fehl), axe für Login, Setup und Shell (hell und dunkel).
+>
+> Abweichungen: Die **TOTP-Seite** folgt mit M1-03 (die Server-Seite fehlt noch). Der echte Login gegen die Datenbank
+> wird mit M1-33 getestet; der E2E-Guard lässt dafür nur die Browser-Meldung zu 401-Antworten zu. Der Ablauf einer
+> Session ist bisher per Komponententest abgedeckt; E2E folgt mit M1-30, sobald die Flotte Daten lädt.
 - **Ziel:** Layout mit Navigation, Light/Dark/System, Org-Switcher, Platzhalter für die Command-Palette; Seiten für Login, TOTP und Setup-Assistent (`SetupService` aus M1-05); Behandlung abgelaufener Sessions; Empty States.
 - **Abhängig von:** M0-04, M0-05 (API zunächst gemockt)
 - **Skill:** `sermon-ui-component`

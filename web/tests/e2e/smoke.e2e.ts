@@ -1,17 +1,23 @@
 import AxeBuilder from '@axe-core/playwright';
+import { installed, mockApi } from './api';
 import { expect, test } from './fixtures';
 
 test.describe('start page (served by sermon-server)', () => {
-	test('renders the welcome page in English by default', async ({ page }) => {
+	test.beforeEach(async ({ page }) => {
+		await mockApi(page, installed(false));
+	});
+
+	test('sends anonymous visitors to the login in English by default', async ({ page }) => {
 		await page.goto('/');
 
-		await expect(page).toHaveTitle('SerMon');
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome to SerMon');
+		await expect(page).toHaveURL(/\/login$/);
+		await expect(page).toHaveTitle('Sign in · SerMon');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sign in');
 		await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 	});
 
 	test('has no accessibility violations', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/login');
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
 		const results = await new AxeBuilder({ page }).analyze();
@@ -20,18 +26,18 @@ test.describe('start page (served by sermon-server)', () => {
 	});
 
 	test('remembers the chosen language across reloads', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/login');
 		await page.getByRole('button', { name: 'Deutsch' }).click();
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Willkommen bei SerMon');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Anmelden');
 
 		await page.reload();
 
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Willkommen bei SerMon');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Anmelden');
 		await expect(page.locator('html')).toHaveAttribute('lang', 'de');
 	});
 
 	test('uses the bundled fonts served by sermon-server', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/login');
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
 		const loaded = await page.evaluate(async () => {
@@ -43,7 +49,7 @@ test.describe('start page (served by sermon-server)', () => {
 	});
 
 	test('sends a strict Content-Security-Policy', async ({ page }) => {
-		const response = await page.goto('/');
+		const response = await page.goto('/login');
 		const csp = response?.headers()['content-security-policy'] ?? '';
 
 		expect(csp).toContain("default-src 'self'");
@@ -64,8 +70,9 @@ test.describe('with a German browser', () => {
 	test.use({ locale: 'de-DE' });
 
 	test('picks German from the browser language', async ({ page }) => {
+		await mockApi(page, installed(false));
 		await page.goto('/');
 
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Willkommen bei SerMon');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Anmelden');
 	});
 });

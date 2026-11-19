@@ -1,0 +1,46 @@
+import type { Page, Route } from '@playwright/test';
+
+/**
+ * Fakes the web API (Connect JSON) for E2E tests: the test server runs without a database.
+ * Handlers are keyed by "Service/Method"; unknown calls answer UNIMPLEMENTED.
+ */
+export type Handler = (body: unknown) => { status?: number; json: unknown };
+
+export const unauthenticated = {
+	status: 401,
+	json: { code: 'unauthenticated', message: 'no session' }
+};
+
+export const session = {
+	userId: '0193f5a0-0000-7000-8000-0000000000ff',
+	email: 'mia@example.org',
+	displayName: 'Mia Muster',
+	activeOrganizationId: '0193f5a0-0000-7000-8000-00000000000a',
+	organizations: [
+		{ id: '0193f5a0-0000-7000-8000-00000000000a', name: 'Alpha GmbH' },
+		{ id: '0193f5a0-0000-7000-8000-00000000000b', name: 'Beta AG' }
+	]
+};
+
+export async function mockApi(page: Page, handlers: Record<string, Handler>): Promise<string[]> {
+	const calls: string[] = [];
+	await page.route(/\/sermon\.web\.v1\.(\w+)\/(\w+)$/, async (route: Route) => {
+		const [, service, method] = /sermon\.web\.v1\.(\w+)\/(\w+)$/.exec(route.request().url()) ?? [];
+		const key = `${service}/${method}`;
+		calls.push(key);
+		const handler = handlers[key];
+		const { status = 200, json } = handler
+			? handler(route.request().postDataJSON())
+			: { status: 501, json: { code: 'unimplemented', message: key } };
+		await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(json) });
+	});
+	return calls;
+}
+
+/** An instance that is set up, with or without a valid session cookie. */
+export function installed(loggedIn: boolean): Record<string, Handler> {
+	return {
+		'SetupService/GetSetupStatus': () => ({ json: { setupRequired: false } }),
+		'AuthService/GetSession': () => (loggedIn ? { json: { session } } : unauthenticated)
+	};
+}

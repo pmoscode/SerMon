@@ -1,14 +1,21 @@
 <script lang="ts">
-	import LanguageSwitcher from '#lib/components/LanguageSwitcher.svelte';
-	import { localeState } from '#lib/i18n/locale.svelte.js';
+	import { api } from '#lib/api/client.js';
+	import { redirectTo } from '#lib/navigation/navigate.js';
+	import { HOME } from '#lib/navigation/redirect.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { sessionState } from '#lib/stores/session.svelte.js';
+
+	/** First start: the setup assistant; otherwise the app or the login. */
+	async function route(): Promise<string> {
+		const status = await api.setup.getSetupStatus({}).catch(() => undefined);
+		if (status?.setupRequired) return '/setup';
+		const session = await sessionState.load().catch(() => 'anonymous');
+		return session === 'authenticated' ? HOME : '/login';
+	}
+
+	$effect(() => {
+		void route().then(redirectTo);
+	});
 </script>
 
-<main class="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-6 p-8">
-	{#key localeState.current}
-		<h1 class="text-4xl font-semibold tracking-tight">{m.welcome_title()}</h1>
-		<p class="text-lg text-muted-foreground">{m.welcome_subtitle()}</p>
-		<p class="font-mono text-sm text-muted-foreground">{m.status_under_construction()}</p>
-	{/key}
-	<LanguageSwitcher />
-</main>
+<p class="p-8 text-muted-foreground" role="status">{m.loading()}</p>

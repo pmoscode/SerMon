@@ -13,6 +13,14 @@
 	"labels": [
 		"dependencies"
 	],
+	"ignorePaths": [
+		"**/node_modules/**",
+		"**/vendor/**",
+		"**/examples/**",
+		"**/__tests__/**",
+		"**/__fixtures__/**",
+		"spikes/**"
+	],
 	"rangeStrategy": "pin",
 	"minimumReleaseAge": "3 days",
 	"internalChecksFilter": "strict",

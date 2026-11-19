@@ -104,6 +104,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/`
 | D25 | Repo/CI        | **GitHub-Monorepo + GitHub Actions**                                                         |                                                                                                       |
 | D26 | API            | **Connect-RPC/Protobuf** für Agent ↔ Server (gRPC) und Web ↔ Server (Connect)                | Ein Schema, typisiert von Ende zu Ende                                                                |
 | D27 | UI-Ressourcen  | **Alles lokal ausgeliefert:** keine CDNs, keine externen Schriften, Skripte, Styles, Bilder oder Icons | Datenschutz (keine IP-Weitergabe an Dritte, DSGVO), Air-Gap-fähig, strikte CSP, keine Supply-Chain über fremde Server |
+| D28 | Mitglieder     | **Einladungslink:** einmalig, 72 h gültig, nur als Hash gespeichert; die UI zeigt ihn zum Kopieren, Mail-Versand optional | Keine User-Enumeration, Admin kennt keine Passwörter, **SMTP nie Pflicht** ([ADR 0008](adr/0008-einladungen.md)) |
 
 ---
 
@@ -1166,7 +1167,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | O10 | Mobile                       | Push-Benachrichtigungen reichen?                                                 | ntfy/Pushover/Telegram decken das für v1 ab                                                |
 | O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |
 | O12 | Wachstum über ca. 200 Nodes  | TimescaleDB stößt bei 1-s-Auflösung an Grenzen                                   | `MetricStore` auf VictoriaMetrics umstellen; die Domänenlogik bleibt unverändert (ADR 0001) |
-| O13 | Mitglieder hinzufügen        | Einladung per Mail-Link oder Anlegen mit Startpasswort? Ist die E-Mail schon instanzweit vergeben, darf ein Org-Admin das nicht erfahren (User-Enumeration) | Einladung mit einmaligem Token (Hash gespeichert, Gültigkeit 72 h) und einheitlicher Antwort |
+| O13 | Mitglieder hinzufügen        | ✓ Geklärt: Einladungslink statt Startpasswort                                    | Entschieden: D28, Link zum Kopieren, Mail optional (ADR 0008)                              |
 
 ---
 

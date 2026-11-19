@@ -308,7 +308,8 @@ flowchart LR
 >
 > Offen (Teil c):
 > - Orgs anlegen, umbenennen und löschen durch den Superadmin; braucht den Superadmin aus M1-05.
-> - Neue Mitglieder hinzufügen (Einladung oder Anlegen); Entscheidung offen, siehe O13.
+> - Mitglieder per Einladungslink (D28, ADR 0008): einladen, auflisten, widerrufen und annehmen, für neue und
+>   bestehende Konten; der Link wird in der UI zum Kopieren angezeigt, Mail-Versand kommt mit E2.4.
 - **Ziel:** CRUD-Use-Cases und Connect-RPCs für Orgs, Node-Gruppen, Mitgliedschaften und Rollen-Bindungen; RLS-Policies; Audit-Log-Tabelle (nur anfügen, Hash-Kette); Org-Switch.
   - **Testgerüst für Mandantentrennung:** ein generischer Test, der **jede** Web-RPC mit einem User aus fremder Org aufruft und `NotFound` oder `PermissionDenied` erwartet. Neue RPCs ohne Eintrag lassen den Test fehlschlagen.
 - **Abhängig von:** M1-01, M1-02

@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
+use sermon_transport::fingerprint::Fingerprint;
+
 use crate::config::DEFAULT_CONFIG_PATH;
 
 /// SerMon agent: collects metrics, logs and security events and streams them to the server.
@@ -54,7 +56,7 @@ pub struct EnrollArgs {
     /// SHA-256 fingerprint of the server certificate, only needed if it is self-signed
     /// ("sha256:AB:CD:…").
     #[arg(long, value_name = "FINGERPRINT")]
-    pub ca_fingerprint: Option<String>,
+    pub ca_fingerprint: Option<Fingerprint>,
 
     /// Replace an existing enrollment of this host.
     #[arg(long)]
@@ -150,6 +152,7 @@ mod tests {
 
     use super::*;
 
+    const FINGERPRINT: &str = "sha256:E3:B0:C4:42:98:FC:1C:14:9A:FB:F4:C8:99:6F:B9:24:27:AE:41:E4:64:9B:93:4C:A4:95:99:1B:78:52:B8:55";
     const TOKEN: &str = "sme_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcde";
 
     fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
@@ -188,7 +191,7 @@ mod tests {
             "--token",
             TOKEN,
             "--ca-fingerprint",
-            "sha256:AB:CD",
+            FINGERPRINT,
             "--force",
         ])
         .unwrap();
@@ -198,8 +201,22 @@ mod tests {
         };
         assert_eq!(args.token.expose(), TOKEN);
         assert_eq!(TOKEN.len(), 4 + 43);
-        assert_eq!(args.ca_fingerprint.as_deref(), Some("sha256:AB:CD"));
+        assert_eq!(args.ca_fingerprint, Some(FINGERPRINT.parse().unwrap()));
         assert!(args.force);
+    }
+
+    #[test]
+    fn enroll_rejects_a_malformed_fingerprint() {
+        let error = parse(&[
+            "enroll",
+            "--token",
+            TOKEN,
+            "--ca-fingerprint",
+            "sha256:AB:CD",
+        ])
+        .unwrap_err();
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
     }
 
     #[test]

@@ -1,0 +1,446 @@
+//! The agent identity on disk: `<state_dir>/identity/` with key, certificates and metadata.
+//!
+//! Files are written with mode 0600 into a directory with mode 0700 and get the owner of the
+//! state directory, so that `enroll` may run as root while the agent runs as `sermon`. A new
+//! identity replaces the old one as a whole (rename), never file by file.
+
+use std::fs::{self, DirBuilder, File, OpenOptions};
+use std::io::{self, Write};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use rustls::pki_types::CertificateDer;
+use serde::{Deserialize, Serialize};
+use sermon_transport::identity::{AgentIdentity, AgentKey, IssuedCertificate};
+
+use crate::state::{CERTIFICATE_FILE, IDENTITY_FILE, KEY_FILE, StateLayout, TRUST_BUNDLE_FILE};
+
+/// Permission bits that must not be set on the key file (group and others).
+const FOREIGN_ACCESS: u32 = 0o077;
+
+/// Errors when storing or loading the identity.
+#[derive(Debug, thiserror::Error)]
+pub enum IdentityStoreError {
+    /// A file or directory could not be read or written.
+    #[error("{path}: {source}")]
+    Io {
+        /// The file or directory.
+        path: PathBuf,
+        /// Cause.
+        #[source]
+        source: io::Error,
+    },
+    /// A file exists but has unusable content or unsafe permissions.
+    #[error("{path}: {reason}")]
+    Invalid {
+        /// The file.
+        path: PathBuf,
+        /// What is wrong.
+        reason: String,
+    },
+}
+
+/// The identity as loaded from disk.
+#[derive(Debug)]
+pub struct StoredIdentity {
+    /// The agent's private key.
+    pub key: AgentKey,
+    /// Organization and node.
+    pub identity: AgentIdentity,
+    /// Client certificate.
+    pub certificate: CertificateDer<'static>,
+    /// Issuing CA certificates.
+    pub intermediates: Vec<CertificateDer<'static>>,
+    /// Roots for the server certificate of the agent API.
+    pub trust_anchors: Vec<CertificateDer<'static>>,
+    /// End of the certificate's validity.
+    pub not_after: SystemTime,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Metadata {
+    org_id: String,
+    node_id: String,
+    /// Expiry of the client certificate, seconds since the Unix epoch.
+    not_after: u64,
+}
+
+/// Whether the host is enrolled (a client certificate exists).
+#[must_use]
+pub fn is_enrolled(layout: &StateLayout) -> bool {
+    layout.certificate_file().exists()
+}
+
+/// Stores a new identity, replacing an existing one as a whole.
+///
+/// # Errors
+///
+/// [`IdentityStoreError::Io`] if writing fails; the previous identity then stays in place.
+pub fn store(
+    layout: &StateLayout,
+    key: &AgentKey,
+    issued: &IssuedCertificate,
+) -> Result<(), IdentityStoreError> {
+    let root = layout.root();
+    create_private_dir_all(root)?;
+    let owner = fs::metadata(root).map_err(io_at(root))?;
+    let pid = std::process::id();
+    let staging = root.join(format!(".identity.new.{pid}"));
+    let previous = root.join(format!(".identity.old.{pid}"));
+    let target = layout.identity_dir();
+
+    remove_if_exists(&staging)?;
+    let result = write_staging(&staging, key, issued)
+        .and_then(|()| adopt_owner(&staging, &owner))
+        .and_then(|()| swap_in(&staging, &target, &previous))
+        .and_then(|()| sync_dir(root));
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
+fn write_staging(
+    staging: &Path,
+    key: &AgentKey,
+    issued: &IssuedCertificate,
+) -> Result<(), IdentityStoreError> {
+    DirBuilder::new()
+        .mode(0o700)
+        .create(staging)
+        .map_err(io_at(staging))?;
+
+    let chain: Vec<&CertificateDer<'_>> = std::iter::once(&issued.certificate)
+        .chain(&issued.intermediates)
+        .collect();
+    let metadata = Metadata {
+        org_id: issued.identity.org_id.clone(),
+        node_id: issued.identity.node_id.clone(),
+        not_after: issued
+            .not_after
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .as_secs(),
+    };
+    let metadata = toml::to_string(&metadata).map_err(|error| IdentityStoreError::Invalid {
+        path: staging.join(IDENTITY_FILE),
+        reason: error.to_string(),
+    })?;
+
+    let anchors: Vec<&CertificateDer<'_>> = issued.trust_anchors.iter().collect();
+    write_private(&staging.join(KEY_FILE), key.to_pem().as_bytes())?;
+    write_private(
+        &staging.join(CERTIFICATE_FILE),
+        certificates_pem(&chain).as_bytes(),
+    )?;
+    write_private(
+        &staging.join(TRUST_BUNDLE_FILE),
+        certificates_pem(&anchors).as_bytes(),
+    )?;
+    write_private(&staging.join(IDENTITY_FILE), metadata.as_bytes())?;
+    sync_dir(staging)
+}
+
+/// Moves `staging` to `target`; an existing `target` is moved aside first and restored on failure.
+fn swap_in(staging: &Path, target: &Path, previous: &Path) -> Result<(), IdentityStoreError> {
+    remove_if_exists(previous)?;
+    let had_previous = match fs::rename(target, previous) {
+        Ok(()) => true,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+        Err(error) => return Err(io_at(target)(error)),
+    };
+    if let Err(error) = fs::rename(staging, target) {
+        if had_previous {
+            let _ = fs::rename(previous, target);
+        }
+        return Err(io_at(target)(error));
+    }
+    if had_previous {
+        fs::remove_dir_all(previous).map_err(io_at(previous))?;
+    }
+    Ok(())
+}
+
+/// Gives the staging directory and its files the owner of the state directory (only differs if
+/// `enroll` runs as root).
+fn adopt_owner(staging: &Path, owner: &fs::Metadata) -> Result<(), IdentityStoreError> {
+    let entries = fs::read_dir(staging).map_err(io_at(staging))?;
+    let mut paths = vec![staging.to_owned()];
+    for entry in entries {
+        paths.push(entry.map_err(io_at(staging))?.path());
+    }
+    for path in paths {
+        let current = fs::symlink_metadata(&path).map_err(io_at(&path))?;
+        if current.uid() != owner.uid() || current.gid() != owner.gid() {
+            std::os::unix::fs::lchown(&path, Some(owner.uid()), Some(owner.gid()))
+                .map_err(io_at(&path))?;
+        }
+    }
+    Ok(())
+}
+
+/// Loads the identity written by [`store`].
+///
+/// # Errors
+///
+/// [`IdentityStoreError`] if a file is missing, malformed, the key file is readable by others or
+/// the key doesn't belong to the certificate.
+pub fn load(layout: &StateLayout) -> Result<StoredIdentity, IdentityStoreError> {
+    let key_path = layout.key_file();
+    let mode = fs::metadata(&key_path).map_err(io_at(&key_path))?.mode();
+    if mode & FOREIGN_ACCESS != 0 {
+        return Err(IdentityStoreError::Invalid {
+            path: key_path,
+            reason: format!(
+                "readable by group or others (mode {:o}); fix with chmod 600",
+                mode & 0o777
+            ),
+        });
+    }
+    let key =
+        AgentKey::from_pem(&read_text(&key_path)?).map_err(|error| invalid(&key_path, &error))?;
+
+    let certificate_path = layout.certificate_file();
+    let mut chain = read_certificates(&certificate_path)?.into_iter();
+    let certificate = chain
+        .next()
+        .ok_or_else(|| invalid(&certificate_path, &"no certificate"))?;
+    let intermediates: Vec<_> = chain.collect();
+    if !sermon_transport::identity::certificate_matches_key(&certificate, &key) {
+        return Err(invalid(&certificate_path, &"does not belong to agent.key"));
+    }
+
+    let trust_path = layout.trust_bundle_file();
+    let trust_anchors = read_certificates(&trust_path)?;
+    if trust_anchors.is_empty() {
+        return Err(invalid(&trust_path, &"no certificate"));
+    }
+
+    let metadata_path = layout.identity_file();
+    let metadata: Metadata = toml::from_str(&read_text(&metadata_path)?)
+        .map_err(|error| invalid(&metadata_path, &error))?;
+    let identity = AgentIdentity {
+        org_id: metadata.org_id,
+        node_id: metadata.node_id,
+    };
+    Ok(StoredIdentity {
+        key,
+        identity,
+        certificate,
+        intermediates,
+        trust_anchors,
+        not_after: UNIX_EPOCH + Duration::from_secs(metadata.not_after),
+    })
+}
+
+fn certificates_pem(certificates: &[&CertificateDer<'_>]) -> String {
+    let blocks: Vec<pem::Pem> = certificates
+        .iter()
+        .map(|der| pem::Pem::new("CERTIFICATE", der.to_vec()))
+        .collect();
+    pem::encode_many_config(
+        &blocks,
+        pem::EncodeConfig::new().set_line_ending(pem::LineEnding::LF),
+    )
+}
+
+fn read_certificates(path: &Path) -> Result<Vec<CertificateDer<'static>>, IdentityStoreError> {
+    let blocks = pem::parse_many(read_text(path)?).map_err(|error| invalid(path, &error))?;
+    blocks
+        .into_iter()
+        .map(|block| {
+            if block.tag() == "CERTIFICATE" {
+                Ok(CertificateDer::from(block.into_contents()))
+            } else {
+                Err(invalid(
+                    path,
+                    &format!("unexpected PEM block {}", block.tag()),
+                ))
+            }
+        })
+        .collect()
+}
+
+fn read_text(path: &Path) -> Result<String, IdentityStoreError> {
+    fs::read_to_string(path).map_err(io_at(path))
+}
+
+fn write_private(path: &Path, contents: &[u8]) -> Result<(), IdentityStoreError> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+        .map_err(io_at(path))?;
+    file.write_all(contents).map_err(io_at(path))?;
+    file.sync_all().map_err(io_at(path))
+}
+
+fn create_private_dir_all(path: &Path) -> Result<(), IdentityStoreError> {
+    DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+        .map_err(io_at(path))
+}
+
+fn remove_if_exists(path: &Path) -> Result<(), IdentityStoreError> {
+    match fs::remove_dir_all(path) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(io_at(path)(error)),
+        _ => Ok(()),
+    }
+}
+
+fn sync_dir(path: &Path) -> Result<(), IdentityStoreError> {
+    File::open(path)
+        .and_then(|dir| dir.sync_all())
+        .map_err(io_at(path))
+}
+
+fn io_at(path: &Path) -> impl Fn(io::Error) -> IdentityStoreError + '_ {
+    move |source| IdentityStoreError::Io {
+        path: path.to_owned(),
+        source,
+    }
+}
+
+fn invalid(path: &Path, reason: &dyn std::fmt::Display) -> IdentityStoreError {
+    IdentityStoreError::Invalid {
+        path: path.to_owned(),
+        reason: reason.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::*;
+
+    fn issued_for(key: &AgentKey) -> IssuedCertificate {
+        // A self-signed stand-in: the store doesn't verify chains, only key and format.
+        let params = rcgen::CertificateParams::new(Vec::<String>::new()).unwrap();
+        let key_pair = rcgen::KeyPair::from_pem(&key.to_pem()).unwrap();
+        let certificate = params.self_signed(&key_pair).unwrap().der().clone();
+        let root = rcgen::CertificateParams::new(Vec::<String>::new())
+            .unwrap()
+            .self_signed(&rcgen::KeyPair::generate().unwrap())
+            .unwrap()
+            .der()
+            .clone();
+        IssuedCertificate {
+            identity: AgentIdentity {
+                org_id: "0192f6c8-1111-7000-8000-000000000001".into(),
+                node_id: "0192f6c8-2222-7000-8000-000000000002".into(),
+            },
+            certificate,
+            intermediates: vec![root.clone()],
+            trust_anchors: vec![root],
+            not_after: UNIX_EPOCH + Duration::from_hours(499_344),
+        }
+    }
+
+    fn mode(path: &Path) -> u32 {
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn stores_and_loads_the_identity_with_private_permissions() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = StateLayout::new(dir.path().join("state"));
+        let key = AgentKey::generate().unwrap();
+        let issued = issued_for(&key);
+
+        store(&layout, &key, &issued).unwrap();
+
+        assert!(is_enrolled(&layout));
+        assert_eq!(mode(layout.root()), 0o700);
+        assert_eq!(mode(&layout.identity_dir()), 0o700);
+        for file in [
+            layout.key_file(),
+            layout.certificate_file(),
+            layout.trust_bundle_file(),
+            layout.identity_file(),
+        ] {
+            assert_eq!(mode(&file), 0o600, "{}", file.display());
+        }
+        let loaded = load(&layout).unwrap();
+        assert_eq!(loaded.key.public_key_info(), key.public_key_info());
+        assert_eq!(loaded.identity, issued.identity);
+        assert_eq!(loaded.certificate, issued.certificate);
+        assert_eq!(loaded.intermediates, issued.intermediates);
+        assert_eq!(loaded.trust_anchors, issued.trust_anchors);
+        assert_eq!(loaded.not_after, issued.not_after);
+        let pem = fs::read_to_string(layout.certificate_file()).unwrap();
+        assert_eq!(pem.matches("BEGIN CERTIFICATE").count(), 2);
+        assert!(!pem.contains('\r'));
+    }
+
+    #[test]
+    fn replaces_an_existing_identity_as_a_whole_and_leaves_no_staging_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = StateLayout::new(dir.path());
+        let old_key = AgentKey::generate().unwrap();
+        store(&layout, &old_key, &issued_for(&old_key)).unwrap();
+        let new_key = AgentKey::generate().unwrap();
+
+        store(&layout, &new_key, &issued_for(&new_key)).unwrap();
+
+        let loaded = load(&layout).unwrap();
+        assert_eq!(loaded.key.public_key_info(), new_key.public_key_info());
+        let names: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["identity"]);
+    }
+
+    #[test]
+    fn refuses_a_key_readable_by_others() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = StateLayout::new(dir.path());
+        let key = AgentKey::generate().unwrap();
+        store(&layout, &key, &issued_for(&key)).unwrap();
+        fs::set_permissions(layout.key_file(), fs::Permissions::from_mode(0o640)).unwrap();
+
+        let error = load(&layout).unwrap_err();
+
+        assert!(error.to_string().contains("chmod 600"), "{error}");
+    }
+
+    #[test]
+    fn refuses_a_certificate_of_another_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = StateLayout::new(dir.path());
+        let key = AgentKey::generate().unwrap();
+        let other = AgentKey::generate().unwrap();
+        store(&layout, &key, &issued_for(&other)).unwrap();
+
+        let error = load(&layout).unwrap_err();
+
+        assert!(
+            error.to_string().contains("does not belong to agent.key"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn reports_missing_and_corrupt_files_with_their_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = StateLayout::new(dir.path());
+        assert!(!is_enrolled(&layout));
+        assert!(load(&layout).unwrap_err().to_string().contains("agent.key"));
+
+        let key = AgentKey::generate().unwrap();
+        store(&layout, &key, &issued_for(&key)).unwrap();
+        fs::write(layout.identity_file(), "node_id = 1\n").unwrap();
+        assert!(
+            load(&layout)
+                .unwrap_err()
+                .to_string()
+                .contains("identity.toml")
+        );
+    }
+}

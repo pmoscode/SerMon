@@ -41,3 +41,15 @@ plugins:
       - no_server=true
       - compile_well_known_types
       - extern_path=.google.protobuf=::prost_types
+
+  # Rust: tonic server stubs for the mock server in agent tests only (dev-dependency, never in the
+  # agent binary). Messages come from sermon-transport.
+  - local: protoc-gen-tonic
+    out: ../agent/crates/sermon-testserver/src/gen
+    exclude_types: [sermon.web.v1]
+    opt:
+      - no_client=true
+      - no_include
+      - compile_well_known_types
+      - extern_path=.google.protobuf=::prost_types
+      - extern_path=.sermon.agent.v1=::sermon_transport::proto::agent::v1

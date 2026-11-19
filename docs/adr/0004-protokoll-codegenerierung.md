@@ -72,6 +72,18 @@ Renovate-PRs, die v2 einführen, werden nicht ungeprüft gemergt.
 
 ## Konsequenzen
 
+### Server-Stubs für Agent-Tests (Ergänzung M1-13, 2026-11-19)
+
+Agent-Tests brauchen einen gRPC-Server, der `sermon-server` spielt (Enrollment, später der Session-Stream). Dafür
+erzeugt `protoc-gen-tonic` zusätzlich **nur Server-Stubs** nach `agent/crates/sermon-testserver/src/gen`
+(`no_client`, `no_include`, Nachrichtentypen per `extern_path` aus `sermon-transport`).
+
+- `sermon-testserver` ist nur Dev-Abhängigkeit und steht nicht in `default-members`. Die Release-Binaries enthalten
+  weder Server-Code noch `axum`.
+- Der Ordner gehört zu den generierten Zielordnern (`just check-gen`).
+
+## Konsequenzen
+
 - **Positiv:**
   - Reproduzierbar und offline-fähig.
   - Keine Weitergabe des Schemas an Dritte.

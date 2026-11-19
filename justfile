@@ -54,7 +54,7 @@ gen: gen-proto gen-sql
 gen-proto:
     buf generate
     cd ../agent && cargo fmt --all
-    @echo "✓ generated: server/internal/gen, web/src/lib/api/gen, agent/crates/sermon-transport/src/gen"
+    @echo "✓ generated: server/internal/gen, web/src/lib/api/gen, agent/crates/sermon-{transport,testserver}/src/gen"
 
 # Generate typed Go code from SQL queries and migrations (sqlc)
 [working-directory: 'server']
@@ -64,8 +64,8 @@ gen-sql:
 
 # Fail if the committed generated code is not up to date with proto/ (used in CI)
 check-gen: gen
-    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen server/internal/adapters/postgres/sqlcdb
-    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen server/internal/adapters/postgres/sqlcdb)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
+    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb
+    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
 
 # Install the pinned Rust protoc plugins used by `just gen`
 install-proto-plugins:
@@ -89,6 +89,11 @@ test-integration:
 [working-directory: 'web']
 e2e:
     pnpm run test:e2e
+
+# Run the Rust agent binary against the real server (Testcontainers; Docker and Rust required)
+e2e-agent:
+    cd agent && cargo build --locked -p sermon-agent
+    cd server && SERMON_AGENT_BIN="{{ justfile_directory() }}/agent/target/debug/sermon-agent" go test -tags integration -count=1 -run 'TestAgentBinary_' ./cmd/sermon-server/
 
 # Run security scans (secrets now; gosec, govulncheck, cargo-audit/deny, pnpm audit follow)
 security: security-secrets security-agent security-server security-web

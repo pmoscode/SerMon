@@ -5,6 +5,8 @@
 
 pub mod cli;
 pub mod config;
+pub mod enroll;
+pub mod identity;
 pub mod logging;
 pub mod state;
 
@@ -34,7 +36,10 @@ pub fn execute(cli: Cli) -> anyhow::Result<()> {
             logging::init(config.log_level);
             run(&config)
         }
-        Command::Enroll(_) => bail!("enroll is not implemented yet (M1-13)"),
+        Command::Enroll(args) => {
+            let config = AgentConfig::load(&cli.config)?;
+            enroll::enroll(&config, &args)
+        }
         Command::Uninstall(args) => {
             let config = AgentConfig::load(&cli.config)?;
             uninstall(&StateLayout::new(&config.state_dir), &args)

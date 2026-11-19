@@ -48,6 +48,9 @@ Devcontainer (`.devcontainer/`) mit allen Werkzeugen.
 Agent bauen: `just build-agent` (statische musl-Binaries für amd64 und arm64), `just smoke-agent` (Start im Container).
 Agent-Konfiguration: `/etc/sermon/agent.toml` (Schema und Beispiel in `agent/crates/sermon-agent/src/config.rs`);
 Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur über `ProcRoot` (`sermon-core`).
+Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
+`just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
+Enrollment und Identitätsdateien: ADR 0010.
 Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just smoke-server` (Start, Health-Probes, SIGTERM).
 Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.
 Wichtige Variablen:
@@ -71,7 +74,8 @@ Web: `just build-web` (Build, Größenbudget, Kopie nach `server/web/dist` zum E
 die echte Server-Binary mit eingebetteter UI), `cd web && pnpm dev` (Vite-Dev-Server).
 
 Protokoll: `proto/` mit buf (ADR 0004). `just gen` generiert Code für Go (`server/internal/gen`), TS
-(`web/src/lib/api/gen`) und Rust (`agent/crates/sermon-transport/src/gen`), und zwar nur mit lokalen Plugins.
+(`web/src/lib/api/gen`) und Rust (`agent/crates/sermon-transport/src/gen`, Server-Stubs für Tests in
+`agent/crates/sermon-testserver/src/gen`), und zwar nur mit lokalen Plugins.
 Generierter Code wird committet und nie von Hand geändert; die Zielordner leert `buf generate` bei jedem Lauf (keine
 eigenen Dateien dort ablegen). Rust-Plugins installiert `just install-proto-plugins`.
 

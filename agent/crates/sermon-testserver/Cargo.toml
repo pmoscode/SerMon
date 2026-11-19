@@ -1,0 +1,22 @@
+[package]
+name = "sermon-testserver"
+description = "Test support only: an in-process gRPC server faking sermon-server for agent tests (never part of the agent binary)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+tonic-prost.workspace = true
+rcgen = { workspace = true, features = ["x509-parser"] }
+rustls.workspace = true
+sermon-transport.workspace = true
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
+tokio-rustls.workspace = true
+tokio-stream = { workspace = true, features = ["net"] }
+tonic = { workspace = true, features = ["server", "router", "tls-connect-info"] }

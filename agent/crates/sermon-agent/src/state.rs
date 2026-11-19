@@ -6,6 +6,15 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+/// File name of the private key in the identity directory.
+pub const KEY_FILE: &str = "agent.key";
+/// File name of the certificate chain in the identity directory.
+pub const CERTIFICATE_FILE: &str = "agent.crt";
+/// File name of the trust bundle in the identity directory.
+pub const TRUST_BUNDLE_FILE: &str = "trust.pem";
+/// File name of the identity metadata in the identity directory.
+pub const IDENTITY_FILE: &str = "identity.toml";
+
 /// Paths of the files and directories the agent keeps in its state directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateLayout {
@@ -28,6 +37,30 @@ impl StateLayout {
     #[must_use]
     pub fn identity_dir(&self) -> PathBuf {
         self.root.join("identity")
+    }
+
+    /// Private key of the agent (PKCS#8 PEM, mode 0600).
+    #[must_use]
+    pub fn key_file(&self) -> PathBuf {
+        self.identity_dir().join(KEY_FILE)
+    }
+
+    /// Client certificate followed by the issuing CA certificates (PEM).
+    #[must_use]
+    pub fn certificate_file(&self) -> PathBuf {
+        self.identity_dir().join(CERTIFICATE_FILE)
+    }
+
+    /// Roots the server certificate of the agent API must chain to (PEM).
+    #[must_use]
+    pub fn trust_bundle_file(&self) -> PathBuf {
+        self.identity_dir().join(TRUST_BUNDLE_FILE)
+    }
+
+    /// Node, organization and certificate expiry (TOML).
+    #[must_use]
+    pub fn identity_file(&self) -> PathBuf {
+        self.identity_dir().join(IDENTITY_FILE)
     }
 
     /// Write-ahead log with data not yet acknowledged by the server.

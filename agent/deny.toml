@@ -39,6 +39,8 @@ ignore = true
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Path dependencies between our own unpublished crates have no version; that is not a wildcard.
+allow-wildcard-paths = true
 highlight = "all"
 deny = [
   # TLS only via rustls (KONZEPT §4.1) – no OpenSSL in the static musl binaries.

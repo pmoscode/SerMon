@@ -32,9 +32,9 @@ nennen die Aufgaben-ID im Implementierungsplan.
 - `just lint` / `just fmt` – Lint bzw. Formatierung aller Teile
 - `just test` – Unit-Tests; `just test-integration` – Integrationstests (Testcontainers)
 - `just e2e` – End-to-End-Tests
-- `just security` – Security-Scans (gosec, govulncheck, cargo-audit/deny, pnpm audit, gitleaks)
+- `just security` – Security-Scans (gosec, govulncheck, cargo-audit/deny, pnpm audit, betterleaks)
 
-Voraussetzungen: `just`, `lefthook`, `gitleaks`, Rust (rustup; Version über `agent/rust-toolchain.toml` gepinnt),
+Voraussetzungen: `just`, `lefthook`, `betterleaks`, Rust (rustup; Version über `agent/rust-toolchain.toml` gepinnt),
 `zig` + `cargo-zigbuild` (Cross-Build, ADR 0002), `cargo-deny`, Go, `golangci-lint` (v2), `govulncheck`,
 Node + pnpm, `buf`, `shellcheck`, Docker.
 `just setup` prüft, was fehlt.

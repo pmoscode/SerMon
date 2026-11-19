@@ -3,8 +3,9 @@
 pre-commit:
   parallel: true
   commands:
-    gitleaks:
-      run: gitleaks git --pre-commit --staged --redact --no-banner
+    secrets:
+      # betterleaks (ADR 0005) – never enable --validation: it would send findings to provider APIs.
+      run: betterleaks git --pre-commit --staged --redact --no-banner .
     shellcheck:
       glob: "*.sh"
       run: shellcheck {staged_files}

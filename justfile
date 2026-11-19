@@ -13,14 +13,14 @@ setup:
     #!/usr/bin/env bash
     set -euo pipefail
     missing=0
-    for tool in just lefthook gitleaks shellcheck git; do
+    for tool in just lefthook betterleaks shellcheck git; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "✗ $tool fehlt"; missing=1; fi
     done
     # Needed from M0-02..M0-05 on – reported, but not fatal yet.
     for tool in cargo cargo-zigbuild cargo-deny zig go golangci-lint govulncheck node pnpm buf protoc-gen-prost protoc-gen-tonic docker; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "… $tool fehlt (ab M0-02..M0-07 nötig)"; fi
     done
-    [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook gitleaks shellcheck)." >&2; exit 1; }
+    [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook betterleaks shellcheck)." >&2; exit 1; }
     lefthook install
 
 # Start the development environment (infra, server with hot reload, web dev server)
@@ -72,9 +72,9 @@ lint-shell:
 test-scripts:
     sh scripts/check-commit-msg_test.sh
 
-# Scan the git history for leaked secrets
+# Scan the git history for leaked secrets (betterleaks, ADR 0005; no live validation against provider APIs)
 security-secrets:
-    gitleaks git --redact --no-banner
+    betterleaks git --redact --no-banner .
 
 # --- proto (buf) -------------------------------------------------------------
 

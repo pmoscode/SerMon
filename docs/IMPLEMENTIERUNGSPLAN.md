@@ -114,7 +114,7 @@ flowchart LR
 > `pmoscode/SerMon` ist privat (API-Antwort 404). Einschalten, sobald das Repo öffentlich wird. Zusätzlich gibt es
 > `just setup`, eine PR-Vorlage und einen Commit-Message-Check (`scripts/check-commit-msg.sh` mit Tests).
 
-- **Ziel:** Struktur nach KONZEPT §20; `LICENSE` (AGPL-3.0), `README.md`, `SECURITY.md` (Responsible Disclosure), `.editorconfig`, `.gitignore`, `CODEOWNERS`, `justfile` mit Ziel-Stubs (`dev`, `gen`, `lint`, `test`, `e2e`, `security`), `lefthook.yml` (Format, gitleaks).
+- **Ziel:** Struktur nach KONZEPT §20; `LICENSE` (AGPL-3.0), `README.md`, `SECURITY.md` (Responsible Disclosure), `.editorconfig`, `.gitignore`, `CODEOWNERS`, `justfile` mit Ziel-Stubs (`dev`, `gen`, `lint`, `test`, `e2e`, `security`), `lefthook.yml` (Format, Secret-Scan; gitleaks, inzwischen betterleaks – ADR 0005).
 - **Abhängig von:** –
 - **Abnahme:** `just --list` zeigt alle Ziele; lefthook-Hooks greifen; GitHub Private Vulnerability Reporting ist aktiviert.
 
@@ -165,7 +165,7 @@ flowchart LR
 ### ☐ M0-06 – CI und Security-Pipeline · X · M 🔒
 - **Ziel:**
   - `ci.yml`: Lint- und Test-Matrix für Rust, Go und Web, Coverage-Upload
-  - `security.yml`: CodeQL, gosec, govulncheck, cargo-audit, cargo-deny, `pnpm audit`, gitleaks, OpenSSF Scorecard
+  - `security.yml`: CodeQL, gosec, govulncheck, cargo-audit, cargo-deny, `pnpm audit`, betterleaks, OpenSSF Scorecard
   - Alle Actions per SHA gepinnt, minimale `permissions:`
   - `renovate.json`, Branch-Protection für `main`
 - **Abhängig von:** M0-02 bis M0-05

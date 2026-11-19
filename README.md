@@ -33,7 +33,7 @@ Unterstützte Systeme: Debian, Ubuntu, RHEL/Rocky/Alma/Fedora, Alpine – jeweil
 ## Entwicklung
 
 Voraussetzungen: [`just`](https://github.com/casey/just), [`lefthook`](https://github.com/evilmartians/lefthook),
-[`gitleaks`](https://github.com/gitleaks/gitleaks), `shellcheck` – später zusätzlich Rust, Go, Node + pnpm, `buf`, Docker.
+[`betterleaks`](https://github.com/betterleaks/betterleaks), `shellcheck` – später zusätzlich Rust, Go, Node + pnpm, `buf`, Docker.
 
 ```bash
 just setup   # prüft Voraussetzungen und installiert die Git-Hooks

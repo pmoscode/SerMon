@@ -39,7 +39,7 @@ Security is the top priority (KONZEPT.md §18). Walk through every section relev
 
 ## 6. Secrets
 - [ ] Secrets stored AES-256-GCM encrypted (`secrets.Box`), never logged, never returned to the UI after saving.
-- [ ] No secrets in error messages, panics, traces, test fixtures or commits (`gitleaks`).
+- [ ] No secrets in error messages, panics, traces, test fixtures or commits (`betterleaks`).
 
 ## 7. Transport & PKI
 - [ ] Agent channel TLS 1.3 only, client cert required; no `InsecureSkipVerify` / `danger_accept_invalid_certs` outside tests.
@@ -59,4 +59,4 @@ Security is the top priority (KONZEPT.md §18). Walk through every section relev
 - [ ] New personal data (IPs, usernames, log content) has retention and role restrictions.
 - [ ] Privileged actions write an audit log entry (who, what, when, result).
 
-Then run: `just lint && just test && just security` (gosec, govulncheck, cargo-audit, cargo-deny, pnpm audit, gitleaks).
+Then run: `just lint && just test && just security` (gosec, govulncheck, cargo-audit, cargo-deny, pnpm audit, betterleaks).

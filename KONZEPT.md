@@ -950,7 +950,7 @@ Mutationstests zeigen die tatsächliche Testgüte.
   a. `gosec`, `errcheck`, `revive`, `staticcheck`); `prettier`, `eslint`, `svelte-check`; `buf lint`; `shellcheck`;
   `hadolint`; `markdownlint`.
 - **Task-Runner:** `just` (`just dev`, `just test`, `just lint`, `just e2e`, `just gen`).
-- **Git-Hooks:** `lefthook` (Format, Lint, schnelle Tests, Secret-Scan mit `gitleaks`).
+- **Git-Hooks:** `lefthook` (Format, Lint, schnelle Tests, Secret-Scan mit `betterleaks`).
 - **Commits:** Conventional Commits → automatischer Changelog und SemVer (`release-please`).
 - **Branching:** Trunk-based, kurze PRs; `main` ist geschützt (Reviews, grüne CI, signierte Commits empfohlen).
 - **Dev-Umgebung:** `deploy/dev/compose.yaml` (PG/TimescaleDB, Loki, Mailpit für SMTP-Tests, ntfy) und ein Devcontainer; ein
@@ -1040,7 +1040,7 @@ SerMon/
 | Workflow       | Trigger                   | Inhalt                                                                                                                                                                                                                                                                       |
 |----------------|---------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `ci.yml`       | PR, push                  | Lint, Format, Unit- und Integrationstests (Matrix: Rust, Go, Web), `buf lint/breaking`, Coverage-Report                                                                                                                                                                      |
-| `security.yml` | PR, nightly               | CodeQL (Go, JS/TS, Rust), `gosec`, `govulncheck`, `cargo-audit`, `cargo-deny` (Lizenzen und Advisories), `pnpm audit`, `gitleaks`, `trivy` (Images), OpenSSF Scorecard                                                                                                       |
+| `security.yml` | PR, nightly               | CodeQL (Go, JS/TS, Rust), `gosec`, `govulncheck`, `cargo-audit`, `cargo-deny` (Lizenzen und Advisories), `pnpm audit`, `betterleaks`, `trivy` (Images), OpenSSF Scorecard                                                                                                       |
 | `e2e.yml`      | PR (Label) und nightly    | Compose-Umgebung mit Agents auf allen Zieldistros (amd64; arm64 über QEMU nightly), Playwright                                                                                                                                                                               |
 | `fuzz.yml`     | nightly                   | `cargo-fuzz` / `go test -fuzz` mit Zeitbudget, Korpus als Artefakt                                                                                                                                                                                                           |
 | `release.yml`  | Tag `v*` (release-please) | Cross-Builds (musl amd64/arm64), Server-Image (multi-arch, distroless/static, non-root), `.deb`/`.rpm`/`.apk` (nfpm), **SBOM** (CycloneDX via syft), **cosign keyless signing** + **SLSA-Provenance** (L3), GitHub Release, Paket-Repos aktualisieren (signiert mit GPG/RSA) |

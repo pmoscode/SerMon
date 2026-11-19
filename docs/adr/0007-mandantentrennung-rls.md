@@ -46,6 +46,23 @@ In der Standardkonfiguration des Postgres-Images ist der einzige Login-User Supe
   - Anlegen ist erlaubt (Einladung).
   - **Folge:** `INSERT … RETURNING` auf `users` scheitert, weil die neue Zeile ohne Mitgliedschaft unsichtbar ist. `CreateUser` gibt deshalb nichts zurück; die Mitgliedschaft wird in derselben Transaktion angelegt.
 
+### Zugriffe ohne Mandant (Ergänzung M1-07)
+
+Manche Prüfungen laufen, bevor ein Mandant bekannt ist, z. B. die Sperrprüfung von Agent-Zertifikaten beim
+TLS-Handshake. Dafür gilt:
+
+- Eine **`SECURITY DEFINER`-Funktion** mit festem `search_path` beantwortet genau eine Frage mit Ja/Nein
+  (`agent_certificate_usable(serial, at)`). `PUBLIC` hat kein EXECUTE-Recht, nur `sermon_app`. Unbekannte Werte
+  ergeben „nein“ (fail closed).
+- Damit die Funktion trotz RLS lesen kann, hat die betroffene Tabelle **RLS ohne `FORCE`**: Der Eigentümer, und damit
+  die Funktion, umgeht RLS, `sermon_app` als Nicht-Eigentümer bleibt eingeschränkt. Das ist eine bewusste,
+  dokumentierte Ausnahme pro Tabelle (bisher nur `agent_certificates`).
+- Instanzweite Tabellen ohne Mandantenbezug (`pki_authorities`) haben keine RLS. Private Schlüssel liegen dort nur
+  mit der Secrets-Box versiegelt, gebunden an den Hash ihres Zertifikats.
+- Getestet ist das auch mit einem **Eigentümer ohne Superuser-Rechte** (Produktionsfall). `FORCE` greift für ihn auf
+  den übrigen Tabellen, die Prüffunktion funktioniert trotzdem. Gegenprobe: Mit `SECURITY INVOKER` schlagen die
+  Tests fehl.
+
 ### Tests (Integration, Testcontainers mit demselben Image wie `deploy/dev/compose.yaml`)
 
 - Ohne Tenant sind 0 Zeilen sichtbar (alle Tabellen).

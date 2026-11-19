@@ -10,6 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
+type AgentCertificate struct {
+	Serial    string
+	OrgID     uuid.UUID
+	NodeID    uuid.UUID
+	NotBefore time.Time
+	NotAfter  time.Time
+	RevokedAt *time.Time
+	CreatedAt time.Time
+}
+
 type Membership struct {
 	OrgID     uuid.UUID
 	UserID    uuid.UUID
@@ -20,6 +30,16 @@ type Organization struct {
 	ID        uuid.UUID
 	Name      string
 	CreatedAt time.Time
+}
+
+type PkiAuthority struct {
+	ID                    int32
+	RootCert              []byte
+	RootKeySealed         []byte
+	IntermediateCert      []byte
+	IntermediateKeySealed []byte
+	Active                bool
+	CreatedAt             time.Time
 }
 
 type User struct {

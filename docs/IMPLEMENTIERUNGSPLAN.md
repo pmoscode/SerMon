@@ -295,7 +295,17 @@ flowchart LR
 
 ### 4.2 Server: PKI und Enrollment
 
-#### ☐ M1-07 – Interne Agent-CA · S · M 🔒
+#### ☑ M1-07 – Interne Agent-CA · S · M 🔒
+> Erledigt:
+> - `pki`: Root-CA (10 Jahre) und Intermediate-CA (2 Jahre, Name Constraint `spiffe://sermon`, keine weiteren CAs).
+> - Agent-Zertifikate 30 Tage, nur `clientAuth`. Nur P-256-CSRs werden akzeptiert; alle Wünsche aus der CSR werden
+>   ignoriert.
+> - Strenges Parsen der Identität (`AgentIdentity`).
+> - `agentca.Service`: Laden oder Anlegen der CA (Schlüssel versiegelt und an ihr Zertifikat gebunden, Race zwischen
+>   mehreren Instanzen abgefangen), Ausstellen, Sperren, Prüfen.
+> - Migration `00002`: Zertifikate mit RLS und Sperrprüfung per `SECURITY DEFINER`; ADR 0007 um Zugriffe ohne
+>   Mandant ergänzt.
+> - Unit- und Integrationstests, auch mit Eigentümer ohne Superuser-Rechte; Gegenprobe mit `SECURITY INVOKER`.
 - **Ziel:** Root- und Intermediate-CA erzeugen (Schlüssel über M1-06 verschlüsselt gespeichert); CSR signieren mit SAN `spiffe://sermon/org/<org>/node/<node>`, Laufzeit 30 Tage; Serial-Verwaltung; Denylist.
 - **Abhängig von:** M0-08, M1-06
 - **Tests zuerst:** Ausgestellte Zertifikate validieren gegen die Kette; CSR mit fremden Extensions oder schwachem Schlüssel wird abgelehnt; Laufzeit stimmt; Serial auf der Denylist wird erkannt.

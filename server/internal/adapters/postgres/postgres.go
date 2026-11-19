@@ -118,3 +118,7 @@ func (db *DB) InTenant(ctx context.Context, scope tenant.Scope, fn func(q *sqlcd
 	}
 	return nil
 }
+
+// withoutTenant returns queries outside any tenant transaction: tenant tables are invisible
+// (RLS), only instance-level tables and SECURITY DEFINER checks are usable.
+func (db *DB) withoutTenant() *sqlcdb.Queries { return sqlcdb.New(db.pool) }

@@ -11,7 +11,10 @@ import (
 )
 
 type Querier interface {
+	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
+	ActiveAuthority(ctx context.Context) (ActiveAuthorityRow, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
+	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	// Organizations. Row-level security limits every query to the organization of the tenant
 	// transaction (postgres.DB.InTenant); there is no way to read other organizations from here.
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
@@ -21,8 +24,11 @@ type Querier interface {
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error)
+	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
+	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	ListOrganizations(ctx context.Context) ([]Organization, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

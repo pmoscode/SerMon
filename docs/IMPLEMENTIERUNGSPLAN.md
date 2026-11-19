@@ -434,7 +434,7 @@ flowchart LR
 - **Abhängig von:** M1-07, M1-09
 - **Tests zuerst:** Verbindung ohne, mit fremdem oder mit gesperrtem Zertifikat wird abgelehnt; Identität kommt aus dem Zertifikat, auch wenn der Payload eine andere enthält.
 
-#### ◐ M1-11 – Zertifikatsrotation · S+A · L 🔒
+#### ☑ M1-11 – Zertifikatsrotation · S+A · L 🔒
 > Teil a erledigt (Server, automatische Rotation und parallele Nutzung):
 > - **Protokoll:** `RotateCertificate` (neue CSR) und `CertificateIssued` im Stream.
 > - **Rotation:** Der Server stellt für dieselbe Identität aus. Das alte Zertifikat bleibt 1 h gültig (Sperre mit
@@ -458,9 +458,12 @@ flowchart LR
 > - **Offline-Nodes:** Alle Zertifikate werden sofort gesperrt (Re-Enrollment nötig, keine Node-Sperre).
 > - Web- und Agent-Listener teilen sich die Sessions.
 >
-> Offen:
-> - Agent-Seite (Rotationszeitpunkt, `RotateNow` beantworten, Re-Enrollment-Hinweis) mit M1-14.
-> - Security-Events und Benachrichtigung mit E2.3/E2.4; die Sperre aufheben mit M1-32.
+> Agent-Seite erledigt mit M1-14: Rotation nach 2/3 der Laufzeit (Ausstellungszeit in `identity.toml`) und auf
+> `RotateNow`, neues Schlüsselpaar, Prüfung und atomares Speichern, danach Reconnect mit dem neuen Zertifikat;
+> abgelaufenes oder abgelehntes Zertifikat → Hinweis auf `enroll --force`. End-to-End gegen den echten Server
+> (`just e2e-agent`): Rotation ohne Security-Event, zweite Session mit dem neuen Zertifikat.
+>
+> Weiter bei anderen Aufgaben: Security-Events und Benachrichtigung (E2.3/E2.4), Sperre aufheben (M1-32).
 - **Ziel** (KONZEPT §6 „Schlüsselrotation“):
   - **Automatisch:** Der Agent erneuert sein Zertifikat nach 2/3 der Laufzeit über den Stream (`RotateCertificate`,
     neues Schlüsselpaar); der Server stellt aus und sperrt das alte Zertifikat nach Übergangszeit.
@@ -497,8 +500,10 @@ flowchart LR
 >   - Er rotiert auf die neue CA; das Ausmustern wird in der Übergangszeit verweigert und gelingt danach.
 >   - Danach verbindet ein Agent mit nur der neuen Wurzel, die alte verifiziert den Server nicht mehr.
 >
+> Agent-Seite erledigt mit M1-14: Das Bundle aus der Session ersetzt `trust.pem` atomar (leere oder kaputte Bundles
+> werden ignoriert); das Server-Zertifikat wird gegen alle Wurzeln geprüft.
+>
 > Offen:
-> - Agent-Seite (Bundle speichern, beide Wurzeln akzeptieren) mit M1-14.
 > - Ein **instanzweites Audit-Log**: Die CA-Aktionen stehen bisher nur in `started_by`/`retired_by` und im Log; das
 >   Audit-Log ist pro Org.
 - **Ziel:** Das Server-Zertifikat der Agent-API ist kurzlebig und wird automatisch erneuert. Der CA-Wechsel läuft per
@@ -556,7 +561,28 @@ flowchart LR
 - **Abhängig von:** M0-05, M1-12 (Server-Gegenstück: M1-09)
 - **Tests zuerst:** CSR-Inhalt; Abbruch bei falschem Fingerprint; Dateirechte; Verhalten bei vorhandenem Enrollment (Abbruch ohne `--force`).
 
-#### ☐ M1-14 – Agent-Transport · A · L
+#### ☑ M1-14 – Agent-Transport · A · L
+> Erledigt:
+> - **Protokoll:** `Batch{seq, MetricBatch}` (Agent → Server) und `Throttle{min_interval}` (Server → Agent) mit
+>   protovalidate-Regeln (Metriknamen `sermon_…`, höchstens 8 Labels, 2 000 Samples, keine NaN/∞). Der Server nimmt
+>   Batches an, bestätigt aber bis M1-24 nichts – die Daten bleiben im WAL.
+> - **Verbindung:** eigener rustls-Connector, nur TLS 1.3, Server-Zertifikat gegen das Trust-Bundle, Client-Zertifikat
+>   aus der Identität; HTTP/2-Keepalive 15 s, gzip.
+> - **Session:** `Hello` mit Host-Fakten, Heartbeat alle 15 s, Batches aus dem WAL in Seq-Reihenfolge, höchstens 64
+>   unbestätigt; `Ack` löscht aus dem WAL; `Throttle` begrenzt auf einen Batch pro Intervall (höchstens 1 h).
+>   Unbekannte Server-Nachrichten werden ignoriert, ein `Ack` jenseits des Gesendeten beendet die Session.
+> - **Reconnect:** exponentieller Backoff mit Full Jitter (1 s bis 60 s), Reset nach erfolgreichem Aufbau; nach einer
+>   Rotation sofort. Identität und Host-Fakten werden vor jeder Verbindung neu gelesen.
+> - **`sermon-agent run`:** öffnet WAL und Transport, Housekeeping (fsync, Alterslimit) alle 5 s, sauberes Ende bei
+>   SIGTERM; ohne Enrollment Abbruch mit Hinweis.
+> - **Tests:** Fake-Agent-API im Prozess (mTLS, Mitschnitt pro Session, steuerbare Acks und Abbrüche): Hello und
+>   Heartbeats, Reihenfolge und Löschen nach Ack, In-flight-Grenze, Resend nur des Unbestätigten, Property-Test über
+>   zufällige Abbrüche ohne Datenverlust, Throttle, Trust-Bundle, Rotation (fällig und auf Abruf), abgelaufenes
+>   Zertifikat, fremder Server. Gegenproben für In-flight-Grenze, Resend, Ack und Trust-Bundle. Binary-Tests für `run`
+>   und End-to-End gegen den echten Server (`just e2e-agent`).
+> - **Härtung:** Server-Meldungen ohne Steuerzeichen in den Logs (keine gefälschten Logzeilen).
+>
+> Abweichung: Nur gzip, kein zstd (bräuchte eine C-Bibliothek im statischen Build); KONZEPT §5 angepasst.
 - **Ziel:** `tonic`-Client mit `rustls` und mTLS; bidirektionaler Stream; Reconnect mit exponentiellem Backoff und Jitter; `Hello` mit Host-Fakten; `Heartbeat`; Senden aus dem WAL nach Sequenznummer und Löschen erst nach `Ack`; `Throttle` beachten; gzip/zstd.
 - **Abhängig von:** M1-13, M1-15
 - **Tests zuerst:** Gegen Mock-gRPC-Server: Reconnect, Ack-Handling, Throttle, keine Datenverluste bei Abbruch (Property-Test über zufällige Abbrüche).

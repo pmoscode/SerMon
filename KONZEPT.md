@@ -264,18 +264,23 @@ eine Fake-Implementierung für Tests.
 - **Schema:** `proto/sermon/agent/v1/*.proto` und `proto/sermon/web/v1/*.proto`, verwaltet mit `buf` (Lint und
   Breaking-Change-Check in CI).
 - **Agent ↔ Server:** Ein langlebiger **bidirektionaler gRPC-Stream** `AgentService.Session`.
-    - Agent → Server: `Hello{agent_version, host_facts, config_version}`, `MetricBatch`, `LogBatch`,
-      `SecurityEventBatch`, `UpdateReport`, `ProcessSnapshot`, `CommandResult`, `Heartbeat`,
-      `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“)
-    - Server → Agent: `TrustBundle{roots}` (zu Beginn jeder Session), `CertificateIssued`, `RotateNow`
-      (Rotation auf Abruf), `ConfigUpdate{version, config}`, `StartLiveView{interval}`, `StopLiveView`,
-      `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`
+    - Agent → Server: `Hello{agent_version, host_facts, config_version}`, `Heartbeat`,
+      `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“), `Batch{seq, …}` mit genau einem
+      Inhalt: `MetricBatch`, später `LogBatch`, `SecurityEventBatch`, `UpdateReport`; dazu `ProcessSnapshot` und
+      `CommandResult` (nicht gepuffert)
+    - Server → Agent: `TrustBundle{roots}` (zu Beginn jeder Session), `Ack{seq}`, `Throttle{min_interval}`,
+      `CertificateIssued`, `RotateNow` (Rotation auf Abruf), `ConfigUpdate{version, config}`,
+      `StartLiveView{interval}`, `StopLiveView`, `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`
 - **Enrollment:** `EnrollmentService.Enroll{token, csr, host_facts}` ist ein einzelner Aufruf über den öffentlichen
   HTTPS-Endpunkt, nicht über den mTLS-Port ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)).
 - **Batching:** Metriken werden jede Sekunde gesendet, Logs alle 1 s oder bei 256 KB (je nachdem, was zuerst eintritt).
-  Komprimiert wird mit zstd oder gzip auf gRPC-Ebene.
+  Komprimiert wird mit gzip auf gRPC-Ebene (zstd bräuchte eine C-Bibliothek im statischen Agent und folgt nur bei
+  Bedarf).
 - **Zuverlässigkeit:** Jeder Batch hat eine monoton steigende Sequenznummer, der Server bestätigt (`Ack{seq}`). Der
-  Agent löscht erst nach dem Ack aus dem WAL (*at-least-once*); der Server dedupliziert über `(node_id, seq)`.
+  Agent löscht erst nach dem Ack aus dem WAL (*at-least-once*) und hat höchstens 64 unbestätigte Batches unterwegs.
+  Die Seq steigt auch über Neustarts und den Verlust des WAL hinweg (ein neues WAL beginnt bei der Zeit in µs), kann
+  aber Lücken haben (verworfene Daten). Der Server dedupliziert deshalb über „Seq ≤ höchste gespeicherte Seq des
+  Nodes“.
 - **Backpressure und Quotas:** Der Server limitiert pro Node (Samples/s, Log-Bytes/s, Anzahl Serien). Bei Überschreitung
   schickt er `Throttle`, der Agent drosselt und meldet das.
 - **Versionierung:** Protokollversion im `Hello`. Der Server unterstützt die aktuelle und die vorherige Minor-Version

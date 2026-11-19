@@ -12,7 +12,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rustls::pki_types::CertificateDer;
 use serde::{Deserialize, Serialize};
-use sermon_transport::identity::{AgentIdentity, AgentKey, IssuedCertificate};
+use sermon_transport::identity::{AgentIdentity, AgentKey, Credentials, IssuedCertificate};
+use sermon_transport::session::{BoxError, IdentitySource};
 
 use crate::state::{CERTIFICATE_FILE, IDENTITY_FILE, KEY_FILE, StateLayout, TRUST_BUNDLE_FILE};
 
@@ -42,21 +43,7 @@ pub enum IdentityStoreError {
 }
 
 /// The identity as loaded from disk.
-#[derive(Debug)]
-pub struct StoredIdentity {
-    /// The agent's private key.
-    pub key: AgentKey,
-    /// Organization and node.
-    pub identity: AgentIdentity,
-    /// Client certificate.
-    pub certificate: CertificateDer<'static>,
-    /// Issuing CA certificates.
-    pub intermediates: Vec<CertificateDer<'static>>,
-    /// Roots for the server certificate of the agent API.
-    pub trust_anchors: Vec<CertificateDer<'static>>,
-    /// End of the certificate's validity.
-    pub not_after: SystemTime,
-}
+pub type StoredIdentity = Credentials;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -65,6 +52,9 @@ struct Metadata {
     node_id: String,
     /// Expiry of the client certificate, seconds since the Unix epoch.
     not_after: u64,
+    /// When the agent received the certificate (for the rotation time), seconds since the epoch.
+    #[serde(default)]
+    issued_at: Option<u64>,
 }
 
 /// Whether the host is enrolled (a client certificate exists).
@@ -82,6 +72,7 @@ pub fn store(
     layout: &StateLayout,
     key: &AgentKey,
     issued: &IssuedCertificate,
+    issued_at: SystemTime,
 ) -> Result<(), IdentityStoreError> {
     let root = layout.root();
     create_private_dir_all(root)?;
@@ -92,7 +83,7 @@ pub fn store(
     let target = layout.identity_dir();
 
     remove_if_exists(&staging)?;
-    let result = write_staging(&staging, key, issued)
+    let result = write_staging(&staging, key, issued, issued_at)
         .and_then(|()| adopt_owner(&staging, &owner))
         .and_then(|()| swap_in(&staging, &target, &previous))
         .and_then(|()| sync_dir(root));
@@ -106,6 +97,7 @@ fn write_staging(
     staging: &Path,
     key: &AgentKey,
     issued: &IssuedCertificate,
+    issued_at: SystemTime,
 ) -> Result<(), IdentityStoreError> {
     DirBuilder::new()
         .mode(0o700)
@@ -118,11 +110,8 @@ fn write_staging(
     let metadata = Metadata {
         org_id: issued.identity.org_id.clone(),
         node_id: issued.identity.node_id.clone(),
-        not_after: issued
-            .not_after
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO)
-            .as_secs(),
+        not_after: unix_seconds(issued.not_after),
+        issued_at: Some(unix_seconds(issued_at)),
     };
     let metadata = toml::to_string(&metadata).map_err(|error| IdentityStoreError::Invalid {
         path: staging.join(IDENTITY_FILE),
@@ -225,14 +214,85 @@ pub fn load(layout: &StateLayout) -> Result<StoredIdentity, IdentityStoreError> 
         org_id: metadata.org_id,
         node_id: metadata.node_id,
     };
-    Ok(StoredIdentity {
+    Ok(Credentials {
         key,
         identity,
         certificate,
         intermediates,
         trust_anchors,
         not_after: UNIX_EPOCH + Duration::from_secs(metadata.not_after),
+        issued_at: metadata
+            .issued_at
+            .map(|seconds| UNIX_EPOCH + Duration::from_secs(seconds)),
     })
+}
+
+/// Replaces the trust bundle (roots from the server) atomically.
+///
+/// # Errors
+///
+/// [`IdentityStoreError::Io`] if writing fails; the old bundle then stays in place.
+pub fn store_trust_bundle(
+    layout: &StateLayout,
+    roots: &[CertificateDer<'static>],
+) -> Result<(), IdentityStoreError> {
+    let target = layout.trust_bundle_file();
+    let temporary = layout
+        .identity_dir()
+        .join(format!(".{TRUST_BUNDLE_FILE}.new"));
+    match fs::remove_file(&temporary) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => {
+            return Err(io_at(&temporary)(error));
+        }
+        _ => {}
+    }
+    let anchors: Vec<&CertificateDer<'_>> = roots.iter().collect();
+    let result = write_private(&temporary, certificates_pem(&anchors).as_bytes())
+        .and_then(|()| fs::rename(&temporary, &target).map_err(io_at(&target)))
+        .and_then(|()| sync_dir(&layout.identity_dir()));
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// The identity files as [`IdentitySource`] for the transport.
+#[derive(Debug, Clone)]
+pub struct FileIdentity {
+    layout: StateLayout,
+}
+
+impl FileIdentity {
+    /// The identity below `layout`.
+    #[must_use]
+    pub fn new(layout: StateLayout) -> Self {
+        Self { layout }
+    }
+}
+
+impl IdentitySource for FileIdentity {
+    fn load(&self) -> Result<Credentials, BoxError> {
+        Ok(load(&self.layout)?)
+    }
+
+    fn store_rotated(
+        &self,
+        key: &AgentKey,
+        issued: &IssuedCertificate,
+        issued_at: SystemTime,
+    ) -> Result<(), BoxError> {
+        Ok(store(&self.layout, key, issued, issued_at)?)
+    }
+
+    fn store_trust_bundle(&self, roots: &[CertificateDer<'static>]) -> Result<(), BoxError> {
+        Ok(store_trust_bundle(&self.layout, roots)?)
+    }
+}
+
+fn unix_seconds(time: SystemTime) -> u64 {
+    time.duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_secs()
 }
 
 fn certificates_pem(certificates: &[&CertificateDer<'_>]) -> String {
@@ -353,7 +413,13 @@ mod tests {
         let key = AgentKey::generate().unwrap();
         let issued = issued_for(&key);
 
-        store(&layout, &key, &issued).unwrap();
+        store(
+            &layout,
+            &key,
+            &issued,
+            UNIX_EPOCH + Duration::from_hours(498_000),
+        )
+        .unwrap();
 
         assert!(is_enrolled(&layout));
         assert_eq!(mode(layout.root()), 0o700);
@@ -373,6 +439,10 @@ mod tests {
         assert_eq!(loaded.intermediates, issued.intermediates);
         assert_eq!(loaded.trust_anchors, issued.trust_anchors);
         assert_eq!(loaded.not_after, issued.not_after);
+        assert_eq!(
+            loaded.issued_at,
+            Some(UNIX_EPOCH + Duration::from_hours(498_000))
+        );
         let pem = fs::read_to_string(layout.certificate_file()).unwrap();
         assert_eq!(pem.matches("BEGIN CERTIFICATE").count(), 2);
         assert!(!pem.contains('\r'));
@@ -383,10 +453,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let layout = StateLayout::new(dir.path());
         let old_key = AgentKey::generate().unwrap();
-        store(&layout, &old_key, &issued_for(&old_key)).unwrap();
+        store(&layout, &old_key, &issued_for(&old_key), UNIX_EPOCH).unwrap();
         let new_key = AgentKey::generate().unwrap();
 
-        store(&layout, &new_key, &issued_for(&new_key)).unwrap();
+        store(&layout, &new_key, &issued_for(&new_key), UNIX_EPOCH).unwrap();
 
         let loaded = load(&layout).unwrap();
         assert_eq!(loaded.key.public_key_info(), new_key.public_key_info());
@@ -402,7 +472,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let layout = StateLayout::new(dir.path());
         let key = AgentKey::generate().unwrap();
-        store(&layout, &key, &issued_for(&key)).unwrap();
+        store(&layout, &key, &issued_for(&key), UNIX_EPOCH).unwrap();
         fs::set_permissions(layout.key_file(), fs::Permissions::from_mode(0o640)).unwrap();
 
         let error = load(&layout).unwrap_err();
@@ -416,7 +486,7 @@ mod tests {
         let layout = StateLayout::new(dir.path());
         let key = AgentKey::generate().unwrap();
         let other = AgentKey::generate().unwrap();
-        store(&layout, &key, &issued_for(&other)).unwrap();
+        store(&layout, &key, &issued_for(&other), UNIX_EPOCH).unwrap();
 
         let error = load(&layout).unwrap_err();
 
@@ -434,7 +504,7 @@ mod tests {
         assert!(load(&layout).unwrap_err().to_string().contains("agent.key"));
 
         let key = AgentKey::generate().unwrap();
-        store(&layout, &key, &issued_for(&key)).unwrap();
+        store(&layout, &key, &issued_for(&key), UNIX_EPOCH).unwrap();
         fs::write(layout.identity_file(), "node_id = 1\n").unwrap();
         assert!(
             load(&layout)
@@ -442,5 +512,58 @@ mod tests {
                 .to_string()
                 .contains("identity.toml")
         );
+    }
+}
+
+#[cfg(test)]
+mod trust_bundle_tests {
+    use super::*;
+
+    #[test]
+    fn replaces_the_trust_bundle_and_keeps_the_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let layout = StateLayout::new(dir.path());
+        let key = AgentKey::generate().unwrap();
+        let root = rcgen::CertificateParams::new(Vec::<String>::new())
+            .unwrap()
+            .self_signed(&rcgen::KeyPair::generate().unwrap())
+            .unwrap()
+            .der()
+            .clone();
+        let certificate = rcgen::CertificateParams::new(Vec::<String>::new())
+            .unwrap()
+            .self_signed(&rcgen::KeyPair::from_pem(&key.to_pem()).unwrap())
+            .unwrap()
+            .der()
+            .clone();
+        let issued = IssuedCertificate {
+            identity: AgentIdentity {
+                org_id: "0192f6c8-1111-7000-8000-000000000001".into(),
+                node_id: "0192f6c8-2222-7000-8000-000000000002".into(),
+            },
+            certificate,
+            intermediates: vec![],
+            trust_anchors: vec![root.clone()],
+            not_after: UNIX_EPOCH + Duration::from_hours(499_344),
+        };
+        store(&layout, &key, &issued, UNIX_EPOCH).unwrap();
+        let next = rcgen::CertificateParams::new(Vec::<String>::new())
+            .unwrap()
+            .self_signed(&rcgen::KeyPair::generate().unwrap())
+            .unwrap()
+            .der()
+            .clone();
+
+        store_trust_bundle(&layout, &[root.clone(), next.clone()]).unwrap();
+
+        let loaded = load(&layout).unwrap();
+        assert_eq!(loaded.trust_anchors, vec![root, next]);
+        assert_eq!(loaded.key.public_key_info(), key.public_key_info());
+        let names: Vec<String> = fs::read_dir(layout.identity_dir())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with('.'))
+            .collect();
+        assert_eq!(names, Vec::<String>::new());
     }
 }

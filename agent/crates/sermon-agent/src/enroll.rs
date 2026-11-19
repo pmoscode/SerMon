@@ -52,7 +52,7 @@ pub fn enroll(config: &AgentConfig, args: &EnrollArgs) -> anyhow::Result<()> {
         .context("cannot start the async runtime")?;
     let issued = runtime.block_on(async {
         let channel =
-            channel::connect(config.server_url.uri().clone(), tls, ENROLL_TIMEOUT).await?;
+            channel::connect(config.server_url.uri().clone(), tls, Some(ENROLL_TIMEOUT)).await?;
         let issued = enrollment::enroll(
             channel,
             &key,
@@ -65,7 +65,8 @@ pub fn enroll(config: &AgentConfig, args: &EnrollArgs) -> anyhow::Result<()> {
         anyhow::Ok(issued)
     })?;
 
-    identity::store(&layout, &key, &issued).context("cannot store the new identity")?;
+    identity::store(&layout, &key, &issued, SystemTime::now())
+        .context("cannot store the new identity")?;
     let days = issued
         .not_after
         .duration_since(SystemTime::now())

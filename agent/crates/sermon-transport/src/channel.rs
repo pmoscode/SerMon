@@ -18,6 +18,10 @@ use tonic::transport::{Channel, Endpoint};
 
 /// Time for TCP and TLS setup.
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// HTTP/2 keepalive pings on idle connections (KONZEPT §5).
+pub const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(15);
+/// A ping unanswered for this long ends the connection.
+pub const KEEPALIVE_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Errors when opening a channel.
 #[derive(Debug, thiserror::Error)]
@@ -37,7 +41,8 @@ pub enum ConnectError {
 }
 
 /// Opens a channel to `uri`. With `tls`, `uri` must be `https`; without, it is plain HTTP/2 (only
-/// used for loopback development setups, see the agent configuration).
+/// used for loopback development setups, see the agent configuration). `request_timeout` bounds
+/// unary calls; long-lived streams pass `None` and rely on the keepalive pings.
 ///
 /// # Errors
 ///
@@ -45,12 +50,17 @@ pub enum ConnectError {
 pub async fn connect(
     uri: Uri,
     tls: Option<Arc<ClientConfig>>,
-    request_timeout: Duration,
+    request_timeout: Option<Duration>,
 ) -> Result<Channel, ConnectError> {
     let (host, port) = host_and_port(&uri)?;
-    let endpoint = Endpoint::from(uri.clone())
+    let mut endpoint = Endpoint::from(uri.clone())
         .connect_timeout(CONNECT_TIMEOUT)
-        .timeout(request_timeout);
+        .http2_keep_alive_interval(KEEPALIVE_INTERVAL)
+        .keep_alive_timeout(KEEPALIVE_TIMEOUT)
+        .keep_alive_while_idle(true);
+    if let Some(timeout) = request_timeout {
+        endpoint = endpoint.timeout(timeout);
+    }
     let result = match tls {
         None => endpoint.connect().await,
         Some(config) => {
@@ -92,6 +102,15 @@ fn host_and_port(uri: &Uri) -> Result<(String, u16), ConnectError> {
     Ok((host.to_owned(), uri.port_u16().unwrap_or(default_port)))
 }
 
+/// Text from the server for logs and terminals: control characters (newlines, escape sequences)
+/// become spaces so that it can't forge log lines, and it is cut at `max_chars`.
+pub(crate) fn printable(text: &str, max_chars: usize) -> String {
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(max_chars)
+        .collect()
+}
+
 /// The error and all its causes, joined with ": ".
 pub(crate) fn error_chain(error: &(dyn std::error::Error + 'static)) -> String {
     let mut text = error.to_string();
@@ -123,6 +142,12 @@ mod tests {
             let parsed = host_and_port(&uri.parse().unwrap()).unwrap();
             assert_eq!(parsed, (host.to_owned(), port), "{uri}");
         }
+    }
+
+    #[test]
+    fn printable_removes_control_characters_and_bounds_the_length() {
+        assert_eq!(printable("a\nb\u{1b}[2Jc", 100), "a b [2Jc");
+        assert_eq!(printable("abcdef", 3), "abc");
     }
 
     #[test]

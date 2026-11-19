@@ -123,11 +123,7 @@ fn map_status(status: &tonic::Status) -> EnrollError {
 
 /// Server messages are shown in a terminal: no control characters (escape sequences), bounded.
 fn sanitize(message: &str) -> String {
-    message
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .take(MAX_SERVER_MESSAGE_CHARS)
-        .collect()
+    crate::channel::printable(message, MAX_SERVER_MESSAGE_CHARS)
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ prost-types.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true
 http.workspace = true
+sermon-buffer.workspace = true
 sermon-core.workspace = true
 hyper-util.workspace = true
 rcgen.workspace = true
@@ -27,9 +28,16 @@ rustls-webpki.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net"] }
 tokio-rustls.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
 tower.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+proptest.workspace = true
+sermon-core = { workspace = true, features = ["testing"] }
+tempfile.workspace = true
+tracing-subscriber.workspace = true
 rcgen = { workspace = true, features = ["x509-parser"] }
 sermon-testserver.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread"] }

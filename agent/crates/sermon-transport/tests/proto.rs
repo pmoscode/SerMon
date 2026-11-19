@@ -100,3 +100,29 @@ fn the_enrollment_client_is_generated() {
         >,
     >();
 }
+
+#[test]
+fn batch_roundtrips_and_carries_its_sequence_number() {
+    use sermon_transport::proto::agent::v1::{Batch, MetricBatch, Sample, batch, sample};
+
+    let request = SessionRequest {
+        payload: Some(Payload::Batch(Batch {
+            seq: 1_795_046_400_000_001,
+            content: Some(batch::Content::Metrics(MetricBatch {
+                collected_at: Some(prost_types::Timestamp {
+                    seconds: 1_795_046_400,
+                    nanos: 0,
+                }),
+                samples: vec![Sample {
+                    metric: "sermon_cpu_utilization_ratio".into(),
+                    labels: [("cpu".to_owned(), "0".to_owned())].into(),
+                    value: Some(sample::Value::IntValue(250_000)),
+                }],
+            })),
+        })),
+    };
+
+    let decoded = SessionRequest::decode(request.encode_to_vec().as_slice()).unwrap();
+
+    assert_eq!(decoded, request);
+}

@@ -4,11 +4,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -101,5 +103,81 @@ func TestAgentBinary_EnrollsAgainstTheRealServer(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(state, "identity", "agent.key"))
 	if string(before) != string(after) {
 		t.Error("a failed enrollment replaced the stored identity")
+	}
+}
+
+// TestAgentBinary_RunsAndRotatesAgainstTheRealServer runs `sermon-agent run` against the real mTLS
+// agent API: session with Hello and trust bundle, a due certificate rotation, the reconnect with
+// the new certificate and a clean stop (M1-11 agent side, M1-14).
+func TestAgentBinary_RunsAndRotatesAgainstTheRealServer(t *testing.T) {
+	bin := agentBinary(t)
+	srv := startTestServer(t, nil)
+	defer srv.stop()
+	seedEnrollmentToken(t)
+
+	dir := t.TempDir()
+	fixture, err := filepath.Abs("../../../agent/fixtures/debian-13")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, agentPort, _ := strings.Cut(srv.agent, ":")
+	config := filepath.Join(dir, "agent.toml")
+	state := filepath.Join(dir, "state")
+	toml := "[server]\nurl = \"http://" + srv.web + "\"\nagent_url = \"https://localhost:" + agentPort + "\"\n" +
+		"[paths]\nstate_dir = \"" + state + "\"\nhost_root = \"" + fixture + "\"\n"
+	if err := os.WriteFile(config, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	enroll := exec.CommandContext(ctx, bin, "enroll", "--config", config)
+	enroll.Env = append(os.Environ(), "SERMON_ENROLLMENT_TOKEN="+fixtureToken)
+	out, err := enroll.CombinedOutput()
+	if err != nil {
+		t.Fatalf("enroll: %v\n%s", err, out)
+	}
+	nodeID := regexp.MustCompile(`enrolled as node ([0-9a-f-]{36})`).FindStringSubmatch(string(out))[1]
+
+	// Pretend 25 of 30 days are over, so that the agent rotates right after connecting.
+	identityFile := filepath.Join(state, "identity", "identity.toml")
+	meta, err := os.ReadFile(identityFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	meta = regexp.MustCompile(`(?m)^issued_at = \d+$`).ReplaceAll(meta, []byte(fmt.Sprintf("issued_at = %d", now-25*24*3600)))
+	meta = regexp.MustCompile(`(?m)^not_after = \d+$`).ReplaceAll(meta, []byte(fmt.Sprintf("not_after = %d", now+5*24*3600)))
+	if err := os.WriteFile(identityFile, meta, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(state, "identity", "agent.crt"))
+
+	agentLogs := &syncBuffer{}
+	run := exec.CommandContext(ctx, bin, "run", "--config", config)
+	run.Stdout, run.Stderr = agentLogs, agentLogs
+	if err := run.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = run.Process.Kill() }()
+
+	node := regexp.QuoteMeta(nodeID)
+	waitFor(t, srv.logs, regexp.MustCompile(`msg="agent certificate rotated" .*node=(`+node+`)`))
+	waitFor(t, srv.logs, regexp.MustCompile(`(?s)msg="agent connected" [^\n]*node=`+node+`.*msg="agent connected" [^\n]*node=(`+node+`)`))
+	after, _ := os.ReadFile(filepath.Join(state, "identity", "agent.crt"))
+	if string(before) == string(after) {
+		t.Errorf("certificate not replaced after the rotation\nagent:\n%s", agentLogs.String())
+	}
+	if strings.Contains(srv.logs.String(), "security:") {
+		t.Errorf("rotation raised a security event:\n%s", srv.logs.String())
+	}
+
+	if err := run.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Wait(); err != nil {
+		t.Errorf("agent exit: %v\n%s", err, agentLogs.String())
+	}
+	if !strings.Contains(agentLogs.String(), "agent stopped") {
+		t.Errorf("agent did not stop cleanly:\n%s", agentLogs.String())
 	}
 }

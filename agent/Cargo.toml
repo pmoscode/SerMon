@@ -28,7 +28,7 @@ publish = false
 [workspace.dependencies]
 prost = "=0.14.6"
 prost-types = "=0.14.6"
-tonic = { version = "=0.14.9", default-features = false, features = ["codegen", "channel"] }
+tonic = { version = "=0.14.9", default-features = false, features = ["codegen", "channel", "gzip"] }
 tonic-prost = "=0.14.9"
 
 anyhow = "=1.0.104"
@@ -57,6 +57,7 @@ tracing-subscriber = { version = "=0.3.23", default-features = false, features =
 proptest = "=1.12.0"
 tempfile = "=3.27.0"
 
+sermon-buffer = { path = "crates/sermon-buffer" }
 sermon-collectors = { path = "crates/sermon-collectors" }
 sermon-core = { path = "crates/sermon-core" }
 sermon-testserver = { path = "crates/sermon-testserver" }

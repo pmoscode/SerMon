@@ -10,11 +10,20 @@ pub mod identity;
 pub mod logging;
 pub mod state;
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use anyhow::{Context, bail};
+use sermon_buffer::{Wal, WalConfig};
+use sermon_collectors::host::read_host_facts;
+use sermon_core::{Clock, ProcRoot, SystemClock};
+use sermon_transport::outbox::Outbox;
+use sermon_transport::session::{FactsSource, Transport, TransportConfig};
 use tokio_util::sync::CancellationToken;
 
 use crate::cli::{Cli, Command, UninstallArgs};
 use crate::config::AgentConfig;
+use crate::identity::FileIdentity;
 use crate::state::StateLayout;
 
 /// Name and version as printed by `--version`.
@@ -47,12 +56,33 @@ pub fn execute(cli: Cli) -> anyhow::Result<()> {
     }
 }
 
-/// Runs the agent until SIGTERM or SIGINT.
+/// Runs the agent until SIGTERM or SIGINT: buffer, transport and housekeeping.
 ///
 /// # Errors
 ///
-/// If the runtime or the signal handlers can't be set up.
+/// If the host is not enrolled, the identity or the buffer can't be opened, or the runtime or the
+/// signal handlers can't be set up. Connection problems are not errors: the transport retries.
 pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
+    let layout = StateLayout::new(&config.state_dir);
+    if !identity::is_enrolled(&layout) {
+        bail!("this host is not enrolled – run `sermon-agent enroll` with a token from the UI");
+    }
+    // Broken identity files fail loudly at the start instead of being retried forever.
+    identity::load(&layout).context("cannot load the agent identity")?;
+    let clock: Arc<dyn Clock> = Arc::new(SystemClock::new());
+    let (wal, recovery) = Wal::open(&layout.wal_dir(), WalConfig::default(), clock.now())
+        .context("cannot open the buffer")?;
+    let outbox = Outbox::new(wal);
+    let host_root = ProcRoot::new(&config.host_root);
+    let facts: FactsSource = Arc::new(move || Ok(read_host_facts(&host_root)?));
+    let transport = Transport::new(
+        TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
+        Arc::new(FileIdentity::new(layout)),
+        facts,
+        outbox.clone(),
+        clock.clone(),
+    );
+
     // One thread is enough for < 1 % CPU: collectors read small /proc files, the rest is I/O.
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -66,10 +96,39 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             server = %config.agent_url,
             "agent started"
         );
-        shutdown.cancelled().await;
+        if !recovery.truncated.is_empty() || !recovery.removed.is_empty() {
+            tracing::warn!(
+                truncated = recovery.truncated.len(),
+                removed = recovery.removed.len(),
+                "buffer repaired after an unclean shutdown"
+            );
+        }
+        let maintenance = tokio::spawn(maintain(outbox.clone(), clock.clone(), shutdown.clone()));
+        transport.run(shutdown.clone()).await;
+        maintenance.await.context("maintenance task failed")?;
+        if let Err(error) = outbox.maintain(clock.now()) {
+            tracing::warn!("cannot flush the buffer: {error}");
+        }
         tracing::info!("agent stopped");
         signals.await.context("signal handler failed")?
     })
+}
+
+/// Interval of buffer housekeeping (fsync, age limit).
+const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
+
+async fn maintain(outbox: Outbox, clock: Arc<dyn Clock>, shutdown: CancellationToken) {
+    let mut tick = tokio::time::interval(MAINTENANCE_INTERVAL);
+    loop {
+        tokio::select! {
+            () = shutdown.cancelled() => return,
+            _ = tick.tick() => {
+                if let Err(error) = outbox.maintain(clock.now()) {
+                    tracing::warn!("buffer housekeeping failed: {error}");
+                }
+            }
+        }
+    }
 }
 
 /// Cancels `shutdown` on SIGTERM (systemd stop) or SIGINT (Ctrl+C).

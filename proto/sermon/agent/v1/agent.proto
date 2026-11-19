@@ -10,6 +10,7 @@ syntax = "proto3";
 package sermon.agent.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 // AgentService is implemented by sermon-server and called by agents over mTLS.
@@ -33,6 +34,9 @@ message SessionRequest {
     // the lifetime, KONZEPT §6). The identity stays the same; it comes from the current
     // certificate of this stream, never from the message.
     RotateCertificate rotate_certificate = 3;
+    // batch carries buffered data with its sequence number; the server answers with an Ack once
+    // the batch is persisted.
+    Batch batch = 4;
   }
 }
 
@@ -54,6 +58,8 @@ message SessionResponse {
     // trust_bundle lists the roots the agent must trust for the agent API; sent at the start of
     // every session. During a CA rollover it contains the old and the new root (KONZEPT §6).
     TrustBundle trust_bundle = 4;
+    // throttle asks the agent to send batches more slowly (quota exceeded, KONZEPT §5).
+    Throttle throttle = 5;
   }
 }
 
@@ -158,4 +164,68 @@ message RotateNow {}
 message Ack {
   // seq is the highest sequence number that was persisted (inclusive).
   uint64 seq = 1;
+}
+
+// Batch is one entry of the agent's write-ahead log. After a reconnect the agent sends every batch
+// that was not acknowledged yet, so batches may arrive twice: the server drops every batch whose
+// seq is not above the highest seq it has persisted for the node. Sequence numbers increase, also
+// across agent restarts, but may have gaps where the agent dropped data (buffer limits).
+message Batch {
+  // seq is the sequence number from the agent's write-ahead log.
+  uint64 seq = 1 [(buf.validate.field).uint64.gt = 0];
+  // content is the data; exactly one must be set.
+  oneof content {
+    option (buf.validate.oneof).required = true;
+
+    // metrics are the samples of one collection tick.
+    MetricBatch metrics = 2;
+  }
+}
+
+// MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
+// converted to per-second rates by the agent; every sample is a gauge.
+message MetricBatch {
+  // collected_at is the agent's wall-clock time of the tick.
+  google.protobuf.Timestamp collected_at = 1 [(buf.validate.field).required = true];
+  // samples are the values; at most the per-node series limit (KONZEPT §8).
+  repeated Sample samples = 2 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 2000
+  }];
+}
+
+// Sample is one value of one series. Organization and node are not part of it: the server takes
+// them from the client certificate.
+message Sample {
+  // metric is the metric name, e.g. "sermon_cpu_utilization_ratio".
+  string metric = 1 [(buf.validate.field).string.pattern = "^sermon_[a-z0-9_]{1,120}$"];
+  // labels are the bounded, technical labels of the series, e.g. cpu, device, interface,
+  // mountpoint, mode.
+  map<string, string> labels = 2 [(buf.validate.field).map = {
+    max_pairs: 8
+    keys: {
+      string: {pattern: "^[a-z][a-z0-9_]{0,31}$"}
+    }
+    values: {
+      string: {max_len: 256}
+    }
+  }];
+  // value is the measured value; integers in base units are preferred (bytes/s, counts, ppm).
+  oneof value {
+    option (buf.validate.oneof).required = true;
+
+    // int_value is an integer value.
+    int64 int_value = 3;
+    // double_value is a fractional value; NaN and infinity are not allowed.
+    double double_value = 4 [(buf.validate.field).double.finite = true];
+  }
+}
+
+// Throttle limits how fast the agent sends batches. It applies until the next Throttle.
+message Throttle {
+  // min_interval is the shortest time between two batches; zero lifts the limit.
+  google.protobuf.Duration min_interval = 1 [(buf.validate.field).duration = {
+    gte: {}
+    lte: {seconds: 3600}
+  }];
 }

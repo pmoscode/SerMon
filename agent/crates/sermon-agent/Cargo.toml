@@ -17,6 +17,7 @@ clap.workspace = true
 http.workspace = true
 pem.workspace = true
 rustls.workspace = true
+sermon-buffer.workspace = true
 sermon-collectors.workspace = true
 sermon-core.workspace = true
 sermon-transport.workspace = true

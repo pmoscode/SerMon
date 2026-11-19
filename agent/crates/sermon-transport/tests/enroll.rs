@@ -46,7 +46,7 @@ async fn enroll_at(
     key: &AgentKey,
 ) -> Result<IssuedCertificate, Failure> {
     let tls = trust.map(|trust| enrollment_config(&trust).unwrap());
-    let channel = channel::connect(url.parse().unwrap(), tls, Duration::from_secs(10))
+    let channel = channel::connect(url.parse().unwrap(), tls, Some(Duration::from_secs(10)))
         .await
         .map_err(Failure::Connect)?;
     enroll(channel, key, TOKEN, &facts(), "1.2.3", &SystemClock::new())

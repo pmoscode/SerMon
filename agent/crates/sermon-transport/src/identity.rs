@@ -139,6 +139,48 @@ pub struct IssuedCertificate {
     pub not_after: SystemTime,
 }
 
+/// Lifetime assumed for certificates without a known issue time (as issued by the server).
+const DEFAULT_LIFETIME: Duration = Duration::from_hours(30 * 24);
+
+/// Everything the agent needs for the mTLS agent API.
+#[derive(Debug)]
+pub struct Credentials {
+    /// The agent's private key.
+    pub key: AgentKey,
+    /// Organization and node.
+    pub identity: AgentIdentity,
+    /// Client certificate.
+    pub certificate: CertificateDer<'static>,
+    /// Issuing CA certificates.
+    pub intermediates: Vec<CertificateDer<'static>>,
+    /// Roots for the server certificate of the agent API (trust bundle).
+    pub trust_anchors: Vec<CertificateDer<'static>>,
+    /// End of the certificate's validity.
+    pub not_after: SystemTime,
+    /// When the agent received the certificate, if known.
+    pub issued_at: Option<SystemTime>,
+}
+
+impl Credentials {
+    /// When to rotate: after two thirds of the lifetime (KONZEPT §6).
+    #[must_use]
+    pub fn rotate_at(&self) -> SystemTime {
+        let lifetime = self
+            .issued_at
+            .and_then(|issued| self.not_after.duration_since(issued).ok())
+            .unwrap_or(DEFAULT_LIFETIME);
+        self.not_after
+            .checked_sub(lifetime / 3)
+            .unwrap_or(self.not_after)
+    }
+
+    /// Whether the certificate has expired at `now`.
+    #[must_use]
+    pub fn is_expired(&self, now: SystemTime) -> bool {
+        now >= self.not_after
+    }
+}
+
 /// What the server sent for a CSR: certificate, chain, roots and expiry.
 #[derive(Debug, Clone)]
 pub struct CertificateOffer<'a> {
@@ -288,6 +330,46 @@ mod tests {
         let second = AgentKey::generate().unwrap();
 
         assert_ne!(first.public_key_info(), second.public_key_info());
+    }
+
+    fn credentials(issued_at: Option<SystemTime>, not_after: SystemTime) -> Credentials {
+        Credentials {
+            key: AgentKey::generate().unwrap(),
+            identity: AgentIdentity {
+                org_id: String::new(),
+                node_id: String::new(),
+            },
+            certificate: CertificateDer::from(Vec::new()),
+            intermediates: Vec::new(),
+            trust_anchors: Vec::new(),
+            not_after,
+            issued_at,
+        }
+    }
+
+    #[test]
+    fn rotation_is_due_after_two_thirds_of_the_lifetime() {
+        let issued = UNIX_EPOCH + Duration::from_hours(498_624);
+        let day = Duration::from_hours(24);
+
+        let thirty_days = credentials(Some(issued), issued + 30 * day);
+        assert_eq!(thirty_days.rotate_at(), issued + 20 * day);
+
+        let three_days = credentials(Some(issued), issued + 3 * day);
+        assert_eq!(three_days.rotate_at(), issued + 2 * day);
+
+        // Unknown issue time: the server's lifetime of 30 days is assumed.
+        let unknown = credentials(None, issued + 30 * day);
+        assert_eq!(unknown.rotate_at(), issued + 20 * day);
+    }
+
+    #[test]
+    fn expiry_is_checked_against_the_given_time() {
+        let not_after = UNIX_EPOCH + Duration::from_hours(498_624);
+        let credentials = credentials(None, not_after);
+
+        assert!(!credentials.is_expired(not_after - Duration::from_secs(1)));
+        assert!(credentials.is_expired(not_after));
     }
 
     #[test]

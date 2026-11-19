@@ -233,7 +233,9 @@ pub async fn serve_tls(routes: Routes, tls: Arc<ServerConfig>) -> RunningServer 
             let (acceptor, streams) = (acceptor.clone(), streams.clone());
             tokio::spawn(async move {
                 if let Ok(stream) = acceptor.accept(tcp).await {
-                    let _ = streams.send(Ok::<_, std::io::Error>(stream)).await;
+                    let _ = streams
+                        .send(Ok::<_, std::io::Error>(PeerStream(stream)))
+                        .await;
                 }
             });
         }
@@ -252,6 +254,61 @@ pub async fn serve_tls(routes: Routes, tls: Arc<ServerConfig>) -> RunningServer 
     RunningServer {
         addr,
         shutdown: Some(shutdown),
+    }
+}
+
+/// The client certificate of a TLS connection, available in request extensions.
+#[derive(Debug, Clone)]
+pub struct PeerCertificate(pub Option<CertificateDer<'static>>);
+
+/// A server-side TLS stream that exposes the client certificate to tonic handlers.
+#[derive(Debug)]
+struct PeerStream(tokio_rustls::server::TlsStream<tokio::net::TcpStream>);
+
+impl tonic::transport::server::Connected for PeerStream {
+    type ConnectInfo = PeerCertificate;
+
+    fn connect_info(&self) -> Self::ConnectInfo {
+        let (_, session) = self.0.get_ref();
+        PeerCertificate(
+            session
+                .peer_certificates()
+                .and_then(|certs| certs.first().cloned()),
+        )
+    }
+}
+
+impl tokio::io::AsyncRead for PeerStream {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.0).poll_read(cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for PeerStream {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.0).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.0).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.0).poll_shutdown(cx)
     }
 }
 
@@ -358,5 +415,325 @@ impl EnrollmentService for FakeEnrollment {
         let request = request.into_inner();
         self.requests.lock().unwrap().push(request.clone());
         (self.responder)(&request, &self.pki).map(Response::new)
+    }
+}
+
+/// TLS 1.3 server configuration that requires a client certificate chaining to `client_roots`
+/// (the agent API).
+#[must_use]
+pub fn mtls_server_config(
+    chain: Vec<CertificateDer<'static>>,
+    key: PrivateKeyDer<'static>,
+    client_roots: &[CertificateDer<'static>],
+) -> Arc<ServerConfig> {
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let mut roots = rustls::RootCertStore::empty();
+    for root in client_roots {
+        roots.add(root.clone()).unwrap();
+    }
+    let verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+        Arc::new(roots),
+        provider.clone(),
+    )
+    .build()
+    .unwrap();
+    let mut config = ServerConfig::builder_with_provider(provider)
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .unwrap()
+        .with_client_cert_verifier(verifier)
+        .with_single_cert(chain, key)
+        .unwrap();
+    config.alpn_protocols = vec![b"h2".to_vec()];
+    Arc::new(config)
+}
+
+/// When the fake agent API acknowledges batches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AckMode {
+    /// Every batch right after receiving it.
+    Immediate,
+    /// Only when the test calls [`FakeAgentApi::send`] with an `Ack`.
+    Manual,
+}
+
+/// What happened in one session.
+#[derive(Debug, Clone, Default)]
+pub struct SessionLog {
+    /// The client certificate the agent presented.
+    pub client_cert: Option<CertificateDer<'static>>,
+    /// The agent's `Hello`.
+    pub hello: Option<sermon_transport::proto::agent::v1::Hello>,
+    /// Heartbeats received.
+    pub heartbeats: usize,
+    /// Sequence numbers of the batches received, in order.
+    pub batches: Vec<u64>,
+    /// When each batch arrived.
+    pub batch_times: Vec<std::time::Instant>,
+    /// `RotateCertificate` requests received.
+    pub rotations: usize,
+    /// Whether the session has ended.
+    pub ended: bool,
+}
+
+#[derive(Debug)]
+struct AgentApiState {
+    ack: AckMode,
+    trust_roots: Vec<Vec<u8>>,
+    sessions: Vec<SessionLog>,
+    /// Highest sequence number "persisted" (deduplication like the real server).
+    highest: u64,
+    /// Unique sequence numbers in the order they were first received.
+    unique: Vec<u64>,
+    /// For upcoming sessions: end the session after this many batches.
+    cut_after: std::collections::VecDeque<Option<usize>>,
+    current: Option<tokio::sync::mpsc::Sender<Result<SessionResponse, Status>>>,
+    end_after_rotation: bool,
+}
+
+/// `AgentService` for transport tests: records everything, acknowledges and rotates like the real
+/// server, and lets the test send commands or cut sessions.
+#[derive(Debug, Clone)]
+pub struct FakeAgentApi {
+    pki: Arc<TestPki>,
+    state: Arc<Mutex<AgentApiState>>,
+}
+
+use sermon_transport::proto::agent::v1::{
+    Ack, CertificateIssued, SessionRequest, SessionResponse, TrustBundle, session_request,
+    session_response,
+};
+
+impl FakeAgentApi {
+    /// A fake whose trust bundle is the root of `pki` and that signs rotations with it.
+    #[must_use]
+    pub fn new(pki: Arc<TestPki>) -> Self {
+        let root = pki.root().to_vec();
+        Self {
+            pki,
+            state: Arc::new(Mutex::new(AgentApiState {
+                ack: AckMode::Immediate,
+                trust_roots: vec![root],
+                sessions: Vec::new(),
+                highest: 0,
+                unique: Vec::new(),
+                cut_after: std::collections::VecDeque::new(),
+                current: None,
+                end_after_rotation: false,
+            })),
+        }
+    }
+
+    /// The service for [`serve_tls`].
+    #[must_use]
+    pub fn routes(&self) -> Routes {
+        Routes::new(
+            proto::agent_service_server::AgentServiceServer::new(self.clone())
+                .accept_compressed(tonic::codec::CompressionEncoding::Gzip)
+                .send_compressed(tonic::codec::CompressionEncoding::Gzip),
+        )
+    }
+
+    /// Sets the acknowledgement mode.
+    pub fn set_ack(&self, mode: AckMode) {
+        self.state.lock().unwrap().ack = mode;
+    }
+
+    /// Roots sent as trust bundle at the start of every session.
+    pub fn set_trust_roots(&self, roots: Vec<Vec<u8>>) {
+        self.state.lock().unwrap().trust_roots = roots;
+    }
+
+    /// End the next sessions after the given numbers of batches (`None`: don't cut).
+    pub fn cut_sessions(&self, after: impl IntoIterator<Item = Option<usize>>) {
+        self.state.lock().unwrap().cut_after.extend(after);
+    }
+
+    /// End the session after the next rotation (like an on-demand rotation on the server).
+    pub fn end_after_rotation(&self, end: bool) {
+        self.state.lock().unwrap().end_after_rotation = end;
+    }
+
+    /// Sends a message on the current session; `false` without one.
+    pub async fn send(&self, payload: session_response::Payload) -> bool {
+        let current = self.state.lock().unwrap().current.clone();
+        match current {
+            Some(sender) => sender
+                .send(Ok(SessionResponse {
+                    payload: Some(payload),
+                }))
+                .await
+                .is_ok(),
+            None => false,
+        }
+    }
+
+    /// The sessions so far.
+    #[must_use]
+    pub fn sessions(&self) -> Vec<SessionLog> {
+        self.state.lock().unwrap().sessions.clone()
+    }
+
+    /// Unique sequence numbers received, in order of first arrival.
+    #[must_use]
+    pub fn received(&self) -> Vec<u64> {
+        self.state.lock().unwrap().unique.clone()
+    }
+
+    /// Waits until `condition` holds for the sessions (polling), at most `timeout`.
+    pub async fn wait_for(
+        &self,
+        timeout: Duration,
+        condition: impl Fn(&[SessionLog]) -> bool,
+    ) -> bool {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            if condition(&self.sessions()) {
+                return true;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }
+
+    fn update(&self, index: usize, change: impl FnOnce(&mut SessionLog)) {
+        let mut state = self.state.lock().unwrap();
+        if let Some(log) = state.sessions.get_mut(index) {
+            change(log);
+        }
+    }
+
+    async fn run_session(
+        &self,
+        index: usize,
+        mut inbound: tonic::Streaming<SessionRequest>,
+        outgoing: tokio::sync::mpsc::Sender<Result<SessionResponse, Status>>,
+        cut_after: Option<usize>,
+    ) {
+        let respond = |payload| SessionResponse {
+            payload: Some(payload),
+        };
+        let first = inbound.message().await;
+        let Ok(Some(SessionRequest {
+            payload: Some(session_request::Payload::Hello(hello)),
+        })) = first
+        else {
+            let _ = outgoing
+                .send(Err(Status::invalid_argument("Hello first")))
+                .await;
+            return;
+        };
+        self.update(index, |log| log.hello = Some(hello));
+        let roots = self.state.lock().unwrap().trust_roots.clone();
+        if outgoing
+            .send(Ok(respond(session_response::Payload::TrustBundle(
+                TrustBundle { roots },
+            ))))
+            .await
+            .is_err()
+        {
+            return;
+        }
+        let mut batches_here = 0;
+        while let Ok(Some(message)) = inbound.message().await {
+            match message.payload {
+                Some(session_request::Payload::Heartbeat(_)) => {
+                    self.update(index, |log| log.heartbeats += 1);
+                }
+                Some(session_request::Payload::Batch(batch)) => {
+                    batches_here += 1;
+                    let ack = {
+                        let mut state = self.state.lock().unwrap();
+                        if let Some(log) = state.sessions.get_mut(index) {
+                            log.batches.push(batch.seq);
+                            log.batch_times.push(std::time::Instant::now());
+                        }
+                        if batch.seq > state.highest {
+                            state.highest = batch.seq;
+                            state.unique.push(batch.seq);
+                        }
+                        state.ack == AckMode::Immediate
+                    };
+                    if ack {
+                        let _ = outgoing
+                            .send(Ok(respond(session_response::Payload::Ack(Ack {
+                                seq: batch.seq,
+                            }))))
+                            .await;
+                    }
+                    if cut_after == Some(batches_here) {
+                        let _ = outgoing
+                            .send(Err(Status::unavailable("cut by the test")))
+                            .await;
+                        break;
+                    }
+                }
+                Some(session_request::Payload::RotateCertificate(rotate)) => {
+                    self.update(index, |log| log.rotations += 1);
+                    let certificate = self.pki.sign_agent_csr(&rotate.csr, ORG_ID, NODE_ID);
+                    let issued = CertificateIssued {
+                        certificate: certificate.to_vec(),
+                        intermediates: vec![self.pki.intermediate().to_vec()],
+                        not_after: Some((SystemTime::now() + AGENT_CERT_LIFETIME).into()),
+                        previous_valid_until: Some(
+                            (SystemTime::now() + Duration::from_hours(1)).into(),
+                        ),
+                    };
+                    let _ = outgoing
+                        .send(Ok(respond(session_response::Payload::CertificateIssued(
+                            issued,
+                        ))))
+                        .await;
+                    if self.state.lock().unwrap().end_after_rotation {
+                        let _ = outgoing.send(Err(Status::aborted("rotated"))).await;
+                        break;
+                    }
+                }
+                Some(session_request::Payload::Hello(_)) | None => {
+                    let _ = outgoing
+                        .send(Err(Status::invalid_argument("unexpected")))
+                        .await;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[tonic::async_trait]
+impl proto::agent_service_server::AgentService for FakeAgentApi {
+    type SessionStream = tokio_stream::wrappers::ReceiverStream<Result<SessionResponse, Status>>;
+
+    async fn session(
+        &self,
+        request: Request<tonic::Streaming<SessionRequest>>,
+    ) -> Result<Response<Self::SessionStream>, Status> {
+        let client_cert = request
+            .extensions()
+            .get::<PeerCertificate>()
+            .and_then(|peer| peer.0.clone());
+        let (outgoing, responses) = tokio::sync::mpsc::channel(64);
+        let (index, cut_after) = {
+            let mut state = self.state.lock().unwrap();
+            state.sessions.push(SessionLog {
+                client_cert,
+                ..SessionLog::default()
+            });
+            state.current = Some(outgoing.clone());
+            (
+                state.sessions.len() - 1,
+                state.cut_after.pop_front().flatten(),
+            )
+        };
+        let this = self.clone();
+        let inbound = request.into_inner();
+        tokio::spawn(async move {
+            this.run_session(index, inbound, outgoing, cut_after).await;
+            this.update(index, |log| log.ended = true);
+        });
+        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(
+            responses,
+        )))
     }
 }

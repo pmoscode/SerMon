@@ -385,6 +385,11 @@ func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSess
 		// After an on-demand rotation the old certificate is revoked: end this session so that
 		// the agent reconnects with the new one.
 		return immediate, nil
+	case msg.GetBatch() != nil:
+		// Ingest follows with M1-24. Until then nothing is persisted, so nothing is acknowledged:
+		// the agent keeps the data in its buffer.
+		h.logger.DebugContext(ctx, "batch received, ingest not implemented yet", "node", id.Node.String(), "seq", msg.GetBatch().GetSeq())
+		return false, nil
 	}
 	// Heartbeat: liveness and node status follow with M1-24.
 	return false, nil

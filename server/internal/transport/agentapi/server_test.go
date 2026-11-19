@@ -647,3 +647,26 @@ func TestTLS_NewServerCertificateWhenTheTrustedCAsChange(t *testing.T) {
 		t.Error("a change of the trusted CAs must renew the server certificate")
 	}
 }
+
+func TestSession_BatchesAreAcceptedButNotAcknowledgedBeforeIngestExists(t *testing.T) {
+	s := startServer(t)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := stream.Receive(); err != nil || res.GetTrustBundle() == nil {
+		t.Fatalf("first message = %v, %v", res, err)
+	}
+	for _, m := range []*agentv1.SessionRequest{batch(intSample("sermon_load_1m", nil)), heartbeatMsg()} {
+		if err := stream.Send(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = stream.CloseRequest()
+	// Until M1-24 nothing is persisted, so nothing may be acknowledged; the session stays healthy.
+	res, err := stream.Receive()
+	if !errors.Is(err, io.EOF) {
+		t.Errorf("Receive() = %v, %v; want EOF without an Ack", res, err)
+	}
+}

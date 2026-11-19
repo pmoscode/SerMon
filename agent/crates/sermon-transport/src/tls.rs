@@ -5,10 +5,11 @@ use std::sync::Arc;
 use rustls::client::WebPkiServerVerifier;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::{CryptoProvider, verify_tls12_signature, verify_tls13_signature};
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme};
 
 use crate::fingerprint::Fingerprint;
+use crate::identity::Credentials;
 
 /// ALPN protocol of gRPC.
 const ALPN_H2: &[u8] = b"h2";
@@ -66,6 +67,30 @@ pub fn enrollment_config(trust: &ServerTrust) -> Result<Arc<ClientConfig>, TlsEr
             }))
             .with_no_client_auth(),
     };
+    config.alpn_protocols = vec![ALPN_H2.to_vec()];
+    Ok(Arc::new(config))
+}
+
+/// TLS configuration for the mTLS agent API: TLS 1.3 only, the server certificate must chain to
+/// one of the agent's trust anchors (all roots of the trust bundle, KONZEPT §6), and the agent
+/// authenticates with its client certificate.
+///
+/// # Errors
+///
+/// [`TlsError::Rustls`] if a trust anchor or the client certificate/key is unusable.
+pub fn agent_api_config(credentials: &Credentials) -> Result<Arc<ClientConfig>, TlsError> {
+    let mut roots = RootCertStore::empty();
+    for anchor in &credentials.trust_anchors {
+        roots.add(anchor.clone())?;
+    }
+    let chain: Vec<CertificateDer<'static>> = std::iter::once(credentials.certificate.clone())
+        .chain(credentials.intermediates.iter().cloned())
+        .collect();
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(credentials.key.to_pkcs8_der()));
+    let mut config = ClientConfig::builder_with_provider(provider())
+        .with_protocol_versions(&[&rustls::version::TLS13])?
+        .with_root_certificates(roots)
+        .with_client_auth_cert(chain, key)?;
     config.alpn_protocols = vec![ALPN_H2.to_vec()];
     Ok(Arc::new(config))
 }

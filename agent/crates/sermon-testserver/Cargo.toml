@@ -19,4 +19,4 @@ sermon-transport.workspace = true
 tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
 tokio-rustls.workspace = true
 tokio-stream = { workspace = true, features = ["net"] }
-tonic = { workspace = true, features = ["server", "router", "tls-connect-info"] }
+tonic = { workspace = true, features = ["server", "router"] }

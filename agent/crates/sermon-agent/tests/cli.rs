@@ -3,11 +3,8 @@
 // Test code: panicking on setup failures is the desired behaviour.
 #![allow(clippy::expect_used)]
 
-use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
-use std::sync::mpsc;
-use std::time::Duration;
+use std::process::{Command, Output};
 
 const BINARY: &str = env!("CARGO_BIN_EXE_sermon-agent");
 
@@ -93,43 +90,14 @@ fn run_lists_all_config_problems() {
 }
 
 #[test]
-fn run_stops_cleanly_on_sigterm() {
+fn run_refuses_to_start_without_enrollment() {
     let dir = tempfile::tempdir().expect("tempdir");
     let config = write_config(dir.path());
-    let mut child = Command::new(BINARY)
-        .args(["run", "--config", &config])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("failed to start sermon-agent");
 
-    // Wait until the signal handlers are installed, without blocking forever.
-    let stdout = child.stdout.take().expect("stdout");
-    let (lines, received) = mpsc::channel();
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if lines.send(line).is_err() {
-                break;
-            }
-        }
-    });
-    let started = received
-        .recv_timeout(Duration::from_secs(10))
-        .expect("agent did not log its start");
-    assert!(started.contains("agent started"), "{started}");
+    let output = run(&["run", "--config", &config]);
 
-    // The shell builtin: minimal images have no /bin/kill.
-    let status = Command::new("sh")
-        .args(["-c", &format!("kill -TERM {}", child.id())])
-        .status()
-        .expect("kill");
-    assert!(status.success());
-
-    let exit = child.wait().expect("wait");
-    let rest: Vec<String> = received.iter().collect();
-    assert!(exit.success(), "exit {exit:?}, output {rest:?}");
-    assert!(rest.iter().any(|line| line.contains("received SIGTERM")));
-    assert!(rest.iter().any(|line| line.contains("agent stopped")));
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not enrolled"));
 }
 
 #[test]

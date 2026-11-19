@@ -18,6 +18,7 @@ import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -94,6 +95,7 @@ type SessionRequest struct {
 	//	*SessionRequest_Hello
 	//	*SessionRequest_Heartbeat
 	//	*SessionRequest_RotateCertificate
+	//	*SessionRequest_Batch
 	Payload       isSessionRequest_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -163,6 +165,15 @@ func (x *SessionRequest) GetRotateCertificate() *RotateCertificate {
 	return nil
 }
 
+func (x *SessionRequest) GetBatch() *Batch {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionRequest_Batch); ok {
+			return x.Batch
+		}
+	}
+	return nil
+}
+
 type isSessionRequest_Payload interface {
 	isSessionRequest_Payload()
 }
@@ -184,11 +195,19 @@ type SessionRequest_RotateCertificate struct {
 	RotateCertificate *RotateCertificate `protobuf:"bytes,3,opt,name=rotate_certificate,json=rotateCertificate,proto3,oneof"`
 }
 
+type SessionRequest_Batch struct {
+	// batch carries buffered data with its sequence number; the server answers with an Ack once
+	// the batch is persisted.
+	Batch *Batch `protobuf:"bytes,4,opt,name=batch,proto3,oneof"`
+}
+
 func (*SessionRequest_Hello) isSessionRequest_Payload() {}
 
 func (*SessionRequest_Heartbeat) isSessionRequest_Payload() {}
 
 func (*SessionRequest_RotateCertificate) isSessionRequest_Payload() {}
+
+func (*SessionRequest_Batch) isSessionRequest_Payload() {}
 
 // SessionResponse is one message from the server to the agent.
 type SessionResponse struct {
@@ -201,6 +220,7 @@ type SessionResponse struct {
 	//	*SessionResponse_CertificateIssued
 	//	*SessionResponse_RotateNow
 	//	*SessionResponse_TrustBundle
+	//	*SessionResponse_Throttle
 	Payload       isSessionResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -279,6 +299,15 @@ func (x *SessionResponse) GetTrustBundle() *TrustBundle {
 	return nil
 }
 
+func (x *SessionResponse) GetThrottle() *Throttle {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_Throttle); ok {
+			return x.Throttle
+		}
+	}
+	return nil
+}
+
 type isSessionResponse_Payload interface {
 	isSessionResponse_Payload()
 }
@@ -307,6 +336,11 @@ type SessionResponse_TrustBundle struct {
 	TrustBundle *TrustBundle `protobuf:"bytes,4,opt,name=trust_bundle,json=trustBundle,proto3,oneof"`
 }
 
+type SessionResponse_Throttle struct {
+	// throttle asks the agent to send batches more slowly (quota exceeded, KONZEPT §5).
+	Throttle *Throttle `protobuf:"bytes,5,opt,name=throttle,proto3,oneof"`
+}
+
 func (*SessionResponse_Ack) isSessionResponse_Payload() {}
 
 func (*SessionResponse_CertificateIssued) isSessionResponse_Payload() {}
@@ -314,6 +348,8 @@ func (*SessionResponse_CertificateIssued) isSessionResponse_Payload() {}
 func (*SessionResponse_RotateNow) isSessionResponse_Payload() {}
 
 func (*SessionResponse_TrustBundle) isSessionResponse_Payload() {}
+
+func (*SessionResponse_Throttle) isSessionResponse_Payload() {}
 
 // Hello is the first message of every stream.
 type Hello struct {
@@ -792,22 +828,315 @@ func (x *Ack) GetSeq() uint64 {
 	return 0
 }
 
+// Batch is one entry of the agent's write-ahead log. After a reconnect the agent sends every batch
+// that was not acknowledged yet, so batches may arrive twice: the server drops every batch whose
+// seq is not above the highest seq it has persisted for the node. Sequence numbers increase, also
+// across agent restarts, but may have gaps where the agent dropped data (buffer limits).
+type Batch struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// seq is the sequence number from the agent's write-ahead log.
+	Seq uint64 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	// content is the data; exactly one must be set.
+	//
+	// Types that are valid to be assigned to Content:
+	//
+	//	*Batch_Metrics
+	Content       isBatch_Content `protobuf_oneof:"content"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Batch) Reset() {
+	*x = Batch{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Batch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Batch) ProtoMessage() {}
+
+func (x *Batch) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Batch.ProtoReflect.Descriptor instead.
+func (*Batch) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *Batch) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *Batch) GetContent() isBatch_Content {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *Batch) GetMetrics() *MetricBatch {
+	if x != nil {
+		if x, ok := x.Content.(*Batch_Metrics); ok {
+			return x.Metrics
+		}
+	}
+	return nil
+}
+
+type isBatch_Content interface {
+	isBatch_Content()
+}
+
+type Batch_Metrics struct {
+	// metrics are the samples of one collection tick.
+	Metrics *MetricBatch `protobuf:"bytes,2,opt,name=metrics,proto3,oneof"`
+}
+
+func (*Batch_Metrics) isBatch_Content() {}
+
+// MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
+// converted to per-second rates by the agent; every sample is a gauge.
+type MetricBatch struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// collected_at is the agent's wall-clock time of the tick.
+	CollectedAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=collected_at,json=collectedAt,proto3" json:"collected_at,omitempty"`
+	// samples are the values; at most the per-node series limit (KONZEPT §8).
+	Samples       []*Sample `protobuf:"bytes,2,rep,name=samples,proto3" json:"samples,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MetricBatch) Reset() {
+	*x = MetricBatch{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricBatch) ProtoMessage() {}
+
+func (x *MetricBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetricBatch.ProtoReflect.Descriptor instead.
+func (*MetricBatch) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *MetricBatch) GetCollectedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CollectedAt
+	}
+	return nil
+}
+
+func (x *MetricBatch) GetSamples() []*Sample {
+	if x != nil {
+		return x.Samples
+	}
+	return nil
+}
+
+// Sample is one value of one series. Organization and node are not part of it: the server takes
+// them from the client certificate.
+type Sample struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// metric is the metric name, e.g. "sermon_cpu_utilization_ratio".
+	Metric string `protobuf:"bytes,1,opt,name=metric,proto3" json:"metric,omitempty"`
+	// labels are the bounded, technical labels of the series, e.g. cpu, device, interface,
+	// mountpoint, mode.
+	Labels map[string]string `protobuf:"bytes,2,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// value is the measured value; integers in base units are preferred (bytes/s, counts, ppm).
+	//
+	// Types that are valid to be assigned to Value:
+	//
+	//	*Sample_IntValue
+	//	*Sample_DoubleValue
+	Value         isSample_Value `protobuf_oneof:"value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Sample) Reset() {
+	*x = Sample{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Sample) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Sample) ProtoMessage() {}
+
+func (x *Sample) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Sample.ProtoReflect.Descriptor instead.
+func (*Sample) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *Sample) GetMetric() string {
+	if x != nil {
+		return x.Metric
+	}
+	return ""
+}
+
+func (x *Sample) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *Sample) GetValue() isSample_Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *Sample) GetIntValue() int64 {
+	if x != nil {
+		if x, ok := x.Value.(*Sample_IntValue); ok {
+			return x.IntValue
+		}
+	}
+	return 0
+}
+
+func (x *Sample) GetDoubleValue() float64 {
+	if x != nil {
+		if x, ok := x.Value.(*Sample_DoubleValue); ok {
+			return x.DoubleValue
+		}
+	}
+	return 0
+}
+
+type isSample_Value interface {
+	isSample_Value()
+}
+
+type Sample_IntValue struct {
+	// int_value is an integer value.
+	IntValue int64 `protobuf:"varint,3,opt,name=int_value,json=intValue,proto3,oneof"`
+}
+
+type Sample_DoubleValue struct {
+	// double_value is a fractional value; NaN and infinity are not allowed.
+	DoubleValue float64 `protobuf:"fixed64,4,opt,name=double_value,json=doubleValue,proto3,oneof"`
+}
+
+func (*Sample_IntValue) isSample_Value() {}
+
+func (*Sample_DoubleValue) isSample_Value() {}
+
+// Throttle limits how fast the agent sends batches. It applies until the next Throttle.
+type Throttle struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// min_interval is the shortest time between two batches; zero lifts the limit.
+	MinInterval   *durationpb.Duration `protobuf:"bytes,1,opt,name=min_interval,json=minInterval,proto3" json:"min_interval,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Throttle) Reset() {
+	*x = Throttle{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Throttle) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Throttle) ProtoMessage() {}
+
+func (x *Throttle) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Throttle.ProtoReflect.Descriptor instead.
+func (*Throttle) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *Throttle) GetMinInterval() *durationpb.Duration {
+	if x != nil {
+		return x.MinInterval
+	}
+	return nil
+}
+
 var File_sermon_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe3\x01\n" +
+	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x93\x02\n" +
 	"\x0eSessionRequest\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.sermon.agent.v1.HelloH\x00R\x05hello\x12:\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1a.sermon.agent.v1.HeartbeatH\x00R\theartbeat\x12S\n" +
-	"\x12rotate_certificate\x18\x03 \x01(\v2\".sermon.agent.v1.RotateCertificateH\x00R\x11rotateCertificateB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xa2\x02\n" +
+	"\x12rotate_certificate\x18\x03 \x01(\v2\".sermon.agent.v1.RotateCertificateH\x00R\x11rotateCertificate\x12.\n" +
+	"\x05batch\x18\x04 \x01(\v2\x16.sermon.agent.v1.BatchH\x00R\x05batchB\x10\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\xdb\x02\n" +
 	"\x0fSessionResponse\x12(\n" +
 	"\x03ack\x18\x01 \x01(\v2\x14.sermon.agent.v1.AckH\x00R\x03ack\x12S\n" +
 	"\x12certificate_issued\x18\x02 \x01(\v2\".sermon.agent.v1.CertificateIssuedH\x00R\x11certificateIssued\x12;\n" +
 	"\n" +
 	"rotate_now\x18\x03 \x01(\v2\x1a.sermon.agent.v1.RotateNowH\x00R\trotateNow\x12A\n" +
-	"\ftrust_bundle\x18\x04 \x01(\v2\x1c.sermon.agent.v1.TrustBundleH\x00R\vtrustBundleB\x10\n" +
+	"\ftrust_bundle\x18\x04 \x01(\v2\x1c.sermon.agent.v1.TrustBundleH\x00R\vtrustBundle\x127\n" +
+	"\bthrottle\x18\x05 \x01(\v2\x19.sermon.agent.v1.ThrottleH\x00R\bthrottleB\x10\n" +
 	"\apayload\x12\x05\xbaH\x02\b\x01\"\xd5\x01\n" +
 	"\x05Hello\x122\n" +
 	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
@@ -844,7 +1173,26 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x05roots\x18\x01 \x03(\fR\x05roots\"\v\n" +
 	"\tRotateNow\"\x17\n" +
 	"\x03Ack\x12\x10\n" +
-	"\x03seq\x18\x01 \x01(\x04R\x03seq*\\\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\"n\n" +
+	"\x05Batch\x12\x19\n" +
+	"\x03seq\x18\x01 \x01(\x04B\a\xbaH\x042\x02 \x00R\x03seq\x128\n" +
+	"\ametrics\x18\x02 \x01(\v2\x1c.sermon.agent.v1.MetricBatchH\x00R\ametricsB\x10\n" +
+	"\acontent\x12\x05\xbaH\x02\b\x01\"\x94\x01\n" +
+	"\vMetricBatch\x12E\n" +
+	"\fcollected_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\vcollectedAt\x12>\n" +
+	"\asamples\x18\x02 \x03(\v2\x17.sermon.agent.v1.SampleB\v\xbaH\b\x92\x01\x05\b\x01\x10\xd0\x0fR\asamples\"\xc4\x02\n" +
+	"\x06Sample\x128\n" +
+	"\x06metric\x18\x01 \x01(\tB \xbaH\x1dr\x1b2\x19^sermon_[a-z0-9_]{1,120}$R\x06metric\x12h\n" +
+	"\x06labels\x18\x02 \x03(\v2#.sermon.agent.v1.Sample.LabelsEntryB+\xbaH(\x9a\x01%\x10\b\"\x1ar\x182\x16^[a-z][a-z0-9_]{0,31}$*\x05r\x03\x18\x80\x02R\x06labels\x12\x1d\n" +
+	"\tint_value\x18\x03 \x01(\x03H\x00R\bintValue\x12,\n" +
+	"\fdouble_value\x18\x04 \x01(\x01B\a\xbaH\x04\x12\x02@\x01H\x00R\vdoubleValue\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x0e\n" +
+	"\x05value\x12\x05\xbaH\x02\b\x01\"W\n" +
+	"\bThrottle\x12K\n" +
+	"\fmin_interval\x18\x01 \x01(\v2\x19.google.protobuf.DurationB\r\xbaH\n" +
+	"\xaa\x01\a\"\x03\b\x90\x1c2\x00R\vminInterval*\\\n" +
 	"\fArchitecture\x12\x1c\n" +
 	"\x18ARCHITECTURE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ARCHITECTURE_AMD64\x10\x01\x12\x16\n" +
@@ -867,7 +1215,7 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(Architecture)(0),             // 0: sermon.agent.v1.Architecture
 	(*SessionRequest)(nil),        // 1: sermon.agent.v1.SessionRequest
@@ -880,28 +1228,41 @@ var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(*TrustBundle)(nil),           // 8: sermon.agent.v1.TrustBundle
 	(*RotateNow)(nil),             // 9: sermon.agent.v1.RotateNow
 	(*Ack)(nil),                   // 10: sermon.agent.v1.Ack
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*Batch)(nil),                 // 11: sermon.agent.v1.Batch
+	(*MetricBatch)(nil),           // 12: sermon.agent.v1.MetricBatch
+	(*Sample)(nil),                // 13: sermon.agent.v1.Sample
+	(*Throttle)(nil),              // 14: sermon.agent.v1.Throttle
+	nil,                           // 15: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 17: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
 	3,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
 	5,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
 	6,  // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
-	10, // 3: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
-	7,  // 4: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	9,  // 5: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	8,  // 6: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
-	4,  // 7: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
-	0,  // 8: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	11, // 9: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	11, // 10: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	11, // 11: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	1,  // 12: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	2,  // 13: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	13, // [13:14] is the sub-list for method output_type
-	12, // [12:13] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	11, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
+	10, // 4: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	7,  // 5: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
+	9,  // 6: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	8,  // 7: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	14, // 8: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
+	4,  // 9: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	0,  // 10: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
+	16, // 11: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	16, // 12: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	16, // 13: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	12, // 14: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	16, // 15: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	13, // 16: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	15, // 17: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	17, // 18: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	1,  // 19: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	2,  // 20: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	20, // [20:21] is the sub-list for method output_type
+	19, // [19:20] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -913,12 +1274,21 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionRequest_Hello)(nil),
 		(*SessionRequest_Heartbeat)(nil),
 		(*SessionRequest_RotateCertificate)(nil),
+		(*SessionRequest_Batch)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[1].OneofWrappers = []any{
 		(*SessionResponse_Ack)(nil),
 		(*SessionResponse_CertificateIssued)(nil),
 		(*SessionResponse_RotateNow)(nil),
 		(*SessionResponse_TrustBundle)(nil),
+		(*SessionResponse_Throttle)(nil),
+	}
+	file_sermon_agent_v1_agent_proto_msgTypes[10].OneofWrappers = []any{
+		(*Batch_Metrics)(nil),
+	}
+	file_sermon_agent_v1_agent_proto_msgTypes[12].OneofWrappers = []any{
+		(*Sample_IntValue)(nil),
+		(*Sample_DoubleValue)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -926,7 +1296,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

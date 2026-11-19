@@ -73,6 +73,32 @@ type Membership struct {
 	CreatedAt time.Time
 }
 
+type Metrics1h struct {
+	Bucket   interface{}
+	SeriesID int32
+	Avg      float64
+	Min      interface{}
+	Max      interface{}
+	Last     interface{}
+}
+
+type Metrics1m struct {
+	Bucket   interface{}
+	SeriesID int32
+	Avg      float64
+	Min      interface{}
+	Max      interface{}
+	Last     interface{}
+}
+
+type MetricsRaw struct {
+	Ts       time.Time
+	SeriesID int32
+	Avg      float64
+	Min      float64
+	Max      float64
+}
+
 type Node struct {
 	ID            uuid.UUID
 	OrgID         uuid.UUID
@@ -90,6 +116,9 @@ type Node struct {
 	LockedAt      *time.Time
 	LockReason    pgtype.Text
 	LastIp        pgtype.Text
+	IngestSeq     int64
+	LastSeenAt    *time.Time
+	AgentVersion  pgtype.Text
 }
 
 type NodeGroup struct {
@@ -124,6 +153,15 @@ type RoleBinding struct {
 	UserID    uuid.UUID
 	GroupID   *uuid.UUID
 	Role      string
+	CreatedAt time.Time
+}
+
+type Series struct {
+	ID        int32
+	OrgID     uuid.UUID
+	NodeID    uuid.UUID
+	Metric    string
+	Labels    []byte
 	CreatedAt time.Time
 }
 

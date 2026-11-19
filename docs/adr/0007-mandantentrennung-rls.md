@@ -61,6 +61,12 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
   - `enrollment_token_by_hash(hash, at)`: ein nutzbares Enrollment-Token zum Hash (M1-08)
   - `admin_list_organizations()`: Name und Mitgliederzahl aller Orgs für den Superadmin, keine Mandantendaten (M1-04)
   - `pki_certificates_in_use(authority, at)`: nur die Anzahl gültiger Zertifikate einer CA (M1-11b)
+  - `metric_points_raw/_1m/_1h(series_ids, from, to, step)`: Messpunkte der angegebenen Serien (M1-22, ADR 0001).
+    Hier gilt die RLS bewusst **auch für `sermon_definer`**: Auf `series` gibt es keine `definer_read`-Policy, die
+    Funktionen liefern also nur Punkte von Serien des aktuellen Mandanten, selbst wenn fremde Serien-IDs übergeben
+    werden. `sermon_app` darf die Metrik-Tabellen nur beschreiben (INSERT), nicht lesen, weil TimescaleDB auf
+    komprimierten Hypertables und Continuous Aggregates keine RLS kann. Gegenprobe: Mit einer `definer_read`-Policy
+    auf `series` sieht eine fremde Org die Punkte.
 
   Suchen per Token gehen nur über den Hash; eine Liste lässt sich damit nicht abfragen. Die Berechtigung
   (z. B. Superadmin) prüft die App-Schicht vor dem Aufruf.

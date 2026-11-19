@@ -17,6 +17,7 @@ type Querier interface {
 	AddSuperadmin(ctx context.Context, userID uuid.UUID) error
 	// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
 	AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error)
+	AdvanceIngestSeq(ctx context.Context, arg AdvanceIngestSeqParams) (int64, error)
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
@@ -25,6 +26,7 @@ type Querier interface {
 	ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error)
 	// Atomic: concurrent redemptions cannot exceed max_uses.
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
+	CopyMetricWindows(ctx context.Context, arg []CopyMetricWindowsParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
@@ -48,9 +50,18 @@ type Querier interface {
 	DeleteSession(ctx context.Context, id string) error
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	EnrollmentTokenByHash(ctx context.Context, arg EnrollmentTokenByHashParams) (EnrollmentTokenByHashRow, error)
+	// Metric series and points (M1-22, ADR 0001). Every query runs in a tenant transaction.
+	// Registers series of the current organization (one row per position of the arrays) and returns
+	// the IDs of new and existing ones. A row inserted concurrently by another transaction may be
+	// missing from the result; the caller asks again for missing keys.
+	EnsureSeries(ctx context.Context, arg EnsureSeriesParams) ([]EnsureSeriesRow, error)
+	// Series of a metric on the given nodes, restricted to the node groups of the scope and to series
+	// whose labels contain the filter.
+	FindSeries(ctx context.Context, arg FindSeriesParams) ([]FindSeriesRow, error)
 	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
+	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
 	GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
@@ -87,6 +98,9 @@ type Querier interface {
 	LockPKI(ctx context.Context) error
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
+	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
+	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
+	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)

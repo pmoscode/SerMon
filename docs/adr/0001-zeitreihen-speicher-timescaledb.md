@@ -178,5 +178,5 @@ Das reduziert die Last um den Faktor 5–10. Erst danach wäre ein Wechsel auf O
   - Abfragen werden ausschließlich typisiert gebaut (sqlc / parametrisiert). User schreiben kein SQL.
 - **Folgearbeiten:**
   - ✓ Spike in M0 durchgeführt (siehe oben).
-  - Schema und Migrationen (`goose`) anlegen.
-  - `MetricStore`-Port mit Contract-Tests schreiben. Dieselben Tests müssen später auch eine alternative Implementierung bestehen.
+  - ✓ Schema und Migration `00013_metrics.sql`, `MetricStore`-Port mit Contract-Tests (`metricstoretest`), bestanden von
+    der TimescaleDB-Implementierung (`adapters/timescale`) und einem Speicher-Fake (M1-22).

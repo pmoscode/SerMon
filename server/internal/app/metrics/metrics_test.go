@@ -20,6 +20,10 @@ func TestChooseSource_FinestThatHoldsTheRangeAndFitsTheStep(t *testing.T) {
 		step time.Duration
 		want metrics.Source
 	}{
+		{"last 5 min, 1 s step", 5 * time.Minute, time.Second, metrics.SourceRing},
+		{"last 15 min, zero step", 15 * time.Minute, 0, metrics.SourceRing},
+		{"last 15 min, 10 s step", 15 * time.Minute, 10 * time.Second, metrics.SourceRaw},
+		{"16 min ago, 1 s step", 16 * time.Minute, time.Second, metrics.SourceRaw},
 		{"last hour, fine step", time.Hour, 10 * time.Second, metrics.SourceRaw},
 		{"last hour, zero step", time.Hour, 0, metrics.SourceRaw},
 		{"last day, 30 s step", 24 * time.Hour, 30 * time.Second, metrics.SourceRaw},

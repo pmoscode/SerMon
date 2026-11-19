@@ -269,6 +269,9 @@ func (s *Store) points(ctx context.Context, db *sqlcdb.Queries, q metrics.Query,
 		for _, r := range rows {
 			out = append(out, seriesPoint{r.SeriesID, metrics.Point{Time: r.Bucket.UTC(), Avg: r.Avg, Min: r.Min, Max: r.Max}})
 		}
+	case metrics.SourceRing:
+		// The ring buffer lives in the server's memory (metrics.Reader), not in the database.
+		return nil, metrics.ErrInvalidQuery
 	default:
 		return nil, metrics.ErrInvalidQuery
 	}

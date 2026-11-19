@@ -69,9 +69,10 @@ type Source int
 
 // Storage resolutions, finest first.
 const (
-	SourceRaw Source = iota + 1 // 10 s windows, 24 h
-	Source1m                    // 1 min aggregates, 30 days
-	Source1h                    // 1 h aggregates, 1 year
+	SourceRaw  Source = iota + 1 // 10 s windows, 24 h
+	Source1m                     // 1 min aggregates, 30 days
+	Source1h                     // 1 h aggregates, 1 year
+	SourceRing                   // 1 s values in the server's memory, 15 min (not in the Store)
 )
 
 // Resolution of a source.
@@ -83,6 +84,8 @@ func (s Source) Resolution() time.Duration {
 		return time.Minute
 	case Source1h:
 		return time.Hour
+	case SourceRing:
+		return time.Second
 	default:
 		return time.Hour
 	}
@@ -97,14 +100,19 @@ func (s Source) retention() time.Duration {
 		return 30 * 24 * time.Hour
 	case Source1h:
 		return 365 * 24 * time.Hour
+	case SourceRing:
+		return RingSpan
 	default:
 		return 365 * 24 * time.Hour
 	}
 }
 
 // ChooseSource picks the finest source that still holds `from` and whose resolution is not finer
-// than the step (a 5 min step needs no 10 s windows).
+// than the step (a 5 min step needs no 10 s windows): ring → raw → 1 min → 1 h.
 func ChooseSource(from time.Time, step time.Duration, now time.Time) Source {
+	if !from.Before(now.Add(-RingSpan)) && step < Window {
+		return SourceRing
+	}
 	for _, source := range []Source{SourceRaw, Source1m} {
 		next := source + 1
 		holdsRange := !from.Before(now.Add(-source.retention()))

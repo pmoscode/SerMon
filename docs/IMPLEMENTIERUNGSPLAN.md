@@ -283,7 +283,12 @@ flowchart LR
 - **Abhängig von:** M1-02, M1-06, M1-07
 - **Tests zuerst:** `init` ist idempotent und verweigert eine zweite Ausführung; das Token verfällt.
 
-#### ☐ M1-06 – Secrets-Box · S · S 🔒
+#### ☑ M1-06 – Secrets-Box · S · S 🔒
+> Erledigt: `secrets.Box` (AES-256-GCM, Key-ID im Ciphertext, Kontextbindung per Associated Data, einheitlicher
+> Fehler `ErrDecrypt`), Rotation mit lesbaren Altschlüsseln und `Reseal`, Schlüsseldatei `<id>:<base64>` (neuester
+> zuerst, Fehlermeldungen ohne Schlüsselmaterial), `GenerateKeyLine`. 93,6 % Abdeckung; der Rest sind Fehlerpfade
+> von `crypto/rand` bzw. AES, die nicht auftreten können. Die Gegenprobe ohne Kontextbindung schlägt fehl.
+> Konfiguration (`SERMON_MASTER_KEYS_FILE`) folgt mit M1-05.
 - **Ziel:** `secrets.Box`: AES-256-GCM mit Key-ID im Ciphertext; Schlüsselrotation (alte Schlüssel weiter lesbar).
 - **Abhängig von:** M0-03
 - **Tests zuerst:** Verschlüsseln und Entschlüsseln im Kreis, manipulierter Ciphertext wird abgelehnt, Rotation.

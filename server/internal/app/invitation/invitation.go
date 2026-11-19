@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -22,6 +20,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/naming"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -132,11 +131,10 @@ func (s *Service) Invite(ctx context.Context, c access.Caller, email string, gro
 	if !r.Valid() {
 		return "", Invitation{}, access.ErrInvalidRole
 	}
-	raw := make([]byte, tokenBytes)
-	if _, err := rand.Read(raw); err != nil {
-		return "", Invitation{}, fmt.Errorf("generate invitation token: %w", err)
+	token, hash, err := NewToken()
+	if err != nil {
+		return "", Invitation{}, err
 	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
 	now := s.now()
 	inviter := c.Principal.User
 	inv := Invitation{ID: ID(s.newID()), Email: email, Group: group, Role: r, InvitedBy: &inviter, CreatedAt: now, ExpiresAt: now.Add(Lifetime)}
@@ -144,10 +142,20 @@ func (s *Service) Invite(ctx context.Context, c access.Caller, email string, gro
 		Actor: inviter, Action: "member.invite", Target: "invitation:" + inv.ID.String(),
 		Details: map[string]string{"email": email, "role": r.String(), "group": groupName(group)},
 	}
-	if err := s.store.Create(ctx, scope, inv, sha256.Sum256([]byte(token)), audit); err != nil {
+	if err := s.store.Create(ctx, scope, inv, hash, audit); err != nil {
 		return "", Invitation{}, fmt.Errorf("create invitation: %w", err)
 	}
 	return token, inv, nil
+}
+
+// NewToken returns a new link token (256 bits, base64url) and the SHA-256 that is stored.
+func NewToken() (string, [32]byte, error) {
+	raw := make([]byte, tokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", [32]byte{}, fmt.Errorf("generate invitation token: %w", err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	return token, sha256.Sum256([]byte(token)), nil
 }
 
 // List returns the open invitations of the caller's organization.
@@ -197,8 +205,8 @@ func (s *Service) AcceptNewAccount(ctx context.Context, token, displayName, pw s
 	if err != nil {
 		return Pending{}, err
 	}
-	name := strings.TrimSpace(displayName)
-	if name == "" || utf8.RuneCountInString(name) > maxName || strings.ContainsFunc(name, unicode.IsControl) {
+	name, ok := naming.Clean(displayName, maxName)
+	if !ok {
 		return Pending{}, ErrInvalidName
 	}
 	if err := password.Validate(pw, p.Email, name); err != nil {

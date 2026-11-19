@@ -16,6 +16,8 @@ type Querier interface {
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
 	AddSuperadmin(ctx context.Context, userID uuid.UUID) error
+	// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
+	AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error)
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	AuditChain(ctx context.Context) ([]AuditLog, error)
@@ -67,6 +69,7 @@ type Querier interface {
 	LockAccessChanges(ctx context.Context) error
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
+	RenameOrganization(ctx context.Context, name string) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)

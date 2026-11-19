@@ -4,15 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/naming"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -283,8 +281,8 @@ func (s *Service) audit(c Caller, action, target string, kv ...string) AuditEntr
 }
 
 func groupName(name string) (string, error) {
-	name = strings.TrimSpace(name)
-	if name == "" || utf8.RuneCountInString(name) > maxGroupName || strings.ContainsFunc(name, unicode.IsControl) {
+	name, ok := naming.Clean(name, maxGroupName)
+	if !ok {
 		return "", ErrInvalidName
 	}
 	return name, nil

@@ -7,9 +7,48 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const adminListOrganizations = `-- name: AdminListOrganizations :many
+SELECT id::uuid AS id, name::text AS name, created_at::timestamptz AS created_at, members::bigint AS members
+FROM admin_list_organizations()
+`
+
+type AdminListOrganizationsRow struct {
+	ID        uuid.UUID
+	Name      string
+	CreatedAt time.Time
+	Members   int64
+}
+
+// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
+func (q *Queries) AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error) {
+	rows, err := q.db.Query(ctx, adminListOrganizations)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AdminListOrganizationsRow{}
+	for rows.Next() {
+		var i AdminListOrganizationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.Members,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const createOrganization = `-- name: CreateOrganization :one
 
@@ -69,4 +108,16 @@ func (q *Queries) ListOrganizations(ctx context.Context) ([]Organization, error)
 		return nil, err
 	}
 	return items, nil
+}
+
+const renameOrganization = `-- name: RenameOrganization :execrows
+UPDATE organizations SET name = $1 WHERE id = current_org_id()
+`
+
+func (q *Queries) RenameOrganization(ctx context.Context, name string) (int64, error) {
+	result, err := q.db.Exec(ctx, renameOrganization, name)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

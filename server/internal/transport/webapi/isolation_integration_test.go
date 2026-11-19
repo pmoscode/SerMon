@@ -60,11 +60,12 @@ func seedAccessFixtures(t *testing.T) {
 }
 
 type loggedIn struct {
-	auth       webv1connect.AuthServiceClient
-	access     webv1connect.AccessServiceClient
-	system     webv1connect.SystemServiceClient
-	invitation webv1connect.InvitationServiceClient
-	jar        *cookiejar.Jar
+	auth         webv1connect.AuthServiceClient
+	access       webv1connect.AccessServiceClient
+	system       webv1connect.SystemServiceClient
+	invitation   webv1connect.InvitationServiceClient
+	organization webv1connect.OrganizationServiceClient
+	jar          *cookiejar.Jar
 }
 
 func login(t *testing.T, s stack, email string) loggedIn {
@@ -72,11 +73,12 @@ func login(t *testing.T, s stack, email string) loggedIn {
 	jar, _ := cookiejar.New(nil)
 	hc := s.httpClient(jar, s.origin)
 	l := loggedIn{
-		auth:       webv1connect.NewAuthServiceClient(hc, s.server.URL),
-		access:     webv1connect.NewAccessServiceClient(hc, s.server.URL),
-		system:     webv1connect.NewSystemServiceClient(hc, s.server.URL),
-		invitation: webv1connect.NewInvitationServiceClient(hc, s.server.URL),
-		jar:        jar,
+		auth:         webv1connect.NewAuthServiceClient(hc, s.server.URL),
+		access:       webv1connect.NewAccessServiceClient(hc, s.server.URL),
+		system:       webv1connect.NewSystemServiceClient(hc, s.server.URL),
+		invitation:   webv1connect.NewInvitationServiceClient(hc, s.server.URL),
+		organization: webv1connect.NewOrganizationServiceClient(hc, s.server.URL),
+		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
 		t.Fatalf("login %s: %v", email, err)
@@ -89,7 +91,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	seedAccessFixtures(t)
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
-		auth: bea.auth, access: bea.access, invitation: bea.invitation,
+		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 	}
 	ctx := context.Background()
@@ -125,6 +127,10 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	}
 	var name string
 	var bindings, members, foreignGroups, invitations int
+	var orgName string
+	if err := conn.QueryRow(ctx, "SELECT name FROM organizations WHERE id = $1", orgAlpha).Scan(&orgName); err != nil || orgName != "Alpha" {
+		t.Errorf("name of Alpha = %q, %v", orgName, err)
+	}
 	if err := conn.QueryRow(ctx, "SELECT name FROM node_groups WHERE id = $1", groupAl).Scan(&name); err != nil || name != "alpha-web" {
 		t.Errorf("group of Alpha = %q, %v", name, err)
 	}

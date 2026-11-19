@@ -284,7 +284,7 @@ flowchart LR
 - **Abhängig von:** M1-02, M1-06
 - **Tests zuerst:** RFC-6238-Testvektoren, Zeitfenster und Schutz vor Replay, Recovery-Code nur einmal verwendbar.
 
-#### ◐ M1-04 – Orgs, Gruppen, Mitgliedschaften und Rollen · S · L 🔒
+#### ☑ M1-04 – Orgs, Gruppen, Mitgliedschaften und Rollen · S · L 🔒
 > Teil a erledigt (Grundlage):
 > - Tabellen `node_groups`, `role_bindings` (zusammengesetzte Fremdschlüssel: Bindungen nur auf Gruppen derselben
 >   Org) und `audit_log`, alle mit RLS (ENABLE + FORCE).
@@ -320,8 +320,13 @@ flowchart LR
 > - Testhilfe korrigiert: Jeder Test-Client hat jetzt ein eigenes `http.Client`. `httptest.Server.Client()` liefert
 >   immer dasselbe Objekt, die Clients hatten sich Cookies geteilt.
 >
-> Offen (Teil d): Orgs anlegen, umbenennen und auflisten durch den Superadmin (der erste Admin einer neuen Org
-> wird eingeladen); Löschen von Orgs braucht ein Konzept für Aufbewahrung und Audit-Log.
+> Teil d erledigt (Orgs durch den Superadmin):
+> - `OrganizationService`: `ListOrganizations` (Name und Mitgliederzahl, keine Mandantendaten),
+>   `CreateOrganization` (mit Step-up; lädt den ersten Admin per Link ein), `RenameOrganization`.
+> - Audit-Einträge im Log der jeweiligen Org.
+> - Ohne Mitgliedschaft sieht der Superadmin keine Daten einer Org (Test).
+>
+> Orgs zu löschen ist offen (O14): Aufbewahrung, Audit-Log, Metriken und Loki-Daten brauchen ein eigenes Konzept.
 - **Ziel:** CRUD-Use-Cases und Connect-RPCs für Orgs, Node-Gruppen, Mitgliedschaften und Rollen-Bindungen; RLS-Policies; Audit-Log-Tabelle (nur anfügen, Hash-Kette); Org-Switch.
   - **Testgerüst für Mandantentrennung:** ein generischer Test, der **jede** Web-RPC mit einem User aus fremder Org aufruft und `NotFound` oder `PermissionDenied` erwartet. Neue RPCs ohne Eintrag lassen den Test fehlschlagen.
 - **Abhängig von:** M1-01, M1-02

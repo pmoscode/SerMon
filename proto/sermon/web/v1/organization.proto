@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// OrganizationService lets the superadmin manage organizations (KONZEPT §7). It requires a
+// session of a superadmin (PERMISSION_DENIED otherwise). The superadmin sees names and member
+// counts only; tenant data needs a membership.
+service OrganizationService {
+  // ListOrganizations returns all organizations.
+  rpc ListOrganizations(ListOrganizationsRequest) returns (ListOrganizationsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateOrganization creates an organization and invites its first admin (step-up). The
+  // response contains the invitation link token once (ADR 0008).
+  rpc CreateOrganization(CreateOrganizationRequest) returns (CreateOrganizationResponse);
+  // RenameOrganization renames an organization.
+  rpc RenameOrganization(RenameOrganizationRequest) returns (RenameOrganizationResponse);
+}
+
+// OrganizationSummary is an organization as the superadmin sees it.
+message OrganizationSummary {
+  // id is the organization UUID.
+  string id = 1;
+  // name is the display name.
+  string name = 2;
+  // create_time is when the organization was created.
+  google.protobuf.Timestamp create_time = 3;
+  // member_count is the number of members.
+  int64 member_count = 4;
+}
+
+// ListOrganizationsRequest has no parameters.
+message ListOrganizationsRequest {}
+
+// ListOrganizationsResponse lists organizations by name.
+message ListOrganizationsResponse {
+  // organizations of the instance.
+  repeated OrganizationSummary organizations = 1;
+}
+
+// CreateOrganizationRequest names the organization and its first admin.
+message CreateOrganizationRequest {
+  // name is the display name.
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // admin_email is the address of the first admin, who is invited by link.
+  string admin_email = 2 [(buf.validate.field).string = {
+    min_len: 3
+    max_len: 320
+  }];
+}
+
+// CreateOrganizationResponse returns the organization and the invitation link token.
+message CreateOrganizationResponse {
+  // organization is the created organization.
+  OrganizationSummary organization = 1;
+  // invitation_token is the secret part of the first admin's invitation link (shown once).
+  string invitation_token = 2;
+}
+
+// RenameOrganizationRequest names the organization and its new name.
+message RenameOrganizationRequest {
+  // organization_id is the UUID of the organization.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+  // name is the new display name.
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// RenameOrganizationResponse has no fields.
+message RenameOrganizationResponse {}

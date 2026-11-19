@@ -24,6 +24,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -82,7 +83,9 @@ func newStack(t *testing.T, loginLimit int) stack {
 		System: webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
 			invites, slog.New(slog.DiscardHandler)),
-		Invitation:    webapi.NewInvitationHandler(invites, sessions, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
+		Invitation: webapi.NewInvitationHandler(invites, sessions, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
+		Organization: webapi.NewOrganizationHandler(
+			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg)), slog.New(slog.DiscardHandler)),
 	})
 	return stack{server: srv, origin: srv.URL}

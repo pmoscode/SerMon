@@ -22,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
@@ -181,6 +182,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Setup:  webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
 		Invitation: webapi.NewInvitationHandler(invites, sessions,
 			ratelimit.New(invitationAttemptsPerWindow, invitationWindow, time.Now), logger),
+		Organization: webapi.NewOrganizationHandler(
+			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID), logger),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(accessStore), logger),
 	})
 	return nil

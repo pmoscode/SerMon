@@ -18,6 +18,7 @@ type isolationEnv struct {
 	auth                            webv1connect.AuthServiceClient
 	access                          webv1connect.AccessServiceClient
 	invitation                      webv1connect.InvitationServiceClient
+	organization                    webv1connect.OrganizationServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 }
@@ -104,6 +105,19 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.InvitationService/JoinOrganization": {tokenBound: true, run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.invitation.JoinOrganization(ctx, connect.NewRequest(&webv1.JoinOrganizationRequest{Token: e.inviteTokenA}))
+		return err
+	}},
+	// Instance-level RPCs: an org admin is not a superadmin.
+	"/sermon.web.v1.OrganizationService/ListOrganizations": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.ListOrganizations(ctx, connect.NewRequest(&webv1.ListOrganizationsRequest{}))
+		return err
+	}},
+	"/sermon.web.v1.OrganizationService/CreateOrganization": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.CreateOrganization(ctx, connect.NewRequest(&webv1.CreateOrganizationRequest{Name: "rogue", AdminEmail: "rogue@example.org"}))
+		return err
+	}},
+	"/sermon.web.v1.OrganizationService/RenameOrganization": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.RenameOrganization(ctx, connect.NewRequest(&webv1.RenameOrganizationRequest{OrganizationId: e.orgA, Name: "pwned"}))
 		return err
 	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {

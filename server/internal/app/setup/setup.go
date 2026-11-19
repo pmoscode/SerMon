@@ -9,15 +9,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/naming"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -121,8 +119,8 @@ func (s *Service) Complete(ctx context.Context, r Request) error {
 	if !ok {
 		return ErrInvalidEmail
 	}
-	name, okName := cleanName(r.DisplayName)
-	org, okOrg := cleanName(r.OrganizationName)
+	name, okName := naming.Clean(r.DisplayName, maxName)
+	org, okOrg := naming.Clean(r.OrganizationName, maxName)
 	if !okName || !okOrg {
 		return ErrInvalidName
 	}
@@ -141,10 +139,4 @@ func (s *Service) Complete(ctx context.Context, r Request) error {
 		return fmt.Errorf("complete setup: %w", err)
 	}
 	return nil
-}
-
-func cleanName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	ok := name != "" && utf8.RuneCountInString(name) <= maxName && !strings.ContainsFunc(name, unicode.IsControl)
-	return name, ok
 }

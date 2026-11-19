@@ -1174,6 +1174,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |
 | O12 | Wachstum über ca. 200 Nodes  | TimescaleDB stößt bei 1-s-Auflösung an Grenzen                                   | `MetricStore` auf VictoriaMetrics umstellen; die Domänenlogik bleibt unverändert (ADR 0001) |
 | O13 | Mitglieder hinzufügen        | ✓ Geklärt: Einladungslink statt Startpasswort                                    | Entschieden: D28, Link zum Kopieren, Mail optional (ADR 0008)                              |
+| O14 | Orgs löschen                 | Audit-Log (nur anfügen), Metriken und Loki-Daten einer Org: sofort löschen, sperren oder nach Frist? | Erst sperren (kein Login, kein Ingest), nach Frist endgültig löschen; Audit-Log exportierbar |
 
 ---
 

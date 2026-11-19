@@ -12,3 +12,12 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+thiserror.workspace = true
+
+[features]
+# Fakes for the ports (FakeClock, ...) used by the tests of other crates.
+testing = []
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true

@@ -46,6 +46,8 @@ DB-Passwort wird beim ersten Start zufällig erzeugt (`deploy/dev/.secrets/`, gi
 Devcontainer (`.devcontainer/`) mit allen Werkzeugen.
 
 Agent bauen: `just build-agent` (statische musl-Binaries für amd64 und arm64), `just smoke-agent` (Start im Container).
+Agent-Konfiguration: `/etc/sermon/agent.toml` (Schema und Beispiel in `agent/crates/sermon-agent/src/config.rs`);
+Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur über `ProcRoot` (`sermon-core`).
 Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just smoke-server` (Start, Health-Probes, SIGTERM).
 Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.
 Wichtige Variablen:

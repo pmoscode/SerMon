@@ -1,22 +1,18 @@
-//! `SerMon` agent: collects metrics, logs and security events and streams them to the server.
-//!
-//! The full CLI (`enroll`, `run`, `uninstall`, `simulate`) follows in M1-12.
+//! `SerMon` agent binary: parses the command line and hands over to the library.
 
 use std::process::ExitCode;
 
-const NAME: &str = "sermon-agent";
-const USAGE: &str = "usage: sermon-agent --version";
+use clap::Parser;
+use sermon_agent::cli::Cli;
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.as_slice() {
-        [flag] if flag == "--version" || flag == "-V" => {
-            println!("{NAME} {}", env!("CARGO_PKG_VERSION"));
-            ExitCode::SUCCESS
-        }
-        _ => {
-            eprintln!("{USAGE}");
-            ExitCode::from(2)
+    // clap prints help, version and usage errors itself (exit code 0 or 2).
+    let cli = Cli::parse();
+    match sermon_agent::execute(cli) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("sermon-agent: {error:#}");
+            ExitCode::FAILURE
         }
     }
 }

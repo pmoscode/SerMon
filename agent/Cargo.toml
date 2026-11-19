@@ -18,6 +18,21 @@ prost-types = "=0.14.6"
 tonic = { version = "=0.14.9", default-features = false, features = ["codegen", "channel"] }
 tonic-prost = "=0.14.9"
 
+anyhow = "=1.0.104"
+clap = { version = "=4.6.8", default-features = false, features = ["std", "help", "usage", "error-context", "suggestions", "derive", "env"] }
+http = "=1.5.0"
+serde = { version = "=1.0.229", features = ["derive"] }
+thiserror = "=2.0.21"
+tokio = { version = "=1.54.1", features = ["rt", "macros", "signal", "time", "sync"] }
+tokio-util = "=0.7.20"
+toml = { version = "=1.2.1", default-features = false, features = ["parse", "serde", "std"] }
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "std", "ansi"] }
+
+# Test-only
+proptest = "=1.12.0"
+tempfile = "=3.27.0"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 unused_qualifications = "warn"

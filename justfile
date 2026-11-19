@@ -86,14 +86,14 @@ lint-proto:
 
 # Detect breaking protocol changes against main (KONZEPT §5: agents N and N-1 must keep working)
 [working-directory: 'proto']
-breaking-proto:
+breaking-proto against="main":
     #!/usr/bin/env bash
     set -euo pipefail
-    if ! git cat-file -e main:proto/buf.yaml 2>/dev/null; then
-        echo "⏭  no proto/ on main yet – nothing to compare"; exit 0
+    if ! git cat-file -e "{{ against }}:proto/buf.yaml" 2>/dev/null; then
+        echo "⏭  no proto/ on {{ against }} yet – nothing to compare"; exit 0
     fi
-    buf breaking --against '../.git#branch=main,subdir=proto'
-    echo "✓ no breaking changes against main"
+    buf breaking --against "../.git#ref={{ against }},subdir=proto"
+    echo "✓ no breaking changes against {{ against }}"
 
 # --- agent (Rust) ------------------------------------------------------------
 

@@ -1,0 +1,157 @@
+# Security: static analysis (CodeQL), workflow audit (zizmor), secret scan (betterleaks),
+# dependency advisories (nightly, new advisories appear without code changes) and OpenSSF Scorecard.
+# CodeQL and Scorecard need a public repository (or GitHub Advanced Security) – see ADR 0006.
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *" # nightly, 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=github-releases depName=casey/just
+  JUST_VERSION: 1.59.0
+  # renovate: datasource=github-releases depName=betterleaks/betterleaks
+  BETTERLEAKS_VERSION: 1.10.1
+  # SHA-256 of betterleaks_<version>_linux_x64.tar.gz (from the release's checksums.txt).
+  BETTERLEAKS_SHA256: c174b42d7aa60caf58c0c3e555c0e4bed01fe6b0d99a412bce777b5af4ce913e
+  # renovate: datasource=go depName=golang.org/x/vuln
+  GOVULNCHECK_VERSION: v1.10.0
+  # renovate: datasource=github-releases depName=EmbarkStudios/cargo-deny
+  CARGO_DENY_VERSION: 0.21.0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  codeql:
+    name: codeql (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # upload CodeQL results to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { language: actions, build-mode: none }
+          - { language: go, build-mode: manual }
+          - { language: javascript-typescript, build-mode: none }
+          - { language: rust, build-mode: none }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - if: matrix.language == 'go'
+        working-directory: server
+        run: go build ./...
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}
+
+  zizmor:
+    name: workflow audit (zizmor)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          # Fail the job on findings instead of uploading SARIF (works without Advanced Security).
+          advanced-security: false
+
+  secrets:
+    name: secret scan (betterleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # scan the full history
+      - name: Install betterleaks (pinned version, verified checksum)
+        run: |
+          archive="betterleaks_${BETTERLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLo "$archive" "https://github.com/betterleaks/betterleaks/releases/download/v${BETTERLEAKS_VERSION}/${archive}"
+          echo "${BETTERLEAKS_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" betterleaks
+          sudo install -m 0755 betterleaks /usr/local/bin/betterleaks
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: just@${{ env.JUST_VERSION }}
+      # No --validation: findings are never sent to provider APIs (ADR 0005).
+      - run: just security-secrets
+
+  dependencies:
+    name: dependency advisories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.node-version
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: just@${{ env.JUST_VERSION }},cargo-deny@${{ env.CARGO_DENY_VERSION }}
+      - run: go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+      - run: just security-agent security-server security-web
+
+  scorecard:
+    name: openssf scorecard
+    # Scorecard results are only published for public repositories on the default branch.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write # upload Scorecard results to code scanning
+      id-token: write # publish results to the OpenSSF API
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: scorecard.sarif
+          category: scorecard

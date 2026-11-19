@@ -1,6 +1,135 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ]
+	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
+	"description": "SerMon dependency updates – requires the Renovate GitHub App on the repository.",
+	"extends": [
+		"config:recommended",
+		":semanticCommits",
+		"helpers:pinGitHubActionDigests"
+	],
+	"timezone": "Europe/Berlin",
+	"schedule": [
+		"* 0-6 * * 1"
+	],
+	"labels": [
+		"dependencies"
+	],
+	"rangeStrategy": "pin",
+	"minimumReleaseAge": "3 days",
+	"internalChecksFilter": "strict",
+	"postUpdateOptions": [
+		"gomodTidy"
+	],
+	"lockFileMaintenance": {
+		"enabled": true,
+		"schedule": [
+			"* 0-6 1 * *"
+		]
+	},
+	"vulnerabilityAlerts": {
+		"labels": [
+			"dependencies",
+			"security"
+		]
+	},
+	"packageRules": [
+		{
+			"matchManagers": [
+				"cargo"
+			],
+			"groupName": "agent (Rust) dependencies"
+		},
+		{
+			"matchManagers": [
+				"gomod"
+			],
+			"groupName": "server (Go) dependencies"
+		},
+		{
+			"matchManagers": [
+				"npm",
+				"nodenv"
+			],
+			"groupName": "web dependencies"
+		},
+		{
+			"matchManagers": [
+				"github-actions"
+			],
+			"groupName": "GitHub Actions"
+		},
+		{
+			"matchManagers": [
+				"custom.regex"
+			],
+			"groupName": "build tools"
+		},
+		{
+			"description": "These projects tag releases with a v prefix; we pin the plain version.",
+			"matchPackageNames": [
+				"bufbuild/buf",
+				"rust-cross/cargo-zigbuild",
+				"betterleaks/betterleaks"
+			],
+			"extractVersion": "^v(?<version>.+)$"
+		},
+		{
+			"description": "Generated code depends on these versions – regenerate and commit with `just gen`.",
+			"matchPackageNames": [
+				"prost",
+				"prost-types",
+				"tonic",
+				"tonic-prost",
+				"protoc-gen-prost",
+				"protoc-gen-tonic",
+				"google.golang.org/protobuf",
+				"connectrpc.com/connect",
+				"@bufbuild/protobuf",
+				"@bufbuild/protoc-gen-es",
+				"bufbuild/buf"
+			],
+			"groupName": "protocol code generation",
+			"prBodyNotes": [
+				"⚠️ Run `just gen` and commit the regenerated code; CI (`just check-gen`) fails otherwise."
+			]
+		},
+		{
+			"matchPackageNames": [
+				"typescript-eslint"
+			],
+			"prBodyNotes": [
+				"⚠️ Remove the `minimatch` override in `web/pnpm-workspace.yaml` once typescript-eslint is >= 8.73.0 (GHSA-g3hv-75wg-m249)."
+			]
+		},
+		{
+			"matchPackageNames": [
+				"betterleaks/betterleaks"
+			],
+			"prBodyNotes": [
+				"⚠️ Update `BETTERLEAKS_SHA256` in `.github/workflows/security.yml` from the release's `checksums.txt` – the secret scan fails on a checksum mismatch."
+			]
+		}
+	],
+	"customManagers": [
+		{
+			"description": "Tool versions in workflow env blocks, annotated with `# renovate: datasource=… depName=…`.",
+			"customType": "regex",
+			"managerFilePatterns": [
+				"/^\\.github/workflows/.+\\.ya?ml$/"
+			],
+			"matchStrings": [
+				"# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+[A-Z_]+: (?<currentValue>\\S+)"
+			]
+		},
+		{
+			"description": "Rust protoc plugins installed by `just install-proto-plugins`.",
+			"customType": "regex",
+			"managerFilePatterns": [
+				"/^justfile$/"
+			],
+			"matchStrings": [
+				"(?<depName>protoc-gen-(?:prost|tonic))@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+			],
+			"datasourceTemplate": "crate"
+		}
+	]
 }

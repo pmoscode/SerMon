@@ -36,7 +36,13 @@ Die CI ruft dieselben `just`-Befehle auf wie die lokale Entwicklung. Was in der 
 - **Werkzeuge außerhalb von Actions:**
   - Versionen sind im `env`-Block gepinnt und mit `# renovate:` annotiert.
   - betterleaks wird zusätzlich gegen eine festgeschriebene **SHA-256-Prüfsumme** verifiziert.
-  - zig aktualisiert Renovate nicht, weil die GitHub-Tags von zig hinter den tatsächlichen Releases zurückliegen.
+  - zig wird direkt von ziglang.org geladen und gegen eine festgeschriebene SHA-256-Prüfsumme geprüft, und zwar bei
+    jedem Lauf, auch wenn das Archiv aus dem Cache kommt. `mlugg/setup-zig` läuft noch auf dem abgekündigten Node.js 20.
+    Renovate aktualisiert zig nicht, weil die GitHub-Tags von zig hinter den tatsächlichen Releases zurückliegen.
+  - Werkzeuge über `taiki-e/install-action` nur in Versionen, die das Manifest der gepinnten Action kennt. Sonst weicht
+    die Action auf `cargo-binstall` aus, das Binaries aus weniger kontrollierten Quellen lädt. Deshalb nutzt die CI
+    `cargo-deny` 0.20.2 statt des erst am 2026-11-16 erschienenen 0.21.0.
+  - Annotations der Läufe (Warnungen wegen Deprecation oder Fallback) gelten als Fehler und werden behoben.
 - **Prüfung der Workflows:** `just lint-ci` (actionlint + zizmor im strengsten Modus) läuft lokal und in `just lint`; in CI läuft zizmor als eigener Job.
 
 ### Renovate (`renovate.json`)

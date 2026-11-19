@@ -28,7 +28,8 @@ env:
   # renovate: datasource=go depName=golang.org/x/vuln
   GOVULNCHECK_VERSION: v1.10.0
   # renovate: datasource=github-releases depName=EmbarkStudios/cargo-deny
-  CARGO_DENY_VERSION: 0.21.0
+  # Must be known to the pinned taiki-e/install-action, otherwise it falls back to cargo-binstall.
+  CARGO_DENY_VERSION: 0.20.2
 
 defaults:
   run:

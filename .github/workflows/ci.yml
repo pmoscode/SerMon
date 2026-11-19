@@ -25,11 +25,14 @@ env:
   # renovate: datasource=go depName=golang.org/x/vuln
   GOVULNCHECK_VERSION: v1.10.0
   # renovate: datasource=github-releases depName=EmbarkStudios/cargo-deny
-  CARGO_DENY_VERSION: 0.21.0
+  # Must be known to the pinned taiki-e/install-action, otherwise it falls back to cargo-binstall.
+  CARGO_DENY_VERSION: 0.20.2
   # renovate: datasource=github-releases depName=rust-cross/cargo-zigbuild
   CARGO_ZIGBUILD_VERSION: 0.24.1
   # Updated manually: zig releases are published on ziglang.org, the GitHub tags lag behind.
   ZIG_VERSION: 0.17.1
+  # SHA-256 of zig-x86_64-linux-<version>.tar.xz (from https://ziglang.org/download/index.json).
+  ZIG_SHA256: 3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
   CARGO_TERM_COLOR: always
 
 defaults:
@@ -148,9 +151,24 @@ jobs:
         with:
           workspaces: agent
           key: release
-      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      # zig is installed directly (mlugg/setup-zig still targets the deprecated Node.js 20).
+      - name: Cache zig archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          version: ${{ env.ZIG_VERSION }}
+          path: zig-archive
+          key: zig-${{ env.ZIG_VERSION }}-x86_64-linux
+      - name: Install zig (pinned version, checksum verified on every run)
+        run: |
+          archive="zig-archive/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          if [ ! -f "$archive" ]; then
+            mkdir -p zig-archive
+            curl -fsSLo "$archive" "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          fi
+          echo "${ZIG_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/zig"
+          tar -xJf "$archive" -C "$RUNNER_TEMP/zig" --strip-components=1
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+      - run: zig version
       - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
         with:
           tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}

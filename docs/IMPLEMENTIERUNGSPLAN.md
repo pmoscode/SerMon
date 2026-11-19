@@ -377,7 +377,18 @@ flowchart LR
 - **Abhängig von:** M0-08, M1-06
 - **Tests zuerst:** Ausgestellte Zertifikate validieren gegen die Kette; CSR mit fremden Extensions oder schwachem Schlüssel wird abgelehnt; Laufzeit stimmt; Serial auf der Denylist wird erkannt.
 
-#### ☐ M1-08 – Enrollment-Token · S · M 🔒
+#### ☑ M1-08 – Enrollment-Token · S · M 🔒
+> Erledigt:
+> - Token `sme_` + 256 Bit; gespeichert wird nur der SHA-256-Hash.
+> - Gebunden an Org und Gruppe; gültig 1 h (5 min bis 7 Tage), 1 bis 1000 Nutzungen, widerrufbar.
+> - `EnrollmentTokenService` (Create, List, Revoke) für Operatoren und Admins der Gruppe; Listen enthalten nur
+>   Gruppen mit diesem Recht.
+> - Für M1-09 steht `Redeem` bereit:
+>   - Suche per Hash über eine Definer-Funktion, danach ein Hash-Vergleich in konstanter Zeit.
+>   - Die Einlösung ist atomar, `max_uses` hält auch bei parallelen Versuchen (Test mit 10 gleichzeitigen).
+> - Audit-Einträge für Erzeugen, Widerrufen und Nutzen; Cross-Tenant-Fälle für alle neuen RPCs.
+>
+> Die Benachrichtigung bei Nutzung folgt mit den Notifiern (E2.4).
 - **Ziel:** Token erzeugen (256 Bit, Präfix `sme_`, nur SHA-256-Hash gespeichert, TTL, maximale Nutzungen, an Gruppe gebunden); RPC für Operator und Admin; Audit-Eintrag und Benachrichtigung bei Nutzung.
 - **Abhängig von:** M1-04
 - **Tests zuerst:** Ablauf, maximale Nutzungen, Vergleich in konstanter Zeit, Bindung an Org und Gruppe.

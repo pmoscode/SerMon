@@ -19,8 +19,10 @@ type isolationEnv struct {
 	access                          webv1connect.AccessServiceClient
 	invitation                      webv1connect.InvitationServiceClient
 	organization                    webv1connect.OrganizationServiceClient
+	enrollment                      webv1connect.EnrollmentTokenServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
+	enrollmentTokenA                string // an open enrollment token of Org A
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -37,7 +39,7 @@ var errLeak = errors.New("response contains data of another organization")
 
 func leaks(e isolationEnv, s string) bool {
 	return strings.Contains(s, e.groupA) || strings.Contains(s, e.memberA) || strings.Contains(s, e.bindingA) ||
-		strings.Contains(s, e.orgA) || strings.Contains(s, e.invitationA)
+		strings.Contains(s, e.orgA) || strings.Contains(s, e.invitationA) || strings.Contains(s, e.enrollmentTokenA)
 }
 
 // tenantIsolationCases maps every tenant RPC to its cross-tenant case (isolation_integration_test.go).
@@ -118,6 +120,21 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.OrganizationService/RenameOrganization": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.organization.RenameOrganization(ctx, connect.NewRequest(&webv1.RenameOrganizationRequest{OrganizationId: e.orgA, Name: "pwned"}))
+		return err
+	}},
+	"/sermon.web.v1.EnrollmentTokenService/CreateEnrollmentToken": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.enrollment.CreateEnrollmentToken(ctx, connect.NewRequest(&webv1.CreateEnrollmentTokenRequest{GroupId: e.groupA, MaxUses: 1000}))
+		return err
+	}},
+	"/sermon.web.v1.EnrollmentTokenService/ListEnrollmentTokens": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.enrollment.ListEnrollmentTokens(ctx, connect.NewRequest(&webv1.ListEnrollmentTokensRequest{}))
+		if err == nil && leaks(e, res.Msg.String()) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.EnrollmentTokenService/RevokeEnrollmentToken": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.enrollment.RevokeEnrollmentToken(ctx, connect.NewRequest(&webv1.RevokeEnrollmentTokenRequest{TokenId: e.enrollmentTokenA}))
 		return err
 	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {

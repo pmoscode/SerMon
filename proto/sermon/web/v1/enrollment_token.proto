@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// EnrollmentTokenService issues tokens for adding nodes to a group (KONZEPT §6). Operators and
+// admins of the group may create, list and revoke them; objects of other groups or
+// organizations are reported as NOT_FOUND.
+service EnrollmentTokenService {
+  // CreateEnrollmentToken issues a token; the secret is returned only in this response.
+  rpc CreateEnrollmentToken(CreateEnrollmentTokenRequest) returns (CreateEnrollmentTokenResponse);
+  // ListEnrollmentTokens returns the open tokens of all groups where the caller is operator or admin.
+  rpc ListEnrollmentTokens(ListEnrollmentTokensRequest) returns (ListEnrollmentTokensResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // RevokeEnrollmentToken makes a token unusable.
+  rpc RevokeEnrollmentToken(RevokeEnrollmentTokenRequest) returns (RevokeEnrollmentTokenResponse);
+}
+
+// EnrollmentToken describes an issued token (never the secret).
+message EnrollmentToken {
+  // id is the token UUID.
+  string id = 1;
+  // group_id is the node group new nodes join.
+  string group_id = 2;
+  // created_by is the UUID of the issuing user; empty if the user was deleted.
+  string created_by = 3;
+  // create_time is when the token was issued.
+  google.protobuf.Timestamp create_time = 4;
+  // expire_time is when the token stops working.
+  google.protobuf.Timestamp expire_time = 5;
+  // max_uses is how many nodes may enroll with the token.
+  int32 max_uses = 6;
+  // uses is how many nodes enrolled so far.
+  int32 uses = 7;
+}
+
+// CreateEnrollmentTokenRequest names the group and the limits.
+message CreateEnrollmentTokenRequest {
+  // group_id is the UUID of the target node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // ttl_seconds is the lifetime (0 = 1 hour; 300 to 604800).
+  int32 ttl_seconds = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 604800
+  }];
+  // max_uses is the number of allowed enrollments (0 = 1; at most 1000).
+  int32 max_uses = 3 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 1000
+  }];
+}
+
+// CreateEnrollmentTokenResponse returns the token and its secret.
+message CreateEnrollmentTokenResponse {
+  // token describes the issued token.
+  EnrollmentToken token = 1;
+  // secret is the token for "sermon-agent enroll --token" ("sme_…"); it cannot be retrieved again.
+  string secret = 2;
+}
+
+// ListEnrollmentTokensRequest has no parameters.
+message ListEnrollmentTokensRequest {}
+
+// ListEnrollmentTokensResponse lists open tokens, newest first.
+message ListEnrollmentTokensResponse {
+  // tokens that are neither expired, revoked nor used up.
+  repeated EnrollmentToken tokens = 1;
+}
+
+// RevokeEnrollmentTokenRequest names the token.
+message RevokeEnrollmentTokenRequest {
+  // token_id is the UUID of the token.
+  string token_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// RevokeEnrollmentTokenResponse has no fields.
+message RevokeEnrollmentTokenResponse {}

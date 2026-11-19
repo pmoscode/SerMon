@@ -22,6 +22,8 @@ type Querier interface {
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error)
+	// Atomic: concurrent redemptions cannot exceed max_uses.
+	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
@@ -42,6 +44,7 @@ type Querier interface {
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
+	EnrollmentTokenByHash(ctx context.Context, arg EnrollmentTokenByHashParams) (EnrollmentTokenByHashRow, error)
 	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
@@ -52,6 +55,9 @@ type Querier interface {
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
+	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
+	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
+	InsertEnrollmentToken(ctx context.Context, arg InsertEnrollmentTokenParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
@@ -59,6 +65,8 @@ type Querier interface {
 	// Replaces a previous token; does nothing once the setup is completed.
 	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (int64, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	// Open tokens (not revoked, not expired, not used up) of the given groups.
+	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
@@ -72,6 +80,7 @@ type Querier interface {
 	RenameOrganization(ctx context.Context, name string) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
+	RevokeEnrollmentToken(ctx context.Context, arg RevokeEnrollmentTokenParams) (int64, error)
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error

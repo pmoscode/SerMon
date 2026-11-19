@@ -26,6 +26,7 @@ type Handlers struct {
 	Setup         *SetupHandler
 	Invitation    *InvitationHandler
 	Organization  *OrganizationHandler
+	Enrollment    *EnrollmentTokenHandler
 	Authenticator *Authenticator // required for every service except AuthService
 }
 
@@ -45,4 +46,5 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewSystemServiceHandler(h.System, authenticated))
 	mount(webv1connect.NewAccessServiceHandler(h.Access, authenticated))
 	mount(webv1connect.NewOrganizationServiceHandler(h.Organization, authenticated))
+	mount(webv1connect.NewEnrollmentTokenServiceHandler(h.Enrollment, authenticated))
 }

@@ -31,6 +31,7 @@ const (
 	groupAl   = "0193f5a0-0000-7000-8000-0000000001a9"
 	bindingAl = "0193f5a0-0000-7000-8000-0000000001a8"
 	inviteAl  = "0193f5a0-0000-7000-8000-0000000001a7"
+	tokenAl   = "0193f5a0-0000-7000-8000-0000000001a6" // enrollment token of Alpha
 	// inviteTokenAl is the link token of inviteAl (fixture, not a secret).
 	inviteTokenAl = "alphaInvitationTokenForCrossTenantTests0001" // betterleaks:allow
 )
@@ -52,6 +53,8 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgAlpha+"', '"+kaiID+"', 'viewer')",
 		"INSERT INTO audit_log (org_id, seq, action, target, details, prev_hash, hash) VALUES ('"+orgAlpha+"', 0, 'seed', 'by-a', '{}', '\\x', '\\x')",
 		"DELETE FROM invitations WHERE org_id = '"+orgAlpha+"'",
+		"DELETE FROM enrollment_tokens WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO enrollment_tokens (id, org_id, group_id, token_hash, expires_at, max_uses) VALUES ('"+tokenAl+"', '"+orgAlpha+"', '"+groupAl+"', sha256(convert_to('"+tokenAl+"', 'UTF8')), now() + interval '1 hour', 1)",
 		"INSERT INTO invitations (id, org_id, email, role, token_hash, expires_at) VALUES ('"+inviteAl+"', '"+orgAlpha+"', 'invited-a@example.org', 'admin', sha256(convert_to('"+inviteTokenAl+"', 'UTF8')), now() + interval '1 day')",
 		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
 		"DELETE FROM role_bindings WHERE org_id = '"+orgBeta+"'",
@@ -65,6 +68,7 @@ type loggedIn struct {
 	system       webv1connect.SystemServiceClient
 	invitation   webv1connect.InvitationServiceClient
 	organization webv1connect.OrganizationServiceClient
+	enrollment   webv1connect.EnrollmentTokenServiceClient
 	jar          *cookiejar.Jar
 }
 
@@ -78,6 +82,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		system:       webv1connect.NewSystemServiceClient(hc, s.server.URL),
 		invitation:   webv1connect.NewInvitationServiceClient(hc, s.server.URL),
 		organization: webv1connect.NewOrganizationServiceClient(hc, s.server.URL),
+		enrollment:   webv1connect.NewEnrollmentTokenServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
@@ -91,8 +96,9 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	seedAccessFixtures(t)
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
-		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization,
+		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
+		enrollmentTokenA: tokenAl,
 	}
 	ctx := context.Background()
 
@@ -139,6 +145,11 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	// The owner is a superuser in the test container (RLS does not apply): filter explicitly.
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM node_groups WHERE org_id = $1 AND name LIKE 'created-by-b%'", orgAlpha).Scan(&foreignGroups)
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM invitations WHERE id = $1", inviteAl).Scan(&invitations)
+	var revokedTokens int
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM enrollment_tokens WHERE org_id = $1 AND (revoked_at IS NOT NULL OR group_id <> $2 OR id <> $3)", orgAlpha, groupAl, tokenAl).Scan(&revokedTokens)
+	if revokedTokens != 0 {
+		t.Errorf("enrollment tokens of Alpha changed or added: %d", revokedTokens)
+	}
 	var beaInAlpha int
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE org_id = $1 AND user_id = $2", orgAlpha, beaID).Scan(&beaInAlpha)
 	if bindings != 1 || members != 1 || foreignGroups != 0 || invitations != 1 || beaInAlpha != 0 {

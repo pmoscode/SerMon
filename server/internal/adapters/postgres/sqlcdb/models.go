@@ -33,6 +33,19 @@ type AuditLog struct {
 	Hash     []byte
 }
 
+type EnrollmentToken struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	GroupID   uuid.UUID
+	TokenHash []byte
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	MaxUses   int32
+	Uses      int32
+	RevokedAt *time.Time
+}
+
 type InstanceSetup struct {
 	Singleton      bool
 	TokenHash      []byte

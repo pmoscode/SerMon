@@ -21,13 +21,9 @@ var _ access.Store = (*AccessStore)(nil)
 
 // ListGroups returns the node groups of the scope (all groups or the scope's groups).
 func (s *AccessStore) ListGroups(ctx context.Context, scope tenant.Scope) ([]access.Group, error) {
-	ids := []uuid.UUID{}
-	for _, g := range scope.Groups() {
-		ids = append(ids, uuid.UUID(g))
-	}
 	var groups []access.Group
 	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		rows, err := q.ListNodeGroups(ctx, sqlcdb.ListNodeGroupsParams{AllGroups: scope.AllGroups(), GroupIds: ids})
+		rows, err := q.ListNodeGroups(ctx, sqlcdb.ListNodeGroupsParams{AllGroups: scope.AllGroups(), GroupIds: groupIDs(scope)})
 		for _, r := range rows {
 			groups = append(groups, access.Group{ID: tenant.GroupID(r.ID), Name: r.Name, CreatedAt: r.CreatedAt})
 		}

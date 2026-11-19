@@ -98,6 +98,9 @@ Web-Besonderheiten:
   und Hilfetexte auf **Deutsch** (Hilfetexte zusätzlich Englisch unter `docs/help/en/`).
 - **Clean Architecture:** Domäne ohne I/O; Abhängigkeiten zeigen nach innen; Ports und Adapter mit Fakes für Tests.
 - **Starke Typen** statt `string`/`float64` (`NodeID`, `OrgID`, `Percent`, …).
+- **Autorisierung:** Jeder Use-Case fragt vor dem Handeln `authz.Policy.Allowed(principal, action, target)`; Listen
+  holen ihren Scope über `authz.ScopeFor`. Neue Actions gehören in die Rollen-Matrix in `policy_test.go`; ein Test
+  schlägt fehl, wenn eine Action dort fehlt.
 - **Fehler explizit:** Go mit `fmt.Errorf("…: %w", err)` und `errors.Is/As`; Rust mit `thiserror` in Libraries und
   `anyhow` nur in Binaries; kein `unwrap()`/`expect()` in Produktionscode ohne begründenden Kommentar.
 - **UI:** alle Texte über i18n (DE + EN); kein `{@html}` mit API-Daten.

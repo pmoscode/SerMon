@@ -35,6 +35,9 @@ linters:
       kv-only: true
       context: scope
     wrapcheck:
+      # Domain packages return sentinel errors meant to be passed through unchanged.
+      ignore-package-globs:
+        - github.com/pmoscode/SerMon/server/internal/domain/*
       ignore-sig-regexps:
         - '\.Errorf\('
         - 'errors\.Join\('

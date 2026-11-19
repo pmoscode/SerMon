@@ -76,6 +76,8 @@ type loggedIn struct {
 	enrollment   webv1connect.EnrollmentTokenServiceClient
 	node         webv1connect.NodeServiceClient
 	agentCA      webv1connect.AgentCAServiceClient
+	metrics      webv1connect.MetricsServiceClient
+	fleet        webv1connect.FleetServiceClient
 	jar          *cookiejar.Jar
 }
 
@@ -92,6 +94,8 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		enrollment:   webv1connect.NewEnrollmentTokenServiceClient(hc, s.server.URL),
 		node:         webv1connect.NewNodeServiceClient(hc, s.server.URL),
 		agentCA:      webv1connect.NewAgentCAServiceClient(hc, s.server.URL),
+		metrics:      webv1connect.NewMetricsServiceClient(hc, s.server.URL),
+		fleet:        webv1connect.NewFleetServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
@@ -106,6 +110,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
+		metrics: bea.metrics, fleet: bea.fleet,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}

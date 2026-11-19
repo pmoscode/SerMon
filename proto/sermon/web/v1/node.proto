@@ -3,9 +3,18 @@ syntax = "proto3";
 package sermon.web.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/fleet.proto";
 
-// NodeService manages nodes (KONZEPT §6, §7). Node listing and details follow with M1-26.
+// NodeService shows and manages nodes (KONZEPT §6, §7, §8.2).
 service NodeService {
+  // GetNode returns the details of a node the caller may view; unknown or foreign nodes are
+  // NOT_FOUND.
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+  // ListFilesystems returns the file systems of a node with fill level and a forecast when they
+  // run full (linear trend of the last 24 hours).
+  rpc ListFilesystems(ListFilesystemsRequest) returns (ListFilesystemsResponse);
+
   // RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
   // backup). Online agents get a new certificate over their stream and the old one is revoked
   // at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
@@ -48,4 +57,84 @@ message RotateNodeKeysResponse {
   int32 online = 1;
   // offline is the number of nodes whose certificates were revoked (re-enrollment needed).
   int32 offline = 2;
+}
+
+// GetNodeRequest names the node.
+message GetNodeRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetNodeResponse holds the node.
+message GetNodeResponse {
+  // node is the node.
+  Node node = 1;
+}
+
+// Node are the details of a node.
+message Node {
+  // id is the node UUID.
+  string id = 1;
+  // hostname is the host name from the agent.
+  string hostname = 2;
+  // group_id is the node group.
+  string group_id = 3;
+  // group_name is the name of the node group.
+  string group_name = 4;
+  // os_id is the operating system, e.g. "debian".
+  string os_id = 5;
+  // os_version is its version, e.g. "13".
+  string os_version = 6;
+  // kernel_release is the kernel version.
+  string kernel_release = 7;
+  // architecture is amd64 or arm64.
+  string architecture = 8;
+  // cpu_count is the number of logical CPUs.
+  uint32 cpu_count = 9;
+  // memory_bytes is the physical memory.
+  uint64 memory_bytes = 10;
+  // agent_version is the version of the agent at the last connection.
+  string agent_version = 11;
+  // enrolled_at is when the node was enrolled.
+  google.protobuf.Timestamp enrolled_at = 12;
+  // last_seen_at is the last contact, if any.
+  google.protobuf.Timestamp last_seen_at = 13;
+  // online is true with contact in the last 60 seconds.
+  bool online = 14;
+  // figures are the current values (absent without live data).
+  KeyFigures figures = 15;
+}
+
+// ListFilesystemsRequest names the node.
+message ListFilesystemsRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListFilesystemsResponse holds the file systems.
+message ListFilesystemsResponse {
+  // filesystems are sorted by mount point.
+  repeated Filesystem filesystems = 1;
+}
+
+// Filesystem is one mounted file system with current values from the last minute.
+message Filesystem {
+  // mountpoint is where it is mounted.
+  string mountpoint = 1;
+  // size_bytes is the size.
+  uint64 size_bytes = 2;
+  // used_bytes is the used space.
+  uint64 used_bytes = 3;
+  // avail_bytes is the space available to unprivileged users.
+  uint64 avail_bytes = 4;
+  // used_ratio is used / (used + avail), 0..1, like df.
+  double used_ratio = 5;
+  // readonly is true when mounted read-only.
+  bool readonly = 6;
+  // inodes_total is the number of inodes.
+  uint64 inodes_total = 7;
+  // inodes_used is the number of used inodes.
+  uint64 inodes_used = 8;
+  // full_at is when the file system runs full at the current trend (only within a year).
+  google.protobuf.Timestamp full_at = 9;
 }

@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// FleetService gives the overview of all nodes the caller may view (KONZEPT §8, M1-26).
+service FleetService {
+  // GetFleetSummary lists the nodes with status and current key figures, optionally of one group.
+  // A foreign or unknown group is NOT_FOUND.
+  rpc GetFleetSummary(GetFleetSummaryRequest) returns (GetFleetSummaryResponse);
+}
+
+// GetFleetSummaryRequest optionally filters by group.
+message GetFleetSummaryRequest {
+  // group_id limits the summary to one node group (empty: all visible groups).
+  string group_id = 1 [
+    (buf.validate.field).string.uuid = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+}
+
+// GetFleetSummaryResponse is the overview.
+message GetFleetSummaryResponse {
+  // total is the number of nodes in the summary.
+  int32 total = 1;
+  // online is the number of nodes with contact in the last 60 seconds.
+  int32 online = 2;
+  // offline is total − online.
+  int32 offline = 3;
+  // nodes are the nodes, sorted by host name.
+  repeated NodeSummary nodes = 4;
+}
+
+// NodeSummary is one node of the overview.
+message NodeSummary {
+  // node_id is the node UUID.
+  string node_id = 1;
+  // hostname is the host name from the agent.
+  string hostname = 2;
+  // group_id is the node group.
+  string group_id = 3;
+  // group_name is the name of the node group.
+  string group_name = 4;
+  // os_id and os_version describe the operating system, e.g. "debian" and "13".
+  string os_id = 5;
+  // os_version is the version of the operating system.
+  string os_version = 6;
+  // online is true with contact in the last 60 seconds.
+  bool online = 7;
+  // last_seen_at is the last contact, if any.
+  google.protobuf.Timestamp last_seen_at = 8;
+  // figures are the current values (absent without live data).
+  KeyFigures figures = 9;
+}
+
+// KeyFigures are current values of a node from the last minute. Ratios are 0..1.
+message KeyFigures {
+  // cpu_busy_ratio is the share of CPU time not idle.
+  optional double cpu_busy_ratio = 1;
+  // memory_used_ratio is used / total memory.
+  optional double memory_used_ratio = 2;
+  // filesystem_max_used_ratio is the fullest file system.
+  optional double filesystem_max_used_ratio = 3;
+  // load_per_cpu is the 1-minute load divided by the number of CPUs.
+  optional double load_per_cpu = 4;
+  // uptime_seconds is the time since boot.
+  optional double uptime_seconds = 5;
+  // network_receive_bytes_per_second is the sum over all reported interfaces.
+  optional double network_receive_bytes_per_second = 6;
+  // network_transmit_bytes_per_second is the sum over all reported interfaces.
+  optional double network_transmit_bytes_per_second = 7;
+}

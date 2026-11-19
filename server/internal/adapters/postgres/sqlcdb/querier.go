@@ -91,6 +91,8 @@ type Querier interface {
 	ListOrganizations(ctx context.Context) ([]Organization, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// Nodes of the scope's groups with their group name, for the UI (M1-26).
+	ListVisibleNodes(ctx context.Context, arg ListVisibleNodesParams) ([]ListVisibleNodesRow, error)
 	// Serializes changes of rights within the organization (last-admin check without races).
 	LockAccessChanges(ctx context.Context) error
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
@@ -133,6 +135,7 @@ type Querier interface {
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)
 	UserProfile(ctx context.Context, userID uuid.UUID) (UserProfileRow, error)
+	VisibleGroupExists(ctx context.Context, arg VisibleGroupExistsParams) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

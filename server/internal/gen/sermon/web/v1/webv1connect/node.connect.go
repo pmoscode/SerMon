@@ -33,6 +33,11 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// NodeServiceGetNodeProcedure is the fully-qualified name of the NodeService's GetNode RPC.
+	NodeServiceGetNodeProcedure = "/sermon.web.v1.NodeService/GetNode"
+	// NodeServiceListFilesystemsProcedure is the fully-qualified name of the NodeService's
+	// ListFilesystems RPC.
+	NodeServiceListFilesystemsProcedure = "/sermon.web.v1.NodeService/ListFilesystems"
 	// NodeServiceRotateNodeKeysProcedure is the fully-qualified name of the NodeService's
 	// RotateNodeKeys RPC.
 	NodeServiceRotateNodeKeysProcedure = "/sermon.web.v1.NodeService/RotateNodeKeys"
@@ -40,6 +45,12 @@ const (
 
 // NodeServiceClient is a client for the sermon.web.v1.NodeService service.
 type NodeServiceClient interface {
+	// GetNode returns the details of a node the caller may view; unknown or foreign nodes are
+	// NOT_FOUND.
+	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
+	// ListFilesystems returns the file systems of a node with fill level and a forecast when they
+	// run full (linear trend of the last 24 hours).
+	ListFilesystems(context.Context, *connect.Request[v1.ListFilesystemsRequest]) (*connect.Response[v1.ListFilesystemsResponse], error)
 	// RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
 	// backup). Online agents get a new certificate over their stream and the old one is revoked
 	// at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
@@ -59,6 +70,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 	baseURL = strings.TrimRight(baseURL, "/")
 	nodeServiceMethods := v1.File_sermon_web_v1_node_proto.Services().ByName("NodeService").Methods()
 	return &nodeServiceClient{
+		getNode: connect.NewClient[v1.GetNodeRequest, v1.GetNodeResponse](
+			httpClient,
+			baseURL+NodeServiceGetNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("GetNode")),
+			connect.WithClientOptions(opts...),
+		),
+		listFilesystems: connect.NewClient[v1.ListFilesystemsRequest, v1.ListFilesystemsResponse](
+			httpClient,
+			baseURL+NodeServiceListFilesystemsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListFilesystems")),
+			connect.WithClientOptions(opts...),
+		),
 		rotateNodeKeys: connect.NewClient[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse](
 			httpClient,
 			baseURL+NodeServiceRotateNodeKeysProcedure,
@@ -70,7 +93,19 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
-	rotateNodeKeys *connect.Client[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse]
+	getNode         *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
+	listFilesystems *connect.Client[v1.ListFilesystemsRequest, v1.ListFilesystemsResponse]
+	rotateNodeKeys  *connect.Client[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse]
+}
+
+// GetNode calls sermon.web.v1.NodeService.GetNode.
+func (c *nodeServiceClient) GetNode(ctx context.Context, req *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error) {
+	return c.getNode.CallUnary(ctx, req)
+}
+
+// ListFilesystems calls sermon.web.v1.NodeService.ListFilesystems.
+func (c *nodeServiceClient) ListFilesystems(ctx context.Context, req *connect.Request[v1.ListFilesystemsRequest]) (*connect.Response[v1.ListFilesystemsResponse], error) {
+	return c.listFilesystems.CallUnary(ctx, req)
 }
 
 // RotateNodeKeys calls sermon.web.v1.NodeService.RotateNodeKeys.
@@ -80,6 +115,12 @@ func (c *nodeServiceClient) RotateNodeKeys(ctx context.Context, req *connect.Req
 
 // NodeServiceHandler is an implementation of the sermon.web.v1.NodeService service.
 type NodeServiceHandler interface {
+	// GetNode returns the details of a node the caller may view; unknown or foreign nodes are
+	// NOT_FOUND.
+	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
+	// ListFilesystems returns the file systems of a node with fill level and a forecast when they
+	// run full (linear trend of the last 24 hours).
+	ListFilesystems(context.Context, *connect.Request[v1.ListFilesystemsRequest]) (*connect.Response[v1.ListFilesystemsResponse], error)
 	// RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
 	// backup). Online agents get a new certificate over their stream and the old one is revoked
 	// at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
@@ -95,6 +136,18 @@ type NodeServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	nodeServiceMethods := v1.File_sermon_web_v1_node_proto.Services().ByName("NodeService").Methods()
+	nodeServiceGetNodeHandler := connect.NewUnaryHandler(
+		NodeServiceGetNodeProcedure,
+		svc.GetNode,
+		connect.WithSchema(nodeServiceMethods.ByName("GetNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceListFilesystemsHandler := connect.NewUnaryHandler(
+		NodeServiceListFilesystemsProcedure,
+		svc.ListFilesystems,
+		connect.WithSchema(nodeServiceMethods.ByName("ListFilesystems")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceRotateNodeKeysHandler := connect.NewUnaryHandler(
 		NodeServiceRotateNodeKeysProcedure,
 		svc.RotateNodeKeys,
@@ -103,6 +156,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 	)
 	return "/sermon.web.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case NodeServiceGetNodeProcedure:
+			nodeServiceGetNodeHandler.ServeHTTP(w, r)
+		case NodeServiceListFilesystemsProcedure:
+			nodeServiceListFilesystemsHandler.ServeHTTP(w, r)
 		case NodeServiceRotateNodeKeysProcedure:
 			nodeServiceRotateNodeKeysHandler.ServeHTTP(w, r)
 		default:
@@ -113,6 +170,14 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 
 // UnimplementedNodeServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedNodeServiceHandler struct{}
+
+func (UnimplementedNodeServiceHandler) GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.GetNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListFilesystems(context.Context, *connect.Request[v1.ListFilesystemsRequest]) (*connect.Response[v1.ListFilesystemsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.ListFilesystems is not implemented"))
+}
 
 func (UnimplementedNodeServiceHandler) RotateNodeKeys(context.Context, *connect.Request[v1.RotateNodeKeysRequest]) (*connect.Response[v1.RotateNodeKeysResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.RotateNodeKeys is not implemented"))

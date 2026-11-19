@@ -30,6 +30,8 @@ type Handlers struct {
 	Enrollment   *EnrollmentTokenHandler
 	Node         *NodeHandler
 	AgentCA      *AgentCAHandler
+	Metrics      *MetricsHandler
+	Fleet        *FleetHandler
 	// AgentEnrollment serves sermon.agent.v1.EnrollmentService for new agents (ADR 0009).
 	AgentEnrollment *AgentEnrollmentHandler
 	Authenticator   *Authenticator // required for every service except AuthService
@@ -54,9 +56,12 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewEnrollmentTokenServiceHandler(h.Enrollment, authenticated))
 	mount(webv1connect.NewNodeServiceHandler(h.Node, authenticated))
 	mount(webv1connect.NewAgentCAServiceHandler(h.AgentCA, authenticated))
+	mount(webv1connect.NewFleetServiceHandler(h.Fleet, authenticated))
+	path, handler := webv1connect.NewMetricsServiceHandler(h.Metrics, authenticated)
+	mount(path, streamingDeadline(handler))
 
 	// Agents send neither Origin nor cookies: no origin check (CSRF needs cookies), the
 	// enrollment token is the credential (ADR 0009).
-	path, handler := agentv1connect.NewEnrollmentServiceHandler(h.AgentEnrollment, connect.WithInterceptors(validation))
+	path, handler = agentv1connect.NewEnrollmentServiceHandler(h.AgentEnrollment, connect.WithInterceptors(validation))
 	mux.Handle(path, ClientIP(cfg.TrustedProxies)(APIHeaders(handler)))
 }

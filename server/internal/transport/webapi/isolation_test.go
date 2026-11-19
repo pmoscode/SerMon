@@ -22,6 +22,7 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.SetupService/CompleteSetup":         "creates the first organization; works once with the setup token",
 	"/sermon.web.v1.InvitationService/GetInvitation":    "acts only on the invitation named by the secret link token (ADR 0008)",
 	"/sermon.web.v1.InvitationService/AcceptInvitation": "creates a new account for the invitation named by the secret link token (ADR 0008)",
+	"/sermon.web.v1.MetricsService/ListMetrics":         "the static metric catalog, no tenant data (requires authentication)",
 }
 
 // TestTenantIsolation_EveryProcedureIsCovered fails when a new RPC is added without a

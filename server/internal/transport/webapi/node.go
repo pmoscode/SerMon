@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -23,14 +24,15 @@ type NodeRotator interface {
 // NodeHandler implements sermon.web.v1.NodeService (behind the Authenticator).
 type NodeHandler struct {
 	rotator NodeRotator
+	fleet   *fleet.Service
 	logger  *slog.Logger
 }
 
 var _ webv1connect.NodeServiceHandler = (*NodeHandler)(nil)
 
 // NewNodeHandler returns the NodeService handler.
-func NewNodeHandler(rotator NodeRotator, logger *slog.Logger) *NodeHandler {
-	return &NodeHandler{rotator: rotator, logger: logger}
+func NewNodeHandler(rotator NodeRotator, nodes *fleet.Service, logger *slog.Logger) *NodeHandler {
+	return &NodeHandler{rotator: rotator, fleet: nodes, logger: logger}
 }
 
 // RotateNodeKeys rotates the keys of the selected nodes now.

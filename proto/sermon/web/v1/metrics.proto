@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// MetricsService reads metrics (KONZEPT §8, M1-26). Every call is limited to the node groups in
+// which the caller may view nodes; unknown or foreign nodes are NOT_FOUND.
+service MetricsService {
+  // ListMetrics returns the metric catalog: units, labels and chart aggregation (no tenant data).
+  rpc ListMetrics(ListMetricsRequest) returns (ListMetricsResponse);
+  // QueryMetrics returns the points of one metric for nodes in a time range. The server picks the
+  // resolution (1 s for the last 15 min, then 10 s, 1 min, 1 h) and a step so that every series
+  // has at most 2000 points.
+  rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
+  // WatchMetrics streams the new 1 s points of one metric (live charts): about every second the
+  // points since the previous message. The stream ends after 15 minutes; clients open a new one.
+  rpc WatchMetrics(WatchMetricsRequest) returns (stream WatchMetricsResponse);
+}
+
+// ListMetricsRequest has no fields.
+message ListMetricsRequest {}
+
+// ListMetricsResponse is the catalog.
+message ListMetricsResponse {
+  // metrics are all known metrics, sorted by name.
+  repeated MetricDefinition metrics = 1;
+}
+
+// MetricDefinition describes one metric.
+message MetricDefinition {
+  // name is the metric name, e.g. "sermon_cpu_utilization_ratio".
+  string name = 1;
+  // unit is one of ratio_ppm (1 000 000 = 100 %), bytes, bytes_per_second, bits_per_second,
+  // per_second, pages_per_second, count, seconds, timestamp_seconds, celsius, load, boolean.
+  string unit = 2;
+  // labels are the label names every series of the metric has.
+  repeated string labels = 3;
+  // aggregation is what charts show for downsampled data: avg, max or last.
+  string aggregation = 4;
+  // area groups the metric for the detail views: cpu, memory, disk, filesystem, network, system, agent.
+  string area = 5;
+  // display_key is the i18n message key of the display name.
+  string display_key = 6;
+  // help_key names the help text (docs/help/<lang>/<help_key>.md).
+  string help_key = 7;
+}
+
+// MetricSelector selects series of one metric.
+message MetricSelector {
+  // metric is the metric name.
+  string metric = 1 [(buf.validate.field).string.pattern = "^sermon_[a-z0-9_]{1,120}$"];
+  // node_ids are the nodes (UUIDs).
+  repeated string node_ids = 2 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 100
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // labels filter the series: only series with all of these label values.
+  map<string, string> labels = 3 [(buf.validate.field).map = {
+    max_pairs: 8
+    keys: {
+      string: {pattern: "^[a-z][a-z0-9_]{0,31}$"}
+    }
+    values: {
+      string: {max_len: 256}
+    }
+  }];
+}
+
+// QueryMetricsRequest asks for points in a time range.
+message QueryMetricsRequest {
+  option (buf.validate.message).cel = {
+    id: "range"
+    message: "from must be before to and the range at most 400 days"
+    expression: "this.from < this.to && this.to - this.from <= duration('9600h')"
+  };
+
+  // selector selects the series.
+  MetricSelector selector = 1 [(buf.validate.field).required = true];
+  // from is the start of the range (inclusive).
+  google.protobuf.Timestamp from = 2 [(buf.validate.field).required = true];
+  // to is the end of the range (exclusive).
+  google.protobuf.Timestamp to = 3 [(buf.validate.field).required = true];
+  // step is the requested bucket size; zero or missing picks the finest step within the limit.
+  google.protobuf.Duration step = 4 [(buf.validate.field).duration = {
+    gte: {}
+    lte: {seconds: 86400}
+  }];
+}
+
+// QueryMetricsResponse holds the series.
+message QueryMetricsResponse {
+  // series are the matching series with their points (values in the metric's unit).
+  repeated MetricSeries series = 1;
+  // step is the bucket size used.
+  google.protobuf.Duration step = 2;
+}
+
+// MetricSeries is one series with its points.
+message MetricSeries {
+  // node_id is the node of the series.
+  string node_id = 1;
+  // labels are the labels of the series.
+  map<string, string> labels = 2;
+  // points are the buckets, oldest first.
+  repeated MetricPoint points = 3;
+}
+
+// MetricPoint is one bucket.
+message MetricPoint {
+  // time is the start of the bucket.
+  google.protobuf.Timestamp time = 1;
+  // avg is the average in the bucket.
+  double avg = 2;
+  // min is the minimum in the bucket.
+  double min = 3;
+  // max is the maximum in the bucket.
+  double max = 4;
+}
+
+// WatchMetricsRequest selects the live series.
+message WatchMetricsRequest {
+  // selector selects the series.
+  MetricSelector selector = 1 [(buf.validate.field).required = true];
+}
+
+// WatchMetricsResponse holds the new points since the previous message.
+message WatchMetricsResponse {
+  // series are the series with new points.
+  repeated MetricSeries series = 1;
+}

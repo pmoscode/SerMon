@@ -93,6 +93,71 @@ func (q *Queries) InsertNode(ctx context.Context, arg InsertNodeParams) error {
 	return err
 }
 
+const listVisibleNodes = `-- name: ListVisibleNodes :many
+SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
+       n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
+       n.created_at, n.last_seen_at
+FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
+WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
+ORDER BY n.hostname, n.id
+`
+
+type ListVisibleNodesParams struct {
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+type ListVisibleNodesRow struct {
+	ID            uuid.UUID
+	GroupID       uuid.UUID
+	GroupName     string
+	Hostname      string
+	OsID          string
+	OsVersion     string
+	KernelRelease string
+	Architecture  string
+	CpuCount      int32
+	MemoryBytes   int64
+	AgentVersion  string
+	CreatedAt     time.Time
+	LastSeenAt    *time.Time
+}
+
+// Nodes of the scope's groups with their group name, for the UI (M1-26).
+func (q *Queries) ListVisibleNodes(ctx context.Context, arg ListVisibleNodesParams) ([]ListVisibleNodesRow, error) {
+	rows, err := q.db.Query(ctx, listVisibleNodes, arg.AllGroups, arg.GroupIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVisibleNodesRow{}
+	for rows.Next() {
+		var i ListVisibleNodesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.GroupName,
+			&i.Hostname,
+			&i.OsID,
+			&i.OsVersion,
+			&i.KernelRelease,
+			&i.Architecture,
+			&i.CpuCount,
+			&i.MemoryBytes,
+			&i.AgentVersion,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const touchNode = `-- name: TouchNode :execrows
 UPDATE nodes SET last_seen_at = GREATEST(COALESCE(last_seen_at, $1), $1)
 WHERE id = $2
@@ -150,4 +215,24 @@ func (q *Queries) UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConne
 	var group_id uuid.UUID
 	err := row.Scan(&group_id)
 	return group_id, err
+}
+
+const visibleGroupExists = `-- name: VisibleGroupExists :one
+SELECT EXISTS (
+    SELECT 1 FROM node_groups
+    WHERE id = $1 AND ($2::boolean OR id = ANY ($3::uuid[]))
+)
+`
+
+type VisibleGroupExistsParams struct {
+	GroupID   uuid.UUID
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+func (q *Queries) VisibleGroupExists(ctx context.Context, arg VisibleGroupExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, visibleGroupExists, arg.GroupID, arg.AllGroups, arg.GroupIds)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

@@ -3,10 +3,13 @@ package webapi_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -22,6 +25,8 @@ type isolationEnv struct {
 	enrollment                      webv1connect.EnrollmentTokenServiceClient
 	node                            webv1connect.NodeServiceClient
 	agentCA                         webv1connect.AgentCAServiceClient
+	metrics                         webv1connect.MetricsServiceClient
+	fleet                           webv1connect.FleetServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -45,8 +50,51 @@ func leaks(e isolationEnv, s string) bool {
 		strings.Contains(s, e.orgA) || strings.Contains(s, e.invitationA) || strings.Contains(s, e.enrollmentTokenA)
 }
 
+var errForeignAccepted = errors.New("a foreign ID was accepted")
+
+func selectorA(e isolationEnv) *webv1.MetricSelector {
+	return &webv1.MetricSelector{Metric: "sermon_load_average", NodeIds: []string{e.nodeA}}
+}
+
 // tenantIsolationCases maps every tenant RPC to its cross-tenant case (isolation_integration_test.go).
 var tenantIsolationCases = map[string]isolationCase{
+	"/sermon.web.v1.MetricsService/QueryMetrics": {run: func(ctx context.Context, e isolationEnv) error {
+		now := time.Now()
+		_, err := e.metrics.QueryMetrics(ctx, connect.NewRequest(&webv1.QueryMetricsRequest{
+			Selector: selectorA(e), From: timestamppb.New(now.Add(-time.Hour)), To: timestamppb.New(now),
+		}))
+		return err
+	}},
+	"/sermon.web.v1.MetricsService/WatchMetrics": {run: func(ctx context.Context, e isolationEnv) error {
+		stream, err := e.metrics.WatchMetrics(ctx, connect.NewRequest(&webv1.WatchMetricsRequest{Selector: selectorA(e)}))
+		if err != nil {
+			return err
+		}
+		defer func() { _ = stream.Close() }()
+		if stream.Receive() {
+			return errLeak
+		}
+		return stream.Err()
+	}},
+	"/sermon.web.v1.FleetService/GetFleetSummary": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.fleet.GetFleetSummary(ctx, connect.NewRequest(&webv1.GetFleetSummaryRequest{GroupId: e.groupA}))
+		if connect.CodeOf(err) != connect.CodeNotFound {
+			return fmt.Errorf("%w: group filter: %w", errForeignAccepted, err)
+		}
+		res, err := e.fleet.GetFleetSummary(ctx, connect.NewRequest(&webv1.GetFleetSummaryRequest{}))
+		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), e.nodeA)) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.NodeService/GetNode": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.GetNode(ctx, connect.NewRequest(&webv1.GetNodeRequest{NodeId: e.nodeA}))
+		return err
+	}},
+	"/sermon.web.v1.NodeService/ListFilesystems": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.ListFilesystems(ctx, connect.NewRequest(&webv1.ListFilesystemsRequest{NodeId: e.nodeA}))
+		return err
+	}},
 	"/sermon.web.v1.AuthService/SwitchOrganization": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.auth.SwitchOrganization(ctx, connect.NewRequest(&webv1.SwitchOrganizationRequest{OrganizationId: e.orgA}))
 		return err

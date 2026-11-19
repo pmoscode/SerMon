@@ -23,6 +23,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
+	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
@@ -114,13 +115,15 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		sessions := agentapi.NewSessions(0)
 		rotationStore := postgres.NewRotationStore(db)
 		rotator := rotation.NewService(rotationStore, ca, time.Now, rotation.WithOnDemand(rotationStore, sessions, authz.NewPolicy()))
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, logger); err != nil {
+		// Live values (15 min, 1 s) and the stored 10 s windows (M1-22..M1-26).
+		ring := metrics.NewRing()
+		metricStore := timescale.New(db)
+		nodes := fleet.NewService(postgres.NewFleetStore(db), metrics.NewReader(metricStore, ring, time.Now), time.Now)
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
-		// Live values (15 min, 1 s) and the stored 10 s windows (M1-22..M1-24).
-		ring := metrics.NewRing()
-		ingestService := ingest.NewService(timescale.New(db), ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
+		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
 		servers = append(servers, pruneRing(ring))
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, ingestService, logger)
@@ -256,7 +259,7 @@ const (
 )
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
-	rotator *rotation.Service, logger *slog.Logger,
+	rotator *rotation.Service, nodes *fleet.Service, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
@@ -292,8 +295,10 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID), logger),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
-		Node:    webapi.NewNodeHandler(rotator, logger),
+		Node:    webapi.NewNodeHandler(rotator, nodes, logger),
 		AgentCA: webapi.NewAgentCAHandler(ca, logger),
+		Metrics: webapi.NewMetricsHandler(nodes, logger),
+		Fleet:   webapi.NewFleetHandler(nodes, logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

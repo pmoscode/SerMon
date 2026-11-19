@@ -84,7 +84,8 @@ func (r *Ring) Len() int {
 }
 
 // Query returns the points of the query from the ring, bucketed by q.Step (at least 1 s), for
-// series within the scope (organization and node group). Only the last RingSpan is available.
+// series within the scope (organization and node group), at most MaxSeries like the store. Only
+// the last RingSpan is available.
 func (r *Ring) Query(scope tenant.Scope, q Query) []Series {
 	if !scope.Valid() {
 		return nil
@@ -109,6 +110,9 @@ func (r *Ring) Query(scope tenant.Scope, q Query) []Series {
 		}
 		return compareText(a.Labels.Key(), b.Labels.Key())
 	})
+	if len(out) > MaxSeries {
+		out = out[:MaxSeries]
+	}
 	return out
 }
 

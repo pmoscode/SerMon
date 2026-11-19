@@ -3,6 +3,7 @@ package metrics_test
 import (
 	"context"
 	"math"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -162,5 +163,18 @@ func TestReader_RoutesByRangeAndStep(t *testing.T) {
 	}
 	if _, err := reader.Query(context.Background(), all(t, orgA), ringQuery(now, now, 0, nodeW)); err == nil {
 		t.Error("an empty range must be rejected")
+	}
+}
+
+func TestRing_ReturnsAtMostMaxSeries(t *testing.T) {
+	ring := metrics.NewRing()
+	for i := range metrics.MaxSeries + 10 {
+		ring.Add(orgA, groupW, nodeW, "sermon_cpu_core_busy_ratio", metrics.Labels{"cpu": strconv.Itoa(i)}, now.Add(-time.Second), 1)
+	}
+
+	series := ring.Query(all(t, orgA), metrics.Query{Metric: "sermon_cpu_core_busy_ratio", Nodes: []identity.NodeID{nodeW}, From: now.Add(-time.Minute), To: now})
+
+	if len(series) != metrics.MaxSeries {
+		t.Errorf("series = %d, want %d", len(series), metrics.MaxSeries)
 	}
 }

@@ -24,3 +24,18 @@ RETURNING group_id;
 -- name: TouchNode :execrows
 UPDATE nodes SET last_seen_at = GREATEST(COALESCE(last_seen_at, sqlc.arg(seen_at)), sqlc.arg(seen_at))
 WHERE id = sqlc.arg(id);
+
+-- name: ListVisibleNodes :many
+-- Nodes of the scope's groups with their group name, for the UI (M1-26).
+SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
+       n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
+       n.created_at, n.last_seen_at
+FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
+WHERE sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[])
+ORDER BY n.hostname, n.id;
+
+-- name: VisibleGroupExists :one
+SELECT EXISTS (
+    SELECT 1 FROM node_groups
+    WHERE id = sqlc.arg(group_id) AND (sqlc.arg(all_groups)::boolean OR id = ANY (sqlc.arg(group_ids)::uuid[]))
+);

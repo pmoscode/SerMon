@@ -5,13 +5,17 @@
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../../buf/validate/validate_pb";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
+import type { KeyFigures } from "./fleet_pb";
+import { file_sermon_web_v1_fleet } from "./fleet_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file sermon/web/v1/node.proto.
  */
 export const file_sermon_web_v1_node: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEikAEKFVJvdGF0ZU5vZGVLZXlzUmVxdWVzdBInCgVub2RlcxgBIAEoCzIWLnNlcm1vbi53ZWIudjEuTm9kZUlEc0gAEhwKCGdyb3VwX2lkGAIgASgJQgi6SAVyA7ABAUgAEh8KDG9yZ2FuaXphdGlvbhgDIAEoCEIHukgEagIIAUgAQg8KBnRhcmdldBIFukgCCAEiLAoHTm9kZUlEcxIhCgNpZHMYASADKAlCFLpIEZIBDggBEOgHGAEiBXIDsAEBIjkKFlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2USDgoGb25saW5lGAEgASgFEg8KB29mZmxpbmUYAiABKAUybAoLTm9kZVNlcnZpY2USXQoOUm90YXRlTm9kZUtleXMSJC5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVxdWVzdBolLnNlcm1vbi53ZWIudjEuUm90YXRlTm9kZUtleXNSZXNwb25zZUK4AQoRY29tLnNlcm1vbi53ZWIudjFCCU5vZGVQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_buf_validate_validate]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEikAEKFVJvdGF0ZU5vZGVLZXlzUmVxdWVzdBInCgVub2RlcxgBIAEoCzIWLnNlcm1vbi53ZWIudjEuTm9kZUlEc0gAEhwKCGdyb3VwX2lkGAIgASgJQgi6SAVyA7ABAUgAEh8KDG9yZ2FuaXphdGlvbhgDIAEoCEIHukgEagIIAUgAQg8KBnRhcmdldBIFukgCCAEiLAoHTm9kZUlEcxIhCgNpZHMYASADKAlCFLpIEZIBDggBEOgHGAEiBXIDsAEBIjkKFlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2USDgoGb25saW5lGAEgASgFEg8KB29mZmxpbmUYAiABKAUiKwoOR2V0Tm9kZVJlcXVlc3QSGQoHbm9kZV9pZBgBIAEoCUIIukgFcgOwAQEiNAoPR2V0Tm9kZVJlc3BvbnNlEiEKBG5vZGUYASABKAsyEy5zZXJtb24ud2ViLnYxLk5vZGUi+gIKBE5vZGUSCgoCaWQYASABKAkSEAoIaG9zdG5hbWUYAiABKAkSEAoIZ3JvdXBfaWQYAyABKAkSEgoKZ3JvdXBfbmFtZRgEIAEoCRINCgVvc19pZBgFIAEoCRISCgpvc192ZXJzaW9uGAYgASgJEhYKDmtlcm5lbF9yZWxlYXNlGAcgASgJEhQKDGFyY2hpdGVjdHVyZRgIIAEoCRIRCgljcHVfY291bnQYCSABKA0SFAoMbWVtb3J5X2J5dGVzGAogASgEEhUKDWFnZW50X3ZlcnNpb24YCyABKAkSLwoLZW5yb2xsZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjAKDGxhc3Rfc2Vlbl9hdBgNIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGb25saW5lGA4gASgIEioKB2ZpZ3VyZXMYDyABKAsyGS5zZXJtb24ud2ViLnYxLktleUZpZ3VyZXMiMwoWTGlzdEZpbGVzeXN0ZW1zUmVxdWVzdBIZCgdub2RlX2lkGAEgASgJQgi6SAVyA7ABASJJChdMaXN0RmlsZXN5c3RlbXNSZXNwb25zZRIuCgtmaWxlc3lzdGVtcxgBIAMoCzIZLnNlcm1vbi53ZWIudjEuRmlsZXN5c3RlbSLbAQoKRmlsZXN5c3RlbRISCgptb3VudHBvaW50GAEgASgJEhIKCnNpemVfYnl0ZXMYAiABKAQSEgoKdXNlZF9ieXRlcxgDIAEoBBITCgthdmFpbF9ieXRlcxgEIAEoBBISCgp1c2VkX3JhdGlvGAUgASgBEhAKCHJlYWRvbmx5GAYgASgIEhQKDGlub2Rlc190b3RhbBgHIAEoBBITCgtpbm9kZXNfdXNlZBgIIAEoBBIrCgdmdWxsX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcDKYAgoLTm9kZVNlcnZpY2USSAoHR2V0Tm9kZRIdLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVJlcXVlc3QaHi5zZXJtb24ud2ViLnYxLkdldE5vZGVSZXNwb25zZRJgCg9MaXN0RmlsZXN5c3RlbXMSJS5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1Jlc3BvbnNlEl0KDlJvdGF0ZU5vZGVLZXlzEiQuc2VybW9uLndlYi52MS5Sb3RhdGVOb2RlS2V5c1JlcXVlc3QaJS5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglOb2RlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp, file_sermon_web_v1_fleet]);
 
 /**
  * RotateNodeKeysRequest selects the nodes.
@@ -108,11 +112,313 @@ export const RotateNodeKeysResponseSchema: GenMessage<RotateNodeKeysResponse> = 
   messageDesc(file_sermon_web_v1_node, 2);
 
 /**
- * NodeService manages nodes (KONZEPT §6, §7). Node listing and details follow with M1-26.
+ * GetNodeRequest names the node.
+ *
+ * @generated from message sermon.web.v1.GetNodeRequest
+ */
+export type GetNodeRequest = Message<"sermon.web.v1.GetNodeRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetNodeRequest.
+ * Use `create(GetNodeRequestSchema)` to create a new message.
+ */
+export const GetNodeRequestSchema: GenMessage<GetNodeRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 3);
+
+/**
+ * GetNodeResponse holds the node.
+ *
+ * @generated from message sermon.web.v1.GetNodeResponse
+ */
+export type GetNodeResponse = Message<"sermon.web.v1.GetNodeResponse"> & {
+  /**
+   * node is the node.
+   *
+   * @generated from field: sermon.web.v1.Node node = 1;
+   */
+  node?: Node | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetNodeResponse.
+ * Use `create(GetNodeResponseSchema)` to create a new message.
+ */
+export const GetNodeResponseSchema: GenMessage<GetNodeResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 4);
+
+/**
+ * Node are the details of a node.
+ *
+ * @generated from message sermon.web.v1.Node
+ */
+export type Node = Message<"sermon.web.v1.Node"> & {
+  /**
+   * id is the node UUID.
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * hostname is the host name from the agent.
+   *
+   * @generated from field: string hostname = 2;
+   */
+  hostname: string;
+
+  /**
+   * group_id is the node group.
+   *
+   * @generated from field: string group_id = 3;
+   */
+  groupId: string;
+
+  /**
+   * group_name is the name of the node group.
+   *
+   * @generated from field: string group_name = 4;
+   */
+  groupName: string;
+
+  /**
+   * os_id is the operating system, e.g. "debian".
+   *
+   * @generated from field: string os_id = 5;
+   */
+  osId: string;
+
+  /**
+   * os_version is its version, e.g. "13".
+   *
+   * @generated from field: string os_version = 6;
+   */
+  osVersion: string;
+
+  /**
+   * kernel_release is the kernel version.
+   *
+   * @generated from field: string kernel_release = 7;
+   */
+  kernelRelease: string;
+
+  /**
+   * architecture is amd64 or arm64.
+   *
+   * @generated from field: string architecture = 8;
+   */
+  architecture: string;
+
+  /**
+   * cpu_count is the number of logical CPUs.
+   *
+   * @generated from field: uint32 cpu_count = 9;
+   */
+  cpuCount: number;
+
+  /**
+   * memory_bytes is the physical memory.
+   *
+   * @generated from field: uint64 memory_bytes = 10;
+   */
+  memoryBytes: bigint;
+
+  /**
+   * agent_version is the version of the agent at the last connection.
+   *
+   * @generated from field: string agent_version = 11;
+   */
+  agentVersion: string;
+
+  /**
+   * enrolled_at is when the node was enrolled.
+   *
+   * @generated from field: google.protobuf.Timestamp enrolled_at = 12;
+   */
+  enrolledAt?: Timestamp | undefined;
+
+  /**
+   * last_seen_at is the last contact, if any.
+   *
+   * @generated from field: google.protobuf.Timestamp last_seen_at = 13;
+   */
+  lastSeenAt?: Timestamp | undefined;
+
+  /**
+   * online is true with contact in the last 60 seconds.
+   *
+   * @generated from field: bool online = 14;
+   */
+  online: boolean;
+
+  /**
+   * figures are the current values (absent without live data).
+   *
+   * @generated from field: sermon.web.v1.KeyFigures figures = 15;
+   */
+  figures?: KeyFigures | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.Node.
+ * Use `create(NodeSchema)` to create a new message.
+ */
+export const NodeSchema: GenMessage<Node> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 5);
+
+/**
+ * ListFilesystemsRequest names the node.
+ *
+ * @generated from message sermon.web.v1.ListFilesystemsRequest
+ */
+export type ListFilesystemsRequest = Message<"sermon.web.v1.ListFilesystemsRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.ListFilesystemsRequest.
+ * Use `create(ListFilesystemsRequestSchema)` to create a new message.
+ */
+export const ListFilesystemsRequestSchema: GenMessage<ListFilesystemsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 6);
+
+/**
+ * ListFilesystemsResponse holds the file systems.
+ *
+ * @generated from message sermon.web.v1.ListFilesystemsResponse
+ */
+export type ListFilesystemsResponse = Message<"sermon.web.v1.ListFilesystemsResponse"> & {
+  /**
+   * filesystems are sorted by mount point.
+   *
+   * @generated from field: repeated sermon.web.v1.Filesystem filesystems = 1;
+   */
+  filesystems: Filesystem[];
+};
+
+/**
+ * Describes the message sermon.web.v1.ListFilesystemsResponse.
+ * Use `create(ListFilesystemsResponseSchema)` to create a new message.
+ */
+export const ListFilesystemsResponseSchema: GenMessage<ListFilesystemsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 7);
+
+/**
+ * Filesystem is one mounted file system with current values from the last minute.
+ *
+ * @generated from message sermon.web.v1.Filesystem
+ */
+export type Filesystem = Message<"sermon.web.v1.Filesystem"> & {
+  /**
+   * mountpoint is where it is mounted.
+   *
+   * @generated from field: string mountpoint = 1;
+   */
+  mountpoint: string;
+
+  /**
+   * size_bytes is the size.
+   *
+   * @generated from field: uint64 size_bytes = 2;
+   */
+  sizeBytes: bigint;
+
+  /**
+   * used_bytes is the used space.
+   *
+   * @generated from field: uint64 used_bytes = 3;
+   */
+  usedBytes: bigint;
+
+  /**
+   * avail_bytes is the space available to unprivileged users.
+   *
+   * @generated from field: uint64 avail_bytes = 4;
+   */
+  availBytes: bigint;
+
+  /**
+   * used_ratio is used / (used + avail), 0..1, like df.
+   *
+   * @generated from field: double used_ratio = 5;
+   */
+  usedRatio: number;
+
+  /**
+   * readonly is true when mounted read-only.
+   *
+   * @generated from field: bool readonly = 6;
+   */
+  readonly: boolean;
+
+  /**
+   * inodes_total is the number of inodes.
+   *
+   * @generated from field: uint64 inodes_total = 7;
+   */
+  inodesTotal: bigint;
+
+  /**
+   * inodes_used is the number of used inodes.
+   *
+   * @generated from field: uint64 inodes_used = 8;
+   */
+  inodesUsed: bigint;
+
+  /**
+   * full_at is when the file system runs full at the current trend (only within a year).
+   *
+   * @generated from field: google.protobuf.Timestamp full_at = 9;
+   */
+  fullAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.Filesystem.
+ * Use `create(FilesystemSchema)` to create a new message.
+ */
+export const FilesystemSchema: GenMessage<Filesystem> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 8);
+
+/**
+ * NodeService shows and manages nodes (KONZEPT §6, §7, §8.2).
  *
  * @generated from service sermon.web.v1.NodeService
  */
 export const NodeService: GenService<{
+  /**
+   * GetNode returns the details of a node the caller may view; unknown or foreign nodes are
+   * NOT_FOUND.
+   *
+   * @generated from rpc sermon.web.v1.NodeService.GetNode
+   */
+  getNode: {
+    methodKind: "unary";
+    input: typeof GetNodeRequestSchema;
+    output: typeof GetNodeResponseSchema;
+  },
+  /**
+   * ListFilesystems returns the file systems of a node with fill level and a forecast when they
+   * run full (linear trend of the last 24 hours).
+   *
+   * @generated from rpc sermon.web.v1.NodeService.ListFilesystems
+   */
+  listFilesystems: {
+    methodKind: "unary";
+    input: typeof ListFilesystemsRequestSchema;
+    output: typeof ListFilesystemsResponseSchema;
+  },
   /**
    * RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
    * backup). Online agents get a new certificate over their stream and the old one is revoked

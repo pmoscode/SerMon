@@ -10,6 +10,7 @@ import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -227,11 +228,485 @@ func (x *RotateNodeKeysResponse) GetOffline() int32 {
 	return 0
 }
 
+// GetNodeRequest names the node.
+type GetNodeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id is the node UUID.
+	NodeId        string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeRequest) Reset() {
+	*x = GetNodeRequest{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeRequest) ProtoMessage() {}
+
+func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeRequest.ProtoReflect.Descriptor instead.
+func (*GetNodeRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// GetNodeResponse holds the node.
+type GetNodeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node is the node.
+	Node          *Node `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeResponse) Reset() {
+	*x = GetNodeResponse{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeResponse) ProtoMessage() {}
+
+func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeResponse.ProtoReflect.Descriptor instead.
+func (*GetNodeResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetNodeResponse) GetNode() *Node {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+// Node are the details of a node.
+type Node struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is the node UUID.
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// hostname is the host name from the agent.
+	Hostname string `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	// group_id is the node group.
+	GroupId string `protobuf:"bytes,3,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// group_name is the name of the node group.
+	GroupName string `protobuf:"bytes,4,opt,name=group_name,json=groupName,proto3" json:"group_name,omitempty"`
+	// os_id is the operating system, e.g. "debian".
+	OsId string `protobuf:"bytes,5,opt,name=os_id,json=osId,proto3" json:"os_id,omitempty"`
+	// os_version is its version, e.g. "13".
+	OsVersion string `protobuf:"bytes,6,opt,name=os_version,json=osVersion,proto3" json:"os_version,omitempty"`
+	// kernel_release is the kernel version.
+	KernelRelease string `protobuf:"bytes,7,opt,name=kernel_release,json=kernelRelease,proto3" json:"kernel_release,omitempty"`
+	// architecture is amd64 or arm64.
+	Architecture string `protobuf:"bytes,8,opt,name=architecture,proto3" json:"architecture,omitempty"`
+	// cpu_count is the number of logical CPUs.
+	CpuCount uint32 `protobuf:"varint,9,opt,name=cpu_count,json=cpuCount,proto3" json:"cpu_count,omitempty"`
+	// memory_bytes is the physical memory.
+	MemoryBytes uint64 `protobuf:"varint,10,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	// agent_version is the version of the agent at the last connection.
+	AgentVersion string `protobuf:"bytes,11,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	// enrolled_at is when the node was enrolled.
+	EnrolledAt *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=enrolled_at,json=enrolledAt,proto3" json:"enrolled_at,omitempty"`
+	// last_seen_at is the last contact, if any.
+	LastSeenAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=last_seen_at,json=lastSeenAt,proto3" json:"last_seen_at,omitempty"`
+	// online is true with contact in the last 60 seconds.
+	Online bool `protobuf:"varint,14,opt,name=online,proto3" json:"online,omitempty"`
+	// figures are the current values (absent without live data).
+	Figures       *KeyFigures `protobuf:"bytes,15,opt,name=figures,proto3" json:"figures,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Node) Reset() {
+	*x = Node{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Node) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Node) ProtoMessage() {}
+
+func (x *Node) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Node.ProtoReflect.Descriptor instead.
+func (*Node) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Node) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Node) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *Node) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *Node) GetGroupName() string {
+	if x != nil {
+		return x.GroupName
+	}
+	return ""
+}
+
+func (x *Node) GetOsId() string {
+	if x != nil {
+		return x.OsId
+	}
+	return ""
+}
+
+func (x *Node) GetOsVersion() string {
+	if x != nil {
+		return x.OsVersion
+	}
+	return ""
+}
+
+func (x *Node) GetKernelRelease() string {
+	if x != nil {
+		return x.KernelRelease
+	}
+	return ""
+}
+
+func (x *Node) GetArchitecture() string {
+	if x != nil {
+		return x.Architecture
+	}
+	return ""
+}
+
+func (x *Node) GetCpuCount() uint32 {
+	if x != nil {
+		return x.CpuCount
+	}
+	return 0
+}
+
+func (x *Node) GetMemoryBytes() uint64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *Node) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
+}
+
+func (x *Node) GetEnrolledAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EnrolledAt
+	}
+	return nil
+}
+
+func (x *Node) GetLastSeenAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSeenAt
+	}
+	return nil
+}
+
+func (x *Node) GetOnline() bool {
+	if x != nil {
+		return x.Online
+	}
+	return false
+}
+
+func (x *Node) GetFigures() *KeyFigures {
+	if x != nil {
+		return x.Figures
+	}
+	return nil
+}
+
+// ListFilesystemsRequest names the node.
+type ListFilesystemsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id is the node UUID.
+	NodeId        string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListFilesystemsRequest) Reset() {
+	*x = ListFilesystemsRequest{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListFilesystemsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListFilesystemsRequest) ProtoMessage() {}
+
+func (x *ListFilesystemsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListFilesystemsRequest.ProtoReflect.Descriptor instead.
+func (*ListFilesystemsRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListFilesystemsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// ListFilesystemsResponse holds the file systems.
+type ListFilesystemsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// filesystems are sorted by mount point.
+	Filesystems   []*Filesystem `protobuf:"bytes,1,rep,name=filesystems,proto3" json:"filesystems,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListFilesystemsResponse) Reset() {
+	*x = ListFilesystemsResponse{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListFilesystemsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListFilesystemsResponse) ProtoMessage() {}
+
+func (x *ListFilesystemsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListFilesystemsResponse.ProtoReflect.Descriptor instead.
+func (*ListFilesystemsResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ListFilesystemsResponse) GetFilesystems() []*Filesystem {
+	if x != nil {
+		return x.Filesystems
+	}
+	return nil
+}
+
+// Filesystem is one mounted file system with current values from the last minute.
+type Filesystem struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// mountpoint is where it is mounted.
+	Mountpoint string `protobuf:"bytes,1,opt,name=mountpoint,proto3" json:"mountpoint,omitempty"`
+	// size_bytes is the size.
+	SizeBytes uint64 `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	// used_bytes is the used space.
+	UsedBytes uint64 `protobuf:"varint,3,opt,name=used_bytes,json=usedBytes,proto3" json:"used_bytes,omitempty"`
+	// avail_bytes is the space available to unprivileged users.
+	AvailBytes uint64 `protobuf:"varint,4,opt,name=avail_bytes,json=availBytes,proto3" json:"avail_bytes,omitempty"`
+	// used_ratio is used / (used + avail), 0..1, like df.
+	UsedRatio float64 `protobuf:"fixed64,5,opt,name=used_ratio,json=usedRatio,proto3" json:"used_ratio,omitempty"`
+	// readonly is true when mounted read-only.
+	Readonly bool `protobuf:"varint,6,opt,name=readonly,proto3" json:"readonly,omitempty"`
+	// inodes_total is the number of inodes.
+	InodesTotal uint64 `protobuf:"varint,7,opt,name=inodes_total,json=inodesTotal,proto3" json:"inodes_total,omitempty"`
+	// inodes_used is the number of used inodes.
+	InodesUsed uint64 `protobuf:"varint,8,opt,name=inodes_used,json=inodesUsed,proto3" json:"inodes_used,omitempty"`
+	// full_at is when the file system runs full at the current trend (only within a year).
+	FullAt        *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=full_at,json=fullAt,proto3" json:"full_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Filesystem) Reset() {
+	*x = Filesystem{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Filesystem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Filesystem) ProtoMessage() {}
+
+func (x *Filesystem) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Filesystem.ProtoReflect.Descriptor instead.
+func (*Filesystem) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *Filesystem) GetMountpoint() string {
+	if x != nil {
+		return x.Mountpoint
+	}
+	return ""
+}
+
+func (x *Filesystem) GetSizeBytes() uint64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *Filesystem) GetUsedBytes() uint64 {
+	if x != nil {
+		return x.UsedBytes
+	}
+	return 0
+}
+
+func (x *Filesystem) GetAvailBytes() uint64 {
+	if x != nil {
+		return x.AvailBytes
+	}
+	return 0
+}
+
+func (x *Filesystem) GetUsedRatio() float64 {
+	if x != nil {
+		return x.UsedRatio
+	}
+	return 0
+}
+
+func (x *Filesystem) GetReadonly() bool {
+	if x != nil {
+		return x.Readonly
+	}
+	return false
+}
+
+func (x *Filesystem) GetInodesTotal() uint64 {
+	if x != nil {
+		return x.InodesTotal
+	}
+	return 0
+}
+
+func (x *Filesystem) GetInodesUsed() uint64 {
+	if x != nil {
+		return x.InodesUsed
+	}
+	return 0
+}
+
+func (x *Filesystem) GetFullAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FullAt
+	}
+	return nil
+}
+
 var File_sermon_web_v1_node_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\n" +
-	"\x18sermon/web/v1/node.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\"\xae\x01\n" +
+	"\x18sermon/web/v1/node.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19sermon/web/v1/fleet.proto\"\xae\x01\n" +
 	"\x15RotateNodeKeysRequest\x12.\n" +
 	"\x05nodes\x18\x01 \x01(\v2\x16.sermon.web.v1.NodeIDsH\x00R\x05nodes\x12%\n" +
 	"\bgroup_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01H\x00R\agroupId\x12-\n" +
@@ -241,8 +716,57 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\x03ids\x18\x01 \x03(\tB\x14\xbaH\x11\x92\x01\x0e\b\x01\x10\xe8\a\x18\x01\"\x05r\x03\xb0\x01\x01R\x03ids\"J\n" +
 	"\x16RotateNodeKeysResponse\x12\x16\n" +
 	"\x06online\x18\x01 \x01(\x05R\x06online\x12\x18\n" +
-	"\aoffline\x18\x02 \x01(\x05R\aoffline2l\n" +
-	"\vNodeService\x12]\n" +
+	"\aoffline\x18\x02 \x01(\x05R\aoffline\"3\n" +
+	"\x0eGetNodeRequest\x12!\n" +
+	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\":\n" +
+	"\x0fGetNodeResponse\x12'\n" +
+	"\x04node\x18\x01 \x01(\v2\x13.sermon.web.v1.NodeR\x04node\"\x98\x04\n" +
+	"\x04Node\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
+	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
+	"\bgroup_id\x18\x03 \x01(\tR\agroupId\x12\x1d\n" +
+	"\n" +
+	"group_name\x18\x04 \x01(\tR\tgroupName\x12\x13\n" +
+	"\x05os_id\x18\x05 \x01(\tR\x04osId\x12\x1d\n" +
+	"\n" +
+	"os_version\x18\x06 \x01(\tR\tosVersion\x12%\n" +
+	"\x0ekernel_release\x18\a \x01(\tR\rkernelRelease\x12\"\n" +
+	"\farchitecture\x18\b \x01(\tR\farchitecture\x12\x1b\n" +
+	"\tcpu_count\x18\t \x01(\rR\bcpuCount\x12!\n" +
+	"\fmemory_bytes\x18\n" +
+	" \x01(\x04R\vmemoryBytes\x12#\n" +
+	"\ragent_version\x18\v \x01(\tR\fagentVersion\x12;\n" +
+	"\venrolled_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"enrolledAt\x12<\n" +
+	"\flast_seen_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"lastSeenAt\x12\x16\n" +
+	"\x06online\x18\x0e \x01(\bR\x06online\x123\n" +
+	"\afigures\x18\x0f \x01(\v2\x19.sermon.web.v1.KeyFiguresR\afigures\";\n" +
+	"\x16ListFilesystemsRequest\x12!\n" +
+	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\"V\n" +
+	"\x17ListFilesystemsResponse\x12;\n" +
+	"\vfilesystems\x18\x01 \x03(\v2\x19.sermon.web.v1.FilesystemR\vfilesystems\"\xbf\x02\n" +
+	"\n" +
+	"Filesystem\x12\x1e\n" +
+	"\n" +
+	"mountpoint\x18\x01 \x01(\tR\n" +
+	"mountpoint\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x02 \x01(\x04R\tsizeBytes\x12\x1d\n" +
+	"\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\x12\x1f\n" +
+	"\vavail_bytes\x18\x04 \x01(\x04R\n" +
+	"availBytes\x12\x1d\n" +
+	"\n" +
+	"used_ratio\x18\x05 \x01(\x01R\tusedRatio\x12\x1a\n" +
+	"\breadonly\x18\x06 \x01(\bR\breadonly\x12!\n" +
+	"\finodes_total\x18\a \x01(\x04R\vinodesTotal\x12\x1f\n" +
+	"\vinodes_used\x18\b \x01(\x04R\n" +
+	"inodesUsed\x123\n" +
+	"\afull_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x06fullAt2\x98\x02\n" +
+	"\vNodeService\x12H\n" +
+	"\aGetNode\x12\x1d.sermon.web.v1.GetNodeRequest\x1a\x1e.sermon.web.v1.GetNodeResponse\x12`\n" +
+	"\x0fListFilesystems\x12%.sermon.web.v1.ListFilesystemsRequest\x1a&.sermon.web.v1.ListFilesystemsResponse\x12]\n" +
 	"\x0eRotateNodeKeys\x12$.sermon.web.v1.RotateNodeKeysRequest\x1a%.sermon.web.v1.RotateNodeKeysResponseB\xb8\x01\n" +
 	"\x11com.sermon.web.v1B\tNodeProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
@@ -258,21 +782,39 @@ func file_sermon_web_v1_node_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_node_proto_rawDescData
 }
 
-var file_sermon_web_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_sermon_web_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_sermon_web_v1_node_proto_goTypes = []any{
-	(*RotateNodeKeysRequest)(nil),  // 0: sermon.web.v1.RotateNodeKeysRequest
-	(*NodeIDs)(nil),                // 1: sermon.web.v1.NodeIDs
-	(*RotateNodeKeysResponse)(nil), // 2: sermon.web.v1.RotateNodeKeysResponse
+	(*RotateNodeKeysRequest)(nil),   // 0: sermon.web.v1.RotateNodeKeysRequest
+	(*NodeIDs)(nil),                 // 1: sermon.web.v1.NodeIDs
+	(*RotateNodeKeysResponse)(nil),  // 2: sermon.web.v1.RotateNodeKeysResponse
+	(*GetNodeRequest)(nil),          // 3: sermon.web.v1.GetNodeRequest
+	(*GetNodeResponse)(nil),         // 4: sermon.web.v1.GetNodeResponse
+	(*Node)(nil),                    // 5: sermon.web.v1.Node
+	(*ListFilesystemsRequest)(nil),  // 6: sermon.web.v1.ListFilesystemsRequest
+	(*ListFilesystemsResponse)(nil), // 7: sermon.web.v1.ListFilesystemsResponse
+	(*Filesystem)(nil),              // 8: sermon.web.v1.Filesystem
+	(*timestamppb.Timestamp)(nil),   // 9: google.protobuf.Timestamp
+	(*KeyFigures)(nil),              // 10: sermon.web.v1.KeyFigures
 }
 var file_sermon_web_v1_node_proto_depIdxs = []int32{
-	1, // 0: sermon.web.v1.RotateNodeKeysRequest.nodes:type_name -> sermon.web.v1.NodeIDs
-	0, // 1: sermon.web.v1.NodeService.RotateNodeKeys:input_type -> sermon.web.v1.RotateNodeKeysRequest
-	2, // 2: sermon.web.v1.NodeService.RotateNodeKeys:output_type -> sermon.web.v1.RotateNodeKeysResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1,  // 0: sermon.web.v1.RotateNodeKeysRequest.nodes:type_name -> sermon.web.v1.NodeIDs
+	5,  // 1: sermon.web.v1.GetNodeResponse.node:type_name -> sermon.web.v1.Node
+	9,  // 2: sermon.web.v1.Node.enrolled_at:type_name -> google.protobuf.Timestamp
+	9,  // 3: sermon.web.v1.Node.last_seen_at:type_name -> google.protobuf.Timestamp
+	10, // 4: sermon.web.v1.Node.figures:type_name -> sermon.web.v1.KeyFigures
+	8,  // 5: sermon.web.v1.ListFilesystemsResponse.filesystems:type_name -> sermon.web.v1.Filesystem
+	9,  // 6: sermon.web.v1.Filesystem.full_at:type_name -> google.protobuf.Timestamp
+	3,  // 7: sermon.web.v1.NodeService.GetNode:input_type -> sermon.web.v1.GetNodeRequest
+	6,  // 8: sermon.web.v1.NodeService.ListFilesystems:input_type -> sermon.web.v1.ListFilesystemsRequest
+	0,  // 9: sermon.web.v1.NodeService.RotateNodeKeys:input_type -> sermon.web.v1.RotateNodeKeysRequest
+	4,  // 10: sermon.web.v1.NodeService.GetNode:output_type -> sermon.web.v1.GetNodeResponse
+	7,  // 11: sermon.web.v1.NodeService.ListFilesystems:output_type -> sermon.web.v1.ListFilesystemsResponse
+	2,  // 12: sermon.web.v1.NodeService.RotateNodeKeys:output_type -> sermon.web.v1.RotateNodeKeysResponse
+	10, // [10:13] is the sub-list for method output_type
+	7,  // [7:10] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_node_proto_init() }
@@ -280,6 +822,7 @@ func file_sermon_web_v1_node_proto_init() {
 	if File_sermon_web_v1_node_proto != nil {
 		return
 	}
+	file_sermon_web_v1_fleet_proto_init()
 	file_sermon_web_v1_node_proto_msgTypes[0].OneofWrappers = []any{
 		(*RotateNodeKeysRequest_Nodes)(nil),
 		(*RotateNodeKeysRequest_GroupId)(nil),
@@ -291,7 +834,7 @@ func file_sermon_web_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_node_proto_rawDesc), len(file_sermon_web_v1_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

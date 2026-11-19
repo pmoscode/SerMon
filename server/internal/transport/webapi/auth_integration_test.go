@@ -19,6 +19,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
@@ -26,7 +27,9 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
+	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
@@ -45,10 +48,12 @@ const (
 )
 
 type stack struct {
-	server *httptest.Server
-	origin string
-	ca     *agentca.Service
-	db     *postgres.DB
+	server  *httptest.Server
+	origin  string
+	ca      *agentca.Service
+	db      *postgres.DB
+	ring    *metrics.Ring
+	metrics *timescale.Store
 }
 
 var (
@@ -107,6 +112,9 @@ func newStack(t *testing.T, loginLimit int) stack {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ring := metrics.NewRing()
+	metricStore := timescale.New(pg)
+	nodes := fleet.NewService(postgres.NewFleetStore(pg), metrics.NewReader(metricStore, ring, time.Now), time.Now)
 	mux := http.NewServeMux()
 	srv := httptest.NewUnstartedServer(mux)
 	srv.StartTLS()
@@ -122,14 +130,16 @@ func newStack(t *testing.T, loginLimit int) stack {
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Node: webapi.NewNodeHandler(rotation.NewService(postgres.NewRotationStore(pg), ca, time.Now,
-			rotation.WithOnDemand(postgres.NewRotationStore(pg), agentapi.NewSessions(0), authz.NewPolicy())), slog.New(slog.DiscardHandler)),
+			rotation.WithOnDemand(postgres.NewRotationStore(pg), agentapi.NewSessions(0), authz.NewPolicy())), nodes, slog.New(slog.DiscardHandler)),
 		AgentCA: webapi.NewAgentCAHandler(ca, slog.New(slog.DiscardHandler)),
+		Metrics: webapi.NewMetricsHandler(nodes, slog.New(slog.DiscardHandler)),
+		Fleet:   webapi.NewFleetHandler(nodes, slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(pg), postgres.NewNodeRegistry(pg), ca, time.Now, access.NewID),
 			ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg)), slog.New(slog.DiscardHandler)),
 	})
-	return stack{server: srv, origin: srv.URL, ca: ca, db: pg}
+	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore}
 }
 
 // ownerSQL runs statements on one owner connection (set_config persists between them).

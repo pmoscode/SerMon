@@ -561,7 +561,27 @@ flowchart LR
 - **Abhängig von:** M1-13, M1-15
 - **Tests zuerst:** Gegen Mock-gRPC-Server: Reconnect, Ack-Handling, Throttle, keine Datenverluste bei Abbruch (Property-Test über zufällige Abbrüche).
 
-#### ☐ M1-15 – WAL-Puffer · A · L
+#### ☑ M1-15 – WAL-Puffer · A · L
+> Erledigt (`sermon-buffer`):
+> - **Format:** Segmente `seg-<erste Seq>.wal` mit Header; jeder Eintrag hat Länge, CRC-32, Seq, Zeitstempel und
+>   Nutzdaten. Der Lesepfad prüft die Länge vor jeder Allokation.
+> - **Seq:** Ein neues WAL beginnt bei der aktuellen Zeit in Mikrosekunden. Geht das Verzeichnis verloren, liegen neue
+>   Nummern trotzdem über allen alten (Vorgabe für M1-24). Das aktive Segment wird nie gelöscht und hält den Zähler
+>   auch dann, wenn alles bestätigt ist.
+> - **Ack:** wird in `acked` gespeichert (Seq + CRC); nach einem Neustart kommen bestätigte Einträge nicht wieder.
+>   Vollständig bestätigte Segmente werden gelöscht.
+> - **Grenzen:** 200 MB und 24 h (konfigurierbar). Die ältesten Segmente werden verworfen und gezählt; ein Segment
+>   wird nach 4 MB oder 1 h geschlossen. `expire()` setzt das Alterslimit auch ohne neue Daten durch.
+> - **fsync:** `Always`, `Interval` (Standard 5 s) oder `Never`. Ein fehlgeschlagener Schreibvorgang hinterlässt keinen
+>   halben Eintrag, hinter dem weitergeschrieben würde.
+> - **Absturz:** Beim Öffnen wird jedes Segment am ersten kaputten oder nicht fortlaufenden Eintrag gekürzt;
+>   unlesbare Segmente werden entfernt, fremde Dateien bleiben. Ein Lock (`flock`) verhindert zwei Prozesse.
+> - **Tests:** Modell-basierter Property-Test (Reihenfolge, Ack, Neustarts), Grenzen (Bytes, Alter, Zählung,
+>   lückenloser Rest), Beschädigung beliebiger Segmente (Kürzen, Bit-Kippen, Müll am Ende) inklusive Schreiben und
+>   Lesen danach; Gegenproben für Ack-Persistenz und Kürzen. Auch unter Linux im Container ausgeführt.
+>
+> Abweichung: Den Lesepfad fuzzt proptest (beliebige Bytes, Bit-Kippen) statt `cargo-fuzz`. Für `cargo-fuzz` fehlt
+> noch eine nightly-Toolchain; die Fuzz-Infrastruktur folgt mit den Collector-Parsern (M1-16).
 - **Ziel:** `sermon-buffer`: segmentierte Dateien, Sequenznummern, Kürzen nach Ack, Grenzen (24 h / 200 MB), FIFO-Verwerfen mit Zähler, konfigurierbare fsync-Strategie, Wiederherstellung nach Absturz (abgeschnittene Einträge erkennen).
 - **Abhängig von:** M1-12
 - **Tests zuerst:** Property-Tests (Reihenfolge bleibt erhalten, kein Eintrag doppelt nach Ack, Grenzen werden eingehalten); Absturz-Simulation mit abgeschnittener Datei; Fuzzing des Lese-Pfads.
@@ -623,6 +643,9 @@ flowchart LR
 - **Tests zuerst:** Tabellen-Test „Zeitraum/Schritt → Quelle“; Ring-Überlauf; nebenläufiger Zugriff (`go test -race`).
 
 #### ☐ M1-24 – Ingest-Pipeline und Node-Status · S · M 🔒
+> Vorgabe aus M1-15: Die Seq eines Agents steigt immer, auch über Neustarts und den Verlust des WAL-Verzeichnisses
+> hinweg (Start bei der Zeit in µs), hat aber Lücken (verworfene Daten). Deduplizieren heißt daher: alles mit
+> `seq ≤ höchster gespeicherter Seq des Nodes` verwerfen; Lücken sind erlaubt und zählen als verworfene Daten.
 - **Ziel:** Stream-Handler: `Hello` (Host-Fakten aktualisieren), Validierung, Quotas und `Throttle`, Deduplizierung über `(node_id, seq)`, Weitergabe an `MetricStore` und Ring, `Ack`; Node-Status online/offline per Heartbeat (60 s); Self-Metriken (Ingest-Lag).
 - **Abhängig von:** M1-10, M1-22, M1-23
 - **Tests zuerst:** Duplikate werden verworfen; Quota löst Throttle aus; Node-Status-Übergänge mit Fake-Clock; Identität nur aus dem Kontext.

@@ -299,6 +299,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crc32fast"
+version = "1.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b929dd2a135771f40afabd1073f85eed59c800b7c61901e5c254270497dad64"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1105,6 +1114,12 @@ dependencies = [
 [[package]]
 name = "sermon-buffer"
 version = "0.0.0"
+dependencies = [
+ "crc32fast",
+ "proptest",
+ "tempfile",
+ "thiserror",
+]
 
 [[package]]
 name = "sermon-collectors"

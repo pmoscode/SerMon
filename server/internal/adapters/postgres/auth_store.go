@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
+	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -86,22 +87,10 @@ func (s *SessionStore) DeleteForUser(ctx context.Context, user identity.UserID) 
 	return nil
 }
 
-// Credentials of a user.
-type Credentials struct {
-	User           identity.UserID
-	PasswordHash   string
-	FailedAttempts int32
-	LockedUntil    *time.Time
-}
-
-// Organization is an organization a user belongs to.
-type Organization struct {
-	ID   tenant.OrgID
-	Name string
-}
-
 // CredentialStore persists password credentials and answers tenant-less login lookups.
 type CredentialStore struct{ db *DB }
+
+var _ auth.CredentialRepository = (*CredentialStore)(nil)
 
 // NewCredentialStore returns the PostgreSQL credential store.
 func NewCredentialStore(db *DB) *CredentialStore { return &CredentialStore{db: db} }
@@ -119,28 +108,28 @@ func (s *CredentialStore) FindUserByEmail(ctx context.Context, email string) (id
 }
 
 // Organizations returns the organizations the user is a member of.
-func (s *CredentialStore) Organizations(ctx context.Context, user identity.UserID) ([]Organization, error) {
+func (s *CredentialStore) Organizations(ctx context.Context, user identity.UserID) ([]auth.Organization, error) {
 	rows, err := s.db.withoutTenant().UserOrganizations(ctx, uuid.UUID(user))
 	if err != nil {
 		return nil, fmt.Errorf("list user organizations: %w", err)
 	}
-	orgs := make([]Organization, 0, len(rows))
+	orgs := make([]auth.Organization, 0, len(rows))
 	for _, r := range rows {
-		orgs = append(orgs, Organization{ID: tenant.OrgID(r.OrgID), Name: r.Name})
+		orgs = append(orgs, auth.Organization{ID: tenant.OrgID(r.OrgID), Name: r.Name})
 	}
 	return orgs, nil
 }
 
 // Get returns the credentials of a user.
-func (s *CredentialStore) Get(ctx context.Context, user identity.UserID) (Credentials, bool, error) {
+func (s *CredentialStore) Get(ctx context.Context, user identity.UserID) (auth.Credentials, bool, error) {
 	row, err := s.db.withoutTenant().GetCredentials(ctx, uuid.UUID(user))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Credentials{}, false, nil
+		return auth.Credentials{}, false, nil
 	}
 	if err != nil {
-		return Credentials{}, false, fmt.Errorf("get credentials: %w", err)
+		return auth.Credentials{}, false, fmt.Errorf("get credentials: %w", err)
 	}
-	return Credentials{User: user, PasswordHash: row.PasswordHash, FailedAttempts: row.FailedAttempts, LockedUntil: row.LockedUntil}, true, nil
+	return auth.Credentials{User: user, PasswordHash: row.PasswordHash, FailedAttempts: row.FailedAttempts, LockedUntil: row.LockedUntil}, true, nil
 }
 
 // SetPassword sets a new password hash and clears failed attempts and locks.

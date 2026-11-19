@@ -46,17 +46,26 @@ dev-reset:
 dev-logs:
     docker compose -f deploy/dev/compose.yaml logs -f
 
+# Generate all code: protocol (buf) and typed SQL (sqlc)
+gen: gen-proto gen-sql
+
 # Generate code from proto/ for Rust, Go and TypeScript (local plugins only)
 [working-directory: 'proto']
-gen:
+gen-proto:
     buf generate
     cd ../agent && cargo fmt --all
     @echo "✓ generated: server/internal/gen, web/src/lib/api/gen, agent/crates/sermon-transport/src/gen"
 
+# Generate typed Go code from SQL queries and migrations (sqlc)
+[working-directory: 'server']
+gen-sql:
+    go tool sqlc generate
+    @echo "✓ generated: server/internal/adapters/postgres/sqlcdb"
+
 # Fail if the committed generated code is not up to date with proto/ (used in CI)
 check-gen: gen
-    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen
-    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
+    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen server/internal/adapters/postgres/sqlcdb
+    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen server/internal/adapters/postgres/sqlcdb)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
 
 # Install the pinned Rust protoc plugins used by `just gen`
 install-proto-plugins:
@@ -71,8 +80,10 @@ lint: lint-shell lint-ci lint-compose lint-proto lint-agent lint-server lint-web
 # Run all unit tests
 test: test-scripts test-agent test-server test-web
 
-# Run integration tests (Testcontainers)
-test-integration: (_todo "test-integration" "M0-08")
+# Run integration tests against real containers (Testcontainers; Docker required)
+[working-directory: 'server']
+test-integration:
+    go test -tags integration -race -count=1 ./...
 
 # Run end-to-end tests against sermon-server with the embedded UI (Playwright)
 [working-directory: 'web']

@@ -9,7 +9,7 @@ Security is the top priority (KONZEPT.md §18). Walk through every section relev
 
 ## 1. Identity & tenancy
 - [ ] Server derives `org_id` / `node_id` **only from the mTLS client certificate** (agent API) or the session (web API) – never from payload fields.
-- [ ] Every repository/query function takes a tenant scope (`tenant.Scope`) and filters by it; no "list all" without scope. PG RLS policy exists for new tables.
+- [ ] Every data access runs in `postgres.DB.InTenant(ctx, scope, …)` with a valid `tenant.Scope`; no "list all" without scope. New tenant tables have `ENABLE` + `FORCE ROW LEVEL SECURITY` with a `current_org_id()` policy and integration tests (isolation, no cross-tenant write, nothing visible without tenant). The server never connects as owner/superuser (`postgres.Open` guard, ADR 0007).
 - [ ] Metric queries go only through the `MetricStore` port with a `tenant.Scope` (filters `series.org_id` + allowed `node_id`s); Loki queries set `X-Scope-OrgID`; user input is escaped/parameterized; no raw SQL/LogQL from clients.
 - [ ] New RPC is added to the **role-matrix test** and **tenant-isolation test**. Default is deny.
 - [ ] Cross-tenant access returns `NotFound` (don't leak existence).

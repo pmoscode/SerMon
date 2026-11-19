@@ -19,3 +19,4 @@ secret() {
 }
 
 secret postgres_password
+secret postgres_app_password

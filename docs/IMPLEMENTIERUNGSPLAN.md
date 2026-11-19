@@ -187,7 +187,16 @@ flowchart LR
 - **Abhängig von:** M0-03, M0-04
 - **Abnahme:** Frischer Clone → `just dev` → UI unter `localhost` erreichbar in < 5 min.
 
-### ☐ M0-08 – Datenbank-Grundgerüst · S · M 🔒
+### ☑ M0-08 – Datenbank-Grundgerüst · S · M 🔒
+> Erledigt ([ADR 0007](adr/0007-mandantentrennung-rls.md)):
+> - goose-Migrationen (eingebettet, mit Advisory-Lock), sqlc mit pgx und `just gen-sql`.
+> - `tenant.Scope` (100 % Testabdeckung) und `postgres.DB.InTenant` (SET LOCAL).
+> - RLS mit FORCE auf `organizations`, `users` und `memberships`.
+> - Getrennte Rollen: Owner nur für Migrationen, `sermon_app` für den Server; `Open` verweigert privilegierte Rollen.
+> - 10 Integrationstests mit Testcontainers (`just test-integration`, CI-Job `integration`); die Gegenprobe ohne RLS
+>   schlägt fehl.
+>
+> Nebenbefund: Das Init-Skript aus M0-07 lag in einem Unterordner und wurde nie ausgeführt; korrigiert.
 - **Ziel:**
   - `goose`-Migrationen und `sqlc`-Konfiguration
   - Testcontainers-Helfer für Integrationstests

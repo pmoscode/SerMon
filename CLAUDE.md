@@ -61,6 +61,15 @@ Actions immer per Commit-SHA pinnen, die Version steht als Kommentar dahinter, u
 3 Tage alt sind. Rechte minimal halten und jede zusätzliche Berechtigung kommentieren. Nach jeder Workflow-Änderung
 `just lint-ci` (actionlint + zizmor) ausführen. Abhängigkeiten aktualisiert Renovate (`renovate.json`).
 
+Datenbank (ADR 0007):
+- Migrationen in `server/migrations/` (goose, eingebettet).
+- Queries in `server/internal/adapters/postgres/queries/`, danach `just gen-sql`.
+- **Jeder Datenzugriff läuft über `postgres.DB.InTenant(ctx, scope, …)`.** Neue Tabellen mit Mandantenbezug bekommen
+  immer `ENABLE` + `FORCE ROW LEVEL SECURITY` und eine Policy auf `current_org_id()`, dazu Integrationstests für
+  Isolation, Schreibschutz und „ohne Tenant nichts sichtbar“.
+- Der Server verbindet sich als `sermon_app` (keine Sonderrechte); die Owner-Rolle nur für Migrationen.
+- `just test-integration` startet die Testdatenbank per Testcontainers (Docker nötig).
+
 Web-Besonderheiten:
 - SvelteKit 3: Die Konfiguration steht in `web/vite.config.ts` (es gibt keine `svelte.config.js`).
 - Paraglide-Code (`web/src/lib/paraglide`) ist generiert und nicht committet; `pnpm run i18n` erzeugt ihn,

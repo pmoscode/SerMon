@@ -84,6 +84,7 @@ func TestRoutes_UIAndAPIDoNotConflict(_ *testing.T) {
 	webapi.Mount(mux, webapi.Config{}, webapi.Handlers{
 		Auth:          webapi.NewAuthHandler(nil, nil, nil, slog.New(slog.DiscardHandler)),
 		System:        webapi.NewSystemHandler("test"),
+		Access:        webapi.NewAccessHandler(nil, slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(nil, nil, slog.New(slog.DiscardHandler)),
 	})
 	registerUI(mux, http.NotFoundHandler()) // panics on a pattern conflict

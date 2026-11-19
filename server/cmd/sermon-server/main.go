@@ -19,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
+	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
@@ -150,8 +151,10 @@ func mountAPI(mux *http.ServeMux, cfg config.Config, db *postgres.DB, logger *sl
 		Now:         time.Now,
 	})
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
-		Auth:          webapi.NewAuthHandler(login, sessions, credentials, logger),
-		System:        webapi.NewSystemHandler(version),
+		Auth:   webapi.NewAuthHandler(login, sessions, credentials, logger),
+		System: webapi.NewSystemHandler(version),
+		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(db), authz.NewPolicy(), time.Now, access.NewID),
+			logger),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(db)), logger),
 	})
 	return nil

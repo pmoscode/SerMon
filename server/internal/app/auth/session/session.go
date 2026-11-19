@@ -70,13 +70,32 @@ func NewManager(store Store, now func() time.Time) *Manager {
 // Create starts a new session after a successful login and returns the token for the cookie.
 // A new token on every login prevents session fixation.
 func (m *Manager) Create(ctx context.Context, user identity.UserID, org tenant.OrgID) (string, Session, error) {
+	now := m.now()
+	return m.insert(ctx, Session{User: user, Org: org, CreatedAt: now, LastSeenAt: now, StepUpAt: now})
+}
+
+// SwitchOrganization moves the session to another organization under a new token. The caller
+// must have checked the membership. Creation and step-up time are kept: switching neither
+// extends the absolute timeout nor counts as a re-authentication.
+func (m *Manager) SwitchOrganization(ctx context.Context, token string, org tenant.OrgID) (string, Session, error) {
+	old, err := m.Validate(ctx, token)
+	if err != nil {
+		return "", Session{}, err
+	}
+	// Revoke first: on a later failure the user is logged out rather than holding two sessions.
+	if err := m.store.Delete(ctx, old.ID); err != nil {
+		return "", Session{}, fmt.Errorf("delete previous session: %w", err)
+	}
+	return m.insert(ctx, Session{User: old.User, Org: org, CreatedAt: old.CreatedAt, LastSeenAt: m.now(), StepUpAt: old.StepUpAt})
+}
+
+func (m *Manager) insert(ctx context.Context, s Session) (string, Session, error) {
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
 		return "", Session{}, fmt.Errorf("generate session token: %w", err)
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
-	now := m.now()
-	s := Session{ID: hashToken(token), User: user, Org: org, CreatedAt: now, LastSeenAt: now, StepUpAt: now}
+	s.ID = hashToken(token)
 	if err := m.store.Insert(ctx, s); err != nil {
 		return "", Session{}, fmt.Errorf("store session: %w", err)
 	}

@@ -1,0 +1,213 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// AccessService manages node groups, members and roles of the caller's active organization
+// (KONZEPT §7). All RPCs require a session; objects of other organizations are reported as
+// NOT_FOUND. Changes of rights (GrantRole, RevokeRole, RemoveMember, DeleteNodeGroup) require a recent
+// re-authentication (FAILED_PRECONDITION otherwise) and are written to the audit log.
+service AccessService {
+  // ListNodeGroups returns the node groups the caller can see (at least viewer).
+  rpc ListNodeGroups(ListNodeGroupsRequest) returns (ListNodeGroupsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateNodeGroup creates a node group (org admin). ALREADY_EXISTS for a duplicate name.
+  rpc CreateNodeGroup(CreateNodeGroupRequest) returns (CreateNodeGroupResponse);
+  // RenameNodeGroup renames a node group (org admin).
+  rpc RenameNodeGroup(RenameNodeGroupRequest) returns (RenameNodeGroupResponse);
+  // DeleteNodeGroup deletes a node group and its role bindings (org admin, step-up).
+  rpc DeleteNodeGroup(DeleteNodeGroupRequest) returns (DeleteNodeGroupResponse);
+  // ListMembers returns the members of the organization with their roles (org admin).
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // GrantRole gives a member a role on one node group or on all groups; an existing role on
+  // the same group is replaced (org admin, step-up).
+  rpc GrantRole(GrantRoleRequest) returns (GrantRoleResponse);
+  // RevokeRole removes a role binding (org admin, step-up). The last org-wide admin cannot be
+  // removed (FAILED_PRECONDITION).
+  rpc RevokeRole(RevokeRoleRequest) returns (RevokeRoleResponse);
+  // RemoveMember removes a user from the organization and ends the user's sessions in it
+  // (org admin, step-up).
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+  // ListAuditLog returns audit entries, newest first (org admin).
+  rpc ListAuditLog(ListAuditLogRequest) returns (ListAuditLogResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// Role is a role on a node group or on all groups.
+enum Role {
+  // ROLE_UNSPECIFIED is invalid.
+  ROLE_UNSPECIFIED = 0;
+  // ROLE_VIEWER may view nodes, metrics and (unless disabled) logs.
+  ROLE_VIEWER = 1;
+  // ROLE_OPERATOR may additionally acknowledge alerts, run updates and reboots.
+  ROLE_OPERATOR = 2;
+  // ROLE_ADMIN may additionally manage the group; on all groups the whole organization.
+  ROLE_ADMIN = 3;
+}
+
+// NodeGroup is a group of nodes; roles are granted per group.
+message NodeGroup {
+  // id is the group UUID.
+  string id = 1;
+  // name is the display name.
+  string name = 2;
+  // create_time is when the group was created.
+  google.protobuf.Timestamp create_time = 3;
+}
+
+// ListNodeGroupsRequest has no parameters.
+message ListNodeGroupsRequest {}
+
+// ListNodeGroupsResponse lists node groups by name.
+message ListNodeGroupsResponse {
+  // groups are the visible node groups.
+  repeated NodeGroup groups = 1;
+}
+
+// CreateNodeGroupRequest names the new group.
+message CreateNodeGroupRequest {
+  // name is the display name (unique within the organization).
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+}
+
+// CreateNodeGroupResponse returns the new group.
+message CreateNodeGroupResponse {
+  // group is the created group.
+  NodeGroup group = 1;
+}
+
+// RenameNodeGroupRequest names the group and its new name.
+message RenameNodeGroupRequest {
+  // group_id is the UUID of the group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // name is the new display name.
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+}
+
+// RenameNodeGroupResponse has no fields.
+message RenameNodeGroupResponse {}
+
+// DeleteNodeGroupRequest names the group.
+message DeleteNodeGroupRequest {
+  // group_id is the UUID of the group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteNodeGroupResponse has no fields.
+message DeleteNodeGroupResponse {}
+
+// RoleBinding is a role of a member on one group or on all groups.
+message RoleBinding {
+  // id is the binding UUID (for RevokeRole).
+  string id = 1;
+  // group_id is the UUID of the group; empty means all groups of the organization.
+  string group_id = 2;
+  // role is the granted role.
+  Role role = 3;
+}
+
+// Member is a user of the organization.
+message Member {
+  // user_id is the user UUID.
+  string user_id = 1;
+  // email is the user's e-mail address.
+  string email = 2;
+  // display_name is the user's name.
+  string display_name = 3;
+  // bindings are the member's roles.
+  repeated RoleBinding bindings = 4;
+}
+
+// ListMembersRequest has no parameters.
+message ListMembersRequest {}
+
+// ListMembersResponse lists the members by e-mail address.
+message ListMembersResponse {
+  // members of the organization.
+  repeated Member members = 1;
+}
+
+// GrantRoleRequest names member, group and role.
+message GrantRoleRequest {
+  // user_id is the UUID of a member of the organization.
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
+  // group_id is the UUID of the group; empty grants the role on all groups.
+  string group_id = 2 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.uuid = true
+  ];
+  // role is the role to grant.
+  Role role = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+// GrantRoleResponse identifies the binding.
+message GrantRoleResponse {
+  // binding_id is the UUID of the new or replaced binding.
+  string binding_id = 1;
+}
+
+// RevokeRoleRequest names the binding.
+message RevokeRoleRequest {
+  // binding_id is the UUID of the binding.
+  string binding_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// RevokeRoleResponse has no fields.
+message RevokeRoleResponse {}
+
+// RemoveMemberRequest names the member.
+message RemoveMemberRequest {
+  // user_id is the UUID of the member.
+  string user_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// RemoveMemberResponse has no fields.
+message RemoveMemberResponse {}
+
+// AuditEntry is an entry of the organization's audit log.
+message AuditEntry {
+  // seq is the position in the organization's log (1, 2, …).
+  int64 seq = 1;
+  // time is when the change happened.
+  google.protobuf.Timestamp time = 2;
+  // actor_id is the UUID of the acting user; empty for system actions.
+  string actor_id = 3;
+  // action names the change, e.g. "role.grant".
+  string action = 4;
+  // target names the changed object, e.g. "user:<uuid>".
+  string target = 5;
+  // details are facts about the change, e.g. role and group.
+  map<string, string> details = 6;
+}
+
+// ListAuditLogRequest pages through the log.
+message ListAuditLogRequest {
+  // before_seq returns entries older than this seq; 0 starts with the newest entry.
+  int64 before_seq = 1 [(buf.validate.field).int64.gte = 0];
+  // page_size is the maximum number of entries (default 100, at most 500).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 500
+  }];
+}
+
+// ListAuditLogResponse is one page of the log.
+message ListAuditLogResponse {
+  // entries, newest first.
+  repeated AuditEntry entries = 1;
+}

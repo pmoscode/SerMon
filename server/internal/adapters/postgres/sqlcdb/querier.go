@@ -17,6 +17,7 @@ type Querier interface {
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	AuditChain(ctx context.Context) ([]AuditLog, error)
+	CountOrgAdmins(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
 	// Organizations. Row-level security limits every query to the organization of the tenant
@@ -28,7 +29,10 @@ type Querier interface {
 	// (SELECT policy), so RETURNING would be rejected by RLS. Add the membership in the same
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
+	// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
+	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
@@ -36,15 +40,20 @@ type Querier interface {
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error)
+	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
-	ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, error)
-	ListNodeGroups(ctx context.Context) ([]NodeGroup, error)
+	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	ListMembers(ctx context.Context) ([]ListMembersRow, error)
+	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
 	ListOrganizations(ctx context.Context) ([]Organization, error)
+	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// Serializes changes of rights within the organization (last-admin check without races).
+	LockAccessChanges(ctx context.Context) error
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
@@ -54,6 +63,7 @@ type Querier interface {
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
+	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)
 	UserProfile(ctx context.Context, userID uuid.UUID) (UserProfileRow, error)
 }

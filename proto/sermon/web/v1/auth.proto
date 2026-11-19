@@ -17,6 +17,10 @@ service AuthService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // SwitchOrganization moves the session to another organization of the user under a new
+  // session cookie. NOT_FOUND if the user is not a member. Timeouts and the time of the last
+  // re-authentication are kept.
+  rpc SwitchOrganization(SwitchOrganizationRequest) returns (SwitchOrganizationResponse);
 }
 
 // LoginRequest carries the credentials.
@@ -51,6 +55,18 @@ message GetSessionRequest {}
 // GetSessionResponse describes the current session.
 message GetSessionResponse {
   // session is the current session.
+  Session session = 1;
+}
+
+// SwitchOrganizationRequest names the target organization.
+message SwitchOrganizationRequest {
+  // organization_id is the UUID of an organization the user is a member of.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// SwitchOrganizationResponse describes the moved session.
+message SwitchOrganizationResponse {
+  // session is the session in the new organization.
   Session session = 1;
 }
 

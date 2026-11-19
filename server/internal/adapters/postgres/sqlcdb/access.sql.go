@@ -80,6 +80,17 @@ func (q *Queries) AuditChain(ctx context.Context) ([]AuditLog, error) {
 	return items, nil
 }
 
+const countOrgAdmins = `-- name: CountOrgAdmins :one
+SELECT count(*) FROM role_bindings WHERE group_id IS NULL AND role = 'admin'
+`
+
+func (q *Queries) CountOrgAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countOrgAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNodeGroup = `-- name: CreateNodeGroup :one
 
 INSERT INTO node_groups (id, org_id, name) VALUES ($1, current_org_id(), $2)
@@ -126,6 +137,18 @@ func (q *Queries) CreateRoleBinding(ctx context.Context, arg CreateRoleBindingPa
 	return err
 }
 
+const deleteMembership = `-- name: DeleteMembership :execrows
+DELETE FROM memberships WHERE user_id = $1
+`
+
+func (q *Queries) DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMembership, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteNodeGroup = `-- name: DeleteNodeGroup :execrows
 DELETE FROM node_groups WHERE id = $1
 `
@@ -138,6 +161,16 @@ func (q *Queries) DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, err
 	return result.RowsAffected(), nil
 }
 
+const deleteOrgSessionsOfUser = `-- name: DeleteOrgSessionsOfUser :exec
+DELETE FROM sessions WHERE user_id = $1 AND org_id = current_org_id()
+`
+
+// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
+func (q *Queries) DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOrgSessionsOfUser, userID)
+	return err
+}
+
 const deleteRoleBinding = `-- name: DeleteRoleBinding :execrows
 DELETE FROM role_bindings WHERE id = $1
 `
@@ -148,6 +181,29 @@ func (q *Queries) DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, e
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getRoleBinding = `-- name: GetRoleBinding :one
+SELECT id, user_id, group_id, role FROM role_bindings WHERE id = $1
+`
+
+type GetRoleBindingRow struct {
+	ID      uuid.UUID
+	UserID  uuid.UUID
+	GroupID *uuid.UUID
+	Role    string
+}
+
+func (q *Queries) GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error) {
+	row := q.db.QueryRow(ctx, getRoleBinding, id)
+	var i GetRoleBindingRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.GroupID,
+		&i.Role,
+	)
+	return i, err
 }
 
 const isMember = `-- name: IsMember :one
@@ -164,12 +220,18 @@ func (q *Queries) IsMember(ctx context.Context, userID uuid.UUID) (bool, error) 
 const listAudit = `-- name: ListAudit :many
 SELECT id, org_id, seq, at, actor_id, action, target, details, prev_hash, hash
 FROM audit_log
+WHERE $1::bigint = 0 OR seq < $1::bigint
 ORDER BY seq DESC
-LIMIT $1
+LIMIT $2
 `
 
-func (q *Queries) ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, error) {
-	rows, err := q.db.Query(ctx, listAudit, maxRows)
+type ListAuditParams struct {
+	BeforeSeq int64
+	MaxRows   int32
+}
+
+func (q *Queries) ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, listAudit, arg.BeforeSeq, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -199,12 +261,51 @@ func (q *Queries) ListAudit(ctx context.Context, maxRows int32) ([]AuditLog, err
 	return items, nil
 }
 
-const listNodeGroups = `-- name: ListNodeGroups :many
-SELECT id, org_id, name, created_at FROM node_groups ORDER BY lower(name)
+const listMembers = `-- name: ListMembers :many
+SELECT u.id, u.email, u.display_name
+FROM memberships m JOIN users u ON u.id = m.user_id
+ORDER BY lower(u.email), u.id
 `
 
-func (q *Queries) ListNodeGroups(ctx context.Context) ([]NodeGroup, error) {
-	rows, err := q.db.Query(ctx, listNodeGroups)
+type ListMembersRow struct {
+	ID          uuid.UUID
+	Email       string
+	DisplayName string
+}
+
+func (q *Queries) ListMembers(ctx context.Context) ([]ListMembersRow, error) {
+	rows, err := q.db.Query(ctx, listMembers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMembersRow{}
+	for rows.Next() {
+		var i ListMembersRow
+		if err := rows.Scan(&i.ID, &i.Email, &i.DisplayName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNodeGroups = `-- name: ListNodeGroups :many
+SELECT id, org_id, name, created_at FROM node_groups
+WHERE $1::boolean OR id = ANY ($2::uuid[])
+ORDER BY lower(name), id
+`
+
+type ListNodeGroupsParams struct {
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+func (q *Queries) ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error) {
+	rows, err := q.db.Query(ctx, listNodeGroups, arg.AllGroups, arg.GroupIds)
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +327,52 @@ func (q *Queries) ListNodeGroups(ctx context.Context) ([]NodeGroup, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listRoleBindings = `-- name: ListRoleBindings :many
+SELECT id, user_id, group_id, role FROM role_bindings ORDER BY created_at, id
+`
+
+type ListRoleBindingsRow struct {
+	ID      uuid.UUID
+	UserID  uuid.UUID
+	GroupID *uuid.UUID
+	Role    string
+}
+
+func (q *Queries) ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error) {
+	rows, err := q.db.Query(ctx, listRoleBindings)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoleBindingsRow{}
+	for rows.Next() {
+		var i ListRoleBindingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.GroupID,
+			&i.Role,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockAccessChanges = `-- name: LockAccessChanges :exec
+SELECT pg_advisory_xact_lock(hashtextextended('access:' || current_org_id()::text, 0))
+`
+
+// Serializes changes of rights within the organization (last-admin check without races).
+func (q *Queries) LockAccessChanges(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockAccessChanges)
+	return err
 }
 
 const renameNodeGroup = `-- name: RenameNodeGroup :execrows
@@ -273,4 +420,31 @@ func (q *Queries) RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]R
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertRoleBinding = `-- name: UpsertRoleBinding :one
+INSERT INTO role_bindings (id, org_id, user_id, group_id, role)
+VALUES ($1, current_org_id(), $2, $3, $4)
+ON CONFLICT (org_id, user_id, COALESCE(group_id, '00000000-0000-0000-0000-000000000000'::uuid))
+DO UPDATE SET role = EXCLUDED.role
+RETURNING id
+`
+
+type UpsertRoleBindingParams struct {
+	ID      uuid.UUID
+	UserID  uuid.UUID
+	GroupID *uuid.UUID
+	Role    string
+}
+
+func (q *Queries) UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, upsertRoleBinding,
+		arg.ID,
+		arg.UserID,
+		arg.GroupID,
+		arg.Role,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }

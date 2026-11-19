@@ -280,6 +280,98 @@ func (x *GetSessionResponse) GetSession() *Session {
 	return nil
 }
 
+// SwitchOrganizationRequest names the target organization.
+type SwitchOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the UUID of an organization the user is a member of.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SwitchOrganizationRequest) Reset() {
+	*x = SwitchOrganizationRequest{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchOrganizationRequest) ProtoMessage() {}
+
+func (x *SwitchOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*SwitchOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SwitchOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+// SwitchOrganizationResponse describes the moved session.
+type SwitchOrganizationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// session is the session in the new organization.
+	Session       *Session `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SwitchOrganizationResponse) Reset() {
+	*x = SwitchOrganizationResponse{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchOrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchOrganizationResponse) ProtoMessage() {}
+
+func (x *SwitchOrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchOrganizationResponse.ProtoReflect.Descriptor instead.
+func (*SwitchOrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SwitchOrganizationResponse) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
 // Session is the view of a login session for the UI.
 type Session struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -299,7 +391,7 @@ type Session struct {
 
 func (x *Session) Reset() {
 	*x = Session{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -311,7 +403,7 @@ func (x *Session) String() string {
 func (*Session) ProtoMessage() {}
 
 func (x *Session) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +416,7 @@ func (x *Session) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Session.ProtoReflect.Descriptor instead.
 func (*Session) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Session) GetUserId() string {
@@ -375,7 +467,7 @@ type Organization struct {
 
 func (x *Organization) Reset() {
 	*x = Organization{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -387,7 +479,7 @@ func (x *Organization) String() string {
 func (*Organization) ProtoMessage() {}
 
 func (x *Organization) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -400,7 +492,7 @@ func (x *Organization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Organization.ProtoReflect.Descriptor instead.
 func (*Organization) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{7}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Organization) GetId() string {
@@ -433,6 +525,10 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x0eLogoutResponse\"\x13\n" +
 	"\x11GetSessionRequest\"F\n" +
 	"\x12GetSessionResponse\x120\n" +
+	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"N\n" +
+	"\x19SwitchOrganizationRequest\x121\n" +
+	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\"N\n" +
+	"\x1aSwitchOrganizationResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\xd4\x01\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
@@ -442,12 +538,13 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\rorganizations\x18\x05 \x03(\v2\x1b.sermon.web.v1.OrganizationR\rorganizations\"2\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name2\xf0\x01\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name2\xdb\x02\n" +
 	"\vAuthService\x12B\n" +
 	"\x05Login\x12\x1b.sermon.web.v1.LoginRequest\x1a\x1c.sermon.web.v1.LoginResponse\x12E\n" +
 	"\x06Logout\x12\x1c.sermon.web.v1.LogoutRequest\x1a\x1d.sermon.web.v1.LogoutResponse\x12V\n" +
 	"\n" +
-	"GetSession\x12 .sermon.web.v1.GetSessionRequest\x1a!.sermon.web.v1.GetSessionResponse\"\x03\x90\x02\x01B\xb8\x01\n" +
+	"GetSession\x12 .sermon.web.v1.GetSessionRequest\x1a!.sermon.web.v1.GetSessionResponse\"\x03\x90\x02\x01\x12i\n" +
+	"\x12SwitchOrganization\x12(.sermon.web.v1.SwitchOrganizationRequest\x1a).sermon.web.v1.SwitchOrganizationResponseB\xb8\x01\n" +
 	"\x11com.sermon.web.v1B\tAuthProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -462,32 +559,37 @@ func file_sermon_web_v1_auth_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_auth_proto_rawDescData
 }
 
-var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_sermon_web_v1_auth_proto_goTypes = []any{
-	(*LoginRequest)(nil),       // 0: sermon.web.v1.LoginRequest
-	(*LoginResponse)(nil),      // 1: sermon.web.v1.LoginResponse
-	(*LogoutRequest)(nil),      // 2: sermon.web.v1.LogoutRequest
-	(*LogoutResponse)(nil),     // 3: sermon.web.v1.LogoutResponse
-	(*GetSessionRequest)(nil),  // 4: sermon.web.v1.GetSessionRequest
-	(*GetSessionResponse)(nil), // 5: sermon.web.v1.GetSessionResponse
-	(*Session)(nil),            // 6: sermon.web.v1.Session
-	(*Organization)(nil),       // 7: sermon.web.v1.Organization
+	(*LoginRequest)(nil),               // 0: sermon.web.v1.LoginRequest
+	(*LoginResponse)(nil),              // 1: sermon.web.v1.LoginResponse
+	(*LogoutRequest)(nil),              // 2: sermon.web.v1.LogoutRequest
+	(*LogoutResponse)(nil),             // 3: sermon.web.v1.LogoutResponse
+	(*GetSessionRequest)(nil),          // 4: sermon.web.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),         // 5: sermon.web.v1.GetSessionResponse
+	(*SwitchOrganizationRequest)(nil),  // 6: sermon.web.v1.SwitchOrganizationRequest
+	(*SwitchOrganizationResponse)(nil), // 7: sermon.web.v1.SwitchOrganizationResponse
+	(*Session)(nil),                    // 8: sermon.web.v1.Session
+	(*Organization)(nil),               // 9: sermon.web.v1.Organization
 }
 var file_sermon_web_v1_auth_proto_depIdxs = []int32{
-	6, // 0: sermon.web.v1.LoginResponse.session:type_name -> sermon.web.v1.Session
-	6, // 1: sermon.web.v1.GetSessionResponse.session:type_name -> sermon.web.v1.Session
-	7, // 2: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
-	0, // 3: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
-	2, // 4: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
-	4, // 5: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
-	1, // 6: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
-	3, // 7: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
-	5, // 8: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	8, // 0: sermon.web.v1.LoginResponse.session:type_name -> sermon.web.v1.Session
+	8, // 1: sermon.web.v1.GetSessionResponse.session:type_name -> sermon.web.v1.Session
+	8, // 2: sermon.web.v1.SwitchOrganizationResponse.session:type_name -> sermon.web.v1.Session
+	9, // 3: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
+	0, // 4: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
+	2, // 5: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
+	4, // 6: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
+	6, // 7: sermon.web.v1.AuthService.SwitchOrganization:input_type -> sermon.web.v1.SwitchOrganizationRequest
+	1, // 8: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
+	3, // 9: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
+	5, // 10: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
+	7, // 11: sermon.web.v1.AuthService.SwitchOrganization:output_type -> sermon.web.v1.SwitchOrganizationResponse
+	8, // [8:12] is the sub-list for method output_type
+	4, // [4:8] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_auth_proto_init() }
@@ -501,7 +603,7 @@ func file_sermon_web_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_auth_proto_rawDesc), len(file_sermon_web_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

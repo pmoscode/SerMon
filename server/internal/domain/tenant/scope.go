@@ -60,6 +60,9 @@ func (s Scope) OrgID() OrgID { return s.org }
 // AllGroups reports whether the scope covers every node group of the organization.
 func (s Scope) AllGroups() bool { return s.Valid() && s.allGroups }
 
+// Groups returns the explicitly granted node groups (empty for ForAllGroups; check AllGroups first).
+func (s Scope) Groups() []GroupID { return slices.Clone(s.groups) }
+
 // AllowsGroup reports whether the scope grants access to the node group.
 func (s Scope) AllowsGroup(group GroupID) bool {
 	if !s.Valid() {

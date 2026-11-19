@@ -93,7 +93,7 @@ func TestNodeGroups_AreIsolatedAndWriteProtected(t *testing.T) {
 	}
 
 	err := db.InTenant(ctx, scopeFor(t, orgB), func(q *sqlcdb.Queries) error {
-		groups, err := q.ListNodeGroups(ctx)
+		groups, err := q.ListNodeGroups(ctx, sqlcdb.ListNodeGroupsParams{AllGroups: true})
 		if err != nil {
 			return err
 		}

@@ -395,6 +395,10 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
 - **Sessions:** serverseitig in PG, Cookie `__Host-sermon_session` (Secure, HttpOnly, SameSite=Lax). Idle-Timeout 30
   min, absolut 12 h. **Step-up-Authentifizierung** (erneute 2FA) für sensible Aktionen wie Updates, Reboot oder
   Rechteänderungen.
+- **Step-up** gilt 15 min. Rechteänderungen (Rollen vergeben oder entziehen, Mitglied entfernen, Gruppe löschen) verlangen ihn.
+  Jede Org behält mindestens einen Admin für alle Gruppen, den letzten kann niemand entfernen.
+- **Org-Wechsel** stellt ein neues Session-Cookie aus. Absoluter Timeout und Step-up-Zeitpunkt bleiben erhalten:
+  Ein Wechsel verlängert keine Session und gilt nicht als erneute Anmeldung.
 - **Brute-Force-Schutz:** Rate-Limit pro IP und pro Account, progressive Verzögerung, Benachrichtigung bei verdächtigen
   Logins.
 
@@ -1162,6 +1166,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | O10 | Mobile                       | Push-Benachrichtigungen reichen?                                                 | ntfy/Pushover/Telegram decken das für v1 ab                                                |
 | O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |
 | O12 | Wachstum über ca. 200 Nodes  | TimescaleDB stößt bei 1-s-Auflösung an Grenzen                                   | `MetricStore` auf VictoriaMetrics umstellen; die Domänenlogik bleibt unverändert (ADR 0001) |
+| O13 | Mitglieder hinzufügen        | Einladung per Mail-Link oder Anlegen mit Startpasswort? Ist die E-Mail schon instanzweit vergeben, darf ein Org-Admin das nicht erfahren (User-Enumeration) | Einladung mit einmaligem Token (Hash gespeichert, Gültigkeit 72 h) und einheitlicher Antwort |
 
 ---
 

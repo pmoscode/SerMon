@@ -95,3 +95,19 @@ func TestIDs_PrintAsCanonicalUUID(t *testing.T) {
 		t.Errorf("GroupID.String() = %q", got)
 	}
 }
+
+func TestScope_GroupsReturnsACopy(t *testing.T) {
+	org := tenant.OrgID(uuid.New())
+	g := tenant.GroupID(uuid.New())
+	s, _ := tenant.ForGroups(org, g)
+
+	groups := s.Groups()
+	groups[0] = tenant.GroupID{}
+	if got := s.Groups(); len(got) != 1 || got[0] != g {
+		t.Errorf("Groups() = %v, want [%v] (scope must stay immutable)", got, g)
+	}
+	all, _ := tenant.ForAllGroups(org)
+	if len(all.Groups()) != 0 {
+		t.Error("ForAllGroups has no explicit group list")
+	}
+}

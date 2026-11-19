@@ -11,7 +11,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/auth.proto.
  */
 export const file_sermon_web_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiRwoMTG9naW5SZXF1ZXN0EhkKBWVtYWlsGAEgASgJQgq6SAdyBRABGMACEhwKCHBhc3N3b3JkGAIgASgJQgq6SAdyBRABKIAIIjgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIPCg1Mb2dvdXRSZXF1ZXN0IhAKDkxvZ291dFJlc3BvbnNlIhMKEUdldFNlc3Npb25SZXF1ZXN0Ij0KEkdldFNlc3Npb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIpMBCgdTZXNzaW9uEg8KB3VzZXJfaWQYASABKAkSDQoFZW1haWwYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEh4KFmFjdGl2ZV9vcmdhbml6YXRpb25faWQYBCABKAkSMgoNb3JnYW5pemF0aW9ucxgFIAMoCzIbLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uIigKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJMvABCgtBdXRoU2VydmljZRJCCgVMb2dpbhIbLnNlcm1vbi53ZWIudjEuTG9naW5SZXF1ZXN0Ghwuc2VybW9uLndlYi52MS5Mb2dpblJlc3BvbnNlEkUKBkxvZ291dBIcLnNlcm1vbi53ZWIudjEuTG9nb3V0UmVxdWVzdBodLnNlcm1vbi53ZWIudjEuTG9nb3V0UmVzcG9uc2USVgoKR2V0U2Vzc2lvbhIgLnNlcm1vbi53ZWIudjEuR2V0U2Vzc2lvblJlcXVlc3QaIS5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXNwb25zZSIDkAIBQrgBChFjb20uc2VybW9uLndlYi52MUIJQXV0aFByb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_buf_validate_validate]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiRwoMTG9naW5SZXF1ZXN0EhkKBWVtYWlsGAEgASgJQgq6SAdyBRABGMACEhwKCHBhc3N3b3JkGAIgASgJQgq6SAdyBRABKIAIIjgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIPCg1Mb2dvdXRSZXF1ZXN0IhAKDkxvZ291dFJlc3BvbnNlIhMKEUdldFNlc3Npb25SZXF1ZXN0Ij0KEkdldFNlc3Npb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIj4KGVN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QSIQoPb3JnYW5pemF0aW9uX2lkGAEgASgJQgi6SAVyA7ABASJFChpTd2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIpMBCgdTZXNzaW9uEg8KB3VzZXJfaWQYASABKAkSDQoFZW1haWwYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEh4KFmFjdGl2ZV9vcmdhbml6YXRpb25faWQYBCABKAkSMgoNb3JnYW5pemF0aW9ucxgFIAMoCzIbLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uIigKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJMtsCCgtBdXRoU2VydmljZRJCCgVMb2dpbhIbLnNlcm1vbi53ZWIudjEuTG9naW5SZXF1ZXN0Ghwuc2VybW9uLndlYi52MS5Mb2dpblJlc3BvbnNlEkUKBkxvZ291dBIcLnNlcm1vbi53ZWIudjEuTG9nb3V0UmVxdWVzdBodLnNlcm1vbi53ZWIudjEuTG9nb3V0UmVzcG9uc2USVgoKR2V0U2Vzc2lvbhIgLnNlcm1vbi53ZWIudjEuR2V0U2Vzc2lvblJlcXVlc3QaIS5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXNwb25zZSIDkAIBEmkKElN3aXRjaE9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuU3dpdGNoT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuU3dpdGNoT3JnYW5pemF0aW9uUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglBdXRoUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_buf_validate_validate]);
 
 /**
  * LoginRequest carries the credentials.
@@ -129,6 +129,48 @@ export const GetSessionResponseSchema: GenMessage<GetSessionResponse> = /*@__PUR
   messageDesc(file_sermon_web_v1_auth, 5);
 
 /**
+ * SwitchOrganizationRequest names the target organization.
+ *
+ * @generated from message sermon.web.v1.SwitchOrganizationRequest
+ */
+export type SwitchOrganizationRequest = Message<"sermon.web.v1.SwitchOrganizationRequest"> & {
+  /**
+   * organization_id is the UUID of an organization the user is a member of.
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.SwitchOrganizationRequest.
+ * Use `create(SwitchOrganizationRequestSchema)` to create a new message.
+ */
+export const SwitchOrganizationRequestSchema: GenMessage<SwitchOrganizationRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 6);
+
+/**
+ * SwitchOrganizationResponse describes the moved session.
+ *
+ * @generated from message sermon.web.v1.SwitchOrganizationResponse
+ */
+export type SwitchOrganizationResponse = Message<"sermon.web.v1.SwitchOrganizationResponse"> & {
+  /**
+   * session is the session in the new organization.
+   *
+   * @generated from field: sermon.web.v1.Session session = 1;
+   */
+  session?: Session | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.SwitchOrganizationResponse.
+ * Use `create(SwitchOrganizationResponseSchema)` to create a new message.
+ */
+export const SwitchOrganizationResponseSchema: GenMessage<SwitchOrganizationResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 7);
+
+/**
  * Session is the view of a login session for the UI.
  *
  * @generated from message sermon.web.v1.Session
@@ -175,7 +217,7 @@ export type Session = Message<"sermon.web.v1.Session"> & {
  * Use `create(SessionSchema)` to create a new message.
  */
 export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 6);
+  messageDesc(file_sermon_web_v1_auth, 8);
 
 /**
  * Organization is an organization the user belongs to.
@@ -203,7 +245,7 @@ export type Organization = Message<"sermon.web.v1.Organization"> & {
  * Use `create(OrganizationSchema)` to create a new message.
  */
 export const OrganizationSchema: GenMessage<Organization> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 7);
+  messageDesc(file_sermon_web_v1_auth, 9);
 
 /**
  * AuthService handles local login sessions (KONZEPT §7). The session token travels only in the
@@ -243,6 +285,18 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof GetSessionRequestSchema;
     output: typeof GetSessionResponseSchema;
+  },
+  /**
+   * SwitchOrganization moves the session to another organization of the user under a new
+   * session cookie. NOT_FOUND if the user is not a member. Timeouts and the time of the last
+   * re-authentication are kept.
+   *
+   * @generated from rpc sermon.web.v1.AuthService.SwitchOrganization
+   */
+  switchOrganization: {
+    methodKind: "unary";
+    input: typeof SwitchOrganizationRequestSchema;
+    output: typeof SwitchOrganizationResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_auth, 0);

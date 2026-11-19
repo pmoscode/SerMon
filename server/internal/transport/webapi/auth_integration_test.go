@@ -22,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
+	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -69,11 +70,44 @@ func newStack(t *testing.T, loginLimit int) stack {
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
-		Auth:          webapi.NewAuthHandler(login, sessions, creds, slog.New(slog.DiscardHandler)),
-		System:        webapi.NewSystemHandler("test"),
+		Auth:   webapi.NewAuthHandler(login, sessions, creds, slog.New(slog.DiscardHandler)),
+		System: webapi.NewSystemHandler("test"),
+		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
+			slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg)), slog.New(slog.DiscardHandler)),
 	})
 	return stack{server: srv, origin: srv.URL}
+}
+
+// ownerSQL runs statements on one owner connection (set_config persists between them).
+func ownerSQL(t *testing.T, statements ...string) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	for _, sql := range statements {
+		if _, err := conn.Exec(ctx, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+}
+
+// seedLogin creates (or resets) a user with userPassword who is a member of the organizations.
+func seedLogin(t *testing.T, id, email string, orgs ...string) {
+	t.Helper()
+	h, _ := password.NewHasher(password.Params{Memory: 8 * 1024, Time: 1, Threads: 1, SaltLength: 16, KeyLength: 32})
+	hash, _ := h.Hash(userPassword)
+	stmts := []string{
+		"INSERT INTO users (id, email, display_name) VALUES ('" + id + "', '" + email + "', 'Test') ON CONFLICT DO NOTHING",
+		"INSERT INTO user_credentials (user_id, password_hash) VALUES ('" + id + "', '" + hash + "') ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, failed_attempts = 0, locked_until = NULL",
+	}
+	for _, org := range orgs {
+		stmts = append(stmts, "INSERT INTO memberships (org_id, user_id) VALUES ('"+org+"', '"+id+"') ON CONFLICT DO NOTHING")
+	}
+	ownerSQL(t, stmts...)
 }
 
 func seedUser(t *testing.T, ownerDSN string) {

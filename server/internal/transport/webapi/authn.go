@@ -34,7 +34,15 @@ func NewAuthenticator(sessions *session.Manager, principals PrincipalLoader, log
 	return &Authenticator{sessions: sessions, principals: principals, logger: logger}
 }
 
-type principalKey struct{}
+type (
+	principalKey struct{}
+	sessionKey   struct{}
+)
+
+func sessionFrom(ctx context.Context) (session.Session, bool) {
+	s, ok := ctx.Value(sessionKey{}).(session.Session)
+	return s, ok
+}
 
 // PrincipalFrom returns the principal set by the Authenticator.
 func PrincipalFrom(ctx context.Context) (authz.Principal, bool) {
@@ -89,5 +97,5 @@ func (a *Authenticator) authenticate(ctx context.Context, cookieHeader string) (
 		// A database outage must not look like a logout to the UI.
 		return ctx, internalError(ctx, a.logger, "load principal", err)
 	}
-	return context.WithValue(ctx, principalKey{}, p), nil
+	return context.WithValue(context.WithValue(ctx, principalKey{}, p), sessionKey{}, s), nil
 }

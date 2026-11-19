@@ -295,7 +295,20 @@ flowchart LR
 > - Testgerüst `TestTenantIsolation_EveryProcedureIsCovered`: jede Web-RPC braucht einen Cross-Tenant-Test oder eine
 >   begründete Ausnahme.
 >
-> Offen (Teil b): CRUD-RPCs für Gruppen, Mitglieder und Rollen mit Audit-Einträgen, Org-Switch, Cross-Tenant-Fälle.
+>
+> Teil b erledigt (Verwaltung in der Org):
+> - `AccessService`: Gruppen anlegen, umbenennen, löschen und auflisten; Mitglieder mit Rollen auflisten; Rollen
+>   vergeben und entziehen; Mitglied entfernen (beendet dessen Sessions in der Org); Audit-Log seitenweise.
+> - Jede Änderung schreibt ihren Audit-Eintrag in derselben Transaktion; fehlgeschlagene Änderungen hinterlassen keinen.
+> - Rechteänderungen verlangen einen Step-up (15 min). Der letzte Admin für alle Gruppen lässt sich nicht entfernen,
+>   auch nicht bei gleichzeitigen Änderungen (Advisory-Lock pro Org).
+> - `AuthService.SwitchOrganization`: neues Cookie, Timeouts und Step-up bleiben erhalten.
+> - Cross-Tenant-Test über HTTPS für alle neuen RPCs: Ein Admin von Org B bekommt für Objekte von Org A `NotFound`
+>   oder `PermissionDenied`, Listen enthalten keine fremden Daten, Org A bleibt unverändert.
+>
+> Offen (Teil c):
+> - Orgs anlegen, umbenennen und löschen durch den Superadmin; braucht den Superadmin aus M1-05.
+> - Neue Mitglieder hinzufügen (Einladung oder Anlegen); Entscheidung offen, siehe O13.
 - **Ziel:** CRUD-Use-Cases und Connect-RPCs für Orgs, Node-Gruppen, Mitgliedschaften und Rollen-Bindungen; RLS-Policies; Audit-Log-Tabelle (nur anfügen, Hash-Kette); Org-Switch.
   - **Testgerüst für Mandantentrennung:** ein generischer Test, der **jede** Web-RPC mit einem User aus fremder Org aufruft und `NotFound` oder `PermissionDenied` erwartet. Neue RPCs ohne Eintrag lassen den Test fehlschlagen.
 - **Abhängig von:** M1-01, M1-02

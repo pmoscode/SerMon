@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
@@ -95,6 +97,47 @@ func (h *AuthHandler) GetSession(ctx context.Context, req *connect.Request[webv1
 		return nil, h.internal(ctx, "session view", err)
 	}
 	return connect.NewResponse(&webv1.GetSessionResponse{Session: view}), nil
+}
+
+// ErrNotAMember means the user does not belong to the requested organization.
+var ErrNotAMember = errors.New("organization not found")
+
+// SwitchOrganization moves the session to another organization of the user.
+func (h *AuthHandler) SwitchOrganization(ctx context.Context, req *connect.Request[webv1.SwitchOrganizationRequest]) (*connect.Response[webv1.SwitchOrganizationResponse], error) {
+	token, ok := tokenFrom(req.Header())
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	}
+	current, err := h.sessions.Validate(ctx, token)
+	if errors.Is(err, session.ErrInvalid) {
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	}
+	if err != nil {
+		return nil, h.internal(ctx, "validate session", err)
+	}
+	target, err := uuid.Parse(req.Msg.GetOrganizationId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errInvalidID)
+	}
+	orgs, err := h.identities.Organizations(ctx, current.User)
+	if err != nil {
+		return nil, h.internal(ctx, "load organizations", err)
+	}
+	if !slices.ContainsFunc(orgs, func(o auth.Organization) bool { return o.ID == tenant.OrgID(target) }) {
+		return nil, connect.NewError(connect.CodeNotFound, ErrNotAMember)
+	}
+	newToken, moved, err := h.sessions.SwitchOrganization(ctx, token, tenant.OrgID(target))
+	if err != nil {
+		return nil, h.internal(ctx, "switch organization", err)
+	}
+	view, err := h.view(ctx, moved)
+	if err != nil {
+		return nil, h.internal(ctx, "session view", err)
+	}
+	res := connect.NewResponse(&webv1.SwitchOrganizationResponse{Session: view})
+	remaining := time.Until(moved.CreatedAt.Add(session.AbsoluteTimeout))
+	res.Header().Add("Set-Cookie", sessionCookie(newToken, max(remaining, time.Second)).String())
+	return res, nil
 }
 
 func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Session, error) {

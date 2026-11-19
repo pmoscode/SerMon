@@ -323,3 +323,35 @@ func TestManager_StoreErrorsNeverYieldAValidSession(t *testing.T) {
 		t.Errorf("RevokeAllForUser: %v", err)
 	}
 }
+
+func TestSwitchOrganization_KeepsTimeoutsAndStepUpAndRotatesTheToken(t *testing.T) {
+	m, store, c := manager(t)
+	orgB := tenant.OrgID(uuid.MustParse("0193f5a0-0000-7000-8000-00000000000b"))
+	oldToken, _, _ := m.Create(context.Background(), alice, orgA)
+	c.advance(10 * time.Minute)
+
+	newToken, s, err := m.SwitchOrganization(context.Background(), oldToken, orgB)
+	if err != nil {
+		t.Fatalf("SwitchOrganization() error = %v", err)
+	}
+	if newToken == oldToken || s.Org != orgB || s.User != alice {
+		t.Errorf("session = %+v, token rotated = %v", s, newToken != oldToken)
+	}
+	// Switching must neither extend the absolute timeout nor count as a re-authentication.
+	if !s.CreatedAt.Equal(t0) || !s.StepUpAt.Equal(t0) {
+		t.Errorf("CreatedAt = %v, StepUpAt = %v, want both %v", s.CreatedAt, s.StepUpAt, t0)
+	}
+	if _, err := m.Validate(context.Background(), oldToken); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("old token still valid: %v", err)
+	}
+	if len(store.byHash) != 1 {
+		t.Errorf("%d sessions stored, want 1", len(store.byHash))
+	}
+}
+
+func TestSwitchOrganization_RejectsInvalidSessions(t *testing.T) {
+	m, _, _ := manager(t)
+	if _, _, err := m.SwitchOrganization(context.Background(), "unknown", orgA); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("error = %v, want ErrInvalid", err)
+	}
+}

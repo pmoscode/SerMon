@@ -39,6 +39,9 @@ const (
 	AuthServiceLogoutProcedure = "/sermon.web.v1.AuthService/Logout"
 	// AuthServiceGetSessionProcedure is the fully-qualified name of the AuthService's GetSession RPC.
 	AuthServiceGetSessionProcedure = "/sermon.web.v1.AuthService/GetSession"
+	// AuthServiceSwitchOrganizationProcedure is the fully-qualified name of the AuthService's
+	// SwitchOrganization RPC.
+	AuthServiceSwitchOrganizationProcedure = "/sermon.web.v1.AuthService/SwitchOrganization"
 )
 
 // AuthServiceClient is a client for the sermon.web.v1.AuthService service.
@@ -51,6 +54,10 @@ type AuthServiceClient interface {
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	// GetSession describes the current session; UNAUTHENTICATED without a valid session.
 	GetSession(context.Context, *connect.Request[v1.GetSessionRequest]) (*connect.Response[v1.GetSessionResponse], error)
+	// SwitchOrganization moves the session to another organization of the user under a new
+	// session cookie. NOT_FOUND if the user is not a member. Timeouts and the time of the last
+	// re-authentication are kept.
+	SwitchOrganization(context.Context, *connect.Request[v1.SwitchOrganizationRequest]) (*connect.Response[v1.SwitchOrganizationResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the sermon.web.v1.AuthService service. By default,
@@ -83,14 +90,21 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 			connect.WithClientOptions(opts...),
 		),
+		switchOrganization: connect.NewClient[v1.SwitchOrganizationRequest, v1.SwitchOrganizationResponse](
+			httpClient,
+			baseURL+AuthServiceSwitchOrganizationProcedure,
+			connect.WithSchema(authServiceMethods.ByName("SwitchOrganization")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login      *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	logout     *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	getSession *connect.Client[v1.GetSessionRequest, v1.GetSessionResponse]
+	login              *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	logout             *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	getSession         *connect.Client[v1.GetSessionRequest, v1.GetSessionResponse]
+	switchOrganization *connect.Client[v1.SwitchOrganizationRequest, v1.SwitchOrganizationResponse]
 }
 
 // Login calls sermon.web.v1.AuthService.Login.
@@ -108,6 +122,11 @@ func (c *authServiceClient) GetSession(ctx context.Context, req *connect.Request
 	return c.getSession.CallUnary(ctx, req)
 }
 
+// SwitchOrganization calls sermon.web.v1.AuthService.SwitchOrganization.
+func (c *authServiceClient) SwitchOrganization(ctx context.Context, req *connect.Request[v1.SwitchOrganizationRequest]) (*connect.Response[v1.SwitchOrganizationResponse], error) {
+	return c.switchOrganization.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the sermon.web.v1.AuthService service.
 type AuthServiceHandler interface {
 	// Login checks e-mail and password and sets the session cookie. All failures return
@@ -118,6 +137,10 @@ type AuthServiceHandler interface {
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	// GetSession describes the current session; UNAUTHENTICATED without a valid session.
 	GetSession(context.Context, *connect.Request[v1.GetSessionRequest]) (*connect.Response[v1.GetSessionResponse], error)
+	// SwitchOrganization moves the session to another organization of the user under a new
+	// session cookie. NOT_FOUND if the user is not a member. Timeouts and the time of the last
+	// re-authentication are kept.
+	SwitchOrganization(context.Context, *connect.Request[v1.SwitchOrganizationRequest]) (*connect.Response[v1.SwitchOrganizationResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -146,6 +169,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceSwitchOrganizationHandler := connect.NewUnaryHandler(
+		AuthServiceSwitchOrganizationProcedure,
+		svc.SwitchOrganization,
+		connect.WithSchema(authServiceMethods.ByName("SwitchOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -154,6 +183,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceLogoutHandler.ServeHTTP(w, r)
 		case AuthServiceGetSessionProcedure:
 			authServiceGetSessionHandler.ServeHTTP(w, r)
+		case AuthServiceSwitchOrganizationProcedure:
+			authServiceSwitchOrganizationHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -173,4 +204,8 @@ func (UnimplementedAuthServiceHandler) Logout(context.Context, *connect.Request[
 
 func (UnimplementedAuthServiceHandler) GetSession(context.Context, *connect.Request[v1.GetSessionRequest]) (*connect.Response[v1.GetSessionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.GetSession is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) SwitchOrganization(context.Context, *connect.Request[v1.SwitchOrganizationRequest]) (*connect.Response[v1.SwitchOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.SwitchOrganization is not implemented"))
 }

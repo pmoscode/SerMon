@@ -1,0 +1,233 @@
+//go:build integration
+
+package webapi_test
+
+import (
+	"context"
+	"errors"
+	"net/http/cookiejar"
+	"sort"
+	"strings"
+	"testing"
+
+	"connectrpc.com/connect"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
+	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
+	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
+)
+
+// Fixtures of the access tests (Org "Alpha" and Org "Beta").
+const (
+	orgAlpha  = "0193f5a0-0000-7000-8000-0000000001aa"
+	orgBeta   = "0193f5a0-0000-7000-8000-0000000001bb"
+	annID     = "0193f5a0-0000-7000-8000-0000000001a1" // admin of Alpha
+	miaID     = "0193f5a0-0000-7000-8000-0000000001a2" // member of Alpha (viewer on groupAlpha)
+	beaID     = "0193f5a0-0000-7000-8000-0000000001b1" // admin of Beta
+	kaiID     = "0193f5a0-0000-7000-8000-0000000001c1" // member of both, no roles in Beta
+	groupAl   = "0193f5a0-0000-7000-8000-0000000001a9"
+	bindingAl = "0193f5a0-0000-7000-8000-0000000001a8"
+)
+
+func seedAccessFixtures(t *testing.T) {
+	t.Helper()
+	ownerSQL(t,
+		"INSERT INTO organizations (id, name) VALUES ('"+orgAlpha+"', 'Alpha'), ('"+orgBeta+"', 'Beta') ON CONFLICT DO NOTHING")
+	seedLogin(t, annID, "ann@example.org", orgAlpha)
+	seedLogin(t, miaID, "mia@example.org", orgAlpha)
+	seedLogin(t, beaID, "bea@example.org", orgBeta)
+	seedLogin(t, kaiID, "kai@example.org", orgAlpha, orgBeta)
+	ownerSQL(t,
+		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
+		"INSERT INTO node_groups (id, org_id, name) VALUES ('"+groupAl+"', '"+orgAlpha+"', 'alpha-web') ON CONFLICT DO NOTHING",
+		"DELETE FROM role_bindings WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgAlpha+"', '"+annID+"', 'admin')",
+		"INSERT INTO role_bindings (id, org_id, user_id, group_id, role) VALUES ('"+bindingAl+"', '"+orgAlpha+"', '"+miaID+"', '"+groupAl+"', 'viewer')",
+		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgAlpha+"', '"+kaiID+"', 'viewer')",
+		"INSERT INTO audit_log (org_id, seq, action, target, details, prev_hash, hash) VALUES ('"+orgAlpha+"', 0, 'seed', 'by-a', '{}', '\\x', '\\x')",
+		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
+		"DELETE FROM role_bindings WHERE org_id = '"+orgBeta+"'",
+		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgBeta+"', '"+beaID+"', 'admin')",
+	)
+}
+
+type loggedIn struct {
+	auth   webv1connect.AuthServiceClient
+	access webv1connect.AccessServiceClient
+	system webv1connect.SystemServiceClient
+	jar    *cookiejar.Jar
+}
+
+func login(t *testing.T, s stack, email string) loggedIn {
+	t.Helper()
+	jar, _ := cookiejar.New(nil)
+	hc := s.server.Client()
+	hc.Jar = jar
+	hc.Transport = originTransport{next: hc.Transport, origin: s.origin}
+	l := loggedIn{
+		auth:   webv1connect.NewAuthServiceClient(hc, s.server.URL),
+		access: webv1connect.NewAccessServiceClient(hc, s.server.URL),
+		system: webv1connect.NewSystemServiceClient(hc, s.server.URL),
+		jar:    jar,
+	}
+	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
+		t.Fatalf("login %s: %v", email, err)
+	}
+	return l
+}
+
+func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	bea := login(t, s, "bea@example.org")
+	env := isolationEnv{auth: bea.auth, access: bea.access, orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl}
+	ctx := context.Background()
+
+	procedures := make([]string, 0, len(tenantIsolationCases))
+	for p := range tenantIsolationCases {
+		procedures = append(procedures, p)
+	}
+	sort.Strings(procedures)
+	for _, p := range procedures {
+		c := tenantIsolationCases[p]
+		err := c.run(ctx, env)
+		code := connect.CodeOf(err)
+		switch {
+		case errors.Is(err, errLeak):
+			t.Errorf("%s leaks data of another organization", p)
+		case c.list && err != nil:
+			t.Errorf("%s: %v", p, err)
+		case !c.list && code != connect.CodeNotFound && code != connect.CodePermissionDenied:
+			t.Errorf("%s with foreign IDs: %v, want NOT_FOUND or PERMISSION_DENIED", p, err)
+		}
+	}
+
+	// Org Alpha is unchanged.
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := conn.Exec(ctx, "SELECT set_config('sermon.org_id', $1, false)", orgAlpha); err != nil {
+		t.Fatal(err)
+	}
+	var name string
+	var bindings, members, foreignGroups int
+	if err := conn.QueryRow(ctx, "SELECT name FROM node_groups WHERE id = $1", groupAl).Scan(&name); err != nil || name != "alpha-web" {
+		t.Errorf("group of Alpha = %q, %v", name, err)
+	}
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM role_bindings WHERE id = $1", bindingAl).Scan(&bindings)
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE user_id = $1", miaID).Scan(&members)
+	// The owner is a superuser in the test container (RLS does not apply): filter explicitly.
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM node_groups WHERE org_id = $1 AND name LIKE 'created-by-b%'", orgAlpha).Scan(&foreignGroups)
+	if bindings != 1 || members != 1 || foreignGroups != 0 {
+		t.Errorf("Alpha changed: binding %d, membership %d, groups created by Beta %d", bindings, members, foreignGroups)
+	}
+}
+
+func TestAccessAPI_AdminManagesGroupsAndRolesWithAudit(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ctx := context.Background()
+	name := "db-" + uuid.NewString()[:8]
+
+	created, err := ann.access.CreateNodeGroup(ctx, connect.NewRequest(&webv1.CreateNodeGroupRequest{Name: name}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := created.Msg.GetGroup().GetId()
+	if _, err := ann.access.CreateNodeGroup(ctx, connect.NewRequest(&webv1.CreateNodeGroupRequest{Name: name})); connect.CodeOf(err) != connect.CodeAlreadyExists {
+		t.Errorf("duplicate: %v, want ALREADY_EXISTS", err)
+	}
+	granted, err := ann.access.GrantRole(ctx, connect.NewRequest(&webv1.GrantRoleRequest{UserId: miaID, GroupId: group, Role: webv1.Role_ROLE_OPERATOR}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	members, err := ann.access.ListMembers(ctx, connect.NewRequest(&webv1.ListMembersRequest{}))
+	if err != nil || !strings.Contains(members.Msg.String(), granted.Msg.GetBindingId()) {
+		t.Errorf("ListMembers() lacks the new binding: %v", err)
+	}
+	if _, err := ann.access.RevokeRole(ctx, connect.NewRequest(&webv1.RevokeRoleRequest{BindingId: granted.Msg.GetBindingId()})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ann.access.DeleteNodeGroup(ctx, connect.NewRequest(&webv1.DeleteNodeGroupRequest{GroupId: group})); err != nil {
+		t.Fatal(err)
+	}
+
+	audit, err := ann.access.ListAuditLog(ctx, connect.NewRequest(&webv1.ListAuditLogRequest{PageSize: 4}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actions []string
+	for _, e := range audit.Msg.GetEntries() {
+		actions = append(actions, e.GetAction())
+		if e.GetActorId() != annID {
+			t.Errorf("entry %d actor = %q, want ann", e.GetSeq(), e.GetActorId())
+		}
+	}
+	if got, want := strings.Join(actions, ","), "group.delete,role.revoke,role.grant,group.create"; got != want {
+		t.Errorf("audit = %s, want %s", got, want)
+	}
+
+	// The last org admin cannot remove themselves.
+	if _, err := ann.access.RemoveMember(ctx, connect.NewRequest(&webv1.RemoveMemberRequest{UserId: annID})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("remove last admin: %v, want FAILED_PRECONDITION", err)
+	}
+}
+
+func TestAccessAPI_RoleChangesNeedARecentLogin(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ownerSQL(t, "UPDATE sessions SET step_up_at = now() - interval '1 hour' WHERE user_id = '"+annID+"'")
+
+	_, err := ann.access.GrantRole(context.Background(), connect.NewRequest(&webv1.GrantRoleRequest{UserId: miaID, Role: webv1.Role_ROLE_VIEWER}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("GrantRole with an old login: %v, want FAILED_PRECONDITION", err)
+	}
+}
+
+func TestAccessAPI_ViewersCannotManage(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	mia := login(t, s, "mia@example.org")
+	ctx := context.Background()
+
+	if _, err := mia.access.CreateNodeGroup(ctx, connect.NewRequest(&webv1.CreateNodeGroupRequest{Name: "x"})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("CreateNodeGroup by a viewer: %v, want PERMISSION_DENIED", err)
+	}
+	groups, err := mia.access.ListNodeGroups(ctx, connect.NewRequest(&webv1.ListNodeGroupsRequest{}))
+	if err != nil || len(groups.Msg.GetGroups()) != 1 || groups.Msg.GetGroups()[0].GetId() != groupAl {
+		t.Errorf("ListNodeGroups by a group viewer = %v, %v; want only her group", groups, err)
+	}
+}
+
+func TestAccessAPI_SwitchOrganizationChangesTheActiveOrganization(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	kai := login(t, s, "kai@example.org")
+	ctx := context.Background()
+
+	res, err := kai.auth.SwitchOrganization(ctx, connect.NewRequest(&webv1.SwitchOrganizationRequest{OrganizationId: orgBeta}))
+	if err != nil || res.Msg.GetSession().GetActiveOrganizationId() != orgBeta {
+		t.Fatalf("SwitchOrganization(Beta) = %v, %v", res, err)
+	}
+	if !strings.Contains(res.Header().Get("Set-Cookie"), webapi.SessionCookie+"=") {
+		t.Error("switching must issue a new session cookie")
+	}
+	// In Beta kai has no role: no groups visible, management denied.
+	if groups, err := kai.access.ListNodeGroups(ctx, connect.NewRequest(&webv1.ListNodeGroupsRequest{})); err != nil || len(groups.Msg.GetGroups()) != 0 {
+		t.Errorf("groups in Beta = %v, %v", groups, err)
+	}
+	back, err := kai.auth.SwitchOrganization(ctx, connect.NewRequest(&webv1.SwitchOrganizationRequest{OrganizationId: orgAlpha}))
+	if err != nil || back.Msg.GetSession().GetActiveOrganizationId() != orgAlpha {
+		t.Errorf("SwitchOrganization(Alpha) = %v, %v", back, err)
+	}
+	if _, err := kai.auth.SwitchOrganization(ctx, connect.NewRequest(&webv1.SwitchOrganizationRequest{OrganizationId: uuid.NewString()})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("switch to an unknown organization: %v, want NOT_FOUND", err)
+	}
+}

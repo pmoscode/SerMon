@@ -315,7 +315,20 @@ flowchart LR
 - **Abhängig von:** M1-01, M1-02
 - **Abnahme:** Testgerüst läuft in CI; Audit-Einträge für alle Änderungen an Rechten.
 
-#### ☐ M1-05 – Erstinstallation `sermon-server init` · S · M 🔒
+#### ☑ M1-05 – Erstinstallation `sermon-server init` · S · M 🔒
+> Erledigt:
+> - `sermon-server init --master-keys-file PFAD`: Master-Key-Datei (0600, nie überschrieben), Migrationen, Agent-CA,
+>   Setup-Token auf stdout. Wiederholbar, bis die Einrichtung abgeschlossen ist; danach Exit-Code 1 ohne Änderung.
+> - Der Server braucht mit DB `SERMON_MASTER_KEYS_FILE`, lädt oder erzeugt beim Start die Agent-CA und schreibt
+>   ein frisches Setup-Token ins Log, solange die Einrichtung offen ist.
+> - Setup-Token: 256 Bit, nur als SHA-256 gespeichert, 30 min gültig, ersetzt das vorige, genau einmal einlösbar
+>   (auch bei gleichzeitigen Versuchen).
+> - `SetupService` (`GetSetupStatus`, `CompleteSetup` mit Rate-Limit): legt Superadmin, erste Org, Mitgliedschaft
+>   und Admin-Rolle für alle Gruppen in einer Transaktion an, mit Audit-Eintrag. Der Principal kennt jetzt `Superadmin`.
+> - End-to-End-Test gegen echte DB: `init` zweimal, Serverstart, Token aus dem Log, Einrichtung über HTTP, Login,
+>   danach verweigert `init`.
+>
+> Die Seite des Setup-Assistenten entsteht mit M1-28 (App-Shell und Auth-Seiten); die API steht.
 - **Ziel:** Erzeugt Master-Key, Agent-CA (über M1-07) und den ersten Superadmin über ein einmaliges Setup-Token (30 min gültig, wird im Log ausgegeben); Setup-Assistent in der UI.
 - **Abhängig von:** M1-02, M1-06, M1-07
 - **Tests zuerst:** `init` ist idempotent und verweigert eine zweite Ausführung; das Token verfällt.
@@ -497,7 +510,7 @@ flowchart LR
 ### 4.6 Web-UI
 
 #### ☐ M1-28 – App-Shell und Auth-Seiten · W · L
-- **Ziel:** Layout mit Navigation, Light/Dark/System, Org-Switcher, Platzhalter für die Command-Palette; Seiten für Login, TOTP und Setup-Assistent; Behandlung abgelaufener Sessions; Empty States.
+- **Ziel:** Layout mit Navigation, Light/Dark/System, Org-Switcher, Platzhalter für die Command-Palette; Seiten für Login, TOTP und Setup-Assistent (`SetupService` aus M1-05); Behandlung abgelaufener Sessions; Empty States.
 - **Abhängig von:** M0-04, M0-05 (API zunächst gemockt)
 - **Skill:** `sermon-ui-component`
 - **Tests zuerst:** Komponenten-Tests für Formulare (Validierung, Fehlerzustände); E2E-Login inkl. axe.

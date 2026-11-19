@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pmoscode/SerMon/server/internal/secrets"
 )
 
 // ErrInvalid is wrapped by every error returned from Load.
@@ -46,6 +48,9 @@ type Config struct {
 	AllowedOrigins []string
 	// TrustedProxies may set X-Forwarded-For (reverse proxy networks).
 	TrustedProxies []netip.Prefix
+	// MasterKeys encrypt secrets at rest (key file "<id>:<base64>" per line, newest first).
+	// Required together with the database; create the file with "sermon-server init".
+	MasterKeys *secrets.Box
 }
 
 // Source abstracts access to the environment and the file system for testability.
@@ -64,6 +69,7 @@ const (
 	envMigrateURL      = "SERMON_DATABASE_MIGRATE_URL"
 	envAllowedOrigins  = "SERMON_ALLOWED_ORIGINS"
 	envTrustedProxies  = "SERMON_TRUSTED_PROXIES"
+	envMasterKeys      = "SERMON_MASTER_KEYS"
 	fileSuffix         = "_FILE"
 )
 
@@ -90,6 +96,10 @@ func Load(src Source) (Config, error) {
 		DatabaseMigrateURL: l.string(envMigrateURL, "", nil),
 		AllowedOrigins:     parseOrigins(&l),
 		TrustedProxies:     parsePrefixes(&l),
+		MasterKeys:         parseMasterKeys(&l),
+	}
+	if cfg.DatabaseURL != "" && cfg.MasterKeys == nil {
+		l.fail(envMasterKeys, "required together with %s (set %s_FILE; create the file with \"sermon-server init\")", envDatabaseURL, envMasterKeys)
 	}
 	if cfg.DatabaseMigrateURL != "" && cfg.DatabaseURL == "" {
 		l.fail(envMigrateURL, "requires %s (migrations run only together with the database connection)", envDatabaseURL)
@@ -144,6 +154,20 @@ func (l *loader) string(key, fallback string, validate func(string) error) strin
 		}
 	}
 	return value
+}
+
+// parseMasterKeys reads the key file. Errors never contain key material (secrets.ParseKeys).
+func parseMasterKeys(l *loader) *secrets.Box {
+	value, ok := l.raw(envMasterKeys)
+	if !ok {
+		return nil
+	}
+	box, err := secrets.ParseKeys(value)
+	if err != nil {
+		l.fail(envMasterKeys, "%v", err)
+		return nil
+	}
+	return box
 }
 
 func parseLevel(l *loader, value string) slog.Level {

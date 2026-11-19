@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/secrets"
+
 	"github.com/pmoscode/SerMon/server/internal/config"
 )
 
@@ -173,14 +175,19 @@ func TestLoad_DatabaseAndWebAPISettings(t *testing.T) {
 		"SERMON_ALLOWED_ORIGINS":           "https://sermon.example.com, http://127.0.0.1:5173",
 		"SERMON_TRUSTED_PROXIES":           "172.18.0.0/16,10.0.0.1/32",
 	}
+	env["SERMON_MASTER_KEYS_FILE"] = "/run/secrets/master-keys"
 	files := map[string]string{
-		"/run/secrets/db":         dbURL("sermon_app") + "\n",
-		"/run/secrets/db-migrate": dbURL("sermon"),
+		"/run/secrets/db":          dbURL("sermon_app") + "\n",
+		"/run/secrets/db-migrate":  dbURL("sermon"),
+		"/run/secrets/master-keys": masterKeyLine(t) + "\n",
 	}
 
 	cfg, err := config.Load(fakeSource(env, files))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MasterKeys == nil {
+		t.Error("MasterKeys not loaded")
 	}
 	if cfg.DatabaseURL != dbURL("sermon_app") || cfg.DatabaseMigrateURL != dbURL("sermon") {
 		t.Errorf("database URLs = %q / %q", cfg.DatabaseURL, cfg.DatabaseMigrateURL)
@@ -208,6 +215,34 @@ func TestLoad_WebAPISettingErrors(t *testing.T) {
 		if _, err := config.Load(fakeSource(env, nil)); err == nil {
 			t.Errorf("%s: Load() error = nil", name)
 		}
+	}
+}
+
+func masterKeyLine(t *testing.T) string {
+	t.Helper()
+	line, err := secrets.GenerateKeyLine(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return line
+}
+
+func TestLoad_MasterKeys(t *testing.T) {
+	line := masterKeyLine(t)
+	// With a database the master keys are required (agent CA, channel secrets).
+	if _, err := config.Load(fakeSource(map[string]string{"SERMON_DATABASE_URL": dbURL("sermon_app")}, nil)); err == nil ||
+		!strings.Contains(err.Error(), "SERMON_MASTER_KEYS") {
+		t.Errorf("database without master keys: %v, want an error naming SERMON_MASTER_KEYS", err)
+	}
+	// Broken key files are rejected without echoing key material.
+	material := strings.SplitN(line, ":", 2)[1]
+	_, err := config.Load(fakeSource(map[string]string{"SERMON_MASTER_KEYS": "x" + material}, nil))
+	if err == nil || strings.Contains(err.Error(), material) {
+		t.Errorf("broken key file: %v", err)
+	}
+	cfg, err := config.Load(fakeSource(map[string]string{"SERMON_DATABASE_URL": dbURL("sermon_app"), "SERMON_MASTER_KEYS": line}, nil))
+	if err != nil || cfg.MasterKeys == nil {
+		t.Errorf("valid keys: %v, %v", cfg.MasterKeys, err)
 	}
 }
 

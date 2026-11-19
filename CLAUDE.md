@@ -53,6 +53,11 @@ Wichtige Variablen:
 - `SERMON_DATABASE_MIGRATE_URL` (Owner, Migrationen beim Start)
 - `SERMON_ALLOWED_ORIGINS` (exakte Origins der UI; leer heißt: alle schreibenden API-Aufrufe werden abgelehnt)
 - `SERMON_TRUSTED_PROXIES` (CIDRs, die `X-Forwarded-For` setzen dürfen)
+- `SERMON_MASTER_KEYS_FILE` (Pflicht mit DB; anlegen mit `sermon-server init --master-keys-file PFAD`, nie ersetzen)
+
+Erstinstallation: `sermon-server init` (Schlüssel, Migrationen, Agent-CA, Setup-Token). Solange die Einrichtung offen
+ist, steht ein Setup-Token im Server-Log (`just dev`: Ausgabe von `sermon-server`); damit legt `SetupService` den
+ersten Superadmin an.
 
 Web-API: Connect-Services unter `server/internal/transport/webapi/`, eingehängt über `webapi.Mount`
 (Validierung, Origin-Prüfung, Security-Header). Die UI hängt auf `/` ohne Methode; Routen mit Methode wie `GET /`

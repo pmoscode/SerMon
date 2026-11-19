@@ -14,9 +14,11 @@ type Querier interface {
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
 	ActiveAuthority(ctx context.Context) (ActiveAuthorityRow, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
+	AddSuperadmin(ctx context.Context, userID uuid.UUID) error
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	AuditChain(ctx context.Context) ([]AuditLog, error)
+	ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
@@ -46,6 +48,9 @@ type Querier interface {
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
+	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
+	// Replaces a previous token; does nothing once the setup is completed.
+	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (int64, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
@@ -61,6 +66,8 @@ type Querier interface {
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
+	// First installation: setup token and superadmins (instance-level tables, no RLS).
+	SetupCompleted(ctx context.Context) (bool, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)

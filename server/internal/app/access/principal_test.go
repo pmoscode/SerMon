@@ -21,6 +21,8 @@ var (
 )
 
 type fakeRepo struct {
+	super    bool
+	superErr error
 	member   bool
 	bindings []authz.Binding
 	err      error
@@ -30,6 +32,21 @@ type fakeRepo struct {
 func (f *fakeRepo) MembershipAndBindings(context.Context, tenant.OrgID, identity.UserID) (bool, []authz.Binding, error) {
 	f.calls++
 	return f.member, f.bindings, f.err
+}
+
+func (f *fakeRepo) IsSuperadmin(context.Context, identity.UserID) (bool, error) {
+	return f.super, f.superErr
+}
+
+func TestLoad_MarksSuperadminsAlsoWithoutOrganization(t *testing.T) {
+	p, err := access.NewLoader(&fakeRepo{super: true}).Load(context.Background(), session.Session{User: alice})
+	if err != nil || !p.Superadmin {
+		t.Errorf("principal = %+v, %v; want superadmin", p, err)
+	}
+	boom := errors.New("db down")
+	if _, err := access.NewLoader(&fakeRepo{superErr: boom}).Load(context.Background(), session.Session{User: alice}); !errors.Is(err, boom) {
+		t.Errorf("error = %v, want the repository error", err)
+	}
 }
 
 func TestLoad_BuildsThePrincipalOfAMember(t *testing.T) {

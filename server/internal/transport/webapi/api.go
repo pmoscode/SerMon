@@ -23,6 +23,7 @@ type Handlers struct {
 	Auth          *AuthHandler
 	System        *SystemHandler
 	Access        *AccessHandler
+	Setup         *SetupHandler
 	Authenticator *Authenticator // required for every service except AuthService
 }
 
@@ -37,6 +38,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	authenticated := connect.WithInterceptors(h.Authenticator, validation)
 
 	mount(webv1connect.NewAuthServiceHandler(h.Auth, connect.WithInterceptors(validation)))
+	mount(webv1connect.NewSetupServiceHandler(h.Setup, connect.WithInterceptors(validation)))
 	mount(webv1connect.NewSystemServiceHandler(h.System, authenticated))
 	mount(webv1connect.NewAccessServiceHandler(h.Access, authenticated))
 }

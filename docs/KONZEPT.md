@@ -930,7 +930,7 @@ Ziel: `systemd-analyze security sermon-agent` mit einem Score **< 2,0** („OK�
 ### 18.5 Secrets
 
 - Zugangsdaten für Kanäle und Module, der TOTP-Seed und der CA-Schlüssel werden mit **AES-256-GCM** verschlüsselt. Der
-  Master-Key kommt aus `SERMON_MASTER_KEY_FILE` (Docker-Secret); Schlüsselrotation ist mit Key-ID im Ciphertext möglich.
+  Master-Key kommt aus `SERMON_MASTER_KEYS_FILE` (Docker-Secret); Schlüsselrotation ist mit Key-ID im Ciphertext möglich.
 - Passwörter werden nie gespeichert oder geloggt; Tokens sind nur als Hash abgelegt.
 - Secrets werden in der UI nach dem Speichern **nie wieder angezeigt** (nur „gesetzt ✓ / ändern“).
 
@@ -1119,8 +1119,14 @@ services:
 networks: public (caddy), internal (alles andere, internal: true)
 ```
 
-- **Erstinstallation:** `sermon-server init` erzeugt Master-Key, Agent-CA und Superadmin (einmaliges Setup-Token im Log,
-  nur 30 min gültig).
+- **Erstinstallation:**
+  - `sermon-server init --master-keys-file PFAD` legt die Master-Key-Datei an (nie überschrieben), migriert die DB,
+    erzeugt die Agent-CA und gibt ein Setup-Token aus.
+  - Solange die Einrichtung offen ist, schreibt der Server bei jedem Start ein neues Token ins Log; der Weg für
+    Docker (`docker compose logs`).
+  - Das Token ist 30 min gültig, wird nur als Hash gespeichert und funktioniert genau einmal. Mit ihm legt der
+    Setup-Assistent den ersten Superadmin samt erster Org an.
+  - Danach verweigert `init` jede weitere Ausführung.
 - **Backup:**
   - `sermon-server backup` sichert Stammdaten, Events, CA und Konfiguration verschlüsselt per `pg_dump`, ohne Metrik-Rohdaten.
   - Eine vollständige Sicherung inklusive Metriken läuft physisch per **pgBackRest**.

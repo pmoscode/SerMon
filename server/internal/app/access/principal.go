@@ -18,6 +18,7 @@ var ErrNoMembership = errors.New("user is not a member of the session's organiza
 // Repository reads memberships and role bindings.
 type Repository interface {
 	MembershipAndBindings(ctx context.Context, org tenant.OrgID, user identity.UserID) (bool, []authz.Binding, error)
+	IsSuperadmin(ctx context.Context, user identity.UserID) (bool, error)
 }
 
 // Loader builds principals.
@@ -29,7 +30,11 @@ func NewLoader(repo Repository) *Loader { return &Loader{repo: repo} }
 // Load returns the principal of the session. Membership and bindings are read on every request,
 // so removing a member or a role takes effect immediately.
 func (l *Loader) Load(ctx context.Context, s session.Session) (authz.Principal, error) {
-	p := authz.Principal{User: s.User}
+	super, err := l.repo.IsSuperadmin(ctx, s.User)
+	if err != nil {
+		return authz.Principal{}, fmt.Errorf("load principal: %w", err)
+	}
+	p := authz.Principal{User: s.User, Superadmin: super}
 	if s.Org == (tenant.OrgID{}) {
 		return p, nil
 	}

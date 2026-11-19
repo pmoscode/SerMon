@@ -29,3 +29,12 @@ url() { # file user password-file
 }
 url database_url sermon_app postgres_app_password
 url database_migrate_url sermon postgres_password
+
+# Master key for sermon-server (format "<id>:<base64 of 32 bytes>"); never replaced, because
+# data encrypted with it (agent CA, channel secrets) would become unreadable.
+keys="$dir/master_keys"
+if [ ! -s "$keys" ]; then
+  umask 077
+  printf '1:%s\n' "$(head -c 32 /dev/urandom | base64 | tr -d '\n')" >"$keys"
+  echo "created $keys"
+fi

@@ -33,6 +33,13 @@ type AuditLog struct {
 	Hash     []byte
 }
 
+type InstanceSetup struct {
+	Singleton      bool
+	TokenHash      []byte
+	TokenExpiresAt *time.Time
+	CompletedAt    *time.Time
+}
+
 type Membership struct {
 	OrgID     uuid.UUID
 	UserID    uuid.UUID
@@ -78,6 +85,11 @@ type Session struct {
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 	StepUpAt   time.Time
+}
+
+type Superadmin struct {
+	UserID    uuid.UUID
+	CreatedAt time.Time
 }
 
 type User struct {

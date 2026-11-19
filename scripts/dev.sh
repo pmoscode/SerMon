@@ -33,6 +33,7 @@ trap cleanup EXIT INT TERM
   export SERMON_HTTP_ADDR=127.0.0.1:8080 SERMON_LOG_FORMAT=text SERMON_LOG_LEVEL=debug
   export SERMON_DATABASE_URL_FILE="$root/deploy/dev/.secrets/database_url"
   export SERMON_DATABASE_MIGRATE_URL_FILE="$root/deploy/dev/.secrets/database_migrate_url"
+  export SERMON_MASTER_KEYS_FILE="$root/deploy/dev/.secrets/master_keys"
   export SERMON_ALLOWED_ORIGINS="http://127.0.0.1:5173,http://127.0.0.1:8080"
   exec go tool air
 ) &

@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+
+// SetupService completes the first installation (KONZEPT §16): with the one-time setup token
+// from the server log (or "sermon-server init") the first superadmin and organization are
+// created. No session is required; CompleteSetup is rate limited per client.
+service SetupService {
+  // GetSetupStatus reports whether the setup is still open (the UI shows the setup wizard).
+  rpc GetSetupStatus(GetSetupStatusRequest) returns (GetSetupStatusResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CompleteSetup creates the first superadmin, the first organization and makes the
+  // superadmin its admin. UNAUTHENTICATED for an invalid, expired or used token; afterwards
+  // the user logs in normally.
+  rpc CompleteSetup(CompleteSetupRequest) returns (CompleteSetupResponse);
+}
+
+// GetSetupStatusRequest has no parameters.
+message GetSetupStatusRequest {}
+
+// GetSetupStatusResponse describes the setup state.
+message GetSetupStatusResponse {
+  // setup_required is true until the first superadmin exists.
+  bool setup_required = 1;
+}
+
+// CompleteSetupRequest carries the token and the first admin.
+message CompleteSetupRequest {
+  // token is the setup token from the server log.
+  string token = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // email is the superadmin's e-mail address.
+  string email = 2 [(buf.validate.field).string = {
+    min_len: 3
+    max_len: 320
+  }];
+  // display_name is the superadmin's name.
+  string display_name = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // password is the superadmin's password (password policy, KONZEPT §7).
+  string password = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 1024
+  }];
+  // organization_name is the name of the first organization.
+  string organization_name = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// CompleteSetupResponse has no fields.
+message CompleteSetupResponse {}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
@@ -32,7 +33,7 @@ import (
 // version is set at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
-const usage = "usage: sermon-server [--version]"
+const usage = "usage: sermon-server [--version | init [--master-keys-file PATH]]"
 
 // Exit codes.
 const (
@@ -55,6 +56,8 @@ func run(ctx context.Context, args []string, src config.Source, stdout, stderr i
 	case len(args) == 1 && (args[0] == "--version" || args[0] == "-V"):
 		_, _ = fmt.Fprintf(stdout, "sermon-server %s\n", version)
 		return exitOK
+	case len(args) > 0 && args[0] == "init":
+		return runInit(ctx, args[1:], src, stdout, stderr)
 	case len(args) > 0:
 		_, _ = fmt.Fprintln(stderr, usage)
 		return exitUsage
@@ -94,7 +97,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		defer db.Close()
 		checks = append(checks, health.Check{Name: "database", Fn: db.Ping})
-		if err := mountAPI(mux, cfg, db, logger); err != nil {
+		if _, err := agentca.Bootstrap(ctx, postgres.NewAgentCAStore(db), cfg.MasterKeys, time.Now); err != nil {
+			return fmt.Errorf("agent CA: %w", err)
+		}
+		if err := mountAPI(ctx, mux, cfg, db, logger); err != nil {
 			return err
 		}
 	} else {
@@ -133,13 +139,23 @@ func openDatabase(ctx context.Context, cfg config.Config, logger *slog.Logger) (
 	return db, nil
 }
 
-func mountAPI(mux *http.ServeMux, cfg config.Config, db *postgres.DB, logger *slog.Logger) error {
+// Setup attempts per client IP (the token has 256 bits; the limit keeps logs and DB quiet).
+const (
+	setupAttemptsPerWindow = 10
+	setupWindow            = time.Minute
+)
+
+func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, logger *slog.Logger) error {
 	if len(cfg.AllowedOrigins) == 0 {
-		logger.Warn("SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
+		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
 	}
 	hasher, err := password.NewHasher(password.DefaultParams)
 	if err != nil {
 		return fmt.Errorf("password hasher: %w", err)
+	}
+	setupSvc := newSetupService(db, hasher)
+	if err := announceSetup(ctx, setupSvc, logger); err != nil {
+		return err
 	}
 	credentials := postgres.NewCredentialStore(db)
 	sessions := session.NewManager(postgres.NewSessionStore(db), time.Now)
@@ -155,6 +171,7 @@ func mountAPI(mux *http.ServeMux, cfg config.Config, db *postgres.DB, logger *sl
 		System: webapi.NewSystemHandler(version),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(db), authz.NewPolicy(), time.Now, access.NewID),
 			logger),
+		Setup:         webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(db)), logger),
 	})
 	return nil

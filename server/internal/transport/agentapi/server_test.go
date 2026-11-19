@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
+	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
@@ -72,10 +73,54 @@ func (c *testCA) agentCert(t *testing.T, org tenant.OrgID, node identity.NodeID)
 	return tls.Certificate{Certificate: [][]byte{issued.DER, c.Intermediate().Raw}, PrivateKey: key}, issued.Serial
 }
 
+// fakeRotator records calls; rotations sign with the test CA.
+type fakeRotator struct {
+	ca        *testCA
+	mu        sync.Mutex
+	locked    []string
+	rotated   []rotation.Identity
+	rotateErr error
+}
+
+func (f *fakeRotator) SessionOpened(context.Context, rotation.Identity, string) (string, error) {
+	return "", nil
+}
+
+func (f *fakeRotator) Rotate(_ context.Context, id rotation.Identity, csr []byte, _, _ string) (rotation.Rotated, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rotated = append(f.rotated, id)
+	if f.rotateErr != nil {
+		return rotation.Rotated{}, f.rotateErr
+	}
+	issued, err := f.ca.SignAgentCSR(csr, id.Org, id.Node, time.Now())
+	if err != nil {
+		return rotation.Rotated{}, err
+	}
+	return rotation.Rotated{
+		Certificate: issued.DER, Intermediate: f.ca.Intermediate().Raw, NotAfter: issued.NotAfter,
+		PreviousValidUntil: time.Now().Add(rotation.Grace),
+	}, nil
+}
+
+func (f *fakeRotator) Lock(_ context.Context, id rotation.Identity, reason string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.locked = append(f.locked, id.Node.String()+": "+reason)
+	return nil
+}
+
+func (f *fakeRotator) lockCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.locked)
+}
+
 type server struct {
 	addr     string
 	ca       *testCA
 	sessions *agentapi.Sessions
+	rotator  *fakeRotator
 }
 
 func startServer(t *testing.T) server {
@@ -83,12 +128,13 @@ func startServer(t *testing.T) server {
 	ca := newTestCA(t)
 	logger := slog.New(slog.DiscardHandler)
 	sessions := agentapi.NewSessions()
+	rotator := &fakeRotator{ca: ca}
 	tlsConfig, err := agentapi.TLSConfig(ca, []string{"localhost"}, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, logger))
+	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, logger))
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +142,7 @@ func startServer(t *testing.T) server {
 	srv := &http.Server{Handler: mux, TLSConfig: tlsConfig, ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = srv.ServeTLS(ln, "", "") }()
 	t.Cleanup(func() { _ = srv.Close() })
-	return server{addr: ln.Addr().String(), ca: ca, sessions: sessions}
+	return server{addr: ln.Addr().String(), ca: ca, sessions: sessions, rotator: rotator}
 }
 
 func (s server) client(t *testing.T, cert *tls.Certificate, tlsVersion uint16) agentv1connect.AgentServiceClient {
@@ -206,7 +252,7 @@ func TestSession_RequiresHelloFirst(t *testing.T) {
 	}
 }
 
-func TestSession_OnlyOneActiveSessionPerNode(t *testing.T) {
+func TestSession_ASecondHolderOfTheIdentityLocksItAndEndsBothSessions(t *testing.T) {
 	s := startServer(t)
 	cert, _ := s.ca.agentCert(t, orgX, nodeX)
 	second, _ := s.ca.agentCert(t, orgX, nodeX) // e.g. a stolen key used in parallel
@@ -220,12 +266,92 @@ func TestSession_OnlyOneActiveSessionPerNode(t *testing.T) {
 	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
 
 	err := runSession(ctx, s.client(t, &second, tls.VersionTLS13), helloMsg())
-	if connect.CodeOf(err) != connect.CodeAlreadyExists {
-		t.Errorf("second session: %v, want ALREADY_EXISTS", err)
+	if connect.CodeOf(err) != connect.CodeAlreadyExists || !strings.Contains(err.Error(), "locked") {
+		t.Errorf("second session: %v, want ALREADY_EXISTS (locked)", err)
 	}
-	if !strings.Contains(err.Error(), "active session") {
-		t.Errorf("error message = %q", err)
+	if s.rotator.lockCount() != 1 {
+		t.Errorf("locks = %v, want one", s.rotator.locked)
 	}
+	if _, err := first.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+		t.Errorf("first session: %v, want ABORTED", err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
+}
+
+func TestSession_TheSameAgentReconnectingReplacesItsOldSession(t *testing.T) {
+	s := startServer(t)
+	cert, serial := s.ca.agentCert(t, orgX, nodeX)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	old := s.client(t, &cert, tls.VersionTLS13).Session(ctx)
+	if err := old.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
+	fresh := s.client(t, &cert, tls.VersionTLS13).Session(ctx)
+	if err := fresh.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := old.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+		t.Errorf("old session: %v, want ABORTED (replaced)", err)
+	}
+	waitFor(t, func() bool { a := s.sessions.Active(); return len(a) == 1 && a[0].Serial == serial })
+	if s.rotator.lockCount() != 0 {
+		t.Error("a reconnect must not lock the node")
+	}
+}
+
+func TestSession_RotationReturnsANewCertificateForTheSameIdentity(t *testing.T) {
+	s := startServer(t)
+	cert, serial := s.ca.agentCert(t, orgX, nodeX)
+	ctx := context.Background()
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(ctx)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	csr, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Send(&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_RotateCertificate{
+		RotateCertificate: &agentv1.RotateCertificate{Csr: csr},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := stream.Receive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := res.GetCertificateIssued()
+	newCert, err := x509.ParseCertificate(issued.GetCertificate())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if org, node, err := pki.AgentIdentity(newCert); err != nil || org != orgX || node != nodeX {
+		t.Errorf("new identity = %v/%v (%v)", org, node, err)
+	}
+	if len(issued.GetIntermediates()) != 1 || !issued.GetPreviousValidUntil().AsTime().After(time.Now()) {
+		t.Errorf("response = %v", issued)
+	}
+	if got := s.rotator.rotated[0]; got.Serial != serial || got.Node != nodeX {
+		t.Errorf("rotation identity = %+v, want the connection's certificate %s", got, serial)
+	}
+	_ = stream.CloseRequest()
+}
+
+func TestSession_RotationWithAReplacedCertificateEndsTheSession(t *testing.T) {
+	s := startServer(t)
+	s.rotator.rotateErr = rotation.ErrLocked
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	csr, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+
+	err := runSession(context.Background(), s.client(t, &cert, tls.VersionTLS13), helloMsg(),
+		&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_RotateCertificate{RotateCertificate: &agentv1.RotateCertificate{Csr: csr}}})
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("error = %v, want PERMISSION_DENIED", err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
 }
 
 func waitFor(t *testing.T, cond func() bool) {

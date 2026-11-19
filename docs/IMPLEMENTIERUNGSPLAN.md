@@ -434,7 +434,25 @@ flowchart LR
 - **Abhängig von:** M1-07, M1-09
 - **Tests zuerst:** Verbindung ohne, mit fremdem oder mit gesperrtem Zertifikat wird abgelehnt; Identität kommt aus dem Zertifikat, auch wenn der Payload eine andere enthält.
 
-#### ☐ M1-11 – Zertifikatsrotation · S+A · L 🔒
+#### ◐ M1-11 – Zertifikatsrotation · S+A · L 🔒
+> Teil a erledigt (Server, automatische Rotation und parallele Nutzung):
+> - **Protokoll:** `RotateCertificate` (neue CSR) und `CertificateIssued` im Stream.
+> - **Rotation:** Der Server stellt für dieselbe Identität aus. Das alte Zertifikat bleibt 1 h gültig (Sperre mit
+>   Zeitpunkt); die Prüfung beim Handshake beachtet das.
+> - **Rotation mit bereits ersetztem Zertifikat:** vorsorgliche Sperre des Nodes. Alle Zertifikate werden gesperrt,
+>   der Node bekommt `locked_at` und `lock_reason`, dazu ein Audit-Eintrag `security.node_locked`. Zertifikate eines
+>   gesperrten Nodes sind unbrauchbar, auch später ausgestellte.
+> - **Zweite Session:** gleiches Zertifikat und gleiche IP gelten als Reconnect und ersetzen die alte Session.
+>   Sonst gibt es eine Sperre, und beide Sessions enden.
+> - **Neue Quell-IP:** Rotation von einer anderen IP als die vorige Session → Security-Hinweis
+>   (`security.rotation_new_ip`).
+> - **Test:** End-to-End mit der Server-Binary. Rotation, neue Verbindung mit dem neuen Zertifikat, ein „Angreifer“
+>   mit dem alten Schlüssel rotiert ebenfalls → Sperre, beide Schlüssel funktionieren nicht mehr.
+>
+> Offen:
+> - Teil b: Rotation auf Abruf (Node, Gruppe oder Org; `RotateNow` an Online-Agents, sofortige Sperre, Step-up).
+> - Agent-Seite (Rotationszeitpunkt, Re-Enrollment-Hinweis) mit M1-14.
+> - Security-Events und Benachrichtigung mit E2.3/E2.4; die Sperre aufheben mit M1-32.
 - **Ziel** (KONZEPT §6 „Schlüsselrotation“):
   - **Automatisch:** Der Agent erneuert sein Zertifikat nach 2/3 der Laufzeit über den Stream (`RotateCertificate`,
     neues Schlüsselpaar); der Server stellt aus und sperrt das alte Zertifikat nach Übergangszeit.

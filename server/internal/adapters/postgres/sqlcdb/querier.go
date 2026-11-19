@@ -78,17 +78,25 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	// Serializes changes of rights within the organization (last-admin check without races).
 	LockAccessChanges(ctx context.Context) error
+	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
 	RevokeEnrollmentToken(ctx context.Context, arg RevokeEnrollmentTokenParams) (int64, error)
+	RevokeNodeCertificates(ctx context.Context, arg RevokeNodeCertificatesParams) error
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
 	// First installation: setup token and superadmins (instance-level tables, no RLS).
 	SetupCompleted(ctx context.Context) (bool, error)
+	// Certificate rotation (M1-11). All queries run inside InTenant.
+	// Replaces the current certificate: it stays valid until revoke_at (grace period). No rows
+	// means the certificate was already replaced or revoked.
+	SupersedeCertificate(ctx context.Context, arg SupersedeCertificateParams) (int64, error)
+	// Records the source IP of a new session and returns the previous one.
+	SwapNodeLastIP(ctx context.Context, arg SwapNodeLastIPParams) (string, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the

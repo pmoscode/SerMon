@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AgentCertificate struct {
@@ -85,6 +86,9 @@ type Node struct {
 	MemoryBytes   int64
 	EnrolledWith  *uuid.UUID
 	CreatedAt     time.Time
+	LockedAt      *time.Time
+	LockReason    pgtype.Text
+	LastIp        pgtype.Text
 }
 
 type NodeGroup struct {

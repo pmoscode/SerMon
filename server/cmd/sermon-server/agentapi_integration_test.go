@@ -55,7 +55,7 @@ func seedEnrollmentToken(t *testing.T) {
 	}
 }
 
-func TestAgentAPI_EnrolledAgentConnectsOverMTLSUntilItsCertificateIsRevoked(t *testing.T) {
+func TestAgentAPI_EnrolledAgentConnectsRotatesAndIsLockedOnParallelUse(t *testing.T) {
 	keysFile := sharedKeysFile()
 	if _, err := ensureKeyFile(keysFile); err != nil {
 		t.Fatal(err)
@@ -93,48 +93,83 @@ func TestAgentAPI_EnrolledAgentConnectsOverMTLSUntilItsCertificateIsRevoked(t *t
 	anchor, _ := x509.ParseCertificate(enrolled.Msg.GetTrustAnchor())
 	roots.AddCert(anchor)
 	clientCert := tls.Certificate{Certificate: append([][]byte{enrolled.Msg.GetCertificate()}, enrolled.Msg.GetIntermediates()...), PrivateKey: key}
-	agent := func() agentv1connect.AgentServiceClient {
+	agent := func(cert tls.Certificate) agentv1connect.AgentServiceClient {
 		tr := &http.Transport{ForceAttemptHTTP2: true, TLSClientConfig: &tls.Config{
-			RootCAs: roots, Certificates: []tls.Certificate{clientCert}, ServerName: "localhost", MinVersion: tls.VersionTLS13,
+			RootCAs: roots, Certificates: []tls.Certificate{cert}, ServerName: "localhost", MinVersion: tls.VersionTLS13,
 		}}
 		return agentv1connect.NewAgentServiceClient(&http.Client{Transport: tr, Timeout: 30 * time.Second}, "https://"+agentAddr, connect.WithGRPC())
 	}
-	session := func() error {
-		stream := agent().Session(ctx)
-		if err := stream.Send(&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Hello{Hello: &agentv1.Hello{
-			ProtocolVersion: 1, AgentVersion: "0.0.0", HostFacts: &agentv1.HostFacts{
-				Hostname: "web-01", MachineId: strings.Repeat("a", 32), OsId: "debian", OsVersion: "13", KernelRelease: "6.12.0",
-				Architecture: agentv1.Architecture_ARCHITECTURE_ARM64, CpuCount: 2, MemoryBytes: 1 << 30,
-			},
-		}}}); err != nil && !errors.Is(err, io.EOF) {
-			return err
+	hello := &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Hello{Hello: &agentv1.Hello{
+		ProtocolVersion: 1, AgentVersion: "0.0.0", HostFacts: &agentv1.HostFacts{
+			Hostname: "web-01", MachineId: strings.Repeat("a", 32), OsId: "debian", OsVersion: "13", KernelRelease: "6.12.0",
+			Architecture: agentv1.Architecture_ARCHITECTURE_ARM64, CpuCount: 2, MemoryBytes: 1 << 30,
+		},
+	}}}
+	// sessionWith connects with cert, optionally rotates, and returns the new certificate.
+	sessionWith := func(cert tls.Certificate, rotate bool) (*tls.Certificate, error) {
+		stream := agent(cert).Session(ctx)
+		defer func() { _ = stream.CloseResponse() }()
+		if err := stream.Send(hello); err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+		var next *tls.Certificate
+		if rotate {
+			newKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			newCSR, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, newKey)
+			if err := stream.Send(&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_RotateCertificate{
+				RotateCertificate: &agentv1.RotateCertificate{Csr: newCSR},
+			}}); err != nil && !errors.Is(err, io.EOF) {
+				return nil, err
+			}
+			res, err := stream.Receive()
+			if err != nil {
+				return nil, err
+			}
+			issued := res.GetCertificateIssued()
+			next = &tls.Certificate{Certificate: append([][]byte{issued.GetCertificate()}, issued.GetIntermediates()...), PrivateKey: newKey}
 		}
 		_ = stream.CloseRequest()
-		_, err := stream.Receive()
-		_ = stream.CloseResponse()
-		if errors.Is(err, io.EOF) {
-			return nil
+		if _, err := stream.Receive(); !errors.Is(err, io.EOF) {
+			return next, err
 		}
-		return err
+		return next, nil
 	}
+	session := func() error { _, err := sessionWith(clientCert, false); return err }
 	if err := session(); err != nil {
 		t.Fatalf("session with the enrolled certificate: %v\n%s", err, logs.String())
 	}
 	waitFor(t, &logs, regexp.MustCompile(`msg="agent connected" .*node=(`+enrolled.Msg.GetNodeId()+`)`))
 
-	// 3. A revoked certificate is rejected at the next connection.
+	// 3. The agent rotates its certificate in the stream; the new one works for a new connection.
+	rotated, err := sessionWith(clientCert, true)
+	if err != nil || rotated == nil {
+		t.Fatalf("rotation: %v\n%s", err, logs.String())
+	}
+	if _, err := sessionWith(*rotated, false); err != nil {
+		t.Fatalf("session with the rotated certificate: %v", err)
+	}
+
+	// 4. Someone else still holding the old key (valid during the grace period) also rotates:
+	//    the certificate was already replaced, so the identity is locked – both keys stop working.
+	if _, err := sessionWith(clientCert, true); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("rotation with the replaced certificate: %v, want PERMISSION_DENIED", err)
+	}
+	for name, cert := range map[string]tls.Certificate{"old": clientCert, "rotated": *rotated} {
+		if _, err := sessionWith(cert, false); err == nil {
+			t.Errorf("%s certificate still works after the lock", name)
+		}
+	}
+	waitFor(t, &logs, regexp.MustCompile(`(certificate revoked or unknown)`))
 	conn, err := pgx.Connect(context.Background(), pgtest.Shared(t).OwnerDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = conn.Close(context.Background()) }()
-	if _, err := conn.Exec(context.Background(), "UPDATE agent_certificates SET revoked_at = now() WHERE node_id = $1", enrolled.Msg.GetNodeId()); err != nil {
-		t.Fatal(err)
+	var reason string
+	if err := conn.QueryRow(context.Background(), "SELECT lock_reason FROM nodes WHERE id = $1", enrolled.Msg.GetNodeId()).Scan(&reason); err != nil ||
+		!strings.Contains(reason, "already replaced") {
+		t.Errorf("lock reason = %q, %v", reason, err)
 	}
-	if err := session(); err == nil {
-		t.Error("a revoked certificate must be rejected")
-	}
-	waitFor(t, &logs, regexp.MustCompile(`(certificate revoked or unknown)`))
 
 	cancel()
 	select {

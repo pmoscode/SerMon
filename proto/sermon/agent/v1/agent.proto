@@ -29,6 +29,10 @@ message SessionRequest {
     Hello hello = 1;
     // heartbeat keeps the stream alive and proves liveness.
     Heartbeat heartbeat = 2;
+    // rotate_certificate asks for a new certificate for a fresh key pair (after two thirds of
+    // the lifetime, KONZEPT §6). The identity stays the same; it comes from the current
+    // certificate of this stream, never from the message.
+    RotateCertificate rotate_certificate = 3;
   }
 }
 
@@ -40,6 +44,9 @@ message SessionResponse {
 
     // ack confirms that all messages up to a sequence number were persisted.
     Ack ack = 1;
+    // certificate_issued answers rotate_certificate. The previous certificate stays valid for a
+    // short grace period so that the agent can reconnect with the new one.
+    CertificateIssued certificate_issued = 2;
   }
 }
 
@@ -108,6 +115,27 @@ enum Architecture {
 message Heartbeat {
   // sent_at is the agent's wall-clock time when the heartbeat was sent (detects clock skew).
   google.protobuf.Timestamp sent_at = 1 [(buf.validate.field).required = true];
+}
+
+// RotateCertificate carries the CSR for the agent's new key pair.
+message RotateCertificate {
+  // csr is a PKCS#10 request in DER for a new ECDSA P-256 key; only the public key is used.
+  bytes csr = 1 [(buf.validate.field).bytes = {
+    min_len: 1
+    max_len: 4096
+  }];
+}
+
+// CertificateIssued is the agent's new client certificate.
+message CertificateIssued {
+  // certificate is the new client certificate (DER).
+  bytes certificate = 1;
+  // intermediates are the issuing CA certificates (DER).
+  repeated bytes intermediates = 2;
+  // not_after is when the new certificate expires.
+  google.protobuf.Timestamp not_after = 3;
+  // previous_valid_until is when the previous certificate stops working.
+  google.protobuf.Timestamp previous_valid_until = 4;
 }
 
 // Ack confirms persisted agent data; the agent may then drop it from its buffer.

@@ -4,7 +4,7 @@
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SessionRequest {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_request::Payload", tags="1, 2")]
+    #[prost(oneof="session_request::Payload", tags="1, 2, 3")]
     pub payload: ::core::option::Option<session_request::Payload>,
 }
 /// Nested message and enum types in `SessionRequest`.
@@ -18,23 +18,32 @@ pub mod session_request {
         /// heartbeat keeps the stream alive and proves liveness.
         #[prost(message, tag="2")]
         Heartbeat(super::Heartbeat),
+        /// rotate_certificate asks for a new certificate for a fresh key pair (after two thirds of
+        /// the lifetime, KONZEPT §6). The identity stays the same; it comes from the current
+        /// certificate of this stream, never from the message.
+        #[prost(message, tag="3")]
+        RotateCertificate(super::RotateCertificate),
     }
 }
 /// SessionResponse is one message from the server to the agent.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1")]
+    #[prost(oneof="session_response::Payload", tags="1, 2")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
 pub mod session_response {
     /// payload is the actual message; exactly one must be set.
-    #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Payload {
         /// ack confirms that all messages up to a sequence number were persisted.
         #[prost(message, tag="1")]
         Ack(super::Ack),
+        /// certificate_issued answers rotate_certificate. The previous certificate stays valid for a
+        /// short grace period so that the agent can reconnect with the new one.
+        #[prost(message, tag="2")]
+        CertificateIssued(super::CertificateIssued),
     }
 }
 /// Hello is the first message of every stream.
@@ -88,6 +97,29 @@ pub struct Heartbeat {
     /// sent_at is the agent's wall-clock time when the heartbeat was sent (detects clock skew).
     #[prost(message, optional, tag="1")]
     pub sent_at: ::core::option::Option<::prost_types::Timestamp>,
+}
+/// RotateCertificate carries the CSR for the agent's new key pair.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RotateCertificate {
+    /// csr is a PKCS#10 request in DER for a new ECDSA P-256 key; only the public key is used.
+    #[prost(bytes="vec", tag="1")]
+    pub csr: ::prost::alloc::vec::Vec<u8>,
+}
+/// CertificateIssued is the agent's new client certificate.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CertificateIssued {
+    /// certificate is the new client certificate (DER).
+    #[prost(bytes="vec", tag="1")]
+    pub certificate: ::prost::alloc::vec::Vec<u8>,
+    /// intermediates are the issuing CA certificates (DER).
+    #[prost(bytes="vec", repeated, tag="2")]
+    pub intermediates: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+    /// not_after is when the new certificate expires.
+    #[prost(message, optional, tag="3")]
+    pub not_after: ::core::option::Option<::prost_types::Timestamp>,
+    /// previous_valid_until is when the previous certificate stops working.
+    #[prost(message, optional, tag="4")]
+    pub previous_valid_until: ::core::option::Option<::prost_types::Timestamp>,
 }
 /// Ack confirms persisted agent data; the agent may then drop it from its buffer.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

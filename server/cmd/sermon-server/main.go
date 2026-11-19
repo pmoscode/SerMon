@@ -24,6 +24,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
+	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
@@ -110,7 +111,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return err
 		}
 		if cfg.AgentAddr != "" {
-			agentServer, err := newAgentServer(ctx, cfg, ca, logger)
+			agentServer, err := newAgentServer(ctx, cfg, db, ca, logger)
 			if err != nil {
 				return err
 			}
@@ -136,13 +137,14 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 }
 
 // newAgentServer prepares the mTLS agent API (M1-10) on its own listener.
-func newAgentServer(ctx context.Context, cfg config.Config, ca *agentca.Service, logger *slog.Logger) (func(context.Context) error, error) {
+func newAgentServer(ctx context.Context, cfg config.Config, db *postgres.DB, ca *agentca.Service, logger *slog.Logger) (func(context.Context) error, error) {
 	tlsConfig, err := agentapi.TLSConfig(ca, cfg.AgentHostnames, logger) //nolint:contextcheck // TLS callbacks have no context
 	if err != nil {
 		return nil, fmt.Errorf("agent API TLS: %w", err)
 	}
 	mux := http.NewServeMux()
-	agentapi.Mount(mux, agentapi.NewSessionHandler(agentapi.NewSessions(), logger))
+	rotator := rotation.NewService(postgres.NewRotationStore(db), ca, time.Now)
+	agentapi.Mount(mux, agentapi.NewSessionHandler(agentapi.NewSessions(), rotator, logger))
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.AgentAddr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", cfg.AgentAddr, err)

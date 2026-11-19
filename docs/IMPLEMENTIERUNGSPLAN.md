@@ -109,11 +109,10 @@ flowchart LR
 
 **Ziel:** Alle Skelette bauen, testen und linten in CI. Die Entwicklungsumgebung startet mit einem Befehl. Die beiden kritischen Annahmen (TimescaleDB-Last, journald über `journalctl`) und der musl-Build für arm64 sind durch Spikes geprüft.
 
-### ◐ M0-01 – Repo-Grundgerüst · X · S
-> Umgesetzt bis auf GitHub Private Vulnerability Reporting: Die Funktion gibt es nur für **öffentliche** Repos, und
-> `pmoscode/SerMon` ist privat (API-Antwort 404). Einschalten, sobald das Repo öffentlich wird. Zusätzlich gibt es
-> `just setup`, eine PR-Vorlage und einen Commit-Message-Check (`scripts/check-commit-msg.sh` mit Tests).
-
+### ☑ M0-01 – Repo-Grundgerüst · X · S
+> Erledigt. Zusätzlich gibt es `just setup`, eine PR-Vorlage und einen Commit-Message-Check
+> (`scripts/check-commit-msg.sh` mit Tests). GitHub Private Vulnerability Reporting ist seit dem 2026-11-19 aktiv;
+> das Repo ist seitdem öffentlich.
 - **Ziel:** Struktur nach KONZEPT §20; `LICENSE` (AGPL-3.0), `README.md`, `SECURITY.md` (Responsible Disclosure), `.editorconfig`, `.gitignore`, `CODEOWNERS`, `justfile` mit Ziel-Stubs (`dev`, `gen`, `lint`, `test`, `e2e`, `security`), `lefthook.yml` (Format, Secret-Scan; gitleaks, inzwischen betterleaks – ADR 0005).
 - **Abhängig von:** –
 - **Abnahme:** `just --list` zeigt alle Ziele; lefthook-Hooks greifen; GitHub Private Vulnerability Reporting ist aktiviert.
@@ -162,7 +161,14 @@ flowchart LR
 - **Skill:** `sermon-proto-change`
 - **Abnahme:** Generierter Code kompiliert in allen drei Sprachen; `buf lint` und `buf breaking` laufen in CI.
 
-### ☐ M0-06 – CI und Security-Pipeline · X · M 🔒
+### ☑ M0-06 – CI und Security-Pipeline · X · M 🔒
+> Erledigt: `ci.yml`, `security.yml` und `renovate.json` ([ADR 0006](adr/0006-ci-und-supply-chain.md)). Actions sind per
+> SHA gepinnt (mindestens 3 Tage alt), Rechte minimal, `just lint-ci` (actionlint + zizmor) ist sauber. Der erste Lauf
+> war grün bis auf den Job `web`: Im frischen Checkout fehlte der generierte Paraglide-Code für `svelte-check`.
+> Behoben, indem `pnpm run check` ihn zuerst erzeugt. Native arm64-Runner, CodeQL und Scorecard laufen, weil das Repo
+> öffentlich ist. Abweichungen: Der Secret-Scan nutzt betterleaks statt gitleaks (ADR 0005). Branch-Protection wird
+> auf Wunsch des Product Owners erst nach der Implementierung eingerichtet (siehe v1.0). Den Test mit einer absichtlich
+> verwundbaren Abhängigkeit ersetzt der reale Fall `minimatch` (GHSA-g3hv-75wg-m249), den die Audits erkannt haben.
 - **Ziel:**
   - `ci.yml`: Lint- und Test-Matrix für Rust, Go und Web, Coverage-Upload
   - `security.yml`: CodeQL, gosec, govulncheck, cargo-audit, cargo-deny, `pnpm audit`, betterleaks, OpenSSF Scorecard
@@ -505,6 +511,7 @@ flowchart LR
 | Upgrade- und Restore-Tests | Datenbank der Vorversion → Migration → Tests; Backup → Restore in CI |
 | Dokumentation | Admin-Doku (Installation, Backup, Upgrade, Härtung), User-Doku, Hilfetexte vollständig DE und EN, Vorlage für die DSGVO-Dokumentation |
 | Release-Prozess | release-please, SBOM, cosign, SLSA-Provenance, signierte Repos, Release-Notes |
+| Branch-Schutz | `main` nur noch per PR mit grüner CI (erforderliche Status-Checks), kein Force-Push; erst nach der Implementierung (Wunsch des Product Owners) |
 
 ---
 

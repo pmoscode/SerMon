@@ -13,14 +13,14 @@ setup:
     #!/usr/bin/env bash
     set -euo pipefail
     missing=0
-    for tool in just lefthook betterleaks shellcheck git; do
+    for tool in just lefthook betterleaks shellcheck actionlint zizmor git; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "✗ $tool fehlt"; missing=1; fi
     done
     # Needed from M0-02..M0-05 on – reported, but not fatal yet.
     for tool in cargo cargo-zigbuild cargo-deny zig go golangci-lint govulncheck node pnpm buf protoc-gen-prost protoc-gen-tonic docker; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "… $tool fehlt (ab M0-02..M0-07 nötig)"; fi
     done
-    [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook betterleaks shellcheck)." >&2; exit 1; }
+    [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook betterleaks shellcheck actionlint zizmor)." >&2; exit 1; }
     lefthook install
 
 # Start the development environment (infra, server with hot reload, web dev server)
@@ -46,7 +46,7 @@ install-proto-plugins:
 fmt: fmt-agent fmt-server fmt-web
 
 # Lint all parts
-lint: lint-shell lint-proto lint-agent lint-server lint-web
+lint: lint-shell lint-ci lint-proto lint-agent lint-server lint-web
 
 # Run all unit tests
 test: test-scripts test-agent test-server test-web
@@ -67,6 +67,11 @@ security: security-secrets security-agent security-server security-web
 # Lint shell scripts
 lint-shell:
     shellcheck scripts/*.sh
+
+# Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
+lint-ci:
+    actionlint
+    zizmor --offline --persona=pedantic .github/workflows
 
 # Test helper scripts
 test-scripts:

@@ -50,8 +50,15 @@ Protokoll: `proto/` mit buf (ADR 0004). `just gen` generiert Code für Go (`serv
 Generierter Code wird committet und nie von Hand geändert; die Zielordner leert `buf generate` bei jedem Lauf (keine
 eigenen Dateien dort ablegen). Rust-Plugins installiert `just install-proto-plugins`.
 
+CI: `.github/workflows/ci.yml` und `security.yml` rufen dieselben `just`-Befehle auf wie die lokale Entwicklung (ADR 0006).
+Actions immer per Commit-SHA pinnen, die Version steht als Kommentar dahinter, und nur Versionen nehmen, die mindestens
+3 Tage alt sind. Rechte minimal halten und jede zusätzliche Berechtigung kommentieren. Nach jeder Workflow-Änderung
+`just lint-ci` (actionlint + zizmor) ausführen. Abhängigkeiten aktualisiert Renovate (`renovate.json`).
+
 Web-Besonderheiten:
 - SvelteKit 3: Die Konfiguration steht in `web/vite.config.ts` (es gibt keine `svelte.config.js`).
+- Paraglide-Code (`web/src/lib/paraglide`) ist generiert und nicht committet; `pnpm run i18n` erzeugt ihn,
+  `pnpm run check` und `prepare` tun das automatisch.
 - Imports über `#lib/...` (package.json-Subpath-Imports) brauchen die Endung `.js`, z. B. `#lib/i18n/locale.svelte.js`.
 - npm: Nur Releases, die mindestens 3 Tage alt sind, werden installiert. Schlägt `pnpm add` mit `NO_MATURE_MATCHING_VERSION`
   fehl, eine ältere Version wählen statt die Regel zu lockern.

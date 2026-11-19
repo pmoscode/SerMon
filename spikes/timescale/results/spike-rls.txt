@@ -1,0 +1,13 @@
+== RLS on TimescaleDB objects
+ENABLE RLS on hypertable metrics_raw                       FAILED: ERROR: operation not supported on hypertables that have columnstore enabled (SQLSTATE 0A000)
+policy on metrics_raw via series (EXISTS)                  ok
+ENABLE RLS on continuous aggregate metrics_1m              FAILED: ERROR: ALTER action ENABLE ROW SECURITY cannot be performed on relation "metrics_1m" (SQLSTATE 42809)
+ENABLE RLS on materialized hypertable of metrics_1m        FAILED: ERROR: operation not supported on materialization tables (SQLSTATE 0A000)
+== visibility for spike_app
+series without tenant                                      0 rows (1ms)
+series with tenant                                         4000 rows (1ms)
+metrics_raw last 5 min without tenant                      100000 rows (17ms)
+metrics_raw last 5 min with tenant                         100000 rows (7ms)
+metrics_raw compressed (>2 h old) without tenant           58065600 rows (416ms)
+metrics_1m without tenant                                  1630800 rows (35ms)
+metrics_1m with tenant                                     1630800 rows (25ms)

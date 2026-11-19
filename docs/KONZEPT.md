@@ -88,7 +88,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/`
 | D9  | Agent-Rechte   | **Privilegien getrennt:** Agent als User `sermon`, minimaler root-Helper nur für Updates     | Least Privilege                                                                                       |
 | D10 | Auth           | **Lokal (Argon2id) + TOTP + Passkeys/WebAuthn, OIDC/SSO**                                    |                                                                                                       |
 | D11 | Rechte         | **Org → Node-Gruppen → Rollen** (Viewer / Operator / Admin)                                  |                                                                                                       |
-| D12 | Retention      | **Gestaffelt:** 1 s / 24 h, 1 min / 30 Tage, 1 h / 1 Jahr; Logs 14 Tage; Events 1 Jahr       | konfigurierbar                                                                                        |
+| D12 | Retention      | **Gestaffelt:** 1 s / 15 min (Ringpuffer im Server), 10 s / 24 h, 1 min / 30 Tage, 1 h / 1 Jahr; Logs 14 Tage; Events 1 Jahr | konfigurierbar; DB-Auflösung 10 s nach Spike M0-09 (ADR 0001) |
 | D13 | Storage        | **PostgreSQL 17 + TimescaleDB** (Stamm-, Event- und Metrikdaten), **Loki** (Logs)            | Eine DB statt fünf Komponenten; Downsampling und Retention nativ; Metrik-Speicher austauschbar ([ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md)) |
 | D14 | Alert-Kanäle   | E-Mail, Webhook, Slack/Teams/Discord/Mattermost, Telegram/ntfy/Gotify/Pushover               |                                                                                                       |
 | D15 | Updates        | **Policy-basiert** pro Gruppe (report / security-auto / all-auto), Wartungsfenster           |                                                                                                       |
@@ -217,7 +217,8 @@ eine Fake-Implementierung für Tests.
 |-------------------------------------------------------------------------------------|------------------------------------------|--------------------------------------------------|
 | Orgs, User, Gruppen, Rollen, Nodes, Zertifikate, Regeln, Policies, Kanäle, Sessions | PostgreSQL                               | dauerhaft                                        |
 | Alert-Instanzen, Security-Events, Update-Läufe, Audit-Log                           | PostgreSQL (partitioniert nach Monat)    | 1 Jahr (Audit: konfigurierbar, Standard 2 Jahre) |
-| Metriken 1 s                                                                        | TimescaleDB-Hypertable `metrics_raw`                         | 24 h                                             |
+| Metriken 1 s                                                                        | Ringpuffer im Server-Speicher (nicht persistent)             | 15 min                                           |
+| Metriken 10 s (avg/min/max je Fenster)                                              | TimescaleDB-Hypertable `metrics_raw`                         | 24 h                                             |
 | Metriken 1 min                                                                      | Continuous Aggregate `metrics_1m`                            | 30 Tage                                          |
 | Metriken 1 h                                                                        | Continuous Aggregate `metrics_1h` (hierarchisch auf `metrics_1m`) | 1 Jahr                                      |
 | Logs                                                                                | Loki (Multi-Tenant, Compactor-Retention)                     | 14 Tage                                          |
@@ -226,24 +227,30 @@ eine Fake-Implementierung für Tests.
 
 - **Schmales Schema mit Integer-IDs:**
   - `series(id int, org_id, node_id, metric text, labels jsonb)`, eindeutig über `(org_id, node_id, metric, labels)`
-  - `metrics_raw(ts timestamptz, series_id int, value double precision)`
-- **Hypertable** mit **1-h-Chunks**. **Kompression nach 2 h** (`segmentby = series_id`, `orderby = ts`).
+  - `metrics_raw(ts timestamptz, series_id int, avg, min, max double precision)`: ein Eintrag je Serie und 10-s-Fenster,
+    gebildet vom Server aus den 1-s-Werten
+- **Hypertable** mit **1-h-Chunks** und Index **`(series_id, ts DESC)`**: Ohne diesen Index dauert ein Chart unter Last
+  720 ms statt 16 ms. **Kompression nach 2 h** (`segmentby = series_id`, `orderby = ts`).
 - **Continuous Aggregates** speichern `avg`, `min`, `max` und `last` je Bucket. Jede Stufe hat eine eigene **Retention-Policy**, die Aktualisierung läuft per Refresh-Policy.
 - **Counter rechnet der Agent in Raten pro Sekunde um** (§8), damit in den Aggregaten keine Window-Funktionen nötig sind.
 - **Ingest:** Der Server sammelt die Batches aller Agents und schreibt **einmal pro Sekunde per `COPY`**. Unbekannte Serien werden vorab in `series` angelegt (mit Cache).
-- **Ringpuffer im Server-Speicher** (letzte 15 min, 1 s) für Live-Charts und kurze Alert-Fenster. Das entlastet die DB beim Lesen.
-- **Spike in M0** mit 50 simulierten Agents. Ziele:
-  - Ingest-Lag < 2 s
-  - DB-CPU < 50 % von 4 vCPU
-  - Plattenbedarf und WAL-Volumen messen
-  - p95 < 300 ms für einen 24-h-Chart
-  - Row-Level-Security auf Hypertables und Continuous Aggregates prüfen
-- **Fallback:** 1-s-Werte nur im Ringpuffer halten und erst ab 5–10 s in der DB speichern.
+- **Ringpuffer im Server-Speicher** (letzte 15 min, 1 s) für Live-Ansicht, Live-Charts und kurze Alert-Fenster.
+- **Werte möglichst ganzzahlig** in Basiseinheiten (Bytes/s, Pakete/s, Anteile in ppm). Die Kompression erreicht
+  dann 3,1 Byte/Messwert statt 10 Byte bei Gleitkommawerten mit voller Genauigkeit (§8).
+- **Mandantentrennung bei Metriken:** TimescaleDB unterstützt RLS weder auf komprimierten Hypertables noch auf
+  Continuous Aggregates. `sermon_app` darf die Metrik-Tabellen deshalb nicht direkt lesen. Gelesen wird über eine
+  `SECURITY DEFINER`-Funktion, deren Eigentümer keine Sonderrechte hat und die nur Serien zurückgibt, die über die
+  RLS-geschützte Tabelle `series` sichtbar sind (ADR 0001, 0007).
+- **PostgreSQL-Einstellungen** für die Schreiblast: `wal_compression = lz4`, `max_wal_size = 8GB`,
+  `checkpoint_timeout = 15min`.
+- **Spike M0-09:** Ergebnisse und Messwerte in ADR 0001.
 
 **Mengengerüst (50 Nodes):**
 
-- Etwa 400 Serien pro Node ergeben 20 000 Samples/s, also ca. 1,7 Mrd. Zeilen pro Tag in `metrics_raw`.
-- Komprimiert (ca. 2–4 Byte/Sample) sind das ca. 3–7 GB für 24 h Rohdaten. Hinzu kommen ca. 10–15 GB für die noch unkomprimierten Chunks der letzten 2 h und ein hohes WAL-Volumen, daher ist eine **NVMe-SSD Pflicht**.
+- Etwa 400 Serien pro Node ergeben 20 000 Samples/s. Gemessen bei 1 s in der DB: 61 Byte/Sample unkomprimiert,
+  10 Byte (Gleitkomma) bzw. 3,1 Byte (ganzzahlig) komprimiert, WAL ~13–15 GB/h (~320 GB/Tag).
+- Mit **10 s in der DB** (2 000 Zeilen/s mit avg/min/max): ca. 173 Mio. Zeilen pro Tag, unter 5 GB für 24 h und
+  WAL ca. 30–40 GB/Tag. Eine SSD wird empfohlen.
 - `metrics_1m` braucht für 30 Tage ca. 5–15 GB, `metrics_1h` für 1 Jahr < 5 GB.
 - Logs schwanken stark; geschätzt werden 0,5–5 GB/Tag.
 
@@ -419,6 +426,11 @@ Loop-Devices werden standardmäßig gefiltert.
 **Counter** (z. B. Bytes total) rechnet der Agent beim Messen selbst in **Raten pro Sekunde** um, inklusive Reset-
 und Wrap-Erkennung, und sendet sie als Gauge. Prozentwerte wie die CPU-Auslastung berechnet er ebenfalls aus Deltas.
 Das hat drei Vorteile:
+
+**Ganzzahlige Werte bevorzugt:** Raten und Mengen sendet der Agent als ganze Zahlen in Basiseinheiten (Bytes/s, Pakete/s,
+Anzahl), Anteile als ppm (1 000 000 = 100 %). Ganzzahlige Werte komprimieren in TimescaleDB auf ca. 3 Byte/Messwert;
+Gleitkommawerte mit voller Genauigkeit brauchen etwa das Dreifache (Spike M0-09). Das Runden auf Nachkommastellen
+bringt keine Ersparnis.
 
 - Die Werte bleiben auch nach einer Zwischenspeicherung im WAL-Puffer korrekt.
 - Die Continuous Aggregates kommen mit einfachen `avg`/`min`/`max`/`last` aus.
@@ -1138,14 +1150,14 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 
 | #   | Thema                        | Frage / Risiko                                                                   | Vorschlag                                                                                  |
 |-----|------------------------------|----------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
-| O1  | Last durch 1-s-Auflösung     | ca. 1,7 Mrd. Zeilen/Tag in TimescaleDB, hohes WAL-Volumen und viel I/O           | Spike in M0 (ADR 0001). Fallback: 1-s-Werte nur im Ringpuffer, in der DB erst ab 5–10 s    |
+| O1  | Last durch 1-s-Auflösung     | ✓ Geklärt (Spike M0-09): 1 s in der DB wäre machbar, erzeugt aber ~320 GB WAL/Tag | Entschieden: 1 s nur im Ringpuffer (15 min), 10 s in der DB (ADR 0001) |
 | O2  | Timescale-Lizenz             | Kompression und Continuous Aggregates stehen unter der Timescale License (TSL), nicht Apache-2.0 | Erlaubt für Self-Hosting und SerMon als Produkt bzw. SaaS; verboten wäre nur, TimescaleDB selbst als DBaaS anzubieten. Vor einem SaaS-Start juristisch prüfen |
 | O3  | Prozessdetails               | Ohne `CAP_SYS_PTRACE` keine IO/FD-Infos fremder Prozesse                         | Akzeptiert („n/a“). Später ggf. eine feste Helper-Op „ProcessDetails(pid)“ mit Rate-Limit  |
 | O4  | Docker-Socket                | root-äquivalent                                                                  | Modul aus + Warnung; cgroup-Variante ohne Socket bevorzugen                                |
 | O5  | `curl \| sh`                 | Wird in Security-Kreisen kritisch gesehen                                        | Signaturprüfung im Skript, Option „erst ansehen“, Paket-Repo als gleichwertige Alternative |
 | O6  | Alpine-Security-Updates      | apk hat keine Security-Metadaten                                                 | Nur `report`/`all-auto`; ggf. später den secdb-Feed von Alpine auswerten                   |
 | O7  | Projekt-/Domainname          | „SerMon“ – Marke/Domain prüfen                                                   | vor dem ersten Release                                                                     |
-| O8  | Mandanten in den Metriken    | Row-Level-Security funktioniert eventuell nur eingeschränkt auf komprimierten Chunks und Continuous Aggregates | Primär die Scope-Pflicht in der typisierten Query-Schicht (keine Roh-SQL-Abfragen von Usern) + Tenant-Isolation-Tests; RLS, wo unterstützt (Spike) |
+| O8  | Mandanten in den Metriken    | ✓ Geklärt (Spike M0-09): keine RLS auf Hypertables mit Columnstore und auf Continuous Aggregates | Scope-Pflicht in der Query-Schicht; zusätzlich kein direktes SELECT für `sermon_app`, Lesen nur über `SECURITY DEFINER`-Funktion mit RLS-geschützter `series` (M1-22) |
 | O9  | API-Tokens / Terraform       | Automatisierbarkeit (Nodes, Regeln)                                              | Nach v1.0: org-gebundene, gescopte API-Tokens                                              |
 | O10 | Mobile                       | Push-Benachrichtigungen reichen?                                                 | ntfy/Pushover/Telegram decken das für v1 ab                                                |
 | O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |

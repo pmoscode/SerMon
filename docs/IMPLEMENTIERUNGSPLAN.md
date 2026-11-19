@@ -207,7 +207,13 @@ flowchart LR
 - **Tests zuerst:** Integrationstest „Abfrage ohne gesetzte Org liefert nichts“ (RLS greift).
 - **Abnahme:** `just test-integration` grün; RLS-Muster als ADR dokumentiert.
 
-### ☐ M0-09 – Spike TimescaleDB-Ingest · S · L
+### ☑ M0-09 – Spike TimescaleDB-Ingest · S · L
+> Erledigt; Ergebnisse in [ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md#ergebnis-des-spikes-m0-09-2026-11-19).
+> Ingest, CPU, Abfragen und Aggregate erfüllen die Kriterien, sobald der Index `(series_id, ts)` angelegt ist.
+> - Bei 1 s in der DB entstehen ~320 GB WAL pro Tag. **Entschieden:** 10 s in der DB, 1 s im Ringpuffer (15 min).
+> - RLS ist auf komprimierten Hypertables und Continuous Aggregates nicht möglich; die Zweitlinie über eine
+>   `SECURITY DEFINER`-Funktion kommt in M1-22.
+> - Abweichungen: 20 min statt 24 h Dauerlast, 6 statt 8 GB RAM.
 - **Ziel:** Abnahmekriterien aus ADR 0001 messen.
   - Schema `series` und `metrics_raw` als Hypertable mit Kompression; Continuous Aggregates `metrics_1m` und `metrics_1h` mit Policies
   - Minimaler Lastgenerator (Go) für 50 Nodes × 400 Serien × 1 s
@@ -388,6 +394,10 @@ flowchart LR
 ### 4.4 Server: Ingest und Speicher
 
 #### ☐ M1-22 – `MetricStore` auf TimescaleDB · S · L 🔒
+> Vorgaben aus dem Spike M0-09:
+> - 10-s-Fenster mit avg/min/max in `metrics_raw` und Index `(series_id, ts DESC)`.
+> - Kein direktes SELECT für `sermon_app`; Lesen über eine `SECURITY DEFINER`-Funktion mit RLS-geschützter `series`.
+> - Tests auf Mandantentrennung auch für komprimierte Chunks und Continuous Aggregates.
 - **Ziel:**
   - Port `MetricStore` mit **Contract-Tests**; jede alternative Implementierung muss sie ebenfalls bestehen
   - Implementierung `adapters/timescale`: Migrationen aus M0-09 übernehmen

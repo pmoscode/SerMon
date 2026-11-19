@@ -9,6 +9,7 @@ Reference: KONZEPT.md §8 (naming, labels, cardinality), §19 (TDD).
 
 ## 1. Specify
 - Metric names: `sermon_<area>_<name>_<unit>` following OpenTelemetry system conventions, Prometheus notation (`_bytes`, `_seconds`, `_ratio` for 0..1, `_per_second` for rates).
+- Values are **integers in base units** where possible (bytes/s, packets/s, counts; ratios as ppm, 1 000 000 = 100 %): integers compress ~3× better in TimescaleDB (spike M0-09, ADR 0001). The catalog's unit tells the UI how to scale.
 - Type: everything is sent as a **gauge**. Kernel counters are converted **in the agent** to per-second rates (`_per_second`) and ratios via deltas (handle resets/wrap) – see KONZEPT §8 / ADR 0001. Never send raw monotonic counters: TimescaleDB continuous aggregates can't compute rates (no window functions).
 - Labels: only bounded ones (`cpu`, `device`, `interface`, `mountpoint`, `mode`). Never PIDs, usernames, paths from user data. Note expected series count per node; respect the per-node cardinality limit and default filters (`veth*`, `loop*`).
 - Source file(s) and availability per distro / kernel version (graceful when missing → no metric, no error spam; log once at debug).

@@ -105,6 +105,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/`
 | D26 | API            | **Connect-RPC/Protobuf** für Agent ↔ Server (gRPC) und Web ↔ Server (Connect)                | Ein Schema, typisiert von Ende zu Ende                                                                |
 | D27 | UI-Ressourcen  | **Alles lokal ausgeliefert:** keine CDNs, keine externen Schriften, Skripte, Styles, Bilder oder Icons | Datenschutz (keine IP-Weitergabe an Dritte, DSGVO), Air-Gap-fähig, strikte CSP, keine Supply-Chain über fremde Server |
 | D28 | Mitglieder     | **Einladungslink:** einmalig, 72 h gültig, nur als Hash gespeichert; die UI zeigt ihn zum Kopieren, Mail-Versand optional | Keine User-Enumeration, Admin kennt keine Passwörter, **SMTP nie Pflicht** ([ADR 0008](docs/adr/0008-einladungen.md)) |
+| D29 | Orgs löschen   | **Erst sperren, nach Frist endgültig löschen:** Sperre beendet Logins und Ingest sofort; nach der Frist (Standard 30 Tage) werden Stamm-, Event-, Metrik- und Loki-Daten gelöscht; das Audit-Log ist vorher exportierbar | Schutz vor Fehlbedienung und Missbrauch, Daten bleiben bis zum Löschen nachvollziehbar |
 
 ---
 
@@ -1174,7 +1175,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |
 | O12 | Wachstum über ca. 200 Nodes  | TimescaleDB stößt bei 1-s-Auflösung an Grenzen                                   | `MetricStore` auf VictoriaMetrics umstellen; die Domänenlogik bleibt unverändert (ADR 0001) |
 | O13 | Mitglieder hinzufügen        | ✓ Geklärt: Einladungslink statt Startpasswort                                    | Entschieden: D28, Link zum Kopieren, Mail optional (ADR 0008)                              |
-| O14 | Orgs löschen                 | Audit-Log (nur anfügen), Metriken und Loki-Daten einer Org: sofort löschen, sperren oder nach Frist? | Erst sperren (kein Login, kein Ingest), nach Frist endgültig löschen; Audit-Log exportierbar |
+| O14 | Orgs löschen                 | ✓ Geklärt: sperren, nach Frist löschen                                           | Entschieden: D29; umgesetzt mit E3.8                                                       |
 
 ---
 

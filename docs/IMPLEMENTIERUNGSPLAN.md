@@ -326,7 +326,7 @@ flowchart LR
 > - Audit-Einträge im Log der jeweiligen Org.
 > - Ohne Mitgliedschaft sieht der Superadmin keine Daten einer Org (Test).
 >
-> Orgs zu löschen ist offen (O14): Aufbewahrung, Audit-Log, Metriken und Loki-Daten brauchen ein eigenes Konzept.
+> Orgs zu löschen ist entschieden (D29: sperren, nach Frist löschen) und folgt mit E3.8.
 - **Ziel:** CRUD-Use-Cases und Connect-RPCs für Orgs, Node-Gruppen, Mitgliedschaften und Rollen-Bindungen; RLS-Policies; Audit-Log-Tabelle (nur anfügen, Hash-Kette); Org-Switch.
   - **Testgerüst für Mandantentrennung:** ein generischer Test, der **jede** Web-RPC mit einem User aus fremder Org aufruft und `NotFound` oder `PermissionDenied` erwartet. Neue RPCs ohne Eintrag lassen den Test fehlschlagen.
 - **Abhängig von:** M1-01, M1-02
@@ -601,6 +601,7 @@ flowchart LR
 | **E3.5 Security-Dashboard** | Zeitverläufe, Top-IPs und Top-User, Tabelle mit CSV-Export, GeoIP (lokale DB, optional), Tracking bekannter IPs | `sermon-ui-component` | E2.3 |
 | **E3.6 OIDC/SSO** | Authorization Code + PKCE, Mapping von Gruppen-Claims, Just-in-Time-Provisioning | `sermon-security-review` | M1-04 |
 | **E3.7 Passkeys und Step-up** | WebAuthn-Registrierung und -Login, Step-up für alle sensiblen Aktionen vervollständigen | `sermon-security-review` | M1-03 |
+| **E3.8 Orgs sperren und löschen** | Sperre (Logins, Ingest und Agent-Verbindungen der Org sofort beenden, Zertifikate sperren), Export des Audit-Logs, Löschjob nach Frist (Stamm-, Event- und Metrikdaten, Loki-Tenant), Aufheben der Sperre während der Frist; alles mit Step-up und Audit (D29) | `sermon-security-review` | M1-04, M1-22, E3.2 |
 
 ---
 

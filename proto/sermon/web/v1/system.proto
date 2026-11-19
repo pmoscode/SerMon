@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+// Package sermon.web.v1 is the API between the web UI and sermon-server (Connect protocol).
+//
+// Every RPC is authorized in the server's app layer and bound to the caller's tenant
+// scope (KONZEPT §7, §18.3); new RPCs must be added to the role-matrix and
+// tenant-isolation tests.
+package sermon.web.v1;
+
+// SystemService provides information about the SerMon installation itself.
+service SystemService {
+  // GetVersion returns the server version. Requires authentication from M1-02 on
+  // (version details help attackers to fingerprint an installation).
+  rpc GetVersion(GetVersionRequest) returns (GetVersionResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// GetVersionRequest has no parameters.
+message GetVersionRequest {}
+
+// GetVersionResponse describes the running server.
+message GetVersionResponse {
+  // version is the server's version string, e.g. "1.4.2" or a git revision for dev builds.
+  string version = 1;
+}

@@ -12,3 +12,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+prost.workspace = true
+prost-types.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true

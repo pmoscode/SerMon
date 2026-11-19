@@ -253,7 +253,7 @@ eine Fake-Implementierung für Tests.
 
 - **Schema:** `proto/sermon/agent/v1/*.proto` und `proto/sermon/web/v1/*.proto`, verwaltet mit `buf` (Lint und
   Breaking-Change-Check in CI).
-- **Agent ↔ Server:** Ein langlebiger **bidirektionaler gRPC-Stream** `AgentService.Connect`.
+- **Agent ↔ Server:** Ein langlebiger **bidirektionaler gRPC-Stream** `AgentService.Session`.
     - Agent → Server: `Hello{agent_version, host_facts, config_version}`, `MetricBatch`, `LogBatch`,
       `SecurityEventBatch`, `UpdateReport`, `ProcessSnapshot`, `CommandResult`, `Heartbeat`
     - Server → Agent: `ConfigUpdate{version, config}`, `StartLiveView{interval}`, `StopLiveView`,

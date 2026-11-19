@@ -45,6 +45,11 @@ Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als D
 Web: `just build-web` (Build, Größenbudget, Kopie nach `server/web/dist` zum Einbetten), `just e2e` (Playwright gegen
 die echte Server-Binary mit eingebetteter UI), `cd web && pnpm dev` (Vite-Dev-Server).
 
+Protokoll: `proto/` mit buf (ADR 0004). `just gen` generiert Code für Go (`server/internal/gen`), TS
+(`web/src/lib/api/gen`) und Rust (`agent/crates/sermon-transport/src/gen`), und zwar nur mit lokalen Plugins.
+Generierter Code wird committet und nie von Hand geändert; die Zielordner leert `buf generate` bei jedem Lauf (keine
+eigenen Dateien dort ablegen). Rust-Plugins installiert `just install-proto-plugins`.
+
 Web-Besonderheiten:
 - SvelteKit 3: Die Konfiguration steht in `web/vite.config.ts` (es gibt keine `svelte.config.js`).
 - Imports über `#lib/...` (package.json-Subpath-Imports) brauchen die Endung `.js`, z. B. `#lib/i18n/locale.svelte.js`.

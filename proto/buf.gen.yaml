@@ -1,0 +1,43 @@
+# Code generation – run via `just gen` (from the repository root).
+# All plugins run locally with pinned versions; no remote plugins (proto files never leave
+# the machine). Generated code is committed; CI checks that `just gen` produces no diff.
+version: v2
+clean: true
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/pmoscode/SerMon/server/internal/gen
+  disable:
+    # Dependencies keep their own Go packages (buf.build/gen/go/...).
+    - module: buf.build/bufbuild/protovalidate
+plugins:
+  # Go: messages (google.golang.org/protobuf) and Connect/gRPC handlers. Versions: server/go.mod (tool).
+  - local: ["go", "-C", "../server", "tool", "protoc-gen-go"]
+    out: ../server/internal/gen
+    opt: paths=source_relative
+  - local: ["go", "-C", "../server", "tool", "protoc-gen-connect-go"]
+    out: ../server/internal/gen
+    opt: paths=source_relative
+
+  # TypeScript (Protobuf-ES v2, includes service descriptors for Connect-ES). Version: web/package.json.
+  - local: ../web/node_modules/.bin/protoc-gen-es
+    out: ../web/src/lib/api/gen
+    include_imports: true
+    exclude_types: [sermon.agent.v1] # the UI only talks the web API
+    opt: target=ts
+
+  # Rust: prost messages and tonic client (agent side only). Versions: just setup / CLAUDE.md.
+  - local: protoc-gen-prost
+    out: ../agent/crates/sermon-transport/src/gen
+    exclude_types: [sermon.web.v1] # the agent only talks the agent API
+    opt:
+      - compile_well_known_types
+      - extern_path=.google.protobuf=::prost_types
+  - local: protoc-gen-tonic
+    out: ../agent/crates/sermon-transport/src/gen
+    exclude_types: [sermon.web.v1]
+    opt:
+      - no_server=true
+      - compile_well_known_types
+      - extern_path=.google.protobuf=::prost_types

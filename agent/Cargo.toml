@@ -10,6 +10,14 @@ license = "AGPL-3.0-only"
 repository = "https://github.com/pmoscode/SerMon"
 publish = false
 
+# Shared dependency versions – crates reference them with `workspace = true`.
+# Generated protocol code (crates/sermon-transport/src/gen) must match these versions (just gen).
+[workspace.dependencies]
+prost = "=0.14.6"
+prost-types = "=0.14.6"
+tonic = { version = "=0.14.9", default-features = false, features = ["codegen", "channel"] }
+tonic-prost = "=0.14.9"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 unused_qualifications = "warn"

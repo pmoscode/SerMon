@@ -1,0 +1,14 @@
+# buf configuration – run via `just gen`, `just lint-proto`, `just breaking-proto`.
+version: v2
+modules:
+  - path: .
+deps:
+  # Validation rules (buf.validate). Pinned in buf.lock.
+  - buf.build/bufbuild/protovalidate
+lint:
+  use:
+    - STANDARD
+    - COMMENTS # every message, field, enum and RPC must be documented (skill sermon-proto-change)
+breaking:
+  use:
+    - WIRE_JSON

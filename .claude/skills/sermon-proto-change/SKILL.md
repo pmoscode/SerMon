@@ -18,8 +18,11 @@ Reference: KONZEPT.md §5 (protocol), §21 (versioning: server supports agent N 
 
 ## Steps
 1. Edit `proto/sermon/<api>/v1/*.proto`.
-2. `just gen` (runs `buf generate` → Rust `agent/crates/sermon-transport/src/gen`, Go `server/internal/gen`, TS `web/src/lib/api/gen`). Never edit generated code.
-3. `buf lint` and `buf breaking --against '.git#branch=main'` must be green.
+2. `just gen` (runs `buf generate` with local plugins only → Rust `agent/crates/sermon-transport/src/gen`, Go `server/internal/gen`, TS `web/src/lib/api/gen`). Never edit generated code and never put own files into these directories (`clean: true` deletes them). Commit schema and generated code together; `just check-gen` must pass.
+3. `just lint-proto` (STANDARD + COMMENTS: document everything) and `just breaking-proto` (against `main`) must be green.
+   - RPC names must not collide with methods of generated clients (e.g. tonic's `connect()` constructor – that's why the agent RPC is `Session`).
+   - New Rust messages: add a roundtrip test in `agent/crates/sermon-transport/tests/proto.rs`.
+   - New validation rules: add positive and negative cases to `server/internal/transport/agentapi/schema_test.go` (or the web API equivalent).
 4. Write/adjust tests on both sides (TDD): server handler test, agent client test; for N-1 compatibility add a test that decodes a message produced by the previous version (golden binary in `proto/testdata/`).
 5. If authz-relevant (new web RPC): add to the role-matrix and tenant-isolation tests (`sermon-security-review` §1).
 6. Update KONZEPT.md §5 if the message list changes.

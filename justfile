@@ -17,7 +17,7 @@ setup:
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "✗ $tool fehlt"; missing=1; fi
     done
     # Needed from M0-02..M0-05 on – reported, but not fatal yet.
-    for tool in cargo cargo-zigbuild cargo-deny zig go golangci-lint govulncheck node pnpm buf docker; do
+    for tool in cargo cargo-zigbuild cargo-deny zig go golangci-lint govulncheck node pnpm buf protoc-gen-prost protoc-gen-tonic docker; do
         if command -v "$tool" >/dev/null; then echo "✓ $tool"; else echo "… $tool fehlt (ab M0-02..M0-07 nötig)"; fi
     done
     [ "$missing" -eq 0 ] || { echo "Bitte fehlende Tools installieren (z. B. brew install just lefthook gitleaks shellcheck)." >&2; exit 1; }
@@ -26,14 +26,27 @@ setup:
 # Start the development environment (infra, server with hot reload, web dev server)
 dev: (_todo "dev" "M0-07")
 
-# Generate code from proto/ for Rust, Go and TypeScript
-gen: (_todo "gen" "M0-05")
+# Generate code from proto/ for Rust, Go and TypeScript (local plugins only)
+[working-directory: 'proto']
+gen:
+    buf generate
+    cd ../agent && cargo fmt --all
+    @echo "✓ generated: server/internal/gen, web/src/lib/api/gen, agent/crates/sermon-transport/src/gen"
+
+# Fail if the committed generated code is not up to date with proto/ (used in CI)
+check-gen: gen
+    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen
+    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
+
+# Install the pinned Rust protoc plugins used by `just gen`
+install-proto-plugins:
+    cargo install --locked protoc-gen-prost@0.5.0 protoc-gen-tonic@0.5.0
 
 # Format all code
 fmt: fmt-agent fmt-server fmt-web
 
 # Lint all parts
-lint: lint-shell lint-agent lint-server lint-web
+lint: lint-shell lint-proto lint-agent lint-server lint-web
 
 # Run all unit tests
 test: test-scripts test-agent test-server test-web
@@ -62,6 +75,25 @@ test-scripts:
 # Scan the git history for leaked secrets
 security-secrets:
     gitleaks git --redact --no-banner
+
+# --- proto (buf) -------------------------------------------------------------
+
+# Lint and format-check the protocol definitions
+[working-directory: 'proto']
+lint-proto:
+    buf lint
+    buf format --diff --exit-code
+
+# Detect breaking protocol changes against main (KONZEPT §5: agents N and N-1 must keep working)
+[working-directory: 'proto']
+breaking-proto:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! git cat-file -e main:proto/buf.yaml 2>/dev/null; then
+        echo "⏭  no proto/ on main yet – nothing to compare"; exit 0
+    fi
+    buf breaking --against '../.git#branch=main,subdir=proto'
+    echo "✓ no breaking changes against main"
 
 # --- agent (Rust) ------------------------------------------------------------
 

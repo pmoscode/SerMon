@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+// Package sermon.agent.v1 is the protocol between sermon-agent and sermon-server.
+//
+// Security rules (KONZEPT §5, §18):
+// - The agent always opens the connection; the server reaches agents only through this stream.
+// - Organization and node identity are taken exclusively from the agent's mTLS client
+//   certificate. Messages from the agent therefore never carry org or node IDs.
+// - Server-to-agent messages are typed commands only – there is no generic "exec" payload.
+package sermon.agent.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// AgentService is implemented by sermon-server and called by agents over mTLS.
+service AgentService {
+  // Session opens the long-lived bidirectional stream of a connected agent. The agent must
+  // send a Hello as its first message; the server answers with Ack messages and commands.
+  rpc Session(stream SessionRequest) returns (stream SessionResponse);
+}
+
+// SessionRequest is one message from the agent to the server.
+message SessionRequest {
+  // payload is the actual message; exactly one must be set.
+  oneof payload {
+    option (buf.validate.oneof).required = true;
+
+    // hello introduces the agent; it must be the first message of a stream.
+    Hello hello = 1;
+    // heartbeat keeps the stream alive and proves liveness.
+    Heartbeat heartbeat = 2;
+  }
+}
+
+// SessionResponse is one message from the server to the agent.
+message SessionResponse {
+  // payload is the actual message; exactly one must be set.
+  oneof payload {
+    option (buf.validate.oneof).required = true;
+
+    // ack confirms that all messages up to a sequence number were persisted.
+    Ack ack = 1;
+  }
+}
+
+// Hello is the first message of every stream.
+message Hello {
+  // protocol_version is the agent's protocol version; the server supports N and N-1.
+  uint32 protocol_version = 1 [(buf.validate.field).uint32.gte = 1];
+  // agent_version is the semantic version of the agent binary, e.g. "1.4.2".
+  string agent_version = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // host_facts describe the machine the agent runs on.
+  HostFacts host_facts = 3 [(buf.validate.field).required = true];
+  // config_version is the version of the server-provided configuration the agent currently
+  // applies (0 = none yet); the server sends a newer one if available.
+  uint64 config_version = 4;
+}
+
+// HostFacts are static properties of the monitored host.
+message HostFacts {
+  // hostname is the host's name as reported by the kernel (RFC 1123, max. 253 characters).
+  string hostname = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 253
+  }];
+  // machine_id is the content of /etc/machine-id: 32 lowercase hex characters.
+  string machine_id = 2 [(buf.validate.field).string.pattern = "^[0-9a-f]{32}$"];
+  // os_id is the ID from /etc/os-release, e.g. "debian", "rocky", "alpine".
+  string os_id = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  // os_version is the VERSION_ID from /etc/os-release, e.g. "13" or "9.5".
+  string os_version = 4 [(buf.validate.field).string.max_len = 64];
+  // kernel_release is the output of `uname -r`.
+  string kernel_release = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  // architecture is the CPU architecture of the agent binary.
+  Architecture architecture = 6 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // cpu_count is the number of logical CPUs.
+  uint32 cpu_count = 7 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 4096
+  }];
+  // memory_bytes is the total physical memory in bytes.
+  uint64 memory_bytes = 8 [(buf.validate.field).uint64.gt = 0];
+}
+
+// Architecture is a supported CPU architecture.
+enum Architecture {
+  // ARCHITECTURE_UNSPECIFIED is invalid and must not be sent.
+  ARCHITECTURE_UNSPECIFIED = 0;
+  // ARCHITECTURE_AMD64 is x86-64.
+  ARCHITECTURE_AMD64 = 1;
+  // ARCHITECTURE_ARM64 is AArch64.
+  ARCHITECTURE_ARM64 = 2;
+}
+
+// Heartbeat proves that the agent is alive; sent every 15 seconds.
+message Heartbeat {
+  // sent_at is the agent's wall-clock time when the heartbeat was sent (detects clock skew).
+  google.protobuf.Timestamp sent_at = 1 [(buf.validate.field).required = true];
+}
+
+// Ack confirms persisted agent data; the agent may then drop it from its buffer.
+message Ack {
+  // seq is the highest sequence number that was persisted (inclusive).
+  uint64 seq = 1;
+}

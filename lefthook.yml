@@ -16,6 +16,10 @@ pre-commit:
       glob: "server/**/*.go"
       root: "server/"
       run: golangci-lint fmt --diff ./...
+    buf-format:
+      glob: "proto/**/*.proto"
+      root: "proto/"
+      run: buf format --diff --exit-code
     prettier:
       glob: "web/**/*.{ts,js,svelte,css,json,html}"
       root: "web/"

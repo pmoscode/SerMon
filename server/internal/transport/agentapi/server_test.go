@@ -22,6 +22,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
+	"github.com/pmoscode/SerMon/server/internal/app/ingest"
+	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/app/metrics/memstore"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -198,6 +201,11 @@ func startServerWithTimeout(t *testing.T, rotationTimeout time.Duration) server 
 
 func startServerWith(t *testing.T, ca *testCA, rotationTimeout time.Duration, opts ...agentapi.TLSOption) server {
 	t.Helper()
+	return startServerFull(t, ca, rotationTimeout, opts, nil)
+}
+
+func startServerFull(t *testing.T, ca *testCA, rotationTimeout time.Duration, opts []agentapi.TLSOption, handlerOpts []agentapi.HandlerOption) server {
+	t.Helper()
 	logger := slog.New(slog.DiscardHandler)
 	sessions := agentapi.NewSessions(rotationTimeout)
 	rotator := &fakeRotator{ca: ca}
@@ -206,7 +214,7 @@ func startServerWith(t *testing.T, ca *testCA, rotationTimeout time.Duration, op
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger))
+	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger, handlerOpts...))
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -648,7 +656,7 @@ func TestTLS_NewServerCertificateWhenTheTrustedCAsChange(t *testing.T) {
 	}
 }
 
-func TestSession_BatchesAreAcceptedButNotAcknowledgedBeforeIngestExists(t *testing.T) {
+func TestSession_BatchesAreAcceptedButNotAcknowledgedWithoutIngest(t *testing.T) {
 	s := startServer(t)
 	cert, _ := s.ca.agentCert(t, orgX, nodeX)
 	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
@@ -664,9 +672,101 @@ func TestSession_BatchesAreAcceptedButNotAcknowledgedBeforeIngestExists(t *testi
 		}
 	}
 	_ = stream.CloseRequest()
-	// Until M1-24 nothing is persisted, so nothing may be acknowledged; the session stays healthy.
+	// Without ingest nothing is persisted, so nothing may be acknowledged; the session stays healthy.
 	res, err := stream.Receive()
 	if !errors.Is(err, io.EOF) {
 		t.Errorf("Receive() = %v, %v; want EOF without an Ack", res, err)
+	}
+}
+
+// fakeNodes is the node directory of the ingest in these tests.
+type fakeNodes struct{ group tenant.GroupID }
+
+func (f fakeNodes) Connected(context.Context, tenant.OrgID, identity.NodeID, ingest.HostFacts, string, time.Time) (tenant.GroupID, error) {
+	return f.group, nil
+}
+
+func (fakeNodes) Seen(context.Context, tenant.OrgID, identity.NodeID, time.Time) error { return nil }
+
+func metricBatch(seq uint64, at time.Time, value int64) *agentv1.SessionRequest {
+	return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: &agentv1.Batch{
+		Seq: seq,
+		Content: &agentv1.Batch_Metrics{Metrics: &agentv1.MetricBatch{CollectedAt: timestamppb.New(at), Samples: []*agentv1.Sample{
+			{Metric: "sermon_load_average", Labels: map[string]string{"period": "1m"}, Value: &agentv1.Sample_IntValue{IntValue: value}},
+		}}},
+	}}}
+}
+
+func TestSession_StoresBatchesUnderTheCertificateIdentityAndAcknowledgesThem(t *testing.T) {
+	store := memstore.New()
+	group := tenant.GroupID(uuid.New())
+	store.AddNode(orgX, group, nodeX)
+	ring := metrics.NewRing()
+	config := ingest.DefaultConfig()
+	config.FlushInterval = 20 * time.Millisecond
+	service := ingest.NewService(store, ring, fakeNodes{group: group}, config, time.Now, slog.New(slog.DiscardHandler))
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithIngest(service)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := stream.Receive(); err != nil || res.GetTrustBundle() == nil {
+		t.Fatalf("first message = %v, %v", res, err)
+	}
+
+	// Two windows: the first one is complete once the second starts.
+	start := time.Now().Add(-time.Minute).Truncate(10 * time.Second)
+	for i := range 11 {
+		if err := stream.Send(metricBatch(uint64(100+i), start.Add(time.Duration(i)*time.Second), int64(i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := stream.Receive()
+	if err != nil || res.GetAck().GetSeq() != 109 {
+		t.Fatalf("Receive() = %v, %v; want Ack 109 (last batch of the complete window)", res, err)
+	}
+	aggregates := store.Aggregates()
+	if len(aggregates) != 1 || aggregates[0].Node != nodeX || aggregates[0].Avg != 4.5 {
+		t.Errorf("stored = %+v", aggregates)
+	}
+	if seq, _ := store.PersistedSeq(context.Background(), orgX, nodeX); seq != 109 {
+		t.Errorf("persisted seq = %d", seq)
+	}
+	scope, _ := tenant.ForAllGroups(orgX)
+	if live := ring.Query(scope, metrics.Query{Metric: "sermon_load_average", Nodes: []identity.NodeID{nodeX}, From: start, To: start.Add(time.Minute), Step: time.Second}); len(live) != 1 || len(live[0].Points) != 11 {
+		t.Errorf("ring = %+v", live)
+	}
+
+	// A resent batch is acknowledged at once and not stored again.
+	if err := stream.Send(metricBatch(105, start.Add(5*time.Second), 5)); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := stream.Receive(); err != nil || res.GetAck().GetSeq() != 109 {
+		t.Fatalf("duplicate: Receive() = %v, %v; want Ack 109", res, err)
+	}
+	_ = stream.CloseRequest()
+	if got := len(store.Aggregates()); got != 1 {
+		t.Errorf("aggregates after the duplicate = %d", got)
+	}
+}
+
+func TestSession_AnInvalidBatchEndsTheSessionWithoutStoringAnything(t *testing.T) {
+	store := memstore.New()
+	group := tenant.GroupID(uuid.New())
+	store.AddNode(orgX, group, nodeX)
+	service := ingest.NewService(store, metrics.NewRing(), fakeNodes{group: group}, ingest.DefaultConfig(), time.Now, slog.New(slog.DiscardHandler))
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithIngest(service)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	invalid := metricBatch(1, time.Now(), 1)
+	invalid.GetBatch().GetMetrics().Samples[0].Metric = "evil'); DROP TABLE series; --"
+
+	err := runSession(context.Background(), s.client(t, &cert, tls.VersionTLS13), helloMsg(), invalid)
+
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("session error = %v, want INVALID_ARGUMENT", err)
+	}
+	if len(store.Aggregates()) != 0 {
+		t.Errorf("stored %+v", store.Aggregates())
 	}
 }

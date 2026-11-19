@@ -92,6 +92,9 @@ Datenbank (ADR 0007):
   Isolation, Schreibschutz und „ohne Tenant nichts sichtbar“.
 - Der Server verbindet sich als `sermon_app` (keine Sonderrechte); die Owner-Rolle nur für Migrationen.
 - `just test-integration` startet die Testdatenbank per Testcontainers (Docker nötig).
+- Metriken (ADR 0001): Port `app/metrics.Store` mit Contract-Tests (`metricstoretest`), Implementierungen
+  `adapters/timescale` und `app/metrics/memstore` (Fake). `sermon_app` darf Metrik-Tabellen nicht lesen; gelesen wird
+  über `metric_points_*` (`SECURITY DEFINER`). Ingest: `app/ingest` (10-s-Fenster, Ack erst nach dem Schreiben).
 
 Web-Besonderheiten:
 - SvelteKit 3: Die Konfiguration steht in `web/vite.config.ts` (es gibt keine `svelte.config.js`).

@@ -15,9 +15,11 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
+	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -241,14 +243,28 @@ type SessionHandler struct {
 	sessions *Sessions
 	rotator  Rotator
 	trust    TrustSource
+	ingest   *ingest.Service
 	logger   *slog.Logger
+}
+
+// HandlerOption configures the SessionHandler.
+type HandlerOption func(*SessionHandler)
+
+// WithIngest stores the agents' batches (M1-24); without it batches are accepted but neither
+// stored nor acknowledged.
+func WithIngest(service *ingest.Service) HandlerOption {
+	return func(h *SessionHandler) { h.ingest = service }
 }
 
 var _ agentv1connect.AgentServiceHandler = (*SessionHandler)(nil)
 
 // NewSessionHandler returns the AgentService handler.
-func NewSessionHandler(sessions *Sessions, rotator Rotator, trust TrustSource, logger *slog.Logger) *SessionHandler {
-	return &SessionHandler{sessions: sessions, rotator: rotator, trust: trust, logger: logger}
+func NewSessionHandler(sessions *Sessions, rotator Rotator, trust TrustSource, logger *slog.Logger, options ...HandlerOption) *SessionHandler {
+	h := &SessionHandler{sessions: sessions, rotator: rotator, trust: trust, logger: logger}
+	for _, option := range options {
+		option(h)
+	}
+	return h
 }
 
 type received struct {
@@ -300,6 +316,11 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 	if err != nil {
 		h.logger.ErrorContext(ctx, "record session failed", "node", id.Node.String(), "error", err)
 	}
+	feed, flush, closeFeed, err := h.openIngest(ctx, id, hello)
+	if err != nil {
+		return err
+	}
+	defer closeFeed()
 	h.logger.InfoContext(ctx, "agent connected", "org", id.Org.String(), "node", id.Node.String(), "agent_version", hello.GetAgentVersion())
 	// The trust bundle first: during a CA rollover the agent learns the new root (KONZEPT §6).
 	bundle := &agentv1.TrustBundle{}
@@ -330,6 +351,10 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 		select {
 		case <-ctx.Done():
 			return connect.NewError(connect.CodeAborted, context.Cause(ctx))
+		case <-flush:
+			if err := h.flush(ctx, feed, stream); err != nil {
+				return err
+			}
 		case <-live.commands:
 			h.logger.InfoContext(ctx, "on-demand rotation requested", "node", id.Node.String())
 			if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RotateNow{RotateNow: &agentv1.RotateNow{}}}); err != nil {
@@ -342,7 +367,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 			if r.err != nil {
 				return r.err
 			}
-			done, err := h.handle(ctx, id, live, previousIP, r.msg, stream)
+			done, err := h.handle(ctx, id, live, previousIP, r.msg, stream, feed)
 			if err != nil {
 				return err
 			}
@@ -355,7 +380,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 
 // handle processes one agent message; done ends the session (after an on-demand rotation).
 func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSession, previousIP string, msg *agentv1.SessionRequest,
-	stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse],
+	stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse], feed *ingest.Session,
 ) (bool, error) {
 	switch {
 	case msg.GetHello() != nil:
@@ -386,11 +411,97 @@ func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSess
 		// the agent reconnects with the new one.
 		return immediate, nil
 	case msg.GetBatch() != nil:
-		// Ingest follows with M1-24. Until then nothing is persisted, so nothing is acknowledged:
-		// the agent keeps the data in its buffer.
-		h.logger.DebugContext(ctx, "batch received, ingest not implemented yet", "node", id.Node.String(), "seq", msg.GetBatch().GetSeq())
+		if feed == nil {
+			// Without ingest nothing is persisted, so nothing is acknowledged: the agent keeps the
+			// data in its buffer.
+			h.logger.DebugContext(ctx, "batch received, ingest disabled", "node", id.Node.String(), "seq", msg.GetBatch().GetSeq())
+			return false, nil
+		}
+		response := feed.Accept(ctx, toBatch(msg.GetBatch()))
+		if response.Throttle != nil {
+			throttle := &agentv1.Throttle{MinInterval: durationpb.New(*response.Throttle)}
+			if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_Throttle{Throttle: throttle}}); err != nil {
+				return false, err //nolint:wrapcheck // connect errors must reach the client unchanged
+			}
+		}
+		if response.Ack != 0 {
+			if err := sendAck(stream, response.Ack); err != nil {
+				return false, err
+			}
+		}
+		if feed.Due() {
+			return false, h.flush(ctx, feed, stream)
+		}
 		return false, nil
 	}
-	// Heartbeat: liveness and node status follow with M1-24.
+	// Heartbeat: liveness for the node status.
+	if feed != nil {
+		feed.Heartbeat(ctx)
+	}
 	return false, nil
+}
+
+// openIngest prepares the ingest of a connected node: the feed, the flush timer and the function
+// to call when the session ends. Without ingest all three are inert.
+func (h *SessionHandler) openIngest(ctx context.Context, id Identity, hello *agentv1.Hello) (*ingest.Session, <-chan time.Time, func(), error) {
+	if h.ingest == nil {
+		return nil, nil, func() {}, nil
+	}
+	feed, err := h.ingest.Open(ctx, id.Org, id.Node, factsFrom(hello.GetHostFacts()), hello.GetAgentVersion())
+	if err != nil {
+		h.logger.ErrorContext(ctx, "open ingest failed", "node", id.Node.String(), "error", err)
+		return nil, nil, nil, connect.NewError(connect.CodeUnavailable, errors.New("ingest unavailable, retry later"))
+	}
+	ticker := time.NewTicker(h.ingest.Config().FlushInterval)
+	closeFeed := func() {
+		ticker.Stop()
+		// The session context is gone; the final flush still gets a few seconds.
+		final, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		feed.Close(final)
+	}
+	return feed, ticker.C, closeFeed, nil
+}
+
+// flush writes the complete windows and acknowledges what is stored. A failed write is logged and
+// retried at the next tick; the agent keeps the data until then.
+func (h *SessionHandler) flush(ctx context.Context, feed *ingest.Session, stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse]) error {
+	ack, err := feed.Flush(ctx)
+	if err != nil {
+		h.logger.WarnContext(ctx, "metric write failed, will retry", "error", err)
+		return nil
+	}
+	if ack == 0 {
+		return nil
+	}
+	return sendAck(stream, ack)
+}
+
+func sendAck(stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse], seq uint64) error {
+	return stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_Ack{Ack: &agentv1.Ack{Seq: seq}}}) //nolint:wrapcheck // connect errors must reach the client unchanged
+}
+
+// toBatch converts a validated protocol batch. Identity is never taken from it.
+func toBatch(b *agentv1.Batch) ingest.Batch {
+	metrics := b.GetMetrics()
+	batch := ingest.Batch{Seq: b.GetSeq(), CollectedAt: metrics.GetCollectedAt().AsTime(), Samples: make([]ingest.Sample, 0, len(metrics.GetSamples()))}
+	for _, sample := range metrics.GetSamples() {
+		value := float64(sample.GetIntValue())
+		if v, ok := sample.GetValue().(*agentv1.Sample_DoubleValue); ok {
+			value = v.DoubleValue
+		}
+		batch.Samples = append(batch.Samples, ingest.Sample{Metric: sample.GetMetric(), Labels: sample.GetLabels(), Value: value})
+	}
+	return batch
+}
+
+func factsFrom(f *agentv1.HostFacts) ingest.HostFacts {
+	architecture := "amd64"
+	if f.GetArchitecture() == agentv1.Architecture_ARCHITECTURE_ARM64 {
+		architecture = "arm64"
+	}
+	return ingest.HostFacts{
+		Hostname: f.GetHostname(), OSID: f.GetOsId(), OSVersion: f.GetOsVersion(), KernelRelease: f.GetKernelRelease(),
+		Architecture: architecture, CPUCount: f.GetCpuCount(), MemoryBytes: f.GetMemoryBytes(),
+	}
 }

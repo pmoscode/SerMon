@@ -120,9 +120,12 @@ type Querier interface {
 	SupersedeCertificate(ctx context.Context, arg SupersedeCertificateParams) (int64, error)
 	// Records the source IP of a new session and returns the previous one.
 	SwapNodeLastIP(ctx context.Context, arg SwapNodeLastIPParams) (string, error)
+	TouchNode(ctx context.Context, arg TouchNodeParams) (int64, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
 	TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error)
+	// The agent's Hello: current host facts and version (the machine-id never changes here).
+	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).

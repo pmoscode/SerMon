@@ -4,8 +4,9 @@
 Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Gebot**.
 
 > ⚠️ **Status: in früher Entwicklung (Meilenstein M1).** Die Server-Seite für Anmeldung, Mandanten, Enrollment und die
-> mTLS-Agent-API steht. Der Agent enrollt sich, hält die Verbindung (Puffer, Reconnect, Zertifikatsrotation);
-> Metrik-Collectors, Ingest und UI folgen. Noch nicht für den produktiven Einsatz geeignet.
+> mTLS-Agent-API steht. Der Agent enrollt sich, sammelt die Basis-Metriken und liefert sie über Puffer, Reconnect und
+> Zertifikatsrotation an den Server, der sie in TimescaleDB speichert. Abfrage-API und UI folgen. Noch nicht für den
+> produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 
 *A lean, self-hosted, multi-tenant monitoring for Linux servers – security first. Documentation is in German.*

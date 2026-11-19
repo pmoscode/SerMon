@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getNode = `-- name: GetNode :one
@@ -90,4 +91,63 @@ func (q *Queries) InsertNode(ctx context.Context, arg InsertNodeParams) error {
 		arg.EnrolledWith,
 	)
 	return err
+}
+
+const touchNode = `-- name: TouchNode :execrows
+UPDATE nodes SET last_seen_at = GREATEST(COALESCE(last_seen_at, $1), $1)
+WHERE id = $2
+`
+
+type TouchNodeParams struct {
+	SeenAt *time.Time
+	ID     uuid.UUID
+}
+
+func (q *Queries) TouchNode(ctx context.Context, arg TouchNodeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, touchNode, arg.SeenAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateNodeOnConnect = `-- name: UpdateNodeOnConnect :one
+UPDATE nodes SET hostname = $1, os_id = $2, os_version = $3,
+                 kernel_release = $4, architecture = $5,
+                 cpu_count = $6, memory_bytes = $7,
+                 agent_version = $8, last_seen_at = $9
+WHERE id = $10
+RETURNING group_id
+`
+
+type UpdateNodeOnConnectParams struct {
+	Hostname      string
+	OsID          string
+	OsVersion     string
+	KernelRelease string
+	Architecture  string
+	CpuCount      int32
+	MemoryBytes   int64
+	AgentVersion  pgtype.Text
+	SeenAt        *time.Time
+	ID            uuid.UUID
+}
+
+// The agent's Hello: current host facts and version (the machine-id never changes here).
+func (q *Queries) UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, updateNodeOnConnect,
+		arg.Hostname,
+		arg.OsID,
+		arg.OsVersion,
+		arg.KernelRelease,
+		arg.Architecture,
+		arg.CpuCount,
+		arg.MemoryBytes,
+		arg.AgentVersion,
+		arg.SeenAt,
+		arg.ID,
+	)
+	var group_id uuid.UUID
+	err := row.Scan(&group_id)
+	return group_id, err
 }

@@ -181,3 +181,85 @@ func TestAgentBinary_RunsAndRotatesAgainstTheRealServer(t *testing.T) {
 		t.Errorf("agent did not stop cleanly:\n%s", agentLogs.String())
 	}
 }
+
+// TestAgentBinary_DeliversMetricsIntoTheDatabase is the M1 data path end to end: the Rust agent
+// collects every second, buffers and sends; the server aggregates 10 s windows, writes them to
+// TimescaleDB and acknowledges (M1-14..M1-24).
+func TestAgentBinary_DeliversMetricsIntoTheDatabase(t *testing.T) {
+	bin := agentBinary(t)
+	srv := startTestServer(t, nil)
+	defer srv.stop()
+	seedEnrollmentToken(t)
+
+	dir := t.TempDir()
+	fixture, err := filepath.Abs("../../../agent/fixtures/debian-13")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, agentPort, _ := strings.Cut(srv.agent, ":")
+	config := filepath.Join(dir, "agent.toml")
+	toml := "[server]\nurl = \"http://" + srv.web + "\"\nagent_url = \"https://localhost:" + agentPort + "\"\n" +
+		"[paths]\nstate_dir = \"" + filepath.Join(dir, "state") + "\"\nhost_root = \"" + fixture + "\"\n"
+	if err := os.WriteFile(config, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	enroll := exec.CommandContext(ctx, bin, "enroll", "--config", config)
+	enroll.Env = append(os.Environ(), "SERMON_ENROLLMENT_TOKEN="+fixtureToken)
+	out, err := enroll.CombinedOutput()
+	if err != nil {
+		t.Fatalf("enroll: %v\n%s", err, out)
+	}
+	nodeID := regexp.MustCompile(`enrolled as node ([0-9a-f-]{36})`).FindStringSubmatch(string(out))[1]
+
+	agentLogs := &syncBuffer{}
+	run := exec.CommandContext(ctx, bin, "run", "--config", config)
+	run.Stdout, run.Stderr = agentLogs, agentLogs
+	if err := run.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = run.Process.Kill() }()
+
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	var series, windows, seq int64
+	var version string
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		err := conn.QueryRow(ctx, `SELECT (SELECT count(*) FROM series WHERE node_id = $1),
+		       (SELECT count(*) FROM metrics_raw r JOIN series s ON s.id = r.series_id WHERE s.node_id = $1),
+		       n.ingest_seq, coalesce(n.agent_version, '')
+		FROM nodes n WHERE n.id = $1`, nodeID).Scan(&series, &windows, &seq, &version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if windows > 0 && seq > 0 {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if series < 40 || windows < series || seq == 0 || version == "" {
+		t.Fatalf("series %d, windows %d, ingest_seq %d, agent_version %q\nagent:\n%s\nserver:\n%s",
+			series, windows, seq, version, agentLogs.String(), srv.logs.String())
+	}
+	// The fixture is static: rates are absent, gauges like the memory size are exact.
+	var memory float64
+	if err := conn.QueryRow(ctx, `SELECT r.avg FROM metrics_raw r JOIN series s ON s.id = r.series_id
+		WHERE s.node_id = $1 AND s.metric = 'sermon_memory_total_bytes' LIMIT 1`, nodeID).Scan(&memory); err != nil || memory != 8_123_740*1024 {
+		t.Errorf("memory window = %v, %v; want the fixture's MemTotal", memory, err)
+	}
+	if strings.Contains(srv.logs.String(), "level=ERROR") {
+		t.Errorf("server logged errors:\n%s", srv.logs.String())
+	}
+
+	if err := run.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Wait(); err != nil {
+		t.Errorf("agent exit: %v\n%s", err, agentLogs.String())
+	}
+}

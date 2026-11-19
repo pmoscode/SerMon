@@ -1,0 +1,363 @@
+// Package ingest turns the agents' batches into stored metrics (KONZEPT §5, M1-24).
+//
+// Per agent session (one node):
+//   - 1 s samples go to the ring buffer and are aggregated into 10 s windows (avg/min/max).
+//   - A window is complete once the agent sent data of a later window (its samples arrive in time
+//     order). Complete windows are written periodically, together with the highest batch sequence
+//     number whose windows are all written – in one transaction (metrics.Store.Write).
+//   - Only then the batches are acknowledged. Open windows are never written: if the session
+//     ends, the agent sends their batches again. A batch is therefore stored exactly once, also
+//     across reconnects and server restarts (seq ≤ persisted seq ⇒ duplicate, acknowledged at once).
+//
+// Organization and node come from the agent certificate (passed to Open), never from a batch.
+package ingest
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"math"
+	"sync/atomic"
+	"time"
+
+	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+)
+
+// OfflineAfter is how long a node may stay silent before it counts as offline (KONZEPT §5).
+const OfflineAfter = 60 * time.Second
+
+// Online reports whether a node last seen at lastSeen is online at now.
+func Online(lastSeen *time.Time, now time.Time) bool {
+	return lastSeen != nil && now.Sub(*lastSeen) < OfflineAfter
+}
+
+// HostFacts are the static properties from the agent's Hello.
+type HostFacts struct {
+	Hostname      string
+	OSID          string
+	OSVersion     string
+	KernelRelease string
+	Architecture  string // "amd64" or "arm64"
+	CPUCount      uint32
+	MemoryBytes   uint64
+}
+
+// Nodes is the port to the node records.
+type Nodes interface {
+	// Connected stores the Hello (host facts, agent version, last contact) and returns the node's
+	// group; metrics.ErrInvalidQuery-like errors are not expected, any error ends the session.
+	Connected(ctx context.Context, org tenant.OrgID, node identity.NodeID, facts HostFacts, agentVersion string, at time.Time) (tenant.GroupID, error)
+	// Seen records the last contact.
+	Seen(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time) error
+}
+
+// Config holds the ingest limits.
+type Config struct {
+	// FlushInterval is how often complete windows are written.
+	FlushInterval time.Duration
+	// FlushPending writes early once this many batches wait for their windows.
+	FlushPending int
+	// SampleRate and SampleBurst form the per-node token bucket (samples per second).
+	SampleRate, SampleBurst float64
+	// ThrottleInterval is the batch interval the agent is asked for when over quota.
+	ThrottleInterval time.Duration
+	// SeriesLimit bounds the distinct series per node (KONZEPT §8).
+	SeriesLimit int
+	// SeenInterval is how often the last contact is written at most.
+	SeenInterval time.Duration
+	// MaxFuture and MaxAge bound the collection time of samples relative to the server clock.
+	MaxFuture, MaxAge time.Duration
+}
+
+// DefaultConfig returns the default limits: about 60× the normal rate of a node.
+func DefaultConfig() Config {
+	return Config{
+		FlushInterval: 2 * time.Second, FlushPending: 32,
+		SampleRate: 10_000, SampleBurst: 50_000, ThrottleInterval: 5 * time.Second,
+		SeriesLimit: 2000, SeenInterval: 30 * time.Second,
+		MaxFuture: 5 * time.Minute, MaxAge: 24 * time.Hour,
+	}
+}
+
+// Stats are counters for monitoring the ingest.
+type Stats struct {
+	Batches, Samples, Duplicates, Late, Rejected, DroppedSeries, WriteErrors atomic.Uint64
+	// LagMillis is the delay of the latest batch (server time − collection time).
+	LagMillis atomic.Int64
+}
+
+// Service opens ingest sessions.
+type Service struct {
+	store  metrics.Store
+	ring   *metrics.Ring
+	nodes  Nodes
+	config Config
+	now    func() time.Time
+	logger *slog.Logger
+	stats  Stats
+}
+
+// NewService returns the ingest service.
+func NewService(store metrics.Store, ring *metrics.Ring, nodes Nodes, config Config, now func() time.Time, logger *slog.Logger) *Service {
+	return &Service{store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger}
+}
+
+// Stats returns the counters.
+func (s *Service) Stats() *Stats { return &s.stats }
+
+// Config returns the limits.
+func (s *Service) Config() Config { return s.config }
+
+// Sample is one value of a batch.
+type Sample struct {
+	Metric string
+	Labels metrics.Labels
+	Value  float64
+}
+
+// Batch is one buffered batch of an agent.
+type Batch struct {
+	Seq         uint64
+	CollectedAt time.Time
+	Samples     []Sample
+}
+
+// Response tells the transport what to send back.
+type Response struct {
+	// Ack is a sequence number to acknowledge (0: nothing).
+	Ack uint64
+	// Throttle, if set, is a new minimum batch interval for the agent (0 lifts it).
+	Throttle *time.Duration
+}
+
+type windowKey struct {
+	metric string
+	labels string
+	start  time.Time
+}
+
+type window struct {
+	labels        metrics.Labels
+	sum, min, max float64
+	count         int
+}
+
+type pendingBatch struct {
+	seq uint64
+	end time.Time // end of the batch's window
+}
+
+// Session is the ingest state of one connected node; not safe for concurrent use (the
+// transport's session loop owns it).
+type Session struct {
+	service   *Service
+	org       tenant.OrgID
+	group     tenant.GroupID
+	node      identity.NodeID
+	persisted uint64
+	received  uint64
+	windows   map[windowKey]*window
+	pending   []pendingBatch
+	watermark time.Time // latest collection time seen
+	written   time.Time // windows ending at or before this are written
+	series    map[string]struct{}
+	tokens    float64
+	refilled  time.Time
+	throttled bool
+	lastSeen  time.Time
+}
+
+// ErrOpen means the session could not be prepared (database unavailable); the agent retries.
+var ErrOpen = errors.New("open ingest session")
+
+// Open starts the ingest for a node that sent its Hello. org and node come from the certificate.
+func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.NodeID, facts HostFacts, agentVersion string) (*Session, error) {
+	now := s.now()
+	group, err := s.nodes.Connected(ctx, org, node, facts, agentVersion, now)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrOpen, err)
+	}
+	persisted, err := s.store.PersistedSeq(ctx, org, node)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrOpen, err)
+	}
+	return &Session{
+		service: s, org: org, group: group, node: node, persisted: persisted, received: persisted,
+		windows: map[windowKey]*window{}, series: map[string]struct{}{},
+		tokens: s.config.SampleBurst, refilled: now, lastSeen: now,
+	}, nil
+}
+
+// Persisted returns the highest stored sequence number.
+func (s *Session) Persisted() uint64 { return s.persisted }
+
+// Accept takes a batch. Duplicates are acknowledged at once; new data waits for Flush.
+func (s *Session) Accept(ctx context.Context, batch Batch) Response {
+	stats := &s.service.stats
+	now := s.service.now()
+	s.seen(ctx, now)
+	if batch.Seq <= s.received {
+		stats.Duplicates.Add(1)
+		if batch.Seq <= s.persisted {
+			return Response{Ack: s.persisted}
+		}
+		return Response{} // already in progress in this session
+	}
+	s.received = batch.Seq
+	stats.Batches.Add(1)
+	stats.LagMillis.Store(now.Sub(batch.CollectedAt).Milliseconds())
+	response := Response{Throttle: s.quota(now, len(batch.Samples))}
+
+	at := batch.CollectedAt
+	config := s.service.config
+	if at.After(now.Add(config.MaxFuture)) || at.Before(now.Add(-config.MaxAge)) {
+		// A wrong agent clock must not close windows early or write outside the retention.
+		stats.Rejected.Add(uint64(len(batch.Samples)))
+		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
+		return response
+	}
+	start := at.Truncate(metrics.Window)
+	end := start.Add(metrics.Window)
+	s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: end})
+	if !end.After(s.written) {
+		stats.Late.Add(uint64(len(batch.Samples)))
+		return response
+	}
+	if at.After(s.watermark) {
+		s.watermark = at
+	}
+	for _, sample := range batch.Samples {
+		if math.IsNaN(sample.Value) || math.IsInf(sample.Value, 0) || !s.admitSeries(sample) {
+			continue
+		}
+		stats.Samples.Add(1)
+		s.service.ring.Add(s.org, s.group, s.node, sample.Metric, sample.Labels, at, sample.Value)
+		key := windowKey{metric: sample.Metric, labels: sample.Labels.Key(), start: start}
+		w, ok := s.windows[key]
+		if !ok {
+			w = &window{labels: sample.Labels, min: sample.Value, max: sample.Value}
+			s.windows[key] = w
+		}
+		w.sum += sample.Value
+		w.count++
+		w.min = min(w.min, sample.Value)
+		w.max = max(w.max, sample.Value)
+	}
+	return response
+}
+
+// Due reports whether enough batches wait for an early flush.
+func (s *Session) Due() bool { return len(s.pending) >= s.service.config.FlushPending }
+
+// Flush writes the complete windows and returns the sequence number to acknowledge (0: none).
+// On a write error nothing is acknowledged and everything is kept for the next attempt.
+func (s *Session) Flush(ctx context.Context) (uint64, error) {
+	complete := s.watermark.Truncate(metrics.Window)
+	ack := s.persisted
+	ackable := 0
+	for _, batch := range s.pending {
+		if batch.end.After(complete) {
+			break
+		}
+		ack = batch.seq
+		ackable++
+	}
+	var aggregates []metrics.Aggregate
+	var keys []windowKey
+	for key, w := range s.windows {
+		if key.start.Add(metrics.Window).After(complete) {
+			continue
+		}
+		aggregates = append(aggregates, metrics.Aggregate{
+			Node: s.node, Metric: key.metric, Labels: w.labels, Start: key.start,
+			Avg: w.sum / float64(w.count), Min: w.min, Max: w.max,
+		})
+		keys = append(keys, key)
+	}
+	if ack == s.persisted && len(aggregates) == 0 {
+		return 0, nil
+	}
+	if err := s.service.store.Write(ctx, s.org, aggregates, map[identity.NodeID]uint64{s.node: ack}); err != nil {
+		s.service.stats.WriteErrors.Add(1)
+		return 0, fmt.Errorf("flush metrics: %w", err)
+	}
+	for _, key := range keys {
+		delete(s.windows, key)
+	}
+	s.pending = s.pending[ackable:]
+	s.written = later(s.written, complete)
+	advanced := ack > s.persisted
+	s.persisted = ack
+	if !advanced {
+		return 0, nil
+	}
+	return ack, nil
+}
+
+// Close writes what is complete; open windows are left to the agent's resend.
+func (s *Session) Close(ctx context.Context) {
+	if _, err := s.Flush(ctx); err != nil {
+		s.service.logger.WarnContext(ctx, "final metric flush failed", "node", s.node.String(), "error", err)
+	}
+}
+
+// Heartbeat records liveness.
+func (s *Session) Heartbeat(ctx context.Context) { s.seen(ctx, s.service.now()) }
+
+func (s *Session) seen(ctx context.Context, now time.Time) {
+	if now.Sub(s.lastSeen) < s.service.config.SeenInterval {
+		return
+	}
+	if err := s.service.nodes.Seen(ctx, s.org, s.node, now); err != nil {
+		s.service.logger.WarnContext(ctx, "record node contact failed", "node", s.node.String(), "error", err)
+		return
+	}
+	s.lastSeen = now
+}
+
+// admitSeries applies the per-node series limit; known series always pass.
+func (s *Session) admitSeries(sample Sample) bool {
+	key := sample.Metric + "\x1f" + sample.Labels.Key()
+	if _, ok := s.series[key]; ok {
+		return true
+	}
+	if len(s.series) >= s.service.config.SeriesLimit {
+		if s.service.stats.DroppedSeries.Add(1) == 1 {
+			s.service.logger.Warn("series limit reached, dropping new series", "node", s.node.String(), "limit", s.service.config.SeriesLimit)
+		}
+		return false
+	}
+	s.series[key] = struct{}{}
+	return true
+}
+
+// quota charges the samples to the token bucket and returns a throttle change, if any.
+func (s *Session) quota(now time.Time, samples int) *time.Duration {
+	config := s.service.config
+	elapsed := now.Sub(s.refilled).Seconds()
+	s.refilled = now
+	s.tokens = min(config.SampleBurst, s.tokens+elapsed*config.SampleRate) - float64(samples)
+	switch {
+	case !s.throttled && s.tokens < 0:
+		s.throttled = true
+		s.service.logger.Warn("agent over its sample quota, throttling", "node", s.node.String())
+		interval := config.ThrottleInterval
+		return &interval
+	case s.throttled && s.tokens > config.SampleBurst/2:
+		s.throttled = false
+		var lifted time.Duration
+		return &lifted
+	default:
+		return nil
+	}
+}
+
+func later(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}

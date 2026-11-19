@@ -236,7 +236,11 @@ eine Fake-Implementierung für Tests.
   720 ms statt 16 ms. **Kompression nach 2 h** (`segmentby = series_id`, `orderby = ts`).
 - **Continuous Aggregates** speichern `avg`, `min`, `max` und `last` je Bucket. Jede Stufe hat eine eigene **Retention-Policy**, die Aktualisierung läuft per Refresh-Policy.
 - **Counter rechnet der Agent in Raten pro Sekunde um** (§8), damit in den Aggregaten keine Window-Funktionen nötig sind.
-- **Ingest:** Der Server sammelt die Batches aller Agents und schreibt **einmal pro Sekunde per `COPY`**. Unbekannte Serien werden vorab in `series` angelegt (mit Cache).
+- **Ingest:** Der Server fasst die 1-s-Werte jedes Nodes zu 10-s-Fenstern zusammen. Ein Fenster ist abgeschlossen,
+  sobald Daten eines späteren Fensters eintreffen; abgeschlossene Fenster schreibt er alle 2 s per `COPY`, zusammen
+  mit der höchsten Batch-Seq des Nodes (`nodes.ingest_seq`) in einer Transaktion. Erst danach bestätigt er die Batches
+  (`Ack`). Offene Fenster werden nie geschrieben; endet die Session, sendet der Agent ihre Batches erneut. So wird jeder
+  Batch genau einmal gespeichert. Unbekannte Serien werden vorab in `series` angelegt (mit Cache).
 - **Ringpuffer im Server-Speicher** (letzte 15 min, 1 s) für Live-Ansicht, Live-Charts und kurze Alert-Fenster.
 - **Werte möglichst ganzzahlig** in Basiseinheiten (Bytes/s, Pakete/s, Anteile in ppm). Die Kompression erreicht
   dann 3,1 Byte/Messwert statt 10 Byte bei Gleitkommawerten mit voller Genauigkeit (§8).

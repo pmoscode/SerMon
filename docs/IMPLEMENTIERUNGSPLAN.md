@@ -715,10 +715,26 @@ flowchart LR
 - **Abhängig von:** M1-22
 - **Tests zuerst:** Tabellen-Test „Zeitraum/Schritt → Quelle“; Ring-Überlauf; nebenläufiger Zugriff (`go test -race`).
 
-#### ☐ M1-24 – Ingest-Pipeline und Node-Status · S · M 🔒
-> Vorgabe aus M1-15: Die Seq eines Agents steigt immer, auch über Neustarts und den Verlust des WAL-Verzeichnisses
-> hinweg (Start bei der Zeit in µs), hat aber Lücken (verworfene Daten). Deduplizieren heißt daher: alles mit
-> `seq ≤ höchster gespeicherter Seq des Nodes` verwerfen; Lücken sind erlaubt und zählen als verworfene Daten.
+#### ☑ M1-24 – Ingest-Pipeline und Node-Status · S · M 🔒
+> Erledigt (`app/ingest`, verdrahtet im Session-Handler der Agent-API):
+> - **Fenster und Ack:** 1-s-Samples in den Ringpuffer und in 10-s-Fenster; ein Fenster ist abgeschlossen, sobald
+>   Daten eines späteren Fensters eintreffen. Alle 2 s (oder ab 32 wartenden Batches) werden abgeschlossene Fenster
+>   geschrieben, zusammen mit der höchsten Seq, deren Fenster alle geschrieben sind; erst dann folgt das `Ack`. Offene
+>   Fenster werden beim Session-Ende verworfen, der Agent sendet sie erneut → jeder Batch genau einmal.
+> - **Deduplizierung:** `seq ≤ nodes.ingest_seq` wird sofort bestätigt und nicht gespeichert (auch nach Neustart des
+>   Servers).
+> - **Schutz:** Token-Bucket pro Node (10 000 Samples/s, Burst 50 000) → `Throttle` 5 s und Aufhebung; Serienlimit
+>   2 000; Samples mehr als 5 min in der Zukunft oder älter als 24 h und Samples für schon geschriebene Fenster werden
+>   verworfen (und bestätigt); ungültige Batches beenden die Session (protovalidate).
+> - **Node:** `Hello` aktualisiert Host-Fakten und Agent-Version; Kontakt (`last_seen_at`) höchstens alle 30 s;
+>   `ingest.Online` (offline nach 60 s ohne Kontakt). Org und Node nur aus dem Zertifikat.
+> - **Zähler:** Batches, Samples, Duplikate, verspätete und verworfene Samples, Schreibfehler, Lag (`Service.Stats`).
+> - **Tests:** Fenster und Ack, Duplikate nach Reconnect, offene Fenster beim Session-Ende, verspätete/zukünftige/alte
+>   Samples, Schreibfehler mit Wiederholung, Ring, Throttle, Serienlimit, Kontakt-Intervall, unbekannte Nodes;
+>   Gegenproben für Fenster-, Ack-, Duplikat- und Verspätungslogik. Handler-Test über mTLS mit Ack und Duplikat,
+>   ungültiger Batch. **End-to-End:** Rust-Agent → Server → TimescaleDB in wenigen Sekunden (`just e2e-agent`).
+>
+> Abweichung: Die Zähler werden noch nicht exportiert; ein `/metrics`-Endpunkt fehlt bisher (KONZEPT §4.3).
 - **Ziel:** Stream-Handler: `Hello` (Host-Fakten aktualisieren), Validierung, Quotas und `Throttle`, Deduplizierung über `(node_id, seq)`, Weitergabe an `MetricStore` und Ring, `Ack`; Node-Status online/offline per Heartbeat (60 s); Self-Metriken (Ingest-Lag).
 - **Abhängig von:** M1-10, M1-22, M1-23
 - **Tests zuerst:** Duplikate werden verworfen; Quota löst Throttle aus; Node-Status-Übergänge mit Fake-Clock; Identität nur aus dem Kontext.

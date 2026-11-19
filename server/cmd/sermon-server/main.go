@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
@@ -22,7 +23,9 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
+	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/config"
@@ -115,8 +118,12 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
+		// Live values (15 min, 1 s) and the stored 10 s windows (M1-22..M1-24).
+		ring := metrics.NewRing()
+		ingestService := ingest.NewService(timescale.New(db), ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
+		servers = append(servers, pruneRing(ring))
 		if cfg.AgentAddr != "" {
-			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger)
+			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, ingestService, logger)
 			if err != nil {
 				return err
 			}
@@ -141,16 +148,32 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	return runAll(ctx, servers)
 }
 
+// pruneRing forgets ring series that stopped reporting (removed interfaces, offline nodes).
+func pruneRing(ring *metrics.Ring) func(context.Context) error {
+	return func(ctx context.Context) error {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case now := <-ticker.C:
+				ring.Prune(now)
+			}
+		}
+	}
+}
+
 // newAgentServer prepares the mTLS agent API (M1-10) on its own listener.
 func newAgentServer(ctx context.Context, cfg config.Config, sessions *agentapi.Sessions, rotator *rotation.Service,
-	ca *agentca.Service, logger *slog.Logger,
+	ca *agentca.Service, ingestService *ingest.Service, logger *slog.Logger,
 ) (func(context.Context) error, error) {
 	tlsConfig, err := agentapi.TLSConfig(ca, cfg.AgentHostnames, logger) //nolint:contextcheck // TLS callbacks have no context
 	if err != nil {
 		return nil, fmt.Errorf("agent API TLS: %w", err)
 	}
 	mux := http.NewServeMux()
-	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger))
+	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger, agentapi.WithIngest(ingestService)))
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.AgentAddr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", cfg.AgentAddr, err)

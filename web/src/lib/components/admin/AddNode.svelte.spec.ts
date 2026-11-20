@@ -65,7 +65,7 @@ describe('AddNode', () => {
 
 		await expect.element(page.getByRole('heading', { name: 'Run on the server' })).toBeVisible();
 		expect(document.querySelector('pre')?.textContent).toBe(
-			`curl -fsSL ${location.origin}/install.sh | sudo SERMON_ENROLLMENT_TOKEN=sme_secret sh -s -- --server ${location.origin}`
+			` export SERMON_ENROLLMENT_TOKEN=sme_secret\ncurl -fsSL ${location.origin}/install.sh | sudo --preserve-env=SERMON_ENROLLMENT_TOKEN sh -s -- --server ${location.origin}`
 		);
 		expect(token.mock.calls[0][0]).toEqual({ groupId: 'g1', ttlSeconds: 86400, maxUses: 5 });
 		expect(summary.mock.calls[0][0]).toEqual({ groupId: 'g1' });
@@ -76,6 +76,54 @@ describe('AddNode', () => {
 		await expect
 			.element(page.getByRole('link', { name: 'Open node' }))
 			.toHaveAttribute('href', '/nodes/n1');
+	});
+
+	it('builds a command that checks the script for servers without a public certificate', async () => {
+		withRights(['*']);
+		vi.spyOn(api.fleet, 'getFleetSummary').mockResolvedValue({ nodes: [old] } as never);
+		vi.spyOn(api.enrollment, 'createEnrollmentToken').mockResolvedValue({
+			secret: 'sme_secret'
+		} as never);
+		const digest = 'c0ffee'.repeat(10) + 'abcd';
+		const realFetch = window.fetch.bind(window);
+		const head = vi
+			.spyOn(window, 'fetch')
+			.mockImplementation((input, init) =>
+				input === '/install.sh'
+					? Promise.resolve(new Response(null, { headers: { 'X-Sermon-Script-SHA256': digest } }))
+					: realFetch(input, init)
+			);
+		render(AddNode);
+		await expect.element(page.getByLabelText('Group')).toHaveValue('g1');
+		await page.getByRole('button', { name: 'Create command' }).click();
+
+		await page
+			.getByLabelText('The server has no publicly trusted certificate', { exact: false })
+			.click();
+		const fingerprint = page.getByLabelText('Fingerprint of the server certificate or a CA', {
+			exact: true
+		});
+		await fingerprint.fill('not a fingerprint');
+		await expect
+			.element(page.getByText('Not a SHA-256 fingerprint', { exact: false }))
+			.toBeVisible();
+		await expect.element(page.getByRole('button', { name: 'Copy' })).toBeDisabled();
+
+		await fingerprint.fill('SHA256 Fingerprint=' + Array(32).fill('ab').join(':'));
+		const pin = 'sha256:' + Array(32).fill('AB').join(':');
+		await vi.waitFor(() =>
+			expect(document.querySelector('pre')?.textContent).toContain(
+				`echo '${digest}  sermon-install.sh' | sha256sum -c -`
+			)
+		);
+		expect(document.querySelector('pre')?.textContent).toBe(
+			[
+				' export SERMON_ENROLLMENT_TOKEN=sme_secret',
+				`curl -fsSLk ${location.origin}/install.sh -o sermon-install.sh`,
+				`echo '${digest}  sermon-install.sh' | sha256sum -c - && sudo --preserve-env=SERMON_ENROLLMENT_TOKEN sh sermon-install.sh --server ${location.origin} --ca-fingerprint ${pin}`
+			].join('\n')
+		);
+		expect(head).toHaveBeenCalledWith('/install.sh', expect.objectContaining({ method: 'HEAD' }));
 	});
 
 	it('asks for the password before the token is created', async () => {

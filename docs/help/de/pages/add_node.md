@@ -11,7 +11,9 @@ Bindet einen Linux-Server mit einem Befehl ein: Gruppe wählen, Befehl erzeugen 
 ## Gut zu wissen
 
 - „Skript erst ansehen“ öffnet das Installationsskript als Text.
-- Bei einem selbstsignierten Zertifikat `curl -k` verwenden und `--ca-fingerprint sha256:…` anhängen: den Fingerprint des Server-Zertifikats oder einer CA, die der Server mitschickt (z. B. die Intermediate-CA von Caddy `tls internal`). Die Signatur des Agents prüft das Skript in jedem Fall.
+- **Ohne öffentlich vertrauenswürdiges Zertifikat** (selbstsigniert, eigene CA) den Haken setzen und den Fingerprint des Server-Zertifikats oder einer CA eintragen, die der Server mitschickt (z. B. die Intermediate-CA von Caddy `tls internal`). Der Befehl lädt `install.sh` dann ohne Zertifikatsprüfung, prüft es aber mit `sha256sum` gegen die Prüfsumme, die dein Browser vom Server bekommen hat, bevor sudo es ausführt. Die Signatur des Agents prüft das Skript in jedem Fall.
+- Das Token steht in einer Variable (`export`), nicht in der Kommandozeile: Andere User des Servers sehen es nicht in der Prozessliste. Das Leerzeichen am Zeilenanfang hält es in bash aus der History.
+- Das Skript installiert nur einen Agent, der für genau die Version dieses Servers signiert ist.
 - Nodes gehören immer zu einer Gruppe. Gibt es noch keine, legen Admins sie unter „Organisation“ → „Gruppen“ an.
 - Das Token wird nur als Hash gespeichert und gilt höchstens so oft und so lange wie gewählt.
 - Ein Token lässt Server der Organisation beitreten. Liegt deine letzte Anmeldung länger als 15 Minuten zurück, fragt SerMon vorher nach Passwort oder zweitem Faktor.

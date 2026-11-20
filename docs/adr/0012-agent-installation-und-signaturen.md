@@ -28,6 +28,9 @@ wie die Unit gehärtet wird.
   Dateinamen, gelesen über `os.Root` (Symlinks aus dem Verzeichnis heraus werden nicht verfolgt).
 - **TLS beim Download:** Mit `--ca-fingerprint` (selbstsigniertes Server-Zertifikat) lädt das Skript ohne
   Zertifikatsprüfung; die Integrität sichert die Signatur, `enroll` prüft danach den Fingerprint (ADR 0010).
+  **Nachtrag (M1-37):** Das reichte nicht. Die Signatur war nicht an Datei und Version gebunden (ein Angreifer im Netz
+  konnte eine ältere signierte Binary oder eine andere signierte Datei liefern), und das Skript selbst kam mit
+  `curl -k` ungeprüft an. Siehe „Nachtrag M1-37“ unten.
 - **Unit:** KONZEPT §18.4, ergänzt um `ProtectKernelLogs`, `ProtectProc=default`, `UMask=0077`, `RemoveIPC`,
   `KeyringMode=private`, `DevicePolicy=closed`, `SystemCallErrorNumber=EPERM`, `TasksMax=64`, `StateDirectory`.
   `ProtectHome=read-only` statt `yes`, damit der Dateisystem-Collector `/home` sieht. Kein `PrivateUsers`, weil sonst
@@ -50,3 +53,29 @@ wie die Unit gehärtet wird.
   kommt dann ins Repository. Bis dahin bauen Entwicklung und E2E mit einem eigenen Testschlüssel.
 - Wer den Server kontrolliert, kann ein anderes Skript ausliefern – das gilt für jedes `curl | sh`. Dafür bleiben
   „Skript erst ansehen“ und das Paket-Repo (später) als Alternativen (KONZEPT O5).
+
+## Nachtrag M1-37 (Security-Review M1-35)
+
+- **Signatur an Datei und Version gebunden.** `release-sign.sh sign KEY --version V` schreibt in den Trusted Comment
+  die durch Tabs getrennten Felder `timestamp:…`, `file:<Name>`, `hashed:0` und `version:V`; die globale Signatur
+  des minisign-Formats deckt ihn ab.
+  - Der Server setzt seine Version beim Ausliefern in `install.sh` ein (`AGENT_VERSION`).
+  - Das Skript prüft den Trusted Comment auf beiden Wegen (minisign prüft die globale Signatur selbst, OpenSSL prüft
+    sie zusätzlich) und verlangt `file:sermon-agent-linux-<arch>` sowie `version:` = Version des Servers.
+  - Ein älteres signiertes Release (Rollback) oder eine andere signierte Datei unter dem Namen des Agents wird
+    abgelehnt.
+  - Folge: Server und Agent-Binaries im Download-Verzeichnis haben immer dieselbe Version
+    (`just sign-agent KEY VERSION`); passt sie nicht, nennt das Skript beide Versionen.
+- **Bootstrap ohne öffentliches Zertifikat über eine Prüfsumme.** Der Server schickt mit `install.sh` die SHA-256 der
+  unkomprimierten Bytes im Header `X-Sermon-Script-SHA256`. Die UI liest ihn über die Verbindung des Browsers, der
+  der Admin ohnehin vertraut, und zeigt einen Befehl, der das Skript mit `curl -k` lädt und mit `sha256sum -c` prüft,
+  bevor `sudo` es ausführt. Ein Angreifer im Netz des Hosts kann so kein eigenes Skript unterschieben.
+  - **Verworfen: `curl --pinnedpubkey`** (Pin auf den Schlüssel des Leaf-Zertifikats). Caddy `tls internal` tauscht das
+    Leaf alle 12 Stunden, ein Befehl mit Pin wäre bald ungültig; der Server kennt das Zertifikat des Proxys zudem nicht.
+    Mit `wget` gäbe es gar keinen Pin. Die Prüfsumme hängt nur am Skript und funktioniert mit jedem Download-Werkzeug.
+  - **Verworfen: `Repr-Digest`** (RFC 9530) statt eines eigenen Headers: Er beschreibt die Repräsentation einschließlich
+    einer Komprimierung, die ein Proxy hinzufügt; gemeint sind hier die Bytes, die `curl` speichert.
+- **Token nie in der Kommandozeile.** Der Befehl der UI exportiert `SERMON_ENROLLMENT_TOKEN` (mit Leerzeichen am Anfang,
+  damit bash ihn nicht in die History schreibt) und reicht es mit `sudo --preserve-env=…` weiter. `install.sh` liest
+  es aus der Variable oder mit `--token-file`; `--token` funktioniert weiter, warnt aber, weil Argumente in der
+  Prozessliste für alle lokalen User sichtbar sind.

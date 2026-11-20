@@ -202,12 +202,12 @@ test-packaging:
         bats packaging/test && \
         { systemd-analyze security --offline=true --threshold=20 packaging/systemd/sermon-agent.service >/tmp/score; status=$?; tail -1 /tmp/score; exit $status; }'
 
-# Sign the release binaries with KEY (Ed25519 PEM) into dist/agent/ – the directory SERMON_AGENT_DOWNLOADS_DIR serves
-sign-agent key: build-agent
+# Sign the release binaries of VERSION (= server version) with KEY into dist/agent/ (SERMON_AGENT_DOWNLOADS_DIR)
+sign-agent key version: build-agent
     mkdir -p dist/agent
     cp agent/target/x86_64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-amd64
     cp agent/target/aarch64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-arm64
-    scripts/release-sign.sh sign "{{ key }}" dist/agent/sermon-agent-linux-amd64 dist/agent/sermon-agent-linux-arm64
+    scripts/release-sign.sh sign "{{ key }}" --version "{{ version }}" dist/agent/sermon-agent-linux-amd64 dist/agent/sermon-agent-linux-arm64
     @echo "✓ dist/agent: binaries and minisign signatures"
 
 # Build static release binaries for amd64 and arm64 (cargo-zigbuild, see ADR 0002)

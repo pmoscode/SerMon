@@ -9,12 +9,32 @@ setup() {
 	. "$BATS_TEST_DIRNAME/../install.sh"
 	KEY="$TMP/key.pem"
 	RELEASE_KEY=$("$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" generate "$KEY")
+	# The version the server expects (written into the script when the server is built).
+	AGENT_VERSION=1.2.3
 	printf 'agent binary\n' >"$TMP/sermon-agent-linux-amd64"
-	"$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" sign "$KEY" "$TMP/sermon-agent-linux-amd64"
+	sign "$KEY" "$TMP/sermon-agent-linux-amd64"
 	BIN="$TMP/sermon-agent-linux-amd64"
 }
 
 teardown() { rm -rf "$TMP"; }
+
+# sign KEY FILE… [VERSION] signs like a release of $AGENT_VERSION (or $SIGN_VERSION).
+sign() {
+	"$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" sign "$1" --version "${SIGN_VERSION:-$AGENT_VERSION}" "$2"
+}
+
+# both runs a command with minisign and with the openssl fallback; both must fail with $1.
+both_reject() {
+	expected=$1
+	shift
+	run without_minisign "$@"
+	[ "$status" -ne 0 ] || return 1
+	[[ "$output" == *"$expected"* ]] || { echo "openssl: $output"; return 1; }
+	command -v minisign >/dev/null
+	run "$@"
+	[ "$status" -ne 0 ] || return 1
+	[[ "$output" == *"$expected"* ]] || { echo "minisign: $output"; return 1; }
+}
 
 # without_minisign runs a command with a PATH that has openssl but no minisign.
 without_minisign() {
@@ -90,7 +110,7 @@ without_minisign() {
 
 @test "rejects a signature of another key" {
 	"$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" generate "$TMP/other.pem" >/dev/null
-	"$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" sign "$TMP/other.pem" "$BIN"
+	sign "$TMP/other.pem" "$BIN"
 	run without_minisign verify "$BIN" "$BIN.minisig"
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"unknown key"* ]]
@@ -106,6 +126,44 @@ without_minisign() {
 	[[ "$output" == *"without a release key"* ]]
 }
 
+@test "release-sign writes file name and version into the trusted comment" {
+	[ "$(sed -n 3p "$BIN.minisig")" != "" ]
+	comment=$(sed -n 's/^trusted comment: //p' "$BIN.minisig")
+	[[ "$comment" == *"	file:sermon-agent-linux-amd64	"* ]]
+	[[ "$comment" == *"	version:1.2.3" ]]
+	run "$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" sign "$KEY" "$BIN"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"--version"* ]]
+	run "$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" sign "$KEY" --version '1.2 3' "$BIN"
+	[ "$status" -ne 0 ]
+}
+
+# Rollback and substitution: a valid signature of the release key is not enough, it must be the
+# signature of exactly this file of exactly the version the server runs.
+@test "rejects the signed binary of another version" {
+	SIGN_VERSION=1.2.2 sign "$KEY" "$BIN"
+	both_reject "version 1.2.2" verify "$BIN" "$BIN.minisig"
+}
+
+@test "rejects a signed file under another name" {
+	printf 'other tool\n' >"$TMP/sermon-agent-linux-arm64"
+	sign "$KEY" "$TMP/sermon-agent-linux-arm64"
+	cp "$TMP/sermon-agent-linux-arm64" "$BIN"
+	cp "$TMP/sermon-agent-linux-arm64.minisig" "$BIN.minisig"
+	both_reject "sermon-agent-linux-arm64" verify "$BIN" "$BIN.minisig"
+}
+
+@test "rejects a forged trusted comment" {
+	SIGN_VERSION=1.2.2 sign "$KEY" "$BIN"
+	sed -i 's/version:1.2.2/version:1.2.3/' "$BIN.minisig"
+	both_reject "signature check failed" verify "$BIN" "$BIN.minisig"
+}
+
+@test "refuses to install from a server that names no agent version" {
+	AGENT_VERSION='@SERMON_AGENT_VERSION@'
+	both_reject "no agent version" verify "$BIN" "$BIN.minisig"
+}
+
 @test "checks the arguments before anything happens" {
 	run main
 	[[ "$output" == *"--server is required"* ]]
@@ -115,6 +173,28 @@ without_minisign() {
 	[[ "$output" == *"enrollment token is required"* ]]
 	run main --server https://sermon.example.com --token sme_x --bogus
 	[[ "$output" == *"unknown argument --bogus"* ]]
+}
+
+# Arguments are visible to every local user (ps): the token comes from the environment or a file.
+@test "reads the token from a file and warns about --token" {
+	printf 'sme_from_file\n' >"$TMP/token"
+	SERMON_ENROLLMENT_TOKEN='' parse_args --server https://sermon.example.com --token-file "$TMP/token"
+	[ "$TOKEN" = sme_from_file ]
+	[ "$AGENT_URL" = https://sermon.example.com:8443 ]
+
+	SERMON_ENROLLMENT_TOKEN='' run parse_args --server https://sermon.example.com --token-file "$TMP/missing"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"cannot read the token file"* ]]
+	printf '\n' >"$TMP/empty"
+	SERMON_ENROLLMENT_TOKEN='' run parse_args --server https://sermon.example.com --token-file "$TMP/empty"
+	[[ "$output" == *"enrollment token is required"* ]]
+
+	SERMON_ENROLLMENT_TOKEN='' run parse_args --server https://sermon.example.com --token sme_x
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"visible in the process list"* ]]
+	SERMON_ENROLLMENT_TOKEN=sme_env run parse_args --server https://sermon.example.com
+	[ "$status" -eq 0 ]
+	[[ "$output" != *"process list"* ]]
 }
 
 @test "writes the agent configuration once" {

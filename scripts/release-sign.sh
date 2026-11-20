@@ -4,7 +4,12 @@
 #
 #   scripts/release-sign.sh generate KEY.pem     new private key (keep it secret, e.g. a CI secret)
 #   scripts/release-sign.sh pubkey KEY.pem       print the public key line for install.sh
-#   scripts/release-sign.sh sign KEY.pem FILE…   write FILE.minisig next to each file
+#   scripts/release-sign.sh sign KEY.pem --version V FILE…
+#                                                write FILE.minisig next to each file
+#
+# The trusted comment (covered by the global signature) names the file and the release version;
+# install.sh accepts a binary only under its own name and of the version the server runs, so an
+# older signed release or another signed file can't be passed off as the agent (M1-37).
 #
 # The key ID is the first 8 bytes of SHA-256 over the public key, so the private key alone is enough.
 set -eu
@@ -53,6 +58,7 @@ pubkey() {
 sign_file() {
 	key=$1
 	file=$2
+	version=$3
 	[ -f "$file" ] || die "no such file: $file"
 	work=$(mktemp -d)
 	trap 'rm -rf "$work"' EXIT
@@ -63,7 +69,7 @@ sign_file() {
 		key_id "$key"
 		cat "$work/sig"
 	} >"$work/signature"
-	trusted="timestamp:$(date +%s)	file:$(basename "$file")	hashed:0"
+	trusted="timestamp:$(date +%s)	file:$(basename "$file")	hashed:0	version:$version"
 	# The global signature covers the file signature and the trusted comment (minisign format).
 	{
 		cat "$work/sig"
@@ -94,8 +100,13 @@ generate)
 	;;
 pubkey) pubkey "$key" ;;
 sign)
+	[ "${1:-}" = --version ] && [ -n "${2:-}" ] || die "usage: release-sign.sh sign KEY.pem --version V FILE…"
+	version=$2
+	shift 2
+	# The version ends up in a tab-separated comment and in install.sh: a plain token only.
+	case $version in *[!0-9A-Za-z.+_-]*) die "invalid version \"$version\" (letters, digits, . + _ -)" ;; esac
 	[ $# -gt 0 ] || die "nothing to sign"
-	for file in "$@"; do sign_file "$key" "$file"; done
+	for file in "$@"; do sign_file "$key" "$file" "$version"; done
 	;;
 *) die "unknown command $command" ;;
 esac

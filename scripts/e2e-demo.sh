@@ -35,7 +35,7 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -x "$build/sermon-server" ]; then
 	echo "▸ building the agent ($target)"
 	(cd "$root/agent" && cargo zigbuild --release --locked -q -p sermon-agent --target "$target")
 	cp "$root/agent/target/$target/release/sermon-agent" "$build/downloads/sermon-agent-linux-$arch"
-	"$root/scripts/release-sign.sh" sign "$build/release.pem" "$build/downloads/sermon-agent-linux-$arch"
+	"$root/scripts/release-sign.sh" sign "$build/release.pem" --version e2e "$build/downloads/sermon-agent-linux-$arch"
 
 	echo "▸ building the web UI and the server (linux/$arch)"
 	(cd "$root" && just build-web >/dev/null)

@@ -77,20 +77,26 @@ test('a fresh installation monitors three hosts within two minutes, and Org B se
 	await page.goto('/nodes/add');
 	await page.getByLabel('Uses').fill(String(agents.length));
 	await page.getByRole('button', { name: 'Create command' }).click();
-	const command = (await page.locator('pre').textContent())?.trim() ?? '';
-	expect(command).toContain('SERMON_ENROLLMENT_TOKEN=sme_');
+	const command = (await page.locator('pre').textContent()) ?? '';
+	expect(command).toContain(' export SERMON_ENROLLMENT_TOKEN=sme_');
+	expect(command).toContain('sudo --preserve-env=SERMON_ENROLLMENT_TOKEN sh');
+
+	// Two hosts trust Caddy's CA system-wide; one pins the intermediate CA and gets the variant
+	// for servers without a public certificate, which checks install.sh by its checksum.
+	const ca = caddyCA();
+	await page.getByLabel('The server has no publicly trusted certificate', { exact: false }).check();
+	await page
+		.getByLabel('Fingerprint of the server certificate or a CA')
+		.fill(ca.intermediateFingerprint);
+	await expect(page.locator('pre')).toContainText('sha256sum -c -');
+	const pinned = (await page.locator('pre').textContent()) ?? '';
 
 	// Run the command from the UI on each host – only the address differs inside the network.
-	// Two hosts trust Caddy's CA system-wide, one pins the intermediate CA (self-signed case).
-	const ca = caddyCA();
-	const forCommand = (agent: (typeof agents)[number]) => {
-		const run =
-			command.replaceAll(new URL(baseURL ?? '').origin, inside) + ` --agent-url ${agentURL}`;
-		return agent.trust === 'system'
-			? run
-			: run.replace('curl -fsSL', 'curl -fsSLk') +
-					` --ca-fingerprint ${ca.intermediateFingerprint}`;
-	};
+	const forCommand = (agent: (typeof agents)[number]) =>
+		(agent.trust === 'system' ? command : pinned).replaceAll(
+			new URL(baseURL ?? '').origin,
+			inside
+		) + ` --agent-url ${agentURL}`;
 
 	// Counter-check of the supply chain: a modified binary is refused before anything is installed.
 	const restore = tamperDownload();

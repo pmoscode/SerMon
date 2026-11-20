@@ -1,16 +1,21 @@
 // Package download serves the agent installer and the agent binaries (KONZEPT §6, ADR 0012):
 // GET /install.sh and GET /downloads/sermon-agent-linux-<arch>[.minisig].
 //
-// The installer is rendered once at startup with the release public key and the init files. The
-// key is compiled into the server (not configurable at runtime), so the script only accepts
-// binaries signed by the release key. Binaries and signatures come from a directory of the
+// The installer is rendered once at startup with the release public key, the server version and
+// the init files. The key is compiled into the server (not configurable at runtime), so the script
+// only accepts binaries signed by the release key for exactly this version. Its SHA-256 (hex, of
+// the uncompressed bytes) goes out as X-Sermon-Script-SHA256: the UI shows it for servers without
+// a publicly trusted certificate, the host checks the script with sha256sum before running it.
+// (Not Repr-Digest: that would cover a compression a proxy adds.) Binaries and signatures come from a directory of the
 // release (SERMON_AGENT_DOWNLOADS_DIR); only the fixed file names are served.
 package download
 
 import (
 	"bytes"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -33,17 +38,29 @@ var (
 // ErrInvalidKey means the release key is not a minisign Ed25519 public key.
 var ErrInvalidKey = errors.New("release key must be a minisign Ed25519 public key (base64, 42 bytes, \"Ed\")")
 
+// ScriptDigestHeader carries the SHA-256 of install.sh (hex).
+const ScriptDigestHeader = "X-Sermon-Script-SHA256"
+
+// ErrInvalidVersion means the server version can't be written into the script safely.
+var ErrInvalidVersion = errors.New("server version must consist of letters, digits and . + _ -")
+
+var version = regexp.MustCompile(`^[0-9A-Za-z.+_-]+$`)
+
 var fileName = regexp.MustCompile(`^sermon-agent-linux-(amd64|arm64)(\.minisig)?$`)
 
 // Handler serves the installer and the binaries.
 type Handler struct {
 	script []byte
-	files  fs.FS // nil: no binaries
+	digest string // SHA-256 of script, hex
+	files  fs.FS  // nil: no binaries
 }
 
-// New renders the installer. releaseKey may be empty (the script then refuses to install);
-// dir may be empty (no binaries).
-func New(releaseKey, dir string) (*Handler, error) {
+// New renders the installer for the server version. releaseKey may be empty (the script then
+// refuses to install); dir may be empty (no binaries).
+func New(releaseKey, serverVersion, dir string) (*Handler, error) {
+	if !version.MatchString(serverVersion) {
+		return nil, ErrInvalidVersion
+	}
 	if releaseKey != "" {
 		raw, err := base64.StdEncoding.DecodeString(releaseKey)
 		if err != nil || len(raw) != 42 || !bytes.HasPrefix(raw, []byte("Ed")) {
@@ -54,9 +71,11 @@ func New(releaseKey, dir string) (*Handler, error) {
 	if releaseKey != "" {
 		script = strings.Replace(script, "@SERMON_RELEASE_KEY@", releaseKey, 1)
 	}
+	script = strings.Replace(script, "@SERMON_AGENT_VERSION@", serverVersion, 1)
 	script = strings.Replace(script, "@SERMON_SYSTEMD_UNIT@", strings.TrimRight(systemdUnit, "\n"), 1)
 	script = strings.Replace(script, "@SERMON_OPENRC_SERVICE@", strings.TrimRight(openrcService, "\n"), 1)
-	h := &Handler{script: []byte(script)}
+	sum := sha256.Sum256([]byte(script))
+	h := &Handler{script: []byte(script), digest: hex.EncodeToString(sum[:])}
 	if dir != "" {
 		root, err := os.OpenRoot(dir)
 		if err != nil {
@@ -84,6 +103,7 @@ func (h *Handler) serveScript(w http.ResponseWriter, r *http.Request) {
 	headers(w)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set(ScriptDigestHeader, h.digest)
 	http.ServeContent(w, r, "install.sh", time.Time{}, bytes.NewReader(h.script))
 }
 

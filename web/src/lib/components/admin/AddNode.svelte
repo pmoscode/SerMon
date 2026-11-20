@@ -7,6 +7,11 @@
 	import type { NodeSummary } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
 	import { api } from '#lib/api/client.js';
 	import { adminError, copyText } from '#lib/admin/admin.js';
+	import {
+		installCommand,
+		normalizeFingerprint,
+		SCRIPT_DIGEST_HEADER
+	} from '#lib/admin/install.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -33,12 +38,36 @@
 	let copied = $state(false);
 	let known = $state<Set<string>>(new Set());
 	let arrived = $state<NodeSummary | undefined>();
+	let selfSigned = $state(false);
+	let fingerprintText = $state('');
+	let digest = $state('');
+	let digestFailed = $state(false);
 
 	const allowed = $derived(sessionState.current?.enrollGroupIds ?? []);
 	const origin = location.origin;
-	const command = $derived(
-		`curl -fsSL ${origin}/install.sh | sudo SERMON_ENROLLMENT_TOKEN=${secret} sh -s -- --server ${origin}`
-	);
+	const fingerprint = $derived(normalizeFingerprint(fingerprintText));
+	const fingerprintInvalid = $derived(selfSigned && fingerprintText.trim() !== '' && !fingerprint);
+	/** Empty while the self-signed variant still lacks the fingerprint or the checksum. */
+	const command = $derived.by(() => {
+		if (!secret) return '';
+		if (!selfSigned) return installCommand({ origin, secret });
+		if (!fingerprint || !digest) return '';
+		return installCommand({ origin, secret, selfSigned: { digest, fingerprint } });
+	});
+
+	// The checksum comes over the browser's connection to the server – the channel the admin
+	// already trusts; on the host curl can't verify the certificate, sha256sum checks the script.
+	$effect(() => {
+		if (!selfSigned || digest) return;
+		digestFailed = false;
+		void fetch('/install.sh', { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' })
+			.then((res) => {
+				const value = res.ok ? (res.headers.get(SCRIPT_DIGEST_HEADER) ?? '') : '';
+				if (/^[0-9a-f]{64}$/.test(value)) digest = value;
+				else digestFailed = true;
+			})
+			.catch(() => (digestFailed = true));
+	});
 
 	$effect(() => {
 		void api.access
@@ -152,10 +181,47 @@
 		<section class="flex flex-col gap-3" aria-labelledby="addnode-command">
 			<h2 id="addnode-command" class="text-lg font-medium">{m.addnode_run()}</h2>
 			<p class="text-sm text-muted-foreground">{m.addnode_run_text()}</p>
-			<pre
-				class="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap select-all">{command}</pre>
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" bind:checked={selfSigned} class="size-4 accent-primary" />
+				{m.addnode_self_signed()}
+			</label>
+			{#if selfSigned}
+				<div class="flex flex-col gap-1">
+					<Label for="addnode-fingerprint">{m.addnode_fingerprint()}</Label>
+					<Input
+						id="addnode-fingerprint"
+						class="font-mono text-xs"
+						autocomplete="off"
+						spellcheck={false}
+						aria-invalid={fingerprintInvalid}
+						aria-describedby={fingerprintInvalid
+							? 'addnode-fingerprint-error addnode-fingerprint-hint'
+							: 'addnode-fingerprint-hint'}
+						bind:value={fingerprintText}
+					/>
+					{#if fingerprintInvalid}
+						<p id="addnode-fingerprint-error" class="text-sm text-destructive">
+							{m.addnode_fingerprint_invalid()}
+						</p>
+					{/if}
+					<p id="addnode-fingerprint-hint" class="text-xs text-muted-foreground">
+						{m.addnode_fingerprint_hint()}
+					</p>
+					{#if digestFailed}
+						<p role="alert" class="text-sm text-destructive">{m.addnode_digest_failed()}</p>
+					{/if}
+				</div>
+			{/if}
+			{#if command}
+				<pre
+					class="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap select-all">{command}</pre>
+			{/if}
 			<div class="flex flex-wrap items-center gap-2">
-				<Button variant="outline" onclick={async () => (copied = await copyText(command))}>
+				<Button
+					variant="outline"
+					disabled={!command}
+					onclick={async () => (copied = await copyText(command))}
+				>
 					<Copy aria-hidden="true" />
 					{copied ? m.security_codes_copied() : m.security_codes_copy()}
 				</Button>
@@ -169,7 +235,6 @@
 					{m.addnode_view_script()}
 				</a>
 			</div>
-			<p class="text-xs text-muted-foreground">{m.addnode_self_signed()}</p>
 			<p class="rounded-md border border-amber-500/50 p-3 text-sm">{m.addnode_secret_once()}</p>
 		</section>
 		<section class="flex flex-col gap-2" aria-labelledby="addnode-status" aria-live="polite">

@@ -1,10 +1,12 @@
 #!/bin/sh
 # SerMon agent installer (KONZEPT §6, ADR 0012).
 #
-#   curl -fsSL https://sermon.example.com/install.sh | sudo sh -s -- \
-#     --server https://sermon.example.com --token sme_XXXXXXXX
+#    export SERMON_ENROLLMENT_TOKEN=sme_XXXXXXXX
+#   curl -fsSL https://sermon.example.com/install.sh |
+#     sudo --preserve-env=SERMON_ENROLLMENT_TOKEN sh -s -- --server https://sermon.example.com
 #
-# The token can also come from SERMON_ENROLLMENT_TOKEN (arguments are visible in the process list).
+# The token comes from SERMON_ENROLLMENT_TOKEN or --token-file; arguments are visible to every
+# local user in the process list (the leading space keeps the export out of the bash history).
 # The script downloads the agent binary of this server and checks its signature against the
 # release key embedded below before anything is installed; a wrong or missing signature aborts.
 # Read it before you run it: https://<server>/install.sh
@@ -13,6 +15,9 @@ set -eu
 # Release public key (minisign format, Ed25519). Replaced when the server is built; a server
 # without release key serves the placeholder and the script refuses to install.
 RELEASE_KEY='@SERMON_RELEASE_KEY@'
+# The version of the server; only an agent signed for exactly this version is installed (no
+# rollback to an older signed release). Replaced when the server is built.
+AGENT_VERSION='@SERMON_AGENT_VERSION@'
 
 BIN_DIR=/usr/local/bin
 CONFIG_DIR=/etc/sermon
@@ -29,10 +34,10 @@ die() {
 
 usage() {
 	cat >&2 <<'USAGE'
-usage: install.sh --server URL [--token TOKEN] [--ca-fingerprint sha256:…] [--agent-url URL] [--force]
+usage: install.sh --server URL [--token-file FILE] [--ca-fingerprint sha256:…] [--agent-url URL] [--force]
 
   --server URL           public HTTPS address of sermon-server (as in the browser)
-  --token TOKEN          enrollment token from the UI (or SERMON_ENROLLMENT_TOKEN)
+  --token-file FILE      file with the enrollment token from the UI (or SERMON_ENROLLMENT_TOKEN)
   --ca-fingerprint FP    SHA-256 fingerprint of a self-signed server certificate
   --agent-url URL        mTLS agent API if not <server host>:8443
   --force                replace an existing enrollment of this host
@@ -81,8 +86,9 @@ b64decode() {
 # hex prints the bytes of stdin as lowercase hex.
 hex() { od -An -v -tx1 | tr -d ' \n'; }
 
-# verify FILE SIGFILE checks a minisign signature (Ed25519, "Ed" algorithm) against RELEASE_KEY.
-# minisign is used when installed; otherwise openssl (3.0 or later) checks the same signature.
+# verify FILE SIGFILE checks a minisign signature (Ed25519, "Ed" algorithm) against RELEASE_KEY,
+# including the trusted comment: it must name this file and AGENT_VERSION. minisign is used when
+# installed; otherwise openssl (3.0 or later) checks the same signatures.
 verify() {
 	# Prefixed names: POSIX sh has no local variables, main() uses work and binary.
 	verify_file=$1
@@ -90,9 +96,15 @@ verify() {
 	case $RELEASE_KEY in
 	@*@ | "") die "this server was built without a release key – install the agent from the package repository" ;;
 	esac
+	case $AGENT_VERSION in
+	@*@ | "") die "this server names no agent version – install the agent from the package repository" ;;
+	esac
+	verify_comment=$(sed -n '3s/^trusted comment: //p' "$verify_sig")
 	if command -v minisign >/dev/null 2>&1; then
+		# minisign checks the file signature and the global signature over the trusted comment.
 		minisign -Vq -P "$RELEASE_KEY" -m "$verify_file" -x "$verify_sig" >/dev/null 2>&1 ||
 			die "signature check failed for $(basename "$verify_file") – not installing"
+		check_comment "$(basename "$verify_file")" "$verify_comment"
 		return 0
 	fi
 	command -v openssl >/dev/null 2>&1 ||
@@ -116,6 +128,28 @@ verify() {
 	openssl pkeyutl -verify -pubin -keyform DER -inkey "$verify_dir/key.der" -rawin \
 		-in "$verify_file" -sigfile "$verify_dir/sig.raw" >/dev/null 2>&1 ||
 		die "signature check failed for $(basename "$verify_file") – not installing"
+	# The global signature covers the file signature and the trusted comment (minisign format).
+	sed -n 4p "$verify_sig" | b64decode >"$verify_dir/global" 2>/dev/null || die "malformed signature file"
+	[ "$(wc -c <"$verify_dir/global" | tr -d ' ')" = 64 ] || die "malformed signature file"
+	{
+		cat "$verify_dir/sig.raw"
+		printf '%s' "$verify_comment"
+	} >"$verify_dir/global.in"
+	openssl pkeyutl -verify -pubin -keyform DER -inkey "$verify_dir/key.der" -rawin \
+		-in "$verify_dir/global.in" -sigfile "$verify_dir/global" >/dev/null 2>&1 ||
+		die "signature check failed for $(basename "$verify_file") (trusted comment) – not installing"
+	check_comment "$(basename "$verify_file")" "$verify_comment"
+}
+
+# check_comment NAME COMMENT requires the signed trusted comment to name the file NAME and
+# AGENT_VERSION: a valid signature of another release or another file is not enough.
+check_comment() {
+	comment_file=$(printf '%s\n' "$2" | tr '\t' '\n' | sed -n 's/^file://p')
+	comment_version=$(printf '%s\n' "$2" | tr '\t' '\n' | sed -n 's/^version://p')
+	[ "$comment_file" = "$1" ] ||
+		die "the signature belongs to ${comment_file:-an unnamed file}, not $1 – not installing"
+	[ "$comment_version" = "$AGENT_VERSION" ] ||
+		die "the agent is signed for version ${comment_version:-unknown}, this server runs $AGENT_VERSION – not installing"
 }
 
 # --- installation ------------------------------------------------------------------------------
@@ -225,7 +259,8 @@ SERVICE
 	chmod 0755 "$ROOT/etc/init.d/sermon-agent"
 }
 
-main() {
+# parse_args ARG… sets SERVER, TOKEN, FINGERPRINT, AGENT_URL and FORCE and checks them.
+parse_args() {
 	SERVER=''
 	TOKEN=${SERMON_ENROLLMENT_TOKEN:-}
 	FINGERPRINT=''
@@ -234,7 +269,14 @@ main() {
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--server) SERVER=${2:-} && shift ;;
-		--token) TOKEN=${2:-} && shift ;;
+		--token)
+			TOKEN=${2:-} && shift
+			say "warning: --token is visible in the process list – prefer SERMON_ENROLLMENT_TOKEN or --token-file"
+			;;
+		--token-file)
+			[ -r "${2:-}" ] || die "cannot read the token file ${2:-}"
+			TOKEN=$(head -n 1 "$2" | tr -d '\r') && shift
+			;;
 		--ca-fingerprint) FINGERPRINT=${2:-} && shift ;;
 		--agent-url) AGENT_URL=${2:-} && shift ;;
 		--force) FORCE=--force ;;
@@ -246,8 +288,12 @@ main() {
 	[ -n "$SERVER" ] || { usage; die "--server is required"; }
 	case $SERVER in https://*) ;; *) die "--server must be an https:// URL" ;; esac
 	SERVER=${SERVER%/}
-	[ -n "$TOKEN" ] || die "an enrollment token is required (--token or SERMON_ENROLLMENT_TOKEN)"
+	[ -n "$TOKEN" ] || die "an enrollment token is required (SERMON_ENROLLMENT_TOKEN or --token-file)"
 	[ -n "$AGENT_URL" ] || AGENT_URL=$(agent_url_for "$SERVER")
+}
+
+main() {
+	parse_args "$@"
 	[ "$(id -u)" = 0 ] || die "please run as root (sudo)"
 
 	arch=$(detect_arch)

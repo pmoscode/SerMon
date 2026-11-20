@@ -303,18 +303,29 @@ eine Fake-Implementierung für Tests.
     - zufällig (256 Bit); in der DB wird nur der **SHA-256-Hash** gespeichert
     - **gültig 1 h** (konfigurierbar), Nutzung **einmalig** oder N-mal (für Massen-Rollouts, z. B. mit Ansible)
     - gebunden an Org und Node-Gruppe
-2. Die UI zeigt den Befehl an:
+2. Die UI zeigt den Befehl an. Das Token steht in einer Variable, nie in der Kommandozeile (Prozessliste); das
+   Leerzeichen am Anfang hält es in bash aus der History:
    ```bash
-   curl -fsSL https://sermon.example.com/install.sh | sudo sh -s -- \
-     --token sme_XXXXXXXX \
-     --ca-fingerprint sha256:AB:CD:…   # nur nötig bei selbstsigniertem Server-Zertifikat
+    export SERMON_ENROLLMENT_TOKEN=sme_XXXXXXXX
+   curl -fsSL https://sermon.example.com/install.sh | sudo --preserve-env=SERMON_ENROLLMENT_TOKEN sh -s -- \
+     --server https://sermon.example.com
+   ```
+   Ohne öffentlich vertrauenswürdiges Zertifikat (selbstsigniert, eigene CA) trägt der Admin den Fingerprint ein, und
+   der Befehl prüft `install.sh` vor dem Ausführen mit `sha256sum` gegen die Prüfsumme, die der Browser vom Server
+   bekommen hat ([ADR 0012](docs/adr/0012-agent-installation-und-signaturen.md), Nachtrag M1-37):
+   ```bash
+    export SERMON_ENROLLMENT_TOKEN=sme_XXXXXXXX
+   curl -fsSLk https://sermon.example.com/install.sh -o sermon-install.sh
+   echo '<sha256>  sermon-install.sh' | sha256sum -c - && sudo --preserve-env=SERMON_ENROLLMENT_TOKEN \
+     sh sermon-install.sh --server https://sermon.example.com --ca-fingerprint sha256:AB:CD:…
    ```
    Daneben gibt es einen Link **„Skript erst ansehen“** und die Alternative per Paket-Repo
    (`apt install sermon-agent && sermon-agent enroll …`).
 3. `install.sh` (POSIX-sh, ShellCheck-geprüft):
     - erkennt Distro, Architektur und Init-System
     - lädt die Agent- und Helper-Binary samt **Signatur** und prüft sie gegen den **im Skript fest eingebetteten Public
-      Key** (minisign/cosign). Schlägt die Prüfung fehl, bricht das Skript ab.
+      Key** (minisign/cosign). Die Signatur muss auch den Dateinamen und **genau die Version des Servers** nennen
+      (kein Rollback auf ein älteres signiertes Release). Schlägt die Prüfung fehl, bricht das Skript ab.
     - legt den User `sermon` an und setzt die Gruppen (`systemd-journal`, `adm`)
     - installiert die Units (systemd/OpenRC) und ruft `sermon-agent enroll` auf
 4. `enroll`:

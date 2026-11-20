@@ -3,7 +3,9 @@ package download_test
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -35,7 +37,7 @@ func serve(t *testing.T, h *download.Handler, method, path string) *httptest.Res
 
 func TestInstallScript_IsRenderedWithKeyAndInitFiles(t *testing.T) {
 	key := releaseKey(t)
-	h, err := download.New(key, "")
+	h, err := download.New(key, "1.2.3", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +47,8 @@ func TestInstallScript_IsRenderedWithKeyAndInitFiles(t *testing.T) {
 		rec.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("GET /install.sh = %d %v", rec.Code, rec.Header())
 	}
-	if !strings.Contains(body, "RELEASE_KEY='"+key+"'") || strings.Contains(body, "@SERMON_") {
-		t.Error("placeholders left or key missing")
+	if !strings.Contains(body, "RELEASE_KEY='"+key+"'") || !strings.Contains(body, "AGENT_VERSION='1.2.3'") || strings.Contains(body, "@SERMON_") {
+		t.Error("placeholders left, key or version missing")
 	}
 	unit, _ := os.ReadFile("../../../../packaging/systemd/sermon-agent.service")
 	service, _ := os.ReadFile("../../../../packaging/openrc/sermon-agent")
@@ -69,13 +71,39 @@ func TestAssets_MatchPackaging(t *testing.T) {
 	}
 }
 
+// The UI shows this checksum for servers without a publicly trusted certificate: the admin's
+// browser is the authenticated channel, the host checks the script with sha256sum before sudo.
+func TestInstallScript_CarriesItsChecksum(t *testing.T) {
+	h, err := download.New(releaseKey(t), "1.2.3", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := serve(t, h, http.MethodGet, "/install.sh")
+	sum := sha256.Sum256(get.Body.Bytes())
+	want := hex.EncodeToString(sum[:])
+	if got := get.Header().Get(download.ScriptDigestHeader); got != want {
+		t.Errorf("GET %s = %q, want %q", download.ScriptDigestHeader, got, want)
+	}
+	if got := serve(t, h, http.MethodHead, "/install.sh").Header().Get(download.ScriptDigestHeader); got != want {
+		t.Errorf("HEAD %s = %q, want %q", download.ScriptDigestHeader, got, want)
+	}
+}
+
+func TestNew_RejectsVersionsThatCouldBreakTheScript(t *testing.T) {
+	for _, version := range []string{"", "1.2 3", "1.2'; rm -rf /", "1.2\n"} {
+		if _, err := download.New(releaseKey(t), version, ""); !errors.Is(err, download.ErrInvalidVersion) {
+			t.Errorf("New(version %q) = %v, want ErrInvalidVersion", version, err)
+		}
+	}
+}
+
 func TestNew_RejectsMalformedKeys(t *testing.T) {
 	for _, key := range []string{"not base64!", base64.StdEncoding.EncodeToString([]byte("short")), base64.StdEncoding.EncodeToString(make([]byte, 42))} {
-		if _, err := download.New(key, ""); !errors.Is(err, download.ErrInvalidKey) {
+		if _, err := download.New(key, "1.2.3", ""); !errors.Is(err, download.ErrInvalidKey) {
 			t.Errorf("New(%q) = %v", key, err)
 		}
 	}
-	h, err := download.New("", "")
+	h, err := download.New("", "1.2.3", "")
 	if err != nil || !strings.Contains(serve(t, h, http.MethodGet, "/install.sh").Body.String(), "RELEASE_KEY='@SERMON_RELEASE_KEY@'") {
 		t.Errorf("without key the placeholder stays (the script refuses to install): %v", err)
 	}
@@ -93,7 +121,7 @@ func TestDownloads_ServeOnlyTheAgentFiles(t *testing.T) {
 	if err := os.Symlink("/etc/passwd", filepath.Join(dir, "sermon-agent-linux-arm64")); err != nil {
 		t.Fatal(err)
 	}
-	h, err := download.New(releaseKey(t), dir)
+	h, err := download.New(releaseKey(t), "1.2.3", dir)
 	if err != nil {
 		t.Fatal(err)
 	}

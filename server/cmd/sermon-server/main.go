@@ -148,7 +148,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	healthHandler := health.New(logger, checks...)
 	healthHandler.Register(mux)
-	downloads, err := download.New(releaseKey, cfg.AgentDownloadsDir)
+	downloads, err := download.New(releaseKey, version, cfg.AgentDownloadsDir)
 	if err != nil {
 		return fmt.Errorf("agent downloads: %w", err)
 	}

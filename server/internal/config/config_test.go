@@ -314,3 +314,13 @@ func TestLoad_MetricsEndpoint(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_AgentDownloadsDir(t *testing.T) {
+	dir := t.TempDir()
+	if cfg, err := config.Load(fakeSource(map[string]string{"SERMON_AGENT_DOWNLOADS_DIR": dir}, nil)); err != nil || cfg.AgentDownloadsDir != dir {
+		t.Errorf("Load() = %q, %v", cfg.AgentDownloadsDir, err)
+	}
+	if _, err := config.Load(fakeSource(map[string]string{"SERMON_AGENT_DOWNLOADS_DIR": dir + "/missing"}, nil)); err == nil {
+		t.Error("a missing directory must be rejected")
+	}
+}

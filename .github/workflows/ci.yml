@@ -43,7 +43,7 @@ jobs:
   shell:
     name: shell scripts
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,6 +52,8 @@ jobs:
         with:
           tool: just@${{ env.JUST_VERSION }}
       - run: just lint-shell lint-compose test-scripts
+      # install.sh (bats) and the systemd unit's exposure score, in a Debian container.
+      - run: just test-packaging
 
   proto:
     name: protocol (buf)

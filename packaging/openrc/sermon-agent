@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+# SerMon agent under OpenRC (Alpine): unprivileged via supervise-daemon (KONZEPT §18.4).
+# The variables are read by openrc-run.
+# shellcheck shell=sh disable=SC2034
+
+name="SerMon agent"
+description="Collects metrics, logs and security events and streams them to sermon-server"
+command="/usr/local/bin/sermon-agent"
+command_args="run --config /etc/sermon/agent.toml"
+command_user="sermon:sermon"
+supervisor="supervise-daemon"
+respawn_delay=5
+respawn_max=0
+
+depend() {
+	need net
+	after firewall
+}
+
+start_pre() {
+	checkpath --directory --mode 0750 --owner sermon:sermon /var/lib/sermon-agent
+}

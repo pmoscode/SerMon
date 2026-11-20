@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +55,8 @@ type Config struct {
 	AgentHostnames []string
 	// MetricsAddr is the listen address of the server's own /metrics (empty: off; ADR 0011).
 	MetricsAddr string
+	// AgentDownloadsDir holds the signed agent binaries served under /downloads (ADR 0012).
+	AgentDownloadsDir string
 	// MasterKeys encrypt secrets at rest (key file "<id>:<base64>" per line, newest first).
 	// Required together with the database; create the file with "sermon-server init".
 	MasterKeys *secrets.Box
@@ -79,6 +82,7 @@ const (
 	envAgentAddr       = "SERMON_AGENT_ADDR"
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
 	envMetricsAddr     = "SERMON_METRICS_ADDR"
+	envDownloadsDir    = "SERMON_AGENT_DOWNLOADS_DIR"
 	fileSuffix         = "_FILE"
 )
 
@@ -109,6 +113,7 @@ func Load(src Source) (Config, error) {
 		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
 		AgentHostnames:     parseHostnames(&l),
 		MetricsAddr:        l.string(envMetricsAddr, "", validateAddr),
+		AgentDownloadsDir:  l.string(envDownloadsDir, "", validateDir),
 	}
 	if cfg.MetricsAddr != "" && !strings.HasSuffix(cfg.MetricsAddr, ":0") &&
 		(cfg.MetricsAddr == cfg.HTTPAddr || cfg.MetricsAddr == cfg.AgentAddr) {
@@ -323,4 +328,12 @@ func parsePrefixes(l *loader) []netip.Prefix {
 		prefixes = append(prefixes, p.Masked())
 	}
 	return prefixes
+}
+
+func validateDir(value string) error {
+	info, err := os.Stat(value)
+	if err != nil || !info.IsDir() {
+		return errors.New("must be an existing directory")
+	}
+	return nil
 }

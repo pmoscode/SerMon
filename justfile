@@ -55,7 +55,7 @@ dev-logs:
     docker compose -f deploy/dev/compose.yaml logs -f
 
 # Generate all code: protocol (buf) and typed SQL (sqlc)
-gen: gen-proto gen-sql
+gen: gen-proto gen-sql gen-packaging
 
 # Generate code from proto/ for Rust, Go and TypeScript (local plugins only)
 [working-directory: 'proto']
@@ -70,10 +70,17 @@ gen-sql:
     go tool sqlc generate
     @echo "✓ generated: server/internal/adapters/postgres/sqlcdb"
 
+# Copy install.sh and the init files into the server, which serves them (ADR 0012)
+gen-packaging:
+    cp packaging/install.sh server/internal/transport/download/assets/install.sh
+    cp packaging/systemd/sermon-agent.service server/internal/transport/download/assets/sermon-agent.service
+    cp packaging/openrc/sermon-agent server/internal/transport/download/assets/sermon-agent.openrc
+    @echo "✓ copied: server/internal/transport/download/assets"
+
 # Fail if the committed generated code is not up to date with proto/ (used in CI)
 check-gen: gen
-    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb
-    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
+    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets
+    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
 
 # Install the pinned Rust protoc plugins used by `just gen`
 install-proto-plugins:
@@ -110,7 +117,7 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh .devcontainer/*.sh
+    shellcheck scripts/*.sh .devcontainer/*.sh packaging/install.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
@@ -181,6 +188,21 @@ fuzz-agent seconds="60":
     cargo fuzz run proc_parsers -- -max_total_time={{ seconds }} -max_len=65536
     cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
 
+# Test install.sh and the systemd unit in Debian: bats (signature, detection) and `systemd-analyze security` < 2.0
+test-packaging:
+    docker run --rm -q -v "{{ justfile_directory() }}:/src:ro" -w /src debian:13 sh -c '\
+        apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends bats openssl minisign systemd >/dev/null 2>&1 && \
+        bats packaging/test && \
+        { systemd-analyze security --offline=true --threshold=20 packaging/systemd/sermon-agent.service >/tmp/score; status=$?; tail -1 /tmp/score; exit $status; }'
+
+# Sign the release binaries with KEY (Ed25519 PEM) into dist/agent/ – the directory SERMON_AGENT_DOWNLOADS_DIR serves
+sign-agent key: build-agent
+    mkdir -p dist/agent
+    cp agent/target/x86_64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-amd64
+    cp agent/target/aarch64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-arm64
+    scripts/release-sign.sh sign "{{ key }}" dist/agent/sermon-agent-linux-amd64 dist/agent/sermon-agent-linux-arm64
+    @echo "✓ dist/agent: binaries and minisign signatures"
+
 # Build static release binaries for amd64 and arm64 (cargo-zigbuild, see ADR 0002)
 [working-directory: 'agent']
 build-agent:
@@ -225,10 +247,13 @@ test-server:
 security-server:
     govulncheck ./...
 
+# Release public key compiled into the server for install.sh (ADR 0012): SERMON_RELEASE_KEY or packaging/release.pub
+release_key := env("SERMON_RELEASE_KEY", `cat packaging/release.pub 2>/dev/null || true`)
+
 # Build a static server binary with the embedded web UI into server/bin/
 [working-directory: 'server']
 build-server: build-web
-    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version={{ server_version }}" -o bin/sermon-server ./cmd/sermon-server
+    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version={{ server_version }} -X main.releaseKey={{ release_key }}" -o bin/sermon-server ./cmd/sermon-server
     @echo "✓ server/bin/sermon-server ({{ server_version }})"
 
 # Start the server binary, probe /healthz and /readyz, stop it with SIGTERM

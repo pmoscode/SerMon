@@ -1,0 +1,54 @@
+# SerMon agent (KONZEPT §4.1, §18.4): unprivileged, hardened; installed by install.sh and the packages.
+[Unit]
+Description=SerMon agent
+Documentation=https://github.com/pmoscode/SerMon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sermon-agent run --config /etc/sermon/agent.toml
+Restart=on-failure
+RestartSec=5s
+User=sermon
+Group=sermon
+SupplementaryGroups=systemd-journal adm
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+# read-only instead of yes: the file system collector must see /home and /root mounts (statvfs).
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=default
+RemoveIPC=yes
+UMask=0077
+KeyringMode=private
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+DevicePolicy=closed
+StateDirectory=sermon-agent
+StateDirectoryMode=0750
+ReadWritePaths=/var/lib/sermon-agent
+ReadOnlyPaths=/etc/sermon
+MemoryMax=128M
+CPUQuota=20%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

@@ -35,6 +35,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
+	"github.com/pmoscode/SerMon/server/internal/transport/download"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
 	"github.com/pmoscode/SerMon/server/internal/transport/httpserver"
 	"github.com/pmoscode/SerMon/server/internal/transport/spa"
@@ -42,8 +43,13 @@ import (
 	"github.com/pmoscode/SerMon/server/web"
 )
 
-// version is set at build time via -ldflags "-X main.version=...".
-var version = "dev"
+var (
+	// version is set at build time via -ldflags "-X main.version=...".
+	version = "dev"
+	// releaseKey is the minisign public key the installer checks agent binaries against; set at
+	// build time (-X main.releaseKey=...), never at runtime (ADR 0012).
+	releaseKey = ""
+)
 
 const usage = "usage: sermon-server [--version | init [--master-keys-file PATH]]"
 
@@ -142,6 +148,14 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	}
 	healthHandler := health.New(logger, checks...)
 	healthHandler.Register(mux)
+	downloads, err := download.New(releaseKey, cfg.AgentDownloadsDir)
+	if err != nil {
+		return fmt.Errorf("agent downloads: %w", err)
+	}
+	if releaseKey == "" {
+		logger.WarnContext(ctx, "built without release key – /install.sh refuses to install agents")
+	}
+	downloads.Register(mux)
 	if err := mountUI(ctx, mux, logger); err != nil {
 		return err
 	}

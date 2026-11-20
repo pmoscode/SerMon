@@ -1,0 +1,52 @@
+# 0012 – Agent-Installation: Skript, Signaturen und gehärtete Unit
+
+- Status: accepted
+- Datum: 2026-11-20
+- Bezug: KONZEPT.md §6, §18.1 (Tampering), §18.4; IMPLEMENTIERUNGSPLAN M1-27; ADR 0010
+
+## Kontext
+
+KONZEPT §6 sieht einen Einzeiler `curl … | sh` vor. Das Skript soll die Agent-Binary samt Signatur laden und gegen
+einen **im Skript eingebetteten Public Key** prüfen (minisign/cosign), den User `sermon` anlegen, die Unit installieren
+und `enroll` aufrufen. Zu entscheiden war, womit Hosts die Signatur prüfen, woher Schlüssel und Binaries kommen und
+wie die Unit gehärtet wird.
+
+## Entscheidung
+
+- **Signaturformat minisign, Algorithmus „Ed“** (Ed25519 über die Datei, nicht vorab gehasht). Erzeugt wird es mit
+  reinem OpenSSL (`scripts/release-sign.sh`: Schlüssel erzeugen, Public Key ausgeben, signieren); die Key-ID sind die
+  ersten 8 Bytes von SHA-256 über den Public Key. `minisign -V` prüft die Dateien (Test in `packaging/test`).
+- **Prüfung im Skript:** mit `minisign`, falls installiert, sonst mit `openssl` ≥ 3.0 (auf Debian, Ubuntu, RHEL und
+  Alpine durch `ca-certificates` praktisch immer vorhanden). Geprüft werden Algorithmus, Key-ID und die
+  Ed25519-Signatur. Ohne beide Werkzeuge, mit fremdem Schlüssel oder veränderter Datei bricht das Skript ab, bevor
+  etwas installiert ist. Es gibt keinen Schalter, der die Prüfung abschaltet.
+- **Der Public Key wird in den Server kompiliert** (`-X main.releaseKey`, aus `SERMON_RELEASE_KEY` oder
+  `packaging/release.pub`), nicht zur Laufzeit konfiguriert. Ohne Key liefert der Server das Skript mit Platzhalter
+  aus, und es verweigert die Installation. Den privaten Schlüssel hält nur die Release-Pipeline.
+- **Auslieferung durch den Server:** `GET /install.sh` (als Text, damit „Skript erst ansehen“ im Browser funktioniert)
+  und `GET /downloads/sermon-agent-linux-{amd64,arm64}[.minisig]` aus `SERMON_AGENT_DOWNLOADS_DIR`. Nur diese
+  Dateinamen, gelesen über `os.Root` (Symlinks aus dem Verzeichnis heraus werden nicht verfolgt).
+- **TLS beim Download:** Mit `--ca-fingerprint` (selbstsigniertes Server-Zertifikat) lädt das Skript ohne
+  Zertifikatsprüfung; die Integrität sichert die Signatur, `enroll` prüft danach den Fingerprint (ADR 0010).
+- **Unit:** KONZEPT §18.4, ergänzt um `ProtectKernelLogs`, `ProtectProc=default`, `UMask=0077`, `RemoveIPC`,
+  `KeyringMode=private`, `DevicePolicy=closed`, `SystemCallErrorNumber=EPERM`, `TasksMax=64`, `StateDirectory`.
+  `ProtectHome=read-only` statt `yes`, damit der Dateisystem-Collector `/home` sieht. Kein `PrivateUsers`, weil sonst
+  die Gruppen `systemd-journal`/`adm` für das spätere Log-Shipping wirkungslos würden. Score laut
+  `systemd-analyze security --offline`: **1,6** (Ziel < 2,0, als Test mit `--threshold=20`).
+- Unit und OpenRC-Skript liegen einmal unter `packaging/`; das Skript bekommt sie beim Ausliefern eingesetzt, eine
+  Kopie im Server prüft `just check-gen`.
+
+## Alternativen
+
+- **cosign:** auf den Ziel-Hosts nicht verbreitet, große Binary; für Container-Images bleibt es vorgesehen.
+- **Prüfung ohne Werkzeug** (z. B. nur SHA-256 aus einer Datei vom Server): schützt nicht gegen einen manipulierten
+  Download-Server bzw. Mirror. Verworfen.
+- **minisign-Prehash („ED“, BLAKE2b-512):** OpenSSL kann es nicht in einem Schritt prüfen; die Binaries sind klein
+  genug für „Ed“.
+
+## Folgen
+
+- Der Release-Schlüssel muss erzeugt und als Secret der Release-Pipeline hinterlegt werden; `packaging/release.pub`
+  kommt dann ins Repository. Bis dahin bauen Entwicklung und E2E mit einem eigenen Testschlüssel.
+- Wer den Server kontrolliert, kann ein anderes Skript ausliefern – das gilt für jedes `curl | sh`. Dafür bleiben
+  „Skript erst ansehen“ und das Paket-Repo (später) als Alternativen (KONZEPT O5).

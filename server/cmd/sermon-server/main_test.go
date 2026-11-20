@@ -124,3 +124,36 @@ func TestRun_ServesMetricsOnItsOwnListener(t *testing.T) {
 		t.Errorf("run() = %d:\n%s", code, logs.String())
 	}
 }
+
+func TestRun_ServesTheInstaller(t *testing.T) {
+	logs := &syncBuffer{}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan int, 1)
+	go func() {
+		done <- run(ctx, nil, envSource(map[string]string{"SERMON_HTTP_ADDR": "127.0.0.1:0"}), logs, logs)
+	}()
+	addr := waitFor(t, logs, regexp.MustCompile(`"msg":"listening"[^\n]*?"addr":"([^"]+)"`))
+
+	get := func(path string) (*http.Response, string) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+path, nil)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		body, _ := io.ReadAll(res.Body)
+		return res, string(body)
+	}
+	res, body := get("/install.sh")
+	if res.StatusCode != http.StatusOK || !strings.HasPrefix(body, "#!/bin/sh") || !strings.Contains(body, "[Service]") {
+		t.Errorf("GET /install.sh = %d %q…", res.StatusCode, body[:min(len(body), 40)])
+	}
+	if !strings.Contains(logs.String(), "built without release key") {
+		t.Error("a server without release key must say so")
+	}
+	if res, _ := get("/downloads/sermon-agent-linux-amd64"); res.StatusCode != http.StatusNotFound {
+		t.Errorf("downloads without directory = %d", res.StatusCode)
+	}
+	cancel()
+	<-done
+}

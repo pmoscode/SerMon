@@ -927,7 +927,7 @@ NoNewPrivileges=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
 ProtectSystem=strict
-ProtectHome=yes
+ProtectHome=read-only
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes
@@ -950,7 +950,9 @@ MemoryMax=128M
 CPUQuota=20%
 ```
 
-Ziel: `systemd-analyze security sermon-agent` mit einem Score **< 2,0** („OK“). Unter OpenRC wird der Agent über
+Ziel: `systemd-analyze security sermon-agent` mit einem Score **< 2,0** („OK“). Die ausgelieferte Unit
+(`packaging/systemd/sermon-agent.service`, ADR 0012) ist zusätzlich gehärtet und erreicht 1,6; `ProtectHome=read-only`
+statt `yes`, damit der Dateisystem-Collector auch `/home` sieht. Unter OpenRC wird der Agent über
 `supervise-daemon` mit `command_user=sermon` gestartet.
 
 ### 18.5 Secrets

@@ -38,7 +38,16 @@ services:
       SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
       SERMON_MASTER_KEYS_FILE: /var/lib/sermon/master_keys
       SERMON_LOG_FORMAT: json
-    secrets: [database_url, database_migrate_url]
+      # Production mode (the default): invitations only by mail, over STARTTLS to Mailpit with
+      # the certificate of this run.
+      SERMON_ALLOWED_ORIGINS: https://localhost:${SERMON_E2E_PORT:-18443},https://sermon.test
+      SERMON_SMTP_HOST: mailpit
+      SERMON_SMTP_PORT: "1025"
+      SERMON_SMTP_FROM: SerMon E2E <sermon@sermon.test>
+      SERMON_SMTP_USERNAME: sermon
+      SERMON_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      SERMON_SMTP_CA_FILE: /run/secrets/mailpit_ca
+    secrets: [database_url, database_migrate_url, smtp_password, mailpit_ca]
     volumes: [server-state:/var/lib/sermon]
     networks: [e2e]
     depends_on:
@@ -51,10 +60,9 @@ services:
       SERMON_HTTP_ADDR: ":8080"
       SERMON_AGENT_ADDR: ":8443"
       SERMON_AGENT_HOSTNAMES: server
-      SERMON_ALLOWED_ORIGINS: https://localhost:${SERMON_E2E_PORT:-18443},https://sermon.test
       SERMON_TRUSTED_PROXIES: 172.30.77.0/24
       SERMON_AGENT_DOWNLOADS_DIR: /srv/downloads
-    secrets: [database_url, database_migrate_url]
+    secrets: [database_url, database_migrate_url, smtp_password, mailpit_ca]
     volumes:
       - server-state:/var/lib/sermon
       - ./.build/downloads:/srv/downloads:ro
@@ -64,6 +72,22 @@ services:
     networks: [e2e]
     depends_on:
       init: { condition: service_completed_successfully }
+      mailpit: { condition: service_started }
+
+  # Mail server of the run: STARTTLS required, any login accepted; the test reads the invitation
+  # mails through its API (published on 127.0.0.1 only).
+  mailpit:
+    image: axllent/mailpit:v1.33.1@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
+    environment:
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_SMTP_TLS_CERT: /certs/mailpit.crt
+      MP_SMTP_TLS_KEY: /certs/mailpit.key
+      MP_SMTP_REQUIRE_STARTTLS: "true"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_DISABLE_RDNS: "true"
+    volumes: ["./.build/mailpit:/certs:ro"]
+    ports: ["127.0.0.1:${SERMON_E2E_MAIL_PORT:-18025}:8025"]
+    networks: [e2e]
 
   caddy:
     image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
@@ -99,6 +123,8 @@ secrets: # written by scripts/e2e-demo.sh into .build/, never committed
   postgres_app_password: { file: ./.build/secrets/postgres_app_password }
   database_url: { file: ./.build/secrets/database_url }
   database_migrate_url: { file: ./.build/secrets/database_migrate_url }
+  smtp_password: { file: ./.build/secrets/smtp_password }
+  mailpit_ca: { file: ./.build/mailpit/mailpit.crt }
 
 volumes:
   server-state:

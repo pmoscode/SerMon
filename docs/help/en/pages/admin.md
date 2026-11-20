@@ -13,6 +13,6 @@ A role applies to one group or to all groups. Several roles add up.
 ## Good to know
 
 - Changing rights, removing members, deleting groups and inviting need a fresh confirmation (password or second factor).
-- Invitations are links shown only once; SerMon sends no emails.
+- Invitations go by email to the invited address; only whoever has the mailbox can accept. The link works once within 72 hours. “Send again” sends a new link and invalidates the old one. Only on a development server without mail does SerMon show the link once to pass on.
 - The last admin of all groups can't be removed.
 - Every change is in the audit log with time and person; the entries are chained and can't be changed unnoticed.

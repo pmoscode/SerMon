@@ -1246,13 +1246,15 @@ func (x *InviteMemberRequest) GetRole() Role {
 	return Role_ROLE_UNSPECIFIED
 }
 
-// InviteMemberResponse returns the invitation and its link token (shown only once).
+// InviteMemberResponse returns the invitation and, without mail, its link token (shown once).
 type InviteMemberResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// invitation is the stored invitation.
 	Invitation *Invitation `protobuf:"bytes,1,opt,name=invitation,proto3" json:"invitation,omitempty"`
-	// token is the secret part of the link; it cannot be retrieved again.
-	Token         string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	// token is the secret part of the link; it cannot be retrieved again. Empty if emailed.
+	Token string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	// emailed is set when the link went to the invited address by mail (nobody else sees it).
+	Emailed       bool `protobuf:"varint,3,opt,name=emailed,proto3" json:"emailed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1299,6 +1301,13 @@ func (x *InviteMemberResponse) GetToken() string {
 		return x.Token
 	}
 	return ""
+}
+
+func (x *InviteMemberResponse) GetEmailed() bool {
+	if x != nil {
+		return x.Emailed
+	}
+	return false
 }
 
 // Invitation is an open invitation.
@@ -1641,12 +1650,13 @@ const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\xbaH\ar\x05\x10\x03\x18\xc0\x02R\x05email\x12&\n" +
 	"\bgroup_id\x18\x02 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\agroupId\x123\n" +
 	"\x04role\x18\x03 \x01(\x0e2\x13.sermon.web.v1.RoleB\n" +
-	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x04role\"g\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x04role\"\x81\x01\n" +
 	"\x14InviteMemberResponse\x129\n" +
 	"\n" +
 	"invitation\x18\x01 \x01(\v2\x19.sermon.web.v1.InvitationR\n" +
 	"invitation\x12\x14\n" +
-	"\x05token\x18\x02 \x01(\tR\x05token\"\x8f\x02\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x12\x18\n" +
+	"\aemailed\x18\x03 \x01(\bR\aemailed\"\x8f\x02\n" +
 	"\n" +
 	"Invitation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +

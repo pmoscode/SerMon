@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"net/http/cookiejar"
+	"strings"
+	"sync"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -144,4 +146,54 @@ func containsInvitation(invs []*webv1.Invitation, id string) bool {
 		}
 	}
 	return false
+}
+
+type recordingMailer struct {
+	mu   sync.Mutex
+	sent []string // "to: text"
+	err  error
+}
+
+func (m *recordingMailer) SendText(_ context.Context, to, _, text string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sent = append(m.sent, to+": "+text)
+	return m.err
+}
+
+// In production the API never hands out the link (M1-39): the admin can't accept it under the
+// invited address; the mailed link works. A failing mail server is UNAVAILABLE, nothing more.
+func TestInvitationAPI_WithMailTheLinkOnlyReachesTheInvitedAddress(t *testing.T) {
+	mailer := &recordingMailer{}
+	s := newStackWithMailer(t, 1000, mailer)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ctx := context.Background()
+
+	res, err := ann.access.InviteMember(ctx, connect.NewRequest(&webv1.InviteMemberRequest{Email: "mailed@example.org", Role: webv1.Role_ROLE_VIEWER}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Msg.GetToken() != "" || !res.Msg.GetEmailed() {
+		t.Fatalf("response = %v, want emailed without token", res.Msg)
+	}
+	mailer.mu.Lock()
+	sent := strings.Join(mailer.sent, "\n")
+	mailer.mu.Unlock()
+	i := strings.Index(sent, "/invite#")
+	if !strings.HasPrefix(sent, "mailed@example.org: ") || i < 0 {
+		t.Fatalf("mails = %q", sent)
+	}
+	token, _, _ := strings.Cut(sent[i+len("/invite#"):], "\n")
+	if _, err := anonymous(s).GetInvitation(ctx, connect.NewRequest(&webv1.GetInvitationRequest{Token: token})); err != nil {
+		t.Errorf("the mailed link doesn't work: %v", err)
+	}
+
+	mailer.mu.Lock()
+	mailer.err = errors.New("dial tcp: connection refused to mail.internal")
+	mailer.mu.Unlock()
+	_, err = ann.access.InviteMember(ctx, connect.NewRequest(&webv1.InviteMemberRequest{Email: "other@example.org", Role: webv1.Role_ROLE_VIEWER}))
+	if connect.CodeOf(err) != connect.CodeUnavailable || strings.Contains(err.Error(), "mail.internal") {
+		t.Errorf("failing mail: %v, want UNAVAILABLE without details", err)
+	}
 }

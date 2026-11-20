@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -235,5 +236,72 @@ func TestJoin_UnknownUserIsRejected(t *testing.T) {
 	store := &fakeStore{pending: pendingForBob()}
 	if _, err := service(store, profiles{}).Join(context.Background(), token, bob); !errors.Is(err, invitation.ErrInvalidInvitation) {
 		t.Errorf("error = %v, want ErrInvalidInvitation", err)
+	}
+}
+
+type sentMail struct{ to, subject, text string }
+
+type fakeMailer struct {
+	sent []sentMail
+	err  error
+}
+
+func (f *fakeMailer) SendText(_ context.Context, to, subject, text string) error {
+	f.sent = append(f.sent, sentMail{to, subject, text})
+	return f.err
+}
+
+// In production the link goes only to the invited address: whoever accepts owns the mailbox, so
+// an admin can't occupy an account with someone else's address (M1-39). The API never sees it.
+func TestInvite_WithAMailerSendsTheLinkOnlyByMail(t *testing.T) {
+	store := &fakeStore{pending: pendingForBob()}
+	mailer := &fakeMailer{}
+	svc := invitation.NewService(store, profiles{ann: "ann@example.org"}, authz.NewPolicy(), plainHasher{}, func() time.Time { return now }, uuid.New,
+		invitation.WithMailer(mailer, "https://sermon.example.com"))
+
+	tok, _, err := svc.Invite(context.Background(), adminCaller(time.Minute), "bob@example.org", nil, role.Operator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok != "" {
+		t.Errorf("token %q returned, want none (only the mailbox owner gets the link)", tok)
+	}
+	if len(mailer.sent) != 1 || mailer.sent[0].to != "bob@example.org" {
+		t.Fatalf("sent = %+v, want one mail to bob", mailer.sent)
+	}
+	mail := mailer.sent[0]
+	i := strings.Index(mail.text, "https://sermon.example.com/invite#")
+	if i < 0 {
+		t.Fatalf("mail text without link:\n%s", mail.text)
+	}
+	link := mail.text[i:]
+	link = link[:strings.IndexAny(link+"\n", " \n")]
+	if sum := sha256.Sum256([]byte(strings.TrimPrefix(link, "https://sermon.example.com/invite#"))); sum != store.hash {
+		t.Errorf("the link in the mail doesn't match the stored hash: %s", link)
+	}
+	for _, want := range []string{"Alpha", "X", "operator"} {
+		if !strings.Contains(mail.subject+mail.text, want) {
+			t.Errorf("mail lacks %q (organization, inviter, role):\n%s\n%s", want, mail.subject, mail.text)
+		}
+	}
+
+	mailer.err = errors.New("connection refused")
+	if _, _, err := svc.Invite(context.Background(), adminCaller(time.Minute), "bob@example.org", nil, role.Operator); !errors.Is(err, invitation.ErrMailFailed) {
+		t.Errorf("Invite() with a failing mailer = %v, want ErrMailFailed", err)
+	}
+}
+
+func TestSendMail_ReadsWellWithoutInviterName(t *testing.T) {
+	mailer := &fakeMailer{}
+	if err := invitation.SendMail(context.Background(), mailer, "https://sermon.example.com/", "tok", invitation.MailFacts{
+		To: "bea@example.org", Organization: "Beta", Role: role.Admin, ExpiresAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	text := mailer.sent[0].text
+	for _, want := range []string{"Du wurdest zur Organisation „Beta“", "You have been invited to the organization \"Beta\"", "https://sermon.example.com/invite#tok"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("mail lacks %q:\n%s", want, text)
+		}
 	}
 }

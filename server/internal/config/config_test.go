@@ -45,6 +45,7 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 
 	want := config.Config{
+		Mode:            config.ModeProduction,
 		HTTPAddr:        ":8080",
 		LogLevel:        slog.LevelInfo,
 		LogFormat:       config.LogFormatJSON,
@@ -69,6 +70,7 @@ func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 	}
 
 	want := config.Config{
+		Mode:            config.ModeProduction,
 		HTTPAddr:        "127.0.0.1:9000",
 		LogLevel:        slog.LevelDebug,
 		LogFormat:       config.LogFormatText,
@@ -170,6 +172,7 @@ func TestLoad_ReportsAllErrorsAtOnce(t *testing.T) {
 
 func TestLoad_DatabaseAndWebAPISettings(t *testing.T) {
 	env := map[string]string{
+		"SERMON_MODE":                      "development",
 		"SERMON_DATABASE_URL_FILE":         "/run/secrets/db",
 		"SERMON_DATABASE_MIGRATE_URL_FILE": "/run/secrets/db-migrate",
 		"SERMON_ALLOWED_ORIGINS":           "https://sermon.example.com, http://127.0.0.1:5173",
@@ -240,7 +243,7 @@ func TestLoad_MasterKeys(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), material) {
 		t.Errorf("broken key file: %v", err)
 	}
-	cfg, err := config.Load(fakeSource(map[string]string{"SERMON_DATABASE_URL": dbURL("sermon_app"), "SERMON_MASTER_KEYS": line}, nil))
+	cfg, err := config.Load(fakeSource(map[string]string{"SERMON_MODE": "development", "SERMON_DATABASE_URL": dbURL("sermon_app"), "SERMON_MASTER_KEYS": line}, nil))
 	if err != nil || cfg.MasterKeys == nil {
 		t.Errorf("valid keys: %v, %v", cfg.MasterKeys, err)
 	}
@@ -256,7 +259,7 @@ func TestLoad_ErrorsNeverContainDatabaseCredentials(t *testing.T) {
 
 func TestLoad_AgentAPI(t *testing.T) {
 	line := masterKeyLine(t)
-	base := map[string]string{"SERMON_DATABASE_URL": dbURL("sermon_app"), "SERMON_MASTER_KEYS": line}
+	base := map[string]string{"SERMON_MODE": "development", "SERMON_DATABASE_URL": dbURL("sermon_app"), "SERMON_MASTER_KEYS": line}
 	with := func(extra map[string]string) map[string]string {
 		env := map[string]string{}
 		for k, v := range base {
@@ -322,5 +325,105 @@ func TestLoad_AgentDownloadsDir(t *testing.T) {
 	}
 	if _, err := config.Load(fakeSource(map[string]string{"SERMON_AGENT_DOWNLOADS_DIR": dir + "/missing"}, nil)); err == nil {
 		t.Error("a missing directory must be rejected")
+	}
+}
+
+// fullServer is the environment of a server with database (the case that sends invitations).
+func fullServer(t *testing.T, extra map[string]string) (map[string]string, map[string]string) {
+	t.Helper()
+	env := map[string]string{
+		"SERMON_DATABASE_URL":     dbURL("sermon_app"),
+		"SERMON_MASTER_KEYS_FILE": "/run/secrets/master-keys",
+	}
+	for k, v := range extra {
+		env[k] = v
+	}
+	return env, map[string]string{"/run/secrets/master-keys": masterKeyLine(t), "/run/secrets/smtp": "smtp-fixture-secret\n"} // betterleaks:allow
+}
+
+// Production is the default: an operator who forgets the variable gets the strict rules.
+// Invitations then go out only by mail – the address is proven (M1-39) – and the UI is served
+// over HTTPS only.
+func TestLoad_ProductionRequiresSMTPAndHTTPSOrigins(t *testing.T) {
+	env, files := fullServer(t, map[string]string{"SERMON_ALLOWED_ORIGINS": "http://sermon.example.com"})
+	_, err := config.Load(fakeSource(env, files))
+	for _, want := range []string{"SERMON_SMTP_HOST: required in production", "SERMON_ALLOWED_ORIGINS: only https:// origins in production"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Load() error = %v, want %q", err, want)
+		}
+	}
+
+	env, files = fullServer(t, map[string]string{
+		"SERMON_ALLOWED_ORIGINS":    "https://sermon.example.com",
+		"SERMON_SMTP_HOST":          "mail.example.com",
+		"SERMON_SMTP_FROM":          "SerMon <sermon@example.com>",
+		"SERMON_SMTP_USERNAME":      "sermon",
+		"SERMON_SMTP_PASSWORD_FILE": "/run/secrets/smtp",
+	})
+	cfg, err := config.Load(fakeSource(env, files))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	smtp := cfg.SMTP
+	if cfg.Mode != config.ModeProduction || smtp == nil || smtp.Host != "mail.example.com" || smtp.Port != 587 ||
+		smtp.TLS != config.SMTPStartTLS || smtp.From != "sermon@example.com" || smtp.FromName != "SerMon" ||
+		smtp.Username != "sermon" || smtp.Password != "smtp-fixture-secret" {
+		t.Errorf("SMTP = %+v", smtp)
+	}
+}
+
+func TestLoad_SMTPSettings(t *testing.T) {
+	ok := map[string]string{"SERMON_ALLOWED_ORIGINS": "https://sermon.example.com", "SERMON_SMTP_HOST": "mail.example.com", "SERMON_SMTP_FROM": "sermon@example.com"}
+	with := func(extra map[string]string) map[string]string {
+		out := map[string]string{}
+		for k, v := range ok {
+			out[k] = v
+		}
+		for k, v := range extra {
+			out[k] = v
+		}
+		return out
+	}
+	env, files := fullServer(t, with(map[string]string{"SERMON_SMTP_TLS": "tls"}))
+	if cfg, err := config.Load(fakeSource(env, files)); err != nil || cfg.SMTP.Port != 465 || cfg.SMTP.TLS != config.SMTPImplicitTLS {
+		t.Errorf("implicit TLS: %+v, %v; want port 465", cfg.SMTP, err)
+	}
+	for name, extra := range map[string]map[string]string{
+		"plain SMTP in production": {"SERMON_SMTP_TLS": "none"},
+		"unknown TLS mode":         {"SERMON_SMTP_TLS": "maybe"},
+		"bad port":                 {"SERMON_SMTP_PORT": "70000"},
+		"bad from":                 {"SERMON_SMTP_FROM": "not an address"},
+		"header injection":         {"SERMON_SMTP_FROM": "a@example.com\r\nBcc: x@example.com"},
+		"user without password":    {"SERMON_SMTP_USERNAME": "sermon"},
+		"missing CA file":          {"SERMON_SMTP_CA_FILE": "/nope.pem"},
+		"no origin for the links":  {"SERMON_ALLOWED_ORIGINS": ""},
+		"unknown mode":             {"SERMON_MODE": "staging"},
+	} {
+		env, files := fullServer(t, with(extra))
+		if _, err := config.Load(fakeSource(env, files)); err == nil {
+			t.Errorf("%s: Load() error = nil", name)
+		}
+	}
+	env, files = fullServer(t, with(map[string]string{"SERMON_SMTP_PASSWORD_FILE": "/run/secrets/smtp", "SERMON_SMTP_USERNAME": "u", "SERMON_SMTP_PORT": "x"}))
+	if _, err := config.Load(fakeSource(env, files)); err == nil || strings.Contains(err.Error(), "smtp-fixture-secret") {
+		t.Errorf("errors must never contain the SMTP password: %v", err)
+	}
+}
+
+// Development (just dev) may run without SMTP – invitation links are shown in the UI then and
+// prove nothing – and with plain HTTP origins; with SMTP (Mailpit) plain SMTP is allowed.
+func TestLoad_DevelopmentRelaxesSMTPAndOrigins(t *testing.T) {
+	env, files := fullServer(t, map[string]string{"SERMON_MODE": "development", "SERMON_ALLOWED_ORIGINS": "http://127.0.0.1:5173"})
+	cfg, err := config.Load(fakeSource(env, files))
+	if err != nil || cfg.Mode != config.ModeDevelopment || cfg.SMTP != nil {
+		t.Fatalf("Load() = %+v, %v", cfg, err)
+	}
+	env, files = fullServer(t, map[string]string{
+		"SERMON_MODE": "development", "SERMON_ALLOWED_ORIGINS": "http://127.0.0.1:5173",
+		"SERMON_SMTP_HOST": "127.0.0.1", "SERMON_SMTP_PORT": "1025",
+		"SERMON_SMTP_TLS": "none", "SERMON_SMTP_FROM": "sermon@localhost",
+	})
+	if cfg, err := config.Load(fakeSource(env, files)); err != nil || cfg.SMTP == nil || cfg.SMTP.TLS != config.SMTPNone || cfg.SMTP.Port != 1025 {
+		t.Errorf("Mailpit in development: %+v, %v", cfg.SMTP, err)
 	}
 }

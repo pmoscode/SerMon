@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,5 +130,42 @@ func TestCreateAndRename_ValidateInput(t *testing.T) {
 	}
 	if err := s.Rename(ctx, superadmin(time.Hour), orgA, " Alpha 2 "); err != nil || store.renamed != "Alpha 2" || store.audits[0].Action != "org.rename" {
 		t.Errorf("Rename() = %v, renamed %q, audits %+v", err, store.renamed, store.audits)
+	}
+}
+
+type fakeMailer struct {
+	to, text string
+	err      error
+}
+
+func (f *fakeMailer) SendText(_ context.Context, to, _, text string) error {
+	f.to, f.text = to, text
+	return f.err
+}
+
+// The first admin of a new organization gets the link by mail as well (M1-39): the superadmin
+// can't accept it under someone else's address.
+func TestCreate_WithAMailerSendsTheFirstAdminLinkByMail(t *testing.T) {
+	store := &fakeStore{}
+	mailer := &fakeMailer{}
+	svc := organization.NewService(store, authz.NewPolicy(), func() time.Time { return now }, uuid.New,
+		organization.WithMailer(mailer, "https://sermon.example.com"))
+
+	_, token, err := svc.Create(context.Background(), superadmin(time.Minute), "Beta", "bea@example.org")
+	if err != nil || token != "" {
+		t.Fatalf("Create() = %q, %v; want no token", token, err)
+	}
+	i := strings.Index(mailer.text, "/invite#")
+	if mailer.to != "bea@example.org" || i < 0 || !strings.Contains(mailer.text, "Beta") {
+		t.Fatalf("mail to %q:\n%s", mailer.to, mailer.text)
+	}
+	link, _, _ := strings.Cut(mailer.text[i+len("/invite#"):], "\n")
+	if sha256.Sum256([]byte(link)) != store.hash {
+		t.Error("the link in the mail doesn't match the stored hash")
+	}
+
+	mailer.err = errors.New("down")
+	if _, _, err := svc.Create(context.Background(), superadmin(time.Minute), "Gamma", "gus@example.org"); !errors.Is(err, invitation.ErrMailFailed) {
+		t.Errorf("Create() with a failing mailer = %v, want ErrMailFailed", err)
 	}
 }

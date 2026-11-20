@@ -13,8 +13,10 @@ service OrganizationService {
   rpc ListOrganizations(ListOrganizationsRequest) returns (ListOrganizationsResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
-  // CreateOrganization creates an organization and invites its first admin (step-up). The
-  // response contains the invitation link token once (ADR 0008).
+  // CreateOrganization creates an organization and invites its first admin (step-up). In
+  // production the link goes to the admin by mail only (invitation_emailed); without mail
+  // (development) the response contains the link token once (ADR 0008). UNAVAILABLE: the
+  // organization exists but the mail could not be sent – invite the admin again.
   rpc CreateOrganization(CreateOrganizationRequest) returns (CreateOrganizationResponse);
   // RenameOrganization renames an organization.
   rpc RenameOrganization(RenameOrganizationRequest) returns (RenameOrganizationResponse);
@@ -60,7 +62,10 @@ message CreateOrganizationResponse {
   // organization is the created organization.
   OrganizationSummary organization = 1;
   // invitation_token is the secret part of the first admin's invitation link (shown once).
+  // Empty if invitation_emailed.
   string invitation_token = 2;
+  // invitation_emailed is set when the link went to the first admin by mail.
+  bool invitation_emailed = 3;
 }
 
 // RenameOrganizationRequest names the organization and its new name.

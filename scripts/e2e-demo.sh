@@ -51,7 +51,12 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -x "$build/sermon-server" ]; then
 		>"$build/secrets/database_url"
 	printf 'postgres://sermon:%s@postgres:5432/sermon?sslmode=disable' "$(cat "$build/secrets/postgres_password")" \
 		>"$build/secrets/database_migrate_url"
-	chmod 0644 "$build/secrets/"* # read by the container users; the directory itself is private
+	openssl rand -hex 16 | tr -d '\n' >"$build/secrets/smtp_password"
+	# Mailpit's certificate of this run; the server trusts exactly it (SERMON_SMTP_CA_FILE).
+	mkdir -p "$build/mailpit"
+	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=mailpit \
+		-addext subjectAltName=DNS:mailpit -keyout "$build/mailpit/mailpit.key" -out "$build/mailpit/mailpit.crt" 2>/dev/null
+	chmod 0644 "$build/secrets/"* "$build/mailpit/"* # read by the container users; the directories are private
 fi
 
 cleanup() {

@@ -33,9 +33,11 @@ service AccessService {
   // RemoveMember removes a user from the organization and ends the user's sessions in it
   // (org admin, step-up).
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
-  // InviteMember invites an e-mail address with an initial role (org admin, step-up). The
-  // response contains the link token once; the UI builds the link "<origin>/invite#<token>".
-  // The response is the same whether or not the address already has an account (ADR 0008).
+  // InviteMember invites an e-mail address with an initial role (org admin, step-up). In
+  // production the link goes out by mail only (emailed; inviting the address again sends a new
+  // one). Without mail (development) the response contains the link token once; the UI builds
+  // the link "<origin>/invite#<token>". The response is the same whether or not the address
+  // already has an account (ADR 0008). UNAVAILABLE: the mail could not be sent.
   rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
   // ListInvitations returns the open invitations (org admin).
   rpc ListInvitations(ListInvitationsRequest) returns (ListInvitationsResponse) {
@@ -241,12 +243,14 @@ message InviteMemberRequest {
   }];
 }
 
-// InviteMemberResponse returns the invitation and its link token (shown only once).
+// InviteMemberResponse returns the invitation and, without mail, its link token (shown once).
 message InviteMemberResponse {
   // invitation is the stored invitation.
   Invitation invitation = 1;
-  // token is the secret part of the link; it cannot be retrieved again.
+  // token is the secret part of the link; it cannot be retrieved again. Empty if emailed.
   string token = 2;
+  // emailed is set when the link went to the invited address by mail (nobody else sees it).
+  bool emailed = 3;
 }
 
 // Invitation is an open invitation.

@@ -56,7 +56,9 @@ func (h *OrganizationHandler) CreateOrganization(ctx context.Context, req *conne
 	if err != nil {
 		return nil, h.fail(ctx, "create organization", err)
 	}
-	return connect.NewResponse(&webv1.CreateOrganizationResponse{Organization: orgView(org), InvitationToken: token}), nil
+	return connect.NewResponse(&webv1.CreateOrganizationResponse{
+		Organization: orgView(org), InvitationToken: token, InvitationEmailed: token == "",
+	}), nil
 }
 
 // RenameOrganization renames an organization.
@@ -87,6 +89,8 @@ func (h *OrganizationHandler) fail(ctx context.Context, op string, err error) er
 		return connect.NewError(connect.CodeInvalidArgument, organization.ErrInvalidName)
 	case errors.Is(err, invitation.ErrInvalidEmail):
 		return connect.NewError(connect.CodeInvalidArgument, invitation.ErrInvalidEmail)
+	case errors.Is(err, invitation.ErrMailFailed):
+		return mailFailed(ctx, h.logger, op, err)
 	}
 	return internalError(ctx, h.logger, op, err)
 }

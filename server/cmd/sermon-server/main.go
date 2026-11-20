@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
+
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
@@ -106,6 +108,9 @@ const (
 )
 
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+	if cfg.Mode == config.ModeDevelopment {
+		logger.WarnContext(ctx, "development mode: SMTP optional (invitations prove no address), http:// origins and plain SMTP allowed – never use it in production")
+	}
 	mux := http.NewServeMux()
 	var checks []health.Check
 	var servers []func(context.Context) error
@@ -318,7 +323,17 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	metricsHandler := webapi.NewMetricsHandler(nodes, logger)
 	registry.Gauge("sermon_server_live_streams", "Open live metric streams of the web UI.",
 		func() float64 { return float64(metricsHandler.LiveStreams()) })
-	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID)
+	var inviteOptions []invitation.Option
+	var orgOptions []organization.Option
+	if cfg.SMTP != nil {
+		// Links go out by mail only: whoever accepts owns the mailbox (M1-39).
+		mailer, base := newMailer(cfg.SMTP), cfg.AllowedOrigins[0]
+		inviteOptions = append(inviteOptions, invitation.WithMailer(mailer, base))
+		orgOptions = append(orgOptions, organization.WithMailer(mailer, base))
+	} else {
+		logger.WarnContext(ctx, "no SMTP configured: invitation links are shown in the UI and prove nothing (development only)")
+	}
+	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID, inviteOptions...)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
 		Auth:   webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals),
 		System: webapi.NewSystemHandler(version),
@@ -327,7 +342,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Invitation: webapi.NewInvitationHandler(invites, sessions,
 			ratelimit.New(invitationAttemptsPerWindow, invitationWindow, time.Now), logger),
 		Organization: webapi.NewOrganizationHandler(
-			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID), logger),
+			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID, orgOptions...), logger),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
 		Node:    webapi.NewNodeHandler(rotator, nodes, logger),
@@ -377,4 +392,13 @@ func newLogger(cfg config.Config, w io.Writer) *slog.Logger {
 		handler = slog.NewTextHandler(w, opts)
 	}
 	return slog.New(handler).With("service", "sermon-server")
+}
+
+// newMailer returns the SMTP mailer of the configuration.
+func newMailer(c *config.SMTP) *smtp.Mailer {
+	mode := map[config.SMTPTLS]smtp.TLSMode{config.SMTPStartTLS: smtp.StartTLS, config.SMTPImplicitTLS: smtp.ImplicitTLS, config.SMTPNone: smtp.NoTLS}[c.TLS]
+	return smtp.New(smtp.Config{
+		Host: c.Host, Port: c.Port, TLS: mode, From: c.From, FromName: c.FromName,
+		Username: c.Username, Password: c.Password, RootCAs: c.RootCAs,
+	})
 }

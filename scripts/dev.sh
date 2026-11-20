@@ -37,6 +37,13 @@ trap cleanup EXIT INT TERM
   export SERMON_AGENT_ADDR=127.0.0.1:8443 SERMON_AGENT_HOSTNAMES=localhost,127.0.0.1
   export SERMON_METRICS_ADDR=127.0.0.1:9464
   export SERMON_ALLOWED_ORIGINS="http://127.0.0.1:5173,http://127.0.0.1:8080"
+  # Development mode: http:// origins, plain SMTP to Mailpit. Invitation links arrive in Mailpit
+  # (as in production by mail); SERMON_DEV_SMTP=off shows them in the UI instead.
+  export SERMON_MODE=development
+  if [ "${SERMON_DEV_SMTP:-on}" != off ]; then
+    export SERMON_SMTP_HOST=127.0.0.1 SERMON_SMTP_PORT="${SERMON_DEV_SMTP_PORT:-1025}" SERMON_SMTP_TLS=none
+    export SERMON_SMTP_FROM="SerMon Dev <sermon@localhost>"
+  fi
   exec go tool air
 ) &
 pids+=($!)
@@ -52,7 +59,7 @@ cat <<INFO
   sermon-server (air)         http://127.0.0.1:8080   (/healthz, /readyz)
   PostgreSQL/TimescaleDB      127.0.0.1:55432  user sermon (secret file: deploy/dev/.secrets/)
   Loki                        http://127.0.0.1:3100   (header X-Scope-OrgID required)
-  Mailpit (SMTP 1025)         http://127.0.0.1:8025
+  Mailpit (SMTP 1025)         http://127.0.0.1:8025   (invitation mails; SERMON_DEV_SMTP=off: links in the UI)
   ntfy                        http://127.0.0.1:8090
   Ctrl+C stops server and Vite – containers keep running (just dev-down).
 

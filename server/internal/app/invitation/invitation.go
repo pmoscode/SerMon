@@ -41,6 +41,9 @@ var (
 	ErrInvalidInvitation = errors.New("invalid or expired invitation")
 	// ErrInvalidEmail means the e-mail address is malformed.
 	ErrInvalidEmail = errors.New("invalid e-mail address")
+	// ErrMailFailed means the invitation was stored but its mail could not be sent; inviting the
+	// address again replaces it and sends a new link.
+	ErrMailFailed = errors.New("the invitation mail could not be sent")
 	// ErrInvalidName means the display name is empty, too long or contains control characters.
 	ErrInvalidName = fmt.Errorf("name must have 1 to %d characters and no control characters", maxName)
 )
@@ -103,6 +106,11 @@ type Hasher interface {
 	Hash(pw string) (string, error)
 }
 
+// Mailer sends plain text mail (adapters/smtp).
+type Mailer interface {
+	SendText(ctx context.Context, to, subject, text string) error
+}
+
 // Service manages invitations.
 type Service struct {
 	store    Store
@@ -111,15 +119,31 @@ type Service struct {
 	hasher   Hasher
 	now      func() time.Time
 	newID    func() uuid.UUID
+	mailer   Mailer
+	baseURL  string
+}
+
+// Option configures a Service.
+type Option func(*Service)
+
+// WithMailer sends invitation links by mail instead of returning them (production, M1-39): only
+// the owner of the mailbox can accept, which proves the address. baseURL is the origin of the UI.
+func WithMailer(mailer Mailer, baseURL string) Option {
+	return func(s *Service) { s.mailer, s.baseURL = mailer, strings.TrimRight(baseURL, "/") }
 }
 
 // NewService returns a Service.
-func NewService(store Store, profiles Profiles, policy authz.Policy, hasher Hasher, now func() time.Time, newID func() uuid.UUID) *Service {
-	return &Service{store: store, profiles: profiles, policy: policy, hasher: hasher, now: now, newID: newID}
+func NewService(store Store, profiles Profiles, policy authz.Policy, hasher Hasher, now func() time.Time, newID func() uuid.UUID, options ...Option) *Service {
+	s := &Service{store: store, profiles: profiles, policy: policy, hasher: hasher, now: now, newID: newID}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 // Invite creates an invitation (replacing an open one for the same address) and returns the
-// link token. Inviting grants a role, so it needs a step-up like other changes of rights.
+// link token – or "" if the link went out by mail (WithMailer); then nobody but the mailbox owner
+// ever sees it. Inviting grants a role, so it needs a step-up like other changes of rights.
 func (s *Service) Invite(ctx context.Context, c access.Caller, email string, group *tenant.GroupID, r role.Role) (string, Invitation, error) {
 	scope, err := s.authorize(c, true)
 	if err != nil {
@@ -146,7 +170,56 @@ func (s *Service) Invite(ctx context.Context, c access.Caller, email string, gro
 	if err := s.store.Create(ctx, scope, inv, hash, audit); err != nil {
 		return "", Invitation{}, fmt.Errorf("create invitation: %w", err)
 	}
-	return token, inv, nil
+	if s.mailer == nil {
+		return token, inv, nil
+	}
+	orgName := ""
+	if pending, ok, err := s.store.Lookup(ctx, hash, now); err == nil && ok {
+		orgName = pending.OrgName
+	}
+	inviterName := ""
+	if p, ok, err := s.profiles.Profile(ctx, inviter); err == nil && ok {
+		inviterName = p.DisplayName
+	}
+	if err := SendMail(ctx, s.mailer, s.baseURL, token, MailFacts{
+		To: email, Organization: orgName, InvitedBy: inviterName, Role: r, ExpiresAt: inv.ExpiresAt,
+	}); err != nil {
+		return "", inv, err
+	}
+	return "", inv, nil
+}
+
+// MailFacts are the details an invitation mail names.
+type MailFacts struct {
+	To, Organization, InvitedBy string
+	Role                        role.Role
+	ExpiresAt                   time.Time
+}
+
+// SendMail sends the invitation link <baseURL>/invite#<token> to f.To, in German and English
+// (the language of the invited person is unknown).
+func SendMail(ctx context.Context, mailer Mailer, baseURL, token string, f MailFacts) error {
+	link := strings.TrimRight(baseURL, "/") + "/invite#" + token
+	org := f.Organization
+	if org == "" {
+		org = "SerMon"
+	}
+	de := "Du wurdest zur Organisation „" + org + "“ in SerMon eingeladen"
+	en := "You have been invited to the organization \"" + org + "\" in SerMon"
+	if f.InvitedBy != "" {
+		de = f.InvitedBy + " hat dich zur Organisation „" + org + "“ in SerMon eingeladen"
+		en = f.InvitedBy + " invited you to the organization \"" + org + "\" in SerMon"
+	}
+	until := f.ExpiresAt.UTC().Format("2006-01-02 15:04 UTC")
+	subject := "SerMon: Einladung zu „" + org + "“ / Invitation to \"" + org + "\""
+	text := de + " (Rolle: " + f.Role.String() + ").\nAnnehmen bis " + until + ":\n" + link + "\n\n" +
+		en + " (role: " + f.Role.String() + ").\nAccept until " + until + ":\n" + link + "\n\n" +
+		"Wenn du diese Einladung nicht erwartest, ignoriere diese Nachricht.\n" +
+		"If you don't expect this invitation, ignore this message.\n"
+	if err := mailer.SendText(ctx, f.To, subject, text); err != nil {
+		return fmt.Errorf("%w: %w", ErrMailFailed, err)
+	}
+	return nil
 }
 
 // NewToken returns a new link token (256 bits, base64url) and the SHA-256 that is stored.

@@ -48,8 +48,10 @@ const (
 type OrganizationServiceClient interface {
 	// ListOrganizations returns all organizations.
 	ListOrganizations(context.Context, *connect.Request[v1.ListOrganizationsRequest]) (*connect.Response[v1.ListOrganizationsResponse], error)
-	// CreateOrganization creates an organization and invites its first admin (step-up). The
-	// response contains the invitation link token once (ADR 0008).
+	// CreateOrganization creates an organization and invites its first admin (step-up). In
+	// production the link goes to the admin by mail only (invitation_emailed); without mail
+	// (development) the response contains the link token once (ADR 0008). UNAVAILABLE: the
+	// organization exists but the mail could not be sent – invite the admin again.
 	CreateOrganization(context.Context, *connect.Request[v1.CreateOrganizationRequest]) (*connect.Response[v1.CreateOrganizationResponse], error)
 	// RenameOrganization renames an organization.
 	RenameOrganization(context.Context, *connect.Request[v1.RenameOrganizationRequest]) (*connect.Response[v1.RenameOrganizationResponse], error)
@@ -114,8 +116,10 @@ func (c *organizationServiceClient) RenameOrganization(ctx context.Context, req 
 type OrganizationServiceHandler interface {
 	// ListOrganizations returns all organizations.
 	ListOrganizations(context.Context, *connect.Request[v1.ListOrganizationsRequest]) (*connect.Response[v1.ListOrganizationsResponse], error)
-	// CreateOrganization creates an organization and invites its first admin (step-up). The
-	// response contains the invitation link token once (ADR 0008).
+	// CreateOrganization creates an organization and invites its first admin (step-up). In
+	// production the link goes to the admin by mail only (invitation_emailed); without mail
+	// (development) the response contains the link token once (ADR 0008). UNAVAILABLE: the
+	// organization exists but the mail could not be sent – invite the admin again.
 	CreateOrganization(context.Context, *connect.Request[v1.CreateOrganizationRequest]) (*connect.Response[v1.CreateOrganizationResponse], error)
 	// RenameOrganization renames an organization.
 	RenameOrganization(context.Context, *connect.Request[v1.RenameOrganizationRequest]) (*connect.Response[v1.RenameOrganizationResponse], error)

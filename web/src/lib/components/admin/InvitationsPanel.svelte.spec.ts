@@ -31,6 +31,50 @@ describe('InvitationsPanel', () => {
 		expect(onChange).toHaveBeenCalledOnce();
 	});
 
+	// Production: the link went to the invited address only (M1-39) – nothing to copy here.
+	it('confirms a mailed invitation without showing a link', async () => {
+		vi.spyOn(api.access, 'inviteMember').mockResolvedValue({ token: '', emailed: true } as never);
+		render(InvitationsPanel, {
+			invitations: [],
+			groups: [],
+			onChange: vi.fn().mockResolvedValue(undefined)
+		});
+
+		await page.getByLabelText('Email address').fill('new@example.org');
+		await page.getByRole('button', { name: 'Invite' }).click();
+
+		await expect
+			.element(page.getByText('Invitation sent to new@example.org', { exact: false }))
+			.toBeVisible();
+		expect(document.body.textContent).not.toContain('/invite#');
+	});
+
+	it('sends an open invitation again with its role and group', async () => {
+		const invite = vi
+			.spyOn(api.access, 'inviteMember')
+			.mockResolvedValue({ token: '', emailed: true } as never);
+		render(InvitationsPanel, {
+			invitations: [
+				{ id: 'i1', email: 'late@example.org', role: Role.OPERATOR, groupId: 'g1' } as never
+			],
+			groups: [{ id: 'g1', name: 'web' } as never],
+			onChange: vi.fn().mockResolvedValue(undefined)
+		});
+
+		await page.getByRole('button', { name: 'Send again' }).click();
+
+		await vi.waitFor(() =>
+			expect(invite).toHaveBeenCalledWith({
+				email: 'late@example.org',
+				role: Role.OPERATOR,
+				groupId: 'g1'
+			})
+		);
+		await expect
+			.element(page.getByText('Invitation sent to late@example.org', { exact: false }))
+			.toBeVisible();
+	});
+
 	it('withdraws an open invitation', async () => {
 		const revoke = vi.spyOn(api.access, 'revokeInvitation').mockResolvedValue({} as never);
 		render(InvitationsPanel, {

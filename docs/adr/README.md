@@ -15,7 +15,7 @@ KONZEPT §2 mit angepasst.
 | [0005](0005-secret-scanning-betterleaks.md) | Secret-Scanning: betterleaks statt gitleaks | accepted | D25 |
 | [0006](0006-ci-und-supply-chain.md) | CI-Pipeline und Supply Chain der Build-Werkzeuge | accepted | D25 |
 | [0007](0007-mandantentrennung-rls.md) | Mandantentrennung in PostgreSQL: Tenant-Scope, RLS und getrennte Rollen | accepted | D5 |
-| [0008](0008-einladungen.md) | Mitglieder per Einladungslink, SMTP optional | accepted | D28 |
+| [0008](0008-einladungen.md) | Mitglieder per Einladungslink, SMTP optional | accepted, Zustellung ersetzt durch 0022 | D28 |
 | [0009](0009-enrollment-ueber-web-endpunkt.md) | Enrollment über den Web-Endpunkt, danach mTLS | accepted | D30 |
 | [0010](0010-agent-enrollment-tls-und-identitaet.md) | Agent-Enrollment: TLS-Prüfung, Pinning und Identitätsdateien | accepted | D8, D30 |
 | [0011](0011-server-metriken-endpunkt.md) | Eigene Metriken des Servers: `/metrics` auf eigenem Listener | accepted | – |
@@ -29,6 +29,7 @@ KONZEPT §2 mit angepasst.
 | [0019](0019-alerting.md) | Alerting: Kanäle, statistische Anomalien, Regeln in UI und YAML | accepted | D14, D16, D22 |
 | [0020](0020-updates-logs-und-module.md) | Updates, Logs und Module | accepted | D15, D17, D18 |
 | [0021](0021-produkt-und-projekt.md) | Produkt und Projekt: Sprachen, Lizenz, Reihenfolge, Monorepo | accepted | D20, D21, D24, D25 |
+| [0022](0022-betriebsmodus-und-einladungen-per-mail.md) | Betriebsmodus und Einladungen nur per Mail | accepted | D28 |
 
 ## Entscheidungslog → ADR
 
@@ -61,7 +62,7 @@ KONZEPT §2 mit angepasst.
 | D25 Monorepo, GitHub Actions | 0021, 0006 |
 | D26 Connect-RPC/Protobuf | 0014, 0004 |
 | D27 Alles lokal ausgeliefert | 0003 |
-| D28 Einladungslink | 0008 |
+| D28 Einladungslink | 0008, 0022 |
 | D29 Orgs erst sperren, dann löschen | noch keins (folgt mit E3.8) |
 | D30 Enrollment über HTTPS | 0009, 0010 |
 

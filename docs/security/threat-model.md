@@ -110,16 +110,16 @@ flowchart LR
 | T14 | S | Phishing/gestohlenes Passwort | TOTP mit Recovery-Codes, Org-Pflicht zur 2FA; Code-Versuche zählen zur selben Sperre | M1-03 | ✓ |
 | T15 | S | Phishing-resistente Anmeldung | Passkeys/WebAuthn, OIDC mit PKCE | E3.6, E3.7 | ☐ |
 | T16 | S | Session-Diebstahl, Session-Fixation | `__Host-`-Cookie (Secure, HttpOnly, SameSite=Lax), serverseitige Sessions, neues Cookie nach 2FA und Org-Wechsel, Idle- und Absolut-Timeout | M1-02, M1-03 | ◐ (offene Live-Ansicht hält die Session über das Idle-Timeout hinaus: M1-40) |
-| T57 | S | Downgrade auf HTTP beim ersten Aufruf, gefälschte Login-Seite | HSTS (1 Jahr, `includeSubDomains`), sobald alle erlaubten Origins `https://` sind; mit HTTP-Origins (Entwicklung) nie | M1-35 | ✓ |
+| T57 | S | Downgrade auf HTTP beim ersten Aufruf, gefälschte Login-Seite | HSTS (1 Jahr, `includeSubDomains`), sobald alle erlaubten Origins `https://` sind; in Produktion sind nur solche erlaubt (`http://` nur im Entwicklungsmodus) | M1-35, M1-39 | ✓ |
 | T17 | S | Gekaperte Session ändert Rechte, richtet eigene 2FA ein oder lässt eigene Maschinen beitreten | Step-up (15 min) für Rechteänderungen, Einladungen, Schlüsselrotation, 2FA-Einrichtung, Enrollment-Tokens (seit M1-35); Fehlversuche zählen zur Sperre | M1-02, M1-03, M1-35 | ✓ |
 | T18 | T | CSRF, Lesen über Navigationen von fremden Seiten | SameSite, Connect-Requests mit `application/proto|json`, Origin-Allowlist im Server, GET mit `Sec-Fetch-Site` einer fremden Seite abgelehnt | M1-02, M1-35 | ✓ |
 | T19 | T | XSS über Hostnamen, Logzeilen, Prozessnamen | kein `{@html}` mit API-Daten, strikte CSP ohne `unsafe-inline`, nur eigene Origin; QR-Code als SVG aus der Matrix | M0-04, M1-28 ff. (ADR 0003) | ✓ |
 | T20 | T | Injection in SQL und LogQL | sqlc (parametrisiert); LogQL nur aus typisierten Bausteinen mit Escaping | M0-08, E3.2 | ✓ / ☐ (LogQL) |
 | T21 | I | User aus Org B sieht Daten von Org A | Tenant-Scope in jeder Repository-Methode, RLS als zweite Linie, Isolationstest für **jede** RPC (CI erzwingt Abdeckung), fremde Objekte = `NOT_FOUND`; End-to-End im Browser gegen den echten Stack | M1-04, M1-22, M1-26, M1-33 | ✓ |
 | T22 | I | Viewer sieht Logs/Security-Events trotz Verbot | Rollen-Matrix mit `viewerLogs`-Schalter, Matrix-Test | M1-01, E3.3 | ✓ / ☐ (UI) |
-| T23 | I | User-Enumeration über Login, Einladung, Passwort-Reset | gleiche Antworten und Laufzeiten (Dummy-Hash), Einladungen ohne Hinweis auf bestehende Konten | M1-02, M1-04 | ◐ (wer den Link hält, erkennt bei der Annahme ein bestehendes Konto; ADR 0008, M1-39) |
+| T23 | I | User-Enumeration über Login, Einladung, Passwort-Reset | gleiche Antworten und Laufzeiten (Dummy-Hash), Einladungen ohne Hinweis auf bestehende Konten | M1-02, M1-04, M1-39 | ✓ (in Produktion bekommt nur die Mailbox den Link, ADR 0022; im Entwicklungsmodus ohne SMTP bleibt das Restrisiko) |
 | T24 | I | Geheimnisse in Antworten, Logs oder URLs | Tokens nur einmal angezeigt, nur Hash gespeichert; Einladungs-Token im URL-Fragment; keine Stacktraces, Korrelations-ID | M1-04, M1-08, M1-32 | ✓ |
-| T61 | S | Org-Admin nimmt die eigene Einladung an und besetzt ein instanzweites Konto mit fremder Adresse | Adressnachweis oder unbestätigte Konten, einheitliche Antwort bei der Annahme | M1-39 (ADR 0008) | ☐ |
+| T61 | S | Org-Admin nimmt die eigene Einladung an und besetzt ein instanzweites Konto mit fremder Adresse | in Produktion gehen Einladungen und die erste Admin-Einladung neuer Orgs nur per Mail an die Adresse, die API gibt kein Token heraus; SMTP Pflicht (STARTTLS/TLS, geprüftes Zertifikat), Standardmodus `production` | M1-39 (ADR 0022) | ✓ |
 | T62 | T | Admin einer Org ändert das globale Konto (E-Mail = Login) eines Users, der auch in anderen Orgs ist | `sermon_app` darf `users` nicht ändern (kein UPDATE-Recht, keine Policy) | M1-35 | ✓ |
 | T25 | I | Server-Metriken ohne Anmeldung verraten Mandanten | `/metrics` auf eigenem Listener, standardmäßig aus, nur Instanzwerte ohne Labels von Orgs/Nodes; Warnung bei nicht-Loopback | M1-24 (ADR 0011) | ✓ |
 | T26 | D | Viele Live-Streams oder große Abfragen | max. 32 Streams pro Session, 64 pro User, 250 pro Org, 1 000 pro Instanz, Re-Check alle 30 s; Begrenzung von Zeitraum, Nodes und Punkten pro Abfrage | M1-26, M1-35 | ✓ |
@@ -214,7 +214,7 @@ Offen als Aufgaben (keine kritisch):
   Prozessliste (T48, T64, T58) – **erledigt**.
 - M1-38: Rotation und Identität – Intermediate aus der Signatur, falsche Sperre nach Rotation, Widerrufsprüfung mit
   Org/Node, Widerruf ohne Rotation auf Abruf (T4, T60). – **erledigt**.
-- M1-39: Einladungen ohne Konto-Squatting (T23, T61).
+- M1-39: Einladungen ohne Konto-Squatting (T23, T61). – **erledigt** (ADR 0022: Betriebsmodus, SMTP in Produktion Pflicht).
 - M1-40: Stream-Re-Check ohne Aktivität, Superadmins nur über Definer-Funktion (T16, T63).
 
 Weiter offen aus früheren Aufgaben: T3/T4 (Benachrichtigung, M2), T5 (Übernahme bei `machine-id`-Konflikt in der UI),

@@ -1,6 +1,7 @@
 # 0008 – Mitglieder per Einladungslink, SMTP optional
 
-- Status: accepted
+- Status: accepted; Zustellung ersetzt durch [0022](0022-betriebsmodus-und-einladungen-per-mail.md) (in Produktion nur
+  per Mail, SMTP Pflicht)
 - Datum: 2026-11-19
 - Bezug: KONZEPT.md §7 (Mandanten, User und Rechte), D28, O13; IMPLEMENTIERUNGSPLAN M1-04 (Teil c), E2.4
 
@@ -66,7 +67,8 @@ Weitere Regeln:
   Adresse besitzt. Ein Org-Admin kann die eigene Einladung an `opfer@example.org` selbst annehmen und so ein
   instanzweites Konto mit dieser Adresse und einem Passwort seiner Wahl anlegen; die echte Inhaberin kann danach keine
   Einladung einer anderen Org mehr annehmen. Gegenmaßnahme folgt mit M1-39 (Adressnachweis oder unbestätigte Konten,
-  einheitliche Antwort bei der Annahme).
+  einheitliche Antwort bei der Annahme). **Erledigt mit ADR 0022 (M1-39):** In Produktion geht der Link nur per Mail
+  an die Adresse; Squatting und Enumeration durch den Admin entfallen.
 - Eine neue Tabelle `invitations` (RLS mit ENABLE + FORCE). Die Annahme läuft ohne Mandant über eine minimale
   `SECURITY DEFINER`-Funktion (`sermon_definer`, ADR 0007), die nur über den Token-Hash sucht.
 - Passwort-Reset ohne SMTP kann später demselben Muster folgen: ein einmaliger Link, den ein Admin erzeugt.

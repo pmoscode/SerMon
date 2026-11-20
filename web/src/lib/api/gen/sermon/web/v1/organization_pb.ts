@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/organization.proto.
  */
 export const file_sermon_web_v1_organization: GenFile = /*@__PURE__*/
-  fileDesc("CiBzZXJtb24vd2ViL3YxL29yZ2FuaXphdGlvbi5wcm90bxINc2VybW9uLndlYi52MSJ2ChNPcmdhbml6YXRpb25TdW1tYXJ5EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhQKDG1lbWJlcl9jb3VudBgEIAEoAyIaChhMaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QiVgoZTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZRI5Cg1vcmdhbml6YXRpb25zGAEgAygLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5Ij4KGUNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSDAoEbmFtZRgBIAEoCRITCgthZG1pbl9lbWFpbBgCIAEoCSJwChpDcmVhdGVPcmdhbml6YXRpb25SZXNwb25zZRI4Cgxvcmdhbml6YXRpb24YASABKAsyIi5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN1bW1hcnkSGAoQaW52aXRhdGlvbl90b2tlbhgCIAEoCSJCChlSZW5hbWVPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJIhwKGlJlbmFtZU9yZ2FuaXphdGlvblJlc3BvbnNlMtgCChNPcmdhbml6YXRpb25TZXJ2aWNlEmsKEUxpc3RPcmdhbml6YXRpb25zEicuc2VybW9uLndlYi52MS5MaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLkxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2UiA5ACARJpChJDcmVhdGVPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEmkKElJlbmFtZU9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2VCwAEKEWNvbS5zZXJtb24ud2ViLnYxQhFPcmdhbml6YXRpb25Qcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("CiBzZXJtb24vd2ViL3YxL29yZ2FuaXphdGlvbi5wcm90bxINc2VybW9uLndlYi52MSJ2ChNPcmdhbml6YXRpb25TdW1tYXJ5EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhQKDG1lbWJlcl9jb3VudBgEIAEoAyIaChhMaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QiVgoZTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZRI5Cg1vcmdhbml6YXRpb25zGAEgAygLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5Ij4KGUNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSDAoEbmFtZRgBIAEoCRITCgthZG1pbl9lbWFpbBgCIAEoCSKMAQoaQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USOAoMb3JnYW5pemF0aW9uGAEgASgLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5EhgKEGludml0YXRpb25fdG9rZW4YAiABKAkSGgoSaW52aXRhdGlvbl9lbWFpbGVkGAMgASgIIkIKGVJlbmFtZU9yZ2FuaXphdGlvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEgwKBG5hbWUYAiABKAkiHAoaUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2Uy2AIKE09yZ2FuaXphdGlvblNlcnZpY2USawoRTGlzdE9yZ2FuaXphdGlvbnMSJy5zZXJtb24ud2ViLnYxLkxpc3RPcmdhbml6YXRpb25zUmVxdWVzdBooLnNlcm1vbi53ZWIudjEuTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZSIDkAIBEmkKEkNyZWF0ZU9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuQ3JlYXRlT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USaQoSUmVuYW1lT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5SZW5hbWVPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5SZW5hbWVPcmdhbml6YXRpb25SZXNwb25zZULAAQoRY29tLnNlcm1vbi53ZWIudjFCEU9yZ2FuaXphdGlvblByb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * OrganizationSummary is an organization as the superadmin sees it.
@@ -135,10 +135,18 @@ export type CreateOrganizationResponse = Message<"sermon.web.v1.CreateOrganizati
 
   /**
    * invitation_token is the secret part of the first admin's invitation link (shown once).
+   * Empty if invitation_emailed.
    *
    * @generated from field: string invitation_token = 2;
    */
   invitationToken: string;
+
+  /**
+   * invitation_emailed is set when the link went to the first admin by mail.
+   *
+   * @generated from field: bool invitation_emailed = 3;
+   */
+  invitationEmailed: boolean;
 };
 
 /**
@@ -210,8 +218,10 @@ export const OrganizationService: GenService<{
     output: typeof ListOrganizationsResponseSchema;
   },
   /**
-   * CreateOrganization creates an organization and invites its first admin (step-up). The
-   * response contains the invitation link token once (ADR 0008).
+   * CreateOrganization creates an organization and invites its first admin (step-up). In
+   * production the link goes to the admin by mail only (invitation_emailed); without mail
+   * (development) the response contains the link token once (ADR 0008). UNAVAILABLE: the
+   * organization exists but the mail could not be sent – invite the admin again.
    *
    * @generated from rpc sermon.web.v1.OrganizationService.CreateOrganization
    */

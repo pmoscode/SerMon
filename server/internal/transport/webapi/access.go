@@ -211,7 +211,8 @@ func (h *AccessHandler) InviteMember(ctx context.Context, req *connect.Request[w
 	if err != nil {
 		return nil, h.fail(ctx, "invite member", err)
 	}
-	return connect.NewResponse(&webv1.InviteMemberResponse{Invitation: invitationView(inv), Token: token}), nil
+	// No token: the link went to the invited address by mail (production).
+	return connect.NewResponse(&webv1.InviteMemberResponse{Invitation: invitationView(inv), Token: token, Emailed: token == ""}), nil
 }
 
 // ListInvitations lists the open invitations.
@@ -292,8 +293,16 @@ func (h *AccessHandler) fail(ctx context.Context, op string, err error) error {
 		return connect.NewError(connect.CodeInvalidArgument, access.ErrInvalidRole)
 	case errors.Is(err, invitation.ErrInvalidEmail):
 		return connect.NewError(connect.CodeInvalidArgument, invitation.ErrInvalidEmail)
+	case errors.Is(err, invitation.ErrMailFailed):
+		return mailFailed(ctx, h.logger, op, err)
 	}
 	return internalError(ctx, h.logger, op, err)
+}
+
+// mailFailed logs why a mail could not be sent and tells the client only that it failed.
+func mailFailed(ctx context.Context, logger *slog.Logger, op string, err error) error {
+	logger.ErrorContext(ctx, op+": sending mail failed", "error", err)
+	return connect.NewError(connect.CodeUnavailable, invitation.ErrMailFailed)
 }
 
 // callerFrom returns the caller set by the Authenticator.

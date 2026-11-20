@@ -5,10 +5,12 @@
 package config
 
 import (
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/mail"
 	"net/netip"
 	"net/url"
 	"os"
@@ -31,8 +33,46 @@ const (
 	LogFormatText LogFormat = "text"
 )
 
+// Mode selects the rules for the environment (M1-39).
+type Mode string
+
+// Modes. Production is the default: whoever forgets SERMON_MODE gets the strict rules.
+const (
+	// ModeProduction requires SMTP (invitations go out only by mail, proving the address) and
+	// https:// origins.
+	ModeProduction Mode = "production"
+	// ModeDevelopment allows running without SMTP (invitation links are shown in the UI and prove
+	// nothing), plain SMTP (Mailpit) and http:// origins.
+	ModeDevelopment Mode = "development"
+)
+
+// SMTPTLS is how the connection to the mail server is protected.
+type SMTPTLS string
+
+// TLS modes of the mail connection.
+const (
+	SMTPStartTLS    SMTPTLS = "starttls" // port 587, STARTTLS required
+	SMTPImplicitTLS SMTPTLS = "tls"      // port 465
+	SMTPNone        SMTPTLS = "none"     // development only (Mailpit)
+)
+
+// SMTP configures outgoing mail.
+type SMTP struct {
+	Host     string
+	Port     int
+	TLS      SMTPTLS
+	From     string // address
+	FromName string // display name, may be empty
+	Username string // empty: no authentication
+	Password string
+	// RootCAs verify the mail server instead of the system roots (SERMON_SMTP_CA_FILE).
+	RootCAs *x509.CertPool
+}
+
 // Config is the validated server configuration.
 type Config struct {
+	// Mode is production unless SERMON_MODE=development.
+	Mode Mode
 	// HTTPAddr is the listen address of the web API and UI (host:port).
 	HTTPAddr string
 	// LogLevel is the minimum level that is logged.
@@ -57,6 +97,9 @@ type Config struct {
 	MetricsAddr string
 	// AgentDownloadsDir holds the signed agent binaries served under /downloads (ADR 0012).
 	AgentDownloadsDir string
+	// SMTP sends mail (invitations; notifications later). Required in production with a
+	// database; nil without.
+	SMTP *SMTP
 	// MasterKeys encrypt secrets at rest (key file "<id>:<base64>" per line, newest first).
 	// Required together with the database; create the file with "sermon-server init".
 	MasterKeys *secrets.Box
@@ -83,6 +126,14 @@ const (
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
 	envMetricsAddr     = "SERMON_METRICS_ADDR"
 	envDownloadsDir    = "SERMON_AGENT_DOWNLOADS_DIR"
+	envMode            = "SERMON_MODE"
+	envSMTPHost        = "SERMON_SMTP_HOST"
+	envSMTPPort        = "SERMON_SMTP_PORT"
+	envSMTPTLS         = "SERMON_SMTP_TLS"
+	envSMTPFrom        = "SERMON_SMTP_FROM"
+	envSMTPUsername    = "SERMON_SMTP_USERNAME"
+	envSMTPPassword    = "SERMON_SMTP_PASSWORD" //nolint:gosec // G101: the name of a variable, not a credential
+	envSMTPCAFile      = "SERMON_SMTP_CA_FILE"
 	fileSuffix         = "_FILE"
 )
 
@@ -100,6 +151,7 @@ func Load(src Source) (Config, error) {
 	l := loader{src: src}
 
 	cfg := Config{
+		Mode:            parseMode(&l),
 		HTTPAddr:        l.string(envHTTPAddr, defaultHTTPAddr, validateAddr),
 		LogLevel:        parseLevel(&l, l.string(envLogLevel, defaultLogLevel, nil)),
 		LogFormat:       parseFormat(&l, l.string(envLogFormat, defaultLogFormat, nil)),
@@ -136,10 +188,100 @@ func Load(src Source) (Config, error) {
 		l.fail(envMigrateURL, "requires %s (migrations run only together with the database connection)", envDatabaseURL)
 	}
 
+	cfg.SMTP = parseSMTP(&l, cfg.Mode)
+	if cfg.SMTP != nil && len(cfg.AllowedOrigins) == 0 {
+		l.fail(envAllowedOrigins, "required with %s (mailed links point to the first origin)", envSMTPHost)
+	}
+	if cfg.Mode == ModeProduction {
+		if cfg.DatabaseURL != "" && cfg.SMTP == nil {
+			l.fail(envSMTPHost, "required in production (invitations are sent by mail to prove the address; SERMON_MODE=development allows running without)")
+		}
+		for _, origin := range cfg.AllowedOrigins {
+			if !strings.HasPrefix(origin, "https://") {
+				l.fail(envAllowedOrigins, "only https:// origins in production (got %s; SERMON_MODE=development allows http://)", origin)
+			}
+		}
+	}
+
 	if len(l.errs) > 0 {
 		return Config{}, fmt.Errorf("%w: %w", ErrInvalid, errors.Join(l.errs...))
 	}
 	return cfg, nil
+}
+
+func parseMode(l *loader) Mode {
+	switch value := Mode(l.string(envMode, string(ModeProduction), nil)); value {
+	case ModeProduction, ModeDevelopment:
+		return value
+	default:
+		l.fail(envMode, "must be production or development, got %q", value)
+		return ModeProduction
+	}
+}
+
+// parseSMTP reads the mail settings; nil if SERMON_SMTP_HOST is not set.
+func parseSMTP(l *loader, mode Mode) *SMTP {
+	host := l.string(envSMTPHost, "", nil)
+	if host == "" {
+		for _, key := range []string{envSMTPPort, envSMTPTLS, envSMTPFrom, envSMTPUsername, envSMTPPassword, envSMTPCAFile} {
+			if _, ok := l.raw(key); ok {
+				l.fail(key, "requires %s", envSMTPHost)
+			}
+		}
+		return nil
+	}
+	if net.ParseIP(host) == nil && !validDNSName(host) {
+		l.fail(envSMTPHost, "invalid host name or IP %q", host)
+	}
+	smtp := &SMTP{Host: host, TLS: SMTPTLS(l.string(envSMTPTLS, string(SMTPStartTLS), nil))}
+	defaultPort := 587
+	switch smtp.TLS {
+	case SMTPStartTLS:
+	case SMTPImplicitTLS:
+		defaultPort = 465
+	case SMTPNone:
+		defaultPort = 25
+		if mode != ModeDevelopment {
+			l.fail(envSMTPTLS, "none (plain SMTP) only in development")
+		}
+	default:
+		l.fail(envSMTPTLS, "must be starttls, tls or none, got %q", smtp.TLS)
+	}
+	smtp.Port = defaultPort
+	if value, ok := l.raw(envSMTPPort); ok {
+		port, err := strconv.Atoi(value)
+		if err != nil || port < 1 || port > maxPort {
+			l.fail(envSMTPPort, "must be a port number (1-%d)", maxPort)
+		} else {
+			smtp.Port = port
+		}
+	}
+	from := l.string(envSMTPFrom, "", nil)
+	addr, err := mail.ParseAddress(from)
+	switch {
+	case from == "":
+		l.fail(envSMTPFrom, "required with %s (sender address)", envSMTPHost)
+	case strings.ContainsAny(from, "\r\n") || err != nil:
+		l.fail(envSMTPFrom, "not a mail address (e.g. \"SerMon <sermon@example.com>\")")
+	default:
+		smtp.From, smtp.FromName = addr.Address, addr.Name
+	}
+	smtp.Username = l.string(envSMTPUsername, "", nil)
+	// Validation messages must never echo the password.
+	smtp.Password = l.string(envSMTPPassword, "", nil)
+	if (smtp.Username == "") != (smtp.Password == "") {
+		l.fail(envSMTPUsername, "%s and %s go together", envSMTPUsername, envSMTPPassword)
+	}
+	if path := l.string(envSMTPCAFile, "", nil); path != "" {
+		pem, err := l.src.ReadFile(path)
+		pool := x509.NewCertPool()
+		if err != nil || !pool.AppendCertsFromPEM(pem) {
+			l.fail(envSMTPCAFile, "cannot read PEM certificates from %s", path)
+		} else {
+			smtp.RootCAs = pool
+		}
+	}
+	return smtp
 }
 
 // loader collects values and errors so that all problems are reported together.

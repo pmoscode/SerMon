@@ -52,6 +52,8 @@ func dbSource(t *testing.T, keysFile string, extra map[string]string) config.Sou
 		t.Fatal(err)
 	}
 	env := map[string]string{
+		// The test servers have no mail server: development mode (SMTP is required in production).
+		"SERMON_MODE":                 "development",
 		"SERMON_DATABASE_URL":         pgtest.EnableAppRole(t, db),
 		"SERMON_DATABASE_MIGRATE_URL": db.OwnerDSN,
 		"SERMON_LOG_FORMAT":           "text",

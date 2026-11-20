@@ -91,9 +91,11 @@ type AccessServiceClient interface {
 	// RemoveMember removes a user from the organization and ends the user's sessions in it
 	// (org admin, step-up).
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
-	// InviteMember invites an e-mail address with an initial role (org admin, step-up). The
-	// response contains the link token once; the UI builds the link "<origin>/invite#<token>".
-	// The response is the same whether or not the address already has an account (ADR 0008).
+	// InviteMember invites an e-mail address with an initial role (org admin, step-up). In
+	// production the link goes out by mail only (emailed; inviting the address again sends a new
+	// one). Without mail (development) the response contains the link token once; the UI builds
+	// the link "<origin>/invite#<token>". The response is the same whether or not the address
+	// already has an account (ADR 0008). UNAVAILABLE: the mail could not be sent.
 	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
 	// ListInvitations returns the open invitations (org admin).
 	ListInvitations(context.Context, *connect.Request[v1.ListInvitationsRequest]) (*connect.Response[v1.ListInvitationsResponse], error)
@@ -290,9 +292,11 @@ type AccessServiceHandler interface {
 	// RemoveMember removes a user from the organization and ends the user's sessions in it
 	// (org admin, step-up).
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
-	// InviteMember invites an e-mail address with an initial role (org admin, step-up). The
-	// response contains the link token once; the UI builds the link "<origin>/invite#<token>".
-	// The response is the same whether or not the address already has an account (ADR 0008).
+	// InviteMember invites an e-mail address with an initial role (org admin, step-up). In
+	// production the link goes out by mail only (emailed; inviting the address again sends a new
+	// one). Without mail (development) the response contains the link token once; the UI builds
+	// the link "<origin>/invite#<token>". The response is the same whether or not the address
+	// already has an account (ADR 0008). UNAVAILABLE: the mail could not be sent.
 	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
 	// ListInvitations returns the open invitations (org admin).
 	ListInvitations(context.Context, *connect.Request[v1.ListInvitationsRequest]) (*connect.Response[v1.ListInvitationsResponse], error)

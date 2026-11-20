@@ -43,15 +43,30 @@ type Store interface {
 
 // Service manages organizations.
 type Service struct {
-	store  Store
-	policy authz.Policy
-	now    func() time.Time
-	newID  func() uuid.UUID
+	store   Store
+	policy  authz.Policy
+	now     func() time.Time
+	newID   func() uuid.UUID
+	mailer  invitation.Mailer
+	baseURL string
+}
+
+// Option configures a Service.
+type Option func(*Service)
+
+// WithMailer sends the first admin's invitation link by mail instead of returning it
+// (production, M1-39); baseURL is the origin of the UI.
+func WithMailer(mailer invitation.Mailer, baseURL string) Option {
+	return func(s *Service) { s.mailer, s.baseURL = mailer, baseURL }
 }
 
 // NewService returns a Service.
-func NewService(store Store, policy authz.Policy, now func() time.Time, newID func() uuid.UUID) *Service {
-	return &Service{store: store, policy: policy, now: now, newID: newID}
+func NewService(store Store, policy authz.Policy, now func() time.Time, newID func() uuid.UUID, options ...Option) *Service {
+	s := &Service{store: store, policy: policy, now: now, newID: newID}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 // List returns all organizations (superadmin).
@@ -67,7 +82,8 @@ func (s *Service) List(ctx context.Context, c access.Caller) ([]Organization, er
 }
 
 // Create creates an organization and invites its first org-wide admin; it returns the link
-// token (shown once). It hands out admin rights, so it needs a step-up.
+// token (shown once) – or "" if the link went out by mail (WithMailer). It hands out admin
+// rights, so it needs a step-up.
 func (s *Service) Create(ctx context.Context, c access.Caller, name, adminEmail string) (Organization, string, error) {
 	if err := s.authorize(c, true); err != nil {
 		return Organization{}, "", err
@@ -97,7 +113,16 @@ func (s *Service) Create(ctx context.Context, c access.Caller, name, adminEmail 
 	if err := s.store.Create(ctx, org, inv, hash, audit); err != nil {
 		return Organization{}, "", fmt.Errorf("create organization: %w", err)
 	}
-	return org, token, nil
+	if s.mailer == nil {
+		return org, token, nil
+	}
+	err = invitation.SendMail(ctx, s.mailer, s.baseURL, token, invitation.MailFacts{
+		To: email, Organization: name, Role: role.Admin, ExpiresAt: inv.ExpiresAt,
+	})
+	if err != nil {
+		return org, "", err //nolint:wrapcheck // ErrMailFailed for the handler
+	}
+	return org, "", nil
 }
 
 // Rename renames an organization.

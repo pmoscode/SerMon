@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test } from '../e2e/fixtures';
-import { caddyCA, exec, setupToken, tamperDownload } from './stack';
+import { caddyCA, exec, invitationLink, setupToken, tamperDownload } from './stack';
 
 /**
  * The M1 demo (IMPLEMENTIERUNGSPLAN §4): a fresh installation, three Linux hosts with systemd get
@@ -153,8 +153,9 @@ test('a fresh installation monitors three hosts within two minutes, and Org B se
 	console.log(`node detail with chart data after ${Math.round((Date.now() - started) / 1000)} s`);
 	await page.screenshot({ path: 'test-results/demo-node.png', fullPage: true });
 
-	// Tenant isolation: the superadmin creates Org B; its admin sees none of Alpha's nodes.
-	const created = await call<{ invitationToken: string }>(
+	// Tenant isolation: the superadmin creates Org B; its admin sees none of Alpha's nodes. In
+	// production the first admin's link goes out by mail only (M1-39).
+	const created = await call<{ invitationToken?: string; invitationEmailed?: boolean }>(
 		page.request,
 		baseURL ?? '',
 		'OrganizationService/CreateOrganization',
@@ -163,9 +164,13 @@ test('a fresh installation monitors three hosts within two minutes, and Org B se
 			adminEmail: other.email
 		}
 	);
+	expect(created.invitationToken ?? '').toBe('');
+	expect(created.invitationEmailed).toBe(true);
+	const link = await invitationLink(other.email);
+	expect(new URL(link).origin).toBe(new URL(baseURL ?? '').origin);
 	const context = await browser.newContext({ ignoreHTTPSErrors: true });
 	const bea = await context.newPage();
-	await bea.goto(`/invite#${created.invitationToken}`);
+	await bea.goto(link);
 	await bea.getByLabel('Name', { exact: true }).fill(other.name);
 	await bea.getByLabel('Password', { exact: true }).fill(PASSWORD);
 	await bea.getByLabel('Repeat password').fill(PASSWORD);

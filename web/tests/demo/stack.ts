@@ -62,3 +62,29 @@ export function tamperDownload(): () => void {
 	appendFileSync(path, Buffer.from([0]));
 	return () => writeFileSync(path, original);
 }
+
+/** Mailpit's API of the e2e environment (published on 127.0.0.1). */
+const mailpit = `http://127.0.0.1:${process.env.SERMON_E2E_MAIL_PORT ?? '18025'}`;
+
+/**
+ * The invitation link mailed to `to`: in production the server never hands it out, only the
+ * mailbox gets it (M1-39). Waits until the mail arrived.
+ */
+export async function invitationLink(to: string, timeoutMs = 15_000): Promise<string> {
+	const deadline = Date.now() + timeoutMs;
+	for (;;) {
+		const search = await fetch(`${mailpit}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`);
+		const found = (await search.json()) as { messages?: { ID: string }[] };
+		const id = found.messages?.[0]?.ID;
+		if (id) {
+			const message = (await (await fetch(`${mailpit}/api/v1/message/${id}`)).json()) as {
+				Text: string;
+			};
+			const link = /https:\/\/\S+\/invite#[\w-]+/.exec(message.Text)?.[0];
+			if (!link) throw new Error(`invitation mail to ${to} without link:\n${message.Text}`);
+			return link;
+		}
+		if (Date.now() > deadline) throw new Error(`no invitation mail to ${to}`);
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+}

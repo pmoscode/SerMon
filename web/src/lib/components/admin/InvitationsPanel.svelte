@@ -14,7 +14,10 @@
 	import { withStepUp } from '#lib/stores/stepup.svelte.js';
 	import RoleForm from './RoleForm.svelte';
 
-	/** Invitations by link (ADR 0008): the link is shown once, nothing is mailed. */
+	/**
+	 * Invitations (ADR 0008): in production the server mails the link to the invited address only
+	 * (M1-39); without mail (development) the link is shown here once.
+	 */
 	let {
 		invitations,
 		groups,
@@ -25,30 +28,39 @@
 	let role = $state(Role.VIEWER);
 	let groupId = $state('');
 	let link = $state('');
+	let sentTo = $state('');
 	let copied = $state(false);
 	let failure = $state('');
 	let busy = $state(false);
 	const groupName = (id: string) =>
 		id ? (groups.find((g) => g.id === id)?.name ?? '–') : m.admin_all_groups();
 
-	async function invite(event: SubmitEvent) {
-		event.preventDefault();
+	/** Invites an address; inviting it again replaces the open invitation and sends a new link. */
+	async function send(to: string, asRole: Role, inGroup: string): Promise<boolean> {
 		busy = true;
 		failure = '';
 		link = '';
+		sentTo = '';
 		copied = false;
 		try {
 			const res = await withStepUp(() =>
-				api.access.inviteMember({ email: email.trim(), role, groupId })
+				api.access.inviteMember({ email: to, role: asRole, groupId: inGroup })
 			);
-			link = `${location.origin}/invite#${res.token}`;
-			email = '';
+			if (res.emailed) sentTo = to;
+			else link = `${location.origin}/invite#${res.token}`;
 			await onChange();
+			return true;
 		} catch (error) {
 			failure = adminError(error);
+			return false;
 		} finally {
 			busy = false;
 		}
+	}
+
+	async function invite(event: SubmitEvent) {
+		event.preventDefault();
+		if (await send(email.trim(), role, groupId)) email = '';
 	}
 
 	async function revoke(id: string) {
@@ -76,6 +88,11 @@
 		<RoleForm id="invite" {groups} bind:role bind:groupId />
 		<Button type="submit" disabled={busy || !email.includes('@')}>{m.admin_invite()}</Button>
 	</form>
+	{#if sentTo}
+		<p class="rounded-md border p-3 text-sm" role="status">
+			{m.admin_invite_sent({ email: sentTo })}
+		</p>
+	{/if}
 	{#if link}
 		<div
 			class="flex flex-col gap-2 rounded-md border border-amber-500/50 p-3 text-sm"
@@ -113,9 +130,17 @@
 						</span>
 					{/if}
 				</span>
-				<Button size="sm" variant="ghost" onclick={() => revoke(inv.id)}
-					>{m.admin_revoke_invitation()}</Button
-				>
+				<span class="flex gap-1">
+					<Button
+						size="sm"
+						variant="ghost"
+						disabled={busy}
+						onclick={() => send(inv.email, inv.role, inv.groupId)}>{m.admin_invite_again()}</Button
+					>
+					<Button size="sm" variant="ghost" onclick={() => revoke(inv.id)}
+						>{m.admin_revoke_invitation()}</Button
+					>
+				</span>
 			</li>
 		{:else}
 			<li class="px-3 py-4 text-sm text-muted-foreground">{m.admin_invitations_none()}</li>

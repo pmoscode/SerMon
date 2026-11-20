@@ -88,6 +88,12 @@ func (s stack) httpClient(jar http.CookieJar, origin string) *http.Client {
 // newStack starts the web API over TLS with a real database (Testcontainers).
 func newStack(t *testing.T, loginLimit int) stack {
 	t.Helper()
+	return newStackWithMailer(t, loginLimit, nil)
+}
+
+// newStackWithMailer is newStack with invitation links sent by mailer (production).
+func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) stack {
+	t.Helper()
 	ctx := context.Background()
 	db := pgtest.Shared(t)
 	if err := postgres.Migrate(ctx, db.OwnerDSN); err != nil {
@@ -110,7 +116,17 @@ func newStack(t *testing.T, loginLimit int) stack {
 		IPLimiter: ratelimit.New(loginLimit, time.Minute, time.Now), Now: time.Now, SecondFactor: secondFactor,
 	})
 
-	invites := invitation.NewService(postgres.NewInvitationStore(pg), creds, authz.NewPolicy(), hasher, time.Now, access.NewID)
+	mux := http.NewServeMux()
+	srv := httptest.NewUnstartedServer(mux)
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	var inviteOptions []invitation.Option
+	var orgOptions []organization.Option
+	if mailer != nil {
+		inviteOptions = append(inviteOptions, invitation.WithMailer(mailer, srv.URL))
+		orgOptions = append(orgOptions, organization.WithMailer(mailer, srv.URL))
+	}
+	invites := invitation.NewService(postgres.NewInvitationStore(pg), creds, authz.NewPolicy(), hasher, time.Now, access.NewID, inviteOptions...)
 	ca, err := agentca.Bootstrap(ctx, postgres.NewAgentCAStore(pg), masterKeys(t), time.Now)
 	if err != nil {
 		t.Fatal(err)
@@ -118,10 +134,6 @@ func newStack(t *testing.T, loginLimit int) stack {
 	ring := metrics.NewRing()
 	metricStore := timescale.New(pg)
 	nodes := fleet.NewService(postgres.NewFleetStore(pg), metrics.NewReader(metricStore, ring, time.Now), time.Now)
-	mux := http.NewServeMux()
-	srv := httptest.NewUnstartedServer(mux)
-	srv.StartTLS()
-	t.Cleanup(srv.Close)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
 			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)),
@@ -130,7 +142,7 @@ func newStack(t *testing.T, loginLimit int) stack {
 			invites, slog.New(slog.DiscardHandler)),
 		Invitation: webapi.NewInvitationHandler(invites, sessions, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
 		Organization: webapi.NewOrganizationHandler(
-			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
+			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID, orgOptions...), slog.New(slog.DiscardHandler)),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Node: webapi.NewNodeHandler(rotation.NewService(postgres.NewRotationStore(pg), ca, time.Now,

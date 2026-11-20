@@ -105,7 +105,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/ad
 | D25 | Repo/CI        | **GitHub-Monorepo + GitHub Actions**                                                         |                                                                                                       |
 | D26 | API            | **Connect-RPC/Protobuf** für Agent ↔ Server (gRPC) und Web ↔ Server (Connect)                | Ein Schema, typisiert von Ende zu Ende                                                                |
 | D27 | UI-Ressourcen  | **Alles lokal ausgeliefert:** keine CDNs, keine externen Schriften, Skripte, Styles, Bilder oder Icons | Datenschutz (keine IP-Weitergabe an Dritte, DSGVO), Air-Gap-fähig, strikte CSP, keine Supply-Chain über fremde Server |
-| D28 | Mitglieder     | **Einladungslink:** einmalig, 72 h gültig, nur als Hash gespeichert; die UI zeigt ihn zum Kopieren, Mail-Versand optional | Keine User-Enumeration, Admin kennt keine Passwörter, **SMTP nie Pflicht** ([ADR 0008](adr/0008-einladungen.md)) |
+| D28 | Mitglieder     | **Einladungslink:** einmalig, 72 h gültig, nur als Hash gespeichert; **in Produktion nur per Mail** an die Adresse (SMTP Pflicht), im Entwicklungsmodus ohne SMTP zum Kopieren | Adresse bewiesen, kein Konto-Squatting, keine User-Enumeration, Admin kennt keine Passwörter ([ADR 0008](adr/0008-einladungen.md), [ADR 0022](adr/0022-betriebsmodus-und-einladungen-per-mail.md)) |
 | D29 | Orgs löschen   | **Erst sperren, nach Frist endgültig löschen:** Sperre beendet Logins und Ingest sofort; nach der Frist (Standard 30 Tage) werden Stamm-, Event-, Metrik- und Loki-Daten gelöscht; das Audit-Log ist vorher exportierbar | Schutz vor Fehlbedienung und Missbrauch, Daten bleiben bis zum Löschen nachvollziehbar |
 | D30 | Enrollment     | **Über den öffentlichen HTTPS-Endpunkt**, danach mTLS auf dem Agent-Port | Neue Agents kennen die Agent-CA noch nicht; der mTLS-Port bleibt streng ([ADR 0009](adr/0009-enrollment-ueber-web-endpunkt.md)) |
 
@@ -914,6 +914,9 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
 ### 18.2 Transport
 
 - **Extern:** HTTPS über Caddy (automatisches ACME oder eigenes Zertifikat), TLS 1.2+ (bevorzugt 1.3), HSTS (setzt der Server selbst, sobald alle erlaubten Origins `https://` sind).
+- **Betriebsmodus:** `SERMON_MODE=production` (Standard) erlaubt nur `https://`-Origins und verlangt SMTP mit
+  STARTTLS oder TLS (geprüftes Zertifikat). `development` lockert beides für `just dev` (Mailpit, `http://`) und
+  wird beim Start als Warnung geloggt ([ADR 0022](adr/0022-betriebsmodus-und-einladungen-per-mail.md)).
 - **Agent-Kanal:** eigener Port oder eigener Hostname mit **mTLS**, **TLS 1.3 only**, Client-Zertifikat Pflicht. Die
   interne Agent-CA ist getrennt vom Web-Zertifikat. Der CA-Schlüssel ist verschlüsselt gespeichert; signiert wird mit
   einer Intermediate-CA. Rotation von Agent-Zertifikaten, Server-Zertifikat und CA (Trust-Bundle) regelt §6
@@ -1220,7 +1223,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | O10 | Mobile                       | Push-Benachrichtigungen reichen?                                                 | ntfy/Pushover/Telegram decken das für v1 ab                                                |
 | O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |
 | O12 | Wachstum über ca. 200 Nodes  | TimescaleDB stößt bei 1-s-Auflösung an Grenzen                                   | `MetricStore` auf VictoriaMetrics umstellen; die Domänenlogik bleibt unverändert (ADR 0001) |
-| O13 | Mitglieder hinzufügen        | ✓ Geklärt: Einladungslink statt Startpasswort                                    | Entschieden: D28, Link zum Kopieren, Mail optional (ADR 0008)                              |
+| O13 | Mitglieder hinzufügen        | ✓ Geklärt: Einladungslink statt Startpasswort                                    | Entschieden: D28, in Produktion nur per Mail, SMTP Pflicht (ADR 0008, 0022)                |
 | O14 | Orgs löschen                 | ✓ Geklärt: sperren, nach Frist löschen                                           | Entschieden: D29; umgesetzt mit E3.8                                                       |
 
 ---

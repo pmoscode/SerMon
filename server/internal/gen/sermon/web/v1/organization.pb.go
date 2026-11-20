@@ -240,9 +240,12 @@ type CreateOrganizationResponse struct {
 	// organization is the created organization.
 	Organization *OrganizationSummary `protobuf:"bytes,1,opt,name=organization,proto3" json:"organization,omitempty"`
 	// invitation_token is the secret part of the first admin's invitation link (shown once).
+	// Empty if invitation_emailed.
 	InvitationToken string `protobuf:"bytes,2,opt,name=invitation_token,json=invitationToken,proto3" json:"invitation_token,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// invitation_emailed is set when the link went to the first admin by mail.
+	InvitationEmailed bool `protobuf:"varint,3,opt,name=invitation_emailed,json=invitationEmailed,proto3" json:"invitation_emailed,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *CreateOrganizationResponse) Reset() {
@@ -287,6 +290,13 @@ func (x *CreateOrganizationResponse) GetInvitationToken() string {
 		return x.InvitationToken
 	}
 	return ""
+}
+
+func (x *CreateOrganizationResponse) GetInvitationEmailed() bool {
+	if x != nil {
+		return x.InvitationEmailed
+	}
+	return false
 }
 
 // RenameOrganizationRequest names the organization and its new name.
@@ -400,10 +410,11 @@ const file_sermon_web_v1_organization_proto_rawDesc = "" +
 	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\x04name\x12+\n" +
 	"\vadmin_email\x18\x02 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x03\x18\xc0\x02R\n" +
-	"adminEmail\"\x8f\x01\n" +
+	"adminEmail\"\xbe\x01\n" +
 	"\x1aCreateOrganizationResponse\x12F\n" +
 	"\forganization\x18\x01 \x01(\v2\".sermon.web.v1.OrganizationSummaryR\forganization\x12)\n" +
-	"\x10invitation_token\x18\x02 \x01(\tR\x0finvitationToken\"n\n" +
+	"\x10invitation_token\x18\x02 \x01(\tR\x0finvitationToken\x12-\n" +
+	"\x12invitation_emailed\x18\x03 \x01(\bR\x11invitationEmailed\"n\n" +
 	"\x19RenameOrganizationRequest\x121\n" +
 	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\x12\x1e\n" +
 	"\x04name\x18\x02 \x01(\tB\n" +

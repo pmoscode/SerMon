@@ -79,6 +79,22 @@ func RequireOrigin(allowed []string) func(http.Handler) http.Handler {
 	}
 }
 
+// StrictTransportSecurity sends HSTS on every response when the UI is only served over HTTPS
+// (all allowed origins https://): the server runs behind a TLS proxy then. With plain HTTP origins
+// (development) nothing is sent.
+func StrictTransportSecurity(origins []string) func(http.Handler) http.Handler {
+	https := len(origins) > 0 && !slices.ContainsFunc(origins, func(o string) bool { return !strings.HasPrefix(o, "https://") })
+	return func(next http.Handler) http.Handler {
+		if !https {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // APIHeaders sets security headers for API responses (never cached, never framed, no content).
 func APIHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

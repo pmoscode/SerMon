@@ -165,7 +165,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return fmt.Errorf("listen on %s: %w", cfg.HTTPAddr, err)
 	}
 	logger.InfoContext(ctx, "listening", "addr", ln.Addr().String(), "version", version)
-	web := httpserver.New(mux, logger, cfg.ShutdownTimeout, healthHandler.SetDraining)
+	web := httpserver.New(webapi.StrictTransportSecurity(cfg.AllowedOrigins)(mux), logger, cfg.ShutdownTimeout, healthHandler.SetDraining)
 	servers = append(servers, func(ctx context.Context) error { return web.Serve(ctx, ln) })
 	if cfg.MetricsAddr != "" {
 		metricsServer, err := newMetricsServer(ctx, cfg, registry, logger)

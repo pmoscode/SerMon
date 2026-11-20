@@ -895,7 +895,7 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
 
 ### 18.2 Transport
 
-- **Extern:** HTTPS über Caddy (automatisches ACME oder eigenes Zertifikat), TLS 1.2+ (bevorzugt 1.3), HSTS.
+- **Extern:** HTTPS über Caddy (automatisches ACME oder eigenes Zertifikat), TLS 1.2+ (bevorzugt 1.3), HSTS (setzt der Server selbst, sobald alle erlaubten Origins `https://` sind).
 - **Agent-Kanal:** eigener Port oder eigener Hostname mit **mTLS**, **TLS 1.3 only**, Client-Zertifikat Pflicht. Die
   interne Agent-CA ist getrennt vom Web-Zertifikat. Der CA-Schlüssel ist verschlüsselt gespeichert; signiert wird mit
   einer Intermediate-CA. Rotation von Agent-Zertifikaten, Server-Zertifikat und CA (Trust-Bundle) regelt §6

@@ -145,6 +145,9 @@ func TestRun_ServesTheInstaller(t *testing.T) {
 		return res, string(body)
 	}
 	res, body := get("/install.sh")
+	if res.Header.Get("Strict-Transport-Security") != "" {
+		t.Error("no HSTS without https origins")
+	}
 	if res.StatusCode != http.StatusOK || !strings.HasPrefix(body, "#!/bin/sh") || !strings.Contains(body, "[Service]") {
 		t.Errorf("GET /install.sh = %d %q…", res.StatusCode, body[:min(len(body), 40)])
 	}
@@ -153,6 +156,29 @@ func TestRun_ServesTheInstaller(t *testing.T) {
 	}
 	if res, _ := get("/downloads/sermon-agent-linux-amd64"); res.StatusCode != http.StatusNotFound {
 		t.Errorf("downloads without directory = %d", res.StatusCode)
+	}
+	cancel()
+	<-done
+}
+
+func TestRun_SendsHSTSBehindTLS(t *testing.T) {
+	logs := &syncBuffer{}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan int, 1)
+	go func() {
+		done <- run(ctx, nil, envSource(map[string]string{
+			"SERMON_HTTP_ADDR": "127.0.0.1:0", "SERMON_ALLOWED_ORIGINS": "https://sermon.example.com",
+		}), logs, logs)
+	}()
+	addr := waitFor(t, logs, regexp.MustCompile(`"msg":"listening"[^\n]*?"addr":"([^"]+)"`))
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/healthz", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+	if got := res.Header.Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains" {
+		t.Errorf("HSTS = %q", got)
 	}
 	cancel()
 	<-done

@@ -131,3 +131,23 @@ func TestClientIP_ReadsAllForwardedForLines(t *testing.T) {
 		t.Errorf("client IP = %q, want the address the proxy added", got)
 	}
 }
+
+// Behind TLS the server tells browsers to never use plain HTTP again (KONZEPT §18.2); with plain
+// HTTP origins (development) it must not, or browsers would lock themselves out of localhost.
+func TestStrictTransportSecurity(t *testing.T) {
+	for name, tc := range map[string]struct {
+		origins []string
+		want    string
+	}{
+		"https only":      {[]string{"https://sermon.example.com"}, "max-age=31536000; includeSubDomains"},
+		"mixed":           {[]string{"https://sermon.example.com", "http://127.0.0.1:5173"}, ""},
+		"plain HTTP":      {[]string{"http://127.0.0.1:8080"}, ""},
+		"no origins (UI)": {nil, ""},
+	} {
+		rec := httptest.NewRecorder()
+		webapi.StrictTransportSecurity(tc.origins)(ok()).ServeHTTP(rec, request(http.MethodGet, "", "192.0.2.1:1", nil))
+		if got := rec.Header().Get("Strict-Transport-Security"); got != tc.want {
+			t.Errorf("%s: HSTS = %q, want %q", name, got, tc.want)
+		}
+	}
+}

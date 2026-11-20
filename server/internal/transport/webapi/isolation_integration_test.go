@@ -64,6 +64,7 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO agent_certificates (serial, org_id, node_id, authority_id, not_before, not_after) VALUES ('"+certAl+"', '"+orgAlpha+"', '"+nodeAl+"', (SELECT id FROM pki_authorities WHERE active), now() - interval '1 hour', now() + interval '30 days')",
 		"INSERT INTO enrollment_tokens (id, org_id, group_id, token_hash, expires_at, max_uses) VALUES ('"+tokenAl+"', '"+orgAlpha+"', '"+groupAl+"', sha256(convert_to('"+tokenAl+"', 'UTF8')), now() + interval '1 hour', 1)",
 		"INSERT INTO invitations (id, org_id, email, role, token_hash, expires_at) VALUES ('"+inviteAl+"', '"+orgAlpha+"', 'invited-a@example.org', 'admin', sha256(convert_to('"+inviteTokenAl+"', 'UTF8')), now() + interval '1 day')",
+		"INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip) SELECT '"+orgAlpha+"', '"+nodeAl+"', now() - interval '1 minute', 'ssh.login.failed', 'alpha-user', '192.0.2.77' WHERE NOT EXISTS (SELECT 1 FROM security_events WHERE user_name = 'alpha-user')",
 		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
 		"DELETE FROM role_bindings WHERE org_id = '"+orgBeta+"'",
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgBeta+"', '"+beaID+"', 'admin')",
@@ -82,6 +83,7 @@ type loggedIn struct {
 	metrics      webv1connect.MetricsServiceClient
 	fleet        webv1connect.FleetServiceClient
 	twoFactor    webv1connect.TwoFactorServiceClient
+	events       webv1connect.SecurityEventServiceClient
 	policy       webv1connect.SecurityPolicyServiceClient
 	jar          *cookiejar.Jar
 }
@@ -102,6 +104,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		metrics:      webv1connect.NewMetricsServiceClient(hc, s.server.URL),
 		fleet:        webv1connect.NewFleetServiceClient(hc, s.server.URL),
 		twoFactor:    webv1connect.NewTwoFactorServiceClient(hc, s.server.URL),
+		events:       webv1connect.NewSecurityEventServiceClient(hc, s.server.URL),
 		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
@@ -117,7 +120,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
-		metrics: bea.metrics, fleet: bea.fleet,
+		metrics: bea.metrics, fleet: bea.fleet, events: bea.events,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}

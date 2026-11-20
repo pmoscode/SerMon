@@ -34,6 +34,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
+	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -152,6 +153,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
 		Metrics: webapi.NewMetricsHandler(nodes, slog.New(slog.DiscardHandler)),
 		Fleet:   webapi.NewFleetHandler(nodes, slog.New(slog.DiscardHandler)),
+		SecurityEvents: webapi.NewSecurityEventHandler(
+			secevents.NewService(postgres.NewSecurityEventStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(pg), postgres.NewNodeRegistry(pg), ca, time.Now, access.NewID),
 			ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),

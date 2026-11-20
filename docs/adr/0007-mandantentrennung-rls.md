@@ -136,3 +136,23 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
   Superadmin legt nur der Verbrauch des Tokens an; `sermon_app` hat auf `superadmins` und `instance_setup` nur noch
   `SELECT`.
 
+
+## Nachtrag M2-07: partitionierte Tabelle `security_events`
+
+- **Kein DDL zur Laufzeit:** Security-Events liegen in einer nach Monat partitionierten Tabelle. Neue Partitionen zur
+  Laufzeit hätten `CREATE` für `sermon_definer` gebraucht. Das widerspricht der Regel oben (`CREATE` nur während der
+  Migration), und `TestDefinerRole_HasNoCreatePrivilegeAndNoLogin` hat den ersten Entwurf genau daran scheitern lassen.
+- **Partitionen vorab:** Die Migration legt deshalb die Monate von 2026-10 bis 2036-12 im Voraus an.
+  - Eigentümer von Elterntabelle und Partitionen ist `sermon_definer`; das `CREATE` dafür gilt nur während der
+    Migration.
+  - Die Definer-Funktion `security_events_expire` **löscht** ganze Monate für die Retention. `DROP` braucht
+    Eigentümerschaft, kein `CREATE`.
+  - `security_events_horizon` meldet das Ende der letzten Partition. Die Wartung des Servers warnt ein Jahr vorher;
+    spätere Migrationen verlängern.
+- **RLS:** Die Elterntabelle hat RLS mit der üblichen Policy, und `sermon_app` darf dort nur `SELECT` und `INSERT`. Jede
+  Partition hat ebenfalls `ENABLE` und `FORCE ROW LEVEL SECURITY`, aber keine Rechte für `sermon_app`. Direkter Zugriff
+  auf eine Partition, DDL, `UPDATE` und `DELETE` sind verweigert; die Integrationstests prüfen das.
+  `TestRLS_EveryTenantTableIsForced` erfasst die Partitionen automatisch.
+- **Verworfen, Hypertable von TimescaleDB:** Ausprobiert mit dem gepinnten Image 2.32.0-pg17. RLS auf der Hypertable
+  wirkt nur beim Zugriff über sie. Die Chunks (`_timescaledb_internal`) haben **keine RLS**, erben aber die Rechte der
+  Hypertable. Eine Rolle ohne Sonderrechte las ohne Mandant über den Chunk die Zeilen **aller** Orgs.

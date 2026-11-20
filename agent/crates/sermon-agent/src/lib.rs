@@ -124,7 +124,8 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         }
         let maintenance = tokio::spawn(maintain(outbox.clone(), clock.clone(), shutdown.clone()));
         // The journal (security events) runs regardless of allow_logs: that veto is about shipping logs.
-        let (journal_metrics, journal) = journal::spawn(&journal_layout, shutdown.clone());
+        let (journal_metrics, journal) =
+            journal::spawn(&journal_layout, outbox.clone(), shutdown.clone());
         let mut collectors = default_collectors();
         collectors.push(Box::new(journal_metrics));
         let scheduler = Scheduler::new(collectors, scheduler_root, scheduler::SERIES_LIMIT);

@@ -1492,7 +1492,59 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Abhängig von:** M2-05
 - **Skill:** `sermon-add-security-event`, `sermon-proto-change`
 
-#### ☐ M2-07 – Event-Ingest und Speicherung · S · M 🔒
+#### ☑ M2-07 – Event-Ingest und Speicherung · S · M 🔒
+> Erledigt (ADR 0007, Nachtrag M2-07; KONZEPT §11):
+> - **Agent:**
+>   - Der Journal-Verbraucher sammelt Events (bis 500 oder 1 s) und schreibt sie per `Outbox::push_security_events` ins
+>     WAL.
+>   - Erst danach rückt der Cursor vor. Schlägt das Schreiben fehl, wird nichts bestätigt und erneut versucht; im
+>     Speicher bleiben höchstens 5 000 Events.
+> - **Ingest:**
+>   - Event- und Metrik-Batches teilen die Sequenznummern. Events werden im `Flush` vor den Metriken geschrieben und in
+>     Reihenfolge bestätigt.
+>   - Der Node kommt aus dem Zertifikat. Event-Zeiten gelten von 7 Tagen zurück bis 5 min voraus, ungültige Events
+>     werden verworfen.
+>   - Token-Bucket pro Node (50/s, Burst 5 000), der über Reconnects erhalten bleibt.
+>   - Eigene Zähler als Server-Metriken.
+> - **Speicherung (Migration 00022):**
+>   - `security_events` ist nach Monat partitioniert, mit RLS und für die Anwendung nur anhängbar; typisierte Spalten
+>     und `details` (jsonb, höchstens 4 KiB).
+>   - Deduplizierung über `nodes.event_seq`, gesetzt in der Transaktion mit gesperrter Node-Zeile.
+>   - Partitionen legt die Migration von 2026-10 bis 2036-12 an. Die Wartung läuft alle 6 h, löscht Monate älter als
+>     ein Jahr (Definer-Funktion, nur `DROP`) und warnt ein Jahr vor dem Ende der Partitionen.
+>   - **Erster Entwurf verworfen:** Partitionen zur Laufzeit per Definer-Funktion brauchen `CREATE` für
+>     `sermon_definer`. Das verbietet ADR 0007, und der Test der Definer-Rolle schlug an. Eine Hypertable kam auch nicht
+>     in Frage: Ihre Chunks haben keine RLS, und `sermon_app` las darüber die Daten aller Orgs (ausprobiert).
+> - **Abfrage:**
+>   - `SecurityEventService.ListSecurityEvents`: Zeitraum (höchstens 366 Tage), Nodes, Arten, User, IP/CIDR
+>     (IPv4-mapped als IPv4), Keyset-Paging.
+>   - Scope aus `view_security_events` über das neue `Policy.ScopeForAction`, das den Viewer-Logs-Schalter beachtet;
+>     ohne Recht `PERMISSION_DENIED`.
+>   - Fall im Tenant-Isolationstest.
+> - **Abweichung, kein Event-Strom in die Engine:** Ingest und Auswertung einer Org laufen auf verschiedenen Instanzen
+>   (Lease, M2-02). M2-08 liest neue Events aus der Tabelle; Index `(org_id, received_at, id)` und `received_at =
+>   clock_timestamp()` sind dafür angelegt. **Für M2-08:** Gleichzeitige Transaktionen können IDs in anderer
+>   Reihenfolge festschreiben, als sie vergeben wurden. Deshalb mit Abstand zu `now()` lesen, statt nur nach `id > x`.
+> - **Tests:**
+>   - Store mit RLS: einmal pro Batch, auch bei gleichzeitigen Writern (deterministisch über die gesperrte Zeile);
+>     Isolation; alle Filter und Paging; Gruppen-Scope; nur anhängbar, Partitionen nicht direkt erreichbar, kein DDL;
+>     Retention.
+>   - Ingest: Reihenfolge der Bestätigung, Resend nach Reconnect, Schreibfehler, Zeitfenster, ungültige Events, Flut
+>     über Reconnects, IPv4-mapped.
+>   - Über den mTLS-Stream; Service und Policy.
+>   - Agent: Batching, Commit erst nach dem Schreiben, voller Batch, Fehler mit Wiederholung, Boot aus dem Cursor.
+>   - Gegenproben für alle Prüfungen. Zwei Lücken wurden so gefunden und geschlossen: das IPv4-mapping im Ingest und
+>     die Sperre der Node-Zeile.
+> - **E2E unter der gehärteten Unit:**
+>   - Ein echtes `useradd`/`userdel` erscheint mit UID in der Datenbank. Gefälschte Zeilen (`logger -t sshd`,
+>     `logger -t useradd`) eines Users ohne Rechte erzeugen nichts.
+>   - Ein Event, das bei gestopptem Agent entstand, kommt nach zwei Neustarts genau einmal an.
+>   - **Fehler, den nur der E2E-Test fand:** Bei einem `systemctl stop` mit wartenden Events kam jedes Event doppelt in
+>     der Datenbank an. Die Quelle schrieb den Cursor zum letzten Mal, bevor der Verbraucher seinen letzten Batch
+>     bestätigte. Der Neustart las die Einträge erneut, unter neuen Sequenznummern.
+>     - Behoben: Nach dem Verbraucher wird der Cursor noch einmal geschrieben (`Checkpoint::persist`). Ein Test mit
+>       Quelle, Verbraucher und Fake-`journalctl` reproduziert den Fehler.
+>     - Ebenfalls behoben: Systemd beendet `journalctl` beim Stop vor dem Agent; das ist keine Warnung mehr.
 - **Ziel:** Events im Stream des Agents, dedupliziert über die Batch-Seq; Speicherung in PostgreSQL (partitioniert nach
   Monat, ein Jahr Aufbewahrung), RLS; Rate-Limit pro Node; Abfrage-RPC mit Filtern; Event-Strom in die Engine.
   Spalten und Typen vor dem ersten Release festlegen (Erkenntnis aus M1-36).
@@ -1506,6 +1558,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   OOM-Kill als Standardregeln.
 - **Tests zuerst:** Ereignisfolgen mit erwarteten Alerts (Brute-Force 10/50 in 5 min, Korrelation über 3 Nodes,
   Erfolg nach Fehlversuchen); keine Alerts über Org-Grenzen hinweg korreliert.
+- **Aus M2-07:** Die Engine liest neue Events aus `security_events` (`received_at`, mit Abstand zu `now()`). Einen
+  Event-Strom im Prozess gibt es nicht, weil Ingest und Lease-Halter verschiedene Instanzen sein können.
 - **Abhängig von:** M2-07, M2-04
 - **Skill:** `sermon-add-alert-rule`
 

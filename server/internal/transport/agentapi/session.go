@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"slices"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
@@ -533,6 +535,15 @@ func sendAck(stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionR
 
 // toBatch converts a validated protocol batch. Identity is never taken from it.
 func toBatch(b *agentv1.Batch) ingest.Batch {
+	if events := b.GetSecurityEvents(); events != nil {
+		batch := ingest.Batch{Seq: b.GetSeq(), Events: make([]secevent.Event, 0, len(events.GetEvents()))}
+		for _, e := range events.GetEvents() {
+			if event, ok := toEvent(e); ok {
+				batch.Events = append(batch.Events, event)
+			}
+		}
+		return batch
+	}
 	metrics := b.GetMetrics()
 	batch := ingest.Batch{Seq: b.GetSeq(), CollectedAt: metrics.GetCollectedAt().AsTime(), Samples: make([]ingest.Sample, 0, len(metrics.GetSamples()))}
 	for _, sample := range metrics.GetSamples() {
@@ -554,4 +565,77 @@ func factsFrom(f *agentv1.HostFacts) ingest.HostFacts {
 		Hostname: f.GetHostname(), OSID: f.GetOsId(), OSVersion: f.GetOsVersion(), KernelRelease: f.GetKernelRelease(),
 		Architecture: architecture, CPUCount: f.GetCpuCount(), MemoryBytes: f.GetMemoryBytes(),
 	}
+}
+
+var methods = map[agentv1.SshAuthMethod]string{
+	agentv1.SshAuthMethod_SSH_AUTH_METHOD_PASSWORD:             "password",
+	agentv1.SshAuthMethod_SSH_AUTH_METHOD_PUBLICKEY:            "publickey",
+	agentv1.SshAuthMethod_SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE: "keyboard-interactive",
+	agentv1.SshAuthMethod_SSH_AUTH_METHOD_HOSTBASED:            "hostbased",
+	agentv1.SshAuthMethod_SSH_AUTH_METHOD_GSSAPI:               "gssapi",
+	agentv1.SshAuthMethod_SSH_AUTH_METHOD_NONE:                 "none",
+	agentv1.SshAuthMethod_SSH_AUTH_METHOD_OTHER:                "other",
+}
+
+func remote(r *agentv1.SshRemote) *secevent.Remote {
+	out := &secevent.Remote{Host: r.GetHost(), Port: uint16(min(r.GetPort(), 65535))}
+	if ip, err := netip.ParseAddr(r.GetIp()); err == nil {
+		out.IP = ip
+	}
+	return out
+}
+
+// toEvent converts a validated protocol event; the node is set by the session. Event kinds of a
+// newer agent are skipped.
+func toEvent(e *agentv1.SecurityEvent) (secevent.Event, bool) {
+	out := secevent.Event{OccurredAt: e.GetOccurredAt().AsTime()}
+	d := &out.Details
+	switch ev := e.GetEvent().(type) {
+	case *agentv1.SecurityEvent_SshLoginFailed:
+		m := ev.SshLoginFailed
+		out.Kind, out.User, out.Remote = secevent.SSHLoginFailed, m.GetUser(), remote(m.GetRemote())
+		d.Method, d.InvalidUser = methods[m.GetMethod()], m.GetInvalidUser()
+	case *agentv1.SecurityEvent_SshInvalidUser:
+		m := ev.SshInvalidUser
+		out.Kind, out.User, out.Remote = secevent.SSHInvalidUser, m.GetUser(), remote(m.GetRemote())
+	case *agentv1.SecurityEvent_SshLoginSucceeded:
+		m := ev.SshLoginSucceeded
+		out.Kind, out.User, out.Remote = secevent.SSHLoginSucceeded, m.GetUser(), remote(m.GetRemote())
+		d.Method, d.KeyType, d.KeyFingerprint = methods[m.GetMethod()], m.GetKeyType(), m.GetKeyFingerprint()
+	case *agentv1.SecurityEvent_SshPreauthDisconnect:
+		m := ev.SshPreauthDisconnect
+		out.Kind, out.User, out.Remote = secevent.SSHPreauthDisconnect, m.GetUser(), remote(m.GetRemote())
+		d.InvalidUser = m.GetInvalidUser()
+	case *agentv1.SecurityEvent_SudoAuthFailed:
+		m := ev.SudoAuthFailed
+		out.Kind, out.User, d.TTY = secevent.SudoAuthFailed, m.GetUser(), m.GetTty()
+	case *agentv1.SecurityEvent_SudoNotAllowed:
+		m := ev.SudoNotAllowed
+		out.Kind, out.User, d.Target, d.TTY = secevent.SudoNotAllowed, m.GetUser(), m.GetTarget(), m.GetTty()
+	case *agentv1.SecurityEvent_SudoCommand:
+		m := ev.SudoCommand
+		out.Kind, out.User, d.Target, d.TTY, d.Command = secevent.SudoCommand, m.GetUser(), m.GetTarget(), m.GetTty(), m.GetCommand()
+	case *agentv1.SecurityEvent_AccountCreated:
+		m := ev.AccountCreated
+		out.Kind, out.User = secevent.AccountCreated, m.GetUser()
+		if m.Uid != nil {
+			uid := m.GetUid()
+			d.UID = &uid
+		}
+	case *agentv1.SecurityEvent_AccountDeleted:
+		out.Kind, out.User = secevent.AccountDeleted, ev.AccountDeleted.GetUser()
+	case *agentv1.SecurityEvent_SystemReboot:
+		m := ev.SystemReboot
+		out.Kind, d.PreviousBootID = secevent.SystemReboot, m.GetPreviousBootId()
+		if m.GetUptimeBefore() != nil {
+			uptime := m.GetUptimeBefore().AsDuration()
+			d.UptimeBefore = &uptime
+		}
+	case *agentv1.SecurityEvent_OomKill:
+		m := ev.OomKill
+		out.Kind, d.PID, d.Process = secevent.OOMKill, m.GetPid(), m.GetProcess()
+	default:
+		return secevent.Event{}, false
+	}
+	return out, true
 }

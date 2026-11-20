@@ -63,6 +63,19 @@ impl Checkpoint {
         self.lock().dirty = true;
     }
 
+    /// Writes the committed cursor to `file` if it changed since the last write; a failed write
+    /// is tried again by the next call.
+    ///
+    /// # Errors
+    ///
+    /// The write fails.
+    pub fn persist(&self, file: &CursorFile) -> io::Result<()> {
+        let Some(cursor) = self.take_changed() else {
+            return Ok(());
+        };
+        file.store(&cursor).inspect_err(|_| self.mark_changed())
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }

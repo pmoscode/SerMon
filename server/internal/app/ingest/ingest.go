@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -85,6 +87,12 @@ type Config struct {
 	SeenInterval time.Duration
 	// MaxFuture and MaxAge bound the collection time of samples relative to the server clock.
 	MaxFuture, MaxAge time.Duration
+	// EventRate and EventBurst form the security event bucket of a node (events per second). It
+	// belongs to the node, not the session: a reconnect gains nothing.
+	EventRate, EventBurst float64
+	// EventMaxAge bounds how old an event may be (MaxFuture applies too); the partitions start a
+	// month back (M2-07).
+	EventMaxAge time.Duration
 }
 
 // DefaultConfig returns the default limits: about 60× the normal rate of a node.
@@ -96,12 +104,17 @@ func DefaultConfig() Config {
 		SeriesLimit:   2000, ActiveSeriesWindow: 48 * time.Hour, OrgSeriesLimit: 250_000, OrgCountInterval: time.Minute,
 		SeenInterval: 30 * time.Second,
 		MaxFuture:    5 * time.Minute, MaxAge: 24 * time.Hour,
+		// A busy brute force is a few attempts per second with three events each.
+		EventRate: 50, EventBurst: 5000, EventMaxAge: 7 * 24 * time.Hour,
 	}
 }
 
 // Stats are counters for monitoring the ingest.
 type Stats struct {
 	Batches, Samples, Duplicates, Late, Rejected, Unknown, DroppedSeries, WriteErrors atomic.Uint64
+	// Security events: stored, dropped by the node's bucket, rejected (time, validation), and
+	// batches that were stored before (resent after a reconnect).
+	Events, EventsDropped, EventsRejected, EventDuplicates atomic.Uint64
 	// LagMillis is the delay of the latest batch (server time − collection time).
 	LagMillis atomic.Int64
 }
@@ -121,6 +134,42 @@ type Service struct {
 
 	orgMu     sync.Mutex
 	orgCounts map[tenant.OrgID]orgCount
+
+	events      secevents.Writer
+	bucketMu    sync.Mutex
+	eventBucket map[identity.NodeID]*bucket
+}
+
+// bucket is a token bucket.
+type bucket struct {
+	tokens   float64
+	refilled time.Time
+}
+
+// maxEventBuckets bounds the buckets kept; beyond it they are forgotten (and start full).
+const maxEventBuckets = 100_000
+
+// SetEventWriter stores security events through w; without one they are acknowledged and
+// dropped (a server without a database).
+func (s *Service) SetEventWriter(w secevents.Writer) { s.events = w }
+
+// admitEvents takes up to n events from the node's bucket and returns how many may pass.
+func (s *Service) admitEvents(node identity.NodeID, n int, now time.Time) int {
+	s.bucketMu.Lock()
+	defer s.bucketMu.Unlock()
+	b, ok := s.eventBucket[node]
+	if !ok {
+		if len(s.eventBucket) >= maxEventBuckets {
+			clear(s.eventBucket)
+		}
+		b = &bucket{tokens: s.config.EventBurst, refilled: now}
+		s.eventBucket[node] = b
+	}
+	b.tokens = math.Min(s.config.EventBurst, b.tokens+now.Sub(b.refilled).Seconds()*s.config.EventRate)
+	b.refilled = later(b.refilled, now)
+	admitted := min(n, int(math.Max(b.tokens, 0)))
+	b.tokens -= float64(admitted)
+	return admitted
 }
 
 type orgCount struct {
@@ -130,7 +179,7 @@ type orgCount struct {
 
 // NewService returns the ingest service.
 func NewService(store metrics.Store, ring *metrics.Ring, nodes Nodes, config Config, now func() time.Time, logger *slog.Logger) *Service {
-	return &Service{store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{}}
+	return &Service{eventBucket: map[identity.NodeID]*bucket{}, store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{}}
 }
 
 // maxReportedUnknown bounds the metric names remembered for "logged once".
@@ -160,11 +209,12 @@ type Sample struct {
 	Value  float64
 }
 
-// Batch is one buffered batch of an agent.
+// Batch is one buffered batch of an agent: samples of a tick, or security events.
 type Batch struct {
 	Seq         uint64
 	CollectedAt time.Time
 	Samples     []Sample
+	Events      []secevent.Event
 }
 
 // Response tells the transport what to send back.
@@ -209,7 +259,10 @@ type Session struct {
 	tokens    float64
 	refilled  time.Time
 	throttled bool
-	lastSeen  time.Time
+	// eventsDropped: the flood warning was logged in this session.
+	eventsDropped bool
+	lastSeen      time.Time
+	events        []secevents.Batch // waiting for the next flush
 }
 
 // ErrOpen means the session could not be prepared (database unavailable); the agent retries.
@@ -299,6 +352,10 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 	}
 	s.received = batch.Seq
 	stats.Batches.Add(1)
+	if len(batch.Events) > 0 {
+		s.acceptEvents(batch, now)
+		return Response{}
+	}
 	stats.LagMillis.Store(now.Sub(batch.CollectedAt).Milliseconds())
 	response := Response{Throttle: s.quota(now, len(batch.Samples))}
 	config := s.service.config
@@ -347,12 +404,60 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 	return response
 }
 
-// Due reports whether enough batches wait for an early flush.
-func (s *Session) Due() bool { return len(s.pending) >= s.service.config.FlushPending }
+// acceptEvents keeps the valid events within the time window and the node's bucket for the next
+// flush; the batch is acknowledged in order once they are stored.
+func (s *Session) acceptEvents(batch Batch, now time.Time) {
+	stats := &s.service.stats
+	config := s.service.config
+	s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
+	if s.service.events == nil {
+		stats.EventsRejected.Add(uint64(len(batch.Events)))
+		return
+	}
+	kept := make([]secevent.Event, 0, len(batch.Events))
+	for _, e := range batch.Events {
+		e.Node = s.node // from the certificate, never from the agent
+		e = e.Normalized()
+		if e.OccurredAt.After(now.Add(config.MaxFuture)) || e.OccurredAt.Before(now.Add(-config.EventMaxAge)) || e.Validate() != nil {
+			stats.EventsRejected.Add(1)
+			continue
+		}
+		kept = append(kept, e)
+	}
+	admitted := s.service.admitEvents(s.node, len(kept), now)
+	if dropped := len(kept) - admitted; dropped > 0 {
+		stats.EventsDropped.Add(uint64(dropped))
+		if !s.eventsDropped {
+			s.eventsDropped = true
+			s.service.logger.Warn("security event flood, dropping events", "node", s.node.String(), "dropped", dropped)
+		}
+	}
+	// The batch is written even if nothing is left: its sequence number marks it as stored.
+	s.events = append(s.events, secevents.Batch{Seq: batch.Seq, Events: kept[:admitted]})
+}
+
+// Due reports whether enough batches wait for an early flush; security events flush at once.
+func (s *Session) Due() bool {
+	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0
+}
 
 // Flush writes the complete windows and returns the sequence number to acknowledge (0: none).
 // On a write error nothing is acknowledged and everything is kept for the next attempt.
 func (s *Session) Flush(ctx context.Context) (uint64, error) {
+	// Events first: their batches are acknowledged with the sequence below, and a resend after
+	// a failed acknowledgement is skipped by the store.
+	if len(s.events) > 0 {
+		written, err := s.service.events.Write(ctx, s.org, s.node, s.events)
+		if err != nil {
+			s.service.stats.WriteErrors.Add(1)
+			return 0, fmt.Errorf("flush security events: %w", err)
+		}
+		for _, b := range written {
+			s.service.stats.Events.Add(uint64(len(b.Events)))
+		}
+		s.service.stats.EventDuplicates.Add(uint64(max(len(s.events)-len(written), 0)))
+		s.events = nil
+	}
 	complete := s.watermark.Truncate(metrics.Window)
 	ack := s.persisted
 	ackable := 0

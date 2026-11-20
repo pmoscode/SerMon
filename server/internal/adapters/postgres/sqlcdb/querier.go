@@ -63,6 +63,7 @@ type Querier interface {
 	// the IDs of new and existing ones. A row inserted concurrently by another transaction may be
 	// missing from the result; the caller asks again for missing keys.
 	EnsureSeries(ctx context.Context, arg EnsureSeriesParams) ([]EnsureSeriesRow, error)
+	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
 	// Series of a metric on the given nodes, restricted to the node groups of the scope and to series
 	// whose labels contain the filter.
 	FindSeries(ctx context.Context, arg FindSeriesParams) ([]FindSeriesRow, error)
@@ -89,6 +90,7 @@ type Querier interface {
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
+	InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
@@ -111,12 +113,18 @@ type Querier interface {
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
+	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
+	// callers on all groups). Keyset paging below (before_time, before_id).
+	ListSecurityEvents(ctx context.Context, arg ListSecurityEventsParams) ([]ListSecurityEventsRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Nodes of the scope's groups with their group name, for the UI (M1-26).
 	ListVisibleNodes(ctx context.Context, arg ListVisibleNodesParams) ([]ListVisibleNodesRow, error)
 	// Serializes changes of rights within the organization (last-admin check without races).
 	LockAccessChanges(ctx context.Context) error
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
+	// Security events (M2-07, ADR 0007). Tenant queries run in the organization's tenant transaction.
+	// The node's stored event sequence, locked until the batches of this transaction are written.
+	LockNodeEventSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	// Serializes rollover operations of all server instances.
 	LockPKI(ctx context.Context) error
 	// Moves seen_at forward to the newest data time of a write (never back).
@@ -146,6 +154,8 @@ type Querier interface {
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
+	SecurityEventHorizon(ctx context.Context) (time.Time, error)
+	SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error
 	SetOrganizationRequiresSecondFactor(ctx context.Context, required bool) (int64, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error

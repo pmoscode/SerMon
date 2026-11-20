@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// SecurityEventService shows the security events of the nodes (KONZEPT §11, M2-07).
+service SecurityEventService {
+  // ListSecurityEvents returns the events of the nodes the caller may see security events of
+  // (view_security_events; viewers only while the organization allows logs for them), newest
+  // first. Without the right on any group: PERMISSION_DENIED.
+  rpc ListSecurityEvents(ListSecurityEventsRequest) returns (ListSecurityEventsResponse);
+}
+
+// ListSecurityEventsRequest filters the events; from and to are required, the rest narrows.
+message ListSecurityEventsRequest {
+  // from is the start of the time range (inclusive).
+  google.protobuf.Timestamp from = 1 [(buf.validate.field).required = true];
+  // to is the end of the time range (exclusive); at most 366 days after from.
+  google.protobuf.Timestamp to = 2 [(buf.validate.field).required = true];
+  // node_ids limits the result to these nodes.
+  repeated string node_ids = 3 [(buf.validate.field).repeated = {
+    max_items: 100
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // kinds limits the result to these event kinds, e.g. ssh.login.failed.
+  repeated string kinds = 4 [(buf.validate.field).repeated = {
+    max_items: 11
+    unique: true
+    items: {
+      string: {
+        in: [
+          "ssh.login.failed",
+          "ssh.login.invalid_user",
+          "ssh.login.success",
+          "ssh.preauth.disconnect",
+          "sudo.auth.failed",
+          "sudo.not_allowed",
+          "sudo.command",
+          "account.created",
+          "account.deleted",
+          "system.reboot",
+          "system.oom_kill"
+        ]
+      }
+    }
+  }];
+  // user is an exact user name.
+  optional string user = 5 [(buf.validate.field).string.max_bytes = 128];
+  // network is an IP address or a network in CIDR notation, e.g. 192.0.2.0/24.
+  string network = 6 [(buf.validate.field).string.max_len = 43];
+  // page_size is the number of events per page; 0 means 100, at most 500.
+  int32 page_size = 7 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 500
+  }];
+  // page_token continues after the previous page.
+  string page_token = 8 [(buf.validate.field).string.max_len = 64];
+}
+
+// ListSecurityEventsResponse is one page of events.
+message ListSecurityEventsResponse {
+  // events are newest first.
+  repeated SecurityEvent events = 1;
+  // next_page_token continues the list; empty on the last page.
+  string next_page_token = 2;
+}
+
+// SecurityEvent is one event of a node. User names, host names and process names come from the
+// node's logs and may be chosen by an attacker: render them as text.
+message SecurityEvent {
+  // id is the event's number.
+  int64 id = 1;
+  // node_id is the node it happened on.
+  string node_id = 2;
+  // occurred_at is the time from the log line.
+  google.protobuf.Timestamp occurred_at = 3;
+  // received_at is when the server stored it.
+  google.protobuf.Timestamp received_at = 4;
+  // kind is the event kind, e.g. ssh.login.failed.
+  string kind = 5;
+  // user is the user name involved, if any.
+  string user = 6;
+  // remote_ip is the address of the other end (ssh), if logged.
+  string remote_ip = 7;
+  // remote_host is the host name of the other end where sshd resolves names.
+  string remote_host = 8;
+  // remote_port is the port of the other end; 0 if unknown.
+  uint32 remote_port = 9;
+  // details are the fields of particular kinds.
+  SecurityEventDetails details = 10;
+}
+
+// SecurityEventDetails are the fields of particular event kinds; unset fields are empty.
+message SecurityEventDetails {
+  // method is the ssh authentication method (password, publickey, keyboard-interactive, …).
+  string method = 1;
+  // invalid_user is set if the ssh user does not exist.
+  bool invalid_user = 2;
+  // key_type is the type of the public key of a login.
+  string key_type = 3;
+  // key_fingerprint is the fingerprint of the public key of a login.
+  string key_fingerprint = 4;
+  // tty is the terminal of sudo.
+  string tty = 5;
+  // target is the account sudo was asked for.
+  string target = 6;
+  // command is the sudo command (redacted on the node).
+  string command = 7;
+  // uid is the user ID of a new account.
+  optional uint32 uid = 8;
+  // pid is the process killed by the OOM killer.
+  uint32 pid = 9;
+  // process is its name.
+  string process = 10;
+  // previous_boot_id is the boot before a reboot.
+  string previous_boot_id = 11;
+  // uptime_before is how long the previous boot ran.
+  google.protobuf.Duration uptime_before = 12;
+}

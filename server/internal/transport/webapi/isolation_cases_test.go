@@ -27,6 +27,7 @@ type isolationEnv struct {
 	agentCA                         webv1connect.AgentCAServiceClient
 	metrics                         webv1connect.MetricsServiceClient
 	fleet                           webv1connect.FleetServiceClient
+	events                          webv1connect.SecurityEventServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -58,6 +59,18 @@ func selectorA(e isolationEnv) *webv1.MetricSelector {
 
 // tenantIsolationCases maps every tenant RPC to its cross-tenant case (isolation_integration_test.go).
 var tenantIsolationCases = map[string]isolationCase{
+	"/sermon.web.v1.SecurityEventService/ListSecurityEvents": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.events.ListSecurityEvents(ctx, connect.NewRequest(&webv1.ListSecurityEventsRequest{
+			From: timestamppb.New(time.Now().Add(-24 * time.Hour)), To: timestamppb.New(time.Now().Add(time.Hour)), NodeIds: []string{e.nodeA},
+		}))
+		if err != nil {
+			return err
+		}
+		if len(res.Msg.GetEvents()) > 0 || strings.Contains(res.Msg.String(), e.nodeA) || strings.Contains(res.Msg.String(), "alpha-user") {
+			return errLeak
+		}
+		return nil
+	}},
 	"/sermon.web.v1.MetricsService/QueryMetrics": {run: func(ctx context.Context, e isolationEnv) error {
 		now := time.Now()
 		_, err := e.metrics.QueryMetrics(ctx, connect.NewRequest(&webv1.QueryMetricsRequest{

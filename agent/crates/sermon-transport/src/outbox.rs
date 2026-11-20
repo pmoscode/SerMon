@@ -8,7 +8,7 @@ use prost::Message;
 use sermon_buffer::{Record, Seq, Wal, WalError, WalStats};
 use tokio::sync::Notify;
 
-use crate::proto::agent::v1::{Batch, MetricBatch, batch};
+use crate::proto::agent::v1::{Batch, MetricBatch, SecurityEvent, SecurityEventBatch, batch};
 
 /// Shared handle to the write-ahead log; cheap to clone.
 #[derive(Debug, Clone)]
@@ -76,6 +76,36 @@ impl Outbox {
             .collect()
     }
 
+    /// Buffers security events (at most [`MAX_EVENTS_PER_BATCH`] per batch) and wakes the session;
+    /// returns the sequence numbers. No events, no batch.
+    ///
+    /// # Errors
+    ///
+    /// [`WalError`] if a batch can't be written.
+    pub fn push_security_events(
+        &self,
+        events: Vec<SecurityEvent>,
+        now: SystemTime,
+    ) -> Result<Vec<Seq>, WalError> {
+        let mut seqs = Vec::new();
+        let mut events = events.into_iter().peekable();
+        while events.peek().is_some() {
+            let chunk: Vec<SecurityEvent> = events.by_ref().take(MAX_EVENTS_PER_BATCH).collect();
+            let payload = Batch {
+                seq: 0,
+                content: Some(batch::Content::SecurityEvents(SecurityEventBatch {
+                    events: chunk,
+                })),
+            }
+            .encode_to_vec();
+            seqs.push(self.wal().append(&payload, now)?);
+        }
+        if !seqs.is_empty() {
+            self.inner.ready.notify_one();
+        }
+        Ok(seqs)
+    }
+
     /// Housekeeping, called periodically: fsync and the age limit (also while disconnected).
     ///
     /// # Errors
@@ -122,6 +152,9 @@ impl Outbox {
 /// Largest number of samples in one batch (protocol limit).
 pub const MAX_SAMPLES_PER_BATCH: usize = 2000;
 
+/// Largest number of security events in one batch (protocol limit).
+pub const MAX_EVENTS_PER_BATCH: usize = 500;
+
 /// Bytes read from the log at once (several batches, bounded memory).
 const READ_BYTES: u64 = 1024 * 1024;
 
@@ -150,6 +183,46 @@ mod tests {
                 value: Some(sample::Value::IntValue(3)),
             }],
         }
+    }
+
+    fn login(n: usize) -> SecurityEvent {
+        SecurityEvent {
+            occurred_at: Some(UNIX_EPOCH.into()),
+            event: Some(
+                crate::proto::agent::v1::security_event::Event::SshInvalidUser(
+                    crate::proto::agent::v1::SshInvalidUser {
+                        user: format!("u{n}"),
+                        remote: None,
+                    },
+                ),
+            ),
+        }
+    }
+
+    // Security events share the log with the metrics; at most MAX_EVENTS_PER_BATCH per batch.
+    #[test]
+    fn security_events_are_buffered_in_batches_within_the_protocol_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let (wal, _) = Wal::open(dir.path(), WalConfig::default(), now).unwrap();
+        let outbox = Outbox::new(wal);
+        let events: Vec<SecurityEvent> = (0..=MAX_EVENTS_PER_BATCH).map(login).collect();
+
+        let seqs = outbox.push_security_events(events.clone(), now).unwrap();
+        assert_eq!(seqs.len(), 2);
+        assert_eq!(
+            outbox.push_security_events(Vec::new(), now).unwrap(),
+            Vec::new()
+        );
+        let records = outbox.read_after(Seq::default(), 10).unwrap();
+        let back: Vec<SecurityEvent> = records
+            .iter()
+            .flat_map(|record| match batch_for(record).unwrap().content {
+                Some(batch::Content::SecurityEvents(b)) => b.events,
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(back, events);
     }
 
     #[test]

@@ -296,17 +296,13 @@ impl JournalSource {
 
     /// Writes the committed cursor if it changed; a failed write is tried again later.
     async fn persist(&self) {
-        let Some(cursor) = self.checkpoint.take_changed() else {
-            return;
-        };
-        let file = self.file.clone();
-        let stored = tokio::task::spawn_blocking(move || file.store(&cursor)).await;
+        let (checkpoint, file) = (self.checkpoint.clone(), self.file.clone());
+        let stored = tokio::task::spawn_blocking(move || checkpoint.persist(&file)).await;
         let error = match stored {
             Ok(Ok(())) => return,
             Ok(Err(error)) => error.to_string(),
             Err(error) => error.to_string(),
         };
-        self.checkpoint.mark_changed();
         tracing::warn!(path = %self.file.path().display(), "cannot store the journal cursor: {error}");
     }
 }
@@ -318,9 +314,18 @@ async fn stop(child: &mut Child, kill: bool) {
     }
     match child.wait().await {
         Ok(status) if kill || status.success() => {}
+        // `systemctl stop` signals the whole unit, journalctl before the agent sees its own
+        // SIGTERM: no reason to warn.
+        Ok(status) if terminated(status) => tracing::debug!(%status, "journalctl was stopped"),
         Ok(status) => tracing::warn!(%status, "journalctl ended, restarting"),
         Err(error) => tracing::warn!("journalctl ended, restarting: {error}"),
     }
+}
+
+/// Ended by SIGTERM or SIGINT (a stop of the unit), not by an error.
+fn terminated(status: std::process::ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt;
+    matches!(status.signal(), Some(2 | 15))
 }
 
 /// Takes the first lines of `journalctl`'s stderr into the agent log.

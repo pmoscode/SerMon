@@ -36,6 +36,7 @@ type Handlers struct {
 	AgentEnrollment *AgentEnrollmentHandler
 	InstanceAudit   *InstanceAuditHandler
 	TwoFactor       *TwoFactorHandler
+	SecurityEvents  *SecurityEventHandler
 	Authenticator   *Authenticator // required for every service except AuthService
 }
 
@@ -67,6 +68,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewAgentCAServiceHandler(h.AgentCA, authenticated))
 	mount(webv1connect.NewFleetServiceHandler(h.Fleet, authenticated))
 	mount(webv1connect.NewInstanceAuditServiceHandler(h.InstanceAudit, authenticated))
+	mount(webv1connect.NewSecurityEventServiceHandler(h.SecurityEvents, authenticated))
 	mount(webv1connect.NewSecurityPolicyServiceHandler(h.TwoFactor, authenticated))
 	if h.Authenticator != nil {
 		// The user's own second factor must be manageable while the organization waits for it.

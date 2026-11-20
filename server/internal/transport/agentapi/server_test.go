@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -22,12 +23,17 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
+
 	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics/memstore"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
+	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
@@ -862,4 +868,87 @@ func TestSession_EndsAfterARotationAndTheNewCertificateReconnects(t *testing.T) 
 		t.Error("the reconnect after a rotation must not lock the node")
 	}
 	_ = next.CloseRequest()
+}
+
+// recordingEvents is the event store of the session tests.
+type recordingEvents struct {
+	mu     sync.Mutex
+	node   identity.NodeID
+	events []secevent.Event
+}
+
+func (r *recordingEvents) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, batches []secevents.Batch) ([]secevents.Batch, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.node = node
+	for _, b := range batches {
+		r.events = append(r.events, b.Events...)
+	}
+	return batches, nil
+}
+
+// Security events (M2-06/07): converted from the protocol, stored under the certificate's node,
+// acknowledged after the write.
+func TestSession_StoresSecurityEvents(t *testing.T) {
+	store := memstore.New()
+	group := tenant.GroupID(uuid.New())
+	store.AddNode(orgX, group, nodeX)
+	config := ingest.DefaultConfig()
+	config.FlushInterval = 20 * time.Millisecond
+	service := ingest.NewService(store, metrics.NewRing(), fakeNodes{group: group}, config, time.Now, slog.New(slog.DiscardHandler))
+	recorded := &recordingEvents{}
+	service.SetEventWriter(recorded)
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithIngest(service)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Receive(); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().Add(-time.Minute).Truncate(time.Microsecond)
+	batch := &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: &agentv1.Batch{
+		Seq: 3,
+		Content: &agentv1.Batch_SecurityEvents{SecurityEvents: &agentv1.SecurityEventBatch{Events: []*agentv1.SecurityEvent{
+			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_SshLoginFailed{SshLoginFailed: &agentv1.SshLoginFailed{
+				User: "root", Remote: &agentv1.SshRemote{Address: &agentv1.SshRemote_Ip{Ip: "::ffff:192.0.2.7"}, Port: 22},
+				Method: agentv1.SshAuthMethod_SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE, InvalidUser: true,
+			}}},
+			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_SshLoginSucceeded{SshLoginSucceeded: &agentv1.SshLoginSucceeded{
+				User: "alice", Remote: &agentv1.SshRemote{Address: &agentv1.SshRemote_Host{Host: "client.example.org"}},
+				Method: agentv1.SshAuthMethod_SSH_AUTH_METHOD_PUBLICKEY, KeyType: "ED25519", KeyFingerprint: "SHA256:abc",
+			}}},
+			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_SystemReboot{SystemReboot: &agentv1.SystemReboot{PreviousBootId: "cc8f", UptimeBefore: durationpb.New(time.Hour)}}},
+			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_AccountCreated{AccountCreated: &agentv1.AccountCreated{User: "bob", Uid: proto.Uint32(1001)}}},
+			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_OomKill{OomKill: &agentv1.OomKill{Pid: 42, Process: "python3"}}},
+			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_SudoNotAllowed{SudoNotAllowed: &agentv1.SudoNotAllowed{User: "carol", Target: "root", Tty: "pts/1"}}},
+		}}},
+	}}}
+	if err := stream.Send(batch); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := stream.Receive(); err != nil || res.GetAck().GetSeq() != 3 {
+		t.Fatalf("Receive() = %v, %v; want Ack 3", res, err)
+	}
+	_ = stream.CloseRequest()
+	recorded.mu.Lock()
+	defer recorded.mu.Unlock()
+	if recorded.node != nodeX || len(recorded.events) != 6 {
+		t.Fatalf("stored %d events for %v", len(recorded.events), recorded.node)
+	}
+	e := recorded.events
+	if e[0].Kind != secevent.SSHLoginFailed || e[0].Remote.IP != netip.MustParseAddr("192.0.2.7") || e[0].Details.Method != "keyboard-interactive" ||
+		!e[0].Details.InvalidUser || !e[0].OccurredAt.Equal(at) || e[0].Node != nodeX {
+		t.Errorf("failed login = %+v", e[0])
+	}
+	if e[1].Remote.Host != "client.example.org" || e[1].Remote.Port != 0 || e[1].Details.KeyFingerprint != "SHA256:abc" {
+		t.Errorf("login = %+v", e[1])
+	}
+	if e[2].Kind != secevent.SystemReboot || *e[2].Details.UptimeBefore != time.Hour || e[2].Details.PreviousBootID != "cc8f" {
+		t.Errorf("reboot = %+v", e[2])
+	}
+	if *e[3].Details.UID != 1001 || e[4].Details.PID != 42 || e[4].Details.Process != "python3" || e[5].Details.Target != "root" || e[5].Details.TTY != "pts/1" {
+		t.Errorf("details = %+v %+v %+v", e[3].Details, e[4].Details, e[5].Details)
+	}
 }

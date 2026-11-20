@@ -36,6 +36,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
+	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -143,6 +144,12 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		servers = append(servers, refreshCA(ca, logger))
 		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
+		// Security events (M2-07): stored by the ingest, partitions kept by the maintenance.
+		eventStore := postgres.NewSecurityEventStore(db)
+		ingestService.SetEventWriter(eventStore)
+		servers = append(servers, func(ctx context.Context) error {
+			return secevents.Maintenance(ctx, eventStore, time.Now, 6*time.Hour, logger)
+		})
 		registerIngestMetrics(registry, ingestService.Stats(), sessions)
 		servers = append(servers, pruneRing(ring))
 		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases – the
@@ -368,6 +375,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(db), policy), logger),
 		Metrics: metricsHandler,
 		Fleet:   webapi.NewFleetHandler(nodes, logger),
+		SecurityEvents: webapi.NewSecurityEventHandler(
+			secevents.NewService(postgres.NewSecurityEventStore(db), policy), logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

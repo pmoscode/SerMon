@@ -5,6 +5,7 @@
 package sqlcdb
 
 import (
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
@@ -177,6 +178,7 @@ type Node struct {
 	IngestSeq     int64
 	LastSeenAt    *time.Time
 	AgentVersion  pgtype.Text
+	EventSeq      int64
 }
 
 type NodeGroup struct {
@@ -213,6 +215,20 @@ type RoleBinding struct {
 	GroupID   *uuid.UUID
 	Role      string
 	CreatedAt time.Time
+}
+
+type SecurityEvent struct {
+	OrgID      uuid.UUID
+	ID         int64
+	NodeID     uuid.UUID
+	OccurredAt time.Time
+	ReceivedAt time.Time
+	Kind       string
+	UserName   pgtype.Text
+	RemoteIp   *netip.Addr
+	RemoteHost pgtype.Text
+	RemotePort pgtype.Int4
+	Details    []byte
 }
 
 type Series struct {

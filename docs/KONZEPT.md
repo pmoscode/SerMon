@@ -563,6 +563,20 @@ Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log gep
 übertragen. Das funktioniert auch, wenn der Log-Versand ansonsten abgeschaltet ist. Gespeichert werden sie in PostgreSQL
 (abfragbar und für 1 Jahr aufbewahrt).
 
+Übertragung und Speicherung (M2-07):
+
+- **Agent:** Er sammelt Events bis zu 500 oder 1 s und schreibt sie als Batch ins WAL. Erst danach rückt der
+  Journal-Cursor vor.
+- **Server:**
+  - Er speichert die Batches in derselben Reihenfolge wie die Metrik-Batches und dedupliziert über die
+    Batch-Sequenznummer (`nodes.event_seq`, in derselben Transaktion gesetzt).
+  - Pro Node gilt ein Token-Bucket von 50 Events/s bei 5 000 Burst; er bleibt über Reconnects erhalten.
+  - Event-Zeiten sind höchstens 7 Tage alt und 5 min in der Zukunft.
+- **Tabelle:** `security_events` mit RLS, nach Monat partitioniert und für die Anwendung nur anhängbar. Typisierte
+  Spalten für Art, User, IP (`inet`), Host und Port, die übrigen Felder als `details`.
+- **Abfrage:** `SecurityEventService.ListSecurityEvents` mit Zeitraum, Nodes, Arten, User und IP/CIDR. Sie gilt für
+  Gruppen mit `view_security_events` (Viewer nur, wenn die Org Logs für Viewer erlaubt).
+
 | Event                                 | Erkennung (Beispiele)                                                                   | Felder                                      |
 |---------------------------------------|-----------------------------------------------------------------------------------------|---------------------------------------------|
 | `ssh.login.failed`                    | `Failed password for (invalid user )?<u> from <ip> port <p> ssh2`, `Failed publickey …`, `error: PAM: Authentication failure for <u> from <ip>` (keyboard-interactive, ohne Port) | ts, user, ip, port, method, invalid_user    |
@@ -617,7 +631,7 @@ Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von
 - **Silences und Wartungsfenster:** zeitlich begrenzt, per Selektor. Während Update-Wartungsfenstern wird
   **automatisch** stummgeschaltet (Reboot- und Offline-Alerts).
 - **Auswertung:** Die Engine läuft im Server alle 10 s. Schwellwert-Regeln fragen den `MetricStore` über die typisierte
-  Query-Schicht ab (Fenster bis 15 min aus dem Ringpuffer, längere aus TimescaleDB), Event-Regeln laufen über einen Event-Stream (sofortige Auswertung beim Ingest).
+  Query-Schicht ab (Fenster bis 15 min aus dem Ringpuffer, längere aus TimescaleDB), Event-Regeln lesen die neuen Security-Events aus PostgreSQL (`received_at`). Ein Strom im Prozess ginge nicht: Ingest und Auswertung einer Org laufen auf verschiedenen Server-Instanzen (Lease, M2-07).
 
 ### 12.2 Regeltypen (YAML-Format)
 

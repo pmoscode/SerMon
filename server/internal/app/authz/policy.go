@@ -7,6 +7,7 @@ package authz
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
@@ -216,6 +217,20 @@ func (p Principal) roleOnAllGroups() role.Role {
 		}
 	}
 	return best
+}
+
+// ScopeForAction returns the scope of all node groups on which p may perform a group-scoped
+// action, as Allowed decides it for each group (including the viewer-logs switch).
+func (pol Policy) ScopeForAction(p Principal, action Action) (tenant.Scope, error) {
+	r, ok := rules[action]
+	if !ok || r.scope != groupScoped {
+		return tenant.Scope{}, fmt.Errorf("%w: %s is not group-scoped", ErrNoOrganization, action)
+	}
+	minimum := r.minimum
+	if r.viewerLogs && pol.viewerLogsDisabled[p.Org] {
+		minimum = role.Operator
+	}
+	return ScopeFor(p, minimum)
 }
 
 // ErrNoOrganization means the principal does not act within an organization.

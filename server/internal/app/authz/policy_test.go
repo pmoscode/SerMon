@@ -193,6 +193,33 @@ func TestScopeFor_ContainsOnlyGroupsWithTheRequiredRole(t *testing.T) {
 	}
 }
 
+// A group-scoped action as a list scope: the groups where Allowed holds, including the
+// organization's choice to keep logs and security events from viewers.
+func TestScopeForAction_FollowsTheRuleOfTheAction(t *testing.T) {
+	p := member(authz.Binding{Group: groupX, Role: role.Operator}, authz.Binding{Group: groupY, Role: role.Viewer})
+	open := authz.NewPolicy()
+	scope, err := open.ScopeForAction(p, authz.ViewSecurityEvents)
+	if err != nil || !scope.AllowsGroup(groupX) || !scope.AllowsGroup(groupY) {
+		t.Errorf("viewer logs allowed: %+v, %v", scope, err)
+	}
+	closed := authz.NewPolicy(authz.WithViewerLogsDisabled(orgA))
+	scope, err = closed.ScopeForAction(p, authz.ViewSecurityEvents)
+	if err != nil || !scope.AllowsGroup(groupX) || scope.AllowsGroup(groupY) {
+		t.Errorf("viewer logs disabled: %+v, %v; want only the operator group", scope, err)
+	}
+	for _, g := range []tenant.GroupID{groupX, groupY} {
+		if closed.Allowed(p, authz.ViewSecurityEvents, authz.InGroup(orgA, g)) != scope.AllowsGroup(g) {
+			t.Errorf("group %v: Allowed and ScopeForAction disagree", g)
+		}
+	}
+	if _, err := closed.ScopeForAction(p, authz.ManageMembers); err == nil {
+		t.Error("an organization-wide action has no group scope")
+	}
+	if none, err := closed.ScopeForAction(member(authz.Binding{Group: groupY, Role: role.Viewer}), authz.ViewSecurityEvents); err != nil || none.AllGroups() || len(none.Groups()) != 0 {
+		t.Errorf("a viewer without logs: %+v, %v; want a scope without groups", none, err)
+	}
+}
+
 func TestScopeFor_RejectsPrincipalsWithoutOrganization(t *testing.T) {
 	if _, err := authz.ScopeFor(authz.Principal{User: userID, Superadmin: true}, role.Viewer); err == nil {
 		t.Error("a superadmin without organization must not get a tenant scope")

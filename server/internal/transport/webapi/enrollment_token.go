@@ -84,6 +84,8 @@ func (h *EnrollmentTokenHandler) fail(ctx context.Context, op string, err error)
 	switch {
 	case errors.Is(err, access.ErrForbidden):
 		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
+	case errors.Is(err, access.ErrStepUpRequired):
+		return stepUpRequired()
 	case errors.Is(err, access.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	case errors.Is(err, enrollment.ErrInvalidLimits):

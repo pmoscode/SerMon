@@ -420,7 +420,8 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
 - **Sessions:** serverseitig in PG, Cookie `__Host-sermon_session` (Secure, HttpOnly, SameSite=Lax). Idle-Timeout 30
   min, absolut 12 h. **Step-up-Authentifizierung** (erneute 2FA) für sensible Aktionen wie Updates, Reboot oder
   Rechteänderungen.
-- **Step-up** gilt 15 min. Rechteänderungen (Rollen vergeben oder entziehen, Mitglied entfernen, Gruppe löschen) verlangen ihn.
+- **Step-up** gilt 15 min. Rechteänderungen (Rollen vergeben oder entziehen, Mitglied entfernen, Gruppe löschen) und
+  Enrollment-Tokens anlegen (ein Token lässt Maschinen der Org beitreten) verlangen ihn.
   Erneuert wird er mit dem zweiten Faktor; ohne eingerichtete 2FA mit dem Passwort (`AuthService.ConfirmPassword`).
   Fehlversuche zählen wie beim Login zur Kontosperre. Fehlt der Step-up, antwortet der Server mit `FAILED_PRECONDITION`
   und dem Detail `StepUpRequired`; die UI fragt dann nach und wiederholt die Aktion.

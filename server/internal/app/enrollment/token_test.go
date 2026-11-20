@@ -137,6 +137,15 @@ func TestCreate_NeedsOperatorOnTheGroup(t *testing.T) {
 	}
 }
 
+// A token lets machines join the organization: a hijacked session must not create one.
+func TestCreate_NeedsARecentStepUp(t *testing.T) {
+	c := caller(role.Operator, group1)
+	c.StepUpAt = now.Add(-access.StepUpMaxAge - time.Second)
+	if _, _, err := service(&fakeStore{}).Create(context.Background(), c, group1, 0, 0); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("Create() with an old step-up = %v, want ErrStepUpRequired", err)
+	}
+}
+
 func TestListAndRevoke_UseTheGroupsWithOperatorRights(t *testing.T) {
 	store := &fakeStore{}
 	c := caller(role.Operator, group1)

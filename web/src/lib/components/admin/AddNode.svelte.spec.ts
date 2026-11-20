@@ -7,7 +7,8 @@ import { NodeGroupSchema } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 import { KeyFiguresSchema, NodeSummarySchema } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
-import { fakeSession } from '#lib/test/fakes.js';
+import { stepUpState } from '#lib/stores/stepup.svelte.js';
+import { fakeSession, stepUpError } from '#lib/test/fakes.js';
 import AddNode from './AddNode.svelte';
 
 const groups = [
@@ -28,6 +29,7 @@ describe('AddNode', () => {
 		vi.spyOn(api.access, 'listNodeGroups').mockResolvedValue({ groups } as never);
 	});
 	afterEach(() => {
+		if (stepUpState.open) stepUpState.finish(false);
 		vi.restoreAllMocks();
 		sessionState.current = undefined;
 	});
@@ -74,6 +76,24 @@ describe('AddNode', () => {
 		await expect
 			.element(page.getByRole('link', { name: 'Open node' }))
 			.toHaveAttribute('href', '/nodes/n1');
+	});
+
+	it('asks for the password before the token is created', async () => {
+		withRights(['*']);
+		vi.spyOn(api.fleet, 'getFleetSummary').mockResolvedValue({ nodes: [old] } as never);
+		const token = vi
+			.spyOn(api.enrollment, 'createEnrollmentToken')
+			.mockRejectedValueOnce(stepUpError())
+			.mockResolvedValueOnce({ secret: 'sme_secret' } as never);
+		render(AddNode);
+
+		await expect.element(page.getByLabelText('Group')).toHaveValue('g1');
+		await page.getByRole('button', { name: 'Create command' }).click();
+		await vi.waitFor(() => expect(stepUpState.open).toBe(true));
+		stepUpState.finish(true);
+
+		await expect.element(page.getByRole('heading', { name: 'Run on the server' })).toBeVisible();
+		expect(token).toHaveBeenCalledTimes(2);
 	});
 
 	it('leads admins to create a group when there is none', async () => {

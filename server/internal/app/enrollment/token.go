@@ -92,12 +92,16 @@ func NewService(store Store, policy authz.Policy, now func() time.Time, newID fu
 	return &Service{store: store, policy: policy, now: now, newID: newID}
 }
 
-// Create issues a token for the group (operator or admin on it). ttl and maxUses of 0 select the
-// defaults. The secret is returned once and never stored.
+// Create issues a token for the group (operator or admin on it, with a recent step-up: a token
+// lets machines join the organization). ttl and maxUses of 0 select the defaults. The secret is
+// returned once and never stored.
 func (s *Service) Create(ctx context.Context, c access.Caller, group tenant.GroupID, ttl time.Duration, maxUses int) (string, Token, error) {
 	p := c.Principal
 	if !s.policy.Allowed(p, authz.CreateEnrollmentTokens, authz.InGroup(p.Org, group)) {
 		return "", Token{}, access.ErrForbidden
+	}
+	if s.now().Sub(c.StepUpAt) > access.StepUpMaxAge {
+		return "", Token{}, access.ErrStepUpRequired
 	}
 	if ttl == 0 {
 		ttl = DefaultTTL

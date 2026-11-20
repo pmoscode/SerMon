@@ -46,7 +46,8 @@ const (
 
 // EnrollmentTokenServiceClient is a client for the sermon.web.v1.EnrollmentTokenService service.
 type EnrollmentTokenServiceClient interface {
-	// CreateEnrollmentToken issues a token; the secret is returned only in this response.
+	// CreateEnrollmentToken issues a token (operator or admin on the group, step-up: a token lets
+	// machines join the organization); the secret is returned only in this response.
 	CreateEnrollmentToken(context.Context, *connect.Request[v1.CreateEnrollmentTokenRequest]) (*connect.Response[v1.CreateEnrollmentTokenResponse], error)
 	// ListEnrollmentTokens returns the open tokens of all groups where the caller is operator or admin.
 	ListEnrollmentTokens(context.Context, *connect.Request[v1.ListEnrollmentTokensRequest]) (*connect.Response[v1.ListEnrollmentTokensResponse], error)
@@ -112,7 +113,8 @@ func (c *enrollmentTokenServiceClient) RevokeEnrollmentToken(ctx context.Context
 // EnrollmentTokenServiceHandler is an implementation of the sermon.web.v1.EnrollmentTokenService
 // service.
 type EnrollmentTokenServiceHandler interface {
-	// CreateEnrollmentToken issues a token; the secret is returned only in this response.
+	// CreateEnrollmentToken issues a token (operator or admin on the group, step-up: a token lets
+	// machines join the organization); the secret is returned only in this response.
 	CreateEnrollmentToken(context.Context, *connect.Request[v1.CreateEnrollmentTokenRequest]) (*connect.Response[v1.CreateEnrollmentTokenResponse], error)
 	// ListEnrollmentTokens returns the open tokens of all groups where the caller is operator or admin.
 	ListEnrollmentTokens(context.Context, *connect.Request[v1.ListEnrollmentTokensRequest]) (*connect.Response[v1.ListEnrollmentTokensResponse], error)

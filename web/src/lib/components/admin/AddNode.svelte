@@ -12,6 +12,7 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
+	import { withStepUp } from '#lib/stores/stepup.svelte.js';
 
 	/** How often the wizard looks for the new node. */
 	const POLL = 3000;
@@ -60,11 +61,9 @@
 		failure = '';
 		try {
 			known = new Set((await nodes()).map((n) => n.nodeId));
-			const res = await api.enrollment.createEnrollmentToken({
-				groupId,
-				ttlSeconds: ttl,
-				maxUses: uses
-			});
+			const res = await withStepUp(() =>
+				api.enrollment.createEnrollmentToken({ groupId, ttlSeconds: ttl, maxUses: uses })
+			);
 			secret = res.secret;
 		} catch (error) {
 			failure = adminError(error);

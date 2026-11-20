@@ -47,3 +47,23 @@ func TestEnrollmentTokenAPI_OperatorsIssueListAndRevokeTokens(t *testing.T) {
 		t.Errorf("viewer list = %v, %v; want empty", res, err)
 	}
 }
+
+// A hijacked session must not let machines join: creating a token needs a recent step-up.
+func TestEnrollmentTokenAPI_CreatingNeedsAStepUp(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ctx := context.Background()
+
+	ownerSQL(t, "UPDATE sessions SET step_up_at = now() - interval '1 hour' WHERE user_id = '"+annID+"'")
+	req := connect.NewRequest(&webv1.CreateEnrollmentTokenRequest{GroupId: groupAl})
+	if _, err := ann.enrollment.CreateEnrollmentToken(ctx, req); connect.CodeOf(err) != connect.CodeFailedPrecondition || !hasStepUpDetail(err) {
+		t.Errorf("CreateEnrollmentToken() with an old login: %v, want FAILED_PRECONDITION with StepUpRequired", err)
+	}
+	if _, err := ann.auth.ConfirmPassword(ctx, connect.NewRequest(&webv1.ConfirmPasswordRequest{Password: userPassword})); err != nil {
+		t.Fatalf("ConfirmPassword() error = %v", err)
+	}
+	if _, err := ann.enrollment.CreateEnrollmentToken(ctx, req); err != nil {
+		t.Errorf("CreateEnrollmentToken() after the step-up: %v", err)
+	}
+}

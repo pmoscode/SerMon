@@ -221,7 +221,8 @@ export const RevokeEnrollmentTokenResponseSchema: GenMessage<RevokeEnrollmentTok
  */
 export const EnrollmentTokenService: GenService<{
   /**
-   * CreateEnrollmentToken issues a token; the secret is returned only in this response.
+   * CreateEnrollmentToken issues a token (operator or admin on the group, step-up: a token lets
+   * machines join the organization); the secret is returned only in this response.
    *
    * @generated from rpc sermon.web.v1.EnrollmentTokenService.CreateEnrollmentToken
    */

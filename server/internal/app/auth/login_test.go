@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,10 +30,16 @@ var (
 const alicePassword = "correct horse battery staple" // betterleaks:allow
 
 type fakeCredentials struct {
-	users  map[string]identity.UserID
-	creds  map[identity.UserID]auth.Credentials
-	orgs   map[identity.UserID][]auth.Organization
-	writes int
+	mu sync.Mutex
+	// barrier > 0 makes the first Get calls wait until that many have arrived (or a timeout), so
+	// that parallel attempts read the same state – the race of a real database.
+	barrier, arrived int
+	released         chan struct{}
+
+	users                map[string]identity.UserID
+	creds                map[identity.UserID]auth.Credentials
+	orgs                 map[identity.UserID][]auth.Organization
+	writes, reservations int
 }
 
 func (f *fakeCredentials) FindUserByEmail(_ context.Context, email string) (identity.UserID, bool, error) {
@@ -41,20 +48,71 @@ func (f *fakeCredentials) FindUserByEmail(_ context.Context, email string) (iden
 }
 
 func (f *fakeCredentials) Get(_ context.Context, user identity.UserID) (auth.Credentials, bool, error) {
+	f.mu.Lock()
 	c, ok := f.creds[user]
+	if f.barrier > 0 && f.released == nil {
+		f.released = make(chan struct{})
+		go func(ch chan struct{}) { time.Sleep(300 * time.Millisecond); f.release(ch) }(f.released)
+	}
+	wait := f.barrier > 0 && f.arrived < f.barrier
+	if wait {
+		f.arrived++
+		if f.arrived == f.barrier {
+			f.mu.Unlock()
+			f.release(f.released)
+			return c, ok, nil
+		}
+	}
+	ch := f.released
+	f.mu.Unlock()
+	if wait {
+		<-ch
+	}
 	return c, ok, nil
 }
 
-func (f *fakeCredentials) RecordFailedLogin(_ context.Context, user identity.UserID, lockedUntil *time.Time) error {
-	f.writes++
+func (f *fakeCredentials) release(ch chan struct{}) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	select {
+	case <-ch:
+	default:
+		close(ch)
+	}
+}
+
+// ReserveAttempt behaves like the SQL compare-and-swap.
+func (f *fakeCredentials) ReserveAttempt(_ context.Context, user identity.UserID, seen int32, lockedUntil *time.Time, now time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	c := f.creds[user]
+	if c.FailedAttempts != seen || (c.LockedUntil != nil && now.Before(*c.LockedUntil)) {
+		return false, nil
+	}
+	f.writes++
+	f.reservations++
 	c.FailedAttempts++
 	c.LockedUntil = lockedUntil
+	f.creds[user] = c
+	return true, nil
+}
+
+func (f *fakeCredentials) ReleaseAttempt(_ context.Context, user identity.UserID, lockAfter int32) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.writes++
+	c := f.creds[user]
+	c.FailedAttempts = max(c.FailedAttempts-1, 0)
+	if c.FailedAttempts < lockAfter {
+		c.LockedUntil = nil
+	}
 	f.creds[user] = c
 	return nil
 }
 
 func (f *fakeCredentials) ResetFailedLogins(_ context.Context, user identity.UserID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.writes++
 	c := f.creds[user]
 	c.FailedAttempts, c.LockedUntil = 0, nil
@@ -283,11 +341,11 @@ func (f *failingCredentials) Get(ctx context.Context, u identity.UserID) (auth.C
 	return f.fakeCredentials.Get(ctx, u)
 }
 
-func (f *failingCredentials) RecordFailedLogin(ctx context.Context, u identity.UserID, l *time.Time) error {
+func (f *failingCredentials) ReserveAttempt(ctx context.Context, u identity.UserID, seen int32, l *time.Time, now time.Time) (bool, error) {
 	if f.fail == "record" {
-		return errDB
+		return false, errDB
 	}
-	return f.fakeCredentials.RecordFailedLogin(ctx, u, l)
+	return f.fakeCredentials.ReserveAttempt(ctx, u, seen, l, now)
 }
 
 func (f *failingCredentials) ResetFailedLogins(ctx context.Context, u identity.UserID) error {
@@ -331,5 +389,30 @@ func TestLogin_RepositoryErrorsNeverLogIn(t *testing.T) {
 				t.Errorf("Login() = %+v, %v; want errDB and no token", res, err)
 			}
 		})
+	}
+}
+
+// Parallel requests must not read the same unlocked state and all get a full check: the account
+// locks after five attempts however they arrive (KONZEPT §7).
+func TestLogin_ParallelAttemptsCannotOutrunTheLockout(t *testing.T) {
+	e := newEnv(t, fast)
+	e.creds.barrier = 12
+	var wg sync.WaitGroup
+	for range 12 {
+		wg.Go(func() {
+			_, _ = e.svc.Login(context.Background(), "alice@example.org", "wrong password here", "192.0.2.10")
+		})
+	}
+	wg.Wait()
+
+	c := e.creds.creds[alice]
+	if c.LockedUntil == nil || c.FailedAttempts != 5 {
+		t.Fatalf("after 12 parallel failures: %+v, want locked after exactly 5", c)
+	}
+	if e.creds.reservations != 5 {
+		t.Errorf("%d attempts were checked, want 5", e.creds.reservations)
+	}
+	if _, err := e.svc.Login(context.Background(), "alice@example.org", alicePassword, "192.0.2.10"); !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Errorf("the right password during the lock: %v", err)
 	}
 }

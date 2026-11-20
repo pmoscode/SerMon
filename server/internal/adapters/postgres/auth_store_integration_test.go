@@ -60,12 +60,43 @@ func TestCredentialStore_PasswordLifecycle(t *testing.T) {
 		t.Fatalf("SetPassword() error = %v", err)
 	}
 	lock := now.Add(time.Minute)
-	if err := store.RecordFailedLogin(ctx, bob, &lock); err != nil {
-		t.Fatal(err)
+	if ok, err := store.ReserveAttempt(ctx, bob, 0, &lock, now); err != nil || !ok {
+		t.Fatalf("ReserveAttempt() = %v, %v", ok, err)
+	}
+	// Compare-and-swap: a stale counter and a locked account reserve nothing.
+	if ok, _ := store.ReserveAttempt(ctx, bob, 0, nil, now.Add(2*time.Minute)); ok {
+		t.Error("a stale counter must not reserve")
+	}
+	if ok, _ := store.ReserveAttempt(ctx, bob, 1, nil, now); ok {
+		t.Error("a locked account must not reserve")
 	}
 	c, found, err := store.Get(ctx, bob)
 	if err != nil || !found || c.PasswordHash != argonHash || c.FailedAttempts != 1 || c.LockedUntil == nil || !c.LockedUntil.Equal(lock) {
 		t.Fatalf("Get() = %+v, %v, %v", c, found, err)
+	}
+	if err := store.ReleaseAttempt(ctx, bob, 5); err != nil {
+		t.Fatal(err)
+	}
+	if c, _, _ := store.Get(ctx, bob); c.FailedAttempts != 0 || c.LockedUntil != nil {
+		t.Errorf("after ReleaseAttempt: %+v", c)
+	}
+
+	// Parallel reservations with the same seen counter: exactly one wins.
+	wins := make(chan bool, 8)
+	for range 8 {
+		go func() {
+			ok, _ := store.ReserveAttempt(ctx, bob, 0, nil, now)
+			wins <- ok
+		}()
+	}
+	won := 0
+	for range 8 {
+		if <-wins {
+			won++
+		}
+	}
+	if won != 1 {
+		t.Errorf("%d parallel reservations won, want 1", won)
 	}
 	if err := store.ResetFailedLogins(ctx, bob); err != nil {
 		t.Fatal(err)

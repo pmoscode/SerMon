@@ -21,9 +21,18 @@ SET password_hash = EXCLUDED.password_hash, password_changed_at = EXCLUDED.passw
 -- name: UpdatePasswordHash :exec
 UPDATE user_credentials SET password_hash = sqlc.arg(password_hash) WHERE user_id = sqlc.arg(user_id);
 
--- name: RecordFailedLogin :exec
+-- name: ReserveAttempt :execrows
+-- Compare-and-swap: counts the attempt only if nobody else did in between and the account isn't
+-- locked, so parallel requests can't all pass the lockout check (M1-35).
 UPDATE user_credentials
 SET failed_attempts = failed_attempts + 1, locked_until = sqlc.narg(locked_until)
+WHERE user_id = sqlc.arg(user_id) AND failed_attempts = sqlc.arg(seen)
+  AND (locked_until IS NULL OR locked_until <= sqlc.arg(now));
+
+-- name: ReleaseAttempt :exec
+UPDATE user_credentials
+SET failed_attempts = GREATEST(failed_attempts - 1, 0),
+    locked_until = CASE WHEN failed_attempts - 1 >= sqlc.arg(lock_after)::int THEN locked_until END
 WHERE user_id = sqlc.arg(user_id);
 
 -- name: ResetFailedLogins :exec

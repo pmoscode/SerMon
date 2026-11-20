@@ -65,7 +65,13 @@ type Profile struct {
 type CredentialRepository interface {
 	FindUserByEmail(ctx context.Context, email string) (identity.UserID, bool, error)
 	Get(ctx context.Context, user identity.UserID) (Credentials, bool, error)
-	RecordFailedLogin(ctx context.Context, user identity.UserID, lockedUntil *time.Time) error
+	// ReserveAttempt counts an attempt before it is checked, atomically: only if the counter is
+	// still seen and the account isn't locked (compare-and-swap); lockedUntil applies from now on.
+	// Parallel requests thus can't all read the same unlocked state and get a full check each.
+	ReserveAttempt(ctx context.Context, user identity.UserID, seen int32, lockedUntil *time.Time, now time.Time) (bool, error)
+	// ReleaseAttempt takes a reserved attempt back (a right password that still needs the second
+	// factor); a lock ends if fewer than lockAfter attempts remain.
+	ReleaseAttempt(ctx context.Context, user identity.UserID, lockAfter int32) error
 	ResetFailedLogins(ctx context.Context, user identity.UserID) error
 	UpdatePasswordHash(ctx context.Context, user identity.UserID, hash string) error
 	Organizations(ctx context.Context, user identity.UserID) ([]Organization, error)
@@ -125,14 +131,14 @@ func (s *Service) Login(ctx context.Context, email, pw, clientIP string) (LoginR
 		return LoginResult{}, fmt.Errorf("login: %w", err)
 	}
 	var creds Credentials
+	reserved := false
 	if found {
-		creds, found, err = s.d.Credentials.Get(ctx, user)
+		creds, reserved, err = s.attempt(ctx, user)
 		if err != nil {
 			return LoginResult{}, fmt.Errorf("login: %w", err)
 		}
 	}
-	now := s.d.Now()
-	if !found || (creds.LockedUntil != nil && now.Before(*creds.LockedUntil)) {
+	if !reserved {
 		// Same cost as a real check, so response times do not reveal existing or locked accounts.
 		s.d.Hasher.VerifyDummy(pw)
 		return LoginResult{}, ErrInvalidCredentials
@@ -143,10 +149,7 @@ func (s *Service) Login(ctx context.Context, email, pw, clientIP string) (LoginR
 		return LoginResult{}, fmt.Errorf("login: verify password: %w", err)
 	}
 	if !ok {
-		if err := s.d.Credentials.RecordFailedLogin(ctx, user, lockUntil(creds.FailedAttempts+1, now)); err != nil {
-			return LoginResult{}, fmt.Errorf("login: %w", err)
-		}
-		return LoginResult{}, ErrInvalidCredentials
+		return LoginResult{}, ErrInvalidCredentials // the attempt is already counted
 	}
 	return s.succeed(ctx, creds, pw)
 }
@@ -240,12 +243,11 @@ func (s *Service) checkSecondFactor(ctx context.Context, user identity.UserID, c
 // checkFactor runs check under the lockout of the user's account: locked accounts fail without a
 // check (dummy hash for the password), failures count, success resets the counter.
 func (s *Service) checkFactor(ctx context.Context, user identity.UserID, pw string, wrong error, check func(Credentials) (bool, error)) error {
-	creds, found, err := s.d.Credentials.Get(ctx, user)
+	creds, reserved, err := s.attempt(ctx, user)
 	if err != nil {
-		return err //nolint:wrapcheck // wrapped by the callers
+		return err
 	}
-	now := s.d.Now()
-	if !found || (creds.LockedUntil != nil && now.Before(*creds.LockedUntil)) {
+	if !reserved {
 		if pw != "" {
 			s.d.Hasher.VerifyDummy(pw)
 		}
@@ -256,17 +258,39 @@ func (s *Service) checkFactor(ctx context.Context, user identity.UserID, pw stri
 		return err
 	}
 	if !ok {
-		if err := s.d.Credentials.RecordFailedLogin(ctx, user, lockUntil(creds.FailedAttempts+1, now)); err != nil {
-			return err //nolint:wrapcheck // wrapped by the callers
-		}
-		return wrong
+		return wrong // the attempt is already counted
 	}
-	if creds.FailedAttempts > 0 || creds.LockedUntil != nil {
-		if err := s.d.Credentials.ResetFailedLogins(ctx, user); err != nil {
-			return err //nolint:wrapcheck // wrapped by the callers
-		}
+	if err := s.d.Credentials.ResetFailedLogins(ctx, user); err != nil {
+		return err //nolint:wrapcheck // wrapped by the callers
 	}
 	return nil
+}
+
+// maxReserveTries bounds the compare-and-swap loop of attempt; a busy account fails closed.
+const maxReserveTries = 8
+
+// attempt reserves one attempt on the account before it is checked. false: unknown user, locked
+// account, or too much contention – all answered like a wrong password.
+func (s *Service) attempt(ctx context.Context, user identity.UserID) (Credentials, bool, error) {
+	for range maxReserveTries {
+		creds, found, err := s.d.Credentials.Get(ctx, user)
+		if err != nil || !found {
+			return Credentials{}, false, err //nolint:wrapcheck // wrapped by the callers
+		}
+		now := s.d.Now()
+		if creds.LockedUntil != nil && now.Before(*creds.LockedUntil) {
+			return Credentials{}, false, nil
+		}
+		ok, err := s.d.Credentials.ReserveAttempt(ctx, user, creds.FailedAttempts, lockUntil(creds.FailedAttempts+1, now), now)
+		if err != nil {
+			return Credentials{}, false, err //nolint:wrapcheck // wrapped by the callers
+		}
+		if ok {
+			creds.FailedAttempts++
+			return creds, true, nil
+		}
+	}
+	return Credentials{}, false, nil
 }
 
 func (s *Service) stepUp(ctx context.Context, token string) (session.Session, error) {
@@ -294,11 +318,15 @@ func (s *Service) succeed(ctx context.Context, creds Credentials, pw string) (Lo
 		return LoginResult{}, fmt.Errorf("login: %w", err)
 	}
 	// With a second factor the failures are reset only after it: otherwise someone who knows the
-	// password could alternate it with code guesses and never reach the lockout.
-	if !enabled && (creds.FailedAttempts > 0 || creds.LockedUntil != nil) {
-		if err := s.d.Credentials.ResetFailedLogins(ctx, creds.User); err != nil {
-			return LoginResult{}, fmt.Errorf("login: %w", err)
-		}
+	// password could alternate it with code guesses and never reach the lockout. The right password
+	// only takes its own attempt back.
+	if enabled {
+		err = s.d.Credentials.ReleaseAttempt(ctx, creds.User, lockAfterFailures)
+	} else {
+		err = s.d.Credentials.ResetFailedLogins(ctx, creds.User)
+	}
+	if err != nil {
+		return LoginResult{}, fmt.Errorf("login: %w", err)
 	}
 	if s.d.Hasher.NeedsRehash(creds.PasswordHash) {
 		hash, err := s.d.Hasher.Hash(pw)

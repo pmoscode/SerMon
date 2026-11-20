@@ -102,7 +102,7 @@ flowchart LR
 
 | # | STRIDE | Bedrohung | Gegenmaßnahme | Aufgabe | Stand |
 |---|---|---|---|---|---|
-| T13 | S | Brute-Force auf Passwörter | Argon2id, Kontosperre mit Backoff, IP-Rate-Limit, einheitliche Fehlermeldung | M1-02 | ✓ |
+| T13 | S | Brute-Force auf Passwörter und Codes, auch mit parallelen Anfragen | Argon2id, Kontosperre mit Backoff, jeder Versuch wird vor der Prüfung atomar reserviert (Compare-and-swap), IP-Rate-Limit, einheitliche Fehlermeldung | M1-02, M1-35 | ✓ |
 | T14 | S | Phishing/gestohlenes Passwort | TOTP mit Recovery-Codes, Org-Pflicht zur 2FA; Code-Versuche zählen zur selben Sperre | M1-03 | ✓ |
 | T15 | S | Phishing-resistente Anmeldung | Passkeys/WebAuthn, OIDC mit PKCE | E3.6, E3.7 | ☐ |
 | T16 | S | Session-Diebstahl, Session-Fixation | `__Host-`-Cookie (Secure, HttpOnly, SameSite=Lax), serverseitige Sessions, neues Cookie nach 2FA und Org-Wechsel, Idle- und Absolut-Timeout | M1-02, M1-03 | ✓ |

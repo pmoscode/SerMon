@@ -116,20 +116,50 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) er
 	return err
 }
 
-const recordFailedLogin = `-- name: RecordFailedLogin :exec
+const releaseAttempt = `-- name: ReleaseAttempt :exec
 UPDATE user_credentials
-SET failed_attempts = failed_attempts + 1, locked_until = $1
+SET failed_attempts = GREATEST(failed_attempts - 1, 0),
+    locked_until = CASE WHEN failed_attempts - 1 >= $1::int THEN locked_until END
 WHERE user_id = $2
 `
 
-type RecordFailedLoginParams struct {
-	LockedUntil *time.Time
-	UserID      uuid.UUID
+type ReleaseAttemptParams struct {
+	LockAfter int32
+	UserID    uuid.UUID
 }
 
-func (q *Queries) RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error {
-	_, err := q.db.Exec(ctx, recordFailedLogin, arg.LockedUntil, arg.UserID)
+func (q *Queries) ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error {
+	_, err := q.db.Exec(ctx, releaseAttempt, arg.LockAfter, arg.UserID)
 	return err
+}
+
+const reserveAttempt = `-- name: ReserveAttempt :execrows
+UPDATE user_credentials
+SET failed_attempts = failed_attempts + 1, locked_until = $1
+WHERE user_id = $2 AND failed_attempts = $3
+  AND (locked_until IS NULL OR locked_until <= $4)
+`
+
+type ReserveAttemptParams struct {
+	LockedUntil *time.Time
+	UserID      uuid.UUID
+	Seen        int32
+	Now         *time.Time
+}
+
+// Compare-and-swap: counts the attempt only if nobody else did in between and the account isn't
+// locked, so parallel requests can't all pass the lockout check (M1-35).
+func (q *Queries) ReserveAttempt(ctx context.Context, arg ReserveAttemptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, reserveAttempt,
+		arg.LockedUntil,
+		arg.UserID,
+		arg.Seen,
+		arg.Now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const resetFailedLogins = `-- name: ResetFailedLogins :exec

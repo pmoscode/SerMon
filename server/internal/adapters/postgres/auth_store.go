@@ -152,11 +152,21 @@ func (s *CredentialStore) UpdatePasswordHash(ctx context.Context, user identity.
 	return nil
 }
 
-// RecordFailedLogin increments the failure counter and optionally locks the account.
-func (s *CredentialStore) RecordFailedLogin(ctx context.Context, user identity.UserID, lockedUntil *time.Time) error {
-	err := s.db.withoutTenant().RecordFailedLogin(ctx, sqlcdb.RecordFailedLoginParams{UserID: uuid.UUID(user), LockedUntil: lockedUntil})
+// ReserveAttempt counts an attempt before it is checked (compare-and-swap, see auth.CredentialRepository).
+func (s *CredentialStore) ReserveAttempt(ctx context.Context, user identity.UserID, seen int32, lockedUntil *time.Time, now time.Time) (bool, error) {
+	rows, err := s.db.withoutTenant().ReserveAttempt(ctx, sqlcdb.ReserveAttemptParams{
+		UserID: uuid.UUID(user), Seen: seen, LockedUntil: lockedUntil, Now: &now,
+	})
 	if err != nil {
-		return fmt.Errorf("record failed login: %w", err)
+		return false, fmt.Errorf("reserve login attempt: %w", err)
+	}
+	return rows == 1, nil
+}
+
+// ReleaseAttempt takes a reserved attempt back.
+func (s *CredentialStore) ReleaseAttempt(ctx context.Context, user identity.UserID, lockAfter int32) error {
+	if err := s.db.withoutTenant().ReleaseAttempt(ctx, sqlcdb.ReleaseAttemptParams{UserID: uuid.UUID(user), LockAfter: lockAfter}); err != nil {
+		return fmt.Errorf("release login attempt: %w", err)
 	}
 	return nil
 }

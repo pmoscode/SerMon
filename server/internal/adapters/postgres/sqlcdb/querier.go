@@ -115,10 +115,13 @@ type Querier interface {
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
-	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
 	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
+	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)
+	// Compare-and-swap: counts the attempt only if nobody else did in between and the account isn't
+	// locked, so parallel requests can't all pass the lockout check (M1-35).
+	ReserveAttempt(ctx context.Context, arg ReserveAttemptParams) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
 	RetireAuthority(ctx context.Context, arg RetireAuthorityParams) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)

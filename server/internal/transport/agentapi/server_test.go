@@ -785,3 +785,34 @@ func TestSession_LimitsTheMessageSize(t *testing.T) {
 		t.Errorf("hello with %d bytes = %v, want RESOURCE_EXHAUSTED", len(facts.GetHostname()), err)
 	}
 }
+
+// Revocation and expiry also end streams that are already open, not only new handshakes (the
+// grace period of a rotation, an admin revoking a node, a certificate running out).
+func TestSession_EndsWhenTheCertificateIsNoLongerUsable(t *testing.T) {
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithCertificateRecheck(50 * time.Millisecond)})
+	cert, serial := s.ca.agentCert(t, orgX, nodeX)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(ctx)
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
+	time.Sleep(200 * time.Millisecond)
+	if len(s.sessions.Active()) != 1 {
+		t.Fatal("a usable certificate keeps its session")
+	}
+
+	s.ca.mu.Lock()
+	s.ca.usable[serial] = false
+	s.ca.mu.Unlock()
+
+	_, err := receive(stream)
+	for err == nil {
+		_, err = receive(stream)
+	}
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("stream after revocation: %v, want PERMISSION_DENIED", err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
+}

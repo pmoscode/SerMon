@@ -238,10 +238,19 @@ type Rotator interface {
 	Lock(ctx context.Context, id rotation.Identity, reason string) error
 }
 
-// TrustSource provides the trust bundle for agents (agentca.Service).
+// TrustSource provides the trust bundle for agents and the state of their certificates
+// (agentca.Service).
 type TrustSource interface {
 	TrustAnchors() []*x509.Certificate
+	// CertificateUsable reports whether a serial is recorded, not revoked and valid now.
+	CertificateUsable(ctx context.Context, serial string) (bool, error)
 }
+
+// certificateRecheck is how often an open session checks that its certificate is still usable:
+// the handshake check alone would let a stream outlive a revocation or the certificate itself.
+const certificateRecheck = time.Minute
+
+var errCertificateUnusable = errors.New("the client certificate was revoked or expired, reconnect with a valid one")
 
 // SessionHandler implements sermon.agent.v1.AgentService.
 type SessionHandler struct {
@@ -249,11 +258,17 @@ type SessionHandler struct {
 	rotator  Rotator
 	trust    TrustSource
 	ingest   *ingest.Service
+	recheck  time.Duration
 	logger   *slog.Logger
 }
 
 // HandlerOption configures the SessionHandler.
 type HandlerOption func(*SessionHandler)
+
+// WithCertificateRecheck sets how often open sessions recheck their certificate (tests).
+func WithCertificateRecheck(interval time.Duration) HandlerOption {
+	return func(h *SessionHandler) { h.recheck = interval }
+}
 
 // WithIngest stores the agents' batches (M1-24); without it batches are accepted but neither
 // stored nor acknowledged.
@@ -265,7 +280,7 @@ var _ agentv1connect.AgentServiceHandler = (*SessionHandler)(nil)
 
 // NewSessionHandler returns the AgentService handler.
 func NewSessionHandler(sessions *Sessions, rotator Rotator, trust TrustSource, logger *slog.Logger, options ...HandlerOption) *SessionHandler {
-	h := &SessionHandler{sessions: sessions, rotator: rotator, trust: trust, logger: logger}
+	h := &SessionHandler{sessions: sessions, rotator: rotator, trust: trust, recheck: certificateRecheck, logger: logger}
 	for _, option := range options {
 		option(h)
 	}
@@ -352,10 +367,23 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 			}
 		}
 	}()
+	recheck := time.NewTicker(h.recheck)
+	defer recheck.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return connect.NewError(connect.CodeAborted, context.Cause(ctx))
+		case <-recheck.C:
+			usable, err := h.trust.CertificateUsable(ctx, id.Serial)
+			if err != nil {
+				// A database hiccup must not disconnect every agent; the next check decides.
+				h.logger.WarnContext(ctx, "certificate recheck failed", "node", id.Node.String(), "error", err)
+				continue
+			}
+			if !usable {
+				h.logger.WarnContext(ctx, "session ended: certificate revoked or expired", "node", id.Node.String(), "serial", id.Serial)
+				return connect.NewError(connect.CodePermissionDenied, errCertificateUnusable)
+			}
 		case <-flush:
 			if err := h.flush(ctx, feed, stream); err != nil {
 				return err

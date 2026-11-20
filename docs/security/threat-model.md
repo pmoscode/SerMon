@@ -88,6 +88,7 @@ flowchart LR
 | T2 | S | Gestohlener Enrollment-Token | 256 Bit, nur Hash, TTL, `max_uses`, gruppengebunden, Widerruf, Rate-Limit am Endpunkt, Audit | M1-08, M1-09 | ✓ |
 | T3 | S | Gestohlener Enrollment-Token: Benachrichtigung bei Nutzung | Event „Token benutzt“ an die Admins | E2.3, E2.4 | ☐ |
 | T4 | S | Gestohlener Agent-Schlüssel wird parallel genutzt | nur eine Session pro Node: dieselbe IP gilt als Reconnect und ersetzt die alte Session, eine zweite IP sperrt die Identität sofort (Log `security: second session`); Rotation auf Abruf mit Sperre des alten Zertifikats | M1-10, M1-11 | ◐ (Security-Event und Alert: E2.3) |
+| T56 | S | Widerrufenes oder abgelaufenes Zertifikat hält einen offenen Stream weiter | jede Session prüft ihr Zertifikat jede Minute nach (Widerruf, Ende der Schonfrist nach Rotation, Ablauf) und endet mit `PERMISSION_DENIED` | M1-35 | ✓ |
 | T5 | S | Klon eines Nodes (gleiche `machine-id`) | `ALREADY_EXISTS`, Token bleibt unverbraucht | M1-09 | ✓ (Übernahme in der UI offen, M1-32) |
 | T6 | T | MITM beim Enrollment | System-CAs oder gepinnter Fingerprint (`--ca-fingerprint`), ausgestelltes Zertifikat wird gegen den Trust-Anker geprüft | M1-13 (ADR 0010) | ✓ |
 | T7 | T | MITM auf dem Agent-Stream, Downgrade | TLS 1.3 only, eigene Agent-CA, Server-Zertifikat mit Rotation, keine Fallback-Optionen | M1-10, M1-11b | ✓ |

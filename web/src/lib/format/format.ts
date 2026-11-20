@@ -168,3 +168,14 @@ export function formatValue(
 			return formatNumber(value, locale);
 	}
 }
+
+/** How long ago a time was, e.g. "5 minutes ago" / "vor 5 Minuten". */
+export function formatAgo(then: Date, now: Date, locale: Locale): string {
+	const seconds = Math.round((then.getTime() - now.getTime()) / 1000);
+	const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+	const abs = Math.abs(seconds);
+	if (abs < 60) return format.format(seconds, 'second');
+	if (abs < 3600) return format.format(Math.round(seconds / 60), 'minute');
+	if (abs < 86400) return format.format(Math.round(seconds / 3600), 'hour');
+	return format.format(Math.round(seconds / 86400), 'day');
+}

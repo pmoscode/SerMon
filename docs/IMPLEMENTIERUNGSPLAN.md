@@ -307,8 +307,7 @@ flowchart LR
 >   Org-Pflicht inkl. Beta ändert Alpha nicht), Komponenten- und Playwright-Tests mit axe.
 >
 > Offen: Der Schalter für die Org-Pflicht in der UI kommt mit der Admin-UI (M1-32). WebAuthn/Passkeys (KONZEPT §7)
-> sind nicht Teil von M1. Das Bundle-Budget misst die Summe aller Chunks (jetzt 174,5 KiB); vor weiteren Seiten auf
-> „erstes Laden“ umstellen.
+> sind nicht Teil von M1. (Das Bundle-Budget misst seit M1-30 das erste Laden je Seite.)
 - **Ziel:** TOTP einrichten (QR-Code) und verifizieren; Recovery-Codes gehasht speichern; Middleware `RequireStepUp(maxAge)`; 2FA-Pflicht pro Org.
 - **Abhängig von:** M1-02, M1-06
 - **Tests zuerst:** RFC-6238-Testvektoren, Zeitfenster und Schutz vor Replay, Recovery-Code nur einmal verwendbar.
@@ -884,7 +883,7 @@ flowchart LR
 >
 > Abweichungen: Die **TOTP-Seite** kam mit M1-03 (Code-Schritt im Login, Seite „Sicherheit“). Der echte Login gegen die Datenbank
 > wird mit M1-33 getestet; der E2E-Guard lässt dafür nur die Browser-Meldung zu 401-Antworten zu. Der Ablauf einer
-> Session ist bisher per Komponententest abgedeckt; E2E folgt mit M1-30, sobald die Flotte Daten lädt.
+> Session ist per Komponententest und seit M1-30 auch per E2E abgedeckt.
 - **Ziel:** Layout mit Navigation, Light/Dark/System, Org-Switcher, Platzhalter für die Command-Palette; Seiten für Login, TOTP und Setup-Assistent (`SetupService` aus M1-05); Behandlung abgelaufener Sessions; Empty States.
 - **Abhängig von:** M0-04, M0-05 (API zunächst gemockt)
 - **Skill:** `sermon-ui-component`
@@ -923,7 +922,24 @@ flowchart LR
 - **Skill:** `sermon-ui-component`
 - **Tests zuerst:** Formatierer (Tabellen-Tests DE/EN); Store-Synchronisation; Hilfe-Lint schlägt bei fehlender EN-Datei fehl.
 
-#### ☐ M1-30 – Fleet-Übersicht · W · M
+#### ☑ M1-30 – Fleet-Übersicht · W · M
+> Erledigt:
+> - **Kacheln und Tabelle** (umschaltbar, gemerkt): Ampel mit Icon und Text, Mini-Anzeigen für CPU, Speicher und
+>   vollstes Dateisystem (SVG statt Inline-Style wegen CSP), Sparkline der CPU-Last der letzten 15 min (eine
+>   `QueryMetrics`-Abfrage für bis zu 100 Nodes, 30-s-Schritte), Uptime, Netzwerk; offline mit „zuletzt gesehen vor …“.
+>   Probleme zuerst, dann nach Hostname.
+> - **Kopfzeile:** Anzahl gesamt und je Status, zugleich Statusfilter; dazu Suche (Hostname, Gruppe, System) und
+>   Gruppenfilter.
+> - **Live:** Übersicht alle 10 s, Sparklines alle 30 s; scheitert eine Aktualisierung, bleiben die Daten mit Hinweis
+>   stehen. Lade-, Fehler- und Leer-Zustand; ⓘ-Hilfe an den Kennzahlen der Tabelle.
+> - **Tests:** Status- und Filterlogik, Store (Sparklines, Fehler, abgelaufene Session), Playwright mit axe in beiden
+>   Ansichten, Filter, Leer-Zustand und der E2E-Fall „Session abgelaufen → Login mit Hinweis“ (aus M1-28 offen).
+> - **Bundle-Budget** jetzt richtig gemessen: `tests/e2e/budget.e2e.ts` zählt das JavaScript, das der Browser beim
+>   ersten Laden holt (Login 118 KiB, Flotte 163 KiB gzip, Grenze 200 KiB). `check:size` begrenzt nur noch die
+>   Summe aller Chunks (400 KiB) gegen versehentlich große Abhängigkeiten.
+>
+> Abweichungen: Die Ampel kommt bis zur Alert-Engine (M2) aus den Kennzahlen (Warnung ab 80 %, kritisch ab 90 %).
+> Tags gibt es im Datenmodell noch nicht, Badges für Updates und Reboot kommen mit M3 – deshalb keine Filter danach.
 - **Ziel:** Kachel- und Tabellenansicht, Ampel, Mini-Anzeigen, Sparkline der letzten 15 min, Badges, Filter nach Gruppe, Tag und Suche, Kopfzeile mit Kennzahlen; Live-Aktualisierung.
 - **Abhängig von:** M1-26, M1-28, M1-29
 - **Skill:** `sermon-ui-component`

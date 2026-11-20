@@ -58,9 +58,13 @@
 		{#if logoutFailed}
 			<p role="alert" class="mb-4 text-sm text-destructive">{m.logout_failed()}</p>
 		{/if}
-		{#key sessionState.current?.activeOrganizationId}
-			{@render children()}
-		{/key}
+		{#if sessionState.secondFactorSetupRequired && page.route.id !== '/(app)/settings/security'}
+			<p role="status" class="text-muted-foreground">{m.loading()}</p>
+		{:else}
+			{#key sessionState.current?.activeOrganizationId}
+				{@render children()}
+			{/key}
+		{/if}
 	</AppShell>
 {:else if unavailable}
 	<main id="content" class="flex flex-col items-start gap-3 p-8">

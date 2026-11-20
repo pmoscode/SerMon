@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	formatBitsPerSecond,
+	formatAgo,
 	formatBytes,
 	formatDuration,
 	formatNumber,
@@ -98,5 +99,19 @@ describe('formatValue by catalog unit', () => {
 		expect(plain(formatValue('bytes_per_second', 12_500_000, 'en', { bits: true }))).toBe(
 			'100 Mbit/s'
 		);
+	});
+});
+
+describe('formatAgo', () => {
+	const now = new Date('2026-11-20T12:00:00Z');
+	it.each([
+		[30, '30 seconds ago', 'vor 30 Sekunden'],
+		[300, '5 minutes ago', 'vor 5 Minuten'],
+		[7200, '2 hours ago', 'vor 2 Stunden'],
+		[86400, 'yesterday', 'gestern']
+	])('%d s', (ago, en, de) => {
+		const then = new Date(now.getTime() - ago * 1000);
+		expect(plain(formatAgo(then, now, 'en'))).toBe(en);
+		expect(plain(formatAgo(then, now, 'de'))).toBe(de);
 	});
 });

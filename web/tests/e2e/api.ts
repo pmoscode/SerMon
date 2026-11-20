@@ -37,10 +37,11 @@ export async function mockApi(page: Page, handlers: Record<string, Handler>): Pr
 	return calls;
 }
 
-/** An instance that is set up, with or without a valid session cookie. */
+/** An instance that is set up, with or without a valid session cookie, and without nodes. */
 export function installed(loggedIn: boolean): Record<string, Handler> {
 	return {
 		'SetupService/GetSetupStatus': () => ({ json: { setupRequired: false } }),
-		'AuthService/GetSession': () => (loggedIn ? { json: { session } } : unauthenticated)
+		'AuthService/GetSession': () => (loggedIn ? { json: { session } } : unauthenticated),
+		'FleetService/GetFleetSummary': () => ({ json: {} })
 	};
 }

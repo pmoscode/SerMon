@@ -64,6 +64,10 @@ type Config struct {
 	FlushPending int
 	// SampleRate and SampleBurst form the per-node token bucket (samples per second).
 	SampleRate, SampleBurst float64
+	// ThrottleSlack is how far an agent may go below zero before its samples are dropped: the
+	// batches already in flight when it gets Throttle (the agent keeps up to 64, each with up to
+	// SeriesLimit samples). An agent that ignores Throttle goes beyond it.
+	ThrottleSlack float64
 	// ThrottleInterval is the batch interval the agent is asked for when over quota.
 	ThrottleInterval time.Duration
 	// SeriesLimit bounds the distinct series per node (KONZEPT §8).
@@ -79,7 +83,8 @@ func DefaultConfig() Config {
 	return Config{
 		FlushInterval: 2 * time.Second, FlushPending: 32,
 		SampleRate: 10_000, SampleBurst: 50_000, ThrottleInterval: 5 * time.Second,
-		SeriesLimit: 2000, SeenInterval: 30 * time.Second,
+		ThrottleSlack: 64 * 2000,
+		SeriesLimit:   2000, SeenInterval: 30 * time.Second,
 		MaxFuture: 5 * time.Minute, MaxAge: 24 * time.Hour,
 	}
 }
@@ -229,9 +234,16 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 	stats.Batches.Add(1)
 	stats.LagMillis.Store(now.Sub(batch.CollectedAt).Milliseconds())
 	response := Response{Throttle: s.quota(now, len(batch.Samples))}
+	config := s.service.config
+	if s.tokens < -config.ThrottleSlack {
+		// The agent ignores Throttle beyond the batches in flight: drop the samples
+		// but acknowledge the batch, so that an honest agent doesn't resend it forever.
+		stats.Rejected.Add(uint64(len(batch.Samples)))
+		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
+		return response
+	}
 
 	at := batch.CollectedAt
-	config := s.service.config
 	if at.After(now.Add(config.MaxFuture)) || at.Before(now.Add(-config.MaxAge)) {
 		// A wrong agent clock must not close windows early or write outside the retention.
 		stats.Rejected.Add(uint64(len(batch.Samples)))
@@ -372,7 +384,9 @@ func (s *Session) quota(now time.Time, samples int) *time.Duration {
 	config := s.service.config
 	elapsed := now.Sub(s.refilled).Seconds()
 	s.refilled = now
-	s.tokens = min(config.SampleBurst, s.tokens+elapsed*config.SampleRate) - float64(samples)
+	// The floor keeps a flooding agent recoverable: once it slows down, it is admitted again
+	// after at most a burst's worth of refill.
+	s.tokens = max(min(config.SampleBurst, s.tokens+elapsed*config.SampleRate)-float64(samples), -config.ThrottleSlack-config.SampleBurst)
 	switch {
 	case !s.throttled && s.tokens < 0:
 		s.throttled = true

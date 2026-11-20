@@ -3,6 +3,7 @@ package ingest_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -347,5 +348,63 @@ func TestIngest_DropsUnknownMetricsAndUnexpectedLabels(t *testing.T) {
 	}
 	if got := w.svc.Stats().Unknown.Load(); got != 3 {
 		t.Errorf("unknown = %d, want 3", got)
+	}
+}
+
+// An agent that ignores Throttle (compromised or broken) must not keep writing at full speed:
+// beyond the slack for batches in flight its samples are dropped, the batches are still
+// acknowledged.
+func TestIngest_DropsSamplesOfAnAgentIgnoringTheThrottle(t *testing.T) {
+	config := ingest.DefaultConfig()
+	config.SampleRate, config.SampleBurst, config.ThrottleSlack = 10, 20, 20
+	w := newWorld(t, config)
+	s := w.open(t)
+	w.clock.Set(t0)
+	flood := func(seq uint64) ingest.Batch {
+		b := ingest.Batch{Seq: seq, CollectedAt: t0, Samples: make([]ingest.Sample, 25)}
+		for i := range b.Samples {
+			b.Samples[i] = ingest.Sample{Metric: "sermon_disk_reads_per_second", Labels: metrics.Labels{"device": string(rune('a' + i))}, Value: 1}
+		}
+		return b
+	}
+
+	s.Accept(context.Background(), flood(1)) // over quota: throttled, still stored
+	before := w.svc.Stats().Samples.Load()
+	s.Accept(context.Background(), flood(2)) // ignores the throttle: beyond the slack
+	s.Accept(context.Background(), flood(3))
+
+	if stored := w.svc.Stats().Samples.Load() - before; stored != 0 {
+		t.Errorf("%d samples stored while the agent ignored the throttle, want 0", stored)
+	}
+	if rejected := w.svc.Stats().Rejected.Load(); rejected != 50 {
+		t.Errorf("rejected = %d, want 50", rejected)
+	}
+	// Calm again: after the refill the agent is admitted; the dropped batches are acknowledged.
+	w.clock.Set(t0.Add(10 * time.Second))
+	s.Accept(context.Background(), batch(4, t0.Add(10*time.Second), 1))
+	if stored := w.svc.Stats().Samples.Load() - before; stored != 1 {
+		t.Errorf("after the pause %d samples stored, want 1", stored)
+	}
+	if ack, err := s.Flush(context.Background()); err != nil || ack < 3 {
+		t.Errorf("Flush() = %d, %v; dropped batches must still be acknowledged", ack, err)
+	}
+}
+
+// An honest agent replaying its buffer has up to 64 full batches in flight when Throttle arrives;
+// the default slack keeps all of them.
+func TestIngest_DefaultSlackKeepsTheBatchesInFlight(t *testing.T) {
+	config := ingest.DefaultConfig()
+	w := newWorld(t, config)
+	s := w.open(t)
+	w.clock.Set(t0)
+	samples := make([]ingest.Sample, config.SeriesLimit)
+	for i := range samples {
+		samples[i] = ingest.Sample{Metric: "sermon_disk_reads_per_second", Labels: metrics.Labels{"device": fmt.Sprintf("d%04d", i)}, Value: 1}
+	}
+	for seq := uint64(1); seq <= 64+uint64(config.SampleBurst)/uint64(config.SeriesLimit); seq++ {
+		s.Accept(context.Background(), ingest.Batch{Seq: seq, CollectedAt: t0, Samples: samples})
+	}
+	if rejected := w.svc.Stats().Rejected.Load(); rejected != 0 {
+		t.Errorf("%d samples of batches in flight rejected, want 0", rejected)
 	}
 }

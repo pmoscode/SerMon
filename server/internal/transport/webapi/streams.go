@@ -49,6 +49,13 @@ func (l *streamLimiter) acquire(session string) bool {
 	return true
 }
 
+// open returns the number of open streams.
+func (l *streamLimiter) open() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.total
+}
+
 // release frees a slot taken with acquire.
 func (l *streamLimiter) release(session string) {
 	l.mu.Lock()

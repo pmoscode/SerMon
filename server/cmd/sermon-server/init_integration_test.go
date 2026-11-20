@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -45,19 +44,6 @@ func TestMain(m *testing.M) {
 }
 
 func sharedKeysFile() string { return filepath.Join(keysDir, "master_keys") }
-
-type syncBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (s *syncBuffer) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b.Write(p)
-}
-
-func (s *syncBuffer) String() string { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
 
 func dbSource(t *testing.T, keysFile string, extra map[string]string) config.Source {
 	t.Helper()
@@ -160,19 +146,6 @@ func TestFirstInstallation_EndToEnd(t *testing.T) {
 	if authorities != 1 {
 		t.Errorf("%d issuing agent CAs, want 1", authorities)
 	}
-}
-
-func waitFor(t *testing.T, logs *syncBuffer, pattern *regexp.Regexp) string {
-	t.Helper()
-	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) {
-		if m := pattern.FindStringSubmatch(logs.String()); m != nil {
-			return m[1]
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("%s not found in logs:\n%s", pattern, logs.String())
-	return ""
 }
 
 type httpClient struct{ origin string }

@@ -38,6 +38,9 @@ func NewMetricsHandler(svc *fleet.Service, logger *slog.Logger) *MetricsHandler 
 	}
 }
 
+// LiveStreams returns the number of open WatchMetrics streams (server metrics, ADR 0011).
+func (h *MetricsHandler) LiveStreams() int { return h.streams.open() }
+
 // ListMetrics returns the catalog.
 func (h *MetricsHandler) ListMetrics(context.Context, *connect.Request[webv1.ListMetricsRequest]) (*connect.Response[webv1.ListMetricsResponse], error) {
 	res := &webv1.ListMetricsResponse{}

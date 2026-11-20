@@ -30,6 +30,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/config"
+	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
@@ -100,6 +101,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	mux := http.NewServeMux()
 	var checks []health.Check
 	var servers []func(context.Context) error
+	registry := serverMetrics()
 	if cfg.DatabaseURL != "" {
 		db, err := openDatabase(ctx, cfg, logger)
 		if err != nil {
@@ -119,11 +121,12 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		ring := metrics.NewRing()
 		metricStore := timescale.New(db)
 		nodes := fleet.NewService(postgres.NewFleetStore(db), metrics.NewReader(metricStore, ring, time.Now), time.Now)
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, logger); err != nil {
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
 		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
+		registerIngestMetrics(registry, ingestService.Stats(), sessions)
 		servers = append(servers, pruneRing(ring))
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, ingestService, logger)
@@ -148,6 +151,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	logger.InfoContext(ctx, "listening", "addr", ln.Addr().String(), "version", version)
 	web := httpserver.New(mux, logger, cfg.ShutdownTimeout, healthHandler.SetDraining)
 	servers = append(servers, func(ctx context.Context) error { return web.Serve(ctx, ln) })
+	if cfg.MetricsAddr != "" {
+		metricsServer, err := newMetricsServer(ctx, cfg, registry, logger)
+		if err != nil {
+			return err
+		}
+		servers = append(servers, metricsServer)
+	}
 	return runAll(ctx, servers)
 }
 
@@ -259,7 +269,7 @@ const (
 )
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
-	rotator *rotation.Service, nodes *fleet.Service, logger *slog.Logger,
+	rotator *rotation.Service, nodes *fleet.Service, registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
@@ -283,6 +293,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	})
 	accessStore := postgres.NewAccessStore(db)
 	policy := authz.NewPolicy()
+	metricsHandler := webapi.NewMetricsHandler(nodes, logger)
+	registry.Gauge("sermon_server_live_streams", "Open live metric streams of the web UI.",
+		func() float64 { return float64(metricsHandler.LiveStreams()) })
 	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
 		Auth:   webapi.NewAuthHandler(login, sessions, credentials, logger),
@@ -297,7 +310,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
 		Node:    webapi.NewNodeHandler(rotator, nodes, logger),
 		AgentCA: webapi.NewAgentCAHandler(ca, logger),
-		Metrics: webapi.NewMetricsHandler(nodes, logger),
+		Metrics: metricsHandler,
 		Fleet:   webapi.NewFleetHandler(nodes, logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),

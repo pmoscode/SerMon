@@ -52,6 +52,8 @@ type Config struct {
 	AgentAddr string
 	// AgentHostnames are the DNS names or IPs agents use to reach the agent API (server certificate).
 	AgentHostnames []string
+	// MetricsAddr is the listen address of the server's own /metrics (empty: off; ADR 0011).
+	MetricsAddr string
 	// MasterKeys encrypt secrets at rest (key file "<id>:<base64>" per line, newest first).
 	// Required together with the database; create the file with "sermon-server init".
 	MasterKeys *secrets.Box
@@ -76,6 +78,7 @@ const (
 	envMasterKeys      = "SERMON_MASTER_KEYS"
 	envAgentAddr       = "SERMON_AGENT_ADDR"
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
+	envMetricsAddr     = "SERMON_METRICS_ADDR"
 	fileSuffix         = "_FILE"
 )
 
@@ -105,6 +108,11 @@ func Load(src Source) (Config, error) {
 		MasterKeys:         parseMasterKeys(&l),
 		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
 		AgentHostnames:     parseHostnames(&l),
+		MetricsAddr:        l.string(envMetricsAddr, "", validateAddr),
+	}
+	if cfg.MetricsAddr != "" && !strings.HasSuffix(cfg.MetricsAddr, ":0") &&
+		(cfg.MetricsAddr == cfg.HTTPAddr || cfg.MetricsAddr == cfg.AgentAddr) {
+		l.fail(envMetricsAddr, "must differ from %s and %s", envHTTPAddr, envAgentAddr)
 	}
 	if cfg.AgentAddr != "" {
 		switch {

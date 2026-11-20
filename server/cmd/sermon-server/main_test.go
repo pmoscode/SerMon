@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -88,4 +90,37 @@ func TestRoutes_UIAndAPIDoNotConflict(_ *testing.T) {
 		Authenticator: webapi.NewAuthenticator(nil, nil, slog.New(slog.DiscardHandler)),
 	})
 	registerUI(mux, http.NotFoundHandler()) // panics on a pattern conflict
+}
+
+func TestRun_ServesMetricsOnItsOwnListener(t *testing.T) {
+	logs := &syncBuffer{}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan int, 1)
+	go func() {
+		done <- run(ctx, nil, envSource(map[string]string{
+			"SERMON_HTTP_ADDR": "127.0.0.1:0", "SERMON_METRICS_ADDR": "127.0.0.1:0",
+		}), logs, logs)
+	}()
+	addr := waitFor(t, logs, regexp.MustCompile(`"msg":"metrics listening"[^\n]*?"addr":"([^"]+)"`))
+
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/metrics", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	for _, want := range []string{"sermon_server_build_info{", "sermon_server_goroutines "} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("/metrics lacks %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(logs.String(), "has no authentication") {
+		t.Error("a loopback address must not warn")
+	}
+
+	cancel()
+	if code := <-done; code != 0 {
+		t.Errorf("run() = %d:\n%s", code, logs.String())
+	}
 }

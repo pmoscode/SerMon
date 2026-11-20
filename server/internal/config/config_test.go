@@ -296,3 +296,21 @@ func TestLoad_AgentAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_MetricsEndpoint(t *testing.T) {
+	cfg, err := config.Load(fakeSource(map[string]string{"SERMON_METRICS_ADDR": "127.0.0.1:9464"}, nil))
+	if err != nil || cfg.MetricsAddr != "127.0.0.1:9464" {
+		t.Errorf("Load() = %q, %v", cfg.MetricsAddr, err)
+	}
+	if cfg, err := config.Load(fakeSource(map[string]string{}, nil)); err != nil || cfg.MetricsAddr != "" {
+		t.Errorf("off by default: %q, %v", cfg.MetricsAddr, err)
+	}
+	for name, env := range map[string]map[string]string{
+		"bad address":  {"SERMON_METRICS_ADDR": "nope"},
+		"same as http": {"SERMON_METRICS_ADDR": ":8080"},
+	} {
+		if _, err := config.Load(fakeSource(env, nil)); err == nil {
+			t.Errorf("%s: Load() error = nil", name)
+		}
+	}
+}

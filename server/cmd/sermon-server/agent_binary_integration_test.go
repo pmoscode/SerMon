@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -187,7 +189,7 @@ func TestAgentBinary_RunsAndRotatesAgainstTheRealServer(t *testing.T) {
 // TimescaleDB and acknowledges (M1-14..M1-24).
 func TestAgentBinary_DeliversMetricsIntoTheDatabase(t *testing.T) {
 	bin := agentBinary(t)
-	srv := startTestServer(t, nil)
+	srv := startTestServer(t, map[string]string{"SERMON_METRICS_ADDR": "127.0.0.1:0"})
 	defer srv.stop()
 	seedEnrollmentToken(t)
 
@@ -252,6 +254,16 @@ func TestAgentBinary_DeliversMetricsIntoTheDatabase(t *testing.T) {
 		WHERE s.node_id = $1 AND s.metric = 'sermon_memory_total_bytes' LIMIT 1`, nodeID).Scan(&memory); err != nil || memory != 8_123_740*1024 {
 		t.Errorf("memory window = %v, %v; want the fixture's MemTotal", memory, err)
 	}
+	// The server's own metrics count the batches and the connected agent (ADR 0011).
+	metricsText := scrape(t, waitFor(t, srv.logs, regexp.MustCompile(`msg="metrics listening" .*addr=(\S+)`)))
+	for _, pattern := range []string{`(?m)^sermon_server_agent_sessions 1$`, `(?m)^sermon_server_ingest_samples_total [1-9]`, `(?m)^sermon_server_ingest_batches_total [1-9]`} {
+		if !regexp.MustCompile(pattern).MatchString(metricsText) {
+			t.Errorf("/metrics does not match %s:\n%s", pattern, metricsText)
+		}
+	}
+	if strings.Contains(metricsText, nodeID) || strings.Contains(metricsText, "web-01") {
+		t.Errorf("/metrics leaks node data:\n%s", metricsText)
+	}
 	// Every metric of the agent's collectors must be in the server's catalog (M1-25).
 	if strings.Contains(srv.logs.String(), "unknown metric") {
 		t.Errorf("the agent sends metrics missing from the catalog:\n%s", srv.logs.String())
@@ -266,4 +278,16 @@ func TestAgentBinary_DeliversMetricsIntoTheDatabase(t *testing.T) {
 	if err := run.Wait(); err != nil {
 		t.Errorf("agent exit: %v\n%s", err, agentLogs.String())
 	}
+}
+
+func scrape(t *testing.T, addr string) string {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/metrics", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	body, _ := io.ReadAll(res.Body)
+	return string(body)
 }

@@ -1,0 +1,37 @@
+# Fuzz targets for the agent's parsers of untrusted input (cargo-fuzz, libFuzzer; KONZEPT §18.5).
+# Needs the pinned nightly of rust-toolchain.toml in this directory: `just fuzz-agent`.
+[package]
+name = "sermon-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+tempfile = "=3.27.0"
+sermon-buffer = { path = "../crates/sermon-buffer" }
+sermon-collectors = { path = "../crates/sermon-collectors" }
+
+# Not part of the agent workspace: built only with the nightly toolchain.
+[workspace]
+
+[[bin]]
+name = "proc_parsers"
+path = "fuzz_targets/proc_parsers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wal_recovery"
+path = "fuzz_targets/wal_recovery.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1

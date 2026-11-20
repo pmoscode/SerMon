@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# Fuzz targets need nightly and have their own workspace (just fuzz-agent).
+exclude = ["fuzz"]
 # sermon-testserver is test support (dev-dependency only); release builds leave it out.
 default-members = [
   "crates/sermon-agent",

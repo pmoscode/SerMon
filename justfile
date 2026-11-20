@@ -166,6 +166,13 @@ test-agent:
 security-agent:
     cargo deny check
 
+# Fuzz the parsers of untrusted input: /proc texts and WAL recovery (cargo-fuzz, pinned nightly)
+[working-directory: 'agent/fuzz']
+fuzz-agent seconds="60":
+    ./seed.sh
+    cargo fuzz run proc_parsers -- -max_total_time={{ seconds }} -max_len=65536
+    cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
+
 # Build static release binaries for amd64 and arm64 (cargo-zigbuild, see ADR 0002)
 [working-directory: 'agent']
 build-agent:

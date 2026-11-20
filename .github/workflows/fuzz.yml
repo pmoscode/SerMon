@@ -1,0 +1,65 @@
+# Fuzzing of the agent's parsers of untrusted input (KONZEPT §18.5): /proc texts and WAL
+# recovery with cargo-fuzz. A short run on agent changes catches broken targets, the nightly run
+# fuzzes five minutes per target; crashes are uploaded as artifacts.
+name: fuzz
+
+on:
+  pull_request:
+    paths: ["agent/**", ".github/workflows/fuzz.yml"]
+  push:
+    branches: [main]
+    paths: ["agent/**", ".github/workflows/fuzz.yml"]
+  schedule:
+    - cron: "47 2 * * *" # nightly, 02:47 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=github-releases depName=casey/just
+  JUST_VERSION: 1.59.0
+  # renovate: datasource=crate depName=cargo-fuzz
+  CARGO_FUZZ_VERSION: 0.13.2
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fuzz:
+    name: fuzz agent parsers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned nightly toolchain (agent/fuzz/rust-toolchain.toml)
+        working-directory: agent/fuzz
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: agent/fuzz -> target
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: just@${{ env.JUST_VERSION }}
+      - run: cargo install --locked --version "${CARGO_FUZZ_VERSION}" cargo-fuzz
+      - name: Lint the fuzz targets (not part of the agent workspace)
+        working-directory: agent/fuzz
+        run: cargo fmt -- --check && cargo clippy --locked --all-targets -- -D warnings
+      # Short run on every change (catches API breaks of the targets), five minutes per target at night.
+      - name: Fuzz
+        env:
+          SECONDS_PER_TARGET: ${{ github.event_name == 'schedule' && '300' || '30' }}
+        run: just fuzz-agent "${SECONDS_PER_TARGET}"
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-artifacts
+          path: agent/fuzz/artifacts/
+          if-no-files-found: ignore

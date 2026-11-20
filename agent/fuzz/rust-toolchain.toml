@@ -1,0 +1,6 @@
+# cargo-fuzz needs nightly (sanitizer flags). Pinned like the stable toolchain of the agent;
+# update deliberately, releases must be at least 3 days old.
+[toolchain]
+channel = "nightly-2026-11-10"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

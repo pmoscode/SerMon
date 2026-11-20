@@ -6,6 +6,9 @@
 
 	/** Renders help text as text nodes only – help files never inject markup. */
 	let { content }: { content: Inline[] } = $props();
+
+	/** A path of this app ("/fleet"), never protocol-relative ("//host", "/\\host"). */
+	const appPath = (href: string) => /^\/(?![/\\])/.test(href);
 </script>
 
 {#each content as inline, i (i)}
@@ -25,9 +28,9 @@
 			rel="noopener noreferrer"
 			class="underline underline-offset-2"
 			><HelpInline content={inline.content} /><span class="sr-only"> ({m.help_new_tab()})</span></a
-		>{:else}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- app paths from our own help files, checked by scripts/help.js --><a
+		>{:else if appPath(inline.href)}<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- app paths from our own help files, checked by scripts/help.js --><a
 			href={inline.href}
 			class="underline underline-offset-2"
 			onclick={() => helpState.close()}><HelpInline content={inline.content} /></a
-		>{/if}
+		>{:else}<HelpInline content={inline.content} />{/if}
 {/each}

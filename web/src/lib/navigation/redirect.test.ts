@@ -16,6 +16,11 @@ describe('safeRedirect', () => {
 		'https://evil.example/',
 		'//evil.example/x',
 		'/\\evil.example',
+		// Paths that become protocol-relative only after normalization.
+		'/.//evil.example/x',
+		'/a/..//evil.example',
+		'/.\\/evil.example',
+		'/./\\evil.example',
 		'javascript:alert(1)',
 		'fleet',
 		'/login?redirect=/x'

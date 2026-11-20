@@ -67,9 +67,14 @@ export function parseInline(text, problems = []) {
 		} else if ((match = /^\[([^\]]+)\]\(([^)\s]+)\)/.exec(rest))) {
 			flush();
 			const href = match[2];
-			if (!linkTarget.test(href))
+			const content = parseInline(match[1], problems);
+			if (linkTarget.test(href)) {
+				out.push({ type: 'link', href, content });
+			} else {
+				// Only the text stays: the target never reaches the bundle.
 				problems.push(`link target "${href}" not allowed (help:, /path or https://)`);
-			out.push({ type: 'link', href, content: parseInline(match[1], problems) });
+				out.push(...content);
+			}
 		} else {
 			plain += text[i];
 			i++;
@@ -325,7 +330,11 @@ export function helpPlugin({ root }) {
 			if (!id.startsWith('\0' + virtualPrefix)) return undefined;
 			const { docs, files, problems } = loadHelp(root);
 			for (const file of files) this.addWatchFile(file);
-			for (const problem of problems) this.warn(`help: ${problem}`);
+			// A production build fails on broken help texts; the dev server only warns while editing.
+			for (const problem of problems) {
+				if (this.meta.watchMode) this.warn(`help: ${problem}`);
+				else this.error(`help: ${problem}`);
+			}
 			return `export default ${JSON.stringify(docs[id.slice(1 + virtualPrefix.length)] ?? {})};`;
 		},
 		handleHotUpdate({ file, server }) {

@@ -6,16 +6,20 @@ export const HOME = '/fleet';
  * (other hosts, protocol-relative "//host", "/\host", schemes) falls back to HOME – no open redirect.
  */
 export function safeRedirect(target: string | null | undefined): string {
-	if (!target || !target.startsWith('/') || target.startsWith('//') || target.startsWith('/\\')) {
-		return HOME;
-	}
+	if (!target || !target.startsWith('/') || isProtocolRelative(target)) return HOME;
 	try {
 		const url = new URL(target, 'http://sermon.invalid');
 		if (url.origin !== 'http://sermon.invalid' || url.pathname.startsWith('/login')) return HOME;
+		// Normalization can turn "/.//host" into "//host": check the result, too.
+		if (isProtocolRelative(url.pathname)) return HOME;
 		return url.pathname + url.search + url.hash;
 	} catch {
 		return HOME;
 	}
+}
+
+function isProtocolRelative(path: string): boolean {
+	return path.startsWith('//') || path.startsWith('/\\');
 }
 
 /** The login page that returns to the given path afterwards. */

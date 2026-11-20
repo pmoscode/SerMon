@@ -31,7 +31,10 @@ describe('parseInline', () => {
 		'rejects the link target %s',
 		(href) => {
 			const problems = [];
-			parseInline(`[x](${href})`, problems);
+			// Only the text stays: the target never reaches the bundle.
+			const parsed = parseInline(`[x](${href})`, problems);
+			expect(parsed[0]).toEqual(text('x'));
+			expect(parsed.some((node) => node.type === 'link')).toBe(false);
 			expect(problems).toHaveLength(1);
 		}
 	);

@@ -107,3 +107,22 @@ Token erst nach dem Parsen.
     `agent.toml`).
   - Der Schlüssel verlässt den Host nie. Die CSR enthält weder Subject noch Extensions; die Identität legt allein der
     Server fest.
+
+## Nachtrag M1-38 (Security-Review M1-35)
+
+- **Kette aus der Signatur:** `pki.Issued` enthält Intermediate und Wurzel der CA, die signiert hat. Enrollment und
+  Rotation schicken diese statt der zum Antwortzeitpunkt ausstellenden CA; ein CA-Wechsel dazwischen erzeugt so keine
+  Kette, die nicht zum Zertifikat passt. Das Trust-Bundle des Enrollments enthält die signierende Wurzel immer.
+- **Session endet nach jeder Rotation,** nicht nur nach einer auf Abruf. Der Agent verbindet sich sofort mit dem neuen
+  Zertifikat (so verhielt er sich schon). Überholt der Reconnect das Ende der alten Session, erkennt `claim()` die in
+  ihr ausgestellte Serial als Nachfolger (von jeder IP, denn das Zertifikat ging an den Inhaber dieser Session) statt
+  den Node wegen einer zweiten Session zu sperren.
+- **Widerrufsprüfung mit Identität:** `agent_certificate_usable(serial, org, node, at)` (Migration 00018) ersetzt die
+  Prüfung nur über die Serial, im Handshake und bei der Nachprüfung offener Sessions. Ein gefälschtes Zertifikat (nur
+  mit kompromittierter Intermediate möglich) kann keine bekannte gültige Serial für eine andere Org oder einen anderen
+  Node nutzen.
+- **Nur widerrufen** (`RotateNodeKeys` mit `revoke_only`): Bei Verdacht auf einen gestohlenen Schlüssel bekäme eine
+  Rotation auf Abruf das neue Zertifikat an den gerade verbundenen Agent – womöglich den Dieb. `revoke_only` widerruft
+  alle Zertifikate, beendet die Sessions („certificate revoked by an operator“) und fragt keinen Agent; die echten
+  Hosts werden neu enrollt. Die UI dafür folgt mit der Node-Verwaltung.
+

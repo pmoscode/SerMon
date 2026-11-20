@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/node.proto.
  */
 export const file_sermon_web_v1_node: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEidgoVUm90YXRlTm9kZUtleXNSZXF1ZXN0EicKBW5vZGVzGAEgASgLMhYuc2VybW9uLndlYi52MS5Ob2RlSURzSAASEgoIZ3JvdXBfaWQYAiABKAlIABIWCgxvcmdhbml6YXRpb24YAyABKAhIAEIICgZ0YXJnZXQiFgoHTm9kZUlEcxILCgNpZHMYASADKAkiOQoWUm90YXRlTm9kZUtleXNSZXNwb25zZRIOCgZvbmxpbmUYASABKAUSDwoHb2ZmbGluZRgCIAEoBSIhCg5HZXROb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIjQKD0dldE5vZGVSZXNwb25zZRIhCgRub2RlGAEgASgLMhMuc2VybW9uLndlYi52MS5Ob2RlIvoCCgROb2RlEgoKAmlkGAEgASgJEhAKCGhvc3RuYW1lGAIgASgJEhAKCGdyb3VwX2lkGAMgASgJEhIKCmdyb3VwX25hbWUYBCABKAkSDQoFb3NfaWQYBSABKAkSEgoKb3NfdmVyc2lvbhgGIAEoCRIWCg5rZXJuZWxfcmVsZWFzZRgHIAEoCRIUCgxhcmNoaXRlY3R1cmUYCCABKAkSEQoJY3B1X2NvdW50GAkgASgNEhQKDG1lbW9yeV9ieXRlcxgKIAEoBBIVCg1hZ2VudF92ZXJzaW9uGAsgASgJEi8KC2Vucm9sbGVkX2F0GAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxsYXN0X3NlZW5fYXQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBm9ubGluZRgOIAEoCBIqCgdmaWd1cmVzGA8gASgLMhkuc2VybW9uLndlYi52MS5LZXlGaWd1cmVzIikKFkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSJJChdMaXN0RmlsZXN5c3RlbXNSZXNwb25zZRIuCgtmaWxlc3lzdGVtcxgBIAMoCzIZLnNlcm1vbi53ZWIudjEuRmlsZXN5c3RlbSLbAQoKRmlsZXN5c3RlbRISCgptb3VudHBvaW50GAEgASgJEhIKCnNpemVfYnl0ZXMYAiABKAQSEgoKdXNlZF9ieXRlcxgDIAEoBBITCgthdmFpbF9ieXRlcxgEIAEoBBISCgp1c2VkX3JhdGlvGAUgASgBEhAKCHJlYWRvbmx5GAYgASgIEhQKDGlub2Rlc190b3RhbBgHIAEoBBITCgtpbm9kZXNfdXNlZBgIIAEoBBIrCgdmdWxsX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcDKYAgoLTm9kZVNlcnZpY2USSAoHR2V0Tm9kZRIdLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVJlcXVlc3QaHi5zZXJtb24ud2ViLnYxLkdldE5vZGVSZXNwb25zZRJgCg9MaXN0RmlsZXN5c3RlbXMSJS5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1Jlc3BvbnNlEl0KDlJvdGF0ZU5vZGVLZXlzEiQuc2VybW9uLndlYi52MS5Sb3RhdGVOb2RlS2V5c1JlcXVlc3QaJS5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglOb2RlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_sermon_web_v1_fleet]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEiiwEKFVJvdGF0ZU5vZGVLZXlzUmVxdWVzdBInCgVub2RlcxgBIAEoCzIWLnNlcm1vbi53ZWIudjEuTm9kZUlEc0gAEhIKCGdyb3VwX2lkGAIgASgJSAASFgoMb3JnYW5pemF0aW9uGAMgASgISAASEwoLcmV2b2tlX29ubHkYBCABKAhCCAoGdGFyZ2V0IhYKB05vZGVJRHMSCwoDaWRzGAEgAygJIkoKFlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2USDgoGb25saW5lGAEgASgFEg8KB29mZmxpbmUYAiABKAUSDwoHcmV2b2tlZBgDIAEoBSIhCg5HZXROb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIjQKD0dldE5vZGVSZXNwb25zZRIhCgRub2RlGAEgASgLMhMuc2VybW9uLndlYi52MS5Ob2RlIvoCCgROb2RlEgoKAmlkGAEgASgJEhAKCGhvc3RuYW1lGAIgASgJEhAKCGdyb3VwX2lkGAMgASgJEhIKCmdyb3VwX25hbWUYBCABKAkSDQoFb3NfaWQYBSABKAkSEgoKb3NfdmVyc2lvbhgGIAEoCRIWCg5rZXJuZWxfcmVsZWFzZRgHIAEoCRIUCgxhcmNoaXRlY3R1cmUYCCABKAkSEQoJY3B1X2NvdW50GAkgASgNEhQKDG1lbW9yeV9ieXRlcxgKIAEoBBIVCg1hZ2VudF92ZXJzaW9uGAsgASgJEi8KC2Vucm9sbGVkX2F0GAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxsYXN0X3NlZW5fYXQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBm9ubGluZRgOIAEoCBIqCgdmaWd1cmVzGA8gASgLMhkuc2VybW9uLndlYi52MS5LZXlGaWd1cmVzIikKFkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSJJChdMaXN0RmlsZXN5c3RlbXNSZXNwb25zZRIuCgtmaWxlc3lzdGVtcxgBIAMoCzIZLnNlcm1vbi53ZWIudjEuRmlsZXN5c3RlbSLbAQoKRmlsZXN5c3RlbRISCgptb3VudHBvaW50GAEgASgJEhIKCnNpemVfYnl0ZXMYAiABKAQSEgoKdXNlZF9ieXRlcxgDIAEoBBITCgthdmFpbF9ieXRlcxgEIAEoBBISCgp1c2VkX3JhdGlvGAUgASgBEhAKCHJlYWRvbmx5GAYgASgIEhQKDGlub2Rlc190b3RhbBgHIAEoBBITCgtpbm9kZXNfdXNlZBgIIAEoBBIrCgdmdWxsX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcDKYAgoLTm9kZVNlcnZpY2USSAoHR2V0Tm9kZRIdLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVJlcXVlc3QaHi5zZXJtb24ud2ViLnYxLkdldE5vZGVSZXNwb25zZRJgCg9MaXN0RmlsZXN5c3RlbXMSJS5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1Jlc3BvbnNlEl0KDlJvdGF0ZU5vZGVLZXlzEiQuc2VybW9uLndlYi52MS5Sb3RhdGVOb2RlS2V5c1JlcXVlc3QaJS5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglOb2RlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_sermon_web_v1_fleet]);
 
 /**
  * RotateNodeKeysRequest selects the nodes.
@@ -52,6 +52,14 @@ export type RotateNodeKeysRequest = Message<"sermon.web.v1.RotateNodeKeysRequest
     value: boolean;
     case: "organization";
   } | { case: undefined; value?: undefined };
+
+  /**
+   * revoke_only revokes all certificates of the nodes and ends their sessions instead of asking
+   * connected agents to rotate; every node must be enrolled again.
+   *
+   * @generated from field: bool revoke_only = 4;
+   */
+  revokeOnly: boolean;
 };
 
 /**
@@ -101,6 +109,14 @@ export type RotateNodeKeysResponse = Message<"sermon.web.v1.RotateNodeKeysRespon
    * @generated from field: int32 offline = 2;
    */
   offline: number;
+
+  /**
+   * revoked is the number of nodes whose certificates were revoked with revoke_only
+   * (re-enrollment needed).
+   *
+   * @generated from field: int32 revoked = 3;
+   */
+  revoked: number;
 };
 
 /**
@@ -419,11 +435,12 @@ export const NodeService: GenService<{
     output: typeof ListFilesystemsResponseSchema;
   },
   /**
-   * RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
-   * backup). Online agents get a new certificate over their stream and the old one is revoked
-   * at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
-   * or admin on the affected groups and a recent re-authentication. Unknown or foreign nodes
-   * and groups are NOT_FOUND.
+   * RotateNodeKeys rotates the keys of nodes now (e.g. after a leaked backup). Online agents get
+   * a new certificate over their stream and the old one is revoked at once; offline nodes have
+   * all certificates revoked and must be re-enrolled. With revoke_only every node has all
+   * certificates revoked and its session ended – for a key that may have been stolen, because
+   * the agent connected right now could be the thief. Needs operator or admin on the affected
+   * groups and a recent re-authentication. Unknown or foreign nodes and groups are NOT_FOUND.
    *
    * @generated from rpc sermon.web.v1.NodeService.RotateNodeKeys
    */

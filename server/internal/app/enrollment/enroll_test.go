@@ -31,18 +31,22 @@ func (f *fakeSigner) SignAgentCertificate(org tenant.OrgID, _ []byte, node ident
 	if f.err != nil {
 		return pki.Issued{}, agentca.CertificateRecord{}, f.err
 	}
-	issued := pki.Issued{DER: []byte("cert"), Serial: "ab", NotAfter: now.Add(30 * 24 * time.Hour)}
+	issued := pki.Issued{DER: []byte("cert"), Serial: "ab", NotAfter: now.Add(30 * 24 * time.Hour), Intermediate: []byte("intermediate"), Root: []byte("root")}
 	return issued, agentca.CertificateRecord{Serial: "ab", Org: org, Node: node, NotAfter: issued.NotAfter}, nil
 }
 
-func (f *fakeSigner) TrustAnchor() *x509.Certificate { return &x509.Certificate{Raw: []byte("root")} }
+// TrustAnchor and Intermediate are the CA issuing *now*: after a rollover between signing and
+// answering they are no longer the ones that signed (the enrollment must not use them, M1-38).
+func (f *fakeSigner) TrustAnchor() *x509.Certificate {
+	return &x509.Certificate{Raw: []byte("root-after-rollover")}
+}
 
 func (f *fakeSigner) TrustAnchors() []*x509.Certificate {
 	return []*x509.Certificate{{Raw: []byte("old-root")}, {Raw: []byte("root")}}
 }
 
 func (f *fakeSigner) Intermediate() *x509.Certificate {
-	return &x509.Certificate{Raw: []byte("intermediate")}
+	return &x509.Certificate{Raw: []byte("intermediate-after-rollover")}
 }
 
 type fakeRegistry struct {
@@ -88,9 +92,16 @@ func TestEnroll_SignsForTheTokensOrganizationAndRegistersTheNode(t *testing.T) {
 	if registry.node.ID != res.Node || registry.node.Group != group1 || registry.node.Facts.Hostname != "web-01" || registry.cert.Serial != "ab" {
 		t.Errorf("registered %+v / %+v", registry.node, registry.cert)
 	}
-	if string(res.Certificate) != "cert" || string(res.Intermediate) != "intermediate" || string(res.TrustAnchor) != "root" ||
-		len(res.TrustBundle) != 2 || string(res.TrustBundle[0]) != "old-root" {
+	// The chain of the CA that signed, not of the one issuing now (rollover in between, M1-38).
+	if string(res.Certificate) != "cert" || string(res.Intermediate) != "intermediate" || string(res.TrustAnchor) != "root" {
 		t.Errorf("result chain = %q %q %q", res.Certificate, res.Intermediate, res.TrustAnchor)
+	}
+	bundle := map[string]bool{}
+	for _, root := range res.TrustBundle {
+		bundle[string(root)] = true
+	}
+	if len(res.TrustBundle) != 2 || !bundle["old-root"] || !bundle["root"] {
+		t.Errorf("trust bundle = %q, want both roots once", res.TrustBundle)
 	}
 	actions := fmt.Sprint(registry.audits[0].Action, ",", registry.audits[1].Action)
 	if actions != "enrollment_token.use,node.enroll" || registry.audits[1].Details["machine_id"] != strings.Repeat("a", 32) {

@@ -33,7 +33,10 @@ type RotateNodeKeysRequest struct {
 	//	*RotateNodeKeysRequest_Nodes
 	//	*RotateNodeKeysRequest_GroupId
 	//	*RotateNodeKeysRequest_Organization
-	Target        isRotateNodeKeysRequest_Target `protobuf_oneof:"target"`
+	Target isRotateNodeKeysRequest_Target `protobuf_oneof:"target"`
+	// revoke_only revokes all certificates of the nodes and ends their sessions instead of asking
+	// connected agents to rotate; every node must be enrolled again.
+	RevokeOnly    bool `protobuf:"varint,4,opt,name=revoke_only,json=revokeOnly,proto3" json:"revoke_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -98,6 +101,13 @@ func (x *RotateNodeKeysRequest) GetOrganization() bool {
 		if x, ok := x.Target.(*RotateNodeKeysRequest_Organization); ok {
 			return x.Organization
 		}
+	}
+	return false
+}
+
+func (x *RotateNodeKeysRequest) GetRevokeOnly() bool {
+	if x != nil {
+		return x.RevokeOnly
 	}
 	return false
 }
@@ -179,7 +189,10 @@ type RotateNodeKeysResponse struct {
 	// online is the number of connected nodes that were asked to rotate now.
 	Online int32 `protobuf:"varint,1,opt,name=online,proto3" json:"online,omitempty"`
 	// offline is the number of nodes whose certificates were revoked (re-enrollment needed).
-	Offline       int32 `protobuf:"varint,2,opt,name=offline,proto3" json:"offline,omitempty"`
+	Offline int32 `protobuf:"varint,2,opt,name=offline,proto3" json:"offline,omitempty"`
+	// revoked is the number of nodes whose certificates were revoked with revoke_only
+	// (re-enrollment needed).
+	Revoked       int32 `protobuf:"varint,3,opt,name=revoked,proto3" json:"revoked,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -224,6 +237,13 @@ func (x *RotateNodeKeysResponse) GetOnline() int32 {
 func (x *RotateNodeKeysResponse) GetOffline() int32 {
 	if x != nil {
 		return x.Offline
+	}
+	return 0
+}
+
+func (x *RotateNodeKeysResponse) GetRevoked() int32 {
+	if x != nil {
+		return x.Revoked
 	}
 	return 0
 }
@@ -706,17 +726,20 @@ var File_sermon_web_v1_node_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\n" +
-	"\x18sermon/web/v1/node.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19sermon/web/v1/fleet.proto\"\xae\x01\n" +
+	"\x18sermon/web/v1/node.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19sermon/web/v1/fleet.proto\"\xcf\x01\n" +
 	"\x15RotateNodeKeysRequest\x12.\n" +
 	"\x05nodes\x18\x01 \x01(\v2\x16.sermon.web.v1.NodeIDsH\x00R\x05nodes\x12%\n" +
 	"\bgroup_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01H\x00R\agroupId\x12-\n" +
-	"\forganization\x18\x03 \x01(\bB\a\xbaH\x04j\x02\b\x01H\x00R\forganizationB\x0f\n" +
+	"\forganization\x18\x03 \x01(\bB\a\xbaH\x04j\x02\b\x01H\x00R\forganization\x12\x1f\n" +
+	"\vrevoke_only\x18\x04 \x01(\bR\n" +
+	"revokeOnlyB\x0f\n" +
 	"\x06target\x12\x05\xbaH\x02\b\x01\"1\n" +
 	"\aNodeIDs\x12&\n" +
-	"\x03ids\x18\x01 \x03(\tB\x14\xbaH\x11\x92\x01\x0e\b\x01\x10\xe8\a\x18\x01\"\x05r\x03\xb0\x01\x01R\x03ids\"J\n" +
+	"\x03ids\x18\x01 \x03(\tB\x14\xbaH\x11\x92\x01\x0e\b\x01\x10\xe8\a\x18\x01\"\x05r\x03\xb0\x01\x01R\x03ids\"d\n" +
 	"\x16RotateNodeKeysResponse\x12\x16\n" +
 	"\x06online\x18\x01 \x01(\x05R\x06online\x12\x18\n" +
-	"\aoffline\x18\x02 \x01(\x05R\aoffline\"3\n" +
+	"\aoffline\x18\x02 \x01(\x05R\aoffline\x12\x18\n" +
+	"\arevoked\x18\x03 \x01(\x05R\arevoked\"3\n" +
 	"\x0eGetNodeRequest\x12!\n" +
 	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\":\n" +
 	"\x0fGetNodeResponse\x12'\n" +

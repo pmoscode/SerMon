@@ -66,6 +66,9 @@ type Issued struct {
 	Serial    string // lowercase hex
 	NotBefore time.Time
 	NotAfter  time.Time
+	// Intermediate and Root are the chain of the authority that signed (DER): reading them from
+	// the issuing CA later could pair the certificate with another one after a rollover.
+	Intermediate, Root []byte
 }
 
 // Exported is the DER material of an authority; the keys must be stored encrypted (secrets.Box).
@@ -172,7 +175,10 @@ func (a *Authority) SignAgentCSR(csrDER []byte, org tenant.OrgID, node identity.
 	if err != nil {
 		return Issued{}, err
 	}
-	return Issued{DER: cert.Raw, Serial: hex.EncodeToString(serial.Bytes()), NotBefore: cert.NotBefore, NotAfter: cert.NotAfter}, nil
+	return Issued{
+		DER: cert.Raw, Serial: hex.EncodeToString(serial.Bytes()), NotBefore: cert.NotBefore, NotAfter: cert.NotAfter,
+		Intermediate: a.Intermediate().Raw, Root: a.Root().Raw,
+	}, nil
 }
 
 // IssueServerCertificate issues a TLS server certificate for the agent API with a fresh P-256

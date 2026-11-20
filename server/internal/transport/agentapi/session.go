@@ -98,8 +98,22 @@ type liveSession struct {
 	end      func(error)   // ends the session with the given cause
 	commands chan struct{} // on-demand rotation requests for the stream
 
-	mu      sync.Mutex
-	pending *time.Timer // on-demand rotation in progress; fires on timeout
+	mu        sync.Mutex
+	pending   *time.Timer // on-demand rotation in progress; fires on timeout
+	successor string      // serial issued by a rotation in this session
+}
+
+// rotatedTo records the serial of the certificate a rotation in this session issued.
+func (l *liveSession) rotatedTo(serial string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.successor = serial
+}
+
+func (l *liveSession) isSuccessor(serial string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.successor != "" && l.successor == serial
 }
 
 // takePending reports whether an on-demand rotation was requested and clears it.
@@ -160,8 +174,8 @@ func (s *Sessions) RequestRotation(org tenant.OrgID, node identity.NodeID, onTim
 	return true
 }
 
-// Terminate ends the node's session (rotation.Live).
-func (s *Sessions) Terminate(node identity.NodeID) { s.terminate(node, errRotationTimeout) }
+// Terminate ends the node's session with cause (rotation.Live).
+func (s *Sessions) Terminate(node identity.NodeID, cause error) { s.terminate(node, cause) }
 
 // Active returns the connected agents.
 func (s *Sessions) Active() []ActiveSession {
@@ -184,8 +198,9 @@ const (
 )
 
 // claim registers a session. A second session with the same certificate from the same IP is a
-// reconnect (the old connection is not dead yet) and replaces the old one; anything else is a
-// conflict.
+// reconnect (the old connection is not dead yet) and replaces the old one, as does the
+// certificate a rotation in the old session issued (from any IP: it went to whoever held that
+// session); anything else is a conflict.
 func (s *Sessions) claim(l *liveSession) (claim, *liveSession) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -194,7 +209,7 @@ func (s *Sessions) claim(l *liveSession) (claim, *liveSession) {
 		s.active[l.Node] = l
 		return claimed, nil
 	}
-	if old.Serial == l.Serial && old.RemoteIP == l.RemoteIP {
+	if (old.Serial == l.Serial && old.RemoteIP == l.RemoteIP) || old.isSuccessor(l.Serial) {
 		s.active[l.Node] = l
 		old.end(errReplaced)
 		return replaced, old
@@ -222,13 +237,12 @@ func (s *Sessions) terminate(node identity.NodeID, cause error) {
 }
 
 var (
-	errNoIdentity      = errors.New("no agent identity")
-	errHelloFirst      = errors.New("the first message must be a Hello")
-	errDuplicateHello  = errors.New("hello may only be sent once per session")
-	errLocked          = errors.New("this node already has an active session elsewhere; the identity was locked as a precaution")
-	errReplaced        = errors.New("session replaced by a new connection of the same agent")
-	errRotationTimeout = errors.New("certificate revoked: the agent did not rotate in time; re-enroll the node")
-	errRotated         = errors.New("certificate rotated on demand; reconnect with the new certificate")
+	errNoIdentity     = errors.New("no agent identity")
+	errHelloFirst     = errors.New("the first message must be a Hello")
+	errDuplicateHello = errors.New("hello may only be sent once per session")
+	errLocked         = errors.New("this node already has an active session elsewhere; the identity was locked as a precaution")
+	errReplaced       = errors.New("session replaced by a new connection of the same agent")
+	errRotated        = errors.New("certificate rotated; reconnect with the new certificate")
 )
 
 // Rotator renews certificates and locks identities (rotation.Service).
@@ -242,8 +256,9 @@ type Rotator interface {
 // (agentca.Service).
 type TrustSource interface {
 	TrustAnchors() []*x509.Certificate
-	// CertificateUsable reports whether a serial is recorded, not revoked and valid now.
-	CertificateUsable(ctx context.Context, serial string) (bool, error)
+	// CertificateUsable reports whether a serial is recorded for org and node, not revoked and
+	// valid now.
+	CertificateUsable(ctx context.Context, serial string, org tenant.OrgID, node identity.NodeID) (bool, error)
 }
 
 // certificateRecheck is how often an open session checks that its certificate is still usable:
@@ -374,7 +389,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 		case <-ctx.Done():
 			return connect.NewError(connect.CodeAborted, context.Cause(ctx))
 		case <-recheck.C:
-			usable, err := h.trust.CertificateUsable(ctx, id.Serial)
+			usable, err := h.trust.CertificateUsable(ctx, id.Serial, id.Org, id.Node)
 			if err != nil {
 				// A database hiccup must not disconnect every agent; the next check decides.
 				h.logger.WarnContext(ctx, "certificate recheck failed", "node", id.Node.String(), "error", err)
@@ -411,7 +426,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 	}
 }
 
-// handle processes one agent message; done ends the session (after an on-demand rotation).
+// handle processes one agent message; done ends the session (after a rotation).
 func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSession, previousIP string, msg *agentv1.SessionRequest,
 	stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse], feed *ingest.Session,
 ) (bool, error) {
@@ -440,9 +455,11 @@ func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSess
 		if err := stream.Send(res); err != nil {
 			return false, err //nolint:wrapcheck // connect errors must reach the client unchanged
 		}
-		// After an on-demand rotation the old certificate is revoked: end this session so that
-		// the agent reconnects with the new one.
-		return immediate, nil
+		// End the session after every rotation, so that the agent reconnects with the new
+		// certificate at once (after an on-demand one the old is revoked already). The new serial
+		// counts as successor if the reconnect overtakes the end of this session (M1-38).
+		live.rotatedTo(rotated.Serial)
+		return true, nil
 	case msg.GetBatch() != nil:
 		if feed == nil {
 			// Without ingest nothing is persisted, so nothing is acknowledged: the agent keeps the

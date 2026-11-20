@@ -231,7 +231,7 @@ func TestAgentCAStore_CertificatesAreTenantIsolatedButCheckableWithoutTenant(t *
 	if err := store.RecordCertificate(ctx, scopeFor(t, orgA), certA); err != nil {
 		t.Fatalf("RecordCertificate() error = %v", err)
 	}
-	if usable, err := store.Usable(ctx, certA.Serial, caTime); err != nil || !usable {
+	if usable, err := store.Usable(ctx, certA.Serial, certA.Org, certA.Node, caTime); err != nil || !usable {
 		t.Errorf("Usable() without tenant = %v, %v; want true", usable, err)
 	}
 
@@ -269,18 +269,29 @@ func TestAgentCAStore_UsableHonorsRevocationAndValidity(t *testing.T) {
 		"at not_after":      cert.NotAfter,
 	}
 	for name, at := range cases {
-		if usable, _ := store.Usable(ctx, cert.Serial, at); usable {
+		if usable, _ := store.Usable(ctx, cert.Serial, cert.Org, cert.Node, at); usable {
 			t.Errorf("%s: usable, want unusable", name)
 		}
 	}
-	if usable, _ := store.Usable(ctx, randomSerial(), caTime); usable {
+	if usable, _ := store.Usable(ctx, randomSerial(), cert.Org, cert.Node, caTime); usable {
 		t.Error("unknown serial must be unusable (fail closed)")
+	}
+	// The serial is bound to the identity in the certificate (M1-38): a forged certificate (only
+	// with a compromised intermediate) can't reuse a known valid serial for another org or node.
+	if usable, _ := store.Usable(ctx, cert.Serial, cert.Org, cert.Node, caTime); !usable {
+		t.Fatal("recorded certificate must be usable")
+	}
+	if usable, _ := store.Usable(ctx, cert.Serial, tenant.OrgID(uuid.New()), cert.Node, caTime); usable {
+		t.Error("the serial with another organization must be unusable")
+	}
+	if usable, _ := store.Usable(ctx, cert.Serial, cert.Org, identity.NodeID(uuid.New()), caTime); usable {
+		t.Error("the serial with another node must be unusable")
 	}
 
 	if revoked, err := store.Revoke(ctx, scopeFor(t, orgA), cert.Serial, caTime); err != nil || !revoked {
 		t.Fatalf("Revoke() = %v, %v", revoked, err)
 	}
-	if usable, _ := store.Usable(ctx, cert.Serial, caTime); usable {
+	if usable, _ := store.Usable(ctx, cert.Serial, cert.Org, cert.Node, caTime); usable {
 		t.Error("revoked certificate must be unusable")
 	}
 	if revoked, _ := store.Revoke(ctx, scopeFor(t, orgA), cert.Serial, caTime); revoked {
@@ -316,7 +327,7 @@ func TestAgentCAStore_RevocationCheckWorksWithANonSuperuserOwner(t *testing.T) {
 	if err := store.RecordCertificate(ctx, scopeFor(t, orgA), cert); err != nil {
 		t.Fatalf("RecordCertificate() error = %v", err)
 	}
-	if usable, err := store.Usable(ctx, cert.Serial, caTime); err != nil || !usable {
+	if usable, err := store.Usable(ctx, cert.Serial, cert.Org, cert.Node, caTime); err != nil || !usable {
 		t.Errorf("Usable() with non-superuser owner = %v, %v; want true", usable, err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -154,6 +155,12 @@ func (s runningServer) session(t *testing.T, cert tls.Certificate, roots [][]byt
 		}
 		issued := res.GetCertificateIssued()
 		result.rotated = &tls.Certificate{Certificate: append([][]byte{issued.GetCertificate()}, issued.GetIntermediates()...), PrivateKey: key}
+		// The server ends the session after a rotation; the agent reconnects with the new one.
+		_ = stream.CloseRequest()
+		if _, err := stream.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+			return result, fmt.Errorf("after the rotation: %w, want the session to end (ABORTED)", err)
+		}
+		return result, nil
 	}
 	_ = stream.CloseRequest()
 	if _, err := stream.Receive(); !errors.Is(err, io.EOF) {

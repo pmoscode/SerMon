@@ -4,7 +4,6 @@ package rotation
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"time"
@@ -40,15 +39,16 @@ type Identity struct {
 // Rotated is the new certificate for the agent.
 type Rotated struct {
 	Certificate        []byte
+	Serial             string // of Certificate
 	Intermediate       []byte
 	NotAfter           time.Time
 	PreviousValidUntil time.Time
 }
 
-// Signer signs agent certificates (agentca.Service).
+// Signer signs agent certificates (agentca.Service); the issued certificate carries the chain of
+// the CA that signed it.
 type Signer interface {
 	SignAgentCertificate(org tenant.OrgID, csrDER []byte, node identity.NodeID) (pki.Issued, agentca.CertificateRecord, error)
-	Intermediate() *x509.Certificate
 }
 
 // Store persists rotations; every method runs in one transaction of the organization.
@@ -131,7 +131,7 @@ func (s *Service) Rotate(ctx context.Context, id Identity, csrDER []byte, ip, pr
 			return Rotated{}, fmt.Errorf("security note: %w", err)
 		}
 	}
-	return Rotated{Certificate: issued.DER, Intermediate: s.signer.Intermediate().Raw, NotAfter: issued.NotAfter, PreviousValidUntil: revokeOld}, nil
+	return Rotated{Certificate: issued.DER, Serial: issued.Serial, Intermediate: issued.Intermediate, NotAfter: issued.NotAfter, PreviousValidUntil: revokeOld}, nil
 }
 
 // Lock locks the node as a precaution and revokes all its certificates (KONZEPT §6).

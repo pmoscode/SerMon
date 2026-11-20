@@ -31,12 +31,14 @@ func (f fakeSigner) SignAgentCertificate(o tenant.OrgID, _ []byte, n identity.No
 	if f.err != nil {
 		return pki.Issued{}, agentca.CertificateRecord{}, f.err
 	}
-	return pki.Issued{DER: []byte("new"), Serial: "new", NotAfter: now.Add(30 * 24 * time.Hour)},
+	return pki.Issued{DER: []byte("new"), Serial: "new", NotAfter: now.Add(30 * 24 * time.Hour), Intermediate: []byte("intermediate"), Root: []byte("root")},
 		agentca.CertificateRecord{Serial: "new", Org: o, Node: n}, nil
 }
 
+// Intermediate is the CA issuing *now*: after a rollover between signing and answering it is no
+// longer the one that signed (the rotation must not use it, M1-38).
 func (fakeSigner) Intermediate() *x509.Certificate {
-	return &x509.Certificate{Raw: []byte("intermediate")}
+	return &x509.Certificate{Raw: []byte("intermediate-after-rollover")}
 }
 
 type fakeStore struct {
@@ -85,7 +87,7 @@ func TestRotate_IssuesForTheSameIdentityAndKeepsTheOldCertificateForTheGracePeri
 	if want := now.Add(rotation.Grace); !store.revokeOld.Equal(want) || !res.PreviousValidUntil.Equal(want) {
 		t.Errorf("old certificate valid until %v / %v, want %v", store.revokeOld, res.PreviousValidUntil, want)
 	}
-	if string(res.Certificate) != "new" || string(res.Intermediate) != "intermediate" || store.audits[0].Action != "certificate.rotate" || len(store.audits) != 1 {
+	if string(res.Certificate) != "new" || res.Serial != "new" || string(res.Intermediate) != "intermediate" || store.audits[0].Action != "certificate.rotate" || len(store.audits) != 1 {
 		t.Errorf("result %+v, audits %+v", res, store.audits)
 	}
 }

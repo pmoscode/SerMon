@@ -13,16 +13,23 @@ import (
 )
 
 const agentCertificateUsable = `-- name: AgentCertificateUsable :one
-SELECT agent_certificate_usable($1, $2)::boolean AS usable
+SELECT agent_certificate_usable($1, $2::uuid, $3::uuid, $4)::boolean AS usable
 `
 
 type AgentCertificateUsableParams struct {
 	Serial string
+	OrgID  uuid.UUID
+	NodeID uuid.UUID
 	At     time.Time
 }
 
 func (q *Queries) AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error) {
-	row := q.db.QueryRow(ctx, agentCertificateUsable, arg.Serial, arg.At)
+	row := q.db.QueryRow(ctx, agentCertificateUsable,
+		arg.Serial,
+		arg.OrgID,
+		arg.NodeID,
+		arg.At,
+	)
 	var usable bool
 	err := row.Scan(&usable)
 	return usable, err

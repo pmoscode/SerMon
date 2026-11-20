@@ -63,6 +63,7 @@ func (h *NodeHandler) RotateNodeKeys(ctx context.Context, req *connect.Request[w
 	default:
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("target required"))
 	}
+	target.RevokeOnly = req.Msg.GetRevokeOnly()
 	res, err := h.rotator.RotateOnDemand(ctx, c, target)
 	switch {
 	case errors.Is(err, access.ErrForbidden):
@@ -75,6 +76,7 @@ func (h *NodeHandler) RotateNodeKeys(ctx context.Context, req *connect.Request[w
 		return nil, internalError(ctx, h.logger, "rotate node keys", err)
 	}
 	return connect.NewResponse(&webv1.RotateNodeKeysResponse{
-		Online: int32(res.Online), Offline: int32(res.Offline), //nolint:gosec // G115: at most the number of nodes of an org
+		//nolint:gosec // G115: at most the number of nodes of an org
+		Online: int32(res.Online), Offline: int32(res.Offline), Revoked: int32(res.Revoked),
 	}), nil
 }

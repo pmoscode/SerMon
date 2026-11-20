@@ -51,11 +51,12 @@ type NodeServiceClient interface {
 	// ListFilesystems returns the file systems of a node with fill level and a forecast when they
 	// run full (linear trend of the last 24 hours).
 	ListFilesystems(context.Context, *connect.Request[v1.ListFilesystemsRequest]) (*connect.Response[v1.ListFilesystemsResponse], error)
-	// RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
-	// backup). Online agents get a new certificate over their stream and the old one is revoked
-	// at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
-	// or admin on the affected groups and a recent re-authentication. Unknown or foreign nodes
-	// and groups are NOT_FOUND.
+	// RotateNodeKeys rotates the keys of nodes now (e.g. after a leaked backup). Online agents get
+	// a new certificate over their stream and the old one is revoked at once; offline nodes have
+	// all certificates revoked and must be re-enrolled. With revoke_only every node has all
+	// certificates revoked and its session ended – for a key that may have been stolen, because
+	// the agent connected right now could be the thief. Needs operator or admin on the affected
+	// groups and a recent re-authentication. Unknown or foreign nodes and groups are NOT_FOUND.
 	RotateNodeKeys(context.Context, *connect.Request[v1.RotateNodeKeysRequest]) (*connect.Response[v1.RotateNodeKeysResponse], error)
 }
 
@@ -121,11 +122,12 @@ type NodeServiceHandler interface {
 	// ListFilesystems returns the file systems of a node with fill level and a forecast when they
 	// run full (linear trend of the last 24 hours).
 	ListFilesystems(context.Context, *connect.Request[v1.ListFilesystemsRequest]) (*connect.Response[v1.ListFilesystemsResponse], error)
-	// RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
-	// backup). Online agents get a new certificate over their stream and the old one is revoked
-	// at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
-	// or admin on the affected groups and a recent re-authentication. Unknown or foreign nodes
-	// and groups are NOT_FOUND.
+	// RotateNodeKeys rotates the keys of nodes now (e.g. after a leaked backup). Online agents get
+	// a new certificate over their stream and the old one is revoked at once; offline nodes have
+	// all certificates revoked and must be re-enrolled. With revoke_only every node has all
+	// certificates revoked and its session ended – for a key that may have been stolen, because
+	// the agent connected right now could be the thief. Needs operator or admin on the affected
+	// groups and a recent re-authentication. Unknown or foreign nodes and groups are NOT_FOUND.
 	RotateNodeKeys(context.Context, *connect.Request[v1.RotateNodeKeysRequest]) (*connect.Response[v1.RotateNodeKeysResponse], error)
 }
 

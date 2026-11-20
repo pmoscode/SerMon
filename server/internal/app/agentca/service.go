@@ -89,7 +89,7 @@ type Store interface {
 	Authorities(ctx context.Context, now time.Time) ([]AuthorityState, error)
 	RecordCertificate(ctx context.Context, scope tenant.Scope, record CertificateRecord) error
 	Revoke(ctx context.Context, scope tenant.Scope, serial string, at time.Time) (bool, error)
-	Usable(ctx context.Context, serial string, at time.Time) (bool, error)
+	Usable(ctx context.Context, serial string, org tenant.OrgID, node identity.NodeID, at time.Time) (bool, error)
 }
 
 type authority struct {
@@ -274,10 +274,11 @@ func (s *Service) Revoke(ctx context.Context, scope tenant.Scope, serial string)
 	return nil
 }
 
-// CertificateUsable reports whether the certificate exists, is not revoked and is within its
-// validity period (checked on every agent connection; unknown serials are unusable).
-func (s *Service) CertificateUsable(ctx context.Context, serial string) (bool, error) {
-	usable, err := s.store.Usable(ctx, serial, s.now())
+// CertificateUsable reports whether the certificate with serial was issued for org and node, is
+// not revoked and is within its validity period (checked on every agent connection and again
+// while it lasts; unknown serials are unusable).
+func (s *Service) CertificateUsable(ctx context.Context, serial string, org tenant.OrgID, node identity.NodeID) (bool, error) {
+	usable, err := s.store.Usable(ctx, serial, org, node, s.now())
 	if err != nil {
 		return false, fmt.Errorf("check agent certificate: %w", err)
 	}

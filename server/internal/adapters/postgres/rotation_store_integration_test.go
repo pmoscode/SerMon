@@ -52,11 +52,11 @@ func TestRotationStore_OldCertificateWorksUntilTheEndOfTheGracePeriod(t *testing
 		t.Fatalf("Rotate() error = %v", err)
 	}
 	for at, want := range map[time.Time]bool{caTime.Add(30 * time.Minute): true, caTime.Add(2 * time.Hour): false} {
-		if usable, _ := ca.Usable(ctx, id.Serial, at); usable != want {
+		if usable, _ := ca.Usable(ctx, id.Serial, id.Org, id.Node, at); usable != want {
 			t.Errorf("old certificate at %v usable = %v, want %v", at.Sub(caTime), usable, want)
 		}
 	}
-	if usable, _ := ca.Usable(ctx, next.Serial, caTime.Add(2*time.Hour)); !usable {
+	if usable, _ := ca.Usable(ctx, next.Serial, id.Org, id.Node, caTime.Add(2*time.Hour)); !usable {
 		t.Error("the new certificate must be usable")
 	}
 	// The old certificate cannot rotate again.
@@ -79,7 +79,7 @@ func TestRotationStore_LockRevokesEveryCertificateOfTheNode(t *testing.T) {
 		t.Fatalf("Lock() error = %v", err)
 	}
 	for _, serial := range []string{id.Serial, next.Serial} {
-		if usable, _ := ca.Usable(ctx, serial, caTime.Add(time.Minute)); usable {
+		if usable, _ := ca.Usable(ctx, serial, id.Org, id.Node, caTime.Add(time.Minute)); usable {
 			t.Errorf("certificate %s still usable after the lock", serial)
 		}
 	}
@@ -88,7 +88,7 @@ func TestRotationStore_LockRevokesEveryCertificateOfTheNode(t *testing.T) {
 	if err := ca.RecordCertificate(ctx, scopeFor(t, uuid.UUID(id.Org)), later); err != nil {
 		t.Fatal(err)
 	}
-	if usable, _ := ca.Usable(ctx, later.Serial, caTime.Add(time.Minute)); usable {
+	if usable, _ := ca.Usable(ctx, later.Serial, id.Org, id.Node, caTime.Add(time.Minute)); usable {
 		t.Error("certificates of a locked node must be unusable")
 	}
 }
@@ -152,7 +152,7 @@ func TestRotationStore_RevokeAllEndsEveryCertificateWithoutLocking(t *testing.T)
 	if err := s.RevokeAll(ctx, id.Org, id.Node, caTime, access.AuditEntry{Action: "certificate.rotate_on_demand", Target: "n"}); err != nil {
 		t.Fatal(err)
 	}
-	if usable, _ := ca.Usable(ctx, id.Serial, caTime.Add(time.Minute)); usable {
+	if usable, _ := ca.Usable(ctx, id.Serial, id.Org, id.Node, caTime.Add(time.Minute)); usable {
 		t.Error("certificate still usable")
 	}
 	// Not locked: a newly issued certificate (re-enrollment) works.
@@ -160,7 +160,7 @@ func TestRotationStore_RevokeAllEndsEveryCertificateWithoutLocking(t *testing.T)
 	if err := ca.RecordCertificate(ctx, scopeFor(t, uuid.UUID(id.Org)), fresh); err != nil {
 		t.Fatal(err)
 	}
-	if usable, _ := ca.Usable(ctx, fresh.Serial, caTime.Add(time.Minute)); !usable {
+	if usable, _ := ca.Usable(ctx, fresh.Serial, id.Org, id.Node, caTime.Add(time.Minute)); !usable {
 		t.Error("a new certificate after RevokeAll must be usable (no lock)")
 	}
 }

@@ -1,6 +1,7 @@
 package pki_test
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -84,6 +85,19 @@ func TestSignAgentCSR_IssuesAClientCertificateThatVerifiesAgainstTheRoot(t *test
 	})
 	if err != nil {
 		t.Fatalf("certificate does not verify: %v", err)
+	}
+}
+
+// The chain comes with the certificate: read separately, a CA rollover in between could pair it
+// with an intermediate that didn't sign it (M1-38).
+func TestSignAgentCSR_ReturnsTheChainOfTheSigningCA(t *testing.T) {
+	ca := newCA(t)
+	issued, err := ca.SignAgentCSR(csr(t, p256(t), nil), org, node, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(issued.Intermediate, ca.Intermediate().Raw) || !bytes.Equal(issued.Root, ca.Root().Raw) {
+		t.Error("Issued must carry the intermediate and root of the signing CA")
 	}
 }
 

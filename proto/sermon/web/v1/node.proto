@@ -15,11 +15,12 @@ service NodeService {
   // run full (linear trend of the last 24 hours).
   rpc ListFilesystems(ListFilesystemsRequest) returns (ListFilesystemsResponse);
 
-  // RotateNodeKeys rotates the keys of nodes now (e.g. after a suspected compromise or a leaked
-  // backup). Online agents get a new certificate over their stream and the old one is revoked
-  // at once; offline nodes have all certificates revoked and must be re-enrolled. Needs operator
-  // or admin on the affected groups and a recent re-authentication. Unknown or foreign nodes
-  // and groups are NOT_FOUND.
+  // RotateNodeKeys rotates the keys of nodes now (e.g. after a leaked backup). Online agents get
+  // a new certificate over their stream and the old one is revoked at once; offline nodes have
+  // all certificates revoked and must be re-enrolled. With revoke_only every node has all
+  // certificates revoked and its session ended – for a key that may have been stolen, because
+  // the agent connected right now could be the thief. Needs operator or admin on the affected
+  // groups and a recent re-authentication. Unknown or foreign nodes and groups are NOT_FOUND.
   rpc RotateNodeKeys(RotateNodeKeysRequest) returns (RotateNodeKeysResponse);
 }
 
@@ -36,6 +37,9 @@ message RotateNodeKeysRequest {
     // organization selects all nodes of the caller's organization (needs operator on all groups).
     bool organization = 3 [(buf.validate.field).bool.const = true];
   }
+  // revoke_only revokes all certificates of the nodes and ends their sessions instead of asking
+  // connected agents to rotate; every node must be enrolled again.
+  bool revoke_only = 4;
 }
 
 // NodeIDs is a list of node UUIDs.
@@ -57,6 +61,9 @@ message RotateNodeKeysResponse {
   int32 online = 1;
   // offline is the number of nodes whose certificates were revoked (re-enrollment needed).
   int32 offline = 2;
+  // revoked is the number of nodes whose certificates were revoked with revoke_only
+  // (re-enrollment needed).
+  int32 revoked = 3;
 }
 
 // GetNodeRequest names the node.

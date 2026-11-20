@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
 // CA is the agent certificate authority as the agent API needs it (agentca.Service).
@@ -21,8 +23,9 @@ type CA interface {
 	// Intermediates are the issuing certificates of all trusted CAs.
 	Intermediates() []*x509.Certificate
 	IssueServerCertificate(hosts []string) (tls.Certificate, error)
-	// CertificateUsable reports whether a serial is recorded, not revoked and valid now.
-	CertificateUsable(ctx context.Context, serial string) (bool, error)
+	// CertificateUsable reports whether a serial is recorded for org and node, not revoked and
+	// valid now.
+	CertificateUsable(ctx context.Context, serial string, org tenant.OrgID, node identity.NodeID) (bool, error)
 	// Generation changes whenever the trusted CAs change.
 	Generation() uint64
 }
@@ -96,7 +99,7 @@ func verifyAgent(ca CA, logger *slog.Logger) func(tls.ConnectionState) error {
 		// The TLS callback has no context; the check gets its own deadline.
 		ctx, cancel := context.WithTimeout(context.Background(), usableCheckTimeout)
 		defer cancel()
-		usable, err := ca.CertificateUsable(ctx, serial)
+		usable, err := ca.CertificateUsable(ctx, serial, org, node)
 		if err != nil {
 			return fmt.Errorf("check client certificate: %w", err)
 		}

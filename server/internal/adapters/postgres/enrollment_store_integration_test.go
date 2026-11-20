@@ -145,7 +145,7 @@ func TestNodeRegistry_CreatesTheNodeWithAUsableCertificate(t *testing.T) {
 	if err := registry.Register(ctx, st, n, cert, now, []access.AuditEntry{{Action: "node.enroll", Target: "node:" + node.String()}}); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
-	if usable, err := postgres.NewAgentCAStore(db).Usable(ctx, cert.Serial, now); err != nil || !usable {
+	if usable, err := postgres.NewAgentCAStore(db).Usable(ctx, cert.Serial, cert.Org, cert.Node, now); err != nil || !usable {
 		t.Errorf("recorded certificate usable = %v, %v", usable, err)
 	}
 	var hostname, arch string

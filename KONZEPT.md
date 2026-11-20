@@ -352,13 +352,18 @@ eine Fake-Implementierung für Tests.
 
 - **Automatisch nach Zeit:** Agent-Zertifikate gelten 30 Tage. Nach 2/3 der Laufzeit erzeugt der Agent ein **neues
   Schlüsselpaar**, und der Server stellt ein neues Zertifikat aus. Nach einer kurzen Übergangszeit kommt das alte auf
-  die Denylist. Es gibt keinen Opt-out pro Node.
+  die Denylist. Es gibt keinen Opt-out pro Node. Nach jeder Rotation endet die Session, und der Agent verbindet sich
+  sofort mit dem neuen Zertifikat; das in der alten Session ausgestellte gilt dabei als Nachfolger, nicht als zweite
+  Session.
 - **Rotation auf Abruf** (z. B. nach Verdacht auf Kompromittierung oder einem Leak im Backup):
   - „Schlüssel jetzt rotieren“ für einen Node, eine Gruppe oder alle Nodes einer Org.
   - Nur für Operator und Admin, mit Step-up-2FA und Eintrag im Audit-Log.
   - Das alte Zertifikat wird **sofort** gesperrt, auch für schon offene Sessions.
   - Ist ein Node gerade offline, wird sein altes Zertifikat trotzdem sofort gesperrt; der Node muss danach neu
     enrollt werden.
+  - **Nur widerrufen** (`revoke_only`): Bei Verdacht auf einen **gestohlenen** Schlüssel könnte der gerade verbundene
+    Agent der Dieb sein und bekäme bei einer Rotation das neue Zertifikat. Dann werden alle Zertifikate sofort
+    widerrufen und die Sessions beendet, ohne Rotation; die echten Hosts werden neu enrollt.
 - **Rotation auf Server-Seite:**
   - Das Server-Zertifikat der Agent-API ist kurzlebig und wird automatisch erneuert.
   - CA-Wechsel per **Trust-Bundle**: Der Server verteilt über den Stream ein Bundle mit alter **und** neuer CA. Danach

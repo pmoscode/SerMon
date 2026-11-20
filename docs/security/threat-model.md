@@ -87,11 +87,11 @@ flowchart LR
 | T1 | S | Fremder Agent gibt sich als Node aus | mTLS mit Client-Zertifikat der Agent-CA; Org und Node nur aus dem Zertifikat (SPIFFE-URI), nie aus Nachrichten | M1-07, M1-10 | ✓ |
 | T2 | S | Gestohlener Enrollment-Token | 256 Bit, nur Hash, TTL, `max_uses`, gruppengebunden, Widerruf, Rate-Limit am Endpunkt, Audit | M1-08, M1-09 | ✓ |
 | T3 | S | Gestohlener Enrollment-Token: Benachrichtigung bei Nutzung | Event „Token benutzt“ an die Admins | E2.3, E2.4 | ☐ |
-| T4 | S | Gestohlener Agent-Schlüssel wird parallel genutzt | nur eine Session pro Node: dieselbe IP gilt als Reconnect und ersetzt die alte Session, eine zweite IP sperrt die Identität sofort (Log `security: second session`); Rotation auf Abruf mit Sperre des alten Zertifikats | M1-10, M1-11 | ◐ (Security-Event und Alert: E2.3; falsche Sperre nach normaler Rotation und Rotation auf Abruf, die den gerade verbundenen Dieb erreicht: M1-38) |
+| T4 | S | Gestohlener Agent-Schlüssel wird parallel genutzt | nur eine Session pro Node: dieselbe IP gilt als Reconnect und ersetzt die alte Session, eine zweite IP sperrt die Identität sofort (Log `security: second session`); Rotation auf Abruf mit Sperre des alten Zertifikats; nach jeder Rotation endet die Session, das neue Zertifikat gilt als Nachfolger (keine falsche Sperre); „nur widerrufen“ ohne Rotation, wenn der verbundene Agent der Dieb sein könnte | M1-10, M1-11, M1-38 | ◐ (Security-Event und Alert: E2.3) |
 | T56 | S | Widerrufenes oder abgelaufenes Zertifikat hält einen offenen Stream weiter | jede Session prüft ihr Zertifikat jede Minute nach (Widerruf, Ende der Schonfrist nach Rotation, Ablauf) und endet mit `PERMISSION_DENIED` | M1-35 | ✓ |
 | T58 | I | Enrollment-Token im Klartext an einen falschen Server oder in der Prozessliste | `http://` nur zu Loopback-IPs (keine Namen); `install.sh` übernimmt keine `agent.toml`, die auf einen anderen Server zeigt (außer `--force`); Token nur in der Umgebung (`export` + `sudo --preserve-env`) oder per `--token-file`, `--token` warnt | M1-35, M1-37 | ✓ |
 | T59 | S | Simulator in der Release-Binary meldet mit einem Token viele Identitäten an | `simulate` nur mit Cargo-Feature, Release-Builds ohne | M1-35 | ✓ |
-| T60 | S | Gefälschtes Agent-Zertifikat mit bekannter, gültiger Serial (nur bei kompromittierter Intermediate) | Widerrufsprüfung bindet Serial an Org und Node | M1-38 | ☐ |
+| T60 | S | Gefälschtes Agent-Zertifikat mit bekannter, gültiger Serial (nur bei kompromittierter Intermediate) | Widerrufsprüfung bindet Serial an Org und Node (Handshake und Nachprüfung) | M1-38 | ✓ |
 | T5 | S | Klon eines Nodes (gleiche `machine-id`) | `ALREADY_EXISTS`, Token bleibt unverbraucht | M1-09 | ✓ (Übernahme in der UI offen, M1-32) |
 | T6 | T | MITM beim Enrollment | System-CAs oder gepinnter Fingerprint (`--ca-fingerprint`), ausgestelltes Zertifikat wird gegen den Trust-Anker geprüft | M1-13 (ADR 0010) | ✓ |
 | T7 | T | MITM auf dem Agent-Stream, Downgrade | TLS 1.3 only, eigene Agent-CA, Server-Zertifikat mit Rotation, keine Fallback-Optionen | M1-10, M1-11b | ✓ |
@@ -213,7 +213,7 @@ Offen als Aufgaben (keine kritisch):
 - M1-37: Signatur an Datei und Version binden, gepinnter Bootstrap bei selbstsigniertem Zertifikat, Token aus der
   Prozessliste (T48, T64, T58) – **erledigt**.
 - M1-38: Rotation und Identität – Intermediate aus der Signatur, falsche Sperre nach Rotation, Widerrufsprüfung mit
-  Org/Node, Widerruf ohne Rotation auf Abruf (T4, T60).
+  Org/Node, Widerruf ohne Rotation auf Abruf (T4, T60). – **erledigt**.
 - M1-39: Einladungen ohne Konto-Squatting (T23, T61).
 - M1-40: Stream-Re-Check ohne Aktivität, Superadmins nur über Definer-Funktion (T16, T63).
 

@@ -47,3 +47,28 @@ func TestNodeAPI_OnDemandRotationRevokesOfflineNodesAndNeedsAStepUp(t *testing.T
 		t.Errorf("old login: %v, want FAILED_PRECONDITION", err)
 	}
 }
+
+// revoke_only never asks a connected agent to rotate (it could be a thief): every node of the
+// group has its certificates revoked and is counted as revoked.
+func TestNodeAPI_RevokeOnlyRevokesWithoutRotation(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ctx := context.Background()
+
+	res, err := ann.node.RotateNodeKeys(ctx, connect.NewRequest(&webv1.RotateNodeKeysRequest{
+		Target: &webv1.RotateNodeKeysRequest_GroupId{GroupId: groupAl}, RevokeOnly: true,
+	}))
+	if err != nil || res.Msg.GetRevoked() < 1 || res.Msg.GetOnline() != 0 || res.Msg.GetOffline() != 0 {
+		t.Fatalf("RotateNodeKeys(revoke_only) = %v, %v; want revoked nodes only", res.Msg, err)
+	}
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var revoked bool
+	if err := conn.QueryRow(ctx, "SELECT revoked_at IS NOT NULL FROM agent_certificates WHERE serial = $1", certAl).Scan(&revoked); err != nil || !revoked {
+		t.Errorf("certificate revoked = %v, %v", revoked, err)
+	}
+}

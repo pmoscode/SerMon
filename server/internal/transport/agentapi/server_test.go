@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
@@ -110,7 +111,7 @@ func (c *testCA) signWith(t *testing.T, a *pki.Authority, org tenant.OrgID, node
 	return tls.Certificate{Certificate: [][]byte{issued.DER, a.Intermediate().Raw}, PrivateKey: key}
 }
 
-func (c *testCA) CertificateUsable(_ context.Context, serial string) (bool, error) {
+func (c *testCA) CertificateUsable(_ context.Context, serial string, _ tenant.OrgID, _ identity.NodeID) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.usable[serial], nil
@@ -167,7 +168,7 @@ func (f *fakeRotator) Rotate(_ context.Context, id rotation.Identity, csr []byte
 		return rotation.Rotated{}, err
 	}
 	return rotation.Rotated{
-		Certificate: issued.DER, Intermediate: f.ca.Intermediate().Raw, NotAfter: issued.NotAfter,
+		Certificate: issued.DER, Serial: issued.Serial, Intermediate: issued.Intermediate, NotAfter: issued.NotAfter,
 		PreviousValidUntil: time.Now().Add(rotation.Grace),
 	}, nil
 }
@@ -558,7 +559,7 @@ func TestOnDemand_AgentThatDoesNotAnswerTimesOut(t *testing.T) {
 	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
 
 	timedOut := make(chan struct{}, 1)
-	s.sessions.RequestRotation(orgX, nodeX, func() { timedOut <- struct{}{}; s.sessions.Terminate(nodeX) })
+	s.sessions.RequestRotation(orgX, nodeX, func() { timedOut <- struct{}{}; s.sessions.Terminate(nodeX, rotation.ErrRotationTimeout) })
 	select {
 	case <-timedOut:
 	case <-time.After(5 * time.Second):
@@ -815,4 +816,50 @@ func TestSession_EndsWhenTheCertificateIsNoLongerUsable(t *testing.T) {
 		t.Errorf("stream after revocation: %v, want PERMISSION_DENIED", err)
 	}
 	waitFor(t, func() bool { return len(s.sessions.Active()) == 0 })
+}
+
+// After a normal rotation the session ends, so the agent reconnects with its new certificate at
+// once; the reconnect is no second holder and locks nothing (M1-38).
+func TestSession_EndsAfterARotationAndTheNewCertificateReconnects(t *testing.T) {
+	s := startServer(t)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(ctx)
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	csr, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Send(&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_RotateCertificate{
+		RotateCertificate: &agentv1.RotateCertificate{Csr: csr},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := receive(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := res.GetCertificateIssued()
+	newCert, _ := x509.ParseCertificate(issued.GetCertificate())
+	s.ca.mu.Lock()
+	s.ca.usable[hex.EncodeToString(newCert.SerialNumber.Bytes())] = true
+	s.ca.mu.Unlock()
+	if _, err := receive(stream); connect.CodeOf(err) != connect.CodeAborted {
+		t.Errorf("old session after the rotation: %v, want ABORTED (reconnect with the new certificate)", err)
+	}
+
+	fresh := tls.Certificate{Certificate: append([][]byte{issued.GetCertificate()}, issued.GetIntermediates()...), PrivateKey: key}
+	next := s.client(t, &fresh, tls.VersionTLS13).Session(ctx)
+	if err := next.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool {
+		a := s.sessions.Active()
+		return len(a) == 1 && a[0].Serial == hex.EncodeToString(newCert.SerialNumber.Bytes())
+	})
+	if s.rotator.lockCount() != 0 {
+		t.Error("the reconnect after a rotation must not lock the node")
+	}
+	_ = next.CloseRequest()
 }

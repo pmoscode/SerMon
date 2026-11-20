@@ -137,10 +137,10 @@ func (f *fakeStore) Revoke(_ context.Context, scope tenant.Scope, serial string,
 	return true, nil
 }
 
-func (f *fakeStore) Usable(_ context.Context, serial string, at time.Time) (bool, error) {
+func (f *fakeStore) Usable(_ context.Context, serial string, org tenant.OrgID, node identity.NodeID, at time.Time) (bool, error) {
 	c, ok := f.certs[serial]
 	_, revoked := f.revoked[serial]
-	return ok && !revoked && !at.Before(c.NotBefore) && at.Before(c.NotAfter), nil
+	return ok && c.Org == org && c.Node == node && !revoked && !at.Before(c.NotBefore) && at.Before(c.NotAfter), nil
 }
 
 func newBox(t *testing.T) *secrets.Box {
@@ -276,11 +276,11 @@ func TestIssue_RecordsTheCertificateAndItIsUsableUntilExpiry(t *testing.T) {
 		t.Errorf("identity = %v, %v, %v", gotOrg, gotNode, err)
 	}
 
-	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial); !usable {
+	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial, orgA, node); !usable {
 		t.Error("fresh certificate must be usable")
 	}
 	now = t0.Add(pki.AgentCertificateLifetime)
-	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial); usable {
+	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial, orgA, node); usable {
 		t.Error("expired certificate must not be usable")
 	}
 }
@@ -302,7 +302,7 @@ func TestRevoke_MakesTheCertificateUnusableImmediately(t *testing.T) {
 	if err := svc.Revoke(context.Background(), scopeA(t), issued.Serial); err != nil {
 		t.Fatalf("Revoke() error = %v", err)
 	}
-	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial); usable {
+	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial, orgA, node); usable {
 		t.Error("revoked certificate must not be usable")
 	}
 	if err := svc.Revoke(context.Background(), scopeA(t), issued.Serial); !errors.Is(err, agentca.ErrNotFound) {
@@ -314,7 +314,7 @@ func TestCertificateUsable_UnknownSerialIsUnusable(t *testing.T) {
 	store, box, now := newFakeStore(), newBox(t), t0
 	svc, _ := agentca.Bootstrap(context.Background(), store, box, clockAt(&now))
 
-	if usable, err := svc.CertificateUsable(context.Background(), "00000000000000000000000000000000"); err != nil || usable {
+	if usable, err := svc.CertificateUsable(context.Background(), "00000000000000000000000000000000", orgA, node); err != nil || usable {
 		t.Errorf("unknown serial: usable=%v err=%v, want false", usable, err)
 	}
 }
@@ -364,11 +364,11 @@ func (f failingStore) Revoke(ctx context.Context, s tenant.Scope, serial string,
 	return f.fakeStore.Revoke(ctx, s, serial, at)
 }
 
-func (f failingStore) Usable(ctx context.Context, serial string, at time.Time) (bool, error) {
+func (f failingStore) Usable(ctx context.Context, serial string, org tenant.OrgID, node identity.NodeID, at time.Time) (bool, error) {
 	if f.fail["usable"] {
 		return false, errStore
 	}
-	return f.fakeStore.Usable(ctx, serial, at)
+	return f.fakeStore.Usable(ctx, serial, org, node, at)
 }
 
 func TestService_PropagatesStoreErrors(t *testing.T) {
@@ -392,7 +392,7 @@ func TestService_PropagatesStoreErrors(t *testing.T) {
 	if err := svc.Revoke(context.Background(), scopeA(t), "x"); !errors.Is(err, errStore) {
 		t.Errorf("Revoke: error = %v, want errStore", err)
 	}
-	if _, err := svc.CertificateUsable(context.Background(), "x"); !errors.Is(err, errStore) {
+	if _, err := svc.CertificateUsable(context.Background(), "x", orgA, node); !errors.Is(err, errStore) {
 		t.Errorf("Usable: error = %v, want errStore", err)
 	}
 }
@@ -423,7 +423,7 @@ func TestSign_ReturnsTheRecordWithoutStoringIt(t *testing.T) {
 	if rec.Serial != issued.Serial || rec.Org != orgA || rec.Node != node || !rec.NotAfter.Equal(issued.NotAfter) {
 		t.Errorf("record = %+v, issued serial %s", rec, issued.Serial)
 	}
-	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial); usable {
+	if usable, _ := svc.CertificateUsable(context.Background(), issued.Serial, orgA, node); usable {
 		t.Error("an unrecorded certificate must not be usable")
 	}
 	if _, _, err := svc.SignAgentCertificate(tenant.OrgID{}, csrDER(t), node); err == nil {

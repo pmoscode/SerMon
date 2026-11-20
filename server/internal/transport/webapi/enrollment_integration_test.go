@@ -86,7 +86,7 @@ func TestEnrollment_AgentGetsACertificateForTheTokensOrganization(t *testing.T) 
 	if err != nil || org.String() != orgAlpha || node.String() != res.Msg.GetNodeId() {
 		t.Errorf("identity = %v/%v (%v), want Alpha/%s", org, node, err, res.Msg.GetNodeId())
 	}
-	if usable, err := s.ca.CertificateUsable(ctx, strings.ToLower(cert.SerialNumber.Text(16))); err != nil || !usable {
+	if usable, err := s.ca.CertificateUsable(ctx, strings.ToLower(cert.SerialNumber.Text(16)), org, node); err != nil || !usable {
 		t.Errorf("certificate usable = %v, %v", usable, err)
 	}
 	if !res.Msg.GetNotAfter().AsTime().After(time.Now().Add(29 * 24 * time.Hour)) {

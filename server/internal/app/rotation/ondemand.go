@@ -2,6 +2,7 @@ package rotation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,11 +13,23 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
-// Target selects the nodes of an on-demand rotation (exactly one field is set).
+var (
+	// ErrRotationTimeout ends the session of an agent that did not rotate on demand in time.
+	ErrRotationTimeout = errors.New("certificate revoked: the agent did not rotate in time; re-enroll the node")
+	// ErrRevoked ends the session of a node whose certificates an operator revoked.
+	ErrRevoked = errors.New("certificate revoked by an operator; re-enroll the node")
+)
+
+// Target selects the nodes of an on-demand rotation (exactly one of Nodes, Group and
+// Organization is set).
 type Target struct {
 	Nodes        []identity.NodeID
 	Group        *tenant.GroupID
 	Organization bool
+	// RevokeOnly revokes all certificates and ends the sessions without asking connected agents
+	// to rotate: if a key may have been stolen, the agent connected right now could be the thief
+	// and would get the new certificate. The nodes must be enrolled again.
+	RevokeOnly bool
 }
 
 // NodeRef is a node with its group.
@@ -29,6 +42,7 @@ type NodeRef struct {
 type Result struct {
 	Online  int // asked to rotate over their stream
 	Offline int // certificates revoked, re-enrollment needed
+	Revoked int // RevokeOnly: certificates revoked and sessions ended, re-enrollment needed
 }
 
 // NodeStore finds nodes and revokes their certificates.
@@ -44,8 +58,8 @@ type Live interface {
 	// RequestRotation asks a connected agent to rotate now; onTimeout runs if it does not answer.
 	// It reports false if the node is not connected.
 	RequestRotation(org tenant.OrgID, node identity.NodeID, onTimeout func()) bool
-	// Terminate ends the node's session.
-	Terminate(node identity.NodeID)
+	// Terminate ends the node's session with cause (sent to the agent).
+	Terminate(node identity.NodeID, cause error)
 }
 
 type onDemand struct {
@@ -64,7 +78,8 @@ func WithOnDemand(nodes NodeStore, live Live, policy authz.Policy) Option {
 
 // RotateOnDemand rotates the keys of the target's nodes now (KONZEPT §6): connected agents get a
 // new certificate over their stream and the old one is revoked at once; offline nodes have all
-// certificates revoked. Needs operator on the groups ("*" for the whole organization) and a
+// certificates revoked. With RevokeOnly every node has all certificates revoked and its session
+// ended. Needs operator on the groups ("*" for the whole organization) and a
 // recent re-authentication.
 func (s *Service) RotateOnDemand(ctx context.Context, c access.Caller, t Target) (Result, error) {
 	if s.onDemand == nil {
@@ -102,8 +117,16 @@ func (s *Service) RotateOnDemand(ctx context.Context, c access.Caller, t Target)
 			if err := s.onDemand.nodes.RevokeAll(ctx, org, node, s.now(), access.AuditEntry{
 				Action: "certificate.rotate_timeout", Target: "node:" + node.String(),
 			}); err == nil {
-				s.onDemand.live.Terminate(node)
+				s.onDemand.live.Terminate(node, ErrRotationTimeout)
 			}
+		}
+		if t.RevokeOnly {
+			if err := s.onDemand.nodes.RevokeAll(ctx, org, node, s.now(), audit("revoke")); err != nil {
+				return res, fmt.Errorf("revoke certificates of %s: %w", node, err)
+			}
+			s.onDemand.live.Terminate(node, ErrRevoked)
+			res.Revoked++
+			continue
 		}
 		if s.onDemand.live.RequestRotation(org, node, timeout) {
 			if err := s.store.Note(ctx, org, audit("online")); err != nil {

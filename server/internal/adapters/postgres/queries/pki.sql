@@ -49,4 +49,4 @@ SET revoked_at = sqlc.arg(revoked_at)
 WHERE serial = sqlc.arg(serial) AND revoked_at IS NULL;
 
 -- name: AgentCertificateUsable :one
-SELECT agent_certificate_usable(sqlc.arg(serial), sqlc.arg(at))::boolean AS usable;
+SELECT agent_certificate_usable(sqlc.arg(serial), sqlc.arg(org_id)::uuid, sqlc.arg(node_id)::uuid, sqlc.arg(at))::boolean AS usable;

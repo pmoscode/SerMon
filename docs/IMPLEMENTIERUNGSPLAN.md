@@ -1145,7 +1145,21 @@ flowchart LR
   OpenSSL), Pin-Fehler bricht ab, Token aus Datei; UI-Test für den Befehl mit Pin.
 - **Abhängig von:** M1-27, M1-32
 
-#### ☐ M1-38 – Rotation und Identität nachschärfen · S · S 🔒
+#### ☑ M1-38 – Rotation und Identität nachschärfen · S · S 🔒
+> Erledigt (ADR 0010, Nachtrag M1-38):
+> - `pki.Issued` trägt Intermediate und Wurzel der signierenden CA; Enrollment und Rotation nutzen sie, das Trust-Bundle
+>   enthält die signierende Wurzel immer. Die Signer-Ports kennen kein `Intermediate()` mehr.
+> - Die Session endet nach jeder Rotation; `claim()` erkennt die in der Session ausgestellte Serial als Nachfolger
+>   (von jeder IP). Vorher sperrte ein Reconnect mit dem neuen Zertifikat, der das Aufräumen der alten Session überholte,
+>   den Node – selbst von derselben IP.
+> - `agent_certificate_usable(serial, org, node, at)` (Migration 00018, die alte Funktion entfällt), im Handshake und bei
+>   der Nachprüfung.
+> - `RotateNodeKeys` mit `revoke_only`: alle Zertifikate widerrufen, Sessions beenden, keine Rotation (Antwort
+>   `revoked`). Die UI folgt mit der Node-Verwaltung. Sessions enden jetzt mit dem passenden Grund
+>   (`rotation.ErrRotationTimeout`, `rotation.ErrRevoked`).
+> - **Tests:** Kette bei CA-Wechsel zwischen Signatur und Antwort (Enrollment, Rotation), Nachfolger von anderer IP
+>   ersetzt statt Konflikt, Session-Ende nach Rotation und Reconnect ohne Sperre (mTLS), Serial mit fremder Org/Node
+>   unbrauchbar (PostgreSQL), `revoke_only` im Service und über die API; Gegenproben mit dem alten Code.
 - **Ziel:**
   - `SignAgentCertificate` liefert die ausstellende Intermediate und die Wurzel mit; Rotation und Enrollment nutzen
     diese statt eines späteren `Intermediate()`, damit ein CA-Wechsel dazwischen keine falsche Kette erzeugt.

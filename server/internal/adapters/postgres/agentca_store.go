@@ -161,9 +161,12 @@ func (s *AgentCAStore) Revoke(ctx context.Context, scope tenant.Scope, serial st
 	return rows > 0, err
 }
 
-// Usable runs the tenant-less revocation check (SECURITY DEFINER function, yes/no only).
-func (s *AgentCAStore) Usable(ctx context.Context, serial string, at time.Time) (bool, error) {
-	usable, err := s.db.withoutTenant().AgentCertificateUsable(ctx, sqlcdb.AgentCertificateUsableParams{Serial: serial, At: at})
+// Usable runs the tenant-less revocation check (SECURITY DEFINER function, yes/no only) for the
+// serial with the identity of the certificate.
+func (s *AgentCAStore) Usable(ctx context.Context, serial string, org tenant.OrgID, node identity.NodeID, at time.Time) (bool, error) {
+	usable, err := s.db.withoutTenant().AgentCertificateUsable(ctx, sqlcdb.AgentCertificateUsableParams{
+		Serial: serial, OrgID: uuid.UUID(org), NodeID: uuid.UUID(node), At: at,
+	})
 	if err != nil {
 		return false, fmt.Errorf("check certificate: %w", err)
 	}

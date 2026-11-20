@@ -3,6 +3,7 @@ package rotation_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -43,9 +44,10 @@ func (f *fakeNodes) RevokeAll(_ context.Context, _ tenant.OrgID, node identity.N
 }
 
 type fakeLive struct {
-	online    map[identity.NodeID]bool
-	requested []identity.NodeID
-	timeout   func()
+	online     map[identity.NodeID]bool
+	requested  []identity.NodeID
+	terminated []identity.NodeID
+	timeout    func()
 }
 
 func (f *fakeLive) RequestRotation(_ tenant.OrgID, node identity.NodeID, onTimeout func()) bool {
@@ -57,7 +59,9 @@ func (f *fakeLive) RequestRotation(_ tenant.OrgID, node identity.NodeID, onTimeo
 	return true
 }
 
-func (f *fakeLive) Terminate(identity.NodeID) {}
+func (f *fakeLive) Terminate(node identity.NodeID, _ error) {
+	f.terminated = append(f.terminated, node)
+}
 
 func onDemand(store *fakeNodes, live *fakeLive) *rotation.Service {
 	return rotation.NewService(store, fakeSigner{}, func() time.Time { return now },
@@ -135,5 +139,30 @@ func TestRotateOnDemand_UnknownNodesAreNotFound(t *testing.T) {
 	_, err := onDemand(store, &fakeLive{}).RotateOnDemand(context.Background(), all, rotation.Target{Nodes: []identity.NodeID{offline, online}})
 	if !errors.Is(err, access.ErrNotFound) || len(store.revoked) != 0 {
 		t.Errorf("error = %v, revoked %v; want ErrNotFound and nothing changed", err, store.revoked)
+	}
+}
+
+// If a key may have been stolen, the agent connected right now could be the thief: asking it to
+// rotate would hand it the new certificate (M1-38). RevokeOnly revokes everything and ends the
+// session instead; the real hosts enroll again.
+func TestRotateOnDemand_RevokeOnlyNeverHandsOutANewCertificate(t *testing.T) {
+	store := &fakeNodes{fakeStore: &fakeStore{}, nodes: []rotation.NodeRef{{Node: online, Group: group1}, {Node: offline, Group: group1}}}
+	live := &fakeLive{online: map[identity.NodeID]bool{online: true}}
+
+	res, err := onDemand(store, live).RotateOnDemand(context.Background(), operatorOn(time.Minute, group1), rotation.Target{Group: &group1, RevokeOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(live.requested) != 0 {
+		t.Errorf("asked %v to rotate, want nobody", live.requested)
+	}
+	if res.Revoked != 2 || res.Online != 0 || res.Offline != 0 || len(store.revoked) != 2 {
+		t.Errorf("result %+v, revoked %v; want both nodes revoked", res, store.revoked)
+	}
+	if !slices.Contains(live.terminated, online) {
+		t.Errorf("terminated %v, want the session of the connected node ended", live.terminated)
+	}
+	if len(store.audits) != 2 || store.audits[0].Details["mode"] != "revoke" {
+		t.Errorf("audits = %+v, want mode revoke", store.audits)
 	}
 }

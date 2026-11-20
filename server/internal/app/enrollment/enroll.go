@@ -1,6 +1,7 @@
 package enrollment
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -59,12 +60,11 @@ type Enrolled struct {
 	NotAfter     time.Time
 }
 
-// Signer signs agent certificates (agentca.Service).
+// Signer signs agent certificates (agentca.Service); the issued certificate carries the chain of
+// the CA that signed it.
 type Signer interface {
 	SignAgentCertificate(org tenant.OrgID, csrDER []byte, node identity.NodeID) (pki.Issued, agentca.CertificateRecord, error)
-	TrustAnchor() *x509.Certificate
 	TrustAnchors() []*x509.Certificate
-	Intermediate() *x509.Certificate
 }
 
 // Registry performs the enrollment transaction in the token's organization: use the token once
@@ -118,13 +118,16 @@ func (e *Enroller) Enroll(ctx context.Context, secret string, csrDER []byte, fac
 	if err := e.registry.Register(ctx, stored, node, record, e.now(), audits); err != nil {
 		return Enrolled{}, fmt.Errorf("register node: %w", err)
 	}
-	bundle := make([][]byte, 0, 2)
+	// The bundle always contains the signing root, even if the trusted CAs changed meanwhile.
+	bundle := [][]byte{issued.Root}
 	for _, root := range e.signer.TrustAnchors() {
-		bundle = append(bundle, root.Raw)
+		if !bytes.Equal(root.Raw, issued.Root) {
+			bundle = append(bundle, root.Raw)
+		}
 	}
 	return Enrolled{
 		Org: stored.Org, Node: node.ID, Certificate: issued.DER, NotAfter: issued.NotAfter,
-		Intermediate: e.signer.Intermediate().Raw, TrustAnchor: e.signer.TrustAnchor().Raw, TrustBundle: bundle,
+		Intermediate: issued.Intermediate, TrustAnchor: issued.Root, TrustBundle: bundle,
 	}, nil
 }
 

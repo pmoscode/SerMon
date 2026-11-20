@@ -48,7 +48,10 @@ Erweiterung, falls das gebraucht wird.
 Bevor etwas gespeichert wird, prüft der Agent:
 
 - Das Zertifikat gehört zu **seinem** Schlüssel (SPKI-Vergleich).
-- Es ist jetzt gültig, für Client-Auth und von der mitgeschickten ausstellenden CA signiert.
+- Es ist jetzt gültig, für Client-Auth und von der mitgeschickten ausstellenden CA signiert. Das ist eine
+  **Konsistenzprüfung, keine Vertrauensprüfung:** Die CA kommt aus derselben Antwort. Vertrauen stiftet allein die
+  TLS-Verbindung zum Server (System-CAs oder gepinnter Fingerprint); später darf sich niemand auf diese Prüfung als
+  Vertrauensanker verlassen (Nachtrag M1-35).
 - Es enthält genau eine SPIFFE-ID `spiffe://sermon/org/<uuid>/node/<uuid>`, und die Node-ID stimmt mit der Antwort überein.
 - Das angegebene Ablaufdatum liegt in der Zukunft.
 

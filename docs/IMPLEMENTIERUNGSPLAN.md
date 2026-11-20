@@ -254,7 +254,7 @@ flowchart LR
 > sechs Vertrauensgrenzen (Node ↔ Server, Browser ↔ Server, Server ↔ DB/Loki, Agent ↔ Helper, ausgehende
 > Verbindungen, Lieferkette) und 53 Bedrohungen nach STRIDE, jeweils mit Gegenmaßnahme, Aufgabe und Stand
 > (umgesetzt, teilweise, geplant). Stand nach M1-32, deshalb mit den Befunden aus der Umsetzung (z. B. `/metrics`,
-> Live-Streams, Einladungslinks). Offene Punkte für M1-35 sind am Ende gesammelt; `SECURITY.md` und der Skill
+> Live-Streams, Einladungslinks). Das Ergebnis von M1-35 steht am Ende (§6); `SECURITY.md` und der Skill
 > `sermon-security-review` verweisen auf das Dokument.
 - **Ziel:** `docs/security/threat-model.md`: Datenfluss-Diagramm, Vertrauensgrenzen (Node ↔ Server, Browser ↔ Server, Server ↔ DB, Agent ↔ Helper), STRIDE-Tabelle aus KONZEPT §18.1, Liste der Assets.
 - **Abhängig von:** –
@@ -730,6 +730,8 @@ flowchart LR
 
 #### ☑ M1-34 – Agent-Simulator · A · M
 > Erledigt: `sermon-agent simulate --nodes N --seed S` (Unterbefehl statt `--simulate`, passend zur übrigen CLI).
+> - **Nachtrag (M1-35):** nur mit dem Cargo-Feature `simulate` (`just simulate`, `just e2e-agent`); Release-Builds
+>   enthalten den Simulator nicht, denn er meldet mit einem Token viele Identitäten an.
 > - Jeder virtuelle Node ist ein echter Agent gegenüber dem Server: eigenes Enrollment (ein Token mit genug
 >   Nutzungen), eigene Identität und mTLS-Session, eigener WAL unter `<state_dir>/simulate/node-NNNN`; ein Neustart
 >   nutzt die Identitäten weiter.
@@ -841,10 +843,10 @@ flowchart LR
 > Abweichung: Werte in `QueryMetrics` kommen in der Einheit des Katalogs (z. B. ppm), die Kennzahlen der Übersicht
 > als 0..1.
 >
-> Nachtrag Live-Streams: höchstens 32 pro Session und 1 000 pro Instanz (`RESOURCE_EXHAUSTED`). Alle 30 s prüft ein
-> laufender Stream Session und Rechte erneut: Logout oder entfernte Mitgliedschaft beenden ihn mit `UNAUTHENTICATED`,
-> geänderte Rechte normal (der Client verbindet neu mit dem neuen Scope). Vorher lief ein Stream nach dem Logout bis
-> zu 15 min weiter.
+> Nachtrag Live-Streams: höchstens 32 pro Session, 64 pro User, 250 pro Org (seit M1-35) und 1 000 pro Instanz
+> (`RESOURCE_EXHAUSTED`). Alle 30 s prüft ein laufender Stream Session und Rechte erneut: Logout oder entfernte
+> Mitgliedschaft beenden ihn mit `UNAUTHENTICATED`, geänderte Rechte normal (der Client verbindet neu mit dem neuen
+> Scope). Vorher lief ein Stream nach dem Logout bis zu 15 min weiter.
 - **Ziel:** `MetricsService.Query` (typisiert: Metrik, Nodes, Zeitraum, Schritt, Aggregation); `FleetService.Summary`; `NodeService.Get` und `NodeService.Summary`; Server-Streaming für Live-Werte; Füllprognose (lineare Regression, für Kapazitäts-Badges).
 - **Abhängig von:** M1-23, M1-24, M1-25
 - **Skill:** `sermon-proto-change`
@@ -1050,9 +1052,99 @@ flowchart LR
 - **Ziel:** Compose-Umgebung für E2E mit Server und Agent-Containern (Debian 12/13, Ubuntu 24.04 LTS, mit systemd im Container); Playwright-Ablauf: Setup → Login → Token erzeugen → Agent im Container enrollen → Node mit Metriken sichtbar in < 2 min; Mandantentrennung end-to-end (User aus Org B).
 - **Abhängig von:** M1-27, M1-30, M1-31, M1-32
 
-#### ☐ M1-35 – Security-Review M1 · X · S 🔒
+#### ☑ M1-35 – Security-Review M1 · X · S 🔒
+> Erledigt: vier Teil-Reviews (Web-API und Mandanten; PKI, Enrollment und Ingest; Rust-Agent und Installation; Web-UI
+> und Lieferkette) und `just security` ohne Befund. **Kein kritischer Befund offen.** Ergebnis und Entscheidungen im
+> Threat Model §6 (`docs/security/threat-model.md`). Behoben, jeweils mit Test und Gegenprobe:
+> - **Hoch:**
+>   - `enroll` als root schrieb in das Verzeichnis von `sermon` und übereignete per `lchown`: ein übernommener Agent
+>     konnte über getauschte Symlinks root-Rechte erlangen. Jetzt läuft `enroll` als `sermon` (`runuser`/`setpriv`),
+>     als root verweigert der Agent fremde oder für andere beschreibbare Verzeichnisse (ADR 0010).
+>   - Keine Größengrenze für Nachrichten: ein kleiner gzip-Body ohne Anmeldung dehnte sich auf Gigabytes aus. Jetzt
+>     64 KiB (Web-API, Enrollment, auch nach dem Entpacken) und 4 MiB (Agent-Stream).
+> - **Mittel:**
+>   - Kontosperre: Jeder Versuch wird vor der Prüfung per Compare-and-swap reserviert (vorher: 12 parallele Versuche,
+>     keine Sperre).
+>   - Höchstens 512 MiB für gleichzeitige Argon2id-Prüfungen; Rate-Limits zählen IPv6 pro /64; alle
+>     `X-Forwarded-For`-Zeilen werden gelesen.
+>   - Ingest verwirft Werte eines Agents, der `Throttle` ignoriert (über die Batches im Flug hinaus).
+>   - Offene Agent-Sessions prüfen ihr Zertifikat jede Minute (Widerruf, Schonfrist, Ablauf).
+>   - HSTS, sobald alle erlaubten Origins `https://` sind; Enrollment-Tokens verlangen einen Step-up.
+> - **Niedrig:**
+>   - `sermon_app` darf `users` nicht mehr ändern (Migration 00016).
+>   - `install.sh` bricht ab, wenn `agent.toml` auf einen anderen Server zeigt (außer `--force`) oder ein bestehender
+>     User `sermon` kein System-Konto ist.
+>   - Agent: `http://` nur zu Loopback-IPs, Simulator nur mit Cargo-Feature `simulate`, Bidi- und Null-Breite-Zeichen
+>     aus Servertexten entfernt, Zeitwerte aus `identity.toml` ohne Panic.
+>   - Web: GET mit `Sec-Fetch-Site` einer fremden Seite abgelehnt; Live-Streams auch pro User (64) und Org (250)
+>     begrenzt; kein offener Redirect über `/.//host`; unerlaubte Links in Hilfetexten brechen den Build ab und werden
+>     nie gerendert; `tailwind-variants` exakt gepinnt (Test prüft alle Pins).
+>   - `release-sign.sh` nimmt nur Ed25519-Schlüssel; `.build/` der E2E-Umgebung nur für den eigenen User.
+>
+> Entscheidungen: Recovery-Codes bleiben bei 80 Bit (Threat Model §5). Der Re-Check offener Agent-Sessions
+> aktualisiert `last_seen` nicht. Offene Befunde: M1-36 bis M1-40.
 - **Ziel:** Skill `sermon-security-review` über alle M1-Änderungen; Threat Model aktualisieren; offene Findings als Aufgaben erfassen.
 - **Abhängig von:** alle M1-Aufgaben
+
+#### ☐ M1-36 – Ingest-Grenzen pro Node und Org · S · M 🔒
+- **Ziel:** Das Serien-Limit (2 000) gilt pro Node über alle Sessions und Instanzen, nicht pro Session: `Open` lädt die
+  Zahl der gespeicherten Serien des Nodes. Dazu eine Obergrenze pro Org. Ring-Slots werden erst bei Bedarf oder mit
+  Größenlimit angelegt, der Serien-Cache des Timescale-Adapters verdrängt alte Einträge. `series.id` und `series_id`
+  werden `bigint`.
+- **Hintergrund (M1-35):** Ein übernommener Agent verbindet sich neu und schickt jedes Mal 2 000 neue Label-Werte:
+  etwa 21 MB RAM pro Reconnect für 15 min, ein Cache ohne Ende und eine `series`-Tabelle, deren `integer`-ID nach 2³¹
+  Zeilen den Ingest aller Mandanten stoppt.
+- **Tests zuerst:** Reconnects mit neuen Serien bleiben beim Limit pro Node; Org-Limit; Speicher des Rings bleibt
+  begrenzt; Migration auf `bigint` mit bestehenden Daten.
+- **Abhängig von:** M1-21, M1-22
+
+#### ☐ M1-37 – Agent-Installation: Signatur, Bootstrap, Token · X · M 🔒
+- **Ziel:**
+  - `install.sh` prüft auch den Trusted Comment der Signatur (im OpenSSL-Pfad die globale Signatur) und verlangt
+    `file:<Binary>` sowie eine Mindestversion oder einen Mindest-Zeitstempel, den der Server beim Build einträgt.
+  - Bei selbstsigniertem Zertifikat zeigt „Node hinzufügen“ einen Befehl mit `curl --pinnedpubkey 'sha256//…'` (SPKI-Pin,
+    curl prüft ihn auch mit `-k`); `install.sh` lädt mit demselben Pin statt `--insecure`, ohne curl bricht es ab.
+  - Das Token steht nicht mehr in einer Kommandozeile: `install.sh` liest es ohne Echo von `/dev/tty` oder per
+    `--token-file`; der Befehl in der UI nutzt `read -rs` und `sudo --preserve-env=SERMON_ENROLLMENT_TOKEN`.
+- **Hintergrund (M1-35):** Mit `--ca-fingerprint` lädt das Skript ohne Zertifikatsprüfung; ein Angreifer im Netz könnte
+  eine ältere signierte Binary (Rollback) oder ein eigenes `install.sh` ausliefern. `sudo SERMON_ENROLLMENT_TOKEN=… sh`
+  zeigt das Token während der Installation in `ps`.
+- **Tests zuerst:** bats: falscher Dateiname und zu alte Version im Trusted Comment werden abgelehnt (minisign und
+  OpenSSL), Pin-Fehler bricht ab, Token aus Datei; UI-Test für den Befehl mit Pin.
+- **Abhängig von:** M1-27, M1-32
+
+#### ☐ M1-38 – Rotation und Identität nachschärfen · S · S 🔒
+- **Ziel:**
+  - `SignAgentCertificate` liefert die ausstellende Intermediate und die Wurzel mit; Rotation und Enrollment nutzen
+    diese statt eines späteren `Intermediate()`, damit ein CA-Wechsel dazwischen keine falsche Kette erzeugt.
+  - Nach jeder erfolgreichen Rotation endet die alte Session; `claim()` erkennt die Nachfolge-Serial als Ersatz statt
+    als zweite Session (sonst falsche Sperre bei IP-Wechsel oder langsamem Aufräumen).
+  - Die Widerrufsprüfung bindet Serial an Org und Node (neue Migration, Handshake und Re-Check).
+  - Ein Modus „widerrufen und neu enrollen“ ohne Rotation auf Abruf: Ist der Dieb gerade verbunden, bekäme er sonst das
+    neue Zertifikat. In ADR 0010 bzw. im Threat Model (T4) festhalten.
+- **Tests zuerst:** CA-Wechsel zwischen Signatur und Antwort; Reconnect mit neuer Serial vor dem Aufräumen ohne Sperre;
+  Serial mit fremder Org/Node abgelehnt; Widerruf ohne Rotation.
+- **Abhängig von:** M1-11, M1-11b
+
+#### ☐ M1-39 – Einladungen ohne Konto-Squatting · S · M 🔒
+- **Ziel:** Ein Org-Admin kann über die eigene Einladung kein instanzweites Konto mit fremder Adresse anlegen: Adresse
+  nachweisen (Link per Mail, wenn SMTP eingerichtet ist) oder neue Konten bis zur Bestätigung als unbestätigt führen.
+  `AcceptInvitation` antwortet gleich, ob die Adresse ein Konto hat oder nicht (z. B. „Mail prüfen oder anmelden“).
+  ADR 0008 anpassen.
+- **Hintergrund (M1-35):** ADR 0008, Nachtrag „Konto-Squatting“.
+- **Tests zuerst:** Annahme durch den Admin legt kein nutzbares Konto für fremde Adressen an; gleiche Antwort mit und
+  ohne bestehendes Konto.
+- **Abhängig von:** M1-04, E2.4 (Mail, optional)
+
+#### ☐ M1-40 – Kleinere Härtungen aus M1-35 · S · S 🔒
+- **Ziel:**
+  - Der Re-Check laufender Live-Streams prüft die Session, ohne `last_seen_at` zu erneuern (`Peek`): Eine offene
+    Live-Ansicht hält die Session nicht über das Idle-Timeout hinaus am Leben.
+  - `sermon_app` verliert `INSERT` auf `superadmins`; der erste Superadmin entsteht über eine
+    `SECURITY DEFINER`-Funktion, die das Setup-Token atomar verbraucht.
+- **Tests zuerst:** Stream offen, keine Anfragen → Session läuft nach dem Idle-Timeout ab; `INSERT INTO superadmins`
+  als `sermon_app` verweigert, Setup funktioniert weiter.
+- **Abhängig von:** M1-05, M1-26
 
 **M1 fertig, wenn:** Der Demo-Test M1-33 ist grün, Mandanten- und Rollen-Tests sind vollständig, das Ressourcen-Budget des Agents ist eingehalten, und die Security-Review hat keine offenen kritischen Findings.
 

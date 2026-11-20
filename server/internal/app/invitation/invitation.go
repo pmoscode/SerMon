@@ -1,6 +1,7 @@
 // Package invitation lets org admins invite members by a single-use link (ADR 0008). The link
-// token has 256 bits, only its SHA-256 is stored, it is valid for 72 hours. Invitations never
-// reveal whether an e-mail address already has an account.
+// token has 256 bits, only its SHA-256 is stored, it is valid for 72 hours. Creating and listing
+// invitations never reveals whether an e-mail address already has an account; whoever holds the
+// link learns it when accepting (accepted residual risk, ADR 0008).
 package invitation
 
 import (

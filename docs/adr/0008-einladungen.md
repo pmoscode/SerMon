@@ -62,6 +62,11 @@ Weitere Regeln:
 - **Restrisiko:** Wer den Link hält, kann bei der Annahme erkennen, ob die Adresse schon ein Konto hat. Das ist
   die eingeladene Person, beim Kopieren auch der Admin. Er erfährt nur, dass es das Konto gibt, nicht in welchen
   Orgs. Bewusst akzeptiert: Der Admin kennt die Adresse ohnehin. Rate-Limit und Audit-Log begrenzen Missbrauch.
+- **Restrisiko (Nachtrag M1-35): Konto-Squatting.** Ohne Mailversand beweist niemand, dass die annehmende Person die
+  Adresse besitzt. Ein Org-Admin kann die eigene Einladung an `opfer@example.org` selbst annehmen und so ein
+  instanzweites Konto mit dieser Adresse und einem Passwort seiner Wahl anlegen; die echte Inhaberin kann danach keine
+  Einladung einer anderen Org mehr annehmen. Gegenmaßnahme folgt mit M1-39 (Adressnachweis oder unbestätigte Konten,
+  einheitliche Antwort bei der Annahme).
 - Eine neue Tabelle `invitations` (RLS mit ENABLE + FORCE). Die Annahme läuft ohne Mandant über eine minimale
   `SECURITY DEFINER`-Funktion (`sermon_definer`, ADR 0007), die nur über den Token-Hash sucht.
 - Passwort-Reset ohne SMTP kann später demselben Muster folgen: ein einmaliger Link, den ein Admin erzeugt.

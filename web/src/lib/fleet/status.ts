@@ -1,4 +1,4 @@
-import type { NodeSummary } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
+import type { KeyFigures, NodeSummary } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
 
 /**
  * Traffic light of a node. Until the alert engine exists (M2), it comes from the key figures:
@@ -17,8 +17,8 @@ export interface Assessment {
 	reasons: Reason[];
 }
 
-/** The status of a node and the figures above the thresholds (highest first). */
-export function assess(node: NodeSummary): Assessment {
+/** The status of a node (summary or details) and the figures above the thresholds (highest first). */
+export function assess(node: { online: boolean; figures?: KeyFigures }): Assessment {
 	if (!node.online) return { status: 'offline', reasons: [] };
 	const figures: [Reason, number | undefined][] = [
 		['cpu', node.figures?.cpuBusyRatio],

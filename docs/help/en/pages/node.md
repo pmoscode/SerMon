@@ -1,0 +1,16 @@
+# Node
+
+Everything about one server: a header with host facts and current key figures, below it charts by area (CPU, memory, disks, network).
+
+## Reading this page
+
+- All charts show the same time range and follow the mouse pointer together. Dragging zooms, a double-click resets – more in [Charts and time range](help:concepts/charts).
+- Every chart has an ⓘ explaining the metric.
+- The file system table shows when a file system runs full at the current trend (linear regression over 24 hours). “Not foreseeable” means no growth or more than a year away.
+- In the network area the rates can be shown in bit/s instead of bytes/s.
+
+## Typical next steps
+
+1. Narrow down an unusual figure in the chart: choose the time range, zoom into the spike.
+2. Read the typical causes in the help of the metric.
+3. Clean up or enlarge a file system with a near forecast before it runs full.

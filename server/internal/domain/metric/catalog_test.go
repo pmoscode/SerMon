@@ -1,6 +1,8 @@
 package metric_test
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -63,5 +65,17 @@ func TestCatalog_LookupAndLabels(t *testing.T) {
 	}
 	if _, ok := metric.Lookup("sermon_unknown"); ok {
 		t.Error("unknown metric found")
+	}
+}
+
+// Every metric of the catalog has a help text in German and English (KONZEPT §17, M1-31).
+func TestCatalog_EveryMetricHasHelpTexts(t *testing.T) {
+	for _, d := range metric.All() {
+		for _, lang := range []string{"de", "en"} {
+			path := filepath.Join("..", "..", "..", "..", "docs", "help", lang, d.HelpKey()+".md")
+			if _, err := os.Stat(path); err != nil {
+				t.Errorf("%s: missing %s", d.Name, path)
+			}
+		}
 	}
 }

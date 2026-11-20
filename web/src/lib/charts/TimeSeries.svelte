@@ -87,7 +87,13 @@
 			},
 			axes: [
 				{ ...axis, values: (_u, splits) => timeAxis(splits) },
-				{ ...axis, size: 72, values: (_u, splits) => splits.map(format) }
+				{
+					...axis,
+					// Wide enough for the longest label (e.g. durations), about 7 px per character.
+					size: (_u, values) =>
+						Math.max(48, 16 + 7 * Math.max(0, ...(values ?? []).map((v) => String(v).length))),
+					values: (_u, splits) => splits.map(format)
+				}
 			],
 			series: [
 				{ value: (_u, v) => (v == null ? '–' : dateTime(v * 1000)) },

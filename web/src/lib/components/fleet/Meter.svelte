@@ -6,8 +6,12 @@
 	import { m } from '#lib/paraglide/messages.js';
 
 	/** A small gauge for a share 0..1 (CPU, memory, disk) with value as text. */
-	let { label, value, topic }: { label: string; value: number | undefined; topic?: string } =
-		$props();
+	let {
+		label,
+		value,
+		topic,
+		compact = false
+	}: { label: string; value: number | undefined; topic?: string; compact?: boolean } = $props();
 
 	const percent = $derived(
 		value === undefined ? undefined : Math.round(Math.min(1, Math.max(0, value)) * 100)
@@ -26,7 +30,7 @@
 
 <div class="flex flex-col gap-1">
 	<div class="flex items-center justify-between gap-2 text-xs">
-		<span class="flex items-center gap-0.5 text-muted-foreground">
+		<span class={['flex items-center gap-0.5 text-muted-foreground', compact && 'sr-only']}>
 			{label}
 			{#if topic}<HelpTip {topic} />{/if}
 		</span>

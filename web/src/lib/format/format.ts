@@ -73,7 +73,8 @@ export function formatBitsPerSecond(bits: number, locale: Locale): string {
 /** A share 0..1 as percent: 0.5 %, 42 %. */
 export function formatPercent(ratio: number, locale: Locale): string {
 	if (!Number.isFinite(ratio)) return '–';
-	const fraction = Math.abs(ratio) < 0.1 && ratio !== 0 ? 1 : 0;
+	const abs = Math.abs(ratio);
+	const fraction = ratio === 0 || abs >= 0.1 ? 0 : abs >= 0.01 ? 1 : 2;
 	return new Intl.NumberFormat(locale, {
 		style: 'percent',
 		maximumFractionDigits: fraction

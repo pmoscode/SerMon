@@ -30,3 +30,17 @@ test('the fleet page loads less than 200 KiB of JavaScript', async ({ page }) =>
 	console.log(`fleet: ${(size / 1024).toFixed(1)} KiB gzip`);
 	expect(size).toBeLessThan(BUDGET);
 });
+
+test('the node page with charts loads less than 200 KiB of JavaScript', async ({ page }) => {
+	await mockApi(page, {
+		...installed(true),
+		'NodeService/GetNode': () => ({
+			json: { node: { id: 'n1', hostname: 'web-01', online: true } }
+		}),
+		'NodeService/ListFilesystems': () => ({ json: {} }),
+		'MetricsService/QueryMetrics': () => ({ json: {} })
+	});
+	const size = await firstLoadJs(page, '/nodes/0193f5a0-0000-7000-8000-000000000001');
+	console.log(`node: ${(size / 1024).toFixed(1)} KiB gzip`);
+	expect(size).toBeLessThan(BUDGET);
+});

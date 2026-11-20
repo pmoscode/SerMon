@@ -127,7 +127,7 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh .devcontainer/*.sh packaging/install.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh
+    shellcheck scripts/*.sh .devcontainer/*.sh packaging/install.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
@@ -194,11 +194,12 @@ test-agent:
 security-agent:
     cargo deny check
 
-# Fuzz the parsers of untrusted input: /proc texts and WAL recovery (cargo-fuzz, pinned nightly)
+# Fuzz the parsers of untrusted input: /proc texts, journal lines and WAL recovery (cargo-fuzz, pinned nightly)
 [working-directory: 'agent/fuzz']
 fuzz-agent seconds="60":
     ./seed.sh
     cargo fuzz run proc_parsers -- -max_total_time={{ seconds }} -max_len=65536
+    cargo fuzz run journal_line -- -max_total_time={{ seconds }} -max_len=65536
     cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
 
 # Test install.sh and the systemd unit in Debian: bats (signature, detection) and `systemd-analyze security` < 2.0

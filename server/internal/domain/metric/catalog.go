@@ -174,6 +174,8 @@ var definitions = []Definition{
 	def("sermon_agent_buffer_bytes", UnitBytes, Max, AreaAgent),
 	def("sermon_agent_buffer_dropped_batches", UnitCount, Last, AreaAgent),
 	def("sermon_agent_series_dropped_samples", UnitCount, Last, AreaAgent),
+	def("sermon_agent_journal_lost_entries", UnitCount, Last, AreaAgent),
+	def("sermon_agent_journal_invalid_lines", UnitCount, Last, AreaAgent),
 }
 
 var byName = func() map[string]Definition {

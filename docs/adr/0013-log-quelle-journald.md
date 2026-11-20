@@ -84,3 +84,33 @@ journalctl -o json --all --follow --output-fields=<feste Liste> (--after-cursor=
   nicht übernommen; ohne Gruppe `systemd-journal` sieht der Agent nur eigene Einträge.
 - Folgearbeiten: Umsetzung in E3.1 (Log-Pipeline) und E2.3 (Security-Events) mit den Fixtures aus
   `agent/fixtures/logs/`; KONZEPT §4.1 und §10.1 sind angepasst.
+
+## Nachtrag M2-05: Umsetzung
+
+- **Ort:** `sermon-logs::journal` (Zeilenparser, Cursor, Quelle); im Agent `journal.rs`. Die Quelle läuft unabhängig
+  vom Veto `allow_logs`, das nur den Versand von Logs betrifft.
+- **Zwei Positionen:**
+  - Startet die Quelle `journalctl` nach einem Absturz neu, setzt sie nach dem zuletzt *gelesenen* Eintrag fort; diese
+    Einträge sind schon beim Verbraucher.
+  - Die Cursor-Datei (`journal.cursor` im State-Verzeichnis, 0600, atomar) hält dagegen den zuletzt *bestätigten*
+    Eintrag. Der Verbraucher bestätigt per `Checkpoint::commit`, sobald die Ergebnisse im WAL liegen. Geschrieben wird
+    höchstens jede Sekunde und beim Beenden.
+  - Bis zu den Parsern (M2-06) bestätigt ein Zwischen-Verbraucher jeden Eintrag sofort.
+- **Argumente:** zusätzlich `--quiet` und `--no-pager`, damit keine Hinweiszeilen in der JSON-Ausgabe landen.
+- **Grenzen:**
+  - Zeilen über 1 MiB werden übersprungen.
+  - `MESSAGE` wird auf 16 KiB gekürzt, andere Textfelder auf 256 Byte, der Cursor muss druckbares ASCII ohne Leerzeichen
+    sein (höchstens 512 Byte).
+  - Kaputte Zeilen und Lücken zählen die Agent-Metriken `sermon_agent_journal_invalid_lines` und
+    `sermon_agent_journal_lost_entries`. Die Lücke seit dem letzten Lauf zählt mit (Sequenznummer aus dem gespeicherten
+    Cursor).
+- **JSON:** `serde_json` nach Ersetzen ungültigen UTF-8. Werte sind Strings, Byte-Arrays, Arrays von Werten (der erste
+  zählt) oder `null`.
+- **Kein Journal** (Alpine, `journalctl` fehlt): Die Quelle warnt einmal und versucht es mit Backoff bis 60 s weiter.
+- **Offen:**
+  - Endet `journalctl` vor dem ersten Eintrag eines Erststarts, startet es wieder mit `--lines=0`; dazwischen
+    geschriebene Einträge fehlen dann.
+  - Ein Agent im Container liest das Journal des Hosts noch nicht (`--directory`/`--root` sind nicht umgesetzt).
+- **Gemessen (E2E unter systemd, 60 s, 20 Zeilen/s):**
+  - Agent und `journalctl` zusammen 0,65–0,70 % eines Kerns und 13–18 MiB RSS, davon `journalctl` 0,17 % und 7 MiB.
+  - Die Selbst-Metrik `sermon_agent_memory_rss_bytes` zählt den Kindprozess nicht mit.

@@ -69,7 +69,14 @@ impl StateLayout {
         self.root.join("wal")
     }
 
-    /// Removes everything the agent created (identity, buffer) and returns what existed.
+    /// Cursor of the journal source: the last entry whose results are stored (ADR 0013).
+    #[must_use]
+    pub fn journal_cursor_file(&self) -> PathBuf {
+        self.root.join("journal.cursor")
+    }
+
+    /// Removes everything the agent created (identity, buffer, journal cursor) and returns what
+    /// existed.
     ///
     /// Symbolic links are removed themselves, never followed.
     ///
@@ -78,7 +85,11 @@ impl StateLayout {
     /// The first error while removing; entries removed before stay removed.
     pub fn remove_agent_data(&self) -> io::Result<Vec<PathBuf>> {
         let mut removed = Vec::new();
-        for entry in [self.identity_dir(), self.wal_dir()] {
+        for entry in [
+            self.identity_dir(),
+            self.wal_dir(),
+            self.journal_cursor_file(),
+        ] {
             let metadata = match std::fs::symlink_metadata(&entry) {
                 Ok(metadata) => metadata,
                 Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
@@ -108,11 +119,20 @@ mod tests {
         fs::create_dir_all(layout.identity_dir()).unwrap();
         fs::write(layout.identity_dir().join("agent.key"), "key").unwrap();
         fs::create_dir_all(layout.wal_dir().join("segments")).unwrap();
+        fs::write(layout.journal_cursor_file(), "s=a;i=1").unwrap();
         fs::write(dir.path().join("notes.txt"), "admin's file").unwrap();
 
         let removed = layout.remove_agent_data().unwrap();
 
-        assert_eq!(removed, vec![layout.identity_dir(), layout.wal_dir()]);
+        assert_eq!(
+            removed,
+            vec![
+                layout.identity_dir(),
+                layout.wal_dir(),
+                layout.journal_cursor_file()
+            ]
+        );
+        assert!(!layout.journal_cursor_file().exists());
         assert!(!layout.identity_dir().exists());
         assert!(!layout.wal_dir().exists());
         assert!(dir.path().join("notes.txt").exists());

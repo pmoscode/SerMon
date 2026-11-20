@@ -1419,7 +1419,32 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 
 ### 5.3 Security-Events (E2.3)
 
-#### ☐ M2-05 – journald-Quelle im Agent · A · M 🔒
+#### ☑ M2-05 – journald-Quelle im Agent · A · M 🔒
+> Erledigt (ADR 0013, Nachtrag M2-05):
+> - **`sermon-logs::journal`:**
+>   - Zeilenparser: tolerantes UTF-8; Strings, Byte-Arrays, Mehrfachwerte, `null`; feste Feldliste, `_CMDLINE` wird
+>     nie übernommen; `MESSAGE` höchstens 16 KiB.
+>   - Cursor-Datei atomar mit 0600.
+>   - Quelle mit `journalctl` als Kindprozess: Neustart mit Backoff nach dem zuletzt gelesenen Eintrag; die Datei hält
+>     nur, was der Verbraucher bestätigt hat. Erster Start mit `--lines=0`, immer `--all`, dazu `--quiet --no-pager`.
+>   - Zeilen über 1 MiB werden übersprungen; kaputte Zeilen und Lücken in der Sequenznummer werden gezählt.
+> - **Agent:** Die Quelle läuft in `run` (unabhängig von `allow_logs`). Bis M2-06 bestätigt ein Zwischen-Verbraucher
+>   jeden Eintrag sofort. Neue Selbst-Metriken `sermon_agent_journal_lost_entries` und
+>   `sermon_agent_journal_invalid_lines` mit Katalog und Hilfe; `journal.cursor` gehört zu den Agent-Daten
+>   (`uninstall`).
+> - **Abweichung:** Den Hinweis in der UI auf verlorene Einträge (ADR 0013) gibt es noch nicht, nur die Metrik.
+> - **Tests:**
+>   - Parser mit den Fixtures aller vier Distros, Proptests, Fuzz-Ziel `journal_line` (60 s, 127 000 Läufe ohne Fund).
+>   - Quelle gegen ein Fake-`journalctl` (`tests/fake-journalctl`) mit den Fixture-Strömen von Debian und Ubuntu: kein
+>     Eintrag doppelt oder verloren über Abstürze; Fortsetzung nach dem bestätigten Cursor; Rotation; Vacuum mit
+>     gezählter Lücke; kaputte Zeilen; fehlendes `journalctl`; Beenden ohne verwaisten Prozess.
+>   - Gegenproben für UTF-8, Byte-Arrays, Kürzen, Lese- gegen bestätigte Position, Schreiben beim Beenden, Lücken
+>     (auch seit dem letzten Lauf), Zeilenlimit, Kill beim Beenden und `--lines=0`.
+> - **E2E unter der gehärteten Unit:**
+>   - `journalctl` läuft als `sermon`, und nach einem Neustart des Agents geht es mit `--after-cursor` weiter.
+>   - Die neuen Metriken kommen an, keine Warnungen.
+>   - **Budget** bei 20 Journal-Zeilen/s über 60 s: Agent und `journalctl` zusammen 0,65–0,70 % eines Kerns und
+>     13–18 MiB RSS.
 - **Ziel:** `journalctl` als Kindprozess nach ADR 0013: eigener Cursor erst, wenn der Eintrag im WAL liegt; erster
   Start mit `--lines=0`; immer `--all`; feste Feldliste ohne `_CMDLINE`; tolerantes UTF-8; Neustart bei Absturz mit
   Backoff. In M2 nur Eingang der Security-Parser, ohne Versand an Loki (E3.1).
@@ -1578,7 +1603,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 
 #### ☐ M2-25 – Ressourcen-Budget als Test · X · S
 - **Ziel:** Messung des Agents im E2E (CPU und RSS über 60 s unter systemd, wie im Review M1) als Prüfung in der
-  Nightly: < 1 % eines Kerns, < 30 MiB RSS, auch mit aktiver journald-Quelle.
+  Nightly: < 1 % eines Kerns, < 30 MiB RSS, auch mit aktiver journald-Quelle. Der Kindprozess `journalctl` zählt mit
+  (rund 7 MiB); die Selbst-Metrik des Agents erfasst ihn nicht (M2-05).
 - **Tests zuerst:** Gegenprobe mit künstlich gesenkter Grenze schlägt fehl.
 - **Abhängig von:** M2-05
 

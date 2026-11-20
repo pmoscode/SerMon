@@ -7,6 +7,7 @@ pub mod cli;
 pub mod config;
 pub mod enroll;
 pub mod identity;
+pub mod journal;
 pub mod logging;
 pub mod scheduler;
 #[cfg(feature = "simulate")]
@@ -89,11 +90,8 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         .context("cannot open the buffer")?;
     let outbox = Outbox::new(wal);
     let host_root = ProcRoot::new(&config.host_root);
-    let scheduler = Scheduler::new(
-        default_collectors(),
-        host_root.clone(),
-        scheduler::SERIES_LIMIT,
-    );
+    let journal_layout = layout.clone();
+    let scheduler_root = host_root.clone();
     let facts: FactsSource = Arc::new(move || Ok(read_host_facts(&host_root)?));
     let transport = Transport::new(
         TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
@@ -124,6 +122,11 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             );
         }
         let maintenance = tokio::spawn(maintain(outbox.clone(), clock.clone(), shutdown.clone()));
+        // The journal (security events) runs regardless of allow_logs: that veto is about shipping logs.
+        let (journal_metrics, journal) = journal::spawn(&journal_layout, shutdown.clone());
+        let mut collectors = default_collectors();
+        collectors.push(Box::new(journal_metrics));
+        let scheduler = Scheduler::new(collectors, scheduler_root, scheduler::SERIES_LIMIT);
         let collection = tokio::spawn(scheduler::run(
             scheduler,
             outbox.clone(),
@@ -133,6 +136,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         collection.await.context("collection task failed")?;
+        journal.await.context("journal task failed")?;
         if let Err(error) = outbox.maintain(clock.now()) {
             tracing::warn!("cannot flush the buffer: {error}");
         }

@@ -15,6 +15,7 @@ libfuzzer-sys = "=0.4.13"
 tempfile = "=3.27.0"
 sermon-buffer = { path = "../crates/sermon-buffer" }
 sermon-collectors = { path = "../crates/sermon-collectors" }
+sermon-logs = { path = "../crates/sermon-logs" }
 
 # Not part of the agent workspace: built only with the nightly toolchain.
 [workspace]
@@ -22,6 +23,13 @@ sermon-collectors = { path = "../crates/sermon-collectors" }
 [[bin]]
 name = "proc_parsers"
 path = "fuzz_targets/proc_parsers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "journal_line"
+path = "fuzz_targets/journal_line.rs"
 test = false
 doc = false
 bench = false

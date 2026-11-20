@@ -26,6 +26,7 @@ rustls.workspace = true
 sermon-buffer.workspace = true
 sermon-collectors.workspace = true
 sermon-core.workspace = true
+sermon-logs.workspace = true
 sermon-transport.workspace = true
 serde.workspace = true
 thiserror.workspace = true

@@ -1,0 +1,35 @@
+#!/bin/sh
+# Fake journalctl for the journal source tests (tests/journal_source.rs). A test links it into its
+# own directory and writes fake.env there:
+#   journal=<file>      one JSON entry per line; journal.<n> (if present) is served on the n-th start
+#   args=<file>         each start appends its arguments (after the start position is fixed)
+#   exit_after=<n>      print at most n lines, then exit 3 (a crash); unset: follow the file
+# --after-cursor=C starts after the line with C; an unknown cursor starts at the first line, as
+# journalctl does after a vacuum. --lines=0 starts at the end.
+set -u
+dir=$(dirname "$0")
+journal=""
+args=""
+exit_after=""
+# shellcheck source=/dev/null # written by the test
+. "$dir/fake.env"
+run=$(($(cat "$dir/runs" 2>/dev/null || echo 0) + 1))
+echo "$run" >"$dir/runs"
+[ -f "$journal.$run" ] && journal="$journal.$run"
+start=1
+for arg in "$@"; do
+	case $arg in
+	--after-cursor=*)
+		line=$(grep -n -F -- "\"${arg#--after-cursor=}\"" "$journal" | head -n 1 | cut -d: -f1)
+		[ -n "$line" ] && start=$((line + 1))
+		;;
+	--lines=0) start=$(($(wc -l <"$journal") + 1)) ;;
+	esac
+done
+printf '%s\n' "$*" >>"$args"
+echo "fake journalctl run $run from line $start" >&2
+if [ -n "$exit_after" ]; then
+	tail -n "+$start" "$journal" | head -n "$exit_after"
+	exit 3
+fi
+exec tail -n "+$start" -f "$journal"

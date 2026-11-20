@@ -48,6 +48,7 @@ tower = { version = "=0.5.3", default-features = false, features = ["util"] }
 clap = { version = "=4.6.8", default-features = false, features = ["std", "help", "usage", "error-context", "suggestions", "derive", "env"] }
 http = "=1.5.0"
 serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
 thiserror = "=2.0.21"
 tokio = { version = "=1.54.1", features = ["rt", "macros", "signal", "time", "sync"] }
 tokio-stream = { version = "=0.1.19", default-features = false }
@@ -63,6 +64,7 @@ tempfile = "=3.27.0"
 sermon-buffer = { path = "crates/sermon-buffer" }
 sermon-collectors = { path = "crates/sermon-collectors" }
 sermon-core = { path = "crates/sermon-core" }
+sermon-logs = { path = "crates/sermon-logs" }
 sermon-testserver = { path = "crates/sermon-testserver" }
 sermon-transport = { path = "crates/sermon-transport" }
 

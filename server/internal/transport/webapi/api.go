@@ -34,6 +34,7 @@ type Handlers struct {
 	Fleet        *FleetHandler
 	// AgentEnrollment serves sermon.agent.v1.EnrollmentService for new agents (ADR 0009).
 	AgentEnrollment *AgentEnrollmentHandler
+	InstanceAudit   *InstanceAuditHandler
 	Authenticator   *Authenticator // required for every service except AuthService
 }
 
@@ -57,6 +58,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewNodeServiceHandler(h.Node, authenticated))
 	mount(webv1connect.NewAgentCAServiceHandler(h.AgentCA, authenticated))
 	mount(webv1connect.NewFleetServiceHandler(h.Fleet, authenticated))
+	mount(webv1connect.NewInstanceAuditServiceHandler(h.InstanceAudit, authenticated))
 	path, handler := webv1connect.NewMetricsServiceHandler(h.Metrics, authenticated)
 	mount(path, streamingDeadline(handler))
 

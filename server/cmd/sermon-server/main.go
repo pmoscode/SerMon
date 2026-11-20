@@ -25,6 +25,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
+	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
@@ -310,6 +311,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
 		Node:    webapi.NewNodeHandler(rotator, nodes, logger),
 		AgentCA: webapi.NewAgentCAHandler(ca, logger),
+		InstanceAudit: webapi.NewInstanceAuditHandler(
+			instanceaudit.NewService(postgres.NewInstanceAuditStore(db), policy), logger),
 		Metrics: metricsHandler,
 		Fleet:   webapi.NewFleetHandler(nodes, logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(

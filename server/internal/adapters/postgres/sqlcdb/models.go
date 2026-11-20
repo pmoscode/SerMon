@@ -48,6 +48,18 @@ type EnrollmentToken struct {
 	RevokedAt *time.Time
 }
 
+type InstanceAuditLog struct {
+	ID       int64
+	Seq      int64
+	At       time.Time
+	ActorID  *uuid.UUID
+	Action   string
+	Target   string
+	Details  []byte
+	PrevHash []byte
+	Hash     []byte
+}
+
 type InstanceSetup struct {
 	Singleton      bool
 	TokenHash      []byte

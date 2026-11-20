@@ -21,6 +21,8 @@ type Querier interface {
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
+	// The trigger instance_audit_log_chain assigns seq, time and the hashes.
+	AppendInstanceAudit(ctx context.Context, arg AppendInstanceAuditParams) error
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
 	ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error)
@@ -73,10 +75,11 @@ type Querier interface {
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
 	InsertEnrollmentToken(ctx context.Context, arg InsertEnrollmentTokenParams) error
-	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) error
+	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) (int32, error)
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
+	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
@@ -85,6 +88,7 @@ type Querier interface {
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
+	ListInstanceAudit(ctx context.Context, arg ListInstanceAuditParams) ([]InstanceAuditLog, error)
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)

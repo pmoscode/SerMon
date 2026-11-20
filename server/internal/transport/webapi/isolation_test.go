@@ -14,16 +14,17 @@ import (
 // tenantIsolationCases (integration tests: a user of Org B must get NOT_FOUND or PERMISSION_DENIED
 // for Org A data) or a documented reason why it handles no tenant data.
 var tenantIsolationExempt = map[string]string{
-	"/sermon.web.v1.AuthService/Login":                  "acts on the caller's own credentials, no tenant data",
-	"/sermon.web.v1.AuthService/Logout":                 "ends the caller's own session",
-	"/sermon.web.v1.AuthService/GetSession":             "describes the caller's own session",
-	"/sermon.web.v1.AuthService/ConfirmPassword":        "re-authenticates the caller's own session",
-	"/sermon.web.v1.SystemService/GetVersion":           "instance information, no tenant data (requires authentication)",
-	"/sermon.web.v1.SetupService/GetSetupStatus":        "only reports whether the instance is set up, no tenant data",
-	"/sermon.web.v1.SetupService/CompleteSetup":         "creates the first organization; works once with the setup token",
-	"/sermon.web.v1.InvitationService/GetInvitation":    "acts only on the invitation named by the secret link token (ADR 0008)",
-	"/sermon.web.v1.InvitationService/AcceptInvitation": "creates a new account for the invitation named by the secret link token (ADR 0008)",
-	"/sermon.web.v1.MetricsService/ListMetrics":         "the static metric catalog, no tenant data (requires authentication)",
+	"/sermon.web.v1.AuthService/Login":                         "acts on the caller's own credentials, no tenant data",
+	"/sermon.web.v1.AuthService/Logout":                        "ends the caller's own session",
+	"/sermon.web.v1.AuthService/GetSession":                    "describes the caller's own session",
+	"/sermon.web.v1.AuthService/ConfirmPassword":               "re-authenticates the caller's own session",
+	"/sermon.web.v1.SystemService/GetVersion":                  "instance information, no tenant data (requires authentication)",
+	"/sermon.web.v1.SetupService/GetSetupStatus":               "only reports whether the instance is set up, no tenant data",
+	"/sermon.web.v1.SetupService/CompleteSetup":                "creates the first organization; works once with the setup token",
+	"/sermon.web.v1.InvitationService/GetInvitation":           "acts only on the invitation named by the secret link token (ADR 0008)",
+	"/sermon.web.v1.InvitationService/AcceptInvitation":        "creates a new account for the invitation named by the secret link token (ADR 0008)",
+	"/sermon.web.v1.MetricsService/ListMetrics":                "the static metric catalog, no tenant data (requires authentication)",
+	"/sermon.web.v1.InstanceAuditService/ListInstanceAuditLog": "instance-level log for the superadmin only, no tenant data (role test in app/instanceaudit)",
 }
 
 // TestTenantIsolation_EveryProcedureIsCovered fails when a new RPC is added without a

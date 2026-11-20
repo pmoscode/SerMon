@@ -45,9 +45,16 @@ func (s *AgentCAStore) TrustedAuthorities(ctx context.Context) ([]agentca.Stored
 
 // InsertAuthority stores the first CA; agentca.ErrAuthorityExists if one is already active.
 func (s *AgentCAStore) InsertAuthority(ctx context.Context, r agentca.AuthorityRecord) error {
-	_, err := s.db.withoutTenant().InsertAuthority(ctx, sqlcdb.InsertAuthorityParams{
-		RootCert: r.RootCert, RootKeySealed: r.RootKeySealed,
-		IntermediateCert: r.IntermediateCert, IntermediateKeySealed: r.IntermediateKeySealed,
+	err := s.db.instanceTx(ctx, func(q *sqlcdb.Queries) error {
+		id, err := q.InsertAuthority(ctx, sqlcdb.InsertAuthorityParams{
+			RootCert: r.RootCert, RootKeySealed: r.RootKeySealed,
+			IntermediateCert: r.IntermediateCert, IntermediateKeySealed: r.IntermediateKeySealed,
+		})
+		if err != nil {
+			return err //nolint:wrapcheck // classified below
+		}
+		return appendInstanceAudit(ctx, q, nil, "pki.authority_created", authorityTarget(id),
+			map[string]any{"root_fingerprint": agentca.Fingerprint(r.RootCert)})
 	})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
@@ -76,10 +83,15 @@ func (s *AgentCAStore) StartRollover(ctx context.Context, r agentca.AuthorityRec
 			return fmt.Errorf("deactivate issuing authority: %w", err)
 		}
 		starter := uuid.UUID(by)
-		return wrap(q.InsertIssuingAuthority(ctx, sqlcdb.InsertIssuingAuthorityParams{
+		id, err := q.InsertIssuingAuthority(ctx, sqlcdb.InsertIssuingAuthorityParams{
 			RootCert: r.RootCert, RootKeySealed: r.RootKeySealed, IntermediateCert: r.IntermediateCert,
 			IntermediateKeySealed: r.IntermediateKeySealed, StartedBy: &starter,
-		}), "insert issuing authority")
+		})
+		if err != nil {
+			return fmt.Errorf("insert issuing authority: %w", err)
+		}
+		return appendInstanceAudit(ctx, q, &by, "pki.rollover_started", authorityTarget(id),
+			map[string]any{"root_fingerprint": agentca.Fingerprint(r.RootCert)})
 	})
 }
 
@@ -101,7 +113,11 @@ func (s *AgentCAStore) Retire(ctx context.Context, id int32, by identity.UserID,
 			return agentca.ErrAuthorityInUse
 		}
 		retirer := uuid.UUID(by)
-		return wrap(q.RetireAuthority(ctx, sqlcdb.RetireAuthorityParams{ID: id, At: &now, RetiredBy: &retirer}), "retire authority")
+		if err := q.RetireAuthority(ctx, sqlcdb.RetireAuthorityParams{ID: id, At: &now, RetiredBy: &retirer}); err != nil {
+			return fmt.Errorf("retire authority: %w", err)
+		}
+		return appendInstanceAudit(ctx, q, &by, "pki.authority_retired", authorityTarget(id),
+			map[string]any{"root_fingerprint": agentca.Fingerprint(row.RootCert)})
 	})
 }
 

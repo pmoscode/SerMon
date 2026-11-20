@@ -182,15 +182,19 @@ func (h *AccessHandler) ListAuditLog(ctx context.Context, req *connect.Request[w
 	if err != nil {
 		return nil, h.fail(ctx, "list audit log", err)
 	}
-	res := &webv1.ListAuditLogResponse{}
+	return connect.NewResponse(&webv1.ListAuditLogResponse{Entries: auditEntries(records)}), nil
+}
+
+func auditEntries(records []access.AuditRecord) []*webv1.AuditEntry {
+	out := make([]*webv1.AuditEntry, 0, len(records))
 	for _, r := range records {
 		e := &webv1.AuditEntry{Seq: r.Seq, Time: timestamppb.New(r.At), Action: r.Action, Target: r.Target, Details: r.Details}
 		if r.Actor != nil {
 			e.ActorId = r.Actor.String()
 		}
-		res.Entries = append(res.Entries, e)
+		out = append(out, e)
 	}
-	return connect.NewResponse(res), nil
+	return out
 }
 
 // InviteMember creates an invitation and returns its link token once.

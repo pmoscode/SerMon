@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "sermon/web/v1/access.proto";
+
+// InstanceAuditService reads the instance-wide audit log (M1-11b): actions outside any
+// organization such as the agent CA rollover. Only the superadmin may read it
+// (PERMISSION_DENIED otherwise); it contains no tenant data.
+service InstanceAuditService {
+  // ListInstanceAuditLog returns a page of the log, newest first.
+  rpc ListInstanceAuditLog(ListInstanceAuditLogRequest) returns (ListInstanceAuditLogResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// ListInstanceAuditLogRequest selects a page.
+message ListInstanceAuditLogRequest {
+  // before_seq returns entries older than this seq; 0 starts with the newest entry.
+  int64 before_seq = 1 [(buf.validate.field).int64.gte = 0];
+  // page_size is the maximum number of entries (default 100, at most 500).
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 500
+  }];
+}
+
+// ListInstanceAuditLogResponse is a page of the log.
+message ListInstanceAuditLogResponse {
+  // entries, newest first; seq is the position in the instance's log.
+  repeated AuditEntry entries = 1;
+}

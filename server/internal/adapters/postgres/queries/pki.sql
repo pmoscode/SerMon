@@ -22,12 +22,13 @@ SELECT count(*) FROM pki_authorities WHERE retired_at IS NULL;
 -- name: DeactivateIssuingAuthority :exec
 UPDATE pki_authorities SET active = false WHERE active;
 
--- name: InsertIssuingAuthority :exec
+-- name: InsertIssuingAuthority :one
 INSERT INTO pki_authorities (root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed, started_by)
-VALUES (sqlc.arg(root_cert), sqlc.arg(root_key_sealed), sqlc.arg(intermediate_cert), sqlc.arg(intermediate_key_sealed), sqlc.narg(started_by));
+VALUES (sqlc.arg(root_cert), sqlc.arg(root_key_sealed), sqlc.arg(intermediate_cert), sqlc.arg(intermediate_key_sealed), sqlc.narg(started_by))
+RETURNING id;
 
 -- name: AuthorityForRetirement :one
-SELECT active, pki_certificates_in_use(id, sqlc.arg(at))::bigint AS in_use
+SELECT active, root_cert, pki_certificates_in_use(id, sqlc.arg(at))::bigint AS in_use
 FROM pki_authorities WHERE id = sqlc.arg(id) AND retired_at IS NULL;
 
 -- name: RetireAuthority :exec

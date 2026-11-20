@@ -72,7 +72,7 @@ func (q *Queries) AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthor
 }
 
 const authorityForRetirement = `-- name: AuthorityForRetirement :one
-SELECT active, pki_certificates_in_use(id, $1)::bigint AS in_use
+SELECT active, root_cert, pki_certificates_in_use(id, $1)::bigint AS in_use
 FROM pki_authorities WHERE id = $2 AND retired_at IS NULL
 `
 
@@ -82,14 +82,15 @@ type AuthorityForRetirementParams struct {
 }
 
 type AuthorityForRetirementRow struct {
-	Active bool
-	InUse  int64
+	Active   bool
+	RootCert []byte
+	InUse    int64
 }
 
 func (q *Queries) AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error) {
 	row := q.db.QueryRow(ctx, authorityForRetirement, arg.At, arg.ID)
 	var i AuthorityForRetirementRow
-	err := row.Scan(&i.Active, &i.InUse)
+	err := row.Scan(&i.Active, &i.RootCert, &i.InUse)
 	return i, err
 }
 
@@ -164,9 +165,10 @@ func (q *Queries) InsertAuthority(ctx context.Context, arg InsertAuthorityParams
 	return id, err
 }
 
-const insertIssuingAuthority = `-- name: InsertIssuingAuthority :exec
+const insertIssuingAuthority = `-- name: InsertIssuingAuthority :one
 INSERT INTO pki_authorities (root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed, started_by)
 VALUES ($1, $2, $3, $4, $5)
+RETURNING id
 `
 
 type InsertIssuingAuthorityParams struct {
@@ -177,15 +179,17 @@ type InsertIssuingAuthorityParams struct {
 	StartedBy             *uuid.UUID
 }
 
-func (q *Queries) InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) error {
-	_, err := q.db.Exec(ctx, insertIssuingAuthority,
+func (q *Queries) InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) (int32, error) {
+	row := q.db.QueryRow(ctx, insertIssuingAuthority,
 		arg.RootCert,
 		arg.RootKeySealed,
 		arg.IntermediateCert,
 		arg.IntermediateKeySealed,
 		arg.StartedBy,
 	)
-	return err
+	var id int32
+	err := row.Scan(&id)
+	return id, err
 }
 
 const lockPKI = `-- name: LockPKI :exec

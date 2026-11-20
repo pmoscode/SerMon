@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -160,6 +161,65 @@ func TestAgentCAStore_RolloverAndRetirement(t *testing.T) {
 	if err := store.StartRollover(ctx, rec("newer"), super); err != nil {
 		t.Errorf("a new rollover is possible after the retirement: %v", err)
 	}
+
+	// Every CA action left exactly one entry in the instance audit log, the failed ones none.
+	audit := postgres.NewInstanceAuditStore(open(t, f.appDSN))
+	entries, err := audit.List(ctx, 0, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byTarget := map[string][]string{}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Action, "pki.") {
+			who := "system"
+			if e.Actor != nil && *e.Actor == super {
+				who = "super"
+			}
+			byTarget[e.Target] = append(byTarget[e.Target], e.Action+" by "+who)
+		}
+	}
+	oldTarget, newTarget := fmt.Sprintf("ca:%d", oldID), fmt.Sprintf("ca:%d", newID)
+	if got := byTarget[oldTarget]; len(got) != 2 || got[0] != "pki.authority_retired by super" || got[1] != "pki.authority_created by system" {
+		t.Errorf("entries of the old CA = %v", got)
+	}
+	if got := byTarget[newTarget]; len(got) != 1 || got[0] != "pki.rollover_started by super" {
+		t.Errorf("entries of the new CA = %v (the losing concurrent rollover must not log)", got)
+	}
+	if err := audit.Verify(ctx); err != nil {
+		t.Errorf("Verify() = %v", err)
+	}
+}
+
+func TestInstanceAuditLog_DetectsTamperingAndIsAppendOnly(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	ca := postgres.NewAgentCAStore(open(t, f.appDSN))
+	ownerExec(t, f.db.OwnerDSN, "DELETE FROM agent_certificates")
+	ownerExec(t, f.db.OwnerDSN, "DELETE FROM pki_authorities")
+	if err := ca.InsertAuthority(ctx, agentca.AuthorityRecord{RootCert: []byte("r"), RootKeySealed: []byte("k"), IntermediateCert: []byte("i"), IntermediateKeySealed: []byte("k")}); err != nil {
+		t.Fatal(err)
+	}
+	audit := postgres.NewInstanceAuditStore(open(t, f.appDSN))
+	if err := audit.Verify(ctx); err != nil {
+		t.Fatalf("Verify() = %v", err)
+	}
+
+	conn, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	for _, sql := range []string{"UPDATE instance_audit_log SET action = 'x'", "DELETE FROM instance_audit_log"} {
+		if _, err := conn.Exec(ctx, sql); err == nil || !strings.Contains(err.Error(), "permission denied") {
+			t.Errorf("%s as sermon_app: %v, want permission denied", sql, err)
+		}
+	}
+
+	ownerExec(t, f.db.OwnerDSN, `UPDATE instance_audit_log SET details = '{"root_fingerprint": "forged"}' WHERE id = (SELECT max(id) FROM instance_audit_log)`)
+	if err := audit.Verify(ctx); !errors.Is(err, postgres.ErrAuditChainBroken) {
+		t.Errorf("after tampering: Verify() = %v, want ErrAuditChainBroken", err)
+	}
+	ownerExec(t, f.db.OwnerDSN, "DELETE FROM instance_audit_log") // leave a valid chain for other tests
 }
 
 func TestAgentCAStore_CertificatesAreTenantIsolatedButCheckableWithoutTenant(t *testing.T) {

@@ -487,7 +487,7 @@ flowchart LR
   - Zweite Session mit derselben Identität wird abgelehnt und erzeugt ein Security-Event; nach einer Rotation durch
     einen Angreifer wird der echte Agent erkannt und die Identität gesperrt.
 
-#### ◐ M1-11b – Rotation von Server-Zertifikat und Agent-CA · S · M 🔒
+#### ☑ M1-11b – Rotation von Server-Zertifikat und Agent-CA · S · M 🔒
 > Server-Seite erledigt:
 > - **Server-Zertifikat:** 7 Tage gültig, erneuert nach 2/3 der Laufzeit und bei jeder Änderung der vertrauten CAs.
 >   Offene Verbindungen laufen weiter (Test mit Fake-Clock).
@@ -510,9 +510,12 @@ flowchart LR
 > Agent-Seite erledigt mit M1-14: Das Bundle aus der Session ersetzt `trust.pem` atomar (leere oder kaputte Bundles
 > werden ignoriert); das Server-Zertifikat wird gegen alle Wurzeln geprüft.
 >
-> Offen:
-> - Ein **instanzweites Audit-Log**: Die CA-Aktionen stehen bisher nur in `started_by`/`retired_by` und im Log; das
->   Audit-Log ist pro Org.
+> Instanzweites Audit-Log (Nachtrag): Tabelle `instance_audit_log` mit derselben Hash-Kette wie das Org-Log (eine
+> Kette für die Instanz, für `sermon_app` nur INSERT/SELECT). CA anlegen, Wechsel starten und CA ausmustern schreiben
+> ihren Eintrag in derselben Transaktion (`pki.authority_created`, `pki.rollover_started`, `pki.authority_retired`, mit
+> Fingerprint der Wurzel). Lesen nur für den Superadmin über `InstanceAuditService.ListInstanceAuditLog`.
+> Tests: genau ein Eintrag pro erfolgreicher Aktion (der verlorene parallele Wechsel schreibt keinen), Manipulation
+> wird erkannt, UPDATE/DELETE verweigert, End-to-End über die Web-API.
 - **Ziel:** Das Server-Zertifikat der Agent-API ist kurzlebig und wird automatisch erneuert. Der CA-Wechsel läuft per
   Trust-Bundle (alte + neue CA über den Stream verteilt); nach dem Wechsel wird nur noch mit der neuen CA
   ausgestellt. Die alte CA wird entfernt, sobald kein gültiges Zertifikat mehr von ihr stammt; der Fortschritt ist

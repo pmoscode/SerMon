@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -145,6 +146,27 @@ func TestAgentCARollover_EndToEnd(t *testing.T) {
 	}
 	if _, err := ca.RetireAgentCA(ctx, connect.NewRequest(&webv1.RetireAgentCARequest{Id: old.GetId()})); err != nil {
 		t.Fatalf("RetireAgentCA() = %v", err)
+	}
+
+	// Both actions are in the instance audit log with the superadmin as actor (M1-11b).
+	me, err := webv1connect.NewAuthServiceClient(hc, "http://"+srv.web).GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, err := webv1connect.NewInstanceAuditServiceClient(hc, "http://"+srv.web).ListInstanceAuditLog(ctx, connect.NewRequest(&webv1.ListInstanceAuditLogRequest{}))
+	if err != nil {
+		t.Fatalf("ListInstanceAuditLog() = %v", err)
+	}
+	logged := map[string]bool{}
+	for _, e := range log.Msg.GetEntries() {
+		if e.GetActorId() == me.Msg.GetSession().GetUserId() {
+			logged[e.GetAction()+" "+e.GetTarget()] = true
+		}
+	}
+	for _, want := range []string{fmt.Sprintf("pki.rollover_started ca:%d", current.GetId()), fmt.Sprintf("pki.authority_retired ca:%d", old.GetId())} {
+		if !logged[want] {
+			t.Errorf("instance audit log lacks %q: %v", want, log.Msg.GetEntries())
+		}
 	}
 
 	// Now the server certificate comes from the new CA: an agent trusting only the new root connects.

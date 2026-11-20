@@ -23,15 +23,19 @@ import (
 
 // MetricsHandler implements sermon.web.v1.MetricsService (behind the Authenticator).
 type MetricsHandler struct {
-	fleet  *fleet.Service
-	logger *slog.Logger
+	fleet   *fleet.Service
+	streams *streamLimiter
+	recheck time.Duration
+	logger  *slog.Logger
 }
 
 var _ webv1connect.MetricsServiceHandler = (*MetricsHandler)(nil)
 
 // NewMetricsHandler returns the MetricsService handler.
 func NewMetricsHandler(svc *fleet.Service, logger *slog.Logger) *MetricsHandler {
-	return &MetricsHandler{fleet: svc, logger: logger}
+	return &MetricsHandler{
+		fleet: svc, streams: newStreamLimiter(MaxLiveStreamsPerSession, MaxLiveStreams), recheck: streamRecheck, logger: logger,
+	}
 }
 
 // ListMetrics returns the catalog.
@@ -64,7 +68,9 @@ func (h *MetricsHandler) QueryMetrics(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(&webv1.QueryMetricsResponse{Series: seriesViews(series), Step: durationpb.New(step)}), nil
 }
 
-// WatchMetrics streams new points until the client goes or fleet.WatchDuration is over.
+// WatchMetrics streams new points until the client goes or fleet.WatchDuration is over. Streams
+// are limited per session; every streamRecheck the session and rights are checked again: an ended
+// session fails the stream, changed rights end it (the client reconnects with the new scope).
 func (h *MetricsHandler) WatchMetrics(ctx context.Context, req *connect.Request[webv1.WatchMetricsRequest], stream *connect.ServerStream[webv1.WatchMetricsResponse]) error {
 	c, err := callerFrom(ctx)
 	if err != nil {
@@ -74,16 +80,34 @@ func (h *MetricsHandler) WatchMetrics(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return err
 	}
+	s, _ := sessionFrom(ctx)
+	if !h.streams.acquire(s.ID) {
+		return connect.NewError(connect.CodeResourceExhausted, errTooManyStreams)
+	}
+	defer h.streams.release(s.ID)
+	reauth, _ := ctx.Value(reauthKey{}).(reauthenticator)
+	checked := time.Now()
 	err = h.fleet.Watch(ctx, c, q, func(series []metrics.Series) error {
+		if reauth != nil && time.Since(checked) >= h.recheck {
+			checked = time.Now()
+			current, err := reauth()
+			if err != nil {
+				return err
+			}
+			if !samePrincipal(current, c.Principal) {
+				return errScopeChanged
+			}
+		}
 		return stream.Send(&webv1.WatchMetricsResponse{Series: seriesViews(series)})
 	})
-	if errors.Is(err, context.Canceled) {
+	var connectErr *connect.Error
+	switch {
+	case err == nil, errors.Is(err, context.Canceled), errors.Is(err, errScopeChanged):
 		return nil
+	case errors.As(err, &connectErr):
+		return connectErr
 	}
-	if err != nil {
-		return readFailure(ctx, h.logger, "watch metrics", err)
-	}
-	return nil
+	return readFailure(ctx, h.logger, "watch metrics", err)
 }
 
 // FleetHandler implements sermon.web.v1.FleetService (behind the Authenticator).

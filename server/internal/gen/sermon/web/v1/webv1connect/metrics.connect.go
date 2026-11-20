@@ -54,6 +54,9 @@ type MetricsServiceClient interface {
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// WatchMetrics streams the new 1 s points of one metric (live charts): about every second the
 	// points since the previous message. The stream ends after 15 minutes; clients open a new one.
+	// At most 32 streams per session (RESOURCE_EXHAUSTED beyond). Every 30 s the session is checked
+	// again: an ended session fails the stream with UNAUTHENTICATED, changed rights end it normally
+	// so that the client reconnects with the new scope.
 	WatchMetrics(context.Context, *connect.Request[v1.WatchMetricsRequest]) (*connect.ServerStreamForClient[v1.WatchMetricsResponse], error)
 }
 
@@ -121,6 +124,9 @@ type MetricsServiceHandler interface {
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 	// WatchMetrics streams the new 1 s points of one metric (live charts): about every second the
 	// points since the previous message. The stream ends after 15 minutes; clients open a new one.
+	// At most 32 streams per session (RESOURCE_EXHAUSTED beyond). Every 30 s the session is checked
+	// again: an ended session fails the stream with UNAUTHENTICATED, changed rights end it normally
+	// so that the client reconnects with the new scope.
 	WatchMetrics(context.Context, *connect.Request[v1.WatchMetricsRequest], *connect.ServerStream[v1.WatchMetricsResponse]) error
 }
 

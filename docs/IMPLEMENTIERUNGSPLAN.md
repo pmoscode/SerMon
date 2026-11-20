@@ -772,7 +772,12 @@ flowchart LR
 >   Integrationstest als Viewerin der Gruppe, Unit-Tests für Scope, Kennzahlen, Prognose und Live-Stream.
 >
 > Abweichung: Werte in `QueryMetrics` kommen in der Einheit des Katalogs (z. B. ppm), die Kennzahlen der Übersicht
-> als 0..1. Ein Limit für gleichzeitige Live-Streams pro Session fehlt noch (vor v1.0 nachziehen).
+> als 0..1.
+>
+> Nachtrag Live-Streams: höchstens 32 pro Session und 1 000 pro Instanz (`RESOURCE_EXHAUSTED`). Alle 30 s prüft ein
+> laufender Stream Session und Rechte erneut: Logout oder entfernte Mitgliedschaft beenden ihn mit `UNAUTHENTICATED`,
+> geänderte Rechte normal (der Client verbindet neu mit dem neuen Scope). Vorher lief ein Stream nach dem Logout bis
+> zu 15 min weiter.
 - **Ziel:** `MetricsService.Query` (typisiert: Metrik, Nodes, Zeitraum, Schritt, Aggregation); `FleetService.Summary`; `NodeService.Get` und `NodeService.Summary`; Server-Streaming für Live-Werte; Füllprognose (lineare Regression, für Kapazitäts-Badges).
 - **Abhängig von:** M1-23, M1-24, M1-25
 - **Skill:** `sermon-proto-change`

@@ -69,11 +69,21 @@ func (a *Authenticator) WrapStreamingClient(next connect.StreamingClientFunc) co
 // WrapStreamingHandler implements connect.Interceptor.
 func (a *Authenticator) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		ctx, err := a.authenticate(ctx, conn.RequestHeader().Get("Cookie"))
+		cookie := conn.RequestHeader().Get("Cookie")
+		ctx, err := a.authenticate(ctx, cookie)
 		if err != nil {
 			return err
 		}
-		return next(ctx, conn)
+		// Long streams check their session again (logout, removed membership, changed rights).
+		reauth := reauthenticator(func() (authz.Principal, error) {
+			checked, err := a.authenticate(ctx, cookie)
+			if err != nil {
+				return authz.Principal{}, err
+			}
+			p, _ := PrincipalFrom(checked)
+			return p, nil
+		})
+		return next(context.WithValue(ctx, reauthKey{}, reauth), conn)
 	}
 }
 

@@ -371,6 +371,9 @@ export const MetricsService: GenService<{
   /**
    * WatchMetrics streams the new 1 s points of one metric (live charts): about every second the
    * points since the previous message. The stream ends after 15 minutes; clients open a new one.
+   * At most 32 streams per session (RESOURCE_EXHAUSTED beyond). Every 30 s the session is checked
+   * again: an ended session fails the stream with UNAUTHENTICATED, changed rights end it normally
+   * so that the client reconnects with the new scope.
    *
    * @generated from rpc sermon.web.v1.MetricsService.WatchMetrics
    */

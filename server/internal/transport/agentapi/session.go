@@ -71,9 +71,14 @@ func withIdentity(next http.Handler) http.Handler {
 	})
 }
 
+// MaxMessageBytes bounds one message of the agent stream after decompression: a full batch (2 000
+// samples with labels) stays far below it; it equals the default limit of the agent's tonic client.
+const MaxMessageBytes = 4 << 20
+
 // Mount registers the agent API on mux (served only on the mTLS listener).
 func Mount(mux *http.ServeMux, sessions *SessionHandler) {
-	path, handler := agentv1connect.NewAgentServiceHandler(sessions, connect.WithInterceptors(validate.NewInterceptor()))
+	path, handler := agentv1connect.NewAgentServiceHandler(sessions,
+		connect.WithReadMaxBytes(MaxMessageBytes), connect.WithInterceptors(validate.NewInterceptor()))
 	mux.Handle(path, withIdentity(handler))
 }
 

@@ -770,3 +770,18 @@ func TestSession_AnInvalidBatchEndsTheSessionWithoutStoringAnything(t *testing.T
 		t.Errorf("stored %+v", store.Aggregates())
 	}
 }
+
+// A message above the limit ends the stream before it is decoded or validated (memory bound for
+// agents, also with gzip).
+func TestSession_LimitsTheMessageSize(t *testing.T) {
+	s := startServer(t)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	facts := validHostFacts()
+	facts.Hostname = strings.Repeat("a", agentapi.MaxMessageBytes+1)
+
+	err := runSession(context.Background(), s.client(t, &cert, tls.VersionTLS13), hello(facts))
+
+	if connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Errorf("hello with %d bytes = %v, want RESOURCE_EXHAUSTED", len(facts.GetHostname()), err)
+	}
+}

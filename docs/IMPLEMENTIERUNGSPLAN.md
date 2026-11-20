@@ -1199,7 +1199,17 @@ flowchart LR
   ohne bestehendes Konto.
 - **Abhängig von:** M1-04, E2.4 (Mail, optional)
 
-#### ☐ M1-40 – Kleinere Härtungen aus M1-35 · S · S 🔒
+#### ☑ M1-40 – Kleinere Härtungen aus M1-35 · S · S 🔒
+> Erledigt:
+> - `session.Manager.Peek` prüft wie `Validate`, ohne `last_seen_at` zu erneuern; der Re-Check laufender Live-Streams
+>   nutzt ihn. Eine offene Live-Ansicht ohne Bedienung endet jetzt nach dem Idle-Timeout (vorher erst nach 12 h).
+> - Migration 00019: `issue_setup_token` und `complete_instance_setup` als `SECURITY DEFINER`-Funktionen
+>   (`sermon_definer`). Die zweite verbraucht das Token und legt den Superadmin in einer Anweisung an. `sermon_app`
+>   verliert `INSERT` auf `superadmins` und `INSERT`/`UPDATE` auf `instance_setup`; sonst hätte ein Fehler in der
+>   Anwendung das Setup zurücksetzen und sich ein neues Token ausgeben können. Ein ungültiges Token wird weiter vor dem
+>   Anlegen abgelehnt (Lese-Vorprüfung).
+> - **Tests:** Peek ohne Erneuerung, Re-Check des Streams endet nach dem Idle-Timeout (rot vor der Änderung), direkte
+>   Schreibzugriffe von `sermon_app` verweigert, Setup über die Funktionen inklusive gleichzeitiger Versuche.
 - **Ziel:**
   - Der Re-Check laufender Live-Streams prüft die Session, ohne `last_seen_at` zu erneuern (`Peek`): Eine offene
     Live-Ansicht hält die Session nicht über das Idle-Timeout hinaus am Leben.

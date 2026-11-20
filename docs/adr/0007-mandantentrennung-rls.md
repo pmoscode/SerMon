@@ -126,3 +126,13 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
 - **Security-Auswirkungen:**
   - Zwei unabhängige Verteidigungslinien für die Mandantentrennung.
   - Getrennte Zugangsdaten für Migration und Laufzeit; das Owner-Passwort braucht der laufende Server nicht.
+
+## Nachtrag M1-35 bis M1-40 (Security-Review)
+
+- `sermon_app` darf `users` nicht mehr ändern (Migration 00016): Konten sind instanzweit, ein Org-Admin könnte sonst
+  die E-Mail-Adresse (den Login) eines Users ändern, der auch in anderen Orgs ist.
+- Instanzweite Schreibzugriffe mit Rechte-Folgen laufen nur über `SECURITY DEFINER`-Funktionen von `sermon_definer`:
+  die Widerrufsprüfung mit Org und Node (00018) sowie das Ausgeben und Verbrauchen des Setup-Tokens (00019). Den
+  Superadmin legt nur der Verbrauch des Tokens an; `sermon_app` hat auf `superadmins` und `instance_setup` nur noch
+  `SELECT`.
+

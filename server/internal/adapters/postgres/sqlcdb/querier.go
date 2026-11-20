@@ -14,7 +14,6 @@ import (
 type Querier interface {
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
-	AddSuperadmin(ctx context.Context, userID uuid.UUID) error
 	// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
 	AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error)
 	AdvanceIngestSeq(ctx context.Context, arg AdvanceIngestSeqParams) (int64, error)
@@ -25,7 +24,8 @@ type Querier interface {
 	AppendInstanceAudit(ctx context.Context, arg AppendInstanceAuditParams) error
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
-	ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error)
+	// Claims the token and adds the superadmin; false without a valid token (definer function).
+	CompleteInstanceSetup(ctx context.Context, arg CompleteInstanceSetupParams) (bool, error)
 	ConfirmTOTP(ctx context.Context, arg ConfirmTOTPParams) (int64, error)
 	// Atomic: concurrent redemptions cannot exceed max_uses.
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
@@ -89,8 +89,8 @@ type Querier interface {
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
-	// Replaces a previous token; does nothing once the setup is completed.
-	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (int64, error)
+	// Replaces a previous token; false once the setup is completed (definer function, M1-40).
+	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (bool, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
@@ -140,6 +140,8 @@ type Querier interface {
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
 	// First installation: setup token and superadmins (instance-level tables, no RLS).
 	SetupCompleted(ctx context.Context) (bool, error)
+	// Read-only pre-check (sermon_app may only read instance_setup); CompleteInstanceSetup consumes.
+	SetupTokenValid(ctx context.Context, arg SetupTokenValidParams) (bool, error)
 	// Certificate rotation (M1-11). All queries run inside InTenant.
 	// Replaces the current certificate: it stays valid until revoke_at (grace period). No rows
 	// means the certificate was already replaced or revoked.

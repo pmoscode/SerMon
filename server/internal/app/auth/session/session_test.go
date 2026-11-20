@@ -407,3 +407,28 @@ func TestSecondFactor_PendingSessionsExpireQuicklyAndCompleteUnderANewToken(t *t
 		t.Errorf("stored sessions = %d, want only the full one", len(store.byHash))
 	}
 }
+
+// Background checks (the re-check of a running live view) must not count as activity: an open
+// dashboard on an unattended machine would otherwise keep the session alive until the absolute
+// timeout (M1-40).
+func TestPeek_ChecksWithoutRenewingTheIdleTimer(t *testing.T) {
+	m, store, c := manager(t)
+	token, _, _ := m.Create(context.Background(), alice, orgA)
+
+	for range 4 {
+		c.advance(session.IdleTimeout / 4)
+		if _, err := m.Peek(context.Background(), token); err != nil && c.now.Sub(t0) < session.IdleTimeout {
+			t.Fatalf("Peek() within the idle timeout = %v", err)
+		}
+	}
+	if store.touches != 0 {
+		t.Errorf("Peek() renewed the session %d times, want never", store.touches)
+	}
+	if _, err := m.Peek(context.Background(), token); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("Peek() after the idle timeout = %v, want ErrInvalid", err)
+	}
+	pending, _, _ := m.CreatePending(context.Background(), alice, orgA)
+	if _, err := m.Peek(context.Background(), pending); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("Peek() of a session waiting for the second factor = %v, want ErrInvalid", err)
+	}
+}

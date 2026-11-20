@@ -12,32 +12,22 @@ import (
 	"github.com/google/uuid"
 )
 
-const addSuperadmin = `-- name: AddSuperadmin :exec
-INSERT INTO superadmins (user_id) VALUES ($1)
+const completeInstanceSetup = `-- name: CompleteInstanceSetup :one
+SELECT complete_instance_setup($1, $2, $3)::boolean AS completed
 `
 
-func (q *Queries) AddSuperadmin(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, addSuperadmin, userID)
-	return err
-}
-
-const claimSetupToken = `-- name: ClaimSetupToken :execrows
-UPDATE instance_setup
-SET completed_at = $1, token_hash = NULL, token_expires_at = NULL
-WHERE token_hash = $2 AND token_expires_at > $1 AND completed_at IS NULL
-`
-
-type ClaimSetupTokenParams struct {
-	Now       *time.Time
+type CompleteInstanceSetupParams struct {
 	TokenHash []byte
+	UserID    uuid.UUID
+	Now       time.Time
 }
 
-func (q *Queries) ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error) {
-	result, err := q.db.Exec(ctx, claimSetupToken, arg.Now, arg.TokenHash)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+// Claims the token and adds the superadmin; false without a valid token (definer function).
+func (q *Queries) CompleteInstanceSetup(ctx context.Context, arg CompleteInstanceSetupParams) (bool, error) {
+	row := q.db.QueryRow(ctx, completeInstanceSetup, arg.TokenHash, arg.UserID, arg.Now)
+	var completed bool
+	err := row.Scan(&completed)
+	return completed, err
 }
 
 const isSuperadmin = `-- name: IsSuperadmin :one
@@ -51,26 +41,21 @@ func (q *Queries) IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, err
 	return superadmin, err
 }
 
-const issueSetupToken = `-- name: IssueSetupToken :execrows
-INSERT INTO instance_setup (singleton, token_hash, token_expires_at)
-VALUES (true, $1, $2)
-ON CONFLICT (singleton) DO UPDATE
-    SET token_hash = EXCLUDED.token_hash, token_expires_at = EXCLUDED.token_expires_at
-    WHERE instance_setup.completed_at IS NULL
+const issueSetupToken = `-- name: IssueSetupToken :one
+SELECT issue_setup_token($1, $2)::boolean AS issued
 `
 
 type IssueSetupTokenParams struct {
 	TokenHash []byte
-	ExpiresAt *time.Time
+	ExpiresAt time.Time
 }
 
-// Replaces a previous token; does nothing once the setup is completed.
-func (q *Queries) IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (int64, error) {
-	result, err := q.db.Exec(ctx, issueSetupToken, arg.TokenHash, arg.ExpiresAt)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+// Replaces a previous token; false once the setup is completed (definer function, M1-40).
+func (q *Queries) IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (bool, error) {
+	row := q.db.QueryRow(ctx, issueSetupToken, arg.TokenHash, arg.ExpiresAt)
+	var issued bool
+	err := row.Scan(&issued)
+	return issued, err
 }
 
 const setupCompleted = `-- name: SetupCompleted :one
@@ -84,4 +69,24 @@ func (q *Queries) SetupCompleted(ctx context.Context) (bool, error) {
 	var completed bool
 	err := row.Scan(&completed)
 	return completed, err
+}
+
+const setupTokenValid = `-- name: SetupTokenValid :one
+SELECT EXISTS (
+    SELECT 1 FROM instance_setup
+    WHERE token_hash = $1 AND token_expires_at > $2 AND completed_at IS NULL
+) AS valid
+`
+
+type SetupTokenValidParams struct {
+	TokenHash []byte
+	Now       *time.Time
+}
+
+// Read-only pre-check (sermon_app may only read instance_setup); CompleteInstanceSetup consumes.
+func (q *Queries) SetupTokenValid(ctx context.Context, arg SetupTokenValidParams) (bool, error) {
+	row := q.db.QueryRow(ctx, setupTokenValid, arg.TokenHash, arg.Now)
+	var valid bool
+	err := row.Scan(&valid)
+	return valid, err
 }

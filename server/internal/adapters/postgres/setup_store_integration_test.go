@@ -159,3 +159,40 @@ func TestSetupStore_ConcurrentCompletionsHaveOneWinner(t *testing.T) {
 		t.Errorf("%d winners, %d superadmins; want 1 and 1 (errors %v)", wins, n, errs)
 	}
 }
+
+// A bug in the application (e.g. an SQL injection) must not create a superadmin: sermon_app can
+// neither insert one nor reset the setup and issue itself a new token (M1-40). The setup goes
+// through SECURITY DEFINER functions that consume the token.
+func TestSetupStore_TheApplicationCannotAddSuperadminsDirectly(t *testing.T) {
+	f := setup(t)
+	resetSetup(t, f)
+	ctx := context.Background()
+	store := postgres.NewSetupStore(open(t, f.appDSN))
+	hash := sha256.Sum256([]byte("setup-token"))
+	if err := store.IssueToken(ctx, hash, caTime.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	admin := firstAdmin()
+	if err := store.Complete(ctx, hash, caTime, admin); err != nil {
+		t.Fatalf("Complete() through the definer functions: %v", err)
+	}
+
+	conn, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	for _, sql := range []string{
+		"INSERT INTO superadmins (user_id) SELECT id FROM users LIMIT 1",
+		"UPDATE instance_setup SET completed_at = NULL",
+		"DELETE FROM instance_setup",
+		"INSERT INTO instance_setup (singleton) VALUES (true) ON CONFLICT DO NOTHING",
+	} {
+		if _, err := conn.Exec(ctx, sql); err == nil {
+			t.Errorf("%q must be denied for sermon_app", sql)
+		}
+	}
+	if err := store.IssueToken(ctx, hash, caTime.Add(time.Hour)); !errors.Is(err, firstrun.ErrAlreadyInitialized) {
+		t.Errorf("IssueToken() after the setup = %v, want ErrAlreadyInitialized", err)
+	}
+}

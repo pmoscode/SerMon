@@ -135,7 +135,17 @@ func (m *Manager) insert(ctx context.Context, s Session) (string, Session, error
 // Validate returns the full session of token, renews its activity and removes it when it
 // expired. Sessions still waiting for the second factor are ErrInvalid here.
 func (m *Manager) Validate(ctx context.Context, token string) (Session, error) {
-	s, err := m.check(ctx, token)
+	return m.full(ctx, token, true)
+}
+
+// Peek checks a full session like Validate but doesn't count as activity: background checks (the
+// re-check of a running live view) must not keep an unattended session alive (M1-40).
+func (m *Manager) Peek(ctx context.Context, token string) (Session, error) {
+	return m.full(ctx, token, false)
+}
+
+func (m *Manager) full(ctx context.Context, token string, touch bool) (Session, error) {
+	s, err := m.check(ctx, token, touch)
 	if err != nil {
 		return Session{}, err
 	}
@@ -147,7 +157,7 @@ func (m *Manager) Validate(ctx context.Context, token string) (Session, error) {
 
 // ValidatePending returns a session that waits for the second factor (ErrNotPending for a full one).
 func (m *Manager) ValidatePending(ctx context.Context, token string) (Session, error) {
-	s, err := m.check(ctx, token)
+	s, err := m.check(ctx, token, true)
 	if err != nil {
 		return Session{}, err
 	}
@@ -157,8 +167,8 @@ func (m *Manager) ValidatePending(ctx context.Context, token string) (Session, e
 	return s, nil
 }
 
-// check loads the session, enforces the timeouts and renews the activity.
-func (m *Manager) check(ctx context.Context, token string) (Session, error) {
+// check loads the session, enforces the timeouts and, with touch, renews the activity.
+func (m *Manager) check(ctx context.Context, token string, touch bool) (Session, error) {
 	s, err := m.lookup(ctx, token)
 	if err != nil {
 		return Session{}, err
@@ -171,7 +181,7 @@ func (m *Manager) check(ctx context.Context, token string) (Session, error) {
 		}
 		return Session{}, ErrInvalid
 	}
-	if now.Sub(s.LastSeenAt) >= touchInterval {
+	if touch && now.Sub(s.LastSeenAt) >= touchInterval {
 		if err := m.store.Touch(ctx, s.ID, now); err != nil {
 			return Session{}, fmt.Errorf("renew session: %w", err)
 		}

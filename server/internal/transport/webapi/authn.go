@@ -86,8 +86,9 @@ func (a *Authenticator) WrapStreamingHandler(next connect.StreamingHandlerFunc) 
 			return err
 		}
 		// Long streams check their session again (logout, removed membership, changed rights).
+		// The check is no user activity: it must not keep an unattended session alive (M1-40).
 		reauth := reauthenticator(func() (authz.Principal, error) {
-			checked, err := a.authenticate(ctx, cookie)
+			checked, err := a.authenticateWith(ctx, cookie, a.sessions.Peek)
 			if err != nil {
 				return authz.Principal{}, err
 			}
@@ -99,11 +100,18 @@ func (a *Authenticator) WrapStreamingHandler(next connect.StreamingHandlerFunc) 
 }
 
 func (a *Authenticator) authenticate(ctx context.Context, cookieHeader string) (context.Context, error) {
+	return a.authenticateWith(ctx, cookieHeader, a.sessions.Validate)
+}
+
+// authenticateWith checks the session with validate (Validate renews the activity, Peek doesn't).
+func (a *Authenticator) authenticateWith(ctx context.Context, cookieHeader string,
+	validate func(context.Context, string) (session.Session, error),
+) (context.Context, error) {
 	token, ok := tokenFrom(cookieHeaderOnly(cookieHeader))
 	if !ok {
 		return ctx, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
 	}
-	s, err := a.sessions.Validate(ctx, token)
+	s, err := validate(ctx, token)
 	switch {
 	case errors.Is(err, session.ErrInvalid):
 		return ctx, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)

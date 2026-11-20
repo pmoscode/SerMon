@@ -109,7 +109,7 @@ flowchart LR
 | T13 | S | Brute-Force auf Passwörter und Codes, auch mit parallelen Anfragen | Argon2id, Kontosperre mit Backoff, jeder Versuch wird vor der Prüfung atomar reserviert (Compare-and-swap), IP-Rate-Limit, einheitliche Fehlermeldung | M1-02, M1-35 | ✓ |
 | T14 | S | Phishing/gestohlenes Passwort | TOTP mit Recovery-Codes, Org-Pflicht zur 2FA; Code-Versuche zählen zur selben Sperre | M1-03 | ✓ |
 | T15 | S | Phishing-resistente Anmeldung | Passkeys/WebAuthn, OIDC mit PKCE | E3.6, E3.7 | ☐ |
-| T16 | S | Session-Diebstahl, Session-Fixation | `__Host-`-Cookie (Secure, HttpOnly, SameSite=Lax), serverseitige Sessions, neues Cookie nach 2FA und Org-Wechsel, Idle- und Absolut-Timeout | M1-02, M1-03 | ◐ (offene Live-Ansicht hält die Session über das Idle-Timeout hinaus: M1-40) |
+| T16 | S | Session-Diebstahl, Session-Fixation | `__Host-`-Cookie (Secure, HttpOnly, SameSite=Lax), serverseitige Sessions, neues Cookie nach 2FA und Org-Wechsel, Idle- und Absolut-Timeout (der Re-Check offener Live-Ansichten zählt nicht als Aktivität) | M1-02, M1-03, M1-40 | ✓ |
 | T57 | S | Downgrade auf HTTP beim ersten Aufruf, gefälschte Login-Seite | HSTS (1 Jahr, `includeSubDomains`), sobald alle erlaubten Origins `https://` sind; in Produktion sind nur solche erlaubt (`http://` nur im Entwicklungsmodus) | M1-35, M1-39 | ✓ |
 | T17 | S | Gekaperte Session ändert Rechte, richtet eigene 2FA ein oder lässt eigene Maschinen beitreten | Step-up (15 min) für Rechteänderungen, Einladungen, Schlüsselrotation, 2FA-Einrichtung, Enrollment-Tokens (seit M1-35); Fehlversuche zählen zur Sperre | M1-02, M1-03, M1-35 | ✓ |
 | T18 | T | CSRF, Lesen über Navigationen von fremden Seiten | SameSite, Connect-Requests mit `application/proto|json`, Origin-Allowlist im Server, GET mit `Sec-Fetch-Site` einer fremden Seite abgelehnt | M1-02, M1-35 | ✓ |
@@ -136,7 +136,7 @@ flowchart LR
 | T32 | I | Fehler in der Anwendung umgeht den Tenant-Scope | RLS mit `FORCE`, Server-Rolle ohne `BYPASSRLS`, Server verweigert privilegierte Rollen; Metriken nur über `SECURITY DEFINER`-Funktion mit RLS-geschützter `series` | M0-08, M1-22 (ADR 0007) | ✓ |
 | T33 | I | DB-Dump verrät Secrets | Secrets-Box (AES-256-GCM, Key-ID, Associated Data mit Kontext, z. B. `totp:<user>`), Passwörter Argon2id, Tokens/Codes nur als Hash | M1-06, M1-03 | ✓ |
 | T34 | T | Manipulation des Audit-Logs | Hash-Kette, kein UPDATE/DELETE für `sermon_app`, Prüffunktion | M1-04, M1-11b | ✓ |
-| T63 | E | Fehler in der Anwendung (z. B. SQL-Injection) legt einen Superadmin an | `INSERT` auf `superadmins` nur über eine `SECURITY DEFINER`-Funktion, die das Setup-Token verbraucht | M1-40 | ☐ |
+| T63 | E | Fehler in der Anwendung (z. B. SQL-Injection) legt einen Superadmin an | `sermon_app` darf weder `superadmins` schreiben noch `instance_setup` ändern; Token ausgeben und verbrauchen nur über `SECURITY DEFINER`-Funktionen, die den Superadmin zusammen mit dem Verbrauch anlegen | M1-40 | ✓ |
 | T35 | I | Logs einer Org landen bei einer anderen | Loki mit `auth_enabled`, `X-Scope-OrgID` aus dem Scope, nie aus Eingaben | E3.2 | ☐ |
 | T36 | I | Telemetrie von TimescaleDB oder Loki | in jeder Compose-Datei abgeschaltet, Test | M0-07 | ✓ |
 | T37 | D | Schreiblast füllt WAL/Platte | 10 s in der DB, Kompression, Retention-Policies, Self-Monitoring | M0-09, M1-22 | ◐ (Self-Monitoring-Alerts: M2) |
@@ -215,7 +215,7 @@ Offen als Aufgaben (keine kritisch):
 - M1-38: Rotation und Identität – Intermediate aus der Signatur, falsche Sperre nach Rotation, Widerrufsprüfung mit
   Org/Node, Widerruf ohne Rotation auf Abruf (T4, T60). – **erledigt**.
 - M1-39: Einladungen ohne Konto-Squatting (T23, T61). – **erledigt** (ADR 0022: Betriebsmodus, SMTP in Produktion Pflicht).
-- M1-40: Stream-Re-Check ohne Aktivität, Superadmins nur über Definer-Funktion (T16, T63).
+- M1-40: Stream-Re-Check ohne Aktivität, Superadmins nur über Definer-Funktion (T16, T63). – **erledigt**. Damit sind alle Befunde aus M1-35 abgearbeitet.
 
 Weiter offen aus früheren Aufgaben: T3/T4 (Benachrichtigung, M2), T5 (Übernahme bei `machine-id`-Konflikt in der UI),
 T37 (Self-Monitoring, M2), T51 (Release-Schlüssel, Product Owner). Kommandozeilen im Journal (`_CMDLINE`) enthalten

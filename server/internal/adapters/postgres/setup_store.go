@@ -31,18 +31,19 @@ func (s *SetupStore) Completed(ctx context.Context) (bool, error) {
 
 // IssueToken stores the hash of a new setup token, replacing a previous one.
 func (s *SetupStore) IssueToken(ctx context.Context, hash [32]byte, expires time.Time) error {
-	n, err := s.db.withoutTenant().IssueSetupToken(ctx, sqlcdb.IssueSetupTokenParams{TokenHash: hash[:], ExpiresAt: &expires})
+	issued, err := s.db.withoutTenant().IssueSetupToken(ctx, sqlcdb.IssueSetupTokenParams{TokenHash: hash[:], ExpiresAt: expires})
 	if err != nil {
 		return fmt.Errorf("issue setup token: %w", err)
 	}
-	if n == 0 {
+	if !issued {
 		return setup.ErrAlreadyInitialized
 	}
 	return nil
 }
 
-// Complete claims the token and creates the first superadmin, organization, membership and
-// org-wide admin binding in one transaction (nothing is created when the token is invalid).
+// Complete creates the organization, the user, membership and org-wide admin binding, then claims
+// the token and makes the user superadmin – all in one transaction, so nothing is created when
+// the token is invalid. Only the definer function may add superadmins (M1-40).
 func (s *SetupStore) Complete(ctx context.Context, hash [32]byte, now time.Time, a setup.FirstAdmin) error {
 	scope, err := tenant.ForAllGroups(a.Org)
 	if err != nil {
@@ -50,11 +51,13 @@ func (s *SetupStore) Complete(ctx context.Context, hash [32]byte, now time.Time,
 	}
 	user, org := uuid.UUID(a.User), uuid.UUID(a.Org)
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		n, err := q.ClaimSetupToken(ctx, sqlcdb.ClaimSetupTokenParams{TokenHash: hash[:], Now: &now})
+		// An invalid token is rejected before anything is created; consuming it at the end is the
+		// race-free check (concurrent setups have one winner).
+		valid, err := q.SetupTokenValid(ctx, sqlcdb.SetupTokenValidParams{TokenHash: hash[:], Now: &now})
 		if err != nil {
-			return fmt.Errorf("claim setup token: %w", err)
+			return fmt.Errorf("check setup token: %w", err)
 		}
-		if n == 0 {
+		if !valid {
 			return setup.ErrInvalidToken
 		}
 		steps := []struct {
@@ -75,7 +78,13 @@ func (s *SetupStore) Complete(ctx context.Context, hash [32]byte, now time.Time,
 			{"grant admin", func() error {
 				return q.CreateRoleBinding(ctx, sqlcdb.CreateRoleBindingParams{ID: a.Binding, UserID: user, Role: role.Admin.String()})
 			}},
-			{"add superadmin", func() error { return q.AddSuperadmin(ctx, user) }},
+			{"claim setup token", func() error {
+				done, err := q.CompleteInstanceSetup(ctx, sqlcdb.CompleteInstanceSetupParams{TokenHash: hash[:], UserID: user, Now: now})
+				if err == nil && !done {
+					return setup.ErrInvalidToken
+				}
+				return err //nolint:wrapcheck // wrapped with the step below
+			}},
 		}
 		for _, step := range steps {
 			if err := step.run(); err != nil {

@@ -1,0 +1,105 @@
+# End-to-end environment (M1-33): server, database, TLS proxy and agent hosts with systemd.
+# Started by scripts/e2e-demo.sh (`just e2e-demo`), which builds the binaries and secrets in .build/.
+# Images are pinned by digest. Only Caddy is published, on 127.0.0.1.
+name: sermon-e2e
+
+x-agent-host: &agent-host
+  privileged: true # systemd as PID 1 and the hardened unit need it
+  cgroup: host
+  volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw"]
+  tmpfs: [/run, /run/lock, /tmp]
+  stop_signal: SIGRTMIN+3
+  networks: [e2e]
+
+services:
+  postgres:
+    image: timescale/timescaledb:2.32.0-pg17@sha256:6a6b7d7a346d7c6be03a310c240706f3bbc6d7adbdf3fbc07823570b34337f5e
+    environment:
+      POSTGRES_USER: sermon
+      POSTGRES_DB: sermon
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      TIMESCALEDB_TELEMETRY: "off"
+    secrets: [postgres_password, postgres_app_password]
+    volumes:
+      - ../dev/initdb/010-app-role.sh:/docker-entrypoint-initdb.d/010-app-role.sh:ro
+    networks: [e2e]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sermon -d sermon"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # First installation: master key file, migrations, agent CA (`sermon-server init`).
+  init:
+    build: { context: .build, dockerfile: ../server.Dockerfile }
+    command: ["init", "--master-keys-file", "/var/lib/sermon/master_keys"]
+    environment: &server-env
+      SERMON_DATABASE_URL_FILE: /run/secrets/database_url
+      SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
+      SERMON_MASTER_KEYS_FILE: /var/lib/sermon/master_keys
+      SERMON_LOG_FORMAT: json
+    secrets: [database_url, database_migrate_url]
+    volumes: [server-state:/var/lib/sermon]
+    networks: [e2e]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  server:
+    build: { context: .build, dockerfile: ../server.Dockerfile }
+    environment:
+      <<: *server-env
+      SERMON_HTTP_ADDR: ":8080"
+      SERMON_AGENT_ADDR: ":8443"
+      SERMON_AGENT_HOSTNAMES: server
+      SERMON_ALLOWED_ORIGINS: https://localhost:${SERMON_E2E_PORT:-18443},https://sermon.test
+      SERMON_TRUSTED_PROXIES: 172.30.77.0/24
+      SERMON_AGENT_DOWNLOADS_DIR: /srv/downloads
+    secrets: [database_url, database_migrate_url]
+    volumes:
+      - server-state:/var/lib/sermon
+      - ./.build/downloads:/srv/downloads:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [e2e]
+    depends_on:
+      init: { condition: service_completed_successfully }
+
+  caddy:
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    ports: ["127.0.0.1:${SERMON_E2E_PORT:-18443}:443"]
+    networks:
+      e2e:
+        aliases: [sermon.test]
+    depends_on: [server]
+
+  agent-debian-12:
+    <<: *agent-host
+    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8" } }
+    hostname: web-01
+  agent-debian-13:
+    <<: *agent-host
+    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
+    hostname: web-02
+  agent-ubuntu-24-04:
+    <<: *agent-host
+    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289" } }
+    hostname: db-01
+
+networks:
+  e2e:
+    ipam:
+      config: [{ subnet: 172.30.77.0/24 }]
+
+secrets: # written by scripts/e2e-demo.sh into .build/, never committed
+  postgres_password: { file: ./.build/secrets/postgres_password }
+  postgres_app_password: { file: ./.build/secrets/postgres_app_password }
+  database_url: { file: ./.build/secrets/database_url }
+  database_migrate_url: { file: ./.build/secrets/database_migrate_url }
+
+volumes:
+  server-state:
+  caddy-data:

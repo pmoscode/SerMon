@@ -1,0 +1,2 @@
+ARG BASE=debian:13
+FROM ${BASE}

@@ -9,11 +9,40 @@ import re
 import sys
 
 
+def unpinned_bases(build: dict) -> list[str]:
+    """Base images of a Dockerfile that are not pinned by digest (build args resolved)."""
+    path = os.path.normpath(os.path.join(build.get("context", "."), build.get("dockerfile", "Dockerfile")))
+    if not os.path.isfile(path):
+        return [f"missing Dockerfile {path}"]
+    args = {k: v for k, v in (build.get("args") or {}).items() if v is not None}
+    stages, bad = set(), []
+    for line in open(path, encoding="utf-8"):
+        words = line.split()
+        if not words:
+            continue
+        keyword = words[0].upper()
+        if keyword == "ARG" and len(words) > 1 and "=" in words[1]:
+            key, default = words[1].split("=", 1)
+            args.setdefault(key, default)
+        elif keyword == "FROM":
+            ref = next((w for w in words[1:] if not w.startswith("--")), "")
+            image = re.sub(r"\$\{?(\w+)\}?", lambda m: args.get(m.group(1), ""), ref)
+            if image not in stages and image != "scratch" and "@sha256:" not in image:
+                bad.append(image or ref)
+            if len(words) >= 4 and words[-2].upper() == "AS":
+                stages.add(words[-1])
+    return bad
+
+
 def check(services: dict, base: str, loopback_only: bool) -> list[str]:
     errors = []
     for name, svc in services.items():
         image = svc.get("image", "")
-        if "@sha256:" not in image:
+        if "build" in svc:
+            # Built locally: every base image of the Dockerfile must be pinned.
+            for bad in unpinned_bases(svc["build"]):
+                errors.append(f"{name}: base image {bad!r} is not pinned by digest")
+        elif "@sha256:" not in image:
             errors.append(f"{name}: image {image!r} is not pinned by digest")
 
         if loopback_only:

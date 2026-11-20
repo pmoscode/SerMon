@@ -1,0 +1,7 @@
+services:
+  pinned:
+    build: { context: build, dockerfile: pinned.Dockerfile }
+  arg:
+    build: { context: build, dockerfile: arg.Dockerfile, args: { BASE: "debian:13@sha256:0000000000000000000000000000000000000000000000000000000000000000" } }
+  stages:
+    build: { context: build, dockerfile: stages.Dockerfile }

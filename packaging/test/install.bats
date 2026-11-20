@@ -67,6 +67,13 @@ without_minisign() {
 	without_minisign verify "$BIN" "$BIN.minisig"
 }
 
+@test "verify leaves the variables of the caller alone (POSIX sh has no locals)" {
+	work=/caller/work binary=caller-binary
+	without_minisign verify "$BIN" "$BIN.minisig"
+	[ "$work" = /caller/work ]
+	[ "$binary" = caller-binary ]
+}
+
 @test "accepts a valid signature with minisign" {
 	command -v minisign
 	verify "$BIN" "$BIN.minisig"

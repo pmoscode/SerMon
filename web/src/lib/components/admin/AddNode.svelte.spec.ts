@@ -76,6 +76,25 @@ describe('AddNode', () => {
 			.toHaveAttribute('href', '/nodes/n1');
 	});
 
+	it('leads admins to create a group when there is none', async () => {
+		withRights(['*']);
+		sessionState.current!.orgAdmin = true;
+		vi.spyOn(api.access, 'listNodeGroups').mockResolvedValue({ groups: [] } as never);
+		render(AddNode);
+
+		await expect
+			.element(
+				page.getByText('Nodes always belong to a group, and there is none yet.', { exact: false })
+			)
+			.toBeVisible();
+		await expect
+			.element(page.getByRole('link', { name: 'Create a group' }))
+			.toHaveAttribute('href', '/admin');
+		await expect
+			.element(page.getByRole('button', { name: 'Create command' }))
+			.not.toBeInTheDocument();
+	});
+
 	it('explains missing rights', async () => {
 		withRights([]);
 		render(AddNode);

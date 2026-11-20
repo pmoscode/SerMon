@@ -27,6 +27,9 @@ expect fail "TimescaleDB telemetry not disabled" "$data/timescale-telemetry.yaml
 expect fail "Loki usage reporting not disabled" "$data/loki-telemetry.yaml"
 expect pass "ports with variables and loopback defaults" --loopback-only "$data/variable-port.yaml"
 expect fail "missing file" "$data/does-not-exist.yaml"
+expect pass "built images with pinned bases (literal, build arg, earlier stage)" "$data/build-good.yaml"
+expect fail "built image with an unpinned base" "$data/build-unpinned.yaml"
+expect fail "built image whose base comes from an unpinned build arg default" "$data/build-arg-unpinned.yaml"
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures of $total compose checks failed"

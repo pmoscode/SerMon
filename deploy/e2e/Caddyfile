@@ -1,0 +1,12 @@
+# TLS in front of the web port with Caddy's own CA (`tls internal`), as for a self-hosted server
+# without a public certificate. The agent port is not proxied: agents reach the server directly.
+{
+	admin off
+	local_certs
+	skip_install_trust
+}
+
+sermon.test, localhost {
+	tls internal
+	reverse_proxy server:8080
+}

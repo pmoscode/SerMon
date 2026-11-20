@@ -105,6 +105,10 @@ test-integration:
 e2e:
     pnpm run test:e2e
 
+# Demo end to end (M1-33): real stack in Docker, install.sh in systemd containers, Playwright (KEEP=1 keeps it running)
+e2e-demo:
+    scripts/e2e-demo.sh
+
 # Run the Rust agent binary against the real server (Testcontainers; Docker and Rust required)
 e2e-agent:
     cd agent && cargo build --locked -p sermon-agent
@@ -127,6 +131,7 @@ lint-ci:
 # Check compose files: images pinned by digest, no telemetry, dev ports on 127.0.0.1 only
 lint-compose:
     sh scripts/check-compose.sh --loopback-only deploy/dev/compose.yaml
+    sh scripts/check-compose.sh --loopback-only deploy/e2e/compose.yaml
 
 # Test helper scripts
 test-scripts:

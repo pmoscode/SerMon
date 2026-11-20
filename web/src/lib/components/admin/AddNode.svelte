@@ -22,6 +22,7 @@
 	];
 
 	let groups = $state<NodeGroup[]>([]);
+	let groupsLoaded = $state(false);
 	let groupId = $state('');
 	let ttl = $state(3600);
 	let uses = $state(1);
@@ -44,6 +45,7 @@
 			.then((res) => {
 				groups = res.groups.filter((g) => allowed.includes('*') || allowed.includes(g.id));
 				groupId ||= groups[0]?.id ?? '';
+				groupsLoaded = true;
 			})
 			.catch((error) => (failure = adminError(error)));
 	});
@@ -96,6 +98,13 @@
 	{/if}
 	{#if allowed.length === 0}
 		<p role="alert" class="text-sm">{m.addnode_forbidden()}</p>
+	{:else if groupsLoaded && groups.length === 0 && !secret}
+		<div class="flex flex-col items-start gap-3 rounded-lg border border-dashed p-6">
+			<p class="text-sm">{m.addnode_no_groups()}</p>
+			{#if sessionState.current?.orgAdmin}
+				<Button href={resolve('/(app)/admin')} variant="outline">{m.addnode_create_group()}</Button>
+			{/if}
+		</div>
 	{:else if !secret}
 		<form class="flex flex-col gap-4" onsubmit={create}>
 			<div class="flex flex-wrap gap-4">

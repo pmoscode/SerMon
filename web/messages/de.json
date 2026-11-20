@@ -264,7 +264,7 @@
 	"addnode_run": "Auf dem Server ausführen",
 	"addnode_run_text": "Als root bzw. mit sudo. Das Skript prüft die Signatur des Agents, legt den User sermon an und verbindet den Server.",
 	"addnode_view_script": "Skript erst ansehen",
-	"addnode_self_signed": "Selbstsigniertes Zertifikat? Dann zusätzlich --ca-fingerprint sha256:… anhängen.",
+	"addnode_self_signed": "Selbstsigniertes Zertifikat? Dann curl mit -k aufrufen und --ca-fingerprint sha256:… anhängen; die Signatur des Agents prüft das Skript trotzdem.",
 	"addnode_secret_once": "Der Befehl enthält ein Token und ist nur jetzt sichtbar.",
 	"addnode_status": "Status",
 	"addnode_waiting": "Warte auf die Verbindung …",
@@ -283,5 +283,7 @@
 	"invite_join": "Beitreten",
 	"invite_error_existing": "Für diese Adresse gibt es schon ein Konto – bitte anmelden und den Link erneut öffnen.",
 	"invite_error_other_account": "Die Einladung gilt für eine andere E-Mail-Adresse.",
-	"login_invited": "Konto angelegt. Jetzt anmelden."
+	"login_invited": "Konto angelegt. Jetzt anmelden.",
+	"addnode_no_groups": "Nodes gehören immer zu einer Gruppe, und es gibt noch keine. Admins legen sie unter „Organisation“ → „Gruppen“ an.",
+	"addnode_create_group": "Gruppe anlegen"
 }

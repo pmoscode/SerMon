@@ -1020,9 +1020,33 @@ flowchart LR
 
 ### 4.7 Querschnitt
 
-#### ☐ M1-33 – E2E-Umgebung und Demo-Test · X · M
-> Hinweis aus M0-10: Container mit systemd als PID 1 laufen stabil mit `--privileged --cgroupns=host`,
-> `-v /sys/fs/cgroup:/sys/fs/cgroup:rw`, `--tmpfs /run` und `STOPSIGNAL SIGRTMIN+3` (`spikes/journald/Dockerfile`).
+#### ☑ M1-33 – E2E-Umgebung und Demo-Test · X · M
+> Erledigt (`just e2e-demo`, CI-Job `e2e-demo`):
+> - **`deploy/e2e/compose.yaml`:** TimescaleDB, `sermon-server init` als einmaliger Lauf, Server (non-root,
+>   read-only, ohne Capabilities) mit eingebetteter UI, Caddy mit `tls internal` vor dem Web-Port und drei
+>   Agent-Hosts mit systemd als PID 1 (Debian 12, Debian 13, Ubuntu 24.04). Alle Images per Digest gepinnt; das
+>   Compose-Lint prüft jetzt auch die Basis-Images selbst gebauter Images (Build-Args eingeschlossen).
+> - **`scripts/e2e-demo.sh`:** baut Agent (musl), UI und Server, erzeugt einen Release-Schlüssel nur für den Lauf
+>   (Public Key in den Server kompiliert, Agent damit signiert) und die DB-Passwörter, startet die Umgebung und räumt
+>   danach ab (`KEEP=1`, `SKIP_BUILD=1`).
+> - **Playwright-Ablauf** (`web/tests/demo`) gegen den echten Stack: Setup mit dem Token aus dem Server-Log → Login →
+>   Gruppe anlegen (vom Assistenten aus) → Token für 3 Nutzungen → der Befehl aus der UI läuft in jedem Container
+>   (zwei Hosts vertrauen Caddys CA systemweit, einer pinnt die Intermediate-CA mit `--ca-fingerprint`) → alle drei
+>   Nodes mit Metriken in der Flotte (gemessen: 3 s, Grenze 120 s), Node-Detail mit Chart-Daten (14 s) → der
+>   Superadmin legt Org B an, deren Admin tritt per Einladungslink bei und sieht keinen Node, auch nicht per
+>   direkter URL oder API.
+> - **Gegenprobe:** Vor der Installation wird die Binary auf dem Server manipuliert; `install.sh` bricht mit
+>   „signature check failed“ ab und installiert nichts.
+> - **Gefundene Fehler:**
+>   - `install.sh` installierte nichts, weil `verify` die Variable `work` von `main` überschrieb (POSIX-sh kennt
+>     keine lokalen Variablen); behoben, bats-Regressionstest.
+>   - Ohne Gruppe zeigte „Node hinzufügen“ eine leere Auswahl ohne Erklärung; jetzt mit Hinweis und Link für Admins.
+>   - Die y-Achse zeigte ohne Daten dreimal „0 %“ (Bereich 0–1 ppm); jetzt 0–100 % bzw. eine Einheit.
+>   - Der Hinweis zum selbstsignierten Zertifikat nennt jetzt auch `curl -k`.
+>
+> Abweichungen: Die Agents erreichen den Agent-Port des Servers direkt (`--agent-url https://server:8443`); in
+> Produktion leitet der Proxy ihn per TLS-Passthrough weiter (Caddy braucht dafür ein Layer-4-Plugin, folgt mit der
+> Produktions-Compose). Im Container sehen die Agents den Kernel der Docker-VM. Rocky und Alpine kommen mit E2.7.
 - **Ziel:** Compose-Umgebung für E2E mit Server und Agent-Containern (Debian 12/13, Ubuntu 24.04 LTS, mit systemd im Container); Playwright-Ablauf: Setup → Login → Token erzeugen → Agent im Container enrollen → Node mit Metriken sichtbar in < 2 min; Mandantentrennung end-to-end (User aus Org B).
 - **Abhängig von:** M1-27, M1-30, M1-31, M1-32
 

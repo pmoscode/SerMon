@@ -7,7 +7,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
 	import { isDark, themeState } from '#lib/theme/theme.svelte.js';
-	import { align, summarize, type ChartSeries } from './data.js';
+	import { align, summarize, yRange, type ChartSeries } from './data.js';
 
 	interface Props {
 		/** Visible title, also the accessible name of the chart. */
@@ -83,7 +83,7 @@
 			height,
 			scales: {
 				x: { time: true, min: range.from / 1000, max: range.to / 1000 },
-				y: { range: (_u, min, max) => [Math.min(0, min), max > min ? max : min + 1] }
+				y: { range: (_u, min, max) => yRange(unit, min, max) }
 			},
 			axes: [
 				{ ...axis, values: (_u, splits) => timeAxis(splits) },

@@ -84,37 +84,38 @@ hex() { od -An -v -tx1 | tr -d ' \n'; }
 # verify FILE SIGFILE checks a minisign signature (Ed25519, "Ed" algorithm) against RELEASE_KEY.
 # minisign is used when installed; otherwise openssl (3.0 or later) checks the same signature.
 verify() {
-	file=$1
-	signature=$2
+	# Prefixed names: POSIX sh has no local variables, main() uses work and binary.
+	verify_file=$1
+	verify_sig=$2
 	case $RELEASE_KEY in
 	@*@ | "") die "this server was built without a release key – install the agent from the package repository" ;;
 	esac
 	if command -v minisign >/dev/null 2>&1; then
-		minisign -Vq -P "$RELEASE_KEY" -m "$file" -x "$signature" >/dev/null 2>&1 ||
-			die "signature check failed for $(basename "$file") – not installing"
+		minisign -Vq -P "$RELEASE_KEY" -m "$verify_file" -x "$verify_sig" >/dev/null 2>&1 ||
+			die "signature check failed for $(basename "$verify_file") – not installing"
 		return 0
 	fi
 	command -v openssl >/dev/null 2>&1 ||
 		die "neither minisign nor openssl found to check the signature – install one of them"
 	# Scratch files next to the download; the caller removes the directory.
-	work="$(dirname "$file")/verify"
-	mkdir -p "$work"
-	printf '%s' "$RELEASE_KEY" | b64decode >"$work/key" || die "invalid release key"
-	sed -n 2p "$signature" | b64decode >"$work/sig" 2>/dev/null || die "malformed signature file"
-	[ "$(wc -c <"$work/key" | tr -d ' ')" = 42 ] || die "invalid release key"
-	[ "$(wc -c <"$work/sig" | tr -d ' ')" = 74 ] || die "malformed signature file"
+	verify_dir="$(dirname "$verify_file")/verify"
+	mkdir -p "$verify_dir"
+	printf '%s' "$RELEASE_KEY" | b64decode >"$verify_dir/key" || die "invalid release key"
+	sed -n 2p "$verify_sig" | b64decode >"$verify_dir/sig" 2>/dev/null || die "malformed signature file"
+	[ "$(wc -c <"$verify_dir/key" | tr -d ' ')" = 42 ] || die "invalid release key"
+	[ "$(wc -c <"$verify_dir/sig" | tr -d ' ')" = 74 ] || die "malformed signature file"
 	# Algorithm "Ed" (not pre-hashed) and the key ID must match the release key.
-	[ "$(dd if="$work/sig" bs=1 count=2 2>/dev/null | hex)" = 4564 ] ||
+	[ "$(dd if="$verify_dir/sig" bs=1 count=2 2>/dev/null | hex)" = 4564 ] ||
 		die "unsupported signature algorithm (expected minisign Ed)"
-	[ "$(dd if="$work/sig" bs=1 skip=2 count=8 2>/dev/null | hex)" = "$(dd if="$work/key" bs=1 skip=2 count=8 2>/dev/null | hex)" ] ||
+	[ "$(dd if="$verify_dir/sig" bs=1 skip=2 count=8 2>/dev/null | hex)" = "$(dd if="$verify_dir/key" bs=1 skip=2 count=8 2>/dev/null | hex)" ] ||
 		die "signature by an unknown key – not installing"
-	dd if="$work/sig" of="$work/sig.raw" bs=1 skip=10 count=64 2>/dev/null
+	dd if="$verify_dir/sig" of="$verify_dir/sig.raw" bs=1 skip=10 count=64 2>/dev/null
 	# DER SubjectPublicKeyInfo of an Ed25519 key: fixed 12-byte prefix + 32-byte key.
-	printf '\060\052\060\005\006\003\053\145\160\003\041\000' >"$work/key.der"
-	dd if="$work/key" bs=1 skip=10 count=32 2>/dev/null >>"$work/key.der"
-	openssl pkeyutl -verify -pubin -keyform DER -inkey "$work/key.der" -rawin \
-		-in "$file" -sigfile "$work/sig.raw" >/dev/null 2>&1 ||
-		die "signature check failed for $(basename "$file") – not installing"
+	printf '\060\052\060\005\006\003\053\145\160\003\041\000' >"$verify_dir/key.der"
+	dd if="$verify_dir/key" bs=1 skip=10 count=32 2>/dev/null >>"$verify_dir/key.der"
+	openssl pkeyutl -verify -pubin -keyform DER -inkey "$verify_dir/key.der" -rawin \
+		-in "$verify_file" -sigfile "$verify_dir/sig.raw" >/dev/null 2>&1 ||
+		die "signature check failed for $(basename "$verify_file") – not installing"
 }
 
 # --- installation ------------------------------------------------------------------------------

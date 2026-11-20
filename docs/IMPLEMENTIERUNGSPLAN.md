@@ -285,9 +285,30 @@ flowchart LR
 - **Tests zuerst:** Passwort-Hashing und -Verifikation (Vergleich in konstanter Zeit), Session-Ablauf mit Fake-Clock, Rate-Limit, abgelehnte Requests ohne gültigen Origin, CSP-Header-Snapshot.
 - **Abnahme:** Login-E2E-Test grün; Security-Review bestanden.
 
-#### ☐ M1-03 – TOTP, Recovery-Codes und Step-up · S · M 🔒
-> Hinweis: Den Step-up per Passwort gibt es schon (`ConfirmPassword`, siehe M1-02). Mit eingerichteter 2FA muss er
-> den zweiten Faktor verlangen.
+#### ☑ M1-03 – TOTP, Recovery-Codes und Step-up · S · M 🔒
+> Erledigt:
+> - **TOTP** (`app/auth/totp`, eigene Umsetzung von RFC 6238, geprüft mit den RFC-Testvektoren): SHA-1, 30 s,
+>   6 Stellen, ±1 Schritt; jeder Zeitschritt gilt einmal (atomar in der DB, parallele Nutzung gewinnt genau einmal).
+>   Seed mit der Secrets-Box versiegelt und an den User gebunden (ein kopierter Seed lässt sich nicht öffnen).
+> - **Recovery-Codes:** 10 Stück mit 80 Bit, nur als Hash gespeichert, jeder einmal; neu erzeugen ersetzt den Satz.
+> - **Login in zwei Schritten:** Nach dem Passwort eine Session, die höchstens 5 min auf den Code wartet und sonst
+>   nichts darf (API, Session-Ansicht, Org-Wechsel lehnen sie ab); danach neues Cookie. Falsche Codes zählen zur
+>   Kontosperre, und das richtige Passwort setzt den Zähler bei 2FA-Usern nicht mehr zurück – sonst ließen sich
+>   Code-Versuche mit neuen Logins abwechseln (Gegenprobe vorhanden).
+> - **Step-up:** mit 2FA per `ConfirmSecondFactor` (Code oder Recovery-Code), ohne 2FA weiter per Passwort.
+>   Einrichten, Abschalten und neue Codes verlangen einen Step-up.
+> - **Org-Pflicht:** `SecurityPolicyService` (Admin für alle Gruppen, Step-up, nur mit eigenem zweiten Faktor,
+>   auditiert). Mitglieder ohne zweiten Faktor bekommen überall `FAILED_PRECONDITION` mit
+>   `SecondFactorSetupRequired`, nur `TwoFactorService` bleibt erreichbar (Authenticator ohne Principal).
+> - **UI:** Code-Schritt im Login, Step-up-Dialog mit Code, Seite „Sicherheit“ (QR-Code als SVG aus der Matrix von
+>   `uqr`, Schlüssel zum Abtippen, Recovery-Codes zum Kopieren oder Speichern), Weiterleitung dorthin, solange die
+>   Org es verlangt; Hilfetext `pages/security`.
+> - **Tests:** Unit-Tests (Codes, Replay, Sperre, Richtlinie), Integration über HTTPS (Login, Step-up, Recovery,
+>   Org-Pflicht inkl. Beta ändert Alpha nicht), Komponenten- und Playwright-Tests mit axe.
+>
+> Offen: Der Schalter für die Org-Pflicht in der UI kommt mit der Admin-UI (M1-32). WebAuthn/Passkeys (KONZEPT §7)
+> sind nicht Teil von M1. Das Bundle-Budget misst die Summe aller Chunks (jetzt 174,5 KiB); vor weiteren Seiten auf
+> „erstes Laden“ umstellen.
 - **Ziel:** TOTP einrichten (QR-Code) und verifizieren; Recovery-Codes gehasht speichern; Middleware `RequireStepUp(maxAge)`; 2FA-Pflicht pro Org.
 - **Abhängig von:** M1-02, M1-06
 - **Tests zuerst:** RFC-6238-Testvektoren, Zeitfenster und Schutz vor Replay, Recovery-Code nur einmal verwendbar.
@@ -823,7 +844,7 @@ flowchart LR
 >   Login mit Rücksprung, Setup-Durchlauf, Org-Wechsel, Logout, Open-Redirect-Abwehr, Dark-Theme ab dem ersten Paint
 >   (Gegenprobe ohne Inline-Skript schlägt fehl), axe für Login, Setup und Shell (hell und dunkel).
 >
-> Abweichungen: Die **TOTP-Seite** folgt mit M1-03 (die Server-Seite fehlt noch). Der echte Login gegen die Datenbank
+> Abweichungen: Die **TOTP-Seite** kam mit M1-03 (Code-Schritt im Login, Seite „Sicherheit“). Der echte Login gegen die Datenbank
 > wird mit M1-33 getestet; der E2E-Guard lässt dafür nur die Browser-Meldung zu 401-Antworten zu. Der Ablauf einer
 > Session ist bisher per Komponententest abgedeckt; E2E folgt mit M1-30, sobald die Flotte Daten lädt.
 - **Ziel:** Layout mit Navigation, Light/Dark/System, Org-Switcher, Platzhalter für die Command-Palette; Seiten für Login, TOTP und Setup-Assistent (`SetupService` aus M1-05); Behandlung abgelaufener Sessions; Empty States.

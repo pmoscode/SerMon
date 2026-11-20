@@ -7,6 +7,8 @@
 	import { sessionState, type ConfirmFailure } from '#lib/stores/session.svelte.js';
 	import { stepUpState } from '#lib/stores/stepup.svelte.js';
 
+	/** Users with a second factor confirm with a code, the others with the password. */
+	const withCode = $derived(sessionState.current?.secondFactorEnabled ?? false);
 	let password = $state('');
 	let busy = $state(false);
 	let failure = $state<ConfirmFailure | undefined>();
@@ -16,6 +18,8 @@
 		switch (failure) {
 			case 'wrong_password':
 				return m.stepup_password_wrong();
+			case 'wrong_code':
+				return m.login_error_code();
 			case 'rate_limited':
 				return m.login_error_rate_limited();
 			case 'unavailable':
@@ -43,7 +47,9 @@
 		if (missing) return;
 		busy = true;
 		try {
-			failure = await sessionState.confirmPassword(password);
+			failure = withCode
+				? await sessionState.confirmSecondFactor(password.trim())
+				: await sessionState.confirmPassword(password);
 		} finally {
 			busy = false;
 		}
@@ -63,7 +69,7 @@
 	<Dialog.Content closeLabel={m.stepup_cancel()} class="sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>{m.stepup_title()}</Dialog.Title>
-			<Dialog.Description>{m.stepup_text()}</Dialog.Description>
+			<Dialog.Description>{withCode ? m.stepup_text_code() : m.stepup_text()}</Dialog.Description>
 		</Dialog.Header>
 		<form class="flex flex-col gap-4" novalidate onsubmit={submit}>
 			{#if failureText}
@@ -75,11 +81,11 @@
 				</p>
 			{/if}
 			<div class="flex flex-col gap-2">
-				<Label for="stepup-password">{m.field_password_label()}</Label>
+				<Label for="stepup-password">{withCode ? m.field_code() : m.field_password_label()}</Label>
 				<Input
 					id="stepup-password"
-					type="password"
-					autocomplete="current-password"
+					type={withCode ? 'text' : 'password'}
+					autocomplete={withCode ? 'one-time-code' : 'current-password'}
 					bind:value={password}
 					aria-invalid={missing}
 					aria-describedby={missing ? 'stepup-password-error' : undefined}

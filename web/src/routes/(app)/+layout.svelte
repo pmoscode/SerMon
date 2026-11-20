@@ -35,6 +35,13 @@
 		}
 	});
 
+	// While the organization requires a second factor the user lacks, only its setup works.
+	$effect(() => {
+		if (sessionState.secondFactorSetupRequired && page.route.id !== '/(app)/settings/security') {
+			void redirectTo('/settings/security');
+		}
+	});
+
 	async function logout() {
 		logoutFailed = false;
 		try {

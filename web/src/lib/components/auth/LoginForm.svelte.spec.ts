@@ -3,6 +3,7 @@ import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { api, Code } from '#lib/api/client.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
+import { m } from '#lib/paraglide/messages.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
 import { fakeSession, PASSPHRASE, rpcError } from '#lib/test/fakes.js';
 import LoginForm from './LoginForm.svelte';
@@ -66,5 +67,46 @@ describe('LoginForm', () => {
 		await expect.element(page.getByRole('alert')).toHaveTextContent(text);
 		expect(onLoggedIn).not.toHaveBeenCalled();
 		await expect.element(page.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+	});
+
+	it('asks for the second factor and logs in with the code', async () => {
+		vi.spyOn(api.auth, 'login').mockResolvedValue({ secondFactorRequired: true } as never);
+		const verify = vi
+			.spyOn(api.auth, 'verifySecondFactor')
+			.mockRejectedValueOnce(rpcError(Code.PermissionDenied))
+			.mockResolvedValueOnce({ session: fakeSession() } as never);
+		const onLoggedIn = vi.fn();
+		render(LoginForm, { onLoggedIn });
+
+		await fillAndSubmit('mia@example.org', PASSPHRASE);
+		await expect.element(page.getByLabelText('Code')).toBeVisible();
+		expect(onLoggedIn).not.toHaveBeenCalled();
+
+		await page.getByLabelText('Code').fill('000000');
+		await page.getByRole('button', { name: 'Confirm' }).click();
+		await expect
+			.element(page.getByRole('alert'))
+			.toHaveTextContent(
+				'The code is wrong or was already used – or the account is temporarily locked.'
+			);
+
+		await page.getByLabelText('Code').fill(' 123 456 ');
+		await page.getByRole('button', { name: 'Confirm' }).click();
+		await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledOnce());
+		expect(verify.mock.calls[1][0]).toEqual({ code: '123 456' });
+		expect(sessionState.status).toBe('authenticated');
+	});
+
+	it('starts again with the password when the waiting login expired', async () => {
+		vi.spyOn(api.auth, 'login').mockResolvedValue({ secondFactorRequired: true } as never);
+		vi.spyOn(api.auth, 'verifySecondFactor').mockRejectedValue(rpcError(Code.Unauthenticated));
+		render(LoginForm, { onLoggedIn: vi.fn() });
+
+		await fillAndSubmit('mia@example.org', PASSPHRASE);
+		await page.getByLabelText('Code').fill('123456');
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect.element(page.getByRole('alert')).toHaveTextContent(m.login_error_code_expired());
+		await expect.element(page.getByLabelText('Password')).toBeVisible();
 	});
 });

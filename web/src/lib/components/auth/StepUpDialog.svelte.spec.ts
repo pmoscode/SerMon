@@ -61,4 +61,23 @@ describe('StepUpDialog', () => {
 		await expect(confirmed).resolves.toBe(false);
 		expect(confirm).not.toHaveBeenCalled();
 	});
+
+	it('asks users with a second factor for a code instead of the password', async () => {
+		const session = fakeSession();
+		session.secondFactorEnabled = true;
+		sessionState.current = session;
+		const confirm = vi
+			.spyOn(api.auth, 'confirmSecondFactor')
+			.mockResolvedValue({ session } as never);
+		const password = vi.spyOn(api.auth, 'confirmPassword');
+		render(StepUpDialog);
+		const confirmed = stepUpState.request();
+
+		await page.getByLabelText('Code').fill('123456');
+		await page.getByRole('button', { name: 'Confirm' }).click();
+
+		await expect(confirmed).resolves.toBe(true);
+		expect(confirm.mock.calls[0][0]).toEqual({ code: '123456' });
+		expect(password).not.toHaveBeenCalled();
+	});
 });

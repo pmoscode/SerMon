@@ -18,6 +18,20 @@ command -v openssl >/dev/null 2>&1 || die "openssl (3.0 or later) is required"
 
 b64() { openssl base64 -A; }
 
+# Every Ed25519 SubjectPublicKeyInfo starts with these 12 bytes, followed by the 32-byte key.
+ED25519_SPKI_PREFIX=302a300506032b6570032100
+
+# check_key KEY.pem refuses anything but an Ed25519 key: of another key, the last 32 bytes of the
+# SPKI would silently become a wrong public key.
+check_key() {
+	spki=$(openssl pkey -in "$1" -pubout -outform DER 2>/dev/null | od -An -v -tx1 | tr -d ' \n') ||
+		die "cannot read the key $1"
+	case $spki in
+	"$ED25519_SPKI_PREFIX"*) [ ${#spki} -eq 88 ] || die "$1 is not an Ed25519 key" ;;
+	*) die "$1 is not an Ed25519 key" ;;
+	esac
+}
+
 # raw_public KEY.pem writes the 32-byte public key to stdout (last 32 bytes of the DER SPKI).
 raw_public() {
 	openssl pkey -in "$1" -pubout -outform DER 2>/dev/null | tail -c 32
@@ -71,6 +85,7 @@ sign_file() {
 command=$1
 key=$2
 shift 2
+[ "$command" = generate ] || check_key "$key"
 case $command in
 generate)
 	[ ! -e "$key" ] || die "$key exists – not overwriting a key"

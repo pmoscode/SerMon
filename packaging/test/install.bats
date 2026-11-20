@@ -122,9 +122,49 @@ without_minisign() {
 	write_config
 	grep -q '^url = "https://sermon.example.com"$' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
 	grep -q '^agent_url = "https://sermon.example.com:8443"$' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
-	SERVER=https://other.example.com
+	# The same server again: kept as it is.
 	write_config
 	grep -q 'sermon.example.com' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
+}
+
+@test "never sends the token to the server of an old configuration" {
+	SERVER=https://sermon.example.com AGENT_URL=https://sermon.example.com:8443 CONFIG_DIR=/etc/sermon FORCE=''
+	write_config
+	SERVER=https://other.example.com AGENT_URL=https://other.example.com:8443
+	run write_config
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"points to https://sermon.example.com"*"--force"* ]]
+	grep -q '^url = "https://sermon.example.com"$' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
+	# With --force the configuration follows the new server.
+	FORCE=--force
+	write_config
+	grep -q '^url = "https://other.example.com"$' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
+	grep -q '^agent_url = "https://other.example.com:8443"$' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
+}
+
+@test "uses an existing sermon user only if it is a system account" {
+	STATE_DIR=/var/lib/sermon-agent
+	id() { return 0; }
+	usermod() { :; }
+	getent() {
+		case "$1 $2" in
+		"passwd sermon") printf '%s\n' "$ACCOUNT" ;;
+		*) return 2 ;;
+		esac
+	}
+	ACCOUNT='sermon:x:998:998::/var/lib/sermon-agent:/usr/sbin/nologin'
+	run create_user
+	[ "$status" -eq 0 ]
+	ACCOUNT='sermon:x:101:101:sermon:/var/lib/sermon-agent:/sbin/nologin'
+	run create_user
+	[ "$status" -eq 0 ]
+	ACCOUNT='sermon:x:1001:1001:Sermon Person:/home/sermon:/bin/bash'
+	run create_user
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"not a system account"* ]]
+	ACCOUNT='sermon:x:997:997::/var/lib/sermon-agent:/bin/sh'
+	run create_user
+	[ "$status" -ne 0 ]
 }
 
 @test "enrolls as the service user, never as root" {
@@ -136,4 +176,13 @@ without_minisign() {
 	[[ "$output" == *"token=sme_secret"* ]]
 	# The token travels in the environment, not in the arguments (visible in ps).
 	[[ "${lines[0]}" != *sme_secret* ]]
+}
+
+@test "release-sign refuses keys other than Ed25519" {
+	openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$TMP/ec.pem" 2>/dev/null
+	run "$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" pubkey "$TMP/ec.pem"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"not an Ed25519 key"* ]]
+	run "$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" sign "$TMP/ec.pem" "$BIN"
+	[ "$status" -ne 0 ]
 }

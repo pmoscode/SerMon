@@ -25,6 +25,9 @@ esac
 if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -x "$build/sermon-server" ]; then
 	rm -rf "$build"
 	mkdir -p "$build/secrets" "$build/downloads"
+	# Release key and database passwords: only for the user who runs the demo. The containers see the
+	# files through bind mounts, which don't need the parent directories to be accessible.
+	chmod 0700 "$build" "$build/secrets"
 
 	# Release key of this run only: the server embeds its public half, install.sh checks against it.
 	"$root/scripts/release-sign.sh" generate "$build/release.pem" >"$build/release.pub"
@@ -48,7 +51,7 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -x "$build/sermon-server" ]; then
 		>"$build/secrets/database_url"
 	printf 'postgres://sermon:%s@postgres:5432/sermon?sslmode=disable' "$(cat "$build/secrets/postgres_password")" \
 		>"$build/secrets/database_migrate_url"
-	chmod 0644 "$build/secrets/"* # read by the container users; the directory is local and temporary
+	chmod 0644 "$build/secrets/"* # read by the container users; the directory itself is private
 fi
 
 cleanup() {

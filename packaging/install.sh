@@ -139,7 +139,9 @@ download() {
 }
 
 create_user() {
-	if ! id sermon >/dev/null 2>&1; then
+	if id sermon >/dev/null 2>&1; then
+		check_system_user
+	else
 		if command -v useradd >/dev/null 2>&1; then
 			useradd --system --home-dir "$STATE_DIR" --no-create-home --shell /usr/sbin/nologin sermon
 		else
@@ -169,6 +171,21 @@ as_service_user() {
 	fi
 }
 
+# check_system_user refuses an existing sermon user that looks like a person's account: it would
+# get the agent's key and the read access to the logs.
+check_system_user() {
+	entry=$(getent passwd sermon) || die "cannot read the account of the existing user sermon"
+	uid=$(printf '%s\n' "$entry" | cut -d: -f3)
+	shell=$(printf '%s\n' "$entry" | cut -d: -f7)
+	case "$shell" in
+	*/nologin | */false) ;;
+	*) uid='' ;;
+	esac
+	if [ -z "$uid" ] || [ "$uid" -ge 1000 ] || [ "$uid" -eq 0 ]; then
+		die "the existing user sermon is not a system account without login (uid ${uid:-?}, shell $shell) – remove or rename it first"
+	fi
+}
+
 agent_url_for() {
 	host=$(printf '%s\n' "$1" | sed -e 's|^[a-z]*://||' -e 's|[/?#].*$||' -e 's|:[0-9]*$||')
 	echo "https://$host:$AGENT_PORT"
@@ -177,8 +194,14 @@ agent_url_for() {
 write_config() {
 	mkdir -p "$ROOT$CONFIG_DIR"
 	if [ -e "$ROOT$CONFIG_DIR/agent.toml" ]; then
-		say "keeping the existing $CONFIG_DIR/agent.toml"
-		return 0
+		# The token goes to the server of the configuration: never to another one than asked for.
+		current=$(sed -n 's/^url = "\(.*\)"$/\1/p' "$ROOT$CONFIG_DIR/agent.toml" | head -n 1)
+		if [ "$current" = "$SERVER" ]; then
+			say "keeping the existing $CONFIG_DIR/agent.toml"
+			return 0
+		fi
+		[ -n "$FORCE" ] || die "$CONFIG_DIR/agent.toml points to ${current:-an unknown server}, not $SERVER – use --force to replace it"
+		say "replacing $CONFIG_DIR/agent.toml (was ${current:-unknown})"
 	fi
 	cat >"$ROOT$CONFIG_DIR/agent.toml" <<EOF
 # SerMon agent – written by install.sh. Everything else comes from the server.

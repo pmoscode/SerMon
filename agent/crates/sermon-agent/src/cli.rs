@@ -38,6 +38,8 @@ pub enum Command {
     Collect(CollectArgs),
     /// Remove the local identity and buffered data of this agent.
     Uninstall(UninstallArgs),
+    /// Run virtual nodes with synthetic metrics against a server (development and load tests).
+    Simulate(SimulateArgs),
     /// Print the version.
     Version,
 }
@@ -71,6 +73,32 @@ pub struct CollectArgs {
     /// Collect for this many seconds (at least 2, rates need two runs).
     #[arg(long, default_value_t = 2)]
     pub seconds: u32,
+}
+
+/// Arguments of `simulate`.
+#[derive(Debug, Args)]
+pub struct SimulateArgs {
+    /// Number of virtual nodes.
+    #[arg(long, default_value_t = 10)]
+    pub nodes: u32,
+
+    /// Seed of the synthetic fleet: the same seed gives the same nodes and patterns.
+    #[arg(long, default_value_t = 1)]
+    pub seed: u64,
+
+    /// Enrollment token for nodes without identity yet ("sme_…", needs enough uses). Prefer the
+    /// environment variable.
+    #[arg(
+        long,
+        env = "SERMON_ENROLLMENT_TOKEN",
+        hide_env_values = true,
+        value_name = "TOKEN"
+    )]
+    pub token: Option<SecretArg>,
+
+    /// SHA-256 fingerprint of a self-signed server certificate ("sha256:AB:CD:…").
+    #[arg(long, value_name = "FINGERPRINT")]
+    pub ca_fingerprint: Option<Fingerprint>,
 }
 
 /// Arguments of `uninstall`.

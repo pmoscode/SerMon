@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -290,4 +291,78 @@ func scrape(t *testing.T, addr string) string {
 	defer func() { _ = res.Body.Close() }()
 	body, _ := io.ReadAll(res.Body)
 	return string(body)
+}
+
+// TestAgentBinary_SimulatesNodes runs `sermon-agent simulate` (M1-34): every virtual node enrolls,
+// holds its own mTLS session and delivers catalog metrics.
+func TestAgentBinary_SimulatesNodes(t *testing.T) {
+	bin := agentBinary(t)
+	srv := startTestServer(t, nil)
+	defer srv.stop()
+	const nodes = 3
+	org := seedEnrollmentTokenWithUses(t, nodes)
+
+	dir := t.TempDir()
+	_, agentPort, _ := strings.Cut(srv.agent, ":")
+	config := filepath.Join(dir, "agent.toml")
+	toml := "[server]\nurl = \"http://" + srv.web + "\"\nagent_url = \"https://localhost:" + agentPort + "\"\n" +
+		"[paths]\nstate_dir = \"" + filepath.Join(dir, "state") + "\"\n"
+	if err := os.WriteFile(config, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	logs := &syncBuffer{}
+	simulate := exec.CommandContext(ctx, bin, "simulate", "--config", config, "--nodes", strconv.Itoa(nodes), "--seed", "42")
+	simulate.Env = append(os.Environ(), "SERMON_ENROLLMENT_TOKEN="+fixtureToken)
+	simulate.Stdout, simulate.Stderr = logs, logs
+	if err := simulate.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = simulate.Process.Kill() }()
+
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	var delivering int
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		err := conn.QueryRow(ctx, `SELECT count(DISTINCT n.id) FROM nodes n
+			JOIN series s ON s.node_id = n.id JOIN metrics_raw r ON r.series_id = s.id
+			WHERE n.org_id = $1 AND n.hostname LIKE 'sim-%' AND n.ingest_seq > 0`, org).Scan(&delivering)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if delivering == nodes {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if delivering != nodes {
+		t.Fatalf("%d of %d virtual nodes deliver metrics\nsimulator:\n%s\nserver:\n%s", delivering, nodes, logs.String(), srv.logs.String())
+	}
+	if strings.Contains(srv.logs.String(), "unknown metric") || strings.Contains(srv.logs.String(), "level=ERROR") {
+		t.Errorf("server complained:\n%s", srv.logs.String())
+	}
+
+	if err := simulate.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	if err := simulate.Wait(); err != nil {
+		t.Errorf("simulator exit: %v\n%s", err, logs.String())
+	}
+	// A restart reuses the identities: no token needed any more.
+	again := exec.CommandContext(ctx, bin, "simulate", "--config", config, "--nodes", strconv.Itoa(nodes), "--seed", "42")
+	again.Env = []string{"PATH=" + os.Getenv("PATH")}
+	again.Stdout, again.Stderr = logs, logs
+	if err := again.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Second)
+	_ = again.Process.Signal(syscall.SIGTERM)
+	if err := again.Wait(); err != nil {
+		t.Errorf("restart without token: %v\n%s", err, logs.String())
+	}
 }

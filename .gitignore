@@ -39,6 +39,8 @@ web/src/lib/paraglide/
 
 # Development secrets (scripts/dev-secrets.sh)
 deploy/dev/.secrets/
+# Identities and buffers of the simulated nodes (just simulate)
+deploy/dev/.simulate/
 # air build output
 server/tmp/
 

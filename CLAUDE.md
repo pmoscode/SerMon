@@ -50,6 +50,8 @@ Agent-Konfiguration: `/etc/sermon/agent.toml` (Schema und Beispiel in `agent/cra
 Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur über `ProcRoot` (`sermon-core`).
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
+`just simulate [nodes] [seed]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`, M1-34); der erste
+Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten wiederverwendet.
 Enrollment und Identitätsdateien: ADR 0010.
 Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just smoke-server` (Start, Health-Probes, SIGTERM).
 Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.

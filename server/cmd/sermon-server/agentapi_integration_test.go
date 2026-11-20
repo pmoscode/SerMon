@@ -21,6 +21,12 @@ const fixtureToken = "sme_AgentApiIntegrationTestToken0123456789abcde" // better
 
 func seedEnrollmentToken(t *testing.T) {
 	t.Helper()
+	seedEnrollmentTokenWithUses(t, 1)
+}
+
+// seedEnrollmentTokenWithUses stores fixtureToken for a new organization and returns its ID.
+func seedEnrollmentTokenWithUses(t *testing.T, uses int) uuid.UUID {
+	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
 	if err != nil {
@@ -37,12 +43,13 @@ func seedEnrollmentToken(t *testing.T) {
 		{"INSERT INTO node_groups (id, org_id, name) VALUES ($1, $2, 'servers')", []any{group, org}},
 		{"DELETE FROM enrollment_tokens WHERE token_hash = sha256(convert_to($1, 'UTF8'))", []any{fixtureToken}},
 		{`INSERT INTO enrollment_tokens (id, org_id, group_id, token_hash, expires_at, max_uses)
-		  VALUES ($1, $2, $3, sha256(convert_to($4, 'UTF8')), now() + interval '1 hour', 1)`, []any{uuid.New(), org, group, fixtureToken}},
+		  VALUES ($1, $2, $3, sha256(convert_to($4, 'UTF8')), now() + interval '1 hour', $5)`, []any{uuid.New(), org, group, fixtureToken, uses}},
 	} {
 		if _, err := conn.Exec(ctx, stmt.sql, stmt.args...); err != nil {
 			t.Fatalf("%s: %v", stmt.sql, err)
 		}
 	}
+	return org
 }
 
 func TestAgentAPI_EnrolledAgentConnectsRotatesAndIsLockedOnParallelUse(t *testing.T) {

@@ -9,6 +9,7 @@ pub mod enroll;
 pub mod identity;
 pub mod logging;
 pub mod scheduler;
+pub mod simulate;
 pub mod state;
 
 use std::sync::Arc;
@@ -55,6 +56,11 @@ pub fn execute(cli: Cli) -> anyhow::Result<()> {
         Command::Collect(args) => {
             let config = AgentConfig::load(&cli.config)?;
             collect(&config, args.seconds)
+        }
+        Command::Simulate(args) => {
+            let config = AgentConfig::load(&cli.config)?;
+            logging::init(config.log_level);
+            simulate::simulate(&config, &args)
         }
         Command::Uninstall(args) => {
             let config = AgentConfig::load(&cli.config)?;
@@ -192,7 +198,7 @@ pub fn collect(config: &AgentConfig, seconds: u32) -> anyhow::Result<()> {
 }
 
 /// Cancels `shutdown` on SIGTERM (systemd stop) or SIGINT (Ctrl+C).
-async fn cancel_on_signal(shutdown: CancellationToken) -> anyhow::Result<()> {
+pub(crate) async fn cancel_on_signal(shutdown: CancellationToken) -> anyhow::Result<()> {
     use tokio::signal::unix::{SignalKind, signal};
 
     let mut terminate =

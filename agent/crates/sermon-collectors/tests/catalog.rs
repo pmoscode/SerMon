@@ -43,6 +43,7 @@ fn every_collected_metric_is_in_the_server_catalog() {
 
     let mut files = sources(&root.join("agent/crates/sermon-collectors/src"));
     files.push(root.join("agent/crates/sermon-agent/src/scheduler.rs"));
+    files.push(root.join("agent/crates/sermon-agent/src/simulate.rs"));
     let mut sent = BTreeSet::new();
     for file in &files {
         let text = std::fs::read_to_string(file).unwrap();

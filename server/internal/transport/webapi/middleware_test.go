@@ -89,6 +89,29 @@ func TestRequireOrigin(t *testing.T) {
 	}
 }
 
+// GET carries the cookie on cross-site navigations (SameSite=Lax): browsers say where a request
+// comes from, and only the app itself (or a typed URL) may read through the API.
+func TestRequireOrigin_RejectsGETFromOtherSites(t *testing.T) {
+	h := webapi.RequireOrigin([]string{"https://sermon.example.com"})(ok())
+	for site, want := range map[string]int{
+		"":            http.StatusOK, // no browser (curl) or an old one
+		"same-origin": http.StatusOK,
+		"none":        http.StatusOK, // typed or bookmarked
+		"same-site":   http.StatusForbidden,
+		"cross-site":  http.StatusForbidden,
+	} {
+		rec := httptest.NewRecorder()
+		headers := map[string]string{}
+		if site != "" {
+			headers["Sec-Fetch-Site"] = site
+		}
+		h.ServeHTTP(rec, request(http.MethodGet, "", "192.0.2.1:1", headers))
+		if rec.Code != want {
+			t.Errorf("GET with Sec-Fetch-Site %q: status = %d, want %d", site, rec.Code, want)
+		}
+	}
+}
+
 func TestRequireOrigin_WithoutAllowedOriginsRejectsEverythingStateChanging(t *testing.T) {
 	h := webapi.RequireOrigin(nil)(ok())
 	rec := httptest.NewRecorder()

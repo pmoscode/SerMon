@@ -9,10 +9,14 @@ import (
 )
 
 // Limits of the live streams (WatchMetrics). A stream holds a goroutine and queries the ring
-// buffer every second, so their number is bounded per session and per instance.
+// buffer every second, so their number is bounded per session, user, organization and instance.
 const (
 	// MaxLiveStreamsPerSession allows a few live views in several tabs of one browser.
 	MaxLiveStreamsPerSession = 32
+	// MaxLiveStreamsPerUser bounds a user with many sessions (several browsers, scripts).
+	MaxLiveStreamsPerUser = 64
+	// MaxLiveStreamsPerOrg keeps one organization from taking all streams of the instance.
+	MaxLiveStreamsPerOrg = 250
 	// MaxLiveStreams bounds all live streams of the instance.
 	MaxLiveStreams = 1000
 	// streamRecheck is how often a running stream checks that its session and rights still hold.
@@ -25,26 +29,53 @@ var (
 	errScopeChanged = errors.New("rights changed")
 )
 
-// streamLimiter counts the open live streams per session and in total.
+// streamLimits are the maximum numbers of open streams.
+type streamLimits struct{ Session, User, Org, Total int }
+
+var defaultStreamLimits = streamLimits{
+	Session: MaxLiveStreamsPerSession, User: MaxLiveStreamsPerUser, Org: MaxLiveStreamsPerOrg, Total: MaxLiveStreams,
+}
+
+// streamKey says whom a stream counts against.
+type streamKey struct{ session, user, org string }
+
+// streamLimiter counts the open live streams per session, user, organization and in total.
 type streamLimiter struct {
-	mu                   sync.Mutex
-	perSession           map[string]int
-	total                int
-	maxPerSession, limit int
+	mu     sync.Mutex
+	limits streamLimits
+	counts map[string]int // by "s:", "u:" and "o:" keys
+	total  int
 }
 
-func newStreamLimiter(maxPerSession, limit int) *streamLimiter {
-	return &streamLimiter{perSession: map[string]int{}, maxPerSession: maxPerSession, limit: limit}
+func newStreamLimiter(limits streamLimits) *streamLimiter {
+	return &streamLimiter{limits: limits, counts: map[string]int{}}
 }
 
-// acquire takes a slot for the session; false if a limit is reached.
-func (l *streamLimiter) acquire(session string) bool {
+type streamCounter struct {
+	key   string
+	limit int
+}
+
+func (k streamKey) counters(l streamLimits) []streamCounter {
+	return []streamCounter{{"s:" + k.session, l.Session}, {"u:" + k.user, l.User}, {"o:" + k.org, l.Org}}
+}
+
+// acquire takes a slot for the stream; false if a limit is reached.
+func (l *streamLimiter) acquire(k streamKey) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.total >= l.limit || l.perSession[session] >= l.maxPerSession {
+	if l.total >= l.limits.Total {
 		return false
 	}
-	l.perSession[session]++
+	counters := k.counters(l.limits)
+	for _, c := range counters {
+		if l.counts[c.key] >= c.limit {
+			return false
+		}
+	}
+	for _, c := range counters {
+		l.counts[c.key]++
+	}
 	l.total++
 	return true
 }
@@ -57,12 +88,14 @@ func (l *streamLimiter) open() int {
 }
 
 // release frees a slot taken with acquire.
-func (l *streamLimiter) release(session string) {
+func (l *streamLimiter) release(k streamKey) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.total--
-	if l.perSession[session]--; l.perSession[session] <= 0 {
-		delete(l.perSession, session)
+	for _, c := range k.counters(l.limits) {
+		if l.counts[c.key]--; l.counts[c.key] <= 0 {
+			delete(l.counts, c.key)
+		}
 	}
 }
 

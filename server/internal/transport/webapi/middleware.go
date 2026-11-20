@@ -63,14 +63,19 @@ func remoteAddr(r *http.Request) netip.Addr {
 }
 
 // RequireOrigin rejects cross-site requests (CSRF, login CSRF): state-changing requests must carry
-// an Origin from the allow list; requests that carry any Origin must match it. Without allowed
+// an Origin from the allow list; requests that carry any Origin must match it; reads that a
+// browser marks as coming from another site (Sec-Fetch-Site) are rejected, too. Without allowed
 // origins every state-changing request is rejected (fail closed).
 func RequireOrigin(allowed []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
 			safe := r.Method == http.MethodGet || r.Method == http.MethodHead
-			if (origin == "" && !safe) || (origin != "" && !slices.Contains(allowed, origin)) {
+			// GET carries the cookie on cross-site navigations (SameSite=Lax); the UI never sends
+			// one from another site.
+			site := r.Header.Get("Sec-Fetch-Site")
+			foreign := site != "" && site != "same-origin" && site != "none"
+			if (origin == "" && !safe) || (origin != "" && !slices.Contains(allowed, origin)) || (safe && foreign) {
 				writeConnectError(w, http.StatusForbidden, "permission_denied", "request origin not allowed")
 				return
 			}

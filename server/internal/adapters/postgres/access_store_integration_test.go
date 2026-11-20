@@ -169,6 +169,25 @@ func TestAuditLog_IsAppendOnlyForTheApplication(t *testing.T) {
 	}
 }
 
+// Users are global identities: an admin of one organization must not change the e-mail (the login)
+// of a user who is also a member elsewhere. No use case updates users, so the role can't either.
+func TestUsers_CannotBeUpdatedByTheApplication(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := conn.Exec(ctx, "SELECT set_config('sermon.org_id', $1, false)", orgA.String()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := conn.Exec(ctx, "UPDATE users SET email = 'taken-over@example.org'"); err == nil {
+		t.Error("UPDATE users must be denied for sermon_app")
+	}
+}
+
 func TestAuditLog_ConcurrentAppendsKeepASingleChain(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()

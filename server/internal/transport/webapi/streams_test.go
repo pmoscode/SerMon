@@ -84,7 +84,7 @@ func liveServer(t *testing.T, perSession int) (webv1connect.MetricsServiceClient
 	ring := metrics.NewRing()
 	svc := fleet.NewService(oneNode{}, metrics.NewReader(store, ring, time.Now), time.Now)
 	handler := NewMetricsHandler(svc, slog.New(slog.DiscardHandler))
-	handler.streams = newStreamLimiter(perSession, 10)
+	handler.streams = newStreamLimiter(streamLimits{Session: perSession, User: 10, Org: 10, Total: 10})
 	handler.recheck = 0 // check on every message
 	auth := &fakeAuth{principal: viewer}
 	mux := http.NewServeMux()
@@ -277,5 +277,44 @@ func TestAuthenticator_StreamsCanCheckTheirSessionAgain(t *testing.T) {
 	}
 	if _, err := reauth(); connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Errorf("re-check after logout: %v, want UNAUTHENTICATED", err)
+	}
+}
+
+// One user with many sessions, or one organization with many users, must not take all live
+// streams of the instance.
+func TestStreamLimiter_LimitsPerSessionUserOrganizationAndInstance(t *testing.T) {
+	l := newStreamLimiter(streamLimits{Session: 2, User: 3, Org: 4, Total: 5})
+	key := func(session, user, org string) streamKey { return streamKey{session: session, user: user, org: org} }
+
+	for _, k := range []streamKey{key("s1", "u1", "o1"), key("s1", "u1", "o1"), key("s2", "u1", "o1")} {
+		if !l.acquire(k) {
+			t.Fatalf("%+v within the limits was refused", k)
+		}
+	}
+	if l.acquire(key("s1", "u1", "o1")) {
+		t.Error("a third stream of session s1 exceeds the session limit")
+	}
+	if l.acquire(key("s3", "u1", "o1")) {
+		t.Error("a fourth stream of user u1 exceeds the user limit, also in a new session")
+	}
+	if !l.acquire(key("s4", "u2", "o1")) {
+		t.Fatal("another user of o1 still gets a stream")
+	}
+	if l.acquire(key("s5", "u3", "o1")) {
+		t.Error("a fifth stream of o1 exceeds the organization limit")
+	}
+	if !l.acquire(key("s6", "u4", "o2")) {
+		t.Fatal("another organization still gets a stream")
+	}
+	if l.acquire(key("s7", "u5", "o3")) {
+		t.Error("the sixth stream exceeds the instance limit")
+	}
+
+	l.release(key("s1", "u1", "o1"))
+	if !l.acquire(key("s3", "u1", "o1")) {
+		t.Error("released slots are free again")
+	}
+	if l.open() != 5 {
+		t.Errorf("open = %d, want 5", l.open())
 	}
 }

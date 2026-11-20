@@ -34,7 +34,7 @@ var _ webv1connect.MetricsServiceHandler = (*MetricsHandler)(nil)
 // NewMetricsHandler returns the MetricsService handler.
 func NewMetricsHandler(svc *fleet.Service, logger *slog.Logger) *MetricsHandler {
 	return &MetricsHandler{
-		fleet: svc, streams: newStreamLimiter(MaxLiveStreamsPerSession, MaxLiveStreams), recheck: streamRecheck, logger: logger,
+		fleet: svc, streams: newStreamLimiter(defaultStreamLimits), recheck: streamRecheck, logger: logger,
 	}
 }
 
@@ -84,10 +84,11 @@ func (h *MetricsHandler) WatchMetrics(ctx context.Context, req *connect.Request[
 		return err
 	}
 	s, _ := sessionFrom(ctx)
-	if !h.streams.acquire(s.ID) {
+	key := streamKey{session: s.ID, user: c.Principal.User.String(), org: c.Principal.Org.String()}
+	if !h.streams.acquire(key) {
 		return connect.NewError(connect.CodeResourceExhausted, errTooManyStreams)
 	}
-	defer h.streams.release(s.ID)
+	defer h.streams.release(key)
 	reauth, _ := ctx.Value(reauthKey{}).(reauthenticator)
 	checked := time.Now()
 	err = h.fleet.Watch(ctx, c, q, func(series []metrics.Series) error {

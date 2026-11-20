@@ -10,6 +10,7 @@ pub mod identity;
 pub mod journal;
 pub mod logging;
 pub mod scheduler;
+pub mod security;
 #[cfg(feature = "simulate")]
 pub mod simulate;
 pub mod state;

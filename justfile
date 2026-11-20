@@ -194,12 +194,13 @@ test-agent:
 security-agent:
     cargo deny check
 
-# Fuzz the parsers of untrusted input: /proc texts, journal lines and WAL recovery (cargo-fuzz, pinned nightly)
+# Fuzz the parsers of untrusted input: /proc texts, journal lines, security events and WAL recovery (cargo-fuzz, pinned nightly)
 [working-directory: 'agent/fuzz']
 fuzz-agent seconds="60":
     ./seed.sh
     cargo fuzz run proc_parsers -- -max_total_time={{ seconds }} -max_len=65536
     cargo fuzz run journal_line -- -max_total_time={{ seconds }} -max_len=65536
+    cargo fuzz run security_parser -- -max_total_time={{ seconds }} -max_len=65536
     cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
 
 # Test install.sh and the systemd unit in Debian: bats (signature, detection) and `systemd-analyze security` < 2.0

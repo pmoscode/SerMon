@@ -49,6 +49,8 @@ clap = { version = "=4.6.8", default-features = false, features = ["std", "help"
 http = "=1.5.0"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
+# Linear-time matching for untrusted log lines (no ReDoS, KONZEPT §10.3, §11).
+regex = { version = "=1.13.1", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
 thiserror = "=2.0.21"
 tokio = { version = "=1.54.1", features = ["rt", "macros", "signal", "time", "sync"] }
 tokio-stream = { version = "=0.1.19", default-features = false }
@@ -65,6 +67,7 @@ sermon-buffer = { path = "crates/sermon-buffer" }
 sermon-collectors = { path = "crates/sermon-collectors" }
 sermon-core = { path = "crates/sermon-core" }
 sermon-logs = { path = "crates/sermon-logs" }
+sermon-security = { path = "crates/sermon-security" }
 sermon-testserver = { path = "crates/sermon-testserver" }
 sermon-transport = { path = "crates/sermon-transport" }
 

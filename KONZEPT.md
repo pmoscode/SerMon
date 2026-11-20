@@ -526,7 +526,7 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 
 | Quelle                 | Umsetzung                                                                                                                                  | Default                                                   |
 |------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
-| **systemd-journal**    | `journalctl -o json --all -f` mit eigenem Cursor (`--after-cursor`, ab systemd 239), feste Feldliste ohne `_CMDLINE`: `MESSAGE`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `SYSLOG_FACILITY`, `_SYSTEMD_UNIT`, `_PID`, `_COMM`, `_BOOT_ID`, `_TRANSPORT`, `_UID` | an (falls vorhanden)                                      |
+| **systemd-journal**    | `journalctl -o json --all -f` mit eigenem Cursor (`--after-cursor`, ab systemd 239), feste Feldliste ohne `_CMDLINE`: `MESSAGE`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `SYSLOG_FACILITY`, `_SYSTEMD_UNIT`, `_PID`, `_COMM`, `_BOOT_ID`, `_TRANSPORT`, `_UID`, `_CAP_EFFECTIVE` | an (falls vorhanden)                                      |
 | **Klassische Dateien** | `/var/log/syslog`, `/var/log/messages`, `/var/log/auth.log`, `/var/log/secure` (je nach Distro automatisch erkannt)                        | an, wenn kein journald (Alpine)                           |
 | **Docker**             | über die Docker-API (`/var/run/docker.sock`), stdout/stderr pro Container mit Labels `container`, `image`, `compose_project`               | **aus** (Modul, siehe §15 – Socket bedeutet root-Rechte!) |
 | **Beliebige Dateien**  | Globs pro Node-Gruppe zentral konfiguriert, z. B. `/var/log/nginx/*.log`; Multiline-Regeln (z. B. Java-Stacktraces)                        | aus                                                       |
@@ -565,19 +565,31 @@ Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log gep
 
 | Event                                 | Erkennung (Beispiele)                                                                   | Felder                                      |
 |---------------------------------------|-----------------------------------------------------------------------------------------|---------------------------------------------|
-| `ssh.login.failed`                    | `Failed password for (invalid user )?<u> from <ip> port <p> ssh2`, `Failed publickey …` | ts, user, ip, port, method, invalid_user    |
+| `ssh.login.failed`                    | `Failed password for (invalid user )?<u> from <ip> port <p> ssh2`, `Failed publickey …`, `error: PAM: Authentication failure for <u> from <ip>` (keyboard-interactive, ohne Port) | ts, user, ip, port, method, invalid_user    |
 | `ssh.login.invalid_user`              | `Invalid user <u> from <ip> port <p>`                                                   | ts, user, ip, port                          |
 | `ssh.login.success`                   | `Accepted (password\|publickey\|keyboard-interactive/pam) for <u> from <ip> port <p>`   | ts, user, ip, port, method, key_fingerprint |
 | `ssh.preauth.disconnect`              | `Connection closed by authenticating user … [preauth]`                                  | ts, user, ip, port                          |
 | `sudo.auth.failed`                    | `pam_unix(sudo:auth): authentication failure … user=<u>`                                | ts, user, tty                               |
+| `sudo.not_allowed`                    | `<u> : user NOT in sudoers ; … USER=<t> ; COMMAND=…` (auch „command not allowed“)       | ts, user, target, tty                       |
 | `sudo.command`                        | `sudo: <u> : … COMMAND=<cmd>` (optional, standardmäßig aus)                             | ts, user, target, cmd (redacted)            |
-| `account.created` / `account.deleted` | `useradd`/`userdel`-Meldungen                                                           | ts, user                                    |
+| `account.created` / `account.deleted` | `useradd`/`userdel`-Meldungen                                                           | ts, user, uid (created)                     |
 | `system.reboot`                       | Wechsel der Boot-ID                                                                     | ts, previous_boot, uptime_before            |
 | `system.oom_kill`                     | Kernel `Out of memory: Killed process <pid> (<name>)`                                   | ts, pid, process                            |
 
 **Parser-Anforderungen:** Sie müssen sowohl `sshd` als auch `sshd-session` erkennen (Prozessname ab OpenSSH 9.8), IPv4
 und IPv6, und Distro-Varianten. **Jeder Parser wird mit echten Logzeilen aus allen Zieldistros als Fixtures getestet und
 gefuzzt** (`cargo-fuzz`).
+
+**Vertrauen** ([ADR 0023](docs/adr/0023-vertrauen-in-security-events.md)):
+
+- **Nur privilegierte Absender:** Events entstehen nur aus Zeilen mit `_UID` 0 oder Capabilities (`_CAP_EFFECTIVE`,
+  setzt journald). Ein `logger -t sshd …` eines normalen Users erzeugt nichts.
+- **OOM-Kills** zählen nur über den Kernel-Transport.
+- **Adresse und Port vom Zeilenende:** Den User-Namen wählt der Angreifer, deshalb kommen Adresse und Port vom Ende
+  der Zeile.
+- **Escapes:** sshd schreibt Nicht-ASCII in User-Namen als Oktal-Escape (`j\303\274rgen`). Der Agent decodiert das.
+- **Reboot** heißt: Die Boot-ID wechselt zwischen zwei Zeilen. Nach einem Neustart des Agents zählt die Boot-ID aus dem
+  gespeicherten Cursor. `uptime_before` ist die monotone Zeit der letzten Zeile vor dem Wechsel.
 
 **Anreicherung im Server (optional):** GeoIP (Land/ASN) über eine **lokale** MaxMind-GeoLite2-Datenbank, ohne externe
 Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von neuer IP“ zu erkennen.

@@ -20,3 +20,11 @@ for file in ../fixtures/logs/*/*.jsonl; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   cp "$file" "corpus/journal_line/fixture$name"
 done
+# security_parser: the messages of the journal fixtures, one file each, with a sender byte.
+mkdir -p corpus/security_parser
+for file in ../fixtures/logs/*/journal-security*.jsonl ../fixtures/logs/*/journal-oom.jsonl; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  python3 -c 'import json,sys; [sys.stdout.write(json.loads(l.decode("utf-8","replace")).get("MESSAGE","") + "\n") for l in open(sys.argv[1],"rb") if isinstance(json.loads(l.decode("utf-8","replace")).get("MESSAGE"), str)]' "$file" >"corpus/security_parser/messages$name.txt"
+  { printf '\001'; cat "corpus/security_parser/messages$name.txt"; } >"corpus/security_parser/fixture$name"
+  rm "corpus/security_parser/messages$name.txt"
+done

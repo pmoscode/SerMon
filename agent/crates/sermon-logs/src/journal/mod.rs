@@ -6,7 +6,7 @@ mod source;
 
 pub use cursor::{Checkpoint, CursorFile};
 pub use entry::{
-    Entry, LineError, MAX_CURSOR_BYTES, MAX_FIELD_BYTES, MAX_MESSAGE_BYTES, OUTPUT_FIELDS, Seqnum,
-    parse_line, valid_cursor,
+    Boot, Entry, LineError, MAX_CURSOR_BYTES, MAX_FIELD_BYTES, MAX_MESSAGE_BYTES, OUTPUT_FIELDS,
+    Seqnum, parse_line, valid_cursor,
 };
 pub use source::{JournalConfig, JournalSource, JournalStats, arguments};

@@ -12,3 +12,8 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+regex.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+sermon-logs.workspace = true

@@ -8,7 +8,8 @@
 use serde_json::{Map, Value};
 
 /// The fields asked for with `--output-fields`; `__CURSOR` and the timestamps always come along.
-pub const OUTPUT_FIELDS: [&str; 10] = [
+/// `_CAP_EFFECTIVE` (set by journald from `/proc`) tells real sshd or sudo lines from forged ones.
+pub const OUTPUT_FIELDS: [&str; 11] = [
     "MESSAGE",
     "PRIORITY",
     "SYSLOG_IDENTIFIER",
@@ -19,6 +20,7 @@ pub const OUTPUT_FIELDS: [&str; 10] = [
     "_BOOT_ID",
     "_TRANSPORT",
     "_UID",
+    "_CAP_EFFECTIVE",
 ];
 
 /// A message is cut to this many bytes (KONZEPT §10.2).
@@ -69,6 +71,35 @@ impl Seqnum {
     }
 }
 
+/// The boot an entry belongs to and its time since that boot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Boot {
+    /// `_BOOT_ID`, `b=` in the cursor.
+    pub id: String,
+    /// Microseconds since the boot (`__MONOTONIC_TIMESTAMP`, `m=` in the cursor, hexadecimal there).
+    pub monotonic_us: Option<u64>,
+}
+
+impl Boot {
+    /// Reads the boot from a cursor (`…;b=<id>;m=<hex>;…`); only a hint, like [`Seqnum::from_cursor`].
+    #[must_use]
+    pub fn from_cursor(cursor: &str) -> Option<Self> {
+        let mut id = None;
+        let mut monotonic_us = None;
+        for part in cursor.split(';') {
+            if let Some(value) = part.strip_prefix("b=") {
+                id = Some(value);
+            } else if let Some(value) = part.strip_prefix("m=") {
+                monotonic_us = u64::from_str_radix(value, 16).ok();
+            }
+        }
+        Some(Self {
+            id: id.filter(|id| !id.is_empty())?.to_owned(),
+            monotonic_us,
+        })
+    }
+}
+
 /// A journal entry with the fields the agent uses.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -76,6 +107,8 @@ pub struct Entry {
     pub cursor: String,
     /// Time of the entry in microseconds since the epoch (`__REALTIME_TIMESTAMP`).
     pub realtime_us: u64,
+    /// Microseconds since the boot (`__MONOTONIC_TIMESTAMP`).
+    pub monotonic_us: Option<u64>,
     /// Sequence number, if known.
     pub seqnum: Option<Seqnum>,
     /// The message, at most [`MAX_MESSAGE_BYTES`].
@@ -100,6 +133,9 @@ pub struct Entry {
     pub pid: Option<u32>,
     /// `_UID`.
     pub uid: Option<u32>,
+    /// `_CAP_EFFECTIVE`: the sender's effective capabilities; non-zero for root and setuid
+    /// programs like sudo, zero for processes of normal users.
+    pub cap_effective: Option<u64>,
 }
 
 /// Why a line is no entry.
@@ -155,6 +191,7 @@ pub fn parse_line(line: &[u8]) -> Result<Entry, LineError> {
     Ok(Entry {
         cursor,
         realtime_us,
+        monotonic_us: number(&object, "__MONOTONIC_TIMESTAMP"),
         seqnum,
         message,
         message_truncated,
@@ -167,6 +204,8 @@ pub fn parse_line(line: &[u8]) -> Result<Entry, LineError> {
         boot_id: short("_BOOT_ID"),
         pid: number(&object, "_PID"),
         uid: number(&object, "_UID"),
+        cap_effective: field("_CAP_EFFECTIVE")
+            .and_then(|hex| u64::from_str_radix(hex.trim(), 16).ok()),
     })
 }
 
@@ -364,6 +403,46 @@ mod tests {
             parse_line(br#"{"__CURSOR":"s=a;i=1"}"#),
             Err(LineError::Timestamp)
         );
+    }
+
+    // Who sent an entry decides whether a security event is believed (M2-06): journald fills
+    // _CAP_EFFECTIVE from /proc; a forged `logger -t sshd` has none.
+    #[test]
+    fn reads_the_sender_capabilities_and_the_monotonic_time() {
+        let entries = entries("debian-13", "journal-security-variants.jsonl");
+        let real = entries
+            .iter()
+            .find(|e| e.message.starts_with("Accepted publickey"))
+            .unwrap();
+        assert_eq!(real.cap_effective, Some(0x1ff_ffff_ffff));
+        assert!(real.monotonic_us.is_some_and(|m| m > 0));
+        let forged = entries
+            .iter()
+            .find(|e| e.message.contains("203.0.113.9") && e.identifier.as_deref() == Some("sshd"))
+            .unwrap();
+        // 0, or missing when logger was gone before journald read /proc.
+        assert_eq!(forged.uid, Some(1000));
+        assert!(forged.cap_effective.is_none_or(|c| c == 0), "{forged:?}");
+        assert!(OUTPUT_FIELDS.contains(&"_CAP_EFFECTIVE"));
+    }
+
+    #[test]
+    fn boot_of_a_cursor() {
+        assert_eq!(
+            Boot::from_cursor("s=a;i=5;b=cc8f;m=840bc89c4;t=660b;x=1"),
+            Some(Boot {
+                id: "cc8f".into(),
+                monotonic_us: Some(0x8_40bc_89c4)
+            })
+        );
+        assert_eq!(
+            Boot::from_cursor("s=a;i=5;b=cc8f"),
+            Some(Boot {
+                id: "cc8f".into(),
+                monotonic_us: None
+            })
+        );
+        assert_eq!(Boot::from_cursor("s=a;i=5"), None);
     }
 
     #[test]

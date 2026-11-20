@@ -165,7 +165,7 @@ pub struct Batch {
     #[prost(uint64, tag="1")]
     pub seq: u64,
     /// content is the data; exactly one must be set.
-    #[prost(oneof="batch::Content", tags="2")]
+    #[prost(oneof="batch::Content", tags="2, 3")]
     pub content: ::core::option::Option<batch::Content>,
 }
 /// Nested message and enum types in `Batch`.
@@ -176,6 +176,9 @@ pub mod batch {
         /// metrics are the samples of one collection tick.
         #[prost(message, tag="2")]
         Metrics(super::MetricBatch),
+        /// security_events are events parsed from the host's logs (KONZEPT §11).
+        #[prost(message, tag="3")]
+        SecurityEvents(super::SecurityEventBatch),
     }
 }
 /// MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
@@ -224,6 +227,222 @@ pub struct Throttle {
     #[prost(message, optional, tag="1")]
     pub min_interval: ::core::option::Option<::prost_types::Duration>,
 }
+/// SecurityEventBatch holds security events the agent parsed from the host's logs (KONZEPT §11).
+/// They are sent even when log shipping is off.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SecurityEventBatch {
+    /// events are in the order of the log.
+    #[prost(message, repeated, tag="1")]
+    pub events: ::prost::alloc::vec::Vec<SecurityEvent>,
+}
+/// SecurityEvent is one event. Raw log lines are never part of it; fields an attacker can choose
+/// (user names of failed logins, process names) are bounded.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SecurityEvent {
+    /// occurred_at is the time from the log line, not the time of sending.
+    #[prost(message, optional, tag="1")]
+    pub occurred_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// event is what happened; exactly one must be set.
+    #[prost(oneof="security_event::Event", tags="2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12")]
+    pub event: ::core::option::Option<security_event::Event>,
+}
+/// Nested message and enum types in `SecurityEvent`.
+pub mod security_event {
+    /// event is what happened; exactly one must be set.
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Event {
+        /// ssh_login_failed is ssh.login.failed.
+        #[prost(message, tag="2")]
+        SshLoginFailed(super::SshLoginFailed),
+        /// ssh_invalid_user is ssh.login.invalid_user.
+        #[prost(message, tag="3")]
+        SshInvalidUser(super::SshInvalidUser),
+        /// ssh_login_succeeded is ssh.login.success.
+        #[prost(message, tag="4")]
+        SshLoginSucceeded(super::SshLoginSucceeded),
+        /// ssh_preauth_disconnect is ssh.preauth.disconnect.
+        #[prost(message, tag="5")]
+        SshPreauthDisconnect(super::SshPreauthDisconnect),
+        /// sudo_auth_failed is sudo.auth.failed.
+        #[prost(message, tag="6")]
+        SudoAuthFailed(super::SudoAuthFailed),
+        /// sudo_not_allowed is sudo.not_allowed.
+        #[prost(message, tag="7")]
+        SudoNotAllowed(super::SudoNotAllowed),
+        /// sudo_command is sudo.command (off unless configured).
+        #[prost(message, tag="8")]
+        SudoCommand(super::SudoCommand),
+        /// account_created is account.created.
+        #[prost(message, tag="9")]
+        AccountCreated(super::AccountCreated),
+        /// account_deleted is account.deleted.
+        #[prost(message, tag="10")]
+        AccountDeleted(super::AccountDeleted),
+        /// system_reboot is system.reboot.
+        #[prost(message, tag="11")]
+        SystemReboot(super::SystemReboot),
+        /// oom_kill is system.oom_kill.
+        #[prost(message, tag="12")]
+        OomKill(super::OomKill),
+    }
+}
+/// SshRemote is the other end of an SSH connection as sshd logged it.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SshRemote {
+    /// port is the remote port; 0 where the log does not tell.
+    #[prost(uint32, tag="3")]
+    pub port: u32,
+    /// address is an IP address or, where sshd resolves names (UseDNS), a host name.
+    #[prost(oneof="ssh_remote::Address", tags="1, 2")]
+    pub address: ::core::option::Option<ssh_remote::Address>,
+}
+/// Nested message and enum types in `SshRemote`.
+pub mod ssh_remote {
+    /// address is an IP address or, where sshd resolves names (UseDNS), a host name.
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Address {
+        /// ip is an IPv4 or IPv6 address.
+        #[prost(string, tag="1")]
+        Ip(::prost::alloc::string::String),
+        /// host is a host name.
+        #[prost(string, tag="2")]
+        Host(::prost::alloc::string::String),
+    }
+}
+/// SshLoginFailed is a failed SSH login.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SshLoginFailed {
+    /// user is the user name tried, chosen by the client.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+    /// remote is where the attempt came from.
+    #[prost(message, optional, tag="2")]
+    pub remote: ::core::option::Option<SshRemote>,
+    /// method is how the login was tried.
+    #[prost(enumeration="SshAuthMethod", tag="3")]
+    pub method: i32,
+    /// invalid_user is set if the user does not exist.
+    #[prost(bool, tag="4")]
+    pub invalid_user: bool,
+}
+/// SshInvalidUser is an SSH connection for a user that does not exist.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SshInvalidUser {
+    /// user is the user name tried, chosen by the client.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+    /// remote is where the attempt came from.
+    #[prost(message, optional, tag="2")]
+    pub remote: ::core::option::Option<SshRemote>,
+}
+/// SshLoginSucceeded is a successful SSH login.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SshLoginSucceeded {
+    /// user is the account logged in to.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+    /// remote is where the login came from.
+    #[prost(message, optional, tag="2")]
+    pub remote: ::core::option::Option<SshRemote>,
+    /// method is how the user authenticated.
+    #[prost(enumeration="SshAuthMethod", tag="3")]
+    pub method: i32,
+    /// key_type is the type of the public key, e.g. ED25519 (publickey only).
+    #[prost(string, tag="4")]
+    pub key_type: ::prost::alloc::string::String,
+    /// key_fingerprint is the fingerprint of the public key, e.g. SHA256:… (publickey only).
+    #[prost(string, tag="5")]
+    pub key_fingerprint: ::prost::alloc::string::String,
+}
+/// SshPreauthDisconnect is an SSH connection that ended before a login.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SshPreauthDisconnect {
+    /// user is the user name tried, if any.
+    #[prost(string, optional, tag="1")]
+    pub user: ::core::option::Option<::prost::alloc::string::String>,
+    /// remote is where the connection came from.
+    #[prost(message, optional, tag="2")]
+    pub remote: ::core::option::Option<SshRemote>,
+    /// invalid_user is set if the user does not exist.
+    #[prost(bool, tag="3")]
+    pub invalid_user: bool,
+}
+/// SudoAuthFailed is a wrong password for sudo.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SudoAuthFailed {
+    /// user is the account whose password failed.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+    /// tty is the terminal, empty if none.
+    #[prost(string, tag="2")]
+    pub tty: ::prost::alloc::string::String,
+}
+/// SudoNotAllowed is sudo refusing a user: not in sudoers, or the command is not allowed.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SudoNotAllowed {
+    /// user is who ran sudo.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+    /// target is the account asked for, e.g. root.
+    #[prost(string, tag="2")]
+    pub target: ::prost::alloc::string::String,
+    /// tty is the terminal, empty if none.
+    #[prost(string, tag="3")]
+    pub tty: ::prost::alloc::string::String,
+}
+/// SudoCommand is a command run through sudo (only if the organization switches it on).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SudoCommand {
+    /// user is who ran sudo.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+    /// target is the account the command ran as.
+    #[prost(string, tag="2")]
+    pub target: ::prost::alloc::string::String,
+    /// tty is the terminal, empty if none.
+    #[prost(string, tag="3")]
+    pub tty: ::prost::alloc::string::String,
+    /// command is the command line with secrets redacted by the agent.
+    #[prost(string, tag="4")]
+    pub command: ::prost::alloc::string::String,
+}
+/// AccountCreated is a new local user account.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccountCreated {
+    /// user is the new account.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+    /// uid is its user ID, if logged.
+    #[prost(uint32, optional, tag="2")]
+    pub uid: ::core::option::Option<u32>,
+}
+/// AccountDeleted is a removed local user account.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccountDeleted {
+    /// user is the removed account.
+    #[prost(string, tag="1")]
+    pub user: ::prost::alloc::string::String,
+}
+/// SystemReboot is a new boot of the host, seen from a change of the journal's boot ID.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SystemReboot {
+    /// previous_boot_id is the boot ID before.
+    #[prost(string, tag="1")]
+    pub previous_boot_id: ::prost::alloc::string::String,
+    /// uptime_before is how long the previous boot ran as far as its last log line tells.
+    #[prost(message, optional, tag="2")]
+    pub uptime_before: ::core::option::Option<::prost_types::Duration>,
+}
+/// OomKill is a process killed by the kernel's out-of-memory killer.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct OomKill {
+    /// pid is the killed process.
+    #[prost(uint32, tag="1")]
+    pub pid: u32,
+    /// process is its name (at most 15 characters, chosen by whoever started it).
+    #[prost(string, tag="2")]
+    pub process: ::prost::alloc::string::String,
+}
 /// Architecture is a supported CPU architecture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -253,6 +472,59 @@ impl Architecture {
             "ARCHITECTURE_UNSPECIFIED" => Some(Self::Unspecified),
             "ARCHITECTURE_AMD64" => Some(Self::Amd64),
             "ARCHITECTURE_ARM64" => Some(Self::Arm64),
+            _ => None,
+        }
+    }
+}
+/// SshAuthMethod is how an SSH login was tried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum SshAuthMethod {
+    /// SSH_AUTH_METHOD_UNSPECIFIED is not sent; newer values decode as this in older servers.
+    Unspecified = 0,
+    /// SSH_AUTH_METHOD_PASSWORD is "password".
+    Password = 1,
+    /// SSH_AUTH_METHOD_PUBLICKEY is "publickey".
+    Publickey = 2,
+    /// SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE is "keyboard-interactive", usually PAM.
+    KeyboardInteractive = 3,
+    /// SSH_AUTH_METHOD_HOSTBASED is "hostbased".
+    Hostbased = 4,
+    /// SSH_AUTH_METHOD_GSSAPI is any "gssapi-*" method.
+    Gssapi = 5,
+    /// SSH_AUTH_METHOD_NONE is "none".
+    None = 6,
+    /// SSH_AUTH_METHOD_OTHER is any other method.
+    Other = 7,
+}
+impl SshAuthMethod {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SSH_AUTH_METHOD_UNSPECIFIED",
+            Self::Password => "SSH_AUTH_METHOD_PASSWORD",
+            Self::Publickey => "SSH_AUTH_METHOD_PUBLICKEY",
+            Self::KeyboardInteractive => "SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE",
+            Self::Hostbased => "SSH_AUTH_METHOD_HOSTBASED",
+            Self::Gssapi => "SSH_AUTH_METHOD_GSSAPI",
+            Self::None => "SSH_AUTH_METHOD_NONE",
+            Self::Other => "SSH_AUTH_METHOD_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SSH_AUTH_METHOD_UNSPECIFIED" => Some(Self::Unspecified),
+            "SSH_AUTH_METHOD_PASSWORD" => Some(Self::Password),
+            "SSH_AUTH_METHOD_PUBLICKEY" => Some(Self::Publickey),
+            "SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE" => Some(Self::KeyboardInteractive),
+            "SSH_AUTH_METHOD_HOSTBASED" => Some(Self::Hostbased),
+            "SSH_AUTH_METHOD_GSSAPI" => Some(Self::Gssapi),
+            "SSH_AUTH_METHOD_NONE" => Some(Self::None),
+            "SSH_AUTH_METHOD_OTHER" => Some(Self::Other),
             _ => None,
         }
     }

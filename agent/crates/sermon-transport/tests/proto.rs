@@ -126,3 +126,43 @@ fn batch_roundtrips_and_carries_its_sequence_number() {
 
     assert_eq!(decoded, request);
 }
+
+// Security events (M2-06): a batch in the session stream, and an event kind an older server does
+// not know decodes as an empty oneof instead of failing.
+#[test]
+fn security_events_roundtrip_in_a_batch() {
+    use sermon_transport::proto::agent::v1::{
+        Batch, SecurityEvent, SecurityEventBatch, SshAuthMethod, SshLoginFailed, SshRemote, batch,
+        security_event, ssh_remote,
+    };
+
+    let request = SessionRequest {
+        payload: Some(Payload::Batch(Batch {
+            seq: 7,
+            content: Some(batch::Content::SecurityEvents(SecurityEventBatch {
+                events: vec![SecurityEvent {
+                    occurred_at: Some(prost_types::Timestamp {
+                        seconds: 1_795_046_400,
+                        nanos: 776_631_000,
+                    }),
+                    event: Some(security_event::Event::SshLoginFailed(SshLoginFailed {
+                        user: "jürgen müller".into(),
+                        remote: Some(SshRemote {
+                            address: Some(ssh_remote::Address::Ip("2001:db8::7".into())),
+                            port: 22,
+                        }),
+                        method: i32::from(SshAuthMethod::Password),
+                        invalid_user: true,
+                    })),
+                }],
+            })),
+        })),
+    };
+    let decoded = SessionRequest::decode(request.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded, request);
+
+    // Field 99 of SecurityEvent: a future event kind.
+    let future = [0x0a, 0x00, 0x9a, 0x06, 0x00];
+    let event = SecurityEvent::decode(future.as_slice()).unwrap();
+    assert!(event.event.is_none() && event.occurred_at.is_some());
+}

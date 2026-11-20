@@ -18,8 +18,12 @@ bis auf ersetzte Werte.
 |---|---|
 | `logs/<distro>/journal-security.jsonl` | sshd (falsches und richtiges Passwort, unbekannter User), su, sudo (Erfolg, drei Fehlversuche), useradd/usermod/userdel |
 | `logs/<distro>/journal-format.jsonl` | Sonderfälle: binärer `MESSAGE` (Byte-Array; bei Rocky 8 rohe Bytes, also **ungültiges UTF-8 im JSON**), Feld mit 5 000 Byte, Priorität per syslog |
+| `logs/<distro>/journal-security-variants.jsonl` | M2-06, `logs/capture/capture.sh`: SSH über IPv6, Root-Login, Public Key (angenommen und unbekannt), keyboard-interactive, User-Namen mit falschem `from … port`, Umlauten und leer; sudo mit Terminal und ohne Recht; **gefälschte Zeilen** eines Users ohne Rechte (`logger -t sshd`, `-t sudo`, `-t useradd`) |
+| `logs/<distro>/journal-oom.jsonl` | M2-06: OOM-Kill einer Unit mit `MemoryMax` – die Kernel-Zeilen dazu (Kernel der Docker-VM) und die Meldung von systemd |
 
-Distributionen: `debian-13` (systemd 257), `ubuntu-24.04` (255), `rockylinux-9` (252), `rockylinux-8` (239). Ab
+Die Varianten erzeugt `logs/capture/capture.sh [image…]` neu (Docker, Container mit systemd als PID 1); das Skript
+gehört zum Projekt, anders als der Spike. Distributionen: `debian-13` (systemd 257), `ubuntu-24.04` (255),
+`rockylinux-9` (252), `rockylinux-8` (239). Ab
 Debian 13 heißt der SSH-Absender `sshd-session`. `_CMDLINE` von `su` enthielt das Test-Passwort und zeigt jetzt
 `fixture-password` – ein Fall für die Redaction (KONZEPT §10.3).
 

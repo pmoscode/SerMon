@@ -3,6 +3,8 @@ package agentapi_test
 import (
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -166,5 +168,104 @@ func TestSchema_EnrollRequest(t *testing.T) {
 		if err := protovalidate.Validate(r); err == nil {
 			t.Errorf("%s: Validate() = nil, want validation error", name)
 		}
+	}
+}
+
+func events(list ...*agentv1.SecurityEvent) *agentv1.SessionRequest {
+	return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: &agentv1.Batch{
+		Seq:     2,
+		Content: &agentv1.Batch_SecurityEvents{SecurityEvents: &agentv1.SecurityEventBatch{Events: list}},
+	}}}
+}
+
+func failedLogin(user string, remote *agentv1.SshRemote) *agentv1.SecurityEvent {
+	return &agentv1.SecurityEvent{OccurredAt: timestamppb.Now(), Event: &agentv1.SecurityEvent_SshLoginFailed{SshLoginFailed: &agentv1.SshLoginFailed{
+		User: user, Remote: remote, Method: agentv1.SshAuthMethod_SSH_AUTH_METHOD_PASSWORD,
+	}}}
+}
+
+func fromIP(ip string, port uint32) *agentv1.SshRemote {
+	return &agentv1.SshRemote{Address: &agentv1.SshRemote_Ip{Ip: ip}, Port: port}
+}
+
+// Security events (KONZEPT §11, M2-06): attacker-chosen fields are bounded, addresses are
+// addresses.
+func TestSchema_SecurityEvents(t *testing.T) {
+	now := timestamppb.Now()
+	valid := map[string]proto.Message{
+		"failed login": events(failedLogin("alice", fromIP("192.0.2.7", 22))),
+		"empty user":   events(failedLogin("", fromIP("2001:db8::1", 0))),
+		"host name":    events(failedLogin("x", &agentv1.SshRemote{Address: &agentv1.SshRemote_Host{Host: "client.example.org"}, Port: 22})),
+		"longest user": events(failedLogin(strings.Repeat("ä", 64), fromIP("192.0.2.7", 22))),
+		"every kind": events(
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SshInvalidUser{SshInvalidUser: &agentv1.SshInvalidUser{User: "mallory", Remote: fromIP("192.0.2.7", 1)}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SshLoginSucceeded{SshLoginSucceeded: &agentv1.SshLoginSucceeded{
+				User: "alice", Remote: fromIP("::1", 2), Method: agentv1.SshAuthMethod_SSH_AUTH_METHOD_PUBLICKEY, KeyType: "ED25519", KeyFingerprint: "SHA256:abc",
+			}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SshPreauthDisconnect{SshPreauthDisconnect: &agentv1.SshPreauthDisconnect{Remote: fromIP("192.0.2.7", 3)}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SudoAuthFailed{SudoAuthFailed: &agentv1.SudoAuthFailed{User: "alice", Tty: "pts/0"}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SudoNotAllowed{SudoNotAllowed: &agentv1.SudoNotAllowed{User: "carol", Target: "root"}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SudoCommand{SudoCommand: &agentv1.SudoCommand{User: "alice", Target: "root", Command: "/usr/bin/id"}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_AccountCreated{AccountCreated: &agentv1.AccountCreated{User: "bob", Uid: proto.Uint32(1001)}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_AccountDeleted{AccountDeleted: &agentv1.AccountDeleted{User: "bob"}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SystemReboot{SystemReboot: &agentv1.SystemReboot{PreviousBootId: "cc8f81a486f84386b00bc31030b4e1bb", UptimeBefore: durationpb.New(time.Hour)}}},
+			&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_OomKill{OomKill: &agentv1.OomKill{Pid: 4242, Process: "python3"}}},
+		),
+	}
+	for name, msg := range valid {
+		if err := protovalidate.Validate(msg); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	many := make([]*agentv1.SecurityEvent, 501)
+	for i := range many {
+		many[i] = failedLogin("a", fromIP("192.0.2.7", 22))
+	}
+	invalid := map[string]proto.Message{
+		"no events":       events(),
+		"too many":        events(many...),
+		"no time":         events(&agentv1.SecurityEvent{Event: failedLogin("a", fromIP("192.0.2.7", 22)).GetEvent()}),
+		"no event":        events(&agentv1.SecurityEvent{OccurredAt: now}),
+		"long user":       events(failedLogin(strings.Repeat("a", 129), fromIP("192.0.2.7", 22))),
+		"not an ip":       events(failedLogin("a", fromIP("192.0.2.300", 22))),
+		"bad host":        events(failedLogin("a", &agentv1.SshRemote{Address: &agentv1.SshRemote_Host{Host: "<script>"}})),
+		"no address":      events(failedLogin("a", &agentv1.SshRemote{Port: 22})),
+		"no remote":       events(failedLogin("a", nil)),
+		"port":            events(failedLogin("a", fromIP("192.0.2.7", 65536))),
+		"unknown method":  events(&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SshLoginFailed{SshLoginFailed: &agentv1.SshLoginFailed{User: "a", Remote: fromIP("192.0.2.7", 1), Method: 99}}}),
+		"long command":    events(&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SudoCommand{SudoCommand: &agentv1.SudoCommand{User: "a", Target: "root", Command: strings.Repeat("x", 1025)}}}),
+		"pid 0":           events(&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_OomKill{OomKill: &agentv1.OomKill{Pid: 0, Process: "x"}}}),
+		"negative uptime": events(&agentv1.SecurityEvent{OccurredAt: now, Event: &agentv1.SecurityEvent_SystemReboot{SystemReboot: &agentv1.SystemReboot{PreviousBootId: "a", UptimeBefore: durationpb.New(-time.Second)}}}),
+	}
+	for name, msg := range invalid {
+		if err := protovalidate.Validate(msg); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+// What the agent makes of the fixture log lines (agent/crates/sermon-agent/src/security.rs writes
+// proto/testdata/security_events.binpb) passes the server's validation, every kind of event.
+func TestSchema_AgentSecurityEventsAreValid(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "proto", "testdata", "security_events.binpb"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch agentv1.SecurityEventBatch
+	if err := proto.Unmarshal(raw, &batch); err != nil {
+		t.Fatal(err)
+	}
+	if len(batch.GetEvents()) > 500 {
+		batch.Events = batch.GetEvents()[:500]
+	}
+	if err := protovalidate.Validate(events(batch.GetEvents()...)); err != nil {
+		t.Fatalf("the agent's events are invalid: %v", err)
+	}
+	kinds := map[string]bool{}
+	for _, e := range batch.GetEvents() {
+		kinds[fmt.Sprintf("%T", e.GetEvent())] = true
+	}
+	if len(kinds) != 11 {
+		t.Errorf("%d kinds of events in the golden batch, want all 11: %v", len(kinds), kinds)
 	}
 }

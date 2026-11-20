@@ -179,6 +179,8 @@ message Batch {
 
     // metrics are the samples of one collection tick.
     MetricBatch metrics = 2;
+    // security_events are events parsed from the host's logs (KONZEPT §11).
+    SecurityEventBatch security_events = 3;
   }
 }
 
@@ -228,4 +230,202 @@ message Throttle {
     gte: {}
     lte: {seconds: 3600}
   }];
+}
+
+// SecurityEventBatch holds security events the agent parsed from the host's logs (KONZEPT §11).
+// They are sent even when log shipping is off.
+message SecurityEventBatch {
+  // events are in the order of the log.
+  repeated SecurityEvent events = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 500
+  }];
+}
+
+// SecurityEvent is one event. Raw log lines are never part of it; fields an attacker can choose
+// (user names of failed logins, process names) are bounded.
+message SecurityEvent {
+  // occurred_at is the time from the log line, not the time of sending.
+  google.protobuf.Timestamp occurred_at = 1 [(buf.validate.field).required = true];
+  // event is what happened; exactly one must be set.
+  oneof event {
+    option (buf.validate.oneof).required = true;
+
+    // ssh_login_failed is ssh.login.failed.
+    SshLoginFailed ssh_login_failed = 2;
+    // ssh_invalid_user is ssh.login.invalid_user.
+    SshInvalidUser ssh_invalid_user = 3;
+    // ssh_login_succeeded is ssh.login.success.
+    SshLoginSucceeded ssh_login_succeeded = 4;
+    // ssh_preauth_disconnect is ssh.preauth.disconnect.
+    SshPreauthDisconnect ssh_preauth_disconnect = 5;
+    // sudo_auth_failed is sudo.auth.failed.
+    SudoAuthFailed sudo_auth_failed = 6;
+    // sudo_not_allowed is sudo.not_allowed.
+    SudoNotAllowed sudo_not_allowed = 7;
+    // sudo_command is sudo.command (off unless configured).
+    SudoCommand sudo_command = 8;
+    // account_created is account.created.
+    AccountCreated account_created = 9;
+    // account_deleted is account.deleted.
+    AccountDeleted account_deleted = 10;
+    // system_reboot is system.reboot.
+    SystemReboot system_reboot = 11;
+    // oom_kill is system.oom_kill.
+    OomKill oom_kill = 12;
+  }
+}
+
+// SshAuthMethod is how an SSH login was tried.
+enum SshAuthMethod {
+  // SSH_AUTH_METHOD_UNSPECIFIED is not sent; newer values decode as this in older servers.
+  SSH_AUTH_METHOD_UNSPECIFIED = 0;
+  // SSH_AUTH_METHOD_PASSWORD is "password".
+  SSH_AUTH_METHOD_PASSWORD = 1;
+  // SSH_AUTH_METHOD_PUBLICKEY is "publickey".
+  SSH_AUTH_METHOD_PUBLICKEY = 2;
+  // SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE is "keyboard-interactive", usually PAM.
+  SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE = 3;
+  // SSH_AUTH_METHOD_HOSTBASED is "hostbased".
+  SSH_AUTH_METHOD_HOSTBASED = 4;
+  // SSH_AUTH_METHOD_GSSAPI is any "gssapi-*" method.
+  SSH_AUTH_METHOD_GSSAPI = 5;
+  // SSH_AUTH_METHOD_NONE is "none".
+  SSH_AUTH_METHOD_NONE = 6;
+  // SSH_AUTH_METHOD_OTHER is any other method.
+  SSH_AUTH_METHOD_OTHER = 7;
+}
+
+// SshRemote is the other end of an SSH connection as sshd logged it.
+message SshRemote {
+  // address is an IP address or, where sshd resolves names (UseDNS), a host name.
+  oneof address {
+    option (buf.validate.oneof).required = true;
+
+    // ip is an IPv4 or IPv6 address.
+    string ip = 1 [(buf.validate.field).string.ip = true];
+    // host is a host name.
+    string host = 2 [(buf.validate.field).string.hostname = true];
+  }
+  // port is the remote port; 0 where the log does not tell.
+  uint32 port = 3 [(buf.validate.field).uint32.lte = 65535];
+}
+
+// SshLoginFailed is a failed SSH login.
+message SshLoginFailed {
+  // user is the user name tried, chosen by the client.
+  string user = 1 [(buf.validate.field).string.max_bytes = 128];
+  // remote is where the attempt came from.
+  SshRemote remote = 2 [(buf.validate.field).required = true];
+  // method is how the login was tried.
+  SshAuthMethod method = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // invalid_user is set if the user does not exist.
+  bool invalid_user = 4;
+}
+
+// SshInvalidUser is an SSH connection for a user that does not exist.
+message SshInvalidUser {
+  // user is the user name tried, chosen by the client.
+  string user = 1 [(buf.validate.field).string.max_bytes = 128];
+  // remote is where the attempt came from.
+  SshRemote remote = 2 [(buf.validate.field).required = true];
+}
+
+// SshLoginSucceeded is a successful SSH login.
+message SshLoginSucceeded {
+  // user is the account logged in to.
+  string user = 1 [(buf.validate.field).string.max_bytes = 128];
+  // remote is where the login came from.
+  SshRemote remote = 2 [(buf.validate.field).required = true];
+  // method is how the user authenticated.
+  SshAuthMethod method = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // key_type is the type of the public key, e.g. ED25519 (publickey only).
+  string key_type = 4 [(buf.validate.field).string.max_bytes = 128];
+  // key_fingerprint is the fingerprint of the public key, e.g. SHA256:… (publickey only).
+  string key_fingerprint = 5 [(buf.validate.field).string.max_bytes = 128];
+}
+
+// SshPreauthDisconnect is an SSH connection that ended before a login.
+message SshPreauthDisconnect {
+  // user is the user name tried, if any.
+  optional string user = 1 [(buf.validate.field).string.max_bytes = 128];
+  // remote is where the connection came from.
+  SshRemote remote = 2 [(buf.validate.field).required = true];
+  // invalid_user is set if the user does not exist.
+  bool invalid_user = 3;
+}
+
+// SudoAuthFailed is a wrong password for sudo.
+message SudoAuthFailed {
+  // user is the account whose password failed.
+  string user = 1 [(buf.validate.field).string.max_bytes = 128];
+  // tty is the terminal, empty if none.
+  string tty = 2 [(buf.validate.field).string.max_bytes = 128];
+}
+
+// SudoNotAllowed is sudo refusing a user: not in sudoers, or the command is not allowed.
+message SudoNotAllowed {
+  // user is who ran sudo.
+  string user = 1 [(buf.validate.field).string.max_bytes = 128];
+  // target is the account asked for, e.g. root.
+  string target = 2 [(buf.validate.field).string.max_bytes = 128];
+  // tty is the terminal, empty if none.
+  string tty = 3 [(buf.validate.field).string.max_bytes = 128];
+}
+
+// SudoCommand is a command run through sudo (only if the organization switches it on).
+message SudoCommand {
+  // user is who ran sudo.
+  string user = 1 [(buf.validate.field).string.max_bytes = 128];
+  // target is the account the command ran as.
+  string target = 2 [(buf.validate.field).string.max_bytes = 128];
+  // tty is the terminal, empty if none.
+  string tty = 3 [(buf.validate.field).string.max_bytes = 128];
+  // command is the command line with secrets redacted by the agent.
+  string command = 4 [(buf.validate.field).string.max_bytes = 1024];
+}
+
+// AccountCreated is a new local user account.
+message AccountCreated {
+  // user is the new account.
+  string user = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 128
+  }];
+  // uid is its user ID, if logged.
+  optional uint32 uid = 2;
+}
+
+// AccountDeleted is a removed local user account.
+message AccountDeleted {
+  // user is the removed account.
+  string user = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 128
+  }];
+}
+
+// SystemReboot is a new boot of the host, seen from a change of the journal's boot ID.
+message SystemReboot {
+  // previous_boot_id is the boot ID before.
+  string previous_boot_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 128
+  }];
+  // uptime_before is how long the previous boot ran as far as its last log line tells.
+  google.protobuf.Duration uptime_before = 2 [(buf.validate.field).duration.gte = {}];
+}
+
+// OomKill is a process killed by the kernel's out-of-memory killer.
+message OomKill {
+  // pid is the killed process.
+  uint32 pid = 1 [(buf.validate.field).uint32.gt = 0];
+  // process is its name (at most 15 characters, chosen by whoever started it).
+  string process = 2 [(buf.validate.field).string.max_bytes = 64];
 }

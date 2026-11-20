@@ -114,3 +114,9 @@ journalctl -o json --all --follow --output-fields=<feste Liste> (--after-cursor=
 - **Gemessen (E2E unter systemd, 60 s, 20 Zeilen/s):**
   - Agent und `journalctl` zusammen 0,65–0,70 % eines Kerns und 13–18 MiB RSS, davon `journalctl` 0,17 % und 7 MiB.
   - Die Selbst-Metrik `sermon_agent_memory_rss_bytes` zählt den Kindprozess nicht mit.
+
+## Nachtrag M2-06: `_CAP_EFFECTIVE`
+
+Die feste Feldliste enthält zusätzlich `_CAP_EFFECTIVE` (11 Felder). Daran erkennen die Security-Parser einen
+privilegierten Absender und verwerfen gefälschte Zeilen ([ADR 0023](0023-vertrauen-in-security-events.md)). Außerdem
+liest der Parser `__MONOTONIC_TIMESTAMP`, das ohnehin jede Zeile hat (Laufzeit vor einem Reboot).

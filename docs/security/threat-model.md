@@ -101,6 +101,7 @@ flowchart LR
 | T10 | D | Viele Enrollment-Versuche | Rate-Limit pro Client-IP, Größenlimits | M1-09 | ✓ |
 | T11 | R | Node bestreitet gelieferte Daten | Identität aus dem Zertifikat, Batch-Seq, Audit für Enrollment und Rotation | M1-09, M1-24 | ✓ |
 | T12 | E | Befehl vom Server führt Code auf dem Node aus | Protokoll kennt nur typisierte Befehle, kein generisches „exec“; unbekannte Befehle → `unsupported` | M0-05, M1-14 | ✓ |
+| T65 | S | Lokaler User ohne Rechte schreibt gefälschte Security-Zeilen ins Journal (`logger -t sshd "Failed password for root from <fremde IP> …"`) und lässt eine fremde IP als Angreifer erscheinen oder flutet Alerts; User-Namen mit `from <ip> port <n>` täuschen die Quelle | Events nur von privilegierten Absendern (`_UID` 0 oder `_CAP_EFFECTIVE` ≠ 0, setzt journald aus `/proc`), OOM nur vom Kernel-Transport; Adresse und Port vom Zeilenende, feste Längen, `regex` mit linearer Laufzeit; Fixtures mit gefälschten Zeilen aller Distros (ADR 0023) | M2-06 | ✓ (Logdateien ohne diese Felder: M2-20) |
 
 ### TB2 – Browser ↔ Server
 
@@ -172,7 +173,7 @@ flowchart LR
 | T64 | T | Bei selbstsigniertem Server-Zertifikat liefert ein Angreifer im Netz ein eigenes `install.sh` (`curl -k`) | die UI holt die SHA-256 des Skripts über die Verbindung des Browsers (`X-Sermon-Script-SHA256`), der Befehl prüft es mit `sha256sum -c`, bevor `sudo` es ausführt (statt SPKI-Pin, ADR 0012) | M1-37 | ✓ |
 | T51 | T | Release-Schlüssel kompromittiert oder fehlt | Schlüssel nur in der Release-Pipeline; ohne einkompilierten Key verweigert das Skript die Installation; `release-sign.sh` nimmt nur Ed25519-Schlüssel | v1.0 (Release-Prozess) | ☐ (Schlüssel erzeugen, `release.yml`) |
 | T52 | T | Kompromittierte Abhängigkeit oder Action | exakt gepinnte Versionen, Mindestalter 3 Tage, Actions per SHA, cargo-deny, govulncheck, pnpm audit, zizmor, Secret-Scan | M0-06 (ADR 0005, 0006) | ✓ |
-| T53 | T | Fehlerhafte Parser für untrusted Input auf dem Node | cargo-fuzz für `/proc`-Parser und WAL-Recovery, proptest; Fuzzing der Log-Parser mit E2.3/E3.1 | M1-15, E2.3 | ◐ |
+| T53 | T | Fehlerhafte Parser für untrusted Input auf dem Node | cargo-fuzz für `/proc`-Parser, WAL-Recovery, Journal-Zeilen (`journal_line`) und Security-Parser (`security_parser`), proptest; Logdateien mit E3.1 | M1-15, M2-05, M2-06, E3.1 | ◐ (Logdateien) |
 
 ## 5. Restrisiken und bewusste Entscheidungen
 

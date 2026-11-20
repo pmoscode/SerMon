@@ -16,6 +16,7 @@ tempfile = "=3.27.0"
 sermon-buffer = { path = "../crates/sermon-buffer" }
 sermon-collectors = { path = "../crates/sermon-collectors" }
 sermon-logs = { path = "../crates/sermon-logs" }
+sermon-security = { path = "../crates/sermon-security" }
 
 # Not part of the agent workspace: built only with the nightly toolchain.
 [workspace]
@@ -30,6 +31,13 @@ bench = false
 [[bin]]
 name = "journal_line"
 path = "fuzz_targets/journal_line.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "security_parser"
+path = "fuzz_targets/security_parser.rs"
 test = false
 doc = false
 bench = false

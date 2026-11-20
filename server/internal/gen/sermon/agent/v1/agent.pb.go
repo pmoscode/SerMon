@@ -85,6 +85,79 @@ func (Architecture) EnumDescriptor() ([]byte, []int) {
 	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{0}
 }
 
+// SshAuthMethod is how an SSH login was tried.
+type SshAuthMethod int32
+
+const (
+	// SSH_AUTH_METHOD_UNSPECIFIED is not sent; newer values decode as this in older servers.
+	SshAuthMethod_SSH_AUTH_METHOD_UNSPECIFIED SshAuthMethod = 0
+	// SSH_AUTH_METHOD_PASSWORD is "password".
+	SshAuthMethod_SSH_AUTH_METHOD_PASSWORD SshAuthMethod = 1
+	// SSH_AUTH_METHOD_PUBLICKEY is "publickey".
+	SshAuthMethod_SSH_AUTH_METHOD_PUBLICKEY SshAuthMethod = 2
+	// SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE is "keyboard-interactive", usually PAM.
+	SshAuthMethod_SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE SshAuthMethod = 3
+	// SSH_AUTH_METHOD_HOSTBASED is "hostbased".
+	SshAuthMethod_SSH_AUTH_METHOD_HOSTBASED SshAuthMethod = 4
+	// SSH_AUTH_METHOD_GSSAPI is any "gssapi-*" method.
+	SshAuthMethod_SSH_AUTH_METHOD_GSSAPI SshAuthMethod = 5
+	// SSH_AUTH_METHOD_NONE is "none".
+	SshAuthMethod_SSH_AUTH_METHOD_NONE SshAuthMethod = 6
+	// SSH_AUTH_METHOD_OTHER is any other method.
+	SshAuthMethod_SSH_AUTH_METHOD_OTHER SshAuthMethod = 7
+)
+
+// Enum value maps for SshAuthMethod.
+var (
+	SshAuthMethod_name = map[int32]string{
+		0: "SSH_AUTH_METHOD_UNSPECIFIED",
+		1: "SSH_AUTH_METHOD_PASSWORD",
+		2: "SSH_AUTH_METHOD_PUBLICKEY",
+		3: "SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE",
+		4: "SSH_AUTH_METHOD_HOSTBASED",
+		5: "SSH_AUTH_METHOD_GSSAPI",
+		6: "SSH_AUTH_METHOD_NONE",
+		7: "SSH_AUTH_METHOD_OTHER",
+	}
+	SshAuthMethod_value = map[string]int32{
+		"SSH_AUTH_METHOD_UNSPECIFIED":          0,
+		"SSH_AUTH_METHOD_PASSWORD":             1,
+		"SSH_AUTH_METHOD_PUBLICKEY":            2,
+		"SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE": 3,
+		"SSH_AUTH_METHOD_HOSTBASED":            4,
+		"SSH_AUTH_METHOD_GSSAPI":               5,
+		"SSH_AUTH_METHOD_NONE":                 6,
+		"SSH_AUTH_METHOD_OTHER":                7,
+	}
+)
+
+func (x SshAuthMethod) Enum() *SshAuthMethod {
+	p := new(SshAuthMethod)
+	*p = x
+	return p
+}
+
+func (x SshAuthMethod) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SshAuthMethod) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[1].Descriptor()
+}
+
+func (SshAuthMethod) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[1]
+}
+
+func (x SshAuthMethod) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SshAuthMethod.Descriptor instead.
+func (SshAuthMethod) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{1}
+}
+
 // SessionRequest is one message from the agent to the server.
 type SessionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -841,6 +914,7 @@ type Batch struct {
 	// Types that are valid to be assigned to Content:
 	//
 	//	*Batch_Metrics
+	//	*Batch_SecurityEvents
 	Content       isBatch_Content `protobuf_oneof:"content"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -899,6 +973,15 @@ func (x *Batch) GetMetrics() *MetricBatch {
 	return nil
 }
 
+func (x *Batch) GetSecurityEvents() *SecurityEventBatch {
+	if x != nil {
+		if x, ok := x.Content.(*Batch_SecurityEvents); ok {
+			return x.SecurityEvents
+		}
+	}
+	return nil
+}
+
 type isBatch_Content interface {
 	isBatch_Content()
 }
@@ -908,7 +991,14 @@ type Batch_Metrics struct {
 	Metrics *MetricBatch `protobuf:"bytes,2,opt,name=metrics,proto3,oneof"`
 }
 
+type Batch_SecurityEvents struct {
+	// security_events are events parsed from the host's logs (KONZEPT §11).
+	SecurityEvents *SecurityEventBatch `protobuf:"bytes,3,opt,name=security_events,json=securityEvents,proto3,oneof"`
+}
+
 func (*Batch_Metrics) isBatch_Content() {}
+
+func (*Batch_SecurityEvents) isBatch_Content() {}
 
 // MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
 // converted to per-second rates by the agent; every sample is a gauge.
@@ -1119,6 +1209,1076 @@ func (x *Throttle) GetMinInterval() *durationpb.Duration {
 	return nil
 }
 
+// SecurityEventBatch holds security events the agent parsed from the host's logs (KONZEPT §11).
+// They are sent even when log shipping is off.
+type SecurityEventBatch struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// events are in the order of the log.
+	Events        []*SecurityEvent `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecurityEventBatch) Reset() {
+	*x = SecurityEventBatch{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecurityEventBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecurityEventBatch) ProtoMessage() {}
+
+func (x *SecurityEventBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecurityEventBatch.ProtoReflect.Descriptor instead.
+func (*SecurityEventBatch) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SecurityEventBatch) GetEvents() []*SecurityEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+// SecurityEvent is one event. Raw log lines are never part of it; fields an attacker can choose
+// (user names of failed logins, process names) are bounded.
+type SecurityEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// occurred_at is the time from the log line, not the time of sending.
+	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	// event is what happened; exactly one must be set.
+	//
+	// Types that are valid to be assigned to Event:
+	//
+	//	*SecurityEvent_SshLoginFailed
+	//	*SecurityEvent_SshInvalidUser
+	//	*SecurityEvent_SshLoginSucceeded
+	//	*SecurityEvent_SshPreauthDisconnect
+	//	*SecurityEvent_SudoAuthFailed
+	//	*SecurityEvent_SudoNotAllowed
+	//	*SecurityEvent_SudoCommand
+	//	*SecurityEvent_AccountCreated
+	//	*SecurityEvent_AccountDeleted
+	//	*SecurityEvent_SystemReboot
+	//	*SecurityEvent_OomKill
+	Event         isSecurityEvent_Event `protobuf_oneof:"event"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecurityEvent) Reset() {
+	*x = SecurityEvent{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecurityEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecurityEvent) ProtoMessage() {}
+
+func (x *SecurityEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecurityEvent.ProtoReflect.Descriptor instead.
+func (*SecurityEvent) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SecurityEvent) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetEvent() isSecurityEvent_Event {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSshLoginFailed() *SshLoginFailed {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SshLoginFailed); ok {
+			return x.SshLoginFailed
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSshInvalidUser() *SshInvalidUser {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SshInvalidUser); ok {
+			return x.SshInvalidUser
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSshLoginSucceeded() *SshLoginSucceeded {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SshLoginSucceeded); ok {
+			return x.SshLoginSucceeded
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSshPreauthDisconnect() *SshPreauthDisconnect {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SshPreauthDisconnect); ok {
+			return x.SshPreauthDisconnect
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSudoAuthFailed() *SudoAuthFailed {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SudoAuthFailed); ok {
+			return x.SudoAuthFailed
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSudoNotAllowed() *SudoNotAllowed {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SudoNotAllowed); ok {
+			return x.SudoNotAllowed
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSudoCommand() *SudoCommand {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SudoCommand); ok {
+			return x.SudoCommand
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetAccountCreated() *AccountCreated {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_AccountCreated); ok {
+			return x.AccountCreated
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetAccountDeleted() *AccountDeleted {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_AccountDeleted); ok {
+			return x.AccountDeleted
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetSystemReboot() *SystemReboot {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_SystemReboot); ok {
+			return x.SystemReboot
+		}
+	}
+	return nil
+}
+
+func (x *SecurityEvent) GetOomKill() *OomKill {
+	if x != nil {
+		if x, ok := x.Event.(*SecurityEvent_OomKill); ok {
+			return x.OomKill
+		}
+	}
+	return nil
+}
+
+type isSecurityEvent_Event interface {
+	isSecurityEvent_Event()
+}
+
+type SecurityEvent_SshLoginFailed struct {
+	// ssh_login_failed is ssh.login.failed.
+	SshLoginFailed *SshLoginFailed `protobuf:"bytes,2,opt,name=ssh_login_failed,json=sshLoginFailed,proto3,oneof"`
+}
+
+type SecurityEvent_SshInvalidUser struct {
+	// ssh_invalid_user is ssh.login.invalid_user.
+	SshInvalidUser *SshInvalidUser `protobuf:"bytes,3,opt,name=ssh_invalid_user,json=sshInvalidUser,proto3,oneof"`
+}
+
+type SecurityEvent_SshLoginSucceeded struct {
+	// ssh_login_succeeded is ssh.login.success.
+	SshLoginSucceeded *SshLoginSucceeded `protobuf:"bytes,4,opt,name=ssh_login_succeeded,json=sshLoginSucceeded,proto3,oneof"`
+}
+
+type SecurityEvent_SshPreauthDisconnect struct {
+	// ssh_preauth_disconnect is ssh.preauth.disconnect.
+	SshPreauthDisconnect *SshPreauthDisconnect `protobuf:"bytes,5,opt,name=ssh_preauth_disconnect,json=sshPreauthDisconnect,proto3,oneof"`
+}
+
+type SecurityEvent_SudoAuthFailed struct {
+	// sudo_auth_failed is sudo.auth.failed.
+	SudoAuthFailed *SudoAuthFailed `protobuf:"bytes,6,opt,name=sudo_auth_failed,json=sudoAuthFailed,proto3,oneof"`
+}
+
+type SecurityEvent_SudoNotAllowed struct {
+	// sudo_not_allowed is sudo.not_allowed.
+	SudoNotAllowed *SudoNotAllowed `protobuf:"bytes,7,opt,name=sudo_not_allowed,json=sudoNotAllowed,proto3,oneof"`
+}
+
+type SecurityEvent_SudoCommand struct {
+	// sudo_command is sudo.command (off unless configured).
+	SudoCommand *SudoCommand `protobuf:"bytes,8,opt,name=sudo_command,json=sudoCommand,proto3,oneof"`
+}
+
+type SecurityEvent_AccountCreated struct {
+	// account_created is account.created.
+	AccountCreated *AccountCreated `protobuf:"bytes,9,opt,name=account_created,json=accountCreated,proto3,oneof"`
+}
+
+type SecurityEvent_AccountDeleted struct {
+	// account_deleted is account.deleted.
+	AccountDeleted *AccountDeleted `protobuf:"bytes,10,opt,name=account_deleted,json=accountDeleted,proto3,oneof"`
+}
+
+type SecurityEvent_SystemReboot struct {
+	// system_reboot is system.reboot.
+	SystemReboot *SystemReboot `protobuf:"bytes,11,opt,name=system_reboot,json=systemReboot,proto3,oneof"`
+}
+
+type SecurityEvent_OomKill struct {
+	// oom_kill is system.oom_kill.
+	OomKill *OomKill `protobuf:"bytes,12,opt,name=oom_kill,json=oomKill,proto3,oneof"`
+}
+
+func (*SecurityEvent_SshLoginFailed) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_SshInvalidUser) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_SshLoginSucceeded) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_SshPreauthDisconnect) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_SudoAuthFailed) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_SudoNotAllowed) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_SudoCommand) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_AccountCreated) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_AccountDeleted) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_SystemReboot) isSecurityEvent_Event() {}
+
+func (*SecurityEvent_OomKill) isSecurityEvent_Event() {}
+
+// SshRemote is the other end of an SSH connection as sshd logged it.
+type SshRemote struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// address is an IP address or, where sshd resolves names (UseDNS), a host name.
+	//
+	// Types that are valid to be assigned to Address:
+	//
+	//	*SshRemote_Ip
+	//	*SshRemote_Host
+	Address isSshRemote_Address `protobuf_oneof:"address"`
+	// port is the remote port; 0 where the log does not tell.
+	Port          uint32 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SshRemote) Reset() {
+	*x = SshRemote{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SshRemote) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SshRemote) ProtoMessage() {}
+
+func (x *SshRemote) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SshRemote.ProtoReflect.Descriptor instead.
+func (*SshRemote) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *SshRemote) GetAddress() isSshRemote_Address {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *SshRemote) GetIp() string {
+	if x != nil {
+		if x, ok := x.Address.(*SshRemote_Ip); ok {
+			return x.Ip
+		}
+	}
+	return ""
+}
+
+func (x *SshRemote) GetHost() string {
+	if x != nil {
+		if x, ok := x.Address.(*SshRemote_Host); ok {
+			return x.Host
+		}
+	}
+	return ""
+}
+
+func (x *SshRemote) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+type isSshRemote_Address interface {
+	isSshRemote_Address()
+}
+
+type SshRemote_Ip struct {
+	// ip is an IPv4 or IPv6 address.
+	Ip string `protobuf:"bytes,1,opt,name=ip,proto3,oneof"`
+}
+
+type SshRemote_Host struct {
+	// host is a host name.
+	Host string `protobuf:"bytes,2,opt,name=host,proto3,oneof"`
+}
+
+func (*SshRemote_Ip) isSshRemote_Address() {}
+
+func (*SshRemote_Host) isSshRemote_Address() {}
+
+// SshLoginFailed is a failed SSH login.
+type SshLoginFailed struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is the user name tried, chosen by the client.
+	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// remote is where the attempt came from.
+	Remote *SshRemote `protobuf:"bytes,2,opt,name=remote,proto3" json:"remote,omitempty"`
+	// method is how the login was tried.
+	Method SshAuthMethod `protobuf:"varint,3,opt,name=method,proto3,enum=sermon.agent.v1.SshAuthMethod" json:"method,omitempty"`
+	// invalid_user is set if the user does not exist.
+	InvalidUser   bool `protobuf:"varint,4,opt,name=invalid_user,json=invalidUser,proto3" json:"invalid_user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SshLoginFailed) Reset() {
+	*x = SshLoginFailed{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SshLoginFailed) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SshLoginFailed) ProtoMessage() {}
+
+func (x *SshLoginFailed) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SshLoginFailed.ProtoReflect.Descriptor instead.
+func (*SshLoginFailed) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SshLoginFailed) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *SshLoginFailed) GetRemote() *SshRemote {
+	if x != nil {
+		return x.Remote
+	}
+	return nil
+}
+
+func (x *SshLoginFailed) GetMethod() SshAuthMethod {
+	if x != nil {
+		return x.Method
+	}
+	return SshAuthMethod_SSH_AUTH_METHOD_UNSPECIFIED
+}
+
+func (x *SshLoginFailed) GetInvalidUser() bool {
+	if x != nil {
+		return x.InvalidUser
+	}
+	return false
+}
+
+// SshInvalidUser is an SSH connection for a user that does not exist.
+type SshInvalidUser struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is the user name tried, chosen by the client.
+	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// remote is where the attempt came from.
+	Remote        *SshRemote `protobuf:"bytes,2,opt,name=remote,proto3" json:"remote,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SshInvalidUser) Reset() {
+	*x = SshInvalidUser{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SshInvalidUser) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SshInvalidUser) ProtoMessage() {}
+
+func (x *SshInvalidUser) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SshInvalidUser.ProtoReflect.Descriptor instead.
+func (*SshInvalidUser) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *SshInvalidUser) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *SshInvalidUser) GetRemote() *SshRemote {
+	if x != nil {
+		return x.Remote
+	}
+	return nil
+}
+
+// SshLoginSucceeded is a successful SSH login.
+type SshLoginSucceeded struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is the account logged in to.
+	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// remote is where the login came from.
+	Remote *SshRemote `protobuf:"bytes,2,opt,name=remote,proto3" json:"remote,omitempty"`
+	// method is how the user authenticated.
+	Method SshAuthMethod `protobuf:"varint,3,opt,name=method,proto3,enum=sermon.agent.v1.SshAuthMethod" json:"method,omitempty"`
+	// key_type is the type of the public key, e.g. ED25519 (publickey only).
+	KeyType string `protobuf:"bytes,4,opt,name=key_type,json=keyType,proto3" json:"key_type,omitempty"`
+	// key_fingerprint is the fingerprint of the public key, e.g. SHA256:… (publickey only).
+	KeyFingerprint string `protobuf:"bytes,5,opt,name=key_fingerprint,json=keyFingerprint,proto3" json:"key_fingerprint,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SshLoginSucceeded) Reset() {
+	*x = SshLoginSucceeded{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SshLoginSucceeded) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SshLoginSucceeded) ProtoMessage() {}
+
+func (x *SshLoginSucceeded) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SshLoginSucceeded.ProtoReflect.Descriptor instead.
+func (*SshLoginSucceeded) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SshLoginSucceeded) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *SshLoginSucceeded) GetRemote() *SshRemote {
+	if x != nil {
+		return x.Remote
+	}
+	return nil
+}
+
+func (x *SshLoginSucceeded) GetMethod() SshAuthMethod {
+	if x != nil {
+		return x.Method
+	}
+	return SshAuthMethod_SSH_AUTH_METHOD_UNSPECIFIED
+}
+
+func (x *SshLoginSucceeded) GetKeyType() string {
+	if x != nil {
+		return x.KeyType
+	}
+	return ""
+}
+
+func (x *SshLoginSucceeded) GetKeyFingerprint() string {
+	if x != nil {
+		return x.KeyFingerprint
+	}
+	return ""
+}
+
+// SshPreauthDisconnect is an SSH connection that ended before a login.
+type SshPreauthDisconnect struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is the user name tried, if any.
+	User *string `protobuf:"bytes,1,opt,name=user,proto3,oneof" json:"user,omitempty"`
+	// remote is where the connection came from.
+	Remote *SshRemote `protobuf:"bytes,2,opt,name=remote,proto3" json:"remote,omitempty"`
+	// invalid_user is set if the user does not exist.
+	InvalidUser   bool `protobuf:"varint,3,opt,name=invalid_user,json=invalidUser,proto3" json:"invalid_user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SshPreauthDisconnect) Reset() {
+	*x = SshPreauthDisconnect{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SshPreauthDisconnect) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SshPreauthDisconnect) ProtoMessage() {}
+
+func (x *SshPreauthDisconnect) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SshPreauthDisconnect.ProtoReflect.Descriptor instead.
+func (*SshPreauthDisconnect) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *SshPreauthDisconnect) GetUser() string {
+	if x != nil && x.User != nil {
+		return *x.User
+	}
+	return ""
+}
+
+func (x *SshPreauthDisconnect) GetRemote() *SshRemote {
+	if x != nil {
+		return x.Remote
+	}
+	return nil
+}
+
+func (x *SshPreauthDisconnect) GetInvalidUser() bool {
+	if x != nil {
+		return x.InvalidUser
+	}
+	return false
+}
+
+// SudoAuthFailed is a wrong password for sudo.
+type SudoAuthFailed struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is the account whose password failed.
+	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// tty is the terminal, empty if none.
+	Tty           string `protobuf:"bytes,2,opt,name=tty,proto3" json:"tty,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SudoAuthFailed) Reset() {
+	*x = SudoAuthFailed{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SudoAuthFailed) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SudoAuthFailed) ProtoMessage() {}
+
+func (x *SudoAuthFailed) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SudoAuthFailed.ProtoReflect.Descriptor instead.
+func (*SudoAuthFailed) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *SudoAuthFailed) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *SudoAuthFailed) GetTty() string {
+	if x != nil {
+		return x.Tty
+	}
+	return ""
+}
+
+// SudoNotAllowed is sudo refusing a user: not in sudoers, or the command is not allowed.
+type SudoNotAllowed struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is who ran sudo.
+	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// target is the account asked for, e.g. root.
+	Target string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// tty is the terminal, empty if none.
+	Tty           string `protobuf:"bytes,3,opt,name=tty,proto3" json:"tty,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SudoNotAllowed) Reset() {
+	*x = SudoNotAllowed{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SudoNotAllowed) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SudoNotAllowed) ProtoMessage() {}
+
+func (x *SudoNotAllowed) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SudoNotAllowed.ProtoReflect.Descriptor instead.
+func (*SudoNotAllowed) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SudoNotAllowed) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *SudoNotAllowed) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *SudoNotAllowed) GetTty() string {
+	if x != nil {
+		return x.Tty
+	}
+	return ""
+}
+
+// SudoCommand is a command run through sudo (only if the organization switches it on).
+type SudoCommand struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is who ran sudo.
+	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// target is the account the command ran as.
+	Target string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// tty is the terminal, empty if none.
+	Tty string `protobuf:"bytes,3,opt,name=tty,proto3" json:"tty,omitempty"`
+	// command is the command line with secrets redacted by the agent.
+	Command       string `protobuf:"bytes,4,opt,name=command,proto3" json:"command,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SudoCommand) Reset() {
+	*x = SudoCommand{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SudoCommand) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SudoCommand) ProtoMessage() {}
+
+func (x *SudoCommand) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SudoCommand.ProtoReflect.Descriptor instead.
+func (*SudoCommand) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *SudoCommand) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *SudoCommand) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *SudoCommand) GetTty() string {
+	if x != nil {
+		return x.Tty
+	}
+	return ""
+}
+
+func (x *SudoCommand) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+// AccountCreated is a new local user account.
+type AccountCreated struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is the new account.
+	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	// uid is its user ID, if logged.
+	Uid           *uint32 `protobuf:"varint,2,opt,name=uid,proto3,oneof" json:"uid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountCreated) Reset() {
+	*x = AccountCreated{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountCreated) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountCreated) ProtoMessage() {}
+
+func (x *AccountCreated) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountCreated.ProtoReflect.Descriptor instead.
+func (*AccountCreated) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *AccountCreated) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *AccountCreated) GetUid() uint32 {
+	if x != nil && x.Uid != nil {
+		return *x.Uid
+	}
+	return 0
+}
+
+// AccountDeleted is a removed local user account.
+type AccountDeleted struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// user is the removed account.
+	User          string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountDeleted) Reset() {
+	*x = AccountDeleted{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountDeleted) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountDeleted) ProtoMessage() {}
+
+func (x *AccountDeleted) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountDeleted.ProtoReflect.Descriptor instead.
+func (*AccountDeleted) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AccountDeleted) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+// SystemReboot is a new boot of the host, seen from a change of the journal's boot ID.
+type SystemReboot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// previous_boot_id is the boot ID before.
+	PreviousBootId string `protobuf:"bytes,1,opt,name=previous_boot_id,json=previousBootId,proto3" json:"previous_boot_id,omitempty"`
+	// uptime_before is how long the previous boot ran as far as its last log line tells.
+	UptimeBefore  *durationpb.Duration `protobuf:"bytes,2,opt,name=uptime_before,json=uptimeBefore,proto3" json:"uptime_before,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemReboot) Reset() {
+	*x = SystemReboot{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemReboot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemReboot) ProtoMessage() {}
+
+func (x *SystemReboot) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemReboot.ProtoReflect.Descriptor instead.
+func (*SystemReboot) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *SystemReboot) GetPreviousBootId() string {
+	if x != nil {
+		return x.PreviousBootId
+	}
+	return ""
+}
+
+func (x *SystemReboot) GetUptimeBefore() *durationpb.Duration {
+	if x != nil {
+		return x.UptimeBefore
+	}
+	return nil
+}
+
+// OomKill is a process killed by the kernel's out-of-memory killer.
+type OomKill struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// pid is the killed process.
+	Pid uint32 `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
+	// process is its name (at most 15 characters, chosen by whoever started it).
+	Process       string `protobuf:"bytes,2,opt,name=process,proto3" json:"process,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OomKill) Reset() {
+	*x = OomKill{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OomKill) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OomKill) ProtoMessage() {}
+
+func (x *OomKill) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OomKill.ProtoReflect.Descriptor instead.
+func (*OomKill) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *OomKill) GetPid() uint32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *OomKill) GetProcess() string {
+	if x != nil {
+		return x.Process
+	}
+	return ""
+}
+
 var File_sermon_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_agent_proto_rawDesc = "" +
@@ -1173,10 +2333,11 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x05roots\x18\x01 \x03(\fR\x05roots\"\v\n" +
 	"\tRotateNow\"\x17\n" +
 	"\x03Ack\x12\x10\n" +
-	"\x03seq\x18\x01 \x01(\x04R\x03seq\"n\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\"\xbe\x01\n" +
 	"\x05Batch\x12\x19\n" +
 	"\x03seq\x18\x01 \x01(\x04B\a\xbaH\x042\x02 \x00R\x03seq\x128\n" +
-	"\ametrics\x18\x02 \x01(\v2\x1c.sermon.agent.v1.MetricBatchH\x00R\ametricsB\x10\n" +
+	"\ametrics\x18\x02 \x01(\v2\x1c.sermon.agent.v1.MetricBatchH\x00R\ametrics\x12N\n" +
+	"\x0fsecurity_events\x18\x03 \x01(\v2#.sermon.agent.v1.SecurityEventBatchH\x00R\x0esecurityEventsB\x10\n" +
 	"\acontent\x12\x05\xbaH\x02\b\x01\"\x94\x01\n" +
 	"\vMetricBatch\x12E\n" +
 	"\fcollected_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\vcollectedAt\x12>\n" +
@@ -1192,11 +2353,91 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x05value\x12\x05\xbaH\x02\b\x01\"W\n" +
 	"\bThrottle\x12K\n" +
 	"\fmin_interval\x18\x01 \x01(\v2\x19.google.protobuf.DurationB\r\xbaH\n" +
-	"\xaa\x01\a\"\x03\b\x90\x1c2\x00R\vminInterval*\\\n" +
+	"\xaa\x01\a\"\x03\b\x90\x1c2\x00R\vminInterval\"Y\n" +
+	"\x12SecurityEventBatch\x12C\n" +
+	"\x06events\x18\x01 \x03(\v2\x1e.sermon.agent.v1.SecurityEventB\v\xbaH\b\x92\x01\x05\b\x01\x10\xf4\x03R\x06events\"\xa5\a\n" +
+	"\rSecurityEvent\x12C\n" +
+	"\voccurred_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\n" +
+	"occurredAt\x12K\n" +
+	"\x10ssh_login_failed\x18\x02 \x01(\v2\x1f.sermon.agent.v1.SshLoginFailedH\x00R\x0esshLoginFailed\x12K\n" +
+	"\x10ssh_invalid_user\x18\x03 \x01(\v2\x1f.sermon.agent.v1.SshInvalidUserH\x00R\x0esshInvalidUser\x12T\n" +
+	"\x13ssh_login_succeeded\x18\x04 \x01(\v2\".sermon.agent.v1.SshLoginSucceededH\x00R\x11sshLoginSucceeded\x12]\n" +
+	"\x16ssh_preauth_disconnect\x18\x05 \x01(\v2%.sermon.agent.v1.SshPreauthDisconnectH\x00R\x14sshPreauthDisconnect\x12K\n" +
+	"\x10sudo_auth_failed\x18\x06 \x01(\v2\x1f.sermon.agent.v1.SudoAuthFailedH\x00R\x0esudoAuthFailed\x12K\n" +
+	"\x10sudo_not_allowed\x18\a \x01(\v2\x1f.sermon.agent.v1.SudoNotAllowedH\x00R\x0esudoNotAllowed\x12A\n" +
+	"\fsudo_command\x18\b \x01(\v2\x1c.sermon.agent.v1.SudoCommandH\x00R\vsudoCommand\x12J\n" +
+	"\x0faccount_created\x18\t \x01(\v2\x1f.sermon.agent.v1.AccountCreatedH\x00R\x0eaccountCreated\x12J\n" +
+	"\x0faccount_deleted\x18\n" +
+	" \x01(\v2\x1f.sermon.agent.v1.AccountDeletedH\x00R\x0eaccountDeleted\x12D\n" +
+	"\rsystem_reboot\x18\v \x01(\v2\x1d.sermon.agent.v1.SystemRebootH\x00R\fsystemReboot\x125\n" +
+	"\boom_kill\x18\f \x01(\v2\x18.sermon.agent.v1.OomKillH\x00R\aoomKillB\x0e\n" +
+	"\x05event\x12\x05\xbaH\x02\b\x01\"v\n" +
+	"\tSshRemote\x12\x19\n" +
+	"\x02ip\x18\x01 \x01(\tB\a\xbaH\x04r\x02p\x01H\x00R\x02ip\x12\x1d\n" +
+	"\x04host\x18\x02 \x01(\tB\a\xbaH\x04r\x02h\x01H\x00R\x04host\x12\x1d\n" +
+	"\x04port\x18\x03 \x01(\rB\t\xbaH\x06*\x04\x18\xff\xff\x03R\x04portB\x10\n" +
+	"\aaddress\x12\x05\xbaH\x02\b\x01\"\xd1\x01\n" +
+	"\x0eSshLoginFailed\x12\x1c\n" +
+	"\x04user\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x04user\x12:\n" +
+	"\x06remote\x18\x02 \x01(\v2\x1a.sermon.agent.v1.SshRemoteB\x06\xbaH\x03\xc8\x01\x01R\x06remote\x12B\n" +
+	"\x06method\x18\x03 \x01(\x0e2\x1e.sermon.agent.v1.SshAuthMethodB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x06method\x12!\n" +
+	"\finvalid_user\x18\x04 \x01(\bR\vinvalidUser\"j\n" +
+	"\x0eSshInvalidUser\x12\x1c\n" +
+	"\x04user\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x04user\x12:\n" +
+	"\x06remote\x18\x02 \x01(\v2\x1a.sermon.agent.v1.SshRemoteB\x06\xbaH\x03\xc8\x01\x01R\x06remote\"\x89\x02\n" +
+	"\x11SshLoginSucceeded\x12\x1c\n" +
+	"\x04user\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x04user\x12:\n" +
+	"\x06remote\x18\x02 \x01(\v2\x1a.sermon.agent.v1.SshRemoteB\x06\xbaH\x03\xc8\x01\x01R\x06remote\x12B\n" +
+	"\x06method\x18\x03 \x01(\x0e2\x1e.sermon.agent.v1.SshAuthMethodB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x06method\x12#\n" +
+	"\bkey_type\x18\x04 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\akeyType\x121\n" +
+	"\x0fkey_fingerprint\x18\x05 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x0ekeyFingerprint\"\xa1\x01\n" +
+	"\x14SshPreauthDisconnect\x12!\n" +
+	"\x04user\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x01H\x00R\x04user\x88\x01\x01\x12:\n" +
+	"\x06remote\x18\x02 \x01(\v2\x1a.sermon.agent.v1.SshRemoteB\x06\xbaH\x03\xc8\x01\x01R\x06remote\x12!\n" +
+	"\finvalid_user\x18\x03 \x01(\bR\vinvalidUserB\a\n" +
+	"\x05_user\"J\n" +
+	"\x0eSudoAuthFailed\x12\x1c\n" +
+	"\x04user\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x04user\x12\x1a\n" +
+	"\x03tty\x18\x02 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x03tty\"l\n" +
+	"\x0eSudoNotAllowed\x12\x1c\n" +
+	"\x04user\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x04user\x12 \n" +
+	"\x06target\x18\x02 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x06target\x12\x1a\n" +
+	"\x03tty\x18\x03 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x03tty\"\x8d\x01\n" +
+	"\vSudoCommand\x12\x1c\n" +
+	"\x04user\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x04user\x12 \n" +
+	"\x06target\x18\x02 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x06target\x12\x1a\n" +
+	"\x03tty\x18\x03 \x01(\tB\b\xbaH\x05r\x03(\x80\x01R\x03tty\x12\"\n" +
+	"\acommand\x18\x04 \x01(\tB\b\xbaH\x05r\x03(\x80\bR\acommand\"O\n" +
+	"\x0eAccountCreated\x12\x1e\n" +
+	"\x04user\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01(\x80\x01R\x04user\x12\x15\n" +
+	"\x03uid\x18\x02 \x01(\rH\x00R\x03uid\x88\x01\x01B\x06\n" +
+	"\x04_uid\"0\n" +
+	"\x0eAccountDeleted\x12\x1e\n" +
+	"\x04user\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01(\x80\x01R\x04user\"\x8e\x01\n" +
+	"\fSystemReboot\x124\n" +
+	"\x10previous_boot_id\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01(\x80\x01R\x0epreviousBootId\x12H\n" +
+	"\ruptime_before\x18\x02 \x01(\v2\x19.google.protobuf.DurationB\b\xbaH\x05\xaa\x01\x022\x00R\fuptimeBefore\"G\n" +
+	"\aOomKill\x12\x19\n" +
+	"\x03pid\x18\x01 \x01(\rB\a\xbaH\x04*\x02 \x00R\x03pid\x12!\n" +
+	"\aprocess\x18\x02 \x01(\tB\a\xbaH\x04r\x02(@R\aprocess*\\\n" +
 	"\fArchitecture\x12\x1c\n" +
 	"\x18ARCHITECTURE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ARCHITECTURE_AMD64\x10\x01\x12\x16\n" +
-	"\x12ARCHITECTURE_ARM64\x10\x022`\n" +
+	"\x12ARCHITECTURE_ARM64\x10\x02*\x87\x02\n" +
+	"\rSshAuthMethod\x12\x1f\n" +
+	"\x1bSSH_AUTH_METHOD_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18SSH_AUTH_METHOD_PASSWORD\x10\x01\x12\x1d\n" +
+	"\x19SSH_AUTH_METHOD_PUBLICKEY\x10\x02\x12(\n" +
+	"$SSH_AUTH_METHOD_KEYBOARD_INTERACTIVE\x10\x03\x12\x1d\n" +
+	"\x19SSH_AUTH_METHOD_HOSTBASED\x10\x04\x12\x1a\n" +
+	"\x16SSH_AUTH_METHOD_GSSAPI\x10\x05\x12\x18\n" +
+	"\x14SSH_AUTH_METHOD_NONE\x10\x06\x12\x19\n" +
+	"\x15SSH_AUTH_METHOD_OTHER\x10\a2`\n" +
 	"\fAgentService\x12P\n" +
 	"\aSession\x12\x1f.sermon.agent.v1.SessionRequest\x1a .sermon.agent.v1.SessionResponse(\x010\x01B\xc7\x01\n" +
 	"\x13com.sermon.agent.v1B\n" +
@@ -1214,55 +2455,91 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 	return file_sermon_agent_v1_agent_proto_rawDescData
 }
 
-var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(Architecture)(0),             // 0: sermon.agent.v1.Architecture
-	(*SessionRequest)(nil),        // 1: sermon.agent.v1.SessionRequest
-	(*SessionResponse)(nil),       // 2: sermon.agent.v1.SessionResponse
-	(*Hello)(nil),                 // 3: sermon.agent.v1.Hello
-	(*HostFacts)(nil),             // 4: sermon.agent.v1.HostFacts
-	(*Heartbeat)(nil),             // 5: sermon.agent.v1.Heartbeat
-	(*RotateCertificate)(nil),     // 6: sermon.agent.v1.RotateCertificate
-	(*CertificateIssued)(nil),     // 7: sermon.agent.v1.CertificateIssued
-	(*TrustBundle)(nil),           // 8: sermon.agent.v1.TrustBundle
-	(*RotateNow)(nil),             // 9: sermon.agent.v1.RotateNow
-	(*Ack)(nil),                   // 10: sermon.agent.v1.Ack
-	(*Batch)(nil),                 // 11: sermon.agent.v1.Batch
-	(*MetricBatch)(nil),           // 12: sermon.agent.v1.MetricBatch
-	(*Sample)(nil),                // 13: sermon.agent.v1.Sample
-	(*Throttle)(nil),              // 14: sermon.agent.v1.Throttle
-	nil,                           // 15: sermon.agent.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 17: google.protobuf.Duration
+	(SshAuthMethod)(0),            // 1: sermon.agent.v1.SshAuthMethod
+	(*SessionRequest)(nil),        // 2: sermon.agent.v1.SessionRequest
+	(*SessionResponse)(nil),       // 3: sermon.agent.v1.SessionResponse
+	(*Hello)(nil),                 // 4: sermon.agent.v1.Hello
+	(*HostFacts)(nil),             // 5: sermon.agent.v1.HostFacts
+	(*Heartbeat)(nil),             // 6: sermon.agent.v1.Heartbeat
+	(*RotateCertificate)(nil),     // 7: sermon.agent.v1.RotateCertificate
+	(*CertificateIssued)(nil),     // 8: sermon.agent.v1.CertificateIssued
+	(*TrustBundle)(nil),           // 9: sermon.agent.v1.TrustBundle
+	(*RotateNow)(nil),             // 10: sermon.agent.v1.RotateNow
+	(*Ack)(nil),                   // 11: sermon.agent.v1.Ack
+	(*Batch)(nil),                 // 12: sermon.agent.v1.Batch
+	(*MetricBatch)(nil),           // 13: sermon.agent.v1.MetricBatch
+	(*Sample)(nil),                // 14: sermon.agent.v1.Sample
+	(*Throttle)(nil),              // 15: sermon.agent.v1.Throttle
+	(*SecurityEventBatch)(nil),    // 16: sermon.agent.v1.SecurityEventBatch
+	(*SecurityEvent)(nil),         // 17: sermon.agent.v1.SecurityEvent
+	(*SshRemote)(nil),             // 18: sermon.agent.v1.SshRemote
+	(*SshLoginFailed)(nil),        // 19: sermon.agent.v1.SshLoginFailed
+	(*SshInvalidUser)(nil),        // 20: sermon.agent.v1.SshInvalidUser
+	(*SshLoginSucceeded)(nil),     // 21: sermon.agent.v1.SshLoginSucceeded
+	(*SshPreauthDisconnect)(nil),  // 22: sermon.agent.v1.SshPreauthDisconnect
+	(*SudoAuthFailed)(nil),        // 23: sermon.agent.v1.SudoAuthFailed
+	(*SudoNotAllowed)(nil),        // 24: sermon.agent.v1.SudoNotAllowed
+	(*SudoCommand)(nil),           // 25: sermon.agent.v1.SudoCommand
+	(*AccountCreated)(nil),        // 26: sermon.agent.v1.AccountCreated
+	(*AccountDeleted)(nil),        // 27: sermon.agent.v1.AccountDeleted
+	(*SystemReboot)(nil),          // 28: sermon.agent.v1.SystemReboot
+	(*OomKill)(nil),               // 29: sermon.agent.v1.OomKill
+	nil,                           // 30: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 31: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 32: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
-	3,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
-	5,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
-	6,  // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
-	11, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
-	10, // 4: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
-	7,  // 5: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	9,  // 6: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	8,  // 7: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
-	14, // 8: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
-	4,  // 9: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	4,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
+	6,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
+	7,  // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
+	12, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
+	11, // 4: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	8,  // 5: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
+	10, // 6: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	9,  // 7: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	15, // 8: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
+	5,  // 9: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
 	0,  // 10: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	16, // 11: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	16, // 12: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	16, // 13: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	12, // 14: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
-	16, // 15: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
-	13, // 16: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
-	15, // 17: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
-	17, // 18: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
-	1,  // 19: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	2,  // 20: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	20, // [20:21] is the sub-list for method output_type
-	19, // [19:20] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	31, // 11: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	31, // 12: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	31, // 13: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	13, // 14: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	16, // 15: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
+	31, // 16: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	14, // 17: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	30, // 18: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	32, // 19: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	17, // 20: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
+	31, // 21: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	19, // 22: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
+	20, // 23: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
+	21, // 24: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
+	22, // 25: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
+	23, // 26: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
+	24, // 27: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
+	25, // 28: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
+	26, // 29: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
+	27, // 30: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
+	28, // 31: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
+	29, // 32: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
+	18, // 33: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
+	1,  // 34: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
+	18, // 35: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
+	18, // 36: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
+	1,  // 37: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
+	18, // 38: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
+	32, // 39: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
+	2,  // 40: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	3,  // 41: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	41, // [41:42] is the sub-list for method output_type
+	40, // [40:41] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -1285,18 +2562,38 @@ func file_sermon_agent_v1_agent_proto_init() {
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[10].OneofWrappers = []any{
 		(*Batch_Metrics)(nil),
+		(*Batch_SecurityEvents)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[12].OneofWrappers = []any{
 		(*Sample_IntValue)(nil),
 		(*Sample_DoubleValue)(nil),
 	}
+	file_sermon_agent_v1_agent_proto_msgTypes[15].OneofWrappers = []any{
+		(*SecurityEvent_SshLoginFailed)(nil),
+		(*SecurityEvent_SshInvalidUser)(nil),
+		(*SecurityEvent_SshLoginSucceeded)(nil),
+		(*SecurityEvent_SshPreauthDisconnect)(nil),
+		(*SecurityEvent_SudoAuthFailed)(nil),
+		(*SecurityEvent_SudoNotAllowed)(nil),
+		(*SecurityEvent_SudoCommand)(nil),
+		(*SecurityEvent_AccountCreated)(nil),
+		(*SecurityEvent_AccountDeleted)(nil),
+		(*SecurityEvent_SystemReboot)(nil),
+		(*SecurityEvent_OomKill)(nil),
+	}
+	file_sermon_agent_v1_agent_proto_msgTypes[16].OneofWrappers = []any{
+		(*SshRemote_Ip)(nil),
+		(*SshRemote_Host)(nil),
+	}
+	file_sermon_agent_v1_agent_proto_msgTypes[20].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[24].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   15,
+			NumEnums:      2,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

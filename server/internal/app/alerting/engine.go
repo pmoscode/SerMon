@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -55,9 +56,25 @@ type Evaluator interface {
 
 // Rule is a rule ready for evaluation.
 type Rule struct {
-	ID        alert.RuleID
-	Timing    alert.Timing
+	ID     alert.RuleID
+	Timing alert.Timing
+	// Groups limits the rule to nodes of these groups; empty: all nodes of the organization.
+	Groups    []tenant.GroupID
 	Evaluator Evaluator
+}
+
+// nodes returns the nodes the rule applies to.
+func (r Rule) nodes(all []fleet.Node) []fleet.Node {
+	if len(r.Groups) == 0 {
+		return all
+	}
+	var out []fleet.Node
+	for _, n := range all {
+		if slices.Contains(r.Groups, n.Group) {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // RuleSource returns the rules of an organization (defaults with its overrides, M2-04).
@@ -196,7 +213,11 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 	var removed []alert.Key
 	var history []Record
 	for _, rule := range rules {
-		results, err := rule.Evaluator.Evaluate(ctx, env)
+		ruleEnv := env
+		if ruleEnv.Nodes = rule.nodes(nodes); len(ruleEnv.Nodes) == 0 {
+			continue
+		}
+		results, err := rule.Evaluator.Evaluate(ctx, ruleEnv)
 		if err != nil {
 			// One broken rule must not silence the others.
 			e.stats.RuleErrors.Add(1)

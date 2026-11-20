@@ -621,7 +621,7 @@ metadata:
 spec:
   type: threshold            # threshold | rate | event | absence | state | anomaly | prediction
   metric: sermon_cpu_utilization_ratio
-  aggregate: avg             # avg | max | min | sum | last
+  aggregate: avg             # avg | max | min | last
   window: 10m
   warning: { op: ">", value: 0.85 }
   critical: { op: ">", value: 0.95 }
@@ -642,6 +642,23 @@ spec:
   count: { window: 5m, warning: 10, critical: 50 }
   notifyFields: [ ts, user, ip, port ]
 ```
+
+Die Regeltypen im Einzelnen (M2-03):
+
+- **`threshold`:** Aggregat über das Fenster (`avg`, `max`, `min`, `last`). Kein `sum`, weil eine Summe über
+  Zeit-Buckets von deren Größe abhängt.
+- **`rate`:** Rate pro Sekunde oder Minute (`per`), optional relativ zu einer zweiten Rate mit denselben Labels
+  (Fehler pro Paket).
+- **`absence`:** Sekunden seit dem letzten Kontakt des Nodes.
+- **`state`:** letzter Wert, optional nur, wenn vorher eine Bedingung galt (`seen`: Interface war up).
+- **`prediction`:** Stunden, bis eine fallende Metrik null erreicht (lineare Tendenz).
+
+Gemeinsam gilt:
+
+- Filter und Dimensionen einer Regel nennen zusammen alle Labels der Metrik. So gehört zu jeder Instanz genau eine
+  Reihe.
+- Ausschlüsse sind Glob-Muster auf Dimensionen (`/dev/*`).
+- Verhältnisse werden als 0..1 verglichen.
 
 Import und Export laufen über die UI bzw. die API. Der Import wird **validiert** (JSON-Schema aus dem Proto) und zeigt
 einen **Dry-Run-Diff**. Mitgelieferte Standardregeln liegen in `rules/` und lassen sich pro Org überschreiben oder

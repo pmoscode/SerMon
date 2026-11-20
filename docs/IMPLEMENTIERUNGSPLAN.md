@@ -1353,7 +1353,28 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 
 ### 5.2 Regeltypen und Standardregeln (E2.2)
 
-#### ☐ M2-03 – Regeltypen threshold, rate, absence, state, prediction · S · M
+#### ☑ M2-03 – Regeltypen threshold, rate, absence, state, prediction · S · M
+> Erledigt (`app/alerting/types.go`, je Typ ein `Evaluator`, aus dem YAML gebaut in M2-04):
+> - **Gemeinsam (`SeriesSpec`):**
+>   - Metrik aus dem Katalog, Label-Filter, Dimensionen und Glob-Ausschlüsse.
+>   - Filter und Dimensionen müssen alle Labels der Metrik abdecken: genau eine Reihe pro Instanz, keine mehrdeutige
+>     Verdichtung.
+>   - Verhältnisse von ppm auf 0..1.
+>   - Abfragen mit `Step 0` über den `metrics.Reader`: Fenster bis 15 min aus dem Ringpuffer mit 1-s-Werten, längere
+>     aus TimescaleDB; in Blöcken zu `MaxNodes` Nodes.
+>   - Nodes ohne Daten liefern nichts.
+> - **`threshold`:** `avg`, `max`, `min`, `last`. **Abweichung:** kein `sum`, weil eine Summe über Zeit-Buckets von
+>   deren Größe abhängt.
+> - **`rate`:** pro Sekunde oder Minute, optional relativ zu einer zweiten Rate mit denselben Labels; keine Pakete und
+>   keine Fehler ergeben 0.
+> - **`absence`:** Sekunden seit `LastSeenAt` (wird höchstens alle 30 s geschrieben); nie gesehene Nodes zählen nicht.
+> - **`state`:** letzter Wert der letzten 5 min (älter: nichts), optional `seen` mit Fenster („war vorher up“).
+> - **`prediction`:** Stunden bis null über eine Rückschau (Trend wie bei `ListFilesystems`); zu wenig Historie ergibt
+>   keine Daten, fallender oder flacher Bedarf keine Gefahr.
+> - **Engine:** Regeln lassen sich auf Gruppen beschränken.
+> - **Tests:** je Typ mit Fake-Reader (Werte, Abfragefenster, Aufteilung großer Flotten, Prüfung gegen den Katalog),
+>   ein Test gegen den echten Reader mit Ringpuffer; Gegenproben ohne ppm-Umrechnung, Ausschlüsse, `seen`, relative
+>   Rate und Gruppenfilter.
 - **Ziel:** Auswertung je Typ über den Reader: Aggregat über Fenster (`avg|max|min|sum|last`), Rate aus Zählern,
   Ausbleiben von Daten (Node offline nach 60 s ohne Heartbeat), Zustandswechsel, Füllprognose (lineare Regression wie
   bei `ListFilesystems`). Dimensionen (Mountpoint, Interface) werden zu eigenen Instanzen.

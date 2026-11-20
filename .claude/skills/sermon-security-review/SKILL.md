@@ -59,4 +59,7 @@ Security is the top priority (KONZEPT.md §18). Walk through every section relev
 - [ ] New personal data (IPs, usernames, log content) has retention and role restrictions.
 - [ ] Privileged actions write an audit log entry (who, what, when, result).
 
+## 11. Threat model
+- [ ] A change to a trust boundary (protocol, rights, helper operations, secrets, outgoing connections, install path) updates `docs/security/threat-model.md` in the same commit: threat, countermeasure, plan task, status.
+
 Then run: `just lint && just test && just security` (gosec, govulncheck, cargo-audit, cargo-deny, pnpm audit, betterleaks).

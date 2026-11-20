@@ -73,7 +73,8 @@
 
 ## 2. Entscheidungslog
 
-Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/` angelegt.
+Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/adr/`; die Zuordnung steht in der
+[ADR-Übersicht](adr/README.md).
 
 | #   | Thema          | Entscheidung                                                                                 | Begründung                                                                                            |
 |-----|----------------|----------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
@@ -170,7 +171,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung wird ein ADR unter `docs/adr/`
 | Build          | `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`; statisch gelinkt                                                                                 |
 | Runtime        | `tokio`; gRPC-Client mit `tonic` + `rustls` (kein OpenSSL)                                                                                                  |
 | Collectors     | Eigene Parser für `/proc` und `/sys`. Das Wurzelverzeichnis ist injizierbar (`ProcRoot`), dadurch sind Tests mit Fixtures möglich                           |
-| Journal        | Kindprozess `journalctl -o json -f --cursor-file=…`. Kein Linken gegen libsystemd, damit die musl-Binary statisch bleibt                                    |
+| Journal        | Kindprozess `journalctl -o json --all -f --after-cursor=…`; den Cursor speichert der Agent selbst, sobald der Eintrag im WAL liegt ([ADR 0013](adr/0013-log-quelle-journald.md)). Kein Linken gegen libsystemd, damit die musl-Binary statisch bleibt |
 | Dateien        | Tailing mit inotify, Rotationserkennung (inode/size) und Offsets persistiert                                                                                |
 | Puffer         | Write-Ahead-Log auf Disk (`/var/lib/sermon-agent/wal`), segmentiert, Obergrenze z. B. 24 h oder 200 MB (was zuerst erreicht ist); FIFO-Verwerfen mit Zähler |
 | Config         | Fast nichts lokal (`/etc/sermon/agent.toml`: Server-URL, Pfade, lokale Verbote). Alles Weitere kommt **versioniert vom Server**                             |
@@ -507,7 +508,7 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 
 | Quelle                 | Umsetzung                                                                                                                                  | Default                                                   |
 |------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
-| **systemd-journal**    | `journalctl -o json -f` mit persistiertem Cursor; Felder: `_SYSTEMD_UNIT`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `_PID`, `_HOSTNAME`, `MESSAGE` | an (falls vorhanden)                                      |
+| **systemd-journal**    | `journalctl -o json --all -f` mit eigenem Cursor (`--after-cursor`, ab systemd 239), feste Feldliste ohne `_CMDLINE`: `_SYSTEMD_UNIT`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `_PID`, `_COMM`, `_BOOT_ID`, `MESSAGE` | an (falls vorhanden)                                      |
 | **Klassische Dateien** | `/var/log/syslog`, `/var/log/messages`, `/var/log/auth.log`, `/var/log/secure` (je nach Distro automatisch erkannt)                        | an, wenn kein journald (Alpine)                           |
 | **Docker**             | über die Docker-API (`/var/run/docker.sock`), stdout/stderr pro Container mit Labels `container`, `image`, `compose_project`               | **aus** (Modul, siehe §15 – Socket bedeutet root-Rechte!) |
 | **Beliebige Dateien**  | Globs pro Node-Gruppe zentral konfiguriert, z. B. `/var/log/nginx/*.log`; Multiline-Regeln (z. B. Java-Stacktraces)                        | aus                                                       |

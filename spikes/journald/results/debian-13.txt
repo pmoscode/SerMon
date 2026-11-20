@@ -1,0 +1,27 @@
+os: Debian GNU/Linux 13 (trixie)
+journalctl: systemd 257 (257.13-1~deb13u1)
+storage: persistent
+fields: MESSAGE PRIORITY SYSLOG_FACILITY SYSLOG_IDENTIFIER SYSLOG_TIMESTAMP _BOOT_ID _COMM _GID _HOSTNAME _MACHINE_ID _PID _RUNTIME_SCOPE _SOURCE_REALTIME_TIMESTAMP _TRANSPORT _UID __CURSOR __MONOTONIC_TIMESTAMP __REALTIME_TIMESTAMP __SEQNUM __SEQNUM_ID
+realtime type: str
+priority value: '4'
+binary MESSAGE: list of 14 ints
+5000-byte MESSAGE without --all: null
+5000-byte MESSAGE with --all: string of 5000
+__SEQNUM present: True
+first start without cursor file: 10 old entries (tail)
+follow sees new entries: 5/5
+cursor file after SIGTERM: written (rc -15)
+restart after SIGTERM: 5 new, 0 duplicates of the old run
+cursor file after SIGKILL: unchanged
+restart after SIGKILL: 5 entries delivered again
+--after-cursor restart: 4 new, 0 duplicates
+follow across --rotate: 6/6, journalctl alive: True
+follow across journald restart: 3/3, journalctl alive: True
+restart after vacuum (cursor deleted): rc ok, 2 new, 0 of 50 vacuumed entries returned
+gap detectable via __SEQNUM: yes, 50 entries skipped
+pipe latency (5 probes): median 447 ms, max 496 ms
+idle RSS: 7308 KiB
+load 20000 lines: 20000 read in 0.5 s (43049 lines/s), journalctl CPU 0.39 s = 20 µs/line, RSS 15736 KiB, peak 15736 KiB
+user sermon without group: 0/2 system entries
+user sermon in systemd-journal: 2/2 system entries
+fixtures: 40 security entries

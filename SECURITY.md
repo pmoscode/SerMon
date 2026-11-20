@@ -41,6 +41,9 @@ Out of scope: vulnerabilities in third-party dependencies that are already publi
 upstream; we track them via automated scanning), and findings that require a fully compromised host or server
 administrator account without crossing a documented security boundary.
 
+The security boundaries, assets and threats are described in the threat model
+([`docs/security/threat-model.md`](docs/security/threat-model.md), German).
+
 ## Safe harbor
 
 We will not pursue legal action against researchers who act in good faith: who avoid privacy violations, data

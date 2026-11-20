@@ -67,6 +67,8 @@
 | **v1.0** | Pentest, Doku, Performance-Nachweis | 2–3 Wochen |
 
 ¹ Grobe Schätzung für eine Person, keine Zusage. Wird nach M0 anhand der tatsächlichen Geschwindigkeit neu kalibriert.
+Nach M1 (§4.8): Mit Claude Code ging es deutlich schneller; die Wochen dienen nur noch als grobe Relation zwischen
+den Meilensteinen.
 
 ### Kritischer Pfad bis „erster Node sichtbar“ (M1)
 
@@ -1221,6 +1223,56 @@ flowchart LR
 
 **M1 fertig, wenn:** Der Demo-Test M1-33 ist grün, Mandanten- und Rollen-Tests sind vollständig, das Ressourcen-Budget des Agents ist eingehalten, und die Security-Review hat keine offenen kritischen Findings.
 
+### 4.8 Review M1 (2026-11-20)
+
+**1. Ziel erreicht: ja.** `just e2e-demo` (CI-Job `e2e-demo`):
+
+- Debian 12, Debian 13 und Ubuntu 24.04 mit systemd werden mit dem Befehl aus der UI installiert. Ein Host pinnt die
+  CA und nutzt die Prüfsummen-Variante.
+- Nach rund 3 s liefern alle Metriken, die Detailansicht hat nach rund 15 s Chartdaten aus der Datenbank.
+- Ein User aus Org B sieht nichts.
+- Gegenprobe: Eine manipulierte Binary wird abgelehnt, bevor etwas installiert ist.
+
+| Kriterium | Stand |
+|---|---|
+| Demo-Test M1-33 grün | ✓ in CI, Laufzeit rund 17 s |
+| Mandanten- und Rollen-Tests vollständig | ✓ Isolationstest für jede RPC (CI erzwingt die Abdeckung), Rollen-Matrix-Test, RLS-Tests pro Tabelle |
+| Ressourcen-Budget des Agents | ✓ im Review gemessen, siehe unten; noch ohne automatischen Test (M2-25) |
+| Security-Review ohne offene kritische Findings | ✓ M1-35; alle Folgeaufgaben M1-36 bis M1-40 erledigt |
+
+**Ressourcen-Budget** (Ziel < 1 % eines Kerns und < 30 MiB RSS, KONZEPT §4.1):
+
+- Gemessen im Review am Agent unter systemd in den E2E-Containern, mit Transport, WAL und Stream zum Server.
+- 60 s, arm64 (Docker-VM mit 16 Kernen): 0,27–0,43 % eines Kerns, 10,6–18,0 MiB RSS (Spitze 18,4 MiB),
+  State-Verzeichnis 1,1 MB.
+- In M1-21 waren es mit `collect` ohne Transport 0,2 % und 7,5 MB.
+
+Abweichungen vom Ziel des Meilensteins:
+
+- Das Ziel nennt amd64; gemessen und lokal getestet wurde arm64 (Docker auf Apple Silicon). amd64 läuft in CI.
+- Die Agents erreichen den Agent-Port direkt statt über den Proxy (TLS-Passthrough braucht ein Layer-4-Plugin für
+  Caddy, M2-26).
+
+**2. Erkenntnisse und ADRs.** In M1 entstanden die ADRs 0007 bis 0013 und 0022 sowie Nachträge zu 0001, 0007, 0008,
+0010 und 0012. Es fehlt kein ADR; D29 folgt wie geplant mit E3.8. Erkenntnisse für die nächsten Meilensteine:
+
+- **Das Security-Review am Ende lohnt sich**, obwohl jede 🔒-Aufgabe den Skill schon durchlaufen hatte. Vier
+  unabhängige Teil-Reviews (je ein Bereich, ohne Kontext der Umsetzung) fanden zwei hohe und rund zehn mittlere
+  Befunde, darunter eine root-Eskalation und Speichererschöpfung ohne Anmeldung. Die meisten lagen zwischen Aufgaben,
+  etwa zwischen `install.sh` und dem Identitätsspeicher. M2-28 wird genauso aufgeteilt.
+- **Schema-Entscheidungen auf Hypertables sind endgültig,** sobald Chunks komprimiert sind (ADR 0001, M1-36): Typen
+  und Spalten neuer Zeitreihen- und Event-Tabellen vor dem ersten Release festlegen.
+- **Ohne Produktions-Compose gibt es keine echte Installation.** Seit M1-39 ist SMTP Pflicht, der Agent-Port braucht
+  TLS-Passthrough, und Release-Schlüssel und `release.yml` fehlen (Product Owner). Die Compose-Datei kommt in M2
+  (M2-26), der Release-Prozess bleibt bei v1.0.
+- **Kalibrierung:** Die Wochen-Schätzungen aus §2 passen nicht zur Arbeit mit Claude Code (M1 entstand in wenigen
+  Arbeitstagen). Die Größen S, M und L bleiben als relative Maße; die Wochen-Spalte gilt nicht als Zusage.
+- **Offen aus M1:** Die Übernahme eines Nodes bei einem `machine-id`-Konflikt und die Aktionen „Sperre aufheben“,
+  „Schlüssel rotieren“ und „nur widerrufen“ haben noch keine UI (M2-23). Benachrichtigungen bei Token-Nutzung und
+  zweiter Session (T3, T4) sowie Self-Monitoring-Alerts (T37) brauchen M2 (M2-24).
+
+**3. M2 ist in Aufgaben zerlegt** (§5.1 bis §5.9, M2-01 bis M2-28).
+
 ---
 
 ## 5. M2 – Alerting
@@ -1237,6 +1289,239 @@ flowchart LR
 | **E2.6 Alert-UI** | Seite mit aktiven Alerts, Historie und Timeline, Regel-Editor, YAML-Import und -Export mit Dry-Run-Diff, Kanal- und Policy-Verwaltung | `sermon-ui-component` | E2.1–E2.5 |
 | **E2.7 Weitere Distros** | Fixtures und Tests für RHEL/Rocky/Alma, Fedora und Alpine; OpenRC-Script; Security-Events aus `/var/log/secure` und `/var/log/auth.log`; arm64 in der E2E-Nightly über QEMU; Pakete mit nfpm (`.deb`, `.rpm`, `.apk`) | `sermon-add-collector` | M1-27 |
 | **E2.8 Zusätzliche Zustands-Collectors** | Fehlgeschlagene systemd-Units, Zeit-Synchronisation, RAID (`/proc/mdstat`), Dateisystem read-only, Interface down | `sermon-add-collector`, `sermon-add-alert-rule` | E2.2 |
+
+**Aufgaben** (Zerlegung im Review M1, §4.8). Reihenfolge nach dem Demo-Pfad: Engine und Regeln → Security-Events →
+Kanäle ntfy und Slack → Demo. Kanal-Welle 3 und Teile der UI lassen sich kürzen (§10). Security-Events brauchen in M2
+schon die journald-Quelle aus E3.1, aber nur für die Parser, ohne Log-Versand an Loki.
+
+**Kritischer Pfad:** M2-01 → M2-02 → M2-08 → M2-14 → M2-27, gespeist von M2-05 → M2-06 → M2-07 (Events) und
+M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
+
+### 5.1 Alert-Engine (E2.1)
+
+#### ☐ M2-01 – Alert-Domäne und Zustandsautomat · S · M
+- **Ziel:** Regel (Typ, Bedingung, Schwellen, `for`, `clear`, Selektor, Labels) und Alert-Instanz (Regel × Node ×
+  Dimension) als Domänentypen; Zustandsautomat `OK → PENDING → WARNING | CRITICAL → RESOLVED → OK` mit `for`,
+  Hysterese über `clear`, Flapping (N Wechsel in M Minuten), Quittieren als Flag. Reine Logik ohne I/O.
+- **Tests zuerst:** Tabellen-Tests aller Übergänge mit Fake-Clock; Hysterese (kein Flattern zwischen Schwelle und
+  `clear`); Flapping drosselt; Quittieren endet mit RESOLVED; property „jede Folge endet in einem gültigen Zustand“.
+- **Abhängig von:** M1-23
+- **Skill:** `sermon-tdd`
+
+#### ☐ M2-02 – Engine-Worker und Persistenz · S · M 🔒
+- **Ziel:** Auswertung alle 10 s pro Org mit Lease in PostgreSQL (`SELECT … FOR UPDATE SKIP LOCKED`, später mehrere
+  Instanzen); Instanzen und Historie in Tabellen mit RLS (ENABLE + FORCE); Abfragen nur über den `metrics.Reader`
+  (Ringpuffer bis 15 min, länger aus TimescaleDB) mit dem Scope der Org. Ein Neustart behält die Zustände.
+- **Tests zuerst:** Isolation (Alerts von Org A unsichtbar für B, Rollen-Matrix für die neuen RPCs); zwei Worker,
+  genau einer wertet aus; fehlende Daten erzeugen keinen Fehlalarm; Neustart mitten in PENDING.
+- **Abhängig von:** M2-01, M1-26
+
+### 5.2 Regeltypen und Standardregeln (E2.2)
+
+#### ☐ M2-03 – Regeltypen threshold, rate, absence, state, prediction · S · M
+- **Ziel:** Auswertung je Typ über den Reader: Aggregat über Fenster (`avg|max|min|sum|last`), Rate aus Zählern,
+  Ausbleiben von Daten (Node offline nach 60 s ohne Heartbeat), Zustandswechsel, Füllprognose (lineare Regression wie
+  bei `ListFilesystems`). Dimensionen (Mountpoint, Interface) werden zu eigenen Instanzen.
+- **Tests zuerst:** je Typ ein Satz Zeitreihen mit erwarteten Übergängen; Grenzen (genau auf der Schwelle, Lücken,
+  Zähler-Reset); Prognose mit fallender und steigender Reihe.
+- **Abhängig von:** M2-02
+
+#### ☐ M2-04 – Regel-Schema, Loader und Standardregeln · X · M
+- **Ziel:** `AlertRule` als Proto-Nachricht mit protovalidate (Quelle des YAML-Schemas); Loader für `rules/*.yaml` mit
+  klaren Fehlermeldungen; Standardregeln aus KONZEPT §12.3, soweit ihre Daten in M2 vorliegen (ohne Updates und
+  Anomalien); Überschreiben und Abschalten pro Org, ohne das Original zu ändern; Hilfetexte DE/EN pro Regel.
+- **Tests zuerst:** Alle mitgelieferten Regeln laden und validieren; jede Standardregel hat einen Test mit Daten, die
+  sie auslösen; Überschreiben und Abschalten; ungültiges YAML (unbekannte Felder, falsche Einheiten) wird abgelehnt.
+- **Abhängig von:** M2-03
+- **Skill:** `sermon-add-alert-rule`, `sermon-proto-change`
+
+### 5.3 Security-Events (E2.3)
+
+#### ☐ M2-05 – journald-Quelle im Agent · A · M 🔒
+- **Ziel:** `journalctl` als Kindprozess nach ADR 0013: eigener Cursor erst, wenn der Eintrag im WAL liegt; erster
+  Start mit `--lines=0`; immer `--all`; feste Feldliste ohne `_CMDLINE`; tolerantes UTF-8; Neustart bei Absturz mit
+  Backoff. In M2 nur Eingang der Security-Parser, ohne Versand an Loki (E3.1).
+- **Tests zuerst:** Fake-`journalctl` mit Fixture-Strömen (Debian, Ubuntu); Cursor überlebt Neustart, kein Eintrag
+  doppelt oder verloren; Journal-Rotation; kaputte Zeilen; Ressourcen-Budget mit aktiver Quelle.
+- **Abhängig von:** M1-15, M0-10
+
+#### ☐ M2-06 – Security-Event-Parser · A · M 🔒
+- **Ziel:** Parser für `sshd`/`sshd-session` (Fehlversuch, ungültiger User, Erfolg, preauth), sudo (Fehler; Befehl
+  optional und redacted), useradd/userdel, OOM-Kill, Reboot über die Boot-ID (KONZEPT §11); IPv4 und IPv6;
+  `SecurityEvent` im Agent-Protokoll.
+- **Tests zuerst:** echte Logzeilen pro Distro als Fixtures (RHEL und Alpine mit M2-19/M2-20); `cargo-fuzz`-Ziel pro
+  Parser; property „nie Panic“; Nachricht im Protokoll mit Roundtrip-Test.
+- **Abhängig von:** M2-05
+- **Skill:** `sermon-add-security-event`, `sermon-proto-change`
+
+#### ☐ M2-07 – Event-Ingest und Speicherung · S · M 🔒
+- **Ziel:** Events im Stream des Agents, dedupliziert über die Batch-Seq; Speicherung in PostgreSQL (partitioniert nach
+  Monat, ein Jahr Aufbewahrung), RLS; Rate-Limit pro Node; Abfrage-RPC mit Filtern; Event-Strom in die Engine.
+  Spalten und Typen vor dem ersten Release festlegen (Erkenntnis aus M1-36).
+- **Tests zuerst:** Isolation; Duplikate nach Reconnect; Flut eines Nodes wird begrenzt; Retention entfernt alte
+  Partitionen.
+- **Abhängig von:** M2-06, M1-24
+
+#### ☐ M2-08 – Regeltyp event und Security-Standardregeln · S · M 🔒
+- **Ziel:** `event`-Regeln mit `groupBy`, Zählfenster und `notifyFields`; Fleet-Korrelation (dieselbe IP auf mindestens
+  3 Nodes); „Erfolgreicher Login nach Fehlversuchen derselben IP“; Root-Login, neuer Benutzer, sudo-Fehler, Reboot,
+  OOM-Kill als Standardregeln.
+- **Tests zuerst:** Ereignisfolgen mit erwarteten Alerts (Brute-Force 10/50 in 5 min, Korrelation über 3 Nodes,
+  Erfolg nach Fehlversuchen); keine Alerts über Org-Grenzen hinweg korreliert.
+- **Abhängig von:** M2-07, M2-04
+- **Skill:** `sermon-add-alert-rule`
+
+### 5.4 Notifier (E2.4)
+
+#### ☐ M2-09 – `safehttp` · S · S 🔒
+- **Ziel:** HTTP-Client für alle ausgehenden Requests: private, Loopback-, Link-local- und Metadata-Adressen gesperrt,
+  aufgelöste IP gepinnt (DNS-Rebinding), höchstens wenige Redirects mit erneuter Prüfung, Zeitlimits, Größenlimit der
+  Antwort; Allowlist durch den Superadmin (KONZEPT §18.6).
+- **Tests zuerst:** jede gesperrte Adressklasse (IPv4, IPv6, IPv4-mapped); Redirect auf eine interne Adresse; DNS-
+  Antwort, die zwischen den Aufrufen wechselt; Allowlist.
+- **Abhängig von:** –
+
+#### ☐ M2-10 – Notifier-Framework · S · M 🔒
+- **Ziel:** Interface `Notifier`; Kanal-Konfiguration pro Org mit Zugangsdaten in `secrets.Box` (Associated Data mit
+  Kanal-ID); Templates DE/EN mit Deep-Link in die UI; Zustellprotokoll; Retries mit Backoff; „Test senden“.
+- **Tests zuerst:** Zugangsdaten nie in Antworten oder Logs; Retry und endgültiger Fehler im Protokoll; Template mit
+  Werten aus Logs (Hostnamen, Usernamen) ohne Injection in Markdown/HTML der Zielsysteme.
+- **Abhängig von:** M2-09, M1-06
+- **Skill:** `sermon-add-notifier`
+
+#### ☐ M2-11 – Kanäle Welle 1: E-Mail, Webhook, ntfy · S · M 🔒
+- **Ziel:** E-Mail über den SMTP-Adapter aus M1-39 (Text und HTML); Webhook als JSON-POST mit
+  `X-SerMon-Signature: t=<ts>,v1=<HMAC-SHA256>`; ntfy mit Priorität aus der Severity. Alle über `safehttp`.
+- **Tests zuerst:** je Kanal gegen einen Test-Server (Format, Signatur prüfbar, Priorität); Ziel im internen Netz
+  abgelehnt.
+- **Abhängig von:** M2-10
+- **Skill:** `sermon-add-notifier`
+
+#### ☐ M2-12 – Kanäle Welle 2: Slack, Teams, Discord, Mattermost · S · M
+- **Ziel:** Incoming Webhooks mit formatierten Nachrichten (Blocks, Adaptive Cards, Embeds).
+- **Tests zuerst:** Golden-Files der erzeugten Nachrichten; Escaping von Feldern aus Logs.
+- **Abhängig von:** M2-11
+- **Skill:** `sermon-add-notifier`
+
+#### ☐ M2-13 – Kanäle Welle 3: Telegram, Gotify, Pushover · S · S
+- **Ziel:** jeweilige HTTP-APIs; kann bei Zeitdruck nach M3 rutschen.
+- **Tests zuerst:** wie M2-12.
+- **Abhängig von:** M2-11
+- **Skill:** `sermon-add-notifier`
+
+### 5.5 Routing und Silences (E2.5)
+
+#### ☐ M2-14 – Notification-Policies und Eskalation · S · M
+- **Ziel:** Policies mit Label-Matchern (`severity`, `group`, `rule`, `tags`) → Kanäle; Gruppierung pro Node oder als
+  Digest; Wiederholungsintervall; Eskalation „nach 15 min ohne Quittierung zusätzlich an Kanal X“; gedrosselt bei
+  Flapping.
+- **Tests zuerst:** Matcher-Tabelle; Wiederholung und Eskalation mit Fake-Clock; Quittieren stoppt die Eskalation.
+- **Abhängig von:** M2-02, M2-10
+
+#### ☐ M2-15 – Silences und Wartungsfenster · S · S
+- **Ziel:** zeitlich begrenzte Silences per Selektor; Wartungsfenster stummschalten Reboot- und Offline-Alerts; Audit.
+- **Tests zuerst:** Silence beginnt und endet; Selektor trifft nur die gemeinten Instanzen.
+- **Abhängig von:** M2-14
+
+### 5.6 Alert-UI (E2.6)
+
+#### ☐ M2-16 – Alert-Seite · W · M
+- **Ziel:** aktive Alerts mit Filtern, Historie und Timeline pro Instanz, Quittieren, Absprung zum Node und Chart;
+  Lade-, Fehler- und Leer-Zustand; Hilfetexte.
+- **Tests zuerst:** Komponenten-Tests der Zustände; Quittieren mit Step-up falls nötig; axe.
+- **Abhängig von:** M2-02
+- **Skill:** `sermon-ui-component`
+
+#### ☐ M2-17 – Regel-Editor und YAML-Import/Export · W · M
+- **Ziel:** Standardregeln ansehen, überschreiben und abschalten; eigene Regeln; Import mit Validierung und
+  Dry-Run-Diff, Export.
+- **Tests zuerst:** Diff-Ansicht; Fehler aus dem Loader an der richtigen Stelle; keine freien Queries.
+- **Abhängig von:** M2-04, M2-16
+- **Skill:** `sermon-ui-component`
+
+#### ☐ M2-18 – Kanäle, Policies und Silences in der UI · W · M 🔒
+- **Ziel:** Kanäle anlegen (Zugangsdaten nur schreibend), „Test senden“, Zustellprotokoll; Policies und Silences
+  verwalten.
+- **Tests zuerst:** Zugangsdaten werden nie angezeigt; Step-up für neue Kanäle; Fehler beim Test sichtbar.
+- **Abhängig von:** M2-10, M2-14, M2-15
+- **Skill:** `sermon-ui-component`
+
+### 5.7 Weitere Distros (E2.7)
+
+#### ☐ M2-19 – RHEL-Familie und Fedora · A · M
+- **Ziel:** Fixtures und Tests für Rocky, Alma und Fedora (Collectors und Security-Parser, `/var/log/secure`); Hosts in
+  der E2E-Umgebung.
+- **Tests zuerst:** Fixtures pro Distro; Installation im E2E-Container.
+- **Abhängig von:** M2-06, M1-27
+- **Skill:** `sermon-add-collector`, `sermon-add-security-event`
+
+#### ☐ M2-20 – Alpine mit OpenRC · A · M
+- **Ziel:** Installation mit OpenRC; Datei-Quelle `/var/log/auth.log` bzw. `/var/log/messages` für die Security-Parser
+  (Tailing mit Rotation, Teil von E3.1); Host in der E2E-Umgebung.
+- **Tests zuerst:** Tailing über Rotation und Neustart; OpenRC-Dienst startet und stoppt.
+- **Abhängig von:** M2-06, M1-27
+
+#### ☐ M2-21 – arm64 in der Nightly und Pakete · X · M
+- **Ziel:** amd64- und arm64-Hosts in der E2E-Nightly (QEMU); Pakete mit nfpm (`.deb`, `.rpm`, `.apk`), signiert.
+- **Tests zuerst:** Paket installiert, Dienst läuft, Deinstallation hinterlässt nichts außer Konfiguration.
+- **Abhängig von:** M2-19, M2-20
+
+### 5.8 Zusätzliche Zustands-Collectors (E2.8)
+
+#### ☐ M2-22 – Zustands-Collectors · A · M
+- **Ziel:** fehlgeschlagene systemd-Units, Zeitsynchronisation (Offset), RAID aus `/proc/mdstat`, Dateisystem
+  read-only, Interface down, mit den Standardregeln dazu.
+- **Tests zuerst:** Fixtures pro Zustand; Übergänge lösen die Regeln aus.
+- **Abhängig von:** M2-03
+- **Skill:** `sermon-add-collector`, `sermon-add-alert-rule`
+
+### 5.9 Querschnitt und Folgeaufgaben aus M1
+
+#### ☐ M2-23 – Node-Verwaltung in der UI · W · M 🔒
+- **Ziel:** „Sperre aufheben“, Übernahme bei `machine-id`-Konflikt (T5), „Schlüssel rotieren“ und „nur widerrufen“
+  (`revoke_only`, M1-38), alle mit Step-up und Audit; Anzeige von Sperrgrund und letzter IP.
+- **Tests zuerst:** Rollen-Matrix (Operator und Admin), Step-up, Isolation; „nur widerrufen“ fragt keinen Agent.
+- **Abhängig von:** M1-32, M1-38
+- **Skill:** `sermon-ui-component`
+
+#### ☐ M2-24 – Security- und Self-Monitoring-Alerts · S · S 🔒
+- **Ziel:** Events „Enrollment-Token benutzt“, „zweite Session gesperrt“, „Rotation von neuer IP“ als Security-Events
+  mit Standardregeln (T3, T4); Self-Monitoring des Servers: Ingest-Lag, Füllstand der Datenbank, verworfene Samples
+  (T37).
+- **Tests zuerst:** jedes Ereignis erzeugt genau einen Alert in der richtigen Org; Self-Monitoring-Alerts nur für
+  Superadmins.
+- **Abhängig von:** M2-08
+
+#### ☐ M2-25 – Ressourcen-Budget als Test · X · S
+- **Ziel:** Messung des Agents im E2E (CPU und RSS über 60 s unter systemd, wie im Review M1) als Prüfung in der
+  Nightly: < 1 % eines Kerns, < 30 MiB RSS, auch mit aktiver journald-Quelle.
+- **Tests zuerst:** Gegenprobe mit künstlich gesenkter Grenze schlägt fehl.
+- **Abhängig von:** M2-05
+
+#### ☐ M2-26 – Produktions-Compose · X · M 🔒
+- **Ziel:** `deploy/compose/` für eine echte Installation (KONZEPT §22): Caddy mit TLS-Passthrough für den Agent-Port
+  (Layer-4-Plugin, gepinntes Image), Server im Produktionsmodus mit SMTP, Secrets als Dateien, nur nötige Ports,
+  gehärtete Container; Anleitung in `docs/admin/`.
+- **Tests zuerst:** `check-compose` (Digests, keine Telemetrie); E2E-Lauf gegen diese Datei mit Agent über den Proxy.
+- **Abhängig von:** M1-39
+
+#### ☐ M2-27 – E2E-Demo M2 · X · M
+- **Ziel:** Simulierter SSH-Brute-Force in einem Agent-Container (wiederholte Fehlanmeldungen gegen den eigenen sshd)
+  → Alert mit Zeitstempel, User, IP und Port landet in ntfy (Container) und Slack (Mock-Webhook); Hysterese und
+  Quittieren im Browser.
+- **Tests zuerst:** Playwright-Ablauf; Nachricht in ntfy und im Slack-Mock mit allen Feldern; nach Quittieren keine
+  Wiederholung.
+- **Abhängig von:** M2-08, M2-11, M2-12, M2-16
+
+#### ☐ M2-28 – Security-Review M2 · X · S 🔒
+- **Ziel:** Skill `sermon-security-review` über alle M2-Änderungen (Schwerpunkte: ausgehende Verbindungen, Parser für
+  untrusted Logzeilen, Zugangsdaten der Kanäle, neue Tabellen mit RLS); Threat Model aktualisieren; Findings als
+  Aufgaben.
+- **Abhängig von:** alle M2-Aufgaben
+
+**M2 fertig, wenn:** Der Demo-Test M2-27 ist grün, jede Standardregel hat einen auslösenden Test, die Parser sind mit
+Fixtures aller Zieldistros getestet und gefuzzt, das Ressourcen-Budget ist mit aktiver journald-Quelle eingehalten,
+und die Security-Review hat keine offenen kritischen Findings.
 
 ---
 

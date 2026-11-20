@@ -79,6 +79,62 @@ func (s *Store) Write(_ context.Context, org tenant.OrgID, aggregates []metrics.
 	return nil
 }
 
+// NodeSeries implements metrics.Store.
+func (s *Store) NodeSeries(_ context.Context, org tenant.OrgID, id identity.NodeID, since time.Time) ([]metrics.SeriesKey, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n, ok := s.nodes[id]; !ok || n.org != org {
+		return nil, nil
+	}
+	var out []metrics.SeriesKey
+	for _, e := range s.lastSeen(func(a metrics.Aggregate) bool { return a.Node == id }) {
+		if !e.seen.Before(since) {
+			out = append(out, e.key)
+		}
+	}
+	return out, nil
+}
+
+// OrgSeriesCount implements metrics.Store.
+func (s *Store) OrgSeriesCount(_ context.Context, org tenant.OrgID, since time.Time) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	inOrg := func(a metrics.Aggregate) bool { n, ok := s.nodes[a.Node]; return ok && n.org == org }
+	for _, e := range s.lastSeen(inOrg) {
+		if !e.seen.Before(since) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+type seenSeries struct {
+	key  metrics.SeriesKey
+	seen time.Time
+}
+
+// lastSeen returns the newest window start per series (node, metric, labels) of the matching
+// aggregates; s.mu is held.
+func (s *Store) lastSeen(match func(metrics.Aggregate) bool) map[string]*seenSeries {
+	out := map[string]*seenSeries{}
+	for _, a := range s.aggregates {
+		if !match(a) {
+			continue
+		}
+		id := a.Node.String() + "\x1f" + a.Metric + "\x1f" + a.Labels.Key()
+		e, ok := out[id]
+		if !ok {
+			e = &seenSeries{key: metrics.SeriesKey{Metric: a.Metric, Labels: a.Labels}}
+			out[id] = e
+		}
+		if a.Start.After(e.seen) {
+			e.seen = a.Start
+		}
+	}
+	return out
+}
+
 // PersistedSeq implements metrics.Store.
 func (s *Store) PersistedSeq(_ context.Context, org tenant.OrgID, id identity.NodeID) (uint64, error) {
 	s.mu.Lock()

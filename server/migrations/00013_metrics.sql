@@ -7,6 +7,9 @@
 -- definer_read policy on series – the tenant policy applies to it, so the functions only return
 -- points of series of the current organization.
 --
+-- Series IDs are bigint (M1-36): they are never reused, and the type of a hypertable column can't
+-- be changed once chunks are compressed. Changed in this migration before the first release.
+--
 -- Continuous aggregates can't be created inside a transaction.
 -- +goose NO TRANSACTION
 
@@ -14,7 +17,7 @@
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 CREATE TABLE series (
-    id         integer     GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id         bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     org_id     uuid        NOT NULL,
     node_id    uuid        NOT NULL,
     metric     text        NOT NULL CHECK (metric ~ '^sermon_[a-z0-9_]{1,120}$'),
@@ -33,7 +36,7 @@ GRANT SELECT, INSERT ON series TO sermon_app;
 -- One row per series and 10 s window, aggregated by the server from the agent's 1 s values.
 CREATE TABLE metrics_raw (
     ts        timestamptz      NOT NULL,
-    series_id integer          NOT NULL,
+    series_id bigint           NOT NULL,
     avg       double precision NOT NULL,
     min       double precision NOT NULL,
     max       double precision NOT NULL
@@ -84,8 +87,8 @@ ALTER TABLE nodes
 GRANT CREATE ON SCHEMA public TO sermon_definer;
 GRANT SELECT ON series, metrics_raw, metrics_1m, metrics_1h TO sermon_definer;
 
-CREATE FUNCTION metric_points_raw(p_series integer[], p_from timestamptz, p_to timestamptz, p_step interval)
-    RETURNS TABLE (series_id integer, bucket timestamptz, avg double precision, min double precision, max double precision)
+CREATE FUNCTION metric_points_raw(p_series bigint[], p_from timestamptz, p_to timestamptz, p_step interval)
+    RETURNS TABLE (series_id bigint, bucket timestamptz, avg double precision, min double precision, max double precision)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public
     AS $$
@@ -97,8 +100,8 @@ CREATE FUNCTION metric_points_raw(p_series integer[], p_from timestamptz, p_to t
         ORDER BY 1, 2
     $$;
 
-CREATE FUNCTION metric_points_1m(p_series integer[], p_from timestamptz, p_to timestamptz, p_step interval)
-    RETURNS TABLE (series_id integer, bucket timestamptz, avg double precision, min double precision, max double precision)
+CREATE FUNCTION metric_points_1m(p_series bigint[], p_from timestamptz, p_to timestamptz, p_step interval)
+    RETURNS TABLE (series_id bigint, bucket timestamptz, avg double precision, min double precision, max double precision)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public
     AS $$
@@ -110,8 +113,8 @@ CREATE FUNCTION metric_points_1m(p_series integer[], p_from timestamptz, p_to ti
         ORDER BY 1, 2
     $$;
 
-CREATE FUNCTION metric_points_1h(p_series integer[], p_from timestamptz, p_to timestamptz, p_step interval)
-    RETURNS TABLE (series_id integer, bucket timestamptz, avg double precision, min double precision, max double precision)
+CREATE FUNCTION metric_points_1h(p_series bigint[], p_from timestamptz, p_to timestamptz, p_step interval)
+    RETURNS TABLE (series_id bigint, bucket timestamptz, avg double precision, min double precision, max double precision)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public
     AS $$
@@ -123,21 +126,21 @@ CREATE FUNCTION metric_points_1h(p_series integer[], p_from timestamptz, p_to ti
         ORDER BY 1, 2
     $$;
 
-ALTER FUNCTION metric_points_raw(integer[], timestamptz, timestamptz, interval) OWNER TO sermon_definer;
-ALTER FUNCTION metric_points_1m(integer[], timestamptz, timestamptz, interval) OWNER TO sermon_definer;
-ALTER FUNCTION metric_points_1h(integer[], timestamptz, timestamptz, interval) OWNER TO sermon_definer;
-REVOKE ALL ON FUNCTION metric_points_raw(integer[], timestamptz, timestamptz, interval) FROM PUBLIC;
-REVOKE ALL ON FUNCTION metric_points_1m(integer[], timestamptz, timestamptz, interval) FROM PUBLIC;
-REVOKE ALL ON FUNCTION metric_points_1h(integer[], timestamptz, timestamptz, interval) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION metric_points_raw(integer[], timestamptz, timestamptz, interval) TO sermon_app;
-GRANT EXECUTE ON FUNCTION metric_points_1m(integer[], timestamptz, timestamptz, interval) TO sermon_app;
-GRANT EXECUTE ON FUNCTION metric_points_1h(integer[], timestamptz, timestamptz, interval) TO sermon_app;
+ALTER FUNCTION metric_points_raw(bigint[], timestamptz, timestamptz, interval) OWNER TO sermon_definer;
+ALTER FUNCTION metric_points_1m(bigint[], timestamptz, timestamptz, interval) OWNER TO sermon_definer;
+ALTER FUNCTION metric_points_1h(bigint[], timestamptz, timestamptz, interval) OWNER TO sermon_definer;
+REVOKE ALL ON FUNCTION metric_points_raw(bigint[], timestamptz, timestamptz, interval) FROM PUBLIC;
+REVOKE ALL ON FUNCTION metric_points_1m(bigint[], timestamptz, timestamptz, interval) FROM PUBLIC;
+REVOKE ALL ON FUNCTION metric_points_1h(bigint[], timestamptz, timestamptz, interval) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION metric_points_raw(bigint[], timestamptz, timestamptz, interval) TO sermon_app;
+GRANT EXECUTE ON FUNCTION metric_points_1m(bigint[], timestamptz, timestamptz, interval) TO sermon_app;
+GRANT EXECUTE ON FUNCTION metric_points_1h(bigint[], timestamptz, timestamptz, interval) TO sermon_app;
 REVOKE CREATE ON SCHEMA public FROM sermon_definer;
 
 -- +goose Down
-DROP FUNCTION metric_points_1h(integer[], timestamptz, timestamptz, interval);
-DROP FUNCTION metric_points_1m(integer[], timestamptz, timestamptz, interval);
-DROP FUNCTION metric_points_raw(integer[], timestamptz, timestamptz, interval);
+DROP FUNCTION metric_points_1h(bigint[], timestamptz, timestamptz, interval);
+DROP FUNCTION metric_points_1m(bigint[], timestamptz, timestamptz, interval);
+DROP FUNCTION metric_points_raw(bigint[], timestamptz, timestamptz, interval);
 ALTER TABLE nodes DROP COLUMN agent_version, DROP COLUMN last_seen_at, DROP COLUMN ingest_seq;
 DROP MATERIALIZED VIEW metrics_1h;
 DROP MATERIALIZED VIEW metrics_1m;

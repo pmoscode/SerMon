@@ -178,3 +178,61 @@ func TestTimescaleStore_ReaderFunctionsIgnoreForeignSeriesIDs(t *testing.T) {
 		t.Errorf("without tenant %d points are visible", got)
 	}
 }
+
+// Series IDs are never reused; with integer they would run out after 2^31 registrations and stop
+// the ingest of every tenant. The type can't be changed later once chunks are compressed.
+func TestTimescaleStore_SeriesIDsAreBigint(t *testing.T) {
+	e := setup(t)
+	conn := owner(t, e)
+	rows, err := conn.Query(context.Background(), `
+		SELECT table_name || '.' || column_name, data_type FROM information_schema.columns
+		WHERE (table_name, column_name) IN (('series', 'id'), ('metrics_raw', 'series_id'), ('metrics_1m', 'series_id'), ('metrics_1h', 'series_id'))`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	types, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) ([2]string, error) {
+		var c [2]string
+		return c, r.Scan(&c[0], &c[1])
+	})
+	if err != nil || len(types) != 4 {
+		t.Fatalf("columns = %v, %v", types, err)
+	}
+	for _, c := range types {
+		if c[1] != "bigint" {
+			t.Errorf("%s is %s, want bigint", c[0], c[1])
+		}
+	}
+}
+
+// The cache only saves lookups: it never holds more than its limit (series of deleted nodes or
+// label churn would otherwise grow it forever), and writes stay correct after it starts over.
+func TestTimescaleStore_BoundsTheSeriesCache(t *testing.T) {
+	e := setup(t)
+	store := timescale.New(e.db)
+	timescale.SetCacheLimit(store, 3)
+	f := &fixture{t: t, owner: owner(t, e), orgs: map[tenant.OrgID]bool{}, group: map[tenant.GroupID]bool{}}
+	org := tenant.OrgID(uuid.New())
+	node := f.Node(t, org, tenant.GroupID(uuid.New()))
+	start := time.Now().Add(-10 * time.Minute).Truncate(time.Minute)
+	write := func(devices ...string) {
+		t.Helper()
+		var aggregates []metrics.Aggregate
+		for _, d := range devices {
+			aggregates = append(aggregates, metrics.Aggregate{Node: node, Metric: "sermon_disk_reads_per_second", Labels: metrics.Labels{"device": d}, Start: start, Avg: 1, Min: 1, Max: 1})
+		}
+		if err := store.Write(context.Background(), org, aggregates, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("a", "b", "c")
+	write("d", "e")
+	if n := store.CachedSeries(); n > 3 {
+		t.Errorf("cache holds %d series, limit 3", n)
+	}
+	write("a", "d")
+	series, err := store.NodeSeries(context.Background(), org, node, start.Add(-time.Hour))
+	if err != nil || len(series) != 5 {
+		t.Errorf("NodeSeries() = %d series, %v; want 5 (no duplicates after the cache started over)", len(series), err)
+	}
+}

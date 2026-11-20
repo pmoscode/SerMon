@@ -34,13 +34,29 @@ type ringSeries struct {
 type Ring struct {
 	mu       sync.RWMutex
 	capacity int
+	perNode  int
 	series   map[ringKey]*ringSeries
+	nodes    map[identity.NodeID]int // series per node
 }
 
-// NewRing returns an empty ring holding RingSpan.
-func NewRing() *Ring {
-	return &Ring{capacity: int(RingSpan / time.Second), series: map[ringKey]*ringSeries{}}
+// MaxRingSeriesPerNode bounds the series of one node in the ring (each holds RingSpan of
+// values, about 11 KB); it matches the ingest's default series limit.
+const MaxRingSeriesPerNode = 2000
+
+// NewRing returns an empty ring holding RingSpan with MaxRingSeriesPerNode.
+func NewRing() *Ring { return NewRingWithLimit(MaxRingSeriesPerNode) }
+
+// NewRingWithLimit returns an empty ring that holds at most perNode series of a node; values of
+// further series are dropped until older ones are pruned.
+func NewRingWithLimit(perNode int) *Ring {
+	return &Ring{
+		capacity: int(RingSpan / time.Second), perNode: perNode,
+		series: map[ringKey]*ringSeries{}, nodes: map[identity.NodeID]int{},
+	}
 }
+
+// Limit returns the maximum number of series per node.
+func (r *Ring) Limit() int { return r.perNode }
 
 // Add stores the value of a series for the second of `at`; a later value for the same second
 // replaces the earlier one. The group is the node's group at ingest time (for the scope check).
@@ -54,8 +70,12 @@ func (r *Ring) Add(org tenant.OrgID, group tenant.GroupID, node identity.NodeID,
 	defer r.mu.Unlock()
 	s, ok := r.series[key]
 	if !ok {
+		if r.nodes[node] >= r.perNode {
+			return
+		}
 		s = &ringSeries{labels: labels, seconds: make([]uint32, r.capacity), values: make([]float64, r.capacity)}
 		r.series[key] = s
+		r.nodes[node]++
 	}
 	s.group = group
 	slot := int(second % uint32(r.capacity)) //nolint:gosec // G115: capacity is 900
@@ -72,6 +92,9 @@ func (r *Ring) Prune(now time.Time) {
 	for key, s := range r.series {
 		if s.last < cutoff {
 			delete(r.series, key)
+			if r.nodes[key.node]--; r.nodes[key.node] <= 0 {
+				delete(r.nodes, key.node)
+			}
 		}
 	}
 }

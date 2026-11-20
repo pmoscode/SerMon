@@ -87,7 +87,7 @@ type Membership struct {
 
 type Metrics1h struct {
 	Bucket   interface{}
-	SeriesID int32
+	SeriesID int64
 	Avg      float64
 	Min      interface{}
 	Max      interface{}
@@ -96,7 +96,7 @@ type Metrics1h struct {
 
 type Metrics1m struct {
 	Bucket   interface{}
-	SeriesID int32
+	SeriesID int64
 	Avg      float64
 	Min      interface{}
 	Max      interface{}
@@ -105,7 +105,7 @@ type Metrics1m struct {
 
 type MetricsRaw struct {
 	Ts       time.Time
-	SeriesID int32
+	SeriesID int64
 	Avg      float64
 	Min      float64
 	Max      float64
@@ -170,12 +170,13 @@ type RoleBinding struct {
 }
 
 type Series struct {
-	ID        int32
+	ID        int64
 	OrgID     uuid.UUID
 	NodeID    uuid.UUID
 	Metric    string
 	Labels    []byte
 	CreatedAt time.Time
+	SeenAt    time.Time
 }
 
 type Session struct {

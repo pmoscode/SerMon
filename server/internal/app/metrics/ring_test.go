@@ -178,3 +178,29 @@ func TestRing_ReturnsAtMostMaxSeries(t *testing.T) {
 		t.Errorf("series = %d, want %d", len(series), metrics.MaxSeries)
 	}
 }
+
+// Every new series costs RingSpan worth of slots: a node can't hold more than its limit, however
+// often it reconnects (M1-36); other nodes are not affected, pruned series free their place.
+func TestRing_BoundsTheSeriesPerNode(t *testing.T) {
+	ring := metrics.NewRingWithLimit(2)
+	for _, m := range []string{"sermon_a", "sermon_b", "sermon_c"} {
+		ring.Add(orgA, groupW, nodeW, m, nil, now.Add(-20*time.Minute), 1)
+	}
+	if ring.Len() != 2 {
+		t.Fatalf("Len() = %d, want 2", ring.Len())
+	}
+	ring.Add(orgA, groupW, nodeW, "sermon_a", nil, now.Add(-19*time.Minute), 2) // known: still written
+	ring.Add(orgA, groupD, nodeD, "sermon_c", nil, now.Add(-time.Minute), 1)
+	if ring.Len() != 3 {
+		t.Errorf("Len() = %d, want 3 (another node has its own limit)", ring.Len())
+	}
+
+	ring.Prune(now)
+	ring.Add(orgA, groupW, nodeW, "sermon_c", nil, now, 1)
+	if ring.Len() != 2 {
+		t.Errorf("after Prune Len() = %d, want 2 (nodeD and the new series of nodeW)", ring.Len())
+	}
+	if metrics.NewRing().Limit() != metrics.MaxRingSeriesPerNode {
+		t.Error("NewRing uses the default limit")
+	}
+}

@@ -6,6 +6,7 @@ package metricstoretest
 import (
 	"context"
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -39,6 +40,8 @@ func Run(t *testing.T, factory Factory) {
 		"RejectsNodesOfOtherOrganizations":      rejectsNodesOfOtherOrganizations,
 		"RecordsTheHighestPersistedSeq":         recordsTheHighestPersistedSeq,
 		"AggregatesAndCompressedDataStayScoped": aggregatesAndCompressedDataStayScoped,
+		"ListsTheActiveSeriesOfANode":           listsTheActiveSeriesOfANode,
+		"CountsTheActiveSeriesOfAnOrganization": countsTheActiveSeriesOfAnOrganization,
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) { test(t, factory) })
@@ -290,5 +293,61 @@ func aggregatesAndCompressedDataStayScoped(t *testing.T, factory Factory) {
 		if foreign := query(t, store, scopeAll(t, orgB), q); len(foreign) != 0 {
 			t.Errorf("source %v: org B sees %+v", source, foreign)
 		}
+	}
+}
+
+// keysOf returns "metric{labels}" of the series, sorted.
+func keysOf(series []metrics.SeriesKey) []string {
+	out := make([]string, 0, len(series))
+	for _, s := range series {
+		out = append(out, s.Metric+"{"+s.Labels.Key()+"}")
+	}
+	slices.Sort(out)
+	return out
+}
+
+// A series is active from the newest data written for it; the ingest's series limit counts only
+// active series, so that one that stopped (a removed disk) frees its place after a while.
+// Implementations may record the time with a coarse resolution of up to metrics.SeenResolution.
+func listsTheActiveSeriesOfANode(t *testing.T, factory Factory) {
+	store, fixture := factory(t)
+	org := newOrg()
+	group := newGroup()
+	node, other := fixture.Node(t, org, group), fixture.Node(t, org, group)
+	ctx := context.Background()
+	now := base()
+	sda, sdb := metrics.Labels{"device": "sda"}, metrics.Labels{"device": "sdb"}
+	write(t, store, org, windows(node, sda, now, 1))
+	write(t, store, org, windows(node, sdb, now.Add(-30*time.Hour), 1)) // stopped long ago
+	write(t, store, org, windows(other, sda, now, 1))
+	since := now.Add(-24 * time.Hour)
+
+	series, err := store.NodeSeries(ctx, org, node, since)
+	if got := keysOf(series); err != nil || !slices.Equal(got, []string{metric + "{" + sda.Key() + "}"}) {
+		t.Fatalf("NodeSeries() = %v, %v; want only the active series of the node", got, err)
+	}
+	write(t, store, org, windows(node, sdb, now, 1)) // sdb is back
+	series, _ = store.NodeSeries(ctx, org, node, since)
+	if got := keysOf(series); len(got) != 2 {
+		t.Errorf("after new data: %v, want both series", got)
+	}
+	if series, err := store.NodeSeries(ctx, newOrg(), node, since); err != nil || len(series) != 0 {
+		t.Errorf("NodeSeries() of another organization = %v, %v; want nothing", series, err)
+	}
+}
+
+func countsTheActiveSeriesOfAnOrganization(t *testing.T, factory Factory) {
+	store, fixture := factory(t)
+	org, otherOrg := newOrg(), newOrg()
+	a, b := fixture.Node(t, org, newGroup()), fixture.Node(t, org, newGroup())
+	c := fixture.Node(t, otherOrg, newGroup())
+	now := base()
+	write(t, store, org, windows(a, metrics.Labels{"device": "sda"}, now, 1))
+	write(t, store, org, windows(a, metrics.Labels{"device": "sdb"}, now.Add(-30*time.Hour), 1))
+	write(t, store, org, windows(b, metrics.Labels{"device": "sda"}, now, 1))
+	write(t, store, otherOrg, windows(c, metrics.Labels{"device": "sda"}, now, 1))
+
+	if n, err := store.OrgSeriesCount(context.Background(), org, now.Add(-24*time.Hour)); err != nil || n != 2 {
+		t.Errorf("OrgSeriesCount() = %d, %v; want 2 (active series of both nodes, none of the other org)", n, err)
 	}
 }

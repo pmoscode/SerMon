@@ -82,8 +82,9 @@ Die bessere Effizienz von VictoriaMetrics braucht SerMon in dieser Größenordnu
 1. **Port `MetricStore`** in `server/internal/app`, implementiert in `server/internal/adapters/timescale`.
    Keine andere Schicht greift direkt auf Metrik-Tabellen zu. Dadurch bleibt ein späterer Wechsel des Speichers möglich.
 2. **Schmales Schema:**
-   - `series(id int, org_id uuid, node_id uuid, metric text, labels jsonb)`, eindeutig über `(org_id, node_id, metric, labels)`
-   - `metrics_raw(ts timestamptz, series_id int, value double precision)`
+   - `series(id bigint, org_id uuid, node_id uuid, metric text, labels jsonb, seen_at timestamptz)`, eindeutig über
+     `(org_id, node_id, metric, labels)`
+   - `metrics_raw(ts timestamptz, series_id bigint, value double precision)`
 3. **Hypertable** `metrics_raw` mit 1-h-Chunks. Kompression nach 2 h (`segmentby = series_id`, `orderby = ts`). Aufbewahrung 24 h.
 4. **Continuous Aggregates:**
    - `metrics_1m` (Basis `metrics_raw`, 30 Tage)
@@ -180,3 +181,22 @@ Das reduziert die Last um den Faktor 5–10. Erst danach wäre ein Wechsel auf O
   - ✓ Spike in M0 durchgeführt (siehe oben).
   - ✓ Schema und Migration `00013_metrics.sql`, `MetricStore`-Port mit Contract-Tests (`metricstoretest`), bestanden von
     der TimescaleDB-Implementierung (`adapters/timescale`) und einem Speicher-Fake (M1-22).
+
+## Nachtrag M1-36 (Security-Review M1-35)
+
+- **Serien-IDs sind `bigint`.** IDs werden nie wiederverwendet; mit `integer` wäre nach 2³¹ Registrierungen der Ingest
+  aller Mandanten stehen geblieben. Den Typ einer Spalte ändert TimescaleDB nicht mehr, sobald Chunks komprimiert
+  sind (ausprobiert: „operation not supported on hypertables with compressed chunks“); eine Migration mit Daten müsste
+  alles entpacken und beide Continuous Aggregates neu aufbauen, mit Verlust der Historie jenseits der 24 h Rohdaten.
+  Deshalb wurde `00013_metrics.sql` vor dem ersten Release direkt geändert. Entwicklungsdatenbanken müssen einmal neu
+  angelegt werden (`docker compose -f deploy/dev/compose.yaml down -v`); Migration 00017 bricht auf einer älteren
+  Datenbank mit genau diesem Hinweis ab, statt Charts mit „function does not exist“ zu hinterlassen.
+- **`series.seen_at`** (Migration 00017) hält die Zeit der neuesten Daten einer Serie, vom Store höchstens alle
+  6 Stunden fortgeschrieben (`metrics.SeenResolution`, eine Aktualisierung pro Schreibvorgang mit dessen neuester
+  Datenzeit). `sermon_app` darf nur diese Spalte ändern.
+- **`MetricStore` kennt `NodeSeries` und `OrgSeriesCount`** (aktive Serien eines Nodes bzw. einer Org seit einem
+  Zeitpunkt), mit Contract-Tests für beide Implementierungen. Der Ingest zählt damit das Serien-Limit pro Node
+  (2 000) über Sessions und Instanzen hinweg und begrenzt die Serien einer Org (250 000); als aktiv gilt eine Serie mit
+  Daten in den letzten 48 Stunden, eine eingestellte (entfernte Platte) gibt ihren Platz danach frei.
+- **Speicher:** Der Ringpuffer hält höchstens 2 000 Serien pro Node, der Serien-Cache des Adapters höchstens 500 000
+  Einträge (danach beginnt er neu, er spart nur Abfragen).

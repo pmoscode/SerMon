@@ -96,7 +96,7 @@ flowchart LR
 | T6 | T | MITM beim Enrollment | System-CAs oder gepinnter Fingerprint (`--ca-fingerprint`), ausgestelltes Zertifikat wird gegen den Trust-Anker geprüft | M1-13 (ADR 0010) | ✓ |
 | T7 | T | MITM auf dem Agent-Stream, Downgrade | TLS 1.3 only, eigene Agent-CA, Server-Zertifikat mit Rotation, keine Fallback-Optionen | M1-10, M1-11b | ✓ |
 | T8 | I | Kompromittierter Node liest Daten anderer Nodes/Orgs | der Stream liefert nur Befehle für den eigenen Node; Scope aus dem Zertifikat | M1-10, M1-24 | ✓ |
-| T9 | D | Ein Agent flutet den Server | Batch-Größe, Sample-Rate pro Node mit Throttle; wer ihn über die Batches im Flug hinaus ignoriert, dessen Werte werden verworfen; Serien-Limit (2 000), Plausibilität der Zeitstempel, Agent-seitiges Serien-Limit | M1-21, M1-24, M1-35 | ◐ (Serien-Limit gilt pro Session, nicht pro Node; Ring und Serien-Cache ohne Obergrenze; `series.id` ist `integer`: M1-36) |
+| T9 | D | Ein Agent flutet den Server | Batch-Größe, Sample-Rate pro Node mit Throttle; wer ihn über die Batches im Flug hinaus ignoriert, dessen Werte werden verworfen; Serien-Limit pro Node (2 000 aktive Serien, über alle Sessions gezählt) und pro Org (250 000), Ringpuffer und Serien-Cache begrenzt, Serien-IDs `bigint`; Plausibilität der Zeitstempel, Agent-seitiges Serien-Limit | M1-21, M1-24, M1-35, M1-36 | ✓ |
 | T55 | D | Kleiner gzip-Body wird beim Dekodieren zu Gigabytes (ohne Anmeldung: Login, Setup, Einladung, Enrollment) | höchstens 64 KiB pro Nachricht der Web-API und des Enrollments (auch nach dem Entpacken) plus Grenze für den Body, 4 MiB pro Nachricht des Agent-Streams | M1-35 | ✓ |
 | T10 | D | Viele Enrollment-Versuche | Rate-Limit pro Client-IP, Größenlimits | M1-09 | ✓ |
 | T11 | R | Node bestreitet gelieferte Daten | Identität aus dem Zertifikat, Batch-Seq, Audit für Enrollment und Rotation | M1-09, M1-24 | ✓ |
@@ -209,7 +209,7 @@ Behoben, jeweils mit Test und Gegenprobe:
 
 Offen als Aufgaben (keine kritisch):
 
-- M1-36: Ingest-Grenzen pro Node und Org (T9).
+- M1-36: Ingest-Grenzen pro Node und Org (T9) – **erledigt**.
 - M1-37: Signatur an Datei und Version binden, gepinnter Bootstrap bei selbstsigniertem Zertifikat, Token aus der
   Prozessliste (T48, T64, T58) – **erledigt**.
 - M1-38: Rotation und Identität – Intermediate aus der Signatur, falsche Sperre nach Rotation, Widerrufsprüfung mit

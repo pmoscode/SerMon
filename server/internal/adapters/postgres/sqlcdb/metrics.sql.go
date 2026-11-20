@@ -32,7 +32,7 @@ func (q *Queries) AdvanceIngestSeq(ctx context.Context, arg AdvanceIngestSeqPara
 
 type CopyMetricWindowsParams struct {
 	Ts       time.Time
-	SeriesID int32
+	SeriesID int64
 	Avg      float64
 	Min      float64
 	Max      float64
@@ -46,8 +46,8 @@ WITH wanted AS (
     JOIN unnest($2::text[]) WITH ORDINALITY AS m(metric, i) ON m.i = n.i
     JOIN unnest($3::jsonb[]) WITH ORDINALITY AS l(labels, i) ON l.i = n.i
 ), inserted AS (
-    INSERT INTO series (org_id, node_id, metric, labels)
-    SELECT current_org_id(), node_id, metric, labels FROM wanted
+    INSERT INTO series (org_id, node_id, metric, labels, seen_at)
+    SELECT current_org_id(), node_id, metric, labels, $4::timestamptz FROM wanted
     ON CONFLICT (org_id, node_id, metric, labels) DO NOTHING
     RETURNING id, node_id, metric, labels
 )
@@ -61,10 +61,11 @@ type EnsureSeriesParams struct {
 	NodeIds []uuid.UUID
 	Metrics []string
 	Labels  [][]byte
+	SeenAt  time.Time
 }
 
 type EnsureSeriesRow struct {
-	ID     int32
+	ID     int64
 	NodeID uuid.UUID
 	Metric string
 	Labels []byte
@@ -75,7 +76,12 @@ type EnsureSeriesRow struct {
 // the IDs of new and existing ones. A row inserted concurrently by another transaction may be
 // missing from the result; the caller asks again for missing keys.
 func (q *Queries) EnsureSeries(ctx context.Context, arg EnsureSeriesParams) ([]EnsureSeriesRow, error) {
-	rows, err := q.db.Query(ctx, ensureSeries, arg.NodeIds, arg.Metrics, arg.Labels)
+	rows, err := q.db.Query(ctx, ensureSeries,
+		arg.NodeIds,
+		arg.Metrics,
+		arg.Labels,
+		arg.SeenAt,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +126,7 @@ type FindSeriesParams struct {
 }
 
 type FindSeriesRow struct {
-	ID     int32
+	ID     int64
 	NodeID uuid.UUID
 	Labels []byte
 }
@@ -165,20 +171,86 @@ func (q *Queries) GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, er
 	return ingest_seq, err
 }
 
+const markSeriesSeen = `-- name: MarkSeriesSeen :exec
+UPDATE series SET seen_at = $1
+WHERE id = ANY ($2::bigint[]) AND seen_at < $1
+`
+
+type MarkSeriesSeenParams struct {
+	SeenAt time.Time
+	Ids    []int64
+}
+
+// Moves seen_at forward to the newest data time of a write (never back).
+func (q *Queries) MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error {
+	_, err := q.db.Exec(ctx, markSeriesSeen, arg.SeenAt, arg.Ids)
+	return err
+}
+
+const nodeSeries = `-- name: NodeSeries :many
+SELECT metric, labels FROM series
+WHERE node_id = $1 AND seen_at >= $2
+ORDER BY metric, labels::text
+LIMIT $3
+`
+
+type NodeSeriesParams struct {
+	NodeID    uuid.UUID
+	Since     time.Time
+	MaxSeries int32
+}
+
+type NodeSeriesRow struct {
+	Metric string
+	Labels []byte
+}
+
+// Series of the node with data from p_since on (the node lies in the current organization by RLS).
+func (q *Queries) NodeSeries(ctx context.Context, arg NodeSeriesParams) ([]NodeSeriesRow, error) {
+	rows, err := q.db.Query(ctx, nodeSeries, arg.NodeID, arg.Since, arg.MaxSeries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NodeSeriesRow{}
+	for rows.Next() {
+		var i NodeSeriesRow
+		if err := rows.Scan(&i.Metric, &i.Labels); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const orgSeriesCount = `-- name: OrgSeriesCount :one
+SELECT count(*) FROM series WHERE seen_at >= $1
+`
+
+func (q *Queries) OrgSeriesCount(ctx context.Context, since time.Time) (int64, error) {
+	row := q.db.QueryRow(ctx, orgSeriesCount, since)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const points1h = `-- name: Points1h :many
-SELECT series_id::integer AS series_id, bucket::timestamptz AS bucket, avg::float8 AS avg, min::float8 AS min, max::float8 AS max
-FROM metric_points_1h($1::integer[], $2::timestamptz, $3::timestamptz, $4::interval)
+SELECT series_id::bigint AS series_id, bucket::timestamptz AS bucket, avg::float8 AS avg, min::float8 AS min, max::float8 AS max
+FROM metric_points_1h($1::bigint[], $2::timestamptz, $3::timestamptz, $4::interval)
 `
 
 type Points1hParams struct {
-	SeriesIds []int32
+	SeriesIds []int64
 	FromTs    time.Time
 	ToTs      time.Time
 	Step      pgtype.Interval
 }
 
 type Points1hRow struct {
-	SeriesID int32
+	SeriesID int64
 	Bucket   time.Time
 	Avg      float64
 	Min      float64
@@ -217,19 +289,19 @@ func (q *Queries) Points1h(ctx context.Context, arg Points1hParams) ([]Points1hR
 }
 
 const points1m = `-- name: Points1m :many
-SELECT series_id::integer AS series_id, bucket::timestamptz AS bucket, avg::float8 AS avg, min::float8 AS min, max::float8 AS max
-FROM metric_points_1m($1::integer[], $2::timestamptz, $3::timestamptz, $4::interval)
+SELECT series_id::bigint AS series_id, bucket::timestamptz AS bucket, avg::float8 AS avg, min::float8 AS min, max::float8 AS max
+FROM metric_points_1m($1::bigint[], $2::timestamptz, $3::timestamptz, $4::interval)
 `
 
 type Points1mParams struct {
-	SeriesIds []int32
+	SeriesIds []int64
 	FromTs    time.Time
 	ToTs      time.Time
 	Step      pgtype.Interval
 }
 
 type Points1mRow struct {
-	SeriesID int32
+	SeriesID int64
 	Bucket   time.Time
 	Avg      float64
 	Min      float64
@@ -268,19 +340,19 @@ func (q *Queries) Points1m(ctx context.Context, arg Points1mParams) ([]Points1mR
 }
 
 const pointsRaw = `-- name: PointsRaw :many
-SELECT series_id::integer AS series_id, bucket::timestamptz AS bucket, avg::float8 AS avg, min::float8 AS min, max::float8 AS max
-FROM metric_points_raw($1::integer[], $2::timestamptz, $3::timestamptz, $4::interval)
+SELECT series_id::bigint AS series_id, bucket::timestamptz AS bucket, avg::float8 AS avg, min::float8 AS min, max::float8 AS max
+FROM metric_points_raw($1::bigint[], $2::timestamptz, $3::timestamptz, $4::interval)
 `
 
 type PointsRawParams struct {
-	SeriesIds []int32
+	SeriesIds []int64
 	FromTs    time.Time
 	ToTs      time.Time
 	Step      pgtype.Interval
 }
 
 type PointsRawRow struct {
-	SeriesID int32
+	SeriesID int64
 	Bucket   time.Time
 	Avg      float64
 	Min      float64

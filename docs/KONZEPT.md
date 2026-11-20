@@ -450,8 +450,9 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
 `sermon_<bereich>_<name>_<einheit>`, z. B. `sermon_cpu_utilization_ratio{mode="iowait"}` oder
 `sermon_network_receive_bytes_per_second{interface="eth0"}`.
 Pflicht-Labels: `org_id` und `node_id` (setzt der Server, nicht der Agent). Fachliche Labels: `cpu`, `device`,
-`interface`, `mountpoint`, `mode`. **Cardinality-Limits** pro Node (z. B. max. 2 000 Serien); Interfaces wie `veth*` und
-Loop-Devices werden standardmäßig gefiltert.
+`interface`, `mountpoint`, `mode`. **Cardinality-Limits:** max. 2 000 aktive Serien pro Node, gezählt über alle Sessions
+(aktiv = Daten in den letzten 48 h, ein Reconnect bringt kein neues Budget), und 250 000 pro Org; Interfaces wie `veth*`
+und Loop-Devices werden standardmäßig gefiltert.
 
 ### 8.1 Basis-Metriken (immer aktiv, Intervall 1 s)
 

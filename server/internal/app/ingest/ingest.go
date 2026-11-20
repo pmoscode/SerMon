@@ -70,8 +70,17 @@ type Config struct {
 	ThrottleSlack float64
 	// ThrottleInterval is the batch interval the agent is asked for when over quota.
 	ThrottleInterval time.Duration
-	// SeriesLimit bounds the distinct series per node (KONZEPT §8).
+	// SeriesLimit bounds the distinct series per node (KONZEPT §8), counted across sessions: the
+	// series stored in the last ActiveSeriesWindow count, so a reconnect gains nothing (M1-36).
 	SeriesLimit int
+	// ActiveSeriesWindow is how long a series without data still counts towards the limits.
+	ActiveSeriesWindow time.Duration
+	// OrgSeriesLimit bounds the active series of an organization. The count comes from the store
+	// at most once per OrgCountInterval (after a server restart all agents reconnect at once) and
+	// grows with every new series admitted in between; other server instances count on their own.
+	OrgSeriesLimit int
+	// OrgCountInterval is how long a counted number of organization series is reused.
+	OrgCountInterval time.Duration
 	// SeenInterval is how often the last contact is written at most.
 	SeenInterval time.Duration
 	// MaxFuture and MaxAge bound the collection time of samples relative to the server clock.
@@ -84,8 +93,9 @@ func DefaultConfig() Config {
 		FlushInterval: 2 * time.Second, FlushPending: 32,
 		SampleRate: 10_000, SampleBurst: 50_000, ThrottleInterval: 5 * time.Second,
 		ThrottleSlack: 64 * 2000,
-		SeriesLimit:   2000, SeenInterval: 30 * time.Second,
-		MaxFuture: 5 * time.Minute, MaxAge: 24 * time.Hour,
+		SeriesLimit:   2000, ActiveSeriesWindow: 48 * time.Hour, OrgSeriesLimit: 250_000, OrgCountInterval: time.Minute,
+		SeenInterval: 30 * time.Second,
+		MaxFuture:    5 * time.Minute, MaxAge: 24 * time.Hour,
 	}
 }
 
@@ -108,11 +118,19 @@ type Service struct {
 
 	unknownMu sync.Mutex
 	unknown   map[string]struct{}
+
+	orgMu     sync.Mutex
+	orgCounts map[tenant.OrgID]orgCount
+}
+
+type orgCount struct {
+	series int
+	at     time.Time
 }
 
 // NewService returns the ingest service.
 func NewService(store metrics.Store, ring *metrics.Ring, nodes Nodes, config Config, now func() time.Time, logger *slog.Logger) *Service {
-	return &Service{store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}}
+	return &Service{store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{}}
 }
 
 // maxReportedUnknown bounds the metric names remembered for "logged once".
@@ -208,12 +226,61 @@ func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.Node
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrOpen, err)
 	}
+	since := now.Add(-s.config.ActiveSeriesWindow)
+	known, err := s.store.NodeSeries(ctx, org, node, since)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrOpen, err)
+	}
+	if err := s.refreshOrgCount(ctx, org, now, since); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrOpen, err)
+	}
+	series := make(map[string]struct{}, len(known))
+	for _, k := range known {
+		series[seriesID(k.Metric, k.Labels)] = struct{}{}
+	}
 	return &Session{
 		service: s, org: org, group: group, node: node, persisted: persisted, received: persisted,
-		windows: map[windowKey]*window{}, series: map[string]struct{}{},
+		windows: map[windowKey]*window{}, series: series,
 		tokens: s.config.SampleBurst, refilled: now, lastSeen: now,
 	}, nil
 }
+
+// refreshOrgCount counts the active series of the organization in the store unless that
+// happened less than OrgCountInterval ago.
+func (s *Service) refreshOrgCount(ctx context.Context, org tenant.OrgID, now, since time.Time) error {
+	s.orgMu.Lock()
+	defer s.orgMu.Unlock()
+	if c, ok := s.orgCounts[org]; ok && now.Sub(c.at) < s.config.OrgCountInterval {
+		return nil
+	}
+	n, err := s.store.OrgSeriesCount(ctx, org, since)
+	if err != nil {
+		return err //nolint:wrapcheck // wrapped by Open
+	}
+	if len(s.orgCounts) > maxCachedOrgCounts {
+		clear(s.orgCounts)
+	}
+	s.orgCounts[org] = orgCount{series: n, at: now}
+	return nil
+}
+
+// admitOrgSeries counts a new series of the organization; false if its limit is reached.
+func (s *Service) admitOrgSeries(org tenant.OrgID) bool {
+	s.orgMu.Lock()
+	defer s.orgMu.Unlock()
+	c := s.orgCounts[org]
+	if c.series >= s.config.OrgSeriesLimit {
+		return false
+	}
+	c.series++
+	s.orgCounts[org] = c
+	return true
+}
+
+// maxCachedOrgCounts bounds the cache of orgSeries.
+const maxCachedOrgCounts = 10_000
+
+func seriesID(metric string, labels metrics.Labels) string { return metric + "\x1f" + labels.Key() }
 
 // Persisted returns the highest stored sequence number.
 func (s *Session) Persisted() uint64 { return s.persisted }
@@ -363,15 +430,18 @@ func (s *Session) known(sample Sample) bool {
 	return false
 }
 
-// admitSeries applies the per-node series limit; known series always pass.
+// admitSeries applies the series limits of the node and the organization; known series always
+// pass.
 func (s *Session) admitSeries(sample Sample) bool {
-	key := sample.Metric + "\x1f" + sample.Labels.Key()
+	key := seriesID(sample.Metric, sample.Labels)
 	if _, ok := s.series[key]; ok {
 		return true
 	}
-	if len(s.series) >= s.service.config.SeriesLimit {
+	config := s.service.config
+	if len(s.series) >= config.SeriesLimit || !s.service.admitOrgSeries(s.org) {
 		if s.service.stats.DroppedSeries.Add(1) == 1 {
-			s.service.logger.Warn("series limit reached, dropping new series", "node", s.node.String(), "limit", s.service.config.SeriesLimit)
+			s.service.logger.Warn("series limit reached, dropping new series", "node", s.node.String(),
+				"limit", config.SeriesLimit, "org_limit", config.OrgSeriesLimit)
 		}
 		return false
 	}

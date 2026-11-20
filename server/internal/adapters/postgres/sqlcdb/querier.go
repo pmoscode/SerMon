@@ -108,8 +108,13 @@ type Querier interface {
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
 	// Serializes rollover operations of all server instances.
 	LockPKI(ctx context.Context) error
+	// Moves seen_at forward to the newest data time of a write (never back).
+	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
+	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
+	NodeSeries(ctx context.Context, arg NodeSeriesParams) ([]NodeSeriesRow, error)
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
+	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
 	// In the tenant transaction of the organization (RLS).
 	OrganizationRequiresSecondFactor(ctx context.Context) (bool, error)
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)

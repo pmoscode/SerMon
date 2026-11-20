@@ -188,4 +188,20 @@ type Store interface {
 	// Query returns the series of a normalized query within the scope (organization and node
 	// groups); series outside the scope are never returned.
 	Query(ctx context.Context, scope tenant.Scope, q Query) ([]Series, error)
+	// NodeSeries returns the series of the node with data from since on (the ingest's series
+	// limit counts them across sessions, M1-36); nothing for nodes of other organizations.
+	NodeSeries(ctx context.Context, org tenant.OrgID, node identity.NodeID, since time.Time) ([]SeriesKey, error)
+	// OrgSeriesCount returns the number of series of the organization with data from since on.
+	OrgSeriesCount(ctx context.Context, org tenant.OrgID, since time.Time) (int, error)
 }
+
+// SeriesKey identifies a series of a node.
+type SeriesKey struct {
+	Metric string
+	Labels Labels
+}
+
+// SeenResolution is how coarse a store may record when a series last got data: NodeSeries and
+// OrgSeriesCount may be off by up to this much (the TimescaleDB store updates the time only this
+// often, not with every write).
+const SeenResolution = 6 * time.Hour

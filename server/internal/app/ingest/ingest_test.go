@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,8 +43,8 @@ type fakeNodes struct {
 	seen      []time.Time
 }
 
-func (f *fakeNodes) Connected(_ context.Context, o tenant.OrgID, n identity.NodeID, facts ingest.HostFacts, _ string, _ time.Time) (tenant.GroupID, error) {
-	if o != org || n != node {
+func (f *fakeNodes) Connected(_ context.Context, o tenant.OrgID, _ identity.NodeID, facts ingest.HostFacts, _ string, _ time.Time) (tenant.GroupID, error) {
+	if o != org {
 		return tenant.GroupID{}, errors.New("unknown node")
 	}
 	f.connected = append(f.connected, facts)
@@ -58,7 +59,13 @@ func (f *fakeNodes) Seen(_ context.Context, _ tenant.OrgID, _ identity.NodeID, a
 // failingStore fails writes while fail is set.
 type failingStore struct {
 	*memstore.Store
-	fail bool
+	fail   bool
+	counts atomic.Int32 // OrgSeriesCount calls
+}
+
+func (f *failingStore) OrgSeriesCount(ctx context.Context, o tenant.OrgID, since time.Time) (int, error) {
+	f.counts.Add(1)
+	return f.Store.OrgSeriesCount(ctx, o, since)
 }
 
 func (f *failingStore) Write(ctx context.Context, o tenant.OrgID, a []metrics.Aggregate, p map[identity.NodeID]uint64) error {
@@ -406,5 +413,110 @@ func TestIngest_DefaultSlackKeepsTheBatchesInFlight(t *testing.T) {
 	}
 	if rejected := w.svc.Stats().Rejected.Load(); rejected != 0 {
 		t.Errorf("%d samples of batches in flight rejected, want 0", rejected)
+	}
+}
+
+func seriesSamples(names ...string) []ingest.Sample {
+	out := make([]ingest.Sample, len(names))
+	for i, n := range names {
+		out[i] = ingest.Sample{Metric: "sermon_disk_reads_per_second", Labels: metrics.Labels{"device": n}, Value: 1}
+	}
+	return out
+}
+
+func storedDevices(w *world, of identity.NodeID) map[string]bool {
+	out := map[string]bool{}
+	for _, a := range w.store.Aggregates() {
+		if a.Node == of {
+			out[a.Labels["device"]] = true
+		}
+	}
+	return out
+}
+
+// A compromised agent must not get a fresh series budget by reconnecting (M1-36): the limit
+// counts the node's series stored in the last ActiveSeriesWindow.
+func TestIngest_SeriesLimitHoldsAcrossReconnects(t *testing.T) {
+	config := ingest.DefaultConfig()
+	config.SeriesLimit = 2
+	w := newWorld(t, config)
+	first := w.open(t)
+	first.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: seriesSamples("a", "b")})
+	first.Accept(context.Background(), ingest.Batch{Seq: 2, CollectedAt: t0.Add(10 * time.Second), Samples: seriesSamples("a")})
+	if _, err := first.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	w.clock.Set(t0.Add(time.Minute))
+	second := w.open(t)
+	second.Accept(context.Background(), ingest.Batch{Seq: 3, CollectedAt: t0.Add(time.Minute), Samples: seriesSamples("c", "a", "b")})
+	second.Accept(context.Background(), ingest.Batch{Seq: 4, CollectedAt: t0.Add(80 * time.Second), Samples: seriesSamples("a")})
+	if _, err := second.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedDevices(w, node); got["c"] || !got["a"] || !got["b"] {
+		t.Errorf("stored %v: the known series pass, a new one beyond the limit doesn't", got)
+	}
+
+	// Series without data for the window free their place.
+	w.clock.Set(t0.Add(config.ActiveSeriesWindow + metrics.SeenResolution + time.Hour))
+	later := w.clock.Now()
+	third := w.open(t)
+	third.Accept(context.Background(), ingest.Batch{Seq: 5, CollectedAt: later, Samples: seriesSamples("c")})
+	third.Accept(context.Background(), ingest.Batch{Seq: 6, CollectedAt: later.Add(10 * time.Second), Samples: seriesSamples("c")})
+	if _, err := third.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !storedDevices(w, node)["c"] {
+		t.Error("after the window a new series is admitted again")
+	}
+}
+
+// One organization can't fill the database with series of many nodes.
+func TestIngest_LimitsTheSeriesOfAnOrganization(t *testing.T) {
+	config := ingest.DefaultConfig()
+	config.OrgSeriesLimit = 3
+	w := newWorld(t, config)
+	other := identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-000000000002"))
+	w.store.AddNode(org, group, other)
+	first := w.open(t)
+	first.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: seriesSamples("a", "b")})
+	first.Accept(context.Background(), ingest.Batch{Seq: 2, CollectedAt: t0.Add(10 * time.Second), Samples: seriesSamples("a")})
+	if _, err := first.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := w.svc.Open(context.Background(), org, other, ingest.HostFacts{Hostname: "web-02"}, "1.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: seriesSamples("x", "y")})
+	second.Accept(context.Background(), ingest.Batch{Seq: 2, CollectedAt: t0.Add(10 * time.Second), Samples: seriesSamples("x")})
+	if _, err := second.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedDevices(w, other); len(got) != 1 {
+		t.Errorf("second node stored %v, want one series (org limit 3, two in use)", got)
+	}
+	if w.svc.Stats().DroppedSeries.Load() == 0 {
+		t.Error("dropped series must be counted")
+	}
+}
+
+// After a server restart every agent of an organization reconnects at once: the organization's
+// series are counted once per OrgCountInterval, not once per session.
+func TestIngest_CountsTheSeriesOfAnOrganizationOncePerInterval(t *testing.T) {
+	config := ingest.DefaultConfig()
+	w := newWorld(t, config)
+	for range 3 {
+		w.open(t)
+	}
+	if n := w.store.counts.Load(); n != 1 {
+		t.Errorf("OrgSeriesCount called %d times for 3 sessions, want 1", n)
+	}
+	w.clock.Set(t0.Add(config.OrgCountInterval))
+	w.open(t)
+	if n := w.store.counts.Load(); n != 2 {
+		t.Errorf("after the interval: %d calls, want 2", n)
 	}
 }

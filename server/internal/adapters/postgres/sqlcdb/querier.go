@@ -18,6 +18,7 @@ type Querier interface {
 	AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error)
 	AdvanceIngestSeq(ctx context.Context, arg AdvanceIngestSeqParams) (int64, error)
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
+	AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	// The trigger instance_audit_log_chain assigns seq, time and the hashes.
@@ -44,6 +45,7 @@ type Querier interface {
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	DeactivateIssuingAuthority(ctx context.Context) error
+	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
@@ -76,6 +78,8 @@ type Querier interface {
 	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
+	// One row per transition (COPY doesn't work with row-level security; a round has few).
+	InsertAlertHistory(ctx context.Context, arg InsertAlertHistoryParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
@@ -91,6 +95,10 @@ type Querier interface {
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Replaces a previous token; false once the setup is completed (definer function, M1-40).
 	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (bool, error)
+	// Alert engine (M2-02, ADR 0007). Every query runs in the organization's tenant transaction.
+	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+	LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrganizationParams) (int64, error)
+	ListAlertInstances(ctx context.Context) ([]ListAlertInstancesRow, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
@@ -155,6 +163,7 @@ type Querier interface {
 	// The agent's Hello: current host facts and version (the machine-id never changes here).
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
+	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error

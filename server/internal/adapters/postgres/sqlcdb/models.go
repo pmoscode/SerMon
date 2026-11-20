@@ -22,6 +22,43 @@ type AgentCertificate struct {
 	AuthorityID int32
 }
 
+type AlertHistory struct {
+	ID        int64
+	OrgID     uuid.UUID
+	RuleID    string
+	NodeID    uuid.UUID
+	Dimension string
+	Kind      int16
+	FromState int16
+	ToState   int16
+	At        time.Time
+	Value     float64
+	ByUser    *uuid.UUID
+}
+
+type AlertInstance struct {
+	OrgID        uuid.UUID
+	RuleID       string
+	NodeID       uuid.UUID
+	Dimension    string
+	State        int16
+	Since        time.Time
+	PendingSince *time.Time
+	FiredAt      *time.Time
+	AckBy        *uuid.UUID
+	AckAt        *time.Time
+	Flapping     bool
+	Value        float64
+	Flips        []time.Time
+	UpdatedAt    time.Time
+}
+
+type AlertLease struct {
+	OrgID     uuid.UUID
+	Holder    string
+	ExpiresAt time.Time
+}
+
 type AuditLog struct {
 	ID       int64
 	OrgID    uuid.UUID

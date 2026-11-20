@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/app/alerting"
+
 	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
@@ -133,7 +135,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// Live values (15 min, 1 s) and the stored 10 s windows (M1-22..M1-26).
 		ring := metrics.NewRing()
 		metricStore := timescale.New(db)
-		nodes := fleet.NewService(postgres.NewFleetStore(db), metrics.NewReader(metricStore, ring, time.Now), time.Now)
+		reader := metrics.NewReader(metricStore, ring, time.Now)
+		nodes := fleet.NewService(postgres.NewFleetStore(db), reader, time.Now)
 		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, registry, logger); err != nil {
 			return err
 		}
@@ -141,6 +144,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
 		registerIngestMetrics(registry, ingestService.Stats(), sessions)
 		servers = append(servers, pruneRing(ring))
+		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases.
+		engine := alerting.NewEngine(alerting.Deps{
+			Store: postgres.NewAlertStore(db), Rules: alerting.NoRules{}, Nodes: postgres.NewFleetStore(db),
+			Metrics: reader, Now: time.Now, Logger: logger,
+		})
+		registerAlertMetrics(registry, engine.Stats())
+		servers = append(servers, engine.Run)
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, ingestService, logger)
 			if err != nil {

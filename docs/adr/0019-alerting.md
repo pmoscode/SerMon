@@ -34,3 +34,12 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   Zeitstempel gegen Replay.
 - Folgearbeiten: Alert-Engine, Kanäle und Regeln in M2, Anomalien in M4; weitere Detektoren hinter dem Interface
   `Detector` in v2.
+
+## Nachtrag M2-02: Ausführung der Engine
+
+- Jede Server-Instanz versucht alle 10 s, die Orgs mit Regeln zu leasen (Compare-and-swap auf `alert_leases`, 30 s,
+  in der Tenant-Transaktion der Org). Nur der Halter wertet aus; fällt er aus, übernimmt eine andere Instanz nach
+  Ablauf. Das erfüllt „Leases in PG“ aus dem Plan, ohne eine Transaktion über die ganze Auswertung offen zu halten.
+- Zustand und Historie liegen in PostgreSQL mit RLS; die Historie ist für die Anwendung nur anhängbar. Wieder ruhige
+  Instanzen (OK ohne Flapping-Historie) werden gelöscht.
+

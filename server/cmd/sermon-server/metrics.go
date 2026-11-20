@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"runtime"
 
+	"github.com/pmoscode/SerMon/server/internal/app/alerting"
+
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
@@ -50,6 +52,22 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 	r.Gauge("sermon_server_ingest_lag_seconds", "Delay of the latest batch (server time minus collection time).",
 		func() float64 { return float64(stats.LagMillis.Load()) / 1000 })
 	r.Gauge("sermon_server_agent_sessions", "Connected agents.", func() float64 { return float64(len(sessions.Active())) })
+}
+
+// registerAlertMetrics adds the counters of the alert engine (M2-02).
+func registerAlertMetrics(r *promtext.Registry, stats *alerting.Stats) {
+	for _, c := range []struct {
+		name, help string
+		value      func() uint64
+	}{
+		{"sermon_server_alert_rounds_total", "Evaluation rounds of the alert engine.", stats.Rounds.Load},
+		{"sermon_server_alert_evaluations_total", "Evaluated rules.", stats.Evaluations.Load},
+		{"sermon_server_alert_transitions_total", "Stored state changes of alert instances.", stats.Transitions.Load},
+		{"sermon_server_alert_rule_errors_total", "Rule evaluations that failed.", stats.RuleErrors.Load},
+		{"sermon_server_alert_org_errors_total", "Organizations whose evaluation failed.", stats.OrgErrors.Load},
+	} {
+		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
+	}
 }
 
 // newMetricsServer serves /metrics on its own listener without authentication (ADR 0011).

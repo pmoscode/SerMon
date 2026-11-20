@@ -84,7 +84,7 @@ func TestRun_StopsCleanlyWhenContextIsCancelled(t *testing.T) {
 func TestRoutes_UIAndAPIDoNotConflict(_ *testing.T) {
 	mux := http.NewServeMux()
 	webapi.Mount(mux, webapi.Config{}, webapi.Handlers{
-		Auth:          webapi.NewAuthHandler(nil, nil, nil, slog.New(slog.DiscardHandler)),
+		Auth:          webapi.NewAuthHandler(nil, nil, nil, nil, slog.New(slog.DiscardHandler)),
 		System:        webapi.NewSystemHandler("test"),
 		Access:        webapi.NewAccessHandler(nil, nil, slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(nil, nil, slog.New(slog.DiscardHandler)),

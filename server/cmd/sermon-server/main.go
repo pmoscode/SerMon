@@ -21,6 +21,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/twofactor"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
@@ -267,6 +268,9 @@ const (
 	// have 256 bits, so the limit is about load, not guessing.
 	enrollmentsPerWindow = 120
 	enrollmentWindow     = time.Minute
+	// Wrong codes while setting up TOTP don't lock the account; this bounds guessing per user.
+	totpSetupAttemptsPerWindow = 10
+	totpSetupWindow            = time.Minute
 )
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
@@ -285,21 +289,23 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	}
 	credentials := postgres.NewCredentialStore(db)
 	sessions := session.NewManager(postgres.NewSessionStore(db), time.Now)
+	policy := authz.NewPolicy()
+	secondFactor := twofactor.NewService(postgres.NewTwoFactorStore(db), cfg.MasterKeys, policy, time.Now)
 	login := auth.NewService(auth.Deps{
-		Credentials: credentials,
-		Sessions:    sessions,
-		Hasher:      hasher,
-		IPLimiter:   ratelimit.New(loginAttemptsPerWindow, loginWindow, time.Now),
-		Now:         time.Now,
+		Credentials:  credentials,
+		Sessions:     sessions,
+		Hasher:       hasher,
+		IPLimiter:    ratelimit.New(loginAttemptsPerWindow, loginWindow, time.Now),
+		Now:          time.Now,
+		SecondFactor: secondFactor,
 	})
 	accessStore := postgres.NewAccessStore(db)
-	policy := authz.NewPolicy()
 	metricsHandler := webapi.NewMetricsHandler(nodes, logger)
 	registry.Gauge("sermon_server_live_streams", "Open live metric streams of the web UI.",
 		func() float64 { return float64(metricsHandler.LiveStreams()) })
 	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
-		Auth:   webapi.NewAuthHandler(login, sessions, credentials, logger),
+		Auth:   webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger),
 		System: webapi.NewSystemHandler(version),
 		Access: webapi.NewAccessHandler(access.NewService(accessStore, policy, time.Now, access.NewID), invites, logger),
 		Setup:  webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
@@ -318,7 +324,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
-		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(accessStore), logger),
+		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
+			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
+		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(accessStore, secondFactor), logger),
 	})
 	return nil
 }

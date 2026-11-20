@@ -29,6 +29,7 @@ func (s *SessionStore) Insert(ctx context.Context, se session.Session) error {
 	err := s.db.withoutTenant().InsertSession(ctx, sqlcdb.InsertSessionParams{
 		ID: se.ID, UserID: uuid.UUID(se.User), OrgID: orgPtr(se.Org),
 		CreatedAt: se.CreatedAt, LastSeenAt: se.LastSeenAt, StepUpAt: se.StepUpAt,
+		SecondFactorPending: se.SecondFactorPending,
 	})
 	if err != nil {
 		return fmt.Errorf("insert session: %w", err)
@@ -48,6 +49,7 @@ func (s *SessionStore) Get(ctx context.Context, id string) (session.Session, boo
 	se := session.Session{
 		ID: row.ID, User: identity.UserID(row.UserID),
 		CreatedAt: row.CreatedAt, LastSeenAt: row.LastSeenAt, StepUpAt: row.StepUpAt,
+		SecondFactorPending: row.SecondFactorPending,
 	}
 	if row.OrgID != nil {
 		se.Org = tenant.OrgID(*row.OrgID)

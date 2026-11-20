@@ -39,12 +39,12 @@ func (f *fakeRepo) IsSuperadmin(context.Context, identity.UserID) (bool, error) 
 }
 
 func TestLoad_MarksSuperadminsAlsoWithoutOrganization(t *testing.T) {
-	p, err := access.NewLoader(&fakeRepo{super: true}).Load(context.Background(), session.Session{User: alice})
+	p, err := access.NewLoader(&fakeRepo{super: true}, nil).Load(context.Background(), session.Session{User: alice})
 	if err != nil || !p.Superadmin {
 		t.Errorf("principal = %+v, %v; want superadmin", p, err)
 	}
 	boom := errors.New("db down")
-	if _, err := access.NewLoader(&fakeRepo{superErr: boom}).Load(context.Background(), session.Session{User: alice}); !errors.Is(err, boom) {
+	if _, err := access.NewLoader(&fakeRepo{superErr: boom}, nil).Load(context.Background(), session.Session{User: alice}); !errors.Is(err, boom) {
 		t.Errorf("error = %v, want the repository error", err)
 	}
 }
@@ -52,7 +52,7 @@ func TestLoad_MarksSuperadminsAlsoWithoutOrganization(t *testing.T) {
 func TestLoad_BuildsThePrincipalOfAMember(t *testing.T) {
 	repo := &fakeRepo{member: true, bindings: []authz.Binding{{AllGroups: true, Role: role.Admin}}}
 
-	p, err := access.NewLoader(repo).Load(context.Background(), session.Session{User: alice, Org: orgA})
+	p, err := access.NewLoader(repo, nil).Load(context.Background(), session.Session{User: alice, Org: orgA})
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -64,7 +64,7 @@ func TestLoad_BuildsThePrincipalOfAMember(t *testing.T) {
 func TestLoad_RemovedMembersLoseAccessImmediately(t *testing.T) {
 	repo := &fakeRepo{member: false}
 
-	if _, err := access.NewLoader(repo).Load(context.Background(), session.Session{User: alice, Org: orgA}); !errors.Is(err, access.ErrNoMembership) {
+	if _, err := access.NewLoader(repo, nil).Load(context.Background(), session.Session{User: alice, Org: orgA}); !errors.Is(err, access.ErrNoMembership) {
 		t.Errorf("Load() error = %v, want ErrNoMembership", err)
 	}
 }
@@ -72,7 +72,7 @@ func TestLoad_RemovedMembersLoseAccessImmediately(t *testing.T) {
 func TestLoad_SessionWithoutOrganizationHasNoTenantAccess(t *testing.T) {
 	repo := &fakeRepo{}
 
-	p, err := access.NewLoader(repo).Load(context.Background(), session.Session{User: alice})
+	p, err := access.NewLoader(repo, nil).Load(context.Background(), session.Session{User: alice})
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -83,7 +83,28 @@ func TestLoad_SessionWithoutOrganizationHasNoTenantAccess(t *testing.T) {
 
 func TestLoad_PropagatesRepositoryErrors(t *testing.T) {
 	boom := errors.New("db down")
-	if _, err := access.NewLoader(&fakeRepo{err: boom}).Load(context.Background(), session.Session{User: alice, Org: orgA}); !errors.Is(err, boom) {
+	if _, err := access.NewLoader(&fakeRepo{err: boom}, nil).Load(context.Background(), session.Session{User: alice, Org: orgA}); !errors.Is(err, boom) {
 		t.Errorf("Load() error = %v, want the repository error", err)
+	}
+}
+
+type gate struct{ required bool }
+
+func (g gate) SetupRequired(context.Context, tenant.OrgID, identity.UserID) (bool, error) {
+	return g.required, nil
+}
+
+func TestLoad_OrganizationsCanRequireASecondFactor(t *testing.T) {
+	repo := &fakeRepo{member: true}
+	s := session.Session{User: alice, Org: orgA}
+
+	if _, err := access.NewLoader(repo, gate{required: true}).Load(context.Background(), s); !errors.Is(err, access.ErrSecondFactorSetupRequired) {
+		t.Errorf("Load() = %v, want ErrSecondFactorSetupRequired", err)
+	}
+	if _, err := access.NewLoader(repo, gate{}).Load(context.Background(), s); err != nil {
+		t.Errorf("Load() without requirement = %v", err)
+	}
+	if _, err := access.NewLoader(repo, gate{required: true}).Load(context.Background(), session.Session{User: alice}); err != nil {
+		t.Errorf("instance sessions have no organization requirement: %v", err)
 	}
 }

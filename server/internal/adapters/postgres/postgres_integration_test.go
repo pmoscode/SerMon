@@ -192,7 +192,7 @@ func TestRLS_EveryTenantTableIsForced(t *testing.T) {
 func TestInTenant_SeesOnlyItsOwnOrganizationAndUsers(t *testing.T) {
 	db := open(t, setup(t).appDSN)
 
-	var orgs []sqlcdb.Organization
+	var orgs []sqlcdb.ListOrganizationsRow
 	var users []sqlcdb.User
 	err := db.InTenant(context.Background(), scopeFor(t, orgA), func(q *sqlcdb.Queries) error {
 		var err error

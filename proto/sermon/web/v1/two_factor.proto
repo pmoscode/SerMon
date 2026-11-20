@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+
+// TwoFactorService manages the caller's own second factor (KONZEPT §7, M1-03): TOTP with
+// recovery codes. It works with any full session, also while the organization waits for the
+// setup (SecondFactorSetupRequired). Changes need a recent step-up (FAILED_PRECONDITION with
+// StepUpRequired otherwise).
+service TwoFactorService {
+  // GetTwoFactorStatus describes the caller's second factor.
+  rpc GetTwoFactorStatus(GetTwoFactorStatusRequest) returns (GetTwoFactorStatusResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // BeginTotpSetup creates a new secret for the authenticator app; it becomes active with
+  // ConfirmTotpSetup. ALREADY_EXISTS when TOTP is enabled.
+  rpc BeginTotpSetup(BeginTotpSetupRequest) returns (BeginTotpSetupResponse);
+  // ConfirmTotpSetup activates TOTP with a code from the app and returns the recovery codes –
+  // only this once. PERMISSION_DENIED for a wrong code, FAILED_PRECONDITION without a started setup.
+  rpc ConfirmTotpSetup(ConfirmTotpSetupRequest) returns (ConfirmTotpSetupResponse);
+  // RegenerateRecoveryCodes replaces the recovery codes (the old ones stop working).
+  rpc RegenerateRecoveryCodes(RegenerateRecoveryCodesRequest) returns (RegenerateRecoveryCodesResponse);
+  // DisableTwoFactor removes the second factor.
+  rpc DisableTwoFactor(DisableTwoFactorRequest) returns (DisableTwoFactorResponse);
+}
+
+// SecurityPolicyService holds the security settings of the active organization.
+service SecurityPolicyService {
+  // GetSecurityPolicy returns the settings (any member).
+  rpc GetSecurityPolicy(GetSecurityPolicyRequest) returns (GetSecurityPolicyResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // SetSecondFactorRequired makes two-factor authentication mandatory or optional for all
+  // members: admins for all groups, with step-up. Requiring it needs the caller's own second
+  // factor (FAILED_PRECONDITION otherwise).
+  rpc SetSecondFactorRequired(SetSecondFactorRequiredRequest) returns (SetSecondFactorRequiredResponse);
+}
+
+// GetTwoFactorStatusRequest has no parameters.
+message GetTwoFactorStatusRequest {}
+
+// GetTwoFactorStatusResponse describes the second factor.
+message GetTwoFactorStatusResponse {
+  // totp_enabled is true once the setup was confirmed.
+  bool totp_enabled = 1;
+  // recovery_codes_left is the number of unused recovery codes.
+  int32 recovery_codes_left = 2;
+  // required_by_organization is true when the active organization requires a second factor.
+  bool required_by_organization = 3;
+}
+
+// BeginTotpSetupRequest has no parameters.
+message BeginTotpSetupRequest {}
+
+// BeginTotpSetupResponse carries the new secret.
+message BeginTotpSetupResponse {
+  // secret is the key in base32 for manual entry.
+  string secret = 1;
+  // uri is the otpauth:// URI for the QR code.
+  string uri = 2;
+}
+
+// ConfirmTotpSetupRequest carries a code from the app.
+message ConfirmTotpSetupRequest {
+  // code is the current 6-digit code.
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 6
+    max_len: 16
+  }];
+}
+
+// ConfirmTotpSetupResponse returns the recovery codes once.
+message ConfirmTotpSetupResponse {
+  // recovery_codes each work once when the app is not at hand.
+  repeated string recovery_codes = 1;
+}
+
+// RegenerateRecoveryCodesRequest has no parameters.
+message RegenerateRecoveryCodesRequest {}
+
+// RegenerateRecoveryCodesResponse returns the new codes once.
+message RegenerateRecoveryCodesResponse {
+  // recovery_codes each work once.
+  repeated string recovery_codes = 1;
+}
+
+// DisableTwoFactorRequest has no parameters.
+message DisableTwoFactorRequest {}
+
+// DisableTwoFactorResponse has no fields.
+message DisableTwoFactorResponse {}
+
+// GetSecurityPolicyRequest has no parameters.
+message GetSecurityPolicyRequest {}
+
+// GetSecurityPolicyResponse holds the settings.
+message GetSecurityPolicyResponse {
+  // second_factor_required is true when every member needs two-factor authentication.
+  bool second_factor_required = 1;
+}
+
+// SetSecondFactorRequiredRequest sets the requirement.
+message SetSecondFactorRequiredRequest {
+  // required makes two-factor authentication mandatory.
+  bool required = 1;
+}
+
+// SetSecondFactorRequiredResponse has no fields.
+message SetSecondFactorRequiredResponse {}

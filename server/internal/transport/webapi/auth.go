@@ -34,19 +34,26 @@ type IdentityReader interface {
 	Organizations(ctx context.Context, user identity.UserID) ([]auth.Organization, error)
 }
 
+// SecondFactorView tells the session view about the user's second factor (twofactor.Service).
+type SecondFactorView interface {
+	Enabled(ctx context.Context, user identity.UserID) (bool, error)
+	SetupRequired(ctx context.Context, org tenant.OrgID, user identity.UserID) (bool, error)
+}
+
 // AuthHandler implements sermon.web.v1.AuthService.
 type AuthHandler struct {
-	login      *auth.Service
-	sessions   *session.Manager
-	identities IdentityReader
-	logger     *slog.Logger
+	login        *auth.Service
+	sessions     *session.Manager
+	identities   IdentityReader
+	secondFactor SecondFactorView // nil: no second factors
+	logger       *slog.Logger
 }
 
 var _ webv1connect.AuthServiceHandler = (*AuthHandler)(nil)
 
 // NewAuthHandler returns the AuthService handler.
-func NewAuthHandler(login *auth.Service, sessions *session.Manager, identities IdentityReader, logger *slog.Logger) *AuthHandler {
-	return &AuthHandler{login: login, sessions: sessions, identities: identities, logger: logger}
+func NewAuthHandler(login *auth.Service, sessions *session.Manager, identities IdentityReader, secondFactor SecondFactorView, logger *slog.Logger) *AuthHandler {
+	return &AuthHandler{login: login, sessions: sessions, identities: identities, secondFactor: secondFactor, logger: logger}
 }
 
 // Login checks the credentials and sets the session cookie.
@@ -59,6 +66,11 @@ func (h *AuthHandler) Login(ctx context.Context, req *connect.Request[webv1.Logi
 		return nil, connect.NewError(connect.CodeResourceExhausted, auth.ErrTooManyAttempts)
 	case err != nil:
 		return nil, h.internal(ctx, "login", err)
+	}
+	if result.SecondFactorRequired {
+		res := connect.NewResponse(&webv1.LoginResponse{SecondFactorRequired: true})
+		res.Header().Add("Set-Cookie", sessionCookie(result.Token, session.PendingTimeout).String())
+		return res, nil
 	}
 	view, err := h.view(ctx, result.Session)
 	if err != nil {
@@ -142,6 +154,67 @@ func (h *AuthHandler) SwitchOrganization(ctx context.Context, req *connect.Reque
 	return res, nil
 }
 
+// VerifySecondFactor completes a login that waits for the second factor.
+func (h *AuthHandler) VerifySecondFactor(ctx context.Context, req *connect.Request[webv1.VerifySecondFactorRequest]) (*connect.Response[webv1.VerifySecondFactorResponse], error) {
+	token, ok := tokenFrom(req.Header())
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	}
+	result, err := h.login.VerifySecondFactor(ctx, token, req.Msg.GetCode(), ClientIPFrom(ctx))
+	if err != nil {
+		return nil, h.factorFailure(ctx, "verify second factor", err)
+	}
+	view, err := h.view(ctx, result.Session)
+	if err != nil {
+		return nil, h.internal(ctx, "session view", err)
+	}
+	res := connect.NewResponse(&webv1.VerifySecondFactorResponse{Session: view})
+	remaining := time.Until(result.Session.CreatedAt.Add(session.AbsoluteTimeout))
+	res.Header().Add("Set-Cookie", sessionCookie(result.Token, max(remaining, time.Second)).String())
+	return res, nil
+}
+
+// ConfirmSecondFactor renews the step-up with a code.
+func (h *AuthHandler) ConfirmSecondFactor(ctx context.Context, req *connect.Request[webv1.ConfirmSecondFactorRequest]) (*connect.Response[webv1.ConfirmSecondFactorResponse], error) {
+	token, ok := tokenFrom(req.Header())
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	}
+	s, err := h.login.ConfirmSecondFactor(ctx, token, req.Msg.GetCode(), ClientIPFrom(ctx))
+	if err != nil {
+		return nil, h.factorFailure(ctx, "confirm second factor", err)
+	}
+	view, err := h.view(ctx, s)
+	if err != nil {
+		return nil, h.internal(ctx, "session view", err)
+	}
+	return connect.NewResponse(&webv1.ConfirmSecondFactorResponse{Session: view}), nil
+}
+
+func (h *AuthHandler) factorFailure(ctx context.Context, op string, err error) error {
+	switch {
+	case errors.Is(err, session.ErrInvalid):
+		return connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	case errors.Is(err, session.ErrNotPending):
+		return connect.NewError(connect.CodeFailedPrecondition, session.ErrNotPending)
+	case errors.Is(err, auth.ErrWrongCode):
+		return connect.NewError(connect.CodePermissionDenied, auth.ErrWrongCode)
+	case errors.Is(err, auth.ErrTooManyAttempts):
+		return connect.NewError(connect.CodeResourceExhausted, auth.ErrTooManyAttempts)
+	}
+	return h.internal(ctx, op, err)
+}
+
+// secondFactorSetupRequired is the error of tenant services while the organization requires a
+// second factor the user doesn't have; the detail lets the UI open the setup.
+func secondFactorSetupRequired() *connect.Error {
+	err := connect.NewError(connect.CodeFailedPrecondition, access.ErrSecondFactorSetupRequired)
+	if detail, detailErr := connect.NewErrorDetail(&webv1.SecondFactorSetupRequired{}); detailErr == nil {
+		err.AddDetail(detail)
+	}
+	return err
+}
+
 // stepUpRequired is the error of sensitive actions without a recent re-authentication; the
 // StepUpRequired detail lets clients ask for the password and retry.
 func stepUpRequired() *connect.Error {
@@ -164,6 +237,8 @@ func (h *AuthHandler) ConfirmPassword(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
 	case errors.Is(err, auth.ErrWrongPassword):
 		return nil, connect.NewError(connect.CodePermissionDenied, auth.ErrWrongPassword)
+	case errors.Is(err, auth.ErrSecondFactorRequired):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, auth.ErrSecondFactorRequired)
 	case errors.Is(err, auth.ErrTooManyAttempts):
 		return nil, connect.NewError(connect.CodeResourceExhausted, auth.ErrTooManyAttempts)
 	case err != nil:
@@ -194,6 +269,16 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 	}
 	for _, o := range orgs {
 		view.Organizations = append(view.Organizations, &webv1.Organization{Id: o.ID.String(), Name: o.Name})
+	}
+	if h.secondFactor != nil {
+		if view.SecondFactorEnabled, err = h.secondFactor.Enabled(ctx, s.User); err != nil {
+			return nil, fmt.Errorf("second factor: %w", err)
+		}
+		if s.Org != (tenant.OrgID{}) && !view.GetSecondFactorEnabled() {
+			if view.SecondFactorSetupRequired, err = h.secondFactor.SetupRequired(ctx, s.Org, s.User); err != nil {
+				return nil, fmt.Errorf("second-factor requirement: %w", err)
+			}
+		}
 	}
 	return view, nil
 }

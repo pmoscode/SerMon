@@ -26,6 +26,7 @@ type Querier interface {
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
 	ClaimSetupToken(ctx context.Context, arg ClaimSetupTokenParams) (int64, error)
+	ConfirmTOTP(ctx context.Context, arg ConfirmTOTPParams) (int64, error)
 	// Atomic: concurrent redemptions cannot exceed max_uses.
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
 	CopyMetricWindows(ctx context.Context, arg []CopyMetricWindowsParams) (int64, error)
@@ -35,7 +36,7 @@ type Querier interface {
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
 	// Organizations. Row-level security limits every query to the organization of the tenant
 	// transaction (postgres.DB.InTenant); there is no way to read other organizations from here.
-	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error)
+	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (CreateOrganizationRow, error)
 	CreateRoleBinding(ctx context.Context, arg CreateRoleBindingParams) error
 	// Users and memberships. Users are visible only through a membership in the current organization.
 	// No RETURNING: a new user is invisible to the tenant until its membership exists
@@ -48,8 +49,10 @@ type Querier interface {
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
 	// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
 	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
+	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
+	DeleteTOTP(ctx context.Context, userID uuid.UUID) error
 	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
 	EnrollmentTokenByHash(ctx context.Context, arg EnrollmentTokenByHashParams) (EnrollmentTokenByHashRow, error)
 	// Metric series and points (M1-22, ADR 0001). Every query runs in a tenant transaction.
@@ -65,9 +68,11 @@ type Querier interface {
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
-	GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error)
+	GetOrganization(ctx context.Context, id uuid.UUID) (GetOrganizationRow, error)
 	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
+	// Second factors (instance-level, per user; M1-03).
+	GetTOTP(ctx context.Context, userID uuid.UUID) (GetTOTPRow, error)
 	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
@@ -78,6 +83,7 @@ type Querier interface {
 	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) (int32, error)
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
+	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
@@ -92,7 +98,7 @@ type Querier interface {
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
-	ListOrganizations(ctx context.Context) ([]Organization, error)
+	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Nodes of the scope's groups with their group name, for the UI (M1-26).
@@ -104,10 +110,13 @@ type Querier interface {
 	LockPKI(ctx context.Context) error
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
+	// In the tenant transaction of the organization (RLS).
+	OrganizationRequiresSecondFactor(ctx context.Context) (bool, error)
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
 	RecordFailedLogin(ctx context.Context, arg RecordFailedLoginParams) error
+	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
@@ -116,6 +125,9 @@ type Querier interface {
 	RevokeEnrollmentToken(ctx context.Context, arg RevokeEnrollmentTokenParams) (int64, error)
 	RevokeNodeCertificates(ctx context.Context, arg RevokeNodeCertificatesParams) error
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
+	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
+	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
+	SetOrganizationRequiresSecondFactor(ctx context.Context, required bool) (int64, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
 	// First installation: setup token and superadmins (instance-level tables, no RLS).
@@ -137,6 +149,8 @@ type Querier interface {
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
+	UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error)
+	UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64, error)
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)
 	UserProfile(ctx context.Context, userID uuid.UUID) (UserProfileRow, error)
 	VisibleGroupExists(ctx context.Context, arg VisibleGroupExistsParams) (bool, error)

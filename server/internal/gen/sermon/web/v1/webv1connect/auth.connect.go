@@ -35,6 +35,9 @@ const (
 const (
 	// AuthServiceLoginProcedure is the fully-qualified name of the AuthService's Login RPC.
 	AuthServiceLoginProcedure = "/sermon.web.v1.AuthService/Login"
+	// AuthServiceVerifySecondFactorProcedure is the fully-qualified name of the AuthService's
+	// VerifySecondFactor RPC.
+	AuthServiceVerifySecondFactorProcedure = "/sermon.web.v1.AuthService/VerifySecondFactor"
 	// AuthServiceLogoutProcedure is the fully-qualified name of the AuthService's Logout RPC.
 	AuthServiceLogoutProcedure = "/sermon.web.v1.AuthService/Logout"
 	// AuthServiceGetSessionProcedure is the fully-qualified name of the AuthService's GetSession RPC.
@@ -45,14 +48,22 @@ const (
 	// AuthServiceConfirmPasswordProcedure is the fully-qualified name of the AuthService's
 	// ConfirmPassword RPC.
 	AuthServiceConfirmPasswordProcedure = "/sermon.web.v1.AuthService/ConfirmPassword"
+	// AuthServiceConfirmSecondFactorProcedure is the fully-qualified name of the AuthService's
+	// ConfirmSecondFactor RPC.
+	AuthServiceConfirmSecondFactorProcedure = "/sermon.web.v1.AuthService/ConfirmSecondFactor"
 )
 
 // AuthServiceClient is a client for the sermon.web.v1.AuthService service.
 type AuthServiceClient interface {
 	// Login checks e-mail and password and sets the session cookie. All failures return
 	// UNAUTHENTICATED with the same message (no user enumeration); too many attempts from one
-	// client return RESOURCE_EXHAUSTED.
+	// client return RESOURCE_EXHAUSTED. Users with two-factor authentication get a session that
+	// waits for VerifySecondFactor (second_factor_required, valid for 5 minutes).
 	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
+	// VerifySecondFactor completes a login with a TOTP or recovery code and replaces the cookie
+	// with the full session. UNAUTHENTICATED without a waiting session, PERMISSION_DENIED for a
+	// wrong or used code or a locked account (counts towards the lockout).
+	VerifySecondFactor(context.Context, *connect.Request[v1.VerifySecondFactorRequest]) (*connect.Response[v1.VerifySecondFactorResponse], error)
 	// Logout ends the current session and clears the cookie.
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	// GetSession describes the current session; UNAUTHENTICATED without a valid session.
@@ -66,7 +77,10 @@ type AuthServiceClient interface {
 	// UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
 	// temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
 	// for too many attempts from one client.
+	// Users with two-factor authentication use ConfirmSecondFactor (FAILED_PRECONDITION here).
 	ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error)
+	// ConfirmSecondFactor renews the step-up with a TOTP or recovery code; errors as ConfirmPassword.
+	ConfirmSecondFactor(context.Context, *connect.Request[v1.ConfirmSecondFactorRequest]) (*connect.Response[v1.ConfirmSecondFactorResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the sermon.web.v1.AuthService service. By default,
@@ -84,6 +98,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+AuthServiceLoginProcedure,
 			connect.WithSchema(authServiceMethods.ByName("Login")),
+			connect.WithClientOptions(opts...),
+		),
+		verifySecondFactor: connect.NewClient[v1.VerifySecondFactorRequest, v1.VerifySecondFactorResponse](
+			httpClient,
+			baseURL+AuthServiceVerifySecondFactorProcedure,
+			connect.WithSchema(authServiceMethods.ByName("VerifySecondFactor")),
 			connect.WithClientOptions(opts...),
 		),
 		logout: connect.NewClient[v1.LogoutRequest, v1.LogoutResponse](
@@ -111,21 +131,34 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ConfirmPassword")),
 			connect.WithClientOptions(opts...),
 		),
+		confirmSecondFactor: connect.NewClient[v1.ConfirmSecondFactorRequest, v1.ConfirmSecondFactorResponse](
+			httpClient,
+			baseURL+AuthServiceConfirmSecondFactorProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ConfirmSecondFactor")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login              *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	logout             *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	getSession         *connect.Client[v1.GetSessionRequest, v1.GetSessionResponse]
-	switchOrganization *connect.Client[v1.SwitchOrganizationRequest, v1.SwitchOrganizationResponse]
-	confirmPassword    *connect.Client[v1.ConfirmPasswordRequest, v1.ConfirmPasswordResponse]
+	login               *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	verifySecondFactor  *connect.Client[v1.VerifySecondFactorRequest, v1.VerifySecondFactorResponse]
+	logout              *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	getSession          *connect.Client[v1.GetSessionRequest, v1.GetSessionResponse]
+	switchOrganization  *connect.Client[v1.SwitchOrganizationRequest, v1.SwitchOrganizationResponse]
+	confirmPassword     *connect.Client[v1.ConfirmPasswordRequest, v1.ConfirmPasswordResponse]
+	confirmSecondFactor *connect.Client[v1.ConfirmSecondFactorRequest, v1.ConfirmSecondFactorResponse]
 }
 
 // Login calls sermon.web.v1.AuthService.Login.
 func (c *authServiceClient) Login(ctx context.Context, req *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error) {
 	return c.login.CallUnary(ctx, req)
+}
+
+// VerifySecondFactor calls sermon.web.v1.AuthService.VerifySecondFactor.
+func (c *authServiceClient) VerifySecondFactor(ctx context.Context, req *connect.Request[v1.VerifySecondFactorRequest]) (*connect.Response[v1.VerifySecondFactorResponse], error) {
+	return c.verifySecondFactor.CallUnary(ctx, req)
 }
 
 // Logout calls sermon.web.v1.AuthService.Logout.
@@ -148,12 +181,22 @@ func (c *authServiceClient) ConfirmPassword(ctx context.Context, req *connect.Re
 	return c.confirmPassword.CallUnary(ctx, req)
 }
 
+// ConfirmSecondFactor calls sermon.web.v1.AuthService.ConfirmSecondFactor.
+func (c *authServiceClient) ConfirmSecondFactor(ctx context.Context, req *connect.Request[v1.ConfirmSecondFactorRequest]) (*connect.Response[v1.ConfirmSecondFactorResponse], error) {
+	return c.confirmSecondFactor.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the sermon.web.v1.AuthService service.
 type AuthServiceHandler interface {
 	// Login checks e-mail and password and sets the session cookie. All failures return
 	// UNAUTHENTICATED with the same message (no user enumeration); too many attempts from one
-	// client return RESOURCE_EXHAUSTED.
+	// client return RESOURCE_EXHAUSTED. Users with two-factor authentication get a session that
+	// waits for VerifySecondFactor (second_factor_required, valid for 5 minutes).
 	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
+	// VerifySecondFactor completes a login with a TOTP or recovery code and replaces the cookie
+	// with the full session. UNAUTHENTICATED without a waiting session, PERMISSION_DENIED for a
+	// wrong or used code or a locked account (counts towards the lockout).
+	VerifySecondFactor(context.Context, *connect.Request[v1.VerifySecondFactorRequest]) (*connect.Response[v1.VerifySecondFactorResponse], error)
 	// Logout ends the current session and clears the cookie.
 	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 	// GetSession describes the current session; UNAUTHENTICATED without a valid session.
@@ -167,7 +210,10 @@ type AuthServiceHandler interface {
 	// UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
 	// temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
 	// for too many attempts from one client.
+	// Users with two-factor authentication use ConfirmSecondFactor (FAILED_PRECONDITION here).
 	ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error)
+	// ConfirmSecondFactor renews the step-up with a TOTP or recovery code; errors as ConfirmPassword.
+	ConfirmSecondFactor(context.Context, *connect.Request[v1.ConfirmSecondFactorRequest]) (*connect.Response[v1.ConfirmSecondFactorResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -181,6 +227,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		AuthServiceLoginProcedure,
 		svc.Login,
 		connect.WithSchema(authServiceMethods.ByName("Login")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceVerifySecondFactorHandler := connect.NewUnaryHandler(
+		AuthServiceVerifySecondFactorProcedure,
+		svc.VerifySecondFactor,
+		connect.WithSchema(authServiceMethods.ByName("VerifySecondFactor")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceLogoutHandler := connect.NewUnaryHandler(
@@ -208,10 +260,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ConfirmPassword")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceConfirmSecondFactorHandler := connect.NewUnaryHandler(
+		AuthServiceConfirmSecondFactorProcedure,
+		svc.ConfirmSecondFactor,
+		connect.WithSchema(authServiceMethods.ByName("ConfirmSecondFactor")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
 			authServiceLoginHandler.ServeHTTP(w, r)
+		case AuthServiceVerifySecondFactorProcedure:
+			authServiceVerifySecondFactorHandler.ServeHTTP(w, r)
 		case AuthServiceLogoutProcedure:
 			authServiceLogoutHandler.ServeHTTP(w, r)
 		case AuthServiceGetSessionProcedure:
@@ -220,6 +280,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceSwitchOrganizationHandler.ServeHTTP(w, r)
 		case AuthServiceConfirmPasswordProcedure:
 			authServiceConfirmPasswordHandler.ServeHTTP(w, r)
+		case AuthServiceConfirmSecondFactorProcedure:
+			authServiceConfirmSecondFactorHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -231,6 +293,10 @@ type UnimplementedAuthServiceHandler struct{}
 
 func (UnimplementedAuthServiceHandler) Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.Login is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) VerifySecondFactor(context.Context, *connect.Request[v1.VerifySecondFactorRequest]) (*connect.Response[v1.VerifySecondFactorResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.VerifySecondFactor is not implemented"))
 }
 
 func (UnimplementedAuthServiceHandler) Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error) {
@@ -247,4 +313,8 @@ func (UnimplementedAuthServiceHandler) SwitchOrganization(context.Context, *conn
 
 func (UnimplementedAuthServiceHandler) ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.ConfirmPassword is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ConfirmSecondFactor(context.Context, *connect.Request[v1.ConfirmSecondFactorRequest]) (*connect.Response[v1.ConfirmSecondFactorResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.ConfirmSecondFactor is not implemented"))
 }

@@ -359,3 +359,51 @@ func TestSwitchOrganization_RejectsInvalidSessions(t *testing.T) {
 		t.Errorf("error = %v, want ErrInvalid", err)
 	}
 }
+
+func TestSecondFactor_PendingSessionsExpireQuicklyAndCompleteUnderANewToken(t *testing.T) {
+	m, store, c := manager(t)
+	ctx := context.Background()
+	user := identity.UserID(uuid.New())
+
+	token, pending, err := m.CreatePending(ctx, user, tenant.OrgID{})
+	if err != nil || !pending.SecondFactorPending {
+		t.Fatalf("CreatePending() = %+v, %v", pending, err)
+	}
+	if s, err := m.ValidatePending(ctx, token); err != nil || !s.SecondFactorPending {
+		t.Fatalf("ValidatePending() = %+v, %v", s, err)
+	}
+	// Everything else (API, session view, organization switch) sees no session yet.
+	if _, err := m.Validate(ctx, token); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("Validate(pending) = %v, want ErrInvalid", err)
+	}
+	if _, _, err := m.SwitchOrganization(ctx, token, tenant.OrgID(uuid.New())); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("SwitchOrganization(pending) = %v, want ErrInvalid", err)
+	}
+	if _, err := m.StepUp(ctx, token); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("a pending session can't step up: %v", err)
+	}
+
+	c.advance(time.Minute)
+	full, done, err := m.CompleteSecondFactor(ctx, token)
+	if err != nil || done.SecondFactorPending || full == token || !done.StepUpAt.Equal(c.Now()) || !done.CreatedAt.Equal(pending.CreatedAt) {
+		t.Fatalf("CompleteSecondFactor() = %+v, %v", done, err)
+	}
+	if _, err := m.ValidatePending(ctx, token); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("the pending token must be gone: %v", err)
+	}
+	if _, err := m.Validate(ctx, full); err != nil {
+		t.Errorf("the full session works: %v", err)
+	}
+	if _, _, err := m.CompleteSecondFactor(ctx, full); !errors.Is(err, session.ErrNotPending) {
+		t.Errorf("completing a full session: %v, want ErrNotPending", err)
+	}
+
+	late, _, _ := m.CreatePending(ctx, user, tenant.OrgID{})
+	c.advance(session.PendingTimeout)
+	if _, err := m.ValidatePending(ctx, late); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("pending session after %v: %v, want ErrInvalid", session.PendingTimeout, err)
+	}
+	if len(store.byHash) != 1 {
+		t.Errorf("stored sessions = %d, want only the full one", len(store.byHash))
+	}
+}

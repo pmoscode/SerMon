@@ -25,6 +25,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/twofactor"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
@@ -103,9 +104,10 @@ func newStack(t *testing.T, loginLimit int) stack {
 	hasher, _ := password.NewHasher(password.Params{Memory: 8 * 1024, Time: 1, Threads: 1, SaltLength: 16, KeyLength: 32})
 	creds := postgres.NewCredentialStore(pg)
 	sessions := session.NewManager(postgres.NewSessionStore(pg), time.Now)
+	secondFactor := twofactor.NewService(postgres.NewTwoFactorStore(pg), masterKeys(t), authz.NewPolicy(), time.Now)
 	login := auth.NewService(auth.Deps{
 		Credentials: creds, Sessions: sessions, Hasher: hasher,
-		IPLimiter: ratelimit.New(loginLimit, time.Minute, time.Now), Now: time.Now,
+		IPLimiter: ratelimit.New(loginLimit, time.Minute, time.Now), Now: time.Now, SecondFactor: secondFactor,
 	})
 
 	invites := invitation.NewService(postgres.NewInvitationStore(pg), creds, authz.NewPolicy(), hasher, time.Now, access.NewID)
@@ -121,7 +123,7 @@ func newStack(t *testing.T, loginLimit int) stack {
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
-		Auth:   webapi.NewAuthHandler(login, sessions, creds, slog.New(slog.DiscardHandler)),
+		Auth:   webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)),
 		System: webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
 			invites, slog.New(slog.DiscardHandler)),
@@ -140,7 +142,8 @@ func newStack(t *testing.T, loginLimit int) stack {
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(pg), postgres.NewNodeRegistry(pg), ca, time.Now, access.NewID),
 			ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
-		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg)), slog.New(slog.DiscardHandler)),
+		TwoFactor:     webapi.NewTwoFactorHandler(secondFactor, creds, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
+		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
 	})
 	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore}
 }

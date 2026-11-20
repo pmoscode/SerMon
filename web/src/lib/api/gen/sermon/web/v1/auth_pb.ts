@@ -13,7 +13,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/auth.proto.
  */
 export const file_sermon_web_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiRwoMTG9naW5SZXF1ZXN0EhkKBWVtYWlsGAEgASgJQgq6SAdyBRABGMACEhwKCHBhc3N3b3JkGAIgASgJQgq6SAdyBRABKIAIIjgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIPCg1Mb2dvdXRSZXF1ZXN0IhAKDkxvZ291dFJlc3BvbnNlIhMKEUdldFNlc3Npb25SZXF1ZXN0Ij0KEkdldFNlc3Npb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIj4KGVN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QSIQoPb3JnYW5pemF0aW9uX2lkGAEgASgJQgi6SAVyA7ABASJFChpTd2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIjYKFkNvbmZpcm1QYXNzd29yZFJlcXVlc3QSHAoIcGFzc3dvcmQYASABKAlCCrpIB3IFEAEogAgiQgoXQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIQCg5TdGVwVXBSZXF1aXJlZCLGAQoHU2Vzc2lvbhIPCgd1c2VyX2lkGAEgASgJEg0KBWVtYWlsGAIgASgJEhQKDGRpc3BsYXlfbmFtZRgDIAEoCRIeChZhY3RpdmVfb3JnYW5pemF0aW9uX2lkGAQgASgJEjIKDW9yZ2FuaXphdGlvbnMYBSADKAsyGy5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvbhIxCg1zdGVwX3VwX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIoCgxPcmdhbml6YXRpb24SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCTK9AwoLQXV0aFNlcnZpY2USQgoFTG9naW4SGy5zZXJtb24ud2ViLnYxLkxvZ2luUmVxdWVzdBocLnNlcm1vbi53ZWIudjEuTG9naW5SZXNwb25zZRJFCgZMb2dvdXQSHC5zZXJtb24ud2ViLnYxLkxvZ291dFJlcXVlc3QaHS5zZXJtb24ud2ViLnYxLkxvZ291dFJlc3BvbnNlElYKCkdldFNlc3Npb24SIC5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXF1ZXN0GiEuc2VybW9uLndlYi52MS5HZXRTZXNzaW9uUmVzcG9uc2UiA5ACARJpChJTd2l0Y2hPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlc3BvbnNlEmAKD0NvbmZpcm1QYXNzd29yZBIlLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglBdXRoUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiRwoMTG9naW5SZXF1ZXN0EhkKBWVtYWlsGAEgASgJQgq6SAdyBRABGMACEhwKCHBhc3N3b3JkGAIgASgJQgq6SAdyBRABKIAIIlgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbhIeChZzZWNvbmRfZmFjdG9yX3JlcXVpcmVkGAIgASgIIjQKGVZlcmlmeVNlY29uZEZhY3RvclJlcXVlc3QSFwoEY29kZRgBIAEoCUIJukgGcgQQARhAIkUKGlZlcmlmeVNlY29uZEZhY3RvclJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iNQoaQ29uZmlybVNlY29uZEZhY3RvclJlcXVlc3QSFwoEY29kZRgBIAEoCUIJukgGcgQQARhAIkYKG0NvbmZpcm1TZWNvbmRGYWN0b3JSZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIg8KDUxvZ291dFJlcXVlc3QiEAoOTG9nb3V0UmVzcG9uc2UiEwoRR2V0U2Vzc2lvblJlcXVlc3QiPQoSR2V0U2Vzc2lvblJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iPgoZU3dpdGNoT3JnYW5pemF0aW9uUmVxdWVzdBIhCg9vcmdhbml6YXRpb25faWQYASABKAlCCLpIBXIDsAEBIkUKGlN3aXRjaE9yZ2FuaXphdGlvblJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iNgoWQ29uZmlybVBhc3N3b3JkUmVxdWVzdBIcCghwYXNzd29yZBgBIAEoCUIKukgHcgUQASiACCJCChdDb25maXJtUGFzc3dvcmRSZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIhAKDlN0ZXBVcFJlcXVpcmVkIhsKGVNlY29uZEZhY3RvclNldHVwUmVxdWlyZWQiiwIKB1Nlc3Npb24SDwoHdXNlcl9pZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIUCgxkaXNwbGF5X25hbWUYAyABKAkSHgoWYWN0aXZlX29yZ2FuaXphdGlvbl9pZBgEIAEoCRIyCg1vcmdhbml6YXRpb25zGAUgAygLMhsuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb24SMQoNc3RlcF91cF91bnRpbBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASHQoVc2Vjb25kX2ZhY3Rvcl9lbmFibGVkGAcgASgIEiQKHHNlY29uZF9mYWN0b3Jfc2V0dXBfcmVxdWlyZWQYCCABKAgiKAoMT3JnYW5pemF0aW9uEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkylgUKC0F1dGhTZXJ2aWNlEkIKBUxvZ2luEhsuc2VybW9uLndlYi52MS5Mb2dpblJlcXVlc3QaHC5zZXJtb24ud2ViLnYxLkxvZ2luUmVzcG9uc2USaQoSVmVyaWZ5U2Vjb25kRmFjdG9yEiguc2VybW9uLndlYi52MS5WZXJpZnlTZWNvbmRGYWN0b3JSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5WZXJpZnlTZWNvbmRGYWN0b3JSZXNwb25zZRJFCgZMb2dvdXQSHC5zZXJtb24ud2ViLnYxLkxvZ291dFJlcXVlc3QaHS5zZXJtb24ud2ViLnYxLkxvZ291dFJlc3BvbnNlElYKCkdldFNlc3Npb24SIC5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXF1ZXN0GiEuc2VybW9uLndlYi52MS5HZXRTZXNzaW9uUmVzcG9uc2UiA5ACARJpChJTd2l0Y2hPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlc3BvbnNlEmAKD0NvbmZpcm1QYXNzd29yZBIlLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USbAoTQ29uZmlybVNlY29uZEZhY3RvchIpLnNlcm1vbi53ZWIudjEuQ29uZmlybVNlY29uZEZhY3RvclJlcXVlc3QaKi5zZXJtb24ud2ViLnYxLkNvbmZpcm1TZWNvbmRGYWN0b3JSZXNwb25zZUK4AQoRY29tLnNlcm1vbi53ZWIudjFCCUF1dGhQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_protobuf_timestamp]);
 
 /**
  * LoginRequest carries the credentials.
@@ -50,11 +50,18 @@ export const LoginRequestSchema: GenMessage<LoginRequest> = /*@__PURE__*/
  */
 export type LoginResponse = Message<"sermon.web.v1.LoginResponse"> & {
   /**
-   * session is the started session.
+   * session is the started session; absent while the second factor is missing.
    *
    * @generated from field: sermon.web.v1.Session session = 1;
    */
   session?: Session | undefined;
+
+  /**
+   * second_factor_required means: call VerifySecondFactor with a code from the app.
+   *
+   * @generated from field: bool second_factor_required = 2;
+   */
+  secondFactorRequired: boolean;
 };
 
 /**
@@ -63,6 +70,90 @@ export type LoginResponse = Message<"sermon.web.v1.LoginResponse"> & {
  */
 export const LoginResponseSchema: GenMessage<LoginResponse> = /*@__PURE__*/
   messageDesc(file_sermon_web_v1_auth, 1);
+
+/**
+ * VerifySecondFactorRequest carries the code.
+ *
+ * @generated from message sermon.web.v1.VerifySecondFactorRequest
+ */
+export type VerifySecondFactorRequest = Message<"sermon.web.v1.VerifySecondFactorRequest"> & {
+  /**
+   * code is a 6-digit TOTP code or a recovery code.
+   *
+   * @generated from field: string code = 1;
+   */
+  code: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.VerifySecondFactorRequest.
+ * Use `create(VerifySecondFactorRequestSchema)` to create a new message.
+ */
+export const VerifySecondFactorRequestSchema: GenMessage<VerifySecondFactorRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 2);
+
+/**
+ * VerifySecondFactorResponse describes the full session.
+ *
+ * @generated from message sermon.web.v1.VerifySecondFactorResponse
+ */
+export type VerifySecondFactorResponse = Message<"sermon.web.v1.VerifySecondFactorResponse"> & {
+  /**
+   * session is the started session.
+   *
+   * @generated from field: sermon.web.v1.Session session = 1;
+   */
+  session?: Session | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.VerifySecondFactorResponse.
+ * Use `create(VerifySecondFactorResponseSchema)` to create a new message.
+ */
+export const VerifySecondFactorResponseSchema: GenMessage<VerifySecondFactorResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 3);
+
+/**
+ * ConfirmSecondFactorRequest carries the code.
+ *
+ * @generated from message sermon.web.v1.ConfirmSecondFactorRequest
+ */
+export type ConfirmSecondFactorRequest = Message<"sermon.web.v1.ConfirmSecondFactorRequest"> & {
+  /**
+   * code is a 6-digit TOTP code or a recovery code.
+   *
+   * @generated from field: string code = 1;
+   */
+  code: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.ConfirmSecondFactorRequest.
+ * Use `create(ConfirmSecondFactorRequestSchema)` to create a new message.
+ */
+export const ConfirmSecondFactorRequestSchema: GenMessage<ConfirmSecondFactorRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 4);
+
+/**
+ * ConfirmSecondFactorResponse describes the session with the renewed step-up.
+ *
+ * @generated from message sermon.web.v1.ConfirmSecondFactorResponse
+ */
+export type ConfirmSecondFactorResponse = Message<"sermon.web.v1.ConfirmSecondFactorResponse"> & {
+  /**
+   * session is the current session.
+   *
+   * @generated from field: sermon.web.v1.Session session = 1;
+   */
+  session?: Session | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.ConfirmSecondFactorResponse.
+ * Use `create(ConfirmSecondFactorResponseSchema)` to create a new message.
+ */
+export const ConfirmSecondFactorResponseSchema: GenMessage<ConfirmSecondFactorResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 5);
 
 /**
  * LogoutRequest has no parameters.
@@ -77,7 +168,7 @@ export type LogoutRequest = Message<"sermon.web.v1.LogoutRequest"> & {
  * Use `create(LogoutRequestSchema)` to create a new message.
  */
 export const LogoutRequestSchema: GenMessage<LogoutRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 2);
+  messageDesc(file_sermon_web_v1_auth, 6);
 
 /**
  * LogoutResponse has no fields.
@@ -92,7 +183,7 @@ export type LogoutResponse = Message<"sermon.web.v1.LogoutResponse"> & {
  * Use `create(LogoutResponseSchema)` to create a new message.
  */
 export const LogoutResponseSchema: GenMessage<LogoutResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 3);
+  messageDesc(file_sermon_web_v1_auth, 7);
 
 /**
  * GetSessionRequest has no parameters.
@@ -107,7 +198,7 @@ export type GetSessionRequest = Message<"sermon.web.v1.GetSessionRequest"> & {
  * Use `create(GetSessionRequestSchema)` to create a new message.
  */
 export const GetSessionRequestSchema: GenMessage<GetSessionRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 4);
+  messageDesc(file_sermon_web_v1_auth, 8);
 
 /**
  * GetSessionResponse describes the current session.
@@ -128,7 +219,7 @@ export type GetSessionResponse = Message<"sermon.web.v1.GetSessionResponse"> & {
  * Use `create(GetSessionResponseSchema)` to create a new message.
  */
 export const GetSessionResponseSchema: GenMessage<GetSessionResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 5);
+  messageDesc(file_sermon_web_v1_auth, 9);
 
 /**
  * SwitchOrganizationRequest names the target organization.
@@ -149,7 +240,7 @@ export type SwitchOrganizationRequest = Message<"sermon.web.v1.SwitchOrganizatio
  * Use `create(SwitchOrganizationRequestSchema)` to create a new message.
  */
 export const SwitchOrganizationRequestSchema: GenMessage<SwitchOrganizationRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 6);
+  messageDesc(file_sermon_web_v1_auth, 10);
 
 /**
  * SwitchOrganizationResponse describes the moved session.
@@ -170,7 +261,7 @@ export type SwitchOrganizationResponse = Message<"sermon.web.v1.SwitchOrganizati
  * Use `create(SwitchOrganizationResponseSchema)` to create a new message.
  */
 export const SwitchOrganizationResponseSchema: GenMessage<SwitchOrganizationResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 7);
+  messageDesc(file_sermon_web_v1_auth, 11);
 
 /**
  * ConfirmPasswordRequest carries the password of the logged-in user.
@@ -191,7 +282,7 @@ export type ConfirmPasswordRequest = Message<"sermon.web.v1.ConfirmPasswordReque
  * Use `create(ConfirmPasswordRequestSchema)` to create a new message.
  */
 export const ConfirmPasswordRequestSchema: GenMessage<ConfirmPasswordRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 8);
+  messageDesc(file_sermon_web_v1_auth, 12);
 
 /**
  * ConfirmPasswordResponse describes the session with the renewed step-up.
@@ -212,7 +303,7 @@ export type ConfirmPasswordResponse = Message<"sermon.web.v1.ConfirmPasswordResp
  * Use `create(ConfirmPasswordResponseSchema)` to create a new message.
  */
 export const ConfirmPasswordResponseSchema: GenMessage<ConfirmPasswordResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 9);
+  messageDesc(file_sermon_web_v1_auth, 13);
 
 /**
  * StepUpRequired is attached as error detail to FAILED_PRECONDITION when a sensitive action needs
@@ -228,7 +319,24 @@ export type StepUpRequired = Message<"sermon.web.v1.StepUpRequired"> & {
  * Use `create(StepUpRequiredSchema)` to create a new message.
  */
 export const StepUpRequiredSchema: GenMessage<StepUpRequired> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 10);
+  messageDesc(file_sermon_web_v1_auth, 14);
+
+/**
+ * SecondFactorSetupRequired is attached as error detail to FAILED_PRECONDITION when the active
+ * organization requires two-factor authentication and the user has none: set it up with
+ * TwoFactorService first.
+ *
+ * @generated from message sermon.web.v1.SecondFactorSetupRequired
+ */
+export type SecondFactorSetupRequired = Message<"sermon.web.v1.SecondFactorSetupRequired"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.SecondFactorSetupRequired.
+ * Use `create(SecondFactorSetupRequiredSchema)` to create a new message.
+ */
+export const SecondFactorSetupRequiredSchema: GenMessage<SecondFactorSetupRequired> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 15);
 
 /**
  * Session is the view of a login session for the UI.
@@ -278,6 +386,21 @@ export type Session = Message<"sermon.web.v1.Session"> & {
    * @generated from field: google.protobuf.Timestamp step_up_until = 6;
    */
   stepUpUntil?: Timestamp | undefined;
+
+  /**
+   * second_factor_enabled means the step-up needs ConfirmSecondFactor instead of the password.
+   *
+   * @generated from field: bool second_factor_enabled = 7;
+   */
+  secondFactorEnabled: boolean;
+
+  /**
+   * second_factor_setup_required means the active organization requires two-factor
+   * authentication the user doesn't have yet; only TwoFactorService works until it is set up.
+   *
+   * @generated from field: bool second_factor_setup_required = 8;
+   */
+  secondFactorSetupRequired: boolean;
 };
 
 /**
@@ -285,7 +408,7 @@ export type Session = Message<"sermon.web.v1.Session"> & {
  * Use `create(SessionSchema)` to create a new message.
  */
 export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 11);
+  messageDesc(file_sermon_web_v1_auth, 16);
 
 /**
  * Organization is an organization the user belongs to.
@@ -313,7 +436,7 @@ export type Organization = Message<"sermon.web.v1.Organization"> & {
  * Use `create(OrganizationSchema)` to create a new message.
  */
 export const OrganizationSchema: GenMessage<Organization> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 12);
+  messageDesc(file_sermon_web_v1_auth, 17);
 
 /**
  * AuthService handles local login sessions (KONZEPT §7). The session token travels only in the
@@ -325,7 +448,8 @@ export const AuthService: GenService<{
   /**
    * Login checks e-mail and password and sets the session cookie. All failures return
    * UNAUTHENTICATED with the same message (no user enumeration); too many attempts from one
-   * client return RESOURCE_EXHAUSTED.
+   * client return RESOURCE_EXHAUSTED. Users with two-factor authentication get a session that
+   * waits for VerifySecondFactor (second_factor_required, valid for 5 minutes).
    *
    * @generated from rpc sermon.web.v1.AuthService.Login
    */
@@ -333,6 +457,18 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof LoginRequestSchema;
     output: typeof LoginResponseSchema;
+  },
+  /**
+   * VerifySecondFactor completes a login with a TOTP or recovery code and replaces the cookie
+   * with the full session. UNAUTHENTICATED without a waiting session, PERMISSION_DENIED for a
+   * wrong or used code or a locked account (counts towards the lockout).
+   *
+   * @generated from rpc sermon.web.v1.AuthService.VerifySecondFactor
+   */
+  verifySecondFactor: {
+    methodKind: "unary";
+    input: typeof VerifySecondFactorRequestSchema;
+    output: typeof VerifySecondFactorResponseSchema;
   },
   /**
    * Logout ends the current session and clears the cookie.
@@ -372,6 +508,7 @@ export const AuthService: GenService<{
    * UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
    * temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
    * for too many attempts from one client.
+   * Users with two-factor authentication use ConfirmSecondFactor (FAILED_PRECONDITION here).
    *
    * @generated from rpc sermon.web.v1.AuthService.ConfirmPassword
    */
@@ -379,6 +516,16 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof ConfirmPasswordRequestSchema;
     output: typeof ConfirmPasswordResponseSchema;
+  },
+  /**
+   * ConfirmSecondFactor renews the step-up with a TOTP or recovery code; errors as ConfirmPassword.
+   *
+   * @generated from rpc sermon.web.v1.AuthService.ConfirmSecondFactor
+   */
+  confirmSecondFactor: {
+    methodKind: "unary";
+    input: typeof ConfirmSecondFactorRequestSchema;
+    output: typeof ConfirmSecondFactorResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_auth, 0);

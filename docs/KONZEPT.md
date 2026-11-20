@@ -407,6 +407,13 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
   gegen eine Liste häufiger Passwörter (offline, mitgeliefert).
 - **2FA:** TOTP (RFC 6238) und **WebAuthn/Passkeys** (`go-webauthn`). Pro Org kann 2FA verpflichtend gemacht werden. Bei
   Einrichtung werden Recovery-Codes erzeugt (gehasht gespeichert).
+  - **TOTP** (SHA-1, 30 s, 6 Stellen, ±1 Schritt): Seed versiegelt mit dem Master-Key und an den User gebunden; jeder
+    Zeitschritt und jeder der 10 Recovery-Codes (80 Bit) gilt einmal. Einrichten, Abschalten und neue Codes verlangen
+    einen Step-up.
+  - **Login:** Nach dem Passwort entsteht eine Session, die höchstens 5 min auf den zweiten Faktor wartet und sonst
+    nichts darf. Fehlversuche beim Code zählen zur Kontosperre; das Passwort setzt den Zähler dann nicht zurück.
+  - **Org-Pflicht:** Admins (mit eigenem zweiten Faktor) schalten sie per `SecurityPolicyService`. Mitglieder ohne
+    zweiten Faktor erreichen in dieser Org nur die Einrichtung (`FAILED_PRECONDITION` mit `SecondFactorSetupRequired`).
 - **OIDC/SSO:** `coreos/go-oidc` mit Authorization Code + PKCE. **Gruppen-Claim-Mapping** (OIDC-Gruppe →
   Org/NodeGroup/Rolle) ist konfigurierbar; Just-in-Time-Provisioning ist optional.
 - **Sessions:** serverseitig in PG, Cookie `__Host-sermon_session` (Secure, HttpOnly, SameSite=Lax). Idle-Timeout 30

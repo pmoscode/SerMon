@@ -72,7 +72,7 @@ func TestSetupStore_CompletesOnceAndCreatesTheFirstAdmin(t *testing.T) {
 	if super, err := accessStore.IsSuperadmin(ctx, admin.User); err != nil || !super {
 		t.Errorf("IsSuperadmin() = %v, %v", super, err)
 	}
-	p, err := access.NewLoader(accessStore).Load(ctx, session.Session{User: admin.User, Org: admin.Org})
+	p, err := access.NewLoader(accessStore, nil).Load(ctx, session.Session{User: admin.User, Org: admin.Org})
 	if err != nil || !p.Superadmin || len(p.Bindings) != 1 || !p.Bindings[0].AllGroups || p.Bindings[0].Role.String() != "admin" {
 		t.Errorf("principal = %+v, %v", p, err)
 	}

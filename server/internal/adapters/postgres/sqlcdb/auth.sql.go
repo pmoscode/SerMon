@@ -69,7 +69,7 @@ func (q *Queries) GetCredentials(ctx context.Context, userID uuid.UUID) (GetCred
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, org_id, created_at, last_seen_at, step_up_at FROM sessions WHERE id = $1
+SELECT id, user_id, org_id, created_at, last_seen_at, step_up_at, second_factor_pending FROM sessions WHERE id = $1
 `
 
 func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
@@ -82,22 +82,25 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.StepUpAt,
+		&i.SecondFactorPending,
 	)
 	return i, err
 }
 
 const insertSession = `-- name: InsertSession :exec
-INSERT INTO sessions (id, user_id, org_id, created_at, last_seen_at, step_up_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO sessions (id, user_id, org_id, created_at, last_seen_at, step_up_at, second_factor_pending)
+VALUES ($1, $2, $3, $4, $5, $6,
+        $7)
 `
 
 type InsertSessionParams struct {
-	ID         string
-	UserID     uuid.UUID
-	OrgID      *uuid.UUID
-	CreatedAt  time.Time
-	LastSeenAt time.Time
-	StepUpAt   time.Time
+	ID                  string
+	UserID              uuid.UUID
+	OrgID               *uuid.UUID
+	CreatedAt           time.Time
+	LastSeenAt          time.Time
+	StepUpAt            time.Time
+	SecondFactorPending bool
 }
 
 func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) error {
@@ -108,6 +111,7 @@ func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) er
 		arg.CreatedAt,
 		arg.LastSeenAt,
 		arg.StepUpAt,
+		arg.SecondFactorPending,
 	)
 	return err
 }

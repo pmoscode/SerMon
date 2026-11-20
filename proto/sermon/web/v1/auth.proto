@@ -10,8 +10,13 @@ import "google/protobuf/timestamp.proto";
 service AuthService {
   // Login checks e-mail and password and sets the session cookie. All failures return
   // UNAUTHENTICATED with the same message (no user enumeration); too many attempts from one
-  // client return RESOURCE_EXHAUSTED.
+  // client return RESOURCE_EXHAUSTED. Users with two-factor authentication get a session that
+  // waits for VerifySecondFactor (second_factor_required, valid for 5 minutes).
   rpc Login(LoginRequest) returns (LoginResponse);
+  // VerifySecondFactor completes a login with a TOTP or recovery code and replaces the cookie
+  // with the full session. UNAUTHENTICATED without a waiting session, PERMISSION_DENIED for a
+  // wrong or used code or a locked account (counts towards the lockout).
+  rpc VerifySecondFactor(VerifySecondFactorRequest) returns (VerifySecondFactorResponse);
   // Logout ends the current session and clears the cookie.
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   // GetSession describes the current session; UNAUTHENTICATED without a valid session.
@@ -27,7 +32,10 @@ service AuthService {
   // UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
   // temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
   // for too many attempts from one client.
+  // Users with two-factor authentication use ConfirmSecondFactor (FAILED_PRECONDITION here).
   rpc ConfirmPassword(ConfirmPasswordRequest) returns (ConfirmPasswordResponse);
+  // ConfirmSecondFactor renews the step-up with a TOTP or recovery code; errors as ConfirmPassword.
+  rpc ConfirmSecondFactor(ConfirmSecondFactorRequest) returns (ConfirmSecondFactorResponse);
 }
 
 // LoginRequest carries the credentials.
@@ -46,7 +54,39 @@ message LoginRequest {
 
 // LoginResponse describes the new session.
 message LoginResponse {
+  // session is the started session; absent while the second factor is missing.
+  Session session = 1;
+  // second_factor_required means: call VerifySecondFactor with a code from the app.
+  bool second_factor_required = 2;
+}
+
+// VerifySecondFactorRequest carries the code.
+message VerifySecondFactorRequest {
+  // code is a 6-digit TOTP code or a recovery code.
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// VerifySecondFactorResponse describes the full session.
+message VerifySecondFactorResponse {
   // session is the started session.
+  Session session = 1;
+}
+
+// ConfirmSecondFactorRequest carries the code.
+message ConfirmSecondFactorRequest {
+  // code is a 6-digit TOTP code or a recovery code.
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// ConfirmSecondFactorResponse describes the session with the renewed step-up.
+message ConfirmSecondFactorResponse {
+  // session is the current session.
   Session session = 1;
 }
 
@@ -96,6 +136,11 @@ message ConfirmPasswordResponse {
 // a fresh re-authentication: call ConfirmPassword, then retry the action.
 message StepUpRequired {}
 
+// SecondFactorSetupRequired is attached as error detail to FAILED_PRECONDITION when the active
+// organization requires two-factor authentication and the user has none: set it up with
+// TwoFactorService first.
+message SecondFactorSetupRequired {}
+
 // Session is the view of a login session for the UI.
 message Session {
   // user_id is the UUID of the logged-in user.
@@ -111,6 +156,11 @@ message Session {
   // step_up_until is when the last (re-)authentication stops allowing sensitive actions; after
   // that they fail with FAILED_PRECONDITION until ConfirmPassword is called.
   google.protobuf.Timestamp step_up_until = 6;
+  // second_factor_enabled means the step-up needs ConfirmSecondFactor instead of the password.
+  bool second_factor_enabled = 7;
+  // second_factor_setup_required means the active organization requires two-factor
+  // authentication the user doesn't have yet; only TwoFactorService works until it is set up.
+  bool second_factor_setup_required = 8;
 }
 
 // Organization is an organization the user belongs to.

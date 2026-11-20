@@ -62,7 +62,7 @@ func systemClient(t *testing.T, principals webapi.PrincipalLoader) (webv1connect
 	}
 	mux := http.NewServeMux()
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{"https://ui.example"}}, webapi.Handlers{
-		Auth:          webapi.NewAuthHandler(nil, sessions, nil, slog.New(slog.DiscardHandler)),
+		Auth:          webapi.NewAuthHandler(nil, sessions, nil, nil, slog.New(slog.DiscardHandler)),
 		System:        webapi.NewSystemHandler("1.2.3"),
 		Authenticator: webapi.NewAuthenticator(sessions, principals, slog.New(slog.DiscardHandler)),
 	})

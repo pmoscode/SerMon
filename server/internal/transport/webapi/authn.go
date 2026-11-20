@@ -27,6 +27,17 @@ type Authenticator struct {
 	sessions   *session.Manager
 	principals PrincipalLoader
 	logger     *slog.Logger
+	// sessionOnly skips the principal: for services about the user itself (TwoFactorService),
+	// which must work while the organization waits for the second-factor setup.
+	sessionOnly bool
+}
+
+// SessionOnly returns an Authenticator that only requires a full session; the principal carries
+// just the user.
+func (a *Authenticator) SessionOnly() *Authenticator {
+	only := *a
+	only.sessionOnly = true
+	return &only
 }
 
 // NewAuthenticator returns an Authenticator.
@@ -99,10 +110,15 @@ func (a *Authenticator) authenticate(ctx context.Context, cookieHeader string) (
 	case err != nil:
 		return ctx, internalError(ctx, a.logger, "validate session", err)
 	}
+	if a.sessionOnly {
+		return context.WithValue(context.WithValue(ctx, principalKey{}, authz.Principal{User: s.User}), sessionKey{}, s), nil
+	}
 	p, err := a.principals.Load(ctx, s)
 	switch {
 	case errors.Is(err, access.ErrNoMembership):
 		return ctx, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
+	case errors.Is(err, access.ErrSecondFactorSetupRequired):
+		return ctx, secondFactorSetupRequired()
 	case err != nil:
 		// A database outage must not look like a logout to the UI.
 		return ctx, internalError(ctx, a.logger, "load principal", err)

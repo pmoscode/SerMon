@@ -22,6 +22,7 @@ const (
 	firstLock         = time.Minute
 	maxLock           = 15 * time.Minute
 	maxEmailLength    = 320
+	maxCodeLength     = 64
 )
 
 var (
@@ -30,6 +31,12 @@ var (
 	// ErrWrongPassword means a password confirmation (step-up) failed: wrong password or a
 	// temporarily locked account, deliberately not distinguished.
 	ErrWrongPassword = errors.New("password confirmation failed: wrong password, or the account is temporarily locked")
+	// ErrWrongCode means a second-factor code failed: wrong, already used or the account is
+	// temporarily locked, deliberately not distinguished.
+	ErrWrongCode = errors.New("the code is wrong or was already used, or the account is temporarily locked")
+	// ErrSecondFactorRequired means users with two-factor authentication confirm with the second
+	// factor, not with the password.
+	ErrSecondFactorRequired = errors.New("confirm with your second factor")
 	// ErrTooManyAttempts means the client IP exceeded the login rate limit.
 	ErrTooManyAttempts = errors.New("too many login attempts, please wait a moment")
 )
@@ -65,6 +72,13 @@ type CredentialRepository interface {
 	Profile(ctx context.Context, user identity.UserID) (Profile, bool, error)
 }
 
+// SecondFactor checks second factors (twofactor.Service).
+type SecondFactor interface {
+	Enabled(ctx context.Context, user identity.UserID) (bool, error)
+	// Verify checks a TOTP or recovery code; every code works once.
+	Verify(ctx context.Context, user identity.UserID, code string) (bool, error)
+}
+
 // RateLimiter limits attempts per key (client IP).
 type RateLimiter interface {
 	Allow(key string) bool
@@ -77,6 +91,8 @@ type Deps struct {
 	Hasher      *password.Hasher
 	IPLimiter   RateLimiter
 	Now         func() time.Time
+	// SecondFactor is optional; without it nobody has a second factor.
+	SecondFactor SecondFactor
 }
 
 // Service performs logins.
@@ -90,6 +106,8 @@ type LoginResult struct {
 	Token         string // session cookie value
 	Session       session.Session
 	Organizations []Organization
+	// SecondFactorRequired means the session waits for VerifySecondFactor (no organizations yet).
+	SecondFactorRequired bool
 }
 
 // Login checks e-mail and password and starts a session in the user's first organization.
@@ -135,7 +153,8 @@ func (s *Service) Login(ctx context.Context, email, pw, clientIP string) (LoginR
 
 // ConfirmPassword re-authenticates the user of a session with the password and renews its step-up
 // (KONZEPT §7) for sensitive actions. Failures count towards the same lockout as logins, so a
-// hijacked session can't be used to guess the password; the IP rate limit applies as well.
+// hijacked session can't be used to guess the password; the IP rate limit applies as well. Users
+// with a second factor confirm with it instead (ErrSecondFactorRequired).
 func (s *Service) ConfirmPassword(ctx context.Context, token, pw, clientIP string) (session.Session, error) {
 	if !s.d.IPLimiter.Allow(clientIP) {
 		return session.Session{}, ErrTooManyAttempts
@@ -144,42 +163,139 @@ func (s *Service) ConfirmPassword(ctx context.Context, token, pw, clientIP strin
 	if err != nil {
 		return session.Session{}, fmt.Errorf("confirm password: %w", err)
 	}
+	if enabled, err := s.secondFactorEnabled(ctx, current.User); err != nil || enabled {
+		if err != nil {
+			return session.Session{}, err
+		}
+		return session.Session{}, ErrSecondFactorRequired
+	}
 	if pw == "" || len(pw) > password.MaxLength {
 		return session.Session{}, ErrWrongPassword
 	}
-	creds, found, err := s.d.Credentials.Get(ctx, current.User)
+	err = s.checkFactor(ctx, current.User, pw, ErrWrongPassword, func(creds Credentials) (bool, error) {
+		ok, err := s.d.Hasher.Verify(pw, creds.PasswordHash)
+		if err != nil {
+			return false, fmt.Errorf("verify password: %w", err)
+		}
+		return ok, nil
+	})
 	if err != nil {
 		return session.Session{}, fmt.Errorf("confirm password: %w", err)
+	}
+	return s.stepUp(ctx, token)
+}
+
+// VerifySecondFactor completes a login that waits for the second factor and returns the full
+// session under a new token. Failures count towards the lockout.
+func (s *Service) VerifySecondFactor(ctx context.Context, token, code, clientIP string) (LoginResult, error) {
+	if !s.d.IPLimiter.Allow(clientIP) {
+		return LoginResult{}, ErrTooManyAttempts
+	}
+	pending, err := s.d.Sessions.ValidatePending(ctx, token)
+	if err != nil {
+		return LoginResult{}, fmt.Errorf("verify second factor: %w", err)
+	}
+	if err := s.checkSecondFactor(ctx, pending.User, code); err != nil {
+		return LoginResult{}, fmt.Errorf("verify second factor: %w", err)
+	}
+	full, sess, err := s.d.Sessions.CompleteSecondFactor(ctx, token)
+	if err != nil {
+		return LoginResult{}, fmt.Errorf("verify second factor: %w", err)
+	}
+	orgs, err := s.d.Credentials.Organizations(ctx, sess.User)
+	if err != nil {
+		return LoginResult{}, fmt.Errorf("verify second factor: %w", err)
+	}
+	return LoginResult{Token: full, Session: sess, Organizations: orgs}, nil
+}
+
+// ConfirmSecondFactor renews the step-up of a full session with a TOTP or recovery code.
+func (s *Service) ConfirmSecondFactor(ctx context.Context, token, code, clientIP string) (session.Session, error) {
+	if !s.d.IPLimiter.Allow(clientIP) {
+		return session.Session{}, ErrTooManyAttempts
+	}
+	current, err := s.d.Sessions.Validate(ctx, token)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("confirm second factor: %w", err)
+	}
+	if err := s.checkSecondFactor(ctx, current.User, code); err != nil {
+		return session.Session{}, fmt.Errorf("confirm second factor: %w", err)
+	}
+	return s.stepUp(ctx, token)
+}
+
+func (s *Service) checkSecondFactor(ctx context.Context, user identity.UserID, code string) error {
+	if s.d.SecondFactor == nil || code == "" || len(code) > maxCodeLength {
+		return ErrWrongCode
+	}
+	return s.checkFactor(ctx, user, "", ErrWrongCode, func(Credentials) (bool, error) {
+		ok, err := s.d.SecondFactor.Verify(ctx, user, code)
+		if err != nil {
+			return false, fmt.Errorf("verify code: %w", err)
+		}
+		return ok, nil
+	})
+}
+
+// checkFactor runs check under the lockout of the user's account: locked accounts fail without a
+// check (dummy hash for the password), failures count, success resets the counter.
+func (s *Service) checkFactor(ctx context.Context, user identity.UserID, pw string, wrong error, check func(Credentials) (bool, error)) error {
+	creds, found, err := s.d.Credentials.Get(ctx, user)
+	if err != nil {
+		return err //nolint:wrapcheck // wrapped by the callers
 	}
 	now := s.d.Now()
 	if !found || (creds.LockedUntil != nil && now.Before(*creds.LockedUntil)) {
-		s.d.Hasher.VerifyDummy(pw)
-		return session.Session{}, ErrWrongPassword
+		if pw != "" {
+			s.d.Hasher.VerifyDummy(pw)
+		}
+		return wrong
 	}
-	ok, err := s.d.Hasher.Verify(pw, creds.PasswordHash)
+	ok, err := check(creds)
 	if err != nil {
-		return session.Session{}, fmt.Errorf("confirm password: verify: %w", err)
+		return err
 	}
 	if !ok {
-		if err := s.d.Credentials.RecordFailedLogin(ctx, current.User, lockUntil(creds.FailedAttempts+1, now)); err != nil {
-			return session.Session{}, fmt.Errorf("confirm password: %w", err)
+		if err := s.d.Credentials.RecordFailedLogin(ctx, user, lockUntil(creds.FailedAttempts+1, now)); err != nil {
+			return err //nolint:wrapcheck // wrapped by the callers
 		}
-		return session.Session{}, ErrWrongPassword
+		return wrong
 	}
 	if creds.FailedAttempts > 0 || creds.LockedUntil != nil {
-		if err := s.d.Credentials.ResetFailedLogins(ctx, current.User); err != nil {
-			return session.Session{}, fmt.Errorf("confirm password: %w", err)
+		if err := s.d.Credentials.ResetFailedLogins(ctx, user); err != nil {
+			return err //nolint:wrapcheck // wrapped by the callers
 		}
 	}
+	return nil
+}
+
+func (s *Service) stepUp(ctx context.Context, token string) (session.Session, error) {
 	stepped, err := s.d.Sessions.StepUp(ctx, token)
 	if err != nil {
-		return session.Session{}, fmt.Errorf("confirm password: %w", err)
+		return session.Session{}, fmt.Errorf("step-up: %w", err)
 	}
 	return stepped, nil
 }
 
+func (s *Service) secondFactorEnabled(ctx context.Context, user identity.UserID) (bool, error) {
+	if s.d.SecondFactor == nil {
+		return false, nil
+	}
+	enabled, err := s.d.SecondFactor.Enabled(ctx, user)
+	if err != nil {
+		return false, fmt.Errorf("second factor: %w", err)
+	}
+	return enabled, nil
+}
+
 func (s *Service) succeed(ctx context.Context, creds Credentials, pw string) (LoginResult, error) {
-	if creds.FailedAttempts > 0 || creds.LockedUntil != nil {
+	enabled, err := s.secondFactorEnabled(ctx, creds.User)
+	if err != nil {
+		return LoginResult{}, fmt.Errorf("login: %w", err)
+	}
+	// With a second factor the failures are reset only after it: otherwise someone who knows the
+	// password could alternate it with code guesses and never reach the lockout.
+	if !enabled && (creds.FailedAttempts > 0 || creds.LockedUntil != nil) {
 		if err := s.d.Credentials.ResetFailedLogins(ctx, creds.User); err != nil {
 			return LoginResult{}, fmt.Errorf("login: %w", err)
 		}
@@ -200,6 +316,13 @@ func (s *Service) succeed(ctx context.Context, creds Credentials, pw string) (Lo
 	var active tenant.OrgID
 	if len(orgs) > 0 {
 		active = orgs[0].ID
+	}
+	if enabled {
+		token, sess, err := s.d.Sessions.CreatePending(ctx, creds.User, active)
+		if err != nil {
+			return LoginResult{}, fmt.Errorf("login: %w", err)
+		}
+		return LoginResult{Token: token, Session: sess, SecondFactorRequired: true}, nil
 	}
 	token, sess, err := s.d.Sessions.Create(ctx, creds.User, active)
 	if err != nil {

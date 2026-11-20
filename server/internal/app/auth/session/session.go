@@ -25,10 +25,16 @@ const (
 	tokenBytes    = 32
 	// maxTokenLength rejects absurd cookie values before hashing.
 	maxTokenLength = 64
+	// PendingTimeout bounds the time between password and second factor.
+	PendingTimeout = 5 * time.Minute
 )
 
-// ErrInvalid means the session is unknown, expired or revoked (deliberately not distinguished).
-var ErrInvalid = errors.New("invalid or expired session")
+var (
+	// ErrInvalid means the session is unknown, expired or revoked (deliberately not distinguished).
+	ErrInvalid = errors.New("invalid or expired session")
+	// ErrNotPending means the session doesn't wait for a second factor.
+	ErrNotPending = errors.New("the session does not wait for a second factor")
+)
 
 // Session is a login session. ID is the hex SHA-256 of the token; the token itself is never stored.
 type Session struct {
@@ -38,6 +44,9 @@ type Session struct {
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 	StepUpAt   time.Time // last (re-)authentication, e.g. login or 2FA confirmation
+	// SecondFactorPending marks a session after the password whose second factor is still
+	// missing: only the second-factor check and logout accept it.
+	SecondFactorPending bool
 }
 
 // SteppedUpWithin reports whether the user authenticated within maxAge (step-up check for
@@ -74,6 +83,27 @@ func (m *Manager) Create(ctx context.Context, user identity.UserID, org tenant.O
 	return m.insert(ctx, Session{User: user, Org: org, CreatedAt: now, LastSeenAt: now, StepUpAt: now})
 }
 
+// CreatePending starts a session after the password of a user with two-factor authentication; it
+// becomes a full session with CompleteSecondFactor and expires after PendingTimeout.
+func (m *Manager) CreatePending(ctx context.Context, user identity.UserID, org tenant.OrgID) (string, Session, error) {
+	now := m.now()
+	return m.insert(ctx, Session{User: user, Org: org, CreatedAt: now, LastSeenAt: now, StepUpAt: now, SecondFactorPending: true})
+}
+
+// CompleteSecondFactor turns a pending session into a full one under a new token (no session
+// fixation across the second step). The absolute timeout counts from the password.
+func (m *Manager) CompleteSecondFactor(ctx context.Context, token string) (string, Session, error) {
+	pending, err := m.ValidatePending(ctx, token)
+	if err != nil {
+		return "", Session{}, err
+	}
+	if err := m.store.Delete(ctx, pending.ID); err != nil {
+		return "", Session{}, fmt.Errorf("delete pending session: %w", err)
+	}
+	now := m.now()
+	return m.insert(ctx, Session{User: pending.User, Org: pending.Org, CreatedAt: pending.CreatedAt, LastSeenAt: now, StepUpAt: now})
+}
+
 // SwitchOrganization moves the session to another organization under a new token. The caller
 // must have checked the membership. Creation and step-up time are kept: switching neither
 // extends the absolute timeout nor counts as a re-authentication.
@@ -102,14 +132,40 @@ func (m *Manager) insert(ctx context.Context, s Session) (string, Session, error
 	return token, s, nil
 }
 
-// Validate returns the session of token, renews its activity and removes it when it expired.
+// Validate returns the full session of token, renews its activity and removes it when it
+// expired. Sessions still waiting for the second factor are ErrInvalid here.
 func (m *Manager) Validate(ctx context.Context, token string) (Session, error) {
+	s, err := m.check(ctx, token)
+	if err != nil {
+		return Session{}, err
+	}
+	if s.SecondFactorPending {
+		return Session{}, ErrInvalid
+	}
+	return s, nil
+}
+
+// ValidatePending returns a session that waits for the second factor (ErrNotPending for a full one).
+func (m *Manager) ValidatePending(ctx context.Context, token string) (Session, error) {
+	s, err := m.check(ctx, token)
+	if err != nil {
+		return Session{}, err
+	}
+	if !s.SecondFactorPending {
+		return Session{}, ErrNotPending
+	}
+	return s, nil
+}
+
+// check loads the session, enforces the timeouts and renews the activity.
+func (m *Manager) check(ctx context.Context, token string) (Session, error) {
 	s, err := m.lookup(ctx, token)
 	if err != nil {
 		return Session{}, err
 	}
 	now := m.now()
-	if now.Sub(s.LastSeenAt) >= IdleTimeout || now.Sub(s.CreatedAt) >= AbsoluteTimeout {
+	if now.Sub(s.LastSeenAt) >= IdleTimeout || now.Sub(s.CreatedAt) >= AbsoluteTimeout ||
+		(s.SecondFactorPending && now.Sub(s.CreatedAt) >= PendingTimeout) {
 		if err := m.store.Delete(ctx, s.ID); err != nil {
 			return Session{}, fmt.Errorf("delete expired session: %w", err)
 		}

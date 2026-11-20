@@ -47,6 +47,9 @@ func seedAccessFixtures(t *testing.T) {
 	seedLogin(t, beaID, "bea@example.org", orgBeta)
 	seedLogin(t, kaiID, "kai@example.org", orgAlpha, orgBeta)
 	ownerSQL(t,
+		"DELETE FROM user_totp WHERE user_id IN ('"+annID+"', '"+miaID+"', '"+beaID+"', '"+kaiID+"')",
+		"UPDATE organizations SET require_second_factor = false WHERE id IN ('"+orgAlpha+"', '"+orgBeta+"')")
+	ownerSQL(t,
 		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
 		"INSERT INTO node_groups (id, org_id, name) VALUES ('"+groupAl+"', '"+orgAlpha+"', 'alpha-web') ON CONFLICT DO NOTHING",
 		"DELETE FROM role_bindings WHERE org_id = '"+orgAlpha+"'",
@@ -78,6 +81,8 @@ type loggedIn struct {
 	agentCA      webv1connect.AgentCAServiceClient
 	metrics      webv1connect.MetricsServiceClient
 	fleet        webv1connect.FleetServiceClient
+	twoFactor    webv1connect.TwoFactorServiceClient
+	policy       webv1connect.SecurityPolicyServiceClient
 	jar          *cookiejar.Jar
 }
 
@@ -96,6 +101,8 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		agentCA:      webv1connect.NewAgentCAServiceClient(hc, s.server.URL),
 		metrics:      webv1connect.NewMetricsServiceClient(hc, s.server.URL),
 		fleet:        webv1connect.NewFleetServiceClient(hc, s.server.URL),
+		twoFactor:    webv1connect.NewTwoFactorServiceClient(hc, s.server.URL),
+		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {

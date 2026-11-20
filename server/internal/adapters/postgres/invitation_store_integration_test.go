@@ -130,7 +130,7 @@ func TestInvitationStore_AcceptNewAccount(t *testing.T) {
 	if id, found, _ := creds.FindUserByEmail(ctx, email); !found || id != user {
 		t.Errorf("account not created: %v %v", id, found)
 	}
-	principal, err := access.NewLoader(postgres.NewAccessStore(db)).Load(ctx, session.Session{User: user, Org: o.scope.OrgID()})
+	principal, err := access.NewLoader(postgres.NewAccessStore(db), nil).Load(ctx, session.Session{User: user, Org: o.scope.OrgID()})
 	if err != nil || len(principal.Bindings) != 1 || principal.Bindings[0].Role != role.Operator || !principal.Bindings[0].AllGroups {
 		t.Errorf("principal = %+v, %v", principal, err)
 	}
@@ -186,7 +186,7 @@ func TestInvitationStore_AcceptingNeverLowersARoleAndHasOneWinner(t *testing.T) 
 	if ok != 1 {
 		t.Errorf("%d acceptances succeeded, want 1", ok)
 	}
-	principal, _ := access.NewLoader(postgres.NewAccessStore(db)).Load(ctx, session.Session{User: o.admin, Org: o.scope.OrgID()})
+	principal, _ := access.NewLoader(postgres.NewAccessStore(db), nil).Load(ctx, session.Session{User: o.admin, Org: o.scope.OrgID()})
 	if len(principal.Bindings) != 1 || principal.Bindings[0].Role != role.Admin {
 		t.Errorf("bindings = %+v, want the admin role to stay", principal.Bindings)
 	}

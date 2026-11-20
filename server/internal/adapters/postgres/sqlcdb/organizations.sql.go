@@ -62,11 +62,17 @@ type CreateOrganizationParams struct {
 	Name string
 }
 
+type CreateOrganizationRow struct {
+	ID        uuid.UUID
+	Name      string
+	CreatedAt time.Time
+}
+
 // Organizations. Row-level security limits every query to the organization of the tenant
 // transaction (postgres.DB.InTenant); there is no way to read other organizations from here.
-func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error) {
+func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (CreateOrganizationRow, error) {
 	row := q.db.QueryRow(ctx, createOrganization, arg.ID, arg.Name)
-	var i Organization
+	var i CreateOrganizationRow
 	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
 	return i, err
 }
@@ -77,9 +83,15 @@ FROM organizations
 WHERE id = $1
 `
 
-func (q *Queries) GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error) {
+type GetOrganizationRow struct {
+	ID        uuid.UUID
+	Name      string
+	CreatedAt time.Time
+}
+
+func (q *Queries) GetOrganization(ctx context.Context, id uuid.UUID) (GetOrganizationRow, error) {
 	row := q.db.QueryRow(ctx, getOrganization, id)
-	var i Organization
+	var i GetOrganizationRow
 	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
 	return i, err
 }
@@ -90,15 +102,21 @@ FROM organizations
 ORDER BY name
 `
 
-func (q *Queries) ListOrganizations(ctx context.Context) ([]Organization, error) {
+type ListOrganizationsRow struct {
+	ID        uuid.UUID
+	Name      string
+	CreatedAt time.Time
+}
+
+func (q *Queries) ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error) {
 	rows, err := q.db.Query(ctx, listOrganizations)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Organization{}
+	items := []ListOrganizationsRow{}
 	for rows.Next() {
-		var i Organization
+		var i ListOrganizationsRow
 		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
 			return nil, err
 		}

@@ -141,9 +141,10 @@ type NodeGroup struct {
 }
 
 type Organization struct {
-	ID        uuid.UUID
-	Name      string
-	CreatedAt time.Time
+	ID                  uuid.UUID
+	Name                string
+	CreatedAt           time.Time
+	RequireSecondFactor bool
 }
 
 type PkiAuthority struct {
@@ -178,12 +179,13 @@ type Series struct {
 }
 
 type Session struct {
-	ID         string
-	UserID     uuid.UUID
-	OrgID      *uuid.UUID
-	CreatedAt  time.Time
-	LastSeenAt time.Time
-	StepUpAt   time.Time
+	ID                  string
+	UserID              uuid.UUID
+	OrgID               *uuid.UUID
+	CreatedAt           time.Time
+	LastSeenAt          time.Time
+	StepUpAt            time.Time
+	SecondFactorPending bool
 }
 
 type Superadmin struct {
@@ -204,4 +206,18 @@ type UserCredential struct {
 	PasswordChangedAt time.Time
 	FailedAttempts    int32
 	LockedUntil       *time.Time
+}
+
+type UserRecoveryCode struct {
+	UserID   uuid.UUID
+	CodeHash []byte
+	UsedAt   *time.Time
+}
+
+type UserTotp struct {
+	UserID       uuid.UUID
+	SecretSealed []byte
+	CreatedAt    time.Time
+	ConfirmedAt  *time.Time
+	LastStep     int64
 }

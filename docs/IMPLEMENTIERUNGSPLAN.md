@@ -1299,7 +1299,24 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 
 ### 5.1 Alert-Engine (E2.1)
 
-#### ☐ M2-01 – Alert-Domäne und Zustandsautomat · S · M
+#### ☑ M2-01 – Alert-Domäne und Zustandsautomat · S · M
+> Erledigt (`domain/alert`, ohne I/O):
+> - **Regel-Bausteine:** `RuleID` (`<kategorie>.<thema>.<bedingung>`), `Type` (die sieben Typen aus KONZEPT §12.2,
+>   keine freien Queries), `Timing` (`for` bis 24 h, Flapping), `Key` (Regel × Node × Dimension).
+> - **`Thresholds`:** warning/critical/clear mit Prüfung auf Widersprüche (gleiche Richtung, critical jenseits von
+>   warning, clear in Gegenrichtung und nicht jenseits der ersten Schwelle); `Evaluate` liefert Stufe und „clear
+>   erreicht“, NaN bedeutet keine Daten.
+> - **Zustandsautomat** `OK → PENDING → WARNING | CRITICAL → RESOLVED → OK`:
+>   - `for` gilt beim Verlassen von OK; ein feuernder Alert eskaliert sofort zu CRITICAL.
+>   - Zwischen Schwelle und `clear` hält er auf WARNING (Hysterese).
+>   - RESOLVED geht beim nächsten Schritt nach OK oder fängt neu an.
+>   - Quittieren nur feuernd; eine Eskalation hebt das Quittieren auf.
+>   - Flapping: mehr als N Wechsel zwischen feuernd und gelöst in M Minuten (Standard 5 in 30 min), mit begrenzter
+>     Historie.
+>   - Jede Änderung ergibt eine `Transition` (Zustand, Quittieren, Flapping an/aus) für Historie und Benachrichtigung.
+>   - Fehlende Daten ändern nichts; das ist Sache der `absence`-Regeln.
+> - **Tests:** Tabellen-Tests der Abläufe, Schwellen und Prüfungen; Property-Test mit 200 Zufallsfolgen (nur erlaubte
+>   Übergänge, Invarianten mit `Check`); Gegenproben ohne Hysterese, ohne Aufheben des Quittierens und ohne `for`.
 - **Ziel:** Regel (Typ, Bedingung, Schwellen, `for`, `clear`, Selektor, Labels) und Alert-Instanz (Regel × Node ×
   Dimension) als Domänentypen; Zustandsautomat `OK → PENDING → WARNING | CRITICAL → RESOLVED → OK` mit `for`,
   Hysterese über `clear`, Flapping (N Wechsel in M Minuten), Quittieren als Flag. Reine Logik ohne I/O.

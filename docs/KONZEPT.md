@@ -593,7 +593,10 @@ Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von
 - **Alert-Instanz:** Regel × Node (× ggf. Dimension wie Mountpoint/Interface) mit Zustand.
 - **Zustandsautomat:** `OK → PENDING → WARNING | CRITICAL → RESOLVED → OK`, dazu `SILENCED` und `ACKNOWLEDGED` als
   Flags.
-    - `for:` legt die Mindestdauer bis zum Feuern fest, `clear:` eine eigene Rückfall-Schwelle (**Hysterese**).
+    - `for:` legt die Mindestdauer bis zum Feuern fest (beim Verlassen von OK; ein feuernder Alert eskaliert sofort zu
+      CRITICAL), `clear:` eine eigene Rückfall-Schwelle (**Hysterese**: zwischen Schwelle und `clear` bleibt er auf
+      WARNING).
+    - **Quittieren** stoppt die Benachrichtigungen, bis der Alert gelöst ist oder zu CRITICAL eskaliert.
     - **Flapping-Erkennung:** Mehr als N Wechsel in M Minuten setzen den Status `FLAPPING`; Benachrichtigungen werden
       dann gedrosselt.
 - **Notification-Policy (Routing):** Matcher auf Labels (`severity`, `group`, `rule`, `tags`) → Kanäle. Dazu

@@ -116,3 +116,18 @@ func TestAPIHeaders(t *testing.T) {
 		}
 	}
 }
+
+// Some proxies (HAProxy option forwardfor) add a separate X-Forwarded-For line instead of
+// appending: the first line is then entirely the client's and must not win.
+func TestClientIP_ReadsAllForwardedForLines(t *testing.T) {
+	h := webapi.ClientIP([]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")})(ok())
+	r := request(http.MethodPost, "", "10.0.0.2:443", nil)
+	r.Header.Add("X-Forwarded-For", "1.2.3.4") // forged by the client
+	r.Header.Add("X-Forwarded-For", "203.0.113.9")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+
+	if got := rec.Body.String(); got != "203.0.113.9" {
+		t.Errorf("client IP = %q, want the address the proxy added", got)
+	}
+}

@@ -116,7 +116,7 @@ flowchart LR
 | T24 | I | Geheimnisse in Antworten, Logs oder URLs | Tokens nur einmal angezeigt, nur Hash gespeichert; Einladungs-Token im URL-Fragment; keine Stacktraces, Korrelations-ID | M1-04, M1-08, M1-32 | ✓ |
 | T25 | I | Server-Metriken ohne Anmeldung verraten Mandanten | `/metrics` auf eigenem Listener, standardmäßig aus, nur Instanzwerte ohne Labels von Orgs/Nodes; Warnung bei nicht-Loopback | M1-24 (ADR 0011) | ✓ |
 | T26 | D | Viele Live-Streams oder große Abfragen | max. 32 Streams pro Session, 1 000 pro Instanz, Re-Check alle 30 s; Begrenzung von Zeitraum, Nodes und Punkten pro Abfrage | M1-26 | ✓ |
-| T27 | D | Login-Flut | Rate-Limits pro IP, progressive Sperre | M1-02 | ✓ |
+| T27 | D | Login-Flut, auch über viele IPv6-Adressen; Argon2id-Speicher (64 MiB je Prüfung) erschöpfen | Rate-Limits pro IP (IPv6 pro /64), progressive Sperre, höchstens 512 MiB für gleichzeitige Passwortprüfungen, alle `X-Forwarded-For`-Zeilen ausgewertet | M1-02, M1-35 | ✓ |
 | T28 | R | „Wer hat die Rolle vergeben?“ | Audit-Log pro Org mit Hash-Kette, `sermon_app` nur INSERT/SELECT; instanzweites Audit-Log für CA-Aktionen | M1-04, M1-11b | ✓ |
 | T29 | E | Viewer löst Operator-Aktion aus | zentrale Policy, deny by default, Rollen-Matrix-Test (jede Aktion × jede Rolle) | M1-01 | ✓ |
 | T30 | E | Admin einer Gruppe erweitert eigene Rechte | Rechteverwaltung nur für Admins aller Gruppen, letzter Admin nicht entfernbar, Step-up | M1-04 | ✓ |

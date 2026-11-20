@@ -81,3 +81,22 @@ func TestNew_RejectsInvalidConfiguration(t *testing.T) {
 	}()
 	ratelimit.New(0, time.Minute, time.Now)
 }
+
+// An IPv6 client usually controls a whole /64: per address it would get 2^64 budgets.
+func TestLimiter_CountsIPv6PerSlash64(t *testing.T) {
+	c := &clock{now: time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)}
+	l := ratelimit.New(2, time.Minute, c.Now)
+
+	if !l.Allow("2001:db8:1:2::1") || !l.Allow("2001:db8:1:2::ffff") {
+		t.Fatal("the first two attempts of the /64 are allowed")
+	}
+	if l.Allow("2001:db8:1:2:abcd::7") {
+		t.Error("a third address of the same /64 shares the budget")
+	}
+	if !l.Allow("2001:db8:1:3::1") || !l.Allow("192.0.2.1") || !l.Allow("::ffff:192.0.2.2") {
+		t.Error("other /64 networks and IPv4 (also mapped) are limited on their own")
+	}
+	if !l.Allow("user-0193f5a0") {
+		t.Error("keys that are no IP stay unchanged")
+	}
+}

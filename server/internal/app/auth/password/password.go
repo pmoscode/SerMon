@@ -57,10 +57,18 @@ type Params struct {
 // DefaultParams are Argon2id with 64 MiB, 3 iterations and 1 thread (KONZEPT §7).
 var DefaultParams = Params{Memory: 64 * 1024, Time: 3, Threads: 1, SaltLength: 16, KeyLength: 32}
 
+// MaxHashMemory bounds the memory of all password checks running at once: each needs
+// Params.Memory, and logins arrive unauthenticated (M1-35). Further checks wait for a slot.
+const MaxHashMemory = 512 << 20
+
+// maxSlots caps the parallel checks for small memory parameters (CPU, tests).
+const maxSlots = 64
+
 // Hasher hashes and verifies passwords.
 type Hasher struct {
 	params Params
 	dummy  string
+	slots  chan struct{} // semaphore: one token per running hash
 }
 
 // NewHasher validates the parameters and prepares a dummy hash for unknown users.
@@ -77,7 +85,8 @@ func NewHasher(p Params) (*Hasher, error) {
 	case p.KeyLength < 32:
 		return nil, errors.New("key must be at least 32 bytes")
 	}
-	h := &Hasher{params: p}
+	slots := min(max(1, MaxHashMemory/(int(p.Memory)<<10)), maxSlots)
+	h := &Hasher{params: p, slots: make(chan struct{}, slots)}
 	dummy, err := h.Hash("dummy password for unknown users")
 	if err != nil {
 		return nil, err
@@ -95,7 +104,7 @@ func (h *Hasher) Hash(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
-	key := argon2.IDKey([]byte(password), salt, h.params.Time, h.params.Memory, h.params.Threads, h.params.KeyLength)
+	key := h.idKey([]byte(password), salt, h.params)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version,
 		h.params.Memory, h.params.Time, h.params.Threads, b64.EncodeToString(salt), b64.EncodeToString(key)), nil
 }
@@ -109,8 +118,15 @@ func (h *Hasher) Verify(password, encoded string) (bool, error) {
 	if len(password) > MaxLength {
 		return false, nil
 	}
-	candidate := argon2.IDKey([]byte(password), salt, p.Time, p.Memory, p.Threads, p.KeyLength)
+	candidate := h.idKey([]byte(password), salt, p)
 	return subtle.ConstantTimeCompare(candidate, key) == 1, nil
+}
+
+// idKey runs Argon2id within the memory budget of the hasher.
+func (h *Hasher) idKey(password, salt []byte, p Params) []byte {
+	h.slots <- struct{}{}
+	defer func() { <-h.slots }()
+	return argon2.IDKey(password, salt, p.Time, p.Memory, p.Threads, p.KeyLength)
 }
 
 // VerifyDummy spends the same time as Verify and always fails. Call it for unknown users so that

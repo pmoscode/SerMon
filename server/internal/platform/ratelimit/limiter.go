@@ -6,6 +6,7 @@
 package ratelimit
 
 import (
+	"net/netip"
 	"sync"
 	"time"
 )
@@ -31,6 +32,7 @@ func New(limit int, window time.Duration, now func() time.Time) *Limiter {
 // Allow records an event for key and reports whether it is within the limit.
 // Denied events are not recorded, so hammering does not extend the block.
 func (l *Limiter) Allow(key string) bool {
+	key = normalize(key)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -72,4 +74,22 @@ func (l *Limiter) cleanup(now time.Time) {
 		}
 	}
 	l.lastCleanup = now
+}
+
+// normalize counts an IPv6 client per /64: that is what one host or customer usually controls,
+// per address the client would get 2^64 budgets. IPv4 (also IPv4-mapped) and other keys stay.
+func normalize(key string) string {
+	addr, err := netip.ParseAddr(key)
+	if err != nil {
+		return key
+	}
+	addr = addr.Unmap()
+	if addr.Is4() {
+		return addr.String()
+	}
+	prefix, err := addr.Prefix(64)
+	if err != nil {
+		return key
+	}
+	return prefix.String()
 }

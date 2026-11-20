@@ -314,12 +314,13 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		SecondFactor: secondFactor,
 	})
 	accessStore := postgres.NewAccessStore(db)
+	principals := access.NewLoader(accessStore, secondFactor)
 	metricsHandler := webapi.NewMetricsHandler(nodes, logger)
 	registry.Gauge("sermon_server_live_streams", "Open live metric streams of the web UI.",
 		func() float64 { return float64(metricsHandler.LiveStreams()) })
 	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
-		Auth:   webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger),
+		Auth:   webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals),
 		System: webapi.NewSystemHandler(version),
 		Access: webapi.NewAccessHandler(access.NewService(accessStore, policy, time.Now, access.NewID), invites, logger),
 		Setup:  webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
@@ -340,7 +341,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
-		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(accessStore, secondFactor), logger),
+		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil
 }

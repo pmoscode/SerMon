@@ -161,6 +161,12 @@ message Session {
   // second_factor_setup_required means the active organization requires two-factor
   // authentication the user doesn't have yet; only TwoFactorService works until it is set up.
   bool second_factor_setup_required = 8;
+  // org_admin is true for admins of all groups of the active organization (members, groups,
+  // invitations, security policy, audit log). The server checks every call anyway.
+  bool org_admin = 9;
+  // enroll_group_ids are the groups where the caller may add nodes (operator or admin); the
+  // single value "*" stands for all groups.
+  repeated string enroll_group_ids = 10;
 }
 
 // Organization is an organization the user belongs to.

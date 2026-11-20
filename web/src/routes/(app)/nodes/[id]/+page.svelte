@@ -59,7 +59,7 @@
 			<TimeRangePicker />
 		</div>
 
-		<Tabs.Root value="cpu" class="flex-col">
+		<Tabs.Root value="cpu">
 			<Tabs.List aria-label={m.node_areas()}>
 				<Tabs.Trigger value="cpu">{m.node_tab_cpu()}</Tabs.Trigger>
 				<Tabs.Trigger value="memory">{m.node_tab_memory()}</Tabs.Trigger>

@@ -9,6 +9,14 @@
 /* Dark mode: the class "dark" on <html>, set from the theme choice (light, dark, system). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * The shadcn-svelte components use data-active/data-horizontal/data-vertical; bits-ui sets
+ * data-state and data-orientation. Map them so active tabs and the orientation take effect.
+ */
+@custom-variant data-active (&[data-state='active']);
+@custom-variant data-horizontal (&[data-orientation='horizontal']);
+@custom-variant data-vertical (&[data-orientation='vertical']);
+
 /* shadcn-svelte theme tokens (zinc). */
 :root {
 	--radius: 0.625rem;

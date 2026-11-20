@@ -1,7 +1,9 @@
 <script lang="ts">
 	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 	import Server from '@lucide/svelte/icons/server';
+	import Plus from '@lucide/svelte/icons/plus';
 	import Table from '@lucide/svelte/icons/table';
+	import { resolve } from '$app/paths';
 	import FleetHeader from '#lib/components/fleet/FleetHeader.svelte';
 	import NodeTable from '#lib/components/fleet/NodeTable.svelte';
 	import NodeTile from '#lib/components/fleet/NodeTile.svelte';
@@ -13,6 +15,7 @@
 	import { countByStatus, filterNodes, groupsOf, type Status } from '#lib/fleet/status.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { sessionState } from '#lib/stores/session.svelte.js';
 
 	const VIEW_KEY = 'sermon-fleet-view';
 	type View = 'tiles' | 'table';
@@ -60,9 +63,15 @@
 	<title>{m.fleet_title()} · SerMon</title>
 </svelte:head>
 
-<div class="mb-6 flex items-center gap-2">
+<div class="mb-6 flex flex-wrap items-center gap-2">
 	<h1 class="text-2xl font-semibold tracking-tight">{m.fleet_title()}</h1>
 	<HelpTip topic="pages/fleet" />
+	{#if (sessionState.current?.enrollGroupIds.length ?? 0) > 0}
+		<Button href={resolve('/(app)/nodes/add')} size="sm" class="ml-auto">
+			<Plus aria-hidden="true" />
+			{m.addnode_title()}
+		</Button>
+	{/if}
 </div>
 
 {#if fleet.status === 'loading'}

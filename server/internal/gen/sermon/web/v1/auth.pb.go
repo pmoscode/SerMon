@@ -756,8 +756,14 @@ type Session struct {
 	// second_factor_setup_required means the active organization requires two-factor
 	// authentication the user doesn't have yet; only TwoFactorService works until it is set up.
 	SecondFactorSetupRequired bool `protobuf:"varint,8,opt,name=second_factor_setup_required,json=secondFactorSetupRequired,proto3" json:"second_factor_setup_required,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// org_admin is true for admins of all groups of the active organization (members, groups,
+	// invitations, security policy, audit log). The server checks every call anyway.
+	OrgAdmin bool `protobuf:"varint,9,opt,name=org_admin,json=orgAdmin,proto3" json:"org_admin,omitempty"`
+	// enroll_group_ids are the groups where the caller may add nodes (operator or admin); the
+	// single value "*" stands for all groups.
+	EnrollGroupIds []string `protobuf:"bytes,10,rep,name=enroll_group_ids,json=enrollGroupIds,proto3" json:"enroll_group_ids,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -844,6 +850,20 @@ func (x *Session) GetSecondFactorSetupRequired() bool {
 		return x.SecondFactorSetupRequired
 	}
 	return false
+}
+
+func (x *Session) GetOrgAdmin() bool {
+	if x != nil {
+		return x.OrgAdmin
+	}
+	return false
+}
+
+func (x *Session) GetEnrollGroupIds() []string {
+	if x != nil {
+		return x.EnrollGroupIds
+	}
+	return nil
 }
 
 // Organization is an organization the user belongs to.
@@ -937,7 +957,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\x89\x03\n" +
+	"\x19SecondFactorSetupRequired\"\xd0\x03\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -946,7 +966,10 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\rorganizations\x18\x05 \x03(\v2\x1b.sermon.web.v1.OrganizationR\rorganizations\x12>\n" +
 	"\rstep_up_until\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vstepUpUntil\x122\n" +
 	"\x15second_factor_enabled\x18\a \x01(\bR\x13secondFactorEnabled\x12?\n" +
-	"\x1csecond_factor_setup_required\x18\b \x01(\bR\x19secondFactorSetupRequired\"2\n" +
+	"\x1csecond_factor_setup_required\x18\b \x01(\bR\x19secondFactorSetupRequired\x12\x1b\n" +
+	"\torg_admin\x18\t \x01(\bR\borgAdmin\x12(\n" +
+	"\x10enroll_group_ids\x18\n" +
+	" \x03(\tR\x0eenrollGroupIds\"2\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name2\x96\x05\n" +

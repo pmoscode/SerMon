@@ -14,6 +14,8 @@
 				return m.login_logged_out();
 			case 'setup_done':
 				return m.login_setup_done();
+			case 'invited':
+				return m.login_invited();
 			default:
 				return '';
 		}

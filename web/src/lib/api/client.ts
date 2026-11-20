@@ -15,6 +15,7 @@ import { AccessService } from './gen/sermon/web/v1/access_pb.js';
 import { AuthService, SecondFactorSetupRequiredSchema } from './gen/sermon/web/v1/auth_pb.js';
 import { EnrollmentTokenService } from './gen/sermon/web/v1/enrollment_token_pb.js';
 import { FleetService } from './gen/sermon/web/v1/fleet_pb.js';
+import { InvitationService } from './gen/sermon/web/v1/invitation_pb.js';
 import { MetricsService } from './gen/sermon/web/v1/metrics_pb.js';
 import { NodeService } from './gen/sermon/web/v1/node_pb.js';
 import { SetupService } from './gen/sermon/web/v1/setup_pb.js';
@@ -48,7 +49,7 @@ export const expiryInterceptor: Interceptor = (next) => async (request) => {
 	try {
 		return await next(request);
 	} catch (error) {
-		const anonymous = [AuthService.typeName, SetupService.typeName];
+		const anonymous = [AuthService.typeName, SetupService.typeName, InvitationService.typeName];
 		if (
 			ConnectError.from(error).code === Code.Unauthenticated &&
 			!anonymous.includes(request.service.typeName)
@@ -77,6 +78,7 @@ export const api = {
 	setup: client(SetupService),
 	access: client(AccessService),
 	enrollment: client(EnrollmentTokenService),
+	invitation: client(InvitationService),
 	fleet: client(FleetService),
 	metrics: client(MetricsService),
 	node: client(NodeService),

@@ -123,7 +123,8 @@ func newStack(t *testing.T, loginLimit int) stack {
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
-		Auth:   webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)),
+		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
+			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)),
 		System: webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
 			invites, slog.New(slog.DiscardHandler)),
@@ -373,5 +374,29 @@ func TestAuthAPI_ConfirmPasswordRenewsTheStepUp(t *testing.T) {
 	session, err := c.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
 	if err != nil || !session.Msg.GetSession().GetStepUpUntil().AsTime().Equal(res.Msg.GetSession().GetStepUpUntil().AsTime()) {
 		t.Errorf("GetSession() after the step-up = %v, %v", session, err)
+	}
+}
+
+func TestAuthAPI_SessionDescribesTheRights(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ctx := context.Background()
+
+	ann := login(t, s, "ann@example.org") // admin of all groups
+	if me, err := ann.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
+		!me.Msg.GetSession().GetOrgAdmin() || strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != "*" {
+		t.Errorf("admin: %v, %v", me, err)
+	}
+	mia := login(t, s, "mia@example.org") // viewer of one group
+	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
+		me.Msg.GetSession().GetOrgAdmin() || len(me.Msg.GetSession().GetEnrollGroupIds()) != 0 {
+		t.Errorf("viewer: %v, %v", me, err)
+	}
+	ownerSQL(t, "SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
+		"UPDATE role_bindings SET role = 'operator' WHERE id = '"+bindingAl+"'")
+	t.Cleanup(func() { seedAccessFixtures(t) })
+	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
+		strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != groupAl {
+		t.Errorf("operator of a group: %v, %v", me, err)
 	}
 }

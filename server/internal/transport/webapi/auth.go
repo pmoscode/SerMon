@@ -18,7 +18,9 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
+	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -46,7 +48,14 @@ type AuthHandler struct {
 	sessions     *session.Manager
 	identities   IdentityReader
 	secondFactor SecondFactorView // nil: no second factors
+	principals   PrincipalLoader  // nil: no rights in the session view
 	logger       *slog.Logger
+}
+
+// WithPrincipals lets the session view describe the caller's rights (navigation in the UI).
+func (h *AuthHandler) WithPrincipals(principals PrincipalLoader) *AuthHandler {
+	h.principals = principals
+	return h
 }
 
 var _ webv1connect.AuthServiceHandler = (*AuthHandler)(nil)
@@ -270,6 +279,9 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 	for _, o := range orgs {
 		view.Organizations = append(view.Organizations, &webv1.Organization{Id: o.ID.String(), Name: o.Name})
 	}
+	if err := h.describeRights(ctx, s, view); err != nil {
+		return nil, err
+	}
 	if h.secondFactor != nil {
 		if view.SecondFactorEnabled, err = h.secondFactor.Enabled(ctx, s.User); err != nil {
 			return nil, fmt.Errorf("second factor: %w", err)
@@ -281,6 +293,34 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 		}
 	}
 	return view, nil
+}
+
+// describeRights fills the caller's rights in the active organization. Without them (no
+// organization, removed member, second factor missing) the view simply has none.
+func (h *AuthHandler) describeRights(ctx context.Context, s session.Session, view *webv1.Session) error {
+	if h.principals == nil || s.Org == (tenant.OrgID{}) {
+		return nil
+	}
+	p, err := h.principals.Load(ctx, s)
+	if errors.Is(err, access.ErrNoMembership) || errors.Is(err, access.ErrSecondFactorSetupRequired) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("load rights: %w", err)
+	}
+	policy := authz.NewPolicy()
+	view.OrgAdmin = policy.Allowed(p, authz.ManageMembers, authz.InOrg(p.Org))
+	for _, b := range p.Bindings {
+		switch {
+		case !b.Role.AtLeast(role.Operator):
+		case b.AllGroups:
+			view.EnrollGroupIds = []string{"*"}
+			return nil
+		default:
+			view.EnrollGroupIds = append(view.EnrollGroupIds, b.Group.String())
+		}
+	}
+	return nil
 }
 
 // internal logs the cause with a correlation ID and returns a generic error to the client.

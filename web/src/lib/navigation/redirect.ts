@@ -20,7 +20,7 @@ export function safeRedirect(target: string | null | undefined): string {
 
 /** The login page that returns to the given path afterwards. */
 export function loginPath(
-	reason: 'expired' | 'logged_out' | 'setup_done' | undefined,
+	reason: 'expired' | 'logged_out' | 'setup_done' | 'invited' | undefined,
 	from?: string
 ): string {
 	const params = new URLSearchParams();

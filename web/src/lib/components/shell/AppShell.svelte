@@ -4,6 +4,7 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import Users from '@lucide/svelte/icons/users';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -20,10 +21,13 @@
 
 	let { children, onLogout }: { children: Snippet; onLogout: () => void } = $props();
 
-	const nav = [
+	const nav = $derived([
 		{ href: resolve('/(app)/fleet'), icon: Server, label: () => m.nav_fleet() },
+		...(sessionState.current?.orgAdmin
+			? [{ href: resolve('/(app)/admin'), icon: Users, label: () => m.nav_admin() }]
+			: []),
 		{ href: resolve('/(app)/settings/security'), icon: ShieldCheck, label: () => m.nav_security() }
-	];
+	]);
 	const name = $derived(sessionState.current?.displayName || sessionState.current?.email || '');
 	const helpTopic = $derived(page.route.id ? pageHelp[page.route.id] : undefined);
 

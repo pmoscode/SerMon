@@ -2,5 +2,7 @@
 export const pageHelp: Record<string, string> = {
 	'/(app)/fleet': 'pages/fleet',
 	'/(app)/settings/security': 'pages/security',
-	'/(app)/nodes/[id]': 'pages/node'
+	'/(app)/nodes/[id]': 'pages/node',
+	'/(app)/nodes/add': 'pages/add_node',
+	'/(app)/admin': 'pages/admin'
 };

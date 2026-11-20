@@ -11,6 +11,11 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# `sermon-agent simulate`: virtual nodes for development and load tests (`just simulate`,
+# `just e2e-agent`). Never in release builds: it enrolls many identities with one token.
+simulate = []
+
 [dependencies]
 rustix.workspace = true
 anyhow.workspace = true

@@ -102,13 +102,26 @@ fn host_and_port(uri: &Uri) -> Result<(String, u16), ConnectError> {
     Ok((host.to_owned(), uri.port_u16().unwrap_or(default_port)))
 }
 
-/// Text from the server for logs and terminals: control characters (newlines, escape sequences)
-/// become spaces so that it can't forge log lines, and it is cut at `max_chars`.
+/// Text from the server for logs and terminals: control characters (newlines, escape sequences),
+/// bidi controls and zero-width characters become spaces so that it can't forge or disguise log
+/// lines, and it is cut at `max_chars`.
 pub(crate) fn printable(text: &str, max_chars: usize) -> String {
     text.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
+        .map(|c| {
+            if c.is_control() || is_invisible(c) {
+                ' '
+            } else {
+                c
+            }
+        })
         .take(max_chars)
         .collect()
+}
+
+/// Bidi controls and zero-width characters: they reorder or hide text in a terminal or log viewer.
+fn is_invisible(c: char) -> bool {
+    matches!(c,
+        '\u{061c}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2069}' | '\u{feff}')
 }
 
 /// The error and all its causes, joined with ": ".
@@ -148,6 +161,14 @@ mod tests {
     fn printable_removes_control_characters_and_bounds_the_length() {
         assert_eq!(printable("a\nb\u{1b}[2Jc", 100), "a b [2Jc");
         assert_eq!(printable("abcdef", 3), "abc");
+    }
+
+    #[test]
+    fn printable_removes_bidi_and_invisible_characters() {
+        // "Trojan source": the server's text must not reorder or hide parts of the log line.
+        assert_eq!(printable("a\u{202e}b\u{2066}c\u{2069}d", 100), "a b c d");
+        assert_eq!(printable("x\u{200b}y\u{feff}z\u{061c}!", 100), "x y z !");
+        assert_eq!(printable("Größe ✓ 日本", 100), "Größe ✓ 日本");
     }
 
     #[test]

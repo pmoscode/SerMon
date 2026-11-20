@@ -236,7 +236,7 @@ fn checked_dir(
 enum PlainHttp {
     /// Only HTTPS (mTLS agent API).
     Never,
-    /// HTTP only to a loopback address (development without TLS, `just dev`).
+    /// HTTP only to a literal loopback address (development without TLS, `just dev`).
     LoopbackOnly,
 }
 
@@ -327,13 +327,14 @@ impl fmt::Display for ServerUrl {
     }
 }
 
+/// Only literal loopback addresses: a name like `localhost` could resolve elsewhere (resolver,
+/// `/etc/hosts`) and the enrollment token would then travel in plain text.
 fn is_loopback(host: &str) -> bool {
     let bare = host
         .strip_prefix('[')
         .and_then(|inner| inner.strip_suffix(']'))
         .unwrap_or(host);
-    bare.eq_ignore_ascii_case("localhost")
-        || bare.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+    bare.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
 }
 
 #[cfg(test)]
@@ -411,6 +412,12 @@ mod tests {
     fn rejects_invalid_server_urls() {
         let cases = [
             ("http://sermon.example.com", "only allowed for loopback"),
+            // A name may resolve anywhere (resolver, /etc/hosts): only literal addresses count.
+            ("http://localhost:8080", "only allowed for loopback"),
+            (
+                "http://localhost.sermon.example.com",
+                "only allowed for loopback",
+            ),
             ("ftp://sermon.example.com", "must use https://"),
             ("sermon.example.com", "must use https://"),
             ("https://alice:secret@sermon.example.com", "user info"),
@@ -432,8 +439,8 @@ mod tests {
     #[test]
     fn plain_http_is_allowed_for_loopback_enrollment_only() {
         for url in [
-            "http://localhost:8080",
             "http://127.0.0.1:8080",
+            "http://127.0.0.2:8080",
             "http://[::1]:8080",
         ] {
             let config = AgentConfig::parse(&format!("[server]\nurl = \"{url}\"\n")).unwrap();
@@ -443,7 +450,7 @@ mod tests {
         }
 
         let problems = invalid(
-            "[server]\nurl = \"http://localhost:8080\"\nagent_url = \"http://localhost:8443\"\n",
+            "[server]\nurl = \"http://127.0.0.1:8080\"\nagent_url = \"http://127.0.0.1:8443\"\n",
         );
         assert_eq!(problems, vec!["server.agent_url: must use https://"]);
     }

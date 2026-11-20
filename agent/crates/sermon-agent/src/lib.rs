@@ -9,6 +9,7 @@ pub mod enroll;
 pub mod identity;
 pub mod logging;
 pub mod scheduler;
+#[cfg(feature = "simulate")]
 pub mod simulate;
 pub mod state;
 
@@ -57,6 +58,7 @@ pub fn execute(cli: Cli) -> anyhow::Result<()> {
             let config = AgentConfig::load(&cli.config)?;
             collect(&config, args.seconds)
         }
+        #[cfg(feature = "simulate")]
         Command::Simulate(args) => {
             let config = AgentConfig::load(&cli.config)?;
             logging::init(config.log_level);

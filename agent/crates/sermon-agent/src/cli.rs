@@ -39,6 +39,7 @@ pub enum Command {
     /// Remove the local identity and buffered data of this agent.
     Uninstall(UninstallArgs),
     /// Run virtual nodes with synthetic metrics against a server (development and load tests).
+    #[cfg(feature = "simulate")]
     Simulate(SimulateArgs),
     /// Print the version.
     Version,
@@ -76,6 +77,7 @@ pub struct CollectArgs {
 }
 
 /// Arguments of `simulate`.
+#[cfg(feature = "simulate")]
 #[derive(Debug, Args)]
 pub struct SimulateArgs {
     /// Number of virtual nodes.
@@ -306,6 +308,14 @@ mod tests {
 
     fn secret(value: &str) -> SecretArg {
         value.parse().unwrap()
+    }
+
+    /// The simulator enrolls many identities with one token: release builds don't contain it.
+    #[cfg(not(feature = "simulate"))]
+    #[test]
+    fn release_builds_have_no_simulator() {
+        let error = parse(&["simulate", "--nodes", "3"]).unwrap_err();
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidSubcommand);
     }
 
     #[test]

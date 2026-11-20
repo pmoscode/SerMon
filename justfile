@@ -29,7 +29,7 @@ dev:
 
 # Run virtual nodes against `just dev` (M1-34); the first run needs SERMON_ENROLLMENT_TOKEN with enough uses
 simulate nodes="10" seed="1":
-    cd agent && cargo build --locked -q -p sermon-agent
+    cd agent && cargo build --locked -q -p sermon-agent --features simulate
     mkdir -p deploy/dev/.simulate
     printf 'log_level = "info"\n[server]\nurl = "http://127.0.0.1:8080"\nagent_url = "https://localhost:8443"\n[paths]\nstate_dir = "%s"\n' \
         "{{ justfile_directory() }}/deploy/dev/.simulate" > deploy/dev/.simulate/agent.toml
@@ -111,7 +111,7 @@ e2e-demo:
 
 # Run the Rust agent binary against the real server (Testcontainers; Docker and Rust required)
 e2e-agent:
-    cd agent && cargo build --locked -p sermon-agent
+    cd agent && cargo build --locked -p sermon-agent --features simulate
     cd server && SERMON_AGENT_BIN="{{ justfile_directory() }}/agent/target/debug/sermon-agent" go test -tags integration -count=1 -run 'TestAgentBinary_' ./cmd/sermon-server/
 
 # Run security scans (secrets now; gosec, govulncheck, cargo-audit/deny, pnpm audit follow)
@@ -175,11 +175,13 @@ fmt-agent:
 lint-agent:
     cargo fmt --all -- --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 # Run the agent tests
 [working-directory: 'agent']
 test-agent:
     cargo test --workspace --locked
+    cargo test -p sermon-agent --features simulate --locked
 
 # Check agent dependencies: advisories, licenses, bans, sources
 [working-directory: 'agent']

@@ -234,10 +234,9 @@ pub fn load(layout: &StateLayout) -> Result<StoredIdentity, IdentityStoreError> 
         certificate,
         intermediates,
         trust_anchors,
-        not_after: UNIX_EPOCH + Duration::from_secs(metadata.not_after),
-        issued_at: metadata
-            .issued_at
-            .map(|seconds| UNIX_EPOCH + Duration::from_secs(seconds)),
+        not_after: from_unix(metadata.not_after)
+            .ok_or_else(|| invalid(&metadata_path, &"not_after is out of range"))?,
+        issued_at: metadata.issued_at.and_then(from_unix),
     })
 }
 
@@ -303,6 +302,10 @@ impl IdentitySource for FileIdentity {
     fn store_trust_bundle(&self, roots: &[CertificateDer<'static>]) -> Result<(), BoxError> {
         Ok(store_trust_bundle(&self.layout, roots)?)
     }
+}
+
+fn from_unix(seconds: u64) -> Option<SystemTime> {
+    UNIX_EPOCH.checked_add(Duration::from_secs(seconds))
 }
 
 fn unix_seconds(time: SystemTime) -> u64 {
@@ -479,6 +482,14 @@ mod tests {
         let pem = fs::read_to_string(layout.certificate_file()).unwrap();
         assert_eq!(pem.matches("BEGIN CERTIFICATE").count(), 2);
         assert!(!pem.contains('\r'));
+    }
+
+    #[test]
+    fn converts_unix_seconds_without_panicking() {
+        assert_eq!(from_unix(0), Some(UNIX_EPOCH));
+        assert_eq!(from_unix(60), Some(UNIX_EPOCH + Duration::from_mins(1)));
+        // A tampered identity.toml must not crash the agent (no panics on untrusted input).
+        assert_eq!(from_unix(u64::MAX), None);
     }
 
     #[test]

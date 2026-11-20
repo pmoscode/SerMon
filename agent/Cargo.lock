@@ -1115,6 +1115,7 @@ dependencies = [
  "http",
  "pem",
  "rcgen",
+ "rustix",
  "rustls",
  "serde",
  "sermon-buffer",

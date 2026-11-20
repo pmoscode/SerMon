@@ -76,7 +76,7 @@ pub fn store(
 ) -> Result<(), IdentityStoreError> {
     let root = layout.root();
     create_private_dir_all(root)?;
-    let owner = fs::metadata(root).map_err(io_at(root))?;
+    check_writable_as(root)?;
     let pid = std::process::id();
     let staging = root.join(format!(".identity.new.{pid}"));
     let previous = root.join(format!(".identity.old.{pid}"));
@@ -84,7 +84,6 @@ pub fn store(
 
     remove_if_exists(&staging)?;
     let result = write_staging(&staging, key, issued, issued_at)
-        .and_then(|()| adopt_owner(&staging, &owner))
         .and_then(|()| swap_in(&staging, &target, &previous))
         .and_then(|()| sync_dir(root));
     if result.is_err() {
@@ -152,20 +151,35 @@ fn swap_in(staging: &Path, target: &Path, previous: &Path) -> Result<(), Identit
     Ok(())
 }
 
-/// Gives the staging directory and its files the owner of the state directory (only differs if
-/// `enroll` runs as root).
-fn adopt_owner(staging: &Path, owner: &fs::Metadata) -> Result<(), IdentityStoreError> {
-    let entries = fs::read_dir(staging).map_err(io_at(staging))?;
-    let mut paths = vec![staging.to_owned()];
-    for entry in entries {
-        paths.push(entry.map_err(io_at(staging))?.path());
+/// Refuses to write as root into a directory another user controls: that user could replace the
+/// staging directory with a symlink between our calls and make root write keys and change owners
+/// elsewhere (privilege escalation of a compromised agent). `install.sh` therefore runs `enroll` as
+/// the service user; files are always owned by the user who writes them.
+fn check_writable_as(dir: &Path) -> Result<(), IdentityStoreError> {
+    let meta = fs::metadata(dir).map_err(io_at(dir))?;
+    root_may_write(
+        rustix::process::geteuid().is_root(),
+        meta.uid(),
+        meta.mode(),
+    )
+    .map_err(|reason| invalid(dir, &reason))
+}
+
+/// The rule of [`check_writable_as`]: root only writes into directories that root owns and nobody
+/// else may write to.
+fn root_may_write(running_as_root: bool, dir_uid: u32, dir_mode: u32) -> Result<(), String> {
+    if !running_as_root {
+        return Ok(());
     }
-    for path in paths {
-        let current = fs::symlink_metadata(&path).map_err(io_at(&path))?;
-        if current.uid() != owner.uid() || current.gid() != owner.gid() {
-            std::os::unix::fs::lchown(&path, Some(owner.uid()), Some(owner.gid()))
-                .map_err(io_at(&path))?;
-        }
+    if dir_uid != 0 {
+        return Err(format!(
+            "belongs to uid {dir_uid}, not root – run enroll as the user that owns it, e.g. `sudo -u sermon sermon-agent enroll …`"
+        ));
+    }
+    if dir_mode & 0o022 != 0 {
+        return Err(
+            "is writable by group or others – fix the permissions (0750 or stricter)".into(),
+        );
     }
     Ok(())
 }
@@ -236,6 +250,8 @@ pub fn store_trust_bundle(
     layout: &StateLayout,
     roots: &[CertificateDer<'static>],
 ) -> Result<(), IdentityStoreError> {
+    check_writable_as(layout.root())?;
+    check_writable_as(&layout.identity_dir())?;
     let target = layout.trust_bundle_file();
     let temporary = layout
         .identity_dir()
@@ -404,6 +420,23 @@ mod tests {
 
     fn mode(path: &Path) -> u32 {
         fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[test]
+    fn root_writes_only_into_directories_nobody_else_controls() {
+        // As the owner itself everything is allowed (the normal case: enroll as `sermon`).
+        assert!(root_may_write(false, 1000, 0o750).is_ok());
+        assert!(root_may_write(true, 0, 0o700).is_ok());
+        assert!(root_may_write(true, 0, 0o755).is_ok());
+        // root in a directory of another user: that user could swap entries for symlinks.
+        let error = root_may_write(true, 999, 0o750).unwrap_err();
+        assert!(
+            error.contains("run enroll as the user that owns it"),
+            "{error}"
+        );
+        // root-owned but writable by group or others: the same.
+        assert!(root_may_write(true, 0, 0o770).is_err());
+        assert!(root_may_write(true, 0, 0o1777).is_err());
     }
 
     #[test]

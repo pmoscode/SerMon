@@ -8,7 +8,7 @@
 
 `sermon-agent enroll` spricht den öffentlichen HTTPS-Endpunkt an (ADR 0009). KONZEPT §6 verlangt die Prüfung des
 Server-Zertifikats gegen die **System-CA oder einen gepinnten Fingerprint** (`--ca-fingerprint`). Danach legt der Agent
-Schlüssel und Zertifikate ab, die er als User `sermon` liest, obwohl `enroll` meist als root läuft (`install.sh`).
+Schlüssel und Zertifikate ab, die er als User `sermon` liest; `install.sh` läuft als root.
 
 Zu entscheiden war:
 
@@ -73,11 +73,15 @@ deshalb auch in CI.
 | `identity.toml` | Org, Node, Ablauf des Zertifikats |
 
 - Alle Dateien haben Modus 0600. Beim Laden wird ein Schlüssel abgelehnt, den Gruppe oder andere lesen dürfen.
-- Neue Dateien bekommen den Eigentümer des State-Verzeichnisses (`lchown`, nur wenn er abweicht). So kann `enroll` als
-  root laufen.
+- Dateien gehören immer dem User, der sie schreibt. `enroll` läuft als `sermon` (`install.sh` per `runuser`); als
+  root verweigert der Agent das Schreiben in ein Verzeichnis, das einem anderen User gehört oder für Gruppe/andere
+  beschreibbar ist. **Nachtrag (M1-35):** Ursprünglich schrieb root und übertrug den Eigentümer per `lchown`. Das
+  erlaubte einem übernommenen Agent, das Staging-Verzeichnis zwischen zwei Aufrufen gegen einen Symlink zu tauschen
+  und root beim nächsten Enrollment Dateien woanders schreiben und übereignen zu lassen (root-Eskalation).
 - Eine neue Identität ersetzt die alte **als Ganzes**: Sie wird in `.identity.new.<pid>` geschrieben und dann
   umbenannt. Scheitert das Enrollment, bleibt die alte Identität unverändert.
-- Symlinks werden nie verfolgt (`O_EXCL`, `lchown`, Entfernen nur des Links).
+- Die letzte Pfadkomponente wird nie über einen Symlink geschrieben (`O_EXCL`, Entfernen nur des Links); gegen
+  getauschte Zwischenverzeichnisse schützt die Regel oben.
 
 ### Token
 

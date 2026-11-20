@@ -218,7 +218,7 @@ impl Transport {
                 retry_after: Some(self.config.expired_retry),
                 ..Failure::new(
                     "the agent certificate has expired – enroll again with \
-                     `sermon-agent enroll --force` and a new token",
+                     `sudo -u sermon sermon-agent enroll --force` and a new token",
                 )
             });
         }
@@ -548,7 +548,7 @@ fn with_hint(message: String) -> String {
     if REJECTED.iter().any(|marker| message.contains(marker)) {
         format!(
             "{message} – the server rejected this agent's certificate (revoked, node locked or \
-             removed); enroll again with `sermon-agent enroll --force` and a new token"
+             removed); enroll again with `sudo -u sermon sermon-agent enroll --force` and a new token"
         )
     } else {
         message

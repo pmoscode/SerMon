@@ -126,3 +126,14 @@ without_minisign() {
 	write_config
 	grep -q 'sermon.example.com' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
 }
+
+@test "enrolls as the service user, never as root" {
+	runuser() { printf '%s\n' "runuser $*" "token=${SERMON_ENROLLMENT_TOKEN:-}"; }
+	TOKEN=sme_secret BIN_DIR=/opt/bin
+	run as_service_user /opt/bin/sermon-agent enroll --config /etc/sermon/agent.toml
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"runuser -u sermon -- /opt/bin/sermon-agent enroll --config /etc/sermon/agent.toml"* ]]
+	[[ "$output" == *"token=sme_secret"* ]]
+	# The token travels in the environment, not in the arguments (visible in ps).
+	[[ "${lines[0]}" != *sme_secret* ]]
+}

@@ -156,6 +156,19 @@ create_user() {
 }
 
 # agent_url_for SERVER prints https://<host of SERVER>:8443.
+# as_service_user CMD… runs a command as the sermon user with the environment kept (the enrollment
+# token travels in SERMON_ENROLLMENT_TOKEN, not in the arguments). enroll must not run as root in
+# the state directory that belongs to sermon (symlink attacks; the agent refuses that, too).
+as_service_user() {
+	if command -v runuser >/dev/null 2>&1; then
+		SERMON_ENROLLMENT_TOKEN=$TOKEN runuser -u sermon -- "$@"
+	elif command -v setpriv >/dev/null 2>&1; then
+		SERMON_ENROLLMENT_TOKEN=$TOKEN setpriv --reuid=sermon --regid=sermon --init-groups -- "$@"
+	else
+		die "neither runuser nor setpriv found (util-linux) – needed to enroll as the sermon user"
+	fi
+}
+
 agent_url_for() {
 	host=$(printf '%s\n' "$1" | sed -e 's|^[a-z]*://||' -e 's|[/?#].*$||' -e 's|:[0-9]*$||')
 	echo "https://$host:$AGENT_PORT"
@@ -239,7 +252,7 @@ main() {
 	set -- enroll --config "$CONFIG_DIR/agent.toml"
 	[ -z "$FINGERPRINT" ] || set -- "$@" --ca-fingerprint "$FINGERPRINT"
 	[ -z "$FORCE" ] || set -- "$@" "$FORCE"
-	SERMON_ENROLLMENT_TOKEN=$TOKEN "$BIN_DIR/sermon-agent" "$@" || die "enrollment failed (see above)"
+	as_service_user "$BIN_DIR/sermon-agent" "$@" || die "enrollment failed (see above)"
 
 	case $init in
 	systemd)

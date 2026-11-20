@@ -27,6 +27,9 @@ const (
 var (
 	// ErrInvalidCredentials covers unknown users, wrong passwords and locked accounts alike.
 	ErrInvalidCredentials = errors.New("login failed: wrong e-mail or password, or the account is temporarily locked")
+	// ErrWrongPassword means a password confirmation (step-up) failed: wrong password or a
+	// temporarily locked account, deliberately not distinguished.
+	ErrWrongPassword = errors.New("password confirmation failed: wrong password, or the account is temporarily locked")
 	// ErrTooManyAttempts means the client IP exceeded the login rate limit.
 	ErrTooManyAttempts = errors.New("too many login attempts, please wait a moment")
 )
@@ -128,6 +131,51 @@ func (s *Service) Login(ctx context.Context, email, pw, clientIP string) (LoginR
 		return LoginResult{}, ErrInvalidCredentials
 	}
 	return s.succeed(ctx, creds, pw)
+}
+
+// ConfirmPassword re-authenticates the user of a session with the password and renews its step-up
+// (KONZEPT §7) for sensitive actions. Failures count towards the same lockout as logins, so a
+// hijacked session can't be used to guess the password; the IP rate limit applies as well.
+func (s *Service) ConfirmPassword(ctx context.Context, token, pw, clientIP string) (session.Session, error) {
+	if !s.d.IPLimiter.Allow(clientIP) {
+		return session.Session{}, ErrTooManyAttempts
+	}
+	current, err := s.d.Sessions.Validate(ctx, token)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("confirm password: %w", err)
+	}
+	if pw == "" || len(pw) > password.MaxLength {
+		return session.Session{}, ErrWrongPassword
+	}
+	creds, found, err := s.d.Credentials.Get(ctx, current.User)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("confirm password: %w", err)
+	}
+	now := s.d.Now()
+	if !found || (creds.LockedUntil != nil && now.Before(*creds.LockedUntil)) {
+		s.d.Hasher.VerifyDummy(pw)
+		return session.Session{}, ErrWrongPassword
+	}
+	ok, err := s.d.Hasher.Verify(pw, creds.PasswordHash)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("confirm password: verify: %w", err)
+	}
+	if !ok {
+		if err := s.d.Credentials.RecordFailedLogin(ctx, current.User, lockUntil(creds.FailedAttempts+1, now)); err != nil {
+			return session.Session{}, fmt.Errorf("confirm password: %w", err)
+		}
+		return session.Session{}, ErrWrongPassword
+	}
+	if creds.FailedAttempts > 0 || creds.LockedUntil != nil {
+		if err := s.d.Credentials.ResetFailedLogins(ctx, current.User); err != nil {
+			return session.Session{}, fmt.Errorf("confirm password: %w", err)
+		}
+	}
+	stepped, err := s.d.Sessions.StepUp(ctx, token)
+	if err != nil {
+		return session.Session{}, fmt.Errorf("confirm password: %w", err)
+	}
+	return stepped, nil
 }
 
 func (s *Service) succeed(ctx context.Context, creds Credentials, pw string) (LoginResult, error) {

@@ -270,6 +270,11 @@ flowchart LR
 >
 > E2E-Tests über HTTPS mit echter DB. Nebenbefund: Konflikt der Routen `GET /` und API (Panic beim Start) mit einem
 > Regressionstest behoben. connect-go bleibt vorerst bei v1 (ADR 0004).
+>
+> Nachtrag Step-up: `AuthService.ConfirmPassword` erneuert den Step-up mit dem Passwort (Fehlversuche zählen zur
+> Kontosperre, IP-Rate-Limit gilt); `Session.step_up_until` zeigt, wie lange er gilt. Fehlender Step-up liefert
+> `FAILED_PRECONDITION` mit dem Detail `StepUpRequired`; in der UI fragt `withStepUp` per `StepUpDialog` nach dem
+> Passwort und wiederholt die Aktion. Vorher war nach 15 min nur Ab- und Anmelden möglich.
 - **Ziel:**
   - User mit Argon2id; Login und Logout
   - Serverseitige Sessions (`__Host-sermon_session`, Idle-Timeout 30 min, absolut 12 h)
@@ -280,6 +285,8 @@ flowchart LR
 - **Abnahme:** Login-E2E-Test grün; Security-Review bestanden.
 
 #### ☐ M1-03 – TOTP, Recovery-Codes und Step-up · S · M 🔒
+> Hinweis: Den Step-up per Passwort gibt es schon (`ConfirmPassword`, siehe M1-02). Mit eingerichteter 2FA muss er
+> den zweiten Faktor verlangen.
 - **Ziel:** TOTP einrichten (QR-Code) und verifizieren; Recovery-Codes gehasht speichern; Middleware `RequireStepUp(maxAge)`; 2FA-Pflicht pro Org.
 - **Abhängig von:** M1-02, M1-06
 - **Tests zuerst:** RFC-6238-Testvektoren, Zeitfenster und Schutz vor Replay, Recovery-Code nur einmal verwendbar.

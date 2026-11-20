@@ -71,5 +71,11 @@
 	"help_more": "Learn more",
 	"help_close": "Close help",
 	"help_missing": "There is no help for this topic yet.",
-	"help_new_tab": "opens in a new tab"
+	"help_new_tab": "opens in a new tab",
+	"stepup_title": "Confirm your identity",
+	"stepup_text": "Please enter your password again for this action. The confirmation lasts 15 minutes.",
+	"stepup_submit": "Confirm",
+	"stepup_busy": "Checking …",
+	"stepup_cancel": "Cancel",
+	"stepup_password_wrong": "The password is wrong or the account is temporarily locked."
 }

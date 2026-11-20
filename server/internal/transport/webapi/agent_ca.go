@@ -89,7 +89,7 @@ func (h *AgentCAHandler) fail(ctx context.Context, op string, err error) error {
 	case errors.Is(err, access.ErrForbidden):
 		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
 	case errors.Is(err, access.ErrStepUpRequired):
-		return connect.NewError(connect.CodeFailedPrecondition, access.ErrStepUpRequired)
+		return stepUpRequired()
 	case errors.Is(err, agentca.ErrUnknownAuthority):
 		return connect.NewError(connect.CodeNotFound, agentca.ErrUnknownAuthority)
 	}

@@ -3,6 +3,7 @@ syntax = "proto3";
 package sermon.web.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
 
 // AuthService handles local login sessions (KONZEPT §7). The session token travels only in the
 // HttpOnly cookie "__Host-sermon_session", never in message bodies.
@@ -21,6 +22,12 @@ service AuthService {
   // session cookie. NOT_FOUND if the user is not a member. Timeouts and the time of the last
   // re-authentication are kept.
   rpc SwitchOrganization(SwitchOrganizationRequest) returns (SwitchOrganizationResponse);
+  // ConfirmPassword re-authenticates the user of the current session with the password and renews
+  // the step-up for sensitive actions (rights, invitations, key rotation; KONZEPT §7).
+  // UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
+  // temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
+  // for too many attempts from one client.
+  rpc ConfirmPassword(ConfirmPasswordRequest) returns (ConfirmPasswordResponse);
 }
 
 // LoginRequest carries the credentials.
@@ -70,6 +77,25 @@ message SwitchOrganizationResponse {
   Session session = 1;
 }
 
+// ConfirmPasswordRequest carries the password of the logged-in user.
+message ConfirmPasswordRequest {
+  // password is the user's password.
+  string password = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 1024
+  }];
+}
+
+// ConfirmPasswordResponse describes the session with the renewed step-up.
+message ConfirmPasswordResponse {
+  // session is the current session.
+  Session session = 1;
+}
+
+// StepUpRequired is attached as error detail to FAILED_PRECONDITION when a sensitive action needs
+// a fresh re-authentication: call ConfirmPassword, then retry the action.
+message StepUpRequired {}
+
 // Session is the view of a login session for the UI.
 message Session {
   // user_id is the UUID of the logged-in user.
@@ -82,6 +108,9 @@ message Session {
   string active_organization_id = 4;
   // organizations are all organizations the user is a member of.
   repeated Organization organizations = 5;
+  // step_up_until is when the last (re-)authentication stops allowing sensitive actions; after
+  // that they fail with FAILED_PRECONDITION until ConfirmPassword is called.
+  google.protobuf.Timestamp step_up_until = 6;
 }
 
 // Organization is an organization the user belongs to.

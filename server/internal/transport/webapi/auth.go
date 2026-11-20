@@ -13,7 +13,9 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
@@ -140,6 +142,40 @@ func (h *AuthHandler) SwitchOrganization(ctx context.Context, req *connect.Reque
 	return res, nil
 }
 
+// stepUpRequired is the error of sensitive actions without a recent re-authentication; the
+// StepUpRequired detail lets clients ask for the password and retry.
+func stepUpRequired() *connect.Error {
+	err := connect.NewError(connect.CodeFailedPrecondition, access.ErrStepUpRequired)
+	if detail, detailErr := connect.NewErrorDetail(&webv1.StepUpRequired{}); detailErr == nil {
+		err.AddDetail(detail)
+	}
+	return err
+}
+
+// ConfirmPassword renews the step-up of the current session with the user's password.
+func (h *AuthHandler) ConfirmPassword(ctx context.Context, req *connect.Request[webv1.ConfirmPasswordRequest]) (*connect.Response[webv1.ConfirmPasswordResponse], error) {
+	token, ok := tokenFrom(req.Header())
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	}
+	s, err := h.login.ConfirmPassword(ctx, token, req.Msg.GetPassword(), ClientIPFrom(ctx))
+	switch {
+	case errors.Is(err, session.ErrInvalid):
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	case errors.Is(err, auth.ErrWrongPassword):
+		return nil, connect.NewError(connect.CodePermissionDenied, auth.ErrWrongPassword)
+	case errors.Is(err, auth.ErrTooManyAttempts):
+		return nil, connect.NewError(connect.CodeResourceExhausted, auth.ErrTooManyAttempts)
+	case err != nil:
+		return nil, h.internal(ctx, "confirm password", err)
+	}
+	view, err := h.view(ctx, s)
+	if err != nil {
+		return nil, h.internal(ctx, "session view", err)
+	}
+	return connect.NewResponse(&webv1.ConfirmPasswordResponse{Session: view}), nil
+}
+
 func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Session, error) {
 	profile, _, err := h.identities.Profile(ctx, s.User)
 	if err != nil {
@@ -149,7 +185,10 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 	if err != nil {
 		return nil, fmt.Errorf("load organizations: %w", err)
 	}
-	view := &webv1.Session{UserId: s.User.String(), Email: profile.Email, DisplayName: profile.DisplayName}
+	view := &webv1.Session{
+		UserId: s.User.String(), Email: profile.Email, DisplayName: profile.DisplayName,
+		StepUpUntil: timestamppb.New(s.StepUpAt.Add(access.StepUpMaxAge)),
+	}
 	if s.Org != (tenant.OrgID{}) {
 		view.ActiveOrganizationId = s.Org.String()
 	}

@@ -70,7 +70,7 @@ func (h *NodeHandler) RotateNodeKeys(ctx context.Context, req *connect.Request[w
 	case errors.Is(err, access.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	case errors.Is(err, access.ErrStepUpRequired):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, access.ErrStepUpRequired)
+		return nil, stepUpRequired()
 	case err != nil:
 		return nil, internalError(ctx, h.logger, "rotate node keys", err)
 	}

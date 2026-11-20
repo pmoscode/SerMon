@@ -5,13 +5,15 @@
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../../buf/validate/validate_pb";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file sermon/web/v1/auth.proto.
  */
 export const file_sermon_web_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiRwoMTG9naW5SZXF1ZXN0EhkKBWVtYWlsGAEgASgJQgq6SAdyBRABGMACEhwKCHBhc3N3b3JkGAIgASgJQgq6SAdyBRABKIAIIjgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIPCg1Mb2dvdXRSZXF1ZXN0IhAKDkxvZ291dFJlc3BvbnNlIhMKEUdldFNlc3Npb25SZXF1ZXN0Ij0KEkdldFNlc3Npb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIj4KGVN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QSIQoPb3JnYW5pemF0aW9uX2lkGAEgASgJQgi6SAVyA7ABASJFChpTd2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIpMBCgdTZXNzaW9uEg8KB3VzZXJfaWQYASABKAkSDQoFZW1haWwYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEh4KFmFjdGl2ZV9vcmdhbml6YXRpb25faWQYBCABKAkSMgoNb3JnYW5pemF0aW9ucxgFIAMoCzIbLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uIigKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJMtsCCgtBdXRoU2VydmljZRJCCgVMb2dpbhIbLnNlcm1vbi53ZWIudjEuTG9naW5SZXF1ZXN0Ghwuc2VybW9uLndlYi52MS5Mb2dpblJlc3BvbnNlEkUKBkxvZ291dBIcLnNlcm1vbi53ZWIudjEuTG9nb3V0UmVxdWVzdBodLnNlcm1vbi53ZWIudjEuTG9nb3V0UmVzcG9uc2USVgoKR2V0U2Vzc2lvbhIgLnNlcm1vbi53ZWIudjEuR2V0U2Vzc2lvblJlcXVlc3QaIS5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXNwb25zZSIDkAIBEmkKElN3aXRjaE9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuU3dpdGNoT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuU3dpdGNoT3JnYW5pemF0aW9uUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglBdXRoUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_buf_validate_validate]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiRwoMTG9naW5SZXF1ZXN0EhkKBWVtYWlsGAEgASgJQgq6SAdyBRABGMACEhwKCHBhc3N3b3JkGAIgASgJQgq6SAdyBRABKIAIIjgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIPCg1Mb2dvdXRSZXF1ZXN0IhAKDkxvZ291dFJlc3BvbnNlIhMKEUdldFNlc3Npb25SZXF1ZXN0Ij0KEkdldFNlc3Npb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIj4KGVN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QSIQoPb3JnYW5pemF0aW9uX2lkGAEgASgJQgi6SAVyA7ABASJFChpTd2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIjYKFkNvbmZpcm1QYXNzd29yZFJlcXVlc3QSHAoIcGFzc3dvcmQYASABKAlCCrpIB3IFEAEogAgiQgoXQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIQCg5TdGVwVXBSZXF1aXJlZCLGAQoHU2Vzc2lvbhIPCgd1c2VyX2lkGAEgASgJEg0KBWVtYWlsGAIgASgJEhQKDGRpc3BsYXlfbmFtZRgDIAEoCRIeChZhY3RpdmVfb3JnYW5pemF0aW9uX2lkGAQgASgJEjIKDW9yZ2FuaXphdGlvbnMYBSADKAsyGy5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvbhIxCg1zdGVwX3VwX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIoCgxPcmdhbml6YXRpb24SCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCTK9AwoLQXV0aFNlcnZpY2USQgoFTG9naW4SGy5zZXJtb24ud2ViLnYxLkxvZ2luUmVxdWVzdBocLnNlcm1vbi53ZWIudjEuTG9naW5SZXNwb25zZRJFCgZMb2dvdXQSHC5zZXJtb24ud2ViLnYxLkxvZ291dFJlcXVlc3QaHS5zZXJtb24ud2ViLnYxLkxvZ291dFJlc3BvbnNlElYKCkdldFNlc3Npb24SIC5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXF1ZXN0GiEuc2VybW9uLndlYi52MS5HZXRTZXNzaW9uUmVzcG9uc2UiA5ACARJpChJTd2l0Y2hPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlc3BvbnNlEmAKD0NvbmZpcm1QYXNzd29yZBIlLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglBdXRoUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp]);
 
 /**
  * LoginRequest carries the credentials.
@@ -171,6 +173,64 @@ export const SwitchOrganizationResponseSchema: GenMessage<SwitchOrganizationResp
   messageDesc(file_sermon_web_v1_auth, 7);
 
 /**
+ * ConfirmPasswordRequest carries the password of the logged-in user.
+ *
+ * @generated from message sermon.web.v1.ConfirmPasswordRequest
+ */
+export type ConfirmPasswordRequest = Message<"sermon.web.v1.ConfirmPasswordRequest"> & {
+  /**
+   * password is the user's password.
+   *
+   * @generated from field: string password = 1;
+   */
+  password: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.ConfirmPasswordRequest.
+ * Use `create(ConfirmPasswordRequestSchema)` to create a new message.
+ */
+export const ConfirmPasswordRequestSchema: GenMessage<ConfirmPasswordRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 8);
+
+/**
+ * ConfirmPasswordResponse describes the session with the renewed step-up.
+ *
+ * @generated from message sermon.web.v1.ConfirmPasswordResponse
+ */
+export type ConfirmPasswordResponse = Message<"sermon.web.v1.ConfirmPasswordResponse"> & {
+  /**
+   * session is the current session.
+   *
+   * @generated from field: sermon.web.v1.Session session = 1;
+   */
+  session?: Session | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.ConfirmPasswordResponse.
+ * Use `create(ConfirmPasswordResponseSchema)` to create a new message.
+ */
+export const ConfirmPasswordResponseSchema: GenMessage<ConfirmPasswordResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 9);
+
+/**
+ * StepUpRequired is attached as error detail to FAILED_PRECONDITION when a sensitive action needs
+ * a fresh re-authentication: call ConfirmPassword, then retry the action.
+ *
+ * @generated from message sermon.web.v1.StepUpRequired
+ */
+export type StepUpRequired = Message<"sermon.web.v1.StepUpRequired"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.StepUpRequired.
+ * Use `create(StepUpRequiredSchema)` to create a new message.
+ */
+export const StepUpRequiredSchema: GenMessage<StepUpRequired> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 10);
+
+/**
  * Session is the view of a login session for the UI.
  *
  * @generated from message sermon.web.v1.Session
@@ -210,6 +270,14 @@ export type Session = Message<"sermon.web.v1.Session"> & {
    * @generated from field: repeated sermon.web.v1.Organization organizations = 5;
    */
   organizations: Organization[];
+
+  /**
+   * step_up_until is when the last (re-)authentication stops allowing sensitive actions; after
+   * that they fail with FAILED_PRECONDITION until ConfirmPassword is called.
+   *
+   * @generated from field: google.protobuf.Timestamp step_up_until = 6;
+   */
+  stepUpUntil?: Timestamp | undefined;
 };
 
 /**
@@ -217,7 +285,7 @@ export type Session = Message<"sermon.web.v1.Session"> & {
  * Use `create(SessionSchema)` to create a new message.
  */
 export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 8);
+  messageDesc(file_sermon_web_v1_auth, 11);
 
 /**
  * Organization is an organization the user belongs to.
@@ -245,7 +313,7 @@ export type Organization = Message<"sermon.web.v1.Organization"> & {
  * Use `create(OrganizationSchema)` to create a new message.
  */
 export const OrganizationSchema: GenMessage<Organization> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 9);
+  messageDesc(file_sermon_web_v1_auth, 12);
 
 /**
  * AuthService handles local login sessions (KONZEPT §7). The session token travels only in the
@@ -297,6 +365,20 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof SwitchOrganizationRequestSchema;
     output: typeof SwitchOrganizationResponseSchema;
+  },
+  /**
+   * ConfirmPassword re-authenticates the user of the current session with the password and renews
+   * the step-up for sensitive actions (rights, invitations, key rotation; KONZEPT §7).
+   * UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
+   * temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
+   * for too many attempts from one client.
+   *
+   * @generated from rpc sermon.web.v1.AuthService.ConfirmPassword
+   */
+  confirmPassword: {
+    methodKind: "unary";
+    input: typeof ConfirmPasswordRequestSchema;
+    output: typeof ConfirmPasswordResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_auth, 0);

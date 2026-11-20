@@ -78,4 +78,20 @@ describe('sessionState', () => {
 		await expect(sessionState.logout()).rejects.toThrow();
 		expect(sessionState.status).toBe('anonymous');
 	});
+
+	it('maps password confirmation failures and ends an expired session', async () => {
+		vi.spyOn(api.auth, 'getSession').mockResolvedValue({ session: fakeSession() } as never);
+		await sessionState.load();
+		const confirm = vi.spyOn(api.auth, 'confirmPassword');
+
+		confirm.mockRejectedValue(rpcError(Code.PermissionDenied));
+		expect(await sessionState.confirmPassword('wrong')).toBe('wrong_password');
+		confirm.mockRejectedValue(rpcError(Code.ResourceExhausted));
+		expect(await sessionState.confirmPassword('wrong')).toBe('rate_limited');
+		expect(sessionState.status).toBe('authenticated');
+
+		confirm.mockRejectedValue(rpcError(Code.Unauthenticated));
+		await sessionState.confirmPassword('x');
+		expect(sessionState.status).toBe('expired');
+	});
 });

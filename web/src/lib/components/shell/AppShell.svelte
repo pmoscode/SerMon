@@ -6,6 +6,7 @@
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import StepUpDialog from '#lib/components/auth/StepUpDialog.svelte';
 	import HelpPanel from '#lib/components/help/HelpPanel.svelte';
 	import LanguageSwitcher from '#lib/components/LanguageSwitcher.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -99,3 +100,4 @@
 </div>
 
 <HelpPanel />
+<StepUpDialog />

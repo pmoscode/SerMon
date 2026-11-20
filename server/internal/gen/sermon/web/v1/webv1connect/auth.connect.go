@@ -42,6 +42,9 @@ const (
 	// AuthServiceSwitchOrganizationProcedure is the fully-qualified name of the AuthService's
 	// SwitchOrganization RPC.
 	AuthServiceSwitchOrganizationProcedure = "/sermon.web.v1.AuthService/SwitchOrganization"
+	// AuthServiceConfirmPasswordProcedure is the fully-qualified name of the AuthService's
+	// ConfirmPassword RPC.
+	AuthServiceConfirmPasswordProcedure = "/sermon.web.v1.AuthService/ConfirmPassword"
 )
 
 // AuthServiceClient is a client for the sermon.web.v1.AuthService service.
@@ -58,6 +61,12 @@ type AuthServiceClient interface {
 	// session cookie. NOT_FOUND if the user is not a member. Timeouts and the time of the last
 	// re-authentication are kept.
 	SwitchOrganization(context.Context, *connect.Request[v1.SwitchOrganizationRequest]) (*connect.Response[v1.SwitchOrganizationResponse], error)
+	// ConfirmPassword re-authenticates the user of the current session with the password and renews
+	// the step-up for sensitive actions (rights, invitations, key rotation; KONZEPT §7).
+	// UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
+	// temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
+	// for too many attempts from one client.
+	ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the sermon.web.v1.AuthService service. By default,
@@ -96,6 +105,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("SwitchOrganization")),
 			connect.WithClientOptions(opts...),
 		),
+		confirmPassword: connect.NewClient[v1.ConfirmPasswordRequest, v1.ConfirmPasswordResponse](
+			httpClient,
+			baseURL+AuthServiceConfirmPasswordProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ConfirmPassword")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -105,6 +120,7 @@ type authServiceClient struct {
 	logout             *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
 	getSession         *connect.Client[v1.GetSessionRequest, v1.GetSessionResponse]
 	switchOrganization *connect.Client[v1.SwitchOrganizationRequest, v1.SwitchOrganizationResponse]
+	confirmPassword    *connect.Client[v1.ConfirmPasswordRequest, v1.ConfirmPasswordResponse]
 }
 
 // Login calls sermon.web.v1.AuthService.Login.
@@ -127,6 +143,11 @@ func (c *authServiceClient) SwitchOrganization(ctx context.Context, req *connect
 	return c.switchOrganization.CallUnary(ctx, req)
 }
 
+// ConfirmPassword calls sermon.web.v1.AuthService.ConfirmPassword.
+func (c *authServiceClient) ConfirmPassword(ctx context.Context, req *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error) {
+	return c.confirmPassword.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the sermon.web.v1.AuthService service.
 type AuthServiceHandler interface {
 	// Login checks e-mail and password and sets the session cookie. All failures return
@@ -141,6 +162,12 @@ type AuthServiceHandler interface {
 	// session cookie. NOT_FOUND if the user is not a member. Timeouts and the time of the last
 	// re-authentication are kept.
 	SwitchOrganization(context.Context, *connect.Request[v1.SwitchOrganizationRequest]) (*connect.Response[v1.SwitchOrganizationResponse], error)
+	// ConfirmPassword re-authenticates the user of the current session with the password and renews
+	// the step-up for sensitive actions (rights, invitations, key rotation; KONZEPT §7).
+	// UNAUTHENTICATED without a valid session, PERMISSION_DENIED for a wrong password or a
+	// temporarily locked account (failures count towards the login lockout), RESOURCE_EXHAUSTED
+	// for too many attempts from one client.
+	ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -175,6 +202,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("SwitchOrganization")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceConfirmPasswordHandler := connect.NewUnaryHandler(
+		AuthServiceConfirmPasswordProcedure,
+		svc.ConfirmPassword,
+		connect.WithSchema(authServiceMethods.ByName("ConfirmPassword")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -185,6 +218,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetSessionHandler.ServeHTTP(w, r)
 		case AuthServiceSwitchOrganizationProcedure:
 			authServiceSwitchOrganizationHandler.ServeHTTP(w, r)
+		case AuthServiceConfirmPasswordProcedure:
+			authServiceConfirmPasswordHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -208,4 +243,8 @@ func (UnimplementedAuthServiceHandler) GetSession(context.Context, *connect.Requ
 
 func (UnimplementedAuthServiceHandler) SwitchOrganization(context.Context, *connect.Request[v1.SwitchOrganizationRequest]) (*connect.Response[v1.SwitchOrganizationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.SwitchOrganization is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.ConfirmPassword is not implemented"))
 }

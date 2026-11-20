@@ -334,3 +334,38 @@ func TestAuthAPI_RemovingTheMembershipEndsAccessImmediately(t *testing.T) {
 		t.Errorf("GetVersion() after removal: %v, want unauthenticated", err)
 	}
 }
+
+func TestAuthAPI_ConfirmPasswordRenewsTheStepUp(t *testing.T) {
+	s := newStack(t, 20)
+	c := client(t, s, s.origin)
+	ctx := context.Background()
+
+	if _, err := c.ConfirmPassword(ctx, connect.NewRequest(&webv1.ConfirmPasswordRequest{Password: userPassword})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Fatalf("without session: %v, want Unauthenticated", err)
+	}
+	login, err := c.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "erin@example.org", Password: userPassword}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	until := login.Msg.GetSession().GetStepUpUntil().AsTime()
+	if d := time.Until(until); d < 14*time.Minute || d > 15*time.Minute {
+		t.Errorf("step_up_until after login = %v, want now + 15 min", until)
+	}
+
+	_, err = c.ConfirmPassword(ctx, connect.NewRequest(&webv1.ConfirmPasswordRequest{Password: wrongPassword}))
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("wrong password: %v, want PermissionDenied", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	res, err := c.ConfirmPassword(ctx, connect.NewRequest(&webv1.ConfirmPasswordRequest{Password: userPassword}))
+	if err != nil {
+		t.Fatalf("ConfirmPassword() error = %v", err)
+	}
+	if renewed := res.Msg.GetSession().GetStepUpUntil().AsTime(); !renewed.After(until) {
+		t.Errorf("step_up_until = %v, want later than %v", renewed, until)
+	}
+	session, err := c.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
+	if err != nil || !session.Msg.GetSession().GetStepUpUntil().AsTime().Equal(res.Msg.GetSession().GetStepUpUntil().AsTime()) {
+		t.Errorf("GetSession() after the step-up = %v, %v", session, err)
+	}
+}

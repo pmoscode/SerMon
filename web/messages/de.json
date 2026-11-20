@@ -71,5 +71,11 @@
 	"help_more": "Mehr erfahren",
 	"help_close": "Hilfe schließen",
 	"help_missing": "Zu diesem Thema gibt es noch keine Hilfe.",
-	"help_new_tab": "öffnet in neuem Tab"
+	"help_new_tab": "öffnet in neuem Tab",
+	"stepup_title": "Identität bestätigen",
+	"stepup_text": "Für diese Aktion bitte das Passwort erneut eingeben. Die Bestätigung gilt 15 Minuten.",
+	"stepup_submit": "Bestätigen",
+	"stepup_busy": "Wird geprüft …",
+	"stepup_cancel": "Abbrechen",
+	"stepup_password_wrong": "Das Passwort ist falsch oder das Konto ist vorübergehend gesperrt."
 }

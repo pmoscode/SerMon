@@ -82,7 +82,7 @@ func (h *OrganizationHandler) fail(ctx context.Context, op string, err error) er
 	case errors.Is(err, access.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	case errors.Is(err, access.ErrStepUpRequired):
-		return connect.NewError(connect.CodeFailedPrecondition, access.ErrStepUpRequired)
+		return stepUpRequired()
 	case errors.Is(err, organization.ErrInvalidName):
 		return connect.NewError(connect.CodeInvalidArgument, organization.ErrInvalidName)
 	case errors.Is(err, invitation.ErrInvalidEmail):

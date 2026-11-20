@@ -7,6 +7,9 @@ export type SessionStatus = 'unknown' | 'anonymous' | 'authenticated' | 'expired
 /** Why a login failed, for the message shown. */
 export type LoginFailure = 'credentials' | 'rate_limited' | 'unavailable';
 
+/** Why a password confirmation (step-up) failed. */
+export type ConfirmFailure = 'wrong_password' | 'rate_limited' | 'unavailable';
+
 class SessionState {
 	status = $state<SessionStatus>('unknown');
 	current = $state<Session | undefined>(undefined);
@@ -48,6 +51,28 @@ class SessionState {
 					return 'credentials';
 				case Code.ResourceExhausted:
 					return 'rate_limited';
+				default:
+					return 'unavailable';
+			}
+		}
+	}
+
+	/** Confirms the password for sensitive actions (step-up, KONZEPT §7). */
+	async confirmPassword(password: string): Promise<ConfirmFailure | undefined> {
+		try {
+			const res = await api.auth.confirmPassword({ password });
+			this.current = res.session;
+			return undefined;
+		} catch (error) {
+			switch (codeOf(error)) {
+				case Code.PermissionDenied:
+				case Code.InvalidArgument:
+					return 'wrong_password';
+				case Code.ResourceExhausted:
+					return 'rate_limited';
+				case Code.Unauthenticated:
+					this.expire();
+					return 'unavailable';
 				default:
 					return 'unavailable';
 			}

@@ -1,6 +1,10 @@
 import { create } from '@bufbuild/protobuf';
 import { Code, ConnectError } from '@connectrpc/connect';
-import { SessionSchema, type Session } from '#lib/api/gen/sermon/web/v1/auth_pb.js';
+import {
+	SessionSchema,
+	StepUpRequiredSchema,
+	type Session
+} from '#lib/api/gen/sermon/web/v1/auth_pb.js';
 
 /** A password that meets the policy; for tests only. */
 export const PASSPHRASE = 'a long passphrase'; // betterleaks:allow
@@ -23,4 +27,14 @@ export function fakeSession(...organizations: string[]): Session {
 		activeOrganizationId: orgs[0].id,
 		organizations: orgs
 	});
+}
+
+/** The server's answer to a sensitive action without a recent re-authentication. */
+export function stepUpError(): ConnectError {
+	return new ConnectError(
+		'please confirm your identity again',
+		Code.FailedPrecondition,
+		undefined,
+		[{ desc: StepUpRequiredSchema, value: {} }]
+	);
 }

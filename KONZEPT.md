@@ -413,6 +413,9 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
   min, absolut 12 h. **Step-up-Authentifizierung** (erneute 2FA) für sensible Aktionen wie Updates, Reboot oder
   Rechteänderungen.
 - **Step-up** gilt 15 min. Rechteänderungen (Rollen vergeben oder entziehen, Mitglied entfernen, Gruppe löschen) verlangen ihn.
+  Erneuert wird er mit dem zweiten Faktor; ohne eingerichtete 2FA mit dem Passwort (`AuthService.ConfirmPassword`).
+  Fehlversuche zählen wie beim Login zur Kontosperre. Fehlt der Step-up, antwortet der Server mit `FAILED_PRECONDITION`
+  und dem Detail `StepUpRequired`; die UI fragt dann nach und wiederholt die Aktion.
   Jede Org behält mindestens einen Admin für alle Gruppen, den letzten kann niemand entfernen.
 - **Org-Wechsel** stellt ein neues Session-Cookie aus. Absoluter Timeout und Step-up-Zeitpunkt bleiben erhalten:
   Ein Wechsel verlängert keine Session und gilt nicht als erneute Anmeldung.

@@ -221,8 +221,12 @@ func TestStepUp(t *testing.T) {
 	if s.SteppedUpWithin(maxAge, c.Now()) {
 		t.Error("authentication older than maxAge must require a step-up")
 	}
-	if err := m.StepUp(context.Background(), token); err != nil {
+	stepped, err := m.StepUp(context.Background(), token)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !stepped.StepUpAt.Equal(c.Now()) {
+		t.Errorf("StepUp() returned step-up at %v, want now", stepped.StepUpAt)
 	}
 	s, _ = m.Validate(context.Background(), token)
 	if !s.SteppedUpWithin(maxAge, c.Now()) {
@@ -232,7 +236,7 @@ func TestStepUp(t *testing.T) {
 
 func TestStepUp_RejectsInvalidSessions(t *testing.T) {
 	m, _, _ := manager(t)
-	if err := m.StepUp(context.Background(), "unknown"); !errors.Is(err, session.ErrInvalid) {
+	if _, err := m.StepUp(context.Background(), "unknown"); !errors.Is(err, session.ErrInvalid) {
 		t.Errorf("StepUp(unknown) error = %v, want ErrInvalid", err)
 	}
 }
@@ -307,7 +311,7 @@ func TestManager_StoreErrorsNeverYieldAValidSession(t *testing.T) {
 		t.Errorf("Validate/touch: %v", err)
 	}
 	store.fail = "stepup"
-	if err := m.StepUp(ctx, token); !errors.Is(err, errDB) {
+	if _, err := m.StepUp(ctx, token); !errors.Is(err, errDB) {
 		t.Errorf("StepUp: %v", err)
 	}
 	store.fail = "delete"

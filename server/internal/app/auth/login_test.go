@@ -92,8 +92,14 @@ func (s *memSessions) Get(_ context.Context, id string) (session.Session, bool, 
 	se, ok := s.m[id]
 	return se, ok, nil
 }
-func (s *memSessions) Touch(context.Context, string, time.Time) error       { return nil }
-func (s *memSessions) SetStepUp(context.Context, string, time.Time) error   { return nil }
+func (s *memSessions) Touch(context.Context, string, time.Time) error { return nil }
+func (s *memSessions) SetStepUp(_ context.Context, id string, at time.Time) error {
+	se := s.m[id]
+	se.StepUpAt = at
+	s.m[id] = se
+	return nil
+}
+
 func (s *memSessions) Delete(_ context.Context, id string) error            { delete(s.m, id); return nil }
 func (s *memSessions) DeleteForUser(context.Context, identity.UserID) error { return nil }
 

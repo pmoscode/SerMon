@@ -4,6 +4,7 @@ package webapi_test
 
 import (
 	"context"
+	"errors"
 	"net/http/cookiejar"
 	"testing"
 
@@ -107,9 +108,33 @@ func TestInvitationAPI_InvitingNeedsAStepUpAndRevokedLinksStopWorking(t *testing
 	}
 
 	ownerSQL(t, "UPDATE sessions SET step_up_at = now() - interval '1 hour' WHERE user_id = '"+annID+"'")
-	if _, err := ann.access.InviteMember(ctx, connect.NewRequest(&webv1.InviteMemberRequest{Email: "late@example.org", Role: webv1.Role_ROLE_VIEWER})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
-		t.Errorf("InviteMember() with an old login: %v, want FAILED_PRECONDITION", err)
+	late := connect.NewRequest(&webv1.InviteMemberRequest{Email: "late@example.org", Role: webv1.Role_ROLE_VIEWER})
+	_, err = ann.access.InviteMember(ctx, late)
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !hasStepUpDetail(err) {
+		t.Errorf("InviteMember() with an old login: %v, want FAILED_PRECONDITION with StepUpRequired", err)
 	}
+
+	if _, err := ann.auth.ConfirmPassword(ctx, connect.NewRequest(&webv1.ConfirmPasswordRequest{Password: userPassword})); err != nil {
+		t.Fatalf("ConfirmPassword() error = %v", err)
+	}
+	if _, err := ann.access.InviteMember(ctx, late); err != nil {
+		t.Errorf("InviteMember() after the step-up: %v", err)
+	}
+}
+
+func hasStepUpDetail(err error) bool {
+	var connectErr *connect.Error
+	if !errors.As(err, &connectErr) {
+		return false
+	}
+	for _, detail := range connectErr.Details() {
+		if msg, err := detail.Value(); err == nil {
+			if _, ok := msg.(*webv1.StepUpRequired); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func containsInvitation(invs []*webv1.Invitation, id string) bool {

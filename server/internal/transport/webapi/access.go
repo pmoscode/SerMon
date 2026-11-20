@@ -279,7 +279,7 @@ func (h *AccessHandler) fail(ctx context.Context, op string, err error) error {
 	case errors.Is(err, access.ErrConflict):
 		return connect.NewError(connect.CodeAlreadyExists, access.ErrConflict)
 	case errors.Is(err, access.ErrStepUpRequired):
-		return connect.NewError(connect.CodeFailedPrecondition, access.ErrStepUpRequired)
+		return stepUpRequired()
 	case errors.Is(err, access.ErrLastAdmin):
 		return connect.NewError(connect.CodeFailedPrecondition, access.ErrLastAdmin)
 	case errors.Is(err, access.ErrInvalidName):

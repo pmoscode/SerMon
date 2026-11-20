@@ -10,6 +10,7 @@ import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -372,6 +373,136 @@ func (x *SwitchOrganizationResponse) GetSession() *Session {
 	return nil
 }
 
+// ConfirmPasswordRequest carries the password of the logged-in user.
+type ConfirmPasswordRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// password is the user's password.
+	Password      string `protobuf:"bytes,1,opt,name=password,proto3" json:"password,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfirmPasswordRequest) Reset() {
+	*x = ConfirmPasswordRequest{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmPasswordRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmPasswordRequest) ProtoMessage() {}
+
+func (x *ConfirmPasswordRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmPasswordRequest.ProtoReflect.Descriptor instead.
+func (*ConfirmPasswordRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ConfirmPasswordRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+// ConfirmPasswordResponse describes the session with the renewed step-up.
+type ConfirmPasswordResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// session is the current session.
+	Session       *Session `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfirmPasswordResponse) Reset() {
+	*x = ConfirmPasswordResponse{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmPasswordResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmPasswordResponse) ProtoMessage() {}
+
+func (x *ConfirmPasswordResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmPasswordResponse.ProtoReflect.Descriptor instead.
+func (*ConfirmPasswordResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ConfirmPasswordResponse) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+// StepUpRequired is attached as error detail to FAILED_PRECONDITION when a sensitive action needs
+// a fresh re-authentication: call ConfirmPassword, then retry the action.
+type StepUpRequired struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StepUpRequired) Reset() {
+	*x = StepUpRequired{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StepUpRequired) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StepUpRequired) ProtoMessage() {}
+
+func (x *StepUpRequired) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StepUpRequired.ProtoReflect.Descriptor instead.
+func (*StepUpRequired) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{10}
+}
+
 // Session is the view of a login session for the UI.
 type Session struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -385,13 +516,16 @@ type Session struct {
 	ActiveOrganizationId string `protobuf:"bytes,4,opt,name=active_organization_id,json=activeOrganizationId,proto3" json:"active_organization_id,omitempty"`
 	// organizations are all organizations the user is a member of.
 	Organizations []*Organization `protobuf:"bytes,5,rep,name=organizations,proto3" json:"organizations,omitempty"`
+	// step_up_until is when the last (re-)authentication stops allowing sensitive actions; after
+	// that they fail with FAILED_PRECONDITION until ConfirmPassword is called.
+	StepUpUntil   *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=step_up_until,json=stepUpUntil,proto3" json:"step_up_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
 	*x = Session{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -403,7 +537,7 @@ func (x *Session) String() string {
 func (*Session) ProtoMessage() {}
 
 func (x *Session) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -416,7 +550,7 @@ func (x *Session) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Session.ProtoReflect.Descriptor instead.
 func (*Session) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{8}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Session) GetUserId() string {
@@ -454,6 +588,13 @@ func (x *Session) GetOrganizations() []*Organization {
 	return nil
 }
 
+func (x *Session) GetStepUpUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StepUpUntil
+	}
+	return nil
+}
+
 // Organization is an organization the user belongs to.
 type Organization struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -467,7 +608,7 @@ type Organization struct {
 
 func (x *Organization) Reset() {
 	*x = Organization{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -479,7 +620,7 @@ func (x *Organization) String() string {
 func (*Organization) ProtoMessage() {}
 
 func (x *Organization) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -492,7 +633,7 @@ func (x *Organization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Organization.ProtoReflect.Descriptor instead.
 func (*Organization) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{9}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Organization) GetId() string {
@@ -513,7 +654,7 @@ var File_sermon_web_v1_auth_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x18sermon/web/v1/auth.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\"X\n" +
+	"\x18sermon/web/v1/auth.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"X\n" +
 	"\fLoginRequest\x12 \n" +
 	"\x05email\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xc0\x02R\x05email\x12&\n" +
@@ -529,22 +670,30 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x19SwitchOrganizationRequest\x121\n" +
 	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\"N\n" +
 	"\x1aSwitchOrganizationResponse\x120\n" +
-	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\xd4\x01\n" +
+	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"@\n" +
+	"\x16ConfirmPasswordRequest\x12&\n" +
+	"\bpassword\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01(\x80\bR\bpassword\"K\n" +
+	"\x17ConfirmPasswordResponse\x120\n" +
+	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
+	"\x0eStepUpRequired\"\x94\x02\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
 	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\x124\n" +
 	"\x16active_organization_id\x18\x04 \x01(\tR\x14activeOrganizationId\x12A\n" +
-	"\rorganizations\x18\x05 \x03(\v2\x1b.sermon.web.v1.OrganizationR\rorganizations\"2\n" +
+	"\rorganizations\x18\x05 \x03(\v2\x1b.sermon.web.v1.OrganizationR\rorganizations\x12>\n" +
+	"\rstep_up_until\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vstepUpUntil\"2\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name2\xdb\x02\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name2\xbd\x03\n" +
 	"\vAuthService\x12B\n" +
 	"\x05Login\x12\x1b.sermon.web.v1.LoginRequest\x1a\x1c.sermon.web.v1.LoginResponse\x12E\n" +
 	"\x06Logout\x12\x1c.sermon.web.v1.LogoutRequest\x1a\x1d.sermon.web.v1.LogoutResponse\x12V\n" +
 	"\n" +
 	"GetSession\x12 .sermon.web.v1.GetSessionRequest\x1a!.sermon.web.v1.GetSessionResponse\"\x03\x90\x02\x01\x12i\n" +
-	"\x12SwitchOrganization\x12(.sermon.web.v1.SwitchOrganizationRequest\x1a).sermon.web.v1.SwitchOrganizationResponseB\xb8\x01\n" +
+	"\x12SwitchOrganization\x12(.sermon.web.v1.SwitchOrganizationRequest\x1a).sermon.web.v1.SwitchOrganizationResponse\x12`\n" +
+	"\x0fConfirmPassword\x12%.sermon.web.v1.ConfirmPasswordRequest\x1a&.sermon.web.v1.ConfirmPasswordResponseB\xb8\x01\n" +
 	"\x11com.sermon.web.v1B\tAuthProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -559,7 +708,7 @@ func file_sermon_web_v1_auth_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_auth_proto_rawDescData
 }
 
-var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_sermon_web_v1_auth_proto_goTypes = []any{
 	(*LoginRequest)(nil),               // 0: sermon.web.v1.LoginRequest
 	(*LoginResponse)(nil),              // 1: sermon.web.v1.LoginResponse
@@ -569,27 +718,35 @@ var file_sermon_web_v1_auth_proto_goTypes = []any{
 	(*GetSessionResponse)(nil),         // 5: sermon.web.v1.GetSessionResponse
 	(*SwitchOrganizationRequest)(nil),  // 6: sermon.web.v1.SwitchOrganizationRequest
 	(*SwitchOrganizationResponse)(nil), // 7: sermon.web.v1.SwitchOrganizationResponse
-	(*Session)(nil),                    // 8: sermon.web.v1.Session
-	(*Organization)(nil),               // 9: sermon.web.v1.Organization
+	(*ConfirmPasswordRequest)(nil),     // 8: sermon.web.v1.ConfirmPasswordRequest
+	(*ConfirmPasswordResponse)(nil),    // 9: sermon.web.v1.ConfirmPasswordResponse
+	(*StepUpRequired)(nil),             // 10: sermon.web.v1.StepUpRequired
+	(*Session)(nil),                    // 11: sermon.web.v1.Session
+	(*Organization)(nil),               // 12: sermon.web.v1.Organization
+	(*timestamppb.Timestamp)(nil),      // 13: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_auth_proto_depIdxs = []int32{
-	8, // 0: sermon.web.v1.LoginResponse.session:type_name -> sermon.web.v1.Session
-	8, // 1: sermon.web.v1.GetSessionResponse.session:type_name -> sermon.web.v1.Session
-	8, // 2: sermon.web.v1.SwitchOrganizationResponse.session:type_name -> sermon.web.v1.Session
-	9, // 3: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
-	0, // 4: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
-	2, // 5: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
-	4, // 6: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
-	6, // 7: sermon.web.v1.AuthService.SwitchOrganization:input_type -> sermon.web.v1.SwitchOrganizationRequest
-	1, // 8: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
-	3, // 9: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
-	5, // 10: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
-	7, // 11: sermon.web.v1.AuthService.SwitchOrganization:output_type -> sermon.web.v1.SwitchOrganizationResponse
-	8, // [8:12] is the sub-list for method output_type
-	4, // [4:8] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	11, // 0: sermon.web.v1.LoginResponse.session:type_name -> sermon.web.v1.Session
+	11, // 1: sermon.web.v1.GetSessionResponse.session:type_name -> sermon.web.v1.Session
+	11, // 2: sermon.web.v1.SwitchOrganizationResponse.session:type_name -> sermon.web.v1.Session
+	11, // 3: sermon.web.v1.ConfirmPasswordResponse.session:type_name -> sermon.web.v1.Session
+	12, // 4: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
+	13, // 5: sermon.web.v1.Session.step_up_until:type_name -> google.protobuf.Timestamp
+	0,  // 6: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
+	2,  // 7: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
+	4,  // 8: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
+	6,  // 9: sermon.web.v1.AuthService.SwitchOrganization:input_type -> sermon.web.v1.SwitchOrganizationRequest
+	8,  // 10: sermon.web.v1.AuthService.ConfirmPassword:input_type -> sermon.web.v1.ConfirmPasswordRequest
+	1,  // 11: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
+	3,  // 12: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
+	5,  // 13: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
+	7,  // 14: sermon.web.v1.AuthService.SwitchOrganization:output_type -> sermon.web.v1.SwitchOrganizationResponse
+	9,  // 15: sermon.web.v1.AuthService.ConfirmPassword:output_type -> sermon.web.v1.ConfirmPasswordResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_auth_proto_init() }
@@ -603,7 +760,7 @@ func file_sermon_web_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_auth_proto_rawDesc), len(file_sermon_web_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

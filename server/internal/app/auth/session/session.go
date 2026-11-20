@@ -124,16 +124,19 @@ func (m *Manager) Validate(ctx context.Context, token string) (Session, error) {
 	return s, nil
 }
 
-// StepUp records a successful re-authentication (password or 2FA confirmation).
-func (m *Manager) StepUp(ctx context.Context, token string) error {
+// StepUp records a successful re-authentication (password or 2FA confirmation) and returns the
+// updated session.
+func (m *Manager) StepUp(ctx context.Context, token string) (Session, error) {
 	s, err := m.Validate(ctx, token)
 	if err != nil {
-		return err
+		return Session{}, err
 	}
-	if err := m.store.SetStepUp(ctx, s.ID, m.now()); err != nil {
-		return fmt.Errorf("record step-up: %w", err)
+	now := m.now()
+	if err := m.store.SetStepUp(ctx, s.ID, now); err != nil {
+		return Session{}, fmt.Errorf("record step-up: %w", err)
 	}
-	return nil
+	s.StepUpAt = now
+	return s, nil
 }
 
 // Revoke ends a session (logout).

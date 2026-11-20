@@ -122,14 +122,6 @@
 		},
 		{
 			"matchPackageNames": [
-				"typescript-eslint"
-			],
-			"prBodyNotes": [
-				"⚠️ Remove the `minimatch` override in `web/pnpm-workspace.yaml` once typescript-eslint is >= 8.73.0 (GHSA-g3hv-75wg-m249)."
-			]
-		},
-		{
-			"matchPackageNames": [
 				"betterleaks/betterleaks"
 			],
 			"prBodyNotes": [

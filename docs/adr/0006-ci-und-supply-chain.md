@@ -52,8 +52,9 @@ Die CI ruft dieselben `just`-Befehle auf wie die lokale Entwicklung. Was in der 
 - Eigene Regex-Manager für Tool-Versionen in den Workflows und für die Rust-protoc-Plugins im `justfile`.
 - Hinweise im PR-Text (`prBodyNotes`):
   - für Pakete, die einen erneuten `just gen` erfordern,
-  - für die betterleaks-Prüfsumme,
-  - für den temporären `minimatch`-Override.
+  - für die betterleaks-Prüfsumme.
+  - Der Hinweis zum temporären `minimatch`-Override ist entfallen: Seit typescript-eslint 8.73.0 (2026-11-20) wird
+    eine behobene Version gezogen, der Override ist entfernt.
 
 ## Konsequenzen
 

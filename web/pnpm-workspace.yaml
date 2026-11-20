@@ -6,8 +6,4 @@ savePrefix: ''
 # Install scripts are blocked unless explicitly allowed here.
 allowBuilds:
   esbuild: true
-# Security overrides – each with advisory and removal condition.
-overrides:
-  # GHSA-g3hv-75wg-m249 (minimatch ReDoS/DoS, dev-only via typescript-eslint 8.72.2).
-  # Remove after upgrading typescript-eslint to >= 8.73.0 (requires minimatch ^11.0.1).
-  '@typescript-eslint/typescript-estree>minimatch': 11.0.8
+# Security overrides – each with advisory and removal condition. None at the moment.

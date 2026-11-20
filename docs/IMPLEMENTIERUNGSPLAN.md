@@ -169,6 +169,7 @@ flowchart LR
 > öffentlich ist. Abweichungen: Der Secret-Scan nutzt betterleaks statt gitleaks (ADR 0005). Branch-Protection wird
 > auf Wunsch des Product Owners erst nach der Implementierung eingerichtet (siehe v1.0). Den Test mit einer absichtlich
 > verwundbaren Abhängigkeit ersetzt der reale Fall `minimatch` (GHSA-g3hv-75wg-m249), den die Audits erkannt haben.
+> Der Override dafür ist seit typescript-eslint 8.73.0 entfernt (2026-11-20).
 - **Ziel:**
   - `ci.yml`: Lint- und Test-Matrix für Rust, Go und Web, Coverage-Upload
   - `security.yml`: CodeQL, gosec, govulncheck, cargo-audit, cargo-deny, `pnpm audit`, betterleaks, OpenSSF Scorecard

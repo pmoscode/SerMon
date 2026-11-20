@@ -1,0 +1,24 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.network.interface_down
+  name: { de: "Netzwerk-Interface down", en: "Network interface down" }
+  labels: { category: network }
+spec:
+  type: state
+  metric: sermon_network_up
+  dimensions: [ interface ]
+  warning: { op: "<", value: 1 }
+  seen: { op: ">=", value: 1 }
+  seenWindow: 24h
+  for: 1m
+  help:
+    de: >-
+      Ein Netzwerk-Interface, das in den letzten 24 Stunden aktiv war, ist ausgefallen. Nie genutzte Ports
+      melden sich nicht. Typische Ursachen: Kabel gezogen oder defekt, Switch-Port deaktiviert, Interface per
+      Konfiguration abgeschaltet. Prüfe mit ip link den Zustand und im Kernel-Log (journalctl -k) die
+      Meldungen des Treibers.
+    en: >-
+      A network interface that was up within the last 24 hours went down. Ports that were never used do not
+      alert. Typical causes: cable pulled or broken, switch port disabled, interface switched off by
+      configuration. Check the state with ip link and the driver's messages in the kernel log (journalctl -k).

@@ -356,6 +356,7 @@ func TestRules_ValidateAgainstTheCatalog(t *testing.T) {
 		"bad thresholds":    alerting.ThresholdRule{Series: alerting.SeriesSpec{Metric: "sermon_system_zombies"}, Aggregate: alerting.Avg, Window: time.Minute},
 		"rate of a ratio":   alerting.RateRule{Series: alerting.SeriesSpec{Metric: "sermon_cpu_core_busy_ratio", Dimensions: []string{"cpu"}}, Window: time.Minute, Thresholds: th},
 		"relative unknown":  alerting.RateRule{Series: alerting.SeriesSpec{Metric: "sermon_tcp_listen_overflows_per_second"}, RelativeTo: "sermon_nope", Window: time.Minute, Thresholds: th},
+		"per of a relative": alerting.RateRule{Series: alerting.SeriesSpec{Metric: "sermon_network_receive_errors_per_second", Dimensions: []string{"interface"}}, RelativeTo: "sermon_network_receive_packets_per_second", Per: time.Minute, Window: time.Minute, Thresholds: th},
 		"odd per":           alerting.RateRule{Series: alerting.SeriesSpec{Metric: "sermon_tcp_listen_overflows_per_second"}, Per: 7 * time.Second, Window: time.Minute, Thresholds: th},
 		"seen w/o window":   alerting.StateRule{Series: alerting.SeriesSpec{Metric: "sermon_network_up", Dimensions: []string{"interface"}}, Thresholds: th, Seen: gt(0)},
 		"short lookback":    alerting.PredictionRule{Series: alerting.SeriesSpec{Metric: "sermon_filesystem_avail_bytes", Dimensions: []string{"mountpoint"}}, Lookback: time.Minute, Thresholds: th},
@@ -414,5 +415,62 @@ func TestThreshold_ReadsLiveValuesFromTheRing(t *testing.T) {
 	results, err := rule.Evaluate(context.Background(), alerting.Env{Scope: scope, Nodes: []fleet.Node{webNode}, Now: t0, Metrics: reader})
 	if err != nil || len(results) != 1 || results[0].Observation.Level != alert.LevelCritical || math.Abs(results[0].Observation.Value-0.05) > 1e-9 {
 		t.Errorf("results = %+v, %v; want critical at 5 %% idle", results, err)
+	}
+}
+
+// Inodes and file descriptors have no ratio metric: used relative to total.
+func TestThreshold_RelativeToASecondMetric(t *testing.T) {
+	m := &fakeMetrics{series: map[string][]metrics.Series{
+		"sermon_filesystem_inodes_used":  {{Node: web, Labels: metrics.Labels{"mountpoint": "/"}, Points: points(time.Minute, 850)}},
+		"sermon_filesystem_inodes_total": {{Node: web, Labels: metrics.Labels{"mountpoint": "/"}, Points: points(time.Minute, 1000)}},
+	}}
+	rule := alerting.ThresholdRule{
+		Series:     alerting.SeriesSpec{Metric: "sermon_filesystem_inodes_used", Dimensions: []string{"mountpoint"}},
+		RelativeTo: "sermon_filesystem_inodes_total", Aggregate: alerting.Last, Window: 5 * time.Minute,
+		Thresholds: alert.Thresholds{Warning: gt(0.80), Critical: gt(0.90)},
+	}
+	if err := rule.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	results, err := rule.Evaluate(context.Background(), env(m, webNode))
+	if err != nil || len(results) != 1 || results[0].Observation.Level != alert.LevelWarning || results[0].Observation.Value != 0.85 {
+		t.Errorf("results = %+v, %v; want warning at 0.85", results, err)
+	}
+	bad := rule
+	bad.RelativeTo = "sermon_memory_total_bytes" // other labels
+	if err := bad.Validate(); !errors.Is(err, alert.ErrInvalidRule) {
+		t.Errorf("relative to a metric with other labels: %v", err)
+	}
+}
+
+// Rules run every 10 s: long lookbacks read the 1-min aggregate with a coarse step instead of the
+// raw table, and a state's current value still comes from the last minutes (ring buffer).
+func TestQueries_LongWindowsUseCoarseSteps(t *testing.T) {
+	spec := alerting.SeriesSpec{Metric: "sermon_network_up", Dimensions: []string{"interface"}}
+	for name, tc := range map[string]struct {
+		rule  alerting.Evaluator
+		steps map[time.Duration]time.Duration // span → step
+	}{
+		"short threshold": {alerting.ThresholdRule{Series: spec, Aggregate: alerting.Last, Window: 10 * time.Minute, Thresholds: alert.Thresholds{Warning: lt(1)}}, map[time.Duration]time.Duration{10 * time.Minute: 0}},
+		"two hours":       {alerting.ThresholdRule{Series: spec, Aggregate: alerting.Last, Window: 2 * time.Hour, Thresholds: alert.Thresholds{Warning: lt(1)}}, map[time.Duration]time.Duration{2 * time.Hour: time.Minute}},
+		"prediction":      {alerting.PredictionRule{Series: alerting.SeriesSpec{Metric: "sermon_filesystem_avail_bytes", Dimensions: []string{"mountpoint"}}, Lookback: 24 * time.Hour, Thresholds: alert.Thresholds{Warning: lt(24)}}, map[time.Duration]time.Duration{24 * time.Hour: 5 * time.Minute}},
+		"state with seen": {alerting.StateRule{Series: spec, Thresholds: alert.Thresholds{Warning: lt(1)}, Seen: gt(0), SeenWindow: 24 * time.Hour}, map[time.Duration]time.Duration{5 * time.Minute: 0, 24 * time.Hour: 5 * time.Minute}},
+	} {
+		m := &fakeMetrics{series: map[string][]metrics.Series{}}
+		if _, err := tc.rule.Evaluate(context.Background(), env(m, webNode)); err != nil {
+			t.Fatal(err)
+		}
+		got := map[time.Duration]time.Duration{}
+		for _, q := range m.queries {
+			got[q.To.Sub(q.From)] = q.Step
+		}
+		if len(got) != len(tc.steps) {
+			t.Errorf("%s: queries %v, want %v", name, got, tc.steps)
+		}
+		for span, step := range tc.steps {
+			if s, ok := got[span]; !ok || s != step {
+				t.Errorf("%s: %v queried with step %v, want %v", name, span, s, step)
+			}
+		}
 	}
 }

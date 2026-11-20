@@ -1,0 +1,25 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.memory.usage_high
+  name: { de: "Hohe RAM-Nutzung", en: "High memory usage" }
+  labels: { category: memory }
+spec:
+  type: threshold
+  metric: sermon_memory_utilization_ratio
+  aggregate: avg
+  window: 5m
+  warning: { op: ">", value: 0.8 }
+  critical: { op: ">", value: 0.9 }
+  clear: { op: "<", value: 0.75 }
+  for: 5m
+  help:
+    de: >-
+      Mehr als 80 % des Arbeitsspeichers sind belegt, gemessen am verfügbaren Speicher (Caches, die der Kernel
+      freigeben kann, zählen nicht als belegt). Wird es knapp, beginnt der Server zu swappen oder der
+      OOM-Killer beendet Prozesse. Suche die Prozesse mit dem größten Speicherbedarf, z. B. mit top sortiert
+      nach RES, und prüfe auf Speicherlecks.
+    en: >-
+      More than 80 % of the memory is in use, measured by the available memory (caches the kernel can free do
+      not count as used). When it gets tight, the server starts swapping or the OOM killer ends processes.
+      Find the processes with the largest memory use, e.g. with top sorted by RES, and check for memory leaks.

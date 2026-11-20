@@ -298,11 +298,43 @@ func TestEngine_EvaluatesEachOrganizationInItsScope(t *testing.T) {
 	}
 }
 
-// Organizations without rules cost nothing: no lease, no load.
-func TestEngine_SkipsOrganizationsWithoutRules(t *testing.T) {
-	store, c := newMemStore(orgA), &clock{now: t0}
-	rounds(t, engine(store, rules{}, c, "a"), c, 3)
-	if len(store.leases) != 0 {
-		t.Error("an organization without rules must not be leased")
+// A rule that no longer applies – disabled, removed, or the node left its groups – ends its
+// alerts: a firing one resolves (history and notification), and the instance goes.
+func TestEngine_RetiresAlertsOfRulesThatNoLongerApply(t *testing.T) {
+	other := tenant.GroupID(uuid.New())
+	for name, next := range map[string][]alerting.Rule{
+		"rule disabled":       nil,
+		"node outside groups": {{ID: cpuRule, Groups: []tenant.GroupID{other}, Timing: alert.Timing{Flapping: alert.DefaultFlapping}, Evaluator: &valueRule{value: 0.9}}},
+	} {
+		store, c := newMemStore(orgA), &clock{now: t0}
+		source := cpuRules(&valueRule{value: 0.90}, 0)
+		e := engine(store, source, c, "a")
+		rounds(t, e, c, 1)
+		if i, _ := store.instance(orgA, cpuKey); i.State != alert.StateWarning {
+			t.Fatalf("%s: %v, want warning", name, i.State)
+		}
+		source[orgA] = next
+		rounds(t, e, c, 1)
+		if i, ok := store.instance(orgA, cpuKey); ok {
+			t.Errorf("%s: instance kept: %+v", name, i)
+		}
+		h := store.history[orgA]
+		if last := h[len(h)-1].Transition; last.From != alert.StateWarning || last.To != alert.StateResolved || !last.At.Equal(c.Now()) {
+			t.Errorf("%s: last transition %+v, want warning → resolved now", name, last)
+		}
+	}
+}
+
+// A rule whose evaluation fails keeps its alerts: an error is no sign that the problem is gone.
+func TestEngine_KeepsAlertsOfAFailingRule(t *testing.T) {
+	store, v, c := newMemStore(orgA), &valueRule{value: 0.90}, &clock{now: t0}
+	e := engine(store, cpuRules(v, 0), c, "a")
+	rounds(t, e, c, 1)
+	v.mu.Lock()
+	v.err = errors.New("query failed")
+	v.mu.Unlock()
+	rounds(t, e, c, 2)
+	if i, _ := store.instance(orgA, cpuKey); i.State != alert.StateWarning {
+		t.Errorf("state = %v, want warning", i.State)
 	}
 }

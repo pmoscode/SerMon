@@ -46,6 +46,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	DeactivateIssuingAuthority(ctx context.Context) error
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
+	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
@@ -99,6 +100,8 @@ type Querier interface {
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
 	LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrganizationParams) (int64, error)
 	ListAlertInstances(ctx context.Context) ([]ListAlertInstancesRow, error)
+	// Alert rule overrides (M2-04, ADR 0007). Every query runs in the organization's tenant transaction.
+	ListAlertRuleOverrides(ctx context.Context) ([]ListAlertRuleOverridesRow, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
@@ -164,6 +167,7 @@ type Querier interface {
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
+	UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRuleOverrideParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error

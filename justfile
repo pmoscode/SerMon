@@ -54,8 +54,8 @@ dev-reset:
 dev-logs:
     docker compose -f deploy/dev/compose.yaml logs -f
 
-# Generate all code: protocol (buf) and typed SQL (sqlc)
-gen: gen-proto gen-sql gen-packaging
+# Generate all code: protocol (buf), typed SQL (sqlc) and the copies the server embeds
+gen: gen-proto gen-sql gen-packaging gen-rules
 
 # Generate code from proto/ for Rust, Go and TypeScript (local plugins only)
 [working-directory: 'proto']
@@ -77,10 +77,16 @@ gen-packaging:
     cp packaging/openrc/sermon-agent server/internal/transport/download/assets/sermon-agent.openrc
     @echo "✓ copied: server/internal/transport/download/assets"
 
+# Copy the default alert rules into the server, which embeds them (M2-04)
+gen-rules:
+    rm -rf server/internal/app/alerting/ruleset/defaults
+    cp -R rules server/internal/app/alerting/ruleset/defaults
+    @echo "✓ copied: server/internal/app/alerting/ruleset/defaults"
+
 # Fail if the committed generated code is not up to date with proto/ (used in CI)
 check-gen: gen
-    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets
-    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
+    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults
+    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
 
 # Install the pinned Rust protoc plugins used by `just gen`
 install-proto-plugins:

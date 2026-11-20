@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.cpu.iowait_high
+  name: { de: "Hoher iowait-Anteil", en: "High iowait" }
+  labels: { category: cpu }
+spec:
+  type: threshold
+  metric: sermon_cpu_utilization_ratio
+  labels: { mode: iowait }
+  aggregate: avg
+  window: 10m
+  warning: { op: ">", value: 0.2 }
+  critical: { op: ">", value: 0.4 }
+  clear: { op: "<", value: 0.15 }
+  for: 5m
+  help:
+    de: >-
+      Die CPU hat über 10 Minuten einen großen Teil der Zeit auf Datenträger gewartet. Typische Ursachen: ein
+      langsamer oder überlasteter Datenträger, viel Swapping, Backups oder Datenbanken mit hoher Schreiblast.
+      Prüfe im Node-Detail die Disk-Auslastung und -Latenz und die Swap-Aktivität, z. B. mit iotop oder
+      iostat.
+    en: >-
+      The CPU spent a large share of the last 10 minutes waiting for storage. Typical causes: a slow or
+      overloaded disk, heavy swapping, backups or databases writing a lot. Check disk utilization, latency and
+      swap activity in the node detail, e.g. with iotop or iostat.

@@ -1,0 +1,25 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.network.transmit_errors_high
+  name: { de: "Sendefehler am Interface", en: "Network transmit errors" }
+  labels: { category: network }
+spec:
+  type: rate
+  metric: sermon_network_transmit_errors_per_second
+  relativeTo: sermon_network_transmit_packets_per_second
+  dimensions: [ interface ]
+  window: 10m
+  warning: { op: ">", value: 0.001 }
+  critical: { op: ">", value: 0.01 }
+  clear: { op: "<", value: 0.0005 }
+  for: 5m
+  help:
+    de: >-
+      Mehr als 0,1 % der Pakete des Interfaces sind über 10 Minuten fehlerhaft gesendet. Typische Ursachen:
+      defektes Kabel oder Stecker, Duplex- oder Geschwindigkeitskonflikt mit dem Switch, fehlerhafte
+      Netzwerkkarte. Prüfe mit ethtool -S die Fehlerzähler und tausche verdächtige Kabel.
+    en: >-
+      More than 0.1 % of the interface's packets were sent with errors over 10 minutes. Typical causes: a
+      broken cable or connector, a duplex or speed mismatch with the switch, a faulty network card. Check the
+      error counters with ethtool -S and replace suspicious cables.

@@ -43,3 +43,23 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
 - Zustand und Historie liegen in PostgreSQL mit RLS; die Historie ist für die Anwendung nur anhängbar. Wieder ruhige
   Instanzen (OK ohne Flapping-Historie) werden gelöscht.
 
+
+## Nachtrag M2-04: Regelformat, Standardregeln und Overrides
+
+- **Schema aus dem Proto:** Die Regel ist die Nachricht `sermon.web.v1.AlertRule`. Sie liegt im Web-Paket, damit der
+  Regel-Editor (M2-17) sie als TypeScript bekommt; der Agent braucht sie nicht. YAML wird mit `go.yaml.in/yaml/v3`
+  gelesen, als JSON strikt per `protojson` übernommen und mit protovalidate geprüft. Unbekannte Felder meldet ein
+  eigener Durchlauf über den YAML-Baum mit Zeile und Pfad, denn `protojson` kennt nur die Position im JSON.
+- **Typprüfung über den Katalog:** Felder eines anderen Regeltyps sind Fehler, ebenso Verhältnisse außerhalb von 0..1.
+  So scheitert „85“ statt „0.85“ beim Laden statt still nie auszulösen.
+- **Standardregeln eingebettet:** `rules/` ist die Quelle. `just gen-rules` kopiert sie in den Server, `check-gen`
+  hält die Kopie aktuell (wie bei `install.sh`). Kein Laden zur Laufzeit von der Platte.
+- **Overrides als ganze Dokumente:** Pro Org und Regel speichert `alert_rule_overrides` (RLS) „abgeschaltet“ und/oder
+  ein vollständiges Regeldokument; eigene Regeln sind Overrides ohne Standardregel. Feldweise Patches wurden verworfen:
+  Sie brechen still, wenn sich die Standardregel ändert. Ein Override, das nicht mehr lädt, wird protokolliert und
+  ignoriert, damit die Org die Regel nicht verliert.
+- **Ende von Alerts:** Gilt eine Regel für eine Instanz nicht mehr, setzt die Engine einen feuernden Alert auf
+  `RESOLVED` (mit Historie, damit die Notifier „behoben“ melden) und löscht die Instanz. Eine Regel, deren Auswertung
+  fehlschlägt, behält ihre Alerts.
+- **Last:** Fenster über 1 h lesen mit grobem Schritt (24 h → 5 min) aus dem 1-min-Aggregat statt aus den Rohdaten.
+  Zustandsregeln holen den aktuellen Wert getrennt aus den letzten 5 min.

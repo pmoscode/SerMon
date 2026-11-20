@@ -6,11 +6,13 @@
 package alerting
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -81,12 +83,6 @@ func (r Rule) nodes(all []fleet.Node) []fleet.Node {
 type RuleSource interface {
 	Rules(ctx context.Context, org tenant.OrgID) ([]Rule, error)
 }
-
-// NoRules is the rule source while there are no default rules yet (M2-04).
-type NoRules struct{}
-
-// Rules implements RuleSource.
-func (NoRules) Rules(context.Context, tenant.OrgID) ([]Rule, error) { return nil, nil }
 
 // Record is one transition of an instance, for the history and the notifications.
 type Record struct {
@@ -178,8 +174,9 @@ func (e *Engine) Round(ctx context.Context) {
 }
 
 func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
+	// An organization without rules (all disabled) is still evaluated: its old alerts end.
 	rules, err := e.d.Rules.Rules(ctx, org)
-	if err != nil || len(rules) == 0 {
+	if err != nil {
 		return err //nolint:wrapcheck // logged with the organization
 	}
 	now := e.d.Now()
@@ -212,9 +209,15 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 	var changed []alert.Instance
 	var removed []alert.Key
 	var history []Record
+	applies := make(map[alert.RuleID]map[identity.NodeID]bool, len(rules))
 	for _, rule := range rules {
 		ruleEnv := env
-		if ruleEnv.Nodes = rule.nodes(nodes); len(ruleEnv.Nodes) == 0 {
+		ruleEnv.Nodes = rule.nodes(nodes)
+		applies[rule.ID] = make(map[identity.NodeID]bool, len(ruleEnv.Nodes))
+		for _, n := range ruleEnv.Nodes {
+			applies[rule.ID][n.ID] = true
+		}
+		if len(ruleEnv.Nodes) == 0 {
 			continue
 		}
 		results, err := rule.Evaluator.Evaluate(ctx, ruleEnv)
@@ -243,6 +246,17 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 			}
 		}
 	}
+	// Instances whose rule no longer applies to their node end (disabled, removed, node outside
+	// the rule's groups); a failing rule still applies and keeps its alerts.
+	for _, key := range slices.SortedFunc(maps.Keys(instances), compareKeys) {
+		if applies[key.Rule][key.Node] {
+			continue
+		}
+		for _, t := range instances[key].Retire(now) {
+			history = append(history, Record{Key: key, Transition: t})
+		}
+		removed = append(removed, key)
+	}
 	if len(changed) == 0 && len(removed) == 0 && len(history) == 0 {
 		return nil
 	}
@@ -254,4 +268,8 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 		e.d.Sink.Deliver(ctx, org, history)
 	}
 	return nil
+}
+
+func compareKeys(a, b alert.Key) int {
+	return cmp.Or(cmp.Compare(a.Rule, b.Rule), cmp.Compare(a.Node.String(), b.Node.String()), cmp.Compare(a.Dimension, b.Dimension))
 }

@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.filesystem.full_soon
+  name: { de: "Dateisystem bald voll", en: "File system full soon" }
+  labels: { category: disk }
+spec:
+  type: prediction
+  metric: sermon_filesystem_avail_bytes
+  dimensions: [ mountpoint ]
+  lookback: 24h
+  warning: { op: "<", value: 24 }
+  critical: { op: "<", value: 6 }
+  clear: { op: ">", value: 36 }
+  for: 30m
+  help:
+    de: >-
+      Hält der Trend der letzten 24 Stunden an, ist das Dateisystem in weniger als 24 Stunden voll (kritisch:
+      in weniger als 6 Stunden). Der Wert ist die geschätzte Zeit in Stunden. Typische Ursachen: wachsende
+      Logs, Backups oder Daten, die nicht mehr aufgeräumt werden. Finde heraus, was wächst, z. B. mit du -xh
+      --max-depth=1 im Abstand einiger Minuten.
+    en: >-
+      If the trend of the last 24 hours continues, the file system will be full in less than 24 hours
+      (critical: in less than 6 hours). The value is the estimated time in hours. Typical causes: growing
+      logs, backups or data that is no longer cleaned up. Find out what grows, e.g. with du -xh --max-depth=1
+      a few minutes apart.

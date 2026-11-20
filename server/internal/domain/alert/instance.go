@@ -199,6 +199,25 @@ func (i *Instance) updateFlapping(at time.Time, f Flapping) []Transition {
 	return []Transition{{Kind: kind, From: i.State, To: i.State, At: at, Value: i.Value}}
 }
 
+// Retire ends the instance because its rule no longer applies to it (disabled, removed, node
+// outside the rule's groups): a firing alert resolves, a pending one falls back to OK. The engine
+// deletes the instance afterwards.
+func (i *Instance) Retire(at time.Time) []Transition {
+	var to State
+	switch {
+	case i.State.Firing():
+		to = StateResolved
+	case i.State == StatePending:
+		to = StateOK
+	default:
+		return nil
+	}
+	t := Transition{Kind: StateChanged, From: i.State, To: to, At: at, Value: i.Value}
+	i.State, i.Since = to, at
+	i.PendingSince, i.FiredAt, i.Ack = time.Time{}, time.Time{}, nil
+	return []Transition{t}
+}
+
 // Acknowledge marks a firing alert as seen; notifications stop until it escalates or resolves.
 func (i *Instance) Acknowledge(by identity.UserID, at time.Time) (Transition, error) {
 	if !i.State.Firing() {

@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.filesystem.usage_high
+  name: { de: "Dateisystem fast voll", en: "File system almost full" }
+  labels: { category: disk }
+spec:
+  type: threshold
+  metric: sermon_filesystem_utilization_ratio
+  dimensions: [ mountpoint ]
+  aggregate: last
+  window: 5m
+  warning: { op: ">", value: 0.8 }
+  critical: { op: ">", value: 0.9 }
+  clear: { op: "<", value: 0.75 }
+  for: 2m
+  help:
+    de: >-
+      Das Dateisystem ist zu mehr als 80 % belegt. Ist es voll, können Programme nicht mehr schreiben:
+      Datenbanken stoppen, Logs gehen verloren. Suche große Verzeichnisse, z. B. mit du -xh --max-depth=1, und
+      räume alte Logs, Backups oder Container-Images auf; die Füllprognose zeigt, wie schnell der Platz
+      schwindet.
+    en: >-
+      The file system is more than 80 % full. Once it is full, programs cannot write: databases stop, logs get
+      lost. Find large directories, e.g. with du -xh --max-depth=1, and clean up old logs, backups or
+      container images; the fill forecast shows how fast the space shrinks.

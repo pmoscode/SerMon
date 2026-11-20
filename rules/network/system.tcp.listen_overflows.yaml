@@ -1,0 +1,24 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.tcp.listen_overflows
+  name: { de: "TCP-Listen-Queue läuft über", en: "TCP listen queue overflows" }
+  labels: { category: network }
+spec:
+  type: rate
+  metric: sermon_tcp_listen_overflows_per_second
+  per: minute
+  window: 5m
+  warning: { op: ">", value: 0 }
+  critical: { op: ">", value: 10 }
+  help:
+    de: >-
+      Verbindungen wurden abgewiesen, weil die Warteschlange eines lauschenden Dienstes voll war: Der Dienst
+      nimmt neue Verbindungen nicht schnell genug an. Der Wert sind Überläufe pro Minute. Typische Ursachen:
+      ein überlasteter oder hängender Dienst oder ein zu kleiner Backlog. Finde mit ss -ltn den Dienst mit
+      voller Warteschlange (Recv-Q nahe Send-Q).
+    en: >-
+      Connections were refused because the queue of a listening service was full: the service does not accept
+      new connections fast enough. The value is overflows per minute. Typical causes: an overloaded or hanging
+      service or a backlog that is too small. Find the service with the full queue with ss -ltn (Recv-Q close
+      to Send-Q).

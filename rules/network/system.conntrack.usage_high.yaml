@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.conntrack.usage_high
+  name: { de: "conntrack-Tabelle fast voll", en: "Conntrack table almost full" }
+  labels: { category: network }
+spec:
+  type: threshold
+  metric: sermon_conntrack_utilization_ratio
+  aggregate: max
+  window: 5m
+  warning: { op: ">", value: 0.8 }
+  critical: { op: ">", value: 0.9 }
+  clear: { op: "<", value: 0.75 }
+  for: 2m
+  help:
+    de: >-
+      Die Tabelle, in der der Kernel Verbindungen für Firewall und NAT verfolgt, ist zu mehr als 80 % gefüllt.
+      Ist sie voll, verwirft der Kernel neue Verbindungen. Ursachen: sehr viele kurze Verbindungen, ein
+      Angriff oder ein zu kleines Limit. Prüfe mit conntrack -S die Zähler und erhöhe bei Bedarf
+      net.netfilter.nf_conntrack_max.
+    en: >-
+      The table in which the kernel tracks connections for the firewall and NAT is more than 80 % full. Once
+      it is full, the kernel drops new connections. Causes: very many short connections, an attack or a limit
+      that is too small. Check the counters with conntrack -S and raise net.netfilter.nf_conntrack_max if
+      needed.

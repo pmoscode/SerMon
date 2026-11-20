@@ -1,0 +1,24 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.swap.usage_high
+  name: { de: "Hohe Swap-Nutzung", en: "High swap usage" }
+  labels: { category: memory }
+spec:
+  type: threshold
+  metric: sermon_swap_utilization_ratio
+  aggregate: avg
+  window: 10m
+  warning: { op: ">", value: 0.5 }
+  critical: { op: ">", value: 0.8 }
+  clear: { op: "<", value: 0.45 }
+  for: 10m
+  help:
+    de: >-
+      Mehr als die Hälfte des Swap-Speichers ist belegt. Etwas Swap-Nutzung ist normal; viel davon heißt, dass
+      der Arbeitsspeicher dauerhaft nicht reicht. Kritisch wird es, wenn zusätzlich viel ein- und ausgelagert
+      wird – dann wird der Server langsam. Prüfe die RAM-Nutzung und die Swap-Aktivität im Node-Detail.
+    en: >-
+      More than half of the swap space is in use. Some swap use is normal; a lot of it means the memory is
+      permanently too small. It becomes critical when pages are also swapped in and out a lot – the server
+      gets slow then. Check memory usage and swap activity in the node detail.

@@ -1,0 +1,23 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.filesystem.readonly
+  name: { de: "Dateisystem schreibgeschützt", en: "File system read-only" }
+  labels: { category: disk }
+spec:
+  type: state
+  metric: sermon_filesystem_readonly
+  dimensions: [ mountpoint ]
+  critical: { op: ">=", value: 1 }
+  seen: { op: "<", value: 1 }
+  seenWindow: 24h
+  help:
+    de: >-
+      Ein Dateisystem, das in den letzten 24 Stunden beschreibbar war, ist jetzt nur noch lesbar eingehängt.
+      Meist schaltet der Kernel so um, wenn er Fehler auf dem Datenträger oder im Dateisystem findet. Schau
+      ins Kernel-Log (dmesg oder journalctl -k) nach I/O- oder Dateisystemfehlern und prüfe den Zustand des
+      Datenträgers, z. B. mit smartctl.
+    en: >-
+      A file system that was writable within the last 24 hours is now mounted read-only. The kernel usually
+      switches like this when it finds errors on the disk or in the file system. Look in the kernel log (dmesg
+      or journalctl -k) for I/O or file system errors and check the health of the disk, e.g. with smartctl.

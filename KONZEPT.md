@@ -621,13 +621,14 @@ metadata:
 spec:
   type: threshold            # threshold | rate | event | absence | state | anomaly | prediction
   metric: sermon_cpu_utilization_ratio
+  labels: { mode: idle }     # Auslastung = 1 − Leerlauf
   aggregate: avg             # avg | max | min | last
   window: 10m
-  warning: { op: ">", value: 0.85 }
-  critical: { op: ">", value: 0.95 }
-  clear: { op: "<", value: 0.80 }
+  warning: { op: "<", value: 0.15 }
+  critical: { op: "<", value: 0.05 }
+  clear: { op: ">", value: 0.20 }
   for: 5m
-  selector: { groups: [ "*" ], tags: { } }
+  selector: { groups: [ "*" ] }
   help:
     de: "Die CPU war über 10 Minuten im Mittel stark ausgelastet. Prüfe in der Live-Ansicht, welche Prozesse die Last erzeugen."
     en: "…"
@@ -660,9 +661,28 @@ Gemeinsam gilt:
 - Ausschlüsse sind Glob-Muster auf Dimensionen (`/dev/*`).
 - Verhältnisse werden als 0..1 verglichen.
 
-Import und Export laufen über die UI bzw. die API. Der Import wird **validiert** (JSON-Schema aus dem Proto) und zeigt
-einen **Dry-Run-Diff**. Mitgelieferte Standardregeln liegen in `rules/` und lassen sich pro Org überschreiben oder
-deaktivieren, ohne das Original zu verändern.
+Format und Ablage (M2-04):
+
+- **Schema:** Das Schema ist die Proto-Nachricht `sermon.web.v1.AlertRule` mit protovalidate. YAML wird als JSON dieser
+  Nachricht gelesen. Fehler sind unbekannte Felder (mit Zeile und Pfad), Felder eines anderen Regeltyps und
+  Verhältnisse außerhalb von 0..1 („85“ statt „0.85“).
+- **Weitere Felder:**
+  - `dimensions` (eine Instanz pro Labelwert) und `exclude` (Glob-Listen je Dimension);
+  - `relativeTo` (geteilt durch eine zweite Metrik mit denselben Labels, z. B. Inodes belegt/gesamt);
+  - `per` (`second` | `minute`), `seen`/`seenWindow` und `lookback`;
+  - `flapping` (`changes`, `window`; Standard 5 Wechsel in 30 min);
+  - `selector.groups` (`*` oder Gruppen-IDs).
+  - Dauern werden als `90s`, `10m` oder `24h` angegeben.
+- **Standardregeln:** Sie liegen in `rules/<kategorie>/<id>.yaml`. Das Verzeichnis ist das Label `category`, der
+  Dateiname die ID. Der Server bettet sie ein.
+- **Overrides pro Org:** Eine Org kann eine Standardregel abschalten, durch ein eigenes Regeldokument ersetzen oder
+  eigene Regeln ergänzen; das Original bleibt unverändert. Lädt ein gespeichertes Override nicht mehr (z. B. nach einer
+  Katalogänderung), wird es protokolliert und ignoriert. Es gilt dann die Standardregel.
+- **Ende von Alerts:** Gilt eine Regel für einen Node nicht mehr (abgeschaltet, entfernt, Node außerhalb ihrer
+  Gruppen), endet ihr Alert: Ein feuernder wird `RESOLVED`, die Instanz entfällt.
+
+Import und Export laufen über die UI bzw. die API. Der Import wird **validiert** (dieselbe Prüfung wie oben) und zeigt
+einen **Dry-Run-Diff**.
 
 ### 12.3 Standardregeln (angelehnt an die Netdata-Health-Configs)
 
@@ -707,6 +727,18 @@ deaktivieren, ohne das Original zu verändern.
 |                   | Reboot erforderlich                                            | state             | > 1 Tag / > 7 Tage                   |
 |                   | Update-Lauf fehlgeschlagen                                     | event             | – / ✓                               |
 | **Anomalien**     | Anomalie-Rate des Nodes hoch                                   | anomaly           | 10 % / 25 % der Metriken             |
+
+Seit M2-04 mitgeliefert sind die Regeln für Verfügbarkeit, CPU, Memory, Disk, Netzwerk und System, soweit ihre Daten
+vorliegen. Abweichungen und offene Punkte:
+
+- **Agent-Puffer:** Die Schwellen sind absolut, 100 MiB und 180 MiB. Der Puffer fasst fest 200 MiB, der Agent meldet
+  sein Limit aber nicht.
+- **„Daten verworfen“** fehlt noch. Der Zähler ist kumulativ, und für Zuwächse fehlt ein Regeltyp (M2-24).
+- **Netzwerk:** Errors und Drops gelten getrennt für Empfang und Senden, jeweils relativ zu den Paketen.
+- **Zurückgestellt:** Bandbreiten-Sättigung (Durchsatz in Bytes/s, Link-Speed in Bits/s; dem Regelformat fehlt ein
+  Umrechnungsfaktor) und Temperatur (hwmon-Grenzen meldet der Agent nicht).
+- **Später:** Event-Regeln (Reboot, OOM, Security) kommen mit M2-08, Zeitsync, RAID und systemd-Units mit M2-22.
+  Updates und Anomalien folgen in späteren Meilensteinen.
 
 ### 12.4 Benachrichtigungskanäle
 

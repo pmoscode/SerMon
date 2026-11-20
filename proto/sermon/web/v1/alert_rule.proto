@@ -1,0 +1,189 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/struct.proto";
+
+// AlertRule is an alert rule as written in YAML (rules/**/*.yaml, KONZEPT §12.2, M2-04) and
+// exchanged by the rule editor. The YAML is read as JSON of this message, so unknown fields
+// are errors. Durations are strings like "10m" or "90s"; ratios are 0..1.
+message AlertRule {
+  // api_version is always "sermon/v1".
+  string api_version = 1 [
+    json_name = "apiVersion",
+    (buf.validate.field).string.const = "sermon/v1"
+  ];
+  // kind is always "AlertRule".
+  string kind = 2 [(buf.validate.field).string.const = "AlertRule"];
+  // metadata names the rule.
+  AlertRuleMetadata metadata = 3 [(buf.validate.field).required = true];
+  // spec is what the rule checks.
+  AlertRuleSpec spec = 4 [(buf.validate.field).required = true];
+}
+
+// AlertRuleMetadata names a rule.
+message AlertRuleMetadata {
+  // id is <category>.<subject>.<condition>, e.g. system.cpu.usage_high.
+  string id = 1 [(buf.validate.field).string = {
+    max_len: 100
+    pattern: "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){2,3}$"
+  }];
+  // name is the display name.
+  LocalizedText name = 2 [(buf.validate.field).required = true];
+  // labels are free labels for routing (e.g. category: cpu).
+  map<string, string> labels = 3 [(buf.validate.field).map = {
+    max_pairs: 16
+    keys: {
+      string: {pattern: "^[a-z][a-z0-9_]{0,31}$"}
+    }
+    values: {
+      string: {max_len: 100}
+    }
+  }];
+}
+
+// LocalizedText is a text in German and English.
+message LocalizedText {
+  // de is the German text.
+  string de = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 2000
+  }];
+  // en is the English text.
+  string en = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 2000
+  }];
+}
+
+// AlertRuleSpec is what a rule checks; which fields apply depends on the type.
+message AlertRuleSpec {
+  // type is threshold, rate, absence, state or prediction (event follows with M2-08).
+  string type = 1 [(buf.validate.field).string = {
+    in: [
+      "threshold",
+      "rate",
+      "absence",
+      "state",
+      "prediction"
+    ]
+  }];
+  // metric is a metric of the catalog (not for absence).
+  string metric = 2 [(buf.validate.field).string.max_len = 128];
+  // labels filter the series, e.g. mode: idle.
+  map<string, string> labels = 3 [(buf.validate.field).map = {
+    max_pairs: 8
+    keys: {
+      string: {max_len: 64}
+    }
+    values: {
+      string: {max_len: 256}
+    }
+  }];
+  // dimensions split the rule into one instance per label value, e.g. mountpoint.
+  repeated string dimensions = 4 [(buf.validate.field).repeated = {
+    max_items: 4
+    unique: true
+    items: {
+      string: {max_len: 64}
+    }
+  }];
+  // exclude lists glob patterns of dimension values to skip, e.g. mountpoint: ["/snap/*"]. A list
+  // value keeps the YAML a plain list; the loader accepts at most 32 strings of 256 bytes each.
+  map<string, google.protobuf.ListValue> exclude = 5 [(buf.validate.field).map = {
+    max_pairs: 4
+    keys: {
+      string: {max_len: 64}
+    }
+  }];
+  // aggregate reduces the window: avg, max, min or last (threshold).
+  string aggregate = 6 [(buf.validate.field).string = {
+    in: [
+      "",
+      "avg",
+      "max",
+      "min",
+      "last"
+    ]
+  }];
+  // window is the time the aggregate or rate covers, e.g. 10m (threshold, rate).
+  string window = 7 [(buf.validate.field).string.max_len = 16];
+  // warning is the condition for a warning.
+  AlertCondition warning = 8;
+  // critical is the condition for a critical alert.
+  AlertCondition critical = 9;
+  // clear is the condition a firing alert must meet to resolve (hysteresis).
+  AlertCondition clear = 10;
+  // for_duration is how long a condition must hold before the alert fires; YAML key "for".
+  string for_duration = 11 [
+    json_name = "for",
+    (buf.validate.field).string.max_len = 16
+  ];
+  // per is second or minute for rates.
+  string per = 12 [(buf.validate.field).string = {
+    in: [
+      "",
+      "second",
+      "minute"
+    ]
+  }];
+  // relative_to divides by a second metric with the same labels (threshold, rate).
+  string relative_to = 13 [
+    json_name = "relativeTo",
+    (buf.validate.field).string.max_len = 128
+  ];
+  // seen is a condition that must have held within seen_window (state).
+  AlertCondition seen = 14;
+  // seen_window is the time seen looks back, e.g. 24h.
+  string seen_window = 15 [
+    json_name = "seenWindow",
+    (buf.validate.field).string.max_len = 16
+  ];
+  // lookback is the history a prediction uses, e.g. 24h.
+  string lookback = 16 [(buf.validate.field).string.max_len = 16];
+  // flapping overrides the default flapping detection.
+  AlertFlapping flapping = 17;
+  // selector limits the rule to node groups ("*" or group IDs); empty: all groups.
+  AlertSelector selector = 18;
+  // help explains the alert: meaning, typical causes, what to do.
+  LocalizedText help = 19 [(buf.validate.field).required = true];
+}
+
+// AlertCondition compares a value with a threshold.
+message AlertCondition {
+  // op is >, >=, < or <=.
+  string op = 1 [(buf.validate.field).string = {
+    in: [
+      ">",
+      ">=",
+      "<",
+      "<="
+    ]
+  }];
+  // value is the threshold.
+  double value = 2 [(buf.validate.field).double.finite = true];
+}
+
+// AlertFlapping limits changes between firing and resolved.
+message AlertFlapping {
+  // changes is the number of changes that are still no flapping.
+  int32 changes = 1 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100
+  }];
+  // window is the time the changes are counted in, e.g. 30m.
+  string window = 2 [(buf.validate.field).string.max_len = 16];
+}
+
+// AlertSelector limits a rule to node groups.
+message AlertSelector {
+  // groups are "*" (all) or node group UUIDs.
+  repeated string groups = 1 [(buf.validate.field).repeated = {
+    max_items: 100
+    unique: true
+    items: {
+      string: {max_len: 36}
+    }
+  }];
+}

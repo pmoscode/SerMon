@@ -59,6 +59,15 @@ type AlertLease struct {
 	ExpiresAt time.Time
 }
 
+type AlertRuleOverride struct {
+	OrgID     uuid.UUID
+	RuleID    string
+	Disabled  bool
+	Document  []byte
+	UpdatedAt time.Time
+	UpdatedBy *uuid.UUID
+}
+
 type AuditLog struct {
 	ID       int64
 	OrgID    uuid.UUID

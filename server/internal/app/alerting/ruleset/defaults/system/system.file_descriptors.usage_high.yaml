@@ -1,0 +1,25 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.file_descriptors.usage_high
+  name: { de: "File-Descriptors fast erschöpft", en: "File descriptors almost exhausted" }
+  labels: { category: system }
+spec:
+  type: threshold
+  metric: sermon_system_file_descriptors_used
+  relativeTo: sermon_system_file_descriptors_limit
+  aggregate: avg
+  window: 5m
+  warning: { op: ">", value: 0.8 }
+  critical: { op: ">", value: 0.9 }
+  clear: { op: "<", value: 0.75 }
+  for: 5m
+  help:
+    de: >-
+      Mehr als 80 % der systemweit erlaubten offenen Dateien und Sockets sind belegt (fs.file-max). Sind sie
+      erschöpft, scheitern neue Verbindungen und Dateizugriffe. Ursache ist oft ein Programm, das Dateien oder
+      Verbindungen nicht schließt. Finde es, z. B. mit lsof | awk '{print $1}' | sort | uniq -c | sort -n.
+    en: >-
+      More than 80 % of the open files and sockets allowed system-wide are in use (fs.file-max). Once they run
+      out, new connections and file accesses fail. The cause is often a program that does not close files or
+      connections. Find it, e.g. with lsof | awk '{print $1}' | sort | uniq -c | sort -n.

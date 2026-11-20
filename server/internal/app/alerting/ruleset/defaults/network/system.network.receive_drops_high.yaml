@@ -1,0 +1,27 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.network.receive_drops_high
+  name: { de: "Empfangs-Drops am Interface", en: "Network receive drops" }
+  labels: { category: network }
+spec:
+  type: rate
+  metric: sermon_network_receive_drops_per_second
+  relativeTo: sermon_network_receive_packets_per_second
+  dimensions: [ interface ]
+  window: 10m
+  warning: { op: ">", value: 0.001 }
+  critical: { op: ">", value: 0.01 }
+  clear: { op: "<", value: 0.0005 }
+  for: 5m
+  help:
+    de: >-
+      Mehr als 0,1 % der Pakete des Interfaces wurden über 10 Minuten beim Empfang verworfen. Typische
+      Ursachen: zu kleine Empfangspuffer der Netzwerkkarte, eine überlastete CPU, die die Pakete nicht schnell
+      genug abholt, oder Pakete für unbekannte Protokolle. Prüfe mit ethtool -S die Zähler und mit ethtool -g
+      die Puffergrößen.
+    en: >-
+      More than 0.1 % of the interface's packets were dropped on receive over 10 minutes. Typical causes:
+      receive buffers of the network card that are too small, an overloaded CPU that does not pick up packets
+      fast enough, or packets for unknown protocols. Check the counters with ethtool -S and the buffer sizes
+      with ethtool -g.

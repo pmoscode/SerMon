@@ -1,0 +1,27 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.filesystem.inodes_high
+  name: { de: "Inodes fast erschöpft", en: "Inodes almost exhausted" }
+  labels: { category: disk }
+spec:
+  type: threshold
+  metric: sermon_filesystem_inodes_used
+  relativeTo: sermon_filesystem_inodes_total
+  dimensions: [ mountpoint ]
+  aggregate: last
+  window: 5m
+  warning: { op: ">", value: 0.8 }
+  critical: { op: ">", value: 0.9 }
+  clear: { op: "<", value: 0.75 }
+  for: 2m
+  help:
+    de: >-
+      Mehr als 80 % der Inodes des Dateisystems sind vergeben. Jede Datei braucht einen Inode; sind sie
+      aufgebraucht, lassen sich keine Dateien mehr anlegen, auch wenn noch Platz frei ist. Ursache sind meist
+      sehr viele kleine Dateien, etwa Sitzungs-, Cache- oder Mail-Dateien. Finde die Verzeichnisse mit den
+      meisten Dateien, z. B. mit du --inodes -x.
+    en: >-
+      More than 80 % of the file system's inodes are in use. Every file needs an inode; once they run out, no
+      files can be created even if space is left. The cause is usually a great many small files, such as
+      session, cache or mail files. Find the directories with the most files, e.g. with du --inodes -x.

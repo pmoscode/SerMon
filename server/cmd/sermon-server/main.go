@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
+	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
 
@@ -144,9 +145,15 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
 		registerIngestMetrics(registry, ingestService.Stats(), sessions)
 		servers = append(servers, pruneRing(ring))
-		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases.
+		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases – the
+		// shipped defaults with each organization's overrides (M2-04).
+		defaultRules, err := ruleset.Defaults()
+		if err != nil {
+			return fmt.Errorf("default alert rules: %w", err)
+		}
 		engine := alerting.NewEngine(alerting.Deps{
-			Store: postgres.NewAlertStore(db), Rules: alerting.NoRules{}, Nodes: postgres.NewFleetStore(db),
+			Store: postgres.NewAlertStore(db), Rules: ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger),
+			Nodes:   postgres.NewFleetStore(db),
 			Metrics: reader, Now: time.Now, Logger: logger,
 		})
 		registerAlertMetrics(registry, engine.Stats())

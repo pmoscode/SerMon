@@ -1382,7 +1382,33 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   Zähler-Reset); Prognose mit fallender und steigender Reihe.
 - **Abhängig von:** M2-02
 
-#### ☐ M2-04 – Regel-Schema, Loader und Standardregeln · X · M
+#### ☑ M2-04 – Regel-Schema, Loader und Standardregeln · X · M
+> Erledigt (ADR 0019, Nachtrag M2-04):
+> - **Schema:** `proto/sermon/web/v1/alert_rule.proto` mit protovalidate.
+> - **Loader `app/alerting/ruleset`:**
+>   - YAML → JSON → strikt `protojson`; unbekannte Felder mit YAML-Zeile und Pfad.
+>   - Felder eines anderen Typs und Verhältnisse außerhalb von 0..1 sind Fehler; höchstens 64 KiB, genau ein Dokument.
+>   - `Load` prüft Dateiname = ID und Verzeichnis = Kategorie, meldet doppelte IDs und alle Fehler mit Datei.
+> - **Standardregeln:** 23 Regeln in `rules/` mit Hilfe DE/EN. Kopie in den Server per `just gen-rules`
+>   (Teil von `gen`/`check-gen`), eingebettet. Abweichungen von KONZEPT §12.3 siehe dort: Agent-Puffer absolut, „Daten
+>   verworfen“ fehlt noch, Bandbreite und Temperatur zurückgestellt.
+> - **Overrides:** Tabelle `alert_rule_overrides` (Migration 00021, RLS) mit `AlertRuleStore`. `ruleset.Source`
+>   mischt Standardregeln und Overrides pro Org (abschalten, ersetzen, eigene Regeln). Ein Override, das nicht mehr
+>   lädt, wird protokolliert, und die Standardregel gilt. Die API dazu folgt mit M2-17.
+> - **Engine:**
+>   - Gilt eine Regel nicht mehr (abgeschaltet, entfernt, Node außerhalb ihrer Gruppen), endet ihr Alert über
+>     `Instance.Retire`: Ein feuernder wird `RESOLVED` mit Historie, dann wird die Instanz gelöscht.
+>   - Orgs ohne aktive Regeln werden dafür weiter ausgewertet.
+>   - Fenster über 1 h lesen aus dem 1-min-Aggregat (24 h → 5-min-Schritt).
+>   - Zustandsregeln lesen den aktuellen Wert getrennt aus den letzten 5 min.
+> - **Tests:**
+>   - Szenariotest: Für jede Standardregel gibt es auslösende und ruhige Daten in Agent-Einheiten (ppm) durch
+>     Auswertung und Zustandsmaschine. Eine Regel ohne Szenario lässt den Test scheitern.
+>   - Ungültige Regeln (21 Fälle) und Overrides mit Fallback.
+>   - Integration: Store mit RLS; Standardregel „Node offline“ feuert über Engine und Datenbank und endet nach dem
+>     Abschalten per Override.
+>   - Gegenproben für Einheitenprüfung, Feldprüfung, Dateinamen, Duplikate, Abschalten, ID-Prüfung des Overrides,
+>     `Retire`, grobe Schritte, `seen`-Historie und eine geänderte Regeldatei.
 - **Ziel:** `AlertRule` als Proto-Nachricht mit protovalidate (Quelle des YAML-Schemas); Loader für `rules/*.yaml` mit
   klaren Fehlermeldungen; Standardregeln aus KONZEPT §12.3, soweit ihre Daten in M2 vorliegen (ohne Updates und
   Anomalien); Überschreiben und Abschalten pro Org, ohne das Original zu ändern; Hilfetexte DE/EN pro Regel.
@@ -1526,7 +1552,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 
 #### ☐ M2-22 – Zustands-Collectors · A · M
 - **Ziel:** fehlgeschlagene systemd-Units, Zeitsynchronisation (Offset), RAID aus `/proc/mdstat`, Dateisystem
-  read-only, Interface down, mit den Standardregeln dazu.
+  read-only, Interface down, mit den Standardregeln dazu. Für read-only und Interface down gibt es Metriken und Regeln
+  seit M2-04.
 - **Tests zuerst:** Fixtures pro Zustand; Übergänge lösen die Regeln aus.
 - **Abhängig von:** M2-03
 - **Skill:** `sermon-add-collector`, `sermon-add-alert-rule`
@@ -1543,7 +1570,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 #### ☐ M2-24 – Security- und Self-Monitoring-Alerts · S · S 🔒
 - **Ziel:** Events „Enrollment-Token benutzt“, „zweite Session gesperrt“, „Rotation von neuer IP“ als Security-Events
   mit Standardregeln (T3, T4); Self-Monitoring des Servers: Ingest-Lag, Füllstand der Datenbank, verworfene Samples
-  (T37).
+  (T37). Dazu „Agent hat Daten verworfen“ (aus M2-04): Zuwachs von `sermon_agent_buffer_dropped_batches`, braucht
+  einen Regeltyp für Zuwächse kumulativer Zähler.
 - **Tests zuerst:** jedes Ereignis erzeugt genau einen Alert in der richtigen Org; Self-Monitoring-Alerts nur für
   Superadmins.
 - **Abhängig von:** M2-08

@@ -1,0 +1,20 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.node.offline
+  name: { de: "Node offline", en: "Node offline" }
+  labels: { category: availability }
+spec:
+  type: absence
+  critical: { op: ">", value: 60 }
+  help:
+    de: >-
+      Der Agent hat sich seit über einer Minute nicht beim Server gemeldet. Typische Ursachen: Der Server ist
+      ausgeschaltet, abgestürzt oder hängt; das Netzwerk oder eine Firewall zwischen Node und SerMon ist
+      gestört; der Dienst sermon-agent wurde gestoppt. Prüfe, ob der Server erreichbar ist, und auf dem Node
+      den Status und das Log von sermon-agent.
+    en: >-
+      The agent has not reported to the server for more than a minute. Typical causes: the server is switched
+      off, crashed or hangs; the network or a firewall between the node and SerMon is disrupted; the
+      sermon-agent service was stopped. Check that the server is reachable, and the status and log of
+      sermon-agent on the node.

@@ -1,0 +1,27 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.disk.busy_high
+  name: { de: "Datenträger ausgelastet", en: "Disk busy" }
+  labels: { category: disk }
+spec:
+  type: threshold
+  metric: sermon_disk_busy_ratio
+  dimensions: [ device ]
+  aggregate: avg
+  window: 10m
+  warning: { op: ">", value: 0.9 }
+  critical: { op: ">", value: 0.98 }
+  clear: { op: "<", value: 0.85 }
+  for: 5m
+  help:
+    de: >-
+      Der Datenträger war über 10 Minuten fast ständig mit Anfragen beschäftigt. Bei klassischen Festplatten
+      heißt das: Er ist am Limit. SSDs und NVMe bearbeiten viele Anfragen parallel und können trotz 100 % noch
+      Reserven haben – dann zählt die Latenz (await). Prüfe Latenz und Warteschlange im Node-Detail und suche
+      mit iotop die Prozesse mit der meisten I/O.
+    en: >-
+      The disk was busy with requests almost all the time over 10 minutes. For classic hard disks this means
+      it is at its limit. SSDs and NVMe serve many requests in parallel and may still have headroom at 100 % –
+      then the latency (await) is what counts. Check latency and queue in the node detail and find the
+      processes with the most I/O with iotop.

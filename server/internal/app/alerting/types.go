@@ -110,7 +110,7 @@ func (s SeriesSpec) query(ctx context.Context, env Env, from time.Time) ([]serie
 		for i, n := range nodes {
 			ids[i] = n.ID
 		}
-		found, err := env.Metrics.Query(ctx, env.Scope, metrics.Query{Metric: s.Metric, Nodes: ids, Labels: s.Labels, From: from, To: env.Now})
+		found, err := env.Metrics.Query(ctx, env.Scope, metrics.Query{Metric: s.Metric, Nodes: ids, Labels: s.Labels, From: from, To: env.Now, Step: stepFor(env.Now.Sub(from))})
 		if err != nil {
 			return nil, fmt.Errorf("query %s: %w", s.Metric, err)
 		}
@@ -127,6 +127,20 @@ func (s SeriesSpec) query(ctx context.Context, env Env, from time.Time) ([]serie
 		}
 	}
 	return out, nil
+}
+
+// Windows longer than coarseSpan are read with a step of about coarsePoints points, in whole
+// minutes: from the 1-min aggregate instead of the raw table, as rules run every Interval.
+const (
+	coarseSpan   = time.Hour
+	coarsePoints = 288
+)
+
+func stepFor(span time.Duration) time.Duration {
+	if span <= coarseSpan {
+		return 0
+	}
+	return max(time.Minute, (span / coarsePoints).Truncate(time.Minute))
 }
 
 func validateWindow(name string, w time.Duration) error {
@@ -175,18 +189,88 @@ func (a Aggregate) of(points []metrics.Point) float64 {
 	}
 }
 
-// ThresholdRule compares an aggregate of a metric over a window with the thresholds.
+// ThresholdRule compares an aggregate of a metric over a window with the thresholds; with
+// RelativeTo the aggregate of a second metric with the same labels and unit divides it (inodes
+// used / total).
 type ThresholdRule struct {
 	Series     SeriesSpec
+	RelativeTo string
 	Aggregate  Aggregate
 	Window     time.Duration
 	Thresholds alert.Thresholds
 }
 
+// relative checks a metric to divide by: same labels, same unit as def.
+func relative(name string, def metric.Definition, ok func(metric.Unit) bool) error {
+	rel, found := metric.Lookup(name)
+	if !found || !slices.Equal(rel.Labels, def.Labels) || !ok(rel.Unit) {
+		return fmt.Errorf("%w: relative_to %q must be a metric with the labels and kind of %s", alert.ErrInvalidRule, name, def.Name)
+	}
+	return nil
+}
+
+// value is the reduced value of one instance.
+type value struct {
+	node      identity.NodeID
+	dimension string
+	v         float64
+}
+
+func reduce(found []series, aggregate Aggregate, factor float64) []value {
+	out := make([]value, len(found))
+	for i, s := range found {
+		out[i] = value{node: s.node, dimension: s.dimension, v: aggregate.of(s.points) * factor}
+	}
+	return out
+}
+
+// divideBy divides each value by the matching total; values without a total drop out, as do
+// values over a zero total – unless both are zero (no traffic, no errors).
+func divideBy(values, totals []value) []value {
+	base := make(map[string]float64, len(totals))
+	for _, t := range totals {
+		base[t.node.String()+"|"+t.dimension] = t.v
+	}
+	out := make([]value, 0, len(values))
+	for _, v := range values {
+		total, ok := base[v.node.String()+"|"+v.dimension]
+		switch {
+		case !ok:
+		case total == 0 && v.v == 0:
+			out = append(out, value{node: v.node, dimension: v.dimension, v: 0})
+		case total == 0:
+		default:
+			out = append(out, value{node: v.node, dimension: v.dimension, v: v.v / total})
+		}
+	}
+	return out
+}
+
+func results(values []value, th alert.Thresholds) []Result {
+	out := make([]Result, len(values))
+	for i, v := range values {
+		out[i] = Result{Node: v.node, Dimension: v.dimension, Observation: th.Evaluate(v.v)}
+	}
+	return out
+}
+
+// relativeSeries reads the series of the relative metric with the spec's filter and dimensions.
+func (s SeriesSpec) relativeSeries(ctx context.Context, env Env, metricName string, from time.Time) ([]series, error) {
+	spec := s
+	spec.Metric = metricName
+	return spec.query(ctx, env, from)
+}
+
 // Validate checks the rule against the metric catalog.
 func (r ThresholdRule) Validate() error {
-	if _, err := r.Series.validate(); err != nil {
+	def, err := r.Series.validate()
+	if err != nil {
 		return err
+	}
+	if r.RelativeTo != "" {
+		if err := relative(r.RelativeTo, def, func(u metric.Unit) bool { return u == def.Unit }); err != nil {
+			return err
+		}
 	}
 	if r.Aggregate < Avg || r.Aggregate > Last {
 		return fmt.Errorf("%w: aggregate must be avg, max, min or last", alert.ErrInvalidRule)
@@ -199,15 +283,20 @@ func (r ThresholdRule) Validate() error {
 
 // Evaluate implements Evaluator.
 func (r ThresholdRule) Evaluate(ctx context.Context, env Env) ([]Result, error) {
-	found, err := r.Series.query(ctx, env, env.Now.Add(-r.Window))
+	from := env.Now.Add(-r.Window)
+	found, err := r.Series.query(ctx, env, from)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Result, 0, len(found))
-	for _, s := range found {
-		out = append(out, Result{Node: s.node, Dimension: s.dimension, Observation: r.Thresholds.Evaluate(r.Aggregate.of(s.points))})
+	values := reduce(found, r.Aggregate, 1)
+	if r.RelativeTo != "" {
+		totals, err := r.Series.relativeSeries(ctx, env, r.RelativeTo, from)
+		if err != nil {
+			return nil, err
+		}
+		values = divideBy(values, reduce(totals, r.Aggregate, 1))
 	}
-	return out, nil
+	return results(values, r.Thresholds), nil
 }
 
 // RateRule compares the average of a per-second metric over a window, per second or per minute
@@ -237,9 +326,11 @@ func (r RateRule) Validate() error {
 		return fmt.Errorf("%w: per must be a second or a minute", alert.ErrInvalidRule)
 	}
 	if r.RelativeTo != "" {
-		rel, ok := metric.Lookup(r.RelativeTo)
-		if !ok || !isRate(rel.Unit) || !slices.Equal(rel.Labels, def.Labels) {
-			return fmt.Errorf("%w: relative_to must be a rate with the labels of %s", alert.ErrInvalidRule, def.Name)
+		if err := relative(r.RelativeTo, def, isRate); err != nil {
+			return err
+		}
+		if r.Per != 0 {
+			return fmt.Errorf("%w: per does not apply to a rate relative to another", alert.ErrInvalidRule)
 		}
 	}
 	if err := validateWindow("window", r.Window); err != nil {
@@ -255,41 +346,19 @@ func (r RateRule) Evaluate(ctx context.Context, env Env) ([]Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	base := map[string]float64{}
-	if r.RelativeTo != "" {
-		spec := r.Series
-		spec.Metric = r.RelativeTo
-		totals, err := spec.query(ctx, env, from)
-		if err != nil {
-			return nil, err
-		}
-		for _, t := range totals {
-			base[t.node.String()+"|"+t.dimension] = Avg.of(t.points)
-		}
-	}
 	factor := 1.0
 	if r.Per == time.Minute {
 		factor = 60
 	}
-	out := make([]Result, 0, len(found))
-	for _, s := range found {
-		value := Avg.of(s.points) * factor
-		if r.RelativeTo != "" {
-			total, ok := base[s.node.String()+"|"+s.dimension]
-			switch {
-			case !ok:
-				continue
-			case total == 0 && value == 0:
-				value = 0 // no traffic, no errors
-			case total == 0:
-				continue
-			default:
-				value /= total
-			}
+	values := reduce(found, Avg, factor)
+	if r.RelativeTo != "" {
+		totals, err := r.Series.relativeSeries(ctx, env, r.RelativeTo, from)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, Result{Node: s.node, Dimension: s.dimension, Observation: r.Thresholds.Evaluate(value)})
+		values = divideBy(reduce(found, Avg, 1), reduce(totals, Avg, 1))
 	}
-	return out, nil
+	return results(values, r.Thresholds), nil
 }
 
 // AbsenceRule compares the seconds since a node's last contact with the thresholds (node offline).
@@ -344,21 +413,27 @@ func (r StateRule) Validate() error {
 
 // Evaluate implements Evaluator.
 func (r StateRule) Evaluate(ctx context.Context, env Env) ([]Result, error) {
-	lookback := stateLookback
-	if r.Seen != nil {
-		lookback = max(lookback, r.SeenWindow)
-	}
-	found, err := r.Series.query(ctx, env, env.Now.Add(-lookback))
+	found, err := r.Series.query(ctx, env, env.Now.Add(-stateLookback))
 	if err != nil {
 		return nil, err
+	}
+	// What was seen before comes from a coarse history; the current points count as well.
+	before := map[string]bool{}
+	if r.Seen != nil {
+		history, err := r.Series.query(ctx, env, env.Now.Add(-r.SeenWindow))
+		if err != nil {
+			return nil, err
+		}
+		for _, h := range history {
+			if seen(*r.Seen, h.points) {
+				before[h.node.String()+"|"+h.dimension] = true
+			}
+		}
 	}
 	out := make([]Result, 0, len(found))
 	for _, s := range found {
 		last := s.points[len(s.points)-1]
-		if !last.Time.After(env.Now.Add(-stateLookback)) {
-			continue // no current value
-		}
-		if r.Seen != nil && !seen(*r.Seen, s.points) {
+		if r.Seen != nil && !before[s.node.String()+"|"+s.dimension] && !seen(*r.Seen, s.points) {
 			out = append(out, Result{Node: s.node, Dimension: s.dimension, Observation: alert.Observation{Level: alert.LevelOK, Cleared: true, Value: last.Avg}})
 			continue
 		}

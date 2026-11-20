@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.load.per_cpu_high
+  name: { de: "Hohe Last pro Kern", en: "High load per core" }
+  labels: { category: cpu }
+spec:
+  type: threshold
+  metric: sermon_load_average_per_cpu
+  labels: { period: "15m" }
+  aggregate: avg
+  window: 5m
+  warning: { op: ">", value: 1.5 }
+  critical: { op: ">", value: 3 }
+  clear: { op: "<", value: 1.2 }
+  for: 5m
+  help:
+    de: >-
+      Die Load über 15 Minuten liegt deutlich über der Zahl der Kerne: Mehr Prozesse wollen rechnen oder
+      warten auf Datenträger, als der Server bedienen kann. Ursachen sind CPU-Last, aber auch hängende I/O (z.
+      B. ein nicht erreichbares Netzlaufwerk). Prüfe CPU-Auslastung und iowait und suche mit top nach
+      Prozessen im Zustand R oder D.
+    en: >-
+      The 15-minute load is well above the number of cores: more processes want to run or wait for storage
+      than the server can serve. Causes are CPU load, but also hanging I/O (e.g. an unreachable network
+      share). Check CPU usage and iowait and look for processes in state R or D with top.

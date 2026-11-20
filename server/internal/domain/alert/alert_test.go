@@ -274,3 +274,34 @@ func TestObserve_InvariantsHoldForRandomSequences(t *testing.T) {
 		}
 	}
 }
+
+// A rule that no longer applies (disabled, removed, node outside its groups) ends its instances:
+// a firing alert resolves, a pending one falls back; either way without a new observation.
+func TestRetire_EndsTheInstance(t *testing.T) {
+	for name, tc := range map[string]struct {
+		steps []step
+		moves []alert.State
+	}{
+		"firing":   {[]step{{0, 0.99, alert.StateCritical, []alert.State{alert.StateCritical}}}, []alert.State{alert.StateResolved}},
+		"pending":  {[]step{{0, 0.90, alert.StatePending, []alert.State{alert.StatePending}}}, []alert.State{alert.StateOK}},
+		"resolved": {[]step{{0, 0.99, alert.StateCritical, []alert.State{alert.StateCritical}}, {time.Minute, 0.5, alert.StateResolved, []alert.State{alert.StateResolved}}}, nil},
+		"ok":       {nil, nil},
+	} {
+		timing := alert.Timing{Flapping: alert.DefaultFlapping}
+		if name == "pending" {
+			timing = fiveMinutes
+		}
+		inst := run(t, timing, tc.steps)
+		value := inst.Value
+		var moves []alert.State
+		for _, tr := range inst.Retire(t0.Add(time.Hour)) {
+			moves = append(moves, tr.To)
+			if tr.Kind != alert.StateChanged || !tr.At.Equal(t0.Add(time.Hour)) || tr.Value != value {
+				t.Errorf("%s: transition %+v", name, tr)
+			}
+		}
+		if !equal(moves, tc.moves) || inst.State.Firing() || inst.State == alert.StatePending || inst.Check() != "" {
+			t.Errorf("%s: moves %v, state %v (%q); want %v", name, moves, inst.State, inst.Check(), tc.moves)
+		}
+	}
+}

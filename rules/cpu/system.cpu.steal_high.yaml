@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.cpu.steal_high
+  name: { de: "Hohe Steal-Time", en: "High steal time" }
+  labels: { category: cpu }
+spec:
+  type: threshold
+  metric: sermon_cpu_utilization_ratio
+  labels: { mode: steal }
+  aggregate: avg
+  window: 10m
+  warning: { op: ">", value: 0.1 }
+  critical: { op: ">", value: 0.25 }
+  clear: { op: "<", value: 0.08 }
+  for: 5m
+  help:
+    de: >-
+      Der Hypervisor hat dieser VM über 10 Minuten spürbar Rechenzeit vorenthalten, weil andere VMs auf
+      demselben Host sie brauchten. Die VM wird dadurch langsamer, ohne dass sie selbst mehr arbeitet. Sprich
+      mit dem Hoster bzw. prüfe die Auslastung des Hypervisors; hilft das nicht, mehr oder dedizierte CPUs
+      buchen.
+    en: >-
+      The hypervisor withheld noticeable CPU time from this VM over 10 minutes because other VMs on the same
+      host needed it. The VM gets slower without doing more work itself. Talk to the hoster or check the load
+      of the hypervisor; if that does not help, book more or dedicated CPUs.

@@ -1,0 +1,27 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.network.transmit_drops_high
+  name: { de: "Sende-Drops am Interface", en: "Network transmit drops" }
+  labels: { category: network }
+spec:
+  type: rate
+  metric: sermon_network_transmit_drops_per_second
+  relativeTo: sermon_network_transmit_packets_per_second
+  dimensions: [ interface ]
+  window: 10m
+  warning: { op: ">", value: 0.001 }
+  critical: { op: ">", value: 0.01 }
+  clear: { op: "<", value: 0.0005 }
+  for: 5m
+  help:
+    de: >-
+      Mehr als 0,1 % der Pakete des Interfaces wurden über 10 Minuten beim Senden verworfen. Typische Ursachen:
+      eine volle Sende-Warteschlange, weil mehr gesendet werden soll, als die Leitung hergibt, ein zu kleiner
+      Sendepuffer (txqueuelen) oder Traffic-Shaping, das Pakete bewusst verwirft. Prüfe mit tc -s qdisc die
+      Warteschlangen und mit ethtool -S die Zähler der Netzwerkkarte.
+    en: >-
+      More than 0.1 % of the interface's packets were dropped on transmit over 10 minutes. Typical causes: a full
+      transmit queue because more is to be sent than the link carries, a transmit buffer that is too small
+      (txqueuelen) or traffic shaping that drops packets on purpose. Check the queues with tc -s qdisc and the
+      network card's counters with ethtool -S.

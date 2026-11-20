@@ -1,0 +1,24 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.processes.zombies_high
+  name: { de: "Viele Zombie-Prozesse", en: "Many zombie processes" }
+  labels: { category: system }
+spec:
+  type: threshold
+  metric: sermon_system_zombies
+  aggregate: min
+  window: 10m
+  warning: { op: ">", value: 10 }
+  critical: { op: ">", value: 50 }
+  clear: { op: "<", value: 5 }
+  help:
+    de: >-
+      Über 10 Minuten gab es ständig mehr als 10 Zombie-Prozesse: beendete Prozesse, deren Elternprozess ihr
+      Ende nicht abholt. Sie belegen keine Ressourcen außer einem Eintrag in der Prozesstabelle, deuten aber
+      auf einen fehlerhaften Elternprozess hin. Finde ihn mit ps -eo ppid,stat | awk '$2 ~ /Z/' und starte ihn
+      neu.
+    en: >-
+      For 10 minutes there were constantly more than 10 zombie processes: finished processes whose parent does
+      not collect their exit. They use no resources except an entry in the process table, but point to a
+      faulty parent process. Find it with ps -eo ppid,stat | awk '$2 ~ /Z/' and restart it.

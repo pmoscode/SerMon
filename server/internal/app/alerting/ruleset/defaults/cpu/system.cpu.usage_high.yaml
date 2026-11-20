@@ -1,0 +1,25 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.cpu.usage_high
+  name: { de: "Hohe CPU-Auslastung", en: "High CPU usage" }
+  labels: { category: cpu }
+spec:
+  type: threshold
+  metric: sermon_cpu_utilization_ratio
+  labels: { mode: idle }
+  aggregate: avg
+  window: 10m
+  warning: { op: "<", value: 0.15 }
+  critical: { op: "<", value: 0.05 }
+  clear: { op: ">", value: 0.2 }
+  for: 5m
+  help:
+    de: >-
+      Die CPU war über 10 Minuten im Mittel zu mehr als 85 % ausgelastet (weniger als 15 % Leerlauf); der
+      Server hat kaum Reserven. Auch iowait und steal zählen hier mit. Sieh dir im Node-Detail die Aufteilung
+      nach user, system, iowait und steal an und suche die Prozesse mit der höchsten Last, z. B. mit top.
+    en: >-
+      The CPU was more than 85 % busy on average over 10 minutes (less than 15 % idle); the server has hardly
+      any headroom. iowait and steal count as busy here too. Look at the split into user, system, iowait and
+      steal in the node detail and find the processes with the highest load, e.g. with top.

@@ -1,0 +1,25 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.memory.pressure_high
+  name: { de: "Hoher Speicherdruck", en: "High memory pressure" }
+  labels: { category: memory }
+spec:
+  type: threshold
+  metric: sermon_pressure_stall_ratio
+  labels: { resource: memory, kind: some }
+  aggregate: avg
+  window: 1m
+  warning: { op: ">", value: 0.1 }
+  critical: { op: ">", value: 0.3 }
+  clear: { op: "<", value: 0.05 }
+  for: 5m
+  help:
+    de: >-
+      Prozesse mussten über mehrere Minuten mehr als 10 % der Zeit auf Arbeitsspeicher warten (Pressure Stall
+      Information, „some“). Das ist ein früheres und genaueres Zeichen für Speichermangel als die reine
+      Belegung. Prüfe RAM- und Swap-Nutzung und die Prozesse mit dem größten Speicherbedarf.
+    en: >-
+      Processes had to wait for memory more than 10 % of the time over several minutes (pressure stall
+      information, "some"). This is an earlier and more precise sign of memory shortage than the usage alone.
+      Check memory and swap usage and the processes with the largest memory use.

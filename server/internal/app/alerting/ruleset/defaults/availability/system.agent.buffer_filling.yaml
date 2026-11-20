@@ -1,0 +1,28 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.agent.buffer_filling
+  name: { de: "Agent-Puffer läuft voll", en: "Agent buffer filling up" }
+  labels: { category: availability }
+spec:
+  type: threshold
+  metric: sermon_agent_buffer_bytes
+  aggregate: max
+  window: 5m
+  warning: { op: ">", value: 104857600 }
+  critical: { op: ">", value: 188743680 }
+  clear: { op: "<", value: 52428800 }
+  for: 2m
+  help:
+    de: >-
+      Der Agent puffert Messwerte, die er noch nicht an den Server übertragen konnte. Der Puffer fasst 200
+      MiB; die Warnung kommt bei 100 MiB, kritisch wird es bei 180 MiB. Ist er voll, verwirft der Agent die
+      ältesten Daten. Ursachen: eine langsame oder instabile Verbindung zum Server oder ein überlasteter
+      Server. Prüfe die Verbindung und das Log von sermon-agent. Solange der Agent gar nichts senden kann,
+      sieht SerMon den Füllstand nicht – dann meldet sich stattdessen „Node offline“.
+    en: >-
+      The agent buffers measurements it could not send to the server yet. The buffer holds 200 MiB; the
+      warning comes at 100 MiB, critical at 180 MiB. Once it is full, the agent drops the oldest data. Causes:
+      a slow or unstable connection to the server, or an overloaded server. Check the connection and the log
+      of sermon-agent. While the agent cannot send at all, SerMon does not see the buffer – "Node offline"
+      fires instead.

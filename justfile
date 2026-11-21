@@ -175,11 +175,13 @@ agent_targets := "x86_64-unknown-linux-musl aarch64-unknown-linux-musl"
 [working-directory: 'agent']
 fmt-agent:
     cargo fmt --all
+    cd fuzz && cargo fmt
 
-# Check formatting and run clippy on the agent
+# Check formatting and run clippy on the agent (the fuzz targets are a workspace of their own; CI lints them in fuzz.yml)
 [working-directory: 'agent']
 lint-agent:
     cargo fmt --all -- --check
+    cd fuzz && cargo fmt -- --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 

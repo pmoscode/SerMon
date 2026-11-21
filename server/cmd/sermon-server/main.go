@@ -34,12 +34,14 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
+	"github.com/pmoscode/SerMon/server/internal/platform/safehttp"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
 	"github.com/pmoscode/SerMon/server/internal/transport/download"
 	"github.com/pmoscode/SerMon/server/internal/transport/health"
@@ -143,7 +145,16 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		metricStore := timescale.New(db)
 		reader := metrics.NewReader(metricStore, ring, time.Now)
 		nodes := fleet.NewService(postgres.NewFleetStore(db), reader, time.Now)
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, registry, logger); err != nil {
+		// Notifications (M2-10): channels with sealed credentials, a delivery queue with retries;
+		// every request to a channel goes through safehttp (M2-09).
+		notifyDeps, err := newNotifyDeps(cfg, db, logger)
+		if err != nil {
+			return err
+		}
+		dispatcher := notify.NewDispatcher(notifyDeps)
+		registerNotifyMetrics(registry, dispatcher.Stats())
+		servers = append(servers, dispatcher.Run)
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -322,7 +333,7 @@ const (
 )
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
-	rotator *rotation.Service, nodes *fleet.Service, registry *promtext.Registry, logger *slog.Logger,
+	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
@@ -387,9 +398,31 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
+		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil
+}
+
+// newNotifyDeps assembles the notifier framework. The channel types (M2-11 ff.) get the
+// safehttp client of this policy; deep links point to the first allowed origin of the UI.
+func newNotifyDeps(cfg config.Config, db *postgres.DB, logger *slog.Logger) (notify.Deps, error) {
+	outbound, err := safehttp.NewPolicy(cfg.OutboundAllowlist)
+	if err != nil {
+		return notify.Deps{}, fmt.Errorf("outbound policy: %w", err)
+	}
+	registry, err := notify.NewRegistry()
+	if err != nil {
+		return notify.Deps{}, fmt.Errorf("notifiers: %w", err)
+	}
+	var base string
+	if len(cfg.AllowedOrigins) > 0 {
+		base = cfg.AllowedOrigins[0]
+	}
+	return notify.Deps{
+		Store: postgres.NewNotificationStore(db), Registry: registry, Box: cfg.MasterKeys, Policy: authz.NewPolicy(),
+		Outbound: outbound, BaseURL: base, Now: time.Now, NewID: access.NewID, Logger: logger,
+	}, nil
 }
 
 // mountUI serves the embedded web UI; without a UI build the server runs API-only.

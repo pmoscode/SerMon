@@ -32,6 +32,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
@@ -158,7 +159,11 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(pg), postgres.NewNodeRegistry(pg), ca, time.Now, access.NewID),
 			ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
-		TwoFactor:     webapi.NewTwoFactorHandler(secondFactor, creds, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
+		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, creds, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
+		Notifications: webapi.NewNotificationChannelHandler(notify.NewService(notify.Deps{
+			Store: postgres.NewNotificationStore(pg), Registry: hookRegistry(t), Box: masterKeys(t), Policy: authz.NewPolicy(),
+			BaseURL: srv.URL, Now: time.Now, NewID: access.NewID, Logger: slog.New(slog.DiscardHandler),
+		}), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
 	})
 	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore}

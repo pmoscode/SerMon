@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
+	"github.com/pmoscode/SerMon/server/internal/app/notify"
 
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/config"
@@ -70,6 +71,22 @@ func registerAlertMetrics(r *promtext.Registry, stats *alerting.Stats) {
 		{"sermon_server_alert_rule_errors_total", "Rule evaluations that failed.", stats.RuleErrors.Load},
 		{"sermon_server_alert_org_errors_total", "Organizations whose evaluation failed.", stats.OrgErrors.Load},
 		{"sermon_server_alert_event_reads_truncated_total", "Event rule reads that hit the limit per round (a flood of events).", stats.EventReadsTruncated.Load},
+	} {
+		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
+	}
+}
+
+// registerNotifyMetrics adds the counters of the notification delivery (M2-10).
+func registerNotifyMetrics(r *promtext.Registry, stats *notify.Stats) {
+	for _, c := range []struct {
+		name, help string
+		value      func() uint64
+	}{
+		{"sermon_server_notify_sent_total", "Notifications delivered to a channel.", stats.Sent.Load},
+		{"sermon_server_notify_failed_total", "Notifications that failed for good.", stats.Failed.Load},
+		{"sermon_server_notify_retried_total", "Failed attempts that will be retried.", stats.Retried.Load},
+		{"sermon_server_notify_blocked_total", "Attempts refused by the outbound policy (SSRF protection).", stats.Blocked.Load},
+		{"sermon_server_notify_errors_total", "Delivery rounds that failed (database).", stats.Errors.Load},
 	} {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
 	}

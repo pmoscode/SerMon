@@ -1,0 +1,13 @@
+WARNUNG: SSH-Brute-Force – web-01
+
+Regel: security.ssh.bruteforce
+Node: web-01
+Betrifft: ip=192.0.2.7
+Wert: 12
+Zeitpunkt: 2026-11-21 10:00:00 UTC
+Ereignis um: 2026-11-21T09:59:58Z
+Benutzer: root
+Adresse: 192.0.2.7
+Port: 50022
+
+https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001

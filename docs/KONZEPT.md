@@ -226,6 +226,7 @@ eine Fake-Implementierung für Tests.
 | Metriken 1 min                                                                      | Continuous Aggregate `metrics_1m`                            | 30 Tage                                          |
 | Metriken 1 h                                                                        | Continuous Aggregate `metrics_1h` (hierarchisch auf `metrics_1m`) | 1 Jahr                                      |
 | Logs                                                                                | Loki (Multi-Tenant, Compactor-Retention)                     | 14 Tage                                          |
+| Zustellprotokoll der Benachrichtigungen (mit den Feldern der Alerts)                | PostgreSQL `notification_deliveries`     | 30 Tage                                          |
 
 **Metrik-Schema in TimescaleDB** (Details in [ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md)):
 
@@ -797,6 +798,29 @@ vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
 - Templates sind **i18n-fähig** (Sprache pro Kanal) und enthalten einen Deep-Link in die UI.
 - Zugangsdaten werden **verschlüsselt gespeichert** (§18.5). Ausgehende Requests sind **SSRF-geschützt** (§18.6).
 - Zustellungen werden protokolliert (Status, Fehlertext) und sind in der UI einsehbar.
+
+Umsetzung des Frameworks (M2-10):
+
+- **Kanal:** Typ, Name, Sprache (de/en), an/aus, Einstellungen und Zugangsdaten. Jeder Typ beschreibt seine Felder
+  (Text, URL, Auswahl, Zahl; geheim oder nicht, Pflicht), daraus baut die UI das Formular.
+  - Zugangsdaten werden mit `secrets.Box` versiegelt (Kontext `notification_channel:<org>:<id>`) und sind nur
+    schreibbar: Antworten nennen nur, welche gesetzt sind.
+  - URLs prüft schon das Speichern gegen die Outbound-Policy von `safehttp`.
+  - Anlegen, Ändern und Löschen brauchen `manage_channels` und einen frischen Step-up. Ein gekapertes Konto soll Alerts
+    mit Security-Events nicht umleiten können. Jede Änderung steht im Audit-Log, ohne Ziel und Zugangsdaten.
+- **Nachricht:** `Render` erzeugt Titel, Zeilen und Deep-Link (`/nodes/<id>`) in der Sprache des Kanals. Werte
+  erscheinen in ihrer Einheit, etwa Verhältnisse als Prozent mit dem Dezimalzeichen der Sprache. Werte der Hosts
+  bleiben auf ihrer Zeile.
+- **Escaping:** Jeder Kanal escapt für sein Format. Helfer gibt es für HTML, Markdown (jede ASCII-Interpunktion),
+  Slack (`& < >`) und gegen `@everyone`/`@channel`.
+- **Zustellung:** `notification_deliveries` ist Warteschlange und Protokoll zugleich.
+  - Jede Server-Instanz holt fällige Zeilen mit `FOR UPDATE SKIP LOCKED` und einem Claim von 2 min.
+  - Höchstens 6 Versuche: nach 30 s, 1, 2, 4 und 8 min. HTTP 429 wartet wie verlangt, höchstens 1 h.
+  - 4xx, gesperrte Ziele und gelöschte oder abgeschaltete Kanäle scheitern sofort.
+  - Ein Event kann doppelt ankommen, geht aber nicht verloren.
+- **Fehlertexte** enthalten nie die Zugangsdaten des Kanals, stehen auf einer Zeile und sind höchstens 500 Bytes lang.
+- **„Test senden“:** Die Nachricht geht sofort raus, ohne Retry, steht im Protokoll und ist auf 5 pro Minute und Org
+  begrenzt.
 
 ---
 

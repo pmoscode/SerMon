@@ -28,10 +28,12 @@ type isolationEnv struct {
 	metrics                         webv1connect.MetricsServiceClient
 	fleet                           webv1connect.FleetServiceClient
 	events                          webv1connect.SecurityEventServiceClient
+	channels                        webv1connect.NotificationChannelServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
 	nodeA                           string // a node of Org A
+	channelA                        string // a notification channel of Org A, with a delivery
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -57,8 +59,55 @@ func selectorA(e isolationEnv) *webv1.MetricSelector {
 	return &webv1.MetricSelector{Metric: "sermon_load_average", NodeIds: []string{e.nodeA}}
 }
 
+func leaksChannel(e isolationEnv, s string) bool {
+	return strings.Contains(s, e.channelA) || strings.Contains(s, "alpha-hook") || strings.Contains(s, "alpha.example") ||
+		strings.Contains(s, "alpha-error") || strings.Contains(s, "alpha-01")
+}
+
 // tenantIsolationCases maps every tenant RPC to its cross-tenant case (isolation_integration_test.go).
 var tenantIsolationCases = map[string]isolationCase{
+	"/sermon.web.v1.NotificationChannelService/ListChannels": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.channels.ListChannels(ctx, connect.NewRequest(&webv1.ListChannelsRequest{}))
+		if err == nil && leaksChannel(e, res.Msg.String()) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.NotificationChannelService/CreateChannel": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		// Creating acts in the caller's organization (Alpha's channels are checked afterwards).
+		_, err := e.channels.CreateChannel(ctx, connect.NewRequest(&webv1.CreateChannelRequest{
+			Type: "hook", Name: "created-by-b", Language: "en", Settings: map[string]string{"url": "https://beta.example/hook"},
+			Secrets: map[string]string{"token": "beta-token"},
+		}))
+		return err
+	}},
+	"/sermon.web.v1.NotificationChannelService/UpdateChannel": {run: func(ctx context.Context, e isolationEnv) error {
+		name := "pwned"
+		_, err := e.channels.UpdateChannel(ctx, connect.NewRequest(&webv1.UpdateChannelRequest{
+			ChannelId: e.channelA, Name: &name, ReplaceSettings: true, Settings: map[string]string{"url": "https://evil.example/"},
+		}))
+		return err
+	}},
+	"/sermon.web.v1.NotificationChannelService/DeleteChannel": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.channels.DeleteChannel(ctx, connect.NewRequest(&webv1.DeleteChannelRequest{ChannelId: e.channelA}))
+		return err
+	}},
+	"/sermon.web.v1.NotificationChannelService/TestChannel": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.channels.TestChannel(ctx, connect.NewRequest(&webv1.TestChannelRequest{ChannelId: e.channelA}))
+		return err
+	}},
+	"/sermon.web.v1.NotificationChannelService/ListDeliveries": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		for _, channel := range []string{e.channelA, ""} {
+			res, err := e.channels.ListDeliveries(ctx, connect.NewRequest(&webv1.ListDeliveriesRequest{ChannelId: channel}))
+			if err != nil {
+				return err
+			}
+			if leaksChannel(e, res.Msg.String()) {
+				return errLeak
+			}
+		}
+		return nil
+	}},
 	"/sermon.web.v1.SecurityEventService/ListSecurityEvents": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.events.ListSecurityEvents(ctx, connect.NewRequest(&webv1.ListSecurityEventsRequest{
 			From: timestamppb.New(time.Now().Add(-24 * time.Hour)), To: timestamppb.New(time.Now().Add(time.Hour)), NodeIds: []string{e.nodeA},

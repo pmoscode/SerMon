@@ -1,0 +1,9 @@
+WARNUNG: Dateisystem bald voll – web-01
+
+Regel: system.filesystem.full_soon
+Node: web-01
+Betrifft: mountpoint=/var
+Wert: 5,3 h
+Zeitpunkt: 2026-11-21 10:00:00 UTC
+
+https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001

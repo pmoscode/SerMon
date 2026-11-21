@@ -24,6 +24,7 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.InvitationService/GetInvitation":               "acts only on the invitation named by the secret link token (ADR 0008)",
 	"/sermon.web.v1.InvitationService/AcceptInvitation":            "creates a new account for the invitation named by the secret link token (ADR 0008)",
 	"/sermon.web.v1.MetricsService/ListMetrics":                    "the static metric catalog, no tenant data (requires authentication)",
+	"/sermon.web.v1.NotificationChannelService/ListChannelTypes":   "the static channel types of the server, no tenant data (manage_channels, app/notify)",
 	"/sermon.web.v1.InstanceAuditService/ListInstanceAuditLog":     "instance-level log for the superadmin only, no tenant data (role test in app/instanceaudit)",
 	"/sermon.web.v1.AuthService/VerifySecondFactor":                "completes the caller's own login",
 	"/sermon.web.v1.AuthService/ConfirmSecondFactor":               "re-authenticates the caller's own session",

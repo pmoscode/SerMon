@@ -84,6 +84,7 @@ type loggedIn struct {
 	fleet        webv1connect.FleetServiceClient
 	twoFactor    webv1connect.TwoFactorServiceClient
 	events       webv1connect.SecurityEventServiceClient
+	channels     webv1connect.NotificationChannelServiceClient
 	policy       webv1connect.SecurityPolicyServiceClient
 	jar          *cookiejar.Jar
 }
@@ -105,6 +106,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		fleet:        webv1connect.NewFleetServiceClient(hc, s.server.URL),
 		twoFactor:    webv1connect.NewTwoFactorServiceClient(hc, s.server.URL),
 		events:       webv1connect.NewSecurityEventServiceClient(hc, s.server.URL),
+		channels:     webv1connect.NewNotificationChannelServiceClient(hc, s.server.URL),
 		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
@@ -117,10 +119,11 @@ func login(t *testing.T, s stack, email string) loggedIn {
 func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *testing.T) {
 	s := newStack(t, 1000)
 	seedAccessFixtures(t)
+	seedChannelAlpha(t)
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
-		metrics: bea.metrics, fleet: bea.fleet, events: bea.events,
+		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}
@@ -178,6 +181,14 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	}
 	if revokedTokens != 0 {
 		t.Errorf("enrollment tokens of Alpha changed or added: %d", revokedTokens)
+	}
+	var alphaChannel string
+	var alphaChannels, alphaDeliveries int
+	_ = conn.QueryRow(ctx, "SELECT name FROM notification_channels WHERE id = $1", channelAl).Scan(&alphaChannel)
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM notification_channels WHERE org_id = $1", orgAlpha).Scan(&alphaChannels)
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM notification_deliveries WHERE org_id = $1", orgAlpha).Scan(&alphaDeliveries)
+	if alphaChannel != "alpha-hook" || alphaChannels != 1 || alphaDeliveries != 1 {
+		t.Errorf("Alpha's channels changed: %q, %d channels, %d deliveries", alphaChannel, alphaChannels, alphaDeliveries)
 	}
 	var beaInAlpha int
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM memberships WHERE org_id = $1 AND user_id = $2", orgAlpha, beaID).Scan(&beaInAlpha)

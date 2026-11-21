@@ -1,0 +1,8 @@
+BEHOBEN: Hohe CPU-Auslastung – web-01
+
+Regel: system.cpu.usage_high
+Node: web-01
+Wert: 96,4 %
+Zeitpunkt: 2026-11-21 10:00:00 UTC
+
+https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001

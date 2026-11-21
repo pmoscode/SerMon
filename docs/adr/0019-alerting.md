@@ -91,3 +91,21 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   `warning`, `critical`, `of`), `after` (vorausgehende Events: Art, Anzahl, Fenster; gleicher Node und gleiche
   `groupBy`-Werte) und `notifyFields`. Welche Felder eine Art hat, legt `secevent.FieldsOf` fest; der Loader prüft
   dagegen.
+
+## Nachtrag M2-10: Notifier-Framework
+
+- **Warteschlange in PostgreSQL:** `notification_deliveries` ist Queue und Zustellprotokoll zugleich, mit RLS wie alle
+  Tenant-Tabellen. Jede Server-Instanz holt fällige Zeilen pro Org mit `FOR UPDATE SKIP LOCKED` und einem Claim von
+  2 min. Fällt eine Instanz beim Senden aus, übernimmt nach Ablauf des Claims eine andere. Das ergibt
+  „mindestens einmal“: Eine Nachricht kann doppelt ankommen, geht aber nicht verloren. Eine Queue im Speicher hätte
+  bei einem Neustart Benachrichtigungen verloren; ein eigener Broker widerspräche dem einfachen Betrieb.
+- **Retries:** höchstens 6 Versuche (nach 30 s, 1, 2, 4, 8 min), `Retry-After` bei 429 bis 1 h. Dauerhafte Fehler
+  scheitern sofort: 4xx außer 408 und 429, gesperrte Ziele aus `safehttp` und gelöschte oder abgeschaltete Kanäle.
+- **Aufbewahrung:** Das Protokoll enthält die Felder der Alerts (User, IP) und wird nach 30 Tagen gelöscht.
+  Die API zeigt daraus nur Art, Regel und Node.
+- **Zugangsdaten:** pro Kanal als JSON mit `secrets.Box` versiegelt, Kontext `notification_channel:<org>:<id>`.
+  Sie sind nur schreibbar; ein Update ersetzt nur die genannten. Fehlertexte werden von den Zugangsdaten des Kanals
+  bereinigt, falls ein Dienst sie zurückgibt.
+- **Deep-Links** zeigen auf den ersten Eintrag von `SERMON_ALLOWED_ORIGINS`, bis M2-16 auf `/nodes/<id>`.
+- **Noch nicht verbunden:** Die Engine liefert ihre Transitionen erst mit dem Routing (M2-14) an
+  `Dispatcher.Enqueue`. Die Kanaltypen folgen ab M2-11; bis dahin ist die Registry leer.

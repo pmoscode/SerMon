@@ -25,6 +25,9 @@ type Querier interface {
 	AppendInstanceAudit(ctx context.Context, arg AppendInstanceAuditParams) error
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
+	// Due rows: pending ones whose attempt is due, and sending ones whose claim expired. SKIP LOCKED
+	// lets concurrent instances claim different rows.
+	ClaimNotificationDeliveries(ctx context.Context, arg ClaimNotificationDeliveriesParams) ([]ClaimNotificationDeliveriesRow, error)
 	// Claims the token and adds the superadmin; false without a valid token (definer function).
 	CompleteInstanceSetup(ctx context.Context, arg CompleteInstanceSetupParams) (bool, error)
 	ConfirmTOTP(ctx context.Context, arg ConfirmTOTPParams) (int64, error)
@@ -50,6 +53,7 @@ type Querier interface {
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteNotificationChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
 	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
 	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
@@ -69,9 +73,11 @@ type Querier interface {
 	FindSeries(ctx context.Context, arg FindSeriesParams) ([]FindSeriesRow, error)
 	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
+	FinishNotificationDelivery(ctx context.Context, arg FinishNotificationDeliveryParams) error
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
+	GetNotificationChannel(ctx context.Context, id uuid.UUID) (GetNotificationChannelRow, error)
 	GetOrganization(ctx context.Context, id uuid.UUID) (GetOrganizationRow, error)
 	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
@@ -89,6 +95,10 @@ type Querier interface {
 	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) (int32, error)
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
+	// Notification channels and deliveries (M2-10, ADR 0007). Every query runs in the
+	// organization's tenant transaction.
+	InsertNotificationChannel(ctx context.Context, arg InsertNotificationChannelParams) error
+	InsertNotificationDelivery(ctx context.Context, arg []InsertNotificationDeliveryParams) *InsertNotificationDeliveryBatchResults
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
 	InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
@@ -111,6 +121,8 @@ type Querier interface {
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
+	ListNotificationChannels(ctx context.Context) ([]ListNotificationChannelsRow, error)
+	ListNotificationDeliveries(ctx context.Context, arg ListNotificationDeliveriesParams) ([]ListNotificationDeliveriesRow, error)
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
@@ -139,6 +151,7 @@ type Querier interface {
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
+	PurgeNotificationDeliveries(ctx context.Context, before time.Time) (int64, error)
 	// The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
 	// received first. The bounds on occurred_at only prune partitions: min_occurred lies the oldest
 	// age the ingest accepts (secevent.MaxAge) and a margin before since; it takes 5 min ahead.
@@ -179,6 +192,7 @@ type Querier interface {
 	TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error)
 	// The agent's Hello: current host facts and version (the machine-id never changes here).
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)
+	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
 	UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRuleOverrideParams) error

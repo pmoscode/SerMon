@@ -20,6 +20,75 @@ var (
 	ErrBatchAlreadyClosed = errors.New("batch already closed")
 )
 
+const insertNotificationDelivery = `-- name: InsertNotificationDelivery :batchexec
+INSERT INTO notification_deliveries (org_id, channel_id, notification, test, status, attempts, created_at,
+                                     next_attempt_at, last_attempt_at, sent_at, last_error)
+VALUES (current_org_id(), $1, $2, $3, $4,
+        $5, $6, $7, $8,
+        $9, $10)
+`
+
+type InsertNotificationDeliveryBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertNotificationDeliveryParams struct {
+	ChannelID     uuid.UUID
+	Notification  []byte
+	Test          bool
+	Status        string
+	Attempts      int32
+	CreatedAt     time.Time
+	NextAttemptAt time.Time
+	LastAttemptAt *time.Time
+	SentAt        *time.Time
+	LastError     string
+}
+
+func (q *Queries) InsertNotificationDelivery(ctx context.Context, arg []InsertNotificationDeliveryParams) *InsertNotificationDeliveryBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.ChannelID,
+			a.Notification,
+			a.Test,
+			a.Status,
+			a.Attempts,
+			a.CreatedAt,
+			a.NextAttemptAt,
+			a.LastAttemptAt,
+			a.SentAt,
+			a.LastError,
+		}
+		batch.Queue(insertNotificationDelivery, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertNotificationDeliveryBatchResults{br, len(arg), false}
+}
+
+func (b *InsertNotificationDeliveryBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertNotificationDeliveryBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const insertSecurityEvent = `-- name: InsertSecurityEvent :batchexec
 INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip, remote_host, remote_port, details)
 VALUES (current_org_id(), $1, $2, $3, $4,

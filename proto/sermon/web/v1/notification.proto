@@ -1,0 +1,298 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// NotificationChannelService manages the notification channels of the caller's organization and
+// shows their delivery log (KONZEPT §12.4, M2-10). Only admins of all groups (manage_channels)
+// may use it; creating, changing and deleting a channel needs a recent step-up. Secrets of a
+// channel are write-only: responses name the secrets that are set, never their values. Channels
+// of other organizations are reported as NOT_FOUND.
+service NotificationChannelService {
+  // ListChannelTypes describes the channel types and their fields (the form of the UI).
+  rpc ListChannelTypes(ListChannelTypesRequest) returns (ListChannelTypesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListChannels returns the organization's channels.
+  rpc ListChannels(ListChannelsRequest) returns (ListChannelsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateChannel adds a channel (step-up).
+  rpc CreateChannel(CreateChannelRequest) returns (CreateChannelResponse);
+  // UpdateChannel changes a channel (step-up); secrets that are not sent stay.
+  rpc UpdateChannel(UpdateChannelRequest) returns (UpdateChannelResponse);
+  // DeleteChannel removes a channel (step-up); its delivery log stays.
+  rpc DeleteChannel(DeleteChannelRequest) returns (DeleteChannelResponse);
+  // TestChannel sends a test message at once and returns its delivery (a few per minute).
+  rpc TestChannel(TestChannelRequest) returns (TestChannelResponse);
+  // ListDeliveries returns the delivery log, newest first.
+  rpc ListDeliveries(ListDeliveriesRequest) returns (ListDeliveriesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// ChannelFieldKind is how a configuration field is entered.
+enum ChannelFieldKind {
+  // CHANNEL_FIELD_KIND_UNSPECIFIED is not used.
+  CHANNEL_FIELD_KIND_UNSPECIFIED = 0;
+  // CHANNEL_FIELD_KIND_TEXT is free text.
+  CHANNEL_FIELD_KIND_TEXT = 1;
+  // CHANNEL_FIELD_KIND_URL is an http(s) URL (checked against the outbound policy).
+  CHANNEL_FIELD_KIND_URL = 2;
+  // CHANNEL_FIELD_KIND_CHOICE is one of the choices.
+  CHANNEL_FIELD_KIND_CHOICE = 3;
+  // CHANNEL_FIELD_KIND_NUMBER is a non-negative integer.
+  CHANNEL_FIELD_KIND_NUMBER = 4;
+}
+
+// ChannelField describes one configuration field of a channel type. Labels and help come from
+// the UI's translations ("<type>.<name>").
+message ChannelField {
+  // name is the key in settings or secrets.
+  string name = 1;
+  // kind is how the field is entered.
+  ChannelFieldKind kind = 2;
+  // secret fields go into secrets and are never shown again.
+  bool secret = 3;
+  // required fields must be set.
+  bool required = 4;
+  // choices are the allowed values of a choice field.
+  repeated string choices = 5;
+  // max_length is the longest allowed value in bytes.
+  int32 max_length = 6;
+}
+
+// ChannelType is a kind of channel with its fields.
+message ChannelType {
+  // type is the name, e.g. webhook.
+  string type = 1;
+  // fields are the configuration fields.
+  repeated ChannelField fields = 2;
+}
+
+// NotificationChannel is a configured channel, without its secret values.
+message NotificationChannel {
+  // id is the channel UUID.
+  string id = 1;
+  // type is the channel type.
+  string type = 2;
+  // name is the display name.
+  string name = 3;
+  // language of the messages: de or en.
+  string language = 4;
+  // enabled channels receive notifications.
+  bool enabled = 5;
+  // settings are the non-secret configuration values.
+  map<string, string> settings = 6;
+  // secret_names are the secrets that are set.
+  repeated string secret_names = 7;
+  // create_time is when the channel was added.
+  google.protobuf.Timestamp create_time = 8;
+  // update_time is when it was changed last.
+  google.protobuf.Timestamp update_time = 9;
+}
+
+// ListChannelTypesRequest has no parameters.
+message ListChannelTypesRequest {}
+
+// ListChannelTypesResponse lists the channel types by name.
+message ListChannelTypesResponse {
+  // types that can be configured.
+  repeated ChannelType types = 1;
+}
+
+// ListChannelsRequest has no parameters.
+message ListChannelsRequest {}
+
+// ListChannelsResponse lists the channels, oldest first.
+message ListChannelsResponse {
+  // channels of the organization.
+  repeated NotificationChannel channels = 1;
+}
+
+// CreateChannelRequest describes the new channel.
+message CreateChannelRequest {
+  // type is a channel type of ListChannelTypes.
+  string type = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 32
+  }];
+  // name is the display name.
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  // language of the messages: de or en.
+  string language = 3 [(buf.validate.field).string = {
+    in: [
+      "de",
+      "en"
+    ]
+  }];
+  // enabled channels receive notifications.
+  bool enabled = 4;
+  // settings are the non-secret configuration values.
+  map<string, string> settings = 5 [(buf.validate.field).map = {
+    max_pairs: 32
+    keys: {
+      string: {max_len: 32}
+    }
+    values: {
+      string: {max_len: 4096}
+    }
+  }];
+  // secrets are the secret configuration values (write-only).
+  map<string, string> secrets = 6 [(buf.validate.field).map = {
+    max_pairs: 32
+    keys: {
+      string: {max_len: 32}
+    }
+    values: {
+      string: {max_len: 4096}
+    }
+  }];
+}
+
+// CreateChannelResponse returns the channel.
+message CreateChannelResponse {
+  // channel as stored.
+  NotificationChannel channel = 1;
+}
+
+// UpdateChannelRequest changes a channel; unset optional fields stay.
+message UpdateChannelRequest {
+  // channel_id is the UUID of the channel.
+  string channel_id = 1 [(buf.validate.field).string.uuid = true];
+  // name is the new display name.
+  optional string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  // language is the new language: de or en.
+  optional string language = 3 [(buf.validate.field).string = {
+    in: [
+      "de",
+      "en"
+    ]
+  }];
+  // enabled switches the channel on or off.
+  optional bool enabled = 4;
+  // replace_settings replaces all settings with settings.
+  bool replace_settings = 5;
+  // settings are the new non-secret values (with replace_settings).
+  map<string, string> settings = 6 [(buf.validate.field).map = {
+    max_pairs: 32
+    keys: {
+      string: {max_len: 32}
+    }
+    values: {
+      string: {max_len: 4096}
+    }
+  }];
+  // secrets replace the named secrets; the others stay.
+  map<string, string> secrets = 7 [(buf.validate.field).map = {
+    max_pairs: 32
+    keys: {
+      string: {max_len: 32}
+    }
+    values: {
+      string: {max_len: 4096}
+    }
+  }];
+}
+
+// UpdateChannelResponse returns the changed channel.
+message UpdateChannelResponse {
+  // channel as stored.
+  NotificationChannel channel = 1;
+}
+
+// DeleteChannelRequest names the channel.
+message DeleteChannelRequest {
+  // channel_id is the UUID of the channel.
+  string channel_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteChannelResponse has no fields.
+message DeleteChannelResponse {}
+
+// TestChannelRequest names the channel.
+message TestChannelRequest {
+  // channel_id is the UUID of the channel.
+  string channel_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// TestChannelResponse returns the test delivery.
+message TestChannelResponse {
+  // delivery of the test message; status sent or failed with the error.
+  Delivery delivery = 1;
+}
+
+// DeliveryStatus is where a delivery stands.
+enum DeliveryStatus {
+  // DELIVERY_STATUS_UNSPECIFIED is not used.
+  DELIVERY_STATUS_UNSPECIFIED = 0;
+  // DELIVERY_STATUS_PENDING waits for its (next) attempt.
+  DELIVERY_STATUS_PENDING = 1;
+  // DELIVERY_STATUS_SENDING is being sent.
+  DELIVERY_STATUS_SENDING = 2;
+  // DELIVERY_STATUS_SENT arrived.
+  DELIVERY_STATUS_SENT = 3;
+  // DELIVERY_STATUS_FAILED failed for good.
+  DELIVERY_STATUS_FAILED = 4;
+}
+
+// Delivery is one notification to one channel with its attempts.
+message Delivery {
+  // id orders the log.
+  int64 id = 1;
+  // channel_id is the channel (it may have been deleted since).
+  string channel_id = 2;
+  // status of the delivery.
+  DeliveryStatus status = 3;
+  // attempts made so far.
+  int32 attempts = 4;
+  // test marks a test message.
+  bool test = 5;
+  // kind is what the notification reports: firing, resolved, acknowledged, flapping_started,
+  // flapping_stopped or test.
+  string kind = 6;
+  // rule_id is the alert rule; empty for a test.
+  string rule_id = 7;
+  // node_id is the node; empty for a test.
+  string node_id = 8;
+  // create_time is when the notification was queued.
+  google.protobuf.Timestamp create_time = 9;
+  // last_attempt_time is when it was tried last.
+  google.protobuf.Timestamp last_attempt_time = 10;
+  // next_attempt_time is when a pending delivery is tried again.
+  google.protobuf.Timestamp next_attempt_time = 11;
+  // sent_time is when it arrived.
+  google.protobuf.Timestamp sent_time = 12;
+  // error of the last attempt (host only, no secrets).
+  string error = 13;
+}
+
+// ListDeliveriesRequest selects a page of the log.
+message ListDeliveriesRequest {
+  // channel_id limits the log to one channel.
+  string channel_id = 1 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.uuid = true
+  ];
+  // before_id continues after the last delivery of the previous page.
+  int64 before_id = 2 [(buf.validate.field).int64.gte = 0];
+  // page_size is at most 200 (0: 200).
+  int32 page_size = 3 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+}
+
+// ListDeliveriesResponse is a page of the log, newest first.
+message ListDeliveriesResponse {
+  // deliveries of the page.
+  repeated Delivery deliveries = 1;
+}

@@ -190,6 +190,37 @@ type NodeGroup struct {
 	CreatedAt time.Time
 }
 
+type NotificationChannel struct {
+	OrgID         uuid.UUID
+	ID            uuid.UUID
+	Type          string
+	Name          string
+	Language      string
+	Enabled       bool
+	Settings      []byte
+	SecretNames   []string
+	SealedSecrets []byte
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	CreatedBy     *uuid.UUID
+}
+
+type NotificationDelivery struct {
+	OrgID         uuid.UUID
+	ID            int64
+	ChannelID     uuid.UUID
+	Notification  []byte
+	Test          bool
+	Status        string
+	Attempts      int32
+	CreatedAt     time.Time
+	NextAttemptAt time.Time
+	ClaimedUntil  *time.Time
+	LastAttemptAt *time.Time
+	SentAt        *time.Time
+	LastError     string
+}
+
 type Organization struct {
 	ID                  uuid.UUID
 	Name                string

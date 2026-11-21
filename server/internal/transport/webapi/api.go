@@ -37,6 +37,7 @@ type Handlers struct {
 	InstanceAudit   *InstanceAuditHandler
 	TwoFactor       *TwoFactorHandler
 	SecurityEvents  *SecurityEventHandler
+	Notifications   *NotificationChannelHandler
 	Authenticator   *Authenticator // required for every service except AuthService
 }
 
@@ -70,6 +71,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewInstanceAuditServiceHandler(h.InstanceAudit, authenticated))
 	mount(webv1connect.NewSecurityEventServiceHandler(h.SecurityEvents, authenticated))
 	mount(webv1connect.NewSecurityPolicyServiceHandler(h.TwoFactor, authenticated))
+	mount(webv1connect.NewNotificationChannelServiceHandler(h.Notifications, authenticated))
 	if h.Authenticator != nil {
 		// The user's own second factor must be manageable while the organization waits for it.
 		mount(webv1connect.NewTwoFactorServiceHandler(h.TwoFactor, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))

@@ -1,0 +1,9 @@
+WARNING: File system full soon – web-01
+
+Rule: system.filesystem.full_soon
+Node: web-01
+Affects: mountpoint=/var
+Value: 5.3 h
+Time: 2026-11-21 10:00:00 UTC
+
+https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001

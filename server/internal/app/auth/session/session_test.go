@@ -432,3 +432,27 @@ func TestPeek_ChecksWithoutRenewingTheIdleTimer(t *testing.T) {
 		t.Errorf("Peek() of a session waiting for the second factor = %v, want ErrInvalid", err)
 	}
 }
+
+// PostgreSQL keeps microseconds: what the manager returns equals what it stored, also on
+// clocks with nanoseconds (Linux).
+func TestTimesHaveTheStorePrecision(t *testing.T) {
+	store, c := newStore(), &clock{now: t0.Add(123456789 * time.Nanosecond)}
+	m := session.NewManager(store, c.Now)
+	token, created, err := m.Create(context.Background(), alice, orgA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.advance(time.Minute + 789*time.Nanosecond)
+	stepped, err := m.StepUp(context.Background(), token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, at := range map[string]time.Time{"created": created.CreatedAt, "last seen": created.LastSeenAt, "step-up": stepped.StepUpAt} {
+		if !at.Equal(at.Truncate(time.Microsecond)) {
+			t.Errorf("%s at %v has more than microseconds", name, at)
+		}
+	}
+	if stored := store.byHash[stepped.ID].StepUpAt; !stored.Equal(stepped.StepUpAt) {
+		t.Errorf("stored step-up %v, returned %v", stored, stepped.StepUpAt)
+	}
+}

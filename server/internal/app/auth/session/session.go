@@ -71,9 +71,10 @@ type Manager struct {
 	now   func() time.Time
 }
 
-// NewManager returns a Manager.
+// NewManager returns a Manager. Its times have the store's precision (PostgreSQL: microseconds),
+// so a returned session equals the stored one.
 func NewManager(store Store, now func() time.Time) *Manager {
-	return &Manager{store: store, now: now}
+	return &Manager{store: store, now: func() time.Time { return now().Truncate(time.Microsecond) }}
 }
 
 // Create starts a new session after a successful login and returns the token for the cookie.

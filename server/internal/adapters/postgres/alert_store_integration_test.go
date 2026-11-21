@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"testing"
@@ -128,10 +129,16 @@ func TestAlertStore_HistoryIsAppendOnlyForTheApplication(t *testing.T) {
 	if _, err := conn.Exec(ctx, "SELECT set_config('sermon.org_id', $1, false)", orgA.String()); err != nil {
 		t.Fatal(err)
 	}
-	for _, sql := range []string{"UPDATE alert_history SET value = 0", "DELETE FROM alert_history"} {
-		if _, err := conn.Exec(ctx, sql); err == nil {
-			t.Errorf("%q must be denied for sermon_app", sql)
-		}
+	if _, err := conn.Exec(ctx, "UPDATE alert_history SET value = 0"); err == nil {
+		t.Error("UPDATE must be denied for sermon_app")
+	}
+	// DELETE reaches only entries older than a year (TestAlertStore_HistoryRetention).
+	var recent int
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM alert_history WHERE at >= now() - interval '365 days'").Scan(&recent); err != nil {
+		t.Fatal(err)
+	}
+	if tag, err := conn.Exec(ctx, "DELETE FROM alert_history WHERE at >= now() - interval '365 days'"); err != nil || tag.RowsAffected() != 0 {
+		t.Errorf("deleting the recent history: %d of %d rows, %v", tag.RowsAffected(), recent, err)
 	}
 }
 
@@ -252,5 +259,122 @@ func TestAlertEngine_TwoInstancesShareTheWorkThroughThePostgresLease(t *testing.
 	}
 	if list, _ := postgres.NewAlertStore(db).Instances(ctx, scopeFor(t, orgB)); hasInstance(list, key, alert.StateWarning) {
 		t.Error("the alert leaked into another organization")
+	}
+}
+
+func ackRecord(inst alert.Instance, by identity.UserID, at time.Time) alerting.Record {
+	return alerting.Record{Key: inst.Key, Transition: alert.Transition{Kind: alert.Acknowledged, From: inst.State, To: inst.State, At: at, Value: inst.Value, By: by}}
+}
+
+// The API acknowledges while the engine evaluates: the engine's save keeps the acknowledgement
+// unless the alert escalated or ended.
+func TestAlertStore_AcknowledgementSurvivesTheEnginesSave(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	org := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Ack')", org)
+	node := uuid.New()
+	createNode(t, f.db.OwnerDSN, org, node)
+	store := postgres.NewAlertStore(open(t, f.appDSN))
+	scope := scopeFor(t, org)
+	by := identity.UserID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000a1"))
+	inst := firingInstance(node)
+	inst.State, inst.Ack, inst.Flapping = alert.StateWarning, nil, false
+	if err := store.Save(ctx, scope, []alert.Instance{inst}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	at := alertTime.Add(5 * time.Minute)
+	if err := store.Acknowledge(ctx, scope, inst.Key, alert.Ack{By: by, At: at}, ackRecord(inst, by, at)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Acknowledge(ctx, scope, inst.Key, alert.Ack{By: by, At: at}, ackRecord(inst, by, at)); !errors.Is(err, alert.ErrNotFiring) {
+		t.Errorf("second acknowledgement: %v", err)
+	}
+	ack := func() *alert.Ack {
+		list, err := store.Instances(ctx, scope)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("instances %+v, %v", list, err)
+		}
+		return list[0].Ack
+	}
+	// The engine saves its older copy (without the acknowledgement): it stays.
+	stale := inst
+	stale.Value = 0.99
+	if err := store.Save(ctx, scope, []alert.Instance{stale}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if a := ack(); a == nil || a.By != by || !a.At.Equal(at) {
+		t.Fatalf("acknowledgement lost: %+v", a)
+	}
+	// Escalation to critical ends it.
+	stale.State = alert.StateCritical
+	if err := store.Save(ctx, scope, []alert.Instance{stale}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if a := ack(); a != nil {
+		t.Errorf("acknowledgement after escalation: %+v", a)
+	}
+	// So does a new firing (another fired_at).
+	if err := store.Acknowledge(ctx, scope, inst.Key, alert.Ack{By: by, At: at}, ackRecord(stale, by, at)); err != nil {
+		t.Fatal(err)
+	}
+	refired := stale
+	refired.FiredAt = alertTime.Add(time.Hour)
+	if err := store.Save(ctx, scope, []alert.Instance{refired}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if a := ack(); a != nil {
+		t.Errorf("acknowledgement after a new firing: %+v", a)
+	}
+	if h, _ := store.History(ctx, scope, inst.Key, 10); len(h) != 2 || h[0].Transition.Kind != alert.Acknowledged || h[0].Transition.By != by {
+		t.Errorf("history %+v", h)
+	}
+	// Only firing alerts: a resolved one is refused.
+	refired.State, refired.FiredAt = alert.StateResolved, time.Time{}
+	if err := store.Save(ctx, scope, []alert.Instance{refired}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Acknowledge(ctx, scope, inst.Key, alert.Ack{By: by, At: at}, ackRecord(refired, by, at)); !errors.Is(err, alert.ErrNotFiring) {
+		t.Errorf("acknowledging a resolved alert: %v", err)
+	}
+}
+
+// The history is kept a year; the application deletes nothing younger, not even directly.
+func TestAlertStore_HistoryRetention(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	org := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Retention')", org)
+	node := uuid.New()
+	createNode(t, f.db.OwnerDSN, org, node)
+	store := postgres.NewAlertStore(open(t, f.appDSN))
+	scope := scopeFor(t, org)
+	inst := firingInstance(node)
+	now := time.Now().UTC()
+	rec := func(at time.Time) alerting.Record {
+		return alerting.Record{Key: inst.Key, Transition: alert.Transition{Kind: alert.StateChanged, From: alert.StateOK, To: alert.StateWarning, At: at, Value: 1}}
+	}
+	if err := store.Save(ctx, scope, nil, nil, []alerting.Record{rec(now.AddDate(-2, 0, 0)), rec(now.AddDate(0, -6, 0)), rec(now)}); err != nil {
+		t.Fatal(err)
+	}
+	// A purge that asks for too much deletes only what the policy allows.
+	n, err := store.PurgeHistory(ctx, scope, now.Add(time.Hour))
+	if err != nil || n != 1 {
+		t.Fatalf("PurgeHistory() = %d, %v", n, err)
+	}
+	if h, _ := store.History(ctx, scope, inst.Key, 10); len(h) != 2 {
+		t.Errorf("history after the purge: %d entries", len(h))
+	}
+	conn, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, "SELECT set_config('sermon.org_id', $1, false)", org.String()); err != nil {
+		t.Fatal(err)
+	}
+	tag, err := conn.Exec(ctx, "DELETE FROM alert_history")
+	if err != nil || tag.RowsAffected() != 0 {
+		t.Errorf("direct delete of the recent history: %v rows, %v", tag.RowsAffected(), err)
 	}
 }

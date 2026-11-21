@@ -40,6 +40,7 @@ type Handlers struct {
 	Notifications   *NotificationChannelHandler
 	Policies        *NotificationPolicyHandler
 	Silences        *AlertSilenceHandler
+	Alerts          *AlertHandler
 	Windows         *MaintenanceWindowHandler
 	Authenticator   *Authenticator // required for every service except AuthService
 }
@@ -77,6 +78,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewNotificationChannelServiceHandler(h.Notifications, authenticated))
 	mount(webv1connect.NewNotificationPolicyServiceHandler(h.Policies, authenticated))
 	mount(webv1connect.NewAlertSilenceServiceHandler(h.Silences, authenticated))
+	mount(webv1connect.NewAlertServiceHandler(h.Alerts, authenticated))
 	mount(webv1connect.NewMaintenanceWindowServiceHandler(h.Windows, authenticated))
 	if h.Authenticator != nil {
 		// The user's own second factor must be manageable while the organization waits for it.

@@ -208,3 +208,24 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   der Router entfernt die Zustände abgeschalteter oder gelöschter Policies in der nächsten Runde.
 - **Korrektur zu M2-14:** Policies verwaltet jetzt `manage_policies` statt `manage_channels` (beide Admin für die
   ganze Org, also dieselbe Wirkung).
+
+## Nachtrag M2-16: Alert-Seite und Quittieren
+
+- **Quittieren über die API neben der Engine:** Die Engine speichert die ganze Instanz aus ihrer Kopie vom Anfang
+  der Runde. Eine Quittierung aus der API dazwischen ginge so verloren. Das Upsert behält deshalb eine gespeicherte
+  Quittierung, wenn die Engine keine mitbringt, der Alert weiter feuert (gleiches `fired_at`) und nicht von Warnung
+  zu kritisch eskaliert. Genau dann behielte auch die Engine sie. Die API quittiert per bedingtem Update (nur
+  feuernd und noch nicht quittiert) zusammen mit dem Eintrag in der Historie.
+- **Routing des Quittierens:** Die API reicht den Übergang als Teil-Runde (`Round.Partial`) an den Router. Der
+  meldet nur diese Änderung; Erinnerungen, Eskalationen und Aufräumen bleiben bei den Runden der Engine, damit
+  nichts doppelt eingereiht wird.
+- **Step-up nur für Security-Alerts:** Quittieren stoppt Erinnerung und Eskalation. Bei Regeln `security.*` ist das
+  so heikel wie eine Silence (T69); bei den anderen Alerts soll Quittieren im Incident schnell gehen.
+- **Felder nur mit `view_security_events`:** User und Adresse von Security-Alerts sind personenbezogen. Liste und
+  Historie zeigen sie nur, wo der Aufrufer die Security-Events der Gruppe sehen darf (auch abhängig von der
+  Org-Einstellung für Viewer).
+- **Aufbewahrung der Historie: 1 Jahr**, wie die Security-Events. `sermon_app` darf nur Einträge löschen, die älter
+  sind; das erzwingt eine einschränkende RLS-Policy (`AS RESTRICTIVE FOR DELETE`). Die jüngere Historie bleibt für die
+  App unveränderlich. Der Server löscht alle 6 Stunden.
+- **Stumm-Anzeige:** Die Seite markiert Alerts, die eine aktive Silence oder ein Wartungsfenster stumm schaltet, mit
+  derselben Logik wie der Router.

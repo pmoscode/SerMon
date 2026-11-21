@@ -12,6 +12,36 @@ import (
 	"github.com/google/uuid"
 )
 
+const acknowledgeAlertInstance = `-- name: AcknowledgeAlertInstance :execrows
+UPDATE alert_instances
+SET ack_by = $1, ack_at = $2, updated_at = now()
+WHERE rule_id = $3 AND node_id = $4 AND dimension = $5
+  AND state IN (2, 3) AND ack_by IS NULL
+`
+
+type AcknowledgeAlertInstanceParams struct {
+	AckBy     *uuid.UUID
+	AckAt     *time.Time
+	RuleID    string
+	NodeID    uuid.UUID
+	Dimension string
+}
+
+// Only a firing alert that nobody acknowledged yet (the engine may have changed it meanwhile).
+func (q *Queries) AcknowledgeAlertInstance(ctx context.Context, arg AcknowledgeAlertInstanceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, acknowledgeAlertInstance,
+		arg.AckBy,
+		arg.AckAt,
+		arg.RuleID,
+		arg.NodeID,
+		arg.Dimension,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const alertInstanceHistory = `-- name: AlertInstanceHistory :many
 SELECT kind, from_state, to_state, at, value, by_user, fields
 FROM alert_history
@@ -201,6 +231,18 @@ func (q *Queries) ListAlertInstances(ctx context.Context) ([]ListAlertInstancesR
 	return items, nil
 }
 
+const purgeAlertHistory = `-- name: PurgeAlertHistory :execrows
+DELETE FROM alert_history WHERE at < $1
+`
+
+func (q *Queries) PurgeAlertHistory(ctx context.Context, before time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeAlertHistory, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const upsertAlertInstance = `-- name: UpsertAlertInstance :exec
 INSERT INTO alert_instances (org_id, rule_id, node_id, dimension, state, since, pending_since, fired_at,
                              ack_by, ack_at, flapping, value, flips, fields, updated_at)
@@ -209,7 +251,15 @@ VALUES (current_org_id(), $1, $2, $3, $4, $5,
         $11, $12::timestamptz[], $13, now())
 ON CONFLICT (org_id, rule_id, node_id, dimension) DO UPDATE SET
     state = EXCLUDED.state, since = EXCLUDED.since, pending_since = EXCLUDED.pending_since,
-    fired_at = EXCLUDED.fired_at, ack_by = EXCLUDED.ack_by, ack_at = EXCLUDED.ack_at,
+    fired_at = EXCLUDED.fired_at,
+    -- An acknowledgement written by the API while the engine evaluated survives the engine's
+    -- save: kept while the alert fires on (same fired_at) and did not escalate to critical.
+    ack_by = CASE WHEN EXCLUDED.ack_by IS NULL AND EXCLUDED.fired_at = alert_instances.fired_at
+                       AND NOT (alert_instances.state = 2 AND EXCLUDED.state = 3)
+                  THEN alert_instances.ack_by ELSE EXCLUDED.ack_by END,
+    ack_at = CASE WHEN EXCLUDED.ack_by IS NULL AND EXCLUDED.fired_at = alert_instances.fired_at
+                       AND NOT (alert_instances.state = 2 AND EXCLUDED.state = 3)
+                  THEN alert_instances.ack_at ELSE EXCLUDED.ack_at END,
     flapping = EXCLUDED.flapping, value = EXCLUDED.value, flips = EXCLUDED.flips, fields = EXCLUDED.fields,
     updated_at = now()
 `

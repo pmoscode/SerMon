@@ -1855,17 +1855,41 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 
 ### 5.6 Alert-UI (E2.6)
 
-#### ☐ M2-16 – Alert-Seite · W · M
+#### ☑ M2-16 – Alert-Seite · W · M
+> Erledigt (ADR 0019, Nachtrag M2-16; ADR 0007; KONZEPT §4.5, §12.1; Threat Model T69; Migration 00027; Hilfe
+> `pages/alerts`):
+> - **`app/alerts`:** aktive Alerts (wartend, feuernd, behoben) der sichtbaren Nodes mit Regelname, Labels, Einheit,
+>   Host, Gruppe, Quittierendem, „stumm“ (Silence oder Wartungsfenster) und `CanAcknowledge`; das Dringendste zuerst,
+>   Quittierte nach den anderen ihres Zustands. Historie (höchstens 100). Quittieren mit `acknowledge_alerts` auf der
+>   Gruppe des Nodes, bei `security.*` mit Step-up; Felder nur mit `view_security_events`.
+> - **Quittieren:** bedingtes Update samt Historie (`AlertStore.Acknowledge`); das Upsert der Engine behält eine
+>   Quittierung der API, solange der Alert feuert und nicht kritisch wird. Der Router meldet es als Teil-Runde
+>   (`Round.Partial`, `Input.ChangesOnly`) ohne Erinnerungen und Aufräumen.
+> - **Aufbewahrung (Migration 00027):** Historie 1 Jahr; `sermon_app` darf nur Älteres löschen (einschränkende
+>   Policy). `alerting.Maintenance` löscht alle 6 Stunden. Damit ist der offene Punkt aus M2-02 erledigt.
+> - **API:** `AlertService` (ListAlerts, GetAlertHistory, AcknowledgeAlert).
+> - **Web:** Seite `/alerts` mit Navigation, Zusammenfassung, Filtern (Zustand, Gruppe, Suche), Karten mit Zustand
+>   (Icon und Text), Werten in der Einheit der Regel, Feldern als Text, Badges „Stumm“ und „Flattert“, Quittieren
+>   (Step-up über den Dialog), Verlauf auf Abruf, Link zum Node; Lade-, Fehler- und Leerzustand; Aktualisierung alle
+>   15 s. Hilfe DE/EN.
+> - **Abweichungen:** keine Statistik („lauteste Regeln“, MTTA/MTTR, KONZEPT §16) und kein Sprung direkt zum Chart –
+>   der Link führt zum Node mit seinen Charts. Beides steht jetzt in E3.5b.
+> - **Tests:**
+>   - Service: Reihenfolge, Scope und Felder (auch mit Viewer-Logs aus), Stumm-Anzeige, Historie mit Namen, Quittieren
+>     mit Teil-Runde, Rechte, Step-up, fremde Org.
+>   - Gegen PostgreSQL: Quittierung übersteht das Speichern der Engine, endet mit Eskalation oder neuem Feuern;
+>     Aufbewahrung über Purge und auch nicht per direktem DELETE. API mit Viewer, Admin, Step-up und Meldung an den
+>     Kanal; Isolationsfälle für alle drei RPCs.
+>   - Web: Logik der Ansicht (Filter, Zählung, Einheiten), Komponenten (Anzeige mit feindlichem User-Namen als Text,
+>     Filter, Quittieren mit Step-up, Fehlerfall, Verlauf, Lade-, Fehler- und Leerzustand), E2E mit axe.
+>   - Gegenproben für 17 Prüfungen; drei überlebten zuerst: eine doppelte Prüfung (entfernt), die Sortierung
+>     quittierter Alerts (Testdaten umgestellt) und die SQL-Proben, die nur am generierten Code wirken (dort wiederholt).
 - **Ziel:** aktive Alerts mit Filtern, Historie und Timeline pro Instanz, Quittieren, Absprung zum Node und Chart;
   Lade-, Fehler- und Leer-Zustand; Hilfetexte.
 - **Tests zuerst:** Komponenten-Tests der Zustände; Quittieren mit Step-up falls nötig; axe.
 - **Aus M2-08:** Die `fields` von Alerts der Security-Regeln (User, IP) sind personenbezogen: nur mit
   `view_security_events` zeigen (wie `ListSecurityEvents`), sonst ohne Felder. Die Aufbewahrung der Historie (offen
   seit M2-02) gilt auch für die Felder; höchstens so lange wie die Events (1 Jahr).
-- **Aus M2-15:** Die Alert-Seite zeigt, ob eine Silence oder ein Wartungsfenster einen Alert stumm schaltet
-  (`Silence.Mutes`, `MaintenanceWindow.Mutes`).
-- **Aus M2-14:** Quittieren schreibt Instanz und Historie und reicht den Übergang an den `routing.Router`
-  (`Deliver` mit einer `alerting.Round`), damit die Kanäle „quittiert“ melden; der Router nennt den Anzeigenamen.
 - **Abhängig von:** M2-02
 - **Skill:** `sermon-ui-component`
 
@@ -1980,6 +2004,7 @@ und die Security-Review hat keine offenen kritischen Findings.
 | **E3.3 Log-Explorer** | Filter, Volltext, Histogramm nach Severity, Live-Tail (Streaming), Kontextansicht, Absprung aus Charts und Alerts; Darstellung nur als Text | `sermon-ui-component` | E3.2 |
 | **E3.4 Live-Ansicht (top)** | Prozess-Snapshots im Agent (redacted), `Start`/`StopLiveView`, Verteilung an mehrere Betrachter im Server, UI mit Sortierung, Filter, Baumansicht und Detail-Drawer | `sermon-proto-change`, `sermon-ui-component` | M1-14 |
 | **E3.5 Security-Dashboard** | Zeitverläufe, Top-IPs und Top-User, Tabelle mit CSV-Export, GeoIP (lokale DB, optional), Tracking bekannter IPs | `sermon-ui-component` | E2.3 |
+| **E3.5b Alert-Statistik** | Lauteste Regeln, MTTA/MTTR, Absprung von einem Alert direkt in den Chart um seinen Zeitpunkt (offen aus M2-16, KONZEPT §16) | `sermon-ui-component` | M2-16 |
 | **E3.6 OIDC/SSO** | Authorization Code + PKCE, Mapping von Gruppen-Claims, Just-in-Time-Provisioning | `sermon-security-review` | M1-04 |
 | **E3.7 Passkeys und Step-up** | WebAuthn-Registrierung und -Login, Step-up für alle sensiblen Aktionen vervollständigen | `sermon-security-review` | M1-03 |
 | **E3.8 Orgs sperren und löschen** | Sperre (Logins, Ingest und Agent-Verbindungen der Org sofort beenden, Zertifikate sperren), Export des Audit-Logs, Löschjob nach Frist (Stamm-, Event- und Metrikdaten, Loki-Tenant), Aufheben der Sperre während der Frist; alles mit Step-up und Audit (D29) | `sermon-security-review` | M1-04, M1-22, E3.2 |

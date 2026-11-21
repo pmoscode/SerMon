@@ -19,7 +19,15 @@ VALUES (current_org_id(), sqlc.arg(rule_id), sqlc.arg(node_id), sqlc.arg(dimensi
         sqlc.arg(value), sqlc.arg(flips)::timestamptz[], sqlc.arg(fields), now())
 ON CONFLICT (org_id, rule_id, node_id, dimension) DO UPDATE SET
     state = EXCLUDED.state, since = EXCLUDED.since, pending_since = EXCLUDED.pending_since,
-    fired_at = EXCLUDED.fired_at, ack_by = EXCLUDED.ack_by, ack_at = EXCLUDED.ack_at,
+    fired_at = EXCLUDED.fired_at,
+    -- An acknowledgement written by the API while the engine evaluated survives the engine's
+    -- save: kept while the alert fires on (same fired_at) and did not escalate to critical.
+    ack_by = CASE WHEN EXCLUDED.ack_by IS NULL AND EXCLUDED.fired_at = alert_instances.fired_at
+                       AND NOT (alert_instances.state = 2 AND EXCLUDED.state = 3)
+                  THEN alert_instances.ack_by ELSE EXCLUDED.ack_by END,
+    ack_at = CASE WHEN EXCLUDED.ack_by IS NULL AND EXCLUDED.fired_at = alert_instances.fired_at
+                       AND NOT (alert_instances.state = 2 AND EXCLUDED.state = 3)
+                  THEN alert_instances.ack_at ELSE EXCLUDED.ack_at END,
     flapping = EXCLUDED.flapping, value = EXCLUDED.value, flips = EXCLUDED.flips, fields = EXCLUDED.fields,
     updated_at = now();
 
@@ -39,3 +47,13 @@ FROM alert_history
 WHERE rule_id = sqlc.arg(rule_id) AND node_id = sqlc.arg(node_id) AND dimension = sqlc.arg(dimension)
 ORDER BY at DESC, id DESC
 LIMIT sqlc.arg(max_entries);
+
+-- name: AcknowledgeAlertInstance :execrows
+-- Only a firing alert that nobody acknowledged yet (the engine may have changed it meanwhile).
+UPDATE alert_instances
+SET ack_by = sqlc.arg(ack_by), ack_at = sqlc.arg(ack_at), updated_at = now()
+WHERE rule_id = sqlc.arg(rule_id) AND node_id = sqlc.arg(node_id) AND dimension = sqlc.arg(dimension)
+  AND state IN (2, 3) AND ack_by IS NULL;
+
+-- name: PurgeAlertHistory :execrows
+DELETE FROM alert_history WHERE at < sqlc.arg(before);

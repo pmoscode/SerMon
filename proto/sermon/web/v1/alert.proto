@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/alert_rule.proto";
+
+// AlertService serves the alert page (KONZEPT §12, M2-16): the active alerts of the nodes the
+// caller sees, the history of an instance and acknowledging. Fields of an alert (user, address
+// of security events) come only with view_security_events for the node's group. Operators of
+// the node's group acknowledge (acknowledge_alerts); security alerts need a recent step-up.
+// Alerts of nodes the caller does not see are reported as NOT_FOUND.
+service AlertService {
+  // ListAlerts returns the active alerts, most urgent first.
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // GetAlertHistory returns the newest transitions of an instance (at most 100).
+  rpc GetAlertHistory(GetAlertHistoryRequest) returns (GetAlertHistoryResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // AcknowledgeAlert marks a firing alert as seen; FAILED_PRECONDITION if it does not fire or
+  // is acknowledged already (or, with StepUpRequired, for a step-up).
+  rpc AcknowledgeAlert(AcknowledgeAlertRequest) returns (AcknowledgeAlertResponse);
+}
+
+// AlertState is where an alert is.
+enum AlertState {
+  // ALERT_STATE_UNSPECIFIED is not used.
+  ALERT_STATE_UNSPECIFIED = 0;
+  // ALERT_STATE_OK is fine (only in the history).
+  ALERT_STATE_OK = 1;
+  // ALERT_STATE_PENDING waits for its duration.
+  ALERT_STATE_PENDING = 2;
+  // ALERT_STATE_WARNING fires as a warning.
+  ALERT_STATE_WARNING = 3;
+  // ALERT_STATE_CRITICAL fires as critical.
+  ALERT_STATE_CRITICAL = 4;
+  // ALERT_STATE_RESOLVED ended recently.
+  ALERT_STATE_RESOLVED = 5;
+}
+
+// AlertKey names an alert instance: rule × node × dimension.
+message AlertKey {
+  // rule_id is the alert rule.
+  string rule_id = 1 [(buf.validate.field).string = {
+    max_len: 100
+    pattern: "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){2,3}$"
+  }];
+  // node_id is the node UUID.
+  string node_id = 2 [(buf.validate.field).string.uuid = true];
+  // dimension is the labels key of the instance (e.g. mountpoint=/var), empty without.
+  string dimension = 3 [(buf.validate.field).string.max_len = 500];
+}
+
+// Alert is an active alert instance.
+message Alert {
+  // key names the instance.
+  AlertKey key = 1;
+  // state of the alert.
+  AlertState state = 2;
+  // rule_name is the display name of the rule.
+  LocalizedText rule_name = 3;
+  // labels of the rule (e.g. category: security).
+  map<string, string> labels = 4;
+  // dimension_labels split the dimension (e.g. mountpoint: /var); host data, shown as text.
+  map<string, string> dimension_labels = 5;
+  // hostname of the node; host data, shown as text.
+  string hostname = 6;
+  // group_id and group_name are the node's group.
+  string group_id = 7;
+  // group_name is the group's display name.
+  string group_name = 8;
+  // since is when the state began.
+  google.protobuf.Timestamp since = 9;
+  // fire_time is when it began to fire (unset while pending).
+  google.protobuf.Timestamp fire_time = 10;
+  // value of the latest observation, in unit.
+  double value = 11;
+  // unit of the value: ratio, seconds, hours, bytes, count, per_second, per_minute, bytes_per_second or empty.
+  string unit = 12;
+  // flapping alerts change too often; their notifications are throttled.
+  bool flapping = 13;
+  // acknowledged_by is the display name of who acknowledged it (empty if nobody).
+  string acknowledged_by = 14;
+  // acknowledge_time is when.
+  google.protobuf.Timestamp acknowledge_time = 15;
+  // muted means a silence or maintenance window mutes its notifications now.
+  bool muted = 16;
+  // fields of the observation (security events: user, address, ...); host data, shown as text.
+  map<string, string> fields = 17;
+  // can_acknowledge tells whether the caller may acknowledge it now.
+  bool can_acknowledge = 18;
+}
+
+// AlertHistoryKind is what a history entry records.
+enum AlertHistoryKind {
+  // ALERT_HISTORY_KIND_UNSPECIFIED is not used.
+  ALERT_HISTORY_KIND_UNSPECIFIED = 0;
+  // ALERT_HISTORY_KIND_STATE_CHANGED moved the state.
+  ALERT_HISTORY_KIND_STATE_CHANGED = 1;
+  // ALERT_HISTORY_KIND_ACKNOWLEDGED was acknowledged.
+  ALERT_HISTORY_KIND_ACKNOWLEDGED = 2;
+  // ALERT_HISTORY_KIND_FLAPPING_STARTED began to flap.
+  ALERT_HISTORY_KIND_FLAPPING_STARTED = 3;
+  // ALERT_HISTORY_KIND_FLAPPING_STOPPED is stable again.
+  ALERT_HISTORY_KIND_FLAPPING_STOPPED = 4;
+}
+
+// AlertHistoryEntry is one transition of an instance.
+message AlertHistoryEntry {
+  // kind of the transition.
+  AlertHistoryKind kind = 1;
+  // from is the state before.
+  AlertState from = 2;
+  // to is the state after.
+  AlertState to = 3;
+  // time of the transition.
+  google.protobuf.Timestamp time = 4;
+  // value at that time.
+  double value = 5;
+  // by is the display name of who acknowledged.
+  string by = 6;
+  // fields of the observation (as in Alert).
+  map<string, string> fields = 7;
+}
+
+// ListAlertsRequest has no parameters; the page filters.
+message ListAlertsRequest {}
+
+// ListAlertsResponse lists the active alerts.
+message ListAlertsResponse {
+  // alerts the caller sees.
+  repeated Alert alerts = 1;
+}
+
+// GetAlertHistoryRequest names the instance.
+message GetAlertHistoryRequest {
+  // key of the instance.
+  AlertKey key = 1 [(buf.validate.field).required = true];
+}
+
+// GetAlertHistoryResponse is the history, newest first.
+message GetAlertHistoryResponse {
+  // entries of the history.
+  repeated AlertHistoryEntry entries = 1;
+}
+
+// AcknowledgeAlertRequest names the instance.
+message AcknowledgeAlertRequest {
+  // key of the instance.
+  AlertKey key = 1 [(buf.validate.field).required = true];
+}
+
+// AcknowledgeAlertResponse has no fields.
+message AcknowledgeAlertResponse {}

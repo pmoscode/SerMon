@@ -17,6 +17,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
+	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
 
@@ -176,7 +177,22 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		silences := routing.NewSilenceService(routing.SilenceDeps{
 			Store: routingStore, Nodes: postgres.NewFleetStore(db), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 		})
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), policies, silences, registry, logger); err != nil {
+		// The shipped default rules with each organization's overrides (M2-04).
+		defaultRules, err := ruleset.Defaults()
+		if err != nil {
+			return fmt.Errorf("default alert rules: %w", err)
+		}
+		rules := ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger)
+		users := routing.UsersOf(postgres.NewAccessStore(db))
+		router := routing.NewRouter(routing.RouterDeps{Store: routingStore, Rules: routing.RulesOf(rules), Users: users, Logger: logger})
+		alertStore := postgres.NewAlertStore(db)
+		// The alert page (M2-16); acknowledgements go to the channels through the router.
+		alertPage := alerts.NewService(alerts.Deps{
+			Store: alertStore, Nodes: postgres.NewFleetStore(db), Rules: routing.RulesOf(rules), Users: users, Mutes: routingStore,
+			Sink: router, Policy: authz.NewPolicy(), Now: time.Now,
+		})
+		alertingAPI := alertingServices{policies: policies, silences: silences, alerts: alertPage}
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -189,24 +205,17 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		})
 		registerIngestMetrics(registry, ingestService.Stats(), sessions)
 		servers = append(servers, pruneRing(ring))
-		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases – the
-		// shipped defaults with each organization's overrides (M2-04), over metrics and the stored
-		// security events (M2-08).
-		defaultRules, err := ruleset.Defaults()
-		if err != nil {
-			return fmt.Errorf("default alert rules: %w", err)
-		}
-		rules := ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger)
-		router := routing.NewRouter(routing.RouterDeps{
-			Store: routingStore, Rules: routing.RulesOf(rules), Users: routing.UsersOf(postgres.NewAccessStore(db)), Logger: logger,
-		})
+		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases over
+		// metrics and the stored security events (M2-08); the history is kept a year (M2-16).
 		engine := alerting.NewEngine(alerting.Deps{
-			Store: postgres.NewAlertStore(db), Rules: rules, Nodes: postgres.NewFleetStore(db),
+			Store: alertStore, Rules: rules, Nodes: postgres.NewFleetStore(db),
 			Metrics: reader, Events: eventStore, Sink: router, Now: time.Now, Logger: logger,
 		})
 		registerAlertMetrics(registry, engine.Stats())
 		registerRoutingMetrics(registry, router.Stats())
-		servers = append(servers, engine.Run)
+		servers = append(servers, engine.Run, func(ctx context.Context) error {
+			return alerting.Maintenance(ctx, alertStore, time.Now, 6*time.Hour, logger)
+		})
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, ingestService, logger)
 			if err != nil {
@@ -358,8 +367,15 @@ const (
 	totpSetupWindow            = time.Minute
 )
 
+// alertingServices are the use cases of alerting behind the web API.
+type alertingServices struct {
+	policies *routing.Service
+	silences *routing.SilenceService
+	alerts   *alerts.Service
+}
+
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
-	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, policies *routing.Service, silences *routing.SilenceService,
+	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
 	registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
@@ -426,9 +442,10 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
 		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),
-		Policies:      webapi.NewNotificationPolicyHandler(policies, logger),
-		Silences:      webapi.NewAlertSilenceHandler(silences, logger),
-		Windows:       webapi.NewMaintenanceWindowHandler(policies, logger),
+		Policies:      webapi.NewNotificationPolicyHandler(alertingAPI.policies, logger),
+		Silences:      webapi.NewAlertSilenceHandler(alertingAPI.silences, logger),
+		Windows:       webapi.NewMaintenanceWindowHandler(alertingAPI.policies, logger),
+		Alerts:        webapi.NewAlertHandler(alertingAPI.alerts, logger),
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil

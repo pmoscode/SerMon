@@ -40,6 +40,9 @@ In der Standardkonfiguration des Postgres-Images ist der einzige Login-User Supe
 ### Policies
 
 - Alle Tenant-Tabellen haben `ENABLE` und **`FORCE ROW LEVEL SECURITY`**.
+- `alert_history` ist für `sermon_app` nur anhängbar. Löschen darf die App nur Einträge, die älter als ein Jahr sind:
+  Eine einschränkende Policy `delete_only_expired` (`AS RESTRICTIVE FOR DELETE`) wird mit der Tenant-Policy
+  UND-verknüpft (Aufbewahrung, M2-16).
 - `organizations` und `memberships`: `USING` und `WITH CHECK` auf `= current_org_id()`. Lesen und Schreiben fremder Organisationen ist damit unmöglich.
 - `users` sind globale Identitäten, weil ein User Mitglied mehrerer Organisationen sein kann:
   - Lesen und Ändern nur über eine Mitgliedschaft in der aktuellen Organisation.

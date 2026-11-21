@@ -62,6 +62,9 @@ type Input struct {
 	// Silences and Windows mute matching alerts while they are active.
 	Silences []Silence
 	Windows  []MaintenanceWindow
+	// ChangesOnly routes the records alone: no reminders, escalations or clean-up (a round of
+	// the API, such as an acknowledgement, next to the engine's rounds).
+	ChangesOnly bool
 	// Target describes an instance for the matchers (without node and severity).
 	Target func(alert.Key) Target
 }
@@ -138,6 +141,9 @@ func Plan(in Input) Output {
 	}
 
 	touched := p.changes(instances)
+	if in.ChangesOnly {
+		return p.out
+	}
 	for _, i := range in.Instances {
 		if i.State.Firing() && i.Ack == nil && !touched[i.Key] {
 			p.timers(i)

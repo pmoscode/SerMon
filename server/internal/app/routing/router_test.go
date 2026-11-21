@@ -208,3 +208,15 @@ func TestRouter_SilencesFromTheSnapshotMute(t *testing.T) {
 		t.Errorf("save %+v", c.save)
 	}
 }
+
+func TestRouter_PartialRoundsSendOnlyTheirRecords(t *testing.T) {
+	p := ops()
+	p.Repeat = time.Hour
+	s := &fakeStore{snapshot: routing.Snapshot{Policies: []routing.Policy{p}, Channels: []notify.ChannelID{chanA}}}
+	r := round(nil, firing(cpu, alert.StateCritical, t0.Add(-2*time.Hour)))
+	r.Partial = true
+	router(s).Deliver(context.Background(), r)
+	if len(s.commits) != 0 {
+		t.Errorf("a partial round sent a reminder: %+v", s.commits)
+	}
+}

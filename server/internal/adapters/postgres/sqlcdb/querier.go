@@ -12,6 +12,8 @@ import (
 )
 
 type Querier interface {
+	// Only a firing alert that nobody acknowledged yet (the engine may have changed it meanwhile).
+	AcknowledgeAlertInstance(ctx context.Context, arg AcknowledgeAlertInstanceParams) (int64, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
 	// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
@@ -172,6 +174,7 @@ type Querier interface {
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
+	PurgeAlertHistory(ctx context.Context, before time.Time) (int64, error)
 	PurgeAlertSilences(ctx context.Context, before time.Time) error
 	PurgeNotificationDeliveries(ctx context.Context, before time.Time) (int64, error)
 	// The alert engine (M2-08): events of one kind and the given nodes received since a time, newest

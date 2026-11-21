@@ -275,3 +275,23 @@ func TestPlan_CleansUpStates(t *testing.T) {
 		t.Errorf("delete %+v", out.Delete)
 	}
 }
+
+// A round from the API (an acknowledgement) routes its change only: no reminders, no clean-up
+// of other states – the engine's rounds do that.
+func TestPlan_ChangesOnly(t *testing.T) {
+	p := ops()
+	p.Repeat = time.Hour
+	other := firing(mem, alert.StateWarning, t0.Add(-3*time.Hour))
+	acked := firing(cpu, alert.StateCritical, t0.Add(-time.Hour))
+	acked.Ack = &alert.Ack{By: alice, At: t0}
+	stale := routing.State{StateKey: routing.StateKey{Key: ssh, Policy: pOps}, LastSent: t0.Add(-time.Hour)}
+	out := routing.Plan(routing.Input{
+		Now: t0, Policies: []routing.Policy{p}, Target: target, ChangesOnly: true,
+		Records:   []alerting.Record{{Key: cpu, Transition: alert.Transition{Kind: alert.Acknowledged, From: alert.StateCritical, To: alert.StateCritical, At: t0, By: alice}}},
+		Instances: []alert.Instance{acked, other}, States: []routing.State{stale},
+	})
+	want(t, out, sent{chanA, cpu, notify.Acknowledged, ""})
+	if len(out.Delete) != 0 || len(out.Save) != 0 {
+		t.Errorf("save %+v delete %+v", out.Save, out.Delete)
+	}
+}

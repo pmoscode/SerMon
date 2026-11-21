@@ -117,7 +117,7 @@ func (r *Router) deliver(ctx context.Context, round alerting.Round) error {
 	}
 	in := Input{
 		Now: round.Now, Records: round.Records, Instances: round.Instances, States: snap.States,
-		Silences: snap.Silences, Windows: snap.Windows,
+		Silences: snap.Silences, Windows: snap.Windows, ChangesOnly: round.Partial,
 		Target: func(k alert.Key) Target {
 			return Target{Rule: k.Rule, Labels: rules[k.Rule].Labels, Group: nodes[k.Node].Group}
 		},

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Bell from '@lucide/svelte/icons/bell';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Search from '@lucide/svelte/icons/search';
@@ -23,6 +24,7 @@
 
 	const nav = $derived([
 		{ href: resolve('/(app)/fleet'), icon: Server, label: () => m.nav_fleet() },
+		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
 		...(sessionState.current?.orgAdmin
 			? [{ href: resolve('/(app)/admin'), icon: Users, label: () => m.nav_admin() }]
 			: []),

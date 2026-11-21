@@ -31,6 +31,7 @@ type isolationEnv struct {
 	channels                        webv1connect.NotificationChannelServiceClient
 	policies                        webv1connect.NotificationPolicyServiceClient
 	silences                        webv1connect.AlertSilenceServiceClient
+	alerts                          webv1connect.AlertServiceClient
 	windows                         webv1connect.MaintenanceWindowServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
@@ -71,6 +72,11 @@ func leaksChannel(e isolationEnv, s string) bool {
 
 func policySpec(channel string) *webv1.PolicySpec {
 	return &webv1.PolicySpec{Name: "pwned", Enabled: true, ChannelIds: []string{channel}, Grouping: webv1.PolicyGrouping_POLICY_GROUPING_NODE}
+}
+
+// alertKeyA is the brute-force alert of Org A's node.
+func alertKeyA(e isolationEnv) *webv1.AlertKey {
+	return &webv1.AlertKey{RuleId: "security.ssh.bruteforce", NodeId: e.nodeA, Dimension: "ip=192.0.2.7"}
 }
 
 func windowSpec(group string) *webv1.MaintenanceWindowSpec {
@@ -148,6 +154,21 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.NotificationPolicyService/DeletePolicy": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.policies.DeletePolicy(ctx, connect.NewRequest(&webv1.DeletePolicyRequest{PolicyId: e.policyA}))
+		return err
+	}},
+	"/sermon.web.v1.AlertService/ListAlerts": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.alerts.ListAlerts(ctx, connect.NewRequest(&webv1.ListAlertsRequest{}))
+		if err == nil && (strings.Contains(res.Msg.String(), e.nodeA) || strings.Contains(res.Msg.String(), "alpha-user") || leaks(e, res.Msg.String())) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.AlertService/GetAlertHistory": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.alerts.GetAlertHistory(ctx, connect.NewRequest(&webv1.GetAlertHistoryRequest{Key: alertKeyA(e)}))
+		return err
+	}},
+	"/sermon.web.v1.AlertService/AcknowledgeAlert": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.alerts.AcknowledgeAlert(ctx, connect.NewRequest(&webv1.AcknowledgeAlertRequest{Key: alertKeyA(e)}))
 		return err
 	}},
 	"/sermon.web.v1.AlertSilenceService/ListSilences": {list: true, run: func(ctx context.Context, e isolationEnv) error {

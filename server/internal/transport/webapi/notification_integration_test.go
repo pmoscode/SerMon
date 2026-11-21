@@ -21,9 +21,9 @@ const channelAl = "0193f5a0-0000-7000-8000-0000000001a4"
 // policyAl is a notification policy of Alpha to channelAl, silenceAl and windowAl a silence and
 // a maintenance window of Alpha's group (isolation fixtures).
 const (
-	policyAl  = "0193f5a0-0000-7000-8000-0000000001a5"
-	silenceAl = "0193f5a0-0000-7000-8000-0000000001a6"
-	windowAl  = "0193f5a0-0000-7000-8000-0000000001a7"
+	policyAl  = "0193f5a0-0000-7000-8000-0000000001b1"
+	silenceAl = "0193f5a0-0000-7000-8000-0000000001b2"
+	windowAl  = "0193f5a0-0000-7000-8000-0000000001b3"
 )
 
 const hookToken = "hook-secret-token-0815" // fixture, not a secret
@@ -74,6 +74,7 @@ func seedChannelAlpha(t *testing.T) {
 	ownerSQL(t,
 		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
 		"DELETE FROM notification_policies WHERE org_id = '"+orgAlpha+"'",
+		"DELETE FROM alert_instances WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM alert_silences WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM maintenance_windows WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM notification_channels WHERE org_id = '"+orgAlpha+"'",
@@ -88,6 +89,10 @@ func seedChannelAlpha(t *testing.T) {
 		 VALUES ('`+orgAlpha+`', '`+policyAl+`', '`+channelAl+`', false, 0)`,
 		`INSERT INTO alert_silences (org_id, id, matchers, starts_at, ends_at, comment, created_at)
 		 VALUES ('`+orgAlpha+`', '`+silenceAl+`', '{"groups": ["`+groupAl+`"]}', now(), now() + interval '1 day', 'alpha-silence', now())`,
+		`INSERT INTO alert_instances (org_id, rule_id, node_id, dimension, state, since, fired_at, value, fields)
+		 VALUES ('`+orgAlpha+`', 'security.ssh.bruteforce', '`+nodeAl+`', 'ip=192.0.2.7', 3, now(), now(), 60, '{"user": "alpha-user"}')`,
+		`INSERT INTO alert_history (org_id, rule_id, node_id, dimension, kind, from_state, to_state, at, value, fields)
+		 VALUES ('`+orgAlpha+`', 'security.ssh.bruteforce', '`+nodeAl+`', 'ip=192.0.2.7', 1, 0, 3, now(), 60, '{"user": "alpha-user"}')`,
 		`INSERT INTO maintenance_windows (org_id, id, name, enabled, group_ids, days, start_minute, duration_minutes, time_zone, created_at, updated_at)
 		 VALUES ('`+orgAlpha+`', '`+windowAl+`', 'alpha-window', true, '{`+groupAl+`}', '{0}', 180, 120, 'Europe/Berlin', now(), now())`,
 	)

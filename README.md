@@ -10,7 +10,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > Die Alert-Engine wertet Standardregeln für Metriken und Security-Events aus (SSH-Brute-Force, Fleet-Korrelation,
 > Root-Login, sudo, OOM, Reboot). Benachrichtigungen per E-Mail, Webhook, ntfy, Slack, Teams,
 > Discord, Mattermost, Telegram, Gotify und Pushover sind angebunden; Notification-Policies leiten die Alerts mit
-> Wiederholung und Eskalation an die Kanäle; Silences und Wartungsfenster schalten sie stumm (die UI dafür folgt).
+> Wiederholung und Eskalation an die Kanäle; Silences und Wartungsfenster schalten sie stumm. Die Alert-Seite zeigt
+> die aktiven Alerts mit Verlauf und Quittieren; die UI für Kanäle, Policies und Silences folgt.
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 

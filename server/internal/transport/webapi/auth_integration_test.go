@@ -22,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
+	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
@@ -37,6 +38,8 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
+	"github.com/pmoscode/SerMon/server/internal/domain/alert"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -171,6 +174,14 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		}), slog.New(slog.DiscardHandler)),
 		Policies: webapi.NewNotificationPolicyHandler(policies, slog.New(slog.DiscardHandler)),
 		Windows:  webapi.NewMaintenanceWindowHandler(policies, slog.New(slog.DiscardHandler)),
+		Alerts: webapi.NewAlertHandler(alerts.NewService(alerts.Deps{
+			Store: postgres.NewAlertStore(pg), Nodes: postgres.NewFleetStore(pg), Rules: noRules{},
+			Users: routing.UsersOf(postgres.NewAccessStore(pg)), Mutes: postgres.NewRoutingStore(pg),
+			Sink: routing.NewRouter(routing.RouterDeps{
+				Store: postgres.NewRoutingStore(pg), Rules: noRules{}, Users: routing.UsersOf(postgres.NewAccessStore(pg)), Logger: slog.New(slog.DiscardHandler),
+			}),
+			Policy: authz.NewPolicy(), Now: time.Now,
+		}), slog.New(slog.DiscardHandler)),
 		Silences: webapi.NewAlertSilenceHandler(routing.NewSilenceService(routing.SilenceDeps{
 			Store: postgres.NewRoutingStore(pg), Nodes: postgres.NewFleetStore(pg), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 		}), slog.New(slog.DiscardHandler)),
@@ -429,4 +440,11 @@ func TestAuthAPI_SessionDescribesTheRights(t *testing.T) {
 		strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != groupAl {
 		t.Errorf("operator of a group: %v, %v", me, err)
 	}
+}
+
+// noRules knows no rule names (the API tests show the rule IDs).
+type noRules struct{}
+
+func (noRules) RuleInfos(context.Context, tenant.OrgID) (map[alert.RuleID]routing.RuleInfo, error) {
+	return nil, nil
 }

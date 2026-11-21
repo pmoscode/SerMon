@@ -220,7 +220,7 @@ eine Fake-Implementierung für Tests.
 | Daten                                                                               | System                                   | Retention                                        |
 |-------------------------------------------------------------------------------------|------------------------------------------|--------------------------------------------------|
 | Orgs, User, Gruppen, Rollen, Nodes, Zertifikate, Regeln, Policies, Kanäle, Sessions | PostgreSQL                               | dauerhaft                                        |
-| Alert-Instanzen, Security-Events, Update-Läufe, Audit-Log                           | PostgreSQL (partitioniert nach Monat)    | 1 Jahr (Audit: konfigurierbar, Standard 2 Jahre) |
+| Alert-Instanzen und -Historie, Security-Events, Update-Läufe, Audit-Log             | PostgreSQL (partitioniert nach Monat)    | 1 Jahr (Audit: konfigurierbar, Standard 2 Jahre) |
 | Metriken 1 s                                                                        | Ringpuffer im Server-Speicher (nicht persistent)             | 15 min                                           |
 | Metriken 10 s (avg/min/max je Fenster)                                              | TimescaleDB-Hypertable `metrics_raw`                         | 24 h                                             |
 | Metriken 1 min                                                                      | Continuous Aggregate `metrics_1m`                            | 30 Tage                                          |
@@ -623,7 +623,8 @@ Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von
     - `for:` legt die Mindestdauer bis zum Feuern fest (beim Verlassen von OK; ein feuernder Alert eskaliert sofort zu
       CRITICAL), `clear:` eine eigene Rückfall-Schwelle (**Hysterese**: zwischen Schwelle und `clear` bleibt er auf
       WARNING).
-    - **Quittieren** stoppt die Benachrichtigungen, bis der Alert gelöst ist oder zu CRITICAL eskaliert.
+    - **Quittieren** stoppt die Benachrichtigungen, bis der Alert gelöst ist oder zu CRITICAL eskaliert. Operatoren der
+      Gruppe quittieren; Security-Alerts brauchen einen frischen Step-up.
     - **Flapping-Erkennung:** Mehr als N Wechsel in M Minuten setzen den Status `FLAPPING`; Benachrichtigungen werden
       dann gedrosselt.
 - **Notification-Policy (Routing):** Matcher auf Severity, Gruppe, Regel (Muster wie `security.*`) und die Labels der

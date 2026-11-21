@@ -114,6 +114,8 @@ type Round struct {
 	Records   []Record
 	Instances []alert.Instance
 	Nodes     []fleet.Node
+	// Partial rounds come from the API (an acknowledgement): the routing sends their records only.
+	Partial bool
 }
 
 // Sink receives every round of an organization this engine holds, after the changes are stored

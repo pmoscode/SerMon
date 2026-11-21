@@ -115,27 +115,28 @@ func (s *AlertStore) Save(ctx context.Context, scope tenant.Scope, changed []ale
 				return wrap(err, "delete alert instance")
 			}
 		}
-		for _, r := range history {
-			t := r.Transition
-			fields, err := encodeFields(t.Fields)
-			if err != nil {
-				return err
-			}
-			p := sqlcdb.InsertAlertHistoryParams{
-				RuleID: string(r.Key.Rule), NodeID: uuid.UUID(r.Key.Node), Dimension: r.Key.Dimension,
-				Kind: int16(t.Kind), FromState: int16(t.From), ToState: int16(t.To), At: t.At, Value: t.Value, //nolint:gosec // G115: small enums
-				Fields: fields,
-			}
-			if t.By != (identity.UserID{}) {
-				by := uuid.UUID(t.By)
-				p.ByUser = &by
-			}
-			if err := q.InsertAlertHistory(ctx, p); err != nil {
-				return wrap(err, "append alert history")
-			}
-		}
-		return nil
+		return appendHistory(ctx, q, history)
 	})
+}
+
+// appendHistory appends transitions within a tenant transaction.
+func appendHistory(ctx context.Context, q *sqlcdb.Queries, history []alerting.Record) error {
+	for _, r := range history {
+		t := r.Transition
+		fields, err := encodeFields(t.Fields)
+		if err != nil {
+			return err
+		}
+		p := sqlcdb.InsertAlertHistoryParams{
+			RuleID: string(r.Key.Rule), NodeID: uuid.UUID(r.Key.Node), Dimension: r.Key.Dimension,
+			Kind: int16(t.Kind), FromState: int16(t.From), ToState: int16(t.To), At: t.At, Value: t.Value, //nolint:gosec // G115: small enums
+			Fields: fields, ByUser: optionalUser(t.By),
+		}
+		if err := q.InsertAlertHistory(ctx, p); err != nil {
+			return wrap(err, "append alert history")
+		}
+	}
+	return nil
 }
 
 // History returns the newest transitions of an instance, newest first.
@@ -201,4 +202,32 @@ func nonNilTimes(ts []time.Time) []time.Time {
 		return []time.Time{}
 	}
 	return ts
+}
+
+// Acknowledge marks a firing, unacknowledged alert and appends the transition, together;
+// alert.ErrNotFiring if it does not fire anymore or someone acknowledged it already.
+func (s *AlertStore) Acknowledge(ctx context.Context, scope tenant.Scope, key alert.Key, ack alert.Ack, rec alerting.Record) error {
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		n, err := q.AcknowledgeAlertInstance(ctx, sqlcdb.AcknowledgeAlertInstanceParams{
+			RuleID: string(key.Rule), NodeID: uuid.UUID(key.Node), Dimension: key.Dimension, AckBy: optionalUser(ack.By), AckAt: &ack.At,
+		})
+		if err != nil {
+			return wrap(err, "acknowledge alert")
+		}
+		if n == 0 {
+			return alert.ErrNotFiring
+		}
+		return appendHistory(ctx, q, []alerting.Record{rec})
+	})
+}
+
+// PurgeHistory deletes the history before before; the table's policy keeps the last year.
+func (s *AlertStore) PurgeHistory(ctx context.Context, scope tenant.Scope, before time.Time) (int, error) {
+	var n int64
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		var err error
+		n, err = q.PurgeAlertHistory(ctx, before)
+		return wrap(err, "purge alert history")
+	})
+	return int(n), err
 }

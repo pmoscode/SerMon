@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { api } from '#lib/api/client.js';
+import { alertingApi } from '#lib/api/alerting.js';
 import { GetFleetSummaryResponseSchema } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
 import { ListSilencesResponseSchema } from '#lib/api/gen/sermon/web/v1/silence_pb.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
@@ -39,11 +40,11 @@ describe('SilencesPanel', () => {
 
 	it('creates a silence prefilled from an alert, after the step-up', async () => {
 		session(['g1']);
-		vi.spyOn(api.silences, 'listSilences').mockResolvedValue(
+		vi.spyOn(alertingApi.silences, 'listSilences').mockResolvedValue(
 			create(ListSilencesResponseSchema, {})
 		);
 		const createSilence = vi
-			.spyOn(api.silences, 'createSilence')
+			.spyOn(alertingApi.silences, 'createSilence')
 			.mockRejectedValueOnce(stepUpError())
 			.mockResolvedValueOnce({} as never);
 		render(SilencesPanel, {
@@ -78,7 +79,7 @@ describe('SilencesPanel', () => {
 	it('lists silences with the comment as text and ends them; viewers only read', async () => {
 		session(['g1']);
 		const now = Date.now();
-		vi.spyOn(api.silences, 'listSilences').mockResolvedValue(
+		vi.spyOn(alertingApi.silences, 'listSilences').mockResolvedValue(
 			create(ListSilencesResponseSchema, {
 				silences: [
 					{
@@ -103,7 +104,7 @@ describe('SilencesPanel', () => {
 				]
 			})
 		);
-		const expire = vi.spyOn(api.silences, 'expireSilence').mockResolvedValue({} as never);
+		const expire = vi.spyOn(alertingApi.silences, 'expireSilence').mockResolvedValue({} as never);
 		const view = await render(SilencesPanel);
 
 		await expect.element(page.getByText(hostile)).toBeVisible();

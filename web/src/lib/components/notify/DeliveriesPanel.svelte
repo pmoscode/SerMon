@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
-	import { api } from '#lib/api/client.js';
+	import { alertingApi } from '#lib/api/alerting.js';
 	import {
 		DeliveryStatus,
 		type Delivery,
@@ -21,9 +21,9 @@
 
 	async function load(append = false) {
 		try {
-			if (!append) channels = (await api.channels.listChannels({})).channels;
+			if (!append) channels = (await alertingApi.channels.listChannels({})).channels;
 			const before = append ? (deliveries.at(-1)?.id ?? 0n) : 0n;
-			const res = await api.channels.listDeliveries({
+			const res = await alertingApi.channels.listDeliveries({
 				channelId,
 				beforeId: before,
 				pageSize: PAGE

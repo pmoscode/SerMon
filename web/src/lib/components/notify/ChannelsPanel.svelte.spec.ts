@@ -2,7 +2,8 @@ import { create } from '@bufbuild/protobuf';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api, Code } from '#lib/api/client.js';
+import { Code } from '#lib/api/client.js';
+import { alertingApi } from '#lib/api/alerting.js';
 import {
 	ChannelFieldKind,
 	DeliveryStatus,
@@ -42,7 +43,7 @@ const ops = create(NotificationChannelSchema, {
 describe('ChannelsPanel', () => {
 	beforeEach(() => {
 		switchLocale('en');
-		vi.spyOn(api.channels, 'listChannelTypes').mockResolvedValue(types);
+		vi.spyOn(alertingApi.channels, 'listChannelTypes').mockResolvedValue(types);
 	});
 	afterEach(() => {
 		vi.restoreAllMocks();
@@ -50,11 +51,11 @@ describe('ChannelsPanel', () => {
 	});
 
 	it('creates a channel after the step-up and never shows its secrets', async () => {
-		vi.spyOn(api.channels, 'listChannels')
+		vi.spyOn(alertingApi.channels, 'listChannels')
 			.mockResolvedValueOnce(create(ListChannelsResponseSchema, { channels: [] }))
 			.mockResolvedValue(create(ListChannelsResponseSchema, { channels: [ops] }));
 		const createChannel = vi
-			.spyOn(api.channels, 'createChannel')
+			.spyOn(alertingApi.channels, 'createChannel')
 			.mockRejectedValueOnce(stepUpError())
 			.mockResolvedValueOnce({} as never);
 		render(ChannelsPanel);
@@ -86,10 +87,10 @@ describe('ChannelsPanel', () => {
 	});
 
 	it('keeps stored secrets when editing and sends only what was typed', async () => {
-		vi.spyOn(api.channels, 'listChannels').mockResolvedValue(
+		vi.spyOn(alertingApi.channels, 'listChannels').mockResolvedValue(
 			create(ListChannelsResponseSchema, { channels: [ops] })
 		);
-		const update = vi.spyOn(api.channels, 'updateChannel').mockResolvedValue({} as never);
+		const update = vi.spyOn(alertingApi.channels, 'updateChannel').mockResolvedValue({} as never);
 		render(ChannelsPanel);
 
 		await page.getByRole('button', { name: 'Edit' }).click();
@@ -114,10 +115,10 @@ describe('ChannelsPanel', () => {
 	});
 
 	it('shows the error of a failed test and of an invalid input', async () => {
-		vi.spyOn(api.channels, 'listChannels').mockResolvedValue(
+		vi.spyOn(alertingApi.channels, 'listChannels').mockResolvedValue(
 			create(ListChannelsResponseSchema, { channels: [ops] })
 		);
-		vi.spyOn(api.channels, 'testChannel')
+		vi.spyOn(alertingApi.channels, 'testChannel')
 			.mockResolvedValueOnce({
 				delivery: {
 					status: DeliveryStatus.FAILED,
@@ -138,11 +139,11 @@ describe('ChannelsPanel', () => {
 	});
 
 	it('deletes after a second click and switches off', async () => {
-		vi.spyOn(api.channels, 'listChannels').mockResolvedValue(
+		vi.spyOn(alertingApi.channels, 'listChannels').mockResolvedValue(
 			create(ListChannelsResponseSchema, { channels: [ops] })
 		);
-		const remove = vi.spyOn(api.channels, 'deleteChannel').mockResolvedValue({} as never);
-		const update = vi.spyOn(api.channels, 'updateChannel').mockResolvedValue({} as never);
+		const remove = vi.spyOn(alertingApi.channels, 'deleteChannel').mockResolvedValue({} as never);
+		const update = vi.spyOn(alertingApi.channels, 'updateChannel').mockResolvedValue({} as never);
 		render(ChannelsPanel);
 
 		await page.getByRole('button', { name: 'Switch off' }).click();

@@ -241,3 +241,22 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
 - **Wo jemand stummschalten darf,** sagt die Session (`silence_group_ids`, wie `enroll_group_ids`). Die UI bietet nur
   diese Gruppen an und blendet sonst die Knöpfe aus; der Server prüft trotzdem jeden Aufruf.
 - **Fehler bei ungültiger Eingabe** zeigen die Begründung des Servers. Sie nennt das Feld, nie einen Wert.
+
+## Nachtrag M2-17: Regel-Editor, Import und Export
+
+- **Ein Weg für Editor und Import:** `ImportAlertRules` nimmt ein oder mehrere YAML-Dokumente (getrennt durch
+  `---`). Mit `dry_run` zeigt es Fehler und die Änderungen je Regel als Vorher/Nachher, ohne zu speichern; sonst
+  speichert es alle Dokumente oder keines, in einer Transaktion mit einem Audit-Eintrag. Unveränderte Regeln bleiben
+  unberührt, eine abgeschaltete Regel bleibt abgeschaltet.
+- **Fehler an der richtigen Stelle:** Der Loader prüft jedes Dokument wie die Standardregeln (keine freien Abfragen,
+  unbekannte Felder abgelehnt). Zeilennummern beziehen sich auf den ganzen Text: Jedes Dokument wird mit so vielen
+  Leerzeilen davor geprüft, wie es im Text weiter unten steht.
+- **Der geschriebene Text bleibt:** `alert_rule_overrides.source` hält das YAML, wie es eingegeben wurde (Kommentare,
+  Reihenfolge); die Engine liest weiter nur das geprüfte JSON. Ohne Text rendert der Server das Dokument als YAML.
+  Standardregeln zeigen ihre Datei.
+- **Rechte:** Lesen und Exportieren dürfen alle Mitglieder, ändern nur Admins (`manage_alert_rules`) mit frischem
+  Step-up, weil Abschalten auch Security-Alerts verstecken kann (T69). Eine Prüfung ohne Speichern braucht keinen
+  Step-up.
+- **Export** liefert die geänderten und eigenen Regeln oder alle als ein YAML. Ob eine Regel abgeschaltet ist, steht
+  nicht darin; das bleibt eine Einstellung der Org.
+- **UI:** Tab „Regeln“ auf der Alert-Seite statt eines weiteren Menüpunkts.

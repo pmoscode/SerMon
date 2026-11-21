@@ -12,10 +12,6 @@ import {
 import { createConnectTransport } from '@connectrpc/connect-web';
 import type { DescService } from '@bufbuild/protobuf';
 import { AccessService } from './gen/sermon/web/v1/access_pb.js';
-import { AlertService } from './gen/sermon/web/v1/alert_pb.js';
-import { NotificationChannelService } from './gen/sermon/web/v1/notification_pb.js';
-import { NotificationPolicyService } from './gen/sermon/web/v1/notification_policy_pb.js';
-import { AlertSilenceService, MaintenanceWindowService } from './gen/sermon/web/v1/silence_pb.js';
 import { AuthService, SecondFactorSetupRequiredSchema } from './gen/sermon/web/v1/auth_pb.js';
 import { EnrollmentTokenService } from './gen/sermon/web/v1/enrollment_token_pb.js';
 import { FleetService } from './gen/sermon/web/v1/fleet_pb.js';
@@ -72,7 +68,8 @@ const transport = createConnectTransport({
 	fetch: (input, init) => fetch(input, { ...init, credentials: 'same-origin' })
 });
 
-function client<T extends DescService>(service: T): Client<T> {
+/** A client of a service; modules of single areas create theirs with it (smaller shared bundle). */
+export function client<T extends DescService>(service: T): Client<T> {
 	return createClient(service, transport);
 }
 
@@ -87,12 +84,7 @@ export const api = {
 	metrics: client(MetricsService),
 	node: client(NodeService),
 	twoFactor: client(TwoFactorService),
-	securityPolicy: client(SecurityPolicyService),
-	alerts: client(AlertService),
-	channels: client(NotificationChannelService),
-	policies: client(NotificationPolicyService),
-	silences: client(AlertSilenceService),
-	windows: client(MaintenanceWindowService)
+	securityPolicy: client(SecurityPolicyService)
 };
 
 /** The Connect code of an error (Unknown for anything else). */

@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const deleteAlertRuleOverride = `-- name: DeleteAlertRuleOverride :execrows
@@ -26,7 +27,7 @@ func (q *Queries) DeleteAlertRuleOverride(ctx context.Context, ruleID string) (i
 
 const listAlertRuleOverrides = `-- name: ListAlertRuleOverrides :many
 
-SELECT rule_id, disabled, document
+SELECT rule_id, disabled, document, source
 FROM alert_rule_overrides
 ORDER BY rule_id
 `
@@ -35,6 +36,7 @@ type ListAlertRuleOverridesRow struct {
 	RuleID   string
 	Disabled bool
 	Document []byte
+	Source   pgtype.Text
 }
 
 // Alert rule overrides (M2-04, ADR 0007). Every query runs in the organization's tenant transaction.
@@ -47,7 +49,12 @@ func (q *Queries) ListAlertRuleOverrides(ctx context.Context) ([]ListAlertRuleOv
 	items := []ListAlertRuleOverridesRow{}
 	for rows.Next() {
 		var i ListAlertRuleOverridesRow
-		if err := rows.Scan(&i.RuleID, &i.Disabled, &i.Document); err != nil {
+		if err := rows.Scan(
+			&i.RuleID,
+			&i.Disabled,
+			&i.Document,
+			&i.Source,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -59,10 +66,11 @@ func (q *Queries) ListAlertRuleOverrides(ctx context.Context) ([]ListAlertRuleOv
 }
 
 const upsertAlertRuleOverride = `-- name: UpsertAlertRuleOverride :exec
-INSERT INTO alert_rule_overrides (org_id, rule_id, disabled, document, updated_at, updated_by)
-VALUES (current_org_id(), $1, $2, $3, now(), $4)
+INSERT INTO alert_rule_overrides (org_id, rule_id, disabled, document, source, updated_at, updated_by)
+VALUES (current_org_id(), $1, $2, $3, $4, now(),
+        $5)
 ON CONFLICT (org_id, rule_id) DO UPDATE SET
-    disabled = EXCLUDED.disabled, document = EXCLUDED.document,
+    disabled = EXCLUDED.disabled, document = EXCLUDED.document, source = EXCLUDED.source,
     updated_at = now(), updated_by = EXCLUDED.updated_by
 `
 
@@ -70,6 +78,7 @@ type UpsertAlertRuleOverrideParams struct {
 	RuleID    string
 	Disabled  bool
 	Document  []byte
+	Source    pgtype.Text
 	UpdatedBy *uuid.UUID
 }
 
@@ -78,6 +87,7 @@ func (q *Queries) UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRu
 		arg.RuleID,
 		arg.Disabled,
 		arg.Document,
+		arg.Source,
 		arg.UpdatedBy,
 	)
 	return err

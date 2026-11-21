@@ -1893,7 +1893,36 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Abhängig von:** M2-02
 - **Skill:** `sermon-ui-component`
 
-#### ☐ M2-17 – Regel-Editor und YAML-Import/Export · W · M
+#### ☑ M2-17 – Regel-Editor und YAML-Import/Export · W · M
+> Erledigt (ADR 0019, Nachtrag M2-17; Threat Model T69; Migration 00028; Hilfe `pages/alerts`):
+> - **`ruleset`:** `ParseBundle` (Dokumente getrennt durch `---`, auch mit Kommentar; Fehler mit Zeile im ganzen Text,
+>   Dokumente nur aus Kommentaren übersprungen), `YAML` (Dokument als Block-YAML), Standardregeln behalten ihren
+>   Dateitext.
+> - **`app/rules`:** Regeln der Org mit Herkunft (Standard, angepasst, eigen), Ein/Aus, YAML, Original bei angepassten
+>   und Problem bei gespeicherten Fassungen, die nicht mehr laden. Import mit Prüflauf und Diff, alles oder nichts, mit
+>   Audit; Ein/Aus (behält das Dokument), Zurücksetzen bzw. Löschen, Export (Änderungen oder alle). Lesen alle
+>   Mitglieder, ändern Admins mit Step-up.
+> - **Speicherung (Migration 00028):** `alert_rule_overrides.source` für den geschriebenen YAML-Text;
+>   `AlertRuleStore.Apply` (mehrere, atomar, mit Audit) und `Reset`.
+> - **API:** `AlertRuleService` (List, Import mit `dry_run`, SetEnabled, Reset, Export).
+> - **Web:** Tab „Regeln“ auf der Alert-Seite: Suche, Herkunft und Zustand, Details mit Hilfetext und YAML bzw. Diff zur
+>   Standardregel, Editor und Import (auch aus Datei) mit „Prüfen“ (Fehler mit Dokument und Zeile, Diff je Regel)
+>   und „Speichern“, Vorlage für neue Regeln, Export als Datei.
+> - **Budget:** Die Clients des Alertings liegen in `#lib/api/alerting.js` statt im gemeinsamen Client, sonst lädt
+>   jede Seite ihre Beschreibungen mit (die Node-Seite lag bei 200,8 KiB, jetzt 195,0 KiB bei 200 KiB Budget).
+> - **Tests:**
+>   - Bundle: Trennung mit Text und Zeilen, Fehler mit Zeile im ganzen Text, Syntaxfehler, leere Dokumente;
+>     YAML-Ausgabe liest sich zurück.
+>   - Service: Prüflauf ohne Speichern, Anwenden mit Text und Audit, nichts bei einem Fehler (auch neben gültigen
+>     Änderungen), freie Abfrage abgelehnt mit Zeile, Duplikate, Ein/Aus mit und ohne eigenes Dokument, Import lässt
+>     Abgeschaltetes aus, Zurücksetzen, Rechte und Step-up, Export.
+>   - Gegen PostgreSQL: `Apply` alles oder nichts mit Text, `Reset` mit Isolation; API über den echten Stack;
+>     Isolationsfälle für alle fünf RPCs (Org A behält ihre abgeschaltete Regel).
+>   - Web: Zeilen-Diff, Panel (Hilfetext als Text, Diff, Fehler an der richtigen Stelle, Prüfen und Speichern mit
+>     Step-up, Ein/Aus, Zurücksetzen, Export), E2E mit axe.
+>   - Gegenproben für 21 Prüfungen. Vier überlebten zuerst; drei waren Lücken und sind abgedeckt (Trenner mit
+>     Kommentar, nichts speichern neben gültigen Änderungen, Abgeschaltetes bleibt aus). Die vierte betrifft nur die
+>     Laufzeit des Diffs.
 - **Ziel:** Standardregeln ansehen, überschreiben und abschalten; eigene Regeln; Import mit Validierung und
   Dry-Run-Diff, Export.
 - **Tests zuerst:** Diff-Ansicht; Fehler aus dem Loader an der richtigen Stelle; keine freien Queries.

@@ -3,7 +3,8 @@ import { timestampFromMs } from '@bufbuild/protobuf/wkt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api, Code } from '#lib/api/client.js';
+import { Code } from '#lib/api/client.js';
+import { alertingApi } from '#lib/api/alerting.js';
 import {
 	AlertHistoryKind,
 	AlertSchema,
@@ -67,7 +68,7 @@ describe('AlertsView', () => {
 	});
 
 	it('shows the alerts with their state, values and host data as text', async () => {
-		vi.spyOn(api.alerts, 'listAlerts').mockResolvedValue(listing(brute, disk));
+		vi.spyOn(alertingApi.alerts, 'listAlerts').mockResolvedValue(listing(brute, disk));
 		render(AlertsView);
 
 		const cards = page.getByRole('article');
@@ -87,7 +88,7 @@ describe('AlertsView', () => {
 	});
 
 	it('filters by state, group and search', async () => {
-		vi.spyOn(api.alerts, 'listAlerts').mockResolvedValue(listing(brute, disk));
+		vi.spyOn(alertingApi.alerts, 'listAlerts').mockResolvedValue(listing(brute, disk));
 		render(AlertsView);
 
 		await page.getByLabelText('State').selectOptions('pending');
@@ -103,7 +104,7 @@ describe('AlertsView', () => {
 
 	it('acknowledges after the step-up and reloads', async () => {
 		const list = vi
-			.spyOn(api.alerts, 'listAlerts')
+			.spyOn(alertingApi.alerts, 'listAlerts')
 			.mockResolvedValueOnce(listing(brute))
 			.mockResolvedValue(
 				listing(
@@ -116,7 +117,7 @@ describe('AlertsView', () => {
 				)
 			);
 		const ack = vi
-			.spyOn(api.alerts, 'acknowledgeAlert')
+			.spyOn(alertingApi.alerts, 'acknowledgeAlert')
 			.mockRejectedValueOnce(stepUpError())
 			.mockResolvedValueOnce({} as never);
 		render(AlertsView);
@@ -133,8 +134,10 @@ describe('AlertsView', () => {
 	});
 
 	it('explains an alert that stopped firing meanwhile', async () => {
-		vi.spyOn(api.alerts, 'listAlerts').mockResolvedValue(listing(brute));
-		vi.spyOn(api.alerts, 'acknowledgeAlert').mockRejectedValue(rpcError(Code.FailedPrecondition));
+		vi.spyOn(alertingApi.alerts, 'listAlerts').mockResolvedValue(listing(brute));
+		vi.spyOn(alertingApi.alerts, 'acknowledgeAlert').mockRejectedValue(
+			rpcError(Code.FailedPrecondition)
+		);
 		render(AlertsView);
 
 		await page.getByRole('button', { name: /Acknowledge/ }).click();
@@ -142,8 +145,8 @@ describe('AlertsView', () => {
 	});
 
 	it('opens the history on demand', async () => {
-		vi.spyOn(api.alerts, 'listAlerts').mockResolvedValue(listing(brute));
-		const history = vi.spyOn(api.alerts, 'getAlertHistory').mockResolvedValue({
+		vi.spyOn(alertingApi.alerts, 'listAlerts').mockResolvedValue(listing(brute));
+		const history = vi.spyOn(alertingApi.alerts, 'getAlertHistory').mockResolvedValue({
 			entries: [
 				{ kind: AlertHistoryKind.ACKNOWLEDGED, by: 'Mia', time: timestampFromMs(now), fields: {} },
 				{
@@ -172,7 +175,7 @@ describe('AlertsView', () => {
 	it('has loading, error with retry and empty states', async () => {
 		let release: (v: ReturnType<typeof listing>) => void = () => {};
 		const list = vi
-			.spyOn(api.alerts, 'listAlerts')
+			.spyOn(alertingApi.alerts, 'listAlerts')
 			.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)) as never)
 			.mockRejectedValueOnce(rpcError(Code.Unavailable))
 			.mockResolvedValueOnce(listing());

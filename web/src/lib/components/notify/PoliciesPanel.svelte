@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { MessageInitShape } from '@bufbuild/protobuf';
 	import { api } from '#lib/api/client.js';
+	import { alertingApi } from '#lib/api/alerting.js';
 	import type { NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import type { NotificationChannel } from '#lib/api/gen/sermon/web/v1/notification_pb.js';
 	import {
@@ -28,8 +29,8 @@
 	async function load() {
 		try {
 			const [p, c, g] = await Promise.all([
-				api.policies.listPolicies({}),
-				api.channels.listChannels({}),
+				alertingApi.policies.listPolicies({}),
+				alertingApi.channels.listChannels({}),
 				api.access.listNodeGroups({})
 			]);
 			policies = p.policies;
@@ -64,8 +65,8 @@
 		const current = editing;
 		const ok = await run(() =>
 			current === 'new' || !current
-				? api.policies.createPolicy({ spec })
-				: api.policies.updatePolicy({ policyId: current.id, spec })
+				? alertingApi.policies.createPolicy({ spec })
+				: alertingApi.policies.updatePolicy({ policyId: current.id, spec })
 		);
 		if (ok) editing = undefined;
 	}
@@ -76,7 +77,7 @@
 			return;
 		}
 		confirmDelete = '';
-		await run(() => api.policies.deletePolicy({ policyId: p.id }));
+		await run(() => alertingApi.policies.deletePolicy({ policyId: p.id }));
 	}
 
 	const names = (ids: string[]) =>

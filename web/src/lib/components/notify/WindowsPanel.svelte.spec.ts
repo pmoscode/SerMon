@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { api } from '#lib/api/client.js';
+import { alertingApi } from '#lib/api/alerting.js';
 import {
 	ListMaintenanceWindowsResponseSchema,
 	Weekday
@@ -20,7 +21,7 @@ describe('WindowsPanel', () => {
 	afterEach(() => vi.restoreAllMocks());
 
 	it('creates a weekly window and lists it in words', async () => {
-		vi.spyOn(api.windows, 'listMaintenanceWindows')
+		vi.spyOn(alertingApi.windows, 'listMaintenanceWindows')
 			.mockResolvedValueOnce(create(ListMaintenanceWindowsResponseSchema, {}))
 			.mockResolvedValue(
 				create(ListMaintenanceWindowsResponseSchema, {
@@ -41,7 +42,7 @@ describe('WindowsPanel', () => {
 				})
 			);
 		const createWindow = vi
-			.spyOn(api.windows, 'createMaintenanceWindow')
+			.spyOn(alertingApi.windows, 'createMaintenanceWindow')
 			.mockResolvedValue({} as never);
 		render(WindowsPanel);
 

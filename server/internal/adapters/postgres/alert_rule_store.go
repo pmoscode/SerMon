@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
+	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
@@ -37,32 +38,43 @@ func (s *AlertRuleStore) Overrides(ctx context.Context, org tenant.OrgID) ([]rul
 		out = make([]ruleset.Override, len(rows))
 		for i, r := range rows {
 			out[i] = ruleset.Override{Rule: alert.RuleID(r.RuleID), Disabled: r.Disabled, Document: r.Document}
+			if r.Source.Valid {
+				out[i].Source = []byte(r.Source.String)
+			}
 		}
 		return nil
 	})
 	return out, err
 }
 
-// PutOverride stores the override of a rule (the rule editor checks the document, M2-17).
-func (s *AlertRuleStore) PutOverride(ctx context.Context, scope tenant.Scope, o ruleset.Override, by identity.UserID) error {
-	p := sqlcdb.UpsertAlertRuleOverrideParams{RuleID: string(o.Rule), Disabled: o.Disabled, Document: o.Document}
-	if by != (identity.UserID{}) {
-		id := uuid.UUID(by)
-		p.UpdatedBy = &id
-	}
+// Apply stores overrides (the rule editor checked their documents, M2-17) with one audit entry,
+// all or none.
+func (s *AlertRuleStore) Apply(ctx context.Context, scope tenant.Scope, put []ruleset.Override, by identity.UserID, audit access.AuditEntry) error {
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		return wrap(q.UpsertAlertRuleOverride(ctx, p), "store rule override")
+		for _, o := range put {
+			p := sqlcdb.UpsertAlertRuleOverrideParams{RuleID: string(o.Rule), Disabled: o.Disabled, Document: o.Document, UpdatedBy: optionalUser(by)}
+			if len(o.Source) > 0 {
+				p.Source = pgtype.Text{String: string(o.Source), Valid: true}
+			}
+			if err := q.UpsertAlertRuleOverride(ctx, p); err != nil {
+				return wrap(err, "store rule override")
+			}
+		}
+		return appendAudit(ctx, q, audit)
 	})
 }
 
-// DeleteOverride restores the default of a rule (or removes a rule of the organization); false
-// if there was no override.
-func (s *AlertRuleStore) DeleteOverride(ctx context.Context, scope tenant.Scope, rule alert.RuleID) (bool, error) {
-	var rows int64
-	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+// Reset restores the default of a rule (or removes a rule of the organization) with an audit
+// entry; access.ErrNotFound if there was no override.
+func (s *AlertRuleStore) Reset(ctx context.Context, scope tenant.Scope, rule alert.RuleID, audit access.AuditEntry) error {
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		n, err := q.DeleteAlertRuleOverride(ctx, string(rule))
-		rows = n
-		return wrap(err, "delete rule override")
+		if err != nil {
+			return wrap(err, "delete rule override")
+		}
+		if n == 0 {
+			return access.ErrNotFound
+		}
+		return appendAudit(ctx, q, audit)
 	})
-	return rows == 1, err
 }

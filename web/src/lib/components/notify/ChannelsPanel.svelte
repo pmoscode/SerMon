@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { api } from '#lib/api/client.js';
+	import { alertingApi } from '#lib/api/alerting.js';
 	import {
 		DeliveryStatus,
 		type ChannelType,
@@ -30,8 +30,8 @@
 	async function load() {
 		try {
 			const [t, c] = await Promise.all([
-				api.channels.listChannelTypes({}),
-				api.channels.listChannels({})
+				alertingApi.channels.listChannelTypes({}),
+				alertingApi.channels.listChannels({})
 			]);
 			types = t.types;
 			channels = c.channels;
@@ -65,8 +65,8 @@
 		const current = editing;
 		const ok = await run(() =>
 			current === 'new' || !current
-				? api.channels.createChannel(input)
-				: api.channels.updateChannel({
+				? alertingApi.channels.createChannel(input)
+				: alertingApi.channels.updateChannel({
 						channelId: current.id,
 						name: input.name,
 						language: input.language,
@@ -80,7 +80,7 @@
 	}
 
 	const toggle = (c: NotificationChannel) =>
-		run(() => api.channels.updateChannel({ channelId: c.id, enabled: !c.enabled }));
+		run(() => alertingApi.channels.updateChannel({ channelId: c.id, enabled: !c.enabled }));
 
 	async function remove(c: NotificationChannel) {
 		if (confirmDelete !== c.id) {
@@ -88,13 +88,13 @@
 			return;
 		}
 		confirmDelete = '';
-		await run(() => api.channels.deleteChannel({ channelId: c.id }));
+		await run(() => alertingApi.channels.deleteChannel({ channelId: c.id }));
 	}
 
 	async function test(c: NotificationChannel) {
 		failure = '';
 		try {
-			const res = await api.channels.testChannel({ channelId: c.id });
+			const res = await alertingApi.channels.testChannel({ channelId: c.id });
 			const sent = res.delivery?.status === DeliveryStatus.SENT;
 			tests = {
 				...tests,

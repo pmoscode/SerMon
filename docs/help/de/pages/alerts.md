@@ -18,6 +18,15 @@ Quittieren sagt „jemand kümmert sich“: Erinnerungen und Eskalation des Aler
 
 Eine Silence schaltet die Benachrichtigungen passender Alerts bis zu 30 Tage stumm: Gruppen, einzelne Nodes dieser Gruppen, Regel-Muster (`security.*`), Labels oder Stufen – sie muss Gruppen, Regeln oder Labels nennen, damit nichts aus Versehen stumm wird, und braucht einen Kommentar. **Stummschalten** an einem Alert öffnet eine Silence für seine Regel auf seinem Node. Die Alerts bleiben sichtbar; was beim Ende noch feuert, kommt einmal nach. Operatoren schalten ihre eigenen Gruppen stumm und bestätigen mit dem Passwort; eine Silence vorzeitig zu beenden braucht kein Passwort.
 
+## Regeln
+
+Die Regeln bestimmen, wann ein Alert feuert. Jedes Mitglied kann sie mit Hilfetext und YAML lesen. Admins schalten Regeln ab, passen sie an, fügen eigene hinzu oder importieren mehrere auf einmal:
+
+- Regeln sind typisierte YAML-Dokumente (threshold, rate, state, absence, prediction, event) – keine freien Abfragen. Der Editor prüft jedes Dokument; **Prüfen** zeigt Fehler mit Dokument und Zeile sowie die Änderungen als Diff, ohne etwas zu speichern. **Speichern** speichert alle Dokumente oder keines.
+- Eine angepasste Standardregel lässt sich mit der mitgelieferten vergleichen und zurücksetzen; eine eigene Regel lässt sich löschen.
+- **Exportieren** liefert die angepassten und eigenen Regeln (oder alle) als eine YAML-Datei, z. B. für eine andere Organisation. Ob eine Regel abgeschaltet ist, steht nicht in der Datei.
+- Änderungen gelten ab der nächsten Auswertung (innerhalb von 10 Sekunden) und fragen noch einmal nach dem Passwort.
+
 ## Typische nächste Schritte
 
 1. Den Node öffnen und die Charts um den Zeitpunkt des Alerts ansehen.

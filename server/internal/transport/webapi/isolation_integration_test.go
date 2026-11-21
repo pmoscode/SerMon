@@ -88,6 +88,7 @@ type loggedIn struct {
 	policies     webv1connect.NotificationPolicyServiceClient
 	silences     webv1connect.AlertSilenceServiceClient
 	alerts       webv1connect.AlertServiceClient
+	rules        webv1connect.AlertRuleServiceClient
 	windows      webv1connect.MaintenanceWindowServiceClient
 	policy       webv1connect.SecurityPolicyServiceClient
 	jar          *cookiejar.Jar
@@ -114,6 +115,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		policies:     webv1connect.NewNotificationPolicyServiceClient(hc, s.server.URL),
 		silences:     webv1connect.NewAlertSilenceServiceClient(hc, s.server.URL),
 		alerts:       webv1connect.NewAlertServiceClient(hc, s.server.URL),
+		rules:        webv1connect.NewAlertRuleServiceClient(hc, s.server.URL),
 		windows:      webv1connect.NewMaintenanceWindowServiceClient(hc, s.server.URL),
 		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		jar:          jar,
@@ -132,7 +134,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
 		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
-		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, silenceA: silenceAl, windowA: windowAl,
+		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}
@@ -204,6 +206,11 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	var alphaSilenceOpen bool
 	_ = conn.QueryRow(ctx, "SELECT name FROM maintenance_windows WHERE id = $1", windowAl).Scan(&alphaWindow)
 	_ = conn.QueryRow(ctx, "SELECT ends_at > now() AND expired_by IS NULL FROM alert_silences WHERE id = $1", silenceAl).Scan(&alphaSilenceOpen)
+	var alphaSwapOff bool
+	_ = conn.QueryRow(ctx, "SELECT disabled FROM alert_rule_overrides WHERE org_id = $1 AND rule_id = 'system.swap.usage_high'", orgAlpha).Scan(&alphaSwapOff)
+	if !alphaSwapOff {
+		t.Error("Alpha's switched-off rule changed")
+	}
 	var alphaAcked int
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM alert_instances WHERE org_id = $1 AND ack_by IS NOT NULL", orgAlpha).Scan(&alphaAcked)
 	if alphaAcked != 0 {

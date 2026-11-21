@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { api } from '#lib/api/client.js';
+	import { alertingApi } from '#lib/api/alerting.js';
 	import type { NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import type { MaintenanceWindow, Weekday } from '#lib/api/gen/sermon/web/v1/silence_pb.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -52,7 +53,7 @@
 	async function load() {
 		try {
 			const [w, g] = await Promise.all([
-				api.windows.listMaintenanceWindows({}),
+				alertingApi.windows.listMaintenanceWindows({}),
 				api.access.listNodeGroups({})
 			]);
 			windows = w.windows;
@@ -96,8 +97,8 @@
 		const current = editing;
 		const ok = await run(() =>
 			current === 'new' || !current
-				? api.windows.createMaintenanceWindow({ spec })
-				: api.windows.updateMaintenanceWindow({ windowId: current.id, spec })
+				? alertingApi.windows.createMaintenanceWindow({ spec })
+				: alertingApi.windows.updateMaintenanceWindow({ windowId: current.id, spec })
 		);
 		if (ok) editing = undefined;
 	}
@@ -108,7 +109,7 @@
 			return;
 		}
 		confirmDelete = '';
-		await run(() => api.windows.deleteMaintenanceWindow({ windowId: w.id }));
+		await run(() => alertingApi.windows.deleteMaintenanceWindow({ windowId: w.id }));
 	}
 
 	function toggle<T>(list: T[], value: T, on: boolean): T[] {

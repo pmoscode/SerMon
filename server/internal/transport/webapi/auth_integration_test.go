@@ -22,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
+	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
@@ -37,6 +38,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
+	"github.com/pmoscode/SerMon/server/internal/app/rules"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -174,6 +176,9 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		}), slog.New(slog.DiscardHandler)),
 		Policies: webapi.NewNotificationPolicyHandler(policies, slog.New(slog.DiscardHandler)),
 		Windows:  webapi.NewMaintenanceWindowHandler(policies, slog.New(slog.DiscardHandler)),
+		Rules: webapi.NewAlertRuleHandler(rules.NewService(rules.Deps{
+			Defaults: mustDefaultRules(t), Store: postgres.NewAlertRuleStore(pg), Policy: authz.NewPolicy(), Now: time.Now,
+		}), slog.New(slog.DiscardHandler)),
 		Alerts: webapi.NewAlertHandler(alerts.NewService(alerts.Deps{
 			Store: postgres.NewAlertStore(pg), Nodes: postgres.NewFleetStore(pg), Rules: noRules{},
 			Users: routing.UsersOf(postgres.NewAccessStore(pg)), Mutes: postgres.NewRoutingStore(pg),
@@ -448,4 +453,13 @@ type noRules struct{}
 
 func (noRules) RuleInfos(context.Context, tenant.OrgID) (map[alert.RuleID]routing.RuleInfo, error) {
 	return nil, nil
+}
+
+func mustDefaultRules(t *testing.T) []ruleset.Definition {
+	t.Helper()
+	defs, err := ruleset.Defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return defs
 }

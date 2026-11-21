@@ -36,11 +36,12 @@ import (
 // MaxDocumentBytes bounds a rule document (rules are imported by users, M2-17).
 const MaxDocumentBytes = 64 << 10
 
-// Definition is a parsed rule: the document (for display, export and overrides) and the rule
-// the engine evaluates.
+// Definition is a parsed rule: the document (for display, export and overrides), the rule the
+// engine evaluates and, where known, the YAML it came from (comments and layout kept).
 type Definition struct {
-	Doc  *webv1.AlertRule
-	Rule alerting.Rule
+	Doc    *webv1.AlertRule
+	Rule   alerting.Rule
+	Source []byte
 }
 
 func invalid(format string, args ...any) error {
@@ -52,6 +53,10 @@ func Parse(data []byte) (Definition, error) {
 	if len(data) > MaxDocumentBytes {
 		return Definition{}, invalid("document too large (%d bytes, at most %d)", len(data), MaxDocumentBytes)
 	}
+	return parse(data)
+}
+
+func parse(data []byte) (Definition, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	var root yaml.Node
 	if err := decoder.Decode(&root); err != nil {
@@ -462,6 +467,7 @@ func loadFile(fsys fs.FS, name string) (Definition, error) {
 	if err != nil {
 		return Definition{}, err
 	}
+	def.Source = data
 	dir, file := path.Split(name)
 	category := def.Doc.GetMetadata().GetLabels()["category"]
 	if want := category + "/"; dir != want {

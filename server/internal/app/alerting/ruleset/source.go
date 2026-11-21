@@ -18,6 +18,8 @@ type Override struct {
 	Disabled bool
 	// Document is the rule as JSON (Marshal); nil keeps the default.
 	Document []byte
+	// Source is the YAML the document was written as (shown by the editor); may be empty.
+	Source []byte
 }
 
 // OverrideStore reads the overrides of an organization.

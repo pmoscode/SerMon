@@ -75,6 +75,8 @@ func seedChannelAlpha(t *testing.T) {
 		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
 		"DELETE FROM notification_policies WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM alert_instances WHERE org_id = '"+orgAlpha+"'",
+		"DELETE FROM alert_rule_overrides WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO alert_rule_overrides (org_id, rule_id, disabled) VALUES ('"+orgAlpha+"', 'system.swap.usage_high', true)",
 		"DELETE FROM alert_silences WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM maintenance_windows WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM notification_channels WHERE org_id = '"+orgAlpha+"'",

@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { installed, mockApi } from './api';
+import { installed, mockApi, session } from './api';
 import { expect, test } from './fixtures';
 
 const key = {
@@ -49,6 +49,7 @@ test.describe('alert page (mocked API)', () => {
 		const calls = await mockApi(page, {
 			...installed(true),
 			'AlertSilenceService/ListSilences': () => ({ json: {} }),
+			'AlertRuleService/ListAlertRules': () => ({ json: {} }),
 			'AlertService/ListAlerts': () => ({
 				json: {
 					alerts: acknowledged
@@ -112,6 +113,7 @@ test.describe('alert page (mocked API)', () => {
 		await mockApi(page, {
 			...installed(true),
 			'AlertSilenceService/ListSilences': () => ({ json: {} }),
+			'AlertRuleService/ListAlertRules': () => ({ json: {} }),
 			'AlertService/ListAlerts': () => ({ json: {} })
 		});
 		await page.goto('/fleet');
@@ -119,5 +121,72 @@ test.describe('alert page (mocked API)', () => {
 		await expect(page.getByRole('heading', { name: 'No active alerts' })).toBeVisible();
 		const results = await new AxeBuilder({ page }).analyze();
 		expect(results.violations).toEqual([]);
+	});
+});
+
+test.describe('rule editor (mocked API)', () => {
+	test('shows the rules, checks an edit with a diff and saves', async ({ page }) => {
+		const cpu =
+			'apiVersion: sermon/v1\nmetadata:\n  id: system.cpu.usage_high\nspec:\n  window: 10m\n';
+		const imports: unknown[] = [];
+		await mockApi(page, {
+			...installed(true),
+			'AuthService/GetSession': () => ({ json: { session: { ...session, orgAdmin: true } } }),
+			'AlertService/ListAlerts': () => ({ json: {} }),
+			'AlertSilenceService/ListSilences': () => ({ json: {} }),
+			'AlertRuleService/ListAlertRules': () => ({
+				json: {
+					rules: [
+						{
+							id: 'system.cpu.usage_high',
+							name: { de: 'Hohe CPU-Auslastung', en: 'High CPU usage' },
+							type: 'threshold',
+							origin: 'ALERT_RULE_ORIGIN_DEFAULT',
+							enabled: true,
+							yaml: cpu,
+							help: { de: 'Hilfe', en: 'The CPU was busy.' }
+						}
+					]
+				}
+			}),
+			'AlertRuleService/ImportAlertRules': (body) => {
+				imports.push(body);
+				const dryRun = (body as { dryRun?: boolean }).dryRun === true;
+				return {
+					json: dryRun
+						? {
+								changes: [
+									{
+										ruleId: 'system.cpu.usage_high',
+										action: 'ALERT_RULE_CHANGE_ACTION_UPDATE',
+										beforeYaml: cpu,
+										afterYaml: cpu.replace('10m', '15m')
+									}
+								]
+							}
+						: { applied: true }
+				};
+			}
+		});
+		await page.goto('/alerts');
+		await page.getByRole('tab', { name: 'Rules' }).click();
+		await expect(page.getByText('High CPU usage')).toBeVisible();
+		await page.getByRole('button', { name: 'Details' }).click();
+		await expect(page.getByText('The CPU was busy.')).toBeVisible();
+
+		await page.getByRole('button', { name: 'Edit' }).click();
+		const yaml = page.getByLabel(/Rules as YAML/);
+		await expect(yaml).toHaveValue(cpu);
+		await yaml.fill(cpu.replace('10m', '15m'));
+		await page.getByRole('button', { name: 'Check' }).click();
+		await expect(
+			page.getByRole('figure', { name: 'Changes to system.cpu.usage_high' })
+		).toContainText('window: 15m');
+		await page.screenshot({ path: 'test-results/rules.png', fullPage: true });
+		const results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+		await page.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByRole('button', { name: 'Import' })).toBeVisible();
+		expect(imports).toHaveLength(2);
 	});
 });

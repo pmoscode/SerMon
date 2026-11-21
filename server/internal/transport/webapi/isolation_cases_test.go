@@ -32,6 +32,7 @@ type isolationEnv struct {
 	policies                        webv1connect.NotificationPolicyServiceClient
 	silences                        webv1connect.AlertSilenceServiceClient
 	alerts                          webv1connect.AlertServiceClient
+	rules                           webv1connect.AlertRuleServiceClient
 	windows                         webv1connect.MaintenanceWindowServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
@@ -154,6 +155,39 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.NotificationPolicyService/DeletePolicy": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.policies.DeletePolicy(ctx, connect.NewRequest(&webv1.DeletePolicyRequest{PolicyId: e.policyA}))
+		return err
+	}},
+	// Rule IDs are the same in every organization: the calls act in the caller's own one, and Org A
+	// keeps its switched-off swap rule (checked afterwards).
+	"/sermon.web.v1.AlertRuleService/ListAlertRules": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.rules.ListAlertRules(ctx, connect.NewRequest(&webv1.ListAlertRulesRequest{}))
+		if err != nil {
+			return err
+		}
+		for _, r := range res.Msg.GetRules() {
+			if r.GetId() == "system.swap.usage_high" && !r.GetEnabled() {
+				return errLeak
+			}
+		}
+		return nil
+	}},
+	"/sermon.web.v1.AlertRuleService/ImportAlertRules": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.rules.ImportAlertRules(ctx, connect.NewRequest(&webv1.ImportAlertRulesRequest{Yaml: "apiVersion: sermon/v1\n", DryRun: true}))
+		return err
+	}},
+	"/sermon.web.v1.AlertRuleService/SetAlertRuleEnabled": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.rules.SetAlertRuleEnabled(ctx, connect.NewRequest(&webv1.SetAlertRuleEnabledRequest{RuleId: "system.swap.usage_high", Enabled: true}))
+		return err
+	}},
+	"/sermon.web.v1.AlertRuleService/ResetAlertRule": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.rules.ResetAlertRule(ctx, connect.NewRequest(&webv1.ResetAlertRuleRequest{RuleId: "system.swap.usage_high"}))
+		if connect.CodeOf(err) == connect.CodeNotFound {
+			return nil // Org B has nothing to reset
+		}
+		return err
+	}},
+	"/sermon.web.v1.AlertRuleService/ExportAlertRules": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.rules.ExportAlertRules(ctx, connect.NewRequest(&webv1.ExportAlertRulesRequest{}))
 		return err
 	}},
 	"/sermon.web.v1.AlertService/ListAlerts": {list: true, run: func(ctx context.Context, e isolationEnv) error {

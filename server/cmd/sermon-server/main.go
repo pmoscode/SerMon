@@ -50,6 +50,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
+	"github.com/pmoscode/SerMon/server/internal/app/rules"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
@@ -182,16 +183,19 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("default alert rules: %w", err)
 		}
-		rules := ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger)
+		ruleSource := ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger)
 		users := routing.UsersOf(postgres.NewAccessStore(db))
-		router := routing.NewRouter(routing.RouterDeps{Store: routingStore, Rules: routing.RulesOf(rules), Users: users, Logger: logger})
+		router := routing.NewRouter(routing.RouterDeps{Store: routingStore, Rules: routing.RulesOf(ruleSource), Users: users, Logger: logger})
 		alertStore := postgres.NewAlertStore(db)
 		// The alert page (M2-16); acknowledgements go to the channels through the router.
 		alertPage := alerts.NewService(alerts.Deps{
-			Store: alertStore, Nodes: postgres.NewFleetStore(db), Rules: routing.RulesOf(rules), Users: users, Mutes: routingStore,
+			Store: alertStore, Nodes: postgres.NewFleetStore(db), Rules: routing.RulesOf(ruleSource), Users: users, Mutes: routingStore,
 			Sink: router, Policy: authz.NewPolicy(), Now: time.Now,
 		})
-		alertingAPI := alertingServices{policies: policies, silences: silences, alerts: alertPage}
+		ruleEditor := rules.NewService(rules.Deps{
+			Defaults: defaultRules, Store: postgres.NewAlertRuleStore(db), Policy: authz.NewPolicy(), Now: time.Now,
+		})
+		alertingAPI := alertingServices{policies: policies, silences: silences, alerts: alertPage, rules: ruleEditor}
 		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, registry, logger); err != nil {
 			return err
 		}
@@ -208,7 +212,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases over
 		// metrics and the stored security events (M2-08); the history is kept a year (M2-16).
 		engine := alerting.NewEngine(alerting.Deps{
-			Store: alertStore, Rules: rules, Nodes: postgres.NewFleetStore(db),
+			Store: alertStore, Rules: ruleSource, Nodes: postgres.NewFleetStore(db),
 			Metrics: reader, Events: eventStore, Sink: router, Now: time.Now, Logger: logger,
 		})
 		registerAlertMetrics(registry, engine.Stats())
@@ -372,6 +376,7 @@ type alertingServices struct {
 	policies *routing.Service
 	silences *routing.SilenceService
 	alerts   *alerts.Service
+	rules    *rules.Service
 }
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
@@ -446,6 +451,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Silences:      webapi.NewAlertSilenceHandler(alertingAPI.silences, logger),
 		Windows:       webapi.NewMaintenanceWindowHandler(alertingAPI.policies, logger),
 		Alerts:        webapi.NewAlertHandler(alertingAPI.alerts, logger),
+		Rules:         webapi.NewAlertRuleHandler(alertingAPI.rules, logger),
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil

@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "sermon/web/v1/alert_rule.proto";
+
+// AlertRuleService serves the rule editor (KONZEPT §12.2, M2-17): the rules of the caller's
+// organization as they apply, import of YAML documents with a dry run, switching rules on and
+// off, restoring the shipped rule and export. Every member reads; only admins of all groups
+// (manage_alert_rules) change, with a recent step-up (a dry run needs none). Rules are typed
+// documents checked by the loader – there are no free queries.
+service AlertRuleService {
+  // ListAlertRules returns the rules: the shipped ones in their order, then the own ones by ID.
+  rpc ListAlertRules(ListAlertRulesRequest) returns (ListAlertRulesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ImportAlertRules checks one or more documents and, unless dry_run, stores them (all or none).
+  rpc ImportAlertRules(ImportAlertRulesRequest) returns (ImportAlertRulesResponse);
+  // SetAlertRuleEnabled switches a rule on or off (step-up).
+  rpc SetAlertRuleEnabled(SetAlertRuleEnabledRequest) returns (SetAlertRuleEnabledResponse);
+  // ResetAlertRule restores the shipped rule or deletes an own rule (step-up).
+  rpc ResetAlertRule(ResetAlertRuleRequest) returns (ResetAlertRuleResponse);
+  // ExportAlertRules returns the rules as one YAML text.
+  rpc ExportAlertRules(ExportAlertRulesRequest) returns (ExportAlertRulesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// AlertRuleOrigin is where a rule of the organization comes from.
+enum AlertRuleOrigin {
+  // ALERT_RULE_ORIGIN_UNSPECIFIED is not used.
+  ALERT_RULE_ORIGIN_UNSPECIFIED = 0;
+  // ALERT_RULE_ORIGIN_DEFAULT is shipped with SerMon.
+  ALERT_RULE_ORIGIN_DEFAULT = 1;
+  // ALERT_RULE_ORIGIN_CHANGED is shipped and replaced by the organization's document.
+  ALERT_RULE_ORIGIN_CHANGED = 2;
+  // ALERT_RULE_ORIGIN_OWN is the organization's own rule.
+  ALERT_RULE_ORIGIN_OWN = 3;
+}
+
+// AlertRuleEntry is a rule as it applies to the organization.
+message AlertRuleEntry {
+  // id of the rule.
+  string id = 1;
+  // name of the rule.
+  LocalizedText name = 2;
+  // labels of the rule (e.g. category: security).
+  map<string, string> labels = 3;
+  // type of the rule (threshold, rate, event, ...).
+  string type = 4;
+  // origin of the rule.
+  AlertRuleOrigin origin = 5;
+  // enabled rules are evaluated.
+  bool enabled = 6;
+  // yaml is the document as written.
+  string yaml = 7;
+  // default_yaml is the shipped document of a changed rule.
+  string default_yaml = 8;
+  // problem says why a stored document no longer loads (the shipped rule applies then).
+  string problem = 9;
+  // help explains the rule.
+  LocalizedText help = 10;
+}
+
+// ListAlertRulesRequest has no parameters.
+message ListAlertRulesRequest {}
+
+// ListAlertRulesResponse lists the rules.
+message ListAlertRulesResponse {
+  // rules of the organization.
+  repeated AlertRuleEntry rules = 1;
+}
+
+// ImportAlertRulesRequest carries the documents.
+message ImportAlertRulesRequest {
+  // yaml holds one or more rule documents separated by "---" lines.
+  string yaml = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 60000
+  }];
+  // dry_run only checks and shows the changes.
+  bool dry_run = 2;
+}
+
+// AlertRuleChangeAction is what an import does with a rule.
+enum AlertRuleChangeAction {
+  // ALERT_RULE_CHANGE_ACTION_UNSPECIFIED is not used.
+  ALERT_RULE_CHANGE_ACTION_UNSPECIFIED = 0;
+  // ALERT_RULE_CHANGE_ACTION_CREATE adds an own rule.
+  ALERT_RULE_CHANGE_ACTION_CREATE = 1;
+  // ALERT_RULE_CHANGE_ACTION_UPDATE replaces a rule.
+  ALERT_RULE_CHANGE_ACTION_UPDATE = 2;
+  // ALERT_RULE_CHANGE_ACTION_UNCHANGED says the same as the rule.
+  ALERT_RULE_CHANGE_ACTION_UNCHANGED = 3;
+}
+
+// AlertRuleChange is one rule of an import.
+message AlertRuleChange {
+  // rule_id of the document.
+  string rule_id = 1;
+  // action of the import.
+  AlertRuleChangeAction action = 2;
+  // before_yaml is the rule now (empty for a new rule).
+  string before_yaml = 3;
+  // after_yaml is the imported document.
+  string after_yaml = 4;
+}
+
+// AlertRuleProblem is an error of an import.
+message AlertRuleProblem {
+  // document is the number of the document (from 1).
+  int32 document = 1;
+  // line is where the document starts in the text.
+  int32 line = 2;
+  // message of the loader; it names the line of the error in the text.
+  string message = 3;
+}
+
+// ImportAlertRulesResponse describes the import.
+message ImportAlertRulesResponse {
+  // changes per rule.
+  repeated AlertRuleChange changes = 1;
+  // problems stop the import.
+  repeated AlertRuleProblem problems = 2;
+  // applied tells whether the rules were stored.
+  bool applied = 3;
+}
+
+// SetAlertRuleEnabledRequest names the rule.
+message SetAlertRuleEnabledRequest {
+  // rule_id of the rule.
+  string rule_id = 1 [(buf.validate.field).string = {
+    max_len: 100
+    pattern: "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){2,3}$"
+  }];
+  // enabled switches it on or off.
+  bool enabled = 2;
+}
+
+// SetAlertRuleEnabledResponse has no fields.
+message SetAlertRuleEnabledResponse {}
+
+// ResetAlertRuleRequest names the rule.
+message ResetAlertRuleRequest {
+  // rule_id of the rule.
+  string rule_id = 1 [(buf.validate.field).string = {
+    max_len: 100
+    pattern: "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){2,3}$"
+  }];
+}
+
+// ResetAlertRuleResponse has no fields.
+message ResetAlertRuleResponse {}
+
+// ExportAlertRulesRequest selects the rules.
+message ExportAlertRulesRequest {
+  // all exports every rule; otherwise only changed and own ones.
+  bool all = 1;
+}
+
+// ExportAlertRulesResponse carries the text.
+message ExportAlertRulesResponse {
+  // yaml holds the documents separated by "---" lines.
+  string yaml = 1;
+}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { timestampDate, timestampFromMs } from '@bufbuild/protobuf/wkt';
 	import { api } from '#lib/api/client.js';
+	import { alertingApi } from '#lib/api/alerting.js';
 	import type { NodeSummary } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
 	import type { AlertSeverity } from '#lib/api/gen/sermon/web/v1/notification_policy_pb.js';
 	import type { AlertSilence } from '#lib/api/gen/sermon/web/v1/silence_pb.js';
@@ -79,7 +80,7 @@
 	async function load() {
 		try {
 			const [s, f] = await Promise.all([
-				api.silences.listSilences({}),
+				alertingApi.silences.listSilences({}),
 				api.fleet.getFleetSummary({})
 			]);
 			silences = s.silences;
@@ -117,7 +118,7 @@
 			return;
 		}
 		const ok = await run(() =>
-			api.silences.createSilence({
+			alertingApi.silences.createSilence({
 				spec: {
 					matchers: { severities, groupIds, rules: parsePatterns(rules), labels: parsed.labels },
 					nodeIds: nodeIds.filter((id) => groupNodes.some((n) => n.nodeId === id)),
@@ -129,7 +130,8 @@
 		if (ok) creating = false;
 	}
 
-	const expire = (s: AlertSilence) => run(() => api.silences.expireSilence({ silenceId: s.id }));
+	const expire = (s: AlertSilence) =>
+		run(() => alertingApi.silences.expireSilence({ silenceId: s.id }));
 
 	const now = $derived(Date.now());
 	const timeFormat = $derived(

@@ -1,4 +1,5 @@
-import { api, Code, codeOf } from '#lib/api/client.js';
+import { Code, codeOf } from '#lib/api/client.js';
+import { alertingApi } from '#lib/api/alerting.js';
 import type { Alert, AlertHistoryEntry, AlertKey } from '#lib/api/gen/sermon/web/v1/alert_pb.js';
 import { m } from '#lib/paraglide/messages.js';
 import { needsStepUp, withStepUp } from '#lib/stores/stepup.svelte.js';
@@ -16,7 +17,7 @@ export class AlertsState {
 
 	async load(): Promise<void> {
 		try {
-			this.alerts = (await api.alerts.listAlerts({})).alerts;
+			this.alerts = (await alertingApi.alerts.listAlerts({})).alerts;
 			this.status = 'ready';
 			this.stale = false;
 			this.updatedAt = Date.now();
@@ -41,7 +42,7 @@ export class AlertsState {
 	 */
 	async acknowledge(key: AlertKey): Promise<string> {
 		try {
-			await withStepUp(() => api.alerts.acknowledgeAlert({ key }));
+			await withStepUp(() => alertingApi.alerts.acknowledgeAlert({ key }));
 			await this.load();
 			return '';
 		} catch (error) {
@@ -62,5 +63,5 @@ export class AlertsState {
 
 /** The history of an instance, newest first. */
 export async function loadHistory(key: AlertKey): Promise<AlertHistoryEntry[]> {
-	return (await api.alerts.getAlertHistory({ key })).entries;
+	return (await alertingApi.alerts.getAlertHistory({ key })).entries;
 }

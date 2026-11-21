@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { api } from '#lib/api/client.js';
+import { alertingApi } from '#lib/api/alerting.js';
 import { ListChannelsResponseSchema } from '#lib/api/gen/sermon/web/v1/notification_pb.js';
 import {
 	AlertSeverity,
@@ -15,7 +16,7 @@ import PoliciesPanel from './PoliciesPanel.svelte';
 describe('PoliciesPanel', () => {
 	beforeEach(() => {
 		switchLocale('en');
-		vi.spyOn(api.channels, 'listChannels').mockResolvedValue(
+		vi.spyOn(alertingApi.channels, 'listChannels').mockResolvedValue(
 			create(ListChannelsResponseSchema, {
 				channels: [
 					{ id: 'c1', name: 'Ops' },
@@ -30,10 +31,12 @@ describe('PoliciesPanel', () => {
 	afterEach(() => vi.restoreAllMocks());
 
 	it('explains the fallback and creates a policy with matchers and escalation', async () => {
-		vi.spyOn(api.policies, 'listPolicies').mockResolvedValue(
+		vi.spyOn(alertingApi.policies, 'listPolicies').mockResolvedValue(
 			create(ListPoliciesResponseSchema, {})
 		);
-		const createPolicy = vi.spyOn(api.policies, 'createPolicy').mockResolvedValue({} as never);
+		const createPolicy = vi
+			.spyOn(alertingApi.policies, 'createPolicy')
+			.mockResolvedValue({} as never);
 		render(PoliciesPanel);
 
 		await expect

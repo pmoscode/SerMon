@@ -3,6 +3,7 @@
 	import AlertsView from '#lib/components/alerts/AlertsView.svelte';
 	import SilencesPanel, { type SilenceDraft } from '#lib/components/alerts/SilencesPanel.svelte';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
+	import RulesPanel from '#lib/components/rules/RulesPanel.svelte';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 
@@ -29,7 +30,9 @@
 	<Tabs.List aria-label={m.alerts_title()}>
 		<Tabs.Trigger value="alerts">{m.alerts_tab_active()}</Tabs.Trigger>
 		<Tabs.Trigger value="silences">{m.alerts_tab_silences()}</Tabs.Trigger>
+		<Tabs.Trigger value="rules">{m.alerts_tab_rules()}</Tabs.Trigger>
 	</Tabs.List>
 	<Tabs.Content value="alerts" class="pt-4"><AlertsView onSilence={silence} /></Tabs.Content>
 	<Tabs.Content value="silences" class="pt-4"><SilencesPanel {draft} /></Tabs.Content>
+	<Tabs.Content value="rules" class="pt-4"><RulesPanel /></Tabs.Content>
 </Tabs.Root>

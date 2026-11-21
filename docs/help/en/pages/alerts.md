@@ -18,6 +18,15 @@ Acknowledging says “someone is on it”: reminders and escalation of the alert
 
 A silence mutes the notifications of matching alerts for up to 30 days: groups, single nodes of those groups, rule patterns (`security.*`), labels or severities – it has to name groups, rules or labels, so nothing is muted by accident, and it needs a comment. **Mute** on an alert opens a silence for its rule on its node. The alerts stay visible; whatever still fires when the silence ends is sent once. Operators mute their own groups and confirm with their password; ending a silence early needs no password.
 
+## Rules
+
+The rules decide when an alert fires. Every member can read them with their help and YAML. Admins switch rules off, adapt them, add their own or import several at once:
+
+- Rules are typed YAML documents (threshold, rate, state, absence, prediction, event) – no free queries. The editor checks every document; **Check** shows problems with document and line, and the changes as a diff, without storing anything. **Save** stores all documents or none.
+- A changed default rule can be compared with the shipped one and reset; an own rule can be deleted.
+- **Export** gives the changed and own rules (or all) as one YAML file, e.g. for another organization. Whether a rule is switched off is not part of the file.
+- Changes apply from the next evaluation (within 10 seconds) and ask for your password again.
+
 ## Typical next steps
 
 1. Open the node to look at the charts around the time the alert fired.

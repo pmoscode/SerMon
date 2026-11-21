@@ -127,6 +127,7 @@ test.describe('notification settings (mocked API)', () => {
 				json: { nodes: [{ nodeId: 'n1', hostname: 'web-01', groupId: 'g1', groupName: 'web' }] }
 			}),
 			'AlertSilenceService/ListSilences': () => ({ json: {} }),
+			'AlertRuleService/ListAlertRules': () => ({ json: {} }),
 			'AlertSilenceService/CreateSilence': (body) => {
 				silence = body;
 				return { json: { silence: { id: 's1' } } };
@@ -138,7 +139,7 @@ test.describe('notification settings (mocked API)', () => {
 			'aria-selected',
 			'true'
 		);
-		await expect(page.getByLabel('Rules')).toHaveValue('system.cpu.usage_high');
+		await expect(page.getByRole('textbox', { name: 'Rules' })).toHaveValue('system.cpu.usage_high');
 		await page.getByLabel('Comment (why?)').fill('Load test');
 		const results = await new AxeBuilder({ page }).analyze();
 		expect(results.violations).toEqual([]);

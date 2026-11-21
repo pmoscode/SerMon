@@ -81,6 +81,7 @@ type AlertRuleOverride struct {
 	Document  []byte
 	UpdatedAt time.Time
 	UpdatedBy *uuid.UUID
+	Source    pgtype.Text
 }
 
 type AlertSilence struct {

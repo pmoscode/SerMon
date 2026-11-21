@@ -16,11 +16,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"mime"
+	"mime/multipart"
 	"mime/quotedprintable"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -55,11 +58,13 @@ type Config struct {
 	Timeout  time.Duration  // 0: defaultTimeout
 }
 
-// Message is a plain text mail to one recipient.
+// Message is a mail to one recipient: plain text, optionally with an HTML alternative (the
+// caller escapes what goes into the HTML).
 type Message struct {
 	To      string
 	Subject string
 	Text    string
+	HTML    string
 }
 
 // Mailer sends messages.
@@ -152,6 +157,18 @@ func (m *Mailer) deliver(ctx context.Context, to string, data []byte) error {
 	return client.Quit() //nolint:wrapcheck // wrapped by Send
 }
 
+// writeQP writes text as quoted-printable with CRLF line ends.
+func writeQP(w io.Writer, text string) error {
+	qp := quotedprintable.NewWriter(w)
+	if _, err := qp.Write([]byte(strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\n", "\r\n"))); err != nil {
+		return fmt.Errorf("encode body: %w", err)
+	}
+	if err := qp.Close(); err != nil {
+		return fmt.Errorf("encode body: %w", err)
+	}
+	return nil
+}
+
 // compose builds the RFC 5322 message: UTF-8 text, quoted-printable, encoded headers.
 func (m *Mailer) compose(msg Message) ([]byte, error) {
 	if strings.ContainsAny(msg.To, "\r\n") || strings.ContainsAny(msg.Subject, "\r\n") {
@@ -175,18 +192,32 @@ func (m *Mailer) compose(msg Message) ([]byte, error) {
 		{"Date", time.Now().UTC().Format(time.RFC1123Z)},
 		{"Message-ID", "<" + hex.EncodeToString(id) + "@" + domain + ">"},
 		{"MIME-Version", "1.0"},
-		{"Content-Type", "text/plain; charset=utf-8"},
-		{"Content-Transfer-Encoding", "quoted-printable"},
 		{"Auto-Submitted", "auto-generated"},
 	} {
 		b.WriteString(h[0] + ": " + h[1] + "\r\n")
 	}
-	b.WriteString("\r\n")
-	qp := quotedprintable.NewWriter(&b)
-	if _, err := qp.Write([]byte(strings.ReplaceAll(strings.ReplaceAll(msg.Text, "\r\n", "\n"), "\n", "\r\n"))); err != nil {
-		return nil, fmt.Errorf("encode body: %w", err)
+	if msg.HTML == "" {
+		b.WriteString("Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n")
+		if err := writeQP(&b, msg.Text); err != nil {
+			return nil, err
+		}
+		return b.Bytes(), nil
 	}
-	if err := qp.Close(); err != nil {
+	w := multipart.NewWriter(&b)
+	b.WriteString("Content-Type: multipart/alternative; boundary=\"" + w.Boundary() + "\"\r\n\r\n")
+	for _, part := range []struct{ mediaType, body string }{{"text/plain", msg.Text}, {"text/html", msg.HTML}} {
+		pw, err := w.CreatePart(textproto.MIMEHeader{
+			"Content-Type":              {part.mediaType + "; charset=utf-8"},
+			"Content-Transfer-Encoding": {"quoted-printable"},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("encode body: %w", err)
+		}
+		if err := writeQP(pw, part.body); err != nil {
+			return nil, err
+		}
+	}
+	if err := w.Close(); err != nil {
 		return nil, fmt.Errorf("encode body: %w", err)
 	}
 	return b.Bytes(), nil

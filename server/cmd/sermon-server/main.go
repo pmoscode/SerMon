@@ -19,6 +19,9 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/notify/email"
+	"github.com/pmoscode/SerMon/server/internal/adapters/notify/ntfy"
+	"github.com/pmoscode/SerMon/server/internal/adapters/notify/webhook"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
@@ -404,14 +407,20 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	return nil
 }
 
-// newNotifyDeps assembles the notifier framework. The channel types (M2-11 ff.) get the
-// safehttp client of this policy; deep links point to the first allowed origin of the UI.
+// newNotifyDeps assembles the notifier framework. The HTTP channel types share one safehttp
+// client of the outbound policy; e-mail exists only with SMTP. Deep links point to the first
+// allowed origin of the UI.
 func newNotifyDeps(cfg config.Config, db *postgres.DB, logger *slog.Logger) (notify.Deps, error) {
 	outbound, err := safehttp.NewPolicy(cfg.OutboundAllowlist)
 	if err != nil {
 		return notify.Deps{}, fmt.Errorf("outbound policy: %w", err)
 	}
-	registry, err := notify.NewRegistry()
+	client := safehttp.New(safehttp.Options{Policy: outbound})
+	notifiers := []notify.Notifier{webhook.New(client, time.Now), ntfy.New(client)}
+	if cfg.SMTP != nil {
+		notifiers = append(notifiers, email.New(newMailer(cfg.SMTP)))
+	}
+	registry, err := notify.NewRegistry(notifiers...)
 	if err != nil {
 		return notify.Deps{}, fmt.Errorf("notifiers: %w", err)
 	}

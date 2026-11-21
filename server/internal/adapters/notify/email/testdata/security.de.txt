@@ -1,0 +1,14 @@
+WARNUNG: SSH-Brute-Force – web-01
+
+Regel: security.ssh.bruteforce
+Node: web-01
+Betrifft: ip=192.0.2.7
+Wert: 12
+Zeitpunkt: 2026-11-21 10:00:00 UTC
+Benutzer: <script>alert("x")</script><a href="javascript:evil()">
+Adresse: 192.0.2.7
+
+https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001
+
+-- 
+Diese Nachricht hat SerMon automatisch geschickt. Welche Alerts hier ankommen, legen die Admins der Organisation fest.

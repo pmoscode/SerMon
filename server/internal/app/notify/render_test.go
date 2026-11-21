@@ -142,3 +142,24 @@ func TestRender_KeepsUntrustedValuesOnTheirLine(t *testing.T) {
 		t.Errorf("a value forged a line:\n%s", m.PlainText())
 	}
 }
+
+// Structured channels (webhook) send the data itself, not only the text.
+func TestRender_KeepsTheSource(t *testing.T) {
+	n := bruteForce()
+	if m := notify.Render(n, notify.English, base); m.Source.Rule != n.Rule || m.Source.Fields["ip"] != "192.0.2.7" || m.Source.Value != 12 {
+		t.Errorf("source = %+v", m.Source)
+	}
+}
+
+func TestDimensionLabels(t *testing.T) {
+	got := notify.DimensionLabels("interface=eth0\x1fmountpoint=/var\x1f")
+	if len(got) != 2 || got["interface"] != "eth0" || got["mountpoint"] != "/var" {
+		t.Errorf("DimensionLabels = %v", got)
+	}
+	if got := notify.DimensionLabels(""); got != nil {
+		t.Errorf("empty: %v", got)
+	}
+	if got := notify.DimensionLabels("user=a=b\x1f"); got["user"] != "a=b" {
+		t.Errorf("value with '=': %v", got)
+	}
+}

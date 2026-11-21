@@ -14,6 +14,7 @@ import (
 	"io"
 	"math/big"
 	"mime"
+	"mime/multipart"
 	"mime/quotedprintable"
 	"net"
 	"net/mail"
@@ -264,5 +265,44 @@ func TestMailer_GivesUpOnAHangingServer(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed > 3*time.Second {
 		t.Errorf("Send() took %v, want the timeout", elapsed)
+	}
+}
+
+// Notifications go out as text with an HTML alternative.
+func TestMailer_SendsTextAndHTMLAlternatives(t *testing.T) {
+	f, pool := newFakeServer(t, func(f *fakeServer) { f.startTLS = true })
+	msg := smtp.Message{To: "bea@example.org", Subject: "KRITISCH: CPU", Text: "Wert: 96 %\nNode: web-01", HTML: "<p>Wert: <b>96 %</b></p>"}
+	if err := mailer(f, pool, smtp.StartTLS).Send(context.Background(), msg); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	parsed, err := mail.ReadMessage(strings.NewReader(f.data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaType, params, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/alternative" || params["boundary"] == "" {
+		t.Fatalf("Content-Type = %q, %v", parsed.Header.Get("Content-Type"), err)
+	}
+	r := multipart.NewReader(parsed.Body, params["boundary"])
+	var types, bodies []string
+	for {
+		part, err := r.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(part) // multipart decodes quoted-printable
+		types = append(types, part.Header.Get("Content-Type"))
+		bodies = append(bodies, strings.ReplaceAll(string(body), "\r\n", "\n"))
+	}
+	if len(types) != 2 || !strings.HasPrefix(types[0], "text/plain") || !strings.HasPrefix(types[1], "text/html") {
+		t.Fatalf("parts = %v, want text then HTML (the last one is preferred)", types)
+	}
+	if strings.TrimSuffix(bodies[0], "\n") != msg.Text || strings.TrimSuffix(bodies[1], "\n") != msg.HTML {
+		t.Errorf("bodies = %q", bodies)
 	}
 }

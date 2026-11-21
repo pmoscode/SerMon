@@ -109,3 +109,16 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
 - **Deep-Links** zeigen auf den ersten Eintrag von `SERMON_ALLOWED_ORIGINS`, bis M2-16 auf `/nodes/<id>`.
 - **Noch nicht verbunden:** Die Engine liefert ihre Transitionen erst mit dem Routing (M2-14) an
   `Dispatcher.Enqueue`. Die Kanaltypen folgen ab M2-11; bis dahin ist die Registry leer.
+
+## Nachtrag M2-11: E-Mail, Webhook, ntfy
+
+- **Webhook-Signatur** `t=<Unix-Sekunden>,v1=<hex HMAC-SHA256 über "<t>.<Body>">`: Der Zeitstempel ist signiert, ein
+  Empfänger lehnt alte Requests ab (Replay). Das Verfahren ist das von Stripe, für das Empfänger oft schon Code haben.
+  Gesendet wird nie ein Token im Klartext.
+- **ntfy:** Das Topic ist ein Geheimnis wie das Token, weil auf öffentlichen Servern jeder mitliest, der es kennt.
+  Gesendet wird JSON an die Wurzel des Servers statt Header (`Title`, `Priority`). So muss kein Wert mit
+  Nicht-ASCII-Zeichen in einen Header, und Markdown bleibt aus.
+- **E-Mail:** eine Mail pro Empfänger statt einer mit allen in `To`. Die Empfänger sehen sich nicht, und eine
+  abgelehnte Adresse hält die anderen nicht auf. Bei einem Retry kann ein Empfänger, der die Mail schon hat, sie
+  noch einmal bekommen; das passt zu „mindestens einmal“. Der Mailserver ist der des Betreibers, darum läuft E-Mail
+  nicht über `safehttp`.

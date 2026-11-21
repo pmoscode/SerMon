@@ -8,7 +8,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > Zertifikatsrotation an den Server, der sie in TimescaleDB speichert; die Abfrage-API für die UI steht.
 > Die UI hat Login, Setup-Assistent und App-Shell; Charts und Flottenübersicht folgen.
 > Die Alert-Engine wertet Standardregeln für Metriken und Security-Events aus (SSH-Brute-Force, Fleet-Korrelation,
-> Root-Login, sudo, OOM, Reboot); die Benachrichtigungskanäle folgen.
+> Root-Login, sudo, OOM, Reboot). Benachrichtigungen per E-Mail, Webhook und ntfy sind
+> angebunden; das Routing der Alerts zu den Kanälen folgt.
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 

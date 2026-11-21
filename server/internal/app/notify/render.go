@@ -21,6 +21,9 @@ type Message struct {
 	Lines    []Line
 	Link     string // deep link into the UI
 	At       time.Time
+	// Source is the notification itself, for channels that send data (webhook); its values are
+	// as untrusted as those of the lines.
+	Source Notification
 }
 
 // Line is a labelled value of a message.
@@ -107,7 +110,7 @@ func oneLine(s string) string {
 // Render renders a notification in a language; baseURL is the origin of the UI.
 func Render(n Notification, l Lang, baseURL string) Message {
 	base := strings.TrimRight(baseURL, "/")
-	m := Message{Lang: l, Kind: n.Kind, Severity: n.Severity, At: n.At, Link: base + "/"}
+	m := Message{Lang: l, Kind: n.Kind, Severity: n.Severity, At: n.At, Link: base + "/", Source: n}
 	if n.Kind == Test {
 		m.Title = word("test", l)
 		m.Lines = []Line{{word("at", l), formatTime(n.At)}}
@@ -159,6 +162,22 @@ func Render(n Notification, l Lang, baseURL string) Message {
 		m.Lines = append(m.Lines, Line{word(name, l), oneLine(n.Fields[name])})
 	}
 	return m
+}
+
+// DimensionLabels splits a labels key ("mountpoint=/var\x1f") into its labels; nil if empty.
+func DimensionLabels(key string) map[string]string {
+	var out map[string]string
+	for _, p := range strings.Split(key, "\x1f") {
+		name, value, ok := strings.Cut(p, "=")
+		if !ok || name == "" {
+			continue
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[name] = value
+	}
+	return out
 }
 
 // dimension turns a labels key ("mountpoint=/var\x1f") into "mountpoint=/var".

@@ -822,6 +822,24 @@ Umsetzung des Frameworks (M2-10):
 - **„Test senden“:** Die Nachricht geht sofort raus, ohne Retry, steht im Protokoll und ist auf 5 pro Minute und Org
   begrenzt.
 
+Kanäle der ersten Welle (M2-11):
+
+- **E-Mail:** über den SMTP-Zugang des Betreibers (nur wenn `SERMON_SMTP_*` gesetzt ist).
+  - Text- und HTML-Teil; das HTML rendert `html/template`, das jeden Wert für seinen Kontext escapt.
+  - Eine Mail pro Empfänger, höchstens 10 Empfänger.
+  - Absagen des Mailservers mit 5xx sind endgültig.
+- **Webhook:** JSON-POST mit `X-SerMon-Event` und `X-SerMon-Signature: t=<Unix-Sekunden>,v1=<HMAC-SHA256>`. Die
+  Signatur geht über `<t>.<Body>`; das Geheimnis hat mindestens 16 Zeichen.
+  - Der Body enthält Art, Severity, Regel, Node, Dimension (als Labels), Wert mit Einheit und Text, Felder,
+    Titel, Text und Link (Version 1; neue Felder kommen nur dazu).
+  - Die Prüfung beim Empfänger beschreibt die Hilfe (`channels/webhook`).
+- **ntfy:** JSON-Publish an die Wurzel des Servers mit Titel, Text, Link, Tag und Priorität (kritisch 5, Warnung 4,
+  behoben und flatternd 3, quittiert und stabil 2).
+  - Das Topic ist ein Geheimnis: Auf einem öffentlichen Server liest mit, wer es kennt.
+  - Ein Access-Token ist optional.
+- Die HTTP-Kanäle teilen sich einen `safehttp`-Client. Ein Fehler zitiert höchstens 200 Bytes der Antwort, auf einer
+  Zeile und ohne die Zugangsdaten des Kanals.
+
 ---
 
 ## 13. Anomalie-Erkennung

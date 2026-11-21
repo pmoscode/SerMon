@@ -135,3 +135,19 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   SSRF schützt ohnehin `safehttp`. Teams-Workflows und Mattermost haben keine festen Hosts.
 - **Teams über Workflows:** Microsoft stellt die Office-365-Connectors ein; Workflows nehmen Adaptive Cards
   im Format `{"type": "message", "attachments": [...]}`.
+
+## Nachtrag M2-13: Telegram, Gotify, Pushover
+
+- **Reiner Text, wo es geht:** Gotify (`text/plain`) und Pushover (ohne `html=1`) zeigen Werte wörtlich. Telegram
+  bekommt HTML, damit der Titel fett ist; Werte werden HTML-escapt und Erwähnungen entschärft. Ohne `parse_mode`
+  wäre der Titel nicht hervorgehoben, und Erwähnungen in User-Namen müssten trotzdem entschärft werden.
+- **Telegram-Link als Text:** Inline-Buttons lehnen Links auf `localhost` oder ohne Domain ab, und eine abgelehnte
+  Nachricht wäre ein dauerhafter Fehler. Der Link steht darum als Text am Ende.
+- **Telegram-Token im Pfad:** Die Bot-API kennt keinen Header für das Token. `safehttp` nennt in Fehlern nur
+  Methode und Host, der Dispatcher entfernt die Zugangsdaten aus jedem Fehlertext; ein Test sichert das ab.
+  `httppost.PostWith` liest die Wartezeit nach 429 aus dem Body, weil Telegram keinen `Retry-After`-Header sendet.
+- **Feste Hosts:** Telegram und Pushover haben feste API-Adressen; Gotify ist selbst betrieben und nimmt jede URL
+  der Outbound-Policy.
+- **Keine Notfall-Priorität bei Pushover:** Priorität 2 wiederholt, bis in Pushover bestätigt wird, und braucht
+  eigene Parameter. Eskalation ist Aufgabe der Policies (M2-14).
+- **Thema bei Telegram:** Für Gruppen mit Themen gibt es das optionale Feld `thread` (`message_thread_id`).

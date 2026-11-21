@@ -21,10 +21,13 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/discord"
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/email"
+	"github.com/pmoscode/SerMon/server/internal/adapters/notify/gotify"
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/mattermost"
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/ntfy"
+	"github.com/pmoscode/SerMon/server/internal/adapters/notify/pushover"
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/slack"
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/teams"
+	"github.com/pmoscode/SerMon/server/internal/adapters/notify/telegram"
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/webhook"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
@@ -423,6 +426,7 @@ func newNotifyDeps(cfg config.Config, db *postgres.DB, logger *slog.Logger) (not
 	notifiers := []notify.Notifier{
 		webhook.New(client, time.Now), ntfy.New(client),
 		slack.New(client), teams.New(client), discord.New(client), mattermost.New(client),
+		telegram.New(client), gotify.New(client), pushover.New(client),
 	}
 	if cfg.SMTP != nil {
 		notifiers = append(notifiers, email.New(newMailer(cfg.SMTP)))

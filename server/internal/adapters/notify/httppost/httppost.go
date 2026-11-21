@@ -19,9 +19,21 @@ import (
 // maxReason bounds what an error quotes from the answer of a service.
 const maxReason = 200
 
+// Options adapt Post to a service.
+type Options struct {
+	// RetryAfter reads the wait in seconds from the answer to a 429 when the service sends no
+	// Retry-After header (Telegram puts it into the body); "" if there is none.
+	RetryAfter func(answer []byte) string
+}
+
 // Post sends body to url. It returns nil for 2xx and otherwise the error of notify.HTTPStatus with
 // the start of the answer (services explain rejections there; notify removes secrets).
 func Post(ctx context.Context, c *safehttp.Client, url string, header http.Header, body []byte) error {
+	return PostWith(ctx, c, url, header, body, Options{})
+}
+
+// PostWith is Post with the options of a service.
+func PostWith(ctx context.Context, c *safehttp.Client, url string, header http.Header, body []byte, o Options) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return notify.Permanent(fmt.Errorf("%w: %w", safehttp.ErrInvalidURL, err))
@@ -35,7 +47,11 @@ func Post(ctx context.Context, c *safehttp.Client, url string, header http.Heade
 	}
 	defer func() { _ = resp.Body.Close() }()
 	answer, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	if err := notify.HTTPStatus(resp.StatusCode, resp.Header.Get("Retry-After")); err != nil {
+	retryAfter := resp.Header.Get("Retry-After")
+	if retryAfter == "" && resp.StatusCode == http.StatusTooManyRequests && o.RetryAfter != nil {
+		retryAfter = o.RetryAfter(answer)
+	}
+	if err := notify.HTTPStatus(resp.StatusCode, retryAfter); err != nil {
 		if reason := reasonOf(answer); reason != "" {
 			return fmt.Errorf("%w: %s", err, reason)
 		}

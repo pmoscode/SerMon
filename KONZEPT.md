@@ -790,7 +790,7 @@ vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
 | E-Mail                                      | SMTP mit STARTTLS/TLS-Pflicht (konfigurierbar), HTML- und Text-Template                   |
 | Webhook                                     | JSON-POST, Header `X-SerMon-Signature: t=<ts>,v1=<HMAC-SHA256>`, Retries mit Backoff      |
 | Slack, Microsoft Teams, Discord, Mattermost | Incoming Webhooks / Workflows; formatierte Nachrichten (Blocks / Adaptive Cards / Embeds) |
-| Telegram                                    | Bot-API (Token + Chat-ID)                                                                 |
+| Telegram                                    | Bot-API (Token + Chat-ID), HTML mit escapten Werten                                       |
 | ntfy, Gotify, Pushover                      | jeweilige HTTP-APIs, Priorität aus Severity                                               |
 
 - Alle Kanäle implementieren ein gemeinsames Interface `Notifier` (Adapter-Pattern) und haben einen **„Test
@@ -853,6 +853,19 @@ gespeichert.
   Erwähnungen entschärft, gekürzt auf die Grenzen von Discord. Nur offizielle Webhook-URLs.
 - **Mattermost:** Slack-kompatibles Attachment. Werte werden Markdown-escapt, `@all`, `@channel` und `@here` darin
   entschärft. Jede URL ist erlaubt (selbst betrieben; intern nur mit der Allowlist).
+
+Kanäle der dritten Welle (M2-13):
+
+- **Telegram:** `sendMessage` der Bot-API im HTML-Modus, Titel fett. Werte werden HTML-escapt und ihre Erwähnungen
+  entschärft; Link-Vorschau aus. Der Link zum Node steht als Text am Ende, weil Buttons Links auf `localhost`
+  ablehnen. Gekürzt auf 4096 Zeichen; quittierte und wieder stabile Alerts kommen ohne Ton. Das Bot-Token ist ein
+  Geheimnis und steht im Pfad: Fehler nennen nur den Host. Die Wartezeit nach 429 steht im Body
+  (`parameters.retry_after`). Nur `https://api.telegram.org`.
+- **Gotify:** `POST /message` mit dem App-Token im Header `X-Gotify-Key`, als reiner Text (`text/plain`), Priorität
+  8 (kritisch), 5 (Warnung), 3 (behoben), 2 (quittiert, stabil). Selbst betrieben, auch unter einem Pfad.
+- **Pushover:** Formular an `https://api.pushover.net/1/messages.json` als reiner Text, Priorität 1 (kritisch),
+  0 oder −1 (quittiert, stabil); keine Notfall-Priorität. Titel und Nachricht auf 250 bzw. 1024 Zeichen gekürzt.
+  App-Token und User-Key sind Geheimnisse, Geräte optional.
 
 ---
 

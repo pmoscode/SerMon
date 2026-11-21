@@ -1,0 +1,9 @@
+{
+  "chat_id": "-1001234567890",
+  "text": "\u003cb\u003eKRITISCH: SSH-Brute-Force – web-01\u003c/b\u003e\n\nRegel: security.ssh.bruteforce\nNode: web-01\nBetrifft: ip=192.0.2.7\nWert: 60\nZeitpunkt: 2026-11-21 10:00:00 UTC\nBenutzer: \u0026lt;!here\u0026gt; @​everyone [click](https://evil.example) *bold* `code` \u0026lt;script\u0026gt;x\u0026lt;/script\u0026gt;\nAdresse: 192.0.2.7\nPort: 50022\n\nhttps://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001",
+  "parse_mode": "HTML",
+  "disable_notification": false,
+  "link_preview_options": {
+    "is_disabled": true
+  }
+}

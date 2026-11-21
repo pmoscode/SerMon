@@ -1,0 +1,9 @@
+{
+  "chat_id": "@sermon_ops",
+  "text": "\u003cb\u003eRESOLVED: High CPU usage – web-01\u003c/b\u003e\n\nRule: system.cpu.usage_high\nNode: web-01\nValue: 42 %\nTime: 2026-11-21 10:00:00 UTC\n\nhttps://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001",
+  "parse_mode": "HTML",
+  "disable_notification": false,
+  "link_preview_options": {
+    "is_disabled": true
+  }
+}

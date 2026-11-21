@@ -1,0 +1,15 @@
+{
+  "title": "KRITISCH: SSH-Brute-Force – web-01",
+  "message": "Regel: security.ssh.bruteforce\nNode: web-01\nBetrifft: ip=192.0.2.7\nWert: 60\nZeitpunkt: 2026-11-21 10:00:00 UTC\nBenutzer: \u003c!here\u003e @everyone [click](https://evil.example) *bold* `code` \u003cscript\u003ex\u003c/script\u003e\nAdresse: 192.0.2.7\nPort: 50022",
+  "priority": 8,
+  "extras": {
+    "client::display": {
+      "contentType": "text/plain"
+    },
+    "client::notification": {
+      "click": {
+        "url": "https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001"
+      }
+    }
+  }
+}

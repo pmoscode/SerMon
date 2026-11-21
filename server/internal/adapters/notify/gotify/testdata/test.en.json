@@ -1,0 +1,15 @@
+{
+  "title": "Test from SerMon: the channel works.",
+  "message": "Time: 2026-11-21 10:00:00 UTC",
+  "priority": 5,
+  "extras": {
+    "client::display": {
+      "contentType": "text/plain"
+    },
+    "client::notification": {
+      "click": {
+        "url": "https://sermon.example/"
+      }
+    }
+  }
+}

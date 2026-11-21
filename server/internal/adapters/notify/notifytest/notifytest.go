@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -73,6 +74,7 @@ type Server struct {
 	Answer string
 	bodies [][]byte
 	header []http.Header
+	paths  []string
 }
 
 // NewServer starts a recording server; it stops with the test.
@@ -82,7 +84,7 @@ func NewServer(t *testing.T) *Server {
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		s.mu.Lock()
-		s.bodies, s.header = append(s.bodies, body), append(s.header, r.Header.Clone())
+		s.bodies, s.header, s.paths = append(s.bodies, body), append(s.header, r.Header.Clone()), append(s.paths, r.URL.Path)
 		status, answer := s.Status, s.Answer
 		s.mu.Unlock()
 		if status == 0 {
@@ -104,6 +106,37 @@ func (s *Server) Last(t *testing.T) ([]byte, http.Header) {
 		t.Fatal("the server got no request")
 	}
 	return s.bodies[len(s.bodies)-1], s.header[len(s.header)-1]
+}
+
+// LastPath returns the path of the last request.
+func (s *Server) LastPath(t *testing.T) string {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.paths) == 0 {
+		t.Fatal("the server got no request")
+	}
+	return s.paths[len(s.paths)-1]
+}
+
+// Message renders a CPU alert of the given kind and severity.
+func Message(kind notify.Kind, severity notify.Severity, lang notify.Lang) notify.Message {
+	return notify.Render(notify.Notification{
+		Kind: kind, Severity: severity, Rule: "system.cpu.usage_high",
+		RuleName: notify.Text{De: "Hohe CPU-Auslastung", En: "High CPU usage"},
+		Node:     identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-000000000001")), Hostname: "web-01",
+		Value: 0.964, Unit: notify.UnitRatio, At: T0, AckBy: "alice",
+	}, lang, "https://sermon.example")
+}
+
+// Long returns the security alert with every value much longer than a service allows.
+func Long(lang notify.Lang) notify.Message {
+	m := Security(lang)
+	m.Title += strings.Repeat("<ü>", 200)
+	for range 20 {
+		m.Lines = append(m.Lines, notify.Line{Label: "x", Value: strings.Repeat("<&@ü", 300)})
+	}
+	return m
 }
 
 // Indent formats JSON for golden files.

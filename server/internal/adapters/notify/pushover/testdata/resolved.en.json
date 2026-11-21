@@ -1,0 +1,11 @@
+{
+  "device": "phone,tablet",
+  "message": "Rule: system.cpu.usage_high\nNode: web-01\nValue: 42 %\nTime: 2026-11-21 10:00:00 UTC",
+  "priority": "0",
+  "timestamp": "1795255200",
+  "title": "RESOLVED: High CPU usage – web-01",
+  "token": "aFixture0123456789abcdefghijkl",
+  "url": "https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001",
+  "url_title": "Open in SerMon",
+  "user": "uFixture0123456789abcdefghijkl"
+}

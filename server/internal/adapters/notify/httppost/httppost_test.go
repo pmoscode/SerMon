@@ -79,3 +79,32 @@ func TestPost_RefusesInternalTargets(t *testing.T) {
 		t.Errorf("loopback target: %v, want blocked for good", err)
 	}
 }
+
+// Telegram puts the wait into the body of a 429; the Retry-After header wins when both are there.
+func TestPostWith_ReadsTheWaitFromTheAnswer(t *testing.T) {
+	for _, tc := range []struct {
+		header string
+		want   time.Duration
+	}{{"", 17 * time.Second}, {"30", 30 * time.Second}} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if tc.header != "" {
+				w.Header().Set("Retry-After", tc.header)
+			}
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, `{"retry_after":17}`)
+		}))
+		err := httppost.PostWith(context.Background(), local(t), srv.URL, nil, []byte("x"), httppost.Options{
+			RetryAfter: func(answer []byte) string {
+				if strings.Contains(string(answer), "17") {
+					return "17"
+				}
+				return ""
+			},
+		})
+		srv.Close()
+		var rl *notify.RateLimitedError
+		if !errors.As(err, &rl) || rl.RetryAfter != tc.want {
+			t.Errorf("header %q: %v, want a wait of %v", tc.header, err, tc.want)
+		}
+	}
+}

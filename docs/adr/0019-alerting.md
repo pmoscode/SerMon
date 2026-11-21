@@ -158,7 +158,7 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   gesetzte Matcher muss passen. Alle passenden Policies greifen, jeder Kanal bekommt eine Änderung aber nur einmal
   (mit der Gruppierung der ersten Policy nach Name). Eine Policy hat 1 bis 10 Kanäle.
 - **Abweichung, `tags`:** Nodes haben noch keine Tags. Stattdessen passen die Labels der Regel (z. B.
-  `category: security`). Tags an Nodes kommen mit den Selektoren der Regeln.
+  `category: security`). Tags an Nodes kommen mit M2-29.
 - **Ohne Policies an alle aktiven Kanäle:** Eine Org ohne eine einzige Policy bekommt jeden Alert auf allen aktiven
   Kanälen, gruppiert pro Node, ohne Wiederholung. Abgeschaltete Policies zählen als vorhanden. So wirkt der erste
   Kanal sofort, und wer Policies anlegt, entscheidet selbst.

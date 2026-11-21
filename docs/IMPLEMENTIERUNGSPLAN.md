@@ -1790,7 +1790,7 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 > - **Speicherung (Migration 00025):** `notification_policies`, `notification_policy_channels` (Fremdschlüssel auf Kanal
 >   und Policy in derselben Org) und `alert_routing_state` (geht mit Instanz und Policy), alle mit RLS (ENABLE + FORCE).
 > - **API:** `NotificationPolicyService` (List, Create, Update, Delete); `Delivery.kind` kennt `digest`.
-> - **Abweichungen:** kein Matcher auf `tags` (Nodes haben noch keine; stattdessen die Labels der Regel); der Digest
+> - **Abweichungen:** kein Matcher auf `tags` (Nodes haben noch keine, → M2-29; stattdessen die Labels der Regel); der Digest
 >   sammelt pro Runde, nicht über ein eigenes Zeitfenster.
 > - **Tests:**
 >   - Matcher-Tabelle (13 Fälle), Prüfung der Policies (18 Fälle).
@@ -1921,8 +1921,7 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 >   - E2E mit axe für alle Tabs der neuen Seite und das Stummschalten aus der Alert-Liste; Session-Rechte gegen den
 >     echten Stack.
 >   - Gegenproben für 10 Prüfungen, alle erkannt.
-> - **Offen:** Die Kopfzeile bricht mit dem neuen Menüpunkt bei 1280 px in zwei Zeilen um (Navigation bei Gelegenheit
->   verdichten).
+> - **Offen:** Die Kopfzeile bricht mit dem neuen Menüpunkt bei 1280 px in zwei Zeilen um → M2-23.
 - **Ziel:** Kanäle anlegen (Zugangsdaten nur schreibend), „Test senden“, Zustellprotokoll; Policies und Silences
   verwalten.
 - **Tests zuerst:** Zugangsdaten werden nie angezeigt; Step-up für neue Kanäle; Fehler beim Test sichtbar.
@@ -1965,6 +1964,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Ziel:** „Sperre aufheben“, Übernahme bei `machine-id`-Konflikt (T5), „Schlüssel rotieren“ und „nur widerrufen“
   (`revoke_only`, M1-38), alle mit Step-up und Audit; Anzeige von Sperrgrund und letzter IP.
 - **Tests zuerst:** Rollen-Matrix (Operator und Admin), Step-up, Isolation; „nur widerrufen“ fragt keinen Agent.
+- **Aus M2-18:** Die Kopfzeile bricht mit dem Menüpunkt „Benachrichtigungen“ bei 1280 px in zwei Zeilen um; die
+  Navigation verdichten (z. B. Org-Switcher und Werkzeuge in ein Menü), Screenshot-Test bei 1280 px.
 - **Abhängig von:** M1-32, M1-38
 - **Skill:** `sermon-ui-component`
 
@@ -1991,12 +1992,30 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Tests zuerst:** `check-compose` (Digests, keine Telemetrie); E2E-Lauf gegen diese Datei mit Agent über den Proxy.
 - **Abhängig von:** M1-39
 
+#### ☐ M2-29 – Tags an Nodes · S · M
+- **Ziel:** freie Tags pro Node (`env=prod`, `role=db`, KONZEPT §7) für Filter und Matching: im Datenmodell (RLS),
+  setzbar durch Admins (Step-up, Audit), sichtbar in Flottenübersicht und Node-Detail mit Filter; Matcher `tags` in
+  Notification-Policies und Silences, Selektor der Regeln.
+- **Tests zuerst:** Matcher-Tabelle mit Tags; Isolation; Filter in der Flottenübersicht.
+- **Aus M2-14:** Policies matchen bisher nur die Labels der Regel; `tags` fehlt, weil Nodes keine Tags haben.
+- **Abhängig von:** M2-14, M2-15
+
+#### ☐ M2-30 – Szenarien im Simulator · A · S
+- **Ziel:** `just simulate N --scenario …` für Tests der Alerts von Hand: `cpu-high` (Last über der Schwelle mit
+  Hysterese), `disk-filling` (Prognose), `ssh-bruteforce` (Security-Events wie vom Parser, auch über mehrere Nodes für
+  die Fleet-Korrelation), `flapping` (wechselnd um die Schwelle), `offline` (Node verstummt und kommt wieder).
+- **Tests zuerst:** je Szenario löst die passende Standardregel aus (gegen `sermon-testserver` bzw. `just e2e-agent`).
+- **Abhängig von:** M1-34, M2-08
+
 #### ☐ M2-27 – E2E-Demo M2 · X · M
 - **Ziel:** Simulierter SSH-Brute-Force in einem Agent-Container (wiederholte Fehlanmeldungen gegen den eigenen sshd)
   → Alert mit Zeitstempel, User, IP und Port landet in ntfy (Container) und Slack (Mock-Webhook); Hysterese und
   Quittieren im Browser.
 - **Tests zuerst:** Playwright-Ablauf; Nachricht in ntfy und im Slack-Mock mit allen Feldern; nach Quittieren keine
   Wiederholung.
+- **Aus M2-11 bis M2-13:** Die Kanäle Slack, Teams, Discord, Mattermost, Telegram, Gotify und Pushover sind nur gegen
+  Test-Server geprüft (ntfy auch gegen den echten Server). Vor dem Abschluss von M2 je einmal „Test senden“ und einen
+  echten Alert gegen den echten Dienst schicken (Konten des Betreibers) und das Ergebnis hier vermerken.
 - **Abhängig von:** M2-08, M2-11, M2-12, M2-16
 
 #### ☐ M2-28 – Security-Review M2 · X · S 🔒

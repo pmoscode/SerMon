@@ -100,7 +100,9 @@ generate)
 	;;
 pubkey) pubkey "$key" ;;
 sign)
-	[ "${1:-}" = --version ] && [ -n "${2:-}" ] || die "usage: release-sign.sh sign KEY.pem --version V FILE…"
+	if [ "${1:-}" != --version ] || [ -z "${2:-}" ]; then
+		die "usage: release-sign.sh sign KEY.pem --version V FILE…"
+	fi
 	version=$2
 	shift 2
 	# The version ends up in a tab-separated comment and in install.sh: a plain token only.

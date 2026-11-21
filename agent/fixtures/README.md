@@ -2,6 +2,8 @@
 
 Echte Dateien aus `/proc`, `/sys` und `/etc` je Distribution, für Parser- und Collector-Tests. Ein Verzeichnis ist
 eine Wurzel für `ProcRoot` (`sermon-core`): `<distro>/proc/…`, `<distro>/sys/…`, `<distro>/etc/…`.
+Die Geräte unter `sys/block/` sind leere Verzeichnisse; Git versioniert sie nur mit einer leeren `.keep`-Datei (ohne
+sie hält der Disk-Collector im frischen Checkout Partitionen für ganze Geräte).
 
 | Verzeichnis | Quelle |
 |---|---|

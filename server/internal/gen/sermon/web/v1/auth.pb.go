@@ -762,8 +762,11 @@ type Session struct {
 	// enroll_group_ids are the groups where the caller may add nodes (operator or admin); the
 	// single value "*" stands for all groups.
 	EnrollGroupIds []string `protobuf:"bytes,10,rep,name=enroll_group_ids,json=enrollGroupIds,proto3" json:"enroll_group_ids,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// silence_group_ids are the groups where the caller may create silences (operator or admin);
+	// the single value "*" stands for all groups.
+	SilenceGroupIds []string `protobuf:"bytes,11,rep,name=silence_group_ids,json=silenceGroupIds,proto3" json:"silence_group_ids,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -866,6 +869,13 @@ func (x *Session) GetEnrollGroupIds() []string {
 	return nil
 }
 
+func (x *Session) GetSilenceGroupIds() []string {
+	if x != nil {
+		return x.SilenceGroupIds
+	}
+	return nil
+}
+
 // Organization is an organization the user belongs to.
 type Organization struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -957,7 +967,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\xd0\x03\n" +
+	"\x19SecondFactorSetupRequired\"\xfc\x03\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -969,7 +979,8 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x1csecond_factor_setup_required\x18\b \x01(\bR\x19secondFactorSetupRequired\x12\x1b\n" +
 	"\torg_admin\x18\t \x01(\bR\borgAdmin\x12(\n" +
 	"\x10enroll_group_ids\x18\n" +
-	" \x03(\tR\x0eenrollGroupIds\"2\n" +
+	" \x03(\tR\x0eenrollGroupIds\x12*\n" +
+	"\x11silence_group_ids\x18\v \x03(\tR\x0fsilenceGroupIds\"2\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name2\x96\x05\n" +

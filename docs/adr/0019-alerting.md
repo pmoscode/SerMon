@@ -229,3 +229,15 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   App unveränderlich. Der Server löscht alle 6 Stunden.
 - **Stumm-Anzeige:** Die Seite markiert Alerts, die eine aktive Silence oder ein Wartungsfenster stumm schaltet, mit
   derselben Logik wie der Router.
+
+## Nachtrag M2-18: Kanäle, Policies und Silences in der UI
+
+- **Seite „Benachrichtigungen“ nur für Admins:** Kanäle, Policies, Wartungsfenster und das Protokoll verwalten Admins
+  der ganzen Org. Silences legen Operatoren an; sie stehen deshalb als Tab auf der Alert-Seite, mit „Stummschalten“
+  an jedem Alert (Gruppe, Node und Regel vorausgefüllt).
+- **Zugangsdaten nur schreibend:** Das Formular entsteht aus den Feldern des Kanaltyps. Geheime Felder sind
+  Passwortfelder, die nie einen gespeicherten Wert zeigen; leer heißt „behalten“, gesendet wird nur Getipptes. Die
+  Liste nennt nur, welche Zugangsdaten gesetzt sind.
+- **Wo jemand stummschalten darf,** sagt die Session (`silence_group_ids`, wie `enroll_group_ids`). Die UI bietet nur
+  diese Gruppen an und blendet sonst die Knöpfe aus; der Server prüft trotzdem jeden Aufruf.
+- **Fehler bei ungültiger Eingabe** zeigen die Begründung des Servers. Sie nennt das Feld, nie einen Wert.

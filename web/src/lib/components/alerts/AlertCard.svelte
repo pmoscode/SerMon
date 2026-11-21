@@ -20,8 +20,15 @@
 	let {
 		alert,
 		now,
-		onAcknowledge
-	}: { alert: Alert; now: Date; onAcknowledge: (alert: Alert) => Promise<string> } = $props();
+		onAcknowledge,
+		onSilence
+	}: {
+		alert: Alert;
+		now: Date;
+		onAcknowledge: (alert: Alert) => Promise<string>;
+		/** Set when the caller may silence the alert's group: opens a prefilled silence. */
+		onSilence?: (alert: Alert) => void;
+	} = $props();
 
 	let open = $state(false);
 	let busy = $state(false);
@@ -127,6 +134,16 @@
 				aria-label={m.alert_acknowledge_label({ rule: name, host: alert.hostname })}
 			>
 				{m.alert_acknowledge()}
+			</Button>
+		{/if}
+		{#if onSilence}
+			<Button
+				size="sm"
+				variant="outline"
+				onclick={() => onSilence(alert)}
+				aria-label={m.alert_silence_label({ rule: name, host: alert.hostname })}
+			>
+				{m.alert_silence()}
 			</Button>
 		{/if}
 		<Button

@@ -48,6 +48,7 @@ test.describe('alert page (mocked API)', () => {
 		let acknowledged = false;
 		const calls = await mockApi(page, {
 			...installed(true),
+			'AlertSilenceService/ListSilences': () => ({ json: {} }),
 			'AlertService/ListAlerts': () => ({
 				json: {
 					alerts: acknowledged
@@ -108,7 +109,11 @@ test.describe('alert page (mocked API)', () => {
 	});
 
 	test('explains the quiet state and is reachable from the navigation', async ({ page }) => {
-		await mockApi(page, { ...installed(true), 'AlertService/ListAlerts': () => ({ json: {} }) });
+		await mockApi(page, {
+			...installed(true),
+			'AlertSilenceService/ListSilences': () => ({ json: {} }),
+			'AlertService/ListAlerts': () => ({ json: {} })
+		});
 		await page.goto('/fleet');
 		await page.getByRole('link', { name: 'Alerts' }).click();
 		await expect(page.getByRole('heading', { name: 'No active alerts' })).toBeVisible();

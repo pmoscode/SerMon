@@ -167,6 +167,9 @@ message Session {
   // enroll_group_ids are the groups where the caller may add nodes (operator or admin); the
   // single value "*" stands for all groups.
   repeated string enroll_group_ids = 10;
+  // silence_group_ids are the groups where the caller may create silences (operator or admin);
+  // the single value "*" stands for all groups.
+  repeated string silence_group_ids = 11;
 }
 
 // Organization is an organization the user belongs to.

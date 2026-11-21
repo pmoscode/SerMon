@@ -20,7 +20,6 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
-	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -310,17 +309,25 @@ func (h *AuthHandler) describeRights(ctx context.Context, s session.Session, vie
 	}
 	policy := authz.NewPolicy()
 	view.OrgAdmin = policy.Allowed(p, authz.ManageMembers, authz.InOrg(p.Org))
-	for _, b := range p.Bindings {
-		switch {
-		case !b.Role.AtLeast(role.Operator):
-		case b.AllGroups:
-			view.EnrollGroupIds = []string{"*"}
-			return nil
-		default:
-			view.EnrollGroupIds = append(view.EnrollGroupIds, b.Group.String())
-		}
-	}
+	view.EnrollGroupIds = groupsFor(policy, p, authz.CreateEnrollmentTokens)
+	view.SilenceGroupIds = groupsFor(policy, p, authz.SilenceAlerts)
 	return nil
+}
+
+// groupsFor lists the groups where the principal may do action; "*" stands for all groups.
+func groupsFor(policy authz.Policy, p authz.Principal, action authz.Action) []string {
+	scope, err := policy.ScopeForAction(p, action)
+	if err != nil {
+		return nil
+	}
+	if scope.AllGroups() {
+		return []string{"*"}
+	}
+	var out []string
+	for _, g := range scope.Groups() {
+		out = append(out, uuid.UUID(g).String())
+	}
+	return out
 }
 
 // internal logs the cause with a correlation ID and returns a generic error to the client.

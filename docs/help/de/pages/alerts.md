@@ -14,6 +14,10 @@ Die aktiven Alerts der Nodes, die du sehen darfst: was feuert, was auf seine Dau
 
 Quittieren sagt „jemand kümmert sich“: Erinnerungen und Eskalation des Alerts stoppen, bis er endet oder kritisch wird, und die Kanäle erfahren, wer quittiert hat. Quittieren dürfen Operatoren der Gruppe des Nodes; bei Security-Alerts fragt SerMon noch einmal nach dem Passwort, weil Quittieren ihre Eskalation stoppt.
 
+## Silences
+
+Eine Silence schaltet die Benachrichtigungen passender Alerts bis zu 30 Tage stumm: Gruppen, einzelne Nodes dieser Gruppen, Regel-Muster (`security.*`), Labels oder Stufen – sie muss Gruppen, Regeln oder Labels nennen, damit nichts aus Versehen stumm wird, und braucht einen Kommentar. **Stummschalten** an einem Alert öffnet eine Silence für seine Regel auf seinem Node. Die Alerts bleiben sichtbar; was beim Ende noch feuert, kommt einmal nach. Operatoren schalten ihre eigenen Gruppen stumm und bestätigen mit dem Passwort; eine Silence vorzeitig zu beenden braucht kein Passwort.
+
 ## Typische nächste Schritte
 
 1. Den Node öffnen und die Charts um den Zeitpunkt des Alerts ansehen.

@@ -1900,14 +1900,32 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Abhängig von:** M2-04, M2-16
 - **Skill:** `sermon-ui-component`
 
-#### ☐ M2-18 – Kanäle, Policies und Silences in der UI · W · M 🔒
+#### ☑ M2-18 – Kanäle, Policies und Silences in der UI · W · M 🔒
+> Erledigt (ADR 0019, Nachtrag M2-18; Hilfe `pages/notifications`, `pages/alerts`):
+> - **Seite `/notifications`** (nur Admins, eigener Menüpunkt) mit Tabs:
+>   - **Kanäle:** Formular aus den Feldern des Typs mit Hilfe je Typ; Zugangsdaten als Passwortfelder, nie angezeigt,
+>     leer heißt behalten, gesendet wird nur Getipptes; die Liste nennt nur gesetzte Zugangsdaten. Test senden mit
+>     sichtbarem Fehler, Ein/Aus, Löschen mit zweitem Klick, Step-up über den Dialog.
+>   - **Policies:** Matcher (Stufen, Gruppen, Regel-Muster, Labels als `key=value`), Kanäle, Gruppierung,
+>     Wiederholung, Eskalation; Hinweis auf den Rückfall ohne Policies.
+>   - **Wartungsfenster:** Name, Tage ab Montag, Startzeit, Dauer, Zeitzone (Liste des Browsers), Gruppen.
+>   - **Protokoll:** Zustellungen der letzten 30 Tage, Filter nach Kanal, ältere nachladen.
+> - **Alert-Seite:** Tab „Silences“ (Liste mit Zeitraum, Selektor und Kommentar als Text; anlegen und beenden) und
+>   „Stummschalten“ an jedem Alert, vorausgefüllt mit Gruppe, Node und Regel.
+> - **Session:** `silence_group_ids` (Gruppen, in denen der Aufrufer stummschalten darf).
+> - **Tests:**
+>   - Logik der Formulare (Muster, Labels, Zeiten, Wochentage, Zugangsdaten, Rechte pro Gruppe).
+>   - Komponenten: Zugangsdaten nie im DOM, Passwortfeld, leer beim Bearbeiten; Step-up für neue Kanäle;
+>     Testfehler und Ratenlimit sichtbar; Policy mit Matchern, Eskalation und fehlerhafter Label-Zeile;
+>     Wartungsfenster; Silence vorausgefüllt mit Step-up, nur erlaubte Gruppen, Kommentar als Text, Viewer nur lesend.
+>   - E2E mit axe für alle Tabs der neuen Seite und das Stummschalten aus der Alert-Liste; Session-Rechte gegen den
+>     echten Stack.
+>   - Gegenproben für 10 Prüfungen, alle erkannt.
+> - **Offen:** Die Kopfzeile bricht mit dem neuen Menüpunkt bei 1280 px in zwei Zeilen um (Navigation bei Gelegenheit
+>   verdichten).
 - **Ziel:** Kanäle anlegen (Zugangsdaten nur schreibend), „Test senden“, Zustellprotokoll; Policies und Silences
   verwalten.
 - **Tests zuerst:** Zugangsdaten werden nie angezeigt; Step-up für neue Kanäle; Fehler beim Test sichtbar.
-- **Aus M2-15:** `AlertSilenceService` für Operatoren (pro Gruppe), `MaintenanceWindowService` für Admins; Wochentage
-  in der API ab Montag. Hilfetexte zu Silences (Selektor, 30 Tage, Nachholen) und Wartungsfenstern fehlen noch.
-- **Aus M2-14:** `NotificationPolicyService` ersetzt eine Policy beim Update ganz; Hilfetexte zu Matchern (Muster
-  mit `*`, Labels der Regeln), zum Rückfall ohne Policies und zur Eskalation fehlen noch.
 - **Abhängig von:** M2-10, M2-14, M2-15
 - **Skill:** `sermon-ui-component`
 

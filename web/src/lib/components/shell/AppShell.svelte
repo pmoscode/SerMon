@@ -2,6 +2,7 @@
 	import Bell from '@lucide/svelte/icons/bell';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import LogOut from '@lucide/svelte/icons/log-out';
+	import Megaphone from '@lucide/svelte/icons/megaphone';
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
@@ -26,7 +27,14 @@
 		{ href: resolve('/(app)/fleet'), icon: Server, label: () => m.nav_fleet() },
 		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
 		...(sessionState.current?.orgAdmin
-			? [{ href: resolve('/(app)/admin'), icon: Users, label: () => m.nav_admin() }]
+			? [
+					{
+						href: resolve('/(app)/notifications'),
+						icon: Megaphone,
+						label: () => m.nav_notifications()
+					},
+					{ href: resolve('/(app)/admin'), icon: Users, label: () => m.nav_admin() }
+				]
 			: []),
 		{ href: resolve('/(app)/settings/security'), icon: ShieldCheck, label: () => m.nav_security() }
 	]);

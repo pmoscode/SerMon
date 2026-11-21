@@ -7,11 +7,15 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
+	import { coversGroups } from '#lib/notify/forms.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { sessionState } from '#lib/stores/session.svelte.js';
 	import AlertCard from './AlertCard.svelte';
 
 	/** The active alerts with filters, refreshed every 15 s (M2-16). */
+	let { onSilence }: { onSilence?: (alert: Alert) => void } = $props();
 	const alerts = new AlertsState();
+	const silenceGroups = $derived(sessionState.current?.silenceGroupIds ?? []);
 	let search = $state('');
 	let group = $state('');
 	let stateFilter = $state<Kind | ''>('');
@@ -116,7 +120,14 @@
 		{:else}
 			<div class="flex flex-col gap-3">
 				{#each shown as a (`${a.key?.ruleId}|${a.key?.nodeId}|${a.key?.dimension}`)}
-					<AlertCard alert={a} {now} onAcknowledge={acknowledge} />
+					<AlertCard
+						alert={a}
+						{now}
+						onAcknowledge={acknowledge}
+						onSilence={onSilence && coversGroups(silenceGroups, [a.groupId])
+							? onSilence
+							: undefined}
+					/>
 				{/each}
 			</div>
 		{/if}

@@ -8,6 +8,7 @@ pub mod config;
 pub mod enroll;
 pub mod identity;
 pub mod journal;
+pub mod logfile;
 pub mod logging;
 pub mod scheduler;
 pub mod security;
@@ -123,11 +124,22 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             );
         }
         let maintenance = tokio::spawn(maintain(outbox.clone(), clock.clone(), shutdown.clone()));
-        // The journal (security events) runs regardless of allow_logs: that veto is about shipping logs.
-        let (journal_metrics, journal) =
-            journal::spawn(&journal_layout, outbox.clone(), shutdown.clone());
+        // The journal (security events) runs regardless of allow_logs: that veto is about shipping
+        // logs. Without journald (Alpine) a classic log file takes its place (ADR 0025).
         let mut collectors = default_collectors();
-        collectors.push(Box::new(journal_metrics));
+        let journal = if logfile::journald_runs(&config.host_root) {
+            let (journal_metrics, journal) =
+                journal::spawn(&journal_layout, outbox.clone(), shutdown.clone());
+            collectors.push(Box::new(journal_metrics));
+            journal
+        } else {
+            logfile::spawn(
+                &journal_layout,
+                &config.host_root,
+                outbox.clone(),
+                shutdown.clone(),
+            )
+        };
         let scheduler = Scheduler::new(collectors, scheduler_root, scheduler::SERIES_LIMIT);
         let collection = tokio::spawn(scheduler::run(
             scheduler,

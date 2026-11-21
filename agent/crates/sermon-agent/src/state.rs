@@ -75,6 +75,12 @@ impl StateLayout {
         self.root.join("journal.cursor")
     }
 
+    /// Where the log file source continues (hosts without journald, M2-20).
+    #[must_use]
+    pub fn logfile_position_file(&self) -> PathBuf {
+        self.root.join("logfile.position")
+    }
+
     /// Removes everything the agent created (identity, buffer, journal cursor) and returns what
     /// existed.
     ///
@@ -89,6 +95,7 @@ impl StateLayout {
             self.identity_dir(),
             self.wal_dir(),
             self.journal_cursor_file(),
+            self.logfile_position_file(),
         ] {
             let metadata = match std::fs::symlink_metadata(&entry) {
                 Ok(metadata) => metadata,
@@ -120,6 +127,7 @@ mod tests {
         fs::write(layout.identity_dir().join("agent.key"), "key").unwrap();
         fs::create_dir_all(layout.wal_dir().join("segments")).unwrap();
         fs::write(layout.journal_cursor_file(), "s=a;i=1").unwrap();
+        fs::write(layout.logfile_position_file(), "/var/log/messages\n1:2:3").unwrap();
         fs::write(dir.path().join("notes.txt"), "admin's file").unwrap();
 
         let removed = layout.remove_agent_data().unwrap();
@@ -129,7 +137,8 @@ mod tests {
             vec![
                 layout.identity_dir(),
                 layout.wal_dir(),
-                layout.journal_cursor_file()
+                layout.journal_cursor_file(),
+                layout.logfile_position_file()
             ]
         );
         assert!(!layout.journal_cursor_file().exists());

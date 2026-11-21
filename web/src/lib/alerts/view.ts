@@ -108,12 +108,23 @@ const fieldLabels: Record<string, () => string> = {
 	command: () => m.alert_field_command(),
 	tty: () => m.alert_field_tty(),
 	process: () => m.alert_field_process(),
-	pid: () => m.alert_field_pid()
+	pid: () => m.alert_field_pid(),
+	source: () => m.alert_field_source()
 };
 
 /** The label of an event field; its name for fields without a translation. */
 export function fieldLabel(name: string): string {
 	return fieldLabels[name]?.() ?? name;
+}
+
+/** The value of an event field as shown: the unverified source in words, others as they are. */
+export function fieldValue(name: string, value: string): string {
+	return name === 'source' && value === 'unverified' ? m.alert_source_unverified() : value;
+}
+
+/** The alert counts events from a log file anyone on the host could write to (ADR 0025). */
+export function unverifiedSource(fields: Record<string, string>): boolean {
+	return fields.source === 'unverified';
 }
 
 export function stateName(state: AlertState): string {

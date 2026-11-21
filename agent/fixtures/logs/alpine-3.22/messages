@@ -1,0 +1,17 @@
+Nov 21 19:54:24 fixture-host auth.info sshd[32]: Server listening on 0.0.0.0 port 22.
+Nov 21 19:54:24 fixture-host auth.info sshd[32]: Server listening on :: port 22.
+Nov 21 19:54:25 fixture-host auth.info sshd-session[38]: Failed password for alice from 127.0.0.1 port 48078 ssh2
+Nov 21 19:54:25 fixture-host auth.info sshd-session[38]: Connection closed by authenticating user alice 127.0.0.1 port 48078 [preauth]
+Nov 21 19:54:25 fixture-host auth.info sshd-session[44]: Accepted password for alice from ::1 port 51950 ssh2
+Nov 21 19:54:25 fixture-host auth.info sshd-session[47]: Received disconnect from ::1 port 51950:11: disconnected by user
+Nov 21 19:54:25 fixture-host auth.info sshd-session[47]: Disconnected from user alice ::1 port 51950
+Nov 21 19:54:25 fixture-host auth.info sshd-session[52]: Invalid user nosuchuser from 127.0.0.1 port 48094
+Nov 21 19:54:25 fixture-host auth.err sshd-session[52]: error: Could not get shadow information for NOUSER
+Nov 21 19:54:25 fixture-host auth.info sshd-session[52]: Failed password for invalid user nosuchuser from 127.0.0.1 port 48094 ssh2
+Nov 21 19:54:25 fixture-host auth.info sshd-session[52]: Connection closed by invalid user nosuchuser 127.0.0.1 port 48094 [preauth]
+Nov 21 19:54:25 fixture-host authpriv.alert sudo:    alice : 1 incorrect password attempt ; PWD=/ ; USER=root ; COMMAND=/bin/true
+Nov 21 19:54:25 fixture-host authpriv.alert sudo:    carol : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/bin/true
+Nov 21 19:54:25 fixture-host authpriv.info useradd[64]: new group: name=bob, GID=1003
+Nov 21 19:54:25 fixture-host authpriv.info useradd[64]: new user: name=bob, UID=1003, GID=1003, home=/home/bob, shell=/bin/ash, from=none
+Nov 21 19:54:25 fixture-host auth.info sshd: Accepted password for root from 203.0.113.9 port 22 ssh2
+Nov 21 19:54:25 fixture-host auth.info useradd: new user: name=backdoor, UID=0, GID=0, home=/root, shell=/bin/sh

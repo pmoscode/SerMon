@@ -274,6 +274,11 @@ message SecurityEvent {
     // oom_kill is system.oom_kill.
     OomKill oom_kill = 12;
   }
+  // unverified is set for events from classic log files whose sender is unknown or a normal user
+  // (ADR 0025): anyone on the host could have written the line. Events from the journal, and from
+  // the SerMon rsyslog template with root as sender, leave it false; so do older agents, which
+  // read only the journal.
+  bool unverified = 13;
 }
 
 // SshAuthMethod is how an SSH login was tried.

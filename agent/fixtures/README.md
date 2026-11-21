@@ -34,6 +34,11 @@ Spike-Dateien gibt es für sie nicht). Fedora bringt `script(1)` im eigenen Pake
 Debian 13 heißt der SSH-Absender `sshd-session`. `_CMDLINE` von `su` enthielt das Test-Passwort und zeigt jetzt
 `fixture-password` – ein Fall für die Redaction (KONZEPT §10.3).
 
+**Alpine ohne journald** (M2-20, ADR 0025): `logs/alpine-3.22/messages` (busybox `syslogd`) und
+`logs/alpine-3.22/security.log` (rsyslog mit der SerMon-Vorlage) erzeugt `logs/capture/capture-alpine.sh`: echte
+sshd-, sudo- und useradd-Zeilen und von alice mit `logger -p auth.info` gefälschte. Das sudo von Alpine nutzt kein PAM
+(nur `1 incorrect password attempt`). Der Container heißt `fixture-host`.
+
 Hinweise:
 
 - Dateien unter `proc/` und `sys/` stammen aus dem Container und zeigen damit den Kernel der Docker-VM (`linuxkit`) –

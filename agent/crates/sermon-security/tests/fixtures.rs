@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use sermon_logs::journal::{Entry, parse_line};
-use sermon_security::{Address, EventKind, LogLine, Parser, ParserConfig, SecurityEvent};
+use sermon_security::{Address, EventKind, LogLine, Parser, ParserConfig, SecurityEvent, Source};
 
 /// Distributions with the spike fixtures (journal-security, journal-format).
 const DISTROS: [&str; 4] = ["debian-13", "ubuntu-24.04", "rockylinux-9", "rockylinux-8"];
@@ -45,6 +45,7 @@ fn line(entry: &Entry) -> LogLine<'_> {
         cap_effective: entry.cap_effective,
         boot_id: entry.boot_id.as_deref(),
         monotonic_us: entry.monotonic_us,
+        source: Source::Journal,
         message: &entry.message,
     }
 }

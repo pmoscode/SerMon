@@ -122,6 +122,24 @@ impl ProcRoot {
         read_bounded(&self.etc(relative)?)
     }
 
+    /// Reads `var/<relative>` as text, e.g. `lib/dbus/machine-id` on hosts without systemd.
+    ///
+    /// # Errors
+    ///
+    /// [`ProcError::InvalidPath`] for an invalid path, otherwise see [`read_bounded`].
+    pub fn read_var(&self, relative: &str) -> Result<String, ProcError> {
+        read_bounded(&self.below("var", relative)?)
+    }
+
+    /// Reads `etc/<relative>` as bytes, e.g. the time zone in `localtime`.
+    ///
+    /// # Errors
+    ///
+    /// See [`ProcRoot::etc`] and [`read_bounded_bytes`].
+    pub fn read_etc_bytes(&self, relative: &str) -> Result<Vec<u8>, ProcError> {
+        read_bounded_bytes(&self.etc(relative)?)
+    }
+
     /// Names in the directory `proc/<relative>` (`""` for `proc/` itself), sorted.
     ///
     /// # Errors
@@ -181,6 +199,19 @@ fn list_dir(dir: &Path) -> Result<Vec<String>, ProcError> {
 ///
 /// [`ProcError::Io`] if the file can't be read, [`ProcError::TooLarge`] above the limit.
 pub fn read_bounded(path: &Path) -> Result<String, ProcError> {
+    let bytes = read_bounded_bytes(path)?;
+    Ok(match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(error) => String::from_utf8_lossy(error.as_bytes()).into_owned(),
+    })
+}
+
+/// Reads a file of at most [`MAX_FILE_SIZE`] bytes as it is (binary files like `/etc/localtime`).
+///
+/// # Errors
+///
+/// As [`read_bounded`].
+pub fn read_bounded_bytes(path: &Path) -> Result<Vec<u8>, ProcError> {
     let io_error = |source| ProcError::Io {
         path: path.to_owned(),
         source,
@@ -196,10 +227,7 @@ pub fn read_bounded(path: &Path) -> Result<String, ProcError> {
             limit: MAX_FILE_SIZE,
         });
     }
-    Ok(match String::from_utf8(bytes) {
-        Ok(text) => text,
-        Err(error) => String::from_utf8_lossy(error.as_bytes()).into_owned(),
-    })
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -207,6 +235,15 @@ mod tests {
     use std::fs;
 
     use super::*;
+
+    #[test]
+    fn reads_binary_etc_files_unchanged() {
+        let (dir, root) = fixture();
+        let tzif = b"TZif2\0\xff\xfe";
+        fs::write(dir.path().join("etc/localtime"), tzif).unwrap();
+        assert_eq!(root.read_etc_bytes("localtime").unwrap(), tzif);
+        assert!(root.read_etc_bytes("../localtime").is_err());
+    }
 
     fn fixture() -> (tempfile::TempDir, ProcRoot) {
         let dir = tempfile::tempdir().unwrap();

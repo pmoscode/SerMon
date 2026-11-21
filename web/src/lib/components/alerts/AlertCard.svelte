@@ -2,10 +2,18 @@
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import CheckCheck from '@lucide/svelte/icons/check-check';
 	import Repeat from '@lucide/svelte/icons/repeat';
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import { resolve } from '$app/paths';
-	import { alertValue, dimensionText, fieldLabel, ruleName } from '#lib/alerts/view.js';
+	import {
+		alertValue,
+		dimensionText,
+		fieldLabel,
+		ruleName,
+		unverifiedSource
+	} from '#lib/alerts/view.js';
 	import type { Alert } from '#lib/api/gen/sermon/web/v1/alert_pb.js';
+	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { formatAgo } from '#lib/format/format.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
@@ -37,7 +45,9 @@
 	const name = $derived(ruleName(alert, localeState.current));
 	const dimension = $derived(dimensionText(alert));
 	const since = $derived(alert.since ? timestampDate(alert.since) : undefined);
-	const fields = $derived(Object.entries(alert.fields));
+	const unverified = $derived(unverifiedSource(alert.fields));
+	// The source is the note below, not another field.
+	const fields = $derived(Object.entries(alert.fields).filter(([name]) => name !== 'source'));
 	const historyId = $derived(
 		`history-${alert.key?.ruleId}-${alert.key?.nodeId}-${alert.key?.dimension}`.replace(
 			/[^A-Za-z0-9_-]/g,
@@ -112,6 +122,17 @@
 			<dd class="break-all">{value}</dd>
 		{/each}
 	</dl>
+
+	{#if unverified}
+		<p
+			role="note"
+			class="mt-2 inline-flex items-center gap-1 text-sm text-amber-700 dark:text-amber-400"
+		>
+			<ShieldAlert class="size-4 shrink-0" aria-hidden="true" />
+			{m.alert_source_unverified_note()}
+			<HelpTip topic="concepts/unverified-source" />
+		</p>
+	{/if}
 
 	{#if alert.acknowledgedBy}
 		<p class="mt-2 inline-flex items-center gap-1 text-sm text-muted-foreground">

@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/netip"
 	"strings"
@@ -443,5 +444,37 @@ func TestAlertEngine_EventRulesOverTheDatabase(t *testing.T) {
 	}
 	if list, _ := alerts.Instances(ctx, scopeFor(t, b.org)); len(list) != 0 {
 		t.Errorf("other organization: %+v, want no alerts (no correlation across organizations)", list)
+	}
+}
+
+// Events from classic log files keep their mark (M2-20, ADR 0025): for the list and the engine.
+func TestSecurityEventStore_KeepsTheUnverifiedMark(t *testing.T) {
+	f := newEventFixture(t)
+	ctx := context.Background()
+	verified := failedLogin(f.node, eventsNow.Add(-2*time.Second), "alice", "192.0.2.7")
+	forged := failedLogin(f.node, eventsNow.Add(-time.Second), "bob", "192.0.2.7")
+	forged.Unverified = true
+	if _, err := f.store.Write(ctx, tenant.OrgID(f.org), f.node, []secevents.Batch{{Seq: 1, Events: []secevent.Event{verified, forged}}}); err != nil {
+		t.Fatal(err)
+	}
+	marks := func(events []secevent.Event) map[string]bool {
+		out := map[string]bool{}
+		for _, e := range events {
+			out[e.User] = e.Unverified
+		}
+		return out
+	}
+	want := map[string]bool{"alice": false, "bob": true}
+	if got := marks(f.list(t, scopeFor(t, f.org), secevents.Filter{})); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("List: %v, want %v", got, want)
+	}
+	received, err := f.store.Received(ctx, scopeFor(t, f.org), alerting.EventQuery{
+		Kind: secevent.SSHLoginFailed, Nodes: []identity.NodeID{f.node}, Since: eventsNow.Add(-time.Hour), Limit: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := marks(received); fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("Received: %v, want %v", got, want)
 	}
 }

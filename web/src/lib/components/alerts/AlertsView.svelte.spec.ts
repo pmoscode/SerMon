@@ -87,6 +87,30 @@ describe('AlertsView', () => {
 		await expect.element(page.getByText('1 firing, 1 of them critical')).toBeVisible();
 	});
 
+	// ADR 0025: events from classic log files; anyone on the host could have written them.
+	it('marks alerts from unverified log files with icon, text and help', async () => {
+		const forged = create(AlertSchema, {
+			...brute,
+			key: { ...brute.key!, dimension: 'ip=192.0.2.8' },
+			dimensionLabels: { ip: '192.0.2.8' },
+			fields: { user: 'root', source: 'unverified' }
+		});
+		vi.spyOn(alertingApi.alerts, 'listAlerts').mockResolvedValue(listing(forged, brute));
+		render(AlertsView);
+
+		const note = page.getByRole('note');
+		await expect
+			.element(note)
+			.toMatchTextContent('Source not verified: a log file any local user can write to.');
+		expect(note.elements()).toHaveLength(1);
+		await expect
+			.element(page.getByRole('button', { name: 'Help: Unverified source' }))
+			.toBeVisible();
+		// Shown as the note, not again as a field.
+		const card = page.getByRole('article').filter({ hasText: '192.0.2.8' });
+		expect(card.element().textContent).not.toContain('unverified');
+	});
+
 	it('filters by state, group and search', async () => {
 		vi.spyOn(alertingApi.alerts, 'listAlerts').mockResolvedValue(listing(brute, disk));
 		render(AlertsView);

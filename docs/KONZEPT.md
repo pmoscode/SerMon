@@ -528,7 +528,7 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 | Quelle                 | Umsetzung                                                                                                                                  | Default                                                   |
 |------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
 | **systemd-journal**    | `journalctl -o json --all -f` mit eigenem Cursor (`--after-cursor`, ab systemd 239), feste Feldliste ohne `_CMDLINE`: `MESSAGE`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `SYSLOG_FACILITY`, `_SYSTEMD_UNIT`, `_PID`, `_COMM`, `_BOOT_ID`, `_TRANSPORT`, `_UID`, `_CAP_EFFECTIVE` | an (falls vorhanden)                                      |
-| **Klassische Dateien** | `/var/log/syslog`, `/var/log/messages`, `/var/log/auth.log`, `/var/log/secure` (je nach Distro automatisch erkannt)                        | an, wenn kein journald (Alpine)                           |
+| **Klassische Dateien** | `/var/log/sermon/security.log` (SerMon-Vorlage für rsyslog), `/var/log/auth.log`, `/var/log/secure`, `/var/log/messages`: die erste vorhandene ([ADR 0025](adr/0025-logdateien-ohne-journald.md)) | an, wenn kein journald (Alpine)                           |
 | **Docker**             | über die Docker-API (`/var/run/docker.sock`), stdout/stderr pro Container mit Labels `container`, `image`, `compose_project`               | **aus** (Modul, siehe §15 – Socket bedeutet root-Rechte!) |
 | **Beliebige Dateien**  | Globs pro Node-Gruppe zentral konfiguriert, z. B. `/var/log/nginx/*.log`; Multiline-Regeln (z. B. Java-Stacktraces)                        | aus                                                       |
 
@@ -605,6 +605,10 @@ gefuzzt** (`cargo-fuzz`).
 - **Escapes:** sshd schreibt Nicht-ASCII in User-Namen als Oktal-Escape (`j\303\274rgen`). Der Agent decodiert das.
 - **Reboot** heißt: Die Boot-ID wechselt zwischen zwei Zeilen. Nach einem Neustart des Agents zählt die Boot-ID aus dem
   gespeicherten Cursor. `uptime_before` ist die monotone Zeit der letzten Zeile vor dem Wechsel.
+- **Ohne journald** ([ADR 0025](adr/0025-logdateien-ohne-journald.md)): Zeilen aus Logdateien zählen, sind aber
+  „nicht verifiziert“ – jeder lokale User kann sie schreiben. Verifiziert sind sie nur mit der SerMon-Vorlage für rsyslog
+  und root als Absender; sudo bleibt dort unverifiziert (setuid, reale UID des Users). Ein Alert mit einem solchen Event
+  trägt `source: unverified`; UI und Kanäle sagen es.
 
 **Anreicherung im Server (optional):** GeoIP (Land/ASN) über eine **lokale** MaxMind-GeoLite2-Datenbank, ohne externe
 Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von neuer IP“ zu erkennen.

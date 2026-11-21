@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 )
 
 // Message is a rendered notification, independent of the channel: each channel turns it into
@@ -94,11 +95,14 @@ var words = map[string]Text{
 	"process":          {"Prozess", "Process"},
 	"previous_boot_id": {"Vorherige Boot-ID", "Previous boot ID"},
 	"uptime_before":    {"Laufzeit davor", "Uptime before"},
+	// ADR 0025: the source of a security alert, set only when it is unverified.
+	secevent.FieldSource:      {"Quelle", "Source"},
+	secevent.SourceUnverified: {"nicht verifiziert (Logdatei, jeder lokale Benutzer kann sie schreiben)", "unverified (log file any local user can write to)"},
 }
 
 // fieldOrder is the order of event fields in a message; others follow by name.
 var fieldOrder = []string{
-	"ts", "user", "ip", "port", "method", "invalid_user", "key_type", "key_fingerprint", "tty", "target", "command",
+	secevent.FieldSource, "ts", "user", "ip", "port", "method", "invalid_user", "key_type", "key_fingerprint", "tty", "target", "command",
 	"uid", "pid", "process", "previous_boot_id", "uptime_before",
 }
 
@@ -265,7 +269,11 @@ func Render(n Notification, l Lang, baseURL string) Message {
 		return strings.Compare(a, b)
 	})
 	for _, name := range names {
-		m.Lines = append(m.Lines, Line{word(name, l), oneLine(n.Fields[name])})
+		value := oneLine(n.Fields[name])
+		if name == secevent.FieldSource && value == secevent.SourceUnverified {
+			value = word(value, l)
+		}
+		m.Lines = append(m.Lines, Line{word(name, l), value})
 	}
 	return m
 }

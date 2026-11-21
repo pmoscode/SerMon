@@ -266,3 +266,65 @@ without_minisign() {
 	run "$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" sign "$TMP/ec.pem" "$BIN"
 	[ "$status" -ne 0 ]
 }
+
+# Hosts without journald (M2-20, ADR 0025): busybox syslogd writes with group wheel; the flag lets it
+# use the group sermon through start_pre, because its init script sets the group itself.
+@test "grants the agent read access to busybox syslogd's files only when asked" {
+	mkdir -p "$SERMON_INSTALL_ROOT/etc/init.d" "$SERMON_INSTALL_ROOT/etc/conf.d"
+	printf '#!/sbin/openrc-run\ncommand="/sbin/syslogd"\nstart_stop_daemon_args="-g wheel -k 027"\n' >"$SERMON_INSTALL_ROOT/etc/init.d/syslog"
+	printf 'SYSLOGD_OPTS="-t"\n' >"$SERMON_INSTALL_ROOT/etc/conf.d/syslog"
+	SERMON_ENROLLMENT_TOKEN=sme_x parse_args --server https://sermon.example.com
+	[ -z "$GRANT_LOG_ACCESS" ]
+	SERMON_ENROLLMENT_TOKEN=sme_x parse_args --server https://sermon.example.com --grant-log-access
+	[ "$GRANT_LOG_ACCESS" = 1 ]
+
+	grant_log_access
+	grant_log_access
+	[ "$(grep -c 'start_stop_daemon_args="-g sermon -k 027"' "$SERMON_INSTALL_ROOT/etc/conf.d/syslog")" -eq 1 ]
+	grep -q '^SYSLOGD_OPTS="-t"$' "$SERMON_INSTALL_ROOT/etc/conf.d/syslog"
+	# The function runs in the init script's shell: it must parse.
+	sh -n "$SERMON_INSTALL_ROOT/etc/conf.d/syslog"
+
+	# An admin's own start_pre stays; so does another syslog daemon.
+	printf 'start_pre() {\n\ttrue\n}\n' >"$SERMON_INSTALL_ROOT/etc/conf.d/syslog"
+	run grant_log_access
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"defines start_pre"* ]]
+	printf '#!/sbin/openrc-run\ncommand="/usr/sbin/rsyslogd"\n' >"$SERMON_INSTALL_ROOT/etc/init.d/syslog"
+	run grant_log_access
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"busybox syslogd"* ]]
+}
+
+@test "tells how to give the agent its security events when it cannot read a log file" {
+	mkdir -p "$SERMON_INSTALL_ROOT/var/log"
+	can_read() { return 1; }
+	run log_source_hint
+	[[ "$output" == *"--grant-log-access"* ]]
+	[[ "$output" == *"rsyslog"* ]]
+	# With journald, or a readable file, nothing to say.
+	mkdir -p "$SERMON_INSTALL_ROOT/run/systemd/journal"
+	run log_source_hint
+	[ -z "$output" ]
+	rmdir "$SERMON_INSTALL_ROOT/run/systemd/journal"
+	: >"$SERMON_INSTALL_ROOT/var/log/messages"
+	can_read() { [ "$1" = "$SERMON_INSTALL_ROOT/var/log/messages" ]; }
+	run log_source_hint
+	[ -z "$output" ]
+}
+
+# Alpine has no machine-id without systemd or dbus; the agent needs one (M2-20).
+@test "creates a machine-id only where there is none" {
+	ensure_machine_id
+	id=$(cat "$SERMON_INSTALL_ROOT/etc/machine-id")
+	[[ "$id" =~ ^[0-9a-f]{32}$ ]]
+	[ "$(stat -c %a "$SERMON_INSTALL_ROOT/etc/machine-id")" = 444 ]
+	ensure_machine_id
+	[ "$(cat "$SERMON_INSTALL_ROOT/etc/machine-id")" = "$id" ]
+
+	rm "$SERMON_INSTALL_ROOT/etc/machine-id"
+	mkdir -p "$SERMON_INSTALL_ROOT/var/lib/dbus"
+	printf 'fedcba9876543210fedcba9876543210\n' >"$SERMON_INSTALL_ROOT/var/lib/dbus/machine-id"
+	ensure_machine_id
+	[ ! -e "$SERMON_INSTALL_ROOT/etc/machine-id" ]
+}

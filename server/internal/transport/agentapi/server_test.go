@@ -922,7 +922,8 @@ func TestSession_StoresSecurityEvents(t *testing.T) {
 			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_SystemReboot{SystemReboot: &agentv1.SystemReboot{PreviousBootId: "cc8f", UptimeBefore: durationpb.New(time.Hour)}}},
 			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_AccountCreated{AccountCreated: &agentv1.AccountCreated{User: "bob", Uid: proto.Uint32(1001)}}},
 			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_OomKill{OomKill: &agentv1.OomKill{Pid: 42, Process: "python3"}}},
-			{OccurredAt: timestamppb.New(at), Event: &agentv1.SecurityEvent_SudoNotAllowed{SudoNotAllowed: &agentv1.SudoNotAllowed{User: "carol", Target: "root", Tty: "pts/1"}}},
+			// From a classic log file (ADR 0025).
+			{OccurredAt: timestamppb.New(at), Unverified: true, Event: &agentv1.SecurityEvent_SudoNotAllowed{SudoNotAllowed: &agentv1.SudoNotAllowed{User: "carol", Target: "root", Tty: "pts/1"}}},
 		}}},
 	}}}
 	if err := stream.Send(batch); err != nil {
@@ -950,5 +951,8 @@ func TestSession_StoresSecurityEvents(t *testing.T) {
 	}
 	if *e[3].Details.UID != 1001 || e[4].Details.PID != 42 || e[4].Details.Process != "python3" || e[5].Details.Target != "root" || e[5].Details.TTY != "pts/1" {
 		t.Errorf("details = %+v %+v %+v", e[3].Details, e[4].Details, e[5].Details)
+	}
+	if !e[5].Unverified || e[0].Unverified {
+		t.Errorf("unverified = %v, %v; want only the event from the log file", e[0].Unverified, e[5].Unverified)
 	}
 }

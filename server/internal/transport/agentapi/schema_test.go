@@ -264,6 +264,10 @@ func TestSchema_AgentSecurityEventsAreValid(t *testing.T) {
 	kinds := map[string]bool{}
 	for _, e := range batch.GetEvents() {
 		kinds[fmt.Sprintf("%T", e.GetEvent())] = true
+		// Written before ADR 0025: an older agent's events are verified (journald).
+		if e.GetUnverified() {
+			t.Errorf("golden event %v is unverified", e)
+		}
 	}
 	if len(kinds) != 11 {
 		t.Errorf("%d kinds of events in the golden batch, want all 11: %v", len(kinds), kinds)

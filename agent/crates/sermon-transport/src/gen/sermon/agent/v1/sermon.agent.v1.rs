@@ -242,6 +242,12 @@ pub struct SecurityEvent {
     /// occurred_at is the time from the log line, not the time of sending.
     #[prost(message, optional, tag="1")]
     pub occurred_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// unverified is set for events from classic log files whose sender is unknown or a normal user
+    /// (ADR 0025): anyone on the host could have written the line. Events from the journal, and from
+    /// the SerMon rsyslog template with root as sender, leave it false; so do older agents, which
+    /// read only the journal.
+    #[prost(bool, tag="13")]
+    pub unverified: bool,
     /// event is what happened; exactly one must be set.
     #[prost(oneof="security_event::Event", tags="2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12")]
     pub event: ::core::option::Option<security_event::Event>,

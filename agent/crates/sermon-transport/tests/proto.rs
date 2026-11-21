@@ -154,6 +154,8 @@ fn security_events_roundtrip_in_a_batch() {
                         method: i32::from(SshAuthMethod::Password),
                         invalid_user: true,
                     })),
+                    // From a classic log file (ADR 0025).
+                    unverified: true,
                 }],
             })),
         })),

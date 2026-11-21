@@ -64,7 +64,7 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO agent_certificates (serial, org_id, node_id, authority_id, not_before, not_after) VALUES ('"+certAl+"', '"+orgAlpha+"', '"+nodeAl+"', (SELECT id FROM pki_authorities WHERE active), now() - interval '1 hour', now() + interval '30 days')",
 		"INSERT INTO enrollment_tokens (id, org_id, group_id, token_hash, expires_at, max_uses) VALUES ('"+tokenAl+"', '"+orgAlpha+"', '"+groupAl+"', sha256(convert_to('"+tokenAl+"', 'UTF8')), now() + interval '1 hour', 1)",
 		"INSERT INTO invitations (id, org_id, email, role, token_hash, expires_at) VALUES ('"+inviteAl+"', '"+orgAlpha+"', 'invited-a@example.org', 'admin', sha256(convert_to('"+inviteTokenAl+"', 'UTF8')), now() + interval '1 day')",
-		"INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip) SELECT '"+orgAlpha+"', '"+nodeAl+"', now() - interval '1 minute', 'ssh.login.failed', 'alpha-user', '192.0.2.77' WHERE NOT EXISTS (SELECT 1 FROM security_events WHERE user_name = 'alpha-user')",
+		"INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip, unverified) SELECT '"+orgAlpha+"', '"+nodeAl+"', now() - interval '1 minute', 'ssh.login.failed', 'alpha-user', '192.0.2.77', true WHERE NOT EXISTS (SELECT 1 FROM security_events WHERE user_name = 'alpha-user')",
 		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
 		"DELETE FROM role_bindings WHERE org_id = '"+orgBeta+"'",
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgBeta+"', '"+beaID+"', 'admin')",

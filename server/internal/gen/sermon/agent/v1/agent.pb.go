@@ -1277,7 +1277,12 @@ type SecurityEvent struct {
 	//	*SecurityEvent_AccountDeleted
 	//	*SecurityEvent_SystemReboot
 	//	*SecurityEvent_OomKill
-	Event         isSecurityEvent_Event `protobuf_oneof:"event"`
+	Event isSecurityEvent_Event `protobuf_oneof:"event"`
+	// unverified is set for events from classic log files whose sender is unknown or a normal user
+	// (ADR 0025): anyone on the host could have written the line. Events from the journal, and from
+	// the SerMon rsyslog template with root as sender, leave it false; so do older agents, which
+	// read only the journal.
+	Unverified    bool `protobuf:"varint,13,opt,name=unverified,proto3" json:"unverified,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1423,6 +1428,13 @@ func (x *SecurityEvent) GetOomKill() *OomKill {
 		}
 	}
 	return nil
+}
+
+func (x *SecurityEvent) GetUnverified() bool {
+	if x != nil {
+		return x.Unverified
+	}
+	return false
 }
 
 type isSecurityEvent_Event interface {
@@ -2355,7 +2367,7 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\fmin_interval\x18\x01 \x01(\v2\x19.google.protobuf.DurationB\r\xbaH\n" +
 	"\xaa\x01\a\"\x03\b\x90\x1c2\x00R\vminInterval\"Y\n" +
 	"\x12SecurityEventBatch\x12C\n" +
-	"\x06events\x18\x01 \x03(\v2\x1e.sermon.agent.v1.SecurityEventB\v\xbaH\b\x92\x01\x05\b\x01\x10\xf4\x03R\x06events\"\xa5\a\n" +
+	"\x06events\x18\x01 \x03(\v2\x1e.sermon.agent.v1.SecurityEventB\v\xbaH\b\x92\x01\x05\b\x01\x10\xf4\x03R\x06events\"\xc5\a\n" +
 	"\rSecurityEvent\x12C\n" +
 	"\voccurred_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\n" +
 	"occurredAt\x12K\n" +
@@ -2370,7 +2382,10 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x0faccount_deleted\x18\n" +
 	" \x01(\v2\x1f.sermon.agent.v1.AccountDeletedH\x00R\x0eaccountDeleted\x12D\n" +
 	"\rsystem_reboot\x18\v \x01(\v2\x1d.sermon.agent.v1.SystemRebootH\x00R\fsystemReboot\x125\n" +
-	"\boom_kill\x18\f \x01(\v2\x18.sermon.agent.v1.OomKillH\x00R\aoomKillB\x0e\n" +
+	"\boom_kill\x18\f \x01(\v2\x18.sermon.agent.v1.OomKillH\x00R\aoomKill\x12\x1e\n" +
+	"\n" +
+	"unverified\x18\r \x01(\bR\n" +
+	"unverifiedB\x0e\n" +
 	"\x05event\x12\x05\xbaH\x02\b\x01\"v\n" +
 	"\tSshRemote\x12\x19\n" +
 	"\x02ip\x18\x01 \x01(\tB\a\xbaH\x04r\x02p\x01H\x00R\x02ip\x12\x1d\n" +

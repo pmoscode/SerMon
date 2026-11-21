@@ -550,3 +550,40 @@ func TestEvent_DimensionsAreSanitized(t *testing.T) {
 		t.Errorf("results %v, want the dimension %q", got, want)
 	}
 }
+
+// Events from classic log files (ADR 0025): one unverified event among the counted ones marks the
+// alert, whatever notifyFields say – a forged line could have raised the count.
+func TestEvent_UnverifiedEventsMarkTheAlert(t *testing.T) {
+	f := &fakeEvents{}
+	verified := burst(secevent.SSHLoginFailed, web, 11, 2*time.Minute, 10*time.Second, "192.0.2.7", "root")
+	mixed := burst(secevent.SSHLoginFailed, web, 11, 2*time.Minute, 10*time.Second, "192.0.2.8", "root")
+	mixed[3].Unverified = true
+	f.add(orgA, verified...)
+	f.add(orgA, mixed...)
+	got := evaluateEvents(t, bruteforce(), eventEnv(f, orgA, webNode))
+	if o := got[web.String()+"|"+ipDim("192.0.2.7")]; o.Fields[secevent.FieldSource] != "" {
+		t.Errorf("verified only: %v, want no source field", o.Fields)
+	}
+	if o := got[web.String()+"|"+ipDim("192.0.2.8")]; o.Fields[secevent.FieldSource] != secevent.SourceUnverified || o.Fields["user"] != "root" {
+		t.Errorf("one unverified: %v, want source=unverified next to the notify fields", o.Fields)
+	}
+
+	// Without notifyFields, and per node in a fleet correlation.
+	g := &fakeEvents{}
+	oom := ev(secevent.OOMKill, web, time.Minute, "", "")
+	oom.Unverified = true
+	g.add(orgA, oom)
+	rule := alerting.EventRule{Kind: secevent.OOMKill, Window: 15 * time.Minute, Critical: 1}
+	if o := evaluateEvents(t, rule, eventEnv(g, orgA, webNode))[web.String()+"|"]; o.Fields[secevent.FieldSource] != secevent.SourceUnverified {
+		t.Errorf("oom without notify fields: %v", o.Fields)
+	}
+	h := &fakeEvents{}
+	forged := ev(secevent.SSHLoginFailed, app01, 3*time.Minute, "192.0.2.7", "x")
+	forged.Unverified = true
+	h.add(orgA, ev(secevent.SSHLoginFailed, web, time.Minute, "192.0.2.7", "root"), ev(secevent.SSHLoginFailed, db01, 2*time.Minute, "192.0.2.7", "root"), forged)
+	for node, o := range evaluateEvents(t, correlation(), eventEnv(h, orgA, webNode, dbNode, appNode)) {
+		if o.Level != alert.LevelWarning || o.Fields[secevent.FieldSource] != secevent.SourceUnverified {
+			t.Errorf("correlation %s: %+v, want every node marked: one node's events may be forged", node, o)
+		}
+	}
+}

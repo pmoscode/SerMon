@@ -94,6 +94,9 @@ message SecurityEvent {
   uint32 remote_port = 9;
   // details are the fields of particular kinds.
   SecurityEventDetails details = 10;
+  // unverified is set for events from a classic log file whose sender anyone on the host could
+  // be (ADR 0025); the UI marks them.
+  bool unverified = 11;
 }
 
 // SecurityEventDetails are the fields of particular event kinds; unset fields are empty.

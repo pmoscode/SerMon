@@ -53,11 +53,17 @@ pub fn read_host_facts(root: &ProcRoot) -> Result<HostFacts, HostFactsError> {
         "/proc/sys/kernel/osrelease",
         MAX_KERNEL_RELEASE_LEN,
     )?;
-    let machine_id = MachineId::parse(&root.read_etc("machine-id")?).map_err(|error| {
-        HostFactsError::Invalid {
-            file: "/etc/machine-id",
-            reason: error.to_string(),
-        }
+    // Without systemd (Alpine) dbus may keep it; install.sh creates /etc/machine-id otherwise.
+    let (text, file) = match root.read_etc("machine-id") {
+        Err(error) if error.is_not_found() => match root.read_var("lib/dbus/machine-id") {
+            Ok(text) => (text, "/var/lib/dbus/machine-id"),
+            Err(_) => return Err(error.into()),
+        },
+        other => (other?, "/etc/machine-id"),
+    };
+    let machine_id = MachineId::parse(&text).map_err(|error| HostFactsError::Invalid {
+        file,
+        reason: error.to_string(),
     })?;
     let os = match root.read_etc("os-release") {
         Ok(text) => parse_os_release(&text),
@@ -276,6 +282,26 @@ mod tests {
         assert!(
             matches!(&error, HostFactsError::Read(read) if read.is_not_found()),
             "{error}"
+        );
+    }
+
+    // Alpine without systemd: dbus keeps the machine-id in /var/lib/dbus (M2-20).
+    #[test]
+    fn falls_back_to_the_machine_id_of_dbus() {
+        let dir = copy_fixture("debian-13");
+        std::fs::remove_file(dir.path().join("etc/machine-id")).unwrap();
+        std::fs::create_dir_all(dir.path().join("var/lib/dbus")).unwrap();
+        std::fs::write(
+            dir.path().join("var/lib/dbus/machine-id"),
+            "fedcba9876543210fedcba9876543210\n",
+        )
+        .unwrap();
+
+        let facts = read_host_facts(&ProcRoot::new(dir.path())).unwrap();
+
+        assert_eq!(
+            facts.machine_id.as_str(),
+            "fedcba9876543210fedcba9876543210"
         );
     }
 

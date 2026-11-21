@@ -211,7 +211,10 @@ type SecurityEvent struct {
 	// remote_port is the port of the other end; 0 if unknown.
 	RemotePort uint32 `protobuf:"varint,9,opt,name=remote_port,json=remotePort,proto3" json:"remote_port,omitempty"`
 	// details are the fields of particular kinds.
-	Details       *SecurityEventDetails `protobuf:"bytes,10,opt,name=details,proto3" json:"details,omitempty"`
+	Details *SecurityEventDetails `protobuf:"bytes,10,opt,name=details,proto3" json:"details,omitempty"`
+	// unverified is set for events from a classic log file whose sender anyone on the host could
+	// be (ADR 0025); the UI marks them.
+	Unverified    bool `protobuf:"varint,11,opt,name=unverified,proto3" json:"unverified,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -314,6 +317,13 @@ func (x *SecurityEvent) GetDetails() *SecurityEventDetails {
 		return x.Details
 	}
 	return nil
+}
+
+func (x *SecurityEvent) GetUnverified() bool {
+	if x != nil {
+		return x.Unverified
+	}
+	return false
 }
 
 // SecurityEventDetails are the fields of particular event kinds; unset fields are empty.
@@ -480,7 +490,7 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\x05_user\"z\n" +
 	"\x1aListSecurityEventsResponse\x124\n" +
 	"\x06events\x18\x01 \x03(\v2\x1c.sermon.web.v1.SecurityEventR\x06events\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xf8\x02\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x98\x03\n" +
 	"\rSecurityEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12;\n" +
@@ -496,7 +506,10 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\vremote_port\x18\t \x01(\rR\n" +
 	"remotePort\x12=\n" +
 	"\adetails\x18\n" +
-	" \x01(\v2#.sermon.web.v1.SecurityEventDetailsR\adetails\"\x8e\x03\n" +
+	" \x01(\v2#.sermon.web.v1.SecurityEventDetailsR\adetails\x12\x1e\n" +
+	"\n" +
+	"unverified\x18\v \x01(\bR\n" +
+	"unverified\"\x8e\x03\n" +
 	"\x14SecurityEventDetails\x12\x16\n" +
 	"\x06method\x18\x01 \x01(\tR\x06method\x12!\n" +
 	"\finvalid_user\x18\x02 \x01(\bR\vinvalidUser\x12\x19\n" +

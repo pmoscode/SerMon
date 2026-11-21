@@ -27,7 +27,7 @@ func (q *Queries) ExpireSecurityEventPartitions(ctx context.Context, before time
 
 const listSecurityEvents = `-- name: ListSecurityEvents :many
 SELECT e.id, e.node_id, e.occurred_at, e.received_at, e.kind, e.user_name, e.remote_ip, e.remote_host,
-       e.remote_port, e.details
+       e.remote_port, e.details, e.unverified
 FROM security_events e
 WHERE e.occurred_at >= $1 AND e.occurred_at < $2
   AND ($3::boolean
@@ -67,6 +67,7 @@ type ListSecurityEventsRow struct {
 	RemoteHost pgtype.Text
 	RemotePort pgtype.Int4
 	Details    []byte
+	Unverified bool
 }
 
 // Newest first; the scope's groups are those of the node now (events of removed nodes only for
@@ -103,6 +104,7 @@ func (q *Queries) ListSecurityEvents(ctx context.Context, arg ListSecurityEvents
 			&i.RemoteHost,
 			&i.RemotePort,
 			&i.Details,
+			&i.Unverified,
 		); err != nil {
 			return nil, err
 		}
@@ -130,7 +132,7 @@ func (q *Queries) LockNodeEventSeq(ctx context.Context, nodeID uuid.UUID) (int64
 
 const receivedSecurityEvents = `-- name: ReceivedSecurityEvents :many
 SELECT e.id, e.node_id, e.occurred_at, e.received_at, e.kind, e.user_name, e.remote_ip, e.remote_host,
-       e.remote_port, e.details
+       e.remote_port, e.details, e.unverified
 FROM security_events e
 WHERE e.kind = $1 AND e.node_id = ANY ($2::uuid[])
   AND e.received_at >= $3
@@ -158,6 +160,7 @@ type ReceivedSecurityEventsRow struct {
 	RemoteHost pgtype.Text
 	RemotePort pgtype.Int4
 	Details    []byte
+	Unverified bool
 }
 
 // The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
@@ -189,6 +192,7 @@ func (q *Queries) ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecuri
 			&i.RemoteHost,
 			&i.RemotePort,
 			&i.Details,
+			&i.Unverified,
 		); err != nil {
 			return nil, err
 		}

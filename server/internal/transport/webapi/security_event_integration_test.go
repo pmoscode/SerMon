@@ -32,7 +32,8 @@ func TestSecurityEvents_ListedForTheCallersGroups(t *testing.T) {
 			t.Fatalf("%s: %v", email, err)
 		}
 		events := res.Msg.GetEvents()
-		if len(events) != 1 || events[0].GetUser() != "alpha-user" || events[0].GetNodeId() != nodeAl || events[0].GetRemoteIp() != "192.0.2.77" {
+		if len(events) != 1 || events[0].GetUser() != "alpha-user" || events[0].GetNodeId() != nodeAl || events[0].GetRemoteIp() != "192.0.2.77" ||
+			!events[0].GetUnverified() {
 			t.Errorf("%s sees %v", email, events)
 		}
 	}

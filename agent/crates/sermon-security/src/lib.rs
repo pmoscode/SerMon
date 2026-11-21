@@ -46,14 +46,42 @@ pub struct LogLine<'a> {
     pub boot_id: Option<&'a str>,
     /// Microseconds since the boot.
     pub monotonic_us: Option<u64>,
+    /// Where the line comes from; it decides how far its sender is known.
+    pub source: Source,
     /// The message.
     pub message: &'a str,
+}
+
+/// Where a line comes from (ADR 0023, ADR 0025).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    /// The systemd journal: `_UID` and `_CAP_EFFECTIVE` are set by journald.
+    Journal,
+    /// A classic log file: `uid` only with the SerMon rsyslog template, otherwise unknown.
+    File,
 }
 
 impl LogLine<'_> {
     /// Root, or a process with capabilities (setuid sudo): not a normal user.
     fn privileged(&self) -> bool {
         self.uid == Some(0) || self.cap_effective.is_some_and(|caps| caps != 0)
+    }
+
+    /// Whether the line may yield events, and whether they count as verified (ADR 0023, 0025).
+    /// `setuid` marks sudo, whose lines carry the UID of the calling user.
+    fn trust(&self, setuid: bool) -> Option<bool> {
+        let kernel = self.transport == Some("kernel");
+        match self.source {
+            // journald sets the transport; for everything else the sender must be privileged.
+            Source::Journal => (kernel || self.privileged()).then_some(true),
+            Source::File => match self.uid {
+                // Classic syslog: anyone could have written it.
+                None => Some(false),
+                Some(0) => Some(true),
+                // rsyslog saw a normal user: forged, but real sudo looks the same.
+                Some(_) => (setuid && !kernel).then_some(false),
+            },
+        }
     }
 }
 
@@ -64,6 +92,9 @@ pub struct SecurityEvent {
     pub at_us: u64,
     /// What happened.
     pub kind: EventKind,
+    /// The sender is known to be privileged (ADR 0023); `false` for lines of classic log files
+    /// whose sender anyone could be (ADR 0025).
+    pub verified: bool,
 }
 
 /// The events (names as in KONZEPT §11).
@@ -263,12 +294,14 @@ pub struct ParserConfig {
     pub sudo_commands: bool,
 }
 
-/// Turns log lines into security events. Stateful only for reboots: it remembers the boot of the
-/// previous line.
+/// Turns log lines into security events. Stateful for reboots (it remembers the boot of the
+/// previous line) and for sudo: once a verified PAM failure was seen, sudo's own summary
+/// (`N incorrect password attempts`) no longer counts, it repeats the PAM lines.
 #[derive(Debug)]
 pub struct Parser {
     config: ParserConfig,
     boot: Option<(String, Option<u64>)>,
+    sudo_pam: bool,
 }
 
 impl Parser {
@@ -279,24 +312,37 @@ impl Parser {
         Self {
             config,
             boot: last_boot,
+            sudo_pam: false,
         }
     }
 
     /// Appends the events of `line` to `out`.
     pub fn parse(&mut self, line: &LogLine<'_>, out: &mut Vec<SecurityEvent>) {
         self.reboot(line, out);
+        let kernel = line.transport == Some("kernel");
+        let sudo_line = !kernel && line.identifier == Some("sudo");
+        let Some(verified) = line.trust(sudo_line) else {
+            return;
+        };
         let kind = match line.identifier {
-            _ if line.transport == Some("kernel") => oom(line.message),
-            Some("sshd" | "sshd-session" | "sshd-auth") if line.privileged() => ssh(line.message),
-            Some("sudo") if line.privileged() => sudo(line.message, self.config),
-            Some("useradd") if line.privileged() => account_created(line.message),
-            Some("userdel") if line.privileged() => account_deleted(line.message),
+            _ if kernel => oom(line.message),
+            Some("sshd" | "sshd-session" | "sshd-auth") => ssh(line.message),
+            Some("sudo") => {
+                let kind = sudo(line.message, self.config, self.sudo_pam);
+                if verified && matches!(kind, Some((_, Pam::Yes))) {
+                    self.sudo_pam = true;
+                }
+                kind.map(|(kind, _)| kind)
+            }
+            Some("useradd") => account_created(line.message),
+            Some("userdel") => account_deleted(line.message),
             _ => None,
         };
         if let Some(kind) = kind {
             out.push(SecurityEvent {
                 at_us: line.at_us,
                 kind,
+                verified,
             });
         }
     }
@@ -311,12 +357,14 @@ impl Parser {
             }
             last => {
                 if let Some((previous, uptime)) = last.take() {
+                    // Boot IDs come from journald only.
                     out.push(SecurityEvent {
                         at_us: line.at_us,
                         kind: EventKind::SystemReboot {
                             previous_boot: cut(previous, MAX_SHORT_BYTES),
                             uptime_before_us: uptime,
                         },
+                        verified: true,
                     });
                 }
                 *last = Some((boot.to_owned(), line.monotonic_us));
@@ -415,6 +463,11 @@ static SUDO_AUTH: LazyLock<Regex> = LazyLock::new(|| {
         r"^pam_unix\(sudo(?:-i)?:auth\): authentication failure;.* tty=(?P<tty>\S*) .* user=(?P<user>\S+)\s*$",
     )
 });
+static SUDO_ATTEMPTS: LazyLock<Regex> = LazyLock::new(|| {
+    regex(
+        r"^\s*(?P<user>\S+) : \d+ incorrect password attempts? ; (?:TTY=(?P<tty>\S+) ; )?PWD=.*? ; USER=\S+ ; COMMAND=",
+    )
+});
 static SUDO_DENIED: LazyLock<Regex> = LazyLock::new(|| {
     regex(
         r"^\s*(?P<user>\S+) : (?:user NOT in sudoers|user NOT authorized on host|command not allowed) ; (?:TTY=(?P<tty>\S+) ; )?PWD=.*? ; USER=(?P<target>\S+) ; COMMAND=",
@@ -426,29 +479,48 @@ static SUDO_COMMAND: LazyLock<Regex> = LazyLock::new(|| {
     )
 });
 
-fn sudo(message: &str, config: ParserConfig) -> Option<EventKind> {
+/// Whether a sudo event came from a PAM line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pam {
+    Yes,
+    No,
+}
+
+/// `pam_seen`: a verified PAM failure was seen, so sudo's summary repeats what counted already.
+fn sudo(message: &str, config: ParserConfig, pam_seen: bool) -> Option<(EventKind, Pam)> {
     if let Some(c) = SUDO_AUTH.captures(message) {
-        return Some(EventKind::SudoAuthFailed {
+        let kind = EventKind::SudoAuthFailed {
             user: cut(c["user"].to_owned(), MAX_USER_BYTES),
             tty: tty(c.name("tty").map(|t| t.as_str())),
-        });
+        };
+        return Some((kind, Pam::Yes));
+    }
+    if let Some(c) = SUDO_ATTEMPTS.captures(message) {
+        // sudo without PAM (Alpine) logs only this; with PAM it follows the pam_unix lines.
+        let kind = EventKind::SudoAuthFailed {
+            user: cut(c["user"].to_owned(), MAX_USER_BYTES),
+            tty: tty(c.name("tty").map(|t| t.as_str())),
+        };
+        return (!pam_seen).then_some((kind, Pam::No));
     }
     if let Some(c) = SUDO_DENIED.captures(message) {
-        return Some(EventKind::SudoNotAllowed {
+        let kind = EventKind::SudoNotAllowed {
             user: cut(c["user"].to_owned(), MAX_USER_BYTES),
             target: cut(c["target"].to_owned(), MAX_USER_BYTES),
             tty: tty(c.name("tty").map(|t| t.as_str())),
-        });
+        };
+        return Some((kind, Pam::No));
     }
     if config.sudo_commands
         && let Some(c) = SUDO_COMMAND.captures(message)
     {
-        return Some(EventKind::SudoCommand {
+        let kind = EventKind::SudoCommand {
             user: cut(c["user"].to_owned(), MAX_USER_BYTES),
             target: cut(c["target"].to_owned(), MAX_USER_BYTES),
             tty: tty(c.name("tty").map(|t| t.as_str())),
             command: cut(redact(&c["command"]), MAX_COMMAND_BYTES),
-        });
+        };
+        return Some((kind, Pam::No));
     }
     None
 }
@@ -583,8 +655,123 @@ mod tests {
             cap_effective: Some(0x1ff_ffff_ffff),
             boot_id: None,
             monotonic_us: None,
+            source: Source::Journal,
             message,
         }
+    }
+
+    fn parse_events(line: &LogLine<'_>) -> Vec<SecurityEvent> {
+        let mut out = Vec::new();
+        Parser::new(
+            ParserConfig {
+                sudo_commands: true,
+            },
+            None,
+        )
+        .parse(line, &mut out);
+        out
+    }
+
+    // Classic log files (ADR 0025): without a sender every line counts, but unverified; with the
+    // UID from rsyslog root is verified, another UID forged – except for setuid sudo.
+    #[test]
+    fn file_lines_are_unverified_unless_root_sent_them() {
+        let failed = "Failed password for root from 203.0.113.9 port 22 ssh2";
+        let sudo = "pam_unix(sudo:auth): authentication failure; logname= uid=1000 euid=0 tty=/dev/pts/1 ruser=alice rhost=  user=alice";
+        let oom = "Out of memory: Killed process 42 (stress) total-vm:1kB";
+        let file = |identifier, uid, message| LogLine {
+            identifier: Some(identifier),
+            transport: (identifier == "kernel").then_some("kernel"),
+            uid,
+            cap_effective: None,
+            source: Source::File,
+            ..sshd(message)
+        };
+        let verdict = |line: &LogLine<'_>| -> Option<bool> {
+            let events = parse_events(line);
+            assert!(events.len() <= 1, "{events:?}");
+            events.first().map(|e| e.verified)
+        };
+        for (identifier, message) in [("sshd", failed), ("sudo", sudo), ("kernel", oom)] {
+            assert_eq!(
+                verdict(&file(identifier, None, message)),
+                Some(false),
+                "{identifier} without sender"
+            );
+            assert_eq!(
+                verdict(&file(identifier, Some(0), message)),
+                Some(true),
+                "{identifier} from root"
+            );
+        }
+        assert_eq!(
+            verdict(&file("sshd", Some(1000), failed)),
+            None,
+            "forged sshd"
+        );
+        assert_eq!(
+            verdict(&file(
+                "useradd",
+                Some(1000),
+                "new user: name=backdoor, UID=0, GID=0, home=/root, shell=/bin/sh"
+            )),
+            None
+        );
+        assert_eq!(
+            verdict(&file("sudo", Some(1000), sudo)),
+            Some(false),
+            "setuid sudo"
+        );
+        assert_eq!(
+            verdict(&file("kernel", Some(1000), oom)),
+            None,
+            "kernel lines from a user"
+        );
+        // The journal: verified, as before.
+        assert_eq!(verdict(&sshd(failed)), Some(true));
+    }
+
+    // sudo without PAM (Alpine) logs only its summary; with PAM the pam_unix line counts and the
+    // summary after it must not count again. Only a verified PAM line switches that.
+    #[test]
+    fn sudo_summaries_count_only_without_pam() {
+        let summary = "   alice : 1 incorrect password attempt ; TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/true";
+        let pam = "pam_unix(sudo:auth): authentication failure; logname= uid=1000 euid=0 tty=/dev/pts/1 ruser=alice rhost=  user=alice";
+        let file = |message, uid| LogLine {
+            identifier: Some("sudo"),
+            uid,
+            cap_effective: None,
+            source: Source::File,
+            ..sshd(message)
+        };
+        let journal = |message| LogLine {
+            identifier: Some("sudo"),
+            uid: Some(1000),
+            ..sshd(message)
+        };
+        let run = |lines: &[LogLine<'_>]| -> usize {
+            let mut parser = Parser::new(ParserConfig::default(), None);
+            let mut out = Vec::new();
+            for line in lines {
+                parser.parse(line, &mut out);
+            }
+            out.iter()
+                .filter(|e| matches!(e.kind, EventKind::SudoAuthFailed { .. }))
+                .count()
+        };
+        assert_eq!(run(&[file(summary, None)]), 1, "busybox file");
+        assert_eq!(
+            parse(&file(summary, None)),
+            [EventKind::SudoAuthFailed {
+                user: "alice".into(),
+                tty: Some("pts/0".into())
+            }]
+        );
+        assert_eq!(run(&[journal(pam), journal(summary)]), 1, "PAM: once");
+        assert_eq!(run(&[journal(pam), journal(summary), journal(summary)]), 1);
+        // A forged PAM line in a file must not hide the summaries of later failures.
+        assert_eq!(run(&[file(pam, None), file(summary, None)]), 2);
+        assert_eq!(run(&[file(pam, Some(1000)), file(summary, Some(1000))]), 2);
     }
 
     fn parse(line: &LogLine<'_>) -> Vec<EventKind> {
@@ -843,7 +1030,8 @@ mod tests {
                 kind: EventKind::SystemReboot {
                     previous_boot: "a".into(),
                     uptime_before_us: Some(500)
-                }
+                },
+                verified: true,
             }]
         );
 
@@ -888,8 +1076,15 @@ mod tests {
                 command: "/usr/bin/mysql --password=*** -e 'select 1'".into()
             }]
         );
-        assert!(parse(&sudo("   alice : 3 incorrect password attempts ; TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/true")).is_empty(),
-            "a failed attempt is no command"
+        // A failed attempt is no command; without a PAM line before it, it is the failure itself.
+        assert_eq!(
+            parse(&sudo(
+                "   alice : 3 incorrect password attempts ; TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/true"
+            )),
+            [EventKind::SudoAuthFailed {
+                user: "alice".into(),
+                tty: Some("pts/0".into())
+            }]
         );
         let mut off = Vec::new();
         Parser::new(ParserConfig::default(), None).parse(

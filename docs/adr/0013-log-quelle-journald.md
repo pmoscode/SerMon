@@ -120,3 +120,9 @@ journalctl -o json --all --follow --output-fields=<feste Liste> (--after-cursor=
 Die feste Feldliste enthält zusätzlich `_CAP_EFFECTIVE` (11 Felder). Daran erkennen die Security-Parser einen
 privilegierten Absender und verwerfen gefälschte Zeilen ([ADR 0023](0023-vertrauen-in-security-events.md)). Außerdem
 liest der Parser `__MONOTONIC_TIMESTAMP`, das ohnehin jede Zeile hat (Laufzeit vor einem Reboot).
+
+## Nachtrag M2-20 (Hosts ohne journald)
+
+Fehlt `/run/systemd/journal`, startet der Agent die Journal-Quelle gar nicht, sondern liest eine Logdatei
+([ADR 0025](0025-logdateien-ohne-journald.md)). Das Warnen mit Backoff gilt nur noch, wenn journald läuft, `journalctl`
+aber fehlt.

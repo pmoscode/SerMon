@@ -78,7 +78,7 @@ func securityEvent(e secevent.Event) *webv1.SecurityEvent {
 	d := e.Details
 	out := &webv1.SecurityEvent{
 		Id: e.ID, NodeId: e.Node.String(), OccurredAt: timestamppb.New(e.OccurredAt), ReceivedAt: timestamppb.New(e.ReceivedAt),
-		Kind: string(e.Kind), User: e.User,
+		Kind: string(e.Kind), User: e.User, Unverified: e.Unverified,
 		Details: &webv1.SecurityEventDetails{
 			Method: d.Method, InvalidUser: d.InvalidUser, KeyType: d.KeyType, KeyFingerprint: d.KeyFingerprint, Tty: d.TTY,
 			Target: d.Target, Command: d.Command, Uid: d.UID, Pid: d.PID, Process: d.Process, PreviousBootId: d.PreviousBootID,

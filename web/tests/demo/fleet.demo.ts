@@ -3,8 +3,8 @@ import { expect, test } from '../e2e/fixtures';
 import { caddyCA, exec, invitationLink, setupToken, tamperDownload } from './stack';
 
 /**
- * The M1 demo (IMPLEMENTIERUNGSPLAN §4): a fresh installation, six Linux hosts with systemd (Debian,
- * Ubuntu, the RHEL family and Fedora) get
+ * The M1 demo (IMPLEMENTIERUNGSPLAN §4): a fresh installation, seven Linux hosts – Debian, Ubuntu,
+ * the RHEL family and Fedora with systemd, Alpine with OpenRC – get
  * the agent with the one-liner from the UI, and within 2 minutes they show up with metrics. A user
  * of another organization sees none of it.
  */
@@ -13,14 +13,38 @@ import { caddyCA, exec, invitationLink, setupToken, tamperDownload } from './sta
 const PASSWORD = 'correct horse battery staple'; // betterleaks:allow
 const admin = { name: 'Ann Admin', email: 'ann@example.org' };
 const other = { name: 'Bea Beta', email: 'bea@example.org' };
+/** running, stopped or what the init system says, for systemd and OpenRC. */
+function serviceState(agent: { service: string; init: 'systemd' | 'openrc' }): string {
+	if (agent.init === 'systemd') {
+		const state = exec(agent.service, 'systemctl is-active sermon-agent || true').trim();
+		return state === 'active' ? 'running' : state;
+	}
+	const state = exec(agent.service, 'rc-service sermon-agent status 2>&1 || true');
+	return /started/.test(state) ? 'running' : /stopped/.test(state) ? 'stopped' : state.trim();
+}
+
 const agents = [
-	{ service: 'agent-debian-12', host: 'web-01', trust: 'system', os: 'debian' },
-	{ service: 'agent-debian-13', host: 'web-02', trust: 'fingerprint', os: 'debian' },
-	{ service: 'agent-ubuntu-24-04', host: 'db-01', trust: 'system', os: 'ubuntu' },
+	{ service: 'agent-debian-12', host: 'web-01', trust: 'system', os: 'debian', init: 'systemd' },
+	{
+		service: 'agent-debian-13',
+		host: 'web-02',
+		trust: 'fingerprint',
+		os: 'debian',
+		init: 'systemd'
+	},
+	{ service: 'agent-ubuntu-24-04', host: 'db-01', trust: 'system', os: 'ubuntu', init: 'systemd' },
 	// The RHEL family and Fedora (M2-19).
-	{ service: 'agent-rockylinux-9', host: 'app-01', trust: 'system', os: 'rocky' },
-	{ service: 'agent-almalinux-10', host: 'app-02', trust: 'fingerprint', os: 'almalinux' },
-	{ service: 'agent-fedora-44', host: 'dev-01', trust: 'system', os: 'fedora' }
+	{ service: 'agent-rockylinux-9', host: 'app-01', trust: 'system', os: 'rocky', init: 'systemd' },
+	{
+		service: 'agent-almalinux-10',
+		host: 'app-02',
+		trust: 'fingerprint',
+		os: 'almalinux',
+		init: 'systemd'
+	},
+	{ service: 'agent-fedora-44', host: 'dev-01', trust: 'system', os: 'fedora', init: 'systemd' },
+	// Alpine with OpenRC and without journald (M2-20).
+	{ service: 'agent-alpine-3-22', host: 'edge-01', trust: 'system', os: 'alpine', init: 'openrc' }
 ] as const;
 /** Containers reach the proxy as sermon.test and the agent port of the server directly. */
 const inside = 'https://sermon.test';
@@ -49,7 +73,7 @@ async function call<T>(
 	return (await res.json()) as T;
 }
 
-test('a fresh installation monitors six hosts within two minutes, and Org B sees nothing', async ({
+test('a fresh installation monitors seven hosts within two minutes, and Org B sees nothing', async ({
 	page,
 	browser,
 	baseURL
@@ -125,10 +149,20 @@ test('a fresh installation monitors six hosts within two minutes, and Org B sees
 				ca.root
 			);
 		}
-		const output = exec(agent.service, `${forCommand(agent)} 2>&1`);
+		// Without journald the agent reads busybox syslogd's files; they belong to wheel otherwise.
+		const extra = agent.init === 'openrc' ? ' --grant-log-access' : '';
+		const output = exec(agent.service, `${forCommand(agent)}${extra} 2>&1`);
 		expect(output, `${agent.service}:\n${output}`).toContain('signature ok');
-		expect(exec(agent.service, 'systemctl is-active sermon-agent').trim()).toBe('active');
+		expect(serviceState(agent)).toBe('running');
 	}
+
+	// OpenRC stops and starts the agent, which runs as sermon (M2-20).
+	const alpine = agents.find((a) => a.init === 'openrc')!;
+	exec(alpine.service, 'rc-service sermon-agent stop >/dev/null 2>&1');
+	expect(serviceState(alpine)).toBe('stopped');
+	exec(alpine.service, 'rc-service sermon-agent start >/dev/null 2>&1');
+	expect(serviceState(alpine)).toBe('running');
+	expect(exec(alpine.service, "ps -o user,args | grep '[s]ermon-agent run'")).toMatch(/^sermon\s/);
 
 	// The wizard sees the first host; the fleet shows all of them with metrics in under 2 minutes.
 	await expect(page.getByText(/Connected: /)).toBeVisible({ timeout: 60_000 });
@@ -160,6 +194,21 @@ test('a fresh installation monitors six hosts within two minutes, and Org B sees
 	});
 	console.log(`node detail with chart data after ${Math.round((Date.now() - started) / 1000)} s`);
 	await page.screenshot({ path: 'test-results/demo-node.png', fullPage: true });
+
+	// Without journald anyone can write such lines (ADR 0025): twelve failed logins, forged by an
+	// unprivileged user on the Alpine host, fire the brute-force alert – marked as unverified.
+	exec(
+		alpine.service,
+		`for i in $(seq 12); do su nobody -s /bin/sh -c "logger -p auth.info -t sshd 'Failed password for root from 192.0.2.99 port 22 ssh2'"; done`
+	);
+	await page.goto('/alerts');
+	const forged = page
+		.getByRole('article')
+		.filter({ hasText: 'edge-01' })
+		.filter({ hasText: 'SSH brute force' });
+	await expect(forged).toBeVisible({ timeout: 120_000 });
+	await expect(forged.getByRole('note')).toContainText('Source not verified');
+	await page.screenshot({ path: 'test-results/demo-unverified.png', fullPage: true });
 
 	// Tenant isolation: the superadmin creates Org B; its admin sees none of Alpha's nodes. In
 	// production the first admin's link goes out by mail only (M1-39).

@@ -106,7 +106,7 @@ func insertParams(e secevent.Event) (sqlcdb.InsertSecurityEventParams, error) {
 	}
 	p := sqlcdb.InsertSecurityEventParams{
 		NodeID: uuid.UUID(e.Node), OccurredAt: e.OccurredAt, Kind: string(e.Kind), UserName: pgtype.Text{String: e.User, Valid: e.User != "" || userKind(e.Kind)},
-		Details: details,
+		Details: details, Unverified: e.Unverified,
 	}
 	if r := e.Remote; r != nil {
 		if r.IP.IsValid() {
@@ -200,7 +200,7 @@ func eventsOf[R any](rows []R, conv func(R) eventRow) ([]secevent.Event, error) 
 		r := conv(row)
 		e := secevent.Event{
 			ID: r.ID, Node: identity.NodeID(r.NodeID), OccurredAt: r.OccurredAt, ReceivedAt: r.ReceivedAt,
-			Kind: secevent.Kind(r.Kind), User: r.UserName.String,
+			Kind: secevent.Kind(r.Kind), User: r.UserName.String, Unverified: r.Unverified,
 		}
 		if r.RemoteIp != nil || r.RemoteHost.Valid {
 			e.Remote = &secevent.Remote{Host: r.RemoteHost.String, Port: uint16(max(min(r.RemotePort.Int32, 65535), 0))}

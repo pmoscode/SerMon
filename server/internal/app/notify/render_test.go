@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
@@ -277,5 +279,30 @@ func TestDigest_FitsTheDeliveryLog(t *testing.T) {
 	}
 	if len(data) > notify.MaxDigestBytes || len(d.Items) == 0 || len(d.Items)+d.More != 23 {
 		t.Errorf("%d bytes, %d items, %d more", len(data), len(d.Items), d.More)
+	}
+}
+
+// A security alert from classic log files says so first, in words (ADR 0025).
+func TestRender_MarksUnverifiedSources(t *testing.T) {
+	n := bruteForce()
+	n.Fields[secevent.FieldSource] = secevent.SourceUnverified
+	for lang, want := range map[notify.Lang]notify.Line{
+		notify.German:  {Label: "Quelle", Value: "nicht verifiziert (Logdatei, jeder lokale Benutzer kann sie schreiben)"},
+		notify.English: {Label: "Source", Value: "unverified (log file any local user can write to)"},
+	} {
+		m := notify.Render(n, lang, base)
+		i := slices.IndexFunc(m.Lines, func(l notify.Line) bool { return l.Label == want.Label })
+		if i < 0 || m.Lines[i] != want {
+			t.Fatalf("%v: lines %v, want %v", lang, m.Lines, want)
+		}
+		if ts := slices.IndexFunc(m.Lines, func(l notify.Line) bool { return l.Value == "2026-11-21T09:59:58Z" }); ts < i {
+			t.Errorf("%v: the source comes after the event fields: %v", lang, m.Lines)
+		}
+	}
+	// Any other value is shown as it is.
+	n.Fields[secevent.FieldSource] = "journal"
+	m := notify.Render(n, notify.English, base)
+	if !slices.Contains(m.Lines, notify.Line{Label: "Source", Value: "journal"}) {
+		t.Errorf("lines %v", m.Lines)
 	}
 }

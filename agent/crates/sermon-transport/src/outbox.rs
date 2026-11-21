@@ -196,6 +196,7 @@ mod tests {
                     },
                 ),
             ),
+            unverified: false,
         }
     }
 

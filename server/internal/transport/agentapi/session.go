@@ -588,7 +588,7 @@ func remote(r *agentv1.SshRemote) *secevent.Remote {
 // toEvent converts a validated protocol event; the node is set by the session. Event kinds of a
 // newer agent are skipped.
 func toEvent(e *agentv1.SecurityEvent) (secevent.Event, bool) {
-	out := secevent.Event{OccurredAt: e.GetOccurredAt().AsTime()}
+	out := secevent.Event{OccurredAt: e.GetOccurredAt().AsTime(), Unverified: e.GetUnverified()}
 	d := &out.Details
 	switch ev := e.GetEvent().(type) {
 	case *agentv1.SecurityEvent_SshLoginFailed:

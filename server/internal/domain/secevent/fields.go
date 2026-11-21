@@ -23,6 +23,13 @@ var fieldsOf = map[Kind][]string{
 	OOMKill:              {"ts", "pid", "process"},
 }
 
+// FieldSource is the alert field set when a counted event is unverified (ADR 0025); it is no
+// field of the events and cannot be chosen in notifyFields or groupBy.
+const (
+	FieldSource      = "source"
+	SourceUnverified = "unverified"
+)
+
 // FieldsOf returns the field names of a kind, nil for an unknown kind.
 func FieldsOf(k Kind) []string {
 	return slices.Clone(fieldsOf[k])

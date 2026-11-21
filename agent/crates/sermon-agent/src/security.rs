@@ -3,7 +3,7 @@
 //! with M2-07.
 
 use sermon_logs::journal::{Boot, Entry};
-use sermon_security::{Address, AuthMethod, EventKind, LogLine, Remote, SecurityEvent};
+use sermon_security::{Address, AuthMethod, EventKind, LogLine, Remote, SecurityEvent, Source};
 use sermon_transport::proto::agent::v1 as proto;
 
 /// The parsers' view of a journal entry.
@@ -17,6 +17,7 @@ pub fn line(entry: &Entry) -> LogLine<'_> {
         cap_effective: entry.cap_effective,
         boot_id: entry.boot_id.as_deref(),
         monotonic_us: entry.monotonic_us,
+        source: Source::Journal,
         message: &entry.message,
     }
 }
@@ -159,6 +160,7 @@ pub fn to_proto(event: &SecurityEvent) -> proto::SecurityEvent {
     proto::SecurityEvent {
         occurred_at: Some(timestamp(event.at_us)),
         event: Some(message),
+        unverified: !event.verified,
     }
 }
 
@@ -206,6 +208,7 @@ mod tests {
                     port: Some(2222),
                 },
             },
+            verified: true,
         });
         // A reboot with an unknown uptime.
         events.push(SecurityEvent {
@@ -214,6 +217,7 @@ mod tests {
                 previous_boot: "cc8f81a486f84386b00bc31030b4e1bb".into(),
                 uptime_before_us: None,
             },
+            verified: true,
         });
         events
     }
@@ -222,6 +226,18 @@ mod tests {
         proto::SecurityEventBatch {
             events: fixture_events().iter().map(to_proto).collect(),
         }
+    }
+
+    // ADR 0025: the mark of events from classic log files reaches the protocol.
+    #[test]
+    fn marks_unverified_events_in_the_protocol() {
+        let event = |verified| SecurityEvent {
+            at_us: 1,
+            kind: EventKind::AccountDeleted { user: "bob".into() },
+            verified,
+        };
+        assert!(to_proto(&event(false)).unverified);
+        assert!(!to_proto(&event(true)).unverified);
     }
 
     #[test]

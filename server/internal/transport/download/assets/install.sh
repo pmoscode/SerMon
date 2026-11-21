@@ -35,12 +35,15 @@ die() {
 usage() {
 	cat >&2 <<'USAGE'
 usage: install.sh --server URL [--token-file FILE] [--ca-fingerprint sha256:…] [--agent-url URL] [--force]
+                  [--grant-log-access]
 
   --server URL           public HTTPS address of sermon-server (as in the browser)
   --token-file FILE      file with the enrollment token from the UI (or SERMON_ENROLLMENT_TOKEN)
   --ca-fingerprint FP    SHA-256 fingerprint of a self-signed server certificate
   --agent-url URL        mTLS agent API if not <server host>:8443
   --force                replace an existing enrollment of this host
+  --grant-log-access     without journald (Alpine): let busybox syslogd write its files with the
+                         group sermon instead of wheel, so the agent reads the security events
 USAGE
 }
 
@@ -259,13 +262,75 @@ SERVICE
 	chmod 0755 "$ROOT/etc/init.d/sermon-agent"
 }
 
-# parse_args ARG… sets SERVER, TOKEN, FINGERPRINT, AGENT_URL and FORCE and checks them.
+# ensure_machine_id creates /etc/machine-id (128 random bits, like systemd-machine-id-setup) where
+# neither systemd nor dbus left one, as on Alpine: the agent names the host by it.
+ensure_machine_id() {
+	if [ -s "$ROOT/etc/machine-id" ] || [ -s "$ROOT/var/lib/dbus/machine-id" ]; then
+		return 0
+	fi
+	id=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+	printf '%s\n' "$id" >"$ROOT/etc/machine-id"
+	chmod 0444 "$ROOT/etc/machine-id"
+	say "created /etc/machine-id"
+}
+
+# --- log files (hosts without journald, ADR 0025) ----------------------------------------------
+
+# The files the agent reads its security events from, in its order (agent/…/logfile.rs).
+LOG_FILES='var/log/sermon/security.log var/log/auth.log var/log/secure var/log/messages'
+
+# can_read FILE reports whether the sermon user can read FILE.
+can_read() {
+	if command -v runuser >/dev/null 2>&1; then
+		runuser -u sermon -- test -r "$1"
+	else
+		setpriv --reuid=sermon --regid=sermon --init-groups -- test -r "$1"
+	fi
+}
+
+# log_source_hint explains how the agent gets its security events if journald is missing and it
+# cannot read any of the log files.
+log_source_hint() {
+	[ ! -d "$ROOT/run/systemd/journal" ] || return 0
+	for file in $LOG_FILES; do
+		if [ -f "$ROOT/$file" ] && can_read "$ROOT/$file"; then
+			return 0
+		fi
+	done
+	say "note: no journald, and the agent cannot read a log file – no security events (SSH, sudo) yet."
+	say "  verified events: rsyslog with the SerMon template (help: Unverified source), or"
+	say "  rerun with --grant-log-access: busybox syslogd then writes with the group sermon instead of wheel"
+}
+
+# grant_log_access lets busybox syslogd under OpenRC write its files with the group sermon instead of
+# wheel. Its init script sets the group itself, so the change goes into start_pre of
+# /etc/conf.d/syslog, which runs just before the daemon starts. The caller restarts syslog.
+grant_log_access() {
+	script="$ROOT/etc/init.d/syslog"
+	conf="$ROOT/etc/conf.d/syslog"
+	grep -q '^command="/sbin/syslogd"' "$script" 2>/dev/null ||
+		die "--grant-log-access needs busybox syslogd under OpenRC ($script)"
+	grep -q 'SerMon: --grant-log-access' "$conf" 2>/dev/null && return 0
+	if grep -q '^start_pre()' "$conf" 2>/dev/null; then
+		die "$conf defines start_pre already – set the group sermon for syslogd there yourself"
+	fi
+	cat >>"$conf" <<'CONF'
+# SerMon: --grant-log-access of install.sh. The agent (group sermon) reads the security events from
+# the log files; root keeps reading them, members of wheel need doas from now on.
+start_pre() {
+	start_stop_daemon_args="-g sermon -k 027"
+}
+CONF
+}
+
+# parse_args ARG… sets SERVER, TOKEN, FINGERPRINT, AGENT_URL, FORCE and GRANT_LOG_ACCESS and checks them.
 parse_args() {
 	SERVER=''
 	TOKEN=${SERMON_ENROLLMENT_TOKEN:-}
 	FINGERPRINT=''
 	AGENT_URL=''
 	FORCE=''
+	GRANT_LOG_ACCESS=''
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--server) SERVER=${2:-} && shift ;;
@@ -280,6 +345,7 @@ parse_args() {
 		--ca-fingerprint) FINGERPRINT=${2:-} && shift ;;
 		--agent-url) AGENT_URL=${2:-} && shift ;;
 		--force) FORCE=--force ;;
+		--grant-log-access) GRANT_LOG_ACCESS=1 ;;
 		-h | --help) usage && exit 0 ;;
 		*) usage && die "unknown argument $1" ;;
 		esac
@@ -310,6 +376,7 @@ main() {
 	say "signature ok"
 
 	create_user
+	ensure_machine_id
 	install -m 0755 "$work/$binary" "$BIN_DIR/sermon-agent"
 	write_config
 	chown root:sermon "$CONFIG_DIR" "$CONFIG_DIR/agent.toml"
@@ -330,11 +397,21 @@ main() {
 		systemctl enable --now sermon-agent
 		;;
 	openrc)
+		if [ -n "$GRANT_LOG_ACCESS" ]; then
+			grant_log_access
+			rc-service syslog restart
+			# The old daemon may have created a file with wheel while stopping.
+			for file in "$ROOT"/var/log/messages*; do
+				[ ! -f "$file" ] || chgrp sermon "$file"
+			done
+			say "syslogd writes with the group sermon now"
+		fi
 		install_openrc_service
 		rc-update add sermon-agent default
 		rc-service sermon-agent restart
 		;;
 	esac
+	log_source_hint
 	say "done – the node shows up in the UI within seconds"
 }
 

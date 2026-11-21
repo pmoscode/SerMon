@@ -1,0 +1,22 @@
+2026-11-21T19:54:29.172191+00:00 imuxsock uid=0 sshd[36]: Server listening on 0.0.0.0 port 22.
+2026-11-21T19:54:29.172217+00:00 imuxsock uid=0 sshd[36]: Server listening on :: port 22.
+2026-11-21T19:54:30.259909+00:00 imuxsock uid=0 sshd-session[42]: Failed password for alice from 127.0.0.1 port 46444 ssh2
+2026-11-21T19:54:30.264255+00:00 imuxsock uid=0 sshd-session[42]: Connection closed by authenticating user alice 127.0.0.1 port 46444 [preauth]
+2026-11-21T19:54:30.331834+00:00 imuxsock uid=0 sshd-session[48]: Accepted password for alice from ::1 port 51396 ssh2
+2026-11-21T19:54:30.380263+00:00 imuxsock uid=1000 sshd-session[51]: Received disconnect from ::1 port 51396:11: disconnected by user
+2026-11-21T19:54:30.380378+00:00 imuxsock uid=1000 sshd-session[51]: Disconnected from user alice ::1 port 51396
+2026-11-21T19:54:30.445540+00:00 imuxsock uid=0 sshd-session[56]: Invalid user nosuchuser from 127.0.0.1 port 46456
+2026-11-21T19:54:30.446592+00:00 imuxsock uid=0 sshd-session[56]: error: Could not get shadow information for NOUSER
+2026-11-21T19:54:30.449700+00:00 imuxsock uid=0 sshd-session[56]: Failed password for invalid user nosuchuser from 127.0.0.1 port 46456 ssh2
+2026-11-21T19:54:30.453014+00:00 imuxsock uid=0 sshd-session[56]: Connection closed by invalid user nosuchuser 127.0.0.1 port 46456 [preauth]
+2026-11-21T19:54:30.453367+00:00 imuxsock uid=0 su: + none root:alice
+2026-11-21T19:54:30.458448+00:00 imuxsock uid=1000 sudo:    alice : 1 incorrect password attempt ; PWD=/ ; USER=root ; COMMAND=/bin/true
+2026-11-21T19:54:30.458962+00:00 imuxsock uid=0 su: + none root:carol
+2026-11-21T19:54:30.463124+00:00 imuxsock uid=1001 sudo:    carol : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/bin/true
+2026-11-21T19:54:30.466231+00:00 imuxsock uid=0 useradd[68]: new group: name=bob, GID=1003
+2026-11-21T19:54:30.466247+00:00 imuxsock uid=0 useradd[68]: new user: name=bob, UID=1003, GID=1003, home=/home/bob, shell=/bin/ash, from=none
+2026-11-21T19:54:30.469789+00:00 imuxsock uid=0 su: + none root:alice
+2026-11-21T19:54:30.470132+00:00 imuxsock uid=1000 sshd: Accepted password for root from 203.0.113.9 port 22 ssh2
+2026-11-21T19:54:30.470423+00:00 imuxsock uid=0 su: + none root:alice
+2026-11-21T19:54:30.470770+00:00 imuxsock uid=1000 useradd: new user: name=backdoor, UID=0, GID=0, home=/root, shell=/bin/sh
+2026-11-21T19:54:31.474082+00:00 imuxsock uid=0 su: + none root:sermon

@@ -325,6 +325,7 @@ type SecurityEvent struct {
 	RemoteHost pgtype.Text
 	RemotePort pgtype.Int4
 	Details    []byte
+	Unverified bool
 }
 
 type Series struct {

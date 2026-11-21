@@ -76,3 +76,9 @@ Dazu kommen Regeln gegen vom Angreifer gewählte Inhalte:
     den Syslog-Daemon.
 - **Security:** root bleibt allmächtig und kann alles fälschen. Wer root hat, hat den Host ohnehin.
 - **Folgearbeiten:** Die Quelle für Logdateien (M2-20) braucht eine eigene Begründung des Vertrauens.
+
+## Nachtrag M2-20 (Logdateien)
+
+Die Folgearbeit ist erledigt: [ADR 0025](0025-logdateien-ohne-journald.md). Ohne journald zählen Zeilen aus Logdateien,
+sind aber als „nicht verifiziert“ markiert; verifiziert nur mit der SerMon-Vorlage für rsyslog und UID 0. Die
+sudo-Zusammenfassung `N incorrect password attempts` zählt nur, solange keine verifizierte PAM-Zeile kam.

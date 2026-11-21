@@ -332,7 +332,7 @@ func (r EventRule) groups(events []secevent.Event) []group {
 func (r EventRule) results(g group, th alert.Thresholds) []Result {
 	if r.Count == CountEvents {
 		o := th.Evaluate(float64(maxInWindow(g.events, r.Window)))
-		o.Fields = r.fields(g.events[len(g.events)-1])
+		o.Fields = r.fields(g.events[len(g.events)-1], unverified(g.events))
 		return []Result{{Node: g.node, Dimension: g.dimension, Observation: o}}
 	}
 	nodes := maxNodesInWindow(g.events, r.Window)
@@ -347,21 +347,29 @@ func (r EventRule) results(g group, th alert.Thresholds) []Result {
 	out := make([]Result, 0, len(order))
 	for _, n := range order {
 		o := th.Evaluate(float64(nodes))
-		o.Fields = r.fields(latest[n])
+		o.Fields = r.fields(latest[n], unverified(g.events))
 		out = append(out, Result{Node: n, Dimension: g.dimension, Observation: o})
 	}
 	return out
 }
 
-func (r EventRule) fields(e secevent.Event) alert.Fields {
-	if len(r.NotifyFields) == 0 {
+// unverified reports whether a counted event comes from a source anyone could write to.
+func unverified(events []secevent.Event) bool {
+	return slices.ContainsFunc(events, func(e secevent.Event) bool { return e.Unverified })
+}
+
+func (r EventRule) fields(e secevent.Event, unverified bool) alert.Fields {
+	if len(r.NotifyFields) == 0 && !unverified {
 		return nil
 	}
-	f := make(alert.Fields, len(r.NotifyFields))
+	f := make(alert.Fields, len(r.NotifyFields)+1)
 	for _, name := range r.NotifyFields {
 		if v, ok := e.Field(name); ok {
 			f[name] = notifyValue(v)
 		}
+	}
+	if unverified {
+		f[secevent.FieldSource] = secevent.SourceUnverified
 	}
 	return f
 }

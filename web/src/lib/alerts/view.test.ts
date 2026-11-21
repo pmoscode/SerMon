@@ -2,7 +2,17 @@ import { create, type MessageInitShape } from '@bufbuild/protobuf';
 import { describe, expect, it } from 'vitest';
 import { AlertSchema, AlertState, type Alert } from '#lib/api/gen/sermon/web/v1/alert_pb.js';
 import { formatBytes, formatDuration, formatPercent } from '#lib/format/format.js';
-import { alertValue, countAlerts, filterAlerts, groupsOf, kindOf, ruleName } from './view.js';
+import {
+	alertValue,
+	countAlerts,
+	fieldLabel,
+	fieldValue,
+	filterAlerts,
+	groupsOf,
+	kindOf,
+	ruleName,
+	unverifiedSource
+} from './view.js';
 
 type Init = Exclude<MessageInitShape<typeof AlertSchema>, Alert>;
 
@@ -55,6 +65,15 @@ describe('alert view', () => {
 		expect(ruleName(list[0], 'de')).toBe('Hohe CPU-Auslastung');
 		expect(ruleName(list[0], 'en')).toBe('High CPU usage');
 		expect(ruleName(alert({ ruleName: undefined }), 'en')).toBe('system.cpu.usage_high');
+	});
+
+	it('names an unverified source in words and keeps other values', () => {
+		expect(fieldLabel('source')).toBe('Source');
+		expect(fieldValue('source', 'unverified')).toBe('not verified');
+		expect(fieldValue('source', 'journal')).toBe('journal');
+		expect(fieldValue('user', 'unverified')).toBe('unverified');
+		expect(unverifiedSource({ source: 'unverified' })).toBe(true);
+		expect(unverifiedSource({ user: 'unverified' })).toBe(false);
 	});
 
 	it('formats values in the units of the rules', () => {

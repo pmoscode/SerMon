@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { loadHistory } from '#lib/alerts/alerts.svelte.js';
-	import { alertValue, fieldLabel, stateName } from '#lib/alerts/view.js';
+	import { alertValue, fieldLabel, fieldValue, stateName } from '#lib/alerts/view.js';
 	import {
 		AlertHistoryKind,
 		type AlertHistoryEntry,
@@ -74,7 +74,10 @@
 						<span class="tabular-nums">{alertValue(unit, e.value, localeState.current)}</span>
 					{/if}
 					{#each Object.entries(e.fields) as [name, value] (name)}
-						<span><span class="text-muted-foreground">{fieldLabel(name)}:</span> {value}</span>
+						<span
+							><span class="text-muted-foreground">{fieldLabel(name)}:</span>
+							{fieldValue(name, value)}</span
+						>
 					{/each}
 				</li>
 			{/each}

@@ -4,7 +4,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use sermon_security::{LogLine, Parser, ParserConfig, redact};
+use sermon_security::{LogLine, Parser, ParserConfig, Source, redact};
 
 const IDENTIFIERS: [&str; 7] = [
     "sshd",
@@ -43,6 +43,12 @@ fuzz_target!(|data: &[u8]| {
                 cap_effective: None,
                 boot_id: Some(if choice & 0x20 != 0 { "b" } else { "a" }),
                 monotonic_us: Some(2),
+                // Classic log files take other paths of the trust rule (ADR 0025).
+                source: if choice & 0x10 != 0 {
+                    Source::File
+                } else {
+                    Source::Journal
+                },
                 message: line,
             },
             &mut out,

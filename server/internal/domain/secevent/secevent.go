@@ -100,6 +100,8 @@ type Event struct {
 	User       string
 	Remote     *Remote
 	Details    Details
+	// Unverified: from a classic log file whose sender anyone on the host could be (ADR 0025).
+	Unverified bool
 }
 
 var hostName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,62})(\.[a-z0-9]([a-z0-9-]{0,62}))*$`)

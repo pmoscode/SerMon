@@ -209,7 +209,13 @@ mod tests {
 
     #[test]
     fn parses_meminfo_and_vmstat_of_debian_and_ubuntu() {
-        for distro in ["debian-13", "ubuntu-24.04"] {
+        for distro in [
+            "debian-13",
+            "ubuntu-24.04",
+            "rockylinux-9",
+            "almalinux-10",
+            "fedora-44",
+        ] {
             let info = parse_meminfo(&fixture(distro).read_proc("meminfo").unwrap()).unwrap();
             assert_eq!(info.total, 8_123_740 * 1024, "{distro}");
             assert!(

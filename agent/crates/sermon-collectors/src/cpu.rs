@@ -293,7 +293,13 @@ mod tests {
 
     #[test]
     fn parses_stat_of_debian_and_ubuntu() {
-        for distro in ["debian-13", "ubuntu-24.04"] {
+        for distro in [
+            "debian-13",
+            "ubuntu-24.04",
+            "rockylinux-9",
+            "almalinux-10",
+            "fedora-44",
+        ] {
             let stat = parse_stat(&fixture(distro).read_proc("stat").unwrap()).unwrap();
             assert_eq!(stat.cores.len(), 16, "{distro}");
             assert!(stat.total.user > 0 && stat.total.idle > 0, "{distro}");

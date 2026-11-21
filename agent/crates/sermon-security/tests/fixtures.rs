@@ -10,7 +10,18 @@ use std::path::PathBuf;
 use sermon_logs::journal::{Entry, parse_line};
 use sermon_security::{Address, EventKind, LogLine, Parser, ParserConfig, SecurityEvent};
 
+/// Distributions with the spike fixtures (journal-security, journal-format).
 const DISTROS: [&str; 4] = ["debian-13", "ubuntu-24.04", "rockylinux-9", "rockylinux-8"];
+
+/// Distributions captured with logs/capture (variants, OOM): the RHEL family and Fedora too (M2-19).
+const CAPTURED: [&str; 6] = [
+    "debian-13",
+    "ubuntu-24.04",
+    "rockylinux-9",
+    "rockylinux-8",
+    "almalinux-10",
+    "fedora-44",
+];
 
 fn entries(distro: &str, file: &str) -> Vec<Entry> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -169,7 +180,7 @@ fn the_variants_on_every_distro() {
         r#"ssh.login.success "alice" ::1 keyboard-interactive"#,
         r#"sudo.not_allowed "carol" as "root""#,
     ];
-    for distro in DISTROS {
+    for distro in CAPTURED {
         let got = events(
             distro,
             "journal-security-variants.jsonl",
@@ -191,7 +202,7 @@ fn the_variants_on_every_distro() {
 
 #[test]
 fn ports_are_known_except_for_the_pam_message() {
-    for distro in DISTROS {
+    for distro in CAPTURED {
         for event in events(
             distro,
             "journal-security-variants.jsonl",
@@ -227,6 +238,8 @@ fn sudo_commands_only_when_switched_on() {
             "{distro}: {commands:?} (the failed attempt is no command)"
         );
         assert!(commands[0].ends_with("/true"), "{distro}: {commands:?}");
+    }
+    for distro in CAPTURED {
         let variants = events(distro, "journal-security-variants.jsonl", on);
         let id = variants.iter().find_map(|e| match &e.kind {
             EventKind::SudoCommand { tty, command, .. } => Some((tty.clone(), command.clone())),
@@ -243,7 +256,7 @@ fn sudo_commands_only_when_switched_on() {
 
 #[test]
 fn oom_kills_from_the_kernel() {
-    for distro in DISTROS {
+    for distro in CAPTURED {
         let got = events(distro, "journal-oom.jsonl", ParserConfig::default());
         assert_eq!(
             summaries(&got),

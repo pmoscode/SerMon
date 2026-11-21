@@ -274,7 +274,13 @@ mod tests {
 
     #[test]
     fn container_fixtures_have_no_local_file_systems_but_parse() {
-        for distro in ["debian-13", "ubuntu-24.04"] {
+        for distro in [
+            "debian-13",
+            "ubuntu-24.04",
+            "rockylinux-9",
+            "almalinux-10",
+            "fedora-44",
+        ] {
             let mounts = parse_mountinfo(&fixture(distro).read_proc("self/mountinfo").unwrap());
             assert!(mounts.len() > 10, "{distro}");
             assert!(

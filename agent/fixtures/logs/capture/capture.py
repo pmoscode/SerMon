@@ -83,7 +83,8 @@ def main():
     time.sleep(3)
 
     ids = "-t sshd -t sshd-session -t sudo -t useradd -t userdel"
-    host = sh("hostname").strip()
+    # Not hostname(1): Fedora images lack it.
+    host = open("/proc/sys/kernel/hostname").read().strip().encode()
     machine = open("/etc/machine-id").read().strip().encode()
 
     def scrub(raw):

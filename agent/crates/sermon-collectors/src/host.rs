@@ -235,6 +235,26 @@ mod tests {
         assert_eq!(facts.os_version, "24.04");
     }
 
+    // The RHEL family quotes its values and names itself by ID (rocky, almalinux), with ID_LIKE
+    // naming rhel; the version carries the minor release (M2-19).
+    #[test]
+    fn reads_the_rhel_family_and_fedora() {
+        for (distro, id, version) in [
+            ("rockylinux-9", "rocky", "9.9"),
+            ("almalinux-10", "almalinux", "10.3"),
+            ("fedora-44", "fedora", "44"),
+        ] {
+            let facts = read_host_facts(&fixture(distro)).unwrap();
+            assert_eq!(
+                (facts.os_id.as_str(), facts.os_version.as_str()),
+                (id, version),
+                "{distro}"
+            );
+            assert_eq!(facts.hostname, "web-01", "{distro}");
+            assert_eq!(facts.cpu_count, 16, "{distro}");
+        }
+    }
+
     #[test]
     fn missing_os_release_falls_back_to_linux() {
         let dir = copy_fixture("debian-13");

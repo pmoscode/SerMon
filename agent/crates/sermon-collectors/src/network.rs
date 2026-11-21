@@ -294,7 +294,13 @@ mod tests {
 
     #[test]
     fn parses_the_fixtures() {
-        for distro in ["debian-13", "ubuntu-24.04"] {
+        for distro in [
+            "debian-13",
+            "ubuntu-24.04",
+            "rockylinux-9",
+            "almalinux-10",
+            "fedora-44",
+        ] {
             let root = fixture(distro);
             let interfaces = parse_net_dev(&root.read_proc("net/dev").unwrap());
             assert!(

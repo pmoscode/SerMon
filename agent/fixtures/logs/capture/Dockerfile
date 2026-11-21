@@ -8,6 +8,8 @@ RUN set -eux; \
       DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends systemd systemd-sysv openssh-server openssh-client sudo procps python3 bsdutils >/dev/null; \
     else \
       dnf install -y -q systemd openssh-server openssh-clients sudo procps-ng python3 util-linux >/dev/null; \
+      # Fedora ships script(1) in its own package; RHEL keeps it in util-linux.
+      dnf install -y -q util-linux-script >/dev/null 2>&1 || true; \
     fi; \
     mkdir -p /var/log/journal; \
     useradd -m alice; echo 'alice:correct-horse' | chpasswd; \

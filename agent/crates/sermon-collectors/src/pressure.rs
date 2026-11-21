@@ -106,7 +106,13 @@ mod tests {
 
     #[test]
     fn parses_the_fixtures() {
-        for distro in ["debian-13", "ubuntu-24.04"] {
+        for distro in [
+            "debian-13",
+            "ubuntu-24.04",
+            "rockylinux-9",
+            "almalinux-10",
+            "fedora-44",
+        ] {
             for resource in RESOURCES {
                 let text = fixture(distro)
                     .read_proc(&format!("pressure/{resource}"))

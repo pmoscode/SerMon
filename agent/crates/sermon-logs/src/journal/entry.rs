@@ -276,6 +276,31 @@ mod tests {
             .collect()
     }
 
+    /// Captured with logs/capture (M2-06, M2-19): the RHEL family and Fedora too.
+    const CAPTURED: [&str; 6] = [
+        "debian-13",
+        "ubuntu-24.04",
+        "rockylinux-9",
+        "rockylinux-8",
+        "almalinux-10",
+        "fedora-44",
+    ];
+
+    #[test]
+    fn captured_lines_parse_on_every_distro() {
+        for distro in CAPTURED {
+            for name in ["journal-security-variants.jsonl", "journal-oom.jsonl"] {
+                let got = entries(distro, name);
+                assert!(!got.is_empty(), "{distro}/{name}");
+                assert!(
+                    got.iter()
+                        .all(|e| valid_cursor(&e.cursor) && e.boot_id.is_some()),
+                    "{distro}/{name}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn every_fixture_line_parses_on_every_distro() {
         for distro in DISTROS {

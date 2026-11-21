@@ -3,7 +3,8 @@ import { expect, test } from '../e2e/fixtures';
 import { caddyCA, exec, invitationLink, setupToken, tamperDownload } from './stack';
 
 /**
- * The M1 demo (IMPLEMENTIERUNGSPLAN §4): a fresh installation, three Linux hosts with systemd get
+ * The M1 demo (IMPLEMENTIERUNGSPLAN §4): a fresh installation, six Linux hosts with systemd (Debian,
+ * Ubuntu, the RHEL family and Fedora) get
  * the agent with the one-liner from the UI, and within 2 minutes they show up with metrics. A user
  * of another organization sees none of it.
  */
@@ -13,9 +14,13 @@ const PASSWORD = 'correct horse battery staple'; // betterleaks:allow
 const admin = { name: 'Ann Admin', email: 'ann@example.org' };
 const other = { name: 'Bea Beta', email: 'bea@example.org' };
 const agents = [
-	{ service: 'agent-debian-12', host: 'web-01', trust: 'system' },
-	{ service: 'agent-debian-13', host: 'web-02', trust: 'fingerprint' },
-	{ service: 'agent-ubuntu-24-04', host: 'db-01', trust: 'system' }
+	{ service: 'agent-debian-12', host: 'web-01', trust: 'system', os: 'debian' },
+	{ service: 'agent-debian-13', host: 'web-02', trust: 'fingerprint', os: 'debian' },
+	{ service: 'agent-ubuntu-24-04', host: 'db-01', trust: 'system', os: 'ubuntu' },
+	// The RHEL family and Fedora (M2-19).
+	{ service: 'agent-rockylinux-9', host: 'app-01', trust: 'system', os: 'rocky' },
+	{ service: 'agent-almalinux-10', host: 'app-02', trust: 'fingerprint', os: 'almalinux' },
+	{ service: 'agent-fedora-44', host: 'dev-01', trust: 'system', os: 'fedora' }
 ] as const;
 /** Containers reach the proxy as sermon.test and the agent port of the server directly. */
 const inside = 'https://sermon.test';
@@ -44,7 +49,7 @@ async function call<T>(
 	return (await res.json()) as T;
 }
 
-test('a fresh installation monitors three hosts within two minutes, and Org B sees nothing', async ({
+test('a fresh installation monitors six hosts within two minutes, and Org B sees nothing', async ({
 	page,
 	browser,
 	baseURL
@@ -73,7 +78,7 @@ test('a fresh installation monitors three hosts within two minutes, and Org B se
 		page.getByRole('tabpanel', { name: 'Groups' }).getByText('servers', { exact: true })
 	).toBeVisible();
 
-	// One token for all three hosts.
+	// One token for all hosts.
 	await page.goto('/nodes/add');
 	await page.getByLabel('Uses').fill(String(agents.length));
 	await page.getByRole('button', { name: 'Create command' }).click();
@@ -113,9 +118,10 @@ test('a fresh installation monitors three hosts within two minutes, and Org B se
 	const started = Date.now();
 	for (const agent of agents) {
 		if (agent.trust === 'system') {
+			// Debian and Ubuntu: update-ca-certificates; the RHEL family and Fedora: update-ca-trust.
 			exec(
 				agent.service,
-				'cat > /usr/local/share/ca-certificates/sermon-e2e.crt && update-ca-certificates >/dev/null',
+				'if command -v update-ca-certificates >/dev/null; then cat > /usr/local/share/ca-certificates/sermon-e2e.crt && update-ca-certificates >/dev/null; else cat > /etc/pki/ca-trust/source/anchors/sermon-e2e.crt && update-ca-trust; fi',
 				ca.root
 			);
 		}
@@ -124,7 +130,7 @@ test('a fresh installation monitors three hosts within two minutes, and Org B se
 		expect(exec(agent.service, 'systemctl is-active sermon-agent').trim()).toBe('active');
 	}
 
-	// The wizard sees the first host; the fleet shows all three with metrics in under 2 minutes.
+	// The wizard sees the first host; the fleet shows all of them with metrics in under 2 minutes.
 	await expect(page.getByText(/Connected: /)).toBeVisible({ timeout: 60_000 });
 	await page.goto('/fleet');
 	const deadline = 120_000 - (Date.now() - started);
@@ -134,9 +140,11 @@ test('a fresh installation monitors three hosts within two minutes, and Org B se
 		await expect(tile.getByRole('meter', { name: 'CPU' })).toBeVisible({
 			timeout: 120_000 - (Date.now() - started)
 		});
+		// The host facts name the distribution (os-release ID).
+		await expect(tile).toContainText(agent.os);
 	}
 	const elapsed = Math.round((Date.now() - started) / 1000);
-	console.log(`three hosts visible with metrics after ${elapsed} s`);
+	console.log(`${agents.length} hosts visible with metrics after ${elapsed} s`);
 	await page.screenshot({ path: 'test-results/demo-fleet.png', fullPage: true });
 
 	// The node detail shows host facts and charts.

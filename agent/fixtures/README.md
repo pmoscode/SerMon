@@ -9,6 +9,9 @@ sie hält der Disk-Collector im frischen Checkout Partitionen für ganze Geräte
 |---|---|
 | `debian-13/` | Container `debian:13` (amd64) |
 | `ubuntu-24.04/` | Container `ubuntu:24.04` (amd64) |
+| `rockylinux-9/`, `almalinux-10/`, `fedora-44/` | M2-19, `capture-host.sh` (arm64): Container `rockylinux:9`, `almalinux:10`, `fedora:44` |
+
+`capture-host.sh image name …` holt dieselben Dateien aus einem Container und ersetzt Hostname und `machine-id`.
 
 ## Logs (`logs/`)
 
@@ -25,13 +28,16 @@ bis auf ersetzte Werte.
 
 Die Varianten erzeugt `logs/capture/capture.sh [image…]` neu (Docker, Container mit systemd als PID 1); das Skript
 gehört zum Projekt, anders als der Spike. Distributionen: `debian-13` (systemd 257), `ubuntu-24.04` (255),
-`rockylinux-9` (252), `rockylinux-8` (239). Ab
+`rockylinux-9` (252), `rockylinux-8` (239), seit M2-19 `almalinux-10` und `fedora-44` (nur Varianten und OOM; die
+Spike-Dateien gibt es für sie nicht). Fedora bringt `script(1)` im eigenen Paket `util-linux-script` und kein
+`hostname(1)` mit; das Capture-Image und `capture.py` berücksichtigen das. Ab
 Debian 13 heißt der SSH-Absender `sshd-session`. `_CMDLINE` von `su` enthielt das Test-Passwort und zeigt jetzt
 `fixture-password` – ein Fall für die Redaction (KONZEPT §10.3).
 
 Hinweise:
 
-- Dateien unter `proc/` stammen aus dem Container und zeigen damit den Kernel der Docker-VM (`linuxkit`). Für die
+- Dateien unter `proc/` und `sys/` stammen aus dem Container und zeigen damit den Kernel der Docker-VM (`linuxkit`) –
+  bei allen Distros dieselbe VM (16 Kerne, 8 GiB). Je Distro unterscheiden sich `/etc/os-release` und das Layout. Für die
   Parser ist das Format entscheidend, nicht der Kernel; Fixtures von echten Hosts kommen mit den Collectors (M1-16 ff.).
 - Hostname und `machine-id` sind ausgedacht (in den Logs `fixture-host` und `0123456789abcdef0123456789abcdef`). Keine echten Hostnamen, IPs, Usernamen oder IDs einchecken
   (Beispiel-IPs: 192.0.2.0/24, 2001:db8::/32; User: `alice`, `bob`).

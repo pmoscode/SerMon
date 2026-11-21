@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"math"
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
@@ -19,35 +20,39 @@ func FullAt(points []metrics.Point, now time.Time, horizon time.Duration) (time.
 	if len(points) < minForecastPoints || points[len(points)-1].Time.Sub(points[0].Time) < minForecastSpan {
 		return time.Time{}, false
 	}
+	// Centered sums: values of a large array (1e12 bytes) would cancel out in the plain ones.
 	origin := points[0].Time
-	var n, sumX, sumY, sumXX, sumXY float64
+	n := float64(len(points))
+	var meanX, meanY float64
 	for _, p := range points {
-		x := p.Time.Sub(origin).Seconds()
-		n++
-		sumX += x
-		sumY += p.Avg
-		sumXX += x * x
-		sumXY += x * p.Avg
+		meanX += p.Time.Sub(origin).Seconds() / n
+		meanY += p.Avg / n
 	}
-	denominator := n*sumXX - sumX*sumX
-	if denominator == 0 {
+	var sxx, sxy float64
+	for _, p := range points {
+		dx, dy := p.Time.Sub(origin).Seconds()-meanX, p.Avg-meanY
+		sxx += dx * dx
+		sxy += dx * dy
+	}
+	if sxx == 0 {
 		return time.Time{}, false
 	}
-	slope := (n*sumXY - sumX*sumY) / denominator // bytes per second
+	slope := sxy / sxx // bytes per second
 	if slope >= 0 {
 		return time.Time{}, false
 	}
-	intercept := (sumY - slope*sumX) / n
 	if points[len(points)-1].Avg <= 0 {
 		return now, true
 	}
-	seconds := -intercept / slope
-	full := origin.Add(time.Duration(seconds * float64(time.Second)))
-	if full.Before(now) {
-		full = now
-	}
-	if full.After(now.Add(horizon)) {
+	// Seconds from now until the line reaches zero; compared before converting, as a float
+	// beyond the range of a Duration converts differently per platform.
+	seconds := meanX - meanY/slope - now.Sub(origin).Seconds()
+	if math.IsNaN(seconds) || seconds > horizon.Seconds() {
 		return time.Time{}, false
+	}
+	full := now
+	if seconds > 0 {
+		full = now.Add(time.Duration(math.Round(seconds)) * time.Second) // a forecast in whole seconds
 	}
 	return full, true
 }

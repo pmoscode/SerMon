@@ -265,6 +265,10 @@ func TestFullAt(t *testing.T) {
 	if full, ok := fleet.FullAt(line(50, -10, 6), now, 365*24*time.Hour); !ok || !full.Equal(now) {
 		t.Errorf("exhausted: %v, %v; want now", full, ok)
 	}
+	// Large values (bytes of a big array) keep their precision: 1e12 falling by 1e10 per hour.
+	if full, ok := fleet.FullAt(line(1.23e12, -1e10, 24), now, 365*24*time.Hour); !ok || (full.Sub(now)-100*time.Hour).Abs() > time.Minute {
+		t.Errorf("large values: %v, %v; want in 100 h", full, ok)
+	}
 }
 
 func TestWatch_SendsEveryPointOnceAlsoWhenItArrivesLate(t *testing.T) {

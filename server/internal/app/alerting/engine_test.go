@@ -338,3 +338,54 @@ func TestEngine_KeepsAlertsOfAFailingRule(t *testing.T) {
 		t.Errorf("state = %v, want warning", i.State)
 	}
 }
+
+type sink struct {
+	mu     sync.Mutex
+	rounds []alerting.Round
+}
+
+func (s *sink) Deliver(_ context.Context, r alerting.Round) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rounds = append(s.rounds, r)
+}
+
+// The routing hears of every round the engine holds, also without changes: repeats and
+// escalations need the firing instances.
+func TestEngine_HandsEveryRoundToTheSink(t *testing.T) {
+	store, v, c, s := newMemStore(orgA, orgB), &valueRule{value: 0.90}, &clock{now: t0}, &sink{}
+	e := alerting.NewEngine(alerting.Deps{
+		Store: store, Rules: cpuRules(v, 0), Nodes: directory{}, Now: c.Now, Holder: "a", Sink: s,
+		Logger: slog.New(slog.DiscardHandler),
+	})
+	rounds(t, e, c, 2)
+	if len(s.rounds) != 4 {
+		t.Fatalf("%d rounds for 2 rounds of 2 organizations", len(s.rounds))
+	}
+	first, second := s.rounds[0], s.rounds[2]
+	if first.Org != orgA || len(first.Records) != 1 || first.Records[0].Transition.To != alert.StateWarning ||
+		len(first.Instances) != 1 || first.Instances[0].State != alert.StateWarning || len(first.Nodes) != 1 || !first.Now.Equal(t0.Add(alerting.Interval)) {
+		t.Errorf("first round %+v", first)
+	}
+	if second.Org != orgA || len(second.Records) != 0 || len(second.Instances) != 1 || second.Instances[0].Key != cpuKey {
+		t.Errorf("second round %+v", second)
+	}
+	if s.rounds[1].Org != orgB || len(s.rounds[1].Instances) != 0 {
+		t.Errorf("organization B %+v", s.rounds[1])
+	}
+	// Removed instances are not handed on.
+	v.set(0.10)
+	rounds(t, e, c, 2) // resolved, then OK (kept for flapping), then gone
+	c.advance(alert.DefaultFlapping.Window)
+	rounds(t, e, c, 1)
+	if last := s.rounds[len(s.rounds)-2]; last.Org != orgA || len(last.Instances) != 0 {
+		t.Errorf("after removal %+v", last)
+	}
+	// Another holder's organization is not handed on.
+	other := alerting.NewEngine(alerting.Deps{Store: store, Rules: cpuRules(v, 0), Nodes: directory{}, Now: c.Now, Holder: "b", Sink: s, Logger: slog.New(slog.DiscardHandler)})
+	before := len(s.rounds)
+	other.Round(context.Background())
+	if len(s.rounds) != before {
+		t.Errorf("a round without the lease reached the sink")
+	}
+}

@@ -1770,7 +1770,41 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 
 ### 5.5 Routing und Silences (E2.5)
 
-#### ☐ M2-14 – Notification-Policies und Eskalation · S · M
+#### ☑ M2-14 – Notification-Policies und Eskalation · S · M
+> Erledigt (ADR 0019, Nachtrag M2-14; KONZEPT §12.1; Threat Model T67; Migration 00025):
+> - **`app/routing`:**
+>   - `Policy` mit Matchern (Severity, Gruppe, Regel-Muster, Labels der Regel), 1 bis 10 Kanälen, Gruppierung,
+>     Wiederholung und Eskalation; Grenzen in `Validate`.
+>   - `Plan` (ohne I/O): Änderungen an die passenden Policies, jeder Kanal einmal; Wiederholung und Eskalation für
+>     feuernde, unquittierte Instanzen; Feuern und Behoben fallen weg, solange eine Instanz flattert; Zustände von
+>     Beendetem und von abgeschalteten oder gelöschten Policies werden entfernt. Ohne Policies an alle aktiven Kanäle.
+>   - `Router` (Sink der Engine): Regelname, Labels und Einheit aus den Regeln (`RulesOf`), Hostname und Gruppe aus der
+>     Runde, Anzeigename bei Quittierung (`UsersOf`); nur aktive Kanäle; pro Node oder als Digest gruppiert; Zustellungen
+>     und Zustand in einer Transaktion. Ruhige Runden lesen nichts. Selbst-Metriken `sermon_server_routing_*`.
+>   - `Service`: Policies auflisten, anlegen, ändern (ersetzen) und löschen mit `manage_channels`, Schreiben mit frischem
+>     Step-up, Audit; Kanäle und Gruppen müssen zur Org gehören; höchstens 100 pro Org.
+> - **Engine:** Der Sink bekommt jede gehaltene Runde (`alerting.Round`: Übergänge, Instanzen danach, Nodes).
+> - **`notify`:** Sammelnachricht `digest` (höchstens 20 Einträge und 12 KiB, Einträge ohne Felder, Titel und Farbe vom dringendsten);
+>   Hinweis bei Erinnerung und Eskalation mit der Dauer; Einheiten `per_minute` und `bytes_per_second`. Der Webhook
+>   sendet Digests mit `items`.
+> - **Speicherung (Migration 00025):** `notification_policies`, `notification_policy_channels` (Fremdschlüssel auf Kanal
+>   und Policy in derselben Org) und `alert_routing_state` (geht mit Instanz und Policy), alle mit RLS (ENABLE + FORCE).
+> - **API:** `NotificationPolicyService` (List, Create, Update, Delete); `Delivery.kind` kennt `digest`.
+> - **Abweichungen:** kein Matcher auf `tags` (Nodes haben noch keine; stattdessen die Labels der Regel); der Digest
+>   sammelt pro Runde, nicht über ein eigenes Zeitfenster.
+> - **Tests:**
+>   - Matcher-Tabelle (13 Fälle), Prüfung der Policies (18 Fälle).
+>   - Plan mit festen Zeiten: Routing, Rückfall ohne Policies, ein Kanal einmal, Behoben beendet den Zustand (auch für
+>     die Eskalation), Wiederholung und ihr Ende durch Quittieren, Policy nach dem Feuern, Eskalation genau einmal und
+>     nur an neue Kanäle, Quittieren stoppt die Eskalation, Drosselung beim Flattern, Aufräumen.
+>   - Router: Anreicherung, ruhige Runden, Gruppierung pro Node und Digest, nur aktive Kanäle und Policies,
+>     Quittierender, Erinnerung mit Dauer, Fehler. Einheiten aus den echten Standardregeln.
+>   - Service: Rundlauf mit Audit, Rechte und Step-up, Kanäle und Gruppen fremder Orgs, Isolation, Grenze.
+>   - Engine: Sink in jeder Runde, ohne entfernte Instanzen, nicht ohne Lease.
+>   - Gegen PostgreSQL: Rundlauf, Isolation (auch ein fremder Kanal per ID), Commit und Rollback, Zustand endet mit
+>     der Instanz, RLS; Durchstich Engine → Router → Warteschlange mit genau einer Erinnerung. API über den echten
+>     Stack, Isolationsfälle für alle vier RPCs.
+>   - Gegenproben für 31 Prüfungen, alle erkannt.
 - **Ziel:** Policies mit Label-Matchern (`severity`, `group`, `rule`, `tags`) → Kanäle; Gruppierung pro Node oder als
   Digest; Wiederholungsintervall; Eskalation „nach 15 min ohne Quittierung zusätzlich an Kanal X“; gedrosselt bei
   Flapping.
@@ -1785,6 +1819,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Ziel:** zeitlich begrenzte Silences per Selektor; Wartungsfenster stummschalten Reboot- und Offline-Alerts; Audit.
 - **Tests zuerst:** Silence beginnt und endet; Selektor trifft nur die gemeinten Instanzen.
 - **Abhängig von:** M2-14
+- **Aus M2-14:** Silences gehören in `routing.Plan` (vor dem Senden, auch für Erinnerungen und Eskalation); der
+  Selektor kann die `routing.Matchers` wiederverwenden.
 
 ### 5.6 Alert-UI (E2.6)
 
@@ -1795,6 +1831,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Aus M2-08:** Die `fields` von Alerts der Security-Regeln (User, IP) sind personenbezogen: nur mit
   `view_security_events` zeigen (wie `ListSecurityEvents`), sonst ohne Felder. Die Aufbewahrung der Historie (offen
   seit M2-02) gilt auch für die Felder; höchstens so lange wie die Events (1 Jahr).
+- **Aus M2-14:** Quittieren schreibt Instanz und Historie und reicht den Übergang an den `routing.Router`
+  (`Deliver` mit einer `alerting.Round`), damit die Kanäle „quittiert“ melden; der Router nennt den Anzeigenamen.
 - **Abhängig von:** M2-02
 - **Skill:** `sermon-ui-component`
 
@@ -1809,6 +1847,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Ziel:** Kanäle anlegen (Zugangsdaten nur schreibend), „Test senden“, Zustellprotokoll; Policies und Silences
   verwalten.
 - **Tests zuerst:** Zugangsdaten werden nie angezeigt; Step-up für neue Kanäle; Fehler beim Test sichtbar.
+- **Aus M2-14:** `NotificationPolicyService` ersetzt eine Policy beim Update ganz; Hilfetexte zu Matchern (Muster
+  mit `*`, Labels der Regeln), zum Rückfall ohne Policies und zur Eskalation fehlen noch.
 - **Abhängig von:** M2-10, M2-14, M2-15
 - **Skill:** `sermon-ui-component`
 

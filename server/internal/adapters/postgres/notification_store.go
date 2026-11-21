@@ -162,11 +162,19 @@ func (s *NotificationStore) Channel(ctx context.Context, scope tenant.Scope, id 
 
 // Enqueue stores deliveries (new ones and finished test sends).
 func (s *NotificationStore) Enqueue(ctx context.Context, scope tenant.Scope, deliveries []notify.Delivery) error {
+	rows, err := deliveryParams(deliveries)
+	if err != nil {
+		return err
+	}
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error { return insertDeliveries(ctx, q, rows) })
+}
+
+func deliveryParams(deliveries []notify.Delivery) ([]sqlcdb.InsertNotificationDeliveryParams, error) {
 	rows := make([]sqlcdb.InsertNotificationDeliveryParams, len(deliveries))
 	for i, d := range deliveries {
 		n, err := json.Marshal(d.Notification)
 		if err != nil {
-			return fmt.Errorf("encode notification: %w", err)
+			return nil, fmt.Errorf("encode notification: %w", err)
 		}
 		rows[i] = sqlcdb.InsertNotificationDeliveryParams{
 			ChannelID: uuid.UUID(d.Channel), Notification: n, Test: d.Test, Status: string(d.Status), Attempts: int32(min(d.Attempts, 100)), //nolint:gosec // G115: bounded
@@ -174,19 +182,25 @@ func (s *NotificationStore) Enqueue(ctx context.Context, scope tenant.Scope, del
 			SentAt: optionalTime(d.SentAt), LastError: d.LastError,
 		}
 	}
-	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		results := q.InsertNotificationDelivery(ctx, rows)
-		var first error
-		results.Exec(func(_ int, err error) {
-			if err != nil && first == nil {
-				first = err
-			}
-		})
-		if err := results.Close(); err != nil && first == nil {
+	return rows, nil
+}
+
+// insertDeliveries queues deliveries within a tenant transaction.
+func insertDeliveries(ctx context.Context, q *sqlcdb.Queries, rows []sqlcdb.InsertNotificationDeliveryParams) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	results := q.InsertNotificationDelivery(ctx, rows)
+	var first error
+	results.Exec(func(_ int, err error) {
+		if err != nil && first == nil {
 			first = err
 		}
-		return wrap(first, "insert notification deliveries")
 	})
+	if err := results.Close(); err != nil && first == nil {
+		first = err
+	}
+	return wrap(first, "insert notification deliveries")
 }
 
 // deliveryRow is a selected delivery (the queries select the same columns).

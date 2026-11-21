@@ -171,3 +171,25 @@ func golden(t *testing.T, name, got string) {
 		t.Errorf("%s differs:\n--- got\n%s\n--- want\n%s", name, got, want)
 	}
 }
+
+// A digest keeps its kind for the receiver and lists its items as data; the severity is the
+// highest of them.
+func TestWebhook_Digest(t *testing.T) {
+	r := &received{}
+	srv := httptest.NewServer(r.handler())
+	defer srv.Close()
+	alert := message(t).Source
+	reminder := alert
+	reminder.Severity, reminder.Reason, reminder.FiringSeconds = notify.Critical, notify.ReasonRepeat, 7200
+	m := notify.Render(notify.Digest(t0, []notify.Notification{alert, reminder}, 3), notify.English, "https://sermon.example")
+	if err := webhook.New(local(t), time.Now).Send(context.Background(), config(srv.URL), m); err != nil {
+		t.Fatal(err)
+	}
+	if r.header.Get("X-SerMon-Event") != "digest" {
+		t.Errorf("event %q", r.header.Get("X-SerMon-Event"))
+	}
+	golden(t, "digest.json", string(r.body))
+	if strings.Contains(string(r.body), "<script>") || strings.Contains(string(r.body), `"fields"`) {
+		t.Errorf("digest items carry fields:\n%s", r.body)
+	}
+}

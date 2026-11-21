@@ -1,0 +1,6 @@
+CRITICAL: 2 alerts – web-01
+
+WARNING: File system full soon (mountpoint=/var): 5.3 h
+CRITICAL: High CPU usage: 96.4 %
+
+https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001

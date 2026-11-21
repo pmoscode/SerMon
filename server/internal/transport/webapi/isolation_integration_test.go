@@ -85,6 +85,7 @@ type loggedIn struct {
 	twoFactor    webv1connect.TwoFactorServiceClient
 	events       webv1connect.SecurityEventServiceClient
 	channels     webv1connect.NotificationChannelServiceClient
+	policies     webv1connect.NotificationPolicyServiceClient
 	policy       webv1connect.SecurityPolicyServiceClient
 	jar          *cookiejar.Jar
 }
@@ -107,6 +108,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		twoFactor:    webv1connect.NewTwoFactorServiceClient(hc, s.server.URL),
 		events:       webv1connect.NewSecurityEventServiceClient(hc, s.server.URL),
 		channels:     webv1connect.NewNotificationChannelServiceClient(hc, s.server.URL),
+		policies:     webv1connect.NewNotificationPolicyServiceClient(hc, s.server.URL),
 		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
@@ -123,7 +125,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
-		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl,
+		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}
@@ -187,6 +189,13 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	_ = conn.QueryRow(ctx, "SELECT name FROM notification_channels WHERE id = $1", channelAl).Scan(&alphaChannel)
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM notification_channels WHERE org_id = $1", orgAlpha).Scan(&alphaChannels)
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM notification_deliveries WHERE org_id = $1", orgAlpha).Scan(&alphaDeliveries)
+	var alphaPolicy string
+	var alphaPolicyChannels int
+	_ = conn.QueryRow(ctx, "SELECT name FROM notification_policies WHERE id = $1", policyAl).Scan(&alphaPolicy)
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM notification_policy_channels WHERE org_id = $1", orgAlpha).Scan(&alphaPolicyChannels)
+	if alphaPolicy != "alpha-policy" || alphaPolicyChannels != 1 {
+		t.Errorf("Alpha's policy changed: %q, %d channels", alphaPolicy, alphaPolicyChannels)
+	}
 	if alphaChannel != "alpha-hook" || alphaChannels != 1 || alphaDeliveries != 1 {
 		t.Errorf("Alpha's channels changed: %q, %d channels, %d deliveries", alphaChannel, alphaChannels, alphaDeliveries)
 	}

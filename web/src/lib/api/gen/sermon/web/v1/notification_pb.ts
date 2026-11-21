@@ -530,21 +530,21 @@ export type Delivery = Message<"sermon.web.v1.Delivery"> & {
 
   /**
    * kind is what the notification reports: firing, resolved, acknowledged, flapping_started,
-   * flapping_stopped or test.
+   * flapping_stopped, test or digest (several alerts of one round in one message).
    *
    * @generated from field: string kind = 6;
    */
   kind: string;
 
   /**
-   * rule_id is the alert rule; empty for a test.
+   * rule_id is the alert rule; empty for a test and a digest.
    *
    * @generated from field: string rule_id = 7;
    */
   ruleId: string;
 
   /**
-   * node_id is the node; empty for a test.
+   * node_id is the node; empty for a test and a digest of several nodes.
    *
    * @generated from field: string node_id = 8;
    */

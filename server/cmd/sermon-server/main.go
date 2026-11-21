@@ -47,6 +47,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
+	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
@@ -164,7 +165,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		dispatcher := notify.NewDispatcher(notifyDeps)
 		registerNotifyMetrics(registry, dispatcher.Stats())
 		servers = append(servers, dispatcher.Run)
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), registry, logger); err != nil {
+		// Routing (M2-14): notification policies decide which channels hear of an alert.
+		routingStore := postgres.NewRoutingStore(db)
+		policies := routing.NewService(routing.ServiceDeps{
+			Store: routingStore, Channels: postgres.NewNotificationStore(db), Groups: postgres.NewFleetStore(db),
+			Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
+		})
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), policies, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -184,12 +191,16 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("default alert rules: %w", err)
 		}
+		rules := ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger)
+		router := routing.NewRouter(routing.RouterDeps{
+			Store: routingStore, Rules: routing.RulesOf(rules), Users: routing.UsersOf(postgres.NewAccessStore(db)), Logger: logger,
+		})
 		engine := alerting.NewEngine(alerting.Deps{
-			Store: postgres.NewAlertStore(db), Rules: ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger),
-			Nodes:   postgres.NewFleetStore(db),
-			Metrics: reader, Events: eventStore, Now: time.Now, Logger: logger,
+			Store: postgres.NewAlertStore(db), Rules: rules, Nodes: postgres.NewFleetStore(db),
+			Metrics: reader, Events: eventStore, Sink: router, Now: time.Now, Logger: logger,
 		})
 		registerAlertMetrics(registry, engine.Stats())
+		registerRoutingMetrics(registry, router.Stats())
 		servers = append(servers, engine.Run)
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, ingestService, logger)
@@ -343,7 +354,8 @@ const (
 )
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
-	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, registry *promtext.Registry, logger *slog.Logger,
+	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, policies *routing.Service,
+	registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
@@ -409,6 +421,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
 		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),
+		Policies:      webapi.NewNotificationPolicyHandler(policies, logger),
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil

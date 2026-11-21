@@ -1,0 +1,201 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// NotificationPolicyService manages the notification policies of the caller's organization
+// (KONZEPT §12.1, M2-14): which alerts go to which channels, how often a firing alert repeats
+// and where it escalates when nobody acknowledges it. Without any policy, alerts go to all
+// enabled channels. Only admins of all groups (manage_channels) may use it; creating, changing
+// and deleting a policy needs a recent step-up. Policies of other organizations are reported as
+// NOT_FOUND.
+service NotificationPolicyService {
+  // ListPolicies returns the organization's policies by name.
+  rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreatePolicy adds a policy (step-up).
+  rpc CreatePolicy(CreatePolicyRequest) returns (CreatePolicyResponse);
+  // UpdatePolicy replaces a policy (step-up).
+  rpc UpdatePolicy(UpdatePolicyRequest) returns (UpdatePolicyResponse);
+  // DeletePolicy removes a policy (step-up).
+  rpc DeletePolicy(DeletePolicyRequest) returns (DeletePolicyResponse);
+}
+
+// AlertSeverity is the level of a firing alert.
+enum AlertSeverity {
+  // ALERT_SEVERITY_UNSPECIFIED is not used.
+  ALERT_SEVERITY_UNSPECIFIED = 0;
+  // ALERT_SEVERITY_WARNING is a warning.
+  ALERT_SEVERITY_WARNING = 1;
+  // ALERT_SEVERITY_CRITICAL is critical.
+  ALERT_SEVERITY_CRITICAL = 2;
+}
+
+// PolicyGrouping is how the notifications of one evaluation round reach a channel.
+enum PolicyGrouping {
+  // POLICY_GROUPING_UNSPECIFIED is not used.
+  POLICY_GROUPING_UNSPECIFIED = 0;
+  // POLICY_GROUPING_NODE sends one message per node (several alerts of a node as a digest).
+  POLICY_GROUPING_NODE = 1;
+  // POLICY_GROUPING_DIGEST sends one message per round for all alerts.
+  POLICY_GROUPING_DIGEST = 2;
+}
+
+// PolicyMatchers select alerts: every set matcher must match, an empty one matches all.
+message PolicyMatchers {
+  // severities the alert has (for resolved alerts: the one it had).
+  repeated AlertSeverity severities = 1 [(buf.validate.field).repeated = {
+    max_items: 2
+    unique: true
+    items: {
+      enum: {
+        defined_only: true
+        not_in: [0]
+      }
+    }
+  }];
+  // group_ids contain the alert's node.
+  repeated string group_ids = 2 [(buf.validate.field).repeated = {
+    max_items: 20
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // rules are patterns of rule IDs; * stands for any characters, e.g. security.*.
+  repeated string rules = 3 [(buf.validate.field).repeated = {
+    max_items: 20
+    unique: true
+    items: {
+      string: {
+        min_len: 1
+        max_len: 100
+        pattern: "^[a-z0-9_.*]+$"
+      }
+    }
+  }];
+  // labels must all equal the rule's labels (e.g. category: security).
+  map<string, string> labels = 4 [(buf.validate.field).map = {
+    max_pairs: 16
+    keys: {
+      string: {pattern: "^[a-z][a-z0-9_]{0,31}$"}
+    }
+    values: {
+      string: {
+        min_len: 1
+        max_len: 100
+      }
+    }
+  }];
+}
+
+// PolicyEscalation sends a firing alert to more channels when nobody acknowledged it in time.
+message PolicyEscalation {
+  // after_minutes is how long the alert fires unacknowledged (1 to 1440).
+  int32 after_minutes = 1 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 1440
+  }];
+  // channel_ids receive the escalation and, from then on, the alert's notifications.
+  repeated string channel_ids = 2 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 10
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+}
+
+// PolicySpec is what a policy does.
+message PolicySpec {
+  // name is the display name.
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  // enabled policies route alerts; disabled ones still keep the fallback to all channels off.
+  bool enabled = 2;
+  // matchers select the alerts.
+  PolicyMatchers matchers = 3;
+  // channel_ids receive the alerts.
+  repeated string channel_ids = 4 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 10
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // grouping of the messages.
+  PolicyGrouping grouping = 5 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // repeat_minutes sends a firing, unacknowledged alert again (0: never; 5 to 10080).
+  int32 repeat_minutes = 6 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 10080
+  }];
+  // escalation is optional.
+  PolicyEscalation escalation = 7;
+}
+
+// NotificationPolicy is a stored policy.
+message NotificationPolicy {
+  // id is the policy UUID.
+  string id = 1;
+  // spec is what the policy does.
+  PolicySpec spec = 2;
+  // create_time is when the policy was added.
+  google.protobuf.Timestamp create_time = 3;
+  // update_time is when it was changed last.
+  google.protobuf.Timestamp update_time = 4;
+}
+
+// ListPoliciesRequest has no parameters.
+message ListPoliciesRequest {}
+
+// ListPoliciesResponse lists the policies by name.
+message ListPoliciesResponse {
+  // policies of the organization.
+  repeated NotificationPolicy policies = 1;
+}
+
+// CreatePolicyRequest describes the new policy.
+message CreatePolicyRequest {
+  // spec of the policy.
+  PolicySpec spec = 1 [(buf.validate.field).required = true];
+}
+
+// CreatePolicyResponse returns the policy.
+message CreatePolicyResponse {
+  // policy as stored.
+  NotificationPolicy policy = 1;
+}
+
+// UpdatePolicyRequest replaces a policy.
+message UpdatePolicyRequest {
+  // policy_id is the UUID of the policy.
+  string policy_id = 1 [(buf.validate.field).string.uuid = true];
+  // spec replaces the policy's spec.
+  PolicySpec spec = 2 [(buf.validate.field).required = true];
+}
+
+// UpdatePolicyResponse returns the changed policy.
+message UpdatePolicyResponse {
+  // policy as stored.
+  NotificationPolicy policy = 1;
+}
+
+// DeletePolicyRequest names the policy.
+message DeletePolicyRequest {
+  // policy_id is the UUID of the policy.
+  string policy_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeletePolicyResponse has no fields.
+message DeletePolicyResponse {}

@@ -60,15 +60,30 @@ func (*Notifier) Validate(c notify.Config) error {
 
 // payload is the JSON body; version 1 changes only by adding fields.
 type payload struct {
-	Version        int               `json:"version"`
-	Kind           notify.Kind       `json:"kind"`
-	Severity       notify.Severity   `json:"severity,omitempty"`
-	Test           bool              `json:"test"`
-	Language       notify.Lang       `json:"language"`
-	Title          string            `json:"title"`
-	Text           string            `json:"text"`
-	Link           string            `json:"link"`
-	At             time.Time         `json:"at"`
+	Version  int             `json:"version"`
+	Kind     notify.Kind     `json:"kind"`
+	Severity notify.Severity `json:"severity,omitempty"`
+	Test     bool            `json:"test"`
+	Language notify.Lang     `json:"language"`
+	Title    string          `json:"title"`
+	Text     string          `json:"text"`
+	Link     string          `json:"link"`
+	At       time.Time       `json:"at"`
+	*item
+	// Items and More make up a digest (kind "digest").
+	Items []digestItem `json:"items,omitempty"`
+	More  int          `json:"more,omitempty"`
+}
+
+// digestItem is one notification of a digest.
+type digestItem struct {
+	Kind     notify.Kind     `json:"kind"`
+	Severity notify.Severity `json:"severity,omitempty"`
+	item
+}
+
+// item is the data of one alert notification.
+type item struct {
 	Rule           *ruleInfo         `json:"rule,omitempty"`
 	Node           *nodeInfo         `json:"node,omitempty"`
 	Dimension      map[string]string `json:"dimension,omitempty"`
@@ -77,6 +92,8 @@ type payload struct {
 	ValueText      string            `json:"value_text,omitempty"`
 	Fields         map[string]string `json:"fields,omitempty"`
 	AcknowledgedBy string            `json:"acknowledged_by,omitempty"`
+	Reason         notify.Reason     `json:"reason,omitempty"`
+	FiringSeconds  int64             `json:"firing_seconds,omitempty"`
 }
 
 type ruleInfo struct {
@@ -89,28 +106,41 @@ type nodeInfo struct {
 	Hostname string `json:"hostname,omitempty"`
 }
 
+func itemOf(n notify.Notification, l notify.Lang) item {
+	it := item{Rule: &ruleInfo{ID: string(n.Rule), Name: n.RuleName.In(l)}}
+	if n.Node != (identity.NodeID{}) {
+		it.Node = &nodeInfo{ID: n.Node.String(), Hostname: n.Hostname}
+	}
+	value := n.Value
+	it.Dimension, it.Value, it.Unit, it.ValueText = notify.DimensionLabels(n.Dimension), &value, n.Unit, notify.FormatValue(n.Value, n.Unit, l)
+	it.Fields, it.AcknowledgedBy, it.Reason, it.FiringSeconds = n.Fields, n.AckBy, n.Reason, n.FiringSeconds
+	return it
+}
+
 func payloadOf(m notify.Message) payload {
 	n := m.Source
 	p := payload{
 		Version: 1, Kind: m.Kind, Severity: m.Severity, Test: m.Kind == notify.Test, Language: m.Lang,
 		Title: m.Title, Text: m.PlainText(), Link: m.Link, At: m.At.UTC(),
 	}
-	if m.Kind == notify.Test {
-		return p
+	switch n.Kind {
+	case notify.Test:
+	case notify.KindDigest:
+		p.Kind, p.More = notify.KindDigest, n.More
+		for _, it := range n.Items {
+			p.Items = append(p.Items, digestItem{Kind: it.Kind, Severity: it.Severity, item: itemOf(it, m.Lang)})
+		}
+	case notify.Firing, notify.Resolved, notify.Acknowledged, notify.FlappingStarted, notify.FlappingStopped:
+		it := itemOf(n, m.Lang)
+		p.item = &it
 	}
-	p.Rule = &ruleInfo{ID: string(n.Rule), Name: n.RuleName.In(m.Lang)}
-	if n.Node != (identity.NodeID{}) {
-		p.Node = &nodeInfo{ID: n.Node.String(), Hostname: n.Hostname}
-	}
-	value := n.Value
-	p.Dimension, p.Value, p.Unit, p.ValueText = notify.DimensionLabels(n.Dimension), &value, n.Unit, notify.FormatValue(n.Value, n.Unit, m.Lang)
-	p.Fields, p.AcknowledgedBy = n.Fields, n.AckBy
 	return p
 }
 
 // Send implements notify.Notifier.
 func (w *Notifier) Send(ctx context.Context, c notify.Config, m notify.Message) error {
-	body, err := json.Marshal(payloadOf(m))
+	p := payloadOf(m)
+	body, err := json.Marshal(p)
 	if err != nil {
 		return notify.Permanent(fmt.Errorf("encode payload: %w", err))
 	}
@@ -124,7 +154,7 @@ func (w *Notifier) Send(ctx context.Context, c notify.Config, m notify.Message) 
 	mac.Write(body)
 	header := http.Header{
 		"Content-Type":       {"application/json"},
-		"X-Sermon-Event":     {string(m.Kind)},
+		"X-Sermon-Event":     {string(p.Kind)},
 		"X-Sermon-Signature": {"t=" + ts + ",v1=" + hex.EncodeToString(mac.Sum(nil))},
 	}
 	return httppost.Post(ctx, w.client, c.Settings["url"], header, body) //nolint:wrapcheck // classified for notify

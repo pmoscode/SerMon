@@ -106,9 +106,20 @@ type Store interface {
 	Save(ctx context.Context, scope tenant.Scope, changed []alert.Instance, removed []alert.Key, history []Record) error
 }
 
-// Sink receives the stored transitions of an organization (routing and notifiers, M2-14).
+// Round is what one evaluation of an organization leaves for the routing: the stored
+// transitions, the instances after it (for repeats and escalations) and the nodes.
+type Round struct {
+	Org       tenant.OrgID
+	Now       time.Time
+	Records   []Record
+	Instances []alert.Instance
+	Nodes     []fleet.Node
+}
+
+// Sink receives every round of an organization this engine holds, after the changes are stored
+// (routing and notifiers, M2-14).
 type Sink interface {
-	Deliver(ctx context.Context, org tenant.OrgID, records []Record)
+	Deliver(ctx context.Context, r Round)
 }
 
 // Stats are counters for the server's own metrics.
@@ -273,17 +284,36 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 		}
 		removed = append(removed, key)
 	}
-	if len(changed) == 0 && len(removed) == 0 && len(history) == 0 {
-		return nil
+	if len(changed) > 0 || len(removed) > 0 || len(history) > 0 {
+		if err := e.d.Store.Save(ctx, scope, changed, removed, history); err != nil {
+			return fmt.Errorf("save: %w", err)
+		}
+		e.stats.Transitions.Add(uint64(len(history)))
 	}
-	if err := e.d.Store.Save(ctx, scope, changed, removed, history); err != nil {
-		return fmt.Errorf("save: %w", err)
-	}
-	e.stats.Transitions.Add(uint64(len(history)))
-	if e.d.Sink != nil && len(history) > 0 {
-		e.d.Sink.Deliver(ctx, org, history)
+	if e.d.Sink != nil {
+		e.d.Sink.Deliver(ctx, Round{Org: org, Now: now, Records: history, Instances: current(instances, changed, removed), Nodes: nodes})
 	}
 	return nil
+}
+
+// current is the instances after a round: the loaded ones as changed, the new ones, without the
+// removed ones.
+func current(loaded map[alert.Key]*alert.Instance, changed []alert.Instance, removed []alert.Key) []alert.Instance {
+	byKey := make(map[alert.Key]alert.Instance, len(loaded)+len(changed))
+	for k, i := range loaded {
+		byKey[k] = *i
+	}
+	for _, i := range changed {
+		byKey[i.Key] = i
+	}
+	for _, k := range removed {
+		delete(byKey, k)
+	}
+	out := make([]alert.Instance, 0, len(byKey))
+	for _, k := range slices.SortedFunc(maps.Keys(byKey), compareKeys) {
+		out = append(out, byKey[k])
+	}
+	return out
 }
 
 // roundEvents reads the events of one organization's round: rules on the same kind and window

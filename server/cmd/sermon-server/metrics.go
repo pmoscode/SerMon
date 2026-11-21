@@ -10,6 +10,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
+	"github.com/pmoscode/SerMon/server/internal/app/routing"
 
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/config"
@@ -90,6 +91,14 @@ func registerNotifyMetrics(r *promtext.Registry, stats *notify.Stats) {
 	} {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
 	}
+}
+
+// registerRoutingMetrics adds the counters of the alert routing (M2-14).
+func registerRoutingMetrics(r *promtext.Registry, stats *routing.Stats) {
+	r.Counter("sermon_server_routing_deliveries_total", "Notifications the routing queued for channels.",
+		func() float64 { return float64(stats.Deliveries.Load()) })
+	r.Counter("sermon_server_routing_errors_total", "Routing rounds that failed.",
+		func() float64 { return float64(stats.Errors.Load()) })
 }
 
 // newMetricsServer serves /metrics on its own listener without authentication (ADR 0011).

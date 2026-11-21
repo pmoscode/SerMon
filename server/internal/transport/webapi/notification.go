@@ -11,6 +11,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -230,7 +231,7 @@ func deliveryView(d notify.Delivery) *webv1.Delivery {
 	if d.Status == notify.StatusPending {
 		v.NextAttemptTime = timestamppb.New(d.NextAttemptAt)
 	}
-	if !d.Test {
+	if !d.Test && d.Notification.Node != (identity.NodeID{}) {
 		v.NodeId = d.Notification.Node.String()
 	}
 	return v

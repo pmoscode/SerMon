@@ -1,0 +1,8 @@
+KRITISCH: 5 Alerts auf 2 Nodes
+
+BEHOBEN: Hohe CPU-Auslastung – db-01: 96,4 %
+KRITISCH: Hohe CPU-Auslastung – web-01: 96,4 % (Eskalation)
+WARNUNG: SSH-Brute-Force (ip=192.0.2.7) – web-01: 12
+Weitere: 2 weitere Alerts in SerMon
+
+https://sermon.example/

@@ -9,7 +9,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > Die UI hat Login, Setup-Assistent und App-Shell; Charts und Flottenübersicht folgen.
 > Die Alert-Engine wertet Standardregeln für Metriken und Security-Events aus (SSH-Brute-Force, Fleet-Korrelation,
 > Root-Login, sudo, OOM, Reboot). Benachrichtigungen per E-Mail, Webhook, ntfy, Slack, Teams,
-> Discord, Mattermost, Telegram, Gotify und Pushover sind angebunden; das Routing der Alerts zu den Kanälen folgt.
+> Discord, Mattermost, Telegram, Gotify und Pushover sind angebunden; Notification-Policies leiten die Alerts mit
+> Wiederholung und Eskalation an die Kanäle (die UI dafür folgt).
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 

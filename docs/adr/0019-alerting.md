@@ -151,3 +151,35 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
 - **Keine Notfall-Priorität bei Pushover:** Priorität 2 wiederholt, bis in Pushover bestätigt wird, und braucht
   eigene Parameter. Eskalation ist Aufgabe der Policies (M2-14).
 - **Thema bei Telegram:** Für Gruppen mit Themen gibt es das optionale Feld `thread` (`message_thread_id`).
+
+## Nachtrag M2-14: Notification-Policies und Eskalation
+
+- **Policies:** Matcher auf Severity, Gruppe des Nodes, Regel-ID (Muster mit `*`) und die Labels der Regel; jeder
+  gesetzte Matcher muss passen. Alle passenden Policies greifen, jeder Kanal bekommt eine Änderung aber nur einmal
+  (mit der Gruppierung der ersten Policy nach Name). Eine Policy hat 1 bis 10 Kanäle.
+- **Abweichung, `tags`:** Nodes haben noch keine Tags. Stattdessen passen die Labels der Regel (z. B.
+  `category: security`). Tags an Nodes kommen mit den Selektoren der Regeln.
+- **Ohne Policies an alle aktiven Kanäle:** Eine Org ohne eine einzige Policy bekommt jeden Alert auf allen aktiven
+  Kanälen, gruppiert pro Node, ohne Wiederholung. Abgeschaltete Policies zählen als vorhanden. So wirkt der erste
+  Kanal sofort, und wer Policies anlegt, entscheidet selbst.
+- **Wiederholung und Eskalation:** Solange ein Alert feuert und nicht quittiert ist, geht er nach dem Intervall der
+  Policy wieder raus (5 min bis 7 Tage). Nach der Eskalationszeit (1 min bis 24 h) bekommen ihn die Kanäle der
+  Eskalation, die ihn noch nicht haben; danach hören sie alles zu diesem Alert, auch das Ende. Quittieren stoppt
+  beides, bis der Alert endet oder kritisch wird. Der Zustand (letzte Nachricht, eskaliert) liegt pro Instanz und
+  Policy in `alert_routing_state` und geht mit Instanz und Policy.
+- **Eine Transaktion:** Der Router schreibt Zustellungen und Zustand zusammen. Eine Erinnerung wird so nie doppelt
+  eingereiht, auch wenn zwei Runden schnell folgen. Fällt das Schreiben aus, holt die nächste Runde fällige
+  Erinnerungen nach; eine Änderung, deren Runde ausfällt, geht verloren (wie bisher zwischen Engine und Sink).
+- **Router als Sink der Engine:** Die Engine gibt jede Runde, die sie hält, mit den Instanzen danach weiter, auch
+  ohne Änderung. Ohne Änderung und ohne feuernden, unquittierten Alert liest der Router nichts.
+- **Flattern:** Während eine Instanz flattert, fallen Feuern und Behoben weg. Die Änderung, mit der das Flattern
+  beginnt, und die Hinweise „flattert“ und „stabil“ gehen raus, Erinnerungen auch.
+- **Gruppierung pro Runde:** „Pro Node“ fasst die Nachrichten einer Runde (10 s) für einen Node und Kanal zusammen,
+  „Digest“ alle. Mehrere werden zu einer Sammelnachricht (`digest`): Titel und Farbe vom dringendsten Eintrag,
+  höchstens 20 Einträge und 12 KiB (das Protokoll erlaubt 16 KiB, auch bei langen Regelnamen), der Rest
+  gezählt. **Abweichung:** kein Sammelfenster über mehrere Runden; Alerts, die
+  zusammen auftreten, fallen meist in dieselbe Runde. Einträge eines Digests haben keine Felder (User, Adresse):
+  Das Protokoll bleibt so klein, die Details stehen in SerMon. Der Webhook bekommt die Einträge als Daten.
+- **Rechte:** Policies verwalten Admins mit `manage_channels`, Schreiben nur mit frischem Step-up, wie bei den
+  Kanälen. Eine Policy entscheidet, wer von Security-Events erfährt (T67). Kanäle und Gruppen müssen zur Org
+  gehören; ein gelöschter Kanal verschwindet aus den Policies.

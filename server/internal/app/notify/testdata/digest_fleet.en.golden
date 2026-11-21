@@ -1,0 +1,8 @@
+CRITICAL: 5 alerts on 2 nodes
+
+RESOLVED: High CPU usage – db-01: 96.4 %
+CRITICAL: High CPU usage – web-01: 96.4 % (escalation)
+WARNING: SSH brute force (ip=192.0.2.7) – web-01: 12
+More: 2 more alerts in SerMon
+
+https://sermon.example/

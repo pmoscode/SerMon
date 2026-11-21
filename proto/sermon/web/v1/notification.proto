@@ -257,11 +257,11 @@ message Delivery {
   // test marks a test message.
   bool test = 5;
   // kind is what the notification reports: firing, resolved, acknowledged, flapping_started,
-  // flapping_stopped or test.
+  // flapping_stopped, test or digest (several alerts of one round in one message).
   string kind = 6;
-  // rule_id is the alert rule; empty for a test.
+  // rule_id is the alert rule; empty for a test and a digest.
   string rule_id = 7;
-  // node_id is the node; empty for a test.
+  // node_id is the node; empty for a test and a digest of several nodes.
   string node_id = 8;
   // create_time is when the notification was queued.
   google.protobuf.Timestamp create_time = 9;

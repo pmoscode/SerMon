@@ -626,9 +626,11 @@ Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von
     - **Quittieren** stoppt die Benachrichtigungen, bis der Alert gelöst ist oder zu CRITICAL eskaliert.
     - **Flapping-Erkennung:** Mehr als N Wechsel in M Minuten setzen den Status `FLAPPING`; Benachrichtigungen werden
       dann gedrosselt.
-- **Notification-Policy (Routing):** Matcher auf Labels (`severity`, `group`, `rule`, `tags`) → Kanäle. Dazu
-  Wiederholungsintervall, Gruppierung (pro Node oder Digest) und eine einfache **Eskalation** („nach 15 min ohne
-  Quittierung zusätzlich an Kanal X“).
+- **Notification-Policy (Routing):** Matcher auf Severity, Gruppe, Regel (Muster wie `security.*`) und die Labels der
+  Regel → Kanäle. Dazu Wiederholungsintervall, Gruppierung (pro Node oder Digest je Auswertungsrunde) und eine
+  einfache **Eskalation** („nach 15 min ohne Quittierung zusätzlich an Kanal X“). Ohne eine Policy gehen alle Alerts
+  an alle aktiven Kanäle der Org. Während eine Instanz flattert, werden Feuern und Behoben nicht gemeldet
+  ([ADR 0019](adr/0019-alerting.md), Nachtrag M2-14).
 - **Silences und Wartungsfenster:** zeitlich begrenzt, per Selektor. Während Update-Wartungsfenstern wird
   **automatisch** stummgeschaltet (Reboot- und Offline-Alerts).
 - **Auswertung:** Die Engine läuft im Server alle 10 s. Schwellwert-Regeln fragen den `MetricStore` über die typisierte

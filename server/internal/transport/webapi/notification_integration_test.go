@@ -18,6 +18,9 @@ import (
 // channelAl is a notification channel of Alpha (isolation fixtures).
 const channelAl = "0193f5a0-0000-7000-8000-0000000001a4"
 
+// policyAl is a notification policy of Alpha to channelAl (isolation fixtures).
+const policyAl = "0193f5a0-0000-7000-8000-0000000001a5"
+
 const hookToken = "hook-secret-token-0815" // fixture, not a secret
 
 // hookNotifier is the channel type of the API tests: a URL and a secret token; it records sends.
@@ -65,12 +68,17 @@ func seedChannelAlpha(t *testing.T) {
 	t.Helper()
 	ownerSQL(t,
 		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
+		"DELETE FROM notification_policies WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM notification_channels WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM notification_deliveries WHERE org_id = '"+orgAlpha+"'",
 		`INSERT INTO notification_channels (org_id, id, type, name, language, enabled, settings, secret_names, sealed_secrets, created_at, updated_at)
 		 VALUES ('`+orgAlpha+`', '`+channelAl+`', 'hook', 'alpha-hook', 'de', true, '{"url": "https://alpha.example/hook"}', '{token}', '\x00', now(), now())`,
 		`INSERT INTO notification_deliveries (org_id, channel_id, notification, status, created_at, next_attempt_at, last_error)
 		 VALUES ('`+orgAlpha+`', '`+channelAl+`', '{"kind": "firing", "hostname": "alpha-01"}', 'failed', now(), now(), 'alpha-error')`,
+		`INSERT INTO notification_policies (org_id, id, name, enabled, grouping, created_at, updated_at)
+		 VALUES ('`+orgAlpha+`', '`+policyAl+`', 'alpha-policy', true, 'node', now(), now())`,
+		`INSERT INTO notification_policy_channels (org_id, policy_id, channel_id, escalation, position)
+		 VALUES ('`+orgAlpha+`', '`+policyAl+`', '`+channelAl+`', false, 0)`,
 	)
 }
 

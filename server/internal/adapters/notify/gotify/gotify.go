@@ -60,7 +60,7 @@ func priority(m notify.Message) int {
 		return 3
 	case notify.Acknowledged, notify.FlappingStopped:
 		return 2
-	case notify.Test:
+	case notify.Test, notify.KindDigest: // a rendered digest has the kind of its most urgent item
 	}
 	return 5
 }

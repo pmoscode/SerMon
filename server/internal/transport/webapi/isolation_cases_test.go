@@ -29,11 +29,13 @@ type isolationEnv struct {
 	fleet                           webv1connect.FleetServiceClient
 	events                          webv1connect.SecurityEventServiceClient
 	channels                        webv1connect.NotificationChannelServiceClient
+	policies                        webv1connect.NotificationPolicyServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
 	nodeA                           string // a node of Org A
 	channelA                        string // a notification channel of Org A, with a delivery
+	policyA                         string // a notification policy of Org A to channelA
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -62,6 +64,10 @@ func selectorA(e isolationEnv) *webv1.MetricSelector {
 func leaksChannel(e isolationEnv, s string) bool {
 	return strings.Contains(s, e.channelA) || strings.Contains(s, "alpha-hook") || strings.Contains(s, "alpha.example") ||
 		strings.Contains(s, "alpha-error") || strings.Contains(s, "alpha-01")
+}
+
+func policySpec(channel string) *webv1.PolicySpec {
+	return &webv1.PolicySpec{Name: "pwned", Enabled: true, ChannelIds: []string{channel}, Grouping: webv1.PolicyGrouping_POLICY_GROUPING_NODE}
 }
 
 // tenantIsolationCases maps every tenant RPC to its cross-tenant case (isolation_integration_test.go).
@@ -107,6 +113,29 @@ var tenantIsolationCases = map[string]isolationCase{
 			}
 		}
 		return nil
+	}},
+	"/sermon.web.v1.NotificationPolicyService/ListPolicies": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.policies.ListPolicies(ctx, connect.NewRequest(&webv1.ListPoliciesRequest{}))
+		if err == nil && (strings.Contains(res.Msg.String(), e.policyA) || leaksChannel(e, res.Msg.String())) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.NotificationPolicyService/CreatePolicy": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		// Creating acts in the caller's organization; a channel of Org A is unknown there.
+		_, err := e.policies.CreatePolicy(ctx, connect.NewRequest(&webv1.CreatePolicyRequest{Spec: policySpec(e.channelA)}))
+		if connect.CodeOf(err) == connect.CodeInvalidArgument {
+			return nil
+		}
+		return errors.Join(errForeignAccepted, err)
+	}},
+	"/sermon.web.v1.NotificationPolicyService/UpdatePolicy": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.policies.UpdatePolicy(ctx, connect.NewRequest(&webv1.UpdatePolicyRequest{PolicyId: e.policyA, Spec: policySpec(e.channelA)}))
+		return err
+	}},
+	"/sermon.web.v1.NotificationPolicyService/DeletePolicy": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.policies.DeletePolicy(ctx, connect.NewRequest(&webv1.DeletePolicyRequest{PolicyId: e.policyA}))
+		return err
 	}},
 	"/sermon.web.v1.SecurityEventService/ListSecurityEvents": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.events.ListSecurityEvents(ctx, connect.NewRequest(&webv1.ListSecurityEventsRequest{

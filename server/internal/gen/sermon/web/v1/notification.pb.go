@@ -1048,11 +1048,11 @@ type Delivery struct {
 	// test marks a test message.
 	Test bool `protobuf:"varint,5,opt,name=test,proto3" json:"test,omitempty"`
 	// kind is what the notification reports: firing, resolved, acknowledged, flapping_started,
-	// flapping_stopped or test.
+	// flapping_stopped, test or digest (several alerts of one round in one message).
 	Kind string `protobuf:"bytes,6,opt,name=kind,proto3" json:"kind,omitempty"`
-	// rule_id is the alert rule; empty for a test.
+	// rule_id is the alert rule; empty for a test and a digest.
 	RuleId string `protobuf:"bytes,7,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
-	// node_id is the node; empty for a test.
+	// node_id is the node; empty for a test and a digest of several nodes.
 	NodeId string `protobuf:"bytes,8,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	// create_time is when the notification was queued.
 	CreateTime *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`

@@ -62,6 +62,16 @@ type AlertLease struct {
 	ExpiresAt time.Time
 }
 
+type AlertRoutingState struct {
+	OrgID      uuid.UUID
+	RuleID     string
+	NodeID     uuid.UUID
+	Dimension  string
+	PolicyID   uuid.UUID
+	LastSentAt time.Time
+	Escalated  bool
+}
+
 type AlertRuleOverride struct {
 	OrgID     uuid.UUID
 	RuleID    string
@@ -219,6 +229,28 @@ type NotificationDelivery struct {
 	LastAttemptAt *time.Time
 	SentAt        *time.Time
 	LastError     string
+}
+
+type NotificationPolicy struct {
+	OrgID             uuid.UUID
+	ID                uuid.UUID
+	Name              string
+	Enabled           bool
+	Matchers          []byte
+	Grouping          string
+	RepeatSeconds     int32
+	EscalationSeconds pgtype.Int4
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	CreatedBy         *uuid.UUID
+}
+
+type NotificationPolicyChannel struct {
+	OrgID      uuid.UUID
+	PolicyID   uuid.UUID
+	ChannelID  uuid.UUID
+	Escalation bool
+	Position   int16
 }
 
 type Organization struct {

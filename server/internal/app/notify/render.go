@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"strconv"
@@ -67,6 +68,14 @@ var words = map[string]Text{
 	"flapping_note":    {"Benachrichtigungen werden gedrosselt.", "Notifications are throttled."},
 	"open":             {"In SerMon öffnen", "Open in SerMon"},
 	"note":             {"Hinweis", "Note"},
+	"repeat":           {"Erinnerung: feuert seit %s und ist nicht quittiert.", "Reminder: firing for %s and not acknowledged."},
+	"escalation":       {"Eskalation: seit %s nicht quittiert.", "Escalation: not acknowledged for %s."},
+	"repeat_short":     {"Erinnerung", "reminder"},
+	"escalation_short": {"Eskalation", "escalation"},
+	"alerts":           {"%d Alerts", "%d alerts"},
+	"on_nodes":         {"auf %d Nodes", "on %d nodes"},
+	"more":             {"Weitere", "More"},
+	"more_alerts":      {"%d weitere Alerts in SerMon", "%d more alerts in SerMon"},
 	"ts":               {"Ereignis um", "Event at"},
 	"user":             {"Benutzer", "User"},
 	"ip":               {"Adresse", "Address"},
@@ -89,6 +98,94 @@ var words = map[string]Text{
 var fieldOrder = []string{
 	"ts", "user", "ip", "port", "method", "invalid_user", "key_type", "key_fingerprint", "tty", "target", "command",
 	"uid", "pid", "process", "previous_boot_id", "uptime_before",
+}
+
+// statusOf is the key of the status word: the severity while firing, else the kind.
+func statusOf(n Notification) string {
+	if n.Kind == Firing {
+		return string(n.Severity)
+	}
+	return string(n.Kind)
+}
+
+// urgency orders the kinds of a digest's items: the most urgent gives the digest its kind.
+func urgency(n Notification) int {
+	switch n.Kind {
+	case Firing:
+		if n.Severity == Critical {
+			return 6
+		}
+		return 5
+	case FlappingStarted:
+		return 4
+	case Resolved:
+		return 3
+	case Acknowledged:
+		return 2
+	case FlappingStopped:
+		return 1
+	case Test, KindDigest:
+	}
+	return 0
+}
+
+// renderDigest writes one line per item: its status, rule, dimension, node (when the digest
+// spans nodes) and value.
+func renderDigest(m Message, d Notification, l Lang, base string) Message {
+	nodes := map[identity.NodeID]bool{}
+	var top Notification
+	for _, it := range d.Items {
+		nodes[it.Node] = true
+		if urgency(it) > urgency(top) {
+			top = it
+		}
+	}
+	m.Kind, m.Severity = top.Kind, top.Severity
+	count := len(d.Items) + d.More
+	m.Title = word(statusOf(top), l) + ": " + fmt.Sprintf(word("alerts", l), count)
+	if d.Hostname != "" {
+		m.Title += " – " + oneLine(d.Hostname)
+	} else if len(nodes) > 1 {
+		m.Title += " " + fmt.Sprintf(word("on_nodes", l), len(nodes))
+	}
+	if d.Node != (identity.NodeID{}) {
+		m.Link = base + "/nodes/" + d.Node.String()
+	}
+	for _, it := range d.Items {
+		v := oneLine(it.RuleName.In(l))
+		if dim := dimension(it.Dimension); dim != "" {
+			v += " (" + dim + ")"
+		}
+		if d.Hostname == "" && it.Hostname != "" {
+			v += " – " + oneLine(it.Hostname)
+		}
+		v += ": " + FormatValue(it.Value, it.Unit, l)
+		if it.Reason == ReasonRepeat || it.Reason == ReasonEscalation {
+			v += " (" + word(string(it.Reason)+"_short", l) + ")"
+		}
+		m.Lines = append(m.Lines, Line{word(statusOf(it), l), v})
+	}
+	if d.More > 0 {
+		m.Lines = append(m.Lines, Line{word("more", l), fmt.Sprintf(word("more_alerts", l), d.More)})
+	}
+	return m
+}
+
+// FormatDuration writes a duration in minutes, hours and days (at least 1 min).
+func FormatDuration(d time.Duration) string {
+	minutes := max(int64(d/time.Minute), 1)
+	days, hours, mins := minutes/(24*60), minutes/60%24, minutes%60
+	var parts []string
+	if days > 0 {
+		parts = append(parts, strconv.FormatInt(days, 10)+" d")
+	}
+	if hours > 0 {
+		parts = append(parts, strconv.FormatInt(hours, 10)+" h")
+	}
+	if mins > 0 && days == 0 {
+		parts = append(parts, strconv.FormatInt(mins, 10)+" min")
+	}
+	return strings.Join(parts, " ")
 }
 
 // OpenInSerMon is the text of a link or button to the deep link.
@@ -115,15 +212,15 @@ func oneLine(s string) string {
 func Render(n Notification, l Lang, baseURL string) Message {
 	base := strings.TrimRight(baseURL, "/")
 	m := Message{Lang: l, Kind: n.Kind, Severity: n.Severity, At: n.At, Link: base + "/", Source: n}
+	if n.Kind == KindDigest {
+		return renderDigest(m, n, l, base)
+	}
 	if n.Kind == Test {
 		m.Title = word("test", l)
 		m.Lines = []Line{{word("at", l), formatTime(n.At)}}
 		return m
 	}
-	status := string(n.Kind)
-	if n.Kind == Firing {
-		status = string(n.Severity)
-	}
+	status := statusOf(n)
 	subject := oneLine(n.RuleName.In(l))
 	if n.Hostname != "" {
 		subject += " – " + oneLine(n.Hostname)
@@ -145,6 +242,9 @@ func Render(n Notification, l Lang, baseURL string) Message {
 	}
 	if n.Kind == FlappingStarted {
 		m.Lines = append(m.Lines, Line{word("note", l), word("flapping_note", l)})
+	}
+	if n.Reason == ReasonRepeat || n.Reason == ReasonEscalation {
+		m.Lines = append(m.Lines, Line{word("note", l), fmt.Sprintf(word(string(n.Reason), l), FormatDuration(time.Duration(n.FiringSeconds)*time.Second))})
 	}
 	names := make([]string, 0, len(n.Fields))
 	for name := range n.Fields {
@@ -227,6 +327,10 @@ func FormatValue(v float64, u Unit, l Lang) string {
 		return number(v, 1) + " " + units[i]
 	case UnitPerSecond:
 		return number(v, 2) + "/s"
+	case UnitPerMinute:
+		return number(v, 2) + "/min"
+	case UnitBytesPerSecond:
+		return FormatValue(v, UnitBytes, l) + "/s"
 	case UnitCount:
 		return number(v, 0)
 	}
@@ -257,7 +361,7 @@ func (m Message) Tone() Tone {
 		return ToneWarning
 	case Resolved:
 		return ToneGood
-	case Acknowledged, FlappingStopped, Test:
+	case Acknowledged, FlappingStopped, Test, KindDigest:
 	}
 	return ToneNeutral
 }

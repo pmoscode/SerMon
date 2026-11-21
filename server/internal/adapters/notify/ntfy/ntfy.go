@@ -63,7 +63,7 @@ func style(m notify.Message) (int, string) {
 		return 3, "repeat"
 	case notify.FlappingStopped:
 		return 2, "repeat"
-	case notify.Test:
+	case notify.Test, notify.KindDigest: // a rendered digest has the kind of its most urgent item
 	}
 	return 3, "test_tube"
 }

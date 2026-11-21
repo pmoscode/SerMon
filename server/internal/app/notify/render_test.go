@@ -1,6 +1,7 @@
 package notify_test
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -40,6 +41,31 @@ func bruteForce() notify.Notification {
 	}
 }
 
+func reminder(r notify.Reason, firing time.Duration) notify.Notification {
+	n := cpuAlert(notify.Firing)
+	n.Reason, n.FiringSeconds = r, int64(firing/time.Second)
+	return n
+}
+
+func diskAlert() notify.Notification {
+	n := cpuAlert(notify.Firing)
+	n.Severity, n.Rule, n.Dimension, n.Value, n.Unit = notify.Warning, "system.filesystem.full_soon", "mountpoint=/var\x1f", 5.25, notify.UnitHours
+	n.RuleName = notify.Text{De: "Dateisystem bald voll", En: "File system full soon"}
+	return n
+}
+
+// nodeDigest is two alerts of one node in one round.
+func nodeDigest() notify.Notification {
+	return notify.Digest(t0, []notify.Notification{diskAlert(), cpuAlert(notify.Firing)}, 0)
+}
+
+// fleetDigest is alerts of two nodes, one resolved, one a reminder, and two left out.
+func fleetDigest() notify.Notification {
+	db := cpuAlert(notify.Resolved)
+	db.Node, db.Hostname = identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-000000000002")), "db-01"
+	return notify.Digest(t0, []notify.Notification{db, reminder(notify.ReasonEscalation, 20*time.Minute), bruteForce()}, 2)
+}
+
 func golden(t *testing.T, name, got string) {
 	t.Helper()
 	path := filepath.Join("testdata", name+".golden")
@@ -72,6 +98,10 @@ func TestRender_Golden(t *testing.T) {
 		"flapping_stopped": cpuAlert(notify.FlappingStopped),
 		"security":         bruteForce(),
 		"test":             notify.TestNotification(t0),
+		"repeat":           reminder(notify.ReasonRepeat, 2*time.Hour+5*time.Minute),
+		"escalation":       reminder(notify.ReasonEscalation, 15*time.Minute),
+		"digest_node":      nodeDigest(),
+		"digest_fleet":     fleetDigest(),
 	}
 	for name, n := range cases {
 		for _, lang := range []notify.Lang{notify.German, notify.English} {
@@ -106,6 +136,8 @@ func TestRender_FormatsValuesByUnit(t *testing.T) {
 		{notify.UnitBytes, 512, "512 B", "512 B"},
 		{notify.UnitCount, 12, "12", "12"},
 		{notify.UnitPerSecond, 0.25, "0,25/s", "0.25/s"},
+		{notify.UnitPerMinute, 3, "3/min", "3/min"},
+		{notify.UnitBytesPerSecond, 2.5 * (1 << 20), "2,5 MiB/s", "2.5 MiB/s"},
 		{"", 1234.5, "1234,5", "1234.5"},
 	} {
 		if got := notify.FormatValue(tc.value, tc.unit, notify.German); got != tc.de {
@@ -181,5 +213,68 @@ func TestMessage_Tone(t *testing.T) {
 		if got := (notify.Message{Kind: tc.kind, Severity: tc.severity}).Tone(); got != tc.want {
 			t.Errorf("%s %s: %v, want %v", tc.kind, tc.severity, got, tc.want)
 		}
+	}
+}
+
+// A digest reads like its most urgent item: channels take priority and colour from Kind and
+// Severity.
+func TestDigest_TakesKindAndSeverityOfTheMostUrgentItem(t *testing.T) {
+	warning := diskAlert()
+	resolved := cpuAlert(notify.Resolved)
+	acked := cpuAlert(notify.Acknowledged)
+	for _, tc := range []struct {
+		items    []notify.Notification
+		kind     notify.Kind
+		severity notify.Severity
+	}{
+		{[]notify.Notification{resolved, warning, cpuAlert(notify.Firing)}, notify.Firing, notify.Critical},
+		{[]notify.Notification{resolved, warning}, notify.Firing, notify.Warning},
+		{[]notify.Notification{acked, cpuAlert(notify.FlappingStarted)}, notify.FlappingStarted, notify.Critical},
+		{[]notify.Notification{acked, resolved}, notify.Resolved, notify.Critical},
+		{[]notify.Notification{cpuAlert(notify.FlappingStopped), acked}, notify.Acknowledged, notify.Critical},
+	} {
+		m := notify.Render(notify.Digest(t0, tc.items, 0), notify.English, base)
+		if m.Kind != tc.kind || m.Severity != tc.severity || m.Source.Kind != notify.KindDigest {
+			t.Errorf("%v: kind %s severity %s, want %s %s", tc.items, m.Kind, m.Severity, tc.kind, tc.severity)
+		}
+	}
+}
+
+// Items of a digest carry no fields (user, address): the delivery log keeps the digest within
+// its size, and the details are in SerMon.
+func TestDigest_DropsFieldsAndLinksToOneNodeOnly(t *testing.T) {
+	d := notify.Digest(t0, []notify.Notification{bruteForce(), cpuAlert(notify.Firing)}, 0)
+	for _, it := range d.Items {
+		if it.Fields != nil {
+			t.Errorf("item %s keeps fields %v", it.Rule, it.Fields)
+		}
+	}
+	if d.Node != web || d.Hostname != "web-01" {
+		t.Errorf("digest of one node: node %v host %q", d.Node, d.Hostname)
+	}
+	if m := notify.Render(d, notify.English, base); m.Link != base+"/nodes/"+web.String() {
+		t.Errorf("link %q", m.Link)
+	}
+	if m := notify.Render(fleetDigest(), notify.English, base); m.Link != base+"/" || fleetDigest().Hostname != "" {
+		t.Errorf("fleet link %q", m.Link)
+	}
+}
+
+// Rules of an organization may have long names: a digest stays within the delivery log's
+// limit (16 KiB) and counts what does not fit.
+func TestDigest_FitsTheDeliveryLog(t *testing.T) {
+	long := cpuAlert(notify.Firing)
+	long.RuleName = notify.Text{De: strings.Repeat("ä", 2000), En: strings.Repeat("x", 2000)}
+	items := make([]notify.Notification, 20)
+	for i := range items {
+		items[i] = long
+	}
+	d := notify.Digest(t0, items, 3)
+	data, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) > notify.MaxDigestBytes || len(d.Items) == 0 || len(d.Items)+d.More != 23 {
+		t.Errorf("%d bytes, %d items, %d more", len(data), len(d.Items), d.More)
 	}
 }

@@ -80,7 +80,7 @@ func priority(m notify.Message) int {
 		}
 	case notify.Acknowledged, notify.FlappingStopped:
 		return -1
-	case notify.Resolved, notify.FlappingStarted, notify.Test:
+	case notify.Resolved, notify.FlappingStarted, notify.Test, notify.KindDigest:
 	}
 	return 0
 }

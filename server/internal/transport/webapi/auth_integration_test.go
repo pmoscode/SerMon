@@ -35,6 +35,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
+	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -163,6 +164,10 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Notifications: webapi.NewNotificationChannelHandler(notify.NewService(notify.Deps{
 			Store: postgres.NewNotificationStore(pg), Registry: hookRegistry(t), Box: masterKeys(t), Policy: authz.NewPolicy(),
 			BaseURL: srv.URL, Now: time.Now, NewID: access.NewID, Logger: slog.New(slog.DiscardHandler),
+		}), slog.New(slog.DiscardHandler)),
+		Policies: webapi.NewNotificationPolicyHandler(routing.NewService(routing.ServiceDeps{
+			Store: postgres.NewRoutingStore(pg), Channels: postgres.NewNotificationStore(pg), Groups: postgres.NewFleetStore(pg),
+			Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 		}), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
 	})

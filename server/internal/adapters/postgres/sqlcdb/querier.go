@@ -49,11 +49,14 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	DeactivateIssuingAuthority(ctx context.Context) error
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
+	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteNotificationChannel(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteNotificationPolicy(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteNotificationPolicyChannels(ctx context.Context, policyID uuid.UUID) error
 	// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
 	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
 	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
@@ -99,6 +102,8 @@ type Querier interface {
 	// organization's tenant transaction.
 	InsertNotificationChannel(ctx context.Context, arg InsertNotificationChannelParams) error
 	InsertNotificationDelivery(ctx context.Context, arg []InsertNotificationDeliveryParams) *InsertNotificationDeliveryBatchResults
+	InsertNotificationPolicy(ctx context.Context, arg InsertNotificationPolicyParams) error
+	InsertNotificationPolicyChannel(ctx context.Context, arg InsertNotificationPolicyChannelParams) error
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
 	InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
@@ -112,9 +117,11 @@ type Querier interface {
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
 	LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrganizationParams) (int64, error)
 	ListAlertInstances(ctx context.Context) ([]ListAlertInstancesRow, error)
+	ListAlertRoutingStates(ctx context.Context) ([]ListAlertRoutingStatesRow, error)
 	// Alert rule overrides (M2-04, ADR 0007). Every query runs in the organization's tenant transaction.
 	ListAlertRuleOverrides(ctx context.Context) ([]ListAlertRuleOverridesRow, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	ListEnabledNotificationChannelIDs(ctx context.Context) ([]uuid.UUID, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
 	ListInstanceAudit(ctx context.Context, arg ListInstanceAuditParams) ([]InstanceAuditLog, error)
@@ -123,6 +130,10 @@ type Querier interface {
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
 	ListNotificationChannels(ctx context.Context) ([]ListNotificationChannelsRow, error)
 	ListNotificationDeliveries(ctx context.Context, arg ListNotificationDeliveriesParams) ([]ListNotificationDeliveriesRow, error)
+	// Notification policies and the routing state (M2-14, ADR 0007). Every query runs in the
+	// organization's tenant transaction.
+	ListNotificationPolicies(ctx context.Context) ([]ListNotificationPoliciesRow, error)
+	ListNotificationPolicyChannels(ctx context.Context) ([]ListNotificationPolicyChannelsRow, error)
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
@@ -193,8 +204,10 @@ type Querier interface {
 	// The agent's Hello: current host facts and version (the machine-id never changes here).
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)
 	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
+	UpdateNotificationPolicy(ctx context.Context, arg UpdateNotificationPolicyParams) (int64, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
+	UpsertAlertRoutingState(ctx context.Context, arg UpsertAlertRoutingStateParams) error
 	UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRuleOverrideParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).

@@ -1080,9 +1080,16 @@ statt `yes`, damit der Dateisystem-Collector auch `/home` sieht. Unter OpenRC wi
 
 ### 18.6 Ausgehende Verbindungen (SSRF)
 
-- Webhooks und Chat-Kanäle: Standardmäßig werden private, Loopback-, Link-local- und Metadata-Adressen
-  (`169.254.169.254` usw.) **blockiert**. Die IP wird aufgelöst und **gepinnt** (gegen DNS-Rebinding), Redirects sind
-  begrenzt, Timeouts gesetzt. Eine Allowlist für interne Ziele (z. B. internes Mattermost) konfiguriert der Superadmin.
+- Webhooks und Chat-Kanäle gehen über den Client `safehttp` ([ADR 0024](docs/adr/0024-ausgehende-verbindungen-safehttp.md)):
+  - Private, Loopback-, Link-local-, Metadata- und andere Sonderadressen (`169.254.169.254` usw.) sind **blockiert**,
+    auch in IPv6-Formen mit eingebetteter IPv4 (IPv4-mapped, NAT64, 6to4).
+  - Die IP wird aufgelöst und **gepinnt** (gegen DNS-Rebinding); der Socket prüft sie noch einmal.
+  - Höchstens 3 Redirects, jeder neu geprüft und ohne Wechsel auf http; 15 s Zeitlimit, Antwort höchstens 1 MiB.
+  - Öffentliche Ziele nur über https; http nur zu Zielen auf der Allowlist. Proxy-Variablen werden ignoriert.
+  - Fehler nennen nur den Host, nie Pfad oder Query (Webhook-URLs enthalten Geheimnisse).
+  - Die **Allowlist** für interne Ziele (z. B. internes Mattermost) setzt der Betreiber in
+    `SERMON_OUTBOUND_ALLOWLIST` (CIDRs). So kann auch ein übernommenes Superadmin-Konto das interne Netz nicht
+    öffnen. Metadata-Dienste lassen sich nicht freigeben.
 - Keine Telemetrie und keine „Phone-Home“-Funktion. Die Prüfung auf neue Versionen ist abschaltbar.
 - Das gilt auch für die Fremdkomponenten: **TimescaleDB** (`TIMESCALEDB_TELEMETRY=off`) und **Loki**
   (`analytics.reporting_enabled: false`) senden standardmäßig Nutzungsdaten. Beides wird in jeder Compose-Datei

@@ -158,7 +158,7 @@ flowchart LR
 
 | # | STRIDE | Bedrohung | Gegenmaßnahme | Aufgabe | Stand |
 |---|---|---|---|---|---|
-| T43 | I/E | SSRF über Webhook-URL (Metadata-Dienst, internes Netz) | `safehttp`: private, Loopback-, Link-local- und Metadata-Adressen blockiert, IP gepinnt (DNS-Rebinding), Redirects begrenzt, Timeouts; Allowlist durch den Superadmin | E2.4 | ☐ |
+| T43 | I/E | SSRF über Webhook-URL (Metadata-Dienst, internes Netz), auch über DNS-Rebinding, Redirects, IPv6-Formen mit eingebetteter IPv4 oder einen Proxy aus der Umgebung; Geheimnisse der URL in Fehlermeldungen | `safehttp`: Sonderadressen blockiert (auch IPv4-mapped, NAT64, 6to4), IP aufgelöst und gepinnt, Socket prüft erneut, höchstens 3 Redirects mit erneuter Prüfung und ohne Wechsel auf http, öffentliche Ziele nur https, kein Proxy, 15 s, 1 MiB; Fehler nur mit Host; Allowlist nur durch den Betreiber (`SERMON_OUTBOUND_ALLOWLIST`), Metadata-Dienste nie freigebbar; `forbidigo` verbietet andere HTTP-Clients (ADR 0024) | M2-09 | ✓ (Nutzung durch die Kanäle: M2-10) |
 | T44 | S | Gefälschte Webhooks beim Empfänger | HMAC-Signatur mit Zeitstempel | E2.4 | ☐ |
 | T45 | I | Mail-Zugangsdaten im Klartext übertragen | SMTP mit TLS-Pflicht (konfigurierbar) | E2.4 | ☐ |
 | T46 | I | „Phone-Home“ | keine Telemetrie, Versionsprüfung abschaltbar | M0-07, v1.0 | ◐ |

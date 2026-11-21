@@ -66,6 +66,8 @@ Wichtige Variablen:
 - `SERMON_MASTER_KEYS_FILE` (Pflicht mit DB; anlegen mit `sermon-server init --master-keys-file PFAD`, nie ersetzen)
 - `SERMON_AGENT_ADDR` + `SERMON_AGENT_HOSTNAMES` (mTLS-Agent-API; leer heißt aus; `just dev`: `127.0.0.1:8443`)
 - `SERMON_METRICS_ADDR` (eigenes `/metrics` ohne Anmeldung, ADR 0011; leer heißt aus; `just dev`: `127.0.0.1:9464`)
+- `SERMON_OUTBOUND_ALLOWLIST` (CIDRs interner Ziele für Kanäle/Webhooks über `safehttp`, ADR 0024; leer heißt nur
+  öffentliche Adressen; `just dev`: `127.0.0.1/32`)
 - `SERMON_AGENT_DOWNLOADS_DIR` (signierte Agent-Binaries für `/downloads`, ADR 0012; Release-Key wird beim Build
   über `SERMON_RELEASE_KEY` bzw. `packaging/release.pub` einkompiliert)
 

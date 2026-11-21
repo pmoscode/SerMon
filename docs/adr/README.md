@@ -31,6 +31,7 @@ KONZEPT §2 mit angepasst.
 | [0021](0021-produkt-und-projekt.md) | Produkt und Projekt: Sprachen, Lizenz, Reihenfolge, Monorepo | accepted | D20, D21, D24, D25 |
 | [0022](0022-betriebsmodus-und-einladungen-per-mail.md) | Betriebsmodus und Einladungen nur per Mail | accepted | D28 |
 | [0023](0023-vertrauen-in-security-events.md) | Vertrauen in Security-Events: nur von privilegierten Absendern | accepted | – |
+| [0024](0024-ausgehende-verbindungen-safehttp.md) | Ausgehende Verbindungen: `safehttp`, Allowlist in der Server-Konfiguration | accepted | – |
 
 ## Entscheidungslog → ADR
 

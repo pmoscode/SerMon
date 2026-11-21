@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/platform/safehttp"
 	"github.com/pmoscode/SerMon/server/internal/secrets"
 )
 
@@ -89,6 +90,9 @@ type Config struct {
 	AllowedOrigins []string
 	// TrustedProxies may set X-Forwarded-For (reverse proxy networks).
 	TrustedProxies []netip.Prefix
+	// OutboundAllowlist are the internal networks requests to user-configured targets (webhooks,
+	// chat channels) may reach (safehttp, KONZEPT §18.6); empty: public addresses only.
+	OutboundAllowlist []netip.Prefix
 	// AgentAddr is the listen address of the mTLS agent API (empty: agent API off).
 	AgentAddr string
 	// AgentHostnames are the DNS names or IPs agents use to reach the agent API (server certificate).
@@ -121,6 +125,7 @@ const (
 	envMigrateURL      = "SERMON_DATABASE_MIGRATE_URL"
 	envAllowedOrigins  = "SERMON_ALLOWED_ORIGINS"
 	envTrustedProxies  = "SERMON_TRUSTED_PROXIES"
+	envOutboundAllow   = "SERMON_OUTBOUND_ALLOWLIST"
 	envMasterKeys      = "SERMON_MASTER_KEYS"
 	envAgentAddr       = "SERMON_AGENT_ADDR"
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
@@ -161,6 +166,7 @@ func Load(src Source) (Config, error) {
 		DatabaseMigrateURL: l.string(envMigrateURL, "", nil),
 		AllowedOrigins:     parseOrigins(&l),
 		TrustedProxies:     parsePrefixes(&l),
+		OutboundAllowlist:  parseOutboundAllowlist(&l),
 		MasterKeys:         parseMasterKeys(&l),
 		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
 		AgentHostnames:     parseHostnames(&l),
@@ -453,6 +459,19 @@ func parseOrigins(l *loader) []string {
 		origins = append(origins, origin)
 	}
 	return origins
+}
+
+// parseOutboundAllowlist reads the internal networks outgoing requests may reach.
+func parseOutboundAllowlist(l *loader) []netip.Prefix {
+	value, ok := l.raw(envOutboundAllow)
+	if !ok {
+		return nil
+	}
+	prefixes, err := safehttp.ParseAllowlist(value)
+	if err != nil {
+		l.fail(envOutboundAllow, "%v (networks like 10.20.0.0/16 or addresses, separated by commas)", err)
+	}
+	return prefixes
 }
 
 func parsePrefixes(l *loader) []netip.Prefix {

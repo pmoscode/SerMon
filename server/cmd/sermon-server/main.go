@@ -115,6 +115,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if cfg.Mode == config.ModeDevelopment {
 		logger.WarnContext(ctx, "development mode: SMTP optional (invitations prove no address), http:// origins and plain SMTP allowed – never use it in production")
 	}
+	if len(cfg.OutboundAllowlist) > 0 {
+		// Notification channels may reach these internal networks (safehttp, M2-09).
+		logger.InfoContext(ctx, "outgoing requests may reach internal networks", "allowlist", fmt.Sprint(cfg.OutboundAllowlist))
+	}
 	mux := http.NewServeMux()
 	var checks []health.Check
 	var servers []func(context.Context) error

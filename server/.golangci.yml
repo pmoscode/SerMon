@@ -12,6 +12,7 @@ linters:
     - contextcheck
     - errorlint
     - exhaustive
+    - forbidigo
     - forcetypeassert
     - gocritic
     - gosec
@@ -26,6 +27,11 @@ linters:
     - usestdlibvars
     - wrapcheck
   settings:
+    forbidigo:
+      # Outgoing requests to configured targets go through safehttp (SSRF protection, KONZEPT §18.6).
+      forbid:
+        - pattern: ^http\.(Get|Head|Post|PostForm|DefaultClient|DefaultTransport|Client|Transport|ProxyFromEnvironment)$
+          msg: use internal/platform/safehttp for outgoing requests (SSRF protection)
     gosec:
       excludes: []
     nolintlint:
@@ -50,7 +56,10 @@ linters:
     rules:
       # Test code may ignore errors of best-effort cleanup and returns from helpers.
       - path: _test\.go
-        linters: [wrapcheck, errcheck, gosec, bodyclose]
+        linters: [wrapcheck, errcheck, gosec, bodyclose, forbidigo]
+      # The one place that builds HTTP clients.
+      - path: internal/platform/safehttp/
+        linters: [forbidigo]
 
 formatters:
   enable:

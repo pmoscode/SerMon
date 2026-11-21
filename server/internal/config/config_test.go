@@ -177,6 +177,7 @@ func TestLoad_DatabaseAndWebAPISettings(t *testing.T) {
 		"SERMON_DATABASE_MIGRATE_URL_FILE": "/run/secrets/db-migrate",
 		"SERMON_ALLOWED_ORIGINS":           "https://sermon.example.com, http://127.0.0.1:5173",
 		"SERMON_TRUSTED_PROXIES":           "172.18.0.0/16,10.0.0.1/32",
+		"SERMON_OUTBOUND_ALLOWLIST":        "10.20.0.0/16, 192.168.5.7",
 	}
 	env["SERMON_MASTER_KEYS_FILE"] = "/run/secrets/master-keys"
 	files := map[string]string{
@@ -202,6 +203,10 @@ func TestLoad_DatabaseAndWebAPISettings(t *testing.T) {
 	if !reflect.DeepEqual(cfg.TrustedProxies, wantProxies) {
 		t.Errorf("TrustedProxies = %v, want %v", cfg.TrustedProxies, wantProxies)
 	}
+	wantAllow := []netip.Prefix{netip.MustParsePrefix("10.20.0.0/16"), netip.MustParsePrefix("192.168.5.7/32")}
+	if !reflect.DeepEqual(cfg.OutboundAllowlist, wantAllow) {
+		t.Errorf("OutboundAllowlist = %v, want %v", cfg.OutboundAllowlist, wantAllow)
+	}
 }
 
 func TestLoad_WebAPISettingErrors(t *testing.T) {
@@ -212,6 +217,9 @@ func TestLoad_WebAPISettingErrors(t *testing.T) {
 		"wildcard origin":       {"SERMON_ALLOWED_ORIGINS": "*"},
 		"proxy without prefix":  {"SERMON_TRUSTED_PROXIES": "10.0.0.1"},
 		"proxy garbage":         {"SERMON_TRUSTED_PROXIES": "everyone"},
+		"allowlist everything":  {"SERMON_OUTBOUND_ALLOWLIST": "0.0.0.0/0"},
+		"allowlist metadata":    {"SERMON_OUTBOUND_ALLOWLIST": "169.254.0.0/16"},
+		"allowlist host name":   {"SERMON_OUTBOUND_ALLOWLIST": "intranet.example"},
 		"migrate without db":    {"SERMON_DATABASE_MIGRATE_URL": "postgres://x"},
 	}
 	for name, env := range cases {

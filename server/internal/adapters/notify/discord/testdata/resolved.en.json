@@ -1,0 +1,38 @@
+{
+  "embeds": [
+    {
+      "title": "RESOLVED\\: High CPU usage – web\\-01",
+      "url": "https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001",
+      "color": 1736503,
+      "fields": [
+        {
+          "name": "Rule",
+          "value": "system\\.cpu\\.usage\\_high",
+          "inline": true
+        },
+        {
+          "name": "Node",
+          "value": "web\\-01",
+          "inline": true
+        },
+        {
+          "name": "Value",
+          "value": "42 \\%",
+          "inline": true
+        },
+        {
+          "name": "Time",
+          "value": "2026\\-11\\-21 10\\:00\\:00 UTC",
+          "inline": true
+        }
+      ],
+      "timestamp": "2026-11-21T10:00:00Z",
+      "footer": {
+        "text": "SerMon"
+      }
+    }
+  ],
+  "allowed_mentions": {
+    "parse": []
+  }
+}

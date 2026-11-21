@@ -122,3 +122,16 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   abgelehnte Adresse hält die anderen nicht auf. Bei einem Retry kann ein Empfänger, der die Mail schon hat, sie
   noch einmal bekommen; das passt zu „mindestens einmal“. Der Mailserver ist der des Betreibers, darum läuft E-Mail
   nicht über `safehttp`.
+
+## Nachtrag M2-12: Slack, Teams, Discord, Mattermost
+
+- **Werte der Hosts möglichst ohne Escaping:** Wo das Format reinen Text kennt, kommen die Werte dorthin, statt sie
+  zu escapen: Slack `plain_text`, Teams `TextRun`. Das hängt nicht davon ab, wie genau ein Dienst Markdown auslegt.
+  Bei Teams ist die Wirkung von Backslash-Escapes in Adaptive Cards nicht verlässlich dokumentiert. Discord und
+  Mattermost haben keinen reinen Textweg: Werte werden für Markdown escapt und Erwähnungen mit einem unsichtbaren
+  Zeichen entschärft; Discord bekommt zusätzlich ein leeres `allowed_mentions`.
+- **Webhook-URLs sind Geheimnisse:** Wer sie kennt, schreibt in den Kanal.
+- **Prüfung der Hosts:** Slack und Discord nur auf ihren offiziellen Webhook-Hosts. Das fängt Kopierfehler ab; vor
+  SSRF schützt ohnehin `safehttp`. Teams-Workflows und Mattermost haben keine festen Hosts.
+- **Teams über Workflows:** Microsoft stellt die Office-365-Connectors ein; Workflows nehmen Adaptive Cards
+  im Format `{"type": "message", "attachments": [...]}`.

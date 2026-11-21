@@ -1,0 +1,54 @@
+{
+  "text": "KRITISCH\\: SSH\\-Brute\\-Force – web\\-01",
+  "attachments": [
+    {
+      "fallback": "KRITISCH\\: SSH\\-Brute\\-Force – web\\-01",
+      "color": "#cf222e",
+      "title": "KRITISCH\\: SSH\\-Brute\\-Force – web\\-01",
+      "title_link": "https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001",
+      "fields": [
+        {
+          "title": "Regel",
+          "value": "security\\.ssh\\.bruteforce",
+          "short": true
+        },
+        {
+          "title": "Node",
+          "value": "web\\-01",
+          "short": true
+        },
+        {
+          "title": "Betrifft",
+          "value": "ip\\=192\\.0\\.2\\.7",
+          "short": true
+        },
+        {
+          "title": "Wert",
+          "value": "60",
+          "short": true
+        },
+        {
+          "title": "Zeitpunkt",
+          "value": "2026\\-11\\-21 10\\:00\\:00 UTC",
+          "short": true
+        },
+        {
+          "title": "Benutzer",
+          "value": "\\\u003c\\!here\\\u003e \\@​everyone \\[click\\]\\(https\\:\\/\\/evil\\.example\\) \\*bold\\* \\`code\\` \\\u003cscript\\\u003ex\\\u003c\\/script\\\u003e",
+          "short": true
+        },
+        {
+          "title": "Adresse",
+          "value": "192\\.0\\.2\\.7",
+          "short": true
+        },
+        {
+          "title": "Port",
+          "value": "50022",
+          "short": true
+        }
+      ],
+      "footer": "SerMon"
+    }
+  ]
+}

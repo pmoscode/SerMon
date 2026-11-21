@@ -840,6 +840,20 @@ Kanäle der ersten Welle (M2-11):
 - Die HTTP-Kanäle teilen sich einen `safehttp`-Client. Ein Fehler zitiert höchstens 200 Bytes der Antwort, auf einer
   Zeile und ohne die Zugangsdaten des Kanals.
 
+Kanäle der zweiten Welle (M2-12): Die Webhook-URL enthält jeweils das Zugriffstoken und wird als Geheimnis
+gespeichert.
+
+- **Slack:** Block Kit mit farbiger Leiste, Kopfzeile, Werten und Button. Werte der Hosts stehen nur in
+  `plain_text`-Objekten, die Slack wörtlich zeigt; der mrkdwn-Fallback ist escapt. Nur URLs unter
+  `https://hooks.slack.com/`.
+- **Microsoft Teams:** Adaptive Card über einen Workflow („Beim Empfang einer Teams-Webhookanforderung posten“).
+  TextBlock und FactSet rendern Markdown, darum stehen Werte nur in `TextRun`-Elementen. Jede https-URL ist erlaubt,
+  weil Workflow-URLs je Tenant und Region wechseln.
+- **Discord:** Embed mit Farbe, Feldern und Link, `allowed_mentions` leer. Werte werden Markdown-escapt und ihre
+  Erwähnungen entschärft, gekürzt auf die Grenzen von Discord. Nur offizielle Webhook-URLs.
+- **Mattermost:** Slack-kompatibles Attachment. Werte werden Markdown-escapt, `@all`, `@channel` und `@here` darin
+  entschärft. Jede URL ist erlaubt (selbst betrieben; intern nur mit der Allowlist).
+
 ---
 
 ## 13. Anomalie-Erkennung

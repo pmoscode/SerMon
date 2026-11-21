@@ -86,13 +86,10 @@ var page = template.Must(template.New("mail").Parse(`<!doctype html>
 </body></html>
 `))
 
-var (
-	open   = notify.Text{De: "In SerMon öffnen", En: "Open in SerMon"}
-	footer = notify.Text{
-		De: "Diese Nachricht hat SerMon automatisch geschickt. Welche Alerts hier ankommen, legen die Admins der Organisation fest.",
-		En: "SerMon sent this message automatically. The admins of the organization decide which alerts arrive here.",
-	}
-)
+var footer = notify.Text{
+	De: "Diese Nachricht hat SerMon automatisch geschickt. Welche Alerts hier ankommen, legen die Admins der Organisation fest.",
+	En: "SerMon sent this message automatically. The admins of the organization decide which alerts arrive here.",
+}
 
 func color(m notify.Message) string {
 	switch {
@@ -111,7 +108,7 @@ func render(m notify.Message) (string, string, error) {
 	err := page.Execute(&b, struct {
 		Lang, Title, Color, Link, Open, Footer string
 		Lines                                  []notify.Line
-	}{string(m.Lang), m.Title, color(m), m.Link, open.In(m.Lang), footer.In(m.Lang), m.Lines})
+	}{string(m.Lang), m.Title, color(m), m.Link, notify.OpenInSerMon(m.Lang), footer.In(m.Lang), m.Lines})
 	if err != nil {
 		return "", "", fmt.Errorf("render mail: %w", err)
 	}

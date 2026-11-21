@@ -163,3 +163,23 @@ func TestDimensionLabels(t *testing.T) {
 		t.Errorf("value with '=': %v", got)
 	}
 }
+
+func TestMessage_Tone(t *testing.T) {
+	for _, tc := range []struct {
+		kind     notify.Kind
+		severity notify.Severity
+		want     notify.Tone
+	}{
+		{notify.Firing, notify.Critical, notify.ToneCritical},
+		{notify.Firing, notify.Warning, notify.ToneWarning},
+		{notify.Resolved, notify.Critical, notify.ToneGood},
+		{notify.Acknowledged, notify.Critical, notify.ToneNeutral},
+		{notify.FlappingStarted, notify.Warning, notify.ToneWarning},
+		{notify.FlappingStopped, notify.Warning, notify.ToneNeutral},
+		{notify.Test, "", notify.ToneNeutral},
+	} {
+		if got := (notify.Message{Kind: tc.kind, Severity: tc.severity}).Tone(); got != tc.want {
+			t.Errorf("%s %s: %v, want %v", tc.kind, tc.severity, got, tc.want)
+		}
+	}
+}

@@ -1,0 +1,57 @@
+{
+  "text": "RESOLVED: High CPU usage – web-01",
+  "attachments": [
+    {
+      "color": "#1a7f37",
+      "blocks": [
+        {
+          "type": "header",
+          "text": {
+            "type": "plain_text",
+            "text": "RESOLVED: High CPU usage – web-01",
+            "emoji": false
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "plain_text",
+              "text": "Rule: system.cpu.usage_high",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Node: web-01",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Value: 42 %",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Time: 2026-11-21 10:00:00 UTC",
+              "emoji": false
+            }
+          ]
+        },
+        {
+          "type": "actions",
+          "elements": [
+            {
+              "type": "button",
+              "text": {
+                "type": "plain_text",
+                "text": "Open in SerMon",
+                "emoji": false
+              },
+              "url": "https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

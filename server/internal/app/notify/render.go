@@ -65,6 +65,7 @@ var words = map[string]Text{
 	"at":               {"Zeitpunkt", "Time"},
 	"ack_by":           {"Quittiert von", "Acknowledged by"},
 	"flapping_note":    {"Benachrichtigungen werden gedrosselt.", "Notifications are throttled."},
+	"open":             {"In SerMon öffnen", "Open in SerMon"},
 	"note":             {"Hinweis", "Note"},
 	"ts":               {"Ereignis um", "Event at"},
 	"user":             {"Benutzer", "User"},
@@ -89,6 +90,9 @@ var fieldOrder = []string{
 	"ts", "user", "ip", "port", "method", "invalid_user", "key_type", "key_fingerprint", "tty", "target", "command",
 	"uid", "pid", "process", "previous_boot_id", "uptime_before",
 }
+
+// OpenInSerMon is the text of a link or button to the deep link.
+func OpenInSerMon(l Lang) string { return word("open", l) }
 
 func word(key string, l Lang) string {
 	if t, ok := words[key]; ok {
@@ -227,4 +231,33 @@ func FormatValue(v float64, u Unit, l Lang) string {
 		return number(v, 0)
 	}
 	return number(v, 3)
+}
+
+// Tone is the colour a channel gives a message.
+type Tone int
+
+// Tones.
+const (
+	ToneNeutral Tone = iota
+	ToneCritical
+	ToneWarning
+	ToneGood
+)
+
+// Tone returns the colour of the message: critical and warning while firing (flapping warns),
+// good once resolved, neutral otherwise.
+func (m Message) Tone() Tone {
+	switch m.Kind {
+	case Firing:
+		if m.Severity == Critical {
+			return ToneCritical
+		}
+		return ToneWarning
+	case FlappingStarted:
+		return ToneWarning
+	case Resolved:
+		return ToneGood
+	case Acknowledged, FlappingStopped, Test:
+	}
+	return ToneNeutral
 }

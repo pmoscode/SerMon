@@ -1,0 +1,77 @@
+{
+  "text": "KRITISCH: SSH-Brute-Force – web-01",
+  "attachments": [
+    {
+      "color": "#cf222e",
+      "blocks": [
+        {
+          "type": "header",
+          "text": {
+            "type": "plain_text",
+            "text": "KRITISCH: SSH-Brute-Force – web-01",
+            "emoji": false
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "plain_text",
+              "text": "Regel: security.ssh.bruteforce",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Node: web-01",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Betrifft: ip=192.0.2.7",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Wert: 60",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Zeitpunkt: 2026-11-21 10:00:00 UTC",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Benutzer: \u003c!here\u003e @everyone [click](https://evil.example) *bold* `code` \u003cscript\u003ex\u003c/script\u003e",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Adresse: 192.0.2.7",
+              "emoji": false
+            },
+            {
+              "type": "plain_text",
+              "text": "Port: 50022",
+              "emoji": false
+            }
+          ]
+        },
+        {
+          "type": "actions",
+          "elements": [
+            {
+              "type": "button",
+              "text": {
+                "type": "plain_text",
+                "text": "In SerMon öffnen",
+                "emoji": false
+              },
+              "url": "https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

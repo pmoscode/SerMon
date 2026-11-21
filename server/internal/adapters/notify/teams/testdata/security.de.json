@@ -1,0 +1,157 @@
+{
+  "type": "message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "KRITISCH: SSH-Brute-Force – web-01",
+                "weight": "bolder",
+                "size": "medium",
+                "color": "attention"
+              }
+            ]
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Regel: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "security.ssh.bruteforce"
+              }
+            ],
+            "spacing": "none"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Node: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "web-01"
+              }
+            ],
+            "spacing": "none"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Betrifft: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "ip=192.0.2.7"
+              }
+            ],
+            "spacing": "none"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Wert: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "60"
+              }
+            ],
+            "spacing": "none"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Zeitpunkt: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "2026-11-21 10:00:00 UTC"
+              }
+            ],
+            "spacing": "none"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Benutzer: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "\u003c!here\u003e @everyone [click](https://evil.example) *bold* `code` \u003cscript\u003ex\u003c/script\u003e"
+              }
+            ],
+            "spacing": "none"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Adresse: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "192.0.2.7"
+              }
+            ],
+            "spacing": "none"
+          },
+          {
+            "type": "RichTextBlock",
+            "inlines": [
+              {
+                "type": "TextRun",
+                "text": "Port: ",
+                "weight": "bolder"
+              },
+              {
+                "type": "TextRun",
+                "text": "50022"
+              }
+            ],
+            "spacing": "none"
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "In SerMon öffnen",
+            "url": "https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001"
+          }
+        ],
+        "msteams": {
+          "width": "Full"
+        }
+      }
+    }
+  ]
+}

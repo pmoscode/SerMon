@@ -631,8 +631,10 @@ Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von
   einfache **Eskalation** („nach 15 min ohne Quittierung zusätzlich an Kanal X“). Ohne eine Policy gehen alle Alerts
   an alle aktiven Kanäle der Org. Während eine Instanz flattert, werden Feuern und Behoben nicht gemeldet
   ([ADR 0019](docs/adr/0019-alerting.md), Nachtrag M2-14).
-- **Silences und Wartungsfenster:** zeitlich begrenzt, per Selektor. Während Update-Wartungsfenstern wird
-  **automatisch** stummgeschaltet (Reboot- und Offline-Alerts).
+- **Silences und Wartungsfenster:** zeitlich begrenzt, per Selektor (Matcher wie bei den Policies, dazu einzelne
+  Nodes). Sie schalten Benachrichtigungen stumm, nicht die Auswertung; was nach dem Ende noch feuert, kommt einmal.
+  Wöchentliche Wartungsfenster pro Gruppe schalten Reboot- und Offline-Alerts stumm; während Update-Wartungsfenstern
+  geschieht das **automatisch** ([ADR 0019](docs/adr/0019-alerting.md), Nachtrag M2-15).
 - **Auswertung:** Die Engine läuft im Server alle 10 s. Schwellwert-Regeln fragen den `MetricStore` über die typisierte
   Query-Schicht ab (Fenster bis 15 min aus dem Ringpuffer, längere aus TimescaleDB), Event-Regeln lesen die neuen Security-Events aus PostgreSQL (`received_at`). Ein Strom im Prozess ginge nicht: Ingest und Auswertung einer Org laufen auf verschiedenen Server-Instanzen (Lease, M2-07).
 

@@ -1,0 +1,229 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/notification_policy.proto";
+
+// AlertSilenceService mutes the notifications of matching alerts for a while (KONZEPT §12.1,
+// M2-15); the alerts themselves go on. Operators silence their groups (silence_alerts); a
+// silence for all groups needs the right on all groups. Creating needs a recent step-up, ending
+// early does not. Members see the silences of their groups and those for all groups. Silences
+// of other organizations are reported as NOT_FOUND.
+service AlertSilenceService {
+  // ListSilences returns the silences that have not ended or ended within a day.
+  rpc ListSilences(ListSilencesRequest) returns (ListSilencesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateSilence adds a silence (step-up).
+  rpc CreateSilence(CreateSilenceRequest) returns (CreateSilenceResponse);
+  // ExpireSilence ends a silence now; one that has not begun is cancelled.
+  rpc ExpireSilence(ExpireSilenceRequest) returns (ExpireSilenceResponse);
+}
+
+// MaintenanceWindowService manages the weekly maintenance windows of the caller's organization
+// (KONZEPT §12.1, M2-15): while one is active, the reboot and offline alerts of its groups are
+// muted. Only admins of all groups (manage_policies) may use it; changes need a recent step-up.
+// Windows of other organizations are reported as NOT_FOUND.
+service MaintenanceWindowService {
+  // ListMaintenanceWindows returns the windows by name.
+  rpc ListMaintenanceWindows(ListMaintenanceWindowsRequest) returns (ListMaintenanceWindowsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateMaintenanceWindow adds a window (step-up).
+  rpc CreateMaintenanceWindow(CreateMaintenanceWindowRequest) returns (CreateMaintenanceWindowResponse);
+  // UpdateMaintenanceWindow replaces a window (step-up).
+  rpc UpdateMaintenanceWindow(UpdateMaintenanceWindowRequest) returns (UpdateMaintenanceWindowResponse);
+  // DeleteMaintenanceWindow removes a window (step-up).
+  rpc DeleteMaintenanceWindow(DeleteMaintenanceWindowRequest) returns (DeleteMaintenanceWindowResponse);
+}
+
+// SilenceSpec is what a silence mutes and when.
+message SilenceSpec {
+  // matchers select the alerts; groups, rules or labels must be set.
+  PolicyMatchers matchers = 1 [(buf.validate.field).required = true];
+  // node_ids limit the silence to these nodes of its groups.
+  repeated string node_ids = 2 [(buf.validate.field).repeated = {
+    max_items: 50
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // start_time is when the silence begins; unset: now.
+  google.protobuf.Timestamp start_time = 3;
+  // end_time is when it ends (at most 30 days after the start).
+  google.protobuf.Timestamp end_time = 4 [(buf.validate.field).required = true];
+  // comment says why (shown with the silence).
+  string comment = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 2000
+  }];
+}
+
+// AlertSilence is a stored silence.
+message AlertSilence {
+  // id is the silence UUID.
+  string id = 1;
+  // spec is what it mutes and when (start_time is always set).
+  SilenceSpec spec = 2;
+  // created_by is the UUID of who created it.
+  string created_by = 3;
+  // expired_by is the UUID of who ended it early, if anybody.
+  string expired_by = 4;
+  // create_time is when it was created.
+  google.protobuf.Timestamp create_time = 5;
+}
+
+// ListSilencesRequest has no parameters.
+message ListSilencesRequest {}
+
+// ListSilencesResponse lists the silences by start.
+message ListSilencesResponse {
+  // silences the caller may see.
+  repeated AlertSilence silences = 1;
+}
+
+// CreateSilenceRequest describes the new silence.
+message CreateSilenceRequest {
+  // spec of the silence.
+  SilenceSpec spec = 1 [(buf.validate.field).required = true];
+}
+
+// CreateSilenceResponse returns the silence.
+message CreateSilenceResponse {
+  // silence as stored.
+  AlertSilence silence = 1;
+}
+
+// ExpireSilenceRequest names the silence.
+message ExpireSilenceRequest {
+  // silence_id is the UUID of the silence.
+  string silence_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ExpireSilenceResponse has no fields.
+message ExpireSilenceResponse {}
+
+// Weekday is a day of the week.
+enum Weekday {
+  // WEEKDAY_UNSPECIFIED is not used.
+  WEEKDAY_UNSPECIFIED = 0;
+  // WEEKDAY_MONDAY is Monday.
+  WEEKDAY_MONDAY = 1;
+  // WEEKDAY_TUESDAY is Tuesday.
+  WEEKDAY_TUESDAY = 2;
+  // WEEKDAY_WEDNESDAY is Wednesday.
+  WEEKDAY_WEDNESDAY = 3;
+  // WEEKDAY_THURSDAY is Thursday.
+  WEEKDAY_THURSDAY = 4;
+  // WEEKDAY_FRIDAY is Friday.
+  WEEKDAY_FRIDAY = 5;
+  // WEEKDAY_SATURDAY is Saturday.
+  WEEKDAY_SATURDAY = 6;
+  // WEEKDAY_SUNDAY is Sunday.
+  WEEKDAY_SUNDAY = 7;
+}
+
+// MaintenanceWindowSpec is a weekly window, like the window of an update policy.
+message MaintenanceWindowSpec {
+  // name is the display name.
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 400
+  }];
+  // enabled windows mute.
+  bool enabled = 2;
+  // group_ids are the groups it applies to; none: all groups.
+  repeated string group_ids = 3 [(buf.validate.field).repeated = {
+    max_items: 20
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // days the window begins on.
+  repeated Weekday days = 4 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 7
+    unique: true
+    items: {
+      enum: {
+        defined_only: true
+        not_in: [0]
+      }
+    }
+  }];
+  // start_minute is the local time of the start in minutes after midnight.
+  int32 start_minute = 5 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 1439
+  }];
+  // duration_minutes is how long it lasts (15 to 1440).
+  int32 duration_minutes = 6 [(buf.validate.field).int32 = {
+    gte: 15
+    lte: 1440
+  }];
+  // time_zone is an IANA name, e.g. Europe/Berlin.
+  string time_zone = 7 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// MaintenanceWindow is a stored window.
+message MaintenanceWindow {
+  // id is the window UUID.
+  string id = 1;
+  // spec of the window.
+  MaintenanceWindowSpec spec = 2;
+  // create_time is when it was added.
+  google.protobuf.Timestamp create_time = 3;
+  // update_time is when it was changed last.
+  google.protobuf.Timestamp update_time = 4;
+}
+
+// ListMaintenanceWindowsRequest has no parameters.
+message ListMaintenanceWindowsRequest {}
+
+// ListMaintenanceWindowsResponse lists the windows by name.
+message ListMaintenanceWindowsResponse {
+  // windows of the organization.
+  repeated MaintenanceWindow windows = 1;
+}
+
+// CreateMaintenanceWindowRequest describes the new window.
+message CreateMaintenanceWindowRequest {
+  // spec of the window.
+  MaintenanceWindowSpec spec = 1 [(buf.validate.field).required = true];
+}
+
+// CreateMaintenanceWindowResponse returns the window.
+message CreateMaintenanceWindowResponse {
+  // window as stored.
+  MaintenanceWindow window = 1;
+}
+
+// UpdateMaintenanceWindowRequest replaces a window.
+message UpdateMaintenanceWindowRequest {
+  // window_id is the UUID of the window.
+  string window_id = 1 [(buf.validate.field).string.uuid = true];
+  // spec replaces the window's spec.
+  MaintenanceWindowSpec spec = 2 [(buf.validate.field).required = true];
+}
+
+// UpdateMaintenanceWindowResponse returns the changed window.
+message UpdateMaintenanceWindowResponse {
+  // window as stored.
+  MaintenanceWindow window = 1;
+}
+
+// DeleteMaintenanceWindowRequest names the window.
+message DeleteMaintenanceWindowRequest {
+  // window_id is the UUID of the window.
+  string window_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteMaintenanceWindowResponse has no fields.
+message DeleteMaintenanceWindowResponse {}

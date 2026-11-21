@@ -104,8 +104,9 @@ func TestPlan_WithoutPoliciesAllEnabledChannels(t *testing.T) {
 	}
 	out := routing.Plan(in)
 	want(t, out, sent{chanA, cpu, notify.Firing, ""}, sent{chanC, cpu, notify.Firing, ""})
-	if len(out.Save) != 0 || out.Sends[0].Event.Severity != notify.Critical || out.Sends[0].Grouping != routing.GroupByNode {
-		t.Errorf("fallback keeps no state: %+v / %+v", out.Save, out.Sends)
+	// The fallback remembers under the zero ID (for silences, M2-15).
+	if len(out.Save) != 1 || out.Save[0].Policy != (routing.PolicyID{}) || out.Sends[0].Event.Severity != notify.Critical || out.Sends[0].Grouping != routing.GroupByNode {
+		t.Errorf("fallback state: %+v / %+v", out.Save, out.Sends)
 	}
 	// The fallback never repeats.
 	in.Now, in.Records = t0.Add(48*time.Hour), nil

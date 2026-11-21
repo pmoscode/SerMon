@@ -63,13 +63,15 @@ type AlertLease struct {
 }
 
 type AlertRoutingState struct {
-	OrgID      uuid.UUID
-	RuleID     string
-	NodeID     uuid.UUID
-	Dimension  string
-	PolicyID   uuid.UUID
-	LastSentAt time.Time
-	Escalated  bool
+	OrgID       uuid.UUID
+	RuleID      string
+	NodeID      uuid.UUID
+	Dimension   string
+	PolicyID    uuid.UUID
+	LastSentAt  *time.Time
+	Escalated   bool
+	FirstSentAt *time.Time
+	Muted       bool
 }
 
 type AlertRuleOverride struct {
@@ -79,6 +81,19 @@ type AlertRuleOverride struct {
 	Document  []byte
 	UpdatedAt time.Time
 	UpdatedBy *uuid.UUID
+}
+
+type AlertSilence struct {
+	OrgID     uuid.UUID
+	ID        uuid.UUID
+	Matchers  []byte
+	NodeIds   []uuid.UUID
+	StartsAt  time.Time
+	EndsAt    time.Time
+	Comment   string
+	CreatedAt time.Time
+	CreatedBy *uuid.UUID
+	ExpiredBy *uuid.UUID
 }
 
 type AuditLog struct {
@@ -136,6 +151,21 @@ type Invitation struct {
 	InvitedBy *uuid.UUID
 	CreatedAt time.Time
 	ExpiresAt time.Time
+}
+
+type MaintenanceWindow struct {
+	OrgID           uuid.UUID
+	ID              uuid.UUID
+	Name            string
+	Enabled         bool
+	GroupIds        []uuid.UUID
+	Days            []int16
+	StartMinute     int32
+	DurationMinutes int32
+	TimeZone        string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatedBy       *uuid.UUID
 }
 
 type Membership struct {

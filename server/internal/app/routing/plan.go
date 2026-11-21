@@ -16,12 +16,15 @@ type StateKey struct {
 	Policy PolicyID
 }
 
-// State is what a policy remembers about a firing instance: when it last notified (for repeats)
-// and whether it escalated.
+// State is what a policy (or the fallback, with the zero ID) remembers about a firing instance:
+// when it first and last notified (escalation, repeats), whether it escalated, and whether a
+// silence or maintenance window held its firing back (Muted: it is sent once that ends).
 type State struct {
 	StateKey
 	LastSent  time.Time
+	FirstSent time.Time
 	Escalated bool
+	Muted     bool
 }
 
 // Event is something to tell about an instance.
@@ -56,7 +59,10 @@ type Input struct {
 	Records   []alerting.Record
 	Instances []alert.Instance
 	States    []State
-	// Target describes an instance for the matchers (without the severity).
+	// Silences and Windows mute matching alerts while they are active.
+	Silences []Silence
+	Windows  []MaintenanceWindow
+	// Target describes an instance for the matchers (without node and severity).
 	Target func(alert.Key) Target
 }
 
@@ -186,7 +192,7 @@ func flappingBefore(key alert.Key, now bool, records []alerting.Record) bool {
 
 func (p *planner) matching(key alert.Key, s notify.Severity) []Policy {
 	t := p.in.Target(key)
-	t.Severity = s
+	t.Node, t.Severity = key.Node, s
 	var out []Policy
 	for _, pol := range p.policies {
 		if pol.Match.Match(t) {
@@ -196,41 +202,88 @@ func (p *planner) matching(key alert.Key, s notify.Severity) []Policy {
 	return out
 }
 
+// muted reports whether an active silence or maintenance window mutes the instance.
+func (p *planner) muted(key alert.Key, s notify.Severity) bool {
+	t := p.in.Target(key)
+	t.Node, t.Severity = key.Node, s
+	for _, sil := range p.in.Silences {
+		if sil.ActiveAt(p.in.Now) && sil.Mutes(t) {
+			return true
+		}
+	}
+	for _, w := range p.in.Windows {
+		if w.Mutes(t, p.in.Now) {
+			return true
+		}
+	}
+	return false
+}
+
 // route sends a change to the policies' channels (and to the escalation's, once escalated) and
-// updates the states.
+// updates the states. While muted, a firing is held back; an end is still told to channels that
+// heard of the alert, and never to those that did not.
 func (p *planner) route(e Event) {
+	muted := p.muted(e.Key, e.Severity)
 	for _, pol := range p.matching(e.Key, e.Severity) {
 		k := StateKey{Key: e.Key, Policy: pol.ID}
 		st, known := p.states[k]
-		p.send(pol, e, p.audience(pol, st))
-		if pol.ID == (PolicyID{}) {
-			continue // the fallback keeps no state
-		}
+		st.StateKey = k
 		switch e.Kind {
 		case notify.Firing:
-			st.StateKey, st.LastSent = k, p.in.Now
-			p.save(st)
+			if muted {
+				st.Muted = true
+				p.save(st)
+				continue
+			}
+			p.send(pol, e, p.audience(pol, st))
+			p.notified(st)
 		case notify.Resolved:
+			if !st.Muted && (known || !muted) {
+				p.send(pol, e, p.audience(pol, st))
+			}
 			if known {
 				p.drop(k)
 			}
 		case notify.Acknowledged, notify.FlappingStarted, notify.FlappingStopped, notify.Test, notify.KindDigest:
+			if !muted && !st.Muted {
+				p.send(pol, e, p.audience(pol, st))
+			}
 		}
 	}
 }
 
-// timers repeats and escalates a firing, unacknowledged instance.
+// notified records that the channels heard of a firing now.
+func (p *planner) notified(st State) {
+	st.LastSent, st.Muted = p.in.Now, false
+	if st.FirstSent.IsZero() {
+		st.FirstSent = p.in.Now
+	}
+	p.save(st)
+}
+
+// timers repeats and escalates a firing, unacknowledged instance, and sends what a silence held
+// back once it ended. The escalation counts from when the channels first heard of the alert.
 func (p *planner) timers(i alert.Instance) {
 	firingFor := p.in.Now.Sub(i.FiredAt)
 	e := Event{Key: i.Key, Kind: notify.Firing, Severity: severityOf(i.State), At: p.in.Now, Value: i.Value, Fields: i.Fields, FiringFor: firingFor}
+	if p.muted(i.Key, e.Severity) {
+		return
+	}
 	for _, pol := range p.matching(i.Key, e.Severity) {
-		if pol.ID == (PolicyID{}) {
-			continue
-		}
 		k := StateKey{Key: i.Key, Policy: pol.ID}
 		st, known := p.states[k]
 		st.StateKey = k
-		if esc := pol.Escalation; esc != nil && !st.Escalated && firingFor >= esc.After {
+		if st.Muted {
+			e.Reason = notify.ReasonUnmuted
+			p.send(pol, e, p.audience(pol, st))
+			p.notified(st)
+			continue
+		}
+		heard := i.FiredAt
+		if known && !st.FirstSent.IsZero() {
+			heard = st.FirstSent
+		}
+		if esc := pol.Escalation; esc != nil && !st.Escalated && p.in.Now.Sub(heard) >= esc.After {
 			e.Reason = notify.ReasonEscalation
 			var fresh []notify.ChannelID
 			for _, c := range esc.Channels {
@@ -300,10 +353,10 @@ func (p *planner) drop(k StateKey) {
 }
 
 // cleanUp drops the states of instances that no longer fire and of policies that are gone or
-// disabled.
+// disabled (and of the fallback once policies exist).
 func (p *planner) cleanUp(instances map[alert.Key]alert.Instance) {
 	active := map[PolicyID]bool{}
-	for _, pol := range p.in.Policies {
+	for _, pol := range p.policies {
 		active[pol.ID] = true
 	}
 	for _, s := range p.in.States {

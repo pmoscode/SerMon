@@ -206,3 +206,98 @@ func TestService_IsolatesOrganizationsAndLimits(t *testing.T) {
 		t.Errorf("policy %d: %v", routing.MaxPolicies+1, err)
 	}
 }
+
+type windowStore struct {
+	byOrg map[tenant.OrgID][]routing.MaintenanceWindow
+	audit []string
+}
+
+func (s *windowStore) Windows(_ context.Context, scope tenant.Scope) ([]routing.MaintenanceWindow, error) {
+	return slices.Clone(s.byOrg[scope.OrgID()]), nil
+}
+
+func (s *windowStore) CreateWindow(_ context.Context, scope tenant.Scope, w routing.MaintenanceWindow, a access.AuditEntry) error {
+	if s.byOrg == nil {
+		s.byOrg = map[tenant.OrgID][]routing.MaintenanceWindow{}
+	}
+	s.byOrg[scope.OrgID()] = append(s.byOrg[scope.OrgID()], w)
+	s.audit = append(s.audit, a.Action)
+	return nil
+}
+
+func (s *windowStore) UpdateWindow(_ context.Context, scope tenant.Scope, w routing.MaintenanceWindow, a access.AuditEntry) error {
+	list := s.byOrg[scope.OrgID()]
+	i := slices.IndexFunc(list, func(x routing.MaintenanceWindow) bool { return x.ID == w.ID })
+	if i < 0 {
+		return access.ErrNotFound
+	}
+	list[i] = w
+	s.audit = append(s.audit, a.Action)
+	return nil
+}
+
+func (s *windowStore) DeleteWindow(_ context.Context, scope tenant.Scope, id routing.WindowID, a access.AuditEntry) error {
+	list := s.byOrg[scope.OrgID()]
+	i := slices.IndexFunc(list, func(x routing.MaintenanceWindow) bool { return x.ID == id })
+	if i < 0 {
+		return access.ErrNotFound
+	}
+	s.byOrg[scope.OrgID()] = slices.Delete(list, i, i+1)
+	s.audit = append(s.audit, a.Action)
+	return nil
+}
+
+func windowService(w *windowStore, now time.Time) *routing.Service {
+	return routing.NewService(routing.ServiceDeps{
+		Store: &policyStore{}, Windows: w, Channels: channels{}, Groups: groups{}, Policy: authz.NewPolicy(),
+		Now: func() time.Time { return now }, NewID: uuid.New,
+	})
+}
+
+func TestService_MaintenanceWindows(t *testing.T) {
+	ws := &windowStore{}
+	svc := windowService(ws, t0)
+	admin := caller(orgA, role.Admin, t0)
+	w := routing.MaintenanceWindow{Name: " Patches ", Enabled: true, Groups: []tenant.GroupID{groupA}, Schedule: sundayNight()}
+	created, err := svc.CreateWindow(context.Background(), admin, w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == (routing.WindowID{}) || created.Name != "Patches" || created.CreatedBy != ann || !created.CreatedAt.Equal(t0) {
+		t.Errorf("created %+v", created)
+	}
+	w.Name, w.Enabled = "Patches 2", false
+	updated, err := svc.UpdateWindow(context.Background(), admin, created.ID, w)
+	if err != nil || updated.ID != created.ID || updated.Name != "Patches 2" || !updated.CreatedAt.Equal(t0) || updated.CreatedBy != ann {
+		t.Errorf("updated %+v, %v", updated, err)
+	}
+	if list, err := svc.ListWindows(context.Background(), caller(orgA, role.Admin, time.Time{})); err != nil || len(list) != 1 {
+		t.Errorf("list %+v, %v", list, err)
+	}
+	for name, change := range map[string]func(*routing.MaintenanceWindow){
+		"unknown group": func(w *routing.MaintenanceWindow) { w.Groups = []tenant.GroupID{tenant.GroupID(uuid.New())} },
+		"invalid zone":  func(w *routing.MaintenanceWindow) { w.Schedule.TimeZone = "Nowhere/Land" },
+	} {
+		bad := w
+		change(&bad)
+		if _, err := svc.CreateWindow(context.Background(), admin, bad); !errors.Is(err, routing.ErrInvalidWindow) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// Admins only, writing with a fresh step-up; other organizations find nothing.
+	if _, err := svc.ListWindows(context.Background(), caller(orgA, role.Operator, t0)); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("operator: %v", err)
+	}
+	if _, err := svc.CreateWindow(context.Background(), caller(orgA, role.Admin, t0.Add(-time.Hour)), w); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("stale step-up: %v", err)
+	}
+	if err := svc.DeleteWindow(context.Background(), caller(orgB, role.Admin, t0), created.ID); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("foreign delete: %v", err)
+	}
+	if err := svc.DeleteWindow(context.Background(), admin, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(ws.audit, []string{"maintenance_window.create", "maintenance_window.update", "maintenance_window.delete"}) {
+		t.Errorf("audit %v", ws.audit)
+	}
+}

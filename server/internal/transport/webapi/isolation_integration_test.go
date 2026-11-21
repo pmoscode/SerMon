@@ -86,6 +86,8 @@ type loggedIn struct {
 	events       webv1connect.SecurityEventServiceClient
 	channels     webv1connect.NotificationChannelServiceClient
 	policies     webv1connect.NotificationPolicyServiceClient
+	silences     webv1connect.AlertSilenceServiceClient
+	windows      webv1connect.MaintenanceWindowServiceClient
 	policy       webv1connect.SecurityPolicyServiceClient
 	jar          *cookiejar.Jar
 }
@@ -109,6 +111,8 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		events:       webv1connect.NewSecurityEventServiceClient(hc, s.server.URL),
 		channels:     webv1connect.NewNotificationChannelServiceClient(hc, s.server.URL),
 		policies:     webv1connect.NewNotificationPolicyServiceClient(hc, s.server.URL),
+		silences:     webv1connect.NewAlertSilenceServiceClient(hc, s.server.URL),
+		windows:      webv1connect.NewMaintenanceWindowServiceClient(hc, s.server.URL),
 		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
@@ -126,6 +130,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
 		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
+		silences: bea.silences, windows: bea.windows, silenceA: silenceAl, windowA: windowAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}
@@ -193,6 +198,13 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	var alphaPolicyChannels int
 	_ = conn.QueryRow(ctx, "SELECT name FROM notification_policies WHERE id = $1", policyAl).Scan(&alphaPolicy)
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM notification_policy_channels WHERE org_id = $1", orgAlpha).Scan(&alphaPolicyChannels)
+	var alphaWindow string
+	var alphaSilenceOpen bool
+	_ = conn.QueryRow(ctx, "SELECT name FROM maintenance_windows WHERE id = $1", windowAl).Scan(&alphaWindow)
+	_ = conn.QueryRow(ctx, "SELECT ends_at > now() AND expired_by IS NULL FROM alert_silences WHERE id = $1", silenceAl).Scan(&alphaSilenceOpen)
+	if alphaWindow != "alpha-window" || !alphaSilenceOpen {
+		t.Errorf("Alpha's window %q or silence (open %v) changed", alphaWindow, alphaSilenceOpen)
+	}
 	if alphaPolicy != "alpha-policy" || alphaPolicyChannels != 1 {
 		t.Errorf("Alpha's policy changed: %q, %d channels", alphaPolicy, alphaPolicyChannels)
 	}

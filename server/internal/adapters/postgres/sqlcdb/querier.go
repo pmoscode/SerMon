@@ -34,6 +34,7 @@ type Querier interface {
 	// Atomic: concurrent redemptions cannot exceed max_uses.
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
 	CopyMetricWindows(ctx context.Context, arg []CopyMetricWindowsParams) (int64, error)
+	CountOpenAlertSilences(ctx context.Context, now time.Time) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
@@ -52,6 +53,7 @@ type Querier interface {
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
+	DeleteMaintenanceWindow(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteNotificationChannel(ctx context.Context, id uuid.UUID) (int64, error)
@@ -70,6 +72,8 @@ type Querier interface {
 	// the IDs of new and existing ones. A row inserted concurrently by another transaction may be
 	// missing from the result; the caller asks again for missing keys.
 	EnsureSeries(ctx context.Context, arg EnsureSeriesParams) ([]EnsureSeriesRow, error)
+	// Ends a silence at at; one that has not begun yet is cancelled.
+	ExpireAlertSilence(ctx context.Context, arg ExpireAlertSilenceParams) (int64, error)
 	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
 	// Series of a metric on the given nodes, restricted to the node groups of the scope and to series
 	// whose labels contain the filter.
@@ -77,6 +81,7 @@ type Querier interface {
 	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
 	FinishNotificationDelivery(ctx context.Context, arg FinishNotificationDeliveryParams) error
+	GetAlertSilence(ctx context.Context, id uuid.UUID) (GetAlertSilenceRow, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
@@ -91,11 +96,13 @@ type Querier interface {
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	// One row per transition (COPY doesn't work with row-level security; a round has few).
 	InsertAlertHistory(ctx context.Context, arg InsertAlertHistoryParams) error
+	InsertAlertSilence(ctx context.Context, arg InsertAlertSilenceParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
 	InsertEnrollmentToken(ctx context.Context, arg InsertEnrollmentTokenParams) error
 	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) (int32, error)
+	InsertMaintenanceWindow(ctx context.Context, arg InsertMaintenanceWindowParams) error
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
 	// Notification channels and deliveries (M2-10, ADR 0007). Every query runs in the
@@ -120,12 +127,15 @@ type Querier interface {
 	ListAlertRoutingStates(ctx context.Context) ([]ListAlertRoutingStatesRow, error)
 	// Alert rule overrides (M2-04, ADR 0007). Every query runs in the organization's tenant transaction.
 	ListAlertRuleOverrides(ctx context.Context) ([]ListAlertRuleOverridesRow, error)
+	// Silences that end after since (active, upcoming and recently ended ones).
+	ListAlertSilences(ctx context.Context, since time.Time) ([]ListAlertSilencesRow, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
 	ListEnabledNotificationChannelIDs(ctx context.Context) ([]uuid.UUID, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
 	ListInstanceAudit(ctx context.Context, arg ListInstanceAuditParams) ([]InstanceAuditLog, error)
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
+	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
 	ListNotificationChannels(ctx context.Context) ([]ListNotificationChannelsRow, error)
@@ -162,6 +172,7 @@ type Querier interface {
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
+	PurgeAlertSilences(ctx context.Context, before time.Time) error
 	PurgeNotificationDeliveries(ctx context.Context, before time.Time) (int64, error)
 	// The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
 	// received first. The bounds on occurred_at only prune partitions: min_occurred lies the oldest
@@ -201,6 +212,7 @@ type Querier interface {
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
 	TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error)
+	UpdateMaintenanceWindow(ctx context.Context, arg UpdateMaintenanceWindowParams) (int64, error)
 	// The agent's Hello: current host facts and version (the machine-id never changes here).
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)
 	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)

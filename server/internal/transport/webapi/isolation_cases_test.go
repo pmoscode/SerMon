@@ -30,12 +30,15 @@ type isolationEnv struct {
 	events                          webv1connect.SecurityEventServiceClient
 	channels                        webv1connect.NotificationChannelServiceClient
 	policies                        webv1connect.NotificationPolicyServiceClient
+	silences                        webv1connect.AlertSilenceServiceClient
+	windows                         webv1connect.MaintenanceWindowServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
 	nodeA                           string // a node of Org A
 	channelA                        string // a notification channel of Org A, with a delivery
 	policyA                         string // a notification policy of Org A to channelA
+	silenceA, windowA               string // a silence and a maintenance window of Org A's group
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -68,6 +71,16 @@ func leaksChannel(e isolationEnv, s string) bool {
 
 func policySpec(channel string) *webv1.PolicySpec {
 	return &webv1.PolicySpec{Name: "pwned", Enabled: true, ChannelIds: []string{channel}, Grouping: webv1.PolicyGrouping_POLICY_GROUPING_NODE}
+}
+
+func windowSpec(group string) *webv1.MaintenanceWindowSpec {
+	s := &webv1.MaintenanceWindowSpec{
+		Name: "pwned", Enabled: true, Days: []webv1.Weekday{webv1.Weekday_WEEKDAY_SUNDAY}, StartMinute: 0, DurationMinutes: 1440, TimeZone: "UTC",
+	}
+	if group != "" {
+		s.GroupIds = []string{group}
+	}
+	return s
 }
 
 // tenantIsolationCases maps every tenant RPC to its cross-tenant case (isolation_integration_test.go).
@@ -135,6 +148,50 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.NotificationPolicyService/DeletePolicy": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.policies.DeletePolicy(ctx, connect.NewRequest(&webv1.DeletePolicyRequest{PolicyId: e.policyA}))
+		return err
+	}},
+	"/sermon.web.v1.AlertSilenceService/ListSilences": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.silences.ListSilences(ctx, connect.NewRequest(&webv1.ListSilencesRequest{}))
+		if err == nil && (strings.Contains(res.Msg.String(), e.silenceA) || strings.Contains(res.Msg.String(), "alpha-silence") || leaks(e, res.Msg.String())) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.AlertSilenceService/CreateSilence": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		// Creating acts in the caller's organization; a group of Org A is unknown there.
+		_, err := e.silences.CreateSilence(ctx, connect.NewRequest(&webv1.CreateSilenceRequest{Spec: &webv1.SilenceSpec{
+			Matchers: &webv1.PolicyMatchers{GroupIds: []string{e.groupA}}, NodeIds: []string{e.nodeA},
+			EndTime: timestamppb.New(time.Now().Add(time.Hour)), Comment: "pwned",
+		}}))
+		if connect.CodeOf(err) == connect.CodeInvalidArgument {
+			return nil
+		}
+		return errors.Join(errForeignAccepted, err)
+	}},
+	"/sermon.web.v1.AlertSilenceService/ExpireSilence": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.silences.ExpireSilence(ctx, connect.NewRequest(&webv1.ExpireSilenceRequest{SilenceId: e.silenceA}))
+		return err
+	}},
+	"/sermon.web.v1.MaintenanceWindowService/ListMaintenanceWindows": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.windows.ListMaintenanceWindows(ctx, connect.NewRequest(&webv1.ListMaintenanceWindowsRequest{}))
+		if err == nil && (strings.Contains(res.Msg.String(), e.windowA) || strings.Contains(res.Msg.String(), "alpha-window") || leaks(e, res.Msg.String())) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.MaintenanceWindowService/CreateMaintenanceWindow": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.windows.CreateMaintenanceWindow(ctx, connect.NewRequest(&webv1.CreateMaintenanceWindowRequest{Spec: windowSpec(e.groupA)}))
+		if connect.CodeOf(err) == connect.CodeInvalidArgument {
+			return nil
+		}
+		return errors.Join(errForeignAccepted, err)
+	}},
+	"/sermon.web.v1.MaintenanceWindowService/UpdateMaintenanceWindow": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.windows.UpdateMaintenanceWindow(ctx, connect.NewRequest(&webv1.UpdateMaintenanceWindowRequest{WindowId: e.windowA, Spec: windowSpec("")}))
+		return err
+	}},
+	"/sermon.web.v1.MaintenanceWindowService/DeleteMaintenanceWindow": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.windows.DeleteMaintenanceWindow(ctx, connect.NewRequest(&webv1.DeleteMaintenanceWindowRequest{WindowId: e.windowA}))
 		return err
 	}},
 	"/sermon.web.v1.SecurityEventService/ListSecurityEvents": {list: true, run: func(ctx context.Context, e isolationEnv) error {

@@ -180,6 +180,31 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   gezählt. **Abweichung:** kein Sammelfenster über mehrere Runden; Alerts, die
   zusammen auftreten, fallen meist in dieselbe Runde. Einträge eines Digests haben keine Felder (User, Adresse):
   Das Protokoll bleibt so klein, die Details stehen in SerMon. Der Webhook bekommt die Einträge als Daten.
-- **Rechte:** Policies verwalten Admins mit `manage_channels`, Schreiben nur mit frischem Step-up, wie bei den
+- **Rechte:** Policies verwalten Admins mit `manage_policies`, Schreiben nur mit frischem Step-up, wie bei den
   Kanälen. Eine Policy entscheidet, wer von Security-Events erfährt (T67). Kanäle und Gruppen müssen zur Org
   gehören; ein gelöschter Kanal verschwindet aus den Policies.
+
+## Nachtrag M2-15: Silences und Wartungsfenster
+
+- **Silences schalten Benachrichtigungen stumm, nicht Alerts:** Die Engine wertet weiter aus, Instanzen und Historie
+  bleiben vollständig. Der Router hält Feuern, Quittieren, Flattern, Erinnerungen und Eskalationen zurück, solange
+  eine Silence oder ein Wartungsfenster greift (`SILENCED` aus §12.1 ist damit ein Zustand des Routings).
+- **Nachholen:** Feuert ein Alert nach dem Ende noch, kommt er einmal mit „Stummschaltung beendet“ und der Dauer.
+  Die Eskalation zählt ab dieser Nachricht, nicht ab dem Feuern; sonst eskalierte jeder Alert, der eine Wartung
+  überdauert, sofort. Endet ein Alert stumm, erfahren die Kanäle nichts davon. Kannten sie ihn schon, hören sie auch
+  in der Stummschaltung, dass er behoben ist.
+- **Selektor:** Matcher wie bei den Policies, dazu einzelne Nodes (nur zusammen mit ihren Gruppen). Eine Silence
+  muss Gruppen, Regeln oder Labels nennen; „alles“ geht nicht aus Versehen. Höchstens 30 Tage, ein Kommentar ist
+  Pflicht, höchstens 200 nicht beendete pro Org. Beendete bleiben 30 Tage gespeichert und werden einen Tag angezeigt.
+- **Rechte:** `silence_alerts` (Operator) pro Gruppe. Eine Silence für alle Gruppen braucht das Recht auf allen.
+  Anlegen nur mit frischem Step-up, weil eine Silence Security-Alerts verbergen kann (T69). Beenden ohne Step-up,
+  weil es nur lauter macht. Mitglieder sehen die Silences ihrer Gruppen und die für alle Gruppen.
+- **Wartungsfenster:** wöchentlich (Wochentage, Start, Dauer, IANA-Zeitzone), pro Gruppe oder für alle. Im Fenster
+  sind nur „Node offline“ und „Reboot“ stumm. Die Form entspricht dem `window` der Update-Policies (§14.2); M4 kann
+  sie dort wiederverwenden. Verwalten Admins mit `manage_policies` und Step-up. Die Zeitzonen sind in den Server
+  eingebettet (`time/tzdata`), damit sie ohne die Zeitzonendaten des Hosts gelten.
+- **Änderung zu M2-14:** Der Rückfall ohne Policies merkt sich seine Zustände unter der Policy-ID null, damit er
+  Zurückgehaltenes nachholen kann. Deshalb verweist `alert_routing_state` nicht mehr auf `notification_policies`;
+  der Router entfernt die Zustände abgeschalteter oder gelöschter Policies in der nächsten Runde.
+- **Korrektur zu M2-14:** Policies verwaltet jetzt `manage_policies` statt `manage_channels` (beide Admin für die
+  ganze Org, also dieselbe Wirkung).

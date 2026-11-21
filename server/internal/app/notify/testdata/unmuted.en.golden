@@ -1,0 +1,9 @@
+CRITICAL: High CPU usage – web-01
+
+Rule: system.cpu.usage_high
+Node: web-01
+Value: 96.4 %
+Time: 2026-11-21 10:00:00 UTC
+Note: Silence ended: firing for 1 h 10 min.
+
+https://sermon.example/nodes/0193f5a0-0000-7000-8000-000000000001

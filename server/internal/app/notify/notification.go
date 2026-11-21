@@ -34,6 +34,7 @@ type Reason string
 const (
 	ReasonRepeat     Reason = "repeat"     // still firing and not acknowledged
 	ReasonEscalation Reason = "escalation" // not acknowledged in time, to more channels
+	ReasonUnmuted    Reason = "unmuted"    // a silence or maintenance window held it back and ended
 )
 
 // Severity is the level of the alert.

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync/atomic"
+	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
@@ -33,17 +34,20 @@ type Users interface {
 }
 
 // Snapshot is what the router reads per round: all policies in order (disabled ones included),
-// the enabled channels and the states.
+// the enabled channels, the states, the silences that have not ended and the enabled maintenance
+// windows.
 type Snapshot struct {
 	Policies []Policy
 	Channels []notify.ChannelID
 	States   []State
+	Silences []Silence
+	Windows  []MaintenanceWindow
 }
 
 // Store reads the routing of an organization and writes a round's outcome in one transaction:
 // the deliveries are queued together with the states, so a reminder is never queued twice.
 type Store interface {
-	Snapshot(ctx context.Context, scope tenant.Scope) (Snapshot, error)
+	Snapshot(ctx context.Context, scope tenant.Scope, now time.Time) (Snapshot, error)
 	Commit(ctx context.Context, scope tenant.Scope, deliveries []notify.Delivery, save []State, del []StateKey) error
 }
 
@@ -99,7 +103,7 @@ func (r *Router) deliver(ctx context.Context, round alerting.Round) error {
 	if err != nil {
 		return fmt.Errorf("scope: %w", err)
 	}
-	snap, err := r.d.Store.Snapshot(ctx, scope)
+	snap, err := r.d.Store.Snapshot(ctx, scope, round.Now)
 	if err != nil {
 		return fmt.Errorf("snapshot: %w", err)
 	}
@@ -113,6 +117,7 @@ func (r *Router) deliver(ctx context.Context, round alerting.Round) error {
 	}
 	in := Input{
 		Now: round.Now, Records: round.Records, Instances: round.Instances, States: snap.States,
+		Silences: snap.Silences, Windows: snap.Windows,
 		Target: func(k alert.Key) Target {
 			return Target{Rule: k.Rule, Labels: rules[k.Rule].Labels, Group: nodes[k.Node].Group}
 		},

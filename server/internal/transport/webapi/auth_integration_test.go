@@ -137,6 +137,10 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 	ring := metrics.NewRing()
 	metricStore := timescale.New(pg)
 	nodes := fleet.NewService(postgres.NewFleetStore(pg), metrics.NewReader(metricStore, ring, time.Now), time.Now)
+	policies := routing.NewService(routing.ServiceDeps{
+		Store: postgres.NewRoutingStore(pg), Windows: postgres.NewRoutingStore(pg), Channels: postgres.NewNotificationStore(pg),
+		Groups: postgres.NewFleetStore(pg), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
+	})
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
 			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)),
@@ -165,9 +169,10 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			Store: postgres.NewNotificationStore(pg), Registry: hookRegistry(t), Box: masterKeys(t), Policy: authz.NewPolicy(),
 			BaseURL: srv.URL, Now: time.Now, NewID: access.NewID, Logger: slog.New(slog.DiscardHandler),
 		}), slog.New(slog.DiscardHandler)),
-		Policies: webapi.NewNotificationPolicyHandler(routing.NewService(routing.ServiceDeps{
-			Store: postgres.NewRoutingStore(pg), Channels: postgres.NewNotificationStore(pg), Groups: postgres.NewFleetStore(pg),
-			Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
+		Policies: webapi.NewNotificationPolicyHandler(policies, slog.New(slog.DiscardHandler)),
+		Windows:  webapi.NewMaintenanceWindowHandler(policies, slog.New(slog.DiscardHandler)),
+		Silences: webapi.NewAlertSilenceHandler(routing.NewSilenceService(routing.SilenceDeps{
+			Store: postgres.NewRoutingStore(pg), Nodes: postgres.NewFleetStore(pg), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 		}), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
 	})

@@ -18,8 +18,13 @@ import (
 // channelAl is a notification channel of Alpha (isolation fixtures).
 const channelAl = "0193f5a0-0000-7000-8000-0000000001a4"
 
-// policyAl is a notification policy of Alpha to channelAl (isolation fixtures).
-const policyAl = "0193f5a0-0000-7000-8000-0000000001a5"
+// policyAl is a notification policy of Alpha to channelAl, silenceAl and windowAl a silence and
+// a maintenance window of Alpha's group (isolation fixtures).
+const (
+	policyAl  = "0193f5a0-0000-7000-8000-0000000001a5"
+	silenceAl = "0193f5a0-0000-7000-8000-0000000001a6"
+	windowAl  = "0193f5a0-0000-7000-8000-0000000001a7"
+)
 
 const hookToken = "hook-secret-token-0815" // fixture, not a secret
 
@@ -69,6 +74,8 @@ func seedChannelAlpha(t *testing.T) {
 	ownerSQL(t,
 		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
 		"DELETE FROM notification_policies WHERE org_id = '"+orgAlpha+"'",
+		"DELETE FROM alert_silences WHERE org_id = '"+orgAlpha+"'",
+		"DELETE FROM maintenance_windows WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM notification_channels WHERE org_id = '"+orgAlpha+"'",
 		"DELETE FROM notification_deliveries WHERE org_id = '"+orgAlpha+"'",
 		`INSERT INTO notification_channels (org_id, id, type, name, language, enabled, settings, secret_names, sealed_secrets, created_at, updated_at)
@@ -79,6 +86,10 @@ func seedChannelAlpha(t *testing.T) {
 		 VALUES ('`+orgAlpha+`', '`+policyAl+`', 'alpha-policy', true, 'node', now(), now())`,
 		`INSERT INTO notification_policy_channels (org_id, policy_id, channel_id, escalation, position)
 		 VALUES ('`+orgAlpha+`', '`+policyAl+`', '`+channelAl+`', false, 0)`,
+		`INSERT INTO alert_silences (org_id, id, matchers, starts_at, ends_at, comment, created_at)
+		 VALUES ('`+orgAlpha+`', '`+silenceAl+`', '{"groups": ["`+groupAl+`"]}', now(), now() + interval '1 day', 'alpha-silence', now())`,
+		`INSERT INTO maintenance_windows (org_id, id, name, enabled, group_ids, days, start_minute, duration_minutes, time_zone, created_at, updated_at)
+		 VALUES ('`+orgAlpha+`', '`+windowAl+`', 'alpha-window', true, '{`+groupAl+`}', '{0}', 180, 120, 'Europe/Berlin', now(), now())`,
 	)
 }
 

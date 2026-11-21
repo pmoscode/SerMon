@@ -70,7 +70,9 @@ var words = map[string]Text{
 	"note":             {"Hinweis", "Note"},
 	"repeat":           {"Erinnerung: feuert seit %s und ist nicht quittiert.", "Reminder: firing for %s and not acknowledged."},
 	"escalation":       {"Eskalation: seit %s nicht quittiert.", "Escalation: not acknowledged for %s."},
+	"unmuted":          {"Stummschaltung beendet: feuert seit %s.", "Silence ended: firing for %s."},
 	"repeat_short":     {"Erinnerung", "reminder"},
+	"unmuted_short":    {"Stummschaltung beendet", "silence ended"},
 	"escalation_short": {"Eskalation", "escalation"},
 	"alerts":           {"%d Alerts", "%d alerts"},
 	"on_nodes":         {"auf %d Nodes", "on %d nodes"},
@@ -160,7 +162,7 @@ func renderDigest(m Message, d Notification, l Lang, base string) Message {
 			v += " – " + oneLine(it.Hostname)
 		}
 		v += ": " + FormatValue(it.Value, it.Unit, l)
-		if it.Reason == ReasonRepeat || it.Reason == ReasonEscalation {
+		if it.Reason != "" {
 			v += " (" + word(string(it.Reason)+"_short", l) + ")"
 		}
 		m.Lines = append(m.Lines, Line{word(statusOf(it), l), v})
@@ -243,7 +245,7 @@ func Render(n Notification, l Lang, baseURL string) Message {
 	if n.Kind == FlappingStarted {
 		m.Lines = append(m.Lines, Line{word("note", l), word("flapping_note", l)})
 	}
-	if n.Reason == ReasonRepeat || n.Reason == ReasonEscalation {
+	if n.Reason != "" {
 		m.Lines = append(m.Lines, Line{word("note", l), fmt.Sprintf(word(string(n.Reason), l), FormatDuration(time.Duration(n.FiringSeconds)*time.Second))})
 	}
 	names := make([]string, 0, len(n.Fields))

@@ -100,6 +100,7 @@ func TestRender_Golden(t *testing.T) {
 		"test":             notify.TestNotification(t0),
 		"repeat":           reminder(notify.ReasonRepeat, 2*time.Hour+5*time.Minute),
 		"escalation":       reminder(notify.ReasonEscalation, 15*time.Minute),
+		"unmuted":          reminder(notify.ReasonUnmuted, 70*time.Minute),
 		"digest_node":      nodeDigest(),
 		"digest_fleet":     fleetDigest(),
 	}

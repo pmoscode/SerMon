@@ -75,6 +75,7 @@ type Target struct {
 	Rule     alert.RuleID
 	Labels   map[string]string
 	Group    tenant.GroupID
+	Node     identity.NodeID // silences may name nodes
 	Severity notify.Severity
 }
 

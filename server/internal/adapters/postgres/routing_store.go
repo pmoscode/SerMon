@@ -217,8 +217,9 @@ func (s *RoutingStore) DeletePolicy(ctx context.Context, scope tenant.Scope, id 
 	})
 }
 
-// Snapshot implements routing.Store: policies, enabled channels and states in one transaction.
-func (s *RoutingStore) Snapshot(ctx context.Context, scope tenant.Scope) (routing.Snapshot, error) {
+// Snapshot implements routing.Store: policies, enabled channels, states, the silences that end
+// after now and the enabled maintenance windows, in one transaction.
+func (s *RoutingStore) Snapshot(ctx context.Context, scope tenant.Scope, now time.Time) (routing.Snapshot, error) {
 	var out routing.Snapshot
 	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		var err error
@@ -242,8 +243,20 @@ func (s *RoutingStore) Snapshot(ctx context.Context, scope tenant.Scope) (routin
 					Key:    alert.Key{Rule: alert.RuleID(r.RuleID), Node: identity.NodeID(r.NodeID), Dimension: r.Dimension},
 					Policy: routing.PolicyID(r.PolicyID),
 				},
-				LastSent: r.LastSentAt, Escalated: r.Escalated,
+				LastSent: derefTime(r.LastSentAt), FirstSent: derefTime(r.FirstSentAt), Escalated: r.Escalated, Muted: r.Muted,
 			})
+		}
+		if out.Silences, err = silences(ctx, q, now); err != nil {
+			return err
+		}
+		windows, err := maintenanceWindows(ctx, q)
+		if err != nil {
+			return err
+		}
+		for _, w := range windows {
+			if w.Enabled {
+				out.Windows = append(out.Windows, w)
+			}
 		}
 		return nil
 	})
@@ -266,7 +279,8 @@ func (s *RoutingStore) Commit(ctx context.Context, scope tenant.Scope, deliverie
 		for _, st := range save {
 			if err := q.UpsertAlertRoutingState(ctx, sqlcdb.UpsertAlertRoutingStateParams{
 				RuleID: string(st.Key.Rule), NodeID: uuid.UUID(st.Key.Node), Dimension: st.Key.Dimension,
-				PolicyID: uuid.UUID(st.Policy), LastSentAt: st.LastSent, Escalated: st.Escalated,
+				PolicyID: uuid.UUID(st.Policy), LastSentAt: optionalTime(st.LastSent), FirstSentAt: optionalTime(st.FirstSent),
+				Escalated: st.Escalated, Muted: st.Muted,
 			}); err != nil {
 				return wrap(err, "save routing state")
 			}
@@ -279,5 +293,232 @@ func (s *RoutingStore) Commit(ctx context.Context, scope tenant.Scope, deliverie
 			}
 		}
 		return nil
+	})
+}
+
+func derefTime(t *time.Time) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return *t
+}
+
+func optionalUser(u identity.UserID) *uuid.UUID {
+	if u.IsZero() {
+		return nil
+	}
+	id := uuid.UUID(u)
+	return &id
+}
+
+func userOf(id *uuid.UUID) identity.UserID {
+	if id == nil {
+		return identity.UserID{}
+	}
+	return identity.UserID(*id)
+}
+
+type silenceRow sqlcdb.GetAlertSilenceRow
+
+func silenceOf(r silenceRow) (routing.Silence, error) {
+	m, err := decodeMatchers(r.Matchers)
+	if err != nil {
+		return routing.Silence{}, err
+	}
+	s := routing.Silence{
+		ID: routing.SilenceID(r.ID), Match: m, StartsAt: r.StartsAt, EndsAt: r.EndsAt, Comment: r.Comment,
+		CreatedAt: r.CreatedAt, CreatedBy: userOf(r.CreatedBy), ExpiredBy: userOf(r.ExpiredBy),
+	}
+	for _, n := range r.NodeIds {
+		s.Nodes = append(s.Nodes, identity.NodeID(n))
+	}
+	return s, nil
+}
+
+func silences(ctx context.Context, q *sqlcdb.Queries, since time.Time) ([]routing.Silence, error) {
+	rows, err := q.ListAlertSilences(ctx, since)
+	if err != nil {
+		return nil, wrap(err, "list silences")
+	}
+	out := make([]routing.Silence, 0, len(rows))
+	for _, r := range rows {
+		s, err := silenceOf(silenceRow(r))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+// Silences implements routing.SilenceStore: the silences that end after since.
+func (s *RoutingStore) Silences(ctx context.Context, scope tenant.Scope, since time.Time) ([]routing.Silence, error) {
+	var out []routing.Silence
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		var err error
+		out, err = silences(ctx, q, since)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Silence returns one silence; access.ErrNotFound outside the scope.
+func (s *RoutingStore) Silence(ctx context.Context, scope tenant.Scope, id routing.SilenceID) (routing.Silence, error) {
+	var out routing.Silence
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		r, err := q.GetAlertSilence(ctx, uuid.UUID(id))
+		if err != nil {
+			return accessError(err, "load silence")
+		}
+		out, err = silenceOf(silenceRow(r))
+		return err
+	})
+	if err != nil {
+		return routing.Silence{}, err
+	}
+	return out, nil
+}
+
+// CreateSilence stores a silence with its audit entry and drops silences that ended before
+// purgeBefore.
+func (s *RoutingStore) CreateSilence(ctx context.Context, scope tenant.Scope, sil routing.Silence, purgeBefore time.Time, audit access.AuditEntry) error {
+	matchers, err := encodeMatchers(sil.Match)
+	if err != nil {
+		return err
+	}
+	nodes := make([]uuid.UUID, 0, len(sil.Nodes))
+	for _, n := range sil.Nodes {
+		nodes = append(nodes, uuid.UUID(n))
+	}
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := q.PurgeAlertSilences(ctx, purgeBefore); err != nil {
+			return wrap(err, "purge silences")
+		}
+		if err := q.InsertAlertSilence(ctx, sqlcdb.InsertAlertSilenceParams{
+			ID: uuid.UUID(sil.ID), Matchers: matchers, NodeIds: nodes, StartsAt: sil.StartsAt, EndsAt: sil.EndsAt,
+			Comment: sil.Comment, CreatedAt: sil.CreatedAt, CreatedBy: optionalUser(sil.CreatedBy),
+		}); err != nil {
+			return wrap(err, "insert silence")
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
+// ExpireSilence ends a silence at at; access.ErrNotFound if it does not exist in the scope or
+// ended already.
+func (s *RoutingStore) ExpireSilence(ctx context.Context, scope tenant.Scope, id routing.SilenceID, at time.Time, by identity.UserID, audit access.AuditEntry) error {
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		n, err := q.ExpireAlertSilence(ctx, sqlcdb.ExpireAlertSilenceParams{ID: uuid.UUID(id), At: at, ExpiredBy: optionalUser(by)})
+		if err != nil {
+			return wrap(err, "expire silence")
+		}
+		if n == 0 {
+			return access.ErrNotFound
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
+func maintenanceWindows(ctx context.Context, q *sqlcdb.Queries) ([]routing.MaintenanceWindow, error) {
+	rows, err := q.ListMaintenanceWindows(ctx)
+	if err != nil {
+		return nil, wrap(err, "list maintenance windows")
+	}
+	out := make([]routing.MaintenanceWindow, 0, len(rows))
+	for _, r := range rows {
+		w := routing.MaintenanceWindow{
+			ID: routing.WindowID(r.ID), Name: r.Name, Enabled: r.Enabled, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+			CreatedBy: userOf(r.CreatedBy),
+			Schedule: routing.Schedule{
+				Start: time.Duration(r.StartMinute) * time.Minute, Duration: time.Duration(r.DurationMinutes) * time.Minute, TimeZone: r.TimeZone,
+			},
+		}
+		for _, g := range r.GroupIds {
+			w.Groups = append(w.Groups, tenant.GroupID(g))
+		}
+		for _, d := range r.Days {
+			w.Schedule.Days = append(w.Schedule.Days, time.Weekday(d))
+		}
+		out = append(out, w)
+	}
+	return out, nil
+}
+
+// Windows implements routing.WindowStore: the maintenance windows by name.
+func (s *RoutingStore) Windows(ctx context.Context, scope tenant.Scope) ([]routing.MaintenanceWindow, error) {
+	var out []routing.MaintenanceWindow
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		var err error
+		out, err = maintenanceWindows(ctx, q)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func windowColumns(w routing.MaintenanceWindow) ([]uuid.UUID, []int16) {
+	groups := make([]uuid.UUID, 0, len(w.Groups))
+	for _, g := range w.Groups {
+		groups = append(groups, uuid.UUID(g))
+	}
+	days := make([]int16, 0, len(w.Schedule.Days))
+	for _, d := range w.Schedule.Days {
+		days = append(days, int16(d)) //nolint:gosec // G115: a weekday
+	}
+	return groups, days
+}
+
+func minutes(d time.Duration) int32 { return int32(d / time.Minute) } //nolint:gosec // G115: at most a day
+
+// CreateWindow stores a maintenance window with its audit entry.
+func (s *RoutingStore) CreateWindow(ctx context.Context, scope tenant.Scope, w routing.MaintenanceWindow, audit access.AuditEntry) error {
+	groups, days := windowColumns(w)
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := q.InsertMaintenanceWindow(ctx, sqlcdb.InsertMaintenanceWindowParams{
+			ID: uuid.UUID(w.ID), Name: w.Name, Enabled: w.Enabled, GroupIds: groups, Days: days,
+			StartMinute: minutes(w.Schedule.Start), DurationMinutes: minutes(w.Schedule.Duration), TimeZone: w.Schedule.TimeZone,
+			CreatedAt: w.CreatedAt, UpdatedAt: w.UpdatedAt, CreatedBy: optionalUser(w.CreatedBy),
+		}); err != nil {
+			return wrap(err, "insert maintenance window")
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
+// UpdateWindow replaces a maintenance window; access.ErrNotFound outside the scope.
+func (s *RoutingStore) UpdateWindow(ctx context.Context, scope tenant.Scope, w routing.MaintenanceWindow, audit access.AuditEntry) error {
+	groups, days := windowColumns(w)
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		n, err := q.UpdateMaintenanceWindow(ctx, sqlcdb.UpdateMaintenanceWindowParams{
+			ID: uuid.UUID(w.ID), Name: w.Name, Enabled: w.Enabled, GroupIds: groups, Days: days,
+			StartMinute: minutes(w.Schedule.Start), DurationMinutes: minutes(w.Schedule.Duration), TimeZone: w.Schedule.TimeZone,
+			UpdatedAt: w.UpdatedAt,
+		})
+		if err != nil {
+			return wrap(err, "update maintenance window")
+		}
+		if n == 0 {
+			return access.ErrNotFound
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
+// DeleteWindow removes a maintenance window; access.ErrNotFound outside the scope.
+func (s *RoutingStore) DeleteWindow(ctx context.Context, scope tenant.Scope, id routing.WindowID, audit access.AuditEntry) error {
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		n, err := q.DeleteMaintenanceWindow(ctx, uuid.UUID(id))
+		if err != nil {
+			return wrap(err, "delete maintenance window")
+		}
+		if n == 0 {
+			return access.ErrNotFound
+		}
+		return appendAudit(ctx, q, audit)
 	})
 }

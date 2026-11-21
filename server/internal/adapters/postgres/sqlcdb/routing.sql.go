@@ -13,6 +13,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countOpenAlertSilences = `-- name: CountOpenAlertSilences :one
+SELECT count(*) FROM alert_silences WHERE ends_at > $1
+`
+
+func (q *Queries) CountOpenAlertSilences(ctx context.Context, now time.Time) (int64, error) {
+	row := q.db.QueryRow(ctx, countOpenAlertSilences, now)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteAlertRoutingState = `-- name: DeleteAlertRoutingState :exec
 DELETE FROM alert_routing_state
 WHERE rule_id = $1 AND node_id = $2 AND dimension = $3
@@ -36,6 +47,18 @@ func (q *Queries) DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRo
 	return err
 }
 
+const deleteMaintenanceWindow = `-- name: DeleteMaintenanceWindow :execrows
+DELETE FROM maintenance_windows WHERE id = $1
+`
+
+func (q *Queries) DeleteMaintenanceWindow(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMaintenanceWindow, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteNotificationPolicy = `-- name: DeleteNotificationPolicy :execrows
 DELETE FROM notification_policies WHERE id = $1
 `
@@ -54,6 +77,132 @@ DELETE FROM notification_policy_channels WHERE policy_id = $1
 
 func (q *Queries) DeleteNotificationPolicyChannels(ctx context.Context, policyID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteNotificationPolicyChannels, policyID)
+	return err
+}
+
+const expireAlertSilence = `-- name: ExpireAlertSilence :execrows
+UPDATE alert_silences
+SET ends_at = $1, starts_at = LEAST(starts_at, $1), expired_by = $2
+WHERE id = $3 AND ends_at > $1
+`
+
+type ExpireAlertSilenceParams struct {
+	At        time.Time
+	ExpiredBy *uuid.UUID
+	ID        uuid.UUID
+}
+
+// Ends a silence at at; one that has not begun yet is cancelled.
+func (q *Queries) ExpireAlertSilence(ctx context.Context, arg ExpireAlertSilenceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, expireAlertSilence, arg.At, arg.ExpiredBy, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getAlertSilence = `-- name: GetAlertSilence :one
+SELECT id, matchers, node_ids, starts_at, ends_at, comment, created_at, created_by, expired_by
+FROM alert_silences
+WHERE id = $1
+`
+
+type GetAlertSilenceRow struct {
+	ID        uuid.UUID
+	Matchers  []byte
+	NodeIds   []uuid.UUID
+	StartsAt  time.Time
+	EndsAt    time.Time
+	Comment   string
+	CreatedAt time.Time
+	CreatedBy *uuid.UUID
+	ExpiredBy *uuid.UUID
+}
+
+func (q *Queries) GetAlertSilence(ctx context.Context, id uuid.UUID) (GetAlertSilenceRow, error) {
+	row := q.db.QueryRow(ctx, getAlertSilence, id)
+	var i GetAlertSilenceRow
+	err := row.Scan(
+		&i.ID,
+		&i.Matchers,
+		&i.NodeIds,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.Comment,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.ExpiredBy,
+	)
+	return i, err
+}
+
+const insertAlertSilence = `-- name: InsertAlertSilence :exec
+INSERT INTO alert_silences (org_id, id, matchers, node_ids, starts_at, ends_at, comment, created_at, created_by)
+VALUES (current_org_id(), $1, $2, $3::uuid[], $4,
+        $5, $6, $7, $8)
+`
+
+type InsertAlertSilenceParams struct {
+	ID        uuid.UUID
+	Matchers  []byte
+	NodeIds   []uuid.UUID
+	StartsAt  time.Time
+	EndsAt    time.Time
+	Comment   string
+	CreatedAt time.Time
+	CreatedBy *uuid.UUID
+}
+
+func (q *Queries) InsertAlertSilence(ctx context.Context, arg InsertAlertSilenceParams) error {
+	_, err := q.db.Exec(ctx, insertAlertSilence,
+		arg.ID,
+		arg.Matchers,
+		arg.NodeIds,
+		arg.StartsAt,
+		arg.EndsAt,
+		arg.Comment,
+		arg.CreatedAt,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const insertMaintenanceWindow = `-- name: InsertMaintenanceWindow :exec
+INSERT INTO maintenance_windows (org_id, id, name, enabled, group_ids, days, start_minute, duration_minutes, time_zone,
+                                 created_at, updated_at, created_by)
+VALUES (current_org_id(), $1, $2, $3, $4::uuid[],
+        $5::smallint[], $6, $7, $8,
+        $9, $10, $11)
+`
+
+type InsertMaintenanceWindowParams struct {
+	ID              uuid.UUID
+	Name            string
+	Enabled         bool
+	GroupIds        []uuid.UUID
+	Days            []int16
+	StartMinute     int32
+	DurationMinutes int32
+	TimeZone        string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatedBy       *uuid.UUID
+}
+
+func (q *Queries) InsertMaintenanceWindow(ctx context.Context, arg InsertMaintenanceWindowParams) error {
+	_, err := q.db.Exec(ctx, insertMaintenanceWindow,
+		arg.ID,
+		arg.Name,
+		arg.Enabled,
+		arg.GroupIds,
+		arg.Days,
+		arg.StartMinute,
+		arg.DurationMinutes,
+		arg.TimeZone,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.CreatedBy,
+	)
 	return err
 }
 
@@ -117,16 +266,18 @@ func (q *Queries) InsertNotificationPolicyChannel(ctx context.Context, arg Inser
 }
 
 const listAlertRoutingStates = `-- name: ListAlertRoutingStates :many
-SELECT rule_id, node_id, dimension, policy_id, last_sent_at, escalated FROM alert_routing_state
+SELECT rule_id, node_id, dimension, policy_id, last_sent_at, first_sent_at, escalated, muted FROM alert_routing_state
 `
 
 type ListAlertRoutingStatesRow struct {
-	RuleID     string
-	NodeID     uuid.UUID
-	Dimension  string
-	PolicyID   uuid.UUID
-	LastSentAt time.Time
-	Escalated  bool
+	RuleID      string
+	NodeID      uuid.UUID
+	Dimension   string
+	PolicyID    uuid.UUID
+	LastSentAt  *time.Time
+	FirstSentAt *time.Time
+	Escalated   bool
+	Muted       bool
 }
 
 func (q *Queries) ListAlertRoutingStates(ctx context.Context) ([]ListAlertRoutingStatesRow, error) {
@@ -144,7 +295,59 @@ func (q *Queries) ListAlertRoutingStates(ctx context.Context) ([]ListAlertRoutin
 			&i.Dimension,
 			&i.PolicyID,
 			&i.LastSentAt,
+			&i.FirstSentAt,
 			&i.Escalated,
+			&i.Muted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAlertSilences = `-- name: ListAlertSilences :many
+SELECT id, matchers, node_ids, starts_at, ends_at, comment, created_at, created_by, expired_by
+FROM alert_silences
+WHERE ends_at > $1
+ORDER BY starts_at, id
+`
+
+type ListAlertSilencesRow struct {
+	ID        uuid.UUID
+	Matchers  []byte
+	NodeIds   []uuid.UUID
+	StartsAt  time.Time
+	EndsAt    time.Time
+	Comment   string
+	CreatedAt time.Time
+	CreatedBy *uuid.UUID
+	ExpiredBy *uuid.UUID
+}
+
+// Silences that end after since (active, upcoming and recently ended ones).
+func (q *Queries) ListAlertSilences(ctx context.Context, since time.Time) ([]ListAlertSilencesRow, error) {
+	rows, err := q.db.Query(ctx, listAlertSilences, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAlertSilencesRow{}
+	for rows.Next() {
+		var i ListAlertSilencesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Matchers,
+			&i.NodeIds,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Comment,
+			&i.CreatedAt,
+			&i.CreatedBy,
+			&i.ExpiredBy,
 		); err != nil {
 			return nil, err
 		}
@@ -173,6 +376,58 @@ func (q *Queries) ListEnabledNotificationChannelIDs(ctx context.Context) ([]uuid
 			return nil, err
 		}
 		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMaintenanceWindows = `-- name: ListMaintenanceWindows :many
+SELECT id, name, enabled, group_ids, days, start_minute, duration_minutes, time_zone, created_at, updated_at, created_by
+FROM maintenance_windows
+ORDER BY lower(name), id
+`
+
+type ListMaintenanceWindowsRow struct {
+	ID              uuid.UUID
+	Name            string
+	Enabled         bool
+	GroupIds        []uuid.UUID
+	Days            []int16
+	StartMinute     int32
+	DurationMinutes int32
+	TimeZone        string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	CreatedBy       *uuid.UUID
+}
+
+func (q *Queries) ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error) {
+	rows, err := q.db.Query(ctx, listMaintenanceWindows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMaintenanceWindowsRow{}
+	for rows.Next() {
+		var i ListMaintenanceWindowsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Enabled,
+			&i.GroupIds,
+			&i.Days,
+			&i.StartMinute,
+			&i.DurationMinutes,
+			&i.TimeZone,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -265,6 +520,53 @@ func (q *Queries) ListNotificationPolicyChannels(ctx context.Context) ([]ListNot
 	return items, nil
 }
 
+const purgeAlertSilences = `-- name: PurgeAlertSilences :exec
+DELETE FROM alert_silences WHERE ends_at < $1
+`
+
+func (q *Queries) PurgeAlertSilences(ctx context.Context, before time.Time) error {
+	_, err := q.db.Exec(ctx, purgeAlertSilences, before)
+	return err
+}
+
+const updateMaintenanceWindow = `-- name: UpdateMaintenanceWindow :execrows
+UPDATE maintenance_windows
+SET name = $1, enabled = $2, group_ids = $3::uuid[],
+    days = $4::smallint[], start_minute = $5,
+    duration_minutes = $6, time_zone = $7, updated_at = $8
+WHERE id = $9
+`
+
+type UpdateMaintenanceWindowParams struct {
+	Name            string
+	Enabled         bool
+	GroupIds        []uuid.UUID
+	Days            []int16
+	StartMinute     int32
+	DurationMinutes int32
+	TimeZone        string
+	UpdatedAt       time.Time
+	ID              uuid.UUID
+}
+
+func (q *Queries) UpdateMaintenanceWindow(ctx context.Context, arg UpdateMaintenanceWindowParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateMaintenanceWindow,
+		arg.Name,
+		arg.Enabled,
+		arg.GroupIds,
+		arg.Days,
+		arg.StartMinute,
+		arg.DurationMinutes,
+		arg.TimeZone,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateNotificationPolicy = `-- name: UpdateNotificationPolicy :execrows
 UPDATE notification_policies
 SET name = $1, enabled = $2, matchers = $3, grouping = $4,
@@ -302,20 +604,23 @@ func (q *Queries) UpdateNotificationPolicy(ctx context.Context, arg UpdateNotifi
 }
 
 const upsertAlertRoutingState = `-- name: UpsertAlertRoutingState :exec
-INSERT INTO alert_routing_state (org_id, rule_id, node_id, dimension, policy_id, last_sent_at, escalated)
+INSERT INTO alert_routing_state (org_id, rule_id, node_id, dimension, policy_id, last_sent_at, first_sent_at, escalated, muted)
 VALUES (current_org_id(), $1, $2, $3, $4,
-        $5, $6)
+        $5, $6, $7, $8)
 ON CONFLICT (org_id, rule_id, node_id, dimension, policy_id)
-    DO UPDATE SET last_sent_at = EXCLUDED.last_sent_at, escalated = EXCLUDED.escalated
+    DO UPDATE SET last_sent_at = EXCLUDED.last_sent_at, first_sent_at = EXCLUDED.first_sent_at,
+                  escalated = EXCLUDED.escalated, muted = EXCLUDED.muted
 `
 
 type UpsertAlertRoutingStateParams struct {
-	RuleID     string
-	NodeID     uuid.UUID
-	Dimension  string
-	PolicyID   uuid.UUID
-	LastSentAt time.Time
-	Escalated  bool
+	RuleID      string
+	NodeID      uuid.UUID
+	Dimension   string
+	PolicyID    uuid.UUID
+	LastSentAt  *time.Time
+	FirstSentAt *time.Time
+	Escalated   bool
+	Muted       bool
 }
 
 func (q *Queries) UpsertAlertRoutingState(ctx context.Context, arg UpsertAlertRoutingStateParams) error {
@@ -325,7 +630,9 @@ func (q *Queries) UpsertAlertRoutingState(ctx context.Context, arg UpsertAlertRo
 		arg.Dimension,
 		arg.PolicyID,
 		arg.LastSentAt,
+		arg.FirstSentAt,
 		arg.Escalated,
+		arg.Muted,
 	)
 	return err
 }

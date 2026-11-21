@@ -19,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -132,7 +133,7 @@ func TestRoutingStore_KeepsOrganizationsApart(t *testing.T) {
 	if list, _ := f.routes.Policies(ctx, foreign); len(list) != 0 {
 		t.Errorf("foreign policies: %+v", list)
 	}
-	if snap, _ := f.routes.Snapshot(ctx, foreign); len(snap.Policies) != 0 || len(snap.Channels) != 1 || snap.Channels[0] != theirs {
+	if snap, _ := f.routes.Snapshot(ctx, foreign, notifyTime); len(snap.Policies) != 0 || len(snap.Channels) != 1 || snap.Channels[0] != theirs {
 		t.Errorf("foreign snapshot: %+v", snap)
 	}
 	p.Name = "hijacked"
@@ -172,7 +173,7 @@ func TestRoutingStore_CommitAndSnapshot(t *testing.T) {
 	if err := f.routes.Commit(ctx, scope, []notify.Delivery{d}, []routing.State{st}, nil); err != nil {
 		t.Fatal(err)
 	}
-	snap, err := f.routes.Snapshot(ctx, scope)
+	snap, err := f.routes.Snapshot(ctx, scope, notifyTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,13 +189,13 @@ func TestRoutingStore_CommitAndSnapshot(t *testing.T) {
 	if err := f.routes.Commit(ctx, scope, nil, []routing.State{st}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if snap, _ = f.routes.Snapshot(ctx, scope); len(snap.States) != 1 || !snap.States[0].LastSent.Equal(st.LastSent) {
+	if snap, _ = f.routes.Snapshot(ctx, scope, notifyTime); len(snap.States) != 1 || !snap.States[0].LastSent.Equal(st.LastSent) {
 		t.Errorf("updated state %+v", snap.States)
 	}
 	if err := f.routes.Commit(ctx, scope, nil, nil, []routing.StateKey{st.StateKey}); err != nil {
 		t.Fatal(err)
 	}
-	if snap, _ = f.routes.Snapshot(ctx, scope); len(snap.States) != 0 {
+	if snap, _ = f.routes.Snapshot(ctx, scope, notifyTime); len(snap.States) != 0 {
 		t.Errorf("deleted state %+v", snap.States)
 	}
 	// A failing part rolls back the deliveries: a state for an instance that does not exist.
@@ -213,14 +214,14 @@ func TestRoutingStore_CommitAndSnapshot(t *testing.T) {
 	if err := f.alerts.Save(ctx, scope, nil, []alert.Key{inst.Key}, []alerting.Record{}); err != nil {
 		t.Fatal(err)
 	}
-	if snap, _ = f.routes.Snapshot(ctx, scope); len(snap.States) != 0 {
+	if snap, _ = f.routes.Snapshot(ctx, scope, notifyTime); len(snap.States) != 0 {
 		t.Errorf("state outlived its instance: %+v", snap.States)
 	}
 }
 
 func TestRoutingStore_TablesHaveRLS(t *testing.T) {
 	f := newRoutingFixture(t)
-	tables := []string{"notification_policies", "notification_policy_channels", "alert_routing_state"}
+	tables := []string{"notification_policies", "notification_policy_channels", "alert_routing_state", "alert_silences", "maintenance_windows"}
 	for _, table := range tables {
 		var enabled, forced bool
 		queryOwner(t, f.ownerDSN, "SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = $1", []any{table}, &enabled, &forced)
@@ -296,5 +297,186 @@ func TestRouting_FromTheEngineToTheQueue(t *testing.T) {
 	ds = deliveries()
 	if len(ds) != 2 || ds[0].Notification.Reason != notify.ReasonRepeat || ds[0].Notification.FiringSeconds != 3600 {
 		t.Errorf("after an hour: %+v", ds)
+	}
+}
+
+func TestRoutingStore_SilencesAndWindows(t *testing.T) {
+	f := newRoutingFixture(t)
+	ctx, scope := context.Background(), scopeFor(t, f.org)
+	group, node := tenant.GroupID(uuid.New()), identity.NodeID(uuid.New())
+	by := identity.UserID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000a1"))
+	active := routing.Silence{
+		ID: routing.SilenceID(uuid.New()), Match: routing.Matchers{Groups: []tenant.GroupID{group}, Rules: []string{"system.*"}},
+		Nodes: []identity.NodeID{node}, StartsAt: notifyTime, EndsAt: notifyTime.Add(time.Hour), Comment: "patch", CreatedAt: notifyTime, CreatedBy: by,
+	}
+	upcoming := active
+	upcoming.ID, upcoming.StartsAt, upcoming.EndsAt, upcoming.Nodes = routing.SilenceID(uuid.New()), notifyTime.Add(2*time.Hour), notifyTime.Add(3*time.Hour), nil
+	old := active
+	old.ID, old.StartsAt, old.EndsAt = routing.SilenceID(uuid.New()), notifyTime.Add(-60*24*time.Hour), notifyTime.Add(-59*24*time.Hour)
+	for _, s := range []routing.Silence{old, active, upcoming} {
+		if err := f.routes.CreateSilence(ctx, scope, s, notifyTime.Add(-90*24*time.Hour), policyAudit("alert_silence.create")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := f.routes.Silences(ctx, scope, notifyTime)
+	if err != nil || len(list) != 2 || list[0].ID != active.ID || list[1].ID != upcoming.ID {
+		t.Fatalf("Silences() = %+v, %v", list, err)
+	}
+	got := list[0]
+	if !slices.Equal(got.Nodes, active.Nodes) || !slices.Equal(got.Match.Groups, active.Match.Groups) || got.Comment != "patch" ||
+		got.CreatedBy != by || !got.EndsAt.Equal(active.EndsAt) {
+		t.Errorf("silence = %+v", got)
+	}
+	// Ending early: the active one ends now, the upcoming one is cancelled; twice is not found.
+	at := notifyTime.Add(30 * time.Minute)
+	for _, id := range []routing.SilenceID{active.ID, upcoming.ID} {
+		if err := f.routes.ExpireSilence(ctx, scope, id, at, by, policyAudit("alert_silence.expire")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.routes.ExpireSilence(ctx, scope, active.ID, at, by, policyAudit("alert_silence.expire")); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("second expire: %v", err)
+	}
+	if got, err := f.routes.Silence(ctx, scope, upcoming.ID); err != nil || !got.EndsAt.Equal(at) || !got.StartsAt.Equal(at) || got.ExpiredBy != by {
+		t.Errorf("cancelled = %+v, %v", got, err)
+	}
+	// A new silence purges what ended before the given time.
+	if err := f.routes.CreateSilence(ctx, scope, upcoming, notifyTime, policyAudit("alert_silence.create")); err == nil {
+		t.Error("the same ID twice")
+	}
+	fresh := active
+	fresh.ID = routing.SilenceID(uuid.New())
+	if err := f.routes.CreateSilence(ctx, scope, fresh, notifyTime.Add(-30*24*time.Hour), policyAudit("alert_silence.create")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.routes.Silence(ctx, scope, old.ID); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("old silence kept: %v", err)
+	}
+
+	w := routing.MaintenanceWindow{
+		ID: routing.WindowID(uuid.New()), Name: "Patches", Enabled: true, Groups: []tenant.GroupID{group},
+		Schedule:  routing.Schedule{Days: []time.Weekday{time.Sunday, time.Wednesday}, Start: 3 * time.Hour, Duration: 2 * time.Hour, TimeZone: "Europe/Berlin"},
+		CreatedAt: notifyTime, UpdatedAt: notifyTime, CreatedBy: by,
+	}
+	off := w
+	off.ID, off.Name, off.Enabled, off.Groups = routing.WindowID(uuid.New()), "Off", false, nil
+	for _, x := range []routing.MaintenanceWindow{w, off} {
+		if err := f.routes.CreateWindow(ctx, scope, x, policyAudit("maintenance_window.create")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	windows, err := f.routes.Windows(ctx, scope)
+	if err != nil || len(windows) != 2 || windows[1].Name != "Patches" || !slices.Equal(windows[1].Schedule.Days, w.Schedule.Days) ||
+		windows[1].Schedule.Start != 3*time.Hour || windows[1].Schedule.Duration != 2*time.Hour || windows[1].Schedule.TimeZone != "Europe/Berlin" ||
+		!slices.Equal(windows[1].Groups, w.Groups) {
+		t.Fatalf("Windows() = %+v, %v", windows, err)
+	}
+	// After the early ends only the fresh silence is left.
+	snap, err := f.routes.Snapshot(ctx, scope, at)
+	if err != nil || len(snap.Windows) != 1 || snap.Windows[0].ID != w.ID || len(snap.Silences) != 1 || snap.Silences[0].ID != fresh.ID {
+		t.Errorf("snapshot windows %+v silences %+v, %v", snap.Windows, snap.Silences, err)
+	}
+	w.Name, w.UpdatedAt = "Patches 2", notifyTime.Add(time.Hour)
+	if err := f.routes.UpdateWindow(ctx, scope, w, policyAudit("maintenance_window.update")); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.routes.DeleteWindow(ctx, scope, off.ID, policyAudit("maintenance_window.delete")); err != nil {
+		t.Fatal(err)
+	}
+	if windows, _ = f.routes.Windows(ctx, scope); len(windows) != 1 || windows[0].Name != "Patches 2" {
+		t.Errorf("after update and delete: %+v", windows)
+	}
+	// Another organization sees and changes nothing.
+	other := uuid.New()
+	ownerExec(t, f.ownerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Other')", other)
+	foreign := scopeFor(t, other)
+	if list, _ := f.routes.Silences(ctx, foreign, notifyTime.Add(-time.Hour)); len(list) != 0 {
+		t.Errorf("foreign silences %+v", list)
+	}
+	if err := f.routes.ExpireSilence(ctx, foreign, fresh.ID, at, by, policyAudit("alert_silence.expire")); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("foreign expire: %v", err)
+	}
+	if windows, _ := f.routes.Windows(ctx, foreign); len(windows) != 0 {
+		t.Errorf("foreign windows %+v", windows)
+	}
+	if err := f.routes.UpdateWindow(ctx, foreign, w, policyAudit("maintenance_window.update")); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("foreign update: %v", err)
+	}
+	if err := f.routes.DeleteWindow(ctx, foreign, w.ID, policyAudit("maintenance_window.delete")); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("foreign delete: %v", err)
+	}
+}
+
+// The fallback keeps its states under the zero policy, muted ones without a send time.
+func TestRoutingStore_FallbackAndMutedStates(t *testing.T) {
+	f := newRoutingFixture(t)
+	ctx, scope := context.Background(), scopeFor(t, f.org)
+	node := uuid.New()
+	createNode(t, f.ownerDSN, f.org, node)
+	inst := firingInstance(node)
+	if err := f.alerts.Save(ctx, scope, []alert.Instance{inst}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	muted := routing.State{StateKey: routing.StateKey{Key: inst.Key}, Muted: true}
+	if err := f.routes.Commit(ctx, scope, nil, []routing.State{muted}, nil); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := f.routes.Snapshot(ctx, scope, notifyTime)
+	if err != nil || len(snap.States) != 1 || !snap.States[0].Muted || !snap.States[0].LastSent.IsZero() || snap.States[0].Policy != (routing.PolicyID{}) {
+		t.Fatalf("states %+v, %v", snap.States, err)
+	}
+	muted.Muted, muted.LastSent, muted.FirstSent = false, notifyTime, notifyTime
+	if err := f.routes.Commit(ctx, scope, nil, []routing.State{muted}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if snap, _ = f.routes.Snapshot(ctx, scope, notifyTime); snap.States[0].Muted || !snap.States[0].FirstSent.Equal(notifyTime) {
+		t.Errorf("unmuted %+v", snap.States)
+	}
+}
+
+// A silence holds the alert back; once it is expired, the next round sends it once.
+func TestRouting_SilenceThroughTheEngine(t *testing.T) {
+	f := newRoutingFixture(t)
+	ctx, scope := context.Background(), scopeFor(t, f.org)
+	node := uuid.New()
+	createNode(t, f.ownerDSN, f.org, node)
+	db := open(t, f.appDSN)
+	ch := f.channel(t, f.org, true)
+	now := alertTime
+	sil := routing.Silence{
+		ID: routing.SilenceID(uuid.New()), Match: routing.Matchers{Rules: []string{"system.cpu.*"}}, StartsAt: now, EndsAt: now.Add(time.Hour),
+		Comment: "patch", CreatedAt: now,
+	}
+	if err := f.routes.CreateSilence(ctx, scope, sil, now.Add(-time.Hour), policyAudit("alert_silence.create")); err != nil {
+		t.Fatal(err)
+	}
+	router := routing.NewRouter(routing.RouterDeps{Store: f.routes, Rules: cpuInfo{}, Logger: slog.New(slog.DiscardHandler)})
+	rule := alerting.Rule{ID: "system.cpu.usage_high", Timing: alert.Timing{Flapping: alert.DefaultFlapping}, Evaluator: constantRule{0.9}}
+	engine := alerting.NewEngine(alerting.Deps{
+		Store: postgres.NewAlertStore(db), Rules: orgRules{tenant.OrgID(f.org), rule}, Nodes: postgres.NewFleetStore(db),
+		Sink: router, Now: func() time.Time { return now }, Holder: "a", Logger: slog.New(slog.DiscardHandler),
+	})
+	count := func() int {
+		ds, err := f.channels.Deliveries(ctx, scope, notify.DeliveryFilter{Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(ds)
+	}
+	engine.Round(ctx)
+	now = now.Add(time.Minute)
+	engine.Round(ctx)
+	if count() != 0 || router.Stats().Errors.Load() != 0 {
+		t.Fatalf("silenced: %d deliveries, %d errors", count(), router.Stats().Errors.Load())
+	}
+	if err := f.routes.ExpireSilence(ctx, scope, sil.ID, now, identity.UserID{}, policyAudit("alert_silence.expire")); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(10 * time.Second)
+	engine.Round(ctx)
+	engine.Round(ctx)
+	ds, _ := f.channels.Deliveries(ctx, scope, notify.DeliveryFilter{Limit: 10})
+	if len(ds) != 1 || ds[0].Channel != ch || ds[0].Notification.Reason != notify.ReasonUnmuted {
+		t.Errorf("after the silence: %+v", ds)
 	}
 }

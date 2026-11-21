@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ type fakeStore struct {
 	commits   []commit
 }
 
-func (f *fakeStore) Snapshot(_ context.Context, scope tenant.Scope) (routing.Snapshot, error) {
+func (f *fakeStore) Snapshot(_ context.Context, scope tenant.Scope, _ time.Time) (routing.Snapshot, error) {
 	if scope.OrgID() != orgA {
 		return routing.Snapshot{}, errors.New("wrong organization")
 	}
@@ -192,5 +193,18 @@ func TestRouter_CountsErrors(t *testing.T) {
 	r.Deliver(context.Background(), round([]alerting.Record{changed(cpu, alert.StateOK, alert.StateWarning, t0)}, firing(cpu, alert.StateWarning, t0)))
 	if r.Stats().Errors.Load() != 1 || len(s.commits) != 0 {
 		t.Errorf("errors %d", r.Stats().Errors.Load())
+	}
+}
+
+func TestRouter_SilencesFromTheSnapshotMute(t *testing.T) {
+	s := &fakeStore{snapshot: routing.Snapshot{Channels: []notify.ChannelID{chanA}, Silences: []routing.Silence{webSilence()}}}
+	rec := []alerting.Record{changed(cpu, alert.StateOK, alert.StateWarning, t0), changed(ssh, alert.StateOK, alert.StateWarning, t0)}
+	router(s).Deliver(context.Background(), round(rec, firing(cpu, alert.StateWarning, t0), firing(ssh, alert.StateWarning, t0)))
+	c := s.commits[0]
+	if len(c.deliveries) != 1 || c.deliveries[0].Notification.Rule != ssh.Rule {
+		t.Errorf("deliveries %+v", c.deliveries)
+	}
+	if !slices.ContainsFunc(c.save, func(st routing.State) bool { return st.Key == cpu && st.Muted }) {
+		t.Errorf("save %+v", c.save)
 	}
 }

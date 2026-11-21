@@ -2,18 +2,14 @@ package webapi
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
-	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -76,26 +72,17 @@ func policyOf(spec *webv1.PolicySpec) (routing.Policy, error) {
 			return routing.Policy{}, err
 		}
 	}
-	m := spec.GetMatchers()
-	for _, s := range m.GetSeverities() {
-		p.Match.Severities = append(p.Match.Severities, severities[s])
+	if p.Match, err = matchersOf(spec.GetMatchers()); err != nil {
+		return routing.Policy{}, err
 	}
-	for _, g := range m.GetGroupIds() {
-		id, err := parseID(g)
-		if err != nil {
-			return routing.Policy{}, err
-		}
-		p.Match.Groups = append(p.Match.Groups, tenant.GroupID(id))
-	}
-	p.Match.Rules, p.Match.Labels = m.GetRules(), m.GetLabels()
 	return p, nil
 }
 
 func policyView(p routing.Policy) *webv1.NotificationPolicy {
-	severityOf, groupingOf := reverse(severities), reverse(groupings)
+	groupingOf := reverse(groupings)
 	spec := &webv1.PolicySpec{
 		Name: p.Name, Enabled: p.Enabled, Grouping: groupingOf[p.Grouping], RepeatMinutes: int32(p.Repeat / time.Minute), //nolint:gosec // G115: at most a week
-		Matchers: &webv1.PolicyMatchers{Rules: p.Match.Rules, Labels: p.Match.Labels},
+		Matchers: matchersView(p.Match),
 	}
 	for _, c := range p.Channels {
 		spec.ChannelIds = append(spec.ChannelIds, c.String())
@@ -105,12 +92,6 @@ func policyView(p routing.Policy) *webv1.NotificationPolicy {
 		for _, c := range e.Channels {
 			spec.Escalation.ChannelIds = append(spec.Escalation.ChannelIds, c.String())
 		}
-	}
-	for _, s := range p.Match.Severities {
-		spec.Matchers.Severities = append(spec.Matchers.Severities, severityOf[s])
-	}
-	for _, g := range p.Match.Groups {
-		spec.Matchers.GroupIds = append(spec.Matchers.GroupIds, uuid.UUID(g).String())
 	}
 	return &webv1.NotificationPolicy{Id: p.ID.String(), Spec: spec, CreateTime: timestamppb.New(p.CreatedAt), UpdateTime: timestamppb.New(p.UpdatedAt)}
 }
@@ -187,15 +168,5 @@ func (h *NotificationPolicyHandler) DeletePolicy(ctx context.Context, req *conne
 }
 
 func (h *NotificationPolicyHandler) fail(ctx context.Context, op string, err error) error {
-	switch {
-	case errors.Is(err, access.ErrForbidden):
-		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
-	case errors.Is(err, access.ErrStepUpRequired):
-		return stepUpRequired()
-	case errors.Is(err, access.ErrNotFound):
-		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
-	case errors.Is(err, routing.ErrInvalidPolicy):
-		return connect.NewError(connect.CodeInvalidArgument, err)
-	}
-	return internalError(ctx, h.logger, op, err)
+	return routingFail(ctx, h.logger, op, err)
 }

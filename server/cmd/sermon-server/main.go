@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // time zones of maintenance windows without the host's zoneinfo (static binary)
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
@@ -167,11 +168,15 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		servers = append(servers, dispatcher.Run)
 		// Routing (M2-14): notification policies decide which channels hear of an alert.
 		routingStore := postgres.NewRoutingStore(db)
+		// Silences and maintenance windows (M2-15) mute the routing for a while.
 		policies := routing.NewService(routing.ServiceDeps{
-			Store: routingStore, Channels: postgres.NewNotificationStore(db), Groups: postgres.NewFleetStore(db),
+			Store: routingStore, Windows: routingStore, Channels: postgres.NewNotificationStore(db), Groups: postgres.NewFleetStore(db),
 			Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 		})
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), policies, registry, logger); err != nil {
+		silences := routing.NewSilenceService(routing.SilenceDeps{
+			Store: routingStore, Nodes: postgres.NewFleetStore(db), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
+		})
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), policies, silences, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -354,7 +359,7 @@ const (
 )
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
-	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, policies *routing.Service,
+	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, policies *routing.Service, silences *routing.SilenceService,
 	registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
@@ -422,6 +427,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
 		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),
 		Policies:      webapi.NewNotificationPolicyHandler(policies, logger),
+		Silences:      webapi.NewAlertSilenceHandler(silences, logger),
+		Windows:       webapi.NewMaintenanceWindowHandler(policies, logger),
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil

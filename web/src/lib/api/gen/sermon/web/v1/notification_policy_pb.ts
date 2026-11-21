@@ -424,7 +424,7 @@ export const PolicyGroupingSchema: GenEnum<PolicyGrouping> = /*@__PURE__*/
  * NotificationPolicyService manages the notification policies of the caller's organization
  * (KONZEPT §12.1, M2-14): which alerts go to which channels, how often a firing alert repeats
  * and where it escalates when nobody acknowledges it. Without any policy, alerts go to all
- * enabled channels. Only admins of all groups (manage_channels) may use it; creating, changing
+ * enabled channels. Only admins of all groups (manage_policies) may use it; creating, changing
  * and deleting a policy needs a recent step-up. Policies of other organizations are reported as
  * NOT_FOUND.
  *

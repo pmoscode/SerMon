@@ -59,14 +59,15 @@ message LocalizedText {
 
 // AlertRuleSpec is what a rule checks; which fields apply depends on the type.
 message AlertRuleSpec {
-  // type is threshold, rate, absence, state or prediction (event follows with M2-08).
+  // type is threshold, rate, absence, state, prediction or event.
   string type = 1 [(buf.validate.field).string = {
     in: [
       "threshold",
       "rate",
       "absence",
       "state",
-      "prediction"
+      "prediction",
+      "event"
     ]
   }];
   // metric is a metric of the catalog (not for absence).
@@ -148,6 +149,93 @@ message AlertRuleSpec {
   AlertSelector selector = 18;
   // help explains the alert: meaning, typical causes, what to do.
   LocalizedText help = 19 [(buf.validate.field).required = true];
+  // event is the security event kind an event rule counts, e.g. ssh.login.failed.
+  string event = 20 [(buf.validate.field).string.max_len = 64];
+  // match keeps only events with these field values, e.g. user: root (event).
+  map<string, string> match = 21 [(buf.validate.field).map = {
+    max_pairs: 4
+    keys: {
+      string: {max_len: 32}
+    }
+    values: {
+      string: {
+        min_len: 1
+        max_len: 128
+      }
+    }
+  }];
+  // group_by splits an event rule into one instance per ip or user (per node); YAML key "groupBy".
+  repeated string group_by = 22 [
+    json_name = "groupBy",
+    (buf.validate.field).repeated = {
+      max_items: 2
+      unique: true
+      items: {
+        string: {
+          in: [
+            "ip",
+            "user"
+          ]
+        }
+      }
+    }
+  ];
+  // count is what an event rule counts and the levels it compares with.
+  AlertEventCount count = 23;
+  // after makes an event count only if other events preceded it (event).
+  AlertEventAfter after = 24;
+  // notify_fields are the event fields a notification shows, e.g. [ts, user, ip, port]; YAML key
+  // "notifyFields".
+  repeated string notify_fields = 25 [
+    json_name = "notifyFields",
+    (buf.validate.field).repeated = {
+      max_items: 16
+      unique: true
+      items: {
+        string: {max_len: 32}
+      }
+    }
+  ];
+}
+
+// AlertEventCount is the count of an event rule: at least warning or critical events (or nodes)
+// within window.
+message AlertEventCount {
+  // window is the time the events lie within, e.g. 5m.
+  string window = 1 [(buf.validate.field).string.max_len = 16];
+  // warning is the count for a warning; 0: none.
+  int32 warning = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 100000
+  }];
+  // critical is the count for a critical alert; 0: none.
+  int32 critical = 3 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 100000
+  }];
+  // of is events (the default: per node) or nodes (how many nodes see the same groupBy values,
+  // fleet correlation).
+  string of = 4 [(buf.validate.field).string = {
+    in: [
+      "",
+      "events",
+      "nodes"
+    ]
+  }];
+}
+
+// AlertEventAfter is what must precede a counted event: at least count events of the kind event
+// on the same node with the same groupBy values within window before it.
+message AlertEventAfter {
+  // event is the preceding kind, e.g. ssh.login.failed.
+  string event = 1 [(buf.validate.field).string.max_len = 64];
+  // count is how many must precede.
+  int32 count = 2 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 100000
+  }];
+  // window is how long before the counted event they may lie, e.g. 1h.
+  string window = 3 [(buf.validate.field).string.max_len = 16];
 }
 
 // AlertCondition compares a value with a threshold.

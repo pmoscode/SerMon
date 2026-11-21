@@ -1,0 +1,21 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.account.created
+  name: { de: "Neuer Benutzer angelegt", en: "New user created" }
+  labels: { category: security }
+spec:
+  type: event
+  event: account.created
+  groupBy: [ user ]
+  count: { window: 15m, warning: 1 }
+  notifyFields: [ ts, user, uid ]
+  help:
+    de: >-
+      Auf dem Node wurde ein Benutzerkonto angelegt (useradd). Bei Paketinstallationen ist das normal (Systemkonten
+      mit kleiner UID); ein unerwartetes Konto kann aber eine Hintertür eines Angreifers sein. Prüfe, ob die
+      Änderung geplant war, etwa im Änderungsprotokoll oder bei der Person, die gerade am Node arbeitet.
+    en: >-
+      A user account was created on the node (useradd). During package installations this is normal (system
+      accounts with a low UID); an unexpected account may however be an attacker's back door. Check whether the
+      change was planned, e.g. in the change log or with the person currently working on the node.

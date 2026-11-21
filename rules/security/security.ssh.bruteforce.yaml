@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.ssh.bruteforce
+  name: { de: "SSH-Brute-Force", en: "SSH brute force" }
+  labels: { category: security }
+spec:
+  type: event
+  event: ssh.login.failed
+  groupBy: [ ip ]
+  count: { window: 5m, warning: 10, critical: 50 }
+  notifyFields: [ ts, user, ip, port ]
+  help:
+    de: >-
+      Von einer Adresse kamen innerhalb von 5 Minuten viele fehlgeschlagene SSH-Anmeldungen (ab 10 Warnung, ab 50
+      kritisch). IPv6-Adressen zählen pro /64-Netz. Meist ist das ein automatisierter Angriff, der Passwörter oder
+      Benutzernamen durchprobiert; seltener ein falsch konfiguriertes Skript oder ein vergessenes Passwort. Prüfe in
+      den Security-Events, welche Benutzer versucht wurden und ob danach eine Anmeldung gelang. Erlaube nach
+      Möglichkeit nur Schlüssel (PasswordAuthentication no), sperre die Adresse in der Firewall oder mit fail2ban
+      und beschränke SSH auf bekannte Netze.
+    en: >-
+      One address caused many failed SSH logins within 5 minutes (warning from 10, critical from 50). IPv6
+      addresses count per /64 network. Usually this is an automated attack trying passwords or user names; less
+      often a misconfigured script or a forgotten password. Check the security events for the users tried and
+      whether a login succeeded afterwards. Allow keys only where possible (PasswordAuthentication no), block the
+      address in the firewall or with fail2ban, and restrict SSH to known networks.

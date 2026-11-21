@@ -1,0 +1,20 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.node.rebooted
+  name: { de: "Neustart erkannt", en: "Reboot detected" }
+  labels: { category: availability }
+spec:
+  type: event
+  event: system.reboot
+  count: { window: 15m, warning: 1 }
+  notifyFields: [ ts, uptime_before ]
+  help:
+    de: >-
+      Der Node wurde neu gestartet (die Boot-ID im Journal hat gewechselt). Geplant ist das nach Updates oder bei
+      Wartungen. Unerwartet deutet es auf einen Absturz, einen Stromausfall, den Watchdog oder einen Kernel-Fehler
+      hin. Prüfe mit journalctl -b -1 die letzten Meldungen vor dem Neustart.
+    en: >-
+      The node rebooted (the boot ID in the journal changed). This is planned after updates or during maintenance.
+      Unexpected, it points to a crash, a power failure, the watchdog or a kernel error. Check the last messages
+      before the reboot with journalctl -b -1.

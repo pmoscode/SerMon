@@ -3,6 +3,7 @@ package ruleset_test
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"slices"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -115,10 +117,13 @@ func falling(start, step float64) []metrics.Point {
 
 // scenario is data that triggers a rule (at the given level) and data that does not, in the
 // units the agent sends (ppm for ratios). seen is the time since the node's last contact.
+// Event rules get security events instead; instances is how many fire (fleet correlation).
 type scenario struct {
-	fire, calm         []metrics.Series
-	fireSeen, calmSeen time.Duration
-	want               alert.Level
+	fire, calm             []metrics.Series
+	fireEvents, calmEvents []secevent.Event
+	fireSeen, calmSeen     time.Duration
+	want                   alert.Level
+	instances              int
 }
 
 var (
@@ -141,6 +146,47 @@ func networkRate(direction, kind string) scenario {
 	m, packets := "sermon_network_"+direction+"_"+kind+"_per_second", "sermon_network_"+direction+"_packets_per_second"
 	return scenario{fire: share(m, packets, eth0, 5), calm: share(m, packets, eth0, 0), want: warning}
 }
+
+// events answers like the store: the events of the queried kind and nodes received since.
+type events []secevent.Event
+
+func (s events) Received(_ context.Context, scope tenant.Scope, q alerting.EventQuery) ([]secevent.Event, error) {
+	if !scope.Valid() {
+		return nil, errors.New("query without scope")
+	}
+	var out []secevent.Event
+	for _, e := range s {
+		if e.Kind == q.Kind && slices.Contains(q.Nodes, e.Node) && !e.ReceivedAt.Before(q.Since) {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+var (
+	db  = identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-000000000002"))
+	app = identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-000000000003"))
+)
+
+// event is an event of a node that occurred and arrived ago before now.
+func event(kind secevent.Kind, node identity.NodeID, ago time.Duration, ip, user string) secevent.Event {
+	e := secevent.Event{Node: node, Kind: kind, User: user, OccurredAt: now.Add(-ago), ReceivedAt: now.Add(-ago)}
+	if ip != "" {
+		e.Remote = &secevent.Remote{IP: netip.MustParseAddr(ip), Port: 50022}
+	}
+	return e
+}
+
+// repeat is n events of web, one every 2 s up to now.
+func repeat(kind secevent.Kind, n int, ip, user string) []secevent.Event {
+	out := make([]secevent.Event, n)
+	for i := range out {
+		out[i] = event(kind, web, time.Duration(i)*2*time.Second, ip, user)
+	}
+	return out
+}
+
+const attacker, colleague = "192.0.2.7", "198.51.100.20"
 
 // Every shipped rule needs one (TestDefaults_EachRuleFiresOnItsData).
 var scenarios = map[alert.RuleID]scenario{
@@ -176,9 +222,42 @@ var scenarios = map[alert.RuleID]scenario{
 	"system.conntrack.usage_high":         {fire: one("sermon_conntrack_utilization_ratio", steady(950_000)), calm: one("sermon_conntrack_utilization_ratio", steady(100_000)), want: critical},
 	"system.file_descriptors.usage_high":  {fire: share("sermon_system_file_descriptors_used", "sermon_system_file_descriptors_limit", nil, 850), calm: share("sermon_system_file_descriptors_used", "sermon_system_file_descriptors_limit", nil, 100), want: warning},
 	"system.processes.zombies_high":       {fire: one("sermon_system_zombies", steady(60)), calm: one("sermon_system_zombies", steady(0)), want: critical},
+
+	"system.node.rebooted":   {fireEvents: []secevent.Event{event(secevent.SystemReboot, web, time.Minute, "", "")}, calmEvents: []secevent.Event{event(secevent.SystemReboot, web, 20*time.Minute, "", "")}, want: warning},
+	"system.memory.oom_kill": {fireEvents: []secevent.Event{event(secevent.OOMKill, web, time.Minute, "", "")}, calmEvents: []secevent.Event{event(secevent.OOMKill, web, 20*time.Minute, "", "")}, want: critical},
+	"security.ssh.bruteforce": {
+		fireEvents: repeat(secevent.SSHLoginFailed, 50, attacker, "root"), calmEvents: repeat(secevent.SSHLoginFailed, 3, colleague, "alice"), want: critical,
+	},
+	"security.ssh.fleet_correlation": {
+		fireEvents: []secevent.Event{
+			event(secevent.SSHLoginFailed, web, time.Minute, attacker, "root"), event(secevent.SSHLoginFailed, db, 2*time.Minute, attacker, "admin"),
+			event(secevent.SSHLoginFailed, app, 3*time.Minute, attacker, "oracle"),
+		},
+		calmEvents: []secevent.Event{event(secevent.SSHLoginFailed, web, time.Minute, colleague, "alice")}, want: warning, instances: 3,
+	},
+	"security.ssh.login_after_failures": {
+		fireEvents: append(repeat(secevent.SSHLoginFailed, 6, attacker, "deploy"), event(secevent.SSHLoginSucceeded, web, 0, attacker, "deploy")),
+		calmEvents: append(repeat(secevent.SSHLoginFailed, 2, colleague, "alice"), event(secevent.SSHLoginSucceeded, web, 0, colleague, "alice")), want: critical,
+	},
+	"security.ssh.root_login": {
+		fireEvents: []secevent.Event{event(secevent.SSHLoginSucceeded, web, time.Minute, colleague, "root")},
+		calmEvents: []secevent.Event{event(secevent.SSHLoginSucceeded, web, time.Minute, colleague, "alice")}, want: warning,
+	},
+	"security.sudo.auth_failed": {
+		fireEvents: repeat(secevent.SudoAuthFailed, 3, "", "alice"), calmEvents: repeat(secevent.SudoAuthFailed, 1, "", "alice"), want: warning,
+	},
+	"security.sudo.not_allowed": {
+		fireEvents: []secevent.Event{event(secevent.SudoNotAllowed, web, time.Minute, "", "bob")},
+		calmEvents: []secevent.Event{event(secevent.SudoNotAllowed, web, time.Hour, "", "bob")}, want: warning,
+	},
+	"security.account.created": {
+		fireEvents: []secevent.Event{event(secevent.AccountCreated, web, time.Minute, "", "bob")},
+		calmEvents: []secevent.Event{event(secevent.AccountCreated, web, time.Hour, "", "bob")}, want: warning,
+	},
 }
 
-func evaluate(t *testing.T, rule alerting.Rule, data []metrics.Series, seen time.Duration) []alerting.Result {
+// evaluate runs the rule over web (with metrics and events) and two nodes that only send events.
+func evaluate(t *testing.T, rule alerting.Rule, data []metrics.Series, evs []secevent.Event, seen time.Duration) []alerting.Result {
 	t.Helper()
 	if seen == 0 {
 		seen = 10 * time.Second
@@ -186,8 +265,8 @@ func evaluate(t *testing.T, rule alerting.Rule, data []metrics.Series, seen time
 	last := now.Add(-seen)
 	scope, _ := tenant.ForAllGroups(orgA)
 	results, err := rule.Evaluator.Evaluate(context.Background(), alerting.Env{
-		Scope: scope, Now: now, Metrics: querier(data),
-		Nodes: []fleet.Node{{ID: web, Group: group, Hostname: "web-01", LastSeenAt: &last}},
+		Scope: scope, Now: now, Metrics: querier(data), Events: events(evs),
+		Nodes: []fleet.Node{{ID: web, Group: group, Hostname: "web-01", LastSeenAt: &last}, {ID: db, Group: group, Hostname: "db-01"}, {ID: app, Group: group, Hostname: "app-01"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -219,13 +298,27 @@ func TestDefaults_EachRuleFiresOnItsData(t *testing.T) {
 			if !ok {
 				t.Fatal("no scenario: add data that triggers the rule")
 			}
-			fired := evaluate(t, rule, sc.fire, sc.fireSeen)
-			if len(fired) != 1 || fired[0].Observation.Level != sc.want || !fires(rule, fired[0].Observation) {
-				t.Errorf("triggering data: %+v, want one %v alert", fired, sc.want)
+			instances := max(sc.instances, 1)
+			fired := evaluate(t, rule, sc.fire, sc.fireEvents, sc.fireSeen)
+			if len(fired) != instances {
+				t.Errorf("triggering data: %+v, want %d alerts", fired, instances)
 			}
-			calm := evaluate(t, rule, sc.calm, sc.calmSeen)
-			if len(calm) != 1 || calm[0].Observation.Level != alert.LevelOK || fires(rule, calm[0].Observation) {
-				t.Errorf("calm data: %+v, want one instance that stays ok", calm)
+			for _, f := range fired {
+				if f.Observation.Level != sc.want || !fires(rule, f.Observation) {
+					t.Errorf("triggering data: %+v, want a %v alert", f, sc.want)
+				}
+				if def.Doc.GetSpec().GetType() == "event" && len(f.Observation.Fields) == 0 {
+					t.Errorf("event alert without fields: %+v", f)
+				}
+			}
+			// Calm data is nothing at all or instances that stay ok.
+			for _, c := range evaluate(t, rule, sc.calm, sc.calmEvents, sc.calmSeen) {
+				if c.Observation.Level != alert.LevelOK || fires(rule, c.Observation) {
+					t.Errorf("calm data: %+v, want it to stay ok", c)
+				}
+			}
+			if def.Doc.GetSpec().GetType() != "event" && len(evaluate(t, rule, sc.calm, nil, sc.calmSeen)) != 1 {
+				t.Error("calm data: want one instance that stays ok")
 			}
 		})
 	}
@@ -238,7 +331,7 @@ func TestDefaults_EachRuleFiresOnItsData(t *testing.T) {
 
 // The defaults hold back flapping: a clear below the threshold (states are 0 or 1 and need none)
 // and a duration, except where a single observation is the alert (offline, read-only, overflows;
-// zombies take the minimum over the window).
+// zombies take the minimum over the window). Event rules hold for their count window instead.
 func TestDefaults_HaveHysteresisOrDuration(t *testing.T) {
 	defs, err := ruleset.Defaults()
 	if err != nil {
@@ -247,7 +340,11 @@ func TestDefaults_HaveHysteresisOrDuration(t *testing.T) {
 	instant := []alert.RuleID{"system.node.offline", "system.filesystem.readonly", "system.tcp.listen_overflows", "system.processes.zombies_high"}
 	for _, def := range defs {
 		spec := def.Doc.GetSpec()
-		if !slices.Contains(instant, def.Rule.ID) && ((spec.GetClear() == nil && spec.GetType() != "state") || def.Rule.Timing.For == 0) {
+		if spec.GetType() == "event" {
+			if len(spec.GetNotifyFields()) == 0 {
+				t.Errorf("%s: an event rule names its notifyFields", def.Rule.ID)
+			}
+		} else if !slices.Contains(instant, def.Rule.ID) && ((spec.GetClear() == nil && spec.GetType() != "state") || def.Rule.Timing.For == 0) {
 			t.Errorf("%s: clear %v, for %v; set both", def.Rule.ID, spec.GetClear(), def.Rule.Timing.For)
 		}
 		if def.Doc.GetMetadata().GetLabels()["category"] == "" {

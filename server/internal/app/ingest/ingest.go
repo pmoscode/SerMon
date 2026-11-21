@@ -105,7 +105,7 @@ func DefaultConfig() Config {
 		SeenInterval: 30 * time.Second,
 		MaxFuture:    5 * time.Minute, MaxAge: 24 * time.Hour,
 		// A busy brute force is a few attempts per second with three events each.
-		EventRate: 50, EventBurst: 5000, EventMaxAge: 7 * 24 * time.Hour,
+		EventRate: 50, EventBurst: 5000, EventMaxAge: secevent.MaxAge,
 	}
 }
 

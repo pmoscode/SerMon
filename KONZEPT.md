@@ -679,6 +679,18 @@ Die Regeltypen im Einzelnen (M2-03):
 - **`absence`:** Sekunden seit dem letzten Kontakt des Nodes.
 - **`state`:** letzter Wert, optional nur, wenn vorher eine Bedingung galt (`seen`: Interface war up).
 - **`prediction`:** Stunden, bis eine fallende Metrik null erreicht (lineare Tendenz).
+- **`event`** (M2-08): zählt Security-Events einer Art (`event`) pro Node und `groupBy` (`ip`, `user`) und
+  vergleicht mit `count.warning`/`count.critical` (mindestens so viele im Fenster `count.window`).
+  - Gezählt wird nach der Entstehung der Events, gelesen werden die im Fenster angekommenen. Ein Rückstau nach einem
+    Ausfall des Agents löst so beim Eintreffen aus, wenn er einen Burst enthält.
+  - IPv6-Adressen zählen pro /64.
+  - `match` filtert auf Feldwerte (`user: root`), `after` verlangt vorausgehende Events derselben Quelle auf dem Node
+    („Erfolg nach 5 Fehlversuchen in 1 h“), `count.of: nodes` zählt die Nodes der Org mit derselben Quelle
+    (Fleet-Korrelation; jeder beteiligte Node bekommt einen Alert).
+  - `notifyFields` nennt die Felder des neuesten Events für die Benachrichtigung (ohne Steuerzeichen, höchstens
+    256 Bytes je Wert).
+  - Ein Alert hält, solange die Zahl reicht; das Fenster ersetzt `clear`. Pro Regel und Runde gibt es höchstens 100
+    Instanzen und 50 000 gelesene Events.
 
 Gemeinsam gilt:
 
@@ -715,7 +727,7 @@ einen **Dry-Run-Diff**.
 | Kategorie         | Regel                                                          | Typ               | Warnung / Kritisch (Default)         |
 |-------------------|----------------------------------------------------------------|-------------------|--------------------------------------|
 | **Verfügbarkeit** | Node offline (kein Heartbeat)                                  | absence           | – / 60 s                             |
-|                   | Reboot erkannt                                                 | event             | Info                                 |
+|                   | Reboot erkannt                                                 | event             | ✓ (Info)                            |
 |                   | Agent-Puffer läuft voll / Daten verworfen                      | threshold         | 50 % / 90 %                          |
 |                   | Uhrzeit nicht synchronisiert / Offset                          | state / threshold | > 100 ms / > 1 s                     |
 | **CPU**           | CPU-Auslastung (avg 10 min)                                    | threshold         | 85 % / 95 %                          |
@@ -747,6 +759,7 @@ einen **Dry-Run-Diff**.
 |                   | Root-Login per SSH erfolgreich                                 | event             | ✓                                   |
 |                   | Login von neuer IP / neuem Land                                | event             | ✓ (Info)                            |
 |                   | sudo-Authentifizierungsfehler                                  | event             | 3 / 10 in 10 min                     |
+|                   | sudo ohne Berechtigung („not in sudoers“)                      | event             | ✓                                   |
 |                   | Neuer Benutzer angelegt                                        | event             | ✓                                   |
 | **Updates**       | Security-Updates verfügbar                                     | state             | > 0 seit 3 Tagen / > 0 seit 14 Tagen |
 |                   | Updates verfügbar (alle)                                       | state             | Info                                 |
@@ -755,7 +768,7 @@ einen **Dry-Run-Diff**.
 | **Anomalien**     | Anomalie-Rate des Nodes hoch                                   | anomaly           | 10 % / 25 % der Metriken             |
 
 Seit M2-04 mitgeliefert sind die Regeln für Verfügbarkeit, CPU, Memory, Disk, Netzwerk und System, soweit ihre Daten
-vorliegen. Abweichungen und offene Punkte:
+vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
 
 - **Agent-Puffer:** Die Schwellen sind absolut, 100 MiB und 180 MiB. Der Puffer fasst fest 200 MiB, der Agent meldet
   sein Limit aber nicht.
@@ -763,8 +776,11 @@ vorliegen. Abweichungen und offene Punkte:
 - **Netzwerk:** Errors und Drops gelten getrennt für Empfang und Senden, jeweils relativ zu den Paketen.
 - **Zurückgestellt:** Bandbreiten-Sättigung (Durchsatz in Bytes/s, Link-Speed in Bits/s; dem Regelformat fehlt ein
   Umrechnungsfaktor) und Temperatur (hwmon-Grenzen meldet der Agent nicht).
-- **Später:** Event-Regeln (Reboot, OOM, Security) kommen mit M2-08, Zeitsync, RAID und systemd-Units mit M2-22.
-  Updates und Anomalien folgen in späteren Meilensteinen.
+- **Event-Regeln (M2-08):** Reboot (15 min), OOM-Kill (15 min), SSH-Brute-Force (5 min), Fleet-Korrelation
+  (15 min), Erfolg nach mindestens 5 Fehlversuchen derselben Adresse in 1 h, Root-Login, sudo-Fehler, sudo ohne
+  Berechtigung (neu) und neuer Benutzer. „Info“ gibt es als Stufe nicht; Reboot meldet eine Warnung.
+- **Später:** „Login von neuer IP / neuem Land“ braucht die Liste bekannter IPs und GeoIP (§11). Zeitsync, RAID und
+  systemd-Units kommen mit M2-22, Updates und Anomalien in späteren Meilensteinen.
 
 ### 12.4 Benachrichtigungskanäle
 

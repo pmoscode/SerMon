@@ -220,7 +220,7 @@ func (x *LocalizedText) GetEn() string {
 // AlertRuleSpec is what a rule checks; which fields apply depends on the type.
 type AlertRuleSpec struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// type is threshold, rate, absence, state or prediction (event follows with M2-08).
+	// type is threshold, rate, absence, state, prediction or event.
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// metric is a metric of the catalog (not for absence).
 	Metric string `protobuf:"bytes,2,opt,name=metric,proto3" json:"metric,omitempty"`
@@ -258,7 +258,20 @@ type AlertRuleSpec struct {
 	// selector limits the rule to node groups ("*" or group IDs); empty: all groups.
 	Selector *AlertSelector `protobuf:"bytes,18,opt,name=selector,proto3" json:"selector,omitempty"`
 	// help explains the alert: meaning, typical causes, what to do.
-	Help          *LocalizedText `protobuf:"bytes,19,opt,name=help,proto3" json:"help,omitempty"`
+	Help *LocalizedText `protobuf:"bytes,19,opt,name=help,proto3" json:"help,omitempty"`
+	// event is the security event kind an event rule counts, e.g. ssh.login.failed.
+	Event string `protobuf:"bytes,20,opt,name=event,proto3" json:"event,omitempty"`
+	// match keeps only events with these field values, e.g. user: root (event).
+	Match map[string]string `protobuf:"bytes,21,rep,name=match,proto3" json:"match,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// group_by splits an event rule into one instance per ip or user (per node); YAML key "groupBy".
+	GroupBy []string `protobuf:"bytes,22,rep,name=group_by,json=groupBy,proto3" json:"group_by,omitempty"`
+	// count is what an event rule counts and the levels it compares with.
+	Count *AlertEventCount `protobuf:"bytes,23,opt,name=count,proto3" json:"count,omitempty"`
+	// after makes an event count only if other events preceded it (event).
+	After *AlertEventAfter `protobuf:"bytes,24,opt,name=after,proto3" json:"after,omitempty"`
+	// notify_fields are the event fields a notification shows, e.g. [ts, user, ip, port]; YAML key
+	// "notifyFields".
+	NotifyFields  []string `protobuf:"bytes,25,rep,name=notify_fields,json=notifyFields,proto3" json:"notify_fields,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -426,6 +439,188 @@ func (x *AlertRuleSpec) GetHelp() *LocalizedText {
 	return nil
 }
 
+func (x *AlertRuleSpec) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *AlertRuleSpec) GetMatch() map[string]string {
+	if x != nil {
+		return x.Match
+	}
+	return nil
+}
+
+func (x *AlertRuleSpec) GetGroupBy() []string {
+	if x != nil {
+		return x.GroupBy
+	}
+	return nil
+}
+
+func (x *AlertRuleSpec) GetCount() *AlertEventCount {
+	if x != nil {
+		return x.Count
+	}
+	return nil
+}
+
+func (x *AlertRuleSpec) GetAfter() *AlertEventAfter {
+	if x != nil {
+		return x.After
+	}
+	return nil
+}
+
+func (x *AlertRuleSpec) GetNotifyFields() []string {
+	if x != nil {
+		return x.NotifyFields
+	}
+	return nil
+}
+
+// AlertEventCount is the count of an event rule: at least warning or critical events (or nodes)
+// within window.
+type AlertEventCount struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// window is the time the events lie within, e.g. 5m.
+	Window string `protobuf:"bytes,1,opt,name=window,proto3" json:"window,omitempty"`
+	// warning is the count for a warning; 0: none.
+	Warning int32 `protobuf:"varint,2,opt,name=warning,proto3" json:"warning,omitempty"`
+	// critical is the count for a critical alert; 0: none.
+	Critical int32 `protobuf:"varint,3,opt,name=critical,proto3" json:"critical,omitempty"`
+	// of is events (the default: per node) or nodes (how many nodes see the same groupBy values,
+	// fleet correlation).
+	Of            string `protobuf:"bytes,4,opt,name=of,proto3" json:"of,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertEventCount) Reset() {
+	*x = AlertEventCount{}
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertEventCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertEventCount) ProtoMessage() {}
+
+func (x *AlertEventCount) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertEventCount.ProtoReflect.Descriptor instead.
+func (*AlertEventCount) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *AlertEventCount) GetWindow() string {
+	if x != nil {
+		return x.Window
+	}
+	return ""
+}
+
+func (x *AlertEventCount) GetWarning() int32 {
+	if x != nil {
+		return x.Warning
+	}
+	return 0
+}
+
+func (x *AlertEventCount) GetCritical() int32 {
+	if x != nil {
+		return x.Critical
+	}
+	return 0
+}
+
+func (x *AlertEventCount) GetOf() string {
+	if x != nil {
+		return x.Of
+	}
+	return ""
+}
+
+// AlertEventAfter is what must precede a counted event: at least count events of the kind event
+// on the same node with the same groupBy values within window before it.
+type AlertEventAfter struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// event is the preceding kind, e.g. ssh.login.failed.
+	Event string `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	// count is how many must precede.
+	Count int32 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	// window is how long before the counted event they may lie, e.g. 1h.
+	Window        string `protobuf:"bytes,3,opt,name=window,proto3" json:"window,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertEventAfter) Reset() {
+	*x = AlertEventAfter{}
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertEventAfter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertEventAfter) ProtoMessage() {}
+
+func (x *AlertEventAfter) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertEventAfter.ProtoReflect.Descriptor instead.
+func (*AlertEventAfter) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *AlertEventAfter) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *AlertEventAfter) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *AlertEventAfter) GetWindow() string {
+	if x != nil {
+		return x.Window
+	}
+	return ""
+}
+
 // AlertCondition compares a value with a threshold.
 type AlertCondition struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -439,7 +634,7 @@ type AlertCondition struct {
 
 func (x *AlertCondition) Reset() {
 	*x = AlertCondition{}
-	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -451,7 +646,7 @@ func (x *AlertCondition) String() string {
 func (*AlertCondition) ProtoMessage() {}
 
 func (x *AlertCondition) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -464,7 +659,7 @@ func (x *AlertCondition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertCondition.ProtoReflect.Descriptor instead.
 func (*AlertCondition) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{4}
+	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AlertCondition) GetOp() string {
@@ -494,7 +689,7 @@ type AlertFlapping struct {
 
 func (x *AlertFlapping) Reset() {
 	*x = AlertFlapping{}
-	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -506,7 +701,7 @@ func (x *AlertFlapping) String() string {
 func (*AlertFlapping) ProtoMessage() {}
 
 func (x *AlertFlapping) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -519,7 +714,7 @@ func (x *AlertFlapping) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertFlapping.ProtoReflect.Descriptor instead.
 func (*AlertFlapping) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{5}
+	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AlertFlapping) GetChanges() int32 {
@@ -547,7 +742,7 @@ type AlertSelector struct {
 
 func (x *AlertSelector) Reset() {
 	*x = AlertSelector{}
-	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +754,7 @@ func (x *AlertSelector) String() string {
 func (*AlertSelector) ProtoMessage() {}
 
 func (x *AlertSelector) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_alert_rule_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -572,7 +767,7 @@ func (x *AlertSelector) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertSelector.ProtoReflect.Descriptor instead.
 func (*AlertSelector) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_alert_rule_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AlertSelector) GetGroups() []string {
@@ -606,10 +801,10 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x02de\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02de\x12\x1a\n" +
 	"\x02en\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\x9c\t\n" +
-	"\rAlertRuleSpec\x12F\n" +
-	"\x04type\x18\x01 \x01(\tB2\xbaH/r-R\tthresholdR\x04rateR\aabsenceR\x05stateR\n" +
-	"predictionR\x04type\x12 \n" +
+	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xac\f\n" +
+	"\rAlertRuleSpec\x12M\n" +
+	"\x04type\x18\x01 \x01(\tB9\xbaH6r4R\tthresholdR\x04rateR\aabsenceR\x05stateR\n" +
+	"predictionR\x05eventR\x04type\x12 \n" +
 	"\x06metric\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x18\x80\x01R\x06metric\x12W\n" +
 	"\x06labels\x18\x03 \x03(\v2(.sermon.web.v1.AlertRuleSpec.LabelsEntryB\x15\xbaH\x12\x9a\x01\x0f\x10\b\"\x04r\x02\x18@*\x05r\x03\x18\x80\x02R\x06labels\x120\n" +
 	"\n" +
@@ -633,13 +828,34 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\blookback\x18\x10 \x01(\tB\a\xbaH\x04r\x02\x18\x10R\blookback\x128\n" +
 	"\bflapping\x18\x11 \x01(\v2\x1c.sermon.web.v1.AlertFlappingR\bflapping\x128\n" +
 	"\bselector\x18\x12 \x01(\v2\x1c.sermon.web.v1.AlertSelectorR\bselector\x128\n" +
-	"\x04help\x18\x13 \x01(\v2\x1c.sermon.web.v1.LocalizedTextB\x06\xbaH\x03\xc8\x01\x01R\x04help\x1a9\n" +
+	"\x04help\x18\x13 \x01(\v2\x1c.sermon.web.v1.LocalizedTextB\x06\xbaH\x03\xc8\x01\x01R\x04help\x12\x1d\n" +
+	"\x05event\x18\x14 \x01(\tB\a\xbaH\x04r\x02\x18@R\x05event\x12V\n" +
+	"\x05match\x18\x15 \x03(\v2'.sermon.web.v1.AlertRuleSpec.MatchEntryB\x17\xbaH\x14\x9a\x01\x11\x10\x04\"\x04r\x02\x18 *\ar\x05\x10\x01\x18\x80\x01R\x05match\x123\n" +
+	"\bgroup_by\x18\x16 \x03(\tB\x18\xbaH\x15\x92\x01\x12\x10\x02\x18\x01\"\fr\n" +
+	"R\x02ipR\x04userR\agroupBy\x124\n" +
+	"\x05count\x18\x17 \x01(\v2\x1e.sermon.web.v1.AlertEventCountR\x05count\x124\n" +
+	"\x05after\x18\x18 \x01(\v2\x1e.sermon.web.v1.AlertEventAfterR\x05after\x125\n" +
+	"\rnotify_fields\x18\x19 \x03(\tB\x10\xbaH\r\x92\x01\n" +
+	"\x10\x10\x18\x01\"\x04r\x02\x18 R\fnotifyFields\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aV\n" +
 	"\fExcludeEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
-	"\x05value\x18\x02 \x01(\v2\x1a.google.protobuf.ListValueR\x05value:\x028\x01\"T\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.google.protobuf.ListValueR\x05value:\x028\x01\x1a8\n" +
+	"\n" +
+	"MatchEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xaa\x01\n" +
+	"\x0fAlertEventCount\x12\x1f\n" +
+	"\x06window\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x18\x10R\x06window\x12%\n" +
+	"\awarning\x18\x02 \x01(\x05B\v\xbaH\b\x1a\x06\x18\xa0\x8d\x06(\x00R\awarning\x12'\n" +
+	"\bcritical\x18\x03 \x01(\x05B\v\xbaH\b\x1a\x06\x18\xa0\x8d\x06(\x00R\bcritical\x12&\n" +
+	"\x02of\x18\x04 \x01(\tB\x16\xbaH\x13r\x11R\x00R\x06eventsR\x05nodesR\x02of\"t\n" +
+	"\x0fAlertEventAfter\x12\x1d\n" +
+	"\x05event\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x18@R\x05event\x12!\n" +
+	"\x05count\x18\x02 \x01(\x05B\v\xbaH\b\x1a\x06\x18\xa0\x8d\x06(\x01R\x05count\x12\x1f\n" +
+	"\x06window\x18\x03 \x01(\tB\a\xbaH\x04r\x02\x18\x10R\x06window\"T\n" +
 	"\x0eAlertCondition\x12#\n" +
 	"\x02op\x18\x01 \x01(\tB\x13\xbaH\x10r\x0eR\x01>R\x02>=R\x01<R\x02<=R\x02op\x12\x1d\n" +
 	"\x05value\x18\x02 \x01(\x01B\a\xbaH\x04\x12\x02@\x01R\x05value\"U\n" +
@@ -663,40 +879,46 @@ func file_sermon_web_v1_alert_rule_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_alert_rule_proto_rawDescData
 }
 
-var file_sermon_web_v1_alert_rule_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_sermon_web_v1_alert_rule_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_sermon_web_v1_alert_rule_proto_goTypes = []any{
 	(*AlertRule)(nil),          // 0: sermon.web.v1.AlertRule
 	(*AlertRuleMetadata)(nil),  // 1: sermon.web.v1.AlertRuleMetadata
 	(*LocalizedText)(nil),      // 2: sermon.web.v1.LocalizedText
 	(*AlertRuleSpec)(nil),      // 3: sermon.web.v1.AlertRuleSpec
-	(*AlertCondition)(nil),     // 4: sermon.web.v1.AlertCondition
-	(*AlertFlapping)(nil),      // 5: sermon.web.v1.AlertFlapping
-	(*AlertSelector)(nil),      // 6: sermon.web.v1.AlertSelector
-	nil,                        // 7: sermon.web.v1.AlertRuleMetadata.LabelsEntry
-	nil,                        // 8: sermon.web.v1.AlertRuleSpec.LabelsEntry
-	nil,                        // 9: sermon.web.v1.AlertRuleSpec.ExcludeEntry
-	(*structpb.ListValue)(nil), // 10: google.protobuf.ListValue
+	(*AlertEventCount)(nil),    // 4: sermon.web.v1.AlertEventCount
+	(*AlertEventAfter)(nil),    // 5: sermon.web.v1.AlertEventAfter
+	(*AlertCondition)(nil),     // 6: sermon.web.v1.AlertCondition
+	(*AlertFlapping)(nil),      // 7: sermon.web.v1.AlertFlapping
+	(*AlertSelector)(nil),      // 8: sermon.web.v1.AlertSelector
+	nil,                        // 9: sermon.web.v1.AlertRuleMetadata.LabelsEntry
+	nil,                        // 10: sermon.web.v1.AlertRuleSpec.LabelsEntry
+	nil,                        // 11: sermon.web.v1.AlertRuleSpec.ExcludeEntry
+	nil,                        // 12: sermon.web.v1.AlertRuleSpec.MatchEntry
+	(*structpb.ListValue)(nil), // 13: google.protobuf.ListValue
 }
 var file_sermon_web_v1_alert_rule_proto_depIdxs = []int32{
 	1,  // 0: sermon.web.v1.AlertRule.metadata:type_name -> sermon.web.v1.AlertRuleMetadata
 	3,  // 1: sermon.web.v1.AlertRule.spec:type_name -> sermon.web.v1.AlertRuleSpec
 	2,  // 2: sermon.web.v1.AlertRuleMetadata.name:type_name -> sermon.web.v1.LocalizedText
-	7,  // 3: sermon.web.v1.AlertRuleMetadata.labels:type_name -> sermon.web.v1.AlertRuleMetadata.LabelsEntry
-	8,  // 4: sermon.web.v1.AlertRuleSpec.labels:type_name -> sermon.web.v1.AlertRuleSpec.LabelsEntry
-	9,  // 5: sermon.web.v1.AlertRuleSpec.exclude:type_name -> sermon.web.v1.AlertRuleSpec.ExcludeEntry
-	4,  // 6: sermon.web.v1.AlertRuleSpec.warning:type_name -> sermon.web.v1.AlertCondition
-	4,  // 7: sermon.web.v1.AlertRuleSpec.critical:type_name -> sermon.web.v1.AlertCondition
-	4,  // 8: sermon.web.v1.AlertRuleSpec.clear:type_name -> sermon.web.v1.AlertCondition
-	4,  // 9: sermon.web.v1.AlertRuleSpec.seen:type_name -> sermon.web.v1.AlertCondition
-	5,  // 10: sermon.web.v1.AlertRuleSpec.flapping:type_name -> sermon.web.v1.AlertFlapping
-	6,  // 11: sermon.web.v1.AlertRuleSpec.selector:type_name -> sermon.web.v1.AlertSelector
+	9,  // 3: sermon.web.v1.AlertRuleMetadata.labels:type_name -> sermon.web.v1.AlertRuleMetadata.LabelsEntry
+	10, // 4: sermon.web.v1.AlertRuleSpec.labels:type_name -> sermon.web.v1.AlertRuleSpec.LabelsEntry
+	11, // 5: sermon.web.v1.AlertRuleSpec.exclude:type_name -> sermon.web.v1.AlertRuleSpec.ExcludeEntry
+	6,  // 6: sermon.web.v1.AlertRuleSpec.warning:type_name -> sermon.web.v1.AlertCondition
+	6,  // 7: sermon.web.v1.AlertRuleSpec.critical:type_name -> sermon.web.v1.AlertCondition
+	6,  // 8: sermon.web.v1.AlertRuleSpec.clear:type_name -> sermon.web.v1.AlertCondition
+	6,  // 9: sermon.web.v1.AlertRuleSpec.seen:type_name -> sermon.web.v1.AlertCondition
+	7,  // 10: sermon.web.v1.AlertRuleSpec.flapping:type_name -> sermon.web.v1.AlertFlapping
+	8,  // 11: sermon.web.v1.AlertRuleSpec.selector:type_name -> sermon.web.v1.AlertSelector
 	2,  // 12: sermon.web.v1.AlertRuleSpec.help:type_name -> sermon.web.v1.LocalizedText
-	10, // 13: sermon.web.v1.AlertRuleSpec.ExcludeEntry.value:type_name -> google.protobuf.ListValue
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	12, // 13: sermon.web.v1.AlertRuleSpec.match:type_name -> sermon.web.v1.AlertRuleSpec.MatchEntry
+	4,  // 14: sermon.web.v1.AlertRuleSpec.count:type_name -> sermon.web.v1.AlertEventCount
+	5,  // 15: sermon.web.v1.AlertRuleSpec.after:type_name -> sermon.web.v1.AlertEventAfter
+	13, // 16: sermon.web.v1.AlertRuleSpec.ExcludeEntry.value:type_name -> google.protobuf.ListValue
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_alert_rule_proto_init() }
@@ -710,7 +932,7 @@ func file_sermon_web_v1_alert_rule_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_alert_rule_proto_rawDesc), len(file_sermon_web_v1_alert_rule_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

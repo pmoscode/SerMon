@@ -13,7 +13,7 @@ import (
 )
 
 const alertInstanceHistory = `-- name: AlertInstanceHistory :many
-SELECT kind, from_state, to_state, at, value, by_user
+SELECT kind, from_state, to_state, at, value, by_user, fields
 FROM alert_history
 WHERE rule_id = $1 AND node_id = $2 AND dimension = $3
 ORDER BY at DESC, id DESC
@@ -34,6 +34,7 @@ type AlertInstanceHistoryRow struct {
 	At        time.Time
 	Value     float64
 	ByUser    *uuid.UUID
+	Fields    []byte
 }
 
 func (q *Queries) AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error) {
@@ -57,6 +58,7 @@ func (q *Queries) AlertInstanceHistory(ctx context.Context, arg AlertInstanceHis
 			&i.At,
 			&i.Value,
 			&i.ByUser,
+			&i.Fields,
 		); err != nil {
 			return nil, err
 		}
@@ -85,9 +87,9 @@ func (q *Queries) DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstan
 }
 
 const insertAlertHistory = `-- name: InsertAlertHistory :exec
-INSERT INTO alert_history (org_id, rule_id, node_id, dimension, kind, from_state, to_state, at, value, by_user)
+INSERT INTO alert_history (org_id, rule_id, node_id, dimension, kind, from_state, to_state, at, value, by_user, fields)
 VALUES (current_org_id(), $1, $2, $3, $4,
-        $5, $6, $7, $8, $9)
+        $5, $6, $7, $8, $9, $10)
 `
 
 type InsertAlertHistoryParams struct {
@@ -100,6 +102,7 @@ type InsertAlertHistoryParams struct {
 	At        time.Time
 	Value     float64
 	ByUser    *uuid.UUID
+	Fields    []byte
 }
 
 // One row per transition (COPY doesn't work with row-level security; a round has few).
@@ -114,6 +117,7 @@ func (q *Queries) InsertAlertHistory(ctx context.Context, arg InsertAlertHistory
 		arg.At,
 		arg.Value,
 		arg.ByUser,
+		arg.Fields,
 	)
 	return err
 }
@@ -143,7 +147,7 @@ func (q *Queries) LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrga
 }
 
 const listAlertInstances = `-- name: ListAlertInstances :many
-SELECT rule_id, node_id, dimension, state, since, pending_since, fired_at, ack_by, ack_at, flapping, value, flips
+SELECT rule_id, node_id, dimension, state, since, pending_since, fired_at, ack_by, ack_at, flapping, value, flips, fields
 FROM alert_instances
 `
 
@@ -160,6 +164,7 @@ type ListAlertInstancesRow struct {
 	Flapping     bool
 	Value        float64
 	Flips        []time.Time
+	Fields       []byte
 }
 
 func (q *Queries) ListAlertInstances(ctx context.Context) ([]ListAlertInstancesRow, error) {
@@ -184,6 +189,7 @@ func (q *Queries) ListAlertInstances(ctx context.Context) ([]ListAlertInstancesR
 			&i.Flapping,
 			&i.Value,
 			&i.Flips,
+			&i.Fields,
 		); err != nil {
 			return nil, err
 		}
@@ -197,14 +203,15 @@ func (q *Queries) ListAlertInstances(ctx context.Context) ([]ListAlertInstancesR
 
 const upsertAlertInstance = `-- name: UpsertAlertInstance :exec
 INSERT INTO alert_instances (org_id, rule_id, node_id, dimension, state, since, pending_since, fired_at,
-                             ack_by, ack_at, flapping, value, flips, updated_at)
+                             ack_by, ack_at, flapping, value, flips, fields, updated_at)
 VALUES (current_org_id(), $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12::timestamptz[], now())
+        $11, $12::timestamptz[], $13, now())
 ON CONFLICT (org_id, rule_id, node_id, dimension) DO UPDATE SET
     state = EXCLUDED.state, since = EXCLUDED.since, pending_since = EXCLUDED.pending_since,
     fired_at = EXCLUDED.fired_at, ack_by = EXCLUDED.ack_by, ack_at = EXCLUDED.ack_at,
-    flapping = EXCLUDED.flapping, value = EXCLUDED.value, flips = EXCLUDED.flips, updated_at = now()
+    flapping = EXCLUDED.flapping, value = EXCLUDED.value, flips = EXCLUDED.flips, fields = EXCLUDED.fields,
+    updated_at = now()
 `
 
 type UpsertAlertInstanceParams struct {
@@ -220,6 +227,7 @@ type UpsertAlertInstanceParams struct {
 	Flapping     bool
 	Value        float64
 	Flips        []time.Time
+	Fields       []byte
 }
 
 func (q *Queries) UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error {
@@ -236,6 +244,7 @@ func (q *Queries) UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstan
 		arg.Flapping,
 		arg.Value,
 		arg.Flips,
+		arg.Fields,
 	)
 	return err
 }

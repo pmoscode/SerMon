@@ -69,6 +69,7 @@ func registerAlertMetrics(r *promtext.Registry, stats *alerting.Stats) {
 		{"sermon_server_alert_transitions_total", "Stored state changes of alert instances.", stats.Transitions.Load},
 		{"sermon_server_alert_rule_errors_total", "Rule evaluations that failed.", stats.RuleErrors.Load},
 		{"sermon_server_alert_org_errors_total", "Organizations whose evaluation failed.", stats.OrgErrors.Load},
+		{"sermon_server_alert_event_reads_truncated_total", "Event rule reads that hit the limit per round (a flood of events).", stats.EventReadsTruncated.Load},
 	} {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
 	}

@@ -2,6 +2,7 @@ package ruleset_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -12,6 +13,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -180,5 +182,88 @@ func TestLoad_ChecksFileNamesAndDuplicates(t *testing.T) {
 				t.Errorf("%s: error %q does not name %s", name, err, file)
 			}
 		}
+	}
+}
+
+// The event example of KONZEPT §12.2, with help.
+const bruteforceRule = `apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.ssh.bruteforce
+  name: { de: "SSH-Brute-Force", en: "SSH brute force" }
+  labels: { category: security }
+spec:
+  type: event
+  event: ssh.login.failed
+  groupBy: [ ip ]
+  count: { window: 5m, warning: 10, critical: 50 }
+  notifyFields: [ ts, user, ip, port ]
+  help:
+    de: "Viele fehlgeschlagene SSH-Anmeldungen von einer Adresse."
+    en: "Many failed SSH logins from one address."
+`
+
+func TestParse_EventRule(t *testing.T) {
+	def, err := ruleset.Parse([]byte(bruteforceRule))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, ok := def.Rule.Evaluator.(alerting.EventRule)
+	if !ok {
+		t.Fatalf("evaluator = %T, want an event rule", def.Rule.Evaluator)
+	}
+	if ev.Kind != secevent.SSHLoginFailed || !slices.Equal(ev.GroupBy, []string{"ip"}) || ev.Window != 5*time.Minute ||
+		ev.Warning != 10 || ev.Critical != 50 || ev.Count != alerting.CountEvents || ev.After != nil ||
+		!slices.Equal(ev.NotifyFields, []string{"ts", "user", "ip", "port"}) {
+		t.Errorf("event rule = %+v", ev)
+	}
+
+	def, err = ruleset.Parse([]byte(strings.NewReplacer(
+		"event: ssh.login.failed", "event: ssh.login.success\n  match: { user: root }\n  after: { event: ssh.login.failed, count: 5, window: 1h }",
+		"window: 5m, warning: 10, critical: 50", "of: nodes, window: 15m, critical: 3",
+	).Replace(bruteforceRule)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev = def.Rule.Evaluator.(alerting.EventRule) //nolint:forcetypeassert // checked above
+	if ev.Kind != secevent.SSHLoginSucceeded || ev.Match["user"] != "root" || ev.Count != alerting.CountNodes || ev.Warning != 0 || ev.Critical != 3 ||
+		ev.After == nil || *ev.After != (alerting.EventCondition{Kind: secevent.SSHLoginFailed, Count: 5, Window: time.Hour}) {
+		t.Errorf("event rule with options = %+v", ev)
+	}
+}
+
+func TestParse_RejectsInvalidEventRules(t *testing.T) {
+	for name, tc := range map[string]struct{ old, new, hint string }{
+		"unknown event":        {"event: ssh.login.failed", "event: ssh.login.guessed", "ssh.login.guessed"},
+		"no event":             {"  event: ssh.login.failed\n", "", "event"},
+		"no count":             {"  count: { window: 5m, warning: 10, critical: 50 }\n", "", "count"},
+		"no window":            {"window: 5m, ", "", "window"},
+		"no level":             {"warning: 10, critical: 50", "warning: 0", "warning or critical"},
+		"group by another":     {"groupBy: [ ip ]", "groupBy: [ port ]", "group_by"},
+		"group by missing":     {"event: ssh.login.failed", "event: system.oom_kill", "groupBy"},
+		"notify a missing":     {"notifyFields: [ ts, user, ip, port ]", "notifyFields: [ uid ]", "uid"},
+		"threshold field":      {"notifyFields:", "warning: { op: \">\", value: 1 }\n  notifyFields:", "warning"},
+		"metric field":         {"notifyFields:", "metric: sermon_cpu_utilization_ratio\n  notifyFields:", "metric"},
+		"event on threshold":   {"type: event", "type: threshold", "event"},
+		"bad after":            {"notifyFields:", "after: { event: ssh.login.failed, count: 0, window: 1h }\n  notifyFields:", "count"},
+		"bad after window":     {"notifyFields:", "after: { event: ssh.login.failed, count: 3, window: soon }\n  notifyFields:", "after.window"},
+		"counting nodes alone": {"groupBy: [ ip ]\n", "", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(bruteforceRule, tc.old) {
+				t.Fatalf("%q not in the example", tc.old)
+			}
+			doc := strings.Replace(bruteforceRule, tc.old, tc.new, 1)
+			if name == "counting nodes alone" {
+				doc = strings.Replace(doc, "window: 5m", "of: nodes, window: 5m", 1)
+			}
+			_, err := ruleset.Parse([]byte(doc))
+			if !errors.Is(err, alert.ErrInvalidRule) {
+				t.Fatalf("Parse() = %v, want an invalid rule", err)
+			}
+			if !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("error %q does not point to %q", err, tc.hint)
+			}
+		})
 	}
 }

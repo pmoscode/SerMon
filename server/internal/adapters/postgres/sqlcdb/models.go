@@ -35,6 +35,7 @@ type AlertHistory struct {
 	At        time.Time
 	Value     float64
 	ByUser    *uuid.UUID
+	Fields    []byte
 }
 
 type AlertInstance struct {
@@ -52,6 +53,7 @@ type AlertInstance struct {
 	Value        float64
 	Flips        []time.Time
 	UpdatedAt    time.Time
+	Fields       []byte
 }
 
 type AlertLease struct {

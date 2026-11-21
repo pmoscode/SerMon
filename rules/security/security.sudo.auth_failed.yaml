@@ -1,0 +1,22 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.sudo.auth_failed
+  name: { de: "sudo-Authentifizierung fehlgeschlagen", en: "sudo authentication failed" }
+  labels: { category: security }
+spec:
+  type: event
+  event: sudo.auth.failed
+  groupBy: [ user ]
+  count: { window: 10m, warning: 3, critical: 10 }
+  notifyFields: [ ts, user, tty ]
+  help:
+    de: >-
+      Ein Benutzer hat innerhalb von 10 Minuten mehrfach ein falsches Passwort für sudo eingegeben (ab 3 Warnung, ab
+      10 kritisch). Meist ist es ein Tippfehler; viele Versuche können aber bedeuten, dass jemand mit einem
+      übernommenen Konto Root-Rechte erraten will. Frag beim Benutzer nach und prüfe in den Security-Events, von wo
+      er angemeldet war.
+    en: >-
+      A user entered a wrong password for sudo several times within 10 minutes (warning from 3, critical from 10).
+      Usually it is a typo; many attempts may however mean that someone with a taken-over account is trying to
+      guess root privileges. Ask the user and check in the security events where they logged in from.

@@ -30,6 +30,19 @@ WHERE e.occurred_at >= sqlc.arg(from_time) AND e.occurred_at < sqlc.arg(to_time)
 ORDER BY e.occurred_at DESC, e.id DESC
 LIMIT sqlc.arg(max_rows);
 
+-- name: ReceivedSecurityEvents :many
+-- The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
+-- received first. The bounds on occurred_at only prune partitions: min_occurred lies the oldest
+-- age the ingest accepts (secevent.MaxAge) and a margin before since; it takes 5 min ahead.
+SELECT e.id, e.node_id, e.occurred_at, e.received_at, e.kind, e.user_name, e.remote_ip, e.remote_host,
+       e.remote_port, e.details
+FROM security_events e
+WHERE e.kind = sqlc.arg(kind) AND e.node_id = ANY (sqlc.arg(node_ids)::uuid[])
+  AND e.received_at >= sqlc.arg(since)
+  AND e.occurred_at >= sqlc.arg(min_occurred) AND e.occurred_at < now() + interval '1 hour'
+ORDER BY e.received_at DESC, e.id DESC
+LIMIT sqlc.arg(max_rows);
+
 -- name: SecurityEventHorizon :one
 SELECT coalesce(security_events_horizon(), '-infinity'::timestamptz)::timestamptz AS horizon;
 

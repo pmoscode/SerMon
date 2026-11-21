@@ -3,10 +3,12 @@
 **Schlankes, selbst gehostetes und mandantenfähiges Server-Monitoring für Linux.**
 Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Gebot**.
 
-> ⚠️ **Status: in früher Entwicklung (Meilenstein M1).** Die Server-Seite für Anmeldung, Mandanten, Enrollment und die
+> ⚠️ **Status: in früher Entwicklung (Meilenstein M2).** Die Server-Seite für Anmeldung, Mandanten, Enrollment und die
 > mTLS-Agent-API steht. Der Agent enrollt sich, sammelt die Basis-Metriken und liefert sie über Puffer, Reconnect und
 > Zertifikatsrotation an den Server, der sie in TimescaleDB speichert; die Abfrage-API für die UI steht.
 > Die UI hat Login, Setup-Assistent und App-Shell; Charts und Flottenübersicht folgen.
+> Die Alert-Engine wertet Standardregeln für Metriken und Security-Events aus (SSH-Brute-Force, Fleet-Korrelation,
+> Root-Login, sudo, OOM, Reboot); die Benachrichtigungskanäle folgen.
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 

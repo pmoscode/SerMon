@@ -1,0 +1,22 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.memory.oom_kill
+  name: { de: "Prozess wegen Speichermangel beendet", en: "Process killed for lack of memory" }
+  labels: { category: memory }
+spec:
+  type: event
+  event: system.oom_kill
+  count: { window: 15m, critical: 1 }
+  notifyFields: [ ts, pid, process ]
+  help:
+    de: >-
+      Der Kernel hat einen Prozess beendet, weil der Arbeitsspeicher nicht mehr reichte (OOM-Killer). Der Dienst ist
+      damit ausgefallen oder wurde neu gestartet. Typische Ursachen: ein Speicherleck, zu viele Prozesse, zu
+      knappe Limits eines Containers oder einer systemd-Unit. Prüfe in der Live-Ansicht den Speicherverlauf und die
+      größten Prozesse und setze passende Limits oder mehr Speicher.
+    en: >-
+      The kernel killed a process because memory ran out (OOM killer). The service has thus failed or was
+      restarted. Typical causes: a memory leak, too many processes, too tight limits of a container or systemd
+      unit. Check the memory history and the largest processes in the live view and set suitable limits or add
+      memory.

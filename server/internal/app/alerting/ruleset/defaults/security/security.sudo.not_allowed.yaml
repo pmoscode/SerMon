@@ -1,0 +1,21 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.sudo.not_allowed
+  name: { de: "sudo ohne Berechtigung", en: "sudo without permission" }
+  labels: { category: security }
+spec:
+  type: event
+  event: sudo.not_allowed
+  groupBy: [ user ]
+  count: { window: 15m, warning: 1 }
+  notifyFields: [ ts, user, target, tty ]
+  help:
+    de: >-
+      Ein Benutzer, der nicht in den sudoers steht oder den Befehl nicht ausführen darf, hat sudo aufgerufen. Das
+      ist oft ein Versehen, kann aber auch ein Angreifer mit einem übernommenen Konto sein, der Rechte ausweiten
+      will. Klär mit dem Benutzer, was er vorhatte, und prüfe in den Security-Events, von wo er angemeldet war.
+    en: >-
+      A user who is not in the sudoers or may not run the command called sudo. This is often a mistake but may also
+      be an attacker with a taken-over account trying to escalate privileges. Ask the user what they intended and
+      check in the security events where they logged in from.

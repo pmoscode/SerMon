@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
+	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
@@ -24,6 +25,7 @@ var (
 	_ secevents.Writer     = (*SecurityEventStore)(nil)
 	_ secevents.Store      = (*SecurityEventStore)(nil)
 	_ secevents.Partitions = (*SecurityEventStore)(nil)
+	_ alerting.EventReader = (*SecurityEventStore)(nil)
 )
 
 // NewSecurityEventStore returns the store on db.
@@ -155,27 +157,61 @@ func (s *SecurityEventStore) List(ctx context.Context, scope tenant.Scope, f sec
 		if err != nil {
 			return wrap(err, "list security events")
 		}
-		out = make([]secevent.Event, 0, len(rows))
-		for _, r := range rows {
-			e := secevent.Event{
-				ID: r.ID, Node: identity.NodeID(r.NodeID), OccurredAt: r.OccurredAt, ReceivedAt: r.ReceivedAt,
-				Kind: secevent.Kind(r.Kind), User: r.UserName.String,
-			}
-			if r.RemoteIp != nil || r.RemoteHost.Valid {
-				e.Remote = &secevent.Remote{Host: r.RemoteHost.String, Port: uint16(max(min(r.RemotePort.Int32, 65535), 0))}
-				if r.RemoteIp != nil {
-					e.Remote.IP = *r.RemoteIp
-				}
-			}
-			if err := json.Unmarshal(r.Details, &e.Details); err != nil {
-				return fmt.Errorf("decode details of event %d: %w", r.ID, err)
-			}
-			out = append(out, e)
-		}
-		return nil
+		out, err = eventsOf(rows, func(r sqlcdb.ListSecurityEventsRow) eventRow { return eventRow(r) })
+		return err
 	})
 	if err != nil {
 		return nil, err
+	}
+	return out, nil
+}
+
+// Received returns the events of one kind and the nodes received since q.Since, newest received
+// first (alerting.EventReader, M2-08).
+func (s *SecurityEventStore) Received(ctx context.Context, scope tenant.Scope, q alerting.EventQuery) ([]secevent.Event, error) {
+	p := sqlcdb.ReceivedSecurityEventsParams{
+		Kind: string(q.Kind), NodeIds: make([]uuid.UUID, len(q.Nodes)), Since: q.Since,
+		MinOccurred: q.Since.Add(-secevent.MaxAge - time.Hour), MaxRows: int32(min(max(q.Limit, 0), 1<<20)),
+	}
+	for i, n := range q.Nodes {
+		p.NodeIds[i] = uuid.UUID(n)
+	}
+	var out []secevent.Event
+	err := s.db.InTenant(ctx, scope, func(qs *sqlcdb.Queries) error {
+		rows, err := qs.ReceivedSecurityEvents(ctx, p)
+		if err != nil {
+			return wrap(err, "read received security events")
+		}
+		out, err = eventsOf(rows, func(r sqlcdb.ReceivedSecurityEventsRow) eventRow { return eventRow(r) })
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// eventRow is a selected security event (the queries select the same columns).
+type eventRow sqlcdb.ListSecurityEventsRow
+
+func eventsOf[R any](rows []R, conv func(R) eventRow) ([]secevent.Event, error) {
+	out := make([]secevent.Event, 0, len(rows))
+	for _, row := range rows {
+		r := conv(row)
+		e := secevent.Event{
+			ID: r.ID, Node: identity.NodeID(r.NodeID), OccurredAt: r.OccurredAt, ReceivedAt: r.ReceivedAt,
+			Kind: secevent.Kind(r.Kind), User: r.UserName.String,
+		}
+		if r.RemoteIp != nil || r.RemoteHost.Valid {
+			e.Remote = &secevent.Remote{Host: r.RemoteHost.String, Port: uint16(max(min(r.RemotePort.Int32, 65535), 0))}
+			if r.RemoteIp != nil {
+				e.Remote.IP = *r.RemoteIp
+			}
+		}
+		if err := json.Unmarshal(r.Details, &e.Details); err != nil {
+			return nil, fmt.Errorf("decode details of event %d: %w", r.ID, err)
+		}
+		out = append(out, e)
 	}
 	return out, nil
 }

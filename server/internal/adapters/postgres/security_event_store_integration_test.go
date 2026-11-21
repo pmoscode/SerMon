@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"log/slog"
 	"net/netip"
 	"strings"
 	"sync"
@@ -14,7 +15,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/app/alerting"
+	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
+	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
+	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -315,5 +320,128 @@ func TestSecurityEventStore_HorizonIsYearsAhead(t *testing.T) {
 	horizon, err := f.store.Horizon(context.Background())
 	if err != nil || !horizon.Equal(time.Date(2037, 1, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("Horizon() = %v, %v; want 2037-01-01", horizon, err)
+	}
+}
+
+// The alert engine reads the events received since a time (M2-08): one kind, the given nodes,
+// newest received first, within the organization.
+func TestSecurityEventStore_ReceivedForTheAlertEngine(t *testing.T) {
+	f := newEventFixture(t)
+	ctx := context.Background()
+	org := tenant.OrgID(f.org)
+	before := time.Now()
+	write := func(node identity.NodeID, seq uint64, events ...secevent.Event) {
+		t.Helper()
+		if _, err := f.store.Write(ctx, org, node, []secevents.Batch{{Seq: seq, Events: events}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// An event from a week ago arrives now: it counts by its arrival.
+	write(f.node, 1, failedLogin(f.node, eventsNow.Add(-6*24*time.Hour), "old", "192.0.2.1"))
+	write(f.node, 2, failedLogin(f.node, eventsNow, "a", "192.0.2.2"), failedLogin(f.node, eventsNow, "b", "192.0.2.3"))
+	write(f.peer, 1, failedLogin(f.peer, eventsNow, "peer", "192.0.2.4"))
+	reboot := secevent.Event{Node: f.node, OccurredAt: eventsNow, Kind: secevent.SystemReboot}
+	write(f.node, 3, reboot)
+
+	// Another organization's events with the same node filter never show.
+	other := newEventFixture(t)
+	if _, err := other.store.Write(ctx, tenant.OrgID(other.org), other.node, []secevents.Batch{{Seq: 1, Events: []secevent.Event{failedLogin(other.node, eventsNow, "foreign", "192.0.2.5")}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	received := func(q alerting.EventQuery) []secevent.Event {
+		t.Helper()
+		got, err := f.store.Received(ctx, scopeFor(t, f.org), q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	all := []identity.NodeID{f.node, f.peer, other.node}
+	got := received(alerting.EventQuery{Kind: secevent.SSHLoginFailed, Nodes: all, Since: before.Add(-time.Minute), Limit: 10})
+	users := make([]string, len(got))
+	for i, e := range got {
+		users[i] = e.User
+		if e.ReceivedAt.Before(before.Add(-time.Second)) || e.Remote == nil {
+			t.Errorf("event %+v", e)
+		}
+	}
+	if strings.Join(users, ",") != "peer,b,a,old" && strings.Join(users, ",") != "peer,a,b,old" {
+		t.Errorf("users = %v, want the failed logins of the organization, newest received first", users)
+	}
+	if got := received(alerting.EventQuery{Kind: secevent.SSHLoginFailed, Nodes: []identity.NodeID{f.peer}, Since: before.Add(-time.Minute), Limit: 10}); len(got) != 1 || got[0].User != "peer" {
+		t.Errorf("one node: %+v", got)
+	}
+	if got := received(alerting.EventQuery{Kind: secevent.SSHLoginFailed, Nodes: all, Since: before.Add(-time.Minute), Limit: 2}); len(got) != 2 || got[0].User != "peer" {
+		t.Errorf("limit: %+v", got)
+	}
+	if got := received(alerting.EventQuery{Kind: secevent.SSHLoginFailed, Nodes: all, Since: time.Now().Add(time.Minute), Limit: 10}); len(got) != 0 {
+		t.Errorf("since later: %+v", got)
+	}
+	if got := received(alerting.EventQuery{Kind: secevent.SystemReboot, Nodes: all, Since: before.Add(-time.Minute), Limit: 10}); len(got) != 1 || got[0].Kind != secevent.SystemReboot {
+		t.Errorf("reboots: %+v", got)
+	}
+}
+
+// Through the engine with the default rules: a brute force on one node fires with its fields, and
+// the same IP on two nodes of one organization and one of another is no fleet correlation.
+func TestAlertEngine_EventRulesOverTheDatabase(t *testing.T) {
+	a := newEventFixture(t)
+	b := newEventFixture(t)
+	ctx := context.Background()
+	fx := setup(t)
+	db := open(t, fx.appDSN)
+	attacker := "203.0.113.66"
+	var burst []secevent.Event
+	for i := range 12 {
+		burst = append(burst, failedLogin(a.node, eventsNow.Add(-time.Duration(i)*time.Second), "root", attacker))
+	}
+	if _, err := a.store.Write(ctx, tenant.OrgID(a.org), a.node, []secevents.Batch{{Seq: 1, Events: burst}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.store.Write(ctx, tenant.OrgID(a.org), a.peer, []secevents.Batch{{Seq: 1, Events: []secevent.Event{failedLogin(a.peer, eventsNow, "admin", attacker)}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.store.Write(ctx, tenant.OrgID(b.org), b.node, []secevents.Batch{{Seq: 1, Events: []secevent.Event{failedLogin(b.node, eventsNow, "oracle", attacker)}}}); err != nil {
+		t.Fatal(err)
+	}
+	defaults, err := ruleset.Defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	alerts := postgres.NewAlertStore(db)
+	engine := alerting.NewEngine(alerting.Deps{
+		Store: alerts, Rules: ruleset.NewSource(defaults, postgres.NewAlertRuleStore(db), slog.New(slog.DiscardHandler)),
+		Nodes: postgres.NewFleetStore(db), Metrics: noMetrics{}, Events: postgres.NewSecurityEventStore(db),
+		Now: time.Now, Logger: slog.New(slog.DiscardHandler),
+	})
+	engine.Round(ctx)
+	if n := engine.Stats().RuleErrors.Load(); n != 0 {
+		t.Fatalf("%d rule errors", n)
+	}
+
+	dim := metrics.Labels{"ip": attacker}.Key()
+	list, err := alerts.Instances(ctx, scopeFor(t, a.org))
+	if err != nil {
+		t.Fatal(err)
+	}
+	brute := alert.Key{Rule: "security.ssh.bruteforce", Node: a.node, Dimension: dim}
+	var found bool
+	for _, i := range list {
+		switch {
+		case i.Key == brute:
+			found = i.State == alert.StateWarning && i.Value == 12 && i.Fields["user"] == "root" && i.Fields["ip"] == attacker
+			if !found {
+				t.Errorf("brute force = %+v", i)
+			}
+		case i.State.Firing():
+			t.Errorf("unexpected alert %+v", i)
+		}
+	}
+	if !found {
+		t.Errorf("instances = %+v, want the brute force", list)
+	}
+	if list, _ := alerts.Instances(ctx, scopeFor(t, b.org)); len(list) != 0 {
+		t.Errorf("other organization: %+v, want no alerts (no correlation across organizations)", list)
 	}
 }

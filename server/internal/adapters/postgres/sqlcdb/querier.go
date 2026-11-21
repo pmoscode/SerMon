@@ -139,6 +139,10 @@ type Querier interface {
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
+	// The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
+	// received first. The bounds on occurred_at only prune partitions: min_occurred lies the oldest
+	// age the ingest accepts (secevent.MaxAge) and a margin before since; it takes 5 min ahead.
+	ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecurityEventsParams) ([]ReceivedSecurityEventsRow, error)
 	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
 	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)

@@ -21,6 +21,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -43,12 +44,16 @@ type Querier interface {
 	Query(ctx context.Context, scope tenant.Scope, q metrics.Query) ([]metrics.Series, error)
 }
 
-// Env is what an evaluator sees: the organization's scope, its nodes, the time and the metrics.
+// Env is what an evaluator sees: the organization's scope, its nodes, the time, the metrics and
+// the security events, and the rule's open instances.
 type Env struct {
 	Scope   tenant.Scope
 	Nodes   []fleet.Node
 	Now     time.Time
 	Metrics Querier
+	Events  EventReader
+	// Open are the stored instances of the rule: event rules report those without events as zero.
+	Open []alert.Key
 }
 
 // Evaluator evaluates one rule for the nodes of an organization (the rule types, M2-03).
@@ -109,6 +114,8 @@ type Sink interface {
 // Stats are counters for the server's own metrics.
 type Stats struct {
 	Rounds, Evaluations, Transitions, RuleErrors, OrgErrors atomic.Uint64
+	// EventReadsTruncated counts reads of an event rule that hit MaxEventsRead (a flood).
+	EventReadsTruncated atomic.Uint64
 }
 
 // Deps are the engine's collaborators. Holder identifies this server instance (random if empty).
@@ -117,6 +124,7 @@ type Deps struct {
 	Rules   RuleSource
 	Nodes   fleet.Directory
 	Metrics Querier
+	Events  EventReader
 	Sink    Sink
 	Now     func() time.Time
 	Holder  string
@@ -205,7 +213,14 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 		instances[loaded[i].Key] = &loaded[i]
 	}
 
+	open := map[alert.RuleID][]alert.Key{}
+	for _, key := range slices.SortedFunc(maps.Keys(instances), compareKeys) {
+		open[key.Rule] = append(open[key.Rule], key)
+	}
 	env := Env{Scope: scope, Nodes: nodes, Now: now, Metrics: e.d.Metrics}
+	if e.d.Events != nil {
+		env.Events = &roundEvents{reader: e.d.Events, stats: &e.stats, cache: map[string][]secevent.Event{}}
+	}
 	var changed []alert.Instance
 	var removed []alert.Key
 	var history []Record
@@ -213,6 +228,7 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 	for _, rule := range rules {
 		ruleEnv := env
 		ruleEnv.Nodes = rule.nodes(nodes)
+		ruleEnv.Open = open[rule.ID]
 		applies[rule.ID] = make(map[identity.NodeID]bool, len(ruleEnv.Nodes))
 		for _, n := range ruleEnv.Nodes {
 			applies[rule.ID][n.ID] = true
@@ -268,6 +284,34 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 		e.d.Sink.Deliver(ctx, org, history)
 	}
 	return nil
+}
+
+// roundEvents reads the events of one organization's round: rules on the same kind and window
+// share one query.
+type roundEvents struct {
+	reader EventReader
+	stats  *Stats
+	cache  map[string][]secevent.Event
+}
+
+func (r *roundEvents) Received(ctx context.Context, scope tenant.Scope, q EventQuery) ([]secevent.Event, error) {
+	ids := make([]string, len(q.Nodes))
+	for i, n := range q.Nodes {
+		ids[i] = n.String()
+	}
+	key := fmt.Sprint(scope.OrgID(), q.Kind, q.Since.UnixNano(), q.Limit, ids)
+	events, ok := r.cache[key]
+	if !ok {
+		var err error
+		if events, err = r.reader.Received(ctx, scope, q); err != nil {
+			return nil, err //nolint:wrapcheck // the rule wraps it
+		}
+		r.cache[key] = events
+	}
+	if len(events) >= q.Limit {
+		r.stats.EventReadsTruncated.Add(1)
+	}
+	return events, nil
 }
 
 func compareKeys(a, b alert.Key) int {

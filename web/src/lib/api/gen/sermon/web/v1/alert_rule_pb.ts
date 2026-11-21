@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/alert_rule.proto.
  */
 export const file_sermon_web_v1_alert_rule: GenFile = /*@__PURE__*/
-  fileDesc("Ch5zZXJtb24vd2ViL3YxL2FsZXJ0X3J1bGUucHJvdG8SDXNlcm1vbi53ZWIudjEijgEKCUFsZXJ0UnVsZRITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjIKCG1ldGFkYXRhGAMgASgLMiAuc2VybW9uLndlYi52MS5BbGVydFJ1bGVNZXRhZGF0YRIqCgRzcGVjGAQgASgLMhwuc2VybW9uLndlYi52MS5BbGVydFJ1bGVTcGVjIrgBChFBbGVydFJ1bGVNZXRhZGF0YRIKCgJpZBgBIAEoCRIqCgRuYW1lGAIgASgLMhwuc2VybW9uLndlYi52MS5Mb2NhbGl6ZWRUZXh0EjwKBmxhYmVscxgDIAMoCzIsLnNlcm1vbi53ZWIudjEuQWxlcnRSdWxlTWV0YWRhdGEuTGFiZWxzRW50cnkaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASInCg1Mb2NhbGl6ZWRUZXh0EgoKAmRlGAEgASgJEgoKAmVuGAIgASgJIoEGCg1BbGVydFJ1bGVTcGVjEgwKBHR5cGUYASABKAkSDgoGbWV0cmljGAIgASgJEjgKBmxhYmVscxgDIAMoCzIoLnNlcm1vbi53ZWIudjEuQWxlcnRSdWxlU3BlYy5MYWJlbHNFbnRyeRISCgpkaW1lbnNpb25zGAQgAygJEjoKB2V4Y2x1ZGUYBSADKAsyKS5zZXJtb24ud2ViLnYxLkFsZXJ0UnVsZVNwZWMuRXhjbHVkZUVudHJ5EhEKCWFnZ3JlZ2F0ZRgGIAEoCRIOCgZ3aW5kb3cYByABKAkSLgoHd2FybmluZxgIIAEoCzIdLnNlcm1vbi53ZWIudjEuQWxlcnRDb25kaXRpb24SLwoIY3JpdGljYWwYCSABKAsyHS5zZXJtb24ud2ViLnYxLkFsZXJ0Q29uZGl0aW9uEiwKBWNsZWFyGAogASgLMh0uc2VybW9uLndlYi52MS5BbGVydENvbmRpdGlvbhIZCgxmb3JfZHVyYXRpb24YCyABKAlSA2ZvchILCgNwZXIYDCABKAkSEwoLcmVsYXRpdmVfdG8YDSABKAkSKwoEc2VlbhgOIAEoCzIdLnNlcm1vbi53ZWIudjEuQWxlcnRDb25kaXRpb24SEwoLc2Vlbl93aW5kb3cYDyABKAkSEAoIbG9va2JhY2sYECABKAkSLgoIZmxhcHBpbmcYESABKAsyHC5zZXJtb24ud2ViLnYxLkFsZXJ0RmxhcHBpbmcSLgoIc2VsZWN0b3IYEiABKAsyHC5zZXJtb24ud2ViLnYxLkFsZXJ0U2VsZWN0b3ISKgoEaGVscBgTIAEoCzIcLnNlcm1vbi53ZWIudjEuTG9jYWxpemVkVGV4dBotCgtMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBGkoKDEV4Y2x1ZGVFbnRyeRILCgNrZXkYASABKAkSKQoFdmFsdWUYAiABKAsyGi5nb29nbGUucHJvdG9idWYuTGlzdFZhbHVlOgI4ASIrCg5BbGVydENvbmRpdGlvbhIKCgJvcBgBIAEoCRINCgV2YWx1ZRgCIAEoASIwCg1BbGVydEZsYXBwaW5nEg8KB2NoYW5nZXMYASABKAUSDgoGd2luZG93GAIgASgJIh8KDUFsZXJ0U2VsZWN0b3ISDgoGZ3JvdXBzGAEgAygJQr0BChFjb20uc2VybW9uLndlYi52MUIOQWxlcnRSdWxlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_struct]);
+  fileDesc("Ch5zZXJtb24vd2ViL3YxL2FsZXJ0X3J1bGUucHJvdG8SDXNlcm1vbi53ZWIudjEijgEKCUFsZXJ0UnVsZRITCgthcGlfdmVyc2lvbhgBIAEoCRIMCgRraW5kGAIgASgJEjIKCG1ldGFkYXRhGAMgASgLMiAuc2VybW9uLndlYi52MS5BbGVydFJ1bGVNZXRhZGF0YRIqCgRzcGVjGAQgASgLMhwuc2VybW9uLndlYi52MS5BbGVydFJ1bGVTcGVjIrgBChFBbGVydFJ1bGVNZXRhZGF0YRIKCgJpZBgBIAEoCRIqCgRuYW1lGAIgASgLMhwuc2VybW9uLndlYi52MS5Mb2NhbGl6ZWRUZXh0EjwKBmxhYmVscxgDIAMoCzIsLnNlcm1vbi53ZWIudjEuQWxlcnRSdWxlTWV0YWRhdGEuTGFiZWxzRW50cnkaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASInCg1Mb2NhbGl6ZWRUZXh0EgoKAmRlGAEgASgJEgoKAmVuGAIgASgJIv0HCg1BbGVydFJ1bGVTcGVjEgwKBHR5cGUYASABKAkSDgoGbWV0cmljGAIgASgJEjgKBmxhYmVscxgDIAMoCzIoLnNlcm1vbi53ZWIudjEuQWxlcnRSdWxlU3BlYy5MYWJlbHNFbnRyeRISCgpkaW1lbnNpb25zGAQgAygJEjoKB2V4Y2x1ZGUYBSADKAsyKS5zZXJtb24ud2ViLnYxLkFsZXJ0UnVsZVNwZWMuRXhjbHVkZUVudHJ5EhEKCWFnZ3JlZ2F0ZRgGIAEoCRIOCgZ3aW5kb3cYByABKAkSLgoHd2FybmluZxgIIAEoCzIdLnNlcm1vbi53ZWIudjEuQWxlcnRDb25kaXRpb24SLwoIY3JpdGljYWwYCSABKAsyHS5zZXJtb24ud2ViLnYxLkFsZXJ0Q29uZGl0aW9uEiwKBWNsZWFyGAogASgLMh0uc2VybW9uLndlYi52MS5BbGVydENvbmRpdGlvbhIZCgxmb3JfZHVyYXRpb24YCyABKAlSA2ZvchILCgNwZXIYDCABKAkSEwoLcmVsYXRpdmVfdG8YDSABKAkSKwoEc2VlbhgOIAEoCzIdLnNlcm1vbi53ZWIudjEuQWxlcnRDb25kaXRpb24SEwoLc2Vlbl93aW5kb3cYDyABKAkSEAoIbG9va2JhY2sYECABKAkSLgoIZmxhcHBpbmcYESABKAsyHC5zZXJtb24ud2ViLnYxLkFsZXJ0RmxhcHBpbmcSLgoIc2VsZWN0b3IYEiABKAsyHC5zZXJtb24ud2ViLnYxLkFsZXJ0U2VsZWN0b3ISKgoEaGVscBgTIAEoCzIcLnNlcm1vbi53ZWIudjEuTG9jYWxpemVkVGV4dBINCgVldmVudBgUIAEoCRI2CgVtYXRjaBgVIAMoCzInLnNlcm1vbi53ZWIudjEuQWxlcnRSdWxlU3BlYy5NYXRjaEVudHJ5EhAKCGdyb3VwX2J5GBYgAygJEi0KBWNvdW50GBcgASgLMh4uc2VybW9uLndlYi52MS5BbGVydEV2ZW50Q291bnQSLQoFYWZ0ZXIYGCABKAsyHi5zZXJtb24ud2ViLnYxLkFsZXJ0RXZlbnRBZnRlchIVCg1ub3RpZnlfZmllbGRzGBkgAygJGi0KC0xhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEaSgoMRXhjbHVkZUVudHJ5EgsKA2tleRgBIAEoCRIpCgV2YWx1ZRgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5MaXN0VmFsdWU6AjgBGiwKCk1hdGNoRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASJQCg9BbGVydEV2ZW50Q291bnQSDgoGd2luZG93GAEgASgJEg8KB3dhcm5pbmcYAiABKAUSEAoIY3JpdGljYWwYAyABKAUSCgoCb2YYBCABKAkiPwoPQWxlcnRFdmVudEFmdGVyEg0KBWV2ZW50GAEgASgJEg0KBWNvdW50GAIgASgFEg4KBndpbmRvdxgDIAEoCSIrCg5BbGVydENvbmRpdGlvbhIKCgJvcBgBIAEoCRINCgV2YWx1ZRgCIAEoASIwCg1BbGVydEZsYXBwaW5nEg8KB2NoYW5nZXMYASABKAUSDgoGd2luZG93GAIgASgJIh8KDUFsZXJ0U2VsZWN0b3ISDgoGZ3JvdXBzGAEgAygJQr0BChFjb20uc2VybW9uLndlYi52MUIOQWxlcnRSdWxlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_struct]);
 
 /**
  * AlertRule is an alert rule as written in YAML (rules/**\/*.yaml, KONZEPT §12.2, M2-04) and
@@ -128,7 +128,7 @@ export const LocalizedTextSchema: GenMessage<LocalizedText> = /*@__PURE__*/
  */
 export type AlertRuleSpec = Message<"sermon.web.v1.AlertRuleSpec"> & {
   /**
-   * type is threshold, rate, absence, state or prediction (event follows with M2-08).
+   * type is threshold, rate, absence, state, prediction or event.
    *
    * @generated from field: string type = 1;
    */
@@ -260,6 +260,49 @@ export type AlertRuleSpec = Message<"sermon.web.v1.AlertRuleSpec"> & {
    * @generated from field: sermon.web.v1.LocalizedText help = 19;
    */
   help?: LocalizedText | undefined;
+
+  /**
+   * event is the security event kind an event rule counts, e.g. ssh.login.failed.
+   *
+   * @generated from field: string event = 20;
+   */
+  event: string;
+
+  /**
+   * match keeps only events with these field values, e.g. user: root (event).
+   *
+   * @generated from field: map<string, string> match = 21;
+   */
+  match: { [key: string]: string };
+
+  /**
+   * group_by splits an event rule into one instance per ip or user (per node); YAML key "groupBy".
+   *
+   * @generated from field: repeated string group_by = 22;
+   */
+  groupBy: string[];
+
+  /**
+   * count is what an event rule counts and the levels it compares with.
+   *
+   * @generated from field: sermon.web.v1.AlertEventCount count = 23;
+   */
+  count?: AlertEventCount | undefined;
+
+  /**
+   * after makes an event count only if other events preceded it (event).
+   *
+   * @generated from field: sermon.web.v1.AlertEventAfter after = 24;
+   */
+  after?: AlertEventAfter | undefined;
+
+  /**
+   * notify_fields are the event fields a notification shows, e.g. [ts, user, ip, port]; YAML key
+   * "notifyFields".
+   *
+   * @generated from field: repeated string notify_fields = 25;
+   */
+  notifyFields: string[];
 };
 
 /**
@@ -268,6 +311,86 @@ export type AlertRuleSpec = Message<"sermon.web.v1.AlertRuleSpec"> & {
  */
 export const AlertRuleSpecSchema: GenMessage<AlertRuleSpec> = /*@__PURE__*/
   messageDesc(file_sermon_web_v1_alert_rule, 3);
+
+/**
+ * AlertEventCount is the count of an event rule: at least warning or critical events (or nodes)
+ * within window.
+ *
+ * @generated from message sermon.web.v1.AlertEventCount
+ */
+export type AlertEventCount = Message<"sermon.web.v1.AlertEventCount"> & {
+  /**
+   * window is the time the events lie within, e.g. 5m.
+   *
+   * @generated from field: string window = 1;
+   */
+  window: string;
+
+  /**
+   * warning is the count for a warning; 0: none.
+   *
+   * @generated from field: int32 warning = 2;
+   */
+  warning: number;
+
+  /**
+   * critical is the count for a critical alert; 0: none.
+   *
+   * @generated from field: int32 critical = 3;
+   */
+  critical: number;
+
+  /**
+   * of is events (the default: per node) or nodes (how many nodes see the same groupBy values,
+   * fleet correlation).
+   *
+   * @generated from field: string of = 4;
+   */
+  of: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.AlertEventCount.
+ * Use `create(AlertEventCountSchema)` to create a new message.
+ */
+export const AlertEventCountSchema: GenMessage<AlertEventCount> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_alert_rule, 4);
+
+/**
+ * AlertEventAfter is what must precede a counted event: at least count events of the kind event
+ * on the same node with the same groupBy values within window before it.
+ *
+ * @generated from message sermon.web.v1.AlertEventAfter
+ */
+export type AlertEventAfter = Message<"sermon.web.v1.AlertEventAfter"> & {
+  /**
+   * event is the preceding kind, e.g. ssh.login.failed.
+   *
+   * @generated from field: string event = 1;
+   */
+  event: string;
+
+  /**
+   * count is how many must precede.
+   *
+   * @generated from field: int32 count = 2;
+   */
+  count: number;
+
+  /**
+   * window is how long before the counted event they may lie, e.g. 1h.
+   *
+   * @generated from field: string window = 3;
+   */
+  window: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.AlertEventAfter.
+ * Use `create(AlertEventAfterSchema)` to create a new message.
+ */
+export const AlertEventAfterSchema: GenMessage<AlertEventAfter> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_alert_rule, 5);
 
 /**
  * AlertCondition compares a value with a threshold.
@@ -295,7 +418,7 @@ export type AlertCondition = Message<"sermon.web.v1.AlertCondition"> & {
  * Use `create(AlertConditionSchema)` to create a new message.
  */
 export const AlertConditionSchema: GenMessage<AlertCondition> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_alert_rule, 4);
+  messageDesc(file_sermon_web_v1_alert_rule, 6);
 
 /**
  * AlertFlapping limits changes between firing and resolved.
@@ -323,7 +446,7 @@ export type AlertFlapping = Message<"sermon.web.v1.AlertFlapping"> & {
  * Use `create(AlertFlappingSchema)` to create a new message.
  */
 export const AlertFlappingSchema: GenMessage<AlertFlapping> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_alert_rule, 5);
+  messageDesc(file_sermon_web_v1_alert_rule, 7);
 
 /**
  * AlertSelector limits a rule to node groups.
@@ -344,5 +467,5 @@ export type AlertSelector = Message<"sermon.web.v1.AlertSelector"> & {
  * Use `create(AlertSelectorSchema)` to create a new message.
  */
 export const AlertSelectorSchema: GenMessage<AlertSelector> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_alert_rule, 6);
+  messageDesc(file_sermon_web_v1_alert_rule, 8);
 

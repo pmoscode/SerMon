@@ -63,3 +63,31 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   fehlschlägt, behält ihre Alerts.
 - **Last:** Fenster über 1 h lesen mit grobem Schritt (24 h → 5 min) aus dem 1-min-Aggregat statt aus den Rohdaten.
   Zustandsregeln holen den aktuellen Wert getrennt aus den letzten 5 min.
+
+## Nachtrag M2-08: Event-Regeln
+
+- **Lesen statt Strom:** Ingest und Auswertung einer Org laufen auf verschiedenen Instanzen (M2-07). Jede Runde liest
+  deshalb die Events, die im Zählfenster **angekommen** sind (`received_at`, Index `(org_id, received_at, id)`), und
+  zählt sie nach ihrer **Entstehung** (`occurred_at`): das Maximum an Events innerhalb eines Fensters (halb offen).
+  Ein Cursor wurde verworfen; er bräuchte Zustand im Speicher, der bei der Übernahme des Leases verloren geht, und
+  wegen der Commit-Reihenfolge einen Abstand zu `now()`. Das gleitende Fenster liest jedes Event mehrfach, ist aber
+  zustandslos.
+  - Ein Rückstau nach einem Ausfall des Agents löst beim Eintreffen aus, wenn er einen Burst enthält; ein Tag
+    verstreuter Fehlversuche, der auf einmal ankommt, löst nicht aus.
+  - Ein Alert hält, solange die Zahl im Fenster reicht, und löst sich danach. Das Fenster ersetzt `clear`.
+- **Instanzen:** Regel × Node × `groupBy` (`ip`, `user`). **IPv6-Adressen zählen pro /64**, sonst entgeht ein
+  Angreifer der Schwelle, indem er Adressen in seinem Netz rotiert. Für die Fleet-Korrelation (`count.of: nodes`)
+  bekommt jeder beteiligte Node eine Instanz; eine Org-Instanz ohne Node hätte das Schema (Fremdschlüssel auf
+  `nodes`) und die Node-Ansicht gebrochen. Die Korrelation sieht nur die Nodes der eigenen Org (RLS).
+- **Offene Instanzen ohne Events** meldet die Regel als 0, dafür bekommt sie die offenen Instanzen der Engine.
+- **Grenzen gegen Fluten:** höchstens 50 000 Events pro Abfrage (die neuesten), höchstens 100 Instanzen pro Regel und
+  Runde (die höchsten Zahlen zuerst). Bei einer Kappung behalten offene Instanzen ihren Zustand, statt auf einer
+  unvollständigen Zahl zu enden. Zähler `sermon_server_alert_event_reads_truncated_total`. Regeln derselben Art und
+  desselben Fensters teilen sich eine Abfrage pro Runde.
+- **Felder:** `notifyFields` kopiert Felder des neuesten Events (`ts`, `user`, `ip`, `port`, …) in die Transition und
+  die Instanz, gespeichert als `fields` (jsonb, Migration 00023). Die Werte wählt ein Angreifer: Steuerzeichen werden
+  zu U+FFFD, jeder Wert endet nach 256 Bytes. Dasselbe gilt für Dimensionen aus User-Namen.
+- **Neue Felder im Schema:** `event`, `match` (nur gleich, z. B. `user: root`), `groupBy`, `count` (`window`,
+  `warning`, `critical`, `of`), `after` (vorausgehende Events: Art, Anzahl, Fenster; gleicher Node und gleiche
+  `groupBy`-Werte) und `notifyFields`. Welche Felder eine Art hat, legt `secevent.FieldsOf` fest; der Loader prüft
+  dagegen.

@@ -128,6 +128,78 @@ func (q *Queries) LockNodeEventSeq(ctx context.Context, nodeID uuid.UUID) (int64
 	return event_seq, err
 }
 
+const receivedSecurityEvents = `-- name: ReceivedSecurityEvents :many
+SELECT e.id, e.node_id, e.occurred_at, e.received_at, e.kind, e.user_name, e.remote_ip, e.remote_host,
+       e.remote_port, e.details
+FROM security_events e
+WHERE e.kind = $1 AND e.node_id = ANY ($2::uuid[])
+  AND e.received_at >= $3
+  AND e.occurred_at >= $4 AND e.occurred_at < now() + interval '1 hour'
+ORDER BY e.received_at DESC, e.id DESC
+LIMIT $5
+`
+
+type ReceivedSecurityEventsParams struct {
+	Kind        string
+	NodeIds     []uuid.UUID
+	Since       time.Time
+	MinOccurred time.Time
+	MaxRows     int32
+}
+
+type ReceivedSecurityEventsRow struct {
+	ID         int64
+	NodeID     uuid.UUID
+	OccurredAt time.Time
+	ReceivedAt time.Time
+	Kind       string
+	UserName   pgtype.Text
+	RemoteIp   *netip.Addr
+	RemoteHost pgtype.Text
+	RemotePort pgtype.Int4
+	Details    []byte
+}
+
+// The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
+// received first. The bounds on occurred_at only prune partitions: min_occurred lies the oldest
+// age the ingest accepts (secevent.MaxAge) and a margin before since; it takes 5 min ahead.
+func (q *Queries) ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecurityEventsParams) ([]ReceivedSecurityEventsRow, error) {
+	rows, err := q.db.Query(ctx, receivedSecurityEvents,
+		arg.Kind,
+		arg.NodeIds,
+		arg.Since,
+		arg.MinOccurred,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReceivedSecurityEventsRow{}
+	for rows.Next() {
+		var i ReceivedSecurityEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.NodeID,
+			&i.OccurredAt,
+			&i.ReceivedAt,
+			&i.Kind,
+			&i.UserName,
+			&i.RemoteIp,
+			&i.RemoteHost,
+			&i.RemotePort,
+			&i.Details,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const securityEventHorizon = `-- name: SecurityEventHorizon :one
 SELECT coalesce(security_events_horizon(), '-infinity'::timestamptz)::timestamptz AS horizon
 `

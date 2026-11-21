@@ -28,6 +28,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 )
@@ -184,16 +185,19 @@ func FromDocument(doc *webv1.AlertRule) (Definition, error) {
 	return Definition{Doc: doc, Rule: alerting.Rule{ID: id, Timing: timing, Groups: groups, Evaluator: evaluator}}, nil
 }
 
-// Fields of the spec by rule type (YAML names in the errors).
+// Fields of the spec by rule type (YAML names in the errors). Event rules count instead of
+// comparing with conditions.
 var (
-	commonFields = []protoreflect.Name{"type", "warning", "critical", "clear", "for_duration", "flapping", "selector", "help"}
-	seriesFields = []protoreflect.Name{"metric", "labels", "dimensions", "exclude"}
-	typeFields   = map[alert.Type][]protoreflect.Name{
+	commonFields    = []protoreflect.Name{"type", "for_duration", "flapping", "selector", "help"}
+	conditionFields = []protoreflect.Name{"warning", "critical", "clear"}
+	seriesFields    = append(slices.Clone(conditionFields), "metric", "labels", "dimensions", "exclude")
+	typeFields      = map[alert.Type][]protoreflect.Name{
 		alert.Threshold:  append(slices.Clone(seriesFields), "aggregate", "window", "relative_to"),
 		alert.Rate:       append(slices.Clone(seriesFields), "window", "per", "relative_to"),
-		alert.Absence:    nil,
+		alert.Absence:    conditionFields,
 		alert.StateRule:  append(slices.Clone(seriesFields), "seen", "seen_window"),
 		alert.Prediction: append(slices.Clone(seriesFields), "lookback"),
+		alert.Event:      {"event", "match", "group_by", "count", "after", "notify_fields"},
 	}
 )
 
@@ -328,6 +332,8 @@ func evaluatorOf(typ alert.Type, spec *webv1.AlertRuleSpec, th alert.Thresholds)
 		return nil, err
 	}
 	switch typ { //nolint:exhaustive // onlyFieldsOf rejects the types not supported yet
+	case alert.Event:
+		return eventOf(spec)
 	case alert.Threshold:
 		return alerting.ThresholdRule{Series: series, RelativeTo: spec.GetRelativeTo(), Aggregate: aggregates[spec.GetAggregate()], Window: window, Thresholds: th}, nil
 	case alert.Rate:
@@ -352,6 +358,32 @@ func evaluatorOf(typ alert.Type, spec *webv1.AlertRuleSpec, th alert.Thresholds)
 		return alerting.PredictionRule{Series: series, Lookback: lookback, Thresholds: th}, nil
 	}
 	return nil, invalid("type %s is not supported yet", typ)
+}
+
+func eventOf(spec *webv1.AlertRuleSpec) (validEvaluator, error) {
+	count := spec.GetCount()
+	window, err := duration("count.window", count.GetWindow())
+	if err != nil {
+		return nil, err
+	}
+	rule := alerting.EventRule{
+		Kind: secevent.Kind(spec.GetEvent()), GroupBy: spec.GetGroupBy(), Window: window,
+		Warning: int(count.GetWarning()), Critical: int(count.GetCritical()), NotifyFields: spec.GetNotifyFields(),
+	}
+	if len(spec.GetMatch()) > 0 {
+		rule.Match = spec.GetMatch()
+	}
+	if count.GetOf() == "nodes" {
+		rule.Count = alerting.CountNodes
+	}
+	if a := spec.GetAfter(); a != nil {
+		aw, err := duration("after.window", a.GetWindow())
+		if err != nil {
+			return nil, err
+		}
+		rule.After = &alerting.EventCondition{Kind: secevent.Kind(a.GetEvent()), Count: int(a.GetCount()), Window: aw}
+	}
+	return rule, nil
 }
 
 // checkUnits catches thresholds in the wrong unit: ratios (and relative values) are 0..1, not

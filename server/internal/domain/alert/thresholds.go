@@ -101,7 +101,12 @@ type Observation struct {
 	Cleared bool // the value meets the clear condition (a firing alert resolves)
 	Value   float64
 	NoData  bool // nothing to evaluate: the instance keeps its state
+	// Fields describe what was seen (event rules: user, IP, port of the latest event).
+	Fields Fields
 }
+
+// Fields are named values for notifications, e.g. user, ip and port of a security event.
+type Fields map[string]string
 
 // Evaluate classifies a value; NaN means no data.
 func (t Thresholds) Evaluate(v float64) Observation {

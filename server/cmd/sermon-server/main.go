@@ -153,7 +153,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		registerIngestMetrics(registry, ingestService.Stats(), sessions)
 		servers = append(servers, pruneRing(ring))
 		// Alert engine (M2-02): evaluates the rules of the organizations this instance leases – the
-		// shipped defaults with each organization's overrides (M2-04).
+		// shipped defaults with each organization's overrides (M2-04), over metrics and the stored
+		// security events (M2-08).
 		defaultRules, err := ruleset.Defaults()
 		if err != nil {
 			return fmt.Errorf("default alert rules: %w", err)
@@ -161,7 +162,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		engine := alerting.NewEngine(alerting.Deps{
 			Store: postgres.NewAlertStore(db), Rules: ruleset.NewSource(defaultRules, postgres.NewAlertRuleStore(db), logger),
 			Nodes:   postgres.NewFleetStore(db),
-			Metrics: reader, Now: time.Now, Logger: logger,
+			Metrics: reader, Events: eventStore, Now: time.Now, Logger: logger,
 		})
 		registerAlertMetrics(registry, engine.Stats())
 		servers = append(servers, engine.Run)

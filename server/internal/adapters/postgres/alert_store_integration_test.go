@@ -26,8 +26,9 @@ func firingInstance(node uuid.UUID) alert.Instance {
 	return alert.Instance{
 		Key:   alert.Key{Rule: "system.disk.usage_high", Node: identity.NodeID(node), Dimension: "mountpoint=/var\x1f"},
 		State: alert.StateCritical, Since: at.Add(time.Minute), FiredAt: at, Flapping: true, Value: 0.97,
-		Ack:   &alert.Ack{By: identity.UserID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000a1")), At: at.Add(2 * time.Minute)},
-		Flips: []time.Time{at, at.Add(30 * time.Second)},
+		Ack:    &alert.Ack{By: identity.UserID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000a1")), At: at.Add(2 * time.Minute)},
+		Flips:  []time.Time{at, at.Add(30 * time.Second)},
+		Fields: alert.Fields{"user": "root", "ip": "192.0.2.7"},
 	}
 }
 
@@ -38,7 +39,7 @@ func TestAlertStore_SavesAndLoadsInstancesWithTheirHistory(t *testing.T) {
 	createNode(t, f.db.OwnerDSN, orgA, node)
 	store := postgres.NewAlertStore(open(t, f.appDSN))
 	inst := firingInstance(node)
-	record := alerting.Record{Key: inst.Key, Transition: alert.Transition{Kind: alert.StateChanged, From: alert.StateWarning, To: alert.StateCritical, At: inst.Since, Value: 0.97}}
+	record := alerting.Record{Key: inst.Key, Transition: alert.Transition{Kind: alert.StateChanged, From: alert.StateWarning, To: alert.StateCritical, At: inst.Since, Value: 0.97, Fields: inst.Fields}}
 
 	if err := store.Save(ctx, scopeFor(t, orgA), []alert.Instance{inst}, nil, []alerting.Record{record}); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -55,16 +56,17 @@ func TestAlertStore_SavesAndLoadsInstancesWithTheirHistory(t *testing.T) {
 	}
 	if got == nil || got.State != inst.State || !got.Since.Equal(inst.Since) || !got.FiredAt.Equal(inst.FiredAt) ||
 		!got.PendingSince.IsZero() || got.Ack == nil || got.Ack.By != inst.Ack.By || !got.Flapping || got.Value != 0.97 ||
-		len(got.Flips) != 2 || got.Check() != "" {
+		len(got.Flips) != 2 || got.Check() != "" || got.Fields["user"] != "root" || got.Fields["ip"] != "192.0.2.7" {
 		t.Fatalf("loaded %+v, want %+v", got, inst)
 	}
 	history, err := store.History(ctx, scopeFor(t, orgA), inst.Key, 10)
-	if err != nil || len(history) != 1 || history[0].Transition.To != alert.StateCritical || history[0].Transition.Value != 0.97 {
+	if err != nil || len(history) != 1 || history[0].Transition.To != alert.StateCritical || history[0].Transition.Value != 0.97 ||
+		history[0].Transition.Fields["ip"] != "192.0.2.7" {
 		t.Errorf("History() = %+v, %v", history, err)
 	}
 
-	// Update and remove.
-	inst.State, inst.Ack = alert.StateWarning, nil
+	// Update and remove; metric rules have no fields.
+	inst.State, inst.Ack, inst.Fields = alert.StateWarning, nil, nil
 	if err := store.Save(ctx, scopeFor(t, orgA), []alert.Instance{inst}, nil, nil); err != nil {
 		t.Fatal(err)
 	}

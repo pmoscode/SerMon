@@ -80,6 +80,7 @@ type Transition struct {
 	At       time.Time
 	Value    float64
 	By       identity.UserID // Acknowledged
+	Fields   Fields          // of the observation that caused it, or the instance's
 }
 
 // Ack records who acknowledged a firing alert.
@@ -98,6 +99,7 @@ type Instance struct {
 	Ack          *Ack      // set while firing and acknowledged
 	Flapping     bool
 	Value        float64     // of the latest observation
+	Fields       Fields      // of the observation behind the last state change
 	Flips        []time.Time // recent changes between firing and resolved, newest last
 }
 
@@ -115,7 +117,8 @@ func (i *Instance) Observe(o Observation, at time.Time, t Timing) []Transition {
 	i.Value = o.Value
 	var out []Transition
 	move := func(to State) {
-		out = append(out, Transition{Kind: StateChanged, From: i.State, To: to, At: at, Value: o.Value})
+		out = append(out, Transition{Kind: StateChanged, From: i.State, To: to, At: at, Value: o.Value, Fields: o.Fields})
+		i.Fields = o.Fields
 		wasFiring := i.State.Firing()
 		if to.Firing() && !wasFiring || to == StateResolved {
 			i.Flips = append(i.Flips, at)
@@ -196,7 +199,7 @@ func (i *Instance) updateFlapping(at time.Time, f Flapping) []Transition {
 	if flapping {
 		kind = FlappingStarted
 	}
-	return []Transition{{Kind: kind, From: i.State, To: i.State, At: at, Value: i.Value}}
+	return []Transition{{Kind: kind, From: i.State, To: i.State, At: at, Value: i.Value, Fields: i.Fields}}
 }
 
 // Retire ends the instance because its rule no longer applies to it (disabled, removed, node
@@ -212,7 +215,7 @@ func (i *Instance) Retire(at time.Time) []Transition {
 	default:
 		return nil
 	}
-	t := Transition{Kind: StateChanged, From: i.State, To: to, At: at, Value: i.Value}
+	t := Transition{Kind: StateChanged, From: i.State, To: to, At: at, Value: i.Value, Fields: i.Fields}
 	i.State, i.Since = to, at
 	i.PendingSince, i.FiredAt, i.Ack = time.Time{}, time.Time{}, nil
 	return []Transition{t}
@@ -224,7 +227,7 @@ func (i *Instance) Acknowledge(by identity.UserID, at time.Time) (Transition, er
 		return Transition{}, ErrNotFiring
 	}
 	i.Ack = &Ack{By: by, At: at}
-	return Transition{Kind: Acknowledged, From: i.State, To: i.State, At: at, Value: i.Value, By: by}, nil
+	return Transition{Kind: Acknowledged, From: i.State, To: i.State, At: at, Value: i.Value, By: by, Fields: i.Fields}, nil
 }
 
 // Check returns a description of the first broken invariant, "" if the instance is consistent

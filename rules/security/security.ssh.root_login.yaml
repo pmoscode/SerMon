@@ -1,0 +1,24 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.ssh.root_login
+  name: { de: "Root-Anmeldung per SSH", en: "Root login over SSH" }
+  labels: { category: security }
+spec:
+  type: event
+  event: ssh.login.success
+  match: { user: root }
+  groupBy: [ ip ]
+  count: { window: 15m, warning: 1 }
+  notifyFields: [ ts, ip, port, method, key_fingerprint ]
+  help:
+    de: >-
+      Jemand hat sich per SSH direkt als root angemeldet. Das umgeht die Nachvollziehbarkeit persönlicher Konten
+      und sudo. Prüfe, ob die Anmeldung erwartet war (Adresse, Schlüssel). Besser ist PermitRootLogin no in der
+      sshd_config und die Arbeit über persönliche Konten mit sudo; wenn root per Schlüssel nötig bleibt, schalte
+      diese Regel für die betroffene Gruppe ab.
+    en: >-
+      Someone logged in over SSH as root directly. This bypasses the traceability of personal accounts and sudo.
+      Check whether the login was expected (address, key). Better is PermitRootLogin no in sshd_config and working
+      through personal accounts with sudo; if root by key remains necessary, switch this rule off for the group
+      concerned.

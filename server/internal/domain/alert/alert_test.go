@@ -305,3 +305,26 @@ func TestRetire_EndsTheInstance(t *testing.T) {
 		}
 	}
 }
+
+// Event rules hand the fields of the latest event (user, IP, port) to the transitions; the
+// instance keeps those of its last change.
+func TestObserve_CarriesTheFieldsOfTheObservation(t *testing.T) {
+	inst := alert.NewInstance(alert.Key{Rule: "security.ssh.bruteforce", Dimension: "ip=192.0.2.7"}, t0)
+	first := alert.Fields{"ip": "192.0.2.7", "user": "root"}
+	moves := inst.Observe(alert.Observation{Level: alert.LevelWarning, Value: 12, Fields: first}, t0, alert.Timing{Flapping: alert.DefaultFlapping})
+	if len(moves) != 1 || moves[0].Fields["user"] != "root" || inst.Fields["ip"] != "192.0.2.7" {
+		t.Fatalf("fire: %+v, instance fields %v", moves, inst.Fields)
+	}
+	// No change, no new fields: they are those of the last transition.
+	inst.Observe(alert.Observation{Level: alert.LevelWarning, Value: 14, Fields: alert.Fields{"user": "admin"}}, t0.Add(10*time.Second), alert.Timing{Flapping: alert.DefaultFlapping})
+	if inst.Fields["user"] != "root" {
+		t.Errorf("fields changed without a transition: %v", inst.Fields)
+	}
+	moves = inst.Observe(alert.Observation{Level: alert.LevelCritical, Value: 60, Fields: alert.Fields{"user": "oracle"}}, t0.Add(20*time.Second), alert.Timing{Flapping: alert.DefaultFlapping})
+	if len(moves) != 1 || moves[0].Fields["user"] != "oracle" || inst.Fields["user"] != "oracle" {
+		t.Errorf("escalation: %+v, instance fields %v", moves, inst.Fields)
+	}
+	if retired := inst.Retire(t0.Add(time.Minute)); len(retired) != 1 || retired[0].Fields["user"] != "oracle" {
+		t.Errorf("retire: %+v", retired)
+	}
+}

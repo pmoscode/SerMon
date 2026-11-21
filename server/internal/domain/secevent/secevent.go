@@ -53,6 +53,10 @@ func ParseKind(name string) (Kind, error) {
 	return "", fmt.Errorf("%w: unknown kind %q", ErrInvalid, name)
 }
 
+// MaxAge is how old an event may be when it arrives (the ingest's default); the alert engine reads
+// partitions this far back.
+const MaxAge = 7 * 24 * time.Hour
+
 // Bounds of the text fields (bytes), as in the agent protocol.
 const (
 	MaxUser    = 128

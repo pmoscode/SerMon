@@ -1,0 +1,24 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.ssh.fleet_correlation
+  name: { de: "Dieselbe Adresse greift mehrere Nodes an", en: "Same address attacks several nodes" }
+  labels: { category: security }
+spec:
+  type: event
+  event: ssh.login.failed
+  groupBy: [ ip ]
+  count: { of: nodes, window: 15m, warning: 3 }
+  notifyFields: [ ts, user, ip ]
+  help:
+    de: >-
+      Fehlgeschlagene SSH-Anmeldungen von derselben Adresse (IPv6: demselben /64-Netz) gab es innerhalb von
+      15 Minuten auf mindestens drei Nodes dieser Organisation. Das deutet auf einen gezielten Scan der Flotte hin,
+      der unter der Schwelle pro Node bleiben kann. Jeder betroffene Node bekommt einen eigenen Alert. Prüfe in den
+      Security-Events, welche Nodes und Benutzer betroffen sind, und sperre die Adresse zentral, etwa in der
+      Firewall vor den Servern.
+    en: >-
+      Failed SSH logins from the same address (IPv6: the same /64 network) occurred within 15 minutes on at least
+      three nodes of this organization. This points to a targeted scan of the fleet that may stay below the
+      threshold per node. Each affected node gets an alert of its own. Check the security events for the nodes and
+      users concerned and block the address centrally, e.g. in the firewall in front of the servers.

@@ -1,0 +1,25 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.ssh.login_after_failures
+  name: { de: "SSH-Anmeldung nach Fehlversuchen", en: "SSH login after failed attempts" }
+  labels: { category: security }
+spec:
+  type: event
+  event: ssh.login.success
+  groupBy: [ ip ]
+  after: { event: ssh.login.failed, count: 5, window: 1h }
+  count: { window: 15m, critical: 1 }
+  notifyFields: [ ts, user, ip, port, method ]
+  help:
+    de: >-
+      Eine SSH-Anmeldung gelang von einer Adresse, von der in der Stunde davor mindestens fünf Anmeldungen auf
+      diesem Node fehlgeschlagen sind. Das kann ein erfolgreich erratenes Passwort sein. Klär sofort mit dem
+      Besitzer des Kontos, ob die Anmeldung von ihm stammt. Wenn nicht: Sitzung beenden, Passwort ändern,
+      Schlüssel in ~/.ssh/authorized_keys prüfen und den Node auf Änderungen untersuchen (neue Benutzer, Dienste,
+      Cronjobs).
+    en: >-
+      An SSH login succeeded from an address that caused at least five failed logins on this node within the hour
+      before. This may be a password that was guessed. Ask the owner of the account right away whether the login was
+      theirs. If not: end the session, change the password, check the keys in ~/.ssh/authorized_keys and examine the
+      node for changes (new users, services, cron jobs).

@@ -2209,26 +2209,39 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Abhängig von:** M2-20
 
 #### ☐ M2-32 – Organisationen in der UI verwalten · X · M 🔒
-- **Ziel:** Seite für Superadmins im Admin-Bereich: alle Organisationen auflisten (ohne Mandantendaten), anlegen (mit
-  Step-up, der erste Admin wird per Mail eingeladen), bearbeiten und löschen. Die API für Liste, Anlegen und Umbenennen
-  gibt es seit M1-04, eine Oberfläche nicht: Bisher legt ein Superadmin weitere Orgs nur per API an (die E2E-Demo tut
-  das so). Sperren und Löschen fehlen auch in der API (D29, E3.8).
-- **Zuerst klären** (mit dem Product Owner; Ergebnis als ADR bzw. Nachtrag zu D29):
-  - **Löschen:** Wer darf es (nur Superadmins, auch der Admin der Org selbst)? Welche Bestätigung (Step-up und Eingabe
-    des Org-Namens)? Wie lang ist die Frist bis zum endgültigen Löschen (Standard 30 Tage, konfigurierbar) und wer hebt
-    die Sperre in der Frist auf? Werden die Admins der Org per Mail benachrichtigt? Export des Audit-Logs vorher.
-  - **Sperren:** Was endet sofort (Logins, Ingest, Agent-Verbindungen, Zertifikate) und was mit laufenden Alerts und
-    Benachrichtigungen passiert.
-  - **Konten:** Was mit Usern geschieht, die nur in dieser Org Mitglied sind (bleiben ohne Org, werden gelöscht).
-  - **Grenzen:** Darf die letzte Org bzw. die Org des einzigen Superadmins gelöscht werden? Sind Namen eindeutig?
-  - **Bearbeiten:** Nur der Name oder auch Einstellungen der Org (2FA-Pflicht, Logs für Viewer, Retention, Limits)? Was
-    davon gehört dem Superadmin, was dem Admin der Org?
-  - **Liste:** Was der Superadmin ohne Mitgliedschaft sehen darf (Name, Mitglieder- und Node-Zahl, Status der Sperre).
-- **Tests zuerst:** nur Superadmins (Rollen-Matrix, Tenant-Isolation: die Liste enthält keine Mandantendaten), Step-up,
-  Audit; Sperre und Löschjob nach Frist (Integration); E2E mit axe.
-- **Abhängig von:** M1-04; Sperren und Löschen setzen E3.8 voraus (dort umsetzen oder hierher vorziehen, je nach
-  Ergebnis der Klärung)
-- **Aus:** Hinweis des Product Owners nach M2-29 (in der Demo ist „Beta AG“ für den Superadmin nirgends zu sehen).
+- **Ziel:** Seite für Superadmins im Admin-Bereich ([ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md)):
+  - **Liste** ohne Mandantendaten: Name, angelegt am, Zahl der Mitglieder und Nodes, ungefährer Speicherbedarf
+    (Metriken, Events; Verfahren für komprimierte Hypertables festlegen), Status.
+  - **Anlegen** mit Step-up, der erste Admin wird per Mail eingeladen (API seit M1-04). Namen eindeutig ohne Groß- und
+    Kleinschreibung (Migration, auch für bestehende Orgs).
+  - **Bearbeiten:** Name und Kontingente – höchstens Nodes, Mitglieder, Obergrenze der Retention, Ingest-Grenzen
+    (Samples/s, Serien pro Node) statt der instanzweiten Werte. An der Grenze wird Neues abgelehnt (Enrollment,
+    Einladung, Ingest), Bestehendes läuft weiter; die Admins der Org sehen den Stand. Die Obergrenze der Retention greift,
+    sobald Orgs ihre Retention einstellen können.
+- **Tests zuerst:** nur Superadmins (Rollen-Matrix; Tenant-Isolation: die Liste enthält keine Mandantendaten), Step-up,
+  Audit; Kontingente: Enrollment, Einladung und Ingest an der Grenze abgelehnt, gesenktes Kontingent löscht nichts;
+  doppelter Name abgelehnt; E2E mit axe.
+- **Abhängig von:** M1-04
+- **Aus:** Hinweis des Product Owners nach M2-29 (in der Demo ist „Beta AG“ für den Superadmin nirgends zu sehen);
+  Rückfragen am 2026-11-22 (ADR 0029).
+
+#### ☐ M2-33 – Organisationen sperren und löschen · S · M 🔒
+- **Ziel:** D29 nach [ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md), aus E3.8 vorgezogen; nur
+  Superadmins, jeweils mit Step-up und Eingabe des Org-Namens:
+  - **Sperren** (ohne Frist) und **Zum Löschen vormerken** (sperrt, Frist 30 Tage, Server-Variable, mindestens 7
+    Tage); in der Frist **aufheben** oder **sofort löschen**.
+  - **Sperre wirkt sofort:** Sitzungen enden, Logins, Agent-Verbindungen, Ingest und Enrollment-Tokens werden
+    abgelehnt; Zertifikate bleiben bis zum Löschen gültig. Engine und Benachrichtigungen ruhen für die Org.
+  - **Mails** an die Admins der Org bei Sperre und Vormerken (mit Datum), beim Aufheben und 7 Tage vor dem Löschen.
+  - **Audit-Export** durch den Superadmin während der Sperre (Datei mit Hash-Kette, Eintrag im Instanz-Audit).
+  - **Löschjob** nach der Frist: Stamm-, Event- und Metrikdaten der Org und Konten ohne weitere Mitgliedschaft;
+    Superadmins und Konten anderer Orgs bleiben. Auch die letzte Org lässt sich löschen.
+- **Tests zuerst:** Sperre beendet Sitzung, Agent-Stream und Ingest sofort, Aufheben stellt alles ohne Neu-Enrollment
+  wieder her; keine Alerts und Mails einer gesperrten Org; Frist und Untergrenze; Löschjob entfernt alles der Org und
+  nichts anderer Orgs (Integration über alle Tabellen mit `org_id`), Konten nur ohne weitere Mitgliedschaft; Export
+  prüfbar; Rollen und Step-up; E2E mit axe.
+- **Abhängig von:** M2-32
+- **Später:** Loki-Daten löscht E3.2/E3.8 mit, sobald es Loki gibt.
 
 #### ☐ M2-27 – E2E-Demo M2 · X · M
 - **Ziel:** Simulierter SSH-Brute-Force in einem Agent-Container (wiederholte Fehlanmeldungen gegen den eigenen sshd)
@@ -2267,7 +2280,7 @@ und die Security-Review hat keine offenen kritischen Findings.
 | **E3.5b Alert-Statistik** | Lauteste Regeln, MTTA/MTTR, Absprung von einem Alert direkt in den Chart um seinen Zeitpunkt (offen aus M2-16, KONZEPT §16) | `sermon-ui-component` | M2-16 |
 | **E3.6 OIDC/SSO** | Authorization Code + PKCE, Mapping von Gruppen-Claims, Just-in-Time-Provisioning | `sermon-security-review` | M1-04 |
 | **E3.7 Passkeys und Step-up** | WebAuthn-Registrierung und -Login, Step-up für alle sensiblen Aktionen vervollständigen | `sermon-security-review` | M1-03 |
-| **E3.8 Orgs sperren und löschen** | Sperre (Logins, Ingest und Agent-Verbindungen der Org sofort beenden, Zertifikate sperren), Export des Audit-Logs, Löschjob nach Frist (Stamm-, Event- und Metrikdaten, Loki-Tenant), Aufheben der Sperre während der Frist; alles mit Step-up und Audit (D29); Bedienung in der Org-Verwaltung aus M2-32 | `sermon-security-review` | M1-04, M1-22, E3.2 |
+| **E3.8 Orgs sperren und löschen** | Vorgezogen nach M2-33 (ADR 0029); hier bleibt nur, den Loki-Tenant einer gelöschten Org mitzulöschen (D29) | `sermon-security-review` | M1-04, M1-22, E3.2 |
 
 ---
 

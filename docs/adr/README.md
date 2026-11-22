@@ -36,6 +36,7 @@ KONZEPT §2 mit angepasst.
 | [0026](0026-zustands-collectors.md) | Zustands-Collectors: adjtimex, systemctl und erholte Units | accepted | D9 |
 | [0027](0027-server-ereignisse-und-self-monitoring.md) | Ereignisse des Servers als Security-Events, Self-Monitoring für Superadmins | accepted | D14 |
 | [0028](0028-produktions-compose.md) | Produktions-Compose: Agent-Port direkt, Server-Image aus dem Quellcode | accepted | D23 |
+| [0029](0029-organisationen-verwalten-sperren-loeschen.md) | Organisationen verwalten, sperren und löschen | accepted | D29 |
 
 ## Entscheidungslog → ADR
 
@@ -69,7 +70,7 @@ KONZEPT §2 mit angepasst.
 | D26 Connect-RPC/Protobuf | 0014, 0004 |
 | D27 Alles lokal ausgeliefert | 0003 |
 | D28 Einladungslink | 0008, 0022 |
-| D29 Orgs erst sperren, dann löschen | noch keins (folgt mit E3.8) |
+| D29 Orgs erst sperren, dann löschen | 0029 |
 | D30 Enrollment über HTTPS | 0009, 0010 |
 
 Die ADRs 0014 bis 0021 dokumentieren Entscheidungen der Konzeptrunde nachträglich (IMPLEMENTIERUNGSPLAN M0-11).

@@ -106,7 +106,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/ad
 | D26 | API            | **Connect-RPC/Protobuf** für Agent ↔ Server (gRPC) und Web ↔ Server (Connect)                | Ein Schema, typisiert von Ende zu Ende                                                                |
 | D27 | UI-Ressourcen  | **Alles lokal ausgeliefert:** keine CDNs, keine externen Schriften, Skripte, Styles, Bilder oder Icons | Datenschutz (keine IP-Weitergabe an Dritte, DSGVO), Air-Gap-fähig, strikte CSP, keine Supply-Chain über fremde Server |
 | D28 | Mitglieder     | **Einladungslink:** einmalig, 72 h gültig, nur als Hash gespeichert; **in Produktion nur per Mail** an die Adresse (SMTP Pflicht), im Entwicklungsmodus ohne SMTP zum Kopieren | Adresse bewiesen, kein Konto-Squatting, keine User-Enumeration, Admin kennt keine Passwörter ([ADR 0008](adr/0008-einladungen.md), [ADR 0022](adr/0022-betriebsmodus-und-einladungen-per-mail.md)) |
-| D29 | Orgs löschen   | **Erst sperren, nach Frist endgültig löschen:** Sperre beendet Logins und Ingest sofort; nach der Frist (Standard 30 Tage) werden Stamm-, Event-, Metrik- und Loki-Daten gelöscht; das Audit-Log ist vorher exportierbar | Schutz vor Fehlbedienung und Missbrauch, Daten bleiben bis zum Löschen nachvollziehbar |
+| D29 | Orgs löschen   | **Erst sperren, nach Frist endgültig löschen:** Sperre beendet Logins und Ingest sofort; nach der Frist (Standard 30 Tage) werden Stamm-, Event-, Metrik- und Loki-Daten gelöscht; das Audit-Log ist vorher exportierbar; Details in [ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md) | Schutz vor Fehlbedienung und Missbrauch, Daten bleiben bis zum Löschen nachvollziehbar |
 | D30 | Enrollment     | **Über den öffentlichen HTTPS-Endpunkt**, danach mTLS auf dem Agent-Port | Neue Agents kennen die Agent-CA noch nicht; der mTLS-Port bleibt streng ([ADR 0009](adr/0009-enrollment-ueber-web-endpunkt.md)) |
 
 ---
@@ -1426,7 +1426,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | O11 | HA                           | Kein HA geplant                                                                  | Architektur (PG-Leases, zustandslose Worker) hält es offen                                 |
 | O12 | Wachstum über ca. 200 Nodes  | TimescaleDB stößt bei 1-s-Auflösung an Grenzen                                   | `MetricStore` auf VictoriaMetrics umstellen; die Domänenlogik bleibt unverändert (ADR 0001) |
 | O13 | Mitglieder hinzufügen        | ✓ Geklärt: Einladungslink statt Startpasswort                                    | Entschieden: D28, in Produktion nur per Mail, SMTP Pflicht (ADR 0008, 0022)                |
-| O14 | Orgs löschen                 | ✓ Geklärt: sperren, nach Frist löschen                                           | Entschieden: D29; umgesetzt mit E3.8                                                       |
+| O14 | Orgs löschen                 | ✓ Geklärt: sperren, nach Frist löschen                                           | Entschieden: D29, ADR 0029; umgesetzt mit M2-32 und M2-33                                  |
 
 ---
 

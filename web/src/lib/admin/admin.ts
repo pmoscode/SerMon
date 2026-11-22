@@ -36,6 +36,8 @@ export function adminError(error: unknown, precondition = m.admin_error_last_adm
 			return m.admin_error_gone();
 		case Code.FailedPrecondition:
 			return precondition;
+		case Code.ResourceExhausted:
+			return m.admin_error_quota();
 		default:
 			return m.error_unavailable();
 	}

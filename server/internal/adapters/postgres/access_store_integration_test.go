@@ -193,7 +193,7 @@ func TestAuditLog_ConcurrentAppendsKeepASingleChain(t *testing.T) {
 	ctx := context.Background()
 	store := postgres.NewAccessStore(open(t, f.appDSN))
 	org := uuid.New()
-	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Concurrent')", org)
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Concurrent ' || $1::uuid::text)", org)
 	scope := scopeFor(t, org)
 
 	var wg sync.WaitGroup

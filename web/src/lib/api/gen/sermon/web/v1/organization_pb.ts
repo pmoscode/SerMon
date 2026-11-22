@@ -2,8 +2,8 @@
 // @generated from file sermon/web/v1/organization.proto (package sermon.web.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +12,58 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/organization.proto.
  */
 export const file_sermon_web_v1_organization: GenFile = /*@__PURE__*/
-  fileDesc("CiBzZXJtb24vd2ViL3YxL29yZ2FuaXphdGlvbi5wcm90bxINc2VybW9uLndlYi52MSJ2ChNPcmdhbml6YXRpb25TdW1tYXJ5EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhQKDG1lbWJlcl9jb3VudBgEIAEoAyIaChhMaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QiVgoZTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZRI5Cg1vcmdhbml6YXRpb25zGAEgAygLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5Ij4KGUNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSDAoEbmFtZRgBIAEoCRITCgthZG1pbl9lbWFpbBgCIAEoCSKMAQoaQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USOAoMb3JnYW5pemF0aW9uGAEgASgLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5EhgKEGludml0YXRpb25fdG9rZW4YAiABKAkSGgoSaW52aXRhdGlvbl9lbWFpbGVkGAMgASgIIkIKGVJlbmFtZU9yZ2FuaXphdGlvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEgwKBG5hbWUYAiABKAkiHAoaUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2Uy2AIKE09yZ2FuaXphdGlvblNlcnZpY2USawoRTGlzdE9yZ2FuaXphdGlvbnMSJy5zZXJtb24ud2ViLnYxLkxpc3RPcmdhbml6YXRpb25zUmVxdWVzdBooLnNlcm1vbi53ZWIudjEuTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZSIDkAIBEmkKEkNyZWF0ZU9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuQ3JlYXRlT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USaQoSUmVuYW1lT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5SZW5hbWVPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5SZW5hbWVPcmdhbml6YXRpb25SZXNwb25zZULAAQoRY29tLnNlcm1vbi53ZWIudjFCEU9yZ2FuaXphdGlvblByb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("CiBzZXJtb24vd2ViL3YxL29yZ2FuaXphdGlvbi5wcm90bxINc2VybW9uLndlYi52MSKGAgoST3JnYW5pemF0aW9uUXVvdGFzEhYKCW1heF9ub2RlcxgBIAEoDUgAiAEBEhgKC21heF9tZW1iZXJzGAIgASgNSAGIAQESHwoScmV0ZW50aW9uX2NhcF9kYXlzGAMgASgNSAKIAQESHwoSc2FtcGxlc19wZXJfc2Vjb25kGAQgASgNSAOIAQESHAoPc2VyaWVzX3Blcl9ub2RlGAUgASgNSASIAQFCDAoKX21heF9ub2Rlc0IOCgxfbWF4X21lbWJlcnNCFQoTX3JldGVudGlvbl9jYXBfZGF5c0IVChNfc2FtcGxlc19wZXJfc2Vjb25kQhIKEF9zZXJpZXNfcGVyX25vZGUihwIKE09yZ2FuaXphdGlvblN1bW1hcnkSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIvCgtjcmVhdGVfdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoMbWVtYmVyX2NvdW50GAQgASgDEhIKCm5vZGVfY291bnQYBSABKAMSFQoNc3RvcmFnZV9ieXRlcxgGIAEoAxIxCgZzdGF0dXMYByABKA4yIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN0YXR1cxIxCgZxdW90YXMYCCABKAsyIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblF1b3RhcyIaChhMaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QiVgoZTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZRI5Cg1vcmdhbml6YXRpb25zGAEgAygLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5Ij4KGUNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSDAoEbmFtZRgBIAEoCRITCgthZG1pbl9lbWFpbBgCIAEoCSKMAQoaQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USOAoMb3JnYW5pemF0aW9uGAEgASgLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5EhgKEGludml0YXRpb25fdG9rZW4YAiABKAkSGgoSaW52aXRhdGlvbl9lbWFpbGVkGAMgASgIIkIKGVJlbmFtZU9yZ2FuaXphdGlvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEgwKBG5hbWUYAiABKAkiHAoaUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2UidQoZVXBkYXRlT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDAoEbmFtZRgCIAEoCRIxCgZxdW90YXMYAyABKAsyIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblF1b3RhcyJWChpVcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZRI4Cgxvcmdhbml6YXRpb24YASABKAsyIi5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN1bW1hcnkqWQoST3JnYW5pemF0aW9uU3RhdHVzEiMKH09SR0FOSVpBVElPTl9TVEFUVVNfVU5TUEVDSUZJRUQQABIeChpPUkdBTklaQVRJT05fU1RBVFVTX0FDVElWRRABMsMDChNPcmdhbml6YXRpb25TZXJ2aWNlEmsKEUxpc3RPcmdhbml6YXRpb25zEicuc2VybW9uLndlYi52MS5MaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLkxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2UiA5ACARJpChJDcmVhdGVPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEmkKElJlbmFtZU9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2USaQoSVXBkYXRlT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5VcGRhdGVPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5VcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZULAAQoRY29tLnNlcm1vbi53ZWIudjFCEU9yZ2FuaXphdGlvblByb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+
+/**
+ * OrganizationQuotas bound an organization instead of the instance-wide values (ADR 0029).
+ * An unset field means the instance default (no limit for nodes and members).
+ *
+ * @generated from message sermon.web.v1.OrganizationQuotas
+ */
+export type OrganizationQuotas = Message<"sermon.web.v1.OrganizationQuotas"> & {
+  /**
+   * max_nodes bounds the enrolled nodes: enrolling more is refused.
+   *
+   * @generated from field: optional uint32 max_nodes = 1;
+   */
+  maxNodes?: number | undefined;
+
+  /**
+   * max_members bounds members plus open invitations: inviting more is refused.
+   *
+   * @generated from field: optional uint32 max_members = 2;
+   */
+  maxMembers?: number | undefined;
+
+  /**
+   * retention_cap_days caps the retention the organization may set for itself (applies once
+   * organizations set their own retention).
+   *
+   * @generated from field: optional uint32 retention_cap_days = 3;
+   */
+  retentionCapDays?: number | undefined;
+
+  /**
+   * samples_per_second is the sample rate per node before the agent is throttled.
+   *
+   * @generated from field: optional uint32 samples_per_second = 4;
+   */
+  samplesPerSecond?: number | undefined;
+
+  /**
+   * series_per_node bounds the distinct series of a node: new ones beyond it are dropped.
+   *
+   * @generated from field: optional uint32 series_per_node = 5;
+   */
+  seriesPerNode?: number | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.OrganizationQuotas.
+ * Use `create(OrganizationQuotasSchema)` to create a new message.
+ */
+export const OrganizationQuotasSchema: GenMessage<OrganizationQuotas> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 0);
 
 /**
  * OrganizationSummary is an organization as the superadmin sees it.
@@ -47,6 +98,35 @@ export type OrganizationSummary = Message<"sermon.web.v1.OrganizationSummary"> &
    * @generated from field: int64 member_count = 4;
    */
   memberCount: bigint;
+
+  /**
+   * node_count is the number of enrolled nodes.
+   *
+   * @generated from field: int64 node_count = 5;
+   */
+  nodeCount: bigint;
+
+  /**
+   * storage_bytes is the approximate storage of its metrics and security events: the totals of
+   * the instance shared by its share of the series and of the events.
+   *
+   * @generated from field: int64 storage_bytes = 6;
+   */
+  storageBytes: bigint;
+
+  /**
+   * status is active (M2-33 adds more).
+   *
+   * @generated from field: sermon.web.v1.OrganizationStatus status = 7;
+   */
+  status: OrganizationStatus;
+
+  /**
+   * quotas are the organization's limits.
+   *
+   * @generated from field: sermon.web.v1.OrganizationQuotas quotas = 8;
+   */
+  quotas?: OrganizationQuotas | undefined;
 };
 
 /**
@@ -54,7 +134,7 @@ export type OrganizationSummary = Message<"sermon.web.v1.OrganizationSummary"> &
  * Use `create(OrganizationSummarySchema)` to create a new message.
  */
 export const OrganizationSummarySchema: GenMessage<OrganizationSummary> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_organization, 0);
+  messageDesc(file_sermon_web_v1_organization, 1);
 
 /**
  * ListOrganizationsRequest has no parameters.
@@ -69,7 +149,7 @@ export type ListOrganizationsRequest = Message<"sermon.web.v1.ListOrganizationsR
  * Use `create(ListOrganizationsRequestSchema)` to create a new message.
  */
 export const ListOrganizationsRequestSchema: GenMessage<ListOrganizationsRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_organization, 1);
+  messageDesc(file_sermon_web_v1_organization, 2);
 
 /**
  * ListOrganizationsResponse lists organizations by name.
@@ -90,7 +170,7 @@ export type ListOrganizationsResponse = Message<"sermon.web.v1.ListOrganizations
  * Use `create(ListOrganizationsResponseSchema)` to create a new message.
  */
 export const ListOrganizationsResponseSchema: GenMessage<ListOrganizationsResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_organization, 2);
+  messageDesc(file_sermon_web_v1_organization, 3);
 
 /**
  * CreateOrganizationRequest names the organization and its first admin.
@@ -118,7 +198,7 @@ export type CreateOrganizationRequest = Message<"sermon.web.v1.CreateOrganizatio
  * Use `create(CreateOrganizationRequestSchema)` to create a new message.
  */
 export const CreateOrganizationRequestSchema: GenMessage<CreateOrganizationRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_organization, 3);
+  messageDesc(file_sermon_web_v1_organization, 4);
 
 /**
  * CreateOrganizationResponse returns the organization and the invitation link token.
@@ -154,7 +234,7 @@ export type CreateOrganizationResponse = Message<"sermon.web.v1.CreateOrganizati
  * Use `create(CreateOrganizationResponseSchema)` to create a new message.
  */
 export const CreateOrganizationResponseSchema: GenMessage<CreateOrganizationResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_organization, 4);
+  messageDesc(file_sermon_web_v1_organization, 5);
 
 /**
  * RenameOrganizationRequest names the organization and its new name.
@@ -182,7 +262,7 @@ export type RenameOrganizationRequest = Message<"sermon.web.v1.RenameOrganizatio
  * Use `create(RenameOrganizationRequestSchema)` to create a new message.
  */
 export const RenameOrganizationRequestSchema: GenMessage<RenameOrganizationRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_organization, 5);
+  messageDesc(file_sermon_web_v1_organization, 6);
 
 /**
  * RenameOrganizationResponse has no fields.
@@ -197,7 +277,91 @@ export type RenameOrganizationResponse = Message<"sermon.web.v1.RenameOrganizati
  * Use `create(RenameOrganizationResponseSchema)` to create a new message.
  */
 export const RenameOrganizationResponseSchema: GenMessage<RenameOrganizationResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_organization, 6);
+  messageDesc(file_sermon_web_v1_organization, 7);
+
+/**
+ * UpdateOrganizationRequest names the organization, its name and its quotas.
+ *
+ * @generated from message sermon.web.v1.UpdateOrganizationRequest
+ */
+export type UpdateOrganizationRequest = Message<"sermon.web.v1.UpdateOrganizationRequest"> & {
+  /**
+   * organization_id is the UUID of the organization.
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * name is the display name.
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * quotas replace the previous ones; unset fields are the instance defaults.
+   *
+   * @generated from field: sermon.web.v1.OrganizationQuotas quotas = 3;
+   */
+  quotas?: OrganizationQuotas | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.UpdateOrganizationRequest.
+ * Use `create(UpdateOrganizationRequestSchema)` to create a new message.
+ */
+export const UpdateOrganizationRequestSchema: GenMessage<UpdateOrganizationRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 8);
+
+/**
+ * UpdateOrganizationResponse returns the organization.
+ *
+ * @generated from message sermon.web.v1.UpdateOrganizationResponse
+ */
+export type UpdateOrganizationResponse = Message<"sermon.web.v1.UpdateOrganizationResponse"> & {
+  /**
+   * organization is the updated organization.
+   *
+   * @generated from field: sermon.web.v1.OrganizationSummary organization = 1;
+   */
+  organization?: OrganizationSummary | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.UpdateOrganizationResponse.
+ * Use `create(UpdateOrganizationResponseSchema)` to create a new message.
+ */
+export const UpdateOrganizationResponseSchema: GenMessage<UpdateOrganizationResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 9);
+
+/**
+ * OrganizationStatus is the state of an organization (M2-33 adds locked and scheduled for
+ * deletion).
+ *
+ * @generated from enum sermon.web.v1.OrganizationStatus
+ */
+export enum OrganizationStatus {
+  /**
+   * ORGANIZATION_STATUS_UNSPECIFIED is not used.
+   *
+   * @generated from enum value: ORGANIZATION_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * ORGANIZATION_STATUS_ACTIVE: members log in, agents send.
+   *
+   * @generated from enum value: ORGANIZATION_STATUS_ACTIVE = 1;
+   */
+  ACTIVE = 1,
+}
+
+/**
+ * Describes the enum sermon.web.v1.OrganizationStatus.
+ */
+export const OrganizationStatusSchema: GenEnum<OrganizationStatus> = /*@__PURE__*/
+  enumDesc(file_sermon_web_v1_organization, 0);
 
 /**
  * OrganizationService lets the superadmin manage organizations (KONZEPT §7). It requires a
@@ -231,7 +395,8 @@ export const OrganizationService: GenService<{
     output: typeof CreateOrganizationResponseSchema;
   },
   /**
-   * RenameOrganization renames an organization.
+   * RenameOrganization renames an organization. ALREADY_EXISTS: another organization has this
+   * name (names are unique regardless of case).
    *
    * @generated from rpc sermon.web.v1.OrganizationService.RenameOrganization
    */
@@ -239,6 +404,18 @@ export const OrganizationService: GenService<{
     methodKind: "unary";
     input: typeof RenameOrganizationRequestSchema;
     output: typeof RenameOrganizationResponseSchema;
+  },
+  /**
+   * UpdateOrganization sets the name and the quotas of an organization (step-up, M2-32). A
+   * lowered quota deletes nothing: what exists keeps running, only new things are refused.
+   * ALREADY_EXISTS: another organization has this name.
+   *
+   * @generated from rpc sermon.web.v1.OrganizationService.UpdateOrganization
+   */
+  updateOrganization: {
+    methodKind: "unary";
+    input: typeof UpdateOrganizationRequestSchema;
+    output: typeof UpdateOrganizationResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_organization, 0);

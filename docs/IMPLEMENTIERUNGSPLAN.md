@@ -2267,7 +2267,32 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Abhängig von:** M2-31
 - **Aus:** M2-31 (Hinweis zur Security-Quelle; Laden bei Bedarf vergrößerte die Seiten).
 
-#### ☐ M2-32 – Organisationen in der UI verwalten · X · M 🔒
+#### ☑ M2-32 – Organisationen in der UI verwalten · X · M 🔒
+> Erledigt (ADR 0029, Nachtrag M2-32; KONZEPT §7; Threat Model T76):
+> - **Seite „Organisationen“** (`/organizations`, eigener Menüpunkt für Superadmins – die Admin-Seite verlangt den
+>   Org-Admin, den ein Superadmin meist nicht hat): Tabelle mit Name, angelegt am, Mitgliedern, Nodes, Speicher (ca.),
+>   Status und Kontingenten; Anlegen (erster Admin per Mail, ohne Mail der Link einmal) und Bearbeiten von Name und
+>   Kontingenten, beides mit Step-up. Org-Admins sehen den Stand im neuen Reiter „Kontingente“.
+> - **API:** `OrganizationService.UpdateOrganization` (Name und `OrganizationQuotas`, Step-up, Audit `org.update`
+>   mit altem und neuem Stand), `OrganizationSummary` mit `node_count`, `storage_bytes`, `status` (Enum, M2-33 erweitert
+>   es) und `quotas`; `AccessService.GetOrganizationQuotas` für Org-Admins. Doppelte Namen: ALREADY_EXISTS, Kontingent
+>   erreicht: RESOURCE_EXHAUSTED mit dem Kontingent in der Meldung.
+> - **Migration 00035:** eindeutiger Index auf `lower(name)`, bestehende Duplikate bekommen ` (2)`, ` (3)` (die älteste
+>   bleibt); Spalten der Kontingente (NULL = Standard der Instanz, CHECK der Bereiche); `admin_organizations()` statt
+>   `admin_list_organizations()`, `admin_storage_totals()` (nur Größen).
+> - **Durchsetzung:** Enrollment zählt die Nodes unter Sperre der Org-Zeile (Übernahmen zählen nicht, das Token bleibt
+>   bei Ablehnung nutzbar); Einladen zählt Mitglieder und andere offene Einladungen, Annehmen die Mitglieder (die
+>   Einladung bleibt); der Ingest übernimmt Samples pro Sekunde (Burst im Verhältnis der Instanz) und Serien pro Node
+>   beim Session-Start. Die Obergrenze der Retention wird nur gespeichert.
+> - **Speicher (Verfahren):** die Größe der Metrik-Hypertables samt Continuous Aggregates wird nach dem Anteil der Org an
+>   den Serien verteilt, die der Event-Partitionen nach dem Anteil an den Events. Gezählt wird pro Org in einer
+>   Tenant-Transaktion (nur Zahlen), denn `series` hat bewusst keine Definer-Policy.
+> - **Tests:** Domäne (Bereiche, Grenze, Meldung), Use-Case (nur Superadmin, Step-up, Audit), Ingest (Org-Werte höher
+>   und niedriger als die Instanz), Rollen- und Isolationstest der neuen RPCs; Integration: eindeutige Namen beim
+>   Anlegen, Umbenennen und Bearbeiten, Zähler und Schätzung ohne Mandantendaten, Ablehnung bei Enrollment, Einladung
+>   und Annahme, gesenktes Kontingent entfernt niemanden, Store liefert die Ingest-Grenzen, Migration benennt
+>   Duplikate um (Gegenprobe ohne Prüfung schlägt fehl); UI-Specs und E2E mit axe.
+> - **Budget:** Der Menüpunkt brachte die Node-Seite über 200 KiB → M2-34 vorgezogen; jetzt 185,3 KiB.
 - **Ziel:** Seite für Superadmins im Admin-Bereich ([ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md)):
   - **Liste** ohne Mandantendaten: Name, angelegt am, Zahl der Mitglieder und Nodes, ungefährer Speicherbedarf
     (Metriken, Events; Verfahren für komprimierte Hypertables festlegen), Status.

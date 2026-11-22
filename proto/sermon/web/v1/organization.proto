@@ -18,8 +18,53 @@ service OrganizationService {
   // (development) the response contains the link token once (ADR 0008). UNAVAILABLE: the
   // organization exists but the mail could not be sent – invite the admin again.
   rpc CreateOrganization(CreateOrganizationRequest) returns (CreateOrganizationResponse);
-  // RenameOrganization renames an organization.
+  // RenameOrganization renames an organization. ALREADY_EXISTS: another organization has this
+  // name (names are unique regardless of case).
   rpc RenameOrganization(RenameOrganizationRequest) returns (RenameOrganizationResponse);
+  // UpdateOrganization sets the name and the quotas of an organization (step-up, M2-32). A
+  // lowered quota deletes nothing: what exists keeps running, only new things are refused.
+  // ALREADY_EXISTS: another organization has this name.
+  rpc UpdateOrganization(UpdateOrganizationRequest) returns (UpdateOrganizationResponse);
+}
+
+// OrganizationStatus is the state of an organization (M2-33 adds locked and scheduled for
+// deletion).
+enum OrganizationStatus {
+  // ORGANIZATION_STATUS_UNSPECIFIED is not used.
+  ORGANIZATION_STATUS_UNSPECIFIED = 0;
+  // ORGANIZATION_STATUS_ACTIVE: members log in, agents send.
+  ORGANIZATION_STATUS_ACTIVE = 1;
+}
+
+// OrganizationQuotas bound an organization instead of the instance-wide values (ADR 0029).
+// An unset field means the instance default (no limit for nodes and members).
+message OrganizationQuotas {
+  // max_nodes bounds the enrolled nodes: enrolling more is refused.
+  optional uint32 max_nodes = 1 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 1000000
+  }];
+  // max_members bounds members plus open invitations: inviting more is refused.
+  optional uint32 max_members = 2 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 100000
+  }];
+  // retention_cap_days caps the retention the organization may set for itself (applies once
+  // organizations set their own retention).
+  optional uint32 retention_cap_days = 3 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 3650
+  }];
+  // samples_per_second is the sample rate per node before the agent is throttled.
+  optional uint32 samples_per_second = 4 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 1000000
+  }];
+  // series_per_node bounds the distinct series of a node: new ones beyond it are dropped.
+  optional uint32 series_per_node = 5 [(buf.validate.field).uint32 = {
+    gte: 1
+    lte: 100000
+  }];
 }
 
 // OrganizationSummary is an organization as the superadmin sees it.
@@ -32,6 +77,15 @@ message OrganizationSummary {
   google.protobuf.Timestamp create_time = 3;
   // member_count is the number of members.
   int64 member_count = 4;
+  // node_count is the number of enrolled nodes.
+  int64 node_count = 5;
+  // storage_bytes is the approximate storage of its metrics and security events: the totals of
+  // the instance shared by its share of the series and of the events.
+  int64 storage_bytes = 6;
+  // status is active (M2-33 adds more).
+  OrganizationStatus status = 7;
+  // quotas are the organization's limits.
+  OrganizationQuotas quotas = 8;
 }
 
 // ListOrganizationsRequest has no parameters.
@@ -81,3 +135,22 @@ message RenameOrganizationRequest {
 
 // RenameOrganizationResponse has no fields.
 message RenameOrganizationResponse {}
+
+// UpdateOrganizationRequest names the organization, its name and its quotas.
+message UpdateOrganizationRequest {
+  // organization_id is the UUID of the organization.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+  // name is the display name.
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // quotas replace the previous ones; unset fields are the instance defaults.
+  OrganizationQuotas quotas = 3 [(buf.validate.field).required = true];
+}
+
+// UpdateOrganizationResponse returns the organization.
+message UpdateOrganizationResponse {
+  // organization is the updated organization.
+  OrganizationSummary organization = 1;
+}

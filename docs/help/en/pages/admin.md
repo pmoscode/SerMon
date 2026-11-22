@@ -16,3 +16,4 @@ A role applies to one group or to all groups. Several roles add up.
 - Invitations go by email to the invited address; only whoever has the mailbox can accept. The link works once within 72 hours. “Send again” sends a new link and invalidates the old one. Only on a development server without mail does SerMon show the link once to pass on.
 - The last admin of all groups can't be removed.
 - Every change is in the audit log with time and person; the entries are chained and can't be changed unnoticed.
+- The **Quotas** tab shows the limits the superadmin of the instance set and how much of them is used. At a quota SerMon refuses new nodes and invitations; what exists keeps running.

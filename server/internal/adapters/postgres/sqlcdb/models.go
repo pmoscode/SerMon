@@ -292,6 +292,11 @@ type Organization struct {
 	Name                string
 	CreatedAt           time.Time
 	RequireSecondFactor bool
+	MaxNodes            pgtype.Int4
+	MaxMembers          pgtype.Int4
+	RetentionCapDays    pgtype.Int4
+	SamplesPerSecond    pgtype.Int4
+	SeriesPerNode       pgtype.Int4
 }
 
 type PkiAuthority struct {

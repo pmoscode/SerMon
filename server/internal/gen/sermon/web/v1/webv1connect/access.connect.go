@@ -68,6 +68,9 @@ const (
 	// AccessServiceListAuditLogProcedure is the fully-qualified name of the AccessService's
 	// ListAuditLog RPC.
 	AccessServiceListAuditLogProcedure = "/sermon.web.v1.AccessService/ListAuditLog"
+	// AccessServiceGetOrganizationQuotasProcedure is the fully-qualified name of the AccessService's
+	// GetOrganizationQuotas RPC.
+	AccessServiceGetOrganizationQuotasProcedure = "/sermon.web.v1.AccessService/GetOrganizationQuotas"
 )
 
 // AccessServiceClient is a client for the sermon.web.v1.AccessService service.
@@ -103,6 +106,9 @@ type AccessServiceClient interface {
 	RevokeInvitation(context.Context, *connect.Request[v1.RevokeInvitationRequest]) (*connect.Response[v1.RevokeInvitationResponse], error)
 	// ListAuditLog returns audit entries, newest first (org admin).
 	ListAuditLog(context.Context, *connect.Request[v1.ListAuditLogRequest]) (*connect.Response[v1.ListAuditLogResponse], error)
+	// GetOrganizationQuotas returns the quotas the superadmin set and how much of them is used
+	// (org admin, M2-32).
+	GetOrganizationQuotas(context.Context, *connect.Request[v1.GetOrganizationQuotasRequest]) (*connect.Response[v1.GetOrganizationQuotasResponse], error)
 }
 
 // NewAccessServiceClient constructs a client for the sermon.web.v1.AccessService service. By
@@ -192,23 +198,31 @@ func NewAccessServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 			connect.WithClientOptions(opts...),
 		),
+		getOrganizationQuotas: connect.NewClient[v1.GetOrganizationQuotasRequest, v1.GetOrganizationQuotasResponse](
+			httpClient,
+			baseURL+AccessServiceGetOrganizationQuotasProcedure,
+			connect.WithSchema(accessServiceMethods.ByName("GetOrganizationQuotas")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // accessServiceClient implements AccessServiceClient.
 type accessServiceClient struct {
-	listNodeGroups   *connect.Client[v1.ListNodeGroupsRequest, v1.ListNodeGroupsResponse]
-	createNodeGroup  *connect.Client[v1.CreateNodeGroupRequest, v1.CreateNodeGroupResponse]
-	renameNodeGroup  *connect.Client[v1.RenameNodeGroupRequest, v1.RenameNodeGroupResponse]
-	deleteNodeGroup  *connect.Client[v1.DeleteNodeGroupRequest, v1.DeleteNodeGroupResponse]
-	listMembers      *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
-	grantRole        *connect.Client[v1.GrantRoleRequest, v1.GrantRoleResponse]
-	revokeRole       *connect.Client[v1.RevokeRoleRequest, v1.RevokeRoleResponse]
-	removeMember     *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
-	inviteMember     *connect.Client[v1.InviteMemberRequest, v1.InviteMemberResponse]
-	listInvitations  *connect.Client[v1.ListInvitationsRequest, v1.ListInvitationsResponse]
-	revokeInvitation *connect.Client[v1.RevokeInvitationRequest, v1.RevokeInvitationResponse]
-	listAuditLog     *connect.Client[v1.ListAuditLogRequest, v1.ListAuditLogResponse]
+	listNodeGroups        *connect.Client[v1.ListNodeGroupsRequest, v1.ListNodeGroupsResponse]
+	createNodeGroup       *connect.Client[v1.CreateNodeGroupRequest, v1.CreateNodeGroupResponse]
+	renameNodeGroup       *connect.Client[v1.RenameNodeGroupRequest, v1.RenameNodeGroupResponse]
+	deleteNodeGroup       *connect.Client[v1.DeleteNodeGroupRequest, v1.DeleteNodeGroupResponse]
+	listMembers           *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
+	grantRole             *connect.Client[v1.GrantRoleRequest, v1.GrantRoleResponse]
+	revokeRole            *connect.Client[v1.RevokeRoleRequest, v1.RevokeRoleResponse]
+	removeMember          *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
+	inviteMember          *connect.Client[v1.InviteMemberRequest, v1.InviteMemberResponse]
+	listInvitations       *connect.Client[v1.ListInvitationsRequest, v1.ListInvitationsResponse]
+	revokeInvitation      *connect.Client[v1.RevokeInvitationRequest, v1.RevokeInvitationResponse]
+	listAuditLog          *connect.Client[v1.ListAuditLogRequest, v1.ListAuditLogResponse]
+	getOrganizationQuotas *connect.Client[v1.GetOrganizationQuotasRequest, v1.GetOrganizationQuotasResponse]
 }
 
 // ListNodeGroups calls sermon.web.v1.AccessService.ListNodeGroups.
@@ -271,6 +285,11 @@ func (c *accessServiceClient) ListAuditLog(ctx context.Context, req *connect.Req
 	return c.listAuditLog.CallUnary(ctx, req)
 }
 
+// GetOrganizationQuotas calls sermon.web.v1.AccessService.GetOrganizationQuotas.
+func (c *accessServiceClient) GetOrganizationQuotas(ctx context.Context, req *connect.Request[v1.GetOrganizationQuotasRequest]) (*connect.Response[v1.GetOrganizationQuotasResponse], error) {
+	return c.getOrganizationQuotas.CallUnary(ctx, req)
+}
+
 // AccessServiceHandler is an implementation of the sermon.web.v1.AccessService service.
 type AccessServiceHandler interface {
 	// ListNodeGroups returns the node groups the caller can see (at least viewer).
@@ -304,6 +323,9 @@ type AccessServiceHandler interface {
 	RevokeInvitation(context.Context, *connect.Request[v1.RevokeInvitationRequest]) (*connect.Response[v1.RevokeInvitationResponse], error)
 	// ListAuditLog returns audit entries, newest first (org admin).
 	ListAuditLog(context.Context, *connect.Request[v1.ListAuditLogRequest]) (*connect.Response[v1.ListAuditLogResponse], error)
+	// GetOrganizationQuotas returns the quotas the superadmin set and how much of them is used
+	// (org admin, M2-32).
+	GetOrganizationQuotas(context.Context, *connect.Request[v1.GetOrganizationQuotasRequest]) (*connect.Response[v1.GetOrganizationQuotasResponse], error)
 }
 
 // NewAccessServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -389,6 +411,13 @@ func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect.HandlerOp
 		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 		connect.WithHandlerOptions(opts...),
 	)
+	accessServiceGetOrganizationQuotasHandler := connect.NewUnaryHandler(
+		AccessServiceGetOrganizationQuotasProcedure,
+		svc.GetOrganizationQuotas,
+		connect.WithSchema(accessServiceMethods.ByName("GetOrganizationQuotas")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AccessService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AccessServiceListNodeGroupsProcedure:
@@ -415,6 +444,8 @@ func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect.HandlerOp
 			accessServiceRevokeInvitationHandler.ServeHTTP(w, r)
 		case AccessServiceListAuditLogProcedure:
 			accessServiceListAuditLogHandler.ServeHTTP(w, r)
+		case AccessServiceGetOrganizationQuotasProcedure:
+			accessServiceGetOrganizationQuotasHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -470,4 +501,8 @@ func (UnimplementedAccessServiceHandler) RevokeInvitation(context.Context, *conn
 
 func (UnimplementedAccessServiceHandler) ListAuditLog(context.Context, *connect.Request[v1.ListAuditLogRequest]) (*connect.Response[v1.ListAuditLogResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.ListAuditLog is not implemented"))
+}
+
+func (UnimplementedAccessServiceHandler) GetOrganizationQuotas(context.Context, *connect.Request[v1.GetOrganizationQuotasRequest]) (*connect.Response[v1.GetOrganizationQuotasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.GetOrganizationQuotas is not implemented"))
 }

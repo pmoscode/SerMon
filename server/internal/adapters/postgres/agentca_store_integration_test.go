@@ -312,13 +312,13 @@ func TestAgentCAStore_RevocationCheckWorksWithANonSuperuserOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = conn.Close(ctx) }()
-	if _, err := conn.Exec(ctx, "INSERT INTO organizations (id, name) VALUES ($1, 'Org A')", orgA); err == nil {
+	if _, err := conn.Exec(ctx, "INSERT INTO organizations (id, name) VALUES ($1, 'Org A ' || $1::uuid::text)", orgA); err == nil {
 		t.Error("FORCE RLS must stop the owner from writing without tenant")
 	}
 	if _, err := conn.Exec(ctx, "SELECT set_config('sermon.org_id', $1, false)", orgA.String()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, "INSERT INTO organizations (id, name) VALUES ($1, 'Org A')", orgA); err != nil {
+	if _, err := conn.Exec(ctx, "INSERT INTO organizations (id, name) VALUES ($1, 'Org A ' || $1::uuid::text)", orgA); err != nil {
 		t.Fatalf("insert organization with tenant: %v", err)
 	}
 

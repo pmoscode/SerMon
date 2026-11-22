@@ -102,7 +102,7 @@ func TestAlertEngine_EvaluatesTheDefaultRulesWithTheOverrides(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
 	org := uuid.New()
-	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Default rules')", org)
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Default rules ' || $1::uuid::text)", org)
 	node := uuid.New()
 	createNode(t, f.db.OwnerDSN, org, node)
 	db := open(t, f.appDSN)

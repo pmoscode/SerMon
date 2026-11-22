@@ -12,6 +12,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -77,6 +78,11 @@ func (f *fakeStore) RemoveMember(_ context.Context, scope tenant.Scope, _ identi
 	return f.record(scope, a)
 }
 
+func (f *fakeStore) QuotaUsage(_ context.Context, scope tenant.Scope, _ time.Time) (access.QuotaUsage, error) {
+	f.scopes = append(f.scopes, scope)
+	return access.QuotaUsage{Quotas: quota.Quotas{MaxNodes: 5}, Nodes: 2}, nil
+}
+
 func (f *fakeStore) ListAudit(_ context.Context, scope tenant.Scope, before int64, limit int) ([]access.AuditRecord, error) {
 	f.scopes = append(f.scopes, scope)
 	f.before, f.limit = before, limit
@@ -116,6 +122,7 @@ func TestManagementRequiresAnOrgWideAdmin(t *testing.T) {
 		"RevokeRole":   func(s *access.Service, c access.Caller) error { return s.RevokeRole(ctx, c, access.BindingID(fixed)) },
 		"RemoveMember": func(s *access.Service, c access.Caller) error { return s.RemoveMember(ctx, c, bob) },
 		"ListAudit":    func(s *access.Service, c access.Caller) error { _, err := s.ListAudit(ctx, c, 0, 10); return err },
+		"QuotaUsage":   func(s *access.Service, c access.Caller) error { _, err := s.QuotaUsage(ctx, c); return err },
 	}
 	for name, call := range calls {
 		for _, c := range []access.Caller{operator, gAdmin, {Principal: authz.Principal{User: alice}}} {

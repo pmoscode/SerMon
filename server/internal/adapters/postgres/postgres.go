@@ -31,7 +31,10 @@ var (
 
 // Migrate applies all pending schema migrations as the owner role. Concurrent server instances
 // are serialized by a PostgreSQL advisory lock.
-func Migrate(ctx context.Context, ownerDSN string) error {
+func Migrate(ctx context.Context, ownerDSN string) error { return migrateTo(ctx, ownerDSN, 0) }
+
+// migrateTo applies the migrations up to version (0: all); tests of a migration use it.
+func migrateTo(ctx context.Context, ownerDSN string, version int64) error {
 	config, err := pgx.ParseConfig(ownerDSN)
 	if err != nil {
 		return fmt.Errorf("parse migration DSN: %w", err)
@@ -47,7 +50,12 @@ func Migrate(ctx context.Context, ownerDSN string) error {
 	if err != nil {
 		return fmt.Errorf("create migration provider: %w", err)
 	}
-	if _, err := provider.Up(ctx); err != nil {
+	if version > 0 {
+		_, err = provider.UpTo(ctx, version)
+	} else {
+		_, err = provider.Up(ctx)
+	}
+	if err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
 	return nil

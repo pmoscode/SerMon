@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -77,8 +78,39 @@ func (h *OrganizationHandler) RenameOrganization(ctx context.Context, req *conne
 	return connect.NewResponse(&webv1.RenameOrganizationResponse{}), nil
 }
 
+// UpdateOrganization sets the name and the quotas of an organization.
+func (h *OrganizationHandler) UpdateOrganization(ctx context.Context, req *connect.Request[webv1.UpdateOrganizationRequest]) (*connect.Response[webv1.UpdateOrganizationResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetOrganizationId())
+	if err != nil {
+		return nil, err
+	}
+	q := quotasFrom(req.Msg.GetQuotas())
+	if err := h.svc.Update(ctx, c, tenant.OrgID(id), req.Msg.GetName(), q); err != nil {
+		return nil, h.fail(ctx, "update organization", err)
+	}
+	orgs, err := h.svc.List(ctx, c)
+	if err != nil {
+		return nil, h.fail(ctx, "update organization", err)
+	}
+	res := &webv1.UpdateOrganizationResponse{}
+	for _, o := range orgs {
+		if o.ID == tenant.OrgID(id) {
+			res.Organization = orgView(o)
+		}
+	}
+	return connect.NewResponse(res), nil
+}
+
 func (h *OrganizationHandler) fail(ctx context.Context, op string, err error) error {
 	switch {
+	case errors.Is(err, organization.ErrNameTaken):
+		return connect.NewError(connect.CodeAlreadyExists, organization.ErrNameTaken)
+	case errors.Is(err, quota.ErrInvalid):
+		return connect.NewError(connect.CodeInvalidArgument, quota.ErrInvalid)
 	case errors.Is(err, access.ErrForbidden):
 		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
 	case errors.Is(err, access.ErrNotFound):
@@ -96,5 +128,23 @@ func (h *OrganizationHandler) fail(ctx context.Context, op string, err error) er
 }
 
 func orgView(o organization.Organization) *webv1.OrganizationSummary {
-	return &webv1.OrganizationSummary{Id: o.ID.String(), Name: o.Name, CreateTime: timestamppb.New(o.CreatedAt), MemberCount: o.Members}
+	return &webv1.OrganizationSummary{
+		Id: o.ID.String(), Name: o.Name, CreateTime: timestamppb.New(o.CreatedAt), MemberCount: o.Members,
+		NodeCount: o.Nodes, StorageBytes: o.StorageBytes, Status: webv1.OrganizationStatus_ORGANIZATION_STATUS_ACTIVE,
+		Quotas: quotasView(o.Quotas),
+	}
+}
+
+func quotasView(q quota.Quotas) *webv1.OrganizationQuotas {
+	return &webv1.OrganizationQuotas{
+		MaxNodes: quota.Optional(q.MaxNodes), MaxMembers: quota.Optional(q.MaxMembers), RetentionCapDays: quota.Optional(q.RetentionCapDays),
+		SamplesPerSecond: quota.Optional(q.SamplesPerSecond), SeriesPerNode: quota.Optional(q.SeriesPerNode),
+	}
+}
+
+func quotasFrom(q *webv1.OrganizationQuotas) quota.Quotas {
+	return quota.Quotas{
+		MaxNodes: q.GetMaxNodes(), MaxMembers: q.GetMaxMembers(), RetentionCapDays: q.GetRetentionCapDays(),
+		SamplesPerSecond: q.GetSamplesPerSecond(), SeriesPerNode: q.GetSeriesPerNode(),
+	}
 }

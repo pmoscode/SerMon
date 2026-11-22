@@ -234,8 +234,10 @@ UPDATE nodes SET hostname = $1, os_id = $2, os_version = $3,
                  cpu_count = $6, memory_bytes = $7,
                  agent_version = $8, last_seen_at = $9,
                  security_source = $10
-WHERE id = $11
-RETURNING group_id
+WHERE nodes.id = $11
+RETURNING group_id,
+          (SELECT o.samples_per_second FROM organizations o WHERE o.id = nodes.org_id) AS samples_per_second,
+          (SELECT o.series_per_node FROM organizations o WHERE o.id = nodes.org_id) AS series_per_node
 `
 
 type UpdateNodeOnConnectParams struct {
@@ -252,8 +254,14 @@ type UpdateNodeOnConnectParams struct {
 	ID             uuid.UUID
 }
 
+type UpdateNodeOnConnectRow struct {
+	GroupID          uuid.UUID
+	SamplesPerSecond pgtype.Int4
+	SeriesPerNode    pgtype.Int4
+}
+
 // The agent's Hello: current host facts and version (the machine-id never changes here).
-func (q *Queries) UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error) {
+func (q *Queries) UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (UpdateNodeOnConnectRow, error) {
 	row := q.db.QueryRow(ctx, updateNodeOnConnect,
 		arg.Hostname,
 		arg.OsID,
@@ -267,9 +275,9 @@ func (q *Queries) UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConne
 		arg.SecuritySource,
 		arg.ID,
 	)
-	var group_id uuid.UUID
-	err := row.Scan(&group_id)
-	return group_id, err
+	var i UpdateNodeOnConnectRow
+	err := row.Scan(&i.GroupID, &i.SamplesPerSecond, &i.SeriesPerNode)
+	return i, err
 }
 
 const visibleGroupExists = `-- name: VisibleGroupExists :one

@@ -15,6 +15,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -129,6 +130,9 @@ func (r *NodeRegistry) Register(ctx context.Context, st enrollment.Stored, n enr
 		}
 		if used == 0 {
 			return enrollment.ErrInvalidToken // revoked, expired or used up in the meantime
+		}
+		if err := admitNode(ctx, q); err != nil {
+			return err
 		}
 		token := uuid.UUID(n.Token)
 		err = q.InsertNode(ctx, sqlcdb.InsertNodeParams{
@@ -249,4 +253,26 @@ func groupIDs(scope tenant.Scope) []uuid.UUID {
 		ids = append(ids, uuid.UUID(g))
 	}
 	return ids
+}
+
+// admitNode applies the organization's node quota (M2-32): the organization row is locked, so
+// concurrent enrollments are counted one after the other. A takeover replaces a node and is not
+// counted.
+func admitNode(ctx context.Context, q *sqlcdb.Queries) error {
+	limits, err := q.OrganizationQuotasForUpdate(ctx)
+	if err != nil {
+		return fmt.Errorf("lock organization quotas: %w", err)
+	}
+	limit := quotaOf(limits.MaxNodes)
+	if limit == 0 {
+		return nil
+	}
+	n, err := q.CountNodes(ctx)
+	if err != nil {
+		return fmt.Errorf("count nodes: %w", err)
+	}
+	if quota.Reached(limit, n) {
+		return quota.Exceeded{Kind: quota.Nodes, Limit: limit}
+	}
+	return nil
 }

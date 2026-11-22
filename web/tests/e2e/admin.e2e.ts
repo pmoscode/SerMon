@@ -52,6 +52,9 @@ function adminApi(overrides: Parameters<typeof mockApi>[1] = {}) {
 			}
 		}),
 		'SecurityPolicyService/GetSecurityPolicy': () => ({ json: {} }),
+		'AccessService/GetOrganizationQuotas': () => ({
+			json: { quotas: { maxNodes: 20 }, nodes: '12', members: '2', openInvitations: '1' }
+		}),
 		...overrides
 	};
 }
@@ -94,12 +97,14 @@ test.describe('organization admin (mocked API)', () => {
 		await expect(page.getByText(/\/invite#smi_link$/)).toBeVisible();
 		await page.screenshot({ path: 'test-results/admin-invite.png', fullPage: true });
 
-		for (const tab of ['Groups', 'Security', 'Audit log']) {
+		for (const tab of ['Groups', 'Security', 'Quotas', 'Audit log']) {
 			await page.getByRole('tab', { name: tab }).click();
 			results = await new AxeBuilder({ page }).analyze();
 			expect(results.violations, tab).toEqual([]);
 		}
 		await expect(page.getByText('role.grant')).toBeVisible();
+		await page.getByRole('tab', { name: 'Quotas' }).click();
+		await expect(page.getByText('12 of 20')).toBeVisible();
 	});
 
 	test('hides the organization from non-admins', async ({ page }) => {

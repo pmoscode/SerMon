@@ -403,7 +403,11 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 
 - Ein User kann Mitglied **mehrerer Orgs** sein und wechselt zwischen ihnen (Org-Switcher).
 - Ein **Superadmin** (Instanz-Ebene) verwaltet Orgs, sieht aber **keine** Daten einer Org, solange er nicht selbst
-  Mitglied ist.
+  Mitglied ist. Seine Seite „Organisationen“ zeigt nur Zahlen (Mitglieder, Nodes, geschätzter Speicher), Status und
+  **Kontingente** ([ADR 0029](docs/adr/0029-organisationen-verwalten-sperren-loeschen.md)): höchstens so viele Nodes und
+  Mitglieder (mit offenen Einladungen), eine Obergrenze der Retention, Samples pro Sekunde und Serien pro Node statt der
+  Werte der Instanz. An der Grenze wird Neues abgelehnt (Enrollment, Einladung, Annahme, neue Serien, Drosselung),
+  Bestehendes läuft weiter. Namen von Orgs sind eindeutig ohne Unterschied von Groß- und Kleinschreibung.
 - Ein Node gehört genau einer Gruppe. Zusätzlich gibt es **Tags** (frei, z. B. `env=prod`, `role=db`) für Filter und
   Regel-Matching, aber nicht für Rechte. Sie setzen Admins der Gruppe des Nodes mit Step-up und Audit-Eintrag;
   höchstens 16 Paare, Schlüssel aus Kleinbuchstaben, Ziffern, `_` und `-`, Werte aus Buchstaben, Ziffern und

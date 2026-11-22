@@ -24,7 +24,7 @@ var testAuthority int32
 func enrolledNode(t *testing.T, f fixture) (rotation.Identity, *postgres.AgentCAStore) {
 	t.Helper()
 	org := uuid.New()
-	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Rotation')", org)
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Rotation ' || $1::uuid::text)", org)
 	cert := certificate(t, f.db.OwnerDSN, org)
 	testAuthority = cert.Authority
 	ca := postgres.NewAgentCAStore(open(t, f.appDSN))

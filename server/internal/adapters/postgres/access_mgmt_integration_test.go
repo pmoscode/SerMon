@@ -30,7 +30,7 @@ type mgmtOrg struct {
 func newMgmtOrg(t *testing.T, f fixture) mgmtOrg {
 	t.Helper()
 	org, admin, other, binding := uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Mgmt')", org)
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Mgmt ' || $1::uuid::text)", org)
 	for _, u := range []uuid.UUID{admin, other} {
 		ownerExec(t, f.db.OwnerDSN, "INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'User')", u, u.String()+"@example.org")
 		ownerExec(t, f.db.OwnerDSN, "INSERT INTO memberships (org_id, user_id) VALUES ($1, $2)", org, u)

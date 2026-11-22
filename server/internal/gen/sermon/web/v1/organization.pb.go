@@ -23,6 +23,140 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// OrganizationStatus is the state of an organization (M2-33 adds locked and scheduled for
+// deletion).
+type OrganizationStatus int32
+
+const (
+	// ORGANIZATION_STATUS_UNSPECIFIED is not used.
+	OrganizationStatus_ORGANIZATION_STATUS_UNSPECIFIED OrganizationStatus = 0
+	// ORGANIZATION_STATUS_ACTIVE: members log in, agents send.
+	OrganizationStatus_ORGANIZATION_STATUS_ACTIVE OrganizationStatus = 1
+)
+
+// Enum value maps for OrganizationStatus.
+var (
+	OrganizationStatus_name = map[int32]string{
+		0: "ORGANIZATION_STATUS_UNSPECIFIED",
+		1: "ORGANIZATION_STATUS_ACTIVE",
+	}
+	OrganizationStatus_value = map[string]int32{
+		"ORGANIZATION_STATUS_UNSPECIFIED": 0,
+		"ORGANIZATION_STATUS_ACTIVE":      1,
+	}
+)
+
+func (x OrganizationStatus) Enum() *OrganizationStatus {
+	p := new(OrganizationStatus)
+	*p = x
+	return p
+}
+
+func (x OrganizationStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (OrganizationStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_web_v1_organization_proto_enumTypes[0].Descriptor()
+}
+
+func (OrganizationStatus) Type() protoreflect.EnumType {
+	return &file_sermon_web_v1_organization_proto_enumTypes[0]
+}
+
+func (x OrganizationStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use OrganizationStatus.Descriptor instead.
+func (OrganizationStatus) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{0}
+}
+
+// OrganizationQuotas bound an organization instead of the instance-wide values (ADR 0029).
+// An unset field means the instance default (no limit for nodes and members).
+type OrganizationQuotas struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// max_nodes bounds the enrolled nodes: enrolling more is refused.
+	MaxNodes *uint32 `protobuf:"varint,1,opt,name=max_nodes,json=maxNodes,proto3,oneof" json:"max_nodes,omitempty"`
+	// max_members bounds members plus open invitations: inviting more is refused.
+	MaxMembers *uint32 `protobuf:"varint,2,opt,name=max_members,json=maxMembers,proto3,oneof" json:"max_members,omitempty"`
+	// retention_cap_days caps the retention the organization may set for itself (applies once
+	// organizations set their own retention).
+	RetentionCapDays *uint32 `protobuf:"varint,3,opt,name=retention_cap_days,json=retentionCapDays,proto3,oneof" json:"retention_cap_days,omitempty"`
+	// samples_per_second is the sample rate per node before the agent is throttled.
+	SamplesPerSecond *uint32 `protobuf:"varint,4,opt,name=samples_per_second,json=samplesPerSecond,proto3,oneof" json:"samples_per_second,omitempty"`
+	// series_per_node bounds the distinct series of a node: new ones beyond it are dropped.
+	SeriesPerNode *uint32 `protobuf:"varint,5,opt,name=series_per_node,json=seriesPerNode,proto3,oneof" json:"series_per_node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OrganizationQuotas) Reset() {
+	*x = OrganizationQuotas{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OrganizationQuotas) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OrganizationQuotas) ProtoMessage() {}
+
+func (x *OrganizationQuotas) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OrganizationQuotas.ProtoReflect.Descriptor instead.
+func (*OrganizationQuotas) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *OrganizationQuotas) GetMaxNodes() uint32 {
+	if x != nil && x.MaxNodes != nil {
+		return *x.MaxNodes
+	}
+	return 0
+}
+
+func (x *OrganizationQuotas) GetMaxMembers() uint32 {
+	if x != nil && x.MaxMembers != nil {
+		return *x.MaxMembers
+	}
+	return 0
+}
+
+func (x *OrganizationQuotas) GetRetentionCapDays() uint32 {
+	if x != nil && x.RetentionCapDays != nil {
+		return *x.RetentionCapDays
+	}
+	return 0
+}
+
+func (x *OrganizationQuotas) GetSamplesPerSecond() uint32 {
+	if x != nil && x.SamplesPerSecond != nil {
+		return *x.SamplesPerSecond
+	}
+	return 0
+}
+
+func (x *OrganizationQuotas) GetSeriesPerNode() uint32 {
+	if x != nil && x.SeriesPerNode != nil {
+		return *x.SeriesPerNode
+	}
+	return 0
+}
+
 // OrganizationSummary is an organization as the superadmin sees it.
 type OrganizationSummary struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -33,14 +167,23 @@ type OrganizationSummary struct {
 	// create_time is when the organization was created.
 	CreateTime *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
 	// member_count is the number of members.
-	MemberCount   int64 `protobuf:"varint,4,opt,name=member_count,json=memberCount,proto3" json:"member_count,omitempty"`
+	MemberCount int64 `protobuf:"varint,4,opt,name=member_count,json=memberCount,proto3" json:"member_count,omitempty"`
+	// node_count is the number of enrolled nodes.
+	NodeCount int64 `protobuf:"varint,5,opt,name=node_count,json=nodeCount,proto3" json:"node_count,omitempty"`
+	// storage_bytes is the approximate storage of its metrics and security events: the totals of
+	// the instance shared by its share of the series and of the events.
+	StorageBytes int64 `protobuf:"varint,6,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	// status is active (M2-33 adds more).
+	Status OrganizationStatus `protobuf:"varint,7,opt,name=status,proto3,enum=sermon.web.v1.OrganizationStatus" json:"status,omitempty"`
+	// quotas are the organization's limits.
+	Quotas        *OrganizationQuotas `protobuf:"bytes,8,opt,name=quotas,proto3" json:"quotas,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *OrganizationSummary) Reset() {
 	*x = OrganizationSummary{}
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -52,7 +195,7 @@ func (x *OrganizationSummary) String() string {
 func (*OrganizationSummary) ProtoMessage() {}
 
 func (x *OrganizationSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -65,7 +208,7 @@ func (x *OrganizationSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrganizationSummary.ProtoReflect.Descriptor instead.
 func (*OrganizationSummary) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{0}
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *OrganizationSummary) GetId() string {
@@ -96,6 +239,34 @@ func (x *OrganizationSummary) GetMemberCount() int64 {
 	return 0
 }
 
+func (x *OrganizationSummary) GetNodeCount() int64 {
+	if x != nil {
+		return x.NodeCount
+	}
+	return 0
+}
+
+func (x *OrganizationSummary) GetStorageBytes() int64 {
+	if x != nil {
+		return x.StorageBytes
+	}
+	return 0
+}
+
+func (x *OrganizationSummary) GetStatus() OrganizationStatus {
+	if x != nil {
+		return x.Status
+	}
+	return OrganizationStatus_ORGANIZATION_STATUS_UNSPECIFIED
+}
+
+func (x *OrganizationSummary) GetQuotas() *OrganizationQuotas {
+	if x != nil {
+		return x.Quotas
+	}
+	return nil
+}
+
 // ListOrganizationsRequest has no parameters.
 type ListOrganizationsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -105,7 +276,7 @@ type ListOrganizationsRequest struct {
 
 func (x *ListOrganizationsRequest) Reset() {
 	*x = ListOrganizationsRequest{}
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -117,7 +288,7 @@ func (x *ListOrganizationsRequest) String() string {
 func (*ListOrganizationsRequest) ProtoMessage() {}
 
 func (x *ListOrganizationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -130,7 +301,7 @@ func (x *ListOrganizationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrganizationsRequest.ProtoReflect.Descriptor instead.
 func (*ListOrganizationsRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{1}
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{2}
 }
 
 // ListOrganizationsResponse lists organizations by name.
@@ -144,7 +315,7 @@ type ListOrganizationsResponse struct {
 
 func (x *ListOrganizationsResponse) Reset() {
 	*x = ListOrganizationsResponse{}
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -156,7 +327,7 @@ func (x *ListOrganizationsResponse) String() string {
 func (*ListOrganizationsResponse) ProtoMessage() {}
 
 func (x *ListOrganizationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -169,7 +340,7 @@ func (x *ListOrganizationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOrganizationsResponse.ProtoReflect.Descriptor instead.
 func (*ListOrganizationsResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{2}
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ListOrganizationsResponse) GetOrganizations() []*OrganizationSummary {
@@ -192,7 +363,7 @@ type CreateOrganizationRequest struct {
 
 func (x *CreateOrganizationRequest) Reset() {
 	*x = CreateOrganizationRequest{}
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -204,7 +375,7 @@ func (x *CreateOrganizationRequest) String() string {
 func (*CreateOrganizationRequest) ProtoMessage() {}
 
 func (x *CreateOrganizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -217,7 +388,7 @@ func (x *CreateOrganizationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrganizationRequest.ProtoReflect.Descriptor instead.
 func (*CreateOrganizationRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{3}
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CreateOrganizationRequest) GetName() string {
@@ -250,7 +421,7 @@ type CreateOrganizationResponse struct {
 
 func (x *CreateOrganizationResponse) Reset() {
 	*x = CreateOrganizationResponse{}
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -262,7 +433,7 @@ func (x *CreateOrganizationResponse) String() string {
 func (*CreateOrganizationResponse) ProtoMessage() {}
 
 func (x *CreateOrganizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -275,7 +446,7 @@ func (x *CreateOrganizationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOrganizationResponse.ProtoReflect.Descriptor instead.
 func (*CreateOrganizationResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{4}
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CreateOrganizationResponse) GetOrganization() *OrganizationSummary {
@@ -312,7 +483,7 @@ type RenameOrganizationRequest struct {
 
 func (x *RenameOrganizationRequest) Reset() {
 	*x = RenameOrganizationRequest{}
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -324,7 +495,7 @@ func (x *RenameOrganizationRequest) String() string {
 func (*RenameOrganizationRequest) ProtoMessage() {}
 
 func (x *RenameOrganizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -337,7 +508,7 @@ func (x *RenameOrganizationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameOrganizationRequest.ProtoReflect.Descriptor instead.
 func (*RenameOrganizationRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{5}
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RenameOrganizationRequest) GetOrganizationId() string {
@@ -363,7 +534,7 @@ type RenameOrganizationResponse struct {
 
 func (x *RenameOrganizationResponse) Reset() {
 	*x = RenameOrganizationResponse{}
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -375,7 +546,7 @@ func (x *RenameOrganizationResponse) String() string {
 func (*RenameOrganizationResponse) ProtoMessage() {}
 
 func (x *RenameOrganizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_organization_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -388,20 +559,149 @@ func (x *RenameOrganizationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameOrganizationResponse.ProtoReflect.Descriptor instead.
 func (*RenameOrganizationResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{7}
+}
+
+// UpdateOrganizationRequest names the organization, its name and its quotas.
+type UpdateOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the UUID of the organization.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// name is the display name.
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// quotas replace the previous ones; unset fields are the instance defaults.
+	Quotas        *OrganizationQuotas `protobuf:"bytes,3,opt,name=quotas,proto3" json:"quotas,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateOrganizationRequest) Reset() {
+	*x = UpdateOrganizationRequest{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateOrganizationRequest) ProtoMessage() {}
+
+func (x *UpdateOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*UpdateOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *UpdateOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *UpdateOrganizationRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateOrganizationRequest) GetQuotas() *OrganizationQuotas {
+	if x != nil {
+		return x.Quotas
+	}
+	return nil
+}
+
+// UpdateOrganizationResponse returns the organization.
+type UpdateOrganizationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization is the updated organization.
+	Organization  *OrganizationSummary `protobuf:"bytes,1,opt,name=organization,proto3" json:"organization,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateOrganizationResponse) Reset() {
+	*x = UpdateOrganizationResponse{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateOrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateOrganizationResponse) ProtoMessage() {}
+
+func (x *UpdateOrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateOrganizationResponse.ProtoReflect.Descriptor instead.
+func (*UpdateOrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UpdateOrganizationResponse) GetOrganization() *OrganizationSummary {
+	if x != nil {
+		return x.Organization
+	}
+	return nil
 }
 
 var File_sermon_web_v1_organization_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_organization_proto_rawDesc = "" +
 	"\n" +
-	" sermon/web/v1/organization.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x99\x01\n" +
+	" sermon/web/v1/organization.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8f\x03\n" +
+	"\x12OrganizationQuotas\x12-\n" +
+	"\tmax_nodes\x18\x01 \x01(\rB\v\xbaH\b*\x06\x18\xc0\x84=(\x01H\x00R\bmaxNodes\x88\x01\x01\x121\n" +
+	"\vmax_members\x18\x02 \x01(\rB\v\xbaH\b*\x06\x18\xa0\x8d\x06(\x01H\x01R\n" +
+	"maxMembers\x88\x01\x01\x12=\n" +
+	"\x12retention_cap_days\x18\x03 \x01(\rB\n" +
+	"\xbaH\a*\x05\x18\xc2\x1c(\x01H\x02R\x10retentionCapDays\x88\x01\x01\x12>\n" +
+	"\x12samples_per_second\x18\x04 \x01(\rB\v\xbaH\b*\x06\x18\xc0\x84=(\x01H\x03R\x10samplesPerSecond\x88\x01\x01\x128\n" +
+	"\x0fseries_per_node\x18\x05 \x01(\rB\v\xbaH\b*\x06\x18\xa0\x8d\x06(\x01H\x04R\rseriesPerNode\x88\x01\x01B\f\n" +
+	"\n" +
+	"_max_nodesB\x0e\n" +
+	"\f_max_membersB\x15\n" +
+	"\x13_retention_cap_daysB\x15\n" +
+	"\x13_samples_per_secondB\x12\n" +
+	"\x10_series_per_node\"\xd3\x02\n" +
 	"\x13OrganizationSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12;\n" +
 	"\vcreate_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"createTime\x12!\n" +
-	"\fmember_count\x18\x04 \x01(\x03R\vmemberCount\"\x1a\n" +
+	"\fmember_count\x18\x04 \x01(\x03R\vmemberCount\x12\x1d\n" +
+	"\n" +
+	"node_count\x18\x05 \x01(\x03R\tnodeCount\x12#\n" +
+	"\rstorage_bytes\x18\x06 \x01(\x03R\fstorageBytes\x129\n" +
+	"\x06status\x18\a \x01(\x0e2!.sermon.web.v1.OrganizationStatusR\x06status\x129\n" +
+	"\x06quotas\x18\b \x01(\v2!.sermon.web.v1.OrganizationQuotasR\x06quotas\"\x1a\n" +
 	"\x18ListOrganizationsRequest\"e\n" +
 	"\x19ListOrganizationsResponse\x12H\n" +
 	"\rorganizations\x18\x01 \x03(\v2\".sermon.web.v1.OrganizationSummaryR\rorganizations\"h\n" +
@@ -419,11 +719,22 @@ const file_sermon_web_v1_organization_proto_rawDesc = "" +
 	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\x12\x1e\n" +
 	"\x04name\x18\x02 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\x04name\"\x1c\n" +
-	"\x1aRenameOrganizationResponse2\xd8\x02\n" +
+	"\x1aRenameOrganizationResponse\"\xb1\x01\n" +
+	"\x19UpdateOrganizationRequest\x121\n" +
+	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\x12\x1e\n" +
+	"\x04name\x18\x02 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\x04name\x12A\n" +
+	"\x06quotas\x18\x03 \x01(\v2!.sermon.web.v1.OrganizationQuotasB\x06\xbaH\x03\xc8\x01\x01R\x06quotas\"d\n" +
+	"\x1aUpdateOrganizationResponse\x12F\n" +
+	"\forganization\x18\x01 \x01(\v2\".sermon.web.v1.OrganizationSummaryR\forganization*Y\n" +
+	"\x12OrganizationStatus\x12#\n" +
+	"\x1fORGANIZATION_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aORGANIZATION_STATUS_ACTIVE\x10\x012\xc3\x03\n" +
 	"\x13OrganizationService\x12k\n" +
 	"\x11ListOrganizations\x12'.sermon.web.v1.ListOrganizationsRequest\x1a(.sermon.web.v1.ListOrganizationsResponse\"\x03\x90\x02\x01\x12i\n" +
 	"\x12CreateOrganization\x12(.sermon.web.v1.CreateOrganizationRequest\x1a).sermon.web.v1.CreateOrganizationResponse\x12i\n" +
-	"\x12RenameOrganization\x12(.sermon.web.v1.RenameOrganizationRequest\x1a).sermon.web.v1.RenameOrganizationResponseB\xc0\x01\n" +
+	"\x12RenameOrganization\x12(.sermon.web.v1.RenameOrganizationRequest\x1a).sermon.web.v1.RenameOrganizationResponse\x12i\n" +
+	"\x12UpdateOrganization\x12(.sermon.web.v1.UpdateOrganizationRequest\x1a).sermon.web.v1.UpdateOrganizationResponseB\xc0\x01\n" +
 	"\x11com.sermon.web.v1B\x11OrganizationProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -438,32 +749,43 @@ func file_sermon_web_v1_organization_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_organization_proto_rawDescData
 }
 
-var file_sermon_web_v1_organization_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_sermon_web_v1_organization_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_sermon_web_v1_organization_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_sermon_web_v1_organization_proto_goTypes = []any{
-	(*OrganizationSummary)(nil),        // 0: sermon.web.v1.OrganizationSummary
-	(*ListOrganizationsRequest)(nil),   // 1: sermon.web.v1.ListOrganizationsRequest
-	(*ListOrganizationsResponse)(nil),  // 2: sermon.web.v1.ListOrganizationsResponse
-	(*CreateOrganizationRequest)(nil),  // 3: sermon.web.v1.CreateOrganizationRequest
-	(*CreateOrganizationResponse)(nil), // 4: sermon.web.v1.CreateOrganizationResponse
-	(*RenameOrganizationRequest)(nil),  // 5: sermon.web.v1.RenameOrganizationRequest
-	(*RenameOrganizationResponse)(nil), // 6: sermon.web.v1.RenameOrganizationResponse
-	(*timestamppb.Timestamp)(nil),      // 7: google.protobuf.Timestamp
+	(OrganizationStatus)(0),            // 0: sermon.web.v1.OrganizationStatus
+	(*OrganizationQuotas)(nil),         // 1: sermon.web.v1.OrganizationQuotas
+	(*OrganizationSummary)(nil),        // 2: sermon.web.v1.OrganizationSummary
+	(*ListOrganizationsRequest)(nil),   // 3: sermon.web.v1.ListOrganizationsRequest
+	(*ListOrganizationsResponse)(nil),  // 4: sermon.web.v1.ListOrganizationsResponse
+	(*CreateOrganizationRequest)(nil),  // 5: sermon.web.v1.CreateOrganizationRequest
+	(*CreateOrganizationResponse)(nil), // 6: sermon.web.v1.CreateOrganizationResponse
+	(*RenameOrganizationRequest)(nil),  // 7: sermon.web.v1.RenameOrganizationRequest
+	(*RenameOrganizationResponse)(nil), // 8: sermon.web.v1.RenameOrganizationResponse
+	(*UpdateOrganizationRequest)(nil),  // 9: sermon.web.v1.UpdateOrganizationRequest
+	(*UpdateOrganizationResponse)(nil), // 10: sermon.web.v1.UpdateOrganizationResponse
+	(*timestamppb.Timestamp)(nil),      // 11: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_organization_proto_depIdxs = []int32{
-	7, // 0: sermon.web.v1.OrganizationSummary.create_time:type_name -> google.protobuf.Timestamp
-	0, // 1: sermon.web.v1.ListOrganizationsResponse.organizations:type_name -> sermon.web.v1.OrganizationSummary
-	0, // 2: sermon.web.v1.CreateOrganizationResponse.organization:type_name -> sermon.web.v1.OrganizationSummary
-	1, // 3: sermon.web.v1.OrganizationService.ListOrganizations:input_type -> sermon.web.v1.ListOrganizationsRequest
-	3, // 4: sermon.web.v1.OrganizationService.CreateOrganization:input_type -> sermon.web.v1.CreateOrganizationRequest
-	5, // 5: sermon.web.v1.OrganizationService.RenameOrganization:input_type -> sermon.web.v1.RenameOrganizationRequest
-	2, // 6: sermon.web.v1.OrganizationService.ListOrganizations:output_type -> sermon.web.v1.ListOrganizationsResponse
-	4, // 7: sermon.web.v1.OrganizationService.CreateOrganization:output_type -> sermon.web.v1.CreateOrganizationResponse
-	6, // 8: sermon.web.v1.OrganizationService.RenameOrganization:output_type -> sermon.web.v1.RenameOrganizationResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	11, // 0: sermon.web.v1.OrganizationSummary.create_time:type_name -> google.protobuf.Timestamp
+	0,  // 1: sermon.web.v1.OrganizationSummary.status:type_name -> sermon.web.v1.OrganizationStatus
+	1,  // 2: sermon.web.v1.OrganizationSummary.quotas:type_name -> sermon.web.v1.OrganizationQuotas
+	2,  // 3: sermon.web.v1.ListOrganizationsResponse.organizations:type_name -> sermon.web.v1.OrganizationSummary
+	2,  // 4: sermon.web.v1.CreateOrganizationResponse.organization:type_name -> sermon.web.v1.OrganizationSummary
+	1,  // 5: sermon.web.v1.UpdateOrganizationRequest.quotas:type_name -> sermon.web.v1.OrganizationQuotas
+	2,  // 6: sermon.web.v1.UpdateOrganizationResponse.organization:type_name -> sermon.web.v1.OrganizationSummary
+	3,  // 7: sermon.web.v1.OrganizationService.ListOrganizations:input_type -> sermon.web.v1.ListOrganizationsRequest
+	5,  // 8: sermon.web.v1.OrganizationService.CreateOrganization:input_type -> sermon.web.v1.CreateOrganizationRequest
+	7,  // 9: sermon.web.v1.OrganizationService.RenameOrganization:input_type -> sermon.web.v1.RenameOrganizationRequest
+	9,  // 10: sermon.web.v1.OrganizationService.UpdateOrganization:input_type -> sermon.web.v1.UpdateOrganizationRequest
+	4,  // 11: sermon.web.v1.OrganizationService.ListOrganizations:output_type -> sermon.web.v1.ListOrganizationsResponse
+	6,  // 12: sermon.web.v1.OrganizationService.CreateOrganization:output_type -> sermon.web.v1.CreateOrganizationResponse
+	8,  // 13: sermon.web.v1.OrganizationService.RenameOrganization:output_type -> sermon.web.v1.RenameOrganizationResponse
+	10, // 14: sermon.web.v1.OrganizationService.UpdateOrganization:output_type -> sermon.web.v1.UpdateOrganizationResponse
+	11, // [11:15] is the sub-list for method output_type
+	7,  // [7:11] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_organization_proto_init() }
@@ -471,18 +793,20 @@ func file_sermon_web_v1_organization_proto_init() {
 	if File_sermon_web_v1_organization_proto != nil {
 		return
 	}
+	file_sermon_web_v1_organization_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_organization_proto_rawDesc), len(file_sermon_web_v1_organization_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   7,
+			NumEnums:      1,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_sermon_web_v1_organization_proto_goTypes,
 		DependencyIndexes: file_sermon_web_v1_organization_proto_depIdxs,
+		EnumInfos:         file_sermon_web_v1_organization_proto_enumTypes,
 		MessageInfos:      file_sermon_web_v1_organization_proto_msgTypes,
 	}.Build()
 	File_sermon_web_v1_organization_proto = out.File

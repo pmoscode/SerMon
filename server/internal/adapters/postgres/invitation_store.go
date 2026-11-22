@@ -14,6 +14,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -34,6 +35,9 @@ func (s *InvitationStore) Create(ctx context.Context, scope tenant.Scope, inv in
 		inviter = &id
 	}
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := admitInvitation(ctx, q, inv); err != nil {
+			return err
+		}
 		err := q.UpsertInvitation(ctx, sqlcdb.UpsertInvitationParams{
 			ID: uuid.UUID(inv.ID), Email: inv.Email, GroupID: groupPtr(inv.Group), Role: inv.Role.String(),
 			TokenHash: hash[:], InvitedBy: inviter, ExpiresAt: inv.ExpiresAt,
@@ -165,6 +169,9 @@ func (s *InvitationStore) accept(ctx context.Context, p invitation.Pending, fn f
 }
 
 func (s *InvitationStore) join(ctx context.Context, q *sqlcdb.Queries, p invitation.Pending, user identity.UserID, binding uuid.UUID, audit access.AuditEntry) error {
+	if err := admitMember(ctx, q, user); err != nil {
+		return err
+	}
 	if err := q.AddMembershipIfMissing(ctx, uuid.UUID(user)); err != nil {
 		return fmt.Errorf("add membership: %w", err)
 	}
@@ -191,4 +198,57 @@ func groupID(g *uuid.UUID) *tenant.GroupID {
 	}
 	id := tenant.GroupID(*g)
 	return &id
+}
+
+// admitInvitation applies the member quota (M2-32) to a new invitation: members and the other
+// open invitations count; inviting the same address again replaces its invitation.
+func admitInvitation(ctx context.Context, q *sqlcdb.Queries, inv invitation.Invitation) error {
+	limits, err := q.OrganizationQuotasForUpdate(ctx)
+	if err != nil {
+		return fmt.Errorf("lock organization quotas: %w", err)
+	}
+	limit := quotaOf(limits.MaxMembers)
+	if limit == 0 {
+		return nil
+	}
+	members, err := q.CountMembers(ctx)
+	if err != nil {
+		return fmt.Errorf("count members: %w", err)
+	}
+	open, err := q.CountOpenInvitations(ctx, sqlcdb.CountOpenInvitationsParams{Now: inv.CreatedAt, Email: inv.Email})
+	if err != nil {
+		return fmt.Errorf("count invitations: %w", err)
+	}
+	if quota.Reached(limit, members+open) {
+		return quota.Exceeded{Kind: quota.Members, Limit: limit}
+	}
+	return nil
+}
+
+// admitMember applies the member quota when an invitation is accepted (it may have been lowered
+// since): an existing member only gets a role, anyone else needs room. The invitation stays.
+func admitMember(ctx context.Context, q *sqlcdb.Queries, user identity.UserID) error {
+	limits, err := q.OrganizationQuotasForUpdate(ctx)
+	if err != nil {
+		return fmt.Errorf("lock organization quotas: %w", err)
+	}
+	limit := quotaOf(limits.MaxMembers)
+	if limit == 0 {
+		return nil
+	}
+	member, err := q.IsMember(ctx, uuid.UUID(user))
+	if err != nil {
+		return fmt.Errorf("check membership: %w", err)
+	}
+	if member {
+		return nil
+	}
+	members, err := q.CountMembers(ctx)
+	if err != nil {
+		return fmt.Errorf("count members: %w", err)
+	}
+	if quota.Reached(limit, members) {
+		return quota.Exceeded{Kind: quota.Members, Limit: limit}
+	}
+	return nil
 }

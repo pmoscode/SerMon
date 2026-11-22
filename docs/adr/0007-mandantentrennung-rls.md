@@ -62,7 +62,10 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
   - `auth_user_profile(user)`: nur E-Mail und Anzeigename (Session-Ansicht, M1-02)
   - `invitation_by_token(hash, at)`: eine gültige Einladung zum Token-Hash (M1-04, ADR 0008)
   - `enrollment_token_by_hash(hash, at)`: ein nutzbares Enrollment-Token zum Hash (M1-08)
-  - `admin_list_organizations()`: Name und Mitgliederzahl aller Orgs für den Superadmin, keine Mandantendaten (M1-04)
+  - `admin_organizations()` (vorher `admin_list_organizations()`): Name, Mitgliederzahl und Kontingente aller Orgs für
+    den Superadmin, keine Mandantendaten (M1-04, M2-32)
+  - `admin_storage_totals()`: Gesamtgröße der Metrik-Hypertables samt Continuous Aggregates und der Event-Partitionen,
+    nur Größen (M2-32); die Anteile pro Org zählt der Server in Tenant-Transaktionen
   - `pki_certificates_in_use(authority, at)`: nur die Anzahl gültiger Zertifikate einer CA (M1-11b)
   - `metric_points_raw/_1m/_1h(series_ids, from, to, step)`: Messpunkte der angegebenen Serien (M1-22, ADR 0001).
     Hier gilt die RLS bewusst **auch für `sermon_definer`**: Auf `series` gibt es keine `definer_read`-Policy, die
@@ -159,3 +162,9 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
 - **Verworfen, Hypertable von TimescaleDB:** Ausprobiert mit dem gepinnten Image 2.32.0-pg17. RLS auf der Hypertable
   wirkt nur beim Zugriff über sie. Die Chunks (`_timescaledb_internal`) haben **keine RLS**, erben aber die Rechte der
   Hypertable. Eine Rolle ohne Sonderrechte las ohne Mandant über den Chunk die Zeilen **aller** Orgs.
+
+## Nachtrag M2-32: Migration mit `NO FORCE`
+
+- Migration 00035 benennt doppelte Org-Namen um, bevor ein eindeutiger Index auf `lower(name)` entsteht. Die Rolle der
+  Migration sieht wegen `FORCE ROW LEVEL SECURITY` keine Zeilen von `organizations`; die Migration schaltet `FORCE` dafür
+  aus und in derselben Transaktion wieder ein. `TestRLS_EveryTenantTableIsForced` prüft danach weiter, dass `FORCE` gilt.

@@ -10,21 +10,32 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const adminListOrganizations = `-- name: AdminListOrganizations :many
-SELECT id::uuid AS id, name::text AS name, created_at::timestamptz AS created_at, members::bigint AS members
-FROM admin_list_organizations()
+SELECT id::uuid AS id, name::text AS name, created_at::timestamptz AS created_at, members::bigint AS members,
+       coalesce(max_nodes, 0)::integer AS max_nodes, coalesce(max_members, 0)::integer AS max_members,
+       coalesce(retention_cap_days, 0)::integer AS retention_cap_days,
+       coalesce(samples_per_second, 0)::integer AS samples_per_second,
+       coalesce(series_per_node, 0)::integer AS series_per_node
+FROM admin_organizations()
 `
 
 type AdminListOrganizationsRow struct {
-	ID        uuid.UUID
-	Name      string
-	CreatedAt time.Time
-	Members   int64
+	ID               uuid.UUID
+	Name             string
+	CreatedAt        time.Time
+	Members          int64
+	MaxNodes         int32
+	MaxMembers       int32
+	RetentionCapDays int32
+	SamplesPerSecond int32
+	SeriesPerNode    int32
 }
 
 // Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
+// Quotas: 0 is the instance default.
 func (q *Queries) AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error) {
 	rows, err := q.db.Query(ctx, adminListOrganizations)
 	if err != nil {
@@ -39,6 +50,11 @@ func (q *Queries) AdminListOrganizations(ctx context.Context) ([]AdminListOrgani
 			&i.Name,
 			&i.CreatedAt,
 			&i.Members,
+			&i.MaxNodes,
+			&i.MaxMembers,
+			&i.RetentionCapDays,
+			&i.SamplesPerSecond,
+			&i.SeriesPerNode,
 		); err != nil {
 			return nil, err
 		}
@@ -48,6 +64,62 @@ func (q *Queries) AdminListOrganizations(ctx context.Context) ([]AdminListOrgani
 		return nil, err
 	}
 	return items, nil
+}
+
+const adminStorageTotals = `-- name: AdminStorageTotals :one
+SELECT metric_bytes::bigint AS metric_bytes, event_bytes::bigint AS event_bytes FROM admin_storage_totals()
+`
+
+type AdminStorageTotalsRow struct {
+	MetricBytes int64
+	EventBytes  int64
+}
+
+// Storage of the instance for the estimate per organization (SECURITY DEFINER, sizes only).
+func (q *Queries) AdminStorageTotals(ctx context.Context) (AdminStorageTotalsRow, error) {
+	row := q.db.QueryRow(ctx, adminStorageTotals)
+	var i AdminStorageTotalsRow
+	err := row.Scan(&i.MetricBytes, &i.EventBytes)
+	return i, err
+}
+
+const countMembers = `-- name: CountMembers :one
+SELECT count(*)::bigint FROM memberships
+`
+
+func (q *Queries) CountMembers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countMembers)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countNodes = `-- name: CountNodes :one
+SELECT count(*)::bigint FROM nodes
+`
+
+func (q *Queries) CountNodes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countNodes)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countOpenInvitations = `-- name: CountOpenInvitations :one
+SELECT count(*)::bigint FROM invitations WHERE expires_at > $1 AND email <> $2
+`
+
+type CountOpenInvitationsParams struct {
+	Now   time.Time
+	Email string
+}
+
+// Open invitations for other addresses than email (a new invitation replaces the old one).
+func (q *Queries) CountOpenInvitations(ctx context.Context, arg CountOpenInvitationsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countOpenInvitations, arg.Now, arg.Email)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const createOrganization = `-- name: CreateOrganization :one
@@ -128,12 +200,107 @@ func (q *Queries) ListOrganizations(ctx context.Context) ([]ListOrganizationsRow
 	return items, nil
 }
 
+const organizationQuotas = `-- name: OrganizationQuotas :one
+SELECT max_nodes, max_members, retention_cap_days, samples_per_second, series_per_node
+FROM organizations WHERE id = current_org_id()
+`
+
+type OrganizationQuotasRow struct {
+	MaxNodes         pgtype.Int4
+	MaxMembers       pgtype.Int4
+	RetentionCapDays pgtype.Int4
+	SamplesPerSecond pgtype.Int4
+	SeriesPerNode    pgtype.Int4
+}
+
+func (q *Queries) OrganizationQuotas(ctx context.Context) (OrganizationQuotasRow, error) {
+	row := q.db.QueryRow(ctx, organizationQuotas)
+	var i OrganizationQuotasRow
+	err := row.Scan(
+		&i.MaxNodes,
+		&i.MaxMembers,
+		&i.RetentionCapDays,
+		&i.SamplesPerSecond,
+		&i.SeriesPerNode,
+	)
+	return i, err
+}
+
+const organizationQuotasForUpdate = `-- name: OrganizationQuotasForUpdate :one
+SELECT max_nodes, max_members FROM organizations WHERE id = current_org_id() FOR UPDATE
+`
+
+type OrganizationQuotasForUpdateRow struct {
+	MaxNodes   pgtype.Int4
+	MaxMembers pgtype.Int4
+}
+
+// The quotas of the organization, locked: enrollments and invitations of one organization are
+// counted one after the other.
+func (q *Queries) OrganizationQuotasForUpdate(ctx context.Context) (OrganizationQuotasForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, organizationQuotasForUpdate)
+	var i OrganizationQuotasForUpdateRow
+	err := row.Scan(&i.MaxNodes, &i.MaxMembers)
+	return i, err
+}
+
+const organizationUsage = `-- name: OrganizationUsage :one
+SELECT (SELECT count(*) FROM nodes)::bigint AS nodes, (SELECT count(*) FROM series)::bigint AS series,
+       (SELECT count(*) FROM security_events)::bigint AS events
+`
+
+type OrganizationUsageRow struct {
+	Nodes  int64
+	Series int64
+	Events int64
+}
+
+// What the organization of the tenant transaction holds, for the superadmin's estimate (M2-32).
+func (q *Queries) OrganizationUsage(ctx context.Context) (OrganizationUsageRow, error) {
+	row := q.db.QueryRow(ctx, organizationUsage)
+	var i OrganizationUsageRow
+	err := row.Scan(&i.Nodes, &i.Series, &i.Events)
+	return i, err
+}
+
 const renameOrganization = `-- name: RenameOrganization :execrows
 UPDATE organizations SET name = $1 WHERE id = current_org_id()
 `
 
 func (q *Queries) RenameOrganization(ctx context.Context, name string) (int64, error) {
 	result, err := q.db.Exec(ctx, renameOrganization, name)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateOrganization = `-- name: UpdateOrganization :execrows
+UPDATE organizations
+SET name = $1, max_nodes = $2, max_members = $3,
+    retention_cap_days = $4, samples_per_second = $5,
+    series_per_node = $6
+WHERE id = current_org_id()
+`
+
+type UpdateOrganizationParams struct {
+	Name             string
+	MaxNodes         pgtype.Int4
+	MaxMembers       pgtype.Int4
+	RetentionCapDays pgtype.Int4
+	SamplesPerSecond pgtype.Int4
+	SeriesPerNode    pgtype.Int4
+}
+
+func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateOrganization,
+		arg.Name,
+		arg.MaxNodes,
+		arg.MaxMembers,
+		arg.RetentionCapDays,
+		arg.SamplesPerSecond,
+		arg.SeriesPerNode,
+	)
 	if err != nil {
 		return 0, err
 	}

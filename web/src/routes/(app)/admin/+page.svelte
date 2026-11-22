@@ -6,6 +6,7 @@
 	import GroupsPanel from '#lib/components/admin/GroupsPanel.svelte';
 	import InvitationsPanel from '#lib/components/admin/InvitationsPanel.svelte';
 	import MembersPanel from '#lib/components/admin/MembersPanel.svelte';
+	import QuotaPanel from '#lib/components/admin/QuotaPanel.svelte';
 	import SecurityPolicyPanel from '#lib/components/admin/SecurityPolicyPanel.svelte';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
@@ -69,6 +70,7 @@
 			<Tabs.Trigger value="invitations">{m.admin_tab_invitations()}</Tabs.Trigger>
 			<Tabs.Trigger value="groups">{m.admin_tab_groups()}</Tabs.Trigger>
 			<Tabs.Trigger value="security">{m.admin_tab_security()}</Tabs.Trigger>
+			<Tabs.Trigger value="quotas">{m.admin_tab_quotas()}</Tabs.Trigger>
 			<Tabs.Trigger value="audit">{m.admin_tab_audit()}</Tabs.Trigger>
 		</Tabs.List>
 		<Tabs.Content value="members" class="pt-4"
@@ -80,6 +82,7 @@
 		<Tabs.Content value="groups" class="pt-4"><GroupsPanel {groups} onChange={load} /></Tabs.Content
 		>
 		<Tabs.Content value="security" class="pt-4"><SecurityPolicyPanel /></Tabs.Content>
+		<Tabs.Content value="quotas" class="pt-4"><QuotaPanel /></Tabs.Content>
 		<Tabs.Content value="audit" class="pt-4"><AuditPanel {members} /></Tabs.Content>
 	</Tabs.Root>
 {/if}

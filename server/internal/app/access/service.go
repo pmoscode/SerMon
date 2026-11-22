@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/naming"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -111,6 +112,15 @@ type Store interface {
 	RevokeRole(ctx context.Context, scope tenant.Scope, id BindingID, audit AuditEntry) error
 	RemoveMember(ctx context.Context, scope tenant.Scope, user identity.UserID, audit AuditEntry) error
 	ListAudit(ctx context.Context, scope tenant.Scope, beforeSeq int64, limit int) ([]AuditRecord, error)
+	// QuotaUsage returns the organization's quotas and what counts against them (M2-32).
+	QuotaUsage(ctx context.Context, scope tenant.Scope, now time.Time) (QuotaUsage, error)
+}
+
+// QuotaUsage is the state of an organization's quotas, for its admins.
+type QuotaUsage struct {
+	Quotas          quota.Quotas
+	Nodes, Members  int64
+	OpenInvitations int64
 }
 
 // Caller is the authenticated principal with the time of its last (re-)authentication.
@@ -186,6 +196,15 @@ func (s *Service) DeleteGroup(ctx context.Context, c Caller, id tenant.GroupID) 
 		return err
 	}
 	return wrap(s.store.DeleteGroup(ctx, scope, id, s.audit(c, "group.delete", "group:"+id.String())), "delete group")
+}
+
+// QuotaUsage returns the quotas the superadmin set and how much of them is used (org admin).
+func (s *Service) QuotaUsage(ctx context.Context, c Caller) (QuotaUsage, error) {
+	scope, err := s.authorize(c, authz.ManageMembers, false)
+	if err != nil {
+		return QuotaUsage{}, err
+	}
+	return wrapResult(s.store.QuotaUsage(ctx, scope, s.now()))
 }
 
 // ListMembers returns the members of the organization with their roles.

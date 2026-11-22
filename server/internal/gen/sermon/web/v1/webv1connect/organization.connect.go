@@ -42,6 +42,9 @@ const (
 	// OrganizationServiceRenameOrganizationProcedure is the fully-qualified name of the
 	// OrganizationService's RenameOrganization RPC.
 	OrganizationServiceRenameOrganizationProcedure = "/sermon.web.v1.OrganizationService/RenameOrganization"
+	// OrganizationServiceUpdateOrganizationProcedure is the fully-qualified name of the
+	// OrganizationService's UpdateOrganization RPC.
+	OrganizationServiceUpdateOrganizationProcedure = "/sermon.web.v1.OrganizationService/UpdateOrganization"
 )
 
 // OrganizationServiceClient is a client for the sermon.web.v1.OrganizationService service.
@@ -53,8 +56,13 @@ type OrganizationServiceClient interface {
 	// (development) the response contains the link token once (ADR 0008). UNAVAILABLE: the
 	// organization exists but the mail could not be sent – invite the admin again.
 	CreateOrganization(context.Context, *connect.Request[v1.CreateOrganizationRequest]) (*connect.Response[v1.CreateOrganizationResponse], error)
-	// RenameOrganization renames an organization.
+	// RenameOrganization renames an organization. ALREADY_EXISTS: another organization has this
+	// name (names are unique regardless of case).
 	RenameOrganization(context.Context, *connect.Request[v1.RenameOrganizationRequest]) (*connect.Response[v1.RenameOrganizationResponse], error)
+	// UpdateOrganization sets the name and the quotas of an organization (step-up, M2-32). A
+	// lowered quota deletes nothing: what exists keeps running, only new things are refused.
+	// ALREADY_EXISTS: another organization has this name.
+	UpdateOrganization(context.Context, *connect.Request[v1.UpdateOrganizationRequest]) (*connect.Response[v1.UpdateOrganizationResponse], error)
 }
 
 // NewOrganizationServiceClient constructs a client for the sermon.web.v1.OrganizationService
@@ -87,6 +95,12 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(organizationServiceMethods.ByName("RenameOrganization")),
 			connect.WithClientOptions(opts...),
 		),
+		updateOrganization: connect.NewClient[v1.UpdateOrganizationRequest, v1.UpdateOrganizationResponse](
+			httpClient,
+			baseURL+OrganizationServiceUpdateOrganizationProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("UpdateOrganization")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -95,6 +109,7 @@ type organizationServiceClient struct {
 	listOrganizations  *connect.Client[v1.ListOrganizationsRequest, v1.ListOrganizationsResponse]
 	createOrganization *connect.Client[v1.CreateOrganizationRequest, v1.CreateOrganizationResponse]
 	renameOrganization *connect.Client[v1.RenameOrganizationRequest, v1.RenameOrganizationResponse]
+	updateOrganization *connect.Client[v1.UpdateOrganizationRequest, v1.UpdateOrganizationResponse]
 }
 
 // ListOrganizations calls sermon.web.v1.OrganizationService.ListOrganizations.
@@ -112,6 +127,11 @@ func (c *organizationServiceClient) RenameOrganization(ctx context.Context, req 
 	return c.renameOrganization.CallUnary(ctx, req)
 }
 
+// UpdateOrganization calls sermon.web.v1.OrganizationService.UpdateOrganization.
+func (c *organizationServiceClient) UpdateOrganization(ctx context.Context, req *connect.Request[v1.UpdateOrganizationRequest]) (*connect.Response[v1.UpdateOrganizationResponse], error) {
+	return c.updateOrganization.CallUnary(ctx, req)
+}
+
 // OrganizationServiceHandler is an implementation of the sermon.web.v1.OrganizationService service.
 type OrganizationServiceHandler interface {
 	// ListOrganizations returns all organizations.
@@ -121,8 +141,13 @@ type OrganizationServiceHandler interface {
 	// (development) the response contains the link token once (ADR 0008). UNAVAILABLE: the
 	// organization exists but the mail could not be sent – invite the admin again.
 	CreateOrganization(context.Context, *connect.Request[v1.CreateOrganizationRequest]) (*connect.Response[v1.CreateOrganizationResponse], error)
-	// RenameOrganization renames an organization.
+	// RenameOrganization renames an organization. ALREADY_EXISTS: another organization has this
+	// name (names are unique regardless of case).
 	RenameOrganization(context.Context, *connect.Request[v1.RenameOrganizationRequest]) (*connect.Response[v1.RenameOrganizationResponse], error)
+	// UpdateOrganization sets the name and the quotas of an organization (step-up, M2-32). A
+	// lowered quota deletes nothing: what exists keeps running, only new things are refused.
+	// ALREADY_EXISTS: another organization has this name.
+	UpdateOrganization(context.Context, *connect.Request[v1.UpdateOrganizationRequest]) (*connect.Response[v1.UpdateOrganizationResponse], error)
 }
 
 // NewOrganizationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -151,6 +176,12 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 		connect.WithSchema(organizationServiceMethods.ByName("RenameOrganization")),
 		connect.WithHandlerOptions(opts...),
 	)
+	organizationServiceUpdateOrganizationHandler := connect.NewUnaryHandler(
+		OrganizationServiceUpdateOrganizationProcedure,
+		svc.UpdateOrganization,
+		connect.WithSchema(organizationServiceMethods.ByName("UpdateOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.OrganizationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OrganizationServiceListOrganizationsProcedure:
@@ -159,6 +190,8 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 			organizationServiceCreateOrganizationHandler.ServeHTTP(w, r)
 		case OrganizationServiceRenameOrganizationProcedure:
 			organizationServiceRenameOrganizationHandler.ServeHTTP(w, r)
+		case OrganizationServiceUpdateOrganizationProcedure:
+			organizationServiceUpdateOrganizationHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -178,4 +211,8 @@ func (UnimplementedOrganizationServiceHandler) CreateOrganization(context.Contex
 
 func (UnimplementedOrganizationServiceHandler) RenameOrganization(context.Context, *connect.Request[v1.RenameOrganizationRequest]) (*connect.Response[v1.RenameOrganizationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.RenameOrganization is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) UpdateOrganization(context.Context, *connect.Request[v1.UpdateOrganizationRequest]) (*connect.Response[v1.UpdateOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.UpdateOrganization is not implemented"))
 }

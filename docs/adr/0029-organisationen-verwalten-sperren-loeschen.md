@@ -58,3 +58,16 @@ mit vielen Organisationen fehlen Kontingente. Die Fragen hat der Product Owner a
 - Die Obergrenze der Retention greift erst, wenn Organisationen ihre Retention selbst einstellen können; bis dahin
   gilt die Retention der Instanz.
 - E3.8 schrumpft auf das Löschen der Loki-Daten (mit E3.2).
+
+## Nachtrag M2-32
+
+- **Speicherbedarf:** Die Größe aller Metrik-Hypertables einschließlich der Continuous Aggregates wird nach dem Anteil
+  der Organisation an den Serien verteilt, die Größe der Partitionen der Security-Events nach ihrem Anteil an den
+  Events. Die Gesamtgrößen liefert eine Definer-Funktion (nur Größen, keine Zeilen); Serien, Events und Nodes zählt der
+  Server pro Organisation in deren Tenant-Transaktion. Eine Definer-Policy auf `series` gibt es bewusst nicht, weil
+  die Leser der Metriken sich auf die Mandanten-Policy verlassen.
+- **Mitglieder-Kontingent** zählt offene Einladungen mit; eine erneute Einladung derselben Adresse ersetzt die alte.
+  Beim Annehmen wird noch einmal gezählt (das Kontingent kann inzwischen gesunken sein), die Einladung bleibt dann.
+- **Ingest-Kontingente** gelten ab der nächsten Session eines Agents; der Burst behält das Verhältnis der Instanz.
+- **Ort der Seite:** eigener Menüpunkt „Organisationen“ für Superadmins, nicht im Admin-Bereich der Org, den ein
+  Superadmin ohne Mitgliedschaft nicht sieht.

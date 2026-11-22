@@ -17,7 +17,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert, Neustarts
 > erkennt er an der Boot-ID, und die Node-Seite warnt, wenn ein Host gar keine Security-Quelle hat), jeweils
 > amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk). Für eine Installation gibt es
-> eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)). Zum Ausprobieren der Alerts spielt der
+> eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)). Superadmins verwalten die Organisationen der
+> Instanz mit Kontingenten für Nodes, Mitglieder und Ingest. Zum Ausprobieren der Alerts spielt der
 > Simulator Szenarien durch: CPU-Last, volle Platte, SSH-Brute-Force, Flattern und Ausfall (`just simulate`).
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).

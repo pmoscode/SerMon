@@ -9,3 +9,8 @@ func (db *DB) CountVisibleOrganizations(ctx context.Context) (int, error) {
 	err := db.pool.QueryRow(ctx, "SELECT count(*) FROM organizations").Scan(&n)
 	return n, err
 }
+
+// MigrateTo applies the migrations up to version (test-only: tests of a single migration).
+func MigrateTo(ctx context.Context, ownerDSN string, version int64) error {
+	return migrateTo(ctx, ownerDSN, version)
+}

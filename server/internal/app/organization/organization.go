@@ -16,6 +16,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/naming"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -25,20 +26,30 @@ const maxName = 200
 // ErrInvalidName means the organization name is empty, too long or contains control characters.
 var ErrInvalidName = fmt.Errorf("name must have 1 to %d characters and no control characters", maxName)
 
-// Organization is an organization as the superadmin sees it.
+// ErrNameTaken means another organization has the name (regardless of case).
+var ErrNameTaken = errors.New("another organization has this name")
+
+// Organization is an organization as the superadmin sees it: counts and sizes, no tenant data.
 type Organization struct {
 	ID        tenant.OrgID
 	Name      string
 	CreatedAt time.Time
 	Members   int64
+	Nodes     int64
+	// StorageBytes estimates its metrics and security events: the instance's totals shared by its
+	// share of the series and of the events (ADR 0029, M2-32).
+	StorageBytes int64
+	Quotas       quota.Quotas
 }
 
-// Store persists organizations; Create and Rename write the audit entry into the organization's
-// log in the same transaction.
+// Store persists organizations; Create, Rename and Update write the audit entry into the
+// organization's log in the same transaction. Duplicate names are ErrNameTaken.
 type Store interface {
 	List(ctx context.Context) ([]Organization, error)
 	Create(ctx context.Context, org Organization, firstAdmin invitation.Invitation, hash [32]byte, audit access.AuditEntry) error
 	Rename(ctx context.Context, org tenant.OrgID, name string, audit access.AuditEntry) error
+	// Update sets name and quotas; audit builds the entry from the previous state.
+	Update(ctx context.Context, org tenant.OrgID, name string, q quota.Quotas, audit func(previous Organization) access.AuditEntry) error
 }
 
 // Service manages organizations.
@@ -140,6 +151,33 @@ func (s *Service) Rename(ctx context.Context, c access.Caller, id tenant.OrgID, 
 	}
 	if err := s.store.Rename(ctx, id, name, audit); err != nil {
 		return fmt.Errorf("rename organization: %w", err)
+	}
+	return nil
+}
+
+// Update sets the name and the quotas of an organization (M2-32). Quotas bound what an
+// organization may add, so changing them needs a step-up; lowering one deletes nothing.
+func (s *Service) Update(ctx context.Context, c access.Caller, id tenant.OrgID, name string, q quota.Quotas) error {
+	if err := s.authorize(c, true); err != nil {
+		return err
+	}
+	name, ok := naming.Clean(name, maxName)
+	if !ok {
+		return ErrInvalidName
+	}
+	if err := q.Validate(); err != nil {
+		return fmt.Errorf("update organization: %w", err)
+	}
+	err := s.store.Update(ctx, id, name, q, func(previous Organization) access.AuditEntry {
+		return access.AuditEntry{
+			Actor: c.Principal.User, Action: "org.update", Target: "org:" + id.String(),
+			Details: map[string]string{
+				"name": name, "previous_name": previous.Name, "quotas": q.String(), "previous_quotas": previous.Quotas.String(),
+			},
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("update organization: %w", err)
 	}
 	return nil
 }

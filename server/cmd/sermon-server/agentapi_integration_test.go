@@ -39,7 +39,7 @@ func seedEnrollmentTokenWithUses(t *testing.T, uses int) uuid.UUID {
 		args []any
 	}{
 		{"SELECT set_config('sermon.org_id', $1, false)", []any{org.String()}},
-		{"INSERT INTO organizations (id, name) VALUES ($1, 'Agents')", []any{org}},
+		{"INSERT INTO organizations (id, name) VALUES ($1, 'Agents ' || $1::uuid::text)", []any{org}},
 		{"INSERT INTO node_groups (id, org_id, name) VALUES ($1, $2, 'servers')", []any{group, org}},
 		{"DELETE FROM enrollment_tokens WHERE token_hash = sha256(convert_to($1, 'UTF8'))", []any{fixtureToken}},
 		{`INSERT INTO enrollment_tokens (id, org_id, group_id, token_hash, expires_at, max_uses)

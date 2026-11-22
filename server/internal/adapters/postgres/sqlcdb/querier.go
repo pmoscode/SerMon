@@ -17,7 +17,10 @@ type Querier interface {
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
 	// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
+	// Quotas: 0 is the instance default.
 	AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error)
+	// Storage of the instance for the estimate per organization (SECURITY DEFINER, sizes only).
+	AdminStorageTotals(ctx context.Context) (AdminStorageTotalsRow, error)
 	AdvanceIngestSeq(ctx context.Context, arg AdvanceIngestSeqParams) (int64, error)
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error)
@@ -37,7 +40,11 @@ type Querier interface {
 	// Atomic: concurrent redemptions cannot exceed max_uses.
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
 	CopyMetricWindows(ctx context.Context, arg []CopyMetricWindowsParams) (int64, error)
+	CountMembers(ctx context.Context) (int64, error)
+	CountNodes(ctx context.Context) (int64, error)
 	CountOpenAlertSilences(ctx context.Context, now time.Time) (int64, error)
+	// Open invitations for other addresses than email (a new invitation replaces the old one).
+	CountOpenInvitations(ctx context.Context, arg CountOpenInvitationsParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
@@ -177,8 +184,14 @@ type Querier interface {
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
 	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
+	OrganizationQuotas(ctx context.Context) (OrganizationQuotasRow, error)
+	// The quotas of the organization, locked: enrollments and invitations of one organization are
+	// counted one after the other.
+	OrganizationQuotasForUpdate(ctx context.Context) (OrganizationQuotasForUpdateRow, error)
 	// In the tenant transaction of the organization (RLS).
 	OrganizationRequiresSecondFactor(ctx context.Context) (bool, error)
+	// What the organization of the tenant transaction holds, for the superadmin's estimate (M2-32).
+	OrganizationUsage(ctx context.Context) (OrganizationUsageRow, error)
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
@@ -233,9 +246,10 @@ type Querier interface {
 	UnlockNode(ctx context.Context, id uuid.UUID) (int64, error)
 	UpdateMaintenanceWindow(ctx context.Context, arg UpdateMaintenanceWindowParams) (int64, error)
 	// The agent's Hello: current host facts and version (the machine-id never changes here).
-	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)
+	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (UpdateNodeOnConnectRow, error)
 	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
 	UpdateNotificationPolicy(ctx context.Context, arg UpdateNotificationPolicyParams) (int64, error)
+	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (int64, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
 	UpsertAlertRoutingState(ctx context.Context, arg UpsertAlertRoutingStateParams) error

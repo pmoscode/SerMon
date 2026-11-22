@@ -71,7 +71,7 @@ func (f *fixture) Node(t *testing.T, org tenant.OrgID, group tenant.GroupID) ide
 	}
 	exec("SELECT set_config('sermon.org_id', $1, false)", org.String())
 	if !f.orgs[org] {
-		exec("INSERT INTO organizations (id, name) VALUES ($1, 'Metrics')", uuid.UUID(org))
+		exec("INSERT INTO organizations (id, name) VALUES ($1, 'Metrics ' || $1::uuid::text)", uuid.UUID(org))
 		f.orgs[org] = true
 	}
 	if !f.group[group] {

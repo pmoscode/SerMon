@@ -15,6 +15,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -32,6 +33,11 @@ type fakeStore struct {
 	hash    [32]byte
 	audits  []access.AuditEntry
 	renamed string
+	updated struct {
+		name   string
+		quotas quota.Quotas
+	}
+	previous organization.Organization
 }
 
 func (f *fakeStore) List(context.Context) ([]organization.Organization, error) {
@@ -50,6 +56,13 @@ func (f *fakeStore) Rename(_ context.Context, _ tenant.OrgID, name string, a acc
 	f.calls++
 	f.renamed = name
 	f.audits = append(f.audits, a)
+	return nil
+}
+
+func (f *fakeStore) Update(_ context.Context, _ tenant.OrgID, name string, q quota.Quotas, audit func(previous organization.Organization) access.AuditEntry) error {
+	f.calls++
+	f.updated.name, f.updated.quotas = name, q
+	f.audits = append(f.audits, audit(f.previous))
 	return nil
 }
 
@@ -77,6 +90,9 @@ func TestOnlySuperadminsManageOrganizations(t *testing.T) {
 	}
 	if err := s.Rename(ctx, orgAdmin, orgA, "x"); !errors.Is(err, access.ErrForbidden) {
 		t.Errorf("Rename by org admin: %v", err)
+	}
+	if err := s.Update(ctx, orgAdmin, orgA, "x", quota.Quotas{MaxNodes: 1000}); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("Update by org admin: %v", err)
 	}
 	if store.calls != 0 {
 		t.Error("store called although access was denied")
@@ -167,5 +183,46 @@ func TestCreate_WithAMailerSendsTheFirstAdminLinkByMail(t *testing.T) {
 	mailer.err = errors.New("down")
 	if _, _, err := svc.Create(context.Background(), superadmin(time.Minute), "Gamma", "gus@example.org"); !errors.Is(err, invitation.ErrMailFailed) {
 		t.Errorf("Create() with a failing mailer = %v, want ErrMailFailed", err)
+	}
+}
+
+// Name and quotas (M2-32): superadmin with a fresh step-up; the audit entry has the old and the
+// new state.
+func TestUpdate_SetsNameAndQuotasWithAStepUp(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeStore{previous: organization.Organization{Name: "Alpha", Quotas: quota.Quotas{MaxNodes: 10}}}
+	s := service(store)
+	q := quota.Quotas{MaxNodes: 20, MaxMembers: 5, SamplesPerSecond: 2000, SeriesPerNode: 500, RetentionCapDays: 90}
+	if err := s.Update(ctx, superadmin(time.Hour), orgA, "Alpha AG", q); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("stale step-up: %v", err)
+	}
+	if err := s.Update(ctx, superadmin(time.Minute), orgA, " ", q); !errors.Is(err, organization.ErrInvalidName) {
+		t.Errorf("empty name: %v", err)
+	}
+	if err := s.Update(ctx, superadmin(time.Minute), orgA, "Alpha", quota.Quotas{SeriesPerNode: 100_001}); !errors.Is(err, quota.ErrInvalid) {
+		t.Errorf("quota out of range: %v", err)
+	}
+	if store.calls != 0 {
+		t.Fatal("store called")
+	}
+	if err := s.Update(ctx, superadmin(time.Minute), orgA, " Alpha AG ", q); err != nil {
+		t.Fatal(err)
+	}
+	if store.updated.name != "Alpha AG" || store.updated.quotas != q {
+		t.Errorf("updated %+v", store.updated)
+	}
+	a := store.audits[0]
+	want := map[string]string{
+		"name": "Alpha AG", "previous_name": "Alpha",
+		"quotas":          "max_nodes=20,max_members=5,retention_cap_days=90,samples_per_second=2000,series_per_node=500",
+		"previous_quotas": "max_nodes=10",
+	}
+	if a.Action != "org.update" || a.Actor != super || a.Target != "org:"+orgA.String() {
+		t.Errorf("audit %+v", a)
+	}
+	for k, v := range want {
+		if a.Details[k] != v {
+			t.Errorf("audit %s = %q, want %q", k, a.Details[k], v)
+		}
 	}
 }

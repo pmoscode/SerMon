@@ -32,7 +32,7 @@ func firstAdmin() firstrun.FirstAdmin {
 	id := uuid.New()
 	return firstrun.FirstAdmin{
 		User: identity.UserID(id), Email: id.String() + "@example.org", DisplayName: "Ann",
-		PasswordHash: "$argon2id$v=19$fixture", Org: tenant.OrgID(uuid.New()), OrganizationName: "First", Binding: uuid.New(),
+		PasswordHash: "$argon2id$v=19$fixture", Org: tenant.OrgID(uuid.New()), OrganizationName: "First " + id.String(), Binding: uuid.New(),
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -85,6 +86,9 @@ func (h *InvitationHandler) JoinOrganization(ctx context.Context, req *connect.R
 func (h *InvitationHandler) fail(ctx context.Context, op string, err error) error {
 	if errors.Is(err, invitation.ErrInvalidInvitation) {
 		return connect.NewError(connect.CodeUnauthenticated, invitation.ErrInvalidInvitation)
+	}
+	if errors.Is(err, quota.ErrExceeded) {
+		return quotaExceeded(err)
 	}
 	// Validation errors carry user-facing messages (no secrets, no internal details).
 	for _, userFacing := range []error{

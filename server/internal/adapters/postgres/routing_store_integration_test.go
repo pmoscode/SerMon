@@ -37,7 +37,7 @@ func newRoutingFixture(t *testing.T) routingFixture {
 	f := setup(t)
 	db := open(t, f.appDSN)
 	org := uuid.New()
-	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Routing')", org)
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Routing ' || $1::uuid::text)", org)
 	return routingFixture{
 		routes: postgres.NewRoutingStore(db), channels: postgres.NewNotificationStore(db), alerts: postgres.NewAlertStore(db),
 		org: org, ownerDSN: f.db.OwnerDSN, appDSN: f.appDSN,
@@ -123,7 +123,7 @@ func TestRoutingStore_KeepsOrganizationsApart(t *testing.T) {
 	f := newRoutingFixture(t)
 	ctx := context.Background()
 	other := uuid.New()
-	ownerExec(t, f.ownerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Other')", other)
+	ownerExec(t, f.ownerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Other ' || $1::uuid::text)", other)
 	mine, theirs := f.channel(t, f.org, true), f.channel(t, other, true)
 	p := routedPolicy([]notify.ChannelID{mine}, []notify.ChannelID{mine})
 	if err := f.routes.CreatePolicy(ctx, scopeFor(t, f.org), p, policyAudit("notification_policy.create")); err != nil {
@@ -388,7 +388,7 @@ func TestRoutingStore_SilencesAndWindows(t *testing.T) {
 	}
 	// Another organization sees and changes nothing.
 	other := uuid.New()
-	ownerExec(t, f.ownerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Other')", other)
+	ownerExec(t, f.ownerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Other ' || $1::uuid::text)", other)
 	foreign := scopeFor(t, other)
 	if list, _ := f.routes.Silences(ctx, foreign, notifyTime.Add(-time.Hour)); len(list) != 0 {
 		t.Errorf("foreign silences %+v", list)

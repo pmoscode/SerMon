@@ -12,6 +12,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
@@ -92,6 +93,21 @@ func (h *AccessHandler) DeleteNodeGroup(ctx context.Context, req *connect.Reques
 		return nil, h.fail(ctx, "delete node group", err)
 	}
 	return connect.NewResponse(&webv1.DeleteNodeGroupResponse{}), nil
+}
+
+// GetOrganizationQuotas returns the quotas of the organization and their use (org admin).
+func (h *AccessHandler) GetOrganizationQuotas(ctx context.Context, _ *connect.Request[webv1.GetOrganizationQuotasRequest]) (*connect.Response[webv1.GetOrganizationQuotasResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	u, err := h.svc.QuotaUsage(ctx, c)
+	if err != nil {
+		return nil, h.fail(ctx, "organization quotas", err)
+	}
+	return connect.NewResponse(&webv1.GetOrganizationQuotasResponse{
+		Quotas: quotasView(u.Quotas), Nodes: u.Nodes, Members: u.Members, OpenInvitations: u.OpenInvitations,
+	}), nil
 }
 
 // ListMembers lists the members with their roles.
@@ -295,8 +311,20 @@ func (h *AccessHandler) fail(ctx context.Context, op string, err error) error {
 		return connect.NewError(connect.CodeInvalidArgument, invitation.ErrInvalidEmail)
 	case errors.Is(err, invitation.ErrMailFailed):
 		return mailFailed(ctx, h.logger, op, err)
+	case errors.Is(err, quota.ErrExceeded):
+		return quotaExceeded(err)
 	}
 	return internalError(ctx, h.logger, op, err)
+}
+
+// quotaExceeded tells the client which quota of the organization refuses (RESOURCE_EXHAUSTED);
+// the message names the quota and its value, nothing else.
+func quotaExceeded(err error) error {
+	var e quota.Exceeded
+	if !errors.As(err, &e) {
+		e = quota.Exceeded{}
+	}
+	return connect.NewError(connect.CodeResourceExhausted, errors.New(e.Error()))
 }
 
 // mailFailed logs why a mail could not be sent and tells the client only that it failed.

@@ -19,8 +19,10 @@ UPDATE nodes SET hostname = sqlc.arg(hostname), os_id = sqlc.arg(os_id), os_vers
                  cpu_count = sqlc.arg(cpu_count), memory_bytes = sqlc.arg(memory_bytes),
                  agent_version = sqlc.arg(agent_version), last_seen_at = sqlc.arg(seen_at),
                  security_source = sqlc.arg(security_source)
-WHERE id = sqlc.arg(id)
-RETURNING group_id;
+WHERE nodes.id = sqlc.arg(id)
+RETURNING group_id,
+          (SELECT o.samples_per_second FROM organizations o WHERE o.id = nodes.org_id) AS samples_per_second,
+          (SELECT o.series_per_node FROM organizations o WHERE o.id = nodes.org_id) AS series_per_node;
 
 -- name: TouchNode :execrows
 UPDATE nodes SET last_seen_at = GREATEST(COALESCE(last_seen_at, sqlc.arg(seen_at)), sqlc.arg(seen_at))

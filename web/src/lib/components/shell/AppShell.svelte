@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Bell from '@lucide/svelte/icons/bell';
+	import Building2 from '@lucide/svelte/icons/building-2';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import Megaphone from '@lucide/svelte/icons/megaphone';
 	import Search from '@lucide/svelte/icons/search';
@@ -33,6 +34,15 @@
 						label: () => m.nav_notifications()
 					},
 					{ href: resolve('/(app)/admin'), icon: Users, label: () => m.nav_admin() }
+				]
+			: []),
+		...(sessionState.current?.superadmin
+			? [
+					{
+						href: resolve('/(app)/organizations'),
+						icon: Building2,
+						label: () => m.nav_organizations()
+					}
 				]
 			: []),
 		{ href: resolve('/(app)/settings/security'), icon: ShieldCheck, label: () => m.nav_security() }

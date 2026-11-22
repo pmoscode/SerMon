@@ -41,14 +41,15 @@ func (c *clock) Set(at time.Time) {
 type fakeNodes struct {
 	connected []ingest.HostFacts
 	seen      []time.Time
+	limits    ingest.Limits // the organization's quotas
 }
 
-func (f *fakeNodes) Connected(_ context.Context, o tenant.OrgID, _ identity.NodeID, facts ingest.HostFacts, _ string, _ time.Time) (tenant.GroupID, error) {
+func (f *fakeNodes) Connected(_ context.Context, o tenant.OrgID, _ identity.NodeID, facts ingest.HostFacts, _ string, _ time.Time) (ingest.Connection, error) {
 	if o != org {
-		return tenant.GroupID{}, errors.New("unknown node")
+		return ingest.Connection{}, errors.New("unknown node")
 	}
 	f.connected = append(f.connected, facts)
-	return group, nil
+	return ingest.Connection{Group: group, Limits: f.limits}, nil
 }
 
 func (f *fakeNodes) Seen(_ context.Context, _ tenant.OrgID, _ identity.NodeID, at time.Time) error {
@@ -279,6 +280,58 @@ func TestIngest_ThrottlesOverQuotaAndLiftsWhenCalm(t *testing.T) {
 	response = s.Accept(context.Background(), batch(2, t0.Add(time.Second), 1))
 	if response.Throttle == nil || *response.Throttle != 0 {
 		t.Fatalf("calm again: throttle = %v, want lifted (0)", response.Throttle)
+	}
+}
+
+// The quotas of the organization (M2-32) replace the instance's values for its nodes, higher or
+// lower; they apply from the next session on.
+func TestIngest_TheOrganizationsQuotasReplaceTheInstanceLimits(t *testing.T) {
+	config := ingest.DefaultConfig()
+	w := newWorld(t, config)
+	w.nodes.limits = ingest.Limits{SeriesPerNode: 2, SamplesPerSecond: 10}
+	s := w.open(t)
+	samples := []ingest.Sample{
+		{Metric: "sermon_tcp_established", Value: 1}, {Metric: "sermon_tcp_time_wait", Value: 1}, {Metric: "sermon_system_zombies", Value: 1},
+	}
+	w.clock.Set(t0)
+	s.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: samples})
+	s.Accept(context.Background(), batch(2, t0.Add(10*time.Second), 1))
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	stored := map[string]bool{}
+	for _, a := range w.store.Aggregates() {
+		stored[a.Metric] = true
+	}
+	if len(stored) != 2 || stored["sermon_system_zombies"] {
+		t.Errorf("series per node 2: stored %v", stored)
+	}
+	// 10 samples per second, burst five times that: 60 samples at once are over it.
+	big := ingest.Batch{Seq: 3, CollectedAt: t0.Add(11 * time.Second), Samples: make([]ingest.Sample, 60)}
+	for i := range big.Samples {
+		big.Samples[i] = ingest.Sample{Metric: "sermon_tcp_established", Value: 1}
+	}
+	w.clock.Set(t0.Add(11 * time.Second))
+	if response := s.Accept(context.Background(), big); response.Throttle == nil || *response.Throttle != config.ThrottleInterval {
+		t.Errorf("samples per second 10: throttle = %v", response.Throttle)
+	}
+
+	// Higher than the instance: 3 series where the instance allows 2.
+	config.SeriesLimit = 2
+	w2 := newWorld(t, config)
+	w2.nodes.limits = ingest.Limits{SeriesPerNode: 3}
+	s2 := w2.open(t)
+	s2.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: samples})
+	s2.Accept(context.Background(), batch(2, t0.Add(10*time.Second), 1))
+	if _, err := s2.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	stored = map[string]bool{}
+	for _, a := range w2.store.Aggregates() {
+		stored[a.Metric] = true
+	}
+	if len(stored) != 3 {
+		t.Errorf("series per node 3 over an instance limit of 2: stored %v", stored)
 	}
 }
 

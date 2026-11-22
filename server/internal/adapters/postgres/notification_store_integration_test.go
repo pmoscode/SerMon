@@ -26,7 +26,7 @@ func newNotifyOrg(t *testing.T) (*postgres.NotificationStore, uuid.UUID, string)
 	t.Helper()
 	f := setup(t)
 	org := uuid.New()
-	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Notify')", org)
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Notify ' || $1::uuid::text)", org)
 	return postgres.NewNotificationStore(open(t, f.appDSN)), org, f.db.OwnerDSN
 }
 

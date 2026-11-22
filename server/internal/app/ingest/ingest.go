@@ -51,11 +51,23 @@ type HostFacts struct {
 	SecuritySource secevent.Source
 }
 
+// Limits are the ingest quotas of the node's organization (M2-32); 0 is the instance's value.
+type Limits struct {
+	SamplesPerSecond uint32
+	SeriesPerNode    uint32
+}
+
+// Connection is what the node records say about a connecting node.
+type Connection struct {
+	Group  tenant.GroupID
+	Limits Limits
+}
+
 // Nodes is the port to the node records.
 type Nodes interface {
 	// Connected stores the Hello (host facts, agent version, last contact) and returns the node's
-	// group; metrics.ErrInvalidQuery-like errors are not expected, any error ends the session.
-	Connected(ctx context.Context, org tenant.OrgID, node identity.NodeID, facts HostFacts, agentVersion string, at time.Time) (tenant.GroupID, error)
+	// group and the quotas of its organization; any error ends the session.
+	Connected(ctx context.Context, org tenant.OrgID, node identity.NodeID, facts HostFacts, agentVersion string, at time.Time) (Connection, error)
 	// Seen records the last contact.
 	Seen(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time) error
 }
@@ -258,9 +270,12 @@ type Session struct {
 	watermark time.Time // latest collection time seen
 	written   time.Time // windows ending at or before this are written
 	series    map[string]struct{}
-	tokens    float64
-	refilled  time.Time
-	throttled bool
+	// rate, burst and seriesLimit are the instance's limits or the organization's quotas.
+	rate, burst float64
+	seriesLimit int
+	tokens      float64
+	refilled    time.Time
+	throttled   bool
 	// eventsDropped: the flood warning was logged in this session.
 	eventsDropped bool
 	lastSeen      time.Time
@@ -273,7 +288,7 @@ var ErrOpen = errors.New("open ingest session")
 // Open starts the ingest for a node that sent its Hello. org and node come from the certificate.
 func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.NodeID, facts HostFacts, agentVersion string) (*Session, error) {
 	now := s.now()
-	group, err := s.nodes.Connected(ctx, org, node, facts, agentVersion, now)
+	conn, err := s.nodes.Connected(ctx, org, node, facts, agentVersion, now)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrOpen, err)
 	}
@@ -293,10 +308,18 @@ func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.Node
 	for _, k := range known {
 		series[seriesID(k.Metric, k.Labels)] = struct{}{}
 	}
+	rate, burst, seriesLimit := s.config.SampleRate, s.config.SampleBurst, s.config.SeriesLimit
+	if q := conn.Limits.SamplesPerSecond; q > 0 {
+		// The burst keeps the instance's ratio to the rate.
+		rate, burst = float64(q), float64(q)*s.config.SampleBurst/s.config.SampleRate
+	}
+	if q := conn.Limits.SeriesPerNode; q > 0 {
+		seriesLimit = int(q)
+	}
 	return &Session{
-		service: s, org: org, group: group, node: node, persisted: persisted, received: persisted,
-		windows: map[windowKey]*window{}, series: series,
-		tokens: s.config.SampleBurst, refilled: now, lastSeen: now,
+		service: s, org: org, group: conn.Group, node: node, persisted: persisted, received: persisted,
+		windows: map[windowKey]*window{}, series: series, rate: rate, burst: burst, seriesLimit: seriesLimit,
+		tokens: burst, refilled: now, lastSeen: now,
 	}, nil
 }
 
@@ -545,10 +568,10 @@ func (s *Session) admitSeries(sample Sample) bool {
 		return true
 	}
 	config := s.service.config
-	if len(s.series) >= config.SeriesLimit || !s.service.admitOrgSeries(s.org) {
+	if len(s.series) >= s.seriesLimit || !s.service.admitOrgSeries(s.org) {
 		if s.service.stats.DroppedSeries.Add(1) == 1 {
 			s.service.logger.Warn("series limit reached, dropping new series", "node", s.node.String(),
-				"limit", config.SeriesLimit, "org_limit", config.OrgSeriesLimit)
+				"limit", s.seriesLimit, "org_limit", config.OrgSeriesLimit)
 		}
 		return false
 	}
@@ -563,14 +586,14 @@ func (s *Session) quota(now time.Time, samples int) *time.Duration {
 	s.refilled = now
 	// The floor keeps a flooding agent recoverable: once it slows down, it is admitted again
 	// after at most a burst's worth of refill.
-	s.tokens = max(min(config.SampleBurst, s.tokens+elapsed*config.SampleRate)-float64(samples), -config.ThrottleSlack-config.SampleBurst)
+	s.tokens = max(min(s.burst, s.tokens+elapsed*s.rate)-float64(samples), -config.ThrottleSlack-s.burst)
 	switch {
 	case !s.throttled && s.tokens < 0:
 		s.throttled = true
 		s.service.logger.Warn("agent over its sample quota, throttling", "node", s.node.String())
 		interval := config.ThrottleInterval
 		return &interval
-	case s.throttled && s.tokens > config.SampleBurst/2:
+	case s.throttled && s.tokens > s.burst/2:
 		s.throttled = false
 		var lifted time.Duration
 		return &lifted

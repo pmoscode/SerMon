@@ -4,6 +4,7 @@ package sermon.web.v1;
 
 import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/organization.proto";
 
 // AccessService manages node groups, members and roles of the caller's active organization
 // (KONZEPT §7). All RPCs require a session; objects of other organizations are reported as
@@ -49,6 +50,26 @@ service AccessService {
   rpc ListAuditLog(ListAuditLogRequest) returns (ListAuditLogResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // GetOrganizationQuotas returns the quotas the superadmin set and how much of them is used
+  // (org admin, M2-32).
+  rpc GetOrganizationQuotas(GetOrganizationQuotasRequest) returns (GetOrganizationQuotasResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// GetOrganizationQuotasRequest has no parameters.
+message GetOrganizationQuotasRequest {}
+
+// GetOrganizationQuotasResponse is the state of the quotas.
+message GetOrganizationQuotasResponse {
+  // quotas are the organization's limits; unset fields are the instance defaults.
+  OrganizationQuotas quotas = 1;
+  // nodes is the number of enrolled nodes.
+  int64 nodes = 2;
+  // members is the number of members.
+  int64 members = 3;
+  // open_invitations is the number of open invitations (they count towards max_members).
+  int64 open_invitations = 4;
 }
 
 // Role is a role on a node group or on all groups.

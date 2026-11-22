@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
 )
@@ -56,6 +57,9 @@ func (h *AgentEnrollmentHandler) Enroll(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInvalidArgument, enrollment.ErrInvalidCSR)
 	case errors.Is(err, enrollment.ErrMachineIDConflict):
 		return nil, connect.NewError(connect.CodeAlreadyExists, enrollment.ErrMachineIDConflict)
+	case errors.Is(err, quota.ErrExceeded):
+		h.logger.WarnContext(ctx, "enrollment rejected: node quota reached", "client_ip", ip)
+		return nil, quotaExceeded(err)
 	case err != nil:
 		return nil, internalError(ctx, h.logger, "enroll agent", err)
 	}

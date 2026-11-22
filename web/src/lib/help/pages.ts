@@ -6,5 +6,6 @@ export const pageHelp: Record<string, string> = {
 	'/(app)/settings/security': 'pages/security',
 	'/(app)/nodes/[id]': 'pages/node',
 	'/(app)/nodes/add': 'pages/add_node',
-	'/(app)/admin': 'pages/admin'
+	'/(app)/admin': 'pages/admin',
+	'/(app)/organizations': 'pages/organizations'
 };

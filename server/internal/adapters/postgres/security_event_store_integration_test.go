@@ -41,7 +41,7 @@ func newEventFixture(t *testing.T) eventFixture {
 	t.Helper()
 	f := setup(t)
 	org := uuid.New()
-	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Events')", org)
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Events ' || $1::uuid::text)", org)
 	node, peer := uuid.New(), uuid.New()
 	createNode(t, f.db.OwnerDSN, org, node)
 	createNode(t, f.db.OwnerDSN, org, peer)

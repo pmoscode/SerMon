@@ -689,8 +689,8 @@ func TestSession_BatchesAreAcceptedButNotAcknowledgedWithoutIngest(t *testing.T)
 // fakeNodes is the node directory of the ingest in these tests.
 type fakeNodes struct{ group tenant.GroupID }
 
-func (f fakeNodes) Connected(context.Context, tenant.OrgID, identity.NodeID, ingest.HostFacts, string, time.Time) (tenant.GroupID, error) {
-	return f.group, nil
+func (f fakeNodes) Connected(context.Context, tenant.OrgID, identity.NodeID, ingest.HostFacts, string, time.Time) (ingest.Connection, error) {
+	return ingest.Connection{Group: f.group}, nil
 }
 
 func (fakeNodes) Seen(context.Context, tenant.OrgID, identity.NodeID, time.Time) error { return nil }

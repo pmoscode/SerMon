@@ -41,7 +41,7 @@ func TestInvitationStore_CreateLookupReplaceRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	p, found, err := s.Lookup(ctx, first, time.Now())
-	if err != nil || !found || p.Org != o.scope.OrgID() || p.OrgName != "Mgmt" || p.Email != email || p.Role != role.Operator || p.Group != nil {
+	if err != nil || !found || p.Org != o.scope.OrgID() || p.OrgName != "Mgmt "+o.scope.OrgID().String() || p.Email != email || p.Role != role.Operator || p.Group != nil {
 		t.Fatalf("Lookup() = %+v, %v, %v", p, found, err)
 	}
 	if _, found, _ := s.Lookup(ctx, first, inv.ExpiresAt.Add(time.Second)); found {

@@ -28,9 +28,9 @@ func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.
 	at := time.Now().Truncate(time.Second)
 	facts := ingest.HostFacts{Hostname: "db-02", OSID: "ubuntu", OSVersion: "24.04", KernelRelease: "6.8.0", Architecture: "arm64", CPUCount: 8, MemoryBytes: 16 << 30, SecuritySource: secevent.SourceFileUnverified}
 
-	group, err := store.Connected(ctx, tenant.OrgID(orgA), identity.NodeID(node), facts, "1.2.3", at)
-	if err != nil || uuid.UUID(group) == uuid.Nil {
-		t.Fatalf("Connected() = %v, %v", group, err)
+	connected, err := store.Connected(ctx, tenant.OrgID(orgA), identity.NodeID(node), facts, "1.2.3", at)
+	if err != nil || uuid.UUID(connected.Group) == uuid.Nil || connected.Limits != (ingest.Limits{}) {
+		t.Fatalf("Connected() = %+v, %v", connected, err)
 	}
 	if err := store.Seen(ctx, tenant.OrgID(orgA), identity.NodeID(node), at.Add(30*time.Second)); err != nil {
 		t.Fatal(err)
@@ -64,6 +64,22 @@ func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.
 	// The column takes only known sources.
 	if _, err := conn.Exec(ctx, "UPDATE nodes SET security_source = 'syslog' WHERE id = $1", node); err == nil {
 		t.Error("unknown security source stored")
+	}
+	// The ingest quotas of the organization come with the connection (M2-32).
+	for _, q := range []string{
+		"SELECT set_config('sermon.org_id', '" + orgA.String() + "', false)",
+		"UPDATE organizations SET samples_per_second = 500, series_per_node = 300 WHERE id = '" + orgA.String() + "'",
+	} {
+		if _, err := conn.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() {
+		_, _ = conn.Exec(ctx, "UPDATE organizations SET samples_per_second = NULL, series_per_node = NULL WHERE id = '"+orgA.String()+"'")
+	}()
+	connected, err = store.Connected(ctx, tenant.OrgID(orgA), identity.NodeID(node), facts, "1.2.3", at)
+	if err != nil || connected.Limits != (ingest.Limits{SamplesPerSecond: 500, SeriesPerNode: 300}) {
+		t.Errorf("Connected() with quotas = %+v, %v", connected, err)
 	}
 
 	// Another organization can neither update nor touch the node.

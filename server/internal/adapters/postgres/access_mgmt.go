@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -281,4 +283,33 @@ func detailStrings(raw []byte) map[string]string {
 		}
 	}
 	return out
+}
+
+// QuotaUsage returns the organization's quotas and its nodes, members and open invitations.
+func (s *AccessStore) QuotaUsage(ctx context.Context, scope tenant.Scope, now time.Time) (access.QuotaUsage, error) {
+	var u access.QuotaUsage
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		row, err := q.OrganizationQuotas(ctx)
+		if err != nil {
+			return fmt.Errorf("load quotas: %w", err)
+		}
+		u.Quotas = quota.Quotas{
+			MaxNodes: quotaOf(row.MaxNodes), MaxMembers: quotaOf(row.MaxMembers), RetentionCapDays: quotaOf(row.RetentionCapDays),
+			SamplesPerSecond: quotaOf(row.SamplesPerSecond), SeriesPerNode: quotaOf(row.SeriesPerNode),
+		}
+		if u.Nodes, err = q.CountNodes(ctx); err != nil {
+			return fmt.Errorf("count nodes: %w", err)
+		}
+		if u.Members, err = q.CountMembers(ctx); err != nil {
+			return fmt.Errorf("count members: %w", err)
+		}
+		if u.OpenInvitations, err = q.CountOpenInvitations(ctx, sqlcdb.CountOpenInvitationsParams{Now: now, Email: ""}); err != nil {
+			return fmt.Errorf("count invitations: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return access.QuotaUsage{}, fmt.Errorf("quota usage: %w", err)
+	}
+	return u, nil
 }

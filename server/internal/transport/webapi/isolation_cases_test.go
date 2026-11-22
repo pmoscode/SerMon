@@ -388,6 +388,13 @@ var tenantIsolationCases = map[string]isolationCase{
 		_, err := e.organization.RenameOrganization(ctx, connect.NewRequest(&webv1.RenameOrganizationRequest{OrganizationId: e.orgA, Name: "pwned"}))
 		return err
 	}},
+	// M2-32: only superadmins change organizations; an org admin of B gets PERMISSION_DENIED.
+	"/sermon.web.v1.OrganizationService/UpdateOrganization": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.UpdateOrganization(ctx, connect.NewRequest(&webv1.UpdateOrganizationRequest{
+			OrganizationId: e.orgA, Name: "pwned", Quotas: &webv1.OrganizationQuotas{},
+		}))
+		return err
+	}},
 	"/sermon.web.v1.EnrollmentTokenService/CreateEnrollmentToken": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.enrollment.CreateEnrollmentToken(ctx, connect.NewRequest(&webv1.CreateEnrollmentTokenRequest{GroupId: e.groupA, MaxUses: 1000}))
 		return err
@@ -421,6 +428,14 @@ var tenantIsolationCases = map[string]isolationCase{
 	// M2-29: tags of a node of another organization are NOT_FOUND and stay as they are.
 	"/sermon.web.v1.NodeService/SetNodeTags": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.node.SetNodeTags(ctx, connect.NewRequest(&webv1.SetNodeTagsRequest{NodeId: e.nodeA, Tags: map[string]string{"env": "prod"}}))
+		return err
+	}},
+	// M2-32: the quotas and counts of the caller's own organization only.
+	"/sermon.web.v1.AccessService/GetOrganizationQuotas": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.access.GetOrganizationQuotas(ctx, connect.NewRequest(&webv1.GetOrganizationQuotasRequest{}))
+		if err == nil && leaks(e, res.Msg.String()) {
+			return errLeak
+		}
 		return err
 	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {

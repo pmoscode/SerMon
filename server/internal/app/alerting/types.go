@@ -160,6 +160,9 @@ const (
 	Max
 	Min
 	Last
+	// Increase is how much a cumulative counter grew within the window (M2-24); a drop (the agent
+	// restarted) starts again from 0.
+	Increase
 )
 
 func (a Aggregate) of(points []metrics.Point) float64 {
@@ -178,6 +181,17 @@ func (a Aggregate) of(points []metrics.Point) float64 {
 		return v
 	case Last:
 		return points[len(points)-1].Avg
+	case Increase:
+		var sum float64
+		for i := 1; i < len(points); i++ {
+			// Max is the counter at the end of the bucket (it only grows within one).
+			if d := points[i].Max - points[i-1].Max; d >= 0 {
+				sum += d
+			} else {
+				sum += points[i].Max
+			}
+		}
+		return sum
 	case Avg:
 		fallthrough
 	default:
@@ -272,8 +286,11 @@ func (r ThresholdRule) Validate() error {
 			return err
 		}
 	}
-	if r.Aggregate < Avg || r.Aggregate > Last {
-		return fmt.Errorf("%w: aggregate must be avg, max, min or last", alert.ErrInvalidRule)
+	if r.Aggregate < Avg || r.Aggregate > Increase {
+		return fmt.Errorf("%w: aggregate must be avg, max, min, last or increase", alert.ErrInvalidRule)
+	}
+	if r.Aggregate == Increase && r.RelativeTo != "" {
+		return fmt.Errorf("%w: increase takes no relative_to", alert.ErrInvalidRule)
 	}
 	if err := validateWindow("window", r.Window); err != nil {
 		return err

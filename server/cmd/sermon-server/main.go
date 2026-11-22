@@ -52,6 +52,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/rules"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
+	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -196,11 +197,17 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			Defaults: defaultRules, Store: postgres.NewAlertRuleStore(db), Policy: authz.NewPolicy(), Now: time.Now,
 		})
 		alertingAPI := alertingServices{policies: policies, silences: silences, alerts: alertPage, rules: ruleEditor}
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, registry, logger); err != nil {
+		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
+		// Self-monitoring (M2-24): ingest lag, dropped samples and database size, for superadmins only.
+		monitor := newSelfMonitor(cfg, db, ingestService.Stats(), logger)
+		servers = append(servers, func(ctx context.Context) error {
+			monitor.Run(ctx, time.Minute)
+			return nil
+		})
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
-		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
 		// Security events (M2-07): stored by the ingest, partitions kept by the maintenance.
 		eventStore := postgres.NewSecurityEventStore(db)
 		ingestService.SetEventWriter(eventStore)
@@ -381,7 +388,7 @@ type alertingServices struct {
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
 	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
-	registry *promtext.Registry, logger *slog.Logger,
+	health webapi.InstanceProblems, registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
@@ -423,7 +430,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	}
 	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID, inviteOptions...)
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
-		Auth:   webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals),
+		Auth: webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals).
+			WithInstanceHealth(accessStore, health),
 		System: webapi.NewSystemHandler(version),
 		Access: webapi.NewAccessHandler(access.NewService(accessStore, policy, time.Now, access.NewID), invites, logger),
 		Setup:  webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
@@ -528,4 +536,40 @@ func newMailer(c *config.SMTP) *smtp.Mailer {
 		Host: c.Host, Port: c.Port, TLS: mode, From: c.From, FromName: c.FromName,
 		Username: c.Username, Password: c.Password, RootCAs: c.RootCAs,
 	})
+}
+
+// selfSources are the measurements of the self-monitoring (M2-24).
+type selfSources struct {
+	stats *ingest.Stats
+	store *postgres.SelfMonitorStore
+}
+
+func (s selfSources) IngestLag() time.Duration {
+	return time.Duration(s.stats.LagMillis.Load()) * time.Millisecond
+}
+
+// DroppedSamples sums what the ingest dropped: implausible times and the rate limit, windows
+// written already, unknown metrics and the series limit.
+func (s selfSources) DroppedSamples() uint64 {
+	return s.stats.Rejected.Load() + s.stats.Late.Load() + s.stats.Unknown.Load() + s.stats.DroppedSeries.Load()
+}
+
+func (s selfSources) DatabaseSize(ctx context.Context) (int64, error) {
+	size, err := s.store.DatabaseSize(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("self-monitoring: %w", err)
+	}
+	return size, nil
+}
+
+// newSelfMonitor returns the self-monitoring; superadmins get mail only with SMTP.
+func newSelfMonitor(cfg config.Config, db *postgres.DB, stats *ingest.Stats, logger *slog.Logger) *selfmonitor.Monitor {
+	store := postgres.NewSelfMonitorStore(db)
+	deps := selfmonitor.Deps{
+		Sources: selfSources{stats: stats, store: store}, DatabaseLimit: cfg.DatabaseSizeLimit, Now: time.Now, Logger: logger,
+	}
+	if cfg.SMTP != nil {
+		deps.Admins, deps.Mailer = store, newMailer(cfg.SMTP)
+	}
+	return selfmonitor.New(deps)
 }

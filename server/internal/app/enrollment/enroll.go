@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,9 @@ type NodeFacts struct {
 	Architecture  string // "amd64" or "arm64"
 	CPUCount      int
 	MemoryBytes   int64
+	// ClientIP is no host fact: the address the enrollment came from, set by the transport, for
+	// the security event "token used" (M2-24); zero if unknown.
+	ClientIP netip.Addr
 }
 
 // Node is a node created by enrollment.

@@ -51,6 +51,7 @@ type Querier interface {
 	// (SELECT policy), so RETURNING would be rejected by RLS. Add the membership in the same
 	// transaction (AddMembership).
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	DatabaseSize(ctx context.Context) (int64, error)
 	DeactivateIssuingAuthority(ctx context.Context) error
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
@@ -116,6 +117,8 @@ type Querier interface {
 	InsertNotificationPolicyChannel(ctx context.Context, arg InsertNotificationPolicyChannelParams) error
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
 	InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults
+	// An event of the server itself (M2-24), inside the transaction of what it reports.
+	InsertServerSecurityEvent(ctx context.Context, arg InsertServerSecurityEventParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
@@ -208,6 +211,8 @@ type Querier interface {
 	SetupCompleted(ctx context.Context) (bool, error)
 	// Read-only pre-check (sermon_app may only read instance_setup); CompleteInstanceSetup consumes.
 	SetupTokenValid(ctx context.Context, arg SetupTokenValidParams) (bool, error)
+	// Self-monitoring of the server (M2-24). Instance level, no tenant.
+	SuperadminEmails(ctx context.Context) ([]string, error)
 	// Certificate rotation (M1-11). All queries run inside InTenant.
 	// Replaces the current certificate: it stays valid until revoke_at (grace period). No rows
 	// means the certificate was already replaced or revoked.

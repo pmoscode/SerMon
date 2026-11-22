@@ -33,11 +33,18 @@ const (
 	AccountDeleted       Kind = "account.deleted"
 	SystemReboot         Kind = "system.reboot"
 	OOMKill              Kind = "system.oom_kill"
+
+	// Written by the server itself, never by an agent (M2-24, T3, T4): an enrollment token was
+	// used (the node is the new one), a node was locked, a node rotated from a new address.
+	EnrollmentTokenUsed Kind = "enrollment.token_used"
+	NodeLocked          Kind = "node.locked"
+	NodeRotationNewIP   Kind = "node.rotation_new_ip"
 )
 
 var kinds = []Kind{
 	SSHLoginFailed, SSHInvalidUser, SSHLoginSucceeded, SSHPreauthDisconnect, SudoAuthFailed, SudoNotAllowed,
 	SudoCommand, AccountCreated, AccountDeleted, SystemReboot, OOMKill,
+	EnrollmentTokenUsed, NodeLocked, NodeRotationNewIP,
 }
 
 // Kinds returns every kind.
@@ -64,6 +71,7 @@ const (
 	MaxShort   = 128
 	MaxCommand = 1024
 	MaxProcess = 64
+	MaxReason  = 200 // as nodes.lock_reason
 )
 
 // Remote is the other end of an SSH connection: an IP address or a host name, and the port
@@ -88,6 +96,10 @@ type Details struct {
 	Process        string         `json:"process,omitempty"`
 	PreviousBootID string         `json:"previous_boot_id,omitempty"`
 	UptimeBefore   *time.Duration `json:"uptime_before,omitempty"`
+	// Server events (M2-24).
+	TokenID    string `json:"token_id,omitempty"`    // enrollment.token_used
+	Reason     string `json:"reason,omitempty"`      // node.locked
+	PreviousIP string `json:"previous_ip,omitempty"` // node.rotation_new_ip
 }
 
 // Event is one security event of a node.
@@ -141,6 +153,9 @@ func (e Event) Validate() error {
 		{"command", d.Command, MaxCommand},
 		{"process", d.Process, MaxProcess},
 		{"boot id", d.PreviousBootID, MaxShort},
+		{"token", d.TokenID, MaxShort},
+		{"reason", d.Reason, MaxReason},
+		{"previous ip", d.PreviousIP, MaxShort},
 	} {
 		if len(f.value) > f.max || !utf8.ValidString(f.value) {
 			return fmt.Errorf("%w: %s longer than %d bytes or not UTF-8", ErrInvalid, f.name, f.max)

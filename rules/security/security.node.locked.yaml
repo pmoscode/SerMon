@@ -1,0 +1,23 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.node.locked
+  name: { de: "Node gesperrt", en: "Node locked" }
+  labels: { category: security }
+spec:
+  type: event
+  event: node.locked
+  count: { window: 1h, critical: 1 }
+  notifyFields: [ ts, reason ]
+  help:
+    de: >-
+      Der Server hat einen Node vorsorglich gesperrt: Er war zweimal gleichzeitig von verschiedenen Adressen verbunden,
+      oder er hat ein bereits ersetztes Zertifikat benutzt. Beides spricht dafür, dass jemand den Schlüssel des Agents
+      kopiert hat. Der Node liefert keine Daten mehr, bis du entscheidest: Bei einer harmlosen Erklärung (etwa ein
+      geklonter Container) entsperren, sonst den Schlüssel widerrufen und den Agent neu installieren (Node, Reiter
+      Identität).
+    en: >-
+      The server locked a node as a precaution: it was connected twice at the same time from different addresses, or
+      it used a certificate that was replaced already. Both suggest someone copied the agent's key. The node sends no
+      data until you decide: with a harmless explanation (such as a cloned container) unlock it, otherwise revoke the
+      key and install the agent again (node, Identity tab).

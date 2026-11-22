@@ -19,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
+	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
@@ -43,6 +44,8 @@ type SecondFactorView interface {
 
 // AuthHandler implements sermon.web.v1.AuthService.
 type AuthHandler struct {
+	super        SuperadminCheck
+	problems     InstanceProblems
 	login        *auth.Service
 	sessions     *session.Manager
 	identities   IdentityReader
@@ -55,6 +58,46 @@ type AuthHandler struct {
 func (h *AuthHandler) WithPrincipals(principals PrincipalLoader) *AuthHandler {
 	h.principals = principals
 	return h
+}
+
+// SuperadminCheck tells superadmins apart (postgres.AccessStore).
+type SuperadminCheck interface {
+	IsSuperadmin(ctx context.Context, user identity.UserID) (bool, error)
+}
+
+// InstanceProblems are the self-monitoring's current problems (selfmonitor.Monitor).
+type InstanceProblems interface {
+	Problems() []selfmonitor.Problem
+}
+
+// WithInstanceHealth shows superadmins the server's own problems in their session (M2-24).
+func (h *AuthHandler) WithInstanceHealth(super SuperadminCheck, problems InstanceProblems) *AuthHandler {
+	h.super, h.problems = super, problems
+	return h
+}
+
+// describeInstance marks superadmins and gives them the self-monitoring problems; nobody else sees them.
+func (h *AuthHandler) describeInstance(ctx context.Context, s session.Session, view *webv1.Session) error {
+	if h.super == nil {
+		return nil
+	}
+	super, err := h.super.IsSuperadmin(ctx, s.User)
+	if err != nil {
+		return fmt.Errorf("superadmin: %w", err)
+	}
+	if !super {
+		return nil
+	}
+	view.Superadmin = true
+	if h.problems == nil {
+		return nil
+	}
+	for _, p := range h.problems.Problems() {
+		view.InstanceProblems = append(view.InstanceProblems, &webv1.InstanceProblem{
+			Check: string(p.Check), Level: p.Level.String(), Since: timestamppb.New(p.Since), Value: p.Value,
+		})
+	}
+	return nil
 }
 
 var _ webv1connect.AuthServiceHandler = (*AuthHandler)(nil)
@@ -277,6 +320,9 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 	}
 	for _, o := range orgs {
 		view.Organizations = append(view.Organizations, &webv1.Organization{Id: o.ID.String(), Name: o.Name})
+	}
+	if err := h.describeInstance(ctx, s, view); err != nil {
+		return nil, err
 	}
 	if err := h.describeRights(ctx, s, view); err != nil {
 		return nil, err

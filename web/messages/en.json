@@ -528,5 +528,13 @@
 	"account_theme": "Appearance",
 	"account_language": "Language",
 	"node_tab_identity": "Identity",
-	"node_locked_badge": "Locked (see Identity)"
+	"node_locked_badge": "Locked (see Identity)",
+	"alert_field_token": "Token",
+	"alert_field_reason": "Reason",
+	"alert_field_previous_ip": "Previous address",
+	"instance_warning": "Server: Warning",
+	"instance_critical": "Server: Critical",
+	"instance_ingest_lag": "Agent data arrives late ({seconds} s)",
+	"instance_dropped_samples": "{count} samples dropped within 15 minutes",
+	"instance_database_size": "The database is filling up ({percent} %)"
 }

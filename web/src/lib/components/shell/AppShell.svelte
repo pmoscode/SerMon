@@ -18,6 +18,7 @@
 	import { sessionState } from '#lib/stores/session.svelte.js';
 	import OrgSwitcher from './OrgSwitcher.svelte';
 	import AccountMenu from './AccountMenu.svelte';
+	import InstanceHealth from './InstanceHealth.svelte';
 
 	let { children, onLogout }: { children: Snippet; onLogout: () => void } = $props();
 
@@ -102,6 +103,7 @@
 			</div>
 		</div>
 	</header>
+	<InstanceHealth />
 	<main id="content" tabindex="-1" class="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
 		{@render children()}
 	</main>

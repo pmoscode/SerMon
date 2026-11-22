@@ -1,0 +1,22 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.enrollment.token_used
+  name: { de: "Enrollment-Token benutzt", en: "Enrollment token used" }
+  labels: { category: security }
+spec:
+  type: event
+  event: enrollment.token_used
+  count: { window: 15m, warning: 1 }
+  notifyFields: [ ts, token, ip ]
+  help:
+    de: >-
+      Mit einem Enrollment-Token wurde ein Node angemeldet oder ein bestehender übernommen. Bei einer geplanten
+      Installation ist das erwartet; kam die Anmeldung unerwartet oder von einer fremden Adresse, kann das Token in
+      falsche Hände geraten sein. Prüfe in der Flotte, ob der Node dazugehört, widerrufe sonst das Token (Verwaltung,
+      Nodes hinzufügen) und den Schlüssel des Nodes (Node, Reiter Identität) und entferne ihn.
+    en: >-
+      A node was enrolled, or an existing one taken over, with an enrollment token. During a planned installation
+      that is expected; if the enrollment was unexpected or came from an unknown address, the token may have fallen
+      into the wrong hands. Check in the fleet whether the node belongs there; otherwise revoke the token
+      (Administration, add nodes) and the node's key (node, Identity tab) and remove it.

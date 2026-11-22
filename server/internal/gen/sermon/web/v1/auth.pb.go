@@ -768,8 +768,13 @@ type Session struct {
 	// node_identity_group_ids are the groups where the caller may rotate, revoke, unlock and allow
 	// the takeover of nodes (operator or admin, M2-23); the single value "*" stands for all groups.
 	NodeIdentityGroupIds []string `protobuf:"bytes,12,rep,name=node_identity_group_ids,json=nodeIdentityGroupIds,proto3" json:"node_identity_group_ids,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// superadmin is set for superadmins of the instance (M2-24).
+	Superadmin bool `protobuf:"varint,13,opt,name=superadmin,proto3" json:"superadmin,omitempty"`
+	// instance_problems are the self-monitoring problems of the server, only for superadmins
+	// (M2-24); empty while all is well.
+	InstanceProblems []*InstanceProblem `protobuf:"bytes,14,rep,name=instance_problems,json=instanceProblems,proto3" json:"instance_problems,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -886,6 +891,94 @@ func (x *Session) GetNodeIdentityGroupIds() []string {
 	return nil
 }
 
+func (x *Session) GetSuperadmin() bool {
+	if x != nil {
+		return x.Superadmin
+	}
+	return false
+}
+
+func (x *Session) GetInstanceProblems() []*InstanceProblem {
+	if x != nil {
+		return x.InstanceProblems
+	}
+	return nil
+}
+
+// InstanceProblem is a check of the server's self-monitoring that is not OK.
+type InstanceProblem struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// check is ingest_lag, dropped_samples or database_size.
+	Check string `protobuf:"bytes,1,opt,name=check,proto3" json:"check,omitempty"`
+	// level is warning or critical.
+	Level string `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"`
+	// since is when it reached this level.
+	Since *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=since,proto3" json:"since,omitempty"`
+	// value is the lag in seconds, the samples dropped within 15 minutes or the share of the
+	// database limit (0..1).
+	Value         float64 `protobuf:"fixed64,4,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InstanceProblem) Reset() {
+	*x = InstanceProblem{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstanceProblem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstanceProblem) ProtoMessage() {}
+
+func (x *InstanceProblem) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstanceProblem.ProtoReflect.Descriptor instead.
+func (*InstanceProblem) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *InstanceProblem) GetCheck() string {
+	if x != nil {
+		return x.Check
+	}
+	return ""
+}
+
+func (x *InstanceProblem) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *InstanceProblem) GetSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Since
+	}
+	return nil
+}
+
+func (x *InstanceProblem) GetValue() float64 {
+	if x != nil {
+		return x.Value
+	}
+	return 0
+}
+
 // Organization is an organization the user belongs to.
 type Organization struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -899,7 +992,7 @@ type Organization struct {
 
 func (x *Organization) Reset() {
 	*x = Organization{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -911,7 +1004,7 @@ func (x *Organization) String() string {
 func (*Organization) ProtoMessage() {}
 
 func (x *Organization) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -924,7 +1017,7 @@ func (x *Organization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Organization.ProtoReflect.Descriptor instead.
 func (*Organization) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{17}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Organization) GetId() string {
@@ -977,7 +1070,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\xb3\x04\n" +
+	"\x19SecondFactorSetupRequired\"\xa0\x05\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -991,7 +1084,16 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x10enroll_group_ids\x18\n" +
 	" \x03(\tR\x0eenrollGroupIds\x12*\n" +
 	"\x11silence_group_ids\x18\v \x03(\tR\x0fsilenceGroupIds\x125\n" +
-	"\x17node_identity_group_ids\x18\f \x03(\tR\x14nodeIdentityGroupIds\"2\n" +
+	"\x17node_identity_group_ids\x18\f \x03(\tR\x14nodeIdentityGroupIds\x12\x1e\n" +
+	"\n" +
+	"superadmin\x18\r \x01(\bR\n" +
+	"superadmin\x12K\n" +
+	"\x11instance_problems\x18\x0e \x03(\v2\x1e.sermon.web.v1.InstanceProblemR\x10instanceProblems\"\x85\x01\n" +
+	"\x0fInstanceProblem\x12\x14\n" +
+	"\x05check\x18\x01 \x01(\tR\x05check\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\tR\x05level\x120\n" +
+	"\x05since\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12\x14\n" +
+	"\x05value\x18\x04 \x01(\x01R\x05value\"2\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name2\x96\x05\n" +
@@ -1018,7 +1120,7 @@ func file_sermon_web_v1_auth_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_auth_proto_rawDescData
 }
 
-var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_sermon_web_v1_auth_proto_goTypes = []any{
 	(*LoginRequest)(nil),                // 0: sermon.web.v1.LoginRequest
 	(*LoginResponse)(nil),               // 1: sermon.web.v1.LoginResponse
@@ -1037,8 +1139,9 @@ var file_sermon_web_v1_auth_proto_goTypes = []any{
 	(*StepUpRequired)(nil),              // 14: sermon.web.v1.StepUpRequired
 	(*SecondFactorSetupRequired)(nil),   // 15: sermon.web.v1.SecondFactorSetupRequired
 	(*Session)(nil),                     // 16: sermon.web.v1.Session
-	(*Organization)(nil),                // 17: sermon.web.v1.Organization
-	(*timestamppb.Timestamp)(nil),       // 18: google.protobuf.Timestamp
+	(*InstanceProblem)(nil),             // 17: sermon.web.v1.InstanceProblem
+	(*Organization)(nil),                // 18: sermon.web.v1.Organization
+	(*timestamppb.Timestamp)(nil),       // 19: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_auth_proto_depIdxs = []int32{
 	16, // 0: sermon.web.v1.LoginResponse.session:type_name -> sermon.web.v1.Session
@@ -1047,27 +1150,29 @@ var file_sermon_web_v1_auth_proto_depIdxs = []int32{
 	16, // 3: sermon.web.v1.GetSessionResponse.session:type_name -> sermon.web.v1.Session
 	16, // 4: sermon.web.v1.SwitchOrganizationResponse.session:type_name -> sermon.web.v1.Session
 	16, // 5: sermon.web.v1.ConfirmPasswordResponse.session:type_name -> sermon.web.v1.Session
-	17, // 6: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
-	18, // 7: sermon.web.v1.Session.step_up_until:type_name -> google.protobuf.Timestamp
-	0,  // 8: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
-	2,  // 9: sermon.web.v1.AuthService.VerifySecondFactor:input_type -> sermon.web.v1.VerifySecondFactorRequest
-	6,  // 10: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
-	8,  // 11: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
-	10, // 12: sermon.web.v1.AuthService.SwitchOrganization:input_type -> sermon.web.v1.SwitchOrganizationRequest
-	12, // 13: sermon.web.v1.AuthService.ConfirmPassword:input_type -> sermon.web.v1.ConfirmPasswordRequest
-	4,  // 14: sermon.web.v1.AuthService.ConfirmSecondFactor:input_type -> sermon.web.v1.ConfirmSecondFactorRequest
-	1,  // 15: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
-	3,  // 16: sermon.web.v1.AuthService.VerifySecondFactor:output_type -> sermon.web.v1.VerifySecondFactorResponse
-	7,  // 17: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
-	9,  // 18: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
-	11, // 19: sermon.web.v1.AuthService.SwitchOrganization:output_type -> sermon.web.v1.SwitchOrganizationResponse
-	13, // 20: sermon.web.v1.AuthService.ConfirmPassword:output_type -> sermon.web.v1.ConfirmPasswordResponse
-	5,  // 21: sermon.web.v1.AuthService.ConfirmSecondFactor:output_type -> sermon.web.v1.ConfirmSecondFactorResponse
-	15, // [15:22] is the sub-list for method output_type
-	8,  // [8:15] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	18, // 6: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
+	19, // 7: sermon.web.v1.Session.step_up_until:type_name -> google.protobuf.Timestamp
+	17, // 8: sermon.web.v1.Session.instance_problems:type_name -> sermon.web.v1.InstanceProblem
+	19, // 9: sermon.web.v1.InstanceProblem.since:type_name -> google.protobuf.Timestamp
+	0,  // 10: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
+	2,  // 11: sermon.web.v1.AuthService.VerifySecondFactor:input_type -> sermon.web.v1.VerifySecondFactorRequest
+	6,  // 12: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
+	8,  // 13: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
+	10, // 14: sermon.web.v1.AuthService.SwitchOrganization:input_type -> sermon.web.v1.SwitchOrganizationRequest
+	12, // 15: sermon.web.v1.AuthService.ConfirmPassword:input_type -> sermon.web.v1.ConfirmPasswordRequest
+	4,  // 16: sermon.web.v1.AuthService.ConfirmSecondFactor:input_type -> sermon.web.v1.ConfirmSecondFactorRequest
+	1,  // 17: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
+	3,  // 18: sermon.web.v1.AuthService.VerifySecondFactor:output_type -> sermon.web.v1.VerifySecondFactorResponse
+	7,  // 19: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
+	9,  // 20: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
+	11, // 21: sermon.web.v1.AuthService.SwitchOrganization:output_type -> sermon.web.v1.SwitchOrganizationResponse
+	13, // 22: sermon.web.v1.AuthService.ConfirmPassword:output_type -> sermon.web.v1.ConfirmPasswordResponse
+	5,  // 23: sermon.web.v1.AuthService.ConfirmSecondFactor:output_type -> sermon.web.v1.ConfirmSecondFactorResponse
+	17, // [17:24] is the sub-list for method output_type
+	10, // [10:17] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_auth_proto_init() }
@@ -1081,7 +1186,7 @@ func file_sermon_web_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_auth_proto_rawDesc), len(file_sermon_web_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

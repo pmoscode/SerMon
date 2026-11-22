@@ -169,6 +169,41 @@ func TestThreshold_AggregatesAndDimensions(t *testing.T) {
 	}
 }
 
+// increase (M2-24): how much a cumulative counter grew within the window; after a reset (agent
+// restart) it counts from 0 again. The buffer's dropped batches are such a counter.
+func TestThreshold_IncreaseOfACumulativeCounter(t *testing.T) {
+	m := &fakeMetrics{series: map[string][]metrics.Series{"sermon_agent_buffer_dropped_batches": {
+		{Node: web, Points: points(time.Minute, 3, 3, 5, 9)},
+		{Node: db01, Points: points(time.Minute, 7, 9, 2, 4)}, // reset after 9: +2, +2, +2
+		{Node: app01, Points: points(time.Minute, 4, 4, 4)},
+	}}}
+	rule := alerting.ThresholdRule{
+		Series: alerting.SeriesSpec{Metric: "sermon_agent_buffer_dropped_batches"}, Aggregate: alerting.Increase,
+		Window: 15 * time.Minute, Thresholds: alert.Thresholds{Warning: gt(0)},
+	}
+	if err := rule.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	results, err := rule.Evaluate(context.Background(), env(m, webNode, dbNode, appNode))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byKey(t, results)
+	for node, want := range map[identity.NodeID]float64{web: 6, db01: 6, app01: 0} {
+		if o := got[node.String()+"|"]; o.Value != want {
+			t.Errorf("%v: increase %v, want %v", node, o.Value, want)
+		}
+	}
+	if got[app01.String()+"|"].Level != alert.LevelOK || got[web.String()+"|"].Level != alert.LevelWarning {
+		t.Errorf("levels: %+v", got)
+	}
+	// A ratio of increases means nothing.
+	rule.RelativeTo = "sermon_agent_buffer_pending_batches"
+	if err := rule.Validate(); !errors.Is(err, alert.ErrInvalidRule) {
+		t.Errorf("increase with relative_to: %v", err)
+	}
+}
+
 func TestThreshold_NodesWithoutDataGetNoResult(t *testing.T) {
 	m := &fakeMetrics{series: map[string][]metrics.Series{}}
 	rule := alerting.ThresholdRule{

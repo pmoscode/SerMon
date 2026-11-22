@@ -352,7 +352,14 @@ type SecurityEventDetails struct {
 	// previous_boot_id is the boot before a reboot.
 	PreviousBootId string `protobuf:"bytes,11,opt,name=previous_boot_id,json=previousBootId,proto3" json:"previous_boot_id,omitempty"`
 	// uptime_before is how long the previous boot ran.
-	UptimeBefore  *durationpb.Duration `protobuf:"bytes,12,opt,name=uptime_before,json=uptimeBefore,proto3" json:"uptime_before,omitempty"`
+	UptimeBefore *durationpb.Duration `protobuf:"bytes,12,opt,name=uptime_before,json=uptimeBefore,proto3" json:"uptime_before,omitempty"`
+	// token_id is the enrollment token of enrollment.token_used (M2-24).
+	TokenId string `protobuf:"bytes,13,opt,name=token_id,json=tokenId,proto3" json:"token_id,omitempty"`
+	// reason is why a node was locked (node.locked).
+	Reason string `protobuf:"bytes,14,opt,name=reason,proto3" json:"reason,omitempty"`
+	// previous_ip is the address of the session before a rotation from a new one
+	// (node.rotation_new_ip).
+	PreviousIp    string `protobuf:"bytes,15,opt,name=previous_ip,json=previousIp,proto3" json:"previous_ip,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -471,6 +478,27 @@ func (x *SecurityEventDetails) GetUptimeBefore() *durationpb.Duration {
 	return nil
 }
 
+func (x *SecurityEventDetails) GetTokenId() string {
+	if x != nil {
+		return x.TokenId
+	}
+	return ""
+}
+
+func (x *SecurityEventDetails) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SecurityEventDetails) GetPreviousIp() string {
+	if x != nil {
+		return x.PreviousIp
+	}
+	return ""
+}
+
 var File_sermon_web_v1_security_event_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_security_event_proto_rawDesc = "" +
@@ -509,7 +537,7 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	" \x01(\v2#.sermon.web.v1.SecurityEventDetailsR\adetails\x12\x1e\n" +
 	"\n" +
 	"unverified\x18\v \x01(\bR\n" +
-	"unverified\"\x8e\x03\n" +
+	"unverified\"\xe2\x03\n" +
 	"\x14SecurityEventDetails\x12\x16\n" +
 	"\x06method\x18\x01 \x01(\tR\x06method\x12!\n" +
 	"\finvalid_user\x18\x02 \x01(\bR\vinvalidUser\x12\x19\n" +
@@ -523,7 +551,11 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\aprocess\x18\n" +
 	" \x01(\tR\aprocess\x12(\n" +
 	"\x10previous_boot_id\x18\v \x01(\tR\x0epreviousBootId\x12>\n" +
-	"\ruptime_before\x18\f \x01(\v2\x19.google.protobuf.DurationR\fuptimeBeforeB\x06\n" +
+	"\ruptime_before\x18\f \x01(\v2\x19.google.protobuf.DurationR\fuptimeBefore\x12\x19\n" +
+	"\btoken_id\x18\r \x01(\tR\atokenId\x12\x16\n" +
+	"\x06reason\x18\x0e \x01(\tR\x06reason\x12\x1f\n" +
+	"\vprevious_ip\x18\x0f \x01(\tR\n" +
+	"previousIpB\x06\n" +
 	"\x04_uid2\x81\x01\n" +
 	"\x14SecurityEventService\x12i\n" +
 	"\x12ListSecurityEvents\x12(.sermon.web.v1.ListSecurityEventsRequest\x1a).sermon.web.v1.ListSecurityEventsResponseB\xc1\x01\n" +

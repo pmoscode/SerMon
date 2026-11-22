@@ -62,6 +62,8 @@ type Store interface {
 	RecordSession(ctx context.Context, org tenant.OrgID, node identity.NodeID, ip string) (string, error)
 	// Note writes a security note to the organization's audit log.
 	Note(ctx context.Context, org tenant.OrgID, audit access.AuditEntry) error
+	// NoteNewAddress records a rotation from a new address: audit note and security event (M2-24).
+	NoteNewAddress(ctx context.Context, org tenant.OrgID, node identity.NodeID, ip, previous string, now time.Time, audit access.AuditEntry) error
 }
 
 // Service rotates certificates.
@@ -127,7 +129,7 @@ func (s *Service) Rotate(ctx context.Context, id Identity, csrDER []byte, ip, pr
 			Action: "security.rotation_new_ip", Target: "node:" + id.Node.String(),
 			Details: map[string]string{"ip": ip, "previous_ip": previousIP},
 		}
-		if err := s.store.Note(ctx, id.Org, note); err != nil {
+		if err := s.store.NoteNewAddress(ctx, id.Org, id.Node, ip, previousIP, now, note); err != nil {
 			return Rotated{}, fmt.Errorf("security note: %w", err)
 		}
 	}

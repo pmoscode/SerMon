@@ -435,3 +435,18 @@ func TestLoad_DevelopmentRelaxesSMTPAndOrigins(t *testing.T) {
 		t.Errorf("Mailpit in development: %+v, %v", cfg.SMTP, err)
 	}
 }
+
+// SERMON_DATABASE_SIZE_LIMIT (M2-24): bytes or with a binary suffix; empty: not checked.
+func TestLoad_DatabaseSizeLimit(t *testing.T) {
+	for value, want := range map[string]int64{"": 0, "1048576": 1 << 20, "50GiB": 50 << 30, "2TiB": 2 << 40, "512MiB": 512 << 20} {
+		cfg, err := config.Load(fakeSource(map[string]string{"SERMON_DATABASE_SIZE_LIMIT": value}, nil))
+		if err != nil || cfg.DatabaseSizeLimit != want {
+			t.Errorf("%q: %d, %v; want %d", value, cfg.DatabaseSizeLimit, err, want)
+		}
+	}
+	for _, bad := range []string{"50GB", "-1", "lots", "0"} {
+		if _, err := config.Load(fakeSource(map[string]string{"SERMON_DATABASE_SIZE_LIMIT": bad}, nil)); err == nil || !strings.Contains(err.Error(), "SERMON_DATABASE_SIZE_LIMIT") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+}

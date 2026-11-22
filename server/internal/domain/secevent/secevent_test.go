@@ -31,6 +31,8 @@ func TestKinds_AreTheNamesOfKonzept(t *testing.T) {
 		"ssh.login.failed", "ssh.login.invalid_user", "ssh.login.success", "ssh.preauth.disconnect",
 		"sudo.auth.failed", "sudo.not_allowed", "sudo.command", "account.created", "account.deleted",
 		"system.reboot", "system.oom_kill",
+		// Written by the server itself (M2-24, T3, T4).
+		"enrollment.token_used", "node.locked", "node.rotation_new_ip",
 	}
 	got := secevent.Kinds()
 	if strings.Join(kindNames(got), ",") != strings.Join(want, ",") {

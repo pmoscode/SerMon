@@ -109,7 +109,10 @@ const fieldLabels: Record<string, () => string> = {
 	tty: () => m.alert_field_tty(),
 	process: () => m.alert_field_process(),
 	pid: () => m.alert_field_pid(),
-	source: () => m.alert_field_source()
+	source: () => m.alert_field_source(),
+	token: () => m.alert_field_token(),
+	reason: () => m.alert_field_reason(),
+	previous_ip: () => m.alert_field_previous_ip()
 };
 
 /** The label of an event field; its name for fields without a translation. */

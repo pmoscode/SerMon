@@ -125,4 +125,11 @@ message SecurityEventDetails {
   string previous_boot_id = 11;
   // uptime_before is how long the previous boot ran.
   google.protobuf.Duration uptime_before = 12;
+  // token_id is the enrollment token of enrollment.token_used (M2-24).
+  string token_id = 13;
+  // reason is why a node was locked (node.locked).
+  string reason = 14;
+  // previous_ip is the address of the session before a rotation from a new one
+  // (node.rotation_new_ip).
+  string previous_ip = 15;
 }

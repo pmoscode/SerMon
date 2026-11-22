@@ -596,6 +596,9 @@ Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log gep
 | `account.created` / `account.deleted` | `useradd`/`userdel`-Meldungen                                                           | ts, user, uid (created)                     |
 | `system.reboot`                       | Wechsel der Boot-ID                                                                     | ts, previous_boot, uptime_before            |
 | `system.oom_kill`                     | Kernel `Out of memory: Killed process <pid> (<name>)`                                   | ts, pid, process                            |
+| `enrollment.token_used`               | vom Server: Enrollment oder Übernahme mit einem Token ([ADR 0027](docs/adr/0027-server-ereignisse-und-self-monitoring.md))                  | ts, token, ip                               |
+| `node.locked`                         | vom Server: vorsorgliche Sperre (zweite Session, ersetztes Zertifikat)                  | ts, reason                                  |
+| `node.rotation_new_ip`                | vom Server: Schlüsselrotation von einer neuen Adresse                                   | ts, ip, previous_ip                         |
 
 **Parser-Anforderungen:** Sie müssen sowohl `sshd` als auch `sshd-session` erkennen (Prozessname ab OpenSSH 9.8), IPv4
 und IPv6, und Distro-Varianten. **Jeder Parser wird mit echten Logzeilen aus allen Zieldistros als Fixtures getestet und
@@ -789,7 +792,9 @@ vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
 
 - **Agent-Puffer:** Die Schwellen sind absolut, 100 MiB und 180 MiB. Der Puffer fasst fest 200 MiB, der Agent meldet
   sein Limit aber nicht.
-- **„Daten verworfen“** fehlt noch. Der Zähler ist kumulativ, und für Zuwächse fehlt ein Regeltyp (M2-24).
+- **„Daten verworfen“** (M2-24): `threshold` mit der Aggregation `increase` (Zuwachs des kumulativen Zählers in 1 h,
+  Warnung ab 1). Dazu die Regeln für Ereignisse des Servers: Token benutzt (Warnung), Node gesperrt (kritisch),
+  Rotation von neuer Adresse (Warnung) – [ADR 0027](docs/adr/0027-server-ereignisse-und-self-monitoring.md).
 - **Netzwerk:** Errors und Drops gelten getrennt für Empfang und Senden, jeweils relativ zu den Paketen.
 - **Zurückgestellt:** Bandbreiten-Sättigung (Durchsatz in Bytes/s, Link-Speed in Bits/s; dem Regelformat fehlt ein
   Umrechnungsfaktor) und Temperatur (hwmon-Grenzen meldet der Agent nicht).
@@ -1372,8 +1377,9 @@ networks: public (caddy), internal (alles andere, internal: true)
   - Der Restore wird in CI getestet.
 - **Upgrade:** `docker compose pull && docker compose up -d`; Migrationen laufen automatisch mit Lock; Rollback-Hinweise
   in den Release-Notes.
-- **Self-Monitoring:** Der Server überwacht sich selbst (Ingest-Lag, Queue-Größen, Fehlerraten der Notifier,
-  Disk-Füllstand der Volumes) mit eigenen Alerts. Optional läuft ein Agent auf dem Server-Host.
+- **Self-Monitoring:** Der Server überwacht sich selbst: Ingest-Lag, verworfene Samples und die Größe der Datenbank
+  gegen `SERMON_DATABASE_SIZE_LIMIT`. Superadmins bekommen bei jedem Wechsel eine Mail und sehen offene Probleme in der
+  UI; Organisationen sehen nichts davon ([ADR 0027](docs/adr/0027-server-ereignisse-und-self-monitoring.md)). Den Füllstand der Volumes misst ein Agent auf dem Server-Host.
 - **Ressourcen (Richtwert für 50 Nodes):** 4 vCPU, 8 GB RAM, 200 GB NVMe-SSD. Wird im Spike in M0 bestätigt.
 
 ---

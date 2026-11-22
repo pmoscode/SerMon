@@ -17,6 +17,8 @@ test.describe('context help (mocked API)', () => {
 
 		const panel = page.getByRole('dialog');
 		await expect(panel.getByRole('heading', { name: 'Reading this page' })).toBeVisible();
+		// The popover fades out: measure once it is gone.
+		await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
 		const results = await new AxeBuilder({ page }).analyze();
 		expect(results.violations).toEqual([]);
 	});

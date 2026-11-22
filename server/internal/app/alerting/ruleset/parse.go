@@ -320,7 +320,7 @@ func seriesOf(spec *webv1.AlertRuleSpec) (alerting.SeriesSpec, error) {
 	return s, nil
 }
 
-var aggregates = map[string]alerting.Aggregate{"avg": alerting.Avg, "max": alerting.Max, "min": alerting.Min, "last": alerting.Last}
+var aggregates = map[string]alerting.Aggregate{"avg": alerting.Avg, "max": alerting.Max, "min": alerting.Min, "last": alerting.Last, "increase": alerting.Increase}
 
 type validEvaluator interface {
 	alerting.Evaluator

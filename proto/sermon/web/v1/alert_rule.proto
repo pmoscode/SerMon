@@ -98,14 +98,16 @@ message AlertRuleSpec {
       string: {max_len: 64}
     }
   }];
-  // aggregate reduces the window: avg, max, min or last (threshold).
+  // aggregate reduces the window: avg, max, min, last or increase (threshold). increase is how
+  // much a cumulative counter grew within the window; a drop counts from 0 again.
   string aggregate = 6 [(buf.validate.field).string = {
     in: [
       "",
       "avg",
       "max",
       "min",
-      "last"
+      "last",
+      "increase"
     ]
   }];
   // window is the time the aggregate or rate covers, e.g. 10m (threshold, rate).

@@ -15,6 +15,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -148,6 +149,9 @@ func (r *NodeRegistry) Register(ctx context.Context, st enrollment.Stored, n enr
 		}); err != nil {
 			return fmt.Errorf("record certificate: %w", err)
 		}
+		if err := insertServerEvent(ctx, q, tokenUsed(st, n, now)); err != nil {
+			return err
+		}
 		for _, a := range audits {
 			if err := appendAudit(ctx, q, a); err != nil {
 				return err
@@ -218,6 +222,9 @@ func (r *NodeRegistry) TakeOver(ctx context.Context, st enrollment.Stored, n enr
 		}); err != nil {
 			return fmt.Errorf("record certificate: %w", err)
 		}
+		if err := insertServerEvent(ctx, q, tokenUsed(st, n, now)); err != nil {
+			return err
+		}
 		for _, a := range audits {
 			if err := appendAudit(ctx, q, a); err != nil {
 				return err
@@ -225,6 +232,15 @@ func (r *NodeRegistry) TakeOver(ctx context.Context, st enrollment.Stored, n enr
 		}
 		return nil
 	})
+}
+
+// tokenUsed is the security event of an enrollment (T3): the node is the new (or taken over) one.
+func tokenUsed(st enrollment.Stored, n enrollment.Node, now time.Time) secevent.Event {
+	e := secevent.Event{Node: n.ID, OccurredAt: now, Kind: secevent.EnrollmentTokenUsed, Details: secevent.Details{TokenID: st.ID.String()}}
+	if n.Facts.ClientIP.IsValid() {
+		e.Remote = &secevent.Remote{IP: n.Facts.ClientIP}
+	}
+	return e
 }
 
 func groupIDs(scope tenant.Scope) []uuid.UUID {

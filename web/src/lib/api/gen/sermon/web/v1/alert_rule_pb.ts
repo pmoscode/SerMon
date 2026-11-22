@@ -164,7 +164,8 @@ export type AlertRuleSpec = Message<"sermon.web.v1.AlertRuleSpec"> & {
   exclude: { [key: string]: ListValue };
 
   /**
-   * aggregate reduces the window: avg, max, min or last (threshold).
+   * aggregate reduces the window: avg, max, min, last or increase (threshold). increase is how
+   * much a cumulative counter grew within the window; a drop counts from 0 again.
    *
    * @generated from field: string aggregate = 6;
    */

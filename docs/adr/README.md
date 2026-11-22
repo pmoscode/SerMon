@@ -34,6 +34,7 @@ KONZEPT §2 mit angepasst.
 | [0024](0024-ausgehende-verbindungen-safehttp.md) | Ausgehende Verbindungen: `safehttp`, Allowlist in der Server-Konfiguration | accepted | – |
 | [0025](0025-logdateien-ohne-journald.md) | Logdateien als Quelle ohne journald: auswerten, aber markieren | accepted | D7, D17 |
 | [0026](0026-zustands-collectors.md) | Zustands-Collectors: adjtimex, systemctl und erholte Units | accepted | D9 |
+| [0027](0027-server-ereignisse-und-self-monitoring.md) | Ereignisse des Servers als Security-Events, Self-Monitoring für Superadmins | accepted | D14 |
 
 ## Entscheidungslog → ADR
 

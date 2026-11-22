@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
@@ -476,5 +477,48 @@ func TestSecurityEventStore_KeepsTheUnverifiedMark(t *testing.T) {
 	}
 	if got := marks(received); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("Received: %v, want %v", got, want)
+	}
+}
+
+// A lock (M2-24, T4) is one security event and one critical alert of the node, in its own
+// organization only.
+func TestAlertEngine_ALockIsOneAlertInItsOrganization(t *testing.T) {
+	a := newEventFixture(t)
+	b := newEventFixture(t)
+	ctx := context.Background()
+	fx := setup(t)
+	db := open(t, fx.appDSN)
+	if err := postgres.NewRotationStore(db).Lock(ctx, tenant.OrgID(a.org), a.node, "second session from 192.0.2.66", time.Now(),
+		access.AuditEntry{Action: "security.node_locked", Target: "node:" + a.node.String()}); err != nil {
+		t.Fatal(err)
+	}
+	defaults, err := ruleset.Defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	alerts := postgres.NewAlertStore(db)
+	engine := alerting.NewEngine(alerting.Deps{
+		Store: alerts, Rules: ruleset.NewSource(defaults, postgres.NewAlertRuleStore(db), slog.New(slog.DiscardHandler)),
+		Nodes: postgres.NewFleetStore(db), Metrics: noMetrics{}, Events: postgres.NewSecurityEventStore(db),
+		Now: time.Now, Logger: slog.New(slog.DiscardHandler),
+	})
+	engine.Round(ctx)
+	engine.Round(ctx) // a second round adds nothing
+	list, err := alerts.Instances(ctx, scopeFor(t, a.org))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var locked []alert.Instance
+	for _, i := range list {
+		if i.Key.Rule == "security.node.locked" {
+			locked = append(locked, i)
+		}
+	}
+	if len(locked) != 1 || locked[0].Key.Node != a.node || locked[0].State != alert.StateCritical ||
+		locked[0].Fields["reason"] != "second session from 192.0.2.66" {
+		t.Errorf("lock alerts = %+v, want one critical for the node with the reason", locked)
+	}
+	if list, _ := alerts.Instances(ctx, scopeFor(t, b.org)); len(list) != 0 {
+		t.Errorf("other organization: %+v", list)
 	}
 }

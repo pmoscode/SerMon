@@ -40,6 +40,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/rules"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
+	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
@@ -148,7 +149,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 	})
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
-			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)),
+			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)).
+			WithInstanceHealth(postgres.NewAccessStore(pg), fakeProblems{}),
 		System: webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
 			invites, slog.New(slog.DiscardHandler)),
@@ -464,4 +466,34 @@ func mustDefaultRules(t *testing.T) []ruleset.Definition {
 		t.Fatal(err)
 	}
 	return defs
+}
+
+// fakeProblems is the self-monitoring of the test stack: one problem, always.
+type fakeProblems struct{}
+
+func (fakeProblems) Problems() []selfmonitor.Problem {
+	return []selfmonitor.Problem{{Check: selfmonitor.IngestLag, Level: selfmonitor.Warning, Since: time.Unix(1_795_000_000, 0), Value: 75}}
+}
+
+// Self-monitoring (M2-24): only superadmins see the server's problems in their session.
+func TestAuthAPI_OnlySuperadminsSeeInstanceProblems(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ctx := context.Background()
+	seedLogin(t, samID, "sam@example.org")
+	ownerSQL(t, "INSERT INTO superadmins (user_id) VALUES ('"+samID+"') ON CONFLICT DO NOTHING")
+	sam := login(t, s, "sam@example.org")
+	me, err := sam.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := me.Msg.GetSession().GetInstanceProblems()
+	if !me.Msg.GetSession().GetSuperadmin() || len(p) != 1 || p[0].GetCheck() != "ingest_lag" || p[0].GetLevel() != "warning" || p[0].GetValue() != 75 {
+		t.Errorf("superadmin session = %v", me.Msg.GetSession())
+	}
+	ann := login(t, s, "ann@example.org") // org admin, no superadmin
+	me, err = ann.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
+	if err != nil || me.Msg.GetSession().GetSuperadmin() || len(me.Msg.GetSession().GetInstanceProblems()) != 0 {
+		t.Errorf("member session = %v, %v", me, err)
+	}
 }

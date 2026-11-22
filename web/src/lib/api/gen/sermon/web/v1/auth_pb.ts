@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/auth.proto.
  */
 export const file_sermon_web_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiLwoMTG9naW5SZXF1ZXN0Eg0KBWVtYWlsGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJIlgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbhIeChZzZWNvbmRfZmFjdG9yX3JlcXVpcmVkGAIgASgIIikKGVZlcmlmeVNlY29uZEZhY3RvclJlcXVlc3QSDAoEY29kZRgBIAEoCSJFChpWZXJpZnlTZWNvbmRGYWN0b3JSZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIioKGkNvbmZpcm1TZWNvbmRGYWN0b3JSZXF1ZXN0EgwKBGNvZGUYASABKAkiRgobQ29uZmlybVNlY29uZEZhY3RvclJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSITChFHZXRTZXNzaW9uUmVxdWVzdCI9ChJHZXRTZXNzaW9uUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiI0ChlTd2l0Y2hPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJFChpTd2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIioKFkNvbmZpcm1QYXNzd29yZFJlcXVlc3QSEAoIcGFzc3dvcmQYASABKAkiQgoXQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIQCg5TdGVwVXBSZXF1aXJlZCIbChlTZWNvbmRGYWN0b3JTZXR1cFJlcXVpcmVkIvQCCgdTZXNzaW9uEg8KB3VzZXJfaWQYASABKAkSDQoFZW1haWwYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEh4KFmFjdGl2ZV9vcmdhbml6YXRpb25faWQYBCABKAkSMgoNb3JnYW5pemF0aW9ucxgFIAMoCzIbLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uEjEKDXN0ZXBfdXBfdW50aWwYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEh0KFXNlY29uZF9mYWN0b3JfZW5hYmxlZBgHIAEoCBIkChxzZWNvbmRfZmFjdG9yX3NldHVwX3JlcXVpcmVkGAggASgIEhEKCW9yZ19hZG1pbhgJIAEoCBIYChBlbnJvbGxfZ3JvdXBfaWRzGAogAygJEhkKEXNpbGVuY2VfZ3JvdXBfaWRzGAsgAygJEh8KF25vZGVfaWRlbnRpdHlfZ3JvdXBfaWRzGAwgAygJIigKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJMpYFCgtBdXRoU2VydmljZRJCCgVMb2dpbhIbLnNlcm1vbi53ZWIudjEuTG9naW5SZXF1ZXN0Ghwuc2VybW9uLndlYi52MS5Mb2dpblJlc3BvbnNlEmkKElZlcmlmeVNlY29uZEZhY3RvchIoLnNlcm1vbi53ZWIudjEuVmVyaWZ5U2Vjb25kRmFjdG9yUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuVmVyaWZ5U2Vjb25kRmFjdG9yUmVzcG9uc2USRQoGTG9nb3V0Ehwuc2VybW9uLndlYi52MS5Mb2dvdXRSZXF1ZXN0Gh0uc2VybW9uLndlYi52MS5Mb2dvdXRSZXNwb25zZRJWCgpHZXRTZXNzaW9uEiAuc2VybW9uLndlYi52MS5HZXRTZXNzaW9uUmVxdWVzdBohLnNlcm1vbi53ZWIudjEuR2V0U2Vzc2lvblJlc3BvbnNlIgOQAgESaQoSU3dpdGNoT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5Td2l0Y2hPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5Td2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRJgCg9Db25maXJtUGFzc3dvcmQSJS5zZXJtb24ud2ViLnYxLkNvbmZpcm1QYXNzd29yZFJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkNvbmZpcm1QYXNzd29yZFJlc3BvbnNlEmwKE0NvbmZpcm1TZWNvbmRGYWN0b3ISKS5zZXJtb24ud2ViLnYxLkNvbmZpcm1TZWNvbmRGYWN0b3JSZXF1ZXN0Giouc2VybW9uLndlYi52MS5Db25maXJtU2Vjb25kRmFjdG9yUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglBdXRoUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiLwoMTG9naW5SZXF1ZXN0Eg0KBWVtYWlsGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJIlgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbhIeChZzZWNvbmRfZmFjdG9yX3JlcXVpcmVkGAIgASgIIikKGVZlcmlmeVNlY29uZEZhY3RvclJlcXVlc3QSDAoEY29kZRgBIAEoCSJFChpWZXJpZnlTZWNvbmRGYWN0b3JSZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIioKGkNvbmZpcm1TZWNvbmRGYWN0b3JSZXF1ZXN0EgwKBGNvZGUYASABKAkiRgobQ29uZmlybVNlY29uZEZhY3RvclJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSITChFHZXRTZXNzaW9uUmVxdWVzdCI9ChJHZXRTZXNzaW9uUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiI0ChlTd2l0Y2hPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJFChpTd2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIioKFkNvbmZpcm1QYXNzd29yZFJlcXVlc3QSEAoIcGFzc3dvcmQYASABKAkiQgoXQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIQCg5TdGVwVXBSZXF1aXJlZCIbChlTZWNvbmRGYWN0b3JTZXR1cFJlcXVpcmVkIsMDCgdTZXNzaW9uEg8KB3VzZXJfaWQYASABKAkSDQoFZW1haWwYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEh4KFmFjdGl2ZV9vcmdhbml6YXRpb25faWQYBCABKAkSMgoNb3JnYW5pemF0aW9ucxgFIAMoCzIbLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uEjEKDXN0ZXBfdXBfdW50aWwYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEh0KFXNlY29uZF9mYWN0b3JfZW5hYmxlZBgHIAEoCBIkChxzZWNvbmRfZmFjdG9yX3NldHVwX3JlcXVpcmVkGAggASgIEhEKCW9yZ19hZG1pbhgJIAEoCBIYChBlbnJvbGxfZ3JvdXBfaWRzGAogAygJEhkKEXNpbGVuY2VfZ3JvdXBfaWRzGAsgAygJEh8KF25vZGVfaWRlbnRpdHlfZ3JvdXBfaWRzGAwgAygJEhIKCnN1cGVyYWRtaW4YDSABKAgSOQoRaW5zdGFuY2VfcHJvYmxlbXMYDiADKAsyHi5zZXJtb24ud2ViLnYxLkluc3RhbmNlUHJvYmxlbSJpCg9JbnN0YW5jZVByb2JsZW0SDQoFY2hlY2sYASABKAkSDQoFbGV2ZWwYAiABKAkSKQoFc2luY2UYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBXZhbHVlGAQgASgBIigKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJMpYFCgtBdXRoU2VydmljZRJCCgVMb2dpbhIbLnNlcm1vbi53ZWIudjEuTG9naW5SZXF1ZXN0Ghwuc2VybW9uLndlYi52MS5Mb2dpblJlc3BvbnNlEmkKElZlcmlmeVNlY29uZEZhY3RvchIoLnNlcm1vbi53ZWIudjEuVmVyaWZ5U2Vjb25kRmFjdG9yUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuVmVyaWZ5U2Vjb25kRmFjdG9yUmVzcG9uc2USRQoGTG9nb3V0Ehwuc2VybW9uLndlYi52MS5Mb2dvdXRSZXF1ZXN0Gh0uc2VybW9uLndlYi52MS5Mb2dvdXRSZXNwb25zZRJWCgpHZXRTZXNzaW9uEiAuc2VybW9uLndlYi52MS5HZXRTZXNzaW9uUmVxdWVzdBohLnNlcm1vbi53ZWIudjEuR2V0U2Vzc2lvblJlc3BvbnNlIgOQAgESaQoSU3dpdGNoT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5Td2l0Y2hPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5Td2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRJgCg9Db25maXJtUGFzc3dvcmQSJS5zZXJtb24ud2ViLnYxLkNvbmZpcm1QYXNzd29yZFJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkNvbmZpcm1QYXNzd29yZFJlc3BvbnNlEmwKE0NvbmZpcm1TZWNvbmRGYWN0b3ISKS5zZXJtb24ud2ViLnYxLkNvbmZpcm1TZWNvbmRGYWN0b3JSZXF1ZXN0Giouc2VybW9uLndlYi52MS5Db25maXJtU2Vjb25kRmFjdG9yUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglBdXRoUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * LoginRequest carries the credentials.
@@ -432,6 +432,21 @@ export type Session = Message<"sermon.web.v1.Session"> & {
    * @generated from field: repeated string node_identity_group_ids = 12;
    */
   nodeIdentityGroupIds: string[];
+
+  /**
+   * superadmin is set for superadmins of the instance (M2-24).
+   *
+   * @generated from field: bool superadmin = 13;
+   */
+  superadmin: boolean;
+
+  /**
+   * instance_problems are the self-monitoring problems of the server, only for superadmins
+   * (M2-24); empty while all is well.
+   *
+   * @generated from field: repeated sermon.web.v1.InstanceProblem instance_problems = 14;
+   */
+  instanceProblems: InstanceProblem[];
 };
 
 /**
@@ -440,6 +455,49 @@ export type Session = Message<"sermon.web.v1.Session"> & {
  */
 export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
   messageDesc(file_sermon_web_v1_auth, 16);
+
+/**
+ * InstanceProblem is a check of the server's self-monitoring that is not OK.
+ *
+ * @generated from message sermon.web.v1.InstanceProblem
+ */
+export type InstanceProblem = Message<"sermon.web.v1.InstanceProblem"> & {
+  /**
+   * check is ingest_lag, dropped_samples or database_size.
+   *
+   * @generated from field: string check = 1;
+   */
+  check: string;
+
+  /**
+   * level is warning or critical.
+   *
+   * @generated from field: string level = 2;
+   */
+  level: string;
+
+  /**
+   * since is when it reached this level.
+   *
+   * @generated from field: google.protobuf.Timestamp since = 3;
+   */
+  since?: Timestamp | undefined;
+
+  /**
+   * value is the lag in seconds, the samples dropped within 15 minutes or the share of the
+   * database limit (0..1).
+   *
+   * @generated from field: double value = 4;
+   */
+  value: number;
+};
+
+/**
+ * Describes the message sermon.web.v1.InstanceProblem.
+ * Use `create(InstanceProblemSchema)` to create a new message.
+ */
+export const InstanceProblemSchema: GenMessage<InstanceProblem> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 17);
 
 /**
  * Organization is an organization the user belongs to.
@@ -467,7 +525,7 @@ export type Organization = Message<"sermon.web.v1.Organization"> & {
  * Use `create(OrganizationSchema)` to create a new message.
  */
 export const OrganizationSchema: GenMessage<Organization> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 17);
+  messageDesc(file_sermon_web_v1_auth, 18);
 
 /**
  * AuthService handles local login sessions (KONZEPT §7). The session token travels only in the

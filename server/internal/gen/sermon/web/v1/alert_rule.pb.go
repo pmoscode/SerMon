@@ -231,7 +231,8 @@ type AlertRuleSpec struct {
 	// exclude lists glob patterns of dimension values to skip, e.g. mountpoint: ["/snap/*"]. A list
 	// value keeps the YAML a plain list; the loader accepts at most 32 strings of 256 bytes each.
 	Exclude map[string]*structpb.ListValue `protobuf:"bytes,5,rep,name=exclude,proto3" json:"exclude,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// aggregate reduces the window: avg, max, min or last (threshold).
+	// aggregate reduces the window: avg, max, min, last or increase (threshold). increase is how
+	// much a cumulative counter grew within the window; a drop counts from 0 again.
 	Aggregate string `protobuf:"bytes,6,opt,name=aggregate,proto3" json:"aggregate,omitempty"`
 	// window is the time the aggregate or rate covers, e.g. 10m (threshold, rate).
 	Window string `protobuf:"bytes,7,opt,name=window,proto3" json:"window,omitempty"`
@@ -801,7 +802,7 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x02de\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02de\x12\x1a\n" +
 	"\x02en\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xac\f\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xb6\f\n" +
 	"\rAlertRuleSpec\x12M\n" +
 	"\x04type\x18\x01 \x01(\tB9\xbaH6r4R\tthresholdR\x04rateR\aabsenceR\x05stateR\n" +
 	"predictionR\x05eventR\x04type\x12 \n" +
@@ -811,8 +812,8 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"dimensions\x18\x04 \x03(\tB\x10\xbaH\r\x92\x01\n" +
 	"\x10\x04\x18\x01\"\x04r\x02\x18@R\n" +
 	"dimensions\x12S\n" +
-	"\aexclude\x18\x05 \x03(\v2).sermon.web.v1.AlertRuleSpec.ExcludeEntryB\x0e\xbaH\v\x9a\x01\b\x10\x04\"\x04r\x02\x18@R\aexclude\x12:\n" +
-	"\taggregate\x18\x06 \x01(\tB\x1c\xbaH\x19r\x17R\x00R\x03avgR\x03maxR\x03minR\x04lastR\taggregate\x12\x1f\n" +
+	"\aexclude\x18\x05 \x03(\v2).sermon.web.v1.AlertRuleSpec.ExcludeEntryB\x0e\xbaH\v\x9a\x01\b\x10\x04\"\x04r\x02\x18@R\aexclude\x12D\n" +
+	"\taggregate\x18\x06 \x01(\tB&\xbaH#r!R\x00R\x03avgR\x03maxR\x03minR\x04lastR\bincreaseR\taggregate\x12\x1f\n" +
 	"\x06window\x18\a \x01(\tB\a\xbaH\x04r\x02\x18\x10R\x06window\x127\n" +
 	"\awarning\x18\b \x01(\v2\x1d.sermon.web.v1.AlertConditionR\awarning\x129\n" +
 	"\bcritical\x18\t \x01(\v2\x1d.sermon.web.v1.AlertConditionR\bcritical\x123\n" +

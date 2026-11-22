@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/mail"
 	"net/netip"
@@ -93,6 +94,9 @@ type Config struct {
 	// OutboundAllowlist are the internal networks requests to user-configured targets (webhooks,
 	// chat channels) may reach (safehttp, KONZEPT §18.6); empty: public addresses only.
 	OutboundAllowlist []netip.Prefix
+	// DatabaseSizeLimit is the size the database may reach (bytes, from e.g. "50GiB"); the
+	// self-monitoring warns superadmins at 80 % and 90 % (M2-24). 0: not checked.
+	DatabaseSizeLimit int64
 	// AgentAddr is the listen address of the mTLS agent API (empty: agent API off).
 	AgentAddr string
 	// AgentHostnames are the DNS names or IPs agents use to reach the agent API (server certificate).
@@ -126,6 +130,7 @@ const (
 	envAllowedOrigins  = "SERMON_ALLOWED_ORIGINS"
 	envTrustedProxies  = "SERMON_TRUSTED_PROXIES"
 	envOutboundAllow   = "SERMON_OUTBOUND_ALLOWLIST"
+	envDatabaseLimit   = "SERMON_DATABASE_SIZE_LIMIT"
 	envMasterKeys      = "SERMON_MASTER_KEYS"
 	envAgentAddr       = "SERMON_AGENT_ADDR"
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
@@ -167,6 +172,7 @@ func Load(src Source) (Config, error) {
 		AllowedOrigins:     parseOrigins(&l),
 		TrustedProxies:     parsePrefixes(&l),
 		OutboundAllowlist:  parseOutboundAllowlist(&l),
+		DatabaseSizeLimit:  parseSize(&l, envDatabaseLimit),
 		MasterKeys:         parseMasterKeys(&l),
 		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
 		AgentHostnames:     parseHostnames(&l),
@@ -497,4 +503,25 @@ func validateDir(value string) error {
 		return errors.New("must be an existing directory")
 	}
 	return nil
+}
+
+// parseSize reads a size in bytes, optionally with a binary suffix (KiB, MiB, GiB, TiB); empty is 0.
+func parseSize(l *loader, key string) int64 {
+	raw := l.string(key, "", nil)
+	if raw == "" {
+		return 0
+	}
+	factor := int64(1)
+	for suffix, f := range map[string]int64{"KiB": 1 << 10, "MiB": 1 << 20, "GiB": 1 << 30, "TiB": 1 << 40} {
+		if n, ok := strings.CutSuffix(raw, suffix); ok {
+			raw, factor = n, f
+			break
+		}
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || n <= 0 || n > math.MaxInt64/factor {
+		l.fail(key, "must be a positive size in bytes or with KiB, MiB, GiB or TiB")
+		return 0
+	}
+	return n * factor
 }

@@ -194,6 +194,8 @@ const attacker, colleague = "192.0.2.7", "198.51.100.20"
 var scenarios = map[alert.RuleID]scenario{
 	"system.node.offline":         {fireSeen: 90 * time.Second, calmSeen: 20 * time.Second, want: critical},
 	"system.agent.buffer_filling": {fire: one("sermon_agent_buffer_bytes", steady(190*mib)), calm: one("sermon_agent_buffer_bytes", steady(mib)), want: critical},
+	// M2-24: the counter of dropped batches grew (increase over the window).
+	"system.agent.data_dropped": {fire: one("sermon_agent_buffer_dropped_batches", at(time.Minute, 3, 3, 4)), calm: one("sermon_agent_buffer_dropped_batches", at(time.Minute, 3, 3, 3)), want: warning},
 	"system.cpu.usage_high": {
 		fire: append(labeled("sermon_cpu_utilization_ratio", idle, steady(100_000)), labeled("sermon_cpu_utilization_ratio", iowait, steady(900_000))...),
 		calm: labeled("sermon_cpu_utilization_ratio", idle, steady(500_000)), want: warning,
@@ -259,6 +261,19 @@ var scenarios = map[alert.RuleID]scenario{
 	"security.account.created": {
 		fireEvents: []secevent.Event{event(secevent.AccountCreated, web, time.Minute, "", "bob")},
 		calmEvents: []secevent.Event{event(secevent.AccountCreated, web, time.Hour, "", "bob")}, want: warning,
+	},
+	// M2-24: events of the server itself (T3, T4).
+	"security.enrollment.token_used": {
+		fireEvents: []secevent.Event{event(secevent.EnrollmentTokenUsed, web, time.Minute, "192.0.2.30", "")},
+		calmEvents: []secevent.Event{event(secevent.EnrollmentTokenUsed, web, time.Hour, "192.0.2.30", "")}, want: warning,
+	},
+	"security.node.locked": {
+		fireEvents: []secevent.Event{event(secevent.NodeLocked, web, time.Minute, "", "")},
+		calmEvents: []secevent.Event{event(secevent.NodeLocked, web, 2*time.Hour, "", "")}, want: critical,
+	},
+	"security.node.rotation_new_ip": {
+		fireEvents: []secevent.Event{event(secevent.NodeRotationNewIP, web, time.Minute, "192.0.2.31", "")},
+		calmEvents: []secevent.Event{event(secevent.NodeRotationNewIP, web, time.Hour, "192.0.2.31", "")}, want: warning,
 	},
 }
 

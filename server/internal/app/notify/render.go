@@ -96,6 +96,9 @@ var words = map[string]Text{
 	"previous_boot_id": {"Vorherige Boot-ID", "Previous boot ID"},
 	"uptime_before":    {"Laufzeit davor", "Uptime before"},
 	// ADR 0025: the source of a security alert, set only when it is unverified.
+	"token":                   {"Token", "Token"},
+	"reason":                  {"Grund", "Reason"},
+	"previous_ip":             {"Vorherige Adresse", "Previous address"},
 	secevent.FieldSource:      {"Quelle", "Source"},
 	secevent.SourceUnverified: {"nicht verifiziert (Logdatei, jeder lokale Benutzer kann sie schreiben)", "unverified (log file any local user can write to)"},
 }
@@ -103,7 +106,7 @@ var words = map[string]Text{
 // fieldOrder is the order of event fields in a message; others follow by name.
 var fieldOrder = []string{
 	secevent.FieldSource, "ts", "user", "ip", "port", "method", "invalid_user", "key_type", "key_fingerprint", "tty", "target", "command",
-	"uid", "pid", "process", "previous_boot_id", "uptime_before",
+	"uid", "pid", "process", "previous_boot_id", "uptime_before", "token", "reason", "previous_ip",
 }
 
 // statusOf is the key of the status word: the severity while firing, else the kind.

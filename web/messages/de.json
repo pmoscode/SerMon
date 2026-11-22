@@ -528,5 +528,13 @@
 	"account_theme": "Darstellung",
 	"account_language": "Sprache",
 	"node_tab_identity": "Identität",
-	"node_locked_badge": "Gesperrt (siehe Identität)"
+	"node_locked_badge": "Gesperrt (siehe Identität)",
+	"alert_field_token": "Token",
+	"alert_field_reason": "Grund",
+	"alert_field_previous_ip": "Vorherige Adresse",
+	"instance_warning": "Server: Warnung",
+	"instance_critical": "Server: Kritisch",
+	"instance_ingest_lag": "Agent-Daten kommen verspätet an ({seconds} s)",
+	"instance_dropped_samples": "{count} Samples in 15 Minuten verworfen",
+	"instance_database_size": "Die Datenbank läuft voll ({percent} %)"
 }

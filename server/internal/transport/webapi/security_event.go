@@ -82,6 +82,7 @@ func securityEvent(e secevent.Event) *webv1.SecurityEvent {
 		Details: &webv1.SecurityEventDetails{
 			Method: d.Method, InvalidUser: d.InvalidUser, KeyType: d.KeyType, KeyFingerprint: d.KeyFingerprint, Tty: d.TTY,
 			Target: d.Target, Command: d.Command, Uid: d.UID, Pid: d.PID, Process: d.Process, PreviousBootId: d.PreviousBootID,
+			TokenId: d.TokenID, Reason: d.Reason, PreviousIp: d.PreviousIP,
 		},
 	}
 	if d.UptimeBefore != nil {

@@ -5,6 +5,8 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +20,9 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
+	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 )
 
 // Takeover (M2-23, T5): only within the window an operator opened, only with a token of the node's
@@ -133,5 +137,94 @@ func ownerQueryRow(t *testing.T, dsn, sql string, args []any, dest ...any) {
 	defer func() { _ = conn.Close(ctx) }()
 	if err := conn.QueryRow(ctx, sql, args...).Scan(dest...); err != nil {
 		t.Fatalf("query %q: %v", sql, err)
+	}
+}
+
+// The server's own security events (M2-24, T3, T4) are written in the transaction of what they
+// report: exactly one per enrollment, lock and rotation from a new address, in the node's org.
+func TestServerSecurityEvents_OnePerOccurrence(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	tokens := postgres.NewEnrollmentTokenStore(db)
+	o := newTokenOrg(t, f)
+	tok, hash := issue(t, tokens, o, o.group, 5)
+	st, _, _ := tokens.Lookup(ctx, hash, time.Now())
+	registry := postgres.NewNodeRegistry(db)
+	rotation := postgres.NewRotationStore(db)
+	events := postgres.NewSecurityEventStore(db)
+	org := o.scope.OrgID()
+
+	node := identity.NodeID(uuid.New())
+	now := time.Now()
+	n := enrollment.Node{ID: node, Group: st.Group, Token: st.ID, Facts: enrollment.NodeFacts{
+		Hostname: "web", MachineID: strings.ReplaceAll(uuid.NewString(), "-", ""), OSID: "debian", OSVersion: "13",
+		KernelRelease: "6.12.0", Architecture: "amd64", CPUCount: 2, MemoryBytes: 1 << 30,
+		ClientIP: netip.MustParseAddr("192.0.2.30"),
+	}}
+	cert := agentca.CertificateRecord{Serial: randomSerial(), Org: org, Node: node, Authority: registryAuthority, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour)}
+	if err := registry.Register(ctx, st, n, cert, now, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := rotation.Lock(ctx, org, node, "second session from 192.0.2.66", time.Now(), entry(o.admin, "security.node_locked")); err != nil {
+		t.Fatal(err)
+	}
+	if err := rotation.NoteNewAddress(ctx, org, node, "192.0.2.31", "192.0.2.30", time.Now(), entry(o.admin, "security.rotation_new_ip")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := events.List(ctx, o.scope, secevents.Filter{From: now.Add(-time.Hour), To: time.Now().Add(time.Minute), Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byKind := map[secevent.Kind]secevent.Event{}
+	for _, e := range got {
+		if _, dup := byKind[e.Kind]; dup {
+			t.Errorf("%s twice", e.Kind)
+		}
+		byKind[e.Kind] = e
+	}
+	used := byKind[secevent.EnrollmentTokenUsed]
+	if used.Node != node || used.Details.TokenID != tok.ID.String() || used.Remote == nil || used.Remote.IP != netip.MustParseAddr("192.0.2.30") {
+		t.Errorf("token used = %+v", used)
+	}
+	if e := byKind[secevent.NodeLocked]; e.Node != node || e.Details.Reason != "second session from 192.0.2.66" {
+		t.Errorf("locked = %+v", e)
+	}
+	if e := byKind[secevent.NodeRotationNewIP]; e.Node != node || e.Remote == nil || e.Remote.IP != netip.MustParseAddr("192.0.2.31") || e.Details.PreviousIP != "192.0.2.30" {
+		t.Errorf("new address = %+v", e)
+	}
+	// Another organization sees none of them.
+	other := newTokenOrg(t, f)
+	if got, _ := events.List(ctx, other.scope, secevents.Filter{From: now.Add(-time.Hour), To: time.Now().Add(time.Minute), Limit: 10}); len(got) != 0 {
+		t.Errorf("another org sees %v", got)
+	}
+}
+
+// Self-monitoring (M2-24): the application role reads the superadmins' addresses only through the
+// definer function, and the size of the database.
+func TestSelfMonitorStore_SuperadminsAndSize(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	store := postgres.NewSelfMonitorStore(open(t, f.appDSN))
+	user := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO users (id, email, display_name) VALUES ($1, $2, 'Root')", user, "root-"+user.String()[:8]+"@example.org")
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO superadmins (user_id) VALUES ($1)", user)
+	emails, err := store.Superadmins(ctx)
+	if err != nil || !slices.Contains(emails, "root-"+user.String()[:8]+"@example.org") {
+		t.Errorf("Superadmins() = %v, %v", emails, err)
+	}
+	if size, err := store.DatabaseSize(ctx); err != nil || size < 1<<20 {
+		t.Errorf("DatabaseSize() = %d, %v", size, err)
+	}
+	// The users table itself stays closed without a tenant.
+	conn, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var n int
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&n); err == nil && n > 0 {
+		t.Errorf("the application role reads %d users without a tenant", n)
 	}
 }

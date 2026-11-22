@@ -99,6 +99,23 @@ func compareSeq(a, b uint64) int {
 	return 0
 }
 
+// insertServerEvent writes an event of the server itself in the caller's transaction (M2-24): it
+// happens exactly when what it reports is stored.
+func insertServerEvent(ctx context.Context, q *sqlcdb.Queries, e secevent.Event) error {
+	if err := e.Validate(); err != nil {
+		return fmt.Errorf("server security event: %w", err)
+	}
+	p, err := insertParams(e)
+	if err != nil {
+		return err
+	}
+	err = q.InsertServerSecurityEvent(ctx, sqlcdb.InsertServerSecurityEventParams{
+		NodeID: p.NodeID, OccurredAt: p.OccurredAt, Kind: p.Kind, UserName: p.UserName, RemoteIp: p.RemoteIp,
+		RemoteHost: p.RemoteHost, RemotePort: p.RemotePort, Details: p.Details,
+	})
+	return wrap(err, "record server security event")
+}
+
 func insertParams(e secevent.Event) (sqlcdb.InsertSecurityEventParams, error) {
 	details, err := json.Marshal(e.Details)
 	if err != nil {
@@ -125,7 +142,8 @@ func userKind(k secevent.Kind) bool {
 	case secevent.SSHLoginFailed, secevent.SSHInvalidUser, secevent.SSHLoginSucceeded, secevent.SudoAuthFailed,
 		secevent.SudoNotAllowed, secevent.SudoCommand, secevent.AccountCreated, secevent.AccountDeleted:
 		return true
-	case secevent.SSHPreauthDisconnect, secevent.SystemReboot, secevent.OOMKill:
+	case secevent.SSHPreauthDisconnect, secevent.SystemReboot, secevent.OOMKill,
+		secevent.EnrollmentTokenUsed, secevent.NodeLocked, secevent.NodeRotationNewIP:
 		return false
 	}
 	return false

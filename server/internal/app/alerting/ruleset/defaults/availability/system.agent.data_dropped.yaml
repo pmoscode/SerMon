@@ -1,0 +1,23 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.agent.data_dropped
+  name: { de: "Agent hat Daten verworfen", en: "Agent dropped data" }
+  labels: { category: availability }
+spec:
+  type: threshold
+  metric: sermon_agent_buffer_dropped_batches
+  aggregate: increase
+  window: 1h
+  warning: { op: ">=", value: 1 }
+  clear: { op: "<", value: 1 }
+  for: 1m
+  help:
+    de: >-
+      Der Agent hat in der letzten Stunde Daten verworfen: Sein Puffer war voll, weil er sie lange nicht an den Server
+      übertragen konnte, oder sie waren älter als 24 Stunden. In den Charts fehlt dieser Zeitraum dauerhaft. Prüfe die
+      Verbindung zum Server und dessen Auslastung; der Alert endet eine Stunde nach dem letzten verworfenen Batch.
+    en: >-
+      The agent dropped data within the last hour: its buffer was full because it could not send it to the server for
+      a long time, or it was older than 24 hours. The charts lack this period for good. Check the connection to the
+      server and its load; the alert ends an hour after the last dropped batch.

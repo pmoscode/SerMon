@@ -25,6 +25,39 @@ func (q *Queries) ExpireSecurityEventPartitions(ctx context.Context, before time
 	return dropped, err
 }
 
+const insertServerSecurityEvent = `-- name: InsertServerSecurityEvent :exec
+INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip, remote_host, remote_port, details,
+                             unverified)
+VALUES (current_org_id(), $1, $2, $3, $4,
+        $5, $6, $7, $8, false)
+`
+
+type InsertServerSecurityEventParams struct {
+	NodeID     uuid.UUID
+	OccurredAt time.Time
+	Kind       string
+	UserName   pgtype.Text
+	RemoteIp   *netip.Addr
+	RemoteHost pgtype.Text
+	RemotePort pgtype.Int4
+	Details    []byte
+}
+
+// An event of the server itself (M2-24), inside the transaction of what it reports.
+func (q *Queries) InsertServerSecurityEvent(ctx context.Context, arg InsertServerSecurityEventParams) error {
+	_, err := q.db.Exec(ctx, insertServerSecurityEvent,
+		arg.NodeID,
+		arg.OccurredAt,
+		arg.Kind,
+		arg.UserName,
+		arg.RemoteIp,
+		arg.RemoteHost,
+		arg.RemotePort,
+		arg.Details,
+	)
+	return err
+}
+
 const listSecurityEvents = `-- name: ListSecurityEvents :many
 SELECT e.id, e.node_id, e.occurred_at, e.received_at, e.kind, e.user_name, e.remote_ip, e.remote_host,
        e.remote_port, e.details, e.unverified

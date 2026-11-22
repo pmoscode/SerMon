@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/netip"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -42,6 +43,9 @@ func (h *AgentEnrollmentHandler) Enroll(ctx context.Context, req *connect.Reques
 		Hostname: f.GetHostname(), MachineID: f.GetMachineId(), OSID: f.GetOsId(), OSVersion: f.GetOsVersion(),
 		KernelRelease: f.GetKernelRelease(), Architecture: architecture(f.GetArchitecture()),
 		CPUCount: int(f.GetCpuCount()), MemoryBytes: int64(f.GetMemoryBytes()), //nolint:gosec // G115: physical memory fits int64
+	}
+	if addr, err := netip.ParseAddr(ip); err == nil {
+		facts.ClientIP = addr.Unmap()
 	}
 	res, err := h.enroller.Enroll(ctx, req.Msg.GetToken(), req.Msg.GetCsr(), facts)
 	switch {

@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +43,7 @@ func (fakeSigner) Intermediate() *x509.Certificate {
 }
 
 type fakeStore struct {
+	newAddress []string // NoteNewAddress calls (M2-24)
 	rotateErr  error
 	revokeOld  time.Time
 	next       agentca.CertificateRecord
@@ -68,6 +70,12 @@ func (f *fakeStore) RecordSession(_ context.Context, _ tenant.OrgID, _ identity.
 
 func (f *fakeStore) Note(_ context.Context, _ tenant.OrgID, a access.AuditEntry) error {
 	f.audits = append(f.audits, a)
+	return nil
+}
+
+func (f *fakeStore) NoteNewAddress(_ context.Context, _ tenant.OrgID, node identity.NodeID, ip, previous string, _ time.Time, a access.AuditEntry) error {
+	f.audits = append(f.audits, a)
+	f.newAddress = append(f.newAddress, node.String()+" "+previous+"->"+ip)
 	return nil
 }
 
@@ -107,6 +115,9 @@ func TestRotate_FromANewSourceIPLeavesASecurityNote(t *testing.T) {
 	store := &fakeStore{}
 	if _, err := service(store, fakeSigner{}).Rotate(context.Background(), id, []byte("csr"), "198.51.100.7", "192.0.2.1", false); err != nil {
 		t.Fatal(err)
+	}
+	if len(store.newAddress) != 1 || !strings.HasSuffix(store.newAddress[0], "192.0.2.1->198.51.100.7") {
+		t.Errorf("new address recorded as %v, want the security event with both addresses", store.newAddress)
 	}
 	if len(store.audits) != 2 || store.audits[1].Action != "security.rotation_new_ip" || store.audits[1].Details["previous_ip"] != "192.0.2.1" {
 		t.Errorf("audits = %+v", store.audits)

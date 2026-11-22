@@ -87,8 +87,8 @@ flowchart LR
 |---|---|---|---|---|---|
 | T1 | S | Fremder Agent gibt sich als Node aus | mTLS mit Client-Zertifikat der Agent-CA; Org und Node nur aus dem Zertifikat (SPIFFE-URI), nie aus Nachrichten | M1-07, M1-10 | ✓ |
 | T2 | S | Gestohlener Enrollment-Token | 256 Bit, nur Hash, TTL, `max_uses`, gruppengebunden, Widerruf, Rate-Limit am Endpunkt, Audit | M1-08, M1-09 | ✓ |
-| T3 | S | Gestohlener Enrollment-Token: Benachrichtigung bei Nutzung | Event „Token benutzt“ an die Admins | E2.3, E2.4 | ☐ |
-| T4 | S | Gestohlener Agent-Schlüssel wird parallel genutzt | nur eine Session pro Node: dieselbe IP gilt als Reconnect und ersetzt die alte Session, eine zweite IP sperrt die Identität sofort (Log `security: second session`); Rotation auf Abruf mit Sperre des alten Zertifikats; nach jeder Rotation endet die Session, das neue Zertifikat gilt als Nachfolger (keine falsche Sperre); „nur widerrufen“ ohne Rotation, wenn der verbundene Agent der Dieb sein könnte ; Sperre aufheben in der UI nur für Operatoren der Gruppe mit Step-up und Audit, mit Hinweis, bei Diebstahlverdacht zu widerrufen (M2-23) | M1-10, M1-11, M1-38, M2-23 | ◐ (Security-Event und Alert: E2.3) |
+| T3 | S | Gestohlener Enrollment-Token: Benachrichtigung bei Nutzung | Security-Event `enrollment.token_used` (mit Absenderadresse) in der Transaktion des Enrollments, Standardregel an die Kanäle der Org (ADR 0027) | M2-24 | ✓ |
+| T4 | S | Gestohlener Agent-Schlüssel wird parallel genutzt | nur eine Session pro Node: dieselbe IP gilt als Reconnect und ersetzt die alte Session, eine zweite IP sperrt die Identität sofort (Log `security: second session`); Rotation auf Abruf mit Sperre des alten Zertifikats; nach jeder Rotation endet die Session, das neue Zertifikat gilt als Nachfolger (keine falsche Sperre); „nur widerrufen“ ohne Rotation, wenn der verbundene Agent der Dieb sein könnte ; Sperre aufheben in der UI nur für Operatoren der Gruppe mit Step-up und Audit, mit Hinweis, bei Diebstahlverdacht zu widerrufen (M2-23) | M1-10, M1-11, M1-38, M2-23 | ✓ (Security-Events `node.locked`, `node.rotation_new_ip` mit Standardregeln, M2-24) |
 | T56 | S | Widerrufenes oder abgelaufenes Zertifikat hält einen offenen Stream weiter | jede Session prüft ihr Zertifikat jede Minute nach (Widerruf, Ende der Schonfrist nach Rotation, Ablauf) und endet mit `PERMISSION_DENIED` | M1-35 | ✓ |
 | T58 | I | Enrollment-Token im Klartext an einen falschen Server oder in der Prozessliste | `http://` nur zu Loopback-IPs (keine Namen); `install.sh` übernimmt keine `agent.toml`, die auf einen anderen Server zeigt (außer `--force`); Token nur in der Umgebung (`export` + `sudo --preserve-env`) oder per `--token-file`, `--token` warnt | M1-35, M1-37 | ✓ |
 | T59 | S | Simulator in der Release-Binary meldet mit einem Token viele Identitäten an | `simulate` nur mit Cargo-Feature, Release-Builds ohne | M1-35 | ✓ |
@@ -143,7 +143,7 @@ flowchart LR
 | T63 | E | Fehler in der Anwendung (z. B. SQL-Injection) legt einen Superadmin an | `sermon_app` darf weder `superadmins` schreiben noch `instance_setup` ändern; Token ausgeben und verbrauchen nur über `SECURITY DEFINER`-Funktionen, die den Superadmin zusammen mit dem Verbrauch anlegen | M1-40 | ✓ |
 | T35 | I | Logs einer Org landen bei einer anderen | Loki mit `auth_enabled`, `X-Scope-OrgID` aus dem Scope, nie aus Eingaben | E3.2 | ☐ |
 | T36 | I | Telemetrie von TimescaleDB oder Loki | in jeder Compose-Datei abgeschaltet, Test | M0-07 | ✓ |
-| T37 | D | Schreiblast füllt WAL/Platte | 10 s in der DB, Kompression, Retention-Policies, Self-Monitoring | M0-09, M1-22 | ◐ (Self-Monitoring-Alerts: M2) |
+| T37 | D | Schreiblast füllt WAL/Platte | 10 s in der DB, Kompression, Retention-Policies, Self-Monitoring (Ingest-Lag, verworfene Samples, DB-Größe gegen `SERMON_DATABASE_SIZE_LIMIT`; Mail an Superadmins und Hinweis in der UI, ADR 0027); Regel „Agent hat Daten verworfen“ | M0-09, M1-22, M2-24 | ✓ |
 
 ### TB4 – Agent ↔ Helper (ab M4)
 

@@ -1,11 +1,16 @@
 package secevent_test
 
 import (
+	"errors"
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 )
 
@@ -22,6 +27,9 @@ func TestFieldsOf_FollowTheTableOfKonzept(t *testing.T) {
 		secevent.AccountDeleted:       {"ts", "user"},
 		secevent.SystemReboot:         {"ts", "previous_boot_id", "uptime_before"},
 		secevent.OOMKill:              {"ts", "pid", "process"},
+		secevent.EnrollmentTokenUsed:  {"ts", "token", "ip"},
+		secevent.NodeLocked:           {"ts", "reason"},
+		secevent.NodeRotationNewIP:    {"ts", "ip", "previous_ip"},
 	}
 	for _, k := range secevent.Kinds() {
 		want, ok := tests[k]
@@ -66,6 +74,40 @@ func TestField_RendersTheValues(t *testing.T) {
 		if !ok || got != tt.want {
 			t.Errorf("Field(%s) of %s = %q, %v; want %q", tt.name, tt.event.Kind, got, ok, tt.want)
 		}
+	}
+}
+
+// The server's own events (M2-24): token, lock reason and the previous address.
+func TestField_RendersTheServerEvents(t *testing.T) {
+	used := secevent.Event{
+		Kind: secevent.EnrollmentTokenUsed, Details: secevent.Details{TokenID: "0193f5a0-0000-7000-8000-0000000000e1"},
+		Remote: &secevent.Remote{IP: netip.MustParseAddr("192.0.2.7")},
+	}
+	locked := secevent.Event{Kind: secevent.NodeLocked, Details: secevent.Details{Reason: "second session from 192.0.2.66"}}
+	moved := secevent.Event{
+		Kind: secevent.NodeRotationNewIP, Remote: &secevent.Remote{IP: netip.MustParseAddr("192.0.2.8")},
+		Details: secevent.Details{PreviousIP: "192.0.2.7"},
+	}
+	for _, tc := range []struct {
+		e           secevent.Event
+		field, want string
+	}{
+		{used, "token", "0193f5a0-0000-7000-8000-0000000000e1"},
+		{used, "ip", "192.0.2.7"},
+		{locked, "reason", "second session from 192.0.2.66"},
+		{moved, "ip", "192.0.2.8"},
+		{moved, "previous_ip", "192.0.2.7"},
+	} {
+		if got, ok := tc.e.Field(tc.field); !ok || got != tc.want {
+			t.Errorf("%s.%s = %q, %v; want %q", tc.e.Kind, tc.field, got, ok, tc.want)
+		}
+	}
+	long := secevent.Event{
+		Node: identity.NodeID(uuid.New()), OccurredAt: time.Now(), Kind: secevent.NodeLocked,
+		Details: secevent.Details{Reason: strings.Repeat("x", secevent.MaxReason+1)},
+	}
+	if err := long.Validate(); !errors.Is(err, secevent.ErrInvalid) {
+		t.Errorf("a reason over %d bytes: %v", secevent.MaxReason, err)
 	}
 }
 

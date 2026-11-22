@@ -3,7 +3,9 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -13,6 +15,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -53,8 +56,39 @@ func (s *RotationStore) Lock(ctx context.Context, org tenant.OrgID, node identit
 		if err := q.RevokeNodeCertificates(ctx, sqlcdb.RevokeNodeCertificatesParams{At: &now, NodeID: uuid.UUID(node)}); err != nil {
 			return fmt.Errorf("revoke certificates: %w", err)
 		}
+		locked := secevent.Event{Node: node, OccurredAt: now, Kind: secevent.NodeLocked, Details: secevent.Details{Reason: cutReason(reason)}}
+		if err := insertServerEvent(ctx, q, locked); err != nil {
+			return err
+		}
 		return appendAudit(ctx, q, audit)
 	})
+}
+
+// NoteNewAddress records a rotation from another address than the previous session (T4): the
+// audit note and the security event in one transaction.
+func (s *RotationStore) NoteNewAddress(ctx context.Context, org tenant.OrgID, node identity.NodeID, ip, previous string, now time.Time, audit access.AuditEntry) error {
+	e := secevent.Event{Node: node, OccurredAt: now, Kind: secevent.NodeRotationNewIP, Details: secevent.Details{PreviousIP: previous}}
+	if addr, err := netip.ParseAddr(ip); err == nil {
+		e.Remote = &secevent.Remote{IP: addr.Unmap()}
+	}
+	return s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
+		if err := insertServerEvent(ctx, q, e); err != nil {
+			return err
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
+// cutReason keeps a lock reason within the column (and the event field) on a character boundary.
+func cutReason(reason string) string {
+	if len(reason) <= secevent.MaxReason {
+		return reason
+	}
+	cut := secevent.MaxReason
+	for cut > 0 && !utf8.RuneStart(reason[cut]) {
+		cut--
+	}
+	return reason[:cut]
 }
 
 // RecordSession stores the session's source IP and returns the previous one.

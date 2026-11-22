@@ -173,6 +173,24 @@ message Session {
   // node_identity_group_ids are the groups where the caller may rotate, revoke, unlock and allow
   // the takeover of nodes (operator or admin, M2-23); the single value "*" stands for all groups.
   repeated string node_identity_group_ids = 12;
+  // superadmin is set for superadmins of the instance (M2-24).
+  bool superadmin = 13;
+  // instance_problems are the self-monitoring problems of the server, only for superadmins
+  // (M2-24); empty while all is well.
+  repeated InstanceProblem instance_problems = 14;
+}
+
+// InstanceProblem is a check of the server's self-monitoring that is not OK.
+message InstanceProblem {
+  // check is ingest_lag, dropped_samples or database_size.
+  string check = 1;
+  // level is warning or critical.
+  string level = 2;
+  // since is when it reached this level.
+  google.protobuf.Timestamp since = 3;
+  // value is the lag in seconds, the samples dropped within 15 minutes or the share of the
+  // database limit (0..1).
+  double value = 4;
 }
 
 // Organization is an organization the user belongs to.

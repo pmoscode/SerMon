@@ -13,6 +13,13 @@ INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remo
 VALUES (current_org_id(), sqlc.arg(node_id), sqlc.arg(occurred_at), sqlc.arg(kind), sqlc.narg(user_name),
         sqlc.narg(remote_ip), sqlc.narg(remote_host), sqlc.narg(remote_port), sqlc.arg(details), sqlc.arg(unverified));
 
+-- name: InsertServerSecurityEvent :exec
+-- An event of the server itself (M2-24), inside the transaction of what it reports.
+INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip, remote_host, remote_port, details,
+                             unverified)
+VALUES (current_org_id(), sqlc.arg(node_id), sqlc.arg(occurred_at), sqlc.arg(kind), sqlc.narg(user_name),
+        sqlc.narg(remote_ip), sqlc.narg(remote_host), sqlc.narg(remote_port), sqlc.arg(details), false);
+
 -- name: ListSecurityEvents :many
 -- Newest first; the scope's groups are those of the node now (events of removed nodes only for
 -- callers on all groups). Keyset paging below (before_time, before_id).

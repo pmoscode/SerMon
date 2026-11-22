@@ -21,6 +21,9 @@ var fieldsOf = map[Kind][]string{
 	AccountDeleted:       {"ts", "user"},
 	SystemReboot:         {"ts", "previous_boot_id", "uptime_before"},
 	OOMKill:              {"ts", "pid", "process"},
+	EnrollmentTokenUsed:  {"ts", "token", "ip"},
+	NodeLocked:           {"ts", "reason"},
+	NodeRotationNewIP:    {"ts", "ip", "previous_ip"},
 }
 
 // FieldSource is the alert field set when a counted event is unverified (ADR 0025); it is no
@@ -99,6 +102,12 @@ func (e Event) Field(name string) (string, bool) {
 		if d.UptimeBefore != nil {
 			v = d.UptimeBefore.String()
 		}
+	case "token":
+		v = d.TokenID
+	case "reason":
+		v = d.Reason
+	case "previous_ip":
+		v = d.PreviousIP
 	}
 	return v, v != ""
 }

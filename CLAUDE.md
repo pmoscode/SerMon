@@ -75,6 +75,8 @@ Wichtige Variablen:
 - `SERMON_METRICS_ADDR` (eigenes `/metrics` ohne Anmeldung, ADR 0011; leer heißt aus; `just dev`: `127.0.0.1:9464`)
 - `SERMON_DATABASE_SIZE_LIMIT` (z. B. `50GiB`; Self-Monitoring warnt Superadmins ab 80 %, ADR 0027; leer heißt keine
   Prüfung)
+- `SERMON_ORG_DELETION_GRACE` (Frist zwischen „Zum Löschen vormerken“ und dem Löschen einer Org, ADR 0029; Standard
+  `720h`, mindestens `168h`; der Löschjob prüft stündlich)
 - `SERMON_OUTBOUND_ALLOWLIST` (CIDRs interner Ziele für Kanäle/Webhooks über `safehttp`, ADR 0024; leer heißt nur
   öffentliche Adressen; `just dev`: `127.0.0.1/32`)
 - `SERMON_AGENT_DOWNLOADS_DIR` (signierte Agent-Binaries für `/downloads`, ADR 0012; Release-Key wird beim Build

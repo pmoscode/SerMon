@@ -395,6 +395,27 @@ var tenantIsolationCases = map[string]isolationCase{
 		}))
 		return err
 	}},
+	// M2-33: only superadmins lock and delete organizations; an org admin of B gets PERMISSION_DENIED.
+	"/sermon.web.v1.OrganizationService/LockOrganization": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.LockOrganization(ctx, connect.NewRequest(&webv1.LockOrganizationRequest{OrganizationId: e.orgA, ConfirmName: "Alpha"}))
+		return err
+	}},
+	"/sermon.web.v1.OrganizationService/ScheduleOrganizationDeletion": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.ScheduleOrganizationDeletion(ctx, connect.NewRequest(&webv1.ScheduleOrganizationDeletionRequest{OrganizationId: e.orgA, ConfirmName: "Alpha"}))
+		return err
+	}},
+	"/sermon.web.v1.OrganizationService/UnlockOrganization": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.UnlockOrganization(ctx, connect.NewRequest(&webv1.UnlockOrganizationRequest{OrganizationId: e.orgA, ConfirmName: "Alpha"}))
+		return err
+	}},
+	"/sermon.web.v1.OrganizationService/DeleteOrganization": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.DeleteOrganization(ctx, connect.NewRequest(&webv1.DeleteOrganizationRequest{OrganizationId: e.orgA, ConfirmName: "Alpha"}))
+		return err
+	}},
+	"/sermon.web.v1.OrganizationService/ExportOrganizationAudit": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.organization.ExportOrganizationAudit(ctx, connect.NewRequest(&webv1.ExportOrganizationAuditRequest{OrganizationId: e.orgA}))
+		return err
+	}},
 	"/sermon.web.v1.EnrollmentTokenService/CreateEnrollmentToken": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.enrollment.CreateEnrollmentToken(ctx, connect.NewRequest(&webv1.CreateEnrollmentTokenRequest{GroupId: e.groupA, MaxUses: 1000}))
 		return err

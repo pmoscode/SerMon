@@ -5,15 +5,19 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"net/http"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
+	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
 )
 
 // Fixture enrollment token (not a secret).
@@ -97,5 +101,52 @@ func TestAgentAPI_EnrolledAgentConnectsRotatesAndIsLockedOnParallelUse(t *testin
 	if err := conn.QueryRow(context.Background(), "SELECT lock_reason FROM nodes WHERE id = $1", agent.nodeID).Scan(&reason); err != nil ||
 		!strings.Contains(reason, "already replaced") {
 		t.Errorf("lock reason = %q, %v", reason, err)
+	}
+}
+
+// A locked organization (M2-33) refuses the agent's session and the enrollment with its token;
+// after the unlock the same agent connects again with the same certificate, without a new
+// enrollment.
+func TestAgentAPI_ALockedOrganizationRefusesAgentsUntilTheUnlock(t *testing.T) {
+	srv := startTestServer(t, nil)
+	defer srv.stop()
+	org := seedEnrollmentTokenWithUses(t, 3)
+	agent := srv.enroll(t, fixtureToken)
+	if _, err := srv.session(t, agent.cert, agent.roots, false); err != nil {
+		t.Fatalf("session before the lock: %v", err)
+	}
+	conn, err := pgx.Connect(context.Background(), pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	setLock := func(locked bool) {
+		t.Helper()
+		value := "NULL"
+		if locked {
+			value = "now()"
+		}
+		if _, err := conn.Exec(context.Background(), "UPDATE organizations SET locked_at = "+value+" WHERE id = $1", org); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	setLock(true)
+	if _, err := srv.session(t, agent.cert, agent.roots, false); err == nil {
+		t.Error("session of a locked organization was accepted")
+	}
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	h2c := &http.Client{Transport: &http.Transport{Protocols: protocols}, Timeout: 30 * time.Second}
+	_, csr := newKeyAndCSR(t)
+	_, err = agentv1connect.NewEnrollmentServiceClient(h2c, "http://"+srv.web, connect.WithGRPC()).Enroll(context.Background(),
+		connect.NewRequest(&agentv1.EnrollRequest{Token: fixtureToken, Csr: csr, AgentVersion: "0.0.0", HostFacts: hostFacts()}))
+	if connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Errorf("enrollment into a locked organization: %v, want UNAUTHENTICATED", err)
+	}
+
+	setLock(false)
+	if _, err := srv.session(t, agent.cert, agent.roots, false); err != nil {
+		t.Errorf("session after the unlock: %v\n%s", err, srv.logs.String())
 	}
 }

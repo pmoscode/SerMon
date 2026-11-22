@@ -135,6 +135,15 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		inviteOptions = append(inviteOptions, invitation.WithMailer(mailer, srv.URL))
 		orgOptions = append(orgOptions, organization.WithMailer(mailer, srv.URL))
 	}
+	lifecycleOptions := []organization.LifecycleOption{organization.WithAgentSessions(agentapi.NewSessions(0))}
+	if mailer != nil {
+		lifecycleOptions = append(lifecycleOptions, organization.WithLifecycleMailer(mailer))
+	}
+	lifecycle, err := organization.NewLifecycle(postgres.NewOrganizationLifecycleStore(pg), authz.NewPolicy(), time.Now,
+		organization.DefaultDeletionGrace, lifecycleOptions...)
+	if err != nil {
+		t.Fatal(err)
+	}
 	invites := invitation.NewService(postgres.NewInvitationStore(pg), creds, authz.NewPolicy(), hasher, time.Now, access.NewID, inviteOptions...)
 	ca, err := agentca.Bootstrap(ctx, postgres.NewAgentCAStore(pg), masterKeys(t), time.Now)
 	if err != nil {
@@ -156,7 +165,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			invites, slog.New(slog.DiscardHandler)),
 		Invitation: webapi.NewInvitationHandler(invites, sessions, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
 		Organization: webapi.NewOrganizationHandler(
-			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID, orgOptions...), slog.New(slog.DiscardHandler)),
+			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID, orgOptions...), slog.New(slog.DiscardHandler)).
+			WithLifecycle(lifecycle),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Node: webapi.NewNodeHandler(rotation.NewService(postgres.NewRotationStore(pg), ca, time.Now,

@@ -66,6 +66,14 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
     den Superadmin, keine Mandantendaten (M1-04, M2-32)
   - `admin_storage_totals()`: Gesamtgröße der Metrik-Hypertables samt Continuous Aggregates und der Event-Partitionen,
     nur Größen (M2-32); die Anteile pro Org zählt der Server in Tenant-Transaktionen
+  - `org_purge(org, at)`: löscht eine gesperrte, fällige Org samt Metriken, Events, Audit-Log und Konten ohne weitere
+    Mitgliedschaft (M2-33, ADR 0029); setzt selbst `sermon.org_id`, die Mandanten-Policies begrenzen das Löschen auf
+    diese Org. Dafür hat `sermon_definer` DELETE (und das dafür nötige SELECT) auf `organizations`, `nodes`,
+    `audit_log`, `users`, `metrics_raw` und die Materialisierung der Continuous Aggregates; die Policies
+    `definer_purge` auf `audit_log` (`current_org_id()`) und `users` (nur DELETE, die IDs bestimmt die Funktion). Die
+    Kaskaden der Fremdschlüssel laufen als Eigentümer der Tabellen.
+  - Seit M2-33 lehnen `agent_certificate_usable`, `enrollment_token_by_hash`, `invitation_by_token` und
+    `auth_user_organizations` eine gesperrte Org ab (`locked_at`); `admin_organizations()` liefert zusätzlich `locked`.
   - `pki_certificates_in_use(authority, at)`: nur die Anzahl gültiger Zertifikate einer CA (M1-11b)
   - `metric_points_raw/_1m/_1h(series_ids, from, to, step)`: Messpunkte der angegebenen Serien (M1-22, ADR 0001).
     Hier gilt die RLS bewusst **auch für `sermon_definer`**: Auf `series` gibt es keine `definer_read`-Policy, die

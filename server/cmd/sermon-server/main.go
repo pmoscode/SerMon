@@ -204,7 +204,19 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			monitor.Run(ctx, time.Minute)
 			return nil
 		})
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, registry, logger); err != nil {
+		// Locking and deleting organizations (M2-33): ends the agent sessions here at once, mails
+		// the admins, deletes after the grace.
+		lifecycleOptions := []organization.LifecycleOption{organization.WithAgentSessions(sessions), organization.WithLogger(logger)}
+		if cfg.SMTP != nil {
+			lifecycleOptions = append(lifecycleOptions, organization.WithLifecycleMailer(newMailer(cfg.SMTP)))
+		}
+		lifecycle, err := organization.NewLifecycle(postgres.NewOrganizationLifecycleStore(db), authz.NewPolicy(), time.Now,
+			cfg.OrgDeletionGrace, lifecycleOptions...)
+		if err != nil {
+			return fmt.Errorf("organization lifecycle: %w", err)
+		}
+		servers = append(servers, lifecycle.Run)
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -388,7 +400,7 @@ type alertingServices struct {
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
 	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
-	health webapi.InstanceProblems, registry *promtext.Registry, logger *slog.Logger,
+	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
@@ -438,7 +450,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Invitation: webapi.NewInvitationHandler(invites, sessions,
 			ratelimit.New(invitationAttemptsPerWindow, invitationWindow, time.Now), logger),
 		Organization: webapi.NewOrganizationHandler(
-			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID, orgOptions...), logger),
+			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID, orgOptions...), logger).
+			WithLifecycle(lifecycle),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
 		Node:    webapi.NewNodeHandler(rotator, nodes, logger).WithTagger(fleet.NewTagger(postgres.NewFleetStore(db), policy, time.Now)),

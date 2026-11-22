@@ -408,6 +408,11 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
   Mitglieder (mit offenen Einladungen), eine Obergrenze der Retention, Samples pro Sekunde und Serien pro Node statt der
   Werte der Instanz. An der Grenze wird Neues abgelehnt (Enrollment, Einladung, Annahme, neue Serien, Drosselung),
   Bestehendes läuft weiter. Namen von Orgs sind eindeutig ohne Unterschied von Groß- und Kleinschreibung.
+  Ein Superadmin **sperrt** eine Org oder **merkt sie zum Löschen vor** (D29, M2-33), jeweils mit Step-up und dem
+  abgeschriebenen Namen: Sitzungen, Logins, Agents, Enrollment-Tokens und Einladungen der Org werden sofort abgelehnt,
+  Alerts ruhen, die Zertifikate bleiben. Nach der Frist (`SERMON_ORG_DELETION_GRACE`, Standard 30 Tage) löscht der
+  Server die Org samt Daten und Konten ohne weitere Mitgliedschaft; vorher lässt sich die Sperre aufheben oder das
+  Audit-Log mit Hash-Kette herunterladen.
 - Ein Node gehört genau einer Gruppe. Zusätzlich gibt es **Tags** (frei, z. B. `env=prod`, `role=db`) für Filter und
   Regel-Matching, aber nicht für Rechte. Sie setzen Admins der Gruppe des Nodes mit Step-up und Audit-Eintrag;
   höchstens 16 Paare, Schlüssel aus Kleinbuchstaben, Ziffern, `_` und `-`, Werte aus Buchstaben, Ziffern und

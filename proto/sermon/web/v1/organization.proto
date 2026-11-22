@@ -25,6 +25,22 @@ service OrganizationService {
   // lowered quota deletes nothing: what exists keeps running, only new things are refused.
   // ALREADY_EXISTS: another organization has this name.
   rpc UpdateOrganization(UpdateOrganizationRequest) returns (UpdateOrganizationResponse);
+  // LockOrganization locks an organization without a deadline (M2-33, step-up, the name typed):
+  // no logins, agent connections, enrollments or invitations; certificates stay valid, alerts
+  // and notifications rest. FAILED_PRECONDITION: the typed name does not match.
+  rpc LockOrganization(LockOrganizationRequest) returns (LockOrganizationResponse);
+  // ScheduleOrganizationDeletion locks an organization and deletes it after the grace of the
+  // server (30 days by default, at least 7).
+  rpc ScheduleOrganizationDeletion(ScheduleOrganizationDeletionRequest) returns (ScheduleOrganizationDeletionResponse);
+  // UnlockOrganization lifts the lock and a scheduled deletion. FAILED_PRECONDITION: not locked
+  // or the typed name does not match.
+  rpc UnlockOrganization(UnlockOrganizationRequest) returns (UnlockOrganizationResponse);
+  // DeleteOrganization deletes a locked organization at once, with its data and the accounts
+  // without another membership. FAILED_PRECONDITION: not locked or the typed name does not match.
+  rpc DeleteOrganization(DeleteOrganizationRequest) returns (DeleteOrganizationResponse);
+  // ExportOrganizationAudit returns the audit log of a locked organization as a file with the
+  // hash chain (step-up); the export is recorded in the instance's audit log.
+  rpc ExportOrganizationAudit(ExportOrganizationAuditRequest) returns (ExportOrganizationAuditResponse);
 }
 
 // OrganizationStatus is the state of an organization (M2-33 adds locked and scheduled for
@@ -34,6 +50,10 @@ enum OrganizationStatus {
   ORGANIZATION_STATUS_UNSPECIFIED = 0;
   // ORGANIZATION_STATUS_ACTIVE: members log in, agents send.
   ORGANIZATION_STATUS_ACTIVE = 1;
+  // ORGANIZATION_STATUS_LOCKED: locked until a superadmin lifts it.
+  ORGANIZATION_STATUS_LOCKED = 2;
+  // ORGANIZATION_STATUS_DELETION_SCHEDULED: locked and deleted at deletion_due_at.
+  ORGANIZATION_STATUS_DELETION_SCHEDULED = 3;
 }
 
 // OrganizationQuotas bound an organization instead of the instance-wide values (ADR 0029).
@@ -82,10 +102,14 @@ message OrganizationSummary {
   // storage_bytes is the approximate storage of its metrics and security events: the totals of
   // the instance shared by its share of the series and of the events.
   int64 storage_bytes = 6;
-  // status is active (M2-33 adds more).
+  // status is active, locked or scheduled for deletion.
   OrganizationStatus status = 7;
   // quotas are the organization's limits.
   OrganizationQuotas quotas = 8;
+  // lock_time is when it was locked (unset while active).
+  google.protobuf.Timestamp lock_time = 9;
+  // deletion_time is when it will be deleted (unset unless scheduled).
+  google.protobuf.Timestamp deletion_time = 10;
 }
 
 // ListOrganizationsRequest has no parameters.
@@ -153,4 +177,83 @@ message UpdateOrganizationRequest {
 message UpdateOrganizationResponse {
   // organization is the updated organization.
   OrganizationSummary organization = 1;
+}
+
+// LockOrganizationRequest names the organization and its name, typed as confirmation.
+message LockOrganizationRequest {
+  // organization_id is the UUID of the organization.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+  // confirm_name is the name of the organization as typed by the superadmin.
+  string confirm_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// ScheduleOrganizationDeletionRequest names the organization and its name, typed as confirmation.
+message ScheduleOrganizationDeletionRequest {
+  // organization_id is the UUID of the organization.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+  // confirm_name is the name of the organization as typed by the superadmin.
+  string confirm_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// UnlockOrganizationRequest names the organization and its name, typed as confirmation.
+message UnlockOrganizationRequest {
+  // organization_id is the UUID of the organization.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+  // confirm_name is the name of the organization as typed by the superadmin.
+  string confirm_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// DeleteOrganizationRequest names the organization and its name, typed as confirmation.
+message DeleteOrganizationRequest {
+  // organization_id is the UUID of the organization.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+  // confirm_name is the name of the organization as typed by the superadmin.
+  string confirm_name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+
+// LockOrganizationResponse has no fields.
+message LockOrganizationResponse {}
+
+// ScheduleOrganizationDeletionResponse says when the organization will be deleted.
+message ScheduleOrganizationDeletionResponse {
+  // deletion_time is the end of the grace.
+  google.protobuf.Timestamp deletion_time = 1;
+}
+
+// UnlockOrganizationResponse has no fields.
+message UnlockOrganizationResponse {}
+
+// DeleteOrganizationResponse says how many accounts went with the organization.
+message DeleteOrganizationResponse {
+  // accounts_deleted are the accounts that had no other membership.
+  int64 accounts_deleted = 1;
+}
+
+// ExportOrganizationAuditRequest names the organization.
+message ExportOrganizationAuditRequest {
+  // organization_id is the UUID of the organization.
+  string organization_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ExportOrganizationAuditResponse is the audit log as a file: a header line, then one JSON line
+// per entry with prev_hash and hash in hex.
+message ExportOrganizationAuditResponse {
+  // file_name is a suggestion for saving it.
+  string file_name = 1;
+  // content are the JSON lines.
+  bytes content = 2;
+  // chain_valid is false if the hash chain is broken (the file still contains every entry).
+  bool chain_valid = 3;
 }

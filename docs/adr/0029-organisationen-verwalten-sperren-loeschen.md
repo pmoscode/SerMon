@@ -71,3 +71,23 @@ mit vielen Organisationen fehlen Kontingente. Die Fragen hat der Product Owner a
 - **Ingest-Kontingente** gelten ab der nächsten Session eines Agents; der Burst behält das Verhältnis der Instanz.
 - **Ort der Seite:** eigener Menüpunkt „Organisationen“ für Superadmins, nicht im Admin-Bereich der Org, den ein
   Superadmin ohne Mitgliedschaft nicht sieht.
+
+## Nachtrag M2-33
+
+- **Sperre über die Definer-Funktionen:** Die Funktionen, die Agents, Enrollment-Tokens, Einladungen und die Orgs beim
+  Login zulassen, prüfen `locked_at IS NULL`; die Mitgliedschaftsprüfung der Sitzungen ebenso. Damit wirkt die Sperre
+  auf allen Server-Instanzen, ohne dass sie voneinander wissen. Die eigene Instanz löscht zusätzlich die Sitzungen der
+  Org und beendet ihre Agent-Streams sofort; andere Instanzen trennen die Agents bei der Prüfung des Zertifikats
+  (spätestens nach einer Minute).
+- **Sofort löschen** setzt nur bei einer gesperrten Org die Frist auf jetzt und löscht in derselben Anfrage; ein
+  Superadmin muss also immer erst sperren. Der Export ist ebenso nur während der Sperre möglich.
+- **Name exakt:** Die Bestätigung unterscheidet Groß- und Kleinschreibung (Leerzeichen am Rand zählen nicht), obwohl
+  Namen ohne diesen Unterschied eindeutig sind – wer bestätigt, soll den Namen bewusst abschreiben.
+- **Export:** JSON-Zeilen; die erste Zeile beschreibt Org, Zeitpunkt, Zahl der Einträge, ob die Kette intakt ist, und die
+  Regel des Hashes. `details` steht als gespeicherter Text in der Datei, damit sich jeder Hash aus der Datei allein
+  nachrechnen lässt.
+- **Löschen in einer Transaktion** (`org_purge`, Definer): Metriken und Continuous Aggregates über die Serien der Org,
+  Events, Audit-Log, Nodes, die Org mit allen abhängigen Zeilen, zuletzt die Konten ohne weitere Mitgliedschaft
+  (Superadmins ausgenommen). Der Eintrag `org.delete` im Instanz-Audit entsteht in derselben Transaktion.
+- **Löschjob** stündlich in jeder Server-Instanz; `org_purge` lehnt ab, was nicht gesperrt und fällig ist, und die
+  Erinnerung wird über `deletion_reminded_at` genau einmal beansprucht.

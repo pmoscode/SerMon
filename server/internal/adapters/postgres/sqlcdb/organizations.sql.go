@@ -18,7 +18,7 @@ SELECT id::uuid AS id, name::text AS name, created_at::timestamptz AS created_at
        coalesce(max_nodes, 0)::integer AS max_nodes, coalesce(max_members, 0)::integer AS max_members,
        coalesce(retention_cap_days, 0)::integer AS retention_cap_days,
        coalesce(samples_per_second, 0)::integer AS samples_per_second,
-       coalesce(series_per_node, 0)::integer AS series_per_node
+       coalesce(series_per_node, 0)::integer AS series_per_node, locked::boolean AS locked
 FROM admin_organizations()
 `
 
@@ -32,6 +32,7 @@ type AdminListOrganizationsRow struct {
 	RetentionCapDays int32
 	SamplesPerSecond int32
 	SeriesPerNode    int32
+	Locked           bool
 }
 
 // Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
@@ -55,6 +56,7 @@ func (q *Queries) AdminListOrganizations(ctx context.Context) ([]AdminListOrgani
 			&i.RetentionCapDays,
 			&i.SamplesPerSecond,
 			&i.SeriesPerNode,
+			&i.Locked,
 		); err != nil {
 			return nil, err
 		}
@@ -81,6 +83,43 @@ func (q *Queries) AdminStorageTotals(ctx context.Context) (AdminStorageTotalsRow
 	var i AdminStorageTotalsRow
 	err := row.Scan(&i.MetricBytes, &i.EventBytes)
 	return i, err
+}
+
+const claimDeletionReminder = `-- name: ClaimDeletionReminder :many
+UPDATE organizations SET deletion_reminded_at = $1
+WHERE id = current_org_id() AND deletion_due_at <= $2 AND deletion_reminded_at IS NULL
+RETURNING name, deletion_due_at
+`
+
+type ClaimDeletionReminderParams struct {
+	Now    *time.Time
+	Before *time.Time
+}
+
+type ClaimDeletionReminderRow struct {
+	Name          string
+	DeletionDueAt *time.Time
+}
+
+// Marks the reminder once (across server instances) if the deletion is due before the time.
+func (q *Queries) ClaimDeletionReminder(ctx context.Context, arg ClaimDeletionReminderParams) ([]ClaimDeletionReminderRow, error) {
+	rows, err := q.db.Query(ctx, claimDeletionReminder, arg.Now, arg.Before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimDeletionReminderRow{}
+	for rows.Next() {
+		var i ClaimDeletionReminderRow
+		if err := rows.Scan(&i.Name, &i.DeletionDueAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countMembers = `-- name: CountMembers :one
@@ -149,6 +188,16 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 	return i, err
 }
 
+const deleteOrganizationSessions = `-- name: DeleteOrganizationSessions :exec
+DELETE FROM sessions WHERE org_id = $1
+`
+
+// The sessions in the organization end with the lock (sessions have no row-level security).
+func (q *Queries) DeleteOrganizationSessions(ctx context.Context, orgID *uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOrganizationSessions, orgID)
+	return err
+}
+
 const getOrganization = `-- name: GetOrganization :one
 SELECT id, name, created_at
 FROM organizations
@@ -200,6 +249,33 @@ func (q *Queries) ListOrganizations(ctx context.Context) ([]ListOrganizationsRow
 	return items, nil
 }
 
+const organizationAdminEmails = `-- name: OrganizationAdminEmails :many
+SELECT DISTINCT u.email FROM users u JOIN role_bindings b ON b.user_id = u.id
+WHERE b.group_id IS NULL AND b.role = 'admin'
+ORDER BY u.email
+`
+
+// The admins of all groups, for the mails about lock and deletion.
+func (q *Queries) OrganizationAdminEmails(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, organizationAdminEmails)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var email string
+		if err := rows.Scan(&email); err != nil {
+			return nil, err
+		}
+		items = append(items, email)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const organizationQuotas = `-- name: OrganizationQuotas :one
 SELECT max_nodes, max_members, retention_cap_days, samples_per_second, series_per_node
 FROM organizations WHERE id = current_org_id()
@@ -244,23 +320,66 @@ func (q *Queries) OrganizationQuotasForUpdate(ctx context.Context) (Organization
 	return i, err
 }
 
+const organizationState = `-- name: OrganizationState :one
+SELECT name, locked_at, deletion_due_at FROM organizations WHERE id = current_org_id()
+`
+
+type OrganizationStateRow struct {
+	Name          string
+	LockedAt      *time.Time
+	DeletionDueAt *time.Time
+}
+
+// Lock and deletion (M2-33). All in the organization's tenant transaction.
+func (q *Queries) OrganizationState(ctx context.Context) (OrganizationStateRow, error) {
+	row := q.db.QueryRow(ctx, organizationState)
+	var i OrganizationStateRow
+	err := row.Scan(&i.Name, &i.LockedAt, &i.DeletionDueAt)
+	return i, err
+}
+
 const organizationUsage = `-- name: OrganizationUsage :one
 SELECT (SELECT count(*) FROM nodes)::bigint AS nodes, (SELECT count(*) FROM series)::bigint AS series,
-       (SELECT count(*) FROM security_events)::bigint AS events
+       (SELECT count(*) FROM security_events)::bigint AS events, o.locked_at, o.deletion_due_at
+FROM organizations o WHERE o.id = current_org_id()
 `
 
 type OrganizationUsageRow struct {
-	Nodes  int64
-	Series int64
-	Events int64
+	Nodes         int64
+	Series        int64
+	Events        int64
+	LockedAt      *time.Time
+	DeletionDueAt *time.Time
 }
 
 // What the organization of the tenant transaction holds, for the superadmin's estimate (M2-32).
 func (q *Queries) OrganizationUsage(ctx context.Context) (OrganizationUsageRow, error) {
 	row := q.db.QueryRow(ctx, organizationUsage)
 	var i OrganizationUsageRow
-	err := row.Scan(&i.Nodes, &i.Series, &i.Events)
+	err := row.Scan(
+		&i.Nodes,
+		&i.Series,
+		&i.Events,
+		&i.LockedAt,
+		&i.DeletionDueAt,
+	)
 	return i, err
+}
+
+const purgeOrganization = `-- name: PurgeOrganization :one
+SELECT org_purge($1, $2)::bigint AS accounts
+`
+
+type PurgeOrganizationParams struct {
+	OrgID uuid.UUID
+	At    time.Time
+}
+
+func (q *Queries) PurgeOrganization(ctx context.Context, arg PurgeOrganizationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, purgeOrganization, arg.OrgID, arg.At)
+	var accounts int64
+	err := row.Scan(&accounts)
+	return accounts, err
 }
 
 const renameOrganization = `-- name: RenameOrganization :execrows
@@ -269,6 +388,25 @@ UPDATE organizations SET name = $1 WHERE id = current_org_id()
 
 func (q *Queries) RenameOrganization(ctx context.Context, name string) (int64, error) {
 	result, err := q.db.Exec(ctx, renameOrganization, name)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setOrganizationLock = `-- name: SetOrganizationLock :execrows
+UPDATE organizations
+SET locked_at = $1, deletion_due_at = $2, deletion_reminded_at = NULL
+WHERE id = current_org_id()
+`
+
+type SetOrganizationLockParams struct {
+	LockedAt      *time.Time
+	DeletionDueAt *time.Time
+}
+
+func (q *Queries) SetOrganizationLock(ctx context.Context, arg SetOrganizationLockParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOrganizationLock, arg.LockedAt, arg.DeletionDueAt)
 	if err != nil {
 		return 0, err
 	}

@@ -93,6 +93,73 @@ test.describe('organizations (mocked API)', () => {
 		expect(results.violations).toEqual([]);
 	});
 
+	// M2-33: lock with the typed name, download the audit log, then delete at once.
+	test('locks, exports the audit log and deletes an organization', async ({ page }) => {
+		const list = structuredClone(organizations);
+		const calls: string[] = [];
+		await mockApi(page, {
+			...installed(true),
+			'AuthService/GetSession': () => ({ json: { session: superadmin } }),
+			'OrganizationService/ListOrganizations': () => ({ json: { organizations: list } }),
+			'OrganizationService/LockOrganization': (body) => {
+				calls.push(`lock ${(body as { confirmName: string }).confirmName}`);
+				Object.assign(list[1]!, {
+					status: 'ORGANIZATION_STATUS_LOCKED',
+					lockTime: '2026-11-22T10:00:00Z'
+				});
+				return { json: {} };
+			},
+			'OrganizationService/ExportOrganizationAudit': () => {
+				calls.push('export');
+				return {
+					json: {
+						fileName: `audit-${list[1]!.id}.jsonl`,
+						content: btoa('{"organization":"x"}\n'),
+						chainValid: true
+					}
+				};
+			},
+			'OrganizationService/DeleteOrganization': () => {
+				calls.push('delete');
+				list.splice(1, 1);
+				return { json: { accountsDeleted: '1' } };
+			}
+		});
+		await page.goto('/organizations');
+
+		await page.getByRole('button', { name: 'Lock or delete Beta AG' }).click();
+		const panel = page.getByRole('region', { name: 'Lock or delete Beta AG' });
+		await panel.getByRole('button', { name: 'Lock', exact: true }).click();
+		await expect(panel.getByText(/Members are signed out at once/)).toBeVisible();
+		let results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+		await panel.getByLabel('Type the name “Beta AG” to confirm').fill('Beta AG');
+		await panel.getByRole('button', { name: 'Lock', exact: true }).last().click();
+		await expect(
+			page.getByRole('status').filter({ hasText: '“Beta AG” is locked.' })
+		).toBeVisible();
+		await expect(page.getByRole('row', { name: /Beta AG/ })).toContainText('Locked since');
+
+		await page.getByRole('button', { name: 'Lock or delete Beta AG' }).click();
+		const download = page.waitForEvent('download');
+		await panel.getByRole('button', { name: 'Download audit log' }).click();
+		expect((await download).suggestedFilename()).toBe(`audit-${organizations[1]!.id}.jsonl`);
+		await expect(panel.getByRole('status')).toHaveText(
+			'Audit log downloaded; the hash chain is intact.'
+		);
+
+		await panel.getByRole('button', { name: 'Delete now' }).click();
+		await panel.getByLabel('Type the name “Beta AG” to confirm').fill('Beta AG');
+		await panel.getByRole('button', { name: 'Delete now' }).last().click();
+		await expect(
+			page.getByRole('status').filter({ hasText: '“Beta AG” is deleted' })
+		).toBeVisible();
+		await expect(page.getByRole('row', { name: /Beta AG/ })).toHaveCount(0);
+		expect(calls).toEqual(['lock Beta AG', 'export', 'delete']);
+		results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+	});
+
 	test('is not there for others', async ({ page }) => {
 		await mockApi(page, installed(true));
 		await page.goto('/organizations');

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
 func live(node identity.NodeID, serial, ip string, ended *[]string) *liveSession {
@@ -37,5 +38,23 @@ func TestClaim_TheSuccessorOfARotationReplacesTheOldSession(t *testing.T) {
 	}
 	if len(ended) != 1 || ended[0] != "aa" {
 		t.Errorf("ended sessions = %v, want the old one", ended)
+	}
+}
+
+// A lock of the organization ends the sessions of its nodes only (M2-33).
+func TestSessions_TerminateOrganizationEndsOnlyItsNodes(t *testing.T) {
+	sessions := NewSessions(0)
+	orgA, orgB := tenant.OrgID(uuid.New()), tenant.OrgID(uuid.New())
+	var ended []string
+	for i, org := range []tenant.OrgID{orgA, orgA, orgB} {
+		l := live(identity.NodeID(uuid.New()), string(rune('a'+i)), "192.0.2.1", &ended)
+		l.Org = org
+		if result, _ := sessions.claim(l); result != claimed {
+			t.Fatalf("claim %d = %v", i, result)
+		}
+	}
+	sessions.TerminateOrganization(orgA)
+	if len(ended) != 2 || len(sessions.Active()) != 1 || sessions.Active()[0].Org != orgB {
+		t.Errorf("ended %v, active %+v", ended, sessions.Active())
 	}
 }

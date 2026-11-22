@@ -31,6 +31,8 @@ type Querier interface {
 	AppendInstanceAudit(ctx context.Context, arg AppendInstanceAuditParams) error
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
+	// Marks the reminder once (across server instances) if the deletion is due before the time.
+	ClaimDeletionReminder(ctx context.Context, arg ClaimDeletionReminderParams) ([]ClaimDeletionReminderRow, error)
 	// Due rows: pending ones whose attempt is due, and sending ones whose claim expired. SKIP LOCKED
 	// lets concurrent instances claim different rows.
 	ClaimNotificationDeliveries(ctx context.Context, arg ClaimNotificationDeliveriesParams) ([]ClaimNotificationDeliveriesRow, error)
@@ -72,6 +74,8 @@ type Querier interface {
 	DeleteNotificationPolicyChannels(ctx context.Context, policyID uuid.UUID) error
 	// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
 	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
+	// The sessions in the organization end with the lock (sessions have no row-level security).
+	DeleteOrganizationSessions(ctx context.Context, orgID *uuid.UUID) error
 	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
@@ -129,6 +133,8 @@ type Querier interface {
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
 	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
+	// A member of a locked organization (M2-33) is no member until the lock is lifted: every
+	// request of its sessions is refused.
 	IsMember(ctx context.Context, userID uuid.UUID) (bool, error)
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Replaces a previous token; false once the setup is completed (definer function, M1-40).
@@ -184,12 +190,16 @@ type Querier interface {
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
 	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
+	// The admins of all groups, for the mails about lock and deletion.
+	OrganizationAdminEmails(ctx context.Context) ([]string, error)
 	OrganizationQuotas(ctx context.Context) (OrganizationQuotasRow, error)
 	// The quotas of the organization, locked: enrollments and invitations of one organization are
 	// counted one after the other.
 	OrganizationQuotasForUpdate(ctx context.Context) (OrganizationQuotasForUpdateRow, error)
 	// In the tenant transaction of the organization (RLS).
 	OrganizationRequiresSecondFactor(ctx context.Context) (bool, error)
+	// Lock and deletion (M2-33). All in the organization's tenant transaction.
+	OrganizationState(ctx context.Context) (OrganizationStateRow, error)
 	// What the organization of the tenant transaction holds, for the superadmin's estimate (M2-32).
 	OrganizationUsage(ctx context.Context) (OrganizationUsageRow, error)
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
@@ -198,6 +208,7 @@ type Querier interface {
 	PurgeAlertHistory(ctx context.Context, before time.Time) (int64, error)
 	PurgeAlertSilences(ctx context.Context, before time.Time) error
 	PurgeNotificationDeliveries(ctx context.Context, before time.Time) (int64, error)
+	PurgeOrganization(ctx context.Context, arg PurgeOrganizationParams) (int64, error)
 	// The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
 	// received first. The bounds on occurred_at only prune partitions: min_occurred lies the oldest
 	// age the ingest accepts (secevent.MaxAge) and a margin before since; it takes 5 min ahead.
@@ -220,6 +231,7 @@ type Querier interface {
 	SecurityEventHorizon(ctx context.Context) (time.Time, error)
 	SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error
 	SetNodeTags(ctx context.Context, arg SetNodeTagsParams) error
+	SetOrganizationLock(ctx context.Context, arg SetOrganizationLockParams) (int64, error)
 	SetOrganizationRequiresSecondFactor(ctx context.Context, required bool) (int64, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error

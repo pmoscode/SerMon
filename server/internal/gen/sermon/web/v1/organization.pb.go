@@ -32,6 +32,10 @@ const (
 	OrganizationStatus_ORGANIZATION_STATUS_UNSPECIFIED OrganizationStatus = 0
 	// ORGANIZATION_STATUS_ACTIVE: members log in, agents send.
 	OrganizationStatus_ORGANIZATION_STATUS_ACTIVE OrganizationStatus = 1
+	// ORGANIZATION_STATUS_LOCKED: locked until a superadmin lifts it.
+	OrganizationStatus_ORGANIZATION_STATUS_LOCKED OrganizationStatus = 2
+	// ORGANIZATION_STATUS_DELETION_SCHEDULED: locked and deleted at deletion_due_at.
+	OrganizationStatus_ORGANIZATION_STATUS_DELETION_SCHEDULED OrganizationStatus = 3
 )
 
 // Enum value maps for OrganizationStatus.
@@ -39,10 +43,14 @@ var (
 	OrganizationStatus_name = map[int32]string{
 		0: "ORGANIZATION_STATUS_UNSPECIFIED",
 		1: "ORGANIZATION_STATUS_ACTIVE",
+		2: "ORGANIZATION_STATUS_LOCKED",
+		3: "ORGANIZATION_STATUS_DELETION_SCHEDULED",
 	}
 	OrganizationStatus_value = map[string]int32{
-		"ORGANIZATION_STATUS_UNSPECIFIED": 0,
-		"ORGANIZATION_STATUS_ACTIVE":      1,
+		"ORGANIZATION_STATUS_UNSPECIFIED":        0,
+		"ORGANIZATION_STATUS_ACTIVE":             1,
+		"ORGANIZATION_STATUS_LOCKED":             2,
+		"ORGANIZATION_STATUS_DELETION_SCHEDULED": 3,
 	}
 )
 
@@ -173,10 +181,14 @@ type OrganizationSummary struct {
 	// storage_bytes is the approximate storage of its metrics and security events: the totals of
 	// the instance shared by its share of the series and of the events.
 	StorageBytes int64 `protobuf:"varint,6,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
-	// status is active (M2-33 adds more).
+	// status is active, locked or scheduled for deletion.
 	Status OrganizationStatus `protobuf:"varint,7,opt,name=status,proto3,enum=sermon.web.v1.OrganizationStatus" json:"status,omitempty"`
 	// quotas are the organization's limits.
-	Quotas        *OrganizationQuotas `protobuf:"bytes,8,opt,name=quotas,proto3" json:"quotas,omitempty"`
+	Quotas *OrganizationQuotas `protobuf:"bytes,8,opt,name=quotas,proto3" json:"quotas,omitempty"`
+	// lock_time is when it was locked (unset while active).
+	LockTime *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=lock_time,json=lockTime,proto3" json:"lock_time,omitempty"`
+	// deletion_time is when it will be deleted (unset unless scheduled).
+	DeletionTime  *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=deletion_time,json=deletionTime,proto3" json:"deletion_time,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -263,6 +275,20 @@ func (x *OrganizationSummary) GetStatus() OrganizationStatus {
 func (x *OrganizationSummary) GetQuotas() *OrganizationQuotas {
 	if x != nil {
 		return x.Quotas
+	}
+	return nil
+}
+
+func (x *OrganizationSummary) GetLockTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LockTime
+	}
+	return nil
+}
+
+func (x *OrganizationSummary) GetDeletionTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DeletionTime
 	}
 	return nil
 }
@@ -672,6 +698,503 @@ func (x *UpdateOrganizationResponse) GetOrganization() *OrganizationSummary {
 	return nil
 }
 
+// LockOrganizationRequest names the organization and its name, typed as confirmation.
+type LockOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the UUID of the organization.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// confirm_name is the name of the organization as typed by the superadmin.
+	ConfirmName   string `protobuf:"bytes,2,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LockOrganizationRequest) Reset() {
+	*x = LockOrganizationRequest{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LockOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LockOrganizationRequest) ProtoMessage() {}
+
+func (x *LockOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LockOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*LockOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LockOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *LockOrganizationRequest) GetConfirmName() string {
+	if x != nil {
+		return x.ConfirmName
+	}
+	return ""
+}
+
+// ScheduleOrganizationDeletionRequest names the organization and its name, typed as confirmation.
+type ScheduleOrganizationDeletionRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the UUID of the organization.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// confirm_name is the name of the organization as typed by the superadmin.
+	ConfirmName   string `protobuf:"bytes,2,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScheduleOrganizationDeletionRequest) Reset() {
+	*x = ScheduleOrganizationDeletionRequest{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScheduleOrganizationDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScheduleOrganizationDeletionRequest) ProtoMessage() {}
+
+func (x *ScheduleOrganizationDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScheduleOrganizationDeletionRequest.ProtoReflect.Descriptor instead.
+func (*ScheduleOrganizationDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ScheduleOrganizationDeletionRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ScheduleOrganizationDeletionRequest) GetConfirmName() string {
+	if x != nil {
+		return x.ConfirmName
+	}
+	return ""
+}
+
+// UnlockOrganizationRequest names the organization and its name, typed as confirmation.
+type UnlockOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the UUID of the organization.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// confirm_name is the name of the organization as typed by the superadmin.
+	ConfirmName   string `protobuf:"bytes,2,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlockOrganizationRequest) Reset() {
+	*x = UnlockOrganizationRequest{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockOrganizationRequest) ProtoMessage() {}
+
+func (x *UnlockOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*UnlockOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UnlockOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *UnlockOrganizationRequest) GetConfirmName() string {
+	if x != nil {
+		return x.ConfirmName
+	}
+	return ""
+}
+
+// DeleteOrganizationRequest names the organization and its name, typed as confirmation.
+type DeleteOrganizationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the UUID of the organization.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// confirm_name is the name of the organization as typed by the superadmin.
+	ConfirmName   string `protobuf:"bytes,2,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteOrganizationRequest) Reset() {
+	*x = DeleteOrganizationRequest{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteOrganizationRequest) ProtoMessage() {}
+
+func (x *DeleteOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*DeleteOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DeleteOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *DeleteOrganizationRequest) GetConfirmName() string {
+	if x != nil {
+		return x.ConfirmName
+	}
+	return ""
+}
+
+// LockOrganizationResponse has no fields.
+type LockOrganizationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LockOrganizationResponse) Reset() {
+	*x = LockOrganizationResponse{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LockOrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LockOrganizationResponse) ProtoMessage() {}
+
+func (x *LockOrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LockOrganizationResponse.ProtoReflect.Descriptor instead.
+func (*LockOrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{14}
+}
+
+// ScheduleOrganizationDeletionResponse says when the organization will be deleted.
+type ScheduleOrganizationDeletionResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// deletion_time is the end of the grace.
+	DeletionTime  *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=deletion_time,json=deletionTime,proto3" json:"deletion_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScheduleOrganizationDeletionResponse) Reset() {
+	*x = ScheduleOrganizationDeletionResponse{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScheduleOrganizationDeletionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScheduleOrganizationDeletionResponse) ProtoMessage() {}
+
+func (x *ScheduleOrganizationDeletionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScheduleOrganizationDeletionResponse.ProtoReflect.Descriptor instead.
+func (*ScheduleOrganizationDeletionResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ScheduleOrganizationDeletionResponse) GetDeletionTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DeletionTime
+	}
+	return nil
+}
+
+// UnlockOrganizationResponse has no fields.
+type UnlockOrganizationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlockOrganizationResponse) Reset() {
+	*x = UnlockOrganizationResponse{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockOrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockOrganizationResponse) ProtoMessage() {}
+
+func (x *UnlockOrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockOrganizationResponse.ProtoReflect.Descriptor instead.
+func (*UnlockOrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{16}
+}
+
+// DeleteOrganizationResponse says how many accounts went with the organization.
+type DeleteOrganizationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// accounts_deleted are the accounts that had no other membership.
+	AccountsDeleted int64 `protobuf:"varint,1,opt,name=accounts_deleted,json=accountsDeleted,proto3" json:"accounts_deleted,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *DeleteOrganizationResponse) Reset() {
+	*x = DeleteOrganizationResponse{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteOrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteOrganizationResponse) ProtoMessage() {}
+
+func (x *DeleteOrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteOrganizationResponse.ProtoReflect.Descriptor instead.
+func (*DeleteOrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *DeleteOrganizationResponse) GetAccountsDeleted() int64 {
+	if x != nil {
+		return x.AccountsDeleted
+	}
+	return 0
+}
+
+// ExportOrganizationAuditRequest names the organization.
+type ExportOrganizationAuditRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// organization_id is the UUID of the organization.
+	OrganizationId string `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ExportOrganizationAuditRequest) Reset() {
+	*x = ExportOrganizationAuditRequest{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportOrganizationAuditRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportOrganizationAuditRequest) ProtoMessage() {}
+
+func (x *ExportOrganizationAuditRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportOrganizationAuditRequest.ProtoReflect.Descriptor instead.
+func (*ExportOrganizationAuditRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ExportOrganizationAuditRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+// ExportOrganizationAuditResponse is the audit log as a file: a header line, then one JSON line
+// per entry with prev_hash and hash in hex.
+type ExportOrganizationAuditResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// file_name is a suggestion for saving it.
+	FileName string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	// content are the JSON lines.
+	Content []byte `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	// chain_valid is false if the hash chain is broken (the file still contains every entry).
+	ChainValid    bool `protobuf:"varint,3,opt,name=chain_valid,json=chainValid,proto3" json:"chain_valid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportOrganizationAuditResponse) Reset() {
+	*x = ExportOrganizationAuditResponse{}
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportOrganizationAuditResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportOrganizationAuditResponse) ProtoMessage() {}
+
+func (x *ExportOrganizationAuditResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_organization_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportOrganizationAuditResponse.ProtoReflect.Descriptor instead.
+func (*ExportOrganizationAuditResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_organization_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ExportOrganizationAuditResponse) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *ExportOrganizationAuditResponse) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *ExportOrganizationAuditResponse) GetChainValid() bool {
+	if x != nil {
+		return x.ChainValid
+	}
+	return false
+}
+
 var File_sermon_web_v1_organization_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_organization_proto_rawDesc = "" +
@@ -690,7 +1213,7 @@ const file_sermon_web_v1_organization_proto_rawDesc = "" +
 	"\f_max_membersB\x15\n" +
 	"\x13_retention_cap_daysB\x15\n" +
 	"\x13_samples_per_secondB\x12\n" +
-	"\x10_series_per_node\"\xd3\x02\n" +
+	"\x10_series_per_node\"\xcd\x03\n" +
 	"\x13OrganizationSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12;\n" +
@@ -701,7 +1224,10 @@ const file_sermon_web_v1_organization_proto_rawDesc = "" +
 	"node_count\x18\x05 \x01(\x03R\tnodeCount\x12#\n" +
 	"\rstorage_bytes\x18\x06 \x01(\x03R\fstorageBytes\x129\n" +
 	"\x06status\x18\a \x01(\x0e2!.sermon.web.v1.OrganizationStatusR\x06status\x129\n" +
-	"\x06quotas\x18\b \x01(\v2!.sermon.web.v1.OrganizationQuotasR\x06quotas\"\x1a\n" +
+	"\x06quotas\x18\b \x01(\v2!.sermon.web.v1.OrganizationQuotasR\x06quotas\x127\n" +
+	"\tlock_time\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\blockTime\x12?\n" +
+	"\rdeletion_time\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\fdeletionTime\"\x1a\n" +
 	"\x18ListOrganizationsRequest\"e\n" +
 	"\x19ListOrganizationsResponse\x12H\n" +
 	"\rorganizations\x18\x01 \x03(\v2\".sermon.web.v1.OrganizationSummaryR\rorganizations\"h\n" +
@@ -726,15 +1252,51 @@ const file_sermon_web_v1_organization_proto_rawDesc = "" +
 	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\x04name\x12A\n" +
 	"\x06quotas\x18\x03 \x01(\v2!.sermon.web.v1.OrganizationQuotasB\x06\xbaH\x03\xc8\x01\x01R\x06quotas\"d\n" +
 	"\x1aUpdateOrganizationResponse\x12F\n" +
-	"\forganization\x18\x01 \x01(\v2\".sermon.web.v1.OrganizationSummaryR\forganization*Y\n" +
+	"\forganization\x18\x01 \x01(\v2\".sermon.web.v1.OrganizationSummaryR\forganization\"{\n" +
+	"\x17LockOrganizationRequest\x121\n" +
+	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\x12-\n" +
+	"\fconfirm_name\x18\x02 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\vconfirmName\"\x87\x01\n" +
+	"#ScheduleOrganizationDeletionRequest\x121\n" +
+	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\x12-\n" +
+	"\fconfirm_name\x18\x02 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\vconfirmName\"}\n" +
+	"\x19UnlockOrganizationRequest\x121\n" +
+	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\x12-\n" +
+	"\fconfirm_name\x18\x02 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\vconfirmName\"}\n" +
+	"\x19DeleteOrganizationRequest\x121\n" +
+	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\x12-\n" +
+	"\fconfirm_name\x18\x02 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\vconfirmName\"\x1a\n" +
+	"\x18LockOrganizationResponse\"g\n" +
+	"$ScheduleOrganizationDeletionResponse\x12?\n" +
+	"\rdeletion_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\fdeletionTime\"\x1c\n" +
+	"\x1aUnlockOrganizationResponse\"G\n" +
+	"\x1aDeleteOrganizationResponse\x12)\n" +
+	"\x10accounts_deleted\x18\x01 \x01(\x03R\x0faccountsDeleted\"S\n" +
+	"\x1eExportOrganizationAuditRequest\x121\n" +
+	"\x0forganization_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x0eorganizationId\"y\n" +
+	"\x1fExportOrganizationAuditResponse\x12\x1b\n" +
+	"\tfile_name\x18\x01 \x01(\tR\bfileName\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\fR\acontent\x12\x1f\n" +
+	"\vchain_valid\x18\x03 \x01(\bR\n" +
+	"chainValid*\xa5\x01\n" +
 	"\x12OrganizationStatus\x12#\n" +
 	"\x1fORGANIZATION_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
-	"\x1aORGANIZATION_STATUS_ACTIVE\x10\x012\xc3\x03\n" +
+	"\x1aORGANIZATION_STATUS_ACTIVE\x10\x01\x12\x1e\n" +
+	"\x1aORGANIZATION_STATUS_LOCKED\x10\x02\x12*\n" +
+	"&ORGANIZATION_STATUS_DELETION_SCHEDULED\x10\x032\x82\b\n" +
 	"\x13OrganizationService\x12k\n" +
 	"\x11ListOrganizations\x12'.sermon.web.v1.ListOrganizationsRequest\x1a(.sermon.web.v1.ListOrganizationsResponse\"\x03\x90\x02\x01\x12i\n" +
 	"\x12CreateOrganization\x12(.sermon.web.v1.CreateOrganizationRequest\x1a).sermon.web.v1.CreateOrganizationResponse\x12i\n" +
 	"\x12RenameOrganization\x12(.sermon.web.v1.RenameOrganizationRequest\x1a).sermon.web.v1.RenameOrganizationResponse\x12i\n" +
-	"\x12UpdateOrganization\x12(.sermon.web.v1.UpdateOrganizationRequest\x1a).sermon.web.v1.UpdateOrganizationResponseB\xc0\x01\n" +
+	"\x12UpdateOrganization\x12(.sermon.web.v1.UpdateOrganizationRequest\x1a).sermon.web.v1.UpdateOrganizationResponse\x12c\n" +
+	"\x10LockOrganization\x12&.sermon.web.v1.LockOrganizationRequest\x1a'.sermon.web.v1.LockOrganizationResponse\x12\x87\x01\n" +
+	"\x1cScheduleOrganizationDeletion\x122.sermon.web.v1.ScheduleOrganizationDeletionRequest\x1a3.sermon.web.v1.ScheduleOrganizationDeletionResponse\x12i\n" +
+	"\x12UnlockOrganization\x12(.sermon.web.v1.UnlockOrganizationRequest\x1a).sermon.web.v1.UnlockOrganizationResponse\x12i\n" +
+	"\x12DeleteOrganization\x12(.sermon.web.v1.DeleteOrganizationRequest\x1a).sermon.web.v1.DeleteOrganizationResponse\x12x\n" +
+	"\x17ExportOrganizationAudit\x12-.sermon.web.v1.ExportOrganizationAuditRequest\x1a..sermon.web.v1.ExportOrganizationAuditResponseB\xc0\x01\n" +
 	"\x11com.sermon.web.v1B\x11OrganizationProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -750,42 +1312,65 @@ func file_sermon_web_v1_organization_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_organization_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_organization_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_sermon_web_v1_organization_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_sermon_web_v1_organization_proto_goTypes = []any{
-	(OrganizationStatus)(0),            // 0: sermon.web.v1.OrganizationStatus
-	(*OrganizationQuotas)(nil),         // 1: sermon.web.v1.OrganizationQuotas
-	(*OrganizationSummary)(nil),        // 2: sermon.web.v1.OrganizationSummary
-	(*ListOrganizationsRequest)(nil),   // 3: sermon.web.v1.ListOrganizationsRequest
-	(*ListOrganizationsResponse)(nil),  // 4: sermon.web.v1.ListOrganizationsResponse
-	(*CreateOrganizationRequest)(nil),  // 5: sermon.web.v1.CreateOrganizationRequest
-	(*CreateOrganizationResponse)(nil), // 6: sermon.web.v1.CreateOrganizationResponse
-	(*RenameOrganizationRequest)(nil),  // 7: sermon.web.v1.RenameOrganizationRequest
-	(*RenameOrganizationResponse)(nil), // 8: sermon.web.v1.RenameOrganizationResponse
-	(*UpdateOrganizationRequest)(nil),  // 9: sermon.web.v1.UpdateOrganizationRequest
-	(*UpdateOrganizationResponse)(nil), // 10: sermon.web.v1.UpdateOrganizationResponse
-	(*timestamppb.Timestamp)(nil),      // 11: google.protobuf.Timestamp
+	(OrganizationStatus)(0),                      // 0: sermon.web.v1.OrganizationStatus
+	(*OrganizationQuotas)(nil),                   // 1: sermon.web.v1.OrganizationQuotas
+	(*OrganizationSummary)(nil),                  // 2: sermon.web.v1.OrganizationSummary
+	(*ListOrganizationsRequest)(nil),             // 3: sermon.web.v1.ListOrganizationsRequest
+	(*ListOrganizationsResponse)(nil),            // 4: sermon.web.v1.ListOrganizationsResponse
+	(*CreateOrganizationRequest)(nil),            // 5: sermon.web.v1.CreateOrganizationRequest
+	(*CreateOrganizationResponse)(nil),           // 6: sermon.web.v1.CreateOrganizationResponse
+	(*RenameOrganizationRequest)(nil),            // 7: sermon.web.v1.RenameOrganizationRequest
+	(*RenameOrganizationResponse)(nil),           // 8: sermon.web.v1.RenameOrganizationResponse
+	(*UpdateOrganizationRequest)(nil),            // 9: sermon.web.v1.UpdateOrganizationRequest
+	(*UpdateOrganizationResponse)(nil),           // 10: sermon.web.v1.UpdateOrganizationResponse
+	(*LockOrganizationRequest)(nil),              // 11: sermon.web.v1.LockOrganizationRequest
+	(*ScheduleOrganizationDeletionRequest)(nil),  // 12: sermon.web.v1.ScheduleOrganizationDeletionRequest
+	(*UnlockOrganizationRequest)(nil),            // 13: sermon.web.v1.UnlockOrganizationRequest
+	(*DeleteOrganizationRequest)(nil),            // 14: sermon.web.v1.DeleteOrganizationRequest
+	(*LockOrganizationResponse)(nil),             // 15: sermon.web.v1.LockOrganizationResponse
+	(*ScheduleOrganizationDeletionResponse)(nil), // 16: sermon.web.v1.ScheduleOrganizationDeletionResponse
+	(*UnlockOrganizationResponse)(nil),           // 17: sermon.web.v1.UnlockOrganizationResponse
+	(*DeleteOrganizationResponse)(nil),           // 18: sermon.web.v1.DeleteOrganizationResponse
+	(*ExportOrganizationAuditRequest)(nil),       // 19: sermon.web.v1.ExportOrganizationAuditRequest
+	(*ExportOrganizationAuditResponse)(nil),      // 20: sermon.web.v1.ExportOrganizationAuditResponse
+	(*timestamppb.Timestamp)(nil),                // 21: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_organization_proto_depIdxs = []int32{
-	11, // 0: sermon.web.v1.OrganizationSummary.create_time:type_name -> google.protobuf.Timestamp
+	21, // 0: sermon.web.v1.OrganizationSummary.create_time:type_name -> google.protobuf.Timestamp
 	0,  // 1: sermon.web.v1.OrganizationSummary.status:type_name -> sermon.web.v1.OrganizationStatus
 	1,  // 2: sermon.web.v1.OrganizationSummary.quotas:type_name -> sermon.web.v1.OrganizationQuotas
-	2,  // 3: sermon.web.v1.ListOrganizationsResponse.organizations:type_name -> sermon.web.v1.OrganizationSummary
-	2,  // 4: sermon.web.v1.CreateOrganizationResponse.organization:type_name -> sermon.web.v1.OrganizationSummary
-	1,  // 5: sermon.web.v1.UpdateOrganizationRequest.quotas:type_name -> sermon.web.v1.OrganizationQuotas
-	2,  // 6: sermon.web.v1.UpdateOrganizationResponse.organization:type_name -> sermon.web.v1.OrganizationSummary
-	3,  // 7: sermon.web.v1.OrganizationService.ListOrganizations:input_type -> sermon.web.v1.ListOrganizationsRequest
-	5,  // 8: sermon.web.v1.OrganizationService.CreateOrganization:input_type -> sermon.web.v1.CreateOrganizationRequest
-	7,  // 9: sermon.web.v1.OrganizationService.RenameOrganization:input_type -> sermon.web.v1.RenameOrganizationRequest
-	9,  // 10: sermon.web.v1.OrganizationService.UpdateOrganization:input_type -> sermon.web.v1.UpdateOrganizationRequest
-	4,  // 11: sermon.web.v1.OrganizationService.ListOrganizations:output_type -> sermon.web.v1.ListOrganizationsResponse
-	6,  // 12: sermon.web.v1.OrganizationService.CreateOrganization:output_type -> sermon.web.v1.CreateOrganizationResponse
-	8,  // 13: sermon.web.v1.OrganizationService.RenameOrganization:output_type -> sermon.web.v1.RenameOrganizationResponse
-	10, // 14: sermon.web.v1.OrganizationService.UpdateOrganization:output_type -> sermon.web.v1.UpdateOrganizationResponse
-	11, // [11:15] is the sub-list for method output_type
-	7,  // [7:11] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	21, // 3: sermon.web.v1.OrganizationSummary.lock_time:type_name -> google.protobuf.Timestamp
+	21, // 4: sermon.web.v1.OrganizationSummary.deletion_time:type_name -> google.protobuf.Timestamp
+	2,  // 5: sermon.web.v1.ListOrganizationsResponse.organizations:type_name -> sermon.web.v1.OrganizationSummary
+	2,  // 6: sermon.web.v1.CreateOrganizationResponse.organization:type_name -> sermon.web.v1.OrganizationSummary
+	1,  // 7: sermon.web.v1.UpdateOrganizationRequest.quotas:type_name -> sermon.web.v1.OrganizationQuotas
+	2,  // 8: sermon.web.v1.UpdateOrganizationResponse.organization:type_name -> sermon.web.v1.OrganizationSummary
+	21, // 9: sermon.web.v1.ScheduleOrganizationDeletionResponse.deletion_time:type_name -> google.protobuf.Timestamp
+	3,  // 10: sermon.web.v1.OrganizationService.ListOrganizations:input_type -> sermon.web.v1.ListOrganizationsRequest
+	5,  // 11: sermon.web.v1.OrganizationService.CreateOrganization:input_type -> sermon.web.v1.CreateOrganizationRequest
+	7,  // 12: sermon.web.v1.OrganizationService.RenameOrganization:input_type -> sermon.web.v1.RenameOrganizationRequest
+	9,  // 13: sermon.web.v1.OrganizationService.UpdateOrganization:input_type -> sermon.web.v1.UpdateOrganizationRequest
+	11, // 14: sermon.web.v1.OrganizationService.LockOrganization:input_type -> sermon.web.v1.LockOrganizationRequest
+	12, // 15: sermon.web.v1.OrganizationService.ScheduleOrganizationDeletion:input_type -> sermon.web.v1.ScheduleOrganizationDeletionRequest
+	13, // 16: sermon.web.v1.OrganizationService.UnlockOrganization:input_type -> sermon.web.v1.UnlockOrganizationRequest
+	14, // 17: sermon.web.v1.OrganizationService.DeleteOrganization:input_type -> sermon.web.v1.DeleteOrganizationRequest
+	19, // 18: sermon.web.v1.OrganizationService.ExportOrganizationAudit:input_type -> sermon.web.v1.ExportOrganizationAuditRequest
+	4,  // 19: sermon.web.v1.OrganizationService.ListOrganizations:output_type -> sermon.web.v1.ListOrganizationsResponse
+	6,  // 20: sermon.web.v1.OrganizationService.CreateOrganization:output_type -> sermon.web.v1.CreateOrganizationResponse
+	8,  // 21: sermon.web.v1.OrganizationService.RenameOrganization:output_type -> sermon.web.v1.RenameOrganizationResponse
+	10, // 22: sermon.web.v1.OrganizationService.UpdateOrganization:output_type -> sermon.web.v1.UpdateOrganizationResponse
+	15, // 23: sermon.web.v1.OrganizationService.LockOrganization:output_type -> sermon.web.v1.LockOrganizationResponse
+	16, // 24: sermon.web.v1.OrganizationService.ScheduleOrganizationDeletion:output_type -> sermon.web.v1.ScheduleOrganizationDeletionResponse
+	17, // 25: sermon.web.v1.OrganizationService.UnlockOrganization:output_type -> sermon.web.v1.UnlockOrganizationResponse
+	18, // 26: sermon.web.v1.OrganizationService.DeleteOrganization:output_type -> sermon.web.v1.DeleteOrganizationResponse
+	20, // 27: sermon.web.v1.OrganizationService.ExportOrganizationAudit:output_type -> sermon.web.v1.ExportOrganizationAuditResponse
+	19, // [19:28] is the sub-list for method output_type
+	10, // [10:19] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_organization_proto_init() }
@@ -800,7 +1385,7 @@ func file_sermon_web_v1_organization_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_organization_proto_rawDesc), len(file_sermon_web_v1_organization_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -227,6 +227,23 @@ func (s *Sessions) release(l *liveSession) {
 	}
 }
 
+// TerminateOrganization ends the sessions of all nodes of the organization on this server (a
+// locked organization, M2-33); other instances end theirs at their next certificate check.
+func (s *Sessions) TerminateOrganization(org tenant.OrgID) {
+	s.mu.Lock()
+	var ended []*liveSession
+	for node, l := range s.active {
+		if l.Org == org {
+			ended = append(ended, l)
+			delete(s.active, node)
+		}
+	}
+	s.mu.Unlock()
+	for _, l := range ended {
+		l.end(errOrganizationLocked)
+	}
+}
+
 // terminate ends the node's session (e.g. after a lock).
 func (s *Sessions) terminate(node identity.NodeID, cause error) {
 	s.mu.Lock()
@@ -245,6 +262,9 @@ var (
 	errLocked         = errors.New("this node already has an active session elsewhere; the identity was locked as a precaution")
 	errReplaced       = errors.New("session replaced by a new connection of the same agent")
 	errRotated        = errors.New("certificate rotated; reconnect with the new certificate")
+	// errOrganizationLocked ends the sessions of a locked organization; reconnecting is refused
+	// until the lock is lifted, the certificate stays valid.
+	errOrganizationLocked = errors.New("the organization is locked")
 )
 
 // Rotator renews certificates and locks identities (rotation.Service).

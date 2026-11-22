@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Pencil from '@lucide/svelte/icons/pencil';
+	import ShieldBan from '@lucide/svelte/icons/shield-ban';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import {
 		type OrganizationSummary,
@@ -20,12 +21,15 @@
 	/**
 	 * The organizations of the instance for superadmins (M2-32, ADR 0029): counts, approximate
 	 * storage, status and quotas – no tenant data. Create (first admin by invitation) and edit
-	 * name and quotas, each with a step-up.
+	 * name and quotas, each with a step-up. Lock, schedule the deletion, unlock, delete and export
+	 * the audit log (M2-33), each with the typed name and a step-up.
 	 */
 	let organizations = $state<OrganizationSummary[]>([]);
 	let status = $state<'loading' | 'ready'>('loading');
 	let failure = $state('');
 	let editing = $state<string | undefined>();
+	let lifecycle = $state<string | undefined>();
+	let notice = $state('');
 	let saved = $state('');
 	const locale = $derived(localeState.current);
 
@@ -51,8 +55,27 @@
 		return set.length ? set.join(' · ') : m.orgs_quotas_none();
 	}
 
-	function statusText(s: OrganizationStatus): string {
-		return s === OrganizationStatus.ACTIVE ? m.orgs_status_active() : '–';
+	function dateOf(t: OrganizationSummary['lockTime']): string {
+		return t ? timestampDate(t).toLocaleDateString(locale) : '–';
+	}
+
+	function statusText(o: OrganizationSummary): string {
+		switch (o.status) {
+			case OrganizationStatus.ACTIVE:
+				return m.orgs_status_active();
+			case OrganizationStatus.LOCKED:
+				return m.orgs_status_locked({ date: dateOf(o.lockTime) });
+			case OrganizationStatus.DELETION_SCHEDULED:
+				return m.orgs_status_scheduled({ date: dateOf(o.deletionTime) });
+			default:
+				return '–';
+		}
+	}
+
+	async function changed(text: string) {
+		lifecycle = undefined;
+		notice = text;
+		await load();
 	}
 
 	async function done(org: OrganizationSummary, ok: boolean) {
@@ -82,6 +105,9 @@
 			<p role="alert" class="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
 				{failure}
 			</p>
+		{/if}
+		{#if notice}
+			<p role="status" class="rounded-md border p-3 text-sm">{notice}</p>
 		{/if}
 		{#if organizations.length === 0}
 			<p class="text-sm text-muted-foreground">{m.orgs_empty()}</p>
@@ -118,20 +144,41 @@
 								<td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
 									{formatBytes(Number(o.storageBytes), locale)}
 								</td>
-								<td class="px-3 py-2">{statusText(o.status)}</td>
+								<td
+									class="px-3 py-2"
+									class:text-destructive={o.status !== OrganizationStatus.ACTIVE}
+									>{statusText(o)}</td
+								>
 								<td class="px-3 py-2 text-muted-foreground">{quotasText(o)}</td>
-								<td class="px-3 py-2 text-right">
+								<td class="px-3 py-2 text-right whitespace-nowrap">
 									<Button
 										size="sm"
 										variant="ghost"
 										aria-label={m.orgs_edit_label({ name: o.name })}
 										onclick={() => {
 											saved = '';
+											notice = '';
+											lifecycle = undefined;
 											editing = o.id;
 										}}
 									>
 										<Pencil aria-hidden="true" />
 										{m.orgs_edit()}
+									</Button>
+									<Button
+										size="sm"
+										variant="ghost"
+										aria-label={m.orgs_lifecycle_label({ name: o.name })}
+										aria-expanded={lifecycle === o.id}
+										onclick={() => {
+											saved = '';
+											notice = '';
+											editing = undefined;
+											lifecycle = lifecycle === o.id ? undefined : o.id;
+										}}
+									>
+										<ShieldBan aria-hidden="true" />
+										{m.orgs_lifecycle()}
 									</Button>
 								</td>
 							</tr>
@@ -139,6 +186,14 @@
 								<tr>
 									<td colspan="8" class="p-3">
 										<OrganizationEditor organization={o} onDone={(ok) => done(o, ok)} />
+									</td>
+								</tr>
+							{:else if lifecycle === o.id}
+								<tr>
+									<td colspan="8" class="p-3">
+										{#await import('#lib/components/organizations/OrganizationLifecycle.svelte') then { default: OrganizationLifecycle }}
+											<OrganizationLifecycle organization={o} onDone={changed} />
+										{/await}
 									</td>
 								</tr>
 							{:else if saved === o.id}

@@ -40,6 +40,8 @@ type Organization struct {
 	// share of the series and of the events (ADR 0029, M2-32).
 	StorageBytes int64
 	Quotas       quota.Quotas
+	// LockedAt and DeletionDueAt are set while it is locked and scheduled for deletion (M2-33).
+	LockedAt, DeletionDueAt *time.Time
 }
 
 // Store persists organizations; Create, Rename and Update write the audit entry into the

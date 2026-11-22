@@ -20,3 +20,15 @@ Leer heißt Standard der Instanz. Ein gesenktes Kontingent löscht nichts: Beste
 ## Speicher
 
 Der Speicherbedarf ist geschätzt: Die Größe aller Metriken der Instanz wird nach dem Anteil der Organisation an den Serien verteilt, die der Security-Events nach dem Anteil an den Events. Komprimierte Daten lassen sich nicht genau einer Organisation zuordnen.
+
+## Sperren und Löschen
+
+Unter **Sperren oder löschen** stehen die Schritte, die der Status erlaubt. Jeder verlangt den Namen der Organisation, genau so geschrieben, und eine erneute Bestätigung; jeder landet im Audit-Log der Organisation und der Instanz.
+
+- **Sperren:** ohne Frist. Mitglieder werden sofort abgemeldet und kommen nicht mehr hinein, Agents werden getrennt, Enrollment-Tokens und Einladungen gelten nicht mehr. Alerts und Benachrichtigungen ruhen. Zertifikate und Daten bleiben. Wer als Superadmin selbst in der Organisation angemeldet ist, wird ebenfalls abgemeldet.
+- **Zum Löschen vormerken:** sperrt wie oben und löscht nach der Frist der Instanz (Standard 30 Tage, `SERMON_ORG_DELETION_GRACE`, mindestens 7 Tage).
+- **Sperre aufheben:** alles läuft wieder an; eine vorgemerkte Löschung entfällt.
+- **Sofort löschen:** nur bei einer gesperrten Organisation. Endgültig gelöscht werden Nodes, Metriken, Events, Alerts, Kanäle, das Audit-Log und alle Konten ohne weitere Mitgliedschaft; Konten von Superadmins bleiben.
+- **Audit-Log herunterladen:** nur bei einer gesperrten Organisation, als JSON-Zeilen mit der Hash-Kette. Die erste Zeile beschreibt, wie sich die Kette nachrechnen lässt; die UI meldet, ob sie intakt ist.
+
+Die Admins der Organisation bekommen eine Mail beim Sperren (mit dem Löschdatum), beim Aufheben und 7 Tage vor der Löschung.

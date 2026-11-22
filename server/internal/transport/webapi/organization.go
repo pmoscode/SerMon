@@ -3,7 +3,9 @@ package webapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -19,8 +21,107 @@ import (
 
 // OrganizationHandler implements sermon.web.v1.OrganizationService (behind the Authenticator).
 type OrganizationHandler struct {
-	svc    *organization.Service
-	logger *slog.Logger
+	svc       *organization.Service
+	lifecycle *organization.Lifecycle
+	logger    *slog.Logger
+}
+
+// WithLifecycle adds locking and deleting (M2-33).
+func (h *OrganizationHandler) WithLifecycle(l *organization.Lifecycle) *OrganizationHandler {
+	h.lifecycle = l
+	return h
+}
+
+// confirmed runs a lifecycle action on the organization of the request.
+func (h *OrganizationHandler) confirmed(ctx context.Context, op, id string, run func(access.Caller, tenant.OrgID) error) error {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return err
+	}
+	if h.lifecycle == nil {
+		return connect.NewError(connect.CodeUnimplemented, errors.New("locking organizations needs the database"))
+	}
+	org, err := parseID(id)
+	if err != nil {
+		return err
+	}
+	if err := run(c, tenant.OrgID(org)); err != nil {
+		return h.fail(ctx, op, err)
+	}
+	return nil
+}
+
+// LockOrganization locks an organization.
+func (h *OrganizationHandler) LockOrganization(ctx context.Context, req *connect.Request[webv1.LockOrganizationRequest]) (*connect.Response[webv1.LockOrganizationResponse], error) {
+	err := h.confirmed(ctx, "lock organization", req.Msg.GetOrganizationId(), func(c access.Caller, org tenant.OrgID) error {
+		return h.lifecycle.Lock(ctx, c, org, req.Msg.GetConfirmName())
+	})
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&webv1.LockOrganizationResponse{}), nil
+}
+
+// ScheduleOrganizationDeletion locks an organization and schedules its deletion.
+func (h *OrganizationHandler) ScheduleOrganizationDeletion(ctx context.Context, req *connect.Request[webv1.ScheduleOrganizationDeletionRequest]) (*connect.Response[webv1.ScheduleOrganizationDeletionResponse], error) {
+	var due time.Time
+	err := h.confirmed(ctx, "schedule deletion", req.Msg.GetOrganizationId(), func(c access.Caller, org tenant.OrgID) error {
+		var err error
+		due, err = h.lifecycle.ScheduleDeletion(ctx, c, org, req.Msg.GetConfirmName())
+		if err != nil {
+			return fmt.Errorf("schedule deletion: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&webv1.ScheduleOrganizationDeletionResponse{DeletionTime: timestamppb.New(due)}), nil
+}
+
+// UnlockOrganization lifts the lock.
+func (h *OrganizationHandler) UnlockOrganization(ctx context.Context, req *connect.Request[webv1.UnlockOrganizationRequest]) (*connect.Response[webv1.UnlockOrganizationResponse], error) {
+	err := h.confirmed(ctx, "unlock organization", req.Msg.GetOrganizationId(), func(c access.Caller, org tenant.OrgID) error {
+		return h.lifecycle.Unlock(ctx, c, org, req.Msg.GetConfirmName())
+	})
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&webv1.UnlockOrganizationResponse{}), nil
+}
+
+// DeleteOrganization deletes a locked organization at once.
+func (h *OrganizationHandler) DeleteOrganization(ctx context.Context, req *connect.Request[webv1.DeleteOrganizationRequest]) (*connect.Response[webv1.DeleteOrganizationResponse], error) {
+	var accounts int64
+	err := h.confirmed(ctx, "delete organization", req.Msg.GetOrganizationId(), func(c access.Caller, org tenant.OrgID) error {
+		var err error
+		accounts, err = h.lifecycle.DeleteNow(ctx, c, org, req.Msg.GetConfirmName())
+		if err != nil {
+			return fmt.Errorf("delete organization: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&webv1.DeleteOrganizationResponse{AccountsDeleted: accounts}), nil
+}
+
+// ExportOrganizationAudit returns the audit log of a locked organization.
+func (h *OrganizationHandler) ExportOrganizationAudit(ctx context.Context, req *connect.Request[webv1.ExportOrganizationAuditRequest]) (*connect.Response[webv1.ExportOrganizationAuditResponse], error) {
+	res := &webv1.ExportOrganizationAuditResponse{}
+	err := h.confirmed(ctx, "export audit log", req.Msg.GetOrganizationId(), func(c access.Caller, org tenant.OrgID) error {
+		var err error
+		res.FileName, res.Content, res.ChainValid, err = h.lifecycle.ExportAudit(ctx, c, org)
+		if err != nil {
+			return fmt.Errorf("export audit log: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(res), nil
 }
 
 var _ webv1connect.OrganizationServiceHandler = (*OrganizationHandler)(nil)
@@ -107,6 +208,10 @@ func (h *OrganizationHandler) UpdateOrganization(ctx context.Context, req *conne
 
 func (h *OrganizationHandler) fail(ctx context.Context, op string, err error) error {
 	switch {
+	case errors.Is(err, organization.ErrNameMismatch):
+		return connect.NewError(connect.CodeInvalidArgument, organization.ErrNameMismatch)
+	case errors.Is(err, organization.ErrNotLocked):
+		return connect.NewError(connect.CodeFailedPrecondition, organization.ErrNotLocked)
 	case errors.Is(err, organization.ErrNameTaken):
 		return connect.NewError(connect.CodeAlreadyExists, organization.ErrNameTaken)
 	case errors.Is(err, quota.ErrInvalid):
@@ -130,8 +235,19 @@ func (h *OrganizationHandler) fail(ctx context.Context, op string, err error) er
 func orgView(o organization.Organization) *webv1.OrganizationSummary {
 	return &webv1.OrganizationSummary{
 		Id: o.ID.String(), Name: o.Name, CreateTime: timestamppb.New(o.CreatedAt), MemberCount: o.Members,
-		NodeCount: o.Nodes, StorageBytes: o.StorageBytes, Status: webv1.OrganizationStatus_ORGANIZATION_STATUS_ACTIVE,
-		Quotas: quotasView(o.Quotas),
+		NodeCount: o.Nodes, StorageBytes: o.StorageBytes, Status: statusView(o),
+		Quotas: quotasView(o.Quotas), LockTime: optionalTime(o.LockedAt), DeletionTime: optionalTime(o.DeletionDueAt),
+	}
+}
+
+func statusView(o organization.Organization) webv1.OrganizationStatus {
+	switch {
+	case o.DeletionDueAt != nil:
+		return webv1.OrganizationStatus_ORGANIZATION_STATUS_DELETION_SCHEDULED
+	case o.LockedAt != nil:
+		return webv1.OrganizationStatus_ORGANIZATION_STATUS_LOCKED
+	default:
+		return webv1.OrganizationStatus_ORGANIZATION_STATUS_ACTIVE
 	}
 }
 

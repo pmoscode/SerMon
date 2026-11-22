@@ -2309,7 +2309,36 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Aus:** Hinweis des Product Owners nach M2-29 (in der Demo ist „Beta AG“ für den Superadmin nirgends zu sehen);
   Rückfragen am 2026-11-22 (ADR 0029).
 
-#### ☐ M2-33 – Organisationen sperren und löschen · S · M 🔒
+#### ☑ M2-33 – Organisationen sperren und löschen · S · M 🔒
+> Erledigt (ADR 0029, Nachtrag M2-33; ADR 0007, Nachtrag M2-33; KONZEPT §7; Threat Model T77):
+> - **Seite „Organisationen“:** Status mit Datum (aktiv, gesperrt seit, Löschung am) und je Org „Sperren oder löschen“
+>   mit den Schritten, die der Status erlaubt. Jede Änderung erklärt ihre Folgen und verlangt den Namen genau so
+>   geschrieben und einen Step-up; das Audit-Log kommt als Datei (Blob, kein Upload).
+> - **API:** `LockOrganization`, `ScheduleOrganizationDeletion`, `UnlockOrganization`, `DeleteOrganization` (jeweils mit
+>   `confirm_name`) und `ExportOrganizationAudit` (JSON-Zeilen mit Hash-Kette, `chain_valid`); `OrganizationStatus`
+>   um `LOCKED` und `DELETION_SCHEDULED`, `OrganizationSummary` um `lock_time` und `deletion_time` erweitert. Falscher
+>   Name: INVALID_ARGUMENT, nicht gesperrt: FAILED_PRECONDITION.
+> - **Migration 00036:** `locked_at`, `deletion_due_at` (nur mit Sperre, CHECK), `deletion_reminded_at`; die
+>   Definer-Funktionen für Agent-Zertifikate, Enrollment-Tokens, Einladungen und die Orgs beim Login lehnen eine
+>   gesperrte Org ab, `IsMember` ebenso (Sessions enden damit auch auf anderen Server-Instanzen); `org_purge` löscht
+>   eine gesperrte, fällige Org in einer Transaktion samt Metriken (auch Continuous Aggregates), Events, Audit-Log und
+>   Konten ohne weitere Mitgliedschaft, Superadmins behalten ihres.
+> - **Sofortige Wirkung:** Beim Sperren löscht der Server die Sitzungen der Org und beendet die Agent-Streams dieser
+>   Instanz; andere Instanzen trennen ihre Agents bei der Prüfung des Zertifikats (spätestens nach einer Minute). Engine
+>   und Benachrichtigungen überspringen gesperrte Orgs.
+> - **Löschjob und Mails:** stündlich; Erinnerung 7 Tage vorher genau einmal (`deletion_reminded_at`), Mails an die
+>   Admins beim Sperren, Vormerken und Aufheben (DE/EN). Frist `SERMON_ORG_DELETION_GRACE` (Standard 720h,
+>   mindestens 168h; Compose, `env.example`, Installationsanleitung).
+> - **Export prüfbar:** `details` steht als gespeicherter Text in der Datei (kompaktiertes JSON passte nicht zum Hash);
+>   der Integrationstest rechnet die Kette allein aus der Datei nach.
+> - **Name exakt:** Bestätigung unterscheidet Groß- und Kleinschreibung (nur Leerzeichen am Rand zählen nicht), in UI
+>   und Server gleich.
+> - **Tests:** Use-Case (Rollen, Step-up, Name, Frist und Untergrenze, Mails, Erinnerung einmal, Löschjob, Export);
+>   Integration: `org_purge` entfernt alles mit `org_id` (alle Tabellen über `information_schema`, dazu Metriken und
+>   Aggregate) und nichts anderer Orgs, Konten nur ohne weitere Mitgliedschaft; Sperre lehnt Zertifikat, Token,
+>   Einladung und Login ab und Aufheben lässt alles wieder zu, Engine überspringt die Org; Agent-API: Stream endet, neuer
+>   Stream abgelehnt, nach dem Aufheben ohne neues Enrollment wieder da; Web-API: kompletter Ablauf mit Sitzungsende,
+>   Export, Instanz-Audit, Vormerken und Löschen; Rollen- und Isolationstest der neuen RPCs; UI-Specs und E2E mit axe.
 - **Ziel:** D29 nach [ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md), aus E3.8 vorgezogen; nur
   Superadmins, jeweils mit Step-up und Eingabe des Org-Namens:
   - **Sperren** (ohne Frist) und **Zum Löschen vormerken** (sperrt, Frist 30 Tage, Server-Variable, mindestens 7

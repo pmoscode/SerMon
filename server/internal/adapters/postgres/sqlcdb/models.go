@@ -297,6 +297,9 @@ type Organization struct {
 	RetentionCapDays    pgtype.Int4
 	SamplesPerSecond    pgtype.Int4
 	SeriesPerNode       pgtype.Int4
+	LockedAt            *time.Time
+	DeletionDueAt       *time.Time
+	DeletionRemindedAt  *time.Time
 }
 
 type PkiAuthority struct {

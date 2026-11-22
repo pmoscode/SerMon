@@ -15,8 +15,13 @@ UPDATE node_groups SET name = sqlc.arg(name) WHERE id = sqlc.arg(id);
 -- name: DeleteNodeGroup :execrows
 DELETE FROM node_groups WHERE id = sqlc.arg(id);
 
+-- A member of a locked organization (M2-33) is no member until the lock is lifted: every
+-- request of its sessions is refused.
 -- name: IsMember :one
-SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id = sqlc.arg(user_id)) AS member;
+SELECT EXISTS (
+    SELECT 1 FROM memberships m JOIN organizations o ON o.id = m.org_id
+    WHERE m.user_id = sqlc.arg(user_id) AND o.locked_at IS NULL
+) AS member;
 
 -- name: RoleBindingsOfUser :many
 SELECT id, group_id, role FROM role_bindings WHERE user_id = sqlc.arg(user_id);

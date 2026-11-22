@@ -207,9 +207,14 @@ func (q *Queries) GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBind
 }
 
 const isMember = `-- name: IsMember :one
-SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1) AS member
+SELECT EXISTS (
+    SELECT 1 FROM memberships m JOIN organizations o ON o.id = m.org_id
+    WHERE m.user_id = $1 AND o.locked_at IS NULL
+) AS member
 `
 
+// A member of a locked organization (M2-33) is no member until the lock is lifted: every
+// request of its sessions is refused.
 func (q *Queries) IsMember(ctx context.Context, userID uuid.UUID) (bool, error) {
 	row := q.db.QueryRow(ctx, isMember, userID)
 	var member bool

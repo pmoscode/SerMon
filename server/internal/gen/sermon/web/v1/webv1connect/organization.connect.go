@@ -45,6 +45,21 @@ const (
 	// OrganizationServiceUpdateOrganizationProcedure is the fully-qualified name of the
 	// OrganizationService's UpdateOrganization RPC.
 	OrganizationServiceUpdateOrganizationProcedure = "/sermon.web.v1.OrganizationService/UpdateOrganization"
+	// OrganizationServiceLockOrganizationProcedure is the fully-qualified name of the
+	// OrganizationService's LockOrganization RPC.
+	OrganizationServiceLockOrganizationProcedure = "/sermon.web.v1.OrganizationService/LockOrganization"
+	// OrganizationServiceScheduleOrganizationDeletionProcedure is the fully-qualified name of the
+	// OrganizationService's ScheduleOrganizationDeletion RPC.
+	OrganizationServiceScheduleOrganizationDeletionProcedure = "/sermon.web.v1.OrganizationService/ScheduleOrganizationDeletion"
+	// OrganizationServiceUnlockOrganizationProcedure is the fully-qualified name of the
+	// OrganizationService's UnlockOrganization RPC.
+	OrganizationServiceUnlockOrganizationProcedure = "/sermon.web.v1.OrganizationService/UnlockOrganization"
+	// OrganizationServiceDeleteOrganizationProcedure is the fully-qualified name of the
+	// OrganizationService's DeleteOrganization RPC.
+	OrganizationServiceDeleteOrganizationProcedure = "/sermon.web.v1.OrganizationService/DeleteOrganization"
+	// OrganizationServiceExportOrganizationAuditProcedure is the fully-qualified name of the
+	// OrganizationService's ExportOrganizationAudit RPC.
+	OrganizationServiceExportOrganizationAuditProcedure = "/sermon.web.v1.OrganizationService/ExportOrganizationAudit"
 )
 
 // OrganizationServiceClient is a client for the sermon.web.v1.OrganizationService service.
@@ -63,6 +78,22 @@ type OrganizationServiceClient interface {
 	// lowered quota deletes nothing: what exists keeps running, only new things are refused.
 	// ALREADY_EXISTS: another organization has this name.
 	UpdateOrganization(context.Context, *connect.Request[v1.UpdateOrganizationRequest]) (*connect.Response[v1.UpdateOrganizationResponse], error)
+	// LockOrganization locks an organization without a deadline (M2-33, step-up, the name typed):
+	// no logins, agent connections, enrollments or invitations; certificates stay valid, alerts
+	// and notifications rest. FAILED_PRECONDITION: the typed name does not match.
+	LockOrganization(context.Context, *connect.Request[v1.LockOrganizationRequest]) (*connect.Response[v1.LockOrganizationResponse], error)
+	// ScheduleOrganizationDeletion locks an organization and deletes it after the grace of the
+	// server (30 days by default, at least 7).
+	ScheduleOrganizationDeletion(context.Context, *connect.Request[v1.ScheduleOrganizationDeletionRequest]) (*connect.Response[v1.ScheduleOrganizationDeletionResponse], error)
+	// UnlockOrganization lifts the lock and a scheduled deletion. FAILED_PRECONDITION: not locked
+	// or the typed name does not match.
+	UnlockOrganization(context.Context, *connect.Request[v1.UnlockOrganizationRequest]) (*connect.Response[v1.UnlockOrganizationResponse], error)
+	// DeleteOrganization deletes a locked organization at once, with its data and the accounts
+	// without another membership. FAILED_PRECONDITION: not locked or the typed name does not match.
+	DeleteOrganization(context.Context, *connect.Request[v1.DeleteOrganizationRequest]) (*connect.Response[v1.DeleteOrganizationResponse], error)
+	// ExportOrganizationAudit returns the audit log of a locked organization as a file with the
+	// hash chain (step-up); the export is recorded in the instance's audit log.
+	ExportOrganizationAudit(context.Context, *connect.Request[v1.ExportOrganizationAuditRequest]) (*connect.Response[v1.ExportOrganizationAuditResponse], error)
 }
 
 // NewOrganizationServiceClient constructs a client for the sermon.web.v1.OrganizationService
@@ -101,15 +132,50 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(organizationServiceMethods.ByName("UpdateOrganization")),
 			connect.WithClientOptions(opts...),
 		),
+		lockOrganization: connect.NewClient[v1.LockOrganizationRequest, v1.LockOrganizationResponse](
+			httpClient,
+			baseURL+OrganizationServiceLockOrganizationProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("LockOrganization")),
+			connect.WithClientOptions(opts...),
+		),
+		scheduleOrganizationDeletion: connect.NewClient[v1.ScheduleOrganizationDeletionRequest, v1.ScheduleOrganizationDeletionResponse](
+			httpClient,
+			baseURL+OrganizationServiceScheduleOrganizationDeletionProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("ScheduleOrganizationDeletion")),
+			connect.WithClientOptions(opts...),
+		),
+		unlockOrganization: connect.NewClient[v1.UnlockOrganizationRequest, v1.UnlockOrganizationResponse](
+			httpClient,
+			baseURL+OrganizationServiceUnlockOrganizationProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("UnlockOrganization")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteOrganization: connect.NewClient[v1.DeleteOrganizationRequest, v1.DeleteOrganizationResponse](
+			httpClient,
+			baseURL+OrganizationServiceDeleteOrganizationProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("DeleteOrganization")),
+			connect.WithClientOptions(opts...),
+		),
+		exportOrganizationAudit: connect.NewClient[v1.ExportOrganizationAuditRequest, v1.ExportOrganizationAuditResponse](
+			httpClient,
+			baseURL+OrganizationServiceExportOrganizationAuditProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("ExportOrganizationAudit")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // organizationServiceClient implements OrganizationServiceClient.
 type organizationServiceClient struct {
-	listOrganizations  *connect.Client[v1.ListOrganizationsRequest, v1.ListOrganizationsResponse]
-	createOrganization *connect.Client[v1.CreateOrganizationRequest, v1.CreateOrganizationResponse]
-	renameOrganization *connect.Client[v1.RenameOrganizationRequest, v1.RenameOrganizationResponse]
-	updateOrganization *connect.Client[v1.UpdateOrganizationRequest, v1.UpdateOrganizationResponse]
+	listOrganizations            *connect.Client[v1.ListOrganizationsRequest, v1.ListOrganizationsResponse]
+	createOrganization           *connect.Client[v1.CreateOrganizationRequest, v1.CreateOrganizationResponse]
+	renameOrganization           *connect.Client[v1.RenameOrganizationRequest, v1.RenameOrganizationResponse]
+	updateOrganization           *connect.Client[v1.UpdateOrganizationRequest, v1.UpdateOrganizationResponse]
+	lockOrganization             *connect.Client[v1.LockOrganizationRequest, v1.LockOrganizationResponse]
+	scheduleOrganizationDeletion *connect.Client[v1.ScheduleOrganizationDeletionRequest, v1.ScheduleOrganizationDeletionResponse]
+	unlockOrganization           *connect.Client[v1.UnlockOrganizationRequest, v1.UnlockOrganizationResponse]
+	deleteOrganization           *connect.Client[v1.DeleteOrganizationRequest, v1.DeleteOrganizationResponse]
+	exportOrganizationAudit      *connect.Client[v1.ExportOrganizationAuditRequest, v1.ExportOrganizationAuditResponse]
 }
 
 // ListOrganizations calls sermon.web.v1.OrganizationService.ListOrganizations.
@@ -132,6 +198,32 @@ func (c *organizationServiceClient) UpdateOrganization(ctx context.Context, req 
 	return c.updateOrganization.CallUnary(ctx, req)
 }
 
+// LockOrganization calls sermon.web.v1.OrganizationService.LockOrganization.
+func (c *organizationServiceClient) LockOrganization(ctx context.Context, req *connect.Request[v1.LockOrganizationRequest]) (*connect.Response[v1.LockOrganizationResponse], error) {
+	return c.lockOrganization.CallUnary(ctx, req)
+}
+
+// ScheduleOrganizationDeletion calls
+// sermon.web.v1.OrganizationService.ScheduleOrganizationDeletion.
+func (c *organizationServiceClient) ScheduleOrganizationDeletion(ctx context.Context, req *connect.Request[v1.ScheduleOrganizationDeletionRequest]) (*connect.Response[v1.ScheduleOrganizationDeletionResponse], error) {
+	return c.scheduleOrganizationDeletion.CallUnary(ctx, req)
+}
+
+// UnlockOrganization calls sermon.web.v1.OrganizationService.UnlockOrganization.
+func (c *organizationServiceClient) UnlockOrganization(ctx context.Context, req *connect.Request[v1.UnlockOrganizationRequest]) (*connect.Response[v1.UnlockOrganizationResponse], error) {
+	return c.unlockOrganization.CallUnary(ctx, req)
+}
+
+// DeleteOrganization calls sermon.web.v1.OrganizationService.DeleteOrganization.
+func (c *organizationServiceClient) DeleteOrganization(ctx context.Context, req *connect.Request[v1.DeleteOrganizationRequest]) (*connect.Response[v1.DeleteOrganizationResponse], error) {
+	return c.deleteOrganization.CallUnary(ctx, req)
+}
+
+// ExportOrganizationAudit calls sermon.web.v1.OrganizationService.ExportOrganizationAudit.
+func (c *organizationServiceClient) ExportOrganizationAudit(ctx context.Context, req *connect.Request[v1.ExportOrganizationAuditRequest]) (*connect.Response[v1.ExportOrganizationAuditResponse], error) {
+	return c.exportOrganizationAudit.CallUnary(ctx, req)
+}
+
 // OrganizationServiceHandler is an implementation of the sermon.web.v1.OrganizationService service.
 type OrganizationServiceHandler interface {
 	// ListOrganizations returns all organizations.
@@ -148,6 +240,22 @@ type OrganizationServiceHandler interface {
 	// lowered quota deletes nothing: what exists keeps running, only new things are refused.
 	// ALREADY_EXISTS: another organization has this name.
 	UpdateOrganization(context.Context, *connect.Request[v1.UpdateOrganizationRequest]) (*connect.Response[v1.UpdateOrganizationResponse], error)
+	// LockOrganization locks an organization without a deadline (M2-33, step-up, the name typed):
+	// no logins, agent connections, enrollments or invitations; certificates stay valid, alerts
+	// and notifications rest. FAILED_PRECONDITION: the typed name does not match.
+	LockOrganization(context.Context, *connect.Request[v1.LockOrganizationRequest]) (*connect.Response[v1.LockOrganizationResponse], error)
+	// ScheduleOrganizationDeletion locks an organization and deletes it after the grace of the
+	// server (30 days by default, at least 7).
+	ScheduleOrganizationDeletion(context.Context, *connect.Request[v1.ScheduleOrganizationDeletionRequest]) (*connect.Response[v1.ScheduleOrganizationDeletionResponse], error)
+	// UnlockOrganization lifts the lock and a scheduled deletion. FAILED_PRECONDITION: not locked
+	// or the typed name does not match.
+	UnlockOrganization(context.Context, *connect.Request[v1.UnlockOrganizationRequest]) (*connect.Response[v1.UnlockOrganizationResponse], error)
+	// DeleteOrganization deletes a locked organization at once, with its data and the accounts
+	// without another membership. FAILED_PRECONDITION: not locked or the typed name does not match.
+	DeleteOrganization(context.Context, *connect.Request[v1.DeleteOrganizationRequest]) (*connect.Response[v1.DeleteOrganizationResponse], error)
+	// ExportOrganizationAudit returns the audit log of a locked organization as a file with the
+	// hash chain (step-up); the export is recorded in the instance's audit log.
+	ExportOrganizationAudit(context.Context, *connect.Request[v1.ExportOrganizationAuditRequest]) (*connect.Response[v1.ExportOrganizationAuditResponse], error)
 }
 
 // NewOrganizationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -182,6 +290,36 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 		connect.WithSchema(organizationServiceMethods.ByName("UpdateOrganization")),
 		connect.WithHandlerOptions(opts...),
 	)
+	organizationServiceLockOrganizationHandler := connect.NewUnaryHandler(
+		OrganizationServiceLockOrganizationProcedure,
+		svc.LockOrganization,
+		connect.WithSchema(organizationServiceMethods.ByName("LockOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceScheduleOrganizationDeletionHandler := connect.NewUnaryHandler(
+		OrganizationServiceScheduleOrganizationDeletionProcedure,
+		svc.ScheduleOrganizationDeletion,
+		connect.WithSchema(organizationServiceMethods.ByName("ScheduleOrganizationDeletion")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceUnlockOrganizationHandler := connect.NewUnaryHandler(
+		OrganizationServiceUnlockOrganizationProcedure,
+		svc.UnlockOrganization,
+		connect.WithSchema(organizationServiceMethods.ByName("UnlockOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceDeleteOrganizationHandler := connect.NewUnaryHandler(
+		OrganizationServiceDeleteOrganizationProcedure,
+		svc.DeleteOrganization,
+		connect.WithSchema(organizationServiceMethods.ByName("DeleteOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceExportOrganizationAuditHandler := connect.NewUnaryHandler(
+		OrganizationServiceExportOrganizationAuditProcedure,
+		svc.ExportOrganizationAudit,
+		connect.WithSchema(organizationServiceMethods.ByName("ExportOrganizationAudit")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.OrganizationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OrganizationServiceListOrganizationsProcedure:
@@ -192,6 +330,16 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 			organizationServiceRenameOrganizationHandler.ServeHTTP(w, r)
 		case OrganizationServiceUpdateOrganizationProcedure:
 			organizationServiceUpdateOrganizationHandler.ServeHTTP(w, r)
+		case OrganizationServiceLockOrganizationProcedure:
+			organizationServiceLockOrganizationHandler.ServeHTTP(w, r)
+		case OrganizationServiceScheduleOrganizationDeletionProcedure:
+			organizationServiceScheduleOrganizationDeletionHandler.ServeHTTP(w, r)
+		case OrganizationServiceUnlockOrganizationProcedure:
+			organizationServiceUnlockOrganizationHandler.ServeHTTP(w, r)
+		case OrganizationServiceDeleteOrganizationProcedure:
+			organizationServiceDeleteOrganizationHandler.ServeHTTP(w, r)
+		case OrganizationServiceExportOrganizationAuditProcedure:
+			organizationServiceExportOrganizationAuditHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -215,4 +363,24 @@ func (UnimplementedOrganizationServiceHandler) RenameOrganization(context.Contex
 
 func (UnimplementedOrganizationServiceHandler) UpdateOrganization(context.Context, *connect.Request[v1.UpdateOrganizationRequest]) (*connect.Response[v1.UpdateOrganizationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.UpdateOrganization is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) LockOrganization(context.Context, *connect.Request[v1.LockOrganizationRequest]) (*connect.Response[v1.LockOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.LockOrganization is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) ScheduleOrganizationDeletion(context.Context, *connect.Request[v1.ScheduleOrganizationDeletionRequest]) (*connect.Response[v1.ScheduleOrganizationDeletionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.ScheduleOrganizationDeletion is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) UnlockOrganization(context.Context, *connect.Request[v1.UnlockOrganizationRequest]) (*connect.Response[v1.UnlockOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.UnlockOrganization is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) DeleteOrganization(context.Context, *connect.Request[v1.DeleteOrganizationRequest]) (*connect.Response[v1.DeleteOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.DeleteOrganization is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) ExportOrganizationAudit(context.Context, *connect.Request[v1.ExportOrganizationAuditRequest]) (*connect.Response[v1.ExportOrganizationAuditResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.OrganizationService.ExportOrganizationAudit is not implemented"))
 }

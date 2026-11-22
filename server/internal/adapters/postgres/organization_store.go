@@ -62,6 +62,7 @@ func (s *OrganizationStore) List(ctx context.Context) ([]organization.Organizati
 		events += usage[i].Events
 		orgs = append(orgs, organization.Organization{
 			ID: tenant.OrgID(r.ID), Name: r.Name, CreatedAt: r.CreatedAt, Members: r.Members, Nodes: usage[i].Nodes,
+			LockedAt: usage[i].LockedAt, DeletionDueAt: usage[i].DeletionDueAt,
 			Quotas: quota.Quotas{
 				MaxNodes: nonNegative(r.MaxNodes), MaxMembers: nonNegative(r.MaxMembers), RetentionCapDays: nonNegative(r.RetentionCapDays),
 				SamplesPerSecond: nonNegative(r.SamplesPerSecond), SeriesPerNode: nonNegative(r.SeriesPerNode),

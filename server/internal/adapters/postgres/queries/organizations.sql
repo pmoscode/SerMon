@@ -23,7 +23,7 @@ SELECT id::uuid AS id, name::text AS name, created_at::timestamptz AS created_at
        coalesce(max_nodes, 0)::integer AS max_nodes, coalesce(max_members, 0)::integer AS max_members,
        coalesce(retention_cap_days, 0)::integer AS retention_cap_days,
        coalesce(samples_per_second, 0)::integer AS samples_per_second,
-       coalesce(series_per_node, 0)::integer AS series_per_node
+       coalesce(series_per_node, 0)::integer AS series_per_node, locked::boolean AS locked
 FROM admin_organizations();
 
 -- Storage of the instance for the estimate per organization (SECURITY DEFINER, sizes only).
@@ -33,7 +33,8 @@ SELECT metric_bytes::bigint AS metric_bytes, event_bytes::bigint AS event_bytes 
 -- What the organization of the tenant transaction holds, for the superadmin's estimate (M2-32).
 -- name: OrganizationUsage :one
 SELECT (SELECT count(*) FROM nodes)::bigint AS nodes, (SELECT count(*) FROM series)::bigint AS series,
-       (SELECT count(*) FROM security_events)::bigint AS events;
+       (SELECT count(*) FROM security_events)::bigint AS events, o.locked_at, o.deletion_due_at
+FROM organizations o WHERE o.id = current_org_id();
 
 -- name: UpdateOrganization :execrows
 UPDATE organizations
@@ -63,3 +64,31 @@ SELECT count(*)::bigint FROM invitations WHERE expires_at > sqlc.arg(now) AND em
 
 -- name: RenameOrganization :execrows
 UPDATE organizations SET name = sqlc.arg(name) WHERE id = current_org_id();
+
+-- Lock and deletion (M2-33). All in the organization's tenant transaction.
+-- name: OrganizationState :one
+SELECT name, locked_at, deletion_due_at FROM organizations WHERE id = current_org_id();
+
+-- name: SetOrganizationLock :execrows
+UPDATE organizations
+SET locked_at = sqlc.narg(locked_at), deletion_due_at = sqlc.narg(deletion_due_at), deletion_reminded_at = NULL
+WHERE id = current_org_id();
+
+-- The sessions in the organization end with the lock (sessions have no row-level security).
+-- name: DeleteOrganizationSessions :exec
+DELETE FROM sessions WHERE org_id = sqlc.arg(org_id);
+
+-- The admins of all groups, for the mails about lock and deletion.
+-- name: OrganizationAdminEmails :many
+SELECT DISTINCT u.email FROM users u JOIN role_bindings b ON b.user_id = u.id
+WHERE b.group_id IS NULL AND b.role = 'admin'
+ORDER BY u.email;
+
+-- Marks the reminder once (across server instances) if the deletion is due before the time.
+-- name: ClaimDeletionReminder :many
+UPDATE organizations SET deletion_reminded_at = sqlc.arg(now)
+WHERE id = current_org_id() AND deletion_due_at <= sqlc.arg(before) AND deletion_reminded_at IS NULL
+RETURNING name, deletion_due_at;
+
+-- name: PurgeOrganization :one
+SELECT org_purge(sqlc.arg(org_id), sqlc.arg(at))::bigint AS accounts;

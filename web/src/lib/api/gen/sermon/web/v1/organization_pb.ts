@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/organization.proto.
  */
 export const file_sermon_web_v1_organization: GenFile = /*@__PURE__*/
-  fileDesc("CiBzZXJtb24vd2ViL3YxL29yZ2FuaXphdGlvbi5wcm90bxINc2VybW9uLndlYi52MSKGAgoST3JnYW5pemF0aW9uUXVvdGFzEhYKCW1heF9ub2RlcxgBIAEoDUgAiAEBEhgKC21heF9tZW1iZXJzGAIgASgNSAGIAQESHwoScmV0ZW50aW9uX2NhcF9kYXlzGAMgASgNSAKIAQESHwoSc2FtcGxlc19wZXJfc2Vjb25kGAQgASgNSAOIAQESHAoPc2VyaWVzX3Blcl9ub2RlGAUgASgNSASIAQFCDAoKX21heF9ub2Rlc0IOCgxfbWF4X21lbWJlcnNCFQoTX3JldGVudGlvbl9jYXBfZGF5c0IVChNfc2FtcGxlc19wZXJfc2Vjb25kQhIKEF9zZXJpZXNfcGVyX25vZGUihwIKE09yZ2FuaXphdGlvblN1bW1hcnkSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIvCgtjcmVhdGVfdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoMbWVtYmVyX2NvdW50GAQgASgDEhIKCm5vZGVfY291bnQYBSABKAMSFQoNc3RvcmFnZV9ieXRlcxgGIAEoAxIxCgZzdGF0dXMYByABKA4yIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN0YXR1cxIxCgZxdW90YXMYCCABKAsyIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblF1b3RhcyIaChhMaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QiVgoZTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZRI5Cg1vcmdhbml6YXRpb25zGAEgAygLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5Ij4KGUNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSDAoEbmFtZRgBIAEoCRITCgthZG1pbl9lbWFpbBgCIAEoCSKMAQoaQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USOAoMb3JnYW5pemF0aW9uGAEgASgLMiIuc2VybW9uLndlYi52MS5Pcmdhbml6YXRpb25TdW1tYXJ5EhgKEGludml0YXRpb25fdG9rZW4YAiABKAkSGgoSaW52aXRhdGlvbl9lbWFpbGVkGAMgASgIIkIKGVJlbmFtZU9yZ2FuaXphdGlvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEgwKBG5hbWUYAiABKAkiHAoaUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2UidQoZVXBkYXRlT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDAoEbmFtZRgCIAEoCRIxCgZxdW90YXMYAyABKAsyIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblF1b3RhcyJWChpVcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZRI4Cgxvcmdhbml6YXRpb24YASABKAsyIi5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN1bW1hcnkqWQoST3JnYW5pemF0aW9uU3RhdHVzEiMKH09SR0FOSVpBVElPTl9TVEFUVVNfVU5TUEVDSUZJRUQQABIeChpPUkdBTklaQVRJT05fU1RBVFVTX0FDVElWRRABMsMDChNPcmdhbml6YXRpb25TZXJ2aWNlEmsKEUxpc3RPcmdhbml6YXRpb25zEicuc2VybW9uLndlYi52MS5MaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLkxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2UiA5ACARJpChJDcmVhdGVPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEmkKElJlbmFtZU9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2USaQoSVXBkYXRlT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5VcGRhdGVPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5VcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZULAAQoRY29tLnNlcm1vbi53ZWIudjFCEU9yZ2FuaXphdGlvblByb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("CiBzZXJtb24vd2ViL3YxL29yZ2FuaXphdGlvbi5wcm90bxINc2VybW9uLndlYi52MSKGAgoST3JnYW5pemF0aW9uUXVvdGFzEhYKCW1heF9ub2RlcxgBIAEoDUgAiAEBEhgKC21heF9tZW1iZXJzGAIgASgNSAGIAQESHwoScmV0ZW50aW9uX2NhcF9kYXlzGAMgASgNSAKIAQESHwoSc2FtcGxlc19wZXJfc2Vjb25kGAQgASgNSAOIAQESHAoPc2VyaWVzX3Blcl9ub2RlGAUgASgNSASIAQFCDAoKX21heF9ub2Rlc0IOCgxfbWF4X21lbWJlcnNCFQoTX3JldGVudGlvbl9jYXBfZGF5c0IVChNfc2FtcGxlc19wZXJfc2Vjb25kQhIKEF9zZXJpZXNfcGVyX25vZGUi6QIKE09yZ2FuaXphdGlvblN1bW1hcnkSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIvCgtjcmVhdGVfdGltZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFAoMbWVtYmVyX2NvdW50GAQgASgDEhIKCm5vZGVfY291bnQYBSABKAMSFQoNc3RvcmFnZV9ieXRlcxgGIAEoAxIxCgZzdGF0dXMYByABKA4yIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN0YXR1cxIxCgZxdW90YXMYCCABKAsyIS5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblF1b3RhcxItCglsb2NrX3RpbWUYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWRlbGV0aW9uX3RpbWUYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIhoKGExpc3RPcmdhbml6YXRpb25zUmVxdWVzdCJWChlMaXN0T3JnYW5pemF0aW9uc1Jlc3BvbnNlEjkKDW9yZ2FuaXphdGlvbnMYASADKAsyIi5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN1bW1hcnkiPgoZQ3JlYXRlT3JnYW5pemF0aW9uUmVxdWVzdBIMCgRuYW1lGAEgASgJEhMKC2FkbWluX2VtYWlsGAIgASgJIowBChpDcmVhdGVPcmdhbml6YXRpb25SZXNwb25zZRI4Cgxvcmdhbml6YXRpb24YASABKAsyIi5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvblN1bW1hcnkSGAoQaW52aXRhdGlvbl90b2tlbhgCIAEoCRIaChJpbnZpdGF0aW9uX2VtYWlsZWQYAyABKAgiQgoZUmVuYW1lT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDAoEbmFtZRgCIAEoCSIcChpSZW5hbWVPcmdhbml6YXRpb25SZXNwb25zZSJ1ChlVcGRhdGVPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEjEKBnF1b3RhcxgDIAEoCzIhLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uUXVvdGFzIlYKGlVwZGF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEjgKDG9yZ2FuaXphdGlvbhgBIAEoCzIiLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uU3VtbWFyeSJIChdMb2NrT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMY29uZmlybV9uYW1lGAIgASgJIlQKI1NjaGVkdWxlT3JnYW5pemF0aW9uRGVsZXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxjb25maXJtX25hbWUYAiABKAkiSgoZVW5sb2NrT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMY29uZmlybV9uYW1lGAIgASgJIkoKGURlbGV0ZU9yZ2FuaXphdGlvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhQKDGNvbmZpcm1fbmFtZRgCIAEoCSIaChhMb2NrT3JnYW5pemF0aW9uUmVzcG9uc2UiWQokU2NoZWR1bGVPcmdhbml6YXRpb25EZWxldGlvblJlc3BvbnNlEjEKDWRlbGV0aW9uX3RpbWUYASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIhwKGlVubG9ja09yZ2FuaXphdGlvblJlc3BvbnNlIjYKGkRlbGV0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEhgKEGFjY291bnRzX2RlbGV0ZWQYASABKAMiOQoeRXhwb3J0T3JnYW5pemF0aW9uQXVkaXRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJaCh9FeHBvcnRPcmdhbml6YXRpb25BdWRpdFJlc3BvbnNlEhEKCWZpbGVfbmFtZRgBIAEoCRIPCgdjb250ZW50GAIgASgMEhMKC2NoYWluX3ZhbGlkGAMgASgIKqUBChJPcmdhbml6YXRpb25TdGF0dXMSIwofT1JHQU5JWkFUSU9OX1NUQVRVU19VTlNQRUNJRklFRBAAEh4KGk9SR0FOSVpBVElPTl9TVEFUVVNfQUNUSVZFEAESHgoaT1JHQU5JWkFUSU9OX1NUQVRVU19MT0NLRUQQAhIqCiZPUkdBTklaQVRJT05fU1RBVFVTX0RFTEVUSU9OX1NDSEVEVUxFRBADMoIIChNPcmdhbml6YXRpb25TZXJ2aWNlEmsKEUxpc3RPcmdhbml6YXRpb25zEicuc2VybW9uLndlYi52MS5MaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLkxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2UiA5ACARJpChJDcmVhdGVPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEmkKElJlbmFtZU9yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuUmVuYW1lT3JnYW5pemF0aW9uUmVzcG9uc2USaQoSVXBkYXRlT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5VcGRhdGVPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5VcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZRJjChBMb2NrT3JnYW5pemF0aW9uEiYuc2VybW9uLndlYi52MS5Mb2NrT3JnYW5pemF0aW9uUmVxdWVzdBonLnNlcm1vbi53ZWIudjEuTG9ja09yZ2FuaXphdGlvblJlc3BvbnNlEocBChxTY2hlZHVsZU9yZ2FuaXphdGlvbkRlbGV0aW9uEjIuc2VybW9uLndlYi52MS5TY2hlZHVsZU9yZ2FuaXphdGlvbkRlbGV0aW9uUmVxdWVzdBozLnNlcm1vbi53ZWIudjEuU2NoZWR1bGVPcmdhbml6YXRpb25EZWxldGlvblJlc3BvbnNlEmkKElVubG9ja09yZ2FuaXphdGlvbhIoLnNlcm1vbi53ZWIudjEuVW5sb2NrT3JnYW5pemF0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuVW5sb2NrT3JnYW5pemF0aW9uUmVzcG9uc2USaQoSRGVsZXRlT3JnYW5pemF0aW9uEiguc2VybW9uLndlYi52MS5EZWxldGVPcmdhbml6YXRpb25SZXF1ZXN0Gikuc2VybW9uLndlYi52MS5EZWxldGVPcmdhbml6YXRpb25SZXNwb25zZRJ4ChdFeHBvcnRPcmdhbml6YXRpb25BdWRpdBItLnNlcm1vbi53ZWIudjEuRXhwb3J0T3JnYW5pemF0aW9uQXVkaXRSZXF1ZXN0Gi4uc2VybW9uLndlYi52MS5FeHBvcnRPcmdhbml6YXRpb25BdWRpdFJlc3BvbnNlQsABChFjb20uc2VybW9uLndlYi52MUIRT3JnYW5pemF0aW9uUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * OrganizationQuotas bound an organization instead of the instance-wide values (ADR 0029).
@@ -115,7 +115,7 @@ export type OrganizationSummary = Message<"sermon.web.v1.OrganizationSummary"> &
   storageBytes: bigint;
 
   /**
-   * status is active (M2-33 adds more).
+   * status is active, locked or scheduled for deletion.
    *
    * @generated from field: sermon.web.v1.OrganizationStatus status = 7;
    */
@@ -127,6 +127,20 @@ export type OrganizationSummary = Message<"sermon.web.v1.OrganizationSummary"> &
    * @generated from field: sermon.web.v1.OrganizationQuotas quotas = 8;
    */
   quotas?: OrganizationQuotas | undefined;
+
+  /**
+   * lock_time is when it was locked (unset while active).
+   *
+   * @generated from field: google.protobuf.Timestamp lock_time = 9;
+   */
+  lockTime?: Timestamp | undefined;
+
+  /**
+   * deletion_time is when it will be deleted (unset unless scheduled).
+   *
+   * @generated from field: google.protobuf.Timestamp deletion_time = 10;
+   */
+  deletionTime?: Timestamp | undefined;
 };
 
 /**
@@ -336,6 +350,247 @@ export const UpdateOrganizationResponseSchema: GenMessage<UpdateOrganizationResp
   messageDesc(file_sermon_web_v1_organization, 9);
 
 /**
+ * LockOrganizationRequest names the organization and its name, typed as confirmation.
+ *
+ * @generated from message sermon.web.v1.LockOrganizationRequest
+ */
+export type LockOrganizationRequest = Message<"sermon.web.v1.LockOrganizationRequest"> & {
+  /**
+   * organization_id is the UUID of the organization.
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * confirm_name is the name of the organization as typed by the superadmin.
+   *
+   * @generated from field: string confirm_name = 2;
+   */
+  confirmName: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.LockOrganizationRequest.
+ * Use `create(LockOrganizationRequestSchema)` to create a new message.
+ */
+export const LockOrganizationRequestSchema: GenMessage<LockOrganizationRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 10);
+
+/**
+ * ScheduleOrganizationDeletionRequest names the organization and its name, typed as confirmation.
+ *
+ * @generated from message sermon.web.v1.ScheduleOrganizationDeletionRequest
+ */
+export type ScheduleOrganizationDeletionRequest = Message<"sermon.web.v1.ScheduleOrganizationDeletionRequest"> & {
+  /**
+   * organization_id is the UUID of the organization.
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * confirm_name is the name of the organization as typed by the superadmin.
+   *
+   * @generated from field: string confirm_name = 2;
+   */
+  confirmName: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.ScheduleOrganizationDeletionRequest.
+ * Use `create(ScheduleOrganizationDeletionRequestSchema)` to create a new message.
+ */
+export const ScheduleOrganizationDeletionRequestSchema: GenMessage<ScheduleOrganizationDeletionRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 11);
+
+/**
+ * UnlockOrganizationRequest names the organization and its name, typed as confirmation.
+ *
+ * @generated from message sermon.web.v1.UnlockOrganizationRequest
+ */
+export type UnlockOrganizationRequest = Message<"sermon.web.v1.UnlockOrganizationRequest"> & {
+  /**
+   * organization_id is the UUID of the organization.
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * confirm_name is the name of the organization as typed by the superadmin.
+   *
+   * @generated from field: string confirm_name = 2;
+   */
+  confirmName: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.UnlockOrganizationRequest.
+ * Use `create(UnlockOrganizationRequestSchema)` to create a new message.
+ */
+export const UnlockOrganizationRequestSchema: GenMessage<UnlockOrganizationRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 12);
+
+/**
+ * DeleteOrganizationRequest names the organization and its name, typed as confirmation.
+ *
+ * @generated from message sermon.web.v1.DeleteOrganizationRequest
+ */
+export type DeleteOrganizationRequest = Message<"sermon.web.v1.DeleteOrganizationRequest"> & {
+  /**
+   * organization_id is the UUID of the organization.
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * confirm_name is the name of the organization as typed by the superadmin.
+   *
+   * @generated from field: string confirm_name = 2;
+   */
+  confirmName: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.DeleteOrganizationRequest.
+ * Use `create(DeleteOrganizationRequestSchema)` to create a new message.
+ */
+export const DeleteOrganizationRequestSchema: GenMessage<DeleteOrganizationRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 13);
+
+/**
+ * LockOrganizationResponse has no fields.
+ *
+ * @generated from message sermon.web.v1.LockOrganizationResponse
+ */
+export type LockOrganizationResponse = Message<"sermon.web.v1.LockOrganizationResponse"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.LockOrganizationResponse.
+ * Use `create(LockOrganizationResponseSchema)` to create a new message.
+ */
+export const LockOrganizationResponseSchema: GenMessage<LockOrganizationResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 14);
+
+/**
+ * ScheduleOrganizationDeletionResponse says when the organization will be deleted.
+ *
+ * @generated from message sermon.web.v1.ScheduleOrganizationDeletionResponse
+ */
+export type ScheduleOrganizationDeletionResponse = Message<"sermon.web.v1.ScheduleOrganizationDeletionResponse"> & {
+  /**
+   * deletion_time is the end of the grace.
+   *
+   * @generated from field: google.protobuf.Timestamp deletion_time = 1;
+   */
+  deletionTime?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.ScheduleOrganizationDeletionResponse.
+ * Use `create(ScheduleOrganizationDeletionResponseSchema)` to create a new message.
+ */
+export const ScheduleOrganizationDeletionResponseSchema: GenMessage<ScheduleOrganizationDeletionResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 15);
+
+/**
+ * UnlockOrganizationResponse has no fields.
+ *
+ * @generated from message sermon.web.v1.UnlockOrganizationResponse
+ */
+export type UnlockOrganizationResponse = Message<"sermon.web.v1.UnlockOrganizationResponse"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.UnlockOrganizationResponse.
+ * Use `create(UnlockOrganizationResponseSchema)` to create a new message.
+ */
+export const UnlockOrganizationResponseSchema: GenMessage<UnlockOrganizationResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 16);
+
+/**
+ * DeleteOrganizationResponse says how many accounts went with the organization.
+ *
+ * @generated from message sermon.web.v1.DeleteOrganizationResponse
+ */
+export type DeleteOrganizationResponse = Message<"sermon.web.v1.DeleteOrganizationResponse"> & {
+  /**
+   * accounts_deleted are the accounts that had no other membership.
+   *
+   * @generated from field: int64 accounts_deleted = 1;
+   */
+  accountsDeleted: bigint;
+};
+
+/**
+ * Describes the message sermon.web.v1.DeleteOrganizationResponse.
+ * Use `create(DeleteOrganizationResponseSchema)` to create a new message.
+ */
+export const DeleteOrganizationResponseSchema: GenMessage<DeleteOrganizationResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 17);
+
+/**
+ * ExportOrganizationAuditRequest names the organization.
+ *
+ * @generated from message sermon.web.v1.ExportOrganizationAuditRequest
+ */
+export type ExportOrganizationAuditRequest = Message<"sermon.web.v1.ExportOrganizationAuditRequest"> & {
+  /**
+   * organization_id is the UUID of the organization.
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.ExportOrganizationAuditRequest.
+ * Use `create(ExportOrganizationAuditRequestSchema)` to create a new message.
+ */
+export const ExportOrganizationAuditRequestSchema: GenMessage<ExportOrganizationAuditRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 18);
+
+/**
+ * ExportOrganizationAuditResponse is the audit log as a file: a header line, then one JSON line
+ * per entry with prev_hash and hash in hex.
+ *
+ * @generated from message sermon.web.v1.ExportOrganizationAuditResponse
+ */
+export type ExportOrganizationAuditResponse = Message<"sermon.web.v1.ExportOrganizationAuditResponse"> & {
+  /**
+   * file_name is a suggestion for saving it.
+   *
+   * @generated from field: string file_name = 1;
+   */
+  fileName: string;
+
+  /**
+   * content are the JSON lines.
+   *
+   * @generated from field: bytes content = 2;
+   */
+  content: Uint8Array;
+
+  /**
+   * chain_valid is false if the hash chain is broken (the file still contains every entry).
+   *
+   * @generated from field: bool chain_valid = 3;
+   */
+  chainValid: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.ExportOrganizationAuditResponse.
+ * Use `create(ExportOrganizationAuditResponseSchema)` to create a new message.
+ */
+export const ExportOrganizationAuditResponseSchema: GenMessage<ExportOrganizationAuditResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_organization, 19);
+
+/**
  * OrganizationStatus is the state of an organization (M2-33 adds locked and scheduled for
  * deletion).
  *
@@ -355,6 +610,20 @@ export enum OrganizationStatus {
    * @generated from enum value: ORGANIZATION_STATUS_ACTIVE = 1;
    */
   ACTIVE = 1,
+
+  /**
+   * ORGANIZATION_STATUS_LOCKED: locked until a superadmin lifts it.
+   *
+   * @generated from enum value: ORGANIZATION_STATUS_LOCKED = 2;
+   */
+  LOCKED = 2,
+
+  /**
+   * ORGANIZATION_STATUS_DELETION_SCHEDULED: locked and deleted at deletion_due_at.
+   *
+   * @generated from enum value: ORGANIZATION_STATUS_DELETION_SCHEDULED = 3;
+   */
+  DELETION_SCHEDULED = 3,
 }
 
 /**
@@ -416,6 +685,62 @@ export const OrganizationService: GenService<{
     methodKind: "unary";
     input: typeof UpdateOrganizationRequestSchema;
     output: typeof UpdateOrganizationResponseSchema;
+  },
+  /**
+   * LockOrganization locks an organization without a deadline (M2-33, step-up, the name typed):
+   * no logins, agent connections, enrollments or invitations; certificates stay valid, alerts
+   * and notifications rest. FAILED_PRECONDITION: the typed name does not match.
+   *
+   * @generated from rpc sermon.web.v1.OrganizationService.LockOrganization
+   */
+  lockOrganization: {
+    methodKind: "unary";
+    input: typeof LockOrganizationRequestSchema;
+    output: typeof LockOrganizationResponseSchema;
+  },
+  /**
+   * ScheduleOrganizationDeletion locks an organization and deletes it after the grace of the
+   * server (30 days by default, at least 7).
+   *
+   * @generated from rpc sermon.web.v1.OrganizationService.ScheduleOrganizationDeletion
+   */
+  scheduleOrganizationDeletion: {
+    methodKind: "unary";
+    input: typeof ScheduleOrganizationDeletionRequestSchema;
+    output: typeof ScheduleOrganizationDeletionResponseSchema;
+  },
+  /**
+   * UnlockOrganization lifts the lock and a scheduled deletion. FAILED_PRECONDITION: not locked
+   * or the typed name does not match.
+   *
+   * @generated from rpc sermon.web.v1.OrganizationService.UnlockOrganization
+   */
+  unlockOrganization: {
+    methodKind: "unary";
+    input: typeof UnlockOrganizationRequestSchema;
+    output: typeof UnlockOrganizationResponseSchema;
+  },
+  /**
+   * DeleteOrganization deletes a locked organization at once, with its data and the accounts
+   * without another membership. FAILED_PRECONDITION: not locked or the typed name does not match.
+   *
+   * @generated from rpc sermon.web.v1.OrganizationService.DeleteOrganization
+   */
+  deleteOrganization: {
+    methodKind: "unary";
+    input: typeof DeleteOrganizationRequestSchema;
+    output: typeof DeleteOrganizationResponseSchema;
+  },
+  /**
+   * ExportOrganizationAudit returns the audit log of a locked organization as a file with the
+   * hash chain (step-up); the export is recorded in the instance's audit log.
+   *
+   * @generated from rpc sermon.web.v1.OrganizationService.ExportOrganizationAudit
+   */
+  exportOrganizationAudit: {
+    methodKind: "unary";
+    input: typeof ExportOrganizationAuditRequestSchema;
+    output: typeof ExportOrganizationAuditResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_organization, 0);

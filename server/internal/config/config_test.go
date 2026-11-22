@@ -45,11 +45,12 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 
 	want := config.Config{
-		Mode:            config.ModeProduction,
-		HTTPAddr:        ":8080",
-		LogLevel:        slog.LevelInfo,
-		LogFormat:       config.LogFormatJSON,
-		ShutdownTimeout: 15 * time.Second,
+		Mode:             config.ModeProduction,
+		HTTPAddr:         ":8080",
+		LogLevel:         slog.LevelInfo,
+		LogFormat:        config.LogFormatJSON,
+		ShutdownTimeout:  15 * time.Second,
+		OrgDeletionGrace: 30 * 24 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -58,10 +59,11 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 	env := map[string]string{
-		"SERMON_HTTP_ADDR":        "127.0.0.1:9000",
-		"SERMON_LOG_LEVEL":        "debug",
-		"SERMON_LOG_FORMAT":       "text",
-		"SERMON_SHUTDOWN_TIMEOUT": "3s",
+		"SERMON_HTTP_ADDR":          "127.0.0.1:9000",
+		"SERMON_LOG_LEVEL":          "debug",
+		"SERMON_LOG_FORMAT":         "text",
+		"SERMON_SHUTDOWN_TIMEOUT":   "3s",
+		"SERMON_ORG_DELETION_GRACE": "240h",
 	}
 
 	cfg, err := config.Load(fakeSource(env, nil))
@@ -70,11 +72,12 @@ func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 	}
 
 	want := config.Config{
-		Mode:            config.ModeProduction,
-		HTTPAddr:        "127.0.0.1:9000",
-		LogLevel:        slog.LevelDebug,
-		LogFormat:       config.LogFormatText,
-		ShutdownTimeout: 3 * time.Second,
+		Mode:             config.ModeProduction,
+		HTTPAddr:         "127.0.0.1:9000",
+		LogLevel:         slog.LevelDebug,
+		LogFormat:        config.LogFormatText,
+		ShutdownTimeout:  3 * time.Second,
+		OrgDeletionGrace: 240 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -447,6 +450,16 @@ func TestLoad_DatabaseSizeLimit(t *testing.T) {
 	for _, bad := range []string{"50GB", "-1", "lots", "0"} {
 		if _, err := config.Load(fakeSource(map[string]string{"SERMON_DATABASE_SIZE_LIMIT": bad}, nil)); err == nil || !strings.Contains(err.Error(), "SERMON_DATABASE_SIZE_LIMIT") {
 			t.Errorf("%q: %v", bad, err)
+		}
+	}
+}
+
+// The deletion grace of organizations is at least 7 days (D29, M2-33).
+func TestLoad_DeletionGraceHasAFloor(t *testing.T) {
+	for value, ok := range map[string]bool{"168h": true, "167h": false, "1h": false, "-1h": false, "x": false} {
+		_, err := config.Load(fakeSource(map[string]string{"SERMON_ORG_DELETION_GRACE": value}, nil))
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", value, err)
 		}
 	}
 }

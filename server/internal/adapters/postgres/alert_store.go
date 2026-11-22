@@ -32,6 +32,9 @@ func (s *AlertStore) Organizations(ctx context.Context) ([]tenant.OrgID, error) 
 	}
 	orgs := make([]tenant.OrgID, 0, len(rows))
 	for _, r := range rows {
+		if r.Locked {
+			continue // a locked organization rests (M2-33)
+		}
 		orgs = append(orgs, tenant.OrgID(r.ID))
 	}
 	return orgs, nil

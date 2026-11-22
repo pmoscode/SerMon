@@ -2248,6 +2248,25 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Tests zuerst:** Boot-ID-Wechsel über einen Neustart des Agents; Quelle im Hello bzw. in den Host-Fakten, Anzeige.
 - **Abhängig von:** M2-20
 
+#### ☑ M2-34 – Luft im JavaScript-Budget der Node-Seite · W · S
+> Erledigt (vorgezogen vor M2-32: dessen Menüpunkt für Superadmins brachte die Node-Seite auf 200,2 KiB):
+> - **Messung** über das Vite-Manifest (statische Importe von App, Layouts und Seite): der größte gemeinsame Chunk war
+>   der Floating-Layer von bits-ui (25 KiB), geladen von `HelpTip` (ⓘ) und `AccountMenu` in jeder Seite; die
+>   Paraglide-Texte werden pro Nachricht eingebunden, die Protobuf-Deskriptoren der Node-Seite sind nur die eigenen.
+> - **Popover bei Bedarf:** `HelpTip` und `AccountMenu` zeigen einen eigenen Button und laden das Popover
+>   (`HelpTipPopup`, `AccountMenuPopup`, `customAnchor` am Button) beim ersten Öffnen; der Button schaltet es um,
+>   Escape und Klick daneben schließen, der Fokus kehrt zum Button zurück.
+> - **Ergebnis:** Node-Seite 199,3 → 184,3 KiB, Flotte 170,6 → 155,2 KiB, Login unverändert (106,5 KiB).
+> - **Tests:** `budget.e2e.ts` verlangt für Flotte und Node-Seite 10 KiB Luft (unter 190 KiB); Spec für Umschalten,
+>   Escape und Fokus; Hilfe-, Shell- und axe-Tests unverändert grün.
+- **Ziel:** Die Node-Seite liegt bei 199,3 KiB von 200 KiB (KONZEPT §17); jede weitere Zeile dort reißt das Budget.
+  Ursachen messen (welche Chunks lädt die Seite, was teilen sie mit der Login-Seite; z. B. die Deskriptoren aller
+  Protobuf-Dateien über den gemeinsamen API-Client, die Paraglide-Texte) und mindestens 10 KiB Luft schaffen, ohne
+  Funktionen zu streichen.
+- **Tests zuerst:** `budget.e2e.ts` mit einer Warnschwelle (z. B. 190 KiB) für die Node-Seite.
+- **Abhängig von:** M2-31
+- **Aus:** M2-31 (Hinweis zur Security-Quelle; Laden bei Bedarf vergrößerte die Seiten).
+
 #### ☐ M2-32 – Organisationen in der UI verwalten · X · M 🔒
 - **Ziel:** Seite für Superadmins im Admin-Bereich ([ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md)):
   - **Liste** ohne Mandantendaten: Name, angelegt am, Zahl der Mitglieder und Nodes, ungefährer Speicherbedarf
@@ -2282,15 +2301,6 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   prüfbar; Rollen und Step-up; E2E mit axe.
 - **Abhängig von:** M2-32
 - **Später:** Loki-Daten löscht E3.2/E3.8 mit, sobald es Loki gibt.
-
-#### ☐ M2-34 – Luft im JavaScript-Budget der Node-Seite · W · S
-- **Ziel:** Die Node-Seite liegt bei 199,3 KiB von 200 KiB (KONZEPT §17); jede weitere Zeile dort reißt das Budget.
-  Ursachen messen (welche Chunks lädt die Seite, was teilen sie mit der Login-Seite; z. B. die Deskriptoren aller
-  Protobuf-Dateien über den gemeinsamen API-Client, die Paraglide-Texte) und mindestens 10 KiB Luft schaffen, ohne
-  Funktionen zu streichen.
-- **Tests zuerst:** `budget.e2e.ts` mit einer Warnschwelle (z. B. 190 KiB) für die Node-Seite.
-- **Abhängig von:** M2-31
-- **Aus:** M2-31 (Hinweis zur Security-Quelle; Laden bei Bedarf vergrößerte die Seiten).
 
 #### ☐ M2-27 – E2E-Demo M2 · X · M
 - **Ziel:** Simulierter SSH-Brute-Force in einem Agent-Container (wiederholte Fehlanmeldungen gegen den eigenen sshd)

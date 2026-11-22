@@ -5,6 +5,11 @@ import { expect, test } from './fixtures';
 
 /** KONZEPT §17: the first load of a page needs less than 200 KiB of JavaScript (gzip). */
 const BUDGET = 200 * 1024;
+/**
+ * M2-34: the pages keep 10 KiB of headroom, so a new feature notices before the budget breaks;
+ * whatever opens on demand (popovers, dialogs, forms) loads on demand.
+ */
+const HEADROOM = 190 * 1024;
 
 async function firstLoadJs(page: Page, path: string): Promise<number> {
 	const sizes = new Map<string, number>();
@@ -29,6 +34,7 @@ test('the fleet page loads less than 200 KiB of JavaScript', async ({ page }) =>
 	const size = await firstLoadJs(page, '/fleet');
 	console.log(`fleet: ${(size / 1024).toFixed(1)} KiB gzip`);
 	expect(size).toBeLessThan(BUDGET);
+	expect(size, 'headroom of the fleet page (M2-34)').toBeLessThan(HEADROOM);
 });
 
 test('the node page with charts loads less than 200 KiB of JavaScript', async ({ page }) => {
@@ -43,4 +49,5 @@ test('the node page with charts loads less than 200 KiB of JavaScript', async ({
 	const size = await firstLoadJs(page, '/nodes/0193f5a0-0000-7000-8000-000000000001');
 	console.log(`node: ${(size / 1024).toFixed(1)} KiB gzip`);
 	expect(size).toBeLessThan(BUDGET);
+	expect(size, 'headroom of the node page (M2-34)').toBeLessThan(HEADROOM);
 });

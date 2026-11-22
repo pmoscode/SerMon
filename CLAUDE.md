@@ -122,6 +122,9 @@ Web-Besonderheiten:
 - Imports über `#lib/...` (package.json-Subpath-Imports) brauchen die Endung `.js`, z. B. `#lib/i18n/locale.svelte.js`.
 - npm: Nur Releases, die mindestens 3 Tage alt sind, werden installiert. Schlägt `pnpm add` mit `NO_MATURE_MATCHING_VERSION`
   fehl, eine ältere Version wählen statt die Regel zu lockern.
+- JavaScript-Budget (KONZEPT §17): unter 200 KiB pro Seite, Flotte und Node-Seite mit 10 KiB Luft (`budget.e2e.ts`).
+  Was erst beim Öffnen gebraucht wird (Popover wie `HelpTip`, Formulare), mit `{#await import(…)}` bzw. `import()` bei
+  Bedarf laden.
 - shadcn-svelte-Komponenten mit `pnpm dlx shadcn-svelte@1.8.1 add <name> --yes --no-deps-install` hinzufügen und
   danach die Abhängigkeiten exakt gepinnt per `pnpm add` installieren.
 

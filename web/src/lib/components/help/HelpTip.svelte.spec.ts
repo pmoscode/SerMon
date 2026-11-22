@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { helpState } from '#lib/stores/help.svelte.js';
@@ -26,6 +26,24 @@ describe('HelpTip and HelpPanel', () => {
 
 		await panel.getByRole('button', { name: 'Close help' }).click();
 		expect(helpState.topic).toBeUndefined();
+	});
+
+	// M2-34: the popover loads on the first opening; the button toggles it, Escape closes it and
+	// the focus goes back to the button.
+	it('opens on demand, toggles and returns the focus', async () => {
+		render(HelpTip, { topic: 'pages/fleet' });
+		const button = page.getByRole('button', { name: 'Help: Fleet' });
+		await expect.element(button).toHaveAttribute('aria-expanded', 'false');
+		await button.click();
+		await expect.element(page.getByText(/^The overview of all servers/)).toBeVisible();
+		await expect.element(button).toHaveAttribute('aria-expanded', 'true');
+		await button.click();
+		await expect.element(page.getByText(/^The overview of all servers/)).not.toBeInTheDocument();
+		await button.click();
+		await expect.element(page.getByText(/^The overview of all servers/)).toBeVisible();
+		await userEvent.keyboard('{Escape}');
+		await expect.element(page.getByText(/^The overview of all servers/)).not.toBeInTheDocument();
+		await expect.element(button).toHaveFocus();
 	});
 
 	it('follows the UI language', async () => {

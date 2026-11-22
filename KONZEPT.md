@@ -1073,8 +1073,9 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
       den ersten Node, Tour optional
 - **i18n:** DE und EN von Anfang an (Paraglide). Zahlen, Einheiten und Datumsformate nach Locale; Einheiten automatisch
   skaliert (KiB/MiB/GiB, bit/s vs. Byte/s umschaltbar).
-- **Performance:** Erstes Laden < 200 KB JS (gzip); Charts mit Downsampling im Client (uPlot), Virtualisierung für lange
-  Listen (Logs, Prozesse).
+- **Performance:** Erstes Laden < 200 KB JS (gzip), mit 10 KiB Luft für Flotte und Node-Seite (`budget.e2e.ts`); was
+  erst beim Öffnen gebraucht wird (Popover, Formulare, Dialoge), lädt bei Bedarf. Charts mit Downsampling im Client
+  (uPlot), Virtualisierung für lange Listen (Logs, Prozesse).
 - **Keine externen Ressourcen (D27):** Alle Bibliotheken, Schriften (über `@fontsource`-Pakete), Icons und Bilder kommen
   per npm ins Projekt. Sie werden beim Build gebündelt und vom SerMon-Server selbst ausgeliefert. Es gibt keine CDNs,
   keine Google Fonts und kein Analytics. Abgesichert wird das durch eine CSP ohne fremde Origins und einen E2E-Test,

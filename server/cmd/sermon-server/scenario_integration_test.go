@@ -318,7 +318,7 @@ func TestAgentBinary_ScenariosAgainstTheServer(t *testing.T) {
 	if err := os.WriteFile(config, []byte(toml), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	logs := &syncBuffer{}
 	simulate := exec.CommandContext(ctx, bin, "simulate", "--config", config, "--nodes", strconv.Itoa(nodes), "--seed", "42",
@@ -363,9 +363,11 @@ func TestAgentBinary_ScenariosAgainstTheServer(t *testing.T) {
 	waitUntil("the fleet correlation", 60*time.Second, func() bool {
 		return count("security.ssh.fleet_correlation", firing...) == nodes
 	})
-	// Then 90 s of silence: offline after 60 s without contact, back afterwards.
+	// Then 90 s of silence (30 s to 120 s after the start): offline after 60 s without contact,
+	// which can be seen from about 60 s on (the last contact is written at most every 30 s).
 	waitUntil("offline", 120*time.Second, func() bool { return count("system.node.offline", alert.StateCritical) == nodes })
-	waitUntil("the return", 60*time.Second, func() bool { return count("system.node.offline", alert.StateResolved, alert.StateOK) == nodes })
+	// Back at 120 s; the wait covers the rest of the silence plus reconnect and an engine round.
+	waitUntil("the return", 100*time.Second, func() bool { return count("system.node.offline", alert.StateResolved, alert.StateOK) == nodes })
 	if !strings.Contains(logs.String(), "virtual node goes silent") {
 		t.Errorf("the simulator did not log the silence:\n%s", logs.String())
 	}

@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 )
 
 // Message is a rendered notification, independent of the channel: each channel turns it into
@@ -210,8 +212,11 @@ func word(key string, l Lang) string {
 // oneLine keeps a value on its line: control characters (line breaks, tabs) become spaces.
 func oneLine(s string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		switch {
+		case unicode.IsControl(r):
 			return ' '
+		case textsafe.Invisible(r): // bidi overrides, zero width, line separators (M2-28)
+			return utf8.RuneError
 		}
 		return r
 	}, s)

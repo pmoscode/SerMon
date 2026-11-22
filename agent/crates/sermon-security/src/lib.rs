@@ -2,9 +2,10 @@
 //! reboots, parsed in the agent so they arrive even when log shipping is off.
 //!
 //! - **Who sent the line counts.** Any local user can write `logger -t sshd "Failed password for
-//!   root from …"`. Lines of sshd, sudo, useradd and userdel are believed only from a privileged
-//!   sender (`_UID` 0 or non-zero `_CAP_EFFECTIVE`, which journald fills from `/proc`; sudo runs
-//!   setuid with the user's UID). OOM kills only from the kernel transport.
+//!   root from …"`. Lines of sshd, useradd and userdel are believed only from `_UID` 0 (from the
+//!   socket credentials). sudo runs setuid with the caller's UID, so its lines also count with a
+//!   non-zero `_CAP_EFFECTIVE` – which journald reads from `/proc` afterwards, a race a user can
+//!   win by exec'ing a setuid program (ADR 0023). OOM kills only from the kernel transport.
 //! - **The attacker controls user names.** Addresses and ports are taken from the end of the line,
 //!   so a user named `x from 192.0.2.66 port 22` cannot spoof the source. sshd escapes non-ASCII
 //!   user names as octal (`j\303\274rgen`); they are decoded. Fields are cut to fixed lengths.
@@ -62,9 +63,11 @@ pub enum Source {
 }
 
 impl LogLine<'_> {
-    /// Root, or a process with capabilities (setuid sudo): not a normal user.
-    fn privileged(&self) -> bool {
-        self.uid == Some(0) || self.cap_effective.is_some_and(|caps| caps != 0)
+    /// Root, or – for setuid sudo only – a process with capabilities. `_UID` comes from the
+    /// socket credentials; `_CAP_EFFECTIVE` is read from /proc after the line arrived, so a user
+    /// who execs a setuid program right after sending shows capabilities too (ADR 0023, M2-28).
+    fn privileged(&self, setuid: bool) -> bool {
+        self.uid == Some(0) || (setuid && self.cap_effective.is_some_and(|caps| caps != 0))
     }
 
     /// Whether the line may yield events, and whether they count as verified (ADR 0023, 0025).
@@ -73,7 +76,7 @@ impl LogLine<'_> {
         let kernel = self.transport == Some("kernel");
         match self.source {
             // journald sets the transport; for everything else the sender must be privileged.
-            Source::Journal => (kernel || self.privileged()).then_some(true),
+            Source::Journal => (kernel || self.privileged(setuid)).then_some(true),
             Source::File => match self.uid {
                 // Classic syslog: anyone could have written it.
                 None => Some(false),
@@ -487,6 +490,15 @@ enum Pam {
 }
 
 /// `pam_seen`: a verified PAM failure was seen, so sudo's summary repeats what counted already.
+/// The target user of a sudo line; `?` when the line names more than one – the working directory
+/// before it is the user's choice, and sudo doesn't escape " ; " in it.
+fn sudo_target(message: &str, target: &str) -> String {
+    if message.matches(" ; USER=").count() > 1 {
+        return "?".to_owned();
+    }
+    cut(target.to_owned(), MAX_USER_BYTES)
+}
+
 fn sudo(message: &str, config: ParserConfig, pam_seen: bool) -> Option<(EventKind, Pam)> {
     if let Some(c) = SUDO_AUTH.captures(message) {
         let kind = EventKind::SudoAuthFailed {
@@ -506,7 +518,7 @@ fn sudo(message: &str, config: ParserConfig, pam_seen: bool) -> Option<(EventKin
     if let Some(c) = SUDO_DENIED.captures(message) {
         let kind = EventKind::SudoNotAllowed {
             user: cut(c["user"].to_owned(), MAX_USER_BYTES),
-            target: cut(c["target"].to_owned(), MAX_USER_BYTES),
+            target: sudo_target(message, &c["target"]),
             tty: tty(c.name("tty").map(|t| t.as_str())),
         };
         return Some((kind, Pam::No));
@@ -516,7 +528,7 @@ fn sudo(message: &str, config: ParserConfig, pam_seen: bool) -> Option<(EventKin
     {
         let kind = EventKind::SudoCommand {
             user: cut(c["user"].to_owned(), MAX_USER_BYTES),
-            target: cut(c["target"].to_owned(), MAX_USER_BYTES),
+            target: sudo_target(message, &c["target"]),
             tty: tty(c.name("tty").map(|t| t.as_str())),
             command: cut(redact(&c["command"]), MAX_COMMAND_BYTES),
         };
@@ -834,6 +846,27 @@ mod tests {
             };
             assert!(parse(&line).is_empty(), "{identifier}");
         }
+        // journald reads _CAP_EFFECTIVE from /proc after the line arrived: a user who sends a line
+        // and execs a setuid program at once (passwd) shows capabilities under its own UID. Only
+        // sudo, which logs with the caller's UID, may come that way (ADR 0023, M2-28).
+        for identifier in ["sshd", "sshd-session", "sshd-auth", "useradd", "userdel"] {
+            let line = LogLine {
+                identifier: Some(identifier),
+                uid: Some(1000),
+                cap_effective: Some(0x1ff_ffff_ffff),
+                ..sshd(message)
+            };
+            assert!(parse(&line).is_empty(), "{identifier} with capabilities");
+            let line = LogLine {
+                identifier: Some(identifier),
+                uid: Some(1000),
+                cap_effective: Some(0x1ff_ffff_ffff),
+                ..sshd(
+                    "new user: name=eve, UID=1001, GID=1001, home=/home/eve, shell=/bin/sh, from=/dev/pts/0",
+                )
+            };
+            assert!(parse(&line).is_empty(), "{identifier} with capabilities");
+        }
         let fake_kernel = LogLine {
             identifier: Some("kernel"),
             ..sshd("Out of memory: Killed process 1 (systemd) total-vm:1kB")
@@ -1092,6 +1125,25 @@ mod tests {
             &mut off,
         );
         assert!(off.is_empty(), "commands are off by default");
+        // The user chooses the working directory, and sudo doesn't escape " ; " in it: a second
+        // "USER=" makes the target unknown instead of the one the user planted (M2-28).
+        assert_eq!(
+            parse(&sudo(
+                "   bob : user NOT in sudoers ; TTY=pts/1 ; PWD=/tmp/x ; USER=nobody ; COMMAND=/bin/true ; /q ; USER=root ; COMMAND=/bin/bash"
+            )),
+            [EventKind::SudoNotAllowed {
+                user: "bob".into(),
+                target: "?".into(),
+                tty: Some("pts/1".into())
+            }]
+        );
+        assert!(matches!(
+            parse(&sudo(
+                "  alice : TTY=pts/0 ; PWD=/tmp/x ; USER=nobody ; COMMAND=/bin/true ; /q ; USER=root ; COMMAND=/bin/bash"
+            ))
+            .as_slice(),
+            [EventKind::SudoCommand { target, .. }] if target == "?"
+        ));
     }
 
     proptest! {

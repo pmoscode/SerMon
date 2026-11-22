@@ -191,7 +191,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// The alert page (M2-16); acknowledgements go to the channels through the router.
 		alertPage := alerts.NewService(alerts.Deps{
 			Store: alertStore, Nodes: postgres.NewFleetStore(db), Rules: routing.RulesOf(ruleSource), Users: users, Mutes: routingStore,
-			Sink: router, Policy: authz.NewPolicy(), Now: time.Now,
+			Sink: router, Policy: authz.NewPolicy(), Now: time.Now, Box: cfg.MasterKeys,
 		})
 		ruleEditor := rules.NewService(rules.Deps{
 			Defaults: defaultRules, Store: postgres.NewAlertRuleStore(db), Policy: authz.NewPolicy(), Now: time.Now,

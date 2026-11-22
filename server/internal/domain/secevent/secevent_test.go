@@ -77,12 +77,33 @@ func TestValidate(t *testing.T) {
 		"long command":     func(e *secevent.Event) { e.Details.Command = strings.Repeat("x", 1025) },
 		"long fingerprint": func(e *secevent.Event) { e.Details.KeyFingerprint = strings.Repeat("x", 129) },
 		"invalid utf-8":    func(e *secevent.Event) { e.User = "a\xff" },
+		// Every field within its bound, but quotes double in the stored JSON: the row would fail
+		// the database's CHECK and block the node's whole batch (M2-28).
+		"details too large": func(e *secevent.Event) {
+			e.Details.Command = strings.Repeat(`"`, 1024)
+			e.Details.Target = strings.Repeat(`"`, 128)
+			e.Details.Reason = strings.Repeat(`"`, 200)
+			for _, f := range []*string{&e.Details.Method, &e.Details.KeyType, &e.Details.KeyFingerprint, &e.Details.TTY, &e.Details.PreviousBootID, &e.Details.TokenID, &e.Details.PreviousIP} {
+				*f = strings.Repeat(`\`, 128)
+			}
+		},
 	} {
 		e := failed()
 		change(&e)
 		if err := e.Validate(); !errors.Is(err, secevent.ErrInvalid) {
 			t.Errorf("%s: Validate() = %v", name, err)
 		}
+	}
+}
+
+// Text from the host keeps no characters that reorder or hide what a reader sees (M2-28).
+func TestNormalized_ReplacesInvisibleCharacters(t *testing.T) {
+	e := failed()
+	e.User = "\u202etoor"
+	e.Details.Command = "ls\u200b -la"
+	e = e.Normalized()
+	if e.User != "\ufffdtoor" || e.Details.Command != "ls\ufffd -la" {
+		t.Errorf("user %q, command %q", e.User, e.Details.Command)
 	}
 }
 

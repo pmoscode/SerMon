@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
@@ -15,6 +14,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 )
 
 // Event rules (KONZEPT §12.2, M2-08) count security events. The engine runs on whichever server
@@ -379,7 +379,7 @@ func (r EventRule) fields(e secevent.Event, unverified bool) alert.Fields {
 func notifyValue(v string) string {
 	var b strings.Builder
 	for _, r := range v {
-		if unicode.IsControl(r) {
+		if textsafe.Invisible(r) { // control, bidi, zero width, separators (M2-28)
 			r = utf8.RuneError
 		}
 		if b.Len()+utf8.RuneLen(r) > MaxFieldBytes {

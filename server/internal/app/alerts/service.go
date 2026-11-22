@@ -6,6 +6,7 @@ package alerts
 import (
 	"cmp"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"slices"
@@ -21,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/secrets"
 )
 
 // ErrNotFiring means the alert does not fire (anymore) or is acknowledged already.
@@ -54,6 +56,9 @@ type Deps struct {
 	Sink   alerting.Sink
 	Policy authz.Policy
 	Now    func() time.Time
+	// Box seals the dimensions of event rules for callers who may not see security events
+	// (M2-28); without it they are hidden and can't be addressed.
+	Box *secrets.Box
 }
 
 // Service serves the alert page.
@@ -81,6 +86,55 @@ type Alert struct {
 type Entry struct {
 	alerting.Record
 	ByName string
+}
+
+// hiddenPrefix starts a sealed dimension: the address or user of an event rule, for a caller who
+// may not see the security events of the node's group (M2-28).
+const hiddenPrefix = "~"
+
+// Hidden reports whether a dimension is sealed.
+func Hidden(dimension string) bool { return strings.HasPrefix(dimension, hiddenPrefix) }
+
+func sealContext(org tenant.OrgID, key alert.Key) []byte {
+	return []byte("alert_dimension:" + org.String() + ":" + string(key.Rule) + ":" + key.Node.String())
+}
+
+// seal replaces the dimension by a sealed one, bound to organization, rule and node.
+func (s *Service) seal(org tenant.OrgID, key alert.Key) alert.Key {
+	if key.Dimension == "" {
+		return key
+	}
+	sealed := []byte{}
+	if s.d.Box != nil {
+		if out, err := s.d.Box.Seal([]byte(key.Dimension), sealContext(org, key)); err == nil {
+			sealed = out
+		}
+	}
+	key.Dimension = hiddenPrefix + base64.RawURLEncoding.EncodeToString(sealed)
+	return key
+}
+
+// unseal returns the key with its real dimension; a sealed one that doesn't open names nothing.
+func (s *Service) unseal(org tenant.OrgID, key alert.Key) (alert.Key, error) {
+	if !Hidden(key.Dimension) {
+		return key, nil
+	}
+	sealed, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(key.Dimension, hiddenPrefix))
+	if err != nil || s.d.Box == nil {
+		return alert.Key{}, access.ErrNotFound
+	}
+	plain, err := s.d.Box.Open(sealed, sealContext(org, key))
+	if err != nil {
+		return alert.Key{}, access.ErrNotFound
+	}
+	key.Dimension = string(plain)
+	return key, nil
+}
+
+// security reports whether acknowledging the rule's alerts needs a step-up: event rules (also an
+// organization's own), the security category and the built-in security rules.
+func security(rule alert.RuleID, info routing.RuleInfo) bool {
+	return info.Event || info.Labels["category"] == "security" || strings.HasPrefix(string(rule), "security.")
 }
 
 // view is what a caller may do where.
@@ -182,6 +236,9 @@ func (s *Service) List(ctx context.Context, c access.Caller) ([]Alert, error) {
 		}
 		if !v.events.AllowsGroup(node.Group) {
 			a.Fields = nil
+			if info.Event || !known {
+				a.Key = s.seal(c.Principal.Org, a.Key)
+			}
 		}
 		out = append(out, a)
 	}
@@ -228,6 +285,9 @@ func (s *Service) History(ctx context.Context, c access.Caller, key alert.Key) (
 	if err != nil {
 		return nil, err
 	}
+	if key, err = s.unseal(c.Principal.Org, key); err != nil {
+		return nil, err
+	}
 	node, ok := v.nodes[key.Node]
 	if !ok {
 		return nil, access.ErrNotFound
@@ -272,8 +332,15 @@ func (s *Service) Acknowledge(ctx context.Context, c access.Caller, key alert.Ke
 	if !v.ack.AllowsGroup(node.Group) {
 		return access.ErrForbidden
 	}
+	if key, err = s.unseal(c.Principal.Org, key); err != nil {
+		return err
+	}
+	rules, err := s.d.Rules.RuleInfos(ctx, c.Principal.Org)
+	if err != nil {
+		return fmt.Errorf("rules: %w", err)
+	}
 	now := s.d.Now()
-	if strings.HasPrefix(string(key.Rule), "security.") && now.Sub(c.StepUpAt) > access.StepUpMaxAge {
+	if security(key.Rule, rules[key.Rule]) && now.Sub(c.StepUpAt) > access.StepUpMaxAge {
 		return access.ErrStepUpRequired
 	}
 	org, err := orgScope(c.Principal.Org)

@@ -268,49 +268,49 @@ func TestSecurityEventStore_IsAppendOnlyAndPartitionsAreNotTouchable(t *testing.
 	}
 }
 
-// One year of retention (ADR 0018): whole months are dropped. The first month of the migration
-// (2026-10) stands in for an expired one.
+// One year of retention (ADR 0018): whole months are dropped, and never one of the last 365 days –
+// the database's clock bounds it, so a clock jumping ahead can't wipe the events (M2-28). A month
+// of 2025, created by the owner, stands in for an expired one.
 func TestSecurityEventStore_RetentionDropsOldPartitions(t *testing.T) {
-	first := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	if eventsNow.Before(first.AddDate(0, 1, 0)) {
-		t.Skip("needs a current month after the first partition")
-	}
 	f := newEventFixture(t)
 	ctx := context.Background()
-	// Put the month back as the migration made it, for the next test run in this process.
-	t.Cleanup(func() {
-		ownerExec(t, setup(t).db.OwnerDSN, `DO $$
-		BEGIN
-			IF to_regclass('public.security_events_202610') IS NULL THEN
-				GRANT CREATE ON SCHEMA public TO sermon_definer;
-				CREATE TABLE security_events_202610 PARTITION OF security_events
-					FOR VALUES FROM ('2026-10-01 00:00+00') TO ('2026-11-01 00:00+00');
-				ALTER TABLE security_events_202610 ENABLE ROW LEVEL SECURITY;
-				ALTER TABLE security_events_202610 FORCE ROW LEVEL SECURITY;
-				ALTER TABLE security_events_202610 OWNER TO sermon_definer;
-				REVOKE CREATE ON SCHEMA public FROM sermon_definer;
-			END IF;
-		END $$`)
-	})
-	old := first.Add(14 * 24 * time.Hour)
-	events := []secevent.Event{failedLogin(f.node, old, "old", "192.0.2.1"), failedLogin(f.node, eventsNow, "new", "192.0.2.2")}
-	if _, err := f.store.Write(ctx, tenant.OrgID(f.org), f.node, []secevents.Batch{{Seq: 1, Events: events}}); err != nil {
-		t.Fatal(err)
+	owner := setup(t).db.OwnerDSN
+	ownerExec(t, owner, `DO $$
+	BEGIN
+		IF to_regclass('public.security_events_202501') IS NULL THEN
+			GRANT CREATE ON SCHEMA public TO sermon_definer;
+			CREATE TABLE security_events_202501 PARTITION OF security_events
+				FOR VALUES FROM ('2025-01-01 00:00+00') TO ('2025-02-01 00:00+00');
+			ALTER TABLE security_events_202501 ENABLE ROW LEVEL SECURITY;
+			ALTER TABLE security_events_202501 FORCE ROW LEVEL SECURITY;
+			ALTER TABLE security_events_202501 OWNER TO sermon_definer;
+			REVOKE CREATE ON SCHEMA public FROM sermon_definer;
+		END IF;
+	END $$`)
+	t.Cleanup(func() { ownerExec(t, owner, "DROP TABLE IF EXISTS security_events_202501") })
+	exists := func(name string) bool {
+		var found bool
+		ownerQueryRowPurge(t, owner, "SELECT to_regclass('public."+name+"') IS NOT NULL", &found)
+		return found
 	}
-	if dropped, err := f.store.Expire(ctx, first.AddDate(0, 1, 0).Add(-time.Second)); err != nil || dropped != 0 {
+	old := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	if dropped, err := f.store.Expire(ctx, time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)); err != nil || dropped != 0 {
 		t.Fatalf("Expire() before the end of the month = %d, %v; whole months only", dropped, err)
 	}
-	dropped, err := f.store.Expire(ctx, first.AddDate(0, 1, 0))
-	if err != nil || dropped != 1 {
-		t.Fatalf("Expire() = %d, %v; want the first month", dropped, err)
+	// Far in the future, as after a clock jump: only the old month goes.
+	dropped, err := f.store.Expire(ctx, time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil || dropped != 1 || exists("security_events_202501") {
+		t.Fatalf("Expire() = %d, %v; want the month of 2025 only", dropped, err)
 	}
-	got := f.list(t, scopeFor(t, f.org), secevents.Filter{From: first, To: eventsNow.Add(time.Hour)})
-	if len(got) != 1 || got[0].User != "new" {
-		t.Errorf("after the retention: %+v, want only the new event", got)
+	for _, month := range []string{"security_events_202610", "security_events_" + eventsNow.UTC().Format("200601")} {
+		if !exists(month) {
+			t.Errorf("%s was dropped although it is within the last year", month)
+		}
 	}
 	// Writing into the dropped month fails instead of landing somewhere else; ingest keeps
 	// event times within a week (secevents, ingest.Config.EventMaxAge).
-	if _, err := f.store.Write(ctx, tenant.OrgID(f.org), f.node, []secevents.Batch{{Seq: 2, Events: events[:1]}}); err == nil {
+	events := []secevent.Event{failedLogin(f.node, old, "old", "192.0.2.1")}
+	if _, err := f.store.Write(ctx, tenant.OrgID(f.org), f.node, []secevents.Batch{{Seq: 1, Events: events}}); err == nil {
 		t.Error("an event of a dropped month was stored")
 	}
 }

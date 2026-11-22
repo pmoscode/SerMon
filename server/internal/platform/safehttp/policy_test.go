@@ -122,6 +122,14 @@ func TestNewPolicy_RejectsDangerousAllowlists(t *testing.T) {
 		{"100.64.0.0/10"},
 		{"192.0.0.0/24"},
 		{"::ffff:0:0/96"},
+		// Ranges that embed an IPv4 address would open its IPv4 form – the metadata service
+		// 169.254.169.254 as 64:ff9b::a9fe:a9fe, loopback as ::7f00:1 (M2-28).
+		{"64:ff9b::/96"},
+		{"64:ff9b::a9fe:a9fe/128"},
+		{"64:ff9b:1::/48"},
+		{"::/96"},
+		{"2002::/16"},
+		{"2001::/32"},
 	} {
 		if _, err := safehttp.NewPolicy(prefixes(t, list...)); err == nil {
 			t.Errorf("allowlist %v accepted", list)
@@ -130,8 +138,25 @@ func TestNewPolicy_RejectsDangerousAllowlists(t *testing.T) {
 	if _, err := safehttp.NewPolicy(prefixes(t, "0.0.0.0/0")); err == nil || !strings.Contains(err.Error(), "every address") {
 		t.Errorf("0.0.0.0/0: %v, want it named as opening everything", err)
 	}
-	if _, err := safehttp.NewPolicy(prefixes(t, "127.0.0.1/32", "10.0.0.0/8", "fd12::/16")); err != nil {
+	if _, err := safehttp.NewPolicy(prefixes(t, "127.0.0.1/32", "::1/128", "10.0.0.0/8", "fd12::/16")); err != nil {
 		t.Errorf("usual allowlist rejected: %v", err)
+	}
+}
+
+// An allowlisted IPv4 network is reached through NAT64 as well; other embedded addresses are
+// still checked as IPv4.
+func TestPolicy_NAT64UsesTheIPv4Form(t *testing.T) {
+	p, err := safehttp.NewPolicy(prefixes(t, "10.0.0.0/8"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Check(netip.MustParseAddr("64:ff9b::a00:1")); err != nil {
+		t.Errorf("10.0.0.1 through NAT64: %v", err)
+	}
+	for _, a := range []string{"64:ff9b::a9fe:a9fe", "64:ff9b::7f00:1"} {
+		if err := p.Check(netip.MustParseAddr(a)); !errors.Is(err, safehttp.ErrBlocked) {
+			t.Errorf("%s: %v, want blocked", a, err)
+		}
 	}
 }
 

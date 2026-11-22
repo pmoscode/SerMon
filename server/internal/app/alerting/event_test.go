@@ -498,14 +498,14 @@ func TestEngine_EventReadsAreCachedPerRoundAndTruncationsCounted(t *testing.T) {
 // control characters and bounded.
 func TestEvent_FieldsAreSanitized(t *testing.T) {
 	f := &fakeEvents{}
-	e := ev(secevent.SSHLoginFailed, web, 0, "192.0.2.7", "root\r\nX-Injected: 1\x1b[31m")
+	e := ev(secevent.SSHLoginFailed, web, 0, "192.0.2.7", "root\r\nX-Injected: 1\x1b[31m\u202e")
 	e.Details.Method = strings.Repeat("ä", 200)
 	f.add(orgA, e)
 	rule := bruteforce()
 	rule.Warning, rule.Critical = 1, 0
 	rule.NotifyFields = []string{"user", "method"}
 	o := evaluateEvents(t, rule, eventEnv(f, orgA, webNode))[web.String()+"|"+ipDim("192.0.2.7")]
-	if got := o.Fields["user"]; got != "root��X-Injected: 1�[31m" {
+	if got := o.Fields["user"]; got != "root��X-Injected: 1�[31m�" {
 		t.Errorf("user = %q, want the control characters replaced", got)
 	}
 	if got := o.Fields["method"]; len(got) > alerting.MaxFieldBytes || !strings.HasPrefix(got, "ää") || !utf8.ValidString(got) {

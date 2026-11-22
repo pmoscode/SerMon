@@ -271,6 +271,7 @@ fmt-server:
 lint-server:
     golangci-lint fmt --diff ./...
     golangci-lint run ./...
+    go mod tidy -diff
 
 # Run the server tests with race detector and coverage
 [working-directory: 'server']

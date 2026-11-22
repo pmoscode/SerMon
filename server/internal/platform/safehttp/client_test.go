@@ -211,7 +211,8 @@ func TestClient_RedirectsAreCheckedAgain(t *testing.T) {
 		if err == nil {
 			resp.Body.Close()
 		}
-		if !errors.Is(err, safehttp.ErrBlocked) {
+		// Addresses are blocked as such; a name is refused as another host before it is resolved.
+		if !errors.Is(err, safehttp.ErrBlocked) && !errors.Is(err, safehttp.ErrRedirectHost) {
 			t.Errorf("redirect to %s = %v, want blocked", to, err)
 		}
 	}
@@ -227,6 +228,36 @@ func TestClient_RedirectsAreCheckedAgain(t *testing.T) {
 	target = "https://example.com/final"
 	if got := ok(t, s.client, "https://example.com/start"); got != "hello" {
 		t.Errorf("allowed redirect: %q", got)
+	}
+}
+
+// A redirect to another host would carry the notifier's own headers along (Go drops only
+// Authorization and cookies) – a Gotify key, for instance (M2-28). Only the same host follows.
+func TestClient_RedirectsStayOnTheHost(t *testing.T) {
+	var target string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/final" {
+			hello(w, r)
+			return
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+	}))
+	defer srv.Close()
+	s := newClient(t, safehttp.Options{}, srv)
+	s.net.name("example.com", "192.0.2.10")
+	s.net.name("other.example", "192.0.2.10")
+	s.net.route("192.0.2.10", srv)
+	target = "https://other.example/final"
+	resp, err := get(t, s.client, "https://example.com/start")
+	if err == nil {
+		resp.Body.Close()
+	}
+	if !errors.Is(err, safehttp.ErrRedirectHost) {
+		t.Errorf("redirect to another host = %v, want refused", err)
+	}
+	target = "https://example.com/final"
+	if got := ok(t, s.client, "https://example.com/start"); got != "hello" {
+		t.Errorf("redirect on the same host: %q", got)
 	}
 }
 

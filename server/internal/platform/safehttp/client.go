@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -20,6 +21,8 @@ var (
 	ErrInvalidURL       = errors.New("invalid target URL")
 	ErrInsecureScheme   = errors.New("plain http only to allowlisted targets")
 	ErrTooManyRedirects = errors.New("too many redirects")
+	// ErrRedirectHost: redirects stay on the host, so the caller's headers (keys) don't travel.
+	ErrRedirectHost     = errors.New("redirect to another host")
 	ErrResponseTooLarge = errors.New("response too large")
 )
 
@@ -188,6 +191,9 @@ func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 	}
 	if _, err := c.policy.checkURL(req.URL); err != nil {
 		return err
+	}
+	if !strings.EqualFold(req.URL.Host, via[0].URL.Host) {
+		return ErrRedirectHost
 	}
 	if req.URL.Scheme == "http" && via[len(via)-1].URL.Scheme == "https" {
 		return ErrInsecureScheme

@@ -4,6 +4,8 @@
 package secevent
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -12,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 )
 
 // ErrInvalid means an event or a filter is malformed.
@@ -118,15 +121,30 @@ type Event struct {
 
 var hostName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,62})(\.[a-z0-9]([a-z0-9-]{0,62}))*$`)
 
-// Normalized returns the event with IPv4-mapped addresses as IPv4.
+// Normalized returns the event with IPv4-mapped addresses as IPv4 and the text from the host
+// without characters that reorder or hide what a reader sees (textsafe, M2-28).
 func (e Event) Normalized() Event {
 	if e.Remote != nil {
 		r := *e.Remote
 		r.IP = r.IP.Unmap()
 		e.Remote = &r
 	}
+	e.User = textsafe.Visible(e.User)
+	d := &e.Details
+	for _, f := range []*string{
+		&d.Method, &d.KeyType, &d.KeyFingerprint, &d.TTY, &d.Target, &d.Command, &d.Process,
+		&d.PreviousBootID, &d.TokenID, &d.Reason, &d.PreviousIP,
+	} {
+		*f = textsafe.Visible(*f)
+	}
 	return e
 }
+
+// MaxDetailsBytes is the database's bound on the stored details (jsonb as text, CHECK in
+// migration 00022); the JSON is checked with room for the spaces jsonb adds after ':' and ','.
+const MaxDetailsBytes = 4096
+
+const jsonbSpacing = 64
 
 // Validate checks kind, bounds and addresses.
 func (e Event) Validate() error {
@@ -161,6 +179,9 @@ func (e Event) Validate() error {
 			return fmt.Errorf("%w: %s longer than %d bytes or not UTF-8", ErrInvalid, f.name, f.max)
 		}
 	}
+	if n, err := detailsSize(d); err != nil || n+jsonbSpacing > MaxDetailsBytes {
+		return fmt.Errorf("%w: details larger than %d bytes", ErrInvalid, MaxDetailsBytes)
+	}
 	if r := e.Remote; r != nil {
 		switch {
 		case r.IP.IsValid() && r.Host != "":
@@ -172,4 +193,16 @@ func (e Event) Validate() error {
 		}
 	}
 	return nil
+}
+
+// detailsSize is the length of the details as JSON without HTML escaping – close to what the
+// database stores, where quotes, backslashes and control characters are escaped the same way.
+func detailsSize(d Details) (int, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(d); err != nil {
+		return 0, fmt.Errorf("encode details: %w", err)
+	}
+	return b.Len(), nil
 }

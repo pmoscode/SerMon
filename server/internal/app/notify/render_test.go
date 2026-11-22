@@ -157,8 +157,13 @@ func TestRender_FormatsValuesByUnit(t *testing.T) {
 func TestRender_KeepsUntrustedValuesOnTheirLine(t *testing.T) {
 	n := bruteForce()
 	n.Fields["user"] = "root\nRegel: gefälscht"
-	n.Hostname = "web-01\r\nX: y"
+	n.Hostname = "web-01\r\nX: y\u202e10-bew"
+	n.Fields["ip"] = "192.0.2.7\u2028Adresse: 198.51.100.1"
 	m := notify.Render(n, notify.German, base)
+	// Separators and bidi overrides (Cf, Zl, Zp) would forge lines or reorder text (M2-28).
+	if strings.ContainsAny(m.PlainText(), "\u202e\u2028") {
+		t.Errorf("invisible characters reach the channel:\n%q", m.PlainText())
+	}
 	for _, l := range m.Lines {
 		if strings.ContainsAny(l.Value, "\r\n") {
 			t.Errorf("line %q: %q spans lines", l.Label, l.Value)

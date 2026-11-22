@@ -11,7 +11,7 @@ use crate::regex;
 
 static KEY_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     regex(
-        r"(?i)(\b(?:password|passwd|pwd|pass|secret|token|api[-_]?key|access[-_]?key|private[-_]?key)\b\s*[=:]\s*)(?:'[^']*'|\x22[^\x22]*\x22|\S+)",
+        r"(?i)(\b(?:[a-z0-9]+_)*(?:password|passwd|pwd|pass|secret|token|api[-_]?key|access[-_]?key|private[-_]?key)\b\s*[=:]\s*)(?:'[^']*'|\x22[^\x22]*\x22|\S+)",
     )
 });
 static FLAG: LazyLock<Regex> = LazyLock::new(|| {
@@ -65,6 +65,12 @@ mod tests {
             ),
             ("export AWS=AKIAIOSFODNN7EXAMPLE", "export AWS=***"),
             ("api_key: xyz", "api_key: ***"),
+            // Names with a prefix, as sudo logs variables of its command line (M2-28).
+            (
+                "ENV=SERMON_ENROLLMENT_TOKEN=sme_abc123 ; COMMAND=/usr/bin/sermon-agent enroll",
+                "ENV=SERMON_ENROLLMENT_TOKEN=*** ; COMMAND=/usr/bin/sermon-agent enroll",
+            ),
+            ("DB_PASSWORD=s3cret ./run", "DB_PASSWORD=*** ./run"),
             ("/usr/bin/apt-get upgrade", "/usr/bin/apt-get upgrade"),
             ("passwd alice", "passwd alice"),
         ] {

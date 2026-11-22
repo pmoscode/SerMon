@@ -2379,6 +2379,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Abhängig von:** M2-08, M2-11, M2-12, M2-16
 
 #### ☐ M2-35 – Kanäle gegen die echten Dienste prüfen · X · S
+> **Offen, blockiert M2 nicht** (Product Owner, 2026-11-22): Es gibt noch keine Konten und Server bei diesen Diensten.
+> Bis jemand real testet, sind die Kanäle nur gegen Test-Server geprüft (README sagt das ebenso).
 - **Ziel:** Die Kanäle Slack, Teams, Discord, Mattermost, Telegram, Gotify und Pushover sind nur gegen Test-Server
   geprüft (ntfy auch gegen den echten Server, M2-27 gegen einen Mock von Slack). Vor dem Abschluss von M2 je einmal
   „Test senden“ und einen echten Alert gegen den echten Dienst schicken und das Ergebnis hier vermerken (Darstellung,
@@ -2387,16 +2389,87 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Aus:** M2-11 bis M2-13, ausgelagert aus M2-27.
 - **Abhängig von:** M2-27
 
-#### ☐ M2-28 – Security-Review M2 · X · S 🔒
+#### ☑ M2-28 – Security-Review M2 · X · S 🔒
+> Erledigt: vier Teil-Reviews ohne Kontext der Umsetzung (Agent und Security-Events; ausgehende Verbindungen, Kanäle und
+> Zugangsdaten; Engine, Mandantentrennung und Organisationen; Web-UI und Lieferkette) und `just security` ohne Befund.
+> **Kein kritischer Befund offen.** Ergebnis im Threat Model §7. Behoben, jeweils mit Test und Gegenprobe:
+> - **Hoch:** Jeder lokale User konnte verifizierte Security-Events fälschen. journald liest `_CAP_EFFECTIVE` erst
+>   nachträglich aus `/proc`; ein `exec` von `passwd` direkt nach dem Senden reichte. Jetzt zählen sshd, useradd und
+>   userdel nur mit `_UID` 0, Capabilities nur noch bei sudo (ADR 0023, Nachtrag M2-28).
+> - **Mittel:**
+>   - `security_events_expire` löscht nie etwas der letzten 365 Tage, nach der Uhr der Datenbank (Migration 00037);
+>     vorher hätte ein Sprung der Server-Uhr die Events aller Orgs gelöscht.
+>   - Die Dimension von Event-Regeln (`ip=…`, `user=…`) kommt für Rollen ohne `view_security_events` versiegelt
+>     (`secrets.Box`); Verlauf und Quittieren lösen sie serverseitig auf.
+>   - Eine neue Adresse eines Kanals verlangt alle Zugangsdaten neu; `safehttp` folgt Redirects nur auf denselben Host
+>     (vorher gingen ntfy- und Gotify-Token an einen Server des Admins).
+> - **Niedrig:** Format-, Bidi- und Trennzeichen aus Host-Daten ersetzt (`domain/textsafe`: Event-Felder beim Ingest,
+>   Host-Fakten, Kanäle; Namen lehnen sie ab); Step-up beim Quittieren nach Regeltyp `event` und Kategorie statt
+>   Präfix; mehrdeutiges sudo-Ziel wird `?`; Event-Details passen in die Grenze der Datenbank (vorher blockierte ein
+>   Event den Ingest des Nodes); Allowlist ohne Bereiche mit eingebetteter IPv4 (NAT64 öffnete den Metadata-Dienst);
+>   Enrollment-Token in der Paket-Konfiguration über `--preserve-env`, Redaction mit Präfixen
+>   (`SERMON_ENROLLMENT_TOKEN=`); Passphrase in `package-agent.sh` nur per Name, `trap` auch bei Ctrl-C;
+>   `gopkg.in/yaml.v3` raus, `go mod tidy -diff` in `lint-server`.
+>
+> Offen als Aufgaben: M2-36 bis M2-39 (keine kritisch).
 - **Ziel:** Skill `sermon-security-review` über alle M2-Änderungen (Schwerpunkte: ausgehende Verbindungen, Parser für
   untrusted Logzeilen, Zugangsdaten der Kanäle, neue Tabellen mit RLS); Threat Model aktualisieren; Findings als
   Aufgaben.
 - **Abhängig von:** alle M2-Aufgaben
 
-**M2 fertig, wenn:** Der Demo-Test M2-27 ist grün, die Kanäle sind gegen die echten Dienste geprüft (M2-35), jede
-Standardregel hat einen auslösenden Test, die Parser sind mit Fixtures aller Zieldistros getestet und gefuzzt, das
-Ressourcen-Budget ist mit aktiver journald-Quelle eingehalten, und die Security-Review hat keine offenen kritischen
-Findings.
+#### ☐ M2-36 – Eigene Owner-Rolle, Migrationen ohne Superuser · X · S 🔒
+- **Ziel:** Befund M1 aus M2-28 (T73). In `deploy/compose` hat der Server-Container dauerhaft die Migrations-URL mit dem
+  Passwort des Datenbank-Superusers (`POSTGRES_USER`); ein kompromittierter Server-Prozess hätte damit vollen Zugriff
+  ohne RLS. Eine Rolle `sermon_owner` (NOSUPERUSER, Eigentümerin von Datenbank und Schema, Mitglied von
+  `sermon_definer`) für die Migrationen; die Migrations-URL nur im einmaligen Init- bzw. Migrationslauf, nicht im
+  Dauerbetrieb; das Superuser-Passwort nur im `postgres`-Container.
+- **Tests zuerst:** Migrationen als Owner ohne Superuser (Testcontainers), `check-compose --hardened` prüft, dass der
+  Server die Migrations-URL nicht hat; Upgrade bestehender Installationen in der Anleitung.
+- **Abhängig von:** M2-26
+
+#### ☐ M2-37 – Prioritäten für seltene Security-Events im Ingest · X · S 🔒
+- **Ziel:** Befund M5 aus M2-28 (T9). Der Token-Bucket pro Node gilt für alle Events zusammen: Eine Flut von
+  Fehlversuchen (rund 60 Events/s von außen) leert ihn, danach gehen `ssh.login.success`, `sudo.*` und `account.*`
+  verloren, und „Login nach Fehlversuchen“ schlägt nicht an. Eigene Buckets oder Vorrang für seltene Arten; verrauschte
+  Arten (`ssh.preauth.disconnect`, `invalid_user`) im Agent pro IP und Minute zusammenfassen; verworfene Events pro Art
+  zählen und als Self-Monitoring melden.
+- **Tests zuerst:** Flut plus erfolgreicher Login → der Login kommt an und der Alert feuert; Zähler pro Art.
+- **Abhängig von:** M2-07
+
+#### ☐ M2-38 – Fairness zwischen Orgs in Engine und Dispatcher · X · M 🔒
+- **Ziel:** Befunde M6 aus M2-28 (T80). Engine und Dispatcher arbeiten alle Orgs nacheinander ab, ohne Zeitbudget; die
+  Lease des Dispatchers (2 min) ist kürzer als ein Batch (20 × 15–30 s), und weder Engine noch Dispatcher prüfen beim
+  Speichern, ob sie die Lease noch halten (Doppelversand bei mehreren Instanzen). Eigene Regeln und Kanäle sind
+  unbegrenzt, E-Mail-Kanäle erreichen beliebige Empfänger (Spam über den SMTP des Betreibers).
+  - Zeitbudget pro Org (`context.WithTimeout`), Regeln erst nach der Lease laden, geparste Overrides cachen.
+  - Zustellungen parallel mit Obergrenze pro Org; Lease ≥ Batch × Timeout oder pro Zustellung verlängern; Fencing in
+    `Save` bzw. `FinishNotificationDelivery`.
+  - Kontingente für eigene Regeln und Kanäle (ADR 0029), Mail-Rate pro Org.
+- **Tests zuerst:** Eine Org mit totem Ziel verzögert die Zustellung einer anderen nicht; abgelaufene Lease speichert
+  nichts; Grenzen für Regeln, Kanäle und Mails.
+- **Abhängig von:** M2-32
+
+#### ☐ M2-39 – Übrige Befunde aus M2-28 · X · S
+- **Ziel:** die niedrigen Befunde, die nicht sofort behoben wurden:
+  - `org_purge` sperrt die Org-Zeile nicht (`FOR UPDATE`): Wettlauf mit „Sperre aufheben“; die Konten ohne weitere
+    Mitgliedschaft im `DELETE` erneut prüfen.
+  - Webhook: URL als Zugangsdatum behandeln (Migration der bestehenden Kanäle); Zustell-ID in Header und signiertem
+    Body.
+  - Fehlertexte von `safehttp` bei Namensauflösung generisch speichern (verraten interne Namen über „Test senden“).
+  - Dateiquelle: Nach einer Rotation die alte Datei bis EOF lesen, übersprungene Zeilen zählen.
+  - systemd-Template-Units (`sshd@…`) zusammenfassen und neue Unit-Namen pro Tag begrenzen (Serien-Limit).
+  - `check-compose --hardened`: Inhalt von `cap_add`, `pid`/`ipc`/`userns_mode: host`, `seccomp`/`apparmor:
+    unconfined`, `devices`, Mounts von `/run` und `*.sock`.
+  - Renovate für `pnpm` im Server-Dockerfile (corepack mit Hash), `NFPM_IMAGE` und die Basis-Images der E2E-Hosts.
+  - `URL.revokeObjectURL` erst nach dem Download (einzelne Browser brechen ab).
+  - `UnlockNode` hebt die Sperre auf, das widerrufene Zertifikat bleibt unbrauchbar: Verhalten und Text angleichen.
+  - Syslog-Dateiquelle: Host-Feld mit dem lokalen Hostnamen abgleichen.
+- **Abhängig von:** M2-28
+
+**M2 fertig, wenn:** Der Demo-Test M2-27 ist grün, jede Standardregel hat einen auslösenden Test, die Parser sind mit
+Fixtures aller Zieldistros getestet und gefuzzt, das Ressourcen-Budget ist mit aktiver journald-Quelle eingehalten,
+und die Security-Review hat keine offenen kritischen Findings. Die Prüfung der Kanäle gegen die echten Dienste (M2-35)
+bleibt offen, bis es Konten dafür gibt.
 
 ---
 

@@ -23,3 +23,12 @@ func TestFactsFrom_SecuritySource(t *testing.T) {
 		}
 	}
 }
+
+// A taken-over agent chooses its host name and OS strings; they are shown in the UI and in
+// notifications, so they keep nothing that reorders or hides text (M2-28).
+func TestFactsFrom_HostTextIsVisible(t *testing.T) {
+	f := factsFrom(&agentv1.HostFacts{Hostname: "web-01\u202e", OsId: "deb\u200bian", OsVersion: "12\u2028", KernelRelease: "6.1\u2066"})
+	if f.Hostname != "web-01\ufffd" || f.OSID != "deb\ufffdian" || f.OSVersion != "12\ufffd" || f.KernelRelease != "6.1\ufffd" {
+		t.Errorf("facts %+v", f)
+	}
+}

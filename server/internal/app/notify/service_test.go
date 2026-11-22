@@ -210,8 +210,16 @@ func TestUpdate_KeepsSecretsThatAreNotSent(t *testing.T) {
 	c := f.create(t)
 	name, lang, off := "Ops night", notify.English, false
 	f.clock.advance(time.Minute)
+	// A new address with the old secrets would hand them to whoever runs it (M2-28): the secrets
+	// have to be entered again.
+	if _, err := f.svc.Update(ctx, admin(orgA, f.clock.Now()), c.ID, notify.ChannelChange{
+		Settings: map[string]string{"url": "https://attacker.example/x", "priority": "high"},
+	}); !errors.Is(err, notify.ErrInvalidChannel) {
+		t.Errorf("new address without the secrets: %v", err)
+	}
 	got, err := f.svc.Update(ctx, admin(orgA, f.clock.Now()), c.ID, notify.ChannelChange{
 		Name: &name, Lang: &lang, Enabled: &off, Settings: map[string]string{"url": "https://hooks.example/night"},
+		Secrets: map[string]string{"token": secretToken},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -234,6 +242,15 @@ func TestUpdate_KeepsSecretsThatAreNotSent(t *testing.T) {
 	}
 	if s := secretsOf(); s["token"] != secretToken {
 		t.Errorf("secret lost: %v", s)
+	}
+	// Other settings keep the secrets.
+	if _, err := f.svc.Update(ctx, admin(orgA, f.clock.Now()), c.ID, notify.ChannelChange{
+		Settings: map[string]string{"url": "https://hooks.example/night", "priority": "low"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if s := secretsOf(); s["token"] != secretToken {
+		t.Errorf("secret lost with another setting: %v", s)
 	}
 	if _, err := f.svc.Update(ctx, admin(orgA, f.clock.Now()), c.ID, notify.ChannelChange{Secrets: map[string]string{"token": "tok-new"}}); err != nil {
 		t.Fatal(err)

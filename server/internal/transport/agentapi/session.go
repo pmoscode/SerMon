@@ -25,6 +25,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
 )
@@ -352,7 +353,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 	defer end(nil)
 	live := &liveSession{end: end, commands: make(chan struct{}, 1), ActiveSession: ActiveSession{
 		Org: id.Org, Node: id.Node, Serial: id.Serial, RemoteIP: id.RemoteIP,
-		AgentVersion: hello.GetAgentVersion(), Hostname: hello.GetHostFacts().GetHostname(), Since: time.Now(),
+		AgentVersion: hello.GetAgentVersion(), Hostname: textsafe.Visible(hello.GetHostFacts().GetHostname()), Since: time.Now(),
 	}}
 	switch result, other := h.sessions.claim(live); result {
 	case conflict:
@@ -582,7 +583,9 @@ func factsFrom(f *agentv1.HostFacts) ingest.HostFacts {
 		architecture = "arm64"
 	}
 	return ingest.HostFacts{
-		Hostname: f.GetHostname(), OSID: f.GetOsId(), OSVersion: f.GetOsVersion(), KernelRelease: f.GetKernelRelease(),
+		// Chosen by the host: shown in the UI and in notifications (textsafe, M2-28).
+		Hostname: textsafe.Visible(f.GetHostname()), OSID: textsafe.Visible(f.GetOsId()),
+		OSVersion: textsafe.Visible(f.GetOsVersion()), KernelRelease: textsafe.Visible(f.GetKernelRelease()),
 		Architecture: architecture, CPUCount: f.GetCpuCount(), MemoryBytes: f.GetMemoryBytes(),
 		SecuritySource: securitySources[f.GetSecuritySource()],
 	}

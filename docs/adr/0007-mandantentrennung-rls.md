@@ -160,7 +160,8 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
   - Eigentümer von Elterntabelle und Partitionen ist `sermon_definer`; das `CREATE` dafür gilt nur während der
     Migration.
   - Die Definer-Funktion `security_events_expire` **löscht** ganze Monate für die Retention. `DROP` braucht
-    Eigentümerschaft, kein `CREATE`.
+    Eigentümerschaft, kein `CREATE`. Seit M2-28 (Migration 00037) löscht sie nie etwas der letzten 365 Tage, nach
+    der Uhr der Datenbank: Ein Sprung der Server-Uhr hätte sonst die Events aller Orgs gelöscht.
   - `security_events_horizon` meldet das Ende der letzten Partition. Die Wartung des Servers warnt ein Jahr vorher;
     spätere Migrationen verlängern.
 - **RLS:** Die Elterntabelle hat RLS mit der üblichen Policy, und `sermon_app` darf dort nur `SELECT` und `INSERT`. Jede

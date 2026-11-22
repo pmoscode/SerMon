@@ -260,3 +260,14 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
 - **Export** liefert die geänderten und eigenen Regeln oder alle als ein YAML. Ob eine Regel abgeschaltet ist, steht
   nicht darin; das bleibt eine Einstellung der Org.
 - **UI:** Tab „Regeln“ auf der Alert-Seite statt eines weiteren Menüpunkts.
+
+## Nachtrag M2-28: Security-Review
+
+- **Neue Adresse, neue Zugangsdaten:** Ändert ein Update ein Feld vom Typ URL (Server von ntfy und Gotify, Webhook-URL),
+  müssen alle gespeicherten Zugangsdaten mitkommen. Sonst schickte „Test senden“ das Token an einen Server des Admins.
+- **Quittieren mit Step-up** hängt am Regeltyp `event` und der Kategorie `security` statt am Präfix `security.` – auch
+  eigene Security-Regeln einer Org.
+- **Dimension für Viewer ohne Logs:** Die Dimension von Event-Regeln nennt Adresse oder User. Ohne
+  `view_security_events` kommt sie mit der `secrets.Box` versiegelt (gebunden an Org, Regel und Node, Präfix `~`); Verlauf
+  und Quittieren lösen sie serverseitig auf.
+- **Text vom Host in den Kanälen** ohne Format- und Trennzeichen (`textsafe`); Namen lehnen sie ab.

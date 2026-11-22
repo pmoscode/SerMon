@@ -21,6 +21,8 @@ type RuleInfo struct {
 	Name   notify.Text
 	Labels map[string]string
 	Unit   notify.Unit
+	// Event marks event rules: their dimension names addresses or users from security events.
+	Event bool
 }
 
 // Rules returns the rules of an organization, disabled ones included (their alerts resolve).

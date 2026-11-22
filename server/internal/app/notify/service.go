@@ -203,6 +203,26 @@ func secretNames(values map[string]string) []string {
 	return slices.Sorted(maps.Keys(values))
 }
 
+// secretsFollow refuses a new address with the stored secrets: they would go to whoever runs the
+// new target, readable by the admin who changed it (M2-28). All secrets come anew with it.
+func (s *Service) secretsFollow(ch Channel, change ChannelChange) error {
+	n, ok := s.d.Registry.Get(ch.Type)
+	if !ok {
+		return fmt.Errorf("%w: %q", ErrUnknownType, ch.Type)
+	}
+	for _, f := range n.Fields() {
+		if f.Kind != FieldURL || f.Secret || ch.Settings[f.Name] == change.Settings[f.Name] {
+			continue
+		}
+		for _, name := range ch.SecretNames {
+			if _, sent := change.Secrets[name]; !sent {
+				return fmt.Errorf("%w: a new %s needs the secrets again (%s)", ErrInvalidChannel, f.Name, strings.Join(ch.SecretNames, ", "))
+			}
+		}
+	}
+	return nil
+}
+
 // Create adds a channel (step-up required).
 func (s *Service) Create(ctx context.Context, c access.Caller, nc NewChannel) (Channel, error) {
 	scope, err := s.authorize(c, true)
@@ -259,6 +279,9 @@ func (s *Service) Update(ctx context.Context, c access.Caller, id ChannelID, cha
 		ch.Enabled, changed = *change.Enabled, append(changed, "enabled")
 	}
 	if change.Settings != nil {
+		if err := s.secretsFollow(ch, change); err != nil {
+			return Channel{}, err
+		}
 		ch.Settings, changed = cloneMap(change.Settings), append(changed, "settings")
 	}
 	if len(change.Secrets) > 0 {

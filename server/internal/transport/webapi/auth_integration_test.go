@@ -198,7 +198,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			Sink: routing.NewRouter(routing.RouterDeps{
 				Store: postgres.NewRoutingStore(pg), Rules: noRules{}, Users: routing.UsersOf(postgres.NewAccessStore(pg)), Logger: slog.New(slog.DiscardHandler),
 			}),
-			Policy: authz.NewPolicy(), Now: time.Now,
+			Policy: authz.NewPolicy(), Now: time.Now, Box: masterKeys(t),
 		}), slog.New(slog.DiscardHandler)),
 		Silences: webapi.NewAlertSilenceHandler(routing.NewSilenceService(routing.SilenceDeps{
 			Store: postgres.NewRoutingStore(pg), Nodes: postgres.NewFleetStore(pg), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,

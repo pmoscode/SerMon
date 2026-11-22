@@ -37,6 +37,7 @@ func (s sourceRules) RuleInfos(ctx context.Context, org tenant.OrgID) (map[alert
 			Name:   notify.Text{De: meta.GetName().GetDe(), En: meta.GetName().GetEn()},
 			Labels: maps.Clone(meta.GetLabels()),
 			Unit:   unitOf(d.Definition),
+			Event:  d.Doc.GetSpec().GetType() == "event",
 		}
 	}
 	return out, nil

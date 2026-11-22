@@ -34,7 +34,9 @@ work="$out/.package-$arch"
 rm -rf "$work"
 mkdir -p "$work/root" "$work/keys"
 chmod 0700 "$work/keys"
+# The key copies go on every way out, interrupts included (dash runs EXIT traps only on exit).
 trap 'rm -rf "$work"' EXIT
+trap 'exit 130' INT TERM HUP
 
 cp "$binary" "$work/root/sermon-agent"
 # Packages install to /usr/bin; install.sh to /usr/local/bin.
@@ -47,10 +49,13 @@ cp "$root/packaging/nfpm/nfpm.yaml" "$root/packaging/nfpm/agent.toml" "$root"/pa
 cp "$SERMON_PKG_GPG_KEY" "$work/keys/gpg.asc"
 cp "$SERMON_PKG_APK_KEY" "$work/keys/apk.rsa"
 
+# The passphrase goes by name only: its value would show in docker's command line (ps).
+NFPM_PASSPHRASE="${SERMON_PKG_KEY_PASSPHRASE:-}"
+export NFPM_PASSPHRASE
 for packager in deb rpm apk; do
 	docker run --rm -q -u "$(id -u):$(id -g)" -v "$work:/work" -w /work \
 		-e PKG_ARCH="$arch" -e PKG_VERSION="$version" \
-		-e NFPM_PASSPHRASE="${SERMON_PKG_KEY_PASSPHRASE:-}" \
+		-e NFPM_PASSPHRASE \
 		"$NFPM_IMAGE" package --config /work/root/nfpm.yaml --packager "$packager" --target /work/ >/dev/null
 done
 mv "$work"/*.deb "$work"/*.rpm "$work"/*.apk "$out/"

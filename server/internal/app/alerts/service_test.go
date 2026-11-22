@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/secrets"
 )
 
 var (
@@ -35,6 +37,8 @@ var (
 	ssh    = alert.Key{Rule: "security.ssh.bruteforce", Node: db, Dimension: "ip=192.0.2.7\x1f"}
 	disk   = alert.Key{Rule: "system.filesystem.full_soon", Node: web, Dimension: "mountpoint=/var\x1f"}
 	mem    = alert.Key{Rule: "system.memory.usage_high", Node: web}
+	// An organization's own event rule: its id doesn't start with "security." (M2-28).
+	custom = alert.Key{Rule: "acme.ssh.failed", Node: db, Dimension: "user=alice\x1f"}
 )
 
 // store holds orgA's instances and history.
@@ -94,9 +98,10 @@ type rules struct{}
 
 func (rules) RuleInfos(context.Context, tenant.OrgID) (map[alert.RuleID]routing.RuleInfo, error) {
 	return map[alert.RuleID]routing.RuleInfo{
-		cpu.Rule:  {Name: notify.Text{De: "Hohe CPU-Auslastung", En: "High CPU usage"}, Labels: map[string]string{"category": "cpu"}, Unit: notify.UnitRatio},
-		ssh.Rule:  {Name: notify.Text{De: "SSH-Brute-Force", En: "SSH brute force"}, Labels: map[string]string{"category": "security"}, Unit: notify.UnitCount},
-		disk.Rule: {Name: notify.Text{De: "Dateisystem bald voll", En: "File system full soon"}, Unit: notify.UnitHours},
+		cpu.Rule:    {Name: notify.Text{De: "Hohe CPU-Auslastung", En: "High CPU usage"}, Labels: map[string]string{"category": "cpu"}, Unit: notify.UnitRatio},
+		disk.Rule:   {Name: notify.Text{De: "Dateisystem bald voll", En: "File system full soon"}, Unit: notify.UnitHours},
+		ssh.Rule:    {Name: notify.Text{De: "SSH-Brute-Force", En: "SSH brute force"}, Labels: map[string]string{"category": "security"}, Unit: notify.UnitCount, Event: true},
+		custom.Rule: {Name: notify.Text{De: "Eigene", En: "Own"}, Unit: notify.UnitCount, Event: true},
 	}, nil
 }
 
@@ -147,9 +152,21 @@ func newFixtureWith(policy authz.Policy, now time.Time, silences ...routing.Sile
 	}}, sink: &sink{}}
 	f.svc = alerts.NewService(alerts.Deps{
 		Store: f.store, Nodes: directory{}, Rules: rules{}, Users: users{}, Mutes: mutes{silences}, Sink: f.sink,
-		Policy: policy, Now: func() time.Time { return now },
+		Policy: policy, Now: func() time.Time { return now }, Box: testBox(),
 	})
 	return f
+}
+
+func testBox() *secrets.Box {
+	line, err := secrets.GenerateKeyLine(1)
+	if err != nil {
+		panic(err)
+	}
+	box, err := secrets.ParseKeys(line)
+	if err != nil {
+		panic(err)
+	}
+	return box
 }
 
 func caller(org tenant.OrgID, b authz.Binding, stepUp time.Time) access.Caller {
@@ -207,6 +224,27 @@ func TestList_ScopeAndFields(t *testing.T) {
 	closed := newFixtureWith(authz.NewPolicy(authz.WithViewerLogsDisabled(orgA)), t0)
 	if list, _ = closed.svc.List(context.Background(), caller(orgA, in(groupB, role.Viewer), time.Time{})); len(list) != 1 || list[0].Fields != nil {
 		t.Errorf("fields without view_security_events: %+v", list)
+	}
+	// The dimension of an event rule names the address or user as well (M2-28): it comes sealed,
+	// and the history still finds the alert by it.
+	hidden := list[0].Key
+	if !alerts.Hidden(hidden.Dimension) || strings.Contains(hidden.Dimension, "192.0.2.7") {
+		t.Errorf("dimension without view_security_events: %q", hidden.Dimension)
+	}
+	closed.store.history = []alerting.Record{{Key: ssh, Transition: alert.Transition{Kind: alert.StateChanged, To: alert.StateWarning, At: t0}}}
+	if h, err := closed.svc.History(context.Background(), caller(orgA, in(groupB, role.Viewer), time.Time{}), hidden); err != nil || len(h) != 1 {
+		t.Errorf("history by the sealed dimension: %+v, %v", h, err)
+	}
+	forged := hidden
+	forged.Node = web
+	if _, err := closed.svc.History(context.Background(), caller(orgA, all(role.Viewer), time.Time{}), forged); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("sealed dimension of another node: %v", err)
+	}
+	open, _ := f.svc.List(context.Background(), caller(orgA, all(role.Viewer), time.Time{}))
+	for _, a := range open {
+		if alerts.Hidden(a.Key.Dimension) {
+			t.Errorf("%s sealed for a viewer with logs allowed", a.Key.Rule)
+		}
 	}
 	if list, _ = f.svc.List(context.Background(), caller(orgB, all(role.Admin), time.Time{})); len(list) != 0 {
 		t.Errorf("another organization sees %+v", list)
@@ -269,6 +307,7 @@ func TestAcknowledge_RoutesTheChange(t *testing.T) {
 // acknowledging stops their reminders and escalation.
 func TestAcknowledge_RightsAndStepUp(t *testing.T) {
 	f := newFixture(t0)
+	f.store.instances = append(f.store.instances, alert.Instance{Key: custom, State: alert.StateWarning, Since: t0, FiredAt: t0, Value: 3})
 	ctx := context.Background()
 	for name, tc := range map[string]struct {
 		c   access.Caller
@@ -281,6 +320,8 @@ func TestAcknowledge_RightsAndStepUp(t *testing.T) {
 		"another organization":  {caller(orgB, all(role.Admin), t0), cpu, access.ErrNotFound},
 		"unknown alert":         {caller(orgA, all(role.Admin), t0), alert.Key{Rule: "system.cpu.steal_high", Node: web}, access.ErrNotFound},
 		"security with step":    {caller(orgA, in(groupB, role.Operator), t0), ssh, nil},
+		// Event rules of the organization stop reminders of security alerts as well (M2-28).
+		"own event rule without step": {caller(orgA, in(groupB, role.Operator), t0.Add(-time.Hour)), custom, access.ErrStepUpRequired},
 	} {
 		err := f.svc.Acknowledge(ctx, tc.c, tc.key)
 		if tc.err == nil && err != nil || tc.err != nil && !errors.Is(err, tc.err) {

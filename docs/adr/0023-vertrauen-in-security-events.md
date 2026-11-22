@@ -82,3 +82,22 @@ Dazu kommen Regeln gegen vom Angreifer gewählte Inhalte:
 Die Folgearbeit ist erledigt: [ADR 0025](0025-logdateien-ohne-journald.md). Ohne journald zählen Zeilen aus Logdateien,
 sind aber als „nicht verifiziert“ markiert; verifiziert nur mit der SerMon-Vorlage für rsyslog und UID 0. Die
 sudo-Zusammenfassung `N incorrect password attempts` zählt nur, solange keine verifizierte PAM-Zeile kam.
+
+## Nachtrag M2-28 (Security-Review)
+
+- **`_CAP_EFFECTIVE` ist kein Beleg für sshd, useradd und userdel.** journald nimmt `_UID` aus den Credentials des
+  Sockets (`SCM_CREDENTIALS`), liest `_CAP_EFFECTIVE` aber erst bei der Verarbeitung aus `/proc/<pid>`
+  (`systemd.journal-fields`: nicht vertrauenswürdig). Ein User ohne Rechte sendet eine gefälschte Zeile und führt sofort
+  ein setuid-Programm aus (`passwd`); dieselbe PID hat dann volle Capabilities. Die Entscheidung oben betrachtete nur
+  den umgekehrten Fall (Absender schon beendet).
+- **Neu:** sshd, sshd-session, sshd-auth, useradd und userdel zählen nur mit `_UID` 0. Die Capabilities gelten nur
+  noch für sudo, das setuid mit der UID des Users loggt.
+- **Folgen:**
+  - sudo-Zeilen bleiben über dieses Race fälschbar. Sie täuschen aber höchstens fehlgeschlagene oder abgelehnte
+    sudo-Versuche des Users selbst vor.
+  - sshd in Containern mit eigenen User-Namespaces (Root mit Capabilities, aber `_UID` ≠ 0 im Host-Journal) liefert
+    keine Events mehr.
+- **sudo-Ziel:** Das Arbeitsverzeichnis wählt der User, und sudo maskiert ` ; ` darin nicht. Nennt eine Zeile `USER=`
+  mehrfach, ist das Ziel `?` statt des eingeschleusten.
+- **Text vom Host:** Der Server ersetzt in Event-Feldern und Host-Fakten Steuer-, Format- (Bidi, Null-Breite) und
+  Trennzeichen durch U+FFFD (`textsafe`); sshd maskiert Nicht-ASCII-Zeichen, der Agent dekodiert sie.

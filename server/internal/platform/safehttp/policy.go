@@ -51,6 +51,20 @@ var blocked = []struct {
 // nat64 embeds an IPv4 address in its last 32 bits (RFC 6052); the IPv4 address is checked.
 var nat64 = netip.MustParsePrefix("64:ff9b::/96")
 
+// embedding are the IPv6 ranges that carry an IPv4 address (NAT64, IPv4-compatible, 6to4,
+// Teredo): allowlisting them would open IPv4 targets – the metadata service, loopback – in
+// disguise (M2-28). The allowlist names the IPv4 networks instead.
+var embedding = []netip.Prefix{
+	nat64,
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("::/96"),
+	netip.MustParsePrefix("2002::/16"),
+	netip.MustParsePrefix("2001::/32"),
+}
+
+// ipv6Loopback lies in ::/96 but embeds nothing: a local ntfy over ::1 may be allowlisted.
+var ipv6Loopback = netip.MustParsePrefix("::1/128")
+
 // metadata are the cloud metadata services, which hand out credentials: no allowlist covers them.
 var metadata = []netip.Addr{
 	netip.MustParseAddr("169.254.169.254"), // AWS, GCP, Azure, OpenStack, …
@@ -65,7 +79,8 @@ type Policy struct {
 }
 
 // NewPolicy returns the policy with the operator's allowlist of internal targets. An entry must
-// not open everything, be an IPv4-mapped prefix (use the IPv4 form) or cover a metadata service.
+// not open everything, be an IPv4-mapped prefix (use the IPv4 form), overlap a range embedding
+// IPv4 addresses or cover a metadata service.
 func NewPolicy(allow []netip.Prefix) (Policy, error) {
 	for _, p := range allow {
 		switch {
@@ -75,6 +90,11 @@ func NewPolicy(allow []netip.Prefix) (Policy, error) {
 			return Policy{}, fmt.Errorf("%w: %v allows every address", ErrInvalidAllowlist, p)
 		case p.Addr().Is4In6():
 			return Policy{}, fmt.Errorf("%w: write %v in its IPv4 form", ErrInvalidAllowlist, p)
+		}
+		for _, e := range embedding {
+			if p.Overlaps(e) && p != ipv6Loopback {
+				return Policy{}, fmt.Errorf("%w: %v overlaps %v, which embeds IPv4 addresses; allow the IPv4 networks", ErrInvalidAllowlist, p, e)
+			}
 		}
 		for _, m := range metadata {
 			if p.Contains(m) {
@@ -132,12 +152,13 @@ func (p Policy) Check(ip netip.Addr) error {
 		return fmt.Errorf("%w: no address", ErrBlocked)
 	}
 	ip = ip.Unmap().WithZone("")
-	if p.Allowlisted(ip) {
-		return nil
-	}
+	// The IPv4 form decides, before the allowlist (M2-28).
 	if nat64.Contains(ip) {
 		b := ip.As16()
 		return p.Check(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+	}
+	if p.Allowlisted(ip) {
+		return nil
 	}
 	for _, b := range blocked {
 		if b.prefix.Contains(ip) {

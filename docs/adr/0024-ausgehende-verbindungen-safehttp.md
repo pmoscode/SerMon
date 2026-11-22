@@ -59,3 +59,11 @@ Option 2 und ein eigener Client `internal/platform/safehttp` für alle Requests 
 - SMTP ist nicht betroffen: Den Mailserver legt der Betreiber fest (`SERMON_SMTP_HOST`), nicht die Org.
 - Folgearbeiten: Notifier nutzen `safehttp` (M2-10); `Policy.ValidateURL` prüft Ziele schon beim Speichern eines
   Kanals; Selbst-Metriken für gesperrte Requests mit dem Zustellprotokoll.
+
+## Nachtrag M2-28 (Security-Review)
+
+- **Eingebettete IPv4 in der Allowlist:** NAT64 (`64:ff9b::/96`, `64:ff9b:1::/48`), IPv4-kompatibel (`::/96`), 6to4 und
+  Teredo tragen eine IPv4-Adresse. Allowlist-Einträge, die diese Bereiche überlappen, lehnt `NewPolicy` ab (außer
+  `::1/128`); eine NAT64-Adresse wird vor der Allowlist ausgepackt. Vorher öffnete `64:ff9b::/96` den Metadata-Dienst.
+- **Redirects nur auf denselben Host:** Go entfernt bei einem Wechsel des Hosts nur `Authorization` und Cookies, eigene
+  Header wie `X-Gotify-Key` gingen mit.

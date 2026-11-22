@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
 	"google.golang.org/protobuf/proto"
-	"gopkg.in/yaml.v3"
 
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 )

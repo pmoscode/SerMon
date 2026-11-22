@@ -46,11 +46,19 @@ func keyView(k alert.Key) *webv1.AlertKey {
 	return &webv1.AlertKey{RuleId: string(k.Rule), NodeId: k.Node.String(), Dimension: k.Dimension}
 }
 
+// dimensionLabels splits a dimension for display; a sealed one (M2-28) shows nothing.
+func dimensionLabels(dimension string) map[string]string {
+	if alerts.Hidden(dimension) {
+		return nil
+	}
+	return notify.DimensionLabels(dimension)
+}
+
 func alertView(a alerts.Alert) *webv1.Alert {
 	v := &webv1.Alert{
 		Key: keyView(a.Key), State: apiState(a.State),
 		RuleName: &webv1.LocalizedText{De: a.RuleName.De, En: a.RuleName.En}, Labels: a.Labels,
-		DimensionLabels: notify.DimensionLabels(a.Key.Dimension), Hostname: a.Hostname,
+		DimensionLabels: dimensionLabels(a.Key.Dimension), Hostname: a.Hostname,
 		GroupId: uuid.UUID(a.Group).String(), GroupName: a.GroupName, Since: timestamppb.New(a.Since),
 		FireTime: optionalTimestamp(a.FiredAt), Value: a.Value, Unit: string(a.Unit), Flapping: a.Flapping,
 		AcknowledgedBy: a.AckByName, Muted: a.Muted, Fields: a.Fields, CanAcknowledge: a.CanAcknowledge,

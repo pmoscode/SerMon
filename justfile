@@ -127,17 +127,19 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
+    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
     actionlint
     zizmor --offline --persona=pedantic .github/workflows
 
-# Check compose files: images pinned by digest, no telemetry, dev ports on 127.0.0.1 only
+# Check compose files: images pinned by digest, no telemetry, dev and E2E ports on 127.0.0.1 only,
+# production containers hardened (M2-26); the E2E overlay is checked merged with the production file
 lint-compose:
     sh scripts/check-compose.sh --loopback-only deploy/dev/compose.yaml
-    sh scripts/check-compose.sh --loopback-only deploy/e2e/compose.yaml
+    COMPOSE_ENV_FILES=deploy/compose/env.example sh scripts/check-compose.sh --hardened deploy/compose/compose.yaml
+    SERMON_RELEASE_KEY= COMPOSE_ENV_FILES=deploy/e2e/e2e.env sh scripts/check-compose.sh --loopback-only deploy/compose/compose.yaml deploy/e2e/compose.yaml
 
 # Test helper scripts
 test-scripts:

@@ -1,0 +1,5 @@
+services:
+  app:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    security_opt: ["no-new-privileges:true"]

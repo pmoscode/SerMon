@@ -46,3 +46,8 @@ server/tmp/
 
 # pnpm content store (never inside the repository; see .devcontainer/setup.sh)
 .pnpm-store/
+
+# Production compose (M2-26): local settings, secrets and agent downloads
+deploy/compose/.env
+deploy/compose/secrets/
+deploy/compose/downloads/

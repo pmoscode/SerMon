@@ -16,7 +16,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       # Only files directly in /docker-entrypoint-initdb.d run (mounted one by one, so the
       # TimescaleDB image's own init scripts stay in place).
-      - ./initdb/010-app-role.sh:/docker-entrypoint-initdb.d/010-app-role.sh:ro
+      - ../compose/initdb/010-app-role.sh:/docker-entrypoint-initdb.d/010-app-role.sh:ro
     ports: ["127.0.0.1:${SERMON_DEV_PG_PORT:-55432}:5432"]
     healthcheck:
       # Over TCP: during the image's first initialization a temporary server answers on the socket

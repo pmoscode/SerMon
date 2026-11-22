@@ -35,6 +35,7 @@ KONZEPT §2 mit angepasst.
 | [0025](0025-logdateien-ohne-journald.md) | Logdateien als Quelle ohne journald: auswerten, aber markieren | accepted | D7, D17 |
 | [0026](0026-zustands-collectors.md) | Zustands-Collectors: adjtimex, systemctl und erholte Units | accepted | D9 |
 | [0027](0027-server-ereignisse-und-self-monitoring.md) | Ereignisse des Servers als Security-Events, Self-Monitoring für Superadmins | accepted | D14 |
+| [0028](0028-produktions-compose.md) | Produktions-Compose: Agent-Port direkt, Server-Image aus dem Quellcode | accepted | D23 |
 
 ## Entscheidungslog → ADR
 
@@ -62,7 +63,7 @@ KONZEPT §2 mit angepasst.
 | D20 DE + EN | 0021 |
 | D21 AGPL-3.0 | 0021 |
 | D22 Regeln in UI und YAML | 0019 |
-| D23 docker-compose | 0015 |
+| D23 docker-compose | 0015, 0028 |
 | D24 Reihenfolge | 0021 |
 | D25 Monorepo, GitHub Actions | 0021, 0006 |
 | D26 Connect-RPC/Protobuf | 0014, 0004 |

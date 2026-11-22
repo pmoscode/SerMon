@@ -1,6 +1,7 @@
 #!/bin/sh
-# End-to-end demo test (M1-33): builds server, UI and agent, signs the agent with a key of this run,
-# starts deploy/e2e/compose.yaml and runs web/tests/demo with Playwright against it:
+# End-to-end demo test (M1-33): builds the agent, signs it with a key of this run, starts the
+# production compose (deploy/compose, M2-26) with the overlay deploy/e2e/compose.yaml – the server
+# image is built from source like on a real installation – and runs web/tests/demo with Playwright:
 # setup → login → enrollment token → install.sh in agent containers with systemd and OpenRC → nodes
 # with metrics in < 2 min → signed packages on three more hosts (M2-21) → a user of another
 # organization sees nothing; meanwhile two hosts measure the agent against its resource budget
@@ -8,7 +9,7 @@
 #
 #   scripts/e2e-demo.sh          run and tear down
 #   KEEP=1 scripts/e2e-demo.sh   leave the environment running (https://localhost:18443)
-#   SKIP_BUILD=1 …               reuse the binaries of the last run (deploy/e2e/.build)
+#   SKIP_BUILD=1 …               reuse the agent, packages and secrets of the last run (deploy/e2e/.build)
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -16,7 +17,10 @@ e2e="$root/deploy/e2e"
 build="$e2e/.build"
 port=${SERMON_E2E_PORT:-18443}
 export SERMON_E2E_PORT="$port"
-compose() { docker compose -f "$e2e/compose.yaml" "$@"; }
+# The production file plus the overlay; e2e.env instead of a local deploy/compose/.env.
+export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$e2e/compose.yaml"
+export COMPOSE_ENV_FILES="$e2e/e2e.env"
+compose() { docker compose "$@"; }
 
 case $(docker info --format '{{.Architecture}}') in
 x86_64 | amd64) arch=amd64 target=x86_64-unknown-linux-musl ;;
@@ -24,7 +28,7 @@ aarch64 | arm64) arch=arm64 target=aarch64-unknown-linux-musl ;;
 *) echo "e2e-demo: unsupported Docker architecture" >&2 && exit 1 ;;
 esac
 
-if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -x "$build/sermon-server" ]; then
+if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ]; then
 	rm -rf "$build"
 	mkdir -p "$build/secrets" "$build/downloads"
 	# Release key and database passwords: only for the user who runs the demo. The containers see the
@@ -47,33 +51,21 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -x "$build/sermon-server" ]; then
 	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/sermon-agent.rsa.pub" "$build/packages/"
 	chmod 0644 "$build/packages/"*
 
-	echo "▸ building the web UI and the server (linux/$arch)"
-	(cd "$root" && just build-web >/dev/null)
-	(cd "$root/server" && CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
-		-ldflags "-s -w -X main.version=e2e -X main.releaseKey=$(cat "$build/release.pub")" \
-		-o "$build/sermon-server" ./cmd/sermon-server)
-
-	# Database passwords of this run (never committed).
-	for name in postgres_password postgres_app_password; do
-		openssl rand -hex 24 | tr -d '\n' >"$build/secrets/$name"
-	done
-	printf 'postgres://sermon_app:%s@postgres:5432/sermon?sslmode=disable' "$(cat "$build/secrets/postgres_app_password")" \
-		>"$build/secrets/database_url"
-	printf 'postgres://sermon:%s@postgres:5432/sermon?sslmode=disable' "$(cat "$build/secrets/postgres_password")" \
-		>"$build/secrets/database_migrate_url"
+	# Database passwords and URLs as on a real installation; Mailpit accepts any SMTP login.
 	openssl rand -hex 16 | tr -d '\n' >"$build/secrets/smtp_password"
+	"$root/deploy/compose/secrets.sh" "$build/secrets" >/dev/null
 	# Mailpit's certificate of this run; the server trusts exactly it (SERMON_SMTP_CA_FILE).
 	mkdir -p "$build/mailpit"
 	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=mailpit \
 		-addext subjectAltName=DNS:mailpit -keyout "$build/mailpit/mailpit.key" -out "$build/mailpit/mailpit.crt" 2>/dev/null
-	chmod 0644 "$build/secrets/"* "$build/mailpit/"* # read by the container users; the directories are private
+	chmod 0644 "$build/mailpit/"* # read by Mailpit and the server; the directory is private
 fi
 
 cleanup() {
 	status=$?
-	if [ "$status" -ne 0 ]; then compose logs --no-color server init >"$build/server.log" 2>&1 || true; fi
+	if [ "$status" -ne 0 ]; then compose logs --no-color server >"$build/server.log" 2>&1 || true; fi
 	if [ "${KEEP:-}" = 1 ]; then
-		echo "▸ environment left running: https://localhost:$port (stop: docker compose -f deploy/e2e/compose.yaml down -v)"
+		echo "▸ environment left running: https://localhost:$port (stop: COMPOSE_FILE=$COMPOSE_FILE docker compose down -v)"
 	else
 		compose down -v --remove-orphans >/dev/null 2>&1 || true
 	fi
@@ -81,9 +73,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "▸ starting deploy/e2e/compose.yaml"
+# The release key of this run goes into the server image (build arg, ADR 0012).
+SERMON_RELEASE_KEY=$(cat "$build/release.pub")
+export SERMON_RELEASE_KEY
+
+echo "▸ building the server image from source (deploy/compose/server.Dockerfile)"
 compose down -v --remove-orphans >/dev/null 2>&1 || true
-compose up -d --build --quiet-pull
+compose build --quiet
+echo "▸ first installation: sermon-server init, then docker compose up"
+compose run --rm --quiet-pull server init --master-keys-file /var/lib/sermon/master_keys >/dev/null
+compose up -d --quiet-pull
 for _ in $(seq 1 90); do
 	curl -fsSk "https://localhost:$port/readyz" >/dev/null 2>&1 && break
 	sleep 1
@@ -92,5 +91,5 @@ curl -fsSk "https://localhost:$port/readyz" >/dev/null
 
 echo "▸ running the demo test"
 cd "$root/web"
-E2E_BASE_URL="https://localhost:$port" E2E_COMPOSE_FILE="$e2e/compose.yaml" \
+E2E_BASE_URL="https://localhost:$port" E2E_DIR="$e2e" \
 	pnpm exec playwright test --config playwright.demo.config.ts

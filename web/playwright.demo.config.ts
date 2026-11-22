@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * End-to-end demo against the real stack of deploy/e2e (M1-33): started by scripts/e2e-demo.sh,
- * which sets E2E_BASE_URL and E2E_COMPOSE_FILE. Runs serially: one installation, one story.
+ * which sets E2E_BASE_URL, E2E_DIR and COMPOSE_FILE. Runs serially: one installation, one story.
  */
 export default defineConfig({
 	testDir: 'tests/demo',

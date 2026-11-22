@@ -1,6 +1,15 @@
-# End-to-end environment (M1-33): server, database, TLS proxy and agent hosts with systemd.
-# Started by scripts/e2e-demo.sh (`just e2e-demo`), which builds the binaries and secrets in .build/.
-# Images are pinned by digest. Only Caddy is published, on 127.0.0.1.
+# End-to-end environment (M1-33, M2-26): an overlay on the production compose,
+#
+#   docker compose -f deploy/compose/compose.yaml -f deploy/e2e/compose.yaml
+#
+# so the demo runs against the real production file – its image built from source, hardening,
+# networks and the directly published agent port. The overlay adds Mailpit, Caddy's own CA instead
+# of ACME, the agent hosts with systemd and OpenRC, and publishes only on 127.0.0.1.
+# Started by scripts/e2e-demo.sh (`just e2e-demo`), which writes the secrets into .build/ and sets
+# COMPOSE_FILE and COMPOSE_ENV_FILES (e2e.env).
+#
+# Paths are relative to deploy/compose: docker compose resolves every file of a merge against the
+# directory of the first one.
 name: sermon-e2e
 
 x-agent-host: &agent-host
@@ -9,72 +18,28 @@ x-agent-host: &agent-host
   volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw"]
   tmpfs: [/run, /run/lock, /tmp]
   stop_signal: SIGRTMIN+3
-  networks: [e2e]
+  networks: [edge]
 
 services:
-  postgres:
-    image: timescale/timescaledb:2.32.0-pg17@sha256:6a6b7d7a346d7c6be03a310c240706f3bbc6d7adbdf3fbc07823570b34337f5e
-    environment:
-      POSTGRES_USER: sermon
-      POSTGRES_DB: sermon
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      TIMESCALEDB_TELEMETRY: "off"
-    secrets: [postgres_password, postgres_app_password]
-    volumes:
-      - ../dev/initdb/010-app-role.sh:/docker-entrypoint-initdb.d/010-app-role.sh:ro
-    networks: [e2e]
-    healthcheck:
-      # Over TCP: during the image's first initialization a temporary server answers on the socket
-      # only and restarts afterwards; a socket check would report it healthy too early.
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sermon -d sermon"]
-      interval: 2s
-      timeout: 3s
-      retries: 30
-
-  # First installation: master key file, migrations, agent CA (`sermon-server init`).
-  init:
-    build: { context: .build, dockerfile: ../server.Dockerfile }
-    command: ["init", "--master-keys-file", "/var/lib/sermon/master_keys"]
-    environment: &server-env
-      SERMON_DATABASE_URL_FILE: /run/secrets/database_url
-      SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
-      SERMON_MASTER_KEYS_FILE: /var/lib/sermon/master_keys
-      SERMON_LOG_FORMAT: json
-      # Production mode (the default): invitations only by mail, over STARTTLS to Mailpit with
-      # the certificate of this run.
-      SERMON_ALLOWED_ORIGINS: https://localhost:${SERMON_E2E_PORT:-18443},https://sermon.test
-      SERMON_SMTP_HOST: mailpit
-      SERMON_SMTP_PORT: "1025"
-      SERMON_SMTP_FROM: SerMon E2E <sermon@sermon.test>
-      SERMON_SMTP_USERNAME: sermon
-      SERMON_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
-      SERMON_SMTP_CA_FILE: /run/secrets/mailpit_ca
-    secrets: [database_url, database_migrate_url, smtp_password, mailpit_ca]
-    volumes: [server-state:/var/lib/sermon]
-    networks: [e2e]
-    depends_on:
-      postgres: { condition: service_healthy }
-
   server:
-    build: { context: .build, dockerfile: ../server.Dockerfile }
     environment:
-      <<: *server-env
-      SERMON_HTTP_ADDR: ":8080"
-      SERMON_AGENT_ADDR: ":8443"
+      # Mailed links point to the first origin, the one the browser of the test uses.
+      SERMON_ALLOWED_ORIGINS: https://localhost:${SERMON_E2E_PORT:-18443},https://sermon.test
+      # The agents reach the agent port inside the network as server:8443.
       SERMON_AGENT_HOSTNAMES: server
-      SERMON_TRUSTED_PROXIES: 172.30.77.0/24
-      SERMON_AGENT_DOWNLOADS_DIR: /srv/downloads
-    secrets: [database_url, database_migrate_url, smtp_password, mailpit_ca]
-    volumes:
-      - server-state:/var/lib/sermon
-      - ./.build/downloads:/srv/downloads:ro
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    networks: [e2e]
+      SERMON_SMTP_CA_FILE: /run/secrets/mailpit_ca
+    secrets: [mailpit_ca]
+    volumes: ["../e2e/.build/downloads:/srv/downloads:ro"]
+    ports: !reset []
     depends_on:
-      init: { condition: service_completed_successfully }
       mailpit: { condition: service_started }
+
+  caddy:
+    # tls internal: Caddy's own CA, like a self-hosted server without a public certificate.
+    volumes: ["../e2e/Caddyfile:/etc/caddy/Caddyfile:ro"]
+    ports: !override ["127.0.0.1:${SERMON_E2E_PORT:-18443}:443"]
+    networks:
+      edge: { aliases: [sermon.test] }
 
   # Mail server of the run: STARTTLS required, any login accepted; the test reads the invitation
   # mails through its API (published on 127.0.0.1 only).
@@ -87,83 +52,63 @@ services:
       MP_SMTP_REQUIRE_STARTTLS: "true"
       MP_SMTP_AUTH_ACCEPT_ANY: "true"
       MP_SMTP_DISABLE_RDNS: "true"
-    volumes: ["./.build/mailpit:/certs:ro"]
+    volumes: ["../e2e/.build/mailpit:/certs:ro"]
     ports: ["127.0.0.1:${SERMON_E2E_MAIL_PORT:-18025}:8025"]
-    networks: [e2e]
-
-  caddy:
-    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-    ports: ["127.0.0.1:${SERMON_E2E_PORT:-18443}:443"]
-    networks:
-      e2e:
-        aliases: [sermon.test]
-    depends_on: [server]
+    networks: [edge]
 
   agent-debian-12:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8" } }
     hostname: web-01
   agent-debian-13:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
     hostname: web-02
   agent-ubuntu-24-04:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289" } }
     hostname: db-01
   # The RHEL family and Fedora (M2-19): install.sh, systemd unit and collectors with dnf-based hosts.
   agent-rockylinux-9:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "rockylinux:9@sha256:03303863808e9cd79f0c58c833db3e5f9cde9f2abe16804a267b05dc54af86e4" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "rockylinux:9@sha256:03303863808e9cd79f0c58c833db3e5f9cde9f2abe16804a267b05dc54af86e4" } }
     hostname: app-01
   agent-almalinux-10:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "almalinux:10@sha256:ccf217024b3d5e268cc208d1edb384a1edee6359370cf6ea1ecbc42254e57375" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "almalinux:10@sha256:ccf217024b3d5e268cc208d1edb384a1edee6359370cf6ea1ecbc42254e57375" } }
     hostname: app-02
   agent-fedora-44:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "fedora:44@sha256:15da97ed9aa94dd3d92c3925eb89520f6c80e07ea7ee24cba848d1f8b6912b3e" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "fedora:44@sha256:15da97ed9aa94dd3d92c3925eb89520f6c80e07ea7ee24cba848d1f8b6912b3e" } }
     hostname: dev-01
   # Alpine with OpenRC and busybox syslogd, no journald (M2-20): the agent reads /var/log/messages.
   agent-alpine-3-22:
     <<: *agent-host
-    build: { context: ., dockerfile: agent-alpine.Dockerfile, args: { BASE: "alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f" } }
+    build: { context: ../e2e, dockerfile: agent-alpine.Dockerfile, args: { BASE: "alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f" } }
     hostname: edge-01
     stop_signal: SIGUSR2 # busybox init
   # Fresh hosts for the agent packages (M2-21): .deb, .rpm and .apk from .build/packages.
   pkg-debian-13:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
     hostname: pkg-01
-    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "./.build/packages:/packages:ro"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro"]
   pkg-rockylinux-9:
     <<: *agent-host
-    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "rockylinux:9@sha256:03303863808e9cd79f0c58c833db3e5f9cde9f2abe16804a267b05dc54af86e4" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "rockylinux:9@sha256:03303863808e9cd79f0c58c833db3e5f9cde9f2abe16804a267b05dc54af86e4" } }
     hostname: pkg-02
-    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "./.build/packages:/packages:ro"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro"]
   pkg-alpine-3-22:
     <<: *agent-host
-    build: { context: ., dockerfile: agent-alpine.Dockerfile, args: { BASE: "alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f" } }
+    build: { context: ../e2e, dockerfile: agent-alpine.Dockerfile, args: { BASE: "alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f" } }
     hostname: pkg-03
     stop_signal: SIGUSR2 # busybox init
-    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "./.build/packages:/packages:ro"]
-
-networks:
-  e2e:
-    ipam:
-      config: [{ subnet: 172.30.77.0/24 }]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro"]
 
 secrets: # written by scripts/e2e-demo.sh into .build/, never committed
-  postgres_password: { file: ./.build/secrets/postgres_password }
-  postgres_app_password: { file: ./.build/secrets/postgres_app_password }
-  database_url: { file: ./.build/secrets/database_url }
-  database_migrate_url: { file: ./.build/secrets/database_migrate_url }
-  smtp_password: { file: ./.build/secrets/smtp_password }
-  mailpit_ca: { file: ./.build/mailpit/mailpit.crt }
-
-volumes:
-  server-state:
-  caddy-data:
+  postgres_password: { file: ../e2e/.build/secrets/postgres_password }
+  postgres_app_password: { file: ../e2e/.build/secrets/postgres_app_password }
+  database_url: { file: ../e2e/.build/secrets/database_url }
+  database_migrate_url: { file: ../e2e/.build/secrets/database_migrate_url }
+  smtp_password: { file: ../e2e/.build/secrets/smtp_password }
+  mailpit_ca: { file: ../e2e/.build/mailpit/mailpit.crt }

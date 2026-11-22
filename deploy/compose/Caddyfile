@@ -1,0 +1,11 @@
+# TLS for the web UI with a certificate from Let's Encrypt (ACME, ports 80 and 443). The agent port
+# is not proxied: Docker publishes the server's mTLS port directly, so the server sees the real
+# addresses of the agents (ADR 0028).
+{
+	admin off
+	email {$SERMON_ACME_EMAIL}
+}
+
+{$SERMON_DOMAIN} {
+	reverse_proxy server:8080
+}

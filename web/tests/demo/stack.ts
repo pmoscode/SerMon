@@ -1,14 +1,26 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { appendFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join, resolve } from 'node:path';
 
-/** Access to the containers of deploy/e2e/compose.yaml (scripts/e2e-demo.sh). */
-const composeFile = process.env.E2E_COMPOSE_FILE ?? '../deploy/e2e/compose.yaml';
+/**
+ * Access to the containers of the production compose with the E2E overlay (scripts/e2e-demo.sh,
+ * M2-26). The script sets COMPOSE_FILE and COMPOSE_ENV_FILES; the defaults are for a run by hand
+ * from web/ against an environment left running with KEEP=1.
+ */
+const e2eDir = resolve(process.env.E2E_DIR ?? '../deploy/e2e');
+const composeEnv = {
+	...process.env,
+	COMPOSE_FILE:
+		process.env.COMPOSE_FILE ??
+		`${join(e2eDir, '..', 'compose', 'compose.yaml')}:${join(e2eDir, 'compose.yaml')}`,
+	COMPOSE_ENV_FILES: process.env.COMPOSE_ENV_FILES ?? join(e2eDir, 'e2e.env')
+};
 
 export function compose(args: string[], input?: string): string {
-	return execFileSync('docker', ['compose', '-f', composeFile, ...args], {
+	return execFileSync('docker', ['compose', ...args], {
 		encoding: 'utf8',
+		env: composeEnv,
 		input,
 		stdio: ['pipe', 'pipe', 'pipe'],
 		maxBuffer: 16 * 1024 * 1024
@@ -29,11 +41,11 @@ export function exec(
 	const names = Object.keys(env).flatMap((name) => ['-e', name]);
 	const res = spawnSync(
 		'docker',
-		['compose', '-f', composeFile, 'exec', '-T', ...names, service, 'sh', '-c', command],
+		['compose', 'exec', '-T', ...names, service, 'sh', '-c', command],
 		{
 			encoding: 'utf8',
 			input,
-			env: { ...process.env, ...env },
+			env: { ...composeEnv, ...env },
 			maxBuffer: 16 * 1024 * 1024
 		}
 	);
@@ -52,17 +64,9 @@ export function execAsync(
 	input?: string
 ): Promise<{ status: number | null; output: string }> {
 	return new Promise((resolve, reject) => {
-		const child = spawn('docker', [
-			'compose',
-			'-f',
-			composeFile,
-			'exec',
-			'-T',
-			service,
-			'sh',
-			'-c',
-			command
-		]);
+		const child = spawn('docker', ['compose', 'exec', '-T', service, 'sh', '-c', command], {
+			env: composeEnv
+		});
 		let output = '';
 		child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
 		child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
@@ -74,7 +78,7 @@ export function execAsync(
 
 /** A script of scripts/ in the repository, to feed to a host over stdin. */
 export function repoScript(name: string): string {
-	return readFileSync(join(dirname(composeFile), '..', '..', 'scripts', name), 'utf8');
+	return readFileSync(join(e2eDir, '..', '..', 'scripts', name), 'utf8');
 }
 
 /** The setup token the server logged on its last start (it replaces the one from `init`). */
@@ -100,7 +104,7 @@ export function caddyCA(): { root: string; intermediateFingerprint: string } {
  * returns the function that restores it: install.sh must refuse the modified file.
  */
 export function tamperDownload(): () => void {
-	const dir = join(dirname(composeFile), '.build', 'downloads');
+	const dir = join(e2eDir, '.build', 'downloads');
 	const binary = readdirSync(dir).find((f) => /^sermon-agent-linux-\w+$/.test(f));
 	if (!binary) throw new Error(`no agent binary in ${dir}`);
 	const path = join(dir, binary);

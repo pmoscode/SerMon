@@ -1,6 +1,6 @@
 # Threat Model v1
 
-- Stand: 2026-11-20 (nach dem Security-Review M1-35)
+- Stand: 2026-11-22 (nach M2-26)
 - Bezug: KONZEPT.md §18; IMPLEMENTIERUNGSPLAN M0-12, M1-35; Skill `sermon-security-review`
 - Pflege: Bei jeder Änderung an einer Vertrauensgrenze (Protokoll, Rechte, Helper-Operationen, Secrets, ausgehende
   Verbindungen) wird dieses Dokument im selben Commit angepasst. Das Security-Review M1-35 und jedes spätere Review
@@ -65,7 +65,7 @@ flowchart LR
 
   Browser -- "TB2: HTTPS, Session-Cookie,<br/>CSP, Origin-Prüfung" --> Caddy --> Server
   Agent -- "TB1a: HTTPS, Enrollment-Token<br/>(einmalig)" --> Caddy
-  Agent -- "TB1b: mTLS 1.3, Client-Zertifikat<br/>(Agent-Port, Passthrough)" --> Server
+  Agent -- "TB1b: mTLS 1.3, Client-Zertifikat<br/>(Agent-Port, direkt veröffentlicht)" --> Server
   Server -- "TB5: ausgehend, SSRF-Schutz" --> Channels
   Release -- "TB6: signierte Binaries,<br/>Key im Server einkompiliert" --> Server
 ```
@@ -181,6 +181,7 @@ flowchart LR
 | T71 | T | Manipuliertes oder fremdes Agent-Paket (.deb, .rpm, .apk); ein Upgrade löscht die Identität; ein Paket startet einen Agent ohne Server | jedes Paket signiert (`package-agent.sh` baut ohne Schlüssel nicht; .deb als `_gpgorigin`, .rpm mit OpenPGP, .apk mit RSA), Schlüssel getrennt vom minisign-Release-Schlüssel und nur in der Release-Pipeline, Test-Schlüssel nur pro Lauf; Tests: Signatur gut, ohne Schlüssel bzw. verändert abgelehnt (`just test-packages`); Remove-Skripte unterscheiden Upgrade und Entfernen (Test: Upgrade behält die Identität); der Dienst startet erst nach Enrollment durch den Admin, Rechte wie bei `install.sh` | M2-21 | ✓ (Paket-Repos: offen) |
 | T52 | T | Kompromittierte Abhängigkeit oder Action | exakt gepinnte Versionen, Mindestalter 3 Tage, Actions per SHA, cargo-deny, govulncheck, pnpm audit, zizmor, Secret-Scan | M0-06 (ADR 0005, 0006) | ✓ |
 | T53 | T | Fehlerhafte Parser für untrusted Input auf dem Node | cargo-fuzz für `/proc`-Parser, WAL-Recovery, Journal-Zeilen (`journal_line`) und Security-Parser (`security_parser`), proptest; Logdateien mit E3.1 | M1-15, M2-05, M2-06, E3.1 | ◐ (Logdateien) |
+| T73 | E/I | Ein kompromittierter Container der Installation (Proxy, Server, Datenbank) breitet sich aus; die Datenbank ist aus dem Netz erreichbar; Secrets stehen in Umgebungsvariablen; ein Host-Prozess fälscht `X-Forwarded-For`; der Proxy verschleiert die Adressen der Agents | `deploy/compose`: jeder Container `read_only`, `cap_drop: ALL` (nur `NET_BIND_SERVICE` bzw. die Benutzerwechsel von PostgreSQL zurück), `no-new-privileges`, kein Docker-Socket, kein Host-Netz (`check-compose.sh --hardened` in `just lint-compose`, mit Tests); Server in `distroless` als `nonroot`; Datenbank nur im Netz `internal`; Secrets als Dateien (`secrets.sh`, überschreibt nie); nur die feste Adresse von Caddy ist Trusted Proxy; Agent-Port direkt veröffentlicht, der Server sieht die echte Adresse (ADR 0028); Images per Digest; die E2E-Demo läuft gegen diese Datei | M2-26 | ✓ |
 | T72 | E/D | Zustands-Collectors (M2-22) als Einfallstor: der Agent startet `systemctl`, ruft `adjtimex` über `unsafe` auf; ein hängender systemctl blockiert die Collectors; gefälschte Unit-Namen sprengen die Kardinalität | `systemctl` mit festen Argumenten, leerer Umgebung, ohne Shell, 10 s Zeitlimit mit `kill`, ≤ 256 KiB Ausgabe; Unit-Namen geprüft, ≤ 50 Serien; `adjtimex` nur mit `modes = 0`, gekapselt mit `SAFETY`-Begründung; die Unit erlaubt nur `adjtimex`/`clock_adjtime` zusätzlich, ohne `CAP_SYS_TIME` kann der Agent die Uhr nicht stellen; Parser von mdstat und systemctl gefuzzt (ADR 0026) | M2-22 | ✓ |
 
 ## 5. Restrisiken und bewusste Entscheidungen

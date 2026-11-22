@@ -50,9 +50,13 @@ Agent-Konfiguration: `/etc/sermon/agent.toml` (Schema und Beispiel in `agent/cra
 Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur über `ProcRoot` (`sermon-core`).
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
-`just e2e-demo` baut alles, startet `deploy/e2e/compose.yaml` (Server, TimescaleDB, Caddy, Agent-Hosts mit systemd)
-und spielt die M1-Demo mit Playwright durch (`KEEP=1` lässt die Umgebung laufen, `SKIP_BUILD=1` nutzt die letzten
-Binaries).
+`just e2e-demo` baut den Agent, startet die Produktions-Compose `deploy/compose/compose.yaml` mit dem Overlay
+`deploy/e2e/compose.yaml` (Server-Image aus dem Quellcode, TimescaleDB, Caddy, Mailpit, Agent-Hosts mit systemd und
+OpenRC) und spielt die Demo mit Playwright durch (`KEEP=1` lässt die Umgebung laufen, `SKIP_BUILD=1` nutzt Agent,
+Pakete und Secrets des letzten Laufs).
+Produktion: `deploy/compose/` (ADR 0028, Anleitung `docs/admin/installation.md`); jeder Container `read_only`, ohne
+Capabilities und neue Privilegien, Agent-Port direkt am Server. `just lint-compose` prüft das (`check-compose.sh
+--hardened`).
 `just simulate [nodes] [seed]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`, M1-34); der erste
 Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten wiederverwendet.
 Enrollment und Identitätsdateien: ADR 0010.

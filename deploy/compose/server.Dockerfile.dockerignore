@@ -1,0 +1,17 @@
+# Only what the server image is built from (server.Dockerfile); everything else stays out of the
+# build context – no .git, no secrets, no local builds.
+*
+!web
+!docs/help
+!server
+web/node_modules
+web/build
+web/.svelte-kit
+web/src/lib/paraglide
+web/test-results
+web/playwright-report
+server/bin
+server/web/dist
+server/tmp
+**/.env
+**/.secrets

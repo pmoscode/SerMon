@@ -1,0 +1,131 @@
+# SerMon for production (M2-26, KONZEPT §22, guide: docs/admin/installation.md).
+#
+#   cp env.example .env && $EDITOR .env      domain, ACME and SMTP
+#   ./secrets.sh                             database passwords and URLs (never overwritten)
+#   docker compose build
+#   docker compose run --rm server init --master-keys-file /var/lib/sermon/master_keys
+#   docker compose up -d
+#
+# Public: Caddy on 80/443 (web UI, ACME) and the server's mTLS agent port (8443), published directly
+# so the server sees the agents' addresses (ADR 0028). The database is on an internal network only.
+# Every container is read-only, drops all capabilities and forbids new privileges
+# (scripts/check-compose.sh --hardened); every image is pinned by digest.
+name: sermon
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: 10m, max-file: "5" }
+
+services:
+  postgres:
+    <<: *hardened
+    image: timescale/timescaledb:2.32.0-pg17@sha256:6a6b7d7a346d7c6be03a310c240706f3bbc6d7adbdf3fbc07823570b34337f5e
+    # The entrypoint prepares the data directory as root and then drops to postgres.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    environment:
+      POSTGRES_USER: sermon
+      POSTGRES_DB: sermon
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      TIMESCALEDB_TELEMETRY: "off"
+    secrets: [postgres_password, postgres_app_password]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # The role sermon-server uses (sermon_app, ADR 0007); mounted on its own so the image's
+      # TimescaleDB init scripts stay in place.
+      - ./initdb/010-app-role.sh:/docker-entrypoint-initdb.d/010-app-role.sh:ro
+    tmpfs: [/var/run/postgresql, /tmp]
+    shm_size: 256mb
+    networks: [internal]
+    healthcheck:
+      # Over TCP: during the first initialization a temporary server answers on the socket only.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sermon -d sermon"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  server:
+    <<: *hardened
+    build:
+      context: ../..
+      dockerfile: deploy/compose/server.Dockerfile
+      args:
+        SERMON_RELEASE_KEY: ${SERMON_RELEASE_KEY:-}
+        SERMON_VERSION: ${SERMON_VERSION:-source}
+    image: sermon-server:${SERMON_VERSION:-source}
+    environment:
+      SERMON_DATABASE_URL_FILE: /run/secrets/database_url
+      SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
+      SERMON_MASTER_KEYS_FILE: /var/lib/sermon/master_keys
+      SERMON_LOG_FORMAT: json
+      SERMON_HTTP_ADDR: ":8080"
+      SERMON_ALLOWED_ORIGINS: https://${SERMON_DOMAIN:?set SERMON_DOMAIN in .env}
+      # Only Caddy may set X-Forwarded-For.
+      SERMON_TRUSTED_PROXIES: ${SERMON_PROXY_IP:-172.30.78.10}/32
+      SERMON_AGENT_ADDR: ":8443"
+      SERMON_AGENT_HOSTNAMES: ${SERMON_DOMAIN}
+      SERMON_AGENT_DOWNLOADS_DIR: /srv/downloads
+      SERMON_DATABASE_SIZE_LIMIT: ${SERMON_DATABASE_SIZE_LIMIT:-}
+      SERMON_OUTBOUND_ALLOWLIST: ${SERMON_OUTBOUND_ALLOWLIST:-}
+      # Production mode: invitations go out by mail only (M1-39).
+      SERMON_SMTP_HOST: ${SERMON_SMTP_HOST:?set SERMON_SMTP_HOST in .env}
+      SERMON_SMTP_PORT: ${SERMON_SMTP_PORT:-587}
+      SERMON_SMTP_TLS: ${SERMON_SMTP_TLS:-starttls}
+      SERMON_SMTP_FROM: ${SERMON_SMTP_FROM:?set SERMON_SMTP_FROM in .env}
+      SERMON_SMTP_USERNAME: ${SERMON_SMTP_USERNAME:-}
+      SERMON_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets: [database_url, database_migrate_url, smtp_password]
+    volumes:
+      - server-state:/var/lib/sermon
+      # Signed agent binaries for install.sh (ADR 0012), optional.
+      - ./downloads:/srv/downloads:ro
+    ports: ["${SERMON_AGENT_PORT:-8443}:8443"]
+    networks: [edge, internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  caddy:
+    <<: *hardened
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      SERMON_DOMAIN: ${SERMON_DOMAIN}
+      SERMON_ACME_EMAIL: ${SERMON_ACME_EMAIL:?set SERMON_ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs: [/tmp]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    networks:
+      edge: { ipv4_address: "${SERMON_PROXY_IP:-172.30.78.10}" }
+    depends_on: [server]
+
+networks:
+  # Caddy and the server: published ports and outgoing connections (ACME, SMTP, channels).
+  # Dynamic addresses come from the upper half only, so Caddy's fixed one is never taken.
+  edge:
+    ipam:
+      config:
+        - subnet: "${SERMON_EDGE_SUBNET:-172.30.78.0/24}"
+          ip_range: "${SERMON_EDGE_IP_RANGE:-172.30.78.128/25}"
+  # The database: no route outside.
+  internal:
+    internal: true
+
+secrets:
+  postgres_password: { file: ./secrets/postgres_password }
+  postgres_app_password: { file: ./secrets/postgres_app_password }
+  database_url: { file: ./secrets/database_url }
+  database_migrate_url: { file: ./secrets/database_migrate_url }
+  smtp_password: { file: ./secrets/smtp_password }
+
+volumes:
+  postgres-data:
+  server-state:
+  caddy-data:
+  caddy-config:

@@ -14,7 +14,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > die aktiven Alerts mit Verlauf, Quittieren, Silences und dem Regel-Editor (YAML-Import und -Export); Kanäle,
 > Policies und Wartungsfenster verwalten Admins in der UI. Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und
 > Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert), jeweils
-> amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk).
+> amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk). Für eine Installation gibt es
+> eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)).
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 
@@ -41,6 +42,7 @@ Unterstützte Systeme: Debian, Ubuntu, RHEL/Rocky/Alma/Fedora, Alpine – jeweil
 | [Konzept](docs/KONZEPT.md) | Architektur, Entscheidungen, Security-Konzept, Qualitätsregeln |
 | [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md) | Meilensteine, Aufgaben, Abnahmekriterien |
 | [ADRs](docs/adr/) | Architekturentscheidungen |
+| [Installation](docs/admin/installation.md) | Einrichtung mit docker compose (`deploy/compose/`) |
 | [Security Policy](SECURITY.md) | Schwachstellen melden |
 
 ## Entwicklung

@@ -1,6 +1,7 @@
 """Rule checks for a docker compose config (JSON from `docker compose config --format json`).
 
-Called by check-compose.sh: python3 -I check_compose.py <loopback_only:true|false> <compose-file> < config.json
+Called by check-compose.sh:
+  python3 -I check_compose.py <loopback_only:true|false> <hardened:true|false> <compose-file> < config.json
 """
 
 import json
@@ -34,7 +35,26 @@ def unpinned_bases(build: dict) -> list[str]:
     return bad
 
 
-def check(services: dict, base: str, loopback_only: bool) -> list[str]:
+def unhardened(svc: dict) -> list[str]:
+    """What keeps a production container from being locked down (M2-26)."""
+    problems = []
+    if svc.get("read_only") is not True:
+        problems.append("root file system is writable (read_only: true)")
+    if "ALL" not in [c.upper() for c in svc.get("cap_drop") or []]:
+        problems.append("capabilities are not dropped (cap_drop: [ALL])")
+    if not any(re.fullmatch(r"no-new-privileges(:true)?", o) for o in svc.get("security_opt") or []):
+        problems.append("new privileges are allowed (security_opt: no-new-privileges:true)")
+    if svc.get("privileged"):
+        problems.append("runs privileged")
+    if svc.get("network_mode") == "host":
+        problems.append("uses the host network")
+    for volume in svc.get("volumes") or []:
+        if str(volume.get("source", "")).endswith("docker.sock"):
+            problems.append("mounts the Docker socket")
+    return problems
+
+
+def check(services: dict, base: str, loopback_only: bool, hardened: bool = False) -> list[str]:
     errors = []
     for name, svc in services.items():
         image = svc.get("image", "")
@@ -50,6 +70,9 @@ def check(services: dict, base: str, loopback_only: bool) -> list[str]:
                 host_ip = port.get("host_ip") if isinstance(port, dict) else str(port).rsplit(":", 2)[0]
                 if host_ip != "127.0.0.1":
                     errors.append(f"{name}: port {port} is not bound to 127.0.0.1")
+
+        if hardened:
+            errors.extend(f"{name}: {problem}" for problem in unhardened(svc))
 
         if image.startswith("timescale/timescaledb"):
             if str(svc.get("environment", {}).get("TIMESCALEDB_TELEMETRY", "")).lower() != "off":
@@ -68,9 +91,10 @@ def check(services: dict, base: str, loopback_only: bool) -> list[str]:
 
 def main() -> int:
     loopback_only = sys.argv[1] == "true"
-    compose_file = sys.argv[2]
+    hardened = sys.argv[2] == "true"
+    compose_file = sys.argv[3]
     services = json.load(sys.stdin).get("services", {})
-    errors = check(services, os.path.dirname(os.path.abspath(compose_file)), loopback_only)
+    errors = check(services, os.path.dirname(os.path.abspath(compose_file)), loopback_only, hardened)
     for error in errors:
         print(f"✗ {error}", file=sys.stderr)
     if errors:

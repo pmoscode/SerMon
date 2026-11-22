@@ -1355,12 +1355,17 @@ SerMon/
 
 ```
 services:
-  caddy            # TLS (ACME), Reverse-Proxy für Web; Agent-Port als TLS-Passthrough (mTLS terminiert im Server)
-  sermon-server    # non-root, read-only root fs, no-new-privileges, cap_drop: ALL
+  caddy            # TLS (ACME), Reverse-Proxy für Web und Enrollment (80, 443)
+  server           # aus dem Quellcode gebaut (distroless, nonroot); Agent-Port 8443 direkt veröffentlicht (mTLS im Server)
   postgres         # PostgreSQL 17 + TimescaleDB (Image timescale/timescaledb, pg17), Volume, nur internes Netz
-  loki             # auth_enabled: true, Compactor-Retention
-networks: public (caddy), internal (alles andere, internal: true)
+  loki             # ab E3.2: auth_enabled: true, Compactor-Retention
+networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres; internal: true)
 ```
+
+- **Dateien:** `deploy/compose/` (Anleitung `docs/admin/installation.md`, [ADR 0028](docs/adr/0028-produktions-compose.md)). Jeder Container ist
+  `read_only`, ohne Capabilities und ohne neue Privilegien (`just lint-compose` prüft das); Secrets liegen als Dateien
+  in `secrets/`, Einstellungen in `.env`. Der Agent-Port geht nicht über Caddy, damit der Server die echten Adressen der
+  Agents sieht. Die E2E-Demo läuft gegen genau diese Datei (Overlay `deploy/e2e/compose.yaml`).
 
 - **Erstinstallation:**
   - `sermon-server init --master-keys-file PFAD` legt die Master-Key-Datei an (nie überschrieben), migriert die DB,

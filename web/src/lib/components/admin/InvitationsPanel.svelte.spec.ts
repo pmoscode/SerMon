@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api } from '#lib/api/client.js';
+import { adminApi } from '#lib/api/admin.js';
 import { Role } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import InvitationsPanel from './InvitationsPanel.svelte';
@@ -12,7 +12,7 @@ describe('InvitationsPanel', () => {
 
 	it('shows the link once with the token in the fragment', async () => {
 		const invite = vi
-			.spyOn(api.access, 'inviteMember')
+			.spyOn(adminApi.access, 'inviteMember')
 			.mockResolvedValue({ token: 'smi_secret' } as never);
 		const onChange = vi.fn().mockResolvedValue(undefined);
 		render(InvitationsPanel, { invitations: [], groups: [], onChange });
@@ -33,7 +33,10 @@ describe('InvitationsPanel', () => {
 
 	// Production: the link went to the invited address only (M1-39) – nothing to copy here.
 	it('confirms a mailed invitation without showing a link', async () => {
-		vi.spyOn(api.access, 'inviteMember').mockResolvedValue({ token: '', emailed: true } as never);
+		vi.spyOn(adminApi.access, 'inviteMember').mockResolvedValue({
+			token: '',
+			emailed: true
+		} as never);
 		render(InvitationsPanel, {
 			invitations: [],
 			groups: [],
@@ -51,7 +54,7 @@ describe('InvitationsPanel', () => {
 
 	it('sends an open invitation again with its role and group', async () => {
 		const invite = vi
-			.spyOn(api.access, 'inviteMember')
+			.spyOn(adminApi.access, 'inviteMember')
 			.mockResolvedValue({ token: '', emailed: true } as never);
 		render(InvitationsPanel, {
 			invitations: [
@@ -76,7 +79,7 @@ describe('InvitationsPanel', () => {
 	});
 
 	it('withdraws an open invitation', async () => {
-		const revoke = vi.spyOn(api.access, 'revokeInvitation').mockResolvedValue({} as never);
+		const revoke = vi.spyOn(adminApi.access, 'revokeInvitation').mockResolvedValue({} as never);
 		render(InvitationsPanel, {
 			invitations: [
 				{ id: 'i1', email: 'late@example.org', role: Role.VIEWER, groupId: '' } as never

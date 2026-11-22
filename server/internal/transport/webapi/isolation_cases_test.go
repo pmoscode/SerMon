@@ -409,6 +409,15 @@ var tenantIsolationCases = map[string]isolationCase{
 		}))
 		return err
 	}},
+	// M2-23: a node of another organization is NOT_FOUND, its lock and window untouched.
+	"/sermon.web.v1.NodeService/UnlockNode": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.UnlockNode(ctx, connect.NewRequest(&webv1.UnlockNodeRequest{NodeId: e.nodeA}))
+		return err
+	}},
+	"/sermon.web.v1.NodeService/AllowNodeTakeover": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.AllowNodeTakeover(ctx, connect.NewRequest(&webv1.AllowNodeTakeoverRequest{NodeId: e.nodeA}))
+		return err
+	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.access.ListAuditLog(ctx, connect.NewRequest(&webv1.ListAuditLogRequest{}))
 		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), "by-a")) {

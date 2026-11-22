@@ -6,6 +6,7 @@
 	import type { NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import type { NodeSummary } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
 	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { adminError, copyText } from '#lib/admin/admin.js';
 	import {
 		installCommand,
@@ -70,7 +71,7 @@
 	});
 
 	$effect(() => {
-		void api.access
+		void adminApi.access
 			.listNodeGroups({})
 			.then((res) => {
 				groups = res.groups.filter((g) => allowed.includes('*') || allowed.includes(g.id));
@@ -91,7 +92,7 @@
 		try {
 			known = new Set((await nodes()).map((n) => n.nodeId));
 			const res = await withStepUp(() =>
-				api.enrollment.createEnrollmentToken({ groupId, ttlSeconds: ttl, maxUses: uses })
+				adminApi.enrollment.createEnrollmentToken({ groupId, ttlSeconds: ttl, maxUses: uses })
 			);
 			secret = res.secret;
 		} catch (error) {

@@ -52,6 +52,12 @@ type Node struct {
 	AgentVersion  string
 	EnrolledAt    time.Time
 	LastSeenAt    *time.Time
+	// Identity (M2-23): a lock after a second session, the address of the last session and an
+	// open takeover window.
+	LockedAt      *time.Time
+	LockReason    string
+	LastIP        string
+	TakeoverUntil *time.Time
 }
 
 // Directory reads node records within a scope.

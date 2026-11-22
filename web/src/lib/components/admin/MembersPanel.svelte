@@ -2,7 +2,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import type { Member, NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import { Role } from '#lib/api/gen/sermon/web/v1/access_pb.js';
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { adminError, roleName } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -43,7 +43,7 @@
 
 	function grant(event: SubmitEvent, userId: string) {
 		event.preventDefault();
-		void run(() => api.access.grantRole({ userId, groupId, role }));
+		void run(() => adminApi.access.grantRole({ userId, groupId, role }));
 	}
 </script>
 
@@ -79,7 +79,7 @@
 								size="sm"
 								variant="destructive"
 								disabled={busy}
-								onclick={() => run(() => api.access.removeMember({ userId: member.userId }))}
+								onclick={() => run(() => adminApi.access.removeMember({ userId: member.userId }))}
 							>
 								{m.admin_remove_confirm()}
 							</Button>
@@ -108,7 +108,7 @@
 									scope: groupName(binding.groupId)
 								})}
 								disabled={busy}
-								onclick={() => run(() => api.access.revokeRole({ bindingId: binding.id }))}
+								onclick={() => run(() => adminApi.access.revokeRole({ bindingId: binding.id }))}
 							>
 								<X class="size-3" aria-hidden="true" />
 							</button>

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { api, Code, codeOf } from '#lib/api/client.js';
+	import { Code, codeOf } from '#lib/api/client.js';
+	import { onboardingApi } from '#lib/api/onboarding.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -42,7 +43,7 @@
 		if (!valid) return;
 		busy = true;
 		try {
-			await api.setup.completeSetup({
+			await onboardingApi.setup.completeSetup({
 				token: values.token.trim(),
 				organizationName: values.organization.trim(),
 				displayName: values.name.trim(),

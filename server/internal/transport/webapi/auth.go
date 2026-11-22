@@ -311,6 +311,7 @@ func (h *AuthHandler) describeRights(ctx context.Context, s session.Session, vie
 	view.OrgAdmin = policy.Allowed(p, authz.ManageMembers, authz.InOrg(p.Org))
 	view.EnrollGroupIds = groupsFor(policy, p, authz.CreateEnrollmentTokens)
 	view.SilenceGroupIds = groupsFor(policy, p, authz.SilenceAlerts)
+	view.NodeIdentityGroupIds = groupsFor(policy, p, authz.UnlockNode)
 	return nil
 }
 

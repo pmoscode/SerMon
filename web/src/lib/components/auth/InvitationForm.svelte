@@ -2,7 +2,8 @@
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import { untrack } from 'svelte';
 	import type { GetInvitationResponse } from '#lib/api/gen/sermon/web/v1/invitation_pb.js';
-	import { api, Code, codeOf } from '#lib/api/client.js';
+	import { Code, codeOf } from '#lib/api/client.js';
+	import { onboardingApi } from '#lib/api/onboarding.js';
 	import { roleName } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -33,7 +34,7 @@
 	$effect(() => {
 		const unknown = untrack(() => sessionState.status === 'unknown');
 		void Promise.all([
-			api.invitation.getInvitation({ token }),
+			onboardingApi.invitation.getInvitation({ token }),
 			unknown ? sessionState.load().catch(() => 'anonymous') : undefined
 		])
 			.then(([res]) => {
@@ -64,7 +65,11 @@
 		if (Object.values(problems).some(Boolean)) return;
 		busy = true;
 		try {
-			await api.invitation.acceptInvitation({ token, displayName: name.trim(), password });
+			await onboardingApi.invitation.acceptInvitation({
+				token,
+				displayName: name.trim(),
+				password
+			});
 			onAccepted();
 		} catch (error) {
 			failure =
@@ -82,7 +87,7 @@
 		busy = true;
 		failure = '';
 		try {
-			const res = await api.invitation.joinOrganization({ token });
+			const res = await onboardingApi.invitation.joinOrganization({ token });
 			await sessionState.switchOrganization(res.organizationId);
 			onJoined();
 		} catch (error) {

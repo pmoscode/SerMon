@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { installed, mockApi } from './api';
+import { installed, mockApi, session } from './api';
 import { expect, test } from './fixtures';
 
 const nodeId = '0193f5a0-0000-7000-8000-000000000001';
@@ -115,6 +115,45 @@ test.describe('node detail (mocked API)', () => {
 		await page.getByRole('tab', { name: 'Network' }).click();
 		await page.getByLabel('Show in bit/s').check();
 		await expect(page.getByRole('figure', { name: 'Throughput' })).toBeVisible();
+	});
+
+	// M2-23: a locked node says so at the top; the identity tab loads on demand and offers the
+	// actions to an operator of its group.
+	test('shows a lock and the identity tab', async ({ page }) => {
+		await mockApi(page, {
+			...nodeApi,
+			'AuthService/GetSession': () => ({
+				json: { session: { ...session, nodeIdentityGroupIds: ['*'] } }
+			}),
+			'NodeService/GetNode': () => ({
+				json: {
+					node: {
+						...node,
+						lockedAt: new Date(Date.now() - 600_000).toISOString(),
+						lockReason: 'second session from 192.0.2.66',
+						lastIp: '192.0.2.10'
+					}
+				}
+			})
+		});
+		await page.goto(`/nodes/${nodeId}`);
+		await expect(page.getByText('Locked (see Identity)')).toBeVisible();
+		await page.getByRole('tab', { name: 'Identity' }).click();
+		await expect(page.getByRole('tab', { name: 'Identity' })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		await expect(page.getByRole('tab', { name: 'CPU' })).toHaveAttribute('aria-selected', 'false');
+		await expect(page.getByRole('tab', { name: 'Identity' })).toHaveAttribute(
+			'data-state',
+			'active'
+		);
+		await expect(page.getByText('second session from 192.0.2.66', { exact: false })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Unlock' })).toBeVisible();
+		await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+		await page.screenshot({ path: 'test-results/node-identity.png', fullPage: true });
+		const results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
 	});
 
 	test.describe('foreign nodes', () => {

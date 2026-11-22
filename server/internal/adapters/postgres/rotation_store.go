@@ -104,6 +104,37 @@ func (s *RotationStore) RevokeAll(ctx context.Context, org tenant.OrgID, node id
 	})
 }
 
+// Unlock lifts the node's lock and writes the audit entry; false (and no audit) if it was not
+// locked.
+func (s *RotationStore) Unlock(ctx context.Context, org tenant.OrgID, node identity.NodeID, audit access.AuditEntry) (bool, error) {
+	var unlocked bool
+	err := s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
+		n, err := q.UnlockNode(ctx, uuid.UUID(node))
+		if err != nil {
+			return fmt.Errorf("unlock node: %w", err)
+		}
+		if unlocked = n == 1; !unlocked {
+			return nil
+		}
+		return appendAudit(ctx, q, audit)
+	})
+	return unlocked, err
+}
+
+// AllowTakeover opens the node's takeover window and writes the audit entry.
+func (s *RotationStore) AllowTakeover(ctx context.Context, org tenant.OrgID, node identity.NodeID, until time.Time, audit access.AuditEntry) error {
+	return s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
+		n, err := q.AllowNodeTakeover(ctx, sqlcdb.AllowNodeTakeoverParams{ID: uuid.UUID(node), Until: &until})
+		if err != nil {
+			return fmt.Errorf("allow takeover: %w", err)
+		}
+		if n != 1 {
+			return fmt.Errorf("allow takeover: node %s not found", node)
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
 // Note writes a security note to the organization's audit log.
 func (s *RotationStore) Note(ctx context.Context, org tenant.OrgID, audit access.AuditEntry) error {
 	return s.inOrg(ctx, org, func(q *sqlcdb.Queries) error { return appendAudit(ctx, q, audit) })

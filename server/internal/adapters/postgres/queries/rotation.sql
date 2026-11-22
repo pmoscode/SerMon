@@ -28,3 +28,27 @@ WHERE (sqlc.arg(all_groups)::boolean OR group_id = ANY (sqlc.arg(group_ids)::uui
   AND (NOT sqlc.arg(by_ids)::boolean OR id = ANY (sqlc.arg(node_ids)::uuid[]))
   AND (sqlc.narg(group_id)::uuid IS NULL OR group_id = sqlc.narg(group_id)::uuid)
 ORDER BY id;
+
+-- Node identity in the UI (M2-23).
+
+-- name: UnlockNode :execrows
+UPDATE nodes SET locked_at = NULL, lock_reason = NULL
+WHERE id = sqlc.arg(id) AND locked_at IS NOT NULL;
+
+-- name: AllowNodeTakeover :execrows
+UPDATE nodes SET takeover_until = sqlc.arg(until) WHERE id = sqlc.arg(id);
+
+-- The node of a group with this machine-id whose takeover window is open.
+-- name: NodeForTakeover :one
+SELECT id FROM nodes
+WHERE machine_id = sqlc.arg(machine_id) AND group_id = sqlc.arg(group_id) AND takeover_until > sqlc.arg(now);
+
+-- Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
+-- closed. No rows: the window closed meanwhile.
+-- name: TakeOverNode :execrows
+UPDATE nodes SET hostname = sqlc.arg(hostname), os_id = sqlc.arg(os_id), os_version = sqlc.arg(os_version),
+                 kernel_release = sqlc.arg(kernel_release), architecture = sqlc.arg(architecture),
+                 cpu_count = sqlc.arg(cpu_count), memory_bytes = sqlc.arg(memory_bytes),
+                 enrolled_with = sqlc.narg(enrolled_with), takeover_until = NULL, locked_at = NULL, lock_reason = NULL
+WHERE id = sqlc.arg(id) AND group_id = sqlc.arg(group_id) AND machine_id = sqlc.arg(machine_id)
+  AND takeover_until > sqlc.arg(now);

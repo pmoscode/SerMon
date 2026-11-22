@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Invitation, Member, NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { adminError } from '#lib/admin/admin.js';
 	import AuditPanel from '#lib/components/admin/AuditPanel.svelte';
 	import GroupsPanel from '#lib/components/admin/GroupsPanel.svelte';
@@ -22,9 +22,9 @@
 		failure = '';
 		try {
 			const [g, mem, inv] = await Promise.all([
-				api.access.listNodeGroups({}),
-				api.access.listMembers({}),
-				api.access.listInvitations({})
+				adminApi.access.listNodeGroups({}),
+				adminApi.access.listMembers({}),
+				adminApi.access.listInvitations({})
 			]);
 			groups = g.groups;
 			members = mem.members;

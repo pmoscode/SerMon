@@ -23,6 +23,181 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// UnlockNodeRequest names the node.
+type UnlockNodeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id is the node UUID.
+	NodeId        string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlockNodeRequest) Reset() {
+	*x = UnlockNodeRequest{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockNodeRequest) ProtoMessage() {}
+
+func (x *UnlockNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockNodeRequest.ProtoReflect.Descriptor instead.
+func (*UnlockNodeRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *UnlockNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// UnlockNodeResponse is empty.
+type UnlockNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlockNodeResponse) Reset() {
+	*x = UnlockNodeResponse{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockNodeResponse) ProtoMessage() {}
+
+func (x *UnlockNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockNodeResponse.ProtoReflect.Descriptor instead.
+func (*UnlockNodeResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{1}
+}
+
+// AllowNodeTakeoverRequest names the node.
+type AllowNodeTakeoverRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id is the node UUID.
+	NodeId        string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllowNodeTakeoverRequest) Reset() {
+	*x = AllowNodeTakeoverRequest{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllowNodeTakeoverRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllowNodeTakeoverRequest) ProtoMessage() {}
+
+func (x *AllowNodeTakeoverRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllowNodeTakeoverRequest.ProtoReflect.Descriptor instead.
+func (*AllowNodeTakeoverRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *AllowNodeTakeoverRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// AllowNodeTakeoverResponse says how long the takeover is allowed.
+type AllowNodeTakeoverResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// until is the end of the takeover window.
+	Until         *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=until,proto3" json:"until,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllowNodeTakeoverResponse) Reset() {
+	*x = AllowNodeTakeoverResponse{}
+	mi := &file_sermon_web_v1_node_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllowNodeTakeoverResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllowNodeTakeoverResponse) ProtoMessage() {}
+
+func (x *AllowNodeTakeoverResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_node_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllowNodeTakeoverResponse.ProtoReflect.Descriptor instead.
+func (*AllowNodeTakeoverResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *AllowNodeTakeoverResponse) GetUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Until
+	}
+	return nil
+}
+
 // RotateNodeKeysRequest selects the nodes.
 type RotateNodeKeysRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -43,7 +218,7 @@ type RotateNodeKeysRequest struct {
 
 func (x *RotateNodeKeysRequest) Reset() {
 	*x = RotateNodeKeysRequest{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55,7 +230,7 @@ func (x *RotateNodeKeysRequest) String() string {
 func (*RotateNodeKeysRequest) ProtoMessage() {}
 
 func (x *RotateNodeKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68,7 +243,7 @@ func (x *RotateNodeKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateNodeKeysRequest.ProtoReflect.Descriptor instead.
 func (*RotateNodeKeysRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{0}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RotateNodeKeysRequest) GetTarget() isRotateNodeKeysRequest_Target {
@@ -148,7 +323,7 @@ type NodeIDs struct {
 
 func (x *NodeIDs) Reset() {
 	*x = NodeIDs{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -160,7 +335,7 @@ func (x *NodeIDs) String() string {
 func (*NodeIDs) ProtoMessage() {}
 
 func (x *NodeIDs) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -173,7 +348,7 @@ func (x *NodeIDs) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeIDs.ProtoReflect.Descriptor instead.
 func (*NodeIDs) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{1}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *NodeIDs) GetIds() []string {
@@ -199,7 +374,7 @@ type RotateNodeKeysResponse struct {
 
 func (x *RotateNodeKeysResponse) Reset() {
 	*x = RotateNodeKeysResponse{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -211,7 +386,7 @@ func (x *RotateNodeKeysResponse) String() string {
 func (*RotateNodeKeysResponse) ProtoMessage() {}
 
 func (x *RotateNodeKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,7 +399,7 @@ func (x *RotateNodeKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateNodeKeysResponse.ProtoReflect.Descriptor instead.
 func (*RotateNodeKeysResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{2}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RotateNodeKeysResponse) GetOnline() int32 {
@@ -259,7 +434,7 @@ type GetNodeRequest struct {
 
 func (x *GetNodeRequest) Reset() {
 	*x = GetNodeRequest{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -271,7 +446,7 @@ func (x *GetNodeRequest) String() string {
 func (*GetNodeRequest) ProtoMessage() {}
 
 func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -284,7 +459,7 @@ func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeRequest.ProtoReflect.Descriptor instead.
 func (*GetNodeRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{3}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetNodeRequest) GetNodeId() string {
@@ -305,7 +480,7 @@ type GetNodeResponse struct {
 
 func (x *GetNodeResponse) Reset() {
 	*x = GetNodeResponse{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -317,7 +492,7 @@ func (x *GetNodeResponse) String() string {
 func (*GetNodeResponse) ProtoMessage() {}
 
 func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -330,7 +505,7 @@ func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeResponse.ProtoReflect.Descriptor instead.
 func (*GetNodeResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{4}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetNodeResponse) GetNode() *Node {
@@ -372,14 +547,24 @@ type Node struct {
 	// online is true with contact in the last 60 seconds.
 	Online bool `protobuf:"varint,14,opt,name=online,proto3" json:"online,omitempty"`
 	// figures are the current values (absent without live data).
-	Figures       *KeyFigures `protobuf:"bytes,15,opt,name=figures,proto3" json:"figures,omitempty"`
+	Figures *KeyFigures `protobuf:"bytes,15,opt,name=figures,proto3" json:"figures,omitempty"`
+	// locked_at is set while the node is locked (a second session, or a rotation from a new
+	// address): its certificate is refused until an operator unlocks it or it is re-enrolled.
+	LockedAt *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=locked_at,json=lockedAt,proto3" json:"locked_at,omitempty"`
+	// lock_reason says why it is locked.
+	LockReason string `protobuf:"bytes,17,opt,name=lock_reason,json=lockReason,proto3" json:"lock_reason,omitempty"`
+	// last_ip is the source address of the last agent session.
+	LastIp string `protobuf:"bytes,18,opt,name=last_ip,json=lastIp,proto3" json:"last_ip,omitempty"`
+	// takeover_until is set while an operator allows the next enrollment with this node's
+	// machine-id to take it over.
+	TakeoverUntil *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=takeover_until,json=takeoverUntil,proto3" json:"takeover_until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Node) Reset() {
 	*x = Node{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -391,7 +576,7 @@ func (x *Node) String() string {
 func (*Node) ProtoMessage() {}
 
 func (x *Node) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -404,7 +589,7 @@ func (x *Node) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Node.ProtoReflect.Descriptor instead.
 func (*Node) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{5}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Node) GetId() string {
@@ -512,6 +697,34 @@ func (x *Node) GetFigures() *KeyFigures {
 	return nil
 }
 
+func (x *Node) GetLockedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LockedAt
+	}
+	return nil
+}
+
+func (x *Node) GetLockReason() string {
+	if x != nil {
+		return x.LockReason
+	}
+	return ""
+}
+
+func (x *Node) GetLastIp() string {
+	if x != nil {
+		return x.LastIp
+	}
+	return ""
+}
+
+func (x *Node) GetTakeoverUntil() *timestamppb.Timestamp {
+	if x != nil {
+		return x.TakeoverUntil
+	}
+	return nil
+}
+
 // ListFilesystemsRequest names the node.
 type ListFilesystemsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -523,7 +736,7 @@ type ListFilesystemsRequest struct {
 
 func (x *ListFilesystemsRequest) Reset() {
 	*x = ListFilesystemsRequest{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -535,7 +748,7 @@ func (x *ListFilesystemsRequest) String() string {
 func (*ListFilesystemsRequest) ProtoMessage() {}
 
 func (x *ListFilesystemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -548,7 +761,7 @@ func (x *ListFilesystemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFilesystemsRequest.ProtoReflect.Descriptor instead.
 func (*ListFilesystemsRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListFilesystemsRequest) GetNodeId() string {
@@ -569,7 +782,7 @@ type ListFilesystemsResponse struct {
 
 func (x *ListFilesystemsResponse) Reset() {
 	*x = ListFilesystemsResponse{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -581,7 +794,7 @@ func (x *ListFilesystemsResponse) String() string {
 func (*ListFilesystemsResponse) ProtoMessage() {}
 
 func (x *ListFilesystemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -594,7 +807,7 @@ func (x *ListFilesystemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFilesystemsResponse.ProtoReflect.Descriptor instead.
 func (*ListFilesystemsResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{7}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListFilesystemsResponse) GetFilesystems() []*Filesystem {
@@ -631,7 +844,7 @@ type Filesystem struct {
 
 func (x *Filesystem) Reset() {
 	*x = Filesystem{}
-	mi := &file_sermon_web_v1_node_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -643,7 +856,7 @@ func (x *Filesystem) String() string {
 func (*Filesystem) ProtoMessage() {}
 
 func (x *Filesystem) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_node_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_node_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -656,7 +869,7 @@ func (x *Filesystem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Filesystem.ProtoReflect.Descriptor instead.
 func (*Filesystem) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{8}
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Filesystem) GetMountpoint() string {
@@ -726,7 +939,14 @@ var File_sermon_web_v1_node_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\n" +
-	"\x18sermon/web/v1/node.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19sermon/web/v1/fleet.proto\"\xcf\x01\n" +
+	"\x18sermon/web/v1/node.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x19sermon/web/v1/fleet.proto\"6\n" +
+	"\x11UnlockNodeRequest\x12!\n" +
+	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\"\x14\n" +
+	"\x12UnlockNodeResponse\"=\n" +
+	"\x18AllowNodeTakeoverRequest\x12!\n" +
+	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\"M\n" +
+	"\x19AllowNodeTakeoverResponse\x120\n" +
+	"\x05until\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"\xcf\x01\n" +
 	"\x15RotateNodeKeysRequest\x12.\n" +
 	"\x05nodes\x18\x01 \x01(\v2\x16.sermon.web.v1.NodeIDsH\x00R\x05nodes\x12%\n" +
 	"\bgroup_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01H\x00R\agroupId\x12-\n" +
@@ -743,7 +963,7 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\x0eGetNodeRequest\x12!\n" +
 	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\":\n" +
 	"\x0fGetNodeResponse\x12'\n" +
-	"\x04node\x18\x01 \x01(\v2\x13.sermon.web.v1.NodeR\x04node\"\x98\x04\n" +
+	"\x04node\x18\x01 \x01(\v2\x13.sermon.web.v1.NodeR\x04node\"\xce\x05\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -764,7 +984,12 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\flast_seen_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"lastSeenAt\x12\x16\n" +
 	"\x06online\x18\x0e \x01(\bR\x06online\x123\n" +
-	"\afigures\x18\x0f \x01(\v2\x19.sermon.web.v1.KeyFiguresR\afigures\";\n" +
+	"\afigures\x18\x0f \x01(\v2\x19.sermon.web.v1.KeyFiguresR\afigures\x127\n" +
+	"\tlocked_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\blockedAt\x12\x1f\n" +
+	"\vlock_reason\x18\x11 \x01(\tR\n" +
+	"lockReason\x12\x17\n" +
+	"\alast_ip\x18\x12 \x01(\tR\x06lastIp\x12A\n" +
+	"\x0etakeover_until\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\rtakeoverUntil\";\n" +
 	"\x16ListFilesystemsRequest\x12!\n" +
 	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\"V\n" +
 	"\x17ListFilesystemsResponse\x12;\n" +
@@ -786,11 +1011,14 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\finodes_total\x18\a \x01(\x04R\vinodesTotal\x12\x1f\n" +
 	"\vinodes_used\x18\b \x01(\x04R\n" +
 	"inodesUsed\x123\n" +
-	"\afull_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x06fullAt2\x98\x02\n" +
+	"\afull_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x06fullAt2\xd3\x03\n" +
 	"\vNodeService\x12H\n" +
 	"\aGetNode\x12\x1d.sermon.web.v1.GetNodeRequest\x1a\x1e.sermon.web.v1.GetNodeResponse\x12`\n" +
 	"\x0fListFilesystems\x12%.sermon.web.v1.ListFilesystemsRequest\x1a&.sermon.web.v1.ListFilesystemsResponse\x12]\n" +
-	"\x0eRotateNodeKeys\x12$.sermon.web.v1.RotateNodeKeysRequest\x1a%.sermon.web.v1.RotateNodeKeysResponseB\xb8\x01\n" +
+	"\x0eRotateNodeKeys\x12$.sermon.web.v1.RotateNodeKeysRequest\x1a%.sermon.web.v1.RotateNodeKeysResponse\x12Q\n" +
+	"\n" +
+	"UnlockNode\x12 .sermon.web.v1.UnlockNodeRequest\x1a!.sermon.web.v1.UnlockNodeResponse\x12f\n" +
+	"\x11AllowNodeTakeover\x12'.sermon.web.v1.AllowNodeTakeoverRequest\x1a(.sermon.web.v1.AllowNodeTakeoverResponseB\xb8\x01\n" +
 	"\x11com.sermon.web.v1B\tNodeProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -805,39 +1033,50 @@ func file_sermon_web_v1_node_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_node_proto_rawDescData
 }
 
-var file_sermon_web_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_sermon_web_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_sermon_web_v1_node_proto_goTypes = []any{
-	(*RotateNodeKeysRequest)(nil),   // 0: sermon.web.v1.RotateNodeKeysRequest
-	(*NodeIDs)(nil),                 // 1: sermon.web.v1.NodeIDs
-	(*RotateNodeKeysResponse)(nil),  // 2: sermon.web.v1.RotateNodeKeysResponse
-	(*GetNodeRequest)(nil),          // 3: sermon.web.v1.GetNodeRequest
-	(*GetNodeResponse)(nil),         // 4: sermon.web.v1.GetNodeResponse
-	(*Node)(nil),                    // 5: sermon.web.v1.Node
-	(*ListFilesystemsRequest)(nil),  // 6: sermon.web.v1.ListFilesystemsRequest
-	(*ListFilesystemsResponse)(nil), // 7: sermon.web.v1.ListFilesystemsResponse
-	(*Filesystem)(nil),              // 8: sermon.web.v1.Filesystem
-	(*timestamppb.Timestamp)(nil),   // 9: google.protobuf.Timestamp
-	(*KeyFigures)(nil),              // 10: sermon.web.v1.KeyFigures
+	(*UnlockNodeRequest)(nil),         // 0: sermon.web.v1.UnlockNodeRequest
+	(*UnlockNodeResponse)(nil),        // 1: sermon.web.v1.UnlockNodeResponse
+	(*AllowNodeTakeoverRequest)(nil),  // 2: sermon.web.v1.AllowNodeTakeoverRequest
+	(*AllowNodeTakeoverResponse)(nil), // 3: sermon.web.v1.AllowNodeTakeoverResponse
+	(*RotateNodeKeysRequest)(nil),     // 4: sermon.web.v1.RotateNodeKeysRequest
+	(*NodeIDs)(nil),                   // 5: sermon.web.v1.NodeIDs
+	(*RotateNodeKeysResponse)(nil),    // 6: sermon.web.v1.RotateNodeKeysResponse
+	(*GetNodeRequest)(nil),            // 7: sermon.web.v1.GetNodeRequest
+	(*GetNodeResponse)(nil),           // 8: sermon.web.v1.GetNodeResponse
+	(*Node)(nil),                      // 9: sermon.web.v1.Node
+	(*ListFilesystemsRequest)(nil),    // 10: sermon.web.v1.ListFilesystemsRequest
+	(*ListFilesystemsResponse)(nil),   // 11: sermon.web.v1.ListFilesystemsResponse
+	(*Filesystem)(nil),                // 12: sermon.web.v1.Filesystem
+	(*timestamppb.Timestamp)(nil),     // 13: google.protobuf.Timestamp
+	(*KeyFigures)(nil),                // 14: sermon.web.v1.KeyFigures
 }
 var file_sermon_web_v1_node_proto_depIdxs = []int32{
-	1,  // 0: sermon.web.v1.RotateNodeKeysRequest.nodes:type_name -> sermon.web.v1.NodeIDs
-	5,  // 1: sermon.web.v1.GetNodeResponse.node:type_name -> sermon.web.v1.Node
-	9,  // 2: sermon.web.v1.Node.enrolled_at:type_name -> google.protobuf.Timestamp
-	9,  // 3: sermon.web.v1.Node.last_seen_at:type_name -> google.protobuf.Timestamp
-	10, // 4: sermon.web.v1.Node.figures:type_name -> sermon.web.v1.KeyFigures
-	8,  // 5: sermon.web.v1.ListFilesystemsResponse.filesystems:type_name -> sermon.web.v1.Filesystem
-	9,  // 6: sermon.web.v1.Filesystem.full_at:type_name -> google.protobuf.Timestamp
-	3,  // 7: sermon.web.v1.NodeService.GetNode:input_type -> sermon.web.v1.GetNodeRequest
-	6,  // 8: sermon.web.v1.NodeService.ListFilesystems:input_type -> sermon.web.v1.ListFilesystemsRequest
-	0,  // 9: sermon.web.v1.NodeService.RotateNodeKeys:input_type -> sermon.web.v1.RotateNodeKeysRequest
-	4,  // 10: sermon.web.v1.NodeService.GetNode:output_type -> sermon.web.v1.GetNodeResponse
-	7,  // 11: sermon.web.v1.NodeService.ListFilesystems:output_type -> sermon.web.v1.ListFilesystemsResponse
-	2,  // 12: sermon.web.v1.NodeService.RotateNodeKeys:output_type -> sermon.web.v1.RotateNodeKeysResponse
-	10, // [10:13] is the sub-list for method output_type
-	7,  // [7:10] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	13, // 0: sermon.web.v1.AllowNodeTakeoverResponse.until:type_name -> google.protobuf.Timestamp
+	5,  // 1: sermon.web.v1.RotateNodeKeysRequest.nodes:type_name -> sermon.web.v1.NodeIDs
+	9,  // 2: sermon.web.v1.GetNodeResponse.node:type_name -> sermon.web.v1.Node
+	13, // 3: sermon.web.v1.Node.enrolled_at:type_name -> google.protobuf.Timestamp
+	13, // 4: sermon.web.v1.Node.last_seen_at:type_name -> google.protobuf.Timestamp
+	14, // 5: sermon.web.v1.Node.figures:type_name -> sermon.web.v1.KeyFigures
+	13, // 6: sermon.web.v1.Node.locked_at:type_name -> google.protobuf.Timestamp
+	13, // 7: sermon.web.v1.Node.takeover_until:type_name -> google.protobuf.Timestamp
+	12, // 8: sermon.web.v1.ListFilesystemsResponse.filesystems:type_name -> sermon.web.v1.Filesystem
+	13, // 9: sermon.web.v1.Filesystem.full_at:type_name -> google.protobuf.Timestamp
+	7,  // 10: sermon.web.v1.NodeService.GetNode:input_type -> sermon.web.v1.GetNodeRequest
+	10, // 11: sermon.web.v1.NodeService.ListFilesystems:input_type -> sermon.web.v1.ListFilesystemsRequest
+	4,  // 12: sermon.web.v1.NodeService.RotateNodeKeys:input_type -> sermon.web.v1.RotateNodeKeysRequest
+	0,  // 13: sermon.web.v1.NodeService.UnlockNode:input_type -> sermon.web.v1.UnlockNodeRequest
+	2,  // 14: sermon.web.v1.NodeService.AllowNodeTakeover:input_type -> sermon.web.v1.AllowNodeTakeoverRequest
+	8,  // 15: sermon.web.v1.NodeService.GetNode:output_type -> sermon.web.v1.GetNodeResponse
+	11, // 16: sermon.web.v1.NodeService.ListFilesystems:output_type -> sermon.web.v1.ListFilesystemsResponse
+	6,  // 17: sermon.web.v1.NodeService.RotateNodeKeys:output_type -> sermon.web.v1.RotateNodeKeysResponse
+	1,  // 18: sermon.web.v1.NodeService.UnlockNode:output_type -> sermon.web.v1.UnlockNodeResponse
+	3,  // 19: sermon.web.v1.NodeService.AllowNodeTakeover:output_type -> sermon.web.v1.AllowNodeTakeoverResponse
+	15, // [15:20] is the sub-list for method output_type
+	10, // [10:15] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_node_proto_init() }
@@ -846,7 +1085,7 @@ func file_sermon_web_v1_node_proto_init() {
 		return
 	}
 	file_sermon_web_v1_fleet_proto_init()
-	file_sermon_web_v1_node_proto_msgTypes[0].OneofWrappers = []any{
+	file_sermon_web_v1_node_proto_msgTypes[4].OneofWrappers = []any{
 		(*RotateNodeKeysRequest_Nodes)(nil),
 		(*RotateNodeKeysRequest_GroupId)(nil),
 		(*RotateNodeKeysRequest_Organization)(nil),
@@ -857,7 +1096,7 @@ func file_sermon_web_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_node_proto_rawDesc), len(file_sermon_web_v1_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

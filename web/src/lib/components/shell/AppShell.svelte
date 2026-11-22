@@ -1,7 +1,6 @@
 <script lang="ts">
 	import Bell from '@lucide/svelte/icons/bell';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
-	import LogOut from '@lucide/svelte/icons/log-out';
 	import Megaphone from '@lucide/svelte/icons/megaphone';
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
@@ -12,14 +11,13 @@
 	import { page } from '$app/state';
 	import StepUpDialog from '#lib/components/auth/StepUpDialog.svelte';
 	import HelpPanel from '#lib/components/help/HelpPanel.svelte';
-	import LanguageSwitcher from '#lib/components/LanguageSwitcher.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { pageHelp } from '#lib/help/pages.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { helpState } from '#lib/stores/help.svelte.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
 	import OrgSwitcher from './OrgSwitcher.svelte';
-	import ThemeToggle from './ThemeToggle.svelte';
+	import AccountMenu from './AccountMenu.svelte';
 
 	let { children, onLogout }: { children: Snippet; onLogout: () => void } = $props();
 
@@ -85,7 +83,7 @@
 			<div class="ml-auto flex flex-wrap items-center gap-2">
 				<Button variant="outline" size="sm" disabled title={m.command_palette_soon()}>
 					<Search aria-hidden="true" />
-					{m.command_palette()}
+					<span class="sr-only">{m.command_palette()}</span>
 					<kbd class="font-mono text-xs text-muted-foreground">⌘K</kbd>
 				</Button>
 				{#if helpTopic}
@@ -100,15 +98,7 @@
 						<CircleQuestionMark aria-hidden="true" />
 					</Button>
 				{/if}
-				<ThemeToggle />
-				<LanguageSwitcher />
-				<span class="max-w-40 truncate text-sm text-muted-foreground" title={m.user_menu({ name })}>
-					{name}
-				</span>
-				<Button variant="ghost" size="sm" onclick={onLogout}>
-					<LogOut aria-hidden="true" />
-					{m.logout()}
-				</Button>
+				<AccountMenu {name} {onLogout} />
 			</div>
 		</div>
 	</header>

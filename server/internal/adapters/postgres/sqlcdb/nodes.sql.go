@@ -96,7 +96,8 @@ func (q *Queries) InsertNode(ctx context.Context, arg InsertNodeParams) error {
 const listVisibleNodes = `-- name: ListVisibleNodes :many
 SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
-       n.created_at, n.last_seen_at
+       n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
+       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
 ORDER BY n.hostname, n.id
@@ -121,6 +122,10 @@ type ListVisibleNodesRow struct {
 	AgentVersion  string
 	CreatedAt     time.Time
 	LastSeenAt    *time.Time
+	LockedAt      *time.Time
+	LockReason    string
+	LastIp        string
+	TakeoverUntil *time.Time
 }
 
 // Nodes of the scope's groups with their group name, for the UI (M1-26).
@@ -147,6 +152,10 @@ func (q *Queries) ListVisibleNodes(ctx context.Context, arg ListVisibleNodesPara
 			&i.AgentVersion,
 			&i.CreatedAt,
 			&i.LastSeenAt,
+			&i.LockedAt,
+			&i.LockReason,
+			&i.LastIp,
+			&i.TakeoverUntil,
 		); err != nil {
 			return nil, err
 		}

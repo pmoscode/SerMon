@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { alertingApi } from '#lib/api/alerting.js';
 	import type { NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import type { MaintenanceWindow, Weekday } from '#lib/api/gen/sermon/web/v1/silence_pb.js';
@@ -54,7 +54,7 @@
 		try {
 			const [w, g] = await Promise.all([
 				alertingApi.windows.listMaintenanceWindows({}),
-				api.access.listNodeGroups({})
+				adminApi.access.listNodeGroups({})
 			]);
 			windows = w.windows;
 			groups = g.groups;

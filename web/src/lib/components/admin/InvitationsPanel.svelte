@@ -3,7 +3,7 @@
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import type { Invitation, NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import { Role } from '#lib/api/gen/sermon/web/v1/access_pb.js';
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { adminError, copyText, roleName } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -44,7 +44,7 @@
 		copied = false;
 		try {
 			const res = await withStepUp(() =>
-				api.access.inviteMember({ email: to, role: asRole, groupId: inGroup })
+				adminApi.access.inviteMember({ email: to, role: asRole, groupId: inGroup })
 			);
 			if (res.emailed) sentTo = to;
 			else link = `${location.origin}/invite#${res.token}`;
@@ -66,7 +66,7 @@
 	async function revoke(id: string) {
 		failure = '';
 		try {
-			await api.access.revokeInvitation({ invitationId: id });
+			await adminApi.access.revokeInvitation({ invitationId: id });
 			await onChange();
 		} catch (error) {
 			failure = adminError(error);

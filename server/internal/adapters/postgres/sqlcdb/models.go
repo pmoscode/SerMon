@@ -222,6 +222,7 @@ type Node struct {
 	LastSeenAt    *time.Time
 	AgentVersion  pgtype.Text
 	EventSeq      int64
+	TakeoverUntil *time.Time
 }
 
 type NodeGroup struct {

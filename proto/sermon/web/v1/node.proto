@@ -22,6 +22,36 @@ service NodeService {
   // the agent connected right now could be the thief. Needs operator or admin on the affected
   // groups and a recent re-authentication. Unknown or foreign nodes and groups are NOT_FOUND.
   rpc RotateNodeKeys(RotateNodeKeysRequest) returns (RotateNodeKeysResponse);
+
+  // UnlockNode lifts the lock of a node (M2-23): its certificate is accepted again. If its key may
+  // have been stolen, use RotateNodeKeys with revoke_only instead. Needs operator on the node's
+  // group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
+  rpc UnlockNode(UnlockNodeRequest) returns (UnlockNodeResponse);
+  // AllowNodeTakeover lets the next enrollment with the node's machine-id and a token of its group
+  // take the node over for an hour (reinstalled host): it keeps ID and history, its old
+  // certificates are revoked. Rights as UnlockNode.
+  rpc AllowNodeTakeover(AllowNodeTakeoverRequest) returns (AllowNodeTakeoverResponse);
+}
+
+// UnlockNodeRequest names the node.
+message UnlockNodeRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// UnlockNodeResponse is empty.
+message UnlockNodeResponse {}
+
+// AllowNodeTakeoverRequest names the node.
+message AllowNodeTakeoverRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// AllowNodeTakeoverResponse says how long the takeover is allowed.
+message AllowNodeTakeoverResponse {
+  // until is the end of the takeover window.
+  google.protobuf.Timestamp until = 1;
 }
 
 // RotateNodeKeysRequest selects the nodes.
@@ -110,6 +140,16 @@ message Node {
   bool online = 14;
   // figures are the current values (absent without live data).
   KeyFigures figures = 15;
+  // locked_at is set while the node is locked (a second session, or a rotation from a new
+  // address): its certificate is refused until an operator unlocks it or it is re-enrolled.
+  google.protobuf.Timestamp locked_at = 16;
+  // lock_reason says why it is locked.
+  string lock_reason = 17;
+  // last_ip is the source address of the last agent session.
+  string last_ip = 18;
+  // takeover_until is set while an operator allows the next enrollment with this node's
+  // machine-id to take it over.
+  google.protobuf.Timestamp takeover_until = 19;
 }
 
 // ListFilesystemsRequest names the node.

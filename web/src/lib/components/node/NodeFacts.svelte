@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import type { Node } from '#lib/api/gen/sermon/web/v1/node_pb.js';
 	import Meter from '#lib/components/fleet/Meter.svelte';
@@ -31,7 +32,18 @@
 				{node.kernelRelease} · {node.architecture}
 			</p>
 		</div>
-		<StatusBadge status={assess(node).status} class="text-sm" />
+		<div class="flex flex-wrap items-center gap-3">
+			{#if node.lockedAt}
+				<!-- A lock refuses the agent's certificate: visible at once, details in the tab. -->
+				<span
+					class="inline-flex items-center gap-1 text-sm font-medium text-red-700 dark:text-red-400"
+				>
+					<ShieldAlert class="size-4" aria-hidden="true" />
+					{m.node_locked_badge()}
+				</span>
+			{/if}
+			<StatusBadge status={assess(node).status} class="text-sm" />
+		</div>
 	</div>
 	<dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
 		<div>

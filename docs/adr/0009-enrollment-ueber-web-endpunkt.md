@@ -43,3 +43,13 @@ Agent-API (M1-10) nutzt dagegen ein Server-Zertifikat der internen CA und verlan
 - Caddy muss für diesen Pfad h2c zum Server sprechen (Beispielkonfiguration mit M1-27).
 - Wer den Web-Endpunkt erreicht, kann `Enroll` aufrufen. Ohne gültiges Token passiert nichts; die Antwort
   unterscheidet ungültig, abgelaufen und aufgebraucht nicht.
+
+## Nachtrag M2-23 (Übernahme)
+
+Die Bestätigung in der UI ist ein **Übernahmefenster**: Ein Operator der Gruppe des Nodes erlaubt die Übernahme
+(Step-up, Audit `node.takeover_allow`); sie ist eine Stunde offen (`nodes.takeover_until`). Ein Enrollment mit derselben
+`machine-id` und einem Token **derselben Gruppe** übernimmt dann den Node: Das Zertifikat trägt die bestehende Node-ID,
+die Transaktion verbraucht das Token, prüft das Fenster erneut, widerruft alle alten Zertifikate, übernimmt die neuen
+Host-Fakten und schließt Fenster und Sperre (Audit `node.takeover`). Ein Token einer anderen Gruppe bekommt weiter
+`ALREADY_EXISTS`: Sonst könnte jemand mit Rechten auf eine Gruppe während des Fensters einen Node einer fremden Gruppe
+übernehmen. Ohne Fenster bleibt alles wie oben.

@@ -1,6 +1,6 @@
 # Node
 
-Everything about one server: a header with host facts and current key figures, below it charts by area (CPU, memory, disks, network).
+Everything about one server: a header with host facts and current key figures, below it charts by area (CPU, memory, disks, network, identity).
 
 ## Reading this page
 
@@ -8,6 +8,7 @@ Everything about one server: a header with host facts and current key figures, b
 - Every chart has an ⓘ explaining the metric.
 - The file system table shows when a file system runs full at the current trend (linear regression over 24 hours). “Not foreseeable” means no growth or more than a year away.
 - In the network area the rates can be shown in bit/s instead of bytes/s.
+- The Identity tab shows whether the node is locked, its last address and an open takeover window; operators rotate, revoke and unlock the key there or allow the takeover after a reinstallation – more in [Node identity](help:concepts/node-identity).
 
 ## Typical next steps
 

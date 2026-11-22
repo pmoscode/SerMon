@@ -30,6 +30,11 @@ type fakeNodes struct {
 	nodes   []rotation.NodeRef
 	scope   tenant.Scope
 	revoked []identity.NodeID
+	// M2-23
+	locked   bool
+	unlocked []identity.NodeID
+	takeover []identity.NodeID
+	until    time.Time
 }
 
 func (f *fakeNodes) NodesForRotation(_ context.Context, scope tenant.Scope, _ rotation.Target) ([]rotation.NodeRef, error) {

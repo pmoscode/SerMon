@@ -431,19 +431,21 @@ func TestAuthAPI_SessionDescribesTheRights(t *testing.T) {
 	ann := login(t, s, "ann@example.org") // admin of all groups
 	if me, err := ann.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
 		!me.Msg.GetSession().GetOrgAdmin() || strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != "*" ||
-		strings.Join(me.Msg.GetSession().GetSilenceGroupIds(), ",") != "*" {
+		strings.Join(me.Msg.GetSession().GetSilenceGroupIds(), ",") != "*" || strings.Join(me.Msg.GetSession().GetNodeIdentityGroupIds(), ",") != "*" {
 		t.Errorf("admin: %v, %v", me, err)
 	}
 	mia := login(t, s, "mia@example.org") // viewer of one group
 	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
-		me.Msg.GetSession().GetOrgAdmin() || len(me.Msg.GetSession().GetEnrollGroupIds()) != 0 || len(me.Msg.GetSession().GetSilenceGroupIds()) != 0 {
+		me.Msg.GetSession().GetOrgAdmin() || len(me.Msg.GetSession().GetEnrollGroupIds()) != 0 || len(me.Msg.GetSession().GetSilenceGroupIds()) != 0 ||
+		len(me.Msg.GetSession().GetNodeIdentityGroupIds()) != 0 {
 		t.Errorf("viewer: %v, %v", me, err)
 	}
 	ownerSQL(t, "SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
 		"UPDATE role_bindings SET role = 'operator' WHERE id = '"+bindingAl+"'")
 	t.Cleanup(func() { seedAccessFixtures(t) })
 	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
-		strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != groupAl || strings.Join(me.Msg.GetSession().GetSilenceGroupIds(), ",") != groupAl {
+		strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != groupAl || strings.Join(me.Msg.GetSession().GetSilenceGroupIds(), ",") != groupAl ||
+		strings.Join(me.Msg.GetSession().GetNodeIdentityGroupIds(), ",") != groupAl {
 		t.Errorf("operator of a group: %v, %v", me, err)
 	}
 }

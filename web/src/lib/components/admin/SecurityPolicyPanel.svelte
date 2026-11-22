@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { adminError } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { m } from '#lib/paraglide/messages.js';
@@ -12,7 +12,7 @@
 
 	async function load() {
 		try {
-			required = (await api.securityPolicy.getSecurityPolicy({})).secondFactorRequired;
+			required = (await adminApi.securityPolicy.getSecurityPolicy({})).secondFactorRequired;
 		} catch (error) {
 			failure = adminError(error);
 		}
@@ -26,7 +26,9 @@
 		busy = true;
 		failure = '';
 		try {
-			await withStepUp(() => api.securityPolicy.setSecondFactorRequired({ required: !required }));
+			await withStepUp(() =>
+				adminApi.securityPolicy.setSecondFactorRequired({ required: !required })
+			);
 			await load();
 		} catch (error) {
 			failure = adminError(error, m.admin_2fa_own_first());

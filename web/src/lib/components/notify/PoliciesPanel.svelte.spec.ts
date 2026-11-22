@@ -2,7 +2,7 @@ import { create } from '@bufbuild/protobuf';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api } from '#lib/api/client.js';
+import { adminApi } from '#lib/api/admin.js';
 import { alertingApi } from '#lib/api/alerting.js';
 import { ListChannelsResponseSchema } from '#lib/api/gen/sermon/web/v1/notification_pb.js';
 import {
@@ -24,7 +24,7 @@ describe('PoliciesPanel', () => {
 				]
 			})
 		);
-		vi.spyOn(api.access, 'listNodeGroups').mockResolvedValue({
+		vi.spyOn(adminApi.access, 'listNodeGroups').mockResolvedValue({
 			groups: [{ id: 'g1', name: 'web' }]
 		} as never);
 	});

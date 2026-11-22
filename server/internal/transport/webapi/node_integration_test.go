@@ -5,6 +5,7 @@ package webapi_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
@@ -71,4 +72,47 @@ func TestNodeAPI_RevokeOnlyRevokesWithoutRotation(t *testing.T) {
 	if err := conn.QueryRow(ctx, "SELECT revoked_at IS NOT NULL FROM agent_certificates WHERE serial = $1", certAl).Scan(&revoked); err != nil || !revoked {
 		t.Errorf("certificate revoked = %v, %v", revoked, err)
 	}
+}
+
+// Node identity (M2-23): an operator unlocks a locked node and allows its takeover, both with a
+// fresh step-up; the node shows lock, reason, last address and the window; a viewer may not.
+func TestNodeAPI_UnlockAndTakeoverShowInTheNode(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ctx := context.Background()
+	ownerSQL(t, "UPDATE nodes SET locked_at = now(), lock_reason = 'second session', last_ip = '192.0.2.10', takeover_until = NULL WHERE id = '"+nodeAl+"'")
+
+	node := func() *webv1.Node {
+		res, err := ann.node.GetNode(ctx, connect.NewRequest(&webv1.GetNodeRequest{NodeId: nodeAl}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Msg.GetNode()
+	}
+	n := node()
+	if n.GetLockedAt() == nil || n.GetLockReason() != "second session" || n.GetLastIp() != "192.0.2.10" || n.GetTakeoverUntil() != nil {
+		t.Fatalf("locked node = %v", n)
+	}
+
+	mia := login(t, s, "mia@example.org") // viewer
+	if _, err := mia.node.UnlockNode(ctx, connect.NewRequest(&webv1.UnlockNodeRequest{NodeId: nodeAl})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("viewer unlock: %v, want PERMISSION_DENIED", err)
+	}
+	if _, err := ann.node.UnlockNode(ctx, connect.NewRequest(&webv1.UnlockNodeRequest{NodeId: nodeAl})); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ann.node.AllowNodeTakeover(ctx, connect.NewRequest(&webv1.AllowNodeTakeoverRequest{NodeId: nodeAl}))
+	if err != nil || res.Msg.GetUntil() == nil {
+		t.Fatalf("AllowNodeTakeover() = %v, %v", res, err)
+	}
+	if n := node(); n.GetLockedAt() != nil || n.GetLockReason() != "" || !n.GetTakeoverUntil().AsTime().Equal(res.Msg.GetUntil().AsTime().Truncate(time.Microsecond)) {
+		t.Errorf("after unlock and takeover: %v", n)
+	}
+
+	ownerSQL(t, "UPDATE sessions SET step_up_at = now() - interval '1 hour' WHERE user_id = '"+annID+"'")
+	if _, err := ann.node.AllowNodeTakeover(ctx, connect.NewRequest(&webv1.AllowNodeTakeoverRequest{NodeId: nodeAl})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("old login: %v, want FAILED_PRECONDITION", err)
+	}
+	ownerSQL(t, "UPDATE nodes SET takeover_until = NULL WHERE id = '"+nodeAl+"'")
 }

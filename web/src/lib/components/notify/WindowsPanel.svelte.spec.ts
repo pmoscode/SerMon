@@ -2,7 +2,7 @@ import { create } from '@bufbuild/protobuf';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api } from '#lib/api/client.js';
+import { adminApi } from '#lib/api/admin.js';
 import { alertingApi } from '#lib/api/alerting.js';
 import {
 	ListMaintenanceWindowsResponseSchema,
@@ -14,7 +14,7 @@ import WindowsPanel from './WindowsPanel.svelte';
 describe('WindowsPanel', () => {
 	beforeEach(() => {
 		switchLocale('en');
-		vi.spyOn(api.access, 'listNodeGroups').mockResolvedValue({
+		vi.spyOn(adminApi.access, 'listNodeGroups').mockResolvedValue({
 			groups: [{ id: 'g1', name: 'web' }]
 		} as never);
 	});

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { MessageInitShape } from '@bufbuild/protobuf';
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { alertingApi } from '#lib/api/alerting.js';
 	import type { NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import type { NotificationChannel } from '#lib/api/gen/sermon/web/v1/notification_pb.js';
@@ -31,7 +31,7 @@
 			const [p, c, g] = await Promise.all([
 				alertingApi.policies.listPolicies({}),
 				alertingApi.channels.listChannels({}),
-				api.access.listNodeGroups({})
+				adminApi.access.listNodeGroups({})
 			]);
 			policies = p.policies;
 			channels = c.channels;

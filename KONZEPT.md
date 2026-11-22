@@ -365,6 +365,12 @@ eine Fake-Implementierung für Tests.
   - **Nur widerrufen** (`revoke_only`): Bei Verdacht auf einen **gestohlenen** Schlüssel könnte der gerade verbundene
     Agent der Dieb sein und bekäme bei einer Rotation das neue Zertifikat. Dann werden alle Zertifikate sofort
     widerrufen und die Sessions beendet, ohne Rotation; die echten Hosts werden neu enrollt.
+- **In der UI** (M2-23): Die Node-Seite zeigt eine Sperre sofort im Kopf; der Reiter „Identität“ zeigt Sperrgrund,
+  letzte Adresse und ein offenes Übernahmefenster. Operatoren der Gruppe können dort rotieren, widerrufen,
+  **entsperren** (das alte Zertifikat gilt wieder – bei Verdacht auf Diebstahl stattdessen widerrufen) und eine
+  **Übernahme erlauben** (eine Stunde: Das nächste Enrollment mit derselben `machine-id` und einem Token **derselben
+  Gruppe** übernimmt den Node mit ID und Historie, seine alten Zertifikate werden widerrufen,
+  [ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)). Alles mit Step-up und Audit.
 - **Rotation auf Server-Seite:**
   - Das Server-Zertifikat der Agent-API ist kurzlebig und wird automatisch erneuert.
   - CA-Wechsel per **Trust-Bundle**: Der Server verteilt über den Stream ein Bundle mit alter **und** neuer CA. Danach

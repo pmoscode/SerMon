@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { api, Code } from '#lib/api/client.js';
+import { adminApi } from '#lib/api/admin.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { m } from '#lib/paraglide/messages.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
@@ -33,19 +34,19 @@ describe('TwoFactorSettings', () => {
 
 	it('sets up TOTP with a QR code and shows the recovery codes once', async () => {
 		const status = vi
-			.spyOn(api.twoFactor, 'getTwoFactorStatus')
+			.spyOn(adminApi.twoFactor, 'getTwoFactorStatus')
 			.mockResolvedValueOnce({
 				totpEnabled: false,
 				recoveryCodesLeft: 0,
 				requiredByOrganization: true
 			} as never)
 			.mockResolvedValueOnce({ totpEnabled: true, recoveryCodesLeft: 10 } as never);
-		vi.spyOn(api.twoFactor, 'beginTotpSetup').mockResolvedValue({
+		vi.spyOn(adminApi.twoFactor, 'beginTotpSetup').mockResolvedValue({
 			secret: rfcSecret,
 			uri: `otpauth://totp/SerMon:mia@example.org?secret=${rfcSecret}&issuer=SerMon`
 		} as never);
 		const confirm = vi
-			.spyOn(api.twoFactor, 'confirmTotpSetup')
+			.spyOn(adminApi.twoFactor, 'confirmTotpSetup')
 			.mockRejectedValueOnce(rpcError(Code.PermissionDenied))
 			.mockResolvedValueOnce({ recoveryCodes: codes } as never);
 		render(TwoFactorSettings);
@@ -77,11 +78,11 @@ describe('TwoFactorSettings', () => {
 	});
 
 	it('asks for the step-up before the setup', async () => {
-		vi.spyOn(api.twoFactor, 'getTwoFactorStatus').mockResolvedValue({
+		vi.spyOn(adminApi.twoFactor, 'getTwoFactorStatus').mockResolvedValue({
 			totpEnabled: false
 		} as never);
 		const begin = vi
-			.spyOn(api.twoFactor, 'beginTotpSetup')
+			.spyOn(adminApi.twoFactor, 'beginTotpSetup')
 			.mockRejectedValueOnce(stepUpError())
 			.mockResolvedValueOnce({ secret: 'ABC', uri: 'otpauth://totp/x?secret=ABC' } as never);
 		render(TwoFactorSettings);
@@ -97,14 +98,14 @@ describe('TwoFactorSettings', () => {
 	});
 
 	it('replaces the recovery codes and turns off after a second click', async () => {
-		vi.spyOn(api.twoFactor, 'getTwoFactorStatus').mockResolvedValue({
+		vi.spyOn(adminApi.twoFactor, 'getTwoFactorStatus').mockResolvedValue({
 			totpEnabled: true,
 			recoveryCodesLeft: 3
 		} as never);
-		vi.spyOn(api.twoFactor, 'regenerateRecoveryCodes').mockResolvedValue({
+		vi.spyOn(adminApi.twoFactor, 'regenerateRecoveryCodes').mockResolvedValue({
 			recoveryCodes: codes
 		} as never);
-		const disable = vi.spyOn(api.twoFactor, 'disableTwoFactor').mockResolvedValue({} as never);
+		const disable = vi.spyOn(adminApi.twoFactor, 'disableTwoFactor').mockResolvedValue({} as never);
 		render(TwoFactorSettings);
 
 		await expect.element(page.getByText('Set up. 3 recovery codes left.')).toBeVisible();

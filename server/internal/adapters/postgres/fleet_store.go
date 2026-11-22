@@ -35,6 +35,7 @@ func (s *FleetStore) List(ctx context.Context, scope tenant.Scope) ([]fleet.Node
 				OSID: r.OsID, OSVersion: r.OsVersion, KernelRelease: r.KernelRelease, Architecture: r.Architecture,
 				CPUCount: uint32(max(r.CpuCount, 0)), MemoryBytes: uint64(max(r.MemoryBytes, 0)),
 				AgentVersion: r.AgentVersion, EnrolledAt: r.CreatedAt, LastSeenAt: r.LastSeenAt,
+				LockedAt: r.LockedAt, LockReason: r.LockReason, LastIP: r.LastIp, TakeoverUntil: r.TakeoverUntil,
 			}
 		}
 		return nil

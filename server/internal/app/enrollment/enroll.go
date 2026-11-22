@@ -26,7 +26,7 @@ var (
 	ErrInvalidCSR = errors.New("invalid certificate signing request")
 	// ErrMachineIDConflict means the organization already has a node with this machine-id; a
 	// takeover needs a confirmation in the UI (ADR 0009). The token is not used.
-	ErrMachineIDConflict = errors.New("a node with this machine-id already exists; confirm the takeover in the UI")
+	ErrMachineIDConflict = errors.New("a node with this machine-id already exists; allow its takeover in the UI (node, Identity) and enroll with a token of its group")
 )
 
 // NodeFacts are the host facts reported at enrollment (validated by protovalidate).
@@ -72,6 +72,13 @@ type Signer interface {
 // certificate and write the audit entries.
 type Registry interface {
 	Register(ctx context.Context, token Stored, node Node, cert agentca.CertificateRecord, now time.Time, audits []access.AuditEntry) error
+	// TakeoverCandidate returns the node of the token's group with this machine-id whose takeover
+	// an operator allowed until after now (M2-23).
+	TakeoverCandidate(ctx context.Context, token Stored, machineID string, now time.Time) (identity.NodeID, bool, error)
+	// TakeOver uses the token, revokes every certificate of the node, records the new one, takes
+	// the new host facts and closes the takeover window and any lock – in one transaction, and only
+	// while the window is still open (ErrMachineIDConflict otherwise).
+	TakeOver(ctx context.Context, token Stored, node Node, cert agentca.CertificateRecord, now time.Time, audits []access.AuditEntry) error
 }
 
 // Enroller enrolls new agents.
@@ -97,6 +104,14 @@ func (e *Enroller) Enroll(ctx context.Context, secret string, csrDER []byte, fac
 		return Enrolled{}, err
 	}
 	node := Node{ID: identity.NodeID(e.newID()), Group: stored.Group, Token: stored.ID, Facts: facts}
+	// A takeover keeps the node's ID (and its history): the certificate must carry it.
+	existing, takeover, err := e.registry.TakeoverCandidate(ctx, stored, facts.MachineID, e.now())
+	if err != nil {
+		return Enrolled{}, fmt.Errorf("look for a takeover: %w", err)
+	}
+	if takeover {
+		node.ID = existing
+	}
 	// Signing before the transaction is safe: an unrecorded certificate is never usable (M1-07).
 	issued, record, err := e.signer.SignAgentCertificate(stored.Org, csrDER, node.ID)
 	if errors.Is(err, pki.ErrInvalidCSR) {
@@ -115,7 +130,12 @@ func (e *Enroller) Enroll(ctx context.Context, secret string, csrDER []byte, fac
 			"certificate": issued.Serial, "cpus": strconv.Itoa(facts.CPUCount),
 		}},
 	}
-	if err := e.registry.Register(ctx, stored, node, record, e.now(), audits); err != nil {
+	register := e.registry.Register
+	if takeover {
+		audits[1].Action = "node.takeover"
+		register = e.registry.TakeOver
+	}
+	if err := register(ctx, stored, node, record, e.now(), audits); err != nil {
 		return Enrolled{}, fmt.Errorf("register node: %w", err)
 	}
 	// The bundle always contains the signing root, even if the trusted CAs changed meanwhile.

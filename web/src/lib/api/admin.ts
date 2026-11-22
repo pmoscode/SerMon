@@ -1,0 +1,16 @@
+/**
+ * Clients of the administration area (members, groups, enrollment tokens, two-factor settings,
+ * security policy). They live apart from #lib/api/client.js so that pages without administration
+ * don't load their descriptors (JavaScript budget, M1-29); tests replace single services with fakes.
+ */
+import { client } from './client.js';
+import { AccessService } from './gen/sermon/web/v1/access_pb.js';
+import { EnrollmentTokenService } from './gen/sermon/web/v1/enrollment_token_pb.js';
+import { SecurityPolicyService, TwoFactorService } from './gen/sermon/web/v1/two_factor_pb.js';
+
+export const adminApi = {
+	access: client(AccessService),
+	enrollment: client(EnrollmentTokenService),
+	twoFactor: client(TwoFactorService),
+	securityPolicy: client(SecurityPolicyService)
+};

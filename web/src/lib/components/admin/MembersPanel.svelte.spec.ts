@@ -2,7 +2,8 @@ import { create } from '@bufbuild/protobuf';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api, Code } from '#lib/api/client.js';
+import { Code } from '#lib/api/client.js';
+import { adminApi } from '#lib/api/admin.js';
 import {
 	MemberSchema,
 	NodeGroupSchema,
@@ -53,7 +54,7 @@ describe('MembersPanel', () => {
 
 	it('grants a role after the step-up and reloads', async () => {
 		const grant = vi
-			.spyOn(api.access, 'grantRole')
+			.spyOn(adminApi.access, 'grantRole')
 			.mockRejectedValueOnce(stepUpError())
 			.mockResolvedValueOnce({} as never);
 		const onChange = vi.fn().mockResolvedValue(undefined);
@@ -73,7 +74,7 @@ describe('MembersPanel', () => {
 
 	it('revokes a role and explains the last admin', async () => {
 		const revoke = vi
-			.spyOn(api.access, 'revokeRole')
+			.spyOn(adminApi.access, 'revokeRole')
 			.mockRejectedValue(rpcError(Code.FailedPrecondition));
 		render(MembersPanel, { members, groups: [web], onChange: vi.fn() });
 
@@ -84,7 +85,7 @@ describe('MembersPanel', () => {
 	});
 
 	it('removes a member only after a second click', async () => {
-		const remove = vi.spyOn(api.access, 'removeMember').mockResolvedValue({} as never);
+		const remove = vi.spyOn(adminApi.access, 'removeMember').mockResolvedValue({} as never);
 		const onChange = vi.fn().mockResolvedValue(undefined);
 		render(MembersPanel, { members, groups: [web], onChange });
 

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import ShieldAlert from '@lucide/svelte/icons/shield-exclamation-point';
-	import { api, Code, codeOf } from '#lib/api/client.js';
+	import { Code, codeOf } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import type { GetTwoFactorStatusResponse } from '#lib/api/gen/sermon/web/v1/two_factor_pb.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
@@ -30,7 +31,7 @@
 		failure = '';
 		confirmDisable = false;
 		try {
-			view = { kind: 'status', status: await api.twoFactor.getTwoFactorStatus({}) };
+			view = { kind: 'status', status: await adminApi.twoFactor.getTwoFactorStatus({}) };
 		} catch {
 			view = { kind: 'unavailable' };
 		}
@@ -55,7 +56,7 @@
 
 	const begin = () =>
 		run(async () => {
-			const res = await api.twoFactor.beginTotpSetup({});
+			const res = await adminApi.twoFactor.beginTotpSetup({});
 			code = '';
 			view = { kind: 'setup', secret: res.secret, uri: res.uri };
 		});
@@ -66,7 +67,7 @@
 		busy = true;
 		failure = '';
 		try {
-			const res = await api.twoFactor.confirmTotpSetup({ code: code.trim() });
+			const res = await adminApi.twoFactor.confirmTotpSetup({ code: code.trim() });
 			view = { kind: 'codes', codes: res.recoveryCodes };
 		} catch (error) {
 			failure =
@@ -82,13 +83,13 @@
 
 	const regenerate = () =>
 		run(async () => {
-			const res = await api.twoFactor.regenerateRecoveryCodes({});
+			const res = await adminApi.twoFactor.regenerateRecoveryCodes({});
 			view = { kind: 'codes', codes: res.recoveryCodes };
 		});
 
 	const disable = () =>
 		run(async () => {
-			await api.twoFactor.disableTwoFactor({});
+			await adminApi.twoFactor.disableTwoFactor({});
 			await sessionState.refresh();
 			await load();
 		});

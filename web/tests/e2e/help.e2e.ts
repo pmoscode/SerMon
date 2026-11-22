@@ -37,7 +37,9 @@ test.describe('context help (mocked API)', () => {
 	});
 
 	test('shows the help in German', async ({ page }) => {
+		await page.getByRole('button', { name: 'Account' }).click();
 		await page.getByRole('button', { name: 'Deutsch' }).click();
+		await page.keyboard.press('Escape');
 		await page.getByRole('button', { name: 'Hilfe zu dieser Seite' }).click();
 
 		await expect(

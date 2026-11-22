@@ -11,15 +11,10 @@ import {
 } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import type { DescService } from '@bufbuild/protobuf';
-import { AccessService } from './gen/sermon/web/v1/access_pb.js';
 import { AuthService, SecondFactorSetupRequiredSchema } from './gen/sermon/web/v1/auth_pb.js';
-import { EnrollmentTokenService } from './gen/sermon/web/v1/enrollment_token_pb.js';
 import { FleetService } from './gen/sermon/web/v1/fleet_pb.js';
-import { InvitationService } from './gen/sermon/web/v1/invitation_pb.js';
 import { MetricsService } from './gen/sermon/web/v1/metrics_pb.js';
 import { NodeService } from './gen/sermon/web/v1/node_pb.js';
-import { SetupService } from './gen/sermon/web/v1/setup_pb.js';
-import { SecurityPolicyService, TwoFactorService } from './gen/sermon/web/v1/two_factor_pb.js';
 
 let onExpired: () => void = () => {};
 
@@ -49,7 +44,12 @@ export const expiryInterceptor: Interceptor = (next) => async (request) => {
 	try {
 		return await next(request);
 	} catch (error) {
-		const anonymous = [AuthService.typeName, SetupService.typeName, InvitationService.typeName];
+		// Names, not descriptors: setup and invitation live in #lib/api/onboarding.js.
+		const anonymous = [
+			AuthService.typeName,
+			'sermon.web.v1.SetupService',
+			'sermon.web.v1.InvitationService'
+		];
 		if (
 			ConnectError.from(error).code === Code.Unauthenticated &&
 			!anonymous.includes(request.service.typeName)
@@ -73,18 +73,12 @@ export function client<T extends DescService>(service: T): Client<T> {
 	return createClient(service, transport);
 }
 
-/** The clients; tests replace single services with fakes. */
+/** The clients every app page needs; areas have their own (#lib/api/admin.js, alerting.js, onboarding.js). Tests replace single services with fakes. */
 export const api = {
 	auth: client(AuthService),
-	setup: client(SetupService),
-	access: client(AccessService),
-	enrollment: client(EnrollmentTokenService),
-	invitation: client(InvitationService),
 	fleet: client(FleetService),
 	metrics: client(MetricsService),
-	node: client(NodeService),
-	twoFactor: client(TwoFactorService),
-	securityPolicy: client(SecurityPolicyService)
+	node: client(NodeService)
 };
 
 /** The Connect code of an error (Unknown for anything else). */

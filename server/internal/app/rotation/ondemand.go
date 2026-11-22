@@ -51,6 +51,11 @@ type NodeStore interface {
 	NodesForRotation(ctx context.Context, scope tenant.Scope, t Target) ([]NodeRef, error)
 	// RevokeAll revokes all certificates of the node now and writes the audit entry.
 	RevokeAll(ctx context.Context, org tenant.OrgID, node identity.NodeID, now time.Time, audit access.AuditEntry) error
+	// Unlock lifts the node's lock and writes the audit entry; false if it was not locked (no
+	// audit then).
+	Unlock(ctx context.Context, org tenant.OrgID, node identity.NodeID, audit access.AuditEntry) (bool, error)
+	// AllowTakeover opens the node's takeover window until then and writes the audit entry.
+	AllowTakeover(ctx context.Context, org tenant.OrgID, node identity.NodeID, until time.Time, audit access.AuditEntry) error
 }
 
 // Live reaches connected agents (agentapi.Sessions).

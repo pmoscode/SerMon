@@ -23,8 +23,8 @@ pub enum EnrollError {
     InvalidToken,
     /// The organization already has a node with this machine-id; the token was not used.
     #[error(
-        "this host (same machine-id) is already registered in the organization – confirm the \
-         takeover in the UI or remove the old node first"
+        "this host (same machine-id) is already registered in the organization – allow its \
+         takeover in the UI (node, tab Identity) and enroll with a token of its group"
     )]
     AlreadyEnrolled,
     /// Too many attempts from this address.

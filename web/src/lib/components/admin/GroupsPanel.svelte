@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { adminError } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -34,13 +34,13 @@
 	async function create(event: SubmitEvent) {
 		event.preventDefault();
 		if (!name.trim()) return;
-		await run(() => api.access.createNodeGroup({ name: name.trim() }));
+		await run(() => adminApi.access.createNodeGroup({ name: name.trim() }));
 		if (!failure) name = '';
 	}
 
 	async function rename(event: SubmitEvent, id: string) {
 		event.preventDefault();
-		await run(() => api.access.renameNodeGroup({ groupId: id, name: editName.trim() }));
+		await run(() => adminApi.access.renameNodeGroup({ groupId: id, name: editName.trim() }));
 		if (!failure) editing = undefined;
 	}
 </script>
@@ -88,7 +88,7 @@
 								size="sm"
 								variant="destructive"
 								disabled={busy}
-								onclick={() => run(() => api.access.deleteNodeGroup({ groupId: group.id }))}
+								onclick={() => run(() => adminApi.access.deleteNodeGroup({ groupId: group.id }))}
 							>
 								{m.admin_delete_confirm()}
 							</Button>

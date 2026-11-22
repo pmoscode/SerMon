@@ -17,6 +17,7 @@
 
 	const nodeState = new NodeState(page.params.id ?? '');
 	let bits = $state(false);
+	let tab = $state('cpu');
 
 	$effect(() => nodeState.start());
 	$effect(() => {
@@ -59,12 +60,13 @@
 			<TimeRangePicker />
 		</div>
 
-		<Tabs.Root value="cpu">
+		<Tabs.Root bind:value={tab}>
 			<Tabs.List aria-label={m.node_areas()}>
 				<Tabs.Trigger value="cpu">{m.node_tab_cpu()}</Tabs.Trigger>
 				<Tabs.Trigger value="memory">{m.node_tab_memory()}</Tabs.Trigger>
 				<Tabs.Trigger value="disk">{m.node_tab_disk()}</Tabs.Trigger>
 				<Tabs.Trigger value="network">{m.node_tab_network()}</Tabs.Trigger>
+				<Tabs.Trigger value="identity">{m.node_tab_identity()}</Tabs.Trigger>
 			</Tabs.List>
 
 			<Tabs.Content value="cpu" class="grid gap-6 pt-4 lg:grid-cols-2">
@@ -230,6 +232,16 @@
 						queries={[{ metric: 'sermon_conntrack_utilization_ratio' }]}
 					/>
 				</div>
+			</Tabs.Content>
+			<!-- Loaded on demand: keeps the first load of the page within its budget (KONZEPT §17). -->
+			<Tabs.Content value="identity" class="pt-4">
+				{#if tab === 'identity'}
+					{#await import('#lib/components/node/NodeIdentity.svelte')}
+						<p role="status" class="text-muted-foreground">{m.loading()}</p>
+					{:then { default: NodeIdentity }}
+						<NodeIdentity node={nodeState.node} {now} onchange={() => void nodeState.load()} />
+					{/await}
+				{/if}
 			</Tabs.Content>
 		</Tabs.Root>
 	</div>

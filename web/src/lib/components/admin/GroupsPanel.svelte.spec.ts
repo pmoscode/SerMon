@@ -2,7 +2,8 @@ import { create } from '@bufbuild/protobuf';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api, Code } from '#lib/api/client.js';
+import { Code } from '#lib/api/client.js';
+import { adminApi } from '#lib/api/admin.js';
 import { NodeGroupSchema } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { m } from '#lib/paraglide/messages.js';
@@ -17,7 +18,7 @@ describe('GroupsPanel', () => {
 
 	it('creates a group and reports a taken name', async () => {
 		const createGroup = vi
-			.spyOn(api.access, 'createNodeGroup')
+			.spyOn(adminApi.access, 'createNodeGroup')
 			.mockRejectedValueOnce(rpcError(Code.AlreadyExists))
 			.mockResolvedValueOnce({} as never);
 		const onChange = vi.fn().mockResolvedValue(undefined);
@@ -35,8 +36,8 @@ describe('GroupsPanel', () => {
 	});
 
 	it('renames and deletes after a second click', async () => {
-		const rename = vi.spyOn(api.access, 'renameNodeGroup').mockResolvedValue({} as never);
-		const remove = vi.spyOn(api.access, 'deleteNodeGroup').mockResolvedValue({} as never);
+		const rename = vi.spyOn(adminApi.access, 'renameNodeGroup').mockResolvedValue({} as never);
+		const remove = vi.spyOn(adminApi.access, 'deleteNodeGroup').mockResolvedValue({} as never);
 		render(GroupsPanel, { groups, onChange: vi.fn().mockResolvedValue(undefined) });
 
 		await page.getByRole('button', { name: 'Rename' }).click();

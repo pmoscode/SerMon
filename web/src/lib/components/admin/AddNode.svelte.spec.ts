@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { api } from '#lib/api/client.js';
+import { adminApi } from '#lib/api/admin.js';
 import { NodeGroupSchema } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 import { KeyFiguresSchema, NodeSummarySchema } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
@@ -26,7 +27,7 @@ function withRights(enrollGroupIds: string[]) {
 describe('AddNode', () => {
 	beforeEach(() => {
 		switchLocale('en');
-		vi.spyOn(api.access, 'listNodeGroups').mockResolvedValue({ groups } as never);
+		vi.spyOn(adminApi.access, 'listNodeGroups').mockResolvedValue({ groups } as never);
 	});
 	afterEach(() => {
 		if (stepUpState.open) stepUpState.finish(false);
@@ -54,7 +55,7 @@ describe('AddNode', () => {
 				nodes: [old, { ...fresh, figures: create(KeyFiguresSchema, { cpuBusyRatio: 0.1 }) }]
 			} as never);
 		const token = vi
-			.spyOn(api.enrollment, 'createEnrollmentToken')
+			.spyOn(adminApi.enrollment, 'createEnrollmentToken')
 			.mockResolvedValue({ secret: 'sme_secret' } as never);
 		render(AddNode);
 
@@ -81,7 +82,7 @@ describe('AddNode', () => {
 	it('builds a command that checks the script for servers without a public certificate', async () => {
 		withRights(['*']);
 		vi.spyOn(api.fleet, 'getFleetSummary').mockResolvedValue({ nodes: [old] } as never);
-		vi.spyOn(api.enrollment, 'createEnrollmentToken').mockResolvedValue({
+		vi.spyOn(adminApi.enrollment, 'createEnrollmentToken').mockResolvedValue({
 			secret: 'sme_secret'
 		} as never);
 		const digest = 'c0ffee'.repeat(10) + 'abcd';
@@ -130,7 +131,7 @@ describe('AddNode', () => {
 		withRights(['*']);
 		vi.spyOn(api.fleet, 'getFleetSummary').mockResolvedValue({ nodes: [old] } as never);
 		const token = vi
-			.spyOn(api.enrollment, 'createEnrollmentToken')
+			.spyOn(adminApi.enrollment, 'createEnrollmentToken')
 			.mockRejectedValueOnce(stepUpError())
 			.mockResolvedValueOnce({ secret: 'sme_secret' } as never);
 		render(AddNode);
@@ -147,7 +148,7 @@ describe('AddNode', () => {
 	it('leads admins to create a group when there is none', async () => {
 		withRights(['*']);
 		sessionState.current!.orgAdmin = true;
-		vi.spyOn(api.access, 'listNodeGroups').mockResolvedValue({ groups: [] } as never);
+		vi.spyOn(adminApi.access, 'listNodeGroups').mockResolvedValue({ groups: [] } as never);
 		render(AddNode);
 
 		await expect

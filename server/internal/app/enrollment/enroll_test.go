@@ -55,6 +55,21 @@ type fakeRegistry struct {
 	audits []access.AuditEntry
 	err    error
 	calls  int
+	// takeover: the node whose takeover is allowed; takeovers counts the calls of TakeOver.
+	takeover  identity.NodeID
+	asked     string
+	takeovers int
+}
+
+func (f *fakeRegistry) TakeoverCandidate(_ context.Context, st enrollment.Stored, machineID string, _ time.Time) (identity.NodeID, bool, error) {
+	f.asked = st.Group.String() + "/" + machineID
+	return f.takeover, !f.takeover.IsZero(), nil
+}
+
+func (f *fakeRegistry) TakeOver(_ context.Context, _ enrollment.Stored, n enrollment.Node, c agentca.CertificateRecord, _ time.Time, audits []access.AuditEntry) error {
+	f.takeovers++
+	f.node, f.cert, f.audits = n, c, audits
+	return f.err
 }
 
 func (f *fakeRegistry) Register(_ context.Context, _ enrollment.Stored, n enrollment.Node, c agentca.CertificateRecord, _ time.Time, audits []access.AuditEntry) error {
@@ -106,6 +121,38 @@ func TestEnroll_SignsForTheTokensOrganizationAndRegistersTheNode(t *testing.T) {
 	actions := fmt.Sprint(registry.audits[0].Action, ",", registry.audits[1].Action)
 	if actions != "enrollment_token.use,node.enroll" || registry.audits[1].Details["machine_id"] != strings.Repeat("a", 32) {
 		t.Errorf("audits = %+v", registry.audits)
+	}
+}
+
+// Takeover (M2-23, T5): an operator allowed it for the node with this machine-id in the token's
+// group; the certificate carries the existing node's ID, its history stays.
+func TestEnroll_TakesOverAnAllowedNodeWithItsID(t *testing.T) {
+	existing := identity.NodeID(uuid.New())
+	signer, registry := &fakeSigner{}, &fakeRegistry{takeover: existing}
+	res, err := enroller(validStore(), signer, registry).Enroll(context.Background(), secret, []byte("csr"), facts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if registry.asked != group1.String()+"/"+strings.Repeat("a", 32) {
+		t.Errorf("asked for %q, want the token's group and the machine-id", registry.asked)
+	}
+	if signer.node != existing || res.Node != existing || registry.node.ID != existing || registry.node.Group != group1 {
+		t.Errorf("signed for %v, result %v, registered %v; want the existing node", signer.node, res.Node, registry.node.ID)
+	}
+	if registry.takeovers != 1 || registry.calls != 0 {
+		t.Errorf("TakeOver %d, Register %d; want the takeover only", registry.takeovers, registry.calls)
+	}
+	actions := fmt.Sprint(registry.audits[0].Action, ",", registry.audits[1].Action)
+	if actions != "enrollment_token.use,node.takeover" || registry.audits[1].Target != "node:"+existing.String() {
+		t.Errorf("audits = %+v", registry.audits)
+	}
+	// Without an allowed takeover a new node is registered (and the store reports a conflict).
+	signer, registry = &fakeSigner{}, &fakeRegistry{}
+	if _, err := enroller(validStore(), signer, registry).Enroll(context.Background(), secret, []byte("csr"), facts()); err != nil {
+		t.Fatal(err)
+	}
+	if registry.calls != 1 || registry.takeovers != 0 || signer.node == existing {
+		t.Errorf("Register %d, TakeOver %d", registry.calls, registry.takeovers)
 	}
 }
 

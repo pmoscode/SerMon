@@ -22,6 +22,7 @@ type Querier interface {
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
 	AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
+	AllowNodeTakeover(ctx context.Context, arg AllowNodeTakeoverParams) (int64, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	// The trigger instance_audit_log_chain assigns seq, time and the hashes.
 	AppendInstanceAudit(ctx context.Context, arg AppendInstanceAuditParams) error
@@ -164,6 +165,8 @@ type Querier interface {
 	LockPKI(ctx context.Context) error
 	// Moves seen_at forward to the newest data time of a write (never back).
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
+	// The node of a group with this machine-id whose takeover window is open.
+	NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error)
 	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
 	NodeSeries(ctx context.Context, arg NodeSeriesParams) ([]NodeSeriesRow, error)
 	// Nodes of an on-demand rotation within the scope's groups.
@@ -211,10 +214,15 @@ type Querier interface {
 	SupersedeCertificate(ctx context.Context, arg SupersedeCertificateParams) (int64, error)
 	// Records the source IP of a new session and returns the previous one.
 	SwapNodeLastIP(ctx context.Context, arg SwapNodeLastIPParams) (string, error)
+	// Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
+	// closed. No rows: the window closed meanwhile.
+	TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int64, error)
 	TouchNode(ctx context.Context, arg TouchNodeParams) (int64, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
 	TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error)
+	// Node identity in the UI (M2-23).
+	UnlockNode(ctx context.Context, id uuid.UUID) (int64, error)
 	UpdateMaintenanceWindow(ctx context.Context, arg UpdateMaintenanceWindowParams) (int64, error)
 	// The agent's Hello: current host facts and version (the machine-id never changes here).
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (uuid.UUID, error)

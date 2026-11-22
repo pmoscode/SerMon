@@ -172,6 +172,7 @@ func (h *NodeHandler) GetNode(ctx context.Context, req *connect.Request[webv1.Ge
 		OsId: n.OSID, OsVersion: n.OSVersion, KernelRelease: n.KernelRelease, Architecture: n.Architecture,
 		CpuCount: n.CPUCount, MemoryBytes: n.MemoryBytes, AgentVersion: n.AgentVersion,
 		EnrolledAt: timestamppb.New(n.EnrolledAt), LastSeenAt: optionalTime(n.LastSeenAt), Online: n.Online, Figures: figuresView(n.Figures),
+		LockedAt: optionalTime(n.LockedAt), LockReason: n.LockReason, LastIp: n.LastIP, TakeoverUntil: optionalTime(n.TakeoverUntil),
 	}}), nil
 }
 

@@ -35,8 +35,14 @@ test.describe('login and app shell (mocked API)', () => {
 		test(`the shell has no accessibility violations (${theme})`, async ({ page }) => {
 			await mockApi(page, installed(true));
 			await page.goto('/fleet');
+			// Theme and language live in the account menu (M2-23).
+			await page.getByRole('button', { name: 'Account' }).click();
 			await page.getByRole('button', { name: theme, exact: true }).click();
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('dialog')).toHaveCount(0);
 			await expect(page.getByText('No nodes yet')).toBeVisible();
+			// Colors fade on a theme switch: measure the contrast once they settled.
+			await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
 
 			const results = await new AxeBuilder({ page }).analyze();
 
@@ -81,6 +87,7 @@ test.describe('login and app shell (mocked API)', () => {
 		await mockApi(page, { ...installed(true), 'AuthService/Logout': () => ({ json: {} }) });
 		await page.goto('/fleet');
 
+		await page.getByRole('button', { name: 'Account' }).click();
 		await page.getByRole('button', { name: 'Sign out' }).click();
 
 		await expect(page).toHaveURL('/login?reason=logged_out');

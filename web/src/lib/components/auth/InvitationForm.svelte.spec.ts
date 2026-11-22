@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
-import { api, Code } from '#lib/api/client.js';
+import { Code } from '#lib/api/client.js';
+import { onboardingApi } from '#lib/api/onboarding.js';
 import { Role } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { m } from '#lib/paraglide/messages.js';
@@ -21,8 +22,10 @@ describe('InvitationForm', () => {
 
 	it('creates an account for the invited address', async () => {
 		sessionState.status = 'anonymous';
-		vi.spyOn(api.invitation, 'getInvitation').mockResolvedValue(invitation as never);
-		const accept = vi.spyOn(api.invitation, 'acceptInvitation').mockResolvedValue({} as never);
+		vi.spyOn(onboardingApi.invitation, 'getInvitation').mockResolvedValue(invitation as never);
+		const accept = vi
+			.spyOn(onboardingApi.invitation, 'acceptInvitation')
+			.mockResolvedValue({} as never);
 		const onAccepted = vi.fn();
 		render(InvitationForm, { token: 'smi_x', onAccepted, onJoined: vi.fn() });
 
@@ -49,8 +52,8 @@ describe('InvitationForm', () => {
 	it('lets a logged-in user join and switches to the organization', async () => {
 		sessionState.status = 'authenticated';
 		sessionState.current = fakeSession();
-		vi.spyOn(api.invitation, 'getInvitation').mockResolvedValue(invitation as never);
-		vi.spyOn(api.invitation, 'joinOrganization').mockResolvedValue({
+		vi.spyOn(onboardingApi.invitation, 'getInvitation').mockResolvedValue(invitation as never);
+		vi.spyOn(onboardingApi.invitation, 'joinOrganization').mockResolvedValue({
 			organizationId: 'o2'
 		} as never);
 		const switchOrg = vi
@@ -68,7 +71,9 @@ describe('InvitationForm', () => {
 
 	it('says so for an invalid link', async () => {
 		sessionState.status = 'anonymous';
-		vi.spyOn(api.invitation, 'getInvitation').mockRejectedValue(rpcError(Code.Unauthenticated));
+		vi.spyOn(onboardingApi.invitation, 'getInvitation').mockRejectedValue(
+			rpcError(Code.Unauthenticated)
+		);
 		render(InvitationForm, { token: 'smi_x', onAccepted: vi.fn(), onJoined: vi.fn() });
 
 		await expect.element(page.getByRole('alert')).toHaveTextContent(m.invite_invalid());

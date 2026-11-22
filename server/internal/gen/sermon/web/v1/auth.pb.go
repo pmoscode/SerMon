@@ -765,8 +765,11 @@ type Session struct {
 	// silence_group_ids are the groups where the caller may create silences (operator or admin);
 	// the single value "*" stands for all groups.
 	SilenceGroupIds []string `protobuf:"bytes,11,rep,name=silence_group_ids,json=silenceGroupIds,proto3" json:"silence_group_ids,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// node_identity_group_ids are the groups where the caller may rotate, revoke, unlock and allow
+	// the takeover of nodes (operator or admin, M2-23); the single value "*" stands for all groups.
+	NodeIdentityGroupIds []string `protobuf:"bytes,12,rep,name=node_identity_group_ids,json=nodeIdentityGroupIds,proto3" json:"node_identity_group_ids,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -876,6 +879,13 @@ func (x *Session) GetSilenceGroupIds() []string {
 	return nil
 }
 
+func (x *Session) GetNodeIdentityGroupIds() []string {
+	if x != nil {
+		return x.NodeIdentityGroupIds
+	}
+	return nil
+}
+
 // Organization is an organization the user belongs to.
 type Organization struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -967,7 +977,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\xfc\x03\n" +
+	"\x19SecondFactorSetupRequired\"\xb3\x04\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -980,7 +990,8 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\torg_admin\x18\t \x01(\bR\borgAdmin\x12(\n" +
 	"\x10enroll_group_ids\x18\n" +
 	" \x03(\tR\x0eenrollGroupIds\x12*\n" +
-	"\x11silence_group_ids\x18\v \x03(\tR\x0fsilenceGroupIds\"2\n" +
+	"\x11silence_group_ids\x18\v \x03(\tR\x0fsilenceGroupIds\x125\n" +
+	"\x17node_identity_group_ids\x18\f \x03(\tR\x14nodeIdentityGroupIds\"2\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name2\x96\x05\n" +

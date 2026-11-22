@@ -157,6 +157,76 @@ func (r *NodeRegistry) Register(ctx context.Context, st enrollment.Stored, n enr
 	})
 }
 
+// TakeoverCandidate returns the node of the token's group with this machine-id whose takeover
+// window is open (M2-23).
+func (r *NodeRegistry) TakeoverCandidate(ctx context.Context, st enrollment.Stored, machineID string, now time.Time) (identity.NodeID, bool, error) {
+	scope, err := tenant.ForGroups(st.Org, st.Group)
+	if err != nil {
+		return identity.NodeID{}, false, enrollment.ErrInvalidToken
+	}
+	var id uuid.UUID
+	err = r.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		found, err := q.NodeForTakeover(ctx, sqlcdb.NodeForTakeoverParams{MachineID: machineID, GroupID: uuid.UUID(st.Group), Now: &now})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		id = found
+		return wrap(err, "look for a takeover")
+	})
+	if err != nil {
+		return identity.NodeID{}, false, err
+	}
+	return identity.NodeID(id), id != uuid.Nil, nil
+}
+
+// TakeOver uses the token, takes the node over while its window is open, revokes all its
+// certificates, records the new one and writes the audit entries – in one transaction of the
+// token's organization. A closed window rolls everything back (ErrMachineIDConflict).
+func (r *NodeRegistry) TakeOver(ctx context.Context, st enrollment.Stored, n enrollment.Node, cert agentca.CertificateRecord, now time.Time, audits []access.AuditEntry) error {
+	scope, err := tenant.ForGroups(st.Org, st.Group)
+	if err != nil {
+		return enrollment.ErrInvalidToken
+	}
+	f := n.Facts
+	return r.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		used, err := q.ConsumeEnrollmentToken(ctx, sqlcdb.ConsumeEnrollmentTokenParams{ID: uuid.UUID(st.ID), Now: now})
+		if err != nil {
+			return fmt.Errorf("use enrollment token: %w", err)
+		}
+		if used == 0 {
+			return enrollment.ErrInvalidToken
+		}
+		token := uuid.UUID(n.Token)
+		taken, err := q.TakeOverNode(ctx, sqlcdb.TakeOverNodeParams{
+			ID: uuid.UUID(n.ID), GroupID: uuid.UUID(n.Group), MachineID: f.MachineID, Now: &now,
+			Hostname: f.Hostname, OsID: f.OSID, OsVersion: f.OSVersion, KernelRelease: f.KernelRelease,
+			Architecture: f.Architecture, CpuCount: int32(f.CPUCount), MemoryBytes: f.MemoryBytes, EnrolledWith: &token, //nolint:gosec // G115: 1..4096 (protovalidate)
+		})
+		if err != nil {
+			return fmt.Errorf("take over node: %w", err)
+		}
+		if taken == 0 {
+			return enrollment.ErrMachineIDConflict
+		}
+		// The old key is no longer trusted: every certificate of the node ends now.
+		if err := q.RevokeNodeCertificates(ctx, sqlcdb.RevokeNodeCertificatesParams{NodeID: uuid.UUID(n.ID), At: &now}); err != nil {
+			return fmt.Errorf("revoke old certificates: %w", err)
+		}
+		if err := q.InsertAgentCertificate(ctx, sqlcdb.InsertAgentCertificateParams{
+			Serial: cert.Serial, OrgID: uuid.UUID(cert.Org), NodeID: uuid.UUID(cert.Node), AuthorityID: cert.Authority,
+			NotBefore: cert.NotBefore, NotAfter: cert.NotAfter,
+		}); err != nil {
+			return fmt.Errorf("record certificate: %w", err)
+		}
+		for _, a := range audits {
+			if err := appendAudit(ctx, q, a); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func groupIDs(scope tenant.Scope) []uuid.UUID {
 	ids := []uuid.UUID{}
 	for _, g := range scope.Groups() {

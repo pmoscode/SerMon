@@ -13,6 +13,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const allowNodeTakeover = `-- name: AllowNodeTakeover :execrows
+UPDATE nodes SET takeover_until = $1 WHERE id = $2
+`
+
+type AllowNodeTakeoverParams struct {
+	Until *time.Time
+	ID    uuid.UUID
+}
+
+func (q *Queries) AllowNodeTakeover(ctx context.Context, arg AllowNodeTakeoverParams) (int64, error) {
+	result, err := q.db.Exec(ctx, allowNodeTakeover, arg.Until, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const lockNode = `-- name: LockNode :execrows
 UPDATE nodes SET locked_at = $1, lock_reason = $2
 WHERE id = $3 AND locked_at IS NULL
@@ -30,6 +47,25 @@ func (q *Queries) LockNode(ctx context.Context, arg LockNodeParams) (int64, erro
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const nodeForTakeover = `-- name: NodeForTakeover :one
+SELECT id FROM nodes
+WHERE machine_id = $1 AND group_id = $2 AND takeover_until > $3
+`
+
+type NodeForTakeoverParams struct {
+	MachineID string
+	GroupID   uuid.UUID
+	Now       *time.Time
+}
+
+// The node of a group with this machine-id whose takeover window is open.
+func (q *Queries) NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, nodeForTakeover, arg.MachineID, arg.GroupID, arg.Now)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const nodesForRotation = `-- name: NodesForRotation :many
@@ -136,4 +172,66 @@ func (q *Queries) SwapNodeLastIP(ctx context.Context, arg SwapNodeLastIPParams) 
 	var previous_ip string
 	err := row.Scan(&previous_ip)
 	return previous_ip, err
+}
+
+const takeOverNode = `-- name: TakeOverNode :execrows
+UPDATE nodes SET hostname = $1, os_id = $2, os_version = $3,
+                 kernel_release = $4, architecture = $5,
+                 cpu_count = $6, memory_bytes = $7,
+                 enrolled_with = $8, takeover_until = NULL, locked_at = NULL, lock_reason = NULL
+WHERE id = $9 AND group_id = $10 AND machine_id = $11
+  AND takeover_until > $12
+`
+
+type TakeOverNodeParams struct {
+	Hostname      string
+	OsID          string
+	OsVersion     string
+	KernelRelease string
+	Architecture  string
+	CpuCount      int32
+	MemoryBytes   int64
+	EnrolledWith  *uuid.UUID
+	ID            uuid.UUID
+	GroupID       uuid.UUID
+	MachineID     string
+	Now           *time.Time
+}
+
+// Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
+// closed. No rows: the window closed meanwhile.
+func (q *Queries) TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, takeOverNode,
+		arg.Hostname,
+		arg.OsID,
+		arg.OsVersion,
+		arg.KernelRelease,
+		arg.Architecture,
+		arg.CpuCount,
+		arg.MemoryBytes,
+		arg.EnrolledWith,
+		arg.ID,
+		arg.GroupID,
+		arg.MachineID,
+		arg.Now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const unlockNode = `-- name: UnlockNode :execrows
+
+UPDATE nodes SET locked_at = NULL, lock_reason = NULL
+WHERE id = $1 AND locked_at IS NOT NULL
+`
+
+// Node identity in the UI (M2-23).
+func (q *Queries) UnlockNode(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, unlockNode, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

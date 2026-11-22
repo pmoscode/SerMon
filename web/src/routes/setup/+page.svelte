@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { api } from '#lib/api/client.js';
+	import { onboardingApi } from '#lib/api/onboarding.js';
 	import AuthLayout from '#lib/components/auth/AuthLayout.svelte';
 	import SetupForm from '#lib/components/auth/SetupForm.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -13,7 +13,7 @@
 	async function check() {
 		state = 'loading';
 		try {
-			const res = await api.setup.getSetupStatus({});
+			const res = await onboardingApi.setup.getSetupStatus({});
 			state = res.setupRequired ? 'required' : 'done';
 		} catch {
 			state = 'unavailable';

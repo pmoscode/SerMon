@@ -14,7 +14,85 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/node.proto.
  */
 export const file_sermon_web_v1_node: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEiiwEKFVJvdGF0ZU5vZGVLZXlzUmVxdWVzdBInCgVub2RlcxgBIAEoCzIWLnNlcm1vbi53ZWIudjEuTm9kZUlEc0gAEhIKCGdyb3VwX2lkGAIgASgJSAASFgoMb3JnYW5pemF0aW9uGAMgASgISAASEwoLcmV2b2tlX29ubHkYBCABKAhCCAoGdGFyZ2V0IhYKB05vZGVJRHMSCwoDaWRzGAEgAygJIkoKFlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2USDgoGb25saW5lGAEgASgFEg8KB29mZmxpbmUYAiABKAUSDwoHcmV2b2tlZBgDIAEoBSIhCg5HZXROb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIjQKD0dldE5vZGVSZXNwb25zZRIhCgRub2RlGAEgASgLMhMuc2VybW9uLndlYi52MS5Ob2RlIvoCCgROb2RlEgoKAmlkGAEgASgJEhAKCGhvc3RuYW1lGAIgASgJEhAKCGdyb3VwX2lkGAMgASgJEhIKCmdyb3VwX25hbWUYBCABKAkSDQoFb3NfaWQYBSABKAkSEgoKb3NfdmVyc2lvbhgGIAEoCRIWCg5rZXJuZWxfcmVsZWFzZRgHIAEoCRIUCgxhcmNoaXRlY3R1cmUYCCABKAkSEQoJY3B1X2NvdW50GAkgASgNEhQKDG1lbW9yeV9ieXRlcxgKIAEoBBIVCg1hZ2VudF92ZXJzaW9uGAsgASgJEi8KC2Vucm9sbGVkX2F0GAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxsYXN0X3NlZW5fYXQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBm9ubGluZRgOIAEoCBIqCgdmaWd1cmVzGA8gASgLMhkuc2VybW9uLndlYi52MS5LZXlGaWd1cmVzIikKFkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSJJChdMaXN0RmlsZXN5c3RlbXNSZXNwb25zZRIuCgtmaWxlc3lzdGVtcxgBIAMoCzIZLnNlcm1vbi53ZWIudjEuRmlsZXN5c3RlbSLbAQoKRmlsZXN5c3RlbRISCgptb3VudHBvaW50GAEgASgJEhIKCnNpemVfYnl0ZXMYAiABKAQSEgoKdXNlZF9ieXRlcxgDIAEoBBITCgthdmFpbF9ieXRlcxgEIAEoBBISCgp1c2VkX3JhdGlvGAUgASgBEhAKCHJlYWRvbmx5GAYgASgIEhQKDGlub2Rlc190b3RhbBgHIAEoBBITCgtpbm9kZXNfdXNlZBgIIAEoBBIrCgdmdWxsX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcDKYAgoLTm9kZVNlcnZpY2USSAoHR2V0Tm9kZRIdLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVJlcXVlc3QaHi5zZXJtb24ud2ViLnYxLkdldE5vZGVSZXNwb25zZRJgCg9MaXN0RmlsZXN5c3RlbXMSJS5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1Jlc3BvbnNlEl0KDlJvdGF0ZU5vZGVLZXlzEiQuc2VybW9uLndlYi52MS5Sb3RhdGVOb2RlS2V5c1JlcXVlc3QaJS5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglOb2RlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_sermon_web_v1_fleet]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEiJAoRVW5sb2NrTm9kZVJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSIUChJVbmxvY2tOb2RlUmVzcG9uc2UiKwoYQWxsb3dOb2RlVGFrZW92ZXJSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkiRgoZQWxsb3dOb2RlVGFrZW92ZXJSZXNwb25zZRIpCgV1bnRpbBgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiiwEKFVJvdGF0ZU5vZGVLZXlzUmVxdWVzdBInCgVub2RlcxgBIAEoCzIWLnNlcm1vbi53ZWIudjEuTm9kZUlEc0gAEhIKCGdyb3VwX2lkGAIgASgJSAASFgoMb3JnYW5pemF0aW9uGAMgASgISAASEwoLcmV2b2tlX29ubHkYBCABKAhCCAoGdGFyZ2V0IhYKB05vZGVJRHMSCwoDaWRzGAEgAygJIkoKFlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2USDgoGb25saW5lGAEgASgFEg8KB29mZmxpbmUYAiABKAUSDwoHcmV2b2tlZBgDIAEoBSIhCg5HZXROb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIjQKD0dldE5vZGVSZXNwb25zZRIhCgRub2RlGAEgASgLMhMuc2VybW9uLndlYi52MS5Ob2RlIoMECgROb2RlEgoKAmlkGAEgASgJEhAKCGhvc3RuYW1lGAIgASgJEhAKCGdyb3VwX2lkGAMgASgJEhIKCmdyb3VwX25hbWUYBCABKAkSDQoFb3NfaWQYBSABKAkSEgoKb3NfdmVyc2lvbhgGIAEoCRIWCg5rZXJuZWxfcmVsZWFzZRgHIAEoCRIUCgxhcmNoaXRlY3R1cmUYCCABKAkSEQoJY3B1X2NvdW50GAkgASgNEhQKDG1lbW9yeV9ieXRlcxgKIAEoBBIVCg1hZ2VudF92ZXJzaW9uGAsgASgJEi8KC2Vucm9sbGVkX2F0GAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxsYXN0X3NlZW5fYXQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBm9ubGluZRgOIAEoCBIqCgdmaWd1cmVzGA8gASgLMhkuc2VybW9uLndlYi52MS5LZXlGaWd1cmVzEi0KCWxvY2tlZF9hdBgQIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEwoLbG9ja19yZWFzb24YESABKAkSDwoHbGFzdF9pcBgSIAEoCRIyCg50YWtlb3Zlcl91bnRpbBgTIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiKQoWTGlzdEZpbGVzeXN0ZW1zUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIkkKF0xpc3RGaWxlc3lzdGVtc1Jlc3BvbnNlEi4KC2ZpbGVzeXN0ZW1zGAEgAygLMhkuc2VybW9uLndlYi52MS5GaWxlc3lzdGVtItsBCgpGaWxlc3lzdGVtEhIKCm1vdW50cG9pbnQYASABKAkSEgoKc2l6ZV9ieXRlcxgCIAEoBBISCgp1c2VkX2J5dGVzGAMgASgEEhMKC2F2YWlsX2J5dGVzGAQgASgEEhIKCnVzZWRfcmF0aW8YBSABKAESEAoIcmVhZG9ubHkYBiABKAgSFAoMaW5vZGVzX3RvdGFsGAcgASgEEhMKC2lub2Rlc191c2VkGAggASgEEisKB2Z1bGxfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wMtMDCgtOb2RlU2VydmljZRJICgdHZXROb2RlEh0uc2VybW9uLndlYi52MS5HZXROb2RlUmVxdWVzdBoeLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVJlc3BvbnNlEmAKD0xpc3RGaWxlc3lzdGVtcxIlLnNlcm1vbi53ZWIudjEuTGlzdEZpbGVzeXN0ZW1zUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuTGlzdEZpbGVzeXN0ZW1zUmVzcG9uc2USXQoOUm90YXRlTm9kZUtleXMSJC5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVxdWVzdBolLnNlcm1vbi53ZWIudjEuUm90YXRlTm9kZUtleXNSZXNwb25zZRJRCgpVbmxvY2tOb2RlEiAuc2VybW9uLndlYi52MS5VbmxvY2tOb2RlUmVxdWVzdBohLnNlcm1vbi53ZWIudjEuVW5sb2NrTm9kZVJlc3BvbnNlEmYKEUFsbG93Tm9kZVRha2VvdmVyEicuc2VybW9uLndlYi52MS5BbGxvd05vZGVUYWtlb3ZlclJlcXVlc3QaKC5zZXJtb24ud2ViLnYxLkFsbG93Tm9kZVRha2VvdmVyUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglOb2RlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_sermon_web_v1_fleet]);
+
+/**
+ * UnlockNodeRequest names the node.
+ *
+ * @generated from message sermon.web.v1.UnlockNodeRequest
+ */
+export type UnlockNodeRequest = Message<"sermon.web.v1.UnlockNodeRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.UnlockNodeRequest.
+ * Use `create(UnlockNodeRequestSchema)` to create a new message.
+ */
+export const UnlockNodeRequestSchema: GenMessage<UnlockNodeRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 0);
+
+/**
+ * UnlockNodeResponse is empty.
+ *
+ * @generated from message sermon.web.v1.UnlockNodeResponse
+ */
+export type UnlockNodeResponse = Message<"sermon.web.v1.UnlockNodeResponse"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.UnlockNodeResponse.
+ * Use `create(UnlockNodeResponseSchema)` to create a new message.
+ */
+export const UnlockNodeResponseSchema: GenMessage<UnlockNodeResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 1);
+
+/**
+ * AllowNodeTakeoverRequest names the node.
+ *
+ * @generated from message sermon.web.v1.AllowNodeTakeoverRequest
+ */
+export type AllowNodeTakeoverRequest = Message<"sermon.web.v1.AllowNodeTakeoverRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.AllowNodeTakeoverRequest.
+ * Use `create(AllowNodeTakeoverRequestSchema)` to create a new message.
+ */
+export const AllowNodeTakeoverRequestSchema: GenMessage<AllowNodeTakeoverRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 2);
+
+/**
+ * AllowNodeTakeoverResponse says how long the takeover is allowed.
+ *
+ * @generated from message sermon.web.v1.AllowNodeTakeoverResponse
+ */
+export type AllowNodeTakeoverResponse = Message<"sermon.web.v1.AllowNodeTakeoverResponse"> & {
+  /**
+   * until is the end of the takeover window.
+   *
+   * @generated from field: google.protobuf.Timestamp until = 1;
+   */
+  until?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.AllowNodeTakeoverResponse.
+ * Use `create(AllowNodeTakeoverResponseSchema)` to create a new message.
+ */
+export const AllowNodeTakeoverResponseSchema: GenMessage<AllowNodeTakeoverResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 3);
 
 /**
  * RotateNodeKeysRequest selects the nodes.
@@ -67,7 +145,7 @@ export type RotateNodeKeysRequest = Message<"sermon.web.v1.RotateNodeKeysRequest
  * Use `create(RotateNodeKeysRequestSchema)` to create a new message.
  */
 export const RotateNodeKeysRequestSchema: GenMessage<RotateNodeKeysRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 0);
+  messageDesc(file_sermon_web_v1_node, 4);
 
 /**
  * NodeIDs is a list of node UUIDs.
@@ -88,7 +166,7 @@ export type NodeIDs = Message<"sermon.web.v1.NodeIDs"> & {
  * Use `create(NodeIDsSchema)` to create a new message.
  */
 export const NodeIDsSchema: GenMessage<NodeIDs> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 1);
+  messageDesc(file_sermon_web_v1_node, 5);
 
 /**
  * RotateNodeKeysResponse reports what happened.
@@ -124,7 +202,7 @@ export type RotateNodeKeysResponse = Message<"sermon.web.v1.RotateNodeKeysRespon
  * Use `create(RotateNodeKeysResponseSchema)` to create a new message.
  */
 export const RotateNodeKeysResponseSchema: GenMessage<RotateNodeKeysResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 2);
+  messageDesc(file_sermon_web_v1_node, 6);
 
 /**
  * GetNodeRequest names the node.
@@ -145,7 +223,7 @@ export type GetNodeRequest = Message<"sermon.web.v1.GetNodeRequest"> & {
  * Use `create(GetNodeRequestSchema)` to create a new message.
  */
 export const GetNodeRequestSchema: GenMessage<GetNodeRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 3);
+  messageDesc(file_sermon_web_v1_node, 7);
 
 /**
  * GetNodeResponse holds the node.
@@ -166,7 +244,7 @@ export type GetNodeResponse = Message<"sermon.web.v1.GetNodeResponse"> & {
  * Use `create(GetNodeResponseSchema)` to create a new message.
  */
 export const GetNodeResponseSchema: GenMessage<GetNodeResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 4);
+  messageDesc(file_sermon_web_v1_node, 8);
 
 /**
  * Node are the details of a node.
@@ -278,6 +356,36 @@ export type Node = Message<"sermon.web.v1.Node"> & {
    * @generated from field: sermon.web.v1.KeyFigures figures = 15;
    */
   figures?: KeyFigures | undefined;
+
+  /**
+   * locked_at is set while the node is locked (a second session, or a rotation from a new
+   * address): its certificate is refused until an operator unlocks it or it is re-enrolled.
+   *
+   * @generated from field: google.protobuf.Timestamp locked_at = 16;
+   */
+  lockedAt?: Timestamp | undefined;
+
+  /**
+   * lock_reason says why it is locked.
+   *
+   * @generated from field: string lock_reason = 17;
+   */
+  lockReason: string;
+
+  /**
+   * last_ip is the source address of the last agent session.
+   *
+   * @generated from field: string last_ip = 18;
+   */
+  lastIp: string;
+
+  /**
+   * takeover_until is set while an operator allows the next enrollment with this node's
+   * machine-id to take it over.
+   *
+   * @generated from field: google.protobuf.Timestamp takeover_until = 19;
+   */
+  takeoverUntil?: Timestamp | undefined;
 };
 
 /**
@@ -285,7 +393,7 @@ export type Node = Message<"sermon.web.v1.Node"> & {
  * Use `create(NodeSchema)` to create a new message.
  */
 export const NodeSchema: GenMessage<Node> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 5);
+  messageDesc(file_sermon_web_v1_node, 9);
 
 /**
  * ListFilesystemsRequest names the node.
@@ -306,7 +414,7 @@ export type ListFilesystemsRequest = Message<"sermon.web.v1.ListFilesystemsReque
  * Use `create(ListFilesystemsRequestSchema)` to create a new message.
  */
 export const ListFilesystemsRequestSchema: GenMessage<ListFilesystemsRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 6);
+  messageDesc(file_sermon_web_v1_node, 10);
 
 /**
  * ListFilesystemsResponse holds the file systems.
@@ -327,7 +435,7 @@ export type ListFilesystemsResponse = Message<"sermon.web.v1.ListFilesystemsResp
  * Use `create(ListFilesystemsResponseSchema)` to create a new message.
  */
 export const ListFilesystemsResponseSchema: GenMessage<ListFilesystemsResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 7);
+  messageDesc(file_sermon_web_v1_node, 11);
 
 /**
  * Filesystem is one mounted file system with current values from the last minute.
@@ -404,7 +512,7 @@ export type Filesystem = Message<"sermon.web.v1.Filesystem"> & {
  * Use `create(FilesystemSchema)` to create a new message.
  */
 export const FilesystemSchema: GenMessage<Filesystem> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 8);
+  messageDesc(file_sermon_web_v1_node, 12);
 
 /**
  * NodeService shows and manages nodes (KONZEPT §6, §7, §8.2).
@@ -448,6 +556,30 @@ export const NodeService: GenService<{
     methodKind: "unary";
     input: typeof RotateNodeKeysRequestSchema;
     output: typeof RotateNodeKeysResponseSchema;
+  },
+  /**
+   * UnlockNode lifts the lock of a node (M2-23): its certificate is accepted again. If its key may
+   * have been stolen, use RotateNodeKeys with revoke_only instead. Needs operator on the node's
+   * group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
+   *
+   * @generated from rpc sermon.web.v1.NodeService.UnlockNode
+   */
+  unlockNode: {
+    methodKind: "unary";
+    input: typeof UnlockNodeRequestSchema;
+    output: typeof UnlockNodeResponseSchema;
+  },
+  /**
+   * AllowNodeTakeover lets the next enrollment with the node's machine-id and a token of its group
+   * take the node over for an hour (reinstalled host): it keeps ID and history, its old
+   * certificates are revoked. Rights as UnlockNode.
+   *
+   * @generated from rpc sermon.web.v1.NodeService.AllowNodeTakeover
+   */
+  allowNodeTakeover: {
+    methodKind: "unary";
+    input: typeof AllowNodeTakeoverRequestSchema;
+    output: typeof AllowNodeTakeoverResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_node, 0);

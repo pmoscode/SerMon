@@ -35,6 +35,8 @@ const (
 	RebootNodes            // trigger reboots
 	CreateEnrollmentTokens // add nodes to a group
 	RotateNodeKeys         // on-demand key rotation (KONZEPT §6)
+	UnlockNode             // lift the lock after a second session (M2-23)
+	AllowNodeTakeover      // let the next enrollment with the node's machine-id take it over (M2-23)
 
 	// Organization-wide actions (Admin on all groups).
 	ManageAlertRules
@@ -80,6 +82,8 @@ var rules = map[Action]rule{
 	RebootNodes:            {name: "reboot_nodes", minimum: role.Operator, scope: groupScoped},
 	CreateEnrollmentTokens: {name: "create_enrollment_tokens", minimum: role.Operator, scope: groupScoped},
 	RotateNodeKeys:         {name: "rotate_node_keys", minimum: role.Operator, scope: groupScoped},
+	UnlockNode:             {name: "unlock_node", minimum: role.Operator, scope: groupScoped},
+	AllowNodeTakeover:      {name: "allow_node_takeover", minimum: role.Operator, scope: groupScoped},
 	ManageAlertRules:       {name: "manage_alert_rules", minimum: role.Admin, scope: orgWide},
 	ManageChannels:         {name: "manage_channels", minimum: role.Admin, scope: orgWide},
 	ManagePolicies:         {name: "manage_policies", minimum: role.Admin, scope: orgWide},

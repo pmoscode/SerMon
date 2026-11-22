@@ -41,6 +41,11 @@ const (
 	// NodeServiceRotateNodeKeysProcedure is the fully-qualified name of the NodeService's
 	// RotateNodeKeys RPC.
 	NodeServiceRotateNodeKeysProcedure = "/sermon.web.v1.NodeService/RotateNodeKeys"
+	// NodeServiceUnlockNodeProcedure is the fully-qualified name of the NodeService's UnlockNode RPC.
+	NodeServiceUnlockNodeProcedure = "/sermon.web.v1.NodeService/UnlockNode"
+	// NodeServiceAllowNodeTakeoverProcedure is the fully-qualified name of the NodeService's
+	// AllowNodeTakeover RPC.
+	NodeServiceAllowNodeTakeoverProcedure = "/sermon.web.v1.NodeService/AllowNodeTakeover"
 )
 
 // NodeServiceClient is a client for the sermon.web.v1.NodeService service.
@@ -58,6 +63,14 @@ type NodeServiceClient interface {
 	// the agent connected right now could be the thief. Needs operator or admin on the affected
 	// groups and a recent re-authentication. Unknown or foreign nodes and groups are NOT_FOUND.
 	RotateNodeKeys(context.Context, *connect.Request[v1.RotateNodeKeysRequest]) (*connect.Response[v1.RotateNodeKeysResponse], error)
+	// UnlockNode lifts the lock of a node (M2-23): its certificate is accepted again. If its key may
+	// have been stolen, use RotateNodeKeys with revoke_only instead. Needs operator on the node's
+	// group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
+	UnlockNode(context.Context, *connect.Request[v1.UnlockNodeRequest]) (*connect.Response[v1.UnlockNodeResponse], error)
+	// AllowNodeTakeover lets the next enrollment with the node's machine-id and a token of its group
+	// take the node over for an hour (reinstalled host): it keeps ID and history, its old
+	// certificates are revoked. Rights as UnlockNode.
+	AllowNodeTakeover(context.Context, *connect.Request[v1.AllowNodeTakeoverRequest]) (*connect.Response[v1.AllowNodeTakeoverResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the sermon.web.v1.NodeService service. By default,
@@ -89,14 +102,28 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("RotateNodeKeys")),
 			connect.WithClientOptions(opts...),
 		),
+		unlockNode: connect.NewClient[v1.UnlockNodeRequest, v1.UnlockNodeResponse](
+			httpClient,
+			baseURL+NodeServiceUnlockNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("UnlockNode")),
+			connect.WithClientOptions(opts...),
+		),
+		allowNodeTakeover: connect.NewClient[v1.AllowNodeTakeoverRequest, v1.AllowNodeTakeoverResponse](
+			httpClient,
+			baseURL+NodeServiceAllowNodeTakeoverProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("AllowNodeTakeover")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
-	getNode         *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
-	listFilesystems *connect.Client[v1.ListFilesystemsRequest, v1.ListFilesystemsResponse]
-	rotateNodeKeys  *connect.Client[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse]
+	getNode           *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
+	listFilesystems   *connect.Client[v1.ListFilesystemsRequest, v1.ListFilesystemsResponse]
+	rotateNodeKeys    *connect.Client[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse]
+	unlockNode        *connect.Client[v1.UnlockNodeRequest, v1.UnlockNodeResponse]
+	allowNodeTakeover *connect.Client[v1.AllowNodeTakeoverRequest, v1.AllowNodeTakeoverResponse]
 }
 
 // GetNode calls sermon.web.v1.NodeService.GetNode.
@@ -114,6 +141,16 @@ func (c *nodeServiceClient) RotateNodeKeys(ctx context.Context, req *connect.Req
 	return c.rotateNodeKeys.CallUnary(ctx, req)
 }
 
+// UnlockNode calls sermon.web.v1.NodeService.UnlockNode.
+func (c *nodeServiceClient) UnlockNode(ctx context.Context, req *connect.Request[v1.UnlockNodeRequest]) (*connect.Response[v1.UnlockNodeResponse], error) {
+	return c.unlockNode.CallUnary(ctx, req)
+}
+
+// AllowNodeTakeover calls sermon.web.v1.NodeService.AllowNodeTakeover.
+func (c *nodeServiceClient) AllowNodeTakeover(ctx context.Context, req *connect.Request[v1.AllowNodeTakeoverRequest]) (*connect.Response[v1.AllowNodeTakeoverResponse], error) {
+	return c.allowNodeTakeover.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the sermon.web.v1.NodeService service.
 type NodeServiceHandler interface {
 	// GetNode returns the details of a node the caller may view; unknown or foreign nodes are
@@ -129,6 +166,14 @@ type NodeServiceHandler interface {
 	// the agent connected right now could be the thief. Needs operator or admin on the affected
 	// groups and a recent re-authentication. Unknown or foreign nodes and groups are NOT_FOUND.
 	RotateNodeKeys(context.Context, *connect.Request[v1.RotateNodeKeysRequest]) (*connect.Response[v1.RotateNodeKeysResponse], error)
+	// UnlockNode lifts the lock of a node (M2-23): its certificate is accepted again. If its key may
+	// have been stolen, use RotateNodeKeys with revoke_only instead. Needs operator on the node's
+	// group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
+	UnlockNode(context.Context, *connect.Request[v1.UnlockNodeRequest]) (*connect.Response[v1.UnlockNodeResponse], error)
+	// AllowNodeTakeover lets the next enrollment with the node's machine-id and a token of its group
+	// take the node over for an hour (reinstalled host): it keeps ID and history, its old
+	// certificates are revoked. Rights as UnlockNode.
+	AllowNodeTakeover(context.Context, *connect.Request[v1.AllowNodeTakeoverRequest]) (*connect.Response[v1.AllowNodeTakeoverResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -156,6 +201,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("RotateNodeKeys")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceUnlockNodeHandler := connect.NewUnaryHandler(
+		NodeServiceUnlockNodeProcedure,
+		svc.UnlockNode,
+		connect.WithSchema(nodeServiceMethods.ByName("UnlockNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceAllowNodeTakeoverHandler := connect.NewUnaryHandler(
+		NodeServiceAllowNodeTakeoverProcedure,
+		svc.AllowNodeTakeover,
+		connect.WithSchema(nodeServiceMethods.ByName("AllowNodeTakeover")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceGetNodeProcedure:
@@ -164,6 +221,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceListFilesystemsHandler.ServeHTTP(w, r)
 		case NodeServiceRotateNodeKeysProcedure:
 			nodeServiceRotateNodeKeysHandler.ServeHTTP(w, r)
+		case NodeServiceUnlockNodeProcedure:
+			nodeServiceUnlockNodeHandler.ServeHTTP(w, r)
+		case NodeServiceAllowNodeTakeoverProcedure:
+			nodeServiceAllowNodeTakeoverHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -183,4 +244,12 @@ func (UnimplementedNodeServiceHandler) ListFilesystems(context.Context, *connect
 
 func (UnimplementedNodeServiceHandler) RotateNodeKeys(context.Context, *connect.Request[v1.RotateNodeKeysRequest]) (*connect.Response[v1.RotateNodeKeysResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.RotateNodeKeys is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) UnlockNode(context.Context, *connect.Request[v1.UnlockNodeRequest]) (*connect.Response[v1.UnlockNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.UnlockNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) AllowNodeTakeover(context.Context, *connect.Request[v1.AllowNodeTakeoverRequest]) (*connect.Response[v1.AllowNodeTakeoverResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.AllowNodeTakeover is not implemented"))
 }

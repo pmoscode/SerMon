@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import type { AuditEntry, Member } from '#lib/api/gen/sermon/web/v1/access_pb.js';
-	import { api } from '#lib/api/client.js';
+	import { adminApi } from '#lib/api/admin.js';
 	import { adminError } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { formatTimestamp } from '#lib/format/format.js';
@@ -22,7 +22,7 @@
 	async function load(before = 0n) {
 		busy = true;
 		try {
-			const res = await api.access.listAuditLog({ beforeSeq: before, pageSize: PAGE });
+			const res = await adminApi.access.listAuditLog({ beforeSeq: before, pageSize: PAGE });
 			entries = before === 0n ? res.entries : [...entries, ...res.entries];
 			more = res.entries.length === PAGE;
 		} catch (error) {

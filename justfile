@@ -27,13 +27,14 @@ setup:
 dev:
     scripts/dev.sh
 
-# Run virtual nodes against `just dev` (M1-34); the first run needs SERMON_ENROLLMENT_TOKEN with enough uses
-simulate nodes="10" seed="1":
+# Run virtual nodes against `just dev` (M1-34); the first run needs SERMON_ENROLLMENT_TOKEN with enough uses.
+# More options pass through, e.g. `just simulate 5 --seed 2 --scenario cpu-high` (scenarios: M2-30)
+simulate nodes="10" *args:
     cd agent && cargo build --locked -q -p sermon-agent --features simulate
     mkdir -p deploy/dev/.simulate
     printf 'log_level = "info"\n[server]\nurl = "http://127.0.0.1:8080"\nagent_url = "https://localhost:8443"\n[paths]\nstate_dir = "%s"\n' \
         "{{ justfile_directory() }}/deploy/dev/.simulate" > deploy/dev/.simulate/agent.toml
-    agent/target/debug/sermon-agent simulate --config deploy/dev/.simulate/agent.toml --nodes {{ nodes }} --seed {{ seed }}
+    agent/target/debug/sermon-agent simulate --config deploy/dev/.simulate/agent.toml --nodes {{ nodes }} {{ args }}
 
 # Start only the development containers (postgres/timescaledb, loki, mailpit, ntfy)
 dev-infra:

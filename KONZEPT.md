@@ -1248,7 +1248,8 @@ Mutationstests zeigen die tatsächliche Testgüte.
 - **Commits:** Conventional Commits → automatischer Changelog und SemVer (`release-please`).
 - **Branching:** Trunk-based, kurze PRs; `main` ist geschützt (Reviews, grüne CI, signierte Commits empfohlen).
 - **Dev-Umgebung:** `deploy/dev/compose.yaml` (PG/TimescaleDB, Loki, Mailpit für SMTP-Tests, ntfy) und ein Devcontainer; ein
-  lokaler Agent-Simulator (`sermon-agent --simulate N`) erzeugt Fake-Nodes.
+  lokaler Agent-Simulator (`sermon-agent simulate`, `just simulate`) erzeugt Fake-Nodes, mit Szenarien
+  (`--scenario cpu-high|disk-filling|ssh-bruteforce|flapping|offline`) für Tests der Alerts von Hand.
 
 ### 19.4 Definition of Done
 

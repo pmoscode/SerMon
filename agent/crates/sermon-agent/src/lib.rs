@@ -64,6 +64,9 @@ pub fn execute(cli: Cli) -> anyhow::Result<()> {
         }
         #[cfg(feature = "simulate")]
         Command::Simulate(args) => {
+            if let Some(span) = args.dump {
+                return simulate::dump(&args, span, &mut std::io::stdout().lock());
+            }
             let config = AgentConfig::load(&cli.config)?;
             logging::init(config.log_level);
             simulate::simulate(&config, &args)

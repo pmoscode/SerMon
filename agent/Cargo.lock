@@ -1221,6 +1221,7 @@ dependencies = [
  "rustix",
  "rustls",
  "serde",
+ "serde_json",
  "sermon-buffer",
  "sermon-collectors",
  "sermon-core",

@@ -101,6 +101,34 @@ pub struct SimulateArgs {
     /// SHA-256 fingerprint of a self-signed server certificate ("sha256:AB:CD:…").
     #[arg(long, value_name = "FINGERPRINT")]
     pub ca_fingerprint: Option<Fingerprint>,
+
+    /// A problem the virtual nodes play through, for trying the alert rules (repeatable).
+    #[arg(long, value_enum, value_name = "SCENARIO")]
+    pub scenario: Vec<crate::simulate::scenario::Scenario>,
+
+    /// Print what the nodes would do over this span ("90s", "30m", "2h") as JSON lines, without
+    /// a server, and exit: for tests of the scenarios in fast motion.
+    #[arg(long, value_name = "SPAN", value_parser = parse_span)]
+    pub dump: Option<std::time::Duration>,
+}
+
+/// A span like `90s`, `30m` or `2h`, at most a week.
+#[cfg(feature = "simulate")]
+fn parse_span(value: &str) -> Result<std::time::Duration, String> {
+    let (number, unit) = value.split_at(value.len().saturating_sub(1));
+    let factor = match unit {
+        "s" => 1,
+        "m" => 60,
+        "h" => 3600,
+        _ => return Err("use a number with s, m or h, e.g. 30m".to_owned()),
+    };
+    let seconds = number
+        .parse::<u64>()
+        .ok()
+        .and_then(|n| n.checked_mul(factor))
+        .filter(|s| (1..=7 * 86_400).contains(s))
+        .ok_or_else(|| "use a number with s, m or h, at most a week".to_owned())?;
+    Ok(std::time::Duration::from_secs(seconds))
 }
 
 /// Arguments of `uninstall`.
@@ -308,6 +336,32 @@ mod tests {
 
     fn secret(value: &str) -> SecretArg {
         value.parse().unwrap()
+    }
+
+    #[cfg(feature = "simulate")]
+    #[test]
+    fn simulate_takes_scenarios_and_a_dump_span() {
+        use crate::simulate::scenario::Scenario;
+        let Command::Simulate(args) = parse(&[
+            "simulate",
+            "--scenario",
+            "cpu-high",
+            "--scenario",
+            "ssh-bruteforce",
+            "--dump",
+            "2h",
+        ])
+        .unwrap()
+        .command
+        else {
+            panic!("expected simulate");
+        };
+        assert_eq!(args.scenario, [Scenario::CpuHigh, Scenario::SshBruteforce]);
+        assert_eq!(args.dump, Some(std::time::Duration::from_secs(7200)));
+        for bad in ["2", "2d", "0s", "-1m", "8000000s", "m"] {
+            assert!(parse(&["simulate", "--dump", bad]).is_err(), "{bad}");
+        }
+        assert!(parse(&["simulate", "--scenario", "meltdown"]).is_err());
     }
 
     /// The simulator enrolls many identities with one token: release builds don't contain it.

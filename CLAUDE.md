@@ -57,8 +57,11 @@ Pakete und Secrets des letzten Laufs).
 Produktion: `deploy/compose/` (ADR 0028, Anleitung `docs/admin/installation.md`); jeder Container `read_only`, ohne
 Capabilities und neue Privilegien, Agent-Port direkt am Server. `just lint-compose` prüft das (`check-compose.sh
 --hardened`).
-`just simulate [nodes] [seed]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`, M1-34); der erste
-Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten wiederverwendet.
+`just simulate [nodes] [--seed S] [--scenario …]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`,
+M1-34); der erste Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten
+wiederverwendet. Szenarien (M2-30, `simulate/scenario.rs`) für Tests der Alerts von Hand: `cpu-high`, `disk-filling`,
+`ssh-bruteforce`, `flapping`, `offline`; `--dump 2h` schreibt die Werte ohne Server als JSON-Zeilen, damit prüft
+`just e2e-agent` jedes Szenario im Zeitraffer gegen seine Standardregel.
 Enrollment und Identitätsdateien: ADR 0010.
 Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just smoke-server` (Start, Health-Probes, SIGTERM).
 Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.

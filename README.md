@@ -16,7 +16,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > Matching von Regeln, Policies und Silences. Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und
 > Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert), jeweils
 > amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk). Für eine Installation gibt es
-> eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)).
+> eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)). Zum Ausprobieren der Alerts spielt der
+> Simulator Szenarien durch: CPU-Last, volle Platte, SSH-Brute-Force, Flattern und Ausfall (`just simulate`).
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 

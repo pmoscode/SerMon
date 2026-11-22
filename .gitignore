@@ -51,3 +51,5 @@ server/tmp/
 deploy/compose/.env
 deploy/compose/secrets/
 deploy/compose/downloads/
+# Local build of the server binary (go build in server/); just build-server writes to server/bin/
+server/sermon-server

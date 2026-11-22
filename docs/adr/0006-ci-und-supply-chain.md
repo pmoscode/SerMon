@@ -69,3 +69,12 @@ Die CI ruft dieselben `just`-Befehle auf wie die lokale Entwicklung. Was in der 
   - ✓ Erster Lauf (2026-11-19): CodeQL, Scorecard und arm64 sind grün; GitHub Private Vulnerability Reporting ist eingeschaltet.
   - Nach der Implementierung den Branch-Schutz mit PR-Pflicht und erforderlichen Status-Checks einrichten (Plan v1.0).
   - Trivy-Scan der Container-Images, sobald es Images gibt (Release-Workflow).
+
+## Nachtrag M2-21 (arm64 und Pakete)
+
+- **arm64 nativ statt QEMU:** KONZEPT sah arm64-Hosts in der E2E-Umgebung über QEMU vor. GitHub bietet native
+  arm64-Runner (`ubuntu-24.04-arm`, in `ci.yml` schon für die Agent-Tests). `nightly.yml` lässt dort jede Nacht
+  dieselbe E2E-Demo laufen wie `ci.yml` auf amd64, dazu `just test-packages`. systemd- und OpenRC-Container unter QEMU
+  wären langsam und unzuverlässig gewesen; das Demo-Skript erkennt die Architektur ohnehin selbst.
+- **Pakete:** nfpm läuft als Container-Image, gepinnt per Digest (`scripts/package-agent.sh`); es wird nichts auf dem
+  Host installiert. `just test-packages` läuft in `ci.yml` im Job des Release-Builds (amd64) und nightly (arm64).

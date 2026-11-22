@@ -19,6 +19,9 @@ RUN set -eux; \
       # container (not on a real RHEL host). 0400 lets root read it as its owner.
       chmod 0400 /etc/shadow; \
     fi; \
-    systemctl mask getty@.service console-getty.service systemd-logind.service >/dev/null 2>&1 || true
+    systemctl mask getty@.service console-getty.service systemd-logind.service >/dev/null 2>&1 || true; \
+    # Every container its own machine-id, as on a fresh installation: systemd fills an empty file
+    # at boot. Built into the image, it would be the same on all hosts of an image (M2-21).
+    rm -f /var/lib/dbus/machine-id; : >/etc/machine-id
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

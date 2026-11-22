@@ -29,7 +29,8 @@ env:
   CARGO_DENY_VERSION: 0.20.2
   # renovate: datasource=github-releases depName=rust-cross/cargo-zigbuild
   CARGO_ZIGBUILD_VERSION: 0.24.1
-  # Updated manually: zig releases are published on ziglang.org, the GitHub tags lag behind.
+  # Updated manually: zig releases are published on ziglang.org, the GitHub tags lag behind. Update
+  # ZIG_SHA256_AARCH64 in nightly.yml with it.
   ZIG_VERSION: 0.17.1
   # SHA-256 of zig-x86_64-linux-<version>.tar.xz (from https://ziglang.org/download/index.json).
   ZIG_SHA256: 3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
@@ -175,6 +176,8 @@ jobs:
         with:
           tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
       - run: just build-agent
+      # .deb, .rpm and .apk with keys of this run: signature, install, upgrade, removal (M2-21).
+      - run: just test-packages
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agent-binaries
@@ -392,7 +395,8 @@ jobs:
         with:
           tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
       # Setup, login, token, install.sh with systemd on Debian 12/13, Ubuntu 24.04, Rocky 9, AlmaLinux 10
-      # and Fedora 44, metrics in under 2 minutes, tenant isolation (M1-33, M2-19).
+      # and Fedora 44 and with OpenRC on Alpine, metrics in under 2 minutes, signed packages on three
+      # more hosts, tenant isolation (M1-33, M2-19 to M2-21). arm64: nightly.yml.
       - run: just e2e-demo
       # The runner's LSM can deny what works on a developer machine (AppArmor on Ubuntu 24.04).
       - name: Show AppArmor denials

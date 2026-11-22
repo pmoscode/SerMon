@@ -133,6 +133,23 @@ services:
     build: { context: ., dockerfile: agent-alpine.Dockerfile, args: { BASE: "alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f" } }
     hostname: edge-01
     stop_signal: SIGUSR2 # busybox init
+  # Fresh hosts for the agent packages (M2-21): .deb, .rpm and .apk from .build/packages.
+  pkg-debian-13:
+    <<: *agent-host
+    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
+    hostname: pkg-01
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "./.build/packages:/packages:ro"]
+  pkg-rockylinux-9:
+    <<: *agent-host
+    build: { context: ., dockerfile: agent.Dockerfile, args: { BASE: "rockylinux:9@sha256:03303863808e9cd79f0c58c833db3e5f9cde9f2abe16804a267b05dc54af86e4" } }
+    hostname: pkg-02
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "./.build/packages:/packages:ro"]
+  pkg-alpine-3-22:
+    <<: *agent-host
+    build: { context: ., dockerfile: agent-alpine.Dockerfile, args: { BASE: "alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f" } }
+    hostname: pkg-03
+    stop_signal: SIGUSR2 # busybox init
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "./.build/packages:/packages:ro"]
 
 networks:
   e2e:

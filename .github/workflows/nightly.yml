@@ -1,0 +1,100 @@
+# Nightly checks that take too long for every push (M2-21): the E2E demo on a native arm64 runner
+# (ci.yml runs it on amd64 for every change) and the agent packages for arm64.
+name: nightly
+
+on:
+  schedule:
+    - cron: "23 1 * * *" # nightly, 01:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=github-releases depName=casey/just
+  JUST_VERSION: 1.59.0
+  # renovate: datasource=github-releases depName=rust-cross/cargo-zigbuild
+  CARGO_ZIGBUILD_VERSION: 0.24.1
+  # Updated manually, together with ci.yml: zig releases are published on ziglang.org.
+  ZIG_VERSION: 0.17.1
+  # SHA-256 of zig-aarch64-linux-<version>.tar.xz (from https://ziglang.org/download/index.json).
+  ZIG_SHA256_AARCH64: a1546d5646eb184437918d6635ca6b762a0e889eac09cef720ee7a1ed3fe7795
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  e2e-demo-arm64:
+    name: e2e demo on arm64 (real stack, agents in systemd and OpenRC containers)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Install pinned Rust toolchain (agent/rust-toolchain.toml)
+        working-directory: agent
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: agent
+          key: release
+      - name: Cache zig archive
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: zig-archive
+          key: zig-${{ env.ZIG_VERSION }}-aarch64-linux
+      - name: Install zig (pinned version, checksum verified on every run)
+        run: |
+          archive="zig-archive/zig-aarch64-linux-${ZIG_VERSION}.tar.xz"
+          if [ ! -f "$archive" ]; then
+            mkdir -p zig-archive
+            curl -fsSLo "$archive" "https://ziglang.org/download/${ZIG_VERSION}/zig-aarch64-linux-${ZIG_VERSION}.tar.xz"
+          fi
+          echo "${ZIG_SHA256_AARCH64}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/zig"
+          tar -xJf "$archive" -C "$RUNNER_TEMP/zig" --strip-components=1
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+      - run: ../scripts/ci-playwright-install.sh
+        working-directory: web
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
+      # The same demo as in ci.yml, natively on arm64 (no QEMU): install.sh, OpenRC, packages.
+      - run: just e2e-demo
+      # .deb, .rpm and .apk for arm64: signature, install, upgrade, removal.
+      - run: just test-packages
+      # The runner's LSM can deny what works on a developer machine (AppArmor on Ubuntu 24.04).
+      - name: Show AppArmor denials
+        if: failure()
+        run: sudo dmesg | grep -i 'apparmor="DENIED"' | tail -n 40 || true
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-demo-arm64
+          path: |
+            web/test-results/
+            web/playwright-report/
+            deploy/e2e/.build/server.log
+          if-no-files-found: ignore
+          retention-days: 7

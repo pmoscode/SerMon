@@ -1,0 +1,11 @@
+# SerMon agent (package). Set the public address of sermon-server, then enroll this host with a
+# token from the UI and start the agent:
+#
+#   sudo -u sermon SERMON_ENROLLMENT_TOKEN=sme_… sermon-agent enroll --config /etc/sermon/agent.toml
+#   systemctl enable --now sermon-agent                     # Debian, Ubuntu, RHEL, Fedora
+#   rc-update add sermon-agent default && rc-service sermon-agent start   # Alpine
+#
+# A self-signed server certificate: add --ca-fingerprint sha256:… to enroll (shown in the UI).
+[server]
+url = "https://sermon.example.com"
+# agent_url = "https://sermon.example.com:8443"   # mTLS agent API, if not on port 8443

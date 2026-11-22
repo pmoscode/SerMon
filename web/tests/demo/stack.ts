@@ -15,14 +15,25 @@ export function compose(args: string[], input?: string): string {
 	});
 }
 
-/** Runs a shell command as root in a service; throws with the whole output if it fails. */
-export function exec(service: string, command: string, input?: string): string {
+/**
+ * Runs a shell command as root in a service, with `env` in its environment (not in the command, so
+ * a token stays out of the host's process list inside the container); throws with the whole output
+ * if it fails.
+ */
+export function exec(
+	service: string,
+	command: string,
+	input?: string,
+	env: Record<string, string> = {}
+): string {
+	const names = Object.keys(env).flatMap((name) => ['-e', name]);
 	const res = spawnSync(
 		'docker',
-		['compose', '-f', composeFile, 'exec', '-T', service, 'sh', '-c', command],
+		['compose', '-f', composeFile, 'exec', '-T', ...names, service, 'sh', '-c', command],
 		{
 			encoding: 'utf8',
 			input,
+			env: { ...process.env, ...env },
 			maxBuffer: 16 * 1024 * 1024
 		}
 	);

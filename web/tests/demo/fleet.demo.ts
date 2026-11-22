@@ -48,6 +48,35 @@ const agents = [
 ] as const;
 /** Containers reach the proxy as sermon.test and the agent port of the server directly. */
 const inside = 'https://sermon.test';
+/** Fresh hosts for the signed agent packages (M2-21). */
+const packageHosts = [
+	{
+		service: 'pkg-debian-13',
+		host: 'pkg-01',
+		init: 'systemd',
+		install: 'apt-get install -y -qq /packages/*.deb',
+		remove: 'apt-get remove -y -qq sermon-agent'
+	},
+	{
+		service: 'pkg-rockylinux-9',
+		host: 'pkg-02',
+		init: 'systemd',
+		install:
+			'rpm --import /packages/gpg.pub.asc && rpm -K /packages/*.rpm | grep -q "signatures OK" && dnf install -y -q /packages/*.rpm',
+		remove: 'dnf remove -y -q sermon-agent'
+	},
+	// apk refuses a package whose key is not in /etc/apk/keys.
+	{
+		service: 'pkg-alpine-3-22',
+		host: 'pkg-03',
+		init: 'openrc',
+		install: 'cp /packages/sermon-agent.rsa.pub /etc/apk/keys/ && apk add -q /packages/*.apk',
+		remove: 'apk del -q sermon-agent'
+	}
+] as const;
+/** Trusts Caddy's CA system-wide: update-ca-certificates (Debian, Ubuntu, Alpine) or update-ca-trust (RHEL, Fedora). */
+const trustCA =
+	'if command -v update-ca-certificates >/dev/null; then cat > /usr/local/share/ca-certificates/sermon-e2e.crt && update-ca-certificates >/dev/null 2>&1; else cat > /etc/pki/ca-trust/source/anchors/sermon-e2e.crt && update-ca-trust; fi';
 const agentURL = 'https://server:8443';
 
 async function login(page: Page, email: string) {
@@ -73,7 +102,7 @@ async function call<T>(
 	return (await res.json()) as T;
 }
 
-test('a fresh installation monitors seven hosts within two minutes, and Org B sees nothing', async ({
+test('a fresh installation monitors seven hosts within two minutes, packages install and remove cleanly, and Org B sees nothing', async ({
 	page,
 	browser,
 	baseURL
@@ -104,7 +133,7 @@ test('a fresh installation monitors seven hosts within two minutes, and Org B se
 
 	// One token for all hosts.
 	await page.goto('/nodes/add');
-	await page.getByLabel('Uses').fill(String(agents.length));
+	await page.getByLabel('Uses').fill(String(agents.length + packageHosts.length));
 	await page.getByRole('button', { name: 'Create command' }).click();
 	const command = (await page.locator('pre').textContent()) ?? '';
 	expect(command).toContain(' export SERMON_ENROLLMENT_TOKEN=sme_');
@@ -142,12 +171,7 @@ test('a fresh installation monitors seven hosts within two minutes, and Org B se
 	const started = Date.now();
 	for (const agent of agents) {
 		if (agent.trust === 'system') {
-			// Debian and Ubuntu: update-ca-certificates; the RHEL family and Fedora: update-ca-trust.
-			exec(
-				agent.service,
-				'if command -v update-ca-certificates >/dev/null; then cat > /usr/local/share/ca-certificates/sermon-e2e.crt && update-ca-certificates >/dev/null; else cat > /etc/pki/ca-trust/source/anchors/sermon-e2e.crt && update-ca-trust; fi',
-				ca.root
-			);
+			exec(agent.service, trustCA, ca.root);
 		}
 		// Without journald the agent reads busybox syslogd's files; they belong to wheel otherwise.
 		const extra = agent.init === 'openrc' ? ' --grant-log-access' : '';
@@ -209,6 +233,54 @@ test('a fresh installation monitors seven hosts within two minutes, and Org B se
 	await expect(forged).toBeVisible({ timeout: 120_000 });
 	await expect(forged.getByRole('note')).toContainText('Source not verified');
 	await page.screenshot({ path: 'test-results/demo-unverified.png', fullPage: true });
+
+	// Signed packages (M2-21): install, set the server, enroll as sermon, start; the node reports.
+	// Removal stops the agent and leaves nothing but the configuration.
+	const token = /SERMON_ENROLLMENT_TOKEN=(sme_\S+)/.exec(command)?.[1] ?? '';
+	expect(token).not.toBe('');
+	for (const host of packageHosts) {
+		exec(host.service, trustCA, ca.root);
+		exec(host.service, `${host.install} 2>&1`);
+		exec(
+			host.service,
+			`sed -i 's#^url = .*#url = "${inside}"#' /etc/sermon/agent.toml && echo 'agent_url = "${agentURL}"' >> /etc/sermon/agent.toml`
+		);
+		exec(
+			host.service,
+			'runuser -u sermon -- /usr/bin/sermon-agent enroll --config /etc/sermon/agent.toml 2>&1',
+			undefined,
+			{
+				SERMON_ENROLLMENT_TOKEN: token
+			}
+		);
+		exec(
+			host.service,
+			host.init === 'systemd'
+				? 'systemctl enable --now sermon-agent 2>&1'
+				: 'rc-update add sermon-agent default >/dev/null && rc-service sermon-agent start 2>&1'
+		);
+		expect(serviceState(host)).toBe('running');
+	}
+	await page.goto('/fleet');
+	for (const host of packageHosts) {
+		const tile = page.getByRole('article').filter({ hasText: host.host });
+		await expect(tile.getByRole('meter', { name: 'CPU' })).toBeVisible({ timeout: 60_000 });
+	}
+	for (const host of packageHosts) {
+		exec(host.service, `${host.remove} 2>&1`);
+		expect(
+			exec(host.service, "grep -ls '[s]ermon-agent' /proc/[0-9]*/cmdline | wc -l").trim()
+		).toBe('0');
+		expect(
+			exec(
+				host.service,
+				'for p in /usr/bin/sermon-agent /var/lib/sermon-agent; do test ! -e $p || echo $p; done'
+			).trim()
+		).toBe('');
+	}
+	console.log(
+		`packages installed, reporting and removed after ${Math.round((Date.now() - started) / 1000)} s`
+	);
 
 	// Tenant isolation: the superadmin creates Org B; its admin sees none of Alpha's nodes. In
 	// production the first admin's link goes out by mail only (M1-39).

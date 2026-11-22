@@ -127,7 +127,7 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh .devcontainer/*.sh packaging/install.sh agent/fixtures/capture-host.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
+    shellcheck scripts/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
@@ -204,6 +204,22 @@ fuzz-agent seconds="60":
     cargo fuzz run journal_line -- -max_total_time={{ seconds }} -max_len=65536
     cargo fuzz run security_parser -- -max_total_time={{ seconds }} -max_len=65536
     cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
+
+# Test the agent packages (.deb, .rpm, .apk) in containers: signature, install, upgrade, removal (M2-21)
+test-packages:
+    #!/usr/bin/env sh
+    set -eu
+    case $(docker info --format '{{{{.Architecture}}') in
+    x86_64 | amd64) target=x86_64-unknown-linux-musl ;;
+    *) target=aarch64-unknown-linux-musl ;;
+    esac
+    (cd agent && cargo zigbuild --release --locked -q -p sermon-agent --target "$target")
+    scripts/test-packages.sh "agent/target/$target/release/sermon-agent"
+
+# Signed agent packages of VERSION (amd64, arm64) into dist/packages/; keys: see scripts/package-agent.sh (M2-21)
+package-agent version: build-agent
+    scripts/package-agent.sh amd64 "{{ version }}" agent/target/x86_64-unknown-linux-musl/release/sermon-agent dist/packages
+    scripts/package-agent.sh arm64 "{{ version }}" agent/target/aarch64-unknown-linux-musl/release/sermon-agent dist/packages
 
 # Test install.sh and the systemd unit in Debian: bats (signature, detection) and `systemd-analyze security` < 2.0
 test-packaging:

@@ -1,8 +1,9 @@
 #!/bin/sh
 # End-to-end demo test (M1-33): builds server, UI and agent, signs the agent with a key of this run,
 # starts deploy/e2e/compose.yaml and runs web/tests/demo with Playwright against it:
-# setup → login → enrollment token → install.sh in agent containers with systemd → nodes with
-# metrics in < 2 min → a user of another organization sees nothing.
+# setup → login → enrollment token → install.sh in agent containers with systemd and OpenRC → nodes
+# with metrics in < 2 min → signed packages on three more hosts (M2-21) → a user of another
+# organization sees nothing.
 #
 #   scripts/e2e-demo.sh          run and tear down
 #   KEEP=1 scripts/e2e-demo.sh   leave the environment running (https://localhost:18443)
@@ -36,6 +37,14 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -x "$build/sermon-server" ]; then
 	(cd "$root/agent" && cargo zigbuild --release --locked -q -p sermon-agent --target "$target")
 	cp "$root/agent/target/$target/release/sermon-agent" "$build/downloads/sermon-agent-linux-$arch"
 	"$root/scripts/release-sign.sh" sign "$build/release.pem" --version e2e "$build/downloads/sermon-agent-linux-$arch"
+
+	echo "▸ packaging the agent (.deb, .rpm, .apk)"
+	"$root/scripts/package-test-keys.sh" "$build/package-keys"
+	SERMON_PKG_GPG_KEY="$build/package-keys/gpg.asc" SERMON_PKG_APK_KEY="$build/package-keys/apk.rsa" \
+		"$root/scripts/package-agent.sh" "$arch" 0.0.1 "$build/downloads/sermon-agent-linux-$arch" "$build/packages" >/dev/null
+	# The package hosts get the packages and the public keys only.
+	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/sermon-agent.rsa.pub" "$build/packages/"
+	chmod 0644 "$build/packages/"*
 
 	echo "▸ building the web UI and the server (linux/$arch)"
 	(cd "$root" && just build-web >/dev/null)

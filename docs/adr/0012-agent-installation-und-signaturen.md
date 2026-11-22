@@ -79,3 +79,20 @@ wie die Unit gehärtet wird.
   damit bash ihn nicht in die History schreibt) und reicht es mit `sudo --preserve-env=…` weiter. `install.sh` liest
   es aus der Variable oder mit `--token-file`; `--token` funktioniert weiter, warnt aber, weil Argumente in der
   Prozessliste für alle lokalen User sichtbar sind.
+
+## Nachtrag M2-21 (signierte Pakete)
+
+Neben `install.sh` gibt es Pakete (`just package-agent VERSION`, nfpm): `.deb`, `.rpm`, `.apk` für amd64 und arm64.
+
+- **Signaturen:** OpenPGP für `.deb` (Typ `origin`, `_gpgorigin`) und `.rpm`, RSA für `.apk` (Schlüsselname
+  `sermon-agent`). Diese Schlüssel sind von minisign getrennt: Paketmanager kennen nur ihre eigenen Formate. Ohne
+  Schlüssel baut das Skript nicht. Prüfen: `rpm --import` + `rpm -K`, `apk` mit dem Schlüssel in `/etc/apk/keys` (sonst
+  verweigert es die Installation), bei `.deb` `gpg --verify _gpgorigin` (dpkg selbst prüft nicht; ein signiertes
+  APT-Repo ist Folgearbeit).
+- **Inhalt:** `/usr/bin/sermon-agent` (nicht `/usr/local`), Unit bzw. OpenRC-Skript mit diesem Pfad,
+  `/etc/sermon/agent.toml` als Konfiguration mit Platzhalter. Das Paket legt User, Zustandsverzeichnis und Rechte an wie
+  `install.sh` und eine `machine-id`, wo keine ist; es enrollt nicht und startet den Agent nicht.
+- **Upgrade und Entfernen:** Nach einem Upgrade startet ein laufender Agent neu. Beim Entfernen stoppen die Skripte den
+  Dienst und löschen `/var/lib/sermon-agent` (Identität, Puffer, Positionen), nicht aber bei einem Upgrade (deb
+  `upgrade`, rpm `1`). Konfiguration und der User `sermon` bleiben, wie Distributionen es mit System-Usern halten
+  (`.rpm`/`.apk` entfernen eine unveränderte Konfiguration).

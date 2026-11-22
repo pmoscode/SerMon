@@ -16,6 +16,7 @@ Legende Stand: ✓ umgesetzt und getestet · ◐ teilweise · ☐ geplant (Aufga
 | A2 Agent-CA (Root- und Intermediate-Schlüssel) | PostgreSQL, versiegelt mit dem Master-Key | sehr hoch: erlaubt das Ausstellen beliebiger Node-Identitäten |
 | A3 Master-Keys (`SERMON_MASTER_KEYS_FILE`) | Datei bzw. Docker-Secret auf dem Server-Host | sehr hoch: öffnen alle versiegelten Secrets |
 | A4 Release-Signaturschlüssel | nur in der Release-Pipeline | sehr hoch: Installskript und Self-Update vertrauen nur ihm |
+| A12 Paket-Signaturschlüssel (OpenPGP für .deb/.rpm, RSA für .apk) | nur in der Release-Pipeline | hoch: Paketmanager vertrauen ihnen, sobald ein Admin den öffentlichen Schlüssel importiert |
 | A5 Node-Identitäten (Agent-Schlüssel, Zertifikate) | `/var/lib/sermon-agent` auf den Nodes | hoch |
 | A6 Konten: Passwort-Hashes, TOTP-Seeds, Recovery-Codes, Sessions | PostgreSQL | hoch |
 | A7 Mandantendaten: Metriken, Logs, Security-Events, Inventar | PostgreSQL/TimescaleDB, Loki | hoch, personenbezogen (IP-Adressen, Usernamen, §18.7) |
@@ -177,6 +178,7 @@ flowchart LR
 | T50 | T | Kompromittierter Server liefert ein manipuliertes `install.sh` | Grenze von `curl | sh` (O5): „Skript erst ansehen“, Paket-Repo als Alternative, Signaturschlüssel nicht auf dem Server | M1-27, E4.5 | ◐ |
 | T64 | T | Bei selbstsigniertem Server-Zertifikat liefert ein Angreifer im Netz ein eigenes `install.sh` (`curl -k`) | die UI holt die SHA-256 des Skripts über die Verbindung des Browsers (`X-Sermon-Script-SHA256`), der Befehl prüft es mit `sha256sum -c`, bevor `sudo` es ausführt (statt SPKI-Pin, ADR 0012) | M1-37 | ✓ |
 | T51 | T | Release-Schlüssel kompromittiert oder fehlt | Schlüssel nur in der Release-Pipeline; ohne einkompilierten Key verweigert das Skript die Installation; `release-sign.sh` nimmt nur Ed25519-Schlüssel | v1.0 (Release-Prozess) | ☐ (Schlüssel erzeugen, `release.yml`) |
+| T71 | T | Manipuliertes oder fremdes Agent-Paket (.deb, .rpm, .apk); ein Upgrade löscht die Identität; ein Paket startet einen Agent ohne Server | jedes Paket signiert (`package-agent.sh` baut ohne Schlüssel nicht; .deb als `_gpgorigin`, .rpm mit OpenPGP, .apk mit RSA), Schlüssel getrennt vom minisign-Release-Schlüssel und nur in der Release-Pipeline, Test-Schlüssel nur pro Lauf; Tests: Signatur gut, ohne Schlüssel bzw. verändert abgelehnt (`just test-packages`); Remove-Skripte unterscheiden Upgrade und Entfernen (Test: Upgrade behält die Identität); der Dienst startet erst nach Enrollment durch den Admin, Rechte wie bei `install.sh` | M2-21 | ✓ (Paket-Repos: offen) |
 | T52 | T | Kompromittierte Abhängigkeit oder Action | exakt gepinnte Versionen, Mindestalter 3 Tage, Actions per SHA, cargo-deny, govulncheck, pnpm audit, zizmor, Secret-Scan | M0-06 (ADR 0005, 0006) | ✓ |
 | T53 | T | Fehlerhafte Parser für untrusted Input auf dem Node | cargo-fuzz für `/proc`-Parser, WAL-Recovery, Journal-Zeilen (`journal_line`) und Security-Parser (`security_parser`), proptest; Logdateien mit E3.1 | M1-15, M2-05, M2-06, E3.1 | ◐ (Logdateien) |
 

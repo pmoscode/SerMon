@@ -13,7 +13,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > Wiederholung und Eskalation an die Kanäle; Silences und Wartungsfenster schalten sie stumm. Die Alert-Seite zeigt
 > die aktiven Alerts mit Verlauf, Quittieren, Silences und dem Regel-Editor (YAML-Import und -Export); Kanäle,
 > Policies und Wartungsfenster verwalten Admins in der UI. Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und
-> Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert).
+> Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert), jeweils
+> amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk).
 > Noch nicht für den produktiven Einsatz geeignet.
 > Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
 

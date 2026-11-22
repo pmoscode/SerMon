@@ -51,8 +51,9 @@ Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur ü
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
 `just e2e-demo` baut den Agent, startet die Produktions-Compose `deploy/compose/compose.yaml` mit dem Overlay
-`deploy/e2e/compose.yaml` (Server-Image aus dem Quellcode, TimescaleDB, Caddy, Mailpit, Agent-Hosts mit systemd und
-OpenRC) und spielt die Demo mit Playwright durch (`KEEP=1` lässt die Umgebung laufen, `SKIP_BUILD=1` nutzt Agent,
+`deploy/e2e/compose.yaml` (Server-Image aus dem Quellcode, TimescaleDB, Caddy, Mailpit, ntfy, ein Slack-Mock unter
+`hooks.slack.com`, Agent-Hosts mit systemd und OpenRC, einer mit echtem sshd) und spielt die Demo mit Playwright durch
+(`tests/demo`: erst die Installation, dann der SSH-Brute-Force bis zum Quittieren) (`KEEP=1` lässt die Umgebung laufen, `SKIP_BUILD=1` nutzt Agent,
 Pakete und Secrets des letzten Laufs).
 Produktion: `deploy/compose/` (ADR 0028, Anleitung `docs/admin/installation.md`); jeder Container `read_only`, ohne
 Capabilities und neue Privilegien, Agent-Port direkt am Server. `just lint-compose` prüft das (`check-compose.sh

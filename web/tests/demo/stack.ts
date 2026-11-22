@@ -1,3 +1,4 @@
+import { type APIRequestContext, type Page, expect } from '@playwright/test';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { appendFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -137,4 +138,65 @@ export async function invitationLink(to: string, timeoutMs = 15_000): Promise<st
 		if (Date.now() > deadline) throw new Error(`no invitation mail to ${to}`);
 		await new Promise((resolve) => setTimeout(resolve, 250));
 	}
+}
+
+// Test fixtures for a throwaway installation, not secrets.
+export const PASSWORD = 'correct horse battery staple'; // betterleaks:allow
+export const admin = { name: 'Ann Admin', email: 'ann@example.org' };
+
+export async function login(page: Page, email: string) {
+	await page.goto('/login');
+	await page.getByLabel('Email address').fill(email);
+	await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+	await page.getByRole('button', { name: 'Sign in' }).click();
+	await expect(page).toHaveURL('/fleet');
+}
+
+/** A Connect call with the cookies of the page (the server checks the origin). */
+export async function call<T>(
+	request: APIRequestContext,
+	baseURL: string,
+	method: string,
+	body: object
+): Promise<T> {
+	const res = await request.post(`/sermon.web.v1.${method}`, {
+		data: body,
+		headers: { Origin: new URL(baseURL).origin, 'Content-Type': 'application/json' }
+	});
+	expect(res.ok(), `${method}: ${res.status()} ${await res.text()}`).toBe(true);
+	return (await res.json()) as T;
+}
+
+/** The messages ntfy keeps for a topic (published on 127.0.0.1 by the overlay, M2-27). */
+export async function ntfyMessages(
+	topic: string
+): Promise<{ title?: string; message?: string; tags?: string[] }[]> {
+	const port = process.env.SERMON_E2E_NTFY_PORT ?? '18090';
+	const res = await fetch(`http://127.0.0.1:${port}/${topic}/json?poll=1&since=all`);
+	const text = await res.text();
+	return text
+		.split('\n')
+		.filter((line) => line.trim() !== '')
+		.map(
+			(line) =>
+				JSON.parse(line) as { event: string; title?: string; message?: string; tags?: string[] }
+		)
+		.filter((m) => m.event === 'message');
+}
+
+/** The bodies the Slack mock received at a webhook path (deploy/e2e/slack-mock, M2-27). */
+export async function slackMessages(path: string): Promise<{ text: string; raw: string }[]> {
+	const port = process.env.SERMON_E2E_SLACK_PORT ?? '18026';
+	const messages = (await (await fetch(`http://127.0.0.1:${port}/messages`)).json()) as {
+		path: string;
+		body: { text: string };
+	}[];
+	return messages
+		.filter((m) => m.path === path)
+		.map((m) => ({ text: m.body.text, raw: JSON.stringify(m.body) }));
+}
+
+/** Runs SQL as the owner in the database container (only to age timers in the demo). */
+export function ownerSQL(sql: string): string {
+	return exec('postgres', 'psql -v ON_ERROR_STOP=1 -qtA -U sermon -d sermon', sql);
 }

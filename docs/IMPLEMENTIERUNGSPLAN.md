@@ -2356,16 +2356,36 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Abhängig von:** M2-32
 - **Später:** Loki-Daten löscht E3.2/E3.8 mit, sobald es Loki gibt.
 
-#### ☐ M2-27 – E2E-Demo M2 · X · M
+#### ☑ M2-27 – E2E-Demo M2 · X · M
+> Erledigt (`web/tests/demo/alerts.demo.ts`, Projekt `alerts` nach `install` in `playwright.demo.config.ts`):
+> - **Echter Angriff:** web-01 (Debian 12, journald) betreibt einen echten sshd, web-02 versucht mit `sshpass` in drei
+>   Wellen 15 Passwörter für den unbekannten User `alice` (sshpass gibt nach dem ersten falschen Passwort auf; mehr als
+>   zehn gleichzeitige Verbindungen verwirft sshd zufällig). Der Alert erscheint nach etwa 30 s.
+> - **Kanäle wie beim Betreiber:** ntfy als Container im Netz, Slack über die Webhook-URL – ein Mock in Go ohne
+>   Abhängigkeiten (`deploy/e2e/slack-mock`) antwortet unter dem Alias `hooks.slack.com` mit einem Zertifikat des Laufs,
+>   dem der Server per `SSL_CERT_FILE` als einziger Wurzel vertraut; `SERMON_OUTBOUND_ALLOWLIST` erlaubt das Netz der
+>   Compose-Datei. „Test senden“ erreicht beide.
+> - **Geprüft:** Titel, Zeitpunkt, User, Adresse und Port in ntfy und Slack; weitere Versuche im Fenster bleiben ein
+>   Alert ohne neue Nachricht; ohne Quittung kommt die Erinnerung (die 5 Minuten der Policy werden in der Datenbank
+>   vorgezogen); Quittieren im Browser meldet beide Kanäle einmal („Acknowledged by“), danach keine Erinnerung mehr.
+> - **Wiederholbar mit `KEEP=1`:** Topic, Webhook-Pfad und Namen sind pro Lauf eindeutig; ein Lauf gegen die
+>   stehende Umgebung braucht aber einen inzwischen behobenen Alert (5-Minuten-Fenster).
+> - **Echte Dienste** (Konten des Betreibers) sind nach M2-35 ausgelagert.
 - **Ziel:** Simulierter SSH-Brute-Force in einem Agent-Container (wiederholte Fehlanmeldungen gegen den eigenen sshd)
   → Alert mit Zeitstempel, User, IP und Port landet in ntfy (Container) und Slack (Mock-Webhook); Hysterese und
   Quittieren im Browser.
 - **Tests zuerst:** Playwright-Ablauf; Nachricht in ntfy und im Slack-Mock mit allen Feldern; nach Quittieren keine
   Wiederholung.
-- **Aus M2-11 bis M2-13:** Die Kanäle Slack, Teams, Discord, Mattermost, Telegram, Gotify und Pushover sind nur gegen
-  Test-Server geprüft (ntfy auch gegen den echten Server). Vor dem Abschluss von M2 je einmal „Test senden“ und einen
-  echten Alert gegen den echten Dienst schicken (Konten des Betreibers) und das Ergebnis hier vermerken.
 - **Abhängig von:** M2-08, M2-11, M2-12, M2-16
+
+#### ☐ M2-35 – Kanäle gegen die echten Dienste prüfen · X · S
+- **Ziel:** Die Kanäle Slack, Teams, Discord, Mattermost, Telegram, Gotify und Pushover sind nur gegen Test-Server
+  geprüft (ntfy auch gegen den echten Server, M2-27 gegen einen Mock von Slack). Vor dem Abschluss von M2 je einmal
+  „Test senden“ und einen echten Alert gegen den echten Dienst schicken und das Ergebnis hier vermerken (Darstellung,
+  Felder, Links, Sprache).
+- **Braucht:** Konten und Webhooks des Betreibers; nicht automatisierbar.
+- **Aus:** M2-11 bis M2-13, ausgelagert aus M2-27.
+- **Abhängig von:** M2-27
 
 #### ☐ M2-28 – Security-Review M2 · X · S 🔒
 - **Ziel:** Skill `sermon-security-review` über alle M2-Änderungen (Schwerpunkte: ausgehende Verbindungen, Parser für
@@ -2373,9 +2393,10 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   Aufgaben.
 - **Abhängig von:** alle M2-Aufgaben
 
-**M2 fertig, wenn:** Der Demo-Test M2-27 ist grün, jede Standardregel hat einen auslösenden Test, die Parser sind mit
-Fixtures aller Zieldistros getestet und gefuzzt, das Ressourcen-Budget ist mit aktiver journald-Quelle eingehalten,
-und die Security-Review hat keine offenen kritischen Findings.
+**M2 fertig, wenn:** Der Demo-Test M2-27 ist grün, die Kanäle sind gegen die echten Dienste geprüft (M2-35), jede
+Standardregel hat einen auslösenden Test, die Parser sind mit Fixtures aller Zieldistros getestet und gefuzzt, das
+Ressourcen-Budget ist mit aktiver journald-Quelle eingehalten, und die Security-Review hat keine offenen kritischen
+Findings.
 
 ---
 

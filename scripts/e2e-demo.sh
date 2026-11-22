@@ -5,11 +5,14 @@
 # setup → login → enrollment token → install.sh in agent containers with systemd and OpenRC → nodes
 # with metrics in < 2 min → signed packages on three more hosts (M2-21) → a user of another
 # organization sees nothing; meanwhile two hosts measure the agent against its resource budget
-# (scripts/agent-budget.sh, M2-25).
+# (scripts/agent-budget.sh, M2-25). Then (M2-27) a host attacks the sshd of another: the alert
+# reaches ntfy and a Slack mock with time, user, address and port, repeats until it is
+# acknowledged in the browser and then stays quiet.
 #
 #   scripts/e2e-demo.sh          run and tear down
 #   KEEP=1 scripts/e2e-demo.sh   leave the environment running (https://localhost:18443)
 #   SKIP_BUILD=1 …               reuse the agent, packages and secrets of the last run (deploy/e2e/.build)
+#   SERMON_E2E_{PORT,MAIL_PORT,NTFY_PORT,SLACK_PORT}  ports on 127.0.0.1 (18443, 18025, 18090, 18026)
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -59,6 +62,11 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ]; then
 	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=mailpit \
 		-addext subjectAltName=DNS:mailpit -keyout "$build/mailpit/mailpit.key" -out "$build/mailpit/mailpit.crt" 2>/dev/null
 	chmod 0644 "$build/mailpit/"* # read by Mailpit and the server; the directory is private
+	# The Slack mock's certificate (M2-27): the server trusts it as its only root (SSL_CERT_FILE).
+	mkdir -p "$build/slack-mock"
+	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=hooks.slack.com \
+		-addext subjectAltName=DNS:hooks.slack.com -keyout "$build/slack-mock/slack-mock.key" -out "$build/slack-mock/slack-mock.crt" 2>/dev/null
+	chmod 0644 "$build/slack-mock/"*
 fi
 
 cleanup() {

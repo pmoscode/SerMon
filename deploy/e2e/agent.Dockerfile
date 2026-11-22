@@ -2,13 +2,15 @@
 # exactly as on a real server (M1-33). Debian and Ubuntu with apt, the RHEL family and Fedora
 # with dnf (M2-19). D-Bus as on a real server: systemctl asks systemd over it as an unprivileged
 # user (failed units, M2-22). Needs --privileged and the host cgroup namespace.
+# EXTRA_PACKAGES (apt only): sshd on the target and the SSH client on the attacker of M2-27.
 ARG BASE=debian:13
 FROM ${BASE}
+ARG EXTRA_PACKAGES=""
 RUN set -eux; \
     if command -v apt-get >/dev/null; then \
       apt-get update -qq; \
       DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-        systemd systemd-sysv dbus curl ca-certificates openssl sudo >/dev/null; \
+        systemd systemd-sysv dbus curl ca-certificates openssl sudo ${EXTRA_PACKAGES} >/dev/null; \
       rm -rf /var/lib/apt/lists/*; \
     else \
       dnf install -y -q systemd dbus ca-certificates openssl sudo shadow-utils util-linux procps-ng >/dev/null; \

@@ -1,10 +1,13 @@
-import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test } from '../e2e/fixtures';
 import {
+	PASSWORD,
+	admin,
 	caddyCA,
+	call,
 	exec,
 	execAsync,
 	invitationLink,
+	login,
 	repoScript,
 	setupToken,
 	tamperDownload
@@ -17,9 +20,6 @@ import {
  * of another organization sees none of it.
  */
 
-// Test fixtures for a throwaway installation, not secrets.
-const PASSWORD = 'correct horse battery staple'; // betterleaks:allow
-const admin = { name: 'Ann Admin', email: 'ann@example.org' };
 const other = { name: 'Bea Beta', email: 'bea@example.org' };
 /** running, stopped or what the init system says, for systemd and OpenRC. */
 function serviceState(agent: { service: string; init: 'systemd' | 'openrc' }): string {
@@ -86,29 +86,6 @@ const packageHosts = [
 const trustCA =
 	'if command -v update-ca-certificates >/dev/null; then cat > /usr/local/share/ca-certificates/sermon-e2e.crt && update-ca-certificates >/dev/null 2>&1; else cat > /etc/pki/ca-trust/source/anchors/sermon-e2e.crt && update-ca-trust; fi';
 const agentURL = 'https://server:8443';
-
-async function login(page: Page, email: string) {
-	await page.goto('/login');
-	await page.getByLabel('Email address').fill(email);
-	await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-	await page.getByRole('button', { name: 'Sign in' }).click();
-	await expect(page).toHaveURL('/fleet');
-}
-
-/** A Connect call with the cookies of the page (the server checks the origin). */
-async function call<T>(
-	request: APIRequestContext,
-	baseURL: string,
-	method: string,
-	body: object
-): Promise<T> {
-	const res = await request.post(`/sermon.web.v1.${method}`, {
-		data: body,
-		headers: { Origin: new URL(baseURL).origin, 'Content-Type': 'application/json' }
-	});
-	expect(res.ok(), `${method}: ${res.status()} ${await res.text()}`).toBe(true);
-	return (await res.json()) as T;
-}
 
 test('a fresh installation monitors seven hosts within two minutes, packages install and remove cleanly, and Org B sees nothing', async ({
 	page,

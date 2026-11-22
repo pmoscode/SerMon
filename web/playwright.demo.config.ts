@@ -20,5 +20,14 @@ export default defineConfig({
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
 	},
-	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
+	// The installation first; the alerts of M2-27 build on its hosts and its admin.
+	projects: [
+		{ name: 'install', testMatch: 'fleet.demo.ts', use: { ...devices['Desktop Chrome'] } },
+		{
+			name: 'alerts',
+			testMatch: 'alerts.demo.ts',
+			dependencies: ['install'],
+			use: { ...devices['Desktop Chrome'] }
+		}
+	]
 });

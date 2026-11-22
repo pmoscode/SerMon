@@ -4,7 +4,8 @@
 #
 # so the demo runs against the real production file – its image built from source, hardening,
 # networks and the directly published agent port. The overlay adds Mailpit, Caddy's own CA instead
-# of ACME, the agent hosts with systemd and OpenRC, and publishes only on 127.0.0.1.
+# of ACME, the agent hosts with systemd and OpenRC, ntfy and a Slack mock for the alerts (M2-27),
+# and publishes only on 127.0.0.1.
 # Started by scripts/e2e-demo.sh (`just e2e-demo`), which writes the secrets into .build/ and sets
 # COMPOSE_FILE and COMPOSE_ENV_FILES (e2e.env).
 #
@@ -28,7 +29,11 @@ services:
       # The agents reach the agent port inside the network as server:8443.
       SERMON_AGENT_HOSTNAMES: server
       SERMON_SMTP_CA_FILE: /run/secrets/mailpit_ca
-    secrets: [mailpit_ca]
+      # Channels inside the network (M2-27): ntfy and the Slack mock have private addresses.
+      SERMON_OUTBOUND_ALLOWLIST: ${SERMON_EDGE_SUBNET:-172.30.78.0/24}
+      # The Slack mock's certificate is the only root for outgoing HTTPS (Go reads SSL_CERT_FILE).
+      SSL_CERT_FILE: /run/secrets/slack_mock_ca
+    secrets: [mailpit_ca, slack_mock_ca]
     volumes: ["../e2e/.build/downloads:/srv/downloads:ro"]
     ports: !reset []
     depends_on:
@@ -56,13 +61,38 @@ services:
     ports: ["127.0.0.1:${SERMON_E2E_MAIL_PORT:-18025}:8025"]
     networks: [edge]
 
+  # ntfy as a self-hosted push server (M2-27); the test reads the messages over its API.
+  ntfy:
+    image: binwiederhier/ntfy:v2.38.0@sha256:771309aecfce18d8fe2bfb8069994ddd6be6ca6ccdd7badace3d791a0045ff0d
+    command: ["serve"]
+    environment:
+      NTFY_BASE_URL: http://ntfy
+    ports: ["127.0.0.1:${SERMON_E2E_NTFY_PORT:-18090}:80"]
+    networks: [edge]
+
+  # Slack's incoming webhooks (M2-27): the channel only takes https://hooks.slack.com/…, so the
+  # mock gets that name in the network and a certificate of this run.
+  slack-mock:
+    build: { context: ../e2e, dockerfile: slack-mock.Dockerfile }
+    environment:
+      CERT_FILE: /certs/slack-mock.crt
+      KEY_FILE: /certs/slack-mock.key
+    volumes: ["../e2e/.build/slack-mock:/certs:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports: ["127.0.0.1:${SERMON_E2E_SLACK_PORT:-18026}:8080"]
+    networks:
+      edge: { aliases: [hooks.slack.com] }
+
+  # web-01 runs a real sshd (journald); web-02 attacks it with sshpass (M2-27).
   agent-debian-12:
     <<: *agent-host
-    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8", EXTRA_PACKAGES: openssh-server } }
     hostname: web-01
   agent-debian-13:
     <<: *agent-host
-    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6", EXTRA_PACKAGES: openssh-client sshpass } }
     hostname: web-02
   agent-ubuntu-24-04:
     <<: *agent-host
@@ -112,3 +142,4 @@ secrets: # written by scripts/e2e-demo.sh into .build/, never committed
   database_migrate_url: { file: ../e2e/.build/secrets/database_migrate_url }
   smtp_password: { file: ../e2e/.build/secrets/smtp_password }
   mailpit_ca: { file: ../e2e/.build/mailpit/mailpit.crt }
+  slack_mock_ca: { file: ../e2e/.build/slack-mock/slack-mock.crt }

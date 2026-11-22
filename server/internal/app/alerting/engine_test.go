@@ -15,6 +15,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -305,6 +306,8 @@ func TestEngine_RetiresAlertsOfRulesThatNoLongerApply(t *testing.T) {
 	for name, next := range map[string][]alerting.Rule{
 		"rule disabled":       nil,
 		"node outside groups": {{ID: cpuRule, Groups: []tenant.GroupID{other}, Timing: alert.Timing{Flapping: alert.DefaultFlapping}, Evaluator: &valueRule{value: 0.9}}},
+		// M2-29: the node lacks the rule's tags (they were removed, or the rule now asks for them).
+		"node without the tags": {{ID: cpuRule, Tags: tag.Tags{"env": "prod"}, Timing: alert.Timing{Flapping: alert.DefaultFlapping}, Evaluator: &valueRule{value: 0.9}}},
 	} {
 		store, c := newMemStore(orgA), &clock{now: t0}
 		source := cpuRules(&valueRule{value: 0.90}, 0)

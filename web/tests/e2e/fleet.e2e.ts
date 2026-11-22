@@ -13,6 +13,7 @@ const nodes = [
 		nodeId: '0193f5a0-0000-7000-8000-000000000001',
 		hostname: 'web-01',
 		...group('g1', 'web'),
+		tags: { env: 'prod', role: 'web' },
 		online: true,
 		figures: {
 			cpuBusyRatio: 0.23,
@@ -28,6 +29,7 @@ const nodes = [
 		nodeId: '0193f5a0-0000-7000-8000-000000000002',
 		hostname: 'web-02',
 		...group('g1', 'web'),
+		tags: { env: 'staging', role: 'web' },
 		online: true,
 		figures: {
 			cpuBusyRatio: 0.93,
@@ -82,6 +84,19 @@ test.describe('fleet overview (mocked API)', () => {
 		await page.getByLabel('Group').selectOption('db');
 		await expect(tiles).toHaveCount(1);
 		await page.getByLabel('Group').selectOption('');
+		// Tags (M2-29): shown on the tile, one pair as a filter, found by the search.
+		await expect(
+			tiles.filter({ hasText: 'web-01' }).getByRole('list', { name: 'Tags' })
+		).toContainText('env=prod');
+		await page.getByLabel('Tag', { exact: true }).selectOption('env=prod');
+		await expect(tiles).toHaveCount(1);
+		await expect(tiles.first()).toContainText('web-01');
+		await page.getByLabel('Tag', { exact: true }).selectOption('role=web');
+		await expect(tiles).toHaveCount(2);
+		await page.getByLabel('Tag', { exact: true }).selectOption('');
+		await page.getByLabel('Search').fill('staging');
+		await expect(tiles).toHaveCount(1);
+		await page.getByLabel('Search').fill('');
 
 		await page.getByRole('button', { name: 'Table' }).click();
 		await expect(page.getByRole('table')).toBeVisible();

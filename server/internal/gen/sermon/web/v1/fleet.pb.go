@@ -162,7 +162,9 @@ type NodeSummary struct {
 	// last_seen_at is the last contact, if any.
 	LastSeenAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_seen_at,json=lastSeenAt,proto3" json:"last_seen_at,omitempty"`
 	// figures are the current values (absent without live data).
-	Figures       *KeyFigures `protobuf:"bytes,9,opt,name=figures,proto3" json:"figures,omitempty"`
+	Figures *KeyFigures `protobuf:"bytes,9,opt,name=figures,proto3" json:"figures,omitempty"`
+	// tags are the node's free key=value pairs, e.g. env: prod (M2-29).
+	Tags          map[string]string `protobuf:"bytes,10,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -256,6 +258,13 @@ func (x *NodeSummary) GetLastSeenAt() *timestamppb.Timestamp {
 func (x *NodeSummary) GetFigures() *KeyFigures {
 	if x != nil {
 		return x.Figures
+	}
+	return nil
+}
+
+func (x *NodeSummary) GetTags() map[string]string {
+	if x != nil {
+		return x.Tags
 	}
 	return nil
 }
@@ -371,7 +380,7 @@ const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x16\n" +
 	"\x06online\x18\x02 \x01(\x05R\x06online\x12\x18\n" +
 	"\aoffline\x18\x03 \x01(\x05R\aoffline\x120\n" +
-	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xbb\x02\n" +
+	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xae\x03\n" +
 	"\vNodeSummary\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -384,7 +393,12 @@ const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\x06online\x18\a \x01(\bR\x06online\x12<\n" +
 	"\flast_seen_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"lastSeenAt\x123\n" +
-	"\afigures\x18\t \x01(\v2\x19.sermon.web.v1.KeyFiguresR\afigures\"\xcd\x04\n" +
+	"\afigures\x18\t \x01(\v2\x19.sermon.web.v1.KeyFiguresR\afigures\x128\n" +
+	"\x04tags\x18\n" +
+	" \x03(\v2$.sermon.web.v1.NodeSummary.TagsEntryR\x04tags\x1a7\n" +
+	"\tTagsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcd\x04\n" +
 	"\n" +
 	"KeyFigures\x12)\n" +
 	"\x0ecpu_busy_ratio\x18\x01 \x01(\x01H\x00R\fcpuBusyRatio\x88\x01\x01\x12/\n" +
@@ -419,25 +433,27 @@ func file_sermon_web_v1_fleet_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_fleet_proto_rawDescData
 }
 
-var file_sermon_web_v1_fleet_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_sermon_web_v1_fleet_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_sermon_web_v1_fleet_proto_goTypes = []any{
 	(*GetFleetSummaryRequest)(nil),  // 0: sermon.web.v1.GetFleetSummaryRequest
 	(*GetFleetSummaryResponse)(nil), // 1: sermon.web.v1.GetFleetSummaryResponse
 	(*NodeSummary)(nil),             // 2: sermon.web.v1.NodeSummary
 	(*KeyFigures)(nil),              // 3: sermon.web.v1.KeyFigures
-	(*timestamppb.Timestamp)(nil),   // 4: google.protobuf.Timestamp
+	nil,                             // 4: sermon.web.v1.NodeSummary.TagsEntry
+	(*timestamppb.Timestamp)(nil),   // 5: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_fleet_proto_depIdxs = []int32{
 	2, // 0: sermon.web.v1.GetFleetSummaryResponse.nodes:type_name -> sermon.web.v1.NodeSummary
-	4, // 1: sermon.web.v1.NodeSummary.last_seen_at:type_name -> google.protobuf.Timestamp
+	5, // 1: sermon.web.v1.NodeSummary.last_seen_at:type_name -> google.protobuf.Timestamp
 	3, // 2: sermon.web.v1.NodeSummary.figures:type_name -> sermon.web.v1.KeyFigures
-	0, // 3: sermon.web.v1.FleetService.GetFleetSummary:input_type -> sermon.web.v1.GetFleetSummaryRequest
-	1, // 4: sermon.web.v1.FleetService.GetFleetSummary:output_type -> sermon.web.v1.GetFleetSummaryResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 3: sermon.web.v1.NodeSummary.tags:type_name -> sermon.web.v1.NodeSummary.TagsEntry
+	0, // 4: sermon.web.v1.FleetService.GetFleetSummary:input_type -> sermon.web.v1.GetFleetSummaryRequest
+	1, // 5: sermon.web.v1.FleetService.GetFleetSummary:output_type -> sermon.web.v1.GetFleetSummaryResponse
+	5, // [5:6] is the sub-list for method output_type
+	4, // [4:5] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_fleet_proto_init() }
@@ -452,7 +468,7 @@ func file_sermon_web_v1_fleet_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_fleet_proto_rawDesc), len(file_sermon_web_v1_fleet_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

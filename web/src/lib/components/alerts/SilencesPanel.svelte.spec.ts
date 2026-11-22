@@ -67,7 +67,8 @@ describe('SilencesPanel', () => {
 			severities: [],
 			groupIds: ['g1'],
 			rules: ['system.cpu.usage_high'],
-			labels: {}
+			labels: {},
+			tags: {}
 		});
 		expect(spec.nodeIds).toEqual(['n1']);
 		expect(spec.comment).toBe('Kernel update');

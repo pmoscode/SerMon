@@ -90,6 +90,16 @@ message PolicyMatchers {
       }
     }
   }];
+  // tags must all be on the alert's node (e.g. env: prod; M2-29).
+  map<string, string> tags = 5 [(buf.validate.field).map = {
+    max_pairs: 16
+    keys: {
+      string: {pattern: "^[a-z][a-z0-9_-]{0,31}$"}
+    }
+    values: {
+      string: {pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,62}$"}
+    }
+  }];
 }
 
 // PolicyEscalation sends a firing alert to more channels when nobody acknowledged it in time.

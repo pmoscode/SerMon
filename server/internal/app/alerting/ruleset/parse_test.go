@@ -108,6 +108,8 @@ func TestParse_RejectsInvalidRules(t *testing.T) {
 		"no aggregate":          {"  aggregate: avg\n", "", "aggregate"},
 		"mixed selector":        {`groups: [ "*" ]`, `groups: [ "*", "0193f5a0-0000-7000-8000-0000000000c1" ]`, "selector"},
 		"group no uuid":         {`groups: [ "*" ]`, `groups: [ "web" ]`, "selector"},
+		"tag key":               {`groups: [ "*" ]`, `groups: [ "*" ], tags: { Env: prod }`, "tags"},
+		"tag value":             {`groups: [ "*" ]`, `groups: [ "*" ], tags: { env: "<prod>" }`, "tags"},
 		"thresholds disagree":   {`{ op: "<", value: 0.05 }`, `{ op: ">", value: 0.95 }`, "direction"},
 		"two documents":         {"apiVersion: sermon/v1", "apiVersion: sermon/v1\nkind: AlertRule\n---\napiVersion: sermon/v1", "one rule"},
 		"not yaml":              {"spec:", "spec: [", "yaml"},
@@ -126,6 +128,18 @@ func TestParse_RejectsInvalidRules(t *testing.T) {
 				t.Errorf("error %q does not point to %q", err, tc.hint)
 			}
 		})
+	}
+}
+
+// The selector names tags (M2-29): the rule applies only to nodes that carry all of them.
+func TestParse_SelectorWithTags(t *testing.T) {
+	doc := strings.Replace(cpuRule, `selector: { groups: [ "*" ] }`, `selector: { tags: { env: prod, role: db } }`, 1)
+	def, err := ruleset.Parse([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := def.Rule.Tags; len(got) != 2 || got["env"] != "prod" || got["role"] != "db" || len(def.Rule.Groups) != 0 {
+		t.Errorf("rule tags %v, groups %v", got, def.Rule.Groups)
 	}
 }
 

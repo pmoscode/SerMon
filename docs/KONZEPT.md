@@ -404,7 +404,9 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 - Ein **Superadmin** (Instanz-Ebene) verwaltet Orgs, sieht aber **keine** Daten einer Org, solange er nicht selbst
   Mitglied ist.
 - Ein Node gehört genau einer Gruppe. Zusätzlich gibt es **Tags** (frei, z. B. `env=prod`, `role=db`) für Filter und
-  Regel-Matching, aber nicht für Rechte.
+  Regel-Matching, aber nicht für Rechte. Sie setzen Admins der Gruppe des Nodes mit Step-up und Audit-Eintrag;
+  höchstens 16 Paare, Schlüssel aus Kleinbuchstaben, Ziffern, `_` und `-`, Werte aus Buchstaben, Ziffern und
+  `_ . : / -` (M2-29). Regel-Selektoren, Notification-Policies und Silences können Tags verlangen.
 
 ### Rollen
 
@@ -416,6 +418,7 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 | Alerts quittieren und stummschalten         |   –    |    ✓    |     ✓      |
 | Updates manuell auslösen, Reboot            |   –    |    ✓    |     ✓      |
 | Enrollment-Token erzeugen                   |   –    |    ✓    |     ✓      |
+| Tags von Nodes setzen                       |   –    |    –     |     ✓      |
 | Regeln, Kanäle, Policies, Module bearbeiten |   –    |    –     |     ✓      |
 | User, Gruppen, Rollen verwalten             |   –    |    –     |     ✓      |
 | Audit-Log ansehen                           |   –    |    –     |     ✓      |
@@ -640,8 +643,8 @@ Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von
       Gruppe quittieren; Security-Alerts brauchen einen frischen Step-up.
     - **Flapping-Erkennung:** Mehr als N Wechsel in M Minuten setzen den Status `FLAPPING`; Benachrichtigungen werden
       dann gedrosselt.
-- **Notification-Policy (Routing):** Matcher auf Severity, Gruppe, Regel (Muster wie `security.*`) und die Labels der
-  Regel → Kanäle. Dazu Wiederholungsintervall, Gruppierung (pro Node oder Digest je Auswertungsrunde) und eine
+- **Notification-Policy (Routing):** Matcher auf Severity, Gruppe, Regel (Muster wie `security.*`), die Labels der
+  Regel und die Tags des Nodes → Kanäle. Dazu Wiederholungsintervall, Gruppierung (pro Node oder Digest je Auswertungsrunde) und eine
   einfache **Eskalation** („nach 15 min ohne Quittierung zusätzlich an Kanal X“). Ohne eine Policy gehen alle Alerts
   an alle aktiven Kanäle der Org. Während eine Instanz flattert, werden Feuern und Behoben nicht gemeldet
   ([ADR 0019](adr/0019-alerting.md), Nachtrag M2-14).

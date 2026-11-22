@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -32,7 +33,7 @@ func TestSilence_BeginsAndEnds(t *testing.T) {
 }
 
 func TestSilence_SelectorMutesOnlyWhatItNames(t *testing.T) {
-	webCPU := routing.Target{Rule: "system.cpu.usage_high", Labels: map[string]string{"category": "cpu"}, Group: groupA, Node: web, Severity: notify.Warning}
+	webCPU := routing.Target{Rule: "system.cpu.usage_high", Labels: map[string]string{"category": "cpu"}, Group: groupA, Node: web, Severity: notify.Warning, Tags: tag.Tags{"env": "prod"}}
 	dbSSH := routing.Target{Rule: "security.ssh.bruteforce", Labels: map[string]string{"category": "security"}, Group: groupB, Node: db, Severity: notify.Critical}
 	otherWeb := webCPU
 	otherWeb.Node = identity.NodeID(uuid.New())
@@ -45,6 +46,7 @@ func TestSilence_SelectorMutesOnlyWhatItNames(t *testing.T) {
 		{"one node", routing.Silence{Match: routing.Matchers{Groups: []tenant.GroupID{groupA}}, Nodes: []identity.NodeID{web}}, true, false, false},
 		{"rule pattern", routing.Silence{Match: routing.Matchers{Rules: []string{"security.*"}}}, false, true, false},
 		{"label and severity", routing.Silence{Match: routing.Matchers{Labels: map[string]string{"category": "cpu"}, Severities: []notify.Severity{notify.Critical}}}, false, false, false},
+		{"tag of the node (M2-29)", routing.Silence{Match: routing.Matchers{Tags: tag.Tags{"env": "prod"}}}, true, false, true},
 		{"rule on a node", routing.Silence{Match: routing.Matchers{Groups: []tenant.GroupID{groupA}, Rules: []string{"system.cpu.*"}}, Nodes: []identity.NodeID{web}}, true, false, false},
 	} {
 		if got := tc.s.Mutes(webCPU); got != tc.web {
@@ -89,6 +91,12 @@ func TestSilence_Validate(t *testing.T) {
 		if err := s.Validate(t0); !errors.Is(err, routing.ErrInvalidSilence) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	// Tags alone are a selector (M2-29): env=staging names something.
+	s = silence()
+	s.Match = routing.Matchers{Tags: tag.Tags{"env": "staging"}}
+	if err := s.Validate(t0); err != nil {
+		t.Errorf("tags alone: %v", err)
 	}
 	// A silence may have begun already, and its comment may span lines.
 	s = silence()

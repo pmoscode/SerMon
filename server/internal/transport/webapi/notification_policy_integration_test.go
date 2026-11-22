@@ -27,6 +27,7 @@ func TestNotificationPolicyAPI_AdminManagesPolicies(t *testing.T) {
 		Matchers: &webv1.PolicyMatchers{
 			Severities: []webv1.AlertSeverity{webv1.AlertSeverity_ALERT_SEVERITY_CRITICAL}, GroupIds: []string{groupAl},
 			Rules: []string{"security.*"}, Labels: map[string]string{"category": "security"},
+			Tags: map[string]string{"env": "prod"}, // M2-29
 		},
 		Escalation: &webv1.PolicyEscalation{AfterMinutes: 15, ChannelIds: []string{channelAl}},
 	}
@@ -49,6 +50,10 @@ func TestNotificationPolicyAPI_AdminManagesPolicies(t *testing.T) {
 	list, err := c.ListPolicies(ctx, connect.NewRequest(&webv1.ListPoliciesRequest{}))
 	if err != nil || len(list.Msg.GetPolicies()) != 1 {
 		t.Fatalf("ListPolicies() = %v, %v", list, err)
+	}
+	// The tags survive the database (they are stored with the other matchers).
+	if tags := list.Msg.GetPolicies()[0].GetSpec().GetMatchers().GetTags(); len(tags) != 1 || tags["env"] != "prod" {
+		t.Errorf("stored tags %v", tags)
 	}
 
 	// Checks of the application: a repeat below 5 minutes, an unknown group.

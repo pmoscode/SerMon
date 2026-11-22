@@ -37,6 +37,7 @@ const (
 	RotateNodeKeys         // on-demand key rotation (KONZEPT §6)
 	UnlockNode             // lift the lock after a second session (M2-23)
 	AllowNodeTakeover      // let the next enrollment with the node's machine-id take it over (M2-23)
+	TagNodes               // set the free tags of nodes (M2-29); they steer rules and notifications
 
 	// Organization-wide actions (Admin on all groups).
 	ManageAlertRules
@@ -84,6 +85,7 @@ var rules = map[Action]rule{
 	RotateNodeKeys:         {name: "rotate_node_keys", minimum: role.Operator, scope: groupScoped},
 	UnlockNode:             {name: "unlock_node", minimum: role.Operator, scope: groupScoped},
 	AllowNodeTakeover:      {name: "allow_node_takeover", minimum: role.Operator, scope: groupScoped},
+	TagNodes:               {name: "tag_nodes", minimum: role.Admin, scope: groupScoped},
 	ManageAlertRules:       {name: "manage_alert_rules", minimum: role.Admin, scope: orgWide},
 	ManageChannels:         {name: "manage_channels", minimum: role.Admin, scope: orgWide},
 	ManagePolicies:         {name: "manage_policies", minimum: role.Admin, scope: orgWide},

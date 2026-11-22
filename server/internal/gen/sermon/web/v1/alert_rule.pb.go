@@ -256,7 +256,7 @@ type AlertRuleSpec struct {
 	Lookback string `protobuf:"bytes,16,opt,name=lookback,proto3" json:"lookback,omitempty"`
 	// flapping overrides the default flapping detection.
 	Flapping *AlertFlapping `protobuf:"bytes,17,opt,name=flapping,proto3" json:"flapping,omitempty"`
-	// selector limits the rule to node groups ("*" or group IDs); empty: all groups.
+	// selector limits the rule to node groups ("*" or group IDs) and tags; empty: all nodes.
 	Selector *AlertSelector `protobuf:"bytes,18,opt,name=selector,proto3" json:"selector,omitempty"`
 	// help explains the alert: meaning, typical causes, what to do.
 	Help *LocalizedText `protobuf:"bytes,19,opt,name=help,proto3" json:"help,omitempty"`
@@ -732,11 +732,13 @@ func (x *AlertFlapping) GetWindow() string {
 	return ""
 }
 
-// AlertSelector limits a rule to node groups.
+// AlertSelector limits a rule to node groups and tags.
 type AlertSelector struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// groups are "*" (all) or node group UUIDs.
-	Groups        []string `protobuf:"bytes,1,rep,name=groups,proto3" json:"groups,omitempty"`
+	Groups []string `protobuf:"bytes,1,rep,name=groups,proto3" json:"groups,omitempty"`
+	// tags must all be on the node (e.g. env: prod; M2-29); empty: every node of the groups.
+	Tags          map[string]string `protobuf:"bytes,2,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -774,6 +776,13 @@ func (*AlertSelector) Descriptor() ([]byte, []int) {
 func (x *AlertSelector) GetGroups() []string {
 	if x != nil {
 		return x.Groups
+	}
+	return nil
+}
+
+func (x *AlertSelector) GetTags() map[string]string {
+	if x != nil {
+		return x.Tags
 	}
 	return nil
 }
@@ -862,10 +871,14 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x01B\a\xbaH\x04\x12\x02@\x01R\x05value\"U\n" +
 	"\rAlertFlapping\x12#\n" +
 	"\achanges\x18\x01 \x01(\x05B\t\xbaH\x06\x1a\x04\x18d(\x01R\achanges\x12\x1f\n" +
-	"\x06window\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18\x10R\x06window\"9\n" +
+	"\x06window\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18\x10R\x06window\"\xff\x01\n" +
 	"\rAlertSelector\x12(\n" +
 	"\x06groups\x18\x01 \x03(\tB\x10\xbaH\r\x92\x01\n" +
-	"\x10d\x18\x01\"\x04r\x02\x18$R\x06groupsB\xbd\x01\n" +
+	"\x10d\x18\x01\"\x04r\x02\x18$R\x06groups\x12\x8a\x01\n" +
+	"\x04tags\x18\x02 \x03(\v2&.sermon.web.v1.AlertSelector.TagsEntryBN\xbaHK\x9a\x01H\x10\x10\"\x1br\x192\x17^[a-z][a-z0-9_-]{0,31}$*'r%2#^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,62}$R\x04tags\x1a7\n" +
+	"\tTagsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\xbd\x01\n" +
 	"\x11com.sermon.web.v1B\x0eAlertRuleProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -880,7 +893,7 @@ func file_sermon_web_v1_alert_rule_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_alert_rule_proto_rawDescData
 }
 
-var file_sermon_web_v1_alert_rule_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_sermon_web_v1_alert_rule_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_sermon_web_v1_alert_rule_proto_goTypes = []any{
 	(*AlertRule)(nil),          // 0: sermon.web.v1.AlertRule
 	(*AlertRuleMetadata)(nil),  // 1: sermon.web.v1.AlertRuleMetadata
@@ -895,7 +908,8 @@ var file_sermon_web_v1_alert_rule_proto_goTypes = []any{
 	nil,                        // 10: sermon.web.v1.AlertRuleSpec.LabelsEntry
 	nil,                        // 11: sermon.web.v1.AlertRuleSpec.ExcludeEntry
 	nil,                        // 12: sermon.web.v1.AlertRuleSpec.MatchEntry
-	(*structpb.ListValue)(nil), // 13: google.protobuf.ListValue
+	nil,                        // 13: sermon.web.v1.AlertSelector.TagsEntry
+	(*structpb.ListValue)(nil), // 14: google.protobuf.ListValue
 }
 var file_sermon_web_v1_alert_rule_proto_depIdxs = []int32{
 	1,  // 0: sermon.web.v1.AlertRule.metadata:type_name -> sermon.web.v1.AlertRuleMetadata
@@ -914,12 +928,13 @@ var file_sermon_web_v1_alert_rule_proto_depIdxs = []int32{
 	12, // 13: sermon.web.v1.AlertRuleSpec.match:type_name -> sermon.web.v1.AlertRuleSpec.MatchEntry
 	4,  // 14: sermon.web.v1.AlertRuleSpec.count:type_name -> sermon.web.v1.AlertEventCount
 	5,  // 15: sermon.web.v1.AlertRuleSpec.after:type_name -> sermon.web.v1.AlertEventAfter
-	13, // 16: sermon.web.v1.AlertRuleSpec.ExcludeEntry.value:type_name -> google.protobuf.ListValue
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	13, // 16: sermon.web.v1.AlertSelector.tags:type_name -> sermon.web.v1.AlertSelector.TagsEntry
+	14, // 17: sermon.web.v1.AlertRuleSpec.ExcludeEntry.value:type_name -> google.protobuf.ListValue
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_alert_rule_proto_init() }
@@ -933,7 +948,7 @@ func file_sermon_web_v1_alert_rule_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_alert_rule_proto_rawDesc), len(file_sermon_web_v1_alert_rule_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

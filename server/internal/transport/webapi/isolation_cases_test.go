@@ -418,6 +418,11 @@ var tenantIsolationCases = map[string]isolationCase{
 		_, err := e.node.AllowNodeTakeover(ctx, connect.NewRequest(&webv1.AllowNodeTakeoverRequest{NodeId: e.nodeA}))
 		return err
 	}},
+	// M2-29: tags of a node of another organization are NOT_FOUND and stay as they are.
+	"/sermon.web.v1.NodeService/SetNodeTags": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.SetNodeTags(ctx, connect.NewRequest(&webv1.SetNodeTagsRequest{NodeId: e.nodeA, Tags: map[string]string{"env": "prod"}}))
+		return err
+	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.access.ListAuditLog(ctx, connect.NewRequest(&webv1.ListAuditLogRequest{}))
 		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), "by-a")) {

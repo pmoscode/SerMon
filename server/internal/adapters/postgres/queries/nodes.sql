@@ -30,7 +30,7 @@ WHERE id = sqlc.arg(id);
 SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
-       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until
+       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 WHERE sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[])
 ORDER BY n.hostname, n.id;
@@ -40,3 +40,12 @@ SELECT EXISTS (
     SELECT 1 FROM node_groups
     WHERE id = sqlc.arg(group_id) AND (sqlc.arg(all_groups)::boolean OR id = ANY (sqlc.arg(group_ids)::uuid[]))
 );
+
+-- Tags of nodes (M2-29). The node within the scope's groups, locked for the change.
+-- name: NodeTagsForUpdate :one
+SELECT group_id, tags FROM nodes
+WHERE id = sqlc.arg(id) AND (sqlc.arg(all_groups)::boolean OR group_id = ANY (sqlc.arg(group_ids)::uuid[]))
+FOR UPDATE;
+
+-- name: SetNodeTags :exec
+UPDATE nodes SET tags = sqlc.arg(tags) WHERE id = sqlc.arg(id);

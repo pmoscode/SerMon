@@ -60,6 +60,14 @@ describe('PoliciesPanel', () => {
 			.toHaveTextContent('Line 2 of the labels needs the form key=value.');
 
 		await page.getByLabelText('Rule labels').fill('category=security');
+		// Tags of the node (M2-29): a bad pair is named, nothing is sent.
+		await page.getByLabelText('Node tags').fill('env=prod Role=db');
+		await page.getByRole('button', { name: 'Create policy' }).click();
+		await expect
+			.element(page.getByRole('alert'))
+			.toHaveTextContent('"Role=db" is not a valid tag (key=value).');
+		expect(createPolicy).not.toHaveBeenCalled();
+		await page.getByLabelText('Node tags').fill('env=prod');
 		await page.getByRole('button', { name: 'Create policy' }).click();
 		await vi.waitFor(() => expect(createPolicy).toHaveBeenCalledOnce());
 		expect(createPolicy.mock.calls[0][0]).toEqual({
@@ -74,7 +82,8 @@ describe('PoliciesPanel', () => {
 					severities: [AlertSeverity.CRITICAL],
 					groupIds: [],
 					rules: ['security.*', 'system.ssh.*'],
-					labels: { category: 'security' }
+					labels: { category: 'security' },
+					tags: { env: 'prod' }
 				}
 			}
 		});

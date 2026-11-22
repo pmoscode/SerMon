@@ -12,6 +12,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { labelsText, parseLabels, parsePatterns, patternsText } from '#lib/notify/forms.js';
+	import { parseTags, tagsText } from '#lib/tags/tags.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import type { MessageInitShape } from '@bufbuild/protobuf';
 	import type { PolicySpecSchema } from '#lib/api/gen/sermon/web/v1/notification_policy_pb.js';
@@ -47,6 +48,7 @@
 	let groupIds = $state<string[]>([...(initial?.matchers?.groupIds ?? [])]);
 	let rules = $state(patternsText(initial?.matchers?.rules ?? []));
 	let labels = $state(labelsText(initial?.matchers?.labels ?? {}));
+	let tags = $state(tagsText(initial?.matchers?.tags ?? {}));
 	let problem = $state('');
 
 	function toggle(list: string[], id: string, on: boolean): string[] {
@@ -60,6 +62,11 @@
 			problem = m.matchers_labels_invalid({ line: String(parsed.error) });
 			return;
 		}
+		const tagged = parseTags(tags);
+		if ('error' in tagged) {
+			problem = m.matchers_tags_invalid({ pair: tagged.error });
+			return;
+		}
 		problem = '';
 		onSubmit({
 			name: name.trim(),
@@ -70,7 +77,13 @@
 			escalation: escalate
 				? { afterMinutes: Number(escalationAfter), channelIds: escalationIds }
 				: undefined,
-			matchers: { severities, groupIds, rules: parsePatterns(rules), labels: parsed.labels }
+			matchers: {
+				severities,
+				groupIds,
+				rules: parsePatterns(rules),
+				labels: parsed.labels,
+				tags: tagged.tags
+			}
 		});
 	}
 
@@ -134,7 +147,15 @@
 		{/each}
 	</fieldset>
 
-	<MatcherFields id="policy" {groups} bind:severities bind:groupIds bind:rules bind:labels />
+	<MatcherFields
+		id="policy"
+		{groups}
+		bind:severities
+		bind:groupIds
+		bind:rules
+		bind:labels
+		bind:tags
+	/>
 
 	<fieldset class="flex flex-col gap-3 rounded-md border p-3 text-sm">
 		<legend class="px-1 font-medium">{m.policy_escalation()}</legend>

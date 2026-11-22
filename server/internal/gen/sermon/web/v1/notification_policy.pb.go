@@ -139,7 +139,9 @@ type PolicyMatchers struct {
 	// rules are patterns of rule IDs; * stands for any characters, e.g. security.*.
 	Rules []string `protobuf:"bytes,3,rep,name=rules,proto3" json:"rules,omitempty"`
 	// labels must all equal the rule's labels (e.g. category: security).
-	Labels        map[string]string `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Labels map[string]string `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// tags must all be on the alert's node (e.g. env: prod; M2-29).
+	Tags          map[string]string `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -198,6 +200,13 @@ func (x *PolicyMatchers) GetRules() []string {
 func (x *PolicyMatchers) GetLabels() map[string]string {
 	if x != nil {
 		return x.Labels
+	}
+	return nil
+}
+
+func (x *PolicyMatchers) GetTags() map[string]string {
+	if x != nil {
+		return x.Tags
 	}
 	return nil
 }
@@ -793,15 +802,19 @@ var File_sermon_web_v1_notification_policy_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_notification_policy_proto_rawDesc = "" +
 	"\n" +
-	"'sermon/web/v1/notification_policy.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf9\x02\n" +
+	"'sermon/web/v1/notification_policy.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc0\x04\n" +
 	"\x0ePolicyMatchers\x12Q\n" +
 	"\n" +
 	"severities\x18\x01 \x03(\x0e2\x1c.sermon.web.v1.AlertSeverityB\x13\xbaH\x10\x92\x01\r\x10\x02\x18\x01\"\a\x82\x01\x04\x10\x01 \x00R\n" +
 	"severities\x12.\n" +
 	"\tgroup_ids\x18\x02 \x03(\tB\x11\xbaH\x0e\x92\x01\v\x10\x14\x18\x01\"\x05r\x03\xb0\x01\x01R\bgroupIds\x128\n" +
 	"\x05rules\x18\x03 \x03(\tB\"\xbaH\x1f\x92\x01\x1c\x10\x14\x18\x01\"\x16r\x14\x10\x01\x18d2\x0e^[a-z0-9_.*]+$R\x05rules\x12o\n" +
-	"\x06labels\x18\x04 \x03(\v2).sermon.web.v1.PolicyMatchers.LabelsEntryB,\xbaH)\x9a\x01&\x10\x10\"\x1ar\x182\x16^[a-z][a-z0-9_]{0,31}$*\x06r\x04\x10\x01\x18dR\x06labels\x1a9\n" +
+	"\x06labels\x18\x04 \x03(\v2).sermon.web.v1.PolicyMatchers.LabelsEntryB,\xbaH)\x9a\x01&\x10\x10\"\x1ar\x182\x16^[a-z][a-z0-9_]{0,31}$*\x06r\x04\x10\x01\x18dR\x06labels\x12\x8b\x01\n" +
+	"\x04tags\x18\x05 \x03(\v2'.sermon.web.v1.PolicyMatchers.TagsEntryBN\xbaHK\x9a\x01H\x10\x10\"\x1br\x192\x17^[a-z][a-z0-9_-]{0,31}$*'r%2#^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,62}$R\x04tags\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a7\n" +
+	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"y\n" +
 	"\x10PolicyEscalation\x12/\n" +
@@ -876,7 +889,7 @@ func file_sermon_web_v1_notification_policy_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_notification_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sermon_web_v1_notification_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_sermon_web_v1_notification_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_sermon_web_v1_notification_policy_proto_goTypes = []any{
 	(AlertSeverity)(0),            // 0: sermon.web.v1.AlertSeverity
 	(PolicyGrouping)(0),           // 1: sermon.web.v1.PolicyGrouping
@@ -893,35 +906,37 @@ var file_sermon_web_v1_notification_policy_proto_goTypes = []any{
 	(*DeletePolicyRequest)(nil),   // 12: sermon.web.v1.DeletePolicyRequest
 	(*DeletePolicyResponse)(nil),  // 13: sermon.web.v1.DeletePolicyResponse
 	nil,                           // 14: sermon.web.v1.PolicyMatchers.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
+	nil,                           // 15: sermon.web.v1.PolicyMatchers.TagsEntry
+	(*timestamppb.Timestamp)(nil), // 16: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_notification_policy_proto_depIdxs = []int32{
 	0,  // 0: sermon.web.v1.PolicyMatchers.severities:type_name -> sermon.web.v1.AlertSeverity
 	14, // 1: sermon.web.v1.PolicyMatchers.labels:type_name -> sermon.web.v1.PolicyMatchers.LabelsEntry
-	2,  // 2: sermon.web.v1.PolicySpec.matchers:type_name -> sermon.web.v1.PolicyMatchers
-	1,  // 3: sermon.web.v1.PolicySpec.grouping:type_name -> sermon.web.v1.PolicyGrouping
-	3,  // 4: sermon.web.v1.PolicySpec.escalation:type_name -> sermon.web.v1.PolicyEscalation
-	4,  // 5: sermon.web.v1.NotificationPolicy.spec:type_name -> sermon.web.v1.PolicySpec
-	15, // 6: sermon.web.v1.NotificationPolicy.create_time:type_name -> google.protobuf.Timestamp
-	15, // 7: sermon.web.v1.NotificationPolicy.update_time:type_name -> google.protobuf.Timestamp
-	5,  // 8: sermon.web.v1.ListPoliciesResponse.policies:type_name -> sermon.web.v1.NotificationPolicy
-	4,  // 9: sermon.web.v1.CreatePolicyRequest.spec:type_name -> sermon.web.v1.PolicySpec
-	5,  // 10: sermon.web.v1.CreatePolicyResponse.policy:type_name -> sermon.web.v1.NotificationPolicy
-	4,  // 11: sermon.web.v1.UpdatePolicyRequest.spec:type_name -> sermon.web.v1.PolicySpec
-	5,  // 12: sermon.web.v1.UpdatePolicyResponse.policy:type_name -> sermon.web.v1.NotificationPolicy
-	6,  // 13: sermon.web.v1.NotificationPolicyService.ListPolicies:input_type -> sermon.web.v1.ListPoliciesRequest
-	8,  // 14: sermon.web.v1.NotificationPolicyService.CreatePolicy:input_type -> sermon.web.v1.CreatePolicyRequest
-	10, // 15: sermon.web.v1.NotificationPolicyService.UpdatePolicy:input_type -> sermon.web.v1.UpdatePolicyRequest
-	12, // 16: sermon.web.v1.NotificationPolicyService.DeletePolicy:input_type -> sermon.web.v1.DeletePolicyRequest
-	7,  // 17: sermon.web.v1.NotificationPolicyService.ListPolicies:output_type -> sermon.web.v1.ListPoliciesResponse
-	9,  // 18: sermon.web.v1.NotificationPolicyService.CreatePolicy:output_type -> sermon.web.v1.CreatePolicyResponse
-	11, // 19: sermon.web.v1.NotificationPolicyService.UpdatePolicy:output_type -> sermon.web.v1.UpdatePolicyResponse
-	13, // 20: sermon.web.v1.NotificationPolicyService.DeletePolicy:output_type -> sermon.web.v1.DeletePolicyResponse
-	17, // [17:21] is the sub-list for method output_type
-	13, // [13:17] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	15, // 2: sermon.web.v1.PolicyMatchers.tags:type_name -> sermon.web.v1.PolicyMatchers.TagsEntry
+	2,  // 3: sermon.web.v1.PolicySpec.matchers:type_name -> sermon.web.v1.PolicyMatchers
+	1,  // 4: sermon.web.v1.PolicySpec.grouping:type_name -> sermon.web.v1.PolicyGrouping
+	3,  // 5: sermon.web.v1.PolicySpec.escalation:type_name -> sermon.web.v1.PolicyEscalation
+	4,  // 6: sermon.web.v1.NotificationPolicy.spec:type_name -> sermon.web.v1.PolicySpec
+	16, // 7: sermon.web.v1.NotificationPolicy.create_time:type_name -> google.protobuf.Timestamp
+	16, // 8: sermon.web.v1.NotificationPolicy.update_time:type_name -> google.protobuf.Timestamp
+	5,  // 9: sermon.web.v1.ListPoliciesResponse.policies:type_name -> sermon.web.v1.NotificationPolicy
+	4,  // 10: sermon.web.v1.CreatePolicyRequest.spec:type_name -> sermon.web.v1.PolicySpec
+	5,  // 11: sermon.web.v1.CreatePolicyResponse.policy:type_name -> sermon.web.v1.NotificationPolicy
+	4,  // 12: sermon.web.v1.UpdatePolicyRequest.spec:type_name -> sermon.web.v1.PolicySpec
+	5,  // 13: sermon.web.v1.UpdatePolicyResponse.policy:type_name -> sermon.web.v1.NotificationPolicy
+	6,  // 14: sermon.web.v1.NotificationPolicyService.ListPolicies:input_type -> sermon.web.v1.ListPoliciesRequest
+	8,  // 15: sermon.web.v1.NotificationPolicyService.CreatePolicy:input_type -> sermon.web.v1.CreatePolicyRequest
+	10, // 16: sermon.web.v1.NotificationPolicyService.UpdatePolicy:input_type -> sermon.web.v1.UpdatePolicyRequest
+	12, // 17: sermon.web.v1.NotificationPolicyService.DeletePolicy:input_type -> sermon.web.v1.DeletePolicyRequest
+	7,  // 18: sermon.web.v1.NotificationPolicyService.ListPolicies:output_type -> sermon.web.v1.ListPoliciesResponse
+	9,  // 19: sermon.web.v1.NotificationPolicyService.CreatePolicy:output_type -> sermon.web.v1.CreatePolicyResponse
+	11, // 20: sermon.web.v1.NotificationPolicyService.UpdatePolicy:output_type -> sermon.web.v1.UpdatePolicyResponse
+	13, // 21: sermon.web.v1.NotificationPolicyService.DeletePolicy:output_type -> sermon.web.v1.DeletePolicyResponse
+	18, // [18:22] is the sub-list for method output_type
+	14, // [14:18] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_notification_policy_proto_init() }
@@ -935,7 +950,7 @@ func file_sermon_web_v1_notification_policy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_notification_policy_proto_rawDesc), len(file_sermon_web_v1_notification_policy_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

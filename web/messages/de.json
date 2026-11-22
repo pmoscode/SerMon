@@ -134,7 +134,7 @@
 	"fleet_total": "Nodes",
 	"fleet_filter": "Nodes filtern",
 	"fleet_search": "Suchen",
-	"fleet_search_hint": "Hostname, Gruppe, System",
+	"fleet_search_hint": "Hostname, Gruppe, System, Tag",
 	"fleet_group": "Gruppe",
 	"fleet_group_all": "Alle Gruppen",
 	"fleet_view": "Ansicht",
@@ -536,5 +536,17 @@
 	"instance_critical": "Server: Kritisch",
 	"instance_ingest_lag": "Agent-Daten kommen verspätet an ({seconds} s)",
 	"instance_dropped_samples": "{count} Samples in 15 Minuten verworfen",
-	"instance_database_size": "Die Datenbank läuft voll ({percent} %)"
+	"instance_database_size": "Die Datenbank läuft voll ({percent} %)",
+	"fleet_tag": "Tag",
+	"fleet_tag_all": "Alle Tags",
+	"tags_label": "Tags",
+	"tags_none": "Keine Tags",
+	"tags_edit": "Tags bearbeiten",
+	"tags_hint": "Paare key=value, durch Kommas getrennt, z. B. env=prod, role=db. Schlüssel: Kleinbuchstaben, Ziffern, _ und -; Werte: Buchstaben, Ziffern und _ . : / -.",
+	"tags_invalid": "„{pair}“ ist kein gültiges Tag (key=value, siehe Hinweis).",
+	"tags_save": "Speichern",
+	"tags_cancel": "Abbrechen",
+	"matchers_tags": "Tags des Nodes",
+	"matchers_tags_invalid": "„{pair}“ ist kein gültiges Tag (key=value).",
+	"tags_input": "Neue Tags"
 }

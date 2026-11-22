@@ -29,6 +29,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 )
@@ -187,7 +188,14 @@ func FromDocument(doc *webv1.AlertRule) (Definition, error) {
 		}
 		return Definition{}, err
 	}
-	return Definition{Doc: doc, Rule: alerting.Rule{ID: id, Timing: timing, Groups: groups, Evaluator: evaluator}}, nil
+	tags := tag.Tags(spec.GetSelector().GetTags())
+	if err := tags.Validate(); err != nil {
+		return Definition{}, invalid("selector.tags: %v", err)
+	}
+	if len(tags) == 0 {
+		tags = nil
+	}
+	return Definition{Doc: doc, Rule: alerting.Rule{ID: id, Timing: timing, Groups: groups, Tags: tags, Evaluator: evaluator}}, nil
 }
 
 // Fields of the spec by rule type (YAML names in the errors). Event rules count instead of

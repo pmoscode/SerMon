@@ -5,7 +5,7 @@ import {
 	NodeSummarySchema,
 	type NodeSummary
 } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
-import { assess, countByStatus, filterNodes, groupsOf } from './status.js';
+import { assess, countByStatus, filterNodes, groupsOf, tagsOf } from './status.js';
 
 function node(
 	hostname: string,
@@ -54,18 +54,39 @@ describe('filterNodes', () => {
 
 	it('puts problems first, then sorts by host name', () => {
 		expect(
-			filterNodes(nodes, { search: '', group: '', status: '' }).map((n) => n.hostname)
+			filterNodes(nodes, { search: '', group: '', status: '', tag: '' }).map((n) => n.hostname)
 		).toEqual(['web-01', 'web-03', 'db-01', 'web-02']);
 	});
 
 	it('filters by search, group and status', () => {
 		expect(
-			filterNodes(nodes, { search: ' DB ', group: '', status: '' }).map((n) => n.hostname)
+			filterNodes(nodes, { search: ' DB ', group: '', status: '', tag: '' }).map((n) => n.hostname)
 		).toEqual(['db-01']);
 		expect(
-			filterNodes(nodes, { search: '', group: 'g1', status: 'ok' }).map((n) => n.hostname)
+			filterNodes(nodes, { search: '', group: 'g1', status: 'ok', tag: '' }).map((n) => n.hostname)
 		).toEqual(['web-02']);
-		expect(filterNodes(nodes, { search: 'debian 13', group: 'g2', status: '' })).toHaveLength(1);
+		expect(
+			filterNodes(nodes, { search: 'debian 13', group: 'g2', status: '', tag: '' })
+		).toHaveLength(1);
+	});
+
+	// M2-29: the tag filter takes one key=value pair; the search finds tags too.
+	it('filters by tag and finds tags in the search', () => {
+		const tagged = [
+			{ ...node('web-01', true, 0.1), tags: { env: 'prod', role: 'web' } },
+			{ ...node('web-02', true, 0.1), tags: { env: 'staging', role: 'web' } },
+			node('db-01', true, 0.1, undefined, undefined, 'g2')
+		] as NodeSummary[];
+		const filter = { search: '', group: '', status: '' as const };
+		expect(filterNodes(tagged, { ...filter, tag: 'env=prod' }).map((n) => n.hostname)).toEqual([
+			'web-01'
+		]);
+		expect(filterNodes(tagged, { ...filter, tag: 'role=web' })).toHaveLength(2);
+		expect(filterNodes(tagged, { ...filter, tag: 'env=test' })).toHaveLength(0);
+		expect(
+			filterNodes(tagged, { ...filter, search: 'staging', tag: '' }).map((n) => n.hostname)
+		).toEqual(['web-02']);
+		expect(tagsOf(tagged)).toEqual(['env=prod', 'env=staging', 'role=web']);
 	});
 
 	it('counts and lists groups', () => {

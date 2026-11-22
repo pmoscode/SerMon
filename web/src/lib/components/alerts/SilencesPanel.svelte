@@ -22,6 +22,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
 	import { withStepUp } from '#lib/stores/stepup.svelte.js';
+	import { parseTags, tagsText } from '#lib/tags/tags.js';
 
 	export interface SilenceDraft {
 		groupIds: string[];
@@ -48,6 +49,7 @@
 	let nodeIds = $state<string[]>([]);
 	let rules = $state('');
 	let labels = $state('');
+	let tags = $state('');
 	let duration = $state(240);
 	let comment = $state('');
 
@@ -67,6 +69,7 @@
 		nodeIds = [...(d?.nodeIds ?? [])];
 		rules = patternsText(d?.rules ?? []);
 		labels = '';
+		tags = '';
 		duration = 240;
 		comment = '';
 		failure = '';
@@ -117,10 +120,21 @@
 			failure = m.matchers_labels_invalid({ line: String(parsed.error) });
 			return;
 		}
+		const tagged = parseTags(tags);
+		if ('error' in tagged) {
+			failure = m.matchers_tags_invalid({ pair: tagged.error });
+			return;
+		}
 		const ok = await run(() =>
 			alertingApi.silences.createSilence({
 				spec: {
-					matchers: { severities, groupIds, rules: parsePatterns(rules), labels: parsed.labels },
+					matchers: {
+						severities,
+						groupIds,
+						rules: parsePatterns(rules),
+						labels: parsed.labels,
+						tags: tagged.tags
+					},
 					nodeIds: nodeIds.filter((id) => groupNodes.some((n) => n.nodeId === id)),
 					endTime: timestampFromMs(Date.now() + duration * 60_000),
 					comment: comment.trim()
@@ -155,11 +169,13 @@
 		if (mt?.rules.length) parts.push(m.silence_sel_rules({ rules: mt.rules.join(', ') }));
 		if (mt && Object.keys(mt.labels).length)
 			parts.push(labelsText(mt.labels).replaceAll('\n', ', '));
+		if (mt && Object.keys(mt.tags).length) parts.push(tagsText(mt.tags));
 		return parts.join(' · ');
 	}
 
 	const complete = $derived(
-		comment.trim() !== '' && (groupIds.length > 0 || rules.trim() !== '' || labels.trim() !== '')
+		comment.trim() !== '' &&
+			(groupIds.length > 0 || rules.trim() !== '' || labels.trim() !== '' || tags.trim() !== '')
 	);
 </script>
 
@@ -184,7 +200,15 @@
 				onsubmit={create}
 				aria-label={m.silence_new()}
 			>
-				<MatcherFields id="silence" {groups} bind:severities bind:groupIds bind:rules bind:labels />
+				<MatcherFields
+					id="silence"
+					{groups}
+					bind:severities
+					bind:groupIds
+					bind:rules
+					bind:labels
+					bind:tags
+				/>
 				{#if groupNodes.length > 0}
 					<fieldset class="flex flex-wrap gap-3 rounded-md border p-3 text-sm">
 						<legend class="px-1 font-medium">{m.silence_nodes()}</legend>

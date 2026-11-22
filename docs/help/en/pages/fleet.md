@@ -7,6 +7,7 @@ The overview of all servers you may see in your node groups – with status and 
 - **Online** means the agent reported within the last 60 seconds. A server without contact shows as **offline**, even if it only lost its network.
 - The key figures show the latest value of the past minute: [CPU busy](help:figures/cpu_busy), [memory](help:figures/memory_used), [fullest file system](help:figures/filesystem_max_used), [load per CPU](help:figures/load_per_cpu), [uptime](help:figures/uptime) and [network](help:figures/network).
 - A missing key figure has not been sent by the agent yet, for example right after it started.
+- [Tags](help:concepts/tags) such as `env=prod` appear below the name; the **Tag** filter shows only servers with that pair, and the search finds tags too.
 
 ## Typical next steps
 

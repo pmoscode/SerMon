@@ -10,6 +10,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -22,7 +23,7 @@ var (
 )
 
 func TestMatchers_Table(t *testing.T) {
-	cpu := routing.Target{Rule: "system.cpu.usage_high", Labels: map[string]string{"category": "cpu"}, Group: groupA, Severity: notify.Critical}
+	cpu := routing.Target{Rule: "system.cpu.usage_high", Labels: map[string]string{"category": "cpu"}, Group: groupA, Severity: notify.Critical, Tags: tag.Tags{"env": "prod", "role": "web"}}
 	ssh := routing.Target{Rule: "security.ssh.bruteforce", Labels: map[string]string{"category": "security"}, Group: groupB, Severity: notify.Warning}
 	for _, tc := range []struct {
 		name     string
@@ -40,6 +41,11 @@ func TestMatchers_Table(t *testing.T) {
 		{"one of several rules", routing.Matchers{Rules: []string{"system.memory.*", "system.cpu.*"}}, true, false},
 		{"label", routing.Matchers{Labels: map[string]string{"category": "security"}}, false, true},
 		{"label missing on the rule", routing.Matchers{Labels: map[string]string{"team": "ops"}}, false, false},
+		// Tags of the node (M2-29): every pair must be on the alert's node.
+		{"tag", routing.Matchers{Tags: tag.Tags{"env": "prod"}}, true, false},
+		{"two tags", routing.Matchers{Tags: tag.Tags{"env": "prod", "role": "web"}}, true, false},
+		{"tag with another value", routing.Matchers{Tags: tag.Tags{"env": "staging"}}, false, false},
+		{"tag and label", routing.Matchers{Tags: tag.Tags{"env": "prod"}, Labels: map[string]string{"category": "security"}}, false, false},
 		{"all must match", routing.Matchers{Severities: []notify.Severity{notify.Warning}, Groups: []tenant.GroupID{groupA}}, false, false},
 		{"all match", routing.Matchers{Severities: []notify.Severity{notify.Critical}, Groups: []tenant.GroupID{groupA}, Rules: []string{"system.*"}, Labels: map[string]string{"category": "cpu"}}, true, false},
 	} {
@@ -83,6 +89,8 @@ func TestPolicy_Validate(t *testing.T) {
 		"rule pattern class":        func(p *routing.Policy) { p.Match.Rules = []string{"system.[a-z]*"} },
 		"label key":                 func(p *routing.Policy) { p.Match.Labels = map[string]string{"Category": "x"} },
 		"empty label value":         func(p *routing.Policy) { p.Match.Labels = map[string]string{"category": ""} },
+		"tag key":                   func(p *routing.Policy) { p.Match.Tags = tag.Tags{"Env": "prod"} },
+		"tag value":                 func(p *routing.Policy) { p.Match.Tags = tag.Tags{"env": "<prod>"} },
 		"many groups": func(p *routing.Policy) {
 			for range 21 {
 				p.Match.Groups = append(p.Match.Groups, tenant.GroupID(uuid.New()))

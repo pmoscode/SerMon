@@ -160,7 +160,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Node: webapi.NewNodeHandler(rotation.NewService(postgres.NewRotationStore(pg), ca, time.Now,
-			rotation.WithOnDemand(postgres.NewRotationStore(pg), agentapi.NewSessions(0), authz.NewPolicy())), nodes, slog.New(slog.DiscardHandler)),
+			rotation.WithOnDemand(postgres.NewRotationStore(pg), agentapi.NewSessions(0), authz.NewPolicy())), nodes, slog.New(slog.DiscardHandler)).
+			WithTagger(fleet.NewTagger(postgres.NewFleetStore(pg), authz.NewPolicy(), time.Now)),
 		AgentCA: webapi.NewAgentCAHandler(ca, slog.New(slog.DiscardHandler)),
 		InstanceAudit: webapi.NewInstanceAuditHandler(
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
@@ -433,13 +434,14 @@ func TestAuthAPI_SessionDescribesTheRights(t *testing.T) {
 	ann := login(t, s, "ann@example.org") // admin of all groups
 	if me, err := ann.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
 		!me.Msg.GetSession().GetOrgAdmin() || strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != "*" ||
-		strings.Join(me.Msg.GetSession().GetSilenceGroupIds(), ",") != "*" || strings.Join(me.Msg.GetSession().GetNodeIdentityGroupIds(), ",") != "*" {
+		strings.Join(me.Msg.GetSession().GetSilenceGroupIds(), ",") != "*" || strings.Join(me.Msg.GetSession().GetNodeIdentityGroupIds(), ",") != "*" ||
+		strings.Join(me.Msg.GetSession().GetTagGroupIds(), ",") != "*" {
 		t.Errorf("admin: %v, %v", me, err)
 	}
 	mia := login(t, s, "mia@example.org") // viewer of one group
 	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
 		me.Msg.GetSession().GetOrgAdmin() || len(me.Msg.GetSession().GetEnrollGroupIds()) != 0 || len(me.Msg.GetSession().GetSilenceGroupIds()) != 0 ||
-		len(me.Msg.GetSession().GetNodeIdentityGroupIds()) != 0 {
+		len(me.Msg.GetSession().GetNodeIdentityGroupIds()) != 0 || len(me.Msg.GetSession().GetTagGroupIds()) != 0 {
 		t.Errorf("viewer: %v, %v", me, err)
 	}
 	ownerSQL(t, "SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
@@ -447,7 +449,8 @@ func TestAuthAPI_SessionDescribesTheRights(t *testing.T) {
 	t.Cleanup(func() { seedAccessFixtures(t) })
 	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil ||
 		strings.Join(me.Msg.GetSession().GetEnrollGroupIds(), ",") != groupAl || strings.Join(me.Msg.GetSession().GetSilenceGroupIds(), ",") != groupAl ||
-		strings.Join(me.Msg.GetSession().GetNodeIdentityGroupIds(), ",") != groupAl {
+		strings.Join(me.Msg.GetSession().GetNodeIdentityGroupIds(), ",") != groupAl ||
+		len(me.Msg.GetSession().GetTagGroupIds()) != 0 { // tags need admin (M2-29)
 		t.Errorf("operator of a group: %v, %v", me, err)
 	}
 }

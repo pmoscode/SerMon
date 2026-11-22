@@ -358,6 +358,7 @@ func (h *AuthHandler) describeRights(ctx context.Context, s session.Session, vie
 	view.EnrollGroupIds = groupsFor(policy, p, authz.CreateEnrollmentTokens)
 	view.SilenceGroupIds = groupsFor(policy, p, authz.SilenceAlerts)
 	view.NodeIdentityGroupIds = groupsFor(policy, p, authz.UnlockNode)
+	view.TagGroupIds = groupsFor(policy, p, authz.TagNodes)
 	return nil
 }
 

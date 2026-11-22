@@ -16,6 +16,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -161,6 +162,30 @@ func TestRouter_OnlyEnabledChannelsAndPolicies(t *testing.T) {
 	router(s).Deliver(context.Background(), round(rec, firing(cpu, alert.StateWarning, t0)))
 	if len(s.commits) != 0 {
 		t.Errorf("a disabled policy routed or let the fallback in: %+v", s.commits)
+	}
+}
+
+// A policy with tags (M2-29) hears only of alerts of nodes that carry them: the router takes the
+// tags from the round's nodes.
+func TestRouter_PolicyWithTagsRoutesOnlyTaggedNodes(t *testing.T) {
+	prod := ops()
+	prod.Match = routing.Matchers{Tags: tag.Tags{"env": "prod"}}
+	s := &fakeStore{snapshot: routing.Snapshot{Policies: []routing.Policy{prod}, Channels: []notify.ChannelID{chanA}}}
+	tagged := round(
+		[]alerting.Record{changed(cpu, alert.StateOK, alert.StateWarning, t0), changed(ssh, alert.StateOK, alert.StateCritical, t0)},
+		firing(cpu, alert.StateWarning, t0), firing(ssh, alert.StateCritical, t0),
+	)
+	tagged.Nodes = []fleet.Node{
+		{ID: web, Group: groupA, Hostname: "web-01", Tags: tag.Tags{"env": "prod", "role": "web"}},
+		{ID: db, Group: groupB, Hostname: "db-01", Tags: tag.Tags{"env": "staging"}},
+	}
+	router(s).Deliver(context.Background(), tagged)
+	if len(s.commits) != 1 {
+		t.Fatalf("commits %+v", s.commits)
+	}
+	ds := s.commits[0].deliveries
+	if len(ds) != 1 || ds[0].Notification.Node != web {
+		t.Errorf("deliveries %+v, want only web-01 (env=prod)", ds)
 	}
 }
 

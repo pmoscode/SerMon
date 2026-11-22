@@ -172,6 +172,8 @@ type Querier interface {
 	NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error)
 	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
 	NodeSeries(ctx context.Context, arg NodeSeriesParams) ([]NodeSeriesRow, error)
+	// Tags of nodes (M2-29). The node within the scope's groups, locked for the change.
+	NodeTagsForUpdate(ctx context.Context, arg NodeTagsForUpdateParams) (NodeTagsForUpdateRow, error)
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
 	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
@@ -204,6 +206,7 @@ type Querier interface {
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
 	SecurityEventHorizon(ctx context.Context) (time.Time, error)
 	SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error
+	SetNodeTags(ctx context.Context, arg SetNodeTagsParams) error
 	SetOrganizationRequiresSecondFactor(ctx context.Context, required bool) (int64, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error

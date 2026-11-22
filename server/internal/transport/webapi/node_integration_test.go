@@ -116,3 +116,79 @@ func TestNodeAPI_UnlockAndTakeoverShowInTheNode(t *testing.T) {
 	}
 	ownerSQL(t, "UPDATE nodes SET takeover_until = NULL WHERE id = '"+nodeAl+"'")
 }
+
+// Tags (M2-29): an admin sets them with a fresh step-up; node, fleet summary and audit log show
+// them; a viewer may not, malformed tags are INVALID_ARGUMENT, and empty tags clear them.
+func TestNodeAPI_TagsShowInNodeFleetAndAudit(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ctx := context.Background()
+	ownerSQL(t, "UPDATE nodes SET tags = '{}' WHERE id = '"+nodeAl+"'")
+	set := func(c loggedIn, tags map[string]string) error {
+		_, err := c.node.SetNodeTags(ctx, connect.NewRequest(&webv1.SetNodeTagsRequest{NodeId: nodeAl, Tags: tags}))
+		return err
+	}
+
+	mia := login(t, s, "mia@example.org") // viewer
+	if err := set(mia, map[string]string{"env": "prod"}); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("viewer: %v, want PERMISSION_DENIED", err)
+	}
+	if err := set(ann, map[string]string{"env": "<prod>"}); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("malformed: %v, want INVALID_ARGUMENT", err)
+	}
+	if err := set(ann, map[string]string{"env": "prod", "role": "db"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ann.node.GetNode(ctx, connect.NewRequest(&webv1.GetNodeRequest{NodeId: nodeAl}))
+	if err != nil || got.Msg.GetNode().GetTags()["env"] != "prod" || got.Msg.GetNode().GetTags()["role"] != "db" {
+		t.Fatalf("GetNode() = %v, %v", got.Msg.GetNode().GetTags(), err)
+	}
+	fleet, err := ann.fleet.GetFleetSummary(ctx, connect.NewRequest(&webv1.GetFleetSummaryRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, n := range fleet.Msg.GetNodes() {
+		if n.GetNodeId() == nodeAl {
+			found = n.GetTags()["env"] == "prod"
+		}
+	}
+	if !found {
+		t.Errorf("fleet summary without the tags of %s", nodeAl)
+	}
+	var tagsDetail, previous string
+	ownerQueryRow(t, "SELECT details->>'tags', details->>'previous' FROM audit_log WHERE action = 'node.tags_set' AND target = 'node:"+nodeAl+"' ORDER BY id DESC LIMIT 1", &tagsDetail, &previous)
+	if tagsDetail != "env=prod,role=db" || previous != "" {
+		t.Errorf("audit details tags=%q previous=%q", tagsDetail, previous)
+	}
+
+	if err := set(ann, nil); err != nil {
+		t.Fatal(err)
+	}
+	var stored string
+	ownerQueryRow(t, "SELECT tags::text FROM nodes WHERE id = '"+nodeAl+"'", &stored)
+	if stored != "{}" {
+		t.Errorf("cleared tags stored as %s", stored)
+	}
+
+	ownerSQL(t, "UPDATE sessions SET step_up_at = now() - interval '1 hour' WHERE user_id = '"+annID+"'")
+	if err := set(ann, map[string]string{"env": "prod"}); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("old login: %v, want FAILED_PRECONDITION", err)
+	}
+}
+
+// ownerQueryRow reads one row as the owner (past row-level security), for checks only.
+func ownerQueryRow(t *testing.T, query string, dest ...any) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if err := conn.QueryRow(ctx, query).Scan(dest...); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+}

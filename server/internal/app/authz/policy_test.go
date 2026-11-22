@@ -41,6 +41,7 @@ var matrix = []struct {
 	{authz.RotateNodeKeys, role.Operator, false},
 	{authz.UnlockNode, role.Operator, false},
 	{authz.AllowNodeTakeover, role.Operator, false},
+	{authz.TagNodes, role.Admin, false},
 	{authz.ManageAlertRules, role.Admin, true},
 	{authz.ManageChannels, role.Admin, true},
 	{authz.ManagePolicies, role.Admin, true},

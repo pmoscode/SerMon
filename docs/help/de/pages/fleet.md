@@ -7,6 +7,7 @@ Die Übersicht aller Server, die du in deinen Node-Gruppen sehen darfst – mit 
 - **Online** heißt: Der Agent hat sich in den letzten 60 Sekunden gemeldet. Ein Server ohne Kontakt erscheint als **offline**, auch wenn er nur das Netz verloren hat.
 - Die Kennzahlen zeigen den letzten Wert der vergangenen Minute: [CPU-Auslastung](help:figures/cpu_busy), [Arbeitsspeicher](help:figures/memory_used), [vollstes Dateisystem](help:figures/filesystem_max_used), [Load pro CPU](help:figures/load_per_cpu), [Uptime](help:figures/uptime) und [Netzwerk](help:figures/network).
 - Fehlt eine Kennzahl, hat der Agent sie noch nicht geliefert, etwa kurz nach dem Start.
+- [Tags](help:concepts/tags) wie `env=prod` stehen unter dem Namen; der Filter **Tag** zeigt nur Server mit diesem Paar, die Suche findet Tags ebenfalls.
 
 ## Typische nächste Schritte
 

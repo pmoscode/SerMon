@@ -46,6 +46,8 @@ const (
 	// NodeServiceAllowNodeTakeoverProcedure is the fully-qualified name of the NodeService's
 	// AllowNodeTakeover RPC.
 	NodeServiceAllowNodeTakeoverProcedure = "/sermon.web.v1.NodeService/AllowNodeTakeover"
+	// NodeServiceSetNodeTagsProcedure is the fully-qualified name of the NodeService's SetNodeTags RPC.
+	NodeServiceSetNodeTagsProcedure = "/sermon.web.v1.NodeService/SetNodeTags"
 )
 
 // NodeServiceClient is a client for the sermon.web.v1.NodeService service.
@@ -71,6 +73,10 @@ type NodeServiceClient interface {
 	// take the node over for an hour (reinstalled host): it keeps ID and history, its old
 	// certificates are revoked. Rights as UnlockNode.
 	AllowNodeTakeover(context.Context, *connect.Request[v1.AllowNodeTakeoverRequest]) (*connect.Response[v1.AllowNodeTakeoverResponse], error)
+	// SetNodeTags replaces the tags of a node (M2-29): free key=value pairs for filters and for
+	// matching in rules, notification policies and silences, never for rights. Needs admin on the
+	// node's group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
+	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the sermon.web.v1.NodeService service. By default,
@@ -114,6 +120,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("AllowNodeTakeover")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeTags: connect.NewClient[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse](
+			httpClient,
+			baseURL+NodeServiceSetNodeTagsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeTags")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -124,6 +136,7 @@ type nodeServiceClient struct {
 	rotateNodeKeys    *connect.Client[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse]
 	unlockNode        *connect.Client[v1.UnlockNodeRequest, v1.UnlockNodeResponse]
 	allowNodeTakeover *connect.Client[v1.AllowNodeTakeoverRequest, v1.AllowNodeTakeoverResponse]
+	setNodeTags       *connect.Client[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse]
 }
 
 // GetNode calls sermon.web.v1.NodeService.GetNode.
@@ -151,6 +164,11 @@ func (c *nodeServiceClient) AllowNodeTakeover(ctx context.Context, req *connect.
 	return c.allowNodeTakeover.CallUnary(ctx, req)
 }
 
+// SetNodeTags calls sermon.web.v1.NodeService.SetNodeTags.
+func (c *nodeServiceClient) SetNodeTags(ctx context.Context, req *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error) {
+	return c.setNodeTags.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the sermon.web.v1.NodeService service.
 type NodeServiceHandler interface {
 	// GetNode returns the details of a node the caller may view; unknown or foreign nodes are
@@ -174,6 +192,10 @@ type NodeServiceHandler interface {
 	// take the node over for an hour (reinstalled host): it keeps ID and history, its old
 	// certificates are revoked. Rights as UnlockNode.
 	AllowNodeTakeover(context.Context, *connect.Request[v1.AllowNodeTakeoverRequest]) (*connect.Response[v1.AllowNodeTakeoverResponse], error)
+	// SetNodeTags replaces the tags of a node (M2-29): free key=value pairs for filters and for
+	// matching in rules, notification policies and silences, never for rights. Needs admin on the
+	// node's group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
+	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -213,6 +235,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("AllowNodeTakeover")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeTagsHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeTagsProcedure,
+		svc.SetNodeTags,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeTags")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceGetNodeProcedure:
@@ -225,6 +253,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceUnlockNodeHandler.ServeHTTP(w, r)
 		case NodeServiceAllowNodeTakeoverProcedure:
 			nodeServiceAllowNodeTakeoverHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeTagsProcedure:
+			nodeServiceSetNodeTagsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -252,4 +282,8 @@ func (UnimplementedNodeServiceHandler) UnlockNode(context.Context, *connect.Requ
 
 func (UnimplementedNodeServiceHandler) AllowNodeTakeover(context.Context, *connect.Request[v1.AllowNodeTakeoverRequest]) (*connect.Response[v1.AllowNodeTakeoverResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.AllowNodeTakeover is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.SetNodeTags is not implemented"))
 }

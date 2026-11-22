@@ -441,7 +441,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			organization.NewService(postgres.NewOrganizationStore(db), policy, time.Now, access.NewID, orgOptions...), logger),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
-		Node:    webapi.NewNodeHandler(rotator, nodes, logger),
+		Node:    webapi.NewNodeHandler(rotator, nodes, logger).WithTagger(fleet.NewTagger(postgres.NewFleetStore(db), policy, time.Now)),
 		AgentCA: webapi.NewAgentCAHandler(ca, logger),
 		InstanceAudit: webapi.NewInstanceAuditHandler(
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(db), policy), logger),

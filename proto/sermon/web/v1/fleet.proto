@@ -53,6 +53,8 @@ message NodeSummary {
   google.protobuf.Timestamp last_seen_at = 8;
   // figures are the current values (absent without live data).
   KeyFigures figures = 9;
+  // tags are the node's free key=value pairs, e.g. env: prod (M2-29).
+  map<string, string> tags = 10;
 }
 
 // KeyFigures are current values of a node from the last minute. Ratios are 0..1.

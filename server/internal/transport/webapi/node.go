@@ -13,6 +13,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -25,10 +26,16 @@ type NodeRotator interface {
 	AllowNodeTakeover(ctx context.Context, c access.Caller, node identity.NodeID) (time.Time, error)
 }
 
+// NodeTagger sets the tags of nodes (fleet.Tagger, M2-29).
+type NodeTagger interface {
+	SetTags(ctx context.Context, c access.Caller, node identity.NodeID, tags tag.Tags) error
+}
+
 // NodeHandler implements sermon.web.v1.NodeService (behind the Authenticator).
 type NodeHandler struct {
 	rotator NodeRotator
 	fleet   *fleet.Service
+	tagger  NodeTagger
 	logger  *slog.Logger
 }
 
@@ -37,6 +44,34 @@ var _ webv1connect.NodeServiceHandler = (*NodeHandler)(nil)
 // NewNodeHandler returns the NodeService handler.
 func NewNodeHandler(rotator NodeRotator, nodes *fleet.Service, logger *slog.Logger) *NodeHandler {
 	return &NodeHandler{rotator: rotator, fleet: nodes, logger: logger}
+}
+
+// WithTagger enables SetNodeTags.
+func (h *NodeHandler) WithTagger(t NodeTagger) *NodeHandler {
+	h.tagger = t
+	return h
+}
+
+// SetNodeTags replaces the tags of a node.
+func (h *NodeHandler) SetNodeTags(ctx context.Context, req *connect.Request[webv1.SetNodeTagsRequest]) (*connect.Response[webv1.SetNodeTagsResponse], error) {
+	if h.tagger == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented, errors.New("node tags are not configured"))
+	}
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	if err := h.tagger.SetTags(ctx, c, identity.NodeID(id), tag.Tags(req.Msg.GetTags())); err != nil {
+		if errors.Is(err, tag.ErrInvalid) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		return nil, h.identityFailure(ctx, "set node tags", err)
+	}
+	return connect.NewResponse(&webv1.SetNodeTagsResponse{}), nil
 }
 
 // identityFailure maps the errors of the node identity use cases.

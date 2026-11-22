@@ -12,7 +12,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { FleetState } from '#lib/fleet/fleet.svelte.js';
-	import { countByStatus, filterNodes, groupsOf, type Status } from '#lib/fleet/status.js';
+	import { countByStatus, filterNodes, groupsOf, tagsOf, type Status } from '#lib/fleet/status.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
@@ -24,6 +24,7 @@
 	let search = $state('');
 	let group = $state('');
 	let status = $state<Status | ''>('');
+	let tag = $state('');
 	let view = $state<View>(readView());
 
 	function readView(): View {
@@ -46,9 +47,10 @@
 	$effect(() => fleet.start());
 
 	const nodes = $derived(fleet.summary?.nodes ?? []);
-	const shown = $derived(filterNodes(nodes, { search, group, status }));
+	const shown = $derived(filterNodes(nodes, { search, group, status, tag }));
 	const counts = $derived(countByStatus(nodes));
 	const groups = $derived(groupsOf(nodes));
+	const tags = $derived(tagsOf(nodes));
 	const now = $derived(new Date(fleet.updatedAt ?? Date.now()));
 	const timeFormat = $derived(new Intl.DateTimeFormat(localeState.current, { timeStyle: 'short' }));
 
@@ -56,6 +58,7 @@
 		search = '';
 		group = '';
 		status = '';
+		tag = '';
 	}
 </script>
 
@@ -116,6 +119,21 @@
 						<option value="">{m.fleet_group_all()}</option>
 						{#each groups as g (g.id)}
 							<option value={g.id}>{g.name}</option>
+						{/each}
+					</select>
+				</div>
+			{/if}
+			{#if tags.length > 0}
+				<div class="flex flex-col gap-1">
+					<Label for="fleet-tag">{m.fleet_tag()}</Label>
+					<select
+						id="fleet-tag"
+						class="h-9 rounded-md border border-input bg-background px-2 font-mono text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+						bind:value={tag}
+					>
+						<option value="">{m.fleet_tag_all()}</option>
+						{#each tags as pair (pair)}
+							<option value={pair}>{pair}</option>
 						{/each}
 					</select>
 				</div>

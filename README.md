@@ -12,7 +12,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > Discord, Mattermost, Telegram, Gotify und Pushover sind angebunden; Notification-Policies leiten die Alerts mit
 > Wiederholung und Eskalation an die Kanäle; Silences und Wartungsfenster schalten sie stumm. Die Alert-Seite zeigt
 > die aktiven Alerts mit Verlauf, Quittieren, Silences und dem Regel-Editor (YAML-Import und -Export); Kanäle,
-> Policies und Wartungsfenster verwalten Admins in der UI. Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und
+> Policies und Wartungsfenster verwalten Admins in der UI; Tags wie `env=prod` an Nodes dienen als Filter und für das
+> Matching von Regeln, Policies und Silences. Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und
 > Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert), jeweils
 > amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk). Für eine Installation gibt es
 > eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)).

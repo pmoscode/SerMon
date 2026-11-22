@@ -13,6 +13,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -34,6 +35,9 @@ func NewAlertSilenceHandler(svc *routing.SilenceService, logger *slog.Logger) *A
 // matchersOf converts matchers; protovalidate checked shapes and bounds before.
 func matchersOf(m *webv1.PolicyMatchers) (routing.Matchers, error) {
 	out := routing.Matchers{Rules: m.GetRules(), Labels: m.GetLabels()}
+	if len(m.GetTags()) > 0 {
+		out.Tags = tag.Tags(m.GetTags())
+	}
 	for _, s := range m.GetSeverities() {
 		out.Severities = append(out.Severities, severities[s])
 	}
@@ -49,7 +53,7 @@ func matchersOf(m *webv1.PolicyMatchers) (routing.Matchers, error) {
 
 func matchersView(m routing.Matchers) *webv1.PolicyMatchers {
 	severityOf := reverse(severities)
-	v := &webv1.PolicyMatchers{Rules: m.Rules, Labels: m.Labels}
+	v := &webv1.PolicyMatchers{Rules: m.Rules, Labels: m.Labels, Tags: m.Tags}
 	for _, s := range m.Severities {
 		v.Severities = append(v.Severities, severityOf[s])
 	}

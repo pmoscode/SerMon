@@ -36,10 +36,11 @@ type matchersJSON struct {
 	Groups     []uuid.UUID       `json:"groups,omitempty"`
 	Rules      []string          `json:"rules,omitempty"`
 	Labels     map[string]string `json:"labels,omitempty"`
+	Tags       map[string]string `json:"tags,omitempty"` // M2-29
 }
 
 func encodeMatchers(m routing.Matchers) ([]byte, error) {
-	j := matchersJSON{Severities: m.Severities, Rules: m.Rules, Labels: m.Labels}
+	j := matchersJSON{Severities: m.Severities, Rules: m.Rules, Labels: m.Labels, Tags: m.Tags}
 	for _, g := range m.Groups {
 		j.Groups = append(j.Groups, uuid.UUID(g))
 	}
@@ -55,7 +56,7 @@ func decodeMatchers(data []byte) (routing.Matchers, error) {
 	if err := json.Unmarshal(data, &j); err != nil {
 		return routing.Matchers{}, fmt.Errorf("decode policy matchers: %w", err)
 	}
-	m := routing.Matchers{Severities: j.Severities, Rules: j.Rules, Labels: j.Labels}
+	m := routing.Matchers{Severities: j.Severities, Rules: j.Rules, Labels: j.Labels, Tags: j.Tags}
 	for _, g := range j.Groups {
 		m.Groups = append(m.Groups, tenant.GroupID(g))
 	}

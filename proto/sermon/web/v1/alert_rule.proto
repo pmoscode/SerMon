@@ -147,7 +147,7 @@ message AlertRuleSpec {
   string lookback = 16 [(buf.validate.field).string.max_len = 16];
   // flapping overrides the default flapping detection.
   AlertFlapping flapping = 17;
-  // selector limits the rule to node groups ("*" or group IDs); empty: all groups.
+  // selector limits the rule to node groups ("*" or group IDs) and tags; empty: all nodes.
   AlertSelector selector = 18;
   // help explains the alert: meaning, typical causes, what to do.
   LocalizedText help = 19 [(buf.validate.field).required = true];
@@ -266,7 +266,7 @@ message AlertFlapping {
   string window = 2 [(buf.validate.field).string.max_len = 16];
 }
 
-// AlertSelector limits a rule to node groups.
+// AlertSelector limits a rule to node groups and tags.
 message AlertSelector {
   // groups are "*" (all) or node group UUIDs.
   repeated string groups = 1 [(buf.validate.field).repeated = {
@@ -274,6 +274,16 @@ message AlertSelector {
     unique: true
     items: {
       string: {max_len: 36}
+    }
+  }];
+  // tags must all be on the node (e.g. env: prod; M2-29); empty: every node of the groups.
+  map<string, string> tags = 2 [(buf.validate.field).map = {
+    max_pairs: 16
+    keys: {
+      string: {pattern: "^[a-z][a-z0-9_-]{0,31}$"}
+    }
+    values: {
+      string: {pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,62}$"}
     }
   }];
 }

@@ -4,7 +4,10 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 
-	/** The matchers shared by policies and silences: severities, groups, rule patterns, labels. */
+	/**
+	 * The matchers shared by policies and silences: severities, groups, rule patterns, labels and
+	 * the node's tags (M2-29).
+	 */
 	let {
 		id,
 		groups,
@@ -12,6 +15,7 @@
 		groupIds = $bindable(),
 		rules = $bindable(),
 		labels = $bindable(),
+		tags = $bindable(),
 		severity = true
 	}: {
 		id: string;
@@ -20,6 +24,7 @@
 		groupIds: string[];
 		rules: string;
 		labels: string;
+		tags: string;
 		severity?: boolean;
 	} = $props();
 
@@ -80,6 +85,15 @@
 				class="rounded-md border border-input bg-background px-2 py-1 font-mono text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
 				placeholder="category=security"
 				bind:value={labels}></textarea>
+		</div>
+		<div class="flex flex-col gap-1">
+			<Label for={`${id}-tags`}>{m.matchers_tags()}</Label>
+			<input
+				id={`${id}-tags`}
+				class="h-9 rounded-md border border-input bg-background px-2 font-mono text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+				placeholder="env=prod, role=db"
+				bind:value={tags}
+			/>
 		</div>
 	</div>
 	<p class="text-xs text-muted-foreground">{m.matchers_hint()}</p>

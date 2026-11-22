@@ -11,6 +11,7 @@
 	import Meter from './Meter.svelte';
 	import Sparkline from './Sparkline.svelte';
 	import StatusBadge from './StatusBadge.svelte';
+	import TagList from './TagList.svelte';
 
 	let {
 		node,
@@ -39,6 +40,7 @@
 				{node.groupName} · {node.osId}
 				{node.osVersion}
 			</p>
+			<TagList tags={node.tags} class="mt-1" />
 		</div>
 		<StatusBadge status={assessment.status} class="shrink-0" />
 	</header>

@@ -60,8 +60,8 @@ func (s Silence) Mutes(t Target) bool {
 	return s.Match.Match(t) && (len(s.Nodes) == 0 || slices.Contains(s.Nodes, t.Node))
 }
 
-// Validate checks a new silence at now: a selector that names something (groups, nodes, rules
-// or labels; never everything by accident), a period of at most 30 days that has not ended, and
+// Validate checks a new silence at now: a selector that names something (groups, nodes, rules,
+// labels or tags; never everything by accident), a period of at most 30 days that has not ended, and
 // a comment. Messages name the field, never a value.
 func (s *Silence) Validate(now time.Time) error {
 	if err := s.Match.validate(); err != nil {
@@ -70,8 +70,8 @@ func (s *Silence) Validate(now time.Time) error {
 	s.Comment = strings.TrimSpace(s.Comment)
 	m := s.Match
 	switch {
-	case len(m.Groups) == 0 && len(m.Rules) == 0 && len(m.Labels) == 0:
-		return invalidSilence("a silence needs groups, rules or labels")
+	case len(m.Groups) == 0 && len(m.Rules) == 0 && len(m.Labels) == 0 && len(m.Tags) == 0:
+		return invalidSilence("a silence needs groups, rules, labels or tags")
 	case len(s.Nodes) > 0 && len(m.Groups) == 0:
 		return invalidSilence("nodes need the groups they belong to")
 	case len(s.Nodes) > MaxSilenceNodes || hasDuplicates(s.Nodes):

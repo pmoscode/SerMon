@@ -156,6 +156,32 @@ test.describe('node detail (mocked API)', () => {
 		expect(results.violations).toEqual([]);
 	});
 
+	// M2-29: tags under the facts; an admin of the group edits them in place (axe in edit mode).
+	test('shows the tags and lets an admin edit them', async ({ page }) => {
+		let sent: unknown;
+		await mockApi(page, {
+			...nodeApi,
+			'AuthService/GetSession': () => ({ json: { session: { ...session, tagGroupIds: ['g1'] } } }),
+			'NodeService/GetNode': () => ({
+				json: { node: { ...node, tags: { env: 'prod', role: 'web' } } }
+			}),
+			'NodeService/SetNodeTags': (body) => {
+				sent = body;
+				return { json: {} };
+			}
+		});
+		await page.goto(`/nodes/${nodeId}`);
+		await expect(page.getByRole('list', { name: 'Tags' })).toContainText('env=prod');
+		await page.getByRole('button', { name: 'Edit tags' }).click();
+		await expect(page.getByLabel('New tags')).toHaveValue('env=prod, role=web');
+		await page.screenshot({ path: 'test-results/node-tags.png', fullPage: true });
+		const results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+		await page.getByLabel('New tags').fill('env=prod, role=db');
+		await page.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent).toEqual({ nodeId, tags: { env: 'prod', role: 'db' } });
+	});
+
 	test.describe('foreign nodes', () => {
 		test.use({ expectedHttpErrors: [401, 404] });
 

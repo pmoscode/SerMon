@@ -97,7 +97,7 @@ const listVisibleNodes = `-- name: ListVisibleNodes :many
 SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
-       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until
+       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
 ORDER BY n.hostname, n.id
@@ -126,6 +126,7 @@ type ListVisibleNodesRow struct {
 	LockReason    string
 	LastIp        string
 	TakeoverUntil *time.Time
+	Tags          []byte
 }
 
 // Nodes of the scope's groups with their group name, for the UI (M1-26).
@@ -156,6 +157,7 @@ func (q *Queries) ListVisibleNodes(ctx context.Context, arg ListVisibleNodesPara
 			&i.LockReason,
 			&i.LastIp,
 			&i.TakeoverUntil,
+			&i.Tags,
 		); err != nil {
 			return nil, err
 		}
@@ -165,6 +167,45 @@ func (q *Queries) ListVisibleNodes(ctx context.Context, arg ListVisibleNodesPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const nodeTagsForUpdate = `-- name: NodeTagsForUpdate :one
+SELECT group_id, tags FROM nodes
+WHERE id = $1 AND ($2::boolean OR group_id = ANY ($3::uuid[]))
+FOR UPDATE
+`
+
+type NodeTagsForUpdateParams struct {
+	ID        uuid.UUID
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+type NodeTagsForUpdateRow struct {
+	GroupID uuid.UUID
+	Tags    []byte
+}
+
+// Tags of nodes (M2-29). The node within the scope's groups, locked for the change.
+func (q *Queries) NodeTagsForUpdate(ctx context.Context, arg NodeTagsForUpdateParams) (NodeTagsForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, nodeTagsForUpdate, arg.ID, arg.AllGroups, arg.GroupIds)
+	var i NodeTagsForUpdateRow
+	err := row.Scan(&i.GroupID, &i.Tags)
+	return i, err
+}
+
+const setNodeTags = `-- name: SetNodeTags :exec
+UPDATE nodes SET tags = $1 WHERE id = $2
+`
+
+type SetNodeTagsParams struct {
+	Tags []byte
+	ID   uuid.UUID
+}
+
+func (q *Queries) SetNodeTags(ctx context.Context, arg SetNodeTagsParams) error {
+	_, err := q.db.Exec(ctx, setNodeTags, arg.Tags, arg.ID)
+	return err
 }
 
 const touchNode = `-- name: TouchNode :execrows

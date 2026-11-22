@@ -119,7 +119,8 @@ func (r *Router) deliver(ctx context.Context, round alerting.Round) error {
 		Now: round.Now, Records: round.Records, Instances: round.Instances, States: snap.States,
 		Silences: snap.Silences, Windows: snap.Windows, ChangesOnly: round.Partial,
 		Target: func(k alert.Key) Target {
-			return Target{Rule: k.Rule, Labels: rules[k.Rule].Labels, Group: nodes[k.Node].Group}
+			n := nodes[k.Node]
+			return Target{Rule: k.Rule, Labels: rules[k.Rule].Labels, Group: n.Group, Tags: n.Tags}
 		},
 	}
 	for _, p := range snap.Policies {

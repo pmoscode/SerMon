@@ -9,6 +9,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import Sparkline from './Sparkline.svelte';
 	import StatusBadge from './StatusBadge.svelte';
+	import TagList from './TagList.svelte';
 
 	let {
 		nodes,
@@ -70,6 +71,7 @@
 							>{node.hostname}</a
 						>
 						<span class="block text-xs font-normal text-muted-foreground">{node.groupName}</span>
+						<TagList tags={node.tags} class="mt-1 font-normal" />
 					</th>
 					<td class="px-3 py-2"><StatusBadge status={assess(node).status} /></td>
 					{#if node.online}

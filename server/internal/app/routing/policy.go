@@ -20,6 +20,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -68,6 +69,8 @@ type Matchers struct {
 	Rules []string
 	// Labels must all equal the rule's labels.
 	Labels map[string]string
+	// Tags must all be on the alert's node (M2-29).
+	Tags tag.Tags
 }
 
 // Target is what matchers look at.
@@ -77,6 +80,7 @@ type Target struct {
 	Group    tenant.GroupID
 	Node     identity.NodeID // silences may name nodes
 	Severity notify.Severity
+	Tags     tag.Tags // of the node
 }
 
 // Match reports whether the matchers select the target.
@@ -98,7 +102,7 @@ func (m Matchers) Match(t Target) bool {
 			return false
 		}
 	}
-	return true
+	return m.Tags.Selects(t.Tags)
 }
 
 // Escalation sends a firing alert to more channels when nobody acknowledged it in time.
@@ -173,6 +177,9 @@ func (m Matchers) validate() error {
 		if !labelKey.MatchString(k) || v == "" || len(v) > maxLabelValueLen || strings.IndexFunc(v, unicode.IsControl) >= 0 {
 			return invalid("labels need a key like category and a value of 1 to %d bytes", maxLabelValueLen)
 		}
+	}
+	if err := m.Tags.Validate(); err != nil {
+		return invalid("tags: %v", err)
 	}
 	return nil
 }

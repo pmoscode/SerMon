@@ -773,8 +773,11 @@ type Session struct {
 	// instance_problems are the self-monitoring problems of the server, only for superadmins
 	// (M2-24); empty while all is well.
 	InstanceProblems []*InstanceProblem `protobuf:"bytes,14,rep,name=instance_problems,json=instanceProblems,proto3" json:"instance_problems,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// tag_group_ids are the groups where the caller may set the tags of nodes (admin, M2-29); the
+	// single value "*" stands for all groups.
+	TagGroupIds   []string `protobuf:"bytes,15,rep,name=tag_group_ids,json=tagGroupIds,proto3" json:"tag_group_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -901,6 +904,13 @@ func (x *Session) GetSuperadmin() bool {
 func (x *Session) GetInstanceProblems() []*InstanceProblem {
 	if x != nil {
 		return x.InstanceProblems
+	}
+	return nil
+}
+
+func (x *Session) GetTagGroupIds() []string {
+	if x != nil {
+		return x.TagGroupIds
 	}
 	return nil
 }
@@ -1070,7 +1080,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\xa0\x05\n" +
+	"\x19SecondFactorSetupRequired\"\xc4\x05\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -1088,7 +1098,8 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"superadmin\x18\r \x01(\bR\n" +
 	"superadmin\x12K\n" +
-	"\x11instance_problems\x18\x0e \x03(\v2\x1e.sermon.web.v1.InstanceProblemR\x10instanceProblems\"\x85\x01\n" +
+	"\x11instance_problems\x18\x0e \x03(\v2\x1e.sermon.web.v1.InstanceProblemR\x10instanceProblems\x12\"\n" +
+	"\rtag_group_ids\x18\x0f \x03(\tR\vtagGroupIds\"\x85\x01\n" +
 	"\x0fInstanceProblem\x12\x14\n" +
 	"\x05check\x18\x01 \x01(\tR\x05check\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x120\n" +

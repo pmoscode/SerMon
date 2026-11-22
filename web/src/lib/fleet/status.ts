@@ -1,4 +1,5 @@
 import type { KeyFigures, NodeSummary } from '#lib/api/gen/sermon/web/v1/fleet_pb.js';
+import { tagPairs } from '#lib/tags/tags.js';
 
 /**
  * Traffic light of a node. Until the alert engine exists (M2), it comes from the key figures:
@@ -49,6 +50,13 @@ export interface FleetFilter {
 	search: string;
 	group: string; // group ID, empty: all
 	status: Status | '';
+	tag: string; // one key=value pair (M2-29), empty: all
+}
+
+/** Whether the node carries the key=value pair. */
+function hasTag(n: NodeSummary, pair: string): boolean {
+	const at = pair.indexOf('=');
+	return at > 0 && n.tags[pair.slice(0, at)] === pair.slice(at + 1);
 }
 
 /** Nodes matching the filter, problems first, then by host name. */
@@ -57,12 +65,14 @@ export function filterNodes(nodes: NodeSummary[], filter: FleetFilter): NodeSumm
 	return nodes
 		.filter((n) => !filter.group || n.groupId === filter.group)
 		.filter((n) => !filter.status || assess(n).status === filter.status)
+		.filter((n) => !filter.tag || hasTag(n, filter.tag))
 		.filter(
 			(n) =>
 				!search ||
 				n.hostname.toLowerCase().includes(search) ||
 				n.groupName.toLowerCase().includes(search) ||
-				`${n.osId} ${n.osVersion}`.toLowerCase().includes(search)
+				`${n.osId} ${n.osVersion}`.toLowerCase().includes(search) ||
+				tagPairs(n.tags).some((p) => p.toLowerCase().includes(search))
 		)
 		.sort(
 			(a, b) =>
@@ -77,4 +87,9 @@ export function groupsOf(nodes: NodeSummary[]): { id: string; name: string }[] {
 	return [...groups]
 		.map(([id, name]) => ({ id, name }))
 		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The key=value pairs that occur, sorted (M2-29). */
+export function tagsOf(nodes: NodeSummary[]): string[] {
+	return [...new Set(nodes.flatMap((n) => tagPairs(n.tags)))].sort();
 }

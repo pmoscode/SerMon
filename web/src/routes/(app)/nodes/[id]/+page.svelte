@@ -3,8 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import MetricChart from '#lib/charts/MetricChart.svelte';
-	import FilesystemTable from '#lib/components/node/FilesystemTable.svelte';
 	import NodeFacts from '#lib/components/node/NodeFacts.svelte';
+	import NodeTags from '#lib/components/node/NodeTags.svelte';
 	import TimeRangePicker from '#lib/components/time/TimeRangePicker.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
@@ -55,6 +55,7 @@
 {:else}
 	<div class="flex flex-col gap-6">
 		<NodeFacts node={nodeState.node} {now} />
+		<NodeTags node={nodeState.node} onchange={() => void nodeState.load()} />
 
 		<div class="flex flex-wrap items-center justify-between gap-2">
 			<TimeRangePicker />
@@ -137,7 +138,12 @@
 					{#if nodeState.filesystems.length === 0}
 						<p class="text-sm text-muted-foreground">{m.node_fs_none()}</p>
 					{:else}
-						<FilesystemTable filesystems={nodeState.filesystems} {now} />
+						<!-- Loaded on demand: the tab's table is not part of the page's first load (budget). -->
+						{#await import('#lib/components/node/FilesystemTable.svelte')}
+							<p role="status" class="text-sm text-muted-foreground">{m.loading()}</p>
+						{:then { default: FilesystemTable }}
+							<FilesystemTable filesystems={nodeState.filesystems} {now} />
+						{/await}
 					{/if}
 				</section>
 				<div class="grid gap-6 lg:grid-cols-2">

@@ -134,7 +134,7 @@
 	"fleet_total": "Nodes",
 	"fleet_filter": "Filter nodes",
 	"fleet_search": "Search",
-	"fleet_search_hint": "Host name, group, system",
+	"fleet_search_hint": "Host name, group, system, tag",
 	"fleet_group": "Group",
 	"fleet_group_all": "All groups",
 	"fleet_view": "View",
@@ -536,5 +536,17 @@
 	"instance_critical": "Server: Critical",
 	"instance_ingest_lag": "Agent data arrives late ({seconds} s)",
 	"instance_dropped_samples": "{count} samples dropped within 15 minutes",
-	"instance_database_size": "The database is filling up ({percent} %)"
+	"instance_database_size": "The database is filling up ({percent} %)",
+	"fleet_tag": "Tag",
+	"fleet_tag_all": "All tags",
+	"tags_label": "Tags",
+	"tags_none": "No tags",
+	"tags_edit": "Edit tags",
+	"tags_hint": "key=value pairs separated by commas, e.g. env=prod, role=db. Keys: lowercase letters, digits, _ and -; values: letters, digits and _ . : / -.",
+	"tags_invalid": "\"{pair}\" is not a valid tag (key=value, see the hint).",
+	"tags_save": "Save",
+	"tags_cancel": "Cancel",
+	"matchers_tags": "Node tags",
+	"matchers_tags_invalid": "\"{pair}\" is not a valid tag (key=value).",
+	"tags_input": "New tags"
 }

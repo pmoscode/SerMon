@@ -178,6 +178,9 @@ message Session {
   // instance_problems are the self-monitoring problems of the server, only for superadmins
   // (M2-24); empty while all is well.
   repeated InstanceProblem instance_problems = 14;
+  // tag_group_ids are the groups where the caller may set the tags of nodes (admin, M2-29); the
+  // single value "*" stands for all groups.
+  repeated string tag_group_ids = 15;
 }
 
 // InstanceProblem is a check of the server's self-monitoring that is not OK.

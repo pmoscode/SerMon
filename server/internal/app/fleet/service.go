@@ -17,6 +17,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -58,6 +59,8 @@ type Node struct {
 	LockReason    string
 	LastIP        string
 	TakeoverUntil *time.Time
+	// Tags are the free key=value pairs admins set (M2-29).
+	Tags tag.Tags
 }
 
 // Directory reads node records within a scope.

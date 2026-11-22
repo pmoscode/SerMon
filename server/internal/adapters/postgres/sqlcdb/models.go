@@ -223,6 +223,7 @@ type Node struct {
 	AgentVersion  pgtype.Text
 	EventSeq      int64
 	TakeoverUntil *time.Time
+	Tags          []byte
 }
 
 type NodeGroup struct {

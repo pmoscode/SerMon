@@ -22,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
+	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -66,18 +67,20 @@ type Rule struct {
 	ID     alert.RuleID
 	Timing alert.Timing
 	// Groups limits the rule to nodes of these groups; empty: all nodes of the organization.
-	Groups    []tenant.GroupID
+	Groups []tenant.GroupID
+	// Tags limits it to nodes that carry all of them (M2-29); empty: no limit.
+	Tags      tag.Tags
 	Evaluator Evaluator
 }
 
 // nodes returns the nodes the rule applies to.
 func (r Rule) nodes(all []fleet.Node) []fleet.Node {
-	if len(r.Groups) == 0 {
+	if len(r.Groups) == 0 && len(r.Tags) == 0 {
 		return all
 	}
 	var out []fleet.Node
 	for _, n := range all {
-		if slices.Contains(r.Groups, n.Group) {
+		if (len(r.Groups) == 0 || slices.Contains(r.Groups, n.Group)) && r.Tags.Selects(n.Tags) {
 			out = append(out, n)
 		}
 	}

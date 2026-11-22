@@ -94,11 +94,11 @@ func (q *Queries) DeleteNotificationChannel(ctx context.Context, id uuid.UUID) (
 	return result.RowsAffected(), nil
 }
 
-const finishNotificationDelivery = `-- name: FinishNotificationDelivery :exec
+const finishNotificationDelivery = `-- name: FinishNotificationDelivery :execrows
 UPDATE notification_deliveries
 SET status = $1, claimed_until = NULL, next_attempt_at = $2,
     last_attempt_at = $3, sent_at = $4, last_error = $5
-WHERE id = $6
+WHERE id = $6 AND status = 'sending' AND claimed_until = $7
 `
 
 type FinishNotificationDeliveryParams struct {
@@ -108,18 +108,25 @@ type FinishNotificationDeliveryParams struct {
 	SentAt        *time.Time
 	LastError     string
 	ID            int64
+	Claim         *time.Time
 }
 
-func (q *Queries) FinishNotificationDelivery(ctx context.Context, arg FinishNotificationDeliveryParams) error {
-	_, err := q.db.Exec(ctx, finishNotificationDelivery,
+// Only the attempt that holds the claim writes (fencing, M2-38): after its claim expired another
+// attempt may have taken the delivery over.
+func (q *Queries) FinishNotificationDelivery(ctx context.Context, arg FinishNotificationDeliveryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishNotificationDelivery,
 		arg.Status,
 		arg.NextAttemptAt,
 		arg.LastAttemptAt,
 		arg.SentAt,
 		arg.LastError,
 		arg.ID,
+		arg.Claim,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getNotificationChannel = `-- name: GetNotificationChannel :one

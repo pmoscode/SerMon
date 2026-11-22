@@ -170,7 +170,7 @@ flowchart LR
 | T45 | I | Mail-Zugangsdaten im Klartext übertragen; Header-Injection über Alert-Werte | SMTP mit TLS-Pflicht (STARTTLS oder TLS, Klartext nur im Entwicklungsmodus); Betreff und Empfänger mit Zeilenumbruch abgelehnt; HTML über `html/template` | M1-39, M2-11 | ✓ |
 | T46 | I | „Phone-Home“ | keine Telemetrie, Versionsprüfung abschaltbar | M0-07, v1.0 | ◐ |
 | T47 | I | Prometheus-Scraper oder Module als SSRF | Scraper nur localhost/Allowlist, Serien-Limit; Modul-Zugangsdaten nur im Speicher des Agents | E5.1, E5.2 | ☐ |
-| T80 | D/I | Eine Org verzögert Alerting und Zustellung aller Orgs (viele eigene Regeln mit langen Fenstern, langsame oder tote Ziele) oder verschickt über viele E-Mail-Kanäle Spam vom Mailserver des Betreibers; bei mehreren Instanzen kommen Benachrichtigungen doppelt | Import höchstens 100 Regeln, „Test senden“ 5 pro Minute; Engine und Dispatcher arbeiten die Orgs aber nacheinander ab, ohne Zeitbudget, und der Lease wird beim Speichern nicht geprüft | M2-38 | ☐ |
+| T80 | D/I | Eine Org verzögert Alerting und Zustellung aller Orgs (viele eigene Regeln mit langen Fenstern, langsame oder tote Ziele) oder verschickt über viele E-Mail-Kanäle Spam vom Mailserver des Betreibers; bei mehreren Instanzen kommen Benachrichtigungen doppelt | Engine mit Zeitbudget pro Org, Regeln lädt nur der Lease-Halter, `Save` nur mit gültigem Lease (Fencing); Dispatcher mit Orgs nebeneinander, begrenzt parallelen Zustellungen pro Org, Claim so lang wie ein Batch und `Finish` nur mit dem eigenen Claim; höchstens 50 Kanäle, 200 eigene Regeln und 100 Mails pro Stunde pro Org (ADR 0019, Nachtrag M2-38) | M2-38 | ✓ |
 
 ### TB6 – Lieferkette der Agent-Binaries
 
@@ -269,5 +269,6 @@ Offen als Aufgaben (keine kritisch):
 
 - M2-36: eigene Owner-Rolle ohne Superuser, Migrations-URL nicht im Dauerbetrieb (T73) – **erledigt**.
 - M2-37: Prioritäten für seltene Security-Events im Ingest (T9) – **erledigt**.
-- M2-38: Fairness zwischen Orgs in Engine und Dispatcher, Fencing der Leases, Grenzen für Regeln, Kanäle und Mails (T80).
+- M2-38: Fairness zwischen Orgs in Engine und Dispatcher, Fencing der Leases, Grenzen für Regeln, Kanäle und Mails (T80) –
+  **erledigt**.
 - M2-39: Sammlung der übrigen niedrigen Befunde (siehe Plan).

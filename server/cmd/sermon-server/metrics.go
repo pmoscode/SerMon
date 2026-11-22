@@ -81,6 +81,8 @@ func registerAlertMetrics(r *promtext.Registry, stats *alerting.Stats) {
 		{"sermon_server_alert_rule_errors_total", "Rule evaluations that failed.", stats.RuleErrors.Load},
 		{"sermon_server_alert_org_errors_total", "Organizations whose evaluation failed.", stats.OrgErrors.Load},
 		{"sermon_server_alert_event_reads_truncated_total", "Event rule reads that hit the limit per round (a flood of events).", stats.EventReadsTruncated.Load},
+		{"sermon_server_alert_org_timeouts_total", "Organizations whose evaluation ran out of its time budget.", stats.OrgTimeouts.Load},
+		{"sermon_server_alert_leases_lost_total", "Rounds dropped because another instance took the organization's lease meanwhile.", stats.LeasesLost.Load},
 	} {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
 	}
@@ -97,6 +99,8 @@ func registerNotifyMetrics(r *promtext.Registry, stats *notify.Stats) {
 		{"sermon_server_notify_retried_total", "Failed attempts that will be retried.", stats.Retried.Load},
 		{"sermon_server_notify_blocked_total", "Attempts refused by the outbound policy (SSRF protection).", stats.Blocked.Load},
 		{"sermon_server_notify_errors_total", "Delivery rounds that failed (database).", stats.Errors.Load},
+		{"sermon_server_notify_claims_lost_total", "Attempts whose claim another attempt took over (outcome not stored).", stats.ClaimsLost.Load},
+		{"sermon_server_notify_mails_deferred_total", "Mails held back by the mail limit of an organization.", stats.MailsDeferred.Load},
 	} {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
 	}

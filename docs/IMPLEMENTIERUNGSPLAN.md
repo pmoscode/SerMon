@@ -2461,7 +2461,22 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Tests zuerst:** Flut plus erfolgreicher Login → der Login kommt an und der Alert feuert; Zähler pro Art.
 - **Abhängig von:** M2-07
 
-#### ☐ M2-38 – Fairness zwischen Orgs in Engine und Dispatcher · X · M 🔒
+#### ☑ M2-38 – Fairness zwischen Orgs in Engine und Dispatcher · X · M 🔒
+> Erledigt (ADR 0019, Nachtrag M2-38; Threat Model T80):
+> - **Engine:** Zeitbudget pro Org (20 s, Zähler `OrgTimeouts`), Regeln erst nach dem Lease; `Save` prüft den Lease in
+>   derselben Transaktion (`HoldAlertLease … FOR UPDATE`), ein verlorener Lease verwirft die Runde (`LeasesLost`).
+> - **Dispatcher:** Orgs nebeneinander (16), beschäftigte übersprungen, Zustellungen einer Org zu viert; Claim 3 min
+>   (ein Batch); `FinishNotificationDelivery` nur mit dem eigenen Claim (`ClaimsLost`).
+> - **Grenzen:** 50 Kanäle pro Org (RESOURCE_EXHAUSTED, eigener Text in der UI), 200 eigene Regeln (Problem beim Import,
+>   geänderte Standardregeln zählen nicht), 100 Mails pro Org und Stunde (danach `MailsDeferred`, Zustellung in der
+>   nächsten Stunde).
+> - **Abweichung vom Ziel:** feste Grenzen statt einstellbarer Kontingente nach ADR 0029 (Migration, API und UI); die
+>   Lücke ist geschlossen, Kontingente lassen sich später ergänzen. Die Overrides werden nicht gecacht – sie lädt nur
+>   noch der Halter.
+> - **Tests:** Engine (Lease verloren → nichts gespeichert und nichts geroutet; Regeln nur beim Halter; langsame Org
+>   hält die andere nicht auf), Store (Speichern nur mit Lease, Finish nur mit Claim, Integration), Dispatcher (tote
+>   Org hält andere nicht auf, höchstens 4 Sendungen gleichzeitig, Mail-Grenze mit Zustellung eine Stunde später;
+>   `-race`), Grenzen für Kanäle und eigene Regeln, UI-Text.
 - **Ziel:** Befunde M6 aus M2-28 (T80). Engine und Dispatcher arbeiten alle Orgs nacheinander ab, ohne Zeitbudget; die
   Lease des Dispatchers (2 min) ist kürzer als ein Batch (20 × 15–30 s), und weder Engine noch Dispatcher prüfen beim
   Speichern, ob sie die Lease noch halten (Doppelversand bei mehreren Instanzen). Eigene Regeln und Kanäle sind

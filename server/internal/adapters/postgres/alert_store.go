@@ -93,8 +93,15 @@ func (s *AlertStore) Instances(ctx context.Context, scope tenant.Scope) ([]alert
 }
 
 // Save writes changed instances, deletes removed ones and appends the history in one transaction.
-func (s *AlertStore) Save(ctx context.Context, scope tenant.Scope, changed []alert.Instance, removed []alert.Key, history []alerting.Record) error {
+func (s *AlertStore) Save(ctx context.Context, scope tenant.Scope, holder string, now time.Time, changed []alert.Instance, removed []alert.Key, history []alerting.Record) error {
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		held, err := q.HoldAlertLease(ctx, sqlcdb.HoldAlertLeaseParams{Holder: holder, Now: now})
+		if err != nil {
+			return wrap(err, "check the alert lease")
+		}
+		if held != 1 {
+			return alerting.ErrLeaseLost
+		}
 		for _, i := range changed {
 			fields, err := encodeFields(i.Fields)
 			if err != nil {

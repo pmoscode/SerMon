@@ -95,7 +95,9 @@ type Querier interface {
 	FindSeries(ctx context.Context, arg FindSeriesParams) ([]FindSeriesRow, error)
 	// Authentication (instance-level). Tenant tables are only reached through SECURITY DEFINER checks.
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
-	FinishNotificationDelivery(ctx context.Context, arg FinishNotificationDeliveryParams) error
+	// Only the attempt that holds the claim writes (fencing, M2-38): after its claim expired another
+	// attempt may have taken the delivery over.
+	FinishNotificationDelivery(ctx context.Context, arg FinishNotificationDeliveryParams) (int64, error)
 	GetAlertSilence(ctx context.Context, id uuid.UUID) (GetAlertSilenceRow, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
@@ -108,6 +110,9 @@ type Querier interface {
 	GetTOTP(ctx context.Context, userID uuid.UUID) (GetTOTPRow, error)
 	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
+	// Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
+	// wait for the save to end.
+	HoldAlertLease(ctx context.Context, arg HoldAlertLeaseParams) (int64, error)
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	// One row per transition (COPY doesn't work with row-level security; a round has few).
 	InsertAlertHistory(ctx context.Context, arg InsertAlertHistoryParams) error

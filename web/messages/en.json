@@ -422,6 +422,7 @@
 	"notify_cancel": "Cancel",
 	"notify_error_invalid": "The input is not valid: {detail}",
 	"notify_error_too_many_tests": "Too many tests in a short time. Please wait a minute.",
+	"notify_error_too_many_channels": "The organization already has the most channels allowed (50). Delete one before you add another.",
 	"policies_fallback": "No policy yet: all alerts go to all enabled channels. As soon as there is a policy (even a disabled one), only the policies apply.",
 	"policies_title": "Policies",
 	"policy_channels": "Channels",

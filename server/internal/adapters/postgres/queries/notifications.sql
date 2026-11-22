@@ -49,11 +49,13 @@ WHERE (d.org_id, d.id) IN (
 RETURNING d.id, d.channel_id, d.notification, d.test, d.status, d.attempts, d.created_at, d.next_attempt_at,
           d.claimed_until, d.last_attempt_at, d.sent_at, d.last_error;
 
--- name: FinishNotificationDelivery :exec
+-- name: FinishNotificationDelivery :execrows
+-- Only the attempt that holds the claim writes (fencing, M2-38): after its claim expired another
+-- attempt may have taken the delivery over.
 UPDATE notification_deliveries
 SET status = sqlc.arg(status), claimed_until = NULL, next_attempt_at = sqlc.arg(next_attempt_at),
     last_attempt_at = sqlc.narg(last_attempt_at), sent_at = sqlc.narg(sent_at), last_error = sqlc.arg(last_error)
-WHERE id = sqlc.arg(id);
+WHERE id = sqlc.arg(id) AND status = 'sending' AND claimed_until = sqlc.arg(claim);
 
 -- name: ListNotificationDeliveries :many
 SELECT id, channel_id, notification, test, status, attempts, created_at, next_attempt_at, claimed_until,

@@ -216,13 +216,17 @@ func (m *memStore) Claim(_ context.Context, scope tenant.Scope, now, until time.
 	return out, nil
 }
 
-func (m *memStore) Finish(_ context.Context, scope tenant.Scope, d notify.Delivery) error {
+func (m *memStore) Finish(_ context.Context, scope tenant.Scope, d notify.Delivery, claim time.Time) error {
 	mustScope(scope)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i := range m.deliveries[scope.OrgID()] {
-		if m.deliveries[scope.OrgID()][i].ID == d.ID {
-			m.deliveries[scope.OrgID()][i] = d
+		stored := &m.deliveries[scope.OrgID()][i]
+		if stored.ID == d.ID {
+			if stored.Status != notify.StatusSending || !stored.ClaimedUntil.Equal(claim) {
+				return notify.ErrClaimLost
+			}
+			*stored = d
 			return nil
 		}
 	}

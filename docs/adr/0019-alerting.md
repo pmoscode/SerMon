@@ -96,7 +96,7 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
 
 - **Warteschlange in PostgreSQL:** `notification_deliveries` ist Queue und Zustellprotokoll zugleich, mit RLS wie alle
   Tenant-Tabellen. Jede Server-Instanz holt fällige Zeilen pro Org mit `FOR UPDATE SKIP LOCKED` und einem Claim von
-  2 min. Fällt eine Instanz beim Senden aus, übernimmt nach Ablauf des Claims eine andere. Das ergibt
+  2 min (seit M2-38 so lang wie ein Batch: 3 min, siehe Nachtrag). Fällt eine Instanz beim Senden aus, übernimmt nach Ablauf des Claims eine andere. Das ergibt
   „mindestens einmal“: Eine Nachricht kann doppelt ankommen, geht aber nicht verloren. Eine Queue im Speicher hätte
   bei einem Neustart Benachrichtigungen verloren; ein eigener Broker widerspräche dem einfachen Betrieb.
 - **Retries:** höchstens 6 Versuche (nach 30 s, 1, 2, 4, 8 min), `Retry-After` bei 429 bis 1 h. Dauerhafte Fehler
@@ -271,3 +271,24 @@ sind schwer zu erklären und zu testen. Regeln sollen sich versionieren lassen.
   `view_security_events` kommt sie mit der `secrets.Box` versiegelt (gebunden an Org, Regel und Node, Präfix `~`); Verlauf
   und Quittieren lösen sie serverseitig auf.
 - **Text vom Host in den Kanälen** ohne Format- und Trennzeichen (`textsafe`); Namen lehnen sie ab.
+
+## Nachtrag M2-38: Fairness zwischen Organisationen
+
+Befund des Security-Reviews M2-28 (T80): Engine und Dispatcher arbeiteten alle Orgs nacheinander ab, ohne Zeitbudget;
+eine Org mit vielen eigenen Regeln oder toten Zielen verzögerte die anderen, und eine Instanz konnte nach Ablauf ihres
+Leases bzw. Claims noch speichern (doppelte Benachrichtigungen bei mehreren Instanzen).
+
+- **Engine:** Zeitbudget pro Org (`OrgBudget`, 20 s, unter dem Lease von 30 s); die Regeln lädt und parst nur noch der
+  Halter des Leases. `Save` prüft den Lease in derselben Transaktion (`SELECT … FOR UPDATE` auf `alert_leases`): Hat
+  ihn inzwischen eine andere Instanz, wird nichts gespeichert und nichts an das Routing gegeben (`ErrLeaseLost`).
+- **Dispatcher:** Orgs laufen nebeneinander (höchstens 16), eine noch beschäftigte Org wird bei der nächsten Abfrage
+  übersprungen; die Zustellungen einer Org laufen zu viert. Der Claim deckt einen Batch ab (20 Zustellungen / 4 ×
+  30 s + 30 s = 3 min); `Finish` schreibt nur mit dem eigenen Claim (`ErrClaimLost`).
+- **Grenzen:** höchstens 50 Kanäle und 200 eigene Regeln pro Org (geänderte Standardregeln zählen nicht) und 100 Mails
+  pro Org und Stunde über den Mailserver des Betreibers. Was darüber geht, wartet die Stunde ab (zählt als Versuch;
+  nach 6 Versuchen ist es gescheitert).
+- **Verworfen für jetzt:** einstellbare Kontingente für Regeln, Kanäle und Mails pro Org (ADR 0029). Die festen Grenzen
+  schließen die Lücke; als Kontingent brauchten sie Migration, API und UI. Sie lassen sich später zu den Kontingenten
+  von M2-32 hinzufügen.
+- **Nicht gecacht:** die geparsten Overrides. Seit nur noch der Halter lädt, fällt das Parsen einmal pro Org und Runde
+  an.

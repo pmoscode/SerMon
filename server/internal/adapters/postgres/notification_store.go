@@ -281,12 +281,19 @@ func (s *NotificationStore) Claim(ctx context.Context, scope tenant.Scope, now, 
 }
 
 // Finish stores the outcome of an attempt.
-func (s *NotificationStore) Finish(ctx context.Context, scope tenant.Scope, d notify.Delivery) error {
+func (s *NotificationStore) Finish(ctx context.Context, scope tenant.Scope, d notify.Delivery, claim time.Time) error {
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		return wrap(q.FinishNotificationDelivery(ctx, sqlcdb.FinishNotificationDeliveryParams{
+		n, err := q.FinishNotificationDelivery(ctx, sqlcdb.FinishNotificationDeliveryParams{
 			ID: d.ID, Status: string(d.Status), NextAttemptAt: d.NextAttemptAt, LastAttemptAt: optionalTime(d.LastAttemptAt),
-			SentAt: optionalTime(d.SentAt), LastError: d.LastError,
-		}), "finish notification delivery")
+			SentAt: optionalTime(d.SentAt), LastError: d.LastError, Claim: &claim,
+		})
+		if err != nil {
+			return wrap(err, "finish notification delivery")
+		}
+		if n == 0 {
+			return notify.ErrClaimLost
+		}
+		return nil
 	})
 }
 

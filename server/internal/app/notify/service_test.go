@@ -3,6 +3,7 @@ package notify_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -201,6 +202,27 @@ func TestCreate_AcceptsAllowlistedInternalTargets(t *testing.T) {
 	n.Settings["url"] = "http://10.20.0.5:8065/hooks/x"
 	if _, err := svc.Create(context.Background(), admin(orgA, t0), n); err != nil {
 		t.Errorf("allowlisted target: %v", err)
+	}
+}
+
+// An organization has at most MaxChannels channels (M2-38): each can mail or call out on its
+// behalf through the operator's server.
+func TestCreate_BoundsTheChannels(t *testing.T) {
+	f := newFixture(t)
+	for i := range notify.MaxChannels {
+		nc := newChannel()
+		nc.Name = fmt.Sprintf("Ops %d", i)
+		if _, err := f.svc.Create(context.Background(), admin(orgA, t0), nc); err != nil {
+			t.Fatalf("channel %d: %v", i, err)
+		}
+	}
+	nc := newChannel()
+	nc.Name = "one too many"
+	if _, err := f.svc.Create(context.Background(), admin(orgA, t0), nc); !errors.Is(err, notify.ErrTooManyChannels) {
+		t.Errorf("channel %d: %v", notify.MaxChannels+1, err)
+	}
+	if _, err := f.svc.Create(context.Background(), admin(orgB, t0), nc); err != nil {
+		t.Errorf("another organization: %v", err)
 	}
 }
 

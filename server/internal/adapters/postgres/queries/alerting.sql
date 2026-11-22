@@ -7,6 +7,13 @@ VALUES (current_org_id(), sqlc.arg(holder), sqlc.arg(until))
 ON CONFLICT (org_id) DO UPDATE SET holder = EXCLUDED.holder, expires_at = EXCLUDED.expires_at
 WHERE alert_leases.holder = EXCLUDED.holder OR alert_leases.expires_at <= sqlc.arg(now);
 
+-- name: HoldAlertLease :execrows
+-- Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
+-- wait for the save to end.
+SELECT 1 FROM alert_leases
+WHERE holder = sqlc.arg(holder) AND expires_at > sqlc.arg(now)
+FOR UPDATE;
+
 -- name: ListAlertInstances :many
 SELECT rule_id, node_id, dimension, state, since, pending_since, fired_at, ack_by, ack_at, flapping, value, flips, fields
 FROM alert_instances;

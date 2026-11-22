@@ -192,6 +192,8 @@ func (h *NotificationChannelHandler) fail(ctx context.Context, op string, err er
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	case errors.Is(err, notify.ErrTooManyTests):
 		return connect.NewError(connect.CodeResourceExhausted, notify.ErrTooManyTests)
+	case errors.Is(err, notify.ErrTooManyChannels):
+		return connect.NewError(connect.CodeResourceExhausted, notify.ErrTooManyChannels)
 	case errors.Is(err, notify.ErrInvalidChannel), errors.Is(err, notify.ErrUnknownType):
 		// The messages name fields, never values (secrets).
 		return connect.NewError(connect.CodeInvalidArgument, err)

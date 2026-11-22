@@ -422,6 +422,7 @@
 	"notify_cancel": "Abbrechen",
 	"notify_error_invalid": "Die Eingabe passt nicht: {detail}",
 	"notify_error_too_many_tests": "Zu viele Tests in kurzer Zeit. Bitte warte eine Minute.",
+	"notify_error_too_many_channels": "Die Organisation hat schon die höchste Zahl an Kanälen (50). Löschen Sie einen, bevor Sie einen neuen anlegen.",
 	"policies_fallback": "Noch keine Policy: Alle Alerts gehen an alle aktiven Kanäle. Sobald es eine Policy gibt (auch eine abgeschaltete), gelten nur noch die Policies.",
 	"policies_title": "Policies",
 	"policy_channels": "Kanäle",

@@ -33,6 +33,48 @@ func firingInstance(node uuid.UUID) alert.Instance {
 	}
 }
 
+// saveHeld saves as the engine does: as the holder of the organization's lease.
+func saveHeld(ctx context.Context, t *testing.T, store *postgres.AlertStore, scope tenant.Scope, changed []alert.Instance, removed []alert.Key, history []alerting.Record) error {
+	t.Helper()
+	now := time.Now()
+	if ok, err := store.Lease(ctx, scope.OrgID(), "test", now, now.Add(time.Minute)); err != nil || !ok {
+		t.Fatalf("lease: %v, %v", ok, err)
+	}
+	return store.Save(ctx, scope, "test", now, changed, removed, history)
+}
+
+// Only the holder of the lease saves (fencing, M2-38): a round that outlived its lease – another
+// instance took the organization meanwhile – stores nothing.
+func TestAlertStore_SavesOnlyWithTheLease(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	org := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Lease ' || $1::uuid::text)", org)
+	node := uuid.New()
+	createNode(t, f.db.OwnerDSN, org, node)
+	store := postgres.NewAlertStore(open(t, f.appDSN))
+	scope := scopeFor(t, org)
+	inst := firingInstance(node)
+	if err := store.Save(ctx, scope, "a", alertTime, []alert.Instance{inst}, nil, nil); !errors.Is(err, alerting.ErrLeaseLost) {
+		t.Errorf("save without any lease: %v", err)
+	}
+	if ok, err := store.Lease(ctx, tenant.OrgID(org), "a", alertTime, alertTime.Add(30*time.Second)); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if err := store.Save(ctx, scope, "b", alertTime, []alert.Instance{inst}, nil, nil); !errors.Is(err, alerting.ErrLeaseLost) {
+		t.Errorf("save by another instance: %v", err)
+	}
+	if err := store.Save(ctx, scope, "a", alertTime.Add(31*time.Second), []alert.Instance{inst}, nil, nil); !errors.Is(err, alerting.ErrLeaseLost) {
+		t.Errorf("save after the lease ran out: %v", err)
+	}
+	if loaded, _ := store.Instances(ctx, scope); len(loaded) != 0 {
+		t.Errorf("stored without the lease: %+v", loaded)
+	}
+	if err := store.Save(ctx, scope, "a", alertTime.Add(10*time.Second), []alert.Instance{inst}, nil, nil); err != nil {
+		t.Errorf("save by the holder: %v", err)
+	}
+}
+
 func TestAlertStore_SavesAndLoadsInstancesWithTheirHistory(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
@@ -42,7 +84,7 @@ func TestAlertStore_SavesAndLoadsInstancesWithTheirHistory(t *testing.T) {
 	inst := firingInstance(node)
 	record := alerting.Record{Key: inst.Key, Transition: alert.Transition{Kind: alert.StateChanged, From: alert.StateWarning, To: alert.StateCritical, At: inst.Since, Value: 0.97, Fields: inst.Fields}}
 
-	if err := store.Save(ctx, scopeFor(t, orgA), []alert.Instance{inst}, nil, []alerting.Record{record}); err != nil {
+	if err := saveHeld(ctx, t, store, scopeFor(t, orgA), []alert.Instance{inst}, nil, []alerting.Record{record}); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 	loaded, err := store.Instances(ctx, scopeFor(t, orgA))
@@ -68,13 +110,13 @@ func TestAlertStore_SavesAndLoadsInstancesWithTheirHistory(t *testing.T) {
 
 	// Update and remove; metric rules have no fields.
 	inst.State, inst.Ack, inst.Fields = alert.StateWarning, nil, nil
-	if err := store.Save(ctx, scopeFor(t, orgA), []alert.Instance{inst}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, store, scopeFor(t, orgA), []alert.Instance{inst}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if loaded, _ := store.Instances(ctx, scopeFor(t, orgA)); !hasInstance(loaded, inst.Key, alert.StateWarning) {
 		t.Error("update not stored")
 	}
-	if err := store.Save(ctx, scopeFor(t, orgA), nil, []alert.Key{inst.Key}, nil); err != nil {
+	if err := saveHeld(ctx, t, store, scopeFor(t, orgA), nil, []alert.Key{inst.Key}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if loaded, _ := store.Instances(ctx, scopeFor(t, orgA)); hasInstance(loaded, inst.Key, alert.StateWarning) {
@@ -99,7 +141,7 @@ func TestAlertStore_KeepsOrganizationsApart(t *testing.T) {
 	createNode(t, f.db.OwnerDSN, orgB, nodeB)
 	store := postgres.NewAlertStore(open(t, f.appDSN))
 	instA := firingInstance(nodeA)
-	if err := store.Save(ctx, scopeFor(t, orgA), []alert.Instance{instA}, nil,
+	if err := saveHeld(ctx, t, store, scopeFor(t, orgA), []alert.Instance{instA}, nil,
 		[]alerting.Record{{Key: instA.Key, Transition: alert.Transition{Kind: alert.StateChanged, To: alert.StateCritical, At: alertTime}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +154,7 @@ func TestAlertStore_KeepsOrganizationsApart(t *testing.T) {
 		t.Error("org B sees the history of org A")
 	}
 	// Writing into another organization fails: the node belongs to org B, the scope to org A.
-	if err := store.Save(ctx, scopeFor(t, orgA), []alert.Instance{firingInstance(nodeB)}, nil, nil); err == nil {
+	if err := saveHeld(ctx, t, store, scopeFor(t, orgA), []alert.Instance{firingInstance(nodeB)}, nil, nil); err == nil {
 		t.Error("an instance for a node of another organization was stored")
 	}
 }
@@ -280,7 +322,7 @@ func TestAlertStore_AcknowledgementSurvivesTheEnginesSave(t *testing.T) {
 	by := identity.UserID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000a1"))
 	inst := firingInstance(node)
 	inst.State, inst.Ack, inst.Flapping = alert.StateWarning, nil, false
-	if err := store.Save(ctx, scope, []alert.Instance{inst}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, store, scope, []alert.Instance{inst}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	at := alertTime.Add(5 * time.Minute)
@@ -300,7 +342,7 @@ func TestAlertStore_AcknowledgementSurvivesTheEnginesSave(t *testing.T) {
 	// The engine saves its older copy (without the acknowledgement): it stays.
 	stale := inst
 	stale.Value = 0.99
-	if err := store.Save(ctx, scope, []alert.Instance{stale}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, store, scope, []alert.Instance{stale}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if a := ack(); a == nil || a.By != by || !a.At.Equal(at) {
@@ -308,7 +350,7 @@ func TestAlertStore_AcknowledgementSurvivesTheEnginesSave(t *testing.T) {
 	}
 	// Escalation to critical ends it.
 	stale.State = alert.StateCritical
-	if err := store.Save(ctx, scope, []alert.Instance{stale}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, store, scope, []alert.Instance{stale}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if a := ack(); a != nil {
@@ -320,7 +362,7 @@ func TestAlertStore_AcknowledgementSurvivesTheEnginesSave(t *testing.T) {
 	}
 	refired := stale
 	refired.FiredAt = alertTime.Add(time.Hour)
-	if err := store.Save(ctx, scope, []alert.Instance{refired}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, store, scope, []alert.Instance{refired}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if a := ack(); a != nil {
@@ -331,7 +373,7 @@ func TestAlertStore_AcknowledgementSurvivesTheEnginesSave(t *testing.T) {
 	}
 	// Only firing alerts: a resolved one is refused.
 	refired.State, refired.FiredAt = alert.StateResolved, time.Time{}
-	if err := store.Save(ctx, scope, []alert.Instance{refired}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, store, scope, []alert.Instance{refired}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Acknowledge(ctx, scope, inst.Key, alert.Ack{By: by, At: at}, ackRecord(refired, by, at)); !errors.Is(err, alert.ErrNotFiring) {
@@ -354,7 +396,7 @@ func TestAlertStore_HistoryRetention(t *testing.T) {
 	rec := func(at time.Time) alerting.Record {
 		return alerting.Record{Key: inst.Key, Transition: alert.Transition{Kind: alert.StateChanged, From: alert.StateOK, To: alert.StateWarning, At: at, Value: 1}}
 	}
-	if err := store.Save(ctx, scope, nil, nil, []alerting.Record{rec(now.AddDate(-2, 0, 0)), rec(now.AddDate(0, -6, 0)), rec(now)}); err != nil {
+	if err := saveHeld(ctx, t, store, scope, nil, nil, []alerting.Record{rec(now.AddDate(-2, 0, 0)), rec(now.AddDate(0, -6, 0)), rec(now)}); err != nil {
 		t.Fatal(err)
 	}
 	// A purge that asks for too much deletes only what the policy allows.

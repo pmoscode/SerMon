@@ -71,10 +71,13 @@ func (m *memStore) Instances(_ context.Context, scope tenant.Scope) ([]alert.Ins
 	return out, nil
 }
 
-func (m *memStore) Save(_ context.Context, scope tenant.Scope, changed []alert.Instance, removed []alert.Key, history []alerting.Record) error {
+func (m *memStore) Save(_ context.Context, scope tenant.Scope, holder string, now time.Time, changed []alert.Instance, removed []alert.Key, history []alerting.Record) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	org := scope.OrgID()
+	if l := m.leases[org]; l.holder != holder || !now.Before(l.until) {
+		return alerting.ErrLeaseLost
+	}
 	if m.instances[org] == nil {
 		m.instances[org] = map[alert.Key]alert.Instance{}
 	}
@@ -139,6 +142,49 @@ type rules map[tenant.OrgID][]alerting.Rule
 
 func (r rules) Rules(_ context.Context, org tenant.OrgID) ([]alerting.Rule, error) {
 	return r[org], nil
+}
+
+// countedRules counts the loads of the rules (each parses the organization's overrides).
+type countedRules struct {
+	rules
+	mu    sync.Mutex
+	loads int
+}
+
+func (c *countedRules) Rules(ctx context.Context, org tenant.OrgID) ([]alerting.Rule, error) {
+	c.mu.Lock()
+	c.loads++
+	c.mu.Unlock()
+	return c.rules.Rules(ctx, org)
+}
+
+// stealingRule hands the lease to another instance while it is evaluated, as if the round took
+// longer than the lease.
+type stealingRule struct {
+	store *memStore
+	org   tenant.OrgID
+}
+
+func (s stealingRule) Evaluate(_ context.Context, env alerting.Env) ([]alerting.Result, error) {
+	s.store.mu.Lock()
+	s.store.leases[s.org] = lease{holder: "other", until: env.Now.Add(time.Hour)}
+	s.store.mu.Unlock()
+	return []alerting.Result{{Node: web, Observation: cpu.Evaluate(0.95)}}, nil
+}
+
+// everywhere has the node in every organization.
+type everywhere struct{ directory }
+
+func (everywhere) List(context.Context, tenant.Scope) ([]fleet.Node, error) {
+	return []fleet.Node{{ID: web, Group: group, Hostname: "web-01"}}, nil
+}
+
+// slowRule blocks until its context ends.
+type slowRule struct{}
+
+func (slowRule) Evaluate(ctx context.Context, _ alerting.Env) ([]alerting.Result, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
 }
 
 type clock struct {
@@ -266,6 +312,59 @@ func TestEngine_OnlyTheLeaseHolderEvaluates(t *testing.T) {
 	b.Round(context.Background())
 	if len(vb.scopes) != 1 {
 		t.Errorf("b after the lease expired: %d evaluations, want 1", len(vb.scopes))
+	}
+}
+
+// Only the holder of the lease loads (and parses) an organization's rules (M2-38).
+func TestEngine_LoadsTheRulesOnlyWithTheLease(t *testing.T) {
+	store, c := newMemStore(orgA), &clock{now: t0}
+	source := &countedRules{rules: cpuRules(&valueRule{value: 0.5}, 0)}
+	a, b := engine(store, source, c, "a"), engine(store, source, c, "b")
+	for range 3 {
+		c.advance(alerting.Interval)
+		a.Round(context.Background())
+		b.Round(context.Background())
+	}
+	if source.loads != 3 {
+		t.Errorf("rules loaded %d times in 3 rounds of two instances, want 3 (the holder's)", source.loads)
+	}
+}
+
+// A round whose lease another instance took meanwhile stores nothing and tells the routing
+// nothing: two instances must not both notify (fencing, M2-28 finding, M2-38).
+func TestEngine_DropsARoundWhoseLeaseWasLost(t *testing.T) {
+	store, c, s := newMemStore(orgA), &clock{now: t0}, &sink{}
+	e := alerting.NewEngine(alerting.Deps{
+		Store: store, Rules: rules{orgA: {{ID: cpuRule, Evaluator: stealingRule{store: store, org: orgA}}}},
+		Nodes: directory{}, Now: c.Now, Holder: "a", Sink: s, Logger: slog.New(slog.DiscardHandler),
+	})
+	rounds(t, e, c, 1)
+	if store.saves != 0 || len(s.rounds) != 0 {
+		t.Errorf("saves %d, rounds %d after the lease was lost", store.saves, len(s.rounds))
+	}
+	if e.Stats().LeasesLost.Load() != 1 {
+		t.Errorf("leases lost = %d", e.Stats().LeasesLost.Load())
+	}
+}
+
+// A slow organization holds up the others only up to its budget (M2-38).
+func TestEngine_ASlowOrganizationHasABudget(t *testing.T) {
+	store, c := newMemStore(orgA, orgB), &clock{now: t0} // A first: it must not hold up B
+	fast := &valueRule{value: 0.5}
+	e := alerting.NewEngine(alerting.Deps{
+		Store: store, Rules: rules{orgA: {{ID: cpuRule, Evaluator: slowRule{}}}, orgB: {{ID: cpuRule, Evaluator: fast}}},
+		Nodes: everywhere{}, Now: c.Now, Holder: "a", Logger: slog.New(slog.DiscardHandler), OrgBudget: 50 * time.Millisecond,
+	})
+	start := time.Now()
+	rounds(t, e, c, 1)
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("round took %v", took)
+	}
+	if len(fast.scopes) != 1 || fast.scopes[0].OrgID() != orgB {
+		t.Errorf("organization B was not evaluated: %v", fast.scopes)
+	}
+	if e.Stats().OrgTimeouts.Load() != 1 {
+		t.Errorf("timeouts = %d", e.Stats().OrgTimeouts.Load())
 	}
 }
 

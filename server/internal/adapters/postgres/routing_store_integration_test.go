@@ -160,7 +160,7 @@ func TestRoutingStore_CommitAndSnapshot(t *testing.T) {
 	node := uuid.New()
 	createNode(t, f.ownerDSN, f.org, node)
 	inst := firingInstance(node)
-	if err := f.alerts.Save(ctx, scope, []alert.Instance{inst}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, f.alerts, scope, []alert.Instance{inst}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	on, off := f.channel(t, f.org, true), f.channel(t, f.org, false)
@@ -211,7 +211,7 @@ func TestRoutingStore_CommitAndSnapshot(t *testing.T) {
 	if err := f.routes.Commit(ctx, scope, nil, []routing.State{st}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.alerts.Save(ctx, scope, nil, []alert.Key{inst.Key}, []alerting.Record{}); err != nil {
+	if err := saveHeld(ctx, t, f.alerts, scope, nil, []alert.Key{inst.Key}, []alerting.Record{}); err != nil {
 		t.Fatal(err)
 	}
 	if snap, _ = f.routes.Snapshot(ctx, scope, notifyTime); len(snap.States) != 0 {
@@ -414,7 +414,7 @@ func TestRoutingStore_FallbackAndMutedStates(t *testing.T) {
 	node := uuid.New()
 	createNode(t, f.ownerDSN, f.org, node)
 	inst := firingInstance(node)
-	if err := f.alerts.Save(ctx, scope, []alert.Instance{inst}, nil, nil); err != nil {
+	if err := saveHeld(ctx, t, f.alerts, scope, []alert.Instance{inst}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	muted := routing.State{StateKey: routing.StateKey{Key: inst.Key}, Muted: true}

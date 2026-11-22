@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -31,7 +32,14 @@ const (
 	Interval = 10 * time.Second
 	// LeaseDuration is how long an instance holds an organization without renewing it.
 	LeaseDuration = 3 * Interval
+	// OrgBudget bounds one organization's evaluation, so a slow one (many rules with long
+	// windows) holds up the others only so long – well within the lease (M2-38).
+	OrgBudget = 2 * Interval
 )
+
+// ErrLeaseLost means another instance took the organization during the round; its results are dropped
+// so two instances never both store and notify (fencing, M2-38).
+var ErrLeaseLost = errors.New("alert lease lost")
 
 // Result is what an evaluation found for one instance of a rule.
 type Result struct {
@@ -105,8 +113,9 @@ type Store interface {
 	// Lease gives holder the organization until until, if nobody else holds it at now.
 	Lease(ctx context.Context, org tenant.OrgID, holder string, now, until time.Time) (bool, error)
 	Instances(ctx context.Context, scope tenant.Scope) ([]alert.Instance, error)
-	// Save writes changed instances, deletes removed ones and appends the history – together.
-	Save(ctx context.Context, scope tenant.Scope, changed []alert.Instance, removed []alert.Key, history []Record) error
+	// Save writes changed instances, deletes removed ones and appends the history – together, and
+	// only while holder still holds the organization's lease at now (ErrLeaseLost otherwise).
+	Save(ctx context.Context, scope tenant.Scope, holder string, now time.Time, changed []alert.Instance, removed []alert.Key, history []Record) error
 }
 
 // Round is what one evaluation of an organization leaves for the routing: the stored
@@ -132,6 +141,9 @@ type Stats struct {
 	Rounds, Evaluations, Transitions, RuleErrors, OrgErrors atomic.Uint64
 	// EventReadsTruncated counts reads of an event rule that hit MaxEventsRead (a flood).
 	EventReadsTruncated atomic.Uint64
+	// OrgTimeouts counts evaluations that ran out of OrgBudget; LeasesLost rounds dropped because
+	// another instance took the lease meanwhile.
+	OrgTimeouts, LeasesLost atomic.Uint64
 }
 
 // Deps are the engine's collaborators. Holder identifies this server instance (random if empty).
@@ -145,6 +157,8 @@ type Deps struct {
 	Now     func() time.Time
 	Holder  string
 	Logger  *slog.Logger
+	// OrgBudget overrides the default budget of one organization (tests).
+	OrgBudget time.Duration
 }
 
 // Engine evaluates the rules of the organizations it holds.
@@ -159,6 +173,9 @@ func NewEngine(d Deps) *Engine {
 		raw := make([]byte, 8)
 		_, _ = rand.Read(raw)
 		d.Holder = hex.EncodeToString(raw)
+	}
+	if d.OrgBudget <= 0 {
+		d.OrgBudget = OrgBudget
 	}
 	return &Engine{d: d}
 }
@@ -190,7 +207,18 @@ func (e *Engine) Round(ctx context.Context) {
 		return
 	}
 	for _, org := range orgs {
-		if err := e.evaluate(ctx, org); err != nil {
+		budget, cancel := context.WithTimeout(ctx, e.d.OrgBudget)
+		err := e.evaluate(budget, org)
+		timedOut := errors.Is(budget.Err(), context.DeadlineExceeded)
+		cancel()
+		switch {
+		case errors.Is(err, ErrLeaseLost):
+			e.stats.LeasesLost.Add(1)
+			e.d.Logger.WarnContext(ctx, "alerting: lease lost during the round, results dropped", "org", org.String())
+		case timedOut:
+			e.stats.OrgTimeouts.Add(1)
+			e.d.Logger.WarnContext(ctx, "alerting: evaluation ran out of its budget", "org", org.String(), "budget", e.d.OrgBudget.String())
+		case err != nil:
 			e.stats.OrgErrors.Add(1)
 			e.d.Logger.ErrorContext(ctx, "alerting: evaluation failed", "org", org.String(), "error", err)
 		}
@@ -198,14 +226,15 @@ func (e *Engine) Round(ctx context.Context) {
 }
 
 func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
-	// An organization without rules (all disabled) is still evaluated: its old alerts end.
-	rules, err := e.d.Rules.Rules(ctx, org)
-	if err != nil {
-		return err //nolint:wrapcheck // logged with the organization
-	}
 	now := e.d.Now()
 	held, err := e.d.Store.Lease(ctx, org, e.d.Holder, now, now.Add(LeaseDuration))
 	if err != nil || !held {
+		return err //nolint:wrapcheck // logged with the organization
+	}
+	// Only the holder loads the rules. An organization without rules (all disabled) is still
+	// evaluated: its old alerts end.
+	rules, err := e.d.Rules.Rules(ctx, org)
+	if err != nil {
 		return err //nolint:wrapcheck // logged with the organization
 	}
 	scope, err := tenant.ForAllGroups(org)
@@ -290,7 +319,7 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 		removed = append(removed, key)
 	}
 	if len(changed) > 0 || len(removed) > 0 || len(history) > 0 {
-		if err := e.d.Store.Save(ctx, scope, changed, removed, history); err != nil {
+		if err := e.d.Store.Save(ctx, scope, e.d.Holder, e.d.Now(), changed, removed, history); err != nil {
 			return fmt.Errorf("save: %w", err)
 		}
 		e.stats.Transitions.Add(uint64(len(history)))

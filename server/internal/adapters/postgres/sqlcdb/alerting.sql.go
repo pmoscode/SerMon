@@ -116,6 +116,27 @@ func (q *Queries) DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstan
 	return err
 }
 
+const holdAlertLease = `-- name: HoldAlertLease :execrows
+SELECT 1 FROM alert_leases
+WHERE holder = $1 AND expires_at > $2
+FOR UPDATE
+`
+
+type HoldAlertLeaseParams struct {
+	Holder string
+	Now    time.Time
+}
+
+// Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
+// wait for the save to end.
+func (q *Queries) HoldAlertLease(ctx context.Context, arg HoldAlertLeaseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, holdAlertLease, arg.Holder, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertAlertHistory = `-- name: InsertAlertHistory :exec
 INSERT INTO alert_history (org_id, rule_id, node_id, dimension, kind, from_state, to_state, at, value, by_user, fields)
 VALUES (current_org_id(), $1, $2, $3, $4,

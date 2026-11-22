@@ -152,12 +152,19 @@ func TestNotificationStore_QueueClaimFinishAndPurge(t *testing.T) {
 		t.Errorf("second claim got %d, want only the third", len(again))
 	}
 	d.Status, d.SentAt, d.LastAttemptAt = notify.StatusSent, notifyTime.Add(time.Minute), notifyTime.Add(time.Minute)
-	if err := store.Finish(ctx, scope, d); err != nil {
+	// Only the attempt that holds the claim writes its outcome (fencing, M2-38).
+	if err := store.Finish(ctx, scope, d, notifyTime.Add(4*time.Minute)); !errors.Is(err, notify.ErrClaimLost) {
+		t.Errorf("finish with another claim: %v", err)
+	}
+	if err := store.Finish(ctx, scope, d, claimed[0].ClaimedUntil); err != nil {
 		t.Fatal(err)
+	}
+	if err := store.Finish(ctx, scope, d, claimed[0].ClaimedUntil); !errors.Is(err, notify.ErrClaimLost) {
+		t.Errorf("finished twice: %v", err)
 	}
 	f := claimed[1]
 	f.Status, f.LastError, f.NextAttemptAt = notify.StatusPending, "connection reset", notifyTime.Add(10*time.Minute)
-	if err := store.Finish(ctx, scope, f); err != nil {
+	if err := store.Finish(ctx, scope, f, claimed[1].ClaimedUntil); err != nil {
 		t.Fatal(err)
 	}
 	list, err := store.Deliveries(ctx, scope, notify.DeliveryFilter{Channel: &c.ID, Limit: 10})

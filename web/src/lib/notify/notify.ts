@@ -54,7 +54,10 @@ export function notifyError(error: unknown): string {
 		case Code.InvalidArgument:
 			return m.notify_error_invalid({ detail: ConnectError.from(error).rawMessage });
 		case Code.ResourceExhausted:
-			return m.notify_error_too_many_tests();
+			// The organization's limit of channels (M2-38), or too many tests in a minute.
+			return ConnectError.from(error).rawMessage.includes('channels')
+				? m.notify_error_too_many_channels()
+				: m.notify_error_too_many_tests();
 		default:
 			return m.error_unavailable();
 	}

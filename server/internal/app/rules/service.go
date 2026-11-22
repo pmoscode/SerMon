@@ -25,6 +25,10 @@ import (
 // MaxImportDocuments bounds the rules of one import.
 const MaxImportDocuments = 100
 
+// MaxOwnRules bounds an organization's own rules (M2-38): they are evaluated next to every other
+// organization's in the same rounds. Changed shipped rules don't count.
+const MaxOwnRules = 200
+
 // Store keeps the overrides of an organization (postgres.AlertRuleStore).
 type Store interface {
 	Overrides(ctx context.Context, org tenant.OrgID) ([]ruleset.Override, error)
@@ -194,6 +198,30 @@ func (s *Service) state(ctx context.Context, org tenant.OrgID) (state, error) {
 	return st, nil
 }
 
+// own counts the organization's own rules.
+func (st state) own() int {
+	n := 0
+	for _, r := range st.rules {
+		if r.Origin == Own {
+			n++
+		}
+	}
+	return n
+}
+
+// newOwn counts the rules an import adds that are neither shipped nor already the organization's.
+func newOwn(st state, put []ruleset.Override, defaults []ruleset.Definition) int {
+	n := 0
+	for _, o := range put {
+		_, known := st.find(o.Rule)
+		shipped := slices.ContainsFunc(defaults, func(d ruleset.Definition) bool { return d.Rule.ID == o.Rule })
+		if !known && !shipped {
+			n++
+		}
+	}
+	return n
+}
+
 func (st state) find(id alert.RuleID) (Rule, bool) {
 	i := slices.IndexFunc(st.rules, func(r Rule) bool { return r.ID == id })
 	if i < 0 {
@@ -265,6 +293,9 @@ func (s *Service) Import(ctx context.Context, c access.Caller, data []byte, dryR
 			return Result{}, fmt.Errorf("rule %s: %w", id, err)
 		}
 		put = append(put, ruleset.Override{Rule: id, Document: doc, Source: []byte(d.Source), Disabled: st.overrides[id].Disabled})
+	}
+	if own := st.own() + newOwn(st, put, s.d.Defaults); own > MaxOwnRules {
+		res.Problems = append(res.Problems, Problem{Document: 1, Line: 1, Message: fmt.Sprintf("an organization has at most %d rules of its own (%d after this import)", MaxOwnRules, own)})
 	}
 	if dryRun || len(res.Problems) > 0 || len(put) == 0 {
 		return res, nil

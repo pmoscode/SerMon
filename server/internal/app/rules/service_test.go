@@ -3,6 +3,7 @@ package rules_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -159,6 +160,37 @@ func TestImport_DryRunThenApply(t *testing.T) {
 	}
 	if r := find(list, "system.cpu.usage_very_high"); r.Origin != rules.Own || !r.Enabled {
 		t.Errorf("own rule %+v", r)
+	}
+}
+
+// An organization holds at most MaxOwnRules rules of its own (M2-38): its rules are evaluated
+// next to every other organization's. Changing a shipped rule doesn't count.
+func TestImport_BoundsTheOwnRules(t *testing.T) {
+	s := &store{}
+	svc := service(t, s, t0)
+	ownRule := func(i int) string {
+		return strings.Replace(source(t, cpu), "id: system.cpu.usage_high", fmt.Sprintf("id: acme.cpu.high_%03d", i), 1)
+	}
+	importN := func(from, to int) (rules.Result, error) {
+		var docs []string
+		for i := from; i < to; i++ {
+			docs = append(docs, ownRule(i))
+		}
+		return svc.Import(context.Background(), admin(), []byte(strings.Join(docs, "---\n")), false)
+	}
+	for from := 0; from < rules.MaxOwnRules; from += rules.MaxImportDocuments {
+		if res, err := importN(from, min(from+rules.MaxImportDocuments, rules.MaxOwnRules)); err != nil || !res.Applied {
+			t.Fatalf("import from %d: %+v, %v", from, res.Problems, err)
+		}
+	}
+	res, err := importN(rules.MaxOwnRules, rules.MaxOwnRules+1)
+	if err != nil || res.Applied || len(res.Problems) != 1 || !strings.Contains(res.Problems[0].Message, fmt.Sprintf("at most %d rules of its own", rules.MaxOwnRules)) {
+		t.Errorf("rule %d: %+v, %v", rules.MaxOwnRules+1, res, err)
+	}
+	// Updating an existing own rule and changing a shipped one still work.
+	changed := strings.Replace(ownRule(0), "window: 10m", "window: 15m", 1) + "---\n" + strings.Replace(source(t, cpu), "window: 10m", "window: 15m", 1)
+	if res, err := svc.Import(context.Background(), admin(), []byte(changed), false); err != nil || !res.Applied {
+		t.Errorf("update at the limit: %+v, %v", res.Problems, err)
 	}
 }
 

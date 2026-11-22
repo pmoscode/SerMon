@@ -26,6 +26,13 @@ const TestsPerMinute = 5
 // ErrTooManyTests means the organization sent too many tests in the last minute.
 var ErrTooManyTests = errors.New("too many test notifications, please wait a minute")
 
+// MaxChannels bounds the channels of an organization (M2-38): each can mail or call out on its
+// behalf, through the operator's server.
+const MaxChannels = 50
+
+// ErrTooManyChannels is returned when the organization has MaxChannels channels.
+var ErrTooManyChannels = fmt.Errorf("at most %d notification channels per organization", MaxChannels)
+
 // Status is where a delivery stands.
 type Status string
 
@@ -77,8 +84,9 @@ type Store interface {
 	// Claim marks up to limit due deliveries as sending until until and counts the attempt:
 	// pending ones whose next attempt is due and sending ones whose claim expired.
 	Claim(ctx context.Context, scope tenant.Scope, now, until time.Time, limit int) ([]Delivery, error)
-	// Finish stores the outcome of an attempt.
-	Finish(ctx context.Context, scope tenant.Scope, d Delivery) error
+	// Finish stores the outcome of an attempt – only while the delivery is still sending under
+	// claim (the ClaimedUntil it was claimed with); ErrClaimLost otherwise (fencing, M2-38).
+	Finish(ctx context.Context, scope tenant.Scope, d Delivery, claim time.Time) error
 	// Purge deletes finished deliveries created before before.
 	Purge(ctx context.Context, scope tenant.Scope, before time.Time) (int, error)
 }
@@ -95,6 +103,8 @@ type Deps struct {
 	Now      func() time.Time
 	NewID    func() uuid.UUID
 	Logger   *slog.Logger
+	// MailsPerHour bounds the mails of one organization (0: DefaultMailsPerHour, M2-38).
+	MailsPerHour int
 }
 
 // Service manages the channels of an organization (admins with ManageChannels).
@@ -233,6 +243,13 @@ func (s *Service) Create(ctx context.Context, c access.Caller, nc NewChannel) (C
 	name, err := s.check(nc.Type, nc.Name, nc.Lang, cfg)
 	if err != nil {
 		return Channel{}, err
+	}
+	existing, err := s.d.Store.Channels(ctx, scope)
+	if err != nil {
+		return Channel{}, fmt.Errorf("count channels: %w", err)
+	}
+	if len(existing) >= MaxChannels {
+		return Channel{}, ErrTooManyChannels
 	}
 	now := s.d.Now()
 	ch := Channel{

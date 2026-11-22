@@ -3,7 +3,8 @@
 # starts deploy/e2e/compose.yaml and runs web/tests/demo with Playwright against it:
 # setup → login → enrollment token → install.sh in agent containers with systemd and OpenRC → nodes
 # with metrics in < 2 min → signed packages on three more hosts (M2-21) → a user of another
-# organization sees nothing.
+# organization sees nothing; meanwhile two hosts measure the agent against its resource budget
+# (scripts/agent-budget.sh, M2-25).
 #
 #   scripts/e2e-demo.sh          run and tear down
 #   KEEP=1 scripts/e2e-demo.sh   leave the environment running (https://localhost:18443)

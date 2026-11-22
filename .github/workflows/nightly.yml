@@ -80,7 +80,8 @@ jobs:
       - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
         with:
           tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
-      # The same demo as in ci.yml, natively on arm64 (no QEMU): install.sh, OpenRC, packages.
+      # The same demo as in ci.yml, natively on arm64 (no QEMU): install.sh, OpenRC, packages,
+      # resource budget.
       - run: just e2e-demo
       # .deb, .rpm and .apk for arm64: signature, install, upgrade, removal.
       - run: just test-packages

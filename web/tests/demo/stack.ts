@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { X509Certificate } from 'node:crypto';
 import { appendFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -40,6 +40,41 @@ export function exec(
 	const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
 	if (res.status !== 0) throw new Error(`${service}: exit ${res.status}\n$ ${command}\n${output}`);
 	return output;
+}
+
+/**
+ * Like exec, but in the background: resolves with the exit status and the whole output, so the
+ * test can go on while a long command (the budget measurement) runs.
+ */
+export function execAsync(
+	service: string,
+	command: string,
+	input?: string
+): Promise<{ status: number | null; output: string }> {
+	return new Promise((resolve, reject) => {
+		const child = spawn('docker', [
+			'compose',
+			'-f',
+			composeFile,
+			'exec',
+			'-T',
+			service,
+			'sh',
+			'-c',
+			command
+		]);
+		let output = '';
+		child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
+		child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
+		child.on('error', reject);
+		child.on('close', (status) => resolve({ status, output }));
+		child.stdin.end(input ?? '');
+	});
+}
+
+/** A script of scripts/ in the repository, to feed to a host over stdin. */
+export function repoScript(name: string): string {
+	return readFileSync(join(dirname(composeFile), '..', '..', 'scripts', name), 'utf8');
 }
 
 /** The setup token the server logged on its last start (it replaces the one from `init`). */

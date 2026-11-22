@@ -1,6 +1,14 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test } from '../e2e/fixtures';
-import { caddyCA, exec, invitationLink, setupToken, tamperDownload } from './stack';
+import {
+	caddyCA,
+	exec,
+	execAsync,
+	invitationLink,
+	repoScript,
+	setupToken,
+	tamperDownload
+} from './stack';
 
 /**
  * The M1 demo (IMPLEMENTIERUNGSPLAN §4): a fresh installation, seven Linux hosts – Debian, Ubuntu,
@@ -203,6 +211,15 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	}
 	const elapsed = Math.round((Date.now() - started) / 1000);
 	console.log(`${agents.length} hosts visible with metrics after ${elapsed} s`);
+
+	// Resource budget (M2-25, KONZEPT §4.1): < 1 % of a core and < 30 MiB RSS over 60 s under
+	// systemd with the journal source, journalctl included. Two hosts nothing else touches measure
+	// in the background while the demo goes on.
+	const budget = repoScript('agent-budget.sh');
+	const budgetHosts = agents.filter(
+		(a) => a.service === 'agent-debian-12' || a.service === 'agent-rockylinux-9'
+	);
+	const measuring = budgetHosts.map((a) => execAsync(a.service, 'sh -s -- 60 1 30', budget));
 	await page.screenshot({ path: 'test-results/demo-fleet.png', fullPage: true });
 
 	// The node detail shows host facts and charts.
@@ -279,6 +296,18 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	console.log(
 		`failed unit alerted and resolved after ${Math.round((Date.now() - started) / 1000)} s`
 	);
+
+	// The budget holds; journalctl counts (agent and child). Counter-check: with the limits lowered
+	// to nothing, the same measurement fails and names both.
+	for (const [i, result] of (await Promise.all(measuring)).entries()) {
+		console.log(`${budgetHosts[i].host}: ${result.output.trim()}`);
+		expect(result.status, `${budgetHosts[i].host}:\n${result.output}`).toBe(0);
+		expect(result.output).toMatch(/, [2-9] processes/);
+	}
+	const lowered = await execAsync(budgetHosts[0].service, 'sh -s -- 3 0 1', budget);
+	expect(lowered.status, lowered.output).toBe(1);
+	expect(lowered.output).toContain('CPU over budget');
+	expect(lowered.output).toContain('RSS over budget');
 
 	// Signed packages (M2-21): install, set the server, enroll as sermon, start; the node reports.
 	// Removal stops the agent and leaves nothing but the configuration.

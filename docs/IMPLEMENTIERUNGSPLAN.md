@@ -1237,7 +1237,7 @@ flowchart LR
 |---|---|
 | Demo-Test M1-33 grün | ✓ in CI, Laufzeit rund 17 s |
 | Mandanten- und Rollen-Tests vollständig | ✓ Isolationstest für jede RPC (CI erzwingt die Abdeckung), Rollen-Matrix-Test, RLS-Tests pro Tabelle |
-| Ressourcen-Budget des Agents | ✓ im Review gemessen, siehe unten; noch ohne automatischen Test (M2-25) |
+| Ressourcen-Budget des Agents | ✓ im Review gemessen, siehe unten; seit M2-25 als Prüfung in der E2E-Demo |
 | Security-Review ohne offene kritische Findings | ✓ M1-35; alle Folgeaufgaben M1-36 bis M1-40 erledigt |
 
 **Ressourcen-Budget** (Ziel < 1 % eines Kerns und < 30 MiB RSS, KONZEPT §4.1):
@@ -2121,7 +2121,16 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   Superadmins.
 - **Abhängig von:** M2-08
 
-#### ☐ M2-25 – Ressourcen-Budget als Test · X · S
+#### ☑ M2-25 – Ressourcen-Budget als Test · X · S
+> Erledigt (KONZEPT §19.2):
+> - **`scripts/agent-budget.sh`** misst im Host `sermon-agent run` mit allen Nachkommen über `/proc` (systemd und
+>   OpenRC gleich): CPU-Zeit des Baums über das Fenster (eingesammelte Kinder eingeschlossen) in Prozent eines Kerns,
+>   Spitze der summierten VmRSS, jede Sekunde abgetastet. Über der Grenze endet es mit Status 1 und nennt den Wert.
+> - **E2E-Demo:** Sobald die Flotte Metriken zeigt, messen `web-01` (Debian 12) und `app-01` (Rocky 9) 60 s lang im
+>   Hintergrund, während die Demo weiterläuft (keine zusätzliche Laufzeit); Grenze < 1 % eines Kerns und < 30 MiB,
+>   `journalctl` zählt mit (zwei Prozesse). Läuft damit bei jedem Push (amd64, `ci.yml`) und in der Nightly (arm64).
+> - **Gegenprobe:** dieselbe Messung mit Grenzen 0 % und 1 MiB schlägt fehl und nennt CPU und RSS.
+> - **Gemessen** (arm64, Docker auf Apple Silicon): 0,29 % und 18,5 MiB (Debian 12), 0,35 % und 19,6 MiB (Rocky 9).
 - **Ziel:** Messung des Agents im E2E (CPU und RSS über 60 s unter systemd, wie im Review M1) als Prüfung in der
   Nightly: < 1 % eines Kerns, < 30 MiB RSS, auch mit aktiver journald-Quelle. Der Kindprozess `journalctl` zählt mit
   (rund 7 MiB); die Selbst-Metrik des Agents erfasst ihn nicht (M2-05).

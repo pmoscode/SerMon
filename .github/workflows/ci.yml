@@ -396,7 +396,8 @@ jobs:
           tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
       # Setup, login, token, install.sh with systemd on Debian 12/13, Ubuntu 24.04, Rocky 9, AlmaLinux 10
       # and Fedora 44 and with OpenRC on Alpine, metrics in under 2 minutes, signed packages on three
-      # more hosts, tenant isolation (M1-33, M2-19 to M2-21). arm64: nightly.yml.
+      # more hosts, tenant isolation, resource budget of the agent (M1-33, M2-19 to M2-21, M2-25).
+      # arm64: nightly.yml.
       - run: just e2e-demo
       # The runner's LSM can deny what works on a developer machine (AppArmor on Ubuntu 24.04).
       - name: Show AppArmor denials

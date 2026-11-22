@@ -1252,11 +1252,13 @@ dependencies = [
 name = "sermon-collectors"
 version = "0.0.0"
 dependencies = [
+ "libc",
  "proptest",
  "rustix",
  "sermon-core",
  "tempfile",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

@@ -234,6 +234,52 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	await expect(forged.getByRole('note')).toContainText('Source not verified');
 	await page.screenshot({ path: 'test-results/demo-unverified.png', fullPage: true });
 
+	// State collectors under the hardened unit (M2-22): every host reports whether its clock is
+	// synchronised (adjtimex, allowed by the syscall filter), and a failed systemd unit fires an
+	// alert with its name, which resolves once the unit is reset.
+	const fleet = await call<{ nodes?: { nodeId: string; hostname: string }[] }>(
+		page.request,
+		baseURL ?? '',
+		'FleetService/GetFleetSummary',
+		{}
+	);
+	const nodeIds = (fleet.nodes ?? []).map((n) => n.nodeId);
+	await expect
+		.poll(
+			async () => {
+				const res = await call<{ series?: { nodeId: string }[] }>(
+					page.request,
+					baseURL ?? '',
+					'MetricsService/QueryMetrics',
+					{
+						selector: { metric: 'sermon_time_synchronized', nodeIds },
+						from: new Date(Date.now() - 10 * 60_000).toISOString(),
+						to: new Date().toISOString()
+					}
+				);
+				return new Set((res.series ?? []).map((s) => s.nodeId)).size;
+			},
+			{ timeout: 60_000 }
+		)
+		.toBe(agents.length);
+	const unitHost = agents.find((a) => a.service === 'agent-debian-13')!;
+	exec(unitHost.service, 'systemd-run --quiet --unit=e2e-backup false');
+	await page.goto('/alerts');
+	const unitAlert = page
+		.getByRole('article')
+		.filter({ hasText: unitHost.host })
+		.filter({ hasText: 'e2e-backup.service' });
+	await expect(unitAlert).toContainText('systemd unit failed', { timeout: 180_000 });
+	// Firing after `for: 1m`; reset while pending, it would simply end without a resolution.
+	await expect(unitAlert).toContainText('Warning', { timeout: 180_000 });
+	exec(unitHost.service, 'systemctl reset-failed e2e-backup.service');
+	// The agent reports 0 for the recovered unit: the alert resolves and leaves the list. Without
+	// that 0 (missing data) it would keep firing.
+	await expect(unitAlert).toHaveCount(0, { timeout: 120_000 });
+	console.log(
+		`failed unit alerted and resolved after ${Math.round((Date.now() - started) / 1000)} s`
+	);
+
 	// Signed packages (M2-21): install, set the server, enroll as sermon, start; the node reports.
 	// Removal stops the agent and leaves nothing but the configuration.
 	const token = /SERMON_ENROLLMENT_TOKEN=(sme_\S+)/.exec(command)?.[1] ?? '';

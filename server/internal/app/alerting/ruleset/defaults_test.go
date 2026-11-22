@@ -130,6 +130,8 @@ var (
 	idle     = metrics.Labels{"mode": "idle"}
 	root     = metrics.Labels{"mountpoint": "/"}
 	eth0     = metrics.Labels{"interface": "eth0"}
+	md0      = metrics.Labels{"device": "md0"}
+	backup   = metrics.Labels{"unit": "backup.service"}
 	sda      = metrics.Labels{"device": "sda"}
 	memSome  = metrics.Labels{"resource": "memory", "kind": "some"}
 	cpuSome  = metrics.Labels{"resource": "cpu", "kind": "some"}
@@ -222,6 +224,10 @@ var scenarios = map[alert.RuleID]scenario{
 	"system.conntrack.usage_high":         {fire: one("sermon_conntrack_utilization_ratio", steady(950_000)), calm: one("sermon_conntrack_utilization_ratio", steady(100_000)), want: critical},
 	"system.file_descriptors.usage_high":  {fire: share("sermon_system_file_descriptors_used", "sermon_system_file_descriptors_limit", nil, 850), calm: share("sermon_system_file_descriptors_used", "sermon_system_file_descriptors_limit", nil, 100), want: warning},
 	"system.processes.zombies_high":       {fire: one("sermon_system_zombies", steady(60)), calm: one("sermon_system_zombies", steady(0)), want: critical},
+	// M2-22: state collectors.
+	"system.raid.degraded":       {fire: labeled("sermon_raid_degraded", md0, was(0, 1)), calm: labeled("sermon_raid_degraded", md0, was(0, 0)), want: critical},
+	"system.time.unsynchronized": {fire: one("sermon_time_synchronized", steady(0)), calm: one("sermon_time_synchronized", steady(1)), want: warning},
+	"system.systemd.unit_failed": {fire: labeled("sermon_systemd_unit_failed", backup, was(0, 1)), calm: labeled("sermon_systemd_unit_failed", backup, was(1, 0)), want: warning},
 
 	"system.node.rebooted":   {fireEvents: []secevent.Event{event(secevent.SystemReboot, web, time.Minute, "", "")}, calmEvents: []secevent.Event{event(secevent.SystemReboot, web, 20*time.Minute, "", "")}, want: warning},
 	"system.memory.oom_kill": {fireEvents: []secevent.Event{event(secevent.OOMKill, web, time.Minute, "", "")}, calmEvents: []secevent.Event{event(secevent.OOMKill, web, 20*time.Minute, "", "")}, want: critical},

@@ -1,4 +1,4 @@
-//! Every parser of `/proc` and `/sys` text, and the rates computed from two readings, must handle
+//! Every parser of `/proc` and `/sys` text (and of `systemctl` output), and the rates computed from two readings, must handle
 //! any input without panicking (overflow checks are on in fuzz builds).
 //!
 //! Input: one byte for the elapsed time, then two readings separated by a NUL byte.
@@ -7,7 +7,9 @@
 use std::time::Duration;
 
 use libfuzzer_sys::fuzz_target;
-use sermon_collectors::{agent, cpu, disk, filesystem, host, memory, network, pressure, system};
+use sermon_collectors::{
+    agent, cpu, disk, filesystem, host, memory, network, pressure, raid, system, systemd,
+};
 
 fn parse_all(text: &str) {
     let _ = host::parse_os_release(text);
@@ -28,6 +30,9 @@ fn parse_all(text: &str) {
     let _ = agent::parse_rss(text);
     let _ = network::parse_snmp_table(text);
     let _ = network::parse_time_wait(text);
+    // M2-22: /proc/mdstat and the output of systemctl.
+    let _ = raid::parse_mdstat(text);
+    let _ = systemd::parse_failed(text);
 }
 
 fuzz_target!(|data: &[u8]| {

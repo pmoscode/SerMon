@@ -470,8 +470,8 @@ und Loop-Devices werden standardmäßig gefiltert.
 | **Disk-IO**                              | pro Device: read/write Bytes/s, IOPS, await (Latenz), Utilization %, Queue-Länge; IO-Pressure (PSI)                                                         | `/proc/diskstats`, `/proc/pressure/io`                                                              |
 | **Dateisysteme**                         | pro Mountpoint: size, used, avail, Inodes used/total, read-only-Flag                                                                                        | `statvfs` + `/proc/self/mountinfo`                                                                  |
 | **Netzwerk**                             | pro Interface: rx/tx Bytes/s, Pakete/s, Errors, Drops, Link-Status, Speed; TCP: established, time_wait, Retransmits, Listen-Overflows; conntrack-Auslastung | `/proc/net/dev`, `/sys/class/net`, `/proc/net/snmp`, `/proc/net/netstat`, `/proc/sys/net/netfilter` |
-| **System**                               | Uptime, Boot-ID (Reboot-Erkennung), Prozess- und Thread-Anzahl, Zombies, File-Descriptors (genutzt/max), Entropy, Zeit-Synchronisation (NTP synced, Offset) | `/proc/uptime`, `/proc/sys/kernel/random/boot_id`, `/proc/sys/fs/file-nr`, `adjtimex`               |
-| **systemd**                              | Anzahl failed Units und deren Namen (Event)                                                                                                                 | D-Bus *oder* `systemctl --failed -o json` (alle 30 s)                                               |
+| **System**                               | Uptime, Boot-ID (Reboot-Erkennung), Prozess- und Thread-Anzahl, Zombies, File-Descriptors (genutzt/max), Entropy, Zeit-Synchronisation (NTP synced, Offset, max. Fehler), RAID (degradiert, fehlende Disks, Abgleich) | `/proc/uptime`, `/proc/sys/kernel/random/boot_id`, `/proc/sys/fs/file-nr`, `adjtimex`, `/proc/mdstat` |
+| **systemd**                              | failed Units, je Unit eine Serie (`unit`, ≤ 50; erholte 24 h lang als 0, [ADR 0026](adr/0026-zustands-collectors.md))                                                                    | `systemctl list-units --state=failed --plain` (alle 30 s, feste Argumente)                           |
 | **Hardware** (opt., automatisch erkannt) | Temperaturen, Lüfter                                                                                                                                        | `/sys/class/hwmon`, `/sys/class/thermal`                                                            |
 
 **Counter** (z. B. Bytes total) rechnet der Agent beim Messen selbst in **Raten pro Sekunde** um, inklusive Reset-
@@ -761,7 +761,8 @@ einen **Dry-Run-Diff**.
 |                   | conntrack-Tabelle                                              | threshold         | 80 % / 90 %                          |
 | **System**        | File-Descriptors                                               | threshold         | 80 % / 90 %                          |
 |                   | Zombie-Prozesse                                                | threshold         | > 10 / > 50                          |
-|                   | systemd-Unit failed                                            | state             | ✓                                   |
+|                   | systemd-Unit failed (pro Unit)                                 | state             | ✓                                   |
+|                   | Uhr nicht synchronisiert (30 min)                              | state             | ✓ / –                               |
 |                   | Temperatur (falls vorhanden)                                   | threshold         | hwmon-Grenzen                        |
 | **Security**      | SSH-Brute-Force pro IP (5 min)                                 | event             | 10 / 50                              |
 |                   | Dieselbe IP auf ≥ 3 Nodes (Fleet-Korrelation)                  | event             | ✓                                   |
@@ -789,8 +790,10 @@ vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
 - **Event-Regeln (M2-08):** Reboot (15 min), OOM-Kill (15 min), SSH-Brute-Force (5 min), Fleet-Korrelation
   (15 min), Erfolg nach mindestens 5 Fehlversuchen derselben Adresse in 1 h, Root-Login, sudo-Fehler, sudo ohne
   Berechtigung (neu) und neuer Benutzer. „Info“ gibt es als Stufe nicht; Reboot meldet eine Warnung.
-- **Später:** „Login von neuer IP / neuem Land“ braucht die Liste bekannter IPs und GeoIP (§11). Zeitsync, RAID und
-  systemd-Units kommen mit M2-22, Updates und Anomalien in späteren Meilensteinen.
+- **Zustände (M2-22):** RAID degradiert (kritisch), systemd-Unit failed (Warnung, eine Instanz pro Unit), Uhr nicht
+  synchronisiert (Warnung nach 30 min) – [ADR 0026](adr/0026-zustands-collectors.md).
+- **Später:** „Login von neuer IP / neuem Land“ braucht die Liste bekannter IPs und GeoIP (§11). Updates und Anomalien
+  kommen in späteren Meilensteinen.
 
 ### 12.4 Benachrichtigungskanäle
 
@@ -1145,7 +1148,7 @@ CPUQuota=20%
 ```
 
 Ziel: `systemd-analyze security sermon-agent` mit einem Score **< 2,0** („OK“). Die ausgelieferte Unit
-(`packaging/systemd/sermon-agent.service`, ADR 0012) ist zusätzlich gehärtet und erreicht 1,6; `ProtectHome=read-only`
+(`packaging/systemd/sermon-agent.service`, ADR 0012) ist zusätzlich gehärtet und erreicht 1,9 (seit M2-22 ohne `ProtectClock`, damit der Agent `adjtimex` lesen darf, [ADR 0026](adr/0026-zustands-collectors.md)); `ProtectHome=read-only`
 statt `yes`, damit der Dateisystem-Collector auch `/home` sieht. Unter OpenRC wird der Agent über
 `supervise-daemon` mit `command_user=sermon` gestartet.
 

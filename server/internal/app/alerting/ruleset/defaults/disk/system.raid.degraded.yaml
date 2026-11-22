@@ -1,0 +1,23 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.raid.degraded
+  name: { de: "RAID degradiert", en: "RAID degraded" }
+  labels: { category: disk }
+spec:
+  type: state
+  metric: sermon_raid_degraded
+  dimensions: [ device ]
+  critical: { op: ">=", value: 1 }
+  for: 1m
+  help:
+    de: >-
+      Einem Software-RAID (md) fehlt mindestens ein Datenträger: Es läuft ohne volle Redundanz weiter, ein weiterer
+      Ausfall kann Daten kosten. Meist ist ein Datenträger ausgefallen oder wurde entfernt. Prüfe mit
+      cat /proc/mdstat und mdadm --detail, welcher fehlt, sieh im Kernel-Log nach I/O-Fehlern, prüfe den Datenträger
+      mit smartctl und ersetze ihn; nach mdadm --add baut das RAID sich neu auf (der Fortschritt steht im Chart).
+    en: >-
+      A software RAID (md) is missing at least one disk: it keeps running without full redundancy, and one more
+      failure can lose data. Usually a disk failed or was removed. Check with cat /proc/mdstat and mdadm --detail
+      which one is missing, look in the kernel log for I/O errors, check the disk with smartctl and replace it; after
+      mdadm --add the array rebuilds (the progress is in the chart).

@@ -11,8 +11,11 @@ pub mod host;
 pub mod memory;
 pub mod network;
 pub mod pressure;
+pub mod raid;
 pub mod rate;
 pub mod system;
+pub mod systemd;
+pub mod timesync;
 
 use sermon_core::{Monotonic, ProcError, ProcRoot, Sample};
 
@@ -91,6 +94,8 @@ pub fn default_collectors() -> Vec<Box<dyn Collector>> {
         ))),
         Box::new(network::NetworkCollector::default()),
         Box::new(system::SystemCollector),
+        Box::new(raid::RaidCollector),
+        Box::new(timesync::TimeSyncCollector::default()),
         Box::new(agent::SelfCollector::default()),
     ]
 }

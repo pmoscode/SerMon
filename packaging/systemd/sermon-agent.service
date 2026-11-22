@@ -25,7 +25,8 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
-ProtectClock=yes
+# No ProtectClock: it forbids adjtimex also for reading (time synchronisation, M2-22); without
+# CAP_SYS_TIME the agent cannot set the clock anyway.
 ProtectHostname=yes
 ProtectProc=default
 RemoveIPC=yes
@@ -40,6 +41,8 @@ MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
+# Read the kernel's NTP state (modes = 0); @privileged contains the @clock group (ADR 0026).
+SystemCallFilter=adjtimex clock_adjtime
 SystemCallErrorNumber=EPERM
 DevicePolicy=closed
 StateDirectory=sermon-agent

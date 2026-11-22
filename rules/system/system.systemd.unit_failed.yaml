@@ -1,0 +1,23 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.systemd.unit_failed
+  name: { de: "systemd-Unit fehlgeschlagen", en: "systemd unit failed" }
+  labels: { category: system }
+spec:
+  type: state
+  metric: sermon_systemd_unit_failed
+  dimensions: [ unit ]
+  warning: { op: ">=", value: 1 }
+  for: 1m
+  help:
+    de: >-
+      Eine systemd-Unit ist im Zustand „failed“: Ein Dienst ist abgestürzt, ließ sich nicht starten, oder ein
+      Timer-Job endete mit einem Fehler. Der Alert endet, sobald die Unit wieder läuft oder zurückgesetzt ist. Sieh
+      mit systemctl status <unit> und journalctl -u <unit> nach der Ursache, behebe sie und starte die Unit neu;
+      eine Unit, die nicht mehr gebraucht wird, setzt systemctl reset-failed <unit> zurück.
+    en: >-
+      A systemd unit is in the state "failed": a service crashed or did not start, or a timer job ended with an
+      error. The alert ends as soon as the unit runs again or is reset. Look for the cause with systemctl status
+      <unit> and journalctl -u <unit>, fix it and restart the unit; a unit that is no longer needed is reset with
+      systemctl reset-failed <unit>.

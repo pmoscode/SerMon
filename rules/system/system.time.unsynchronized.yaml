@@ -1,0 +1,22 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.time.unsynchronized
+  name: { de: "Uhr nicht synchronisiert", en: "Clock not synchronised" }
+  labels: { category: system }
+spec:
+  type: state
+  metric: sermon_time_synchronized
+  warning: { op: "<", value: 1 }
+  for: 30m
+  help:
+    de: >-
+      Der Kernel hält die Uhr seit 30 Minuten für nicht synchronisiert. Ohne Zeitabgleich driftet die Uhr; Logs
+      verschiedener Hosts passen dann nicht mehr zusammen, TLS-Zertifikate und Tokens können als ungültig gelten.
+      Meist läuft kein NTP-Dienst oder er erreicht keinen Server. Prüfe mit timedatectl, chronyc tracking oder
+      ntpq -p, ob ein Dienst läuft und Server erreicht (UDP-Port 123 in der Firewall).
+    en: >-
+      For 30 minutes the kernel has considered the clock not synchronised. Without time synchronisation the clock
+      drifts; logs of different hosts no longer line up, TLS certificates and tokens may count as invalid. Usually no
+      NTP service runs or it reaches no server. Check with timedatectl, chronyc tracking or ntpq -p whether a service
+      runs and reaches its servers (UDP port 123 in the firewall).

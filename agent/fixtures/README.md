@@ -34,6 +34,13 @@ Spike-Dateien gibt es für sie nicht). Fedora bringt `script(1)` im eigenen Pake
 Debian 13 heißt der SSH-Absender `sshd-session`. `_CMDLINE` von `su` enthielt das Test-Passwort und zeigt jetzt
 `fixture-password` – ein Fall für die Redaction (KONZEPT §10.3).
 
+**Zustände** (M2-22) unter `states/`: `states/raid/proc/mdstat` ist von Hand im Format von `drivers/md/md.c`
+geschrieben (Container haben kein md-RAID): raid1 gesund, raid5 degradiert mit Wiederherstellung, raid0, ein inaktives
+und ein raid6 im Resync. `states/systemd/failed-<distro>.txt` ist die echte Ausgabe von
+`systemctl list-units --state=failed --plain --no-legend --no-pager --full` in den E2E-Images (Debian 13, Ubuntu
+24.04, Rocky 9, Fedora 44) mit zwei absichtlich fehlgeschlagenen Units (`systemd-run --unit=… false`, eine mit
+escaptem Namen `app@web\x2d01`).
+
 **Alpine ohne journald** (M2-20, ADR 0025): `logs/alpine-3.22/messages` (busybox `syslogd`) und
 `logs/alpine-3.22/security.log` (rsyslog mit der SerMon-Vorlage) erzeugt `logs/capture/capture-alpine.sh`: echte
 sshd-, sudo- und useradd-Zeilen und von alice mit `logger -p auth.info` gefälschte. Das sudo von Alpine nutzt kein PAM

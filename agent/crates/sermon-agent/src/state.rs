@@ -75,6 +75,12 @@ impl StateLayout {
         self.root.join("journal.cursor")
     }
 
+    /// The systemd units seen failed in the last 24 h (M2-22): recovered ones are reported as 0.
+    #[must_use]
+    pub fn systemd_failed_file(&self) -> PathBuf {
+        self.root.join("systemd-failed")
+    }
+
     /// Where the log file source continues (hosts without journald, M2-20).
     #[must_use]
     pub fn logfile_position_file(&self) -> PathBuf {
@@ -96,6 +102,7 @@ impl StateLayout {
             self.wal_dir(),
             self.journal_cursor_file(),
             self.logfile_position_file(),
+            self.systemd_failed_file(),
         ] {
             let metadata = match std::fs::symlink_metadata(&entry) {
                 Ok(metadata) => metadata,
@@ -128,6 +135,7 @@ mod tests {
         fs::create_dir_all(layout.wal_dir().join("segments")).unwrap();
         fs::write(layout.journal_cursor_file(), "s=a;i=1").unwrap();
         fs::write(layout.logfile_position_file(), "/var/log/messages\n1:2:3").unwrap();
+        fs::write(layout.systemd_failed_file(), "backup.service 1800000000\n").unwrap();
         fs::write(dir.path().join("notes.txt"), "admin's file").unwrap();
 
         let removed = layout.remove_agent_data().unwrap();
@@ -138,7 +146,8 @@ mod tests {
                 layout.identity_dir(),
                 layout.wal_dir(),
                 layout.journal_cursor_file(),
-                layout.logfile_position_file()
+                layout.logfile_position_file(),
+                layout.systemd_failed_file()
             ]
         );
         assert!(!layout.journal_cursor_file().exists());

@@ -136,6 +136,11 @@ var definitions = []Definition{
 	def("sermon_filesystem_inodes_used", UnitCount, Last, AreaFilesystem, "mountpoint"),
 	def("sermon_filesystem_readonly", UnitBoolean, Max, AreaFilesystem, "mountpoint"),
 
+	// Software RAID (M2-22)
+	def("sermon_raid_degraded", UnitBoolean, Max, AreaDisk, "device"),
+	def("sermon_raid_disks_missing", UnitCount, Max, AreaDisk, "device"),
+	def("sermon_raid_sync_ratio", UnitRatioPPM, Last, AreaDisk, "device"),
+
 	// Network
 	def("sermon_network_receive_bytes_per_second", UnitBytesPerSecond, Avg, AreaNetwork, "interface"),
 	def("sermon_network_transmit_bytes_per_second", UnitBytesPerSecond, Avg, AreaNetwork, "interface"),
@@ -166,6 +171,11 @@ var definitions = []Definition{
 	def("sermon_system_file_descriptors_limit", UnitCount, Last, AreaSystem),
 	def("sermon_system_entropy_bits", UnitCount, Avg, AreaSystem),
 	def("sermon_hardware_temperature_celsius", UnitCelsius, Max, AreaSystem, "sensor"),
+	// Time synchronisation and failed systemd units (M2-22)
+	def("sermon_time_synchronized", UnitBoolean, Last, AreaSystem),
+	def("sermon_time_offset_seconds", UnitSeconds, Avg, AreaSystem),
+	def("sermon_time_max_error_seconds", UnitSeconds, Max, AreaSystem),
+	def("sermon_systemd_unit_failed", UnitBoolean, Max, AreaSystem, "unit"),
 
 	// The agent itself
 	def("sermon_agent_cpu_ratio", UnitRatioPPM, Avg, AreaAgent),

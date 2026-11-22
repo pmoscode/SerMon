@@ -23,6 +23,7 @@ use anyhow::{Context, bail};
 use sermon_buffer::{Wal, WalConfig};
 use sermon_collectors::default_collectors;
 use sermon_collectors::host::read_host_facts;
+use sermon_collectors::systemd::SystemdCollector;
 use sermon_core::{Clock, ProcRoot, SystemClock};
 use sermon_transport::outbox::Outbox;
 use sermon_transport::session::{FactsSource, Transport, TransportConfig};
@@ -127,6 +128,11 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         // The journal (security events) runs regardless of allow_logs: that veto is about shipping
         // logs. Without journald (Alpine) a classic log file takes its place (ADR 0025).
         let mut collectors = default_collectors();
+        collectors.push(Box::new(SystemdCollector::for_host(
+            &config.host_root,
+            clock.clone(),
+            journal_layout.systemd_failed_file(),
+        )));
         let journal = if logfile::journald_runs(&config.host_root) {
             let (journal_metrics, journal) =
                 journal::spawn(&journal_layout, outbox.clone(), shutdown.clone());

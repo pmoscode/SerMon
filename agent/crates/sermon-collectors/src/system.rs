@@ -10,7 +10,7 @@
 //! | `sermon_system_entropy_bits` | – | bits |
 //! | `sermon_hardware_temperature_celsius` | `sensor` (chip/sensor, at most 32) | °C |
 //!
-//! Time synchronisation (`adjtimex`) follows with the state collectors (E2.8).
+//! Time synchronisation: `timesync`; RAID: `raid`; failed systemd units: `systemd` (M2-22).
 
 use sermon_core::Sample;
 

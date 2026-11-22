@@ -344,9 +344,11 @@ dependencies = [
 name = "sermon-collectors"
 version = "0.0.0"
 dependencies = [
+ "libc",
  "rustix",
  "sermon-core",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

@@ -116,3 +116,13 @@ func TestValidate_UnmapsIPv4(t *testing.T) {
 		t.Errorf("ip = %v", e.Remote.IP)
 	}
 }
+
+// Only what a stranger can cause from outside counts as noisy (M2-37).
+func TestKind_Noisy(t *testing.T) {
+	for _, k := range secevent.Kinds() {
+		want := k == secevent.SSHLoginFailed || k == secevent.SSHInvalidUser || k == secevent.SSHPreauthDisconnect
+		if k.Noisy() != want {
+			t.Errorf("%s noisy = %v", k, k.Noisy())
+		}
+	}
+}

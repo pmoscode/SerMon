@@ -19,8 +19,14 @@ type Check string
 const (
 	IngestLag      Check = "ingest_lag"
 	DroppedSamples Check = "dropped_samples"
-	DatabaseSize   Check = "database_size"
+	// DroppedSecurityEvents: rare security events (logins, sudo, accounts, the system) dropped by
+	// the rate limit of a node (M2-37); failed logins dropped under attack don't count.
+	DroppedSecurityEvents Check = "dropped_security_events"
+	DatabaseSize          Check = "database_size"
 )
+
+// checks is the fixed order of the checks.
+var checks = []Check{IngestLag, DroppedSamples, DroppedSecurityEvents, DatabaseSize}
 
 // Level is the state of a check.
 type Level int
@@ -54,8 +60,8 @@ const (
 	SizeCriticalPart = 0.9
 )
 
-// Problem is a check that is not OK. Value is the lag in seconds, the dropped samples within
-// DroppedWindow or the share of the database limit (0..1).
+// Problem is a check that is not OK. Value is the lag in seconds, the dropped samples or security
+// events within DroppedWindow or the share of the database limit (0..1).
 type Problem struct {
 	Check Check
 	Level Level
@@ -68,6 +74,8 @@ type Sources interface {
 	IngestLag() time.Duration
 	// DroppedSamples is the cumulative number of samples the ingest dropped since the start.
 	DroppedSamples() uint64
+	// DroppedRareEvents is the cumulative number of rare security events the ingest dropped.
+	DroppedRareEvents() uint64
 	DatabaseSize(ctx context.Context) (int64, error)
 }
 
@@ -92,8 +100,8 @@ type Deps struct {
 }
 
 type sample struct {
-	at      time.Time
-	dropped uint64
+	at              time.Time
+	dropped, events uint64
 }
 
 // Monitor runs the checks.
@@ -117,7 +125,7 @@ func (m *Monitor) Problems() []Problem {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]Problem, 0, len(m.state))
-	for _, c := range []Check{IngestLag, DroppedSamples, DatabaseSize} {
+	for _, c := range checks {
 		if p, ok := m.state[c]; ok {
 			out = append(out, p)
 		}
@@ -152,8 +160,12 @@ func (m *Monitor) Check(ctx context.Context) {
 		results[IngestLag] = Problem{Check: IngestLag, Level: Warning, Value: lag.Seconds()}
 	}
 
-	if grown := m.droppedWithin(now); grown > 0 {
-		results[DroppedSamples] = Problem{Check: DroppedSamples, Level: Warning, Value: float64(grown)}
+	samples, events := m.droppedWithin(now)
+	if samples > 0 {
+		results[DroppedSamples] = Problem{Check: DroppedSamples, Level: Warning, Value: float64(samples)}
+	}
+	if events > 0 {
+		results[DroppedSecurityEvents] = Problem{Check: DroppedSecurityEvents, Level: Warning, Value: float64(events)}
 	}
 
 	keepSize := false
@@ -176,7 +188,7 @@ func (m *Monitor) Check(ctx context.Context) {
 
 	m.mu.Lock()
 	var changes []Problem
-	for _, c := range []Check{IngestLag, DroppedSamples, DatabaseSize} {
+	for _, c := range checks {
 		if c == DatabaseSize && keepSize {
 			continue
 		}
@@ -201,18 +213,22 @@ func (m *Monitor) Check(ctx context.Context) {
 	}
 }
 
-// droppedWithin remembers the counter and returns its growth within DroppedWindow (0 after a
-// restart of the server, which resets it).
-func (m *Monitor) droppedWithin(now time.Time) uint64 {
+// droppedWithin remembers the counters and returns their growth within DroppedWindow (0 after a
+// restart of the server, which resets them): dropped samples and rare security events.
+func (m *Monitor) droppedWithin(now time.Time) (samples, events uint64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.history = append(m.history, sample{at: now, dropped: m.d.Sources.DroppedSamples()})
+	m.history = append(m.history, sample{at: now, dropped: m.d.Sources.DroppedSamples(), events: m.d.Sources.DroppedRareEvents()})
 	m.history = slices.DeleteFunc(m.history, func(s sample) bool { return now.Sub(s.at) > DroppedWindow })
 	first, last := m.history[0], m.history[len(m.history)-1]
-	if last.dropped < first.dropped {
+	return growth(first.dropped, last.dropped), growth(first.events, last.events)
+}
+
+func growth(first, last uint64) uint64 {
+	if last < first {
 		return 0
 	}
-	return last.dropped - first.dropped
+	return last - first
 }
 
 func (m *Monitor) mail(ctx context.Context, p Problem) {
@@ -236,9 +252,10 @@ func (m *Monitor) mail(ctx context.Context, p Problem) {
 // problems in their language).
 func message(p Problem) (string, string) {
 	what := map[Check]string{
-		IngestLag:      "Agent data arrives late",
-		DroppedSamples: "The server dropped samples",
-		DatabaseSize:   "The database is filling up",
+		IngestLag:             "Agent data arrives late",
+		DroppedSamples:        "The server dropped samples",
+		DroppedSecurityEvents: "The server dropped security events",
+		DatabaseSize:          "The database is filling up",
 	}[p.Check]
 	if p.Level == OK {
 		return fmt.Sprintf("SerMon: resolved – %s", what), fmt.Sprintf("%s: back to normal since %s.\n", what, p.Since.UTC().Format(time.RFC3339))
@@ -249,6 +266,8 @@ func message(p Problem) (string, string) {
 		detail = fmt.Sprintf("The latest batch was %.0f s old when it arrived. Check the load of the server and the database.", p.Value)
 	case DroppedSamples:
 		detail = fmt.Sprintf("%.0f samples were dropped within 15 minutes (series limit, implausible times or late windows). See /metrics of the server.", p.Value)
+	case DroppedSecurityEvents:
+		detail = fmt.Sprintf("%.0f security events (logins, sudo, accounts or system events) were dropped within 15 minutes by the rate limit of a node – a node sends far more than usual. See sermon_server_ingest_dropped_security_events_by_kind_total in /metrics of the server.", p.Value)
 	case DatabaseSize:
 		detail = fmt.Sprintf("The database uses %.0f %% of SERMON_DATABASE_SIZE_LIMIT. Shorten the retention or add space.", p.Value*100)
 	}

@@ -19,6 +19,8 @@
 				return m.instance_ingest_lag({ seconds: Math.round(p.value) });
 			case 'dropped_samples':
 				return m.instance_dropped_samples({ count: Math.round(p.value) });
+			case 'dropped_security_events':
+				return m.instance_dropped_security_events({ count: Math.round(p.value) });
 			case 'database_size':
 				return m.instance_database_size({ percent: Math.round(p.value * 100) });
 			default:

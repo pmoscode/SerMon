@@ -45,3 +45,9 @@ freien Platz auf dem Datenträger.
   - Der Füllstand ist relativ zu einem Limit, das der Betreiber setzt; den freien Platz der Platte kennt der Server nicht.
   - Der Zustand des Self-Monitorings lebt im Speicher jeder Server-Instanz: Mehrere Instanzen mailen jede für sich.
 - **Security:** Die Definer-Funktion gibt nur die Adressen der Superadmins heraus. Die Events entstehen nur im Server.
+
+## Nachtrag M2-37
+
+- Neuer Check **`dropped_security_events`** (Warnung): Zuwachs der verworfenen *seltenen* Security-Events innerhalb von
+  15 min (erfolgreiche Logins, sudo, Konten, System; ADR 0023, Nachtrag M2-37). Verworfene Fehlversuche zählen nicht:
+  Bei einem Angriff sind sie erwartet, und der Brute-Force-Alert meldet ihn schon.

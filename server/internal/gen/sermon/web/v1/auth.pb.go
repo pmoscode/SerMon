@@ -918,7 +918,7 @@ func (x *Session) GetTagGroupIds() []string {
 // InstanceProblem is a check of the server's self-monitoring that is not OK.
 type InstanceProblem struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// check is ingest_lag, dropped_samples or database_size.
+	// check is ingest_lag, dropped_samples, dropped_security_events or database_size.
 	Check string `protobuf:"bytes,1,opt,name=check,proto3" json:"check,omitempty"`
 	// level is warning or critical.
 	Level string `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"`

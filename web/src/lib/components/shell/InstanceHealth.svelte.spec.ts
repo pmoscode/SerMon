@@ -10,7 +10,13 @@ import InstanceHealth from './InstanceHealth.svelte';
 const problems = [
 	{ check: 'ingest_lag', level: 'warning', since: timestampFromMs(Date.now()), value: 75 },
 	{ check: 'database_size', level: 'critical', since: timestampFromMs(Date.now()), value: 0.93 },
-	{ check: 'dropped_samples', level: 'warning', since: timestampFromMs(Date.now()), value: 30 }
+	{ check: 'dropped_samples', level: 'warning', since: timestampFromMs(Date.now()), value: 30 },
+	{
+		check: 'dropped_security_events',
+		level: 'warning',
+		since: timestampFromMs(Date.now()),
+		value: 4
+	}
 ];
 
 describe('InstanceHealth', () => {
@@ -30,6 +36,9 @@ describe('InstanceHealth', () => {
 		await expect.element(bar).toMatchTextContent(/Agent data arrives late \(75 s\)/);
 		await expect.element(bar).toMatchTextContent(/The database is filling up \(93 %\)/);
 		await expect.element(bar).toMatchTextContent(/30 samples dropped/);
+		await expect
+			.element(bar)
+			.toMatchTextContent(/4 security events \(logins, sudo, accounts\) dropped/);
 		await expect.element(bar).toMatchTextContent(/Critical/);
 	});
 

@@ -15,12 +15,14 @@ var t0 = time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)
 type fakeSources struct {
 	lag     time.Duration
 	dropped uint64
+	events  uint64
 	size    int64
 	sizeErr error
 }
 
-func (f *fakeSources) IngestLag() time.Duration { return f.lag }
-func (f *fakeSources) DroppedSamples() uint64   { return f.dropped }
+func (f *fakeSources) IngestLag() time.Duration  { return f.lag }
+func (f *fakeSources) DroppedSamples() uint64    { return f.dropped }
+func (f *fakeSources) DroppedRareEvents() uint64 { return f.events }
 func (f *fakeSources) DatabaseSize(context.Context) (int64, error) {
 	return f.size, f.sizeErr
 }
@@ -117,6 +119,34 @@ func TestMonitor_DroppedSamplesWarnWhileTheyIncrease(t *testing.T) {
 	p := m.Problems()
 	if len(p) != 1 || p[0].Check != selfmonitor.DroppedSamples || p[0].Level != selfmonitor.Warning || p[0].Value != 30 {
 		t.Fatalf("problems = %+v", p)
+	}
+	for range 15 {
+		now = now.Add(time.Minute)
+		m.Check(ctx)
+	}
+	if len(m.Problems()) != 0 {
+		t.Errorf("15 quiet minutes: %v", m.Problems())
+	}
+}
+
+// Dropped rare security events (a successful login, sudo, an account) hide what matters: they
+// warn like dropped samples, on their own (M2-37). Dropped failed logins don't – an attack.
+func TestMonitor_DroppedRareEventsWarn(t *testing.T) {
+	now := t0
+	src := &fakeSources{events: 5}
+	mailer := &fakeMail{admins: []string{"alice@example.org"}}
+	m := monitor(src, mailer, &now, 0)
+	ctx := context.Background()
+	m.Check(ctx)
+	src.events = 7
+	now = now.Add(time.Minute)
+	m.Check(ctx)
+	p := m.Problems()
+	if len(p) != 1 || p[0].Check != selfmonitor.DroppedSecurityEvents || p[0].Level != selfmonitor.Warning || p[0].Value != 2 {
+		t.Fatalf("problems = %+v", p)
+	}
+	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].text, "2 security events") {
+		t.Errorf("mails = %+v", mailer.sent)
 	}
 	for range 15 {
 		now = now.Add(time.Minute)

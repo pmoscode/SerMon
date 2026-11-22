@@ -2441,7 +2441,18 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   Server die Migrations-URL nicht hat; Upgrade bestehender Installationen in der Anleitung.
 - **Abhängig von:** M2-26
 
-#### ☐ M2-37 – Prioritäten für seltene Security-Events im Ingest · X · S 🔒
+#### ☑ M2-37 – Prioritäten für seltene Security-Events im Ingest · X · S 🔒
+> Erledigt (ADR 0023 und 0027, Nachträge M2-37; KONZEPT §11; Threat Model T9):
+> - **Zwei Buckets pro Node:** `secevent.Kind.Noisy` (fehlgeschlagene und ungültige Logins, Abbrüche vor der
+>   Anmeldung) teilen sich 50/s bei 5 000 Burst; die übrigen Arten haben 5/s bei 500 Burst (`RareEventRate`,
+>   `RareEventBurst`). Die Reihenfolge im Batch bleibt.
+> - **Zähler pro Art:** `sermon_server_ingest_dropped_security_events_by_kind_total{kind}` (neu: `promtext.CounterFamily`);
+>   das Self-Monitoring warnt bei verworfenen seltenen Events (`dropped_security_events`, UI und Mail).
+> - **Nicht umgesetzt:** Zusammenfassen im Agent pro IP und Minute – es änderte Protokoll und Zählung der
+>   Event-Regeln, und die getrennten Buckets reichen (ADR 0023).
+> - **Tests:** 600 Fehlversuche und Abbrüche, danach erfolgreicher Login, neues Konto und zehn sudo-Fehler: Login und
+>   Konto kommen an, die Flut hält ihr eigenes Limit, sudo das der seltenen Arten, Zähler pro Art; Self-Monitoring;
+>   `CounterFamily`; UI-Spec.
 - **Ziel:** Befund M5 aus M2-28 (T9). Der Token-Bucket pro Node gilt für alle Events zusammen: Eine Flut von
   Fehlversuchen (rund 60 Events/s von außen) leert ihn, danach gehen `ssh.login.success`, `sudo.*` und `account.*`
   verloren, und „Login nach Fehlversuchen“ schlägt nicht an. Eigene Buckets oder Vorrang für seltene Arten; verrauschte

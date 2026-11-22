@@ -590,7 +590,10 @@ Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log gep
 - **Server:**
   - Er speichert die Batches in derselben Reihenfolge wie die Metrik-Batches und dedupliziert über die
     Batch-Sequenznummer (`nodes.event_seq`, in derselben Transaktion gesetzt).
-  - Pro Node gilt ein Token-Bucket von 50 Events/s bei 5 000 Burst; er bleibt über Reconnects erhalten.
+  - Pro Node gelten zwei Token-Buckets, die über Reconnects erhalten bleiben: 50 Events/s bei 5 000 Burst für die
+    Arten, die jeder von außen auslösen kann (fehlgeschlagene und ungültige Logins, Abbrüche vor der Anmeldung), und
+    5 Events/s bei 500 Burst für die übrigen. Eine Flut von Fehlversuchen verdrängt so nicht den erfolgreichen Login
+    danach (M2-37); Verworfenes zählt pro Art (`/metrics`), verworfene seltene Events meldet das Self-Monitoring.
   - Event-Zeiten sind höchstens 7 Tage alt und 5 min in der Zukunft.
 - **Tabelle:** `security_events` mit RLS, nach Monat partitioniert und für die Anwendung nur anhängbar. Typisierte
   Spalten für Art, User, IP (`inet`), Host und Port, die übrigen Felder als `details`.

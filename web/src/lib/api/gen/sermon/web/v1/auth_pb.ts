@@ -471,7 +471,7 @@ export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
  */
 export type InstanceProblem = Message<"sermon.web.v1.InstanceProblem"> & {
   /**
-   * check is ingest_lag, dropped_samples or database_size.
+   * check is ingest_lag, dropped_samples, dropped_security_events or database_size.
    *
    * @generated from field: string check = 1;
    */

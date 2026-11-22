@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -25,6 +26,13 @@ type metric struct {
 	name, help, kind string
 	labels           string // rendered {…} or empty
 	value            func() float64
+	// family replaces labels and value: one sample per label value.
+	family func() []sample
+}
+
+type sample struct {
+	labels string
+	value  float64
 }
 
 // Registry holds the metrics of one endpoint.
@@ -39,6 +47,23 @@ func NewRegistry() *Registry { return &Registry{} }
 // programming error caught by the tests.
 func (r *Registry) Counter(name, help string, value func() float64) {
 	r.add(metric{name: name, help: help, kind: "counter", value: value})
+}
+
+// CounterFamily registers one counter per value of a label, written sorted by value; it panics on
+// an invalid metric or label name. Label values must be bounded (no host or user data).
+func (r *Registry) CounterFamily(name, help, label string, values func() map[string]float64) {
+	if !labelPattern.MatchString(label) || strings.HasPrefix(label, "__") {
+		panic(fmt.Sprintf("promtext: invalid label name %q", label))
+	}
+	r.add(metric{name: name, help: help, kind: "counter", family: func() []sample {
+		v := values()
+		keys := slices.Sorted(maps.Keys(v))
+		out := make([]sample, len(keys))
+		for i, k := range keys {
+			out[i] = sample{labels: "{" + label + `="` + escapeLabel(k) + `"}`, value: v[k]}
+		}
+		return out
+	}})
 }
 
 // Gauge registers a value that goes up and down; it panics on an invalid name.
@@ -79,8 +104,16 @@ func (r *Registry) WriteTo(w io.Writer) (int64, error) {
 	counter := &countingWriter{w: w}
 	buf := bufio.NewWriter(counter)
 	for _, m := range r.metrics {
-		_, _ = fmt.Fprintf(buf, "# HELP %s %s\n# TYPE %s %s\n%s%s %s\n",
-			m.name, escapeHelp(m.help), m.name, m.kind, m.name, m.labels, formatValue(m.value()))
+		_, _ = fmt.Fprintf(buf, "# HELP %s %s\n# TYPE %s %s\n", m.name, escapeHelp(m.help), m.name, m.kind)
+		var samples []sample
+		if m.family != nil {
+			samples = m.family()
+		} else {
+			samples = []sample{{labels: m.labels, value: m.value()}}
+		}
+		for _, x := range samples {
+			_, _ = fmt.Fprintf(buf, "%s%s %s\n", m.name, x.labels, formatValue(x.value))
+		}
 	}
 	if err := buf.Flush(); err != nil {
 		return counter.n, fmt.Errorf("write metrics: %w", err)

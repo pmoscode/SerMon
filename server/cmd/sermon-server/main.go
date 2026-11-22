@@ -569,6 +569,9 @@ func (s selfSources) DroppedSamples() uint64 {
 	return s.stats.Rejected.Load() + s.stats.Late.Load() + s.stats.Unknown.Load() + s.stats.DroppedSeries.Load()
 }
 
+// DroppedRareEvents counts the rare security events the ingest dropped (M2-37).
+func (s selfSources) DroppedRareEvents() uint64 { return s.stats.DroppedRareEvents() }
+
 func (s selfSources) DatabaseSize(ctx context.Context) (int64, error) {
 	size, err := s.store.DatabaseSize(ctx)
 	if err != nil {

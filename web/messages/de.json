@@ -536,6 +536,7 @@
 	"instance_critical": "Server: Kritisch",
 	"instance_ingest_lag": "Agent-Daten kommen verspätet an ({seconds} s)",
 	"instance_dropped_samples": "{count} Samples in 15 Minuten verworfen",
+	"instance_dropped_security_events": "{count} Security-Events (Logins, sudo, Konten) in 15 Minuten verworfen",
 	"instance_database_size": "Die Datenbank läuft voll ({percent} %)",
 	"fleet_tag": "Tag",
 	"fleet_tag_all": "Alle Tags",

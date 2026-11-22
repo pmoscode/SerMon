@@ -48,13 +48,22 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 		{"sermon_server_ingest_dropped_series_total", "Samples dropped by the series limit per node.", stats.DroppedSeries.Load},
 		{"sermon_server_ingest_write_errors_total", "Failed writes to the metric or security event store.", stats.WriteErrors.Load},
 		{"sermon_server_ingest_security_events_total", "Stored security events.", stats.Events.Load},
-		{"sermon_server_ingest_dropped_security_events_total", "Security events dropped by the rate limit per node.", stats.EventsDropped.Load},
+		{"sermon_server_ingest_dropped_security_events_total", "Security events dropped by the rate limits per node (all kinds).", stats.EventsDropped.Load},
 		{"sermon_server_ingest_rejected_security_events_total", "Security events dropped for implausible times or invalid fields.", stats.EventsRejected.Load},
 		{"sermon_server_ingest_duplicate_security_event_batches_total", "Security event batches stored before (resent after a reconnect).", stats.EventDuplicates.Load},
 	}
 	for _, c := range counters {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
 	}
+	// Per kind (M2-37): the noisy kinds are dropped under attack, the others should never be.
+	r.CounterFamily("sermon_server_ingest_dropped_security_events_by_kind_total",
+		"Security events dropped by the rate limits per node, per kind.", "kind", func() map[string]float64 {
+			out := map[string]float64{}
+			for k, n := range stats.DroppedEvents() {
+				out[string(k)] = float64(n)
+			}
+			return out
+		})
 	r.Gauge("sermon_server_ingest_lag_seconds", "Delay of the latest batch (server time minus collection time).",
 		func() float64 { return float64(stats.LagMillis.Load()) / 1000 })
 	r.Gauge("sermon_server_agent_sessions", "Connected agents.", func() float64 { return float64(len(sessions.Active())) })

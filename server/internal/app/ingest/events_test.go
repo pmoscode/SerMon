@@ -220,6 +220,56 @@ func TestEvents_AFloodIsLimitedPerNodeAcrossReconnects(t *testing.T) {
 	}
 }
 
+// A flood of failed logins (anyone on the internet can cause it) must not crowd out the rare
+// events that follow it – the successful login, sudo, a new account (M2-28 finding, M2-37).
+// The rare kinds have a bucket of their own, with its own limit; drops are counted per kind.
+func TestEvents_AFloodOfFailuresLeavesRoomForRareEvents(t *testing.T) {
+	config := ingest.DefaultConfig()
+	config.EventRate, config.EventBurst = 10, 100
+	config.RareEventRate, config.RareEventBurst = 1, 5
+	w, events := eventWorld(t, config)
+	ctx := context.Background()
+	w.clock.Set(t0.Add(time.Second))
+	s := w.open(t)
+	var list []secevent.Event
+	for range 300 {
+		list = append(list, attempt(t0, "root"), secevent.Event{
+			OccurredAt: t0, Kind: secevent.SSHPreauthDisconnect, Remote: &secevent.Remote{IP: netip.MustParseAddr("192.0.2.7"), Port: 22},
+		})
+	}
+	success := secevent.Event{
+		OccurredAt: t0, Kind: secevent.SSHLoginSucceeded, User: "root", Details: secevent.Details{Method: "password"},
+		Remote: &secevent.Remote{IP: netip.MustParseAddr("192.0.2.7"), Port: 22},
+	}
+	created := secevent.Event{OccurredAt: t0, Kind: secevent.AccountCreated, User: "backdoor"}
+	list = append(list, success, created)
+	for range 10 {
+		list = append(list, secevent.Event{OccurredAt: t0, Kind: secevent.SudoAuthFailed, User: "alice"})
+	}
+	s.Accept(ctx, eventBatch(1, list...))
+	if _, err := s.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[secevent.Kind]int{}
+	for _, e := range events.stored() {
+		kinds[e.Kind]++
+	}
+	if kinds[secevent.SSHLoginSucceeded] != 1 || kinds[secevent.AccountCreated] != 1 {
+		t.Errorf("rare events lost in the flood: %v", kinds)
+	}
+	if noisy := kinds[secevent.SSHLoginFailed] + kinds[secevent.SSHPreauthDisconnect]; noisy != 100 {
+		t.Errorf("%d noisy events stored, want the burst of 100", noisy)
+	}
+	if kinds[secevent.SudoAuthFailed] != 3 { // 5 rare tokens: login, account, three sudo
+		t.Errorf("sudo failures stored = %d, want 3 (the rare bucket has its own limit)", kinds[secevent.SudoAuthFailed])
+	}
+	dropped := w.svc.Stats().DroppedEvents()
+	if dropped[secevent.SudoAuthFailed] != 7 || dropped[secevent.SSHLoginFailed]+dropped[secevent.SSHPreauthDisconnect] != 500 ||
+		dropped[secevent.SSHLoginSucceeded] != 0 || w.svc.Stats().DroppedRareEvents() != 7 {
+		t.Errorf("dropped per kind = %v, rare %d", dropped, w.svc.Stats().DroppedRareEvents())
+	}
+}
+
 // Without an event store (no database) event batches are acknowledged and dropped.
 func TestEvents_WithoutAWriterAreDropped(t *testing.T) {
 	w := newWorld(t, ingest.DefaultConfig())

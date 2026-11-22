@@ -101,9 +101,13 @@ type Config struct {
 	SeenInterval time.Duration
 	// MaxFuture and MaxAge bound the collection time of samples relative to the server clock.
 	MaxFuture, MaxAge time.Duration
-	// EventRate and EventBurst form the security event bucket of a node (events per second). It
-	// belongs to the node, not the session: a reconnect gains nothing.
+	// EventRate and EventBurst form the security event bucket of a node (events per second) for the
+	// noisy kinds (secevent.Kind.Noisy). It belongs to the node, not the session: a reconnect
+	// gains nothing.
 	EventRate, EventBurst float64
+	// RareEventRate and RareEventBurst form the node's bucket for all other kinds, so a flood of
+	// failed logins can't crowd out the successful one that follows (M2-37).
+	RareEventRate, RareEventBurst float64
 	// EventMaxAge bounds how old an event may be (MaxFuture applies too); the partitions start a
 	// month back (M2-07).
 	EventMaxAge time.Duration
@@ -120,6 +124,8 @@ func DefaultConfig() Config {
 		MaxFuture:    5 * time.Minute, MaxAge: 24 * time.Hour,
 		// A busy brute force is a few attempts per second with three events each.
 		EventRate: 50, EventBurst: 5000, EventMaxAge: secevent.MaxAge,
+		// Logins, sudo and accounts come by hand: a few per minute; a script still fits.
+		RareEventRate: 5, RareEventBurst: 500,
 	}
 }
 
@@ -131,6 +137,49 @@ type Stats struct {
 	Events, EventsDropped, EventsRejected, EventDuplicates atomic.Uint64
 	// LagMillis is the delay of the latest batch (server time − collection time).
 	LagMillis atomic.Int64
+	// droppedKinds counts the events dropped by the buckets per kind (index in secevent.Kinds).
+	droppedKinds [maxKinds]atomic.Uint64
+}
+
+// maxKinds bounds the kinds counted per kind (there are 14).
+const maxKinds = 32
+
+var kindIndex = func() map[secevent.Kind]int {
+	out := map[secevent.Kind]int{}
+	for i, k := range secevent.Kinds() {
+		if i < maxKinds {
+			out[k] = i
+		}
+	}
+	return out
+}()
+
+func (s *Stats) dropEvent(k secevent.Kind) {
+	s.EventsDropped.Add(1)
+	if i, ok := kindIndex[k]; ok {
+		s.droppedKinds[i].Add(1)
+	}
+}
+
+// DroppedEvents returns the events dropped by the buckets per kind, every kind included.
+func (s *Stats) DroppedEvents() map[secevent.Kind]uint64 {
+	out := make(map[secevent.Kind]uint64, len(kindIndex))
+	for k, i := range kindIndex {
+		out[k] = s.droppedKinds[i].Load()
+	}
+	return out
+}
+
+// DroppedRareEvents sums the dropped events of the kinds that are not noisy: losing them hides
+// what matters (self-monitoring warns).
+func (s *Stats) DroppedRareEvents() uint64 {
+	var n uint64
+	for k, i := range kindIndex {
+		if !k.Noisy() {
+			n += s.droppedKinds[i].Load()
+		}
+	}
+	return n
 }
 
 // Service opens ingest sessions.
@@ -151,8 +200,11 @@ type Service struct {
 
 	events      secevents.Writer
 	bucketMu    sync.Mutex
-	eventBucket map[identity.NodeID]*bucket
+	eventBucket map[identity.NodeID]*eventBuckets
 }
+
+// eventBuckets are a node's buckets: the noisy kinds and the rest.
+type eventBuckets struct{ noisy, rare bucket }
 
 // bucket is a token bucket.
 type bucket struct {
@@ -167,8 +219,25 @@ const maxEventBuckets = 100_000
 // dropped (a server without a database).
 func (s *Service) SetEventWriter(w secevents.Writer) { s.events = w }
 
-// admitEvents takes up to n events from the node's bucket and returns how many may pass.
-func (s *Service) admitEvents(node identity.NodeID, n int, now time.Time) int {
+// refill adds what accrued since the last refill, up to burst.
+func (b *bucket) refill(now time.Time, rate, burst float64) {
+	b.tokens = math.Min(burst, b.tokens+now.Sub(b.refilled).Seconds()*rate)
+	b.refilled = later(b.refilled, now)
+}
+
+// take spends a token if there is one.
+func (b *bucket) take() bool {
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
+// admitEvents keeps the events the node's buckets allow, in order: noisy kinds from one bucket,
+// the rest from another (M2-37); the dropped ones are counted per kind. It returns how many
+// were dropped.
+func (s *Service) admitEvents(node identity.NodeID, events []secevent.Event, now time.Time) ([]secevent.Event, int) {
 	s.bucketMu.Lock()
 	defer s.bucketMu.Unlock()
 	b, ok := s.eventBucket[node]
@@ -176,14 +245,28 @@ func (s *Service) admitEvents(node identity.NodeID, n int, now time.Time) int {
 		if len(s.eventBucket) >= maxEventBuckets {
 			clear(s.eventBucket)
 		}
-		b = &bucket{tokens: s.config.EventBurst, refilled: now}
+		b = &eventBuckets{
+			noisy: bucket{tokens: s.config.EventBurst, refilled: now},
+			rare:  bucket{tokens: s.config.RareEventBurst, refilled: now},
+		}
 		s.eventBucket[node] = b
 	}
-	b.tokens = math.Min(s.config.EventBurst, b.tokens+now.Sub(b.refilled).Seconds()*s.config.EventRate)
-	b.refilled = later(b.refilled, now)
-	admitted := min(n, int(math.Max(b.tokens, 0)))
-	b.tokens -= float64(admitted)
-	return admitted
+	b.noisy.refill(now, s.config.EventRate, s.config.EventBurst)
+	b.rare.refill(now, s.config.RareEventRate, s.config.RareEventBurst)
+	kept, dropped := events[:0], 0
+	for _, e := range events {
+		from := &b.rare
+		if e.Kind.Noisy() {
+			from = &b.noisy
+		}
+		if !from.take() {
+			s.stats.dropEvent(e.Kind)
+			dropped++
+			continue
+		}
+		kept = append(kept, e)
+	}
+	return kept, dropped
 }
 
 type orgCount struct {
@@ -193,7 +276,7 @@ type orgCount struct {
 
 // NewService returns the ingest service.
 func NewService(store metrics.Store, ring *metrics.Ring, nodes Nodes, config Config, now func() time.Time, logger *slog.Logger) *Service {
-	return &Service{eventBucket: map[identity.NodeID]*bucket{}, store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{}}
+	return &Service{eventBucket: map[identity.NodeID]*eventBuckets{}, store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{}}
 }
 
 // maxReportedUnknown bounds the metric names remembered for "logged once".
@@ -449,16 +532,15 @@ func (s *Session) acceptEvents(batch Batch, now time.Time) {
 		}
 		kept = append(kept, e)
 	}
-	admitted := s.service.admitEvents(s.node, len(kept), now)
-	if dropped := len(kept) - admitted; dropped > 0 {
-		stats.EventsDropped.Add(uint64(dropped))
+	kept, dropped := s.service.admitEvents(s.node, kept, now)
+	if dropped > 0 {
 		if !s.eventsDropped {
 			s.eventsDropped = true
 			s.service.logger.Warn("security event flood, dropping events", "node", s.node.String(), "dropped", dropped)
 		}
 	}
 	// The batch is written even if nothing is left: its sequence number marks it as stored.
-	s.events = append(s.events, secevents.Batch{Seq: batch.Seq, Events: kept[:admitted]})
+	s.events = append(s.events, secevents.Batch{Seq: batch.Seq, Events: kept})
 }
 
 // Due reports whether enough batches wait for an early flush; security events flush at once.

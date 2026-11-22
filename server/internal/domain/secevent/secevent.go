@@ -50,6 +50,13 @@ var kinds = []Kind{
 	EnrollmentTokenUsed, NodeLocked, NodeRotationNewIP,
 }
 
+// Noisy reports whether anyone on the internet can produce the kind at will – failed and invalid
+// logins, connections closed before authentication. A flood of them must not crowd out the rare
+// kinds (successful logins, sudo, accounts, the system), which get room of their own (M2-37).
+func (k Kind) Noisy() bool {
+	return k == SSHLoginFailed || k == SSHInvalidUser || k == SSHPreauthDisconnect
+}
+
 // Kinds returns every kind.
 func Kinds() []Kind { return append([]Kind(nil), kinds...) }
 

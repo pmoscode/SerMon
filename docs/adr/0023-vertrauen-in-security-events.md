@@ -101,3 +101,16 @@ sudo-Zusammenfassung `N incorrect password attempts` zählt nur, solange keine v
   mehrfach, ist das Ziel `?` statt des eingeschleusten.
 - **Text vom Host:** Der Server ersetzt in Event-Feldern und Host-Fakten Steuer-, Format- (Bidi, Null-Breite) und
   Trennzeichen durch U+FFFD (`textsafe`); sshd maskiert Nicht-ASCII-Zeichen, der Agent dekodiert sie.
+
+## Nachtrag M2-37 (Flut von außen)
+
+- **Zwei Buckets pro Node im Ingest:** Fehlgeschlagene und ungültige Logins und Abbrüche vor der Anmeldung kann jeder aus
+  dem Internet auslösen (`Kind.Noisy`); sie teilen sich den Bucket von 50/s (Burst 5 000). Alle anderen Arten
+  (erfolgreicher Login, sudo, Konten, System) haben einen eigenen von 5/s (Burst 500). Vorher leerte eine Flut von
+  Fehlversuchen den gemeinsamen Bucket, und der erfolgreiche Login danach ging verloren – genau das Event, das
+  „Login nach Fehlversuchen“ und „Root-Login“ brauchen.
+- **Sichtbar:** `sermon_server_ingest_dropped_security_events_by_kind_total{kind}` in `/metrics`; verworfene seltene
+  Events meldet das Self-Monitoring als `dropped_security_events` (ADR 0027).
+- **Verworfen: Zusammenfassen im Agent** (Fehlversuche pro IP und Minute als ein Event mit Anzahl). Das änderte das
+  Protokoll und die Zählung der Event-Regeln (Fenster, `groupBy`), und die Buckets lösen das Problem schon: Den
+  Brute-Force-Alert lösen die ersten Tausend Fehlversuche ohnehin aus.

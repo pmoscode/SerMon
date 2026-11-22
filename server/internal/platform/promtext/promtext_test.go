@@ -35,6 +35,34 @@ sermon_server_live_streams 3
 	}
 }
 
+// A counter per value of one label (M2-37: dropped security events per kind), sorted by value;
+// label values are escaped.
+func TestRegistry_CounterFamily(t *testing.T) {
+	r := promtext.NewRegistry()
+	r.CounterFamily("sermon_server_dropped_total", "Dropped per kind.", "kind", func() map[string]float64 {
+		return map[string]float64{"ssh.login.success": 0, "ssh.login.failed": 12, `a"b`: 1}
+	})
+	var out strings.Builder
+	if _, err := r.WriteTo(&out); err != nil {
+		t.Fatal(err)
+	}
+	want := `# HELP sermon_server_dropped_total Dropped per kind.
+# TYPE sermon_server_dropped_total counter
+sermon_server_dropped_total{kind="a\"b"} 1
+sermon_server_dropped_total{kind="ssh.login.failed"} 12
+sermon_server_dropped_total{kind="ssh.login.success"} 0
+`
+	if out.String() != want {
+		t.Errorf("output:\n%s\nwant:\n%s", out.String(), want)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("invalid label name accepted")
+		}
+	}()
+	r.CounterFamily("sermon_server_other_total", "x", "bad-label", func() map[string]float64 { return nil })
+}
+
 func TestRegistry_RejectsInvalidNames(t *testing.T) {
 	for _, name := range []string{"", "9lives", "with-dash", "sermon server"} {
 		func() {

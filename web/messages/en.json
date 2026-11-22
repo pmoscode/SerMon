@@ -536,6 +536,7 @@
 	"instance_critical": "Server: Critical",
 	"instance_ingest_lag": "Agent data arrives late ({seconds} s)",
 	"instance_dropped_samples": "{count} samples dropped within 15 minutes",
+	"instance_dropped_security_events": "{count} security events (logins, sudo, accounts) dropped within 15 minutes",
 	"instance_database_size": "The database is filling up ({percent} %)",
 	"fleet_tag": "Tag",
 	"fleet_tag_all": "All tags",

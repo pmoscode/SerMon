@@ -5,6 +5,7 @@
 	import MetricChart from '#lib/charts/MetricChart.svelte';
 	import NodeFacts from '#lib/components/node/NodeFacts.svelte';
 	import NodeTags from '#lib/components/node/NodeTags.svelte';
+	import SecuritySourceNotice from '#lib/components/node/SecuritySourceNotice.svelte';
 	import TimeRangePicker from '#lib/components/time/TimeRangePicker.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
@@ -55,6 +56,7 @@
 {:else}
 	<div class="flex flex-col gap-6">
 		<NodeFacts node={nodeState.node} {now} />
+		<SecuritySourceNotice node={nodeState.node} />
 		<NodeTags node={nodeState.node} onchange={() => void nodeState.load()} />
 
 		<div class="flex flex-wrap items-center justify-between gap-2">

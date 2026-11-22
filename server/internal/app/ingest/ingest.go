@@ -47,6 +47,8 @@ type HostFacts struct {
 	Architecture  string // "amd64" or "arm64"
 	CPUCount      uint32
 	MemoryBytes   uint64
+	// SecuritySource is where the agent reads security events (M2-31).
+	SecuritySource secevent.Source
 }
 
 // Nodes is the port to the node records.

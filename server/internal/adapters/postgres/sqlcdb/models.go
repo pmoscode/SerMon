@@ -202,28 +202,29 @@ type MetricsRaw struct {
 }
 
 type Node struct {
-	ID            uuid.UUID
-	OrgID         uuid.UUID
-	GroupID       uuid.UUID
-	Hostname      string
-	MachineID     string
-	OsID          string
-	OsVersion     string
-	KernelRelease string
-	Architecture  string
-	CpuCount      int32
-	MemoryBytes   int64
-	EnrolledWith  *uuid.UUID
-	CreatedAt     time.Time
-	LockedAt      *time.Time
-	LockReason    pgtype.Text
-	LastIp        pgtype.Text
-	IngestSeq     int64
-	LastSeenAt    *time.Time
-	AgentVersion  pgtype.Text
-	EventSeq      int64
-	TakeoverUntil *time.Time
-	Tags          []byte
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	GroupID        uuid.UUID
+	Hostname       string
+	MachineID      string
+	OsID           string
+	OsVersion      string
+	KernelRelease  string
+	Architecture   string
+	CpuCount       int32
+	MemoryBytes    int64
+	EnrolledWith   *uuid.UUID
+	CreatedAt      time.Time
+	LockedAt       *time.Time
+	LockReason     pgtype.Text
+	LastIp         pgtype.Text
+	IngestSeq      int64
+	LastSeenAt     *time.Time
+	AgentVersion   pgtype.Text
+	EventSeq       int64
+	TakeoverUntil  *time.Time
+	Tags           []byte
+	SecuritySource string
 }
 
 type NodeGroup struct {

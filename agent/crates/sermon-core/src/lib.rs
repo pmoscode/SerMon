@@ -8,6 +8,6 @@ pub mod proc_root;
 pub mod testing;
 
 pub use clock::{Clock, Monotonic, SystemClock};
-pub use host::{Architecture, HostFacts, MachineId};
+pub use host::{Architecture, HostFacts, MachineId, SecuritySource};
 pub use metrics::{PPM, Sample, Value};
 pub use proc_root::{ProcError, ProcRoot};

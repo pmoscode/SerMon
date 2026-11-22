@@ -2221,7 +2221,26 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Tests zuerst:** je Szenario löst die passende Standardregel aus (gegen `sermon-testserver` bzw. `just e2e-agent`).
 - **Abhängig von:** M1-34, M2-08
 
-#### ☐ M2-31 – Hosts ohne journald: Reboot und fehlende Quelle · A · S
+#### ☑ M2-31 – Hosts ohne journald: Reboot und fehlende Quelle · A · S
+> Erledigt (ADR 0025, Nachtrag M2-31; KONZEPT §5 und §11; Threat Model T75):
+> - **Reboot ohne journald** (`sermon-agent::reboot`): Beim Start vergleicht der Agent
+>   `/proc/sys/kernel/random/boot_id` mit `<state_dir>/boot_id` und meldet bei einem Wechsel `system.reboot`
+>   (verifiziert, Zeit aus `btime`, `previous_boot`, ohne `uptime_before`). Gespeichert wird die neue Boot-ID erst, wenn
+>   das Event im WAL liegt; der erste Start meldet nichts, ungültige IDs werden ignoriert. Nur ohne journald, denn dort
+>   erkennt der Parser Reboots an den Einträgen. `uninstall` entfernt die Datei mit.
+> - **Quelle in den Host-Fakten:** `HostFacts.security_source` (Feld 9, Enum Journal, Datei verifiziert, Datei
+>   unverifiziert, keine; ältere Agents: unspezifiziert), bei jedem Hello neu bestimmt: Journal, sonst die erste
+>   vorhandene Datei, die der Agent auch öffnen darf. Server: Spalte `nodes.security_source` (Migration 00034,
+>   CHECK), Typ `secevent.Source`, Web-API `Node.security_source`.
+> - **UI:** Die Node-Seite warnt bei „keine Quelle“ mit Verweis auf `install.sh --grant-log-access` und die
+>   rsyslog-Vorlage, bei einer unverifizierten Datei steht ein Hinweis; Hilfetext `concepts/security-source`.
+> - **Tests:** Boot-ID-Wechsel über Neustarts des Agents, erneute Meldung nach abgelehnter Zustellung, ungültige IDs;
+>   Quelle je Fall inkl. fehlendem Leserecht; Schema (unbekannter Wert abgelehnt), Mapping, Store (älterer Agent setzt
+>   zurück, CHECK), Web-API; `just e2e-agent`: der Agent auf der Fixture ohne journald meldet „keine“; UI-Spec; die
+>   E2E-Demo prüft den Hinweis auf dem Alpine-Host und keinen auf `web-01`.
+> - **Budget:** Die Node-Seite liegt bei 199,3 KiB (ohne den Hinweis 198,3 KiB: Protokoll und Texte wachsen mit).
+>   Laden bei Bedarf half hier nicht (199,6 KiB, die Login-Seite wuchs um 1,1 KiB durch die Aufteilung der Chunks) →
+>   M2-34.
 - **Ziel:** Aus M2-20 (ADR 0025, Folgearbeiten). `system.reboot` auch ohne journald: Der Agent merkt sich
   `/proc/sys/kernel/random/boot_id` im Zustandsverzeichnis und meldet beim Start einen Wechsel (verifiziert, die Boot-ID
   kommt vom Kernel). Der Agent meldet, ob er eine Security-Quelle hat (Journal, Datei verifiziert/unverifiziert, keine);
@@ -2263,6 +2282,15 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   prüfbar; Rollen und Step-up; E2E mit axe.
 - **Abhängig von:** M2-32
 - **Später:** Loki-Daten löscht E3.2/E3.8 mit, sobald es Loki gibt.
+
+#### ☐ M2-34 – Luft im JavaScript-Budget der Node-Seite · W · S
+- **Ziel:** Die Node-Seite liegt bei 199,3 KiB von 200 KiB (KONZEPT §17); jede weitere Zeile dort reißt das Budget.
+  Ursachen messen (welche Chunks lädt die Seite, was teilen sie mit der Login-Seite; z. B. die Deskriptoren aller
+  Protobuf-Dateien über den gemeinsamen API-Client, die Paraglide-Texte) und mindestens 10 KiB Luft schaffen, ohne
+  Funktionen zu streichen.
+- **Tests zuerst:** `budget.e2e.ts` mit einer Warnschwelle (z. B. 190 KiB) für die Node-Seite.
+- **Abhängig von:** M2-31
+- **Aus:** M2-31 (Hinweis zur Security-Quelle; Laden bei Bedarf vergrößerte die Seiten).
 
 #### ☐ M2-27 – E2E-Demo M2 · X · M
 - **Ziel:** Simulierter SSH-Brute-Force in einem Agent-Container (wiederholte Fehlanmeldungen gegen den eigenen sshd)

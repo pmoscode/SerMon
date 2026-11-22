@@ -234,6 +234,8 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		timeout: Math.max(5_000, 120_000 - (Date.now() - started))
 	});
 	console.log(`node detail with chart data after ${Math.round((Date.now() - started) / 1000)} s`);
+	// With journald the source needs no notice (M2-31).
+	await expect(page.getByText(/No security events|not verified/)).toHaveCount(0);
 	await page.screenshot({ path: 'test-results/demo-node.png', fullPage: true });
 
 	// Without journald anyone can write such lines (ADR 0025): twelve failed logins, forged by an
@@ -250,6 +252,10 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	await expect(forged).toBeVisible({ timeout: 120_000 });
 	await expect(forged.getByRole('note')).toContainText('Source not verified');
 	await page.screenshot({ path: 'test-results/demo-unverified.png', fullPage: true });
+	// Its node page names the source (M2-31): /var/log/messages, readable with --grant-log-access.
+	await page.goto('/fleet');
+	await page.getByRole('link', { name: 'edge-01' }).click();
+	await expect(page.getByRole('status').filter({ hasText: 'not verified' })).toBeVisible();
 
 	// State collectors under the hardened unit (M2-22): every host reports whether its clock is
 	// synchronised (adjtimex, allowed by the syscall filter), and a failed systemd unit fires an

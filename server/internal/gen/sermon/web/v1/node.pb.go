@@ -23,6 +23,67 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// SecuritySource is where the agent of a node finds the log lines for security events.
+type SecuritySource int32
+
+const (
+	// SECURITY_SOURCE_UNSPECIFIED: not reported (an older agent, or not connected yet).
+	SecuritySource_SECURITY_SOURCE_UNSPECIFIED SecuritySource = 0
+	// SECURITY_SOURCE_JOURNAL is the systemd journal.
+	SecuritySource_SECURITY_SOURCE_JOURNAL SecuritySource = 1
+	// SECURITY_SOURCE_FILE_VERIFIED is the file of the SerMon rsyslog template.
+	SecuritySource_SECURITY_SOURCE_FILE_VERIFIED SecuritySource = 2
+	// SECURITY_SOURCE_FILE_UNVERIFIED is a classic log file: events are marked unverified.
+	SecuritySource_SECURITY_SOURCE_FILE_UNVERIFIED SecuritySource = 3
+	// SECURITY_SOURCE_NONE: the agent finds no source, so the node sends no security events.
+	SecuritySource_SECURITY_SOURCE_NONE SecuritySource = 4
+)
+
+// Enum value maps for SecuritySource.
+var (
+	SecuritySource_name = map[int32]string{
+		0: "SECURITY_SOURCE_UNSPECIFIED",
+		1: "SECURITY_SOURCE_JOURNAL",
+		2: "SECURITY_SOURCE_FILE_VERIFIED",
+		3: "SECURITY_SOURCE_FILE_UNVERIFIED",
+		4: "SECURITY_SOURCE_NONE",
+	}
+	SecuritySource_value = map[string]int32{
+		"SECURITY_SOURCE_UNSPECIFIED":     0,
+		"SECURITY_SOURCE_JOURNAL":         1,
+		"SECURITY_SOURCE_FILE_VERIFIED":   2,
+		"SECURITY_SOURCE_FILE_UNVERIFIED": 3,
+		"SECURITY_SOURCE_NONE":            4,
+	}
+)
+
+func (x SecuritySource) Enum() *SecuritySource {
+	p := new(SecuritySource)
+	*p = x
+	return p
+}
+
+func (x SecuritySource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SecuritySource) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_web_v1_node_proto_enumTypes[0].Descriptor()
+}
+
+func (SecuritySource) Type() protoreflect.EnumType {
+	return &file_sermon_web_v1_node_proto_enumTypes[0]
+}
+
+func (x SecuritySource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SecuritySource.Descriptor instead.
+func (SecuritySource) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_web_v1_node_proto_rawDescGZIP(), []int{0}
+}
+
 // SetNodeTagsRequest names the node and its new tags.
 type SetNodeTagsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -652,9 +713,12 @@ type Node struct {
 	// machine-id to take it over.
 	TakeoverUntil *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=takeover_until,json=takeoverUntil,proto3" json:"takeover_until,omitempty"`
 	// tags are the node's free key=value pairs, e.g. env: prod (M2-29).
-	Tags          map[string]string `protobuf:"bytes,20,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Tags map[string]string `protobuf:"bytes,20,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// security_source is where the agent reads security events from, as of its last connection
+	// (M2-31).
+	SecuritySource SecuritySource `protobuf:"varint,21,opt,name=security_source,json=securitySource,proto3,enum=sermon.web.v1.SecuritySource" json:"security_source,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Node) Reset() {
@@ -825,6 +889,13 @@ func (x *Node) GetTags() map[string]string {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *Node) GetSecuritySource() SecuritySource {
+	if x != nil {
+		return x.SecuritySource
+	}
+	return SecuritySource_SECURITY_SOURCE_UNSPECIFIED
 }
 
 // ListFilesystemsRequest names the node.
@@ -1072,7 +1143,7 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\x0eGetNodeRequest\x12!\n" +
 	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\":\n" +
 	"\x0fGetNodeResponse\x12'\n" +
-	"\x04node\x18\x01 \x01(\v2\x13.sermon.web.v1.NodeR\x04node\"\xba\x06\n" +
+	"\x04node\x18\x01 \x01(\v2\x13.sermon.web.v1.NodeR\x04node\"\x82\a\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -1099,7 +1170,8 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"lockReason\x12\x17\n" +
 	"\alast_ip\x18\x12 \x01(\tR\x06lastIp\x12A\n" +
 	"\x0etakeover_until\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\rtakeoverUntil\x121\n" +
-	"\x04tags\x18\x14 \x03(\v2\x1d.sermon.web.v1.Node.TagsEntryR\x04tags\x1a7\n" +
+	"\x04tags\x18\x14 \x03(\v2\x1d.sermon.web.v1.Node.TagsEntryR\x04tags\x12F\n" +
+	"\x0fsecurity_source\x18\x15 \x01(\x0e2\x1d.sermon.web.v1.SecuritySourceR\x0esecuritySource\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\";\n" +
@@ -1124,7 +1196,13 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\finodes_total\x18\a \x01(\x04R\vinodesTotal\x12\x1f\n" +
 	"\vinodes_used\x18\b \x01(\x04R\n" +
 	"inodesUsed\x123\n" +
-	"\afull_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x06fullAt2\xa9\x04\n" +
+	"\afull_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x06fullAt*\xb0\x01\n" +
+	"\x0eSecuritySource\x12\x1f\n" +
+	"\x1bSECURITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17SECURITY_SOURCE_JOURNAL\x10\x01\x12!\n" +
+	"\x1dSECURITY_SOURCE_FILE_VERIFIED\x10\x02\x12#\n" +
+	"\x1fSECURITY_SOURCE_FILE_UNVERIFIED\x10\x03\x12\x18\n" +
+	"\x14SECURITY_SOURCE_NONE\x10\x042\xa9\x04\n" +
 	"\vNodeService\x12H\n" +
 	"\aGetNode\x12\x1d.sermon.web.v1.GetNodeRequest\x1a\x1e.sermon.web.v1.GetNodeResponse\x12`\n" +
 	"\x0fListFilesystems\x12%.sermon.web.v1.ListFilesystemsRequest\x1a&.sermon.web.v1.ListFilesystemsResponse\x12]\n" +
@@ -1147,58 +1225,61 @@ func file_sermon_web_v1_node_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_node_proto_rawDescData
 }
 
+var file_sermon_web_v1_node_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_sermon_web_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_sermon_web_v1_node_proto_goTypes = []any{
-	(*SetNodeTagsRequest)(nil),        // 0: sermon.web.v1.SetNodeTagsRequest
-	(*SetNodeTagsResponse)(nil),       // 1: sermon.web.v1.SetNodeTagsResponse
-	(*UnlockNodeRequest)(nil),         // 2: sermon.web.v1.UnlockNodeRequest
-	(*UnlockNodeResponse)(nil),        // 3: sermon.web.v1.UnlockNodeResponse
-	(*AllowNodeTakeoverRequest)(nil),  // 4: sermon.web.v1.AllowNodeTakeoverRequest
-	(*AllowNodeTakeoverResponse)(nil), // 5: sermon.web.v1.AllowNodeTakeoverResponse
-	(*RotateNodeKeysRequest)(nil),     // 6: sermon.web.v1.RotateNodeKeysRequest
-	(*NodeIDs)(nil),                   // 7: sermon.web.v1.NodeIDs
-	(*RotateNodeKeysResponse)(nil),    // 8: sermon.web.v1.RotateNodeKeysResponse
-	(*GetNodeRequest)(nil),            // 9: sermon.web.v1.GetNodeRequest
-	(*GetNodeResponse)(nil),           // 10: sermon.web.v1.GetNodeResponse
-	(*Node)(nil),                      // 11: sermon.web.v1.Node
-	(*ListFilesystemsRequest)(nil),    // 12: sermon.web.v1.ListFilesystemsRequest
-	(*ListFilesystemsResponse)(nil),   // 13: sermon.web.v1.ListFilesystemsResponse
-	(*Filesystem)(nil),                // 14: sermon.web.v1.Filesystem
-	nil,                               // 15: sermon.web.v1.SetNodeTagsRequest.TagsEntry
-	nil,                               // 16: sermon.web.v1.Node.TagsEntry
-	(*timestamppb.Timestamp)(nil),     // 17: google.protobuf.Timestamp
-	(*KeyFigures)(nil),                // 18: sermon.web.v1.KeyFigures
+	(SecuritySource)(0),               // 0: sermon.web.v1.SecuritySource
+	(*SetNodeTagsRequest)(nil),        // 1: sermon.web.v1.SetNodeTagsRequest
+	(*SetNodeTagsResponse)(nil),       // 2: sermon.web.v1.SetNodeTagsResponse
+	(*UnlockNodeRequest)(nil),         // 3: sermon.web.v1.UnlockNodeRequest
+	(*UnlockNodeResponse)(nil),        // 4: sermon.web.v1.UnlockNodeResponse
+	(*AllowNodeTakeoverRequest)(nil),  // 5: sermon.web.v1.AllowNodeTakeoverRequest
+	(*AllowNodeTakeoverResponse)(nil), // 6: sermon.web.v1.AllowNodeTakeoverResponse
+	(*RotateNodeKeysRequest)(nil),     // 7: sermon.web.v1.RotateNodeKeysRequest
+	(*NodeIDs)(nil),                   // 8: sermon.web.v1.NodeIDs
+	(*RotateNodeKeysResponse)(nil),    // 9: sermon.web.v1.RotateNodeKeysResponse
+	(*GetNodeRequest)(nil),            // 10: sermon.web.v1.GetNodeRequest
+	(*GetNodeResponse)(nil),           // 11: sermon.web.v1.GetNodeResponse
+	(*Node)(nil),                      // 12: sermon.web.v1.Node
+	(*ListFilesystemsRequest)(nil),    // 13: sermon.web.v1.ListFilesystemsRequest
+	(*ListFilesystemsResponse)(nil),   // 14: sermon.web.v1.ListFilesystemsResponse
+	(*Filesystem)(nil),                // 15: sermon.web.v1.Filesystem
+	nil,                               // 16: sermon.web.v1.SetNodeTagsRequest.TagsEntry
+	nil,                               // 17: sermon.web.v1.Node.TagsEntry
+	(*timestamppb.Timestamp)(nil),     // 18: google.protobuf.Timestamp
+	(*KeyFigures)(nil),                // 19: sermon.web.v1.KeyFigures
 }
 var file_sermon_web_v1_node_proto_depIdxs = []int32{
-	15, // 0: sermon.web.v1.SetNodeTagsRequest.tags:type_name -> sermon.web.v1.SetNodeTagsRequest.TagsEntry
-	17, // 1: sermon.web.v1.AllowNodeTakeoverResponse.until:type_name -> google.protobuf.Timestamp
-	7,  // 2: sermon.web.v1.RotateNodeKeysRequest.nodes:type_name -> sermon.web.v1.NodeIDs
-	11, // 3: sermon.web.v1.GetNodeResponse.node:type_name -> sermon.web.v1.Node
-	17, // 4: sermon.web.v1.Node.enrolled_at:type_name -> google.protobuf.Timestamp
-	17, // 5: sermon.web.v1.Node.last_seen_at:type_name -> google.protobuf.Timestamp
-	18, // 6: sermon.web.v1.Node.figures:type_name -> sermon.web.v1.KeyFigures
-	17, // 7: sermon.web.v1.Node.locked_at:type_name -> google.protobuf.Timestamp
-	17, // 8: sermon.web.v1.Node.takeover_until:type_name -> google.protobuf.Timestamp
-	16, // 9: sermon.web.v1.Node.tags:type_name -> sermon.web.v1.Node.TagsEntry
-	14, // 10: sermon.web.v1.ListFilesystemsResponse.filesystems:type_name -> sermon.web.v1.Filesystem
-	17, // 11: sermon.web.v1.Filesystem.full_at:type_name -> google.protobuf.Timestamp
-	9,  // 12: sermon.web.v1.NodeService.GetNode:input_type -> sermon.web.v1.GetNodeRequest
-	12, // 13: sermon.web.v1.NodeService.ListFilesystems:input_type -> sermon.web.v1.ListFilesystemsRequest
-	6,  // 14: sermon.web.v1.NodeService.RotateNodeKeys:input_type -> sermon.web.v1.RotateNodeKeysRequest
-	2,  // 15: sermon.web.v1.NodeService.UnlockNode:input_type -> sermon.web.v1.UnlockNodeRequest
-	4,  // 16: sermon.web.v1.NodeService.AllowNodeTakeover:input_type -> sermon.web.v1.AllowNodeTakeoverRequest
-	0,  // 17: sermon.web.v1.NodeService.SetNodeTags:input_type -> sermon.web.v1.SetNodeTagsRequest
-	10, // 18: sermon.web.v1.NodeService.GetNode:output_type -> sermon.web.v1.GetNodeResponse
-	13, // 19: sermon.web.v1.NodeService.ListFilesystems:output_type -> sermon.web.v1.ListFilesystemsResponse
-	8,  // 20: sermon.web.v1.NodeService.RotateNodeKeys:output_type -> sermon.web.v1.RotateNodeKeysResponse
-	3,  // 21: sermon.web.v1.NodeService.UnlockNode:output_type -> sermon.web.v1.UnlockNodeResponse
-	5,  // 22: sermon.web.v1.NodeService.AllowNodeTakeover:output_type -> sermon.web.v1.AllowNodeTakeoverResponse
-	1,  // 23: sermon.web.v1.NodeService.SetNodeTags:output_type -> sermon.web.v1.SetNodeTagsResponse
-	18, // [18:24] is the sub-list for method output_type
-	12, // [12:18] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	16, // 0: sermon.web.v1.SetNodeTagsRequest.tags:type_name -> sermon.web.v1.SetNodeTagsRequest.TagsEntry
+	18, // 1: sermon.web.v1.AllowNodeTakeoverResponse.until:type_name -> google.protobuf.Timestamp
+	8,  // 2: sermon.web.v1.RotateNodeKeysRequest.nodes:type_name -> sermon.web.v1.NodeIDs
+	12, // 3: sermon.web.v1.GetNodeResponse.node:type_name -> sermon.web.v1.Node
+	18, // 4: sermon.web.v1.Node.enrolled_at:type_name -> google.protobuf.Timestamp
+	18, // 5: sermon.web.v1.Node.last_seen_at:type_name -> google.protobuf.Timestamp
+	19, // 6: sermon.web.v1.Node.figures:type_name -> sermon.web.v1.KeyFigures
+	18, // 7: sermon.web.v1.Node.locked_at:type_name -> google.protobuf.Timestamp
+	18, // 8: sermon.web.v1.Node.takeover_until:type_name -> google.protobuf.Timestamp
+	17, // 9: sermon.web.v1.Node.tags:type_name -> sermon.web.v1.Node.TagsEntry
+	0,  // 10: sermon.web.v1.Node.security_source:type_name -> sermon.web.v1.SecuritySource
+	15, // 11: sermon.web.v1.ListFilesystemsResponse.filesystems:type_name -> sermon.web.v1.Filesystem
+	18, // 12: sermon.web.v1.Filesystem.full_at:type_name -> google.protobuf.Timestamp
+	10, // 13: sermon.web.v1.NodeService.GetNode:input_type -> sermon.web.v1.GetNodeRequest
+	13, // 14: sermon.web.v1.NodeService.ListFilesystems:input_type -> sermon.web.v1.ListFilesystemsRequest
+	7,  // 15: sermon.web.v1.NodeService.RotateNodeKeys:input_type -> sermon.web.v1.RotateNodeKeysRequest
+	3,  // 16: sermon.web.v1.NodeService.UnlockNode:input_type -> sermon.web.v1.UnlockNodeRequest
+	5,  // 17: sermon.web.v1.NodeService.AllowNodeTakeover:input_type -> sermon.web.v1.AllowNodeTakeoverRequest
+	1,  // 18: sermon.web.v1.NodeService.SetNodeTags:input_type -> sermon.web.v1.SetNodeTagsRequest
+	11, // 19: sermon.web.v1.NodeService.GetNode:output_type -> sermon.web.v1.GetNodeResponse
+	14, // 20: sermon.web.v1.NodeService.ListFilesystems:output_type -> sermon.web.v1.ListFilesystemsResponse
+	9,  // 21: sermon.web.v1.NodeService.RotateNodeKeys:output_type -> sermon.web.v1.RotateNodeKeysResponse
+	4,  // 22: sermon.web.v1.NodeService.UnlockNode:output_type -> sermon.web.v1.UnlockNodeResponse
+	6,  // 23: sermon.web.v1.NodeService.AllowNodeTakeover:output_type -> sermon.web.v1.AllowNodeTakeoverResponse
+	2,  // 24: sermon.web.v1.NodeService.SetNodeTags:output_type -> sermon.web.v1.SetNodeTagsResponse
+	19, // [19:25] is the sub-list for method output_type
+	13, // [13:19] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_node_proto_init() }
@@ -1217,13 +1298,14 @@ func file_sermon_web_v1_node_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_node_proto_rawDesc), len(file_sermon_web_v1_node_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_sermon_web_v1_node_proto_goTypes,
 		DependencyIndexes: file_sermon_web_v1_node_proto_depIdxs,
+		EnumInfos:         file_sermon_web_v1_node_proto_enumTypes,
 		MessageInfos:      file_sermon_web_v1_node_proto_msgTypes,
 	}.Build()
 	File_sermon_web_v1_node_proto = out.File

@@ -106,6 +106,10 @@ pub struct HostFacts {
     /// memory_bytes is the total physical memory in bytes.
     #[prost(uint64, tag="8")]
     pub memory_bytes: u64,
+    /// security_source is where the agent reads security events from (M2-31); unspecified from
+    /// agents before it.
+    #[prost(enumeration="SecuritySource", tag="9")]
+    pub security_source: i32,
 }
 /// Heartbeat proves that the agent is alive; sent every 15 seconds.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -448,6 +452,49 @@ pub struct OomKill {
     /// process is its name (at most 15 characters, chosen by whoever started it).
     #[prost(string, tag="2")]
     pub process: ::prost::alloc::string::String,
+}
+/// SecuritySource is where the agent finds the log lines for security events (ADR 0025).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum SecuritySource {
+    /// SECURITY_SOURCE_UNSPECIFIED: not reported (older agents).
+    Unspecified = 0,
+    /// SECURITY_SOURCE_JOURNAL is the systemd journal: every line carries its sender.
+    Journal = 1,
+    /// SECURITY_SOURCE_FILE_VERIFIED is the file of the SerMon rsyslog template, with the sender's
+    /// user ID on every line.
+    FileVerified = 2,
+    /// SECURITY_SOURCE_FILE_UNVERIFIED is a classic log file (auth.log, secure, messages): its
+    /// events count but are marked unverified.
+    FileUnverified = 3,
+    /// SECURITY_SOURCE_NONE: no journald and no readable log file, so no security events.
+    None = 4,
+}
+impl SecuritySource {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SECURITY_SOURCE_UNSPECIFIED",
+            Self::Journal => "SECURITY_SOURCE_JOURNAL",
+            Self::FileVerified => "SECURITY_SOURCE_FILE_VERIFIED",
+            Self::FileUnverified => "SECURITY_SOURCE_FILE_UNVERIFIED",
+            Self::None => "SECURITY_SOURCE_NONE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SECURITY_SOURCE_UNSPECIFIED" => Some(Self::Unspecified),
+            "SECURITY_SOURCE_JOURNAL" => Some(Self::Journal),
+            "SECURITY_SOURCE_FILE_VERIFIED" => Some(Self::FileVerified),
+            "SECURITY_SOURCE_FILE_UNVERIFIED" => Some(Self::FileUnverified),
+            "SECURITY_SOURCE_NONE" => Some(Self::None),
+            _ => None,
+        }
+    }
 }
 /// Architecture is a supported CPU architecture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

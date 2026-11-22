@@ -136,6 +136,7 @@ func TestSchema_RejectsInvalidMessages(t *testing.T) {
 		"implausible cpu count":    withFacts(func(f *agentv1.HostFacts) { f.CpuCount = 100_000 }),
 		"zero memory":              withFacts(func(f *agentv1.HostFacts) { f.MemoryBytes = 0 }),
 		"kernel release too long":  withFacts(func(f *agentv1.HostFacts) { f.KernelRelease = string(make([]byte, 129)) }),
+		"security source unknown":  withFacts(func(f *agentv1.HostFacts) { f.SecuritySource = 99 }),
 	}
 
 	for name, msg := range invalid {

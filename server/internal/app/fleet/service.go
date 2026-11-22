@@ -17,6 +17,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -53,6 +54,8 @@ type Node struct {
 	AgentVersion  string
 	EnrolledAt    time.Time
 	LastSeenAt    *time.Time
+	// SecuritySource is where its agent reads security events, as of the last Hello (M2-31).
+	SecuritySource secevent.Source
 	// Identity (M2-23): a lock after a second session, the address of the last session and an
 	// open takeover window.
 	LockedAt      *time.Time

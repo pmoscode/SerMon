@@ -2,7 +2,8 @@
 
 use prost::Message;
 use sermon_transport::proto::agent::v1::{
-    Architecture, Heartbeat, Hello, HostFacts, SessionRequest, session_request::Payload,
+    Architecture, Heartbeat, Hello, HostFacts, SecuritySource, SessionRequest,
+    session_request::Payload,
 };
 
 fn hello() -> SessionRequest {
@@ -19,6 +20,7 @@ fn hello() -> SessionRequest {
                 architecture: Architecture::Amd64.into(),
                 cpu_count: 4,
                 memory_bytes: 8 << 30,
+                security_source: SecuritySource::FileUnverified.into(),
             }),
             config_version: 0,
         })),

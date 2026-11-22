@@ -14,6 +14,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -25,7 +26,7 @@ func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.
 	node := uuid.New()
 	createNode(t, f.db.OwnerDSN, orgA, node)
 	at := time.Now().Truncate(time.Second)
-	facts := ingest.HostFacts{Hostname: "db-02", OSID: "ubuntu", OSVersion: "24.04", KernelRelease: "6.8.0", Architecture: "arm64", CPUCount: 8, MemoryBytes: 16 << 30}
+	facts := ingest.HostFacts{Hostname: "db-02", OSID: "ubuntu", OSVersion: "24.04", KernelRelease: "6.8.0", Architecture: "arm64", CPUCount: 8, MemoryBytes: 16 << 30, SecuritySource: secevent.SourceFileUnverified}
 
 	group, err := store.Connected(ctx, tenant.OrgID(orgA), identity.NodeID(node), facts, "1.2.3", at)
 	if err != nil || uuid.UUID(group) == uuid.Nil {
@@ -44,13 +45,25 @@ func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.
 		t.Fatal(err)
 	}
 	defer func() { _ = conn.Close(ctx) }()
-	var hostname, arch, version string
+	var hostname, arch, version, source string
 	var cpus int32
 	var seen time.Time
-	err = conn.QueryRow(ctx, "SELECT hostname, architecture, cpu_count, agent_version, last_seen_at FROM nodes WHERE id = $1", node).
-		Scan(&hostname, &arch, &cpus, &version, &seen)
-	if err != nil || hostname != "db-02" || arch != "arm64" || cpus != 8 || version != "1.2.3" || !seen.Equal(at.Add(30*time.Second)) {
-		t.Errorf("node = %s %s %d %s %v, %v", hostname, arch, cpus, version, seen, err)
+	err = conn.QueryRow(ctx, "SELECT hostname, architecture, cpu_count, agent_version, last_seen_at, security_source FROM nodes WHERE id = $1", node).
+		Scan(&hostname, &arch, &cpus, &version, &seen, &source)
+	if err != nil || hostname != "db-02" || arch != "arm64" || cpus != 8 || version != "1.2.3" || !seen.Equal(at.Add(30*time.Second)) || source != "file_unverified" {
+		t.Errorf("node = %s %s %d %s %v %s, %v", hostname, arch, cpus, version, seen, source, err)
+	}
+	// An older agent reports no source: it is unknown again, not left over from before (M2-31).
+	facts.SecuritySource = secevent.SourceUnknown
+	if _, err := store.Connected(ctx, tenant.OrgID(orgA), identity.NodeID(node), facts, "1.2.2", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(ctx, "SELECT security_source FROM nodes WHERE id = $1", node).Scan(&source); err != nil || source != "" {
+		t.Errorf("source after an older agent = %q, %v", source, err)
+	}
+	// The column takes only known sources.
+	if _, err := conn.Exec(ctx, "UPDATE nodes SET security_source = 'syslog' WHERE id = $1", node); err == nil {
+		t.Error("unknown security source stored")
 	}
 
 	// Another organization can neither update nor touch the node.

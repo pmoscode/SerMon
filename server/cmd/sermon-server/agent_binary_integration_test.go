@@ -255,6 +255,11 @@ func TestAgentBinary_DeliversMetricsIntoTheDatabase(t *testing.T) {
 		WHERE s.node_id = $1 AND s.metric = 'sermon_memory_total_bytes' LIMIT 1`, nodeID).Scan(&memory); err != nil || memory != 8_123_740*1024 {
 		t.Errorf("memory window = %v, %v; want the fixture's MemTotal", memory, err)
 	}
+	// The fixture has neither journald nor a log file: the agent reports no security source (M2-31).
+	var source string
+	if err := conn.QueryRow(ctx, `SELECT security_source FROM nodes WHERE id = $1`, nodeID).Scan(&source); err != nil || source != "none" {
+		t.Errorf("security source = %q, %v; want none", source, err)
+	}
 	// The server's own metrics count the batches and the connected agent (ADR 0011).
 	metricsText := scrape(t, waitFor(t, srv.logs, regexp.MustCompile(`msg="metrics listening" .*addr=(\S+)`)))
 	for _, pattern := range []string{`(?m)^sermon_server_agent_sessions 1$`, `(?m)^sermon_server_ingest_samples_total [1-9]`, `(?m)^sermon_server_ingest_batches_total [1-9]`} {

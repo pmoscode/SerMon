@@ -62,6 +62,22 @@ impl fmt::Debug for MachineId {
     }
 }
 
+/// Where the agent finds the log lines for security events (ADR 0025, M2-31).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SecuritySource {
+    /// Not determined (e.g. at enrollment).
+    #[default]
+    Unknown,
+    /// The systemd journal: every line carries its sender.
+    Journal,
+    /// The file of the SerMon rsyslog template, with the sender's user ID on every line.
+    FileVerified,
+    /// A classic log file: events are marked unverified.
+    FileUnverified,
+    /// No journald and no readable log file: no security events.
+    None,
+}
+
 /// Static facts about the host.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostFacts {
@@ -81,6 +97,8 @@ pub struct HostFacts {
     pub cpu_count: u32,
     /// Total physical memory in bytes.
     pub memory_bytes: u64,
+    /// Where security events come from; set by the agent, not by the facts collector.
+    pub security_source: SecuritySource,
 }
 
 #[cfg(test)]

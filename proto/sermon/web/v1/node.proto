@@ -176,6 +176,23 @@ message Node {
   google.protobuf.Timestamp takeover_until = 19;
   // tags are the node's free key=value pairs, e.g. env: prod (M2-29).
   map<string, string> tags = 20;
+  // security_source is where the agent reads security events from, as of its last connection
+  // (M2-31).
+  SecuritySource security_source = 21;
+}
+
+// SecuritySource is where the agent of a node finds the log lines for security events.
+enum SecuritySource {
+  // SECURITY_SOURCE_UNSPECIFIED: not reported (an older agent, or not connected yet).
+  SECURITY_SOURCE_UNSPECIFIED = 0;
+  // SECURITY_SOURCE_JOURNAL is the systemd journal.
+  SECURITY_SOURCE_JOURNAL = 1;
+  // SECURITY_SOURCE_FILE_VERIFIED is the file of the SerMon rsyslog template.
+  SECURITY_SOURCE_FILE_VERIFIED = 2;
+  // SECURITY_SOURCE_FILE_UNVERIFIED is a classic log file: events are marked unverified.
+  SECURITY_SOURCE_FILE_UNVERIFIED = 3;
+  // SECURITY_SOURCE_NONE: the agent finds no source, so the node sends no security events.
+  SECURITY_SOURCE_NONE = 4;
 }
 
 // ListFilesystemsRequest names the node.

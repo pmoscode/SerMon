@@ -112,6 +112,25 @@ message HostFacts {
   }];
   // memory_bytes is the total physical memory in bytes.
   uint64 memory_bytes = 8 [(buf.validate.field).uint64.gt = 0];
+  // security_source is where the agent reads security events from (M2-31); unspecified from
+  // agents before it.
+  SecuritySource security_source = 9 [(buf.validate.field).enum.defined_only = true];
+}
+
+// SecuritySource is where the agent finds the log lines for security events (ADR 0025).
+enum SecuritySource {
+  // SECURITY_SOURCE_UNSPECIFIED: not reported (older agents).
+  SECURITY_SOURCE_UNSPECIFIED = 0;
+  // SECURITY_SOURCE_JOURNAL is the systemd journal: every line carries its sender.
+  SECURITY_SOURCE_JOURNAL = 1;
+  // SECURITY_SOURCE_FILE_VERIFIED is the file of the SerMon rsyslog template, with the sender's
+  // user ID on every line.
+  SECURITY_SOURCE_FILE_VERIFIED = 2;
+  // SECURITY_SOURCE_FILE_UNVERIFIED is a classic log file (auth.log, secure, messages): its
+  // events count but are marked unverified.
+  SECURITY_SOURCE_FILE_UNVERIFIED = 3;
+  // SECURITY_SOURCE_NONE: no journald and no readable log file, so no security events.
+  SECURITY_SOURCE_NONE = 4;
 }
 
 // Architecture is a supported CPU architecture.

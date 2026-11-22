@@ -34,6 +34,7 @@ fn facts() -> HostFacts {
         architecture: Architecture::Arm64,
         cpu_count: 2,
         memory_bytes: 1 << 30,
+        security_source: sermon_core::SecuritySource::Journal,
     }
 }
 

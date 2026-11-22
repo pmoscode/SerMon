@@ -17,7 +17,8 @@ FROM nodes WHERE id = sqlc.arg(id);
 UPDATE nodes SET hostname = sqlc.arg(hostname), os_id = sqlc.arg(os_id), os_version = sqlc.arg(os_version),
                  kernel_release = sqlc.arg(kernel_release), architecture = sqlc.arg(architecture),
                  cpu_count = sqlc.arg(cpu_count), memory_bytes = sqlc.arg(memory_bytes),
-                 agent_version = sqlc.arg(agent_version), last_seen_at = sqlc.arg(seen_at)
+                 agent_version = sqlc.arg(agent_version), last_seen_at = sqlc.arg(seen_at),
+                 security_source = sqlc.arg(security_source)
 WHERE id = sqlc.arg(id)
 RETURNING group_id;
 
@@ -30,7 +31,7 @@ WHERE id = sqlc.arg(id);
 SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
-       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags
+       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags, n.security_source
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 WHERE sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[])
 ORDER BY n.hostname, n.id;

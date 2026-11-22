@@ -564,7 +564,16 @@ func factsFrom(f *agentv1.HostFacts) ingest.HostFacts {
 	return ingest.HostFacts{
 		Hostname: f.GetHostname(), OSID: f.GetOsId(), OSVersion: f.GetOsVersion(), KernelRelease: f.GetKernelRelease(),
 		Architecture: architecture, CPUCount: f.GetCpuCount(), MemoryBytes: f.GetMemoryBytes(),
+		SecuritySource: securitySources[f.GetSecuritySource()],
 	}
+}
+
+// securitySources maps the reported source; unspecified and unknown values are SourceUnknown.
+var securitySources = map[agentv1.SecuritySource]secevent.Source{
+	agentv1.SecuritySource_SECURITY_SOURCE_JOURNAL:         secevent.SourceJournal,
+	agentv1.SecuritySource_SECURITY_SOURCE_FILE_VERIFIED:   secevent.SourceFileVerified,
+	agentv1.SecuritySource_SECURITY_SOURCE_FILE_UNVERIFIED: secevent.SourceFileUnverified,
+	agentv1.SecuritySource_SECURITY_SOURCE_NONE:            secevent.SourceNone,
 }
 
 var methods = map[agentv1.SshAuthMethod]string{

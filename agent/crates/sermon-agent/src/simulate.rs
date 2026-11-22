@@ -17,7 +17,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::{Context, bail};
 use sermon_buffer::{FsyncPolicy, Wal, WalConfig};
 use sermon_collectors::rate::{round_to_i64, to_f64};
-use sermon_core::{Architecture, Clock, HostFacts, MachineId, Sample, SystemClock, Value};
+use sermon_core::{
+    Architecture, Clock, HostFacts, MachineId, Sample, SecuritySource, SystemClock, Value,
+};
 use sermon_security::{Address, EventKind, SecurityEvent};
 use sermon_transport::identity::AgentKey;
 use sermon_transport::outbox::Outbox;
@@ -154,6 +156,7 @@ impl Profile {
             architecture: Architecture::Amd64,
             cpu_count: self.cpus,
             memory_bytes: self.memory_bytes,
+            security_source: SecuritySource::Journal,
         }
     }
 }

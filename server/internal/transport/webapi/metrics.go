@@ -17,6 +17,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -174,7 +175,7 @@ func (h *NodeHandler) GetNode(ctx context.Context, req *connect.Request[webv1.Ge
 		CpuCount: n.CPUCount, MemoryBytes: n.MemoryBytes, AgentVersion: n.AgentVersion,
 		EnrolledAt: timestamppb.New(n.EnrolledAt), LastSeenAt: optionalTime(n.LastSeenAt), Online: n.Online, Figures: figuresView(n.Figures),
 		LockedAt: optionalTime(n.LockedAt), LockReason: n.LockReason, LastIp: n.LastIP, TakeoverUntil: optionalTime(n.TakeoverUntil),
-		Tags: n.Tags,
+		Tags: n.Tags, SecuritySource: securitySourceView[n.SecuritySource],
 	}}), nil
 }
 
@@ -266,4 +267,12 @@ func streamingDeadline(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// securitySourceView maps the stored source of security events (M2-31); unknown is unspecified.
+var securitySourceView = map[secevent.Source]webv1.SecuritySource{
+	secevent.SourceJournal:        webv1.SecuritySource_SECURITY_SOURCE_JOURNAL,
+	secevent.SourceFileVerified:   webv1.SecuritySource_SECURITY_SOURCE_FILE_VERIFIED,
+	secevent.SourceFileUnverified: webv1.SecuritySource_SECURITY_SOURCE_FILE_UNVERIFIED,
+	secevent.SourceNone:           webv1.SecuritySource_SECURITY_SOURCE_NONE,
 }

@@ -14,7 +14,8 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 > die aktiven Alerts mit Verlauf, Quittieren, Silences und dem Regel-Editor (YAML-Import und -Export); Kanäle,
 > Policies und Wartungsfenster verwalten Admins in der UI; Tags wie `env=prod` an Nodes dienen als Filter und für das
 > Matching von Regeln, Policies und Silences. Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und
-> Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert), jeweils
+> Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert, Neustarts
+> erkennt er an der Boot-ID, und die Node-Seite warnt, wenn ein Host gar keine Security-Quelle hat), jeweils
 > amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk). Für eine Installation gibt es
 > eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)). Zum Ausprobieren der Alerts spielt der
 > Simulator Szenarien durch: CPU-Last, volle Platte, SSH-Brute-Force, Flattern und Ausfall (`just simulate`).

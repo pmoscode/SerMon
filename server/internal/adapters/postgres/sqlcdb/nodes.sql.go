@@ -97,7 +97,7 @@ const listVisibleNodes = `-- name: ListVisibleNodes :many
 SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
-       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags
+       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags, n.security_source
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
 ORDER BY n.hostname, n.id
@@ -109,24 +109,25 @@ type ListVisibleNodesParams struct {
 }
 
 type ListVisibleNodesRow struct {
-	ID            uuid.UUID
-	GroupID       uuid.UUID
-	GroupName     string
-	Hostname      string
-	OsID          string
-	OsVersion     string
-	KernelRelease string
-	Architecture  string
-	CpuCount      int32
-	MemoryBytes   int64
-	AgentVersion  string
-	CreatedAt     time.Time
-	LastSeenAt    *time.Time
-	LockedAt      *time.Time
-	LockReason    string
-	LastIp        string
-	TakeoverUntil *time.Time
-	Tags          []byte
+	ID             uuid.UUID
+	GroupID        uuid.UUID
+	GroupName      string
+	Hostname       string
+	OsID           string
+	OsVersion      string
+	KernelRelease  string
+	Architecture   string
+	CpuCount       int32
+	MemoryBytes    int64
+	AgentVersion   string
+	CreatedAt      time.Time
+	LastSeenAt     *time.Time
+	LockedAt       *time.Time
+	LockReason     string
+	LastIp         string
+	TakeoverUntil  *time.Time
+	Tags           []byte
+	SecuritySource string
 }
 
 // Nodes of the scope's groups with their group name, for the UI (M1-26).
@@ -158,6 +159,7 @@ func (q *Queries) ListVisibleNodes(ctx context.Context, arg ListVisibleNodesPara
 			&i.LastIp,
 			&i.TakeoverUntil,
 			&i.Tags,
+			&i.SecuritySource,
 		); err != nil {
 			return nil, err
 		}
@@ -230,22 +232,24 @@ const updateNodeOnConnect = `-- name: UpdateNodeOnConnect :one
 UPDATE nodes SET hostname = $1, os_id = $2, os_version = $3,
                  kernel_release = $4, architecture = $5,
                  cpu_count = $6, memory_bytes = $7,
-                 agent_version = $8, last_seen_at = $9
-WHERE id = $10
+                 agent_version = $8, last_seen_at = $9,
+                 security_source = $10
+WHERE id = $11
 RETURNING group_id
 `
 
 type UpdateNodeOnConnectParams struct {
-	Hostname      string
-	OsID          string
-	OsVersion     string
-	KernelRelease string
-	Architecture  string
-	CpuCount      int32
-	MemoryBytes   int64
-	AgentVersion  pgtype.Text
-	SeenAt        *time.Time
-	ID            uuid.UUID
+	Hostname       string
+	OsID           string
+	OsVersion      string
+	KernelRelease  string
+	Architecture   string
+	CpuCount       int32
+	MemoryBytes    int64
+	AgentVersion   pgtype.Text
+	SeenAt         *time.Time
+	SecuritySource string
+	ID             uuid.UUID
 }
 
 // The agent's Hello: current host facts and version (the machine-id never changes here).
@@ -260,6 +264,7 @@ func (q *Queries) UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConne
 		arg.MemoryBytes,
 		arg.AgentVersion,
 		arg.SeenAt,
+		arg.SecuritySource,
 		arg.ID,
 	)
 	var group_id uuid.UUID

@@ -87,6 +87,12 @@ impl StateLayout {
         self.root.join("logfile.position")
     }
 
+    /// The kernel's boot ID at the last start, for reboots without journald (M2-31).
+    #[must_use]
+    pub fn boot_id_file(&self) -> PathBuf {
+        self.root.join("boot_id")
+    }
+
     /// Removes everything the agent created (identity, buffer, journal cursor) and returns what
     /// existed.
     ///
@@ -103,6 +109,7 @@ impl StateLayout {
             self.journal_cursor_file(),
             self.logfile_position_file(),
             self.systemd_failed_file(),
+            self.boot_id_file(),
         ] {
             let metadata = match std::fs::symlink_metadata(&entry) {
                 Ok(metadata) => metadata,
@@ -136,6 +143,11 @@ mod tests {
         fs::write(layout.journal_cursor_file(), "s=a;i=1").unwrap();
         fs::write(layout.logfile_position_file(), "/var/log/messages\n1:2:3").unwrap();
         fs::write(layout.systemd_failed_file(), "backup.service 1800000000\n").unwrap();
+        fs::write(
+            layout.boot_id_file(),
+            "6b1c57d4-3c39-4e5c-9f3a-5a4b8d3c2e11",
+        )
+        .unwrap();
         fs::write(dir.path().join("notes.txt"), "admin's file").unwrap();
 
         let removed = layout.remove_agent_data().unwrap();
@@ -147,7 +159,8 @@ mod tests {
                 layout.wal_dir(),
                 layout.journal_cursor_file(),
                 layout.logfile_position_file(),
-                layout.systemd_failed_file()
+                layout.systemd_failed_file(),
+                layout.boot_id_file()
             ]
         );
         assert!(!layout.journal_cursor_file().exists());

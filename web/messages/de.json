@@ -548,5 +548,9 @@
 	"tags_cancel": "Abbrechen",
 	"matchers_tags": "Tags des Nodes",
 	"matchers_tags_invalid": "„{pair}“ ist kein gültiges Tag (key=value).",
-	"tags_input": "Neue Tags"
+	"tags_input": "Neue Tags",
+	"security_source_none_title": "Keine Security-Events",
+	"security_source_none_text": "Der Agent findet weder journald noch eine lesbare Logdatei; SSH-Anmeldungen, sudo und Neustarts dieses Nodes werden nicht gemeldet. Auf Alpine hilft",
+	"security_source_none_or": "oder die SerMon-Vorlage für rsyslog.",
+	"security_source_unverified": "Security-Events kommen aus einer Logdatei und sind nicht verifiziert."
 }

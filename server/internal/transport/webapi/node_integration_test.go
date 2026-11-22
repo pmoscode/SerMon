@@ -179,6 +179,29 @@ func TestNodeAPI_TagsShowInNodeFleetAndAudit(t *testing.T) {
 	}
 }
 
+// The node shows where its agent reads security events (M2-31); without a report it is
+// unspecified, so the UI shows nothing.
+func TestNodeAPI_ShowsTheSecuritySource(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	mia := login(t, s, "mia@example.org") // viewer: the hint is for everyone who sees the node
+	ctx := context.Background()
+	for stored, want := range map[string]webv1.SecuritySource{
+		"":                webv1.SecuritySource_SECURITY_SOURCE_UNSPECIFIED,
+		"journal":         webv1.SecuritySource_SECURITY_SOURCE_JOURNAL,
+		"file_verified":   webv1.SecuritySource_SECURITY_SOURCE_FILE_VERIFIED,
+		"file_unverified": webv1.SecuritySource_SECURITY_SOURCE_FILE_UNVERIFIED,
+		"none":            webv1.SecuritySource_SECURITY_SOURCE_NONE,
+	} {
+		ownerSQL(t, "UPDATE nodes SET security_source = '"+stored+"' WHERE id = '"+nodeAl+"'")
+		got, err := mia.node.GetNode(ctx, connect.NewRequest(&webv1.GetNodeRequest{NodeId: nodeAl}))
+		if err != nil || got.Msg.GetNode().GetSecuritySource() != want {
+			t.Errorf("stored %q: GetNode() = %v, %v; want %v", stored, got.Msg.GetNode().GetSecuritySource(), err, want)
+		}
+	}
+	ownerSQL(t, "UPDATE nodes SET security_source = '' WHERE id = '"+nodeAl+"'")
+}
+
 // ownerQueryRow reads one row as the owner (past row-level security), for checks only.
 func ownerQueryRow(t *testing.T, query string, dest ...any) {
 	t.Helper()

@@ -75,7 +75,8 @@ außer rsyslog nennt root als Absender.**
   - Mit `--grant-log-access` lesen Mitglieder von `wheel` die Logs nur noch mit doas.
   - Auf einem System mit PAM und ohne journald zählen fehlgeschlagene sudo-Versuche doppelt (PAM-Zeile und
     Zusammenfassung sind beide nicht verifiziert).
-  - Aus Dateien gibt es kein `system.reboot`: Boot-IDs liefert nur journald.
+  - Aus Dateien gibt es kein `system.reboot`: Boot-IDs liefert nur journald (seit M2-31 ersetzt durch den Vergleich
+    beim Start, siehe Nachtrag).
   - Zeilen, die während der Rotation zwischen dem letzten Lesen der alten Datei und dem Wechsel geschrieben werden,
     liest der Agent beim nächsten Durchlauf noch einmal aus der alten Datei; danach nicht mehr.
 - **Security:** Die Datei-Quelle ist ein neuer Eingang für Daten, die jeder lokale User bestimmt. Sie läuft durch
@@ -83,3 +84,13 @@ außer rsyslog nennt root als Absender.**
   Threat Model T70.
 - **Folgearbeiten (M2-31):** Reboot-Erkennung ohne journald (Boot-ID beim Start des Agents vergleichen); Hinweis in
   der UI, wenn ein Node gar keine Security-Quelle hat.
+
+## Nachtrag M2-31
+
+- **Reboot ohne journald:** Der Agent speichert die Boot-ID des Kernels (`/proc/sys/kernel/random/boot_id`) in
+  `<state_dir>/boot_id` und meldet beim Start bei einem Wechsel `system.reboot` mit der vorigen ID und der Bootzeit aus
+  `btime`. Das Event ist verifiziert, denn die ID kommt vom Kernel. Die neue ID wird erst gespeichert, wenn das Event
+  im WAL liegt. Mehrere Neustarts, während der Agent nicht lief, zählen als einer; `uptime_before` bleibt leer.
+- **Quelle melden:** Die Host-Fakten tragen `security_source` (Journal, Datei verifiziert, Datei unverifiziert,
+  keine), bei jeder Verbindung neu bestimmt; eine Datei zählt nur, wenn der Agent sie öffnen darf. Die Node-Seite
+  warnt, wenn keine Quelle da ist, und weist auf unverifizierte Dateien hin.

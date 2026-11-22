@@ -548,5 +548,9 @@
 	"tags_cancel": "Cancel",
 	"matchers_tags": "Node tags",
 	"matchers_tags_invalid": "\"{pair}\" is not a valid tag (key=value).",
-	"tags_input": "New tags"
+	"tags_input": "New tags",
+	"security_source_none_title": "No security events",
+	"security_source_none_text": "The agent finds neither journald nor a readable log file, so SSH logins, sudo and reboots of this node are not reported. On Alpine run",
+	"security_source_none_or": "or set up the SerMon template for rsyslog.",
+	"security_source_unverified": "Security events come from a log file and are not verified."
 }

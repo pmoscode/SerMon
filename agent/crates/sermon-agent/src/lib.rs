@@ -10,6 +10,7 @@ pub mod identity;
 pub mod journal;
 pub mod logfile;
 pub mod logging;
+pub mod reboot;
 pub mod scheduler;
 pub mod security;
 #[cfg(feature = "simulate")]
@@ -98,7 +99,12 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     let host_root = ProcRoot::new(&config.host_root);
     let journal_layout = layout.clone();
     let scheduler_root = host_root.clone();
-    let facts: FactsSource = Arc::new(move || Ok(read_host_facts(&host_root)?));
+    let facts_root = config.host_root.clone();
+    let facts: FactsSource = Arc::new(move || {
+        let mut facts = read_host_facts(&host_root)?;
+        facts.security_source = logfile::security_source(&facts_root);
+        Ok(facts)
+    });
     let transport = Transport::new(
         TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
         Arc::new(FileIdentity::new(layout)),
@@ -142,6 +148,21 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             collectors.push(Box::new(journal_metrics));
             journal
         } else {
+            // Without journald no boot IDs come with the lines: compare the kernel's (M2-31).
+            reboot::report(
+                &ProcRoot::new(&config.host_root),
+                &journal_layout.boot_id_file(),
+                |event| {
+                    outbox
+                        .push_security_events(vec![security::to_proto(event)], clock.now())
+                        .inspect_err(|error| {
+                            tracing::warn!(
+                                "cannot buffer the reboot, retrying at the next start: {error}"
+                            );
+                        })
+                        .is_ok()
+                },
+            );
             logfile::spawn(
                 &journal_layout,
                 &config.host_root,

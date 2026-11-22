@@ -41,6 +41,7 @@ func (s *IngestNodeStore) Connected(ctx context.Context, org tenant.OrgID, node 
 			Architecture: facts.Architecture, CpuCount: int32(min(facts.CPUCount, math.MaxInt32)),
 			MemoryBytes:  int64(min(facts.MemoryBytes, math.MaxInt64)),
 			AgentVersion: pgtype.Text{String: agentVersion, Valid: true}, SeenAt: &at, ID: uuid.UUID(node),
+			SecuritySource: string(facts.SecuritySource),
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNodeNotFound

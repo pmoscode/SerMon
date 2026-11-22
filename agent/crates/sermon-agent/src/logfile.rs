@@ -11,7 +11,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use sermon_core::ProcRoot;
+use sermon_core::{ProcRoot, SecuritySource};
 use sermon_logs::file::{Format, LocalTime, Position, Record, Sender, Tail, parse};
 use sermon_security::{LogLine, Parser, ParserConfig, SecurityEvent, Source};
 use sermon_transport::outbox::{MAX_EVENTS_PER_BATCH, Outbox};
@@ -48,6 +48,23 @@ pub fn choose(host_root: &Path) -> Option<(PathBuf, Format)> {
         .iter()
         .map(|(path, format)| (host_root.join(path), *format))
         .find(|(path, _)| path.is_file())
+}
+
+/// Where the agent finds security events (M2-31), reported in the host facts: the journal, the
+/// file of the SerMon rsyslog template, another log file, or nothing readable. Checked at every
+/// connection, so a later fix (`install.sh --grant-log-access`, rsyslog) shows after the next one.
+#[must_use]
+pub fn security_source(host_root: &Path) -> SecuritySource {
+    if journald_runs(host_root) {
+        return SecuritySource::Journal;
+    }
+    match choose(host_root) {
+        Some((path, format)) if fs::File::open(&path).is_ok() => match format {
+            Format::Trusted => SecuritySource::FileVerified,
+            Format::Syslog => SecuritySource::FileUnverified,
+        },
+        _ => SecuritySource::None,
+    }
 }
 
 /// The settings of the source.
@@ -320,6 +337,34 @@ mod tests {
             shutdown.clone(),
         ));
         (seen, shutdown, task)
+    }
+
+    // M2-31: the source in the host facts follows the choice of the source and its read access.
+    #[test]
+    fn the_security_source_names_journal_file_or_nothing() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        assert_eq!(security_source(root), SecuritySource::None);
+        append(&root.join("var/log/messages"), BUSYBOX);
+        assert_eq!(security_source(root), SecuritySource::FileUnverified);
+        append(&root.join("var/log/sermon/security.log"), TRUSTED_ROOT);
+        assert_eq!(security_source(root), SecuritySource::FileVerified);
+        fs::create_dir_all(root.join("run/systemd/journal")).unwrap();
+        assert_eq!(security_source(root), SecuritySource::Journal);
+    }
+
+    // Without read access (busybox syslogd writes with group wheel) there are no events.
+    #[test]
+    fn an_unreadable_file_is_no_source() {
+        use std::os::unix::fs::PermissionsExt;
+        if rustix::process::geteuid().is_root() {
+            return; // root reads everything
+        }
+        let root = tempfile::tempdir().unwrap();
+        let messages = root.path().join("var/log/messages");
+        append(&messages, BUSYBOX);
+        fs::set_permissions(&messages, fs::Permissions::from_mode(0o000)).unwrap();
+        assert_eq!(security_source(root.path()), SecuritySource::None);
     }
 
     async fn wait_for(seen: &Seen, n: usize) -> Vec<SecurityEvent> {

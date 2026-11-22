@@ -1,6 +1,6 @@
 //! Conversions between domain types (`sermon-core`) and protocol messages.
 
-use sermon_core::{Architecture, HostFacts, Sample, Value};
+use sermon_core::{Architecture, HostFacts, Sample, SecuritySource, Value};
 
 use crate::proto::agent::v1 as pb;
 
@@ -15,6 +15,19 @@ impl From<&HostFacts> for pb::HostFacts {
             architecture: pb::Architecture::from(facts.architecture).into(),
             cpu_count: facts.cpu_count,
             memory_bytes: facts.memory_bytes,
+            security_source: pb::SecuritySource::from(facts.security_source).into(),
+        }
+    }
+}
+
+impl From<SecuritySource> for pb::SecuritySource {
+    fn from(source: SecuritySource) -> Self {
+        match source {
+            SecuritySource::Unknown => Self::Unspecified,
+            SecuritySource::Journal => Self::Journal,
+            SecuritySource::FileVerified => Self::FileVerified,
+            SecuritySource::FileUnverified => Self::FileUnverified,
+            SecuritySource::None => Self::None,
         }
     }
 }
@@ -73,6 +86,7 @@ mod tests {
             architecture: Architecture::Arm64,
             cpu_count: 4,
             memory_bytes: 8 << 30,
+            security_source: SecuritySource::FileUnverified,
         };
 
         let message = pb::HostFacts::from(&facts);
@@ -88,7 +102,19 @@ mod tests {
                 architecture: pb::Architecture::Arm64.into(),
                 cpu_count: 4,
                 memory_bytes: 8 << 30,
+                security_source: pb::SecuritySource::FileUnverified.into(),
             }
         );
+        for (source, wire) in [
+            (SecuritySource::Unknown, pb::SecuritySource::Unspecified),
+            (SecuritySource::Journal, pb::SecuritySource::Journal),
+            (
+                SecuritySource::FileVerified,
+                pb::SecuritySource::FileVerified,
+            ),
+            (SecuritySource::None, pb::SecuritySource::None),
+        ] {
+            assert_eq!(pb::SecuritySource::from(source), wire);
+        }
     }
 }

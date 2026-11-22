@@ -270,7 +270,8 @@ eine Fake-Implementierung für Tests.
 - **Schema:** `proto/sermon/agent/v1/*.proto` und `proto/sermon/web/v1/*.proto`, verwaltet mit `buf` (Lint und
   Breaking-Change-Check in CI).
 - **Agent ↔ Server:** Ein langlebiger **bidirektionaler gRPC-Stream** `AgentService.Session`.
-    - Agent → Server: `Hello{agent_version, host_facts, config_version}`, `Heartbeat`,
+    - Agent → Server: `Hello{agent_version, host_facts, config_version}` (`host_facts` mit `security_source`: Journal,
+      Datei verifiziert/unverifiziert oder keine), `Heartbeat`,
       `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“), `Batch{seq, …}` mit genau einem
       Inhalt: `MetricBatch`, später `LogBatch`, `SecurityEventBatch`, `UpdateReport`; dazu `ProcessSnapshot` und
       `CommandResult` (nicht gepuffert)
@@ -616,7 +617,10 @@ gefuzzt** (`cargo-fuzz`).
   der Zeile.
 - **Escapes:** sshd schreibt Nicht-ASCII in User-Namen als Oktal-Escape (`j\303\274rgen`). Der Agent decodiert das.
 - **Reboot** heißt: Die Boot-ID wechselt zwischen zwei Zeilen. Nach einem Neustart des Agents zählt die Boot-ID aus dem
-  gespeicherten Cursor. `uptime_before` ist die monotone Zeit der letzten Zeile vor dem Wechsel.
+  gespeicherten Cursor. `uptime_before` ist die monotone Zeit der letzten Zeile vor dem Wechsel. Ohne journald
+  vergleicht der Agent beim Start die Boot-ID des Kernels mit der gespeicherten (verifiziert, ohne `uptime_before`).
+- **Keine Quelle:** Findet der Agent weder journald noch eine lesbare Logdatei, meldet er das in den Host-Fakten; die
+  Node-Seite sagt, dass Security-Events fehlen, und nennt `install.sh --grant-log-access` bzw. die rsyslog-Vorlage.
 - **Ohne journald** ([ADR 0025](adr/0025-logdateien-ohne-journald.md)): Zeilen aus Logdateien zählen, sind aber
   „nicht verifiziert“ – jeder lokale User kann sie schreiben. Verifiziert sind sie nur mit der SerMon-Vorlage für rsyslog
   und root als Absender; sudo bleibt dort unverifiziert (setuid, reale UID des Users). Ein Alert mit einem solchen Event

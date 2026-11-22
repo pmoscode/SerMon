@@ -89,6 +89,7 @@ pub fn read_host_facts(root: &ProcRoot) -> Result<HostFacts, HostFactsError> {
         architecture,
         cpu_count,
         memory_bytes,
+        security_source: sermon_core::SecuritySource::Unknown,
     })
 }
 

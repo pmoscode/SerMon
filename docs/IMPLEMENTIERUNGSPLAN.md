@@ -2208,6 +2208,28 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 - **Tests zuerst:** Boot-ID-Wechsel über einen Neustart des Agents; Quelle im Hello bzw. in den Host-Fakten, Anzeige.
 - **Abhängig von:** M2-20
 
+#### ☐ M2-32 – Organisationen in der UI verwalten · X · M 🔒
+- **Ziel:** Seite für Superadmins im Admin-Bereich: alle Organisationen auflisten (ohne Mandantendaten), anlegen (mit
+  Step-up, der erste Admin wird per Mail eingeladen), bearbeiten und löschen. Die API für Liste, Anlegen und Umbenennen
+  gibt es seit M1-04, eine Oberfläche nicht: Bisher legt ein Superadmin weitere Orgs nur per API an (die E2E-Demo tut
+  das so). Sperren und Löschen fehlen auch in der API (D29, E3.8).
+- **Zuerst klären** (mit dem Product Owner; Ergebnis als ADR bzw. Nachtrag zu D29):
+  - **Löschen:** Wer darf es (nur Superadmins, auch der Admin der Org selbst)? Welche Bestätigung (Step-up und Eingabe
+    des Org-Namens)? Wie lang ist die Frist bis zum endgültigen Löschen (Standard 30 Tage, konfigurierbar) und wer hebt
+    die Sperre in der Frist auf? Werden die Admins der Org per Mail benachrichtigt? Export des Audit-Logs vorher.
+  - **Sperren:** Was endet sofort (Logins, Ingest, Agent-Verbindungen, Zertifikate) und was mit laufenden Alerts und
+    Benachrichtigungen passiert.
+  - **Konten:** Was mit Usern geschieht, die nur in dieser Org Mitglied sind (bleiben ohne Org, werden gelöscht).
+  - **Grenzen:** Darf die letzte Org bzw. die Org des einzigen Superadmins gelöscht werden? Sind Namen eindeutig?
+  - **Bearbeiten:** Nur der Name oder auch Einstellungen der Org (2FA-Pflicht, Logs für Viewer, Retention, Limits)? Was
+    davon gehört dem Superadmin, was dem Admin der Org?
+  - **Liste:** Was der Superadmin ohne Mitgliedschaft sehen darf (Name, Mitglieder- und Node-Zahl, Status der Sperre).
+- **Tests zuerst:** nur Superadmins (Rollen-Matrix, Tenant-Isolation: die Liste enthält keine Mandantendaten), Step-up,
+  Audit; Sperre und Löschjob nach Frist (Integration); E2E mit axe.
+- **Abhängig von:** M1-04; Sperren und Löschen setzen E3.8 voraus (dort umsetzen oder hierher vorziehen, je nach
+  Ergebnis der Klärung)
+- **Aus:** Hinweis des Product Owners nach M2-29 (in der Demo ist „Beta AG“ für den Superadmin nirgends zu sehen).
+
 #### ☐ M2-27 – E2E-Demo M2 · X · M
 - **Ziel:** Simulierter SSH-Brute-Force in einem Agent-Container (wiederholte Fehlanmeldungen gegen den eigenen sshd)
   → Alert mit Zeitstempel, User, IP und Port landet in ntfy (Container) und Slack (Mock-Webhook); Hysterese und
@@ -2245,7 +2267,7 @@ und die Security-Review hat keine offenen kritischen Findings.
 | **E3.5b Alert-Statistik** | Lauteste Regeln, MTTA/MTTR, Absprung von einem Alert direkt in den Chart um seinen Zeitpunkt (offen aus M2-16, KONZEPT §16) | `sermon-ui-component` | M2-16 |
 | **E3.6 OIDC/SSO** | Authorization Code + PKCE, Mapping von Gruppen-Claims, Just-in-Time-Provisioning | `sermon-security-review` | M1-04 |
 | **E3.7 Passkeys und Step-up** | WebAuthn-Registrierung und -Login, Step-up für alle sensiblen Aktionen vervollständigen | `sermon-security-review` | M1-03 |
-| **E3.8 Orgs sperren und löschen** | Sperre (Logins, Ingest und Agent-Verbindungen der Org sofort beenden, Zertifikate sperren), Export des Audit-Logs, Löschjob nach Frist (Stamm-, Event- und Metrikdaten, Loki-Tenant), Aufheben der Sperre während der Frist; alles mit Step-up und Audit (D29) | `sermon-security-review` | M1-04, M1-22, E3.2 |
+| **E3.8 Orgs sperren und löschen** | Sperre (Logins, Ingest und Agent-Verbindungen der Org sofort beenden, Zertifikate sperren), Export des Audit-Logs, Löschjob nach Frist (Stamm-, Event- und Metrikdaten, Loki-Tenant), Aufheben der Sperre während der Frist; alles mit Step-up und Audit (D29); Bedienung in der Org-Verwaltung aus M2-32 | `sermon-security-review` | M1-04, M1-22, E3.2 |
 
 ---
 

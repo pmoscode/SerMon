@@ -39,6 +39,10 @@ services:
     depends_on:
       mailpit: { condition: service_started }
 
+  # The one-shot migration and "init" (M2-36) see the server's downloads as in production.
+  migrate:
+    volumes: ["../e2e/.build/downloads:/srv/downloads:ro"]
+
   caddy:
     # tls internal: Caddy's own CA, like a self-hosted server without a public certificate.
     volumes: ["../e2e/Caddyfile:/etc/caddy/Caddyfile:ro"]
@@ -137,6 +141,7 @@ services:
 
 secrets: # written by scripts/e2e-demo.sh into .build/, never committed
   postgres_password: { file: ../e2e/.build/secrets/postgres_password }
+  postgres_owner_password: { file: ../e2e/.build/secrets/postgres_owner_password }
   postgres_app_password: { file: ../e2e/.build/secrets/postgres_app_password }
   database_url: { file: ../e2e/.build/secrets/database_url }
   database_migrate_url: { file: ../e2e/.build/secrets/database_migrate_url }

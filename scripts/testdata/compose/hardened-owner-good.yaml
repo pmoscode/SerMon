@@ -1,0 +1,27 @@
+services:
+  db:
+    image: timescale/timescaledb:2@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    environment: { TIMESCALEDB_TELEMETRY: "off" }
+    secrets: [postgres_password]
+  migrate:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    secrets: [database_migrate_url]
+  app:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    secrets: [database_url]
+secrets:
+  postgres_password: { file: ./dummy }
+  database_migrate_url: { file: ./dummy }
+  database_url: { file: ./dummy }

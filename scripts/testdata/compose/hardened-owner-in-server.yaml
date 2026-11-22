@@ -1,0 +1,12 @@
+# The owner's URL in a long-running container (M2-36): a compromised server could migrate.
+services:
+  app:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    secrets: [database_url, database_migrate_url]
+secrets:
+  database_migrate_url: { file: ./dummy }
+  database_url: { file: ./dummy }

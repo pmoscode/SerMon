@@ -35,8 +35,8 @@ Veröffentlichte Images des Servers gibt es noch nicht; der Release-Prozess folg
   (`SERMON_TRUSTED_PROXIES` mit `/32`).
 - **Secrets als Dateien** in `deploy/compose/secrets/` (Verzeichnis `0700`), angelegt von `secrets.sh`, das nie
   überschreibt. Einstellungen ohne Geheimnis stehen in `.env` (Vorlage `env.example`).
-- **Erstinstallation wie im Konzept:** `docker compose run --rm server init …` einmal, danach `docker compose up -d`;
-  Migrationen laufen beim Start.
+- **Erstinstallation wie im Konzept:** `docker compose run --rm migrate init …` einmal, danach `docker compose up -d`;
+  Migrationen laufen beim Start im Service `migrate` (seit M2-36, siehe Nachtrag).
 - **Die E2E-Demo läuft gegen diese Datei:** `deploy/e2e/compose.yaml` ist ein Overlay (Mailpit, Caddys eigene CA statt
   ACME, Agent-Hosts, Ports nur auf 127.0.0.1) und wird zusammen mit der Produktionsdatei geladen.
 - Loki fehlt, bis der Server Logs schreibt (E3.2).
@@ -51,3 +51,21 @@ Veröffentlichte Images des Servers gibt es noch nicht; der Release-Prozess folg
   Images folgen mit dem Release-Prozess (v1.0); dann zeigt `image:` auf sie.
 - Wer Agents unbedingt über 443 erreichen will, braucht einen Layer-4-Proxy mit PROXY-Protokoll; das wäre ein neues
   ADR.
+
+## Nachtrag M2-36: Owner-Rolle und Migrationen ohne Superuser
+
+Befund des Security-Reviews M2-28 (T73): Der Server-Container hatte dauerhaft die Migrations-URL mit dem Passwort des
+Superusers (`POSTGRES_USER` des Images); ein übernommener Server hätte damit alle Mandanten ohne RLS gelesen und im
+Datenbank-Container Befehle ausführen können (`COPY … TO PROGRAM`).
+
+- **Drei Rollen** legt `initdb/010-roles.sh` beim ersten Start an: `sermon_owner` (NOSUPERUSER, NOBYPASSRLS, Eigentümer
+  der Datenbank und damit des Schemas `public`, Mitglied von `sermon_definer`), `sermon_definer` (ohne Login) und
+  `sermon_app`. Der Superuser heißt `postgres` und bleibt im Datenbank-Container.
+- **Ein einmaliger Service `migrate`** (dasselbe Image, `sermon-server migrate`, `restart: "no"`) migriert als
+  `sermon_owner`; der Server startet erst nach seinem Erfolg (`service_completed_successfully`) und bekommt nur
+  `database_url`. `init` läuft ebenfalls dort.
+- **`check-compose --hardened`** lehnt die Migrations-URL in einem dauerhaft laufenden Container und das Passwort des
+  Superusers außerhalb des Datenbank-Containers ab.
+- **Verworfen:** Migrationen weiter im Server, aber als `sermon_owner` – der Owner umgeht `FORCE ROW LEVEL SECURITY`
+  zwar nicht, könnte aber Policies ändern; im Dauerbetrieb braucht ihn niemand.
+- **Folge:** Installationen von vor M2-36 (Superuser `sermon`) setzt man neu auf (vor dem ersten Release, Anleitung).

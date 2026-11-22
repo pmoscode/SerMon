@@ -19,11 +19,17 @@ Diese Anleitung richtet SerMon auf einem Linux-Server mit Docker ein. Grundlage 
 |---|---|---|
 | `caddy` | TLS mit Zertifikat per ACME, Reverse-Proxy für die Web-UI und das Enrollment | 80, 443 |
 | `server` | `sermon-server`, gebaut aus dem Quellcode; Web-API, Ingest, Alerting | 8443 (Agents, mTLS) |
+| `migrate` | dasselbe Image, läuft vor dem Server einmal durch und migriert die Datenbank | – |
 | `postgres` | PostgreSQL 17 mit TimescaleDB | nur im internen Netz |
 
 Alle Container laufen mit schreibgeschütztem Dateisystem, ohne Capabilities (Ausnahmen: Caddy darf Port 80/443
 binden, PostgreSQL zum eigenen Benutzer wechseln) und ohne neue Privilegien. Die Datenbank hängt nur an einem Netz
 ohne Route nach außen. Der Agent-Port geht direkt zum Server, damit er die echten Adressen der Agents sieht.
+
+Die Datenbank hat drei Rollen ([ADR 0007](../adr/0007-mandantentrennung-rls.md)): Der Superuser `postgres` bleibt im
+Datenbank-Container; `sermon_owner` besitzt das Schema und migriert, aber nur im Service `migrate`; der Server meldet
+sich als `sermon_app` an, für die die Mandantentrennung per Row-Level-Security immer gilt. Ein übernommener Server
+kommt so weder an die Daten fremder Organisationen ohne RLS noch an das Schema.
 
 ## Einrichten
 
@@ -38,11 +44,11 @@ $EDITOR .env          # SERMON_DOMAIN, SERMON_ACME_EMAIL, SMTP
 $EDITOR secrets/smtp_password   # nur mit SERMON_SMTP_USERNAME: das Passwort, ohne Zeilenumbruch
 
 docker compose build
-docker compose run --rm server init --master-keys-file /var/lib/sermon/master_keys
+docker compose run --rm migrate init --master-keys-file /var/lib/sermon/master_keys
 docker compose up -d
 ```
 
-`init` legt die Master-Key-Datei an, migriert die Datenbank, erzeugt die Agent-CA und gibt ein **Setup-Token** aus.
+`init` läuft im Service `migrate`, legt die Master-Key-Datei an, migriert die Datenbank, erzeugt die Agent-CA und gibt ein **Setup-Token** aus.
 Es ist 30 Minuten gültig und funktioniert genau einmal. Öffnen Sie `https://<SERMON_DOMAIN>`, geben Sie das Token ein und
 legen Sie die erste Organisation und den ersten Superadmin an. Ist das Token abgelaufen, schreibt der Server bei jedem
 Start ein neues ins Log:
@@ -71,7 +77,7 @@ Veröffentlichte Releases mit Schlüssel und Binaries folgen mit v1.0.
 | Was | Wo | Hinweis |
 |---|---|---|
 | Einstellungen | `deploy/compose/.env` | keine Geheimnisse |
-| Datenbank-Passwörter, SMTP-Passwort | `deploy/compose/secrets/` | `secrets.sh` überschreibt nie; ein neues Passwort sperrt den Server aus |
+| Datenbank-Passwörter, SMTP-Passwort | `deploy/compose/secrets/` | `secrets.sh` überschreibt nie; ein neues Passwort sperrt den Server aus. `postgres_password` (Superuser) braucht nur der Datenbank-Container |
 | Master-Keys, Agent-CA | Volume `sermon_server-state` | **sichern**: ohne Master-Keys sind alle versiegelten Secrets verloren |
 | Datenbank | Volume `sermon_postgres-data` | |
 | Zertifikate von Caddy | Volume `sermon_caddy-data` | |
@@ -86,7 +92,8 @@ docker compose build
 docker compose up -d
 ```
 
-Migrationen laufen beim Start automatisch. Vor einem Update die Volumes sichern (bei gestoppten Containern); ein
+Die Migrationen spielt der Service `migrate` ein, bevor der Server startet; schlägt das fehl, startet der Server nicht
+(`docker compose logs migrate`). Vor einem Update die Volumes sichern (bei gestoppten Containern); ein
 eigener Befehl `sermon-server backup` mit getestetem Restore folgt mit v1.0.
 
 ## Self-Monitoring
@@ -109,3 +116,9 @@ Das Netz `edge` nutzt `172.30.78.0/24`, Caddy hat darin die feste Adresse `172.3
 aus `172.30.78.128/25`. Kollidiert das mit einem vorhandenen Netz, setzen Sie in `.env` `SERMON_EDGE_SUBNET`,
 `SERMON_EDGE_IP_RANGE` und `SERMON_PROXY_IP` passend; die Adresse von Caddy muss außerhalb des dynamischen Bereichs
 liegen. Nur sie darf dem Server die Adresse des Browsers nennen (`X-Forwarded-For`).
+
+## Installationen vor M2-36
+
+Bis M2-36 migrierte der Server selbst, als Superuser `sermon`. Solche Installationen (vor dem ersten Release, nur zum
+Ausprobieren) bitte neu aufsetzen: `docker compose down -v`, `./secrets/` löschen und die Schritte unter
+[Einrichten](#einrichten) wiederholen. Daten gehen dabei verloren.

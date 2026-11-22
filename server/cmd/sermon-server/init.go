@@ -67,6 +67,26 @@ func runInit(ctx context.Context, args []string, src config.Source, stdout, stde
 	return exitOK
 }
 
+// runMigrate applies the migrations and exits (M2-36): the one-shot service of the production
+// compose holds the owner's credentials, the long-running server only those of sermon_app.
+func runMigrate(ctx context.Context, src config.Source, stdout, stderr io.Writer) int {
+	cfg, err := config.Load(src)
+	if err == nil && cfg.DatabaseMigrateURL == "" {
+		err = errors.New("migrate needs SERMON_DATABASE_MIGRATE_URL (the owner of the schema)")
+	}
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "sermon-server: %v\n", err)
+		return exitError
+	}
+	logger := newLogger(cfg, stdout)
+	if err := postgres.Migrate(ctx, cfg.DatabaseMigrateURL); err != nil {
+		logger.ErrorContext(ctx, "migrate database", "error", err)
+		return exitError
+	}
+	logger.InfoContext(ctx, "database migrations applied")
+	return exitOK
+}
+
 func initialize(ctx context.Context, cfg config.Config, logger *slog.Logger) (string, time.Time, error) {
 	db, err := openDatabase(ctx, cfg, logger)
 	if err != nil {

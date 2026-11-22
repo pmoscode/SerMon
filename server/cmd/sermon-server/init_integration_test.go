@@ -77,6 +77,21 @@ func runInitOnce(t *testing.T, keysFile string) (int, string, string) {
 	return code, stdout.String(), stderr.String()
 }
 
+// The one-shot migration of the production compose (M2-36): applies the migrations and exits.
+func TestMigrate_AppliesTheMigrationsAndExits(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	keys := filepath.Join(t.TempDir(), "master_keys") // created by init before, as in the compose
+	if _, err := ensureKeyFile(keys); err != nil {
+		t.Fatal(err)
+	}
+	if code := run(context.Background(), []string{"migrate"}, dbSource(t, keys, nil), &stdout, &stderr); code != exitOK {
+		t.Fatalf("run(migrate) = %d, stderr %q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String()+stdout.String(), "database migrations applied") {
+		t.Errorf("no report of the migrations: %q %q", stdout.String(), stderr.String())
+	}
+}
+
 func TestFirstInstallation_EndToEnd(t *testing.T) {
 	keysFile := sharedKeysFile()
 

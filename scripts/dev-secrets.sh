@@ -19,6 +19,7 @@ secret() {
 }
 
 secret postgres_password
+secret postgres_owner_password
 secret postgres_app_password
 
 # Connection strings for sermon-server (read via SERMON_DATABASE_URL_FILE / _MIGRATE_URL_FILE).

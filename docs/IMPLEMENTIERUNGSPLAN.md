@@ -2417,7 +2417,21 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   Aufgaben.
 - **Abhängig von:** alle M2-Aufgaben
 
-#### ☐ M2-36 – Eigene Owner-Rolle, Migrationen ohne Superuser · X · S 🔒
+#### ☑ M2-36 – Eigene Owner-Rolle, Migrationen ohne Superuser · X · S 🔒
+> Erledigt (ADR 0028, Nachtrag M2-36; Threat Model T73):
+> - **Rollen:** `deploy/compose/initdb/010-roles.sh` legt `sermon_owner` (NOSUPERUSER, NOBYPASSRLS, Eigentümer der
+>   Datenbank, Mitglied von `sermon_definer`), `sermon_definer` und `sermon_app` an. Der Superuser heißt `postgres`
+>   und bleibt im Datenbank-Container; `secrets.sh` erzeugt zusätzlich `postgres_owner_password`, die Migrations-URL
+>   nennt `sermon_owner`.
+> - **Migrationen im einmaligen Service `migrate`** (`sermon-server migrate`, dasselbe Image, `restart: "no"`); der
+>   Server startet nach dessen Erfolg und hat nur noch `database_url`. `init` läuft dort
+>   (`docker compose run --rm migrate init …`); beide teilen die Einstellungen über einen YAML-Anker.
+> - **`check-compose --hardened`:** Owner-URL nur in einem einmaligen Container ohne Ports, das Superuser-Passwort nur
+>   im Datenbank-Container (Fixtures mit Gegenproben).
+> - **Dev** legt dieselben Rollen an, migriert aber weiter als Superuser, damit bestehende Volumes laufen; den Weg über
+>   `sermon_owner` prüfen die Integrationstests mit `nonSuperuserDatabase` (Migrationen als Owner ohne Superuser) und
+>   die E2E-Demo.
+> - **Bestehende Installationen** (vor dem ersten Release) setzt man neu auf (Anleitung).
 - **Ziel:** Befund M1 aus M2-28 (T73). In `deploy/compose` hat der Server-Container dauerhaft die Migrations-URL mit dem
   Passwort des Datenbank-Superusers (`POSTGRES_USER`); ein kompromittierter Server-Prozess hätte damit vollen Zugriff
   ohne RLS. Eine Rolle `sermon_owner` (NOSUPERUSER, Eigentümerin von Datenbank und Schema, Mitglied von

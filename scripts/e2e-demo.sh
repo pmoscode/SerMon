@@ -89,7 +89,7 @@ echo "▸ building the server image from source (deploy/compose/server.Dockerfil
 compose down -v --remove-orphans >/dev/null 2>&1 || true
 compose build --quiet
 echo "▸ first installation: sermon-server init, then docker compose up"
-compose run --rm --quiet-pull server init --master-keys-file /var/lib/sermon/master_keys >/dev/null
+compose run --rm --quiet-pull migrate init --master-keys-file /var/lib/sermon/master_keys >/dev/null
 compose up -d --quiet-pull
 for _ in $(seq 1 90); do
 	curl -fsSk "https://localhost:$port/readyz" >/dev/null 2>&1 && break

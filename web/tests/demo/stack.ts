@@ -196,7 +196,7 @@ export async function slackMessages(path: string): Promise<{ text: string; raw: 
 		.map((m) => ({ text: m.body.text, raw: JSON.stringify(m.body) }));
 }
 
-/** Runs SQL as the owner in the database container (only to age timers in the demo). */
+/** Runs SQL as the superuser in the database container (only to age timers in the demo). */
 export function ownerSQL(sql: string): string {
-	return exec('postgres', 'psql -v ON_ERROR_STOP=1 -qtA -U sermon -d sermon', sql);
+	return exec('postgres', 'psql -v ON_ERROR_STOP=1 -qtA -U postgres -d sermon', sql);
 }

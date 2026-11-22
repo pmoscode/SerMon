@@ -54,6 +54,23 @@ def unhardened(svc: dict) -> list[str]:
     return problems
 
 
+def secret_names(svc: dict) -> set[str]:
+    """The secrets a service gets (short or long syntax)."""
+    return {s.get("source") if isinstance(s, dict) else s for s in svc.get("secrets") or []}
+
+
+def misplaced_credentials(svc: dict) -> list[str]:
+    """Database credentials beyond what a container needs (M2-36, T73): the schema owner only in a
+    one-shot container, the superuser only in the database."""
+    problems = []
+    secrets = secret_names(svc)
+    if "database_migrate_url" in secrets and (str(svc.get("restart", "no")) != "no" or svc.get("ports")):
+        problems.append("keeps the schema owner's URL in a long-running container (one-shot migrate service only)")
+    if "postgres_password" in secrets and not svc.get("image", "").startswith(("timescale/timescaledb", "postgres")):
+        problems.append("gets the database superuser's password (database container only)")
+    return problems
+
+
 def check(services: dict, base: str, loopback_only: bool, hardened: bool = False) -> list[str]:
     errors = []
     for name, svc in services.items():
@@ -73,6 +90,7 @@ def check(services: dict, base: str, loopback_only: bool, hardened: bool = False
 
         if hardened:
             errors.extend(f"{name}: {problem}" for problem in unhardened(svc))
+            errors.extend(f"{name}: {problem}" for problem in misplaced_credentials(svc))
 
         if image.startswith("timescale/timescaledb"):
             if str(svc.get("environment", {}).get("TIMESCALEDB_TELEMETRY", "")).lower() != "off":

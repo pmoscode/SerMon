@@ -56,8 +56,9 @@ Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit,
 (`tests/demo`: erst die Installation, dann der SSH-Brute-Force bis zum Quittieren) (`KEEP=1` lässt die Umgebung laufen, `SKIP_BUILD=1` nutzt Agent,
 Pakete und Secrets des letzten Laufs).
 Produktion: `deploy/compose/` (ADR 0028, Anleitung `docs/admin/installation.md`); jeder Container `read_only`, ohne
-Capabilities und neue Privilegien, Agent-Port direkt am Server. `just lint-compose` prüft das (`check-compose.sh
---hardened`).
+Capabilities und neue Privilegien, Agent-Port direkt am Server, die Owner-URL der Datenbank nur im einmaligen Service
+`migrate`; `just lint-compose` prüft das (`check-compose.sh --hardened`). Erstinstallation mit
+`docker compose run --rm migrate init …`.
 `just simulate [nodes] [--seed S] [--scenario …]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`,
 M1-34); der erste Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten
 wiederverwendet. Szenarien (M2-30, `simulate/scenario.rs`) für Tests der Alerts von Hand: `cpu-high`, `disk-filling`,
@@ -68,7 +69,8 @@ Server bauen: `just build-server` (statische Binary nach `server/bin/`), `just s
 Server-Konfiguration: Environment-Variablen `SERMON_*`, jeweils alternativ als Datei über `SERMON_*_FILE`.
 Wichtige Variablen:
 - `SERMON_DATABASE_URL` (Laufzeit als `sermon_app`)
-- `SERMON_DATABASE_MIGRATE_URL` (Owner, Migrationen beim Start)
+- `SERMON_DATABASE_MIGRATE_URL` (Owner `sermon_owner`, Migrationen beim Start; in `deploy/compose` nur im einmaligen
+  Service `migrate` = `sermon-server migrate`, nie im Server, M2-36)
 - `SERMON_ALLOWED_ORIGINS` (exakte Origins der UI; leer heißt: alle schreibenden API-Aufrufe werden abgelehnt)
 - `SERMON_TRUSTED_PROXIES` (CIDRs, die `X-Forwarded-For` setzen dürfen)
 - `SERMON_MASTER_KEYS_FILE` (Pflicht mit DB; anlegen mit `sermon-server init --master-keys-file PFAD`, nie ersetzen)

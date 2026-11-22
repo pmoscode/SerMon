@@ -1387,7 +1387,9 @@ networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres;
 
 - **Erstinstallation:**
   - `sermon-server init --master-keys-file PFAD` legt die Master-Key-Datei an (nie überschrieben), migriert die DB,
-    erzeugt die Agent-CA und gibt ein Setup-Token aus.
+    erzeugt die Agent-CA und gibt ein Setup-Token aus. In `deploy/compose` läuft es im einmaligen Service `migrate`, der
+    auch bei jedem Start vor dem Server migriert (`sermon-server migrate`): Nur er kennt die Owner-Rolle
+    `sermon_owner`, der Server nur `sermon_app`, der Superuser nur der Datenbank-Container (M2-36).
   - Solange die Einrichtung offen ist, schreibt der Server bei jedem Start ein neues Token ins Log; der Weg für
     Docker (`docker compose logs`).
   - Das Token ist 30 min gültig, wird nur als Hash gespeichert und funktioniert genau einmal. Mit ihm legt der

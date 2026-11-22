@@ -39,6 +39,10 @@ expect fail "new privileges allowed with --hardened" --hardened "$data/hardened-
 expect fail "privileged container with --hardened" --hardened "$data/hardened-privileged.yaml"
 expect fail "Docker socket mounted with --hardened" --hardened "$data/hardened-socket.yaml"
 expect fail "host network with --hardened" --hardened "$data/hardened-host-network.yaml"
+# Database credentials (M2-36): the owner only in a one-shot container, the superuser only in the database.
+expect pass "owner URL in a one-shot container, superuser in the database" --hardened "$data/hardened-owner-good.yaml"
+expect fail "owner URL in a long-running container" --hardened "$data/hardened-owner-in-server.yaml"
+expect fail "superuser password outside the database" --hardened "$data/hardened-superuser-in-app.yaml"
 # Several files are merged like docker compose -f a -f b; the result is checked.
 expect pass "base and overlay merged" "$data/hardened-good.yaml" "$data/good.yaml"
 expect fail "an overlay that unpins an image" "$data/hardened-good.yaml" "$data/overlay-unpinned.yaml"

@@ -74,7 +74,7 @@ var (
 	releaseKey = ""
 )
 
-const usage = "usage: sermon-server [--version | init [--master-keys-file PATH]]"
+const usage = "usage: sermon-server [--version | init [--master-keys-file PATH] | migrate]"
 
 // Exit codes.
 const (
@@ -99,6 +99,8 @@ func run(ctx context.Context, args []string, src config.Source, stdout, stderr i
 		return exitOK
 	case len(args) > 0 && args[0] == "init":
 		return runInit(ctx, args[1:], src, stdout, stderr)
+	case len(args) == 1 && args[0] == "migrate":
+		return runMigrate(ctx, src, stdout, stderr)
 	case len(args) > 0:
 		_, _ = fmt.Fprintln(stderr, usage)
 		return exitUsage

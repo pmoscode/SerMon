@@ -71,6 +71,19 @@ func TestRunInit_RejectsUnknownFlags(t *testing.T) {
 	}
 }
 
+// migrate (M2-36) runs only the migrations, as the one-shot service of the production compose:
+// the long-running server no longer holds the owner's credentials.
+func TestRunMigrate_RequiresTheMigrateURL(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	src := envSource(map[string]string{"SERMON_MODE": "development"})
+	if code := run(context.Background(), []string{"migrate"}, src, &stdout, &stderr); code != exitError || !strings.Contains(stderr.String(), "SERMON_DATABASE_MIGRATE_URL") {
+		t.Errorf("run(migrate) = %d, stderr %q; want an error naming SERMON_DATABASE_MIGRATE_URL", code, stderr.String())
+	}
+	if code := run(context.Background(), []string{"migrate", "now"}, src, &stdout, &stderr); code != exitUsage {
+		t.Errorf("run(migrate now) = %d, want %d", code, exitUsage)
+	}
+}
+
 type memSetupStore struct{ completed bool }
 
 func (m *memSetupStore) Completed(context.Context) (bool, error) { return m.completed, nil }

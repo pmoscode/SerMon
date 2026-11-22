@@ -1,8 +1,8 @@
 #!/bin/sh
-# Creates the secrets of the production compose in ./secrets (M2-26): random database passwords
-# and the two database URLs built from them. Existing files are never overwritten – a new password
-# would lock the server out of its database. smtp_password is created empty; put the password of
-# SERMON_SMTP_USERNAME there.
+# Creates the secrets of the production compose in ./secrets (M2-26, M2-36): random database
+# passwords (superuser, schema owner, sermon_app) and the two database URLs built from them.
+# Existing files are never overwritten – a new password would lock the server out of its
+# database. smtp_password is created empty; put the password of SERMON_SMTP_USERNAME there.
 #
 #   ./secrets.sh [DIR]     default: secrets/ next to this script
 set -eu
@@ -24,10 +24,12 @@ create() {
 
 random() { openssl rand -hex 24 | tr -d '\n'; }
 
+# postgres_password: the superuser, for the database container only (M2-36).
 create postgres_password "$(random)"
+create postgres_owner_password "$(random)"
 create postgres_app_password "$(random)"
 create database_url "postgres://sermon_app:$(cat "$dir/postgres_app_password")@postgres:5432/sermon?sslmode=disable"
-create database_migrate_url "postgres://sermon:$(cat "$dir/postgres_password")@postgres:5432/sermon?sslmode=disable"
+create database_migrate_url "postgres://sermon_owner:$(cat "$dir/postgres_owner_password")@postgres:5432/sermon?sslmode=disable"
 create smtp_password ""
 
 # The containers run as their own users (postgres, nonroot) and read the files through bind

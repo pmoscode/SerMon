@@ -26,7 +26,7 @@ In der Standardkonfiguration des Postgres-Images ist der einzige Login-User Supe
 | `sermon_app` | `NOSUPERUSER NOBYPASSRLS`, besitzt keine Tabellen, nur DML-Rechte | Laufzeit von sermon-server (`postgres.Open`) |
 
 - Die Migration legt `sermon_app` ohne LOGIN an, falls die Rolle fehlt.
-- LOGIN und Passwort setzt der Betrieb: In der Entwicklungsumgebung erledigt das `deploy/dev/initdb/010-app-role.sh` mit einem eigenen Zufalls-Secret; in Produktion `sermon-server init` (M1-05).
+- LOGIN und Passwort setzt der Betrieb: `deploy/compose/initdb/010-roles.sh` legt mit eigenen Zufalls-Secrets `sermon_app`, `sermon_definer` und die Owner-Rolle `sermon_owner` (ohne Superuser) an, in der Entwicklungsumgebung wie in Produktion (M1-05, M2-36; ADR 0028).
 - **`postgres.Open` verweigert den Start**, wenn die verbundene Rolle Superuser ist, `BYPASSRLS` hat oder Tabellen im Schema besitzt (`ErrPrivilegedRole`). Eine Fehlkonfiguration wird so zum Startfehler statt zum stillen Datenleck.
 
 ### Tenant-Kontext

@@ -1,0 +1,11 @@
+# The database superuser's password outside the database container (M2-36).
+services:
+  migrate:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    secrets: [postgres_password]
+secrets:
+  postgres_password: { file: ./dummy }

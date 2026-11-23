@@ -2525,6 +2525,66 @@ Fixtures aller Zieldistros getestet und gefuzzt, das Ressourcen-Budget ist mit a
 und die Security-Review hat keine offenen kritischen Findings. Die Prüfung der Kanäle gegen die echten Dienste (M2-35)
 bleibt offen, bis es Konten dafür gibt.
 
+### 5.10 Review M2 (2026-11-23)
+
+**1. Ziel erreicht: ja.** `just e2e-demo` (Projekt `alerts`, CI-Job `e2e-demo` bei jedem Push auf amd64, nachts auf
+arm64):
+
+- web-02 greift den echten sshd auf web-01 (Debian 12) an. Nach rund 30 s landet der Alert in ntfy und im Slack-Mock,
+  mit Zeitpunkt, User, Adresse und Port.
+- Weitere Versuche im Fenster bleiben ein Alert. Ohne Quittung kommt die Erinnerung; nach dem Quittieren im Browser
+  melden beide Kanäle das einmal, danach bleibt es still.
+- Agents laufen auf Debian 12/13, Ubuntu 24.04, Rocky 9, AlmaLinux 10, Fedora 44 und Alpine (OpenRC, Dateiquelle),
+  dazu die Pakete `.deb`, `.rpm` und `.apk`.
+
+| Kriterium | Stand |
+|---|---|
+| Demo-Test M2-27 grün | ✓ in CI (amd64) und in der Nightly (arm64) |
+| Jede Standardregel hat einen auslösenden Test | ✓ Szenariotest aus M2-04 (39 Regeln; eine Regel ohne Szenario lässt ihn scheitern), dazu Simulator-Szenarien im Zeitraffer (M2-30) |
+| Parser mit Fixtures aller Zieldistros, gefuzzt | ✓ Journal-Zeilen und Security-Parser über sieben Distros (M2-06, M2-19, M2-20), Fuzz-Ziele `journal_line`, `security_parser`, mdstat und systemctl (nightly) |
+| Ressourcen-Budget mit aktiver journald-Quelle | ✓ Prüfung in jeder Demo (M2-25): amd64 0,13–0,16 % eines Kerns und 15,8–17,2 MiB mit `journalctl` |
+| Security-Review ohne offene kritische Findings | ✓ M2-28; alle Folgeaufgaben M2-36 bis M2-39 erledigt |
+
+Abweichungen vom Ziel des Meilensteins:
+
+- M2-35 (Kanäle gegen die echten Dienste) bleibt offen, bis es Konten gibt. Getestet sind die Kanäle gegen
+  Test-Server, ntfy auch gegen den echten Dienst.
+- arm64 läuft auf einem nativen Runner statt unter QEMU (M2-21).
+- Der Agent-Port ist direkt am Server veröffentlicht statt per TLS-Passthrough über Caddy (ADR 0028).
+
+**2. Erkenntnisse und ADRs.** In M2 entstanden die ADRs 0023 bis 0029 sowie Nachträge zu 0007, 0009, 0013, 0019,
+0024 und 0025. Es fehlt kein ADR. Erkenntnisse für M3:
+
+- **Der E2E-Test unter der gehärteten Unit findet, was Unit-Tests übersehen.** Beispiele: doppelte Events beim
+  `systemctl stop` (M2-07), die fehlende `machine-id` auf Alpine (M2-20), dieselbe `machine-id` in allen Images
+  (M2-21) und `unicode-case`, das im Agent fehlte (M2-06). Für M3 bekommt deshalb jede neue Pipeline (Log-Versand,
+  Live-Ansicht) ihren E2E-Fall schon in ihrer eigenen Aufgabe, nicht erst in der Demo.
+- **Gegenproben lohnen sich weiter.** In fast jeder Aufgabe überlebte zuerst mindestens eine Mutante, und die Lücke
+  wurde geschlossen.
+- **Daten der Hosts sind feindlich, auch wenn sie von root kommen.** Das betrifft journald-Felder, die erst
+  nachträglich gelesen werden (M2-28), und Dateien ohne Absender (ADR 0025). Logzeilen und Kommandozeilen werden in
+  M3 nur angezeigt, nie ausgewertet. Labels kommen nur aus den Metadaten des Agents, nie aus dem Inhalt einer Zeile.
+- **Grenzen und Fairness pro Org gehören von Anfang an in jeden Worker** (M2-37, M2-38). Log-Ingest, Abfragen und
+  Live-Tail bekommen ihre Grenzen pro Node, Org und Instanz schon in der ersten Fassung.
+- **Loki ist der erste zustandsbehaftete Dienst neben PostgreSQL.** Fällt Loki aus, dürfen Metriken und Alerts nicht
+  stehen bleiben. Bisher bestätigt der Server alle Batches eines Nodes über eine gemeinsame Seq (M3-07).
+- **Das JavaScript-Budget der Node-Seite bleibt knapp** (184,3 KiB nach M2-34). Neue Reiter (Logs, Prozesse,
+  Security) laden deshalb von Anfang an bei Bedarf.
+- **Neue Tabellen mit Mandantenbezug sind normale Tabellen mit RLS.** Hypertables haben in ihren Chunks keine RLS
+  (Erfahrung aus M2-07).
+- **Offen aus M2:**
+  - M2-35
+  - Hinweis auf verlorene Journal-Einträge in der UI (M2-05) → M3-11
+  - Konfigurierbare Redaction auch für `sudo.command` (M2-06) → M3-02, M3-03
+  - „Login von neuer IP“ (M2-08) → M3-16
+  - Statistik und Absprung zum Chart (M2-16) → M3-19
+  - Loki in der Produktions-Compose (M2-26) → M3-06
+  - Loki-Daten beim Löschen einer Org (M2-33) → M3-10
+  - Signierte Paket-Repos → E4.5
+  - Journal des Hosts aus einem Container lesen (ADR 0013): nicht geplant.
+
+**3. M3 ist in Aufgaben zerlegt** (§6.1 bis §6.8, M3-01 bis M3-28).
+
 ---
 
 ## 6. M3 – Logs und Live-Ansicht
@@ -2542,6 +2602,443 @@ bleibt offen, bis es Konten dafür gibt.
 | **E3.6 OIDC/SSO** | Authorization Code + PKCE, Mapping von Gruppen-Claims, Just-in-Time-Provisioning | `sermon-security-review` | M1-04 |
 | **E3.7 Passkeys und Step-up** | WebAuthn-Registrierung und -Login, Step-up für alle sensiblen Aktionen vervollständigen | `sermon-security-review` | M1-03 |
 | **E3.8 Orgs sperren und löschen** | Vorgezogen nach M2-33 (ADR 0029); hier bleibt nur, den Loki-Tenant einer gelöschten Org mitzulöschen (D29) | `sermon-security-review` | M1-04, M1-22, E3.2 |
+
+**Aufgaben** (Zerlegung im Review M2, §5.10). Reihenfolge nach dem Demo-Pfad: Logs vom Agent über Loki bis zum
+Explorer → Live-Ansicht → Security-Dashboard → OIDC und Passkeys → Demo. Kürzbar sind GeoIP (M3-18) und die
+Alert-Statistik (M3-19) (§10).
+
+**Kritischer Pfad:** M3-01 → M3-04 → M3-07 → M3-08 → M3-11 → M3-26, gespeist von M3-02 → M3-03 (Redaction und
+Konfiguration) und M3-06 (Loki).
+
+### 6.1 Log-Pipeline im Agent (E3.1)
+
+#### ☐ M3-01 – Log-Einträge im Protokoll · X · M 🔒
+- **Ziel:** `LogBatch` als weiterer Inhalt von `Batch` (KONZEPT §5, §10.2). Jeder `LogEntry` hat:
+  - Zeitpunkt, Quelle (Journal oder Datei), Unit bzw. Syslog-Identifier, Pfad bei Dateien
+  - Severity (syslog 0–7, sonst unbekannt) und die Nachricht (höchstens 16 KiB, sonst gekürzt mit Flag)
+  - wenige feste Felder (PID, Prozessname, Boot-ID, Transport, Facility)
+
+  Pro Batch höchstens 1 000 Einträge bzw. 256 KiB. Die Normalisierung macht aus Journal-Einträgen (`PRIORITY`) und
+  Zeilen der Dateiquelle (Formate aus ADR 0025) Einträge.
+- **Tests zuerst:**
+  - Normalisierung mit den Fixtures aller Distros (Journal und Dateien)
+  - Kürzen an der UTF-8-Grenze mit Flag
+  - Grenzen im Schema mit Gegenproben
+  - Roundtrip; goldene Datei `proto/testdata/log_batch.binpb` aus dem Agent, im Server mit protovalidate geprüft
+- **Abhängig von:** M2-05, M2-20
+- **Skill:** `sermon-proto-change`
+
+#### ☐ M3-02 – Redaction im Agent · A · M 🔒
+- **Ziel:** KONZEPT §10.3.
+  - **Eingebaute Regeln:** `password=`, `passwd`, `secret`, `token` als Schlüssel-Wert, `Authorization: Bearer|Basic`,
+    AWS-Access-Keys, private Schlüsselblöcke, Connection-Strings mit Passwort, Enrollment-Tokens (`sme_…`). Treffer
+    werden durch `***` ersetzt.
+  - **Ein Modul für alles:** Logs, `sudo.command` und Kommandozeilen der Live-Ansicht (bisher
+    `sermon-security::redact`).
+  - **Regeln der Org** (Regex mit Ersatz) kompiliert die `regex`-Crate (lineare Laufzeit) mit Größenlimit. Höchstens
+    32 Regeln; ungültige werden mit Grund abgelehnt.
+  - Selbst-Metrik: redigierte Einträge.
+- **Tests zuerst:**
+  - Tabelle mit Geheimnissen je Muster, dazu Gegenbeispiele, die unverändert bleiben müssen
+  - Proptest: Ein eingebettetes Geheimnis steht nie in der Ausgabe
+  - Fuzz-Ziel `redaction`
+  - Laufzeit pro Zeile gemessen
+  - Zu große und ungültige Org-Regeln werden abgelehnt
+- **Abhängig von:** M2-06
+
+#### ☐ M3-03 – Konfiguration vom Server an die Agents · X · M 🔒
+- **Ziel:** `ConfigUpdate{version, config}` (KONZEPT §4.1, §5: „Alles Weitere kommt versioniert vom Server“).
+  - **Inhalt:** Log-Einstellungen pro Node-Gruppe (Versand an oder aus, Mindest-Severity, ausgeschlossene Units,
+    Datei-Globs mit Multiline-Regel) und die Redaction-Regeln der Org
+  - **Speicher und API:** Speicherung mit RLS, die Version steigt mit jeder Änderung. API `LogSettingsService` mit
+    neuer Action (Admin), Step-up und Audit.
+  - **Verteilung:** Das Hello nennt die Version des Agents. Der Server schickt eine neuere beim Start der Session und
+    bei jeder Änderung an alle verbundenen Agents der Gruppe.
+  - **Agent:** prüft die Konfiguration (Regex kompilieren), speichert sie atomar im State-Verzeichnis und meldet
+    Annahme oder Fehler (`ConfigApplied{version, error}`). Bei einem Fehler behält er die alte Konfiguration.
+  - **Lokales Veto** (`allow_logs`) gewinnt immer und wird gemeldet.
+  - ADR: was der Server steuern darf.
+- **Tests zuerst:**
+  - Die neue Version erreicht verbundene und neu verbundene Agents
+  - Eine ungültige Regel lehnt schon der Server ab (Go-`regexp`)
+  - Eine Regel, die nur in Rust ungültig ist, meldet der Agent, und die alte Konfiguration bleibt
+  - Das Veto gewinnt
+  - Rollen-Matrix; die neuen RPCs im Tenant-Isolationstest
+- **Abhängig von:** M3-02, M1-14
+- **Skill:** `sermon-proto-change`, `sermon-adr`
+
+#### ☐ M3-04 – Log-Versand aus Journal und Datei · A · M 🔒
+- **Ziel:** Journal- und Dateiquelle liefern neben den Security-Parsern auch Log-Einträge.
+  - **Ablauf:** Filter aus der Konfiguration, dann Redaction, dann Batches bis 1 s oder 256 KiB ins WAL
+    (`Outbox::push_logs`).
+  - **Cursor bzw. Position** rücken erst vor, wenn beide Verbraucher bestätigt haben.
+  - **Grenzen im Agent:**
+    - Zeilen/s und Bytes/s pro Node; was darüber liegt, wird verworfen und gezählt
+    - Logs belegen höchstens die Hälfte des WAL, damit Metriken und Security-Events nicht verdrängt werden
+  - **Veto:** Mit `allow_logs = false` gehen keine Logs raus, Security-Events weiter.
+  - Selbst-Metriken: gesendet, verworfen, redigiert.
+- **Tests zuerst:**
+  - Fake-`journalctl`: Mit beiden Verbrauchern geht über Abstürze kein Eintrag doppelt oder verloren
+  - Ein Geheimnis steht nie in der WAL-Datei
+  - Filter; eine Flut wird begrenzt und gezählt; WAL-Anteil; Veto
+  - E2E unter der gehärteten Unit mit Budget bei 20 Zeilen/s und Versand
+- **Abhängig von:** M3-01, M3-02, M3-03
+
+#### ☐ M3-05 – Beliebige Logdateien per Glob · A · M 🔒
+- **Ziel:** KONZEPT §10.1. Globs aus der Konfiguration der Gruppe, z. B. `/var/log/nginx/*.log`.
+  - **Tailing:** Rotation und Position pro Datei (Tail aus M2-20); neue Dateien werden erkannt; höchstens 64 Dateien.
+  - **Multiline:** Fortsetzung bei Einrückung oder per Regex für den Zeilenanfang (z. B. Java-Stacktraces); höchstens
+    256 Zeilen bzw. 64 KiB pro Eintrag.
+  - **Pfade:**
+    - Nur unter den lokal erlaubten Präfixen (neu in `agent.toml`, Standard `/var/log`)
+    - Nie das State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys` oder `/dev`; Symlinks werden aufgelöst und erneut
+      geprüft
+    - Ein kompromittierter Server liest so keine Schlüssel des Agents.
+- **Tests zuerst:**
+  - Glob mit neuen und rotierten Dateien; Neustart setzt fort
+  - Multiline mit Fixture; Grenzen
+  - Abgelehnte Pfade: State-Verzeichnis, Symlink nach außen, Präfix-Trick `/var/log2`
+  - Fuzz-Ziel für Multiline
+- **Abhängig von:** M3-04
+
+### 6.2 Loki (E3.2)
+
+#### ☐ M3-06 – Loki in der Compose und Adapter · S · M 🔒
+- **Ziel:**
+  - **Loki in `deploy/compose`:**
+    - Netz `internal`, read-only mit Volume
+    - `auth_enabled: true`, Telemetrie aus
+    - Compactor mit Retention 14 Tage und Löschen pro Tenant; Grenzen pro Tenant
+    - Dev-Konfiguration angleichen
+  - **Adapter `adapters/loki`:**
+    - Push mit `X-Scope-OrgID` = Org-UUID aus dem Scope
+    - Labels nur `node_id`, `source`, `unit`, `severity` (Unit begrenzt); alles andere als structured metadata
+    - typisierte Abfrage (`query_range`)
+  - **Ziel-URL:** fest aus `SERMON_LOKI_URL` (Betreiber). Eigener HTTP-Client ohne Redirects und Proxy, nur zu dieser
+    URL. ADR: Loki ist kein Ziel für `safehttp`; die Ausnahme für `forbidigo` gilt an genau einer Stelle.
+  - Loki im Health-Check `/readyz`.
+- **Tests zuerst:**
+  - Integration gegen Loki (Testcontainers): Push und Abfrage; Org B sieht nichts von Org A; ohne Tenant abgelehnt
+  - Labels begrenzt
+  - Fehlerfälle: 429, 5xx, Timeout
+  - `check-compose --hardened` und Telemetrie-Prüfung
+- **Abhängig von:** M2-26
+- **Skill:** `sermon-adr`
+
+#### ☐ M3-07 – Log-Ingest · S · M 🔒
+- **Ziel:** `LogBatch` aus dem Stream nach Loki.
+  - Node und Org kommen aus dem Zertifikat; Zeitfenster wie bei Events.
+  - **Grenzen:** Bytes/s pro Node mit Token-Bucket über Reconnects und Throttle; Grenze pro Org; Zähler in
+    `/metrics`.
+  - **Ack** erst nach erfolgreichem Push. Duplikate nach einem Reconnect werden erkannt (Seq) oder sind für Loki
+    harmlos; das ist zu belegen.
+  - **Ausfall von Loki:** Metriken und Alerts dürfen nicht stehen bleiben. Bisher bestätigt eine gemeinsame Seq alle
+    Batches eines Nodes, deshalb das Verhalten in einem ADR festlegen: Logs nach begrenzten Versuchen verwerfen und
+    zählen, oder Acks pro Inhalt (Protokolländerung). Das Self-Monitoring meldet den Ausfall.
+- **Tests zuerst:**
+  - Ack-Reihenfolge mit Metriken und Events; Resend nach Reconnect ohne Duplikate in Loki
+  - Eine Flut wird begrenzt
+  - Bei einem Ausfall von Loki werden Metriken weiter gespeichert und bestätigt
+  - Labels und Tenant nie aus dem Payload
+- **Abhängig von:** M3-01, M3-06, M1-24
+
+#### ☐ M3-08 – Log-Abfrage mit typisierten Filtern · S · M 🔒
+- **Ziel:**
+  - **RPCs:**
+    - `LogService.QueryLogs`: Zeitraum, Nodes oder Gruppe, Quelle, Unit, Severity, Volltext als Teilstring (auch ohne
+      Groß- und Kleinschreibung), Limit, Richtung, Paging
+    - `LogHistogram`: Rate nach Severity
+    - `LogContext`: ± 50 Zeilen um einen Eintrag
+  - **LogQL-Builder** aus typisierten Bausteinen (`domain/logql`):
+    - Label-Werte und Zeilenfilter escaped; Eingaben in Regex nur über `QuoteMeta`
+    - Die Nodes sind immer die Schnittmenge mit dem Scope (`view_logs`, Viewer-Schalter)
+    - Der Tenant kommt immer aus dem Scope
+  - **Grenzen:** Zeitraum, Abfragedauer, Antwortgröße.
+- **Tests zuerst:**
+  - Builder-Tabelle mit feindlichen Eingaben (Anführungszeichen, Backslash, `}`, `|`, Zeilenumbrüche)
+  - Fuzz-Test: Die Ausgabe ist gültig und enthält genau den Scope
+  - Viewer mit abgeschalteten Logs → `PERMISSION_DENIED`; ein fremder Node bringt nichts
+  - Alle RPCs im Tenant-Isolationstest; Integration gegen Loki
+- **Abhängig von:** M3-06, M3-07
+
+#### ☐ M3-09 – Live-Tail · S · S 🔒
+- **Ziel:** `LogService.TailLogs` (Server-Streaming) mit den Filtern aus M3-08.
+  - ADR: Loki wird in kurzen Abständen ab dem letzten Zeitstempel abgefragt, die Duplikate am Rand werden entfernt.
+    Kein Loki-WebSocket, also keine neue Abhängigkeit, und mehrere Instanzen bleiben möglich.
+  - **Grenzen wie T26** (Streams pro Session, User, Org und Instanz); Rechte alle 30 s erneut geprüft; höchstens
+    N Zeilen/s pro Stream, sonst Hinweis „gedrosselt“.
+- **Tests zuerst:** Neue Zeilen kommen genau einmal an; Grenzen; Rechteentzug und Abmeldung beenden den Stream.
+- **Abhängig von:** M3-08
+
+#### ☐ M3-10 – Loki-Daten löschen · S · S 🔒
+- **Ziel:** Rest von D29 bzw. E3.8.
+  - Der Löschjob einer Org löscht ihren Loki-Tenant (Delete-API, Compactor), vor den Stammdaten und mit Wiederholung.
+  - Das Löschen eines Nodes löscht auch seine Logs.
+  - Die Retention-Obergrenze aus den Kontingenten der Org (ADR 0029) gilt auch für Logs, oder die Abweichung wird
+    begründet.
+- **Tests zuerst:** Integration gegen Loki: Nach dem Löschen bleibt nichts von der Org, die andere Org behält alles;
+  Wiederholung nach einem Ausfall; Löschen eines Nodes.
+- **Abhängig von:** M3-07, M2-33
+
+### 6.3 Log-Explorer (E3.3)
+
+#### ☐ M3-11 – Log-Explorer · W · L
+- **Ziel:** Seite `/logs` mit Menüpunkt (KONZEPT §10.4, §17).
+  - **Filter:** Zeitraum, Node/Gruppe, Quelle/Unit, Severity, Volltext; alle Filter stehen in der URL.
+  - **Histogramm** nach Severity; Zoom setzt den Zeitraum.
+  - **Ergebnisliste:**
+    - virtualisiert, nur als Text: ANSI-Codes entfernt, Steuer- und Bidi-Zeichen sichtbar ersetzt, lange Zeilen
+      umbrochen
+    - Kontextansicht ± 50 Zeilen; Live-Tail mit Pause
+  - **Einstiege:** Reiter „Logs“ auf der Node-Seite (lädt bei Bedarf); Absprung aus Charts und Alerts („Logs dieses
+    Nodes um diesen Zeitpunkt“).
+  - **Hinweise:** verlorene Journal-Einträge (offen aus M2-05); Logs per `allow_logs` abgeschaltet.
+  - Lade-, Fehler- und Leerzustand; Hilfe DE/EN.
+- **Tests zuerst:**
+  - Entfernen von ANSI- und Steuerzeichen (Unit)
+  - Eine feindliche Logzeile (`<script>`, Bidi) erscheint nur als Text
+  - Filter ↔ URL; Pause des Live-Tails; Zustände der Komponenten
+  - E2E mit axe; Budget
+- **Abhängig von:** M3-08, M3-09
+- **Skill:** `sermon-ui-component`
+
+#### ☐ M3-12 – Log-Einstellungen in der UI · W · M 🔒
+- **Ziel:** Reiter „Logs“ im Admin-Bereich.
+  - **Pro Gruppe:** Versand, Mindest-Severity, ausgeschlossene Units, Datei-Globs mit Multiline.
+  - **Redaction-Regeln der Org** mit „Testen“ gegen eine Beispielzeile.
+  - **Stand pro Node:** angewendete Version, Fehler des Agents, lokales Veto.
+  - Alle Änderungen mit Step-up.
+- **Tests zuerst:** Formularlogik (Globs, Regex); Komponenten (Fehler des Agents sichtbar, Step-up); E2E mit axe.
+- **Abhängig von:** M3-03, M3-05
+- **Skill:** `sermon-ui-component`
+
+### 6.4 Live-Ansicht (E3.4)
+
+#### ☐ M3-13 – Prozess-Snapshots im Agent · A · M 🔒
+- **Ziel:** KONZEPT §9.
+  - **Collector** über `/proc/<pid>/{stat,status,cmdline,cgroup}` per `ProcRoot`:
+    - PID, PPID, User (aus `/etc/passwd`), Status, CPU-Anteil über das Intervall, Speicheranteil und RSS, Threads,
+      Laufzeit
+    - Befehlszeile (redigiert, gekürzt) und Unit bzw. Container aus der cgroup
+  - **Kopfzeile:** CPU, Speicher, Swap, Load und Uptime.
+  - **Grenzen:** höchstens 4 000 Prozesse, der Rest wird gezählt. Prozesse, die beim Lesen enden, werden übersprungen.
+    Felder fremder Prozesse ohne Leserecht kommen als „n/a“.
+  - **Protokoll:**
+    - Server → Agent: `StartLiveView{interval, hide_cmdline}` und `StopLiveView`
+    - Agent → Server: `ProcessSnapshot`, nicht gepuffert und nicht im WAL
+    - Der Start gilt als Lease: Ohne Erneuerung hört der Agent nach 60 s von selbst auf.
+  - **Veto:** `allow_live_view = false` lehnt mit Grund ab.
+- **Tests zuerst:**
+  - Fixtures mit `/proc/<pid>`: Kernel-Threads, Zombies, Namen mit `)` und Leerzeichen, fremde Prozesse
+  - CPU-Anteil über zwei Snapshots; Redaction der Befehlszeile; Grenzen; Veto; Ablauf der Lease
+  - Fuzz-Ziel für `stat` und `status`
+  - E2E mit Budget bei aktiver Live-Ansicht (2 s)
+- **Abhängig von:** M3-02
+- **Skill:** `sermon-add-collector`, `sermon-proto-change`
+
+#### ☐ M3-14 – Live-Ansicht im Server · S · M 🔒
+- **Ziel:** `LiveViewService.WatchProcesses` (Server-Streaming, `use_live_view`).
+  - **Fan-out:** Mehrere Betrachter teilen sich einen Agent-Stream. Der erste Betrachter startet den Stream (die
+    Lease wird erneuert), 30 s nach dem letzten folgt `StopLiveView`.
+  - **Speicherung:** Snapshots werden nie gespeichert.
+  - **Org-Schalter „Befehlszeile ausblenden“:** Agent und Server entfernen sie.
+  - **Grenzen wie T26**; Rechte alle 30 s erneut geprüft; eine klare Meldung, wenn der Node offline ist.
+  - Nur die Instanz mit der Agent-Session kann liefern. Das wird als Nachtrag zu ADR 0015 festgehalten.
+- **Tests zuerst:**
+  - Zwei Betrachter teilen einen Agent-Stream; Stop nach 30 s
+  - Rechteentzug beendet den Stream; ein fremder Node gibt `NOT_FOUND`; Tenant-Isolationstest
+  - Das Veto des Agents erreicht die UI; Schalter für die Befehlszeile
+- **Abhängig von:** M3-13, M1-26
+
+#### ☐ M3-15 – Prozess-Ansicht in der UI · W · M
+- **Ziel:** Reiter „Prozesse (Live)“ auf der Node-Seite (lädt bei Bedarf).
+  - Kopfzeile wie bei `top`; virtualisierte Tabelle mit Sortierung.
+  - **Filter** nach User, Name und Regex (im Browser, eine ungültige Regex wird angezeigt); Baumansicht; Pause.
+  - **Detail-Drawer:** vollständige, redigierte Befehlszeile, Unit bzw. Container, „n/a“ mit ⓘ.
+  - Keine Aktionen (D19); Hilfe DE/EN.
+- **Tests zuerst:**
+  - Sortierung; Baum aus der PPID (Zyklen, fehlende Eltern); Filter; Pause
+  - Ein Prozessname mit Markup erscheint als Text
+  - E2E mit axe; Budget
+- **Abhängig von:** M3-14
+- **Skill:** `sermon-ui-component`
+
+### 6.5 Security-Dashboard (E3.5)
+
+#### ☐ M3-16 – Security-Auswertungen und bekannte Quellen · S · M 🔒
+- **Ziel:** `SecurityEventService` erweitern.
+  - **Auswertungen:** Fehlversuche über die Zeit nach Node; Top-IPs und Top-User; Root-Logins; sudo-Fehler.
+  - **Erfolgreiche Logins mit Markierung „neu“:** User und Quelle erstmals auf dem Node. Eine neue Tabelle mit RLS
+    merkt sich die bekannten Quellen und wird beim Ingest gepflegt.
+  - **Regel `security.ssh.login_new_source`** (offen aus M2-08). Sie gilt erst, wenn der Node 7 Tage beobachtet wurde,
+    damit neue Nodes nicht fluten.
+  - **CSV-Export:** begrenzt; Werte mit `= + - @` am Anfang werden gegen CSV-Injection geschützt.
+- **Tests zuerst:**
+  - Auswertungen gegen PostgreSQL (Fenster, Scope, Viewer-Schalter)
+  - „neu“ genau beim ersten Login; Szenario der Regel
+  - CSV-Injection; Tenant-Isolationstest
+- **Abhängig von:** M2-07, M2-08
+- **Skill:** `sermon-add-alert-rule`
+
+#### ☐ M3-17 – Security-Dashboard · W · M
+- **Ziel:** Seite `/security` (KONZEPT §16.4).
+  - Fehlversuche gestapelt nach Node; Top-IPs und Top-User
+  - Erfolgreiche Logins mit „neu“, Root-Logins, sudo-Fehler
+  - Tabelle mit Filtern und CSV-Export; Markierung „unverifiziert“
+  - Reiter „Security“ auf der Node-Seite (lädt bei Bedarf); Absprung in die Logs; Hilfe DE/EN
+- **Tests zuerst:** Komponenten mit feindlichen User-Namen; Filter ↔ URL; CSV-Download; E2E mit axe; Budget.
+- **Abhängig von:** M3-16
+- **Skill:** `sermon-ui-component`
+
+#### ☐ M3-18 – GeoIP (optional) · S · S
+- **Ziel:**
+  - **Datenbank:** lokal im MMDB-Format, bereitgestellt vom Betreiber (`SERMON_GEOIP_DB_FILE`, z. B. DB-IP Lite
+    unter CC BY 4.0). Der Server lädt nichts herunter (D27, T46).
+  - **Anzeige:** Land bei den Top-IPs und in der Tabelle, mit Lizenzhinweis.
+  - Die neue Abhängigkeit wird geprüft (Lizenz, Pflege).
+- **Tests zuerst:** Lookup mit einer Test-MMDB; ohne Datei ist die Funktion aus; private Adressen ohne Land.
+- **Abhängig von:** M3-16
+
+### 6.6 Alert-Statistik (E3.5b)
+
+#### ☐ M3-19 – Alert-Statistik und Absprung in Chart und Logs · S+W · M
+- **Ziel:** offen aus M2-16 (KONZEPT §16).
+  - **Statistik:** lauteste Regeln, MTTA und MTTR über 7 bzw. 30 Tage aus `alert_history`.
+  - **Absprung:** von einem Alert in die Charts des Nodes um seinen Zeitpunkt (Zeitraum in der URL der Node-Seite)
+    und in die Logs.
+- **Tests zuerst:** Berechnung für offene, nie quittierte und flatternde Alerts; Scope; Komponenten; E2E.
+- **Abhängig von:** M2-16, M3-11
+
+### 6.7 OIDC (E3.6)
+
+#### ☐ M3-20 – OIDC-Anmeldung · S · L 🔒
+- **Ziel:**
+  - **Ablauf:** Authorization Code mit PKCE (S256); `state` und `nonce` an die Vor-Session gebunden.
+  - **Abhängigkeiten:** `coreos/go-oidc` und `x/oauth2`, vorher geprüft. Discovery und JWKS laufen über `safehttp`
+    (Allowlist für interne IdPs).
+  - **Konfiguration der Instanz:** Issuer, Client-ID, Secret als Datei, Scopes, Anzeigename.
+  - **Identität:**
+    - immer über `iss` + `sub` (neue Tabelle), nie allein über die E-Mail
+    - bestehende Konten verknüpfen nur angemeldet und mit Step-up
+  - **Session** wie beim lokalen Login.
+  - **2FA-Pflicht der Org:** gilt nur als erfüllt, wenn der Betreiber dem IdP vertraut (Einstellung) bzw. `amr`
+    Mehrfaktor nennt, sonst gilt der lokale zweite Faktor.
+  - **Step-up** per lokalem zweitem Faktor oder per erneuter Anmeldung beim IdP (`max_age=0`, `auth_time` geprüft).
+  - ADR.
+- **Tests zuerst:**
+  - Fake-IdP im Test (eigener Schlüssel, JWKS)
+  - Abgelehnt werden: falscher `state`, falsche `nonce`, Audience oder Issuer; abgelaufenes Token; `alg: none`;
+    fehlendes PKCE
+  - Unbekannte Identität ohne JIT → abgelehnt, ohne Konten zu verraten
+  - Verknüpfen nur angemeldet; Step-up mit `auth_time`; Rate-Limit
+- **Abhängig von:** M1-02, M1-03, M2-09
+- **Skill:** `sermon-adr`
+
+#### ☐ M3-21 – Gruppen-Mapping und Just-in-Time-Provisioning · S · M 🔒
+- **Ziel:**
+  - **Mapping** OIDC-Gruppe → Node-Gruppe (oder `*`) und Rolle, pro Org gepflegt von ihren Admins (Step-up, Audit).
+  - **Abgleich bei jedem Login:** Rollen aus dem Mapping werden gesetzt und entzogen. Von Hand vergebene Rollen
+    bleiben unberührt (Herkunft an der Rollenbindung).
+  - **JIT** legt Konto und Mitgliedschaft an, wenn ein Mapping passt; abschaltbar für die Instanz.
+  - Kontingente gelten; der letzte Admin bleibt; gesperrte Orgs sind ausgenommen.
+- **Tests zuerst:**
+  - Abgleich: hinzufügen, entziehen, von Hand Vergebenes bleibt
+  - Letzter Admin, Kontingent, gesperrte Org; Audit
+  - Tenant-Isolationstest; Rollen-Matrix
+- **Abhängig von:** M3-20
+
+#### ☐ M3-22 – OIDC in der UI und E2E mit echtem IdP · W · M 🔒
+- **Ziel:**
+  - Button auf der Login-Seite, nur wenn OIDC konfiguriert ist; Rückkehr und Fehlerseite ohne Details
+  - **Verknüpfungen im Konto:** Verknüpfen mit Step-up; Lösen nur, wenn ein anderer Anmeldeweg bleibt
+  - Mapping-Verwaltung im Admin-Bereich
+  - E2E mit Dex (Image per Digest) in der E2E-Umgebung
+- **Tests zuerst:** Komponenten; E2E: Login über Dex mit Mapping auf Operator, JIT, Entzug beim nächsten Login.
+- **Abhängig von:** M3-21
+- **Skill:** `sermon-ui-component`
+
+### 6.8 Passkeys, Step-up und Querschnitt (E3.7)
+
+#### ☐ M3-23 – Passkeys im Server · S · L 🔒
+- **Ziel:**
+  - **Bibliothek:** `go-webauthn/webauthn`, vorher geprüft. RP-ID und Origins kommen aus `SERMON_ALLOWED_ORIGINS`.
+  - **Registrierung:** mit Step-up, Name und höchstens 10 pro User; `attestation: none`.
+  - **Anmeldung:**
+    - als zweiter Faktor
+    - ohne Passwort (discoverable credential mit User Verification zählt als zwei Faktoren)
+    - als Step-up
+  - **Schutz:**
+    - Challenge 5 min gültig, einmalig und an die (Vor-)Session gebunden
+    - Signaturzähler mit Hinweis auf Klone (synchronisierte Passkeys mit Zähler 0 beachten)
+    - Kontosperre und Rate-Limits wie beim Passwort
+  - **Löschen** mit Step-up. Ein Passkey zählt für die 2FA-Pflicht der Org.
+- **Tests zuerst:**
+  - Registrierung und Login mit einem Software-Authenticator im Test
+  - Abgelehnt werden: falsche Origin oder RP-ID, wiederverwendete Challenge, fremder User, Zähler rückwärts
+  - Löschen des letzten Faktors bei Org-Pflicht; Rate-Limit; Audit
+- **Abhängig von:** M1-03
+
+#### ☐ M3-24 – Passkeys in der UI · W · M 🔒
+- **Ziel:**
+  - **Einstellungen „Sicherheit“:** Passkey hinzufügen (Name), Liste mit letzter Nutzung, umbenennen, löschen
+    (Step-up)
+  - **Login-Seite:** „Mit Passkey anmelden“ (Conditional UI, wo verfügbar)
+  - Der Step-up-Dialog bietet Passkeys an; Hilfe DE/EN
+- **Tests zuerst:**
+  - Komponenten: Abbruch durch den User, Browser ohne WebAuthn
+  - E2E mit dem virtuellen Authenticator von Chromium: registrieren, Login ohne Passwort, Step-up; axe
+- **Abhängig von:** M3-23
+- **Skill:** `sermon-ui-component`
+
+#### ☐ M3-25 – Step-up für alle sensiblen Aktionen · S · S 🔒
+- **Ziel:** Liste der sensiblen Aktionen festlegen (KONZEPT §7) und als Tabelle prüfen. Dazu gehören neu
+  Log-Einstellungen und Redaction, OIDC-Mapping, Passkeys, der Viewer-Logs-Schalter und der Export des Audit-Logs. Ein
+  Test ruft jede schreibende RPC ohne frischen Step-up auf und erwartet `StepUpRequired`. CI erzwingt die Abdeckung
+  neuer RPCs, wie bei den Isolationstests.
+- **Tests zuerst:** der Abdeckungstest selbst; er schlägt für eine neue RPC ohne Eintrag fehl.
+- **Abhängig von:** M3-12, M3-21, M3-23
+
+#### ☐ M3-26 – E2E-Demo M3 · X · M
+- **Ziel:** „Fehlersuche ohne SSH“ in `web/tests/demo/`.
+  - **Fehler finden:**
+    - Auf web-01 schlägt ein Dienst fehl und schreibt eine Zeile mit einem Geheimnis →
+      `system.systemd.unit_failed`
+    - Vom Alert in die Logs um den Zeitpunkt: Die Fehlerzeile ist sichtbar, das Geheimnis steht als `***` da (auch in
+      Loki geprüft)
+  - **Live:** Der Live-Tail zeigt eine neue Zeile. Die Live-Ansicht zeigt einen Prozess mit hoher CPU-Last und
+    redigierter Befehlszeile.
+  - **Security:** Das Dashboard zeigt den Brute-Force aus der M2-Demo mit der Top-IP.
+  - **Anmeldung:** über Dex; Step-up per Passkey (virtueller Authenticator).
+  - **Dateien:** Eine Logdatei per Glob auf dem Alpine-Host.
+- **Abhängig von:** M3-11, M3-15, M3-17, M3-22, M3-24
+
+#### ☐ M3-27 – Ressourcen-Budget mit Logs und Live-Ansicht · X · S
+- **Ziel:** `agent-budget.sh` misst in der Demo zusätzlich mit Log-Versand (20 Zeilen/s) und aktiver Live-Ansicht.
+  - Ziel: < 1 % eines Kerns und < 30 MiB. Braucht die Live-Ansicht mehr, bekommt sie eine eigene, begründete Grenze
+    (KONZEPT §4.1 anpassen).
+  - Der Speicher von Loki ist in der Compose begrenzt.
+- **Tests zuerst:** Gegenprobe mit gesenkter Grenze schlägt fehl.
+- **Abhängig von:** M3-04, M3-13
+
+#### ☐ M3-28 – Security-Review M3 · X · S 🔒
+- **Ziel:** Skill `sermon-security-review` über alle M3-Änderungen, aufgeteilt wie M2-28 in Teil-Reviews ohne
+  Kontext der Umsetzung:
+  - Log-Pipeline und Redaction im Agent
+  - Loki, LogQL und Mandantentrennung
+  - Live-Ansicht
+  - OIDC, Passkeys und Step-up
+  - Darstellung fremder Daten in der UI
+
+  Danach das Threat Model aktualisieren (T15, T20, T22, T35, T42, T53) und Befunde als Aufgaben anlegen.
+- **Abhängig von:** alle M3-Aufgaben
+
+**M3 fertig, wenn:**
+
+- Der Demo-Test M3-26 ist grün.
+- Logs sind pro Org getrennt: Loki-Test und Tenant-Isolationstest aller neuen RPCs.
+- Die Redaction ist gefuzzt, und kein Geheimnis gelangt in das WAL.
+- Das Ressourcen-Budget ist mit Log-Versand eingehalten.
+- Die Security-Review hat keine offenen kritischen Findings.
 
 ---
 

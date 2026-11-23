@@ -31,6 +31,17 @@ ORDER BY id;
 
 -- Node identity in the UI (M2-23).
 
+-- name: NodeLockedAt :one
+SELECT locked_at FROM nodes WHERE id = sqlc.arg(id) FOR UPDATE;
+
+-- name: RestoreLockRevokedCertificate :exec
+-- The unlock gives the agent its current key back (M2-39): the newest certificate of the node, if
+-- the lock revoked it (same time). Older ones – a rotation's grace – stay revoked.
+UPDATE agent_certificates c SET revoked_at = NULL
+WHERE c.node_id = sqlc.arg(node_id) AND c.revoked_at = sqlc.arg(locked_at)
+  AND c.serial = (SELECT n.serial FROM agent_certificates n WHERE n.node_id = sqlc.arg(node_id)
+                  ORDER BY n.not_before DESC, n.created_at DESC LIMIT 1);
+
 -- name: UnlockNode :execrows
 UPDATE nodes SET locked_at = NULL, lock_reason = NULL
 WHERE id = sqlc.arg(id) AND locked_at IS NOT NULL;

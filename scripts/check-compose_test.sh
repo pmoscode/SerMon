@@ -43,6 +43,12 @@ expect fail "host network with --hardened" --hardened "$data/hardened-host-netwo
 expect pass "owner URL in a one-shot container, superuser in the database" --hardened "$data/hardened-owner-good.yaml"
 expect fail "owner URL in a long-running container" --hardened "$data/hardened-owner-in-server.yaml"
 expect fail "superuser password outside the database" --hardened "$data/hardened-superuser-in-app.yaml"
+# More ways out of a container (M2-39).
+expect fail "SYS_ADMIN added back with --hardened" --hardened "$data/hardened-cap-sys-admin.yaml"
+expect fail "host PID namespace with --hardened" --hardened "$data/hardened-pid-host.yaml"
+expect fail "seccomp unconfined with --hardened" --hardened "$data/hardened-seccomp-unconfined.yaml"
+expect fail "host device with --hardened" --hardened "$data/hardened-devices.yaml"
+expect fail "host /run mounted with --hardened" --hardened "$data/hardened-run-mount.yaml"
 # Several files are merged like docker compose -f a -f b; the result is checked.
 expect pass "base and overlay merged" "$data/hardened-good.yaml" "$data/good.yaml"
 expect fail "an overlay that unpins an image" "$data/hardened-good.yaml" "$data/overlay-unpinned.yaml"

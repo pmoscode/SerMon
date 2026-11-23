@@ -261,6 +261,30 @@ func TestClient_RedirectsStayOnTheHost(t *testing.T) {
 	}
 }
 
+// "Send test" with a host name must not tell whether the name exists inside the network: a
+// blocked address and a name that doesn't resolve read the same (M2-39). They stay apart for the
+// retry: blocked is final, an unresolved name may come back.
+func TestClient_NamesDontRevealInternalTargets(t *testing.T) {
+	s := newClient(t, safehttp.Options{})
+	s.net.name("db.internal", "10.0.0.5")
+	_, blocked := get(t, s.client, "https://db.internal/")
+	_, unknown := get(t, s.client, "https://nothing.internal/")
+	if blocked == nil || unknown == nil {
+		t.Fatalf("blocked %v, unknown %v", blocked, unknown)
+	}
+	strip := func(err error, host string) string { return strings.ReplaceAll(err.Error(), host, "HOST") }
+	if strip(blocked, "db.internal") != strip(unknown, "nothing.internal") {
+		t.Errorf("texts differ:\n%v\n%v", blocked, unknown)
+	}
+	if !errors.Is(blocked, safehttp.ErrBlocked) || errors.Is(unknown, safehttp.ErrBlocked) {
+		t.Errorf("blocked %v, unknown %v: only the first is final", blocked, unknown)
+	}
+	// An address typed as such names its class.
+	if _, err := get(t, s.client, "https://10.0.0.5/"); err == nil || !strings.Contains(err.Error(), "private") {
+		t.Errorf("address: %v", err)
+	}
+}
+
 func TestClient_LimitsRedirects(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(r.URL.Path) > 5 { // /a, /aa, …, /aaaaa

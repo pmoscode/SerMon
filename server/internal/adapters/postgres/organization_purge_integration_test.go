@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -183,6 +184,56 @@ func TestOrgPurge_RemovesEverythingOfTheOrganizationAndNothingElse(t *testing.T)
 	}
 	if users[0] || !users[1] || !users[2] {
 		t.Errorf("accounts left (only here, also elsewhere, superadmin) = %v, want false true true", users)
+	}
+}
+
+// Lifting the lock while the deletion job starts: org_purge locks the row before it checks, so it
+// either sees the lock lifted and refuses, or the unlock waits and finds nothing (M2-39). Without
+// the row lock the purge read the old state and deleted an organization just unlocked.
+func TestOrgPurge_WaitsForAConcurrentUnlock(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	p := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	ownerExec(t, f.db.OwnerDSN, "UPDATE organizations SET locked_at = now(), deletion_due_at = now() - interval '1 minute' WHERE id = $1", p.org)
+
+	unlock, err := pgx.Connect(ctx, f.db.OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = unlock.Close(ctx) }()
+	tx, err := unlock.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "UPDATE organizations SET locked_at = NULL, deletion_due_at = NULL WHERE id = $1", p.org); err != nil {
+		t.Fatal(err)
+	}
+
+	app, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = app.Close(ctx) }()
+	purged := make(chan error, 1)
+	go func() {
+		var accounts int64
+		purged <- app.QueryRow(ctx, "SELECT org_purge($1, now())", p.org).Scan(&accounts)
+	}()
+	select {
+	case err := <-purged:
+		t.Fatalf("org_purge did not wait for the unlock: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-purged; err == nil || !strings.Contains(err.Error(), "not locked") {
+		t.Errorf("org_purge after the unlock: %v, want a refusal", err)
+	}
+	var left int
+	ownerQueryRowPurge(t, f.db.OwnerDSN, "SELECT count(*) FROM organizations WHERE id = '"+p.org.String()+"'", &left)
+	if left != 1 {
+		t.Error("the unlocked organization was deleted")
 	}
 }
 

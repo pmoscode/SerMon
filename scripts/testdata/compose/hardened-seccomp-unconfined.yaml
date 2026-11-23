@@ -1,0 +1,7 @@
+# Without the seccomp filter (M2-39).
+services:
+  app:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true", "seccomp:unconfined"]

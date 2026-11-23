@@ -48,10 +48,30 @@ def unhardened(svc: dict) -> list[str]:
         problems.append("runs privileged")
     if svc.get("network_mode") == "host":
         problems.append("uses the host network")
+    # M2-39: the other ways out of a container.
+    for cap in svc.get("cap_add") or []:
+        if cap.upper().removeprefix("CAP_") not in SAFE_CAPS:
+            problems.append(f"adds the capability {cap} (only {', '.join(sorted(SAFE_CAPS))})")
+    for key in ("pid", "ipc", "userns_mode", "uts", "cgroup"):
+        if svc.get(key) == "host":
+            problems.append(f"shares the host's {key} namespace")
+    for opt in svc.get("security_opt") or []:
+        if re.fullmatch(r"(seccomp|apparmor)[:=]unconfined|label[:=]disable", opt):
+            problems.append(f"turns off confinement ({opt})")
+    if svc.get("devices"):
+        problems.append("gets host devices")
     for volume in svc.get("volumes") or []:
-        if str(volume.get("source", "")).endswith("docker.sock"):
-            problems.append("mounts the Docker socket")
+        source = str(volume.get("source", ""))
+        if source.endswith(".sock") or os.path.normpath(source) in HOST_RUNTIME:
+            problems.append(f"mounts the host's {source} (container runtime sockets)")
     return problems
+
+
+# Capabilities a hardened container may add back: switching users when it starts, binding ports
+# below 1024. Everything else (SYS_ADMIN, NET_ADMIN, SYS_PTRACE, …) opens the host.
+SAFE_CAPS = {"CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "NET_BIND_SERVICE"}
+# Host directories that hold the sockets of Docker and containerd.
+HOST_RUNTIME = {"/run", "/var/run", "/run/containerd", "/var/run/containerd", "/run/docker", "/var/run/docker"}
 
 
 def secret_names(svc: dict) -> set[str]:

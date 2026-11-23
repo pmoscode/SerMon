@@ -1,0 +1,8 @@
+# A capability outside the few a container may need back (M2-39).
+services:
+  app:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [SYS_ADMIN]
+    security_opt: ["no-new-privileges:true"]

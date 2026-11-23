@@ -68,7 +68,8 @@ TLS-Handshake und die Suche eines Users per E-Mail beim Login. Dafür gilt:
     nur Größen (M2-32); die Anteile pro Org zählt der Server in Tenant-Transaktionen
   - `org_purge(org, at)`: löscht eine gesperrte, fällige Org samt Metriken, Events, Audit-Log und Konten ohne weitere
     Mitgliedschaft (M2-33, ADR 0029); setzt selbst `sermon.org_id`, die Mandanten-Policies begrenzen das Löschen auf
-    diese Org. Dafür hat `sermon_definer` DELETE (und das dafür nötige SELECT) auf `organizations`, `nodes`,
+    diese Org. Seit M2-39 sperrt sie die Org-Zeile vor der Prüfung (`FOR UPDATE`, dafür `UPDATE (locked_at)` für
+    `sermon_definer`). Dafür hat `sermon_definer` DELETE (und das dafür nötige SELECT) auf `organizations`, `nodes`,
     `audit_log`, `users`, `metrics_raw` und die Materialisierung der Continuous Aggregates; die Policies
     `definer_purge` auf `audit_log` (`current_org_id()`) und `users` (nur DELETE, die IDs bestimmt die Funktion). Die
     Kaskaden der Fremdschlüssel laufen als Eigentümer der Tabellen.

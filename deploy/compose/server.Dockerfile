@@ -10,10 +10,11 @@
 #   SERMON_VERSION      shown in the UI and in logs
 
 FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS web
-# The version of package.json (packageManager); pnpm-workspace.yaml keeps the supply-chain rules.
-RUN npm install --global --no-fund --no-audit pnpm@12.21.0
 WORKDIR /src/web
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+# pnpm in the version of package.json's packageManager (Renovate keeps that one current, M2-39);
+# pnpm-workspace.yaml keeps the supply-chain rules.
+RUN npm install --global --no-fund --no-audit "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
 RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY web/ ./
 COPY docs/help/ /src/docs/help/

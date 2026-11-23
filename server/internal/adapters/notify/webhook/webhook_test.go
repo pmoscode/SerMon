@@ -77,8 +77,9 @@ func (r *received) handler() http.HandlerFunc {
 	}
 }
 
+// The URL is a secret (M2-39): receivers like Home Assistant or n8n carry their token in it.
 func config(url string) notify.Config {
-	return notify.Config{Settings: map[string]string{"url": url}, Secrets: map[string]string{"secret": secret}}
+	return notify.Config{Secrets: map[string]string{"url": url, "secret": secret}}
 }
 
 func TestWebhook_PostsSignedJSON(t *testing.T) {
@@ -86,12 +87,19 @@ func TestWebhook_PostsSignedJSON(t *testing.T) {
 	srv := httptest.NewServer(r.handler())
 	defer srv.Close()
 	n := webhook.New(local(t), func() time.Time { return t0.Add(3 * time.Second) })
-	if err := n.Send(context.Background(), config(srv.URL+"/sermon"), message(t)); err != nil {
+	m := message(t)
+	m.ID = "4711"
+	if err := n.Send(context.Background(), config(srv.URL+"/sermon"), m); err != nil {
 		t.Fatal(err)
 	}
 	if r.path != "/sermon" || r.header.Get("Content-Type") != "application/json" || r.header.Get("X-SerMon-Event") != "firing" ||
 		!strings.HasPrefix(r.header.Get("User-Agent"), "SerMon") {
 		t.Errorf("request %s, headers %v", r.path, r.header)
+	}
+	// The same ID on every attempt, in a header and in the signed body: the receiver drops
+	// duplicates and replays (M2-39).
+	if r.header.Get("X-SerMon-Delivery") != "4711" || !strings.Contains(string(r.body), `"id":"4711"`) {
+		t.Errorf("delivery id: header %q, body %s", r.header.Get("X-SerMon-Delivery"), r.body)
 	}
 	// The receiver checks the signature: HMAC-SHA256 over "<t>.<body>" with the shared secret.
 	sig := r.header.Get("X-SerMon-Signature")
@@ -144,7 +152,8 @@ func TestWebhook_AnswersAndTargets(t *testing.T) {
 func TestWebhook_Fields(t *testing.T) {
 	n := webhook.New(local(t), time.Now)
 	fields := n.Fields()
-	if n.Type() != "webhook" || len(fields) != 2 || fields[0].Name != "url" || fields[0].Kind != notify.FieldURL || !fields[1].Secret || !fields[1].Required {
+	if n.Type() != "webhook" || len(fields) != 2 || fields[0].Name != "url" || fields[0].Kind != notify.FieldURL || !fields[0].Secret ||
+		!fields[1].Secret || !fields[1].Required {
 		t.Errorf("fields %+v", fields)
 	}
 	if err := n.Validate(notify.Config{Secrets: map[string]string{"secret": "short"}}); err == nil {

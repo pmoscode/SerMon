@@ -185,7 +185,7 @@ func (s *Service) List(ctx context.Context, c access.Caller) ([]Channel, error) 
 	}
 	out := make([]Channel, len(stored))
 	for i, sc := range stored {
-		out[i] = sc.Channel
+		out[i] = s.view(sc.Channel)
 	}
 	return out, nil
 }
@@ -285,6 +285,9 @@ func (s *Service) Update(ctx context.Context, c access.Caller, id ChannelID, cha
 		return Channel{}, err
 	}
 	ch := stored.Channel
+	if n, ok := s.d.Registry.Get(ch.Type); ok {
+		ch.Settings, open = liftSecrets(n, ch.Settings, open)
+	}
 	var changed []string
 	if change.Name != nil {
 		ch.Name, changed = *change.Name, append(changed, "name")
@@ -353,7 +356,7 @@ func (s *Service) Test(ctx context.Context, c access.Caller, id ChannelID) (Deli
 	}
 	now := s.d.Now()
 	d := Delivery{Channel: id, Notification: TestNotification(now), Test: true, Status: StatusSending, Attempts: 1, CreatedAt: now, NextAttemptAt: now}
-	sendErr := s.send.deliver(ctx, c.Principal.Org, stored, d.Notification)
+	sendErr := s.send.deliver(ctx, c.Principal.Org, stored, d.Notification, "test-"+s.d.NewID().String())
 	d.LastAttemptAt = s.d.Now()
 	if sendErr != nil {
 		d.Status, d.LastError = StatusFailed, sendErr.text

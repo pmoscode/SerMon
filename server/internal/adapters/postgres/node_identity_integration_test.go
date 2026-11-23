@@ -228,3 +228,59 @@ func TestSelfMonitorStore_SuperadminsAndSize(t *testing.T) {
 		t.Errorf("the application role reads %d users without a tenant", n)
 	}
 }
+
+// Unlocking lets the agent connect again with its current key, as the UI says (M2-39): the lock
+// revoked the certificates, the unlock restores the newest one. An older certificate of an
+// earlier rotation stays revoked, and so does one revoked before the lock.
+func TestNodeIdentity_UnlockRestoresTheCurrentCertificate(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	tokens := postgres.NewEnrollmentTokenStore(db)
+	o := newTokenOrg(t, f)
+	_, hash := issue(t, tokens, o, o.group, 10)
+	st, _, _ := tokens.Lookup(ctx, hash, time.Now())
+	registry, rotation, ca := postgres.NewNodeRegistry(db), postgres.NewRotationStore(db), postgres.NewAgentCAStore(db)
+	org := o.scope.OrgID()
+	machine := strings.ReplaceAll(uuid.NewString(), "-", "")
+	if err := registerMachine(registry, st, machine); err != nil {
+		t.Fatal(err)
+	}
+	var nodeID uuid.UUID
+	var current string
+	ownerQueryRow(t, f.db.OwnerDSN, "SELECT n.id, c.serial FROM nodes n JOIN agent_certificates c ON c.node_id = n.id WHERE n.machine_id = $1", []any{machine}, &nodeID, &current)
+	node := identity.NodeID(nodeID)
+	old := randomSerial() // the key before the last rotation, still in its grace period
+	ownerExec(t, f.db.OwnerDSN, `INSERT INTO agent_certificates (serial, org_id, node_id, authority_id, not_before, not_after, revoked_at)
+		SELECT $1, org_id, node_id, authority_id, not_before - interval '1 day', not_after, now() + interval '1 hour'
+		FROM agent_certificates WHERE serial = $2`, old, current)
+
+	now := time.Now()
+	if err := rotation.Lock(ctx, org, node, "second session", now, entry(o.admin, "node.lock")); err != nil {
+		t.Fatal(err)
+	}
+	if usable, _ := ca.Usable(ctx, current, org, node, now.Add(time.Second)); usable {
+		t.Fatal("usable while locked")
+	}
+	if ok, err := rotation.Unlock(ctx, org, node, entry(o.admin, "node.unlock")); err != nil || !ok {
+		t.Fatalf("unlock = %v, %v", ok, err)
+	}
+	if usable, err := ca.Usable(ctx, current, org, node, now.Add(time.Second)); err != nil || !usable {
+		t.Errorf("the current certificate after the unlock: %v, %v", usable, err)
+	}
+	if usable, _ := ca.Usable(ctx, old, org, node, now.Add(time.Second)); usable {
+		t.Error("the certificate of the earlier rotation came back")
+	}
+
+	// Revoked on purpose before a lock: an unlock doesn't bring it back.
+	ownerExec(t, f.db.OwnerDSN, "UPDATE agent_certificates SET revoked_at = now() - interval '1 minute' WHERE serial = $1", current)
+	if err := rotation.Lock(ctx, org, node, "second session", time.Now(), entry(o.admin, "node.lock")); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := rotation.Unlock(ctx, org, node, entry(o.admin, "node.unlock")); err != nil || !ok {
+		t.Fatalf("second unlock = %v, %v", ok, err)
+	}
+	if usable, _ := ca.Usable(ctx, current, org, node, time.Now()); usable {
+		t.Error("a certificate revoked before the lock came back")
+	}
+}

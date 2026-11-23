@@ -188,6 +188,8 @@ type Querier interface {
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
 	// The node of a group with this machine-id whose takeover window is open.
 	NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error)
+	// Node identity in the UI (M2-23).
+	NodeLockedAt(ctx context.Context, id uuid.UUID) (*time.Time, error)
 	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
 	NodeSeries(ctx context.Context, arg NodeSeriesParams) ([]NodeSeriesRow, error)
 	// Tags of nodes (M2-29). The node within the scope's groups, locked for the change.
@@ -226,6 +228,9 @@ type Querier interface {
 	// locked, so parallel requests can't all pass the lockout check (M1-35).
 	ReserveAttempt(ctx context.Context, arg ReserveAttemptParams) (int64, error)
 	ResetFailedLogins(ctx context.Context, userID uuid.UUID) error
+	// The unlock gives the agent its current key back (M2-39): the newest certificate of the node, if
+	// the lock revoked it (same time). Older ones – a rotation's grace – stay revoked.
+	RestoreLockRevokedCertificate(ctx context.Context, arg RestoreLockRevokedCertificateParams) error
 	RetireAuthority(ctx context.Context, arg RetireAuthorityParams) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
 	RevokeEnrollmentToken(ctx context.Context, arg RevokeEnrollmentTokenParams) (int64, error)
@@ -259,7 +264,6 @@ type Querier interface {
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
 	TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error)
-	// Node identity in the UI (M2-23).
 	UnlockNode(ctx context.Context, id uuid.UUID) (int64, error)
 	UpdateMaintenanceWindow(ctx context.Context, arg UpdateMaintenanceWindowParams) (int64, error)
 	// The agent's Hello: current host facts and version (the machine-id never changes here).

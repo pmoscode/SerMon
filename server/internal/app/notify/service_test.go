@@ -2,6 +2,7 @@ package notify_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -223,6 +224,49 @@ func TestCreate_BoundsTheChannels(t *testing.T) {
 	}
 	if _, err := f.svc.Create(context.Background(), admin(orgB, t0), nc); err != nil {
 		t.Errorf("another organization: %v", err)
+	}
+}
+
+// A field that became secret (the webhook URL, M2-39) may still sit among the settings of an
+// older channel: it is sent as a secret, never shown, and sealed with the next change.
+func TestLegacy_SecretFieldsAmongTheSettings(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c := f.create(t)
+	stored, err := f.store.Channel(ctx, scope(orgA), c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.Settings["token"] = "tok-legacy"
+	plain, _ := json.Marshal(map[string]string{})
+	if stored.SealedSecrets, err = f.deps.Box.Seal(plain, notify.SecretContext(orgA, c.ID)); err != nil {
+		t.Fatal(err)
+	}
+	stored.SecretNames = nil
+	f.store.channels[orgA][c.ID] = stored
+
+	list, err := f.svc.List(ctx, admin(orgA, t0))
+	if err != nil || len(list) != 1 || list[0].Settings["token"] != "" || !slices.Contains(list[0].SecretNames, "token") {
+		t.Errorf("listed %+v, %v", list, err)
+	}
+	d := f.dispatcher()
+	f.enqueue(t, d, c.ID)
+	d.Round(ctx)
+	msgs := f.notifier.messages()
+	if len(msgs) != 1 || msgs[0].config.Secrets["token"] != "tok-legacy" || msgs[0].config.Settings["token"] != "" {
+		t.Fatalf("sent %+v", msgs)
+	}
+	if msgs[0].message.ID == "" {
+		t.Error("no delivery id")
+	}
+	name := "Ops renamed"
+	if _, err := f.svc.Update(ctx, admin(orgA, t0), c.ID, notify.ChannelChange{Name: &name}); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = f.store.Channel(ctx, scope(orgA), c.ID)
+	open, err := notify.OpenSecrets(f.deps.Box, orgA, stored)
+	if err != nil || stored.Settings["token"] != "" || open["token"] != "tok-legacy" {
+		t.Errorf("after the change: settings %v, secrets %v, %v", stored.Settings, open, err)
 	}
 }
 

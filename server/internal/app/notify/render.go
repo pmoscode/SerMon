@@ -28,6 +28,9 @@ type Message struct {
 	// Source is the notification itself, for channels that send data (webhook); its values are
 	// as untrusted as those of the lines.
 	Source Notification
+	// ID names the delivery, the same on every attempt, so receivers can drop duplicates and
+	// replays (webhook, M2-39); empty where there is none.
+	ID string
 }
 
 // Line is a labelled value of a message.

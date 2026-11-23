@@ -4,7 +4,7 @@ SerMon posts every notification as JSON to your URL, signed with a shared secret
 
 ## Setup
 
-- **URL:** target of the requests, over https. Internal addresses (private, loopback, link-local) are blocked unless the operator allows them in `SERMON_OUTBOUND_ALLOWLIST`; only then plain http works as well.
+- **URL:** target of the requests, over https. Internal addresses (private, loopback, link-local) are blocked unless the operator allows them in `SERMON_OUTBOUND_ALLOWLIST`; only then plain http works as well. SerMon stores the URL encrypted and never shows it again, since many receivers carry their token in it.
 - **Secret:** at least 16 characters, ideally random, e.g. from `openssl rand -hex 32`. SerMon stores it encrypted and never shows it again.
 
 ## Verifying the signature
@@ -31,4 +31,4 @@ The body contains among others `kind` (firing, resolved, acknowledged, flapping_
 
 ## Delivery
 
-A 2xx answer counts as delivered. On 5xx, 408 or a network error SerMon tries up to six times with growing pauses, on 429 after the time in `Retry-After`. Other answers are final errors. In rare cases a message may arrive twice.
+A 2xx answer counts as delivered. On 5xx, 408 or a network error SerMon tries up to six times with growing pauses, on 429 after the time in `Retry-After`. Other answers are final errors. In rare cases a message may arrive twice: the header `X-SerMon-Delivery` and the field `id` in the (signed) body stay the same on every attempt – remember the IDs of the last minutes and drop what you have seen.

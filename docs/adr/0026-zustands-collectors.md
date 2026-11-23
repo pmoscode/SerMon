@@ -55,3 +55,11 @@ Datei wie andere Collector-Quellen. Die beiden anderen brauchen mehr:
     Gedächtnis gelöscht, bleibt ein Alert stehen, bis die Unit wieder fehlschlägt und sich erholt.
 - **Security:** Kein freies Kommando: Programm und Argumente sind fest, die Ausgabe wird nur als Liste von
   Unit-Namen gelesen. Threat Model T72.
+
+## Nachtrag M2-39: Template-Units
+
+- Instanzen einer Template-Unit zählen als das Template (`sshd@.service`, `getty@.service`): Socket-aktiviertes sshd
+  benennt jede Verbindung nach ihren Adressen, sonst entstünde pro Besucher eine Serie. Welche Instanz ausfiel, zeigt
+  `systemctl --failed` auf dem Host.
+- Höchstens 100 neue Unit-Namen pro Tag (im Speicher des Agents, ein Neustart beginnt neu); darüber hinaus erst wieder
+  am nächsten Tag.

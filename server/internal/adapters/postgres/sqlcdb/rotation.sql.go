@@ -68,6 +68,19 @@ func (q *Queries) NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams
 	return id, err
 }
 
+const nodeLockedAt = `-- name: NodeLockedAt :one
+
+SELECT locked_at FROM nodes WHERE id = $1 FOR UPDATE
+`
+
+// Node identity in the UI (M2-23).
+func (q *Queries) NodeLockedAt(ctx context.Context, id uuid.UUID) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, nodeLockedAt, id)
+	var locked_at *time.Time
+	err := row.Scan(&locked_at)
+	return locked_at, err
+}
+
 const nodesForRotation = `-- name: NodesForRotation :many
 SELECT id, group_id FROM nodes
 WHERE ($1::boolean OR group_id = ANY ($2::uuid[]))
@@ -114,6 +127,25 @@ func (q *Queries) NodesForRotation(ctx context.Context, arg NodesForRotationPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const restoreLockRevokedCertificate = `-- name: RestoreLockRevokedCertificate :exec
+UPDATE agent_certificates c SET revoked_at = NULL
+WHERE c.node_id = $1 AND c.revoked_at = $2
+  AND c.serial = (SELECT n.serial FROM agent_certificates n WHERE n.node_id = $1
+                  ORDER BY n.not_before DESC, n.created_at DESC LIMIT 1)
+`
+
+type RestoreLockRevokedCertificateParams struct {
+	NodeID   uuid.UUID
+	LockedAt *time.Time
+}
+
+// The unlock gives the agent its current key back (M2-39): the newest certificate of the node, if
+// the lock revoked it (same time). Older ones – a rotation's grace – stay revoked.
+func (q *Queries) RestoreLockRevokedCertificate(ctx context.Context, arg RestoreLockRevokedCertificateParams) error {
+	_, err := q.db.Exec(ctx, restoreLockRevokedCertificate, arg.NodeID, arg.LockedAt)
+	return err
 }
 
 const revokeNodeCertificates = `-- name: RevokeNodeCertificates :exec
@@ -222,12 +254,10 @@ func (q *Queries) TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int
 }
 
 const unlockNode = `-- name: UnlockNode :execrows
-
 UPDATE nodes SET locked_at = NULL, lock_reason = NULL
 WHERE id = $1 AND locked_at IS NOT NULL
 `
 
-// Node identity in the UI (M2-23).
 func (q *Queries) UnlockNode(ctx context.Context, id uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, unlockNode, id)
 	if err != nil {

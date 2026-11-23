@@ -72,6 +72,8 @@ pub struct TailStats {
     pub rotations: u64,
     /// The file became shorter than what was read.
     pub truncations: u64,
+    /// Bytes of a rotated file left unread because the next rotation came first (M2-39).
+    pub skipped_bytes: u64,
 }
 
 #[derive(Debug)]
@@ -113,14 +115,15 @@ impl Open {
         }
     }
 
-    /// Reads up to `budget` bytes and returns the complete lines among them.
-    fn read(&mut self, budget: &mut usize, out: &mut Vec<Line>) -> io::Result<()> {
+    /// Reads up to `budget` bytes and returns the complete lines among them; `true` once it
+    /// reached the end of the file.
+    fn read(&mut self, budget: &mut usize, out: &mut Vec<Line>) -> io::Result<bool> {
         let mut buffer = vec![0u8; 64 * 1024];
         while *budget > 0 {
             let want = buffer.len().min(*budget);
             let n = self.file.read(&mut buffer[..want])?;
             if n == 0 {
-                break;
+                return Ok(true);
             }
             *budget -= n;
             // The offset of the first byte of `partial`, to compute each line's end.
@@ -145,7 +148,14 @@ impl Open {
                 }
             }
         }
-        Ok(())
+        Ok(false)
+    }
+
+    /// Bytes not read yet.
+    fn rest(&self) -> u64 {
+        self.file
+            .metadata()
+            .map_or(0, |meta| meta.len().saturating_sub(self.offset))
     }
 }
 
@@ -154,7 +164,7 @@ impl Open {
 pub struct Tail {
     path: PathBuf,
     current: Option<Open>,
-    /// The file before the last rotation, read once more.
+    /// The file before the last rotation, read until its end.
     previous: Option<Open>,
     /// Where to continue at the first call (from the stored position).
     resume: Resume,
@@ -225,9 +235,13 @@ impl Tail {
         self.check_replaced(&mut budget, out)
     }
 
+    /// Reads the old file; it is closed once a read reaches its end (the writer may still add a
+    /// little after the rotation), not before – lines behind a flood would be lost otherwise.
     fn drain_previous(&mut self, budget: &mut usize, out: &mut Vec<Line>) -> io::Result<()> {
-        if let Some(mut previous) = self.previous.take() {
-            previous.read(budget, out)?;
+        if let Some(mut previous) = self.previous.take()
+            && !previous.read(budget, out)?
+        {
+            self.previous = Some(previous);
         }
         Ok(())
     }
@@ -309,7 +323,10 @@ impl Tail {
                 {
                     current.read(budget, out)?;
                 }
-                self.previous = old;
+                // A second rotation before the old file was read to its end: its rest is lost.
+                if let Some(abandoned) = std::mem::replace(&mut self.previous, old) {
+                    self.stats.skipped_bytes += abandoned.rest();
+                }
                 Ok(())
             }
             // Renamed, the new one not created yet: keep reading the old one.
@@ -415,6 +432,39 @@ mod tests {
             Vec::<String>::new(),
             "the old file is read once more only"
         );
+    }
+
+    // Behind by more than one read when the file rotates (a flood): the old file is read to its
+    // end over the next reads, not once and dropped (M2-39); only a second rotation before that
+    // abandons the rest, counted.
+    #[test]
+    fn reads_a_rotated_file_to_its_end_even_when_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("messages");
+        append(&path, "");
+        let mut tail = Tail::new(&path, None);
+        let line = format!("{}\n", "x".repeat(1023));
+        let old = MAX_READ_BYTES / 1024 * 2 + 5; // two reads and a bit
+        append(&path, &line.repeat(old));
+        fs::rename(&path, dir.path().join("messages.0")).unwrap();
+        append(&path, "first of new\n");
+        let mut got = Vec::new();
+        for _ in 0..6 {
+            got.extend(lines(&mut tail));
+        }
+        assert_eq!(got.len(), old + 1, "every old line and the new one");
+        assert_eq!(got.last().map(String::as_str), Some("first of new"));
+        assert_eq!(tail.stats().skipped_bytes, 0);
+
+        // Two rotations within one read: the rest of the first old file is abandoned, counted.
+        append(&path, &line.repeat(old));
+        fs::rename(&path, dir.path().join("messages.1")).unwrap();
+        append(&path, "x\n");
+        let _ = lines(&mut tail); // reads part of messages.1, notices the rotation
+        fs::rename(&path, dir.path().join("messages.0")).unwrap();
+        append(&path, "y\n");
+        let _ = lines(&mut tail);
+        assert!(tail.stats().skipped_bytes > 0, "{:?}", tail.stats());
     }
 
     #[test]

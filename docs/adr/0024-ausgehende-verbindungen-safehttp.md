@@ -67,3 +67,10 @@ Option 2 und ein eigener Client `internal/platform/safehttp` für alle Requests 
   `::1/128`); eine NAT64-Adresse wird vor der Allowlist ausgepackt. Vorher öffnete `64:ff9b::/96` den Metadata-Dienst.
 - **Redirects nur auf denselben Host:** Go entfernt bei einem Wechsel des Hosts nur `Authorization` und Cookies, eigene
   Header wie `X-Gotify-Key` gingen mit.
+
+## Nachtrag M2-39: Keine Auskunft über interne Namen
+
+- Ein Name, der nicht auflöst, und einer, der auf eine gesperrte Adresse zeigt, liefern denselben Fehlertext („target
+  not allowed or not resolvable“). Sonst ließe sich über „Test senden“ prüfen, welche internen Namen es gibt. Intern
+  bleiben sie getrennt: gesperrt ist `ErrBlocked` (endgültig), nicht auflösbar wird wiederholt. Eine getippte
+  IP-Adresse nennt ihre Klasse weiter.

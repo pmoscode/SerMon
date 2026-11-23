@@ -41,6 +41,9 @@ pub enum Sender {
 pub struct Record<'a> {
     /// Microseconds since the epoch.
     pub at_us: u64,
+    /// The host field of a classic syslog line; `None` in the trusted format, which only local
+    /// senders write (M2-39).
+    pub host: Option<&'a str>,
     /// The tag without the PID, e.g. `sshd-session`.
     pub identifier: Option<&'a str>,
     /// The PID from the tag.
@@ -121,8 +124,9 @@ fn syslog<'a>(line: &'a str, time: &LocalTime) -> Result<Record<'a>, SyslogError
     let stamp = line.get(..15).ok_or(SyslogError::Time)?;
     let at_us = time.resolve(stamp).ok_or(SyslogError::Time)?;
     let rest = line[15..].trim_start_matches(' ');
-    // The host.
-    let rest = rest.split_once(' ').map_or("", |(_, rest)| rest);
+    let (host, rest) = rest
+        .split_once(' ')
+        .map_or((None, ""), |(host, rest)| (Some(host), rest));
     // busybox writes `facility.priority` before the tag.
     let rest = match rest.split_once(' ') {
         Some((first, after)) if facility(first) => after,
@@ -131,6 +135,7 @@ fn syslog<'a>(line: &'a str, time: &LocalTime) -> Result<Record<'a>, SyslogError
     let (identifier, pid, message) = tag(rest);
     Ok(Record {
         at_us,
+        host,
         identifier,
         pid,
         sender: Sender::Unknown,
@@ -164,6 +169,7 @@ fn trusted(line: &str) -> Result<Record<'_>, SyslogError> {
     let (identifier, pid, message) = tag(rest);
     Ok(Record {
         at_us,
+        host: None,
         identifier,
         pid,
         sender,
@@ -214,6 +220,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(r.at_us, us("2026-11-21T19:33:14Z"));
+        assert_eq!(r.host, Some("45a848315440"));
         assert_eq!((r.identifier, r.pid), (Some("sshd-session"), Some(23)));
         assert_eq!(r.sender, Sender::Unknown);
         assert_eq!(

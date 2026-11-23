@@ -4,7 +4,7 @@ SerMon schickt jede Benachrichtigung als JSON per POST an deine URL, signiert mi
 
 ## Einrichten
 
-- **URL:** Ziel der Requests, über https. Interne Adressen (privat, Loopback, Link-local) sind gesperrt, außer der Betreiber gibt sie in `SERMON_OUTBOUND_ALLOWLIST` frei; nur dann geht auch http.
+- **URL:** Ziel der Requests, über https. Interne Adressen (privat, Loopback, Link-local) sind gesperrt, außer der Betreiber gibt sie in `SERMON_OUTBOUND_ALLOWLIST` frei; nur dann geht auch http. SerMon speichert die URL verschlüsselt und zeigt sie nicht wieder an, denn viele Empfänger tragen ihr Token darin.
 - **Geheimnis:** mindestens 16 Zeichen, am besten zufällig, z. B. mit `openssl rand -hex 32`. SerMon speichert es verschlüsselt und zeigt es nie wieder an.
 
 ## Signatur prüfen
@@ -31,4 +31,4 @@ Der Body enthält unter anderem `kind` (firing, resolved, acknowledged, flapping
 
 ## Zustellung
 
-Antwortet die URL mit 2xx, gilt die Nachricht als zugestellt. Bei 5xx, 408 oder einem Netzwerkfehler versucht SerMon es bis zu sechsmal mit wachsendem Abstand, bei 429 nach der Zeit aus `Retry-After`. Andere Antworten gelten als endgültiger Fehler. Eine Nachricht kann im Ausnahmefall doppelt ankommen.
+Antwortet die URL mit 2xx, gilt die Nachricht als zugestellt. Bei 5xx, 408 oder einem Netzwerkfehler versucht SerMon es bis zu sechsmal mit wachsendem Abstand, bei 429 nach der Zeit aus `Retry-After`. Andere Antworten gelten als endgültiger Fehler. Eine Nachricht kann im Ausnahmefall doppelt ankommen: Header `X-SerMon-Delivery` und Feld `id` im (signierten) Body sind bei jedem Versuch gleich – merke dir die IDs der letzten Minuten und verwirf Bekanntes.

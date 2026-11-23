@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { saveFile } from '#lib/download/download.js';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -16,12 +17,7 @@
 	}
 
 	function download() {
-		const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = 'sermon-recovery-codes.txt';
-		link.click();
-		URL.revokeObjectURL(url);
+		saveFile(text, 'sermon-recovery-codes.txt', 'text/plain');
 	}
 </script>
 

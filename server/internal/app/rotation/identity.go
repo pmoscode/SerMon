@@ -38,7 +38,8 @@ func (s *Service) identityTarget(ctx context.Context, c access.Caller, action au
 }
 
 // UnlockNode lifts the lock a second session or a rotation from a new address set (M1-11). The
-// certificate becomes usable again: if the key may have been stolen, revoke it instead.
+// node's current certificate, revoked by the lock, becomes usable again (M2-39; older ones stay
+// revoked): if the key may have been stolen, revoke it instead.
 func (s *Service) UnlockNode(ctx context.Context, c access.Caller, node identity.NodeID) error {
 	ref, err := s.identityTarget(ctx, c, authz.UnlockNode, node)
 	if err != nil {

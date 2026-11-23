@@ -2,7 +2,9 @@
 //
 // Signature: X-SerMon-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">, keyed with
 // the channel's secret. The receiver recomputes it, compares in constant time and rejects old
-// timestamps (replays); see docs/help/*/channels/webhook.md.
+// timestamps (replays); see docs/help/*/channels/webhook.md. X-SerMon-Delivery and "id" in the
+// body name the delivery, the same on every attempt: receivers drop what they have seen. The URL
+// is a secret (M2-39): generic receivers carry their token in it.
 package webhook
 
 import (
@@ -45,7 +47,7 @@ func (*Notifier) Type() notify.ChannelType { return "webhook" }
 // Fields implements notify.Notifier.
 func (*Notifier) Fields() []notify.Field {
 	return []notify.Field{
-		{Name: "url", Kind: notify.FieldURL, Required: true},
+		{Name: "url", Kind: notify.FieldURL, Secret: true, Required: true},
 		{Name: "secret", Kind: notify.FieldText, Secret: true, Required: true, MaxLen: 256},
 	}
 }
@@ -61,6 +63,7 @@ func (*Notifier) Validate(c notify.Config) error {
 // payload is the JSON body; version 1 changes only by adding fields.
 type payload struct {
 	Version  int             `json:"version"`
+	ID       string          `json:"id,omitempty"`
 	Kind     notify.Kind     `json:"kind"`
 	Severity notify.Severity `json:"severity,omitempty"`
 	Test     bool            `json:"test"`
@@ -120,7 +123,7 @@ func itemOf(n notify.Notification, l notify.Lang) item {
 func payloadOf(m notify.Message) payload {
 	n := m.Source
 	p := payload{
-		Version: 1, Kind: m.Kind, Severity: m.Severity, Test: m.Kind == notify.Test, Language: m.Lang,
+		Version: 1, ID: m.ID, Kind: m.Kind, Severity: m.Severity, Test: m.Kind == notify.Test, Language: m.Lang,
 		Title: m.Title, Text: m.PlainText(), Link: m.Link, At: m.At.UTC(),
 	}
 	switch n.Kind {
@@ -157,5 +160,8 @@ func (w *Notifier) Send(ctx context.Context, c notify.Config, m notify.Message) 
 		"X-Sermon-Event":     {string(p.Kind)},
 		"X-Sermon-Signature": {"t=" + ts + ",v1=" + hex.EncodeToString(mac.Sum(nil))},
 	}
-	return httppost.Post(ctx, w.client, c.Settings["url"], header, body) //nolint:wrapcheck // classified for notify
+	if m.ID != "" {
+		header.Set("X-Sermon-Delivery", m.ID)
+	}
+	return httppost.Post(ctx, w.client, c.Secrets["url"], header, body) //nolint:wrapcheck // classified for notify
 }

@@ -91,3 +91,10 @@ mit vielen Organisationen fehlen Kontingente. Die Fragen hat der Product Owner a
   (Superadmins ausgenommen). Der Eintrag `org.delete` im Instanz-Audit entsteht in derselben Transaktion.
 - **Löschjob** stündlich in jeder Server-Instanz; `org_purge` lehnt ab, was nicht gesperrt und fällig ist, und die
   Erinnerung wird über `deletion_reminded_at` genau einmal beansprucht.
+
+## Nachtrag M2-39
+
+- `org_purge` sperrt die Org-Zeile, bevor es Sperre und Frist prüft (Migration 00038): Ein gleichzeitiges „Sperre
+  aufheben“ ist entweder vorher committet und wird gesehen, oder es wartet und findet die Org nicht mehr. Vorher konnte
+  der Löschjob eine gerade entsperrte Org löschen. Die Konten ohne weitere Mitgliedschaft werden am Ende erneut
+  geprüft.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { saveFile } from '#lib/download/download.js';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import { Code, codeOf } from '#lib/api/client.js';
 	import type { OrganizationSummary } from '#lib/api/gen/sermon/web/v1/organization_pb.js';
@@ -107,14 +108,7 @@
 			const res = await withStepUp(() =>
 				adminApi.organization.exportOrganizationAudit({ organizationId: organization.id })
 			);
-			const url = URL.createObjectURL(
-				new Blob([res.content as Uint8Array<ArrayBuffer>], { type: 'application/x-ndjson' })
-			);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = res.fileName;
-			a.click();
-			URL.revokeObjectURL(url);
+			saveFile(res.content as Uint8Array<ArrayBuffer>, res.fileName, 'application/x-ndjson');
 			exported = res.chainValid ? m.orgs_export_done() : m.orgs_export_broken();
 		} catch (error) {
 			failure = failed(error);

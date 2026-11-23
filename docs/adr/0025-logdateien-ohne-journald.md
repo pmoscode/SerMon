@@ -94,3 +94,12 @@ außer rsyslog nennt root als Absender.**
 - **Quelle melden:** Die Host-Fakten tragen `security_source` (Journal, Datei verifiziert, Datei unverifiziert,
   keine), bei jeder Verbindung neu bestimmt; eine Datei zählt nur, wenn der Agent sie öffnen darf. Die Node-Seite
   warnt, wenn keine Quelle da ist, und weist auf unverifizierte Dateien hin.
+
+## Nachtrag M2-39
+
+- **Rotation unter Last:** Die alte Datei wird nach einer Rotation bis zu ihrem Ende gelesen, nicht nur einmal mit dem
+  Rest des Lesebudgets; erst eine zweite Rotation davor gibt ihren Rest auf. Diese Bytes zählt `TailStats` und der
+  Agent warnt.
+- **Fremde Hosts:** Auf einem zentralen Syslog-Server stehen Zeilen anderer Hosts in derselben Datei. Zeilen des
+  klassischen Formats, deren Host-Feld nicht der eigene Hostname ist (ohne Groß- und Kleinschreibung, Kurzname gleich
+  FQDN, `localhost` zählt), werden verworfen. Das Format mit der SerMon-Vorlage nimmt nur lokale Absender.

@@ -194,6 +194,7 @@ pub async fn run(
     let mut last_write = tokio::time::Instant::now();
     let mut warned = false;
     let mut read_failed = false;
+    let mut skipped = 0;
     loop {
         tokio::select! {
             () = shutdown.cancelled() => break,
@@ -238,13 +239,17 @@ pub async fn run(
             if std::mem::take(&mut read_failed) {
                 tracing::info!(file = %tail.path().display(), "reading the log file again");
             }
+            report_skipped(tail, &mut skipped);
             let zone = ProcRoot::new(&config.host_root)
                 .read_etc_bytes("localtime")
                 .ok();
             let time = LocalTime::new(zone.as_deref(), now_us());
+            let local = local_hostname(&config.host_root);
             for raw in &lines {
                 let text = String::from_utf8_lossy(&raw.text);
-                if let Ok(record) = parse(*format, &text, &time) {
+                if let Ok(record) = parse(*format, &text, &time)
+                    && from_this_host(record.host, local.as_deref())
+                {
                     parser.parse(&line(&record), &mut pending);
                 }
                 uncommitted = Some(raw.end);
@@ -288,6 +293,41 @@ fn persist(file: &Path, committed: Option<&Stored>, written: &mut Option<Stored>
     match store(file, committed) {
         Ok(()) => *written = Some(committed.clone()),
         Err(error) => tracing::warn!("cannot store the log file position: {error}"),
+    }
+}
+
+/// The host's name (`/proc/sys/kernel/hostname`), `None` if unknown.
+fn local_hostname(root: &Path) -> Option<String> {
+    ProcRoot::new(root)
+        .read_proc("sys/kernel/hostname")
+        .ok()
+        .map(|name| name.trim().to_owned())
+        .filter(|name| !name.is_empty())
+}
+
+/// Whether a line's host field names this host (M2-39): a central syslog server collects other
+/// hosts' lines too, which must not count as this node's. Case aside, a short name matches its
+/// FQDN; `localhost` and a missing name on either side count.
+fn from_this_host(host: Option<&str>, local: Option<&str>) -> bool {
+    let (Some(host), Some(local)) = (host, local) else {
+        return true;
+    };
+    let short = |name: &str| name.split('.').next().unwrap_or(name).to_ascii_lowercase();
+    host.eq_ignore_ascii_case("localhost")
+        || host.eq_ignore_ascii_case(local)
+        || short(host) == short(local)
+}
+
+/// Warns when the log file rotated twice before its rest was read (M2-39): lines were lost.
+fn report_skipped(tail: &Tail, seen: &mut u64) {
+    let skipped = tail.stats().skipped_bytes;
+    if skipped > *seen {
+        tracing::warn!(
+            file = %tail.path().display(),
+            bytes = skipped - *seen,
+            "the log file rotated twice before its rest was read; lines were skipped"
+        );
+        *seen = skipped;
     }
 }
 
@@ -519,6 +559,21 @@ mod tests {
 
     fn has(events: &[(String, String, bool)], kind: &str, user: &str, verified: bool) -> bool {
         events.contains(&(kind.to_owned(), user.to_owned(), verified))
+    }
+
+    // A central syslog server collects other hosts' lines too: only this host's count (M2-39).
+    #[test]
+    fn only_lines_of_this_host_count() {
+        assert!(from_this_host(Some("web-01"), Some("web-01")));
+        assert!(from_this_host(Some("WEB-01"), Some("web-01")));
+        assert!(from_this_host(Some("web-01"), Some("web-01.example.org")));
+        assert!(from_this_host(Some("web-01.example.org"), Some("web-01")));
+        assert!(from_this_host(Some("localhost"), Some("web-01")));
+        assert!(!from_this_host(Some("db-01"), Some("web-01")));
+        assert!(!from_this_host(Some("web-01.evil"), Some("web-02")));
+        // Unknown on either side: nothing to compare, the line counts.
+        assert!(from_this_host(None, Some("web-01")));
+        assert!(from_this_host(Some("db-01"), None));
     }
 
     // busybox syslogd: every event counts, none is verified – the forged root login too.

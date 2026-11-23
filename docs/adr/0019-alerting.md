@@ -292,3 +292,12 @@ Leases bzw. Claims noch speichern (doppelte Benachrichtigungen bei mehreren Inst
   von M2-32 hinzufügen.
 - **Nicht gecacht:** die geparsten Overrides. Seit nur noch der Halter lädt, fällt das Parsen einmal pro Org und Runde
   an.
+
+## Nachtrag M2-39: Webhook
+
+- **Die URL ist ein Zugangsdatum:** Generische Empfänger (Home Assistant, n8n, Zapier) tragen ihr Token in Pfad oder
+  Query und prüfen die Signatur oft nicht. Das Feld `url` ist jetzt geheim (versiegelt, nie angezeigt). Ältere Kanäle
+  mit der URL unter den Settings senden weiter; die Liste zeigt sie nicht, die nächste Änderung versiegelt sie
+  (`liftSecrets`).
+- **Zustell-ID:** `X-SerMon-Delivery` und `id` im signierten Body sind bei jedem Versuch gleich (die ID der Zustellung,
+  bei „Test senden“ `test-<uuid>`). Empfänger erkennen damit Duplikate („mindestens einmal“) und Replays.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { saveFile } from '#lib/download/download.js';
 	import { alertingApi } from '#lib/api/alerting.js';
 	import {
 		AlertRuleOrigin,
@@ -72,12 +73,7 @@
 		failure = '';
 		try {
 			const res = await alertingApi.rules.exportAlertRules({ all });
-			const url = URL.createObjectURL(new Blob([res.yaml], { type: 'text/yaml' }));
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = all ? 'sermon-rules-all.yaml' : 'sermon-rules.yaml';
-			a.click();
-			URL.revokeObjectURL(url);
+			saveFile(res.yaml, all ? 'sermon-rules-all.yaml' : 'sermon-rules.yaml', 'text/yaml');
 		} catch (error) {
 			failure = notifyError(error);
 		}

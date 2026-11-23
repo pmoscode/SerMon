@@ -69,3 +69,12 @@ Datenbank-Container Befehle ausführen können (`COPY … TO PROGRAM`).
 - **Verworfen:** Migrationen weiter im Server, aber als `sermon_owner` – der Owner umgeht `FORCE ROW LEVEL SECURITY`
   zwar nicht, könnte aber Policies ändern; im Dauerbetrieb braucht ihn niemand.
 - **Folge:** Installationen von vor M2-36 (Superuser `sermon`) setzt man neu auf (vor dem ersten Release, Anleitung).
+
+## Nachtrag M2-39
+
+- **`check-compose --hardened`** lehnt zusätzlich ab: Capabilities außer `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`,
+  `SETUID` und `NET_BIND_SERVICE`; `pid`, `ipc`, `uts`, `cgroup` oder `userns_mode` vom Host; `seccomp`/`apparmor:
+  unconfined` und `label:disable`; Geräte; Mounts von `/run`, `/var/run` und Sockets.
+- **pnpm im Server-Image** in der Version von `packageManager` aus `package.json` (Renovate pflegt nur diese Stelle);
+  corepack fehlt ab Node 25.
+- **Renovate** pflegt per Regex auch das nfpm-Image, die Test-Hosts in `scripts/` und die Basis-Images der E2E-Hosts.

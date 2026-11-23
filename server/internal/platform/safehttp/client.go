@@ -138,6 +138,25 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 
 type plainKey struct{}
 
+// nameRefused is the error for a host name that doesn't resolve or resolves to a blocked address:
+// both read the same, so "send test" can't probe which internal names exist (M2-39). Only a blocked
+// one is ErrBlocked (final); an unresolved name is retried.
+type nameRefused struct {
+	blocked bool
+	cause   error
+}
+
+func (e *nameRefused) Error() string { return "target not allowed or not resolvable" }
+
+func (e *nameRefused) Is(target error) bool { return e.blocked && target == ErrBlocked }
+
+func (e *nameRefused) Unwrap() error {
+	if e.blocked {
+		return nil // the class of the address stays inside
+	}
+	return e.cause
+}
+
 // dialContext resolves the host once, checks every address and dials the checked ones only.
 func (c *Client) dialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(addr)
@@ -145,18 +164,22 @@ func (c *Client) dialContext(ctx context.Context, network, addr string) (net.Con
 		return nil, fmt.Errorf("%w: %w", ErrInvalidURL, err)
 	}
 	var ips []netip.Addr
+	literal := false
 	if ip, err := netip.ParseAddr(host); err == nil {
-		ips = []netip.Addr{ip}
+		ips, literal = []netip.Addr{ip}, true
 	} else if ips, err = c.resolver.LookupNetIP(ctx, "ip", host); err != nil {
-		return nil, fmt.Errorf("resolve: %w", err)
+		return nil, &nameRefused{cause: err}
 	}
 	if len(ips) == 0 {
-		return nil, fmt.Errorf("resolve: no address for %s", host)
+		return nil, &nameRefused{cause: errors.New("no address")}
 	}
 	plain := ctx.Value(plainKey{}) != nil
 	// One bad answer refuses the name: an attacker controls its records.
 	for _, ip := range ips {
 		if err := c.policy.Check(ip); err != nil {
+			if !literal {
+				return nil, &nameRefused{blocked: true}
+			}
 			return nil, err
 		}
 		if plain && !c.policy.Allowlisted(ip) {

@@ -3,7 +3,10 @@
 //!
 //! | Metric | Labels | Unit |
 //! |---|---|---|
-//! | `sermon_systemd_unit_failed` | `unit` (at most 50) | boolean |
+//! | `sermon_systemd_unit_failed` | `unit` (at most 50, 100 new names a day) | boolean |
+//!
+//! Instances of a template unit count as the template (`sshd@.service`): socket-activated sshd
+//! names each connection after its addresses, a series per visitor otherwise (M2-39).
 //!
 //! The list comes from `systemctl list-units --state=failed` with fixed arguments (no shell, an
 //! empty environment, a timeout); as an unprivileged user systemctl asks systemd over D-Bus.
@@ -25,6 +28,8 @@ use crate::{CollectError, Collector, Context};
 
 /// At most so many units are reported (failed ones and remembered ones together).
 pub const MAX_UNITS: usize = 50;
+/// At most so many new unit names per day (M2-39): each is a series on the server.
+pub const MAX_NEW_PER_DAY: usize = 100;
 /// How long a recovered unit is reported as 0.
 pub const REMEMBER: Duration = Duration::from_hours(24);
 /// The longest unit name taken (systemd allows 255 characters).
@@ -60,14 +65,24 @@ pub fn parse_failed(text: &str) -> Vec<String> {
             Some("●" | "*") => words.next(),
             other => other,
         };
-        if let Some(name) = name.filter(|n| valid_unit(n))
-            && !out.iter().any(|u: &String| u == name)
+        if let Some(name) = name.filter(|n| valid_unit(n)).map(template)
+            && !out.contains(&name)
             && out.len() < MAX_UNITS
         {
-            out.push(name.to_owned());
+            out.push(name);
         }
     }
     out
+}
+
+/// The template of an instance (`getty@tty1.service` → `getty@.service`); other names as they are.
+fn template(name: &str) -> String {
+    match (name.split_once('@'), name.rfind('.')) {
+        (Some((prefix, _)), Some(dot)) if dot > prefix.len() => {
+            format!("{prefix}@{}", &name[dot..])
+        }
+        _ => name.to_owned(),
+    }
 }
 
 fn valid_unit(name: &str) -> bool {
@@ -196,6 +211,8 @@ pub struct SystemdCollector {
     file: Option<PathBuf>,
     memory: Memory,
     warned: bool,
+    /// When new unit names were taken in, within the last day (not stored: a restart starts anew).
+    admitted: std::collections::VecDeque<u64>,
 }
 
 impl std::fmt::Debug for SystemdCollector {
@@ -221,6 +238,7 @@ impl SystemdCollector {
             file,
             memory,
             warned: false,
+            admitted: std::collections::VecDeque::new(),
         }
     }
 
@@ -268,7 +286,20 @@ impl Collector for SystemdCollector {
             .map_or(0, |d| d.as_secs());
         let failed = parse_failed(&text);
         let before = self.memory.clone();
+        while self
+            .admitted
+            .front()
+            .is_some_and(|at| now.saturating_sub(*at) >= REMEMBER.as_secs())
+        {
+            self.admitted.pop_front();
+        }
         for unit in &failed {
+            if !self.memory.0.contains_key(unit) {
+                if self.admitted.len() >= MAX_NEW_PER_DAY {
+                    continue; // a day's worth of new names: no new series until it passes
+                }
+                self.admitted.push_back(now);
+            }
             self.memory.0.insert(unit.clone(), now);
         }
         self.memory
@@ -387,8 +418,9 @@ mod tests {
                 units.contains(&"backup-nightly.service".to_owned()),
                 "{distro}: {units:?}"
             );
+            // An instance counts as its template (M2-39).
             assert!(
-                units.contains(&"app@web\\x2d01.service".to_owned()),
+                units.contains(&"app@.service".to_owned()),
                 "{distro}: {units:?}"
             );
         }
@@ -422,6 +454,54 @@ mod tests {
             .collect::<Vec<_>>()
             .concat();
         assert_eq!(parse_failed(&many).len(), MAX_UNITS);
+    }
+
+    // Instances of a template unit become one series (M2-39): socket-activated sshd names each
+    // connection (sshd@<n>-<local>-<remote:port>.service) – a series per visitor otherwise.
+    #[test]
+    fn template_instances_are_one_unit() {
+        assert_eq!(
+            parse_failed(
+                "sshd@1-192.0.2.1:22-198.51.100.7:51234.service x\n\
+                 sshd@2-192.0.2.1:22-198.51.100.8:40000.service x\n\
+                 getty@tty1.service x\nnginx.service x\n"
+            ),
+            ["sshd@.service", "getty@.service", "nginx.service"]
+        );
+    }
+
+    // New unit names per day are bounded (M2-39): a host can't fill its series limit with
+    // ever new failing units; after a day there is room again.
+    #[test]
+    fn new_unit_names_per_day_are_bounded() {
+        let clock = FakeClock::at(1_800_000_000);
+        let fake = Fake::default();
+        let mut collector =
+            SystemdCollector::new(Some(Box::new(fake.clone())), clock.clone(), None);
+        let mut seen = std::collections::BTreeSet::new();
+        for round in 0..6 {
+            let units: String = (0..30)
+                .map(|i| format!("r{round}u{i}.service x\n"))
+                .collect::<Vec<_>>()
+                .concat();
+            fake.answer(&units);
+            clock.advance(Duration::from_secs(60));
+            for sample in collect(&mut collector) {
+                seen.extend(sample.labels.iter().map(|(_, v)| v.clone()));
+            }
+        }
+        assert_eq!(seen.len(), MAX_NEW_PER_DAY, "names reported within a day");
+        clock.advance(REMEMBER);
+        fake.answer("fresh.service x\n");
+        let out = collect(&mut collector);
+        assert!(
+            value(
+                &out,
+                "sermon_systemd_unit_failed",
+                &[("unit", "fresh.service")]
+            ) == Some(Value::Int(1)),
+            "a day later there is room again"
+        );
     }
 
     #[test]

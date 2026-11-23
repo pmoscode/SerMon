@@ -151,6 +151,18 @@
 				"(?<depName>protoc-gen-(?:prost|tonic))@(?<currentValue>\\d+\\.\\d+\\.\\d+)"
 			],
 			"datasourceTemplate": "crate"
+		},
+		{
+			"description": "Images pinned by digest outside compose files and Dockerfiles (M2-39): nfpm and the test hosts in scripts/, the base images of the E2E agent hosts (build args).",
+			"customType": "regex",
+			"managerFilePatterns": [
+				"/^scripts/.+\\.sh$/",
+				"/^deploy/e2e/compose\\.yaml$/"
+			],
+			"matchStrings": [
+				"(?:NFPM_IMAGE=|run \\S+ |BASE: \")(?<depName>[a-z0-9][a-z0-9./-]*):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+			],
+			"datasourceTemplate": "docker"
 		}
 	]
 }

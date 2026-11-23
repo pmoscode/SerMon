@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -235,7 +236,7 @@ func (d *Dispatcher) attempt(ctx context.Context, org tenant.OrgID, scope tenant
 		err := &RateLimitedError{RetryAfter: time.Hour}
 		failure = &sendError{err: err, text: "mail limit of the organization reached, sent later"}
 	default:
-		failure = d.send.deliver(ctx, org, stored, del.Notification)
+		failure = d.send.deliver(ctx, org, stored, del.Notification, strconv.FormatInt(del.ID, 10))
 	}
 	now := d.d.Now()
 	claim := del.ClaimedUntil
@@ -278,7 +279,9 @@ type sender struct{ d Deps }
 
 func newSender(d Deps) *sender { return &sender{d: d} }
 
-func (s *sender) deliver(ctx context.Context, org tenant.OrgID, stored StoredChannel, n Notification) *sendError {
+// deliver sends n over the channel; id names the delivery for the receiver (the same on every
+// attempt).
+func (s *sender) deliver(ctx context.Context, org tenant.OrgID, stored StoredChannel, n Notification, id string) *sendError {
 	notifier, ok := s.d.Registry.Get(stored.Type)
 	if !ok {
 		err := Permanent(fmt.Errorf("%w: %q", ErrUnknownType, stored.Type))
@@ -292,7 +295,9 @@ func (s *sender) deliver(ctx context.Context, org tenant.OrgID, stored StoredCha
 	ctx, cancel := context.WithTimeout(ctx, SendTimeout)
 	defer cancel()
 	m := Render(n, stored.Lang, s.d.BaseURL)
-	if err := notifier.Send(ctx, Config{Settings: cloneMap(stored.Settings), Secrets: open}, m); err != nil {
+	m.ID = id
+	settings, open := liftSecrets(notifier, stored.Settings, open)
+	if err := notifier.Send(ctx, Config{Settings: settings, Secrets: open}, m); err != nil {
 		return &sendError{err: err, text: describe(err, open)}
 	}
 	return nil

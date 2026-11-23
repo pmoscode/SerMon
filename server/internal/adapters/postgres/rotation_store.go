@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
@@ -143,6 +145,18 @@ func (s *RotationStore) RevokeAll(ctx context.Context, org tenant.OrgID, node id
 func (s *RotationStore) Unlock(ctx context.Context, org tenant.OrgID, node identity.NodeID, audit access.AuditEntry) (bool, error) {
 	var unlocked bool
 	err := s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
+		lockedAt, err := q.NodeLockedAt(ctx, uuid.UUID(node))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("load node: %w", err)
+		}
+		if lockedAt != nil {
+			if err := q.RestoreLockRevokedCertificate(ctx, sqlcdb.RestoreLockRevokedCertificateParams{NodeID: uuid.UUID(node), LockedAt: lockedAt}); err != nil {
+				return fmt.Errorf("restore the certificate: %w", err)
+			}
+		}
 		n, err := q.UnlockNode(ctx, uuid.UUID(node))
 		if err != nil {
 			return fmt.Errorf("unlock node: %w", err)

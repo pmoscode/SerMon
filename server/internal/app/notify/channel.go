@@ -259,6 +259,45 @@ func OpenSecrets(box *secrets.Box, org tenant.OrgID, c StoredChannel) (map[strin
 	return values, nil
 }
 
+// liftSecrets moves values of secret fields that older versions kept among the settings (the
+// webhook URL until M2-39) into the secrets; a value already among the secrets wins. It returns
+// copies.
+func liftSecrets(n Notifier, settings, secrets map[string]string) (map[string]string, map[string]string) {
+	settings, secrets = cloneMap(settings), cloneMap(secrets)
+	if secrets == nil {
+		secrets = map[string]string{}
+	}
+	for _, f := range n.Fields() {
+		v, ok := settings[f.Name]
+		if !f.Secret || !ok {
+			continue
+		}
+		delete(settings, f.Name)
+		if _, set := secrets[f.Name]; !set {
+			secrets[f.Name] = v
+		}
+	}
+	return settings, secrets
+}
+
+// view is a channel as the API shows it: values of secret fields never appear among the
+// settings, their names among the secret names.
+func (s *Service) view(c Channel) Channel {
+	n, ok := s.d.Registry.Get(c.Type)
+	if !ok {
+		return c
+	}
+	settings, lifted := liftSecrets(n, c.Settings, nil)
+	for name := range lifted {
+		if !slices.Contains(c.SecretNames, name) {
+			c.SecretNames = append(slices.Clone(c.SecretNames), name)
+		}
+	}
+	slices.Sort(c.SecretNames)
+	c.Settings = settings
+	return c
+}
+
 const maxName = 100
 
 func checkName(name string) (string, error) {

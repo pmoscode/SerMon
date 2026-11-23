@@ -2489,7 +2489,21 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
   nichts; Grenzen für Regeln, Kanäle und Mails.
 - **Abhängig von:** M2-32
 
-#### ☐ M2-39 – Übrige Befunde aus M2-28 · X · S
+#### ☑ M2-39 – Übrige Befunde aus M2-28 · X · S
+> Erledigt (Threat Model T4, T43, T67, T70, T73, T77; Nachträge in ADR 0007, 0019, 0024, 0025, 0026, 0028, 0029):
+> - **`org_purge`** sperrt die Org-Zeile vor der Prüfung (Migration 00038); ein Test mit gleichzeitigem Aufheben
+>   bestätigte die Race zuerst. Die Konten werden am Ende erneut geprüft.
+> - **Webhook:** URL als Zugangsdatum (ältere Kanäle senden weiter und werden bei der nächsten Änderung versiegelt);
+>   Zustell-ID in `X-SerMon-Delivery` und im signierten Body; Hilfe DE/EN.
+> - **`safehttp`:** nicht auflösbare und gesperrte Namen mit demselben Text, getrennt beim Wiederholen.
+> - **Dateiquelle:** rotierte Datei bis zum Ende, verlorene Bytes nach doppelter Rotation gezählt und gemeldet; Zeilen
+>   mit fremdem Host-Feld verworfen.
+> - **systemd:** Template-Instanzen als eine Unit (`sshd@.service`), höchstens 100 neue Namen pro Tag.
+> - **`check-compose --hardened`:** Capabilities, Host-Namespaces, `unconfined`, Geräte, `/run` und Sockets.
+> - **Renovate:** Regex für nfpm, Test-Hosts und E2E-Basis-Images; pnpm im Server-Image aus `package.json`.
+> - **Downloads:** `saveFile` gibt die Blob-URL erst nach 60 s frei.
+> - **Node entsperren:** gibt dem Agent sein aktuelles Zertifikat zurück; ältere und vorher widerrufene bleiben
+>   widerrufen.
 - **Ziel:** die niedrigen Befunde, die nicht sofort behoben wurden:
   - `org_purge` sperrt die Org-Zeile nicht (`FOR UPDATE`): Wettlauf mit „Sperre aufheben“; die Konten ohne weitere
     Mitgliedschaft im `DELETE` erneut prüfen.

@@ -48,12 +48,12 @@ rustix = { version = "=1.1.6", default-features = false, features = ["fs", "proc
 rustls-webpki = { version = "=0.103.17", default-features = false, features = ["ring", "std"] }
 tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring", "tls12"] }
 tower = { version = "=0.5.3", default-features = false, features = ["util"] }
-clap = { version = "=4.6.8", default-features = false, features = ["std", "help", "usage", "error-context", "suggestions", "derive", "env"] }
+clap = { version = "=4.6.9", default-features = false, features = ["std", "help", "usage", "error-context", "suggestions", "derive", "env"] }
 http = "=1.5.0"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 # Linear-time matching for untrusted log lines (no ReDoS, KONZEPT §10.3, §11).
-regex = { version = "=1.13.1", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
+regex = { version = "=1.13.2", default-features = false, features = ["std", "perf", "unicode-case", "unicode-perl"] }
 thiserror = "=2.0.21"
 tokio = { version = "=1.54.1", features = ["rt", "macros", "signal", "time", "sync"] }
 tokio-stream = { version = "=0.1.19", default-features = false }
@@ -66,7 +66,7 @@ tracing-subscriber = { version = "=0.3.23", default-features = false, features =
 proptest = "=1.12.0"
 tempfile = "=3.27.0"
 # Time zones of classic log files (M2-20): no bundled tzdb, the agent passes /etc/localtime.
-jiff = { version = "=0.2.43", default-features = false, features = ["std"] }
+jiff = { version = "=0.2.46", default-features = false, features = ["std"] }
 
 sermon-buffer = { path = "crates/sermon-buffer" }
 sermon-collectors = { path = "crates/sermon-collectors" }

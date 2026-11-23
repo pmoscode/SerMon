@@ -1,0 +1,197 @@
+package agentapi_test
+
+import (
+	"context"
+	"crypto/tls"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
+
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/logconfig"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
+	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
+)
+
+// fakeConfigs holds one configuration per organization and records the agents' answers.
+type fakeConfigs struct {
+	mu       sync.Mutex
+	configs  map[tenant.OrgID]logconfig.NodeConfig
+	asked    []identity.NodeID
+	answered []answer
+}
+
+type answer struct {
+	org     tenant.OrgID
+	node    identity.NodeID
+	applied logconfig.Applied
+}
+
+func (f *fakeConfigs) set(org tenant.OrgID, c logconfig.NodeConfig) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.configs[org] = c
+}
+
+func (f *fakeConfigs) ForNode(_ context.Context, org tenant.OrgID, node identity.NodeID) (logconfig.NodeConfig, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.asked = append(f.asked, node)
+	return f.configs[org], nil
+}
+
+func (f *fakeConfigs) Applied(_ context.Context, org tenant.OrgID, node identity.NodeID, a logconfig.Applied) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.answered = append(f.answered, answer{org, node, a})
+	return nil
+}
+
+func (f *fakeConfigs) answers() []answer {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]answer(nil), f.answered...)
+}
+
+func helloWithConfig(version uint64) *agentv1.SessionRequest {
+	msg := helloMsg()
+	msg.GetHello().ConfigVersion = version
+	return msg
+}
+
+func nodeConfig(version uint64) logconfig.NodeConfig {
+	return logconfig.NodeConfig{
+		Version: version,
+		Settings: logconfig.Settings{
+			Enabled: true, MinSeverity: logconfig.SeverityWarning, ExcludeUnits: []string{"cron.service"},
+			Files: []logconfig.FileGlob{{Pattern: "/var/log/nginx/*.log", MultilineStart: `^\d`}},
+		},
+		Rules: []logconfig.Rule{{Pattern: `customer-\d{6}`}},
+	}
+}
+
+// within bounds a stream, so that a missing message fails the test instead of hanging it.
+func within(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func startConfigServer(t *testing.T, configs *fakeConfigs) server {
+	t.Helper()
+	return startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithAgentConfig(configs)})
+}
+
+// ADR 0030: a configuration that differs from the agent's version is sent right after the trust
+// bundle, with every field; the agent's answer is stored under the certificate's identity.
+func TestConfig_SentAtTheStartWhenTheVersionDiffersAndTheAnswerIsStored(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: nodeConfig(3)}}
+	s := startConfigServer(t, configs)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	if err := stream.Send(helloWithConfig(2)); err != nil {
+		t.Fatal(err)
+	}
+	res, err := receive(stream)
+	update := res.GetConfigUpdate()
+	if err != nil || update == nil {
+		t.Fatalf("Receive() = %v, %v; want ConfigUpdate", res, err)
+	}
+	logs := update.GetConfig().GetLogs()
+	if update.GetVersion() != 3 || !logs.GetEnabled() || logs.GetMinSeverity() != agentv1.LogSeverity_LOG_SEVERITY_WARNING ||
+		len(logs.GetExcludeUnits()) != 1 || logs.GetFiles()[0].GetPattern() != "/var/log/nginx/*.log" || logs.GetFiles()[0].GetMultilineStart() != `^\d` ||
+		update.GetConfig().GetRedactionRules()[0].GetPattern() != `customer-\d{6}` {
+		t.Errorf("ConfigUpdate = %v", update)
+	}
+
+	applied := &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_ConfigApplied{ConfigApplied: &agentv1.ConfigApplied{
+		Version: 3, Error: "rule 1: look-around is not supported", LogsVetoed: true,
+	}}}
+	if err := stream.Send(applied); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(configs.answers()) == 1 })
+	got := configs.answers()[0]
+	if got.org != orgX || got.node != nodeX || got.applied.Version != 3 || !got.applied.LogsVetoed ||
+		got.applied.Error != "rule 1: look-around is not supported" || time.Since(got.applied.At) > time.Minute {
+		t.Errorf("stored answer = %+v", got)
+	}
+	_ = stream.CloseRequest()
+}
+
+// The same version as the agent's is not sent; a change reaches the sessions of the organization
+// once per version, others not.
+func TestConfig_ChangesReachTheConnectedAgentsOfTheOrganizationOnce(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: nodeConfig(3)}}
+	s := startConfigServer(t, configs)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	if err := stream.Send(helloWithConfig(3)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
+
+	s.sessions.ConfigChanged(tenant.OrgID(uuid.New())) // another organization: nothing
+	s.sessions.ConfigChanged(orgX)                     // still version 3: nothing
+	configs.set(orgX, nodeConfig(4))
+	s.sessions.ConfigChanged(orgX)
+	res, err := receive(stream)
+	if err != nil || res.GetConfigUpdate().GetVersion() != 4 {
+		t.Fatalf("Receive() = %v, %v; want ConfigUpdate 4 as the first message after the trust bundle", res, err)
+	}
+	s.sessions.ConfigChanged(orgX) // version 4 again: not resent
+	configs.set(orgX, nodeConfig(5))
+	s.sessions.ConfigChanged(orgX)
+	if res, err := stream.Receive(); err != nil || res.GetConfigUpdate().GetVersion() != 5 {
+		t.Fatalf("Receive() = %v, %v; want ConfigUpdate 5 next", res, err)
+	}
+	_ = stream.CloseRequest()
+}
+
+// Changes made through another server instance arrive with the periodic recheck (T56).
+func TestConfig_TheRecheckPicksUpChangesFromOtherInstances(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: nodeConfig(1)}}
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{
+		agentapi.WithAgentConfig(configs), agentapi.WithCertificateRecheck(50 * time.Millisecond),
+	})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	if err := stream.Send(helloWithConfig(1)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(s.sessions.Active()) == 1 })
+	configs.set(orgX, nodeConfig(2))
+	if res, err := receive(stream); err != nil || res.GetConfigUpdate().GetVersion() != 2 {
+		t.Fatalf("Receive() = %v, %v; want ConfigUpdate 2 from the recheck", res, err)
+	}
+	_ = stream.CloseRequest()
+}
+
+// The error text comes from the host: control characters become U+FFFD (longer in UTF-8), and the
+// result still fits the column (1 KiB).
+func TestConfig_TheAgentsErrorIsMadeVisibleAndBounded(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: nodeConfig(1)}}
+	s := startConfigServer(t, configs)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	if err := stream.Send(helloWithConfig(1)); err != nil {
+		t.Fatal(err)
+	}
+	reason := strings.Repeat("\x1b", 1024)
+	applied := &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_ConfigApplied{ConfigApplied: &agentv1.ConfigApplied{Version: 1, Error: reason}}}
+	if err := stream.Send(applied); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(configs.answers()) == 1 })
+	got := configs.answers()[0].applied.Error
+	if len(got) > logconfig.MaxErrorBytes || !utf8.ValidString(got) || strings.Contains(got, "\x1b") || got == "" {
+		t.Errorf("stored error has %d bytes: %q", len(got), got[:min(len(got), 30)])
+	}
+	_ = stream.CloseRequest()
+}

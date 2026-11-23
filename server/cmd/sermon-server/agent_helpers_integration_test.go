@@ -149,7 +149,7 @@ func (s runningServer) session(t *testing.T, cert tls.Certificate, roots [][]byt
 		}}); err != nil && !errors.Is(err, io.EOF) {
 			return result, err
 		}
-		res, err := stream.Receive()
+		res, err := receiveSkippingConfig(stream)
 		if err != nil {
 			return result, err
 		}
@@ -157,14 +157,25 @@ func (s runningServer) session(t *testing.T, cert tls.Certificate, roots [][]byt
 		result.rotated = &tls.Certificate{Certificate: append([][]byte{issued.GetCertificate()}, issued.GetIntermediates()...), PrivateKey: key}
 		// The server ends the session after a rotation; the agent reconnects with the new one.
 		_ = stream.CloseRequest()
-		if _, err := stream.Receive(); connect.CodeOf(err) != connect.CodeAborted {
+		if _, err := receiveSkippingConfig(stream); connect.CodeOf(err) != connect.CodeAborted {
 			return result, fmt.Errorf("after the rotation: %w, want the session to end (ABORTED)", err)
 		}
 		return result, nil
 	}
 	_ = stream.CloseRequest()
-	if _, err := stream.Receive(); !errors.Is(err, io.EOF) {
+	if _, err := receiveSkippingConfig(stream); !errors.Is(err, io.EOF) {
 		return result, err
 	}
 	return result, nil
+}
+
+// receiveSkippingConfig returns the next message that is no ConfigUpdate: the server sends the
+// node's configuration after the trust bundle (ADR 0030).
+func receiveSkippingConfig(stream *connect.BidiStreamForClient[agentv1.SessionRequest, agentv1.SessionResponse]) (*agentv1.SessionResponse, error) {
+	for {
+		res, err := stream.Receive()
+		if err != nil || res.GetConfigUpdate() == nil {
+			return res, err
+		}
+	}
 }

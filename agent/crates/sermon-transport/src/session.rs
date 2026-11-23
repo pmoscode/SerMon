@@ -22,8 +22,8 @@ use crate::identity::{AgentKey, CertificateOffer, Credentials, IssuedCertificate
 use crate::outbox::{Outbox, batch_for};
 use crate::proto::agent::v1::agent_service_client::AgentServiceClient;
 use crate::proto::agent::v1::{
-    Heartbeat, Hello, RotateCertificate, SessionRequest, SessionResponse, session_request,
-    session_response,
+    ConfigApplied, ConfigUpdate, Heartbeat, Hello, RotateCertificate, SessionRequest,
+    SessionResponse, session_request, session_response,
 };
 use crate::tls::agent_api_config;
 
@@ -66,6 +66,14 @@ pub trait IdentitySource: Send + Sync {
     ///
     /// If storing fails.
     fn store_trust_bundle(&self, roots: &[CertificateDer<'static>]) -> Result<(), BoxError>;
+}
+
+/// Takes the configurations the server sends (ADR 0030): checks, stores and applies them.
+pub trait ConfigSink: Send + Sync {
+    /// The version in use, 0 without one; every `Hello` names it.
+    fn version(&self) -> u64;
+    /// Takes `update` or keeps the previous configuration; the answer goes to the server.
+    fn apply(&self, update: ConfigUpdate) -> ConfigApplied;
 }
 
 /// Reads the host facts for `Hello`.
@@ -113,6 +121,7 @@ pub struct Transport {
     facts: FactsSource,
     outbox: Outbox,
     clock: Arc<dyn Clock>,
+    config_sink: Option<Arc<dyn ConfigSink>>,
 }
 
 impl std::fmt::Debug for Transport {
@@ -168,7 +177,15 @@ impl Transport {
             facts,
             outbox,
             clock,
+            config_sink: None,
         }
+    }
+
+    /// Hands the server's configurations to `sink`; without one they are ignored.
+    #[must_use]
+    pub fn with_config(mut self, sink: Arc<dyn ConfigSink>) -> Self {
+        self.config_sink = Some(sink);
+        self
     }
 
     /// Runs sessions until `shutdown` is cancelled. Errors are logged and lead to a reconnect.
@@ -235,7 +252,7 @@ impl Transport {
             protocol_version: PROTOCOL_VERSION,
             agent_version: self.config.agent_version.clone(),
             host_facts: Some((&facts).into()),
-            config_version: 0,
+            config_version: self.config_sink.as_ref().map_or(0, |sink| sink.version()),
         }));
         outgoing
             .send(hello)
@@ -412,6 +429,27 @@ impl Session<'_> {
             }
             session_response::Payload::CertificateIssued(issued) => {
                 return self.finish_rotation(&issued).map(|()| Some(End::Rotated));
+            }
+            session_response::Payload::ConfigUpdate(update) => {
+                let Some(sink) = &self.transport.config_sink else {
+                    tracing::debug!("ignoring a configuration, none is applied here");
+                    return Ok(None);
+                };
+                let answer = sink.apply(update);
+                if answer.error.is_empty() {
+                    tracing::info!(
+                        version = answer.version,
+                        "configuration from the server applied"
+                    );
+                } else {
+                    tracing::warn!(
+                        version = answer.version,
+                        "configuration from the server rejected, keeping the previous one: {}",
+                        answer.error
+                    );
+                }
+                self.send(session_request::Payload::ConfigApplied(answer))
+                    .await?;
             }
         }
         Ok(None)

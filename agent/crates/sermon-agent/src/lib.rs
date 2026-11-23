@@ -3,6 +3,7 @@
 //! The binary (`main.rs`) only parses the command line; everything else lives here so that it can
 //! be tested.
 
+pub mod agent_config;
 pub mod cli;
 pub mod config;
 pub mod enroll;
@@ -106,13 +107,19 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         facts.security_source = logfile::security_source(&facts_root);
         Ok(facts)
     });
+    // The configuration from the server (ADR 0030); the log pipeline follows it (M3-04).
+    let agent_config = Arc::new(agent_config::ConfigStore::open(
+        layout.agent_config_file(),
+        config.local.allow_logs,
+    ));
     let transport = Transport::new(
         TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
         Arc::new(FileIdentity::new(layout)),
         facts,
         outbox.clone(),
         clock.clone(),
-    );
+    )
+    .with_config(agent_config);
 
     // One thread is enough for < 1 % CPU: collectors read small /proc files, the rest is I/O.
     let runtime = tokio::runtime::Builder::new_current_thread()

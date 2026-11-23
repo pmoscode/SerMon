@@ -35,6 +35,8 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.TwoFactorService/DisableTwoFactor":             "the caller's own second factor (per user, no tenant data)",
 	"/sermon.web.v1.SecurityPolicyService/GetSecurityPolicy":       "only the caller's own organization, no IDs (two_factor_integration_test.go)",
 	"/sermon.web.v1.SecurityPolicyService/SetSecondFactorRequired": "only the caller's own organization, no IDs (two_factor_integration_test.go)",
+	"/sermon.web.v1.LogSettingsService/GetLogSettings":             "only the caller's own organization, no IDs (log_settings_integration_test.go)",
+	"/sermon.web.v1.LogSettingsService/SetRedactionRules":          "only the caller's own organization, no IDs (log_settings_integration_test.go)",
 }
 
 // TestTenantIsolation_EveryProcedureIsCovered fails when a new RPC is added without a

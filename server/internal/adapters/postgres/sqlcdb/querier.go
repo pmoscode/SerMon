@@ -23,6 +23,9 @@ type Querier interface {
 	AdminStorageTotals(ctx context.Context) (AdminStorageTotalsRow, error)
 	AdvanceIngestSeq(ctx context.Context, arg AdvanceIngestSeqParams) (int64, error)
 	AgentCertificateUsable(ctx context.Context, arg AgentCertificateUsableParams) (bool, error)
+	// The configuration of a node: its organization's version and rules, its group's settings (NULL:
+	// the defaults).
+	AgentConfigForNode(ctx context.Context, nodeID uuid.UUID) (AgentConfigForNodeRow, error)
 	AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
 	AllowNodeTakeover(ctx context.Context, arg AllowNodeTakeoverParams) (int64, error)
@@ -31,6 +34,7 @@ type Querier interface {
 	AppendInstanceAudit(ctx context.Context, arg AppendInstanceAuditParams) error
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
+	BumpAgentConfigVersion(ctx context.Context) (int64, error)
 	// Marks the reminder once (across server instances) if the deletion is due before the time.
 	ClaimDeletionReminder(ctx context.Context, arg ClaimDeletionReminderParams) ([]ClaimDeletionReminderRow, error)
 	// Due rows: pending ones whose attempt is due, and sending ones whose claim expired. SKIP LOCKED
@@ -65,6 +69,7 @@ type Querier interface {
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
+	DeleteGroupLogSettings(ctx context.Context, groupID uuid.UUID) error
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMaintenanceWindow(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -157,6 +162,9 @@ type Querier interface {
 	ListEnabledNotificationChannelIDs(ctx context.Context) ([]uuid.UUID, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
+	// Log settings and redaction rules (M3-03, ADR 0030). Every query runs in the organization's
+	// tenant transaction.
+	ListGroupLogSettings(ctx context.Context) ([]ListGroupLogSettingsRow, error)
 	ListInstanceAudit(ctx context.Context, arg ListInstanceAuditParams) ([]InstanceAuditLog, error)
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
@@ -188,6 +196,7 @@ type Querier interface {
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
 	// The node of a group with this machine-id whose takeover window is open.
 	NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error)
+	NodeGroupExists(ctx context.Context, groupID uuid.UUID) (bool, error)
 	// Node identity in the UI (M2-23).
 	NodeLockedAt(ctx context.Context, id uuid.UUID) (*time.Time, error)
 	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
@@ -199,6 +208,7 @@ type Querier interface {
 	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
 	// The admins of all groups, for the mails about lock and deletion.
 	OrganizationAdminEmails(ctx context.Context) ([]string, error)
+	OrganizationAgentConfig(ctx context.Context) (OrganizationAgentConfigRow, error)
 	OrganizationQuotas(ctx context.Context) (OrganizationQuotasRow, error)
 	// The quotas of the organization, locked: enrollments and invitations of one organization are
 	// counted one after the other.
@@ -220,6 +230,7 @@ type Querier interface {
 	// received first. The bounds on occurred_at only prune partitions: min_occurred lies the oldest
 	// age the ingest accepts (secevent.MaxAge) and a margin before since; it takes 5 min ahead.
 	ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecurityEventsParams) ([]ReceivedSecurityEventsRow, error)
+	RecordAgentConfigApplied(ctx context.Context, arg RecordAgentConfigAppliedParams) (int64, error)
 	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
 	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
@@ -244,6 +255,7 @@ type Querier interface {
 	SetOrganizationLock(ctx context.Context, arg SetOrganizationLockParams) (int64, error)
 	SetOrganizationRequiresSecondFactor(ctx context.Context, required bool) (int64, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
+	SetRedactionRules(ctx context.Context, rules []byte) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
 	// First installation: setup token and superadmins (instance-level tables, no RLS).
 	SetupCompleted(ctx context.Context) (bool, error)
@@ -275,6 +287,7 @@ type Querier interface {
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
 	UpsertAlertRoutingState(ctx context.Context, arg UpsertAlertRoutingStateParams) error
 	UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRuleOverrideParams) error
+	UpsertGroupLogSettings(ctx context.Context, arg UpsertGroupLogSettingsParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error

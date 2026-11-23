@@ -471,6 +471,8 @@ pub struct SessionLog {
     pub batch_times: Vec<std::time::Instant>,
     /// `RotateCertificate` requests received.
     pub rotations: usize,
+    /// `ConfigApplied` answers received (ADR 0030).
+    pub config_applied: Vec<sermon_transport::proto::agent::v1::ConfigApplied>,
     /// Whether the session has ended.
     pub ended: bool,
 }
@@ -689,6 +691,9 @@ impl FakeAgentApi {
                         let _ = outgoing.send(Err(Status::aborted("rotated"))).await;
                         break;
                     }
+                }
+                Some(session_request::Payload::ConfigApplied(applied)) => {
+                    self.update(index, |log| log.config_applied.push(applied));
                 }
                 Some(session_request::Payload::Hello(_)) | None => {
                     let _ = outgoing

@@ -34,6 +34,7 @@ type isolationEnv struct {
 	alerts                          webv1connect.AlertServiceClient
 	rules                           webv1connect.AlertRuleServiceClient
 	windows                         webv1connect.MaintenanceWindowServiceClient
+	logSettings                     webv1connect.LogSettingsServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -300,6 +301,14 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.AuthService/SwitchOrganization": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.auth.SwitchOrganization(ctx, connect.NewRequest(&webv1.SwitchOrganizationRequest{OrganizationId: e.orgA}))
+		return err
+	}},
+	"/sermon.web.v1.LogSettingsService/SetGroupLogSettings": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.logSettings.SetGroupLogSettings(ctx, connect.NewRequest(&webv1.SetGroupLogSettingsRequest{GroupId: e.groupA, Settings: &webv1.LogSettings{}}))
+		return err
+	}},
+	"/sermon.web.v1.LogSettingsService/ResetGroupLogSettings": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.logSettings.ResetGroupLogSettings(ctx, connect.NewRequest(&webv1.ResetGroupLogSettingsRequest{GroupId: e.groupA}))
 		return err
 	}},
 	"/sermon.web.v1.AccessService/ListNodeGroups": {list: true, run: func(ctx context.Context, e isolationEnv) error {

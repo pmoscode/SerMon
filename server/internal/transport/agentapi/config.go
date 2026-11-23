@@ -1,0 +1,121 @@
+package agentapi
+
+import (
+	"context"
+	"time"
+	"unicode/utf8"
+
+	"connectrpc.com/connect"
+
+	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/logconfig"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
+	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
+)
+
+// AgentConfigs provides the configuration of a node and stores the agent's answer (ADR 0030).
+// Organization and node come from the certificate.
+type AgentConfigs interface {
+	ForNode(ctx context.Context, org tenant.OrgID, node identity.NodeID) (logconfig.NodeConfig, error)
+	Applied(ctx context.Context, org tenant.OrgID, node identity.NodeID, applied logconfig.Applied) error
+}
+
+// WithAgentConfig sends the server's configuration to the agents (M3-03); without it they keep
+// what they have.
+func WithAgentConfig(configs AgentConfigs) HandlerOption {
+	return func(h *SessionHandler) { h.configs = configs }
+}
+
+var _ logsettings.Agents = (*Sessions)(nil)
+
+// ConfigChanged tells the sessions of the organization on this server that its configuration
+// changed (logsettings.Agents); other instances notice at their next recheck.
+func (s *Sessions) ConfigChanged(org tenant.OrgID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, l := range s.active {
+		if l.Org != org {
+			continue
+		}
+		select {
+		case l.config <- struct{}{}:
+		default: // a check is already queued
+		}
+	}
+}
+
+// configState is what a session knows about the agent's configuration.
+type configState struct {
+	agent uint64 // the version from the Hello
+	sent  uint64 // the version last sent in this session
+}
+
+// sendConfig sends the node's configuration if its version is neither the agent's nor the one
+// sent last: a configuration the agent rejected goes out once per session, not at every check.
+func (h *SessionHandler) sendConfig(ctx context.Context, id Identity, state *configState, stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse]) error {
+	if h.configs == nil {
+		return nil
+	}
+	config, err := h.configs.ForNode(ctx, id.Org, id.Node)
+	if err != nil {
+		// The agent keeps its configuration; the next check tries again.
+		h.logger.WarnContext(ctx, "load agent config failed", "node", id.Node.String(), "error", err)
+		return nil
+	}
+	if config.Version == state.agent || config.Version == state.sent {
+		return nil
+	}
+	if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_ConfigUpdate{ConfigUpdate: configUpdate(config)}}); err != nil {
+		return err //nolint:wrapcheck // connect errors must reach the client unchanged
+	}
+	state.sent = config.Version
+	h.logger.InfoContext(ctx, "agent config sent", "node", id.Node.String(), "version", config.Version)
+	return nil
+}
+
+// recordApplied stores the agent's answer; the error text comes from the host.
+func (h *SessionHandler) recordApplied(ctx context.Context, id Identity, applied *agentv1.ConfigApplied) {
+	if h.configs == nil {
+		return
+	}
+	answer := logconfig.Applied{
+		Version: applied.GetVersion(), Error: cutUTF8(textsafe.Visible(applied.GetError()), logconfig.MaxErrorBytes),
+		LogsVetoed: applied.GetLogsVetoed(), At: time.Now(),
+	}
+	if answer.Error != "" {
+		h.logger.WarnContext(ctx, "agent rejected its config", "node", id.Node.String(), "version", answer.Version, "error", answer.Error)
+	}
+	if err := h.configs.Applied(ctx, id.Org, id.Node, answer); err != nil {
+		h.logger.WarnContext(ctx, "record agent config answer failed", "node", id.Node.String(), "error", err)
+	}
+}
+
+func configUpdate(c logconfig.NodeConfig) *agentv1.ConfigUpdate {
+	logs := &agentv1.LogConfig{
+		Enabled:      c.Settings.Enabled,
+		MinSeverity:  agentv1.LogSeverity(c.Settings.MinSeverity), // same codes (logconfig.Severity)
+		ExcludeUnits: c.Settings.ExcludeUnits,
+	}
+	for _, f := range c.Settings.Files {
+		logs.Files = append(logs.Files, &agentv1.LogFileGlob{Pattern: f.Pattern, MultilineStart: f.MultilineStart})
+	}
+	config := &agentv1.AgentConfig{Logs: logs}
+	for _, r := range c.Rules {
+		config.RedactionRules = append(config.RedactionRules, &agentv1.RedactionRule{Pattern: r.Pattern})
+	}
+	return &agentv1.ConfigUpdate{Version: c.Version, Config: config}
+}
+
+// cutUTF8 shortens s to at most max bytes without splitting a character.
+func cutUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	end := maxBytes
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	return s[:end]
+}

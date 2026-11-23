@@ -273,10 +273,11 @@ eine Fake-Implementierung für Tests.
     - Agent → Server: `Hello{agent_version, host_facts, config_version}` (`host_facts` mit `security_source`: Journal,
       Datei verifiziert/unverifiziert oder keine), `Heartbeat`,
       `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“), `Batch{seq, …}` mit genau einem
-      Inhalt: `MetricBatch`, `SecurityEventBatch`, `LogBatch` (M3-01), später `UpdateReport`; dazu `ProcessSnapshot` und
-      `CommandResult` (nicht gepuffert)
+      Inhalt: `MetricBatch`, `SecurityEventBatch`, `LogBatch` (M3-01), später `UpdateReport`; dazu `ConfigApplied`
+      (Antwort auf `ConfigUpdate`), `ProcessSnapshot` und `CommandResult` (nicht gepuffert)
     - Server → Agent: `TrustBundle{roots}` (zu Beginn jeder Session), `Ack{seq}`, `Throttle{min_interval}`,
-      `CertificateIssued`, `RotateNow` (Rotation auf Abruf), `ConfigUpdate{version, config}`,
+      `CertificateIssued`, `RotateNow` (Rotation auf Abruf), `ConfigUpdate{version, config}` (Log-Auswahl und
+      Redaction-Regeln, [ADR 0030](adr/0030-konfiguration-vom-server.md)),
       `StartLiveView{interval}`, `StopLiveView`, `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`
 - **Enrollment:** `EnrollmentService.Enroll{token, csr, host_facts}` ist ein einzelner Aufruf über den öffentlichen
   HTTPS-Endpunkt, nicht über den mTLS-Port ([ADR 0009](adr/0009-enrollment-ueber-web-endpunkt.md)).

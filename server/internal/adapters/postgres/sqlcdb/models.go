@@ -154,6 +154,14 @@ type Invitation struct {
 	ExpiresAt time.Time
 }
 
+type LogSetting struct {
+	OrgID     uuid.UUID
+	GroupID   uuid.UUID
+	Settings  []byte
+	UpdatedAt time.Time
+	UpdatedBy *uuid.UUID
+}
+
 type MaintenanceWindow struct {
 	OrgID           uuid.UUID
 	ID              uuid.UUID
@@ -202,29 +210,33 @@ type MetricsRaw struct {
 }
 
 type Node struct {
-	ID             uuid.UUID
-	OrgID          uuid.UUID
-	GroupID        uuid.UUID
-	Hostname       string
-	MachineID      string
-	OsID           string
-	OsVersion      string
-	KernelRelease  string
-	Architecture   string
-	CpuCount       int32
-	MemoryBytes    int64
-	EnrolledWith   *uuid.UUID
-	CreatedAt      time.Time
-	LockedAt       *time.Time
-	LockReason     pgtype.Text
-	LastIp         pgtype.Text
-	IngestSeq      int64
-	LastSeenAt     *time.Time
-	AgentVersion   pgtype.Text
-	EventSeq       int64
-	TakeoverUntil  *time.Time
-	Tags           []byte
-	SecuritySource string
+	ID               uuid.UUID
+	OrgID            uuid.UUID
+	GroupID          uuid.UUID
+	Hostname         string
+	MachineID        string
+	OsID             string
+	OsVersion        string
+	KernelRelease    string
+	Architecture     string
+	CpuCount         int32
+	MemoryBytes      int64
+	EnrolledWith     *uuid.UUID
+	CreatedAt        time.Time
+	LockedAt         *time.Time
+	LockReason       pgtype.Text
+	LastIp           pgtype.Text
+	IngestSeq        int64
+	LastSeenAt       *time.Time
+	AgentVersion     pgtype.Text
+	EventSeq         int64
+	TakeoverUntil    *time.Time
+	Tags             []byte
+	SecuritySource   string
+	ConfigVersion    int64
+	ConfigError      pgtype.Text
+	LogsVetoed       bool
+	ConfigReportedAt *time.Time
 }
 
 type NodeGroup struct {
@@ -300,6 +312,8 @@ type Organization struct {
 	LockedAt            *time.Time
 	DeletionDueAt       *time.Time
 	DeletionRemindedAt  *time.Time
+	AgentConfigVersion  int64
+	RedactionRules      []byte
 }
 
 type PkiAuthority struct {

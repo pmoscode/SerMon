@@ -100,6 +100,7 @@ type liveSession struct {
 	ActiveSession
 	end      func(error)   // ends the session with the given cause
 	commands chan struct{} // on-demand rotation requests for the stream
+	config   chan struct{} // the organization's agent configuration changed (ADR 0030)
 
 	mu        sync.Mutex
 	pending   *time.Timer // on-demand rotation in progress; fires on timeout
@@ -296,6 +297,7 @@ type SessionHandler struct {
 	rotator  Rotator
 	trust    TrustSource
 	ingest   *ingest.Service
+	configs  AgentConfigs
 	recheck  time.Duration
 	logger   *slog.Logger
 }
@@ -351,7 +353,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 
 	ctx, end := context.WithCancelCause(ctx)
 	defer end(nil)
-	live := &liveSession{end: end, commands: make(chan struct{}, 1), ActiveSession: ActiveSession{
+	live := &liveSession{end: end, commands: make(chan struct{}, 1), config: make(chan struct{}, 1), ActiveSession: ActiveSession{
 		Org: id.Org, Node: id.Node, Serial: id.Serial, RemoteIP: id.RemoteIP,
 		AgentVersion: hello.GetAgentVersion(), Hostname: textsafe.Visible(hello.GetHostFacts().GetHostname()), Since: time.Now(),
 	}}
@@ -389,6 +391,10 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 		return err //nolint:wrapcheck // connect errors must reach the client unchanged
 	}
 	defer h.logger.InfoContext(ctx, "agent disconnected", "org", id.Org.String(), "node", id.Node.String())
+	config := &configState{agent: hello.GetConfigVersion()}
+	if err := h.sendConfig(ctx, id, config, stream); err != nil {
+		return err
+	}
 
 	// Receive in the background, so that the session can be ended from outside (lock, replace).
 	messages := make(chan received)
@@ -421,6 +427,14 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 			if !usable {
 				h.logger.WarnContext(ctx, "session ended: certificate revoked or expired", "node", id.Node.String(), "serial", id.Serial)
 				return connect.NewError(connect.CodePermissionDenied, errCertificateUnusable)
+			}
+			// Changes made through another server instance (ADR 0030).
+			if err := h.sendConfig(ctx, id, config, stream); err != nil {
+				return err
+			}
+		case <-live.config:
+			if err := h.sendConfig(ctx, id, config, stream); err != nil {
+				return err
 			}
 		case <-flush:
 			if err := h.flush(ctx, feed, stream); err != nil {
@@ -456,6 +470,9 @@ func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSess
 	switch {
 	case msg.GetHello() != nil:
 		return false, connect.NewError(connect.CodeInvalidArgument, errDuplicateHello)
+	case msg.GetConfigApplied() != nil:
+		h.recordApplied(ctx, id, msg.GetConfigApplied())
+		return false, nil
 	case msg.GetRotateCertificate() != nil:
 		immediate := live.takePending()
 		rotated, err := h.rotator.Rotate(ctx, id.rotation(), msg.GetRotateCertificate().GetCsr(), id.RemoteIP, previousIP, immediate)

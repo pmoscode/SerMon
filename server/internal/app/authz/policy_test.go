@@ -49,6 +49,7 @@ var matrix = []struct {
 	{authz.ManageMembers, role.Admin, true},
 	{authz.ManageGroups, role.Admin, true},
 	{authz.ViewAuditLog, role.Admin, true},
+	{authz.ManageLogSettings, role.Admin, true},
 }
 
 func TestPolicy_RoleMatrix(t *testing.T) {

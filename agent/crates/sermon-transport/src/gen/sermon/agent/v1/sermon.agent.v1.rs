@@ -4,7 +4,7 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionRequest {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_request::Payload", tags="1, 2, 3, 4")]
+    #[prost(oneof="session_request::Payload", tags="1, 2, 3, 4, 5")]
     pub payload: ::core::option::Option<session_request::Payload>,
 }
 /// Nested message and enum types in `SessionRequest`.
@@ -27,19 +27,22 @@ pub mod session_request {
         /// the batch is persisted.
         #[prost(message, tag="4")]
         Batch(super::Batch),
+        /// config_applied answers config_update: the configuration is in use, or why not (ADR 0030).
+        #[prost(message, tag="5")]
+        ConfigApplied(super::ConfigApplied),
     }
 }
 /// SessionResponse is one message from the server to the agent.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5")]
+    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
 pub mod session_response {
     /// payload is the actual message; exactly one must be set.
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Payload {
         /// ack confirms that all messages up to a sequence number were persisted.
         #[prost(message, tag="1")]
@@ -60,6 +63,10 @@ pub mod session_response {
         /// throttle asks the agent to send batches more slowly (quota exceeded, KONZEPT §5).
         #[prost(message, tag="5")]
         Throttle(super::Throttle),
+        /// config_update is the configuration the server holds for the node (ADR 0030); sent when its
+        /// version differs from the agent's and after every change.
+        #[prost(message, tag="6")]
+        ConfigUpdate(super::ConfigUpdate),
     }
 }
 /// Hello is the first message of every stream.
@@ -512,6 +519,76 @@ pub struct LogEntry {
     /// facility is the syslog facility (0 kern … 23 local7), if known.
     #[prost(uint32, optional, tag="14")]
     pub facility: ::core::option::Option<u32>,
+}
+/// ConfigUpdate is the configuration of a node (ADR 0030): what to send, nothing about how the
+/// agent runs. The local veto in agent.toml always wins.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConfigUpdate {
+    /// version identifies the configuration; the agent reports it in Hello and ConfigApplied.
+    #[prost(uint64, tag="1")]
+    pub version: u64,
+    /// config is the content.
+    #[prost(message, optional, tag="2")]
+    pub config: ::core::option::Option<AgentConfig>,
+}
+/// AgentConfig is what the server may set on a node.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentConfig {
+    /// logs selects the log entries to send (KONZEPT §10).
+    #[prost(message, optional, tag="1")]
+    pub logs: ::core::option::Option<LogConfig>,
+    /// redaction_rules are the organization's rules on top of the built-in ones (KONZEPT §10.3).
+    #[prost(message, repeated, tag="2")]
+    pub redaction_rules: ::prost::alloc::vec::Vec<RedactionRule>,
+}
+/// LogConfig selects the log entries of a node.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LogConfig {
+    /// enabled sends log entries at all; security events are sent either way.
+    #[prost(bool, tag="1")]
+    pub enabled: bool,
+    /// min_severity drops entries less severe than this; unspecified keeps all, entries without a
+    /// severity are always kept.
+    #[prost(enumeration="LogSeverity", tag="2")]
+    pub min_severity: i32,
+    /// exclude_units are systemd units (or syslog identifiers) whose entries are not sent.
+    #[prost(string, repeated, tag="3")]
+    pub exclude_units: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// files are log files to follow besides the journal (M3-05); the agent reads only paths below
+    /// its locally allowed prefixes.
+    #[prost(message, repeated, tag="4")]
+    pub files: ::prost::alloc::vec::Vec<LogFileGlob>,
+}
+/// LogFileGlob is a set of log files.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LogFileGlob {
+    /// pattern is an absolute path with * and ? in the last segments, e.g. /var/log/nginx/*.log.
+    #[prost(string, tag="1")]
+    pub pattern: ::prost::alloc::string::String,
+    /// multiline_start is a regex for the first line of an entry; following lines that don't match
+    /// belong to it (e.g. stack traces). Empty: every line is an entry.
+    #[prost(string, tag="2")]
+    pub multiline_start: ::prost::alloc::string::String,
+}
+/// RedactionRule is a rule of the organization (KONZEPT §10.3).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RedactionRule {
+    /// pattern is a regex; matches (or their group named secret) are replaced with ***.
+    #[prost(string, tag="1")]
+    pub pattern: ::prost::alloc::string::String,
+}
+/// ConfigApplied is the agent's answer to a ConfigUpdate.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ConfigApplied {
+    /// version is the version of the ConfigUpdate answered.
+    #[prost(uint64, tag="1")]
+    pub version: u64,
+    /// error says why the agent keeps its previous configuration; empty if it took the new one.
+    #[prost(string, tag="2")]
+    pub error: ::prost::alloc::string::String,
+    /// logs_vetoed is set if agent.toml forbids sending logs (allow_logs = false).
+    #[prost(bool, tag="3")]
+    pub logs_vetoed: bool,
 }
 /// SecuritySource is where the agent finds the log lines for security events (ADR 0025).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

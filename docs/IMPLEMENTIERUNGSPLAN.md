@@ -2704,7 +2704,45 @@ Konfiguration) und M3-06 (Loki).
   - Zu große und ungültige Org-Regeln werden abgelehnt
 - **Abhängig von:** M2-06
 
-#### ☐ M3-03 – Konfiguration vom Server an die Agents · X · M 🔒
+#### ☑ M3-03 – Konfiguration vom Server an die Agents · X · M 🔒
+> Erledigt ([ADR 0030](adr/0030-konfiguration-vom-server.md); KONZEPT §5; Threat Model T81):
+> - **Protokoll:**
+>   - `ConfigUpdate{version, AgentConfig}` (Server → Agent, Feld 6) und `ConfigApplied{version, error, logs_vetoed}`
+>     (Agent → Server, Feld 5).
+>   - `AgentConfig` hat `LogConfig` (an/aus, Mindest-Severity, bis 64 ausgeschlossene Units, bis 16 Datei-Globs mit
+>     Multiline-Regex) und bis 32 `RedactionRule`.
+> - **Server:**
+>   - Domäne `logconfig` prüft Grenzen, Globs (absolut, ohne `..`, `path.Match`) und Regexes (Go-`regexp`).
+>   - Use-Case `app/logsettings` mit neuer Action `manage_log_settings` (Admin der Org, Lesen und Ändern), Step-up,
+>     Audit ohne Muster.
+>   - Migration 00039: `log_settings` pro Gruppe (RLS), `organizations.agent_config_version` und `redaction_rules`;
+>     am Node die Antwort des Agents (`config_version`, `config_error`, `logs_vetoed`).
+>   - Web-API `LogSettingsService` (Get, SetGroup, ResetGroup, SetRedactionRules).
+>   - Session: sendet die Konfiguration nach dem Trust-Bundle, wenn ihre Version von der im Hello abweicht. Danach
+>     bei jeder Änderung (`Sessions.ConfigChanged`) und bei der Nachprüfung jeder Minute (andere Instanzen). Jede
+>     Version geht pro Session nur einmal raus; die Antwort speichert der Server am Node.
+> - **Agent:**
+>   - `agent_config::ConfigStore` prüft alles selbst (Grenzen, Regexes mit 1 MiB) und speichert atomar mit 0600
+>     (`agent-config.pb`, `uninstall` entfernt sie).
+>   - Er veröffentlicht die Konfiguration über `watch` und antwortet mit Fehler bzw. Veto.
+>   - Vor der ersten Konfiguration sendet er keine Logs; `allow_logs = false` gewinnt.
+>   - `Transport::with_config` meldet die Version im Hello.
+> - **Abweichung:** Die Verbraucher (Log-Pipeline, Redactor des sudo-Parsers) hängen sich mit M3-04 an.
+> - **Befund:** Der Schalter „Viewer dürfen keine Logs sehen“ (KONZEPT §7) wird nirgends gespeichert. Es gibt ihn
+>   nur in der Policy über `WithViewerLogsDisabled` in Tests (T22) → M3-12.
+> - **Tests:**
+>   - Domäne (18 ungültige Einstellungen, 8 ungültige Regeln mit Position), Use-Case (Rechte, Step-up, Prüfung vor
+>     dem Speichern, Audit, Push nur nach Erfolg, Org des Aufrufers), Rollen-Matrix.
+>   - Integration: Store (Version, Gruppe und Rückfall auf den Standard, Antwort, Org-Grenzen), API (Viewer,
+>     Look-behind mit Regelnummer, Org-Grenzen). `SetGroup`/`ResetGroup` im Tenant-Isolationstest, Get und
+>     `SetRedactionRules` als eigene Org ausgenommen.
+>   - Session: Senden bei abweichender Version mit allen Feldern, Antwort mit Identität aus dem Zertifikat, Push
+>     einmal pro Version und nur in der Org, Nachprüfung. Transport: Hello mit Version, Antwort an den Server, neue
+>     Version nach Reconnect. Agent: Kompilieren, Veto, Auswahl nach Unit und Severity, 14 Zurückweisungen,
+>     Speichern mit 0600 und Neustart, Ablehnung behält Datei und Stand, beschädigte Datei.
+>   - `just e2e-agent`: Der echte Agent übernimmt Version 1 ohne Fehler und speichert sie.
+>   - Gegenproben für 15 Prüfungen. Eine gleichwertige Mutante blieb (ungültige gespeicherte Datei ergibt in beiden
+>     Fassungen Version 0); eine hängte den Test, der jetzt eine Frist hat.
 - **Ziel:** `ConfigUpdate{version, config}` (KONZEPT §4.1, §5: „Alles Weitere kommt versioniert vom Server“).
   - **Inhalt:** Log-Einstellungen pro Node-Gruppe (Versand an oder aus, Mindest-Severity, ausgeschlossene Units,
     Datei-Globs mit Multiline-Regel) und die Redaction-Regeln der Org
@@ -2866,6 +2904,8 @@ Konfiguration) und M3-06 (Loki).
   - **Pro Gruppe:** Versand, Mindest-Severity, ausgeschlossene Units, Datei-Globs mit Multiline.
   - **Redaction-Regeln der Org** mit „Testen“ gegen eine Beispielzeile.
   - **Stand pro Node:** angewendete Version, Fehler des Agents, lokales Veto.
+  - **Schalter „Viewer dürfen keine Logs sehen“** (aus M3-03, T22): speichern (Spalte der Org), in die Policy laden
+    (pro Anfrage, nicht nur beim Start) und anzeigen; Test über den echten Stack.
   - Alle Änderungen mit Step-up.
 - **Tests zuerst:** Formularlogik (Globs, Regex); Komponenten (Fehler des Agents sichtbar, Step-up); E2E mit axe.
 - **Abhängig von:** M3-03, M3-05

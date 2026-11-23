@@ -362,6 +362,7 @@ type SessionRequest struct {
 	//	*SessionRequest_Heartbeat
 	//	*SessionRequest_RotateCertificate
 	//	*SessionRequest_Batch
+	//	*SessionRequest_ConfigApplied
 	Payload       isSessionRequest_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -440,6 +441,15 @@ func (x *SessionRequest) GetBatch() *Batch {
 	return nil
 }
 
+func (x *SessionRequest) GetConfigApplied() *ConfigApplied {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionRequest_ConfigApplied); ok {
+			return x.ConfigApplied
+		}
+	}
+	return nil
+}
+
 type isSessionRequest_Payload interface {
 	isSessionRequest_Payload()
 }
@@ -467,6 +477,11 @@ type SessionRequest_Batch struct {
 	Batch *Batch `protobuf:"bytes,4,opt,name=batch,proto3,oneof"`
 }
 
+type SessionRequest_ConfigApplied struct {
+	// config_applied answers config_update: the configuration is in use, or why not (ADR 0030).
+	ConfigApplied *ConfigApplied `protobuf:"bytes,5,opt,name=config_applied,json=configApplied,proto3,oneof"`
+}
+
 func (*SessionRequest_Hello) isSessionRequest_Payload() {}
 
 func (*SessionRequest_Heartbeat) isSessionRequest_Payload() {}
@@ -474,6 +489,8 @@ func (*SessionRequest_Heartbeat) isSessionRequest_Payload() {}
 func (*SessionRequest_RotateCertificate) isSessionRequest_Payload() {}
 
 func (*SessionRequest_Batch) isSessionRequest_Payload() {}
+
+func (*SessionRequest_ConfigApplied) isSessionRequest_Payload() {}
 
 // SessionResponse is one message from the server to the agent.
 type SessionResponse struct {
@@ -487,6 +504,7 @@ type SessionResponse struct {
 	//	*SessionResponse_RotateNow
 	//	*SessionResponse_TrustBundle
 	//	*SessionResponse_Throttle
+	//	*SessionResponse_ConfigUpdate
 	Payload       isSessionResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -574,6 +592,15 @@ func (x *SessionResponse) GetThrottle() *Throttle {
 	return nil
 }
 
+func (x *SessionResponse) GetConfigUpdate() *ConfigUpdate {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_ConfigUpdate); ok {
+			return x.ConfigUpdate
+		}
+	}
+	return nil
+}
+
 type isSessionResponse_Payload interface {
 	isSessionResponse_Payload()
 }
@@ -607,6 +634,12 @@ type SessionResponse_Throttle struct {
 	Throttle *Throttle `protobuf:"bytes,5,opt,name=throttle,proto3,oneof"`
 }
 
+type SessionResponse_ConfigUpdate struct {
+	// config_update is the configuration the server holds for the node (ADR 0030); sent when its
+	// version differs from the agent's and after every change.
+	ConfigUpdate *ConfigUpdate `protobuf:"bytes,6,opt,name=config_update,json=configUpdate,proto3,oneof"`
+}
+
 func (*SessionResponse_Ack) isSessionResponse_Payload() {}
 
 func (*SessionResponse_CertificateIssued) isSessionResponse_Payload() {}
@@ -616,6 +649,8 @@ func (*SessionResponse_RotateNow) isSessionResponse_Payload() {}
 func (*SessionResponse_TrustBundle) isSessionResponse_Payload() {}
 
 func (*SessionResponse_Throttle) isSessionResponse_Payload() {}
+
+func (*SessionResponse_ConfigUpdate) isSessionResponse_Payload() {}
 
 // Hello is the first message of every stream.
 type Hello struct {
@@ -2724,24 +2759,378 @@ func (x *LogEntry) GetFacility() uint32 {
 	return 0
 }
 
+// ConfigUpdate is the configuration of a node (ADR 0030): what to send, nothing about how the
+// agent runs. The local veto in agent.toml always wins.
+type ConfigUpdate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// version identifies the configuration; the agent reports it in Hello and ConfigApplied.
+	Version uint64 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	// config is the content.
+	Config        *AgentConfig `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfigUpdate) Reset() {
+	*x = ConfigUpdate{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigUpdate) ProtoMessage() {}
+
+func (x *ConfigUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigUpdate.ProtoReflect.Descriptor instead.
+func (*ConfigUpdate) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ConfigUpdate) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ConfigUpdate) GetConfig() *AgentConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+// AgentConfig is what the server may set on a node.
+type AgentConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// logs selects the log entries to send (KONZEPT §10).
+	Logs *LogConfig `protobuf:"bytes,1,opt,name=logs,proto3" json:"logs,omitempty"`
+	// redaction_rules are the organization's rules on top of the built-in ones (KONZEPT §10.3).
+	RedactionRules []*RedactionRule `protobuf:"bytes,2,rep,name=redaction_rules,json=redactionRules,proto3" json:"redaction_rules,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AgentConfig) Reset() {
+	*x = AgentConfig{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentConfig) ProtoMessage() {}
+
+func (x *AgentConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentConfig.ProtoReflect.Descriptor instead.
+func (*AgentConfig) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *AgentConfig) GetLogs() *LogConfig {
+	if x != nil {
+		return x.Logs
+	}
+	return nil
+}
+
+func (x *AgentConfig) GetRedactionRules() []*RedactionRule {
+	if x != nil {
+		return x.RedactionRules
+	}
+	return nil
+}
+
+// LogConfig selects the log entries of a node.
+type LogConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// enabled sends log entries at all; security events are sent either way.
+	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// min_severity drops entries less severe than this; unspecified keeps all, entries without a
+	// severity are always kept.
+	MinSeverity LogSeverity `protobuf:"varint,2,opt,name=min_severity,json=minSeverity,proto3,enum=sermon.agent.v1.LogSeverity" json:"min_severity,omitempty"`
+	// exclude_units are systemd units (or syslog identifiers) whose entries are not sent.
+	ExcludeUnits []string `protobuf:"bytes,3,rep,name=exclude_units,json=excludeUnits,proto3" json:"exclude_units,omitempty"`
+	// files are log files to follow besides the journal (M3-05); the agent reads only paths below
+	// its locally allowed prefixes.
+	Files         []*LogFileGlob `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogConfig) Reset() {
+	*x = LogConfig{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogConfig) ProtoMessage() {}
+
+func (x *LogConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogConfig.ProtoReflect.Descriptor instead.
+func (*LogConfig) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *LogConfig) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *LogConfig) GetMinSeverity() LogSeverity {
+	if x != nil {
+		return x.MinSeverity
+	}
+	return LogSeverity_LOG_SEVERITY_UNSPECIFIED
+}
+
+func (x *LogConfig) GetExcludeUnits() []string {
+	if x != nil {
+		return x.ExcludeUnits
+	}
+	return nil
+}
+
+func (x *LogConfig) GetFiles() []*LogFileGlob {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+// LogFileGlob is a set of log files.
+type LogFileGlob struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// pattern is an absolute path with * and ? in the last segments, e.g. /var/log/nginx/*.log.
+	Pattern string `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
+	// multiline_start is a regex for the first line of an entry; following lines that don't match
+	// belong to it (e.g. stack traces). Empty: every line is an entry.
+	MultilineStart string `protobuf:"bytes,2,opt,name=multiline_start,json=multilineStart,proto3" json:"multiline_start,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *LogFileGlob) Reset() {
+	*x = LogFileGlob{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogFileGlob) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogFileGlob) ProtoMessage() {}
+
+func (x *LogFileGlob) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogFileGlob.ProtoReflect.Descriptor instead.
+func (*LogFileGlob) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *LogFileGlob) GetPattern() string {
+	if x != nil {
+		return x.Pattern
+	}
+	return ""
+}
+
+func (x *LogFileGlob) GetMultilineStart() string {
+	if x != nil {
+		return x.MultilineStart
+	}
+	return ""
+}
+
+// RedactionRule is a rule of the organization (KONZEPT §10.3).
+type RedactionRule struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// pattern is a regex; matches (or their group named secret) are replaced with ***.
+	Pattern       string `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RedactionRule) Reset() {
+	*x = RedactionRule{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedactionRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedactionRule) ProtoMessage() {}
+
+func (x *RedactionRule) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedactionRule.ProtoReflect.Descriptor instead.
+func (*RedactionRule) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *RedactionRule) GetPattern() string {
+	if x != nil {
+		return x.Pattern
+	}
+	return ""
+}
+
+// ConfigApplied is the agent's answer to a ConfigUpdate.
+type ConfigApplied struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// version is the version of the ConfigUpdate answered.
+	Version uint64 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	// error says why the agent keeps its previous configuration; empty if it took the new one.
+	Error string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	// logs_vetoed is set if agent.toml forbids sending logs (allow_logs = false).
+	LogsVetoed    bool `protobuf:"varint,3,opt,name=logs_vetoed,json=logsVetoed,proto3" json:"logs_vetoed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfigApplied) Reset() {
+	*x = ConfigApplied{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigApplied) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigApplied) ProtoMessage() {}
+
+func (x *ConfigApplied) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigApplied.ProtoReflect.Descriptor instead.
+func (*ConfigApplied) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ConfigApplied) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ConfigApplied) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *ConfigApplied) GetLogsVetoed() bool {
+	if x != nil {
+		return x.LogsVetoed
+	}
+	return false
+}
+
 var File_sermon_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x93\x02\n" +
+	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdc\x02\n" +
 	"\x0eSessionRequest\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.sermon.agent.v1.HelloH\x00R\x05hello\x12:\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1a.sermon.agent.v1.HeartbeatH\x00R\theartbeat\x12S\n" +
 	"\x12rotate_certificate\x18\x03 \x01(\v2\".sermon.agent.v1.RotateCertificateH\x00R\x11rotateCertificate\x12.\n" +
-	"\x05batch\x18\x04 \x01(\v2\x16.sermon.agent.v1.BatchH\x00R\x05batchB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xdb\x02\n" +
+	"\x05batch\x18\x04 \x01(\v2\x16.sermon.agent.v1.BatchH\x00R\x05batch\x12G\n" +
+	"\x0econfig_applied\x18\x05 \x01(\v2\x1e.sermon.agent.v1.ConfigAppliedH\x00R\rconfigAppliedB\x10\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\xa1\x03\n" +
 	"\x0fSessionResponse\x12(\n" +
 	"\x03ack\x18\x01 \x01(\v2\x14.sermon.agent.v1.AckH\x00R\x03ack\x12S\n" +
 	"\x12certificate_issued\x18\x02 \x01(\v2\".sermon.agent.v1.CertificateIssuedH\x00R\x11certificateIssued\x12;\n" +
 	"\n" +
 	"rotate_now\x18\x03 \x01(\v2\x1a.sermon.agent.v1.RotateNowH\x00R\trotateNow\x12A\n" +
 	"\ftrust_bundle\x18\x04 \x01(\v2\x1c.sermon.agent.v1.TrustBundleH\x00R\vtrustBundle\x127\n" +
-	"\bthrottle\x18\x05 \x01(\v2\x19.sermon.agent.v1.ThrottleH\x00R\bthrottleB\x10\n" +
+	"\bthrottle\x18\x05 \x01(\v2\x19.sermon.agent.v1.ThrottleH\x00R\bthrottle\x12D\n" +
+	"\rconfig_update\x18\x06 \x01(\v2\x1d.sermon.agent.v1.ConfigUpdateH\x00R\fconfigUpdateB\x10\n" +
 	"\apayload\x12\x05\xbaH\x02\b\x01\"\xd5\x01\n" +
 	"\x05Hello\x122\n" +
 	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
@@ -2899,7 +3288,30 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\bfacility\x18\x0e \x01(\rB\a\xbaH\x04*\x02\x18\x17H\x01R\bfacility\x88\x01\x01:\x98\x01\xbaH\x94\x01\x1a\x91\x01\n" +
 	"\x04file\x12Ifile must be an absolute path for entries from a file and empty otherwise\x1a>this.source == 2 ? this.file.startsWith('/') : this.file == ''B\x06\n" +
 	"\x04_uidB\v\n" +
-	"\t_facility*\xb0\x01\n" +
+	"\t_facility\"o\n" +
+	"\fConfigUpdate\x12!\n" +
+	"\aversion\x18\x01 \x01(\x04B\a\xbaH\x042\x02 \x00R\aversion\x12<\n" +
+	"\x06config\x18\x02 \x01(\v2\x1c.sermon.agent.v1.AgentConfigB\x06\xbaH\x03\xc8\x01\x01R\x06config\"\x98\x01\n" +
+	"\vAgentConfig\x126\n" +
+	"\x04logs\x18\x01 \x01(\v2\x1a.sermon.agent.v1.LogConfigB\x06\xbaH\x03\xc8\x01\x01R\x04logs\x12Q\n" +
+	"\x0fredaction_rules\x18\x02 \x03(\v2\x1e.sermon.agent.v1.RedactionRuleB\b\xbaH\x05\x92\x01\x02\x10 R\x0eredactionRules\"\xfe\x01\n" +
+	"\tLogConfig\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12I\n" +
+	"\fmin_severity\x18\x02 \x01(\x0e2\x1c.sermon.agent.v1.LogSeverityB\b\xbaH\x05\x82\x01\x02\x10\x01R\vminSeverity\x12N\n" +
+	"\rexclude_units\x18\x03 \x03(\tB)\xbaH&\x92\x01#\x10@\"\x1fr\x1d2\x1b^[A-Za-z0-9@:._\\\\-]{1,256}$R\fexcludeUnits\x12<\n" +
+	"\x05files\x18\x04 \x03(\v2\x1c.sermon.agent.v1.LogFileGlobB\b\xbaH\x05\x92\x01\x02\x10\x10R\x05files\"\xec\x01\n" +
+	"\vLogFileGlob\x121\n" +
+	"\apattern\x18\x01 \x01(\tB\x17\xbaH\x14r\x12\x10\x02(\x80\b2\v^/[^\\x00]*$R\apattern\x121\n" +
+	"\x0fmultiline_start\x18\x02 \x01(\tB\b\xbaH\x05r\x03(\x80\bR\x0emultilineStart:w\xbaHt\x1ar\n" +
+	"\tno_parent\x12$pattern must not contain .. segments\x1a?!this.pattern.contains('/../') && !this.pattern.endsWith('/..')\"5\n" +
+	"\rRedactionRule\x12$\n" +
+	"\apattern\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01(\x80\bR\apattern\"s\n" +
+	"\rConfigApplied\x12!\n" +
+	"\aversion\x18\x01 \x01(\x04B\a\xbaH\x042\x02 \x00R\aversion\x12\x1e\n" +
+	"\x05error\x18\x02 \x01(\tB\b\xbaH\x05r\x03(\x80\bR\x05error\x12\x1f\n" +
+	"\vlogs_vetoed\x18\x03 \x01(\bR\n" +
+	"logsVetoed*\xb0\x01\n" +
 	"\x0eSecuritySource\x12\x1f\n" +
 	"\x1bSECURITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17SECURITY_SOURCE_JOURNAL\x10\x01\x12!\n" +
@@ -2951,7 +3363,7 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(SecuritySource)(0),           // 0: sermon.agent.v1.SecuritySource
 	(Architecture)(0),             // 1: sermon.agent.v1.Architecture
@@ -2988,64 +3400,77 @@ var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(*OomKill)(nil),               // 32: sermon.agent.v1.OomKill
 	(*LogBatch)(nil),              // 33: sermon.agent.v1.LogBatch
 	(*LogEntry)(nil),              // 34: sermon.agent.v1.LogEntry
-	nil,                           // 35: sermon.agent.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 36: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 37: google.protobuf.Duration
+	(*ConfigUpdate)(nil),          // 35: sermon.agent.v1.ConfigUpdate
+	(*AgentConfig)(nil),           // 36: sermon.agent.v1.AgentConfig
+	(*LogConfig)(nil),             // 37: sermon.agent.v1.LogConfig
+	(*LogFileGlob)(nil),           // 38: sermon.agent.v1.LogFileGlob
+	(*RedactionRule)(nil),         // 39: sermon.agent.v1.RedactionRule
+	(*ConfigApplied)(nil),         // 40: sermon.agent.v1.ConfigApplied
+	nil,                           // 41: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 42: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 43: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
 	7,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
 	9,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
 	10, // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
 	15, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
-	14, // 4: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
-	11, // 5: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	13, // 6: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	12, // 7: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
-	18, // 8: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
-	8,  // 9: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
-	1,  // 10: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	0,  // 11: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
-	36, // 12: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	36, // 13: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	36, // 14: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	16, // 15: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
-	19, // 16: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
-	33, // 17: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
-	36, // 18: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
-	17, // 19: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
-	35, // 20: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
-	37, // 21: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
-	20, // 22: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
-	36, // 23: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	22, // 24: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
-	23, // 25: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
-	24, // 26: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
-	25, // 27: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
-	26, // 28: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
-	27, // 29: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
-	28, // 30: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
-	29, // 31: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
-	30, // 32: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
-	31, // 33: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
-	32, // 34: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
-	21, // 35: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 36: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
-	21, // 37: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
-	21, // 38: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 39: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
-	21, // 40: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
-	37, // 41: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
-	34, // 42: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
-	36, // 43: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
-	3,  // 44: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
-	4,  // 45: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
-	5,  // 46: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	6,  // 47: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	47, // [47:48] is the sub-list for method output_type
-	46, // [46:47] is the sub-list for method input_type
-	46, // [46:46] is the sub-list for extension type_name
-	46, // [46:46] is the sub-list for extension extendee
-	0,  // [0:46] is the sub-list for field type_name
+	40, // 4: sermon.agent.v1.SessionRequest.config_applied:type_name -> sermon.agent.v1.ConfigApplied
+	14, // 5: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	11, // 6: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
+	13, // 7: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	12, // 8: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	18, // 9: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
+	35, // 10: sermon.agent.v1.SessionResponse.config_update:type_name -> sermon.agent.v1.ConfigUpdate
+	8,  // 11: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	1,  // 12: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
+	0,  // 13: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
+	42, // 14: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	42, // 15: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	42, // 16: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	16, // 17: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	19, // 18: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
+	33, // 19: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
+	42, // 20: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	17, // 21: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	41, // 22: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	43, // 23: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	20, // 24: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
+	42, // 25: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	22, // 26: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
+	23, // 27: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
+	24, // 28: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
+	25, // 29: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
+	26, // 30: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
+	27, // 31: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
+	28, // 32: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
+	29, // 33: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
+	30, // 34: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
+	31, // 35: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
+	32, // 36: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
+	21, // 37: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 38: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
+	21, // 39: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
+	21, // 40: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 41: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
+	21, // 42: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
+	43, // 43: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
+	34, // 44: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
+	42, // 45: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	3,  // 46: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
+	4,  // 47: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
+	36, // 48: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
+	37, // 49: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
+	39, // 50: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
+	4,  // 51: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
+	38, // 52: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
+	5,  // 53: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	6,  // 54: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	54, // [54:55] is the sub-list for method output_type
+	53, // [53:54] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -3058,6 +3483,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionRequest_Heartbeat)(nil),
 		(*SessionRequest_RotateCertificate)(nil),
 		(*SessionRequest_Batch)(nil),
+		(*SessionRequest_ConfigApplied)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[1].OneofWrappers = []any{
 		(*SessionResponse_Ack)(nil),
@@ -3065,6 +3491,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionResponse_RotateNow)(nil),
 		(*SessionResponse_TrustBundle)(nil),
 		(*SessionResponse_Throttle)(nil),
+		(*SessionResponse_ConfigUpdate)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[10].OneofWrappers = []any{
 		(*Batch_Metrics)(nil),
@@ -3101,7 +3528,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   31,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -260,6 +260,26 @@ func TestAgentBinary_DeliversMetricsIntoTheDatabase(t *testing.T) {
 	if err := conn.QueryRow(ctx, `SELECT security_source FROM nodes WHERE id = $1`, nodeID).Scan(&source); err != nil || source != "none" {
 		t.Errorf("security source = %q, %v; want none", source, err)
 	}
+	// The server's configuration (ADR 0030): sent at the start, taken and answered by the agent,
+	// stored in its state directory with mode 0600.
+	var applied int64
+	var configError *string
+	var vetoed bool
+	for time.Now().Before(deadline) {
+		if err := conn.QueryRow(ctx, `SELECT config_version, config_error, logs_vetoed FROM nodes WHERE id = $1`, nodeID).Scan(&applied, &configError, &vetoed); err != nil {
+			t.Fatal(err)
+		}
+		if applied > 0 {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if applied < 1 || configError != nil || vetoed {
+		t.Errorf("config answer = version %d, error %v, vetoed %v; want version ≥ 1 taken without veto\nagent:\n%s", applied, configError, vetoed, agentLogs.String())
+	}
+	if info, err := os.Stat(filepath.Join(dir, "state", "agent-config.pb")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("stored configuration: %v, %v; want a file with mode 0600", info, err)
+	}
 	// The server's own metrics count the batches and the connected agent (ADR 0011).
 	metricsText := scrape(t, waitFor(t, srv.logs, regexp.MustCompile(`msg="metrics listening" .*addr=(\S+)`)))
 	for _, pattern := range []string{`(?m)^sermon_server_agent_sessions 1$`, `(?m)^sermon_server_ingest_samples_total [1-9]`, `(?m)^sermon_server_ingest_batches_total [1-9]`} {

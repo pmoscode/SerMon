@@ -93,6 +93,12 @@ impl StateLayout {
         self.root.join("boot_id")
     }
 
+    /// The configuration from the server (ADR 0030, M3-03).
+    #[must_use]
+    pub fn agent_config_file(&self) -> PathBuf {
+        self.root.join("agent-config.pb")
+    }
+
     /// Removes everything the agent created (identity, buffer, journal cursor) and returns what
     /// existed.
     ///
@@ -110,6 +116,7 @@ impl StateLayout {
             self.logfile_position_file(),
             self.systemd_failed_file(),
             self.boot_id_file(),
+            self.agent_config_file(),
         ] {
             let metadata = match std::fs::symlink_metadata(&entry) {
                 Ok(metadata) => metadata,
@@ -148,6 +155,7 @@ mod tests {
             "6b1c57d4-3c39-4e5c-9f3a-5a4b8d3c2e11",
         )
         .unwrap();
+        fs::write(layout.agent_config_file(), b"\x08\x01").unwrap();
         fs::write(dir.path().join("notes.txt"), "admin's file").unwrap();
 
         let removed = layout.remove_agent_data().unwrap();
@@ -160,7 +168,8 @@ mod tests {
                 layout.journal_cursor_file(),
                 layout.logfile_position_file(),
                 layout.systemd_failed_file(),
-                layout.boot_id_file()
+                layout.boot_id_file(),
+                layout.agent_config_file()
             ]
         );
         assert!(!layout.journal_cursor_file().exists());

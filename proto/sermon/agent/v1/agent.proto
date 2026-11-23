@@ -37,6 +37,8 @@ message SessionRequest {
     // batch carries buffered data with its sequence number; the server answers with an Ack once
     // the batch is persisted.
     Batch batch = 4;
+    // config_applied answers config_update: the configuration is in use, or why not (ADR 0030).
+    ConfigApplied config_applied = 5;
   }
 }
 
@@ -60,6 +62,9 @@ message SessionResponse {
     TrustBundle trust_bundle = 4;
     // throttle asks the agent to send batches more slowly (quota exceeded, KONZEPT §5).
     Throttle throttle = 5;
+    // config_update is the configuration the server holds for the node (ADR 0030); sent when its
+    // version differs from the agent's and after every change.
+    ConfigUpdate config_update = 6;
   }
 }
 
@@ -540,4 +545,78 @@ enum LogSeverity {
   LOG_SEVERITY_INFO = 7;
   // LOG_SEVERITY_DEBUG is priority 7.
   LOG_SEVERITY_DEBUG = 8;
+}
+
+// ConfigUpdate is the configuration of a node (ADR 0030): what to send, nothing about how the
+// agent runs. The local veto in agent.toml always wins.
+message ConfigUpdate {
+  // version identifies the configuration; the agent reports it in Hello and ConfigApplied.
+  uint64 version = 1 [(buf.validate.field).uint64.gt = 0];
+  // config is the content.
+  AgentConfig config = 2 [(buf.validate.field).required = true];
+}
+
+// AgentConfig is what the server may set on a node.
+message AgentConfig {
+  // logs selects the log entries to send (KONZEPT §10).
+  LogConfig logs = 1 [(buf.validate.field).required = true];
+  // redaction_rules are the organization's rules on top of the built-in ones (KONZEPT §10.3).
+  repeated RedactionRule redaction_rules = 2 [(buf.validate.field).repeated.max_items = 32];
+}
+
+// LogConfig selects the log entries of a node.
+message LogConfig {
+  // enabled sends log entries at all; security events are sent either way.
+  bool enabled = 1;
+  // min_severity drops entries less severe than this; unspecified keeps all, entries without a
+  // severity are always kept.
+  LogSeverity min_severity = 2 [(buf.validate.field).enum.defined_only = true];
+  // exclude_units are systemd units (or syslog identifiers) whose entries are not sent.
+  repeated string exclude_units = 3 [(buf.validate.field).repeated = {
+    max_items: 64
+    items: {
+      string: {pattern: "^[A-Za-z0-9@:._\\\\-]{1,256}$"}
+    }
+  }];
+  // files are log files to follow besides the journal (M3-05); the agent reads only paths below
+  // its locally allowed prefixes.
+  repeated LogFileGlob files = 4 [(buf.validate.field).repeated.max_items = 16];
+}
+
+// LogFileGlob is a set of log files.
+message LogFileGlob {
+  option (buf.validate.message).cel = {
+    id: "no_parent"
+    message: "pattern must not contain .. segments"
+    expression: "!this.pattern.contains('/../') && !this.pattern.endsWith('/..')"
+  };
+
+  // pattern is an absolute path with * and ? in the last segments, e.g. /var/log/nginx/*.log.
+  string pattern = 1 [(buf.validate.field).string = {
+    min_len: 2
+    max_bytes: 1024
+    pattern: "^/[^\\x00]*$"
+  }];
+  // multiline_start is a regex for the first line of an entry; following lines that don't match
+  // belong to it (e.g. stack traces). Empty: every line is an entry.
+  string multiline_start = 2 [(buf.validate.field).string.max_bytes = 1024];
+}
+
+// RedactionRule is a rule of the organization (KONZEPT §10.3).
+message RedactionRule {
+  // pattern is a regex; matches (or their group named secret) are replaced with ***.
+  string pattern = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 1024
+  }];
+}
+
+// ConfigApplied is the agent's answer to a ConfigUpdate.
+message ConfigApplied {
+  // version is the version of the ConfigUpdate answered.
+  uint64 version = 1 [(buf.validate.field).uint64.gt = 0];
+  // error says why the agent keeps its previous configuration; empty if it took the new one.
+  string error = 2 [(buf.validate.field).string.max_bytes = 1024];
+  // logs_vetoed is set if agent.toml forbids sending logs (allow_logs = false).
+  bool logs_vetoed = 3;
 }

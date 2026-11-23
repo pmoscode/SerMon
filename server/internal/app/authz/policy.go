@@ -47,6 +47,7 @@ const (
 	ManageMembers
 	ManageGroups
 	ViewAuditLog
+	ManageLogSettings // what agents send as logs and how they redact them (M3-03)
 
 	// Instance-level actions (superadmin).
 	ManageOrganizations
@@ -93,6 +94,7 @@ var rules = map[Action]rule{
 	ManageMembers:          {name: "manage_members", minimum: role.Admin, scope: orgWide},
 	ManageGroups:           {name: "manage_groups", minimum: role.Admin, scope: orgWide},
 	ViewAuditLog:           {name: "view_audit_log", minimum: role.Admin, scope: orgWide},
+	ManageLogSettings:      {name: "manage_log_settings", minimum: role.Admin, scope: orgWide},
 	ManageOrganizations:    {name: "manage_organizations", scope: instanceLevel},
 	ManageAgentCA:          {name: "manage_agent_ca", scope: instanceLevel},
 	ViewInstanceAudit:      {name: "view_instance_audit", scope: instanceLevel},

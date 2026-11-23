@@ -58,3 +58,28 @@ func TestSessions_TerminateOrganizationEndsOnlyItsNodes(t *testing.T) {
 		t.Errorf("ended %v, active %+v", ended, sessions.Active())
 	}
 }
+
+// A changed configuration (ADR 0030) is signalled to the sessions of its organization only, at
+// most once while one is pending.
+func TestSessions_ConfigChangedReachesOnlyTheOrganization(t *testing.T) {
+	sessions := NewSessions(0)
+	orgA, orgB := tenant.OrgID(uuid.New()), tenant.OrgID(uuid.New())
+	var ended []string
+	var all []*liveSession
+	for i, org := range []tenant.OrgID{orgA, orgA, orgB} {
+		l := live(identity.NodeID(uuid.New()), string(rune('a'+i)), "192.0.2.1", &ended)
+		l.Org = org
+		l.config = make(chan struct{}, 1)
+		if result, _ := sessions.claim(l); result != claimed {
+			t.Fatalf("claim %d = %v", i, result)
+		}
+		all = append(all, l)
+	}
+	sessions.ConfigChanged(orgA)
+	sessions.ConfigChanged(orgA) // does not block while one is pending
+	for i, l := range all {
+		if got, want := len(l.config), map[bool]int{true: 1, false: 0}[l.Org == orgA]; got != want {
+			t.Errorf("session %d: %d signals, want %d", i, got, want)
+		}
+	}
+}

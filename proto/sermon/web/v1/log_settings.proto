@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+
+// LogSettingsService holds which log entries the agents of the active organization send and how
+// they redact them (KONZEPT §10, ADR 0030). Admins for all groups only; changes need a recent
+// step-up (FAILED_PRECONDITION with StepUpRequired otherwise) and reach connected agents at once.
+service LogSettingsService {
+  // GetLogSettings returns the settings of every group of the organization and its rules.
+  rpc GetLogSettings(GetLogSettingsRequest) returns (GetLogSettingsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // SetGroupLogSettings replaces the settings of a node group; NOT_FOUND for an unknown group,
+  // INVALID_ARGUMENT for a multiline regex the server cannot compile.
+  rpc SetGroupLogSettings(SetGroupLogSettingsRequest) returns (SetGroupLogSettingsResponse);
+  // ResetGroupLogSettings returns a node group to the defaults (logs on, no filter).
+  rpc ResetGroupLogSettings(ResetGroupLogSettingsRequest) returns (ResetGroupLogSettingsResponse);
+  // SetRedactionRules replaces the redaction rules of the organization; INVALID_ARGUMENT names
+  // the first rule the server cannot compile.
+  rpc SetRedactionRules(SetRedactionRulesRequest) returns (SetRedactionRulesResponse);
+}
+
+// LogSeverity is the syslog priority of a log entry, from the most to the least severe.
+enum LogSeverity {
+  // LOG_SEVERITY_UNSPECIFIED: unknown, or as a filter: no filter.
+  LOG_SEVERITY_UNSPECIFIED = 0;
+  // LOG_SEVERITY_EMERGENCY is priority 0.
+  LOG_SEVERITY_EMERGENCY = 1;
+  // LOG_SEVERITY_ALERT is priority 1.
+  LOG_SEVERITY_ALERT = 2;
+  // LOG_SEVERITY_CRITICAL is priority 2.
+  LOG_SEVERITY_CRITICAL = 3;
+  // LOG_SEVERITY_ERROR is priority 3.
+  LOG_SEVERITY_ERROR = 4;
+  // LOG_SEVERITY_WARNING is priority 4.
+  LOG_SEVERITY_WARNING = 5;
+  // LOG_SEVERITY_NOTICE is priority 5.
+  LOG_SEVERITY_NOTICE = 6;
+  // LOG_SEVERITY_INFO is priority 6.
+  LOG_SEVERITY_INFO = 7;
+  // LOG_SEVERITY_DEBUG is priority 7.
+  LOG_SEVERITY_DEBUG = 8;
+}
+
+// LogSettings select the log entries of the nodes of a group.
+message LogSettings {
+  // enabled sends log entries at all; security events are sent either way.
+  bool enabled = 1;
+  // min_severity drops entries less severe than this; unspecified keeps all.
+  LogSeverity min_severity = 2 [(buf.validate.field).enum.defined_only = true];
+  // exclude_units are systemd units or syslog identifiers whose entries are not sent.
+  repeated string exclude_units = 3 [(buf.validate.field).repeated = {
+    max_items: 64
+    unique: true
+    items: {
+      string: {pattern: "^[A-Za-z0-9@:._\\\\-]{1,256}$"}
+    }
+  }];
+  // files are log files to follow besides the journal, e.g. /var/log/nginx/*.log; agents read
+  // only paths below their locally allowed prefixes.
+  repeated LogFileGlob files = 4 [(buf.validate.field).repeated.max_items = 16];
+}
+
+// LogFileGlob is a set of log files.
+message LogFileGlob {
+  option (buf.validate.message).cel = {
+    id: "no_parent"
+    message: "pattern must not contain .. segments"
+    expression: "!this.pattern.contains('/../') && !this.pattern.endsWith('/..')"
+  };
+
+  // pattern is an absolute path with * and ? in it.
+  string pattern = 1 [(buf.validate.field).string = {
+    min_len: 2
+    max_bytes: 1024
+    pattern: "^/[^\\x00]*$"
+  }];
+  // multiline_start is a regex for the first line of an entry; empty: every line is an entry.
+  string multiline_start = 2 [(buf.validate.field).string.max_bytes = 1024];
+}
+
+// GroupLogSettings are the settings of one node group.
+message GroupLogSettings {
+  // group_id is the node group.
+  string group_id = 1;
+  // group_name is its name.
+  string group_name = 2;
+  // settings are in effect for the group.
+  LogSettings settings = 3;
+  // custom is false while the group has the defaults.
+  bool custom = 4;
+}
+
+// RedactionRule is a rule of the organization on top of the built-in ones (KONZEPT §10.3).
+message RedactionRule {
+  // pattern is a regex; matches (or their group named secret) are replaced with ***.
+  string pattern = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 1024
+  }];
+}
+
+// GetLogSettingsRequest has no parameters.
+message GetLogSettingsRequest {}
+
+// GetLogSettingsResponse holds the settings of the organization.
+message GetLogSettingsResponse {
+  // groups are all node groups of the organization, by name.
+  repeated GroupLogSettings groups = 1;
+  // redaction_rules are the rules of the organization, in the order they apply.
+  repeated RedactionRule redaction_rules = 2;
+  // version is the configuration version the agents get (ADR 0030).
+  uint64 version = 3;
+}
+
+// SetGroupLogSettingsRequest replaces the settings of a group.
+message SetGroupLogSettingsRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // settings are the new settings.
+  LogSettings settings = 2 [(buf.validate.field).required = true];
+}
+
+// SetGroupLogSettingsResponse has no fields.
+message SetGroupLogSettingsResponse {}
+
+// ResetGroupLogSettingsRequest names the group.
+message ResetGroupLogSettingsRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ResetGroupLogSettingsResponse has no fields.
+message ResetGroupLogSettingsResponse {}
+
+// SetRedactionRulesRequest replaces the rules.
+message SetRedactionRulesRequest {
+  // rules are the new rules, in the order they apply; at most 32.
+  repeated RedactionRule rules = 1 [(buf.validate.field).repeated.max_items = 32];
+}
+
+// SetRedactionRulesResponse has no fields.
+message SetRedactionRulesResponse {}

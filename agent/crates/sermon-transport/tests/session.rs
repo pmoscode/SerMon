@@ -17,9 +17,10 @@ use sermon_testserver::{
 use sermon_transport::identity::{AgentIdentity, AgentKey, Credentials, IssuedCertificate};
 use sermon_transport::outbox::Outbox;
 use sermon_transport::proto::agent::v1::{
-    Ack, MetricBatch, RotateNow, Sample, Throttle, sample, session_response::Payload,
+    Ack, AgentConfig, ConfigApplied, ConfigUpdate, LogConfig, MetricBatch, RotateNow, Sample,
+    Throttle, sample, session_response::Payload,
 };
-use sermon_transport::session::{BoxError, IdentitySource, Transport, TransportConfig};
+use sermon_transport::session::{BoxError, ConfigSink, IdentitySource, Transport, TransportConfig};
 use tokio_util::sync::CancellationToken;
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -139,6 +140,7 @@ struct Setup {
     server_pki: Option<TestPki>,
     tweak: fn(&mut TransportConfig),
     api: Option<FakeAgentApi>,
+    config: Option<Arc<dyn ConfigSink>>,
 }
 
 impl Setup {
@@ -149,6 +151,7 @@ impl Setup {
             server_pki: None,
             tweak: |_| {},
             api: None,
+            config: None,
         }
     }
 
@@ -181,13 +184,16 @@ impl Setup {
         config.reconnect_max = Duration::from_millis(50);
         config.expired_retry = Duration::from_millis(50);
         (self.tweak)(&mut config);
-        let transport = Transport::new(
+        let mut transport = Transport::new(
             config,
             identity.clone(),
             Arc::new(|| Ok(facts())),
             outbox.clone(),
             Arc::new(SystemClock::new()),
         );
+        if let Some(sink) = self.config {
+            transport = transport.with_config(sink);
+        }
         let shutdown = CancellationToken::new();
         let token = shutdown.clone();
         let task = tokio::spawn(async move { transport.run(token).await });
@@ -514,4 +520,109 @@ proptest! {
             harness.stop().await;
         });
     }
+}
+
+/// A configuration sink that takes every version but 13, which it rejects.
+#[derive(Debug, Default)]
+struct FakeConfig {
+    version: Mutex<u64>,
+    seen: Mutex<Vec<u64>>,
+}
+
+impl ConfigSink for FakeConfig {
+    fn version(&self) -> u64 {
+        *self.version.lock().unwrap()
+    }
+
+    fn apply(&self, update: ConfigUpdate) -> ConfigApplied {
+        self.seen.lock().unwrap().push(update.version);
+        if update.version == 13 {
+            return ConfigApplied {
+                version: 13,
+                error: "rule 1: look-around is not supported".into(),
+                logs_vetoed: true,
+            };
+        }
+        *self.version.lock().unwrap() = update.version;
+        ConfigApplied {
+            version: update.version,
+            error: String::new(),
+            logs_vetoed: true,
+        }
+    }
+}
+
+fn config_update(version: u64) -> Payload {
+    Payload::ConfigUpdate(ConfigUpdate {
+        version,
+        config: Some(AgentConfig {
+            logs: Some(LogConfig {
+                enabled: true,
+                ..LogConfig::default()
+            }),
+            redaction_rules: Vec::new(),
+        }),
+    })
+}
+
+// ADR 0030: the Hello names the version in use, every ConfigUpdate goes to the sink and its
+// answer back to the server; after a reconnect the Hello names the new version.
+#[tokio::test(flavor = "multi_thread")]
+async fn hands_configurations_to_the_sink_and_answers_the_server() {
+    let sink = Arc::new(FakeConfig::default());
+    *sink.version.lock().unwrap() = 4;
+    let mut setup = Setup::new();
+    let api = FakeAgentApi::new(setup.pki.clone());
+    api.end_after_rotation(true);
+    setup.api = Some(api);
+    setup.config = Some(sink.clone());
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    assert_eq!(
+        harness.api.sessions()[0]
+            .hello
+            .clone()
+            .unwrap()
+            .config_version,
+        4
+    );
+
+    assert!(harness.api.send(config_update(5)).await);
+    assert!(harness.api.send(config_update(13)).await);
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s
+                .first()
+                .is_some_and(|s| s.config_applied.len() == 2))
+            .await
+    );
+    let answers = harness.api.sessions()[0].config_applied.clone();
+    assert_eq!((answers[0].version, answers[0].error.as_str()), (5, ""));
+    assert_eq!(answers[1].version, 13);
+    assert!(answers[1].error.contains("look-around") && answers[1].logs_vetoed);
+    assert_eq!(*sink.seen.lock().unwrap(), [5, 13]);
+
+    // The next session (here after a rotation) starts with the version taken, not the rejected.
+    assert!(harness.api.send(Payload::RotateNow(RotateNow {})).await);
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.len() >= 2 && s[1].hello.is_some())
+            .await
+    );
+    assert_eq!(
+        harness.api.sessions()[1]
+            .hello
+            .clone()
+            .unwrap()
+            .config_version,
+        5
+    );
+    harness.stop().await;
 }

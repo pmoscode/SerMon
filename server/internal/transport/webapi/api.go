@@ -43,6 +43,7 @@ type Handlers struct {
 	Alerts          *AlertHandler
 	Rules           *AlertRuleHandler
 	Windows         *MaintenanceWindowHandler
+	LogSettings     *LogSettingsHandler
 	Authenticator   *Authenticator // required for every service except AuthService
 }
 
@@ -76,6 +77,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewInstanceAuditServiceHandler(h.InstanceAudit, authenticated))
 	mount(webv1connect.NewSecurityEventServiceHandler(h.SecurityEvents, authenticated))
 	mount(webv1connect.NewSecurityPolicyServiceHandler(h.TwoFactor, authenticated))
+	mount(webv1connect.NewLogSettingsServiceHandler(h.LogSettings, authenticated))
 	mount(webv1connect.NewNotificationChannelServiceHandler(h.Notifications, authenticated))
 	mount(webv1connect.NewNotificationPolicyServiceHandler(h.Policies, authenticated))
 	mount(webv1connect.NewAlertSilenceServiceHandler(h.Silences, authenticated))

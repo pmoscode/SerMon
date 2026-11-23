@@ -233,6 +233,37 @@ func TestIngest_LateFutureAndAncientSamplesAreDroppedButAcknowledged(t *testing.
 	}
 }
 
+// Log batches (M3-01) are stored from M3-07 on; until then they are acknowledged in order and
+// dropped, without touching the metric windows or the ingest lag.
+func TestIngest_LogBatchesAreAcknowledgedInOrderUntilTheyAreStored(t *testing.T) {
+	w := newWorld(t, ingest.DefaultConfig())
+	s := w.open(t)
+	last := send(t, w, s, 1, t0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	lag := w.svc.Stats().LagMillis.Load()
+
+	if response := s.Accept(context.Background(), ingest.Batch{Seq: last + 1, Logs: 3}); response.Ack != 0 || response.Throttle != nil {
+		t.Fatalf("Accept(logs) = %+v, want nothing before the flush", response)
+	}
+	if got := w.svc.Stats().LagMillis.Load(); got != lag {
+		t.Errorf("lag = %d ms after a log batch, want %d", got, lag)
+	}
+	// Batch `last` still waits for its window: nothing is acknowledged out of order.
+	if ack, err := s.Flush(context.Background()); err != nil || ack != 0 {
+		t.Fatalf("Flush() = %d, %v; want nothing while an earlier batch is open", ack, err)
+	}
+	send(t, w, s, last+2, t0.Add(20*time.Second), 12) // closes the window of `last`
+	ack, err := s.Flush(context.Background())
+	if err != nil || ack != last+1 {
+		t.Fatalf("Flush() = %d, %v; want %d", ack, err, last+1)
+	}
+	if stats := w.svc.Stats(); stats.Rejected.Load() != 0 || stats.Late.Load() != 0 {
+		t.Errorf("rejected %d, late %d; a log batch has no samples", stats.Rejected.Load(), stats.Late.Load())
+	}
+}
+
 func TestIngest_AWriteErrorAcknowledgesNothingAndRetries(t *testing.T) {
 	w := newWorld(t, ingest.DefaultConfig())
 	s := w.open(t)

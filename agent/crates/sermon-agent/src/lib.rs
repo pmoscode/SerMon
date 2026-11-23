@@ -10,6 +10,7 @@ pub mod identity;
 pub mod journal;
 pub mod logfile;
 pub mod logging;
+pub mod logs;
 pub mod reboot;
 pub mod scheduler;
 pub mod security;

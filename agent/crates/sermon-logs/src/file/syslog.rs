@@ -50,6 +50,10 @@ pub struct Record<'a> {
     pub pid: Option<u32>,
     /// Who sent it.
     pub sender: Sender,
+    /// The syslog facility (0 kern … 23 local7), where the line names it (busybox).
+    pub facility: Option<u8>,
+    /// The syslog priority (0 emergency … 7 debug), where the line names it (busybox).
+    pub priority: Option<u8>,
     /// The text after the tag.
     pub message: &'a str,
 }
@@ -128,9 +132,12 @@ fn syslog<'a>(line: &'a str, time: &LocalTime) -> Result<Record<'a>, SyslogError
         .split_once(' ')
         .map_or((None, ""), |(host, rest)| (Some(host), rest));
     // busybox writes `facility.priority` before the tag.
-    let rest = match rest.split_once(' ') {
-        Some((first, after)) if facility(first) => after,
-        _ => rest,
+    let (facility, priority, rest) = match rest.split_once(' ') {
+        Some((first, after)) if facility_priority(first) => {
+            let (f, p) = first.split_once('.').unwrap_or_default();
+            (facility_number(f), priority_number(p), after)
+        }
+        _ => (None, None, rest),
     };
     let (identifier, pid, message) = tag(rest);
     Ok(Record {
@@ -139,17 +146,56 @@ fn syslog<'a>(line: &'a str, time: &LocalTime) -> Result<Record<'a>, SyslogError
         identifier,
         pid,
         sender: Sender::Unknown,
+        facility,
+        priority,
         message,
     })
 }
 
-fn facility(token: &str) -> bool {
+fn facility_priority(token: &str) -> bool {
     token.split_once('.').is_some_and(|(f, p)| {
         !f.is_empty()
             && !p.is_empty()
             && f.bytes()
                 .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
             && p.bytes().all(|b| b.is_ascii_lowercase())
+    })
+}
+
+/// The names of `syslog.h` (`facilitynames`), as busybox prints them.
+fn facility_number(name: &str) -> Option<u8> {
+    Some(match name {
+        "kern" => 0,
+        "user" => 1,
+        "mail" => 2,
+        "daemon" => 3,
+        "auth" | "security" => 4,
+        "syslog" => 5,
+        "lpr" => 6,
+        "news" => 7,
+        "uucp" => 8,
+        "cron" => 9,
+        "authpriv" => 10,
+        "ftp" => 11,
+        _ => {
+            let n: u8 = name.strip_prefix("local")?.parse().ok()?;
+            return (n <= 7 && name.len() == 6).then_some(16 + n);
+        }
+    })
+}
+
+/// The names of `syslog.h` (`prioritynames`), as busybox prints them.
+fn priority_number(name: &str) -> Option<u8> {
+    Some(match name {
+        "emerg" | "panic" => 0,
+        "alert" => 1,
+        "crit" => 2,
+        "err" | "error" => 3,
+        "warn" | "warning" => 4,
+        "notice" => 5,
+        "info" => 6,
+        "debug" => 7,
+        _ => return None,
     })
 }
 
@@ -173,6 +219,8 @@ fn trusted(line: &str) -> Result<Record<'_>, SyslogError> {
         identifier,
         pid,
         sender,
+        facility: None,
+        priority: None,
         message,
     })
 }
@@ -296,6 +344,46 @@ mod tests {
                 "{line:?}"
             );
         }
+    }
+
+    #[test]
+    fn reads_facility_and_priority_of_busybox_lines() {
+        let r = parse(
+            Format::Syslog,
+            "Nov 21 19:33:14 h auth.info sshd[23]: Accepted password for alice",
+            &utc(),
+        )
+        .unwrap();
+        assert_eq!((r.facility, r.priority), (Some(4), Some(6)));
+        for (token, facility, priority) in [
+            ("kern.warn", Some(0), Some(4)),
+            ("kern.warning", Some(0), Some(4)),
+            ("daemon.err", Some(3), Some(3)),
+            ("daemon.error", Some(3), Some(3)),
+            ("authpriv.notice", Some(10), Some(5)),
+            ("security.crit", Some(4), Some(2)),
+            ("cron.emerg", Some(9), Some(0)),
+            ("user.panic", Some(1), Some(0)),
+            ("local7.debug", Some(23), Some(7)),
+            ("syslog.alert", Some(5), Some(1)),
+            ("local8.info", None, Some(6)),
+            ("user.loud", Some(1), None),
+        ] {
+            let line = format!("Nov 21 19:33:14 h {token} app: text");
+            let r = parse(Format::Syslog, &line, &utc()).unwrap();
+            assert_eq!((r.facility, r.priority), (facility, priority), "{token}");
+            assert_eq!((r.identifier, r.message), (Some("app"), "text"), "{token}");
+        }
+        // Classic files and the trusted format don't tell.
+        let r = parse(Format::Syslog, "Nov 21 19:33:13 h sshd[7]: x", &utc()).unwrap();
+        assert_eq!((r.facility, r.priority), (None, None));
+        let r = parse(
+            Format::Trusted,
+            "2026-11-21T19:34:29+00:00 imuxsock uid=0 auth.info sshd: x",
+            &utc(),
+        )
+        .unwrap();
+        assert_eq!((r.facility, r.priority), (None, None));
     }
 
     #[test]

@@ -273,7 +273,7 @@ eine Fake-Implementierung für Tests.
     - Agent → Server: `Hello{agent_version, host_facts, config_version}` (`host_facts` mit `security_source`: Journal,
       Datei verifiziert/unverifiziert oder keine), `Heartbeat`,
       `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“), `Batch{seq, …}` mit genau einem
-      Inhalt: `MetricBatch`, später `LogBatch`, `SecurityEventBatch`, `UpdateReport`; dazu `ProcessSnapshot` und
+      Inhalt: `MetricBatch`, `SecurityEventBatch`, `LogBatch` (M3-01), später `UpdateReport`; dazu `ProcessSnapshot` und
       `CommandResult` (nicht gepuffert)
     - Server → Agent: `TrustBundle{roots}` (zu Beginn jeder Session), `Ack{seq}`, `Throttle{min_interval}`,
       `CertificateIssued`, `RotateNow` (Rotation auf Abruf), `ConfigUpdate{version, config}`,
@@ -553,7 +553,14 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 
 ### 10.2 Verarbeitung
 
-- Der Agent normalisiert jede Zeile zu `{ts, source, unit/file, severity, message, fields}`.
+- Der Agent normalisiert jede Zeile zu `{ts, source, unit/file, severity, message, fields}` (`LogEntry`, M3-01):
+  - **Unit** ist die systemd-Unit, sonst der Syslog-Identifier.
+  - **Severity** kommt aus `PRIORITY` bzw. aus `facility.priority` der busybox-Zeilen. Die übrigen Dateiformate
+    nennen keine, dann bleibt sie unbekannt.
+  - **Felder:** Identifier, PID, Prozessname, UID des Absenders, Boot-ID, Transport, Facility.
+  - **Form:** Werte mit falscher Form (Boot-ID, Transport, Facility) lässt der Agent weg, damit ein Eintrag nie den
+    ganzen Batch ungültig macht.
+  - **Batch:** höchstens 1 000 Einträge bzw. 256 KiB.
 - Loki-Labels werden **bewusst sparsam** gewählt (niedrige Cardinality): `node_id`, `source`, `unit`, `severity`. Alles
   andere steht als *structured metadata* bzw. in der Zeile.
 - **Begrenzungen:** Zeilenlänge max. 16 KB (danach gekürzt + Flag), Rate-Limit pro Node.

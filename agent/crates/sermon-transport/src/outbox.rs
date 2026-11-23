@@ -243,7 +243,7 @@ mod tests {
             .iter()
             .map(|record| match batch_for(record).unwrap().content {
                 Some(batch::Content::Metrics(metrics)) => metrics.samples.len(),
-                Some(batch::Content::SecurityEvents(_)) | None => 0,
+                Some(batch::Content::SecurityEvents(_) | batch::Content::Logs(_)) | None => 0,
             })
             .collect();
         assert_eq!(sizes, vec![MAX_SAMPLES_PER_BATCH, 1]);

@@ -221,6 +221,136 @@ func (SshAuthMethod) EnumDescriptor() ([]byte, []int) {
 	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{2}
 }
 
+// LogSource is where a log entry comes from (KONZEPT §10.1).
+type LogSource int32
+
+const (
+	// LOG_SOURCE_UNSPECIFIED is invalid and must not be sent.
+	LogSource_LOG_SOURCE_UNSPECIFIED LogSource = 0
+	// LOG_SOURCE_JOURNAL is the systemd journal.
+	LogSource_LOG_SOURCE_JOURNAL LogSource = 1
+	// LOG_SOURCE_FILE is a log file (classic syslog files, configured globs).
+	LogSource_LOG_SOURCE_FILE LogSource = 2
+)
+
+// Enum value maps for LogSource.
+var (
+	LogSource_name = map[int32]string{
+		0: "LOG_SOURCE_UNSPECIFIED",
+		1: "LOG_SOURCE_JOURNAL",
+		2: "LOG_SOURCE_FILE",
+	}
+	LogSource_value = map[string]int32{
+		"LOG_SOURCE_UNSPECIFIED": 0,
+		"LOG_SOURCE_JOURNAL":     1,
+		"LOG_SOURCE_FILE":        2,
+	}
+)
+
+func (x LogSource) Enum() *LogSource {
+	p := new(LogSource)
+	*p = x
+	return p
+}
+
+func (x LogSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (LogSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[3].Descriptor()
+}
+
+func (LogSource) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[3]
+}
+
+func (x LogSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use LogSource.Descriptor instead.
+func (LogSource) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{3}
+}
+
+// LogSeverity is the syslog priority of an entry, from the most to the least severe.
+type LogSeverity int32
+
+const (
+	// LOG_SEVERITY_UNSPECIFIED: the source does not tell.
+	LogSeverity_LOG_SEVERITY_UNSPECIFIED LogSeverity = 0
+	// LOG_SEVERITY_EMERGENCY is priority 0: the system is unusable.
+	LogSeverity_LOG_SEVERITY_EMERGENCY LogSeverity = 1
+	// LOG_SEVERITY_ALERT is priority 1: act immediately.
+	LogSeverity_LOG_SEVERITY_ALERT LogSeverity = 2
+	// LOG_SEVERITY_CRITICAL is priority 2.
+	LogSeverity_LOG_SEVERITY_CRITICAL LogSeverity = 3
+	// LOG_SEVERITY_ERROR is priority 3.
+	LogSeverity_LOG_SEVERITY_ERROR LogSeverity = 4
+	// LOG_SEVERITY_WARNING is priority 4.
+	LogSeverity_LOG_SEVERITY_WARNING LogSeverity = 5
+	// LOG_SEVERITY_NOTICE is priority 5.
+	LogSeverity_LOG_SEVERITY_NOTICE LogSeverity = 6
+	// LOG_SEVERITY_INFO is priority 6.
+	LogSeverity_LOG_SEVERITY_INFO LogSeverity = 7
+	// LOG_SEVERITY_DEBUG is priority 7.
+	LogSeverity_LOG_SEVERITY_DEBUG LogSeverity = 8
+)
+
+// Enum value maps for LogSeverity.
+var (
+	LogSeverity_name = map[int32]string{
+		0: "LOG_SEVERITY_UNSPECIFIED",
+		1: "LOG_SEVERITY_EMERGENCY",
+		2: "LOG_SEVERITY_ALERT",
+		3: "LOG_SEVERITY_CRITICAL",
+		4: "LOG_SEVERITY_ERROR",
+		5: "LOG_SEVERITY_WARNING",
+		6: "LOG_SEVERITY_NOTICE",
+		7: "LOG_SEVERITY_INFO",
+		8: "LOG_SEVERITY_DEBUG",
+	}
+	LogSeverity_value = map[string]int32{
+		"LOG_SEVERITY_UNSPECIFIED": 0,
+		"LOG_SEVERITY_EMERGENCY":   1,
+		"LOG_SEVERITY_ALERT":       2,
+		"LOG_SEVERITY_CRITICAL":    3,
+		"LOG_SEVERITY_ERROR":       4,
+		"LOG_SEVERITY_WARNING":     5,
+		"LOG_SEVERITY_NOTICE":      6,
+		"LOG_SEVERITY_INFO":        7,
+		"LOG_SEVERITY_DEBUG":       8,
+	}
+)
+
+func (x LogSeverity) Enum() *LogSeverity {
+	p := new(LogSeverity)
+	*p = x
+	return p
+}
+
+func (x LogSeverity) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (LogSeverity) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[4].Descriptor()
+}
+
+func (LogSeverity) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[4]
+}
+
+func (x LogSeverity) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use LogSeverity.Descriptor instead.
+func (LogSeverity) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{4}
+}
+
 // SessionRequest is one message from the agent to the server.
 type SessionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -988,6 +1118,7 @@ type Batch struct {
 	//
 	//	*Batch_Metrics
 	//	*Batch_SecurityEvents
+	//	*Batch_Logs
 	Content       isBatch_Content `protobuf_oneof:"content"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1055,6 +1186,15 @@ func (x *Batch) GetSecurityEvents() *SecurityEventBatch {
 	return nil
 }
 
+func (x *Batch) GetLogs() *LogBatch {
+	if x != nil {
+		if x, ok := x.Content.(*Batch_Logs); ok {
+			return x.Logs
+		}
+	}
+	return nil
+}
+
 type isBatch_Content interface {
 	isBatch_Content()
 }
@@ -1069,9 +1209,16 @@ type Batch_SecurityEvents struct {
 	SecurityEvents *SecurityEventBatch `protobuf:"bytes,3,opt,name=security_events,json=securityEvents,proto3,oneof"`
 }
 
+type Batch_Logs struct {
+	// logs are log entries of the host, redacted by the agent before sending (KONZEPT §10).
+	Logs *LogBatch `protobuf:"bytes,4,opt,name=logs,proto3,oneof"`
+}
+
 func (*Batch_Metrics) isBatch_Content() {}
 
 func (*Batch_SecurityEvents) isBatch_Content() {}
+
+func (*Batch_Logs) isBatch_Content() {}
 
 // MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
 // converted to per-second rates by the agent; every sample is a gauge.
@@ -2364,6 +2511,219 @@ func (x *OomKill) GetProcess() string {
 	return ""
 }
 
+// LogBatch holds log entries of the host (KONZEPT §10.2), redacted by the agent. The agent sends
+// them only while the server's configuration asks for logs (M3-03), so an older server never
+// gets one. It bounds a batch to about 256 KiB of messages; the server checks that too (M3-07).
+type LogBatch struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// entries are in the order the agent read them.
+	Entries       []*LogEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogBatch) Reset() {
+	*x = LogBatch{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogBatch) ProtoMessage() {}
+
+func (x *LogBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogBatch.ProtoReflect.Descriptor instead.
+func (*LogBatch) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *LogBatch) GetEntries() []*LogEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+// LogEntry is one normalized log entry: {ts, source, unit/file, severity, message, fields}. Every
+// text comes from the host and is shown as text only; none of it decides anything.
+type LogEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// occurred_at is the time of the entry on the host (journal: __REALTIME_TIMESTAMP).
+	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	// source is where the entry was read.
+	Source LogSource `protobuf:"varint,2,opt,name=source,proto3,enum=sermon.agent.v1.LogSource" json:"source,omitempty"`
+	// unit is the systemd unit (_SYSTEMD_UNIT) or, without one, the syslog identifier; empty if
+	// neither is known. The server bounds how many distinct units a node may have.
+	Unit string `protobuf:"bytes,3,opt,name=unit,proto3" json:"unit,omitempty"`
+	// file is the path of the log file (source LOG_SOURCE_FILE only).
+	File string `protobuf:"bytes,4,opt,name=file,proto3" json:"file,omitempty"`
+	// severity is the syslog priority; unspecified where the source has none.
+	Severity LogSeverity `protobuf:"varint,5,opt,name=severity,proto3,enum=sermon.agent.v1.LogSeverity" json:"severity,omitempty"`
+	// message is the text, after redaction, cut to 16 KiB.
+	Message string `protobuf:"bytes,6,opt,name=message,proto3" json:"message,omitempty"`
+	// truncated is set if the message was longer and has been cut.
+	Truncated bool `protobuf:"varint,7,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	// identifier is the syslog identifier (SYSLOG_IDENTIFIER or the tag of a file line), e.g. sshd.
+	Identifier string `protobuf:"bytes,8,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	// pid is the sending process; 0 if unknown.
+	Pid uint32 `protobuf:"varint,9,opt,name=pid,proto3" json:"pid,omitempty"`
+	// process is the name of the sending process (journal: _COMM).
+	Process string `protobuf:"bytes,10,opt,name=process,proto3" json:"process,omitempty"`
+	// uid is the user ID of the sender as journald or the SerMon rsyslog template saw it.
+	Uid *uint32 `protobuf:"varint,11,opt,name=uid,proto3,oneof" json:"uid,omitempty"`
+	// boot_id is the boot the entry belongs to (journal: _BOOT_ID); empty if unknown.
+	BootId string `protobuf:"bytes,12,opt,name=boot_id,json=bootId,proto3" json:"boot_id,omitempty"`
+	// transport is how journald received the entry (journal, syslog, stdout, kernel, …).
+	Transport string `protobuf:"bytes,13,opt,name=transport,proto3" json:"transport,omitempty"`
+	// facility is the syslog facility (0 kern … 23 local7), if known.
+	Facility      *uint32 `protobuf:"varint,14,opt,name=facility,proto3,oneof" json:"facility,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogEntry) Reset() {
+	*x = LogEntry{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogEntry) ProtoMessage() {}
+
+func (x *LogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
+func (*LogEntry) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *LogEntry) GetOccurredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.OccurredAt
+	}
+	return nil
+}
+
+func (x *LogEntry) GetSource() LogSource {
+	if x != nil {
+		return x.Source
+	}
+	return LogSource_LOG_SOURCE_UNSPECIFIED
+}
+
+func (x *LogEntry) GetUnit() string {
+	if x != nil {
+		return x.Unit
+	}
+	return ""
+}
+
+func (x *LogEntry) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+func (x *LogEntry) GetSeverity() LogSeverity {
+	if x != nil {
+		return x.Severity
+	}
+	return LogSeverity_LOG_SEVERITY_UNSPECIFIED
+}
+
+func (x *LogEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *LogEntry) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *LogEntry) GetIdentifier() string {
+	if x != nil {
+		return x.Identifier
+	}
+	return ""
+}
+
+func (x *LogEntry) GetPid() uint32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *LogEntry) GetProcess() string {
+	if x != nil {
+		return x.Process
+	}
+	return ""
+}
+
+func (x *LogEntry) GetUid() uint32 {
+	if x != nil && x.Uid != nil {
+		return *x.Uid
+	}
+	return 0
+}
+
+func (x *LogEntry) GetBootId() string {
+	if x != nil {
+		return x.BootId
+	}
+	return ""
+}
+
+func (x *LogEntry) GetTransport() string {
+	if x != nil {
+		return x.Transport
+	}
+	return ""
+}
+
+func (x *LogEntry) GetFacility() uint32 {
+	if x != nil && x.Facility != nil {
+		return *x.Facility
+	}
+	return 0
+}
+
 var File_sermon_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_agent_proto_rawDesc = "" +
@@ -2419,11 +2779,12 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x05roots\x18\x01 \x03(\fR\x05roots\"\v\n" +
 	"\tRotateNow\"\x17\n" +
 	"\x03Ack\x12\x10\n" +
-	"\x03seq\x18\x01 \x01(\x04R\x03seq\"\xbe\x01\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\"\xef\x01\n" +
 	"\x05Batch\x12\x19\n" +
 	"\x03seq\x18\x01 \x01(\x04B\a\xbaH\x042\x02 \x00R\x03seq\x128\n" +
 	"\ametrics\x18\x02 \x01(\v2\x1c.sermon.agent.v1.MetricBatchH\x00R\ametrics\x12N\n" +
-	"\x0fsecurity_events\x18\x03 \x01(\v2#.sermon.agent.v1.SecurityEventBatchH\x00R\x0esecurityEventsB\x10\n" +
+	"\x0fsecurity_events\x18\x03 \x01(\v2#.sermon.agent.v1.SecurityEventBatchH\x00R\x0esecurityEvents\x12/\n" +
+	"\x04logs\x18\x04 \x01(\v2\x19.sermon.agent.v1.LogBatchH\x00R\x04logsB\x10\n" +
 	"\acontent\x12\x05\xbaH\x02\b\x01\"\x94\x01\n" +
 	"\vMetricBatch\x12E\n" +
 	"\fcollected_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\vcollectedAt\x12>\n" +
@@ -2513,7 +2874,32 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\ruptime_before\x18\x02 \x01(\v2\x19.google.protobuf.DurationB\b\xbaH\x05\xaa\x01\x022\x00R\fuptimeBefore\"G\n" +
 	"\aOomKill\x12\x19\n" +
 	"\x03pid\x18\x01 \x01(\rB\a\xbaH\x04*\x02 \x00R\x03pid\x12!\n" +
-	"\aprocess\x18\x02 \x01(\tB\a\xbaH\x04r\x02(@R\aprocess*\xb0\x01\n" +
+	"\aprocess\x18\x02 \x01(\tB\a\xbaH\x04r\x02(@R\aprocess\"L\n" +
+	"\bLogBatch\x12@\n" +
+	"\aentries\x18\x01 \x03(\v2\x19.sermon.agent.v1.LogEntryB\v\xbaH\b\x92\x01\x05\b\x01\x10\xe8\aR\aentries\"\x8c\x06\n" +
+	"\bLogEntry\x12C\n" +
+	"\voccurred_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\n" +
+	"occurredAt\x12>\n" +
+	"\x06source\x18\x02 \x01(\x0e2\x1a.sermon.agent.v1.LogSourceB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x06source\x12\x1c\n" +
+	"\x04unit\x18\x03 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x04unit\x12\x1c\n" +
+	"\x04file\x18\x04 \x01(\tB\b\xbaH\x05r\x03(\x80 R\x04file\x12B\n" +
+	"\bseverity\x18\x05 \x01(\x0e2\x1c.sermon.agent.v1.LogSeverityB\b\xbaH\x05\x82\x01\x02\x10\x01R\bseverity\x12#\n" +
+	"\amessage\x18\x06 \x01(\tB\t\xbaH\x06r\x04(\x80\x80\x01R\amessage\x12\x1c\n" +
+	"\ttruncated\x18\a \x01(\bR\ttruncated\x12(\n" +
+	"\n" +
+	"identifier\x18\b \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\n" +
+	"identifier\x12\x10\n" +
+	"\x03pid\x18\t \x01(\rR\x03pid\x12\"\n" +
+	"\aprocess\x18\n" +
+	" \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\aprocess\x12\x15\n" +
+	"\x03uid\x18\v \x01(\rH\x00R\x03uid\x88\x01\x01\x121\n" +
+	"\aboot_id\x18\f \x01(\tB\x18\xbaH\x15r\x132\x11^([0-9a-f]{32})?$R\x06bootId\x124\n" +
+	"\ttransport\x18\r \x01(\tB\x16\xbaH\x13r\x112\x0f^[a-z_-]{0,32}$R\ttransport\x12(\n" +
+	"\bfacility\x18\x0e \x01(\rB\a\xbaH\x04*\x02\x18\x17H\x01R\bfacility\x88\x01\x01:\x98\x01\xbaH\x94\x01\x1a\x91\x01\n" +
+	"\x04file\x12Ifile must be an absolute path for entries from a file and empty otherwise\x1a>this.source == 2 ? this.file.startsWith('/') : this.file == ''B\x06\n" +
+	"\x04_uidB\v\n" +
+	"\t_facility*\xb0\x01\n" +
 	"\x0eSecuritySource\x12\x1f\n" +
 	"\x1bSECURITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17SECURITY_SOURCE_JOURNAL\x10\x01\x12!\n" +
@@ -2532,7 +2918,21 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x19SSH_AUTH_METHOD_HOSTBASED\x10\x04\x12\x1a\n" +
 	"\x16SSH_AUTH_METHOD_GSSAPI\x10\x05\x12\x18\n" +
 	"\x14SSH_AUTH_METHOD_NONE\x10\x06\x12\x19\n" +
-	"\x15SSH_AUTH_METHOD_OTHER\x10\a2`\n" +
+	"\x15SSH_AUTH_METHOD_OTHER\x10\a*T\n" +
+	"\tLogSource\x12\x1a\n" +
+	"\x16LOG_SOURCE_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12LOG_SOURCE_JOURNAL\x10\x01\x12\x13\n" +
+	"\x0fLOG_SOURCE_FILE\x10\x02*\xf4\x01\n" +
+	"\vLogSeverity\x12\x1c\n" +
+	"\x18LOG_SEVERITY_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16LOG_SEVERITY_EMERGENCY\x10\x01\x12\x16\n" +
+	"\x12LOG_SEVERITY_ALERT\x10\x02\x12\x19\n" +
+	"\x15LOG_SEVERITY_CRITICAL\x10\x03\x12\x16\n" +
+	"\x12LOG_SEVERITY_ERROR\x10\x04\x12\x18\n" +
+	"\x14LOG_SEVERITY_WARNING\x10\x05\x12\x17\n" +
+	"\x13LOG_SEVERITY_NOTICE\x10\x06\x12\x15\n" +
+	"\x11LOG_SEVERITY_INFO\x10\a\x12\x16\n" +
+	"\x12LOG_SEVERITY_DEBUG\x10\b2`\n" +
 	"\fAgentService\x12P\n" +
 	"\aSession\x12\x1f.sermon.agent.v1.SessionRequest\x1a .sermon.agent.v1.SessionResponse(\x010\x01B\xc7\x01\n" +
 	"\x13com.sermon.agent.v1B\n" +
@@ -2550,93 +2950,102 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 	return file_sermon_agent_v1_agent_proto_rawDescData
 }
 
-var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(SecuritySource)(0),           // 0: sermon.agent.v1.SecuritySource
 	(Architecture)(0),             // 1: sermon.agent.v1.Architecture
 	(SshAuthMethod)(0),            // 2: sermon.agent.v1.SshAuthMethod
-	(*SessionRequest)(nil),        // 3: sermon.agent.v1.SessionRequest
-	(*SessionResponse)(nil),       // 4: sermon.agent.v1.SessionResponse
-	(*Hello)(nil),                 // 5: sermon.agent.v1.Hello
-	(*HostFacts)(nil),             // 6: sermon.agent.v1.HostFacts
-	(*Heartbeat)(nil),             // 7: sermon.agent.v1.Heartbeat
-	(*RotateCertificate)(nil),     // 8: sermon.agent.v1.RotateCertificate
-	(*CertificateIssued)(nil),     // 9: sermon.agent.v1.CertificateIssued
-	(*TrustBundle)(nil),           // 10: sermon.agent.v1.TrustBundle
-	(*RotateNow)(nil),             // 11: sermon.agent.v1.RotateNow
-	(*Ack)(nil),                   // 12: sermon.agent.v1.Ack
-	(*Batch)(nil),                 // 13: sermon.agent.v1.Batch
-	(*MetricBatch)(nil),           // 14: sermon.agent.v1.MetricBatch
-	(*Sample)(nil),                // 15: sermon.agent.v1.Sample
-	(*Throttle)(nil),              // 16: sermon.agent.v1.Throttle
-	(*SecurityEventBatch)(nil),    // 17: sermon.agent.v1.SecurityEventBatch
-	(*SecurityEvent)(nil),         // 18: sermon.agent.v1.SecurityEvent
-	(*SshRemote)(nil),             // 19: sermon.agent.v1.SshRemote
-	(*SshLoginFailed)(nil),        // 20: sermon.agent.v1.SshLoginFailed
-	(*SshInvalidUser)(nil),        // 21: sermon.agent.v1.SshInvalidUser
-	(*SshLoginSucceeded)(nil),     // 22: sermon.agent.v1.SshLoginSucceeded
-	(*SshPreauthDisconnect)(nil),  // 23: sermon.agent.v1.SshPreauthDisconnect
-	(*SudoAuthFailed)(nil),        // 24: sermon.agent.v1.SudoAuthFailed
-	(*SudoNotAllowed)(nil),        // 25: sermon.agent.v1.SudoNotAllowed
-	(*SudoCommand)(nil),           // 26: sermon.agent.v1.SudoCommand
-	(*AccountCreated)(nil),        // 27: sermon.agent.v1.AccountCreated
-	(*AccountDeleted)(nil),        // 28: sermon.agent.v1.AccountDeleted
-	(*SystemReboot)(nil),          // 29: sermon.agent.v1.SystemReboot
-	(*OomKill)(nil),               // 30: sermon.agent.v1.OomKill
-	nil,                           // 31: sermon.agent.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 32: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 33: google.protobuf.Duration
+	(LogSource)(0),                // 3: sermon.agent.v1.LogSource
+	(LogSeverity)(0),              // 4: sermon.agent.v1.LogSeverity
+	(*SessionRequest)(nil),        // 5: sermon.agent.v1.SessionRequest
+	(*SessionResponse)(nil),       // 6: sermon.agent.v1.SessionResponse
+	(*Hello)(nil),                 // 7: sermon.agent.v1.Hello
+	(*HostFacts)(nil),             // 8: sermon.agent.v1.HostFacts
+	(*Heartbeat)(nil),             // 9: sermon.agent.v1.Heartbeat
+	(*RotateCertificate)(nil),     // 10: sermon.agent.v1.RotateCertificate
+	(*CertificateIssued)(nil),     // 11: sermon.agent.v1.CertificateIssued
+	(*TrustBundle)(nil),           // 12: sermon.agent.v1.TrustBundle
+	(*RotateNow)(nil),             // 13: sermon.agent.v1.RotateNow
+	(*Ack)(nil),                   // 14: sermon.agent.v1.Ack
+	(*Batch)(nil),                 // 15: sermon.agent.v1.Batch
+	(*MetricBatch)(nil),           // 16: sermon.agent.v1.MetricBatch
+	(*Sample)(nil),                // 17: sermon.agent.v1.Sample
+	(*Throttle)(nil),              // 18: sermon.agent.v1.Throttle
+	(*SecurityEventBatch)(nil),    // 19: sermon.agent.v1.SecurityEventBatch
+	(*SecurityEvent)(nil),         // 20: sermon.agent.v1.SecurityEvent
+	(*SshRemote)(nil),             // 21: sermon.agent.v1.SshRemote
+	(*SshLoginFailed)(nil),        // 22: sermon.agent.v1.SshLoginFailed
+	(*SshInvalidUser)(nil),        // 23: sermon.agent.v1.SshInvalidUser
+	(*SshLoginSucceeded)(nil),     // 24: sermon.agent.v1.SshLoginSucceeded
+	(*SshPreauthDisconnect)(nil),  // 25: sermon.agent.v1.SshPreauthDisconnect
+	(*SudoAuthFailed)(nil),        // 26: sermon.agent.v1.SudoAuthFailed
+	(*SudoNotAllowed)(nil),        // 27: sermon.agent.v1.SudoNotAllowed
+	(*SudoCommand)(nil),           // 28: sermon.agent.v1.SudoCommand
+	(*AccountCreated)(nil),        // 29: sermon.agent.v1.AccountCreated
+	(*AccountDeleted)(nil),        // 30: sermon.agent.v1.AccountDeleted
+	(*SystemReboot)(nil),          // 31: sermon.agent.v1.SystemReboot
+	(*OomKill)(nil),               // 32: sermon.agent.v1.OomKill
+	(*LogBatch)(nil),              // 33: sermon.agent.v1.LogBatch
+	(*LogEntry)(nil),              // 34: sermon.agent.v1.LogEntry
+	nil,                           // 35: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 36: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 37: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
-	5,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
-	7,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
-	8,  // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
-	13, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
-	12, // 4: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
-	9,  // 5: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	11, // 6: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	10, // 7: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
-	16, // 8: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
-	6,  // 9: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	7,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
+	9,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
+	10, // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
+	15, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
+	14, // 4: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	11, // 5: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
+	13, // 6: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	12, // 7: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	18, // 8: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
+	8,  // 9: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
 	1,  // 10: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
 	0,  // 11: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
-	32, // 12: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	32, // 13: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	32, // 14: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	14, // 15: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
-	17, // 16: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
-	32, // 17: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
-	15, // 18: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
-	31, // 19: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
-	33, // 20: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
-	18, // 21: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
-	32, // 22: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	20, // 23: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
-	21, // 24: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
-	22, // 25: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
-	23, // 26: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
-	24, // 27: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
-	25, // 28: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
-	26, // 29: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
-	27, // 30: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
-	28, // 31: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
-	29, // 32: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
-	30, // 33: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
-	19, // 34: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 35: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
-	19, // 36: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
-	19, // 37: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 38: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
-	19, // 39: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
-	33, // 40: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
-	3,  // 41: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	4,  // 42: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	42, // [42:43] is the sub-list for method output_type
-	41, // [41:42] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	36, // 12: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	36, // 13: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	36, // 14: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	16, // 15: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	19, // 16: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
+	33, // 17: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
+	36, // 18: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	17, // 19: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	35, // 20: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	37, // 21: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	20, // 22: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
+	36, // 23: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	22, // 24: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
+	23, // 25: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
+	24, // 26: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
+	25, // 27: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
+	26, // 28: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
+	27, // 29: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
+	28, // 30: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
+	29, // 31: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
+	30, // 32: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
+	31, // 33: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
+	32, // 34: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
+	21, // 35: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 36: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
+	21, // 37: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
+	21, // 38: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 39: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
+	21, // 40: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
+	37, // 41: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
+	34, // 42: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
+	36, // 43: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	3,  // 44: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
+	4,  // 45: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
+	5,  // 46: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	6,  // 47: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	47, // [47:48] is the sub-list for method output_type
+	46, // [46:47] is the sub-list for method input_type
+	46, // [46:46] is the sub-list for extension type_name
+	46, // [46:46] is the sub-list for extension extendee
+	0,  // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -2660,6 +3069,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 	file_sermon_agent_v1_agent_proto_msgTypes[10].OneofWrappers = []any{
 		(*Batch_Metrics)(nil),
 		(*Batch_SecurityEvents)(nil),
+		(*Batch_Logs)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[12].OneofWrappers = []any{
 		(*Sample_IntValue)(nil),
@@ -2684,13 +3094,14 @@ func file_sermon_agent_v1_agent_proto_init() {
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[20].OneofWrappers = []any{}
 	file_sermon_agent_v1_agent_proto_msgTypes[24].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[29].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   29,
+			NumEnums:      5,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

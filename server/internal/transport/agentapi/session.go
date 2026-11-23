@@ -565,6 +565,9 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		}
 		return batch
 	}
+	if logs := b.GetLogs(); logs != nil {
+		return ingest.Batch{Seq: b.GetSeq(), Logs: len(logs.GetEntries())}
+	}
 	metrics := b.GetMetrics()
 	batch := ingest.Batch{Seq: b.GetSeq(), CollectedAt: metrics.GetCollectedAt().AsTime(), Samples: make([]ingest.Sample, 0, len(metrics.GetSamples()))}
 	for _, sample := range metrics.GetSamples() {

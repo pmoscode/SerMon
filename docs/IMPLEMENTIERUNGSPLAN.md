@@ -2612,7 +2612,38 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.1 Log-Pipeline im Agent (E3.1)
 
-#### ☐ M3-01 – Log-Einträge im Protokoll · X · M 🔒
+#### ☑ M3-01 – Log-Einträge im Protokoll · X · M 🔒
+> Erledigt (KONZEPT §5, §10.2; Threat Model T42):
+> - **Protokoll:** `LogBatch` als Inhalt 4 von `Batch` (höchstens 1 000 Einträge).
+>   - `LogEntry` hat Zeitpunkt, Quelle (`LOG_SOURCE_JOURNAL`/`_FILE`), Unit, Pfad (nur bei Dateien und absolut, per
+>     CEL geprüft), Severity (`LOG_SEVERITY_*`, syslog-Priorität + 1, unspezifiziert = unbekannt), Nachricht
+>     (≤ 16 KiB) mit `truncated`, Identifier, PID, Prozessname, UID, Boot-ID, Transport und Facility.
+>   - Alle Texte sind begrenzt; Boot-ID und Transport haben ein festes Muster.
+>   - Der Agent sendet Logs nur, wenn die Konfiguration des Servers sie verlangt (M3-03). Ein älterer Server bekommt
+>     also nie einen `LogBatch`.
+> - **Normalisierung** (`sermon-logs::record`):
+>   - `LogRecord::from_journal` und `from_file`: Die Unit ist die systemd-Unit, sonst der Identifier.
+>   - Severity aus `PRIORITY` bzw. aus `facility.priority` der busybox-Zeilen; der Syslog-Parser liefert dafür jetzt
+>     Facility und Priorität mit.
+>   - Werte mit falscher Form (Boot-ID, Transport, Facility > 23) lässt der Agent weg, damit ein Eintrag nie den
+>     ganzen Batch ungültig macht. Ein ungültiger Batch beendet die Session.
+>   - `Batcher` begrenzt auf 1 000 Einträge bzw. 256 KiB (`LogRecord::size`: Texte plus fester Anteil). Das Zeitlimit
+>     von 1 s folgt mit M3-04.
+>   - Im Agent `logs::to_proto`.
+> - **Server bis M3-07:** Ein `LogBatch` wird in Reihenfolge bestätigt und verworfen (`ingest.Batch.Logs`), ohne
+>   Metrik-Fenster und Ingest-Lag zu berühren. Vorher wäre er im Metrik-Zweig gelandet: Zeit 1970, ein Lag von
+>   Jahrzehnten im Self-Monitoring.
+> - **Tests:**
+>   - Normalisierung über die Journal-Fixtures von sechs Distros (Zeit, Nachricht, Severity, Felder) und die beiden
+>     Dateiformate von Alpine; Kürzen mit Flag; Pfade; falsche Formen.
+>   - Proptests: Batches bleiben in den Grenzen, Journal-Einträge passen immer ins Schema.
+>   - Facility und Priorität der busybox-Namen.
+>   - Schema im Server: 7 gültige und 18 ungültige Fälle. Goldene Datei `proto/testdata/log_batch.binpb` (alle
+>     Fixtures, beide Quellen, gekürzter Eintrag) aus dem Agent, im Server mit protovalidate geprüft.
+>   - Roundtrip im Stream; unbekannte Severity wird zu „unspezifiziert“.
+>   - Ingest und Session: Bestätigung in Reihenfolge, nichts gespeichert, Lag unverändert.
+>   - Gegenproben für 13 Prüfungen (Formen, Unit-Rückfall, Batch-Grenzen, Pfade, Kürzen, Kernel, CEL-Regel, Zweig im
+>     Ingest und in der Session), alle erkannt.
 - **Ziel:** `LogBatch` als weiterer Inhalt von `Batch` (KONZEPT §5, §10.2). Jeder `LogEntry` hat:
   - Zeitpunkt, Quelle (Journal oder Datei), Unit bzw. Syslog-Identifier, Pfad bei Dateien
   - Severity (syslog 0–7, sonst unbekannt) und die Nachricht (höchstens 16 KiB, sonst gekürzt mit Flag)
@@ -2726,7 +2757,8 @@ Konfiguration) und M3-06 (Loki).
 - **Skill:** `sermon-adr`
 
 #### ☐ M3-07 – Log-Ingest · S · M 🔒
-- **Ziel:** `LogBatch` aus dem Stream nach Loki.
+- **Ziel:** `LogBatch` aus dem Stream nach Loki; bis dahin bestätigt der Server Log-Batches und verwirft sie
+  (M3-01).
   - Node und Org kommen aus dem Zertifikat; Zeitfenster wie bei Events.
   - **Grenzen:** Bytes/s pro Node mit Token-Bucket über Reconnects und Throttle; Grenze pro Org; Zähler in
     `/metrics`.

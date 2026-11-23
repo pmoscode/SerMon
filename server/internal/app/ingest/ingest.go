@@ -312,6 +312,8 @@ type Batch struct {
 	CollectedAt time.Time
 	Samples     []Sample
 	Events      []secevent.Event
+	// Logs is the number of log entries of a log batch (M3-01); they are stored from M3-07 on.
+	Logs int
 }
 
 // Response tells the transport what to send back.
@@ -462,6 +464,12 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 	stats.Batches.Add(1)
 	if len(batch.Events) > 0 {
 		s.acceptEvents(batch, now)
+		return Response{}
+	}
+	if batch.Logs > 0 {
+		// Until the log ingest (M3-07) a log batch is acknowledged in order and dropped. Agents
+		// send logs only when the server's configuration asks for them (M3-03).
+		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
 		return Response{}
 	}
 	stats.LagMillis.Store(now.Sub(batch.CollectedAt).Milliseconds())

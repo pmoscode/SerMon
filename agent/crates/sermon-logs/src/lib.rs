@@ -2,3 +2,4 @@
 
 pub mod file;
 pub mod journal;
+pub mod record;

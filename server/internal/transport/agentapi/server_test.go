@@ -956,3 +956,36 @@ func TestSession_StoresSecurityEvents(t *testing.T) {
 		t.Errorf("unverified = %v, %v; want only the event from the log file", e[0].Unverified, e[5].Unverified)
 	}
 }
+
+// Log batches (M3-01) are stored from M3-07 on: until then the session acknowledges them, so an
+// agent never resends them forever, and they touch neither metrics nor the ingest lag.
+func TestSession_AcknowledgesLogBatchesWithoutStoringThemYet(t *testing.T) {
+	store := memstore.New()
+	group := tenant.GroupID(uuid.New())
+	store.AddNode(orgX, group, nodeX)
+	config := ingest.DefaultConfig()
+	config.FlushInterval = 20 * time.Millisecond
+	service := ingest.NewService(store, metrics.NewRing(), fakeNodes{group: group}, config, time.Now, slog.New(slog.DiscardHandler))
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithIngest(service)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Receive(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Send(logs(journalEntry("upstream timed out"))); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := stream.Receive(); err != nil || res.GetAck().GetSeq() != 3 {
+		t.Fatalf("Receive() = %v, %v; want Ack 3", res, err)
+	}
+	_ = stream.CloseRequest()
+	if got := store.Aggregates(); len(got) != 0 {
+		t.Errorf("stored %+v", got)
+	}
+	if lag := service.Stats().LagMillis.Load(); lag != 0 {
+		t.Errorf("lag = %d ms after a log batch", lag)
+	}
+}

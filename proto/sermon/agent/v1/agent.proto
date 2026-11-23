@@ -200,6 +200,8 @@ message Batch {
     MetricBatch metrics = 2;
     // security_events are events parsed from the host's logs (KONZEPT §11).
     SecurityEventBatch security_events = 3;
+    // logs are log entries of the host, redacted by the agent before sending (KONZEPT §10).
+    LogBatch logs = 4;
   }
 }
 
@@ -452,4 +454,90 @@ message OomKill {
   uint32 pid = 1 [(buf.validate.field).uint32.gt = 0];
   // process is its name (at most 15 characters, chosen by whoever started it).
   string process = 2 [(buf.validate.field).string.max_bytes = 64];
+}
+
+// LogBatch holds log entries of the host (KONZEPT §10.2), redacted by the agent. The agent sends
+// them only while the server's configuration asks for logs (M3-03), so an older server never
+// gets one. It bounds a batch to about 256 KiB of messages; the server checks that too (M3-07).
+message LogBatch {
+  // entries are in the order the agent read them.
+  repeated LogEntry entries = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 1000
+  }];
+}
+
+// LogEntry is one normalized log entry: {ts, source, unit/file, severity, message, fields}. Every
+// text comes from the host and is shown as text only; none of it decides anything.
+message LogEntry {
+  option (buf.validate.message).cel = {
+    id: "file"
+    message: "file must be an absolute path for entries from a file and empty otherwise"
+    expression: "this.source == 2 ? this.file.startsWith('/') : this.file == ''"
+  };
+
+  // occurred_at is the time of the entry on the host (journal: __REALTIME_TIMESTAMP).
+  google.protobuf.Timestamp occurred_at = 1 [(buf.validate.field).required = true];
+  // source is where the entry was read.
+  LogSource source = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // unit is the systemd unit (_SYSTEMD_UNIT) or, without one, the syslog identifier; empty if
+  // neither is known. The server bounds how many distinct units a node may have.
+  string unit = 3 [(buf.validate.field).string.max_bytes = 256];
+  // file is the path of the log file (source LOG_SOURCE_FILE only).
+  string file = 4 [(buf.validate.field).string.max_bytes = 4096];
+  // severity is the syslog priority; unspecified where the source has none.
+  LogSeverity severity = 5 [(buf.validate.field).enum.defined_only = true];
+  // message is the text, after redaction, cut to 16 KiB.
+  string message = 6 [(buf.validate.field).string.max_bytes = 16384];
+  // truncated is set if the message was longer and has been cut.
+  bool truncated = 7;
+  // identifier is the syslog identifier (SYSLOG_IDENTIFIER or the tag of a file line), e.g. sshd.
+  string identifier = 8 [(buf.validate.field).string.max_bytes = 256];
+  // pid is the sending process; 0 if unknown.
+  uint32 pid = 9;
+  // process is the name of the sending process (journal: _COMM).
+  string process = 10 [(buf.validate.field).string.max_bytes = 256];
+  // uid is the user ID of the sender as journald or the SerMon rsyslog template saw it.
+  optional uint32 uid = 11;
+  // boot_id is the boot the entry belongs to (journal: _BOOT_ID); empty if unknown.
+  string boot_id = 12 [(buf.validate.field).string.pattern = "^([0-9a-f]{32})?$"];
+  // transport is how journald received the entry (journal, syslog, stdout, kernel, …).
+  string transport = 13 [(buf.validate.field).string.pattern = "^[a-z_-]{0,32}$"];
+  // facility is the syslog facility (0 kern … 23 local7), if known.
+  optional uint32 facility = 14 [(buf.validate.field).uint32.lte = 23];
+}
+
+// LogSource is where a log entry comes from (KONZEPT §10.1).
+enum LogSource {
+  // LOG_SOURCE_UNSPECIFIED is invalid and must not be sent.
+  LOG_SOURCE_UNSPECIFIED = 0;
+  // LOG_SOURCE_JOURNAL is the systemd journal.
+  LOG_SOURCE_JOURNAL = 1;
+  // LOG_SOURCE_FILE is a log file (classic syslog files, configured globs).
+  LOG_SOURCE_FILE = 2;
+}
+
+// LogSeverity is the syslog priority of an entry, from the most to the least severe.
+enum LogSeverity {
+  // LOG_SEVERITY_UNSPECIFIED: the source does not tell.
+  LOG_SEVERITY_UNSPECIFIED = 0;
+  // LOG_SEVERITY_EMERGENCY is priority 0: the system is unusable.
+  LOG_SEVERITY_EMERGENCY = 1;
+  // LOG_SEVERITY_ALERT is priority 1: act immediately.
+  LOG_SEVERITY_ALERT = 2;
+  // LOG_SEVERITY_CRITICAL is priority 2.
+  LOG_SEVERITY_CRITICAL = 3;
+  // LOG_SEVERITY_ERROR is priority 3.
+  LOG_SEVERITY_ERROR = 4;
+  // LOG_SEVERITY_WARNING is priority 4.
+  LOG_SEVERITY_WARNING = 5;
+  // LOG_SEVERITY_NOTICE is priority 5.
+  LOG_SEVERITY_NOTICE = 6;
+  // LOG_SEVERITY_INFO is priority 6.
+  LOG_SEVERITY_INFO = 7;
+  // LOG_SEVERITY_DEBUG is priority 7.
+  LOG_SEVERITY_DEBUG = 8;
 }

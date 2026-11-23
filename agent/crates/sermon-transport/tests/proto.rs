@@ -170,3 +170,46 @@ fn security_events_roundtrip_in_a_batch() {
     let event = SecurityEvent::decode(future.as_slice()).unwrap();
     assert!(event.event.is_none() && event.occurred_at.is_some());
 }
+
+// Log entries (M3-01): a batch in the session stream; a severity a peer does not know yet decodes
+// as its number and maps to unspecified.
+#[test]
+fn log_entries_roundtrip_in_a_batch() {
+    use sermon_transport::proto::agent::v1::{
+        Batch, LogBatch, LogEntry, LogSeverity, LogSource, batch,
+    };
+
+    let request = SessionRequest {
+        payload: Some(Payload::Batch(Batch {
+            seq: 8,
+            content: Some(batch::Content::Logs(LogBatch {
+                entries: vec![LogEntry {
+                    occurred_at: Some(prost_types::Timestamp {
+                        seconds: 1_795_046_400,
+                        nanos: 1_000,
+                    }),
+                    source: i32::from(LogSource::File),
+                    unit: "nginx".into(),
+                    file: "/var/log/nginx/error.log".into(),
+                    severity: i32::from(LogSeverity::Error),
+                    message: "upstream timed out (110: Connection timed out) – ü".into(),
+                    truncated: false,
+                    identifier: "nginx".into(),
+                    pid: 812,
+                    process: String::new(),
+                    uid: Some(0),
+                    boot_id: String::new(),
+                    transport: String::new(),
+                    facility: Some(3),
+                }],
+            })),
+        })),
+    };
+    let decoded = SessionRequest::decode(request.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded, request);
+
+    // Field 5 (severity) = 42.
+    let future = LogEntry::decode([0x28, 42].as_slice()).unwrap();
+    assert_eq!(future.severity, 42);
+    assert_eq!(future.severity(), LogSeverity::Unspecified);
+}

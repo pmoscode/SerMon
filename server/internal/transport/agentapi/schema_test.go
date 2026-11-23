@@ -274,3 +274,107 @@ func TestSchema_AgentSecurityEventsAreValid(t *testing.T) {
 		t.Errorf("%d kinds of events in the golden batch, want all 11: %v", len(kinds), kinds)
 	}
 }
+
+func logs(list ...*agentv1.LogEntry) *agentv1.SessionRequest {
+	return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: &agentv1.Batch{
+		Seq:     3,
+		Content: &agentv1.Batch_Logs{Logs: &agentv1.LogBatch{Entries: list}},
+	}}}
+}
+
+func journalEntry(message string) *agentv1.LogEntry {
+	return &agentv1.LogEntry{
+		OccurredAt: timestamppb.Now(), Source: agentv1.LogSource_LOG_SOURCE_JOURNAL,
+		Unit: "nginx.service", Identifier: "nginx", Severity: agentv1.LogSeverity_LOG_SEVERITY_ERROR,
+		Message: message, Pid: 812, Process: "nginx", Uid: proto.Uint32(33),
+		BootId: "cc8f81a486f84386b00bc31030b4e1bb", Transport: "stdout", Facility: proto.Uint32(3),
+	}
+}
+
+func withEntry(mutate func(*agentv1.LogEntry)) *agentv1.SessionRequest {
+	e := journalEntry("upstream timed out")
+	mutate(e)
+	return logs(e)
+}
+
+// Log entries (KONZEPT §10.2, M3-01): every text is bounded, files are absolute paths.
+func TestSchema_LogEntries(t *testing.T) {
+	valid := map[string]proto.Message{
+		"journal entry": logs(journalEntry("upstream timed out")),
+		"minimal":       logs(&agentv1.LogEntry{OccurredAt: timestamppb.Now(), Source: agentv1.LogSource_LOG_SOURCE_JOURNAL}),
+		"file entry": withEntry(func(e *agentv1.LogEntry) {
+			e.Source, e.File, e.BootId, e.Transport = agentv1.LogSource_LOG_SOURCE_FILE, "/var/log/nginx/error.log", "", ""
+		}),
+		"longest message": logs(journalEntry(strings.Repeat("ä", 8192))),
+		"markup and ansi": logs(journalEntry("<script>alert(1)</script> \x1b[31mred\x1b[0m")),
+		"kernel facility": withEntry(func(e *agentv1.LogEntry) { e.Facility = proto.Uint32(0) }),
+		"local7":          withEntry(func(e *agentv1.LogEntry) { e.Facility = proto.Uint32(23) }),
+	}
+	for name, msg := range valid {
+		if err := protovalidate.Validate(msg); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	many := make([]*agentv1.LogEntry, 1001)
+	for i := range many {
+		many[i] = journalEntry("x")
+	}
+	invalid := map[string]proto.Message{
+		"no entries":        logs(),
+		"too many":          logs(many...),
+		"no time":           withEntry(func(e *agentv1.LogEntry) { e.OccurredAt = nil }),
+		"no source":         withEntry(func(e *agentv1.LogEntry) { e.Source = agentv1.LogSource_LOG_SOURCE_UNSPECIFIED }),
+		"unknown source":    withEntry(func(e *agentv1.LogEntry) { e.Source = 9 }),
+		"unknown severity":  withEntry(func(e *agentv1.LogEntry) { e.Severity = 9 }),
+		"long message":      logs(journalEntry(strings.Repeat("x", 16385))),
+		"long unit":         withEntry(func(e *agentv1.LogEntry) { e.Unit = strings.Repeat("u", 257) }),
+		"long identifier":   withEntry(func(e *agentv1.LogEntry) { e.Identifier = strings.Repeat("i", 257) }),
+		"long process":      withEntry(func(e *agentv1.LogEntry) { e.Process = strings.Repeat("p", 257) }),
+		"file from journal": withEntry(func(e *agentv1.LogEntry) { e.File = "/var/log/syslog" }),
+		"file without path": withEntry(func(e *agentv1.LogEntry) { e.Source = agentv1.LogSource_LOG_SOURCE_FILE }),
+		"relative file":     withEntry(func(e *agentv1.LogEntry) { e.Source, e.File = agentv1.LogSource_LOG_SOURCE_FILE, "var/log/x" }),
+		"long file": withEntry(func(e *agentv1.LogEntry) {
+			e.Source, e.File = agentv1.LogSource_LOG_SOURCE_FILE, "/"+strings.Repeat("f", 4096)
+		}),
+		"boot id upper case":  withEntry(func(e *agentv1.LogEntry) { e.BootId = "CC8F81A486F84386B00BC31030B4E1BB" }),
+		"boot id with dashes": withEntry(func(e *agentv1.LogEntry) { e.BootId = "cc8f81a4-86f8-4386-b00b-c31030b4e1bb" }),
+		"transport injection": withEntry(func(e *agentv1.LogEntry) { e.Transport = `stdout"}` }),
+		"facility 24":         withEntry(func(e *agentv1.LogEntry) { e.Facility = proto.Uint32(24) }),
+	}
+	for name, msg := range invalid {
+		if err := protovalidate.Validate(msg); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+// What the agent makes of the fixture logs of every distro (agent/crates/sermon-agent/src/logs.rs
+// writes proto/testdata/log_batch.binpb) passes the server's validation.
+func TestSchema_AgentLogEntriesAreValid(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "proto", "testdata", "log_batch.binpb"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch agentv1.LogBatch
+	if err := proto.Unmarshal(raw, &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := protovalidate.Validate(logs(batch.GetEntries()...)); err != nil {
+		t.Fatalf("the agent's log entries are invalid: %v", err)
+	}
+	sources, severities, truncated := map[agentv1.LogSource]bool{}, map[agentv1.LogSeverity]bool{}, false
+	for _, e := range batch.GetEntries() {
+		sources[e.GetSource()] = true
+		severities[e.GetSeverity()] = true
+		truncated = truncated || e.GetTruncated()
+	}
+	if len(sources) != 2 {
+		t.Errorf("sources in the golden batch: %v, want journal and file", sources)
+	}
+	if len(severities) < 5 || !severities[agentv1.LogSeverity_LOG_SEVERITY_UNSPECIFIED] {
+		t.Errorf("severities in the golden batch: %v, want several and unspecified", severities)
+	}
+	if !truncated {
+		t.Error("no truncated entry in the golden batch")
+	}
+}

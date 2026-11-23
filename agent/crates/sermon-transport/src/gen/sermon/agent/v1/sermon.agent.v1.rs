@@ -169,7 +169,7 @@ pub struct Batch {
     #[prost(uint64, tag="1")]
     pub seq: u64,
     /// content is the data; exactly one must be set.
-    #[prost(oneof="batch::Content", tags="2, 3")]
+    #[prost(oneof="batch::Content", tags="2, 3, 4")]
     pub content: ::core::option::Option<batch::Content>,
 }
 /// Nested message and enum types in `Batch`.
@@ -183,6 +183,9 @@ pub mod batch {
         /// security_events are events parsed from the host's logs (KONZEPT §11).
         #[prost(message, tag="3")]
         SecurityEvents(super::SecurityEventBatch),
+        /// logs are log entries of the host, redacted by the agent before sending (KONZEPT §10).
+        #[prost(message, tag="4")]
+        Logs(super::LogBatch),
     }
 }
 /// MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
@@ -453,6 +456,63 @@ pub struct OomKill {
     #[prost(string, tag="2")]
     pub process: ::prost::alloc::string::String,
 }
+/// LogBatch holds log entries of the host (KONZEPT §10.2), redacted by the agent. The agent sends
+/// them only while the server's configuration asks for logs (M3-03), so an older server never
+/// gets one. It bounds a batch to about 256 KiB of messages; the server checks that too (M3-07).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LogBatch {
+    /// entries are in the order the agent read them.
+    #[prost(message, repeated, tag="1")]
+    pub entries: ::prost::alloc::vec::Vec<LogEntry>,
+}
+/// LogEntry is one normalized log entry: {ts, source, unit/file, severity, message, fields}. Every
+/// text comes from the host and is shown as text only; none of it decides anything.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LogEntry {
+    /// occurred_at is the time of the entry on the host (journal: __REALTIME_TIMESTAMP).
+    #[prost(message, optional, tag="1")]
+    pub occurred_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// source is where the entry was read.
+    #[prost(enumeration="LogSource", tag="2")]
+    pub source: i32,
+    /// unit is the systemd unit (_SYSTEMD_UNIT) or, without one, the syslog identifier; empty if
+    /// neither is known. The server bounds how many distinct units a node may have.
+    #[prost(string, tag="3")]
+    pub unit: ::prost::alloc::string::String,
+    /// file is the path of the log file (source LOG_SOURCE_FILE only).
+    #[prost(string, tag="4")]
+    pub file: ::prost::alloc::string::String,
+    /// severity is the syslog priority; unspecified where the source has none.
+    #[prost(enumeration="LogSeverity", tag="5")]
+    pub severity: i32,
+    /// message is the text, after redaction, cut to 16 KiB.
+    #[prost(string, tag="6")]
+    pub message: ::prost::alloc::string::String,
+    /// truncated is set if the message was longer and has been cut.
+    #[prost(bool, tag="7")]
+    pub truncated: bool,
+    /// identifier is the syslog identifier (SYSLOG_IDENTIFIER or the tag of a file line), e.g. sshd.
+    #[prost(string, tag="8")]
+    pub identifier: ::prost::alloc::string::String,
+    /// pid is the sending process; 0 if unknown.
+    #[prost(uint32, tag="9")]
+    pub pid: u32,
+    /// process is the name of the sending process (journal: _COMM).
+    #[prost(string, tag="10")]
+    pub process: ::prost::alloc::string::String,
+    /// uid is the user ID of the sender as journald or the SerMon rsyslog template saw it.
+    #[prost(uint32, optional, tag="11")]
+    pub uid: ::core::option::Option<u32>,
+    /// boot_id is the boot the entry belongs to (journal: _BOOT_ID); empty if unknown.
+    #[prost(string, tag="12")]
+    pub boot_id: ::prost::alloc::string::String,
+    /// transport is how journald received the entry (journal, syslog, stdout, kernel, …).
+    #[prost(string, tag="13")]
+    pub transport: ::prost::alloc::string::String,
+    /// facility is the syslog facility (0 kern … 23 local7), if known.
+    #[prost(uint32, optional, tag="14")]
+    pub facility: ::core::option::Option<u32>,
+}
 /// SecuritySource is where the agent finds the log lines for security events (ADR 0025).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -578,6 +638,96 @@ impl SshAuthMethod {
             "SSH_AUTH_METHOD_GSSAPI" => Some(Self::Gssapi),
             "SSH_AUTH_METHOD_NONE" => Some(Self::None),
             "SSH_AUTH_METHOD_OTHER" => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+/// LogSource is where a log entry comes from (KONZEPT §10.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LogSource {
+    /// LOG_SOURCE_UNSPECIFIED is invalid and must not be sent.
+    Unspecified = 0,
+    /// LOG_SOURCE_JOURNAL is the systemd journal.
+    Journal = 1,
+    /// LOG_SOURCE_FILE is a log file (classic syslog files, configured globs).
+    File = 2,
+}
+impl LogSource {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "LOG_SOURCE_UNSPECIFIED",
+            Self::Journal => "LOG_SOURCE_JOURNAL",
+            Self::File => "LOG_SOURCE_FILE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LOG_SOURCE_UNSPECIFIED" => Some(Self::Unspecified),
+            "LOG_SOURCE_JOURNAL" => Some(Self::Journal),
+            "LOG_SOURCE_FILE" => Some(Self::File),
+            _ => None,
+        }
+    }
+}
+/// LogSeverity is the syslog priority of an entry, from the most to the least severe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LogSeverity {
+    /// LOG_SEVERITY_UNSPECIFIED: the source does not tell.
+    Unspecified = 0,
+    /// LOG_SEVERITY_EMERGENCY is priority 0: the system is unusable.
+    Emergency = 1,
+    /// LOG_SEVERITY_ALERT is priority 1: act immediately.
+    Alert = 2,
+    /// LOG_SEVERITY_CRITICAL is priority 2.
+    Critical = 3,
+    /// LOG_SEVERITY_ERROR is priority 3.
+    Error = 4,
+    /// LOG_SEVERITY_WARNING is priority 4.
+    Warning = 5,
+    /// LOG_SEVERITY_NOTICE is priority 5.
+    Notice = 6,
+    /// LOG_SEVERITY_INFO is priority 6.
+    Info = 7,
+    /// LOG_SEVERITY_DEBUG is priority 7.
+    Debug = 8,
+}
+impl LogSeverity {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "LOG_SEVERITY_UNSPECIFIED",
+            Self::Emergency => "LOG_SEVERITY_EMERGENCY",
+            Self::Alert => "LOG_SEVERITY_ALERT",
+            Self::Critical => "LOG_SEVERITY_CRITICAL",
+            Self::Error => "LOG_SEVERITY_ERROR",
+            Self::Warning => "LOG_SEVERITY_WARNING",
+            Self::Notice => "LOG_SEVERITY_NOTICE",
+            Self::Info => "LOG_SEVERITY_INFO",
+            Self::Debug => "LOG_SEVERITY_DEBUG",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LOG_SEVERITY_UNSPECIFIED" => Some(Self::Unspecified),
+            "LOG_SEVERITY_EMERGENCY" => Some(Self::Emergency),
+            "LOG_SEVERITY_ALERT" => Some(Self::Alert),
+            "LOG_SEVERITY_CRITICAL" => Some(Self::Critical),
+            "LOG_SEVERITY_ERROR" => Some(Self::Error),
+            "LOG_SEVERITY_WARNING" => Some(Self::Warning),
+            "LOG_SEVERITY_NOTICE" => Some(Self::Notice),
+            "LOG_SEVERITY_INFO" => Some(Self::Info),
+            "LOG_SEVERITY_DEBUG" => Some(Self::Debug),
             _ => None,
         }
     }

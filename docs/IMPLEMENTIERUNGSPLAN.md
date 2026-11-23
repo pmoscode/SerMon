@@ -2659,7 +2659,34 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M2-05, M2-20
 - **Skill:** `sermon-proto-change`
 
-#### ☐ M3-02 – Redaction im Agent · A · M 🔒
+#### ☑ M3-02 – Redaction im Agent · A · M 🔒
+> Erledigt (KONZEPT §10.3; Threat Model T42, T53):
+> - **`sermon-security::redact::Redactor`:** erst die Standardregeln, dann die der Org; `Cow` bleibt geliehen, wenn
+>   nichts gefunden wurde. `redact()` (nur Standardregeln) bleibt für die Stellen ohne Konfiguration.
+> - **Neue Standardregeln:**
+>   - Schlüssel in JSON und mit Bindestrich-Präfix
+>   - private Schlüsselblöcke, auch gekürzt, und Base64-Zeilen in der Länge einer Schlüsselzeile (journald schreibt
+>     einen Schlüssel Zeile für Zeile)
+>   - JWTs, GitHub- und Slack-Tokens, Enrollment-Tokens ohne Schlüssel davor
+> - **Regeln der Org** (`RuleSpec`): höchstens 32, Muster bis 1 KiB, kompiliert bis 1 MiB (das `regex`-Crate allein
+>   erlaubte 10 MiB); Fehler mit Position und Grund (`RuleError`). Ersetzt wird der ganze Treffer oder nur die Gruppe
+>   `secret`; leere Treffer und eine nicht beteiligte Gruppe `secret` ändern nichts.
+> - **Grenzen:** `LogRecord::redact_with` kürzt nach der Redaction erneut auf 16 KiB und setzt `truncated`.
+> - **sudo:** `Parser::set_redactor` wendet die Regeln der Org auch auf `sudo.command` an (offen aus M2-06).
+> - **Abweichung:** Die Selbst-Metrik „redigierte Einträge“ kommt mit dem Versand (M3-04); vorher gäbe es nichts zu
+>   zählen.
+> - **Messung** (Release, Apple M-Serie, Standardregeln und zwei Regeln der Org): 531 ns pro Zeile, bei 500 Zeilen/s
+>   rund 0,03 % eines Kerns.
+> - **Tests:**
+>   - Tabelle mit 23 Fällen (Geheimnisse und Gegenbeispiele) und Schlüsselblöcke
+>   - Regeln der Org: Treffer, Gruppe `secret`, leere und optionale Treffer; Zurückweisung (Anzahl, leer, Länge,
+>     Syntax, Rückverweise und Look-around, kompilierte Größe)
+>   - Proptests: Ein eingebettetes Geheimnis überlebt nie (13 Schlüssel, 6 Trenner), auch nicht als Flag, Header,
+>     URL oder im Schlüsselblock; Prosa ohne Geheimnis bleibt unverändert; Regeln ohne Panic
+>   - Fuzz-Ziel `redaction` mit Regeln aus der Eingabe (120 s, 115 000 Läufe ohne Fund, Korpus aus den Fixtures;
+>     `just fuzz-agent`, nightly)
+>   - Gegenproben für 14 Prüfungen. Eine überlebte zuerst: die Größengrenze, weil das Testmuster auch an der
+>     Grenze des Crates scheiterte; jetzt mit `\w{100}`.
 - **Ziel:** KONZEPT §10.3.
   - **Eingebaute Regeln:** `password=`, `passwd`, `secret`, `token` als Schlüssel-Wert, `Authorization: Bearer|Basic`,
     AWS-Access-Keys, private Schlüsselblöcke, Connection-Strings mit Passwort, Enrollment-Tokens (`sme_…`). Treffer

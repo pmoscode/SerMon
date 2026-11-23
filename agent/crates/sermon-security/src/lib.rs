@@ -12,14 +12,14 @@
 //! - Patterns use the `regex` crate: linear time on any input.
 //! - Raw lines never become event fields; the sudo command (off by default) is redacted.
 
-mod redact;
+pub mod redact;
 
 use std::net::IpAddr;
 use std::sync::LazyLock;
 
 use regex::Regex;
 
-pub use redact::redact;
+pub use redact::{Redactor, RuleSpec, redact};
 
 /// Longest user name kept (user names in failed logins are attacker-controlled).
 pub const MAX_USER_BYTES: usize = 128;
@@ -303,6 +303,7 @@ pub struct ParserConfig {
 #[derive(Debug)]
 pub struct Parser {
     config: ParserConfig,
+    redactor: Redactor,
     boot: Option<(String, Option<u64>)>,
     sudo_pam: bool,
 }
@@ -314,9 +315,16 @@ impl Parser {
     pub fn new(config: ParserConfig, last_boot: Option<(String, Option<u64>)>) -> Self {
         Self {
             config,
+            redactor: Redactor::builtin(),
             boot: last_boot,
             sudo_pam: false,
         }
+    }
+
+    /// Redacts sudo commands with `redactor` (the rules of the organization, M3-02) instead of
+    /// only the built-in patterns.
+    pub fn set_redactor(&mut self, redactor: Redactor) {
+        self.redactor = redactor;
     }
 
     /// Appends the events of `line` to `out`.
@@ -331,7 +339,7 @@ impl Parser {
             _ if kernel => oom(line.message),
             Some("sshd" | "sshd-session" | "sshd-auth") => ssh(line.message),
             Some("sudo") => {
-                let kind = sudo(line.message, self.config, self.sudo_pam);
+                let kind = sudo(line.message, self.config, &self.redactor, self.sudo_pam);
                 if verified && matches!(kind, Some((_, Pam::Yes))) {
                     self.sudo_pam = true;
                 }
@@ -499,7 +507,12 @@ fn sudo_target(message: &str, target: &str) -> String {
     cut(target.to_owned(), MAX_USER_BYTES)
 }
 
-fn sudo(message: &str, config: ParserConfig, pam_seen: bool) -> Option<(EventKind, Pam)> {
+fn sudo(
+    message: &str,
+    config: ParserConfig,
+    redactor: &Redactor,
+    pam_seen: bool,
+) -> Option<(EventKind, Pam)> {
     if let Some(c) = SUDO_AUTH.captures(message) {
         let kind = EventKind::SudoAuthFailed {
             user: cut(c["user"].to_owned(), MAX_USER_BYTES),
@@ -530,7 +543,10 @@ fn sudo(message: &str, config: ParserConfig, pam_seen: bool) -> Option<(EventKin
             user: cut(c["user"].to_owned(), MAX_USER_BYTES),
             target: sudo_target(message, &c["target"]),
             tty: tty(c.name("tty").map(|t| t.as_str())),
-            command: cut(redact(&c["command"]), MAX_COMMAND_BYTES),
+            command: cut(
+                redactor.redact(&c["command"]).into_owned(),
+                MAX_COMMAND_BYTES,
+            ),
         };
         return Some((kind, Pam::No));
     }
@@ -1125,6 +1141,29 @@ mod tests {
             &mut off,
         );
         assert!(off.is_empty(), "commands are off by default");
+        // The rules of the organization apply to commands too (M3-02).
+        let mut parser = Parser::new(
+            ParserConfig {
+                sudo_commands: true,
+            },
+            None,
+        );
+        parser.set_redactor(
+            Redactor::with_rules(&[RuleSpec {
+                pattern: r"--customer=(?P<secret>\d+)".into(),
+            }])
+            .unwrap(),
+        );
+        let mut ruled = Vec::new();
+        parser.parse(
+            &sudo("  alice : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/opt/export --customer=4711 --password=x"),
+            &mut ruled,
+        );
+        assert!(
+            matches!(ruled.as_slice(), [SecurityEvent { kind: EventKind::SudoCommand { command, .. }, .. }]
+                if command == "/opt/export --customer=*** --password=***"),
+            "{ruled:?}"
+        );
         // The user chooses the working directory, and sudo doesn't escape " ; " in it: a second
         // "USER=" makes the target unknown instead of the one the user planted (M2-28).
         assert_eq!(

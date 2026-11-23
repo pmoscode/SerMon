@@ -1,5 +1,5 @@
-# Fuzzing of the agent's parsers of untrusted input (KONZEPT §18.5): /proc texts and WAL
-# recovery with cargo-fuzz. A short run on agent changes catches broken targets, the nightly run
+# Fuzzing of the agent's parsers of untrusted input (KONZEPT §18.5): /proc texts, journal lines,
+# security events, redaction and WAL recovery with cargo-fuzz. A short run on agent changes catches broken targets, the nightly run
 # fuzzes five minutes per target; crashes are uploaded as artifacts.
 name: fuzz
 

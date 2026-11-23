@@ -5,6 +5,7 @@
 //! bounds of the protocol (`LogEntry` in `agent.proto`), so a batch never fails the server's
 //! validation: texts are cut, values of the wrong shape are dropped.
 
+use std::borrow::Cow;
 use std::path::Path;
 
 use crate::file::{Record, Sender};
@@ -161,6 +162,22 @@ impl LogRecord {
         }
     }
 
+    /// Replaces the message with `redact(message)`, cut to [`MAX_MESSAGE_BYTES`] again: a mask can
+    /// be longer than what it replaces.
+    pub fn redact_with<F>(&mut self, redact: F)
+    where
+        F: for<'a> FnOnce(&'a str) -> Cow<'a, str>,
+    {
+        let redacted = match redact(&self.message) {
+            Cow::Borrowed(same) if std::ptr::eq(same, self.message.as_str()) => return,
+            other => other.into_owned(),
+        };
+        let kept = cut(&redacted, MAX_MESSAGE_BYTES).len();
+        self.truncated |= kept < redacted.len();
+        self.message = redacted;
+        self.message.truncate(kept);
+    }
+
     /// What the record counts against [`MAX_BATCH_BYTES`]: its texts plus a fixed share for the
     /// other fields.
     #[must_use]
@@ -242,6 +259,8 @@ fn cut(text: &str, max: usize) -> &str {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+
+    use std::borrow::Cow;
 
     use proptest::prelude::*;
 
@@ -505,6 +524,32 @@ mod tests {
         in_file.origin = Origin::File("/var/log/nginx/error.log".into());
         assert_eq!(in_file.size() - small.size(), 24);
         assert!(small.size() > 2 + 13 + 5, "a share for the other fields");
+    }
+
+    #[test]
+    fn redaction_keeps_the_message_within_its_bound() {
+        let mut grown = record(&"a".repeat(MAX_MESSAGE_BYTES));
+        grown.redact_with(|text: &str| Cow::Owned(text.replace('a', "***")));
+        assert!(grown.truncated, "cut again after the redaction");
+        assert_eq!(grown.message.len(), MAX_MESSAGE_BYTES);
+        assert!(grown.message.bytes().all(|b| b == b'*'));
+
+        let mut short = record("password=x");
+        short.redact_with(|_: &str| Cow::Borrowed("password=***"));
+        assert_eq!(short.message, "password=***");
+        assert!(!short.truncated);
+
+        let mut untouched = record("nothing");
+        untouched.redact_with(|text: &str| Cow::Borrowed(text));
+        assert_eq!(
+            (untouched.message.as_str(), untouched.truncated),
+            ("nothing", false)
+        );
+
+        // Only the message: units and identifiers are names, not texts.
+        let mut named = record("x");
+        named.redact_with(|_: &str| Cow::Borrowed("y"));
+        assert_eq!(named.unit.as_deref(), Some("nginx.service"));
     }
 
     #[test]

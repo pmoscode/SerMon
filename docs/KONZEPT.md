@@ -567,10 +567,21 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 
 ### 10.3 Redaction (im Agent, vor dem Versand)
 
-- Standardregeln für Muster wie `password=`, `passwd`, `secret`, `token`, `Authorization: Bearer …`, AWS-Keys, private
-  Schlüsselblöcke und Connection-Strings mit Passwort.
-- Zusätzliche Regeln pro Org konfigurierbar (Regex mit Ersatz `***`). Regeln werden **kompiliert und getestet**, bevor
-  der Server sie verteilt; ReDoS-sicher durch die Rust-`regex`-Crate (lineare Laufzeit).
+- **Standardregeln** (M3-02, `sermon-security::redact`):
+  - Schlüssel-Wert-Paare wie `password=`, `passwd`, `secret`, `token`, `api_key` (auch mit Präfix wie `DB_PASSWORD`,
+    in JSON und als `--password wert`)
+  - `Authorization: Bearer|Basic …` und Passwörter in URLs bzw. Connection-Strings
+  - private Schlüsselblöcke, auch gekürzt; eine Zeile nur aus Base64 in der Länge einer Schlüsselzeile (journald
+    schreibt einen Schlüssel Zeile für Zeile)
+  - Tokens, die man ohne Schlüssel davor erkennt: AWS-Access-Keys, JWTs, GitHub- und Slack-Tokens,
+    Enrollment-Tokens (`sme_…`)
+- **Regeln pro Org:** Regex mit Ersatz `***`. Hat die Regex eine Gruppe `secret`, wird nur diese ersetzt, sonst der
+  ganze Treffer; leere Treffer ändern nichts. Höchstens 32 Regeln mit je 1 KiB Muster und 1 MiB kompilierter Größe.
+  Regeln werden **kompiliert und getestet**, bevor der Server sie verteilt; ReDoS-sicher durch die Rust-`regex`-Crate
+  (lineare Laufzeit).
+- **Reihenfolge und Grenzen:** erst die Standardregeln, dann die der Org. Ein `***` kann länger sein als der Treffer;
+  die Nachricht wird danach erneut auf 16 KiB gekürzt. Dieselbe Redaction gilt für Logs, `sudo.command` und
+  Kommandozeilen der Live-Ansicht.
 
 ### 10.4 Log-UI
 

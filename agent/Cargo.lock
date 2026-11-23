@@ -1340,6 +1340,7 @@ dependencies = [
  "proptest",
  "regex",
  "sermon-logs",
+ "thiserror",
 ]
 
 [[package]]

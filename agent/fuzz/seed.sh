@@ -28,3 +28,10 @@ for file in ../fixtures/logs/*/journal-security*.jsonl ../fixtures/logs/*/journa
   { printf '\001'; cat "corpus/security_parser/messages$name.txt"; } >"corpus/security_parser/fixture$name"
   rm "corpus/security_parser/messages$name.txt"
 done
+# redaction: the same messages without rules, and with a rule that has a secret group.
+mkdir -p corpus/redaction
+for file in corpus/security_parser/fixture*; do
+  name=$(basename "$file")
+  { printf '\000'; tail -c +2 "$file"; } >"corpus/redaction/$name"
+  { printf '\001'; printf 'pin=(?P<secret>[0-9]+)\000'; tail -c +2 "$file"; } >"corpus/redaction/rule$name"
+done

@@ -5,10 +5,10 @@ name: fuzz
 
 on:
   pull_request:
-    paths: ["agent/**", ".github/workflows/fuzz.yml"]
+    paths: ["agent/**", ".github/workflows/fuzz.yml", "justfile"]
   push:
     branches: [main]
-    paths: ["agent/**", ".github/workflows/fuzz.yml"]
+    paths: ["agent/**", ".github/workflows/fuzz.yml", "justfile"]
   schedule:
     - cron: "47 2 * * *" # nightly, 02:47 UTC
   workflow_dispatch:

@@ -63,3 +63,33 @@ test('the log explorer loads less than 200 KiB of JavaScript', async ({ page }) 
 	expect(size).toBeLessThan(BUDGET);
 	expect(size, 'headroom of the log explorer (M2-34)').toBeLessThan(HEADROOM);
 });
+
+test('the process tab loads on demand and keeps the node page within the budget', async ({
+	page
+}) => {
+	await mockApi(page, {
+		...installed(true),
+		'NodeService/GetNode': () => ({
+			json: { node: { id: 'n1', hostname: 'web-01', online: true } }
+		}),
+		'NodeService/ListFilesystems': () => ({ json: {} }),
+		'MetricsService/QueryMetrics': () => ({ json: {} })
+	});
+	// The stream stays open: the tab shows that it waits for the first snapshot.
+	await page.route(/LiveViewService\/WatchProcesses$/, () => {});
+	const first = await firstLoadJs(page, '/nodes/0193f5a0-0000-7000-8000-000000000001');
+	const sizes = new Map<string, number>();
+	page.on('response', async (response) => {
+		if (response.url().endsWith('.js'))
+			sizes.set(response.url(), gzipSync(await response.body()).length);
+	});
+	await page.getByRole('tab', { name: 'Processes (live)' }).click();
+	await expect(page.getByText('Connecting to the agent …')).toBeVisible();
+	await page.waitForLoadState('networkidle');
+	const tab = [...sizes.values()].reduce((a, b) => a + b, 0);
+	console.log(
+		`node: ${(first / 1024).toFixed(1)} KiB gzip, process tab +${(tab / 1024).toFixed(1)} KiB`
+	);
+	expect(tab, 'the process tab is not part of the first load').toBeGreaterThan(0);
+	expect(first + tab).toBeLessThan(BUDGET);
+});

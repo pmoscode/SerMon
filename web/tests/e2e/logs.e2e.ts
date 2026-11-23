@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { installed, mockApi, type Handler } from './api';
+import { envelopes, installed, mockApi, type Handler } from './api';
 import { expect, test } from './fixtures';
 
 const web01 = '0193f5a0-0000-7000-8000-000000000001';
@@ -61,18 +61,6 @@ function logApi(queries: unknown[] = []): Record<string, Handler> {
 			json: { lines: [line(9000, 'before the entry'), line(1000, hostile), line(500, 'after it')] }
 		})
 	};
-}
-
-/** A Connect stream: enveloped JSON messages, then the end of the stream. */
-function envelopes(...messages: unknown[]): Buffer {
-	const frame = (flags: number, json: unknown) => {
-		const body = Buffer.from(JSON.stringify(json));
-		const head = Buffer.alloc(5);
-		head.writeUInt8(flags, 0);
-		head.writeUInt32BE(body.length, 1);
-		return Buffer.concat([head, body]);
-	};
-	return Buffer.concat([...messages.map((m) => frame(0, m)), frame(2, {})]);
 }
 
 async function tailWith(page: Page, ...messages: unknown[]) {

@@ -6,6 +6,10 @@ What the agents send as logs, who may see them and what is redacted before. Admi
 
 Logs and security events contain personal data (user names, addresses). With the switch, viewers no longer see them; operators and admins still do. It applies from the next request of every session; running live views end.
 
+## Command lines in the live view
+
+Command lines can contain secrets, even though the redaction replaces the known patterns. When hidden, the agents no longer send them and the server removes them as well. Open live views reconnect within 30 seconds and then show "hidden". The change is in the audit log.
+
 ## Per group
 
 - **Send logs:** off means the group's agents send no logs. Security events still come.

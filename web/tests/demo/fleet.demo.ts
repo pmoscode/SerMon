@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../e2e/fixtures';
 import {
 	PASSWORD,
@@ -333,6 +334,48 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	expect(secret?.cmdline).toContain('password=***');
 	expect(JSON.stringify(live.processes)).not.toContain('hunter2');
 	expect(live.processes.some((p) => p.pid === 1 && p.user === 'root')).toBe(true);
+	// The process tab of the node page against the real agent (M3-15): the agent as sermon, a
+	// secret in a command line redacted in the details, axe with real data.
+	exec(
+		liveHost.service,
+		`systemd-run --quiet --unit=e2e-secret-ui sh -c 'sleep 120; echo password=hunter2'`
+	);
+	await page.goto(`/nodes/${liveNode}`);
+	await page.getByRole('tab', { name: 'Processes (live)' }).click();
+	const procs = page.getByRole('region', { name: 'Processes' });
+	await expect(procs.getByRole('button', { name: /^Details of sermon-agent, PID/ })).toBeVisible({
+		timeout: 30_000
+	});
+	await expect(page.getByText('Live, updated every 2 seconds')).toBeVisible();
+	await page.getByLabel('User').selectOption('sermon');
+	await expect(procs.getByRole('button', { name: /^Details of sermon-agent, PID/ })).toBeVisible();
+	await page.getByLabel('User').selectOption('');
+	await page.getByLabel('Regex').fill('password=');
+	await procs.getByRole('button', { name: /^Details of sh, PID/ }).click();
+	const details = page.getByRole('dialog');
+	await expect(details.locator('pre')).toContainText('password=***');
+	await expect(details.getByText('e2e-secret-ui.service')).toBeVisible();
+	await expect(page.getByText('hunter2')).toHaveCount(0);
+	expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual(
+		[]
+	);
+	await page.screenshot({ path: 'test-results/demo-process-details.png' });
+	await page.keyboard.press('Escape');
+	await page.getByLabel('Regex').fill('');
+	await page.getByLabel('Tree view').check();
+	// From the second snapshot on, the agent measures the CPU shares.
+	const agentRow = procs.locator('tr', {
+		has: page.getByRole('button', { name: /^Details of sermon-agent, PID/ })
+	});
+	await expect(agentRow.locator('td').nth(4)).toHaveText(/\d\s?%/, { timeout: 10_000 });
+	await expect(
+		page
+			.getByRole('region', { name: 'Overview of the host' })
+			.getByText(/\d\s?%/)
+			.first()
+	).toBeVisible();
+	expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+	await page.screenshot({ path: 'test-results/demo-processes.png', fullPage: true });
 	await Promise.all(load);
 	// The agents shipped the load lines, redacted (their own metrics, M3-04).
 	for (const host of budgetHosts) {

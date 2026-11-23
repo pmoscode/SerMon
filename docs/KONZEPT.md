@@ -541,8 +541,12 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
       Nachtrag M3-14).
 - **Inhalt:** Prozessliste mit PID, PPID, User, Status, CPU %, MEM % / RSS, Threads, Laufzeit, Befehlszeile (gekürzt);
   Kopfzeile mit CPU, Mem, Swap, Load und Uptime (wie `top`).
-- **Bedienung:** Sortieren, Filtern (User, Name, Regex), Baumansicht (pstree), Pause; Detail-Drawer pro Prozess
-  (vollständige cmdline, cgroup/Unit, Container-Zuordnung, offene FDs, falls lesbar).
+- **Bedienung** (M3-15, Reiter „Prozesse (Live)“ der Node-Seite; der Stream läuft nur, solange er offen ist):
+    - Sortieren, Filtern (User, Name, Regex; im Browser, eine ungültige Regex wird angezeigt), Baumansicht (pstree)
+      und Pause, bei der die Daten im Hintergrund weiterlaufen.
+    - Detail-Drawer pro Prozess: vollständige, redigierte Befehlszeile, Elternprozess, systemd-Unit und Container.
+      Offene FDs liest der Agent nicht (siehe Rechte-Hinweis).
+    - Alle Texte des Hosts erscheinen nur als Text; Steuer- und Bidi-Zeichen werden markiert (wie im Log-Explorer).
 - **Nur lesen.** Es gibt keine Kill- oder Restart-Aktionen (D19).
 - **Datenschutz:** Kommandozeilen können Secrets enthalten. Die agentseitige **Redaction** (§10.3) gilt auch hier;
   zusätzlich kann pro Org „cmdline ausblenden“ aktiviert werden (Admin mit Step-up, im Audit-Log). Der Agent sendet die

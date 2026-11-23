@@ -71,6 +71,7 @@
 				<Tabs.Trigger value="memory">{m.node_tab_memory()}</Tabs.Trigger>
 				<Tabs.Trigger value="disk">{m.node_tab_disk()}</Tabs.Trigger>
 				<Tabs.Trigger value="network">{m.node_tab_network()}</Tabs.Trigger>
+				<Tabs.Trigger value="processes">{m.node_tab_processes()}</Tabs.Trigger>
 				<Tabs.Trigger value="logs">{m.node_tab_logs()}</Tabs.Trigger>
 				<Tabs.Trigger value="identity">{m.node_tab_identity()}</Tabs.Trigger>
 			</Tabs.List>
@@ -243,6 +244,16 @@
 						queries={[{ metric: 'sermon_conntrack_utilization_ratio' }]}
 					/>
 				</div>
+			</Tabs.Content>
+			<!-- Loaded and streamed only while open: the agent sends processes only on demand (KONZEPT §9). -->
+			<Tabs.Content value="processes" class="pt-4">
+				{#if tab === 'processes'}
+					{#await import('#lib/components/processes/ProcessView.svelte')}
+						<p role="status" class="text-muted-foreground">{m.loading()}</p>
+					{:then { default: ProcessView }}
+						<ProcessView nodeId={id} />
+					{/await}
+				{/if}
 			</Tabs.Content>
 			<!-- Loaded on demand: keeps the first load of the page within its budget (KONZEPT §17). -->
 			<Tabs.Content value="logs" class="flex flex-col gap-3 pt-4">

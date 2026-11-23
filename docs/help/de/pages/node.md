@@ -1,6 +1,6 @@
 # Node
 
-Alles zu einem Server: Kopfzeile mit Host-Fakten und aktuellen Kennzahlen, darunter Charts nach Bereichen (CPU, Speicher, Datenträger, Netzwerk, Identität).
+Alles zu einem Server: Kopfzeile mit Host-Fakten und aktuellen Kennzahlen, darunter Charts nach Bereichen (CPU, Speicher, Datenträger, Netzwerk, Prozesse, Logs, Identität).
 
 ## So liest du die Seite
 
@@ -9,6 +9,7 @@ Alles zu einem Server: Kopfzeile mit Host-Fakten und aktuellen Kennzahlen, darun
 - Die Tabelle der Dateisysteme zeigt, wann ein Dateisystem bei gleichem Trend voll ist (lineare Regression über 24 Stunden). „Nicht absehbar“ heißt: kein Wachstum oder erst in über einem Jahr.
 - Im Bereich Netzwerk lassen sich die Raten in bit/s statt Byte/s anzeigen.
 - Ein Hinweis unter dem Namen erscheint, wenn der Node keine Security-Events liefern kann oder sie nur unverifiziert aus einer Logdatei kommen – mehr unter [Quelle der Security-Events](help:concepts/security-source).
+- Der Reiter **Prozesse (Live)** zeigt die Prozesse wie in `top`, alle 2 Sekunden neu – sortierbar, mit Filtern, als Baum und mit Details pro Prozess. Er läuft nur, solange er offen ist; mehr unter [Live-Ansicht der Prozesse](help:concepts/live-view).
 - Der Reiter Identität zeigt, ob der Node gesperrt ist, seine letzte Adresse und ein offenes Übernahmefenster; Operatoren rotieren, widerrufen und entsperren dort den Schlüssel oder erlauben die Übernahme nach einer Neuinstallation – mehr unter [Identität des Nodes](help:concepts/node-identity).
 
 ## Typische nächste Schritte

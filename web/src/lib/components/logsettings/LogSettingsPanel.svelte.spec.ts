@@ -99,6 +99,29 @@ describe('LogSettingsPanel', () => {
 		expect(load).toHaveBeenCalledTimes(2);
 	});
 
+	it('hides the command lines of the live view after a step-up', async () => {
+		const hidden = settings();
+		hidden.hideCommandLines = true;
+		vi.spyOn(adminApi.logSettings, 'getLogSettings')
+			.mockResolvedValueOnce(settings())
+			.mockResolvedValueOnce(hidden);
+		const set = vi
+			.spyOn(adminApi.logSettings, 'setLiveViewCommandLines')
+			.mockRejectedValueOnce(stepUpError())
+			.mockResolvedValueOnce({} as never);
+		render(LogSettingsPanel);
+		await expect
+			.element(page.getByText('Command lines are shown, with secrets replaced.'))
+			.toBeVisible();
+		await page.getByRole('button', { name: 'Hide command lines' }).click();
+		await vi.waitFor(() => expect(stepUpState.open).toBe(true));
+		stepUpState.finish(true);
+		await expect.element(page.getByText('Command lines are hidden.')).toBeVisible();
+		await expect.element(page.getByRole('button', { name: 'Show command lines' })).toBeVisible();
+		expect(set).toHaveBeenCalledTimes(2);
+		expect(set.mock.calls[1][0]).toEqual({ hideCommandLines: true });
+	});
+
 	it('edits a group and refuses what the agent would not take', async () => {
 		vi.spyOn(adminApi.logSettings, 'getLogSettings').mockResolvedValue(settings());
 		const save = vi

@@ -45,3 +45,15 @@ export function installed(loggedIn: boolean): Record<string, Handler> {
 		'FleetService/GetFleetSummary': () => ({ json: {} })
 	};
 }
+
+/** A Connect stream: enveloped JSON messages, then the end of the stream. */
+export function envelopes(...messages: unknown[]): Buffer {
+	const frame = (flags: number, json: unknown) => {
+		const body = Buffer.from(JSON.stringify(json));
+		const head = Buffer.alloc(5);
+		head.writeUInt8(flags, 0);
+		head.writeUInt32BE(body.length, 1);
+		return Buffer.concat([head, body]);
+	};
+	return Buffer.concat([...messages.map((m) => frame(0, m)), frame(2, {})]);
+}

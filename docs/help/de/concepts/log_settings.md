@@ -6,6 +6,10 @@ Was die Agents an Logs senden, wer sie sehen darf und was vorher geschwärzt wir
 
 Logs und Security-Events enthalten personenbezogene Daten (User-Namen, Adressen). Mit dem Schalter sehen Viewer sie nicht mehr; Operatoren und Admins schon. Er gilt ab der nächsten Anfrage jeder Sitzung, laufende Live-Ansichten enden.
 
+## Befehlszeilen in der Live-Ansicht
+
+Befehlszeilen können Secrets enthalten, auch wenn die Redaction die bekannten Muster ersetzt. Ausgeblendet schicken die Agents sie nicht mehr, und der Server entfernt sie zusätzlich. Offene Live-Ansichten verbinden sich innerhalb von 30 Sekunden neu und zeigen dann „ausgeblendet“. Die Änderung steht im Audit-Log.
+
 ## Pro Gruppe
 
 - **Logs senden:** aus heißt, die Agents der Gruppe senden keine Logs. Security-Events kommen weiter.

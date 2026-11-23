@@ -62,6 +62,14 @@
 		busy = false;
 	}
 
+	async function setCommandLines(hide: boolean) {
+		busy = true;
+		failure = await change(() =>
+			adminApi.logSettings.setLiveViewCommandLines({ hideCommandLines: hide })
+		);
+		busy = false;
+	}
+
 	async function saveGroup(
 		group: GroupLogSettings,
 		settings: MessageInitShape<typeof LogSettingsSchema>
@@ -138,6 +146,23 @@
 				onclick={() => setViewers(!data!.viewersSeeLogs)}
 			>
 				{data.viewersSeeLogs ? m.logsettings_viewers_disable() : m.logsettings_viewers_enable()}
+			</Button>
+		</section>
+
+		<section class="flex flex-col gap-2" aria-labelledby="cmdline-title">
+			<h2 id="cmdline-title" class="text-lg font-medium">{m.logsettings_cmdline_title()}</h2>
+			<p class="text-sm text-muted-foreground">{m.logsettings_cmdline_text()}</p>
+			<p class="text-sm" role="status">
+				{data.hideCommandLines ? m.logsettings_cmdline_hidden() : m.logsettings_cmdline_shown()}
+			</p>
+			<Button
+				class="self-start"
+				variant="outline"
+				size="sm"
+				disabled={busy}
+				onclick={() => setCommandLines(!data!.hideCommandLines)}
+			>
+				{data.hideCommandLines ? m.logsettings_cmdline_show() : m.logsettings_cmdline_hide()}
 			</Button>
 		</section>
 

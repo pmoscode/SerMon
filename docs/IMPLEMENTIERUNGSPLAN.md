@@ -3285,7 +3285,36 @@ Konfiguration) und M3-06 (Loki).
   - Das Veto des Agents erreicht die UI; Schalter für die Befehlszeile
 - **Abhängig von:** M3-13, M1-26
 
-#### ☐ M3-15 – Prozess-Ansicht in der UI · W · M
+#### ☑ M3-15 – Prozess-Ansicht in der UI · W · M
+> Erledigt (KONZEPT §9; Threat Model T19, T42):
+> - **Reiter „Prozesse (Live)“** der Node-Seite: lädt erst beim Öffnen und hält den Stream nur, solange er offen
+>   ist (`ProcessViewState`). Nach dem normalen Ende (15 min, Schalter) verbindet er sich sofort neu, nach Ausfällen
+>   mit Backoff; eine Ablehnung des Agents und fehlende Rechte beenden ihn mit einer Meldung, „offline“ lässt den
+>   letzten Stand stehen.
+> - **Kopfzeile** wie bei `top` (CPU, Speicher, Swap, Load, Uptime, Prozesse je Zustand, Stand) mit ⓘ; der Hinweis
+>   auf Prozesse über der Grenze von 4 000.
+> - **Tabelle:** virtualisiert mit fester Zeilenhöhe (natives `<table>`, Kopf mit `aria-sort`), Sortierung über
+>   alle Spalten, nicht Lesbares („n/a“) immer am Ende. Filter im Browser nach User, Name und Regex; eine ungültige
+>   oder zu lange Regex (über 200 Zeichen) wird angezeigt und filtert nicht. Baumansicht aus der PPID: fehlende
+>   Eltern werden Wurzeln, Zyklen brechen an der kleinsten PID, die Eltern eines Treffers erscheinen als Kontext.
+>   Pause hält die Anzeige, die Daten laufen weiter.
+> - **Detail-Drawer:** vollständige, redigierte Befehlszeile (gekürzt oder ausgeblendet mit Hinweis), Elternprozess,
+>   User mit UID, Zustand, Unit, Container; „n/a“ mit ⓘ (`concepts/process-na`). Endet der Prozess, bleibt sein
+>   letzter Stand mit Hinweis. Keine Aktionen (D19).
+> - Texte des Hosts nur als Text, Steuer- und Bidi-Zeichen markiert wie im Log-Explorer.
+> - **Org-Schalter „Befehlszeilen ausblenden“** (M3-14) in Administration → Logs, mit Step-up.
+> - Hilfe DE/EN: `concepts/live-view`, `concepts/process-na`, Node-Seite und Log-Einstellungen ergänzt.
+> - **Tests:**
+>   - Sortierung, Baum (fehlende Eltern, Zyklen, Selbst-Eltern, Kette aus 4 000 Prozessen), Filter, doppelte PIDs.
+>   - Zustand des Streams: Pause, offline, Ablehnung, Abbruch je Fehlercode, Logout, Wiederverbinden.
+>   - Komponente: Prozessname und Befehlszeile mit Markup und Bidi-Zeichen erscheinen als Text, Drawer, beendeter
+>     Prozess, ausgeblendete Befehlszeile, der Stream endet mit dem Reiter.
+>   - E2E mit axe auf Reiter und Drawer, ohne Stream vor dem Öffnen; Budget: Node-Seite 178 KiB beim ersten Laden,
+>     der Reiter lädt 12,8 KiB nach.
+>   - **Demo-E2E:** Der Reiter zeigt web-01 mit echten Daten: der Agent als `sermon` (Filter nach User), CPU-Anteile
+>     ab dem zweiten Snapshot, eine Befehlszeile mit Passwort im Drawer als `password=***` mit ihrer Unit; axe auf
+>     Reiter (Baumansicht) und Drawer. Budget unverändert: Agent mit Live-Ansicht 0,54 %, ohne 0,48 % eines Kerns.
+>   - Gegenproben für 20 Prüfungen, alle erkannt.
 - **Ziel:** Reiter „Prozesse (Live)“ auf der Node-Seite (lädt bei Bedarf).
   - Kopfzeile wie bei `top`; virtualisierte Tabelle mit Sortierung.
   - **Filter** nach User, Name und Regex (im Browser, eine ungültige Regex wird angezeigt); Baumansicht; Pause.

@@ -39,6 +39,7 @@ KONZEPT §2 mit angepasst.
 | [0029](0029-organisationen-verwalten-sperren-loeschen.md) | Organisationen verwalten, sperren und löschen | accepted | D29 |
 | [0030](0030-konfiguration-vom-server.md) | Konfiguration vom Server an die Agents | accepted | D17 |
 | [0031](0031-logs-in-loki.md) | Logs in Loki: fester Endpunkt, eigener Client, sparsame Labels | accepted | D13, D17 |
+| [0032](0032-live-tail-durch-abfragen.md) | Live-Tail durch wiederholte Abfragen statt Loki-WebSocket | accepted | D13 |
 
 ## Entscheidungslog → ADR
 
@@ -56,7 +57,7 @@ KONZEPT §2 mit angepasst.
 | D10 Authentifizierung | 0017 |
 | D11 Rechte | 0017 |
 | D12 Retention | 0018 |
-| D13 Storage | 0001 |
+| D13 Storage | 0001, 0031, 0032 |
 | D14 Alert-Kanäle | 0019 |
 | D15 Updates | 0020 |
 | D16 Anomalien | 0019 |

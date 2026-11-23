@@ -263,3 +263,26 @@ func TestCounts_ReadsTheMatrixOfAMetricQuery(t *testing.T) {
 		t.Errorf("streams instead of a matrix: %v", err)
 	}
 }
+
+// Loki groups the lines of an answer by stream; the client returns them in the asked order over
+// all streams.
+func TestQuery_OrdersTheLinesOverAllStreams(t *testing.T) {
+	response := `{"status":"success","data":{"resultType":"streams","result":[
+		{"stream":{"unit":"a"},"values":[["1795435200000000003","a3"],["1795435200000000001","a1"]]},
+		{"stream":{"unit":"b"},"values":[["1795435200000000004","b4"],["1795435200000000002","b2"]]}]}}`
+	c := client(t, (&recorded{}).handler(http.StatusOK, response))
+	q, _ := logql.Select([]identity.NodeID{node})
+	for direction, want := range map[loki.Direction]string{loki.Backward: "b4 a3 b2 a1", "": "b4 a3 b2 a1", loki.Forward: "a1 b2 a3 b4"} {
+		lines, err := c.Query(context.Background(), org, loki.QueryRange{Query: q, Start: at.Add(-time.Hour), End: at, Limit: 10, Direction: direction})
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts := make([]string, 0, len(lines))
+		for _, l := range lines {
+			texts = append(texts, l.Line)
+		}
+		if got := strings.Join(texts, " "); got != want {
+			t.Errorf("%q: %s, want %s", direction, got, want)
+		}
+	}
+}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
+	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
@@ -32,15 +32,11 @@ type MetricsHandler struct {
 
 var _ webv1connect.MetricsServiceHandler = (*MetricsHandler)(nil)
 
-// NewMetricsHandler returns the MetricsService handler.
-func NewMetricsHandler(svc *fleet.Service, logger *slog.Logger) *MetricsHandler {
-	return &MetricsHandler{
-		fleet: svc, streams: newStreamLimiter(defaultStreamLimits), recheck: streamRecheck, logger: logger,
-	}
+// NewMetricsHandler returns the MetricsService handler; live are the limits shared with TailLogs
+// (nil: its own).
+func NewMetricsHandler(svc *fleet.Service, live *LiveStreams, logger *slog.Logger) *MetricsHandler {
+	return &MetricsHandler{fleet: svc, streams: live.orNew(), recheck: streamRecheck, logger: logger}
 }
-
-// LiveStreams returns the number of open WatchMetrics streams (server metrics, ADR 0011).
-func (h *MetricsHandler) LiveStreams() int { return h.streams.open() }
 
 // ListMetrics returns the catalog.
 func (h *MetricsHandler) ListMetrics(context.Context, *connect.Request[webv1.ListMetricsRequest]) (*connect.Response[webv1.ListMetricsResponse], error) {
@@ -85,22 +81,18 @@ func (h *MetricsHandler) WatchMetrics(ctx context.Context, req *connect.Request[
 		return err
 	}
 	s, _ := sessionFrom(ctx)
-	key := streamKey{session: s.ID, user: c.Principal.User.String(), org: c.Principal.Org.String()}
+	key := streamKeyOf(s, c)
 	if !h.streams.acquire(key) {
 		return connect.NewError(connect.CodeResourceExhausted, errTooManyStreams)
 	}
 	defer h.streams.release(key)
-	reauth, _ := ctx.Value(reauthKey{}).(reauthenticator)
+	recheck := recheckOf(ctx, c)
 	checked := time.Now()
 	err = h.fleet.Watch(ctx, c, q, func(series []metrics.Series) error {
-		if reauth != nil && time.Since(checked) >= h.recheck {
+		if time.Since(checked) >= h.recheck {
 			checked = time.Now()
-			current, err := reauth()
-			if err != nil {
+			if err := recheck(); err != nil {
 				return err
-			}
-			if !samePrincipal(current, c.Principal) {
-				return errScopeChanged
 			}
 		}
 		return stream.Send(&webv1.WatchMetricsResponse{Series: seriesViews(series)})
@@ -257,13 +249,19 @@ func readFailure(ctx context.Context, logger *slog.Logger, op string, err error)
 	return internalError(ctx, logger, op, err)
 }
 
+// streamDurations are the maximum durations of the live streams.
+var streamDurations = map[string]time.Duration{
+	"/sermon.web.v1.MetricsService/WatchMetrics": fleet.WatchDuration,
+	"/sermon.web.v1.LogService/TailLogs":         logs.TailDuration,
+}
+
 // streamingDeadline lifts the server's write timeout (against slow clients) for the live streams,
 // bounded by their own maximum duration.
 func streamingDeadline(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/WatchMetrics") {
+		if d, ok := streamDurations[r.URL.Path]; ok {
 			// An error means the writer can't change deadlines; the stream then ends earlier.
-			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(fleet.WatchDuration + time.Minute))
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(d + time.Minute))
 		}
 		next.ServeHTTP(w, r)
 	})

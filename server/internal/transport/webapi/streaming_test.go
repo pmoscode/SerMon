@@ -43,6 +43,12 @@ func TestStreamingDeadline_LiftsTheWriteTimeoutOnlyForLiveStreams(t *testing.T) 
 	if got := read("/sermon.web.v1.MetricsService/WatchMetrics"); got != 4*len("tick\n") {
 		t.Errorf("live stream got %d bytes, want all 4 ticks", got)
 	}
+	if got := read("/sermon.web.v1.LogService/TailLogs"); got != 4*len("tick\n") {
+		t.Errorf("log tail got %d bytes, want all 4 ticks", got)
+	}
+	if got := read("/sermon.web.v1.LogService/QueryLogs"); got >= 4*len("tick\n") {
+		t.Errorf("log queries must keep the write timeout, got %d bytes", got)
+	}
 	if got := read("/sermon.web.v1.MetricsService/QueryMetrics"); got >= 4*len("tick\n") {
 		t.Errorf("other requests must keep the write timeout, got %d bytes", got)
 	}

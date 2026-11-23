@@ -60,7 +60,8 @@ type CountSeries struct {
 	Points []CountPoint
 }
 
-// Store reads the log store of an organization (Loki); unreachable is ErrUnavailable.
+// Store reads the log store of an organization (Loki); unreachable is ErrUnavailable. Lines come
+// in the asked order over all streams.
 type Store interface {
 	Lines(ctx context.Context, org tenant.OrgID, q logql.Query, from, to time.Time, limit int, forward bool) ([]StoredLine, error)
 	Counts(ctx context.Context, org tenant.OrgID, q logql.Query, from, to time.Time, step time.Duration) ([]CountSeries, error)
@@ -114,11 +115,29 @@ type Service struct {
 	store     Store
 	directory Directory
 	policy    authz.Policy
+	now       func() time.Time
+	// tailInterval and tailRecheck are TailInterval and TailRecheck outside of tests.
+	tailInterval, tailRecheck time.Duration
+}
+
+// Option configures the service.
+type Option func(*Service)
+
+// WithClock sets the clock (tests).
+func WithClock(now func() time.Time) Option { return func(s *Service) { s.now = now } }
+
+// WithTailTiming sets the interval of the tail's rounds and of its rechecks (tests).
+func WithTailTiming(interval, recheck time.Duration) Option {
+	return func(s *Service) { s.tailInterval, s.tailRecheck = interval, recheck }
 }
 
 // NewService returns the service; without a store every query is ErrUnavailable.
-func NewService(store Store, directory Directory, policy authz.Policy) *Service {
-	return &Service{store: store, directory: directory, policy: policy}
+func NewService(store Store, directory Directory, policy authz.Policy, opts ...Option) *Service {
+	s := &Service{store: store, directory: directory, policy: policy, now: time.Now, tailInterval: TailInterval, tailRecheck: TailRecheck}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func invalid(format string, args ...any) error {
@@ -132,6 +151,9 @@ func (s *Service) Query(ctx context.Context, c access.Caller, f Filter, limit in
 	}
 	if limit == 0 {
 		limit = DefaultLimit
+	}
+	if err := checkRange(f); err != nil {
+		return Page{}, err
 	}
 	q, org, hosts, err := s.prepare(ctx, c, f)
 	if err != nil || hosts == nil {
@@ -150,6 +172,9 @@ func (s *Service) Query(ctx context.Context, c access.Caller, f Filter, limit in
 
 // Histogram counts the lines of the filter per severity in about HistogramSteps buckets.
 func (s *Service) Histogram(ctx context.Context, c access.Caller, f Filter) (Histogram, error) {
+	if err := checkRange(f); err != nil {
+		return Histogram{}, err
+	}
 	step := max(f.To.Sub(f.From)/HistogramSteps, time.Second).Truncate(time.Second)
 	q, org, hosts, err := s.prepare(ctx, c, f)
 	if err != nil || hosts == nil {
@@ -209,6 +234,17 @@ type prepared struct {
 	nodes []identity.NodeID
 }
 
+// checkRange checks the time range of a query.
+func checkRange(f Filter) error {
+	switch {
+	case f.From.IsZero() || f.To.IsZero() || !f.To.After(f.From):
+		return invalid("the time range needs from before to")
+	case f.To.Sub(f.From) > MaxRange:
+		return invalid("the time range is at most %v", MaxRange)
+	}
+	return nil
+}
+
 // prepare checks the filter, resolves the visible nodes and builds the query. Without a visible
 // node, hosts is nil and nothing is to be asked.
 func (s *Service) prepare(ctx context.Context, c access.Caller, f Filter) (prepared, tenant.OrgID, map[identity.NodeID]string, error) {
@@ -216,12 +252,7 @@ func (s *Service) prepare(ctx context.Context, c access.Caller, f Filter) (prepa
 	if err != nil || (!scope.AllGroups() && len(scope.Groups()) == 0) {
 		return prepared{}, tenant.OrgID{}, nil, access.ErrForbidden
 	}
-	switch {
-	case f.From.IsZero() || f.To.IsZero() || !f.To.After(f.From):
-		return prepared{}, tenant.OrgID{}, nil, invalid("the time range needs from before to")
-	case f.To.Sub(f.From) > MaxRange:
-		return prepared{}, tenant.OrgID{}, nil, invalid("the time range is at most %v", MaxRange)
-	case len(f.Nodes) > MaxNodes:
+	if len(f.Nodes) > MaxNodes {
 		return prepared{}, tenant.OrgID{}, nil, invalid("at most %d nodes", MaxNodes)
 	}
 	visible, err := s.directory.List(ctx, scope)

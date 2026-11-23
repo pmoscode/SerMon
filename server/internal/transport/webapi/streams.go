@@ -1,15 +1,19 @@
 package webapi
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 )
 
-// Limits of the live streams (WatchMetrics). A stream holds a goroutine and queries the ring
-// buffer every second, so their number is bounded per session, user, organization and instance.
+// Limits of the live streams (WatchMetrics, TailLogs). A stream holds a goroutine and queries the
+// ring buffer or Loki every few seconds, so their number is bounded per session, user,
+// organization and instance.
 const (
 	// MaxLiveStreamsPerSession allows a few live views in several tabs of one browser.
 	MaxLiveStreamsPerSession = 32
@@ -34,6 +38,25 @@ type streamLimits struct{ Session, User, Org, Total int }
 
 var defaultStreamLimits = streamLimits{
 	Session: MaxLiveStreamsPerSession, User: MaxLiveStreamsPerUser, Org: MaxLiveStreamsPerOrg, Total: MaxLiveStreams,
+}
+
+// LiveStreams counts the open live streams of the web UI – WatchMetrics and TailLogs together –
+// against one set of limits (T26).
+type LiveStreams struct{ limiter *streamLimiter }
+
+// NewLiveStreams returns the counter with the limits of T26.
+func NewLiveStreams() *LiveStreams {
+	return &LiveStreams{limiter: newStreamLimiter(defaultStreamLimits)}
+}
+
+// Open returns the number of open live streams (server metrics, ADR 0011).
+func (l *LiveStreams) Open() int { return l.limiter.open() }
+
+func (l *LiveStreams) orNew() *streamLimiter {
+	if l == nil {
+		return newStreamLimiter(defaultStreamLimits)
+	}
+	return l.limiter
 }
 
 // streamKey says whom a stream counts against.
@@ -85,6 +108,30 @@ func (l *streamLimiter) open() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.total
+}
+
+// streamKeyOf is the stream key of a caller's session.
+func streamKeyOf(s session.Session, c access.Caller) streamKey {
+	return streamKey{session: s.ID, user: c.Principal.User.String(), org: c.Principal.Org.String()}
+}
+
+// recheckOf checks the session of a running stream again: an ended session fails it, changed
+// rights end it (errScopeChanged; the client reconnects with the new scope).
+func recheckOf(ctx context.Context, c access.Caller) func() error {
+	reauth, _ := ctx.Value(reauthKey{}).(reauthenticator)
+	return func() error {
+		if reauth == nil {
+			return nil
+		}
+		current, err := reauth()
+		if err != nil {
+			return err
+		}
+		if !samePrincipal(current, c.Principal) {
+			return errScopeChanged
+		}
+		return nil
+	}
 }
 
 // release frees a slot taken with acquire.

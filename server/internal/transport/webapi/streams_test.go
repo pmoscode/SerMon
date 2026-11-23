@@ -83,7 +83,7 @@ func liveServer(t *testing.T, perSession int) (webv1connect.MetricsServiceClient
 	store.AddNode(streamOrg, streamGroup, streamNode)
 	ring := metrics.NewRing()
 	svc := fleet.NewService(oneNode{}, metrics.NewReader(store, ring, time.Now), time.Now)
-	handler := NewMetricsHandler(svc, slog.New(slog.DiscardHandler))
+	handler := NewMetricsHandler(svc, nil, slog.New(slog.DiscardHandler))
 	handler.streams = newStreamLimiter(streamLimits{Session: perSession, User: 10, Org: 10, Total: 10})
 	handler.recheck = 0 // check on every message
 	auth := &fakeAuth{principal: viewer}

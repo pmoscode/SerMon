@@ -19,17 +19,18 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
 
-// LogHandler implements sermon.web.v1.LogService (M3-08).
+// LogHandler implements sermon.web.v1.LogService (M3-08, M3-09).
 type LogHandler struct {
-	svc    *logs.Service
-	logger *slog.Logger
+	svc     *logs.Service
+	streams *streamLimiter
+	logger  *slog.Logger
 }
 
 var _ webv1connect.LogServiceHandler = (*LogHandler)(nil)
 
-// NewLogHandler returns the handler.
-func NewLogHandler(svc *logs.Service, logger *slog.Logger) *LogHandler {
-	return &LogHandler{svc: svc, logger: logger}
+// NewLogHandler returns the handler; live are the limits shared with WatchMetrics (nil: its own).
+func NewLogHandler(svc *logs.Service, live *LiveStreams, logger *slog.Logger) *LogHandler {
+	return &LogHandler{svc: svc, streams: live.orNew(), logger: logger}
 }
 
 // QueryLogs returns the lines of the filter.
@@ -103,6 +104,43 @@ func (h *LogHandler) GetLogContext(ctx context.Context, req *connect.Request[web
 	return connect.NewResponse(res), nil
 }
 
+// TailLogs streams new lines (ADR 0032). The stream counts against the live stream limits; the
+// service checks the session again every 30 s.
+func (h *LogHandler) TailLogs(ctx context.Context, req *connect.Request[webv1.TailLogsRequest], stream *connect.ServerStream[webv1.TailLogsResponse]) error {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return err
+	}
+	f, err := logSelectorFrom(req.Msg)
+	if err != nil {
+		return err
+	}
+	if req.Msg.GetSince() != nil {
+		f.From = req.Msg.GetSince().AsTime()
+	}
+	s, _ := sessionFrom(ctx)
+	key := streamKeyOf(s, c)
+	if !h.streams.acquire(key) {
+		return connect.NewError(connect.CodeResourceExhausted, errTooManyStreams)
+	}
+	defer h.streams.release(key)
+	err = h.svc.Tail(ctx, c, f, func(b logs.TailBatch) error {
+		res := &webv1.TailLogsResponse{Throttled: b.Throttled, Unavailable: b.Unavailable, Lines: make([]*webv1.LogLine, 0, len(b.Lines))}
+		for _, l := range b.Lines {
+			res.Lines = append(res.Lines, logLineMessage(l))
+		}
+		return stream.Send(res)
+	}, recheckOf(ctx, c))
+	var connectErr *connect.Error
+	switch {
+	case err == nil, errors.Is(err, context.Canceled), errors.Is(err, errScopeChanged):
+		return nil
+	case errors.As(err, &connectErr):
+		return connectErr
+	}
+	return h.fail(ctx, "tail logs", err)
+}
+
 func (h *LogHandler) fail(ctx context.Context, op string, err error) error {
 	switch {
 	case errors.Is(err, access.ErrForbidden):
@@ -118,11 +156,26 @@ func (h *LogHandler) fail(ctx context.Context, op string, err error) error {
 	return internalError(ctx, h.logger, op, err)
 }
 
+// logSelector are the fields LogFilter and TailLogsRequest share.
+type logSelector interface {
+	GetNodeIds() []string
+	GetGroupId() string
+	GetSources() []webv1.LogSource
+	GetUnits() []string
+	GetMinSeverity() webv1.LogSeverity
+	GetText() string
+	GetIgnoreCase() bool
+}
+
 func logFilterFrom(m *webv1.LogFilter) (logs.Filter, error) {
-	f := logs.Filter{
-		From: m.GetFrom().AsTime(), To: m.GetTo().AsTime(), Units: m.GetUnits(),
-		Text: m.GetText(), IgnoreCase: m.GetIgnoreCase(),
-	}
+	f, err := logSelectorFrom(m)
+	f.From, f.To = m.GetFrom().AsTime(), m.GetTo().AsTime()
+	return f, err
+}
+
+// logSelectorFrom maps the selection; a set group is never empty (validation: a UUID).
+func logSelectorFrom(m logSelector) (logs.Filter, error) {
+	f := logs.Filter{Units: m.GetUnits(), Text: m.GetText(), IgnoreCase: m.GetIgnoreCase()}
 	for _, raw := range m.GetNodeIds() {
 		id, err := uuid.Parse(raw)
 		if err != nil {
@@ -130,7 +183,7 @@ func logFilterFrom(m *webv1.LogFilter) (logs.Filter, error) {
 		}
 		f.Nodes = append(f.Nodes, identity.NodeID(id))
 	}
-	if m.GroupId != nil {
+	if m.GetGroupId() != "" {
 		id, err := uuid.Parse(m.GetGroupId())
 		if err != nil {
 			return logs.Filter{}, connect.NewError(connect.CodeInvalidArgument, errInvalidID)

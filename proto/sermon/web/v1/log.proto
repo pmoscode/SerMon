@@ -25,6 +25,14 @@ service LogService {
   rpc GetLogContext(GetLogContextRequest) returns (GetLogContextResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // TailLogs streams new lines of the filter (ADR 0032): a first message at once, then messages
+  // with new lines, a change of availability or every 15 s a heartbeat. At most 100 lines/s
+  // (else throttled); the live stream limits of WatchMetrics apply together with it
+  // (RESOURCE_EXHAUSTED). It ends after 15 minutes or when the rights change, fails with
+  // UNAUTHENTICATED after a logout and PERMISSION_DENIED without view_logs; the client reconnects.
+  rpc TailLogs(TailLogsRequest) returns (stream TailLogsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
 // LogSource is where the agent read a line.
@@ -175,4 +183,56 @@ message GetLogContextRequest {
 message GetLogContextResponse {
   // lines are the lines before, the entry and the lines after.
   repeated LogLine lines = 1;
+}
+
+// TailLogsRequest selects the lines of a tail, like LogFilter without a time range.
+message TailLogsRequest {
+  // node_ids narrow to these nodes; empty: every visible node.
+  repeated string node_ids = 1 [(buf.validate.field).repeated = {
+    max_items: 100
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // group_id narrows to the nodes of this group.
+  optional string group_id = 2 [(buf.validate.field).string.uuid = true];
+  // sources narrow to these sources; empty: all.
+  repeated LogSource sources = 3 [(buf.validate.field).repeated = {
+    max_items: 2
+    items: {
+      enum: {
+        defined_only: true
+        not_in: [0]
+      }
+    }
+  }];
+  // units narrow to these systemd units or syslog identifiers; empty: all.
+  repeated string units = 4 [(buf.validate.field).repeated = {
+    max_items: 20
+    items: {
+      string: {
+        min_len: 1
+        max_bytes: 256
+      }
+    }
+  }];
+  // min_severity keeps this severity and the more severe ones; unspecified keeps all.
+  LogSeverity min_severity = 5 [(buf.validate.field).enum.defined_only = true];
+  // text is a part of the line, as typed (no regex).
+  string text = 6 [(buf.validate.field).string.max_bytes = 256];
+  // ignore_case matches text regardless of case.
+  bool ignore_case = 7;
+  // since starts the tail at this time, at most 5 minutes ago (e.g. the newest line of a query);
+  // unset: now.
+  google.protobuf.Timestamp since = 8 [(buf.validate.field).timestamp.within = {seconds: 300}];
+}
+
+// TailLogsResponse is a message of a tail.
+message TailLogsResponse {
+  // lines are the new lines, oldest first; a late line may be older than one of an earlier message.
+  repeated LogLine lines = 1;
+  // throttled is set if more lines arrived than the tail sends; the older ones were skipped.
+  bool throttled = 2;
+  // unavailable is set while the log store is not reachable; the tail goes on.
+  bool unavailable = 3;
 }

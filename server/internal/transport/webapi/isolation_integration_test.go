@@ -357,9 +357,14 @@ func TestAccessAPI_SwitchOrganizationChangesTheActiveOrganization(t *testing.T) 
 // seedLogAlpha writes a log line of Alpha's node to Loki (M3-08): a leaking query would find it.
 func seedLogAlpha(t *testing.T) {
 	t.Helper()
-	entry := ingest.LogEntry{At: time.Now().Add(-time.Minute), Source: ingest.LogSourceJournal, Unit: "nginx.service", Severity: 4, Message: "alpha secret line"}
+	writeLogAlpha(t, ingest.LogEntry{At: time.Now().Add(-time.Minute), Source: ingest.LogSourceJournal, Unit: "nginx.service", Severity: 4, Message: "alpha secret line"})
+}
+
+// writeLogAlpha writes entries of Alpha's node to Loki.
+func writeLogAlpha(t *testing.T, entries ...ingest.LogEntry) {
+	t.Helper()
 	w := loki.NewWriter(loki.New(lokitest.Shared(t)))
-	if err := w.Write(context.Background(), tenant.OrgID(uuid.MustParse(orgAlpha)), identity.NodeID(uuid.MustParse(nodeAl)), []ingest.LogEntry{entry}); err != nil {
+	if err := w.Write(context.Background(), tenant.OrgID(uuid.MustParse(orgAlpha)), identity.NodeID(uuid.MustParse(nodeAl)), entries); err != nil {
 		t.Fatal(err)
 	}
 }

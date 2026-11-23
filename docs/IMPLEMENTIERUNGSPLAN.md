@@ -2984,7 +2984,34 @@ Konfiguration) und M3-06 (Loki).
   - Alle RPCs im Tenant-Isolationstest; Integration gegen Loki
 - **Abhängig von:** M3-06, M3-07
 
-#### ☐ M3-09 – Live-Tail · S · S 🔒
+#### ☑ M3-09 – Live-Tail · S · S 🔒
+> Erledigt ([ADR 0032](adr/0032-live-tail-durch-abfragen.md); Threat Model T26):
+> - **`app/logs.Tail`:**
+>   - Alle 2 s eine Abfrage über das Fenster der letzten 30 s, die neuesten Zeilen zuerst. Gesendete Zeilen
+>     (Stream, Zeit, Text) merkt sich der Stream, solange sie im Fenster liegen; jede geht genau einmal raus.
+>   - Start jetzt oder bis 5 Minuten zurück (`since`).
+>   - Höchstens 100 Zeilen/s (200 je Runde), sonst die neuesten mit `throttled`; eine Untergrenze verhindert, dass
+>     Übersprungenes nachkommt.
+>   - Loki nicht erreichbar: `unavailable`, der Stream läuft weiter. Lebenszeichen alle 15 s, Ende nach 15 min.
+>   - Alle 30 s Session-Prüfung und sichtbare Nodes neu bestimmt.
+> - **Web-API:** `LogService.TailLogs` (Server-Streaming). `LiveStreams` zählt Tails und `WatchMetrics` gemeinsam
+>   gegen die Grenzen aus T26. Die Write-Deadline ist für beide Streams aufgehoben, die Metrik
+>   `sermon_server_live_streams` zählt beide.
+> - **Gefunden:** Loki liefert die Zeilen gruppiert nach Stream; `loki.Client.Query` hängte sie nur aneinander. Damit
+>   war auch `QueryLogs` aus M3-08 über mehrere Streams hinweg nicht nach Zeit sortiert. Der Client sortiert jetzt in
+>   der verlangten Richtung.
+> - **Tests:**
+>   - Use-Case mit Testuhr: genau einmal (auch verspätete Zeilen, gleicher Text auf zwei Nodes, gleiche Zeit),
+>     gleitendes Fenster, Start in der Vergangenheit und Grenzen, Drosselung mit Untergrenze, Ausfall und
+>     Erholung, Lebenszeichen, Laufzeit, Rechte und Nodes neu, fehlgeschlagene Prüfung, ohne sichtbare Nodes.
+>   - Speicher des Fensters bleibt begrenzt.
+>   - Adapter: Reihenfolge über alle Streams in beiden Richtungen.
+>   - Handler: Grenzen gemeinsam mit `WatchMetrics`, Abmeldung (`UNAUTHENTICATED`), geänderte Rechte (normales
+>     Ende), Write-Deadline.
+>   - Über den echten Stack mit Loki: eine neue Zeile kommt genau einmal an (40 s beobachtet), Org B sieht nichts.
+>   - `TailLogs` im Tenant-Isolationstest, Start vor der Zeile von Org A.
+>   - Gegenproben für 17 Prüfungen, alle erkannt. Die zur Untergrenze überlebte zuerst; der Drossel-Test hat
+>     dafür eine Runde ohne neue Zeilen bekommen. Das Vergessen alter Zeilen prüft ein interner Test am Fenster.
 - **Ziel:** `LogService.TailLogs` (Server-Streaming) mit den Filtern aus M3-08.
   - ADR: Loki wird in kurzen Abständen ab dem letzten Zeitstempel abgefragt, die Duplikate am Rand werden entfernt.
     Kein Loki-WebSocket, also keine neue Abhängigkeit, und mehrere Instanzen bleiben möglich.

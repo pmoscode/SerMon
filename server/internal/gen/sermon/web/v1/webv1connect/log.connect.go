@@ -41,6 +41,8 @@ const (
 	// LogServiceGetLogContextProcedure is the fully-qualified name of the LogService's GetLogContext
 	// RPC.
 	LogServiceGetLogContextProcedure = "/sermon.web.v1.LogService/GetLogContext"
+	// LogServiceTailLogsProcedure is the fully-qualified name of the LogService's TailLogs RPC.
+	LogServiceTailLogsProcedure = "/sermon.web.v1.LogService/TailLogs"
 )
 
 // LogServiceClient is a client for the sermon.web.v1.LogService service.
@@ -52,6 +54,12 @@ type LogServiceClient interface {
 	// GetLogContext returns up to 50 lines before an entry, the entry and up to 50 after, of the same
 	// node, source and unit; NOT_FOUND for a node the caller doesn't see.
 	GetLogContext(context.Context, *connect.Request[v1.GetLogContextRequest]) (*connect.Response[v1.GetLogContextResponse], error)
+	// TailLogs streams new lines of the filter (ADR 0032): a first message at once, then messages
+	// with new lines, a change of availability or every 15 s a heartbeat. At most 100 lines/s
+	// (else throttled); the live stream limits of WatchMetrics apply together with it
+	// (RESOURCE_EXHAUSTED). It ends after 15 minutes or when the rights change, fails with
+	// UNAUTHENTICATED after a logout and PERMISSION_DENIED without view_logs; the client reconnects.
+	TailLogs(context.Context, *connect.Request[v1.TailLogsRequest]) (*connect.ServerStreamForClient[v1.TailLogsResponse], error)
 }
 
 // NewLogServiceClient constructs a client for the sermon.web.v1.LogService service. By default, it
@@ -86,6 +94,13 @@ func NewLogServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 			connect.WithClientOptions(opts...),
 		),
+		tailLogs: connect.NewClient[v1.TailLogsRequest, v1.TailLogsResponse](
+			httpClient,
+			baseURL+LogServiceTailLogsProcedure,
+			connect.WithSchema(logServiceMethods.ByName("TailLogs")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -94,6 +109,7 @@ type logServiceClient struct {
 	queryLogs       *connect.Client[v1.QueryLogsRequest, v1.QueryLogsResponse]
 	getLogHistogram *connect.Client[v1.GetLogHistogramRequest, v1.GetLogHistogramResponse]
 	getLogContext   *connect.Client[v1.GetLogContextRequest, v1.GetLogContextResponse]
+	tailLogs        *connect.Client[v1.TailLogsRequest, v1.TailLogsResponse]
 }
 
 // QueryLogs calls sermon.web.v1.LogService.QueryLogs.
@@ -111,6 +127,11 @@ func (c *logServiceClient) GetLogContext(ctx context.Context, req *connect.Reque
 	return c.getLogContext.CallUnary(ctx, req)
 }
 
+// TailLogs calls sermon.web.v1.LogService.TailLogs.
+func (c *logServiceClient) TailLogs(ctx context.Context, req *connect.Request[v1.TailLogsRequest]) (*connect.ServerStreamForClient[v1.TailLogsResponse], error) {
+	return c.tailLogs.CallServerStream(ctx, req)
+}
+
 // LogServiceHandler is an implementation of the sermon.web.v1.LogService service.
 type LogServiceHandler interface {
 	// QueryLogs returns the lines of the filter, newest first unless oldest_first.
@@ -120,6 +141,12 @@ type LogServiceHandler interface {
 	// GetLogContext returns up to 50 lines before an entry, the entry and up to 50 after, of the same
 	// node, source and unit; NOT_FOUND for a node the caller doesn't see.
 	GetLogContext(context.Context, *connect.Request[v1.GetLogContextRequest]) (*connect.Response[v1.GetLogContextResponse], error)
+	// TailLogs streams new lines of the filter (ADR 0032): a first message at once, then messages
+	// with new lines, a change of availability or every 15 s a heartbeat. At most 100 lines/s
+	// (else throttled); the live stream limits of WatchMetrics apply together with it
+	// (RESOURCE_EXHAUSTED). It ends after 15 minutes or when the rights change, fails with
+	// UNAUTHENTICATED after a logout and PERMISSION_DENIED without view_logs; the client reconnects.
+	TailLogs(context.Context, *connect.Request[v1.TailLogsRequest], *connect.ServerStream[v1.TailLogsResponse]) error
 }
 
 // NewLogServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -150,6 +177,13 @@ func NewLogServiceHandler(svc LogServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 		connect.WithHandlerOptions(opts...),
 	)
+	logServiceTailLogsHandler := connect.NewServerStreamHandler(
+		LogServiceTailLogsProcedure,
+		svc.TailLogs,
+		connect.WithSchema(logServiceMethods.ByName("TailLogs")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.LogService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case LogServiceQueryLogsProcedure:
@@ -158,6 +192,8 @@ func NewLogServiceHandler(svc LogServiceHandler, opts ...connect.HandlerOption) 
 			logServiceGetLogHistogramHandler.ServeHTTP(w, r)
 		case LogServiceGetLogContextProcedure:
 			logServiceGetLogContextHandler.ServeHTTP(w, r)
+		case LogServiceTailLogsProcedure:
+			logServiceTailLogsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -177,4 +213,8 @@ func (UnimplementedLogServiceHandler) GetLogHistogram(context.Context, *connect.
 
 func (UnimplementedLogServiceHandler) GetLogContext(context.Context, *connect.Request[v1.GetLogContextRequest]) (*connect.Response[v1.GetLogContextResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.LogService.GetLogContext is not implemented"))
+}
+
+func (UnimplementedLogServiceHandler) TailLogs(context.Context, *connect.Request[v1.TailLogsRequest], *connect.ServerStream[v1.TailLogsResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.LogService.TailLogs is not implemented"))
 }

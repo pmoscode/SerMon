@@ -333,6 +333,24 @@ var tenantIsolationCases = map[string]isolationCase{
 		}))
 		return err
 	}},
+	// The tail starts before Alpha's line: a leaking tail would send it at once.
+	"/sermon.web.v1.LogService/TailLogs": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		group := e.groupA
+		stream, err := e.logs.TailLogs(ctx, connect.NewRequest(&webv1.TailLogsRequest{
+			NodeIds: []string{e.nodeA}, GroupId: &group, Since: timestamppb.New(time.Now().Add(-4 * time.Minute)),
+		}))
+		if err != nil {
+			return err
+		}
+		defer func() { _ = stream.Close() }()
+		if !stream.Receive() {
+			return stream.Err()
+		}
+		if len(stream.Msg().GetLines()) > 0 || strings.Contains(stream.Msg().String(), e.nodeA) {
+			return errLeak
+		}
+		return nil
+	}},
 	"/sermon.web.v1.LogSettingsService/SetGroupLogSettings": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.logSettings.SetGroupLogSettings(ctx, connect.NewRequest(&webv1.SetGroupLogSettingsRequest{GroupId: e.groupA, Settings: &webv1.LogSettings{}}))
 		return err

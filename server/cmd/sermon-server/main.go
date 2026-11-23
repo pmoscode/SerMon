@@ -453,9 +453,10 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	})
 	accessStore := postgres.NewAccessStore(db)
 	principals := access.NewLoader(accessStore, secondFactor)
-	metricsHandler := webapi.NewMetricsHandler(nodes, logger)
-	registry.Gauge("sermon_server_live_streams", "Open live metric streams of the web UI.",
-		func() float64 { return float64(metricsHandler.LiveStreams()) })
+	live := webapi.NewLiveStreams()
+	metricsHandler := webapi.NewMetricsHandler(nodes, live, logger)
+	registry.Gauge("sermon_server_live_streams", "Open live streams of the web UI (metrics and log tails).",
+		func() float64 { return float64(live.Open()) })
 	var inviteOptions []invitation.Option
 	var orgOptions []organization.Option
 	if cfg.SMTP != nil {
@@ -492,7 +493,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
 		LogSettings: webapi.NewLogSettingsHandler(logSettings, logger),
-		Logs:        webapi.NewLogHandler(logQueries, logger),
+		Logs:        webapi.NewLogHandler(logQueries, live, logger),
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
 		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),

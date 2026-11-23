@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -200,7 +201,18 @@ func (c *Client) Query(ctx context.Context, org tenant.OrgID, q QueryRange) ([]L
 	if err := check(res); err != nil {
 		return nil, err
 	}
-	return decodeStreams(io.LimitReader(res.Body, maxQueryBody))
+	lines, err := decodeStreams(io.LimitReader(res.Body, maxQueryBody))
+	if err != nil {
+		return nil, err
+	}
+	// Loki groups the lines by stream; the order holds over all of them.
+	slices.SortStableFunc(lines, func(a, b Line) int {
+		if q.Direction == Forward {
+			return a.At.Compare(b.At)
+		}
+		return b.At.Compare(a.At)
+	})
+	return lines, nil
 }
 
 // Point is one value of a metric series.

@@ -79,7 +79,6 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewSecurityEventServiceHandler(h.SecurityEvents, authenticated))
 	mount(webv1connect.NewSecurityPolicyServiceHandler(h.TwoFactor, authenticated))
 	mount(webv1connect.NewLogSettingsServiceHandler(h.LogSettings, authenticated))
-	mount(webv1connect.NewLogServiceHandler(h.Logs, authenticated))
 	mount(webv1connect.NewNotificationChannelServiceHandler(h.Notifications, authenticated))
 	mount(webv1connect.NewNotificationPolicyServiceHandler(h.Policies, authenticated))
 	mount(webv1connect.NewAlertSilenceServiceHandler(h.Silences, authenticated))
@@ -91,6 +90,8 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 		mount(webv1connect.NewTwoFactorServiceHandler(h.TwoFactor, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))
 	}
 	path, handler := webv1connect.NewMetricsServiceHandler(h.Metrics, authenticated)
+	mount(path, streamingDeadline(handler))
+	path, handler = webv1connect.NewLogServiceHandler(h.Logs, authenticated)
 	mount(path, streamingDeadline(handler))
 
 	// Agents send neither Origin nor cookies: no origin check (CSRF needs cookies), the

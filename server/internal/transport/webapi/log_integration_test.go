@@ -10,6 +10,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 )
 
@@ -63,5 +64,47 @@ func TestLogs_MembersReadTheLinesOfTheirNodes(t *testing.T) {
 	bad := &webv1.LogFilter{From: timestamppb.New(time.Now().Add(-30 * 24 * time.Hour)), To: timestamppb.Now()}
 	if _, err := bea.logs.QueryLogs(ctx, connect.NewRequest(&webv1.QueryLogsRequest{Filter: bad})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("30 days: %v, want INVALID_ARGUMENT", err)
+	}
+}
+
+// The tail over the real stack and Loki (M3-09): a line written after the start arrives exactly
+// once, with its fields; Beta's tail of the same time sees nothing.
+func TestTailLogs_ALineArrivesExactlyOnce(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	open := func(member loggedIn, email string) *connect.ServerStreamForClient[webv1.TailLogsResponse] {
+		t.Helper()
+		stream, err := member.logs.TailLogs(ctx, connect.NewRequest(&webv1.TailLogsRequest{Text: "tailed", Units: []string{"cron.service"}}))
+		if err != nil || !stream.Receive() {
+			t.Fatalf("%s: %v %v", email, err, stream.Err())
+		}
+		return stream
+	}
+	mia, bea := open(login(t, s, "mia@example.org"), "mia"), open(login(t, s, "bea@example.org"), "bea")
+	defer func() { _, _ = mia.Close(), bea.Close() }()
+	message := "tailed " + time.Now().Format(time.RFC3339Nano)
+	writeLogAlpha(t, ingest.LogEntry{At: time.Now(), Source: ingest.LogSourceJournal, Unit: "cron.service", Severity: 7, Message: message})
+
+	// The line comes within a few rounds; then nothing more of it for 40 s (beyond the window).
+	got := 0
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) && mia.Receive() {
+		for _, l := range mia.Msg().GetLines() {
+			if l.GetMessage() != message || l.GetHostname() != "alpha-01" || l.GetSeverity() != webv1.LogSeverity_LOG_SEVERITY_INFO {
+				t.Errorf("line = %v", l)
+			}
+			got++
+		}
+	}
+	if got != 1 {
+		t.Errorf("the line arrived %d times, want once (%v)", got, mia.Err())
+	}
+	_ = bea.Close()
+	for bea.Receive() {
+		if len(bea.Msg().GetLines()) > 0 {
+			t.Errorf("Beta's tail got %v", bea.Msg().GetLines())
+		}
 	}
 }

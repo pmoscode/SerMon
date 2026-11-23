@@ -762,6 +762,180 @@ func (x *GetLogContextResponse) GetLines() []*LogLine {
 	return nil
 }
 
+// TailLogsRequest selects the lines of a tail, like LogFilter without a time range.
+type TailLogsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_ids narrow to these nodes; empty: every visible node.
+	NodeIds []string `protobuf:"bytes,1,rep,name=node_ids,json=nodeIds,proto3" json:"node_ids,omitempty"`
+	// group_id narrows to the nodes of this group.
+	GroupId *string `protobuf:"bytes,2,opt,name=group_id,json=groupId,proto3,oneof" json:"group_id,omitempty"`
+	// sources narrow to these sources; empty: all.
+	Sources []LogSource `protobuf:"varint,3,rep,packed,name=sources,proto3,enum=sermon.web.v1.LogSource" json:"sources,omitempty"`
+	// units narrow to these systemd units or syslog identifiers; empty: all.
+	Units []string `protobuf:"bytes,4,rep,name=units,proto3" json:"units,omitempty"`
+	// min_severity keeps this severity and the more severe ones; unspecified keeps all.
+	MinSeverity LogSeverity `protobuf:"varint,5,opt,name=min_severity,json=minSeverity,proto3,enum=sermon.web.v1.LogSeverity" json:"min_severity,omitempty"`
+	// text is a part of the line, as typed (no regex).
+	Text string `protobuf:"bytes,6,opt,name=text,proto3" json:"text,omitempty"`
+	// ignore_case matches text regardless of case.
+	IgnoreCase bool `protobuf:"varint,7,opt,name=ignore_case,json=ignoreCase,proto3" json:"ignore_case,omitempty"`
+	// since starts the tail at this time, at most 5 minutes ago (e.g. the newest line of a query);
+	// unset: now.
+	Since         *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=since,proto3" json:"since,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TailLogsRequest) Reset() {
+	*x = TailLogsRequest{}
+	mi := &file_sermon_web_v1_log_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TailLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TailLogsRequest) ProtoMessage() {}
+
+func (x *TailLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_log_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TailLogsRequest.ProtoReflect.Descriptor instead.
+func (*TailLogsRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_log_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TailLogsRequest) GetNodeIds() []string {
+	if x != nil {
+		return x.NodeIds
+	}
+	return nil
+}
+
+func (x *TailLogsRequest) GetGroupId() string {
+	if x != nil && x.GroupId != nil {
+		return *x.GroupId
+	}
+	return ""
+}
+
+func (x *TailLogsRequest) GetSources() []LogSource {
+	if x != nil {
+		return x.Sources
+	}
+	return nil
+}
+
+func (x *TailLogsRequest) GetUnits() []string {
+	if x != nil {
+		return x.Units
+	}
+	return nil
+}
+
+func (x *TailLogsRequest) GetMinSeverity() LogSeverity {
+	if x != nil {
+		return x.MinSeverity
+	}
+	return LogSeverity_LOG_SEVERITY_UNSPECIFIED
+}
+
+func (x *TailLogsRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *TailLogsRequest) GetIgnoreCase() bool {
+	if x != nil {
+		return x.IgnoreCase
+	}
+	return false
+}
+
+func (x *TailLogsRequest) GetSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Since
+	}
+	return nil
+}
+
+// TailLogsResponse is a message of a tail.
+type TailLogsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// lines are the new lines, oldest first; a late line may be older than one of an earlier message.
+	Lines []*LogLine `protobuf:"bytes,1,rep,name=lines,proto3" json:"lines,omitempty"`
+	// throttled is set if more lines arrived than the tail sends; the older ones were skipped.
+	Throttled bool `protobuf:"varint,2,opt,name=throttled,proto3" json:"throttled,omitempty"`
+	// unavailable is set while the log store is not reachable; the tail goes on.
+	Unavailable   bool `protobuf:"varint,3,opt,name=unavailable,proto3" json:"unavailable,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TailLogsResponse) Reset() {
+	*x = TailLogsResponse{}
+	mi := &file_sermon_web_v1_log_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TailLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TailLogsResponse) ProtoMessage() {}
+
+func (x *TailLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_log_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TailLogsResponse.ProtoReflect.Descriptor instead.
+func (*TailLogsResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_log_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TailLogsResponse) GetLines() []*LogLine {
+	if x != nil {
+		return x.Lines
+	}
+	return nil
+}
+
+func (x *TailLogsResponse) GetThrottled() bool {
+	if x != nil {
+		return x.Throttled
+	}
+	return false
+}
+
+func (x *TailLogsResponse) GetUnavailable() bool {
+	if x != nil {
+		return x.Unavailable
+	}
+	return false
+}
+
 var File_sermon_web_v1_log_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_log_proto_rawDesc = "" +
@@ -818,16 +992,32 @@ const file_sermon_web_v1_log_proto_rawDesc = "" +
 	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x06source\x12\x1c\n" +
 	"\x04unit\x18\x04 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x04unit\"E\n" +
 	"\x15GetLogContextResponse\x12,\n" +
-	"\x05lines\x18\x01 \x03(\v2\x16.sermon.web.v1.LogLineR\x05lines*T\n" +
+	"\x05lines\x18\x01 \x03(\v2\x16.sermon.web.v1.LogLineR\x05lines\"\xab\x03\n" +
+	"\x0fTailLogsRequest\x12*\n" +
+	"\bnode_ids\x18\x01 \x03(\tB\x0f\xbaH\f\x92\x01\t\x10d\"\x05r\x03\xb0\x01\x01R\anodeIds\x12(\n" +
+	"\bgroup_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01H\x00R\agroupId\x88\x01\x01\x12E\n" +
+	"\asources\x18\x03 \x03(\x0e2\x18.sermon.web.v1.LogSourceB\x11\xbaH\x0e\x92\x01\v\x10\x02\"\a\x82\x01\x04\x10\x01 \x00R\asources\x12'\n" +
+	"\x05units\x18\x04 \x03(\tB\x11\xbaH\x0e\x92\x01\v\x10\x14\"\ar\x05\x10\x01(\x80\x02R\x05units\x12G\n" +
+	"\fmin_severity\x18\x05 \x01(\x0e2\x1a.sermon.web.v1.LogSeverityB\b\xbaH\x05\x82\x01\x02\x10\x01R\vminSeverity\x12\x1c\n" +
+	"\x04text\x18\x06 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x04text\x12\x1f\n" +
+	"\vignore_case\x18\a \x01(\bR\n" +
+	"ignoreCase\x12=\n" +
+	"\x05since\x18\b \x01(\v2\x1a.google.protobuf.TimestampB\v\xbaH\b\xb2\x01\x05J\x03\b\xac\x02R\x05sinceB\v\n" +
+	"\t_group_id\"\x80\x01\n" +
+	"\x10TailLogsResponse\x12,\n" +
+	"\x05lines\x18\x01 \x03(\v2\x16.sermon.web.v1.LogLineR\x05lines\x12\x1c\n" +
+	"\tthrottled\x18\x02 \x01(\bR\tthrottled\x12 \n" +
+	"\vunavailable\x18\x03 \x01(\bR\vunavailable*T\n" +
 	"\tLogSource\x12\x1a\n" +
 	"\x16LOG_SOURCE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12LOG_SOURCE_JOURNAL\x10\x01\x12\x13\n" +
-	"\x0fLOG_SOURCE_FILE\x10\x022\xa9\x02\n" +
+	"\x0fLOG_SOURCE_FILE\x10\x022\xfd\x02\n" +
 	"\n" +
 	"LogService\x12S\n" +
 	"\tQueryLogs\x12\x1f.sermon.web.v1.QueryLogsRequest\x1a .sermon.web.v1.QueryLogsResponse\"\x03\x90\x02\x01\x12e\n" +
 	"\x0fGetLogHistogram\x12%.sermon.web.v1.GetLogHistogramRequest\x1a&.sermon.web.v1.GetLogHistogramResponse\"\x03\x90\x02\x01\x12_\n" +
-	"\rGetLogContext\x12#.sermon.web.v1.GetLogContextRequest\x1a$.sermon.web.v1.GetLogContextResponse\"\x03\x90\x02\x01B\xb7\x01\n" +
+	"\rGetLogContext\x12#.sermon.web.v1.GetLogContextRequest\x1a$.sermon.web.v1.GetLogContextResponse\"\x03\x90\x02\x01\x12R\n" +
+	"\bTailLogs\x12\x1e.sermon.web.v1.TailLogsRequest\x1a\x1f.sermon.web.v1.TailLogsResponse\"\x03\x90\x02\x010\x01B\xb7\x01\n" +
 	"\x11com.sermon.web.v1B\bLogProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -843,7 +1033,7 @@ func file_sermon_web_v1_log_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_log_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_log_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_sermon_web_v1_log_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_sermon_web_v1_log_proto_goTypes = []any{
 	(LogSource)(0),                  // 0: sermon.web.v1.LogSource
 	(*LogFilter)(nil),               // 1: sermon.web.v1.LogFilter
@@ -856,42 +1046,50 @@ var file_sermon_web_v1_log_proto_goTypes = []any{
 	(*LogHistogramPoint)(nil),       // 8: sermon.web.v1.LogHistogramPoint
 	(*GetLogContextRequest)(nil),    // 9: sermon.web.v1.GetLogContextRequest
 	(*GetLogContextResponse)(nil),   // 10: sermon.web.v1.GetLogContextResponse
-	nil,                             // 11: sermon.web.v1.LogLine.FieldsEntry
-	(*timestamppb.Timestamp)(nil),   // 12: google.protobuf.Timestamp
-	(LogSeverity)(0),                // 13: sermon.web.v1.LogSeverity
-	(*durationpb.Duration)(nil),     // 14: google.protobuf.Duration
+	(*TailLogsRequest)(nil),         // 11: sermon.web.v1.TailLogsRequest
+	(*TailLogsResponse)(nil),        // 12: sermon.web.v1.TailLogsResponse
+	nil,                             // 13: sermon.web.v1.LogLine.FieldsEntry
+	(*timestamppb.Timestamp)(nil),   // 14: google.protobuf.Timestamp
+	(LogSeverity)(0),                // 15: sermon.web.v1.LogSeverity
+	(*durationpb.Duration)(nil),     // 16: google.protobuf.Duration
 }
 var file_sermon_web_v1_log_proto_depIdxs = []int32{
-	12, // 0: sermon.web.v1.LogFilter.from:type_name -> google.protobuf.Timestamp
-	12, // 1: sermon.web.v1.LogFilter.to:type_name -> google.protobuf.Timestamp
+	14, // 0: sermon.web.v1.LogFilter.from:type_name -> google.protobuf.Timestamp
+	14, // 1: sermon.web.v1.LogFilter.to:type_name -> google.protobuf.Timestamp
 	0,  // 2: sermon.web.v1.LogFilter.sources:type_name -> sermon.web.v1.LogSource
-	13, // 3: sermon.web.v1.LogFilter.min_severity:type_name -> sermon.web.v1.LogSeverity
-	12, // 4: sermon.web.v1.LogLine.at:type_name -> google.protobuf.Timestamp
-	13, // 5: sermon.web.v1.LogLine.severity:type_name -> sermon.web.v1.LogSeverity
+	15, // 3: sermon.web.v1.LogFilter.min_severity:type_name -> sermon.web.v1.LogSeverity
+	14, // 4: sermon.web.v1.LogLine.at:type_name -> google.protobuf.Timestamp
+	15, // 5: sermon.web.v1.LogLine.severity:type_name -> sermon.web.v1.LogSeverity
 	0,  // 6: sermon.web.v1.LogLine.source:type_name -> sermon.web.v1.LogSource
-	11, // 7: sermon.web.v1.LogLine.fields:type_name -> sermon.web.v1.LogLine.FieldsEntry
+	13, // 7: sermon.web.v1.LogLine.fields:type_name -> sermon.web.v1.LogLine.FieldsEntry
 	1,  // 8: sermon.web.v1.QueryLogsRequest.filter:type_name -> sermon.web.v1.LogFilter
 	2,  // 9: sermon.web.v1.QueryLogsResponse.lines:type_name -> sermon.web.v1.LogLine
 	1,  // 10: sermon.web.v1.GetLogHistogramRequest.filter:type_name -> sermon.web.v1.LogFilter
-	14, // 11: sermon.web.v1.GetLogHistogramResponse.step:type_name -> google.protobuf.Duration
+	16, // 11: sermon.web.v1.GetLogHistogramResponse.step:type_name -> google.protobuf.Duration
 	7,  // 12: sermon.web.v1.GetLogHistogramResponse.series:type_name -> sermon.web.v1.LogHistogramSeries
-	13, // 13: sermon.web.v1.LogHistogramSeries.severity:type_name -> sermon.web.v1.LogSeverity
+	15, // 13: sermon.web.v1.LogHistogramSeries.severity:type_name -> sermon.web.v1.LogSeverity
 	8,  // 14: sermon.web.v1.LogHistogramSeries.points:type_name -> sermon.web.v1.LogHistogramPoint
-	12, // 15: sermon.web.v1.LogHistogramPoint.at:type_name -> google.protobuf.Timestamp
-	12, // 16: sermon.web.v1.GetLogContextRequest.at:type_name -> google.protobuf.Timestamp
+	14, // 15: sermon.web.v1.LogHistogramPoint.at:type_name -> google.protobuf.Timestamp
+	14, // 16: sermon.web.v1.GetLogContextRequest.at:type_name -> google.protobuf.Timestamp
 	0,  // 17: sermon.web.v1.GetLogContextRequest.source:type_name -> sermon.web.v1.LogSource
 	2,  // 18: sermon.web.v1.GetLogContextResponse.lines:type_name -> sermon.web.v1.LogLine
-	3,  // 19: sermon.web.v1.LogService.QueryLogs:input_type -> sermon.web.v1.QueryLogsRequest
-	5,  // 20: sermon.web.v1.LogService.GetLogHistogram:input_type -> sermon.web.v1.GetLogHistogramRequest
-	9,  // 21: sermon.web.v1.LogService.GetLogContext:input_type -> sermon.web.v1.GetLogContextRequest
-	4,  // 22: sermon.web.v1.LogService.QueryLogs:output_type -> sermon.web.v1.QueryLogsResponse
-	6,  // 23: sermon.web.v1.LogService.GetLogHistogram:output_type -> sermon.web.v1.GetLogHistogramResponse
-	10, // 24: sermon.web.v1.LogService.GetLogContext:output_type -> sermon.web.v1.GetLogContextResponse
-	22, // [22:25] is the sub-list for method output_type
-	19, // [19:22] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	0,  // 19: sermon.web.v1.TailLogsRequest.sources:type_name -> sermon.web.v1.LogSource
+	15, // 20: sermon.web.v1.TailLogsRequest.min_severity:type_name -> sermon.web.v1.LogSeverity
+	14, // 21: sermon.web.v1.TailLogsRequest.since:type_name -> google.protobuf.Timestamp
+	2,  // 22: sermon.web.v1.TailLogsResponse.lines:type_name -> sermon.web.v1.LogLine
+	3,  // 23: sermon.web.v1.LogService.QueryLogs:input_type -> sermon.web.v1.QueryLogsRequest
+	5,  // 24: sermon.web.v1.LogService.GetLogHistogram:input_type -> sermon.web.v1.GetLogHistogramRequest
+	9,  // 25: sermon.web.v1.LogService.GetLogContext:input_type -> sermon.web.v1.GetLogContextRequest
+	11, // 26: sermon.web.v1.LogService.TailLogs:input_type -> sermon.web.v1.TailLogsRequest
+	4,  // 27: sermon.web.v1.LogService.QueryLogs:output_type -> sermon.web.v1.QueryLogsResponse
+	6,  // 28: sermon.web.v1.LogService.GetLogHistogram:output_type -> sermon.web.v1.GetLogHistogramResponse
+	10, // 29: sermon.web.v1.LogService.GetLogContext:output_type -> sermon.web.v1.GetLogContextResponse
+	12, // 30: sermon.web.v1.LogService.TailLogs:output_type -> sermon.web.v1.TailLogsResponse
+	27, // [27:31] is the sub-list for method output_type
+	23, // [23:27] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_log_proto_init() }
@@ -901,13 +1099,14 @@ func file_sermon_web_v1_log_proto_init() {
 	}
 	file_sermon_web_v1_log_settings_proto_init()
 	file_sermon_web_v1_log_proto_msgTypes[0].OneofWrappers = []any{}
+	file_sermon_web_v1_log_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_log_proto_rawDesc), len(file_sermon_web_v1_log_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

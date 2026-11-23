@@ -179,7 +179,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		AgentCA: webapi.NewAgentCAHandler(ca, slog.New(slog.DiscardHandler)),
 		InstanceAudit: webapi.NewInstanceAuditHandler(
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
-		Metrics: webapi.NewMetricsHandler(nodes, slog.New(slog.DiscardHandler)),
+		Metrics: webapi.NewMetricsHandler(nodes, nil, slog.New(slog.DiscardHandler)),
 		Fleet:   webapi.NewFleetHandler(nodes, slog.New(slog.DiscardHandler)),
 		SecurityEvents: webapi.NewSecurityEventHandler(
 			secevents.NewService(postgres.NewSecurityEventStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
@@ -194,7 +194,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Policies: webapi.NewNotificationPolicyHandler(policies, slog.New(slog.DiscardHandler)),
 		Windows:  webapi.NewMaintenanceWindowHandler(policies, slog.New(slog.DiscardHandler)),
 		Logs: webapi.NewLogHandler(
-			logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
+			logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy()), nil, slog.New(slog.DiscardHandler)),
 		LogSettings: webapi.NewLogSettingsHandler(
 			logsettings.NewService(postgres.NewLogSettingsStore(pg), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
 		Rules: webapi.NewAlertRuleHandler(rules.NewService(rules.Deps{

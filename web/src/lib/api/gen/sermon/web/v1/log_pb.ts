@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/log.proto.
  */
 export const file_sermon_web_v1_log: GenFile = /*@__PURE__*/
-  fileDesc("ChdzZXJtb24vd2ViL3YxL2xvZy5wcm90bxINc2VybW9uLndlYi52MSKiAgoJTG9nRmlsdGVyEigKBGZyb20YASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghub2RlX2lkcxgDIAMoCRIVCghncm91cF9pZBgEIAEoCUgAiAEBEikKB3NvdXJjZXMYBSADKA4yGC5zZXJtb24ud2ViLnYxLkxvZ1NvdXJjZRINCgV1bml0cxgGIAMoCRIwCgxtaW5fc2V2ZXJpdHkYByABKA4yGi5zZXJtb24ud2ViLnYxLkxvZ1NldmVyaXR5EgwKBHRleHQYCCABKAkSEwoLaWdub3JlX2Nhc2UYCSABKAhCCwoJX2dyb3VwX2lkIsECCgdMb2dMaW5lEg8KB25vZGVfaWQYASABKAkSEAoIaG9zdG5hbWUYAiABKAkSJgoCYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKCHNldmVyaXR5GAQgASgOMhouc2VybW9uLndlYi52MS5Mb2dTZXZlcml0eRIoCgZzb3VyY2UYBSABKA4yGC5zZXJtb24ud2ViLnYxLkxvZ1NvdXJjZRIMCgR1bml0GAYgASgJEg8KB21lc3NhZ2UYByABKAkSEQoJdHJ1bmNhdGVkGAggASgIEjIKBmZpZWxkcxgJIAMoCzIiLnNlcm1vbi53ZWIudjEuTG9nTGluZS5GaWVsZHNFbnRyeRotCgtGaWVsZHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBImEKEFF1ZXJ5TG9nc1JlcXVlc3QSKAoGZmlsdGVyGAEgASgLMhguc2VybW9uLndlYi52MS5Mb2dGaWx0ZXISDQoFbGltaXQYAiABKA0SFAoMb2xkZXN0X2ZpcnN0GAMgASgIIkgKEVF1ZXJ5TG9nc1Jlc3BvbnNlEiUKBWxpbmVzGAEgAygLMhYuc2VybW9uLndlYi52MS5Mb2dMaW5lEgwKBG1vcmUYAiABKAgiQgoWR2V0TG9nSGlzdG9ncmFtUmVxdWVzdBIoCgZmaWx0ZXIYASABKAsyGC5zZXJtb24ud2ViLnYxLkxvZ0ZpbHRlciJ1ChdHZXRMb2dIaXN0b2dyYW1SZXNwb25zZRInCgRzdGVwGAEgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEjEKBnNlcmllcxgCIAMoCzIhLnNlcm1vbi53ZWIudjEuTG9nSGlzdG9ncmFtU2VyaWVzInQKEkxvZ0hpc3RvZ3JhbVNlcmllcxIsCghzZXZlcml0eRgBIAEoDjIaLnNlcm1vbi53ZWIudjEuTG9nU2V2ZXJpdHkSMAoGcG9pbnRzGAIgAygLMiAuc2VybW9uLndlYi52MS5Mb2dIaXN0b2dyYW1Qb2ludCJKChFMb2dIaXN0b2dyYW1Qb2ludBImCgJhdBgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFY291bnQYAiABKAEihwEKFEdldExvZ0NvbnRleHRSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSJgoCYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEigKBnNvdXJjZRgDIAEoDjIYLnNlcm1vbi53ZWIudjEuTG9nU291cmNlEgwKBHVuaXQYBCABKAkiPgoVR2V0TG9nQ29udGV4dFJlc3BvbnNlEiUKBWxpbmVzGAEgAygLMhYuc2VybW9uLndlYi52MS5Mb2dMaW5lKlQKCUxvZ1NvdXJjZRIaChZMT0dfU09VUkNFX1VOU1BFQ0lGSUVEEAASFgoSTE9HX1NPVVJDRV9KT1VSTkFMEAESEwoPTE9HX1NPVVJDRV9GSUxFEAIyqQIKCkxvZ1NlcnZpY2USUwoJUXVlcnlMb2dzEh8uc2VybW9uLndlYi52MS5RdWVyeUxvZ3NSZXF1ZXN0GiAuc2VybW9uLndlYi52MS5RdWVyeUxvZ3NSZXNwb25zZSIDkAIBEmUKD0dldExvZ0hpc3RvZ3JhbRIlLnNlcm1vbi53ZWIudjEuR2V0TG9nSGlzdG9ncmFtUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuR2V0TG9nSGlzdG9ncmFtUmVzcG9uc2UiA5ACARJfCg1HZXRMb2dDb250ZXh0EiMuc2VybW9uLndlYi52MS5HZXRMb2dDb250ZXh0UmVxdWVzdBokLnNlcm1vbi53ZWIudjEuR2V0TG9nQ29udGV4dFJlc3BvbnNlIgOQAgFCtwEKEWNvbS5zZXJtb24ud2ViLnYxQghMb2dQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_duration, file_google_protobuf_timestamp, file_sermon_web_v1_log_settings]);
+  fileDesc("ChdzZXJtb24vd2ViL3YxL2xvZy5wcm90bxINc2VybW9uLndlYi52MSKiAgoJTG9nRmlsdGVyEigKBGZyb20YASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghub2RlX2lkcxgDIAMoCRIVCghncm91cF9pZBgEIAEoCUgAiAEBEikKB3NvdXJjZXMYBSADKA4yGC5zZXJtb24ud2ViLnYxLkxvZ1NvdXJjZRINCgV1bml0cxgGIAMoCRIwCgxtaW5fc2V2ZXJpdHkYByABKA4yGi5zZXJtb24ud2ViLnYxLkxvZ1NldmVyaXR5EgwKBHRleHQYCCABKAkSEwoLaWdub3JlX2Nhc2UYCSABKAhCCwoJX2dyb3VwX2lkIsECCgdMb2dMaW5lEg8KB25vZGVfaWQYASABKAkSEAoIaG9zdG5hbWUYAiABKAkSJgoCYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKCHNldmVyaXR5GAQgASgOMhouc2VybW9uLndlYi52MS5Mb2dTZXZlcml0eRIoCgZzb3VyY2UYBSABKA4yGC5zZXJtb24ud2ViLnYxLkxvZ1NvdXJjZRIMCgR1bml0GAYgASgJEg8KB21lc3NhZ2UYByABKAkSEQoJdHJ1bmNhdGVkGAggASgIEjIKBmZpZWxkcxgJIAMoCzIiLnNlcm1vbi53ZWIudjEuTG9nTGluZS5GaWVsZHNFbnRyeRotCgtGaWVsZHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBImEKEFF1ZXJ5TG9nc1JlcXVlc3QSKAoGZmlsdGVyGAEgASgLMhguc2VybW9uLndlYi52MS5Mb2dGaWx0ZXISDQoFbGltaXQYAiABKA0SFAoMb2xkZXN0X2ZpcnN0GAMgASgIIkgKEVF1ZXJ5TG9nc1Jlc3BvbnNlEiUKBWxpbmVzGAEgAygLMhYuc2VybW9uLndlYi52MS5Mb2dMaW5lEgwKBG1vcmUYAiABKAgiQgoWR2V0TG9nSGlzdG9ncmFtUmVxdWVzdBIoCgZmaWx0ZXIYASABKAsyGC5zZXJtb24ud2ViLnYxLkxvZ0ZpbHRlciJ1ChdHZXRMb2dIaXN0b2dyYW1SZXNwb25zZRInCgRzdGVwGAEgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEjEKBnNlcmllcxgCIAMoCzIhLnNlcm1vbi53ZWIudjEuTG9nSGlzdG9ncmFtU2VyaWVzInQKEkxvZ0hpc3RvZ3JhbVNlcmllcxIsCghzZXZlcml0eRgBIAEoDjIaLnNlcm1vbi53ZWIudjEuTG9nU2V2ZXJpdHkSMAoGcG9pbnRzGAIgAygLMiAuc2VybW9uLndlYi52MS5Mb2dIaXN0b2dyYW1Qb2ludCJKChFMb2dIaXN0b2dyYW1Qb2ludBImCgJhdBgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFY291bnQYAiABKAEihwEKFEdldExvZ0NvbnRleHRSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSJgoCYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEigKBnNvdXJjZRgDIAEoDjIYLnNlcm1vbi53ZWIudjEuTG9nU291cmNlEgwKBHVuaXQYBCABKAkiPgoVR2V0TG9nQ29udGV4dFJlc3BvbnNlEiUKBWxpbmVzGAEgAygLMhYuc2VybW9uLndlYi52MS5Mb2dMaW5lIoECCg9UYWlsTG9nc1JlcXVlc3QSEAoIbm9kZV9pZHMYASADKAkSFQoIZ3JvdXBfaWQYAiABKAlIAIgBARIpCgdzb3VyY2VzGAMgAygOMhguc2VybW9uLndlYi52MS5Mb2dTb3VyY2USDQoFdW5pdHMYBCADKAkSMAoMbWluX3NldmVyaXR5GAUgASgOMhouc2VybW9uLndlYi52MS5Mb2dTZXZlcml0eRIMCgR0ZXh0GAYgASgJEhMKC2lnbm9yZV9jYXNlGAcgASgIEikKBXNpbmNlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEILCglfZ3JvdXBfaWQiYQoQVGFpbExvZ3NSZXNwb25zZRIlCgVsaW5lcxgBIAMoCzIWLnNlcm1vbi53ZWIudjEuTG9nTGluZRIRCgl0aHJvdHRsZWQYAiABKAgSEwoLdW5hdmFpbGFibGUYAyABKAgqVAoJTG9nU291cmNlEhoKFkxPR19TT1VSQ0VfVU5TUEVDSUZJRUQQABIWChJMT0dfU09VUkNFX0pPVVJOQUwQARITCg9MT0dfU09VUkNFX0ZJTEUQAjL9AgoKTG9nU2VydmljZRJTCglRdWVyeUxvZ3MSHy5zZXJtb24ud2ViLnYxLlF1ZXJ5TG9nc1JlcXVlc3QaIC5zZXJtb24ud2ViLnYxLlF1ZXJ5TG9nc1Jlc3BvbnNlIgOQAgESZQoPR2V0TG9nSGlzdG9ncmFtEiUuc2VybW9uLndlYi52MS5HZXRMb2dIaXN0b2dyYW1SZXF1ZXN0GiYuc2VybW9uLndlYi52MS5HZXRMb2dIaXN0b2dyYW1SZXNwb25zZSIDkAIBEl8KDUdldExvZ0NvbnRleHQSIy5zZXJtb24ud2ViLnYxLkdldExvZ0NvbnRleHRSZXF1ZXN0GiQuc2VybW9uLndlYi52MS5HZXRMb2dDb250ZXh0UmVzcG9uc2UiA5ACARJSCghUYWlsTG9ncxIeLnNlcm1vbi53ZWIudjEuVGFpbExvZ3NSZXF1ZXN0Gh8uc2VybW9uLndlYi52MS5UYWlsTG9nc1Jlc3BvbnNlIgOQAgEwAUK3AQoRY29tLnNlcm1vbi53ZWIudjFCCExvZ1Byb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_duration, file_google_protobuf_timestamp, file_sermon_web_v1_log_settings]);
 
 /**
  * LogFilter selects log lines.
@@ -402,6 +402,112 @@ export const GetLogContextResponseSchema: GenMessage<GetLogContextResponse> = /*
   messageDesc(file_sermon_web_v1_log, 9);
 
 /**
+ * TailLogsRequest selects the lines of a tail, like LogFilter without a time range.
+ *
+ * @generated from message sermon.web.v1.TailLogsRequest
+ */
+export type TailLogsRequest = Message<"sermon.web.v1.TailLogsRequest"> & {
+  /**
+   * node_ids narrow to these nodes; empty: every visible node.
+   *
+   * @generated from field: repeated string node_ids = 1;
+   */
+  nodeIds: string[];
+
+  /**
+   * group_id narrows to the nodes of this group.
+   *
+   * @generated from field: optional string group_id = 2;
+   */
+  groupId?: string | undefined;
+
+  /**
+   * sources narrow to these sources; empty: all.
+   *
+   * @generated from field: repeated sermon.web.v1.LogSource sources = 3;
+   */
+  sources: LogSource[];
+
+  /**
+   * units narrow to these systemd units or syslog identifiers; empty: all.
+   *
+   * @generated from field: repeated string units = 4;
+   */
+  units: string[];
+
+  /**
+   * min_severity keeps this severity and the more severe ones; unspecified keeps all.
+   *
+   * @generated from field: sermon.web.v1.LogSeverity min_severity = 5;
+   */
+  minSeverity: LogSeverity;
+
+  /**
+   * text is a part of the line, as typed (no regex).
+   *
+   * @generated from field: string text = 6;
+   */
+  text: string;
+
+  /**
+   * ignore_case matches text regardless of case.
+   *
+   * @generated from field: bool ignore_case = 7;
+   */
+  ignoreCase: boolean;
+
+  /**
+   * since starts the tail at this time, at most 5 minutes ago (e.g. the newest line of a query);
+   * unset: now.
+   *
+   * @generated from field: google.protobuf.Timestamp since = 8;
+   */
+  since?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.TailLogsRequest.
+ * Use `create(TailLogsRequestSchema)` to create a new message.
+ */
+export const TailLogsRequestSchema: GenMessage<TailLogsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_log, 10);
+
+/**
+ * TailLogsResponse is a message of a tail.
+ *
+ * @generated from message sermon.web.v1.TailLogsResponse
+ */
+export type TailLogsResponse = Message<"sermon.web.v1.TailLogsResponse"> & {
+  /**
+   * lines are the new lines, oldest first; a late line may be older than one of an earlier message.
+   *
+   * @generated from field: repeated sermon.web.v1.LogLine lines = 1;
+   */
+  lines: LogLine[];
+
+  /**
+   * throttled is set if more lines arrived than the tail sends; the older ones were skipped.
+   *
+   * @generated from field: bool throttled = 2;
+   */
+  throttled: boolean;
+
+  /**
+   * unavailable is set while the log store is not reachable; the tail goes on.
+   *
+   * @generated from field: bool unavailable = 3;
+   */
+  unavailable: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.TailLogsResponse.
+ * Use `create(TailLogsResponseSchema)` to create a new message.
+ */
+export const TailLogsResponseSchema: GenMessage<TailLogsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_log, 11);
+
+/**
  * LogSource is where the agent read a line.
  *
  * @generated from enum sermon.web.v1.LogSource
@@ -474,6 +580,20 @@ export const LogService: GenService<{
     methodKind: "unary";
     input: typeof GetLogContextRequestSchema;
     output: typeof GetLogContextResponseSchema;
+  },
+  /**
+   * TailLogs streams new lines of the filter (ADR 0032): a first message at once, then messages
+   * with new lines, a change of availability or every 15 s a heartbeat. At most 100 lines/s
+   * (else throttled); the live stream limits of WatchMetrics apply together with it
+   * (RESOURCE_EXHAUSTED). It ends after 15 minutes or when the rights change, fails with
+   * UNAUTHENTICATED after a logout and PERMISSION_DENIED without view_logs; the client reconnects.
+   *
+   * @generated from rpc sermon.web.v1.LogService.TailLogs
+   */
+  tailLogs: {
+    methodKind: "server_streaming";
+    input: typeof TailLogsRequestSchema;
+    output: typeof TailLogsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_log, 0);

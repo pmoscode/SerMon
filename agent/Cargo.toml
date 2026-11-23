@@ -1,8 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
-# Fuzz targets need nightly and have their own workspace (just fuzz-agent).
-exclude = ["fuzz"]
+# The fuzz targets are a member, so one Cargo.lock holds every pin and Renovate updates it in one
+# place; they compile on stable, cargo-fuzz builds them with the nightly of fuzz/rust-toolchain.toml
+# (just fuzz-agent). Not among default-members: plain builds leave them out.
+members = ["crates/*", "fuzz"]
 # sermon-testserver is test support (dev-dependency only); release builds leave it out.
 default-members = [
   "crates/sermon-agent",

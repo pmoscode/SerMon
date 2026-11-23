@@ -28,7 +28,9 @@ allow = [
   "Zlib",
 ]
 confidence-threshold = 0.9
-exceptions = []
+# libfuzzer-sys bundles LLVM's libFuzzer (NCSA, permissive and AGPL-compatible); only the fuzz
+# targets use it, the agent binary doesn't.
+exceptions = [{ crate = "libfuzzer-sys", allow = ["NCSA"] }]
 # The allow list is a policy, not an inventory: unused entries are fine.
 unused-allowed-license = "allow"
 

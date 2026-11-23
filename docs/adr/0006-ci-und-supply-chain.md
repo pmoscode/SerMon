@@ -78,3 +78,16 @@ Die CI ruft dieselben `just`-Befehle auf wie die lokale Entwicklung. Was in der 
   wären langsam und unzuverlässig gewesen; das Demo-Skript erkennt die Architektur ohnehin selbst.
 - **Pakete:** nfpm läuft als Container-Image, gepinnt per Digest (`scripts/package-agent.sh`); es wird nichts auf dem
   Host installiert. `just test-packages` läuft in `ci.yml` im Job des Release-Builds (amd64) und nightly (arm64).
+
+## Nachtrag: Fuzz-Targets im Agent-Workspace (2026-11-23)
+
+- **Problem:** Die Fuzz-Targets (`agent/fuzz`) waren ein eigener Workspace mit eigener `Cargo.lock` und erbten die
+  exakten Pins des Agents über Pfad-Abhängigkeiten. Renovate aktualisiert nur die Lock-Datei des Workspaces, dessen
+  Manifest eine Abhängigkeit nennt; nach jedem Update der Agent-Abhängigkeiten scheiterte der Fuzz-Job an
+  `--locked`. Befehle nach dem Update (`postUpgradeTasks`) erlaubt nur selbst gehostetes Renovate.
+- **Entscheidung:** `agent/fuzz` ist Mitglied des Agent-Workspaces (nicht in `default-members`), mit einer
+  gemeinsamen `Cargo.lock`. Die Targets kompilieren auf stable; `cargo fuzz` baut sie mit dem Nightly aus
+  `fuzz/rust-toolchain.toml`. `just lint-agent` und `cargo-deny` prüfen sie mit; der eigene Lint-Schritt in `fuzz.yml`
+  entfällt. Die Workspace-Lints gelten dort nicht (Testcode mit `expect()`).
+- **Lizenz:** `libfuzzer-sys` bündelt libFuzzer unter NCSA (permissiv, mit der AGPL vereinbar); `deny.toml` erlaubt
+  NCSA nur für diese Crate. Sie landet nicht in der Agent-Binary.

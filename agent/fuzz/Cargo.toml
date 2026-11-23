@@ -18,8 +18,6 @@ sermon-collectors = { path = "../crates/sermon-collectors" }
 sermon-logs = { path = "../crates/sermon-logs" }
 sermon-security = { path = "../crates/sermon-security" }
 
-# Not part of the agent workspace: built only with the nightly toolchain.
-[workspace]
 
 [[bin]]
 name = "proc_parsers"
@@ -49,5 +47,5 @@ test = false
 doc = false
 bench = false
 
-[profile.release]
-debug = 1
+# The workspace lints are not taken over: fuzz targets are test code (expect() on fixtures).
+[lints]

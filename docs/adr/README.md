@@ -38,6 +38,7 @@ KONZEPT §2 mit angepasst.
 | [0028](0028-produktions-compose.md) | Produktions-Compose: Agent-Port direkt, Server-Image aus dem Quellcode | accepted | D23 |
 | [0029](0029-organisationen-verwalten-sperren-loeschen.md) | Organisationen verwalten, sperren und löschen | accepted | D29 |
 | [0030](0030-konfiguration-vom-server.md) | Konfiguration vom Server an die Agents | accepted | D17 |
+| [0031](0031-logs-in-loki.md) | Logs in Loki: fester Endpunkt, eigener Client, sparsame Labels | accepted | D13, D17 |
 
 ## Entscheidungslog → ADR
 

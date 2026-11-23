@@ -59,8 +59,11 @@ linters:
       # Test code may ignore errors of best-effort cleanup and returns from helpers.
       - path: _test\.go
         linters: [wrapcheck, errcheck, gosec, bodyclose, forbidigo]
-      # The one place that builds HTTP clients.
+      # The one place that builds HTTP clients for user-chosen targets.
       - path: internal/platform/safehttp/
+        linters: [forbidigo]
+      # Loki: the one fixed endpoint of the operator, no redirects, no proxy (ADR 0031).
+      - path: internal/adapters/loki/
         linters: [forbidigo]
 
 formatters:

@@ -36,6 +36,8 @@ trap cleanup EXIT INT TERM
   export SERMON_MASTER_KEYS_FILE="$root/deploy/dev/.secrets/master_keys"
   export SERMON_AGENT_ADDR=127.0.0.1:8443 SERMON_AGENT_HOSTNAMES=localhost,127.0.0.1
   export SERMON_METRICS_ADDR=127.0.0.1:9464
+  # Logs (ADR 0031): the Loki of deploy/dev/compose.yaml.
+  export SERMON_LOKI_URL="http://127.0.0.1:${SERMON_DEV_LOKI_PORT:-3100}"
   # Notification channels may reach the local ntfy and Mailpit (safehttp blocks loopback otherwise).
   export SERMON_OUTBOUND_ALLOWLIST=127.0.0.1/32
   export SERMON_ALLOWED_ORIGINS="http://127.0.0.1:5173,http://127.0.0.1:8080"

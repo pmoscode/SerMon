@@ -108,6 +108,8 @@ type Config struct {
 	MetricsAddr string
 	// AgentDownloadsDir holds the signed agent binaries served under /downloads (ADR 0012).
 	AgentDownloadsDir string
+	// LokiURL is the Loki instance for logs (ADR 0031); nil: the server takes no logs.
+	LokiURL *url.URL
 	// SMTP sends mail (invitations; notifications later). Required in production with a
 	// database; nil without.
 	SMTP *SMTP
@@ -140,6 +142,7 @@ const (
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
 	envMetricsAddr     = "SERMON_METRICS_ADDR"
 	envDownloadsDir    = "SERMON_AGENT_DOWNLOADS_DIR"
+	envLokiURL         = "SERMON_LOKI_URL"
 	envMode            = "SERMON_MODE"
 	envSMTPHost        = "SERMON_SMTP_HOST"
 	envSMTPPort        = "SERMON_SMTP_PORT"
@@ -186,6 +189,7 @@ func Load(src Source) (Config, error) {
 		AgentHostnames:     parseHostnames(&l),
 		MetricsAddr:        l.string(envMetricsAddr, "", validateAddr),
 		AgentDownloadsDir:  l.string(envDownloadsDir, "", validateDir),
+		LokiURL:            parseLokiURL(&l),
 	}
 	if cfg.OrgDeletionGrace < minDeletionGrace {
 		l.fail(envDeletionGrace, "must be at least %s (7 days), got %s", minDeletionGrace, cfg.OrgDeletionGrace)
@@ -476,6 +480,32 @@ func parseOrigins(l *loader) []string {
 		origins = append(origins, origin)
 	}
 	return origins
+}
+
+// parseLokiURL reads the Loki endpoint (ADR 0031): http(s), a host, no credentials, query or
+// fragment. Errors never echo the value.
+func parseLokiURL(l *loader) *url.URL {
+	raw := l.string(envLokiURL, "", nil)
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	switch {
+	case err != nil:
+		l.fail(envLokiURL, "not a URL")
+	case u.Scheme != "http" && u.Scheme != "https":
+		l.fail(envLokiURL, "must be an http:// or https:// URL")
+	case u.Host == "":
+		l.fail(envLokiURL, "must name a host")
+	case u.User != nil:
+		l.fail(envLokiURL, "must not contain credentials (Loki is reached over the internal network only)")
+	case u.RawQuery != "" || u.Fragment != "" || u.ForceQuery:
+		l.fail(envLokiURL, "must not contain a query or fragment")
+	default:
+		u.Path = strings.TrimSuffix(u.Path, "/")
+		return u
+	}
+	return nil
 }
 
 // parseOutboundAllowlist reads the internal networks outgoing requests may reach.

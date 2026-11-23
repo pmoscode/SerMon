@@ -124,6 +124,12 @@ def check(services: dict, base: str, loopback_only: bool, hardened: bool = False
             content = open(path, encoding="utf-8").read() if path and os.path.isfile(path) else ""
             if not re.search(r"^\s*reporting_enabled:\s*false\b", content, re.MULTILINE):
                 errors.append(f"{name}: Loki config must set analytics.reporting_enabled: false")
+            # Without it Loki ignores X-Scope-OrgID: one tenant for all organizations (ADR 0031).
+            if not re.search(r"^auth_enabled:\s*true\b", content, re.MULTILINE):
+                errors.append(f"{name}: Loki config must set auth_enabled: true")
+            # Loki has no login of its own: only the server may reach it.
+            if hardened and svc.get("ports"):
+                errors.append(f"{name}: Loki must not publish ports")
     return errors
 
 

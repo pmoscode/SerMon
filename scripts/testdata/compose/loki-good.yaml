@@ -1,2 +1,3 @@
+auth_enabled: true
 analytics:
   reporting_enabled: false

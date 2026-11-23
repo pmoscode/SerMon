@@ -201,7 +201,7 @@ eine Fake-Implementierung für Tests.
 | HTTP/RPC        | `net/http` (stdlib) + `connectrpc.com/connect`                                                                                                                                                                                        |
 | DB              | PostgreSQL 17 + TimescaleDB-Extension, `pgx`, `sqlc` (typisierte Queries), `goose` (Migrationen); Row-Level-Security als zweite Verteidigungslinie. Migrationen laufen als Owner-Rolle, der Server läuft als `sermon_app` ohne Sonderrechte und verweigert privilegierte Rollen (ADR 0007) |
 | Metriken        | Port `MetricStore` mit Implementierung auf TimescaleDB-Hypertables (selbe PG-Instanz). Schreiben gebündelt per `COPY`, Lesen **nur über die typisierte Query-Schicht**. Die Implementierung ist austauschbar (z. B. VictoriaMetrics bei Wachstum, siehe ADR 0001) |
-| Logs            | Loki-Push-API mit `X-Scope-OrgID = <org-uuid>`                                                                                                                                                                                        |
+| Logs            | Loki-Push-API mit `X-Scope-OrgID = <org-uuid>`, eine feste URL des Betreibers (`SERMON_LOKI_URL`), eigener Client ohne Proxy und Redirects ([ADR 0031](docs/adr/0031-logs-in-loki.md))                                                     |
 | Background-Jobs | Alert-Engine, Anomalie-Worker, Notifier, Update-Orchestrator, Zertifikatsrotation, Retention. Implementiert als In-Process-Worker mit Leases in PG (`SELECT … FOR UPDATE SKIP LOCKED`), sodass später mehrere Instanzen möglich wären |
 | Konfiguration   | Environment-Variablen plus optionale YAML-Datei; Secrets über `*_FILE` (Docker-Secrets)                                                                                                                                               |
 | Observability   | Eigene `/metrics` (Prometheus), strukturierte Logs (`slog`, JSON), Health-Endpunkte `/healthz` und `/readyz`                                                                                                                          |
@@ -1408,8 +1408,8 @@ services:
   caddy            # TLS (ACME), Reverse-Proxy für Web und Enrollment (80, 443)
   server           # aus dem Quellcode gebaut (distroless, nonroot); Agent-Port 8443 direkt veröffentlicht (mTLS im Server)
   postgres         # PostgreSQL 17 + TimescaleDB (Image timescale/timescaledb, pg17), Volume, nur internes Netz
-  loki             # ab E3.2: auth_enabled: true, Compactor-Retention
-networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres; internal: true)
+  loki             # Logs: auth_enabled: true, Compactor-Retention 14 Tage, kein Port, nur internes Netz (ADR 0031)
+networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres, loki; internal: true)
 ```
 
 - **Dateien:** `deploy/compose/` (Anleitung `docs/admin/installation.md`, [ADR 0028](docs/adr/0028-produktions-compose.md)). Jeder Container ist

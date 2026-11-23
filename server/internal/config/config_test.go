@@ -463,3 +463,33 @@ func TestLoad_DeletionGraceHasAFloor(t *testing.T) {
 		}
 	}
 }
+
+// ADR 0031: Loki is one fixed URL of the operator; credentials, queries and other schemes are
+// rejected, without echoing the value.
+func TestLoad_LokiURL(t *testing.T) {
+	cfg, err := config.Load(fakeSource(map[string]string{"SERMON_LOKI_URL": "http://loki:3100"}, nil))
+	if err != nil || cfg.LokiURL == nil || cfg.LokiURL.String() != "http://loki:3100" {
+		t.Errorf("Load() = %v, %v", cfg.LokiURL, err)
+	}
+	if cfg, err := config.Load(fakeSource(map[string]string{"SERMON_LOKI_URL": "https://logs.internal/loki/"}, nil)); err != nil || cfg.LokiURL.Path != "/loki" {
+		t.Errorf("path prefix: %v, %v", cfg.LokiURL, err)
+	}
+	if cfg, err := config.Load(fakeSource(map[string]string{}, nil)); err != nil || cfg.LokiURL != nil {
+		t.Errorf("off by default: %v, %v", cfg.LokiURL, err)
+	}
+	for name, value := range map[string]string{
+		"credentials": "http://admin:s3cret@loki:3100", // betterleaks:allow
+		"query":       "http://loki:3100/?x=1",
+		"fragment":    "http://loki:3100/#x",
+		"scheme":      "ftp://loki:3100",
+		"no host":     "http:///loki",
+		"not a url":   "::",
+	} {
+		_, err := config.Load(fakeSource(map[string]string{"SERMON_LOKI_URL": value}, nil))
+		if err == nil {
+			t.Errorf("%s: Load() error = nil", name)
+		} else if strings.Contains(err.Error(), "s3cret") {
+			t.Errorf("%s: the error echoes the value: %v", name, err)
+		}
+	}
+}

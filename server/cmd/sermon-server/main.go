@@ -19,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
 	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/discord"
@@ -143,6 +144,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	var checks []health.Check
 	var servers []func(context.Context) error
 	registry := serverMetrics()
+	// Logs (ADR 0031): the ingest stores them from M3-07 on.
+	if cfg.LokiURL != nil {
+		logStore := loki.New(cfg.LokiURL)
+		checks = append(checks, health.Check{Name: "loki", Fn: logStore.Ready})
+	} else {
+		logger.WarnContext(ctx, "SERMON_LOKI_URL is not set – the server takes no logs from the agents")
+	}
 	if cfg.DatabaseURL != "" {
 		db, err := openDatabase(ctx, cfg, logger)
 		if err != nil {

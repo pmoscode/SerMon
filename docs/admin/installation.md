@@ -21,10 +21,12 @@ Diese Anleitung richtet SerMon auf einem Linux-Server mit Docker ein. Grundlage 
 | `server` | `sermon-server`, gebaut aus dem Quellcode; Web-API, Ingest, Alerting | 8443 (Agents, mTLS) |
 | `migrate` | dasselbe Image, läuft vor dem Server einmal durch und migriert die Datenbank | – |
 | `postgres` | PostgreSQL 17 mit TimescaleDB | nur im internen Netz |
+| `loki` | Logs der Nodes, getrennt pro Organisation, 14 Tage ([ADR 0031](../adr/0031-logs-in-loki.md)) | nur im internen Netz |
 
 Alle Container laufen mit schreibgeschütztem Dateisystem, ohne Capabilities (Ausnahmen: Caddy darf Port 80/443
 binden, PostgreSQL zum eigenen Benutzer wechseln) und ohne neue Privilegien. Die Datenbank hängt nur an einem Netz
-ohne Route nach außen. Der Agent-Port geht direkt zum Server, damit er die echten Adressen der Agents sieht.
+ohne Route nach außen, ebenso Loki: Loki hat keine eigene Anmeldung, nur der Server erreicht es und nennt bei jedem
+Zugriff die Organisation. Der Agent-Port geht direkt zum Server, damit er die echten Adressen der Agents sieht.
 
 Die Datenbank hat drei Rollen ([ADR 0007](../adr/0007-mandantentrennung-rls.md)): Der Superuser `postgres` bleibt im
 Datenbank-Container; `sermon_owner` besitzt das Schema und migriert, aber nur im Service `migrate`; der Server meldet
@@ -80,6 +82,7 @@ Veröffentlichte Releases mit Schlüssel und Binaries folgen mit v1.0.
 | Datenbank-Passwörter, SMTP-Passwort | `deploy/compose/secrets/` | `secrets.sh` überschreibt nie; ein neues Passwort sperrt den Server aus. `postgres_password` (Superuser) braucht nur der Datenbank-Container |
 | Master-Keys, Agent-CA | Volume `sermon_server-state` | **sichern**: ohne Master-Keys sind alle versiegelten Secrets verloren |
 | Datenbank | Volume `sermon_postgres-data` | |
+| Logs | Volume `sermon_loki-data` | 14 Tage; Konfiguration in `deploy/compose/loki.yaml` |
 | Zertifikate von Caddy | Volume `sermon_caddy-data` | |
 
 Die Logs der Container sind auf 5 × 10 MB begrenzt.

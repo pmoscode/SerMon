@@ -11,7 +11,8 @@
 # server starts; the server itself connects as "sermon_app" only.
 #
 # Public: Caddy on 80/443 (web UI, ACME) and the server's mTLS agent port (8443), published directly
-# so the server sees the agents' addresses (ADR 0028). The database is on an internal network only.
+# so the server sees the agents' addresses (ADR 0028). The database and Loki are on an internal
+# network only.
 # Every container is read-only, drops all capabilities and forbids new privileges
 # (scripts/check-compose.sh --hardened); every image is pinned by digest.
 name: sermon
@@ -40,6 +41,8 @@ x-server-environment: &server-environment
   SERMON_DATABASE_SIZE_LIMIT: ${SERMON_DATABASE_SIZE_LIMIT:-}
   SERMON_ORG_DELETION_GRACE: ${SERMON_ORG_DELETION_GRACE:-720h}
   SERMON_OUTBOUND_ALLOWLIST: ${SERMON_OUTBOUND_ALLOWLIST:-}
+  # Logs (ADR 0031): only over the internal network.
+  SERMON_LOKI_URL: http://loki:3100
   # Production mode: invitations go out by mail only (M1-39).
   SERMON_SMTP_HOST: ${SERMON_SMTP_HOST:?set SERMON_SMTP_HOST in .env}
   SERMON_SMTP_PORT: ${SERMON_SMTP_PORT:-587}
@@ -116,6 +119,20 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
+      # Distroless, without a health check of its own: the server's /readyz reports it.
+      loki: { condition: service_started }
+
+  # Logs (ADR 0031): multi-tenant without a login of its own, so on the internal network only and
+  # without a published port; runs as UID 10001 from the image.
+  loki:
+    <<: *hardened
+    image: grafana/loki:3.7.10@sha256:b43c257ccfc925d4a50b8717cac61a3b51df8c48d01847936057e5c4075a24a7
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    tmpfs: [/tmp]
+    networks: [internal]
 
   caddy:
     <<: *hardened
@@ -142,7 +159,7 @@ networks:
       config:
         - subnet: "${SERMON_EDGE_SUBNET:-172.30.78.0/24}"
           ip_range: "${SERMON_EDGE_IP_RANGE:-172.30.78.128/25}"
-  # The database: no route outside.
+  # The database and Loki: no route outside.
   internal:
     internal: true
 
@@ -156,6 +173,7 @@ secrets:
 
 volumes:
   postgres-data:
+  loki-data:
   server-state:
   caddy-data:
   caddy-config:

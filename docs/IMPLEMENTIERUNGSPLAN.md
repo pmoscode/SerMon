@@ -2829,7 +2829,40 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.2 Loki (E3.2)
 
-#### ☐ M3-06 – Loki in der Compose und Adapter · S · M 🔒
+#### ☑ M3-06 – Loki in der Compose und Adapter · S · M 🔒
+> Erledigt ([ADR 0031](adr/0031-logs-in-loki.md); KONZEPT §4.3, §22; Threat Model T35, T36):
+> - **Compose:**
+>   - Loki in `deploy/compose`: gehärtet, UID 10001 aus dem Image, nur Netz `internal`, kein Port, Volume
+>     `loki-data`. Der Server bekommt `SERMON_LOKI_URL=http://loki:3100`.
+>   - **Eine Konfiguration** `deploy/compose/loki.yaml` für Produktion und `just dev` (die Dev-Kopie ist entfernt):
+>     `auth_enabled`, Retention 14 Tage mit Löschen pro Tenant, Grenzen pro Tenant (Ingest, Zeilen 32 KB mit Kürzen,
+>     8 Labels, Alter 7 Tage, Abfragen), Telemetrie aus. Geprüft mit `-verify-config`; gehärtet gestartet, ohne
+>     Tenant 401.
+>   - Das Image ist distroless und hat keinen Health-Check; `/readyz` des Servers meldet Loki.
+> - **`check-compose`:** Die Loki-Konfiguration muss `auth_enabled: true` setzen; gehärtet darf Loki keinen Port
+>   veröffentlichen.
+> - **Server:**
+>   - `SERMON_LOKI_URL`: http(s), mit Host, ohne Zugangsdaten, Query und Fragment; Fehler ohne den Wert. Ohne URL
+>     warnt der Server beim Start. `just dev` setzt die URL des Dev-Containers.
+>   - **`adapters/loki`:**
+>     - Client nur zu dieser URL, ohne Proxy und Redirects, mit Zeitlimits und 32 MiB pro Antwort
+>       (`forbidigo`-Ausnahme nur hier)
+>     - Push als JSON mit gzip und `X-Scope-OrgID` aus `tenant.OrgID`; Labels `node_id`, `source`, `unit`,
+>       `severity`, bereinigt auf 64 Bytes; der Rest als structured metadata
+>     - `Query` (`query_range` mit `categorize-labels`) und `Ready`
+>     - Fehlerarten `ErrRateLimited`, `ErrRejected`, `ErrUnavailable`, mit höchstens 256 Bytes der Antwort
+>   - **`domain/logql`:** Selektor nur aus Node-IDs (nie ohne Nodes), `Quote` für Literale. Die Filter folgen mit
+>     M3-08.
+> - **Tests:**
+>   - Unit: Push (gzip, Tenant, Labels, Nanosekunden, Metadaten), Grenzen der Labels, Fehlerarten mit kurzem Text,
+>     keine Redirects und kein Proxy aus der Umgebung, Query (Parameter, Kopfzeilen, kategorisierte Antwort,
+>     kaputte Antworten), Ready; Config; LogQL mit feindlichen Eingaben.
+>   - Integration (`lokitest`, Image und Konfiguration aus `deploy/compose`): Org A liest ihre Zeilen mit Metadaten,
+>     Org B nichts, ohne Tenant 401; ein Eintrag älter als 7 Tage wird abgelehnt.
+>   - `check-compose`: 2 neue Fälle.
+>   - E2E-Demo gegen die Compose mit Loki.
+> - **Gefunden:** Die erste Fassung las bei Erfolg die ersten 256 Bytes der Antwort weg (gemeinsame
+>   Status-Prüfung); der Query-Test fand es.
 - **Ziel:**
   - **Loki in `deploy/compose`:**
     - Netz `internal`, read-only mit Volume

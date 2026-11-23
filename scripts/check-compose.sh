@@ -1,7 +1,8 @@
 #!/bin/sh
 # Checks a docker compose file against SerMon's rules (KONZEPT §18.6, ADR 0006):
 #   - every image is pinned by digest (@sha256:…)
-#   - TimescaleDB telemetry is off, Loki usage reporting is disabled
+#   - TimescaleDB telemetry is off, Loki usage reporting is disabled, Loki is multi-tenant
+#     (auth_enabled) and, with --hardened, publishes no port
 #   - with --loopback-only: every published port binds to 127.0.0.1
 #   - with --hardened (production, M2-26): every container is read-only, drops all capabilities,
 #     forbids new privileges, is not privileged and sees neither the Docker socket nor the host

@@ -3126,7 +3126,41 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M3-08, M3-09
 - **Skill:** `sermon-ui-component`
 
-#### ☐ M3-12 – Log-Einstellungen in der UI · W · M 🔒
+#### ☑ M3-12 – Log-Einstellungen in der UI · W · M 🔒
+> Erledigt (KONZEPT §7, §10; ADR 0030; Threat Model T22):
+> - **Reiter „Logs“ im Admin-Bereich** (bei Bedarf geladen), Hilfe `concepts/log_settings` DE/EN, alle Änderungen
+>   mit Step-up.
+>   - Viewer-Schalter.
+>   - Pro Gruppe: Versand, Mindest-Severity, ausgeschlossene Units, Datei-Muster mit Multiline. Die Formularlogik
+>     (`lib/logsettings/form.ts`) prüft Globs wie Server und Agent.
+>   - Redaction-Regeln mit „Testen“ an einer Beispielzeile.
+>   - Stand pro Node: Version aktuell, wartet oder keine Antwort; Fehler des Agents als Text; lokales Veto.
+>   - Abgelehnte Regeln zeigen den Grund des Servers.
+> - **Viewer-Schalter:** Spalte `organizations.viewers_see_logs` (Migration 00040), mit Mitgliedschaft und Rollen bei
+>   jeder Anfrage geladen (`Principal.ViewersWithoutLogs`). `samePrincipal` vergleicht ihn, laufende Live-Streams
+>   enden. Neue RPC `SetViewerLogAccess`.
+> - **Stand pro Node** in `GetLogSettingsResponse.nodes` aus den gespeicherten `ConfigApplied`.
+> - **Redaction testen:** neue RPC `TestRedaction` mit der Go-Kopie der Redaction (`domain/redact`).
+>   - Die eingebauten Muster und die Regeln wie im Agent.
+>   - Gemeinsame Fälle in `testdata/redaction/cases.json` laufen in Rust und Go. Erfundene Geheimnisse sind mit `{{}}`
+>     für Secret-Scanner getrennt.
+>   - Fuzz-Ziel `FuzzRedact` in `just fuzz-server` und im nächtlichen Lauf.
+> - **Gefunden:**
+>   - Der Server nahm Globs mit `[abc]` und `\` an (Go `path.Match`), der Agent kennt nur `*` und `?`. Jetzt
+>     abgelehnt, ebenso leere und `.`-Segmente.
+>   - Paraglide und Svelte lesen `{4}` in Texten und Attributen als Platzhalter. Die Beispiele kommen ohne geschweifte
+>     Klammern aus bzw. als String-Ausdruck.
+> - **Tests:**
+>   - Domäne: Globs, Redaction mit den gemeinsamen Fällen und Ablehnungen.
+>   - Policy und Loader mit dem Schalter, `samePrincipal`.
+>   - Use-Case: Schalter mit Step-up, Audit, ohne Agent-Push; Test der Redaction mit Rechten und Grenzen.
+>   - Integration: Store (Schalter, Audit, Org-Grenzen, Principal pro Org, Stand pro Node).
+>   - API über den echten Stack: die nächste Anfrage eines Viewers wird nach dem Umschalten abgewiesen, Viewer setzen
+>     nicht, Beta sieht keine Nodes von Alpha, Redaction-Test mit Fehler.
+>   - Web: Formularlogik, Komponenten (Stand mit feindlichem Fehlertext, Step-up, abgelehnter Glob, Speichern,
+>     Grund des Servers, Testen, ohne Rechte).
+>   - E2E mit axe (Reiter und offenes Formular, Step-up-Dialog, Speichern, Testen); Budgets unverändert.
+>   - Gegenproben für 24 Prüfungen, alle erkannt; eine doppelte Prüfung in der Redaction ist entfernt.
 - **Ziel:** Reiter „Logs“ im Admin-Bereich.
   - **Pro Gruppe:** Versand, Mindest-Severity, ausgeschlossene Units, Datei-Globs mit Multiline.
   - **Redaction-Regeln der Org** mit „Testen“ gegen eine Beispielzeile.

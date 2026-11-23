@@ -10,6 +10,10 @@ Verwaltung der Organisation für Admins aller Gruppen: Mitglieder und ihre Rolle
 
 Eine Rolle gilt für eine Gruppe oder für alle Gruppen. Mehrere Rollen ergänzen sich.
 
+## Logs
+
+Der Reiter **Logs** legt fest, was die Agents jeder Gruppe senden, ob Viewer Logs sehen und welche eigenen Redaction-Regeln gelten; er zeigt auch, welche Einstellungen jeder Agent angewendet hat. Mehr dazu: [Log-Einstellungen](help:concepts/log_settings).
+
 ## Gut zu wissen
 
 - Rechte ändern, Mitglieder entfernen, Gruppen löschen und Einladen verlangen eine erneute Bestätigung (Passwort oder zweiter Faktor).

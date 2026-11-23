@@ -3,6 +3,7 @@ syntax = "proto3";
 package sermon.web.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
 
 // LogSettingsService holds which log entries the agents of the active organization send and how
 // they redact them (KONZEPT §10, ADR 0030). Admins for all groups only; changes need a recent
@@ -20,6 +21,15 @@ service LogSettingsService {
   // SetRedactionRules replaces the redaction rules of the organization; INVALID_ARGUMENT names
   // the first rule the server cannot compile.
   rpc SetRedactionRules(SetRedactionRulesRequest) returns (SetRedactionRulesResponse);
+  // SetViewerLogAccess sets whether viewers may see logs and security events (KONZEPT §7, M3-12).
+  // It applies from the next request of every session; running live views end.
+  rpc SetViewerLogAccess(SetViewerLogAccessRequest) returns (SetViewerLogAccessResponse);
+  // TestRedaction returns a sample line as the agents would send it with the given rules (not
+  // saved): the built-in patterns, then the rules. No step-up: nothing changes. INVALID_ARGUMENT
+  // names the first rule the server cannot compile.
+  rpc TestRedaction(TestRedactionRequest) returns (TestRedactionResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
 // LogSeverity is the syslog priority of a log entry, from the most to the least severe.
@@ -113,6 +123,28 @@ message GetLogSettingsResponse {
   repeated RedactionRule redaction_rules = 2;
   // version is the configuration version the agents get (ADR 0030).
   uint64 version = 3;
+  // viewers_see_logs is false while viewers may not see logs and security events.
+  bool viewers_see_logs = 4;
+  // nodes are what every agent reported about its configuration, by host name.
+  repeated NodeConfigStatus nodes = 5;
+}
+
+// NodeConfigStatus is the answer of a node's agent to its configuration (ConfigApplied).
+message NodeConfigStatus {
+  // node_id is the node.
+  string node_id = 1;
+  // hostname is the node's name.
+  string hostname = 2;
+  // group_id is the node's group.
+  string group_id = 3;
+  // applied_version is the version the agent took; 0 before its first answer.
+  uint64 applied_version = 4;
+  // error says why the agent kept its previous configuration; from the host: show as text only.
+  string error = 5;
+  // logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false).
+  bool logs_vetoed = 6;
+  // reported_at is the time of the last answer.
+  google.protobuf.Timestamp reported_at = 7;
 }
 
 // SetGroupLogSettingsRequest replaces the settings of a group.
@@ -143,3 +175,26 @@ message SetRedactionRulesRequest {
 
 // SetRedactionRulesResponse has no fields.
 message SetRedactionRulesResponse {}
+
+// SetViewerLogAccessRequest is the switch.
+message SetViewerLogAccessRequest {
+  // viewers_see_logs lets viewers see logs and security events.
+  bool viewers_see_logs = 1;
+}
+
+// SetViewerLogAccessResponse has no fields.
+message SetViewerLogAccessResponse {}
+
+// TestRedactionRequest are rules and a sample line.
+message TestRedactionRequest {
+  // rules are the rules to test, in the order they apply; at most 32.
+  repeated RedactionRule rules = 1 [(buf.validate.field).repeated.max_items = 32];
+  // sample is a log line.
+  string sample = 2 [(buf.validate.field).string.max_bytes = 16384];
+}
+
+// TestRedactionResponse is the redacted line.
+message TestRedactionResponse {
+  // redacted is the sample as the agents would send it.
+  string redacted = 1;
+}

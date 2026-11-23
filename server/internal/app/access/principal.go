@@ -26,9 +26,17 @@ type SecondFactorGate interface {
 	SetupRequired(ctx context.Context, org tenant.OrgID, user identity.UserID) (bool, error)
 }
 
+// Membership is what a user is in an organization.
+type Membership struct {
+	Member   bool
+	Bindings []authz.Binding
+	// ViewersWithoutLogs is the organization's switch (M3-12).
+	ViewersWithoutLogs bool
+}
+
 // Repository reads memberships and role bindings.
 type Repository interface {
-	MembershipAndBindings(ctx context.Context, org tenant.OrgID, user identity.UserID) (bool, []authz.Binding, error)
+	MembershipAndBindings(ctx context.Context, org tenant.OrgID, user identity.UserID) (Membership, error)
 	IsSuperadmin(ctx context.Context, user identity.UserID) (bool, error)
 }
 
@@ -54,11 +62,11 @@ func (l *Loader) Load(ctx context.Context, s session.Session) (authz.Principal, 
 	if s.Org == (tenant.OrgID{}) {
 		return p, nil
 	}
-	member, bindings, err := l.repo.MembershipAndBindings(ctx, s.Org, s.User)
+	membership, err := l.repo.MembershipAndBindings(ctx, s.Org, s.User)
 	if err != nil {
 		return authz.Principal{}, fmt.Errorf("load principal: %w", err)
 	}
-	if !member {
+	if !membership.Member {
 		return authz.Principal{}, ErrNoMembership
 	}
 	if l.gate != nil {
@@ -70,6 +78,6 @@ func (l *Loader) Load(ctx context.Context, s session.Session) (authz.Principal, 
 			return authz.Principal{}, ErrSecondFactorSetupRequired
 		}
 	}
-	p.Org, p.Bindings = s.Org, bindings
+	p.Org, p.Bindings, p.ViewersWithoutLogs = s.Org, membership.Bindings, membership.ViewersWithoutLogs
 	return p, nil
 }

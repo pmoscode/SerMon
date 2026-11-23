@@ -159,6 +159,24 @@ func TestPolicy_ViewersCanBeDeniedLogs(t *testing.T) {
 	}
 }
 
+// The switch of the organization comes with the principal, loaded on every request (M3-12).
+func TestPolicy_TheOrganizationsSwitchComesWithThePrincipal(t *testing.T) {
+	viewer := member(authz.Binding{AllGroups: true, Role: role.Viewer})
+	operator := member(authz.Binding{AllGroups: true, Role: role.Operator})
+	viewer.ViewersWithoutLogs, operator.ViewersWithoutLogs = true, true
+	policy := authz.NewPolicy()
+	target := authz.InGroup(orgA, groupX)
+	for _, action := range []authz.Action{authz.ViewLogs, authz.ViewSecurityEvents} {
+		if policy.Allowed(viewer, action, target) || !policy.Allowed(operator, action, target) {
+			t.Errorf("%s: viewer %v, operator %v", action, policy.Allowed(viewer, action, target), policy.Allowed(operator, action, target))
+		}
+	}
+	viewer.ViewersWithoutLogs = false
+	if !policy.Allowed(viewer, authz.ViewLogs, target) {
+		t.Error("with the switch off viewers see logs")
+	}
+}
+
 func TestPolicy_DeniesInvalidInput(t *testing.T) {
 	policy := authz.NewPolicy()
 	admin := member(authz.Binding{AllGroups: true, Role: role.Admin})

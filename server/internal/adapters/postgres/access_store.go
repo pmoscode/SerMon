@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
+	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
@@ -30,18 +31,22 @@ func NewAccessStore(db *DB) *AccessStore { return &AccessStore{db: db} }
 
 // MembershipAndBindings reports whether the user is a member of the organization and returns the
 // user's role bindings there (read inside the organization's tenant transaction).
-func (s *AccessStore) MembershipAndBindings(ctx context.Context, org tenant.OrgID, user identity.UserID) (bool, []authz.Binding, error) {
+func (s *AccessStore) MembershipAndBindings(ctx context.Context, org tenant.OrgID, user identity.UserID) (access.Membership, error) {
 	scope, err := tenant.ForAllGroups(org)
 	if err != nil {
-		return false, nil, err
+		return access.Membership{}, err
 	}
-	var member bool
-	var bindings []authz.Binding
+	var m access.Membership
 	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		var err error
-		if member, err = q.IsMember(ctx, uuid.UUID(user)); err != nil || !member {
+		if m.Member, err = q.IsMember(ctx, uuid.UUID(user)); err != nil || !m.Member {
 			return wrap(err, "check membership")
 		}
+		see, err := q.ViewersSeeLogs(ctx)
+		if err != nil {
+			return fmt.Errorf("viewer switch: %w", err)
+		}
+		m.ViewersWithoutLogs = !see
 		rows, err := q.RoleBindingsOfUser(ctx, uuid.UUID(user))
 		if err != nil {
 			return fmt.Errorf("load role bindings: %w", err)
@@ -55,11 +60,11 @@ func (s *AccessStore) MembershipAndBindings(ctx context.Context, org tenant.OrgI
 			if r.GroupID != nil {
 				b.Group = tenant.GroupID(*r.GroupID)
 			}
-			bindings = append(bindings, b)
+			m.Bindings = append(m.Bindings, b)
 		}
 		return nil
 	})
-	return member, bindings, err
+	return m, err
 }
 
 // AppendAudit appends an entry to the organization's audit log (hash chain computed by the database).

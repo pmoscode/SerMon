@@ -94,6 +94,52 @@ func (q *Queries) ListGroupLogSettings(ctx context.Context) ([]ListGroupLogSetti
 	return items, nil
 }
 
+const listNodeConfigStatus = `-- name: ListNodeConfigStatus :many
+SELECT id, hostname, group_id, config_version, coalesce(config_error, '')::text AS config_error, logs_vetoed,
+       config_reported_at
+FROM nodes
+ORDER BY hostname, id
+`
+
+type ListNodeConfigStatusRow struct {
+	ID               uuid.UUID
+	Hostname         string
+	GroupID          uuid.UUID
+	ConfigVersion    int64
+	ConfigError      string
+	LogsVetoed       bool
+	ConfigReportedAt *time.Time
+}
+
+// What every agent reported about its configuration (M3-12).
+func (q *Queries) ListNodeConfigStatus(ctx context.Context) ([]ListNodeConfigStatusRow, error) {
+	rows, err := q.db.Query(ctx, listNodeConfigStatus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNodeConfigStatusRow{}
+	for rows.Next() {
+		var i ListNodeConfigStatusRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hostname,
+			&i.GroupID,
+			&i.ConfigVersion,
+			&i.ConfigError,
+			&i.LogsVetoed,
+			&i.ConfigReportedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nodeGroupExists = `-- name: NodeGroupExists :one
 SELECT EXISTS (SELECT 1 FROM node_groups WHERE id = $1)
 `
@@ -106,18 +152,19 @@ func (q *Queries) NodeGroupExists(ctx context.Context, groupID uuid.UUID) (bool,
 }
 
 const organizationAgentConfig = `-- name: OrganizationAgentConfig :one
-SELECT agent_config_version, redaction_rules FROM organizations WHERE id = current_org_id()
+SELECT agent_config_version, redaction_rules, viewers_see_logs FROM organizations WHERE id = current_org_id()
 `
 
 type OrganizationAgentConfigRow struct {
 	AgentConfigVersion int64
 	RedactionRules     []byte
+	ViewersSeeLogs     bool
 }
 
 func (q *Queries) OrganizationAgentConfig(ctx context.Context) (OrganizationAgentConfigRow, error) {
 	row := q.db.QueryRow(ctx, organizationAgentConfig)
 	var i OrganizationAgentConfigRow
-	err := row.Scan(&i.AgentConfigVersion, &i.RedactionRules)
+	err := row.Scan(&i.AgentConfigVersion, &i.RedactionRules, &i.ViewersSeeLogs)
 	return i, err
 }
 
@@ -156,6 +203,15 @@ UPDATE organizations SET redaction_rules = $1 WHERE id = current_org_id()
 
 func (q *Queries) SetRedactionRules(ctx context.Context, rules []byte) error {
 	_, err := q.db.Exec(ctx, setRedactionRules, rules)
+	return err
+}
+
+const setViewersSeeLogs = `-- name: SetViewersSeeLogs :exec
+UPDATE organizations SET viewers_see_logs = $1 WHERE id = current_org_id()
+`
+
+func (q *Queries) SetViewersSeeLogs(ctx context.Context, see bool) error {
+	_, err := q.db.Exec(ctx, setViewersSeeLogs, see)
 	return err
 }
 

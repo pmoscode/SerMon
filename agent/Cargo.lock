@@ -1340,6 +1340,7 @@ version = "0.0.0"
 dependencies = [
  "proptest",
  "regex",
+ "serde_json",
  "sermon-logs",
  "thiserror",
 ]

@@ -132,6 +132,9 @@ type Principal struct {
 	Org        tenant.OrgID // zero for a superadmin acting at instance level
 	Bindings   []Binding
 	Superadmin bool
+	// ViewersWithoutLogs: the organization denies logs and security events to viewers (KONZEPT
+	// §7, M3-12); loaded with the principal on every request.
+	ViewersWithoutLogs bool
 }
 
 // Target is the object of an action: an organization or a node group in it.
@@ -193,7 +196,7 @@ func (pol Policy) Allowed(p Principal, action Action, target Target) bool {
 	}
 
 	minimum := r.minimum
-	if r.viewerLogs && pol.viewerLogsDisabled[p.Org] {
+	if r.viewerLogs && (p.ViewersWithoutLogs || pol.viewerLogsDisabled[p.Org]) {
 		minimum = role.Operator
 	}
 	return held.AtLeast(minimum)
@@ -235,7 +238,7 @@ func (pol Policy) ScopeForAction(p Principal, action Action) (tenant.Scope, erro
 		return tenant.Scope{}, fmt.Errorf("%w: %s is not group-scoped", ErrNoOrganization, action)
 	}
 	minimum := r.minimum
-	if r.viewerLogs && pol.viewerLogsDisabled[p.Org] {
+	if r.viewerLogs && (p.ViewersWithoutLogs || pol.viewerLogsDisabled[p.Org]) {
 		minimum = role.Operator
 	}
 	return ScopeFor(p, minimum)

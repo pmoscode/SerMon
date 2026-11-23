@@ -36,8 +36,20 @@ func (s *LogSettingsStore) View(ctx context.Context, scope tenant.Scope) (logset
 			return fmt.Errorf("organization config: %w", err)
 		}
 		view.Version = uint64(max(org.AgentConfigVersion, 1))
+		view.ViewersSeeLogs = org.ViewersSeeLogs
 		if view.Rules, err = decodeRules(org.RedactionRules); err != nil {
 			return err
+		}
+		nodes, err := q.ListNodeConfigStatus(ctx)
+		if err != nil {
+			return fmt.Errorf("node config status: %w", err)
+		}
+		for _, n := range nodes {
+			view.Nodes = append(view.Nodes, logsettings.NodeStatus{
+				ID: identity.NodeID(n.ID), Hostname: n.Hostname, Group: tenant.GroupID(n.GroupID),
+				AppliedVersion: uint64(max(n.ConfigVersion, 0)), Error: n.ConfigError, LogsVetoed: n.LogsVetoed,
+				ReportedAt: n.ConfigReportedAt,
+			})
 		}
 		rows, err := q.ListGroupLogSettings(ctx)
 		if err != nil {
@@ -97,6 +109,16 @@ func (s *LogSettingsStore) PutRules(ctx context.Context, scope tenant.Scope, rul
 		}
 		return bumpAndAudit(ctx, q, audit)
 	})
+}
+
+// PutViewersSeeLogs implements logsettings.Store.
+func (s *LogSettingsStore) PutViewersSeeLogs(ctx context.Context, scope tenant.Scope, see bool, _ identity.UserID, audit access.AuditEntry) error {
+	return wrap(s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := q.SetViewersSeeLogs(ctx, see); err != nil {
+			return fmt.Errorf("store viewer switch: %w", err)
+		}
+		return appendAudit(ctx, q, audit)
+	}), "viewer switch")
 }
 
 func bumpAndAudit(ctx context.Context, q *sqlcdb.Queries, audit access.AuditEntry) error {

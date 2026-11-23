@@ -45,6 +45,12 @@ const (
 	// LogSettingsServiceSetRedactionRulesProcedure is the fully-qualified name of the
 	// LogSettingsService's SetRedactionRules RPC.
 	LogSettingsServiceSetRedactionRulesProcedure = "/sermon.web.v1.LogSettingsService/SetRedactionRules"
+	// LogSettingsServiceSetViewerLogAccessProcedure is the fully-qualified name of the
+	// LogSettingsService's SetViewerLogAccess RPC.
+	LogSettingsServiceSetViewerLogAccessProcedure = "/sermon.web.v1.LogSettingsService/SetViewerLogAccess"
+	// LogSettingsServiceTestRedactionProcedure is the fully-qualified name of the LogSettingsService's
+	// TestRedaction RPC.
+	LogSettingsServiceTestRedactionProcedure = "/sermon.web.v1.LogSettingsService/TestRedaction"
 )
 
 // LogSettingsServiceClient is a client for the sermon.web.v1.LogSettingsService service.
@@ -59,6 +65,13 @@ type LogSettingsServiceClient interface {
 	// SetRedactionRules replaces the redaction rules of the organization; INVALID_ARGUMENT names
 	// the first rule the server cannot compile.
 	SetRedactionRules(context.Context, *connect.Request[v1.SetRedactionRulesRequest]) (*connect.Response[v1.SetRedactionRulesResponse], error)
+	// SetViewerLogAccess sets whether viewers may see logs and security events (KONZEPT §7, M3-12).
+	// It applies from the next request of every session; running live views end.
+	SetViewerLogAccess(context.Context, *connect.Request[v1.SetViewerLogAccessRequest]) (*connect.Response[v1.SetViewerLogAccessResponse], error)
+	// TestRedaction returns a sample line as the agents would send it with the given rules (not
+	// saved): the built-in patterns, then the rules. No step-up: nothing changes. INVALID_ARGUMENT
+	// names the first rule the server cannot compile.
+	TestRedaction(context.Context, *connect.Request[v1.TestRedactionRequest]) (*connect.Response[v1.TestRedactionResponse], error)
 }
 
 // NewLogSettingsServiceClient constructs a client for the sermon.web.v1.LogSettingsService service.
@@ -97,6 +110,19 @@ func NewLogSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(logSettingsServiceMethods.ByName("SetRedactionRules")),
 			connect.WithClientOptions(opts...),
 		),
+		setViewerLogAccess: connect.NewClient[v1.SetViewerLogAccessRequest, v1.SetViewerLogAccessResponse](
+			httpClient,
+			baseURL+LogSettingsServiceSetViewerLogAccessProcedure,
+			connect.WithSchema(logSettingsServiceMethods.ByName("SetViewerLogAccess")),
+			connect.WithClientOptions(opts...),
+		),
+		testRedaction: connect.NewClient[v1.TestRedactionRequest, v1.TestRedactionResponse](
+			httpClient,
+			baseURL+LogSettingsServiceTestRedactionProcedure,
+			connect.WithSchema(logSettingsServiceMethods.ByName("TestRedaction")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -106,6 +132,8 @@ type logSettingsServiceClient struct {
 	setGroupLogSettings   *connect.Client[v1.SetGroupLogSettingsRequest, v1.SetGroupLogSettingsResponse]
 	resetGroupLogSettings *connect.Client[v1.ResetGroupLogSettingsRequest, v1.ResetGroupLogSettingsResponse]
 	setRedactionRules     *connect.Client[v1.SetRedactionRulesRequest, v1.SetRedactionRulesResponse]
+	setViewerLogAccess    *connect.Client[v1.SetViewerLogAccessRequest, v1.SetViewerLogAccessResponse]
+	testRedaction         *connect.Client[v1.TestRedactionRequest, v1.TestRedactionResponse]
 }
 
 // GetLogSettings calls sermon.web.v1.LogSettingsService.GetLogSettings.
@@ -128,6 +156,16 @@ func (c *logSettingsServiceClient) SetRedactionRules(ctx context.Context, req *c
 	return c.setRedactionRules.CallUnary(ctx, req)
 }
 
+// SetViewerLogAccess calls sermon.web.v1.LogSettingsService.SetViewerLogAccess.
+func (c *logSettingsServiceClient) SetViewerLogAccess(ctx context.Context, req *connect.Request[v1.SetViewerLogAccessRequest]) (*connect.Response[v1.SetViewerLogAccessResponse], error) {
+	return c.setViewerLogAccess.CallUnary(ctx, req)
+}
+
+// TestRedaction calls sermon.web.v1.LogSettingsService.TestRedaction.
+func (c *logSettingsServiceClient) TestRedaction(ctx context.Context, req *connect.Request[v1.TestRedactionRequest]) (*connect.Response[v1.TestRedactionResponse], error) {
+	return c.testRedaction.CallUnary(ctx, req)
+}
+
 // LogSettingsServiceHandler is an implementation of the sermon.web.v1.LogSettingsService service.
 type LogSettingsServiceHandler interface {
 	// GetLogSettings returns the settings of every group of the organization and its rules.
@@ -140,6 +178,13 @@ type LogSettingsServiceHandler interface {
 	// SetRedactionRules replaces the redaction rules of the organization; INVALID_ARGUMENT names
 	// the first rule the server cannot compile.
 	SetRedactionRules(context.Context, *connect.Request[v1.SetRedactionRulesRequest]) (*connect.Response[v1.SetRedactionRulesResponse], error)
+	// SetViewerLogAccess sets whether viewers may see logs and security events (KONZEPT §7, M3-12).
+	// It applies from the next request of every session; running live views end.
+	SetViewerLogAccess(context.Context, *connect.Request[v1.SetViewerLogAccessRequest]) (*connect.Response[v1.SetViewerLogAccessResponse], error)
+	// TestRedaction returns a sample line as the agents would send it with the given rules (not
+	// saved): the built-in patterns, then the rules. No step-up: nothing changes. INVALID_ARGUMENT
+	// names the first rule the server cannot compile.
+	TestRedaction(context.Context, *connect.Request[v1.TestRedactionRequest]) (*connect.Response[v1.TestRedactionResponse], error)
 }
 
 // NewLogSettingsServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -174,6 +219,19 @@ func NewLogSettingsServiceHandler(svc LogSettingsServiceHandler, opts ...connect
 		connect.WithSchema(logSettingsServiceMethods.ByName("SetRedactionRules")),
 		connect.WithHandlerOptions(opts...),
 	)
+	logSettingsServiceSetViewerLogAccessHandler := connect.NewUnaryHandler(
+		LogSettingsServiceSetViewerLogAccessProcedure,
+		svc.SetViewerLogAccess,
+		connect.WithSchema(logSettingsServiceMethods.ByName("SetViewerLogAccess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	logSettingsServiceTestRedactionHandler := connect.NewUnaryHandler(
+		LogSettingsServiceTestRedactionProcedure,
+		svc.TestRedaction,
+		connect.WithSchema(logSettingsServiceMethods.ByName("TestRedaction")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.LogSettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case LogSettingsServiceGetLogSettingsProcedure:
@@ -184,6 +242,10 @@ func NewLogSettingsServiceHandler(svc LogSettingsServiceHandler, opts ...connect
 			logSettingsServiceResetGroupLogSettingsHandler.ServeHTTP(w, r)
 		case LogSettingsServiceSetRedactionRulesProcedure:
 			logSettingsServiceSetRedactionRulesHandler.ServeHTTP(w, r)
+		case LogSettingsServiceSetViewerLogAccessProcedure:
+			logSettingsServiceSetViewerLogAccessHandler.ServeHTTP(w, r)
+		case LogSettingsServiceTestRedactionProcedure:
+			logSettingsServiceTestRedactionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -207,4 +269,12 @@ func (UnimplementedLogSettingsServiceHandler) ResetGroupLogSettings(context.Cont
 
 func (UnimplementedLogSettingsServiceHandler) SetRedactionRules(context.Context, *connect.Request[v1.SetRedactionRulesRequest]) (*connect.Response[v1.SetRedactionRulesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.LogSettingsService.SetRedactionRules is not implemented"))
+}
+
+func (UnimplementedLogSettingsServiceHandler) SetViewerLogAccess(context.Context, *connect.Request[v1.SetViewerLogAccessRequest]) (*connect.Response[v1.SetViewerLogAccessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.LogSettingsService.SetViewerLogAccess is not implemented"))
+}
+
+func (UnimplementedLogSettingsServiceHandler) TestRedaction(context.Context, *connect.Request[v1.TestRedactionRequest]) (*connect.Response[v1.TestRedactionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.LogSettingsService.TestRedaction is not implemented"))
 }

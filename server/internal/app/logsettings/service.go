@@ -13,6 +13,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logconfig"
+	"github.com/pmoscode/SerMon/server/internal/domain/redact"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -25,12 +26,33 @@ type Group struct {
 	Custom bool
 }
 
+// NodeStatus is what the agent of a node reported about its configuration (ConfigApplied).
+type NodeStatus struct {
+	ID       identity.NodeID
+	Hostname string
+	Group    tenant.GroupID
+	// AppliedVersion is the version the agent took; 0 before its first answer.
+	AppliedVersion uint64
+	// Error says why the agent kept its previous configuration (from the host: text only).
+	Error string
+	// LogsVetoed: agent.toml forbids sending logs.
+	LogsVetoed bool
+	ReportedAt *time.Time
+}
+
 // View is everything the organization has set.
 type View struct {
 	Groups  []Group
 	Rules   []logconfig.Rule
 	Version uint64
+	// ViewersSeeLogs is the organization's switch (KONZEPT §7, M3-12).
+	ViewersSeeLogs bool
+	// Nodes is the state of every node of the organization.
+	Nodes []NodeStatus
 }
+
+// MaxSampleBytes bounds the sample line of a redaction test (a log message's length).
+const MaxSampleBytes = 16 * 1024
 
 // Store keeps the settings. Every change raises the organization's configuration version and
 // writes the audit entry in the same transaction.
@@ -40,6 +62,8 @@ type Store interface {
 	// group the scope does not see.
 	PutGroup(ctx context.Context, scope tenant.Scope, group tenant.GroupID, settings *logconfig.Settings, by identity.UserID, audit access.AuditEntry) error
 	PutRules(ctx context.Context, scope tenant.Scope, rules []logconfig.Rule, by identity.UserID, audit access.AuditEntry) error
+	// PutViewersSeeLogs stores the organization's switch; no agent configuration changes.
+	PutViewersSeeLogs(ctx context.Context, scope tenant.Scope, see bool, by identity.UserID, audit access.AuditEntry) error
 }
 
 // Agents learn about a changed configuration (the connected agent sessions).
@@ -131,4 +155,44 @@ func (s *Service) SetRules(ctx context.Context, c access.Caller, rules []logconf
 	}
 	s.agents.ConfigChanged(c.Principal.Org)
 	return nil
+}
+
+// SetViewersSeeLogs sets whether viewers may see logs and security events (KONZEPT §7, T22). It
+// applies from the next request of every session: the switch comes with the principal.
+func (s *Service) SetViewersSeeLogs(ctx context.Context, c access.Caller, see bool) error {
+	scope, err := access.Authorize(s.policy, c, authz.ManageLogSettings, true, s.now())
+	if err != nil {
+		return err //nolint:wrapcheck // see View
+	}
+	audit := access.AuditEntry{
+		Actor: c.Principal.User, Action: "log_settings.viewers", Target: "org:" + c.Principal.Org.String(),
+		Details: map[string]string{"viewers_see_logs": strconv.FormatBool(see)},
+	}
+	if err := s.store.PutViewersSeeLogs(ctx, scope, see, c.Principal.User, audit); err != nil {
+		return fmt.Errorf("set viewer switch: %w", err)
+	}
+	return nil
+}
+
+// TestRedaction returns sample as the agent would send it with rules (not saved yet): the
+// built-in patterns, then the rules. Nothing changes, so no step-up.
+func (s *Service) TestRedaction(_ context.Context, c access.Caller, rules []logconfig.Rule, sample string) (string, error) {
+	if _, err := access.Authorize(s.policy, c, authz.ManageLogSettings, false, s.now()); err != nil {
+		return "", err //nolint:wrapcheck // see View
+	}
+	if len(sample) > MaxSampleBytes {
+		return "", &logconfig.InvalidError{Field: "sample", Index: -1, Reason: fmt.Sprintf("at most %d bytes", MaxSampleBytes)}
+	}
+	if err := logconfig.ValidateRules(rules); err != nil {
+		return "", err
+	}
+	patterns := make([]string, 0, len(rules))
+	for _, r := range rules {
+		patterns = append(patterns, r.Pattern)
+	}
+	r, err := redact.New(patterns)
+	if err != nil {
+		return "", &logconfig.InvalidError{Field: "rule", Index: -1, Reason: err.Error()}
+	}
+	return r.Redact(sample), nil
 }

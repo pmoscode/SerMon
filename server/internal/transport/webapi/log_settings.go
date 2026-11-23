@@ -39,7 +39,13 @@ func (h *LogSettingsHandler) GetLogSettings(ctx context.Context, _ *connect.Requ
 	if err != nil {
 		return nil, h.fail(ctx, "get log settings", err)
 	}
-	res := &webv1.GetLogSettingsResponse{Version: view.Version}
+	res := &webv1.GetLogSettingsResponse{Version: view.Version, ViewersSeeLogs: view.ViewersSeeLogs}
+	for _, n := range view.Nodes {
+		res.Nodes = append(res.Nodes, &webv1.NodeConfigStatus{
+			NodeId: n.ID.String(), Hostname: n.Hostname, GroupId: n.Group.String(), AppliedVersion: n.AppliedVersion,
+			Error: n.Error, LogsVetoed: n.LogsVetoed, ReportedAt: optionalTime(n.ReportedAt),
+		})
+	}
 	for _, g := range view.Groups {
 		res.Groups = append(res.Groups, &webv1.GroupLogSettings{
 			GroupId: g.ID.String(), GroupName: g.Name, Settings: settingsMessage(g.Settings), Custom: g.Custom,
@@ -97,6 +103,35 @@ func (h *LogSettingsHandler) SetRedactionRules(ctx context.Context, req *connect
 		return nil, h.fail(ctx, "set redaction rules", err)
 	}
 	return connect.NewResponse(&webv1.SetRedactionRulesResponse{}), nil
+}
+
+// SetViewerLogAccess sets whether viewers may see logs.
+func (h *LogSettingsHandler) SetViewerLogAccess(ctx context.Context, req *connect.Request[webv1.SetViewerLogAccessRequest]) (*connect.Response[webv1.SetViewerLogAccessResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.SetViewersSeeLogs(ctx, c, req.Msg.GetViewersSeeLogs()); err != nil {
+		return nil, h.fail(ctx, "set viewer log access", err)
+	}
+	return connect.NewResponse(&webv1.SetViewerLogAccessResponse{}), nil
+}
+
+// TestRedaction redacts a sample with rules that are not saved yet.
+func (h *LogSettingsHandler) TestRedaction(ctx context.Context, req *connect.Request[webv1.TestRedactionRequest]) (*connect.Response[webv1.TestRedactionResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rules := make([]logconfig.Rule, 0, len(req.Msg.GetRules()))
+	for _, r := range req.Msg.GetRules() {
+		rules = append(rules, logconfig.Rule{Pattern: r.GetPattern()})
+	}
+	out, err := h.svc.TestRedaction(ctx, c, rules, req.Msg.GetSample())
+	if err != nil {
+		return nil, h.fail(ctx, "test redaction", err)
+	}
+	return connect.NewResponse(&webv1.TestRedactionResponse{Redacted: out}), nil
 }
 
 func (h *LogSettingsHandler) fail(ctx context.Context, op string, err error) error {

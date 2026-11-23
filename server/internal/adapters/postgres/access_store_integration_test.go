@@ -39,7 +39,8 @@ func TestAccessStore_LoadsMembershipAndBindingsOfTheOrganizationOnly(t *testing.
 		t.Fatal(err)
 	}
 
-	member, bindings, err := store.MembershipAndBindings(ctx, tenant.OrgID(orgA), alice)
+	m, err := store.MembershipAndBindings(ctx, tenant.OrgID(orgA), alice)
+	member, bindings := m.Member, m.Bindings
 	if err != nil || !member {
 		t.Fatalf("MembershipAndBindings(orgA) = %v, %v", member, err)
 	}
@@ -54,7 +55,8 @@ func TestAccessStore_LoadsMembershipAndBindingsOfTheOrganizationOnly(t *testing.
 		t.Errorf("bindings = %+v, missing %+v", bindings, want)
 	}
 
-	member, bindings, err = store.MembershipAndBindings(ctx, tenant.OrgID(orgB), alice)
+	m, err = store.MembershipAndBindings(ctx, tenant.OrgID(orgB), alice)
+	member, bindings = m.Member, m.Bindings
 	if err != nil || member || len(bindings) != 0 {
 		t.Errorf("alice in Org B = %v, %+v, %v; want no membership", member, bindings, err)
 	}

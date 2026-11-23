@@ -4,13 +4,15 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file sermon/web/v1/log_settings.proto.
  */
 export const file_sermon_web_v1_log_settings: GenFile = /*@__PURE__*/
-  fileDesc("CiBzZXJtb24vd2ViL3YxL2xvZ19zZXR0aW5ncy5wcm90bxINc2VybW9uLndlYi52MSKSAQoLTG9nU2V0dGluZ3MSDwoHZW5hYmxlZBgBIAEoCBIwCgxtaW5fc2V2ZXJpdHkYAiABKA4yGi5zZXJtb24ud2ViLnYxLkxvZ1NldmVyaXR5EhUKDWV4Y2x1ZGVfdW5pdHMYAyADKAkSKQoFZmlsZXMYBCADKAsyGi5zZXJtb24ud2ViLnYxLkxvZ0ZpbGVHbG9iIjcKC0xvZ0ZpbGVHbG9iEg8KB3BhdHRlcm4YASABKAkSFwoPbXVsdGlsaW5lX3N0YXJ0GAIgASgJInYKEEdyb3VwTG9nU2V0dGluZ3MSEAoIZ3JvdXBfaWQYASABKAkSEgoKZ3JvdXBfbmFtZRgCIAEoCRIsCghzZXR0aW5ncxgDIAEoCzIaLnNlcm1vbi53ZWIudjEuTG9nU2V0dGluZ3MSDgoGY3VzdG9tGAQgASgIIiAKDVJlZGFjdGlvblJ1bGUSDwoHcGF0dGVybhgBIAEoCSIXChVHZXRMb2dTZXR0aW5nc1JlcXVlc3QikQEKFkdldExvZ1NldHRpbmdzUmVzcG9uc2USLwoGZ3JvdXBzGAEgAygLMh8uc2VybW9uLndlYi52MS5Hcm91cExvZ1NldHRpbmdzEjUKD3JlZGFjdGlvbl9ydWxlcxgCIAMoCzIcLnNlcm1vbi53ZWIudjEuUmVkYWN0aW9uUnVsZRIPCgd2ZXJzaW9uGAMgASgEIlwKGlNldEdyb3VwTG9nU2V0dGluZ3NSZXF1ZXN0EhAKCGdyb3VwX2lkGAEgASgJEiwKCHNldHRpbmdzGAIgASgLMhouc2VybW9uLndlYi52MS5Mb2dTZXR0aW5ncyIdChtTZXRHcm91cExvZ1NldHRpbmdzUmVzcG9uc2UiMAocUmVzZXRHcm91cExvZ1NldHRpbmdzUmVxdWVzdBIQCghncm91cF9pZBgBIAEoCSIfCh1SZXNldEdyb3VwTG9nU2V0dGluZ3NSZXNwb25zZSJHChhTZXRSZWRhY3Rpb25SdWxlc1JlcXVlc3QSKwoFcnVsZXMYASADKAsyHC5zZXJtb24ud2ViLnYxLlJlZGFjdGlvblJ1bGUiGwoZU2V0UmVkYWN0aW9uUnVsZXNSZXNwb25zZSr0AQoLTG9nU2V2ZXJpdHkSHAoYTE9HX1NFVkVSSVRZX1VOU1BFQ0lGSUVEEAASGgoWTE9HX1NFVkVSSVRZX0VNRVJHRU5DWRABEhYKEkxPR19TRVZFUklUWV9BTEVSVBACEhkKFUxPR19TRVZFUklUWV9DUklUSUNBTBADEhYKEkxPR19TRVZFUklUWV9FUlJPUhAEEhgKFExPR19TRVZFUklUWV9XQVJOSU5HEAUSFwoTTE9HX1NFVkVSSVRZX05PVElDRRAGEhUKEUxPR19TRVZFUklUWV9JTkZPEAcSFgoSTE9HX1NFVkVSSVRZX0RFQlVHEAgywgMKEkxvZ1NldHRpbmdzU2VydmljZRJiCg5HZXRMb2dTZXR0aW5ncxIkLnNlcm1vbi53ZWIudjEuR2V0TG9nU2V0dGluZ3NSZXF1ZXN0GiUuc2VybW9uLndlYi52MS5HZXRMb2dTZXR0aW5nc1Jlc3BvbnNlIgOQAgESbAoTU2V0R3JvdXBMb2dTZXR0aW5ncxIpLnNlcm1vbi53ZWIudjEuU2V0R3JvdXBMb2dTZXR0aW5nc1JlcXVlc3QaKi5zZXJtb24ud2ViLnYxLlNldEdyb3VwTG9nU2V0dGluZ3NSZXNwb25zZRJyChVSZXNldEdyb3VwTG9nU2V0dGluZ3MSKy5zZXJtb24ud2ViLnYxLlJlc2V0R3JvdXBMb2dTZXR0aW5nc1JlcXVlc3QaLC5zZXJtb24ud2ViLnYxLlJlc2V0R3JvdXBMb2dTZXR0aW5nc1Jlc3BvbnNlEmYKEVNldFJlZGFjdGlvblJ1bGVzEicuc2VybW9uLndlYi52MS5TZXRSZWRhY3Rpb25SdWxlc1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLlNldFJlZGFjdGlvblJ1bGVzUmVzcG9uc2VCvwEKEWNvbS5zZXJtb24ud2ViLnYxQhBMb2dTZXR0aW5nc1Byb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z");
+  fileDesc("CiBzZXJtb24vd2ViL3YxL2xvZ19zZXR0aW5ncy5wcm90bxINc2VybW9uLndlYi52MSKSAQoLTG9nU2V0dGluZ3MSDwoHZW5hYmxlZBgBIAEoCBIwCgxtaW5fc2V2ZXJpdHkYAiABKA4yGi5zZXJtb24ud2ViLnYxLkxvZ1NldmVyaXR5EhUKDWV4Y2x1ZGVfdW5pdHMYAyADKAkSKQoFZmlsZXMYBCADKAsyGi5zZXJtb24ud2ViLnYxLkxvZ0ZpbGVHbG9iIjcKC0xvZ0ZpbGVHbG9iEg8KB3BhdHRlcm4YASABKAkSFwoPbXVsdGlsaW5lX3N0YXJ0GAIgASgJInYKEEdyb3VwTG9nU2V0dGluZ3MSEAoIZ3JvdXBfaWQYASABKAkSEgoKZ3JvdXBfbmFtZRgCIAEoCRIsCghzZXR0aW5ncxgDIAEoCzIaLnNlcm1vbi53ZWIudjEuTG9nU2V0dGluZ3MSDgoGY3VzdG9tGAQgASgIIiAKDVJlZGFjdGlvblJ1bGUSDwoHcGF0dGVybhgBIAEoCSIXChVHZXRMb2dTZXR0aW5nc1JlcXVlc3Qi2wEKFkdldExvZ1NldHRpbmdzUmVzcG9uc2USLwoGZ3JvdXBzGAEgAygLMh8uc2VybW9uLndlYi52MS5Hcm91cExvZ1NldHRpbmdzEjUKD3JlZGFjdGlvbl9ydWxlcxgCIAMoCzIcLnNlcm1vbi53ZWIudjEuUmVkYWN0aW9uUnVsZRIPCgd2ZXJzaW9uGAMgASgEEhgKEHZpZXdlcnNfc2VlX2xvZ3MYBCABKAgSLgoFbm9kZXMYBSADKAsyHy5zZXJtb24ud2ViLnYxLk5vZGVDb25maWdTdGF0dXMitQEKEE5vZGVDb25maWdTdGF0dXMSDwoHbm9kZV9pZBgBIAEoCRIQCghob3N0bmFtZRgCIAEoCRIQCghncm91cF9pZBgDIAEoCRIXCg9hcHBsaWVkX3ZlcnNpb24YBCABKAQSDQoFZXJyb3IYBSABKAkSEwoLbG9nc192ZXRvZWQYBiABKAgSLwoLcmVwb3J0ZWRfYXQYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlwKGlNldEdyb3VwTG9nU2V0dGluZ3NSZXF1ZXN0EhAKCGdyb3VwX2lkGAEgASgJEiwKCHNldHRpbmdzGAIgASgLMhouc2VybW9uLndlYi52MS5Mb2dTZXR0aW5ncyIdChtTZXRHcm91cExvZ1NldHRpbmdzUmVzcG9uc2UiMAocUmVzZXRHcm91cExvZ1NldHRpbmdzUmVxdWVzdBIQCghncm91cF9pZBgBIAEoCSIfCh1SZXNldEdyb3VwTG9nU2V0dGluZ3NSZXNwb25zZSJHChhTZXRSZWRhY3Rpb25SdWxlc1JlcXVlc3QSKwoFcnVsZXMYASADKAsyHC5zZXJtb24ud2ViLnYxLlJlZGFjdGlvblJ1bGUiGwoZU2V0UmVkYWN0aW9uUnVsZXNSZXNwb25zZSI1ChlTZXRWaWV3ZXJMb2dBY2Nlc3NSZXF1ZXN0EhgKEHZpZXdlcnNfc2VlX2xvZ3MYASABKAgiHAoaU2V0Vmlld2VyTG9nQWNjZXNzUmVzcG9uc2UiUwoUVGVzdFJlZGFjdGlvblJlcXVlc3QSKwoFcnVsZXMYASADKAsyHC5zZXJtb24ud2ViLnYxLlJlZGFjdGlvblJ1bGUSDgoGc2FtcGxlGAIgASgJIikKFVRlc3RSZWRhY3Rpb25SZXNwb25zZRIQCghyZWRhY3RlZBgBIAEoCSr0AQoLTG9nU2V2ZXJpdHkSHAoYTE9HX1NFVkVSSVRZX1VOU1BFQ0lGSUVEEAASGgoWTE9HX1NFVkVSSVRZX0VNRVJHRU5DWRABEhYKEkxPR19TRVZFUklUWV9BTEVSVBACEhkKFUxPR19TRVZFUklUWV9DUklUSUNBTBADEhYKEkxPR19TRVZFUklUWV9FUlJPUhAEEhgKFExPR19TRVZFUklUWV9XQVJOSU5HEAUSFwoTTE9HX1NFVkVSSVRZX05PVElDRRAGEhUKEUxPR19TRVZFUklUWV9JTkZPEAcSFgoSTE9HX1NFVkVSSVRZX0RFQlVHEAgyjgUKEkxvZ1NldHRpbmdzU2VydmljZRJiCg5HZXRMb2dTZXR0aW5ncxIkLnNlcm1vbi53ZWIudjEuR2V0TG9nU2V0dGluZ3NSZXF1ZXN0GiUuc2VybW9uLndlYi52MS5HZXRMb2dTZXR0aW5nc1Jlc3BvbnNlIgOQAgESbAoTU2V0R3JvdXBMb2dTZXR0aW5ncxIpLnNlcm1vbi53ZWIudjEuU2V0R3JvdXBMb2dTZXR0aW5nc1JlcXVlc3QaKi5zZXJtb24ud2ViLnYxLlNldEdyb3VwTG9nU2V0dGluZ3NSZXNwb25zZRJyChVSZXNldEdyb3VwTG9nU2V0dGluZ3MSKy5zZXJtb24ud2ViLnYxLlJlc2V0R3JvdXBMb2dTZXR0aW5nc1JlcXVlc3QaLC5zZXJtb24ud2ViLnYxLlJlc2V0R3JvdXBMb2dTZXR0aW5nc1Jlc3BvbnNlEmYKEVNldFJlZGFjdGlvblJ1bGVzEicuc2VybW9uLndlYi52MS5TZXRSZWRhY3Rpb25SdWxlc1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLlNldFJlZGFjdGlvblJ1bGVzUmVzcG9uc2USaQoSU2V0Vmlld2VyTG9nQWNjZXNzEiguc2VybW9uLndlYi52MS5TZXRWaWV3ZXJMb2dBY2Nlc3NSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5TZXRWaWV3ZXJMb2dBY2Nlc3NSZXNwb25zZRJfCg1UZXN0UmVkYWN0aW9uEiMuc2VybW9uLndlYi52MS5UZXN0UmVkYWN0aW9uUmVxdWVzdBokLnNlcm1vbi53ZWIudjEuVGVzdFJlZGFjdGlvblJlc3BvbnNlIgOQAgFCvwEKEWNvbS5zZXJtb24ud2ViLnYxQhBMb2dTZXR0aW5nc1Byb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * LogSettings select the log entries of the nodes of a group.
@@ -187,6 +189,20 @@ export type GetLogSettingsResponse = Message<"sermon.web.v1.GetLogSettingsRespon
    * @generated from field: uint64 version = 3;
    */
   version: bigint;
+
+  /**
+   * viewers_see_logs is false while viewers may not see logs and security events.
+   *
+   * @generated from field: bool viewers_see_logs = 4;
+   */
+  viewersSeeLogs: boolean;
+
+  /**
+   * nodes are what every agent reported about its configuration, by host name.
+   *
+   * @generated from field: repeated sermon.web.v1.NodeConfigStatus nodes = 5;
+   */
+  nodes: NodeConfigStatus[];
 };
 
 /**
@@ -195,6 +211,69 @@ export type GetLogSettingsResponse = Message<"sermon.web.v1.GetLogSettingsRespon
  */
 export const GetLogSettingsResponseSchema: GenMessage<GetLogSettingsResponse> = /*@__PURE__*/
   messageDesc(file_sermon_web_v1_log_settings, 5);
+
+/**
+ * NodeConfigStatus is the answer of a node's agent to its configuration (ConfigApplied).
+ *
+ * @generated from message sermon.web.v1.NodeConfigStatus
+ */
+export type NodeConfigStatus = Message<"sermon.web.v1.NodeConfigStatus"> & {
+  /**
+   * node_id is the node.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * hostname is the node's name.
+   *
+   * @generated from field: string hostname = 2;
+   */
+  hostname: string;
+
+  /**
+   * group_id is the node's group.
+   *
+   * @generated from field: string group_id = 3;
+   */
+  groupId: string;
+
+  /**
+   * applied_version is the version the agent took; 0 before its first answer.
+   *
+   * @generated from field: uint64 applied_version = 4;
+   */
+  appliedVersion: bigint;
+
+  /**
+   * error says why the agent kept its previous configuration; from the host: show as text only.
+   *
+   * @generated from field: string error = 5;
+   */
+  error: string;
+
+  /**
+   * logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false).
+   *
+   * @generated from field: bool logs_vetoed = 6;
+   */
+  logsVetoed: boolean;
+
+  /**
+   * reported_at is the time of the last answer.
+   *
+   * @generated from field: google.protobuf.Timestamp reported_at = 7;
+   */
+  reportedAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.NodeConfigStatus.
+ * Use `create(NodeConfigStatusSchema)` to create a new message.
+ */
+export const NodeConfigStatusSchema: GenMessage<NodeConfigStatus> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_log_settings, 6);
 
 /**
  * SetGroupLogSettingsRequest replaces the settings of a group.
@@ -222,7 +301,7 @@ export type SetGroupLogSettingsRequest = Message<"sermon.web.v1.SetGroupLogSetti
  * Use `create(SetGroupLogSettingsRequestSchema)` to create a new message.
  */
 export const SetGroupLogSettingsRequestSchema: GenMessage<SetGroupLogSettingsRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_log_settings, 6);
+  messageDesc(file_sermon_web_v1_log_settings, 7);
 
 /**
  * SetGroupLogSettingsResponse has no fields.
@@ -237,7 +316,7 @@ export type SetGroupLogSettingsResponse = Message<"sermon.web.v1.SetGroupLogSett
  * Use `create(SetGroupLogSettingsResponseSchema)` to create a new message.
  */
 export const SetGroupLogSettingsResponseSchema: GenMessage<SetGroupLogSettingsResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_log_settings, 7);
+  messageDesc(file_sermon_web_v1_log_settings, 8);
 
 /**
  * ResetGroupLogSettingsRequest names the group.
@@ -258,7 +337,7 @@ export type ResetGroupLogSettingsRequest = Message<"sermon.web.v1.ResetGroupLogS
  * Use `create(ResetGroupLogSettingsRequestSchema)` to create a new message.
  */
 export const ResetGroupLogSettingsRequestSchema: GenMessage<ResetGroupLogSettingsRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_log_settings, 8);
+  messageDesc(file_sermon_web_v1_log_settings, 9);
 
 /**
  * ResetGroupLogSettingsResponse has no fields.
@@ -273,7 +352,7 @@ export type ResetGroupLogSettingsResponse = Message<"sermon.web.v1.ResetGroupLog
  * Use `create(ResetGroupLogSettingsResponseSchema)` to create a new message.
  */
 export const ResetGroupLogSettingsResponseSchema: GenMessage<ResetGroupLogSettingsResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_log_settings, 9);
+  messageDesc(file_sermon_web_v1_log_settings, 10);
 
 /**
  * SetRedactionRulesRequest replaces the rules.
@@ -294,7 +373,7 @@ export type SetRedactionRulesRequest = Message<"sermon.web.v1.SetRedactionRulesR
  * Use `create(SetRedactionRulesRequestSchema)` to create a new message.
  */
 export const SetRedactionRulesRequestSchema: GenMessage<SetRedactionRulesRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_log_settings, 10);
+  messageDesc(file_sermon_web_v1_log_settings, 11);
 
 /**
  * SetRedactionRulesResponse has no fields.
@@ -309,7 +388,92 @@ export type SetRedactionRulesResponse = Message<"sermon.web.v1.SetRedactionRules
  * Use `create(SetRedactionRulesResponseSchema)` to create a new message.
  */
 export const SetRedactionRulesResponseSchema: GenMessage<SetRedactionRulesResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_log_settings, 11);
+  messageDesc(file_sermon_web_v1_log_settings, 12);
+
+/**
+ * SetViewerLogAccessRequest is the switch.
+ *
+ * @generated from message sermon.web.v1.SetViewerLogAccessRequest
+ */
+export type SetViewerLogAccessRequest = Message<"sermon.web.v1.SetViewerLogAccessRequest"> & {
+  /**
+   * viewers_see_logs lets viewers see logs and security events.
+   *
+   * @generated from field: bool viewers_see_logs = 1;
+   */
+  viewersSeeLogs: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.SetViewerLogAccessRequest.
+ * Use `create(SetViewerLogAccessRequestSchema)` to create a new message.
+ */
+export const SetViewerLogAccessRequestSchema: GenMessage<SetViewerLogAccessRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_log_settings, 13);
+
+/**
+ * SetViewerLogAccessResponse has no fields.
+ *
+ * @generated from message sermon.web.v1.SetViewerLogAccessResponse
+ */
+export type SetViewerLogAccessResponse = Message<"sermon.web.v1.SetViewerLogAccessResponse"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.SetViewerLogAccessResponse.
+ * Use `create(SetViewerLogAccessResponseSchema)` to create a new message.
+ */
+export const SetViewerLogAccessResponseSchema: GenMessage<SetViewerLogAccessResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_log_settings, 14);
+
+/**
+ * TestRedactionRequest are rules and a sample line.
+ *
+ * @generated from message sermon.web.v1.TestRedactionRequest
+ */
+export type TestRedactionRequest = Message<"sermon.web.v1.TestRedactionRequest"> & {
+  /**
+   * rules are the rules to test, in the order they apply; at most 32.
+   *
+   * @generated from field: repeated sermon.web.v1.RedactionRule rules = 1;
+   */
+  rules: RedactionRule[];
+
+  /**
+   * sample is a log line.
+   *
+   * @generated from field: string sample = 2;
+   */
+  sample: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.TestRedactionRequest.
+ * Use `create(TestRedactionRequestSchema)` to create a new message.
+ */
+export const TestRedactionRequestSchema: GenMessage<TestRedactionRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_log_settings, 15);
+
+/**
+ * TestRedactionResponse is the redacted line.
+ *
+ * @generated from message sermon.web.v1.TestRedactionResponse
+ */
+export type TestRedactionResponse = Message<"sermon.web.v1.TestRedactionResponse"> & {
+  /**
+   * redacted is the sample as the agents would send it.
+   *
+   * @generated from field: string redacted = 1;
+   */
+  redacted: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.TestRedactionResponse.
+ * Use `create(TestRedactionResponseSchema)` to create a new message.
+ */
+export const TestRedactionResponseSchema: GenMessage<TestRedactionResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_log_settings, 16);
 
 /**
  * LogSeverity is the syslog priority of a log entry, from the most to the least severe.
@@ -436,6 +600,29 @@ export const LogSettingsService: GenService<{
     methodKind: "unary";
     input: typeof SetRedactionRulesRequestSchema;
     output: typeof SetRedactionRulesResponseSchema;
+  },
+  /**
+   * SetViewerLogAccess sets whether viewers may see logs and security events (KONZEPT §7, M3-12).
+   * It applies from the next request of every session; running live views end.
+   *
+   * @generated from rpc sermon.web.v1.LogSettingsService.SetViewerLogAccess
+   */
+  setViewerLogAccess: {
+    methodKind: "unary";
+    input: typeof SetViewerLogAccessRequestSchema;
+    output: typeof SetViewerLogAccessResponseSchema;
+  },
+  /**
+   * TestRedaction returns a sample line as the agents would send it with the given rules (not
+   * saved): the built-in patterns, then the rules. No step-up: nothing changes. INVALID_ARGUMENT
+   * names the first rule the server cannot compile.
+   *
+   * @generated from rpc sermon.web.v1.LogSettingsService.TestRedaction
+   */
+  testRedaction: {
+    methodKind: "unary";
+    input: typeof TestRedactionRequestSchema;
+    output: typeof TestRedactionResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_log_settings, 0);

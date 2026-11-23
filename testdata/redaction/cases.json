@@ -1,0 +1,238 @@
+{
+  "_comment": "Redaction cases shared by the agent (Rust) and the server (Go, M3-12): both must give the same output. \"{{}}\" splits made-up secrets for secret scanners and is removed before use.",
+  "cases": [
+    {
+      "name": "flag",
+      "rules": [],
+      "input": "mysql --pass{{}}word=hunter2 -e x",
+      "output": "mysql --password=*** -e x"
+    },
+    {
+      "name": "quoted value",
+      "rules": [],
+      "input": "app PASS{{}}WORD='a b c' run",
+      "output": "app PASSWORD=*** run"
+    },
+    {
+      "name": "bearer",
+      "rules": [],
+      "input": "curl -H 'Authorization: Bea{{}}rer eyJabc.def' https://x",
+      "output": "curl -H 'Authorization: Bearer *** https://x"
+    },
+    {
+      "name": "basic",
+      "rules": [],
+      "input": "proxy: authorization: ba{{}}sic YWxpY2U6czNjcjN0",
+      "output": "proxy: authorization: basic ***"
+    },
+    {
+      "name": "url password",
+      "rules": [],
+      "input": "psql postgres://app:s3cr{{}}3t@db/app",
+      "output": "psql postgres://app:***@db/app"
+    },
+    {
+      "name": "token flag",
+      "rules": [],
+      "input": "tool --to{{}}ken abc123 --verbose",
+      "output": "tool --token *** --verbose"
+    },
+    {
+      "name": "aws key",
+      "rules": [],
+      "input": "export AWS=AKIA{{}}IOSFODNN7EXAMPLE",
+      "output": "export AWS=***"
+    },
+    {
+      "name": "api key",
+      "rules": [],
+      "input": "api_key: xyz",
+      "output": "api_key: ***"
+    },
+    {
+      "name": "header key",
+      "rules": [],
+      "input": "X-Api-Key: 0123abcd",
+      "output": "X-Api-Key: ***"
+    },
+    {
+      "name": "prefixed name",
+      "rules": [],
+      "input": "ENV=SERMON_ENROLLMENT_TOKEN=sme{{}}_abc123 ; COMMAND=/usr/bin/sermon-agent enroll",
+      "output": "ENV=SERMON_ENROLLMENT_TOKEN=*** ; COMMAND=/usr/bin/sermon-agent enroll"
+    },
+    {
+      "name": "env password",
+      "rules": [],
+      "input": "DB_PASS{{}}WORD=s3cret ./run",
+      "output": "DB_PASSWORD=*** ./run"
+    },
+    {
+      "name": "json",
+      "rules": [],
+      "input": "login {\"user\":\"alice\",\"pass{{}}word\":\"hunter2\"}",
+      "output": "login {\"user\":\"alice\",\"password\":***}"
+    },
+    {
+      "name": "json spaced",
+      "rules": [],
+      "input": "{\"client_sec{{}}ret\": \"abc def\", \"x\": 1}",
+      "output": "{\"client_secret\": ***, \"x\": 1}"
+    },
+    {
+      "name": "enrollment token",
+      "rules": [],
+      "input": "enroll with sme{{}}_R2xpdHRlcmluZ1Rva2VuMTIzNDU2Nzg5MA failed",
+      "output": "enroll with *** failed"
+    },
+    {
+      "name": "jwt",
+      "rules": [],
+      "input": "jwt eyJ{{}}hbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.c2lnbmF0dXJlLXZhbHVl ok",
+      "output": "jwt *** ok"
+    },
+    {
+      "name": "github",
+      "rules": [],
+      "input": "clone with gh{{}}p_0123456789abcdefghijABCDEFGHIJ012345",
+      "output": "clone with ***"
+    },
+    {
+      "name": "slack",
+      "rules": [],
+      "input": "hook xo{{}}xb-1234567890-abcdefghij failed",
+      "output": "hook *** failed"
+    },
+    {
+      "name": "key block",
+      "rules": [],
+      "input": "key: -----BEGIN OPENSSH PRIVATE{{}} KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmU=\n-----END OPENSSH PRIVATE{{}} KEY----- done",
+      "output": "key: *** done"
+    },
+    {
+      "name": "key block cut",
+      "rules": [],
+      "input": "-----BEGIN RSA PRIVATE{{}} KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xfn",
+      "output": "***"
+    },
+    {
+      "name": "key armor alone",
+      "rules": [],
+      "input": "-----BEGIN PRIVATE{{}} KEY-----",
+      "output": "***"
+    },
+    {
+      "name": "key line",
+      "rules": [],
+      "input": "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj",
+      "output": "***"
+    },
+    {
+      "name": "short base64",
+      "rules": [],
+      "input": "aGVsbG8gd29ybGQ=",
+      "output": "aGVsbG8gd29ybGQ="
+    },
+    {
+      "name": "certificate",
+      "rules": [],
+      "input": "-----BEGIN CERTIFICATE-----",
+      "output": "-----BEGIN CERTIFICATE-----"
+    },
+    {
+      "name": "nothing: apt",
+      "rules": [],
+      "input": "/usr/bin/apt-get upgrade",
+      "output": "/usr/bin/apt-get upgrade"
+    },
+    {
+      "name": "nothing: passwd",
+      "rules": [],
+      "input": "passwd alice",
+      "output": "passwd alice"
+    },
+    {
+      "name": "nothing: ssh",
+      "rules": [],
+      "input": "Accepted publickey for alice from 192.0.2.7 port 22 ssh2",
+      "output": "Accepted publickey for alice from 192.0.2.7 port 22 ssh2"
+    },
+    {
+      "name": "nothing: token word",
+      "rules": [],
+      "input": "token expired for alice",
+      "output": "token expired for alice"
+    },
+    {
+      "name": "nothing: url",
+      "rules": [],
+      "input": "https://example.org:8443/path",
+      "output": "https://example.org:8443/path"
+    },
+    {
+      "name": "rule: whole match",
+      "rules": [
+        "customer-\\d{6}"
+      ],
+      "input": "order for customer-123456 shipped",
+      "output": "order for *** shipped"
+    },
+    {
+      "name": "rule: secret group",
+      "rules": [
+        "(?i)pin\\s*(?P<secret>\\d{4})\\b"
+      ],
+      "input": "card PIN 1234 ok",
+      "output": "card PIN *** ok"
+    },
+    {
+      "name": "rule: after the built-in",
+      "rules": [
+        "customer-\\d{6}"
+      ],
+      "input": "pass{{}}word=hunter2 customer-654321",
+      "output": "password=*** ***"
+    },
+    {
+      "name": "rule: empty match",
+      "rules": [
+        "x*"
+      ],
+      "input": "abc",
+      "output": "abc"
+    },
+    {
+      "name": "rule: empty matches skipped",
+      "rules": [
+        "x*"
+      ],
+      "input": "axxb",
+      "output": "a***b"
+    },
+    {
+      "name": "rule: optional group",
+      "rules": [
+        "id=(?P<secret>\\d+)?"
+      ],
+      "input": "id= id=42",
+      "output": "id= id=***"
+    },
+    {
+      "name": "rule: two rules in order",
+      "rules": [
+        "a(b)c",
+        "\\*\\*\\*c"
+      ],
+      "input": "abc",
+      "output": "***"
+    },
+    {
+      "name": "rule: secret group twice",
+      "rules": [
+        "k=(?P<secret>\\w+)"
+      ],
+      "input": "k=1 k=2 x=3",
+      "output": "k=*** k=*** x=3"
+    }
+  ]
+}

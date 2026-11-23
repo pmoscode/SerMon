@@ -34,15 +34,20 @@ type memStore struct {
 	version uint64
 	audits  []access.AuditEntry
 	scopes  []tenant.Scope
+	// viewersSee is the organization's switch (M3-12).
+	viewersSee bool
 }
 
 func newStore() *memStore {
-	return &memStore{groups: map[tenant.GroupID]string{web: "web", db: "db"}, custom: map[tenant.GroupID]logconfig.Settings{}, version: 1}
+	return &memStore{groups: map[tenant.GroupID]string{web: "web", db: "db"}, custom: map[tenant.GroupID]logconfig.Settings{}, version: 1, viewersSee: true}
 }
 
 func (m *memStore) View(_ context.Context, scope tenant.Scope) (logsettings.View, error) {
 	m.scopes = append(m.scopes, scope)
-	v := logsettings.View{Rules: m.rules, Version: m.version}
+	v := logsettings.View{
+		Rules: m.rules, Version: m.version, ViewersSeeLogs: m.viewersSee,
+		Nodes: []logsettings.NodeStatus{{Hostname: "web-01", Group: web, AppliedVersion: m.version, LogsVetoed: true}},
+	}
 	for id, name := range m.groups {
 		s, ok := m.custom[id]
 		if !ok {
@@ -72,6 +77,13 @@ func (m *memStore) PutRules(_ context.Context, scope tenant.Scope, rules []logco
 	m.scopes = append(m.scopes, scope)
 	m.rules = rules
 	m.version++
+	m.audits = append(m.audits, audit)
+	return nil
+}
+
+func (m *memStore) PutViewersSeeLogs(_ context.Context, scope tenant.Scope, see bool, _ identity.UserID, audit access.AuditEntry) error {
+	m.scopes = append(m.scopes, scope)
+	m.viewersSee = see
 	m.audits = append(m.audits, audit)
 	return nil
 }
@@ -222,5 +234,53 @@ func TestEveryChange_StaysInTheCallersOrganization(t *testing.T) {
 	}
 	if w.agents.changed[0] != other {
 		t.Errorf("agents told = %v", w.agents.changed)
+	}
+}
+
+// The switch "viewers may not see logs" (M3-12): admins with a step-up, audited; the agents keep
+// their configuration (it is no part of it).
+func TestSetViewersSeeLogs_NeedsAnAdminWithAStepUp(t *testing.T) {
+	w := newWorld()
+	if err := w.svc.SetViewersSeeLogs(context.Background(), caller(admin, role.Admin, stale), false); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("without a step-up: %v", err)
+	}
+	if err := w.svc.SetViewersSeeLogs(context.Background(), caller(viewer, role.Operator, fresh), false); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("operator: %v", err)
+	}
+	if err := w.svc.SetViewersSeeLogs(context.Background(), caller(admin, role.Admin, fresh), false); err != nil {
+		t.Fatal(err)
+	}
+	view, _ := w.svc.View(context.Background(), caller(admin, role.Admin, stale))
+	if view.ViewersSeeLogs || len(w.store.audits) != 1 || w.store.audits[0].Action != "log_settings.viewers" ||
+		w.store.audits[0].Details["viewers_see_logs"] != "false" || len(w.agents.changed) != 0 {
+		t.Errorf("view %+v, audits %+v, agents %v", view, w.store.audits, w.agents.changed)
+	}
+	if len(view.Nodes) != 1 || !view.Nodes[0].LogsVetoed {
+		t.Errorf("nodes = %+v", view.Nodes)
+	}
+}
+
+// Testing rules shows what the agent would send: the built-in patterns and the rules given, not
+// yet saved. Admins only, no step-up (nothing changes).
+func TestTestRedaction_ShowsWhatTheAgentWouldSend(t *testing.T) {
+	w := newWorld()
+	out, err := w.svc.TestRedaction(context.Background(), caller(admin, role.Admin, stale),
+		[]logconfig.Rule{{Pattern: `customer-\d{6}`}}, "password=hunter2 for customer-123456") // betterleaks:allow
+	if err != nil || out != "password=*** for ***" {
+		t.Errorf("TestRedaction() = %q, %v", out, err)
+	}
+	_, err = w.svc.TestRedaction(context.Background(), caller(admin, role.Admin, stale), []logconfig.Rule{{Pattern: "ok"}, {Pattern: "(unclosed"}}, "x")
+	var invalid *logconfig.InvalidError
+	if !errors.As(err, &invalid) || invalid.Index != 1 {
+		t.Errorf("a bad rule: %v", err)
+	}
+	if _, err := w.svc.TestRedaction(context.Background(), caller(admin, role.Admin, stale), nil, string(make([]byte, logsettings.MaxSampleBytes+1))); !errors.Is(err, logconfig.ErrInvalid) {
+		t.Errorf("a long sample: %v", err)
+	}
+	if _, err := w.svc.TestRedaction(context.Background(), caller(viewer, role.Viewer, fresh), nil, "x"); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("viewer: %v", err)
+	}
+	if len(w.store.audits) != 0 {
+		t.Error("a test changes nothing")
 	}
 }

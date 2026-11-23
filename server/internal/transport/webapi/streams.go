@@ -153,7 +153,8 @@ type reauthKey struct{}
 
 // samePrincipal reports whether two principals have the same rights (bindings in any order).
 func samePrincipal(a, b authz.Principal) bool {
-	if a.User != b.User || a.Org != b.Org || a.Superadmin != b.Superadmin || len(a.Bindings) != len(b.Bindings) {
+	if a.User != b.User || a.Org != b.Org || a.Superadmin != b.Superadmin || a.ViewersWithoutLogs != b.ViewersWithoutLogs ||
+		len(a.Bindings) != len(b.Bindings) {
 		return false
 	}
 	for _, binding := range a.Bindings {

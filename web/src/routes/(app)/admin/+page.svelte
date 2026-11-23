@@ -17,6 +17,7 @@
 	let members = $state<Member[]>([]);
 	let invitations = $state<Invitation[]>([]);
 	let status = $state<'loading' | 'ready'>('loading');
+	let tab = $state('members');
 	let failure = $state('');
 
 	async function load() {
@@ -64,12 +65,13 @@
 			{failure}
 		</p>
 	{/if}
-	<Tabs.Root value="members">
+	<Tabs.Root bind:value={tab}>
 		<Tabs.List aria-label={m.admin_title()}>
 			<Tabs.Trigger value="members">{m.admin_tab_members()}</Tabs.Trigger>
 			<Tabs.Trigger value="invitations">{m.admin_tab_invitations()}</Tabs.Trigger>
 			<Tabs.Trigger value="groups">{m.admin_tab_groups()}</Tabs.Trigger>
 			<Tabs.Trigger value="security">{m.admin_tab_security()}</Tabs.Trigger>
+			<Tabs.Trigger value="logs">{m.admin_tab_logs()}</Tabs.Trigger>
 			<Tabs.Trigger value="quotas">{m.admin_tab_quotas()}</Tabs.Trigger>
 			<Tabs.Trigger value="audit">{m.admin_tab_audit()}</Tabs.Trigger>
 		</Tabs.List>
@@ -82,6 +84,16 @@
 		<Tabs.Content value="groups" class="pt-4"><GroupsPanel {groups} onChange={load} /></Tabs.Content
 		>
 		<Tabs.Content value="security" class="pt-4"><SecurityPolicyPanel /></Tabs.Content>
+		<!-- Loaded on demand: the log settings are not part of the page's first load (budget). -->
+		<Tabs.Content value="logs" class="pt-4">
+			{#if tab === 'logs'}
+				{#await import('#lib/components/logsettings/LogSettingsPanel.svelte')}
+					<p role="status" class="text-muted-foreground">{m.loading()}</p>
+				{:then { default: LogSettingsPanel }}
+					<LogSettingsPanel />
+				{/await}
+			{/if}
+		</Tabs.Content>
 		<Tabs.Content value="quotas" class="pt-4"><QuotaPanel /></Tabs.Content>
 		<Tabs.Content value="audit" class="pt-4"><AuditPanel {members} /></Tabs.Content>
 	</Tabs.Root>

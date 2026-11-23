@@ -209,6 +209,12 @@ func TestSamePrincipal_IgnoresTheOrderOfBindings(t *testing.T) {
 	if samePrincipal(a, b) {
 		t.Error("a changed role must count as a change")
 	}
+	// The viewer switch of the organization changes what viewers see (M3-12).
+	c := a
+	c.ViewersWithoutLogs = true
+	if samePrincipal(a, c) {
+		t.Error("a changed viewer switch must count as a change")
+	}
 }
 
 type memStore struct {

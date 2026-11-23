@@ -10,6 +10,10 @@ Administration of the organization for admins of all groups: members and their r
 
 A role applies to one group or to all groups. Several roles add up.
 
+## Logs
+
+The **Logs** tab sets what each group's agents send, whether viewers see logs and which redaction rules of your own apply; it also shows which settings each agent applied. More: [log settings](help:concepts/log_settings).
+
 ## Good to know
 
 - Changing rights, removing members, deleting groups and inviting need a fresh confirmation (password or second factor).

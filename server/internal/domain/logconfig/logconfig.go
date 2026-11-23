@@ -9,7 +9,6 @@ package logconfig
 import (
 	"errors"
 	"fmt"
-	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -153,9 +152,14 @@ func (g FileGlob) validate() error {
 		return errors.New("the pattern contains a NUL byte")
 	case strings.Contains(p, "/../") || strings.HasSuffix(p, "/.."):
 		return errors.New("the pattern must not contain .. segments")
+	case strings.ContainsAny(p, `[]\`):
+		// The agent knows * and ? only (M3-05).
+		return errors.New("only * and ? are wildcards")
 	}
-	if _, err := path.Match(p, ""); err != nil {
-		return fmt.Errorf("the pattern is not a valid glob: %w", err)
+	for _, segment := range strings.Split(p[1:], "/") {
+		if segment == "" || segment == "." {
+			return errors.New("the pattern must not contain empty or . segments")
+		}
 	}
 	if len(g.MultilineStart) > MaxRegexBytes {
 		return fmt.Errorf("the multiline regex is longer than %d bytes", MaxRegexBytes)

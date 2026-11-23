@@ -8,7 +8,17 @@ LEFT JOIN log_settings ls ON ls.org_id = g.org_id AND ls.group_id = g.id
 ORDER BY g.name;
 
 -- name: OrganizationAgentConfig :one
-SELECT agent_config_version, redaction_rules FROM organizations WHERE id = current_org_id();
+SELECT agent_config_version, redaction_rules, viewers_see_logs FROM organizations WHERE id = current_org_id();
+
+-- name: SetViewersSeeLogs :exec
+UPDATE organizations SET viewers_see_logs = sqlc.arg(see) WHERE id = current_org_id();
+
+-- name: ListNodeConfigStatus :many
+-- What every agent reported about its configuration (M3-12).
+SELECT id, hostname, group_id, config_version, coalesce(config_error, '')::text AS config_error, logs_vetoed,
+       config_reported_at
+FROM nodes
+ORDER BY hostname, id;
 
 -- name: NodeGroupExists :one
 SELECT EXISTS (SELECT 1 FROM node_groups WHERE id = sqlc.arg(group_id));

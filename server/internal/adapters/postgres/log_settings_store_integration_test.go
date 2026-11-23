@@ -12,6 +12,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logconfig"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -107,6 +108,22 @@ func TestLogSettingsStore_ConfigurationOfANode(t *testing.T) {
 	if applied != 7 || reason != "rule 1: look-around is not supported" || !vetoed || !reported.Equal(at) {
 		t.Errorf("stored answer = %d %q %v %v", applied, reason, vetoed, reported)
 	}
+	// The settings show the agent's answer per node (M3-12).
+	view, err = store.View(ctx, scopeFor(t, orgA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var status *logsettings.NodeStatus
+	for i := range view.Nodes {
+		if uuid.UUID(view.Nodes[i].ID) == node {
+			status = &view.Nodes[i]
+		}
+	}
+	if status == nil || status.AppliedVersion != 7 || status.Error != "rule 1: look-around is not supported" || !status.LogsVetoed ||
+		status.ReportedAt == nil || !status.ReportedAt.Equal(at) || uuid.UUID(status.Group) != group {
+		t.Errorf("node status = %+v", status)
+	}
+
 	// The fleet shows the veto (log explorer, M3-11).
 	nodes, err := postgres.NewFleetStore(open(t, f.appDSN)).List(ctx, scopeFor(t, orgA))
 	if err != nil {
@@ -162,5 +179,43 @@ func TestLogSettingsStore_KeepsOrganizationsApart(t *testing.T) {
 		if g.ID == tenant.GroupID(group) {
 			t.Errorf("org B sees org A's group %+v", g)
 		}
+	}
+}
+
+// The organization's viewer switch (M3-12): stored with an audit entry and loaded with every
+// principal of the organization only.
+func TestLogSettingsStore_StoresTheViewerSwitch(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	store := postgres.NewLogSettingsStore(db)
+	view, err := store.View(ctx, scopeFor(t, orgA))
+	if err != nil || !view.ViewersSeeLogs {
+		t.Fatalf("default: %+v, %v", view.ViewersSeeLogs, err)
+	}
+	if err := store.PutViewersSeeLogs(ctx, scopeFor(t, orgA), false, alice, access.AuditEntry{Action: "log_settings.viewers", Target: "org:a"}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = store.PutViewersSeeLogs(ctx, scopeFor(t, orgA), true, alice, access.AuditEntry{Action: "log_settings.viewers", Target: "org:a"})
+	}()
+	if view, _ := store.View(ctx, scopeFor(t, orgA)); view.ViewersSeeLogs {
+		t.Error("switch not stored")
+	}
+	if view, _ := store.View(ctx, scopeFor(t, orgB)); !view.ViewersSeeLogs {
+		t.Error("another organization keeps its switch")
+	}
+	var audits int
+	queryOwner(t, f.db.OwnerDSN, `SELECT count(*) FROM audit_log WHERE action = 'log_settings.viewers'`, nil, &audits)
+	if audits == 0 {
+		t.Error("no audit entry")
+	}
+	m, err := postgres.NewAccessStore(db).MembershipAndBindings(ctx, tenant.OrgID(orgA), alice)
+	if err != nil || !m.ViewersWithoutLogs {
+		t.Errorf("principal of Alpha: %+v, %v", m, err)
+	}
+	m, err = postgres.NewAccessStore(db).MembershipAndBindings(ctx, tenant.OrgID(orgB), alice)
+	if err != nil || m.ViewersWithoutLogs {
+		t.Errorf("principal of Beta: %+v, %v", m, err)
 	}
 }

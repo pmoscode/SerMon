@@ -314,6 +314,7 @@ type Organization struct {
 	DeletionRemindedAt  *time.Time
 	AgentConfigVersion  int64
 	RedactionRules      []byte
+	ViewersSeeLogs      bool
 }
 
 type PkiAuthority struct {

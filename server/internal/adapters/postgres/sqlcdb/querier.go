@@ -169,6 +169,8 @@ type Querier interface {
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
+	// What every agent reported about its configuration (M3-12).
+	ListNodeConfigStatus(ctx context.Context) ([]ListNodeConfigStatusRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
 	ListNotificationChannels(ctx context.Context) ([]ListNotificationChannelsRow, error)
 	ListNotificationDeliveries(ctx context.Context, arg ListNotificationDeliveriesParams) ([]ListNotificationDeliveriesRow, error)
@@ -257,6 +259,7 @@ type Querier interface {
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetRedactionRules(ctx context.Context, rules []byte) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
+	SetViewersSeeLogs(ctx context.Context, see bool) error
 	// First installation: setup token and superadmins (instance-level tables, no RLS).
 	SetupCompleted(ctx context.Context) (bool, error)
 	// Read-only pre-check (sermon_app may only read instance_setup); CompleteInstanceSetup consumes.
@@ -296,6 +299,8 @@ type Querier interface {
 	UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64, error)
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)
 	UserProfile(ctx context.Context, userID uuid.UUID) (UserProfileRow, error)
+	// The organization's switch (M3-12), in its tenant transaction.
+	ViewersSeeLogs(ctx context.Context) (bool, error)
 	VisibleGroupExists(ctx context.Context, arg VisibleGroupExistsParams) (bool, error)
 }
 

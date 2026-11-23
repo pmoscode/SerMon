@@ -107,6 +107,83 @@ test.describe('organization admin (mocked API)', () => {
 		await expect(page.getByText('12 of 20')).toBeVisible();
 	});
 
+	// M3-12: the log settings tab – viewer switch with a step-up, a group's files, the state per
+	// node with the agent's error as text; axe on the tab and the open form.
+	test('sets the log settings after the step-up', async ({ page }) => {
+		let confirmed = false;
+		let viewersSeeLogs = true;
+		const saved: unknown[] = [];
+		await mockApi(
+			page,
+			adminApi({
+				'LogSettingsService/GetLogSettings': () => ({
+					json: {
+						version: '3',
+						viewersSeeLogs,
+						groups: [
+							{ groupId: 'g1', groupName: 'web', settings: { enabled: true } },
+							{ groupId: 'g2', groupName: 'db', settings: { enabled: false }, custom: true }
+						],
+						redactionRules: [],
+						nodes: [
+							{ nodeId: 'n1', hostname: 'web-01', groupId: 'g1', appliedVersion: '3' },
+							{
+								nodeId: 'n2',
+								hostname: 'db-01',
+								groupId: 'g2',
+								appliedVersion: '2',
+								error: '<script>alert(1)</script> rule 1: look-around'
+							}
+						]
+					}
+				}),
+				'LogSettingsService/SetViewerLogAccess': (body) => {
+					if (!confirmed) return stepUp;
+					viewersSeeLogs = (body as { viewersSeeLogs?: boolean }).viewersSeeLogs ?? false;
+					return { json: {} };
+				},
+				'LogSettingsService/SetGroupLogSettings': (body) => {
+					saved.push(body);
+					return { json: {} };
+				},
+				'LogSettingsService/TestRedaction': () => ({ json: { redacted: 'password=***' } }),
+				'AuthService/ConfirmPassword': () => {
+					confirmed = true;
+					return { json: { session: admin } };
+				}
+			})
+		);
+		await page.goto('/admin');
+		await page.getByRole('tab', { name: 'Logs' }).click();
+		await expect(page.getByText('Viewers see logs and security events.')).toBeVisible();
+		await expect(page.getByRole('table')).toContainText('<script>alert(1)</script> rule 1');
+		expect(await page.locator('table script').count()).toBe(0);
+		let results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+
+		await page.getByRole('button', { name: 'Hide from viewers' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Password').fill('correct horse battery');
+		await dialog.getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('Viewers see no logs and security events.')).toBeVisible();
+
+		await page.getByRole('button', { name: 'Edit the settings of web' }).click();
+		await page.getByRole('button', { name: 'Add a pattern' }).click();
+		await page.getByLabel('Pattern 1', { exact: true }).fill('/var/log/nginx/*.log');
+		results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations, 'open form').toEqual([]);
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect.poll(() => saved.length).toBe(1);
+		expect(saved[0]).toMatchObject({
+			groupId: 'g1',
+			settings: { enabled: true, files: [{ pattern: '/var/log/nginx/*.log' }] }
+		});
+
+		await page.getByLabel('Sample line to test').fill('password=hunter2');
+		await page.getByRole('button', { name: 'Test', exact: true }).click();
+		await expect(page.getByTestId('redaction-result')).toHaveText('password=***');
+	});
+
 	test('hides the organization from non-admins', async ({ page }) => {
 		await mockApi(page, installed(true));
 		await page.goto('/admin');

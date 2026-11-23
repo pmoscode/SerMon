@@ -23,6 +23,10 @@ SELECT EXISTS (
     WHERE m.user_id = sqlc.arg(user_id) AND o.locked_at IS NULL
 ) AS member;
 
+-- The organization's switch (M3-12), in its tenant transaction.
+-- name: ViewersSeeLogs :one
+SELECT viewers_see_logs FROM organizations WHERE id = current_org_id();
+
 -- name: RoleBindingsOfUser :many
 SELECT id, group_id, role FROM role_bindings WHERE user_id = sqlc.arg(user_id);
 

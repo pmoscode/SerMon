@@ -453,3 +453,15 @@ func (q *Queries) UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingPa
 	err := row.Scan(&id)
 	return id, err
 }
+
+const viewersSeeLogs = `-- name: ViewersSeeLogs :one
+SELECT viewers_see_logs FROM organizations WHERE id = current_org_id()
+`
+
+// The organization's switch (M3-12), in its tenant transaction.
+func (q *Queries) ViewersSeeLogs(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, viewersSeeLogs)
+	var viewers_see_logs bool
+	err := row.Scan(&viewers_see_logs)
+	return viewers_see_logs, err
+}

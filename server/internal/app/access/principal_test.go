@@ -25,13 +25,14 @@ type fakeRepo struct {
 	superErr error
 	member   bool
 	bindings []authz.Binding
+	noLogs   bool
 	err      error
 	calls    int
 }
 
-func (f *fakeRepo) MembershipAndBindings(context.Context, tenant.OrgID, identity.UserID) (bool, []authz.Binding, error) {
+func (f *fakeRepo) MembershipAndBindings(context.Context, tenant.OrgID, identity.UserID) (access.Membership, error) {
 	f.calls++
-	return f.member, f.bindings, f.err
+	return access.Membership{Member: f.member, Bindings: f.bindings, ViewersWithoutLogs: f.noLogs}, f.err
 }
 
 func (f *fakeRepo) IsSuperadmin(context.Context, identity.UserID) (bool, error) {
@@ -46,6 +47,14 @@ func TestLoad_MarksSuperadminsAlsoWithoutOrganization(t *testing.T) {
 	boom := errors.New("db down")
 	if _, err := access.NewLoader(&fakeRepo{superErr: boom}, nil).Load(context.Background(), session.Session{User: alice}); !errors.Is(err, boom) {
 		t.Errorf("error = %v, want the repository error", err)
+	}
+}
+
+func TestLoad_TakesTheViewerSwitchOfTheOrganization(t *testing.T) {
+	repo := &fakeRepo{member: true, bindings: []authz.Binding{{AllGroups: true, Role: role.Viewer}}, noLogs: true}
+	p, err := access.NewLoader(repo, nil).Load(context.Background(), session.Session{User: alice, Org: orgA})
+	if err != nil || !p.ViewersWithoutLogs {
+		t.Errorf("principal = %+v, %v", p, err)
 	}
 }
 

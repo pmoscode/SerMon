@@ -17,6 +17,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
+	"github.com/pmoscode/SerMon/server/internal/adapters/loki/lokitest"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
@@ -33,6 +35,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
@@ -190,6 +193,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		}), slog.New(slog.DiscardHandler)),
 		Policies: webapi.NewNotificationPolicyHandler(policies, slog.New(slog.DiscardHandler)),
 		Windows:  webapi.NewMaintenanceWindowHandler(policies, slog.New(slog.DiscardHandler)),
+		Logs: webapi.NewLogHandler(
+			logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
 		LogSettings: webapi.NewLogSettingsHandler(
 			logsettings.NewService(postgres.NewLogSettingsStore(pg), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
 		Rules: webapi.NewAlertRuleHandler(rules.NewService(rules.Deps{

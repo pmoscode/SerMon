@@ -203,6 +203,85 @@ func (c *Client) Query(ctx context.Context, org tenant.OrgID, q QueryRange) ([]L
 	return decodeStreams(io.LimitReader(res.Body, maxQueryBody))
 }
 
+// Point is one value of a metric series.
+type Point struct {
+	At    time.Time
+	Value float64
+}
+
+// Series is a metric series of a query answer.
+type Series struct {
+	Labels map[string]string
+	Points []Point
+}
+
+// Counts runs a metric query (e.g. logql.CountBySeverity) over a time range.
+func (c *Client) Counts(ctx context.Context, org tenant.OrgID, q logql.Query, start, end time.Time, step time.Duration) ([]Series, error) {
+	if q.String() == "" {
+		return nil, ErrNoQuery
+	}
+	params := url.Values{}
+	params.Set("query", q.String())
+	params.Set("start", strconv.FormatInt(start.UnixNano(), 10))
+	params.Set("end", strconv.FormatInt(end.UnixNano(), 10))
+	params.Set("step", strconv.FormatInt(int64(step/time.Second), 10))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/loki/api/v1/query_range")+"?"+params.Encode(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("loki: count request: %w", err)
+	}
+	req.Header.Set(tenantHeader, org.String())
+	res, err := c.do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = res.Body.Close() }()
+	if err := check(res); err != nil {
+		return nil, err
+	}
+	return decodeMatrix(io.LimitReader(res.Body, maxQueryBody))
+}
+
+func decodeMatrix(r io.Reader) ([]Series, error) {
+	var answer struct {
+		Data struct {
+			ResultType string `json:"resultType"`
+			Result     []struct {
+				Metric map[string]string    `json:"metric"`
+				Values [][2]json.RawMessage `json:"values"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(r).Decode(&answer); err != nil {
+		return nil, fmt.Errorf("%w: unreadable answer: %w", ErrRejected, err)
+	}
+	if answer.Data.ResultType != "matrix" {
+		return nil, fmt.Errorf("%w: answer of type %q", ErrRejected, answer.Data.ResultType)
+	}
+	out := make([]Series, 0, len(answer.Data.Result))
+	for _, result := range answer.Data.Result {
+		series := Series{Labels: result.Metric, Points: make([]Point, 0, len(result.Values))}
+		for _, v := range result.Values {
+			var seconds float64
+			var text string
+			if err := json.Unmarshal(v[0], &seconds); err != nil {
+				return nil, fmt.Errorf("%w: point time: %w", ErrRejected, err)
+			}
+			if err := json.Unmarshal(v[1], &text); err != nil {
+				return nil, fmt.Errorf("%w: point value: %w", ErrRejected, err)
+			}
+			value, err := strconv.ParseFloat(text, 64)
+			if err != nil {
+				return nil, fmt.Errorf("%w: point value: %w", ErrRejected, err)
+			}
+			whole := int64(seconds)
+			at := time.Unix(whole, int64((seconds-float64(whole))*1e9)).UTC()
+			series.Points = append(series.Points, Point{At: at, Value: value})
+		}
+		out = append(out, series)
+	}
+	return out, nil
+}
+
 // Ready reports whether Loki takes requests (/ready, for /readyz).
 func (c *Client) Ready(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/ready"), nil)

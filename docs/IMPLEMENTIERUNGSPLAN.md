@@ -2936,7 +2936,36 @@ Konfiguration) und M3-06 (Loki).
   - Labels und Tenant nie aus dem Payload
 - **Abhängig von:** M3-01, M3-06, M1-24
 
-#### ☐ M3-08 – Log-Abfrage mit typisierten Filtern · S · M 🔒
+#### ☑ M3-08 – Log-Abfrage mit typisierten Filtern · S · M 🔒
+> Erledigt ([ADR 0031](adr/0031-logs-in-loki.md), Nachtrag M3-08; KONZEPT §10.4; Threat Model T20, T35):
+> - **`domain/logql`:** `Lines` (Nodes, Quellen, Units, Severities, Text mit oder ohne Groß- und Kleinschreibung)
+>   und `CountBySeverity` (Schritt 1 s bis 24 h). Werte sind Go-Literale, Units und Text in Regexes stehen mit
+>   `QuoteMeta`; Grenzen 20 Units, Text 256 Bytes UTF-8.
+> - **`app/logs`:**
+>   - Scope aus `view_logs` (Viewer-Schalter). Die Nodes sind die sichtbaren, eingeengt nach Liste und Gruppe;
+>     fremde ergeben nichts, ohne sichtbaren Node wird Loki gar nicht gefragt.
+>   - Zeitraum höchstens 14 Tage, Limit 1 000 (Standard 200) mit `more`, Mindest-Severity.
+>   - Histogramm in etwa 100 Schritten. Kontext: 50 Zeilen davor, der Eintrag und 50 danach aus demselben Stream;
+>     ein fremder Node gibt `NOT_FOUND`.
+>   - Ohne Loki `UNAVAILABLE`.
+> - **Adapter:** `loki.Reader` (Zeilen, Zählungen über eine Matrix-Antwort). Nicht erreichbar oder 429 wird zu
+>   `logs.ErrUnavailable`.
+> - **Web-API:** `LogService` (`QueryLogs`, `GetLogHistogram`, `GetLogContext`) mit CEL für den Zeitraum.
+> - **Gefunden:** Loki 3 setzte von sich aus das Label `service_name` und das Feld `detected_level`; beides ist in
+>   `deploy/compose/loki.yaml` abgeschaltet.
+> - **Tests:**
+>   - Builder: Selektor, Filter, Groß- und Kleinschreibung, Ablehnungen, Zählabfrage.
+>   - Fuzz-Ziel `FuzzLines`: zerlegt jede Ausgabe streng, 60 s und 25 Mio. Eingaben ohne Fund. Läuft als Job
+>     `fuzz-server` in `.github/workflows/fuzz.yml` (30 s bei Änderungen, nachts 5 min); lokal `just fuzz-server`.
+>   - Use-Case: sichtbare Nodes, fremde Nodes und Gruppen, Filter, `more`, Grenzen, Viewer-Schalter, ohne Store,
+>     Histogramm, Kontext.
+>   - Adapter: Matrix, Reader mit Ausfall.
+>   - Integration gegen Loki: jeder Filter einschließlich feindlichem Text und Ausbruchsversuch, Zählung pro
+>     Severity, nur die vier Labels und eigenen Felder.
+>   - API über den echten Stack mit Loki: Admin und Viewer lesen ihre Zeile mit Histogramm und Kontext, Org B
+>     nichts, 30 Tage abgelehnt.
+>   - Alle drei RPCs im Tenant-Isolationstest mit einer echten Zeile von Org A in Loki.
+>   - Gegenproben für 11 Prüfungen, alle erkannt; dazu die Gegenprobe zur Loki-Konfiguration.
 - **Ziel:**
   - **RPCs:**
     - `LogService.QueryLogs`: Zeitraum, Nodes oder Gruppe, Quelle, Unit, Severity, Volltext als Teilstring (auch ohne

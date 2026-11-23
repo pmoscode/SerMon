@@ -61,6 +61,12 @@ func TestLoki_KeepsOrganizationsApart(t *testing.T) {
 		t.Errorf("lines = %+v (newest first, with metadata)", lines)
 	}
 	got := lines[0].Labels
+	if len(got) != 4 {
+		t.Errorf("labels = %v, want only node_id, source, unit, severity", got)
+	}
+	if len(lines[0].Metadata) != 0 || len(lines[1].Metadata) != 1 {
+		t.Errorf("metadata = %v, %v; want only what SerMon sent", lines[0].Metadata, lines[1].Metadata)
+	}
 	if got["node_id"] != nodeA.String() || got["unit"] != "nginx.service" || got["severity"] != "error" || got["source"] != "journal" {
 		t.Errorf("labels = %v", got)
 	}
@@ -126,5 +132,105 @@ func TestWriter_AResendIsStoredOnce(t *testing.T) {
 	}
 	if err != nil || len(lines) != 2 {
 		t.Fatalf("Query() = %d lines, %v; want each entry once: %+v", len(lines), err, lines)
+	}
+}
+
+// The builder's queries (M3-08) run on the real Loki: every filter selects what it should, and
+// hostile text is matched literally – it neither breaks the query nor widens it.
+func TestLoki_TheBuildersQueriesSelectWhatTheySay(t *testing.T) {
+	c := loki.New(lokitest.Shared(t))
+	w := loki.NewWriter(c)
+	ctx := context.Background()
+	org := tenant.OrgID(uuid.New())
+	node, other := identity.NodeID(uuid.New()), identity.NodeID(uuid.New())
+	now := time.Now().Truncate(time.Microsecond)
+	hostile := `say "hi" {node_id=~".+"} | \back`
+	entry := func(ago time.Duration, src ingest.LogSource, unit string, sev uint8, msg string) ingest.LogEntry {
+		return ingest.LogEntry{At: now.Add(-ago), Source: src, Unit: unit, Severity: sev, Message: msg}
+	}
+	if err := w.Write(ctx, org, node, []ingest.LogEntry{
+		entry(5*time.Second, ingest.LogSourceJournal, "nginx.service", 4, "Upstream TIMED OUT"),
+		entry(4*time.Second, ingest.LogSourceJournal, "cron.service", 7, "session opened"),
+		entry(3*time.Second, ingest.LogSourceFile, "app", 5, hostile),
+		entry(2*time.Second, ingest.LogSourceJournal, "nginx.service", 7, "upstream recovered"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(ctx, org, other, []ingest.LogEntry{entry(time.Second, ingest.LogSourceJournal, "nginx.service", 4, "other node")}); err != nil {
+		t.Fatal(err)
+	}
+	lines := func(f logql.Filter) []string {
+		t.Helper()
+		f.Nodes = []identity.NodeID{node}
+		q, err := logql.Lines(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []loki.Line
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			got, err = c.Query(ctx, org, loki.QueryRange{Query: q, Start: now.Add(-time.Minute), End: now.Add(time.Second), Limit: 100, Direction: loki.Forward})
+			if err != nil {
+				t.Fatalf("%s: %v", q, err)
+			}
+			if len(got) > 0 || time.Now().After(deadline) {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		out := make([]string, 0, len(got))
+		for _, l := range got {
+			out = append(out, l.Line)
+		}
+		return out
+	}
+	// The first query waits until Loki has all lines of the node.
+	if got := lines(logql.Filter{}); len(got) != 4 {
+		t.Fatalf("all lines of the node = %v", got)
+	}
+	cases := map[string]struct {
+		filter logql.Filter
+		want   []string
+	}{
+		"text":          {logql.Filter{Text: "upstream"}, []string{"upstream recovered"}},
+		"ignore case":   {logql.Filter{Text: "upstream", IgnoreCase: true}, []string{"Upstream TIMED OUT", "upstream recovered"}},
+		"regex literal": {logql.Filter{Text: "TIMED.OUT", IgnoreCase: true}, nil},
+		"hostile text":  {logql.Filter{Text: hostile}, []string{hostile}},
+		"units":         {logql.Filter{Units: []string{"cron.service", "app"}}, []string{"session opened", hostile}},
+		"unit literal":  {logql.Filter{Units: []string{"nginx.servic."}}, nil},
+		"severity":      {logql.Filter{Severities: []logql.Severity{logql.SeverityError}}, []string{"Upstream TIMED OUT"}},
+		"source":        {logql.Filter{Sources: []logql.Source{logql.SourceFile}}, []string{hostile}},
+		"breakout":      {logql.Filter{Text: `"} or {node_id=~".+`}, nil},
+	}
+	for name, tc := range cases {
+		f := tc.filter
+		f.Nodes = []identity.NodeID{node}
+		q, _ := logql.Lines(f)
+		got, err := c.Query(ctx, org, loki.QueryRange{Query: q, Start: now.Add(-time.Minute), End: now.Add(time.Second), Limit: 100, Direction: loki.Forward})
+		if err != nil {
+			t.Errorf("%s: %s: %v", name, q, err)
+			continue
+		}
+		texts := make([]string, 0, len(got))
+		for _, l := range got {
+			texts = append(texts, l.Line)
+		}
+		if strings.Join(texts, "\n") != strings.Join(tc.want, "\n") {
+			t.Errorf("%s: %s → %q, want %q", name, q, texts, tc.want)
+		}
+	}
+	count, _ := logql.CountBySeverity(logql.Filter{Nodes: []identity.NodeID{node}}, time.Minute)
+	series, err := c.Counts(ctx, org, count, now.Add(-time.Minute), now.Add(time.Second), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := map[string]float64{}
+	for _, s := range series {
+		for _, p := range s.Points {
+			total[s.Labels["severity"]] += p.Value
+		}
+	}
+	if total["info"] != 2 || total["error"] != 1 || total["warning"] != 1 {
+		t.Errorf("counts per severity = %v", total)
 	}
 }

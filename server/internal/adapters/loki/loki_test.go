@@ -238,3 +238,28 @@ func TestReady(t *testing.T) {
 		t.Error("not ready: no error")
 	}
 }
+
+func TestCounts_ReadsTheMatrixOfAMetricQuery(t *testing.T) {
+	rec := &recorded{}
+	response := `{"status":"success","data":{"resultType":"matrix","result":[
+		{"metric":{"severity":"error"},"values":[[1795435200,"3"],[1795435260.5,"1"]]},
+		{"metric":{"severity":"info"},"values":[[1795435200,"12"]]}]}}`
+	c := client(t, rec.handler(http.StatusOK, response))
+	q, _ := logql.CountBySeverity(logql.Filter{Nodes: []identity.NodeID{node}}, time.Minute)
+	series, err := c.Counts(context.Background(), org, q, at.Add(-time.Hour), at, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := rec.requests[0].URL.Query()
+	if params.Get("step") != "60" || params.Get("query") != q.String() || rec.requests[0].Header.Get("X-Scope-OrgID") != org.String() {
+		t.Errorf("request = %s", rec.requests[0].URL)
+	}
+	if len(series) != 2 || series[0].Labels["severity"] != "error" || len(series[0].Points) != 2 ||
+		series[0].Points[1].Value != 1 || !series[0].Points[1].At.Equal(time.Unix(1795435260, 500_000_000).UTC()) {
+		t.Errorf("series = %+v", series)
+	}
+	bad := client(t, (&recorded{}).handler(http.StatusOK, `{"status":"success","data":{"resultType":"streams","result":[]}}`))
+	if _, err := bad.Counts(context.Background(), org, q, at.Add(-time.Hour), at, time.Minute); !errors.Is(err, loki.ErrRejected) {
+		t.Errorf("streams instead of a matrix: %v", err)
+	}
+}

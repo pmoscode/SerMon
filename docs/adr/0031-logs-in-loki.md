@@ -76,3 +76,15 @@ dahinter, und damit die Alerts.
 - **Sichtbarkeit:** Zähler `sermon_server_ingest_log_entries_total` und
   `sermon_server_ingest_dropped_log_entries_total{reason}`; das Self-Monitoring meldet `logs_unavailable` an die
   Superadmins (Mail und Band in der UI).
+
+## Nachtrag M3-08: Abfragen und Standards von Loki
+
+- **Abfragen:** `domain/logql` baut Selektor und Zeilenfilter aus typisierten Bausteinen.
+  - Werte als Go-Literale (`strconv.Quote`; Loki entquotet mit `strconv`), Units und Text in Regexes mit
+    `regexp.QuoteMeta`.
+  - Nie ohne Nodes. Die Nodes sind immer die für `view_logs` sichtbaren, im Tenant der Org des Aufrufers.
+  - Ein Fuzz-Ziel zerlegt jede Ausgabe mit `strconv.QuotedPrefix` und prüft, dass keine Eingabe die Struktur bricht;
+    ein Integrationstest lässt jeden Filter auf dem echten Loki laufen.
+- **Gefunden:** Loki 3 hängt ohne Einstellung jedem Stream das Label `service_name` (`unknown_service`) und jedem
+  Eintrag das Feld `detected_level` an. Beides ist abgeschaltet (`discover_service_name: []`,
+  `discover_log_levels: false`); ein Integrationstest verlangt genau die vier Labels und nur die Felder von SerMon.

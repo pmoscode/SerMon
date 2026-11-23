@@ -9,12 +9,18 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
+	"github.com/pmoscode/SerMon/server/internal/adapters/loki/lokitest"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	"github.com/pmoscode/SerMon/server/internal/app/ingest"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
@@ -92,6 +98,7 @@ type loggedIn struct {
 	windows      webv1connect.MaintenanceWindowServiceClient
 	policy       webv1connect.SecurityPolicyServiceClient
 	logSettings  webv1connect.LogSettingsServiceClient
+	logs         webv1connect.LogServiceClient
 	jar          *cookiejar.Jar
 }
 
@@ -120,6 +127,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		windows:      webv1connect.NewMaintenanceWindowServiceClient(hc, s.server.URL),
 		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		logSettings:  webv1connect.NewLogSettingsServiceClient(hc, s.server.URL),
+		logs:         webv1connect.NewLogServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
@@ -132,13 +140,14 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	s := newStack(t, 1000)
 	seedAccessFixtures(t)
 	seedChannelAlpha(t)
+	seedLogAlpha(t)
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
 		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
-		logSettings: bea.logSettings,
-		orgA:        orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
+		logSettings: bea.logSettings, logs: bea.logs,
+		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}
 	ctx := context.Background()
@@ -342,5 +351,15 @@ func TestAccessAPI_SwitchOrganizationChangesTheActiveOrganization(t *testing.T) 
 	}
 	if _, err := kai.auth.SwitchOrganization(ctx, connect.NewRequest(&webv1.SwitchOrganizationRequest{OrganizationId: uuid.NewString()})); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Errorf("switch to an unknown organization: %v, want NOT_FOUND", err)
+	}
+}
+
+// seedLogAlpha writes a log line of Alpha's node to Loki (M3-08): a leaking query would find it.
+func seedLogAlpha(t *testing.T) {
+	t.Helper()
+	entry := ingest.LogEntry{At: time.Now().Add(-time.Minute), Source: ingest.LogSourceJournal, Unit: "nginx.service", Severity: 4, Message: "alpha secret line"}
+	w := loki.NewWriter(loki.New(lokitest.Shared(t)))
+	if err := w.Write(context.Background(), tenant.OrgID(uuid.MustParse(orgAlpha)), identity.NodeID(uuid.MustParse(nodeAl)), []ingest.LogEntry{entry}); err != nil {
+		t.Fatal(err)
 	}
 }

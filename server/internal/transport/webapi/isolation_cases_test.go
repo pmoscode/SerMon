@@ -35,6 +35,7 @@ type isolationEnv struct {
 	rules                           webv1connect.AlertRuleServiceClient
 	windows                         webv1connect.MaintenanceWindowServiceClient
 	logSettings                     webv1connect.LogSettingsServiceClient
+	logs                            webv1connect.LogServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -55,6 +56,15 @@ type isolationCase struct {
 }
 
 var errLeak = errors.New("response contains data of another organization")
+
+// logFilterOf asks for the last hour of Org A's node and group.
+func logFilterOf(e isolationEnv) *webv1.LogFilter {
+	group := e.groupA
+	return &webv1.LogFilter{
+		From: timestamppb.New(time.Now().Add(-time.Hour)), To: timestamppb.New(time.Now().Add(time.Minute)),
+		NodeIds: []string{e.nodeA}, GroupId: &group,
+	}
+}
 
 func leaks(e isolationEnv, s string) bool {
 	return strings.Contains(s, e.groupA) || strings.Contains(s, e.memberA) || strings.Contains(s, e.bindingA) ||
@@ -301,6 +311,26 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.AuthService/SwitchOrganization": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.auth.SwitchOrganization(ctx, connect.NewRequest(&webv1.SwitchOrganizationRequest{OrganizationId: e.orgA}))
+		return err
+	}},
+	"/sermon.web.v1.LogService/QueryLogs": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.logs.QueryLogs(ctx, connect.NewRequest(&webv1.QueryLogsRequest{Filter: logFilterOf(e)}))
+		if err == nil && (len(res.Msg.GetLines()) > 0 || leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), e.nodeA)) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.LogService/GetLogHistogram": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.logs.GetLogHistogram(ctx, connect.NewRequest(&webv1.GetLogHistogramRequest{Filter: logFilterOf(e)}))
+		if err == nil && len(res.Msg.GetSeries()) > 0 {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.LogService/GetLogContext": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.logs.GetLogContext(ctx, connect.NewRequest(&webv1.GetLogContextRequest{
+			NodeId: e.nodeA, At: timestamppb.Now(), Source: webv1.LogSource_LOG_SOURCE_JOURNAL,
+		}))
 		return err
 	}},
 	"/sermon.web.v1.LogSettingsService/SetGroupLogSettings": {run: func(ctx context.Context, e isolationEnv) error {

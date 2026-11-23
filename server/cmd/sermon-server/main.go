@@ -46,6 +46,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
@@ -234,7 +235,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// Configuration of the agents (M3-03, ADR 0030): changes reach the connected sessions.
 		agentConfigs := postgres.NewLogSettingsStore(db)
 		logSettings := logsettings.NewService(agentConfigs, authz.NewPolicy(), sessions, time.Now)
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, logSettings, registry, logger); err != nil {
+		// The log explorer (M3-08); without Loki every query is UNAVAILABLE.
+		var logReader logs.Store
+		if logStore != nil {
+			logReader = loki.NewReader(logStore)
+		}
+		logQueries := logs.NewService(logReader, postgres.NewFleetStore(db), authz.NewPolicy())
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, logSettings, logQueries, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -418,8 +425,8 @@ type alertingServices struct {
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
 	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
-	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, logSettings *logsettings.Service, registry *promtext.Registry,
-	logger *slog.Logger,
+	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, logSettings *logsettings.Service, logQueries *logs.Service,
+	registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
 		logger.WarnContext(ctx, "SERMON_ALLOWED_ORIGINS is empty – the web API rejects every state-changing request")
@@ -485,6 +492,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
 		LogSettings: webapi.NewLogSettingsHandler(logSettings, logger),
+		Logs:        webapi.NewLogHandler(logQueries, logger),
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
 		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),

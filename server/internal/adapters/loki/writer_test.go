@@ -9,9 +9,13 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
+	"github.com/pmoscode/SerMon/server/internal/app/logs"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/logql"
 )
 
 func writtenStreams(t *testing.T, body []byte) pushBody {
@@ -98,5 +102,20 @@ func TestWriter_MapsTheErrorsForTheIngest(t *testing.T) {
 		if err == nil || errors.Is(err, ingest.ErrLogsRejected) != rejected {
 			t.Errorf("%d: %v, rejected %v", status, err, rejected)
 		}
+	}
+}
+
+func TestReader_MapsLinesAndAnOutage(t *testing.T) {
+	response := `{"status":"success","data":{"resultType":"streams","result":[
+		{"stream":{"node_id":"` + node.String() + `","unit":"nginx.service"},"values":[["1795435200123456789","x",{"structuredMetadata":{"pid":"1"}}]]}]}}`
+	r := loki.NewReader(client(t, (&recorded{}).handler(http.StatusOK, response)))
+	q, _ := logql.Select([]identity.NodeID{node})
+	lines, err := r.Lines(context.Background(), org, q, at.Add(-time.Hour), at, 10, true)
+	if err != nil || len(lines) != 1 || lines[0].Metadata["pid"] != "1" || lines[0].Labels["unit"] != "nginx.service" {
+		t.Errorf("Lines() = %+v, %v", lines, err)
+	}
+	down := loki.NewReader(client(t, (&recorded{}).handler(http.StatusServiceUnavailable, "")))
+	if _, err := down.Lines(context.Background(), org, q, at.Add(-time.Hour), at, 10, true); !errors.Is(err, logs.ErrUnavailable) {
+		t.Errorf("Loki down: %v", err)
 	}
 }

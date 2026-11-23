@@ -1,14 +1,15 @@
 # Fuzzing of the agent's parsers of untrusted input (KONZEPT §18.5): /proc texts, journal lines,
-# security events, redaction and WAL recovery with cargo-fuzz. A short run on agent changes catches broken targets, the nightly run
-# fuzzes five minutes per target; crashes are uploaded as artifacts.
+# security events, redaction and WAL recovery with cargo-fuzz; and the server's LogQL builder
+# (Go fuzzing, M3-08). A short run on changes catches broken targets, the nightly run fuzzes five
+# minutes per target; crashes are uploaded as artifacts.
 name: fuzz
 
 on:
   pull_request:
-    paths: ["agent/**", ".github/workflows/fuzz.yml", "justfile"]
+    paths: ["agent/**", "server/internal/domain/logql/**", ".github/workflows/fuzz.yml", "justfile"]
   push:
     branches: [main]
-    paths: ["agent/**", ".github/workflows/fuzz.yml", "justfile"]
+    paths: ["agent/**", "server/internal/domain/logql/**", ".github/workflows/fuzz.yml", "justfile"]
   schedule:
     - cron: "47 2 * * *" # nightly, 02:47 UTC
   workflow_dispatch:
@@ -59,4 +60,30 @@ jobs:
         with:
           name: fuzz-artifacts
           path: agent/fuzz/artifacts/
+          if-no-files-found: ignore
+
+  fuzz-server:
+    name: fuzz server LogQL builder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: just@${{ env.JUST_VERSION }}
+      - name: Fuzz
+        env:
+          SECONDS_PER_TARGET: ${{ github.event_name == 'schedule' && '300' || '30' }}
+        run: just fuzz-server "${SECONDS_PER_TARGET}"
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-server-artifacts
+          path: server/internal/domain/logql/testdata/fuzz/
           if-no-files-found: ignore

@@ -55,11 +55,18 @@ pub struct LogSelection {
 }
 
 impl LogSelection {
-    /// Whether an entry of `unit` with `severity` is sent.
+    /// Whether an entry of `unit` (or the syslog `identifier`) with `severity` is sent.
     #[must_use]
-    pub fn sends(&self, unit: Option<&str>, severity: Option<Severity>) -> bool {
+    pub fn sends(
+        &self,
+        unit: Option<&str>,
+        identifier: Option<&str>,
+        severity: Option<Severity>,
+    ) -> bool {
+        let excluded = |name: Option<&str>| name.is_some_and(|n| self.exclude_units.contains(n));
         self.enabled
-            && unit.is_none_or(|u| !self.exclude_units.contains(u))
+            && !excluded(unit)
+            && !excluded(identifier)
             && match (self.min_severity, severity) {
                 (Some(min), Some(s)) => s <= min,
                 _ => true,
@@ -324,28 +331,30 @@ mod tests {
     fn the_local_veto_switches_logs_off() {
         let active = compile(&update(1, |_| {}), false).unwrap();
         assert!(!active.logs.enabled);
-        assert!(
-            !active
-                .logs
-                .sends(Some("nginx.service"), Some(Severity::Error))
-        );
+        let sends = active
+            .logs
+            .sends(Some("nginx.service"), None, Some(Severity::Error));
+        assert!(!sends);
     }
 
     #[test]
-    fn selects_entries_by_unit_and_severity() {
+    fn selects_entries_by_unit_identifier_and_severity() {
         let logs = compile(&update(1, |_| {}), true).unwrap().logs;
-        assert!(logs.sends(Some("nginx.service"), Some(Severity::Error)));
-        assert!(logs.sends(Some("nginx.service"), Some(Severity::Warning)));
-        assert!(!logs.sends(Some("nginx.service"), Some(Severity::Notice)));
+        let error = Some(Severity::Error);
+        assert!(logs.sends(Some("nginx.service"), Some("nginx"), error));
+        assert!(logs.sends(Some("nginx.service"), None, Some(Severity::Warning)));
+        assert!(!logs.sends(Some("nginx.service"), None, Some(Severity::Notice)));
         assert!(
-            logs.sends(None, None),
+            logs.sends(None, None, None),
             "entries without unit or severity stay"
         );
-        assert!(!logs.sends(Some("cron.service"), Some(Severity::Emergency)));
-        assert!(
-            !LogSelection::default().sends(None, None),
-            "nothing before the first configuration"
-        );
+        assert!(!logs.sends(Some("cron.service"), None, Some(Severity::Emergency)));
+        // A syslog identifier excludes too, also under another unit.
+        let mut by_identifier = logs.clone();
+        by_identifier.exclude_units.insert("CRON".into());
+        assert!(!by_identifier.sends(Some("cron2.service"), Some("CRON"), None));
+        let nothing = LogSelection::default().sends(None, None, None);
+        assert!(!nothing, "nothing before the first configuration");
     }
 
     #[test]

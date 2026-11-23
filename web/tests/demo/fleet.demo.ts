@@ -8,6 +8,7 @@ import {
 	execAsync,
 	invitationLink,
 	login,
+	ownerSQL,
 	repoScript,
 	setupToken,
 	tamperDownload
@@ -196,6 +197,14 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	const budgetHosts = agents.filter(
 		(a) => a.service === 'agent-debian-12' || a.service === 'agent-rockylinux-9'
 	);
+	// Since M3-04 with log shipping: 20 journal lines per second during the measurement, each with
+	// a secret the agent redacts before its buffer.
+	const load = budgetHosts.map((a) =>
+		execAsync(
+			a.service,
+			'for i in $(seq 1200); do logger -t budget-load "load line $i password=hunter2"; sleep 0.05; done'
+		)
+	);
 	const measuring = budgetHosts.map((a) => execAsync(a.service, 'sh -s -- 60 1 30', budget));
 	await page.screenshot({ path: 'test-results/demo-fleet.png', fullPage: true });
 
@@ -286,6 +295,20 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		console.log(`${budgetHosts[i].host}: ${result.output.trim()}`);
 		expect(result.status, `${budgetHosts[i].host}:\n${result.output}`).toBe(0);
 		expect(result.output).toMatch(/, [2-9] processes/);
+	}
+	await Promise.all(load);
+	// The agents shipped the load lines, redacted (their own metrics, M3-04).
+	for (const host of budgetHosts) {
+		const counter = (metric: string) =>
+			Number(
+				ownerSQL(`SELECT coalesce(max(r.max), 0) FROM metrics_raw r JOIN series s ON s.id = r.series_id
+					JOIN nodes n ON n.id = s.node_id WHERE n.hostname = '${host.host}' AND s.metric = '${metric}'`).trim()
+			);
+		await expect
+			.poll(() => counter('sermon_agent_logs_redacted_entries'), { timeout: 60_000 })
+			.toBeGreaterThanOrEqual(1000);
+		expect(counter('sermon_agent_logs_sent_entries')).toBeGreaterThanOrEqual(1000);
+		expect(counter('sermon_agent_logs_dropped_entries')).toBe(0);
 	}
 	const lowered = await execAsync(budgetHosts[0].service, 'sh -s -- 3 0 1', budget);
 	expect(lowered.status, lowered.output).toBe(1);

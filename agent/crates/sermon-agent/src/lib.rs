@@ -12,6 +12,7 @@ pub mod journal;
 pub mod logfile;
 pub mod logging;
 pub mod logs;
+pub mod logship;
 pub mod reboot;
 pub mod scheduler;
 pub mod security;
@@ -112,6 +113,13 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         layout.agent_config_file(),
         config.local.allow_logs,
     ));
+    // Log shipping (M3-04) for the one source that runs.
+    let log_stats = Arc::new(logship::ShipStats::default());
+    let shipper = logship::Shipper::new(
+        agent_config.subscribe(),
+        log_stats.clone(),
+        logship::into_outbox(outbox.clone()),
+    );
     let transport = Transport::new(
         TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
         Arc::new(FileIdentity::new(layout)),
@@ -142,42 +150,22 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             );
         }
         let maintenance = tokio::spawn(maintain(outbox.clone(), clock.clone(), shutdown.clone()));
-        // The journal (security events) runs regardless of allow_logs: that veto is about shipping
-        // logs. Without journald (Alpine) a classic log file takes its place (ADR 0025).
         let mut collectors = default_collectors();
+        collectors.push(Box::new(logship::LogMetrics(log_stats)));
         collectors.push(Box::new(SystemdCollector::for_host(
             &config.host_root,
             clock.clone(),
             journal_layout.systemd_failed_file(),
         )));
-        let journal = if logfile::journald_runs(&config.host_root) {
-            let (journal_metrics, journal) =
-                journal::spawn(&journal_layout, outbox.clone(), shutdown.clone());
-            collectors.push(Box::new(journal_metrics));
-            journal
-        } else {
-            // Without journald no boot IDs come with the lines: compare the kernel's (M2-31).
-            reboot::report(
-                &ProcRoot::new(&config.host_root),
-                &journal_layout.boot_id_file(),
-                |event| {
-                    outbox
-                        .push_security_events(vec![security::to_proto(event)], clock.now())
-                        .inspect_err(|error| {
-                            tracing::warn!(
-                                "cannot buffer the reboot, retrying at the next start: {error}"
-                            );
-                        })
-                        .is_ok()
-                },
-            );
-            logfile::spawn(
-                &journal_layout,
-                &config.host_root,
-                outbox.clone(),
-                shutdown.clone(),
-            )
-        };
+        let journal = start_log_source(
+            config,
+            &journal_layout,
+            &outbox,
+            &clock,
+            shipper,
+            &mut collectors,
+            &shutdown,
+        );
         let scheduler = Scheduler::new(collectors, scheduler_root, scheduler::SERIES_LIMIT);
         let collection = tokio::spawn(scheduler::run(
             scheduler,
@@ -199,6 +187,45 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
 
 /// Interval of buffer housekeeping (fsync, age limit).
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Starts the source of security events and logs. The journal runs regardless of `allow_logs`:
+/// that veto is about shipping logs. Without journald (Alpine) a classic log file takes its place
+/// (ADR 0025).
+fn start_log_source(
+    config: &AgentConfig,
+    layout: &StateLayout,
+    outbox: &Outbox,
+    clock: &Arc<dyn Clock>,
+    shipper: logship::Shipper,
+    collectors: &mut Vec<Box<dyn sermon_collectors::Collector>>,
+    shutdown: &CancellationToken,
+) -> tokio::task::JoinHandle<()> {
+    if logfile::journald_runs(&config.host_root) {
+        let (metrics, journal) = journal::spawn(layout, outbox.clone(), shipper, shutdown.clone());
+        collectors.push(Box::new(metrics));
+        return journal;
+    }
+    // Without journald no boot IDs come with the lines: compare the kernel's (M2-31).
+    reboot::report(
+        &ProcRoot::new(&config.host_root),
+        &layout.boot_id_file(),
+        |event| {
+            outbox
+                .push_security_events(vec![security::to_proto(event)], clock.now())
+                .inspect_err(|error| {
+                    tracing::warn!("cannot buffer the reboot, retrying at the next start: {error}");
+                })
+                .is_ok()
+        },
+    );
+    logfile::spawn(
+        layout,
+        &config.host_root,
+        outbox.clone(),
+        shipper,
+        shutdown.clone(),
+    )
+}
 
 async fn maintain(outbox: Outbox, clock: Arc<dyn Clock>, shutdown: CancellationToken) {
     let mut tick = tokio::time::interval(MAINTENANCE_INTERVAL);

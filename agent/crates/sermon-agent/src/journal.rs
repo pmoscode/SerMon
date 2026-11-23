@@ -1,6 +1,6 @@
 //! The journal source in the agent (M2-05, ADR 0013): `journalctl` follows the journal, its
-//! entries go to the security parsers (M2-06) – log shipping comes with E3.1 – and its counters to
-//! the agent's own metrics.
+//! entries go to the security parsers (M2-06) and, as far as the configuration selects them, to
+//! log shipping (M3-04); its counters go to the agent's own metrics.
 //!
 //! | Metric | Unit |
 //! |---|---|
@@ -16,6 +16,7 @@ use sermon_core::Sample;
 use sermon_logs::journal::{
     Checkpoint, CursorFile, Entry, JournalConfig, JournalSource, JournalStats,
 };
+use sermon_logs::record::LogRecord;
 use sermon_security::{Parser, ParserConfig, SecurityEvent};
 use sermon_transport::outbox::{MAX_EVENTS_PER_BATCH, Outbox};
 use tokio::sync::mpsc;
@@ -23,13 +24,14 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
+use crate::logship::{self, Shipper};
 use crate::security;
 use crate::state::StateLayout;
 
 /// Entries in flight between source and consumer; a slow consumer holds `journalctl` back.
 const QUEUE: usize = 256;
-/// Events wait at most this long for more before they go to the WAL as one batch.
-const FLUSH_AFTER: Duration = Duration::from_secs(1);
+/// Events and log entries wait at most this long for more before they go to the WAL.
+const FLUSH_AFTER: Duration = logship::FLUSH_AFTER;
 /// Events kept while the WAL refuses them; beyond it the oldest are dropped (with a warning).
 const MAX_PENDING: usize = 10 * MAX_EVENTS_PER_BATCH;
 
@@ -38,10 +40,12 @@ const MAX_PENDING: usize = 10 * MAX_EVENTS_PER_BATCH;
 pub fn spawn(
     layout: &StateLayout,
     outbox: Outbox,
+    shipper: Shipper,
     shutdown: CancellationToken,
 ) -> (JournalMetrics, JoinHandle<()>) {
     spawn_with(
         JournalConfig::new(layout.journal_cursor_file()),
+        Some(shipper),
         move |events| {
             let batch = events.iter().map(security::to_proto).collect();
             match outbox.push_security_events(batch, SystemTime::now()) {
@@ -59,6 +63,7 @@ pub fn spawn(
 /// [`spawn`] with the source's settings and the delivery of the events given.
 fn spawn_with(
     config: JournalConfig,
+    shipper: Option<Shipper>,
     deliver: impl FnMut(&[SecurityEvent]) -> bool + Send + 'static,
     shutdown: CancellationToken,
 ) -> (JournalMetrics, JoinHandle<()>) {
@@ -69,7 +74,13 @@ fn spawn_with(
     let parser = parser(&checkpoint);
     let (sender, entries) = mpsc::channel(QUEUE);
     let task = tokio::spawn(async move {
-        let consumer = tokio::spawn(consume(entries, checkpoint.clone(), parser, deliver));
+        let consumer = tokio::spawn(consume(
+            entries,
+            checkpoint.clone(),
+            parser,
+            deliver,
+            shipper,
+        ));
         source.run(sender, shutdown).await;
         let _ = consumer.await;
         // The consumer commits its last batch after the source wrote the cursor for the last
@@ -92,52 +103,73 @@ fn parser(checkpoint: &Checkpoint) -> Parser {
     )
 }
 
-/// Takes the entries until the source ends. The security events of the entries are collected
-/// (up to a full batch or `FLUSH_AFTER`) and handed to `deliver`, which writes them to the WAL;
-/// only then is the cursor of the last entry committed, so a crash before the write brings the
-/// entries back. Entries without events are committed at once while nothing waits. If `deliver`
-/// fails, nothing is committed and the events are tried again.
+/// Takes the entries until the source ends. Their security events are collected (up to a full
+/// batch or `FLUSH_AFTER`) and handed to `deliver`, which writes them to the WAL; their log entries
+/// go to the `shipper` (M3-04), which writes them in batches too. Only once both are written is
+/// the cursor of the last entry committed, so a crash before the write brings the entries back.
+/// Entries without events and log entries are committed at once while nothing waits. If a write
+/// fails, nothing is committed and it is tried again.
 async fn consume(
     mut entries: mpsc::Receiver<Entry>,
     checkpoint: Checkpoint,
     mut parser: Parser,
     mut deliver: impl FnMut(&[SecurityEvent]) -> bool,
+    mut shipper: Option<Shipper>,
 ) {
     let mut pending: Vec<SecurityEvent> = Vec::new();
-    let mut last: Option<String> = None; // the cursor to commit once pending is stored
+    let mut last: Option<String> = None; // the cursor to commit once everything is stored
     let mut deadline = Instant::now();
-    let mut flush = |pending: &mut Vec<SecurityEvent>, last: &mut Option<String>| {
-        if pending.is_empty() || deliver(pending) {
-            pending.clear();
-            if let Some(cursor) = last.take() {
-                checkpoint.commit(&cursor);
+    let waiting = |pending: &[SecurityEvent], shipper: &Option<Shipper>| {
+        !pending.is_empty() || shipper.as_ref().is_some_and(|s| !s.is_empty())
+    };
+    let mut flush = |pending: &mut Vec<SecurityEvent>,
+                     shipper: &mut Option<Shipper>,
+                     last: &mut Option<String>| {
+        if !pending.is_empty() {
+            if !deliver(pending) {
+                return false;
             }
-            true
-        } else {
-            false
+            pending.clear();
         }
+        if let Some(shipper) = shipper.as_mut()
+            && !shipper.flush()
+        {
+            return false;
+        }
+        if let Some(cursor) = last.take() {
+            checkpoint.commit(&cursor);
+        }
+        true
     };
     loop {
-        let next = if pending.is_empty() {
-            entries.recv().await
-        } else {
+        let next = if waiting(&pending, &shipper) {
             let Ok(next) = tokio::time::timeout_at(deadline, entries.recv()).await else {
-                if !flush(&mut pending, &mut last) {
+                if !flush(&mut pending, &mut shipper, &mut last) {
                     deadline = Instant::now() + FLUSH_AFTER;
                 }
                 continue;
             };
             next
+        } else {
+            entries.recv().await
         };
         let Some(entry) = next else { break };
-        let before = pending.len();
-        parser.parse(&security::line(&entry), &mut pending);
-        if before == 0 && !pending.is_empty() {
-            deadline = Instant::now() + FLUSH_AFTER;
+        let before = waiting(&pending, &shipper);
+        if let Some(shipper) = shipper.as_mut() {
+            if let Some(redactor) = shipper.changed_redactor() {
+                parser.set_redactor(redactor);
+            }
+            if shipper.enabled() {
+                shipper.offer(LogRecord::from_journal(&entry), Instant::now());
+            }
         }
-        if pending.is_empty() {
+        parser.parse(&security::line(&entry), &mut pending);
+        if !waiting(&pending, &shipper) {
             checkpoint.commit(&entry.cursor);
             continue;
+        }
+        if !before {
+            deadline = Instant::now() + FLUSH_AFTER;
         }
         last = Some(entry.cursor);
         if pending.len() > MAX_PENDING {
@@ -145,14 +177,16 @@ async fn consume(
             pending.drain(..dropped);
             tracing::warn!(dropped, "security events dropped: the buffer refuses them");
         }
-        if pending.len() >= MAX_EVENTS_PER_BATCH && !flush(&mut pending, &mut last) {
+        let full = pending.len() >= MAX_EVENTS_PER_BATCH
+            || shipper.as_ref().is_some_and(Shipper::has_full);
+        if full && !flush(&mut pending, &mut shipper, &mut last) {
             deadline = Instant::now() + FLUSH_AFTER;
         }
     }
-    if !flush(&mut pending, &mut last) {
+    if !flush(&mut pending, &mut shipper, &mut last) {
         tracing::warn!(
             events = pending.len(),
-            "security events not buffered at shutdown; they come again from the journal"
+            "entries not buffered at shutdown; they come again from the journal"
         );
     }
 }
@@ -189,6 +223,7 @@ mod tests {
     use sermon_core::{Monotonic, ProcRoot, Value};
 
     use super::*;
+    use crate::logship;
 
     #[test]
     fn reports_the_counters() {
@@ -236,6 +271,7 @@ mod tests {
     #[derive(Clone, Default)]
     struct Sink {
         batches: Arc<std::sync::Mutex<Vec<Vec<&'static str>>>>,
+        commands: Arc<std::sync::Mutex<Vec<String>>>,
         fail: Arc<std::sync::atomic::AtomicBool>,
     }
 
@@ -250,12 +286,21 @@ mod tests {
                     .lock()
                     .unwrap()
                     .push(events.iter().map(|e| e.kind.name()).collect());
+                for event in events {
+                    if let sermon_security::EventKind::SudoCommand { command, .. } = &event.kind {
+                        sink.commands.lock().unwrap().push(command.clone());
+                    }
+                }
                 true
             }
         }
 
         fn batches(&self) -> Vec<Vec<&'static str>> {
             self.batches.lock().unwrap().clone()
+        }
+
+        fn commands(&self) -> Vec<String> {
+            self.commands.lock().unwrap().clone()
         }
     }
 
@@ -267,14 +312,27 @@ mod tests {
     }
 
     fn consumer(committed: Option<&str>) -> Consumer {
+        consumer_with(committed, None, None)
+    }
+
+    fn consumer_with(
+        committed: Option<&str>,
+        parser_config: Option<ParserConfig>,
+        shipper: Option<Shipper>,
+    ) -> Consumer {
         let checkpoint = Checkpoint::new(committed.map(str::to_owned));
         let (sender, entries) = mpsc::channel(QUEUE);
         let sink = Sink::default();
+        let parser = match parser_config {
+            Some(config) => Parser::new(config, None),
+            None => parser(&checkpoint),
+        };
         let task = tokio::spawn(consume(
             entries,
             checkpoint.clone(),
-            parser(&checkpoint),
+            parser,
             sink.deliver(),
+            shipper,
         ));
         Consumer {
             sender,
@@ -417,7 +475,7 @@ mod tests {
         let sink = Sink::default();
 
         let shutdown = CancellationToken::new();
-        let (_, task) = spawn_with(config(), sink.deliver(), shutdown.clone());
+        let (_, task) = spawn_with(config(), None, sink.deliver(), shutdown.clone());
         // Read, but the batch waits for FLUSH_AFTER.
         tokio::time::sleep(Duration::from_millis(300)).await;
         assert_eq!(sink.batches(), Vec::<Vec<&str>>::new());
@@ -430,7 +488,7 @@ mod tests {
         );
 
         let again = CancellationToken::new();
-        let (_, task) = spawn_with(config(), sink.deliver(), again.clone());
+        let (_, task) = spawn_with(config(), None, sink.deliver(), again.clone());
         tokio::time::sleep(FLUSH_AFTER + Duration::from_millis(300)).await;
         again.cancel();
         task.await.unwrap();
@@ -439,6 +497,78 @@ mod tests {
             1,
             "the events came again after the restart"
         );
+    }
+
+    // Logs (M3-04): the cursor moves only once the events and the log entries of the entries
+    // before it are in the WAL.
+    #[tokio::test(start_paused = true)]
+    async fn logs_and_events_are_committed_after_both_are_written() {
+        let (shipper, written, _, _config) = logship::tests::shipper(true);
+        let c = consumer_with(Some("s=a;i=0;b=new"), None, Some(shipper));
+        c.send(quiet(1)).await;
+        c.send(failed(2)).await;
+        assert_eq!(
+            c.committed().as_deref(),
+            Some("s=a;i=0;b=new"),
+            "the log entry waits"
+        );
+        tokio::time::sleep(FLUSH_AFTER + Duration::from_millis(10)).await;
+        assert_eq!(c.sink.batches(), [vec!["ssh.login.failed"]]);
+        assert_eq!(written.messages().len(), 2);
+        assert_eq!(c.committed().as_deref(), Some("s=a;i=2;b=new"));
+        c.close().await;
+    }
+
+    // The WAL refuses the log entries: the cursor stays until they are written.
+    #[tokio::test(start_paused = true)]
+    async fn a_failed_log_write_holds_the_cursor() {
+        let (shipper, written, _, _config) = logship::tests::shipper(true);
+        *written.next.lock().unwrap() = logship::Delivery::Failed;
+        let c = consumer_with(Some("s=a;i=0;b=new"), None, Some(shipper));
+        c.send(quiet(1)).await;
+        tokio::time::sleep(FLUSH_AFTER * 3).await;
+        assert_eq!(c.committed().as_deref(), Some("s=a;i=0;b=new"));
+        *written.next.lock().unwrap() = logship::Delivery::Stored;
+        tokio::time::sleep(FLUSH_AFTER * 2).await;
+        assert_eq!(c.committed().as_deref(), Some("s=a;i=1;b=new"));
+        assert_eq!(
+            written.messages(),
+            ["pam_unix(cron:session): session opened"]
+        );
+        c.close().await;
+    }
+
+    // With logs off nothing waits: the cursor moves at once, as before.
+    #[tokio::test(start_paused = true)]
+    async fn with_logs_off_entries_are_committed_at_once() {
+        let (shipper, written, _, _config) = logship::tests::shipper(false);
+        let c = consumer_with(Some("s=a;i=0;b=new"), None, Some(shipper));
+        c.send(quiet(1)).await;
+        assert_eq!(c.committed().as_deref(), Some("s=a;i=1;b=new"));
+        let c = c.close().await;
+        assert_eq!(written.messages(), Vec::<String>::new());
+        drop(c);
+    }
+
+    // The rules of the organization also redact sudo commands (M3-02, ADR 0030).
+    #[tokio::test(start_paused = true)]
+    async fn sudo_commands_follow_the_rules_of_the_configuration() {
+        let (shipper, _, _, _config) = logship::tests::shipper(true);
+        let c = consumer_with(
+            None,
+            Some(ParserConfig {
+                sudo_commands: true,
+            }),
+            Some(shipper),
+        );
+        c.send(entry(
+            1,
+            "sudo",
+            "  alice : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/opt/export customer-123456",
+        ))
+        .await;
+        let c = c.close().await;
+        assert_eq!(c.sink.commands(), ["/opt/export ***"]);
     }
 
     // A reboot while the agent was stopped: the boot of the stored cursor was another.

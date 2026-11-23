@@ -2763,7 +2763,37 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M3-02, M1-14
 - **Skill:** `sermon-proto-change`, `sermon-adr`
 
-#### ☐ M3-04 – Log-Versand aus Journal und Datei · A · M 🔒
+#### ☑ M3-04 – Log-Versand aus Journal und Datei · A · M 🔒
+> Erledigt (KONZEPT §10.2; Threat Model T9, T42):
+> - **`logship::Shipper`** (einer pro laufender Quelle):
+>   - wählt nach der Konfiguration der Gruppe aus (Unit **oder** Syslog-Identifier ausgeschlossen, Mindest-Severity)
+>   - begrenzt auf 500 Einträge und 512 KiB pro Sekunde (Spitzen 5 000 bzw. 5 MiB)
+>   - redigiert vor dem WAL und bündelt (1 000 Einträge, 256 KiB, 1 s)
+>   - hält höchstens 8 volle Batches, wenn das WAL sie ablehnt
+>   - gibt dem sudo-Parser den Redactor jeder neuen Konfiguration
+> - **Outbox:** `push_logs` lässt unbestätigte Log-Batches höchstens die Hälfte des WAL belegen. Darüber werden sie
+>   verworfen und gezählt, ein Schreibfehler wird wiederholt. Bestätigte und vom WAL verworfene Batches zählen nicht
+>   mehr.
+> - **Journal und Datei:** derselbe Verbraucher wie für die Security-Events. Cursor bzw. Position rücken erst vor,
+>   wenn Events und Logs geschrieben sind. Die Datei nennt ihren Pfad aus Sicht des Hosts, Zeilen fremder Hosts
+>   bleiben draußen.
+> - **Selbst-Metriken** `sermon_agent_logs_sent_entries`, `sermon_agent_logs_dropped_entries{reason=rate|buffer}`,
+>   `sermon_agent_logs_redacted_entries` (aus M3-02) mit Katalog und Hilfe DE/EN.
+> - **Tests:**
+>   - Shipper: Auswahl, Redaction, Batches, Abschalten und Anschalten, Rate nach Zeilen und Bytes, Schreibfehler,
+>     voller Anteil, Grenze wartender Batches, Redactor pro Version, Zähler.
+>   - Kein Geheimnis in den Dateien des echten WAL, der maskierte Text schon.
+>   - Outbox: Anteil, Freigabe nach Ack und nach Ablauf.
+>   - Journal: Bestätigung erst nach beiden, Schreibfehler hält den Cursor, aus heißt sofort bestätigen, sudo mit den
+>     Regeln der Org.
+>   - Datei: Zeilen mit Pfad und Severity, fremder Host, Schreibfehler hält die Position.
+>   - Gegenproben für 18 Prüfungen. Eine Mutante überlebte: Die Freigabe beim Ack war doppelt zu der beim Push und
+>     ist entfernt. Eine weitere hängte den Test (Endlosschleife), sie gilt als erkannt.
+> - **E2E unter der gehärteten Unit** (`fleet.demo.ts`):
+>   - Während der Budget-Messung schreiben web-01 und app-01 je 20 Zeilen/s mit einem Geheimnis.
+>   - Danach zeigen die Selbst-Metriken ≥ 1 000 gesendete und redigierte und 0 verworfene Einträge.
+>   - **Budget** (arm64, Docker auf Apple Silicon, Agent und `journalctl`): 0,63 % eines Kerns bei 20,3 MiB
+>     (Debian 12), 0,59 % bei 18,6 MiB (Rocky 9); ohne Versand waren es 0,29 % bzw. 0,35 % (M2-25).
 - **Ziel:** Journal- und Dateiquelle liefern neben den Security-Parsern auch Log-Einträge.
   - **Ablauf:** Filter aus der Konfiguration, dann Redaction, dann Batches bis 1 s oder 256 KiB ins WAL
     (`Outbox::push_logs`).

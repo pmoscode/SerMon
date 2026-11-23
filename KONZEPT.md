@@ -564,7 +564,17 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
   - **Batch:** höchstens 1 000 Einträge bzw. 256 KiB.
 - Loki-Labels werden **bewusst sparsam** gewählt (niedrige Cardinality): `node_id`, `source`, `unit`, `severity`. Alles
   andere steht als *structured metadata* bzw. in der Zeile.
-- **Begrenzungen:** Zeilenlänge max. 16 KB (danach gekürzt + Flag), Rate-Limit pro Node.
+- **Begrenzungen:**
+  - Zeilenlänge max. 16 KB (danach gekürzt + Flag).
+  - Im Agent höchstens 500 Einträge und 512 KiB pro Sekunde (mit Spitzen bis 5 000 bzw. 5 MiB), Rest verworfen und
+    gezählt (M3-04).
+  - Logs belegen höchstens die Hälfte des Puffers. Darüber werden sie verworfen, damit Metriken und Security-Events
+    ihren Platz behalten.
+  - Der Server begrenzt zusätzlich pro Node und Org (M3-07).
+- **Versand:** Der Journal- bzw. Dateiverbraucher gibt jeden Eintrag an die Security-Parser und an den Log-Versand.
+  Dieser wählt nach der Konfiguration der Gruppe aus (ADR 0030), redigiert und bündelt (bis 1 s oder 256 KiB). Der
+  Cursor bzw. die Position rückt erst vor, wenn Events und Logs im WAL liegen. Vor der ersten Konfiguration und mit
+  `allow_logs = false` gehen keine Logs raus.
 
 ### 10.3 Redaction (im Agent, vor dem Versand)
 

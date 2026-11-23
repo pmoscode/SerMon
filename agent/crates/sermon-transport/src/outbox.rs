@@ -1,6 +1,7 @@
 //! The outbox: producers (collectors) append batches to the write-ahead log, the session sends
 //! them and removes them after the server's acknowledgement.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::SystemTime;
 
@@ -8,7 +9,9 @@ use prost::Message;
 use sermon_buffer::{Record, Seq, Wal, WalError, WalStats};
 use tokio::sync::Notify;
 
-use crate::proto::agent::v1::{Batch, MetricBatch, SecurityEvent, SecurityEventBatch, batch};
+use crate::proto::agent::v1::{
+    Batch, LogBatch, LogEntry, MetricBatch, SecurityEvent, SecurityEventBatch, batch,
+};
 
 /// Shared handle to the write-ahead log; cheap to clone.
 #[derive(Debug, Clone)]
@@ -20,18 +23,77 @@ pub struct Outbox {
 struct Inner {
     wal: Mutex<Wal>,
     ready: Notify,
+    /// Unacknowledged log batches with their size (M3-04); always locked after `wal`.
+    logs: Mutex<BTreeMap<Seq, u64>>,
+    /// The bytes logs may take: half of the log, so they never crowd out metrics and events.
+    log_share: u64,
+}
+
+/// Why log entries were not buffered.
+#[derive(Debug, thiserror::Error)]
+pub enum LogPushError {
+    /// No entries.
+    #[error("no log entries")]
+    Empty,
+    /// Unacknowledged logs take their share of the buffer already; the entries are dropped, not
+    /// retried (metrics and security events keep their room).
+    #[error("the log share of the buffer is full")]
+    ShareFull,
+    /// The log could not be written; worth retrying.
+    #[error(transparent)]
+    Wal(#[from] WalError),
 }
 
 impl Outbox {
     /// Wraps an opened log.
     #[must_use]
     pub fn new(wal: Wal) -> Self {
+        let log_share = wal.config().max_bytes / 2;
         Self {
             inner: Arc::new(Inner {
                 wal: Mutex::new(wal),
                 ready: Notify::new(),
+                logs: Mutex::new(BTreeMap::new()),
+                log_share,
             }),
         }
+    }
+
+    /// Buffers log entries as one batch (the caller keeps it within the protocol's limits) and
+    /// wakes the session.
+    ///
+    /// Unacknowledged log batches take at most half of the buffer. Batches buffered before a
+    /// restart are not counted until they are sent.
+    ///
+    /// # Errors
+    ///
+    /// [`LogPushError::ShareFull`] beyond the share, [`LogPushError::Wal`] if writing failed.
+    pub fn push_logs(&self, entries: Vec<LogEntry>, now: SystemTime) -> Result<Seq, LogPushError> {
+        if entries.is_empty() {
+            return Err(LogPushError::Empty);
+        }
+        let payload = Batch {
+            seq: 0,
+            content: Some(batch::Content::Logs(LogBatch { entries })),
+        }
+        .encode_to_vec();
+        let size = u64::try_from(payload.len()).unwrap_or(u64::MAX);
+        let mut wal = self.wal();
+        let mut logs = self.logs();
+        // Acknowledged batches and what the log dropped at its limits (age, bytes) no longer take
+        // room: everything before the oldest pending record.
+        let stats = wal.stats();
+        let oldest = Seq::new(stats.next_seq.get().saturating_sub(stats.pending_records));
+        logs.retain(|seq, _| *seq >= oldest);
+        if logs.values().sum::<u64>().saturating_add(size) > self.inner.log_share {
+            return Err(LogPushError::ShareFull);
+        }
+        let seq = wal.append(&payload, now)?;
+        logs.insert(seq, size);
+        drop(logs);
+        drop(wal);
+        self.inner.ready.notify_one();
+        Ok(seq)
     }
 
     /// Buffers the samples of one collection tick and wakes the session.
@@ -140,6 +202,13 @@ impl Outbox {
         self.inner.ready.notified().await;
     }
 
+    fn logs(&self) -> MutexGuard<'_, BTreeMap<Seq, u64>> {
+        self.inner
+            .logs
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn wal(&self) -> MutexGuard<'_, Wal> {
         // The log stays consistent even if a holder panicked: every operation is self-contained.
         self.inner
@@ -172,7 +241,7 @@ mod tests {
     use sermon_buffer::WalConfig;
 
     use super::*;
-    use crate::proto::agent::v1::{Sample, sample};
+    use crate::proto::agent::v1::{LogEntry, Sample, sample};
 
     fn metrics() -> MetricBatch {
         MetricBatch {
@@ -224,6 +293,97 @@ mod tests {
             })
             .collect();
         assert_eq!(back, events);
+    }
+
+    fn log_entry(message: &str) -> LogEntry {
+        LogEntry {
+            occurred_at: Some(UNIX_EPOCH.into()),
+            source: crate::proto::agent::v1::LogSource::Journal.into(),
+            message: message.into(),
+            ..LogEntry::default()
+        }
+    }
+
+    fn small_wal(dir: &std::path::Path, now: SystemTime) -> Wal {
+        let config = WalConfig {
+            max_bytes: 4 * 1024 * 1024,
+            segment_bytes: 256 * 1024,
+            max_record_bytes: 512 * 1024,
+            ..WalConfig::default()
+        };
+        Wal::open(dir, config, now).unwrap().0
+    }
+
+    // Logs take at most half of the buffer (M3-04): metrics and security events are never
+    // crowded out by them; an acknowledgement frees the share again.
+    #[test]
+    fn logs_get_at_most_half_of_the_buffer() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let outbox = Outbox::new(small_wal(dir.path(), now));
+        let big = log_entry(&"x".repeat(16 * 1024));
+        let batch: Vec<LogEntry> = vec![big; 15]; // about 240 KiB
+        let mut seqs = Vec::new();
+        let full = loop {
+            match outbox.push_logs(batch.clone(), now) {
+                Ok(seq) => seqs.push(seq),
+                Err(error) => break error,
+            }
+            assert!(seqs.len() < 20, "the share has no end");
+        };
+        assert!(matches!(full, LogPushError::ShareFull), "{full}");
+        // 2 MiB of 4 MiB: 8 batches of about 240 KiB fit.
+        assert_eq!(seqs.len(), 8, "{seqs:?}");
+        // Metrics and events still go in.
+        outbox.push_metrics(metrics(), now).unwrap();
+        outbox.push_security_events(vec![login(1)], now).unwrap();
+
+        outbox.ack(seqs[2]).unwrap();
+        assert_eq!(
+            outbox.push_logs(batch.clone(), now).ok().map(|_| ()),
+            Some(())
+        );
+        let records = outbox.read_after(seqs[2], 20).unwrap();
+        assert!(records.iter().any(|r| matches!(
+            batch_for(r).unwrap().content,
+            Some(batch::Content::Logs(ref logs)) if logs.entries.len() == 15
+        )));
+    }
+
+    #[test]
+    fn an_empty_log_batch_is_not_buffered() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let outbox = Outbox::new(small_wal(dir.path(), now));
+        assert!(matches!(
+            outbox.push_logs(Vec::new(), now),
+            Err(LogPushError::Empty)
+        ));
+        assert_eq!(outbox.stats().pending_records, 0);
+    }
+
+    // Records the buffer drops at its limits (age, bytes) no longer count against the share.
+    #[test]
+    fn dropped_records_free_the_share() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let config = WalConfig {
+            max_bytes: 4 * 1024 * 1024,
+            segment_bytes: 256 * 1024,
+            max_record_bytes: 512 * 1024,
+            max_age: Duration::from_hours(2),
+            segment_span: Duration::from_mins(10),
+            ..WalConfig::default()
+        };
+        let outbox = Outbox::new(Wal::open(dir.path(), config, now).unwrap().0);
+        let batch: Vec<LogEntry> = vec![log_entry(&"y".repeat(16 * 1024)); 15];
+        while outbox.push_logs(batch.clone(), now).is_ok() {}
+        let later = now + Duration::from_hours(3);
+        outbox.maintain(later).unwrap();
+        assert!(
+            outbox.push_logs(batch, later).is_ok(),
+            "the expired logs freed their share"
+        );
     }
 
     #[test]

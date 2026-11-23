@@ -13,11 +13,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sermon_core::{ProcRoot, SecuritySource};
 use sermon_logs::file::{Format, LocalTime, Position, Record, Sender, Tail, parse};
+use sermon_logs::record::{LogRecord, Origin};
 use sermon_security::{LogLine, Parser, ParserConfig, SecurityEvent, Source};
 use sermon_transport::outbox::{MAX_EVENTS_PER_BATCH, Outbox};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::logship::Shipper;
 use crate::security;
 use crate::state::StateLayout;
 
@@ -150,6 +152,7 @@ pub fn spawn(
     layout: &StateLayout,
     host_root: &Path,
     outbox: Outbox,
+    shipper: Shipper,
     shutdown: CancellationToken,
 ) -> JoinHandle<()> {
     let config = FileConfig {
@@ -169,16 +172,19 @@ pub fn spawn(
                 }
             }
         },
+        Some(shipper),
         shutdown,
     ))
 }
 
 /// Follows the chosen file until `shutdown`. Events go to `deliver` in batches of at most
-/// [`MAX_EVENTS_PER_BATCH`]; only after it succeeded is the position of their line committed. If it
-/// fails, nothing more is read and the same events are tried again.
+/// [`MAX_EVENTS_PER_BATCH`], the lines of this host to the `shipper` (M3-04); only after both
+/// succeeded is the position of their line committed. If a write fails, nothing more is read and
+/// the same events and entries are tried again.
 pub async fn run(
     config: FileConfig,
     mut deliver: impl FnMut(&[SecurityEvent]) -> bool + Send + 'static,
+    mut shipper: Option<Shipper>,
     shutdown: CancellationToken,
 ) {
     let mut tick = tokio::time::interval(config.poll);
@@ -201,7 +207,8 @@ pub async fn run(
             _ = tick.tick() => {}
         }
         if chosen.is_none() {
-            let Some((path, format)) = choose(&config.host_root) else {
+            chosen = open_chosen(&config, stored.as_ref(), &mut committed, &mut written);
+            if chosen.is_none() {
                 if !warned {
                     tracing::warn!(
                         "no journald and no log file with security events found, retrying"
@@ -209,24 +216,16 @@ pub async fn run(
                     warned = true;
                 }
                 continue;
-            };
-            let resume = stored
-                .as_ref()
-                .filter(|s| s.path == path)
-                .map(|s| s.position);
-            tracing::info!(file = %path.display(), ?format, "following the log file for security events");
-            let tail = Tail::new(&path, resume);
-            if resume.is_none() {
-                // The start counts as read: a restart continues there, not at the then end.
-                committed = tail.position().map(|position| Stored { path, position });
-                persist(&config.position_file, committed.as_ref(), &mut written);
             }
-            chosen = Some((tail, format));
         }
         let Some((tail, format)) = chosen.as_mut() else {
             continue;
         };
-        if pending.is_empty() {
+        if let Some(redactor) = shipper.as_mut().and_then(Shipper::changed_redactor) {
+            parser.set_redactor(redactor);
+        }
+        let logs_waiting = shipper.as_ref().is_some_and(|s| !s.is_empty());
+        if pending.is_empty() && !logs_waiting {
             let mut lines = Vec::new();
             if let Err(error) = tail.read(&mut lines) {
                 // Once, not every second (e.g. no read access: install.sh --grant-log-access).
@@ -240,19 +239,17 @@ pub async fn run(
                 tracing::info!(file = %tail.path().display(), "reading the log file again");
             }
             report_skipped(tail, &mut skipped);
-            let zone = ProcRoot::new(&config.host_root)
-                .read_etc_bytes("localtime")
-                .ok();
-            let time = LocalTime::new(zone.as_deref(), now_us());
-            let local = local_hostname(&config.host_root);
-            for raw in &lines {
-                let text = String::from_utf8_lossy(&raw.text);
-                if let Ok(record) = parse(*format, &text, &time)
-                    && from_this_host(record.host, local.as_deref())
-                {
-                    parser.parse(&line(&record), &mut pending);
-                }
-                uncommitted = Some(raw.end);
+            let tail_path = tail.path().to_owned();
+            if let Some(end) = take_lines(
+                &config.host_root,
+                &tail_path,
+                *format,
+                &lines,
+                &mut parser,
+                &mut pending,
+                shipper.as_mut(),
+            ) {
+                uncommitted = Some(end);
             }
         }
         // Delivered in batches; a failed one stays for the next tick.
@@ -263,7 +260,9 @@ pub async fn run(
             }
             pending.drain(..n);
         }
+        let logs_written = shipper.as_mut().is_none_or(Shipper::flush);
         if pending.is_empty()
+            && logs_written
             && let Some(position) = uncommitted.take()
         {
             committed = Some(Stored {
@@ -285,6 +284,60 @@ pub async fn run(
     persist(&config.position_file, committed.as_ref(), &mut written);
 }
 
+/// Parses the lines of the file: the lines of this host go to the security parsers and the
+/// shipper. Returns the end of the last line.
+fn take_lines(
+    host_root: &Path,
+    path: &Path,
+    format: Format,
+    lines: &[sermon_logs::file::Line],
+    parser: &mut Parser,
+    pending: &mut Vec<SecurityEvent>,
+    mut shipper: Option<&mut Shipper>,
+) -> Option<Position> {
+    let zone = ProcRoot::new(host_root).read_etc_bytes("localtime").ok();
+    let time = LocalTime::new(zone.as_deref(), now_us());
+    let local = local_hostname(host_root);
+    let origin = host_path(host_root, path);
+    let now = tokio::time::Instant::now();
+    for raw in lines {
+        let text = String::from_utf8_lossy(&raw.text);
+        if let Ok(record) = parse(format, &text, &time)
+            && from_this_host(record.host, local.as_deref())
+        {
+            parser.parse(&line(&record), pending);
+            if let (Some(shipper), Some(origin)) = (shipper.as_deref_mut(), origin.as_ref())
+                && shipper.enabled()
+            {
+                shipper.offer(
+                    LogRecord::from_file(origin.clone(), &record, raw.truncated),
+                    now,
+                );
+            }
+        }
+    }
+    lines.last().map(|raw| raw.end)
+}
+
+/// Opens the file to follow, at the stored position if it is the same file; `None` without one.
+fn open_chosen(
+    config: &FileConfig,
+    stored: Option<&Stored>,
+    committed: &mut Option<Stored>,
+    written: &mut Option<Stored>,
+) -> Option<(Tail, Format)> {
+    let (path, format) = choose(&config.host_root)?;
+    let resume = stored.filter(|s| s.path == path).map(|s| s.position);
+    tracing::info!(file = %path.display(), ?format, "following the log file for security events");
+    let tail = Tail::new(&path, resume);
+    if resume.is_none() {
+        // The start counts as read: a restart continues there, not at the then end.
+        *committed = tail.position().map(|position| Stored { path, position });
+        persist(&config.position_file, committed.as_ref(), written);
+    }
+    Some((tail, format))
+}
+
 fn persist(file: &Path, committed: Option<&Stored>, written: &mut Option<Stored>) {
     let Some(committed) = committed else { return };
     if written.as_ref() == Some(committed) {
@@ -294,6 +347,12 @@ fn persist(file: &Path, committed: Option<&Stored>, written: &mut Option<Stored>
         Ok(()) => *written = Some(committed.clone()),
         Err(error) => tracing::warn!("cannot store the log file position: {error}"),
     }
+}
+
+/// The file as the host names it: relative to the host root (a container's view of the host).
+fn host_path(host_root: &Path, path: &Path) -> Option<Origin> {
+    let relative = path.strip_prefix(host_root).unwrap_or(path);
+    Origin::file(&Path::new("/").join(relative))
 }
 
 /// The host's name (`/proc/sys/kernel/hostname`), `None` if unknown.
@@ -339,6 +398,7 @@ mod tests {
     use sermon_security::EventKind;
 
     use super::*;
+    use crate::logship;
 
     const TRUSTED_ROOT: &str = "2026-11-21T19:34:29.908937+00:00 imuxsock uid=0 sshd-session[37]: Invalid user admin from 192.0.2.7 port 4711";
     const TRUSTED_FORGED: &str = "2026-11-21T19:34:30+00:00 imuxsock uid=1000 sshd: Accepted password for root from 192.0.2.66 port 22 ssh2";
@@ -357,6 +417,14 @@ mod tests {
     type Seen = Arc<Mutex<Vec<SecurityEvent>>>;
 
     fn start(root: &Path, accept: Arc<Mutex<bool>>) -> (Seen, CancellationToken, JoinHandle<()>) {
+        start_with(root, accept, None)
+    }
+
+    fn start_with(
+        root: &Path,
+        accept: Arc<Mutex<bool>>,
+        shipper: Option<Shipper>,
+    ) -> (Seen, CancellationToken, JoinHandle<()>) {
         let seen: Seen = Arc::default();
         let sink = seen.clone();
         let shutdown = CancellationToken::new();
@@ -374,9 +442,91 @@ mod tests {
                 sink.lock().unwrap().extend_from_slice(events);
                 true
             },
+            shipper,
             shutdown.clone(),
         ));
         (seen, shutdown, task)
+    }
+
+    const NGINX: &str =
+        "Nov 21 19:33:15 web-01 daemon.err nginx[5]: upstream timed out, token=s3cr3t";
+
+    async fn wait_for_logs(written: &logship::tests::Written, n: usize) -> Vec<String> {
+        for _ in 0..500 {
+            if written.messages().len() >= n {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        written.messages()
+    }
+
+    // Log shipping from the file (M3-04): every line of this host, redacted, with the path as
+    // seen on the host and the severity of busybox.
+    #[tokio::test]
+    async fn ships_the_lines_of_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("var/log/messages");
+        append(&log, "");
+        append(&dir.path().join("proc/sys/kernel/hostname"), "web-01\n");
+        let (shipper, written, _, _config) = logship::tests::shipper(true);
+        let (seen, shutdown, task) =
+            start_with(dir.path(), Arc::new(Mutex::new(true)), Some(shipper));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        append(
+            &log,
+            &format!(
+                "{BUSYBOX}\n{NGINX}\nNov 21 19:33:16 other-host daemon.err x: from elsewhere\n"
+            ),
+        );
+        let messages = wait_for_logs(&written, 2).await;
+        shutdown.cancel();
+        task.await.unwrap();
+        assert_eq!(
+            messages,
+            [
+                "Invalid user bob from 192.0.2.8 port 4712",
+                "upstream timed out, token=***"
+            ]
+        );
+        let batches = written.batches.lock().unwrap().clone();
+        let nginx = &batches.concat()[1];
+        assert_eq!(nginx.origin, Origin::File("/var/log/messages".into()));
+        assert_eq!(nginx.severity, Some(sermon_logs::record::Severity::Error));
+        assert_eq!(nginx.identifier.as_deref(), Some("nginx"));
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            1,
+            "the security event as before"
+        );
+    }
+
+    // The buffer refuses the log entries: the position stays, a restart reads the lines again.
+    #[tokio::test]
+    async fn a_failed_log_write_holds_the_position() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("var/log/messages");
+        append(&log, "");
+        let (shipper, written, _, _config) = logship::tests::shipper(true);
+        *written.next.lock().unwrap() = logship::Delivery::Failed;
+        let (_, shutdown, task) = start_with(dir.path(), Arc::new(Mutex::new(true)), Some(shipper));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        append(&log, &format!("{NGINX}\n"));
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        shutdown.cancel();
+        task.await.unwrap();
+        assert_eq!(written.messages(), Vec::<String>::new());
+
+        let (shipper, written, _, _config) = logship::tests::shipper(true);
+        let (_, shutdown, task) = start_with(dir.path(), Arc::new(Mutex::new(true)), Some(shipper));
+        let messages = wait_for_logs(&written, 1).await;
+        shutdown.cancel();
+        task.await.unwrap();
+        assert_eq!(
+            messages,
+            ["upstream timed out, token=***"],
+            "read again after the restart"
+        );
     }
 
     // M2-31: the source in the host facts follows the choice of the source and its read access.

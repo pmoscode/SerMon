@@ -229,6 +229,12 @@ impl Wal {
         Ok((wal, recovery))
     }
 
+    /// The limits the log was opened with.
+    #[must_use]
+    pub fn config(&self) -> &WalConfig {
+        &self.config
+    }
+
     /// Appends `payload` written at `now` and returns its sequence number. Applies the byte and
     /// age limits first (dropping the oldest segments) and fsyncs according to the policy.
     ///

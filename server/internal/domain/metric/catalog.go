@@ -186,6 +186,10 @@ var definitions = []Definition{
 	def("sermon_agent_series_dropped_samples", UnitCount, Last, AreaAgent),
 	def("sermon_agent_journal_lost_entries", UnitCount, Last, AreaAgent),
 	def("sermon_agent_journal_invalid_lines", UnitCount, Last, AreaAgent),
+	// Log shipping (M3-04)
+	def("sermon_agent_logs_sent_entries", UnitCount, Last, AreaAgent),
+	def("sermon_agent_logs_dropped_entries", UnitCount, Last, AreaAgent, "reason"),
+	def("sermon_agent_logs_redacted_entries", UnitCount, Last, AreaAgent),
 }
 
 var byName = func() map[string]Definition {

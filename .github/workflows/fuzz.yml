@@ -1,5 +1,5 @@
 # Fuzzing of the agent's parsers of untrusted input (KONZEPT §18.5): /proc texts, journal lines,
-# security events, redaction and WAL recovery with cargo-fuzz; and the server's LogQL builder
+# security events, redaction, WAL recovery and multi-line log entries with cargo-fuzz; and the server's LogQL builder
 # (Go fuzzing, M3-08). A short run on changes catches broken targets, the nightly run fuzzes five
 # minutes per target; crashes are uploaded as artifacts.
 name: fuzz

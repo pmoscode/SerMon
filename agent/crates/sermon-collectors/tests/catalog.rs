@@ -41,9 +41,9 @@ fn every_collected_metric_is_in_the_server_catalog() {
     let known = names_in(&catalog, "def(\"sermon_");
     assert!(known.len() > 70, "catalog not parsed: {known:?}");
 
+    // The collectors and every source of the agent (journal, log shipping, log files, …).
     let mut files = sources(&root.join("agent/crates/sermon-collectors/src"));
-    files.push(root.join("agent/crates/sermon-agent/src/scheduler.rs"));
-    files.push(root.join("agent/crates/sermon-agent/src/simulate.rs"));
+    files.extend(sources(&root.join("agent/crates/sermon-agent/src")));
     let mut sent = BTreeSet::new();
     for file in &files {
         let text = std::fs::read_to_string(file).unwrap();

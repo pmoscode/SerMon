@@ -17,6 +17,7 @@
 //! [local]                                         # optional vetoes, default: allowed
 //! allow_live_view = true
 //! allow_logs = true
+//! log_file_prefixes = ["/var/log"]                # where the server's file globs may read
 //! ```
 
 use std::fmt;
@@ -71,7 +72,7 @@ pub struct AgentConfig {
 }
 
 /// Local vetoes: things the server may ask for, but the host's admin forbids.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(
     clippy::struct_excessive_bools,
     reason = "independent switches from the config file"
@@ -81,13 +82,20 @@ pub struct LocalPolicy {
     pub allow_live_view: bool,
     /// Log lines may be shipped to the server (§10). Security events are not affected.
     pub allow_logs: bool,
+    /// The directories below which the server's log file globs may read (M3-05); the state
+    /// directory, `/etc/sermon`, `/proc`, `/sys` and `/dev` never.
+    pub log_file_prefixes: Vec<PathBuf>,
 }
+
+/// Where the server's log file globs may read by default.
+pub const DEFAULT_LOG_FILE_PREFIX: &str = "/var/log";
 
 impl Default for LocalPolicy {
     fn default() -> Self {
         Self {
             allow_live_view: true,
             allow_logs: true,
+            log_file_prefixes: vec![PathBuf::from(DEFAULT_LOG_FILE_PREFIX)],
         }
     }
 }
@@ -166,6 +174,7 @@ struct RawPaths {
 struct RawLocal {
     allow_live_view: Option<bool>,
     allow_logs: Option<bool>,
+    log_file_prefixes: Option<Vec<PathBuf>>,
 }
 
 impl RawConfig {
@@ -200,6 +209,22 @@ impl RawConfig {
         if state_dir == Path::new("/") {
             problems.push("paths.state_dir: must not be the root directory".to_owned());
         }
+        let log_file_prefixes = self
+            .local
+            .log_file_prefixes
+            .unwrap_or_else(|| vec![PathBuf::from(DEFAULT_LOG_FILE_PREFIX)]);
+        for prefix in &log_file_prefixes {
+            // By text: `Path::components` drops `.` in the middle.
+            let normal = prefix
+                .to_str()
+                .is_some_and(|p| p.split('/').skip(1).all(|s| !matches!(s, "." | "..")));
+            if !prefix.is_absolute() || !normal {
+                problems.push(format!(
+                    "local.log_file_prefixes: {} must be an absolute path without . and ..",
+                    prefix.display()
+                ));
+            }
+        }
 
         match (server_url, agent_url) {
             (Some(server_url), Some(agent_url)) if problems.is_empty() => Ok(AgentConfig {
@@ -211,6 +236,7 @@ impl RawConfig {
                 local: LocalPolicy {
                     allow_live_view: self.local.allow_live_view.unwrap_or(true),
                     allow_logs: self.local.allow_logs.unwrap_or(true),
+                    log_file_prefixes,
                 },
             }),
             _ => Err(ConfigError::Invalid(problems)),
@@ -380,6 +406,7 @@ mod tests {
             [local]
             allow_live_view = false
             allow_logs = false
+            log_file_prefixes = ["/var/log", "/srv/app/logs"]
             "#,
         )
         .unwrap();
@@ -398,9 +425,28 @@ mod tests {
             config.local,
             LocalPolicy {
                 allow_live_view: false,
-                allow_logs: false
+                allow_logs: false,
+                log_file_prefixes: vec![PathBuf::from("/var/log"), PathBuf::from("/srv/app/logs")],
             }
         );
+    }
+
+    #[test]
+    fn log_file_prefixes_must_be_absolute_and_plain() {
+        for prefix in ["var/log", "/var/log/../../etc", "/var/./log"] {
+            let problems = invalid(&format!(
+                "{MINIMAL}[local]\nlog_file_prefixes = [\"{prefix}\"]\n"
+            ));
+            assert_eq!(problems.len(), 1, "{prefix}: {problems:?}");
+            assert!(
+                problems[0].starts_with("local.log_file_prefixes:"),
+                "{problems:?}"
+            );
+        }
+        // None at all: the server's globs read nothing.
+        let none =
+            AgentConfig::parse(&format!("{MINIMAL}[local]\nlog_file_prefixes = []\n")).unwrap();
+        assert_eq!(none.local.log_file_prefixes, Vec::<PathBuf>::new());
     }
 
     #[test]
@@ -504,6 +550,7 @@ mod tests {
             format!("{MINIMAL}colour = \"blue\"\n"),
             format!("{MINIMAL}[local]\nallow_reboot = true\n"),
             format!("{MINIMAL}[local]\nallow_logs = \"no\"\n"),
+            format!("{MINIMAL}[local]\nlog_file_prefixes = \"/var/log\"\n"),
             format!("{MINIMAL}log_level = \"verbose\"\n"),
             "[server\n".to_owned(),
         ] {

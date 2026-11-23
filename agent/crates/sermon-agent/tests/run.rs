@@ -5,7 +5,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
@@ -41,7 +41,10 @@ impl World {
             serve_tls(api.routes(), mtls_server_config(chain, key, &[pki.root()])).await;
 
         let dir = tempfile::tempdir().unwrap();
+        // A copy of the host: the log file test writes into its /var/log.
         let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/debian-13");
+        let host = dir.path().join("host");
+        copy_dir(&fixture, &host);
         std::fs::write(
             dir.path().join("agent.toml"),
             format!(
@@ -49,7 +52,7 @@ impl World {
                 enrollment.http_url(),
                 agent_api.https_url(),
                 dir.path().join("state").display(),
-                fixture.display()
+                host.display()
             ),
         )
         .unwrap();
@@ -106,6 +109,19 @@ impl World {
             }
         });
         (child, received)
+    }
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
     }
 }
 
@@ -208,5 +224,104 @@ async fn rotates_a_certificate_that_is_due_and_keeps_running() {
     let new = identity::load(&world.layout()).unwrap().certificate;
     assert_ne!(new, old);
     assert_eq!(sessions[1].client_cert, Some(new));
+    stop(child, &lines).await;
+}
+
+// M3-05 end to end: the server's configuration names a glob, the agent follows a file created
+// later from its start, groups the stack trace into one entry and sends it; a symlink to the
+// agent's key is refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn follows_the_log_files_of_the_servers_globs() {
+    use sermon_transport::proto::agent::v1::{
+        AgentConfig, ConfigUpdate, LogConfig, LogFileGlob, session_response,
+    };
+    let world = World::start().await;
+    world.enroll().await;
+    let (child, lines) = world.run();
+    assert!(
+        world
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    let update = ConfigUpdate {
+        version: 1,
+        config: Some(AgentConfig {
+            logs: Some(LogConfig {
+                enabled: true,
+                files: vec![LogFileGlob {
+                    pattern: "/var/log/app/*.log".into(),
+                    multiline_start: r"^\d{4}-".into(),
+                }],
+                ..LogConfig::default()
+            }),
+            redaction_rules: Vec::new(),
+        }),
+    };
+    assert!(
+        world
+            .api
+            .send(session_response::Payload::ConfigUpdate(update))
+            .await
+    );
+    assert!(
+        world
+            .api
+            .wait_for(WAIT, |s| s.iter().any(|s| !s.config_applied.is_empty()))
+            .await
+    );
+    let app = world.dir.path().join("host/var/log/app");
+    std::fs::create_dir_all(&app).unwrap();
+    // After the first expansion of the pattern (files found then start at their end): the file
+    // is new and read from its start.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    std::os::unix::fs::symlink(
+        world.layout().identity_dir().join("agent.key"),
+        app.join("key.log"),
+    )
+    .unwrap();
+    std::fs::write(
+        app.join("server.log"),
+        "2026-11-23 12:00:01 ERROR failed, password=hunter2\n\tat app.Main(Main.java:7)\n2026-11-23 12:00:02 INFO next\n",
+    )
+    .unwrap();
+    assert!(
+        world
+            .api
+            .wait_for(Duration::from_secs(30), |s| s
+                .iter()
+                .flat_map(|s| &s.log_entries)
+                .any(|e| e.message.starts_with("2026-11-23 12:00:02")))
+            .await,
+        "no entries of the file"
+    );
+    let entries: Vec<_> = world
+        .api
+        .sessions()
+        .iter()
+        .flat_map(|s| s.log_entries.clone())
+        .filter(|e| e.file.starts_with("/var/log/app/"))
+        .collect();
+    assert_eq!(entries.len(), 2, "{entries:#?}");
+    assert_eq!(
+        entries[0].message,
+        "2026-11-23 12:00:01 ERROR failed, password=***\n\tat app.Main(Main.java:7)"
+    );
+    assert_eq!(entries[0].file, "/var/log/app/server.log");
+    assert_eq!(entries[0].unit, "server.log");
+    let key = std::fs::read(world.layout().identity_dir().join("agent.key")).unwrap();
+    let key = String::from_utf8_lossy(&key);
+    assert!(
+        !world
+            .api
+            .sessions()
+            .iter()
+            .flat_map(|s| &s.log_entries)
+            .any(|e| key.contains(e.message.as_str())
+                && !e.message.is_empty()
+                && e.file.ends_with("key.log")),
+        "the key was read"
+    );
+    assert!(!entries.iter().any(|e| e.file.ends_with("key.log")));
     stop(child, &lines).await;
 }

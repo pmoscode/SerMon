@@ -190,6 +190,9 @@ var definitions = []Definition{
 	def("sermon_agent_logs_sent_entries", UnitCount, Last, AreaAgent),
 	def("sermon_agent_logs_dropped_entries", UnitCount, Last, AreaAgent, "reason"),
 	def("sermon_agent_logs_redacted_entries", UnitCount, Last, AreaAgent),
+	// Log files of the groups' globs (M3-05)
+	def("sermon_agent_log_files_followed", UnitCount, Last, AreaAgent),
+	def("sermon_agent_log_files_rejected", UnitCount, Last, AreaAgent),
 }
 
 var byName = func() map[string]Definition {

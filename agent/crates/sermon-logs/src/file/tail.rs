@@ -198,6 +198,20 @@ impl Tail {
         tail
     }
 
+    /// Follows a file found after the start (e.g. by a glob): everything in it is new.
+    #[must_use]
+    pub fn new_file(path: impl Into<PathBuf>) -> Self {
+        let mut tail = Self {
+            path: path.into(),
+            current: None,
+            previous: None,
+            resume: Resume::Start,
+            stats: TailStats::default(),
+        };
+        let _ = tail.open();
+        tail
+    }
+
     /// The followed path.
     #[must_use]
     pub fn path(&self) -> &Path {
@@ -388,6 +402,18 @@ mod tests {
         append(&path, " line\n");
         assert_eq!(lines(&mut tail), ["half line"]);
         assert_eq!(lines(&mut tail), Vec::<String>::new());
+    }
+
+    // A file found after the start (a glob, M3-05) is new: read from its start.
+    #[test]
+    fn a_new_file_is_read_from_its_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.log");
+        append(&path, "first\nsecond\n");
+        let mut tail = Tail::new_file(&path);
+        assert_eq!(lines(&mut tail), ["first", "second"]);
+        append(&path, "third\n");
+        assert_eq!(lines(&mut tail), ["third"]);
     }
 
     #[test]

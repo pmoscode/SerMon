@@ -15,8 +15,8 @@
 //! | `sermon_agent_logs_redacted_entries` | entries in which redaction replaced something |
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use sermon_collectors::{CollectError, Collector, Context};
@@ -93,6 +93,13 @@ impl Bucket {
     }
 }
 
+/// The node's rate: entries and bytes.
+#[derive(Debug)]
+struct Rate {
+    lines: Bucket,
+    bytes: Bucket,
+}
+
 /// Hands a batch to the buffer.
 pub type Deliver = Box<dyn FnMut(&[LogRecord]) -> Delivery + Send>;
 
@@ -100,8 +107,8 @@ pub type Deliver = Box<dyn FnMut(&[LogRecord]) -> Delivery + Send>;
 pub struct Shipper {
     config: watch::Receiver<Arc<Active>>,
     redactor_version: Option<u64>,
-    lines: Bucket,
-    bytes: Bucket,
+    /// Shared by all sources of the node.
+    rate: Arc<Mutex<Rate>>,
     batcher: Batcher,
     ready: VecDeque<Vec<LogRecord>>,
     deliver: Deliver,
@@ -127,12 +134,29 @@ impl Shipper {
         Self {
             config,
             redactor_version: None,
-            lines: Bucket::new(LINES_PER_SECOND, LINES_BURST),
-            bytes: Bucket::new(BYTES_PER_SECOND, BYTES_BURST),
+            rate: Arc::new(Mutex::new(Rate {
+                lines: Bucket::new(LINES_PER_SECOND, LINES_BURST),
+                bytes: Bucket::new(BYTES_PER_SECOND, BYTES_BURST),
+            })),
             batcher: Batcher::default(),
             ready: VecDeque::new(),
             deliver,
             stats,
+        }
+    }
+
+    /// A shipper of another source of the node: same configuration, counters and rate, its own
+    /// batches and delivery.
+    #[must_use]
+    pub fn sibling(&self, deliver: Deliver) -> Self {
+        Self {
+            config: self.config.clone(),
+            redactor_version: None,
+            rate: self.rate.clone(),
+            batcher: Batcher::default(),
+            ready: VecDeque::new(),
+            deliver,
+            stats: self.stats.clone(),
         }
     }
 
@@ -162,15 +186,21 @@ impl Shipper {
         ) {
             return;
         }
-        self.lines.refill(now);
-        self.bytes.refill(now);
-        let size = f64::from(u32::try_from(record.size()).unwrap_or(u32::MAX));
-        if self.lines.tokens < 1.0 || self.bytes.tokens < size {
-            add(&self.stats.dropped_rate, 1);
-            return;
+        {
+            let mut rate = self
+                .rate
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            rate.lines.refill(now);
+            rate.bytes.refill(now);
+            let size = f64::from(u32::try_from(record.size()).unwrap_or(u32::MAX));
+            if rate.lines.tokens < 1.0 || rate.bytes.tokens < size {
+                add(&self.stats.dropped_rate, 1);
+                return;
+            }
+            rate.lines.tokens -= 1.0;
+            rate.bytes.tokens -= size;
         }
-        self.lines.tokens -= 1.0;
-        self.bytes.tokens -= size;
         let before = record.message.len();
         let mut changed = false;
         record.redact_with(|text: &str| {
@@ -405,6 +435,29 @@ pub(crate) mod tests {
         assert!(s.is_empty());
         assert_eq!(stats.sent.load(Ordering::Relaxed), 2);
         assert_eq!(stats.redacted.load(Ordering::Relaxed), 1);
+    }
+
+    // The rate is the node's: every source's shipper draws from the same buckets (M3-05).
+    #[tokio::test(start_paused = true)]
+    async fn siblings_share_the_rate_of_the_node() {
+        let (mut journal, _, stats, _config) = shipper(true);
+        let written = Written::new();
+        let mut files = journal.sibling(written.deliver());
+        let now = Instant::now();
+        for i in 0..5_000 {
+            journal.offer(record("app.service", None, &format!("j{i}")), now);
+        }
+        files.offer(record("app.service", None, "over the rate"), now);
+        assert!(files.flush());
+        assert_eq!(written.messages(), Vec::<String>::new());
+        assert_eq!(stats.dropped_rate.load(Ordering::Relaxed), 1);
+        // The rate refills for both.
+        files.offer(
+            record("app.service", None, "later"),
+            now + Duration::from_secs(1),
+        );
+        assert!(files.flush());
+        assert_eq!(written.messages(), ["later"]);
     }
 
     #[tokio::test(start_paused = true)]

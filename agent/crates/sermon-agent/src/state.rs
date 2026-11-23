@@ -87,6 +87,12 @@ impl StateLayout {
         self.root.join("logfile.position")
     }
 
+    /// Where the log files of the server's globs continue (M3-05).
+    #[must_use]
+    pub fn log_files_position_file(&self) -> PathBuf {
+        self.root.join("logfiles.positions")
+    }
+
     /// The kernel's boot ID at the last start, for reboots without journald (M2-31).
     #[must_use]
     pub fn boot_id_file(&self) -> PathBuf {
@@ -114,6 +120,7 @@ impl StateLayout {
             self.wal_dir(),
             self.journal_cursor_file(),
             self.logfile_position_file(),
+            self.log_files_position_file(),
             self.systemd_failed_file(),
             self.boot_id_file(),
             self.agent_config_file(),
@@ -149,6 +156,7 @@ mod tests {
         fs::create_dir_all(layout.wal_dir().join("segments")).unwrap();
         fs::write(layout.journal_cursor_file(), "s=a;i=1").unwrap();
         fs::write(layout.logfile_position_file(), "/var/log/messages\n1:2:3").unwrap();
+        fs::write(layout.log_files_position_file(), "1:2:3 /var/log/app.log\n").unwrap();
         fs::write(layout.systemd_failed_file(), "backup.service 1800000000\n").unwrap();
         fs::write(
             layout.boot_id_file(),
@@ -167,6 +175,7 @@ mod tests {
                 layout.wal_dir(),
                 layout.journal_cursor_file(),
                 layout.logfile_position_file(),
+                layout.log_files_position_file(),
                 layout.systemd_failed_file(),
                 layout.boot_id_file(),
                 layout.agent_config_file()

@@ -56,3 +56,10 @@ bench = false
 
 # The workspace lints are not taken over: fuzz targets are test code (expect() on fixtures).
 [lints]
+
+[[bin]]
+name = "multiline"
+path = "fuzz_targets/multiline.rs"
+test = false
+doc = false
+bench = false

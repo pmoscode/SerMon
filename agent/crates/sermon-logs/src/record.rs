@@ -162,6 +162,33 @@ impl LogRecord {
         }
     }
 
+    /// An entry of a log file named by a glob (M3-05): the time it was read, the file name as
+    /// unit; such files name no severity.
+    #[must_use]
+    pub fn from_plain_file(origin: Origin, at_us: u64, message: &str, truncated: bool) -> Self {
+        let unit = match &origin {
+            Origin::File(path) => Path::new(path)
+                .file_name()
+                .map(|n| cut(&n.to_string_lossy(), MAX_FIELD_BYTES).to_owned()),
+            Origin::Journal => None,
+        };
+        Self {
+            at_us,
+            origin,
+            unit,
+            identifier: None,
+            severity: None,
+            message: cut(message, MAX_MESSAGE_BYTES).to_owned(),
+            truncated: truncated || message.len() > MAX_MESSAGE_BYTES,
+            pid: None,
+            process: None,
+            uid: None,
+            boot_id: None,
+            transport: None,
+            facility: None,
+        }
+    }
+
     /// Replaces the message with `redact(message)`, cut to [`MAX_MESSAGE_BYTES`] again: a mask can
     /// be longer than what it replaces.
     pub fn redact_with<F>(&mut self, redact: F)
@@ -428,6 +455,20 @@ mod tests {
                 Some(23)
             )
         );
+    }
+
+    #[test]
+    fn an_entry_of_a_plain_file_names_the_file() {
+        let origin = Origin::file(Path::new("/var/log/nginx/error.log")).unwrap();
+        let long = "x".repeat(MAX_MESSAGE_BYTES + 5);
+        let record = LogRecord::from_plain_file(origin.clone(), 7, &long, false);
+        assert_eq!(record.unit.as_deref(), Some("error.log"));
+        assert_eq!(record.identifier, None);
+        assert_eq!(record.severity, None);
+        assert_eq!(record.at_us, 7);
+        assert!(record.truncated && record.message.len() == MAX_MESSAGE_BYTES);
+        assert_eq!(record.origin, origin);
+        assert!(!LogRecord::from_plain_file(origin, 7, "short", false).truncated);
     }
 
     #[test]

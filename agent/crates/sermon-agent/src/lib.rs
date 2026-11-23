@@ -11,6 +11,7 @@ pub mod identity;
 pub mod journal;
 pub mod logfile;
 pub mod logging;
+pub mod logglob;
 pub mod logs;
 pub mod logship;
 pub mod reboot;
@@ -115,6 +116,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     ));
     // Log shipping (M3-04) for the one source that runs.
     let log_stats = Arc::new(logship::ShipStats::default());
+    let config_updates = agent_config.subscribe();
     let shipper = logship::Shipper::new(
         agent_config.subscribe(),
         log_stats.clone(),
@@ -152,6 +154,14 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         let maintenance = tokio::spawn(maintain(outbox.clone(), clock.clone(), shutdown.clone()));
         let mut collectors = default_collectors();
         collectors.push(Box::new(logship::LogMetrics(log_stats)));
+        let globs = start_log_files(
+            config,
+            &journal_layout,
+            shipper.sibling(logship::into_outbox(outbox.clone())),
+            config_updates,
+            &mut collectors,
+            &shutdown,
+        );
         collectors.push(Box::new(SystemdCollector::for_host(
             &config.host_root,
             clock.clone(),
@@ -177,6 +187,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         maintenance.await.context("maintenance task failed")?;
         collection.await.context("collection task failed")?;
         journal.await.context("journal task failed")?;
+        globs.await.context("log file task failed")?;
         if let Err(error) = outbox.maintain(clock.now()) {
             tracing::warn!("cannot flush the buffer: {error}");
         }
@@ -187,6 +198,33 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
 
 /// Interval of buffer housekeeping (fsync, age limit).
 const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Starts the log files of the server's globs (M3-05), within the same rate as the journal.
+fn start_log_files(
+    config: &AgentConfig,
+    layout: &StateLayout,
+    shipper: logship::Shipper,
+    updates: tokio::sync::watch::Receiver<Arc<agent_config::Active>>,
+    collectors: &mut Vec<Box<dyn sermon_collectors::Collector>>,
+    shutdown: &CancellationToken,
+) -> tokio::task::JoinHandle<()> {
+    let stats = Arc::new(logglob::GlobStats::default());
+    collectors.push(Box::new(logglob::GlobMetrics(stats.clone())));
+    logglob::spawn(
+        logglob::GlobConfig {
+            host_root: config.host_root.clone(),
+            prefixes: config.local.log_file_prefixes.clone(),
+            denied: vec![config.state_dir.clone()],
+            position_file: layout.log_files_position_file(),
+            poll: logglob::POLL,
+            rescan: logglob::RESCAN,
+        },
+        shipper,
+        updates,
+        stats,
+        shutdown.clone(),
+    )
+}
 
 /// Starts the source of security events and logs. The journal runs regardless of `allow_logs`:
 /// that veto is about shipping logs. Without journald (Alpine) a classic log file takes its place

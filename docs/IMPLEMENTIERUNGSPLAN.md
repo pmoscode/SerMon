@@ -2811,7 +2811,38 @@ Konfiguration) und M3-06 (Loki).
   - E2E unter der gehärteten Unit mit Budget bei 20 Zeilen/s und Versand
 - **Abhängig von:** M3-01, M3-02, M3-03
 
-#### ☐ M3-05 – Beliebige Logdateien per Glob · A · M 🔒
+#### ☑ M3-05 – Beliebige Logdateien per Glob · A · M 🔒
+> Erledigt (KONZEPT §10.1; ADR 0030, Nachtrag M3-05; Threat Model T81):
+> - **`sermon-logs::file::glob`:** `*` und `?` pro Segment, kein führender Punkt.
+>   - Der feste Anfang muss unter einem Präfix liegen, jeder Treffer wird aufgelöst und erneut geprüft.
+>   - Gesperrt sind State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys`, `/dev`; rotierte und komprimierte Namen fallen
+>     weg; höchstens 64 Dateien, 4 096 Einträge pro Verzeichnis.
+> - **`sermon-logs::file::multiline`:** Einträge per Start-Regex oder Einrückung; höchstens 256 Zeilen bzw. 64 KiB.
+>   Leerzeilen beginnen keinen Eintrag; die Position gilt erst für abgeschlossene Einträge. `Tail::new_file` liest eine
+>   neu gefundene Datei vom Anfang.
+> - **Agent `logglob`:**
+>   - Liest jede Sekunde, sucht alle 10 s neu. Dateien der ersten Suche beginnen am Ende, spätere am Anfang.
+>   - Positionen pro Datei in `logfiles.positions` (0600, `uninstall` entfernt sie), committet erst nach dem WAL.
+>   - Versand aus: nichts lesen, Positionen vergessen.
+>   - Eintrag: Zeit des Lesens, Unit = Dateiname, keine Severity (`LogRecord::from_plain_file`).
+>   - Neue Metriken `sermon_agent_log_files_followed` und `…_rejected` mit Katalog und Hilfe DE/EN.
+> - **`agent.toml`:** `[local] log_file_prefixes` (Standard `["/var/log"]`), absolut ohne `.` und `..`.
+> - **Rate:** `Shipper::sibling` teilt die Rate des Nodes zwischen den Quellen.
+> - **Gefunden:** Der Katalog-Test prüfte nur Collector, Scheduler und Simulation. Metriken von Journal, Log-Versand und
+>   Dateien fehlten darin; jetzt prüft er alle Quellen des Agents.
+> - **Tests:**
+>   - Glob: Muster, Rotationsnamen, Präfix-Trick `/var/log2`, `..`, Symlinks auf State-Verzeichnis, `/etc/shadow` und
+>     ein Verzeichnis nach außen, Grenzen.
+>   - Multiline mit Java-Fixture (`fixtures/logs/multiline/`), Einrückung, Leerzeilen, Grenzen, Proptest.
+>   - Quelle: neue und rotierte Dateien, Neustart setzt fort, Stacktrace, abgelehnte Pfade, fehlgeschlagenes Schreiben,
+>     geänderte Muster, gelöschte Datei, Task an/aus und ohne Puffer.
+>   - Konfiguration, Rate zwischen Quellen, Katalog.
+>   - Fuzz-Ziel `multiline`: 60 s, 1,3 Mio. Läufe ohne Fund; läuft mit `just fuzz-agent` und nachts.
+>   - Ende-zu-Ende mit dem echten Binary gegen den Testserver: Konfiguration mit Glob, später angelegte Datei, ein
+>     Eintrag für den Stacktrace mit geschwärztem Passwort, Symlink auf den Agent-Schlüssel abgelehnt.
+>   - Gegenproben für 19 Prüfungen, alle erkannt. Zuerst überlebten drei; dafür gibt es jetzt Tests für nur
+>     Leerzeilen, fehlgeschlagenes Schreiben im Task und eine gelöschte Datei. Eine überflüssige Prüfung (`..` doppelt)
+>     ist entfernt.
 - **Ziel:** KONZEPT §10.1. Globs aus der Konfiguration der Gruppe, z. B. `/var/log/nginx/*.log`.
   - **Tailing:** Rotation und Position pro Datei (Tail aus M2-20); neue Dateien werden erkannt; höchstens 64 Dateien.
   - **Multiline:** Fortsetzung bei Einrückung oder per Regex für den Zeilenanfang (z. B. Java-Stacktraces); höchstens

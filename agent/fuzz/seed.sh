@@ -35,3 +35,10 @@ for file in corpus/security_parser/fixture*; do
   { printf '\000'; tail -c +2 "$file"; } >"corpus/redaction/$name"
   { printf '\001'; printf 'pin=(?P<secret>[0-9]+)\000'; tail -c +2 "$file"; } >"corpus/redaction/rule$name"
 done
+# multiline: the multi-line fixtures, by indentation and by a start byte ('2' of the dates).
+mkdir -p corpus/multiline
+for file in ../fixtures/logs/multiline/*.log; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\000'; cat "$file"; } >"corpus/multiline/indent$name"
+  { printf '2'; cat "$file"; } >"corpus/multiline/start$name"
+done

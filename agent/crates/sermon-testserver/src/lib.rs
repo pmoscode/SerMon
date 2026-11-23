@@ -473,6 +473,8 @@ pub struct SessionLog {
     pub rotations: usize,
     /// `ConfigApplied` answers received (ADR 0030).
     pub config_applied: Vec<sermon_transport::proto::agent::v1::ConfigApplied>,
+    /// Log entries of the batches received (M3-04, M3-05).
+    pub log_entries: Vec<sermon_transport::proto::agent::v1::LogEntry>,
     /// Whether the session has ended.
     pub ended: bool,
 }
@@ -650,6 +652,12 @@ impl FakeAgentApi {
                         if let Some(log) = state.sessions.get_mut(index) {
                             log.batches.push(batch.seq);
                             log.batch_times.push(std::time::Instant::now());
+                            if let Some(sermon_transport::proto::agent::v1::batch::Content::Logs(
+                                logs,
+                            )) = &batch.content
+                            {
+                                log.log_entries.extend(logs.entries.iter().cloned());
+                            }
                         }
                         if batch.seq > state.highest {
                             state.highest = batch.seq;

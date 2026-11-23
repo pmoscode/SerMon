@@ -76,3 +76,18 @@ Gewählt: **Option 2.**
     lokal erlaubten Pfade (T81).
   - Redaction-Regeln des Servers können nur zusätzlich maskieren.
   - Logs bleiben Daten des Hosts und werden nur angezeigt.
+
+## Nachtrag M3-05: Datei-Globs lesen nur, was der Host erlaubt
+
+- **Lokale Präfixe:** `log_file_prefixes` in `agent.toml` (Standard `["/var/log"]`, leer: keine Dateien). Der Server
+  wählt die Muster, der Host bestimmt, wo sie lesen dürfen – wie bei `allow_logs` gewinnt die lokale Seite.
+- **Immer gesperrt:** das State-Verzeichnis des Agents, `/etc/sermon`, `/proc`, `/sys`, `/dev`, auch wenn ein Präfix
+  sie einschließt.
+- **Prüfung zweimal:** Der feste Anfang eines Musters muss unter einem Präfix liegen, sonst listet der Agent nicht
+  einmal das Verzeichnis. Jeder Treffer wird aufgelöst (Symlinks) und erneut geprüft. Präfixe vergleichen segmentweise.
+- **Bewusst nicht:** rotierte und komprimierte Dateien (ihre Zeilen kamen unter dem aktiven Namen), `**`, mehr als 64
+  Dateien.
+- **Neue Dateien und Positionen:** Dateien der ersten Suche eines Musters beginnen am Ende, später gefundene am Anfang.
+  Die Position pro Datei rückt erst vor, wenn der Eintrag im WAL liegt. Ist der Versand aus, liest die Quelle nichts und
+  vergisst ihre Positionen.
+- **Rate:** Alle Quellen eines Nodes teilen sich die 500 Einträge/s.

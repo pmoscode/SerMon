@@ -213,3 +213,55 @@ fn log_entries_roundtrip_in_a_batch() {
     assert_eq!(future.severity, 42);
     assert_eq!(future.severity(), LogSeverity::Unspecified);
 }
+
+// The live view (M3-13): start and snapshot survive the wire with unset ("n/a") fields unset.
+#[test]
+fn live_view_messages_roundtrip() {
+    use sermon_transport::proto::agent::v1::{
+        ProcessInfo, ProcessSnapshot, SessionResponse, StartLiveView, SystemSummary, TaskCounts,
+        session_response,
+    };
+    let start = SessionResponse {
+        payload: Some(session_response::Payload::StartLiveView(StartLiveView {
+            interval: Some(std::time::Duration::from_secs(2).try_into().unwrap()),
+            hide_cmdline: true,
+        })),
+    };
+    assert_eq!(
+        SessionResponse::decode(start.encode_to_vec().as_slice()).unwrap(),
+        start
+    );
+    let snapshot = SessionRequest {
+        payload: Some(Payload::ProcessSnapshot(ProcessSnapshot {
+            taken_at: Some(std::time::SystemTime::UNIX_EPOCH.into()),
+            summary: Some(SystemSummary {
+                cpu_busy_ratio: None,
+                load_1: Some(0.5),
+                tasks: Some(TaskCounts {
+                    total: 2,
+                    zombie: 1,
+                    ..TaskCounts::default()
+                }),
+                ..SystemSummary::default()
+            }),
+            processes: vec![ProcessInfo {
+                pid: 1,
+                state: "S".into(),
+                uid: None,
+                cmdline: Some(String::new()),
+                name: "evil) name (x".into(),
+                ..ProcessInfo::default()
+            }],
+            omitted: 3,
+        })),
+    };
+    let decoded = SessionRequest::decode(snapshot.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded, snapshot);
+    let Some(Payload::ProcessSnapshot(s)) = decoded.payload else {
+        panic!()
+    };
+    assert_eq!(
+        (s.processes[0].uid, s.processes[0].cmdline.as_deref()),
+        (None, Some(""))
+    );
+}

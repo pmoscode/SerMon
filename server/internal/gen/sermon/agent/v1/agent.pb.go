@@ -363,6 +363,8 @@ type SessionRequest struct {
 	//	*SessionRequest_RotateCertificate
 	//	*SessionRequest_Batch
 	//	*SessionRequest_ConfigApplied
+	//	*SessionRequest_ProcessSnapshot
+	//	*SessionRequest_LiveViewRefused
 	Payload       isSessionRequest_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -450,6 +452,24 @@ func (x *SessionRequest) GetConfigApplied() *ConfigApplied {
 	return nil
 }
 
+func (x *SessionRequest) GetProcessSnapshot() *ProcessSnapshot {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionRequest_ProcessSnapshot); ok {
+			return x.ProcessSnapshot
+		}
+	}
+	return nil
+}
+
+func (x *SessionRequest) GetLiveViewRefused() *LiveViewRefused {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionRequest_LiveViewRefused); ok {
+			return x.LiveViewRefused
+		}
+	}
+	return nil
+}
+
 type isSessionRequest_Payload interface {
 	isSessionRequest_Payload()
 }
@@ -482,6 +502,17 @@ type SessionRequest_ConfigApplied struct {
 	ConfigApplied *ConfigApplied `protobuf:"bytes,5,opt,name=config_applied,json=configApplied,proto3,oneof"`
 }
 
+type SessionRequest_ProcessSnapshot struct {
+	// process_snapshot is a snapshot of the live view (KONZEPT §9); never buffered, never
+	// acknowledged: a lost one is replaced by the next.
+	ProcessSnapshot *ProcessSnapshot `protobuf:"bytes,6,opt,name=process_snapshot,json=processSnapshot,proto3,oneof"`
+}
+
+type SessionRequest_LiveViewRefused struct {
+	// live_view_refused answers start_live_view when agent.toml forbids the live view.
+	LiveViewRefused *LiveViewRefused `protobuf:"bytes,7,opt,name=live_view_refused,json=liveViewRefused,proto3,oneof"`
+}
+
 func (*SessionRequest_Hello) isSessionRequest_Payload() {}
 
 func (*SessionRequest_Heartbeat) isSessionRequest_Payload() {}
@@ -491,6 +522,10 @@ func (*SessionRequest_RotateCertificate) isSessionRequest_Payload() {}
 func (*SessionRequest_Batch) isSessionRequest_Payload() {}
 
 func (*SessionRequest_ConfigApplied) isSessionRequest_Payload() {}
+
+func (*SessionRequest_ProcessSnapshot) isSessionRequest_Payload() {}
+
+func (*SessionRequest_LiveViewRefused) isSessionRequest_Payload() {}
 
 // SessionResponse is one message from the server to the agent.
 type SessionResponse struct {
@@ -505,6 +540,8 @@ type SessionResponse struct {
 	//	*SessionResponse_TrustBundle
 	//	*SessionResponse_Throttle
 	//	*SessionResponse_ConfigUpdate
+	//	*SessionResponse_StartLiveView
+	//	*SessionResponse_StopLiveView
 	Payload       isSessionResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -601,6 +638,24 @@ func (x *SessionResponse) GetConfigUpdate() *ConfigUpdate {
 	return nil
 }
 
+func (x *SessionResponse) GetStartLiveView() *StartLiveView {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_StartLiveView); ok {
+			return x.StartLiveView
+		}
+	}
+	return nil
+}
+
+func (x *SessionResponse) GetStopLiveView() *StopLiveView {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_StopLiveView); ok {
+			return x.StopLiveView
+		}
+	}
+	return nil
+}
+
 type isSessionResponse_Payload interface {
 	isSessionResponse_Payload()
 }
@@ -640,6 +695,16 @@ type SessionResponse_ConfigUpdate struct {
 	ConfigUpdate *ConfigUpdate `protobuf:"bytes,6,opt,name=config_update,json=configUpdate,proto3,oneof"`
 }
 
+type SessionResponse_StartLiveView struct {
+	// start_live_view starts the live view or renews its lease (KONZEPT §9).
+	StartLiveView *StartLiveView `protobuf:"bytes,7,opt,name=start_live_view,json=startLiveView,proto3,oneof"`
+}
+
+type SessionResponse_StopLiveView struct {
+	// stop_live_view ends the live view.
+	StopLiveView *StopLiveView `protobuf:"bytes,8,opt,name=stop_live_view,json=stopLiveView,proto3,oneof"`
+}
+
 func (*SessionResponse_Ack) isSessionResponse_Payload() {}
 
 func (*SessionResponse_CertificateIssued) isSessionResponse_Payload() {}
@@ -651,6 +716,10 @@ func (*SessionResponse_TrustBundle) isSessionResponse_Payload() {}
 func (*SessionResponse_Throttle) isSessionResponse_Payload() {}
 
 func (*SessionResponse_ConfigUpdate) isSessionResponse_Payload() {}
+
+func (*SessionResponse_StartLiveView) isSessionResponse_Payload() {}
+
+func (*SessionResponse_StopLiveView) isSessionResponse_Payload() {}
 
 // Hello is the first message of every stream.
 type Hello struct {
@@ -3111,18 +3180,644 @@ func (x *ConfigApplied) GetLogsVetoed() bool {
 	return false
 }
 
+// StartLiveView starts the live view ("top", KONZEPT §9, M3-13): a ProcessSnapshot every
+// interval. It is a lease: the agent stops 60 s after the last StartLiveView, at a StopLiveView
+// or with the session. A StartLiveView while running renews it and takes the new settings.
+type StartLiveView struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// interval is the time between two snapshots, 1 to 10 s.
+	Interval *durationpb.Duration `protobuf:"bytes,1,opt,name=interval,proto3" json:"interval,omitempty"`
+	// hide_cmdline leaves out the command lines (the organization's switch).
+	HideCmdline   bool `protobuf:"varint,2,opt,name=hide_cmdline,json=hideCmdline,proto3" json:"hide_cmdline,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartLiveView) Reset() {
+	*x = StartLiveView{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartLiveView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartLiveView) ProtoMessage() {}
+
+func (x *StartLiveView) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartLiveView.ProtoReflect.Descriptor instead.
+func (*StartLiveView) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *StartLiveView) GetInterval() *durationpb.Duration {
+	if x != nil {
+		return x.Interval
+	}
+	return nil
+}
+
+func (x *StartLiveView) GetHideCmdline() bool {
+	if x != nil {
+		return x.HideCmdline
+	}
+	return false
+}
+
+// StopLiveView ends the live view.
+type StopLiveView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopLiveView) Reset() {
+	*x = StopLiveView{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopLiveView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopLiveView) ProtoMessage() {}
+
+func (x *StopLiveView) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopLiveView.ProtoReflect.Descriptor instead.
+func (*StopLiveView) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{37}
+}
+
+// LiveViewRefused says why the agent does not start the live view.
+type LiveViewRefused struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// reason is for the people who asked, e.g. "agent.toml forbids the live view".
+	Reason        string `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LiveViewRefused) Reset() {
+	*x = LiveViewRefused{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LiveViewRefused) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LiveViewRefused) ProtoMessage() {}
+
+func (x *LiveViewRefused) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LiveViewRefused.ProtoReflect.Descriptor instead.
+func (*LiveViewRefused) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *LiveViewRefused) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// ProcessSnapshot is the state of the host's processes at one moment; nothing of it is stored.
+type ProcessSnapshot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// taken_at is the agent's time of the snapshot.
+	TakenAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=taken_at,json=takenAt,proto3" json:"taken_at,omitempty"`
+	// summary is the header (CPU, memory, swap, load, uptime, tasks).
+	Summary *SystemSummary `protobuf:"bytes,2,opt,name=summary,proto3" json:"summary,omitempty"`
+	// processes are the busiest processes first, at most 4000.
+	Processes []*ProcessInfo `protobuf:"bytes,3,rep,name=processes,proto3" json:"processes,omitempty"`
+	// omitted counts the processes left out over the bound.
+	Omitted       uint32 `protobuf:"varint,4,opt,name=omitted,proto3" json:"omitted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessSnapshot) Reset() {
+	*x = ProcessSnapshot{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessSnapshot) ProtoMessage() {}
+
+func (x *ProcessSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessSnapshot.ProtoReflect.Descriptor instead.
+func (*ProcessSnapshot) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *ProcessSnapshot) GetTakenAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.TakenAt
+	}
+	return nil
+}
+
+func (x *ProcessSnapshot) GetSummary() *SystemSummary {
+	if x != nil {
+		return x.Summary
+	}
+	return nil
+}
+
+func (x *ProcessSnapshot) GetProcesses() []*ProcessInfo {
+	if x != nil {
+		return x.Processes
+	}
+	return nil
+}
+
+func (x *ProcessSnapshot) GetOmitted() uint32 {
+	if x != nil {
+		return x.Omitted
+	}
+	return 0
+}
+
+// SystemSummary is the header of a snapshot, like top's.
+type SystemSummary struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// cpu_busy_ratio is the busy share of all CPUs over the interval; unset in the first snapshot.
+	CpuBusyRatio *float64 `protobuf:"fixed64,1,opt,name=cpu_busy_ratio,json=cpuBusyRatio,proto3,oneof" json:"cpu_busy_ratio,omitempty"`
+	// cpu_count is the number of CPUs.
+	CpuCount uint32 `protobuf:"varint,2,opt,name=cpu_count,json=cpuCount,proto3" json:"cpu_count,omitempty"`
+	// memory_total_bytes is the physical memory.
+	MemoryTotalBytes uint64 `protobuf:"varint,3,opt,name=memory_total_bytes,json=memoryTotalBytes,proto3" json:"memory_total_bytes,omitempty"`
+	// memory_available_bytes is the memory available without swapping.
+	MemoryAvailableBytes uint64 `protobuf:"varint,4,opt,name=memory_available_bytes,json=memoryAvailableBytes,proto3" json:"memory_available_bytes,omitempty"`
+	// swap_total_bytes is the swap space.
+	SwapTotalBytes uint64 `protobuf:"varint,5,opt,name=swap_total_bytes,json=swapTotalBytes,proto3" json:"swap_total_bytes,omitempty"`
+	// swap_free_bytes is the unused swap space.
+	SwapFreeBytes uint64 `protobuf:"varint,6,opt,name=swap_free_bytes,json=swapFreeBytes,proto3" json:"swap_free_bytes,omitempty"`
+	// load_1, load_5 and load_15 are the load averages, if readable.
+	Load_1 *float64 `protobuf:"fixed64,7,opt,name=load_1,json=load1,proto3,oneof" json:"load_1,omitempty"`
+	// load_5 is the load over 5 minutes.
+	Load_5 *float64 `protobuf:"fixed64,8,opt,name=load_5,json=load5,proto3,oneof" json:"load_5,omitempty"`
+	// load_15 is the load over 15 minutes.
+	Load_15 *float64 `protobuf:"fixed64,9,opt,name=load_15,json=load15,proto3,oneof" json:"load_15,omitempty"`
+	// uptime_seconds is the time since boot, if readable.
+	UptimeSeconds *uint64 `protobuf:"varint,10,opt,name=uptime_seconds,json=uptimeSeconds,proto3,oneof" json:"uptime_seconds,omitempty"`
+	// tasks counts the processes per state.
+	Tasks         *TaskCounts `protobuf:"bytes,11,opt,name=tasks,proto3" json:"tasks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemSummary) Reset() {
+	*x = SystemSummary{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemSummary) ProtoMessage() {}
+
+func (x *SystemSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemSummary.ProtoReflect.Descriptor instead.
+func (*SystemSummary) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *SystemSummary) GetCpuBusyRatio() float64 {
+	if x != nil && x.CpuBusyRatio != nil {
+		return *x.CpuBusyRatio
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetCpuCount() uint32 {
+	if x != nil {
+		return x.CpuCount
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetMemoryTotalBytes() uint64 {
+	if x != nil {
+		return x.MemoryTotalBytes
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetMemoryAvailableBytes() uint64 {
+	if x != nil {
+		return x.MemoryAvailableBytes
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetSwapTotalBytes() uint64 {
+	if x != nil {
+		return x.SwapTotalBytes
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetSwapFreeBytes() uint64 {
+	if x != nil {
+		return x.SwapFreeBytes
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetLoad_1() float64 {
+	if x != nil && x.Load_1 != nil {
+		return *x.Load_1
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetLoad_5() float64 {
+	if x != nil && x.Load_5 != nil {
+		return *x.Load_5
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetLoad_15() float64 {
+	if x != nil && x.Load_15 != nil {
+		return *x.Load_15
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetUptimeSeconds() uint64 {
+	if x != nil && x.UptimeSeconds != nil {
+		return *x.UptimeSeconds
+	}
+	return 0
+}
+
+func (x *SystemSummary) GetTasks() *TaskCounts {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
+// TaskCounts are the processes per state.
+type TaskCounts struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// total is every process.
+	Total uint32 `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
+	// running is state R.
+	Running uint32 `protobuf:"varint,2,opt,name=running,proto3" json:"running,omitempty"`
+	// sleeping is states S, D and I.
+	Sleeping uint32 `protobuf:"varint,3,opt,name=sleeping,proto3" json:"sleeping,omitempty"`
+	// stopped is states T and t.
+	Stopped uint32 `protobuf:"varint,4,opt,name=stopped,proto3" json:"stopped,omitempty"`
+	// zombie is state Z.
+	Zombie        uint32 `protobuf:"varint,5,opt,name=zombie,proto3" json:"zombie,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskCounts) Reset() {
+	*x = TaskCounts{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskCounts) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskCounts) ProtoMessage() {}
+
+func (x *TaskCounts) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskCounts.ProtoReflect.Descriptor instead.
+func (*TaskCounts) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *TaskCounts) GetTotal() uint32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *TaskCounts) GetRunning() uint32 {
+	if x != nil {
+		return x.Running
+	}
+	return 0
+}
+
+func (x *TaskCounts) GetSleeping() uint32 {
+	if x != nil {
+		return x.Sleeping
+	}
+	return 0
+}
+
+func (x *TaskCounts) GetStopped() uint32 {
+	if x != nil {
+		return x.Stopped
+	}
+	return 0
+}
+
+func (x *TaskCounts) GetZombie() uint32 {
+	if x != nil {
+		return x.Zombie
+	}
+	return 0
+}
+
+// ProcessInfo is one process. Every text comes from the host: shown as text only. Unset fields
+// were not readable ("n/a").
+type ProcessInfo struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// pid is the process ID.
+	Pid uint32 `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
+	// ppid is the parent's ID (0 for the first processes).
+	Ppid uint32 `protobuf:"varint,2,opt,name=ppid,proto3" json:"ppid,omitempty"`
+	// uid is the real user ID.
+	Uid *uint32 `protobuf:"varint,3,opt,name=uid,proto3,oneof" json:"uid,omitempty"`
+	// user is the name of uid from /etc/passwd; empty without one.
+	User string `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
+	// state is the one-letter state (R, S, D, Z, T, I, …).
+	State string `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	// cpu_ratio is the CPU share of one core over the interval (above 1 with several threads);
+	// unset in the first snapshot of the process.
+	CpuRatio *float64 `protobuf:"fixed64,6,opt,name=cpu_ratio,json=cpuRatio,proto3,oneof" json:"cpu_ratio,omitempty"`
+	// rss_bytes is the resident memory.
+	RssBytes *uint64 `protobuf:"varint,7,opt,name=rss_bytes,json=rssBytes,proto3,oneof" json:"rss_bytes,omitempty"`
+	// memory_ratio is rss_bytes of the physical memory.
+	MemoryRatio *float64 `protobuf:"fixed64,8,opt,name=memory_ratio,json=memoryRatio,proto3,oneof" json:"memory_ratio,omitempty"`
+	// threads is the number of threads.
+	Threads uint32 `protobuf:"varint,9,opt,name=threads,proto3" json:"threads,omitempty"`
+	// runtime_seconds is the time since the start of the process.
+	RuntimeSeconds *uint64 `protobuf:"varint,10,opt,name=runtime_seconds,json=runtimeSeconds,proto3,oneof" json:"runtime_seconds,omitempty"`
+	// name is the process name (comm, at most 15 bytes from the kernel).
+	Name string `protobuf:"bytes,11,opt,name=name,proto3" json:"name,omitempty"`
+	// cmdline is the command line, redacted by the agent and cut; unset if hidden or not
+	// readable, empty for kernel threads and zombies.
+	Cmdline *string `protobuf:"bytes,12,opt,name=cmdline,proto3,oneof" json:"cmdline,omitempty"`
+	// cmdline_truncated is set if the agent cut the command line.
+	CmdlineTruncated bool `protobuf:"varint,13,opt,name=cmdline_truncated,json=cmdlineTruncated,proto3" json:"cmdline_truncated,omitempty"`
+	// cmdline_hidden is set if the organization hides command lines.
+	CmdlineHidden bool `protobuf:"varint,14,opt,name=cmdline_hidden,json=cmdlineHidden,proto3" json:"cmdline_hidden,omitempty"`
+	// kernel_thread marks threads of the kernel.
+	KernelThread bool `protobuf:"varint,15,opt,name=kernel_thread,json=kernelThread,proto3" json:"kernel_thread,omitempty"`
+	// unit is the systemd unit from the cgroup.
+	Unit string `protobuf:"bytes,16,opt,name=unit,proto3" json:"unit,omitempty"`
+	// container is the first 12 characters of a container ID from the cgroup.
+	Container     string `protobuf:"bytes,17,opt,name=container,proto3" json:"container,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessInfo) Reset() {
+	*x = ProcessInfo{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessInfo) ProtoMessage() {}
+
+func (x *ProcessInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessInfo.ProtoReflect.Descriptor instead.
+func (*ProcessInfo) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ProcessInfo) GetPid() uint32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetPpid() uint32 {
+	if x != nil {
+		return x.Ppid
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetUid() uint32 {
+	if x != nil && x.Uid != nil {
+		return *x.Uid
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetUser() string {
+	if x != nil {
+		return x.User
+	}
+	return ""
+}
+
+func (x *ProcessInfo) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *ProcessInfo) GetCpuRatio() float64 {
+	if x != nil && x.CpuRatio != nil {
+		return *x.CpuRatio
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetRssBytes() uint64 {
+	if x != nil && x.RssBytes != nil {
+		return *x.RssBytes
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetMemoryRatio() float64 {
+	if x != nil && x.MemoryRatio != nil {
+		return *x.MemoryRatio
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetThreads() uint32 {
+	if x != nil {
+		return x.Threads
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetRuntimeSeconds() uint64 {
+	if x != nil && x.RuntimeSeconds != nil {
+		return *x.RuntimeSeconds
+	}
+	return 0
+}
+
+func (x *ProcessInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ProcessInfo) GetCmdline() string {
+	if x != nil && x.Cmdline != nil {
+		return *x.Cmdline
+	}
+	return ""
+}
+
+func (x *ProcessInfo) GetCmdlineTruncated() bool {
+	if x != nil {
+		return x.CmdlineTruncated
+	}
+	return false
+}
+
+func (x *ProcessInfo) GetCmdlineHidden() bool {
+	if x != nil {
+		return x.CmdlineHidden
+	}
+	return false
+}
+
+func (x *ProcessInfo) GetKernelThread() bool {
+	if x != nil {
+		return x.KernelThread
+	}
+	return false
+}
+
+func (x *ProcessInfo) GetUnit() string {
+	if x != nil {
+		return x.Unit
+	}
+	return ""
+}
+
+func (x *ProcessInfo) GetContainer() string {
+	if x != nil {
+		return x.Container
+	}
+	return ""
+}
+
 var File_sermon_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdc\x02\n" +
+	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xfb\x03\n" +
 	"\x0eSessionRequest\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.sermon.agent.v1.HelloH\x00R\x05hello\x12:\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1a.sermon.agent.v1.HeartbeatH\x00R\theartbeat\x12S\n" +
 	"\x12rotate_certificate\x18\x03 \x01(\v2\".sermon.agent.v1.RotateCertificateH\x00R\x11rotateCertificate\x12.\n" +
 	"\x05batch\x18\x04 \x01(\v2\x16.sermon.agent.v1.BatchH\x00R\x05batch\x12G\n" +
-	"\x0econfig_applied\x18\x05 \x01(\v2\x1e.sermon.agent.v1.ConfigAppliedH\x00R\rconfigAppliedB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xa1\x03\n" +
+	"\x0econfig_applied\x18\x05 \x01(\v2\x1e.sermon.agent.v1.ConfigAppliedH\x00R\rconfigApplied\x12M\n" +
+	"\x10process_snapshot\x18\x06 \x01(\v2 .sermon.agent.v1.ProcessSnapshotH\x00R\x0fprocessSnapshot\x12N\n" +
+	"\x11live_view_refused\x18\a \x01(\v2 .sermon.agent.v1.LiveViewRefusedH\x00R\x0fliveViewRefusedB\x10\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\xb2\x04\n" +
 	"\x0fSessionResponse\x12(\n" +
 	"\x03ack\x18\x01 \x01(\v2\x14.sermon.agent.v1.AckH\x00R\x03ack\x12S\n" +
 	"\x12certificate_issued\x18\x02 \x01(\v2\".sermon.agent.v1.CertificateIssuedH\x00R\x11certificateIssued\x12;\n" +
@@ -3130,7 +3825,9 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"rotate_now\x18\x03 \x01(\v2\x1a.sermon.agent.v1.RotateNowH\x00R\trotateNow\x12A\n" +
 	"\ftrust_bundle\x18\x04 \x01(\v2\x1c.sermon.agent.v1.TrustBundleH\x00R\vtrustBundle\x127\n" +
 	"\bthrottle\x18\x05 \x01(\v2\x19.sermon.agent.v1.ThrottleH\x00R\bthrottle\x12D\n" +
-	"\rconfig_update\x18\x06 \x01(\v2\x1d.sermon.agent.v1.ConfigUpdateH\x00R\fconfigUpdateB\x10\n" +
+	"\rconfig_update\x18\x06 \x01(\v2\x1d.sermon.agent.v1.ConfigUpdateH\x00R\fconfigUpdate\x12H\n" +
+	"\x0fstart_live_view\x18\a \x01(\v2\x1e.sermon.agent.v1.StartLiveViewH\x00R\rstartLiveView\x12E\n" +
+	"\x0estop_live_view\x18\b \x01(\v2\x1d.sermon.agent.v1.StopLiveViewH\x00R\fstopLiveViewB\x10\n" +
 	"\apayload\x12\x05\xbaH\x02\b\x01\"\xd5\x01\n" +
 	"\x05Hello\x122\n" +
 	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
@@ -3311,7 +4008,73 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\x04B\a\xbaH\x042\x02 \x00R\aversion\x12\x1e\n" +
 	"\x05error\x18\x02 \x01(\tB\b\xbaH\x05r\x03(\x80\bR\x05error\x12\x1f\n" +
 	"\vlogs_vetoed\x18\x03 \x01(\bR\n" +
-	"logsVetoed*\xb0\x01\n" +
+	"logsVetoed\"y\n" +
+	"\rStartLiveView\x12E\n" +
+	"\binterval\x18\x01 \x01(\v2\x19.google.protobuf.DurationB\x0e\xbaH\v\xaa\x01\b\"\x02\b\n" +
+	"2\x02\b\x01R\binterval\x12!\n" +
+	"\fhide_cmdline\x18\x02 \x01(\bR\vhideCmdline\"\x0e\n" +
+	"\fStopLiveView\"3\n" +
+	"\x0fLiveViewRefused\x12 \n" +
+	"\x06reason\x18\x01 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x06reason\"\xf3\x01\n" +
+	"\x0fProcessSnapshot\x12=\n" +
+	"\btaken_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\atakenAt\x12@\n" +
+	"\asummary\x18\x02 \x01(\v2\x1e.sermon.agent.v1.SystemSummaryB\x06\xbaH\x03\xc8\x01\x01R\asummary\x12E\n" +
+	"\tprocesses\x18\x03 \x03(\v2\x1c.sermon.agent.v1.ProcessInfoB\t\xbaH\x06\x92\x01\x03\x10\xa0\x1fR\tprocesses\x12\x18\n" +
+	"\aomitted\x18\x04 \x01(\rR\aomitted\"\xf8\x04\n" +
+	"\rSystemSummary\x12B\n" +
+	"\x0ecpu_busy_ratio\x18\x01 \x01(\x01B\x17\xbaH\x14\x12\x12\x19\x00\x00\x00\x00\x00\x00\xf0?)\x00\x00\x00\x00\x00\x00\x00\x00H\x00R\fcpuBusyRatio\x88\x01\x01\x12%\n" +
+	"\tcpu_count\x18\x02 \x01(\rB\b\xbaH\x05*\x03\x18\x80 R\bcpuCount\x12,\n" +
+	"\x12memory_total_bytes\x18\x03 \x01(\x04R\x10memoryTotalBytes\x124\n" +
+	"\x16memory_available_bytes\x18\x04 \x01(\x04R\x14memoryAvailableBytes\x12(\n" +
+	"\x10swap_total_bytes\x18\x05 \x01(\x04R\x0eswapTotalBytes\x12&\n" +
+	"\x0fswap_free_bytes\x18\x06 \x01(\x04R\rswapFreeBytes\x123\n" +
+	"\x06load_1\x18\a \x01(\x01B\x17\xbaH\x14\x12\x12\x19\x00\x00\x00\x00\x80\x84.A)\x00\x00\x00\x00\x00\x00\x00\x00H\x01R\x05load1\x88\x01\x01\x123\n" +
+	"\x06load_5\x18\b \x01(\x01B\x17\xbaH\x14\x12\x12\x19\x00\x00\x00\x00\x80\x84.A)\x00\x00\x00\x00\x00\x00\x00\x00H\x02R\x05load5\x88\x01\x01\x125\n" +
+	"\aload_15\x18\t \x01(\x01B\x17\xbaH\x14\x12\x12\x19\x00\x00\x00\x00\x80\x84.A)\x00\x00\x00\x00\x00\x00\x00\x00H\x03R\x06load15\x88\x01\x01\x12*\n" +
+	"\x0euptime_seconds\x18\n" +
+	" \x01(\x04H\x04R\ruptimeSeconds\x88\x01\x01\x121\n" +
+	"\x05tasks\x18\v \x01(\v2\x1b.sermon.agent.v1.TaskCountsR\x05tasksB\x11\n" +
+	"\x0f_cpu_busy_ratioB\t\n" +
+	"\a_load_1B\t\n" +
+	"\a_load_5B\n" +
+	"\n" +
+	"\b_load_15B\x11\n" +
+	"\x0f_uptime_seconds\"\x8a\x01\n" +
+	"\n" +
+	"TaskCounts\x12\x14\n" +
+	"\x05total\x18\x01 \x01(\rR\x05total\x12\x18\n" +
+	"\arunning\x18\x02 \x01(\rR\arunning\x12\x1a\n" +
+	"\bsleeping\x18\x03 \x01(\rR\bsleeping\x12\x18\n" +
+	"\astopped\x18\x04 \x01(\rR\astopped\x12\x16\n" +
+	"\x06zombie\x18\x05 \x01(\rR\x06zombie\"\xe1\x05\n" +
+	"\vProcessInfo\x12\x19\n" +
+	"\x03pid\x18\x01 \x01(\rB\a\xbaH\x04*\x02 \x00R\x03pid\x12\x12\n" +
+	"\x04ppid\x18\x02 \x01(\rR\x04ppid\x12\x15\n" +
+	"\x03uid\x18\x03 \x01(\rH\x00R\x03uid\x88\x01\x01\x12\x1b\n" +
+	"\x04user\x18\x04 \x01(\tB\a\xbaH\x04r\x02(@R\x04user\x12\x1f\n" +
+	"\x05state\x18\x05 \x01(\tB\t\xbaH\x06r\x04\x10\x01(\x04R\x05state\x129\n" +
+	"\tcpu_ratio\x18\x06 \x01(\x01B\x17\xbaH\x14\x12\x12\x19\x00\x00\x00\x00\x00\x00\xb0@)\x00\x00\x00\x00\x00\x00\x00\x00H\x01R\bcpuRatio\x88\x01\x01\x12 \n" +
+	"\trss_bytes\x18\a \x01(\x04H\x02R\brssBytes\x88\x01\x01\x12?\n" +
+	"\fmemory_ratio\x18\b \x01(\x01B\x17\xbaH\x14\x12\x12\x19\x00\x00\x00\x00\x00\x00\xf0?)\x00\x00\x00\x00\x00\x00\x00\x00H\x03R\vmemoryRatio\x88\x01\x01\x12\x18\n" +
+	"\athreads\x18\t \x01(\rR\athreads\x12,\n" +
+	"\x0fruntime_seconds\x18\n" +
+	" \x01(\x04H\x04R\x0eruntimeSeconds\x88\x01\x01\x12\x1b\n" +
+	"\x04name\x18\v \x01(\tB\a\xbaH\x04r\x02(@R\x04name\x12'\n" +
+	"\acmdline\x18\f \x01(\tB\b\xbaH\x05r\x03(\x80\bH\x05R\acmdline\x88\x01\x01\x12+\n" +
+	"\x11cmdline_truncated\x18\r \x01(\bR\x10cmdlineTruncated\x12%\n" +
+	"\x0ecmdline_hidden\x18\x0e \x01(\bR\rcmdlineHidden\x12#\n" +
+	"\rkernel_thread\x18\x0f \x01(\bR\fkernelThread\x12\x1c\n" +
+	"\x04unit\x18\x10 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x04unit\x126\n" +
+	"\tcontainer\x18\x11 \x01(\tB\x18\xbaH\x15r\x132\x11^([0-9a-f]{12})?$R\tcontainerB\x06\n" +
+	"\x04_uidB\f\n" +
+	"\n" +
+	"_cpu_ratioB\f\n" +
+	"\n" +
+	"_rss_bytesB\x0f\n" +
+	"\r_memory_ratioB\x12\n" +
+	"\x10_runtime_secondsB\n" +
+	"\n" +
+	"\b_cmdline*\xb0\x01\n" +
 	"\x0eSecuritySource\x12\x1f\n" +
 	"\x1bSECURITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17SECURITY_SOURCE_JOURNAL\x10\x01\x12!\n" +
@@ -3363,7 +4126,7 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(SecuritySource)(0),           // 0: sermon.agent.v1.SecuritySource
 	(Architecture)(0),             // 1: sermon.agent.v1.Architecture
@@ -3406,9 +4169,16 @@ var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(*LogFileGlob)(nil),           // 38: sermon.agent.v1.LogFileGlob
 	(*RedactionRule)(nil),         // 39: sermon.agent.v1.RedactionRule
 	(*ConfigApplied)(nil),         // 40: sermon.agent.v1.ConfigApplied
-	nil,                           // 41: sermon.agent.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 42: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 43: google.protobuf.Duration
+	(*StartLiveView)(nil),         // 41: sermon.agent.v1.StartLiveView
+	(*StopLiveView)(nil),          // 42: sermon.agent.v1.StopLiveView
+	(*LiveViewRefused)(nil),       // 43: sermon.agent.v1.LiveViewRefused
+	(*ProcessSnapshot)(nil),       // 44: sermon.agent.v1.ProcessSnapshot
+	(*SystemSummary)(nil),         // 45: sermon.agent.v1.SystemSummary
+	(*TaskCounts)(nil),            // 46: sermon.agent.v1.TaskCounts
+	(*ProcessInfo)(nil),           // 47: sermon.agent.v1.ProcessInfo
+	nil,                           // 48: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 49: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 50: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
 	7,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
@@ -3416,61 +4186,70 @@ var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
 	10, // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
 	15, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
 	40, // 4: sermon.agent.v1.SessionRequest.config_applied:type_name -> sermon.agent.v1.ConfigApplied
-	14, // 5: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
-	11, // 6: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	13, // 7: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	12, // 8: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
-	18, // 9: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
-	35, // 10: sermon.agent.v1.SessionResponse.config_update:type_name -> sermon.agent.v1.ConfigUpdate
-	8,  // 11: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
-	1,  // 12: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	0,  // 13: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
-	42, // 14: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	42, // 15: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	42, // 16: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	16, // 17: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
-	19, // 18: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
-	33, // 19: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
-	42, // 20: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
-	17, // 21: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
-	41, // 22: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
-	43, // 23: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
-	20, // 24: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
-	42, // 25: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	22, // 26: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
-	23, // 27: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
-	24, // 28: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
-	25, // 29: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
-	26, // 30: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
-	27, // 31: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
-	28, // 32: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
-	29, // 33: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
-	30, // 34: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
-	31, // 35: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
-	32, // 36: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
-	21, // 37: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 38: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
-	21, // 39: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
-	21, // 40: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 41: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
-	21, // 42: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
-	43, // 43: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
-	34, // 44: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
-	42, // 45: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
-	3,  // 46: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
-	4,  // 47: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
-	36, // 48: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
-	37, // 49: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
-	39, // 50: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
-	4,  // 51: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
-	38, // 52: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
-	5,  // 53: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	6,  // 54: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	54, // [54:55] is the sub-list for method output_type
-	53, // [53:54] is the sub-list for method input_type
-	53, // [53:53] is the sub-list for extension type_name
-	53, // [53:53] is the sub-list for extension extendee
-	0,  // [0:53] is the sub-list for field type_name
+	44, // 5: sermon.agent.v1.SessionRequest.process_snapshot:type_name -> sermon.agent.v1.ProcessSnapshot
+	43, // 6: sermon.agent.v1.SessionRequest.live_view_refused:type_name -> sermon.agent.v1.LiveViewRefused
+	14, // 7: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	11, // 8: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
+	13, // 9: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	12, // 10: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	18, // 11: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
+	35, // 12: sermon.agent.v1.SessionResponse.config_update:type_name -> sermon.agent.v1.ConfigUpdate
+	41, // 13: sermon.agent.v1.SessionResponse.start_live_view:type_name -> sermon.agent.v1.StartLiveView
+	42, // 14: sermon.agent.v1.SessionResponse.stop_live_view:type_name -> sermon.agent.v1.StopLiveView
+	8,  // 15: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	1,  // 16: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
+	0,  // 17: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
+	49, // 18: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	49, // 19: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	49, // 20: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	16, // 21: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	19, // 22: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
+	33, // 23: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
+	49, // 24: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	17, // 25: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	48, // 26: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	50, // 27: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	20, // 28: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
+	49, // 29: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	22, // 30: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
+	23, // 31: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
+	24, // 32: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
+	25, // 33: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
+	26, // 34: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
+	27, // 35: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
+	28, // 36: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
+	29, // 37: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
+	30, // 38: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
+	31, // 39: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
+	32, // 40: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
+	21, // 41: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 42: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
+	21, // 43: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
+	21, // 44: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 45: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
+	21, // 46: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
+	50, // 47: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
+	34, // 48: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
+	49, // 49: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	3,  // 50: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
+	4,  // 51: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
+	36, // 52: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
+	37, // 53: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
+	39, // 54: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
+	4,  // 55: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
+	38, // 56: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
+	50, // 57: sermon.agent.v1.StartLiveView.interval:type_name -> google.protobuf.Duration
+	49, // 58: sermon.agent.v1.ProcessSnapshot.taken_at:type_name -> google.protobuf.Timestamp
+	45, // 59: sermon.agent.v1.ProcessSnapshot.summary:type_name -> sermon.agent.v1.SystemSummary
+	47, // 60: sermon.agent.v1.ProcessSnapshot.processes:type_name -> sermon.agent.v1.ProcessInfo
+	46, // 61: sermon.agent.v1.SystemSummary.tasks:type_name -> sermon.agent.v1.TaskCounts
+	5,  // 62: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	6,  // 63: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	63, // [63:64] is the sub-list for method output_type
+	62, // [62:63] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -3484,6 +4263,8 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionRequest_RotateCertificate)(nil),
 		(*SessionRequest_Batch)(nil),
 		(*SessionRequest_ConfigApplied)(nil),
+		(*SessionRequest_ProcessSnapshot)(nil),
+		(*SessionRequest_LiveViewRefused)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[1].OneofWrappers = []any{
 		(*SessionResponse_Ack)(nil),
@@ -3492,6 +4273,8 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionResponse_TrustBundle)(nil),
 		(*SessionResponse_Throttle)(nil),
 		(*SessionResponse_ConfigUpdate)(nil),
+		(*SessionResponse_StartLiveView)(nil),
+		(*SessionResponse_StopLiveView)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[10].OneofWrappers = []any{
 		(*Batch_Metrics)(nil),
@@ -3522,13 +4305,15 @@ func file_sermon_agent_v1_agent_proto_init() {
 	file_sermon_agent_v1_agent_proto_msgTypes[20].OneofWrappers = []any{}
 	file_sermon_agent_v1_agent_proto_msgTypes[24].OneofWrappers = []any{}
 	file_sermon_agent_v1_agent_proto_msgTypes[29].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[40].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[42].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   37,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

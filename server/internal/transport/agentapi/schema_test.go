@@ -378,3 +378,98 @@ func TestSchema_AgentLogEntriesAreValid(t *testing.T) {
 		t.Error("no truncated entry in the golden batch")
 	}
 }
+
+// The live view (M3-13): a snapshot within the protocol's bounds passes, every field over them
+// fails – the server will relay snapshots to browsers (M3-14).
+func TestSchema_ProcessSnapshots(t *testing.T) {
+	v, err := protovalidate.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	uid, cpu, cmd := uint32(0), 0.5, "nginx: worker process"
+	process := func(change func(*agentv1.ProcessInfo)) *agentv1.ProcessInfo {
+		p := &agentv1.ProcessInfo{
+			Pid: 812, Ppid: 1, Uid: &uid, User: "www-data", State: "S", CpuRatio: &cpu, Threads: 2,
+			Name: "nginx", Cmdline: &cmd, Unit: "nginx.service", Container: "4f1c0a5e8b2d",
+		}
+		if change != nil {
+			change(p)
+		}
+		return p
+	}
+	snapshot := func(processes ...*agentv1.ProcessInfo) *agentv1.SessionRequest {
+		return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_ProcessSnapshot{ProcessSnapshot: &agentv1.ProcessSnapshot{
+			TakenAt: timestamppb.Now(), Summary: &agentv1.SystemSummary{CpuCount: 4, Tasks: &agentv1.TaskCounts{Total: 1}},
+			Processes: processes,
+		}}}
+	}
+	if err := v.Validate(snapshot(process(nil))); err != nil {
+		t.Errorf("valid snapshot: %v", err)
+	}
+	long := strings.Repeat("x", 1025)
+	tooBusy, negative := 4097.0, -0.1
+	for name, p := range map[string]*agentv1.ProcessInfo{
+		"pid 0":           process(func(p *agentv1.ProcessInfo) { p.Pid = 0 }),
+		"no state":        process(func(p *agentv1.ProcessInfo) { p.State = "" }),
+		"long cmdline":    process(func(p *agentv1.ProcessInfo) { p.Cmdline = &long }),
+		"long name":       process(func(p *agentv1.ProcessInfo) { p.Name = long[:65] }),
+		"cpu over":        process(func(p *agentv1.ProcessInfo) { p.CpuRatio = &tooBusy }),
+		"cpu negative":    process(func(p *agentv1.ProcessInfo) { p.CpuRatio = &negative }),
+		"upper container": process(func(p *agentv1.ProcessInfo) { p.Container = "4F1C0A5E8B2D" }),
+		"long container":  process(func(p *agentv1.ProcessInfo) { p.Container = "4f1c0a5e8b2d0" }),
+	} {
+		if err := v.Validate(snapshot(p)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	many := make([]*agentv1.ProcessInfo, 4001)
+	for i := range many {
+		many[i] = process(nil)
+	}
+	if err := v.Validate(snapshot(many...)); err == nil {
+		t.Error("4001 processes accepted")
+	}
+	noTime := snapshot(process(nil))
+	noTime.GetProcessSnapshot().TakenAt = nil
+	if err := v.Validate(noTime); err == nil {
+		t.Error("a snapshot without time accepted")
+	}
+	start := func(d time.Duration) *agentv1.SessionResponse {
+		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_StartLiveView{StartLiveView: &agentv1.StartLiveView{Interval: durationpb.New(d)}}}
+	}
+	if err := v.Validate(start(2 * time.Second)); err != nil {
+		t.Errorf("2 s: %v", err)
+	}
+	for _, d := range []time.Duration{500 * time.Millisecond, 11 * time.Second} {
+		if err := v.Validate(start(d)); err == nil {
+			t.Errorf("interval %v accepted", d)
+		}
+	}
+	if err := v.Validate(&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_LiveViewRefused{LiveViewRefused: &agentv1.LiveViewRefused{Reason: long[:257]}}}); err == nil {
+		t.Error("a long refusal accepted")
+	}
+}
+
+func TestSchema_AgentSnapshotIsValid(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "proto", "testdata", "process_snapshot.binpb"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot agentv1.ProcessSnapshot
+	if err := proto.Unmarshal(raw, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	req := &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_ProcessSnapshot{ProcessSnapshot: &snapshot}}
+	if err := protovalidate.Validate(req); err != nil {
+		t.Fatalf("the agent's snapshot is invalid: %v", err)
+	}
+	var odd, kernel, zombie bool
+	for _, p := range snapshot.GetProcesses() {
+		odd = odd || p.GetName() == "evil) name (x"
+		kernel = kernel || p.GetKernelThread()
+		zombie = zombie || p.GetState() == "Z"
+	}
+	if len(snapshot.GetProcesses()) != 9 || !odd || !kernel || !zombie {
+		t.Errorf("golden snapshot: %d processes, odd %v, kernel %v, zombie %v", len(snapshot.GetProcesses()), odd, kernel, zombie)
+	}
+}

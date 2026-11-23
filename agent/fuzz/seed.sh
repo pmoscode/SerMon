@@ -42,3 +42,9 @@ for file in ../fixtures/logs/multiline/*.log; do
   { printf '\000'; cat "$file"; } >"corpus/multiline/indent$name"
   { printf '2'; cat "$file"; } >"corpus/multiline/start$name"
 done
+# process_parsers: the files of the process fixtures.
+mkdir -p corpus/process_parsers
+for file in ../fixtures/processes/*/proc/*/stat ../fixtures/processes/*/proc/*/status ../fixtures/processes/*/proc/*/cgroup ../fixtures/processes/*/etc/passwd; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  cp "$file" "corpus/process_parsers/fixture$name"
+done

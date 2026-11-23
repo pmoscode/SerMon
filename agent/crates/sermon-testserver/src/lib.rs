@@ -475,6 +475,13 @@ pub struct SessionLog {
     pub config_applied: Vec<sermon_transport::proto::agent::v1::ConfigApplied>,
     /// Log entries of the batches received (M3-04, M3-05).
     pub log_entries: Vec<sermon_transport::proto::agent::v1::LogEntry>,
+    /// Snapshots of the live view received (M3-13), with their arrival.
+    pub snapshots: Vec<(
+        std::time::Instant,
+        sermon_transport::proto::agent::v1::ProcessSnapshot,
+    )>,
+    /// Reasons of refused live views.
+    pub live_refusals: Vec<String>,
     /// Whether the session has ended.
     pub ended: bool,
 }
@@ -700,9 +707,11 @@ impl FakeAgentApi {
                         break;
                     }
                 }
-                Some(session_request::Payload::ConfigApplied(applied)) => {
-                    self.update(index, |log| log.config_applied.push(applied));
-                }
+                Some(
+                    payload @ (session_request::Payload::ConfigApplied(_)
+                    | session_request::Payload::ProcessSnapshot(_)
+                    | session_request::Payload::LiveViewRefused(_)),
+                ) => self.record(index, payload),
                 Some(session_request::Payload::Hello(_)) | None => {
                     let _ = outgoing
                         .send(Err(Status::invalid_argument("unexpected")))
@@ -711,6 +720,22 @@ impl FakeAgentApi {
                 }
             }
         }
+    }
+}
+
+impl FakeAgentApi {
+    /// Records the agent's answers that need no reply.
+    fn record(&self, index: usize, payload: session_request::Payload) {
+        self.update(index, |log| match payload {
+            session_request::Payload::ConfigApplied(applied) => log.config_applied.push(applied),
+            session_request::Payload::ProcessSnapshot(snapshot) => {
+                log.snapshots.push((std::time::Instant::now(), snapshot));
+            }
+            session_request::Payload::LiveViewRefused(refused) => {
+                log.live_refusals.push(refused.reason);
+            }
+            _ => {}
+        });
     }
 }
 

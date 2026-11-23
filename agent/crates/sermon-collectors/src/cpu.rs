@@ -52,13 +52,13 @@ impl CpuTimes {
         ]
     }
 
-    fn total(&self) -> u64 {
+    pub(crate) fn total(&self) -> u64 {
         self.modes()
             .iter()
             .fold(0, |sum, (_, ticks)| sum.saturating_add(*ticks))
     }
 
-    fn busy(&self) -> u64 {
+    pub(crate) fn busy(&self) -> u64 {
         self.total()
             .saturating_sub(self.idle)
             .saturating_sub(self.iowait)

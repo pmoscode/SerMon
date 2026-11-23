@@ -17,10 +17,13 @@ use sermon_testserver::{
 use sermon_transport::identity::{AgentIdentity, AgentKey, Credentials, IssuedCertificate};
 use sermon_transport::outbox::Outbox;
 use sermon_transport::proto::agent::v1::{
-    Ack, AgentConfig, ConfigApplied, ConfigUpdate, LogConfig, MetricBatch, RotateNow, Sample,
-    Throttle, sample, session_response::Payload,
+    Ack, AgentConfig, ConfigApplied, ConfigUpdate, LogConfig, MetricBatch, ProcessSnapshot,
+    RotateNow, Sample, StartLiveView, StopLiveView, SystemSummary, Throttle, sample,
+    session_response::Payload,
 };
-use sermon_transport::session::{BoxError, ConfigSink, IdentitySource, Transport, TransportConfig};
+use sermon_transport::session::{
+    BoxError, ConfigSink, IdentitySource, LiveSource, Transport, TransportConfig,
+};
 use tokio_util::sync::CancellationToken;
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -141,6 +144,7 @@ struct Setup {
     tweak: fn(&mut TransportConfig),
     api: Option<FakeAgentApi>,
     config: Option<Arc<dyn ConfigSink>>,
+    live: Option<Arc<FakeLive>>,
 }
 
 impl Setup {
@@ -152,6 +156,7 @@ impl Setup {
             tweak: |_| {},
             api: None,
             config: None,
+            live: None,
         }
     }
 
@@ -193,6 +198,9 @@ impl Setup {
         );
         if let Some(sink) = self.config {
             transport = transport.with_config(sink);
+        }
+        if let Some(live) = self.live {
+            transport = transport.with_live(live);
         }
         let shutdown = CancellationToken::new();
         let token = shutdown.clone();
@@ -625,4 +633,179 @@ async fn hands_configurations_to_the_sink_and_answers_the_server() {
         5
     );
     harness.stop().await;
+}
+
+/// A live source of fixed snapshots, or one that refuses.
+#[derive(Debug, Default)]
+struct FakeLive {
+    refuse: Option<String>,
+    taken: Mutex<Vec<bool>>,
+    stopped: Mutex<usize>,
+}
+
+impl LiveSource for FakeLive {
+    fn refusal(&self) -> Option<String> {
+        self.refuse.clone()
+    }
+
+    fn snapshot(&self, hide_cmdline: bool) -> Option<ProcessSnapshot> {
+        self.taken.lock().unwrap().push(hide_cmdline);
+        Some(ProcessSnapshot {
+            taken_at: Some(SystemTime::now().into()),
+            summary: Some(SystemSummary::default()),
+            processes: Vec::new(),
+            omitted: 0,
+        })
+    }
+
+    fn stopped(&self) {
+        *self.stopped.lock().unwrap() += 1;
+    }
+}
+
+fn start_live(interval_ms: u64, hide_cmdline: bool) -> Payload {
+    Payload::StartLiveView(StartLiveView {
+        interval: Some(Duration::from_millis(interval_ms).try_into().unwrap()),
+        hide_cmdline,
+    })
+}
+
+fn snapshots(harness: &Harness) -> usize {
+    harness
+        .api
+        .sessions()
+        .iter()
+        .map(|s| s.snapshots.len())
+        .sum()
+}
+
+// KONZEPT §9, M3-13: a StartLiveView makes snapshots every interval, sent at once (not buffered),
+// until StopLiveView; renewing takes the new settings.
+#[tokio::test(flavor = "multi_thread")]
+async fn sends_snapshots_while_the_live_view_runs() {
+    let live = Arc::new(FakeLive::default());
+    let mut setup = Setup::new();
+    setup.live = Some(live.clone());
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(snapshots(&harness), 0, "nothing before a start");
+
+    // Below the bound of 1 s the agent takes 1 s.
+    assert!(harness.api.send(start_live(10, false)).await);
+    assert!(harness.wait_until(|h| snapshots(h) >= 2).await);
+    let times: Vec<_> = harness.api.sessions()[0]
+        .snapshots
+        .iter()
+        .map(|(t, _)| *t)
+        .collect();
+    assert!(
+        times[1].duration_since(times[0]) >= Duration::from_millis(900),
+        "{:?}",
+        times[1].duration_since(times[0])
+    );
+    let before = harness.outbox.stats().next_seq;
+    assert!(harness.wait_until(|h| snapshots(h) >= 3).await);
+    assert_eq!(
+        harness.outbox.stats().next_seq,
+        before,
+        "nothing goes into the buffer"
+    );
+
+    assert!(harness.api.send(start_live(1000, true)).await);
+    assert!(
+        harness
+            .wait_until(|_| live.taken.lock().unwrap().last() == Some(&true))
+            .await
+    );
+
+    assert!(
+        harness
+            .api
+            .send(Payload::StopLiveView(StopLiveView {}))
+            .await
+    );
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let after_stop = snapshots(&harness);
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(
+        snapshots(&harness),
+        after_stop,
+        "no snapshots after the stop"
+    );
+    assert!(*live.stopped.lock().unwrap() >= 1);
+    harness.stop().await;
+}
+
+// Without a renewal the live view ends by itself after the lease.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_live_view_ends_without_a_renewal() {
+    let live = Arc::new(FakeLive::default());
+    let mut setup = Setup::new();
+    setup.live = Some(live.clone());
+    setup.tweak = |c| c.live_lease = Duration::from_millis(2500);
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    assert!(harness.api.send(start_live(1000, false)).await);
+    assert!(harness.wait_until(|h| snapshots(h) >= 1).await);
+    tokio::time::sleep(Duration::from_millis(3500)).await;
+    let ended = snapshots(&harness);
+    assert!((2..=4).contains(&ended), "{ended} snapshots in the lease");
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(snapshots(&harness), ended, "the lease ended");
+    assert!(*live.stopped.lock().unwrap() >= 1);
+    harness.stop().await;
+}
+
+// agent.toml forbids the live view (or there is none): refused with a reason, no snapshots.
+#[tokio::test(flavor = "multi_thread")]
+async fn refuses_the_live_view_with_a_reason() {
+    for live in [
+        Some(Arc::new(FakeLive {
+            refuse: Some("agent.toml forbids the live view".into()),
+            ..FakeLive::default()
+        })),
+        None,
+    ] {
+        let mut setup = Setup::new();
+        setup.live = live.clone();
+        let harness = setup.start().await;
+        assert!(
+            harness
+                .api
+                .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+                .await
+        );
+        assert!(harness.api.send(start_live(1000, false)).await);
+        assert!(
+            harness
+                .api
+                .wait_for(WAIT, |s| s
+                    .first()
+                    .is_some_and(|s| !s.live_refusals.is_empty()))
+                .await
+        );
+        let reason = harness.api.sessions()[0].live_refusals[0].clone();
+        assert!(
+            if live.is_some() {
+                reason.contains("agent.toml")
+            } else {
+                !reason.is_empty()
+            },
+            "{reason}"
+        );
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        assert_eq!(snapshots(&harness), 0);
+        harness.stop().await;
+    }
 }

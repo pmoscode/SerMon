@@ -13,6 +13,14 @@ sie hält der Disk-Collector im frischen Checkout Partitionen für ganze Geräte
 
 `capture-host.sh image name …` holt dieselben Dateien aus einem Container und ersetzt Hostname und `machine-id`.
 
+## Prozesse (`processes/`)
+
+`processes/capture.sh` (M3-13) holt `/proc/<pid>/{stat,status,cmdline,cgroup}` einiger Sonderfälle aus einem
+`debian:13`-Container: ein normaler Prozess, einer von `nobody`, ein Zombie und eine ausführbare Datei namens
+`evil) name (x`. Aus dem PID-Namensraum des Docker-Hosts kommen `kthreadd`, ein `kworker` und `containerd` mit vielen
+Threads; sie liegen unter PID 9000 + n, weil ihre eigenen PIDs mit denen des Containers kollidieren. Dazu kommen die
+Dateien der Kopfzeile und `/etc/passwd`; `pids.txt` nennt die Zuordnung.
+
 ## Logs (`logs/`)
 
 Ausgabe von `journalctl -o json --all` aus Containern mit systemd als PID 1 (Spike M0-10,

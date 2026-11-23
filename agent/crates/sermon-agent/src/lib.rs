@@ -9,6 +9,7 @@ pub mod config;
 pub mod enroll;
 pub mod identity;
 pub mod journal;
+pub mod liveview;
 pub mod logfile;
 pub mod logging;
 pub mod logglob;
@@ -122,14 +123,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         log_stats.clone(),
         logship::into_outbox(outbox.clone()),
     );
-    let transport = Transport::new(
-        TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
-        Arc::new(FileIdentity::new(layout)),
-        facts,
-        outbox.clone(),
-        clock.clone(),
-    )
-    .with_config(agent_config);
+    let transport = transport(config, layout, facts, &outbox, &clock, &agent_config);
 
     // One thread is enough for < 1 % CPU: collectors read small /proc files, the rest is I/O.
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -194,6 +188,32 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         tracing::info!("agent stopped");
         signals.await.context("signal handler failed")?
     })
+}
+
+/// The transport with the server's configuration and the live view (M3-13: on demand, its
+/// snapshots never buffered).
+fn transport(
+    config: &AgentConfig,
+    layout: StateLayout,
+    facts: FactsSource,
+    outbox: &Outbox,
+    clock: &Arc<dyn Clock>,
+    agent_config: &Arc<agent_config::ConfigStore>,
+) -> Transport {
+    Transport::new(
+        TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
+        Arc::new(FileIdentity::new(layout)),
+        facts,
+        outbox.clone(),
+        clock.clone(),
+    )
+    .with_config(agent_config.clone())
+    .with_live(Arc::new(liveview::LiveView::new(
+        ProcRoot::new(&config.host_root),
+        config.local.allow_live_view,
+        agent_config.subscribe(),
+        clock.clone(),
+    )))
 }
 
 /// Interval of buffer housekeeping (fsync, age limit).

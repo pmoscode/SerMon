@@ -22,10 +22,19 @@ use crate::identity::{AgentKey, CertificateOffer, Credentials, IssuedCertificate
 use crate::outbox::{Outbox, batch_for};
 use crate::proto::agent::v1::agent_service_client::AgentServiceClient;
 use crate::proto::agent::v1::{
-    ConfigApplied, ConfigUpdate, Heartbeat, Hello, RotateCertificate, SessionRequest,
-    SessionResponse, session_request, session_response,
+    ConfigApplied, ConfigUpdate, Heartbeat, Hello, LiveViewRefused, ProcessSnapshot,
+    RotateCertificate, SessionRequest, SessionResponse, StartLiveView, session_request,
+    session_response,
 };
 use crate::tls::agent_api_config;
+
+/// Waits for the next snapshot of a running live view; forever without one.
+async fn live_tick(live: Option<Live>) {
+    match live {
+        Some(live) => tokio::time::sleep_until(live.next.min(live.until)).await,
+        None => std::future::pending().await,
+    }
+}
 
 /// Version of the agent protocol sent in `Hello`.
 pub const PROTOCOL_VERSION: u32 = 1;
@@ -76,6 +85,16 @@ pub trait ConfigSink: Send + Sync {
     fn apply(&self, update: ConfigUpdate) -> ConfigApplied;
 }
 
+/// Takes the snapshots of the live view (KONZEPT §9, M3-13).
+pub trait LiveSource: Send + Sync {
+    /// Why the live view is refused (e.g. `allow_live_view = false`), or `None`.
+    fn refusal(&self) -> Option<String>;
+    /// A snapshot; blocks while it reads `/proc`. `None` if it failed (the source logs why).
+    fn snapshot(&self, hide_cmdline: bool) -> Option<ProcessSnapshot>;
+    /// The live view ended: the history for CPU shares is forgotten.
+    fn stopped(&self);
+}
+
 /// Reads the host facts for `Hello`.
 pub type FactsSource = Arc<dyn Fn() -> Result<HostFacts, BoxError> + Send + Sync>;
 
@@ -96,6 +115,8 @@ pub struct TransportConfig {
     pub max_in_flight: u64,
     /// Wait before trying again with an expired certificate.
     pub expired_retry: Duration,
+    /// How long a `StartLiveView` holds without renewal (KONZEPT §9: 60 s).
+    pub live_lease: Duration,
 }
 
 impl TransportConfig {
@@ -110,6 +131,7 @@ impl TransportConfig {
             reconnect_max: Duration::from_secs(60),
             max_in_flight: 64,
             expired_retry: Duration::from_mins(5),
+            live_lease: Duration::from_mins(1),
         }
     }
 }
@@ -122,6 +144,7 @@ pub struct Transport {
     outbox: Outbox,
     clock: Arc<dyn Clock>,
     config_sink: Option<Arc<dyn ConfigSink>>,
+    live: Option<Arc<dyn LiveSource>>,
 }
 
 impl std::fmt::Debug for Transport {
@@ -178,7 +201,15 @@ impl Transport {
             outbox,
             clock,
             config_sink: None,
+            live: None,
         }
+    }
+
+    /// Takes the live view's snapshots from `source`; without one a start is refused.
+    #[must_use]
+    pub fn with_live(mut self, source: Arc<dyn LiveSource>) -> Self {
+        self.live = Some(source);
+        self
     }
 
     /// Hands the server's configurations to `sink`; without one they are ignored.
@@ -278,8 +309,11 @@ impl Transport {
             last_batch: None,
             pending_rotation: None,
             established: false,
+            live: None,
         };
         let result = session.run(inbound, shutdown).await;
+        // The live view belongs to the session.
+        session.stop_live();
         let established = session.established;
         result.map_err(|mut failure| {
             failure.established = established;
@@ -301,7 +335,22 @@ struct Session<'t> {
     last_batch: Option<Instant>,
     pending_rotation: Option<AgentKey>,
     established: bool,
+    live: Option<Live>,
 }
+
+/// A running live view.
+#[derive(Debug, Clone, Copy)]
+struct Live {
+    interval: Duration,
+    hide_cmdline: bool,
+    /// The lease: without a renewal it ends here.
+    until: Instant,
+    next: Instant,
+}
+
+/// Bounds of the interval (protocol: 1 to 10 s), checked again here.
+const LIVE_MIN_INTERVAL: Duration = Duration::from_secs(1);
+const LIVE_MAX_INTERVAL: Duration = Duration::from_secs(10);
 
 impl Session<'_> {
     async fn run(
@@ -346,7 +395,79 @@ impl Session<'_> {
                 }
                 () = &mut ready => {}
                 () = throttle => {}
+                () = live_tick(self.live) => self.live_snapshot().await?,
             }
+        }
+    }
+
+    /// Starts or renews the live view, or refuses it.
+    async fn start_live(&mut self, start: StartLiveView) -> Result<(), Failure> {
+        let refusal = match &self.transport.live {
+            None => Some("this agent has no live view".to_owned()),
+            Some(source) => source.refusal(),
+        };
+        if let Some(reason) = refusal {
+            tracing::info!("live view refused: {reason}");
+            return self
+                .send(session_request::Payload::LiveViewRefused(LiveViewRefused {
+                    reason,
+                }))
+                .await;
+        }
+        let interval = start
+            .interval
+            .and_then(|d| Duration::try_from(d).ok())
+            .unwrap_or(LIVE_MIN_INTERVAL)
+            .clamp(LIVE_MIN_INTERVAL, LIVE_MAX_INTERVAL);
+        let now = Instant::now();
+        let next = if let Some(live) = self.live {
+            live.next.min(now + interval)
+        } else {
+            tracing::info!("live view started");
+            now
+        };
+        self.live = Some(Live {
+            interval,
+            hide_cmdline: start.hide_cmdline,
+            until: now + self.transport.config.live_lease,
+            next,
+        });
+        Ok(())
+    }
+
+    fn stop_live(&mut self) {
+        if self.live.take().is_some() {
+            tracing::info!("live view stopped");
+            if let Some(source) = &self.transport.live {
+                source.stopped();
+            }
+        }
+    }
+
+    /// Takes and sends a snapshot, or ends the live view after its lease.
+    async fn live_snapshot(&mut self) -> Result<(), Failure> {
+        let (Some(live), Some(source)) = (self.live, self.transport.live.clone()) else {
+            return Ok(());
+        };
+        let now = Instant::now();
+        if now >= live.until {
+            self.stop_live();
+            return Ok(());
+        }
+        if let Some(l) = &mut self.live {
+            l.next = now + live.interval;
+        }
+        let hide = live.hide_cmdline;
+        let snapshot = tokio::task::spawn_blocking(move || source.snapshot(hide))
+            .await
+            .ok()
+            .flatten();
+        match snapshot {
+            Some(snapshot) => {
+                self.send(session_request::Payload::ProcessSnapshot(snapshot))
+                    .await
+            }
+            None => Ok(()),
         }
     }
 
@@ -430,6 +551,8 @@ impl Session<'_> {
             session_response::Payload::CertificateIssued(issued) => {
                 return self.finish_rotation(&issued).map(|()| Some(End::Rotated));
             }
+            session_response::Payload::StartLiveView(start) => self.start_live(start).await?,
+            session_response::Payload::StopLiveView(_) => self.stop_live(),
             session_response::Payload::ConfigUpdate(update) => {
                 let Some(sink) = &self.transport.config_sink else {
                     tracing::debug!("ignoring a configuration, none is applied here");

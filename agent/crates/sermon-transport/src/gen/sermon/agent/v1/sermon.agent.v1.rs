@@ -4,7 +4,7 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionRequest {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_request::Payload", tags="1, 2, 3, 4, 5")]
+    #[prost(oneof="session_request::Payload", tags="1, 2, 3, 4, 5, 6, 7")]
     pub payload: ::core::option::Option<session_request::Payload>,
 }
 /// Nested message and enum types in `SessionRequest`.
@@ -30,13 +30,20 @@ pub mod session_request {
         /// config_applied answers config_update: the configuration is in use, or why not (ADR 0030).
         #[prost(message, tag="5")]
         ConfigApplied(super::ConfigApplied),
+        /// process_snapshot is a snapshot of the live view (KONZEPT §9); never buffered, never
+        /// acknowledged: a lost one is replaced by the next.
+        #[prost(message, tag="6")]
+        ProcessSnapshot(super::ProcessSnapshot),
+        /// live_view_refused answers start_live_view when agent.toml forbids the live view.
+        #[prost(message, tag="7")]
+        LiveViewRefused(super::LiveViewRefused),
     }
 }
 /// SessionResponse is one message from the server to the agent.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6")]
+    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6, 7, 8")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
@@ -67,6 +74,12 @@ pub mod session_response {
         /// version differs from the agent's and after every change.
         #[prost(message, tag="6")]
         ConfigUpdate(super::ConfigUpdate),
+        /// start_live_view starts the live view or renews its lease (KONZEPT §9).
+        #[prost(message, tag="7")]
+        StartLiveView(super::StartLiveView),
+        /// stop_live_view ends the live view.
+        #[prost(message, tag="8")]
+        StopLiveView(super::StopLiveView),
     }
 }
 /// Hello is the first message of every stream.
@@ -589,6 +602,159 @@ pub struct ConfigApplied {
     /// logs_vetoed is set if agent.toml forbids sending logs (allow_logs = false).
     #[prost(bool, tag="3")]
     pub logs_vetoed: bool,
+}
+/// StartLiveView starts the live view ("top", KONZEPT §9, M3-13): a ProcessSnapshot every
+/// interval. It is a lease: the agent stops 60 s after the last StartLiveView, at a StopLiveView
+/// or with the session. A StartLiveView while running renews it and takes the new settings.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StartLiveView {
+    /// interval is the time between two snapshots, 1 to 10 s.
+    #[prost(message, optional, tag="1")]
+    pub interval: ::core::option::Option<::prost_types::Duration>,
+    /// hide_cmdline leaves out the command lines (the organization's switch).
+    #[prost(bool, tag="2")]
+    pub hide_cmdline: bool,
+}
+/// StopLiveView ends the live view.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopLiveView {
+}
+/// LiveViewRefused says why the agent does not start the live view.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LiveViewRefused {
+    /// reason is for the people who asked, e.g. "agent.toml forbids the live view".
+    #[prost(string, tag="1")]
+    pub reason: ::prost::alloc::string::String,
+}
+/// ProcessSnapshot is the state of the host's processes at one moment; nothing of it is stored.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProcessSnapshot {
+    /// taken_at is the agent's time of the snapshot.
+    #[prost(message, optional, tag="1")]
+    pub taken_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// summary is the header (CPU, memory, swap, load, uptime, tasks).
+    #[prost(message, optional, tag="2")]
+    pub summary: ::core::option::Option<SystemSummary>,
+    /// processes are the busiest processes first, at most 4000.
+    #[prost(message, repeated, tag="3")]
+    pub processes: ::prost::alloc::vec::Vec<ProcessInfo>,
+    /// omitted counts the processes left out over the bound.
+    #[prost(uint32, tag="4")]
+    pub omitted: u32,
+}
+/// SystemSummary is the header of a snapshot, like top's.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SystemSummary {
+    /// cpu_busy_ratio is the busy share of all CPUs over the interval; unset in the first snapshot.
+    #[prost(double, optional, tag="1")]
+    pub cpu_busy_ratio: ::core::option::Option<f64>,
+    /// cpu_count is the number of CPUs.
+    #[prost(uint32, tag="2")]
+    pub cpu_count: u32,
+    /// memory_total_bytes is the physical memory.
+    #[prost(uint64, tag="3")]
+    pub memory_total_bytes: u64,
+    /// memory_available_bytes is the memory available without swapping.
+    #[prost(uint64, tag="4")]
+    pub memory_available_bytes: u64,
+    /// swap_total_bytes is the swap space.
+    #[prost(uint64, tag="5")]
+    pub swap_total_bytes: u64,
+    /// swap_free_bytes is the unused swap space.
+    #[prost(uint64, tag="6")]
+    pub swap_free_bytes: u64,
+    /// load_1, load_5 and load_15 are the load averages, if readable.
+    #[prost(double, optional, tag="7")]
+    pub load_1: ::core::option::Option<f64>,
+    /// load_5 is the load over 5 minutes.
+    #[prost(double, optional, tag="8")]
+    pub load_5: ::core::option::Option<f64>,
+    /// load_15 is the load over 15 minutes.
+    #[prost(double, optional, tag="9")]
+    pub load_15: ::core::option::Option<f64>,
+    /// uptime_seconds is the time since boot, if readable.
+    #[prost(uint64, optional, tag="10")]
+    pub uptime_seconds: ::core::option::Option<u64>,
+    /// tasks counts the processes per state.
+    #[prost(message, optional, tag="11")]
+    pub tasks: ::core::option::Option<TaskCounts>,
+}
+/// TaskCounts are the processes per state.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TaskCounts {
+    /// total is every process.
+    #[prost(uint32, tag="1")]
+    pub total: u32,
+    /// running is state R.
+    #[prost(uint32, tag="2")]
+    pub running: u32,
+    /// sleeping is states S, D and I.
+    #[prost(uint32, tag="3")]
+    pub sleeping: u32,
+    /// stopped is states T and t.
+    #[prost(uint32, tag="4")]
+    pub stopped: u32,
+    /// zombie is state Z.
+    #[prost(uint32, tag="5")]
+    pub zombie: u32,
+}
+/// ProcessInfo is one process. Every text comes from the host: shown as text only. Unset fields
+/// were not readable ("n/a").
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProcessInfo {
+    /// pid is the process ID.
+    #[prost(uint32, tag="1")]
+    pub pid: u32,
+    /// ppid is the parent's ID (0 for the first processes).
+    #[prost(uint32, tag="2")]
+    pub ppid: u32,
+    /// uid is the real user ID.
+    #[prost(uint32, optional, tag="3")]
+    pub uid: ::core::option::Option<u32>,
+    /// user is the name of uid from /etc/passwd; empty without one.
+    #[prost(string, tag="4")]
+    pub user: ::prost::alloc::string::String,
+    /// state is the one-letter state (R, S, D, Z, T, I, …).
+    #[prost(string, tag="5")]
+    pub state: ::prost::alloc::string::String,
+    /// cpu_ratio is the CPU share of one core over the interval (above 1 with several threads);
+    /// unset in the first snapshot of the process.
+    #[prost(double, optional, tag="6")]
+    pub cpu_ratio: ::core::option::Option<f64>,
+    /// rss_bytes is the resident memory.
+    #[prost(uint64, optional, tag="7")]
+    pub rss_bytes: ::core::option::Option<u64>,
+    /// memory_ratio is rss_bytes of the physical memory.
+    #[prost(double, optional, tag="8")]
+    pub memory_ratio: ::core::option::Option<f64>,
+    /// threads is the number of threads.
+    #[prost(uint32, tag="9")]
+    pub threads: u32,
+    /// runtime_seconds is the time since the start of the process.
+    #[prost(uint64, optional, tag="10")]
+    pub runtime_seconds: ::core::option::Option<u64>,
+    /// name is the process name (comm, at most 15 bytes from the kernel).
+    #[prost(string, tag="11")]
+    pub name: ::prost::alloc::string::String,
+    /// cmdline is the command line, redacted by the agent and cut; unset if hidden or not
+    /// readable, empty for kernel threads and zombies.
+    #[prost(string, optional, tag="12")]
+    pub cmdline: ::core::option::Option<::prost::alloc::string::String>,
+    /// cmdline_truncated is set if the agent cut the command line.
+    #[prost(bool, tag="13")]
+    pub cmdline_truncated: bool,
+    /// cmdline_hidden is set if the organization hides command lines.
+    #[prost(bool, tag="14")]
+    pub cmdline_hidden: bool,
+    /// kernel_thread marks threads of the kernel.
+    #[prost(bool, tag="15")]
+    pub kernel_thread: bool,
+    /// unit is the systemd unit from the cgroup.
+    #[prost(string, tag="16")]
+    pub unit: ::prost::alloc::string::String,
+    /// container is the first 12 characters of a container ID from the cgroup.
+    #[prost(string, tag="17")]
+    pub container: ::prost::alloc::string::String,
 }
 /// SecuritySource is where the agent finds the log lines for security events (ADR 0025).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

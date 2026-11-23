@@ -39,6 +39,11 @@ message SessionRequest {
     Batch batch = 4;
     // config_applied answers config_update: the configuration is in use, or why not (ADR 0030).
     ConfigApplied config_applied = 5;
+    // process_snapshot is a snapshot of the live view (KONZEPT §9); never buffered, never
+    // acknowledged: a lost one is replaced by the next.
+    ProcessSnapshot process_snapshot = 6;
+    // live_view_refused answers start_live_view when agent.toml forbids the live view.
+    LiveViewRefused live_view_refused = 7;
   }
 }
 
@@ -65,6 +70,10 @@ message SessionResponse {
     // config_update is the configuration the server holds for the node (ADR 0030); sent when its
     // version differs from the agent's and after every change.
     ConfigUpdate config_update = 6;
+    // start_live_view starts the live view or renews its lease (KONZEPT §9).
+    StartLiveView start_live_view = 7;
+    // stop_live_view ends the live view.
+    StopLiveView stop_live_view = 8;
   }
 }
 
@@ -619,4 +628,140 @@ message ConfigApplied {
   string error = 2 [(buf.validate.field).string.max_bytes = 1024];
   // logs_vetoed is set if agent.toml forbids sending logs (allow_logs = false).
   bool logs_vetoed = 3;
+}
+
+// StartLiveView starts the live view ("top", KONZEPT §9, M3-13): a ProcessSnapshot every
+// interval. It is a lease: the agent stops 60 s after the last StartLiveView, at a StopLiveView
+// or with the session. A StartLiveView while running renews it and takes the new settings.
+message StartLiveView {
+  // interval is the time between two snapshots, 1 to 10 s.
+  google.protobuf.Duration interval = 1 [(buf.validate.field).duration = {
+    gte: {seconds: 1}
+    lte: {seconds: 10}
+  }];
+  // hide_cmdline leaves out the command lines (the organization's switch).
+  bool hide_cmdline = 2;
+}
+
+// StopLiveView ends the live view.
+message StopLiveView {}
+
+// LiveViewRefused says why the agent does not start the live view.
+message LiveViewRefused {
+  // reason is for the people who asked, e.g. "agent.toml forbids the live view".
+  string reason = 1 [(buf.validate.field).string.max_bytes = 256];
+}
+
+// ProcessSnapshot is the state of the host's processes at one moment; nothing of it is stored.
+message ProcessSnapshot {
+  // taken_at is the agent's time of the snapshot.
+  google.protobuf.Timestamp taken_at = 1 [(buf.validate.field).required = true];
+  // summary is the header (CPU, memory, swap, load, uptime, tasks).
+  SystemSummary summary = 2 [(buf.validate.field).required = true];
+  // processes are the busiest processes first, at most 4000.
+  repeated ProcessInfo processes = 3 [(buf.validate.field).repeated.max_items = 4000];
+  // omitted counts the processes left out over the bound.
+  uint32 omitted = 4;
+}
+
+// SystemSummary is the header of a snapshot, like top's.
+message SystemSummary {
+  // cpu_busy_ratio is the busy share of all CPUs over the interval; unset in the first snapshot.
+  optional double cpu_busy_ratio = 1 [(buf.validate.field).double = {
+    gte: 0
+    lte: 1
+  }];
+  // cpu_count is the number of CPUs.
+  uint32 cpu_count = 2 [(buf.validate.field).uint32.lte = 4096];
+  // memory_total_bytes is the physical memory.
+  uint64 memory_total_bytes = 3;
+  // memory_available_bytes is the memory available without swapping.
+  uint64 memory_available_bytes = 4;
+  // swap_total_bytes is the swap space.
+  uint64 swap_total_bytes = 5;
+  // swap_free_bytes is the unused swap space.
+  uint64 swap_free_bytes = 6;
+  // load_1, load_5 and load_15 are the load averages, if readable.
+  optional double load_1 = 7 [(buf.validate.field).double = {
+    gte: 0
+    lte: 1e6
+  }];
+  // load_5 is the load over 5 minutes.
+  optional double load_5 = 8 [(buf.validate.field).double = {
+    gte: 0
+    lte: 1e6
+  }];
+  // load_15 is the load over 15 minutes.
+  optional double load_15 = 9 [(buf.validate.field).double = {
+    gte: 0
+    lte: 1e6
+  }];
+  // uptime_seconds is the time since boot, if readable.
+  optional uint64 uptime_seconds = 10;
+  // tasks counts the processes per state.
+  TaskCounts tasks = 11;
+}
+
+// TaskCounts are the processes per state.
+message TaskCounts {
+  // total is every process.
+  uint32 total = 1;
+  // running is state R.
+  uint32 running = 2;
+  // sleeping is states S, D and I.
+  uint32 sleeping = 3;
+  // stopped is states T and t.
+  uint32 stopped = 4;
+  // zombie is state Z.
+  uint32 zombie = 5;
+}
+
+// ProcessInfo is one process. Every text comes from the host: shown as text only. Unset fields
+// were not readable ("n/a").
+message ProcessInfo {
+  // pid is the process ID.
+  uint32 pid = 1 [(buf.validate.field).uint32.gt = 0];
+  // ppid is the parent's ID (0 for the first processes).
+  uint32 ppid = 2;
+  // uid is the real user ID.
+  optional uint32 uid = 3;
+  // user is the name of uid from /etc/passwd; empty without one.
+  string user = 4 [(buf.validate.field).string.max_bytes = 64];
+  // state is the one-letter state (R, S, D, Z, T, I, …).
+  string state = 5 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 4
+  }];
+  // cpu_ratio is the CPU share of one core over the interval (above 1 with several threads);
+  // unset in the first snapshot of the process.
+  optional double cpu_ratio = 6 [(buf.validate.field).double = {
+    gte: 0
+    lte: 4096
+  }];
+  // rss_bytes is the resident memory.
+  optional uint64 rss_bytes = 7;
+  // memory_ratio is rss_bytes of the physical memory.
+  optional double memory_ratio = 8 [(buf.validate.field).double = {
+    gte: 0
+    lte: 1
+  }];
+  // threads is the number of threads.
+  uint32 threads = 9;
+  // runtime_seconds is the time since the start of the process.
+  optional uint64 runtime_seconds = 10;
+  // name is the process name (comm, at most 15 bytes from the kernel).
+  string name = 11 [(buf.validate.field).string.max_bytes = 64];
+  // cmdline is the command line, redacted by the agent and cut; unset if hidden or not
+  // readable, empty for kernel threads and zombies.
+  optional string cmdline = 12 [(buf.validate.field).string.max_bytes = 1024];
+  // cmdline_truncated is set if the agent cut the command line.
+  bool cmdline_truncated = 13;
+  // cmdline_hidden is set if the organization hides command lines.
+  bool cmdline_hidden = 14;
+  // kernel_thread marks threads of the kernel.
+  bool kernel_thread = 15;
+  // unit is the systemd unit from the cgroup.
+  string unit = 16 [(buf.validate.field).string.max_bytes = 256];
+  // container is the first 12 characters of a container ID from the cgroup.
+  string container = 17 [(buf.validate.field).string.pattern = "^([0-9a-f]{12})?$"];
 }

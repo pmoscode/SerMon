@@ -63,3 +63,10 @@ path = "fuzz_targets/multiline.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "process_parsers"
+path = "fuzz_targets/process_parsers.rs"
+test = false
+doc = false
+bench = false

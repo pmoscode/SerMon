@@ -3194,7 +3194,34 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.4 Live-Ansicht (E3.4)
 
-#### ☐ M3-13 – Prozess-Snapshots im Agent · A · M 🔒
+#### ☑ M3-13 – Prozess-Snapshots im Agent · A · M 🔒
+> Erledigt (KONZEPT §5, §9; Threat Model T42):
+> - **`sermon-collectors::process`:**
+>   - Reine Parser für `stat` (Name zwischen erstem `(` und letztem `)`), `status`, `cmdline`, `cgroup` (Unit,
+>     Container-ID von Docker, Podman, containerd, CRI-O, kleingeschrieben) und `/etc/passwd`.
+>   - `ProcessSampler`: CPU-Anteil über zwei Snapshots (eine wiederverwendete PID gilt als neuer Prozess), Kopfzeile
+>     wie `top`.
+>   - Höchstens 4 000 Prozesse (die aktivsten), der Rest wird gezählt; Befehlszeilen bis 8 KiB gelesen.
+>   - Nicht Lesbares ist „n/a“, endende Prozesse werden übersprungen.
+> - **Protokoll:** `StartLiveView{interval 1–10 s, hide_cmdline}`, `StopLiveView`, `ProcessSnapshot`,
+>   `LiveViewRefused{reason}`, alle mit protovalidate-Grenzen.
+> - **Transport:** `LiveSource` mit Lease (`live_lease`, 60 s; ein erneutes Start erneuert sie), Snapshots über
+>   `spawn_blocking`, nie im WAL; das Ende der Session beendet die Live-Ansicht.
+> - **Agent `liveview`:** Befehlszeile mit den Regeln der Org redigiert, auf 1 KiB gekürzt, je Snapshot höchstens
+>   1 MiB (danach 128 B); `hide_cmdline`; Veto `allow_live_view = false` mit Grund.
+> - **Abweichung:** Das Budget-E2E bei aktiver Live-Ansicht kommt mit M3-14. Erst dann startet der Server sie bei
+>   echten Agents.
+> - **Tests:**
+>   - Fixtures mit `processes/capture.sh`: Kernel-Threads, Zombie, Name mit `)` und Leerzeichen, fremder User,
+>     Threads.
+>   - Parser und Grenzen; CPU-Anteil über zwei Snapshots; wiederverwendete PID; fehlende Dateien.
+>   - Redaction, Kürzen an Zeichengrenzen, Budget, Ausblenden, Veto.
+>   - Session gegen den Testserver: Snapshots im Takt (mindestens 1 s), nicht im Puffer, Erneuerung, Stop, Ablauf
+>     der Lease, Ablehnung mit Grund.
+>   - Roundtrip in Rust; Schema-Test in Go mit gültigen und ungültigen Feldern.
+>   - Golden-Snapshot des Agents (`proto/testdata/process_snapshot.binpb`) gegen die Validierung des Servers.
+>   - Fuzz-Ziel `process_parsers` (60 s, 2,1 Mio. Läufe ohne Fund).
+>   - Gegenproben für 18 Prüfungen, alle erkannt.
 - **Ziel:** KONZEPT §9.
   - **Collector** über `/proc/<pid>/{stat,status,cmdline,cgroup}` per `ProcRoot`:
     - PID, PPID, User (aus `/etc/passwd`), Status, CPU-Anteil über das Intervall, Speicheranteil und RSS, Threads,

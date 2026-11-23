@@ -1,0 +1,4 @@
+normal=7 other=8 odd=10 parent=11 zombie=14
+host 2 -> 9001
+host 10 -> 9002
+host 317 -> 9003

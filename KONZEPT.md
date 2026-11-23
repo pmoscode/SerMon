@@ -274,11 +274,13 @@ eine Fake-Implementierung für Tests.
       Datei verifiziert/unverifiziert oder keine), `Heartbeat`,
       `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“), `Batch{seq, …}` mit genau einem
       Inhalt: `MetricBatch`, `SecurityEventBatch`, `LogBatch` (M3-01), später `UpdateReport`; dazu `ConfigApplied`
-      (Antwort auf `ConfigUpdate`), `ProcessSnapshot` und `CommandResult` (nicht gepuffert)
+      (Antwort auf `ConfigUpdate`), `ProcessSnapshot` bzw. `LiveViewRefused{reason}` (Antwort auf `StartLiveView`, M3-13)
+      und `CommandResult` (nicht gepuffert)
     - Server → Agent: `TrustBundle{roots}` (zu Beginn jeder Session), `Ack{seq}`, `Throttle{min_interval}`,
       `CertificateIssued`, `RotateNow` (Rotation auf Abruf), `ConfigUpdate{version, config}` (Log-Auswahl und
       Redaction-Regeln, [ADR 0030](docs/adr/0030-konfiguration-vom-server.md)),
-      `StartLiveView{interval}`, `StopLiveView`, `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`
+      `StartLiveView{interval, hide_cmdline}` (eine Lease: ohne Erneuerung endet die Live-Ansicht nach 60 s, ebenso mit
+      der Session), `StopLiveView`, `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`
 - **Enrollment:** `EnrollmentService.Enroll{token, csr, host_facts}` ist ein einzelner Aufruf über den öffentlichen
   HTTPS-Endpunkt, nicht über den mTLS-Port ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)).
 - **Batching:** Metriken werden jede Sekunde gesendet, Logs alle 1 s oder bei 256 KB (je nachdem, was zuerst eintritt).

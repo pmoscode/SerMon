@@ -11,6 +11,7 @@ pub mod host;
 pub mod memory;
 pub mod network;
 pub mod pressure;
+pub mod process;
 pub mod raid;
 pub mod rate;
 pub mod system;

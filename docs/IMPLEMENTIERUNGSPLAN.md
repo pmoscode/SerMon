@@ -1433,7 +1433,8 @@ M2-09 → M2-10 → M2-11/M2-12 (Kanäle).
 >   jeden Eintrag sofort. Neue Selbst-Metriken `sermon_agent_journal_lost_entries` und
 >   `sermon_agent_journal_invalid_lines` mit Katalog und Hilfe; `journal.cursor` gehört zu den Agent-Daten
 >   (`uninstall`).
-> - **Abweichung:** Den Hinweis in der UI auf verlorene Einträge (ADR 0013) gibt es noch nicht, nur die Metrik.
+> - **Abweichung:** Den Hinweis in der UI auf verlorene Einträge (ADR 0013) gibt es noch nicht, nur die Metrik. Nachgeholt
+>   in M3-11 (Log-Explorer).
 > - **Tests:**
 >   - Parser mit den Fixtures aller vier Distros, Proptests, Fuzz-Ziel `journal_line` (60 s, 127 000 Läufe ohne Fund).
 >   - Quelle gegen ein Fake-`journalctl` (`tests/fake-journalctl`) mit den Fixture-Strömen von Debian und Ubuntu: kein
@@ -3032,7 +3033,49 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.3 Log-Explorer (E3.3)
 
-#### ☐ M3-11 – Log-Explorer · W · L
+#### ☑ M3-11 – Log-Explorer · W · L
+> Erledigt (KONZEPT §10.4, §17; Threat Model T19):
+> - **Seite `/logs`** mit Menüpunkt und Hilfe DE/EN (`pages/logs`).
+>   - Filter: Zeitraum (15 Min. bis 14 Tage, Zoom), Node, Gruppe, Quelle, Units, Mindest-Schweregrad, Text mit oder
+>     ohne Groß- und Kleinschreibung. Alle Filter stehen in der URL (`lib/logs/filter.ts`), ungültige Werte fallen weg.
+>   - Histogramm als eigenes SVG (ohne uPlot, Budget): vier Gruppen mit Summen als Text, Ziehen zoomt.
+>   - Liste virtualisiert (`VirtualList`, gemessene Zeilenhöhen), höchstens 2 000 Zeilen, Seiten zu 200 ohne
+>     Duplikate.
+>   - Darstellung nur als Text (`lib/logs/text.ts`): ANSI-Sequenzen entfernt, Steuer-, Bidi- und unsichtbare
+>     Zeichen als markierte Symbole, lange Zeilen umbrochen.
+>   - Felder einer Zeile; Kontext ± 50 Zeilen im Dialog mit markiertem Eintrag.
+>   - Live-Tail mit Pause (neue Zeilen warten im Puffer), Wiederverbinden mit Backoff ab der neuesten Zeile. Ein
+>     sofort endender Stream wartet wie ein Fehler; „gedrosselt“ und „Loki nicht erreichbar“ werden angezeigt.
+>   - Lade-, Fehler- und Leerzustände.
+> - **Einstiege:** Reiter „Logs“ auf der Node-Seite (bei Bedarf geladen, ohne Node-Wahl), Link aus jedem Chart (Node
+>   und Zeitraum) und aus jedem Alert (± 15 Minuten um den Beginn).
+> - **Hinweise:**
+>   - Nodes mit `allow_logs = false`: neues Feld `logs_vetoed` in `Node` und `NodeSummary` aus dem gespeicherten
+>     `ConfigApplied`.
+>   - Verlorene Journal-Einträge im Zeitraum aus `sermon_agent_journal_lost_entries` (Anstieg, auch über einen
+>     Neustart). Damit ist die Abweichung aus M2-05 erledigt.
+> - **Budget:** Die Hilfe ist geteilt. Tooltips laden nur Titel und Zusammenfassungen
+>   (`virtual:sermon-help/<sprache>/summary`), das Panel die vollen Texte. Die Node-Seite fiel damit von 196 auf
+>   176 KiB, der Log-Explorer braucht 155 KiB.
+> - **Gefunden:**
+>   - Der Effekt, der bei einem neuen Filter sucht, las über die Suche den Zustand des Tails mit. Jeder Wechsel
+>     startete so eine neue Suche und einen neuen Tail (Endlosschleife); jetzt `untrack`.
+>   - Zwei Landmarks mit demselben Namen (axe).
+>   - Zu schwacher Kontrast der Markierung im Kontext; jetzt Randbalken und Text „Dieser Eintrag“.
+> - **Tests:**
+>   - Unit: Text (ANSI, OSC, Steuer-, Bidi- und unsichtbare Zeichen), Filter ↔ URL mit Grenzen, Zeitraum, Links,
+>     Histogramm-Buckets, verlorene Einträge, Auswahl der Nodes.
+>   - Zustand: Abfrage, Node der Node-Seite, Fehler, Weiterladen ohne Duplikate, Kontext, Tail mit Pause, Puffer,
+>     Wiederverbinden, sofort endender Stream, Abbruch bei Ablehnung, neuer Filter.
+>   - Komponenten: feindliche Zeile nur als Text, Liste und Histogramm, Filter, Zustände, Hinweise, Kontext,
+>     Live mit Pause, Zoom, Node-Seite; die virtuelle Liste rendert von 5 000 Zeilen weniger als 100. Hilfe:
+>     Tooltips laden nur die Zusammenfassungen.
+>   - E2E mit eingebettetem Server: feindliche Zeile und axe, Filter ↔ URL mit Zurück, Kontext-Dialog mit axe, Live
+>     über einen echten Connect-Stream, Einstiege von Chart, Reiter und Menü; Budget der Seite.
+>   - Server: `logs_vetoed` in Store, `GetNode` und `GetFleetSummary` (mit Gegenprobe).
+>   - Demo (`just e2e-demo`) mit echten Agents: Der Admin findet die geschwärzten Lastzeilen im Explorer, eine auf
+>     dem Host frisch geloggte Zeile erscheint live, Org B sieht keine Zeile.
+>   - Gegenproben für 20 Prüfungen der Oberfläche, alle erkannt.
 - **Ziel:** Seite `/logs` mit Menüpunkt (KONZEPT §10.4, §17).
   - **Filter:** Zeitraum, Node/Gruppe, Quelle/Unit, Severity, Volltext; alle Filter stehen in der URL.
   - **Histogramm** nach Severity; Zoom setzt den Zeitraum.

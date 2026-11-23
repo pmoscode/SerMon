@@ -32,7 +32,7 @@
 	>
 		<p class="font-medium">{doc.title}</p>
 		<p class="text-muted-foreground"><HelpInline content={doc.summary} /></p>
-		{#if doc.body.length}
+		{#if doc.body.length || doc.more}
 			<Button variant="link" size="sm" class="self-start px-0" onclick={onMore}
 				>{m.help_more()}</Button
 			>

@@ -164,7 +164,10 @@ type NodeSummary struct {
 	// figures are the current values (absent without live data).
 	Figures *KeyFigures `protobuf:"bytes,9,opt,name=figures,proto3" json:"figures,omitempty"`
 	// tags are the node's free key=value pairs, e.g. env: prod (M2-29).
-	Tags          map[string]string `protobuf:"bytes,10,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Tags map[string]string `protobuf:"bytes,10,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false), as of
+	// its last configuration report (ADR 0030).
+	LogsVetoed    bool `protobuf:"varint,11,opt,name=logs_vetoed,json=logsVetoed,proto3" json:"logs_vetoed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -267,6 +270,13 @@ func (x *NodeSummary) GetTags() map[string]string {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *NodeSummary) GetLogsVetoed() bool {
+	if x != nil {
+		return x.LogsVetoed
+	}
+	return false
 }
 
 // KeyFigures are current values of a node from the last minute. Ratios are 0..1.
@@ -380,7 +390,7 @@ const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x16\n" +
 	"\x06online\x18\x02 \x01(\x05R\x06online\x12\x18\n" +
 	"\aoffline\x18\x03 \x01(\x05R\aoffline\x120\n" +
-	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xae\x03\n" +
+	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xcf\x03\n" +
 	"\vNodeSummary\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -395,7 +405,9 @@ const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"lastSeenAt\x123\n" +
 	"\afigures\x18\t \x01(\v2\x19.sermon.web.v1.KeyFiguresR\afigures\x128\n" +
 	"\x04tags\x18\n" +
-	" \x03(\v2$.sermon.web.v1.NodeSummary.TagsEntryR\x04tags\x1a7\n" +
+	" \x03(\v2$.sermon.web.v1.NodeSummary.TagsEntryR\x04tags\x12\x1f\n" +
+	"\vlogs_vetoed\x18\v \x01(\bR\n" +
+	"logsVetoed\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcd\x04\n" +

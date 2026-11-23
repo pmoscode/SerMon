@@ -331,6 +331,30 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		// Another organization's tenant sees none of it.
 		expect(lokiLines('00000000-0000-7000-8000-000000000000')).not.toContain('load line');
 	}
+	// The log explorer shows them (M3-11): filtered by text, redacted, and live a line logged on
+	// the host just now.
+	const logHost = budgetHosts[0];
+	await page.goto('/logs?range=15m&q=load+line');
+	const logLines = page.getByRole('region', { name: 'Lines' });
+	await expect(logLines.getByText(/load line \d+ password=\*\*\*/).first()).toBeVisible({
+		timeout: 30_000
+	});
+	await expect(page.getByText('hunter2')).toHaveCount(0);
+	await page.getByLabel('Text').fill('e2e live tail');
+	await page
+		.getByRole('form', { name: 'Log filters' })
+		.getByRole('button', { name: 'Search' })
+		.click();
+	await expect(page).toHaveURL(/q=e2e\+live\+tail/);
+	await page.getByRole('button', { name: 'Live' }).click();
+	await expect(page.getByText('Live: new lines appear at the top.')).toBeVisible({
+		timeout: 30_000
+	});
+	const stamp = `e2e live tail ${Date.now()}`;
+	exec(logHost.service, `logger -t e2e-live '${stamp}'`);
+	await expect(logLines.getByText(stamp)).toBeVisible({ timeout: 30_000 });
+	await page.getByRole('button', { name: 'Stop live' }).click();
+
 	const lowered = await execAsync(budgetHosts[0].service, 'sh -s -- 3 0 1', budget);
 	expect(lowered.status, lowered.output).toBe(1);
 	expect(lowered.output).toContain('CPU over budget');
@@ -409,6 +433,10 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	await expect(bea).toHaveURL(/\/login\?reason=invited/);
 	await login(bea, other.email);
 	await expect(bea.getByRole('heading', { name: 'No nodes yet' })).toBeVisible();
+	// …and none of Alpha's logs (M3-11).
+	await bea.goto('/logs?range=24h&q=load+line');
+	await expect(bea.getByText('No nodes yet. As soon as an agent runs')).toBeVisible();
+	await expect(bea.getByText(/load line \d+/)).toHaveCount(0);
 	await bea.goto(nodeURL);
 	await expect(bea.getByRole('heading', { name: 'Node not found' })).toBeVisible();
 	const summary = await call<{ nodes?: unknown[] }>(

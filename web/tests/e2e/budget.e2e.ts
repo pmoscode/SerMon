@@ -51,3 +51,15 @@ test('the node page with charts loads less than 200 KiB of JavaScript', async ({
 	expect(size).toBeLessThan(BUDGET);
 	expect(size, 'headroom of the node page (M2-34)').toBeLessThan(HEADROOM);
 });
+
+test('the log explorer loads less than 200 KiB of JavaScript', async ({ page }) => {
+	await mockApi(page, {
+		...installed(true),
+		'LogService/QueryLogs': () => ({ json: {} }),
+		'LogService/GetLogHistogram': () => ({ json: {} })
+	});
+	const size = await firstLoadJs(page, '/logs');
+	console.log(`logs: ${(size / 1024).toFixed(1)} KiB gzip`);
+	expect(size).toBeLessThan(BUDGET);
+	expect(size, 'headroom of the log explorer (M2-34)').toBeLessThan(HEADROOM);
+});

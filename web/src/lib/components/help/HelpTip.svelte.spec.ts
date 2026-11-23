@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
@@ -44,6 +44,21 @@ describe('HelpTip and HelpPanel', () => {
 		await userEvent.keyboard('{Escape}');
 		await expect.element(page.getByText(/^The overview of all servers/)).not.toBeInTheDocument();
 		await expect.element(button).toHaveFocus();
+	});
+
+	// The tooltips of every page need only the summaries; the full texts load with the panel.
+	it('loads the full texts only for the panel', async () => {
+		switchLocale('de');
+		render(HelpTip, { topic: 'pages/alerts' });
+		await expect.element(page.getByRole('button', { name: 'Hilfe: Alerts' })).toBeVisible();
+		await vi.waitFor(() => expect(helpState.summaries).toBe('de'));
+		expect(helpState.locale).toBeUndefined();
+		expect(helpState.get('pages/alerts')?.body).toEqual([]);
+		expect(helpState.get('pages/alerts')?.more).toBe(true);
+		render(HelpPanel);
+		helpState.open('pages/alerts');
+		await expect.element(page.getByRole('heading', { name: 'Quittieren' })).toBeVisible();
+		expect(helpState.locale).toBe('de');
 	});
 
 	it('follows the UI language', async () => {

@@ -17,4 +17,6 @@ export interface HelpDoc {
 	/** The first paragraph, shown in tooltips. */
 	summary: Inline[];
 	body: Block[];
+	/** Set in the summaries: the full text has a body (loaded with the panel). */
+	more?: boolean;
 }

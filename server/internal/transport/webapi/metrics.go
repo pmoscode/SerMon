@@ -141,7 +141,7 @@ func (h *FleetHandler) GetFleetSummary(ctx context.Context, req *connect.Request
 		res.Nodes = append(res.Nodes, &webv1.NodeSummary{
 			NodeId: n.ID.String(), Hostname: n.Hostname, GroupId: n.Group.String(), GroupName: n.GroupName,
 			OsId: n.OSID, OsVersion: n.OSVersion, Online: n.Online, LastSeenAt: optionalTime(n.LastSeenAt), Figures: figuresView(n.Figures),
-			Tags: n.Tags,
+			Tags: n.Tags, LogsVetoed: n.LogsVetoed,
 		})
 	}
 	return connect.NewResponse(res), nil
@@ -167,7 +167,7 @@ func (h *NodeHandler) GetNode(ctx context.Context, req *connect.Request[webv1.Ge
 		CpuCount: n.CPUCount, MemoryBytes: n.MemoryBytes, AgentVersion: n.AgentVersion,
 		EnrolledAt: timestamppb.New(n.EnrolledAt), LastSeenAt: optionalTime(n.LastSeenAt), Online: n.Online, Figures: figuresView(n.Figures),
 		LockedAt: optionalTime(n.LockedAt), LockReason: n.LockReason, LastIp: n.LastIP, TakeoverUntil: optionalTime(n.TakeoverUntil),
-		Tags: n.Tags, SecuritySource: securitySourceView[n.SecuritySource],
+		Tags: n.Tags, SecuritySource: securitySourceView[n.SecuritySource], LogsVetoed: n.LogsVetoed,
 	}}), nil
 }
 

@@ -56,6 +56,8 @@ type Node struct {
 	LastSeenAt    *time.Time
 	// SecuritySource is where its agent reads security events, as of the last Hello (M2-31).
 	SecuritySource secevent.Source
+	// LogsVetoed: its agent.toml forbids sending logs (allow_logs = false), as of its last config report.
+	LogsVetoed bool
 	// Identity (M2-23): a lock after a second session, the address of the last session and an
 	// open takeover window.
 	LockedAt      *time.Time

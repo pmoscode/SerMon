@@ -314,7 +314,8 @@ const virtualPrefix = 'virtual:sermon-help/';
 
 /**
  * Vite plugin: `import docs from 'virtual:sermon-help/<locale>'` gives the help documents of a
- * locale (one chunk per language, loaded on demand).
+ * locale (one chunk per language, loaded on demand); `…/<locale>/summary` only their titles and
+ * summaries, for the tooltips of every page (JavaScript budget).
  * @param {{ root: string }} options
  * @returns {import('vite').Plugin}
  */
@@ -322,7 +323,8 @@ export function helpPlugin({ root }) {
 	return {
 		name: 'sermon-help',
 		resolveId(id) {
-			if (id.startsWith(virtualPrefix) && locales.includes(id.slice(virtualPrefix.length)))
+			const [locale, part] = id.slice(virtualPrefix.length).split('/');
+			if (id.startsWith(virtualPrefix) && locales.includes(locale) && (!part || part === 'summary'))
 				return '\0' + id;
 			return undefined;
 		},
@@ -335,13 +337,27 @@ export function helpPlugin({ root }) {
 				if (this.meta.watchMode) this.warn(`help: ${problem}`);
 				else this.error(`help: ${problem}`);
 			}
-			return `export default ${JSON.stringify(docs[id.slice(1 + virtualPrefix.length)] ?? {})};`;
+			const [locale, part] = id.slice(1 + virtualPrefix.length).split('/');
+			const all = docs[locale] ?? {};
+			// The summaries are what every page with a ⓘ needs; the full texts load with the panel.
+			const out =
+				part === 'summary'
+					? Object.fromEntries(
+							Object.entries(all).map(([topic, doc]) => [
+								topic,
+								{ title: doc.title, summary: doc.summary, body: [], more: doc.body.length > 0 }
+							])
+						)
+					: all;
+			return `export default ${JSON.stringify(out)};`;
 		},
 		handleHotUpdate({ file, server }) {
 			if (!file.startsWith(root) || !file.endsWith('.md')) return undefined;
 			for (const locale of locales) {
-				const module = server.moduleGraph.getModuleById('\0' + virtualPrefix + locale);
-				if (module) server.moduleGraph.invalidateModule(module);
+				for (const id of [locale, `${locale}/summary`]) {
+					const module = server.moduleGraph.getModuleById('\0' + virtualPrefix + id);
+					if (module) server.moduleGraph.invalidateModule(module);
+				}
 			}
 			server.ws.send({ type: 'full-reload' });
 			return [];

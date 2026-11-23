@@ -24,7 +24,7 @@
 	const doc = $derived(helpState.get(topic));
 
 	$effect(() => {
-		void helpState.load(localeState.current);
+		void helpState.loadSummaries(localeState.current);
 	});
 
 	async function toggle() {

@@ -2,6 +2,7 @@
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import CheckCheck from '@lucide/svelte/icons/check-check';
 	import Repeat from '@lucide/svelte/icons/repeat';
+	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import { resolve } from '$app/paths';
@@ -17,6 +18,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { formatAgo } from '#lib/format/format.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
+	import { alertLogsQuery } from '#lib/logs/filter.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import AlertStateBadge from './AlertStateBadge.svelte';
 	import AlertTimeline from './AlertTimeline.svelte';
@@ -184,6 +186,16 @@
 		>
 			{m.alert_open_node()}
 		</Button>
+		{#if since && alert.key?.nodeId}
+			<Button
+				size="sm"
+				variant="ghost"
+				href={`${resolve('/(app)/logs')}${alertLogsQuery(alert.key.nodeId, since.getTime(), now.getTime())}`}
+			>
+				<ScrollText aria-hidden="true" />
+				{m.alert_logs_link()}
+			</Button>
+		{/if}
 		{#if error}
 			<p role="alert" class="text-sm text-destructive">{error}</p>
 		{/if}

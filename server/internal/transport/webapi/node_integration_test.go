@@ -4,6 +4,7 @@ package webapi_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -213,5 +214,30 @@ func ownerQueryRow(t *testing.T, query string, dest ...any) {
 	defer func() { _ = conn.Close(ctx) }()
 	if err := conn.QueryRow(ctx, query).Scan(dest...); err != nil {
 		t.Fatalf("%s: %v", query, err)
+	}
+}
+
+// The local log veto (allow_logs = false) shows in the node and the fleet (log explorer, M3-11).
+func TestNodeAPI_ShowsTheLogVeto(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	mia := login(t, s, "mia@example.org")
+	ctx := context.Background()
+	defer ownerSQL(t, "UPDATE nodes SET logs_vetoed = false WHERE id = '"+nodeAl+"'")
+	for _, vetoed := range []bool{true, false} {
+		ownerSQL(t, "UPDATE nodes SET logs_vetoed = "+strconv.FormatBool(vetoed)+" WHERE id = '"+nodeAl+"'")
+		node, err := mia.node.GetNode(ctx, connect.NewRequest(&webv1.GetNodeRequest{NodeId: nodeAl}))
+		if err != nil || node.Msg.GetNode().GetLogsVetoed() != vetoed {
+			t.Errorf("GetNode() = %v, %v; want %v", node.Msg.GetNode().GetLogsVetoed(), err, vetoed)
+		}
+		fleet, err := mia.fleet.GetFleetSummary(ctx, connect.NewRequest(&webv1.GetFleetSummaryRequest{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range fleet.Msg.GetNodes() {
+			if n.GetNodeId() == nodeAl && n.GetLogsVetoed() != vetoed {
+				t.Errorf("fleet: %v, want %v", n.GetLogsVetoed(), vetoed)
+			}
+		}
 	}
 }

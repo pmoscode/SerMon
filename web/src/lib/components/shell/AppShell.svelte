@@ -3,6 +3,7 @@
 	import Building2 from '@lucide/svelte/icons/building-2';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import Megaphone from '@lucide/svelte/icons/megaphone';
+	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
@@ -26,6 +27,7 @@
 	const nav = $derived([
 		{ href: resolve('/(app)/fleet'), icon: Server, label: () => m.nav_fleet() },
 		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
+		{ href: resolve('/(app)/logs'), icon: ScrollText, label: () => m.nav_logs() },
 		...(sessionState.current?.orgAdmin
 			? [
 					{

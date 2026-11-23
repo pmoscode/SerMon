@@ -717,8 +717,11 @@ type Node struct {
 	// security_source is where the agent reads security events from, as of its last connection
 	// (M2-31).
 	SecuritySource SecuritySource `protobuf:"varint,21,opt,name=security_source,json=securitySource,proto3,enum=sermon.web.v1.SecuritySource" json:"security_source,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false), as of
+	// its last configuration report (ADR 0030).
+	LogsVetoed    bool `protobuf:"varint,22,opt,name=logs_vetoed,json=logsVetoed,proto3" json:"logs_vetoed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Node) Reset() {
@@ -896,6 +899,13 @@ func (x *Node) GetSecuritySource() SecuritySource {
 		return x.SecuritySource
 	}
 	return SecuritySource_SECURITY_SOURCE_UNSPECIFIED
+}
+
+func (x *Node) GetLogsVetoed() bool {
+	if x != nil {
+		return x.LogsVetoed
+	}
+	return false
 }
 
 // ListFilesystemsRequest names the node.
@@ -1143,7 +1153,7 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\x0eGetNodeRequest\x12!\n" +
 	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\":\n" +
 	"\x0fGetNodeResponse\x12'\n" +
-	"\x04node\x18\x01 \x01(\v2\x13.sermon.web.v1.NodeR\x04node\"\x82\a\n" +
+	"\x04node\x18\x01 \x01(\v2\x13.sermon.web.v1.NodeR\x04node\"\xa3\a\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -1171,7 +1181,9 @@ const file_sermon_web_v1_node_proto_rawDesc = "" +
 	"\alast_ip\x18\x12 \x01(\tR\x06lastIp\x12A\n" +
 	"\x0etakeover_until\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\rtakeoverUntil\x121\n" +
 	"\x04tags\x18\x14 \x03(\v2\x1d.sermon.web.v1.Node.TagsEntryR\x04tags\x12F\n" +
-	"\x0fsecurity_source\x18\x15 \x01(\x0e2\x1d.sermon.web.v1.SecuritySourceR\x0esecuritySource\x1a7\n" +
+	"\x0fsecurity_source\x18\x15 \x01(\x0e2\x1d.sermon.web.v1.SecuritySourceR\x0esecuritySource\x12\x1f\n" +
+	"\vlogs_vetoed\x18\x16 \x01(\bR\n" +
+	"logsVetoed\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\";\n" +

@@ -107,6 +107,16 @@ func TestLogSettingsStore_ConfigurationOfANode(t *testing.T) {
 	if applied != 7 || reason != "rule 1: look-around is not supported" || !vetoed || !reported.Equal(at) {
 		t.Errorf("stored answer = %d %q %v %v", applied, reason, vetoed, reported)
 	}
+	// The fleet shows the veto (log explorer, M3-11).
+	nodes, err := postgres.NewFleetStore(open(t, f.appDSN)).List(ctx, scopeFor(t, orgA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range nodes {
+		if uuid.UUID(n.ID) == node && !n.LogsVetoed {
+			t.Errorf("node %v without the veto", n.ID)
+		}
+	}
 }
 
 func TestLogSettingsStore_KeepsOrganizationsApart(t *testing.T) {

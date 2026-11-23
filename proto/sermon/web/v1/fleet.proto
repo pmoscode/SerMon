@@ -55,6 +55,9 @@ message NodeSummary {
   KeyFigures figures = 9;
   // tags are the node's free key=value pairs, e.g. env: prod (M2-29).
   map<string, string> tags = 10;
+  // logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false), as of
+  // its last configuration report (ADR 0030).
+  bool logs_vetoed = 11;
 }
 
 // KeyFigures are current values of a node from the last minute. Ratios are 0..1.

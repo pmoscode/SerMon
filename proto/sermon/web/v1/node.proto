@@ -179,6 +179,9 @@ message Node {
   // security_source is where the agent reads security events from, as of its last connection
   // (M2-31).
   SecuritySource security_source = 21;
+  // logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false), as of
+  // its last configuration report (ADR 0030).
+  bool logs_vetoed = 22;
 }
 
 // SecuritySource is where the agent of a node finds the log lines for security events.

@@ -9,6 +9,7 @@
 	import TimeRangePicker from '#lib/components/time/TimeRangePicker.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { emptyFilter, filterParams, type LogFilter } from '#lib/logs/filter.js';
 	import { NodeState } from '#lib/node/node.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
@@ -19,6 +20,7 @@
 	const nodeState = new NodeState(page.params.id ?? '');
 	let bits = $state(false);
 	let tab = $state('cpu');
+	let logFilter = $state<LogFilter>(emptyFilter());
 
 	$effect(() => nodeState.start());
 	$effect(() => {
@@ -69,6 +71,7 @@
 				<Tabs.Trigger value="memory">{m.node_tab_memory()}</Tabs.Trigger>
 				<Tabs.Trigger value="disk">{m.node_tab_disk()}</Tabs.Trigger>
 				<Tabs.Trigger value="network">{m.node_tab_network()}</Tabs.Trigger>
+				<Tabs.Trigger value="logs">{m.node_tab_logs()}</Tabs.Trigger>
 				<Tabs.Trigger value="identity">{m.node_tab_identity()}</Tabs.Trigger>
 			</Tabs.List>
 
@@ -242,6 +245,23 @@
 				</div>
 			</Tabs.Content>
 			<!-- Loaded on demand: keeps the first load of the page within its budget (KONZEPT §17). -->
+			<Tabs.Content value="logs" class="flex flex-col gap-3 pt-4">
+				{#if tab === 'logs'}
+					<Button
+						href={`${resolve('/(app)/logs')}?${filterParams({ ...logFilter, nodes: [id] })}`}
+						variant="link"
+						size="sm"
+						class="self-end px-0"
+					>
+						{m.node_logs_open()}
+					</Button>
+					{#await import('#lib/components/logs/LogExplorer.svelte')}
+						<p role="status" class="text-muted-foreground">{m.loading()}</p>
+					{:then { default: LogExplorer }}
+						<LogExplorer filter={logFilter} onFilter={(f) => (logFilter = f)} fixedNode={id} />
+					{/await}
+				{/if}
+			</Tabs.Content>
 			<Tabs.Content value="identity" class="pt-4">
 				{#if tab === 'identity'}
 					{#await import('#lib/components/node/NodeIdentity.svelte')}

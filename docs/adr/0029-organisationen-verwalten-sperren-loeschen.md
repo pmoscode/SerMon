@@ -98,3 +98,21 @@ mit vielen Organisationen fehlen Kontingente. Die Fragen hat der Product Owner a
   aufheben“ ist entweder vorher committet und wird gesehen, oder es wartet und findet die Org nicht mehr. Vorher konnte
   der Löschjob eine gerade entsperrte Org löschen. Die Konten ohne weitere Mitgliedschaft werden am Ende erneut
   geprüft.
+
+## Nachtrag M3-10: Loki-Daten beim Löschen
+
+- **Reihenfolge:** Das Löschen einer Organisation trägt zuerst bei Loki die Löschung ihres ganzen Tenants ein
+  (Delete-API des Compactors, `{node_id=~".+"}`), danach löscht es die Stammdaten. Lehnt Loki ab oder ist es nicht
+  erreichbar, bleibt die Organisation fällig. Der nächste Lauf der Wartung (stündlich) versucht es erneut, auch nach
+  „Sofort löschen“.
+- **Was danach geschieht, macht Loki:**
+  - Der Compactor führt die Löschung nach der Wartefrist aus, für SerMon 10 Minuten statt 24 h: SerMon bricht keine
+    Löschung ab.
+  - Abfragen filtern die Zeilen, sobald die Querier ihre Liste neu laden (fest 5 Minuten). Diese Organisation fragt
+    danach ohnehin niemand mehr ab.
+  - Als Rückfall löscht die Retention nach 14 Tagen alles.
+- **Abweichung – Nodes:** Einzelne Nodes lassen sich noch nicht löschen. Der Client kann die Zeilen eines Nodes
+  löschen (`logql.MustSelect`, im Integrationstest geprüft); sobald es das Löschen von Nodes gibt, ruft es das auf.
+- **Abweichung – Retention:** Die Obergrenze aus den Kontingenten gilt für Logs genauso wenig wie für Metriken, solange
+  Organisationen ihre Retention nicht selbst einstellen. Alle haben die 14 Tage der Instanz. Später bietet Loki dafür
+  `retention_period` pro Tenant (Runtime-Overrides).

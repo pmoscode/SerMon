@@ -234,3 +234,68 @@ func TestLoki_TheBuildersQueriesSelectWhatTheySay(t *testing.T) {
 		t.Errorf("counts per severity = %v", total)
 	}
 }
+
+// Deleting (M3-10, D29): the request is recorded for the organization's tenant only, a retry is
+// no error. Loki filters the lines from queries once its querier reloads the requests (every 5
+// min) and removes them in the compactor after the cancel period.
+func TestLoki_RecordsTheDeletionOfAnOrganizationOrANode(t *testing.T) {
+	c := loki.New(lokitest.Shared(t))
+	ctx := context.Background()
+	alpha, beta := tenant.OrgID(uuid.New()), tenant.OrgID(uuid.New())
+	node := identity.NodeID(uuid.New())
+	now := time.Now()
+	if err := c.Delete(ctx, alpha, logql.MustSelect(node), now.Add(-30*24*time.Hour), now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Delete(ctx, alpha, logql.Everything(), time.Unix(0, 0), now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Delete(ctx, alpha, logql.Everything(), time.Unix(0, 0), now.Add(time.Minute)); err != nil {
+		t.Errorf("a retry: %v", err)
+	}
+	requests, err := c.Deletions(ctx, alpha)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queries := map[string]int{}
+	for _, r := range requests {
+		queries[r.Query]++
+		if r.End.After(time.Now()) || r.Status == "" {
+			t.Errorf("request = %+v", r)
+		}
+	}
+	if queries[logql.MustSelect(node).String()] != 1 || queries[logql.Everything().String()] < 1 {
+		t.Errorf("requests of Alpha = %+v", requests)
+	}
+	if other, err := c.Deletions(ctx, beta); err != nil || len(other) != 0 {
+		t.Errorf("requests of Beta = %+v, %v", other, err)
+	}
+}
+
+// The compactor runs a recorded request (here every few seconds instead of every 10 minutes).
+func TestLoki_TheCompactorProcessesADeletion(t *testing.T) {
+	c := loki.New(lokitest.Start(t, "-compactor.compaction-interval=2s", "-compactor.delete-request-cancel-period=1s"))
+	w := loki.NewWriter(c)
+	ctx := context.Background()
+	org, node := tenant.OrgID(uuid.New()), identity.NodeID(uuid.New())
+	if err := w.Write(ctx, org, node, []ingest.LogEntry{{At: time.Now().Add(-time.Minute), Source: ingest.LogSourceJournal, Unit: "app.service", Severity: 7, Message: "gone soon"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Delete(ctx, org, logql.Everything(), time.Unix(0, 0), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		requests, err := c.Deletions(ctx, org)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(requests) == 1 && requests[0].Status == "processed" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("not processed: %+v", requests)
+		}
+		time.Sleep(time.Second)
+	}
+}

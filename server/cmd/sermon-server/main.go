@@ -226,6 +226,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if cfg.SMTP != nil {
 			lifecycleOptions = append(lifecycleOptions, organization.WithLifecycleMailer(newMailer(cfg.SMTP)))
 		}
+		// Purging an organization deletes its logs first (M3-10).
+		if logStore != nil {
+			lifecycleOptions = append(lifecycleOptions, organization.WithLogs(loki.NewEraser(logStore)))
+		}
 		lifecycle, err := organization.NewLifecycle(postgres.NewOrganizationLifecycleStore(db), authz.NewPolicy(), time.Now,
 			cfg.OrgDeletionGrace, lifecycleOptions...)
 		if err != nil {

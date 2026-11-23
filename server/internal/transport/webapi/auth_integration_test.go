@@ -139,7 +139,10 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		inviteOptions = append(inviteOptions, invitation.WithMailer(mailer, srv.URL))
 		orgOptions = append(orgOptions, organization.WithMailer(mailer, srv.URL))
 	}
-	lifecycleOptions := []organization.LifecycleOption{organization.WithAgentSessions(agentapi.NewSessions(0))}
+	lifecycleOptions := []organization.LifecycleOption{
+		organization.WithAgentSessions(agentapi.NewSessions(0)),
+		organization.WithLogs(loki.NewEraser(loki.New(lokitest.Shared(t)))),
+	}
 	if mailer != nil {
 		lifecycleOptions = append(lifecycleOptions, organization.WithLifecycleMailer(mailer))
 	}

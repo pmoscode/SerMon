@@ -36,6 +36,16 @@ func Select(nodes []identity.NodeID) (Query, error) {
 	return Query{expr: "{node_id=~" + Quote(strings.Join(ids, "|")) + "}"}, nil
 }
 
+// MustSelect is Select of one node.
+func MustSelect(node identity.NodeID) Query {
+	q, _ := Select([]identity.NodeID{node}) // one node: never ErrNoNodes
+	return q
+}
+
+// Everything selects every stream of an organization (every SerMon stream has a node_id), for
+// deleting it (M3-10). Never for reading: queries name the visible nodes.
+func Everything() Query { return Query{expr: `{node_id=~".+"}`} }
+
 // Quote returns s as a LogQL string literal. LogQL strings follow Go's syntax (Loki unquotes
 // them with strconv), so strconv.Quote keeps any input inside the literal.
 func Quote(s string) string { return strconv.Quote(s) }

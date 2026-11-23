@@ -88,3 +88,14 @@ dahinter, und damit die Alerts.
 - **Gefunden:** Loki 3 hängt ohne Einstellung jedem Stream das Label `service_name` (`unknown_service`) und jedem
   Eintrag das Feld `detected_level` an. Beides ist abgeschaltet (`discover_service_name: []`,
   `discover_log_levels: false`); ein Integrationstest verlangt genau die vier Labels und nur die Felder von SerMon.
+
+## Nachtrag M3-10: Löschen
+
+- `Client.Delete` nutzt die Delete-API des Compactors im Tenant der Organisation. Das Ende wird auf jetzt begrenzt,
+  weil Loki Löschungen in der Zukunft ablehnt. Der Start wird auf `DeleteFrom` (2025-01-01) gehoben, vor dem Schema;
+  Loki lehnt Starts nahe der Epoche ab.
+- `delete_request_cancel_period: 10m` in `deploy/compose/loki.yaml`. `deletion_mode: filter-and-delete` war schon
+  gesetzt.
+- **Gefunden:** Abfragen sehen eine Löschung erst nach bis zu 5 Minuten; den Cache der Querier stellt Loki nicht
+  einstellbar bereit. Tests prüfen deshalb, dass die Anfrage im richtigen Tenant eingetragen ist, und mit einem schnell
+  laufenden Compactor (`lokitest.Start` mit Flags), dass Loki sie bearbeitet.

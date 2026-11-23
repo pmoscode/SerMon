@@ -270,3 +270,61 @@ func TestLifecycle_ExportAudit(t *testing.T) {
 		t.Errorf("first %s", lines[1])
 	}
 }
+
+// eraser stands for Loki: it fails while down and records the organizations it erased.
+type eraser struct {
+	down   bool
+	erased []tenant.OrgID
+}
+
+func (e *eraser) EraseOrganization(_ context.Context, org tenant.OrgID) error {
+	if e.down {
+		return errors.New("loki unreachable")
+	}
+	e.erased = append(e.erased, org)
+	return nil
+}
+
+// M3-10: the logs go before the master data; while the log store fails, the organization stays
+// due and the next run tries again (the master data are what makes it due).
+func TestLifecycle_ErasesTheLogsFirstAndRetries(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	logs := &eraser{down: true}
+	l, err := organization.NewLifecycle(w.store, authz.NewPolicy(), func() time.Time { return *w.clock }, organization.DefaultDeletionGrace,
+		organization.WithLogs(logs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	due, err := l.ScheduleDeletion(ctx, superadminAt(w), orgA, "Alpha AG")
+	if err != nil {
+		t.Fatal(err)
+	}
+	*w.clock = due
+	if err := l.Maintain(ctx); err == nil || len(w.store.purged) != 0 {
+		t.Fatalf("log store down: %v, purged %v", err, w.store.purged)
+	}
+	logs.down = false
+	if err := l.Maintain(ctx); err != nil || len(w.store.purged) != 1 || len(logs.erased) != 1 || logs.erased[0] != orgA {
+		t.Errorf("retry: %v, purged %v, erased %v", err, w.store.purged, logs.erased)
+	}
+
+	// Deleting at once: the same order; a failure leaves the organization due for the next run.
+	w2 := newWorld(t)
+	logs2 := &eraser{down: true}
+	l2, _ := organization.NewLifecycle(w2.store, authz.NewPolicy(), func() time.Time { return *w2.clock }, organization.DefaultDeletionGrace,
+		organization.WithLogs(logs2))
+	if err := l2.Lock(ctx, superadminAt(w2), orgA, "Alpha AG"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l2.DeleteNow(ctx, superadminAt(w2), orgA, "Alpha AG"); err == nil || len(w2.store.purged) != 0 {
+		t.Errorf("DeleteNow with the log store down: %v, purged %v", err, w2.store.purged)
+	}
+	if w2.store.state.DeletionDueAt == nil {
+		t.Error("the organization must stay due")
+	}
+	logs2.down = false
+	if err := l2.Maintain(ctx); err != nil || len(w2.store.purged) != 1 {
+		t.Errorf("next run: %v, purged %v", err, w2.store.purged)
+	}
+}

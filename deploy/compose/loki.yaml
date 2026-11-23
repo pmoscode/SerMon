@@ -66,6 +66,9 @@ compactor:
   retention_enabled: true
   retention_delete_delay: 2h
   delete_request_store: filesystem
+  # SerMon never cancels a deletion (an organization's purge comes after its grace, D29): run it
+  # soon instead of after the default 24 h (M3-10).
+  delete_request_cancel_period: 10m
 
 analytics:
   reporting_enabled: false # no usage reporting to Grafana (KONZEPT §18.6)

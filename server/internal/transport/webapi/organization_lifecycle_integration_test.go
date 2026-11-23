@@ -16,6 +16,10 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
+	"github.com/pmoscode/SerMon/server/internal/adapters/loki/lokitest"
+	"github.com/pmoscode/SerMon/server/internal/domain/logql"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -207,5 +211,15 @@ func TestOrganizationAPI_SuperadminLocksExportsUnlocksAndDeletes(t *testing.T) {
 	}
 	if instanceAudit(t, org, "org.delete") != 1 {
 		t.Error("deletion missing in the instance audit log")
+	}
+	// Its logs went first (M3-10): the deletion of its whole tenant is recorded in Loki, Alpha's
+	// tenant has none.
+	lokiClient := loki.New(lokitest.Shared(t))
+	requests, err := lokiClient.Deletions(ctx, tenant.OrgID(uuid.MustParse(org)))
+	if err != nil || len(requests) != 1 || requests[0].Query != logql.Everything().String() {
+		t.Errorf("Loki deletions of the organization = %+v, %v", requests, err)
+	}
+	if alpha, err := lokiClient.Deletions(ctx, tenant.OrgID(uuid.MustParse(orgAlpha))); err != nil || len(alpha) != 0 {
+		t.Errorf("Loki deletions of Alpha = %+v, %v", alpha, err)
 	}
 }

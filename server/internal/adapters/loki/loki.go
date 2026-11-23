@@ -294,6 +294,84 @@ func decodeMatrix(r io.Reader) ([]Series, error) {
 	return out, nil
 }
 
+// Delete asks Loki to delete the lines of q between start and end in the organization's tenant
+// (the compactor's delete API, M3-10). Loki filters them from queries at once and removes them
+// from its storage after the cancel period; asking twice is no error.
+func (c *Client) Delete(ctx context.Context, org tenant.OrgID, q logql.Query, start, end time.Time) error {
+	if q.String() == "" {
+		return ErrNoQuery
+	}
+	// Loki refuses deletes in the future and starts near the epoch; nothing is older than
+	// DeleteFrom (the schema starts 2026-01-01, deploy/compose/loki.yaml).
+	if now := time.Now(); end.After(now) {
+		end = now
+	}
+	if start.Before(DeleteFrom) {
+		start = DeleteFrom
+	}
+	params := url.Values{}
+	params.Set("query", q.String())
+	params.Set("start", strconv.FormatInt(start.Unix(), 10))
+	params.Set("end", strconv.FormatInt(end.Unix(), 10))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/loki/api/v1/delete")+"?"+params.Encode(), nil)
+	if err != nil {
+		return fmt.Errorf("loki: delete request: %w", err)
+	}
+	req.Header.Set(tenantHeader, org.String())
+	res, err := c.do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = res.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, io.LimitReader(res.Body, maxErrorBody)) }()
+	return check(res)
+}
+
+// DeleteFrom is the earliest start of a delete request: before the schema of SerMon's Loki.
+var DeleteFrom = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// Deletion is a delete request of a tenant as Loki lists it.
+type Deletion struct {
+	Query      string
+	Start, End time.Time
+	// Status is received, processed or, in between, partially processed.
+	Status string
+}
+
+// Deletions lists the delete requests of the organization's tenant.
+func (c *Client) Deletions(ctx context.Context, org tenant.OrgID) ([]Deletion, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/loki/api/v1/delete"), nil)
+	if err != nil {
+		return nil, fmt.Errorf("loki: deletions request: %w", err)
+	}
+	req.Header.Set(tenantHeader, org.String())
+	res, err := c.do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = res.Body.Close() }()
+	if err := check(res); err != nil {
+		return nil, err
+	}
+	var answer []struct {
+		Query     string  `json:"query"`
+		StartTime float64 `json:"start_time"`
+		EndTime   float64 `json:"end_time"`
+		Status    string  `json:"status"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, maxQueryBody)).Decode(&answer); err != nil {
+		return nil, fmt.Errorf("%w: unreadable answer: %w", ErrRejected, err)
+	}
+	out := make([]Deletion, 0, len(answer))
+	for _, a := range answer {
+		out = append(out, Deletion{
+			Query: a.Query, Status: a.Status,
+			Start: time.UnixMilli(int64(a.StartTime * 1000)).UTC(), End: time.UnixMilli(int64(a.EndTime * 1000)).UTC(),
+		})
+	}
+	return out, nil
+}
+
 // Ready reports whether Loki takes requests (/ready, for /readyz).
 func (c *Client) Ready(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/ready"), nil)

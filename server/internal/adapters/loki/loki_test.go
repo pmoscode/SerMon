@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -284,5 +285,32 @@ func TestQuery_OrdersTheLinesOverAllStreams(t *testing.T) {
 		if got := strings.Join(texts, " "); got != want {
 			t.Errorf("%q: %s, want %s", direction, got, want)
 		}
+	}
+}
+
+func TestDelete_AsksTheCompactorInTheTenant(t *testing.T) {
+	rec := &recorded{}
+	c := client(t, rec.handler(http.StatusNoContent, ""))
+	before := time.Now()
+	if err := c.Delete(context.Background(), org, logql.Everything(), time.Unix(0, 0), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	req := rec.requests[0]
+	params := req.URL.Query()
+	if req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/loki/api/v1/delete") || req.Header.Get("X-Scope-OrgID") != org.String() ||
+		params.Get("query") != `{node_id=~".+"}` {
+		t.Errorf("request = %s %s", req.Method, req.URL)
+	}
+	start, _ := strconv.ParseInt(params.Get("start"), 10, 64)
+	end, _ := strconv.ParseInt(params.Get("end"), 10, 64)
+	if start != loki.DeleteFrom.Unix() || end > time.Now().Unix() || end < before.Unix() {
+		t.Errorf("start %d, end %d: not clamped", start, end)
+	}
+	down := client(t, (&recorded{}).handler(http.StatusServiceUnavailable, ""))
+	if err := down.Delete(context.Background(), org, logql.Everything(), loki.DeleteFrom, time.Now()); !errors.Is(err, loki.ErrUnavailable) {
+		t.Errorf("Loki down: %v", err)
+	}
+	if err := c.Delete(context.Background(), org, logql.Query{}, loki.DeleteFrom, time.Now()); !errors.Is(err, loki.ErrNoQuery) {
+		t.Errorf("no query: %v", err)
 	}
 }

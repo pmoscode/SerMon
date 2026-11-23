@@ -100,7 +100,14 @@ type Lifecycle struct {
 	grace  time.Duration
 	mailer invitation.Mailer
 	agents AgentSessions
+	logs   LogEraser
 	logger *slog.Logger
+}
+
+// LogEraser deletes the logs of an organization (Loki, M3-10); an error leaves the organization
+// due, the next run tries again.
+type LogEraser interface {
+	EraseOrganization(ctx context.Context, org tenant.OrgID) error
 }
 
 // LifecycleOption configures a Lifecycle.
@@ -114,6 +121,11 @@ func WithLifecycleMailer(mailer invitation.Mailer) LifecycleOption {
 // WithAgentSessions ends the organization's agent sessions on a lock.
 func WithAgentSessions(agents AgentSessions) LifecycleOption {
 	return func(l *Lifecycle) { l.agents = agents }
+}
+
+// WithLogs deletes an organization's logs before its master data (M3-10).
+func WithLogs(eraser LogEraser) LifecycleOption {
+	return func(l *Lifecycle) { l.logs = eraser }
 }
 
 // WithLogger logs mails that could not be sent and the deletions of the maintenance.
@@ -228,9 +240,24 @@ func (l *Lifecycle) DeleteNow(ctx context.Context, c access.Caller, org tenant.O
 		return 0, fmt.Errorf("delete organization: %w", err)
 	}
 	by := c.Principal.User
-	users, err := l.store.Purge(ctx, org, now, &by, st.Name)
+	users, err := l.purge(ctx, org, now, &by, st.Name)
 	if err != nil {
 		return 0, fmt.Errorf("delete organization: %w", err)
+	}
+	return users, nil
+}
+
+// purge deletes the logs, then the master data: the master data keep the organization due, so a
+// failure of the log store is tried again by the next run.
+func (l *Lifecycle) purge(ctx context.Context, org tenant.OrgID, at time.Time, by *identity.UserID, name string) (int64, error) {
+	if l.logs != nil {
+		if err := l.logs.EraseOrganization(ctx, org); err != nil {
+			return 0, fmt.Errorf("delete the logs: %w", err)
+		}
+	}
+	users, err := l.store.Purge(ctx, org, at, by, name)
+	if err != nil {
+		return 0, fmt.Errorf("delete the data: %w", err)
 	}
 	return users, nil
 }
@@ -337,7 +364,7 @@ func (l *Lifecycle) Maintain(ctx context.Context) error {
 		st, err := l.store.State(ctx, org)
 		if err == nil {
 			var users int64
-			users, err = l.store.Purge(ctx, org, now, nil, st.Name)
+			users, err = l.purge(ctx, org, now, nil, st.Name)
 			if err == nil {
 				l.logger.InfoContext(ctx, "organization deleted after its grace", "org", org.String(), "accounts", users)
 				continue

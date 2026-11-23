@@ -3052,7 +3052,27 @@ Konfiguration) und M3-06 (Loki).
 - **Tests zuerst:** Neue Zeilen kommen genau einmal an; Grenzen; Rechteentzug und Abmeldung beenden den Stream.
 - **Abhängig von:** M3-08
 
-#### ☐ M3-10 – Loki-Daten löschen · S · S 🔒
+#### ☑ M3-10 – Loki-Daten löschen · S · S 🔒
+> Erledigt (D29; ADR 0029 und 0031, Nachträge M3-10):
+> - **Löschjob:** `organization.WithLogs` mit `loki.Eraser`. Zuerst wird die Löschung des ganzen Tenants bei Loki
+>   eingetragen, dann werden die Stammdaten gelöscht. Ein Fehler lässt die Organisation fällig, der nächste Lauf
+>   wiederholt; das gilt auch für „Sofort löschen“.
+> - **Client:** `Delete` (Ende höchstens jetzt, Start ab `DeleteFrom`) und `Deletions`; `logql.Everything`,
+>   `logql.MustSelect`.
+> - **Loki:** `delete_request_cancel_period: 10m`.
+> - **Abweichungen:**
+>   - Nodes lassen sich noch nicht löschen. Das Löschen der Zeilen eines Nodes ist im Client vorhanden und geprüft.
+>   - Die Retention-Obergrenze aus den Kontingenten gilt für Logs wie für Metriken erst, wenn Organisationen ihre
+>     Retention einstellen; bis dahin 14 Tage für alle.
+> - **Gefunden:** Loki lehnt Löschungen mit einem Ende in der Zukunft und Starts nahe der Epoche ab. Abfragen sehen eine
+>   Löschung erst nach bis zu 5 Minuten (fester Cache der Querier).
+> - **Tests:**
+>   - Lebenszyklus: erst die Logs, Wiederholung nach einem Ausfall, auch bei „Sofort löschen“.
+>   - Client gegen einen Fake: Anfrage, Tenant, Begrenzung, Ausfall.
+>   - Gegen das echte Loki: Löschung von Node und Organisation nur im eigenen Tenant eingetragen, Wiederholung ohne
+>     Fehler; mit schnell laufendem Compactor wird sie bearbeitet (`processed`).
+>   - API über den echten Stack: Nach „Organisation löschen“ steht die Löschung ihres Tenants in Loki, bei Alpha nicht.
+>   - Gegenproben für 6 Prüfungen, alle erkannt.
 - **Ziel:** Rest von D29 bzw. E3.8.
   - Der Löschjob einer Org löscht ihren Loki-Tenant (Delete-API, Compactor), vor den Stammdaten und mit Wiederholung.
   - Das Löschen eines Nodes löscht auch seine Logs.

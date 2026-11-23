@@ -200,3 +200,92 @@ export async function slackMessages(path: string): Promise<{ text: string; raw: 
 export function ownerSQL(sql: string): string {
 	return exec('postgres', 'psql -v ON_ERROR_STOP=1 -qtA -U postgres -d sermon', sql);
 }
+
+/** What a live view of a node's processes delivered (M3-14). */
+export interface LiveViewResult {
+	status: number;
+	snapshots: number;
+	offline: number;
+	refused: string;
+	/** The end of the stream, if the server ended it (Connect end-stream message). */
+	end: string;
+	/** The processes of the last snapshot. */
+	processes: { pid: number; name?: string; user?: string; cmdline?: string; unit?: string }[];
+}
+
+/**
+ * Watches the node's processes for some seconds in the browser of `page` (its session cookie,
+ * its origin), over the Connect streaming protocol with JSON – as the UI will (M3-15).
+ */
+export async function watchProcesses(
+	page: Page,
+	nodeId: string,
+	seconds: number
+): Promise<LiveViewResult> {
+	return page.evaluate(
+		async ({ nodeId, seconds }) => {
+			const body = new TextEncoder().encode(JSON.stringify({ nodeId }));
+			const envelope = new Uint8Array(5 + body.length);
+			new DataView(envelope.buffer).setUint32(1, body.length);
+			envelope.set(body, 5);
+			const abort = new AbortController();
+			const timer = setTimeout(() => abort.abort(), seconds * 1000);
+			const out = {
+				status: 0,
+				snapshots: 0,
+				offline: 0,
+				refused: '',
+				end: '',
+				processes: [] as LiveViewResult['processes']
+			};
+			try {
+				const res = await fetch('/sermon.web.v1.LiveViewService/WatchProcesses', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/connect+json',
+						'Connect-Protocol-Version': '1'
+					},
+					body: envelope,
+					signal: abort.signal
+				});
+				out.status = res.status;
+				const reader = res.body!.getReader();
+				let buffer = new Uint8Array(0);
+				for (;;) {
+					const { value, done } = await reader.read();
+					if (done) break;
+					const joined = new Uint8Array(buffer.length + value.length);
+					joined.set(buffer);
+					joined.set(value, buffer.length);
+					buffer = joined;
+					while (buffer.length >= 5) {
+						const length = new DataView(buffer.buffer, buffer.byteOffset).getUint32(1);
+						if (buffer.length < 5 + length) break;
+						const flags = buffer[0];
+						const text = new TextDecoder().decode(buffer.subarray(5, 5 + length));
+						buffer = buffer.slice(5 + length);
+						if (flags & 2) {
+							out.end = text;
+							continue;
+						}
+						const msg = JSON.parse(text);
+						if (msg.snapshot) {
+							out.snapshots++;
+							out.processes = msg.snapshot.processes ?? [];
+						} else if (msg.offline) {
+							out.offline++;
+						} else if (msg.refused) {
+							out.refused = msg.refused;
+						}
+					}
+				}
+			} catch (error) {
+				if (!abort.signal.aborted) throw error;
+			} finally {
+				clearTimeout(timer);
+			}
+			return out;
+		},
+		{ nodeId, seconds }
+	);
+}

@@ -39,7 +39,7 @@ func (h *LogSettingsHandler) GetLogSettings(ctx context.Context, _ *connect.Requ
 	if err != nil {
 		return nil, h.fail(ctx, "get log settings", err)
 	}
-	res := &webv1.GetLogSettingsResponse{Version: view.Version, ViewersSeeLogs: view.ViewersSeeLogs}
+	res := &webv1.GetLogSettingsResponse{Version: view.Version, ViewersSeeLogs: view.ViewersSeeLogs, HideCommandLines: view.HideCommandLines}
 	for _, n := range view.Nodes {
 		res.Nodes = append(res.Nodes, &webv1.NodeConfigStatus{
 			NodeId: n.ID.String(), Hostname: n.Hostname, GroupId: n.Group.String(), AppliedVersion: n.AppliedVersion,
@@ -115,6 +115,18 @@ func (h *LogSettingsHandler) SetViewerLogAccess(ctx context.Context, req *connec
 		return nil, h.fail(ctx, "set viewer log access", err)
 	}
 	return connect.NewResponse(&webv1.SetViewerLogAccessResponse{}), nil
+}
+
+// SetLiveViewCommandLines sets whether the live view leaves out command lines (M3-14).
+func (h *LogSettingsHandler) SetLiveViewCommandLines(ctx context.Context, req *connect.Request[webv1.SetLiveViewCommandLinesRequest]) (*connect.Response[webv1.SetLiveViewCommandLinesResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.SetHideCommandLines(ctx, c, req.Msg.GetHideCommandLines()); err != nil {
+		return nil, h.fail(ctx, "set live view command lines", err)
+	}
+	return connect.NewResponse(&webv1.SetLiveViewCommandLinesResponse{}), nil
 }
 
 // TestRedaction redacts a sample with rules that are not saved yet.

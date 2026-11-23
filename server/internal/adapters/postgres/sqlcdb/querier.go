@@ -186,6 +186,7 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	// Nodes of the scope's groups with their group name, for the UI (M1-26).
 	ListVisibleNodes(ctx context.Context, arg ListVisibleNodesParams) ([]ListVisibleNodesRow, error)
+	LiveHideCmdline(ctx context.Context) (bool, error)
 	// Serializes changes of rights within the organization (last-admin check without races).
 	LockAccessChanges(ctx context.Context) error
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
@@ -252,6 +253,7 @@ type Querier interface {
 	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
 	SecurityEventHorizon(ctx context.Context) (time.Time, error)
+	SetLiveHideCmdline(ctx context.Context, hide bool) error
 	SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error
 	SetNodeTags(ctx context.Context, arg SetNodeTagsParams) error
 	SetOrganizationLock(ctx context.Context, arg SetOrganizationLockParams) (int64, error)

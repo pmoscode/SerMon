@@ -37,6 +37,7 @@ func (s *LogSettingsStore) View(ctx context.Context, scope tenant.Scope) (logset
 		}
 		view.Version = uint64(max(org.AgentConfigVersion, 1))
 		view.ViewersSeeLogs = org.ViewersSeeLogs
+		view.HideCommandLines = org.LiveHideCmdline
 		if view.Rules, err = decodeRules(org.RedactionRules); err != nil {
 			return err
 		}
@@ -119,6 +120,27 @@ func (s *LogSettingsStore) PutViewersSeeLogs(ctx context.Context, scope tenant.S
 		}
 		return appendAudit(ctx, q, audit)
 	}), "viewer switch")
+}
+
+// PutHideCommandLines implements logsettings.Store.
+func (s *LogSettingsStore) PutHideCommandLines(ctx context.Context, scope tenant.Scope, hide bool, _ identity.UserID, audit access.AuditEntry) error {
+	return wrap(s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := q.SetLiveHideCmdline(ctx, hide); err != nil {
+			return fmt.Errorf("store command line switch: %w", err)
+		}
+		return appendAudit(ctx, q, audit)
+	}), "command line switch")
+}
+
+// HideCommandLines implements liveview.Settings.
+func (s *LogSettingsStore) HideCommandLines(ctx context.Context, scope tenant.Scope) (bool, error) {
+	var hide bool
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		var err error
+		hide, err = q.LiveHideCmdline(ctx)
+		return err //nolint:wrapcheck // wrapped below
+	})
+	return hide, wrap(err, "command line switch")
 }
 
 func bumpAndAudit(ctx context.Context, q *sqlcdb.Queries, audit access.AuditEntry) error {

@@ -48,6 +48,9 @@ const (
 	// LogSettingsServiceSetViewerLogAccessProcedure is the fully-qualified name of the
 	// LogSettingsService's SetViewerLogAccess RPC.
 	LogSettingsServiceSetViewerLogAccessProcedure = "/sermon.web.v1.LogSettingsService/SetViewerLogAccess"
+	// LogSettingsServiceSetLiveViewCommandLinesProcedure is the fully-qualified name of the
+	// LogSettingsService's SetLiveViewCommandLines RPC.
+	LogSettingsServiceSetLiveViewCommandLinesProcedure = "/sermon.web.v1.LogSettingsService/SetLiveViewCommandLines"
 	// LogSettingsServiceTestRedactionProcedure is the fully-qualified name of the LogSettingsService's
 	// TestRedaction RPC.
 	LogSettingsServiceTestRedactionProcedure = "/sermon.web.v1.LogSettingsService/TestRedaction"
@@ -68,6 +71,9 @@ type LogSettingsServiceClient interface {
 	// SetViewerLogAccess sets whether viewers may see logs and security events (KONZEPT §7, M3-12).
 	// It applies from the next request of every session; running live views end.
 	SetViewerLogAccess(context.Context, *connect.Request[v1.SetViewerLogAccessRequest]) (*connect.Response[v1.SetViewerLogAccessResponse], error)
+	// SetLiveViewCommandLines sets whether the live view leaves out command lines (KONZEPT §9,
+	// M3-14). Running live views end at their next check (within 30 s); the clients reconnect.
+	SetLiveViewCommandLines(context.Context, *connect.Request[v1.SetLiveViewCommandLinesRequest]) (*connect.Response[v1.SetLiveViewCommandLinesResponse], error)
 	// TestRedaction returns a sample line as the agents would send it with the given rules (not
 	// saved): the built-in patterns, then the rules. No step-up: nothing changes. INVALID_ARGUMENT
 	// names the first rule the server cannot compile.
@@ -116,6 +122,12 @@ func NewLogSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(logSettingsServiceMethods.ByName("SetViewerLogAccess")),
 			connect.WithClientOptions(opts...),
 		),
+		setLiveViewCommandLines: connect.NewClient[v1.SetLiveViewCommandLinesRequest, v1.SetLiveViewCommandLinesResponse](
+			httpClient,
+			baseURL+LogSettingsServiceSetLiveViewCommandLinesProcedure,
+			connect.WithSchema(logSettingsServiceMethods.ByName("SetLiveViewCommandLines")),
+			connect.WithClientOptions(opts...),
+		),
 		testRedaction: connect.NewClient[v1.TestRedactionRequest, v1.TestRedactionResponse](
 			httpClient,
 			baseURL+LogSettingsServiceTestRedactionProcedure,
@@ -128,12 +140,13 @@ func NewLogSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 
 // logSettingsServiceClient implements LogSettingsServiceClient.
 type logSettingsServiceClient struct {
-	getLogSettings        *connect.Client[v1.GetLogSettingsRequest, v1.GetLogSettingsResponse]
-	setGroupLogSettings   *connect.Client[v1.SetGroupLogSettingsRequest, v1.SetGroupLogSettingsResponse]
-	resetGroupLogSettings *connect.Client[v1.ResetGroupLogSettingsRequest, v1.ResetGroupLogSettingsResponse]
-	setRedactionRules     *connect.Client[v1.SetRedactionRulesRequest, v1.SetRedactionRulesResponse]
-	setViewerLogAccess    *connect.Client[v1.SetViewerLogAccessRequest, v1.SetViewerLogAccessResponse]
-	testRedaction         *connect.Client[v1.TestRedactionRequest, v1.TestRedactionResponse]
+	getLogSettings          *connect.Client[v1.GetLogSettingsRequest, v1.GetLogSettingsResponse]
+	setGroupLogSettings     *connect.Client[v1.SetGroupLogSettingsRequest, v1.SetGroupLogSettingsResponse]
+	resetGroupLogSettings   *connect.Client[v1.ResetGroupLogSettingsRequest, v1.ResetGroupLogSettingsResponse]
+	setRedactionRules       *connect.Client[v1.SetRedactionRulesRequest, v1.SetRedactionRulesResponse]
+	setViewerLogAccess      *connect.Client[v1.SetViewerLogAccessRequest, v1.SetViewerLogAccessResponse]
+	setLiveViewCommandLines *connect.Client[v1.SetLiveViewCommandLinesRequest, v1.SetLiveViewCommandLinesResponse]
+	testRedaction           *connect.Client[v1.TestRedactionRequest, v1.TestRedactionResponse]
 }
 
 // GetLogSettings calls sermon.web.v1.LogSettingsService.GetLogSettings.
@@ -161,6 +174,11 @@ func (c *logSettingsServiceClient) SetViewerLogAccess(ctx context.Context, req *
 	return c.setViewerLogAccess.CallUnary(ctx, req)
 }
 
+// SetLiveViewCommandLines calls sermon.web.v1.LogSettingsService.SetLiveViewCommandLines.
+func (c *logSettingsServiceClient) SetLiveViewCommandLines(ctx context.Context, req *connect.Request[v1.SetLiveViewCommandLinesRequest]) (*connect.Response[v1.SetLiveViewCommandLinesResponse], error) {
+	return c.setLiveViewCommandLines.CallUnary(ctx, req)
+}
+
 // TestRedaction calls sermon.web.v1.LogSettingsService.TestRedaction.
 func (c *logSettingsServiceClient) TestRedaction(ctx context.Context, req *connect.Request[v1.TestRedactionRequest]) (*connect.Response[v1.TestRedactionResponse], error) {
 	return c.testRedaction.CallUnary(ctx, req)
@@ -181,6 +199,9 @@ type LogSettingsServiceHandler interface {
 	// SetViewerLogAccess sets whether viewers may see logs and security events (KONZEPT §7, M3-12).
 	// It applies from the next request of every session; running live views end.
 	SetViewerLogAccess(context.Context, *connect.Request[v1.SetViewerLogAccessRequest]) (*connect.Response[v1.SetViewerLogAccessResponse], error)
+	// SetLiveViewCommandLines sets whether the live view leaves out command lines (KONZEPT §9,
+	// M3-14). Running live views end at their next check (within 30 s); the clients reconnect.
+	SetLiveViewCommandLines(context.Context, *connect.Request[v1.SetLiveViewCommandLinesRequest]) (*connect.Response[v1.SetLiveViewCommandLinesResponse], error)
 	// TestRedaction returns a sample line as the agents would send it with the given rules (not
 	// saved): the built-in patterns, then the rules. No step-up: nothing changes. INVALID_ARGUMENT
 	// names the first rule the server cannot compile.
@@ -225,6 +246,12 @@ func NewLogSettingsServiceHandler(svc LogSettingsServiceHandler, opts ...connect
 		connect.WithSchema(logSettingsServiceMethods.ByName("SetViewerLogAccess")),
 		connect.WithHandlerOptions(opts...),
 	)
+	logSettingsServiceSetLiveViewCommandLinesHandler := connect.NewUnaryHandler(
+		LogSettingsServiceSetLiveViewCommandLinesProcedure,
+		svc.SetLiveViewCommandLines,
+		connect.WithSchema(logSettingsServiceMethods.ByName("SetLiveViewCommandLines")),
+		connect.WithHandlerOptions(opts...),
+	)
 	logSettingsServiceTestRedactionHandler := connect.NewUnaryHandler(
 		LogSettingsServiceTestRedactionProcedure,
 		svc.TestRedaction,
@@ -244,6 +271,8 @@ func NewLogSettingsServiceHandler(svc LogSettingsServiceHandler, opts ...connect
 			logSettingsServiceSetRedactionRulesHandler.ServeHTTP(w, r)
 		case LogSettingsServiceSetViewerLogAccessProcedure:
 			logSettingsServiceSetViewerLogAccessHandler.ServeHTTP(w, r)
+		case LogSettingsServiceSetLiveViewCommandLinesProcedure:
+			logSettingsServiceSetLiveViewCommandLinesHandler.ServeHTTP(w, r)
 		case LogSettingsServiceTestRedactionProcedure:
 			logSettingsServiceTestRedactionHandler.ServeHTTP(w, r)
 		default:
@@ -273,6 +302,10 @@ func (UnimplementedLogSettingsServiceHandler) SetRedactionRules(context.Context,
 
 func (UnimplementedLogSettingsServiceHandler) SetViewerLogAccess(context.Context, *connect.Request[v1.SetViewerLogAccessRequest]) (*connect.Response[v1.SetViewerLogAccessResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.LogSettingsService.SetViewerLogAccess is not implemented"))
+}
+
+func (UnimplementedLogSettingsServiceHandler) SetLiveViewCommandLines(context.Context, *connect.Request[v1.SetLiveViewCommandLinesRequest]) (*connect.Response[v1.SetLiveViewCommandLinesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.LogSettingsService.SetLiveViewCommandLines is not implemented"))
 }
 
 func (UnimplementedLogSettingsServiceHandler) TestRedaction(context.Context, *connect.Request[v1.TestRedactionRequest]) (*connect.Response[v1.TestRedactionResponse], error) {

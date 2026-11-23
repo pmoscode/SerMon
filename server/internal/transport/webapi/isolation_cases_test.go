@@ -36,6 +36,7 @@ type isolationEnv struct {
 	windows                         webv1connect.MaintenanceWindowServiceClient
 	logSettings                     webv1connect.LogSettingsServiceClient
 	logs                            webv1connect.LogServiceClient
+	liveView                        webv1connect.LiveViewServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -350,6 +351,18 @@ var tenantIsolationCases = map[string]isolationCase{
 			return errLeak
 		}
 		return nil
+	}},
+	// A leaking live view would answer with a first frame (offline or a snapshot).
+	"/sermon.web.v1.LiveViewService/WatchProcesses": {run: func(ctx context.Context, e isolationEnv) error {
+		stream, err := e.liveView.WatchProcesses(ctx, connect.NewRequest(&webv1.WatchProcessesRequest{NodeId: e.nodeA}))
+		if err != nil {
+			return err
+		}
+		defer func() { _ = stream.Close() }()
+		if stream.Receive() {
+			return errLeak
+		}
+		return stream.Err()
 	}},
 	"/sermon.web.v1.LogSettingsService/SetGroupLogSettings": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.logSettings.SetGroupLogSettings(ctx, connect.NewRequest(&webv1.SetGroupLogSettingsRequest{GroupId: e.groupA, Settings: &webv1.LogSettings{}}))

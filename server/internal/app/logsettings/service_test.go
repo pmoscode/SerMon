@@ -36,6 +36,8 @@ type memStore struct {
 	scopes  []tenant.Scope
 	// viewersSee is the organization's switch (M3-12).
 	viewersSee bool
+	// hideCmdline is the live view's switch (M3-14).
+	hideCmdline bool
 }
 
 func newStore() *memStore {
@@ -45,7 +47,7 @@ func newStore() *memStore {
 func (m *memStore) View(_ context.Context, scope tenant.Scope) (logsettings.View, error) {
 	m.scopes = append(m.scopes, scope)
 	v := logsettings.View{
-		Rules: m.rules, Version: m.version, ViewersSeeLogs: m.viewersSee,
+		Rules: m.rules, Version: m.version, ViewersSeeLogs: m.viewersSee, HideCommandLines: m.hideCmdline,
 		Nodes: []logsettings.NodeStatus{{Hostname: "web-01", Group: web, AppliedVersion: m.version, LogsVetoed: true}},
 	}
 	for id, name := range m.groups {
@@ -84,6 +86,13 @@ func (m *memStore) PutRules(_ context.Context, scope tenant.Scope, rules []logco
 func (m *memStore) PutViewersSeeLogs(_ context.Context, scope tenant.Scope, see bool, _ identity.UserID, audit access.AuditEntry) error {
 	m.scopes = append(m.scopes, scope)
 	m.viewersSee = see
+	m.audits = append(m.audits, audit)
+	return nil
+}
+
+func (m *memStore) PutHideCommandLines(_ context.Context, scope tenant.Scope, hide bool, _ identity.UserID, audit access.AuditEntry) error {
+	m.scopes = append(m.scopes, scope)
+	m.hideCmdline = hide
 	m.audits = append(m.audits, audit)
 	return nil
 }
@@ -282,5 +291,23 @@ func TestTestRedaction_ShowsWhatTheAgentWouldSend(t *testing.T) {
 	}
 	if len(w.store.audits) != 0 {
 		t.Error("a test changes nothing")
+	}
+}
+
+// The live view's switch (M3-14): admins with a step-up, audited.
+func TestSetHideCommandLines_NeedsAnAdminWithAStepUp(t *testing.T) {
+	w := newWorld()
+	if err := w.svc.SetHideCommandLines(context.Background(), caller(admin, role.Admin, stale), true); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("without a step-up: %v", err)
+	}
+	if err := w.svc.SetHideCommandLines(context.Background(), caller(viewer, role.Operator, fresh), true); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("operator: %v", err)
+	}
+	if err := w.svc.SetHideCommandLines(context.Background(), caller(admin, role.Admin, fresh), true); err != nil {
+		t.Fatal(err)
+	}
+	view, _ := w.svc.View(context.Background(), caller(admin, role.Admin, stale))
+	if !view.HideCommandLines || w.store.audits[0].Action != "live_view.command_lines" || w.store.audits[0].Details["hidden"] != "true" {
+		t.Errorf("view %+v, audits %+v", view, w.store.audits)
 	}
 }

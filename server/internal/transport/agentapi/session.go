@@ -101,6 +101,8 @@ type liveSession struct {
 	end      func(error)   // ends the session with the given cause
 	commands chan struct{} // on-demand rotation requests for the stream
 	config   chan struct{} // the organization's agent configuration changed (ADR 0030)
+	// liveCommands holds the newest start or stop of the live view (M3-14).
+	liveCommands chan liveCommand
 
 	mu        sync.Mutex
 	pending   *time.Timer // on-demand rotation in progress; fires on timeout
@@ -221,12 +223,18 @@ func (s *Sessions) claim(l *liveSession) (claim, *liveSession) {
 	return conflict, old
 }
 
-func (s *Sessions) release(l *liveSession) {
+// release unregisters the session; false if a reconnect of the node replaced it.
+func (s *Sessions) release(l *liveSession) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.active[l.Node] == l {
+	switch s.active[l.Node] {
+	case l:
 		delete(s.active, l.Node)
+	case nil:
+	default:
+		return false
 	}
+	return true
 }
 
 // TerminateOrganization ends the sessions of all nodes of the organization on this server (a
@@ -298,6 +306,7 @@ type SessionHandler struct {
 	trust    TrustSource
 	ingest   *ingest.Service
 	configs  AgentConfigs
+	live     LiveViews
 	recheck  time.Duration
 	logger   *slog.Logger
 }
@@ -353,7 +362,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 
 	ctx, end := context.WithCancelCause(ctx)
 	defer end(nil)
-	live := &liveSession{end: end, commands: make(chan struct{}, 1), config: make(chan struct{}, 1), ActiveSession: ActiveSession{
+	live := &liveSession{end: end, commands: make(chan struct{}, 1), config: make(chan struct{}, 1), liveCommands: make(chan liveCommand, 1), ActiveSession: ActiveSession{
 		Org: id.Org, Node: id.Node, Serial: id.Serial, RemoteIP: id.RemoteIP,
 		AgentVersion: hello.GetAgentVersion(), Hostname: textsafe.Visible(hello.GetHostFacts().GetHostname()), Since: time.Now(),
 	}}
@@ -371,7 +380,11 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 		h.logger.InfoContext(ctx, "agent reconnected, old session replaced", "node", id.Node.String())
 	case claimed:
 	}
-	defer h.sessions.release(live)
+	defer func() {
+		if h.sessions.release(live) && h.live != nil {
+			h.live.Disconnected(id.Org, id.Node)
+		}
+	}()
 	previousIP, err := h.rotator.SessionOpened(ctx, id.rotation(), id.RemoteIP)
 	if err != nil {
 		h.logger.ErrorContext(ctx, "record session failed", "node", id.Node.String(), "error", err)
@@ -413,6 +426,10 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 	}()
 	recheck := time.NewTicker(h.recheck)
 	defer recheck.Stop()
+	if h.live != nil {
+		// Viewers waiting for the node get their live view now.
+		h.live.Connected(id.Org, id.Node)
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -438,6 +455,10 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 			}
 		case <-flush:
 			if err := h.flush(ctx, feed, stream); err != nil {
+				return err
+			}
+		case cmd := <-live.liveCommands:
+			if err := sendLive(stream, cmd); err != nil {
 				return err
 			}
 		case <-live.commands:
@@ -472,6 +493,17 @@ func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSess
 		return false, connect.NewError(connect.CodeInvalidArgument, errDuplicateHello)
 	case msg.GetConfigApplied() != nil:
 		h.recordApplied(ctx, id, msg.GetConfigApplied())
+		return false, nil
+	case msg.GetProcessSnapshot() != nil:
+		if h.live != nil {
+			h.live.Deliver(id.Org, id.Node, toSnapshot(msg.GetProcessSnapshot()))
+		}
+		return false, nil
+	case msg.GetLiveViewRefused() != nil:
+		h.logger.InfoContext(ctx, "live view refused by the agent", "node", id.Node.String())
+		if h.live != nil {
+			h.live.Refused(id.Org, id.Node, textsafe.Visible(msg.GetLiveViewRefused().GetReason()))
+		}
 		return false, nil
 	case msg.GetRotateCertificate() != nil:
 		immediate := live.takePending()

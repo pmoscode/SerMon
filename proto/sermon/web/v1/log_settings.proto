@@ -24,6 +24,9 @@ service LogSettingsService {
   // SetViewerLogAccess sets whether viewers may see logs and security events (KONZEPT §7, M3-12).
   // It applies from the next request of every session; running live views end.
   rpc SetViewerLogAccess(SetViewerLogAccessRequest) returns (SetViewerLogAccessResponse);
+  // SetLiveViewCommandLines sets whether the live view leaves out command lines (KONZEPT §9,
+  // M3-14). Running live views end at their next check (within 30 s); the clients reconnect.
+  rpc SetLiveViewCommandLines(SetLiveViewCommandLinesRequest) returns (SetLiveViewCommandLinesResponse);
   // TestRedaction returns a sample line as the agents would send it with the given rules (not
   // saved): the built-in patterns, then the rules. No step-up: nothing changes. INVALID_ARGUMENT
   // names the first rule the server cannot compile.
@@ -127,6 +130,8 @@ message GetLogSettingsResponse {
   bool viewers_see_logs = 4;
   // nodes are what every agent reported about its configuration, by host name.
   repeated NodeConfigStatus nodes = 5;
+  // hide_command_lines is set while the live view leaves out command lines.
+  bool hide_command_lines = 6;
 }
 
 // NodeConfigStatus is the answer of a node's agent to its configuration (ConfigApplied).
@@ -184,6 +189,15 @@ message SetViewerLogAccessRequest {
 
 // SetViewerLogAccessResponse has no fields.
 message SetViewerLogAccessResponse {}
+
+// SetLiveViewCommandLinesRequest is the switch of the live view.
+message SetLiveViewCommandLinesRequest {
+  // hide_command_lines leaves out the command lines of processes.
+  bool hide_command_lines = 1;
+}
+
+// SetLiveViewCommandLinesResponse has no fields.
+message SetLiveViewCommandLinesResponse {}
 
 // TestRedactionRequest are rules and a sample line.
 message TestRedactionRequest {

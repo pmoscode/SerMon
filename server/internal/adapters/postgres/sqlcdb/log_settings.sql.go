@@ -140,6 +140,17 @@ func (q *Queries) ListNodeConfigStatus(ctx context.Context) ([]ListNodeConfigSta
 	return items, nil
 }
 
+const liveHideCmdline = `-- name: LiveHideCmdline :one
+SELECT live_hide_cmdline FROM organizations WHERE id = current_org_id()
+`
+
+func (q *Queries) LiveHideCmdline(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, liveHideCmdline)
+	var live_hide_cmdline bool
+	err := row.Scan(&live_hide_cmdline)
+	return live_hide_cmdline, err
+}
+
 const nodeGroupExists = `-- name: NodeGroupExists :one
 SELECT EXISTS (SELECT 1 FROM node_groups WHERE id = $1)
 `
@@ -152,19 +163,25 @@ func (q *Queries) NodeGroupExists(ctx context.Context, groupID uuid.UUID) (bool,
 }
 
 const organizationAgentConfig = `-- name: OrganizationAgentConfig :one
-SELECT agent_config_version, redaction_rules, viewers_see_logs FROM organizations WHERE id = current_org_id()
+SELECT agent_config_version, redaction_rules, viewers_see_logs, live_hide_cmdline FROM organizations WHERE id = current_org_id()
 `
 
 type OrganizationAgentConfigRow struct {
 	AgentConfigVersion int64
 	RedactionRules     []byte
 	ViewersSeeLogs     bool
+	LiveHideCmdline    bool
 }
 
 func (q *Queries) OrganizationAgentConfig(ctx context.Context) (OrganizationAgentConfigRow, error) {
 	row := q.db.QueryRow(ctx, organizationAgentConfig)
 	var i OrganizationAgentConfigRow
-	err := row.Scan(&i.AgentConfigVersion, &i.RedactionRules, &i.ViewersSeeLogs)
+	err := row.Scan(
+		&i.AgentConfigVersion,
+		&i.RedactionRules,
+		&i.ViewersSeeLogs,
+		&i.LiveHideCmdline,
+	)
 	return i, err
 }
 
@@ -195,6 +212,15 @@ func (q *Queries) RecordAgentConfigApplied(ctx context.Context, arg RecordAgentC
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setLiveHideCmdline = `-- name: SetLiveHideCmdline :exec
+UPDATE organizations SET live_hide_cmdline = $1 WHERE id = current_org_id()
+`
+
+func (q *Queries) SetLiveHideCmdline(ctx context.Context, hide bool) error {
+	_, err := q.db.Exec(ctx, setLiveHideCmdline, hide)
+	return err
 }
 
 const setRedactionRules = `-- name: SetRedactionRules :exec

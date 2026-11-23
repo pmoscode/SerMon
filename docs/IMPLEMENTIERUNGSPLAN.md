@@ -3243,7 +3243,35 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M3-02
 - **Skill:** `sermon-add-collector`, `sermon-proto-change`
 
-#### ☐ M3-14 – Live-Ansicht im Server · S · M 🔒
+#### ☑ M3-14 – Live-Ansicht im Server · S · M 🔒
+> Erledigt (KONZEPT §9; ADR 0015 Nachtrag M3-14; Threat Model T26, T42):
+> - **`app/liveview`:**
+>   - Der `Hub` pro Instanz teilt einen Agent-Stream je Node unter allen Betrachtern: 2 s Takt, Lease alle 20 s
+>     erneuert, `StopLiveView` 30 s nach dem letzten Betrachter.
+>   - Ein langsamer Betrachter bekommt nur den neuesten Snapshot. Mit dem Org-Schalter entfernt der Hub die
+>     Befehlszeilen zusätzlich selbst.
+>   - `Service.Watch` prüft `use_live_view` und die Sichtbarkeit des Nodes (fremd: `NOT_FOUND`). Session, Rechte,
+>     Sichtbarkeit und Schalter werden alle 30 s erneut geprüft; nach 15 min endet der Stream. Eine Ablehnung des
+>     Agents beendet ihn mit dem Grund; ein geänderter Schalter beendet ihn normal, der Client verbindet sich neu.
+> - **Agent-API:** `Sessions` startet und stoppt die Live-Ansicht (nur der neueste Befehl zählt). Snapshots und
+>   Ablehnungen gehen an den Hub, Texte des Hosts über `textsafe.Visible`. Verbindet sich der Agent, startet eine
+>   wartende Live-Ansicht; ein ersetzter Stream meldet den Node nicht als offline.
+> - **Web-API:** `LiveViewService.WatchProcesses` mit den gemeinsamen Grenzen der Live-Streams (T26) und einer Meldung
+>   `offline`. `LogSettingsService.SetLiveViewCommandLines` (Admin, Step-up, Audit `live_view.command_lines`);
+>   `GetLogSettings` nennt den Schalter. Migration `00041` (`organizations.live_hide_cmdline`).
+> - **Tests:**
+>   - Hub: zwei Betrachter teilen einen Stream, Erneuerung, Stop nach 30 s, Rückkehr eines Betrachters, offline und
+>     Wiederverbinden, Ablehnung ohne Erneuerung, langsamer Betrachter, Schalter.
+>   - Dienst: fremder Node, fehlende Rechte, Recheck mit Rechteentzug, verschobener Node, Schalter, Höchstdauer.
+>   - Agent-API über mTLS: Befehle erreichen den Agent, Snapshot und Ablehnung erreichen den Hub mit sichtbar gemachten
+>     Steuerzeichen, Ersetzen einer Session.
+>   - Über den echten Stack: zwei Betrachter, offline, Snapshot, Schalter (Viewer abgewiesen, laufende Streams enden,
+>     danach ohne Befehlszeile), Logout beendet mit `UNAUTHENTICATED`; Tenant-Isolationstest für `WatchProcesses`.
+>   - **Demo-E2E:** web-01 hat während der Budget-Messung die Live-Ansicht offen (zweiter Tab, Connect-Streaming aus
+>     dem Browser): 31 Snapshots in 62 s; Agent und `journalctl` 0,68 % eines Kerns und 18,7 MiB, mit Log-Last.
+>     app-01 ohne Live-Ansicht kommt auf 0,64 %. Der Prozess des Agents läuft als `sermon` in seiner Unit; eine
+>     Befehlszeile mit Passwort kommt redigiert an.
+>   - Gegenproben für 22 Prüfungen, alle erkannt.
 - **Ziel:** `LiveViewService.WatchProcesses` (Server-Streaming, `use_live_view`).
   - **Fan-out:** Mehrere Betrachter teilen sich einen Agent-Stream. Der erste Betrachter startet den Stream (die
     Lease wird erneuert), 30 s nach dem letzten folgt `StopLiveView`.

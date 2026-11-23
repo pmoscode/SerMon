@@ -46,6 +46,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/liveview"
 	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
@@ -245,7 +246,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			logReader = loki.NewReader(logStore)
 		}
 		logQueries := logs.NewService(logReader, postgres.NewFleetStore(db), authz.NewPolicy())
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, logSettings, logQueries, registry, logger); err != nil {
+		// The live view of processes (M3-14): one agent stream per node shared by its viewers on
+		// this instance; only the instance holding the agent's session reaches it (ADR 0015).
+		liveHub := liveview.NewHub(sessions)
+		liveViews := liveview.NewService(liveHub, postgres.NewFleetStore(db), agentConfigs, authz.NewPolicy())
+		servers = append(servers, liveViews.Run)
+		observing := observingServices{logSettings: logSettings, logQueries: logQueries, liveViews: liveViews}
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, observing, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -269,7 +276,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return alerting.Maintenance(ctx, alertStore, time.Now, 6*time.Hour, logger)
 		})
 		if cfg.AgentAddr != "" {
-			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, ingestService, agentConfigs, logger)
+			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger,
+				agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(agentConfigs), agentapi.WithLiveView(liveHub))
 			if err != nil {
 				return err
 			}
@@ -327,14 +335,14 @@ func pruneRing(ring *metrics.Ring) func(context.Context) error {
 
 // newAgentServer prepares the mTLS agent API (M1-10) on its own listener.
 func newAgentServer(ctx context.Context, cfg config.Config, sessions *agentapi.Sessions, rotator *rotation.Service,
-	ca *agentca.Service, ingestService *ingest.Service, configs agentapi.AgentConfigs, logger *slog.Logger,
+	ca *agentca.Service, logger *slog.Logger, options ...agentapi.HandlerOption,
 ) (func(context.Context) error, error) {
 	tlsConfig, err := agentapi.TLSConfig(ca, cfg.AgentHostnames, logger) //nolint:contextcheck // TLS callbacks have no context
 	if err != nil {
 		return nil, fmt.Errorf("agent API TLS: %w", err)
 	}
 	mux := http.NewServeMux()
-	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger, agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(configs)))
+	agentapi.Mount(mux, agentapi.NewSessionHandler(sessions, rotator, ca, logger, options...))
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.AgentAddr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", cfg.AgentAddr, err)
@@ -419,6 +427,13 @@ const (
 	totpSetupWindow            = time.Minute
 )
 
+// observingServices are the use cases of logs and the live view behind the web API.
+type observingServices struct {
+	logSettings *logsettings.Service
+	logQueries  *logs.Service
+	liveViews   *liveview.Service
+}
+
 // alertingServices are the use cases of alerting behind the web API.
 type alertingServices struct {
 	policies *routing.Service
@@ -429,7 +444,7 @@ type alertingServices struct {
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
 	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
-	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, logSettings *logsettings.Service, logQueries *logs.Service,
+	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, observing observingServices,
 	registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
@@ -459,7 +474,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	principals := access.NewLoader(accessStore, secondFactor)
 	live := webapi.NewLiveStreams()
 	metricsHandler := webapi.NewMetricsHandler(nodes, live, logger)
-	registry.Gauge("sermon_server_live_streams", "Open live streams of the web UI (metrics and log tails).",
+	registry.Gauge("sermon_server_live_streams", "Open live streams of the web UI (metrics, log tails and live views).",
 		func() float64 { return float64(live.Open()) })
 	var inviteOptions []invitation.Option
 	var orgOptions []organization.Option
@@ -496,8 +511,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
-		LogSettings: webapi.NewLogSettingsHandler(logSettings, logger),
-		Logs:        webapi.NewLogHandler(logQueries, live, logger),
+		LogSettings: webapi.NewLogSettingsHandler(observing.logSettings, logger),
+		Logs:        webapi.NewLogHandler(observing.logQueries, live, logger),
+		LiveView:    webapi.NewLiveViewHandler(observing.liveViews, live, logger),
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
 		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),

@@ -35,6 +35,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/liveview"
 	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
@@ -69,6 +70,8 @@ type stack struct {
 	db      *postgres.DB
 	ring    *metrics.Ring
 	metrics *timescale.Store
+	// hub is the live view of the processes; no agent is connected, snapshots come from tests.
+	hub *liveview.Hub
 }
 
 var (
@@ -163,7 +166,11 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Store: postgres.NewRoutingStore(pg), Windows: postgres.NewRoutingStore(pg), Channels: postgres.NewNotificationStore(pg),
 		Groups: postgres.NewFleetStore(pg), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 	})
+	hub := liveview.NewHub(agentapi.NewSessions(0))
+	liveViews := liveview.NewService(hub, postgres.NewFleetStore(pg), postgres.NewLogSettingsStore(pg), authz.NewPolicy(),
+		liveview.WithRecheck(200*time.Millisecond))
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
+		LiveView: webapi.NewLiveViewHandler(liveViews, nil, slog.New(slog.DiscardHandler)),
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
 			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)).
 			WithInstanceHealth(postgres.NewAccessStore(pg), fakeProblems{}),
@@ -216,7 +223,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		}), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
 	})
-	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore}
+	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore, hub: hub}
 }
 
 // ownerSQL runs statements on one owner connection (set_config persists between them).

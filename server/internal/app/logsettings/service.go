@@ -47,6 +47,8 @@ type View struct {
 	Version uint64
 	// ViewersSeeLogs is the organization's switch (KONZEPT §7, M3-12).
 	ViewersSeeLogs bool
+	// HideCommandLines leaves the command lines out of the live view (KONZEPT §9, M3-14).
+	HideCommandLines bool
 	// Nodes is the state of every node of the organization.
 	Nodes []NodeStatus
 }
@@ -64,6 +66,8 @@ type Store interface {
 	PutRules(ctx context.Context, scope tenant.Scope, rules []logconfig.Rule, by identity.UserID, audit access.AuditEntry) error
 	// PutViewersSeeLogs stores the organization's switch; no agent configuration changes.
 	PutViewersSeeLogs(ctx context.Context, scope tenant.Scope, see bool, by identity.UserID, audit access.AuditEntry) error
+	// PutHideCommandLines stores the live view's switch.
+	PutHideCommandLines(ctx context.Context, scope tenant.Scope, hide bool, by identity.UserID, audit access.AuditEntry) error
 }
 
 // Agents learn about a changed configuration (the connected agent sessions).
@@ -170,6 +174,23 @@ func (s *Service) SetViewersSeeLogs(ctx context.Context, c access.Caller, see bo
 	}
 	if err := s.store.PutViewersSeeLogs(ctx, scope, see, c.Principal.User, audit); err != nil {
 		return fmt.Errorf("set viewer switch: %w", err)
+	}
+	return nil
+}
+
+// SetHideCommandLines sets whether the live view leaves out command lines. Running live views
+// follow at their next recheck (they end, the clients reconnect).
+func (s *Service) SetHideCommandLines(ctx context.Context, c access.Caller, hide bool) error {
+	scope, err := access.Authorize(s.policy, c, authz.ManageLogSettings, true, s.now())
+	if err != nil {
+		return err //nolint:wrapcheck // see View
+	}
+	audit := access.AuditEntry{
+		Actor: c.Principal.User, Action: "live_view.command_lines", Target: "org:" + c.Principal.Org.String(),
+		Details: map[string]string{"hidden": strconv.FormatBool(hide)},
+	}
+	if err := s.store.PutHideCommandLines(ctx, scope, hide, c.Principal.User, audit); err != nil {
+		return fmt.Errorf("set command line switch: %w", err)
 	}
 	return nil
 }

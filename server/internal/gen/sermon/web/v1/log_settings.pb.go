@@ -397,9 +397,11 @@ type GetLogSettingsResponse struct {
 	// viewers_see_logs is false while viewers may not see logs and security events.
 	ViewersSeeLogs bool `protobuf:"varint,4,opt,name=viewers_see_logs,json=viewersSeeLogs,proto3" json:"viewers_see_logs,omitempty"`
 	// nodes are what every agent reported about its configuration, by host name.
-	Nodes         []*NodeConfigStatus `protobuf:"bytes,5,rep,name=nodes,proto3" json:"nodes,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Nodes []*NodeConfigStatus `protobuf:"bytes,5,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	// hide_command_lines is set while the live view leaves out command lines.
+	HideCommandLines bool `protobuf:"varint,6,opt,name=hide_command_lines,json=hideCommandLines,proto3" json:"hide_command_lines,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetLogSettingsResponse) Reset() {
@@ -465,6 +467,13 @@ func (x *GetLogSettingsResponse) GetNodes() []*NodeConfigStatus {
 		return x.Nodes
 	}
 	return nil
+}
+
+func (x *GetLogSettingsResponse) GetHideCommandLines() bool {
+	if x != nil {
+		return x.HideCommandLines
+	}
+	return false
 }
 
 // NodeConfigStatus is the answer of a node's agent to its configuration (ConfigApplied).
@@ -908,6 +917,89 @@ func (*SetViewerLogAccessResponse) Descriptor() ([]byte, []int) {
 	return file_sermon_web_v1_log_settings_proto_rawDescGZIP(), []int{14}
 }
 
+// SetLiveViewCommandLinesRequest is the switch of the live view.
+type SetLiveViewCommandLinesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// hide_command_lines leaves out the command lines of processes.
+	HideCommandLines bool `protobuf:"varint,1,opt,name=hide_command_lines,json=hideCommandLines,proto3" json:"hide_command_lines,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SetLiveViewCommandLinesRequest) Reset() {
+	*x = SetLiveViewCommandLinesRequest{}
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetLiveViewCommandLinesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetLiveViewCommandLinesRequest) ProtoMessage() {}
+
+func (x *SetLiveViewCommandLinesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetLiveViewCommandLinesRequest.ProtoReflect.Descriptor instead.
+func (*SetLiveViewCommandLinesRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_log_settings_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SetLiveViewCommandLinesRequest) GetHideCommandLines() bool {
+	if x != nil {
+		return x.HideCommandLines
+	}
+	return false
+}
+
+// SetLiveViewCommandLinesResponse has no fields.
+type SetLiveViewCommandLinesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetLiveViewCommandLinesResponse) Reset() {
+	*x = SetLiveViewCommandLinesResponse{}
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetLiveViewCommandLinesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetLiveViewCommandLinesResponse) ProtoMessage() {}
+
+func (x *SetLiveViewCommandLinesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetLiveViewCommandLinesResponse.ProtoReflect.Descriptor instead.
+func (*SetLiveViewCommandLinesResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_log_settings_proto_rawDescGZIP(), []int{16}
+}
+
 // TestRedactionRequest are rules and a sample line.
 type TestRedactionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -921,7 +1013,7 @@ type TestRedactionRequest struct {
 
 func (x *TestRedactionRequest) Reset() {
 	*x = TestRedactionRequest{}
-	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[15]
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -933,7 +1025,7 @@ func (x *TestRedactionRequest) String() string {
 func (*TestRedactionRequest) ProtoMessage() {}
 
 func (x *TestRedactionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[15]
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -946,7 +1038,7 @@ func (x *TestRedactionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestRedactionRequest.ProtoReflect.Descriptor instead.
 func (*TestRedactionRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_log_settings_proto_rawDescGZIP(), []int{15}
+	return file_sermon_web_v1_log_settings_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TestRedactionRequest) GetRules() []*RedactionRule {
@@ -974,7 +1066,7 @@ type TestRedactionResponse struct {
 
 func (x *TestRedactionResponse) Reset() {
 	*x = TestRedactionResponse{}
-	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[16]
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -986,7 +1078,7 @@ func (x *TestRedactionResponse) String() string {
 func (*TestRedactionResponse) ProtoMessage() {}
 
 func (x *TestRedactionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[16]
+	mi := &file_sermon_web_v1_log_settings_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -999,7 +1091,7 @@ func (x *TestRedactionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestRedactionResponse.ProtoReflect.Descriptor instead.
 func (*TestRedactionResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_log_settings_proto_rawDescGZIP(), []int{16}
+	return file_sermon_web_v1_log_settings_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TestRedactionResponse) GetRedacted() string {
@@ -1032,13 +1124,14 @@ const file_sermon_web_v1_log_settings_proto_rawDesc = "" +
 	"\rRedactionRule\x12$\n" +
 	"\apattern\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01(\x80\bR\apattern\"\x17\n" +
-	"\x15GetLogSettingsRequest\"\x93\x02\n" +
+	"\x15GetLogSettingsRequest\"\xc1\x02\n" +
 	"\x16GetLogSettingsResponse\x127\n" +
 	"\x06groups\x18\x01 \x03(\v2\x1f.sermon.web.v1.GroupLogSettingsR\x06groups\x12E\n" +
 	"\x0fredaction_rules\x18\x02 \x03(\v2\x1c.sermon.web.v1.RedactionRuleR\x0eredactionRules\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\x04R\aversion\x12(\n" +
 	"\x10viewers_see_logs\x18\x04 \x01(\bR\x0eviewersSeeLogs\x125\n" +
-	"\x05nodes\x18\x05 \x03(\v2\x1f.sermon.web.v1.NodeConfigStatusR\x05nodes\"\xff\x01\n" +
+	"\x05nodes\x18\x05 \x03(\v2\x1f.sermon.web.v1.NodeConfigStatusR\x05nodes\x12,\n" +
+	"\x12hide_command_lines\x18\x06 \x01(\bR\x10hideCommandLines\"\xff\x01\n" +
 	"\x10NodeConfigStatus\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -1061,7 +1154,10 @@ const file_sermon_web_v1_log_settings_proto_rawDesc = "" +
 	"\x19SetRedactionRulesResponse\"E\n" +
 	"\x19SetViewerLogAccessRequest\x12(\n" +
 	"\x10viewers_see_logs\x18\x01 \x01(\bR\x0eviewersSeeLogs\"\x1c\n" +
-	"\x1aSetViewerLogAccessResponse\"w\n" +
+	"\x1aSetViewerLogAccessResponse\"N\n" +
+	"\x1eSetLiveViewCommandLinesRequest\x12,\n" +
+	"\x12hide_command_lines\x18\x01 \x01(\bR\x10hideCommandLines\"!\n" +
+	"\x1fSetLiveViewCommandLinesResponse\"w\n" +
 	"\x14TestRedactionRequest\x12<\n" +
 	"\x05rules\x18\x01 \x03(\v2\x1c.sermon.web.v1.RedactionRuleB\b\xbaH\x05\x92\x01\x02\x10 R\x05rules\x12!\n" +
 	"\x06sample\x18\x02 \x01(\tB\t\xbaH\x06r\x04(\x80\x80\x01R\x06sample\"3\n" +
@@ -1076,13 +1172,14 @@ const file_sermon_web_v1_log_settings_proto_rawDesc = "" +
 	"\x14LOG_SEVERITY_WARNING\x10\x05\x12\x17\n" +
 	"\x13LOG_SEVERITY_NOTICE\x10\x06\x12\x15\n" +
 	"\x11LOG_SEVERITY_INFO\x10\a\x12\x16\n" +
-	"\x12LOG_SEVERITY_DEBUG\x10\b2\x8e\x05\n" +
+	"\x12LOG_SEVERITY_DEBUG\x10\b2\x88\x06\n" +
 	"\x12LogSettingsService\x12b\n" +
 	"\x0eGetLogSettings\x12$.sermon.web.v1.GetLogSettingsRequest\x1a%.sermon.web.v1.GetLogSettingsResponse\"\x03\x90\x02\x01\x12l\n" +
 	"\x13SetGroupLogSettings\x12).sermon.web.v1.SetGroupLogSettingsRequest\x1a*.sermon.web.v1.SetGroupLogSettingsResponse\x12r\n" +
 	"\x15ResetGroupLogSettings\x12+.sermon.web.v1.ResetGroupLogSettingsRequest\x1a,.sermon.web.v1.ResetGroupLogSettingsResponse\x12f\n" +
 	"\x11SetRedactionRules\x12'.sermon.web.v1.SetRedactionRulesRequest\x1a(.sermon.web.v1.SetRedactionRulesResponse\x12i\n" +
-	"\x12SetViewerLogAccess\x12(.sermon.web.v1.SetViewerLogAccessRequest\x1a).sermon.web.v1.SetViewerLogAccessResponse\x12_\n" +
+	"\x12SetViewerLogAccess\x12(.sermon.web.v1.SetViewerLogAccessRequest\x1a).sermon.web.v1.SetViewerLogAccessResponse\x12x\n" +
+	"\x17SetLiveViewCommandLines\x12-.sermon.web.v1.SetLiveViewCommandLinesRequest\x1a..sermon.web.v1.SetLiveViewCommandLinesResponse\x12_\n" +
 	"\rTestRedaction\x12#.sermon.web.v1.TestRedactionRequest\x1a$.sermon.web.v1.TestRedactionResponse\"\x03\x90\x02\x01B\xbf\x01\n" +
 	"\x11com.sermon.web.v1B\x10LogSettingsProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
@@ -1099,27 +1196,29 @@ func file_sermon_web_v1_log_settings_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_log_settings_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_log_settings_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_sermon_web_v1_log_settings_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_sermon_web_v1_log_settings_proto_goTypes = []any{
-	(LogSeverity)(0),                      // 0: sermon.web.v1.LogSeverity
-	(*LogSettings)(nil),                   // 1: sermon.web.v1.LogSettings
-	(*LogFileGlob)(nil),                   // 2: sermon.web.v1.LogFileGlob
-	(*GroupLogSettings)(nil),              // 3: sermon.web.v1.GroupLogSettings
-	(*RedactionRule)(nil),                 // 4: sermon.web.v1.RedactionRule
-	(*GetLogSettingsRequest)(nil),         // 5: sermon.web.v1.GetLogSettingsRequest
-	(*GetLogSettingsResponse)(nil),        // 6: sermon.web.v1.GetLogSettingsResponse
-	(*NodeConfigStatus)(nil),              // 7: sermon.web.v1.NodeConfigStatus
-	(*SetGroupLogSettingsRequest)(nil),    // 8: sermon.web.v1.SetGroupLogSettingsRequest
-	(*SetGroupLogSettingsResponse)(nil),   // 9: sermon.web.v1.SetGroupLogSettingsResponse
-	(*ResetGroupLogSettingsRequest)(nil),  // 10: sermon.web.v1.ResetGroupLogSettingsRequest
-	(*ResetGroupLogSettingsResponse)(nil), // 11: sermon.web.v1.ResetGroupLogSettingsResponse
-	(*SetRedactionRulesRequest)(nil),      // 12: sermon.web.v1.SetRedactionRulesRequest
-	(*SetRedactionRulesResponse)(nil),     // 13: sermon.web.v1.SetRedactionRulesResponse
-	(*SetViewerLogAccessRequest)(nil),     // 14: sermon.web.v1.SetViewerLogAccessRequest
-	(*SetViewerLogAccessResponse)(nil),    // 15: sermon.web.v1.SetViewerLogAccessResponse
-	(*TestRedactionRequest)(nil),          // 16: sermon.web.v1.TestRedactionRequest
-	(*TestRedactionResponse)(nil),         // 17: sermon.web.v1.TestRedactionResponse
-	(*timestamppb.Timestamp)(nil),         // 18: google.protobuf.Timestamp
+	(LogSeverity)(0),                        // 0: sermon.web.v1.LogSeverity
+	(*LogSettings)(nil),                     // 1: sermon.web.v1.LogSettings
+	(*LogFileGlob)(nil),                     // 2: sermon.web.v1.LogFileGlob
+	(*GroupLogSettings)(nil),                // 3: sermon.web.v1.GroupLogSettings
+	(*RedactionRule)(nil),                   // 4: sermon.web.v1.RedactionRule
+	(*GetLogSettingsRequest)(nil),           // 5: sermon.web.v1.GetLogSettingsRequest
+	(*GetLogSettingsResponse)(nil),          // 6: sermon.web.v1.GetLogSettingsResponse
+	(*NodeConfigStatus)(nil),                // 7: sermon.web.v1.NodeConfigStatus
+	(*SetGroupLogSettingsRequest)(nil),      // 8: sermon.web.v1.SetGroupLogSettingsRequest
+	(*SetGroupLogSettingsResponse)(nil),     // 9: sermon.web.v1.SetGroupLogSettingsResponse
+	(*ResetGroupLogSettingsRequest)(nil),    // 10: sermon.web.v1.ResetGroupLogSettingsRequest
+	(*ResetGroupLogSettingsResponse)(nil),   // 11: sermon.web.v1.ResetGroupLogSettingsResponse
+	(*SetRedactionRulesRequest)(nil),        // 12: sermon.web.v1.SetRedactionRulesRequest
+	(*SetRedactionRulesResponse)(nil),       // 13: sermon.web.v1.SetRedactionRulesResponse
+	(*SetViewerLogAccessRequest)(nil),       // 14: sermon.web.v1.SetViewerLogAccessRequest
+	(*SetViewerLogAccessResponse)(nil),      // 15: sermon.web.v1.SetViewerLogAccessResponse
+	(*SetLiveViewCommandLinesRequest)(nil),  // 16: sermon.web.v1.SetLiveViewCommandLinesRequest
+	(*SetLiveViewCommandLinesResponse)(nil), // 17: sermon.web.v1.SetLiveViewCommandLinesResponse
+	(*TestRedactionRequest)(nil),            // 18: sermon.web.v1.TestRedactionRequest
+	(*TestRedactionResponse)(nil),           // 19: sermon.web.v1.TestRedactionResponse
+	(*timestamppb.Timestamp)(nil),           // 20: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_log_settings_proto_depIdxs = []int32{
 	0,  // 0: sermon.web.v1.LogSettings.min_severity:type_name -> sermon.web.v1.LogSeverity
@@ -1128,7 +1227,7 @@ var file_sermon_web_v1_log_settings_proto_depIdxs = []int32{
 	3,  // 3: sermon.web.v1.GetLogSettingsResponse.groups:type_name -> sermon.web.v1.GroupLogSettings
 	4,  // 4: sermon.web.v1.GetLogSettingsResponse.redaction_rules:type_name -> sermon.web.v1.RedactionRule
 	7,  // 5: sermon.web.v1.GetLogSettingsResponse.nodes:type_name -> sermon.web.v1.NodeConfigStatus
-	18, // 6: sermon.web.v1.NodeConfigStatus.reported_at:type_name -> google.protobuf.Timestamp
+	20, // 6: sermon.web.v1.NodeConfigStatus.reported_at:type_name -> google.protobuf.Timestamp
 	1,  // 7: sermon.web.v1.SetGroupLogSettingsRequest.settings:type_name -> sermon.web.v1.LogSettings
 	4,  // 8: sermon.web.v1.SetRedactionRulesRequest.rules:type_name -> sermon.web.v1.RedactionRule
 	4,  // 9: sermon.web.v1.TestRedactionRequest.rules:type_name -> sermon.web.v1.RedactionRule
@@ -1137,15 +1236,17 @@ var file_sermon_web_v1_log_settings_proto_depIdxs = []int32{
 	10, // 12: sermon.web.v1.LogSettingsService.ResetGroupLogSettings:input_type -> sermon.web.v1.ResetGroupLogSettingsRequest
 	12, // 13: sermon.web.v1.LogSettingsService.SetRedactionRules:input_type -> sermon.web.v1.SetRedactionRulesRequest
 	14, // 14: sermon.web.v1.LogSettingsService.SetViewerLogAccess:input_type -> sermon.web.v1.SetViewerLogAccessRequest
-	16, // 15: sermon.web.v1.LogSettingsService.TestRedaction:input_type -> sermon.web.v1.TestRedactionRequest
-	6,  // 16: sermon.web.v1.LogSettingsService.GetLogSettings:output_type -> sermon.web.v1.GetLogSettingsResponse
-	9,  // 17: sermon.web.v1.LogSettingsService.SetGroupLogSettings:output_type -> sermon.web.v1.SetGroupLogSettingsResponse
-	11, // 18: sermon.web.v1.LogSettingsService.ResetGroupLogSettings:output_type -> sermon.web.v1.ResetGroupLogSettingsResponse
-	13, // 19: sermon.web.v1.LogSettingsService.SetRedactionRules:output_type -> sermon.web.v1.SetRedactionRulesResponse
-	15, // 20: sermon.web.v1.LogSettingsService.SetViewerLogAccess:output_type -> sermon.web.v1.SetViewerLogAccessResponse
-	17, // 21: sermon.web.v1.LogSettingsService.TestRedaction:output_type -> sermon.web.v1.TestRedactionResponse
-	16, // [16:22] is the sub-list for method output_type
-	10, // [10:16] is the sub-list for method input_type
+	16, // 15: sermon.web.v1.LogSettingsService.SetLiveViewCommandLines:input_type -> sermon.web.v1.SetLiveViewCommandLinesRequest
+	18, // 16: sermon.web.v1.LogSettingsService.TestRedaction:input_type -> sermon.web.v1.TestRedactionRequest
+	6,  // 17: sermon.web.v1.LogSettingsService.GetLogSettings:output_type -> sermon.web.v1.GetLogSettingsResponse
+	9,  // 18: sermon.web.v1.LogSettingsService.SetGroupLogSettings:output_type -> sermon.web.v1.SetGroupLogSettingsResponse
+	11, // 19: sermon.web.v1.LogSettingsService.ResetGroupLogSettings:output_type -> sermon.web.v1.ResetGroupLogSettingsResponse
+	13, // 20: sermon.web.v1.LogSettingsService.SetRedactionRules:output_type -> sermon.web.v1.SetRedactionRulesResponse
+	15, // 21: sermon.web.v1.LogSettingsService.SetViewerLogAccess:output_type -> sermon.web.v1.SetViewerLogAccessResponse
+	17, // 22: sermon.web.v1.LogSettingsService.SetLiveViewCommandLines:output_type -> sermon.web.v1.SetLiveViewCommandLinesResponse
+	19, // 23: sermon.web.v1.LogSettingsService.TestRedaction:output_type -> sermon.web.v1.TestRedactionResponse
+	17, // [17:24] is the sub-list for method output_type
+	10, // [10:17] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name
 	10, // [10:10] is the sub-list for extension extendee
 	0,  // [0:10] is the sub-list for field type_name
@@ -1162,7 +1263,7 @@ func file_sermon_web_v1_log_settings_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_log_settings_proto_rawDesc), len(file_sermon_web_v1_log_settings_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

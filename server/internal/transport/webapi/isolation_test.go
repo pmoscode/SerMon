@@ -38,6 +38,7 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.LogSettingsService/GetLogSettings":             "only the caller's own organization, no IDs (log_settings_integration_test.go)",
 	"/sermon.web.v1.LogSettingsService/SetRedactionRules":          "only the caller's own organization, no IDs (log_settings_integration_test.go)",
 	"/sermon.web.v1.LogSettingsService/SetViewerLogAccess":         "only the caller's own organization, no IDs (log_settings_integration_test.go)",
+	"/sermon.web.v1.LogSettingsService/SetLiveViewCommandLines":    "only the caller's own organization, no IDs (live_view_integration_test.go)",
 	"/sermon.web.v1.LogSettingsService/TestRedaction":              "no stored data, no IDs: redacts the request's own sample",
 }
 

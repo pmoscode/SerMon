@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// LiveViewService shows the processes of a node live, like top (KONZEPT §9, M3-14). Nothing of
+// it is stored; it is read only (D19). Needs use_live_view for the node's group.
+service LiveViewService {
+  // WatchProcesses streams a snapshot of the node's processes about every 2 s. Viewers of a node
+  // share one stream of its agent. A message with offline is sent while the agent is not
+  // connected to this server instance, one with refused when the agent forbids the live view
+  // (the stream ends then). The live stream limits of WatchMetrics apply together with it
+  // (RESOURCE_EXHAUSTED). It ends after 15 minutes, when the rights change or the organization
+  // switches command lines on or off; the client reconnects. NOT_FOUND for a node the caller
+  // doesn't see, PERMISSION_DENIED without use_live_view, UNAUTHENTICATED after a logout.
+  rpc WatchProcesses(WatchProcessesRequest) returns (stream WatchProcessesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// WatchProcessesRequest names the node.
+message WatchProcessesRequest {
+  // node_id is the node to watch.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// WatchProcessesResponse is one message of the live view.
+message WatchProcessesResponse {
+  // event is what happened; exactly one is set.
+  oneof event {
+    option (buf.validate.oneof).required = true;
+
+    // snapshot is the state of the node's processes.
+    ProcessSnapshot snapshot = 1;
+    // refused is the agent's reason not to show its processes (agent.toml).
+    string refused = 2;
+    // offline is set while the node's agent is not connected to this server instance.
+    bool offline = 3;
+  }
+}
+
+// ProcessSnapshot is the state of a host's processes at one moment.
+message ProcessSnapshot {
+  // taken_at is the agent's time of the snapshot.
+  google.protobuf.Timestamp taken_at = 1;
+  // summary is the header (CPU, memory, swap, load, uptime, tasks).
+  SystemSummary summary = 2;
+  // processes are the busiest processes first, at most 4000.
+  repeated ProcessInfo processes = 3;
+  // omitted counts the processes left out over the bound.
+  uint32 omitted = 4;
+}
+
+// SystemSummary is the header of a snapshot, like top's.
+message SystemSummary {
+  // cpu_busy_ratio is the busy share of all CPUs over the interval; unset in the first snapshot.
+  optional double cpu_busy_ratio = 1;
+  // cpu_count is the number of CPUs.
+  uint32 cpu_count = 2;
+  // memory_total_bytes is the physical memory.
+  uint64 memory_total_bytes = 3;
+  // memory_available_bytes is the memory available without swapping.
+  uint64 memory_available_bytes = 4;
+  // swap_total_bytes is the swap space.
+  uint64 swap_total_bytes = 5;
+  // swap_free_bytes is the unused swap space.
+  uint64 swap_free_bytes = 6;
+  // load_1 is the load over 1 minute, if readable.
+  optional double load_1 = 7;
+  // load_5 is the load over 5 minutes.
+  optional double load_5 = 8;
+  // load_15 is the load over 15 minutes.
+  optional double load_15 = 9;
+  // uptime_seconds is the time since boot, if readable.
+  optional uint64 uptime_seconds = 10;
+  // tasks counts the processes per state.
+  TaskCounts tasks = 11;
+}
+
+// TaskCounts are the processes per state.
+message TaskCounts {
+  // total is every process.
+  uint32 total = 1;
+  // running is state R.
+  uint32 running = 2;
+  // sleeping is states S, D and I.
+  uint32 sleeping = 3;
+  // stopped is states T and t.
+  uint32 stopped = 4;
+  // zombie is state Z.
+  uint32 zombie = 5;
+}
+
+// ProcessInfo is one process. Every text comes from the host: show it as text only. Unset fields
+// were not readable ("n/a").
+message ProcessInfo {
+  // pid is the process ID.
+  uint32 pid = 1;
+  // ppid is the parent's ID.
+  uint32 ppid = 2;
+  // uid is the real user ID.
+  optional uint32 uid = 3;
+  // user is the name of uid; empty without one.
+  string user = 4;
+  // state is the one-letter state (R, S, D, Z, T, I, …).
+  string state = 5;
+  // cpu_ratio is the CPU share of one core over the interval; unset in the first snapshot.
+  optional double cpu_ratio = 6;
+  // rss_bytes is the resident memory.
+  optional uint64 rss_bytes = 7;
+  // memory_ratio is rss_bytes of the physical memory.
+  optional double memory_ratio = 8;
+  // threads is the number of threads.
+  uint32 threads = 9;
+  // runtime_seconds is the time since the start of the process.
+  optional uint64 runtime_seconds = 10;
+  // name is the process name.
+  string name = 11;
+  // cmdline is the redacted, cut command line; unset if hidden or not readable, empty for
+  // kernel threads and zombies.
+  optional string cmdline = 12;
+  // cmdline_truncated is set if the command line was cut.
+  bool cmdline_truncated = 13;
+  // cmdline_hidden is set if the organization hides command lines.
+  bool cmdline_hidden = 14;
+  // kernel_thread marks threads of the kernel.
+  bool kernel_thread = 15;
+  // unit is the systemd unit from the cgroup.
+  string unit = 16;
+  // container is the first 12 characters of a container ID.
+  string container = 17;
+}

@@ -8,7 +8,13 @@ LEFT JOIN log_settings ls ON ls.org_id = g.org_id AND ls.group_id = g.id
 ORDER BY g.name;
 
 -- name: OrganizationAgentConfig :one
-SELECT agent_config_version, redaction_rules, viewers_see_logs FROM organizations WHERE id = current_org_id();
+SELECT agent_config_version, redaction_rules, viewers_see_logs, live_hide_cmdline FROM organizations WHERE id = current_org_id();
+
+-- name: SetLiveHideCmdline :exec
+UPDATE organizations SET live_hide_cmdline = sqlc.arg(hide) WHERE id = current_org_id();
+
+-- name: LiveHideCmdline :one
+SELECT live_hide_cmdline FROM organizations WHERE id = current_org_id();
 
 -- name: SetViewersSeeLogs :exec
 UPDATE organizations SET viewers_see_logs = sqlc.arg(see) WHERE id = current_org_id();

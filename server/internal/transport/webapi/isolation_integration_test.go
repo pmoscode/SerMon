@@ -99,6 +99,7 @@ type loggedIn struct {
 	policy       webv1connect.SecurityPolicyServiceClient
 	logSettings  webv1connect.LogSettingsServiceClient
 	logs         webv1connect.LogServiceClient
+	liveView     webv1connect.LiveViewServiceClient
 	jar          *cookiejar.Jar
 }
 
@@ -128,6 +129,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		logSettings:  webv1connect.NewLogSettingsServiceClient(hc, s.server.URL),
 		logs:         webv1connect.NewLogServiceClient(hc, s.server.URL),
+		liveView:     webv1connect.NewLiveViewServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
@@ -146,7 +148,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
 		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
-		logSettings: bea.logSettings, logs: bea.logs,
+		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}

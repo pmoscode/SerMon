@@ -11,7 +11,8 @@ import {
 	ownerSQL,
 	repoScript,
 	setupToken,
-	tamperDownload
+	tamperDownload,
+	watchProcesses
 } from './stack';
 
 /**
@@ -205,6 +206,24 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 			'for i in $(seq 1200); do logger -t budget-load "load line $i password=hunter2"; sleep 0.05; done'
 		)
 	);
+	// Since M3-14 web-01 also has its live view open (a snapshot every 2 s) the whole time, in a
+	// second tab; rocky-01 measures without one for comparison. A process with a secret in its
+	// command line shows that the live view redacts like the logs.
+	const liveHost = budgetHosts.find((a) => a.service === 'agent-debian-12')!;
+	exec(
+		liveHost.service,
+		`systemd-run --quiet --unit=e2e-secret sh -c 'sleep 120; echo password=hunter2'`
+	);
+	const liveFleet = await call<{ nodes?: { nodeId: string; hostname: string }[] }>(
+		page.request,
+		baseURL ?? '',
+		'FleetService/GetFleetSummary',
+		{}
+	);
+	const liveNode = (liveFleet.nodes ?? []).find((n) => n.hostname === liveHost.host)!.nodeId;
+	const viewer = await page.context().newPage();
+	await viewer.goto('/fleet');
+	const watching = watchProcesses(viewer, liveNode, 62);
 	const measuring = budgetHosts.map((a) => execAsync(a.service, 'sh -s -- 60 1 30', budget));
 	await page.screenshot({ path: 'test-results/demo-fleet.png', fullPage: true });
 
@@ -296,6 +315,24 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		expect(result.status, `${budgetHosts[i].host}:\n${result.output}`).toBe(0);
 		expect(result.output).toMatch(/, [2-9] processes/);
 	}
+	// The live view ran the whole time: first offline until the agent's stream started, then a
+	// snapshot every 2 s with the host's processes, the command line redacted (M3-14).
+	const live = await watching;
+	await viewer.close();
+	console.log(`live view of ${liveHost.host}: ${live.snapshots} snapshots in 62 s`);
+	expect(live.status, JSON.stringify(live)).toBe(200);
+	expect(live.refused).toBe('');
+	expect(live.snapshots).toBeGreaterThanOrEqual(25);
+	const agentProcess = live.processes.find((p) => p.name === 'sermon-agent');
+	expect(agentProcess?.user).toBe('sermon');
+	expect(agentProcess?.unit).toBe('sermon-agent.service');
+	// The unit holds the shell with the secret and its sleep.
+	const secret = live.processes.find(
+		(p) => p.unit === 'e2e-secret.service' && p.cmdline?.includes('password')
+	);
+	expect(secret?.cmdline).toContain('password=***');
+	expect(JSON.stringify(live.processes)).not.toContain('hunter2');
+	expect(live.processes.some((p) => p.pid === 1 && p.user === 'root')).toBe(true);
 	await Promise.all(load);
 	// The agents shipped the load lines, redacted (their own metrics, M3-04).
 	for (const host of budgetHosts) {

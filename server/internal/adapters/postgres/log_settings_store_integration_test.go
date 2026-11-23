@@ -219,3 +219,28 @@ func TestLogSettingsStore_StoresTheViewerSwitch(t *testing.T) {
 		t.Errorf("principal of Beta: %+v, %v", m, err)
 	}
 }
+
+// The live view's switch (M3-14): stored per organization with an audit entry.
+func TestLogSettingsStore_StoresTheCommandLineSwitch(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	store := postgres.NewLogSettingsStore(open(t, f.appDSN))
+	if hide, err := store.HideCommandLines(ctx, scopeFor(t, orgA)); err != nil || hide {
+		t.Fatalf("default: %v, %v", hide, err)
+	}
+	if err := store.PutHideCommandLines(ctx, scopeFor(t, orgA), true, alice, access.AuditEntry{Action: "live_view.command_lines", Target: "org:a"}); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = store.PutHideCommandLines(ctx, scopeFor(t, orgA), false, alice, access.AuditEntry{Action: "live_view.command_lines", Target: "org:a"})
+	}()
+	if hide, _ := store.HideCommandLines(ctx, scopeFor(t, orgA)); !hide {
+		t.Error("switch not stored")
+	}
+	if view, _ := store.View(ctx, scopeFor(t, orgA)); !view.HideCommandLines {
+		t.Error("the view lacks the switch")
+	}
+	if hide, _ := store.HideCommandLines(ctx, scopeFor(t, orgB)); hide {
+		t.Error("another organization keeps its switch")
+	}
+}

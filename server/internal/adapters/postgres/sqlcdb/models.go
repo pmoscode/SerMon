@@ -315,6 +315,7 @@ type Organization struct {
 	AgentConfigVersion  int64
 	RedactionRules      []byte
 	ViewersSeeLogs      bool
+	LiveHideCmdline     bool
 }
 
 type PkiAuthority struct {

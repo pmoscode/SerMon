@@ -13,6 +13,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
+	"github.com/pmoscode/SerMon/server/internal/app/liveview"
 	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
@@ -251,8 +252,9 @@ func readFailure(ctx context.Context, logger *slog.Logger, op string, err error)
 
 // streamDurations are the maximum durations of the live streams.
 var streamDurations = map[string]time.Duration{
-	"/sermon.web.v1.MetricsService/WatchMetrics": fleet.WatchDuration,
-	"/sermon.web.v1.LogService/TailLogs":         logs.TailDuration,
+	"/sermon.web.v1.MetricsService/WatchMetrics":    fleet.WatchDuration,
+	"/sermon.web.v1.LogService/TailLogs":            logs.TailDuration,
+	"/sermon.web.v1.LiveViewService/WatchProcesses": liveview.MaxDuration,
 }
 
 // streamingDeadline lifts the server's write timeout (against slow clients) for the live streams,

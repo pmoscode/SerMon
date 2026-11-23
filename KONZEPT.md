@@ -531,13 +531,22 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 - **Wird nur bei Bedarf aktiviert:** Öffnet ein User die Live-Ansicht, schickt der Server `StartLiveView{interval=2s}`
   an den Agent. Mehrere Betrachter teilen sich einen Stream (Fan-out im Server). 30 s nach dem letzten Betrachter folgt
   `StopLiveView`. Die Daten werden **nicht gespeichert**.
+- **Im Server** (M3-14): `LiveViewService.WatchProcesses` mit dem Recht `use_live_view` für die Gruppe des Nodes.
+    - Der Server erneuert die Lease des Agents alle 20 s, solange jemand zusieht.
+    - Ist der Agent nicht verbunden, bekommt der Betrachter `offline` und bleibt verbunden. Lehnt der Agent ab
+      (`allow_live_view = false`), endet der Stream mit dem Grund.
+    - Rechte, Sichtbarkeit des Nodes und der Org-Schalter werden alle 30 s geprüft; nach 15 min endet der Stream, der
+      Client verbindet sich neu. Es gelten die Grenzen der Live-Streams (§18, T26).
+    - Nur die Instanz mit der Session des Agents kann liefern ([ADR 0015](docs/adr/0015-topologie-und-betriebsmodell.md),
+      Nachtrag M3-14).
 - **Inhalt:** Prozessliste mit PID, PPID, User, Status, CPU %, MEM % / RSS, Threads, Laufzeit, Befehlszeile (gekürzt);
   Kopfzeile mit CPU, Mem, Swap, Load und Uptime (wie `top`).
 - **Bedienung:** Sortieren, Filtern (User, Name, Regex), Baumansicht (pstree), Pause; Detail-Drawer pro Prozess
   (vollständige cmdline, cgroup/Unit, Container-Zuordnung, offene FDs, falls lesbar).
 - **Nur lesen.** Es gibt keine Kill- oder Restart-Aktionen (D19).
 - **Datenschutz:** Kommandozeilen können Secrets enthalten. Die agentseitige **Redaction** (§10.3) gilt auch hier;
-  zusätzlich kann pro Org „cmdline ausblenden“ aktiviert werden.
+  zusätzlich kann pro Org „cmdline ausblenden“ aktiviert werden (Admin mit Step-up, im Audit-Log). Der Agent sendet die
+  Befehlszeilen dann nicht, und der Server entfernt sie zusätzlich selbst.
 - **Rechte-Hinweis:** Als User `sermon` sind `/proc/<pid>/io` und `fd/` fremder Prozesse nicht lesbar. Diese Felder
   zeigen „n/a“ mit erklärendem ⓘ. Es gibt bewusst **kein** `CAP_SYS_PTRACE` (siehe §24).
 

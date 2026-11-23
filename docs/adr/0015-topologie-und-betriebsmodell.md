@@ -40,3 +40,16 @@ später soll ein SaaS-Angebot ohne Umbau möglich sein. Die Zielgröße sind kle
 - Security: Der Agent ist immer Client; Identität über Client-Zertifikate (ADR 0009, 0010). Mandantendaten verlassen
   die Instanz nicht.
 - Folgearbeiten: Kein HA in v1 (O11); Worker mit Leases in PostgreSQL halten mehrere Instanzen offen.
+
+## Nachtrag M3-14
+
+- **Live-Ansicht nur über die Instanz mit der Agent-Session:** Die Snapshots der Live-Ansicht (KONZEPT §9) werden nicht
+  gespeichert und nicht zwischen Instanzen weitergereicht. Nur die Instanz, bei der der Agent gerade verbunden ist,
+  kann ihn starten und seine Snapshots an Betrachter senden. Pro Instanz teilen sich alle Betrachter eines Nodes einen
+  Agent-Stream (Hub im Speicher).
+- **Auf anderen Instanzen gilt der Node als offline:** Der Betrachter bekommt eine Meldung `offline` und bleibt
+  verbunden. Verbindet sich der Agent während der Betrachtung mit dieser Instanz, startet die Live-Ansicht von selbst.
+- **Warum kein Weiterreichen:** In v1 gibt es kein HA (O11), meist läuft eine Instanz. Ein Bus zwischen Instanzen
+  (PostgreSQL `LISTEN/NOTIFY` oder ein Broker) brächte für Daten, die nie gespeichert werden, einen neuen Pfad für
+  Mandantendaten. Bei mehreren Instanzen hinter einem Load-Balancer muss dieser Web- und Agent-Verbindungen derselben
+  Instanz zuordnen, damit die Live-Ansicht funktioniert. Das wird bei HA neu entschieden.

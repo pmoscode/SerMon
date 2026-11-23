@@ -45,6 +45,7 @@ type Handlers struct {
 	Windows         *MaintenanceWindowHandler
 	LogSettings     *LogSettingsHandler
 	Logs            *LogHandler
+	LiveView        *LiveViewHandler
 	Authenticator   *Authenticator // required for every service except AuthService
 }
 
@@ -92,6 +93,8 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	path, handler := webv1connect.NewMetricsServiceHandler(h.Metrics, authenticated)
 	mount(path, streamingDeadline(handler))
 	path, handler = webv1connect.NewLogServiceHandler(h.Logs, authenticated)
+	mount(path, streamingDeadline(handler))
+	path, handler = webv1connect.NewLiveViewServiceHandler(h.LiveView, authenticated)
 	mount(path, streamingDeadline(handler))
 
 	// Agents send neither Origin nor cookies: no origin check (CSRF needs cookies), the

@@ -18,11 +18,13 @@ type fakeSources struct {
 	events  uint64
 	size    int64
 	sizeErr error
+	noLogs  bool
 }
 
 func (f *fakeSources) IngestLag() time.Duration  { return f.lag }
 func (f *fakeSources) DroppedSamples() uint64    { return f.dropped }
 func (f *fakeSources) DroppedRareEvents() uint64 { return f.events }
+func (f *fakeSources) LogsUnavailable() bool     { return f.noLogs }
 func (f *fakeSources) DatabaseSize(context.Context) (int64, error) {
 	return f.size, f.sizeErr
 }
@@ -182,5 +184,29 @@ func TestMonitor_WorksWithoutMail(t *testing.T) {
 	m.Check(context.Background())
 	if len(m.Problems()) != 1 {
 		t.Errorf("problems = %v", m.Problems())
+	}
+}
+
+// Loki down (M3-07): log entries are dropped while metrics and alerts go on – a warning with a
+// mail, and the all-clear once logs are stored again.
+func TestMonitor_UnavailableLogsWarn(t *testing.T) {
+	now := t0
+	src := &fakeSources{noLogs: true}
+	mailer := &fakeMail{admins: []string{"alice@example.org"}}
+	m := monitor(src, mailer, &now, 0)
+	ctx := context.Background()
+	m.Check(ctx)
+	p := m.Problems()
+	if len(p) != 1 || p[0].Check != selfmonitor.LogsUnavailable || p[0].Level != selfmonitor.Warning {
+		t.Fatalf("problems = %+v", p)
+	}
+	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].text, "Loki") || !strings.Contains(mailer.sent[0].subject, "log entries") {
+		t.Errorf("mails = %+v", mailer.sent)
+	}
+	src.noLogs = false
+	now = now.Add(time.Minute)
+	m.Check(ctx)
+	if len(m.Problems()) != 0 || len(mailer.sent) != 2 || !strings.Contains(mailer.sent[1].subject, "resolved") {
+		t.Errorf("after the recovery: %v, mails %+v", m.Problems(), mailer.sent)
 	}
 }

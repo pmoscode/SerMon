@@ -309,6 +309,27 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 			.toBeGreaterThanOrEqual(1000);
 		expect(counter('sermon_agent_logs_sent_entries')).toBeGreaterThanOrEqual(1000);
 		expect(counter('sermon_agent_logs_dropped_entries')).toBe(0);
+		// …and they are in Loki (M3-07), in the tenant of the node's organization, redacted. Loki
+		// has no port: asked from the database container on the same internal network.
+		const [nodeID, orgID] = ownerSQL(`SELECT id, org_id FROM nodes WHERE hostname = '${host.host}'`)
+			.trim()
+			.split('|');
+		const query = encodeURIComponent(`{node_id="${nodeID}"} |= "load line"`);
+		const lokiLines = (tenant: string) =>
+			exec(
+				'postgres',
+				`wget -qO- --header 'X-Scope-OrgID: ${tenant}' 'http://loki:3100/loki/api/v1/query_range?query=${query}&limit=5000&since=10m'`
+			);
+		await expect
+			.poll(() => (lokiLines(orgID).match(/load line \d+ password=\*\*\*/g) ?? []).length, {
+				timeout: 60_000
+			})
+			.toBeGreaterThanOrEqual(1000);
+		const stored = lokiLines(orgID);
+		expect(stored).not.toContain('hunter2');
+		expect(stored).toContain('budget-load');
+		// Another organization's tenant sees none of it.
+		expect(lokiLines('00000000-0000-7000-8000-000000000000')).not.toContain('load line');
 	}
 	const lowered = await execAsync(budgetHosts[0].service, 'sh -s -- 3 0 1', budget);
 	expect(lowered.status, lowered.output).toBe(1);

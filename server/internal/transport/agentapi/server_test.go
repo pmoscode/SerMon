@@ -989,3 +989,68 @@ func TestSession_AcknowledgesLogBatchesWithoutStoringThemYet(t *testing.T) {
 		t.Errorf("lag = %d ms after a log batch", lag)
 	}
 }
+
+// recordingLogs captures what the ingest writes as logs.
+type recordingLogs struct {
+	mu      sync.Mutex
+	node    identity.NodeID
+	entries []ingest.LogEntry
+}
+
+func (r *recordingLogs) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, entries []ingest.LogEntry) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.node = node
+	r.entries = append(r.entries, entries...)
+	return nil
+}
+
+// Log entries (M3-07): converted field by field, stored under the certificate's node.
+func TestSession_StoresLogEntries(t *testing.T) {
+	store := memstore.New()
+	group := tenant.GroupID(uuid.New())
+	store.AddNode(orgX, group, nodeX)
+	config := ingest.DefaultConfig()
+	config.FlushInterval = 20 * time.Millisecond
+	service := ingest.NewService(store, metrics.NewRing(), fakeNodes{group: group}, config, time.Now, slog.New(slog.DiscardHandler))
+	recorded := &recordingLogs{}
+	service.SetLogWriter(recorded)
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithIngest(service)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Receive(); err != nil {
+		t.Fatal(err)
+	}
+	journal := journalEntry("upstream timed out")
+	at := time.Now().Add(-time.Minute).Truncate(time.Microsecond)
+	journal.OccurredAt = timestamppb.New(at)
+	file := &agentv1.LogEntry{
+		OccurredAt: timestamppb.New(at), Source: agentv1.LogSource_LOG_SOURCE_FILE, File: "/var/log/nginx/error.log",
+		Unit: "nginx", Message: "x", Truncated: true,
+	}
+	if err := stream.Send(logs(journal, file)); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := stream.Receive(); err != nil || res.GetAck().GetSeq() != 3 {
+		t.Fatalf("Receive() = %v, %v; want Ack 3", res, err)
+	}
+	_ = stream.CloseRequest()
+	recorded.mu.Lock()
+	defer recorded.mu.Unlock()
+	if recorded.node != nodeX || len(recorded.entries) != 2 {
+		t.Fatalf("stored %d entries for %v", len(recorded.entries), recorded.node)
+	}
+	e := recorded.entries[0]
+	if !e.At.Equal(at) || e.Source != ingest.LogSourceJournal || e.Unit != "nginx.service" || e.Identifier != "nginx" ||
+		e.Severity != 4 || e.Message != "upstream timed out" || e.PID != 812 || e.Process != "nginx" || *e.UID != 33 ||
+		e.BootID != "cc8f81a486f84386b00bc31030b4e1bb" || e.Transport != "stdout" || *e.Facility != 3 || e.Truncated {
+		t.Errorf("journal entry = %+v", e)
+	}
+	f := recorded.entries[1]
+	if f.Source != ingest.LogSourceFile || f.File != "/var/log/nginx/error.log" || !f.Truncated || f.UID != nil || f.Facility != nil {
+		t.Errorf("file entry = %+v", f)
+	}
+}

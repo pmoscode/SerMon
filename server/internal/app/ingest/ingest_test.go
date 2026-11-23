@@ -233,9 +233,9 @@ func TestIngest_LateFutureAndAncientSamplesAreDroppedButAcknowledged(t *testing.
 	}
 }
 
-// Log batches (M3-01) are stored from M3-07 on; until then they are acknowledged in order and
-// dropped, without touching the metric windows or the ingest lag.
-func TestIngest_LogBatchesAreAcknowledgedInOrderUntilTheyAreStored(t *testing.T) {
+// Log batches without a log store are acknowledged in order and dropped, without touching the
+// metric windows or the ingest lag (M3-01, M3-07).
+func TestIngest_LogBatchesAreAcknowledgedInOrderWithoutAStore(t *testing.T) {
 	w := newWorld(t, ingest.DefaultConfig())
 	s := w.open(t)
 	last := send(t, w, s, 1, t0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
@@ -244,7 +244,7 @@ func TestIngest_LogBatchesAreAcknowledgedInOrderUntilTheyAreStored(t *testing.T)
 	}
 	lag := w.svc.Stats().LagMillis.Load()
 
-	if response := s.Accept(context.Background(), ingest.Batch{Seq: last + 1, Logs: 3}); response.Ack != 0 || response.Throttle != nil {
+	if response := s.Accept(context.Background(), logBatch(last+1, logEntry(w.clock.Now(), "x"))); response.Ack != 0 || response.Throttle != nil {
 		t.Fatalf("Accept(logs) = %+v, want nothing before the flush", response)
 	}
 	if got := w.svc.Stats().LagMillis.Load(); got != lag {

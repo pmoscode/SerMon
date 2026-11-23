@@ -111,6 +111,20 @@ type Config struct {
 	// EventMaxAge bounds how old an event may be (MaxFuture applies too); the partitions start a
 	// month back (M2-07).
 	EventMaxAge time.Duration
+	// LogBytesRate and LogBytesBurst form a node's bucket for log bytes (the messages), across
+	// reconnects; OrgLogBytesRate and OrgLogBytesBurst the organization's (M3-07).
+	LogBytesRate, LogBytesBurst       float64
+	OrgLogBytesRate, OrgLogBytesBurst float64
+	// LogMaxAge bounds how old a log entry may be (MaxFuture applies too), as Loki does.
+	LogMaxAge time.Duration
+	// LogRetryFor is how long log batches are retried while the store fails; the acknowledgement
+	// waits for them that long at most, then they are dropped (ADR 0031).
+	LogRetryFor time.Duration
+	// LogDownFor is how long log batches are dropped without a try after the store failed for
+	// LogRetryFor.
+	LogDownFor time.Duration
+	// LogWriteTimeout bounds one write to the store.
+	LogWriteTimeout time.Duration
 }
 
 // DefaultConfig returns the default limits: about 60× the normal rate of a node.
@@ -126,6 +140,12 @@ func DefaultConfig() Config {
 		EventRate: 50, EventBurst: 5000, EventMaxAge: secevent.MaxAge,
 		// Logins, sudo and accounts come by hand: a few per minute; a script still fits.
 		RareEventRate: 5, RareEventBurst: 500,
+		// Twice what the agent sends at most (512 KiB/s, 5 MiB burst); the organization within
+		// Loki's limit per tenant (4 MB/s, burst 16 MB, deploy/compose/loki.yaml).
+		LogBytesRate: 1 << 20, LogBytesBurst: 8 << 20,
+		OrgLogBytesRate: 3 << 20, OrgLogBytesBurst: 12 << 20,
+		LogMaxAge:   7 * 24 * time.Hour,
+		LogRetryFor: 30 * time.Second, LogDownFor: 30 * time.Second, LogWriteTimeout: 10 * time.Second,
 	}
 }
 
@@ -135,6 +155,8 @@ type Stats struct {
 	// Security events: stored, dropped by the node's bucket, rejected (time, validation), and
 	// batches that were stored before (resent after a reconnect).
 	Events, EventsDropped, EventsRejected, EventDuplicates atomic.Uint64
+	// Log entries: stored, and dropped by reason (M3-07).
+	LogEntries, LogsDroppedRate, LogsDroppedAge, LogsDroppedRejected, LogsDroppedUnavailable, LogsDroppedNoStore atomic.Uint64
 	// LagMillis is the delay of the latest batch (server time − collection time).
 	LagMillis atomic.Int64
 	// droppedKinds counts the events dropped by the buckets per kind (index in secevent.Kinds).
@@ -201,6 +223,13 @@ type Service struct {
 	events      secevents.Writer
 	bucketMu    sync.Mutex
 	eventBucket map[identity.NodeID]*eventBuckets
+
+	logs           LogWriter
+	logMu          sync.Mutex
+	nodeLogBuckets map[identity.NodeID]*bucket
+	orgLogBuckets  map[tenant.OrgID]*bucket
+	units          map[identity.NodeID]map[string]struct{}
+	logsDownUntil  time.Time
 }
 
 // eventBuckets are a node's buckets: the noisy kinds and the rest.
@@ -276,7 +305,10 @@ type orgCount struct {
 
 // NewService returns the ingest service.
 func NewService(store metrics.Store, ring *metrics.Ring, nodes Nodes, config Config, now func() time.Time, logger *slog.Logger) *Service {
-	return &Service{eventBucket: map[identity.NodeID]*eventBuckets{}, store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{}}
+	return &Service{
+		eventBucket: map[identity.NodeID]*eventBuckets{}, nodeLogBuckets: map[identity.NodeID]*bucket{},
+		orgLogBuckets: map[tenant.OrgID]*bucket{}, units: map[identity.NodeID]map[string]struct{}{}, store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{},
+	}
 }
 
 // maxReportedUnknown bounds the metric names remembered for "logged once".
@@ -312,8 +344,8 @@ type Batch struct {
 	CollectedAt time.Time
 	Samples     []Sample
 	Events      []secevent.Event
-	// Logs is the number of log entries of a log batch (M3-01); they are stored from M3-07 on.
-	Logs int
+	// Logs are the entries of a log batch (M3-07).
+	Logs []LogEntry
 }
 
 // Response tells the transport what to send back.
@@ -365,6 +397,8 @@ type Session struct {
 	eventsDropped bool
 	lastSeen      time.Time
 	events        []secevents.Batch // waiting for the next flush
+	logs          []logBatch        // waiting for the next flush
+	logsFailing   time.Time         // since when the store fails for the waiting logs
 }
 
 // ErrOpen means the session could not be prepared (database unavailable); the agent retries.
@@ -466,10 +500,8 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		s.acceptEvents(batch, now)
 		return Response{}
 	}
-	if batch.Logs > 0 {
-		// Until the log ingest (M3-07) a log batch is acknowledged in order and dropped. Agents
-		// send logs only when the server's configuration asks for them (M3-03).
-		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
+	if len(batch.Logs) > 0 {
+		s.acceptLogs(batch, now)
 		return Response{}
 	}
 	stats.LagMillis.Store(now.Sub(batch.CollectedAt).Milliseconds())
@@ -553,7 +585,7 @@ func (s *Session) acceptEvents(batch Batch, now time.Time) {
 
 // Due reports whether enough batches wait for an early flush; security events flush at once.
 func (s *Session) Due() bool {
-	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0
+	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0 || len(s.logs) > 0
 }
 
 // Flush writes the complete windows and returns the sequence number to acknowledge (0: none).
@@ -573,11 +605,14 @@ func (s *Session) Flush(ctx context.Context) (uint64, error) {
 		s.service.stats.EventDuplicates.Add(uint64(max(len(s.events)-len(written), 0)))
 		s.events = nil
 	}
+	// Logs next: while the store fails they wait, and so does the acknowledgement of the batches
+	// from theirs on – at most LogRetryFor (ADR 0031).
+	holdFrom := s.flushLogs(ctx)
 	complete := s.watermark.Truncate(metrics.Window)
 	ack := s.persisted
 	ackable := 0
 	for _, batch := range s.pending {
-		if batch.end.After(complete) {
+		if batch.end.After(complete) || (holdFrom != 0 && batch.seq >= holdFrom) {
 			break
 		}
 		ack = batch.seq

@@ -50,3 +50,29 @@ Gewählt: **Option 2.**
 - Negativ: Wer in den Server-Container einbricht, erreicht Loki mit jedem Tenant (wie die Datenbank als `sermon_app`,
   aber ohne RLS als zweite Linie). Abgemildert durch das interne Netz und den gehärteten Container.
 - Folgearbeiten: Log-Ingest (M3-07), Abfragen (M3-08), Live-Tail (M3-09), Löschen pro Tenant (M3-10).
+
+## Nachtrag M3-07: Ingest und Ausfall von Loki
+
+Der Agent bestätigt seine Batches über eine gemeinsame Seq (Metriken, Events und Logs in einem WAL). Würde der Server
+einen Log-Batch erst nach dem Push bestätigen und Loki fällt aus, stünden auch alle Metriken und Security-Events
+dahinter, und damit die Alerts.
+
+- **Gewählt:** Logs nach begrenzter Zeit verwerfen statt Acks pro Inhalt (Protokolländerung, zweite Seq im WAL).
+  - Log-Batches warten wie Events im Puffer der Session und gehen beim nächsten Flush nach Loki (höchstens 10 s pro
+    Push).
+  - Schlägt der Push fehl, wartet die Bestätigung ab diesem Batch. Nach `LogRetryFor` (30 s) werden die Logs
+    verworfen und gezählt, und die Bestätigung geht weiter.
+  - Danach gilt Loki für `LogDownFor` (30 s) als ausgefallen: Neue Log-Batches werden ohne Versuch verworfen. So hält
+    ein langer Ausfall die Metriken je Zeitraum nur einmal kurz an.
+  - Was Loki endgültig ablehnt (4xx außer 429), wird sofort verworfen.
+- **Grenzen im Server:**
+  - Bytes/s pro Node (1 MiB/s, Spitze 8 MiB) über Reconnects und pro Org (3 MiB/s, Spitze 12 MiB, unter Lokis
+    Grenze pro Tenant).
+  - Zeitfenster 7 Tage bis 5 min voraus.
+  - Höchstens 64 Units pro Node, danach `other`.
+  - Kein Throttle: Er bremste auch die Metriken.
+- **Duplikate:** Ein Batch, den der Server schrieb, aber vor dem Ack verlor, kommt erneut. Loki speichert identische
+  Einträge eines Streams nur einmal; das ist gegen das echte Image getestet.
+- **Sichtbarkeit:** Zähler `sermon_server_ingest_log_entries_total` und
+  `sermon_server_ingest_dropped_log_entries_total{reason}`; das Self-Monitoring meldet `logs_unavailable` an die
+  Superadmins (Mail und Band in der UI).

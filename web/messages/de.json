@@ -539,6 +539,7 @@
 	"instance_dropped_samples": "{count} Samples in 15 Minuten verworfen",
 	"instance_dropped_security_events": "{count} Security-Events (Logins, sudo, Konten) in 15 Minuten verworfen",
 	"instance_database_size": "Die Datenbank läuft voll ({percent} %)",
+	"instance_logs_unavailable": "Logs können nicht gespeichert werden (Loki nicht erreichbar), Log-Einträge werden verworfen",
 	"fleet_tag": "Tag",
 	"fleet_tag_all": "Alle Tags",
 	"tags_label": "Tags",

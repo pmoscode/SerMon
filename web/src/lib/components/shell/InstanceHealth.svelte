@@ -23,6 +23,8 @@
 				return m.instance_dropped_security_events({ count: Math.round(p.value) });
 			case 'database_size':
 				return m.instance_database_size({ percent: Math.round(p.value * 100) });
+			case 'logs_unavailable':
+				return m.instance_logs_unavailable();
 			default:
 				return p.check;
 		}

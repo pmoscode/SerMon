@@ -570,7 +570,11 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
     gezählt (M3-04).
   - Logs belegen höchstens die Hälfte des Puffers. Darüber werden sie verworfen, damit Metriken und Security-Events
     ihren Platz behalten.
-  - Der Server begrenzt zusätzlich pro Node und Org (M3-07).
+  - Der Server begrenzt zusätzlich: 1 MiB/s pro Node, 3 MiB/s pro Org, 7 Tage alt bis 5 min voraus, höchstens 64 Units
+    pro Node (danach `other`) (M3-07).
+- **Ausfall von Loki:** Bestätigt wird erst nach dem Push. Schlägt er fehl, wartet die Bestätigung höchstens 30 s,
+  dann werden die Logs verworfen und gezählt, und Loki gilt 30 s als ausgefallen. So halten Logs Metriken und Alerts
+  nie lange auf; das Self-Monitoring meldet den Ausfall ([ADR 0031](docs/adr/0031-logs-in-loki.md), Nachtrag M3-07).
 - **Versand:** Der Journal- bzw. Dateiverbraucher gibt jeden Eintrag an die Security-Parser und an den Log-Versand.
   Dieser wählt nach der Konfiguration der Gruppe aus (ADR 0030), redigiert und bündelt (bis 1 s oder 256 KiB). Der
   Cursor bzw. die Position rückt erst vor, wenn Events und Logs im WAL liegen. Vor der ersten Konfiguration und mit

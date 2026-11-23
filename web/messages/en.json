@@ -539,6 +539,7 @@
 	"instance_dropped_samples": "{count} samples dropped within 15 minutes",
 	"instance_dropped_security_events": "{count} security events (logins, sudo, accounts) dropped within 15 minutes",
 	"instance_database_size": "The database is filling up ({percent} %)",
+	"instance_logs_unavailable": "Logs can't be stored (Loki unavailable), log entries are dropped",
 	"fleet_tag": "Tag",
 	"fleet_tag_all": "All tags",
 	"tags_label": "Tags",

@@ -583,7 +583,11 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		return batch
 	}
 	if logs := b.GetLogs(); logs != nil {
-		return ingest.Batch{Seq: b.GetSeq(), Logs: len(logs.GetEntries())}
+		batch := ingest.Batch{Seq: b.GetSeq(), Logs: make([]ingest.LogEntry, 0, len(logs.GetEntries()))}
+		for _, e := range logs.GetEntries() {
+			batch.Logs = append(batch.Logs, toLogEntry(e))
+		}
+		return batch
 	}
 	metrics := b.GetMetrics()
 	batch := ingest.Batch{Seq: b.GetSeq(), CollectedAt: metrics.GetCollectedAt().AsTime(), Samples: make([]ingest.Sample, 0, len(metrics.GetSamples()))}
@@ -595,6 +599,27 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		batch.Samples = append(batch.Samples, ingest.Sample{Metric: sample.GetMetric(), Labels: sample.GetLabels(), Value: value})
 	}
 	return batch
+}
+
+// toLogEntry converts a validated log entry; the node is the session's.
+func toLogEntry(e *agentv1.LogEntry) ingest.LogEntry {
+	entry := ingest.LogEntry{
+		At: e.GetOccurredAt().AsTime(), Source: ingest.LogSourceJournal, Unit: e.GetUnit(), File: e.GetFile(),
+		Severity: uint8(min(e.GetSeverity(), 8)), Message: e.GetMessage(), Truncated: e.GetTruncated(), //nolint:gosec // bounded by the schema and min
+		Identifier: e.GetIdentifier(), PID: e.GetPid(), Process: e.GetProcess(), BootID: e.GetBootId(), Transport: e.GetTransport(),
+	}
+	if e.GetSource() == agentv1.LogSource_LOG_SOURCE_FILE {
+		entry.Source = ingest.LogSourceFile
+	}
+	if e.Uid != nil {
+		uid := e.GetUid()
+		entry.UID = &uid
+	}
+	if e.Facility != nil {
+		facility := uint8(min(e.GetFacility(), 23)) // bounded by the schema and min
+		entry.Facility = &facility
+	}
+	return entry
 }
 
 func factsFrom(f *agentv1.HostFacts) ingest.HostFacts {

@@ -2884,7 +2884,41 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M2-26
 - **Skill:** `sermon-adr`
 
-#### ☐ M3-07 – Log-Ingest · S · M 🔒
+#### ☑ M3-07 – Log-Ingest · S · M 🔒
+> Erledigt ([ADR 0031](adr/0031-logs-in-loki.md), Nachtrag M3-07; KONZEPT §10.2; Threat Model T9, T35):
+> - **Ingest:**
+>   - Log-Batches warten wie Events im Puffer der Session, die Session wird sofort fällig. Sie gehen im Flush nach den
+>     Events und vor der Bestätigung nach Loki (`LogWriter`, höchstens 10 s).
+>   - Node und Org kommen aus der Session; ein erneut gesendeter Batch wird ohne Speichern bestätigt.
+> - **Ausfall von Loki** (Entscheidung im Nachtrag):
+>   - Die Bestätigung wartet ab dem ersten offenen Log-Batch höchstens 30 s. Danach werden die Logs verworfen und
+>     gezählt, und Loki gilt 30 s als ausgefallen (neue Logs ohne Versuch verworfen).
+>   - Was Loki endgültig ablehnt, wird sofort verworfen.
+>   - Kein Ack pro Inhalt, keine Protokolländerung.
+> - **Grenzen:**
+>   - Bytes/s pro Node über Reconnects (1 MiB/s, Spitze 8 MiB) und pro Org (3 MiB/s, Spitze 12 MiB)
+>   - Zeitfenster 7 Tage bis 5 min voraus
+>   - höchstens 64 Units pro Node (danach `other`)
+>   - **Abweichung:** kein Throttle, er bremste auch die Metriken; feste Werte statt Kontingenten (wie M2-38).
+> - **`loki.Writer`:** ein Stream pro Labelsatz; Identifier, PID, Prozess, UID, Boot-ID, Transport, Facility,
+>   Datei und `truncated` als structured metadata. 4xx wird zu `ingest.ErrLogsRejected`, 429 und 5xx werden
+>   wiederholt.
+> - **Sichtbarkeit:**
+>   - `/metrics`: `sermon_server_ingest_log_entries_total` und
+>     `sermon_server_ingest_dropped_log_entries_total{reason=rate|age|rejected|unavailable|no_store}`
+>   - Self-Monitoring `logs_unavailable` (Mail und Band für Superadmins, DE/EN)
+> - **Tests:**
+>   - Ingest: Speichern und Bestätigen in Reihenfolge; Resend; Ausfall hält nur bis `LogRetryFor`, dann verworfen,
+>     Ausfall-Fenster und Wiederaufnahme; Ablehnung; Zeitfenster; Flut pro Node über Reconnects und pro Org;
+>     Units; ohne Store.
+>   - Session: Umwandlung aller Felder, Identität aus dem Zertifikat.
+>   - Writer: Streams und Metadaten, Severity-Namen, Fehlerarten.
+>   - Integration gegen Loki: ein zweimal geschriebener Batch steht einmal in Loki.
+>   - Self-Monitoring mit Mail und Entwarnung; UI-Band.
+>   - Gegenproben für 11 Prüfungen. Eine überlebte: Das Schließen des Ausfall-Schalters nach einem Erfolg war
+>     überflüssig (kein Push, solange er offen ist) und ist entfernt.
+> - **E2E-Demo:** Die 1 200 Lastzeilen pro Host (M3-04) stehen redigiert im Tenant der Org des Nodes in Loki, ohne
+>   das Geheimnis; ein anderer Tenant sieht keine.
 - **Ziel:** `LogBatch` aus dem Stream nach Loki; bis dahin bestätigt der Server Log-Batches und verwirft sie
   (M3-01).
   - Node und Org kommen aus dem Zertifikat; Zeitfenster wie bei Events.

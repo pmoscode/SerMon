@@ -16,7 +16,8 @@ const problems = [
 		level: 'warning',
 		since: timestampFromMs(Date.now()),
 		value: 4
-	}
+	},
+	{ check: 'logs_unavailable', level: 'warning', since: timestampFromMs(Date.now()), value: 0 }
 ];
 
 describe('InstanceHealth', () => {
@@ -39,6 +40,7 @@ describe('InstanceHealth', () => {
 		await expect
 			.element(bar)
 			.toMatchTextContent(/4 security events \(logins, sudo, accounts\) dropped/);
+		await expect.element(bar).toMatchTextContent(/Logs can't be stored \(Loki unavailable\)/);
 		await expect.element(bar).toMatchTextContent(/Critical/);
 	});
 

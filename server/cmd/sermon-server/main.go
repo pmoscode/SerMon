@@ -144,9 +144,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	var checks []health.Check
 	var servers []func(context.Context) error
 	registry := serverMetrics()
-	// Logs (ADR 0031): the ingest stores them from M3-07 on.
+	// Logs (ADR 0031): the ingest writes them to Loki (M3-07).
+	var logStore *loki.Client
 	if cfg.LokiURL != nil {
-		logStore := loki.New(cfg.LokiURL)
+		logStore = loki.New(cfg.LokiURL)
 		checks = append(checks, health.Check{Name: "loki", Fn: logStore.Ready})
 	} else {
 		logger.WarnContext(ctx, "SERMON_LOKI_URL is not set – the server takes no logs from the agents")
@@ -210,7 +211,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		alertingAPI := alertingServices{policies: policies, silences: silences, alerts: alertPage, rules: ruleEditor}
 		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
 		// Self-monitoring (M2-24): ingest lag, dropped samples and database size, for superadmins only.
-		monitor := newSelfMonitor(cfg, db, ingestService.Stats(), logger)
+		if logStore != nil {
+			ingestService.SetLogWriter(loki.NewWriter(logStore))
+		}
+		monitor := newSelfMonitor(cfg, db, ingestService, logger)
 		servers = append(servers, func(ctx context.Context) error {
 			monitor.Run(ctx, time.Minute)
 			return nil
@@ -570,6 +574,7 @@ func newMailer(c *config.SMTP) *smtp.Mailer {
 // selfSources are the measurements of the self-monitoring (M2-24).
 type selfSources struct {
 	stats *ingest.Stats
+	logs  *ingest.Service
 	store *postgres.SelfMonitorStore
 }
 
@@ -586,6 +591,9 @@ func (s selfSources) DroppedSamples() uint64 {
 // DroppedRareEvents counts the rare security events the ingest dropped (M2-37).
 func (s selfSources) DroppedRareEvents() uint64 { return s.stats.DroppedRareEvents() }
 
+// LogsUnavailable reports whether the ingest counts Loki as down (M3-07).
+func (s selfSources) LogsUnavailable() bool { return s.logs.LogsUnavailable() }
+
 func (s selfSources) DatabaseSize(ctx context.Context) (int64, error) {
 	size, err := s.store.DatabaseSize(ctx)
 	if err != nil {
@@ -595,10 +603,10 @@ func (s selfSources) DatabaseSize(ctx context.Context) (int64, error) {
 }
 
 // newSelfMonitor returns the self-monitoring; superadmins get mail only with SMTP.
-func newSelfMonitor(cfg config.Config, db *postgres.DB, stats *ingest.Stats, logger *slog.Logger) *selfmonitor.Monitor {
+func newSelfMonitor(cfg config.Config, db *postgres.DB, ingestService *ingest.Service, logger *slog.Logger) *selfmonitor.Monitor {
 	store := postgres.NewSelfMonitorStore(db)
 	deps := selfmonitor.Deps{
-		Sources: selfSources{stats: stats, store: store}, DatabaseLimit: cfg.DatabaseSizeLimit, Now: time.Now, Logger: logger,
+		Sources: selfSources{stats: ingestService.Stats(), logs: ingestService, store: store}, DatabaseLimit: cfg.DatabaseSizeLimit, Now: time.Now, Logger: logger,
 	}
 	if cfg.SMTP != nil {
 		deps.Admins, deps.Mailer = store, newMailer(cfg.SMTP)

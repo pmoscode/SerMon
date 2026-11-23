@@ -23,10 +23,12 @@ const (
 	// the rate limit of a node (M2-37); failed logins dropped under attack don't count.
 	DroppedSecurityEvents Check = "dropped_security_events"
 	DatabaseSize          Check = "database_size"
+	// LogsUnavailable: the log store (Loki) fails, the ingest drops log entries (M3-07).
+	LogsUnavailable Check = "logs_unavailable"
 )
 
 // checks is the fixed order of the checks.
-var checks = []Check{IngestLag, DroppedSamples, DroppedSecurityEvents, DatabaseSize}
+var checks = []Check{IngestLag, DroppedSamples, DroppedSecurityEvents, DatabaseSize, LogsUnavailable}
 
 // Level is the state of a check.
 type Level int
@@ -76,6 +78,8 @@ type Sources interface {
 	DroppedSamples() uint64
 	// DroppedRareEvents is the cumulative number of rare security events the ingest dropped.
 	DroppedRareEvents() uint64
+	// LogsUnavailable reports whether the log store counts as down.
+	LogsUnavailable() bool
 	DatabaseSize(ctx context.Context) (int64, error)
 }
 
@@ -167,6 +171,9 @@ func (m *Monitor) Check(ctx context.Context) {
 	if events > 0 {
 		results[DroppedSecurityEvents] = Problem{Check: DroppedSecurityEvents, Level: Warning, Value: float64(events)}
 	}
+	if m.d.Sources.LogsUnavailable() {
+		results[LogsUnavailable] = Problem{Check: LogsUnavailable, Level: Warning}
+	}
 
 	keepSize := false
 	if limit := m.d.DatabaseLimit; limit > 0 {
@@ -256,6 +263,7 @@ func message(p Problem) (string, string) {
 		DroppedSamples:        "The server dropped samples",
 		DroppedSecurityEvents: "The server dropped security events",
 		DatabaseSize:          "The database is filling up",
+		LogsUnavailable:       "The server drops log entries",
 	}[p.Check]
 	if p.Level == OK {
 		return fmt.Sprintf("SerMon: resolved – %s", what), fmt.Sprintf("%s: back to normal since %s.\n", what, p.Since.UTC().Format(time.RFC3339))
@@ -270,6 +278,8 @@ func message(p Problem) (string, string) {
 		detail = fmt.Sprintf("%.0f security events (logins, sudo, accounts or system events) were dropped within 15 minutes by the rate limit of a node – a node sends far more than usual. See sermon_server_ingest_dropped_security_events_by_kind_total in /metrics of the server.", p.Value)
 	case DatabaseSize:
 		detail = fmt.Sprintf("The database uses %.0f %% of SERMON_DATABASE_SIZE_LIMIT. Shorten the retention or add space.", p.Value*100)
+	case LogsUnavailable:
+		detail = "Loki (SERMON_LOKI_URL) is unreachable or fails: the agents' log entries are dropped, metrics, security events and alerts go on. Check the loki container (docker compose logs loki) and /readyz of the server; see sermon_server_ingest_dropped_log_entries_total in /metrics."
 	}
 	return fmt.Sprintf("SerMon: %s – %s", p.Level, what), fmt.Sprintf("%s (%s since %s).\n\n%s\n", what, p.Level, p.Since.UTC().Format(time.RFC3339), detail)
 }

@@ -185,7 +185,8 @@ message Session {
 
 // InstanceProblem is a check of the server's self-monitoring that is not OK.
 message InstanceProblem {
-  // check is ingest_lag, dropped_samples, dropped_security_events or database_size.
+  // check is ingest_lag, dropped_samples, dropped_security_events, database_size or
+  // logs_unavailable.
   string check = 1;
   // level is warning or critical.
   string level = 2;

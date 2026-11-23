@@ -14,6 +14,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki/lokitest"
+	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logql"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -91,5 +92,39 @@ func TestLoki_LimitsAreErrors(t *testing.T) {
 	}}
 	if err := c.Push(context.Background(), org, old); !errors.Is(err, loki.ErrRejected) {
 		t.Errorf("an entry older than 7 days: %v, want ErrRejected", err)
+	}
+}
+
+// A batch written twice (the agent resends after the server stored it but crashed before the
+// acknowledgement) is in Loki once: identical entries of a stream are deduplicated (M3-07).
+func TestWriter_AResendIsStoredOnce(t *testing.T) {
+	c := loki.New(lokitest.Shared(t))
+	w := loki.NewWriter(c)
+	ctx := context.Background()
+	org, node := tenant.OrgID(uuid.New()), identity.NodeID(uuid.New())
+	now := time.Now().Truncate(time.Microsecond)
+	pid := uint32(812)
+	entries := []ingest.LogEntry{
+		{At: now.Add(-2 * time.Second), Source: ingest.LogSourceJournal, Unit: "nginx.service", Severity: 4, Message: "upstream timed out", PID: pid},
+		{At: now.Add(-time.Second), Source: ingest.LogSourceFile, Unit: "nginx", Message: "recovered", File: "/var/log/nginx/error.log"},
+	}
+	for range 2 {
+		if err := w.Write(ctx, org, node, entries); err != nil {
+			t.Fatal(err)
+		}
+	}
+	q, _ := logql.Select([]identity.NodeID{node})
+	query := loki.QueryRange{Query: q, Start: now.Add(-time.Minute), End: now.Add(time.Second), Limit: 10}
+	var lines []loki.Line
+	var err error
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if lines, err = c.Query(ctx, org, query); err == nil && len(lines) >= 2 {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if err != nil || len(lines) != 2 {
+		t.Fatalf("Query() = %d lines, %v; want each entry once: %+v", len(lines), err, lines)
 	}
 }

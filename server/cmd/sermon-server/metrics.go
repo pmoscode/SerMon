@@ -51,6 +51,7 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 		{"sermon_server_ingest_dropped_security_events_total", "Security events dropped by the rate limits per node (all kinds).", stats.EventsDropped.Load},
 		{"sermon_server_ingest_rejected_security_events_total", "Security events dropped for implausible times or invalid fields.", stats.EventsRejected.Load},
 		{"sermon_server_ingest_duplicate_security_event_batches_total", "Security event batches stored before (resent after a reconnect).", stats.EventDuplicates.Load},
+		{"sermon_server_ingest_log_entries_total", "Log entries stored in Loki.", stats.LogEntries.Load},
 	}
 	for _, c := range counters {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
@@ -63,6 +64,16 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 				out[string(k)] = float64(n)
 			}
 			return out
+		})
+	// Log entries not stored, per reason (M3-07).
+	r.CounterFamily("sermon_server_ingest_dropped_log_entries_total",
+		"Log entries dropped: rate (limits per node and organization), age (time window), rejected (by Loki), unavailable (Loki down), no_store (no Loki configured).",
+		"reason", func() map[string]float64 {
+			return map[string]float64{
+				"rate": float64(stats.LogsDroppedRate.Load()), "age": float64(stats.LogsDroppedAge.Load()),
+				"rejected": float64(stats.LogsDroppedRejected.Load()), "unavailable": float64(stats.LogsDroppedUnavailable.Load()),
+				"no_store": float64(stats.LogsDroppedNoStore.Load()),
+			}
 		})
 	r.Gauge("sermon_server_ingest_lag_seconds", "Delay of the latest batch (server time minus collection time).",
 		func() float64 { return float64(stats.LagMillis.Load()) / 1000 })

@@ -197,14 +197,18 @@ test-agent:
 security-agent:
     cargo deny check
 
+# The fuzz builds don't take the agent's release profile: LTO drops libFuzzer's coverage symbols
+# (__sancov_gen_) on Linux; debug info names the lines of a crash.
+fuzz_profile := "CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_PROFILE_RELEASE_STRIP=none CARGO_PROFILE_RELEASE_DEBUG=1"
+
 # Fuzz the parsers of untrusted input: /proc texts, journal lines, security events and WAL recovery (cargo-fuzz, pinned nightly)
 [working-directory: 'agent/fuzz']
 fuzz-agent seconds="60":
     ./seed.sh
-    cargo fuzz run proc_parsers -- -max_total_time={{ seconds }} -max_len=65536
-    cargo fuzz run journal_line -- -max_total_time={{ seconds }} -max_len=65536
-    cargo fuzz run security_parser -- -max_total_time={{ seconds }} -max_len=65536
-    cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run proc_parsers -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run journal_line -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run security_parser -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
 
 # Test the agent packages (.deb, .rpm, .apk) in containers: signature, install, upgrade, removal (M2-21)
 test-packages:

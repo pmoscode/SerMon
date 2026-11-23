@@ -89,5 +89,8 @@ Die CI ruft dieselben `just`-Befehle auf wie die lokale Entwicklung. Was in der 
   gemeinsamen `Cargo.lock`. Die Targets kompilieren auf stable; `cargo fuzz` baut sie mit dem Nightly aus
   `fuzz/rust-toolchain.toml`. `just lint-agent` und `cargo-deny` prüfen sie mit; der eigene Lint-Schritt in `fuzz.yml`
   entfällt. Die Workspace-Lints gelten dort nicht (Testcode mit `expect()`).
+- **Profil:** Das Release-Profil des Workspaces (LTO, eine Codegen-Unit, ohne Symbole) gilt nicht für die
+  Fuzz-Builds: Mit LTO fehlen unter Linux die Coverage-Symbole von libFuzzer (`__sancov_gen_`). `just fuzz-agent`
+  setzt dafür `CARGO_PROFILE_RELEASE_*` (ohne LTO, 16 Units, mit Debug-Infos), wie das frühere eigene Profil.
 - **Lizenz:** `libfuzzer-sys` bündelt libFuzzer unter NCSA (permissiv, mit der AGPL vereinbar); `deny.toml` erlaubt
   NCSA nur für diese Crate. Sie landet nicht in der Agent-Binary.

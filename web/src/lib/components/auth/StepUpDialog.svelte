@@ -24,7 +24,13 @@
 	const withPasskey = $derived(
 		(current?.passkeysAvailable ?? false) && (current?.passkeyCount ?? 0) > 0 && supported()
 	);
-	const withSso = $derived(ssoState.enabled && (current?.oidcLinked ?? false));
+	// With a second factor, the provider's login counts only if the operator trusts it as two
+	// factors; the server refuses the others (M3-28).
+	const withSso = $derived(
+		ssoState.enabled &&
+			(current?.oidcLinked ?? false) &&
+			(!(current?.secondFactorEnabled ?? false) || ssoState.secondFactor)
+	);
 	let leaving = $state(false);
 	let checking = $state(false);
 	let passkeyFailure = $state<PasskeyFailure | undefined>();

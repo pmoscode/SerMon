@@ -358,7 +358,8 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 		if view.TotpEnabled, err = h.secondFactor.TOTPEnabled(ctx, s.User); err != nil {
 			return nil, fmt.Errorf("second factor: %w", err)
 		}
-		if s.Org != (tenant.OrgID{}) && !view.GetSecondFactorEnabled() {
+		// A login with the provider's second factor meets the requirement (as access.Loader).
+		if s.Org != (tenant.OrgID{}) && !view.GetSecondFactorEnabled() && !s.ExternalMFA {
 			if view.SecondFactorSetupRequired, err = h.secondFactor.SetupRequired(ctx, s.Org, s.User); err != nil {
 				return nil, fmt.Errorf("second-factor requirement: %w", err)
 			}

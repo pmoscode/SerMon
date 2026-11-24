@@ -8,9 +8,19 @@ describe('displayText', () => {
 		expect(displayText('a\x9b31mb')).toBe('ab');
 	});
 
-	it('removes OSC sequences such as terminal titles and links', () => {
-		expect(displayText('\x1b]0;evil title\x07rest')).toBe('rest');
-		expect(displayText('\x1b]8;;https://evil.example\x1b\\click\x1b]8;;\x1b\\')).toBe('click');
+	it('shows OSC sequences such as terminal titles and links with their content (M3-28)', () => {
+		expect(displayText('\x1b]0;evil title\x07rest')).toBe('⟨OSC 0;evil title⟩rest');
+		expect(displayText('\x1b]8;;https://evil.example\x1b\\click\x1b]8;;\x1b\\')).toBe(
+			'⟨OSC 8;;https://evil.example⟩click⟨OSC 8;;⟩'
+		);
+		// Text between two fields can't hide in it.
+		expect(displayText('user=bob\x1b]0;\x07 ip=10.0.0.1')).toBe('user=bob⟨OSC 0;⟩ ip=10.0.0.1');
+	});
+
+	it('shows every format character: joiners, tags, soft hyphens, fillers (M3-28)', () => {
+		expect(displayText('a\u200Cb\u200Dc\u2060d\u00ADe\u{E0041}f\u3164g')).toBe(
+			'a⟨U+200C⟩b⟨U+200D⟩c⟨U+2060⟩d⟨U+00AD⟩e⟨U+E0041⟩f⟨U+3164⟩g'
+		);
 	});
 
 	it('shows control characters as visible symbols', () => {

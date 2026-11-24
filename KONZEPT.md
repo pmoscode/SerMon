@@ -476,7 +476,10 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
       zu. Jede Anmeldung gleicht die Rollen aus Zuordnungen ab (Herkunft `oidc` an der Bindung); von Hand Vergebenes
       bleibt, der letzte org-weite Admin auch, gesperrte Orgs sind ausgenommen. JIT (abschaltbar mit
       `SERMON_OIDC_JIT=false`) legt Konto und Mitgliedschaft an, nur mit bestätigter E-Mail, die noch keinem Konto
-      gehört, und im Rahmen des Kontingents.
+      gehört, und im Rahmen des Kontingents. Beitreten tut nur ein bei dieser Anmeldung angelegtes Konto; wen ein
+      Admin entfernt, der bleibt draußen (M3-28).
+    - Seit M3-28: Der Step-up beim Provider gilt für User mit eigenem zweiten Faktor nur mit einem zweiten Faktor
+      dort (`amr` oder `trusted`). Konten ohne Passwort nutzen Passkeys statt TOTP.
     - Seit M3-22: Knopf auf der Anmeldeseite, Verknüpfen und Lösen unter „Kontosicherheit“ (Lösen nur, wenn ein
       Passwort oder eine weitere Identität bleibt), Step-up beim Provider im Bestätigungsdialog, Zuordnungen im Reiter
       „SSO-Gruppen“ der Organisation. Rollen aus Zuordnungen tragen in der Mitgliederliste das Zeichen „SSO“.
@@ -597,7 +600,7 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 | **systemd-journal**    | `journalctl -o json --all -f` mit eigenem Cursor (`--after-cursor`, ab systemd 239), feste Feldliste ohne `_CMDLINE`: `MESSAGE`, `PRIORITY`, `SYSLOG_IDENTIFIER`, `SYSLOG_FACILITY`, `_SYSTEMD_UNIT`, `_PID`, `_COMM`, `_BOOT_ID`, `_TRANSPORT`, `_UID`, `_CAP_EFFECTIVE` | an (falls vorhanden)                                      |
 | **Klassische Dateien** | `/var/log/sermon/security.log` (SerMon-Vorlage für rsyslog), `/var/log/auth.log`, `/var/log/secure`, `/var/log/messages`: die erste vorhandene ([ADR 0025](docs/adr/0025-logdateien-ohne-journald.md)) | an, wenn kein journald (Alpine)                           |
 | **Docker**             | über die Docker-API (`/var/run/docker.sock`), stdout/stderr pro Container mit Labels `container`, `image`, `compose_project`               | **aus** (Modul, siehe §15 – Socket bedeutet root-Rechte!) |
-| **Beliebige Dateien**  | Globs pro Node-Gruppe zentral konfiguriert, z. B. `/var/log/nginx/*.log`; Multiline-Regeln (z. B. Java-Stacktraces). Gelesen wird nur unter `log_file_prefixes` der `agent.toml` (Standard `/var/log`), nie State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys`, `/dev`; Symlinks aufgelöst und erneut geprüft; höchstens 64 Dateien, rotierte und komprimierte nicht (M3-05) | aus                                                       |
+| **Beliebige Dateien**  | Globs pro Node-Gruppe zentral konfiguriert, z. B. `/var/log/nginx/*.log`; Multiline-Regeln (z. B. Java-Stacktraces). Gelesen wird nur unter `log_file_prefixes` der `agent.toml` (Standard `/var/log`), nie State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys`, `/dev`, die Dateien des Journals und die Login-Protokolle (`wtmp`, `btmp`, `lastlog`); Symlinks aufgelöst und bei jedem Öffnen erneut geprüft, nur reguläre Dateien (M3-28); höchstens 64 Dateien, rotierte und komprimierte nicht (M3-05) | aus                                                       |
 
 ### 10.2 Verarbeitung
 
@@ -618,7 +621,9 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
   - Logs belegen höchstens die Hälfte des Puffers. Darüber werden sie verworfen, damit Metriken und Security-Events
     ihren Platz behalten.
   - Der Server begrenzt zusätzlich: 1 MiB/s pro Node, 3 MiB/s pro Org, 7 Tage alt bis 5 min voraus, höchstens 64 Units
-    pro Node (danach `other`) (M3-07).
+    pro Node (danach `other`) (M3-07). Gezählt wird jeder Eintrag mit seinen Metadaten (M3-28).
+  - Lehnt Loki die Einträge einer Org für deren Limits ab (429), werden nach 30 s nur die Einträge dieses Nodes
+    verworfen; das ist kein Ausfall von Loki (M3-28).
 - **Ausfall von Loki:** Bestätigt wird erst nach dem Push. Schlägt er fehl, wartet die Bestätigung höchstens 30 s,
   dann werden die Logs verworfen und gezählt, und Loki gilt 30 s als ausgefallen. So halten Logs Metriken und Alerts
   nie lange auf; das Self-Monitoring meldet den Ausfall ([ADR 0031](docs/adr/0031-logs-in-loki.md), Nachtrag M3-07).

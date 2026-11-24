@@ -9,7 +9,16 @@ export type SsoFailure = 'rate_limited' | 'unavailable' | 'step_up' | 'signed_ou
 /** Leaves the app for the provider's login page; tests replace it. */
 export const browser = {
 	leave(url: string): void {
-		window.location.assign(url);
+		// Only to the provider's https page (http on a development server with http itself).
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- parsed once, not state
+		const target = new URL(url, window.location.href);
+		if (
+			target.protocol !== 'https:' &&
+			!(target.protocol === 'http:' && window.location.protocol === 'http:')
+		) {
+			throw new Error('sso: refused to leave for a non-https address');
+		}
+		window.location.assign(target.href);
 	}
 };
 
@@ -22,6 +31,8 @@ class SsoState {
 	name = $state('');
 	/** The server offers passkeys (M3-24). */
 	passkeys = $state(false);
+	/** Every login at the provider counts as two factors (the operator trusts it, M3-28). */
+	secondFactor = $state(false);
 	#loading: Promise<void> | undefined;
 
 	/** Asks the server once; failures leave SSO off. */
@@ -32,6 +43,7 @@ class SsoState {
 				this.enabled = res.oidc;
 				this.name = res.oidcName;
 				this.passkeys = res.passkeys;
+				this.secondFactor = res.oidcSecondFactor;
 			})
 			.catch(() => {
 				this.#loading = undefined;
@@ -69,6 +81,7 @@ class SsoState {
 		this.enabled = false;
 		this.name = '';
 		this.passkeys = false;
+		this.secondFactor = false;
 		this.#loading = undefined;
 	}
 }

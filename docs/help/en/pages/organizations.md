@@ -28,7 +28,7 @@ The storage is an estimate: the size of all metrics of the instance is shared by
 - **Lock:** without a deadline. Members are signed out at once and cannot get back in, agents are disconnected, enrollment tokens and invitations stop working. Alerts and notifications rest. Certificates and data stay. A superadmin signed in to the organization is signed out as well.
 - **Schedule deletion:** locks as above and deletes after the instance's grace period (default 30 days, `SERMON_ORG_DELETION_GRACE`, at least 7 days).
 - **Lift lock:** everything starts again; a scheduled deletion is cancelled.
-- **Delete now:** only for a locked organization. Nodes, metrics, events, alerts, channels, the audit log and every account without another membership are deleted for good; superadmin accounts stay.
+- **Delete now:** only for a locked organization, at the earliest 10 minutes after the lock (until then hosts with a clock ahead may still send log lines). Nodes, metrics, events, alerts, channels, the audit log and every account without another membership are deleted for good; superadmin accounts stay.
 - **Download audit log:** only for a locked organization, as JSON lines with the hash chain. The first line explains how to recompute the chain; the UI says whether it is intact.
 
 The organization's admins get an email when it is locked (with the deletion date), when the lock is lifted and 7 days before the deletion.

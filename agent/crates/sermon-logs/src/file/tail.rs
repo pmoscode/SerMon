@@ -12,16 +12,74 @@
 //!   the agent was stopped, it finds the old file as `<name>.0` or `<name>.1`, reads its rest and
 //!   then the new file from its start.
 //! - **First start:** at the end of the file; old lines are not read again.
+//!
+//! Every open – the first, after a rotation, of a rotated `.0`/`.1` – is non-blocking and only of
+//! a regular file (a FIFO or device swapped in would stall the agent), and with a [`Guard`] the
+//! file opened must be the one its check allowed (M3-28): a symlink swapped in after the glob was
+//! expanded reads nothing outside the allowed prefixes.
 
+use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom};
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Lines longer than this are cut (and marked).
 pub const MAX_LINE_BYTES: usize = 16 * 1024;
 /// At most so many bytes per call of [`Tail::read`]; the rest comes with the next call.
 pub const MAX_READ_BYTES: usize = 1024 * 1024;
+/// About so many lines per call of [`Tail::read`] (a read chunk more at most): a megabyte of
+/// empty lines would otherwise be a million of them in memory at once (M3-28).
+pub const MAX_READ_LINES: usize = 8192;
+/// Bytes read at once.
+const CHUNK_BYTES: usize = 16 * 1024;
+
+/// The access check of a path before every open: the device and inode of the regular file it may
+/// read there; `NotFound` if there is none, another error if it is refused.
+#[derive(Clone)]
+pub struct Guard(Arc<GuardFn>);
+
+/// The device and inode of the file the check allows at a path.
+type GuardFn = dyn Fn(&Path) -> io::Result<(u64, u64)> + Send + Sync;
+
+impl Guard {
+    /// A guard calling `check`.
+    pub fn new(check: impl Fn(&Path) -> io::Result<(u64, u64)> + Send + Sync + 'static) -> Self {
+        Self(Arc::new(check))
+    }
+}
+
+impl fmt::Debug for Guard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Guard")
+    }
+}
+
+/// Opens a regular file without blocking (FIFOs, devices) and, with a guard, only the file the
+/// guard allowed.
+fn open_checked(path: &Path, guard: Option<&Guard>) -> io::Result<File> {
+    let allowed = guard.map(|g| (g.0)(path)).transpose()?;
+    let flags = rustix::fs::OFlags::NONBLOCK | rustix::fs::OFlags::NOCTTY;
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(i32::try_from(flags.bits()).unwrap_or(0))
+        .open(path)?;
+    let meta = file.metadata()?;
+    if !meta.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    if allowed.is_some_and(|ids| ids != (meta.dev(), meta.ino())) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "the file changed after its access check",
+        ));
+    }
+    Ok(file)
+}
 
 /// Where a line ends: the file by device and inode, and the offset after its newline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,8 +176,8 @@ impl Open {
     /// Reads up to `budget` bytes and returns the complete lines among them; `true` once it
     /// reached the end of the file.
     fn read(&mut self, budget: &mut usize, out: &mut Vec<Line>) -> io::Result<bool> {
-        let mut buffer = vec![0u8; 64 * 1024];
-        while *budget > 0 {
+        let mut buffer = vec![0u8; CHUNK_BYTES];
+        while *budget > 0 && out.len() < MAX_READ_LINES {
             let want = buffer.len().min(*budget);
             let n = self.file.read(&mut buffer[..want])?;
             if n == 0 {
@@ -169,6 +227,7 @@ pub struct Tail {
     /// Where to continue at the first call (from the stored position).
     resume: Resume,
     stats: TailStats,
+    guard: Option<Guard>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -186,28 +245,42 @@ impl Tail {
     /// the end of the file.
     #[must_use]
     pub fn new(path: impl Into<PathBuf>, resume: Option<Position>) -> Self {
-        let mut tail = Self {
-            path: path.into(),
-            current: None,
-            previous: None,
-            resume: resume.map_or(Resume::End, Resume::At),
-            stats: TailStats::default(),
-        };
-        // Now, so that "the end" is the end at the start; an error is tried again by `read`.
-        let _ = tail.open();
-        tail
+        Self::start(path.into(), resume.map_or(Resume::End, Resume::At), None)
     }
 
     /// Follows a file found after the start (e.g. by a glob): everything in it is new.
     #[must_use]
     pub fn new_file(path: impl Into<PathBuf>) -> Self {
+        Self::start(path.into(), Resume::Start, None)
+    }
+
+    /// Like [`Tail::new`] (`new_file` false) or [`Tail::new_file`], with `guard` checked before
+    /// every open (the files of a glob, M3-28).
+    #[must_use]
+    pub fn guarded(
+        path: impl Into<PathBuf>,
+        resume: Option<Position>,
+        new_file: bool,
+        guard: Guard,
+    ) -> Self {
+        let resume = match resume {
+            Some(at) => Resume::At(at),
+            None if new_file => Resume::Start,
+            None => Resume::End,
+        };
+        Self::start(path.into(), resume, Some(guard))
+    }
+
+    fn start(path: PathBuf, resume: Resume, guard: Option<Guard>) -> Self {
         let mut tail = Self {
-            path: path.into(),
+            path,
             current: None,
             previous: None,
-            resume: Resume::Start,
+            resume,
             stats: TailStats::default(),
+            guard,
         };
+        // Now, so that "the end" is the end at the start; an error is tried again by `read`.
         let _ = tail.open();
         tail
     }
@@ -262,7 +335,7 @@ impl Tail {
 
     /// Opens the file at the start, after a restart or when it appears; `false` if it is missing.
     fn open(&mut self) -> io::Result<bool> {
-        let file = match File::open(&self.path) {
+        let file = match open_checked(&self.path, self.guard.as_ref()) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 // Created later, everything in it is new.
@@ -301,7 +374,7 @@ impl Tail {
         for suffix in [".0", ".1"] {
             let mut name = self.path.clone().into_os_string();
             name.push(suffix);
-            let Ok(file) = File::open(PathBuf::from(name)) else {
+            let Ok(file) = open_checked(Path::new(&name), self.guard.as_ref()) else {
                 continue;
             };
             let meta = file.metadata()?;
@@ -599,5 +672,100 @@ mod tests {
         for bad in ["", "1:2", "1:2:3:4", "a:2:3", "1:2:-3"] {
             assert_eq!(Position::decode(bad), None, "{bad:?}");
         }
+    }
+
+    // M3-28: a FIFO swapped in at a rotation must neither block the agent nor be read.
+    #[test]
+    fn a_fifo_swapped_in_is_not_read_and_does_not_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.log");
+        append(&path, "");
+        let mut tail = Tail::new_file(&path);
+        append(&path, "before\n");
+        assert_eq!(lines(&mut tail), ["before"]);
+        fs::rename(&path, dir.path().join("app.log.1")).unwrap();
+        let made = std::process::Command::new("mkfifo")
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let mut out = Vec::new();
+        let err = tail.read(&mut out).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput, "{err}");
+        assert!(tail.read(&mut out).is_err(), "still refused");
+    }
+
+    // M3-28: with a guard, a symlink swapped in after the check reads nothing outside.
+    #[test]
+    fn a_guard_refuses_a_symlink_swapped_in_at_a_rotation() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join("logs");
+        fs::create_dir(&logs).unwrap();
+        let secret = dir.path().join("secret");
+        append(&secret, "key material\n");
+        let path = logs.join("app.log");
+        append(&path, "");
+        let allowed = fs::canonicalize(&logs).unwrap();
+        let guard = Guard::new(move |p: &Path| {
+            let real = fs::canonicalize(p)?;
+            if !real.starts_with(&allowed) {
+                return Err(io::Error::new(io::ErrorKind::PermissionDenied, "outside"));
+            }
+            let meta = fs::metadata(real)?;
+            Ok((meta.dev(), meta.ino()))
+        });
+        let mut tail = Tail::guarded(&path, None, true, guard);
+        append(&path, "mine\n");
+        assert_eq!(lines(&mut tail), ["mine"]);
+        fs::rename(&path, logs.join("app.log.1")).unwrap();
+        std::os::unix::fs::symlink(&secret, &path).unwrap();
+        let mut out = Vec::new();
+        let err = tail.read(&mut out).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied, "{err}");
+        assert!(out.iter().all(|l| l.text != b"key material"), "{out:?}");
+        // Back to a real file: followed again from its start.
+        fs::remove_file(&path).unwrap();
+        append(&path, "again\n");
+        assert_eq!(lines(&mut tail), ["again"]);
+    }
+
+    // M3-28: a flood of empty lines comes in bounded reads, not a million lines at once.
+    #[test]
+    fn one_read_holds_a_bounded_number_of_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.log");
+        append(&path, "");
+        let mut tail = Tail::new_file(&path);
+        append(&path, &"\n".repeat(MAX_READ_BYTES));
+        let mut out = Vec::new();
+        tail.read(&mut out).unwrap();
+        assert!(
+            out.len() >= MAX_READ_LINES && out.len() <= MAX_READ_LINES + CHUNK_BYTES,
+            "{} lines",
+            out.len()
+        );
+        let mut total = out.len();
+        while total < MAX_READ_BYTES {
+            let mut more = Vec::new();
+            tail.read(&mut more).unwrap();
+            assert!(!more.is_empty(), "stalled at {total}");
+            total += more.len();
+        }
+        assert_eq!(total, MAX_READ_BYTES, "no line lost");
+    }
+
+    // The file opened must be the one the guard checked: swapped in between, it is refused.
+    #[test]
+    fn a_file_other_than_the_checked_one_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("app.log");
+        append(&path, "x\n");
+        let checked = fs::metadata(dir.path()).unwrap();
+        let guard = Guard::new(move |_: &Path| Ok((checked.dev(), checked.ino())));
+        let mut tail = Tail::guarded(&path, None, true, guard);
+        let mut out = Vec::new();
+        let err = tail.read(&mut out).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied, "{err}");
+        assert_eq!(out.len(), 0);
     }
 }

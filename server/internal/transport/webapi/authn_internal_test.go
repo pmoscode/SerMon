@@ -110,3 +110,41 @@ func TestAuthenticator_StreamRecheckDoesNotRenewTheSession(t *testing.T) {
 		t.Errorf("the re-checks renewed the session %d times, want never", store.touches-touchesAtStart)
 	}
 }
+
+// M3-28: a stream the UI reopens by itself (Sermon-Background) is no activity either; the user's
+// own opens are.
+func TestAuthenticator_BackgroundReopensDoNotRenewTheSession(t *testing.T) {
+	for name, background := range map[string]bool{"the user's opens": false, "reopens by the UI": true} {
+		t.Run(name, func(t *testing.T) {
+			store := &countingSessions{byID: map[string]session.Session{}}
+			now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+			sessions := session.NewManager(store, func() time.Time { return now })
+			token, _, err := sessions.Create(context.Background(), identity.UserID(uuid.New()), tenant.OrgID(uuid.New()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			auth := NewAuthenticator(sessions, staticPrincipals{}, nil)
+			header := http.Header{"Cookie": []string{SessionCookie + "=" + token}}
+			if background {
+				header.Set(BackgroundHeader, "1")
+			}
+			open := func() error {
+				return auth.WrapStreamingHandler(func(context.Context, connect.StreamingHandlerConn) error { return nil })(
+					context.Background(), streamConn{header: header})
+			}
+			var err2 error
+			for range 4 { // a reopen every 15 minutes, an hour in all
+				now = now.Add(15 * time.Minute)
+				if err2 = open(); err2 != nil {
+					break
+				}
+			}
+			if background && connect.CodeOf(err2) != connect.CodeUnauthenticated {
+				t.Errorf("reopens by the UI kept the session alive: %v", err2)
+			}
+			if !background && err2 != nil {
+				t.Errorf("the user's own opens: %v", err2)
+			}
+		})
+	}
+}

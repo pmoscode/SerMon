@@ -188,4 +188,21 @@ describe('StepUpDialog', () => {
 		await expect.element(page.getByLabelText('Password')).toBeVisible();
 		expect(page.getByRole('button', { name: 'Confirm with a passkey' }).elements()).toHaveLength(0);
 	});
+
+	it('offers the provider to users with a second factor only if it counts as two (M3-28)', async () => {
+		const options = vi
+			.spyOn(api.auth, 'getLoginOptions')
+			.mockResolvedValue({ oidc: true, oidcName: 'Dex', oidcSecondFactor: false } as never);
+		sessionState.current = {
+			...fakeSession(),
+			oidcLinked: true,
+			secondFactorEnabled: true,
+			totpEnabled: true
+		};
+		render(StepUpDialog);
+		void stepUpState.request();
+		await vi.waitFor(() => expect(options).toHaveBeenCalled());
+		await expect.element(page.getByLabelText('Code')).toBeVisible();
+		expect(page.getByRole('button', { name: /Dex/ }).elements()).toHaveLength(0);
+	});
 });

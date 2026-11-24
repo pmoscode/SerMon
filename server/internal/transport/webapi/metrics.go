@@ -3,6 +3,7 @@ package webapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -264,10 +265,37 @@ func streamingDeadline(next http.Handler) http.Handler {
 		if d, ok := streamDurations[r.URL.Path]; ok {
 			// An error means the writer can't change deadlines; the stream then ends earlier.
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(d + time.Minute))
+			// A client that stops reading may hold a written message only this long (M3-28).
+			w = &writeDeadline{ResponseWriter: w, ctl: http.NewResponseController(w), each: streamWriteTimeout}
 		}
 		next.ServeHTTP(w, r)
 	})
 }
+
+// streamWriteTimeout bounds each write of a live stream: a stalled reader is dropped.
+const streamWriteTimeout = 30 * time.Second
+
+// writeDeadline sets the write deadline before every write.
+type writeDeadline struct {
+	http.ResponseWriter
+	ctl  *http.ResponseController
+	each time.Duration
+}
+
+func (w *writeDeadline) Write(b []byte) (int, error) {
+	_ = w.ctl.SetWriteDeadline(time.Now().Add(w.each))
+	n, err := w.ResponseWriter.Write(b)
+	if err != nil {
+		return n, fmt.Errorf("stream write: %w", err)
+	}
+	return n, nil
+}
+
+// Flush passes on (connect flushes every message of a stream).
+func (w *writeDeadline) Flush() { _ = w.ctl.Flush() }
+
+// Unwrap gives http.ResponseController the writer underneath.
+func (w *writeDeadline) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // securitySourceView maps the stored source of security events (M2-31); unknown is unspecified.
 var securitySourceView = map[secevent.Source]webv1.SecuritySource{

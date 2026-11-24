@@ -144,6 +144,12 @@ describe('ProcessViewState', () => {
 		await vi.waitFor(() => expect(pids(state)).toEqual([2]));
 		expect(spy).toHaveBeenCalledTimes(2);
 		expect(state.status).toBe('live');
+		// M3-28: the first open is the user's, the reopen marked as the UI's own (no activity).
+		const headers = spy.mock.calls.map(
+			(c) => (c[1] as { headers?: Record<string, string> })?.headers
+		);
+		expect(headers[0]).toBeUndefined();
+		expect(headers[1]).toEqual({ 'Sermon-Background': '1' });
 		state.stop();
 	});
 

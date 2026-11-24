@@ -197,6 +197,11 @@ func TestOrganizationAPI_SuperadminLocksExportsUnlocksAndDeletes(t *testing.T) {
 		t.Errorf("delete with an old login: %v, want FAILED_PRECONDITION", err)
 	}
 	sam = login(t, s, "sam@example.org")
+	// M3-28: right after the lock it waits (lines from up to 5 min ahead), then it goes.
+	if _, err := sam.organization.DeleteOrganization(ctx, connect.NewRequest(&webv1.DeleteOrganizationRequest{OrganizationId: org, ConfirmName: name})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("delete right after the lock: %v, want FAILED_PRECONDITION", err)
+	}
+	ownerSQL(t, "UPDATE organizations SET locked_at = locked_at - interval '10 minutes' WHERE id = '"+org+"'")
 	deleted, err := sam.organization.DeleteOrganization(ctx, connect.NewRequest(&webv1.DeleteOrganizationRequest{OrganizationId: org, ConfirmName: name}))
 	if err != nil || deleted.Msg.GetAccountsDeleted() != 1 {
 		t.Fatalf("DeleteOrganization() = %v, %v", deleted, err)

@@ -8,4 +8,6 @@ mod tail;
 
 pub use multiline::{Assembler, Entry, MAX_ENTRY_BYTES, MAX_ENTRY_LINES, indented};
 pub use syslog::{Format, LocalTime, Record, Sender, SyslogError, parse};
-pub use tail::{Line, MAX_LINE_BYTES, MAX_READ_BYTES, Position, Tail, TailStats};
+pub use tail::{
+    Guard, Line, MAX_LINE_BYTES, MAX_READ_BYTES, MAX_READ_LINES, Position, Tail, TailStats,
+};

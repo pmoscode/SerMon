@@ -2,9 +2,10 @@
 //! commands and command lines of the live view.
 //!
 //! - **Built-in patterns** for what commonly leaks: `password=`/`token: …` and friends (also in
-//!   JSON and as `--flag value`), `Authorization: Bearer|Basic`, passwords in URLs, AWS access
-//!   keys, private key blocks (and their base64 lines on their own), JSON web tokens, GitHub and
-//!   Slack tokens and SerMon enrollment tokens.
+//!   JSON, glued as in `PGPASSWORD=` and as `--any-password value`), `Authorization:
+//!   Bearer|Basic`, cookies, passwords in URLs, the password options of `mysql` (`-p…`),
+//!   `sshpass -p` and `redis-cli -a`, AWS access keys, private key blocks (and their base64
+//!   lines), JSON web tokens, GitHub and Slack tokens and SerMon enrollment tokens (M3-28).
 //! - **Rules of the organization** (from the server, M3-03): a regex per rule, compiled by the
 //!   `regex` crate (linear time, bounded size). A rule replaces its whole match, or only the group
 //!   named `secret` if it has one, with `***`. Empty matches change nothing.
@@ -31,27 +32,38 @@ const RULE_SIZE_LIMIT: usize = 1024 * 1024;
 const RULE_DFA_LIMIT: usize = 1024 * 1024;
 
 /// Key words whose value is a secret: `password=…`, `"token": "…"`, `DB_PASSWORD=…`.
-const KEYS: &str =
-    "password|passwd|pwd|pass|secret|token|api[-_]?key|access[-_]?key|private[-_]?key";
+const KEYS: &str = "password|passwd|passphrase|pwd|pass|secret[-_]?key|secret|token|api[-_]?key|access[-_]?key|private[-_]?key";
+/// Key words a prefix may be glued to: `PGPASSWORD=…`, `dbpassword: …`.
+const GLUED: &str = "[a-z0-9]*(?:password|passwd|passphrase)";
+/// A value: quoted (with escaped quotes inside) or up to the next blank.
+const VALUE: &str = r#"(?:'[^']*'|"(?:[^"\\]|\\.)*"|\S+)"#;
 
 /// A private key block, up to its end or the end of the text if it was cut.
 static PRIVATE_KEY: LazyLock<Regex> = LazyLock::new(|| {
     regex(r"(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)")
 });
 /// A text that is only base64, as long as a line of a key (PEM: 64, OpenSSH: 70 characters).
-static BASE64_LINE: LazyLock<Regex> = LazyLock::new(|| regex(r"^[A-Za-z0-9+/]{60,}={0,2}$"));
+static BASE64_LINE: LazyLock<Regex> = LazyLock::new(|| regex(r"(?m)^[A-Za-z0-9+/]{60,}={0,2}$"));
 static KEY_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     regex(&format!(
-        r#"(?i)(\b(?:[a-z0-9]+[_-])*(?:{KEYS})\b["']?\s*[=:]\s*)(?:'[^']*'|"[^"]*"|\S+)"#
+        r#"(?i)(\b(?:[a-z0-9]+[_-])*(?:{GLUED}|{KEYS})\b["']?\s*[=:]\s*){VALUE}"#
     ))
 });
-static FLAG: LazyLock<Regex> = LazyLock::new(|| {
-    regex(
-        r"(?i)(--(?:password|passwd|pass|secret|token|api[-_]?key)\s+)(?:'[^']*'|\x22[^\x22]*\x22|\S+)",
-    )
+/// `--password value`, `--db-password value`, `--client-secret value`.
+static FLAG: LazyLock<Regex> =
+    LazyLock::new(|| regex(&format!(r"(?i)(--(?:[a-z0-9]+[-_])*(?:{KEYS})\s+){VALUE}")));
+/// Password options of common tools: `mysql -pSECRET` (glued; `-p` alone prompts), `sshpass -p
+/// SECRET`, `redis-cli -a SECRET`.
+static TOOL_FLAG: LazyLock<Regex> = LazyLock::new(|| {
+    regex(concat!(
+        r"(\b(?i:mysql|mariadb)[a-z]*\b[^\n]*?\s-p)\S+",
+        r"|(\bsshpass\b[^\n]*?\s-p\s*)\S+",
+        r"|(\bredis-cli\b[^\n]*?\s-a\s+)\S+",
+    ))
 });
 static BEARER: LazyLock<Regex> =
     LazyLock::new(|| regex(r"(?i)(authorization:\s*(?:bearer|basic)\s+)\S+"));
+static COOKIE: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)(\b(?:set-)?cookie:\s*)\S[^\n]*"));
 static URL_PASSWORD: LazyLock<Regex> = LazyLock::new(|| regex(r"(://[^:/@\s]+:)[^@\s]+@"));
 /// Tokens recognizable without a key in front: AWS access keys, JSON web tokens, GitHub and Slack
 /// tokens, SerMon enrollment tokens.
@@ -67,13 +79,15 @@ static TOKEN: LazyLock<Regex> = LazyLock::new(|| {
 
 /// The built-in patterns in their order (key blocks first: they span lines) with what replaces
 /// a match.
-fn builtin() -> [(&'static Regex, &'static str); 7] {
+fn builtin() -> [(&'static Regex, &'static str); 9] {
     [
         (&*PRIVATE_KEY, MASK),
         (&*BASE64_LINE, MASK),
         (&*KEY_VALUE, "${1}***"),
         (&*FLAG, "${1}***"),
+        (&*TOOL_FLAG, "${1}${2}${3}***"),
         (&*BEARER, "${1}***"),
+        (&*COOKIE, "${1}***"),
         (&*URL_PASSWORD, "${1}***@"),
         (&*TOKEN, MASK),
     ]

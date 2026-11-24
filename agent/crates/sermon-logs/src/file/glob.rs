@@ -7,7 +7,8 @@
 //!   (`log_file_prefixes` in `agent.toml`, default `/var/log`), so no directory outside is even
 //!   listed.
 //! - **Every match** is resolved (symlinks included) and checked again: below an allowed prefix,
-//!   never below a denied path (the state directory, `/etc/sermon`, `/proc`, `/sys`, `/dev`).
+//!   never below a denied path (the state directory, `/etc/sermon`, `/proc`, `/sys`, `/dev`,
+//!   the binary journal files and the login records, M3-28).
 //!   Prefixes compare by segment: `/var/log2` is not below `/var/log`. A compromised server so
 //!   reads no keys of the agent.
 //! - **Rotated and compressed files** (`.1`, `.gz`, `-20261123`, …) are never followed: their
@@ -15,15 +16,31 @@
 //! - **Bounds:** at most [`MAX_FILES`] files, [`MAX_DIR_ENTRIES`] entries per listed directory.
 
 use std::fs;
+use std::io;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
+
+use super::tail::Guard;
 
 /// Files followed at most, over all patterns.
 pub const MAX_FILES: usize = 64;
 /// Entries read per listed directory.
 pub const MAX_DIR_ENTRIES: usize = 4096;
 
-/// Paths the agent never reads, whatever the prefixes allow.
-pub const ALWAYS_DENIED: [&str; 4] = ["/etc/sermon", "/proc", "/sys", "/dev"];
+/// Paths the agent never reads, whatever the prefixes allow. The journal's own files lie below
+/// the default prefix `/var/log`: read raw they would carry every field of every unit
+/// (command lines, environment), past the fixed field list of the journal source (M3-28).
+pub const ALWAYS_DENIED: [&str; 9] = [
+    "/etc/sermon",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/var/log/journal",
+    "/run/log/journal",
+    "/var/log/wtmp",
+    "/var/log/btmp",
+    "/var/log/lastlog",
+];
 
 /// Why a pattern or a file is not followed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -192,6 +209,35 @@ impl Access {
             return Err(Rejected::Outside);
         }
         Ok(true)
+    }
+
+    /// The check of [`Access::check_file`] for a host path, as a [`Guard`] of the tail: the
+    /// device and inode of the file it may read (M3-28).
+    #[must_use]
+    pub fn guard(&self) -> Guard {
+        let access = self.clone();
+        Guard::new(move |on_host: &Path| access.verify(on_host))
+    }
+
+    fn verify(&self, on_host: &Path) -> io::Result<(u64, u64)> {
+        let resolved = fs::canonicalize(on_host)?;
+        let meta = fs::metadata(&resolved)?;
+        if !meta.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a regular file",
+            ));
+        }
+        let inside = |host: &Path| {
+            fs::canonicalize(self.on_host(host)).is_ok_and(|real| resolved.starts_with(real))
+        };
+        if self.denied.iter().any(|d| inside(d)) || !self.allowed.iter().any(|p| inside(p)) {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "outside the allowed prefixes or below a denied path",
+            ));
+        }
+        Ok((meta.dev(), meta.ino()))
     }
 
     /// The path below the host root.
@@ -483,5 +529,51 @@ mod tests {
         assert_eq!(e.files.len(), MAX_FILES);
         assert_eq!(e.rejected, 100 - MAX_FILES);
         assert_eq!(e.files[0].0, PathBuf::from("/var/log/many/f000.log"));
+    }
+
+    // M3-28: the journal's own files and the login records lie below /var/log but are never
+    // followed – by pattern or by match.
+    #[test]
+    fn never_follows_the_journal_files_or_login_records() {
+        let host = Host::new();
+        host.file("/var/log/journal/abc/system.journal");
+        host.file("/var/log/wtmp");
+        host.file("/var/log/btmp");
+        host.file("/var/log/app.log");
+        let access = host.access();
+        assert_eq!(
+            access.check_pattern("/var/log/journal/*/*.journal"),
+            Err(Rejected::Denied)
+        );
+        let e = access.expand(&["/var/log/*/*/*.journal", "/var/log/*"]);
+        assert_eq!(names(&e), ["/var/log/app.log"]);
+        assert_eq!(e.rejected, 3, "journal file, wtmp and btmp");
+    }
+
+    // The guard of a tail checks a host path as the expansion does and names the file's inode.
+    #[test]
+    fn the_guard_checks_every_open() {
+        let host = Host::new();
+        host.file("/var/log/app.log");
+        host.file("/var/lib/sermon-agent/key");
+        host.link("/var/log/evil.log", "/var/lib/sermon-agent/key");
+        let access = host.access();
+        let guard = access.guard();
+        let app = access.on_host(Path::new("/var/log/app.log"));
+        let meta = fs::metadata(&app).unwrap();
+        assert_eq!(access.verify(&app).unwrap(), (meta.dev(), meta.ino()));
+        let evil = access.on_host(Path::new("/var/log/evil.log"));
+        assert_eq!(
+            access.verify(&evil).unwrap_err().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        let missing = access.on_host(Path::new("/var/log/none.log"));
+        assert_eq!(
+            access.verify(&missing).unwrap_err().kind(),
+            io::ErrorKind::NotFound
+        );
+        let mut tail = super::super::tail::Tail::guarded(&evil, None, true, guard);
+        let mut out = Vec::new();
+        assert!(tail.read(&mut out).is_err() && out.is_empty());
     }
 }

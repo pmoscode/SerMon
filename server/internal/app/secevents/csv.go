@@ -22,13 +22,18 @@ var CSVHeader = []string{
 }
 
 // CSVCell defuses a text for spreadsheets (CSV injection): a cell starting with =, +, -, @, a
-// tab or a carriage return would be read as a formula, so it gets a leading apostrophe. The
-// values come from the hosts' logs and may be chosen by an attacker.
+// tab or a carriage return would be read as a formula, so it gets a leading apostrophe. A
+// spreadsheet that opens the file with ";" as separator (German Excel) starts a cell after every
+// ";": each part is defused the same way (M3-28). The values come from the hosts' logs and may
+// be chosen by an attacker.
 func CSVCell(s string) string {
-	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
-		return "'" + s
+	parts := strings.Split(s, ";")
+	for i, p := range parts {
+		if p != "" && strings.ContainsRune("=+-@\t\r", rune(p[0])) {
+			parts[i] = "'" + p
+		}
 	}
-	return s
+	return strings.Join(parts, ";")
 }
 
 func optional(n uint64, set bool) string {

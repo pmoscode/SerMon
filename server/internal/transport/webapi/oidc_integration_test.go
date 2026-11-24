@@ -235,6 +235,11 @@ func TestOIDC_GroupMappingsAndJIT(t *testing.T) {
 		sess.Msg.GetSession().GetHasPassword() || !sess.Msg.GetSession().GetOidcLinked() {
 		t.Fatalf("the provisioned session: %v, %v", sess, err)
 	}
+	// M3-28: without a password it has no lockout for codes: TOTP is refused, passkeys are the way.
+	totp := webv1connect.NewTwoFactorServiceClient(b.http, s.server.URL)
+	if _, err := totp.BeginTotpSetup(ctx, connect.NewRequest(&webv1.BeginTotpSetupRequest{})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("TOTP for an account without a password: %v", err)
+	}
 	// M3-22: its only way in can't be unlinked.
 	_, err = b.auth.UnlinkOidcIdentity(ctx, connect.NewRequest(&webv1.UnlinkOidcIdentityRequest{Issuer: s.idp.URL}))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition || strings.Contains(err.Error(), "confirm") {
@@ -263,6 +268,19 @@ func TestOIDC_GroupMappingsAndJIT(t *testing.T) {
 	ownerQuery(t, "SELECT count(*) FROM role_bindings r JOIN users u ON u.id = r.user_id WHERE u.email = 'jit@idp.example'", &bindings)
 	if bindings != 0 {
 		t.Errorf("%d bindings after leaving the group", bindings)
+	}
+	// M3-28: an admin removes the member; back in the group, the next sign-in doesn't rejoin.
+	if _, err := ann.access.RemoveMember(ctx, connect.NewRequest(&webv1.RemoveMemberRequest{UserId: jit.GetUserId()})); err != nil {
+		t.Fatal(err)
+	}
+	who.Groups = []string{group}
+	if got := newBrowser(t, s).signIn(t, s, webv1.OidcIntent_OIDC_INTENT_LOGIN, "/", who); got != "/" {
+		t.Fatalf("sign-in after the removal: %s", got)
+	}
+	var memberships int
+	ownerQuery(t, "SELECT count(*) FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.email = 'jit@idp.example'", &memberships)
+	if memberships != 0 {
+		t.Errorf("the removed member joined again by the mapping")
 	}
 	if _, err := ann.oidcMappings.DeleteOidcMapping(ctx, connect.NewRequest(&webv1.DeleteOidcMappingRequest{Id: created.Msg.GetMapping().GetId()})); err != nil {
 		t.Errorf("DeleteOidcMapping() = %v", err)

@@ -167,6 +167,9 @@ message GetLoginOptionsResponse {
   string oidc_name = 2;
   // passkeys is set if the server offers the sign-in with a passkey (M3-24).
   bool passkeys = 3;
+  // oidc_second_factor is set if every login at the provider counts as two factors (the operator
+  // trusts it): its step-up then also serves users with a local second factor (M3-28).
+  bool oidc_second_factor = 4;
 }
 
 // OidcIntent is what a sign-in at the provider is for.

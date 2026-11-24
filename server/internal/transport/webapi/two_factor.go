@@ -32,6 +32,9 @@ var (
 
 var errTooManyCodes = errors.New("too many attempts, please wait a moment")
 
+// errTOTPNeedsPassword: accounts without a password (from OIDC) add a passkey as second factor.
+var errTOTPNeedsPassword = errors.New("accounts without a password use a passkey as second factor")
+
 // NewTwoFactorHandler returns the handler; limiter bounds setup confirmations per user.
 func NewTwoFactorHandler(svc *twofactor.Service, identities IdentityReader, limiter *ratelimit.Limiter, logger *slog.Logger) *TwoFactorHandler {
 	return &TwoFactorHandler{svc: svc, identities: identities, limiter: limiter, logger: logger}
@@ -62,6 +65,12 @@ func (h *TwoFactorHandler) BeginTotpSetup(ctx context.Context, _ *connect.Reques
 	s, ok := sessionFrom(ctx)
 	if !ok {
 		return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
+	}
+	// The lockout state of codes lives with the password; accounts from OIDC use passkeys (M3-28).
+	if hasPassword, err := h.identities.HasPassword(ctx, s.User); err != nil {
+		return nil, h.fail(ctx, "load credentials", err)
+	} else if !hasPassword {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errTOTPNeedsPassword)
 	}
 	profile, _, err := h.identities.Profile(ctx, s.User)
 	if err != nil {

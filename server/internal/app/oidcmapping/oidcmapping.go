@@ -22,14 +22,16 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/naming"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
 // Bounds of the mappings.
 const (
-	MaxGroupName = 255
-	MaxMappings  = 200
+	maxDisplayName = 200
+	MaxGroupName   = 255
+	MaxMappings    = 200
 	// MaxClaimGroups bounds the groups of a sign-in that are compared.
 	MaxClaimGroups = 1000
 )
@@ -314,9 +316,14 @@ func (s *Service) Provision(ctx context.Context, c oidc.Claims) (identity.UserID
 	if len(mapped) == 0 {
 		return identity.UserID{}, false, nil
 	}
-	name := strings.TrimSpace(c.Name)
-	if name == "" || utf8.RuneCountInString(name) > 200 {
-		name, _, _ = strings.Cut(c.Email, "@")
+	// The provider's name is shown to admins and members: the rules of every other name apply
+	// (no control, bidi or invisible characters, M3-28); else the local part of the e-mail.
+	name, ok := naming.Clean(c.Name, maxDisplayName)
+	if !ok {
+		local, _, _ := strings.Cut(c.Email, "@")
+		if name, ok = naming.Clean(local, maxDisplayName); !ok {
+			name = "SSO"
+		}
 	}
 	user, err := s.store.Provision(ctx, c.Email, name, oidc.Identity{Issuer: c.Issuer, Subject: c.Subject, Email: c.Email})
 	if errors.Is(err, ErrEmailTaken) {

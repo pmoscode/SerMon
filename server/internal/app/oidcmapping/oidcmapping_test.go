@@ -296,6 +296,21 @@ func TestProvision_OnlyWithAVerifiedAddressAndAMapping(t *testing.T) {
 	if _, ok, _ := svc.Provision(ctx, nameless); !ok || s.created[0] != "new@example.org|new" {
 		t.Errorf("without a name: %v", s.created)
 	}
+	// M3-28: names with bidi or invisible characters are refused like everywhere else.
+	for _, hostile := range []string{"\u202Enimda.ti", "a\u200Bdmin", "line\u2028break"} {
+		c := claims
+		c.Name = hostile
+		s.created = nil
+		if _, ok, _ := svc.Provision(ctx, c); !ok || s.created[0] != "new@example.org|new" {
+			t.Errorf("name %q: %v", hostile, s.created)
+		}
+	}
+	odd := claims
+	odd.Name, odd.Email = "", "\u202E@example.org"
+	s.created = nil
+	if _, ok, _ := svc.Provision(ctx, odd); !ok || s.created[0] != "\u202E@example.org|SSO" {
+		t.Errorf("neither name nor local part: %v", s.created)
+	}
 	// An account has the e-mail: it is not taken over, the identity must be linked.
 	s.provErr = oidcmapping.ErrEmailTaken
 	if _, ok, err := svc.Provision(ctx, claims); ok || err != nil {

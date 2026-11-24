@@ -212,6 +212,8 @@ func (h *OrganizationHandler) fail(ctx context.Context, op string, err error) er
 		return connect.NewError(connect.CodeInvalidArgument, organization.ErrNameMismatch)
 	case errors.Is(err, organization.ErrNotLocked):
 		return connect.NewError(connect.CodeFailedPrecondition, organization.ErrNotLocked)
+	case errors.Is(err, organization.ErrLockTooRecent):
+		return connect.NewError(connect.CodeFailedPrecondition, organization.ErrLockTooRecent)
 	case errors.Is(err, organization.ErrNameTaken):
 		return connect.NewError(connect.CodeAlreadyExists, organization.ErrNameTaken)
 	case errors.Is(err, quota.ErrInvalid):

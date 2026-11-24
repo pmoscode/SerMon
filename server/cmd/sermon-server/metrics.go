@@ -67,7 +67,7 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 		})
 	// Log entries not stored, per reason (M3-07).
 	r.CounterFamily("sermon_server_ingest_dropped_log_entries_total",
-		"Log entries dropped: rate (limits per node and organization), age (time window), rejected (by Loki), unavailable (Loki down), no_store (no Loki configured).",
+		"Log entries dropped: rate (limits per node and organization, or of the organization at Loki), age (time window), rejected (by Loki), unavailable (Loki down), no_store (no Loki configured).",
 		"reason", func() map[string]float64 {
 			return map[string]float64{
 				"rate": float64(stats.LogsDroppedRate.Load()), "age": float64(stats.LogsDroppedAge.Load()),

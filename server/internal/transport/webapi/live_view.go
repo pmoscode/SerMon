@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -20,15 +21,34 @@ import (
 type LiveViewHandler struct {
 	svc     *liveview.Service
 	streams *streamLimiter
-	logger  *slog.Logger
+	// views bounds the live views on top of the shared limits: a snapshot is large (M3-28).
+	views  *streamLimiter
+	logger *slog.Logger
+
+	mu sync.Mutex
+	// built holds the last message per node: every viewer of a snapshot sends the same one,
+	// built once (M3-28).
+	built map[identity.NodeID]builtFrame
 }
+
+type builtFrame struct {
+	snapshot *liveview.Snapshot
+	message  *webv1.WatchProcessesResponse
+}
+
+// Live views per session, user, organization and instance, within the live stream limits: a
+// snapshot of a busy node is megabytes (M3-28).
+var liveViewLimits = streamLimits{Session: 4, User: 8, Org: 50, Total: 200}
 
 var _ webv1connect.LiveViewServiceHandler = (*LiveViewHandler)(nil)
 
 // NewLiveViewHandler returns the handler; live are the limits shared with the other live streams
 // (nil: its own).
 func NewLiveViewHandler(svc *liveview.Service, live *LiveStreams, logger *slog.Logger) *LiveViewHandler {
-	return &LiveViewHandler{svc: svc, streams: live.orNew(), logger: logger}
+	return &LiveViewHandler{
+		svc: svc, streams: live.orNew(), views: newStreamLimiter(liveViewLimits), logger: logger,
+		built: map[identity.NodeID]builtFrame{},
+	}
 }
 
 // WatchProcesses streams the node's processes. The stream counts against the live stream limits;
@@ -44,12 +64,17 @@ func (h *LiveViewHandler) WatchProcesses(ctx context.Context, req *connect.Reque
 	}
 	s, _ := sessionFrom(ctx)
 	key := streamKeyOf(s, c)
+	if !h.views.acquire(key) {
+		return connect.NewError(connect.CodeResourceExhausted, errTooManyStreams)
+	}
+	defer h.views.release(key)
 	if !h.streams.acquire(key) {
 		return connect.NewError(connect.CodeResourceExhausted, errTooManyStreams)
 	}
 	defer h.streams.release(key)
-	err = h.svc.Watch(ctx, c, identity.NodeID(id), func(f liveview.Frame) error {
-		return stream.Send(frameMessage(f))
+	node := identity.NodeID(id)
+	err = h.svc.Watch(ctx, c, node, func(f liveview.Frame) error {
+		return stream.Send(h.message(node, f))
 	}, recheckOf(ctx, c))
 	var connectErr *connect.Error
 	switch {
@@ -63,6 +88,25 @@ func (h *LiveViewHandler) WatchProcesses(ctx context.Context, req *connect.Reque
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	}
 	return internalError(ctx, h.logger, "watch processes", err)
+}
+
+// message returns the message of a frame; for a snapshot the one built for it already, shared
+// read-only by every viewer of the node.
+func (h *LiveViewHandler) message(node identity.NodeID, f liveview.Frame) *webv1.WatchProcessesResponse {
+	if f.Snapshot == nil {
+		return frameMessage(f)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if b, ok := h.built[node]; ok && b.snapshot == f.Snapshot {
+		return b.message
+	}
+	if len(h.built) >= liveViewLimits.Total {
+		clear(h.built)
+	}
+	msg := frameMessage(f)
+	h.built[node] = builtFrame{snapshot: f.Snapshot, message: msg}
+	return msg
 }
 
 func frameMessage(f liveview.Frame) *webv1.WatchProcessesResponse {

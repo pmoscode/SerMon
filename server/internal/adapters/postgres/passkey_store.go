@@ -175,3 +175,11 @@ func (s *PasskeyStore) TakeCeremony(ctx context.Context, idHash string, now time
 func (s *PasskeyStore) DeleteExpiredCeremonies(ctx context.Context, now time.Time) error {
 	return wrap(s.db.withoutTenant().DeleteExpiredWebAuthnCeremonies(ctx, now), "delete expired webauthn ceremonies")
 }
+
+// CloneSuspected implements passkey.Store: an entry in the instance audit log.
+func (s *PasskeyStore) CloneSuspected(ctx context.Context, user identity.UserID, id []byte) error {
+	return s.db.instanceTx(ctx, func(q *sqlcdb.Queries) error {
+		return appendInstanceAudit(ctx, q, nil, "passkey.clone_suspected", "user:"+user.String(),
+			map[string]any{"credential": base64.RawURLEncoding.EncodeToString(id)})
+	})
+}

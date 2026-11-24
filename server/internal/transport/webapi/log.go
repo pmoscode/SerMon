@@ -23,14 +23,31 @@ import (
 type LogHandler struct {
 	svc     *logs.Service
 	streams *streamLimiter
+	queries *streamLimiter
 	logger  *slog.Logger
+}
+
+// Concurrent log queries (QueryLogs, GetLogHistogram, GetLogContext): each reads up to 14 days
+// from Loki and holds the answer in memory, so their number is bounded like the streams (M3-28).
+var logQueryLimits = streamLimits{Session: 4, User: 8, Org: 32, Total: 128}
+
+var errTooManyQueries = errors.New("too many log queries at once, wait for the running ones")
+
+// admit takes a slot for a log query; the caller releases it when done.
+func (h *LogHandler) admit(ctx context.Context, c access.Caller) (func(), error) {
+	s, _ := sessionFrom(ctx)
+	k := streamKeyOf(s, c)
+	if !h.queries.acquire(k) {
+		return nil, connect.NewError(connect.CodeResourceExhausted, errTooManyQueries)
+	}
+	return func() { h.queries.release(k) }, nil
 }
 
 var _ webv1connect.LogServiceHandler = (*LogHandler)(nil)
 
 // NewLogHandler returns the handler; live are the limits shared with WatchMetrics (nil: its own).
 func NewLogHandler(svc *logs.Service, live *LiveStreams, logger *slog.Logger) *LogHandler {
-	return &LogHandler{svc: svc, streams: live.orNew(), logger: logger}
+	return &LogHandler{svc: svc, streams: live.orNew(), queries: newStreamLimiter(logQueryLimits), logger: logger}
 }
 
 // QueryLogs returns the lines of the filter.
@@ -39,6 +56,11 @@ func (h *LogHandler) QueryLogs(ctx context.Context, req *connect.Request[webv1.Q
 	if err != nil {
 		return nil, err
 	}
+	release, err := h.admit(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	f, err := logFilterFrom(req.Msg.GetFilter())
 	if err != nil {
 		return nil, err
@@ -60,6 +82,11 @@ func (h *LogHandler) GetLogHistogram(ctx context.Context, req *connect.Request[w
 	if err != nil {
 		return nil, err
 	}
+	release, err := h.admit(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	f, err := logFilterFrom(req.Msg.GetFilter())
 	if err != nil {
 		return nil, err
@@ -89,6 +116,11 @@ func (h *LogHandler) GetLogContext(ctx context.Context, req *connect.Request[web
 	if err != nil {
 		return nil, err
 	}
+	release, err := h.admit(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	id, err := uuid.Parse(req.Msg.GetNodeId())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errInvalidID)

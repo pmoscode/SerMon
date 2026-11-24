@@ -642,9 +642,12 @@ type GetLoginOptionsResponse struct {
 	// oidc_name is the provider's name for the button (set by the operator).
 	OidcName string `protobuf:"bytes,2,opt,name=oidc_name,json=oidcName,proto3" json:"oidc_name,omitempty"`
 	// passkeys is set if the server offers the sign-in with a passkey (M3-24).
-	Passkeys      bool `protobuf:"varint,3,opt,name=passkeys,proto3" json:"passkeys,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Passkeys bool `protobuf:"varint,3,opt,name=passkeys,proto3" json:"passkeys,omitempty"`
+	// oidc_second_factor is set if every login at the provider counts as two factors (the operator
+	// trusts it): its step-up then also serves users with a local second factor (M3-28).
+	OidcSecondFactor bool `protobuf:"varint,4,opt,name=oidc_second_factor,json=oidcSecondFactor,proto3" json:"oidc_second_factor,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetLoginOptionsResponse) Reset() {
@@ -694,6 +697,13 @@ func (x *GetLoginOptionsResponse) GetOidcName() string {
 func (x *GetLoginOptionsResponse) GetPasskeys() bool {
 	if x != nil {
 		return x.Passkeys
+	}
+	return false
+}
+
+func (x *GetLoginOptionsResponse) GetOidcSecondFactor() bool {
+	if x != nil {
+		return x.OidcSecondFactor
 	}
 	return false
 }
@@ -1905,11 +1915,12 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x06issuer\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01(\x80\x04R\x06issuer\"\x1c\n" +
 	"\x1aUnlinkOidcIdentityResponse\"\x18\n" +
-	"\x16GetLoginOptionsRequest\"f\n" +
+	"\x16GetLoginOptionsRequest\"\x94\x01\n" +
 	"\x17GetLoginOptionsResponse\x12\x12\n" +
 	"\x04oidc\x18\x01 \x01(\bR\x04oidc\x12\x1b\n" +
 	"\toidc_name\x18\x02 \x01(\tR\boidcName\x12\x1a\n" +
-	"\bpasskeys\x18\x03 \x01(\bR\bpasskeys\"o\n" +
+	"\bpasskeys\x18\x03 \x01(\bR\bpasskeys\x12,\n" +
+	"\x12oidc_second_factor\x18\x04 \x01(\bR\x10oidcSecondFactor\"o\n" +
 	"\x10BeginOidcRequest\x12=\n" +
 	"\x06intent\x18\x01 \x01(\x0e2\x19.sermon.web.v1.OidcIntentB\n" +
 	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x06intent\x12\x1c\n" +

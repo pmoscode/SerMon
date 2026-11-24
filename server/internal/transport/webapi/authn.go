@@ -81,7 +81,13 @@ func (a *Authenticator) WrapStreamingClient(next connect.StreamingClientFunc) co
 func (a *Authenticator) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
 		cookie := conn.RequestHeader().Get("Cookie")
-		ctx, err := a.authenticate(ctx, cookie)
+		// A stream the UI reopens by itself is no activity of the user: it must not keep an
+		// unattended session alive past the idle timeout (M3-28).
+		validate := a.sessions.Validate
+		if conn.RequestHeader().Get(BackgroundHeader) == "1" {
+			validate = a.sessions.Peek
+		}
+		ctx, err := a.authenticateWith(ctx, cookie, validate)
 		if err != nil {
 			return err
 		}
@@ -98,6 +104,9 @@ func (a *Authenticator) WrapStreamingHandler(next connect.StreamingHandlerFunc) 
 		return next(context.WithValue(ctx, reauthKey{}, reauth), conn)
 	}
 }
+
+// BackgroundHeader marks a live stream the UI opened by itself (a reconnect), not the user.
+const BackgroundHeader = "Sermon-Background"
 
 func (a *Authenticator) authenticate(ctx context.Context, cookieHeader string) (context.Context, error) {
 	return a.authenticateWith(ctx, cookieHeader, a.sessions.Validate)

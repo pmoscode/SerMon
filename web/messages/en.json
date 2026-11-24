@@ -1002,5 +1002,6 @@
 	"passkey_never_used": "never used",
 	"passkey_rename": "Rename passkey {name}",
 	"passkey_delete": "Delete passkey {name}",
-	"passkey_list_empty": "No passkey yet."
+	"passkey_list_empty": "No passkey yet.",
+	"orgs_error_lock_too_recent": "The organization was locked just now. Deleting at once works 10 minutes after the lock: hosts with a clock ahead still send log lines that would be left over."
 }

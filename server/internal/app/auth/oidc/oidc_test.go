@@ -464,7 +464,7 @@ func TestLogin_ReconcilesAndProvisions(t *testing.T) {
 	p := &provisioner{}
 	e := withProvisioner(t, p, true)
 	res, err := complete(t, e)
-	if err != nil || res.Session.User != alice || p.calls != 1 || p.user != alice || !p.join || strings.Join(p.reconcile, ",") != "ops" {
+	if err != nil || res.Session.User != alice || p.calls != 1 || p.user != alice || p.join || strings.Join(p.reconcile, ",") != "ops" {
 		t.Fatalf("known identity: %+v, %v, %+v", res, err, p)
 	}
 	// Without JIT the mappings still give and take roles, but nobody joins.
@@ -482,8 +482,8 @@ func TestLogin_ReconcilesAndProvisions(t *testing.T) {
 	e = withProvisioner(t, p, true)
 	e.idp.claims.Subject = "new-sub"
 	res, err = complete(t, e)
-	if err != nil || res.Session.User != bob || p.user != bob {
-		t.Errorf("provisioned: %+v, %v", res, err)
+	if err != nil || res.Session.User != bob || p.user != bob || !p.join {
+		t.Errorf("provisioned: %+v, %v; the new account joins", res, err)
 	}
 	// No mapping matches: nothing is created.
 	e = withProvisioner(t, &provisioner{}, true)
@@ -547,5 +547,34 @@ func TestUnlink_KeepsAWayToSignIn(t *testing.T) {
 	}
 	if pw, linked, _ := e.svc.SignInWays(ctx, bob); pw || linked {
 		t.Error("bob signs in somehow")
+	}
+}
+
+// M3-28: the step-up at the provider of a user with a local second factor needs one there too.
+func TestStepUp_UsersWithASecondFactorNeedOneAtTheProvider(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mode oidc.MFAMode
+		amr  []string
+		ok   bool
+	}{
+		"password only":   {oidc.MFAByClaim, []string{"pwd"}, false},
+		"amr with otp":    {oidc.MFAByClaim, []string{"pwd", "otp"}, true},
+		"trusted":         {oidc.MFAAlways, nil, true},
+		"never, even mfa": {oidc.MFANever, []string{"mfa"}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newEnv(t, tc.mode, secondFactor{alice: true})
+			ctx := context.Background()
+			token := signedIn(t, e, alice)
+			e.idp.claims.AMR, e.idp.claims.AuthTime = tc.amr, *e.now
+			b, err := e.svc.Begin(ctx, oidc.IntentStepUp, token, "/", "192.0.2.1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = e.svc.Complete(ctx, stateOf(t, b), "code", b.Binding, token, "192.0.2.1")
+			if (err == nil) != tc.ok {
+				t.Errorf("Complete() = %v, want ok %v", err, tc.ok)
+			}
+		})
 	}
 }

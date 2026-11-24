@@ -18,6 +18,9 @@ export interface ViewTiming {
 
 const TIMING: ViewTiming = { retryFirst: 1000, retryMax: 30_000, shortStream: 10_000 };
 
+/** Marks a stream the UI reopened by itself (M3-28): the server doesn't count it as activity. */
+export const BACKGROUND = { 'Sermon-Background': '1' };
+
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
 	return new Promise((done) => {
 		const timer = setTimeout(done, ms);
@@ -105,13 +108,17 @@ export class ProcessViewState {
 		this.status = 'connecting';
 		let wait = retryFirst;
 		let end: ViewStatus = 'stopped';
+		let reopen = false;
 		while (!ctrl.signal.aborted) {
 			const opened = Date.now();
+			// Reopening by itself is no activity of the user: it must not keep the session alive.
+			const headers = reopen ? BACKGROUND : undefined;
+			reopen = true;
 			try {
 				let refused = false;
 				for await (const res of liveViewApi.liveView.watchProcesses(
 					{ nodeId },
-					{ signal: ctrl.signal }
+					{ signal: ctrl.signal, headers }
 				)) {
 					const event = res.event;
 					if (event.case === 'snapshot') {

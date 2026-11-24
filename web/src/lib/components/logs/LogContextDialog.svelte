@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { displayText } from '#lib/logs/text.js';
 	import { tick } from 'svelte';
 	import type { LogLine } from '#lib/api/gen/sermon/web/v1/log_pb.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -54,7 +55,7 @@
 		<Dialog.Header>
 			<Dialog.Title>{m.logs_context_title()}</Dialog.Title>
 			<Dialog.Description>
-				{m.logs_context_text({ host: line?.hostname ?? '', unit: line?.unit || '–' })}
+				{m.logs_context_text({ host: line?.hostname ?? '', unit: displayText(line?.unit || '–') })}
 			</Dialog.Description>
 		</Dialog.Header>
 		{#if status === 'loading'}

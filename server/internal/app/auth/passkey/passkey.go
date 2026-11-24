@@ -100,6 +100,9 @@ type Store interface {
 	Add(ctx context.Context, p Passkey, limit int) error
 	// Used stores the credential after an assertion (counter, flags) and the time.
 	Used(ctx context.Context, id []byte, c webauthn.Credential, at time.Time) error
+	// CloneSuspected records a refused assertion whose counter went back in the instance audit
+	// log (M3-28).
+	CloneSuspected(ctx context.Context, user identity.UserID, id []byte) error
 	Rename(ctx context.Context, user identity.UserID, id []byte, name string) error
 	// Delete removes a passkey with an entry in the instance audit log; ErrNotFound if the user has
 	// none with id.
@@ -572,6 +575,15 @@ func (s *Service) accept(ctx context.Context, cred *webauthn.Credential) (bool, 
 	if cred.Authenticator.CloneWarning {
 		s.d.Logger.WarnContext(ctx, "passkey refused: its signature counter went back – the authenticator may be cloned",
 			"credential", base64.RawURLEncoding.EncodeToString(cred.ID))
+		p, found, err := s.d.Store.Find(ctx, cred.ID)
+		if err != nil {
+			return false, fmt.Errorf("passkey clone: %w", err)
+		}
+		if found {
+			if err := s.d.Store.CloneSuspected(ctx, p.User, cred.ID); err != nil {
+				return false, fmt.Errorf("passkey clone: %w", err)
+			}
+		}
 		return false, nil
 	}
 	if err := s.d.Store.Used(ctx, cred.ID, *cred, s.d.Now()); err != nil {

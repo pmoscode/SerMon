@@ -33,6 +33,8 @@ var (
 	ErrNameMismatch = errors.New("type the name of the organization to confirm")
 	// ErrNotLocked means the action needs a locked organization (unlock, delete, audit export).
 	ErrNotLocked = errors.New("the organization is not locked")
+	// ErrLockTooRecent means the lock is younger than MinLockBeforeDelete.
+	ErrLockTooRecent = errors.New("the organization was locked just now: delete it 10 minutes after the lock")
 	// ErrGraceTooShort means the configured deletion grace is below MinDeletionGrace.
 	ErrGraceTooShort = fmt.Errorf("the deletion grace must be at least %v", MinDeletionGrace)
 )
@@ -224,6 +226,11 @@ func (l *Lifecycle) Unlock(ctx context.Context, c access.Caller, org tenant.OrgI
 	return nil
 }
 
+// MinLockBeforeDelete is how long an organization stays locked before it can be deleted at once:
+// agents send log lines up to 5 minutes ahead of the server's clock, and Loki deletes nothing in
+// the future, so lines stamped after a fresh lock would outlive the deletion (M3-28).
+const MinLockBeforeDelete = 10 * time.Minute
+
 // DeleteNow deletes a locked organization at once (e.g. on its own request) and returns the
 // number of accounts deleted with it.
 func (l *Lifecycle) DeleteNow(ctx context.Context, c access.Caller, org tenant.OrgID, typed string) (int64, error) {
@@ -235,6 +242,9 @@ func (l *Lifecycle) DeleteNow(ctx context.Context, c access.Caller, org tenant.O
 		return 0, ErrNotLocked
 	}
 	now := l.now()
+	if now.Sub(*st.LockedAt) < MinLockBeforeDelete {
+		return 0, ErrLockTooRecent
+	}
 	details := map[string]string{"name": st.Name, "deletion_due_at": now.UTC().Format(time.RFC3339)}
 	if err := l.store.SetLock(ctx, org, st.LockedAt, &now, entry(c, "org.schedule_deletion", org, details)); err != nil {
 		return 0, fmt.Errorf("delete organization: %w", err)

@@ -152,6 +152,10 @@ func TestPasskeys_RegisterSignInSecondFactorStepUp(t *testing.T) {
 	if !view.Msg.GetSession().GetSecondFactorSetupRequired() {
 		t.Errorf("after deleting the last second factor: %v", view.Msg.GetSession())
 	}
+	// M3-28: the session of the passkey sign-in had two factors and keeps them in its view.
+	if v, err := fresh.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil || v.Msg.GetSession().GetSecondFactorSetupRequired() {
+		t.Errorf("the passkey sign-in's session: %v, %v", v, err)
+	}
 	var audits int
 	ownerQuery(t, "SELECT count(*) FROM instance_audit_log WHERE target = 'user:"+piaID+"' AND action IN ('passkey.added', 'passkey.deleted')", &audits)
 	if audits < 2 {

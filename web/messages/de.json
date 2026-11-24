@@ -1002,5 +1002,6 @@
 	"passkey_never_used": "noch nie benutzt",
 	"passkey_rename": "Passkey {name} umbenennen",
 	"passkey_delete": "Passkey {name} löschen",
-	"passkey_list_empty": "Noch kein Passkey."
+	"passkey_list_empty": "Noch kein Passkey.",
+	"orgs_error_lock_too_recent": "Die Organisation ist gerade erst gesperrt. Sofort löschen geht 10 Minuten nach der Sperre: Hosts mit vorgehender Uhr schicken noch Log-Zeilen, die sonst übrig blieben."
 }

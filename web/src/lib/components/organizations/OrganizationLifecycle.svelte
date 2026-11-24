@@ -11,7 +11,7 @@
 	import { localeState } from '#lib/i18n/locale.svelte.js';
 	import { type LifecycleAction, actionsFor, confirmed } from '#lib/organizations/lifecycle.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { withStepUp } from '#lib/stores/stepup.svelte.js';
+	import { needsStepUp, withStepUp } from '#lib/stores/stepup.svelte.js';
 
 	/**
 	 * Lock, schedule the deletion, lift the lock, delete at once and export the audit log of an
@@ -59,8 +59,20 @@
 		typed = '';
 	}
 
-	function failed(error: unknown): string {
+	/** The server deletes at once only 10 minutes after the lock (M3-28). */
+	const MIN_LOCK_BEFORE_DELETE_MS = 10 * 60_000;
+
+	function failed(error: unknown, action?: Change): string {
 		if (codeOf(error) === Code.InvalidArgument) return m.orgs_error_name();
+		const lockedAt = organization.lockTime ? timestampDate(organization.lockTime).getTime() : 0;
+		if (
+			action === 'delete' &&
+			codeOf(error) === Code.FailedPrecondition &&
+			!needsStepUp(error) &&
+			Date.now() - lockedAt < MIN_LOCK_BEFORE_DELETE_MS
+		) {
+			return m.orgs_error_lock_too_recent();
+		}
 		return adminError(error, m.orgs_error_not_locked());
 	}
 
@@ -96,7 +108,7 @@
 		try {
 			onDone(await withStepUp(() => change(action)));
 		} catch (error) {
-			failure = failed(error);
+			failure = failed(error, action);
 		} finally {
 			busy = false;
 		}

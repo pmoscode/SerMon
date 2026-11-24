@@ -1,3 +1,4 @@
+import { BACKGROUND } from '#lib/processes/live.svelte.js';
 import { create } from '@bufbuild/protobuf';
 import {
 	timestampFromMs,
@@ -264,11 +265,15 @@ export class LogExplorerState {
 		this.#tail = ctrl;
 		this.live = 'connecting';
 		let wait = RETRY_FIRST;
+		let reopen = false;
 		while (!ctrl.signal.aborted) {
 			const opened = Date.now();
+			// Reopening by itself is no activity of the user (M3-28).
+			const headers = reopen ? BACKGROUND : undefined;
+			reopen = true;
 			try {
 				const request = { ...selection(filter, fixedNode), since: this.#since() };
-				for await (const res of logsApi.logs.tailLogs(request, { signal: ctrl.signal })) {
+				for await (const res of logsApi.logs.tailLogs(request, { signal: ctrl.signal, headers })) {
 					this.live = 'live';
 					this.throttled = res.throttled;
 					this.storeDown = res.unavailable;

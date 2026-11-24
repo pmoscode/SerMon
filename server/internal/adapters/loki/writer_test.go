@@ -92,15 +92,18 @@ func TestWriter_SeverityNames(t *testing.T) {
 	}
 }
 
-// What Loki refuses for good is ErrLogsRejected for the ingest (dropped); an outage or a rate
-// limit is not (retried).
+// What Loki refuses for good is ErrLogsRejected for the ingest (dropped); its limits of the
+// tenant are ErrLogsThrottled (retried, then dropped for the organization only); an outage is
+// neither.
 func TestWriter_MapsTheErrorsForTheIngest(t *testing.T) {
 	entry := []ingest.LogEntry{{At: at, Source: ingest.LogSourceJournal, Message: "x"}}
-	for status, rejected := range map[int]bool{http.StatusBadRequest: true, http.StatusTooManyRequests: false, http.StatusServiceUnavailable: false} {
+	for status, want := range map[int][2]bool{
+		http.StatusBadRequest: {true, false}, http.StatusTooManyRequests: {false, true}, http.StatusServiceUnavailable: {false, false},
+	} {
 		w := loki.NewWriter(client(t, (&recorded{}).handler(status, "nope")))
 		err := w.Write(context.Background(), org, node, entry)
-		if err == nil || errors.Is(err, ingest.ErrLogsRejected) != rejected {
-			t.Errorf("%d: %v, rejected %v", status, err, rejected)
+		if err == nil || errors.Is(err, ingest.ErrLogsRejected) != want[0] || errors.Is(err, ingest.ErrLogsThrottled) != want[1] {
+			t.Errorf("%d: %v, want rejected %v, throttled %v", status, err, want[0], want[1])
 		}
 	}
 }

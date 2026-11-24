@@ -43,8 +43,23 @@ type LogWriter interface {
 }
 
 // ErrLogsRejected marks entries the store refuses for good; they are dropped, not retried. Any
-// other error counts as an outage.
+// other error counts as an outage, except ErrLogsThrottled.
 var ErrLogsRejected = errors.New("log entries rejected")
+
+// ErrLogsThrottled means the store refused the organization's entries for its limits (Loki 429):
+// retried for LogRetryFor and then dropped for this node only. Loki counts as up, the other
+// organizations write on (M3-28).
+var ErrLogsThrottled = errors.New("log entries throttled")
+
+// entryOverhead is charged per entry on top of its bytes: a flood of tiny entries costs too.
+const entryOverhead = 16
+
+// entryCost is what an entry costs in the buckets: everything the store keeps of it, not only
+// the message (M3-28).
+func entryCost(e LogEntry) float64 {
+	return float64(len(e.Message) + len(e.Unit) + len(e.File) + len(e.Identifier) + len(e.Process) +
+		len(e.BootID) + len(e.Transport) + entryOverhead)
+}
 
 // MaxUnitsPerNode bounds the distinct units of a node: beyond it entries go to OtherUnit, so a
 // host can't grow the store's streams without bound.
@@ -104,7 +119,7 @@ func (s *Service) admitLogs(org tenant.OrgID, node identity.NodeID, entries []Lo
 	}
 	kept := entries[:0]
 	for _, e := range entries {
-		size := float64(len(e.Message))
+		size := entryCost(e)
 		if nodeBucket.tokens < size || orgBucket.tokens < size {
 			s.stats.LogsDroppedRate.Add(1)
 			continue
@@ -201,6 +216,11 @@ func (s *Session) flushLogs(ctx context.Context) uint64 {
 	}
 	if now.Sub(s.logsFailing) < svc.config.LogRetryFor {
 		return s.logs[0].seq
+	}
+	if errors.Is(err, ErrLogsThrottled) {
+		// The organization's limit at the store: its entries go, nobody else's.
+		svc.logger.WarnContext(ctx, "log store throttles the organization, dropping log entries", "node", s.node.String(), "entries", count, "error", err)
+		return drop(&stats.LogsDroppedRate)
 	}
 	svc.logger.WarnContext(ctx, "log store unavailable, dropping log entries", "node", s.node.String(), "entries", count, "error", err)
 	svc.markLogsDown(now)

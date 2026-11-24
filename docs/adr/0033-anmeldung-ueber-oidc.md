@@ -59,7 +59,7 @@ Gewählt: **Option 2**, ein Provider pro Instanz (`SERMON_OIDC_*`, das Secret al
   ohne Rechte; das Entfernen bleibt dem Admin.
 - **JIT** (Standard an, `SERMON_OIDC_JIT=false`): Eine unbekannte Identität bekommt ein Konto ohne Passwort, wenn die
   E-Mail bestätigt ist (`email_verified`), keinem Konto gehört und eine Zuordnung einer ungesperrten Org passt; dann
-  wird sie Mitglied der passenden Orgs. Gehört die E-Mail einem Konto, entsteht keines: Die Identität muss dort
+  wird sie Mitglied der passenden Orgs – nur bei dieser ersten Anmeldung (Nachtrag M3-28). Gehört die E-Mail einem Konto, entsteht keines: Die Identität muss dort
   verknüpft werden (keine Übernahme über die E-Mail). Welche Orgs passen, ermittelt eine SECURITY-DEFINER-Funktion,
   die nur IDs liefert.
 - **Audit:** Zuordnungen im Audit-Log der Org (`oidc_mapping.create`/`delete`), Änderungen bei der Anmeldung als
@@ -82,9 +82,25 @@ Gewählt: **Option 2**, ein Provider pro Instanz (`SERMON_OIDC_*`, das Secret al
 - Drei neue Abhängigkeiten (`go-oidc`, `x/oauth2`, `go-jose`), von Renovate und govulncheck verfolgt.
 - Ein Provider, der `amr` nicht setzt (Dex, Keycloak ohne Mapper), erfüllt eine 2FA-Pflicht nur mit `trusted`. Das
   muss der Betreiber bewusst einstellen.
-- Konten ohne Passwort (M3-21) bestätigen den Step-up beim Provider oder mit dem lokalen zweiten Faktor.
+- Konten ohne Passwort (M3-21) bestätigen den Step-up beim Provider oder mit einem Passkey.
 - Abmelden beim Provider (RP-initiated Logout) gibt es nicht: Abmelden beendet nur die Session in SerMon.
 - Rollen aus Gruppen ändern sich erst bei der nächsten Anmeldung; eine laufende Session behält sie bis dahin (höchstens
   12 h). Wer sofort entziehen muss, entzieht von Hand oder entfernt das Mitglied.
 - Mit JIT kann der Admin einer Org Mitglieder einer Provider-Gruppe aufnehmen und sieht ihre E-Mail. Wer das nicht
   will, schaltet JIT ab.
+
+## Nachtrag M3-28: Befunde des Security-Reviews
+
+- **Step-up beim Provider** gilt für User mit eigenem zweiten Faktor (TOTP oder Passkey) nur, wenn die Anmeldung dort
+  ebenfalls zwei Faktoren hatte (`amr` oder `SERMON_OIDC_MFA=trusted`); sonst wird er abgewiesen. Vorher ersetzte das
+  Passwort beim Provider den lokalen Faktor, und mit dem Step-up ließ sich ein eigener Passkey hinzufügen.
+  `GetLoginOptions.oidc_second_factor` sagt der UI, ob sie den Weg diesen Usern anbieten darf.
+- **Beitritt nur bei der Anlage:** Bestehende Konten bekommen und verlieren bei der Anmeldung nur die Rollen in Orgs,
+  in denen sie Mitglied sind. Vorher trat ein von einem Admin entferntes Mitglied bei der nächsten Anmeldung über die
+  Zuordnung wieder bei. Wer ein vorhandenes Konto aufnehmen will, lädt es ein.
+- **Kein TOTP ohne Passwort:** Die Kontosperre für Codes hängt am Passwort; Konten aus JIT nutzen Passkeys als zweiten
+  Faktor (`BeginTotpSetup` antwortet `FAILED_PRECONDITION`).
+- **Anzeigenamen** aus dem Claim `name` gelten nur nach den Regeln aller Namen (`naming.Clean`), sonst der lokale Teil
+  der E-Mail.
+- Die UI verlässt die App nur zu einer https-Adresse des Providers.
+

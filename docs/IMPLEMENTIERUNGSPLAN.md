@@ -2584,7 +2584,7 @@ Abweichungen vom Ziel des Meilensteins:
   - Signierte Paket-Repos → E4.5
   - Journal des Hosts aus einem Container lesen (ADR 0013): nicht geplant.
 
-**3. M3 ist in Aufgaben zerlegt** (§6.1 bis §6.8, M3-01 bis M3-28).
+**3. M3 ist in Aufgaben zerlegt** (§6.1 bis §6.8, M3-01 bis M3-29).
 
 ---
 
@@ -3727,7 +3727,37 @@ Konfiguration) und M3-06 (Loki).
 - **Tests zuerst:** Gegenprobe mit gesenkter Grenze schlägt fehl.
 - **Abhängig von:** M3-04, M3-13
 
-#### ☐ M3-28 – Security-Review M3 · X · S 🔒
+#### ☑ M3-28 – Security-Review M3 · X · S 🔒
+> Erledigt: fünf Teil-Reviews ohne Kontext der Umsetzung (Log-Pipeline und Redaction im Agent; Loki, LogQL und
+> Mandantentrennung; Live-Ansicht; OIDC, Passkeys und Step-up; Darstellung fremder Daten in der UI) und
+> `just security` ohne Befund. **Kein kritischer und kein hoher Befund.** Ergebnis im Threat Model §8, Nachträge in
+> ADR 0031, 0033 und 0034. Behoben, jeweils mit Test:
+> - **Mittel:**
+>   - Ein 429 von Loki markierte Loki für alle Orgs als ausgefallen; jetzt `ingest.ErrLogsThrottled`, verworfen wird
+>     nach 30 s nur für den Node. Die Buckets zählen Metadaten und 16 Bytes je Eintrag,
+>     `per_stream_rate_limit_burst: 16MB` (T9).
+>   - Log-Abfragen gleichzeitig höchstens 4/8/32/128 (Session, User, Org, Instanz, T26).
+>   - Live-Ansicht: Snapshot pro Node einmal gebaut und geteilt, eigene Grenzen 4/8/50/200, jedes Schreiben eines
+>     Live-Streams mit 30 s Frist (T26); automatisch wieder geöffnete Streams senden `Sermon-Background: 1` und
+>     verlängern die Session nicht (T16).
+>   - Step-up beim Provider für User mit eigenem zweiten Faktor nur mit zweitem Faktor dort, die UI bietet ihn sonst
+>     nicht an (`GetLoginOptions.oidc_second_factor`, T85).
+>   - JIT: nur ein bei dieser Anmeldung angelegtes Konto tritt Orgs bei; ein entferntes Mitglied kehrt nicht zurück
+>     (T86).
+>   - CSV: jeder durch `;` getrennte Teil einer Zelle wird entschärft (T83).
+>   - Agent: jedes Öffnen einer Datei (auch nach Rotation, `.0`/`.1`) nicht blockierend, nur reguläre Dateien und mit
+>     `Guard` die geprüfte Datei nach Gerät und Inode (T81); Journal-Dateien und Login-Protokolle gesperrt, auch im
+>     Server (`logconfig`, T42); Redaction für `PGPASSWORD=`, `passphrase`, `secret_key`, `--db-password …`,
+>     `mysql -p…`, `sshpass -p`, `redis-cli -a`, Cookies, maskierte Anführungszeichen, base64-Zeilen in mehrzeiligen
+>     Einträgen (gemeinsame Fälle mit dem Server, T42); ein Lesevorgang hält rund 8 192 Zeilen.
+> - **Niedrig:** sofort löschen frühestens 10 min nach der Sperre (`ErrLockTooRecent`, Hinweis im Dialog); kein TOTP
+>   für Konten ohne Passwort; `passkey.clone_suspected` im Audit-Log der Instanz (T87); Session-Ansicht ohne
+>   Einrichtungszwang nach zwei Faktoren beim Provider oder Passkey; Unit einer Logzeile als `LogText`, OSC als
+>   `⟨OSC …⟩`, unsichtbar sind Cc, Cf, Zl, Zp und Hangul-Füllzeichen (ZWJ in Emoji bleibt, T19); Namen aus JIT über
+>   `naming.Clean`; die App verlässt sich nur zu https-Adressen des Providers.
+> - **Gegenproben** für 35 Prüfungen, alle erkannt (eine nach einem zusätzlichen Test: die geöffnete Datei muss die
+>   geprüfte sein).
+> - Die übrigen niedrigen Befunde stehen in M3-29.
 - **Ziel:** Skill `sermon-security-review` über alle M3-Änderungen, aufgeteilt wie M2-28 in Teil-Reviews ohne
   Kontext der Umsetzung:
   - Log-Pipeline und Redaction im Agent
@@ -3738,6 +3768,24 @@ Konfiguration) und M3-06 (Loki).
 
   Danach das Threat Model aktualisieren (T15, T20, T22, T35, T42, T53) und Befunde als Aufgaben anlegen.
 - **Abhängig von:** alle M3-Aufgaben
+
+#### ☐ M3-29 – Übrige Befunde der Security-Review M3 · X · S 🔒
+- **Ziel:** die niedrigen Befunde aus M3-28 (Threat Model §8), keiner kritisch oder hoch:
+  - **Live-Ansicht:**
+    - `hide` pro Betrachter statt pro Feed (Rennen beim Umschalten).
+    - Snapshots eines Agents höchstens im Abstand des halben Intervalls, ohne laufenden Feed nicht umwandeln.
+    - Beim Öffnen und Re-Check nur den einen Node laden statt aller sichtbaren.
+    - Entscheidung zum Viewer-Logs-Schalter: Befehlszeilen und Prozess-User für Viewer ohne Logs (T22).
+  - **Loki:** `query_range` als POST, Grenze der Nodes ohne Auswahl mit klarer Meldung; Antwort nach Limit und
+    schlimmster Zeilenlänge begrenzt oder Steuerzeichen schon beim Ingest ersetzt.
+  - **Anmeldung:** Rate-Limits pro IPv6-/64 und getrennt für Start und Abschluss (OIDC, Passkeys), Conditional UI erst
+    beim Fokus des E-Mail-Felds; Obergrenze offener Flows und Zeremonien; nach dem Lösen einer Identität oder dem
+    Löschen eines Passkeys die übrigen Sessions des Users beenden.
+  - **Agent:** Gesamtbudget für die Regexes der Org (auch im Server geprüft), kleinerer DFA-Cache; Glob-Expansion vor
+    der Grenze abbrechen, Präfixe einmal pro Expansion auflösen; PEM-Blöcke über mehrere Einträge maskieren;
+    Befehlszeilen je Argument redigieren (das Folgeargument einer Passwort-Option ganz).
+- **Tests zuerst:** je Befund ein Test, der vorher scheitert; gemeinsame Redaction-Fälle für Agent und Server.
+- **Abhängig von:** M3-28
 
 **M3 fertig, wenn:**
 

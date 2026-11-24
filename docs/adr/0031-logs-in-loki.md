@@ -99,3 +99,16 @@ dahinter, und damit die Alerts.
 - **Gefunden:** Abfragen sehen eine Löschung erst nach bis zu 5 Minuten; den Cache der Querier stellt Loki nicht
   einstellbar bereit. Tests prüfen deshalb, dass die Anfrage im richtigen Tenant eingetragen ist, und mit einem schnell
   laufenden Compactor (`lokitest.Start` mit Flags), dass Loki sie bearbeitet.
+
+## Nachtrag M3-28: Limits eines Tenants, Gleichzeitigkeit, Löschen
+
+- **429 von Loki** (ein Limit des Tenants) ist kein Ausfall: Der Ingest versucht den Batch 30 s lang und verwirft dann
+  nur die Einträge dieses Nodes (`sermon_server_ingest_dropped_log_entries_total{reason="rate"}`). Loki gilt nicht als ausgefallen,
+  die anderen Orgs schreiben weiter. Vorher ließ ein einzelner Node die Logs aller Orgs verwerfen.
+- Die Buckets des Servers zählen je Eintrag Nachricht, Unit, Datei, Identifier, Prozess, Boot-ID, Transport und
+  16 Bytes; `per_stream_rate_limit_burst` steht auf 16 MB, über dem Burst eines Nodes.
+- **Abfragen** (Liste, Histogramm, Kontext) laufen höchstens zu 4 pro Session, 8 pro User, 32 pro Org und 128 pro
+  Instanz gleichzeitig, darüber `RESOURCE_EXHAUSTED`: Jede kann bis zu 32 MiB aus Loki lesen.
+- **Sofort löschen** einer Org frühestens 10 min nach der Sperre: Agents senden Zeilen bis 5 min vor der Uhr des
+  Servers, Loki löscht nichts in der Zukunft.
+

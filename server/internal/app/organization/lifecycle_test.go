@@ -223,6 +223,11 @@ func TestLifecycle_DeleteNow(t *testing.T) {
 	if err := w.l.Lock(ctx, superadminAt(w), orgA, "Alpha AG"); err != nil {
 		t.Fatal(err)
 	}
+	// M3-28: lines up to 5 min ahead would outlive a deletion right after the lock.
+	if _, err := w.l.DeleteNow(ctx, superadminAt(w), orgA, "Alpha AG"); !errors.Is(err, organization.ErrLockTooRecent) || len(w.store.purged) != 0 {
+		t.Errorf("right after the lock: %v", err)
+	}
+	*w.clock = w.clock.Add(organization.MinLockBeforeDelete)
 	users, err := w.l.DeleteNow(ctx, superadminAt(w), orgA, "Alpha AG")
 	if err != nil || users != 2 || w.store.purged[0] != orgA.String()+" "+super.String()+" Alpha AG" {
 		t.Errorf("DeleteNow = %d, %v; purged %v", users, err, w.store.purged)
@@ -317,6 +322,7 @@ func TestLifecycle_ErasesTheLogsFirstAndRetries(t *testing.T) {
 	if err := l2.Lock(ctx, superadminAt(w2), orgA, "Alpha AG"); err != nil {
 		t.Fatal(err)
 	}
+	*w2.clock = w2.clock.Add(organization.MinLockBeforeDelete)
 	if _, err := l2.DeleteNow(ctx, superadminAt(w2), orgA, "Alpha AG"); err == nil || len(w2.store.purged) != 0 {
 		t.Errorf("DeleteNow with the log store down: %v, purged %v", err, w2.store.purged)
 	}

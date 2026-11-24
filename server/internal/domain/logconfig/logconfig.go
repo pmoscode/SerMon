@@ -141,6 +141,32 @@ func (s Settings) Validate() error {
 	return nil
 }
 
+// neverRead are the paths the agent refuses whatever its prefixes allow (sermon-logs
+// ALWAYS_DENIED, M3-28): refused here already, so the UI says so at once.
+var neverRead = []string{
+	"/etc/sermon", "/proc", "/sys", "/dev", "/var/log/journal", "/run/log/journal",
+	"/var/log/wtmp", "/var/log/btmp", "/var/log/lastlog",
+}
+
+// deniedPath reports whether the literal start of a pattern (the segments before the first
+// wildcard) lies in a path the agent never reads. Matches by wildcards are refused by the agent.
+func deniedPath(segments []string) bool {
+	var literal []string
+	for _, s := range segments {
+		if strings.ContainsAny(s, "*?") {
+			break
+		}
+		literal = append(literal, s)
+	}
+	for _, d := range neverRead {
+		ds := strings.Split(d[1:], "/")
+		if len(literal) >= len(ds) && slices.Equal(literal[:len(ds)], ds) {
+			return true
+		}
+	}
+	return false
+}
+
 func (g FileGlob) validate() error {
 	p := g.Pattern
 	switch {
@@ -156,10 +182,14 @@ func (g FileGlob) validate() error {
 		// The agent knows * and ? only (M3-05).
 		return errors.New("only * and ? are wildcards")
 	}
-	for _, segment := range strings.Split(p[1:], "/") {
+	segments := strings.Split(p[1:], "/")
+	for _, segment := range segments {
 		if segment == "" || segment == "." {
 			return errors.New("the pattern must not contain empty or . segments")
 		}
+	}
+	if deniedPath(segments) {
+		return errors.New("the agent never reads this path (its own files, /proc, /sys, /dev, the journal's files, login records)")
 	}
 	if len(g.MultilineStart) > MaxRegexBytes {
 		return fmt.Errorf("the multiline regex is longer than %d bytes", MaxRegexBytes)

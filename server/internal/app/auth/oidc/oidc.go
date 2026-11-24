@@ -385,10 +385,12 @@ func (s *Service) login(ctx context.Context, f Flow, c Claims) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("oidc login: %w", err)
 	}
+	provisioned := false
 	if !found && s.d.JIT && s.d.Provisioner != nil {
 		if user, found, err = s.d.Provisioner.Provision(ctx, c); err != nil {
 			return Result{}, fmt.Errorf("oidc login: %w", err)
 		}
+		provisioned = found
 	}
 	if !found {
 		s.d.Logger.WarnContext(ctx, "oidc login with an unknown identity", "issuer", c.Issuer)
@@ -400,7 +402,10 @@ func (s *Service) login(ctx context.Context, f Flow, c Claims) (Result, error) {
 	// The roles follow the groups before the session exists: a failure ends the sign-in rather
 	// than leave roles the provider took away.
 	if s.d.Provisioner != nil {
-		if err := s.d.Provisioner.Reconcile(ctx, user, c.Groups, s.d.JIT); err != nil {
+		// Only an account created just now joins organizations by the mappings; an existing one
+		// only gets and loses the mapped roles where it is a member, so a removal by an admin
+		// holds (M3-28).
+		if err := s.d.Provisioner.Reconcile(ctx, user, c.Groups, provisioned); err != nil {
 			return Result{}, fmt.Errorf("oidc login: %w", err)
 		}
 	}
@@ -456,6 +461,17 @@ func (s *Service) stepUp(ctx context.Context, f Flow, c Claims, sessionToken str
 	// The provider was asked for a fresh login (max_age=0): an older one doesn't count.
 	if c.AuthTime.IsZero() || c.AuthTime.Before(f.CreatedAt.Add(-authTimeSkew)) {
 		return Result{}, s.fail(ctx, f, "no fresh login at the provider (auth_time)", nil)
+	}
+	// A user with a second factor needs one at the provider too: a provider password alone must
+	// not stand in for the local factor (M3-28, like ConfirmPassword).
+	if !s.mfa(c) && s.d.SecondFactor != nil {
+		enabled, err := s.d.SecondFactor.Enabled(ctx, user)
+		if err != nil {
+			return Result{}, fmt.Errorf("oidc step-up: %w", err)
+		}
+		if enabled {
+			return Result{}, s.fail(ctx, f, "provider login without a second factor for a user with one", nil)
+		}
 	}
 	sess, err := s.d.Sessions.StepUp(ctx, sessionToken)
 	if err != nil {
@@ -519,3 +535,7 @@ func (s *Service) Unlink(ctx context.Context, sessionToken, issuer string) error
 	}
 	return nil
 }
+
+// TrustsSecondFactor reports whether every login at the provider counts as two factors (the
+// operator trusts it): then the step-up there also serves users with a local second factor.
+func (s *Service) TrustsSecondFactor() bool { return s != nil && s.d.MFA == MFAAlways }

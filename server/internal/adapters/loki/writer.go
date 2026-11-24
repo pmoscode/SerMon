@@ -43,8 +43,11 @@ func (w *Writer) Write(ctx context.Context, org tenant.OrgID, node identity.Node
 		streams[i].Entries = append(streams[i].Entries, Entry{At: e.At, Line: e.Message, Metadata: metadata(e)})
 	}
 	err := w.client.Push(ctx, org, streams)
-	if errors.Is(err, ErrRejected) {
+	switch {
+	case errors.Is(err, ErrRejected):
 		return fmt.Errorf("%w: %w", ingest.ErrLogsRejected, err)
+	case errors.Is(err, ErrRateLimited):
+		return fmt.Errorf("%w: %w", ingest.ErrLogsThrottled, err)
 	}
 	return err
 }

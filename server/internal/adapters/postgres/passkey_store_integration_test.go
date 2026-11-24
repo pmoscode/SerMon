@@ -110,6 +110,15 @@ func TestPasskeyStore_RegisterSignInDelete(t *testing.T) {
 	if audits != 2 {
 		t.Errorf("%d audit entries", audits)
 	}
+	if err := store.CloneSuspected(ctx, identity.UserID(user), a.ID); err != nil {
+		t.Fatal(err)
+	}
+	var clones int
+	ownerQueryRow(t, f.db.OwnerDSN, `SELECT count(*) FROM instance_audit_log WHERE target = $1 AND action = 'passkey.clone_suspected'`,
+		[]any{"user:" + user.String()}, &clones)
+	if clones != 1 {
+		t.Errorf("%d clone entries", clones)
+	}
 	// Expired ceremonies are cleaned up, and the database refuses inconsistent ones.
 	if err := store.InsertCeremony(ctx, passkey.Ceremony{
 		IDHash: strings.Repeat("a", 64), Purpose: passkey.PurposeLogin,

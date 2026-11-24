@@ -26,6 +26,10 @@ func TestCSVCell_DefusesFormulas(t *testing.T) {
 		"a=b":                        "a=b",
 		"SHA256:abc+def/ghi=":        "SHA256:abc+def/ghi=",
 		"\uff1d1 (fullwidth equals)": "\uff1d1 (fullwidth equals)",
+		// M3-28: German Excel splits at ";" – every part is a cell of its own.
+		"x;=1+1;":     "x;'=1+1;",
+		";@SUM(1)":    ";'@SUM(1)",
+		"a;b;-c;\t=d": "a;b;'-c;'\t=d",
 	} {
 		if got := secevents.CSVCell(in); got != want {
 			t.Errorf("CSVCell(%q) = %q, want %q", in, got, want)

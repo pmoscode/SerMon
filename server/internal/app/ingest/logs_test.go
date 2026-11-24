@@ -176,6 +176,54 @@ func TestLogs_RejectedOnesAreDroppedAtOnce(t *testing.T) {
 	}
 }
 
+// M3-28: Loki throttles one organization (429): its entries are retried and then dropped, Loki
+// does not count as down and another organization writes on.
+func TestLogs_AThrottledOrganizationDoesNotStopTheOthers(t *testing.T) {
+	config := ingest.DefaultConfig()
+	w, logs := logWorld(t, config)
+	logs.setFail(fmt.Errorf("%w: status 429", ingest.ErrLogsThrottled))
+	s := w.open(t)
+	s.Accept(context.Background(), logBatch(1, logEntry(w.clock.Now(), "throttled")))
+	if ack, err := s.Flush(context.Background()); err != nil || ack != 0 {
+		t.Fatalf("Flush() = %d, %v; want held back", ack, err)
+	}
+	w.clock.Set(w.clock.Now().Add(config.LogRetryFor))
+	if ack, err := s.Flush(context.Background()); err != nil || ack != 1 {
+		t.Fatalf("after the retry time: Flush() = %d, %v; want 1", ack, err)
+	}
+	stats := w.svc.Stats()
+	if stats.LogsDroppedRate.Load() != 1 || stats.LogsDroppedUnavailable.Load() != 0 || w.svc.LogsUnavailable() {
+		t.Errorf("rate %d, unavailable %d, down %v", stats.LogsDroppedRate.Load(), stats.LogsDroppedUnavailable.Load(), w.svc.LogsUnavailable())
+	}
+	logs.setFail(nil)
+	s.Accept(context.Background(), logBatch(2, logEntry(w.clock.Now(), "written")))
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := logs.messages(); len(got) != 1 || got[0] != "written" {
+		t.Errorf("written %v", got)
+	}
+}
+
+// The buckets charge what the store keeps: long metadata with tiny messages costs too.
+func TestLogs_MetadataCountsTowardsTheBuckets(t *testing.T) {
+	config := ingest.DefaultConfig()
+	config.LogBytesRate, config.LogBytesBurst = 1, 10_000
+	w, logs := logWorld(t, config)
+	s := w.open(t)
+	e := logEntry(w.clock.Now(), "x")
+	e.File = "/var/log/" + strings.Repeat("a", 4000)
+	for i := range 5 {
+		s.Accept(context.Background(), logBatch(uint64(i+1), e))
+	}
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(logs.messages()); got != 2 {
+		t.Errorf("%d entries with 4 KiB paths passed a burst of 10 000 bytes, want 2", got)
+	}
+}
+
 // Time window: entries older than 7 days or 5 min ahead are dropped before they reach Loki.
 func TestLogs_OutsideTheTimeWindowAreDropped(t *testing.T) {
 	w, logs := logWorld(t, ingest.DefaultConfig())
@@ -197,7 +245,8 @@ func TestLogs_AFloodIsBoundedPerNodeAndOrganization(t *testing.T) {
 	config.LogBytesRate, config.LogBytesBurst = 1000, 10_000
 	config.OrgLogBytesRate, config.OrgLogBytesBurst = 1000, 15_000
 	w, logs := logWorld(t, config)
-	line := strings.Repeat("x", 1000)
+	// An entry costs its bytes with the unit and 16 per entry: 1000 here.
+	line := strings.Repeat("x", 1000-len("nginx.service")-16)
 	flood := func(s *ingest.Session, firstSeq uint64, n int) {
 		for i := range n {
 			s.Accept(context.Background(), logBatch(firstSeq+uint64(i), logEntry(w.clock.Now(), line)))

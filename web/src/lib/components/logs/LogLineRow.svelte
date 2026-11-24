@@ -67,7 +67,7 @@
 		</button>
 		<SeverityBadge severity={line.severity} />
 		{#if showHost}<span class="font-medium">{line.hostname}</span>{/if}
-		{#if line.unit}<span class="text-muted-foreground">{line.unit}</span>{/if}
+		{#if line.unit}<span class="text-muted-foreground"><LogText text={line.unit} /></span>{/if}
 		{#if current}<span class="font-sans font-semibold text-foreground">{m.logs_context_this()}</span
 			>{/if}
 		{#if line.truncated}

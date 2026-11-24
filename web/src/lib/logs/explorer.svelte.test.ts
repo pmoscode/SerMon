@@ -244,6 +244,12 @@ describe('LogExplorerState', () => {
 		// The reconnects continue at the newest line.
 		const since = spy.mock.calls[2][0].since!;
 		expect(ms(since)).toBe(now - 98);
+		// M3-28: only the first open is the user's; the reopens are marked as the UI's own.
+		const headers = spy.mock.calls.map(
+			(c) => (c[1] as { headers?: Record<string, string> } | undefined)?.headers
+		);
+		expect(headers[0]).toBeUndefined();
+		expect(headers.slice(1)).toEqual([{ 'Sermon-Background': '1' }, { 'Sermon-Background': '1' }]);
 	});
 
 	it('follows a new filter with the running tail', async () => {

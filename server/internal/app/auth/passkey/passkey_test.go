@@ -34,6 +34,7 @@ var (
 )
 
 type store struct {
+	clones     int
 	mu         sync.Mutex
 	keys       []passkey.Passkey
 	ceremonies map[string]passkey.Ceremony
@@ -86,6 +87,13 @@ func (s *store) Used(_ context.Context, id []byte, c webauthn.Credential, at tim
 			s.keys[i].Credential, s.keys[i].LastUsedAt = c, at
 		}
 	}
+	return nil
+}
+
+func (s *store) CloneSuspected(context.Context, identity.UserID, []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clones++
 	return nil
 }
 
@@ -645,5 +653,20 @@ func TestConfig_RelyingPartyFromTheOrigins(t *testing.T) {
 	var off *passkey.Service
 	if off.Available() || passkey.NewService(passkey.Deps{}).Available() {
 		t.Error("available without a relying party")
+	}
+}
+
+// M3-28: a counter going back is recorded, not only refused.
+func TestLogin_ACloneIsRecorded(t *testing.T) {
+	e := newEnv(t)
+	a := e.register(t, alice, "Phone")
+	a.Count = 1
+	b := begin(t, e, passkey.PurposeLogin, "")
+	resp, _ := a.Assert(b.Options)
+	if _, err := e.svc.Finish(context.Background(), passkey.PurposeLogin, b.CeremonyID, b.Binding, "", resp, "192.0.2.1"); !errors.Is(err, passkey.ErrFailed) {
+		t.Fatalf("Finish() = %v", err)
+	}
+	if e.store.clones != 1 {
+		t.Errorf("%d clones recorded", e.store.clones)
 	}
 }

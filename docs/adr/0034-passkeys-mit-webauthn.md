@@ -51,3 +51,13 @@ Gewählt: **Option 2**, mit `attestation: none` (keine Herstellerprüfung, keine
   govulncheck verfolgt; die nicht genutzten Formate werden trotzdem mitgebaut.
 - Ändert der Betreiber die erste Origin auf einen anderen Host, gelten die vorhandenen Passkeys nicht mehr.
 - Ohne Attestation weiß SerMon nicht, welcher Authenticator dahintersteht; die AAGUID dient nur der Anzeige.
+
+## Nachtrag M3-28
+
+- Ein rückwärts laufender Zähler wird abgewiesen und als `passkey.clone_suspected` (User und Credential-ID) ins
+  Audit-Log der Instanz geschrieben; vorher stand er nur im Log des Servers.
+- Eine Session aus einer Anmeldung mit Passkey (zwei Faktoren) verlangt in der Session-Ansicht keine Einrichtung
+  eines zweiten Faktors.
+- Mit einem zweiten Faktor bietet der Step-up-Dialog den Provider nur an, wenn dessen Anmeldung zwei Faktoren zählt
+  (ADR 0033, Nachtrag M3-28).
+

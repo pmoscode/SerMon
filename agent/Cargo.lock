@@ -1322,6 +1322,7 @@ version = "0.0.0"
 dependencies = [
  "jiff",
  "proptest",
+ "rustix",
  "serde_json",
  "tempfile",
  "thiserror",

@@ -22,7 +22,11 @@ const (
 	MaxPatternBytes = 1024
 )
 
-const keys = `password|passwd|pwd|pass|secret|token|api[-_]?key|access[-_]?key|private[-_]?key`
+const (
+	keys  = `password|passwd|passphrase|pwd|pass|secret[-_]?key|secret|token|api[-_]?key|access[-_]?key|private[-_]?key`
+	glued = `[a-z0-9]*(?:password|passwd|passphrase)`
+	value = `(?:'[^']*'|"(?:[^"\\]|\\.)*"|\S+)`
+)
 
 type builtin struct {
 	re          *regexp.Regexp
@@ -32,10 +36,14 @@ type builtin struct {
 // The built-in patterns in the agent's order.
 var builtins = []builtin{
 	{regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\z)`), Mask},
-	{regexp.MustCompile(`^[A-Za-z0-9+/]{60,}={0,2}$`), Mask},
-	{regexp.MustCompile(`(?i)(\b(?:[a-z0-9]+[_-])*(?:` + keys + `)\b["']?\s*[=:]\s*)(?:'[^']*'|"[^"]*"|\S+)`), "${1}" + Mask},
-	{regexp.MustCompile(`(?i)(--(?:password|passwd|pass|secret|token|api[-_]?key)\s+)(?:'[^']*'|"[^"]*"|\S+)`), "${1}" + Mask},
+	{regexp.MustCompile(`(?m)^[A-Za-z0-9+/]{60,}={0,2}$`), Mask},
+	{regexp.MustCompile(`(?i)(\b(?:[a-z0-9]+[_-])*(?:` + glued + `|` + keys + `)\b["']?\s*[=:]\s*)` + value), "${1}" + Mask},
+	{regexp.MustCompile(`(?i)(--(?:[a-z0-9]+[-_])*(?:` + keys + `)\s+)` + value), "${1}" + Mask},
+	{regexp.MustCompile(`(\b(?i:mysql|mariadb)[a-z]*\b[^\n]*?\s-p)\S+` +
+		`|(\bsshpass\b[^\n]*?\s-p\s*)\S+` +
+		`|(\bredis-cli\b[^\n]*?\s-a\s+)\S+`), "${1}${2}${3}" + Mask},
 	{regexp.MustCompile(`(?i)(authorization:\s*(?:bearer|basic)\s+)\S+`), "${1}" + Mask},
+	{regexp.MustCompile(`(?i)(\b(?:set-)?cookie:\s*)\S[^\n]*`), "${1}" + Mask},
 	{regexp.MustCompile(`(://[^:/@\s]+:)[^@\s]+@`), "${1}" + Mask + "@"},
 	{regexp.MustCompile(`\b(?:AKIA|ASIA)[0-9A-Z]{16}\b` +
 		`|\beyJ[A-Za-z0-9_-]{4,}\.eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+` +

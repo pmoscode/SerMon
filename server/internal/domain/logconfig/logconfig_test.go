@@ -56,6 +56,9 @@ func TestSettings_Validate(t *testing.T) {
 		"parent at the end": files(logconfig.FileGlob{Pattern: "/var/log/.."}),
 		"nul byte":          files(logconfig.FileGlob{Pattern: "/var/log/a\x00b"}),
 		"bad glob":          files(logconfig.FileGlob{Pattern: "/var/log/[a.log"}),
+		"journal files":     files(logconfig.FileGlob{Pattern: "/var/log/journal/*/*.journal"}),
+		"login records":     files(logconfig.FileGlob{Pattern: "/var/log/wtmp"}),
+		"agent config":      files(logconfig.FileGlob{Pattern: "/etc/sermon/*"}),
 		// The agent knows * and ? only (M3-05).
 		"character class":    files(logconfig.FileGlob{Pattern: "/var/log/[ab].log"}),
 		"escape":             files(logconfig.FileGlob{Pattern: `/var/log/a\*.log`}),

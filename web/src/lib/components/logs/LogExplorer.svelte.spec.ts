@@ -119,9 +119,11 @@ describe('LogExplorer', () => {
 	it('shows a hostile line as text only, with bidi and control characters visible', async () => {
 		stubFleet();
 		stubMetrics();
-		stubQuery([line(1000, hostile)]);
+		stubQuery([line(1000, hostile, { unit: '\u202Eecivres.dhss' })]);
 		stubHistogram();
 		show();
+		// M3-28: the unit comes from the host as well (a syslog identifier anyone can set).
+		await expect.element(page.getByText('⟨U+202E⟩ecivres.dhss')).toBeVisible();
 		const row = page.getByText('txt.exe', { exact: false });
 		await expect.element(row).toBeVisible();
 		const text = row.element().closest('p')!;

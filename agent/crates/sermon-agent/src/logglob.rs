@@ -205,10 +205,11 @@ impl Files {
                 continue;
             }
             let on_host = self.access.on_host(&path);
+            // Every open of the file is checked again, rotations included (M3-28).
+            let guard = self.access.guard();
             let tail = match self.stored.remove(&path) {
-                Some(position) => Tail::new(on_host, Some(position)),
-                None if !self.expanded[pattern] => Tail::new(on_host, None),
-                None => Tail::new_file(on_host),
+                Some(position) => Tail::guarded(on_host, Some(position), false, guard),
+                None => Tail::guarded(on_host, None, self.expanded[pattern], guard),
             };
             self.followed.insert(
                 path.clone(),

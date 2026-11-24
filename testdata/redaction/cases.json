@@ -233,6 +233,78 @@
       ],
       "input": "k=1 k=2 x=3",
       "output": "k=*** k=*** x=3"
+    },
+    {
+      "name": "glued env key",
+      "rules": [],
+      "input": "env PGPASS{{}}WORD=abc123 pg_dump app",
+      "output": "env PGPASSWORD=*** pg_dump app"
+    },
+    {
+      "name": "secret key",
+      "rules": [],
+      "input": "SECRET_KEY=abc{{}}123 and secret_key: xyz{{}}789",
+      "output": "SECRET_KEY=*** and secret_key: ***"
+    },
+    {
+      "name": "passphrase",
+      "rules": [],
+      "input": "unlock passphrase=abc{{}}123",
+      "output": "unlock passphrase=***"
+    },
+    {
+      "name": "prefixed flags",
+      "rules": [],
+      "input": "app --db-password abc{{}}123 --client-secret xyz{{}}789 --access-token t0k{{}}en --verbose",
+      "output": "app --db-password *** --client-secret *** --access-token *** --verbose"
+    },
+    {
+      "name": "flag without a secret",
+      "rules": [],
+      "input": "app --token-file /etc/app/token --passive",
+      "output": "app --token-file /etc/app/token --passive"
+    },
+    {
+      "name": "mysql glued",
+      "rules": [],
+      "input": "mysqldump -uroot -pS3c{{}}ret db",
+      "output": "mysqldump -uroot -p*** db"
+    },
+    {
+      "name": "mysql prompt and port",
+      "rules": [],
+      "input": "mysql -u root -p -P3306 app",
+      "output": "mysql -u root -p -P3306 app"
+    },
+    {
+      "name": "sshpass",
+      "rules": [],
+      "input": "sshpass -p hun{{}}ter2 ssh host",
+      "output": "sshpass -p *** ssh host"
+    },
+    {
+      "name": "redis-cli",
+      "rules": [],
+      "input": "redis-cli -h db -a hun{{}}ter2 ping",
+      "output": "redis-cli -h db -a *** ping"
+    },
+    {
+      "name": "cookie",
+      "rules": [],
+      "input": "GET / Cookie: session=abc{{}}123; theme=dark",
+      "output": "GET / Cookie: ***"
+    },
+    {
+      "name": "escaped quote",
+      "rules": [],
+      "input": "{\"pass{{}}word\":\"ab\\\"cd\",\"user\":\"x\"}",
+      "output": "{\"password\":***,\"user\":\"x\"}"
+    },
+    {
+      "name": "key lines in a block",
+      "rules": [],
+      "input": "key:\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7{{}}VJTUt9Us8cKjMzEfYyjiWA4R\nend",
+      "output": "key:\n***\nend"
     }
   ]
 }

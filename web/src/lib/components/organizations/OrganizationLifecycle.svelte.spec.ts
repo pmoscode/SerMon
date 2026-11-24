@@ -73,6 +73,22 @@ describe('OrganizationLifecycle', () => {
 		);
 	});
 
+	// M3-28: right after the lock the server waits 10 minutes; the dialog says why.
+	it('explains that deleting at once waits for 10 minutes after the lock', async () => {
+		vi.spyOn(adminApi.organization, 'deleteOrganization').mockRejectedValue(
+			rpcError(Code.FailedPrecondition)
+		);
+		const fresh = create(OrganizationSummarySchema, {
+			...locked,
+			lockTime: timestampFromDate(new Date(Date.now() - 60_000))
+		});
+		render(OrganizationLifecycle, { organization: fresh, onDone: vi.fn() });
+		await page.getByRole('button', { name: 'Delete now' }).click();
+		await page.getByLabelText('Type the name “Beta AG” to confirm').fill('Beta AG');
+		await page.getByRole('button', { name: 'Delete now' }).last().click();
+		await expect.element(page.getByText(/locked just now/)).toBeVisible();
+	});
+
 	it('reports a name the server refuses and an organization that is no longer locked', async () => {
 		vi.spyOn(adminApi.organization, 'unlockOrganization')
 			.mockRejectedValueOnce(rpcError(Code.InvalidArgument))

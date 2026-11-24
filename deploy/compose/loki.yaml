@@ -44,8 +44,11 @@ limits_config:
   creation_grace_period: 10m
   ingestion_rate_mb: 4
   ingestion_burst_size_mb: 16
+  # Above the server's buckets (a node 1 MiB/s with 8 MiB burst, an organization 3 MiB/s with
+  # 12 MiB burst): the server throttles first; Loki's 429 only drops the organization's entries
+  # (M3-28).
   per_stream_rate_limit: 2MB
-  per_stream_rate_limit_burst: 8MB
+  per_stream_rate_limit_burst: 16MB
   # The agent cuts messages to 16 KiB; metadata comes on top.
   max_line_size: 32KB
   max_line_size_truncate: true

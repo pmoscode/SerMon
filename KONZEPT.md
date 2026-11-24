@@ -184,14 +184,21 @@ eine Fake-Implementierung für Tests.
 
 ### 4.2 Root-Helper (`sermon-helper`, Rust)
 
-- Ein eigener, **winziger** Prozess (Ziel: < 1 000 LoC) mit eigener systemd-Unit, der als root läuft.
-- Er lauscht auf `/run/sermon/helper.sock` (Rechte `root:sermon 0660`) und prüft per `SO_PEERCRED`, dass der Aufrufer
-  die UID `sermon` hat.
-- Er nimmt **nur ein festes Enum an Operationen** an: `ListUpdates`, `ApplyUpdates{scope: security|all}`,
-  `Reboot{reason}`, `SelfUpdate{version, signature}`. Freie Kommandos gibt es nicht.
-- **Lokale Hoheit:** In `/etc/sermon/helper.toml` gelten z. B. `allow_remote_updates = false` und
-  `allow_remote_reboot = false`. Diese Werte kann der Server **nicht** überschreiben.
-- Jede Operation wird lokal (journald) und zentral (Audit-Log) protokolliert.
+- Ein eigener, **winziger** Prozess (Ziel: < 1 000 LoC, in CI geprüft) mit eigener systemd-Unit, der als root läuft;
+  eigenes Paket `sermon-helper` ([ADR 0035](docs/adr/0035-root-helper.md)).
+- Er lauscht auf `/run/sermon/helper.sock` (Rechte `root:sermon 0660`, unter systemd per Socket-Aktivierung) und prüft
+  per `SO_PEERCRED`, dass der Aufrufer die UID `sermon` hat. Eine Anfrage pro Verbindung, Protobuf mit vorangestellter
+  Länge (`sermon.helper.v1`).
+- Er nimmt **nur ein festes Enum an Operationen** an: `GetStatus`, `ListUpdates{refresh}`,
+  `ApplyUpdates{run_id, scope: security|all}`, `Reboot{run_id, reason}`, `SelfUpdate` (ADR 0036) und
+  `RunResult{run_id}`. Freie Kommandos, Paketnamen oder Pfade gibt es nicht.
+- Er führt nur feste Befehle aus und gibt ihre Ausgabe begrenzt zurück; **geparst wird im Agent** ohne Rechte.
+- Ein Lauf ist eine eigene Unit (`systemd-run`, unter OpenRC eine eigene Session): Er übersteht den Neustart von
+  Agent und Helper, wenn ein Update deren Pakete erneuert. Das Ergebnis holt der Agent mit `RunResult` ab.
+- **Lokale Hoheit:** `/etc/sermon/helper.toml` mit `allow_remote_updates` (ab Werk an), `allow_remote_reboot` (aus)
+  und `allow_self_update` (an). Diese Werte kann der Server **nicht** überschreiben; ohne Helper gibt es keine
+  Fernsteuerung.
+- Jede Operation wird lokal (journald) und zentral (Audit-Log) protokolliert, auch abgelehnte.
 
 ### 4.3 Server (`sermon-server`, Go)
 
@@ -1418,7 +1425,7 @@ SerMon/
 │   │   ├── sermon-security/       # Security-Event-Parser
 │   │   ├── sermon-buffer/         # WAL
 │   │   ├── sermon-transport/      # gRPC-Client, Enrollment, Zertifikatsrotation
-│   │   ├── sermon-updates/        # apt/dnf/apk-Adapter (vom Helper genutzt)
+│   │   ├── sermon-updates/        # Parser für apt/dnf/apk (im Agent, Ausgaben vom Helper)
 │   │   └── sermon-modules/        # Integrationen (Feature-Flags)
 │   ├── fixtures/                  # echte /proc-Snapshots + Logzeilen je Distro
 │   └── fuzz/

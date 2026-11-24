@@ -3947,7 +3947,25 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.1 Root-Helper (E4.1)
 
-#### ☐ M4-01 – ADR Root-Helper · X · S 🔒
+#### ☑ M4-01 – ADR Root-Helper · X · S 🔒
+> Erledigt ([ADR 0035](adr/0035-root-helper.md); KONZEPT §4.2; Threat Model T38 bis T41, neu T88 und T89):
+> - **Protokoll:** Unix-Socket, eine Anfrage pro Verbindung, Protobuf `sermon.helper.v1` mit vorangestellter Länge
+>   (Anfrage ≤ 64 KiB, Antwort ≤ 8 MiB), generiert nur für Rust in ein eigenes Crate; `buf breaking` hält Agent und
+>   Helper über Versionen hinweg kompatibel (das Self-Update ersetzt nur den Agent), Unbekanntes ist `UNSUPPORTED`.
+> - **Operationen:** `GetStatus`, `ListUpdates{refresh}`, `ApplyUpdates{run_id, scope}`, `Reboot{run_id, reason}`,
+>   `SelfUpdate` (ADR 0036) und `RunResult{run_id}`; nur Enums und UUIDs als Argumente. Höchstens ein schreibender
+>   Lauf (`flock`), Aktualisieren der Quellen höchstens alle 5 min.
+> - **Arbeitsteilung:** Der Helper führt feste Befehle mit fester Umgebung aus und gibt die Ausgabe begrenzt zurück;
+>   geparst wird im Agent.
+> - **Läufe** sind eigene Units (`systemd-run`, unter OpenRC eine eigene Session) und überstehen den Neustart von Agent
+>   und Helper durch ihre eigenen Pakete; das Ergebnis liegt 7 Tage beim Helper.
+> - **Aufrufer:** Dateirechte und `SO_PEERCRED` mit der UID von `sermon` aus `/etc/passwd`; die Binary des Aufrufers
+>   wird nicht geprüft (Rennen, kein Schutz vor einem kompromittierten Agent).
+> - **Lokale Hoheit ab Werk:** Updates an, Reboot aus, Self-Update an; `install.sh` mit `--no-remote-updates`,
+>   `--allow-remote-reboot`, `--no-self-update` und `--no-helper`. Eigenes Paket `sermon-helper`.
+> - **Start:** Socket-Aktivierung unter systemd, Ende nach 60 s ohne Anfrage; unter OpenRC `supervise-daemon`. Die
+>   Unit wird nur gehärtet, wo sie die Paketmanager nicht bricht; der Score wird dokumentiert.
+> - **Audit:** jede Anfrage in journald, auch Ablehnungen; zentral über `CommandResult`.
 - **Ziel:** ADR 0035 (Skill `sermon-adr`) legt den Helper fest, bevor Code entsteht:
   - **Protokoll Agent ↔ Helper:** eine Anfrage pro Verbindung, Länge vorangestellt, Obergrenze der Größe; Format
     (Protobuf in einem eigenen Paket oder festes Binärformat) mit Blick auf < 1 000 LoC.

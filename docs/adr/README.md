@@ -42,6 +42,7 @@ KONZEPT §2 mit angepasst.
 | [0032](0032-live-tail-durch-abfragen.md) | Live-Tail durch wiederholte Abfragen statt Loki-WebSocket | accepted | D13 |
 | [0033](0033-anmeldung-ueber-oidc.md) | Anmeldung über OpenID Connect | accepted | D10 |
 | [0034](0034-passkeys-mit-webauthn.md) | Passkeys mit WebAuthn | accepted | D10 |
+| [0035](0035-root-helper.md) | Root-Helper: Protokoll, Operationen und Läufe | accepted | D9, D15 |
 
 ## Entscheidungslog → ADR
 

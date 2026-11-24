@@ -3,6 +3,7 @@ package ruleset_test
 import (
 	"context"
 	"errors"
+	"math"
 	"net/netip"
 	"slices"
 	"testing"
@@ -314,6 +315,26 @@ func fires(rule alerting.Rule, o alert.Observation) bool {
 		inst.Observe(o, at, rule.Timing)
 	}
 	return inst.State.Firing()
+}
+
+// The CPU alert shows the use, not the idle time it is measured from: at 97 % load its value is
+// 0.97 (shown as 97 %), not 0.03.
+func TestDefaults_TheCPUAlertShowsTheUse(t *testing.T) {
+	defs, err := ruleset.Defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(defs, func(d ruleset.Definition) bool { return d.Rule.ID == "system.cpu.usage_high" })
+	if i < 0 {
+		t.Fatal("no rule system.cpu.usage_high")
+	}
+	fired := evaluate(t, defs[i].Rule, labeled("sermon_cpu_utilization_ratio", idle, steady(30_000)), nil, 0)
+	if len(fired) != 1 {
+		t.Fatalf("%+v, want one alert", fired)
+	}
+	if o := fired[0].Observation; o.Level != alert.LevelCritical || math.Abs(o.Value-0.97) > 1e-9 {
+		t.Errorf("%+v, want critical at 0.97", o)
+	}
 }
 
 func TestDefaults_EachRuleFiresOnItsData(t *testing.T) {

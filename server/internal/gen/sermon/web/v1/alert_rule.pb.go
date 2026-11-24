@@ -276,7 +276,10 @@ type AlertRuleSpec struct {
 	// learning is how long a node's events don't count after SerMon began to learn it (its
 	// enrollment, for older nodes the upgrade to M3-16) (event), e.g. 168h for logins from new
 	// sources: everything is new on a new node.
-	Learning      string `protobuf:"bytes,26,opt,name=learning,proto3" json:"learning,omitempty"`
+	Learning string `protobuf:"bytes,26,opt,name=learning,proto3" json:"learning,omitempty"`
+	// complement compares 1 − the ratio, e.g. the CPU's use from its idle time (threshold, on a
+	// ratio, not with relative_to or increase); the thresholds and the alert's value are the rest.
+	Complement    bool `protobuf:"varint,27,opt,name=complement,proto3" json:"complement,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -491,6 +494,13 @@ func (x *AlertRuleSpec) GetLearning() string {
 		return x.Learning
 	}
 	return ""
+}
+
+func (x *AlertRuleSpec) GetComplement() bool {
+	if x != nil {
+		return x.Complement
+	}
+	return false
 }
 
 // AlertEventCount is the count of an event rule: at least warning or critical events (or nodes)
@@ -822,7 +832,7 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x02de\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02de\x12\x1a\n" +
 	"\x02en\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xdb\f\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xfb\f\n" +
 	"\rAlertRuleSpec\x12M\n" +
 	"\x04type\x18\x01 \x01(\tB9\xbaH6r4R\tthresholdR\x04rateR\aabsenceR\x05stateR\n" +
 	"predictionR\x05eventR\x04type\x12 \n" +
@@ -858,7 +868,10 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x05after\x18\x18 \x01(\v2\x1e.sermon.web.v1.AlertEventAfterR\x05after\x125\n" +
 	"\rnotify_fields\x18\x19 \x03(\tB\x10\xbaH\r\x92\x01\n" +
 	"\x10\x10\x18\x01\"\x04r\x02\x18 R\fnotifyFields\x12#\n" +
-	"\blearning\x18\x1a \x01(\tB\a\xbaH\x04r\x02\x18\x10R\blearning\x1a9\n" +
+	"\blearning\x18\x1a \x01(\tB\a\xbaH\x04r\x02\x18\x10R\blearning\x12\x1e\n" +
+	"\n" +
+	"complement\x18\x1b \x01(\bR\n" +
+	"complement\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aV\n" +

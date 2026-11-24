@@ -17,7 +17,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
-// The example of KONZEPT §12.2.
+// A CPU rule on the idle time (KONZEPT §12.2 compares its complement, the use).
 const cpuRule = `apiVersion: sermon/v1
 kind: AlertRule
 metadata:
@@ -59,6 +59,39 @@ func TestParse_BuildsTheRule(t *testing.T) {
 	}
 	if def.Doc.GetMetadata().GetName().GetEn() != "High CPU usage" || def.Doc.GetSpec().GetHelp().GetDe() == "" {
 		t.Errorf("document = %v", def.Doc)
+	}
+}
+
+// complement compares 1 − a ratio: the CPU's use from its idle time, with thresholds on the use.
+func TestParse_Complement(t *testing.T) {
+	use := strings.NewReplacer(
+		"labels: { mode: idle }", "labels: { mode: idle }\n  complement: true",
+		`{ op: "<", value: 0.15 }`, `{ op: ">", value: 0.85 }`,
+		`{ op: "<", value: 0.05 }`, `{ op: ">", value: 0.95 }`,
+		`{ op: ">", value: 0.20 }`, `{ op: "<", value: 0.80 }`,
+	).Replace(cpuRule)
+	def, err := ruleset.Parse([]byte(use))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if th, ok := def.Rule.Evaluator.(alerting.ThresholdRule); !ok || !th.Complement || th.Thresholds.Critical.Op != alert.Above {
+		t.Errorf("evaluator = %+v", def.Rule.Evaluator)
+	}
+	for name, tc := range map[string]struct {
+		replace []string
+		hint    string
+	}{
+		"of a rate":     {[]string{"type: threshold", "type: rate", "  aggregate: avg\n", ""}, "complement"},
+		"of bytes":      {[]string{"sermon_cpu_utilization_ratio", "sermon_memory_available_bytes", "labels: { mode: idle }\n  ", ""}, "complement"},
+		"in percent":    {[]string{`{ op: ">", value: 0.85 }`, `{ op: ">", value: 85 }`}, "0..1"},
+		"not a boolean": {[]string{"complement: true", "complement: yes please"}, "complement"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			doc := strings.NewReplacer(tc.replace...).Replace(use)
+			if _, err := ruleset.Parse([]byte(doc)); !errors.Is(err, alert.ErrInvalidRule) || !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("Parse() = %v, want an invalid rule about %q", err, tc.hint)
+			}
+		})
 	}
 }
 

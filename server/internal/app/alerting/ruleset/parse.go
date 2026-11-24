@@ -205,7 +205,7 @@ var (
 	conditionFields = []protoreflect.Name{"warning", "critical", "clear"}
 	seriesFields    = append(slices.Clone(conditionFields), "metric", "labels", "dimensions", "exclude")
 	typeFields      = map[alert.Type][]protoreflect.Name{
-		alert.Threshold:  append(slices.Clone(seriesFields), "aggregate", "window", "relative_to"),
+		alert.Threshold:  append(slices.Clone(seriesFields), "aggregate", "window", "relative_to", "complement"),
 		alert.Rate:       append(slices.Clone(seriesFields), "window", "per", "relative_to"),
 		alert.Absence:    conditionFields,
 		alert.StateRule:  append(slices.Clone(seriesFields), "seen", "seen_window"),
@@ -348,7 +348,10 @@ func evaluatorOf(typ alert.Type, spec *webv1.AlertRuleSpec, th alert.Thresholds)
 	case alert.Event:
 		return eventOf(spec)
 	case alert.Threshold:
-		return alerting.ThresholdRule{Series: series, RelativeTo: spec.GetRelativeTo(), Aggregate: aggregates[spec.GetAggregate()], Window: window, Thresholds: th}, nil
+		return alerting.ThresholdRule{
+			Series: series, RelativeTo: spec.GetRelativeTo(), Complement: spec.GetComplement(),
+			Aggregate: aggregates[spec.GetAggregate()], Window: window, Thresholds: th,
+		}, nil
 	case alert.Rate:
 		per := map[string]time.Duration{"": 0, "second": time.Second, "minute": time.Minute}[spec.GetPer()]
 		return alerting.RateRule{Series: series, Per: per, RelativeTo: spec.GetRelativeTo(), Window: window, Thresholds: th}, nil

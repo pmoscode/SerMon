@@ -806,12 +806,13 @@ metadata:
 spec:
   type: threshold            # threshold | rate | event | absence | state | anomaly | prediction
   metric: sermon_cpu_utilization_ratio
-  labels: { mode: idle }     # Auslastung = 1 − Leerlauf
+  labels: { mode: idle }
+  complement: true           # Auslastung = 1 − Leerlauf: Schwellen und Wert des Alerts sind die Auslastung
   aggregate: avg             # avg | max | min | last
   window: 10m
-  warning: { op: "<", value: 0.15 }
-  critical: { op: "<", value: 0.05 }
-  clear: { op: ">", value: 0.20 }
+  warning: { op: ">", value: 0.85 }
+  critical: { op: ">", value: 0.95 }
+  clear: { op: "<", value: 0.80 }
   for: 5m
   selector: { groups: [ "*" ] }
   help:
@@ -868,6 +869,9 @@ Format und Ablage (M2-04):
 - **Weitere Felder:**
   - `dimensions` (eine Instanz pro Labelwert) und `exclude` (Glob-Listen je Dimension);
   - `relativeTo` (geteilt durch eine zweite Metrik mit denselben Labels, z. B. Inodes belegt/gesamt);
+  - `complement` (`threshold` auf einem Verhältnis: verglichen wird `1 − Wert`, Punkt für Punkt vor dem Aggregat, so
+    ist `max` der Auslastung `1 −` das Minimum des Leerlaufs; nicht mit `relativeTo` oder `increase`). Damit zeigt der
+    CPU-Alert bei 97 % Last 97 % statt der 3 % Leerlauf, aus denen er rechnet;
   - `per` (`second` | `minute`), `seen`/`seenWindow` und `lookback`;
   - `flapping` (`changes`, `window`; Standard 5 Wechsel in 30 min);
   - `selector.groups` (`*` oder Gruppen-IDs).

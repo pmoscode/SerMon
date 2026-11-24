@@ -478,6 +478,62 @@ func TestThreshold_RelativeToASecondMetric(t *testing.T) {
 	}
 }
 
+// The complement compares 1 − the ratio: the CPU's use from its idle time, so the alert shows
+// 97 % and not 3 %. It applies to every point before the aggregate: the max of the use is 1 − the
+// min of the idle time.
+func TestThreshold_ComplementComparesTheRest(t *testing.T) {
+	idle := []metrics.Point{
+		{Time: t0.Add(-3 * time.Minute), Avg: 100_000, Min: 20_000, Max: 200_000},
+		{Time: t0.Add(-2 * time.Minute), Avg: 50_000, Min: 30_000, Max: 60_000},
+		{Time: t0.Add(-1 * time.Minute), Avg: 30_000, Min: 10_000, Max: 40_000},
+	}
+	m := &fakeMetrics{series: map[string][]metrics.Series{"sermon_cpu_utilization_ratio": {
+		{Node: web, Labels: metrics.Labels{"mode": "idle"}, Points: idle},
+	}}}
+	base := alerting.ThresholdRule{
+		Series:     alerting.SeriesSpec{Metric: "sermon_cpu_utilization_ratio", Labels: metrics.Labels{"mode": "idle"}},
+		Complement: true, Window: 10 * time.Minute,
+		Thresholds: alert.Thresholds{Warning: gt(0.85), Critical: gt(0.95), Clear: lt(0.80)},
+	}
+	for agg, want := range map[alerting.Aggregate]struct {
+		value float64
+		level alert.Level
+	}{
+		alerting.Avg:  {1 - 0.06, alert.LevelWarning},
+		alerting.Last: {0.97, alert.LevelCritical},
+		alerting.Max:  {0.99, alert.LevelCritical}, // 1 − the smallest idle minimum
+		alerting.Min:  {0.80, alert.LevelOK},       // 1 − the largest idle maximum
+	} {
+		rule := base
+		rule.Aggregate = agg
+		if err := rule.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		results, err := rule.Evaluate(context.Background(), env(m, webNode))
+		if err != nil || len(results) != 1 {
+			t.Fatalf("%v: %+v, %v", agg, results, err)
+		}
+		if o := results[0].Observation; math.Abs(o.Value-want.value) > 1e-9 || o.Level != want.level {
+			t.Errorf("%v: %+v, want %v at %v", agg, o, want.level, want.value)
+		}
+	}
+	// Only ratios have a complement, and not relative to another metric or as an increase.
+	for name, bad := range map[string]alerting.ThresholdRule{
+		"bytes": {Series: alerting.SeriesSpec{Metric: "sermon_memory_available_bytes"}, Complement: true, Aggregate: alerting.Avg, Window: time.Minute, Thresholds: alert.Thresholds{Warning: gt(0.5)}},
+		// A ratio relative to a ratio (itself) passes the check of relative_to; the complement not.
+		"relative": {
+			Series:     alerting.SeriesSpec{Metric: "sermon_cpu_utilization_ratio", Labels: metrics.Labels{"mode": "idle"}},
+			RelativeTo: "sermon_cpu_utilization_ratio", Complement: true, Aggregate: alerting.Last, Window: time.Minute,
+			Thresholds: alert.Thresholds{Warning: gt(0.5)},
+		},
+		"increase": {Series: alerting.SeriesSpec{Metric: "sermon_cpu_utilization_ratio", Labels: metrics.Labels{"mode": "idle"}}, Complement: true, Aggregate: alerting.Increase, Window: time.Minute, Thresholds: alert.Thresholds{Warning: gt(0.5)}},
+	} {
+		if err := bad.Validate(); !errors.Is(err, alert.ErrInvalidRule) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
 // Rules run every 10 s: long lookbacks read the 1-min aggregate with a coarse step instead of the
 // raw table, and a state's current value still comes from the last minutes (ring buffer).
 func TestQueries_LongWindowsUseCoarseSteps(t *testing.T) {

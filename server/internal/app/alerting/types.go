@@ -205,13 +205,24 @@ func (a Aggregate) of(points []metrics.Point) float64 {
 
 // ThresholdRule compares an aggregate of a metric over a window with the thresholds; with
 // RelativeTo the aggregate of a second metric with the same labels and unit divides it (inodes
-// used / total).
+// used / total). Complement compares 1 − a ratio instead, point by point before the aggregate: the
+// CPU's use from its idle time, so the alert shows the use.
 type ThresholdRule struct {
 	Series     SeriesSpec
 	RelativeTo string
+	Complement bool
 	Aggregate  Aggregate
 	Window     time.Duration
 	Thresholds alert.Thresholds
+}
+
+// complement turns ratios into their rest; minimum and maximum swap.
+func complement(found []series) {
+	for _, s := range found {
+		for i, p := range s.points {
+			s.points[i] = metrics.Point{Time: p.Time, Avg: 1 - p.Avg, Min: 1 - p.Max, Max: 1 - p.Min}
+		}
+	}
 }
 
 // relative checks a metric to divide by: same labels, same unit as def.
@@ -292,6 +303,9 @@ func (r ThresholdRule) Validate() error {
 	if r.Aggregate == Increase && r.RelativeTo != "" {
 		return fmt.Errorf("%w: increase takes no relative_to", alert.ErrInvalidRule)
 	}
+	if r.Complement && (def.Unit != metric.UnitRatioPPM || r.RelativeTo != "" || r.Aggregate == Increase) {
+		return fmt.Errorf("%w: complement takes a ratio, without relative_to and increase", alert.ErrInvalidRule)
+	}
 	if err := validateWindow("window", r.Window); err != nil {
 		return err
 	}
@@ -304,6 +318,9 @@ func (r ThresholdRule) Evaluate(ctx context.Context, env Env) ([]Result, error) 
 	found, err := r.Series.query(ctx, env, from)
 	if err != nil {
 		return nil, err
+	}
+	if r.Complement {
+		complement(found)
 	}
 	values := reduce(found, r.Aggregate, 1)
 	if r.RelativeTo != "" {

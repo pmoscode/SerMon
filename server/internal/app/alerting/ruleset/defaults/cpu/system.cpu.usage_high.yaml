@@ -8,18 +8,20 @@ spec:
   type: threshold
   metric: sermon_cpu_utilization_ratio
   labels: { mode: idle }
+  # The use is 1 − the idle time: iowait and steal count as busy. The alert shows the use.
+  complement: true
   aggregate: avg
   window: 10m
-  warning: { op: "<", value: 0.15 }
-  critical: { op: "<", value: 0.05 }
-  clear: { op: ">", value: 0.2 }
+  warning: { op: ">", value: 0.85 }
+  critical: { op: ">", value: 0.95 }
+  clear: { op: "<", value: 0.8 }
   for: 5m
   help:
     de: >-
-      Die CPU war über 10 Minuten im Mittel zu mehr als 85 % ausgelastet (weniger als 15 % Leerlauf); der
-      Server hat kaum Reserven. Auch iowait und steal zählen hier mit. Sieh dir im Node-Detail die Aufteilung
+      Die CPU war über 10 Minuten im Mittel zu mehr als 85 % ausgelastet (weniger als 15 % Leerlauf, ab 95 %
+      kritisch); der Server hat kaum Reserven. Auch iowait und steal zählen hier mit. Sieh dir im Node-Detail die Aufteilung
       nach user, system, iowait und steal an und suche die Prozesse mit der höchsten Last, z. B. mit top.
     en: >-
-      The CPU was more than 85 % busy on average over 10 minutes (less than 15 % idle); the server has hardly
-      any headroom. iowait and steal count as busy here too. Look at the split into user, system, iowait and
+      The CPU was more than 85 % busy on average over 10 minutes (less than 15 % idle, critical from 95 %); the
+      server has hardly any headroom. iowait and steal count as busy here too. Look at the split into user, system, iowait and
       steal in the node detail and find the processes with the highest load, e.g. with top.

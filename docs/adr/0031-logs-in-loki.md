@@ -112,3 +112,10 @@ dahinter, und damit die Alerts.
 - **Sofort löschen** einer Org frühestens 10 min nach der Sperre: Agents senden Zeilen bis 5 min vor der Uhr des
   Servers, Loki löscht nichts in der Zukunft.
 
+## Nachtrag M3-29: Abfragen als POST, Grenzen der Antwort
+
+- `query_range` geht als POST-Formular: Der Selektor nennt jeden Node einer Abfrage, das sprengt bei Tausenden von Nodes
+  jede URL. Eine Abfrage nennt höchstens 5 000 Nodes; darüber `FAILED_PRECONDITION` mit der Bitte, nach Gruppe oder Node
+  einzugrenzen. Abfragen nennen ihre Nodes weiter immer selbst (kein Selektor über den ganzen Tenant).
+- Eine Antwort über 32 MiB (lange Zeilen, Steuerzeichen in JSON maskiert) ist `ErrTooLarge`: Die Liste fragt dann
+  20 Zeilen und meldet „mehr“; ist auch das zu groß, `FAILED_PRECONDITION`.

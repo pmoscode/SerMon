@@ -58,5 +58,8 @@ func readError(err error) error {
 	if errors.Is(err, ErrUnavailable) || errors.Is(err, ErrRateLimited) {
 		return fmt.Errorf("%w: %w", logs.ErrUnavailable, err)
 	}
+	if errors.Is(err, ErrTooLarge) {
+		return fmt.Errorf("%w: %w", logs.ErrTooLarge, err)
+	}
 	return err
 }

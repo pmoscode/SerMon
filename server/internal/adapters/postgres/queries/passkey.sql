@@ -28,10 +28,12 @@ UPDATE webauthn_credentials SET name = sqlc.arg(name) WHERE id = sqlc.arg(id) AN
 -- name: DeletePasskey :one
 DELETE FROM webauthn_credentials WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) RETURNING name;
 
--- name: InsertWebAuthnCeremony :exec
+-- name: InsertWebAuthnCeremony :execrows
+-- Only while fewer than max_open ceremonies are open (M3-29).
 INSERT INTO webauthn_ceremonies (id_hash, binding_hash, purpose, user_id, session_id, name, data, created_at, expires_at)
-VALUES (sqlc.arg(id_hash), sqlc.narg(binding_hash), sqlc.arg(purpose), sqlc.narg(user_id), sqlc.narg(session_id), sqlc.arg(name),
-        sqlc.arg(data), sqlc.arg(created_at), sqlc.arg(expires_at));
+SELECT sqlc.arg(id_hash), sqlc.narg(binding_hash)::text, sqlc.arg(purpose), sqlc.narg(user_id)::uuid, sqlc.narg(session_id)::text,
+       sqlc.arg(name), sqlc.arg(data), sqlc.arg(created_at), sqlc.arg(expires_at)
+WHERE (SELECT count(*) FROM webauthn_ceremonies) < sqlc.arg(max_open)::bigint;
 
 -- name: TakeWebAuthnCeremony :one
 -- Once: the ceremony is deleted whether it expired or not.

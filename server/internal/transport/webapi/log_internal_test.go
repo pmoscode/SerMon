@@ -2,6 +2,7 @@ package webapi
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
+	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -59,5 +61,15 @@ func TestLogQueries_AreBoundedPerSessionAndUser(t *testing.T) {
 	releases[0]()
 	if _, err := h.admit(ctx, c); err != nil {
 		t.Errorf("after one ended: %v", err)
+	}
+}
+
+// M3-29: a query too broad for the store is the user's to narrow (FAILED_PRECONDITION), not an
+// invalid filter or an internal error.
+func TestLogErrors_TooBroadIsAPrecondition(t *testing.T) {
+	h := NewLogHandler(nil, nil, slog.New(slog.DiscardHandler))
+	err := h.fail(context.Background(), "query logs", fmt.Errorf("query: %w", logs.ErrTooBroad))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("fail(ErrTooBroad) = %v", err)
 	}
 }

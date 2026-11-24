@@ -144,6 +144,10 @@ func TestPasskeys_RegisterSignInSecondFactorStepUp(t *testing.T) {
 	if _, err := pk.RenamePasskey(ctx, connect.NewRequest(&webv1.RenamePasskeyRequest{Id: id, Name: "Work"})); err != nil {
 		t.Errorf("RenamePasskey() = %v", err)
 	}
+	// M3-28: the session of the passkey sign-in had two factors and keeps them in its view.
+	if v, err := fresh.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil || v.Msg.GetSession().GetSecondFactorSetupRequired() {
+		t.Errorf("the passkey sign-in's session: %v, %v", v, err)
+	}
 	if _, err := pk.DeletePasskey(ctx, connect.NewRequest(&webv1.DeletePasskeyRequest{Id: id})); err != nil {
 		t.Errorf("DeletePasskey() = %v", err)
 	}
@@ -152,9 +156,9 @@ func TestPasskeys_RegisterSignInSecondFactorStepUp(t *testing.T) {
 	if !view.Msg.GetSession().GetSecondFactorSetupRequired() {
 		t.Errorf("after deleting the last second factor: %v", view.Msg.GetSession())
 	}
-	// M3-28: the session of the passkey sign-in had two factors and keeps them in its view.
-	if v, err := fresh.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil || v.Msg.GetSession().GetSecondFactorSetupRequired() {
-		t.Errorf("the passkey sign-in's session: %v, %v", v, err)
+	// M3-29: the other sessions of Pia – the one signed in with the passkey – end with it.
+	if _, err := fresh.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Errorf("the passkey sign-in's session after the deletion: %v", err)
 	}
 	var audits int
 	ownerQuery(t, "SELECT count(*) FROM instance_audit_log WHERE target = 'user:"+piaID+"' AND action IN ('passkey.added', 'passkey.deleted')", &audits)

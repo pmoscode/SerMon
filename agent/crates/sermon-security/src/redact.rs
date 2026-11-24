@@ -26,10 +26,19 @@ pub const MASK: &str = "***";
 pub const MAX_RULES: usize = 32;
 /// Longest pattern of a rule.
 pub const MAX_PATTERN_BYTES: usize = 1024;
-/// Memory a compiled rule may take (`RegexBuilder::size_limit`).
+/// Memory a compiled rule may take at most (`RegexBuilder::size_limit`).
 const RULE_SIZE_LIMIT: usize = 1024 * 1024;
-/// Memory the lazy DFA of a rule may take.
-const RULE_DFA_LIMIT: usize = 1024 * 1024;
+/// Memory all rules of an organization may take compiled: each gets its share (M3-29), so 32
+/// large rules don't add up to 32 MiB.
+pub const RULES_BUDGET: usize = 8 * 1024 * 1024;
+/// Memory the lazy DFA of a rule may take (per thread that runs it).
+const RULE_DFA_LIMIT: usize = 256 * 1024;
+
+/// The compiled size one of `count` rules may take.
+#[must_use]
+pub fn rule_size_limit(count: usize) -> usize {
+    (RULES_BUDGET / count.max(1)).min(RULE_SIZE_LIMIT)
+}
 
 /// Key words whose value is a secret: `password=…`, `"token": "…"`, `DB_PASSWORD=…`.
 const KEYS: &str = "password|passwd|passphrase|pwd|pass|secret[-_]?key|secret|token|api[-_]?key|access[-_]?key|private[-_]?key";
@@ -144,6 +153,7 @@ impl Redactor {
         if rules.len() > MAX_RULES {
             return Err(RuleError::TooMany(rules.len()));
         }
+        let size_limit = rule_size_limit(rules.len());
         let compiled = rules
             .iter()
             .enumerate()
@@ -155,7 +165,7 @@ impl Redactor {
                     return Err(RuleError::TooLong(index));
                 }
                 RegexBuilder::new(&rule.pattern)
-                    .size_limit(RULE_SIZE_LIMIT)
+                    .size_limit(size_limit)
                     .dfa_size_limit(RULE_DFA_LIMIT)
                     .build()
                     .map_err(|error| RuleError::Invalid {
@@ -405,6 +415,23 @@ mod tests {
             RuleError::Invalid { index: 0, .. }
         ));
         assert!(rules(&[r"\w{20}"]).is_ok());
+    }
+
+    // M3-29: all rules together have a budget; each gets its share of it.
+    #[test]
+    fn the_rules_share_a_budget() {
+        assert_eq!(rule_size_limit(0), 1024 * 1024);
+        assert_eq!(rule_size_limit(8), 1024 * 1024);
+        assert_eq!(rule_size_limit(MAX_RULES), RULES_BUDGET / MAX_RULES);
+        // Ten Unicode word characters fit alone, not as 32 rules.
+        assert!(rules(&[r"\w{10}"]).is_ok());
+        let heavy = vec![r"\w{10}"; MAX_RULES];
+        assert!(matches!(
+            rules(&heavy).unwrap_err(),
+            RuleError::Invalid { index: 0, .. }
+        ));
+        // ASCII classes stay small.
+        assert!(rules(&vec!["[A-Za-z0-9_]{20}"; MAX_RULES]).is_ok());
     }
 
     // A rough cost per line; run with `cargo test --release -p sermon-security -- --ignored

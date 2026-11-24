@@ -39,10 +39,10 @@ func (s *memSessions) Get(_ context.Context, id string) (session.Session, bool, 
 	se, ok := s.m[id]
 	return se, ok, nil
 }
-func (s *memSessions) Touch(context.Context, string, time.Time) error       { return nil }
-func (s *memSessions) SetStepUp(context.Context, string, time.Time) error   { return nil }
-func (s *memSessions) Delete(_ context.Context, id string) error            { delete(s.m, id); return nil }
-func (s *memSessions) DeleteForUser(context.Context, identity.UserID) error { return nil }
+func (s *memSessions) Touch(context.Context, string, time.Time) error               { return nil }
+func (s *memSessions) SetStepUp(context.Context, string, time.Time) error           { return nil }
+func (s *memSessions) Delete(_ context.Context, id string) error                    { delete(s.m, id); return nil }
+func (s *memSessions) DeleteForUser(context.Context, identity.UserID, string) error { return nil }
 
 type fakePrincipals struct{ err error }
 

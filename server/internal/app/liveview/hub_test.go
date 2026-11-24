@@ -184,15 +184,72 @@ func TestHub_SaysOfflineAndRefusedAndRestartsOnReconnect(t *testing.T) {
 // A slow viewer gets the newest snapshot, not a growing queue; the others are not held up.
 func TestHub_ASlowViewerGetsTheNewest(t *testing.T) {
 	a := &agents{connected: true}
-	hub := liveview.NewHub(a)
+	clock := t0
+	hub := liveview.NewHub(a, liveview.WithHubClock(func() time.Time { return clock }))
 	slow := hub.Subscribe(org, node, false, t0)
 	for i := range 5 {
 		s := snapshot()
 		s.Omitted = uint32(i)
 		hub.Deliver(org, node, s)
+		clock = clock.Add(liveview.Interval)
 	}
 	if f := next(t, slow); f.Snapshot.Omitted != 4 {
 		t.Errorf("got snapshot %d, want the newest", f.Snapshot.Omitted)
 	}
 	none(t, slow)
+}
+
+// M3-29: every viewer has its own switch. The agent sends command lines while one viewer may see
+// them; the others get them removed, also when the switch changes between two viewers.
+func TestHub_HidesPerViewer(t *testing.T) {
+	a := &agents{connected: true}
+	clock := t0
+	hub := liveview.NewHub(a, liveview.WithHubClock(func() time.Time { return clock }))
+	hidden := hub.Subscribe(org, node, true, t0)
+	shown := hub.Subscribe(org, node, false, t0)
+	if a.starts[len(a.starts)-1] {
+		t.Fatalf("starts = %v: one viewer may see command lines", a.starts)
+	}
+	hub.Deliver(org, node, snapshot())
+	if p := next(t, hidden).Snapshot.Processes[0]; p.Cmdline != nil || !p.CmdlineHidden {
+		t.Errorf("the hiding viewer got %+v", p)
+	}
+	if f := next(t, shown); f.Snapshot.Processes[0].Cmdline == nil || f.Snapshot.CmdlinesHidden {
+		t.Errorf("the other viewer got %+v", f.Snapshot)
+	}
+	// A late viewer with the old switch doesn't turn it off for the others.
+	late := hub.Subscribe(org, node, false, t0)
+	shown.Close(t0)
+	late.Close(t0)
+	// Only hiding viewers left: the agent is asked to hide again.
+	if !a.starts[len(a.starts)-1] {
+		t.Errorf("starts = %v: only hiding viewers are left", a.starts)
+	}
+	clock = clock.Add(liveview.Interval)
+	hub.Deliver(org, node, snapshot())
+	if f := next(t, hidden); !f.Snapshot.CmdlinesHidden {
+		t.Errorf("after the others left: %+v", f.Snapshot)
+	}
+}
+
+// M3-29: an agent sends at most one snapshot per half interval; it can't flood the viewers.
+func TestHub_DropsSnapshotsFasterThanTheInterval(t *testing.T) {
+	a := &agents{connected: true}
+	clock := t0
+	hub := liveview.NewHub(a, liveview.WithHubClock(func() time.Time { return clock }))
+	if hub.Wants(org, node) {
+		t.Error("wants snapshots without viewers")
+	}
+	s := hub.Subscribe(org, node, false, t0)
+	if !hub.Wants(org, node) || hub.Wants(other, node) {
+		t.Error("Wants() with a viewer")
+	}
+	hub.Deliver(org, node, snapshot())
+	next(t, s)
+	clock = clock.Add(liveview.Interval/2 - time.Millisecond)
+	hub.Deliver(org, node, snapshot())
+	none(t, s)
+	clock = clock.Add(time.Millisecond)
+	hub.Deliver(org, node, snapshot())
+	next(t, s)
 }

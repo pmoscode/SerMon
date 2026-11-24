@@ -35,9 +35,14 @@
 	const passkeys = $derived(ssoState.passkeys && supported());
 	/** The conditional UI's wait for the autofill; aborted before any other sign-in. */
 	let conditional: AbortController | undefined;
+	/**
+	 * The autofill starts with the first focus of the e-mail field: a ceremony for every view of
+	 * the page would use up the address's attempts (M3-29).
+	 */
+	let emailFocused = $state(false);
 
 	$effect(() => {
-		if (step !== 'password' || !passkeys) return;
+		if (step !== 'password' || !passkeys || !emailFocused) return;
 		const controller = new AbortController();
 		conditional = controller;
 		void (async () => {
@@ -194,6 +199,7 @@
 				id="login-email"
 				type="email"
 				autocomplete={passkeys ? 'username webauthn' : 'username'}
+				onfocus={() => (emailFocused = true)}
 				bind:value={email}
 				aria-invalid={emailMissing}
 				aria-describedby={emailMissing ? 'login-email-error' : undefined}

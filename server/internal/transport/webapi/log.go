@@ -181,6 +181,8 @@ func (h *LogHandler) fail(ctx context.Context, op string, err error) error {
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	case errors.Is(err, logs.ErrInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, logs.ErrTooBroad):
+		return connect.NewError(connect.CodeFailedPrecondition, logs.ErrTooBroad)
 	case errors.Is(err, logs.ErrUnavailable):
 		h.logger.WarnContext(ctx, op+": log store unavailable", "error", err)
 		return connect.NewError(connect.CodeUnavailable, logs.ErrUnavailable)

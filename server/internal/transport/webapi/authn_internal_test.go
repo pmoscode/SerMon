@@ -55,7 +55,7 @@ func (c *countingSessions) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (c *countingSessions) DeleteForUser(context.Context, identity.UserID) error { return nil }
+func (c *countingSessions) DeleteForUser(context.Context, identity.UserID, string) error { return nil }
 
 type staticPrincipals struct{}
 

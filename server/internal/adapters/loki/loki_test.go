@@ -195,7 +195,11 @@ func TestQuery_SendsTheTypedQueryAndReadsCategorizedLines(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := rec.requests[0]
-	params := req.URL.Query()
+	// M3-29: a POST form, so thousands of node IDs don't hit the limits of a URL.
+	params, _ := url.ParseQuery(string(rec.bodies[0]))
+	if req.Method != http.MethodPost || req.Header.Get("Content-Type") != "application/x-www-form-urlencoded" || req.URL.RawQuery != "" {
+		t.Errorf("request %s %s, %s", req.Method, req.URL, req.Header.Get("Content-Type"))
+	}
 	if req.URL.Path != "/prefix/loki/api/v1/query_range" || params.Get("query") != q.String() ||
 		params.Get("limit") != "100" || params.Get("direction") != "backward" ||
 		params.Get("start") != "1795431600123456789" || params.Get("end") != "1795435200123456789" {
@@ -251,8 +255,8 @@ func TestCounts_ReadsTheMatrixOfAMetricQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	params := rec.requests[0].URL.Query()
-	if params.Get("step") != "60" || params.Get("query") != q.String() || rec.requests[0].Header.Get("X-Scope-OrgID") != org.String() {
+	params, _ := url.ParseQuery(string(rec.bodies[0]))
+	if rec.requests[0].Method != http.MethodPost || params.Get("step") != "60" || params.Get("query") != q.String() || rec.requests[0].Header.Get("X-Scope-OrgID") != org.String() {
 		t.Errorf("request = %s", rec.requests[0].URL)
 	}
 	if len(series) != 2 || series[0].Labels["severity"] != "error" || len(series[0].Points) != 2 ||
@@ -312,5 +316,21 @@ func TestDelete_AsksTheCompactorInTheTenant(t *testing.T) {
 	}
 	if err := c.Delete(context.Background(), org, logql.Query{}, loki.DeleteFrom, time.Now()); !errors.Is(err, loki.ErrNoQuery) {
 		t.Errorf("no query: %v", err)
+	}
+}
+
+// M3-29: an answer beyond the bound is ErrTooLarge (the caller asks for fewer lines), not a
+// broken answer.
+func TestQuery_AnAnswerBeyondTheBoundIsTooLarge(t *testing.T) {
+	q, _ := logql.Select([]identity.NodeID{node})
+	line := strings.Repeat("x", 1<<20)
+	var values []string
+	for range loki.MaxQueryBody>>20 + 1 {
+		values = append(values, `["1795435200123456789","`+line+`"]`)
+	}
+	body := `{"status":"success","data":{"resultType":"streams","result":[{"stream":{},"values":[` + strings.Join(values, ",") + `]}]}}`
+	c := client(t, (&recorded{}).handler(http.StatusOK, body))
+	if _, err := c.Query(context.Background(), org, loki.QueryRange{Query: q, Start: at.Add(-time.Hour), End: at, Limit: 1000}); !errors.Is(err, loki.ErrTooLarge) {
+		t.Errorf("Query() = %v, want ErrTooLarge", err)
 	}
 }

@@ -34,6 +34,7 @@ var (
 )
 
 type store struct {
+	maxOpen    int // a smaller bound of open ceremonies for its test
 	clones     int
 	mu         sync.Mutex
 	keys       []passkey.Passkey
@@ -121,9 +122,15 @@ func (s *store) Delete(_ context.Context, u identity.UserID, id []byte) error {
 	return passkey.ErrNotFound
 }
 
-func (s *store) InsertCeremony(_ context.Context, c passkey.Ceremony) error {
+func (s *store) InsertCeremony(_ context.Context, c passkey.Ceremony, limit int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.maxOpen > 0 {
+		limit = min(limit, s.maxOpen)
+	}
+	if len(s.ceremonies) >= limit {
+		return passkey.ErrTooManyCeremonies
+	}
 	s.ceremonies[c.IDHash] = c
 	return nil
 }
@@ -203,7 +210,17 @@ func (s *memSessions) Delete(_ context.Context, id string) error {
 	delete(s.m, id)
 	return nil
 }
-func (s *memSessions) DeleteForUser(context.Context, identity.UserID) error { return nil }
+
+func (s *memSessions) DeleteForUser(_ context.Context, u identity.UserID, keep string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, se := range s.m {
+		if se.User == u && id != keep {
+			delete(s.m, id)
+		}
+	}
+	return nil
+}
 
 type env struct {
 	svc      *passkey.Service
@@ -628,9 +645,17 @@ func TestRenameAndDelete(t *testing.T) {
 	if err := e.svc.Delete(ctx, s, a.ID); !errors.Is(err, access.ErrStepUpRequired) {
 		t.Errorf("old step-up: %v", err)
 	}
-	_, s = e.signedIn(t, alice)
+	current, s := e.signedIn(t, alice)
+	elsewhere, _ := e.signedIn(t, alice)
 	if err := e.svc.Delete(ctx, s, a.ID); err != nil {
 		t.Fatal(err)
+	}
+	// M3-29: the passkey may be in other hands: Alice's other sessions end, this one stays.
+	if _, err := e.sessions.Validate(ctx, elsewhere); err == nil {
+		t.Error("another session survived the deletion")
+	}
+	if _, err := e.sessions.Validate(ctx, current); err != nil {
+		t.Errorf("the current session: %v", err)
 	}
 	if n, _ := e.svc.Count(ctx, alice); n != 0 {
 		t.Errorf("%d left", n)
@@ -668,5 +693,38 @@ func TestLogin_ACloneIsRecorded(t *testing.T) {
 	}
 	if e.store.clones != 1 {
 		t.Errorf("%d clones recorded", e.store.clones)
+	}
+}
+
+// M3-29: open ceremonies have an upper bound; starting and finishing count apart.
+func TestCeremonies_BoundAndLimitsApart(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	a := e.register(t, alice, "Phone")
+	e.store.maxOpen = 2
+	b1 := begin(t, e, passkey.PurposeLogin, "")
+	_ = begin(t, e, passkey.PurposeLogin, "")
+	if _, err := e.svc.Begin(ctx, passkey.PurposeLogin, "", "192.0.2.1"); !errors.Is(err, passkey.ErrTooManyAttempts) {
+		t.Errorf("beyond the open ceremonies: %v", err)
+	}
+	e.store.maxOpen = 0
+	// Starts used up behind one address: answers still work.
+	now := t0
+	clock := func() time.Time { return now }
+	cfg, _ := passkey.Config([]string{origin})
+	wa, _ := webauthn.New(cfg)
+	svc := passkey.NewService(passkey.Deps{
+		WebAuthn: wa, Store: e.store, Users: users{}, Lockout: e.lock, Sessions: e.sessions,
+		Limiter: ratelimit.New(1, time.Minute, clock), FinishLimiter: ratelimit.New(5, time.Minute, clock), Now: clock,
+	})
+	if _, err := svc.Begin(ctx, passkey.PurposeLogin, "", "192.0.2.1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Begin(ctx, passkey.PurposeLogin, "", "192.0.2.1"); !errors.Is(err, passkey.ErrTooManyAttempts) {
+		t.Errorf("second start: %v", err)
+	}
+	resp, _ := a.Assert(b1.Options)
+	if _, err := svc.Finish(ctx, passkey.PurposeLogin, b1.CeremonyID, b1.Binding, "", resp, "192.0.2.1"); err != nil {
+		t.Errorf("answer after the starts were used up: %v", err)
 	}
 }

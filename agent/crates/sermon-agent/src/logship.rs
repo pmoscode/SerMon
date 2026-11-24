@@ -14,7 +14,7 @@
 //! | `sermon_agent_logs_dropped_entries{reason}` | entries dropped since the start: `rate`, `buffer` |
 //! | `sermon_agent_logs_redacted_entries` | entries in which redaction replaced something |
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -113,6 +113,53 @@ pub struct Shipper {
     ready: VecDeque<Vec<LogRecord>>,
     deliver: Deliver,
     stats: Arc<ShipStats>,
+    keys: KeyBlocks,
+}
+
+/// Lines of a private key block masked at most, if its END line never comes.
+pub const MAX_KEY_LINES: usize = 128;
+/// Sources followed for key blocks at once; beyond, the state starts afresh.
+const MAX_KEY_SOURCES: usize = 256;
+
+/// Private key blocks logged one line per entry (journald, files without a multiline regex,
+/// M3-29): after a BEGIN line every line of the same source is masked up to its END line. The
+/// redaction of an entry sees only that entry and would miss the last, short base64 line.
+#[derive(Debug, Default)]
+struct KeyBlocks {
+    /// Lines masked so far, per source inside a block.
+    inside: HashMap<String, usize>,
+}
+
+impl KeyBlocks {
+    fn source(record: &LogRecord) -> String {
+        format!(
+            "{:?}|{:?}|{:?}|{:?}",
+            record.origin, record.unit, record.identifier, record.pid
+        )
+    }
+
+    fn mask(&mut self, record: &mut LogRecord) {
+        let begins = record.message.contains("-----BEGIN ")
+            && record.message.contains("PRIVATE KEY-----")
+            && !record.message.contains("-----END ");
+        let ends =
+            record.message.contains("-----END ") && record.message.contains("PRIVATE KEY-----");
+        let source = Self::source(record);
+        if let Some(lines) = self.inside.get_mut(&source) {
+            sermon_security::redact::MASK.clone_into(&mut record.message);
+            *lines += 1;
+            if ends || *lines >= MAX_KEY_LINES {
+                self.inside.remove(&source);
+            }
+            return;
+        }
+        if begins {
+            if self.inside.len() >= MAX_KEY_SOURCES {
+                self.inside.clear();
+            }
+            self.inside.insert(source, 0);
+        }
+    }
 }
 
 impl std::fmt::Debug for Shipper {
@@ -142,6 +189,7 @@ impl Shipper {
             ready: VecDeque::new(),
             deliver,
             stats,
+            keys: KeyBlocks::default(),
         }
     }
 
@@ -157,6 +205,7 @@ impl Shipper {
             ready: VecDeque::new(),
             deliver,
             stats: self.stats.clone(),
+            keys: KeyBlocks::default(),
         }
     }
 
@@ -186,6 +235,7 @@ impl Shipper {
         ) {
             return;
         }
+        self.keys.mask(&mut record);
         {
             let mut rate = self
                 .rate
@@ -435,6 +485,57 @@ pub(crate) mod tests {
         assert!(s.is_empty());
         assert_eq!(stats.sent.load(Ordering::Relaxed), 2);
         assert_eq!(stats.redacted.load(Ordering::Relaxed), 1);
+    }
+
+    // M3-29: a private key logged one line per entry is masked to its END line – also its last,
+    // short base64 line; another source in between is not.
+    #[tokio::test(start_paused = true)]
+    async fn masks_a_key_block_over_several_entries() {
+        let (mut s, written, _, _config) = shipper(true);
+        let now = Instant::now();
+        // A made-up key block, no real key.
+        let key = [
+            "-----BEGIN OPENSSH PRIVATE KEY-----", // betterleaks:allow
+            "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW", // betterleaks:allow
+            "QyNTUxOQAAACDsecret",               // betterleaks:allow
+            "-----END OPENSSH PRIVATE KEY-----", // betterleaks:allow
+        ];
+        s.offer(record("app.service", None, key[0]), now);
+        s.offer(record("app.service", None, key[1]), now);
+        s.offer(record("other.service", None, "unrelated line"), now);
+        s.offer(record("app.service", None, key[2]), now);
+        s.offer(record("app.service", None, key[3]), now);
+        s.offer(record("app.service", None, "after the key"), now);
+        assert!(s.flush());
+        assert_eq!(
+            written.messages(),
+            [
+                "***",
+                "***",
+                "unrelated line",
+                "***",
+                "***",
+                "after the key"
+            ]
+        );
+    }
+
+    // A block without its END ends after MAX_KEY_LINES lines: nothing is masked for ever.
+    #[tokio::test(start_paused = true)]
+    async fn a_key_block_without_end_ends_after_its_bound() {
+        let (mut s, written, _, _config) = shipper(true);
+        let now = Instant::now();
+        s.offer(
+            record("app.service", None, "-----BEGIN RSA PRIVATE KEY-----"),
+            now,
+        );
+        for i in 0..=MAX_KEY_LINES {
+            s.offer(record("app.service", None, &format!("line {i}")), now);
+        }
+        assert!(s.flush());
+        let messages = written.messages();
+        assert_eq!(messages[MAX_KEY_LINES], "***");
+        assert_eq!(messages[MAX_KEY_LINES + 1], format!("line {MAX_KEY_LINES}"));
     }
 
     // The rate is the node's: every source's shipper draws from the same buckets (M3-05).

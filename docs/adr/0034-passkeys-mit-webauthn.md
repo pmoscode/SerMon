@@ -61,3 +61,8 @@ Gewählt: **Option 2**, mit `attestation: none` (keine Herstellerprüfung, keine
 - Mit einem zweiten Faktor bietet der Step-up-Dialog den Provider nur an, wenn dessen Anmeldung zwei Faktoren zählt
   (ADR 0033, Nachtrag M3-28).
 
+## Nachtrag M3-29
+
+- Start und Antwort zählen in getrennten Rate-Limits, offene Zeremonien höchstens 10 000. Die Conditional UI startet
+  erst mit dem Fokus des E-Mail-Felds, nicht bei jedem Aufruf der Anmeldeseite.
+- Das Löschen eines Passkeys beendet die übrigen Sessions des Users.

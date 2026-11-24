@@ -122,6 +122,8 @@ impl Access {
     pub fn expand(&self, patterns: &[&str]) -> Expansion {
         let mut found: Vec<(PathBuf, usize)> = Vec::new();
         let mut rejected = 0;
+        // Resolved once per expansion, not per candidate (M3-29).
+        let roots = self.roots();
         for (index, pattern) in patterns.iter().enumerate() {
             if self.check_pattern(pattern).is_err() {
                 continue;
@@ -132,7 +134,9 @@ impl Access {
             let mut candidates = vec![PathBuf::from("/")];
             for (i, segment) in segments.iter().enumerate() {
                 let last = i + 1 == segments.len();
-                let mut next = Vec::new();
+                // Bounded, the smallest names kept (M3-29): wildcards in several segments don't
+                // multiply, and a huge directory is never held at once.
+                let mut next = Smallest::default();
                 for dir in &candidates {
                     if wildcard(segment) {
                         for name in self.list(dir) {
@@ -144,16 +148,14 @@ impl Access {
                         next.push(dir.join(segment));
                     }
                 }
-                next.sort();
-                if !last {
-                    // Directories to look into: bounded, so that wildcards in several segments
-                    // don't multiply.
-                    next.truncate(MAX_FILES * 4);
+                let (kept, dropped) = next.finish();
+                if last {
+                    rejected += dropped;
                 }
-                candidates = next;
+                candidates = kept;
             }
             for path in candidates {
-                match self.check_file(&path) {
+                match self.check_resolved(&path, &roots) {
                     Ok(true) => {
                         if !found.iter().any(|(p, _)| p == &path) {
                             found.push((path, index));
@@ -193,19 +195,34 @@ impl Access {
     ///
     /// Why it is refused.
     pub fn check_file(&self, path: &Path) -> Result<bool, Rejected> {
+        self.check_resolved(path, &self.roots())
+    }
+
+    /// The allowed prefixes and denied paths as they resolve on the host (missing ones left out).
+    fn roots(&self) -> Roots {
+        let resolve = |paths: &[PathBuf]| {
+            paths
+                .iter()
+                .filter_map(|p| fs::canonicalize(self.on_host(p)).ok())
+                .collect()
+        };
+        Roots {
+            allowed: resolve(&self.allowed),
+            denied: resolve(&self.denied),
+        }
+    }
+
+    fn check_resolved(&self, path: &Path, roots: &Roots) -> Result<bool, Rejected> {
         let Ok(resolved) = fs::canonicalize(self.on_host(path)) else {
             return Ok(false);
         };
         if !resolved.is_file() {
             return Ok(false);
         }
-        let inside = |host: &Path| {
-            fs::canonicalize(self.on_host(host)).is_ok_and(|real| resolved.starts_with(real))
-        };
-        if self.denied.iter().any(|d| inside(d)) {
+        if roots.denied.iter().any(|d| resolved.starts_with(d)) {
             return Err(Rejected::Denied);
         }
-        if !self.allowed.iter().any(|p| inside(p)) {
+        if !roots.allowed.iter().any(|p| resolved.starts_with(p)) {
             return Err(Rejected::Outside);
         }
         Ok(true)
@@ -244,6 +261,48 @@ impl Access {
     #[must_use]
     pub fn on_host(&self, path: &Path) -> PathBuf {
         self.host_root.join(path.strip_prefix("/").unwrap_or(path))
+    }
+}
+
+/// Resolved prefixes and denied paths.
+struct Roots {
+    allowed: Vec<PathBuf>,
+    denied: Vec<PathBuf>,
+}
+
+/// Candidates of a segment: the smallest [`MAX_FILES`]` * 4` paths in order, held at most twice
+/// that many at once; the others are counted.
+#[derive(Default)]
+struct Smallest {
+    paths: Vec<PathBuf>,
+    dropped: usize,
+}
+
+const fn keep_smallest_bound() -> usize {
+    MAX_FILES * 4
+}
+
+impl Smallest {
+    fn push(&mut self, path: PathBuf) {
+        self.paths.push(path);
+        if self.paths.len() >= 2 * keep_smallest_bound() {
+            self.trim();
+        }
+    }
+
+    fn trim(&mut self) {
+        self.paths.sort();
+        self.paths.dedup();
+        let bound = keep_smallest_bound();
+        if self.paths.len() > bound {
+            self.dropped += self.paths.len() - bound;
+            self.paths.truncate(bound);
+        }
+    }
+
+    fn finish(mut self) -> (Vec<PathBuf>, usize) {
+        self.trim();
+        (self.paths, self.dropped)
     }
 }
 
@@ -529,6 +588,25 @@ mod tests {
         assert_eq!(e.files.len(), MAX_FILES);
         assert_eq!(e.rejected, 100 - MAX_FILES);
         assert_eq!(e.files[0].0, PathBuf::from("/var/log/many/f000.log"));
+    }
+
+    // M3-29: a directory with far more matches than followed files: the same smallest names,
+    // counted as rejected – without holding every match at once.
+    #[test]
+    fn far_more_matches_keep_the_smallest_names() {
+        let host = Host::new();
+        for i in (0..600).rev() {
+            host.file(&format!("/var/log/huge/f{i:03}.log"));
+        }
+        let e = host.access().expand(&["/var/log/huge/*.log"]);
+        assert_eq!(e.files.len(), MAX_FILES);
+        assert_eq!(e.rejected, 600 - MAX_FILES);
+        assert_eq!(e.files[0].0, PathBuf::from("/var/log/huge/f000.log"));
+        assert_eq!(
+            e.files[MAX_FILES - 1].0,
+            PathBuf::from(format!("/var/log/huge/f{:03}.log", MAX_FILES - 1))
+        );
+        assert_eq!(keep_smallest_bound(), MAX_FILES * 4);
     }
 
     // M3-28: the journal's own files and the login records lie below /var/log but are never

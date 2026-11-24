@@ -19,6 +19,9 @@ type LiveViews interface {
 	Connected(org tenant.OrgID, node identity.NodeID)
 	// Disconnected: the node's session on this instance ended (not when a reconnect replaced it).
 	Disconnected(org tenant.OrgID, node identity.NodeID)
+	// Wants reports whether anyone here watches the node; else its snapshots are dropped
+	// unconverted (M3-29).
+	Wants(org tenant.OrgID, node identity.NodeID) bool
 	Deliver(org tenant.OrgID, node identity.NodeID, snapshot liveview.Snapshot)
 	Refused(org tenant.OrgID, node identity.NodeID, reason string)
 }

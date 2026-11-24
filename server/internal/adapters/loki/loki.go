@@ -36,10 +36,11 @@ const (
 	encodingFlags = "X-Loki-Response-Encoding-Flags"
 	// Bytes of an error answer kept in the error.
 	maxErrorBody = 256
-	// Bytes of a query answer read at most.
-	maxQueryBody = 32 << 20
 	timeout      = 30 * time.Second
 )
+
+// MaxQueryBody bounds the bytes of a query answer; beyond it the answer is ErrTooLarge.
+const MaxQueryBody = 32 << 20
 
 // Errors of the store.
 var (
@@ -51,6 +52,9 @@ var (
 	ErrUnavailable = errors.New("loki: unavailable")
 	// ErrNoQuery: a query without an expression.
 	ErrNoQuery = errors.New("loki: empty query")
+	// ErrTooLarge: the answer is larger than MaxQueryBody (long lines, control characters
+	// escaped in JSON); ask for fewer lines (M3-29).
+	ErrTooLarge = errors.New("loki: answer too large")
 )
 
 // Labels are the labels of a stream.
@@ -187,7 +191,7 @@ func (c *Client) Query(ctx context.Context, org tenant.OrgID, q QueryRange) ([]L
 	if q.Direction != "" {
 		params.Set("direction", string(q.Direction))
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/loki/api/v1/query_range")+"?"+params.Encode(), nil)
+	req, err := c.rangeRequest(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("loki: query request: %w", err)
 	}
@@ -201,7 +205,11 @@ func (c *Client) Query(ctx context.Context, org tenant.OrgID, q QueryRange) ([]L
 	if err := check(res); err != nil {
 		return nil, err
 	}
-	lines, err := decodeStreams(io.LimitReader(res.Body, maxQueryBody))
+	body := &io.LimitedReader{R: res.Body, N: MaxQueryBody + 1}
+	lines, err := decodeStreams(body)
+	if body.N <= 0 {
+		return nil, ErrTooLarge
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +245,7 @@ func (c *Client) Counts(ctx context.Context, org tenant.OrgID, q logql.Query, st
 	params.Set("start", strconv.FormatInt(start.UnixNano(), 10))
 	params.Set("end", strconv.FormatInt(end.UnixNano(), 10))
 	params.Set("step", strconv.FormatInt(int64(step/time.Second), 10))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint("/loki/api/v1/query_range")+"?"+params.Encode(), nil)
+	req, err := c.rangeRequest(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("loki: count request: %w", err)
 	}
@@ -250,7 +258,7 @@ func (c *Client) Counts(ctx context.Context, org tenant.OrgID, q logql.Query, st
 	if err := check(res); err != nil {
 		return nil, err
 	}
-	return decodeMatrix(io.LimitReader(res.Body, maxQueryBody))
+	return decodeMatrix(io.LimitReader(res.Body, MaxQueryBody))
 }
 
 func decodeMatrix(r io.Reader) ([]Series, error) {
@@ -359,7 +367,7 @@ func (c *Client) Deletions(ctx context.Context, org tenant.OrgID) ([]Deletion, e
 		EndTime   float64 `json:"end_time"`
 		Status    string  `json:"status"`
 	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, maxQueryBody)).Decode(&answer); err != nil {
+	if err := json.NewDecoder(io.LimitReader(res.Body, MaxQueryBody)).Decode(&answer); err != nil {
 		return nil, fmt.Errorf("%w: unreadable answer: %w", ErrRejected, err)
 	}
 	out := make([]Deletion, 0, len(answer))
@@ -384,6 +392,17 @@ func (c *Client) Ready(ctx context.Context) error {
 	}
 	defer func() { _ = res.Body.Close() }()
 	return check(res)
+}
+
+// rangeRequest is a query_range as a POST form: the selector names every node of a query, which
+// can exceed what a URL may hold (M3-29).
+func (c *Client) rangeRequest(ctx context.Context, params url.Values) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint("/loki/api/v1/query_range"), strings.NewReader(params.Encode()))
+	if err != nil {
+		return nil, err //nolint:wrapcheck // wrapped by the callers
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return req, nil
 }
 
 func (c *Client) endpoint(path string) string {

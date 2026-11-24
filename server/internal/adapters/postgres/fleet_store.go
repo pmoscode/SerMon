@@ -61,6 +61,25 @@ func (s *FleetStore) List(ctx context.Context, scope tenant.Scope) ([]fleet.Node
 	return nodes, nil
 }
 
+// NodeGroup returns the group of a node the scope sees (liveview.Directory); false otherwise.
+func (s *FleetStore) NodeGroup(ctx context.Context, scope tenant.Scope, node identity.NodeID) (tenant.GroupID, bool, error) {
+	var group uuid.UUID
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		var err error
+		group, err = q.VisibleNodeGroup(ctx, sqlcdb.VisibleNodeGroupParams{
+			ID: uuid.UUID(node), AllGroups: scope.AllGroups(), GroupIds: groupIDs(scope),
+		})
+		return err //nolint:wrapcheck // wrapped below
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return tenant.GroupID{}, false, nil
+	}
+	if err != nil {
+		return tenant.GroupID{}, false, fmt.Errorf("visible node: %w", err)
+	}
+	return tenant.GroupID(group), true, nil
+}
+
 // HasGroup implements fleet.Directory.
 func (s *FleetStore) HasGroup(ctx context.Context, scope tenant.Scope, group tenant.GroupID) (bool, error) {
 	var exists bool

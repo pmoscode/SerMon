@@ -26,9 +26,14 @@ type LiveViewHandler struct {
 	logger *slog.Logger
 
 	mu sync.Mutex
-	// built holds the last message per node: every viewer of a snapshot sends the same one,
-	// built once (M3-28).
-	built map[identity.NodeID]builtFrame
+	// built holds the last message per node and visibility of command lines: every viewer of a
+	// snapshot sends the same one, built once (M3-28, M3-29).
+	built map[builtKey]builtFrame
+}
+
+type builtKey struct {
+	node   identity.NodeID
+	hidden bool
 }
 
 type builtFrame struct {
@@ -47,7 +52,7 @@ var _ webv1connect.LiveViewServiceHandler = (*LiveViewHandler)(nil)
 func NewLiveViewHandler(svc *liveview.Service, live *LiveStreams, logger *slog.Logger) *LiveViewHandler {
 	return &LiveViewHandler{
 		svc: svc, streams: live.orNew(), views: newStreamLimiter(liveViewLimits), logger: logger,
-		built: map[identity.NodeID]builtFrame{},
+		built: map[builtKey]builtFrame{},
 	}
 }
 
@@ -98,14 +103,15 @@ func (h *LiveViewHandler) message(node identity.NodeID, f liveview.Frame) *webv1
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if b, ok := h.built[node]; ok && b.snapshot == f.Snapshot {
+	key := builtKey{node: node, hidden: f.Snapshot.CmdlinesHidden}
+	if b, ok := h.built[key]; ok && b.snapshot == f.Snapshot {
 		return b.message
 	}
-	if len(h.built) >= liveViewLimits.Total {
+	if len(h.built) >= 2*liveViewLimits.Total {
 		clear(h.built)
 	}
 	msg := frameMessage(f)
-	h.built[node] = builtFrame{snapshot: f.Snapshot, message: msg}
+	h.built[key] = builtFrame{snapshot: f.Snapshot, message: msg}
 	return msg
 }
 

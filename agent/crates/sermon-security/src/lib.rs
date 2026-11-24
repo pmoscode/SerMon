@@ -12,6 +12,7 @@
 //! - Patterns use the `regex` crate: linear time on any input.
 //! - Raw lines never become event fields; the sudo command (off by default) is redacted.
 
+pub mod cmdline;
 pub mod redact;
 
 use std::net::IpAddr;
@@ -19,6 +20,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+pub use cmdline::redact_args;
 pub use redact::{Redactor, RuleSpec, redact};
 
 /// Longest user name kept (user names in failed logins are attacker-controlled).

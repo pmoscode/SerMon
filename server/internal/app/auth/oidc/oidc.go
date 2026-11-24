@@ -59,6 +59,8 @@ var (
 	// ErrIdentityTaken means the identity belongs to another user, or the user has one of the
 	// provider already.
 	ErrIdentityTaken = errors.New("the identity is linked already")
+	// ErrTooManyFlows means MaxOpenFlows flows are open (FlowStore.Insert).
+	ErrTooManyFlows = errors.New("too many open sign-ins at the provider")
 	// ErrLastSignIn means unlinking would leave the user no way to sign in.
 	ErrLastSignIn = errors.New("set a password first: this is your only way to sign in")
 	// ErrNotLinked means the user has no identity of the issuer.
@@ -102,7 +104,8 @@ type Flow struct {
 
 // FlowStore keeps the flows (instance-level, every server instance sees them).
 type FlowStore interface {
-	Insert(ctx context.Context, f Flow) error
+	// Insert stores a flow while fewer than limit are open; ErrTooManyFlows otherwise.
+	Insert(ctx context.Context, f Flow, limit int) error
 	// Take returns and deletes the flow of a state if it has not expired at now.
 	Take(ctx context.Context, stateHash string, now time.Time) (Flow, bool, error)
 	DeleteExpired(ctx context.Context, now time.Time) error
@@ -182,8 +185,11 @@ type Deps struct {
 	Users        Users
 	Sessions     *session.Manager
 	SecondFactor SecondFactor
-	Limiter      RateLimiter
-	MFA          MFAMode
+	// Limiter bounds the starts per client IP, CompleteLimiter the returns (nil: Limiter); apart,
+	// so many starts behind one address don't block the returns (M3-29).
+	Limiter         RateLimiter
+	CompleteLimiter RateLimiter
+	MFA             MFAMode
 	// Provisioner reconciles the roles at every sign-in; nil: no group mappings.
 	Provisioner Provisioner
 	// JIT creates accounts and memberships by the mappings (just-in-time provisioning).
@@ -191,6 +197,10 @@ type Deps struct {
 	Now    func() time.Time
 	Logger *slog.Logger
 }
+
+// MaxOpenFlows bounds the flows open at once (10 minutes each): a flood of starts from many
+// addresses fills no table (M3-29).
+const MaxOpenFlows = 10_000
 
 // Service runs the flows.
 type Service struct{ d Deps }
@@ -300,14 +310,19 @@ func (s *Service) Begin(ctx context.Context, intent Intent, sessionToken, next, 
 		return Begun{}, err
 	}
 	f.StateHash, f.BindingHash = hash(state), hash(binding)
-	authURL, err := s.d.Provider.AuthCodeURL(ctx, state, f.Nonce, challenge(f.Verifier), intent == IntentStepUp)
-	if err != nil {
-		return Begun{}, fmt.Errorf("oidc begin: %w", err)
-	}
 	if err := s.d.Flows.DeleteExpired(ctx, now); err != nil {
 		return Begun{}, fmt.Errorf("oidc begin: %w", err)
 	}
-	if err := s.d.Flows.Insert(ctx, f); err != nil {
+	if err := s.d.Flows.Insert(ctx, f, MaxOpenFlows); err != nil {
+		if errors.Is(err, ErrTooManyFlows) {
+			s.d.Logger.WarnContext(ctx, "oidc: too many open flows, refusing a start", "open", MaxOpenFlows)
+			return Begun{}, ErrTooManyAttempts
+		}
+		return Begun{}, fmt.Errorf("oidc begin: %w", err)
+	}
+	// After the bound of open flows: a refused start doesn't reach the provider.
+	authURL, err := s.d.Provider.AuthCodeURL(ctx, state, f.Nonce, challenge(f.Verifier), intent == IntentStepUp)
+	if err != nil {
 		return Begun{}, fmt.Errorf("oidc begin: %w", err)
 	}
 	return Begun{URL: authURL, Binding: binding}, nil
@@ -340,7 +355,11 @@ func (s *Service) fail(ctx context.Context, f Flow, reason string, err error) er
 // Complete finishes a flow when the provider returns with state and code. binding is the cookie
 // of the browser, sessionToken its session cookie (for linking and step-up).
 func (s *Service) Complete(ctx context.Context, state, code, binding, sessionToken, clientIP string) (Result, error) {
-	if !s.d.Limiter.Allow(clientIP) {
+	limiter := s.d.CompleteLimiter
+	if limiter == nil {
+		limiter = s.d.Limiter
+	}
+	if !limiter.Allow(clientIP) {
 		return Result{}, ErrTooManyAttempts
 	}
 	if state == "" || code == "" || binding == "" || len(state) > 128 || len(code) > 2048 || len(binding) > 128 {
@@ -531,6 +550,10 @@ func (s *Service) Unlink(ctx context.Context, sessionToken, issuer string) error
 		return ErrLastSignIn
 	}
 	if err := s.d.Identities.Unlink(ctx, current.User, issuer); err != nil {
+		return fmt.Errorf("unlink: %w", err)
+	}
+	// The identity may be in someone else's hands: their sessions end with it (M3-29).
+	if err := s.d.Sessions.RevokeOthers(ctx, current); err != nil {
 		return fmt.Errorf("unlink: %w", err)
 	}
 	return nil

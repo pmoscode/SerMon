@@ -57,4 +57,13 @@ func TestFleetStore_ListsOnlyNodesOfTheScope(t *testing.T) {
 	if ok, err := store.HasGroup(ctx, allB, group); err != nil || ok {
 		t.Errorf("HasGroup(foreign) = %v, %v", ok, err)
 	}
+	// M3-29: one node with its group, only within the scope.
+	if g, ok, err := store.NodeGroup(ctx, all, identity.NodeID(nodeA)); err != nil || !ok || g != group {
+		t.Errorf("NodeGroup(own) = %v, %v, %v", g, ok, err)
+	}
+	for name, scope := range map[string]tenant.Scope{"another group": otherGroup, "another organization": allB} {
+		if _, ok, err := store.NodeGroup(ctx, scope, identity.NodeID(nodeA)); err != nil || ok {
+			t.Errorf("NodeGroup() in %s = %v, %v", name, ok, err)
+		}
+	}
 }

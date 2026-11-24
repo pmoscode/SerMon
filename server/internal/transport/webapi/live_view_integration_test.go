@@ -95,6 +95,8 @@ func TestLiveView_ViewersWatchAndTheSwitchHidesCommandLines(t *testing.T) {
 
 	again := watchProcesses(t, mia.liveView, nodeAl)
 	nextFrame(t, again) // offline
+	// The hub takes at most one snapshot per half interval of an agent (M3-29).
+	time.Sleep(liveview.Interval / 2)
 	deliver()
 	p := nextFrame(t, again).GetSnapshot().GetProcesses()
 	if len(p) != 1 || p[0].Cmdline != nil || !p[0].GetCmdlineHidden() {

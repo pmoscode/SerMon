@@ -42,6 +42,8 @@ test('a passkey is added, signs in without a password and confirms a step-up', a
 	// Signed out, back in with the passkey only (the autofill or the button, whichever comes first).
 	await call(page.request, base, 'AuthService/Logout', {});
 	await page.goto('/login');
+	// The autofill starts with the focus of the e-mail field (M3-29).
+	await page.getByLabel('Email address').focus();
 	await page.waitForURL('/fleet', { timeout: 3000 }).catch(async () => {
 		await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
 		await page.waitForURL('/fleet');

@@ -156,11 +156,24 @@ func TestSessionStore_InstanceSessionWithoutOrganization(t *testing.T) {
 	if got.Org != (tenant.OrgID{}) {
 		t.Errorf("Org = %v, want zero", got.Org)
 	}
-	if err := store.DeleteForUser(ctx, bob); err != nil {
+	kept := strings.Repeat("ef", 32)
+	if err := store.Insert(ctx, session.Session{ID: kept, User: bob, CreatedAt: now, LastSeenAt: now, StepUpAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteForUser(ctx, bob, kept); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, _ := store.Get(ctx, id); found {
 		t.Error("DeleteForUser must remove the user's sessions")
+	}
+	if _, found, _ := store.Get(ctx, kept); !found {
+		t.Error("DeleteForUser removed the session to keep")
+	}
+	if err := store.DeleteForUser(ctx, bob, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, _ := store.Get(ctx, kept); found {
+		t.Error("without a session to keep all go")
 	}
 }
 

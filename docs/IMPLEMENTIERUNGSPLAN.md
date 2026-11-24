@@ -3780,7 +3780,54 @@ Konfiguration) und M3-06 (Loki).
   Danach das Threat Model aktualisieren (T15, T20, T22, T35, T42, T53) und Befunde als Aufgaben anlegen.
 - **Abhängig von:** alle M3-Aufgaben
 
-#### ☐ M3-29 – Übrige Befunde der Security-Review M3 · X · S 🔒
+#### ☑ M3-29 – Übrige Befunde der Security-Review M3 · X · S 🔒
+> Erledigt (Threat Model §8, T22, T26, T42, T81, T84, T87; KONZEPT §7, §9; Nachträge ADR 0030, 0031, 0033, 0034):
+> - **Live-Ansicht:**
+>   - `hide` pro Betrachter: Der Agent sendet Befehlszeilen, solange ein Betrachter sie sehen darf, den anderen
+>     entfernt sie der Server (je Snapshot einmal, der Handler baut volle und gekürzte Nachricht je einmal). Verlässt
+>     der letzte solche Betrachter die Ansicht, wird der Agent auf „ausblenden“ umgestellt.
+>   - **Entscheidung Viewer-Logs-Schalter:** Befehlszeilen sind Log-Daten. Sie sieht nur, wer `view_logs` auf der
+>     Gruppe des Nodes hat; Viewer einer Org ohne Logs für Viewer sehen Prozesse und User, aber keine Befehlszeilen.
+>   - Höchstens ein Snapshot pro halbem Intervall (Uhr des Servers); ohne Betrachter wandelt die Agent-API keinen um
+>     (`Wants`).
+>   - Öffnen und Re-Check laden nur den einen Node (`FleetStore.NodeGroup`, neue Abfrage `VisibleNodeGroup`).
+> - **Loki:** `query_range` als POST-Formular; höchstens 5 000 Nodes je Abfrage, darüber `FAILED_PRECONDITION`
+>   (`logs.ErrTooBroad`) mit eigener Meldung in der UI; eine Antwort über 32 MiB (`loki.ErrTooLarge`) wird mit
+>   20 Zeilen und „mehr“ wiederholt. Die Meldung zu `RESOURCE_EXHAUSTED` nennt jetzt auch laufende Abfragen.
+> - **Anmeldung:**
+>   - Pro IPv6-/64 zählte der Limiter schon (`ratelimit.normalize`); neu sind getrennte Limiter für Start und
+>     Rückkehr (OIDC, `CompleteLimiter`) bzw. Antwort (Passkeys, `FinishLimiter`).
+>   - Offene Flows und Zeremonien höchstens je 10 000, im `INSERT … WHERE count < max` geprüft; ein abgewiesener
+>     OIDC-Start erreicht den Provider nicht mehr (der Flow wird vor der URL gespeichert).
+>   - Conditional UI erst mit dem ersten Fokus des E-Mail-Felds.
+>   - `session.Manager.RevokeOthers`: Lösen einer Identität und Löschen eines Passkeys beenden die übrigen Sessions
+>     des Users (`DeleteForUser` mit einer Session, die bleibt).
+> - **Agent:**
+>   - Budget der Org-Regeln 8 MiB (je Regel ihr Anteil, höchstens 1 MiB), DFA-Cache 256 KiB, Multiline-Regexes je
+>     256 KiB. **Abweichung:** Der Server prüft die Größe nicht vor – `\w` und `\d` sind in Rust Unicode und in Go ASCII,
+>     die Größen entsprechen sich nicht. Der Agent lehnt ab und meldet den Grund (M3-03); die Hilfe rät zu
+>     ASCII-Klassen.
+>   - Glob-Expansion mit höchstens 512 Kandidaten pro Segment (die kleinsten Namen, deterministisch, der Rest zählt als
+>     abgewiesen); Präfixe und gesperrte Pfade einmal pro Lauf aufgelöst.
+>   - Schlüsselblöcke über mehrere Einträge einer Quelle (Herkunft, Unit, Identifier, PID) bis zur END-Zeile maskiert,
+>     höchstens 128 Zeilen, höchstens 256 Quellen gleichzeitig.
+>   - Befehlszeilen mit Argumenten (`sermon_security::redact_args`): Der Collector behält die NUL-Trenner; das Argument
+>     nach einer Passwort-Option (`--…password`, `--…secret`, `--…token`, `-storepass` …) ganz maskiert, auch mit
+>     Leerzeichen, `mysql -p…`, `sshpass -p`, `redis-cli -a`; danach läuft die übliche Redaction über die verbundene
+>     Zeile (Regeln über mehrere Argumente, Hashes als Argument bleiben). Fuzz-Ziel `redaction` ruft sie mit auf.
+> - **Tests:**
+>   - Hub: hide pro Betrachter samt Umstellung, Rate der Snapshots, `Wants`; Dienst: Befehlszeilen nur mit Log-Rechten;
+>     Agent-API: kein Umwandeln ohne Betrachter; Handler: beide Fassungen eines Snapshots ohne Neubau; PostgreSQL:
+>     `NodeGroup` nur im Scope.
+>   - Loki: POST-Formular, `ErrTooLarge`; Dienst: Wiederholung mit weniger Zeilen, Grenze der Nodes (Liste und
+>     Histogramm), Abbildung auf `FAILED_PRECONDITION`; Explorer zeigt die Meldung; echter Loki im Integrationstest.
+>   - Anmeldung: getrennte Limits und Obergrenze (OIDC, Passkeys, beide Stores gegen PostgreSQL), `RevokeOthers` im
+>     Manager und Store, Lösen und Löschen beenden die übrigen Sessions (auch über den echten Stack), Conditional UI
+>     erst nach dem Fokus (Komponente und E2E mit virtuellem Authenticator).
+>   - Agent: Budget der Regeln, Multiline-Grenze, 600 Treffer mit den kleinsten Namen, Schlüsselblock über Einträge
+>     und seine Grenze, Befehlszeilen mit Argumenten; alle Fuzz-Ziele je 15 s.
+>   - Gegenproben für 34 Prüfungen, alle erkannt (drei nach zusätzlichen Tests: Passwörter mit Leerzeichen bei
+>     `mysql -p`/`redis-cli -a` und die Abbildung von `ErrTooBroad`).
 - **Ziel:** die niedrigen Befunde aus M3-28 (Threat Model §8), keiner kritisch oder hoch:
   - **Live-Ansicht:**
     - `hide` pro Betrachter statt pro Feed (Rennen beim Umschalten).

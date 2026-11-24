@@ -28,7 +28,7 @@ func TestOIDCStore_FlowsAreTakenOnce(t *testing.T) {
 		StateHash: hex64('a'), BindingHash: hex64('b'), Nonce: strings.Repeat("n", 43), Verifier: strings.Repeat("v", 64),
 		Intent: oidc.IntentLogin, Next: "/alerts", CreatedAt: now, ExpiresAt: now.Add(oidc.FlowLifetime),
 	}
-	if err := store.Insert(ctx, flow); err != nil {
+	if err := store.Insert(ctx, flow, oidc.MaxOpenFlows); err != nil {
 		t.Fatal(err)
 	}
 	got, ok, err := store.Take(ctx, flow.StateHash, now)
@@ -41,7 +41,7 @@ func TestOIDCStore_FlowsAreTakenOnce(t *testing.T) {
 	}
 	late := flow
 	late.StateHash = hex64('c')
-	if err := store.Insert(ctx, late); err != nil {
+	if err := store.Insert(ctx, late, oidc.MaxOpenFlows); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok, _ := store.Take(ctx, late.StateHash, late.ExpiresAt); ok {
@@ -52,7 +52,7 @@ func TestOIDCStore_FlowsAreTakenOnce(t *testing.T) {
 	}
 	old := flow
 	old.StateHash = hex64('d')
-	if err := store.Insert(ctx, old); err != nil {
+	if err := store.Insert(ctx, old, oidc.MaxOpenFlows); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DeleteExpired(ctx, old.ExpiresAt); err != nil {
@@ -64,8 +64,19 @@ func TestOIDCStore_FlowsAreTakenOnce(t *testing.T) {
 	// A login flow names no user; the database refuses one that does (and a link without one).
 	bad := flow
 	bad.StateHash, bad.Intent = hex64('e'), oidc.IntentLink
-	if err := store.Insert(ctx, bad); err == nil {
+	if err := store.Insert(ctx, bad, oidc.MaxOpenFlows); err == nil {
 		t.Error("a link flow without user and session was stored")
+	}
+	// M3-29: beyond the bound of open flows nothing is stored.
+	var open int
+	ownerQueryRow(t, f.db.OwnerDSN, "SELECT count(*) FROM oidc_flows", nil, &open)
+	full := flow
+	full.StateHash = hex64('f')
+	if err := store.Insert(ctx, full, open); !errors.Is(err, oidc.ErrTooManyFlows) {
+		t.Errorf("at the bound: %v", err)
+	}
+	if err := store.Insert(ctx, full, open+1); err != nil {
+		t.Errorf("below the bound: %v", err)
 	}
 }
 

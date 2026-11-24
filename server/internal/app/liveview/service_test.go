@@ -26,26 +26,27 @@ var (
 	errGone = errors.New("session ended")
 )
 
-// directory lists the nodes of a scope; moved moves the node into the group db.
+// directory knows the nodes; moved moves the node into the group db.
 type directory struct {
-	mu    sync.Mutex
-	moved bool
+	mu      sync.Mutex
+	moved   bool
+	lookups int
 }
 
-func (d *directory) List(_ context.Context, scope tenant.Scope) ([]fleet.Node, error) {
+func (d *directory) NodeGroup(_ context.Context, scope tenant.Scope, id identity.NodeID) (tenant.GroupID, bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.lookups++
 	group := web
 	if d.moved {
 		group = db
 	}
-	var out []fleet.Node
 	for _, n := range []fleet.Node{{ID: node, Group: group}, {ID: dbNode, Group: db}} {
-		if scope.AllowsGroup(n.Group) {
-			out = append(out, n)
+		if n.ID == id && scope.AllowsGroup(n.Group) {
+			return n.Group, true, nil
 		}
 	}
-	return out, nil
+	return tenant.GroupID{}, false, nil
 }
 
 type settings struct {
@@ -152,6 +153,29 @@ func TestWatch_HidesCommandLinesByTheOrganizationsSwitch(t *testing.T) {
 	waitFor(t, func() bool { return len(frames()) == 1 })
 	if p := frames()[0].Snapshot.Processes[0]; p.Cmdline != nil || !p.CmdlineHidden {
 		t.Errorf("process = %+v", p)
+	}
+}
+
+// M3-29: command lines are log data – a viewer of an organization without logs for viewers gets
+// none, an operator of the same organization does.
+func TestWatch_CommandLinesNeedTheRightToReadLogs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		role role.Role
+		hide bool
+	}{"viewer": {role.Viewer, true}, "operator": {role.Operator, false}} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorld()
+			c := viewer(tc.role, web)
+			c.Principal.ViewersWithoutLogs = true
+			frames, _, cancel := w.watch(t, c, node, nil)
+			defer cancel()
+			waitFor(t, func() bool { s, _ := w.agents.counts(); return s == 1 })
+			w.hub.Deliver(org, node, snapshot())
+			waitFor(t, func() bool { return len(frames()) == 1 })
+			if p := frames()[0].Snapshot.Processes[0]; (p.Cmdline == nil) != tc.hide {
+				t.Errorf("process = %+v, want hidden %v", p, tc.hide)
+			}
+		})
 	}
 }
 

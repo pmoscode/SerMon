@@ -59,12 +59,17 @@ type fakeStore struct {
 	calls []call
 	lines []logs.StoredLine
 	err   error
+	// tooLarge answers ErrTooLarge above this limit (M3-29).
+	tooLarge int
 }
 
 func (f *fakeStore) Lines(_ context.Context, o tenant.OrgID, q logql.Query, from, to time.Time, limit int, forward bool) ([]logs.StoredLine, error) {
 	f.calls = append(f.calls, call{org: o, query: q.String(), from: from, to: to, limit: limit, forward: forward})
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.tooLarge > 0 && limit > f.tooLarge {
+		return nil, logs.ErrTooLarge
 	}
 	return f.lines[:min(len(f.lines), limit)], nil
 }
@@ -173,6 +178,51 @@ func TestQuery_MoreThanTheLimitSaysSo(t *testing.T) {
 	page, err := service(store).Query(context.Background(), admin(), filter(), 2, false)
 	if err != nil || len(page.Lines) != 2 || !page.More {
 		t.Errorf("page = %+v, %v", page, err)
+	}
+}
+
+// M3-29: an answer too large for one read (long lines) comes with fewer lines and says there is
+// more; it doesn't fail.
+func TestQuery_ATooLargeAnswerComesWithFewerLines(t *testing.T) {
+	var stored []logs.StoredLine
+	for range 300 {
+		stored = append(stored, line(web01, "long"))
+	}
+	store := &fakeStore{lines: stored, tooLarge: 100}
+	page, err := service(store).Query(context.Background(), admin(), filter(), 200, false)
+	if err != nil || len(page.Lines) == 0 || len(page.Lines) > 100 || !page.More {
+		t.Fatalf("page = %d lines, more %v, %v", len(page.Lines), page.More, err)
+	}
+	store = &fakeStore{lines: stored, tooLarge: 1}
+	if _, err := service(store).Query(context.Background(), admin(), filter(), 200, false); !errors.Is(err, logs.ErrTooBroad) {
+		t.Errorf("even small answers too large: %v", err)
+	}
+}
+
+// manyNodes is an organization with n nodes in the group web.
+type manyNodes int
+
+func (m manyNodes) List(context.Context, tenant.Scope) ([]fleet.Node, error) {
+	out := make([]fleet.Node, int(m))
+	for i := range out {
+		out[i] = fleet.Node{ID: identity.NodeID(uuid.New()), Group: web, Hostname: "h"}
+	}
+	return out, nil
+}
+
+// M3-29: a query names its nodes; beyond MaxSelectedNodes the user narrows by group or node.
+func TestQuery_BoundsTheSelectedNodes(t *testing.T) {
+	store := &fakeStore{}
+	big := logs.NewService(store, manyNodes(logs.MaxSelectedNodes+1), authz.NewPolicy())
+	if _, err := big.Query(context.Background(), admin(), filter(), 10, false); !errors.Is(err, logs.ErrTooBroad) {
+		t.Errorf("all of %d nodes: %v, want ErrTooBroad", logs.MaxSelectedNodes+1, err)
+	}
+	if _, err := big.Histogram(context.Background(), admin(), filter()); !errors.Is(err, logs.ErrTooBroad) {
+		t.Errorf("histogram of all: %v", err)
+	}
+	fits := logs.NewService(store, manyNodes(logs.MaxSelectedNodes), authz.NewPolicy())
+	if _, err := fits.Query(context.Background(), admin(), filter(), 10, false); err != nil {
+		t.Errorf("%d nodes: %v", logs.MaxSelectedNodes, err)
 	}
 }
 

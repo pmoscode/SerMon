@@ -56,7 +56,7 @@ UPDATE sessions SET step_up_at = sqlc.arg(at) WHERE id = sqlc.arg(id);
 DELETE FROM sessions WHERE id = sqlc.arg(id);
 
 -- name: DeleteUserSessions :exec
-DELETE FROM sessions WHERE user_id = sqlc.arg(user_id);
+DELETE FROM sessions WHERE user_id = sqlc.arg(user_id) AND id <> sqlc.arg(keep)::text;
 
 -- name: UserProfile :one
 SELECT email::text AS email, display_name::text AS display_name FROM auth_user_profile(sqlc.arg(user_id));

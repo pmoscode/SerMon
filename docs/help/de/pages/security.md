@@ -18,6 +18,7 @@ Ein Passkey meldet dich ohne Passwort an: Dein Gerät (Fingerabdruck, Gesicht, P
 - Ein Passkey ist auch dein **zweiter Faktor**: nach dem Passwort statt des Codes und für Bestätigungen sensibler Aktionen. Verlangt deine Organisation zwei Faktoren, genügt ein Passkey.
 - **Synchronisiert** heißt: Dein Passwort-Manager oder Gerätekonto sichert den Passkey; er steht dann auch auf deinen anderen Geräten bereit.
 - Löschen verlangt eine Bestätigung. Löschst du den letzten zweiten Faktor, fragt eine Organisation mit Pflicht danach erst wieder nach der Einrichtung.
+- Löschen meldet dich auf allen anderen Geräten ab: Ein verlorener Passkey nützt damit auch für schon offene Sitzungen nichts mehr. Ebenso beim Lösen einer SSO-Identität.
 
 ## Anmeldung über SSO
 

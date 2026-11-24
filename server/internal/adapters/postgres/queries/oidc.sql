@@ -1,9 +1,11 @@
 -- OIDC (M3-20, ADR 0033): instance-level, like the credentials.
 
--- name: InsertOIDCFlow :exec
+-- name: InsertOIDCFlow :execrows
+-- Only while fewer than max_open flows are open (M3-29).
 INSERT INTO oidc_flows (state_hash, binding_hash, nonce, verifier, intent, user_id, session_id, next_path, created_at, expires_at)
-VALUES (sqlc.arg(state_hash), sqlc.arg(binding_hash), sqlc.arg(nonce), sqlc.arg(verifier), sqlc.arg(intent), sqlc.narg(user_id),
-        sqlc.narg(session_id), sqlc.arg(next_path), sqlc.arg(created_at), sqlc.arg(expires_at));
+SELECT sqlc.arg(state_hash), sqlc.arg(binding_hash), sqlc.arg(nonce), sqlc.arg(verifier), sqlc.arg(intent), sqlc.narg(user_id)::uuid,
+       sqlc.narg(session_id)::text, sqlc.arg(next_path), sqlc.arg(created_at), sqlc.arg(expires_at)
+WHERE (SELECT count(*) FROM oidc_flows) < sqlc.arg(max_open)::bigint;
 
 -- name: TakeOIDCFlow :one
 -- Once: the flow is deleted whether it expired or not.

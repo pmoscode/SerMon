@@ -495,7 +495,7 @@ func (h *SessionHandler) handle(ctx context.Context, id Identity, live *liveSess
 		h.recordApplied(ctx, id, msg.GetConfigApplied())
 		return false, nil
 	case msg.GetProcessSnapshot() != nil:
-		if h.live != nil {
+		if h.live != nil && h.live.Wants(id.Org, id.Node) {
 			h.live.Deliver(id.Org, id.Node, toSnapshot(msg.GetProcessSnapshot()))
 		}
 		return false, nil

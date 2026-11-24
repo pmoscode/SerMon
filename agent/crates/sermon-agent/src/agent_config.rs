@@ -27,8 +27,9 @@ const MAX_UNIT_BYTES: usize = 256;
 const MAX_FILES: usize = 16;
 const MAX_GLOB_BYTES: usize = 1024;
 const MAX_REGEX_BYTES: usize = 1024;
-/// Memory a compiled multiline regex may take.
-const REGEX_SIZE_LIMIT: usize = 1024 * 1024;
+/// Memory a compiled multiline regex may take, and its lazy DFA: 16 of them stay within 8 MiB
+/// together (M3-29), as the redaction rules do.
+const REGEX_SIZE_LIMIT: usize = 256 * 1024;
 /// Longest reason sent back to the server.
 const MAX_ERROR_BYTES: usize = 1024;
 
@@ -418,6 +419,13 @@ mod tests {
                 "multiline",
                 update(1, |c| {
                     c.logs.as_mut().unwrap().files[0].multiline_start = r"\w{100}".into();
+                }),
+            ),
+            (
+                // M3-29: 256 KiB per multiline regex, 16 of them within 4 MiB.
+                "multiline",
+                update(1, |c| {
+                    c.logs.as_mut().unwrap().files[0].multiline_start = r"\w{10}".into();
                 }),
             ),
             (

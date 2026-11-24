@@ -160,6 +160,8 @@ test('signs in from the autofill where the browser offers it (conditional UI)', 
 		async () => (await window.PublicKeyCredential.isConditionalMediationAvailable?.()) ?? false
 	);
 	test.skip(!available, 'this Chromium offers no conditional UI');
-	// The virtual authenticator answers the waiting request by itself, like picking the passkey.
+	// The request starts with the focus of the e-mail field (M3-29); the virtual authenticator
+	// answers it by itself, like picking the passkey.
+	await page.getByLabel('Email address').focus();
 	await expect(page).toHaveURL('/fleet');
 });

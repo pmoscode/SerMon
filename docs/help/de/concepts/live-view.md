@@ -21,7 +21,7 @@ Die Prozesse des Hosts wie in `top`, alle 2 Sekunden neu. Der Agent schickt sie 
 ## Grenzen
 
 - Der Agent schickt höchstens 4 000 Prozesse, die aktivsten zuerst; die übrigen werden nur gezählt.
-- Befehlszeilen sind wie Logs redigiert (Secrets ersetzt) und auf 1 KiB gekürzt. Admins können sie für die Organisation ganz ausblenden (Administration → Logs).
+- Befehlszeilen sind wie Logs redigiert (Secrets ersetzt) und auf 1 KiB gekürzt. Admins können sie für die Organisation ganz ausblenden (Administration → Logs). Wer die Logs des Nodes nicht lesen darf – Betrachter einer Organisation, die ihnen Logs verwehrt –, sieht auch keine Befehlszeilen.
 - Die Ansicht liest nur. SerMon beendet oder startet keine Prozesse.
 - Steht in der `agent.toml` des Hosts `allow_live_view = false`, lehnt der Agent ab und nennt den Grund.
 - Ist der Agent gerade nicht mit dem Server verbunden, steht das über der Liste; die Ansicht läuft weiter, sobald er sich verbindet.

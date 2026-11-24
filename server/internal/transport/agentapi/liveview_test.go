@@ -23,6 +23,19 @@ type liveSink struct {
 	disconnected []identity.NodeID
 	snapshots    []liveview.Snapshot
 	refusals     []string
+	// skip answers Wants with false so many times (M3-29).
+	skip, asked int
+}
+
+func (l *liveSink) Wants(tenant.OrgID, identity.NodeID) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.asked++
+	if l.skip > 0 {
+		l.skip--
+		return false
+	}
+	return true
 }
 
 func (l *liveSink) Connected(_ tenant.OrgID, n identity.NodeID) {
@@ -105,8 +118,14 @@ func TestLiveView_CommandsReachTheAgentAndSnapshotsTheHub(t *testing.T) {
 		t.Fatalf("Receive() = %v, %v; want StopLiveView", res, err)
 	}
 
-	if err := stream.Send(processSnapshot()); err != nil {
-		t.Fatal(err)
+	// M3-29: a snapshot nobody here wants is not even converted.
+	sink.mu.Lock()
+	sink.skip = 1
+	sink.mu.Unlock()
+	for range 2 {
+		if err := stream.Send(processSnapshot()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	refused := &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_LiveViewRefused{LiveViewRefused: &agentv1.LiveViewRefused{Reason: "agent.toml\x1b[31m forbids"}}}
 	if err := stream.Send(refused); err != nil {
@@ -114,8 +133,11 @@ func TestLiveView_CommandsReachTheAgentAndSnapshotsTheHub(t *testing.T) {
 	}
 	waitFor(t, func() bool { _, _, n, r := sink.counts(); return n == 1 && r == 1 })
 	sink.mu.Lock()
-	got, reason := sink.snapshots[0], sink.refusals[0]
+	got, reason, asked := sink.snapshots[0], sink.refusals[0], sink.asked
 	sink.mu.Unlock()
+	if asked != 2 {
+		t.Errorf("Wants asked %d times for two snapshots", asked)
+	}
 	p := got.Processes[0]
 	if got.Omitted != 3 || got.Summary.CPUCount != 4 || got.Summary.Tasks.Sleeping != 1 || !got.TakenAt.Equal(time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)) ||
 		p.PID != 812 || *p.UID != 33 || p.User != "www-data" || *p.CPURatio != 0.25 || p.Unit != "nginx.service" || p.Container != "4f1c0a5e8b2d" ||

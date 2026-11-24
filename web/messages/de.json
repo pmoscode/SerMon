@@ -619,7 +619,7 @@
 	"logs_error_unavailable": "Der Log-Speicher (Loki) ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.",
 	"logs_error_forbidden": "Sie dürfen in dieser Organisation keine Logs sehen.",
 	"logs_error_invalid": "Diesen Filter nimmt der Server nicht an. Bitte Zeitraum und Eingaben prüfen.",
-	"logs_error_too_many_live": "Es sind zu viele Live-Ansichten offen. Bitte einige schließen und erneut versuchen.",
+	"logs_error_too_many_live": "Es laufen zu viele Log-Abfragen oder Live-Ansichten. Bitte einen Moment warten oder einige schließen und erneut versuchen.",
 	"nav_logs": "Logs",
 	"range_14d": "14 Tage",
 	"logs_title": "Logs",
@@ -1003,5 +1003,6 @@
 	"passkey_rename": "Passkey {name} umbenennen",
 	"passkey_delete": "Passkey {name} löschen",
 	"passkey_list_empty": "Noch kein Passkey.",
-	"orgs_error_lock_too_recent": "Die Organisation ist gerade erst gesperrt. Sofort löschen geht 10 Minuten nach der Sperre: Hosts mit vorgehender Uhr schicken noch Log-Zeilen, die sonst übrig blieben."
+	"orgs_error_lock_too_recent": "Die Organisation ist gerade erst gesperrt. Sofort löschen geht 10 Minuten nach der Sperre: Hosts mit vorgehender Uhr schicken noch Log-Zeilen, die sonst übrig blieben.",
+	"logs_error_too_broad": "Die Abfrage ist zu breit: zu viele Nodes oder zu lange Zeilen. Bitte den Zeitraum verkürzen oder eine Gruppe oder einen Node wählen."
 }

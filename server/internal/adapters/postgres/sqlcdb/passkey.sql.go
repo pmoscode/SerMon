@@ -95,10 +95,11 @@ func (q *Queries) InsertPasskey(ctx context.Context, arg InsertPasskeyParams) (i
 	return result.RowsAffected(), nil
 }
 
-const insertWebAuthnCeremony = `-- name: InsertWebAuthnCeremony :exec
+const insertWebAuthnCeremony = `-- name: InsertWebAuthnCeremony :execrows
 INSERT INTO webauthn_ceremonies (id_hash, binding_hash, purpose, user_id, session_id, name, data, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8, $9)
+SELECT $1, $2::text, $3, $4::uuid, $5::text,
+       $6, $7, $8, $9
+WHERE (SELECT count(*) FROM webauthn_ceremonies) < $10::bigint
 `
 
 type InsertWebAuthnCeremonyParams struct {
@@ -111,10 +112,12 @@ type InsertWebAuthnCeremonyParams struct {
 	Data        []byte
 	CreatedAt   time.Time
 	ExpiresAt   time.Time
+	MaxOpen     int64
 }
 
-func (q *Queries) InsertWebAuthnCeremony(ctx context.Context, arg InsertWebAuthnCeremonyParams) error {
-	_, err := q.db.Exec(ctx, insertWebAuthnCeremony,
+// Only while fewer than max_open ceremonies are open (M3-29).
+func (q *Queries) InsertWebAuthnCeremony(ctx context.Context, arg InsertWebAuthnCeremonyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertWebAuthnCeremony,
 		arg.IDHash,
 		arg.BindingHash,
 		arg.Purpose,
@@ -124,8 +127,12 @@ func (q *Queries) InsertWebAuthnCeremony(ctx context.Context, arg InsertWebAuthn
 		arg.Data,
 		arg.CreatedAt,
 		arg.ExpiresAt,
+		arg.MaxOpen,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listPasskeys = `-- name: ListPasskeys :many

@@ -22,11 +22,16 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
-DELETE FROM sessions WHERE user_id = $1
+DELETE FROM sessions WHERE user_id = $1 AND id <> $2::text
 `
 
-func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteUserSessions, userID)
+type DeleteUserSessionsParams struct {
+	UserID uuid.UUID
+	Keep   string
+}
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error {
+	_, err := q.db.Exec(ctx, deleteUserSessions, arg.UserID, arg.Keep)
 	return err
 }
 

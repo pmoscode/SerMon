@@ -480,6 +480,9 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
       Admin entfernt, der bleibt draußen (M3-28).
     - Seit M3-28: Der Step-up beim Provider gilt für User mit eigenem zweiten Faktor nur mit einem zweiten Faktor
       dort (`amr` oder `trusted`). Konten ohne Passwort nutzen Passkeys statt TOTP.
+    - Seit M3-29: Start und Rückkehr (OIDC) bzw. Start und Antwort (Passkeys) haben getrennte Rate-Limits, offene
+      Flows und Zeremonien höchstens je 10 000. Das Lösen einer Identität und das Löschen eines Passkeys beenden die
+      übrigen Sessions des Users.
     - Seit M3-22: Knopf auf der Anmeldeseite, Verknüpfen und Lösen unter „Kontosicherheit“ (Lösen nur, wenn ein
       Passwort oder eine weitere Identität bleibt), Step-up beim Provider im Bestätigungsdialog, Zuordnungen im Reiter
       „SSO-Gruppen“ der Organisation. Rollen aus Zuordnungen tragen in der Mitgliederliste das Zeichen „SSO“.
@@ -586,6 +589,10 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 - **Datenschutz:** Kommandozeilen können Secrets enthalten. Die agentseitige **Redaction** (§10.3) gilt auch hier;
   zusätzlich kann pro Org „cmdline ausblenden“ aktiviert werden (Admin mit Step-up, im Audit-Log). Der Agent sendet die
   Befehlszeilen dann nicht, und der Server entfernt sie zusätzlich selbst.
+    - Seit M3-29 pro Betrachter: Befehlszeilen sieht nur, wer die Logs des Nodes lesen darf (Viewer einer Org ohne
+      Logs für Viewer nicht). Der Agent sendet sie, solange ein Betrachter sie sehen darf; den anderen entfernt sie
+      der Server. Redigiert wird mit den Argumenten: Das Argument nach einer Passwort-Option ist ganz maskiert.
+    - Ein Agent liefert höchstens einen Snapshot pro halbem Intervall; schnellere verwirft der Server.
 - **Rechte-Hinweis:** Als User `sermon` sind `/proc/<pid>/io` und `fd/` fremder Prozesse nicht lesbar. Diese Felder
   zeigen „n/a“ mit erklärendem ⓘ. Es gibt bewusst **kein** `CAP_SYS_PTRACE` (siehe §24).
 

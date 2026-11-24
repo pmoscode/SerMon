@@ -91,3 +91,14 @@ Gewählt: **Option 2.**
   Die Position pro Datei rückt erst vor, wenn der Eintrag im WAL liegt. Ist der Versand aus, liest die Quelle nichts und
   vergisst ihre Positionen.
 - **Rate:** Alle Quellen eines Nodes teilen sich die 500 Einträge/s.
+
+## Nachtrag M3-29: Budget der Regexes, begrenzte Expansion
+
+- Alle Redaction-Regeln einer Org zusammen dürfen kompiliert höchstens 8 MiB belegen: jede Regel bekommt ihren Anteil
+  (`8 MiB / Anzahl`, höchstens 1 MiB), der Lazy-DFA-Cache je Regel 256 KiB. Multiline-Regexes je 256 KiB. Vorher
+  konnten 48 große Regexes 60 bis 90 MiB belegen, bei 128 MiB `MemoryMax` (gemessen im Review M3-28).
+- Die Größe hängt an Unicode-Klassen (`\w`, `\d`), die in Go ASCII sind: Der Server kann sie nicht vorhersagen. Der
+  Agent bleibt maßgeblich; eine zu große Regel lehnt er ab, behält die vorherige Konfiguration und meldet den Grund
+  (siehe oben). Die Hilfe rät zu ASCII-Klassen.
+- Die Glob-Expansion hält pro Segment höchstens 512 Kandidaten (die kleinsten Namen, deterministisch) und löst Präfixe
+  und gesperrte Pfade einmal pro Lauf auf.

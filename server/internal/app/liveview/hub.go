@@ -63,6 +63,8 @@ type Snapshot struct {
 	Summary   Summary
 	Processes []Process
 	Omitted   uint32
+	// CmdlinesHidden: the server removed the command lines for this viewer.
+	CmdlinesHidden bool
 }
 
 // Frame is what a viewer gets: a snapshot, the agent's refusal, or that the node is offline.
@@ -83,6 +85,7 @@ type Agents interface {
 // Hub shares the agent streams of this instance.
 type Hub struct {
 	agents Agents
+	now    func() time.Time
 	mu     sync.Mutex
 	feeds  map[identity.NodeID]*feed
 }
@@ -90,24 +93,58 @@ type Hub struct {
 type feed struct {
 	org     tenant.OrgID
 	viewers map[*Subscription]struct{}
+	// hide is what the agent was asked: true while no viewer may see command lines.
 	hide    bool
 	running bool // the agent was started and has not refused or gone
 	refused bool
 	started time.Time // of the last start or renewal
 	idle    time.Time // since when without viewers
+	// delivered is when the last snapshot went to the viewers (server clock).
+	delivered time.Time
 }
 
 // Subscription is one viewer.
 type Subscription struct {
-	hub    *Hub
-	node   identity.NodeID
+	hub  *Hub
+	node identity.NodeID
+	// hide: this viewer gets no command lines (M3-29: per viewer, not per feed).
+	hide   bool
 	frames chan Frame
 	closed bool
 }
 
+// HubOption configures the hub.
+type HubOption func(*Hub)
+
+// WithHubClock sets the clock of the snapshots' rate (tests).
+func WithHubClock(now func() time.Time) HubOption { return func(h *Hub) { h.now = now } }
+
 // NewHub returns a hub sending its commands to agents.
-func NewHub(agents Agents) *Hub {
-	return &Hub{agents: agents, feeds: map[identity.NodeID]*feed{}}
+func NewHub(agents Agents, opts ...HubOption) *Hub {
+	h := &Hub{agents: agents, now: time.Now, feeds: map[identity.NodeID]*feed{}}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
+// agentHide is what the agent is asked: hide unless a viewer may see command lines.
+func (f *feed) agentHide() bool {
+	for s := range f.viewers {
+		if !s.hide {
+			return false
+		}
+	}
+	return true
+}
+
+// Wants reports whether the node's snapshots go to anyone here: the agent API converts nothing
+// else (M3-29).
+func (h *Hub) Wants(org tenant.OrgID, node identity.NodeID) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	f := h.feeds[node]
+	return f != nil && f.org == org && len(f.viewers) > 0 && !f.refused
 }
 
 // Frames delivers the frames; a slow viewer gets the newest.
@@ -124,8 +161,13 @@ func (s *Subscription) Close(now time.Time) {
 	s.closed = true
 	if f := h.feeds[s.node]; f != nil {
 		delete(f.viewers, s)
-		if len(f.viewers) == 0 {
+		switch {
+		case len(f.viewers) == 0:
 			f.idle = now
+		case f.running && f.agentHide() != f.hide:
+			// The last viewer who saw command lines left: the agent stops sending them.
+			f.hide = true
+			h.start(s.node, f, now)
 		}
 	}
 }
@@ -145,11 +187,12 @@ func (s *Subscription) put(frame Frame) {
 	}
 }
 
-// Subscribe adds a viewer of the node; hide is the organization's switch for command lines.
+// Subscribe adds a viewer of the node; hide: it gets no command lines (the organization's switch,
+// or it may not read the node's logs).
 func (h *Hub) Subscribe(org tenant.OrgID, node identity.NodeID, hide bool, now time.Time) *Subscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	s := &Subscription{hub: h, node: node, frames: make(chan Frame, 1)}
+	s := &Subscription{hub: h, node: node, hide: hide, frames: make(chan Frame, 1)}
 	f := h.feeds[node]
 	if f == nil || f.org != org {
 		f = &feed{org: org, viewers: map[*Subscription]struct{}{}}
@@ -157,8 +200,8 @@ func (h *Hub) Subscribe(org tenant.OrgID, node identity.NodeID, hide bool, now t
 	}
 	f.viewers[s] = struct{}{}
 	f.idle = time.Time{}
-	if !f.running || f.hide != hide {
-		f.hide, f.refused = hide, false
+	if want := f.agentHide(); !f.running || f.hide != want {
+		f.hide, f.refused = want, false
 		h.start(node, f, now)
 	}
 	if !f.running {
@@ -204,8 +247,8 @@ func (h *Hub) Maintain(now time.Time) {
 	}
 }
 
-// Deliver passes a snapshot of the node's agent to its viewers; hidden command lines are removed
-// here too.
+// Deliver passes a snapshot of the node's agent to its viewers; command lines are removed here
+// too, for every viewer who may not see them. Snapshots faster than half the interval are dropped.
 func (h *Hub) Deliver(org tenant.OrgID, node identity.NodeID, snapshot Snapshot) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -213,15 +256,32 @@ func (h *Hub) Deliver(org tenant.OrgID, node identity.NodeID, snapshot Snapshot)
 	if f == nil || f.org != org {
 		return
 	}
-	if f.hide {
-		processes := make([]Process, len(snapshot.Processes))
-		for i, p := range snapshot.Processes {
-			p.Cmdline, p.CmdlineTruncated, p.CmdlineHidden = nil, false, true
-			processes[i] = p
-		}
-		snapshot.Processes = processes
+	now := h.now()
+	if !f.delivered.IsZero() && now.Sub(f.delivered) < Interval/2 {
+		return
 	}
-	h.broadcast(f, Frame{Snapshot: &snapshot})
+	f.delivered = now
+	var hidden *Snapshot
+	for s := range f.viewers {
+		if !s.hide && !f.hide {
+			s.put(Frame{Snapshot: &snapshot})
+			continue
+		}
+		if hidden == nil {
+			hidden = withoutCmdlines(snapshot)
+		}
+		s.put(Frame{Snapshot: hidden})
+	}
+}
+
+func withoutCmdlines(snapshot Snapshot) *Snapshot {
+	processes := make([]Process, len(snapshot.Processes))
+	for i, p := range snapshot.Processes {
+		p.Cmdline, p.CmdlineTruncated, p.CmdlineHidden = nil, false, true
+		processes[i] = p
+	}
+	snapshot.Processes, snapshot.CmdlinesHidden = processes, true
+	return &snapshot
 }
 
 // Refused passes the agent's refusal on; the stream is not tried again until a new viewer comes.

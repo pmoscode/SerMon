@@ -26,6 +26,11 @@ const (
 	MaxLimit     = 1000
 	DefaultLimit = 200
 	MaxNodes     = 100
+	// MaxSelectedNodes bounds the nodes of one query (every query names them, M3-29); beyond it the
+	// user narrows by group or node.
+	MaxSelectedNodes = 5000
+	// smallerLimit is the limit of a second try after ErrTooLarge.
+	smallerLimit = 20
 	// ContextLines are the lines before and after an entry.
 	ContextLines = 50
 	// HistogramSteps is about the number of buckets of a histogram.
@@ -38,6 +43,10 @@ var (
 	ErrInvalid = errors.New("invalid log query")
 	// ErrUnavailable: the log store is not configured or not reachable.
 	ErrUnavailable = errors.New("logs are unavailable")
+	// ErrTooLarge means the store's answer exceeds what one read may hold; ask for fewer lines.
+	ErrTooLarge = errors.New("the answer of the log store is too large")
+	// ErrTooBroad means the query covers too many nodes or too much text: narrow it (M3-29).
+	ErrTooBroad = errors.New("the query is too broad: narrow the time range or choose a group or node")
 )
 
 // StoredLine is a line as the store returns it.
@@ -160,10 +169,19 @@ func (s *Service) Query(ctx context.Context, c access.Caller, f Filter, limit in
 		return Page{}, err
 	}
 	stored, err := s.store.Lines(ctx, org, q.Query, f.From, f.To, limit+1, oldestFirst)
+	cut := false
+	if errors.Is(err, ErrTooLarge) && limit > smallerLimit {
+		// Long lines: fewer of them; the page says there is more (M3-29).
+		limit, cut = smallerLimit, true
+		stored, err = s.store.Lines(ctx, org, q.Query, f.From, f.To, limit+1, oldestFirst)
+	}
+	if errors.Is(err, ErrTooLarge) {
+		return Page{}, fmt.Errorf("%w: %w", ErrTooBroad, err)
+	}
 	if err != nil {
 		return Page{}, fmt.Errorf("query logs: %w", err)
 	}
-	page := Page{More: len(stored) > limit}
+	page := Page{More: cut || len(stored) > limit}
 	for _, l := range stored[:min(len(stored), limit)] {
 		page.Lines = append(page.Lines, toLine(l, hosts))
 	}
@@ -274,6 +292,9 @@ func (s *Service) prepare(ctx context.Context, c access.Caller, f Filter) (prepa
 	}
 	if len(selected) == 0 {
 		return prepared{}, tenant.OrgID{}, nil, nil
+	}
+	if len(selected) > MaxSelectedNodes {
+		return prepared{}, tenant.OrgID{}, nil, fmt.Errorf("%w (more than %d nodes)", ErrTooBroad, MaxSelectedNodes)
 	}
 	q, err := logql.Lines(filter)
 	if err != nil {

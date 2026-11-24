@@ -18,7 +18,7 @@ Command lines can contain secrets, even though the redaction replaces the known 
 
 ## Redaction
 
-The agents replace passwords, tokens and private keys with `***` before a line leaves the host. Your own rules come on top: a regular expression replaces its match, or only the group `(?P<secret>…)`. **Test** shows on a sample line what the agents would send with the rules in the form.
+The agents replace passwords, tokens and private keys with `***` before a line leaves the host. Your own rules come on top: a regular expression replaces its match, or only the group `(?P<secret>…)`. **Test** shows on a sample line what the agents would send with the rules in the form. All rules together may take at most 8 MiB in the agent: classes like `\w` or `\d` cover every script there and are large, `[A-Za-z0-9_]` and `[0-9]` stay small. The agent refuses a rule that is too large (see below).
 
 ## State per node
 

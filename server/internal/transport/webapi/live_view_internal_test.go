@@ -29,6 +29,13 @@ func TestLiveView_ASnapshotIsBuiltOnceForAllViewers(t *testing.T) {
 	if msg := h.message(other, liveview.Frame{Snapshot: snap}); msg == first {
 		t.Error("another node shares the message")
 	}
+	// M3-29: the copy without command lines and the full one alternate without rebuilding.
+	full := &liveview.Snapshot{Processes: []liveview.Process{{PID: 3}}}
+	hidden := &liveview.Snapshot{Processes: []liveview.Process{{PID: 3, CmdlineHidden: true}}, CmdlinesHidden: true}
+	a, b := h.message(node, liveview.Frame{Snapshot: full}), h.message(node, liveview.Frame{Snapshot: hidden})
+	if h.message(node, liveview.Frame{Snapshot: full}) != a || h.message(node, liveview.Frame{Snapshot: hidden}) != b || a == b {
+		t.Error("full and hidden copies of one snapshot were built again")
+	}
 	if msg := h.message(node, liveview.Frame{Offline: true}); !msg.GetOffline() {
 		t.Errorf("offline: %v", msg)
 	}

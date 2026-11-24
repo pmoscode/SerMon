@@ -67,6 +67,8 @@ function failure(error: unknown): string {
 			return m.logs_error_forbidden();
 		case Code.InvalidArgument:
 			return m.logs_error_invalid();
+		case Code.FailedPrecondition:
+			return m.logs_error_too_broad();
 		case Code.ResourceExhausted:
 			return m.logs_error_too_many_live();
 		default:
@@ -294,6 +296,7 @@ export class LogExplorerState {
 				if (
 					code === Code.PermissionDenied ||
 					code === Code.ResourceExhausted ||
+					code === Code.FailedPrecondition ||
 					code === Code.InvalidArgument
 				) {
 					this.liveError = failure(error);

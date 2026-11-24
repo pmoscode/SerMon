@@ -1,3 +1,4 @@
+import { m } from '#lib/paraglide/messages.js';
 import { create, type MessageInitShape } from '@bufbuild/protobuf';
 import {
 	durationFromMs,
@@ -123,6 +124,10 @@ describe('LogExplorerState', () => {
 		query.mockRejectedValueOnce(rpcError(Code.PermissionDenied));
 		await state.search(filter, undefined, now);
 		expect(state.error).not.toBe('');
+		// M3-29: too many nodes or too long lines – the user narrows the query.
+		query.mockRejectedValueOnce(rpcError(Code.FailedPrecondition));
+		await state.search(filter, undefined, now);
+		expect(state.error).toBe(m.logs_error_too_broad());
 	});
 
 	it('loads older pages without duplicates', async () => {

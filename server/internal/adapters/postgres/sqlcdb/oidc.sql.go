@@ -153,11 +153,12 @@ func (q *Queries) InsertIdentity(ctx context.Context, arg InsertIdentityParams) 
 	return result.RowsAffected(), nil
 }
 
-const insertOIDCFlow = `-- name: InsertOIDCFlow :exec
+const insertOIDCFlow = `-- name: InsertOIDCFlow :execrows
 
 INSERT INTO oidc_flows (state_hash, binding_hash, nonce, verifier, intent, user_id, session_id, next_path, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10)
+SELECT $1, $2, $3, $4, $5, $6::uuid,
+       $7::text, $8, $9, $10
+WHERE (SELECT count(*) FROM oidc_flows) < $11::bigint
 `
 
 type InsertOIDCFlowParams struct {
@@ -171,11 +172,13 @@ type InsertOIDCFlowParams struct {
 	NextPath    string
 	CreatedAt   time.Time
 	ExpiresAt   time.Time
+	MaxOpen     int64
 }
 
 // OIDC (M3-20, ADR 0033): instance-level, like the credentials.
-func (q *Queries) InsertOIDCFlow(ctx context.Context, arg InsertOIDCFlowParams) error {
-	_, err := q.db.Exec(ctx, insertOIDCFlow,
+// Only while fewer than max_open flows are open (M3-29).
+func (q *Queries) InsertOIDCFlow(ctx context.Context, arg InsertOIDCFlowParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertOIDCFlow,
 		arg.StateHash,
 		arg.BindingHash,
 		arg.Nonce,
@@ -186,8 +189,12 @@ func (q *Queries) InsertOIDCFlow(ctx context.Context, arg InsertOIDCFlowParams) 
 		arg.NextPath,
 		arg.CreatedAt,
 		arg.ExpiresAt,
+		arg.MaxOpen,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const takeOIDCFlow = `-- name: TakeOIDCFlow :one

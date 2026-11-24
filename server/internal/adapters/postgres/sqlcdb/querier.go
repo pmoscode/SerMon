@@ -99,7 +99,7 @@ type Querier interface {
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteTOTP(ctx context.Context, userID uuid.UUID) error
-	DeleteUserSessions(ctx context.Context, userID uuid.UUID) error
+	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
 	EnrollmentTokenByHash(ctx context.Context, arg EnrollmentTokenByHashParams) (EnrollmentTokenByHashRow, error)
 	// Metric series and points (M1-22, ADR 0001). Every query runs in a tenant transaction.
 	// Registers series of the current organization (one row per position of the arrays) and returns
@@ -163,14 +163,16 @@ type Querier interface {
 	InsertNotificationPolicy(ctx context.Context, arg InsertNotificationPolicyParams) error
 	InsertNotificationPolicyChannel(ctx context.Context, arg InsertNotificationPolicyChannelParams) error
 	// OIDC (M3-20, ADR 0033): instance-level, like the credentials.
-	InsertOIDCFlow(ctx context.Context, arg InsertOIDCFlowParams) error
+	// Only while fewer than max_open flows are open (M3-29).
+	InsertOIDCFlow(ctx context.Context, arg InsertOIDCFlowParams) (int64, error)
 	InsertPasskey(ctx context.Context, arg InsertPasskeyParams) (int64, error)
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
 	InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults
 	// An event of the server itself (M2-24), inside the transaction of what it reports.
 	InsertServerSecurityEvent(ctx context.Context, arg InsertServerSecurityEventParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
-	InsertWebAuthnCeremony(ctx context.Context, arg InsertWebAuthnCeremonyParams) error
+	// Only while fewer than max_open ceremonies are open (M3-29).
+	InsertWebAuthnCeremony(ctx context.Context, arg InsertWebAuthnCeremonyParams) (int64, error)
 	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
 	// A member of a locked organization (M2-33) is no member until the lock is lifted: every
@@ -360,6 +362,8 @@ type Querier interface {
 	// The organization's switch (M3-12), in its tenant transaction.
 	ViewersSeeLogs(ctx context.Context) (bool, error)
 	VisibleGroupExists(ctx context.Context, arg VisibleGroupExistsParams) (bool, error)
+	// The group of one node of the scope's groups (the live view, M3-29).
+	VisibleNodeGroup(ctx context.Context, arg VisibleNodeGroupParams) (uuid.UUID, error)
 }
 
 var _ Querier = (*Queries)(nil)

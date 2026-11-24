@@ -18,6 +18,7 @@ A passkey signs you in without a password: your device (fingerprint, face, PIN) 
 - A passkey is also your **second factor**: after the password instead of the code and for confirming sensitive actions. If your organization requires two factors, a passkey is enough.
 - **Synced** means: your password manager or device account backs up the passkey; it is then available on your other devices too.
 - Deleting needs a confirmation. If you delete your last second factor, an organization that requires one asks for the setup again.
+- Deleting signs you out on all other devices, so a lost passkey is useless for sessions already open too. The same holds for unlinking an SSO identity.
 
 ## Sign-in over SSO
 

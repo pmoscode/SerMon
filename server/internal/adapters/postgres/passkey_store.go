@@ -133,20 +133,27 @@ func (s *PasskeyStore) Delete(ctx context.Context, user identity.UserID, id []by
 }
 
 // InsertCeremony implements passkey.Store.
-func (s *PasskeyStore) InsertCeremony(ctx context.Context, c passkey.Ceremony) error {
+func (s *PasskeyStore) InsertCeremony(ctx context.Context, c passkey.Ceremony, limit int) error {
 	data, err := json.Marshal(c.Data)
 	if err != nil {
 		return fmt.Errorf("encode ceremony: %w", err)
 	}
 	p := sqlcdb.InsertWebAuthnCeremonyParams{
 		IDHash: c.IDHash, BindingHash: text(c.BindingHash), Purpose: int16(c.Purpose), SessionID: text(c.SessionID), //nolint:gosec // G115: 1..4
-		Name: c.Name, Data: data, CreatedAt: c.CreatedAt, ExpiresAt: c.ExpiresAt,
+		Name: c.Name, Data: data, CreatedAt: c.CreatedAt, ExpiresAt: c.ExpiresAt, MaxOpen: int64(limit),
 	}
 	if !c.User.IsZero() {
 		u := uuid.UUID(c.User)
 		p.UserID = &u
 	}
-	return wrap(s.db.withoutTenant().InsertWebAuthnCeremony(ctx, p), "insert webauthn ceremony")
+	n, err := s.db.withoutTenant().InsertWebAuthnCeremony(ctx, p)
+	if err != nil {
+		return fmt.Errorf("insert webauthn ceremony: %w", err)
+	}
+	if n == 0 {
+		return passkey.ErrTooManyCeremonies
+	}
+	return nil
 }
 
 // TakeCeremony implements passkey.Store.

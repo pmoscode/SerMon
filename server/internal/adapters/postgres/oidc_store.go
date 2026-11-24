@@ -26,16 +26,23 @@ var (
 func NewOIDCStore(db *DB) *OIDCStore { return &OIDCStore{db: db} }
 
 // Insert implements oidc.FlowStore.
-func (s *OIDCStore) Insert(ctx context.Context, f oidc.Flow) error {
+func (s *OIDCStore) Insert(ctx context.Context, f oidc.Flow, limit int) error {
 	p := sqlcdb.InsertOIDCFlowParams{
 		StateHash: f.StateHash, BindingHash: f.BindingHash, Nonce: f.Nonce, Verifier: f.Verifier, Intent: int16(f.Intent), //nolint:gosec // G115: 1..3
-		SessionID: text(f.SessionID), NextPath: f.Next, CreatedAt: f.CreatedAt, ExpiresAt: f.ExpiresAt,
+		SessionID: text(f.SessionID), NextPath: f.Next, CreatedAt: f.CreatedAt, ExpiresAt: f.ExpiresAt, MaxOpen: int64(limit),
 	}
 	if !f.User.IsZero() {
 		u := uuid.UUID(f.User)
 		p.UserID = &u
 	}
-	return wrap(s.db.withoutTenant().InsertOIDCFlow(ctx, p), "insert oidc flow")
+	n, err := s.db.withoutTenant().InsertOIDCFlow(ctx, p)
+	if err != nil {
+		return fmt.Errorf("insert oidc flow: %w", err)
+	}
+	if n == 0 {
+		return oidc.ErrTooManyFlows
+	}
+	return nil
 }
 
 // Take implements oidc.FlowStore.

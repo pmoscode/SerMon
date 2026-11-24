@@ -81,9 +81,9 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// DeleteForUser removes all sessions of a user.
-func (s *SessionStore) DeleteForUser(ctx context.Context, user identity.UserID) error {
-	if err := s.db.withoutTenant().DeleteUserSessions(ctx, uuid.UUID(user)); err != nil {
+// DeleteForUser removes the sessions of a user but keep.
+func (s *SessionStore) DeleteForUser(ctx context.Context, user identity.UserID, keep string) error {
+	if err := s.db.withoutTenant().DeleteUserSessions(ctx, sqlcdb.DeleteUserSessionsParams{UserID: uuid.UUID(user), Keep: keep}); err != nil {
 		return fmt.Errorf("delete user sessions: %w", err)
 	}
 	return nil

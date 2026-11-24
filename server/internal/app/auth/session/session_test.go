@@ -58,9 +58,9 @@ func (f *fakeStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeStore) DeleteForUser(_ context.Context, user identity.UserID) error {
+func (f *fakeStore) DeleteForUser(_ context.Context, user identity.UserID, keep string) error {
 	for id, s := range f.byHash {
-		if s.User == user {
+		if s.User == user && id != keep {
 			delete(f.byHash, id)
 		}
 	}
@@ -188,6 +188,27 @@ func TestRevoke_EndsTheSession(t *testing.T) {
 	}
 }
 
+// M3-29: after a factor or a way to sign in goes, the user's other sessions end; this one stays.
+func TestRevokeOthers_KeepsTheCurrentSession(t *testing.T) {
+	m, _, _ := manager(t)
+	ctx := context.Background()
+	current, s, _ := m.Create(ctx, alice, orgA)
+	other, _, _ := m.Create(ctx, alice, orgA)
+	bobs, _, _ := m.Create(ctx, bob, orgA)
+	if err := m.RevokeOthers(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Validate(ctx, current); err != nil {
+		t.Errorf("the current session: %v", err)
+	}
+	if _, err := m.Validate(ctx, other); !errors.Is(err, session.ErrInvalid) {
+		t.Errorf("the other session: %v", err)
+	}
+	if _, err := m.Validate(ctx, bobs); err != nil {
+		t.Errorf("bob's session: %v", err)
+	}
+}
+
 func TestRevokeAllForUser_EndsOnlyThatUsersSessions(t *testing.T) {
 	m, _, _ := manager(t)
 	a1, _, _ := m.Create(context.Background(), alice, orgA)
@@ -283,11 +304,11 @@ func (b *brokenStore) Delete(ctx context.Context, id string) error {
 	return b.fakeStore.Delete(ctx, id)
 }
 
-func (b *brokenStore) DeleteForUser(ctx context.Context, u identity.UserID) error {
+func (b *brokenStore) DeleteForUser(ctx context.Context, u identity.UserID, keep string) error {
 	if b.fail == "deleteuser" {
 		return errDB
 	}
-	return b.fakeStore.DeleteForUser(ctx, u)
+	return b.fakeStore.DeleteForUser(ctx, u, keep)
 }
 
 func TestManager_StoreErrorsNeverYieldAValidSession(t *testing.T) {

@@ -49,6 +49,8 @@ const (
 	CeremonyLifetime = 5 * time.Minute
 	// MaxResponse bounds the JSON a browser sends back.
 	MaxResponse = 64 << 10
+	// MaxOpenCeremonies bounds the ceremonies open at once (5 minutes each, M3-29).
+	MaxOpenCeremonies = 10_000
 )
 
 var (
@@ -64,6 +66,8 @@ var (
 	ErrNotSignedIn = errors.New("sign in first")
 	// ErrTooManyAttempts means the client IP exceeded the rate limit.
 	ErrTooManyAttempts = errors.New("too many attempts, please wait a moment")
+	// ErrTooManyCeremonies means MaxOpenCeremonies are open (Store.InsertCeremony).
+	ErrTooManyCeremonies = errors.New("too many open passkey ceremonies")
 	// ErrUnavailable means passkeys are off (no allowed origin).
 	ErrUnavailable = errors.New("passkeys are not available on this server")
 )
@@ -107,7 +111,9 @@ type Store interface {
 	// Delete removes a passkey with an entry in the instance audit log; ErrNotFound if the user has
 	// none with id.
 	Delete(ctx context.Context, user identity.UserID, id []byte) error
-	InsertCeremony(ctx context.Context, c Ceremony) error
+	// InsertCeremony stores a ceremony while fewer than limit are open; ErrTooManyCeremonies
+	// otherwise.
+	InsertCeremony(ctx context.Context, c Ceremony, limit int) error
 	// TakeCeremony returns and deletes the ceremony if it has not expired at now.
 	TakeCeremony(ctx context.Context, idHash string, now time.Time) (Ceremony, bool, error)
 	DeleteExpiredCeremonies(ctx context.Context, now time.Time) error
@@ -137,9 +143,12 @@ type Deps struct {
 	Users    Users
 	Lockout  Lockout
 	Sessions *session.Manager
-	Limiter  RateLimiter
-	Now      func() time.Time
-	Logger   *slog.Logger
+	// Limiter bounds the starts per client IP, FinishLimiter the answers (nil: Limiter), apart
+	// (M3-29).
+	Limiter       RateLimiter
+	FinishLimiter RateLimiter
+	Now           func() time.Time
+	Logger        *slog.Logger
 }
 
 // Service runs the ceremonies.
@@ -277,7 +286,11 @@ func (s *Service) store(ctx context.Context, c Ceremony) (string, error) {
 	if err := s.d.Store.DeleteExpiredCeremonies(ctx, now); err != nil {
 		return "", fmt.Errorf("passkey ceremony: %w", err)
 	}
-	if err := s.d.Store.InsertCeremony(ctx, c); err != nil {
+	if err := s.d.Store.InsertCeremony(ctx, c, MaxOpenCeremonies); err != nil {
+		if errors.Is(err, ErrTooManyCeremonies) {
+			s.d.Logger.WarnContext(ctx, "passkey: too many open ceremonies, refusing a start", "open", MaxOpenCeremonies)
+			return "", ErrTooManyAttempts
+		}
 		return "", fmt.Errorf("passkey ceremony: %w", err)
 	}
 	return id, nil
@@ -416,6 +429,10 @@ func (s *Service) Delete(ctx context.Context, current session.Session, id []byte
 	if err := s.d.Store.Delete(ctx, current.User, id); err != nil {
 		return fmt.Errorf("delete passkey: %w", err)
 	}
+	// The passkey may be in someone else's hands: their sessions end with it (M3-29).
+	if err := s.d.Sessions.RevokeOthers(ctx, current); err != nil {
+		return fmt.Errorf("delete passkey: %w", err)
+	}
 	return nil
 }
 
@@ -484,7 +501,11 @@ func (s *Service) Finish(ctx context.Context, purpose Purpose, ceremonyID, bindi
 	if !s.Available() {
 		return Result{}, ErrUnavailable
 	}
-	if !s.d.Limiter.Allow(clientIP) {
+	limiter := s.d.FinishLimiter
+	if limiter == nil {
+		limiter = s.d.Limiter
+	}
+	if !limiter.Allow(clientIP) {
 		return Result{}, ErrTooManyAttempts
 	}
 	c, ok, err := s.take(ctx, ceremonyID, purpose)

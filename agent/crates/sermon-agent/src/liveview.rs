@@ -159,7 +159,8 @@ fn process(
     let (cmdline, truncated) = match (&p.cmdline, hide) {
         (_, true) | (None, _) => (None, false),
         (Some(raw), false) => {
-            let redacted = redact(raw);
+            // Per argument, joined with spaces afterwards (M3-29).
+            let redacted = sermon_security::redact_args(raw, redact);
             let max = if *budget >= MAX_CMDLINE_BYTES {
                 MAX_CMDLINE_BYTES
             } else {
@@ -274,6 +275,24 @@ mod tests {
         assert_eq!(
             s.processes[0].cmdline.as_deref(),
             Some("mysql --password=*** -e 'select 1'")
+        );
+        // M3-29: per argument – the whole argument after a password option, mysql -pSECRET.
+        let args = to_proto(
+            snapshot(vec![
+                proc_with(Some("mysql\0-uroot\0-pS3cret\0db")), // betterleaks:allow
+                proc_with(Some("app\0--password\0a b c\0--verbose")),
+            ]),
+            false,
+            redact,
+            SystemTime::now(),
+        );
+        assert_eq!(
+            args.processes[0].cmdline.as_deref(),
+            Some("mysql -uroot -p*** db")
+        );
+        assert_eq!(
+            args.processes[1].cmdline.as_deref(),
+            Some("app --password *** --verbose")
         );
         assert!(!s.processes[0].cmdline_truncated);
         assert_eq!(

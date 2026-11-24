@@ -225,7 +225,7 @@ describe('LoginForm', () => {
 	it('waits for the passkey in the autofill where the browser offers it', async () => {
 		ssoState.passkeys = true;
 		vi.spyOn(window.PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(true);
-		vi.spyOn(api.auth, 'beginPasskey').mockResolvedValue({
+		const begin = vi.spyOn(api.auth, 'beginPasskey').mockResolvedValue({
 			ceremonyId: 'c1',
 			optionsJson: requestJson
 		} as never);
@@ -233,7 +233,12 @@ describe('LoginForm', () => {
 		vi.spyOn(api.auth, 'finishPasskey').mockResolvedValue({ session: fakeSession() } as never);
 		const onLoggedIn = vi.fn();
 		render(LoginForm, { onLoggedIn });
+		// M3-29: only once the e-mail field has the focus – not for every view of the page.
+		await new Promise((done) => setTimeout(done, 100));
+		expect(begin).not.toHaveBeenCalled();
+		await page.getByLabelText('Email address').click();
 		await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledOnce());
+		expect(begin).toHaveBeenCalledOnce();
 		expect(get.mock.calls[0][0]).toMatchObject({ mediation: 'conditional' });
 	});
 

@@ -65,7 +65,8 @@ type Store interface {
 	Touch(ctx context.Context, id string, at time.Time) error
 	SetStepUp(ctx context.Context, id string, at time.Time) error
 	Delete(ctx context.Context, id string) error
-	DeleteForUser(ctx context.Context, user identity.UserID) error
+	// DeleteForUser removes the user's sessions but keep (a session ID; empty: none).
+	DeleteForUser(ctx context.Context, user identity.UserID, keep string) error
 }
 
 // Manager creates and validates sessions.
@@ -226,8 +227,17 @@ func (m *Manager) Revoke(ctx context.Context, token string) error {
 
 // RevokeAllForUser ends all sessions of a user (password change, account lock).
 func (m *Manager) RevokeAllForUser(ctx context.Context, user identity.UserID) error {
-	if err := m.store.DeleteForUser(ctx, user); err != nil {
+	if err := m.store.DeleteForUser(ctx, user, ""); err != nil {
 		return fmt.Errorf("delete sessions of user: %w", err)
+	}
+	return nil
+}
+
+// RevokeOthers ends the user's sessions but current, e.g. after a passkey or a linked identity
+// went that may be in someone else's hands (M3-29).
+func (m *Manager) RevokeOthers(ctx context.Context, current Session) error {
+	if err := m.store.DeleteForUser(ctx, current.User, current.ID); err != nil {
+		return fmt.Errorf("delete other sessions of user: %w", err)
 	}
 	return nil
 }

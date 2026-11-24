@@ -619,7 +619,7 @@
 	"logs_error_unavailable": "The log store (Loki) is not reachable right now. Please try again shortly.",
 	"logs_error_forbidden": "You may not see logs in this organization.",
 	"logs_error_invalid": "The server does not accept this filter. Please check the time range and the input.",
-	"logs_error_too_many_live": "Too many live views are open. Please close some and try again.",
+	"logs_error_too_many_live": "Too many log queries or live views are running. Please wait a moment or close some and try again.",
 	"nav_logs": "Logs",
 	"range_14d": "14 days",
 	"logs_title": "Logs",
@@ -1003,5 +1003,6 @@
 	"passkey_rename": "Rename passkey {name}",
 	"passkey_delete": "Delete passkey {name}",
 	"passkey_list_empty": "No passkey yet.",
-	"orgs_error_lock_too_recent": "The organization was locked just now. Deleting at once works 10 minutes after the lock: hosts with a clock ahead still send log lines that would be left over."
+	"orgs_error_lock_too_recent": "The organization was locked just now. Deleting at once works 10 minutes after the lock: hosts with a clock ahead still send log lines that would be left over.",
+	"logs_error_too_broad": "The query is too broad: too many nodes or too long lines. Please shorten the time range or choose a group or node."
 }

@@ -588,7 +588,9 @@ func newPasskeys(ctx context.Context, cfg config.Config, db *postgres.DB, users 
 ) (*passkey.Service, error) {
 	d := passkey.Deps{
 		Store: postgres.NewPasskeyStore(db), Users: users, Lockout: lockout, Sessions: sessions,
-		Limiter: ratelimit.New(passkeyAttemptsPerWindow, passkeyWindow, time.Now), Now: time.Now, Logger: logger,
+		Limiter: ratelimit.New(passkeyAttemptsPerWindow, passkeyWindow, time.Now),
+		// Answers count apart from starts (M3-29).
+		FinishLimiter: ratelimit.New(passkeyAttemptsPerWindow, passkeyWindow, time.Now), Now: time.Now, Logger: logger,
 	}
 	if rp, err := passkey.Config(cfg.AllowedOrigins); err == nil {
 		if d.WebAuthn, err = webauthn.New(rp); err != nil {
@@ -629,7 +631,9 @@ func newOIDC(ctx context.Context, cfg config.Config, db *postgres.DB, sessions *
 	store := postgres.NewOIDCStore(db)
 	return oidc.NewService(oidc.Deps{
 		Provider: provider, Flows: store, Identities: store, Users: users, Sessions: sessions, SecondFactor: secondFactor,
-		Limiter: ratelimit.New(oidcAttemptsPerWindow, oidcWindow, time.Now), MFA: mfa, Now: time.Now, Logger: logger,
+		Limiter: ratelimit.New(oidcAttemptsPerWindow, oidcWindow, time.Now),
+		// Returns from the provider count apart from starts (M3-29).
+		CompleteLimiter: ratelimit.New(oidcAttemptsPerWindow, oidcWindow, time.Now), MFA: mfa, Now: time.Now, Logger: logger,
 		Provisioner: mappings, JIT: o.JIT,
 	}), nil
 }

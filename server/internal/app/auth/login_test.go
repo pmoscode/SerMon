@@ -158,8 +158,8 @@ func (s *memSessions) SetStepUp(_ context.Context, id string, at time.Time) erro
 	return nil
 }
 
-func (s *memSessions) Delete(_ context.Context, id string) error            { delete(s.m, id); return nil }
-func (s *memSessions) DeleteForUser(context.Context, identity.UserID) error { return nil }
+func (s *memSessions) Delete(_ context.Context, id string) error                    { delete(s.m, id); return nil }
+func (s *memSessions) DeleteForUser(context.Context, identity.UserID, string) error { return nil }
 
 type env struct {
 	svc   *auth.Service

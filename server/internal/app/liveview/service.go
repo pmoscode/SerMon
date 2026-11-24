@@ -3,12 +3,10 @@ package liveview
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
-	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -21,9 +19,10 @@ const (
 	MaxDuration = 15 * time.Minute
 )
 
-// Directory lists the nodes of a scope (fleet.Directory).
+// Directory finds a node within a scope (postgres.FleetStore).
 type Directory interface {
-	List(ctx context.Context, scope tenant.Scope) ([]fleet.Node, error)
+	// NodeGroup returns the node's group; false if the scope doesn't see the node.
+	NodeGroup(ctx context.Context, scope tenant.Scope, node identity.NodeID) (tenant.GroupID, bool, error)
 }
 
 // Settings reads the organization's switch for command lines.
@@ -73,23 +72,29 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 }
 
-// access returns the scope and the switch if the caller may watch the node: access.ErrForbidden
-// without use_live_view, access.ErrNotFound for a node it doesn't see.
+// access returns the scope and whether the caller gets no command lines, if it may watch the
+// node: access.ErrForbidden without use_live_view, access.ErrNotFound for a node it doesn't see.
+// Command lines are hidden by the organization's switch and for callers who may not read the
+// node's logs (viewers of an organization without logs for viewers, M3-29): they carry the same
+// kind of data.
 func (s *Service) access(ctx context.Context, c access.Caller, node identity.NodeID) (tenant.Scope, bool, error) {
 	scope, err := s.policy.ScopeForAction(c.Principal, authz.UseLiveView)
 	if err != nil || (!scope.AllGroups() && len(scope.Groups()) == 0) {
 		return tenant.Scope{}, false, access.ErrForbidden
 	}
-	nodes, err := s.directory.List(ctx, scope)
+	group, found, err := s.directory.NodeGroup(ctx, scope, node)
 	if err != nil {
-		return tenant.Scope{}, false, fmt.Errorf("visible nodes: %w", err)
+		return tenant.Scope{}, false, fmt.Errorf("visible node: %w", err)
 	}
-	if !slices.ContainsFunc(nodes, func(n fleet.Node) bool { return n.ID == node }) {
+	if !found {
 		return tenant.Scope{}, false, access.ErrNotFound
 	}
 	hide, err := s.settings.HideCommandLines(ctx, scope)
 	if err != nil {
 		return tenant.Scope{}, false, fmt.Errorf("live view settings: %w", err)
+	}
+	if !s.policy.Allowed(c.Principal, authz.ViewLogs, authz.InGroup(scope.OrgID(), group)) {
+		hide = true
 	}
 	return scope, hide, nil
 }

@@ -117,12 +117,13 @@ pub fn parse_status(text: &str) -> ProcStatus {
     status
 }
 
-/// The command line: arguments separated by NUL become separated by spaces; empty for kernel
-/// threads and zombies.
+/// The command line with its arguments still separated by NUL (without the last one): the
+/// redaction works per argument (M3-29), joined with spaces afterwards. Empty for kernel threads
+/// and zombies.
 #[must_use]
 pub fn parse_cmdline(bytes: &[u8]) -> String {
     let trimmed = bytes.strip_suffix(&[0]).unwrap_or(bytes);
-    String::from_utf8_lossy(trimmed).replace('\0', " ")
+    String::from_utf8_lossy(trimmed).into_owned()
 }
 
 /// Where a process runs, from its cgroup.
@@ -199,8 +200,8 @@ pub struct Process {
     /// Since the start of the process.
     pub runtime_seconds: Option<u64>,
     pub name: String,
-    /// Unredacted, at most [`CMDLINE_READ_BYTES`]; `None` if not readable, empty for kernel
-    /// threads and zombies.
+    /// Unredacted, the arguments separated by NUL, at most [`CMDLINE_READ_BYTES`]; `None` if not
+    /// readable, empty for kernel threads and zombies.
     pub cmdline: Option<String>,
     pub kernel_thread: bool,
     pub place: Place,
@@ -499,7 +500,7 @@ mod tests {
         );
         assert_eq!(
             parse_cmdline(b"/tmp/evil) name (x\0-c\0sleep 300; echo 'a b'\0"),
-            "/tmp/evil) name (x -c sleep 300; echo 'a b'"
+            "/tmp/evil) name (x\0-c\0sleep 300; echo 'a b'"
         );
         assert_eq!(parse_cmdline(b""), "");
         assert_eq!(parse_cmdline(b"a\xffb\0"), "a\u{fffd}b");
@@ -575,7 +576,7 @@ mod tests {
         assert_eq!(odd.name, "evil) name (x");
         assert_eq!(
             odd.cmdline.as_deref(),
-            Some("/tmp/evil) name (x -c sleep 300; echo 'a b'")
+            Some("/tmp/evil) name (x\0-c\0sleep 300; echo 'a b'")
         );
         assert_eq!(by_pid(&s, 8).user.as_deref(), Some("nobody"));
         let zombie = by_pid(&s, 14);

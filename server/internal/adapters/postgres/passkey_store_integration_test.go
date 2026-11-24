@@ -123,8 +123,21 @@ func TestPasskeyStore_RegisterSignInDelete(t *testing.T) {
 	if err := store.InsertCeremony(ctx, passkey.Ceremony{
 		IDHash: strings.Repeat("a", 64), Purpose: passkey.PurposeLogin,
 		CreatedAt: time.Now(), ExpiresAt: time.Now(),
-	}); err == nil {
+	}, passkey.MaxOpenCeremonies); err == nil {
 		t.Error("a sign-in ceremony without a browser binding was stored")
+	}
+	// M3-29: beyond the bound of open ceremonies nothing is stored.
+	var open int
+	ownerQueryRow(t, f.db.OwnerDSN, "SELECT count(*) FROM webauthn_ceremonies", nil, &open)
+	c := passkey.Ceremony{
+		IDHash: strings.Repeat("b", 64), BindingHash: strings.Repeat("c", 64), Purpose: passkey.PurposeLogin,
+		CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute),
+	}
+	if err := store.InsertCeremony(ctx, c, open); !errors.Is(err, passkey.ErrTooManyCeremonies) {
+		t.Errorf("at the bound: %v", err)
+	}
+	if err := store.InsertCeremony(ctx, c, open+1); err != nil {
+		t.Errorf("below the bound: %v", err)
 	}
 	if err := store.DeleteExpiredCeremonies(ctx, time.Now()); err != nil {
 		t.Fatal(err)

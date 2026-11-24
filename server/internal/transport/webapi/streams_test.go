@@ -243,7 +243,7 @@ func (s *memStore) Delete(_ context.Context, id string) error {
 	delete(s.m, id)
 	return nil
 }
-func (s *memStore) DeleteForUser(context.Context, identity.UserID) error { return nil }
+func (s *memStore) DeleteForUser(context.Context, identity.UserID, string) error { return nil }
 
 type principals struct{ p authz.Principal }
 

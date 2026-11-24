@@ -304,3 +304,22 @@ func (q *Queries) VisibleGroupExists(ctx context.Context, arg VisibleGroupExists
 	err := row.Scan(&exists)
 	return exists, err
 }
+
+const visibleNodeGroup = `-- name: VisibleNodeGroup :one
+SELECT group_id FROM nodes
+WHERE id = $1 AND ($2::boolean OR group_id = ANY ($3::uuid[]))
+`
+
+type VisibleNodeGroupParams struct {
+	ID        uuid.UUID
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+// The group of one node of the scope's groups (the live view, M3-29).
+func (q *Queries) VisibleNodeGroup(ctx context.Context, arg VisibleNodeGroupParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, visibleNodeGroup, arg.ID, arg.AllGroups, arg.GroupIds)
+	var group_id uuid.UUID
+	err := row.Scan(&group_id)
+	return group_id, err
+}

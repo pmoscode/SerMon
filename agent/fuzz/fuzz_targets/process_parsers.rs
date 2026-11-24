@@ -24,6 +24,8 @@ fuzz_target!(|data: &[u8]| {
         );
     }
     let _ = parse_passwd(&text);
+    // The arguments stay separated by NUL for the redaction (M3-29); only the last one is dropped.
     let line = parse_cmdline(data);
-    assert!(!line.contains('\0'));
+    let trimmed = data.strip_suffix(&[0]).unwrap_or(data);
+    assert_eq!(line, String::from_utf8_lossy(trimmed));
 });

@@ -104,3 +104,10 @@ Gewählt: **Option 2**, ein Provider pro Instanz (`SERMON_OIDC_*`, das Secret al
   der E-Mail.
 - Die UI verlässt die App nur zu einer https-Adresse des Providers.
 
+## Nachtrag M3-29
+
+- Start und Rückkehr zählen in getrennten Rate-Limits (30 pro Minute und IPv4-Adresse bzw. IPv6-/64): Viele Starts
+  hinter einer Adresse blockieren die Rückkehr der anderen nicht. Offene Flows höchstens 10 000 (in der Abfrage des
+  Einfügens geprüft); ein abgewiesener Start erreicht den Provider nicht.
+- Das Lösen einer Identität beendet die übrigen Sessions des Users: Eine verlorene Identität nützt auch für schon offene
+  Sessions nichts mehr.

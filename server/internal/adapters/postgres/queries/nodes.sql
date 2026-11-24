@@ -53,3 +53,8 @@ FOR UPDATE;
 
 -- name: SetNodeTags :exec
 UPDATE nodes SET tags = sqlc.arg(tags) WHERE id = sqlc.arg(id);
+
+-- name: VisibleNodeGroup :one
+-- The group of one node of the scope's groups (the live view, M3-29).
+SELECT group_id FROM nodes
+WHERE id = sqlc.arg(id) AND (sqlc.arg(all_groups)::boolean OR group_id = ANY (sqlc.arg(group_ids)::uuid[]));

@@ -18,7 +18,7 @@ Befehlszeilen können Secrets enthalten, auch wenn die Redaction die bekannten M
 
 ## Redaction
 
-Die Agents ersetzen Passwörter, Tokens und private Schlüssel durch `***`, bevor eine Zeile den Host verlässt. Eigene Regeln kommen dazu: Ein regulärer Ausdruck ersetzt seinen Treffer, oder nur die Gruppe `(?P<secret>…)`. **Testen** zeigt an einer Beispielzeile, was die Agents mit den Regeln im Formular senden würden.
+Die Agents ersetzen Passwörter, Tokens und private Schlüssel durch `***`, bevor eine Zeile den Host verlässt. Eigene Regeln kommen dazu: Ein regulärer Ausdruck ersetzt seinen Treffer, oder nur die Gruppe `(?P<secret>…)`. **Testen** zeigt an einer Beispielzeile, was die Agents mit den Regeln im Formular senden würden. Alle Regeln zusammen dürfen im Agent höchstens 8 MiB belegen: Klassen wie `\w` oder `\d` gelten dort für alle Schriften und sind groß, `[A-Za-z0-9_]` und `[0-9]` bleiben klein. Eine zu große Regel lehnt der Agent ab (siehe unten).
 
 ## Stand pro Node
 

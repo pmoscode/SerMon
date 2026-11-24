@@ -61,15 +61,27 @@ func (p *provider) Exchange(_ context.Context, _, verifier string) (oidc.Claims,
 }
 
 type flows struct {
-	mu sync.Mutex
-	m  map[string]oidc.Flow
+	mu  sync.Mutex
+	m   map[string]oidc.Flow
+	max int
 }
 
-func (f *flows) Insert(_ context.Context, fl oidc.Flow) error {
+func (f *flows) Insert(_ context.Context, fl oidc.Flow, limit int) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if len(f.m) >= min(limit, f.bound()) {
+		return oidc.ErrTooManyFlows
+	}
 	f.m[fl.StateHash] = fl
 	return nil
+}
+
+// bound is a smaller bound of open flows for the test of it (0: none).
+func (f *flows) bound() int {
+	if f.max > 0 {
+		return f.max
+	}
+	return oidc.MaxOpenFlows
 }
 
 func (f *flows) Take(_ context.Context, h string, now time.Time) (oidc.Flow, bool, error) {
@@ -172,8 +184,18 @@ func (s *memSessions) SetStepUp(_ context.Context, id string, at time.Time) erro
 	return nil
 }
 
-func (s *memSessions) Delete(_ context.Context, id string) error            { delete(s.m, id); return nil }
-func (s *memSessions) DeleteForUser(context.Context, identity.UserID) error { return nil }
+func (s *memSessions) Delete(_ context.Context, id string) error { delete(s.m, id); return nil }
+
+func (s *memSessions) DeleteForUser(_ context.Context, u identity.UserID, keep string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, se := range s.m {
+		if se.User == u && id != keep {
+			delete(s.m, id)
+		}
+	}
+	return nil
+}
 
 type env struct {
 	svc      *oidc.Service
@@ -380,6 +402,41 @@ func TestStepUp_NeedsAFreshLoginOfTheSameUser(t *testing.T) {
 	}
 }
 
+// M3-29: starting and finishing count apart, so a busy network's starts don't block the
+// returns from the provider; open flows have an upper bound.
+func TestRateLimit_StartAndFinishApartAndABoundOfOpenFlows(t *testing.T) {
+	now := t0
+	clock := func() time.Time { return now }
+	fl := &flows{m: map[string]oidc.Flow{}, max: 3}
+	sessions := session.NewManager(&memSessions{m: map[string]session.Session{}}, clock)
+	svc := oidc.NewService(oidc.Deps{
+		Provider: &provider{claims: oidc.Claims{Issuer: issuer, Subject: "alice-sub", AuthTime: t0}}, Flows: fl,
+		Identities: &identities{m: map[[2]string]identity.UserID{{issuer, "alice-sub"}: alice}}, Users: users{}, Sessions: sessions,
+		Limiter: ratelimit.New(3, time.Minute, clock), CompleteLimiter: ratelimit.New(3, time.Minute, clock), Now: clock,
+	})
+	ctx := context.Background()
+	var begun []oidc.Begun
+	for range 3 {
+		b, err := svc.Begin(ctx, oidc.IntentLogin, "", "/", "10.0.0."+string(rune('1'+len(begun))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		begun = append(begun, b)
+	}
+	// The bound of open flows: another client gets no fourth.
+	if _, err := svc.Begin(ctx, oidc.IntentLogin, "", "/", "10.0.0.9"); !errors.Is(err, oidc.ErrTooManyAttempts) {
+		t.Errorf("beyond the open flows: %v", err)
+	}
+	// One client used up its starts, its returns still work.
+	for range 3 {
+		_, _ = svc.Begin(ctx, oidc.IntentLogin, "", "/", "192.0.2.7")
+	}
+	b := begun[len(begun)-1] // the fake provider knows the nonce of the last start
+	if _, err := svc.Complete(ctx, stateOf(t, b), "code", b.Binding, "", "192.0.2.7"); err != nil {
+		t.Errorf("return after the starts were used up: %v", err)
+	}
+}
+
 func TestRateLimit(t *testing.T) {
 	e := newEnv(t, oidc.MFAByClaim, nil)
 	var err error
@@ -535,8 +592,16 @@ func TestUnlink_KeepsAWayToSignIn(t *testing.T) {
 	if err := e.svc.Unlink(ctx, "nope", issuer); !errors.Is(err, oidc.ErrNotSignedIn) {
 		t.Errorf("without a session: %v", err)
 	}
+	elsewhere := signedIn(t, e, alice)
 	if err := e.svc.Unlink(ctx, token, issuer); err != nil || len(e.ids.unlinked) != 1 {
 		t.Errorf("Unlink() = %v, %v", err, e.ids.unlinked)
+	}
+	// M3-29: the identity may be in other hands: Alice's other sessions end, hers stays.
+	if _, err := e.sessions.Validate(ctx, elsewhere); err == nil {
+		t.Error("another session survived the unlinking")
+	}
+	if _, err := e.sessions.Validate(ctx, token); err != nil {
+		t.Errorf("the current session: %v", err)
 	}
 	// With two identities one may go without a password.
 	e.ids.passwords = nil

@@ -1,6 +1,6 @@
 [package]
 name = "sermon-updates"
-description = "Package manager adapters (apt, dnf, apk) used by the root helper."
+description = "Parsers for the outputs of apt, dnf and apk the root helper returns (ADR 0035), used by the agent."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

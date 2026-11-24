@@ -1,0 +1,6 @@
+ALSA-2026:100685 Important/Sec. curl-8.12.1-9.el10_3.aarch64
+ALSA-2026:100681 Important/Sec. expat-2.7.3-2.el10_3.8.aarch64
+ALSA-2026:99624  Important/Sec. krb5-libs-1.21.3-11.el10_3.2.aarch64
+ALSA-2026:100685 Important/Sec. libcurl-minimal-8.12.1-9.el10_3.aarch64
+ALSA-2026:100486 Important/Sec. vim-data-2:9.1.083-26.el10_3.noarch
+ALSA-2026:100486 Important/Sec. vim-minimal-2:9.1.083-26.el10_3.aarch64

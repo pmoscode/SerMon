@@ -1093,6 +1093,12 @@ Alle 6 h, nach Paketmanager-Läufen (erkannt über Dateiänderungen an dpkg-/rpm
 Gemeldet werden: Anzahl gesamt und Security, Paketliste (Name, installiert, Kandidat, Quelle, Security-Flag), Reboot
 nötig samt Grund, Zeitpunkt des letzten erfolgreichen Updates.
 
+- Die Ausgaben parst der Agent (`sermon-updates`, M4-06). Eine Zeile zählt nur, wenn jeder Teil 1 bis 256 druckbare
+  ASCII-Zeichen ohne Leerzeichen hat; anderes wird übersprungen, nie repariert.
+- `dnf check-update` nennt keine installierte Version: Für dnf bleibt sie leer.
+- `needs-restarting` zählt nach seinem Wortlaut, nicht nach dem Exit-Code: Exit 1 heißt auch „Befehl fehlt“ (Rocky ohne
+  `dnf-utils`). Dann ist „Reboot nötig“ unbekannt. Alpine: Reboot nötig, wenn die Module des laufenden Kernels fehlen.
+
 ### 14.2 Update-Policies (pro Node-Gruppe)
 
 ```yaml

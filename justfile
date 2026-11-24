@@ -128,7 +128,7 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh deploy/e2e/repos/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
+    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh deploy/e2e/repos/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/updates/capture.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
@@ -228,6 +228,7 @@ fuzz-agent seconds="60":
     {{ fuzz_profile }} cargo fuzz run redaction -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run helper_request -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run update_parsers -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run multiline -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run process_parsers -- -max_total_time={{ seconds }} -max_len=65536
 

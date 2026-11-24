@@ -20,6 +20,7 @@ sermon-helper-proto = { path = "../crates/sermon-helper-proto" }
 prost = "=0.14.6"
 sermon-logs = { path = "../crates/sermon-logs" }
 sermon-security = { path = "../crates/sermon-security" }
+sermon-updates = { path = "../crates/sermon-updates" }
 
 
 [[bin]]
@@ -77,6 +78,13 @@ bench = false
 [[bin]]
 name = "helper_request"
 path = "fuzz_targets/helper_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_parsers"
+path = "fuzz_targets/update_parsers.rs"
 test = false
 doc = false
 bench = false

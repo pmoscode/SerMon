@@ -1,0 +1,19 @@
+Upgrades
+dnf5.aarch64                       5.4.8.0-2.fc44    updates
+dnf5-plugins.aarch64               5.4.8.0-2.fc44    updates
+elfutils-default-yama-scope.noarch 0.197-1.fc44      updates
+elfutils-libelf.aarch64            0.197-1.fc44      updates
+elfutils-libs.aarch64              0.197-1.fc44      updates
+file-libs.aarch64                  5.48-2.fc44       updates
+libdnf5.aarch64                    5.4.8.0-2.fc44    updates
+libdnf5-cli.aarch64                5.4.8.0-2.fc44    updates
+libmodulemd.aarch64                2.15.4-1.fc44     updates
+libnghttp3.aarch64                 1.19.0-1.fc44     updates
+librepo.aarch64                    1.22.0-1.fc44     updates
+openldap.aarch64                   2.6.16-1.fc44     updates
+pcre2.aarch64                      10.49-1.fc44      updates
+pcre2-syntax.noarch                10.49-1.fc44      updates
+tpm2-tss.aarch64                   4.1.6-1.fc44      updates
+tzdata.noarch                      2026f-1.fc44      updates
+vim-data.noarch                    2:9.2.1302-2.fc44 updates
+vim-minimal.aarch64                2:9.2.1302-2.fc44 updates

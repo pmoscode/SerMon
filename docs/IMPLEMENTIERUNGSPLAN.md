@@ -4126,7 +4126,27 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Validierung an den Grenzen; `just breaking-proto` grün.
 - **Abhängig von:** M4-01
 
-#### ☐ M4-06 – Parser für apt, dnf und apk · A · M
+#### ☑ M4-06 – Parser für apt, dnf und apk · A · M
+> Erledigt (KONZEPT §14.1; `agent/fixtures/README.md`):
+> - **`sermon-updates`** (reine Funktionen auf Text): `apt`, `dnf` (mit der Security-Liste nach Name und Architektur
+>   aus der NEVRA, dnf 4 und 5, bis „Obsoleting“), `apk`, die Reboots `apt_reboot`, `dnf_reboot` (nach dem Wortlaut)
+>   und `apk_reboot` (Module des laufenden Kernels, ohne Module unbekannt) sowie `bounded` (Security zuerst, mit
+>   den Zahlen aller).
+> - **Fremde Daten:** Eine Zeile zählt nur, wenn jeder Teil 1 bis 256 druckbare ASCII-Zeichen ohne Leerzeichen hat;
+>   sonst wird sie übersprungen, nie repariert. Ebenso die Gründe eines Reboots.
+> - **Fixtures** (`agent/fixtures/updates/capture.sh`, arm64): echte Ausgaben von Debian 12 und 13, Ubuntu 24.04,
+>   Rocky 9, AlmaLinux 10, Fedora 44 und Alpine 3.22 gegen ihre eigenen Quellen; von Hand nur `needs-restarting` mit
+>   nötigem Reboot und eine feindliche `apt list`-Ausgabe.
+> - **Gefunden:**
+>   - Auf Rocky 9 ohne `dnf-utils` endet `needs-restarting -r` mit Exit 1 ohne Ausgabe – derselbe Code wie „Reboot
+>     nötig“. Gezählt wird deshalb der Wortlaut; ohne ihn ist der Reboot unbekannt.
+>   - `dnf check-update` nennt keine installierte Version; dnf 5 (Fedora) schreibt eine Kopfzeile `Upgrades` und
+>     `updateinfo` als Tabelle.
+>   - Debian 13 meldet die Updates der Point-Releases aus `stable`, nur `zlib1g` aus `stable-security`.
+> - **Tests:** je Distro mit den Fixtures, feindliche Zeilen, Name und Architektur bei dnf, Obsoletes, alle Reboots
+>   (auch mit Steuerzeichen in `.pkgs` und in der Ausgabe von dnf), Alpine-Namen mit Bindestrichen, Begrenzung.
+>   Fuzz-Ziel `update_parsers` (Seeds aus den Fixtures): 1,4 Mio. Läufe ohne Befund.
+> - **Gegenproben** für 12 Prüfungen, alle erkannt (zwei nach einem zusätzlichen Test: Steuerzeichen in den Gründen).
 - **Ziel:** `sermon-updates` liest die Ausgaben aus M4-03 (Tabelle KONZEPT §14.1).
   - apt: `apt list --upgradable`, Security nach Origin/Suite `*-security` (Debian und Ubuntu).
   - dnf: `check-update` und `updateinfo list --security`, `needs-restarting -r`.

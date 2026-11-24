@@ -66,3 +66,9 @@ ops = {
 for name, body in ops.items():
     open(f"corpus/helper_request/{name}", "wb").write(b"\x07" + body)
 PY
+# update_parsers: the captured outputs of apt, dnf and apk (M4-06).
+mkdir -p corpus/update_parsers
+for file in ../fixtures/updates/*/*.txt; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  cp "$file" "corpus/update_parsers/fixture$name"
+done

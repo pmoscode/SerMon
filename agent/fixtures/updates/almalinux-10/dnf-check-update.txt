@@ -1,0 +1,7 @@
+
+curl.aarch64                           8.12.1-9.el10_3                    baseos
+expat.aarch64                          2.7.3-2.el10_3.8                   baseos
+krb5-libs.aarch64                      1.21.3-11.el10_3.2                 baseos
+libcurl-minimal.aarch64                8.12.1-9.el10_3                    baseos
+vim-data.noarch                        2:9.1.083-26.el10_3                baseos
+vim-minimal.aarch64                    2:9.1.083-26.el10_3                baseos

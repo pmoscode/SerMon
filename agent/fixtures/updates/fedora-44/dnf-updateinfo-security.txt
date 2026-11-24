@@ -1,0 +1,9 @@
+Name                   Type     Severity                              Package              Issued
+FEDORA-2026-450395b11f security Important          pcre2-10.49-1.fc44.aarch64 2026-11-08 17:08:54
+FEDORA-2026-450395b11f security Important    pcre2-syntax-10.49-1.fc44.noarch 2026-11-08 17:08:54
+FEDORA-2026-63ebc7d33c security Moderate        tpm2-tss-4.1.6-1.fc44.aarch64 2026-11-13 03:43:50
+FEDORA-2026-d657495ea3 security Moderate    libmodulemd-2.15.4-1.fc44.aarch64 2026-11-10 01:30:48
+FEDORA-2026-e7379f9f3f security Important         dnf5-5.4.8.0-2.fc44.aarch64 2026-11-14 02:12:03
+FEDORA-2026-e7379f9f3f security Important dnf5-plugins-5.4.8.0-2.fc44.aarch64 2026-11-14 02:12:03
+FEDORA-2026-e7379f9f3f security Important      libdnf5-5.4.8.0-2.fc44.aarch64 2026-11-14 02:12:03
+FEDORA-2026-e7379f9f3f security Important  libdnf5-cli-5.4.8.0-2.fc44.aarch64 2026-11-14 02:12:03

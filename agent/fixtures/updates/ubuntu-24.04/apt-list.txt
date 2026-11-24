@@ -1,0 +1,5 @@
+Listing...
+libc-bin/noble-updates,noble-security 2.39-0ubuntu8.12 arm64 [upgradable from: 2.39-0ubuntu8.9]
+libc6/noble-updates,noble-security 2.39-0ubuntu8.12 arm64 [upgradable from: 2.39-0ubuntu8.9]
+libsystemd0/noble-updates 255.4-1ubuntu8.19 arm64 [upgradable from: 255.4-1ubuntu8.18]
+libudev1/noble-updates 255.4-1ubuntu8.19 arm64 [upgradable from: 255.4-1ubuntu8.18]

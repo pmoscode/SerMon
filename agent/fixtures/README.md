@@ -61,3 +61,16 @@ Hinweise:
   Parser ist das Format entscheidend, nicht der Kernel; Fixtures von echten Hosts kommen mit den Collectors (M1-16 ff.).
 - Hostname und `machine-id` sind ausgedacht (in den Logs `fixture-host` und `0123456789abcdef0123456789abcdef`). Keine echten Hostnamen, IPs, Usernamen oder IDs einchecken
   (Beispiel-IPs: 192.0.2.0/24, 2001:db8::/32; User: `alice`, `bob`).
+
+## Updates (`updates/`)
+
+`updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in
+frischen Containern der gepinnten Basis-Images aus, gegen die echten Paketquellen der Distribution (die Images sind
+älter, also warten Updates); `<datei>.exit` hält den Exit-Code. Erfasst auf arm64 am 2026-11-24:
+
+| Verzeichnis | Inhalt |
+|---|---|
+| `debian-12/`, `debian-13/`, `ubuntu-24.04/` | `apt list --upgradable` (Debian 12 ohne Updates) |
+| `rockylinux-9/`, `almalinux-10/`, `fedora-44/` | `dnf -q check-update` (100), `dnf -q updateinfo list --security` (dnf 4 und 5), `dnf needs-restarting -r` (auf Rocky ohne `dnf-utils`: Exit 1 ohne Ausgabe) |
+| `alpine-3.22/` | `apk version -l '<'` |
+| `synthetic/` | **von Hand:** `needs-restarting` mit nötigem Reboot (der Wortlaut von dnf) und eine `apt list`-Ausgabe einer feindlichen Quelle (Steuerzeichen, überlange Namen, kaputte Zeilen) |

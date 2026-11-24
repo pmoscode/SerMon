@@ -1,0 +1,7 @@
+Listing...
+base-files/stable 13.8+deb13u8 arm64 [upgradable from: 13.8+deb13u7]
+libc-bin/stable 2.41-12+deb13u5 arm64 [upgradable from: 2.41-12+deb13u4]
+libc6/stable 2.41-12+deb13u5 arm64 [upgradable from: 2.41-12+deb13u4]
+libssl3t64/stable 3.5.9-1~deb13u1 arm64 [upgradable from: 3.5.7-1~deb13u3]
+openssl-provider-legacy/stable 3.5.9-1~deb13u1 arm64 [upgradable from: 3.5.7-1~deb13u3]
+zlib1g/stable,stable-security 1:1.3.dfsg+really1.3.1-1+deb13u1 arm64 [upgradable from: 1:1.3.dfsg+really1.3.1-1+b1]

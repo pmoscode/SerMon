@@ -3372,7 +3372,36 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M2-07, M2-08
 - **Skill:** `sermon-add-alert-rule`
 
-#### ☐ M3-17 – Security-Dashboard · W · M
+#### ☑ M3-17 – Security-Dashboard · W · M
+> Erledigt (KONZEPT §16.4; Threat Model T19):
+> - **Seite `/security`** mit dem Filter in der URL (Zeitraum bis 1 Jahr oder gezoomt, Nodes, Arten, User, IP/Netz,
+>   nur neue Quellen). Der Menüpunkt „Security“ führt dorthin; die eigene Kontosicherheit (2FA) steht jetzt im
+>   Kontomenü.
+> - **Summen:** Fehlversuche, Logins (davon von neuen Quellen), Root-Logins und sudo-Fehler, je mit ⓘ und einem Klick,
+>   der die Tabelle auf diese Events filtert.
+> - **Chart:** Fehlversuche gestapelt nach Node (die sechs mit den meisten in eigener Farbe, der Rest gemeinsam, die
+>   Legende mit Zahlen); Ziehen zoomt.
+> - **Top-IPs und Top-User** mit Nodes, letztem Zeitpunkt und Zahl der unverifizierten; ein Klick filtert darauf.
+>   Der leere User-Name erscheint als „(leer)“.
+> - **Tabelle:** Zeit · Node · Ergebnis · User · Quelle · Details, Markierung „neu“ und „unverifiziert“ mit Symbol
+>   und Text, Link in die Logs ±15 min, ältere Events seitenweise, CSV-Export des Filters.
+> - Texte der Hosts nur als Text, Steuer- und Bidi-Zeichen markiert.
+> - **Reiter „Security“** der Node-Seite (lädt bei Bedarf) mit Link ins Dashboard mit demselben Filter.
+> - Hilfe DE/EN: Seite `pages/security_events`, Kennzahlen `figures/failed_logins`, `new_source_logins`,
+>   `root_logins` und `sudo_failures`; Node-Seite ergänzt.
+> - **Abweichung:** Die Grenze von `check:size` für alle Chunks zusammen steigt von 400 auf 450 KiB. Mit dem
+>   Dashboard sind es 409 KiB; jede Seite bleibt unter ihrem Budget (Security 155 KiB, Node 180 KiB beim ersten Laden).
+> - **Tests:**
+>   - Filter ↔ URL (alle Felder, leerer User-Name, ungültige Werte, Grenze des Zeitraums); Stapelung nach Node.
+>   - Komponente: feindlicher User-Name, Host und Befehl als Text; Anfragen mit Filter und festem Node; Filter aus
+>     Summen, Top-Listen und Formular (ungültiges Netz); Nachladen; CSV-Download mit Hinweis auf die Grenze; fehlende
+>     Rechte.
+>   - E2E mit axe auf Seite und Reiter; Filter ↔ URL mit Zurück; CSV-Download mit Inhalt; Menü und Kontomenü;
+>     Budget der Seite.
+>   - **Demo-E2E:** Die zwölf gefälschten Fehlversuche von edge-01 (Alpine) stehen mit 192.0.2.99 oben in den
+>     Top-IPs, als unverifiziert markiert; ein Klick filtert die Tabelle darauf, axe ohne Befund, die CSV enthält sie
+>     mit Hostname.
+>   - Gegenproben für 20 Prüfungen, alle erkannt.
 - **Ziel:** Seite `/security` (KONZEPT §16.4).
   - Fehlversuche gestapelt nach Node; Top-IPs und Top-User
   - Erfolgreiche Logins mit „neu“, Root-Logins, sudo-Fehler

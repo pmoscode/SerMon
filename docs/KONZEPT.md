@@ -1110,6 +1110,10 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
     - Erfolgreiche Logins mit „neu“-Markierung, Root-Logins, sudo-Fehler
     - Tabelle: Zeitstempel · Node · User · IP · Port · Methode · Ergebnis, mit Export als CSV
     - Hinweise wie „Passwort-Login ist auf 4 Nodes erlaubt“ (später: SSH-Config-Audit)
+    - Umgesetzt mit M3-17 unter `/security` (Menüpunkt „Security“; die eigene Kontosicherheit steht seitdem im
+      Kontomenü) und als Reiter „Security“ der Node-Seite. Der Filter steht in der URL; Summen, Top-Listen und Chart
+      filtern die Tabelle mit einem Klick. Jede Zeile führt in die Logs ±15 min; „neu“ und „unverifiziert“ sind mit
+      Symbol und Text markiert. Länder und Weltkarte kommen mit GeoIP (M3-18).
 5. **Updates/Patch-Compliance:** Nodes nach Status (aktuell / Updates / Security-Updates / Reboot nötig), Alter offener
    Security-Updates, nächste Wartungsfenster, Laufhistorie.
 6. **Kapazitätsplanung:** Füllprognosen aller Dateisysteme (sortiert nach „Tage bis voll“), RAM/CPU-Trends über 30 Tage,

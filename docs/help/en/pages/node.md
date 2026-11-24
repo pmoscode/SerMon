@@ -1,6 +1,6 @@
 # Node
 
-Everything about one server: a header with host facts and current key figures, below it charts by area (CPU, memory, disks, network, processes, logs, identity).
+Everything about one server: a header with host facts and current key figures, below it charts by area (CPU, memory, disks, network, processes, logs, security, identity).
 
 ## Reading this page
 
@@ -10,6 +10,7 @@ Everything about one server: a header with host facts and current key figures, b
 - In the network area the rates can be shown in bit/s instead of bytes/s.
 - A notice below the name appears if the node cannot deliver security events or they only come unverified from a log file – more in [Source of security events](help:concepts/security-source).
 - The **Processes (live)** tab shows the processes as in `top`, updated every 2 seconds – sortable, with filters, as a tree and with details per process. It runs only while it is open; more in [Live view of the processes](help:concepts/live-view).
+- The **Security** tab shows the node's security events with totals, chart, top IPs and top users; "Open in the security dashboard" leads to the [Security](/security) page with the same filter – more in [Security](help:pages/security_events).
 - The Identity tab shows whether the node is locked, its last address and an open takeover window; operators rotate, revoke and unlock the key there or allow the takeover after a reinstallation – more in [Node identity](help:concepts/node-identity).
 
 ## Typical next steps

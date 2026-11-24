@@ -1,5 +1,7 @@
 <script lang="ts">
 	import LogOut from '@lucide/svelte/icons/log-out';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import { resolve } from '$app/paths';
 	import LanguageSwitcher from '#lib/components/LanguageSwitcher.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
@@ -41,6 +43,16 @@
 			<span class="text-xs text-muted-foreground">{m.account_language()}</span>
 			<LanguageSwitcher />
 		</div>
+		<Button
+			href={resolve('/(app)/settings/security')}
+			variant="ghost"
+			size="sm"
+			class="self-start"
+			onclick={() => (open = false)}
+		>
+			<ShieldCheck aria-hidden="true" />
+			{m.nav_security()}
+		</Button>
 		<Button variant="outline" size="sm" class="self-start" onclick={onLogout}>
 			<LogOut aria-hidden="true" />
 			{m.logout()}

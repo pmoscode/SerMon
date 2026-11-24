@@ -6,7 +6,7 @@
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
-	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import Users from '@lucide/svelte/icons/users';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -28,6 +28,7 @@
 		{ href: resolve('/(app)/fleet'), icon: Server, label: () => m.nav_fleet() },
 		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
 		{ href: resolve('/(app)/logs'), icon: ScrollText, label: () => m.nav_logs() },
+		{ href: resolve('/(app)/security'), icon: ShieldAlert, label: () => m.nav_security_events() },
 		...(sessionState.current?.orgAdmin
 			? [
 					{
@@ -46,8 +47,7 @@
 						label: () => m.nav_organizations()
 					}
 				]
-			: []),
-		{ href: resolve('/(app)/settings/security'), icon: ShieldCheck, label: () => m.nav_security() }
+			: [])
 	]);
 	const name = $derived(sessionState.current?.displayName || sessionState.current?.email || '');
 	const helpTopic = $derived(page.route.id ? pageHelp[page.route.id] : undefined);

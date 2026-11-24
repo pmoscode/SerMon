@@ -93,3 +93,15 @@ test('the process tab loads on demand and keeps the node page within the budget'
 	expect(tab, 'the process tab is not part of the first load').toBeGreaterThan(0);
 	expect(first + tab).toBeLessThan(BUDGET);
 });
+
+test('the security dashboard loads less than 200 KiB of JavaScript', async ({ page }) => {
+	await mockApi(page, {
+		...installed(true),
+		'SecurityEventService/GetSecurityOverview': () => ({ json: {} }),
+		'SecurityEventService/ListSecurityEvents': () => ({ json: {} })
+	});
+	const size = await firstLoadJs(page, '/security');
+	console.log(`security: ${(size / 1024).toFixed(1)} KiB gzip`);
+	expect(size).toBeLessThan(BUDGET);
+	expect(size, 'headroom of the security dashboard (M2-34)').toBeLessThan(HEADROOM);
+});

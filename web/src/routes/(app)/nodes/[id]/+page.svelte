@@ -10,6 +10,11 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { emptyFilter, filterParams, type LogFilter } from '#lib/logs/filter.js';
+	import {
+		emptySecurityFilter,
+		securityFilterParams,
+		type SecurityFilter
+	} from '#lib/security/filter.js';
 	import { NodeState } from '#lib/node/node.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
@@ -21,6 +26,7 @@
 	let bits = $state(false);
 	let tab = $state('cpu');
 	let logFilter = $state<LogFilter>(emptyFilter());
+	let securityFilter = $state<SecurityFilter>(emptySecurityFilter());
 
 	$effect(() => nodeState.start());
 	$effect(() => {
@@ -73,6 +79,7 @@
 				<Tabs.Trigger value="network">{m.node_tab_network()}</Tabs.Trigger>
 				<Tabs.Trigger value="processes">{m.node_tab_processes()}</Tabs.Trigger>
 				<Tabs.Trigger value="logs">{m.node_tab_logs()}</Tabs.Trigger>
+				<Tabs.Trigger value="security">{m.node_tab_security()}</Tabs.Trigger>
 				<Tabs.Trigger value="identity">{m.node_tab_identity()}</Tabs.Trigger>
 			</Tabs.List>
 
@@ -270,6 +277,27 @@
 						<p role="status" class="text-muted-foreground">{m.loading()}</p>
 					{:then { default: LogExplorer }}
 						<LogExplorer filter={logFilter} onFilter={(f) => (logFilter = f)} fixedNode={id} />
+					{/await}
+				{/if}
+			</Tabs.Content>
+			<Tabs.Content value="security" class="flex flex-col gap-3 pt-4">
+				{#if tab === 'security'}
+					<Button
+						href={`${resolve('/(app)/security')}?${securityFilterParams({ ...securityFilter, nodes: [id] })}`}
+						variant="link"
+						size="sm"
+						class="self-end px-0"
+					>
+						{m.node_security_open()}
+					</Button>
+					{#await import('#lib/components/securityevents/SecurityDashboard.svelte')}
+						<p role="status" class="text-muted-foreground">{m.loading()}</p>
+					{:then { default: SecurityDashboard }}
+						<SecurityDashboard
+							filter={securityFilter}
+							onFilter={(f) => (securityFilter = f)}
+							fixedNode={id}
+						/>
 					{/await}
 				{/if}
 			</Tabs.Content>

@@ -262,6 +262,28 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	await page.goto('/fleet');
 	await page.getByRole('link', { name: 'edge-01' }).click();
 	await expect(page.getByRole('status').filter({ hasText: 'not verified' })).toBeVisible();
+	// The security dashboard (M3-17) with the real data: the forged address on top, marked as
+	// unverified, the events of the node in its tab and the CSV of the filter.
+	await page.goto('/security?range=1h');
+	const topIPs = page.getByRole('region', { name: 'Top IPs of failed logins' });
+	await expect(topIPs.getByRole('button', { name: 'Show events of 192.0.2.99' })).toBeVisible({
+		timeout: 30_000
+	});
+	await expect(topIPs).toContainText('unverified');
+	await topIPs.getByRole('button', { name: 'Show events of 192.0.2.99' }).click();
+	await expect(page).toHaveURL(/net=192.0.2.99/);
+	const securityRows = page.getByRole('table').getByRole('row');
+	await expect(securityRows.filter({ hasText: 'edge-01' }).first()).toContainText('unverified');
+	expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+	const csvDownload = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Export as CSV' }).click();
+	const csvFile = await csvDownload;
+	const csvChunks: Buffer[] = [];
+	for await (const chunk of await csvFile.createReadStream()) csvChunks.push(chunk as Buffer);
+	const csvText = Buffer.concat(csvChunks).toString();
+	expect(csvText.split('\r\n')[0]).toContain('occurred_at,received_at,node_id,hostname');
+	expect(csvText).toMatch(/,edge-01,ssh\.login\.failed,root,192\.0\.2\.99,/);
+	await page.screenshot({ path: 'test-results/demo-security.png', fullPage: true });
 
 	// State collectors under the hardened unit (M2-22): every host reports whether its clock is
 	// synchronised (adjtimex, allowed by the syscall filter), and a failed systemd unit fires an

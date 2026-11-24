@@ -210,7 +210,7 @@ var (
 		alert.Absence:    conditionFields,
 		alert.StateRule:  append(slices.Clone(seriesFields), "seen", "seen_window"),
 		alert.Prediction: append(slices.Clone(seriesFields), "lookback"),
-		alert.Event:      {"event", "match", "group_by", "count", "after", "notify_fields"},
+		alert.Event:      {"event", "match", "group_by", "count", "after", "notify_fields", "learning"},
 	}
 )
 
@@ -379,9 +379,14 @@ func eventOf(spec *webv1.AlertRuleSpec) (validEvaluator, error) {
 	if err != nil {
 		return nil, err
 	}
+	learning, err := duration("learning", spec.GetLearning())
+	if err != nil {
+		return nil, err
+	}
 	rule := alerting.EventRule{
 		Kind: secevent.Kind(spec.GetEvent()), GroupBy: spec.GetGroupBy(), Window: window,
 		Warning: int(count.GetWarning()), Critical: int(count.GetCritical()), NotifyFields: spec.GetNotifyFields(),
+		Learning: learning,
 	}
 	if len(spec.GetMatch()) > 0 {
 		rule.Match = spec.GetMatch()

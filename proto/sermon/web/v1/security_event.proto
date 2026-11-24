@@ -12,6 +12,18 @@ service SecurityEventService {
   // (view_security_events; viewers only while the organization allows logs for them), newest
   // first. Without the right on any group: PERMISSION_DENIED.
   rpc ListSecurityEvents(ListSecurityEventsRequest) returns (ListSecurityEventsResponse);
+  // GetSecurityOverview evaluates the events of a time range (M3-16): failed logins over time per
+  // node, the addresses and users with the most failed logins, and totals of logins, logins from
+  // new sources, root logins and sudo failures. Rights as ListSecurityEvents.
+  rpc GetSecurityOverview(GetSecurityOverviewRequest) returns (GetSecurityOverviewResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ExportSecurityEvents returns the events of a filter as CSV, newest first and at most 10,000
+  // (and 8 MiB). Cells that a spreadsheet would read as a formula start with an apostrophe.
+  // Rights as ListSecurityEvents.
+  rpc ExportSecurityEvents(ExportSecurityEventsRequest) returns (ExportSecurityEventsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
 // ListSecurityEventsRequest filters the events; from and to are required, the rest narrows.
@@ -61,6 +73,8 @@ message ListSecurityEventsRequest {
   }];
   // page_token continues after the previous page.
   string page_token = 8 [(buf.validate.field).string.max_len = 64];
+  // new_sources_only keeps the successful logins from a source new to the node (new_source).
+  bool new_sources_only = 9;
 }
 
 // ListSecurityEventsResponse is one page of events.
@@ -97,6 +111,9 @@ message SecurityEvent {
   // unverified is set for events from a classic log file whose sender anyone on the host could
   // be (ADR 0025); the UI marks them.
   bool unverified = 11;
+  // new_source is set on a successful login of the user from an address (or host name) for the
+  // first time on the node (M3-16).
+  bool new_source = 12;
 }
 
 // SecurityEventDetails are the fields of particular event kinds; unset fields are empty.
@@ -132,4 +149,143 @@ message SecurityEventDetails {
   // previous_ip is the address of the session before a rotation from a new one
   // (node.rotation_new_ip).
   string previous_ip = 15;
+}
+
+// SecurityEventFilter selects events like ListSecurityEventsRequest; from and to are required.
+message SecurityEventFilter {
+  // from is the start of the time range (inclusive).
+  google.protobuf.Timestamp from = 1 [(buf.validate.field).required = true];
+  // to is the end of the time range (exclusive); at most 366 days after from.
+  google.protobuf.Timestamp to = 2 [(buf.validate.field).required = true];
+  // node_ids limits the result to these nodes.
+  repeated string node_ids = 3 [(buf.validate.field).repeated = {
+    max_items: 100
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // kinds limits the result to these event kinds, e.g. ssh.login.failed.
+  repeated string kinds = 4 [(buf.validate.field).repeated = {
+    max_items: 11
+    unique: true
+    items: {
+      string: {
+        in: [
+          "ssh.login.failed",
+          "ssh.login.invalid_user",
+          "ssh.login.success",
+          "ssh.preauth.disconnect",
+          "sudo.auth.failed",
+          "sudo.not_allowed",
+          "sudo.command",
+          "account.created",
+          "account.deleted",
+          "system.reboot",
+          "system.oom_kill"
+        ]
+      }
+    }
+  }];
+  // user is an exact user name.
+  optional string user = 5 [(buf.validate.field).string.max_bytes = 128];
+  // network is an IP address or a network in CIDR notation, e.g. 192.0.2.0/24.
+  string network = 6 [(buf.validate.field).string.max_len = 43];
+  // new_sources_only keeps the successful logins from a source new to the node.
+  bool new_sources_only = 7;
+}
+
+// GetSecurityOverviewRequest is the time range and optionally the nodes.
+message GetSecurityOverviewRequest {
+  // from is the start of the time range (inclusive).
+  google.protobuf.Timestamp from = 1 [(buf.validate.field).required = true];
+  // to is the end of the time range (exclusive); at most 366 days after from.
+  google.protobuf.Timestamp to = 2 [(buf.validate.field).required = true];
+  // node_ids limits the overview to these nodes.
+  repeated string node_ids = 3 [(buf.validate.field).repeated = {
+    max_items: 100
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+}
+
+// GetSecurityOverviewResponse are the evaluations. Failed logins are ssh.login.failed and
+// ssh.login.invalid_user.
+message GetSecurityOverviewResponse {
+  // step is the width of a bucket of failed_logins, chosen for at most 200 buckets.
+  google.protobuf.Duration step = 1;
+  // failed_logins are the failed logins per node and bucket; empty buckets are left out.
+  repeated NodeEventSeries failed_logins = 2;
+  // top_ips are the addresses with the most failed logins, at most 10.
+  repeated SecurityEventCount top_ips = 3;
+  // top_users are the user names with the most failed logins, at most 10; the empty name is
+  // what an attacker tried.
+  repeated SecurityEventCount top_users = 4;
+  // totals count the events of the range.
+  SecurityEventTotals totals = 5;
+}
+
+// NodeEventSeries are the counts of one node over time.
+message NodeEventSeries {
+  // node_id is the node.
+  string node_id = 1;
+  // points are the buckets with events, oldest first.
+  repeated EventCountPoint points = 2;
+}
+
+// EventCountPoint is the count of a bucket.
+message EventCountPoint {
+  // at is the start of the bucket.
+  google.protobuf.Timestamp at = 1;
+  // count is the number of events in it.
+  uint64 count = 2;
+}
+
+// SecurityEventCount is a value (address or user name) with its failed logins. Values come from
+// the nodes' logs: render them as text.
+message SecurityEventCount {
+  // value is the address or the user name.
+  string value = 1;
+  // count is the number of failed logins.
+  uint64 count = 2;
+  // nodes is on how many nodes they happened.
+  uint32 nodes = 3;
+  // last_at is the time of the latest one.
+  google.protobuf.Timestamp last_at = 4;
+  // unverified counts those from classic log files (ADR 0025).
+  uint64 unverified = 5;
+}
+
+// SecurityEventTotals are counts of a time range.
+message SecurityEventTotals {
+  // failed_logins counts ssh.login.failed and ssh.login.invalid_user.
+  uint64 failed_logins = 1;
+  // logins counts ssh.login.success.
+  uint64 logins = 2;
+  // new_source_logins counts the logins from a source new to the node.
+  uint64 new_source_logins = 3;
+  // root_logins counts the logins of root.
+  uint64 root_logins = 4;
+  // sudo_failures counts sudo.auth.failed and sudo.not_allowed.
+  uint64 sudo_failures = 5;
+}
+
+// ExportSecurityEventsRequest is the filter of the export.
+message ExportSecurityEventsRequest {
+  // filter selects the events.
+  SecurityEventFilter filter = 1 [(buf.validate.field).required = true];
+}
+
+// ExportSecurityEventsResponse is the CSV file.
+message ExportSecurityEventsResponse {
+  // file_name is a suggestion for saving it.
+  string file_name = 1;
+  // content is the CSV text (UTF-8, a header line, comma-separated, CRLF line ends).
+  bytes content = 2;
+  // rows is the number of events in it.
+  uint32 rows = 3;
+  // truncated is set if the filter selects more than the export holds.
+  bool truncated = 4;
 }

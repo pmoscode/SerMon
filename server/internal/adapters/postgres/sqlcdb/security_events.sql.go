@@ -25,6 +25,78 @@ func (q *Queries) ExpireSecurityEventPartitions(ctx context.Context, before time
 	return dropped, err
 }
 
+const failedLoginBuckets = `-- name: FailedLoginBuckets :many
+
+SELECT e.node_id, date_bin($1::interval, e.occurred_at, $2::timestamptz)::timestamptz AS bucket,
+       count(*) AS events
+FROM security_events e
+WHERE e.occurred_at >= $2 AND e.occurred_at < $3
+  AND e.kind IN ('ssh.login.failed', 'ssh.login.invalid_user')
+  AND ($4::boolean
+       OR e.node_id IN (SELECT n.id FROM nodes n WHERE n.group_id = ANY ($5::uuid[])))
+  AND (cardinality($6::uuid[]) = 0 OR e.node_id = ANY ($6::uuid[]))
+GROUP BY e.node_id, bucket
+ORDER BY e.node_id, bucket
+`
+
+type FailedLoginBucketsParams struct {
+	Step      pgtype.Interval
+	FromTime  time.Time
+	ToTime    time.Time
+	AllGroups bool
+	GroupIds  []uuid.UUID
+	NodeIds   []uuid.UUID
+}
+
+type FailedLoginBucketsRow struct {
+	NodeID uuid.UUID
+	Bucket time.Time
+	Events int64
+}
+
+// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.
+func (q *Queries) FailedLoginBuckets(ctx context.Context, arg FailedLoginBucketsParams) ([]FailedLoginBucketsRow, error) {
+	rows, err := q.db.Query(ctx, failedLoginBuckets,
+		arg.Step,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AllGroups,
+		arg.GroupIds,
+		arg.NodeIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FailedLoginBucketsRow{}
+	for rows.Next() {
+		var i FailedLoginBucketsRow
+		if err := rows.Scan(&i.NodeID, &i.Bucket, &i.Events); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const forgetLoginSources = `-- name: ForgetLoginSources :exec
+DELETE FROM known_login_sources WHERE node_id = $1 AND last_seen < $2
+`
+
+type ForgetLoginSourcesParams struct {
+	NodeID uuid.UUID
+	Before time.Time
+}
+
+// Forgets the sources of a node unused since before (a year: personal data like the events).
+func (q *Queries) ForgetLoginSources(ctx context.Context, arg ForgetLoginSourcesParams) error {
+	_, err := q.db.Exec(ctx, forgetLoginSources, arg.NodeID, arg.Before)
+	return err
+}
+
 const insertServerSecurityEvent = `-- name: InsertServerSecurityEvent :exec
 INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip, remote_host, remote_port, details,
                              unverified)
@@ -58,9 +130,61 @@ func (q *Queries) InsertServerSecurityEvent(ctx context.Context, arg InsertServe
 	return err
 }
 
+const learnLoginSource = `-- name: LearnLoginSource :many
+
+INSERT INTO known_login_sources AS k (org_id, node_id, user_name, source, first_seen, last_seen)
+SELECT current_org_id(), $1, $2, $3, $4, $4
+WHERE EXISTS (SELECT 1 FROM known_login_sources o
+              WHERE o.node_id = $1 AND o.user_name = $2 AND o.source = $3)
+   OR (SELECT count(*) FROM known_login_sources o WHERE o.node_id = $1) < $5::bigint
+ON CONFLICT (org_id, node_id, user_name, source) DO UPDATE
+    SET first_seen = least(k.first_seen, excluded.first_seen),
+        last_seen  = greatest(k.last_seen, excluded.last_seen),
+        logins     = k.logins + 1
+RETURNING (xmax = 0)::boolean AS inserted
+`
+
+type LearnLoginSourceParams struct {
+	NodeID     uuid.UUID
+	UserName   string
+	Source     string
+	At         time.Time
+	MaxSources int64
+}
+
+// Known login sources (M3-16).
+// Records a successful login of a user from a source on a node; inserted is true for the first
+// one (the row is new). A node holds at most max_sources: beyond, an unknown source is not
+// recorded and nothing is returned.
+func (q *Queries) LearnLoginSource(ctx context.Context, arg LearnLoginSourceParams) ([]bool, error) {
+	rows, err := q.db.Query(ctx, learnLoginSource,
+		arg.NodeID,
+		arg.UserName,
+		arg.Source,
+		arg.At,
+		arg.MaxSources,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []bool{}
+	for rows.Next() {
+		var inserted bool
+		if err := rows.Scan(&inserted); err != nil {
+			return nil, err
+		}
+		items = append(items, inserted)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSecurityEvents = `-- name: ListSecurityEvents :many
 SELECT e.id, e.node_id, e.occurred_at, e.received_at, e.kind, e.user_name, e.remote_ip, e.remote_host,
-       e.remote_port, e.details, e.unverified
+       e.remote_port, e.details, e.unverified, e.new_source
 FROM security_events e
 WHERE e.occurred_at >= $1 AND e.occurred_at < $2
   AND ($3::boolean
@@ -69,24 +193,26 @@ WHERE e.occurred_at >= $1 AND e.occurred_at < $2
   AND (cardinality($6::text[]) = 0 OR e.kind = ANY ($6::text[]))
   AND ($7::text IS NULL OR e.user_name = $7::text)
   AND ($8::cidr IS NULL OR e.remote_ip <<= $8::cidr)
-  AND ($9::timestamptz IS NULL
-       OR (e.occurred_at, e.id) < ($9::timestamptz, $10::bigint))
+  AND (NOT $9::boolean OR e.new_source)
+  AND ($10::timestamptz IS NULL
+       OR (e.occurred_at, e.id) < ($10::timestamptz, $11::bigint))
 ORDER BY e.occurred_at DESC, e.id DESC
-LIMIT $11
+LIMIT $12
 `
 
 type ListSecurityEventsParams struct {
-	FromTime   time.Time
-	ToTime     time.Time
-	AllGroups  bool
-	GroupIds   []uuid.UUID
-	NodeIds    []uuid.UUID
-	Kinds      []string
-	UserName   pgtype.Text
-	Network    *netip.Prefix
-	BeforeTime *time.Time
-	BeforeID   pgtype.Int8
-	MaxRows    int32
+	FromTime       time.Time
+	ToTime         time.Time
+	AllGroups      bool
+	GroupIds       []uuid.UUID
+	NodeIds        []uuid.UUID
+	Kinds          []string
+	UserName       pgtype.Text
+	Network        *netip.Prefix
+	NewSourcesOnly bool
+	BeforeTime     *time.Time
+	BeforeID       pgtype.Int8
+	MaxRows        int32
 }
 
 type ListSecurityEventsRow struct {
@@ -101,6 +227,7 @@ type ListSecurityEventsRow struct {
 	RemotePort pgtype.Int4
 	Details    []byte
 	Unverified bool
+	NewSource  bool
 }
 
 // Newest first; the scope's groups are those of the node now (events of removed nodes only for
@@ -115,6 +242,7 @@ func (q *Queries) ListSecurityEvents(ctx context.Context, arg ListSecurityEvents
 		arg.Kinds,
 		arg.UserName,
 		arg.Network,
+		arg.NewSourcesOnly,
 		arg.BeforeTime,
 		arg.BeforeID,
 		arg.MaxRows,
@@ -138,6 +266,7 @@ func (q *Queries) ListSecurityEvents(ctx context.Context, arg ListSecurityEvents
 			&i.RemotePort,
 			&i.Details,
 			&i.Unverified,
+			&i.NewSource,
 		); err != nil {
 			return nil, err
 		}
@@ -163,9 +292,46 @@ func (q *Queries) LockNodeEventSeq(ctx context.Context, nodeID uuid.UUID) (int64
 	return event_seq, err
 }
 
+const nodeHostnames = `-- name: NodeHostnames :many
+SELECT n.id, n.hostname FROM nodes n
+WHERE n.id = ANY ($1::uuid[])
+  AND ($2::boolean OR n.group_id = ANY ($3::uuid[]))
+`
+
+type NodeHostnamesParams struct {
+	NodeIds   []uuid.UUID
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+type NodeHostnamesRow struct {
+	ID       uuid.UUID
+	Hostname string
+}
+
+func (q *Queries) NodeHostnames(ctx context.Context, arg NodeHostnamesParams) ([]NodeHostnamesRow, error) {
+	rows, err := q.db.Query(ctx, nodeHostnames, arg.NodeIds, arg.AllGroups, arg.GroupIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NodeHostnamesRow{}
+	for rows.Next() {
+		var i NodeHostnamesRow
+		if err := rows.Scan(&i.ID, &i.Hostname); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const receivedSecurityEvents = `-- name: ReceivedSecurityEvents :many
 SELECT e.id, e.node_id, e.occurred_at, e.received_at, e.kind, e.user_name, e.remote_ip, e.remote_host,
-       e.remote_port, e.details, e.unverified
+       e.remote_port, e.details, e.unverified, e.new_source
 FROM security_events e
 WHERE e.kind = $1 AND e.node_id = ANY ($2::uuid[])
   AND e.received_at >= $3
@@ -194,6 +360,7 @@ type ReceivedSecurityEventsRow struct {
 	RemotePort pgtype.Int4
 	Details    []byte
 	Unverified bool
+	NewSource  bool
 }
 
 // The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
@@ -226,6 +393,7 @@ func (q *Queries) ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecuri
 			&i.RemotePort,
 			&i.Details,
 			&i.Unverified,
+			&i.NewSource,
 		); err != nil {
 			return nil, err
 		}
@@ -248,6 +416,55 @@ func (q *Queries) SecurityEventHorizon(ctx context.Context) (time.Time, error) {
 	return horizon, err
 }
 
+const securityEventTotals = `-- name: SecurityEventTotals :one
+SELECT count(*) FILTER (WHERE e.kind IN ('ssh.login.failed', 'ssh.login.invalid_user')) AS failed_logins,
+       count(*) FILTER (WHERE e.kind = 'ssh.login.success') AS logins,
+       count(*) FILTER (WHERE e.kind = 'ssh.login.success' AND e.new_source) AS new_source_logins,
+       count(*) FILTER (WHERE e.kind = 'ssh.login.success' AND e.user_name = 'root') AS root_logins,
+       count(*) FILTER (WHERE e.kind IN ('sudo.auth.failed', 'sudo.not_allowed')) AS sudo_failures
+FROM security_events e
+WHERE e.occurred_at >= $1 AND e.occurred_at < $2
+  AND e.kind IN ('ssh.login.failed', 'ssh.login.invalid_user', 'ssh.login.success', 'sudo.auth.failed', 'sudo.not_allowed')
+  AND ($3::boolean
+       OR e.node_id IN (SELECT n.id FROM nodes n WHERE n.group_id = ANY ($4::uuid[])))
+  AND (cardinality($5::uuid[]) = 0 OR e.node_id = ANY ($5::uuid[]))
+`
+
+type SecurityEventTotalsParams struct {
+	FromTime  time.Time
+	ToTime    time.Time
+	AllGroups bool
+	GroupIds  []uuid.UUID
+	NodeIds   []uuid.UUID
+}
+
+type SecurityEventTotalsRow struct {
+	FailedLogins    int64
+	Logins          int64
+	NewSourceLogins int64
+	RootLogins      int64
+	SudoFailures    int64
+}
+
+func (q *Queries) SecurityEventTotals(ctx context.Context, arg SecurityEventTotalsParams) (SecurityEventTotalsRow, error) {
+	row := q.db.QueryRow(ctx, securityEventTotals,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AllGroups,
+		arg.GroupIds,
+		arg.NodeIds,
+	)
+	var i SecurityEventTotalsRow
+	err := row.Scan(
+		&i.FailedLogins,
+		&i.Logins,
+		&i.NewSourceLogins,
+		&i.RootLogins,
+		&i.SudoFailures,
+	)
+	return i, err
+}
+
 const setNodeEventSeq = `-- name: SetNodeEventSeq :exec
 UPDATE nodes SET event_seq = $1 WHERE id = $2 AND event_seq < $1
 `
@@ -260,4 +477,132 @@ type SetNodeEventSeqParams struct {
 func (q *Queries) SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error {
 	_, err := q.db.Exec(ctx, setNodeEventSeq, arg.Seq, arg.NodeID)
 	return err
+}
+
+const topFailedIPs = `-- name: TopFailedIPs :many
+SELECT e.remote_ip::inet AS remote_ip, count(*) AS events, count(DISTINCT e.node_id) AS nodes,
+       max(e.occurred_at)::timestamptz AS last_at, count(*) FILTER (WHERE e.unverified) AS unverified
+FROM security_events e
+WHERE e.occurred_at >= $1 AND e.occurred_at < $2
+  AND e.kind IN ('ssh.login.failed', 'ssh.login.invalid_user') AND e.remote_ip IS NOT NULL
+  AND ($3::boolean
+       OR e.node_id IN (SELECT n.id FROM nodes n WHERE n.group_id = ANY ($4::uuid[])))
+  AND (cardinality($5::uuid[]) = 0 OR e.node_id = ANY ($5::uuid[]))
+GROUP BY e.remote_ip
+ORDER BY events DESC, e.remote_ip
+LIMIT $6
+`
+
+type TopFailedIPsParams struct {
+	FromTime  time.Time
+	ToTime    time.Time
+	AllGroups bool
+	GroupIds  []uuid.UUID
+	NodeIds   []uuid.UUID
+	MaxRows   int32
+}
+
+type TopFailedIPsRow struct {
+	RemoteIp   netip.Addr
+	Events     int64
+	Nodes      int64
+	LastAt     time.Time
+	Unverified int64
+}
+
+func (q *Queries) TopFailedIPs(ctx context.Context, arg TopFailedIPsParams) ([]TopFailedIPsRow, error) {
+	rows, err := q.db.Query(ctx, topFailedIPs,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AllGroups,
+		arg.GroupIds,
+		arg.NodeIds,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopFailedIPsRow{}
+	for rows.Next() {
+		var i TopFailedIPsRow
+		if err := rows.Scan(
+			&i.RemoteIp,
+			&i.Events,
+			&i.Nodes,
+			&i.LastAt,
+			&i.Unverified,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const topFailedUsers = `-- name: TopFailedUsers :many
+SELECT coalesce(e.user_name, '')::text AS user_name, count(*) AS events, count(DISTINCT e.node_id) AS nodes,
+       max(e.occurred_at)::timestamptz AS last_at, count(*) FILTER (WHERE e.unverified) AS unverified
+FROM security_events e
+WHERE e.occurred_at >= $1 AND e.occurred_at < $2
+  AND e.kind IN ('ssh.login.failed', 'ssh.login.invalid_user')
+  AND ($3::boolean
+       OR e.node_id IN (SELECT n.id FROM nodes n WHERE n.group_id = ANY ($4::uuid[])))
+  AND (cardinality($5::uuid[]) = 0 OR e.node_id = ANY ($5::uuid[]))
+GROUP BY coalesce(e.user_name, '')
+ORDER BY events DESC, user_name
+LIMIT $6
+`
+
+type TopFailedUsersParams struct {
+	FromTime  time.Time
+	ToTime    time.Time
+	AllGroups bool
+	GroupIds  []uuid.UUID
+	NodeIds   []uuid.UUID
+	MaxRows   int32
+}
+
+type TopFailedUsersRow struct {
+	UserName   string
+	Events     int64
+	Nodes      int64
+	LastAt     time.Time
+	Unverified int64
+}
+
+func (q *Queries) TopFailedUsers(ctx context.Context, arg TopFailedUsersParams) ([]TopFailedUsersRow, error) {
+	rows, err := q.db.Query(ctx, topFailedUsers,
+		arg.FromTime,
+		arg.ToTime,
+		arg.AllGroups,
+		arg.GroupIds,
+		arg.NodeIds,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TopFailedUsersRow{}
+	for rows.Next() {
+		var i TopFailedUsersRow
+		if err := rows.Scan(
+			&i.UserName,
+			&i.Events,
+			&i.Nodes,
+			&i.LastAt,
+			&i.Unverified,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

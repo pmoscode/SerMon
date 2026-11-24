@@ -3329,7 +3329,35 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.5 Security-Dashboard (E3.5)
 
-#### ☐ M3-16 – Security-Auswertungen und bekannte Quellen · S · M 🔒
+#### ☑ M3-16 – Security-Auswertungen und bekannte Quellen · S · M 🔒
+> Erledigt (KONZEPT §11, §12.2, §12.3; Threat Model T82, T83):
+> - **Bekannte Quellen:** Migration `00042` mit `known_login_sources` (RLS, am Node hängend) und
+>   `security_events.new_source`.
+>   - Beim Ingest merkt sich der Server jede erfolgreiche Anmeldung pro Node, User und Quelle: die Adresse, IPv6 als
+>     /64, sonst der Hostname aus dem sshd-Log. Die erste trägt `new_source`.
+>   - Nach einem Jahr ohne Nutzung wird eine Quelle vergessen. Pro Node gibt es höchstens 10 000; darüber wird eine
+>     unbekannte Quelle weder gemerkt noch markiert.
+>   - Neues Event-Feld `new_source` für `match`; `ListSecurityEvents` filtert auf neue Quellen.
+> - **Regel `security.ssh.login_new_source`:** Warnung pro User und Quelle. Die neue Option `learning: 168h` der
+>   Event-Regeln lässt die Events eines Nodes in seiner ersten Woche aus.
+> - **Abweichung:** Die Woche zählt ab `nodes.learning_since` statt ab der Anmeldung des Nodes. Für Nodes vor dem
+>   Update ist das der Zeitpunkt der Migration: Sie kann die gespeicherten Events wegen RLS nicht lesen, um die Quellen
+>   nachzutragen. Ein Update meldet so nicht jede nächste Anmeldung als neu.
+> - **`GetSecurityOverview`:** Fehlversuche pro Node in höchstens 200 Intervallen (1 min bis 7 Tage), die zehn
+>   Adressen und User mit den meisten Fehlversuchen (mit Nodes, letztem Zeitpunkt und den unverifizierten) und Summen:
+>   Logins, Logins von neuen Quellen, Root-Logins und sudo-Fehler.
+> - **`ExportSecurityEvents`:** CSV mit denselben Filtern und dem Hostnamen, höchstens 10 000 Zeilen und 8 MiB.
+>   Textzellen mit `= + - @`, Tab oder CR am Anfang bekommen ein Apostroph.
+> - **Tests:**
+>   - Gegen PostgreSQL: „neu“ genau bei der ersten Anmeldung (IPv6 pro /64, Hostname, Konsole, erneut gesendeter
+>     Batch, anderer Node, andere Org); Vergessen nach einem Jahr; Grenze von 10 000.
+>   - Auswertungen mit Fenster, Intervallen, Node-Filter, Gruppen-Scope und fremder Org; Start des Lernens neuer
+>     Nodes.
+>   - Regel: Lernzeit mit Grenze, Szenario in den Standardregeln, Parser für `learning`.
+>   - CSV-Zellen und Größengrenze; Dienst mit Viewer-Schalter.
+>   - Über den echten Stack: Übersicht, Filter auf neue Quellen, Export mit entschärfter Formel; mit abgeschaltetem
+>     Viewer-Schalter `PERMISSION_DENIED`. Tenant-Isolationstest für beide neuen RPCs.
+>   - Gegenproben für 22 Prüfungen, alle erkannt.
 - **Ziel:** `SecurityEventService` erweitern.
   - **Auswertungen:** Fehlversuche über die Zeit nach Node; Top-IPs und Top-User; Root-Logins; sudo-Fehler.
   - **Erfolgreiche Logins mit Markierung „neu“:** User und Quelle erstmals auf dem Node. Eine neue Tabelle mit RLS

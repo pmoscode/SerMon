@@ -50,6 +50,7 @@ func (s *FleetStore) List(ctx context.Context, scope tenant.Scope) ([]fleet.Node
 				AgentVersion: r.AgentVersion, EnrolledAt: r.CreatedAt, LastSeenAt: r.LastSeenAt,
 				LockedAt: r.LockedAt, LockReason: r.LockReason, LastIP: r.LastIp, TakeoverUntil: r.TakeoverUntil,
 				Tags: tags, SecuritySource: secevent.Source(r.SecuritySource), LogsVetoed: r.LogsVetoed,
+				LearningSince: r.LearningSince,
 			}
 		}
 		return nil

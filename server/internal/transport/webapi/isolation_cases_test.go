@@ -273,6 +273,32 @@ var tenantIsolationCases = map[string]isolationCase{
 		}
 		return nil
 	}},
+	"/sermon.web.v1.SecurityEventService/GetSecurityOverview": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.events.GetSecurityOverview(ctx, connect.NewRequest(&webv1.GetSecurityOverviewRequest{
+			From: timestamppb.New(time.Now().Add(-24 * time.Hour)), To: timestamppb.New(time.Now().Add(time.Hour)), NodeIds: []string{e.nodeA},
+		}))
+		if err != nil {
+			return err
+		}
+		m := res.Msg
+		if len(m.GetFailedLogins())+len(m.GetTopIps())+len(m.GetTopUsers()) > 0 || m.GetTotals().GetFailedLogins() > 0 ||
+			strings.Contains(m.String(), e.nodeA) || strings.Contains(m.String(), "alpha-user") {
+			return errLeak
+		}
+		return nil
+	}},
+	"/sermon.web.v1.SecurityEventService/ExportSecurityEvents": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.events.ExportSecurityEvents(ctx, connect.NewRequest(&webv1.ExportSecurityEventsRequest{Filter: &webv1.SecurityEventFilter{
+			From: timestamppb.New(time.Now().Add(-24 * time.Hour)), To: timestamppb.New(time.Now().Add(time.Hour)), NodeIds: []string{e.nodeA},
+		}}))
+		if err != nil {
+			return err
+		}
+		if content := string(res.Msg.GetContent()); res.Msg.GetRows() > 0 || strings.Contains(content, e.nodeA) || strings.Contains(content, "alpha-user") {
+			return errLeak
+		}
+		return nil
+	}},
 	"/sermon.web.v1.MetricsService/QueryMetrics": {run: func(ctx context.Context, e isolationEnv) error {
 		now := time.Now()
 		_, err := e.metrics.QueryMetrics(ctx, connect.NewRequest(&webv1.QueryMetricsRequest{

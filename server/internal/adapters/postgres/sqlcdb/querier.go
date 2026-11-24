@@ -95,6 +95,8 @@ type Querier interface {
 	// Ends a silence at at; one that has not begun yet is cancelled.
 	ExpireAlertSilence(ctx context.Context, arg ExpireAlertSilenceParams) (int64, error)
 	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
+	// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.
+	FailedLoginBuckets(ctx context.Context, arg FailedLoginBucketsParams) ([]FailedLoginBucketsRow, error)
 	// Series of a metric on the given nodes, restricted to the node groups of the scope and to series
 	// whose labels contain the filter.
 	FindSeries(ctx context.Context, arg FindSeriesParams) ([]FindSeriesRow, error)
@@ -103,6 +105,8 @@ type Querier interface {
 	// Only the attempt that holds the claim writes (fencing, M2-38): after its claim expired another
 	// attempt may have taken the delivery over.
 	FinishNotificationDelivery(ctx context.Context, arg FinishNotificationDeliveryParams) (int64, error)
+	// Forgets the sources of a node unused since before (a year: personal data like the events).
+	ForgetLoginSources(ctx context.Context, arg ForgetLoginSourcesParams) error
 	GetAlertSilence(ctx context.Context, id uuid.UUID) (GetAlertSilenceRow, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
@@ -149,6 +153,11 @@ type Querier interface {
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Replaces a previous token; false once the setup is completed (definer function, M1-40).
 	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (bool, error)
+	// Known login sources (M3-16).
+	// Records a successful login of a user from a source on a node; inserted is true for the first
+	// one (the row is new). A node holds at most max_sources: beyond, an unknown source is not
+	// recorded and nothing is returned.
+	LearnLoginSource(ctx context.Context, arg LearnLoginSourceParams) ([]bool, error)
 	// Alert engine (M2-02, ADR 0007). Every query runs in the organization's tenant transaction.
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
 	LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrganizationParams) (int64, error)
@@ -200,6 +209,7 @@ type Querier interface {
 	// The node of a group with this machine-id whose takeover window is open.
 	NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error)
 	NodeGroupExists(ctx context.Context, groupID uuid.UUID) (bool, error)
+	NodeHostnames(ctx context.Context, arg NodeHostnamesParams) ([]NodeHostnamesRow, error)
 	// Node identity in the UI (M2-23).
 	NodeLockedAt(ctx context.Context, id uuid.UUID) (*time.Time, error)
 	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
@@ -253,6 +263,7 @@ type Querier interface {
 	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
 	SecurityEventHorizon(ctx context.Context) (time.Time, error)
+	SecurityEventTotals(ctx context.Context, arg SecurityEventTotalsParams) (SecurityEventTotalsRow, error)
 	SetLiveHideCmdline(ctx context.Context, hide bool) error
 	SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error
 	SetNodeTags(ctx context.Context, arg SetNodeTagsParams) error
@@ -277,6 +288,8 @@ type Querier interface {
 	// Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
 	// closed. No rows: the window closed meanwhile.
 	TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int64, error)
+	TopFailedIPs(ctx context.Context, arg TopFailedIPsParams) ([]TopFailedIPsRow, error)
+	TopFailedUsers(ctx context.Context, arg TopFailedUsersParams) ([]TopFailedUsersRow, error)
 	TouchNode(ctx context.Context, arg TouchNodeParams) (int64, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).

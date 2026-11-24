@@ -272,7 +272,11 @@ type AlertRuleSpec struct {
 	After *AlertEventAfter `protobuf:"bytes,24,opt,name=after,proto3" json:"after,omitempty"`
 	// notify_fields are the event fields a notification shows, e.g. [ts, user, ip, port]; YAML key
 	// "notifyFields".
-	NotifyFields  []string `protobuf:"bytes,25,rep,name=notify_fields,json=notifyFields,proto3" json:"notify_fields,omitempty"`
+	NotifyFields []string `protobuf:"bytes,25,rep,name=notify_fields,json=notifyFields,proto3" json:"notify_fields,omitempty"`
+	// learning is how long a node's events don't count after SerMon began to learn it (its
+	// enrollment, for older nodes the upgrade to M3-16) (event), e.g. 168h for logins from new
+	// sources: everything is new on a new node.
+	Learning      string `protobuf:"bytes,26,opt,name=learning,proto3" json:"learning,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -480,6 +484,13 @@ func (x *AlertRuleSpec) GetNotifyFields() []string {
 		return x.NotifyFields
 	}
 	return nil
+}
+
+func (x *AlertRuleSpec) GetLearning() string {
+	if x != nil {
+		return x.Learning
+	}
+	return ""
 }
 
 // AlertEventCount is the count of an event rule: at least warning or critical events (or nodes)
@@ -811,7 +822,7 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x02de\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02de\x12\x1a\n" +
 	"\x02en\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xb6\f\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xdb\f\n" +
 	"\rAlertRuleSpec\x12M\n" +
 	"\x04type\x18\x01 \x01(\tB9\xbaH6r4R\tthresholdR\x04rateR\aabsenceR\x05stateR\n" +
 	"predictionR\x05eventR\x04type\x12 \n" +
@@ -846,7 +857,8 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x05count\x18\x17 \x01(\v2\x1e.sermon.web.v1.AlertEventCountR\x05count\x124\n" +
 	"\x05after\x18\x18 \x01(\v2\x1e.sermon.web.v1.AlertEventAfterR\x05after\x125\n" +
 	"\rnotify_fields\x18\x19 \x03(\tB\x10\xbaH\r\x92\x01\n" +
-	"\x10\x10\x18\x01\"\x04r\x02\x18 R\fnotifyFields\x1a9\n" +
+	"\x10\x10\x18\x01\"\x04r\x02\x18 R\fnotifyFields\x12#\n" +
+	"\blearning\x18\x1a \x01(\tB\a\xbaH\x04r\x02\x18\x10R\blearning\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aV\n" +

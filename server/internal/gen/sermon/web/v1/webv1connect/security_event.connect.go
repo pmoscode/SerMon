@@ -36,6 +36,12 @@ const (
 	// SecurityEventServiceListSecurityEventsProcedure is the fully-qualified name of the
 	// SecurityEventService's ListSecurityEvents RPC.
 	SecurityEventServiceListSecurityEventsProcedure = "/sermon.web.v1.SecurityEventService/ListSecurityEvents"
+	// SecurityEventServiceGetSecurityOverviewProcedure is the fully-qualified name of the
+	// SecurityEventService's GetSecurityOverview RPC.
+	SecurityEventServiceGetSecurityOverviewProcedure = "/sermon.web.v1.SecurityEventService/GetSecurityOverview"
+	// SecurityEventServiceExportSecurityEventsProcedure is the fully-qualified name of the
+	// SecurityEventService's ExportSecurityEvents RPC.
+	SecurityEventServiceExportSecurityEventsProcedure = "/sermon.web.v1.SecurityEventService/ExportSecurityEvents"
 )
 
 // SecurityEventServiceClient is a client for the sermon.web.v1.SecurityEventService service.
@@ -44,6 +50,14 @@ type SecurityEventServiceClient interface {
 	// (view_security_events; viewers only while the organization allows logs for them), newest
 	// first. Without the right on any group: PERMISSION_DENIED.
 	ListSecurityEvents(context.Context, *connect.Request[v1.ListSecurityEventsRequest]) (*connect.Response[v1.ListSecurityEventsResponse], error)
+	// GetSecurityOverview evaluates the events of a time range (M3-16): failed logins over time per
+	// node, the addresses and users with the most failed logins, and totals of logins, logins from
+	// new sources, root logins and sudo failures. Rights as ListSecurityEvents.
+	GetSecurityOverview(context.Context, *connect.Request[v1.GetSecurityOverviewRequest]) (*connect.Response[v1.GetSecurityOverviewResponse], error)
+	// ExportSecurityEvents returns the events of a filter as CSV, newest first and at most 10,000
+	// (and 8 MiB). Cells that a spreadsheet would read as a formula start with an apostrophe.
+	// Rights as ListSecurityEvents.
+	ExportSecurityEvents(context.Context, *connect.Request[v1.ExportSecurityEventsRequest]) (*connect.Response[v1.ExportSecurityEventsResponse], error)
 }
 
 // NewSecurityEventServiceClient constructs a client for the sermon.web.v1.SecurityEventService
@@ -63,17 +77,43 @@ func NewSecurityEventServiceClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(securityEventServiceMethods.ByName("ListSecurityEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		getSecurityOverview: connect.NewClient[v1.GetSecurityOverviewRequest, v1.GetSecurityOverviewResponse](
+			httpClient,
+			baseURL+SecurityEventServiceGetSecurityOverviewProcedure,
+			connect.WithSchema(securityEventServiceMethods.ByName("GetSecurityOverview")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
+		exportSecurityEvents: connect.NewClient[v1.ExportSecurityEventsRequest, v1.ExportSecurityEventsResponse](
+			httpClient,
+			baseURL+SecurityEventServiceExportSecurityEventsProcedure,
+			connect.WithSchema(securityEventServiceMethods.ByName("ExportSecurityEvents")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // securityEventServiceClient implements SecurityEventServiceClient.
 type securityEventServiceClient struct {
-	listSecurityEvents *connect.Client[v1.ListSecurityEventsRequest, v1.ListSecurityEventsResponse]
+	listSecurityEvents   *connect.Client[v1.ListSecurityEventsRequest, v1.ListSecurityEventsResponse]
+	getSecurityOverview  *connect.Client[v1.GetSecurityOverviewRequest, v1.GetSecurityOverviewResponse]
+	exportSecurityEvents *connect.Client[v1.ExportSecurityEventsRequest, v1.ExportSecurityEventsResponse]
 }
 
 // ListSecurityEvents calls sermon.web.v1.SecurityEventService.ListSecurityEvents.
 func (c *securityEventServiceClient) ListSecurityEvents(ctx context.Context, req *connect.Request[v1.ListSecurityEventsRequest]) (*connect.Response[v1.ListSecurityEventsResponse], error) {
 	return c.listSecurityEvents.CallUnary(ctx, req)
+}
+
+// GetSecurityOverview calls sermon.web.v1.SecurityEventService.GetSecurityOverview.
+func (c *securityEventServiceClient) GetSecurityOverview(ctx context.Context, req *connect.Request[v1.GetSecurityOverviewRequest]) (*connect.Response[v1.GetSecurityOverviewResponse], error) {
+	return c.getSecurityOverview.CallUnary(ctx, req)
+}
+
+// ExportSecurityEvents calls sermon.web.v1.SecurityEventService.ExportSecurityEvents.
+func (c *securityEventServiceClient) ExportSecurityEvents(ctx context.Context, req *connect.Request[v1.ExportSecurityEventsRequest]) (*connect.Response[v1.ExportSecurityEventsResponse], error) {
+	return c.exportSecurityEvents.CallUnary(ctx, req)
 }
 
 // SecurityEventServiceHandler is an implementation of the sermon.web.v1.SecurityEventService
@@ -83,6 +123,14 @@ type SecurityEventServiceHandler interface {
 	// (view_security_events; viewers only while the organization allows logs for them), newest
 	// first. Without the right on any group: PERMISSION_DENIED.
 	ListSecurityEvents(context.Context, *connect.Request[v1.ListSecurityEventsRequest]) (*connect.Response[v1.ListSecurityEventsResponse], error)
+	// GetSecurityOverview evaluates the events of a time range (M3-16): failed logins over time per
+	// node, the addresses and users with the most failed logins, and totals of logins, logins from
+	// new sources, root logins and sudo failures. Rights as ListSecurityEvents.
+	GetSecurityOverview(context.Context, *connect.Request[v1.GetSecurityOverviewRequest]) (*connect.Response[v1.GetSecurityOverviewResponse], error)
+	// ExportSecurityEvents returns the events of a filter as CSV, newest first and at most 10,000
+	// (and 8 MiB). Cells that a spreadsheet would read as a formula start with an apostrophe.
+	// Rights as ListSecurityEvents.
+	ExportSecurityEvents(context.Context, *connect.Request[v1.ExportSecurityEventsRequest]) (*connect.Response[v1.ExportSecurityEventsResponse], error)
 }
 
 // NewSecurityEventServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -98,10 +146,28 @@ func NewSecurityEventServiceHandler(svc SecurityEventServiceHandler, opts ...con
 		connect.WithSchema(securityEventServiceMethods.ByName("ListSecurityEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	securityEventServiceGetSecurityOverviewHandler := connect.NewUnaryHandler(
+		SecurityEventServiceGetSecurityOverviewProcedure,
+		svc.GetSecurityOverview,
+		connect.WithSchema(securityEventServiceMethods.ByName("GetSecurityOverview")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
+	securityEventServiceExportSecurityEventsHandler := connect.NewUnaryHandler(
+		SecurityEventServiceExportSecurityEventsProcedure,
+		svc.ExportSecurityEvents,
+		connect.WithSchema(securityEventServiceMethods.ByName("ExportSecurityEvents")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.SecurityEventService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SecurityEventServiceListSecurityEventsProcedure:
 			securityEventServiceListSecurityEventsHandler.ServeHTTP(w, r)
+		case SecurityEventServiceGetSecurityOverviewProcedure:
+			securityEventServiceGetSecurityOverviewHandler.ServeHTTP(w, r)
+		case SecurityEventServiceExportSecurityEventsProcedure:
+			securityEventServiceExportSecurityEventsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -113,4 +179,12 @@ type UnimplementedSecurityEventServiceHandler struct{}
 
 func (UnimplementedSecurityEventServiceHandler) ListSecurityEvents(context.Context, *connect.Request[v1.ListSecurityEventsRequest]) (*connect.Response[v1.ListSecurityEventsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.SecurityEventService.ListSecurityEvents is not implemented"))
+}
+
+func (UnimplementedSecurityEventServiceHandler) GetSecurityOverview(context.Context, *connect.Request[v1.GetSecurityOverviewRequest]) (*connect.Response[v1.GetSecurityOverviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.SecurityEventService.GetSecurityOverview is not implemented"))
+}
+
+func (UnimplementedSecurityEventServiceHandler) ExportSecurityEvents(context.Context, *connect.Request[v1.ExportSecurityEventsRequest]) (*connect.Response[v1.ExportSecurityEventsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.SecurityEventService.ExportSecurityEvents is not implemented"))
 }

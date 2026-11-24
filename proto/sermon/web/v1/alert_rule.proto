@@ -198,6 +198,10 @@ message AlertRuleSpec {
       }
     }
   ];
+  // learning is how long a node's events don't count after SerMon began to learn it (its
+  // enrollment, for older nodes the upgrade to M3-16) (event), e.g. 168h for logins from new
+  // sources: everything is new on a new node.
+  string learning = 26 [(buf.validate.field).string.max_len = 16];
 }
 
 // AlertEventCount is the count of an event rule: at least warning or critical events (or nodes)

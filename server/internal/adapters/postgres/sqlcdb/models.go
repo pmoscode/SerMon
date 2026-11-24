@@ -154,6 +154,16 @@ type Invitation struct {
 	ExpiresAt time.Time
 }
 
+type KnownLoginSource struct {
+	OrgID     uuid.UUID
+	NodeID    uuid.UUID
+	UserName  string
+	Source    string
+	FirstSeen time.Time
+	LastSeen  time.Time
+	Logins    int64
+}
+
 type LogSetting struct {
 	OrgID     uuid.UUID
 	GroupID   uuid.UUID
@@ -237,6 +247,7 @@ type Node struct {
 	ConfigError      pgtype.Text
 	LogsVetoed       bool
 	ConfigReportedAt *time.Time
+	LearningSince    time.Time
 }
 
 type NodeGroup struct {
@@ -353,6 +364,7 @@ type SecurityEvent struct {
 	RemotePort pgtype.Int4
 	Details    []byte
 	Unverified bool
+	NewSource  bool
 }
 
 type Series struct {

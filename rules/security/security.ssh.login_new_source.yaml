@@ -1,0 +1,28 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: security.ssh.login_new_source
+  name: { de: "SSH-Anmeldung von neuer Quelle", en: "SSH login from a new source" }
+  labels: { category: security }
+spec:
+  type: event
+  event: ssh.login.success
+  match: { new_source: "true" }
+  groupBy: [ user, ip ]
+  count: { window: 15m, warning: 1 }
+  learning: 168h
+  notifyFields: [ ts, user, ip, port, method, key_fingerprint ]
+  help:
+    de: >-
+      Ein User hat sich per SSH zum ersten Mal von dieser Adresse (IPv6: aus diesem /64-Netz) oder diesem Host auf dem
+      Node angemeldet. Das ist normal bei einem neuen Arbeitsplatz, einem anderen Netz oder einem neuen Kollegen; es
+      kann aber auch ein gestohlenes Passwort oder ein kopierter Schlüssel sein. Prüfe mit der Person, ob die
+      Anmeldung von ihr kam (Adresse, Methode, Schlüssel). War sie es nicht, sperre das Konto, ersetze Passwort bzw.
+      Schlüssel und schau in den Logs nach, was in der Sitzung geschah. In der ersten Woche eines Nodes lernt SerMon
+      die üblichen Quellen und meldet sie nicht.
+    en: >-
+      A user logged in over SSH for the first time from this address (IPv6: from this /64 network) or this host on
+      the node. That is normal with a new workplace, another network or a new colleague; it may however be a stolen
+      password or a copied key. Check with the person whether the login was theirs (address, method, key). If it
+      was not, lock the account, replace the password or key and look in the logs at what happened in the session.
+      In a node's first week SerMon learns the usual sources and doesn't report them.

@@ -229,6 +229,42 @@ func TestEvent_GroupByUserAndMatch(t *testing.T) {
 	}
 }
 
+// Logins from new sources (M3-16) count only once SerMon has learned the node for a week before
+// them: on a new node every source is new. A node without a start of learning counts at once.
+func TestEvent_LearningSkipsTheFirstDaysOfANode(t *testing.T) {
+	week := 7 * 24 * time.Hour
+	rule := alerting.EventRule{
+		Kind: secevent.SSHLoginSucceeded, Match: map[string]string{"new_source": "true"}, GroupBy: []string{"user", "ip"},
+		Window: 15 * time.Minute, Warning: 1, Learning: week, NotifyFields: []string{"user", "ip"},
+	}
+	login := func(node identity.NodeID, ip string, isNew bool) secevent.Event {
+		e := ev(secevent.SSHLoginSucceeded, node, time.Minute, ip, "alice")
+		e.NewSource = isNew
+		return e
+	}
+	f := &fakeEvents{}
+	f.add(orgA, login(web, "192.0.2.7", true), login(web, "192.0.2.8", false), login(db01, "192.0.2.9", true), login(app01, "192.0.2.10", true))
+	old, young, edge := webNode, dbNode, appNode
+	old.LearningSince = t0.Add(-30 * 24 * time.Hour)
+	young.LearningSince = t0.Add(-6 * 24 * time.Hour)
+	// Learned for a week before the login exactly: the learning is over.
+	edge.LearningSince = t0.Add(-time.Minute - week)
+	got := evaluateEvents(t, rule, eventEnv(f, orgA, old, young, edge))
+	dim := func(ip string) string { return metrics.Labels{"ip": ip, "user": "alice"}.Key() }
+	if len(got) != 2 || got[web.String()+"|"+dim("192.0.2.7")].Level != alert.LevelWarning ||
+		got[app01.String()+"|"+dim("192.0.2.10")].Level != alert.LevelWarning {
+		t.Errorf("got %+v, want warnings for the new source of the old node and at the edge only", got)
+	}
+
+	edge.LearningSince = edge.LearningSince.Add(time.Second)
+	if got := evaluateEvents(t, rule, eventEnv(f, orgA, edge)); len(got) != 0 {
+		t.Errorf("a second before the end of the learning: %+v", got)
+	}
+	if got := evaluateEvents(t, rule, eventEnv(f, orgA, appNode)); len(got) != 1 {
+		t.Errorf("without a start of learning: %+v, want it counted", got)
+	}
+}
+
 // Without groupBy one instance per node counts every event (OOM kills, reboots).
 func TestEvent_WithoutGroupingOneInstancePerNode(t *testing.T) {
 	f := &fakeEvents{}
@@ -420,6 +456,8 @@ func TestEvent_ValidateRejects(t *testing.T) {
 		"after without window": func(r *alerting.EventRule) {
 			r.After = &alerting.EventCondition{Kind: secevent.SSHLoginFailed, Count: 3}
 		},
+		"negative learning":     func(r *alerting.EventRule) { r.Learning = -time.Hour },
+		"learning over 30 days": func(r *alerting.EventRule) { r.Learning = 31 * 24 * time.Hour },
 		"after lacks the group": func(r *alerting.EventRule) {
 			r.After = &alerting.EventCondition{Kind: secevent.SudoAuthFailed, Count: 3, Window: time.Hour}
 		},

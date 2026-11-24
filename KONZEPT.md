@@ -647,6 +647,21 @@ Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log gep
   Spalten für Art, User, IP (`inet`), Host und Port, die übrigen Felder als `details`.
 - **Abfrage:** `SecurityEventService.ListSecurityEvents` mit Zeitraum, Nodes, Arten, User und IP/CIDR. Sie gilt für
   Gruppen mit `view_security_events` (Viewer nur, wenn die Org Logs für Viewer erlaubt).
+- **Bekannte Quellen** (M3-16): Der Ingest merkt sich pro Node, welcher User sich von welcher Quelle erfolgreich
+  angemeldet hat (`known_login_sources` mit RLS). Quelle ist die Adresse, bei IPv6 das /64, sonst der Hostname aus dem
+  sshd-Log; Anmeldungen ohne beides (Konsole) zählen nicht. Die erste Anmeldung eines Users von einer Quelle trägt
+  `new_source`.
+    - Eine Quelle, die ein Jahr ungenutzt ist, wird vergessen und gilt danach wieder als neu.
+    - Pro Node gibt es höchstens 10 000 Quellen. Darüber wird eine unbekannte Quelle weder gemerkt noch als neu markiert;
+      gefälschte Zeilen aus Logdateien ([ADR 0025](docs/adr/0025-logdateien-ohne-journald.md)) füllen die Tabelle so nicht.
+    - Seit wann SerMon die Quellen eines Nodes lernt, steht in `nodes.learning_since`: die Anmeldung des Nodes, für
+      ältere Nodes das Update auf M3-16. Die Events vor dem Update kann die Migration wegen RLS nicht lesen.
+- **Auswertungen** (M3-16): `GetSecurityOverview` liefert für einen Zeitraum die Fehlversuche
+  (`ssh.login.failed`, `ssh.login.invalid_user`) pro Node in höchstens 200 Intervallen, die zehn Adressen und User
+  mit den meisten Fehlversuchen (mit Zahl der Nodes, letztem Zeitpunkt und den unverifizierten) und Summen:
+  Logins, Logins von neuen Quellen, Root-Logins und sudo-Fehler. `ListSecurityEvents` filtert auf neue Quellen.
+- **CSV-Export** (M3-16): `ExportSecurityEvents` mit denselben Filtern, höchstens 10 000 Events und 8 MiB. Zellen, die
+  mit `=`, `+`, `-`, `@`, Tab oder CR beginnen, bekommen ein führendes Apostroph (CSV-Injection).
 
 | Event                                 | Erkennung (Beispiele)                                                                   | Felder                                      |
 |---------------------------------------|-----------------------------------------------------------------------------------------|---------------------------------------------|
@@ -687,7 +702,7 @@ gefuzzt** (`cargo-fuzz`).
   trägt `source: unverified`; UI und Kanäle sagen es.
 
 **Anreicherung im Server (optional):** GeoIP (Land/ASN) über eine **lokale** MaxMind-GeoLite2-Datenbank, ohne externe
-Abfragen. Pro User wird eine Liste „bekannter IPs“ geführt, um „Login von neuer IP“ zu erkennen.
+Abfragen. Für „Login von neuer IP“ dienen die bekannten Quellen pro Node und User (M3-16, oben).
 
 ---
 
@@ -775,6 +790,8 @@ Die Regeltypen im Einzelnen (M2-03):
     (Fleet-Korrelation; jeder beteiligte Node bekommt einen Alert).
   - `notifyFields` nennt die Felder des neuesten Events für die Benachrichtigung (ohne Steuerzeichen, höchstens
     256 Bytes je Wert).
+  - `learning` (M3-16) lässt die Events eines Nodes so lange nach `nodes.learning_since` aus (höchstens 30 Tage):
+    Auf einem neuen Node ist jede Quelle neu.
   - Ein Alert hält, solange die Zahl reicht; das Fenster ersetzt `clear`. Pro Regel und Runde gibt es höchstens 100
     Instanzen und 50 000 gelesene Events.
 
@@ -844,7 +861,7 @@ einen **Dry-Run-Diff**.
 |                   | Dieselbe IP auf ≥ 3 Nodes (Fleet-Korrelation)                  | event             | ✓                                   |
 |                   | **Erfolgreicher Login nach vielen Fehlversuchen** derselben IP | event             | – / ✓                               |
 |                   | Root-Login per SSH erfolgreich                                 | event             | ✓                                   |
-|                   | Login von neuer IP / neuem Land                                | event             | ✓ (Info)                            |
+|                   | Login von neuer Quelle (M3-16) / neuem Land                    | event             | ✓ (Warnung)                         |
 |                   | sudo-Authentifizierungsfehler                                  | event             | 3 / 10 in 10 min                     |
 |                   | sudo ohne Berechtigung („not in sudoers“)                      | event             | ✓                                   |
 |                   | Neuer Benutzer angelegt                                        | event             | ✓                                   |
@@ -870,8 +887,10 @@ vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
   Berechtigung (neu) und neuer Benutzer. „Info“ gibt es als Stufe nicht; Reboot meldet eine Warnung.
 - **Zustände (M2-22):** RAID degradiert (kritisch), systemd-Unit failed (Warnung, eine Instanz pro Unit), Uhr nicht
   synchronisiert (Warnung nach 30 min) – [ADR 0026](docs/adr/0026-zustands-collectors.md).
-- **Später:** „Login von neuer IP / neuem Land“ braucht die Liste bekannter IPs und GeoIP (§11). Updates und Anomalien
-  kommen in späteren Meilensteinen.
+- **Login von neuer Quelle** (M3-16): `security.ssh.login_new_source` meldet eine Warnung pro User und Quelle, wenn
+  SerMon den Node schon 7 Tage kennt (`learning: 168h`); „Info“ gibt es als Stufe nicht.
+- **Später:** „Login aus neuem Land“ braucht GeoIP (§11, M3-18). Updates und Anomalien kommen in späteren
+  Meilensteinen.
 
 ### 12.4 Benachrichtigungskanäle
 

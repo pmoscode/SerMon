@@ -190,6 +190,12 @@ func repeat(kind secevent.Kind, n int, ip, user string) []secevent.Event {
 
 const attacker, colleague = "192.0.2.7", "198.51.100.20"
 
+// newSource marks a login as the first from its source, as the store does.
+func newSource(e secevent.Event) secevent.Event {
+	e.NewSource = true
+	return e
+}
+
 // Every shipped rule needs one (TestDefaults_EachRuleFiresOnItsData).
 var scenarios = map[alert.RuleID]scenario{
 	"system.node.offline":         {fireSeen: 90 * time.Second, calmSeen: 20 * time.Second, want: critical},
@@ -249,6 +255,12 @@ var scenarios = map[alert.RuleID]scenario{
 	},
 	"security.ssh.root_login": {
 		fireEvents: []secevent.Event{event(secevent.SSHLoginSucceeded, web, time.Minute, colleague, "root")},
+		calmEvents: []secevent.Event{event(secevent.SSHLoginSucceeded, web, time.Minute, colleague, "alice")}, want: warning,
+	},
+	// M3-16: the first login of a user from a source; the node of the scenarios has no
+	// enrollment time, so its learning week is over.
+	"security.ssh.login_new_source": {
+		fireEvents: []secevent.Event{newSource(event(secevent.SSHLoginSucceeded, web, time.Minute, colleague, "alice"))},
 		calmEvents: []secevent.Event{event(secevent.SSHLoginSucceeded, web, time.Minute, colleague, "alice")}, want: warning,
 	},
 	"security.sudo.auth_failed": {

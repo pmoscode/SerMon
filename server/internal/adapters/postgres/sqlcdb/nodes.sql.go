@@ -97,7 +97,8 @@ const listVisibleNodes = `-- name: ListVisibleNodes :many
 SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version, n.kernel_release,
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
-       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags, n.security_source, n.logs_vetoed
+       coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags, n.security_source, n.logs_vetoed,
+       n.learning_since
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
 ORDER BY n.hostname, n.id
@@ -129,6 +130,7 @@ type ListVisibleNodesRow struct {
 	Tags           []byte
 	SecuritySource string
 	LogsVetoed     bool
+	LearningSince  time.Time
 }
 
 // Nodes of the scope's groups with their group name, for the UI (M1-26).
@@ -162,6 +164,7 @@ func (q *Queries) ListVisibleNodes(ctx context.Context, arg ListVisibleNodesPara
 			&i.Tags,
 			&i.SecuritySource,
 			&i.LogsVetoed,
+			&i.LearningSince,
 		); err != nil {
 			return nil, err
 		}

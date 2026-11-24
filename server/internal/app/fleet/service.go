@@ -66,6 +66,9 @@ type Node struct {
 	TakeoverUntil *time.Time
 	// Tags are the free key=value pairs admins set (M2-29).
 	Tags tag.Tags
+	// LearningSince is when SerMon began to learn the node's login sources (M3-16): its
+	// enrollment, for nodes enrolled before that the upgrade.
+	LearningSince time.Time
 }
 
 // Directory reads node records within a scope.

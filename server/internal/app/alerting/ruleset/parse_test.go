@@ -235,13 +235,15 @@ func TestParse_EventRule(t *testing.T) {
 	def, err = ruleset.Parse([]byte(strings.NewReplacer(
 		"event: ssh.login.failed", "event: ssh.login.success\n  match: { user: root }\n  after: { event: ssh.login.failed, count: 5, window: 1h }",
 		"window: 5m, warning: 10, critical: 50", "of: nodes, window: 15m, critical: 3",
+		"notifyFields:", "learning: 168h\n  notifyFields:",
 	).Replace(bruteforceRule)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	ev = def.Rule.Evaluator.(alerting.EventRule) //nolint:forcetypeassert // checked above
 	if ev.Kind != secevent.SSHLoginSucceeded || ev.Match["user"] != "root" || ev.Count != alerting.CountNodes || ev.Warning != 0 || ev.Critical != 3 ||
-		ev.After == nil || *ev.After != (alerting.EventCondition{Kind: secevent.SSHLoginFailed, Count: 5, Window: time.Hour}) {
+		ev.After == nil || *ev.After != (alerting.EventCondition{Kind: secevent.SSHLoginFailed, Count: 5, Window: time.Hour}) ||
+		ev.Learning != 7*24*time.Hour {
 		t.Errorf("event rule with options = %+v", ev)
 	}
 }
@@ -262,6 +264,8 @@ func TestParse_RejectsInvalidEventRules(t *testing.T) {
 		"bad after":            {"notifyFields:", "after: { event: ssh.login.failed, count: 0, window: 1h }\n  notifyFields:", "count"},
 		"bad after window":     {"notifyFields:", "after: { event: ssh.login.failed, count: 3, window: soon }\n  notifyFields:", "after.window"},
 		"counting nodes alone": {"groupBy: [ ip ]\n", "", ""},
+		"learning in days":     {"notifyFields:", "learning: 7d\n  notifyFields:", "learning"},
+		"learning too long":    {"notifyFields:", "learning: 1000h\n  notifyFields:", "learning"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if !strings.Contains(bruteforceRule, tc.old) {

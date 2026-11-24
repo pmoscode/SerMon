@@ -18,7 +18,7 @@ func TestFieldsOf_FollowTheTableOfKonzept(t *testing.T) {
 	tests := map[secevent.Kind][]string{
 		secevent.SSHLoginFailed:       {"ts", "user", "ip", "port", "method", "invalid_user"},
 		secevent.SSHInvalidUser:       {"ts", "user", "ip", "port"},
-		secevent.SSHLoginSucceeded:    {"ts", "user", "ip", "port", "method", "key_type", "key_fingerprint"},
+		secevent.SSHLoginSucceeded:    {"ts", "user", "ip", "port", "method", "key_type", "key_fingerprint", "new_source"},
 		secevent.SSHPreauthDisconnect: {"ts", "user", "ip", "port"},
 		secevent.SudoAuthFailed:       {"ts", "user", "tty"},
 		secevent.SudoNotAllowed:       {"ts", "user", "target", "tty"},
@@ -68,6 +68,7 @@ func TestField_RendersTheValues(t *testing.T) {
 		{secevent.Event{Kind: secevent.OOMKill, Details: secevent.Details{PID: 4711, Process: "java"}}, "process", "java"},
 		{secevent.Event{Kind: secevent.SystemReboot, Details: secevent.Details{PreviousBootID: "b1", UptimeBefore: &uptime}}, "uptime_before", "3h0m2s"},
 		{secevent.Event{Kind: secevent.SudoNotAllowed, User: "alice", Details: secevent.Details{Target: "root", TTY: "pts/0"}}, "target", "root"},
+		{secevent.Event{Kind: secevent.SSHLoginSucceeded, User: "alice", NewSource: true}, "new_source", "true"},
 	}
 	for _, tt := range tests {
 		got, ok := tt.event.Field(tt.name)
@@ -114,7 +115,7 @@ func TestField_RendersTheServerEvents(t *testing.T) {
 func TestField_IsMissingWhenEmptyOrNotOfTheKind(t *testing.T) {
 	e := failed()
 	e.Remote.Port = 0
-	for _, name := range []string{"port", "invalid_user", "uid", "process", "nonsense"} {
+	for _, name := range []string{"port", "invalid_user", "uid", "process", "new_source", "nonsense"} {
 		if got, ok := e.Field(name); ok {
 			t.Errorf("Field(%s) = %q, want none", name, got)
 		}
@@ -164,5 +165,32 @@ func TestGroupable_AreIPAndUserWhereTheKindHasThem(t *testing.T) {
 	}
 	if secevent.Groupable(secevent.SSHLoginFailed, "port") || secevent.Groupable(secevent.SSHLoginFailed, "ts") {
 		t.Error("only ip and user group")
+	}
+}
+
+// The source a successful login is known by (M3-16): the address, IPv6 by its /64 like the
+// alerts, else the host name sshd logged.
+func TestLoginSource(t *testing.T) {
+	login := func(r *secevent.Remote) secevent.Event {
+		return secevent.Event{Kind: secevent.SSHLoginSucceeded, User: "alice", Remote: r}
+	}
+	tests := []struct {
+		name   string
+		event  secevent.Event
+		want   string
+		wantOK bool
+	}{
+		{"IPv4", login(&secevent.Remote{IP: netip.MustParseAddr("192.0.2.7"), Port: 50022}), "192.0.2.7", true},
+		{"IPv6 by its /64", login(&secevent.Remote{IP: netip.MustParseAddr("2001:db8:1:2:aaaa::1")}), "2001:db8:1:2::/64", true},
+		{"host name", login(&secevent.Remote{Host: "jump.example"}), "jump.example", true},
+		{"no remote (console)", login(nil), "", false},
+		{"no address nor host", login(&secevent.Remote{Port: 22}), "", false},
+		{"a failed login", secevent.Event{Kind: secevent.SSHLoginFailed, Remote: &secevent.Remote{IP: netip.MustParseAddr("192.0.2.7")}}, "", false},
+	}
+	for _, tt := range tests {
+		got, ok := tt.event.LoginSource()
+		if got != tt.want || ok != tt.wantOK {
+			t.Errorf("%s: LoginSource() = %q, %v; want %q, %v", tt.name, got, ok, tt.want, tt.wantOK)
+		}
 	}
 }

@@ -12,7 +12,7 @@ import (
 var fieldsOf = map[Kind][]string{
 	SSHLoginFailed:       {"ts", "user", "ip", "port", "method", "invalid_user"},
 	SSHInvalidUser:       {"ts", "user", "ip", "port"},
-	SSHLoginSucceeded:    {"ts", "user", "ip", "port", "method", "key_type", "key_fingerprint"},
+	SSHLoginSucceeded:    {"ts", "user", "ip", "port", "method", "key_type", "key_fingerprint", "new_source"},
 	SSHPreauthDisconnect: {"ts", "user", "ip", "port"},
 	SudoAuthFailed:       {"ts", "user", "tty"},
 	SudoNotAllowed:       {"ts", "user", "target", "tty"},
@@ -108,6 +108,10 @@ func (e Event) Field(name string) (string, bool) {
 		v = d.Reason
 	case "previous_ip":
 		v = d.PreviousIP
+	case "new_source":
+		if e.NewSource {
+			v = "true"
+		}
 	}
 	return v, v != ""
 }
@@ -126,4 +130,14 @@ func (e Event) GroupKey(name string) (string, bool) {
 		return netip.PrefixFrom(e.Remote.IP, ipv6Group).Masked().String(), true
 	}
 	return e.Field(name)
+}
+
+// LoginSource returns what a successful login is known by on its node (M3-16): the address, an
+// IPv6 address by its /64 like GroupKey, else the host name sshd logged; false for other kinds
+// and logins without either (the console).
+func (e Event) LoginSource() (string, bool) {
+	if e.Kind != SSHLoginSucceeded || e.Remote == nil || (!e.Remote.IP.IsValid() && e.Remote.Host == "") {
+		return "", false
+	}
+	return e.GroupKey("ip")
 }

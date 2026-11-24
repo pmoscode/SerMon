@@ -91,9 +91,10 @@ func (b *InsertNotificationDeliveryBatchResults) Close() error {
 
 const insertSecurityEvent = `-- name: InsertSecurityEvent :batchexec
 INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip, remote_host, remote_port, details,
-                             unverified)
+                             unverified, new_source)
 VALUES (current_org_id(), $1, $2, $3, $4,
-        $5, $6, $7, $8, $9)
+        $5, $6, $7, $8, $9,
+        $10)
 `
 
 type InsertSecurityEventBatchResults struct {
@@ -112,6 +113,7 @@ type InsertSecurityEventParams struct {
 	RemotePort pgtype.Int4
 	Details    []byte
 	Unverified bool
+	NewSource  bool
 }
 
 func (q *Queries) InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults {
@@ -127,6 +129,7 @@ func (q *Queries) InsertSecurityEvent(ctx context.Context, arg []InsertSecurityE
 			a.RemotePort,
 			a.Details,
 			a.Unverified,
+			a.NewSource,
 		}
 		batch.Queue(insertSecurityEvent, vals...)
 	}

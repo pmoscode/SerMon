@@ -124,6 +124,9 @@ type Event struct {
 	Details    Details
 	// Unverified: from a classic log file whose sender anyone on the host could be (ADR 0025).
 	Unverified bool
+	// NewSource (set by the store, M3-16): the first successful login of the user from the
+	// source (LoginSource) on the node.
+	NewSource bool
 }
 
 var hostName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,62})(\.[a-z0-9]([a-z0-9-]{0,62}))*$`)

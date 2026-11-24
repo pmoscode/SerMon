@@ -42,9 +42,11 @@ type ListSecurityEventsRequest struct {
 	// page_size is the number of events per page; 0 means 100, at most 500.
 	PageSize int32 `protobuf:"varint,7,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	// page_token continues after the previous page.
-	PageToken     string `protobuf:"bytes,8,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PageToken string `protobuf:"bytes,8,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	// new_sources_only keeps the successful logins from a source new to the node (new_source).
+	NewSourcesOnly bool `protobuf:"varint,9,opt,name=new_sources_only,json=newSourcesOnly,proto3" json:"new_sources_only,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ListSecurityEventsRequest) Reset() {
@@ -133,6 +135,13 @@ func (x *ListSecurityEventsRequest) GetPageToken() string {
 	return ""
 }
 
+func (x *ListSecurityEventsRequest) GetNewSourcesOnly() bool {
+	if x != nil {
+		return x.NewSourcesOnly
+	}
+	return false
+}
+
 // ListSecurityEventsResponse is one page of events.
 type ListSecurityEventsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -214,7 +223,10 @@ type SecurityEvent struct {
 	Details *SecurityEventDetails `protobuf:"bytes,10,opt,name=details,proto3" json:"details,omitempty"`
 	// unverified is set for events from a classic log file whose sender anyone on the host could
 	// be (ADR 0025); the UI marks them.
-	Unverified    bool `protobuf:"varint,11,opt,name=unverified,proto3" json:"unverified,omitempty"`
+	Unverified bool `protobuf:"varint,11,opt,name=unverified,proto3" json:"unverified,omitempty"`
+	// new_source is set on a successful login of the user from an address (or host name) for the
+	// first time on the node (M3-16).
+	NewSource     bool `protobuf:"varint,12,opt,name=new_source,json=newSource,proto3" json:"new_source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -322,6 +334,13 @@ func (x *SecurityEvent) GetDetails() *SecurityEventDetails {
 func (x *SecurityEvent) GetUnverified() bool {
 	if x != nil {
 		return x.Unverified
+	}
+	return false
+}
+
+func (x *SecurityEvent) GetNewSource() bool {
+	if x != nil {
+		return x.NewSource
 	}
 	return false
 }
@@ -499,11 +518,653 @@ func (x *SecurityEventDetails) GetPreviousIp() string {
 	return ""
 }
 
+// SecurityEventFilter selects events like ListSecurityEventsRequest; from and to are required.
+type SecurityEventFilter struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// from is the start of the time range (inclusive).
+	From *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	// to is the end of the time range (exclusive); at most 366 days after from.
+	To *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=to,proto3" json:"to,omitempty"`
+	// node_ids limits the result to these nodes.
+	NodeIds []string `protobuf:"bytes,3,rep,name=node_ids,json=nodeIds,proto3" json:"node_ids,omitempty"`
+	// kinds limits the result to these event kinds, e.g. ssh.login.failed.
+	Kinds []string `protobuf:"bytes,4,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	// user is an exact user name.
+	User *string `protobuf:"bytes,5,opt,name=user,proto3,oneof" json:"user,omitempty"`
+	// network is an IP address or a network in CIDR notation, e.g. 192.0.2.0/24.
+	Network string `protobuf:"bytes,6,opt,name=network,proto3" json:"network,omitempty"`
+	// new_sources_only keeps the successful logins from a source new to the node.
+	NewSourcesOnly bool `protobuf:"varint,7,opt,name=new_sources_only,json=newSourcesOnly,proto3" json:"new_sources_only,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SecurityEventFilter) Reset() {
+	*x = SecurityEventFilter{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecurityEventFilter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecurityEventFilter) ProtoMessage() {}
+
+func (x *SecurityEventFilter) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecurityEventFilter.ProtoReflect.Descriptor instead.
+func (*SecurityEventFilter) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SecurityEventFilter) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *SecurityEventFilter) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+func (x *SecurityEventFilter) GetNodeIds() []string {
+	if x != nil {
+		return x.NodeIds
+	}
+	return nil
+}
+
+func (x *SecurityEventFilter) GetKinds() []string {
+	if x != nil {
+		return x.Kinds
+	}
+	return nil
+}
+
+func (x *SecurityEventFilter) GetUser() string {
+	if x != nil && x.User != nil {
+		return *x.User
+	}
+	return ""
+}
+
+func (x *SecurityEventFilter) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
+func (x *SecurityEventFilter) GetNewSourcesOnly() bool {
+	if x != nil {
+		return x.NewSourcesOnly
+	}
+	return false
+}
+
+// GetSecurityOverviewRequest is the time range and optionally the nodes.
+type GetSecurityOverviewRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// from is the start of the time range (inclusive).
+	From *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	// to is the end of the time range (exclusive); at most 366 days after from.
+	To *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=to,proto3" json:"to,omitempty"`
+	// node_ids limits the overview to these nodes.
+	NodeIds       []string `protobuf:"bytes,3,rep,name=node_ids,json=nodeIds,proto3" json:"node_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecurityOverviewRequest) Reset() {
+	*x = GetSecurityOverviewRequest{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecurityOverviewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecurityOverviewRequest) ProtoMessage() {}
+
+func (x *GetSecurityOverviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecurityOverviewRequest.ProtoReflect.Descriptor instead.
+func (*GetSecurityOverviewRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetSecurityOverviewRequest) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *GetSecurityOverviewRequest) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+func (x *GetSecurityOverviewRequest) GetNodeIds() []string {
+	if x != nil {
+		return x.NodeIds
+	}
+	return nil
+}
+
+// GetSecurityOverviewResponse are the evaluations. Failed logins are ssh.login.failed and
+// ssh.login.invalid_user.
+type GetSecurityOverviewResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// step is the width of a bucket of failed_logins, chosen for at most 200 buckets.
+	Step *durationpb.Duration `protobuf:"bytes,1,opt,name=step,proto3" json:"step,omitempty"`
+	// failed_logins are the failed logins per node and bucket; empty buckets are left out.
+	FailedLogins []*NodeEventSeries `protobuf:"bytes,2,rep,name=failed_logins,json=failedLogins,proto3" json:"failed_logins,omitempty"`
+	// top_ips are the addresses with the most failed logins, at most 10.
+	TopIps []*SecurityEventCount `protobuf:"bytes,3,rep,name=top_ips,json=topIps,proto3" json:"top_ips,omitempty"`
+	// top_users are the user names with the most failed logins, at most 10; the empty name is
+	// what an attacker tried.
+	TopUsers []*SecurityEventCount `protobuf:"bytes,4,rep,name=top_users,json=topUsers,proto3" json:"top_users,omitempty"`
+	// totals count the events of the range.
+	Totals        *SecurityEventTotals `protobuf:"bytes,5,opt,name=totals,proto3" json:"totals,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSecurityOverviewResponse) Reset() {
+	*x = GetSecurityOverviewResponse{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSecurityOverviewResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSecurityOverviewResponse) ProtoMessage() {}
+
+func (x *GetSecurityOverviewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSecurityOverviewResponse.ProtoReflect.Descriptor instead.
+func (*GetSecurityOverviewResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetSecurityOverviewResponse) GetStep() *durationpb.Duration {
+	if x != nil {
+		return x.Step
+	}
+	return nil
+}
+
+func (x *GetSecurityOverviewResponse) GetFailedLogins() []*NodeEventSeries {
+	if x != nil {
+		return x.FailedLogins
+	}
+	return nil
+}
+
+func (x *GetSecurityOverviewResponse) GetTopIps() []*SecurityEventCount {
+	if x != nil {
+		return x.TopIps
+	}
+	return nil
+}
+
+func (x *GetSecurityOverviewResponse) GetTopUsers() []*SecurityEventCount {
+	if x != nil {
+		return x.TopUsers
+	}
+	return nil
+}
+
+func (x *GetSecurityOverviewResponse) GetTotals() *SecurityEventTotals {
+	if x != nil {
+		return x.Totals
+	}
+	return nil
+}
+
+// NodeEventSeries are the counts of one node over time.
+type NodeEventSeries struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id is the node.
+	NodeId string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	// points are the buckets with events, oldest first.
+	Points        []*EventCountPoint `protobuf:"bytes,2,rep,name=points,proto3" json:"points,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeEventSeries) Reset() {
+	*x = NodeEventSeries{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeEventSeries) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeEventSeries) ProtoMessage() {}
+
+func (x *NodeEventSeries) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeEventSeries.ProtoReflect.Descriptor instead.
+func (*NodeEventSeries) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *NodeEventSeries) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *NodeEventSeries) GetPoints() []*EventCountPoint {
+	if x != nil {
+		return x.Points
+	}
+	return nil
+}
+
+// EventCountPoint is the count of a bucket.
+type EventCountPoint struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// at is the start of the bucket.
+	At *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`
+	// count is the number of events in it.
+	Count         uint64 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventCountPoint) Reset() {
+	*x = EventCountPoint{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventCountPoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventCountPoint) ProtoMessage() {}
+
+func (x *EventCountPoint) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventCountPoint.ProtoReflect.Descriptor instead.
+func (*EventCountPoint) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *EventCountPoint) GetAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.At
+	}
+	return nil
+}
+
+func (x *EventCountPoint) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// SecurityEventCount is a value (address or user name) with its failed logins. Values come from
+// the nodes' logs: render them as text.
+type SecurityEventCount struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// value is the address or the user name.
+	Value string `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	// count is the number of failed logins.
+	Count uint64 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	// nodes is on how many nodes they happened.
+	Nodes uint32 `protobuf:"varint,3,opt,name=nodes,proto3" json:"nodes,omitempty"`
+	// last_at is the time of the latest one.
+	LastAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
+	// unverified counts those from classic log files (ADR 0025).
+	Unverified    uint64 `protobuf:"varint,5,opt,name=unverified,proto3" json:"unverified,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecurityEventCount) Reset() {
+	*x = SecurityEventCount{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecurityEventCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecurityEventCount) ProtoMessage() {}
+
+func (x *SecurityEventCount) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecurityEventCount.ProtoReflect.Descriptor instead.
+func (*SecurityEventCount) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SecurityEventCount) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *SecurityEventCount) GetCount() uint64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *SecurityEventCount) GetNodes() uint32 {
+	if x != nil {
+		return x.Nodes
+	}
+	return 0
+}
+
+func (x *SecurityEventCount) GetLastAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastAt
+	}
+	return nil
+}
+
+func (x *SecurityEventCount) GetUnverified() uint64 {
+	if x != nil {
+		return x.Unverified
+	}
+	return 0
+}
+
+// SecurityEventTotals are counts of a time range.
+type SecurityEventTotals struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// failed_logins counts ssh.login.failed and ssh.login.invalid_user.
+	FailedLogins uint64 `protobuf:"varint,1,opt,name=failed_logins,json=failedLogins,proto3" json:"failed_logins,omitempty"`
+	// logins counts ssh.login.success.
+	Logins uint64 `protobuf:"varint,2,opt,name=logins,proto3" json:"logins,omitempty"`
+	// new_source_logins counts the logins from a source new to the node.
+	NewSourceLogins uint64 `protobuf:"varint,3,opt,name=new_source_logins,json=newSourceLogins,proto3" json:"new_source_logins,omitempty"`
+	// root_logins counts the logins of root.
+	RootLogins uint64 `protobuf:"varint,4,opt,name=root_logins,json=rootLogins,proto3" json:"root_logins,omitempty"`
+	// sudo_failures counts sudo.auth.failed and sudo.not_allowed.
+	SudoFailures  uint64 `protobuf:"varint,5,opt,name=sudo_failures,json=sudoFailures,proto3" json:"sudo_failures,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SecurityEventTotals) Reset() {
+	*x = SecurityEventTotals{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SecurityEventTotals) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SecurityEventTotals) ProtoMessage() {}
+
+func (x *SecurityEventTotals) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SecurityEventTotals.ProtoReflect.Descriptor instead.
+func (*SecurityEventTotals) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SecurityEventTotals) GetFailedLogins() uint64 {
+	if x != nil {
+		return x.FailedLogins
+	}
+	return 0
+}
+
+func (x *SecurityEventTotals) GetLogins() uint64 {
+	if x != nil {
+		return x.Logins
+	}
+	return 0
+}
+
+func (x *SecurityEventTotals) GetNewSourceLogins() uint64 {
+	if x != nil {
+		return x.NewSourceLogins
+	}
+	return 0
+}
+
+func (x *SecurityEventTotals) GetRootLogins() uint64 {
+	if x != nil {
+		return x.RootLogins
+	}
+	return 0
+}
+
+func (x *SecurityEventTotals) GetSudoFailures() uint64 {
+	if x != nil {
+		return x.SudoFailures
+	}
+	return 0
+}
+
+// ExportSecurityEventsRequest is the filter of the export.
+type ExportSecurityEventsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// filter selects the events.
+	Filter        *SecurityEventFilter `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportSecurityEventsRequest) Reset() {
+	*x = ExportSecurityEventsRequest{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportSecurityEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportSecurityEventsRequest) ProtoMessage() {}
+
+func (x *ExportSecurityEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportSecurityEventsRequest.ProtoReflect.Descriptor instead.
+func (*ExportSecurityEventsRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ExportSecurityEventsRequest) GetFilter() *SecurityEventFilter {
+	if x != nil {
+		return x.Filter
+	}
+	return nil
+}
+
+// ExportSecurityEventsResponse is the CSV file.
+type ExportSecurityEventsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// file_name is a suggestion for saving it.
+	FileName string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	// content is the CSV text (UTF-8, a header line, comma-separated, CRLF line ends).
+	Content []byte `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	// rows is the number of events in it.
+	Rows uint32 `protobuf:"varint,3,opt,name=rows,proto3" json:"rows,omitempty"`
+	// truncated is set if the filter selects more than the export holds.
+	Truncated     bool `protobuf:"varint,4,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportSecurityEventsResponse) Reset() {
+	*x = ExportSecurityEventsResponse{}
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportSecurityEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportSecurityEventsResponse) ProtoMessage() {}
+
+func (x *ExportSecurityEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_security_event_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportSecurityEventsResponse.ProtoReflect.Descriptor instead.
+func (*ExportSecurityEventsResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_security_event_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ExportSecurityEventsResponse) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *ExportSecurityEventsResponse) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *ExportSecurityEventsResponse) GetRows() uint32 {
+	if x != nil {
+		return x.Rows
+	}
+	return 0
+}
+
+func (x *ExportSecurityEventsResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
 var File_sermon_web_v1_security_event_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\n" +
-	"\"sermon/web/v1/security_event.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xca\x04\n" +
+	"\"sermon/web/v1/security_event.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf4\x04\n" +
 	"\x19ListSecurityEventsRequest\x126\n" +
 	"\x04from\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x04from\x122\n" +
 	"\x02to\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x02to\x12,\n" +
@@ -514,11 +1175,12 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\tpage_size\x18\a \x01(\x05B\n" +
 	"\xbaH\a\x1a\x05\x18\xf4\x03(\x00R\bpageSize\x12&\n" +
 	"\n" +
-	"page_token\x18\b \x01(\tB\a\xbaH\x04r\x02\x18@R\tpageTokenB\a\n" +
+	"page_token\x18\b \x01(\tB\a\xbaH\x04r\x02\x18@R\tpageToken\x12(\n" +
+	"\x10new_sources_only\x18\t \x01(\bR\x0enewSourcesOnlyB\a\n" +
 	"\x05_user\"z\n" +
 	"\x1aListSecurityEventsResponse\x124\n" +
 	"\x06events\x18\x01 \x03(\v2\x1c.sermon.web.v1.SecurityEventR\x06events\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x98\x03\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xb7\x03\n" +
 	"\rSecurityEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12;\n" +
@@ -537,7 +1199,9 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	" \x01(\v2#.sermon.web.v1.SecurityEventDetailsR\adetails\x12\x1e\n" +
 	"\n" +
 	"unverified\x18\v \x01(\bR\n" +
-	"unverified\"\xe2\x03\n" +
+	"unverified\x12\x1d\n" +
+	"\n" +
+	"new_source\x18\f \x01(\bR\tnewSource\"\xe2\x03\n" +
 	"\x14SecurityEventDetails\x12\x16\n" +
 	"\x06method\x18\x01 \x01(\tR\x06method\x12!\n" +
 	"\finvalid_user\x18\x02 \x01(\bR\vinvalidUser\x12\x19\n" +
@@ -556,9 +1220,58 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\x06reason\x18\x0e \x01(\tR\x06reason\x12\x1f\n" +
 	"\vprevious_ip\x18\x0f \x01(\tR\n" +
 	"previousIpB\x06\n" +
-	"\x04_uid2\x81\x01\n" +
+	"\x04_uid\"\x9d\x04\n" +
+	"\x13SecurityEventFilter\x126\n" +
+	"\x04from\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x04from\x122\n" +
+	"\x02to\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x02to\x12,\n" +
+	"\bnode_ids\x18\x03 \x03(\tB\x11\xbaH\x0e\x92\x01\v\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\x12\xf2\x01\n" +
+	"\x05kinds\x18\x04 \x03(\tB\xdb\x01\xbaH\xd7\x01\x92\x01\xd3\x01\x10\v\x18\x01\"\xcc\x01r\xc9\x01R\x10ssh.login.failedR\x16ssh.login.invalid_userR\x11ssh.login.successR\x16ssh.preauth.disconnectR\x10sudo.auth.failedR\x10sudo.not_allowedR\fsudo.commandR\x0faccount.createdR\x0faccount.deletedR\rsystem.rebootR\x0fsystem.oom_killR\x05kinds\x12!\n" +
+	"\x04user\x18\x05 \x01(\tB\b\xbaH\x05r\x03(\x80\x01H\x00R\x04user\x88\x01\x01\x12!\n" +
+	"\anetwork\x18\x06 \x01(\tB\a\xbaH\x04r\x02\x18+R\anetwork\x12(\n" +
+	"\x10new_sources_only\x18\a \x01(\bR\x0enewSourcesOnlyB\a\n" +
+	"\x05_user\"\xb6\x01\n" +
+	"\x1aGetSecurityOverviewRequest\x126\n" +
+	"\x04from\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x04from\x122\n" +
+	"\x02to\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x02to\x12,\n" +
+	"\bnode_ids\x18\x03 \x03(\tB\x11\xbaH\x0e\x92\x01\v\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\"\xc9\x02\n" +
+	"\x1bGetSecurityOverviewResponse\x12-\n" +
+	"\x04step\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x04step\x12C\n" +
+	"\rfailed_logins\x18\x02 \x03(\v2\x1e.sermon.web.v1.NodeEventSeriesR\ffailedLogins\x12:\n" +
+	"\atop_ips\x18\x03 \x03(\v2!.sermon.web.v1.SecurityEventCountR\x06topIps\x12>\n" +
+	"\ttop_users\x18\x04 \x03(\v2!.sermon.web.v1.SecurityEventCountR\btopUsers\x12:\n" +
+	"\x06totals\x18\x05 \x01(\v2\".sermon.web.v1.SecurityEventTotalsR\x06totals\"b\n" +
+	"\x0fNodeEventSeries\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x126\n" +
+	"\x06points\x18\x02 \x03(\v2\x1e.sermon.web.v1.EventCountPointR\x06points\"S\n" +
+	"\x0fEventCountPoint\x12*\n" +
+	"\x02at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xab\x01\n" +
+	"\x12SecurityEventCount\x12\x14\n" +
+	"\x05value\x18\x01 \x01(\tR\x05value\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x14\n" +
+	"\x05nodes\x18\x03 \x01(\rR\x05nodes\x123\n" +
+	"\alast_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x1e\n" +
+	"\n" +
+	"unverified\x18\x05 \x01(\x04R\n" +
+	"unverified\"\xc4\x01\n" +
+	"\x13SecurityEventTotals\x12#\n" +
+	"\rfailed_logins\x18\x01 \x01(\x04R\ffailedLogins\x12\x16\n" +
+	"\x06logins\x18\x02 \x01(\x04R\x06logins\x12*\n" +
+	"\x11new_source_logins\x18\x03 \x01(\x04R\x0fnewSourceLogins\x12\x1f\n" +
+	"\vroot_logins\x18\x04 \x01(\x04R\n" +
+	"rootLogins\x12#\n" +
+	"\rsudo_failures\x18\x05 \x01(\x04R\fsudoFailures\"a\n" +
+	"\x1bExportSecurityEventsRequest\x12B\n" +
+	"\x06filter\x18\x01 \x01(\v2\".sermon.web.v1.SecurityEventFilterB\x06\xbaH\x03\xc8\x01\x01R\x06filter\"\x87\x01\n" +
+	"\x1cExportSecurityEventsResponse\x12\x1b\n" +
+	"\tfile_name\x18\x01 \x01(\tR\bfileName\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\fR\acontent\x12\x12\n" +
+	"\x04rows\x18\x03 \x01(\rR\x04rows\x12\x1c\n" +
+	"\ttruncated\x18\x04 \x01(\bR\ttruncated2\xea\x02\n" +
 	"\x14SecurityEventService\x12i\n" +
-	"\x12ListSecurityEvents\x12(.sermon.web.v1.ListSecurityEventsRequest\x1a).sermon.web.v1.ListSecurityEventsResponseB\xc1\x01\n" +
+	"\x12ListSecurityEvents\x12(.sermon.web.v1.ListSecurityEventsRequest\x1a).sermon.web.v1.ListSecurityEventsResponse\x12q\n" +
+	"\x13GetSecurityOverview\x12).sermon.web.v1.GetSecurityOverviewRequest\x1a*.sermon.web.v1.GetSecurityOverviewResponse\"\x03\x90\x02\x01\x12t\n" +
+	"\x14ExportSecurityEvents\x12*.sermon.web.v1.ExportSecurityEventsRequest\x1a+.sermon.web.v1.ExportSecurityEventsResponse\"\x03\x90\x02\x01B\xc1\x01\n" +
 	"\x11com.sermon.web.v1B\x12SecurityEventProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -573,30 +1286,56 @@ func file_sermon_web_v1_security_event_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_security_event_proto_rawDescData
 }
 
-var file_sermon_web_v1_security_event_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_sermon_web_v1_security_event_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_sermon_web_v1_security_event_proto_goTypes = []any{
-	(*ListSecurityEventsRequest)(nil),  // 0: sermon.web.v1.ListSecurityEventsRequest
-	(*ListSecurityEventsResponse)(nil), // 1: sermon.web.v1.ListSecurityEventsResponse
-	(*SecurityEvent)(nil),              // 2: sermon.web.v1.SecurityEvent
-	(*SecurityEventDetails)(nil),       // 3: sermon.web.v1.SecurityEventDetails
-	(*timestamppb.Timestamp)(nil),      // 4: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),        // 5: google.protobuf.Duration
+	(*ListSecurityEventsRequest)(nil),    // 0: sermon.web.v1.ListSecurityEventsRequest
+	(*ListSecurityEventsResponse)(nil),   // 1: sermon.web.v1.ListSecurityEventsResponse
+	(*SecurityEvent)(nil),                // 2: sermon.web.v1.SecurityEvent
+	(*SecurityEventDetails)(nil),         // 3: sermon.web.v1.SecurityEventDetails
+	(*SecurityEventFilter)(nil),          // 4: sermon.web.v1.SecurityEventFilter
+	(*GetSecurityOverviewRequest)(nil),   // 5: sermon.web.v1.GetSecurityOverviewRequest
+	(*GetSecurityOverviewResponse)(nil),  // 6: sermon.web.v1.GetSecurityOverviewResponse
+	(*NodeEventSeries)(nil),              // 7: sermon.web.v1.NodeEventSeries
+	(*EventCountPoint)(nil),              // 8: sermon.web.v1.EventCountPoint
+	(*SecurityEventCount)(nil),           // 9: sermon.web.v1.SecurityEventCount
+	(*SecurityEventTotals)(nil),          // 10: sermon.web.v1.SecurityEventTotals
+	(*ExportSecurityEventsRequest)(nil),  // 11: sermon.web.v1.ExportSecurityEventsRequest
+	(*ExportSecurityEventsResponse)(nil), // 12: sermon.web.v1.ExportSecurityEventsResponse
+	(*timestamppb.Timestamp)(nil),        // 13: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),          // 14: google.protobuf.Duration
 }
 var file_sermon_web_v1_security_event_proto_depIdxs = []int32{
-	4, // 0: sermon.web.v1.ListSecurityEventsRequest.from:type_name -> google.protobuf.Timestamp
-	4, // 1: sermon.web.v1.ListSecurityEventsRequest.to:type_name -> google.protobuf.Timestamp
-	2, // 2: sermon.web.v1.ListSecurityEventsResponse.events:type_name -> sermon.web.v1.SecurityEvent
-	4, // 3: sermon.web.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	4, // 4: sermon.web.v1.SecurityEvent.received_at:type_name -> google.protobuf.Timestamp
-	3, // 5: sermon.web.v1.SecurityEvent.details:type_name -> sermon.web.v1.SecurityEventDetails
-	5, // 6: sermon.web.v1.SecurityEventDetails.uptime_before:type_name -> google.protobuf.Duration
-	0, // 7: sermon.web.v1.SecurityEventService.ListSecurityEvents:input_type -> sermon.web.v1.ListSecurityEventsRequest
-	1, // 8: sermon.web.v1.SecurityEventService.ListSecurityEvents:output_type -> sermon.web.v1.ListSecurityEventsResponse
-	8, // [8:9] is the sub-list for method output_type
-	7, // [7:8] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	13, // 0: sermon.web.v1.ListSecurityEventsRequest.from:type_name -> google.protobuf.Timestamp
+	13, // 1: sermon.web.v1.ListSecurityEventsRequest.to:type_name -> google.protobuf.Timestamp
+	2,  // 2: sermon.web.v1.ListSecurityEventsResponse.events:type_name -> sermon.web.v1.SecurityEvent
+	13, // 3: sermon.web.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	13, // 4: sermon.web.v1.SecurityEvent.received_at:type_name -> google.protobuf.Timestamp
+	3,  // 5: sermon.web.v1.SecurityEvent.details:type_name -> sermon.web.v1.SecurityEventDetails
+	14, // 6: sermon.web.v1.SecurityEventDetails.uptime_before:type_name -> google.protobuf.Duration
+	13, // 7: sermon.web.v1.SecurityEventFilter.from:type_name -> google.protobuf.Timestamp
+	13, // 8: sermon.web.v1.SecurityEventFilter.to:type_name -> google.protobuf.Timestamp
+	13, // 9: sermon.web.v1.GetSecurityOverviewRequest.from:type_name -> google.protobuf.Timestamp
+	13, // 10: sermon.web.v1.GetSecurityOverviewRequest.to:type_name -> google.protobuf.Timestamp
+	14, // 11: sermon.web.v1.GetSecurityOverviewResponse.step:type_name -> google.protobuf.Duration
+	7,  // 12: sermon.web.v1.GetSecurityOverviewResponse.failed_logins:type_name -> sermon.web.v1.NodeEventSeries
+	9,  // 13: sermon.web.v1.GetSecurityOverviewResponse.top_ips:type_name -> sermon.web.v1.SecurityEventCount
+	9,  // 14: sermon.web.v1.GetSecurityOverviewResponse.top_users:type_name -> sermon.web.v1.SecurityEventCount
+	10, // 15: sermon.web.v1.GetSecurityOverviewResponse.totals:type_name -> sermon.web.v1.SecurityEventTotals
+	8,  // 16: sermon.web.v1.NodeEventSeries.points:type_name -> sermon.web.v1.EventCountPoint
+	13, // 17: sermon.web.v1.EventCountPoint.at:type_name -> google.protobuf.Timestamp
+	13, // 18: sermon.web.v1.SecurityEventCount.last_at:type_name -> google.protobuf.Timestamp
+	4,  // 19: sermon.web.v1.ExportSecurityEventsRequest.filter:type_name -> sermon.web.v1.SecurityEventFilter
+	0,  // 20: sermon.web.v1.SecurityEventService.ListSecurityEvents:input_type -> sermon.web.v1.ListSecurityEventsRequest
+	5,  // 21: sermon.web.v1.SecurityEventService.GetSecurityOverview:input_type -> sermon.web.v1.GetSecurityOverviewRequest
+	11, // 22: sermon.web.v1.SecurityEventService.ExportSecurityEvents:input_type -> sermon.web.v1.ExportSecurityEventsRequest
+	1,  // 23: sermon.web.v1.SecurityEventService.ListSecurityEvents:output_type -> sermon.web.v1.ListSecurityEventsResponse
+	6,  // 24: sermon.web.v1.SecurityEventService.GetSecurityOverview:output_type -> sermon.web.v1.GetSecurityOverviewResponse
+	12, // 25: sermon.web.v1.SecurityEventService.ExportSecurityEvents:output_type -> sermon.web.v1.ExportSecurityEventsResponse
+	23, // [23:26] is the sub-list for method output_type
+	20, // [20:23] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_security_event_proto_init() }
@@ -606,13 +1345,14 @@ func file_sermon_web_v1_security_event_proto_init() {
 	}
 	file_sermon_web_v1_security_event_proto_msgTypes[0].OneofWrappers = []any{}
 	file_sermon_web_v1_security_event_proto_msgTypes[3].OneofWrappers = []any{}
+	file_sermon_web_v1_security_event_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_security_event_proto_rawDesc), len(file_sermon_web_v1_security_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

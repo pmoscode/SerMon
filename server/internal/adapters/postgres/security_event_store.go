@@ -28,6 +28,14 @@ var (
 	_ alerting.EventReader = (*SecurityEventStore)(nil)
 )
 
+// Bounds of the known login sources of a node (M3-16): a source unused for a year is new again,
+// and beyond MaxLoginSources an unknown source is neither recorded nor marked new (forged lines
+// from classic log files must not fill the table, ADR 0025).
+const (
+	ForgetSourcesAfter = 365 * 24 * time.Hour
+	MaxLoginSources    = 10_000
+)
+
 // NewSecurityEventStore returns the store on db.
 func NewSecurityEventStore(db *DB) *SecurityEventStore { return &SecurityEventStore{db: db} }
 
@@ -50,9 +58,25 @@ func (s *SecurityEventStore) Write(ctx context.Context, org tenant.OrgID, node i
 		written = nil
 		var rows []sqlcdb.InsertSecurityEventParams
 		seq := stored
+		learning := false
 		for _, b := range sorted {
 			if b.Seq > uint64(max(seq, 0)) {
 				for _, e := range b.Events {
+					if source, ok := e.LoginSource(); ok {
+						if !learning {
+							learning = true
+							if err := q.ForgetLoginSources(ctx, sqlcdb.ForgetLoginSourcesParams{NodeID: uuid.UUID(node), Before: time.Now().Add(-ForgetSourcesAfter)}); err != nil {
+								return wrap(err, "forget login sources")
+							}
+						}
+						inserted, err := q.LearnLoginSource(ctx, sqlcdb.LearnLoginSourceParams{
+							NodeID: uuid.UUID(node), UserName: e.User, Source: source, At: e.OccurredAt, MaxSources: MaxLoginSources,
+						})
+						if err != nil {
+							return wrap(err, "learn login source")
+						}
+						e.NewSource = len(inserted) == 1 && inserted[0]
+					}
 					row, err := insertParams(e)
 					if err != nil {
 						return err
@@ -123,7 +147,7 @@ func insertParams(e secevent.Event) (sqlcdb.InsertSecurityEventParams, error) {
 	}
 	p := sqlcdb.InsertSecurityEventParams{
 		NodeID: uuid.UUID(e.Node), OccurredAt: e.OccurredAt, Kind: string(e.Kind), UserName: pgtype.Text{String: e.User, Valid: e.User != "" || userKind(e.Kind)},
-		Details: details, Unverified: e.Unverified,
+		Details: details, Unverified: e.Unverified, NewSource: e.NewSource,
 	}
 	if r := e.Remote; r != nil {
 		if r.IP.IsValid() {
@@ -165,6 +189,7 @@ func (s *SecurityEventStore) List(ctx context.Context, scope tenant.Scope, f sec
 	if f.User != nil {
 		p.UserName = pgtype.Text{String: *f.User, Valid: true}
 	}
+	p.NewSourcesOnly = f.NewSourcesOnly
 	if f.Before != nil {
 		at := f.Before.At
 		p.BeforeTime, p.BeforeID = &at, pgtype.Int8{Int64: f.Before.ID, Valid: true}
@@ -218,7 +243,7 @@ func eventsOf[R any](rows []R, conv func(R) eventRow) ([]secevent.Event, error) 
 		r := conv(row)
 		e := secevent.Event{
 			ID: r.ID, Node: identity.NodeID(r.NodeID), OccurredAt: r.OccurredAt, ReceivedAt: r.ReceivedAt,
-			Kind: secevent.Kind(r.Kind), User: r.UserName.String, Unverified: r.Unverified,
+			Kind: secevent.Kind(r.Kind), User: r.UserName.String, Unverified: r.Unverified, NewSource: r.NewSource,
 		}
 		if r.RemoteIp != nil || r.RemoteHost.Valid {
 			e.Remote = &secevent.Remote{Host: r.RemoteHost.String, Port: uint16(max(min(r.RemotePort.Int32, 65535), 0))}
@@ -230,6 +255,90 @@ func eventsOf[R any](rows []R, conv func(R) eventRow) ([]secevent.Event, error) 
 			return nil, fmt.Errorf("decode details of event %d: %w", r.ID, err)
 		}
 		out = append(out, e)
+	}
+	return out, nil
+}
+
+// Overview evaluates the events of the query (secevents.Store, M3-16) in one tenant transaction.
+func (s *SecurityEventStore) Overview(ctx context.Context, scope tenant.Scope, q secevents.OverviewQuery) (secevents.Overview, error) {
+	nodes := make([]uuid.UUID, len(q.Nodes))
+	for i, n := range q.Nodes {
+		nodes[i] = uuid.UUID(n)
+	}
+	all, groups := scope.AllGroups(), groupIDs(scope)
+	top := int32(min(max(q.Top, 0), 1000))
+	var o secevents.Overview
+	err := s.db.InTenant(ctx, scope, func(qs *sqlcdb.Queries) error {
+		buckets, err := qs.FailedLoginBuckets(ctx, sqlcdb.FailedLoginBucketsParams{
+			Step: pgtype.Interval{Microseconds: q.Step.Microseconds(), Valid: true}, FromTime: q.From, ToTime: q.To,
+			AllGroups: all, GroupIds: groups, NodeIds: nodes,
+		})
+		if err != nil {
+			return wrap(err, "failed login buckets")
+		}
+		for _, b := range buckets {
+			node := identity.NodeID(b.NodeID)
+			if len(o.FailedLogins) == 0 || o.FailedLogins[len(o.FailedLogins)-1].Node != node {
+				o.FailedLogins = append(o.FailedLogins, secevents.NodeSeries{Node: node})
+			}
+			series := &o.FailedLogins[len(o.FailedLogins)-1]
+			series.Points = append(series.Points, secevents.Point{At: b.Bucket, Count: b.Events})
+		}
+		ips, err := qs.TopFailedIPs(ctx, sqlcdb.TopFailedIPsParams{
+			FromTime: q.From, ToTime: q.To, AllGroups: all, GroupIds: groups, NodeIds: nodes, MaxRows: top,
+		})
+		if err != nil {
+			return wrap(err, "top failed addresses")
+		}
+		for _, r := range ips {
+			o.TopIPs = append(o.TopIPs, secevents.Count{Value: r.RemoteIp.Unmap().String(), Count: r.Events, Nodes: int(r.Nodes), Last: r.LastAt, Unverified: r.Unverified})
+		}
+		users, err := qs.TopFailedUsers(ctx, sqlcdb.TopFailedUsersParams{
+			FromTime: q.From, ToTime: q.To, AllGroups: all, GroupIds: groups, NodeIds: nodes, MaxRows: top,
+		})
+		if err != nil {
+			return wrap(err, "top failed users")
+		}
+		for _, r := range users {
+			o.TopUsers = append(o.TopUsers, secevents.Count{Value: r.UserName, Count: r.Events, Nodes: int(r.Nodes), Last: r.LastAt, Unverified: r.Unverified})
+		}
+		t, err := qs.SecurityEventTotals(ctx, sqlcdb.SecurityEventTotalsParams{
+			FromTime: q.From, ToTime: q.To, AllGroups: all, GroupIds: groups, NodeIds: nodes,
+		})
+		if err != nil {
+			return wrap(err, "security event totals")
+		}
+		o.Totals = secevents.Totals{
+			FailedLogins: t.FailedLogins, Logins: t.Logins, NewSourceLogins: t.NewSourceLogins, RootLogins: t.RootLogins,
+			SudoFailures: t.SudoFailures,
+		}
+		return nil
+	})
+	if err != nil {
+		return secevents.Overview{}, err
+	}
+	return o, nil
+}
+
+// Hostnames returns the host names of the nodes of the scope among ids (secevents.Store).
+func (s *SecurityEventStore) Hostnames(ctx context.Context, scope tenant.Scope, ids []identity.NodeID) (map[identity.NodeID]string, error) {
+	p := sqlcdb.NodeHostnamesParams{NodeIds: make([]uuid.UUID, len(ids)), AllGroups: scope.AllGroups(), GroupIds: groupIDs(scope)}
+	for i, id := range ids {
+		p.NodeIds[i] = uuid.UUID(id)
+	}
+	out := make(map[identity.NodeID]string, len(ids))
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		rows, err := q.NodeHostnames(ctx, p)
+		if err != nil {
+			return wrap(err, "node host names")
+		}
+		for _, r := range rows {
+			out[identity.NodeID(r.ID)] = r.Hostname
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

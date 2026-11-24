@@ -33,6 +33,7 @@ const (
 	// MaxFieldBytes bounds a field value in a notification.
 	MaxFieldBytes  = 256
 	maxEventWindow = 24 * time.Hour
+	maxLearning    = 30 * 24 * time.Hour
 	maxEventCount  = 100_000
 	maxMatchValue  = secevent.MaxUser
 )
@@ -72,7 +73,9 @@ type EventCondition struct {
 // EventRule counts the events of one kind per node and groupBy values (ip, user) within Window,
 // optionally only those that match fields (user: root) or follow an EventCondition. The count
 // is compared with Warning and Critical (at least so many; 0: unused). NotifyFields are copied
-// from the latest event into the notification.
+// from the latest event into the notification. Learning leaves out the events of a node within
+// that time after SerMon began to learn it (fleet.Node.LearningSince: on a new node every login
+// source is new).
 type EventRule struct {
 	Kind              secevent.Kind
 	Match             map[string]string
@@ -82,6 +85,7 @@ type EventRule struct {
 	Warning, Critical int
 	After             *EventCondition
 	NotifyFields      []string
+	Learning          time.Duration
 }
 
 func validEventWindow(name string, w time.Duration) error {
@@ -107,6 +111,8 @@ func (r EventRule) Validate() error {
 		return fmt.Errorf("%w: count of events or nodes", alert.ErrInvalidRule)
 	case r.Count == CountNodes && len(r.GroupBy) == 0:
 		return fmt.Errorf("%w: counting nodes needs groupBy (the same IP on several nodes)", alert.ErrInvalidRule)
+	case r.Learning < 0 || r.Learning > maxLearning:
+		return fmt.Errorf("%w: learning must be between 0 and %v", alert.ErrInvalidRule, maxLearning)
 	}
 	if err := validEventWindow("count.window", r.Window); err != nil {
 		return err
@@ -199,7 +205,10 @@ func (r EventRule) Evaluate(ctx context.Context, env Env) ([]Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	events = slices.DeleteFunc(events, func(e secevent.Event) bool { return !r.matches(e) })
+	learned := r.learnedSince(env)
+	events = slices.DeleteFunc(events, func(e secevent.Event) bool {
+		return !r.matches(e) || e.OccurredAt.Before(learned[e.Node])
+	})
 	if r.After != nil && len(events) > 0 {
 		var cut bool
 		if events, cut, err = r.preceded(ctx, env, events); err != nil {
@@ -236,6 +245,21 @@ func (r EventRule) Evaluate(ctx context.Context, env Env) ([]Result, error) {
 		out = append(out, Result{Node: k.Node, Dimension: k.Dimension, Observation: o})
 	}
 	return out, nil
+}
+
+// learnedSince is when the learning of each node ends; nil without learning. A node without
+// a start of learning has none.
+func (r EventRule) learnedSince(env Env) map[identity.NodeID]time.Time {
+	if r.Learning == 0 {
+		return nil
+	}
+	out := make(map[identity.NodeID]time.Time, len(env.Nodes))
+	for _, n := range env.Nodes {
+		if !n.LearningSince.IsZero() {
+			out[n.ID] = n.LearningSince.Add(r.Learning)
+		}
+	}
+	return out
 }
 
 func (r EventRule) matches(e secevent.Event) bool {

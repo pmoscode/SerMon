@@ -1,6 +1,7 @@
 package secevents
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -12,7 +13,9 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
 // Bounds of a query.
@@ -51,32 +54,59 @@ func invalid(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", secevent.ErrInvalid, fmt.Sprintf(format, args...))
 }
 
-// List returns a page of the events of the request; access.ErrForbidden without
-// ViewSecurityEvents on any group, secevent.ErrInvalid for a bad filter.
-func (s *Service) List(ctx context.Context, c access.Caller, r Request) (Page, error) {
+// scope is the caller's scope for security events; access.ErrForbidden without
+// ViewSecurityEvents on any group (or as a viewer while the organization denies them logs).
+func (s *Service) scope(c access.Caller) (tenant.Scope, error) {
 	scope, err := s.policy.ScopeForAction(c.Principal, authz.ViewSecurityEvents)
 	if err != nil || (!scope.AllGroups() && len(scope.Groups()) == 0) {
-		return Page{}, access.ErrForbidden
+		return tenant.Scope{}, access.ErrForbidden
 	}
-	f := r.Filter
+	return scope, nil
+}
+
+func checkRange(from, to time.Time, nodes int) error {
 	switch {
-	case f.From.IsZero() || f.To.IsZero() || !f.To.After(f.From):
-		return Page{}, invalid("the time range needs from before to")
-	case f.To.Sub(f.From) > MaxRange:
-		return Page{}, invalid("the time range is at most %v", MaxRange)
-	case r.PageSize < 0 || r.PageSize > MaxPageSize:
-		return Page{}, invalid("page size between 0 and %d", MaxPageSize)
-	case len(f.Nodes) > MaxNodes:
-		return Page{}, invalid("at most %d nodes", MaxNodes)
+	case from.IsZero() || to.IsZero() || !to.After(from):
+		return invalid("the time range needs from before to")
+	case to.Sub(from) > MaxRange:
+		return invalid("the time range is at most %v", MaxRange)
+	case nodes > MaxNodes:
+		return invalid("at most %d nodes", MaxNodes)
+	}
+	return nil
+}
+
+func checkFilter(f Filter) error {
+	if err := checkRange(f.From, f.To, len(f.Nodes)); err != nil {
+		return err
+	}
+	switch {
 	case f.User != nil && len(*f.User) > secevent.MaxUser:
-		return Page{}, invalid("user longer than %d bytes", secevent.MaxUser)
+		return invalid("user longer than %d bytes", secevent.MaxUser)
 	case f.Network != nil && !f.Network.IsValid():
-		return Page{}, invalid("invalid network")
+		return invalid("invalid network")
 	}
 	for _, k := range f.Kinds {
 		if _, err := secevent.ParseKind(string(k)); err != nil {
-			return Page{}, err
+			return err
 		}
+	}
+	return nil
+}
+
+// List returns a page of the events of the request; access.ErrForbidden without
+// ViewSecurityEvents on any group, secevent.ErrInvalid for a bad filter.
+func (s *Service) List(ctx context.Context, c access.Caller, r Request) (Page, error) {
+	scope, err := s.scope(c)
+	if err != nil {
+		return Page{}, err
+	}
+	f := r.Filter
+	if r.PageSize < 0 || r.PageSize > MaxPageSize {
+		return Page{}, invalid("page size between 0 and %d", MaxPageSize)
+	}
+	if err := checkFilter(f); err != nil {
+		return Page{}, err
 	}
 	if r.PageToken != "" {
 		cursor, err := parseToken(r.PageToken)
@@ -101,6 +131,107 @@ func (s *Service) List(ctx context.Context, c access.Caller, r Request) (Page, e
 		page.Next = token(Cursor{At: last.OccurredAt, ID: last.ID})
 	}
 	return page, nil
+}
+
+// Bounds of the evaluations and the export (M3-16).
+const (
+	MaxBuckets     = 200
+	TopCount       = 10
+	MaxExportRows  = 10_000
+	MaxExportBytes = 8 << 20
+)
+
+// steps are the bucket widths of an overview, the finest that keeps MaxBuckets.
+var steps = []time.Duration{
+	time.Minute, 5 * time.Minute, 15 * time.Minute, 30 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour,
+	12 * time.Hour, 24 * time.Hour, 48 * time.Hour, 7 * 24 * time.Hour,
+}
+
+// StepFor returns the bucket width for a range: the finest of steps with at most MaxBuckets.
+func StepFor(r time.Duration) time.Duration {
+	for _, step := range steps {
+		if (r+step-1)/step <= MaxBuckets {
+			return step
+		}
+	}
+	return steps[len(steps)-1]
+}
+
+// OverviewRequest is the range of an overview and optionally its nodes.
+type OverviewRequest struct {
+	From, To time.Time
+	Nodes    []identity.NodeID
+}
+
+// Overview evaluates the events of the range in the caller's scope (M3-16).
+func (s *Service) Overview(ctx context.Context, c access.Caller, r OverviewRequest) (Overview, error) {
+	scope, err := s.scope(c)
+	if err != nil {
+		return Overview{}, err
+	}
+	if err := checkRange(r.From, r.To, len(r.Nodes)); err != nil {
+		return Overview{}, err
+	}
+	step := StepFor(r.To.Sub(r.From))
+	o, err := s.store.Overview(ctx, scope, OverviewQuery{From: r.From, To: r.To, Nodes: r.Nodes, Step: step, Top: TopCount})
+	if err != nil {
+		return Overview{}, fmt.Errorf("security overview: %w", err)
+	}
+	o.Step = step
+	return o, nil
+}
+
+// Export is a CSV file of events.
+type Export struct {
+	FileName  string
+	Content   []byte
+	Rows      int
+	Truncated bool
+}
+
+// Export returns the events of the filter as CSV, newest first, at most MaxExportRows and
+// MaxExportBytes (M3-16).
+func (s *Service) Export(ctx context.Context, c access.Caller, f Filter) (Export, error) {
+	scope, err := s.scope(c)
+	if err != nil {
+		return Export{}, err
+	}
+	if err := checkFilter(f); err != nil {
+		return Export{}, err
+	}
+	f.Before, f.Limit = nil, MaxExportRows+1
+	events, err := s.store.List(ctx, scope, f)
+	if err != nil {
+		return Export{}, fmt.Errorf("export security events: %w", err)
+	}
+	truncated := len(events) > MaxExportRows
+	if truncated {
+		events = events[:MaxExportRows]
+	}
+	var ids []identity.NodeID
+	seen := map[identity.NodeID]bool{}
+	for _, e := range events {
+		if !seen[e.Node] {
+			seen[e.Node] = true
+			ids = append(ids, e.Node)
+		}
+	}
+	names := map[identity.NodeID]string{}
+	if len(ids) > 0 {
+		if names, err = s.store.Hostnames(ctx, scope, ids); err != nil {
+			return Export{}, fmt.Errorf("export security events: %w", err)
+		}
+	}
+	var buf bytes.Buffer
+	rows, cut, err := WriteCSV(&buf, events, names, MaxExportBytes)
+	if err != nil {
+		return Export{}, err
+	}
+	const stamp = "20060102T1504Z"
+	return Export{
+		FileName: "sermon-security-events-" + f.From.UTC().Format(stamp) + "-" + f.To.UTC().Format(stamp) + ".csv",
+		Content:  buf.Bytes(), Rows: rows, Truncated: truncated || cut,
+	}, nil
 }
 
 func token(c Cursor) string {

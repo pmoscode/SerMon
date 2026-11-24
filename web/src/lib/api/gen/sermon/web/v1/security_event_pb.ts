@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/security_event.proto.
  */
 export const file_sermon_web_v1_security_event: GenFile = /*@__PURE__*/
-  fileDesc("CiJzZXJtb24vd2ViL3YxL3NlY3VyaXR5X2V2ZW50LnByb3RvEg1zZXJtb24ud2ViLnYxIuIBChlMaXN0U2VjdXJpdHlFdmVudHNSZXF1ZXN0EigKBGZyb20YASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghub2RlX2lkcxgDIAMoCRINCgVraW5kcxgEIAMoCRIRCgR1c2VyGAUgASgJSACIAQESDwoHbmV0d29yaxgGIAEoCRIRCglwYWdlX3NpemUYByABKAUSEgoKcGFnZV90b2tlbhgIIAEoCUIHCgVfdXNlciJjChpMaXN0U2VjdXJpdHlFdmVudHNSZXNwb25zZRIsCgZldmVudHMYASADKAsyHC5zZXJtb24ud2ViLnYxLlNlY3VyaXR5RXZlbnQSFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJIrECCg1TZWN1cml0eUV2ZW50EgoKAmlkGAEgASgDEg8KB25vZGVfaWQYAiABKAkSLwoLb2NjdXJyZWRfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3JlY2VpdmVkX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRraW5kGAUgASgJEgwKBHVzZXIYBiABKAkSEQoJcmVtb3RlX2lwGAcgASgJEhMKC3JlbW90ZV9ob3N0GAggASgJEhMKC3JlbW90ZV9wb3J0GAkgASgNEjQKB2RldGFpbHMYCiABKAsyIy5zZXJtb24ud2ViLnYxLlNlY3VyaXR5RXZlbnREZXRhaWxzEhIKCnVudmVyaWZpZWQYCyABKAgi0AIKFFNlY3VyaXR5RXZlbnREZXRhaWxzEg4KBm1ldGhvZBgBIAEoCRIUCgxpbnZhbGlkX3VzZXIYAiABKAgSEAoIa2V5X3R5cGUYAyABKAkSFwoPa2V5X2ZpbmdlcnByaW50GAQgASgJEgsKA3R0eRgFIAEoCRIOCgZ0YXJnZXQYBiABKAkSDwoHY29tbWFuZBgHIAEoCRIQCgN1aWQYCCABKA1IAIgBARILCgNwaWQYCSABKA0SDwoHcHJvY2VzcxgKIAEoCRIYChBwcmV2aW91c19ib290X2lkGAsgASgJEjAKDXVwdGltZV9iZWZvcmUYDCABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24SEAoIdG9rZW5faWQYDSABKAkSDgoGcmVhc29uGA4gASgJEhMKC3ByZXZpb3VzX2lwGA8gASgJQgYKBF91aWQygQEKFFNlY3VyaXR5RXZlbnRTZXJ2aWNlEmkKEkxpc3RTZWN1cml0eUV2ZW50cxIoLnNlcm1vbi53ZWIudjEuTGlzdFNlY3VyaXR5RXZlbnRzUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuTGlzdFNlY3VyaXR5RXZlbnRzUmVzcG9uc2VCwQEKEWNvbS5zZXJtb24ud2ViLnYxQhJTZWN1cml0eUV2ZW50UHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_duration, file_google_protobuf_timestamp]);
+  fileDesc("CiJzZXJtb24vd2ViL3YxL3NlY3VyaXR5X2V2ZW50LnByb3RvEg1zZXJtb24ud2ViLnYxIvwBChlMaXN0U2VjdXJpdHlFdmVudHNSZXF1ZXN0EigKBGZyb20YASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghub2RlX2lkcxgDIAMoCRINCgVraW5kcxgEIAMoCRIRCgR1c2VyGAUgASgJSACIAQESDwoHbmV0d29yaxgGIAEoCRIRCglwYWdlX3NpemUYByABKAUSEgoKcGFnZV90b2tlbhgIIAEoCRIYChBuZXdfc291cmNlc19vbmx5GAkgASgIQgcKBV91c2VyImMKGkxpc3RTZWN1cml0eUV2ZW50c1Jlc3BvbnNlEiwKBmV2ZW50cxgBIAMoCzIcLnNlcm1vbi53ZWIudjEuU2VjdXJpdHlFdmVudBIXCg9uZXh0X3BhZ2VfdG9rZW4YAiABKAkixQIKDVNlY3VyaXR5RXZlbnQSCgoCaWQYASABKAMSDwoHbm9kZV9pZBgCIAEoCRIvCgtvY2N1cnJlZF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLcmVjZWl2ZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBGtpbmQYBSABKAkSDAoEdXNlchgGIAEoCRIRCglyZW1vdGVfaXAYByABKAkSEwoLcmVtb3RlX2hvc3QYCCABKAkSEwoLcmVtb3RlX3BvcnQYCSABKA0SNAoHZGV0YWlscxgKIAEoCzIjLnNlcm1vbi53ZWIudjEuU2VjdXJpdHlFdmVudERldGFpbHMSEgoKdW52ZXJpZmllZBgLIAEoCBISCgpuZXdfc291cmNlGAwgASgIItACChRTZWN1cml0eUV2ZW50RGV0YWlscxIOCgZtZXRob2QYASABKAkSFAoMaW52YWxpZF91c2VyGAIgASgIEhAKCGtleV90eXBlGAMgASgJEhcKD2tleV9maW5nZXJwcmludBgEIAEoCRILCgN0dHkYBSABKAkSDgoGdGFyZ2V0GAYgASgJEg8KB2NvbW1hbmQYByABKAkSEAoDdWlkGAggASgNSACIAQESCwoDcGlkGAkgASgNEg8KB3Byb2Nlc3MYCiABKAkSGAoQcHJldmlvdXNfYm9vdF9pZBgLIAEoCRIwCg11cHRpbWVfYmVmb3JlGAwgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEhAKCHRva2VuX2lkGA0gASgJEg4KBnJlYXNvbhgOIAEoCRITCgtwcmV2aW91c19pcBgPIAEoCUIGCgRfdWlkIs8BChNTZWN1cml0eUV2ZW50RmlsdGVyEigKBGZyb20YASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghub2RlX2lkcxgDIAMoCRINCgVraW5kcxgEIAMoCRIRCgR1c2VyGAUgASgJSACIAQESDwoHbmV0d29yaxgGIAEoCRIYChBuZXdfc291cmNlc19vbmx5GAcgASgIQgcKBV91c2VyIoABChpHZXRTZWN1cml0eU92ZXJ2aWV3UmVxdWVzdBIoCgRmcm9tGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBImCgJ0bxgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIbm9kZV9pZHMYAyADKAkimwIKG0dldFNlY3VyaXR5T3ZlcnZpZXdSZXNwb25zZRInCgRzdGVwGAEgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEjUKDWZhaWxlZF9sb2dpbnMYAiADKAsyHi5zZXJtb24ud2ViLnYxLk5vZGVFdmVudFNlcmllcxIyCgd0b3BfaXBzGAMgAygLMiEuc2VybW9uLndlYi52MS5TZWN1cml0eUV2ZW50Q291bnQSNAoJdG9wX3VzZXJzGAQgAygLMiEuc2VybW9uLndlYi52MS5TZWN1cml0eUV2ZW50Q291bnQSMgoGdG90YWxzGAUgASgLMiIuc2VybW9uLndlYi52MS5TZWN1cml0eUV2ZW50VG90YWxzIlIKD05vZGVFdmVudFNlcmllcxIPCgdub2RlX2lkGAEgASgJEi4KBnBvaW50cxgCIAMoCzIeLnNlcm1vbi53ZWIudjEuRXZlbnRDb3VudFBvaW50IkgKD0V2ZW50Q291bnRQb2ludBImCgJhdBgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFY291bnQYAiABKAQiggEKElNlY3VyaXR5RXZlbnRDb3VudBINCgV2YWx1ZRgBIAEoCRINCgVjb3VudBgCIAEoBBINCgVub2RlcxgDIAEoDRIrCgdsYXN0X2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgp1bnZlcmlmaWVkGAUgASgEIoMBChNTZWN1cml0eUV2ZW50VG90YWxzEhUKDWZhaWxlZF9sb2dpbnMYASABKAQSDgoGbG9naW5zGAIgASgEEhkKEW5ld19zb3VyY2VfbG9naW5zGAMgASgEEhMKC3Jvb3RfbG9naW5zGAQgASgEEhUKDXN1ZG9fZmFpbHVyZXMYBSABKAQiUQobRXhwb3J0U2VjdXJpdHlFdmVudHNSZXF1ZXN0EjIKBmZpbHRlchgBIAEoCzIiLnNlcm1vbi53ZWIudjEuU2VjdXJpdHlFdmVudEZpbHRlciJjChxFeHBvcnRTZWN1cml0eUV2ZW50c1Jlc3BvbnNlEhEKCWZpbGVfbmFtZRgBIAEoCRIPCgdjb250ZW50GAIgASgMEgwKBHJvd3MYAyABKA0SEQoJdHJ1bmNhdGVkGAQgASgIMuoCChRTZWN1cml0eUV2ZW50U2VydmljZRJpChJMaXN0U2VjdXJpdHlFdmVudHMSKC5zZXJtb24ud2ViLnYxLkxpc3RTZWN1cml0eUV2ZW50c1JlcXVlc3QaKS5zZXJtb24ud2ViLnYxLkxpc3RTZWN1cml0eUV2ZW50c1Jlc3BvbnNlEnEKE0dldFNlY3VyaXR5T3ZlcnZpZXcSKS5zZXJtb24ud2ViLnYxLkdldFNlY3VyaXR5T3ZlcnZpZXdSZXF1ZXN0Giouc2VybW9uLndlYi52MS5HZXRTZWN1cml0eU92ZXJ2aWV3UmVzcG9uc2UiA5ACARJ0ChRFeHBvcnRTZWN1cml0eUV2ZW50cxIqLnNlcm1vbi53ZWIudjEuRXhwb3J0U2VjdXJpdHlFdmVudHNSZXF1ZXN0Gisuc2VybW9uLndlYi52MS5FeHBvcnRTZWN1cml0eUV2ZW50c1Jlc3BvbnNlIgOQAgFCwQEKEWNvbS5zZXJtb24ud2ViLnYxQhJTZWN1cml0eUV2ZW50UHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_duration, file_google_protobuf_timestamp]);
 
 /**
  * ListSecurityEventsRequest filters the events; from and to are required, the rest narrows.
@@ -75,6 +75,13 @@ export type ListSecurityEventsRequest = Message<"sermon.web.v1.ListSecurityEvent
    * @generated from field: string page_token = 8;
    */
   pageToken: string;
+
+  /**
+   * new_sources_only keeps the successful logins from a source new to the node (new_source).
+   *
+   * @generated from field: bool new_sources_only = 9;
+   */
+  newSourcesOnly: boolean;
 };
 
 /**
@@ -196,6 +203,14 @@ export type SecurityEvent = Message<"sermon.web.v1.SecurityEvent"> & {
    * @generated from field: bool unverified = 11;
    */
   unverified: boolean;
+
+  /**
+   * new_source is set on a successful login of the user from an address (or host name) for the
+   * first time on the node (M3-16).
+   *
+   * @generated from field: bool new_source = 12;
+   */
+  newSource: boolean;
 };
 
 /**
@@ -326,6 +341,373 @@ export const SecurityEventDetailsSchema: GenMessage<SecurityEventDetails> = /*@_
   messageDesc(file_sermon_web_v1_security_event, 3);
 
 /**
+ * SecurityEventFilter selects events like ListSecurityEventsRequest; from and to are required.
+ *
+ * @generated from message sermon.web.v1.SecurityEventFilter
+ */
+export type SecurityEventFilter = Message<"sermon.web.v1.SecurityEventFilter"> & {
+  /**
+   * from is the start of the time range (inclusive).
+   *
+   * @generated from field: google.protobuf.Timestamp from = 1;
+   */
+  from?: Timestamp | undefined;
+
+  /**
+   * to is the end of the time range (exclusive); at most 366 days after from.
+   *
+   * @generated from field: google.protobuf.Timestamp to = 2;
+   */
+  to?: Timestamp | undefined;
+
+  /**
+   * node_ids limits the result to these nodes.
+   *
+   * @generated from field: repeated string node_ids = 3;
+   */
+  nodeIds: string[];
+
+  /**
+   * kinds limits the result to these event kinds, e.g. ssh.login.failed.
+   *
+   * @generated from field: repeated string kinds = 4;
+   */
+  kinds: string[];
+
+  /**
+   * user is an exact user name.
+   *
+   * @generated from field: optional string user = 5;
+   */
+  user?: string | undefined;
+
+  /**
+   * network is an IP address or a network in CIDR notation, e.g. 192.0.2.0/24.
+   *
+   * @generated from field: string network = 6;
+   */
+  network: string;
+
+  /**
+   * new_sources_only keeps the successful logins from a source new to the node.
+   *
+   * @generated from field: bool new_sources_only = 7;
+   */
+  newSourcesOnly: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.SecurityEventFilter.
+ * Use `create(SecurityEventFilterSchema)` to create a new message.
+ */
+export const SecurityEventFilterSchema: GenMessage<SecurityEventFilter> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 4);
+
+/**
+ * GetSecurityOverviewRequest is the time range and optionally the nodes.
+ *
+ * @generated from message sermon.web.v1.GetSecurityOverviewRequest
+ */
+export type GetSecurityOverviewRequest = Message<"sermon.web.v1.GetSecurityOverviewRequest"> & {
+  /**
+   * from is the start of the time range (inclusive).
+   *
+   * @generated from field: google.protobuf.Timestamp from = 1;
+   */
+  from?: Timestamp | undefined;
+
+  /**
+   * to is the end of the time range (exclusive); at most 366 days after from.
+   *
+   * @generated from field: google.protobuf.Timestamp to = 2;
+   */
+  to?: Timestamp | undefined;
+
+  /**
+   * node_ids limits the overview to these nodes.
+   *
+   * @generated from field: repeated string node_ids = 3;
+   */
+  nodeIds: string[];
+};
+
+/**
+ * Describes the message sermon.web.v1.GetSecurityOverviewRequest.
+ * Use `create(GetSecurityOverviewRequestSchema)` to create a new message.
+ */
+export const GetSecurityOverviewRequestSchema: GenMessage<GetSecurityOverviewRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 5);
+
+/**
+ * GetSecurityOverviewResponse are the evaluations. Failed logins are ssh.login.failed and
+ * ssh.login.invalid_user.
+ *
+ * @generated from message sermon.web.v1.GetSecurityOverviewResponse
+ */
+export type GetSecurityOverviewResponse = Message<"sermon.web.v1.GetSecurityOverviewResponse"> & {
+  /**
+   * step is the width of a bucket of failed_logins, chosen for at most 200 buckets.
+   *
+   * @generated from field: google.protobuf.Duration step = 1;
+   */
+  step?: Duration | undefined;
+
+  /**
+   * failed_logins are the failed logins per node and bucket; empty buckets are left out.
+   *
+   * @generated from field: repeated sermon.web.v1.NodeEventSeries failed_logins = 2;
+   */
+  failedLogins: NodeEventSeries[];
+
+  /**
+   * top_ips are the addresses with the most failed logins, at most 10.
+   *
+   * @generated from field: repeated sermon.web.v1.SecurityEventCount top_ips = 3;
+   */
+  topIps: SecurityEventCount[];
+
+  /**
+   * top_users are the user names with the most failed logins, at most 10; the empty name is
+   * what an attacker tried.
+   *
+   * @generated from field: repeated sermon.web.v1.SecurityEventCount top_users = 4;
+   */
+  topUsers: SecurityEventCount[];
+
+  /**
+   * totals count the events of the range.
+   *
+   * @generated from field: sermon.web.v1.SecurityEventTotals totals = 5;
+   */
+  totals?: SecurityEventTotals | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetSecurityOverviewResponse.
+ * Use `create(GetSecurityOverviewResponseSchema)` to create a new message.
+ */
+export const GetSecurityOverviewResponseSchema: GenMessage<GetSecurityOverviewResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 6);
+
+/**
+ * NodeEventSeries are the counts of one node over time.
+ *
+ * @generated from message sermon.web.v1.NodeEventSeries
+ */
+export type NodeEventSeries = Message<"sermon.web.v1.NodeEventSeries"> & {
+  /**
+   * node_id is the node.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * points are the buckets with events, oldest first.
+   *
+   * @generated from field: repeated sermon.web.v1.EventCountPoint points = 2;
+   */
+  points: EventCountPoint[];
+};
+
+/**
+ * Describes the message sermon.web.v1.NodeEventSeries.
+ * Use `create(NodeEventSeriesSchema)` to create a new message.
+ */
+export const NodeEventSeriesSchema: GenMessage<NodeEventSeries> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 7);
+
+/**
+ * EventCountPoint is the count of a bucket.
+ *
+ * @generated from message sermon.web.v1.EventCountPoint
+ */
+export type EventCountPoint = Message<"sermon.web.v1.EventCountPoint"> & {
+  /**
+   * at is the start of the bucket.
+   *
+   * @generated from field: google.protobuf.Timestamp at = 1;
+   */
+  at?: Timestamp | undefined;
+
+  /**
+   * count is the number of events in it.
+   *
+   * @generated from field: uint64 count = 2;
+   */
+  count: bigint;
+};
+
+/**
+ * Describes the message sermon.web.v1.EventCountPoint.
+ * Use `create(EventCountPointSchema)` to create a new message.
+ */
+export const EventCountPointSchema: GenMessage<EventCountPoint> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 8);
+
+/**
+ * SecurityEventCount is a value (address or user name) with its failed logins. Values come from
+ * the nodes' logs: render them as text.
+ *
+ * @generated from message sermon.web.v1.SecurityEventCount
+ */
+export type SecurityEventCount = Message<"sermon.web.v1.SecurityEventCount"> & {
+  /**
+   * value is the address or the user name.
+   *
+   * @generated from field: string value = 1;
+   */
+  value: string;
+
+  /**
+   * count is the number of failed logins.
+   *
+   * @generated from field: uint64 count = 2;
+   */
+  count: bigint;
+
+  /**
+   * nodes is on how many nodes they happened.
+   *
+   * @generated from field: uint32 nodes = 3;
+   */
+  nodes: number;
+
+  /**
+   * last_at is the time of the latest one.
+   *
+   * @generated from field: google.protobuf.Timestamp last_at = 4;
+   */
+  lastAt?: Timestamp | undefined;
+
+  /**
+   * unverified counts those from classic log files (ADR 0025).
+   *
+   * @generated from field: uint64 unverified = 5;
+   */
+  unverified: bigint;
+};
+
+/**
+ * Describes the message sermon.web.v1.SecurityEventCount.
+ * Use `create(SecurityEventCountSchema)` to create a new message.
+ */
+export const SecurityEventCountSchema: GenMessage<SecurityEventCount> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 9);
+
+/**
+ * SecurityEventTotals are counts of a time range.
+ *
+ * @generated from message sermon.web.v1.SecurityEventTotals
+ */
+export type SecurityEventTotals = Message<"sermon.web.v1.SecurityEventTotals"> & {
+  /**
+   * failed_logins counts ssh.login.failed and ssh.login.invalid_user.
+   *
+   * @generated from field: uint64 failed_logins = 1;
+   */
+  failedLogins: bigint;
+
+  /**
+   * logins counts ssh.login.success.
+   *
+   * @generated from field: uint64 logins = 2;
+   */
+  logins: bigint;
+
+  /**
+   * new_source_logins counts the logins from a source new to the node.
+   *
+   * @generated from field: uint64 new_source_logins = 3;
+   */
+  newSourceLogins: bigint;
+
+  /**
+   * root_logins counts the logins of root.
+   *
+   * @generated from field: uint64 root_logins = 4;
+   */
+  rootLogins: bigint;
+
+  /**
+   * sudo_failures counts sudo.auth.failed and sudo.not_allowed.
+   *
+   * @generated from field: uint64 sudo_failures = 5;
+   */
+  sudoFailures: bigint;
+};
+
+/**
+ * Describes the message sermon.web.v1.SecurityEventTotals.
+ * Use `create(SecurityEventTotalsSchema)` to create a new message.
+ */
+export const SecurityEventTotalsSchema: GenMessage<SecurityEventTotals> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 10);
+
+/**
+ * ExportSecurityEventsRequest is the filter of the export.
+ *
+ * @generated from message sermon.web.v1.ExportSecurityEventsRequest
+ */
+export type ExportSecurityEventsRequest = Message<"sermon.web.v1.ExportSecurityEventsRequest"> & {
+  /**
+   * filter selects the events.
+   *
+   * @generated from field: sermon.web.v1.SecurityEventFilter filter = 1;
+   */
+  filter?: SecurityEventFilter | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.ExportSecurityEventsRequest.
+ * Use `create(ExportSecurityEventsRequestSchema)` to create a new message.
+ */
+export const ExportSecurityEventsRequestSchema: GenMessage<ExportSecurityEventsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 11);
+
+/**
+ * ExportSecurityEventsResponse is the CSV file.
+ *
+ * @generated from message sermon.web.v1.ExportSecurityEventsResponse
+ */
+export type ExportSecurityEventsResponse = Message<"sermon.web.v1.ExportSecurityEventsResponse"> & {
+  /**
+   * file_name is a suggestion for saving it.
+   *
+   * @generated from field: string file_name = 1;
+   */
+  fileName: string;
+
+  /**
+   * content is the CSV text (UTF-8, a header line, comma-separated, CRLF line ends).
+   *
+   * @generated from field: bytes content = 2;
+   */
+  content: Uint8Array;
+
+  /**
+   * rows is the number of events in it.
+   *
+   * @generated from field: uint32 rows = 3;
+   */
+  rows: number;
+
+  /**
+   * truncated is set if the filter selects more than the export holds.
+   *
+   * @generated from field: bool truncated = 4;
+   */
+  truncated: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.ExportSecurityEventsResponse.
+ * Use `create(ExportSecurityEventsResponseSchema)` to create a new message.
+ */
+export const ExportSecurityEventsResponseSchema: GenMessage<ExportSecurityEventsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_security_event, 12);
+
+/**
  * SecurityEventService shows the security events of the nodes (KONZEPT §11, M2-07).
  *
  * @generated from service sermon.web.v1.SecurityEventService
@@ -342,6 +724,30 @@ export const SecurityEventService: GenService<{
     methodKind: "unary";
     input: typeof ListSecurityEventsRequestSchema;
     output: typeof ListSecurityEventsResponseSchema;
+  },
+  /**
+   * GetSecurityOverview evaluates the events of a time range (M3-16): failed logins over time per
+   * node, the addresses and users with the most failed logins, and totals of logins, logins from
+   * new sources, root logins and sudo failures. Rights as ListSecurityEvents.
+   *
+   * @generated from rpc sermon.web.v1.SecurityEventService.GetSecurityOverview
+   */
+  getSecurityOverview: {
+    methodKind: "unary";
+    input: typeof GetSecurityOverviewRequestSchema;
+    output: typeof GetSecurityOverviewResponseSchema;
+  },
+  /**
+   * ExportSecurityEvents returns the events of a filter as CSV, newest first and at most 10,000
+   * (and 8 MiB). Cells that a spreadsheet would read as a formula start with an apostrophe.
+   * Rights as ListSecurityEvents.
+   *
+   * @generated from rpc sermon.web.v1.SecurityEventService.ExportSecurityEvents
+   */
+  exportSecurityEvents: {
+    methodKind: "unary";
+    input: typeof ExportSecurityEventsRequestSchema;
+    output: typeof ExportSecurityEventsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_security_event, 0);

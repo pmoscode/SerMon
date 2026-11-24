@@ -39,13 +39,63 @@ type Filter struct {
 	Kinds    []secevent.Kind
 	User     *string
 	Network  *netip.Prefix
-	Before   *Cursor
-	Limit    int
+	// NewSourcesOnly keeps the successful logins from a source new to the node (M3-16).
+	NewSourcesOnly bool
+	Before         *Cursor
+	Limit          int
+}
+
+// OverviewQuery selects what an overview evaluates (M3-16): the events of the range and nodes,
+// failed logins in buckets of Step, the Top addresses and users.
+type OverviewQuery struct {
+	From, To time.Time
+	Nodes    []identity.NodeID
+	Step     time.Duration
+	Top      int
+}
+
+// Point is the count of the bucket starting at At.
+type Point struct {
+	At    time.Time
+	Count int64
+}
+
+// NodeSeries are the buckets of one node with events, oldest first.
+type NodeSeries struct {
+	Node   identity.NodeID
+	Points []Point
+}
+
+// Count is an address or user name with its failed logins: how many, on how many nodes, the
+// latest and how many of them are unverified (ADR 0025).
+type Count struct {
+	Value      string
+	Count      int64
+	Nodes      int
+	Last       time.Time
+	Unverified int64
+}
+
+// Totals count the events of a range.
+type Totals struct {
+	FailedLogins, Logins, NewSourceLogins, RootLogins, SudoFailures int64
+}
+
+// Overview are the evaluations of a range. Failed logins are ssh.login.failed and
+// ssh.login.invalid_user; sudo failures sudo.auth.failed and sudo.not_allowed.
+type Overview struct {
+	Step             time.Duration
+	FailedLogins     []NodeSeries
+	TopIPs, TopUsers []Count
+	Totals           Totals
 }
 
 // Store reads events within a scope (only nodes of the scope's groups).
 type Store interface {
 	List(ctx context.Context, scope tenant.Scope, f Filter) ([]secevent.Event, error)
+	Overview(ctx context.Context, scope tenant.Scope, q OverviewQuery) (Overview, error)
+	// Hostnames returns the host names of the nodes of the scope among ids.
+	Hostnames(ctx context.Context, scope tenant.Scope, ids []identity.NodeID) (map[identity.NodeID]string, error)
 }
 
 // Partitions are the monthly partitions (instance level). They are created ahead by migrations;

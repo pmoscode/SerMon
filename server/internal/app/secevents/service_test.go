@@ -28,18 +28,31 @@ var (
 	t0     = time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
 )
 
-// store returns n events, newest first, and records the call.
+// store returns n events, newest first, and records the calls.
 type store struct {
-	n      int
-	scope  tenant.Scope
-	filter secevents.Filter
+	n         int
+	user      string
+	scope     tenant.Scope
+	filter    secevents.Filter
+	overview  secevents.OverviewQuery
+	hostnames []identity.NodeID
+}
+
+func (s *store) Overview(_ context.Context, scope tenant.Scope, q secevents.OverviewQuery) (secevents.Overview, error) {
+	s.scope, s.overview = scope, q
+	return secevents.Overview{Totals: secevents.Totals{FailedLogins: 7}}, nil
+}
+
+func (s *store) Hostnames(_ context.Context, scope tenant.Scope, ids []identity.NodeID) (map[identity.NodeID]string, error) {
+	s.scope, s.hostnames = scope, ids
+	return map[identity.NodeID]string{node: "web-01"}, nil
 }
 
 func (s *store) List(_ context.Context, scope tenant.Scope, f secevents.Filter) ([]secevent.Event, error) {
 	s.scope, s.filter = scope, f
 	out := make([]secevent.Event, 0, min(s.n, f.Limit))
 	for i := range min(s.n, f.Limit) {
-		out = append(out, secevent.Event{ID: int64(1000 - i), Node: node, OccurredAt: t0.Add(-time.Duration(i) * time.Second), Kind: secevent.SSHLoginFailed})
+		out = append(out, secevent.Event{ID: int64(1000 - i), Node: node, OccurredAt: t0.Add(-time.Duration(i) * time.Second), Kind: secevent.SSHLoginFailed, User: s.user})
 	}
 	return out, nil
 }
@@ -164,5 +177,86 @@ func TestMaintenance_KeepsAYearAndWarnsBeforeTheHorizon(t *testing.T) {
 		if got := strings.Contains(log.String(), "end soon"); got != warn {
 			t.Errorf("horizon %v: warning %v, want %v\n%s", horizon, got, warn, log.String())
 		}
+	}
+}
+
+func TestStepFor_KeepsAtMost200Buckets(t *testing.T) {
+	for r, want := range map[time.Duration]time.Duration{
+		time.Hour:         time.Minute,
+		200 * time.Minute: time.Minute,
+		201 * time.Minute: 5 * time.Minute,
+		// A part of a bucket is a bucket: 201 of them.
+		200*time.Minute + 30*time.Second: 5 * time.Minute,
+		24 * time.Hour:                   15 * time.Minute,
+		7 * 24 * time.Hour:               time.Hour,
+		30 * 24 * time.Hour:              6 * time.Hour,
+		366 * 24 * time.Hour:             48 * time.Hour,
+	} {
+		if got := secevents.StepFor(r); got != want {
+			t.Errorf("StepFor(%v) = %v, want %v", r, got, want)
+		}
+	}
+}
+
+func TestOverview_InTheScopeWithAStep(t *testing.T) {
+	s := &store{}
+	o, err := service(s).Overview(context.Background(), caller(role.Viewer, false), secevents.OverviewRequest{
+		From: t0.Add(-24 * time.Hour), To: t0, Nodes: []identity.NodeID{node},
+	})
+	if err != nil || o.Totals.FailedLogins != 7 || o.Step != 15*time.Minute {
+		t.Fatalf("Overview() = %+v, %v", o, err)
+	}
+	q := s.overview
+	if !s.scope.AllowsGroup(groupX) || s.scope.AllGroups() || q.Step != 15*time.Minute || q.Top != 10 ||
+		len(q.Nodes) != 1 || !q.From.Equal(t0.Add(-24*time.Hour)) || !q.To.Equal(t0) {
+		t.Errorf("scope %+v, query %+v", s.scope, q)
+	}
+	_, err = service(&store{}, authz.WithViewerLogsDisabled(org)).Overview(context.Background(), caller(role.Viewer, true),
+		secevents.OverviewRequest{From: t0.Add(-time.Hour), To: t0})
+	if !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("viewer without logs: %v, want forbidden", err)
+	}
+	for name, r := range map[string]secevents.OverviewRequest{
+		"to before from": {From: t0, To: t0.Add(-time.Hour)},
+		"over a year":    {From: t0.Add(-367 * 24 * time.Hour), To: t0},
+		"too many nodes": {From: t0.Add(-time.Hour), To: t0, Nodes: make([]identity.NodeID, 101)},
+	} {
+		if _, err := service(&store{}).Overview(context.Background(), caller(role.Admin, true), r); !errors.Is(err, secevent.ErrInvalid) {
+			t.Errorf("%s: %v, want invalid", name, err)
+		}
+	}
+}
+
+func TestExport_WritesCSVWithHostnamesAndBounds(t *testing.T) {
+	s := &store{n: 3, user: "=1+1"}
+	req := request().Filter
+	req.Before = &secevents.Cursor{At: t0, ID: 1}
+	e, err := service(s).Export(context.Background(), caller(role.Viewer, false), req)
+	if err != nil || e.Rows != 3 || e.Truncated {
+		t.Fatalf("Export() = %+v, %v", e, err)
+	}
+	if e.FileName != "sermon-security-events-20261120T1100Z-20261120T1200Z.csv" {
+		t.Errorf("file name %q", e.FileName)
+	}
+	if s.filter.Limit != secevents.MaxExportRows+1 || s.filter.Before != nil || len(s.hostnames) != 1 || !s.scope.AllowsGroup(groupX) {
+		t.Errorf("filter %+v, hostnames of %v", s.filter, s.hostnames)
+	}
+	text := string(e.Content)
+	if !strings.Contains(text, ",web-01,ssh.login.failed,'=1+1,") || strings.Count(text, "\r\n") != 4 {
+		t.Errorf("content:\n%s", text)
+	}
+
+	many := &store{n: secevents.MaxExportRows + 5}
+	if e, err := service(many).Export(context.Background(), caller(role.Viewer, false), request().Filter); err != nil ||
+		e.Rows != secevents.MaxExportRows || !e.Truncated {
+		t.Errorf("over the bound: %d rows, truncated %v, %v", e.Rows, e.Truncated, err)
+	}
+	if _, err := service(&store{}, authz.WithViewerLogsDisabled(org)).Export(context.Background(), caller(role.Viewer, true), request().Filter); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("viewer without logs: %v", err)
+	}
+	bad := request().Filter
+	bad.Kinds = []secevent.Kind{"ssh.root"}
+	if _, err := service(&store{}).Export(context.Background(), caller(role.Admin, true), bad); !errors.Is(err, secevent.ErrInvalid) {
+		t.Errorf("bad filter: %v", err)
 	}
 }

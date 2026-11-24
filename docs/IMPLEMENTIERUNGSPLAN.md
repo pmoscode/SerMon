@@ -4055,7 +4055,38 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   Updates aus den Quellen von M4-08.
 - **Abhängig von:** M4-04, M4-05, M4-06, M4-08
 
-#### ☐ M4-08 – Paketquellen mit Updates in der E2E-Umgebung · X · M
+#### ☑ M4-08 – Paketquellen mit Updates in der E2E-Umgebung · X · M
+> Erledigt (`deploy/e2e/repos/`, Dienst `packages` in `deploy/e2e/compose.yaml`):
+> - **`build.sh KEYS OUT`** baut mit nfpm zwei Pakete in je zwei Versionen: `sermon-e2e-demo` 1.0.0 → 2.0.0 als
+>   Security-Update, `sermon-e2e-extra` 1.0.0 → 1.1.0 als gewöhnliches Update. nfpm schreibt semantische Versionen,
+>   daher 1.0.0 statt 1.0. Signiert mit den Paket-Schlüsseln des Laufs (`package-test-keys.sh`), Werkzeuge in
+>   Containern aus eigenen Dockerfiles mit gepinnten Digests.
+>   - **apt:** Suites `e2e`, `e2e-updates` und `e2e-security` wie bei Debian, `InRelease` signiert. `apt list
+>     --upgradable` zeigt `sermon-e2e-demo/e2e-security`. Version 2.0.0 legt auf Debian und Ubuntu
+>     `/var/run/reboot-required` an (mit `.pkgs`).
+>   - **rpm:** ein Repo, `repomd.xml` signiert (`repo_gpgcheck`), `updateinfo.xml` mit einem Security-Advisory
+>     (`reboot_suggested`) und einem Bugfix. dnf 4 (Rocky) und dnf 5 (Fedora) zeigen es mit `updateinfo list
+>     --security`.
+>   - **apk:** signierter Index je Architektur. Pakete mit `noarch` holt apk aus `noarch/` und unter
+>     `NAME-VERSION.apk` (nfpm schreibt `NAME_VERSION_ARCH.apk`), beides im Test gefunden.
+> - **`use.sh URL KEYS`** stellt einen Host auf diese Quellen um: Die eigenen kommen zur Seite, dann wird Version 1.0.0
+>   installiert. `scripts/e2e-demo.sh` baut die Quellen mit den Paketen und führt `use.sh` nach dem Start parallel auf
+>   allen sieben Agent-Hosts aus. Die Paket-Hosts bleiben unverändert. Ausgeliefert wird von Caddy
+>   (`packages.test:8080`, ohne root, nur lesend, ohne Capabilities).
+> - **Spike Reboot: geht.** `systemctl reboot` (systemd fällt ohne logind auf `reboot.target` zurück) und `reboot`
+>   unter busybox-init beenden den Container. Mit `restart: unless-stopped` (neu für alle Agent-Hosts) ist er nach
+>   1 bis 2 s wieder da; `/run` ist frisch, `reboot-required` also weg.
+> - **Gefunden für M4-13:** Der Kernel bleibt derselbe. Boot-ID und Uptime ändern sich im Container nicht, die
+>   Reboot-Erkennung über die Boot-ID des Journals greift dort also nicht. Der Health-Check stützt sich auf die neue
+>   Session des Agents nach dem Reboot.
+> - **Tests:** `just test-e2e-repos` (`repos/test.sh`, in CI vor der Demo, nightly auf arm64): Quellen bauen, auf
+>   Debian 13, Ubuntu 24.04, Rocky 9, Fedora 44 und Alpine 3.22 genau die zwei erwarteten Updates sehen (Security
+>   und gewöhnlich getrennt, Alpine ohne Kennzeichnung), Reboot-Hinweis nach dem Upgrade (apt). Quellen mit einem
+>   anderen Schlüssel lehnen Debian, Rocky und Alpine ab.
+>   - Demo mit umgestellten Hosts grün (5/5, 7,2 min; Budget 0,57–0,70 % eines Kerns, 17,6–18,0 MiB).
+>   - Gegenproben für 10 Prüfungen, alle erkannt: Security-Update in der falschen Suite bzw. als Bugfix, Bugfix als
+>     Security, fehlende Signatur je Format, kein Reboot-Hinweis, ein Update zu viel, `repo_gpgcheck` aus, eigene
+>     Quellen nicht beiseitegelegt.
 - **Ziel:** Die E2E-Umgebung hat eigene Paketquellen, damit Updates reproduzierbar und ohne Internet entstehen.
   - Ein Container liefert ein apt-, ein rpm- und ein apk-Repo, signiert mit Testschlüsseln. Darin liegt ein Paket
     `sermon-e2e-demo` in Version 1 (installiert) und 2 (als Security-Update: Suite `*-security` bzw. `updateinfo.xml`)
@@ -4116,7 +4147,8 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   - Zustände je Node: wartend, aktualisiert, startet neu, Health-Check, fertig, fehlgeschlagen, übersprungen (offline,
     Veto).
   - Reboot nur, wenn nötig, `autoReboot` gilt und das Fenster offen ist.
-  - **Health-Check:** Der Node ist innerhalb von `healthCheck` wieder online und ohne kritische Alerts. Sonst stoppt
+  - **Health-Check:** Der Node ist innerhalb von `healthCheck` wieder online (eine neue Session; Boot-ID und Uptime
+    ändern sich in den E2E-Containern nicht, M4-08) und ohne kritische Alerts. Sonst stoppt
     der Rollout bei `stopOnFailure`, und das Event `updates.rollout_stopped` entsteht.
   - Am Fensterende starten keine neuen Nodes; laufende werden fertig.
   - **Automatische Silences:** Während seines Laufs sind Reboot- und Offline-Alerts des Nodes stumm.
@@ -4358,7 +4390,7 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 | Drei Sprachen (Rust, Go, TS) verlangsamen | Kontextwechsel kosten Zeit | Strangweise Blöcke bilden; Codegen aus Proto hält die Schnittstellen synchron |
 | Umfang von M2/M3 wächst | Verzögerung | Kanal- und Modul-Wellen erlauben frühes Kürzen; Priorität: E-Mail, Webhook und ntfy vor den übrigen Kanälen |
 | Security-Findings spät entdeckt | Nacharbeit | 🔒-Aufgaben mit Pflicht-Review, Security-Review am Ende jedes Meilensteins, Fuzzing nightly ab M0 |
-| Reboot lässt sich in den E2E-Containern nicht nachstellen (M4-08) | Rollout mit Reboot ungetestet | Spike in M4-08; sonst Reboot-Teil nightly in einer VM (QEMU), der übrige Rollout bleibt im Container |
+| Reboot lässt sich in den E2E-Containern nicht nachstellen (M4-08) | Rollout mit Reboot ungetestet | ✓ Spike M4-08: geht mit `restart: unless-stopped`; Boot-ID und Uptime bleiben aber gleich, der Health-Check stützt sich auf die neue Session |
 | Root-Helper wächst über 1 000 LoC oder wird zum Einfallstor | A1: root auf allen Nodes | Parsen im Agent, festes Op-Enum, LoC-Prüfung in CI, eigene Review vor der Nutzung (M4-04) |
 | Anomalie-Erkennung meldet zu viel oder zu wenig | Vertrauen in die Alerts sinkt | beide Verfahren müssen übereinstimmen, Debounce, Lernphase; Benchmark in CI (M4-22); die Regel ist pro Org abschaltbar |
 | Umfang von M4 wächst | Verzögerung | Paket-Repos (M4-20) mit dem Release in v1.0, Kapazität und Heatmap (M4-26, M4-27) nach M5, Kanal `beta` später |

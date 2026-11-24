@@ -82,6 +82,7 @@ jobs:
           tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
       # The same demo as in ci.yml, natively on arm64 (no QEMU): install.sh, OpenRC, packages,
       # resource budget.
+      - run: just test-e2e-repos
       - run: just e2e-demo
       # .deb, .rpm and .apk for arm64: signature, install, upgrade, removal.
       - run: just test-packages

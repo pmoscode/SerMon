@@ -398,6 +398,8 @@ jobs:
       # and Fedora 44 and with OpenRC on Alpine, metrics in under 2 minutes, signed packages on three
       # more hosts, tenant isolation, resource budget of the agent (M1-33, M2-19 to M2-21, M2-25).
       # arm64: nightly.yml.
+      # Package sources with updates for the agent hosts first: signatures, the expected updates (M4-08).
+      - run: just test-e2e-repos
       - run: just e2e-demo
       # The runner's LSM can deny what works on a developer machine (AppArmor on Ubuntu 24.04).
       - name: Show AppArmor denials

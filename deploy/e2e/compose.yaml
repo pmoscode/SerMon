@@ -16,9 +16,13 @@ name: sermon-e2e
 x-agent-host: &agent-host
   privileged: true # systemd as PID 1 and the hardened unit need it
   cgroup: host
-  volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw"]
+  # repos/use.sh and the keys of the package sources (M4-08); the package hosts below replace this.
+  volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/repos/use.sh:/e2e/use.sh:ro", "../e2e/.build/repos/keys:/e2e/keys:ro"]
   tmpfs: [/run, /run/lock, /tmp]
   stop_signal: SIGRTMIN+3
+  # A reboot ends PID 1 and with it the container; Docker starts it again like a host coming back
+  # (M4-08). The kernel stays the same: boot ID and uptime don't change.
+  restart: unless-stopped
   networks: [edge]
 
 services:
@@ -104,6 +108,20 @@ services:
     ports: ["127.0.0.1:18556:18556"]
     networks:
       edge: { aliases: [dex.test] }
+
+  # The package sources of the agent hosts (M4-08, repos/build.sh): updates without the internet,
+  # sermon-e2e-demo 2.0.0 as a security update. scripts/e2e-demo.sh switches the hosts to them.
+  packages:
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    command: ["caddy", "file-server", "--root", "/srv", "--listen", ":8080"]
+    volumes: ["../e2e/.build/repos:/srv:ro"]
+    user: "65534:65534"
+    read_only: true
+    tmpfs: [/data, /config]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      edge: { aliases: [packages.test] }
 
   # web-01 runs a real sshd (journald); web-02 attacks it with sshpass (M2-27).
   agent-debian-12:

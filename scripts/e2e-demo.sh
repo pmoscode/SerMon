@@ -7,7 +7,8 @@
 # organization sees nothing; meanwhile two hosts measure the agent against its resource budget
 # (scripts/agent-budget.sh, M2-25). Then (M2-27) a host attacks the sshd of another: the alert
 # reaches ntfy and a Slack mock with time, user, address and port, repeats until it is
-# acknowledged in the browser and then stays quiet.
+# acknowledged in the browser and then stays quiet. The agent hosts take their package updates only
+# from sources of this run (deploy/e2e/repos, M4-08).
 #
 #   scripts/e2e-demo.sh          run and tear down
 #   KEEP=1 scripts/e2e-demo.sh   leave the environment running (https://localhost:18443)
@@ -31,7 +32,7 @@ aarch64 | arm64) arch=arm64 target=aarch64-unknown-linux-musl ;;
 *) echo "e2e-demo: unsupported Docker architecture" >&2 && exit 1 ;;
 esac
 
-if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build/dex/config.yaml" ]; then
+if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build/dex/config.yaml" ] || [ ! -f "$build/repos/keys/gpg.pub.asc" ]; then
 	rm -rf "$build"
 	mkdir -p "$build/secrets" "$build/downloads"
 	# Release key and database passwords: only for the user who runs the demo. The containers see the
@@ -53,6 +54,9 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 	# The package hosts get the packages and the public keys only.
 	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/sermon-agent.rsa.pub" "$build/packages/"
 	chmod 0644 "$build/packages/"*
+	# Package sources with updates for the agent hosts (M4-08), signed with the same keys.
+	echo "▸ building the package sources with updates"
+	sh "$e2e/repos/build.sh" "$build/package-keys" "$build/repos" >/dev/null
 
 	# Database passwords and URLs as on a real installation; Mailpit accepts any SMTP login.
 	openssl rand -hex 16 | tr -d '\n' >"$build/secrets/smtp_password"
@@ -119,6 +123,20 @@ for _ in $(seq 1 90); do
 	sleep 1
 done
 curl -fsSk "https://localhost:$port/readyz" >/dev/null
+
+# The agent hosts take their updates from the package sources of this run only (M4-08).
+echo "▸ switching the agent hosts to the package sources of this run"
+pids=""
+for service in $(compose config --services | grep '^agent-'); do
+	compose exec -T "$service" sh /e2e/use.sh http://packages.test:8080 /e2e/keys >"$build/use-$service.log" 2>&1 &
+	pids="$pids $!"
+done
+for pid in $pids; do
+	wait "$pid" || {
+		tail -n 20 "$build"/use-*.log >&2
+		exit 1
+	}
+done
 
 echo "▸ running the demo test"
 cd "$root/web"

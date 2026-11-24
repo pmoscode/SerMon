@@ -128,7 +128,7 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
+    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh deploy/e2e/repos/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
@@ -146,6 +146,10 @@ lint-compose:
 test-scripts:
     sh scripts/check-commit-msg_test.sh
     sh scripts/check-compose_test.sh
+
+# Build the package sources of the E2E environment and check them on five distros (M4-08; Docker required)
+test-e2e-repos:
+    sh deploy/e2e/repos/test.sh
 
 # Scan the git history for leaked secrets (betterleaks, ADR 0005; no live validation against provider APIs)
 security-secrets:

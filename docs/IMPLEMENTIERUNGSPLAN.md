@@ -3705,7 +3705,20 @@ Konfiguration) und M3-06 (Loki).
 - **Tests zuerst:** der Abdeckungstest selbst; er schlägt für eine neue RPC ohne Eintrag fehl.
 - **Abhängig von:** M3-12, M3-21, M3-23
 
-#### ☐ M3-26 – E2E-Demo M3 · X · M
+#### ☑ M3-26 – E2E-Demo M3 · X · M
+> Erledigt (Projekt `troubleshoot` in `web/tests/demo/troubleshoot.demo.ts`, nach `alerts` im Lauf von `just e2e-demo`):
+> - **Fehler finden:** Auf web-01 schlägt ein Dienst fehl und schreibt dabei ein Geheimnis →
+>   `system.systemd.unit_failed`. Vom Alert geht es in die Logs des Nodes um den Zeitpunkt; die Zeile steht redigiert
+>   da, und auch Loki hält sie ohne das Geheimnis (Abfrage im Tenant der Org).
+> - **Security:** Das Dashboard zeigt die Adresse des Brute-Force aus `alerts` oben, verifiziert, mit den Events von
+>   web-01.
+> - **Dateien:** Eine Logdatei des Alpine-Hosts kommt über einen Glob der Log-Einstellungen der Gruppe an, ebenfalls
+>   redigiert.
+> - **In den anderen Projekten:** Live-Tail und Live-Ansicht in `install` (seit M3-11, M3-14, M3-15), die Anmeldung über
+>   Dex in `sso` (M3-22), der Step-up per Passkey mit virtuellem Authenticator in `passkeys` (M3-24).
+> - **Abweichung:** Ein Prozess mit hoher CPU-Last wird in der Live-Ansicht nicht eigens geprüft. Geprüft ist der
+>   sicherheitsrelevante Fall: ein Prozess mit Geheimnis in der Befehlszeile, redigiert in Liste und Detail.
+> - Lauf vom 2026-11-24 (nach M3-29): alle fünf Projekte grün in 7,9 min.
 - **Ziel:** „Fehlersuche ohne SSH“ in `web/tests/demo/`.
   - **Fehler finden:**
     - Auf web-01 schlägt ein Dienst fehl und schreibt eine Zeile mit einem Geheimnis →
@@ -3853,6 +3866,59 @@ Konfiguration) und M3-06 (Loki).
 - Das Ressourcen-Budget ist mit Log-Versand eingehalten.
 - Die Security-Review hat keine offenen kritischen Findings.
 
+### 6.9 Review M3 (2026-11-24)
+
+**1. Ziel erreicht: ja.** `just e2e-demo` mit den Projekten `install`, `alerts`, `sso`, `troubleshoot` und `passkeys`
+(lokal auf arm64 grün in 7,9 min; CI-Job `e2e-demo` mit dem nächsten Push):
+
+- Ein Dienst auf web-01 schlägt fehl. Vom Alert geht es in seine Logs; das Geheimnis steht als `***` da, auch in Loki.
+- Live-Tail zeigt eine eben geschriebene Zeile, die Live-Ansicht die Prozesse des Hosts mit redigierter Befehlszeile.
+- Das Security-Dashboard zeigt die Adresse des Brute-Force oben, eine Logdatei des Alpine-Hosts kommt per Glob an.
+- Anmeldung über Dex mit Gruppen-Mapping, Passkey als Anmeldung und Step-up.
+
+| Kriterium | Stand |
+|---|---|
+| Demo-Test M3-26 grün | ✓ 5/5 Projekte (2026-11-24, nach M3-29) |
+| Logs pro Org getrennt | ✓ Loki-Integrationstests (Tenant-Header, Löschung nur im eigenen Tenant, M3-06, M3-10), Tenant-Isolationstests aller neuen RPCs (Abdeckungstest), in der Demo sieht Org B nichts |
+| Redaction gefuzzt, kein Geheimnis im WAL | ✓ Fuzz-Ziel `redaction` (seit M3-29 mit Befehlszeilen), ein Test liest die Dateien des Puffers (M3-04), die Demo fragt Loki ab |
+| Ressourcen-Budget mit Log-Versand | ✓ 0,48–0,70 % eines Kerns und 16,1–20,5 MiB mit 20 Zeilen/s und offener Live-Ansicht (M3-27) |
+| Security-Review ohne offene kritische Findings | ✓ M3-28 ohne kritischen und hohen Befund; alle Befunde in M3-28 und M3-29 behoben |
+
+Abweichungen vom Ziel des Meilensteins:
+
+- Live-Tail fragt Loki in einem gleitenden Fenster ab, statt Lokis Tail-Stream zu nutzen (ADR 0032).
+- Der Server prüft die Größe der Redaction-Regeln nicht vor; maßgeblich ist der Agent (M3-29, Nachtrag ADR 0030).
+- Nodes lassen sich noch nicht löschen; die Retention gilt für alle Orgs mit 14 Tagen, bis Orgs sie einstellen können
+  (M3-10).
+- Die Grenze aller JavaScript-Chunks stieg von 400 auf 450 KiB (M3-17), Stand 433 KiB.
+- Keine Weltkarte im Security-Dashboard (M3-18, im Konzept optional).
+
+**2. Erkenntnisse und ADRs.** In M3 entstanden die ADRs 0030 bis 0034 sowie Nachträge zu 0015, 0029, 0030, 0031, 0033
+und 0034. Es fehlt kein ADR. Erkenntnisse für M4:
+
+- **Die Security-Review findet bei neuen Vertrauensgrenzen viel.** M3-28 fand keinen kritischen und keinen hohen
+  Befund, aber so viele mittlere und niedrige, dass sie zwei Aufgaben füllten. Der Root-Helper ist die heikelste
+  Grenze bisher (A1: root auf jedem Node). Er bekommt deshalb eine eigene Review, bevor der Agent ihn benutzt (M4-04),
+  nicht erst am Ende des Meilensteins.
+- **Daten der Hosts sind feindlich**, auch Paketnamen, Versionen und die Ausgabe von apt, dnf und apk: Dritte
+  kontrollieren die Paketquellen. Geparst wird im Agent ohne Rechte, nicht im Helper; angezeigt wird nur als Text.
+- **Dieselbe Prüfung in zwei Sprachen ist eine Falle.** `\w` ist in Rust Unicode und in Go ASCII (M3-29). Wo die
+  Semantik auseinanderläuft, ist eine Seite maßgeblich und meldet ihre Entscheidung zurück.
+- **Jede Pipeline bekommt ihren E2E-Fall in ihrer eigenen Aufgabe.** Das hat sich in M3 bewährt. In M4 gilt es für
+  Erfassung, Rollout, Reboot, Self-Update und Anomalien.
+- **Grenzen pro Node, Org und Instanz gehören in jeden Worker** (M3-28: Abfragen, Live-Ansicht, Flows). Orchestrator
+  und Anomalie-Worker bekommen sie in der ersten Fassung.
+- **Gegenproben lohnen sich weiter:** In M3-28 und M3-29 überlebten zuerst je eine bis drei Mutanten.
+- **Die Demo läuft lokal nur unter `caffeinate`.** Schlief der Mac, pausierte Docker, und ein Lauf scheiterte nach
+  15 min Lücke ohne echten Fehler.
+- **Offen aus M3:**
+  - M2-35 (Kanäle gegen die echten Dienste) ohne Konten
+  - Signierte Paket-Repos → M4-20
+  - Nodes löschen, Retention pro Org einstellen (M3-10): noch nicht eingeplant
+  - Vorprüfung der Regex-Größe im Server: nur auf Wunsch
+
+**3. M4 ist in Aufgaben zerlegt** (§7.1 bis §7.8, M4-01 bis M4-30).
+
 ---
 
 ## 7. M4 – Updates und Anomalien
@@ -3868,6 +3934,373 @@ Konfiguration) und M3-06 (Loki).
 | **E4.5 Self-Update und Paket-Repos** | Signierte apt-, rpm- und apk-Repos; Self-Update über den Helper mit Signaturprüfung und Rollback; Kanäle `stable` und `beta` | `sermon-security-review` | E4.1, E2.7 |
 | **E4.6 Anomalie-Erkennung** | Worker auf `metrics_1m`; EWMA und saisonaler Median/MAD; Debounce; Anomalie-Rate pro Node; Lernphase 7 Tage; Benchmark für Precision und Recall in CI; Anomalie-Band in Charts, „Was war ungewöhnlich?“ | `sermon-tdd`, `sermon-ui-component` | M1-22 |
 | **E4.7 Kapazität und Heatmap** | Kapazitäts-Dashboard (Füllprognosen, Trends), Fleet-Heatmap | `sermon-ui-component` | M1-26 |
+
+**Aufgaben** (Zerlegung im Review M3, §6.9). Reihenfolge nach dem Demo-Pfad: Helper → Erfassung mit eigenen
+Paketquellen in der E2E-Umgebung → Ingest → Befehle und Orchestrator → Dashboard → Self-Update. Die Anomalie-Erkennung
+(§7.6) hängt nur an den Metriken und läuft parallel. Kürzbar sind die signierten Paket-Repos (M4-20, sonst mit dem
+Release-Prozess in v1.0), der Kanal `beta` (M4-19) sowie Kapazitäts-Dashboard und Heatmap (M4-26, M4-27, sonst M5)
+(§10).
+
+**Kritischer Pfad:** M4-01 → M4-02 → M4-03 → M4-04 → M4-12 → M4-14 → M4-28. Dazu fließen M4-05 → M4-11 und
+M4-09 → M4-10 → M4-13 (Befehle, Policies, Orchestrator) sowie M4-06 → M4-07 mit M4-08 (Erfassung mit eigenen
+Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
+
+### 7.1 Root-Helper (E4.1)
+
+#### ☐ M4-01 – ADR Root-Helper · X · S 🔒
+- **Ziel:** ADR 0035 (Skill `sermon-adr`) legt den Helper fest, bevor Code entsteht:
+  - **Protokoll Agent ↔ Helper:** eine Anfrage pro Verbindung, Länge vorangestellt, Obergrenze der Größe; Format
+    (Protobuf in einem eigenen Paket oder festes Binärformat) mit Blick auf < 1 000 LoC.
+  - **Operationen:** das feste Enum aus KONZEPT §4.2 (`ListUpdates`, `ApplyUpdates{scope}`, `Reboot{reason}`,
+    `SelfUpdate`) und was dazukommen muss. Beispiel: Ein Lauf muss den Neustart des Agents überleben, denn apt
+    aktualisiert auch das Paket `sermon-agent`. Der Helper führt ihn also zu Ende und hält das Ergebnis, bis der Agent
+    es abholt (`RunResult{run_id}`?).
+  - **Arbeitsteilung:** Der Helper führt nur feste Befehle mit fester Umgebung aus und gibt die Ausgabe begrenzt
+    zurück. Geparst wird im Agent ohne Rechte (Erkenntnis aus §6.9).
+  - **Lokale Hoheit:** `helper.toml` mit `allow_remote_updates`, `allow_remote_reboot`, `allow_self_update`. Welche
+    Werte gelten ohne Datei, und wie setzt `install.sh` sie (z. B. `--allow-remote-updates`)?
+  - **Start und Rechte:** systemd mit Socket-Aktivierung (`sermon-helper.socket`, `root:sermon 0660`), unter OpenRC
+    legt der Helper den Socket selbst an. Härtung der Unit, soweit ein Paketmanager das zulässt (Score dokumentiert).
+  - **Audit:** jede Operation in journald und als Ergebnis an den Server (Audit-Log), auch abgelehnte.
+- Threat Model TB4 (T38 bis T41) mit den Entscheidungen; KONZEPT §4.2 und §5 nachziehen.
+- **Abhängig von:** –
+
+#### ☐ M4-02 – Helper: Socket, Aufrufer, Operationen und Veto · A · M 🔒
+- **Ziel:** `sermon-helper` nimmt Anfragen an und lehnt alles außerhalb der Regeln ab.
+  - `SO_PEERCRED`: nur die UID des Users `sermon` (aus `/etc/passwd`, nie aus der Umgebung); andere UIDs, auch root,
+    werden abgewiesen und protokolliert.
+  - Decoder mit Obergrenze, Zeitlimit pro Verbindung, höchstens eine schreibende Operation gleichzeitig.
+  - `helper.toml` (root-eigen, nicht von Gruppe oder anderen beschreibbar, sonst Start verweigert); ein Veto beantwortet
+    die Anfrage mit Grund, ohne etwas auszuführen.
+  - `just helper-loc` zählt die Zeilen ohne Tests und schlägt über 1 000 fehl (in CI).
+- **Tests zuerst:** fremde UID, Anfrage über der Grenze, unbekannte Operation, Veto je Operation, beschreibbare
+  `helper.toml`; Fuzz-Ziel `helper_request` für den Decoder.
+- **Abhängig von:** M4-01
+
+#### ☐ M4-03 – Helper: Paketmanager und Reboot ausführen · A · M 🔒
+- **Ziel:** Die Operationen laufen auf Debian/Ubuntu, der RHEL-Familie und Alpine.
+  - Befehle aus KONZEPT §14.1 und §14.2 mit absoluten Pfaden, fester Umgebung (`PATH`, `LANG=C`,
+    `DEBIAN_FRONTEND=noninteractive`) und Zeitlimit (Liste 10 min, Updates 60 min). Die Distro liest der Helper selbst
+    aus `/etc/os-release`.
+  - Ausgabe auf die letzten 256 KiB gekürzt; das Ergebnis eines Laufs (Exit-Code, Ausgabe, Dauer) liegt root-eigen
+    unter `/var/lib/sermon-helper/` und wird nach 7 Tagen gelöscht.
+  - Ein Lauf überlebt Neustart und Absturz des Agents (eigene Prozessgruppe bzw. transiente Unit).
+  - `Reboot` mit einer Minute Vorlauf und Grund (`systemctl reboot`, unter OpenRC `reboot`).
+- **Tests zuerst:** Fake-Befehle in einem Testverzeichnis (nur in Tests einstellbar, nie über Umgebung oder
+  Konfiguration): Zeitlimit, Kürzung, Exit-Codes (dnf: 100 heißt „Updates vorhanden“), Lauf überlebt das Ende der
+  Verbindung, Ergebnis wird einmal abgeholt.
+- **Abhängig von:** M4-02
+
+#### ☐ M4-04 – Helper paketieren und vorab reviewen · A · S 🔒
+- **Ziel:**
+  - Helper in `.deb`, `.rpm` und `.apk` und in `install.sh`: Binary, systemd-Unit und Socket, OpenRC-Skript,
+    `helper.toml` als Konfigurationsdatei. Deinstallation entfernt alles außer der Konfiguration.
+  - `scripts/test-packages.sh` und `install.bats` erweitert; in allen sieben E2E-Images läuft der Helper, und der Agent
+    erreicht ihn (`ListUpdates`).
+  - **Review vorab** (Skill `sermon-security-review`, ohne Kontext der Umsetzung): Helper und TB4. Befunde behebt diese
+    Aufgabe, bevor der Agent ihn benutzt.
+- **Tests zuerst:** Paket-Tests (Rechte von Socket und Konfiguration, Unit aktiv), ein anderer lokaler User erreicht den
+  Socket nicht (E2E).
+- **Abhängig von:** M4-03
+
+### 7.2 Update-Erfassung (E4.2)
+
+#### ☐ M4-05 – Protokoll für Updates und Befehle · X · S
+- **Ziel:** Skill `sermon-proto-change`.
+  - Agent → Server: `UpdateReport` (Zähler, Paketliste mit Name, installiert, Kandidat, Quelle und Security-Flag,
+    Reboot nötig mit Grund, letztes erfolgreiches Update, „nicht verfügbar“ mit Grund) als Inhalt von `Batch`;
+    `CommandResult{run_id, phase, exit_code, output}` nicht gepuffert.
+  - Server → Agent: `RefreshUpdateInfo`, `RunUpdate{run_id, scope, reboot}`, `RebootNode{run_id, reason}`,
+    `SelfUpdate{run_id, version}` (die Felder des Self-Updates nach ADR 0036).
+  - Grenzen in den Validierungsregeln (Pakete je Bericht, Längen von Namen, Versionen und Ausgabe).
+- **Tests zuerst:** Validierung an den Grenzen; `just breaking-proto` grün.
+- **Abhängig von:** M4-01
+
+#### ☐ M4-06 – Parser für apt, dnf und apk · A · M
+- **Ziel:** `sermon-updates` liest die Ausgaben aus M4-03 (Tabelle KONZEPT §14.1).
+  - apt: `apt list --upgradable`, Security nach Origin/Suite `*-security` (Debian und Ubuntu).
+  - dnf: `check-update` und `updateinfo list --security`, `needs-restarting -r`.
+  - apk: `version -l '<'`, alle Updates ohne Security-Kennzeichnung (O6); Reboot nötig, wenn der laufende Kernel nicht
+    dem installierten entspricht.
+  - Fixtures von allen Zieldistros (Debian 12 und 13, Ubuntu 24.04, Rocky 9, AlmaLinux 10, Fedora 44, Alpine), per
+    Skript aus den E2E-Images erzeugt; Namen und Versionen gekürzt, Steuerzeichen nicht übernommen.
+- **Tests zuerst:** Fixtures je Distro, leere und kaputte Ausgaben; Fuzz-Ziel `update_parsers`.
+- **Abhängig von:** M4-03
+
+#### ☐ M4-07 – Erfassung im Agent · A · M
+- **Ziel:** Der Agent meldet seine Updates.
+  - Alle 6 h mit Streuung, nach Paketmanager-Läufen (inotify auf die Datenbanken von dpkg, rpm und apk, entprellt um
+    2 min) und auf `RefreshUpdateInfo` (höchstens alle 5 min).
+  - Ohne Helper oder mit Veto meldet er „nicht verfügbar“ samt Grund statt eines Fehlers.
+  - Das Ressourcen-Budget des Agents bleibt; die Paketmanager laufen im Helper.
+- **Tests zuerst:** Zeitplan und Entprellung mit pausierter Zeit, Ausfall des Helpers; E2E: alle sieben Images melden
+  Updates aus den Quellen von M4-08.
+- **Abhängig von:** M4-04, M4-05, M4-06, M4-08
+
+#### ☐ M4-08 – Paketquellen mit Updates in der E2E-Umgebung · X · M
+- **Ziel:** Die E2E-Umgebung hat eigene Paketquellen, damit Updates reproduzierbar und ohne Internet entstehen.
+  - Ein Container liefert ein apt-, ein rpm- und ein apk-Repo, signiert mit Testschlüsseln. Darin liegt ein Paket
+    `sermon-e2e-demo` in Version 1 (installiert) und 2 (als Security-Update: Suite `*-security` bzw. `updateinfo.xml`)
+    sowie ein Update ohne Security-Kennzeichnung.
+  - Version 2 verlangt auf Debian einen Reboot (`/var/run/reboot-required`).
+  - Die Agent-Images nutzen nur diese Quellen.
+  - **Spike Reboot:** Ein systemd-Container startet nach `systemctl reboot` über `restart: unless-stopped` neu, und der
+    Agent verbindet sich wieder. Klappt das nicht, läuft der Reboot-Teil nur nightly in einer VM (§10).
+- **Tests zuerst:** `just test-scripts` prüft die Repos (Signatur, Metadaten); ein Image sieht genau die erwarteten
+  Updates.
+- **Abhängig von:** –
+
+#### ☐ M4-09 – Update-Ingest und -Abfrage im Server · S · M 🔒
+- **Ziel:**
+  - Tabellen mit RLS für den letzten Bericht je Node und seine Pakete.
+  - Abgeleitete Serien für Regeln und Charts (`updates.pending`, `updates.security_pending`,
+    `updates.reboot_required`, Alter des ältesten Security-Updates).
+  - RPCs: `GetNodeUpdates`, `ListFleetUpdates` (Nodes nach Status: aktuell, Updates, Security-Updates, Reboot nötig)
+    und `RefreshUpdateInfo` (Operator, begrenzt pro Node und Org).
+  - Grenzen pro Node und Org (Pakete, Berichte pro Stunde).
+- **Tests zuerst:** Ingest gegen PostgreSQL (neuer Bericht ersetzt den alten), Tenant-Isolation der neuen RPCs, Grenzen.
+- **Abhängig von:** M4-05
+
+### 7.3 Policies und Rollout (E4.3)
+
+#### ☐ M4-10 – Update-Policies pro Gruppe · S · M 🔒
+- **Ziel:** `UpdatePolicy` nach KONZEPT §14.2.
+  - `mode` (`report`, `security-auto`, `all-auto`), `window` als `routing.Schedule` (M2-15), `autoReboot`, `rollout`
+    (`maxParallel` 1 bis 50, `stopOnFailure`, `healthCheck` 5 min bis 2 h).
+  - Import und Export als YAML wie die Alert-Regeln.
+  - Alpine-Nodes in `security-auto` bleiben bei „melden“, mit Hinweis (O6).
+  - Ändern verlangt Admin und Step-up und steht im Audit-Log.
+- **Tests zuerst:** Validierung (Fenster, Zeitzonen, Grenzen), YAML-Round-Trip, Rechte und Step-up (Abdeckungstest).
+- **Abhängig von:** M4-09
+
+#### ☐ M4-11 – Befehle an die Agents über Instanzen hinweg · S · M 🔒
+- **Ziel:** Befehle erreichen den Agent, egal welche Instanz die Session hält (ADR 0015).
+  - Tabelle `node_commands` (wartend, gesendet, bestätigt, fertig, abgelaufen); die Instanz mit der Session stellt zu
+    (NOTIFY und Abfrage als Rückfall).
+  - `run_id` macht jeden Befehl idempotent; ein Befehl verfällt, wenn der Node nicht rechtzeitig online ist.
+  - `CommandResult` schreibt Phase und Ergebnis zurück; die Ausgabe ist im Agent redigiert und gekürzt.
+- **Tests zuerst:** Zustellung über zwei Instanzen, doppelte Zustellung nach Reconnect, Ablauf, fremde Org.
+- **Abhängig von:** M4-05
+
+#### ☐ M4-12 – Befehle im Agent ausführen · A · M 🔒
+- **Ziel:** Der Agent reicht `RunUpdate`, `RebootNode` und `RefreshUpdateInfo` an den Helper weiter.
+  - Er merkt sich bearbeitete `run_id`s im Zustandsverzeichnis und führt keinen Befehl zweimal aus.
+  - Nach einem Neustart holt er offene Ergebnisse beim Helper ab und meldet sie.
+  - Die Ausgabe läuft vor dem Senden durch die Redaction.
+- **Tests zuerst:** Wiederholter Befehl, Neustart mitten im Lauf, Veto des Helpers; E2E: ein Update aus M4-08 auf
+  Debian, Rocky und Alpine.
+- **Abhängig von:** M4-04, M4-08, M4-11
+
+#### ☐ M4-13 – Orchestrator · S · L 🔒
+- **Ziel:** Ein Worker (mit Lease) rollt die Policies aus.
+  - Pro Gruppe und Fenster wählt er die Nodes: `security-auto` mit Security-Updates, `all-auto` mit beliebigen
+    Updates. Höchstens `maxParallel` gleichzeitig, in fester Reihenfolge.
+  - Zustände je Node: wartend, aktualisiert, startet neu, Health-Check, fertig, fehlgeschlagen, übersprungen (offline,
+    Veto).
+  - Reboot nur, wenn nötig, `autoReboot` gilt und das Fenster offen ist.
+  - **Health-Check:** Der Node ist innerhalb von `healthCheck` wieder online und ohne kritische Alerts. Sonst stoppt
+    der Rollout bei `stopOnFailure`, und das Event `updates.rollout_stopped` entsteht.
+  - Am Fensterende starten keine neuen Nodes; laufende werden fertig.
+  - **Automatische Silences:** Während seines Laufs sind Reboot- und Offline-Alerts des Nodes stumm.
+  - Grenzen pro Org und Instanz (gleichzeitige Läufe), Fairness zwischen Orgs.
+- **Tests zuerst:** Fake-Uhr über Fensterbeginn, Fensterende und Sommerzeitwechsel; `maxParallel`; Fehlschlag mit und
+  ohne `stopOnFailure`; Health-Check verfehlt; Node offline; zwei Instanzen, ein Rollout.
+- **Abhängig von:** M4-10, M4-11
+
+#### ☐ M4-14 – Manuell aktualisieren und neu starten · S+W · S 🔒
+- **Ziel:** „Jetzt aktualisieren“ für einen Node oder eine Auswahl.
+  - Operator mit Step-up; der Bestätigungsdialog zeigt die Paketliste des letzten Berichts.
+  - `scope` (Security oder alle) und Reboot wählbar; läuft über den Orchestrator mit `maxParallel` der Gruppe.
+  - „Neu starten“ mit Grund (`reboot_nodes`); beides im Audit-Log (wer, wann, was, Ergebnis).
+- **Tests zuerst:** Rechte, Step-up, Veto des Helpers in der UI sichtbar; Komponente: Dialog mit Paketliste; E2E: ein
+  Update von Hand auf einem Node aus M4-08.
+- **Abhängig von:** M4-12, M4-13
+
+### 7.4 Updates-Dashboard (E4.4)
+
+#### ☐ M4-15 – Updates-Dashboard und Reiter „Updates“ · W · L
+- **Ziel:** KONZEPT §16, Dashboard 5.
+  - Seite `/updates`: Nodes nach Status, Alter offener Security-Updates, nächste Wartungsfenster, Laufhistorie mit
+    Protokollen.
+  - Reiter „Updates“ der Node-Seite: Paketliste (filterbar, Security markiert), Historie, Ausgabe eines Laufs nur als
+    Text mit markierten Steuerzeichen.
+  - Policy-Editor bei den Gruppen; in der Fleet-Übersicht Badges für Updates und Reboot und die Zahl der Nodes mit
+    Security-Updates in der Kopfzeile.
+  - Hilfe DE/EN; die Seiten laden bei Bedarf und bleiben im JavaScript-Budget.
+- **Tests zuerst:** Komponenten (Status, feindliche Paketnamen und Ausgaben, leere Zustände), axe, `check:size`.
+- **Abhängig von:** M4-09, M4-10, M4-13
+
+#### ☐ M4-16 – Standardregeln für Updates und Reboot · S · S
+- **Ziel:** Skill `sermon-add-alert-rule`, Tabelle KONZEPT §12.3.
+  - Security-Updates offen seit 3 bzw. 14 Tagen; Reboot nötig seit 1 bzw. 7 Tagen; Update-Lauf fehlgeschlagen;
+    Rollout gestoppt.
+  - „Updates verfügbar (alle)“ ist als Info gedacht, die Stufe gibt es nicht (M2-08): Die Aufgabe entscheidet zwischen
+    „nur im Dashboard“ und einer Warnung nach langer Zeit.
+- **Tests zuerst:** Szenariotest je Regel (der Test aus M2-04 verlangt ihn), Hilfetexte.
+- **Abhängig von:** M4-09, M4-13
+
+### 7.5 Self-Update und Paket-Repos (E4.5)
+
+#### ☐ M4-17 – ADR Self-Update und Paket-Repos · X · S 🔒
+- **Ziel:** ADR 0036.
+  - **Ablauf:** Der Agent lädt die Binary als `sermon` vom Server. Der Helper kopiert sie in ein root-eigenes
+    Verzeichnis und prüft dort die minisign-Signatur gegen den eingebetteten Release-Key (wie `install.sh`), samt
+    Version im vertrauenswürdigen Kommentar. Dann ersetzt er atomar und startet neu.
+  - **Rollback**, wenn der Agent nach 2 min nicht verbunden ist: Woran erkennt der Helper das? Ein lügender Agent kann
+    so nur zwischen zwei signierten Fassungen wählen.
+  - Kein Downgrade außer durch den Rollback; nur für Installationen per Skript (`/usr/local/bin`). Pakete aktualisiert
+    der Paketmanager (KONZEPT §14.3).
+  - **Kanäle** `stable` und `beta` pro Gruppe: woher der Server die Versionen kennt. Ringe folgen später.
+  - **Paket-Repos:** Schlüssel (OpenPGP für apt und rpm, RSA für apk), Ablage, Rotation; wer die Repos ausliefert
+    (Server unter `/repo` oder statisch).
+- Threat Model A4 und T40; KONZEPT §14.3.
+- **Abhängig von:** M4-01
+
+#### ☐ M4-18 – Self-Update über den Helper · A · M 🔒
+- **Ziel:** `SelfUpdate` nach ADR 0036 im Helper und im Agent, mit Rollback.
+- **Tests zuerst:**
+  - Falsche oder fehlende Signatur, fremde Datei, Downgrade, getauschte Datei zwischen Prüfung und Ersetzen (TOCTOU),
+    Veto (`allow_self_update`).
+  - E2E: Ein per Skript installierter Node wechselt auf eine neue, signierte Version. Eine signierte Version, die nicht
+    startet, wird nach 2 min zurückgerollt.
+- **Abhängig von:** M4-12, M4-17
+
+#### ☐ M4-19 – Kanäle und Self-Update im Server · S+W · M 🔒
+- **Ziel:**
+  - Kanal pro Gruppe (`stable`, `beta`) und die verfügbaren Versionen je Kanal.
+  - Self-Update manuell (Operator, Step-up) oder per Policy (`agentUpdate: auto`) über den Orchestrator.
+  - Version, Kanal und letztes Ergebnis je Node in der UI; Regel „Self-Update fehlgeschlagen“.
+- **Tests zuerst:** Auswahl der Version je Kanal, Rechte und Step-up, Tenant-Isolation, Szenariotest der Regel.
+- **Abhängig von:** M4-13, M4-18
+
+#### ☐ M4-20 – Signierte Paket-Repos · X · M 🔒
+- **Ziel:**
+  - Ein Skript baut aus `dist/packages` signierte apt-, rpm- und apk-Repos (ADR 0036), ausgeliefert wie dort
+    entschieden.
+  - `install.sh --repo` richtet Quelle und Schlüssel ein statt die Binary zu laden (O5).
+  - Kürzbar: sonst mit dem Release-Prozess in v1.0.
+- **Tests zuerst:** E2E: Installation aus dem Repo auf Debian, Rocky und Alpine. Eine neue Version kommt über eine
+  `all-auto`-Policy; ein Repo mit falscher Signatur wird abgelehnt.
+- **Abhängig von:** M4-08, M4-13, M4-17
+
+### 7.6 Anomalie-Erkennung (E4.6)
+
+#### ☐ M4-21 – ADR Anomalie-Erkennung · S · S
+- **Ziel:** ADR 0037 zu KONZEPT §13.
+  - **Speicher:** Baselines je Node, Metrik und Stunde der Woche (168 Buckets), stündlich aus `metrics_1m` neu
+    berechnet. Die 30 Tage Retention von `metrics_1m` reichen für 4 Wochen.
+  - **Ergebnisse je Minute** für Band und „Was war ungewöhnlich?“: Hypertable ohne RLS, gelesen über eine
+    `SECURITY DEFINER`-Funktion wie die Metriken (O8).
+  - Rechenbudget für 200 Nodes × 30 Metriken pro Minute.
+  - Interface `Detector` für die Ausbaustufe.
+  - Die Kandidaten-Metriken; Log-Rate und SSH-Fehlversuche kommen aus Loki-Ingest und Security-Events statt aus
+    `metrics_1m`.
+- **Abhängig von:** –
+
+#### ☐ M4-22 – Detektoren, Golden-Tests und Benchmark · S · M
+- **Ziel:** Reines Paket `domain/anomaly` ohne I/O.
+  - EWMA mit Halbwertszeit 1 h; saisonaler Median und MAD; robuster Z-Score; anomal nur, wenn beide über 4 liegen;
+    Debounce 3 von 5 Minuten.
+  - Sonderfälle: MAD = 0 (Mindeststreuung), Lücken, Level-Shift.
+  - Generator für synthetische Reihen (Rauschen, Saisonalität, Spikes, Level-Shifts, Drifts) mit festem Seed.
+- **Tests zuerst:**
+  - Golden-Tests je Muster.
+  - `just bench-anomaly` misst Precision und Recall und vergleicht sie mit einer eingecheckten Referenz. CI schlägt
+    fehl, wenn einer der Werte sinkt.
+- **Abhängig von:** M4-21
+
+#### ☐ M4-23 – Anomalie-Worker · S · M 🔒
+- **Ziel:**
+  - Ein Worker (mit Lease) rechnet jede Minute auf `metrics_1m` und schreibt Ergebnisse und die Anomalie-Rate je Node
+    als Serie (`anomaly.rate`).
+  - Lernphase 7 Tage ab `nodes.learning_since`, für neue Metriken ab ihrer ersten Minute.
+  - Grenzen pro Org und Instanz; ein Lauf, der sein Zeitbudget überschreitet, setzt fort statt sich zu stapeln.
+  - RPCs: Anomalien eines Nodes im Zeitraum; „Was war ungewöhnlich?“ für Node oder Fleet (begrenzt, nach Score).
+- **Tests zuerst:** gegen PostgreSQL mit synthetischer Historie (4 Wochen und ein Spike), Lernphase, Tenant-Isolation,
+  zwei Instanzen.
+- **Abhängig von:** M4-22
+
+#### ☐ M4-24 – Regeltyp `anomaly` und Standardregel · S · S
+- **Ziel:** Die Alert-Engine wertet den Regeltyp `anomaly` aus.
+  - Standardregel „Anomalie-Rate des Nodes hoch“ mit 10 % bzw. 25 % der Metriken (KONZEPT §12.3).
+  - Keine Alerts in der Lernphase.
+- **Tests zuerst:** Szenariotest der Regel, Lernphase, Validierung im Regel-Editor und Import.
+- **Abhängig von:** M4-23
+
+#### ☐ M4-25 – Anomalien in der UI · W · M
+- **Ziel:**
+  - Anomalie-Band in allen Charts (uPlot-Plugin), optional das Baseline-Band; „lernt noch (Tag 3/7)“.
+  - „Was war ungewöhnlich?“ aus einem markierten Zeitbereich.
+  - Dashboard „Anomalien“ (KONZEPT §16, 9): Nodes nach Anomalie-Rate; die Rate der Fleet in der Kopfzeile der
+    Übersicht.
+  - Hilfe DE/EN: Wie lese ich Score und Band, warum lernt ein Node noch.
+- **Tests zuerst:** Komponenten (Band, Lernphase, leere Ergebnisse), axe, `check:size`.
+- **Abhängig von:** M4-23
+
+### 7.7 Kapazität und Heatmap (E4.7)
+
+#### ☐ M4-26 – Kapazitäts-Dashboard · S+W · M
+- **Ziel:** KONZEPT §16, 6.
+  - Füllprognosen aller Dateisysteme nach „Tage bis voll“, mit der Rechnung des Regeltyps `prediction`.
+  - CPU- und RAM-Trends über 30 Tage aus `metrics_1h`; die größten Verbraucher der Fleet.
+  - RPC mit Grenzen; Hilfe DE/EN. Kürzbar (sonst M5).
+- **Tests zuerst:** Prognose gegen dieselben Fälle wie die Regel, Tenant-Isolation, Komponenten.
+- **Abhängig von:** –
+
+#### ☐ M4-27 – Fleet-Heatmap · S+W · M
+- **Ziel:** KONZEPT §16, 7.
+  - Nodes × Zeit, eingefärbt nach CPU, Speicher, IO oder Anomalie-Rate; der Server fasst auf höchstens 200 Spalten
+    zusammen.
+  - Werte bei Fokus und Hover; Legende und eine Tabelle als Alternative zur Farbe.
+  - Kürzbar (sonst M5).
+- **Tests zuerst:** Zusammenfassen an den Grenzen, Tenant-Isolation, axe.
+- **Abhängig von:** M4-23 (für die Anomalie-Rate)
+
+### 7.8 Querschnitt
+
+#### ☐ M4-28 – E2E-Demo M4 · X · M
+- **Ziel:** „Patch-Compliance auf einen Blick“ in `web/tests/demo/`.
+  - **Dashboard:** Das Updates-Dashboard zeigt alle Nodes mit offenen Security-Updates aus den Quellen von M4-08;
+    Alpine steht mit Updates ohne Security-Kennzeichnung da.
+  - **Rollout:** Eine Policy `security-auto` mit einem Fenster ab jetzt aktualisiert eine Gruppe aus drei Nodes
+    nacheinander (`maxParallel: 1`). Der Debian-Node startet neu und besteht den Health-Check.
+  - Es gibt keine Benachrichtigung über Reboot oder Offline (automatische Silence). Ein Node mit Veto wird mit Grund
+    übersprungen.
+  - **Manuell:** „Jetzt aktualisieren“ für einen Node mit Step-up per Passkey und Paketliste im Dialog; das Audit-Log
+    zeigt wer, wann, was.
+  - **Anomalie:** Für einen Node liegen 4 Wochen synthetische Historie in der Datenbank (nur in der E2E-Umgebung
+    eingespielt). Ein Lastsprung auf dem Host (`stress-ng` o. ä.) erscheint als Anomalie-Band und oben in „Was war
+    ungewöhnlich?“.
+- **Abhängig von:** M4-07, M4-14, M4-15, M4-25
+
+#### ☐ M4-29 – Ressourcen-Budget mit Update-Erfassung · X · S
+- **Ziel:** `agent-budget.sh` misst in der Demo auch während einer Erfassung: Der Agent bleibt unter 1 % eines Kerns
+  und 30 MiB. Der Helper wird getrennt gemessen und dokumentiert (in Ruhe, beim Lauf).
+- **Tests zuerst:** Gegenprobe mit gesenkter Grenze schlägt fehl.
+- **Abhängig von:** M4-07
+
+#### ☐ M4-30 – Security-Review M4 · X · S 🔒
+- **Ziel:** Skill `sermon-security-review` über alle M4-Änderungen, in Teil-Reviews ohne Kontext der Umsetzung:
+  - Helper und TB4 (nach der Review aus M4-04 erneut, mit Self-Update)
+  - Befehle, Orchestrator und Rechte: Was kann ein kompromittierter Server oder ein Operator auf den Nodes auslösen
+    (T40)?
+  - Self-Update, Signaturen und Paket-Repos (A4)
+  - Anomalie- und Update-Worker: Grenzen, Fairness, Mandantentrennung
+  - Darstellung fremder Daten in der UI (Paketnamen, Ausgaben der Läufe)
+
+  Danach das Threat Model aktualisieren (T38 bis T41 und neue Zeilen) und Befunde als Aufgaben anlegen.
+- **Abhängig von:** alle M4-Aufgaben
+
+**M4 fertig, wenn:**
+
+- Der Demo-Test M4-28 ist grün.
+- Der Helper hat weniger als 1 000 LoC, sein Decoder ist gefuzzt, Aufrufer-Prüfung und Veto sind getestet.
+- Die Parser haben Fixtures aller Zieldistros und sind gefuzzt.
+- Der Orchestrator ist mit Zeitzonen, Sommerzeit, `stopOnFailure` und Health-Check getestet.
+- Der Benchmark der Anomalie-Erkennung läuft in CI und ist nicht schlechter als die Referenz.
+- Alle neuen RPCs stehen in den Tenant-Isolations- und Step-up-Tabellen.
+- Das Ressourcen-Budget ist mit Update-Erfassung eingehalten.
+- Die Security-Review hat keine offenen kritischen Findings; TB4 im Threat Model ist erledigt.
 
 ---
 
@@ -3907,3 +4340,7 @@ Konfiguration) und M3-06 (Loki).
 | Drei Sprachen (Rust, Go, TS) verlangsamen | Kontextwechsel kosten Zeit | Strangweise Blöcke bilden; Codegen aus Proto hält die Schnittstellen synchron |
 | Umfang von M2/M3 wächst | Verzögerung | Kanal- und Modul-Wellen erlauben frühes Kürzen; Priorität: E-Mail, Webhook und ntfy vor den übrigen Kanälen |
 | Security-Findings spät entdeckt | Nacharbeit | 🔒-Aufgaben mit Pflicht-Review, Security-Review am Ende jedes Meilensteins, Fuzzing nightly ab M0 |
+| Reboot lässt sich in den E2E-Containern nicht nachstellen (M4-08) | Rollout mit Reboot ungetestet | Spike in M4-08; sonst Reboot-Teil nightly in einer VM (QEMU), der übrige Rollout bleibt im Container |
+| Root-Helper wächst über 1 000 LoC oder wird zum Einfallstor | A1: root auf allen Nodes | Parsen im Agent, festes Op-Enum, LoC-Prüfung in CI, eigene Review vor der Nutzung (M4-04) |
+| Anomalie-Erkennung meldet zu viel oder zu wenig | Vertrauen in die Alerts sinkt | beide Verfahren müssen übereinstimmen, Debounce, Lernphase; Benchmark in CI (M4-22); die Regel ist pro Org abschaltbar |
+| Umfang von M4 wächst | Verzögerung | Paket-Repos (M4-20) mit dem Release in v1.0, Kapazität und Heatmap (M4-26, M4-27) nach M5, Kanal `beta` später |

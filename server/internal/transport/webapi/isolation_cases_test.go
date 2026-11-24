@@ -217,6 +217,21 @@ var tenantIsolationCases = map[string]isolationCase{
 		_, err := e.alerts.AcknowledgeAlert(ctx, connect.NewRequest(&webv1.AcknowledgeAlertRequest{Key: alertKeyA(e)}))
 		return err
 	}},
+	"/sermon.web.v1.AlertService/GetAlertStatistics": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.alerts.GetAlertStatistics(ctx, connect.NewRequest(&webv1.GetAlertStatisticsRequest{Days: 30}))
+		if err != nil {
+			return err
+		}
+		for _, r := range res.Msg.GetRules() {
+			if r.GetRuleId() == alertKeyA(e).GetRuleId() {
+				return errLeak
+			}
+		}
+		if leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), e.nodeA) {
+			return errLeak
+		}
+		return nil
+	}},
 	"/sermon.web.v1.AlertSilenceService/ListSilences": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.silences.ListSilences(ctx, connect.NewRequest(&webv1.ListSilencesRequest{}))
 		if err == nil && (strings.Contains(res.Msg.String(), e.silenceA) || strings.Contains(res.Msg.String(), "alpha-silence") || leaks(e, res.Msg.String())) {

@@ -46,6 +46,7 @@ type store struct {
 	instances []alert.Instance
 	history   []alerting.Record
 	acks      []alerting.Record
+	since     time.Time
 }
 
 func (s *store) Instances(_ context.Context, scope tenant.Scope) ([]alert.Instance, error) {
@@ -59,6 +60,17 @@ func (s *store) History(_ context.Context, scope tenant.Scope, key alert.Key, li
 	var out []alerting.Record
 	for _, r := range s.history {
 		if scope.OrgID() == orgA && r.Key == key && len(out) < int(limit) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func (s *store) HistorySince(_ context.Context, scope tenant.Scope, since time.Time, limit int) ([]alerting.Record, error) {
+	s.since = since
+	var out []alerting.Record
+	for _, r := range s.history {
+		if scope.OrgID() == orgA && !r.Transition.At.Before(since) && len(out) < limit {
 			out = append(out, r)
 		}
 	}

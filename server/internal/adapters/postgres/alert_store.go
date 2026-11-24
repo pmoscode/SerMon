@@ -177,6 +177,29 @@ func (s *AlertStore) History(ctx context.Context, scope tenant.Scope, key alert.
 	return out, err
 }
 
+// HistorySince returns the transitions at or after since, oldest first, without fields
+// (alerts.Store, M3-19).
+func (s *AlertStore) HistorySince(ctx context.Context, scope tenant.Scope, since time.Time, limit int) ([]alerting.Record, error) {
+	var out []alerting.Record
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		rows, err := q.AlertHistorySince(ctx, sqlcdb.AlertHistorySinceParams{Since: since, MaxEntries: int32(min(max(limit, 0), 1<<30))})
+		if err != nil {
+			return wrap(err, "alert history since")
+		}
+		out = make([]alerting.Record, len(rows))
+		for i, r := range rows {
+			out[i] = alerting.Record{
+				Key: alert.Key{Rule: alert.RuleID(r.RuleID), Node: identity.NodeID(r.NodeID), Dimension: r.Dimension},
+				Transition: alert.Transition{
+					Kind: alert.TransitionKind(r.Kind), From: alert.State(r.FromState), To: alert.State(r.ToState), At: r.At, Value: r.Value,
+				},
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+
 // encodeFields stores the fields of an alert as a JSON object ({} without any).
 func encodeFields(f alert.Fields) ([]byte, error) {
 	if len(f) == 0 {

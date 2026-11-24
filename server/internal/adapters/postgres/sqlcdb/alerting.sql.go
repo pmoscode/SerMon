@@ -42,6 +42,61 @@ func (q *Queries) AcknowledgeAlertInstance(ctx context.Context, arg AcknowledgeA
 	return result.RowsAffected(), nil
 }
 
+const alertHistorySince = `-- name: AlertHistorySince :many
+SELECT rule_id, node_id, dimension, kind, from_state, to_state, at, value
+FROM alert_history
+WHERE at >= $1
+ORDER BY at, id
+LIMIT $2
+`
+
+type AlertHistorySinceParams struct {
+	Since      time.Time
+	MaxEntries int32
+}
+
+type AlertHistorySinceRow struct {
+	RuleID    string
+	NodeID    uuid.UUID
+	Dimension string
+	Kind      int16
+	FromState int16
+	ToState   int16
+	At        time.Time
+	Value     float64
+}
+
+// The statistics (M3-19): the transitions of the organization from since on, oldest first,
+// without their fields.
+func (q *Queries) AlertHistorySince(ctx context.Context, arg AlertHistorySinceParams) ([]AlertHistorySinceRow, error) {
+	rows, err := q.db.Query(ctx, alertHistorySince, arg.Since, arg.MaxEntries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AlertHistorySinceRow{}
+	for rows.Next() {
+		var i AlertHistorySinceRow
+		if err := rows.Scan(
+			&i.RuleID,
+			&i.NodeID,
+			&i.Dimension,
+			&i.Kind,
+			&i.FromState,
+			&i.ToState,
+			&i.At,
+			&i.Value,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const alertInstanceHistory = `-- name: AlertInstanceHistory :many
 SELECT kind, from_state, to_state, at, value, by_user, fields
 FROM alert_history

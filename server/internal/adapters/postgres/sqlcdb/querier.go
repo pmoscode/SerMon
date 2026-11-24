@@ -26,6 +26,9 @@ type Querier interface {
 	// The configuration of a node: its organization's version and rules, its group's settings (NULL:
 	// the defaults).
 	AgentConfigForNode(ctx context.Context, nodeID uuid.UUID) (AgentConfigForNodeRow, error)
+	// The statistics (M3-19): the transitions of the organization from since on, oldest first,
+	// without their fields.
+	AlertHistorySince(ctx context.Context, arg AlertHistorySinceParams) ([]AlertHistorySinceRow, error)
 	AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
 	AllowNodeTakeover(ctx context.Context, arg AllowNodeTakeoverParams) (int64, error)

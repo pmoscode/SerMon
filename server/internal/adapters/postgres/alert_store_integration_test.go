@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -156,6 +157,35 @@ func TestAlertStore_KeepsOrganizationsApart(t *testing.T) {
 	// Writing into another organization fails: the node belongs to org B, the scope to org A.
 	if err := saveHeld(ctx, t, store, scopeFor(t, orgA), []alert.Instance{firingInstance(nodeB)}, nil, nil); err == nil {
 		t.Error("an instance for a node of another organization was stored")
+	}
+}
+
+// M3-19: the statistics read the history of the organization from a time on, oldest first.
+func TestAlertStore_HistorySince(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	org := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Stats ' || $1::uuid::text)", org)
+	node := uuid.New()
+	createNode(t, f.db.OwnerDSN, org, node)
+	store := postgres.NewAlertStore(open(t, f.appDSN))
+	key := alert.Key{Rule: "system.cpu.usage_high", Node: identity.NodeID(node)}
+	var records []alerting.Record
+	for i, to := range []alert.State{alert.StateWarning, alert.StateResolved, alert.StateOK, alert.StateCritical} {
+		records = append(records, alerting.Record{Key: key, Transition: alert.Transition{
+			Kind: alert.StateChanged, To: to, At: alertTime.Add(time.Duration(i) * time.Hour), Value: float64(i), Fields: alert.Fields{"x": "y"},
+		}})
+	}
+	if err := saveHeld(ctx, t, store, scopeFor(t, org), nil, nil, records); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.HistorySince(ctx, scopeFor(t, org), alertTime.Add(time.Hour), 2)
+	if err != nil || len(got) != 2 || got[0].Transition.To != alert.StateResolved || got[1].Transition.To != alert.StateOK ||
+		got[0].Key != key || got[0].Transition.Fields != nil || got[1].Transition.Value != 2 {
+		t.Errorf("HistorySince() = %+v, %v", got, err)
+	}
+	if other, err := store.HistorySince(ctx, scopeFor(t, orgB), alertTime, 100); err != nil || slices.ContainsFunc(other, func(r alerting.Record) bool { return r.Key == key }) {
+		t.Errorf("another organization: %v, %v", other, err)
 	}
 }
 

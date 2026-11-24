@@ -41,6 +41,9 @@ const (
 	// AlertServiceAcknowledgeAlertProcedure is the fully-qualified name of the AlertService's
 	// AcknowledgeAlert RPC.
 	AlertServiceAcknowledgeAlertProcedure = "/sermon.web.v1.AlertService/AcknowledgeAlert"
+	// AlertServiceGetAlertStatisticsProcedure is the fully-qualified name of the AlertService's
+	// GetAlertStatistics RPC.
+	AlertServiceGetAlertStatisticsProcedure = "/sermon.web.v1.AlertService/GetAlertStatistics"
 )
 
 // AlertServiceClient is a client for the sermon.web.v1.AlertService service.
@@ -52,6 +55,9 @@ type AlertServiceClient interface {
 	// AcknowledgeAlert marks a firing alert as seen; FAILED_PRECONDITION if it does not fire or
 	// is acknowledged already (or, with StepUpRequired, for a step-up).
 	AcknowledgeAlert(context.Context, *connect.Request[v1.AcknowledgeAlertRequest]) (*connect.Response[v1.AcknowledgeAlertResponse], error)
+	// GetAlertStatistics returns the loudest rules and the mean times to acknowledgement (MTTA)
+	// and resolution (MTTR) of the last 7 or 30 days on the nodes the caller sees (M3-19).
+	GetAlertStatistics(context.Context, *connect.Request[v1.GetAlertStatisticsRequest]) (*connect.Response[v1.GetAlertStatisticsResponse], error)
 }
 
 // NewAlertServiceClient constructs a client for the sermon.web.v1.AlertService service. By default,
@@ -85,14 +91,22 @@ func NewAlertServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(alertServiceMethods.ByName("AcknowledgeAlert")),
 			connect.WithClientOptions(opts...),
 		),
+		getAlertStatistics: connect.NewClient[v1.GetAlertStatisticsRequest, v1.GetAlertStatisticsResponse](
+			httpClient,
+			baseURL+AlertServiceGetAlertStatisticsProcedure,
+			connect.WithSchema(alertServiceMethods.ByName("GetAlertStatistics")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // alertServiceClient implements AlertServiceClient.
 type alertServiceClient struct {
-	listAlerts       *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
-	getAlertHistory  *connect.Client[v1.GetAlertHistoryRequest, v1.GetAlertHistoryResponse]
-	acknowledgeAlert *connect.Client[v1.AcknowledgeAlertRequest, v1.AcknowledgeAlertResponse]
+	listAlerts         *connect.Client[v1.ListAlertsRequest, v1.ListAlertsResponse]
+	getAlertHistory    *connect.Client[v1.GetAlertHistoryRequest, v1.GetAlertHistoryResponse]
+	acknowledgeAlert   *connect.Client[v1.AcknowledgeAlertRequest, v1.AcknowledgeAlertResponse]
+	getAlertStatistics *connect.Client[v1.GetAlertStatisticsRequest, v1.GetAlertStatisticsResponse]
 }
 
 // ListAlerts calls sermon.web.v1.AlertService.ListAlerts.
@@ -110,6 +124,11 @@ func (c *alertServiceClient) AcknowledgeAlert(ctx context.Context, req *connect.
 	return c.acknowledgeAlert.CallUnary(ctx, req)
 }
 
+// GetAlertStatistics calls sermon.web.v1.AlertService.GetAlertStatistics.
+func (c *alertServiceClient) GetAlertStatistics(ctx context.Context, req *connect.Request[v1.GetAlertStatisticsRequest]) (*connect.Response[v1.GetAlertStatisticsResponse], error) {
+	return c.getAlertStatistics.CallUnary(ctx, req)
+}
+
 // AlertServiceHandler is an implementation of the sermon.web.v1.AlertService service.
 type AlertServiceHandler interface {
 	// ListAlerts returns the active alerts, most urgent first.
@@ -119,6 +138,9 @@ type AlertServiceHandler interface {
 	// AcknowledgeAlert marks a firing alert as seen; FAILED_PRECONDITION if it does not fire or
 	// is acknowledged already (or, with StepUpRequired, for a step-up).
 	AcknowledgeAlert(context.Context, *connect.Request[v1.AcknowledgeAlertRequest]) (*connect.Response[v1.AcknowledgeAlertResponse], error)
+	// GetAlertStatistics returns the loudest rules and the mean times to acknowledgement (MTTA)
+	// and resolution (MTTR) of the last 7 or 30 days on the nodes the caller sees (M3-19).
+	GetAlertStatistics(context.Context, *connect.Request[v1.GetAlertStatisticsRequest]) (*connect.Response[v1.GetAlertStatisticsResponse], error)
 }
 
 // NewAlertServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -148,6 +170,13 @@ func NewAlertServiceHandler(svc AlertServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(alertServiceMethods.ByName("AcknowledgeAlert")),
 		connect.WithHandlerOptions(opts...),
 	)
+	alertServiceGetAlertStatisticsHandler := connect.NewUnaryHandler(
+		AlertServiceGetAlertStatisticsProcedure,
+		svc.GetAlertStatistics,
+		connect.WithSchema(alertServiceMethods.ByName("GetAlertStatistics")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AlertService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AlertServiceListAlertsProcedure:
@@ -156,6 +185,8 @@ func NewAlertServiceHandler(svc AlertServiceHandler, opts ...connect.HandlerOpti
 			alertServiceGetAlertHistoryHandler.ServeHTTP(w, r)
 		case AlertServiceAcknowledgeAlertProcedure:
 			alertServiceAcknowledgeAlertHandler.ServeHTTP(w, r)
+		case AlertServiceGetAlertStatisticsProcedure:
+			alertServiceGetAlertStatisticsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -175,4 +206,8 @@ func (UnimplementedAlertServiceHandler) GetAlertHistory(context.Context, *connec
 
 func (UnimplementedAlertServiceHandler) AcknowledgeAlert(context.Context, *connect.Request[v1.AcknowledgeAlertRequest]) (*connect.Response[v1.AcknowledgeAlertResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AlertService.AcknowledgeAlert is not implemented"))
+}
+
+func (UnimplementedAlertServiceHandler) GetAlertStatistics(context.Context, *connect.Request[v1.GetAlertStatisticsRequest]) (*connect.Response[v1.GetAlertStatisticsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AlertService.GetAlertStatistics is not implemented"))
 }

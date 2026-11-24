@@ -936,5 +936,19 @@
 	"secdash_detail_reason": "Grund:",
 	"secdash_detail_previous_ip": "vorher",
 	"secdash_load_more": "Ältere Events laden",
-	"secdash_geoip_notice": "Länder: {notice}"
+	"secdash_geoip_notice": "Länder: {notice}",
+	"alert_charts_link": "Charts um den Zeitpunkt",
+	"alerts_tab_statistics": "Statistik",
+	"alertstats_firings": "Auslösungen",
+	"alertstats_mtta": "MTTA",
+	"alertstats_mttr": "MTTR",
+	"alertstats_open": "Noch aktiv",
+	"alertstats_unacknowledged": "Ohne Quittung",
+	"alertstats_truncated": "Der Zeitraum enthält mehr Verlauf, als eine Auswertung liest; die Zahlen gelten für seinen älteren Teil.",
+	"alertstats_loudest": "Lauteste Regeln",
+	"alertstats_empty": "Keine Alerts in diesem Zeitraum.",
+	"alertstats_col_rule": "Regel",
+	"alertstats_col_nodes": "Nodes",
+	"alertstats_col_flapping": "Davon flatternd",
+	"alertstats_forbidden": "Dir fehlt das Recht, Alerts zu sehen."
 }

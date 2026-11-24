@@ -10,6 +10,7 @@ import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -770,11 +771,332 @@ func (*AcknowledgeAlertResponse) Descriptor() ([]byte, []int) {
 	return file_sermon_web_v1_alert_proto_rawDescGZIP(), []int{8}
 }
 
+// GetAlertStatisticsRequest is the range.
+type GetAlertStatisticsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// days back from now: 7 or 30.
+	Days          int32 `protobuf:"varint,1,opt,name=days,proto3" json:"days,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAlertStatisticsRequest) Reset() {
+	*x = GetAlertStatisticsRequest{}
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAlertStatisticsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAlertStatisticsRequest) ProtoMessage() {}
+
+func (x *GetAlertStatisticsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAlertStatisticsRequest.ProtoReflect.Descriptor instead.
+func (*GetAlertStatisticsRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_alert_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetAlertStatisticsRequest) GetDays() int32 {
+	if x != nil {
+		return x.Days
+	}
+	return 0
+}
+
+// AlertFigures count the firings of a range: an instance turning warning or critical from a
+// state that doesn't fire. A firing that began before the range is not counted.
+type AlertFigures struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// firings in the range.
+	Firings uint32 `protobuf:"varint,1,opt,name=firings,proto3" json:"firings,omitempty"`
+	// acknowledged firings.
+	Acknowledged uint32 `protobuf:"varint,2,opt,name=acknowledged,proto3" json:"acknowledged,omitempty"`
+	// resolved firings.
+	Resolved uint32 `protobuf:"varint,3,opt,name=resolved,proto3" json:"resolved,omitempty"`
+	// open firings still fire.
+	Open uint32 `protobuf:"varint,4,opt,name=open,proto3" json:"open,omitempty"`
+	// unacknowledged firings ended or go on without an acknowledgement.
+	Unacknowledged uint32 `protobuf:"varint,5,opt,name=unacknowledged,proto3" json:"unacknowledged,omitempty"`
+	// flapping counts the firings while the instance flapped.
+	Flapping uint32 `protobuf:"varint,6,opt,name=flapping,proto3" json:"flapping,omitempty"`
+	// mtta is the mean time from the start of a firing to its acknowledgement; unset without one.
+	Mtta *durationpb.Duration `protobuf:"bytes,7,opt,name=mtta,proto3" json:"mtta,omitempty"`
+	// mttr is the mean time from the start of a firing to its resolution; unset without one.
+	Mttr          *durationpb.Duration `protobuf:"bytes,8,opt,name=mttr,proto3" json:"mttr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertFigures) Reset() {
+	*x = AlertFigures{}
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertFigures) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertFigures) ProtoMessage() {}
+
+func (x *AlertFigures) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertFigures.ProtoReflect.Descriptor instead.
+func (*AlertFigures) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_alert_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AlertFigures) GetFirings() uint32 {
+	if x != nil {
+		return x.Firings
+	}
+	return 0
+}
+
+func (x *AlertFigures) GetAcknowledged() uint32 {
+	if x != nil {
+		return x.Acknowledged
+	}
+	return 0
+}
+
+func (x *AlertFigures) GetResolved() uint32 {
+	if x != nil {
+		return x.Resolved
+	}
+	return 0
+}
+
+func (x *AlertFigures) GetOpen() uint32 {
+	if x != nil {
+		return x.Open
+	}
+	return 0
+}
+
+func (x *AlertFigures) GetUnacknowledged() uint32 {
+	if x != nil {
+		return x.Unacknowledged
+	}
+	return 0
+}
+
+func (x *AlertFigures) GetFlapping() uint32 {
+	if x != nil {
+		return x.Flapping
+	}
+	return 0
+}
+
+func (x *AlertFigures) GetMtta() *durationpb.Duration {
+	if x != nil {
+		return x.Mtta
+	}
+	return nil
+}
+
+func (x *AlertFigures) GetMttr() *durationpb.Duration {
+	if x != nil {
+		return x.Mttr
+	}
+	return nil
+}
+
+// RuleStatistics are the figures of one rule.
+type RuleStatistics struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// rule_id is the rule.
+	RuleId string `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	// rule_name is its display name.
+	RuleName *LocalizedText `protobuf:"bytes,2,opt,name=rule_name,json=ruleName,proto3" json:"rule_name,omitempty"`
+	// labels of the rule (e.g. category: cpu).
+	Labels map[string]string `protobuf:"bytes,3,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// figures of the rule.
+	Figures *AlertFigures `protobuf:"bytes,4,opt,name=figures,proto3" json:"figures,omitempty"`
+	// nodes is on how many nodes it fired.
+	Nodes         uint32 `protobuf:"varint,5,opt,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RuleStatistics) Reset() {
+	*x = RuleStatistics{}
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuleStatistics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuleStatistics) ProtoMessage() {}
+
+func (x *RuleStatistics) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuleStatistics.ProtoReflect.Descriptor instead.
+func (*RuleStatistics) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_alert_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RuleStatistics) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *RuleStatistics) GetRuleName() *LocalizedText {
+	if x != nil {
+		return x.RuleName
+	}
+	return nil
+}
+
+func (x *RuleStatistics) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *RuleStatistics) GetFigures() *AlertFigures {
+	if x != nil {
+		return x.Figures
+	}
+	return nil
+}
+
+func (x *RuleStatistics) GetNodes() uint32 {
+	if x != nil {
+		return x.Nodes
+	}
+	return 0
+}
+
+// GetAlertStatisticsResponse are the statistics.
+type GetAlertStatisticsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// from and to are the range.
+	From *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	// to is now.
+	To *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=to,proto3" json:"to,omitempty"`
+	// totals over every rule.
+	Totals *AlertFigures `protobuf:"bytes,3,opt,name=totals,proto3" json:"totals,omitempty"`
+	// rules are the loudest, most firings first, at most 10.
+	Rules []*RuleStatistics `protobuf:"bytes,4,rep,name=rules,proto3" json:"rules,omitempty"`
+	// truncated is set if the range held more history than one answer reads (200,000
+	// transitions); the figures cover its oldest part.
+	Truncated     bool `protobuf:"varint,5,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAlertStatisticsResponse) Reset() {
+	*x = GetAlertStatisticsResponse{}
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAlertStatisticsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAlertStatisticsResponse) ProtoMessage() {}
+
+func (x *GetAlertStatisticsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_alert_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAlertStatisticsResponse.ProtoReflect.Descriptor instead.
+func (*GetAlertStatisticsResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_alert_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GetAlertStatisticsResponse) GetFrom() *timestamppb.Timestamp {
+	if x != nil {
+		return x.From
+	}
+	return nil
+}
+
+func (x *GetAlertStatisticsResponse) GetTo() *timestamppb.Timestamp {
+	if x != nil {
+		return x.To
+	}
+	return nil
+}
+
+func (x *GetAlertStatisticsResponse) GetTotals() *AlertFigures {
+	if x != nil {
+		return x.Totals
+	}
+	return nil
+}
+
+func (x *GetAlertStatisticsResponse) GetRules() []*RuleStatistics {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+func (x *GetAlertStatisticsResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
 var File_sermon_web_v1_alert_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_alert_proto_rawDesc = "" +
 	"\n" +
-	"\x19sermon/web/v1/alert.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1esermon/web/v1/alert_rule.proto\"\xac\x01\n" +
+	"\x19sermon/web/v1/alert.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1esermon/web/v1/alert_rule.proto\"\xac\x01\n" +
 	"\bAlertKey\x12U\n" +
 	"\arule_id\x18\x01 \x01(\tB<\xbaH9r7\x18d23^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){2,3}$R\x06ruleId\x12!\n" +
 	"\anode_id\x18\x02 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\x12&\n" +
@@ -829,7 +1151,33 @@ const file_sermon_web_v1_alert_proto_rawDesc = "" +
 	"\aentries\x18\x01 \x03(\v2 .sermon.web.v1.AlertHistoryEntryR\aentries\"L\n" +
 	"\x17AcknowledgeAlertRequest\x121\n" +
 	"\x03key\x18\x01 \x01(\v2\x17.sermon.web.v1.AlertKeyB\x06\xbaH\x03\xc8\x01\x01R\x03key\"\x1a\n" +
-	"\x18AcknowledgeAlertResponse*\xa3\x01\n" +
+	"\x18AcknowledgeAlertResponse\":\n" +
+	"\x19GetAlertStatisticsRequest\x12\x1d\n" +
+	"\x04days\x18\x01 \x01(\x05B\t\xbaH\x06\x1a\x040\a0\x1eR\x04days\"\x9e\x02\n" +
+	"\fAlertFigures\x12\x18\n" +
+	"\afirings\x18\x01 \x01(\rR\afirings\x12\"\n" +
+	"\facknowledged\x18\x02 \x01(\rR\facknowledged\x12\x1a\n" +
+	"\bresolved\x18\x03 \x01(\rR\bresolved\x12\x12\n" +
+	"\x04open\x18\x04 \x01(\rR\x04open\x12&\n" +
+	"\x0eunacknowledged\x18\x05 \x01(\rR\x0eunacknowledged\x12\x1a\n" +
+	"\bflapping\x18\x06 \x01(\rR\bflapping\x12-\n" +
+	"\x04mtta\x18\a \x01(\v2\x19.google.protobuf.DurationR\x04mtta\x12-\n" +
+	"\x04mttr\x18\b \x01(\v2\x19.google.protobuf.DurationR\x04mttr\"\xaf\x02\n" +
+	"\x0eRuleStatistics\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x129\n" +
+	"\trule_name\x18\x02 \x01(\v2\x1c.sermon.web.v1.LocalizedTextR\bruleName\x12A\n" +
+	"\x06labels\x18\x03 \x03(\v2).sermon.web.v1.RuleStatistics.LabelsEntryR\x06labels\x125\n" +
+	"\afigures\x18\x04 \x01(\v2\x1b.sermon.web.v1.AlertFiguresR\afigures\x12\x14\n" +
+	"\x05nodes\x18\x05 \x01(\rR\x05nodes\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x80\x02\n" +
+	"\x1aGetAlertStatisticsResponse\x12.\n" +
+	"\x04from\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
+	"\x02to\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\x123\n" +
+	"\x06totals\x18\x03 \x01(\v2\x1b.sermon.web.v1.AlertFiguresR\x06totals\x123\n" +
+	"\x05rules\x18\x04 \x03(\v2\x1d.sermon.web.v1.RuleStatisticsR\x05rules\x12\x1c\n" +
+	"\ttruncated\x18\x05 \x01(\bR\ttruncated*\xa3\x01\n" +
 	"\n" +
 	"AlertState\x12\x1b\n" +
 	"\x17ALERT_STATE_UNSPECIFIED\x10\x00\x12\x12\n" +
@@ -843,12 +1191,13 @@ const file_sermon_web_v1_alert_proto_rawDesc = "" +
 	" ALERT_HISTORY_KIND_STATE_CHANGED\x10\x01\x12#\n" +
 	"\x1fALERT_HISTORY_KIND_ACKNOWLEDGED\x10\x02\x12'\n" +
 	"#ALERT_HISTORY_KIND_FLAPPING_STARTED\x10\x03\x12'\n" +
-	"#ALERT_HISTORY_KIND_FLAPPING_STOPPED\x10\x042\xb2\x02\n" +
+	"#ALERT_HISTORY_KIND_FLAPPING_STOPPED\x10\x042\xa2\x03\n" +
 	"\fAlertService\x12V\n" +
 	"\n" +
 	"ListAlerts\x12 .sermon.web.v1.ListAlertsRequest\x1a!.sermon.web.v1.ListAlertsResponse\"\x03\x90\x02\x01\x12e\n" +
 	"\x0fGetAlertHistory\x12%.sermon.web.v1.GetAlertHistoryRequest\x1a&.sermon.web.v1.GetAlertHistoryResponse\"\x03\x90\x02\x01\x12c\n" +
-	"\x10AcknowledgeAlert\x12&.sermon.web.v1.AcknowledgeAlertRequest\x1a'.sermon.web.v1.AcknowledgeAlertResponseB\xb9\x01\n" +
+	"\x10AcknowledgeAlert\x12&.sermon.web.v1.AcknowledgeAlertRequest\x1a'.sermon.web.v1.AcknowledgeAlertResponse\x12n\n" +
+	"\x12GetAlertStatistics\x12(.sermon.web.v1.GetAlertStatisticsRequest\x1a).sermon.web.v1.GetAlertStatisticsResponse\"\x03\x90\x02\x01B\xb9\x01\n" +
 	"\x11com.sermon.web.v1B\n" +
 	"AlertProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
@@ -865,56 +1214,73 @@ func file_sermon_web_v1_alert_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_alert_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sermon_web_v1_alert_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_sermon_web_v1_alert_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_sermon_web_v1_alert_proto_goTypes = []any{
-	(AlertState)(0),                  // 0: sermon.web.v1.AlertState
-	(AlertHistoryKind)(0),            // 1: sermon.web.v1.AlertHistoryKind
-	(*AlertKey)(nil),                 // 2: sermon.web.v1.AlertKey
-	(*Alert)(nil),                    // 3: sermon.web.v1.Alert
-	(*AlertHistoryEntry)(nil),        // 4: sermon.web.v1.AlertHistoryEntry
-	(*ListAlertsRequest)(nil),        // 5: sermon.web.v1.ListAlertsRequest
-	(*ListAlertsResponse)(nil),       // 6: sermon.web.v1.ListAlertsResponse
-	(*GetAlertHistoryRequest)(nil),   // 7: sermon.web.v1.GetAlertHistoryRequest
-	(*GetAlertHistoryResponse)(nil),  // 8: sermon.web.v1.GetAlertHistoryResponse
-	(*AcknowledgeAlertRequest)(nil),  // 9: sermon.web.v1.AcknowledgeAlertRequest
-	(*AcknowledgeAlertResponse)(nil), // 10: sermon.web.v1.AcknowledgeAlertResponse
-	nil,                              // 11: sermon.web.v1.Alert.LabelsEntry
-	nil,                              // 12: sermon.web.v1.Alert.DimensionLabelsEntry
-	nil,                              // 13: sermon.web.v1.Alert.FieldsEntry
-	nil,                              // 14: sermon.web.v1.AlertHistoryEntry.FieldsEntry
-	(*LocalizedText)(nil),            // 15: sermon.web.v1.LocalizedText
-	(*timestamppb.Timestamp)(nil),    // 16: google.protobuf.Timestamp
+	(AlertState)(0),                    // 0: sermon.web.v1.AlertState
+	(AlertHistoryKind)(0),              // 1: sermon.web.v1.AlertHistoryKind
+	(*AlertKey)(nil),                   // 2: sermon.web.v1.AlertKey
+	(*Alert)(nil),                      // 3: sermon.web.v1.Alert
+	(*AlertHistoryEntry)(nil),          // 4: sermon.web.v1.AlertHistoryEntry
+	(*ListAlertsRequest)(nil),          // 5: sermon.web.v1.ListAlertsRequest
+	(*ListAlertsResponse)(nil),         // 6: sermon.web.v1.ListAlertsResponse
+	(*GetAlertHistoryRequest)(nil),     // 7: sermon.web.v1.GetAlertHistoryRequest
+	(*GetAlertHistoryResponse)(nil),    // 8: sermon.web.v1.GetAlertHistoryResponse
+	(*AcknowledgeAlertRequest)(nil),    // 9: sermon.web.v1.AcknowledgeAlertRequest
+	(*AcknowledgeAlertResponse)(nil),   // 10: sermon.web.v1.AcknowledgeAlertResponse
+	(*GetAlertStatisticsRequest)(nil),  // 11: sermon.web.v1.GetAlertStatisticsRequest
+	(*AlertFigures)(nil),               // 12: sermon.web.v1.AlertFigures
+	(*RuleStatistics)(nil),             // 13: sermon.web.v1.RuleStatistics
+	(*GetAlertStatisticsResponse)(nil), // 14: sermon.web.v1.GetAlertStatisticsResponse
+	nil,                                // 15: sermon.web.v1.Alert.LabelsEntry
+	nil,                                // 16: sermon.web.v1.Alert.DimensionLabelsEntry
+	nil,                                // 17: sermon.web.v1.Alert.FieldsEntry
+	nil,                                // 18: sermon.web.v1.AlertHistoryEntry.FieldsEntry
+	nil,                                // 19: sermon.web.v1.RuleStatistics.LabelsEntry
+	(*LocalizedText)(nil),              // 20: sermon.web.v1.LocalizedText
+	(*timestamppb.Timestamp)(nil),      // 21: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),        // 22: google.protobuf.Duration
 }
 var file_sermon_web_v1_alert_proto_depIdxs = []int32{
 	2,  // 0: sermon.web.v1.Alert.key:type_name -> sermon.web.v1.AlertKey
 	0,  // 1: sermon.web.v1.Alert.state:type_name -> sermon.web.v1.AlertState
-	15, // 2: sermon.web.v1.Alert.rule_name:type_name -> sermon.web.v1.LocalizedText
-	11, // 3: sermon.web.v1.Alert.labels:type_name -> sermon.web.v1.Alert.LabelsEntry
-	12, // 4: sermon.web.v1.Alert.dimension_labels:type_name -> sermon.web.v1.Alert.DimensionLabelsEntry
-	16, // 5: sermon.web.v1.Alert.since:type_name -> google.protobuf.Timestamp
-	16, // 6: sermon.web.v1.Alert.fire_time:type_name -> google.protobuf.Timestamp
-	16, // 7: sermon.web.v1.Alert.acknowledge_time:type_name -> google.protobuf.Timestamp
-	13, // 8: sermon.web.v1.Alert.fields:type_name -> sermon.web.v1.Alert.FieldsEntry
+	20, // 2: sermon.web.v1.Alert.rule_name:type_name -> sermon.web.v1.LocalizedText
+	15, // 3: sermon.web.v1.Alert.labels:type_name -> sermon.web.v1.Alert.LabelsEntry
+	16, // 4: sermon.web.v1.Alert.dimension_labels:type_name -> sermon.web.v1.Alert.DimensionLabelsEntry
+	21, // 5: sermon.web.v1.Alert.since:type_name -> google.protobuf.Timestamp
+	21, // 6: sermon.web.v1.Alert.fire_time:type_name -> google.protobuf.Timestamp
+	21, // 7: sermon.web.v1.Alert.acknowledge_time:type_name -> google.protobuf.Timestamp
+	17, // 8: sermon.web.v1.Alert.fields:type_name -> sermon.web.v1.Alert.FieldsEntry
 	1,  // 9: sermon.web.v1.AlertHistoryEntry.kind:type_name -> sermon.web.v1.AlertHistoryKind
 	0,  // 10: sermon.web.v1.AlertHistoryEntry.from:type_name -> sermon.web.v1.AlertState
 	0,  // 11: sermon.web.v1.AlertHistoryEntry.to:type_name -> sermon.web.v1.AlertState
-	16, // 12: sermon.web.v1.AlertHistoryEntry.time:type_name -> google.protobuf.Timestamp
-	14, // 13: sermon.web.v1.AlertHistoryEntry.fields:type_name -> sermon.web.v1.AlertHistoryEntry.FieldsEntry
+	21, // 12: sermon.web.v1.AlertHistoryEntry.time:type_name -> google.protobuf.Timestamp
+	18, // 13: sermon.web.v1.AlertHistoryEntry.fields:type_name -> sermon.web.v1.AlertHistoryEntry.FieldsEntry
 	3,  // 14: sermon.web.v1.ListAlertsResponse.alerts:type_name -> sermon.web.v1.Alert
 	2,  // 15: sermon.web.v1.GetAlertHistoryRequest.key:type_name -> sermon.web.v1.AlertKey
 	4,  // 16: sermon.web.v1.GetAlertHistoryResponse.entries:type_name -> sermon.web.v1.AlertHistoryEntry
 	2,  // 17: sermon.web.v1.AcknowledgeAlertRequest.key:type_name -> sermon.web.v1.AlertKey
-	5,  // 18: sermon.web.v1.AlertService.ListAlerts:input_type -> sermon.web.v1.ListAlertsRequest
-	7,  // 19: sermon.web.v1.AlertService.GetAlertHistory:input_type -> sermon.web.v1.GetAlertHistoryRequest
-	9,  // 20: sermon.web.v1.AlertService.AcknowledgeAlert:input_type -> sermon.web.v1.AcknowledgeAlertRequest
-	6,  // 21: sermon.web.v1.AlertService.ListAlerts:output_type -> sermon.web.v1.ListAlertsResponse
-	8,  // 22: sermon.web.v1.AlertService.GetAlertHistory:output_type -> sermon.web.v1.GetAlertHistoryResponse
-	10, // 23: sermon.web.v1.AlertService.AcknowledgeAlert:output_type -> sermon.web.v1.AcknowledgeAlertResponse
-	21, // [21:24] is the sub-list for method output_type
-	18, // [18:21] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	22, // 18: sermon.web.v1.AlertFigures.mtta:type_name -> google.protobuf.Duration
+	22, // 19: sermon.web.v1.AlertFigures.mttr:type_name -> google.protobuf.Duration
+	20, // 20: sermon.web.v1.RuleStatistics.rule_name:type_name -> sermon.web.v1.LocalizedText
+	19, // 21: sermon.web.v1.RuleStatistics.labels:type_name -> sermon.web.v1.RuleStatistics.LabelsEntry
+	12, // 22: sermon.web.v1.RuleStatistics.figures:type_name -> sermon.web.v1.AlertFigures
+	21, // 23: sermon.web.v1.GetAlertStatisticsResponse.from:type_name -> google.protobuf.Timestamp
+	21, // 24: sermon.web.v1.GetAlertStatisticsResponse.to:type_name -> google.protobuf.Timestamp
+	12, // 25: sermon.web.v1.GetAlertStatisticsResponse.totals:type_name -> sermon.web.v1.AlertFigures
+	13, // 26: sermon.web.v1.GetAlertStatisticsResponse.rules:type_name -> sermon.web.v1.RuleStatistics
+	5,  // 27: sermon.web.v1.AlertService.ListAlerts:input_type -> sermon.web.v1.ListAlertsRequest
+	7,  // 28: sermon.web.v1.AlertService.GetAlertHistory:input_type -> sermon.web.v1.GetAlertHistoryRequest
+	9,  // 29: sermon.web.v1.AlertService.AcknowledgeAlert:input_type -> sermon.web.v1.AcknowledgeAlertRequest
+	11, // 30: sermon.web.v1.AlertService.GetAlertStatistics:input_type -> sermon.web.v1.GetAlertStatisticsRequest
+	6,  // 31: sermon.web.v1.AlertService.ListAlerts:output_type -> sermon.web.v1.ListAlertsResponse
+	8,  // 32: sermon.web.v1.AlertService.GetAlertHistory:output_type -> sermon.web.v1.GetAlertHistoryResponse
+	10, // 33: sermon.web.v1.AlertService.AcknowledgeAlert:output_type -> sermon.web.v1.AcknowledgeAlertResponse
+	14, // 34: sermon.web.v1.AlertService.GetAlertStatistics:output_type -> sermon.web.v1.GetAlertStatisticsResponse
+	31, // [31:35] is the sub-list for method output_type
+	27, // [27:31] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_alert_proto_init() }
@@ -929,7 +1295,7 @@ func file_sermon_web_v1_alert_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_alert_proto_rawDesc), len(file_sermon_web_v1_alert_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   13,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

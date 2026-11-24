@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
@@ -139,4 +140,44 @@ func (h *AlertHandler) fail(ctx context.Context, op string, err error) error {
 		return connect.NewError(connect.CodeFailedPrecondition, alerts.ErrNotFiring)
 	}
 	return internalError(ctx, h.logger, op, err)
+}
+
+// GetAlertStatistics returns the loudest rules, MTTA and MTTR of the last days (M3-19).
+func (h *AlertHandler) GetAlertStatistics(ctx context.Context, req *connect.Request[webv1.GetAlertStatisticsRequest]) (*connect.Response[webv1.GetAlertStatisticsResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s, err := h.svc.Statistics(ctx, c, int(req.Msg.GetDays()))
+	if errors.Is(err, alerts.ErrInvalid) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	if err != nil {
+		return nil, h.fail(ctx, "alert statistics", err)
+	}
+	res := &webv1.GetAlertStatisticsResponse{
+		From: timestamppb.New(s.From), To: timestamppb.New(s.To), Totals: figures(s.Totals), Truncated: s.Truncated,
+	}
+	for _, r := range s.Rules {
+		res.Rules = append(res.Rules, &webv1.RuleStatistics{
+			RuleId: string(r.Rule), RuleName: &webv1.LocalizedText{De: r.Name.De, En: r.Name.En}, Labels: r.Labels,
+			Figures: figures(r.Figures), Nodes: uint32(min(max(r.Nodes, 0), 1<<31)),
+		})
+	}
+	return connect.NewResponse(res), nil
+}
+
+func figures(f alerts.Figures) *webv1.AlertFigures {
+	n := func(v int) uint32 { return uint32(min(max(v, 0), 1<<31)) }
+	out := &webv1.AlertFigures{
+		Firings: n(f.Firings), Acknowledged: n(f.Acknowledged), Resolved: n(f.Resolved), Open: n(f.Open),
+		Unacknowledged: n(f.Unacknowledged), Flapping: n(f.Flapping),
+	}
+	if f.MTTA != nil {
+		out.Mtta = durationpb.New(*f.MTTA)
+	}
+	if f.MTTR != nil {
+		out.Mttr = durationpb.New(*f.MTTR)
+	}
+	return out
 }

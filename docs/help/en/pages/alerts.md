@@ -9,6 +9,7 @@ The active alerts of the nodes you may see: what fires, what waits for its durat
 - **Flapping** alerts change too often; their notifications are throttled until they are stable again.
 - Values of the hosts (host names, user names, addresses) are shown as text. User and address of security alerts appear only for members who may see the security events.
 - **History** shows the changes of an alert, newest first; it is kept for a year.
+- **Charts around the time** opens the node page an hour before to an hour after the alert fired, in the area of its rule (CPU, memory, disks, network, security); **Logs** shows the node's logs around the time.
 
 ## Acknowledging
 
@@ -26,6 +27,10 @@ The rules decide when an alert fires. Every member can read them with their help
 - A changed default rule can be compared with the shipped one and reset; an own rule can be deleted.
 - **Export** gives the changed and own rules (or all) as one YAML file, e.g. for another organization. Whether a rule is switched off is not part of the file.
 - Changes apply from the next evaluation (within 10 seconds) and ask for your password again.
+
+## Statistics
+
+The **Statistics** tab shows for the last 7 or 30 days how often alerts fired, the loudest rules and how long it took on average until the acknowledgement (MTTA) and the resolution (MTTR) – more in [Alert statistics](help:concepts/alert-statistics).
 
 ## Typical next steps
 

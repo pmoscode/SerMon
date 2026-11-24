@@ -3441,7 +3441,27 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.6 Alert-Statistik (E3.5b)
 
-#### ☐ M3-19 – Alert-Statistik und Absprung in Chart und Logs · S+W · M
+#### ☑ M3-19 – Alert-Statistik und Absprung in Chart und Logs · S+W · M
+> Erledigt (KONZEPT §16):
+> - **`AlertService.GetAlertStatistics`** für 7 oder 30 Tage auf den Nodes, die der Aufrufer sieht. Eine Auslösung
+>   beginnt beim Wechsel von OK, ausstehend oder behoben auf Warnung oder kritisch (kritisch nach Warnung ist keine
+>   neue). Gezählt werden die im Zeitraum beginnenden mit erster Quittung (MTTA) und Behebung (MTTR); Auslösungen von
+>   vorher fehlen samt Ende. Dazu offene, nie quittierte und flatternde Auslösungen, die zehn lautesten Regeln mit
+>   Zahl der Nodes. Gelesen werden höchstens 200 000 Übergänge (`AlertHistorySince`, ohne Felder), mehr wird markiert.
+> - **UI:** Reiter „Statistik“ auf der Alert-Seite (lädt bei Bedarf) mit Kennzahlen samt ⓘ und Tabelle der lautesten
+>   Regeln.
+> - **Absprung:** „Charts um den Zeitpunkt“ an jedem Alert öffnet die Node-Seite eine Stunde vor bis nach dem
+>   Auslösen (höchstens bis jetzt) im Reiter seiner Kategorie. Die Node-Seite liest Zeitraum und Reiter aus der URL.
+>   Der Absprung in die Logs gibt es seit M3-11.
+> - Hilfe DE/EN: `concepts/alert-statistics`, `figures/alert_firings`, `mtta`, `mttr`; Seite der Alerts ergänzt.
+> - **Tests:**
+>   - Berechnung: Quittung und Behebung, wiederholte Auslösung, offene und nie quittierte, Ende ohne Beginn im
+>     Zeitraum, ausstehend ohne Auslösung, Flattern, Zahl der Nodes, nur die erste Quittung, Grenze der Regeln.
+>   - Dienst: nur sichtbare Nodes, unbekannte Regel mit ihrer ID, 7 und 30 Tage, ungültige Tage, gekappter Verlauf.
+>   - PostgreSQL: `HistorySince` ab einem Zeitpunkt, älteste zuerst, ohne Felder, nur die eigene Org.
+>   - Über den echten Stack mit Quittung; Tenant-Isolationstest.
+>   - Komponenten und E2E: Statistik mit axe, Wechsel auf 30 Tage; Link in die Charts mit Zeitraum und Reiter.
+>   - Gegenproben für 15 Prüfungen, alle erkannt.
 - **Ziel:** offen aus M2-16 (KONZEPT §16).
   - **Statistik:** lauteste Regeln, MTTA und MTTR über 7 bzw. 30 Tage aus `alert_history`.
   - **Absprung:** von einem Alert in die Charts des Nodes um seinen Zeitpunkt (Zeitraum in der URL der Node-Seite)

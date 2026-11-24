@@ -9,6 +9,7 @@ Die aktiven Alerts der Nodes, die du sehen darfst: was feuert, was auf seine Dau
 - **Flattert** heißt: Der Alert wechselt zu oft; seine Benachrichtigungen werden gedrosselt, bis er wieder stabil ist.
 - Werte der Hosts (Hostnamen, User-Namen, Adressen) erscheinen als Text. User und Adresse von Security-Alerts sehen nur Mitglieder, die die Security-Events sehen dürfen.
 - **Verlauf** zeigt die Änderungen eines Alerts, die neueste zuerst; er bleibt ein Jahr gespeichert.
+- **Charts um den Zeitpunkt** öffnet die Node-Seite eine Stunde vor bis eine Stunde nach dem Auslösen, im Bereich der Regel (CPU, Speicher, Datenträger, Netzwerk, Security); **Logs** zeigt die Logs des Nodes um den Zeitpunkt.
 
 ## Quittieren
 
@@ -26,6 +27,10 @@ Die Regeln bestimmen, wann ein Alert feuert. Jedes Mitglied kann sie mit Hilfete
 - Eine angepasste Standardregel lässt sich mit der mitgelieferten vergleichen und zurücksetzen; eine eigene Regel lässt sich löschen.
 - **Exportieren** liefert die angepassten und eigenen Regeln (oder alle) als eine YAML-Datei, z. B. für eine andere Organisation. Ob eine Regel abgeschaltet ist, steht nicht in der Datei.
 - Änderungen gelten ab der nächsten Auswertung (innerhalb von 10 Sekunden) und fragen noch einmal nach dem Passwort.
+
+## Statistik
+
+Der Reiter **Statistik** zeigt für die letzten 7 oder 30 Tage, wie oft Alerts ausgelöst haben, die lautesten Regeln und wie lange es im Mittel bis zur Quittung (MTTA) und bis zur Behebung (MTTR) dauerte – mehr unter [Alert-Statistik](help:concepts/alert-statistics).
 
 ## Typische nächste Schritte
 

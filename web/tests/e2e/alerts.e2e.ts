@@ -189,4 +189,77 @@ test.describe('rule editor (mocked API)', () => {
 		await expect(page.getByRole('button', { name: 'Import' })).toBeVisible();
 		expect(imports).toHaveLength(2);
 	});
+
+	test('shows the statistics of 7 and 30 days and passes axe (M3-19)', async ({ page }) => {
+		const asked: unknown[] = [];
+		await mockApi(page, {
+			...installed(true),
+			'AlertSilenceService/ListSilences': () => ({ json: {} }),
+			'AlertRuleService/ListAlertRules': () => ({ json: {} }),
+			'AlertService/ListAlerts': () => ({ json: { alerts } }),
+			'AlertService/GetAlertStatistics': (body) => {
+				asked.push(body);
+				return {
+					json: {
+						totals: {
+							firings: 12,
+							acknowledged: 4,
+							resolved: 10,
+							open: 2,
+							unacknowledged: 8,
+							mtta: '300s',
+							mttr: '5400s'
+						},
+						rules: [
+							{
+								ruleId: 'security.ssh.bruteforce',
+								ruleName: { de: 'SSH-Brute-Force', en: 'SSH brute force' },
+								figures: { firings: 9, open: 1, mttr: '120s' },
+								nodes: 3
+							}
+						]
+					}
+				};
+			}
+		});
+		await page.goto('/alerts');
+		await page.getByRole('tab', { name: 'Statistics' }).click();
+		await expect(page.getByRole('row').nth(1)).toContainText('SSH brute force');
+		await expect(page.getByText('1 hr 30 min')).toBeVisible();
+		expect(asked).toEqual([{ days: 7 }]);
+		await page.getByRole('button', { name: '30 days' }).click();
+		await expect.poll(() => asked.length).toBe(2);
+		expect(asked[1]).toEqual({ days: 30 });
+		const results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+	});
+
+	test('leads from an alert to the charts of its node around the time (M3-19)', async ({
+		page
+	}) => {
+		const fired = new Date(Date.now() - 2 * 3600_000);
+		await mockApi(page, {
+			...installed(true),
+			'AlertSilenceService/ListSilences': () => ({ json: {} }),
+			'AlertRuleService/ListAlertRules': () => ({ json: {} }),
+			'AlertService/ListAlerts': () => ({
+				json: {
+					alerts: [{ ...alerts[1], fireTime: fired.toISOString(), labels: { category: 'disk' } }]
+				}
+			}),
+			'NodeService/GetNode': () => ({
+				json: {
+					node: { id: alerts[1].key.nodeId, hostname: 'db-01', groupName: 'db', online: true }
+				}
+			}),
+			'NodeService/ListFilesystems': () => ({ json: {} }),
+			'MetricsService/QueryMetrics': () => ({ json: {} })
+		});
+		await page.goto('/alerts');
+		await page.getByRole('link', { name: 'Charts around the time' }).click();
+		await expect(page).toHaveURL(/\/nodes\/.*\?from=.*&to=.*&tab=disk/);
+		await expect(page.getByRole('tab', { name: 'Disks' })).toHaveAttribute('aria-selected', 'true');
+		// The charts show the hour around the firing: zoomed, with the way back to the preset.
+		await expect(page.getByRole('button', { name: /Reset zoom/ })).toBeVisible();
+	});
 });

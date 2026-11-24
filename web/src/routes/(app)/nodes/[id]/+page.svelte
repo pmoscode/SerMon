@@ -9,6 +9,7 @@
 	import TimeRangePicker from '#lib/components/time/TimeRangePicker.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { parseNodeView } from '#lib/alerts/links.js';
 	import { emptyFilter, filterParams, type LogFilter } from '#lib/logs/filter.js';
 	import {
 		emptySecurityFilter,
@@ -23,8 +24,11 @@
 	const LIVE_INTERVAL = 10_000;
 
 	const nodeState = new NodeState(page.params.id ?? '');
+	// A link from an alert (M3-19) names the range of the charts and the area to open.
+	const linked = parseNodeView(page.url.searchParams);
+	if (linked.range) timeRange.zoom(linked.range.from, linked.range.to);
 	let bits = $state(false);
-	let tab = $state('cpu');
+	let tab = $state<string>(linked.tab ?? 'cpu');
 	let logFilter = $state<LogFilter>(emptyFilter());
 	let securityFilter = $state<SecurityFilter>(emptySecurityFilter());
 

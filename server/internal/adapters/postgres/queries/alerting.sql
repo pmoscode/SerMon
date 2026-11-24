@@ -64,3 +64,12 @@ WHERE rule_id = sqlc.arg(rule_id) AND node_id = sqlc.arg(node_id) AND dimension 
 
 -- name: PurgeAlertHistory :execrows
 DELETE FROM alert_history WHERE at < sqlc.arg(before);
+
+-- name: AlertHistorySince :many
+-- The statistics (M3-19): the transitions of the organization from since on, oldest first,
+-- without their fields.
+SELECT rule_id, node_id, dimension, kind, from_state, to_state, at, value
+FROM alert_history
+WHERE at >= sqlc.arg(since)
+ORDER BY at, id
+LIMIT sqlc.arg(max_entries);

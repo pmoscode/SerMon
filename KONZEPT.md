@@ -1107,6 +1107,12 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
    Module.
 3. **Alerts:** aktive Alerts (gruppiert, filterbar, quittierbar), Timeline/Historie, Statistik („lauteste Regeln“,
    MTTA/MTTR).
+    - Statistik (M3-19): Reiter „Statistik“ für 7 oder 30 Tage aus `alert_history`. Eine Auslösung beginnt beim
+      Wechsel von einem ruhigen Zustand auf Warnung oder kritisch; MTTA zählt bis zur ersten Quittung, MTTR bis zur
+      Behebung, Auslösungen vor dem Zeitraum fehlen. Die zehn lautesten Regeln mit Nodes, offenen und flatternden
+      Auslösungen; höchstens 200 000 Übergänge pro Auswertung.
+    - Jeder Alert führt in die Charts seines Nodes eine Stunde vor bis nach dem Auslösen (Zeitraum und Reiter in der
+      URL der Node-Seite) und in die Logs um den Zeitpunkt.
 4. **Security-Dashboard:**
     - Fehlgeschlagene Logins über Zeit (gestapelt nach Node), **Top-IPs, Top-Usernamen**, Länder (bei GeoIP), Weltkarte
       optional

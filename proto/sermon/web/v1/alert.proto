@@ -3,6 +3,7 @@ syntax = "proto3";
 package sermon.web.v1;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "sermon/web/v1/alert_rule.proto";
 
@@ -23,6 +24,11 @@ service AlertService {
   // AcknowledgeAlert marks a firing alert as seen; FAILED_PRECONDITION if it does not fire or
   // is acknowledged already (or, with StepUpRequired, for a step-up).
   rpc AcknowledgeAlert(AcknowledgeAlertRequest) returns (AcknowledgeAlertResponse);
+  // GetAlertStatistics returns the loudest rules and the mean times to acknowledgement (MTTA)
+  // and resolution (MTTR) of the last 7 or 30 days on the nodes the caller sees (M3-19).
+  rpc GetAlertStatistics(GetAlertStatisticsRequest) returns (GetAlertStatisticsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
 // AlertState is where an alert is.
@@ -155,3 +161,64 @@ message AcknowledgeAlertRequest {
 
 // AcknowledgeAlertResponse has no fields.
 message AcknowledgeAlertResponse {}
+
+// GetAlertStatisticsRequest is the range.
+message GetAlertStatisticsRequest {
+  // days back from now: 7 or 30.
+  int32 days = 1 [(buf.validate.field).int32 = {
+    in: [
+      7,
+      30
+    ]
+  }];
+}
+
+// AlertFigures count the firings of a range: an instance turning warning or critical from a
+// state that doesn't fire. A firing that began before the range is not counted.
+message AlertFigures {
+  // firings in the range.
+  uint32 firings = 1;
+  // acknowledged firings.
+  uint32 acknowledged = 2;
+  // resolved firings.
+  uint32 resolved = 3;
+  // open firings still fire.
+  uint32 open = 4;
+  // unacknowledged firings ended or go on without an acknowledgement.
+  uint32 unacknowledged = 5;
+  // flapping counts the firings while the instance flapped.
+  uint32 flapping = 6;
+  // mtta is the mean time from the start of a firing to its acknowledgement; unset without one.
+  google.protobuf.Duration mtta = 7;
+  // mttr is the mean time from the start of a firing to its resolution; unset without one.
+  google.protobuf.Duration mttr = 8;
+}
+
+// RuleStatistics are the figures of one rule.
+message RuleStatistics {
+  // rule_id is the rule.
+  string rule_id = 1;
+  // rule_name is its display name.
+  LocalizedText rule_name = 2;
+  // labels of the rule (e.g. category: cpu).
+  map<string, string> labels = 3;
+  // figures of the rule.
+  AlertFigures figures = 4;
+  // nodes is on how many nodes it fired.
+  uint32 nodes = 5;
+}
+
+// GetAlertStatisticsResponse are the statistics.
+message GetAlertStatisticsResponse {
+  // from and to are the range.
+  google.protobuf.Timestamp from = 1;
+  // to is now.
+  google.protobuf.Timestamp to = 2;
+  // totals over every rule.
+  AlertFigures totals = 3;
+  // rules are the loudest, most firings first, at most 10.
+  repeated RuleStatistics rules = 4;
+  // truncated is set if the range held more history than one answer reads (200,000
+  // transitions); the figures cover its oldest part.
+  bool truncated = 5;
+}

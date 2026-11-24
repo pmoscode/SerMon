@@ -936,5 +936,19 @@
 	"secdash_detail_reason": "reason:",
 	"secdash_detail_previous_ip": "before",
 	"secdash_load_more": "Load older events",
-	"secdash_geoip_notice": "Countries: {notice}"
+	"secdash_geoip_notice": "Countries: {notice}",
+	"alert_charts_link": "Charts around the time",
+	"alerts_tab_statistics": "Statistics",
+	"alertstats_firings": "Firings",
+	"alertstats_mtta": "MTTA",
+	"alertstats_mttr": "MTTR",
+	"alertstats_open": "Still active",
+	"alertstats_unacknowledged": "Not acknowledged",
+	"alertstats_truncated": "The range holds more history than one evaluation reads; the figures cover its older part.",
+	"alertstats_loudest": "Loudest rules",
+	"alertstats_empty": "No alerts in this range.",
+	"alertstats_col_rule": "Rule",
+	"alertstats_col_nodes": "Nodes",
+	"alertstats_col_flapping": "Of them flapping",
+	"alertstats_forbidden": "You lack the right to see alerts."
 }

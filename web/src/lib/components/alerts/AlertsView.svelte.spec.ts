@@ -33,6 +33,8 @@ const brute = create(AlertSchema, {
 	groupId: 'g1',
 	groupName: 'web',
 	since: timestampFromMs(now - 120_000),
+	fireTime: timestampFromMs(now - 300_000),
+	labels: { category: 'security' },
 	value: 60,
 	unit: 'count',
 	fields: { user: hostile },
@@ -65,6 +67,21 @@ describe('AlertsView', () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
 		if (stepUpState.open) stepUpState.finish(false);
+	});
+
+	it('leads to the charts of the node around the firing, in the area of the rule (M3-19)', async () => {
+		vi.spyOn(alertingApi.alerts, 'listAlerts').mockResolvedValue(listing(brute, disk));
+		render(AlertsView);
+		const links = page.getByRole('link', { name: 'Charts around the time' });
+		await expect.element(links.first()).toBeVisible();
+		const href = new URL(links.first().element().getAttribute('href')!, 'http://x');
+		expect(href.pathname).toBe('/nodes/0193f5a0-0000-7000-8000-000000000001');
+		expect(Date.parse(href.searchParams.get('from')!)).toBe(now - 300_000 - 3600_000);
+		expect(href.searchParams.get('tab')).toBe('security');
+		// The pending alert by its start, without an area for its rule.
+		const pending = new URL(links.nth(1).element().getAttribute('href')!, 'http://x');
+		expect(Date.parse(pending.searchParams.get('from')!)).toBe(now - 60_000 - 3600_000);
+		expect(pending.searchParams.get('tab')).toBeNull();
 	});
 
 	it('shows the alerts with their state, values and host data as text', async () => {

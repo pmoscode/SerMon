@@ -1,11 +1,13 @@
 <script lang="ts">
 	import BellOff from '@lucide/svelte/icons/bell-off';
+	import ChartLine from '@lucide/svelte/icons/chart-line';
 	import CheckCheck from '@lucide/svelte/icons/check-check';
 	import Repeat from '@lucide/svelte/icons/repeat';
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import { resolve } from '$app/paths';
+	import { chartsQuery } from '#lib/alerts/links.js';
 	import {
 		alertValue,
 		dimensionText,
@@ -47,6 +49,8 @@
 	const name = $derived(ruleName(alert, localeState.current));
 	const dimension = $derived(dimensionText(alert));
 	const since = $derived(alert.since ? timestampDate(alert.since) : undefined);
+	/** When it began to fire; pending alerts by their start. */
+	const fired = $derived(alert.fireTime ? timestampDate(alert.fireTime) : since);
 	const unverified = $derived(unverifiedSource(alert.fields));
 	// The source is the note below, not another field.
 	const fields = $derived(Object.entries(alert.fields).filter(([name]) => name !== 'source'));
@@ -186,6 +190,16 @@
 		>
 			{m.alert_open_node()}
 		</Button>
+		{#if fired && alert.key?.nodeId}
+			<Button
+				size="sm"
+				variant="ghost"
+				href={`${resolve('/(app)/nodes/[id]', { id: alert.key.nodeId })}${chartsQuery(fired.getTime(), now.getTime(), alert.labels.category)}`}
+			>
+				<ChartLine aria-hidden="true" />
+				{m.alert_charts_link()}
+			</Button>
+		{/if}
 		{#if since && alert.key?.nodeId}
 			<Button
 				size="sm"

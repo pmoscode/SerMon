@@ -64,6 +64,19 @@ func TestAlertAPI_ListHistoryAndAcknowledge(t *testing.T) {
 	if e := history.Msg.GetEntries()[0]; e.GetKind() != webv1.AlertHistoryKind_ALERT_HISTORY_KIND_ACKNOWLEDGED || e.GetBy() == "" {
 		t.Errorf("history %v", history.Msg.GetEntries())
 	}
+	// M3-19: the statistics count the firing with its acknowledgement.
+	stats, err := mia.alerts.GetAlertStatistics(ctx, connect.NewRequest(&webv1.GetAlertStatisticsRequest{Days: 7}))
+	if err != nil || len(stats.Msg.GetRules()) == 0 {
+		t.Fatalf("GetAlertStatistics() = %v, %v", stats, err)
+	}
+	r := stats.Msg.GetRules()[0]
+	if r.GetRuleId() != "security.ssh.bruteforce" || r.GetFigures().GetFirings() < 1 || r.GetFigures().GetAcknowledged() < 1 ||
+		r.GetFigures().GetMtta() == nil || r.GetNodes() != 1 || stats.Msg.GetTotals().GetOpen() < 1 || stats.Msg.GetFrom() == nil {
+		t.Errorf("statistics %v", stats.Msg)
+	}
+	if _, err := mia.alerts.GetAlertStatistics(ctx, connect.NewRequest(&webv1.GetAlertStatisticsRequest{Days: 14})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("14 days: %v", err)
+	}
 	// Without policies the enabled channel of Alpha hears of it.
 	var queued int
 	ownerQuery(t, "SELECT count(*) FROM notification_deliveries WHERE org_id = '"+orgAlpha+"' AND notification->>'kind' = 'acknowledged'", &queued)

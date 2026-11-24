@@ -28,6 +28,9 @@ import (
 // ErrNotFiring means the alert does not fire (anymore) or is acknowledged already.
 var ErrNotFiring = errors.New("the alert does not fire or is acknowledged already")
 
+// ErrInvalid means a request the service doesn't take.
+var ErrInvalid = errors.New("invalid request")
+
 // MaxHistory bounds the history of an instance in one answer.
 const MaxHistory = 100
 
@@ -37,6 +40,9 @@ type Store interface {
 	History(ctx context.Context, scope tenant.Scope, key alert.Key, limit int32) ([]alerting.Record, error)
 	// Acknowledge returns alert.ErrNotFiring if the alert stopped firing or is acknowledged.
 	Acknowledge(ctx context.Context, scope tenant.Scope, key alert.Key, ack alert.Ack, rec alerting.Record) error
+	// HistorySince returns the transitions at or after since, oldest first, at most limit and
+	// without their fields (the statistics, M3-19).
+	HistorySince(ctx context.Context, scope tenant.Scope, since time.Time, limit int) ([]alerting.Record, error)
 }
 
 // Mutes lists what mutes alerts (postgres.RoutingStore).
@@ -374,4 +380,69 @@ func (s *Service) Acknowledge(ctx context.Context, c access.Caller, key alert.Ke
 	// The change alone: the engine's rounds handle reminders and clean-up.
 	s.d.Sink.Deliver(ctx, alerting.Round{Org: c.Principal.Org, Now: now, Records: []alerting.Record{rec}, Instances: instances, Nodes: all, Partial: true})
 	return nil
+}
+
+// MaxStatisticsRecords bounds the history one statistics reads (M3-19); a busier range is
+// evaluated on its oldest part and marked truncated.
+const MaxStatisticsRecords = 200_000
+
+// StatisticsDays are the ranges of the statistics.
+var StatisticsDays = []int{7, 30}
+
+// RuleStatistics are the figures of a rule with its name and labels.
+type RuleStatistics struct {
+	RuleFigures
+	Name   notify.Text
+	Labels map[string]string
+}
+
+// StatisticsResult is what the alert page shows.
+type StatisticsResult struct {
+	Statistics
+	Rules []RuleStatistics
+}
+
+// Statistics returns the loudest rules and the times to acknowledgement and resolution of the
+// last days (7 or 30) on the nodes the caller sees (M3-19).
+func (s *Service) Statistics(ctx context.Context, c access.Caller, days int) (StatisticsResult, error) {
+	if !slices.Contains(StatisticsDays, days) {
+		return StatisticsResult{}, fmt.Errorf("%w: days must be one of %v", ErrInvalid, StatisticsDays)
+	}
+	v, err := s.view(ctx, c.Principal)
+	if err != nil {
+		return StatisticsResult{}, err
+	}
+	org, err := orgScope(c.Principal.Org)
+	if err != nil {
+		return StatisticsResult{}, err
+	}
+	now := s.d.Now()
+	from := now.AddDate(0, 0, -days)
+	records, err := s.d.Store.HistorySince(ctx, org, from, MaxStatisticsRecords+1)
+	if err != nil {
+		return StatisticsResult{}, fmt.Errorf("alert statistics: %w", err)
+	}
+	truncated := len(records) > MaxStatisticsRecords
+	if truncated {
+		records = records[:MaxStatisticsRecords]
+	}
+	records = slices.DeleteFunc(records, func(r alerting.Record) bool {
+		_, ok := v.nodes[r.Key.Node]
+		return !ok
+	})
+	stats := ComputeStatistics(records, from, now)
+	stats.Truncated = truncated
+	rules, err := s.d.Rules.RuleInfos(ctx, c.Principal.Org)
+	if err != nil {
+		return StatisticsResult{}, fmt.Errorf("rules: %w", err)
+	}
+	out := StatisticsResult{Statistics: stats, Rules: make([]RuleStatistics, len(stats.Rules))}
+	for i, r := range stats.Rules {
+		info, known := rules[r.Rule]
+		if !known {
+			info.Name = notify.Text{De: string(r.Rule), En: string(r.Rule)}
+		}
+		out.Rules[i] = RuleStatistics{RuleFigures: r, Name: info.Name, Labels: info.Labels}
+	}
+	return out, nil
 }

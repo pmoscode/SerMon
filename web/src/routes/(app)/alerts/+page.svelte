@@ -31,8 +31,19 @@
 		<Tabs.Trigger value="alerts">{m.alerts_tab_active()}</Tabs.Trigger>
 		<Tabs.Trigger value="silences">{m.alerts_tab_silences()}</Tabs.Trigger>
 		<Tabs.Trigger value="rules">{m.alerts_tab_rules()}</Tabs.Trigger>
+		<Tabs.Trigger value="statistics">{m.alerts_tab_statistics()}</Tabs.Trigger>
 	</Tabs.List>
 	<Tabs.Content value="alerts" class="pt-4"><AlertsView onSilence={silence} /></Tabs.Content>
 	<Tabs.Content value="silences" class="pt-4"><SilencesPanel {draft} /></Tabs.Content>
 	<Tabs.Content value="rules" class="pt-4"><RulesPanel /></Tabs.Content>
+	<!-- Loaded on demand: the statistics are not part of the page's first load (budget). -->
+	<Tabs.Content value="statistics" class="pt-4">
+		{#if tab === 'statistics'}
+			{#await import('#lib/components/alerts/AlertStatistics.svelte')}
+				<p role="status" class="text-muted-foreground">{m.loading()}</p>
+			{:then { default: AlertStatistics }}
+				<AlertStatistics />
+			{/await}
+		{/if}
+	</Tabs.Content>
 </Tabs.Root>

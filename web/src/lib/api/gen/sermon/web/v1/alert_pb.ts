@@ -4,8 +4,8 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Timestamp } from "@bufbuild/protobuf/wkt";
-import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
+import type { Duration, Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_duration, file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { LocalizedText } from "./alert_rule_pb";
 import { file_sermon_web_v1_alert_rule } from "./alert_rule_pb";
 import type { Message } from "@bufbuild/protobuf";
@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/alert.proto.
  */
 export const file_sermon_web_v1_alert: GenFile = /*@__PURE__*/
-  fileDesc("ChlzZXJtb24vd2ViL3YxL2FsZXJ0LnByb3RvEg1zZXJtb24ud2ViLnYxIj8KCEFsZXJ0S2V5Eg8KB3J1bGVfaWQYASABKAkSDwoHbm9kZV9pZBgCIAEoCRIRCglkaW1lbnNpb24YAyABKAki/wUKBUFsZXJ0EiQKA2tleRgBIAEoCzIXLnNlcm1vbi53ZWIudjEuQWxlcnRLZXkSKAoFc3RhdGUYAiABKA4yGS5zZXJtb24ud2ViLnYxLkFsZXJ0U3RhdGUSLwoJcnVsZV9uYW1lGAMgASgLMhwuc2VybW9uLndlYi52MS5Mb2NhbGl6ZWRUZXh0EjAKBmxhYmVscxgEIAMoCzIgLnNlcm1vbi53ZWIudjEuQWxlcnQuTGFiZWxzRW50cnkSQwoQZGltZW5zaW9uX2xhYmVscxgFIAMoCzIpLnNlcm1vbi53ZWIudjEuQWxlcnQuRGltZW5zaW9uTGFiZWxzRW50cnkSEAoIaG9zdG5hbWUYBiABKAkSEAoIZ3JvdXBfaWQYByABKAkSEgoKZ3JvdXBfbmFtZRgIIAEoCRIpCgVzaW5jZRgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLQoJZmlyZV90aW1lGAogASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBINCgV2YWx1ZRgLIAEoARIMCgR1bml0GAwgASgJEhAKCGZsYXBwaW5nGA0gASgIEhcKD2Fja25vd2xlZGdlZF9ieRgOIAEoCRI0ChBhY2tub3dsZWRnZV90aW1lGA8gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBINCgVtdXRlZBgQIAEoCBIwCgZmaWVsZHMYESADKAsyIC5zZXJtb24ud2ViLnYxLkFsZXJ0LkZpZWxkc0VudHJ5EhcKD2Nhbl9hY2tub3dsZWRnZRgSIAEoCBotCgtMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBGjYKFERpbWVuc2lvbkxhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEaLQoLRmllbGRzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASLEAgoRQWxlcnRIaXN0b3J5RW50cnkSLQoEa2luZBgBIAEoDjIfLnNlcm1vbi53ZWIudjEuQWxlcnRIaXN0b3J5S2luZBInCgRmcm9tGAIgASgOMhkuc2VybW9uLndlYi52MS5BbGVydFN0YXRlEiUKAnRvGAMgASgOMhkuc2VybW9uLndlYi52MS5BbGVydFN0YXRlEigKBHRpbWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBXZhbHVlGAUgASgBEgoKAmJ5GAYgASgJEjwKBmZpZWxkcxgHIAMoCzIsLnNlcm1vbi53ZWIudjEuQWxlcnRIaXN0b3J5RW50cnkuRmllbGRzRW50cnkaLQoLRmllbGRzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASITChFMaXN0QWxlcnRzUmVxdWVzdCI6ChJMaXN0QWxlcnRzUmVzcG9uc2USJAoGYWxlcnRzGAEgAygLMhQuc2VybW9uLndlYi52MS5BbGVydCI+ChZHZXRBbGVydEhpc3RvcnlSZXF1ZXN0EiQKA2tleRgBIAEoCzIXLnNlcm1vbi53ZWIudjEuQWxlcnRLZXkiTAoXR2V0QWxlcnRIaXN0b3J5UmVzcG9uc2USMQoHZW50cmllcxgBIAMoCzIgLnNlcm1vbi53ZWIudjEuQWxlcnRIaXN0b3J5RW50cnkiPwoXQWNrbm93bGVkZ2VBbGVydFJlcXVlc3QSJAoDa2V5GAEgASgLMhcuc2VybW9uLndlYi52MS5BbGVydEtleSIaChhBY2tub3dsZWRnZUFsZXJ0UmVzcG9uc2UqowEKCkFsZXJ0U3RhdGUSGwoXQUxFUlRfU1RBVEVfVU5TUEVDSUZJRUQQABISCg5BTEVSVF9TVEFURV9PSxABEhcKE0FMRVJUX1NUQVRFX1BFTkRJTkcQAhIXChNBTEVSVF9TVEFURV9XQVJOSU5HEAMSGAoUQUxFUlRfU1RBVEVfQ1JJVElDQUwQBBIYChRBTEVSVF9TVEFURV9SRVNPTFZFRBAFKtMBChBBbGVydEhpc3RvcnlLaW5kEiIKHkFMRVJUX0hJU1RPUllfS0lORF9VTlNQRUNJRklFRBAAEiQKIEFMRVJUX0hJU1RPUllfS0lORF9TVEFURV9DSEFOR0VEEAESIwofQUxFUlRfSElTVE9SWV9LSU5EX0FDS05PV0xFREdFRBACEicKI0FMRVJUX0hJU1RPUllfS0lORF9GTEFQUElOR19TVEFSVEVEEAMSJwojQUxFUlRfSElTVE9SWV9LSU5EX0ZMQVBQSU5HX1NUT1BQRUQQBDKyAgoMQWxlcnRTZXJ2aWNlElYKCkxpc3RBbGVydHMSIC5zZXJtb24ud2ViLnYxLkxpc3RBbGVydHNSZXF1ZXN0GiEuc2VybW9uLndlYi52MS5MaXN0QWxlcnRzUmVzcG9uc2UiA5ACARJlCg9HZXRBbGVydEhpc3RvcnkSJS5zZXJtb24ud2ViLnYxLkdldEFsZXJ0SGlzdG9yeVJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkdldEFsZXJ0SGlzdG9yeVJlc3BvbnNlIgOQAgESYwoQQWNrbm93bGVkZ2VBbGVydBImLnNlcm1vbi53ZWIudjEuQWNrbm93bGVkZ2VBbGVydFJlcXVlc3QaJy5zZXJtb24ud2ViLnYxLkFja25vd2xlZGdlQWxlcnRSZXNwb25zZUK5AQoRY29tLnNlcm1vbi53ZWIudjFCCkFsZXJ0UHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_sermon_web_v1_alert_rule]);
+  fileDesc("ChlzZXJtb24vd2ViL3YxL2FsZXJ0LnByb3RvEg1zZXJtb24ud2ViLnYxIj8KCEFsZXJ0S2V5Eg8KB3J1bGVfaWQYASABKAkSDwoHbm9kZV9pZBgCIAEoCRIRCglkaW1lbnNpb24YAyABKAki/wUKBUFsZXJ0EiQKA2tleRgBIAEoCzIXLnNlcm1vbi53ZWIudjEuQWxlcnRLZXkSKAoFc3RhdGUYAiABKA4yGS5zZXJtb24ud2ViLnYxLkFsZXJ0U3RhdGUSLwoJcnVsZV9uYW1lGAMgASgLMhwuc2VybW9uLndlYi52MS5Mb2NhbGl6ZWRUZXh0EjAKBmxhYmVscxgEIAMoCzIgLnNlcm1vbi53ZWIudjEuQWxlcnQuTGFiZWxzRW50cnkSQwoQZGltZW5zaW9uX2xhYmVscxgFIAMoCzIpLnNlcm1vbi53ZWIudjEuQWxlcnQuRGltZW5zaW9uTGFiZWxzRW50cnkSEAoIaG9zdG5hbWUYBiABKAkSEAoIZ3JvdXBfaWQYByABKAkSEgoKZ3JvdXBfbmFtZRgIIAEoCRIpCgVzaW5jZRgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLQoJZmlyZV90aW1lGAogASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBINCgV2YWx1ZRgLIAEoARIMCgR1bml0GAwgASgJEhAKCGZsYXBwaW5nGA0gASgIEhcKD2Fja25vd2xlZGdlZF9ieRgOIAEoCRI0ChBhY2tub3dsZWRnZV90aW1lGA8gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBINCgVtdXRlZBgQIAEoCBIwCgZmaWVsZHMYESADKAsyIC5zZXJtb24ud2ViLnYxLkFsZXJ0LkZpZWxkc0VudHJ5EhcKD2Nhbl9hY2tub3dsZWRnZRgSIAEoCBotCgtMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBGjYKFERpbWVuc2lvbkxhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEaLQoLRmllbGRzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASLEAgoRQWxlcnRIaXN0b3J5RW50cnkSLQoEa2luZBgBIAEoDjIfLnNlcm1vbi53ZWIudjEuQWxlcnRIaXN0b3J5S2luZBInCgRmcm9tGAIgASgOMhkuc2VybW9uLndlYi52MS5BbGVydFN0YXRlEiUKAnRvGAMgASgOMhkuc2VybW9uLndlYi52MS5BbGVydFN0YXRlEigKBHRpbWUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBXZhbHVlGAUgASgBEgoKAmJ5GAYgASgJEjwKBmZpZWxkcxgHIAMoCzIsLnNlcm1vbi53ZWIudjEuQWxlcnRIaXN0b3J5RW50cnkuRmllbGRzRW50cnkaLQoLRmllbGRzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASITChFMaXN0QWxlcnRzUmVxdWVzdCI6ChJMaXN0QWxlcnRzUmVzcG9uc2USJAoGYWxlcnRzGAEgAygLMhQuc2VybW9uLndlYi52MS5BbGVydCI+ChZHZXRBbGVydEhpc3RvcnlSZXF1ZXN0EiQKA2tleRgBIAEoCzIXLnNlcm1vbi53ZWIudjEuQWxlcnRLZXkiTAoXR2V0QWxlcnRIaXN0b3J5UmVzcG9uc2USMQoHZW50cmllcxgBIAMoCzIgLnNlcm1vbi53ZWIudjEuQWxlcnRIaXN0b3J5RW50cnkiPwoXQWNrbm93bGVkZ2VBbGVydFJlcXVlc3QSJAoDa2V5GAEgASgLMhcuc2VybW9uLndlYi52MS5BbGVydEtleSIaChhBY2tub3dsZWRnZUFsZXJ0UmVzcG9uc2UiKQoZR2V0QWxlcnRTdGF0aXN0aWNzUmVxdWVzdBIMCgRkYXlzGAEgASgFItEBCgxBbGVydEZpZ3VyZXMSDwoHZmlyaW5ncxgBIAEoDRIUCgxhY2tub3dsZWRnZWQYAiABKA0SEAoIcmVzb2x2ZWQYAyABKA0SDAoEb3BlbhgEIAEoDRIWCg51bmFja25vd2xlZGdlZBgFIAEoDRIQCghmbGFwcGluZxgGIAEoDRInCgRtdHRhGAcgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEicKBG10dHIYCCABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24i+QEKDlJ1bGVTdGF0aXN0aWNzEg8KB3J1bGVfaWQYASABKAkSLwoJcnVsZV9uYW1lGAIgASgLMhwuc2VybW9uLndlYi52MS5Mb2NhbGl6ZWRUZXh0EjkKBmxhYmVscxgDIAMoCzIpLnNlcm1vbi53ZWIudjEuUnVsZVN0YXRpc3RpY3MuTGFiZWxzRW50cnkSLAoHZmlndXJlcxgEIAEoCzIbLnNlcm1vbi53ZWIudjEuQWxlcnRGaWd1cmVzEg0KBW5vZGVzGAUgASgNGi0KC0xhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEi3AEKGkdldEFsZXJ0U3RhdGlzdGljc1Jlc3BvbnNlEigKBGZyb20YASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIrCgZ0b3RhbHMYAyABKAsyGy5zZXJtb24ud2ViLnYxLkFsZXJ0RmlndXJlcxIsCgVydWxlcxgEIAMoCzIdLnNlcm1vbi53ZWIudjEuUnVsZVN0YXRpc3RpY3MSEQoJdHJ1bmNhdGVkGAUgASgIKqMBCgpBbGVydFN0YXRlEhsKF0FMRVJUX1NUQVRFX1VOU1BFQ0lGSUVEEAASEgoOQUxFUlRfU1RBVEVfT0sQARIXChNBTEVSVF9TVEFURV9QRU5ESU5HEAISFwoTQUxFUlRfU1RBVEVfV0FSTklORxADEhgKFEFMRVJUX1NUQVRFX0NSSVRJQ0FMEAQSGAoUQUxFUlRfU1RBVEVfUkVTT0xWRUQQBSrTAQoQQWxlcnRIaXN0b3J5S2luZBIiCh5BTEVSVF9ISVNUT1JZX0tJTkRfVU5TUEVDSUZJRUQQABIkCiBBTEVSVF9ISVNUT1JZX0tJTkRfU1RBVEVfQ0hBTkdFRBABEiMKH0FMRVJUX0hJU1RPUllfS0lORF9BQ0tOT1dMRURHRUQQAhInCiNBTEVSVF9ISVNUT1JZX0tJTkRfRkxBUFBJTkdfU1RBUlRFRBADEicKI0FMRVJUX0hJU1RPUllfS0lORF9GTEFQUElOR19TVE9QUEVEEAQyogMKDEFsZXJ0U2VydmljZRJWCgpMaXN0QWxlcnRzEiAuc2VybW9uLndlYi52MS5MaXN0QWxlcnRzUmVxdWVzdBohLnNlcm1vbi53ZWIudjEuTGlzdEFsZXJ0c1Jlc3BvbnNlIgOQAgESZQoPR2V0QWxlcnRIaXN0b3J5EiUuc2VybW9uLndlYi52MS5HZXRBbGVydEhpc3RvcnlSZXF1ZXN0GiYuc2VybW9uLndlYi52MS5HZXRBbGVydEhpc3RvcnlSZXNwb25zZSIDkAIBEmMKEEFja25vd2xlZGdlQWxlcnQSJi5zZXJtb24ud2ViLnYxLkFja25vd2xlZGdlQWxlcnRSZXF1ZXN0Gicuc2VybW9uLndlYi52MS5BY2tub3dsZWRnZUFsZXJ0UmVzcG9uc2USbgoSR2V0QWxlcnRTdGF0aXN0aWNzEiguc2VybW9uLndlYi52MS5HZXRBbGVydFN0YXRpc3RpY3NSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5HZXRBbGVydFN0YXRpc3RpY3NSZXNwb25zZSIDkAIBQrkBChFjb20uc2VybW9uLndlYi52MUIKQWxlcnRQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_duration, file_google_protobuf_timestamp, file_sermon_web_v1_alert_rule]);
 
 /**
  * AlertKey names an alert instance: rule × node × dimension.
@@ -369,6 +369,197 @@ export const AcknowledgeAlertResponseSchema: GenMessage<AcknowledgeAlertResponse
   messageDesc(file_sermon_web_v1_alert, 8);
 
 /**
+ * GetAlertStatisticsRequest is the range.
+ *
+ * @generated from message sermon.web.v1.GetAlertStatisticsRequest
+ */
+export type GetAlertStatisticsRequest = Message<"sermon.web.v1.GetAlertStatisticsRequest"> & {
+  /**
+   * days back from now: 7 or 30.
+   *
+   * @generated from field: int32 days = 1;
+   */
+  days: number;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetAlertStatisticsRequest.
+ * Use `create(GetAlertStatisticsRequestSchema)` to create a new message.
+ */
+export const GetAlertStatisticsRequestSchema: GenMessage<GetAlertStatisticsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_alert, 9);
+
+/**
+ * AlertFigures count the firings of a range: an instance turning warning or critical from a
+ * state that doesn't fire. A firing that began before the range is not counted.
+ *
+ * @generated from message sermon.web.v1.AlertFigures
+ */
+export type AlertFigures = Message<"sermon.web.v1.AlertFigures"> & {
+  /**
+   * firings in the range.
+   *
+   * @generated from field: uint32 firings = 1;
+   */
+  firings: number;
+
+  /**
+   * acknowledged firings.
+   *
+   * @generated from field: uint32 acknowledged = 2;
+   */
+  acknowledged: number;
+
+  /**
+   * resolved firings.
+   *
+   * @generated from field: uint32 resolved = 3;
+   */
+  resolved: number;
+
+  /**
+   * open firings still fire.
+   *
+   * @generated from field: uint32 open = 4;
+   */
+  open: number;
+
+  /**
+   * unacknowledged firings ended or go on without an acknowledgement.
+   *
+   * @generated from field: uint32 unacknowledged = 5;
+   */
+  unacknowledged: number;
+
+  /**
+   * flapping counts the firings while the instance flapped.
+   *
+   * @generated from field: uint32 flapping = 6;
+   */
+  flapping: number;
+
+  /**
+   * mtta is the mean time from the start of a firing to its acknowledgement; unset without one.
+   *
+   * @generated from field: google.protobuf.Duration mtta = 7;
+   */
+  mtta?: Duration | undefined;
+
+  /**
+   * mttr is the mean time from the start of a firing to its resolution; unset without one.
+   *
+   * @generated from field: google.protobuf.Duration mttr = 8;
+   */
+  mttr?: Duration | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.AlertFigures.
+ * Use `create(AlertFiguresSchema)` to create a new message.
+ */
+export const AlertFiguresSchema: GenMessage<AlertFigures> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_alert, 10);
+
+/**
+ * RuleStatistics are the figures of one rule.
+ *
+ * @generated from message sermon.web.v1.RuleStatistics
+ */
+export type RuleStatistics = Message<"sermon.web.v1.RuleStatistics"> & {
+  /**
+   * rule_id is the rule.
+   *
+   * @generated from field: string rule_id = 1;
+   */
+  ruleId: string;
+
+  /**
+   * rule_name is its display name.
+   *
+   * @generated from field: sermon.web.v1.LocalizedText rule_name = 2;
+   */
+  ruleName?: LocalizedText | undefined;
+
+  /**
+   * labels of the rule (e.g. category: cpu).
+   *
+   * @generated from field: map<string, string> labels = 3;
+   */
+  labels: { [key: string]: string };
+
+  /**
+   * figures of the rule.
+   *
+   * @generated from field: sermon.web.v1.AlertFigures figures = 4;
+   */
+  figures?: AlertFigures | undefined;
+
+  /**
+   * nodes is on how many nodes it fired.
+   *
+   * @generated from field: uint32 nodes = 5;
+   */
+  nodes: number;
+};
+
+/**
+ * Describes the message sermon.web.v1.RuleStatistics.
+ * Use `create(RuleStatisticsSchema)` to create a new message.
+ */
+export const RuleStatisticsSchema: GenMessage<RuleStatistics> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_alert, 11);
+
+/**
+ * GetAlertStatisticsResponse are the statistics.
+ *
+ * @generated from message sermon.web.v1.GetAlertStatisticsResponse
+ */
+export type GetAlertStatisticsResponse = Message<"sermon.web.v1.GetAlertStatisticsResponse"> & {
+  /**
+   * from and to are the range.
+   *
+   * @generated from field: google.protobuf.Timestamp from = 1;
+   */
+  from?: Timestamp | undefined;
+
+  /**
+   * to is now.
+   *
+   * @generated from field: google.protobuf.Timestamp to = 2;
+   */
+  to?: Timestamp | undefined;
+
+  /**
+   * totals over every rule.
+   *
+   * @generated from field: sermon.web.v1.AlertFigures totals = 3;
+   */
+  totals?: AlertFigures | undefined;
+
+  /**
+   * rules are the loudest, most firings first, at most 10.
+   *
+   * @generated from field: repeated sermon.web.v1.RuleStatistics rules = 4;
+   */
+  rules: RuleStatistics[];
+
+  /**
+   * truncated is set if the range held more history than one answer reads (200,000
+   * transitions); the figures cover its oldest part.
+   *
+   * @generated from field: bool truncated = 5;
+   */
+  truncated: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetAlertStatisticsResponse.
+ * Use `create(GetAlertStatisticsResponseSchema)` to create a new message.
+ */
+export const GetAlertStatisticsResponseSchema: GenMessage<GetAlertStatisticsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_alert, 12);
+
+/**
  * AlertState is where an alert is.
  *
  * @generated from enum sermon.web.v1.AlertState
@@ -511,6 +702,17 @@ export const AlertService: GenService<{
     methodKind: "unary";
     input: typeof AcknowledgeAlertRequestSchema;
     output: typeof AcknowledgeAlertResponseSchema;
+  },
+  /**
+   * GetAlertStatistics returns the loudest rules and the mean times to acknowledgement (MTTA)
+   * and resolution (MTTR) of the last 7 or 30 days on the nodes the caller sees (M3-19).
+   *
+   * @generated from rpc sermon.web.v1.AlertService.GetAlertStatistics
+   */
+  getAlertStatistics: {
+    methodKind: "unary";
+    input: typeof GetAlertStatisticsRequestSchema;
+    output: typeof GetAlertStatisticsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_alert, 0);

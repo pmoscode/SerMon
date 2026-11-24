@@ -2,8 +2,8 @@
 // @generated from file sermon/web/v1/auth.proto (package sermon.web.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +12,99 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/auth.proto.
  */
 export const file_sermon_web_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiLwoMTG9naW5SZXF1ZXN0Eg0KBWVtYWlsGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJIlgKDUxvZ2luUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbhIeChZzZWNvbmRfZmFjdG9yX3JlcXVpcmVkGAIgASgIIikKGVZlcmlmeVNlY29uZEZhY3RvclJlcXVlc3QSDAoEY29kZRgBIAEoCSJFChpWZXJpZnlTZWNvbmRGYWN0b3JSZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIioKGkNvbmZpcm1TZWNvbmRGYWN0b3JSZXF1ZXN0EgwKBGNvZGUYASABKAkiRgobQ29uZmlybVNlY29uZEZhY3RvclJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSITChFHZXRTZXNzaW9uUmVxdWVzdCI9ChJHZXRTZXNzaW9uUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiI0ChlTd2l0Y2hPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJFChpTd2l0Y2hPcmdhbml6YXRpb25SZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIioKFkNvbmZpcm1QYXNzd29yZFJlcXVlc3QSEAoIcGFzc3dvcmQYASABKAkiQgoXQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIQCg5TdGVwVXBSZXF1aXJlZCIbChlTZWNvbmRGYWN0b3JTZXR1cFJlcXVpcmVkItoDCgdTZXNzaW9uEg8KB3VzZXJfaWQYASABKAkSDQoFZW1haWwYAiABKAkSFAoMZGlzcGxheV9uYW1lGAMgASgJEh4KFmFjdGl2ZV9vcmdhbml6YXRpb25faWQYBCABKAkSMgoNb3JnYW5pemF0aW9ucxgFIAMoCzIbLnNlcm1vbi53ZWIudjEuT3JnYW5pemF0aW9uEjEKDXN0ZXBfdXBfdW50aWwYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEh0KFXNlY29uZF9mYWN0b3JfZW5hYmxlZBgHIAEoCBIkChxzZWNvbmRfZmFjdG9yX3NldHVwX3JlcXVpcmVkGAggASgIEhEKCW9yZ19hZG1pbhgJIAEoCBIYChBlbnJvbGxfZ3JvdXBfaWRzGAogAygJEhkKEXNpbGVuY2VfZ3JvdXBfaWRzGAsgAygJEh8KF25vZGVfaWRlbnRpdHlfZ3JvdXBfaWRzGAwgAygJEhIKCnN1cGVyYWRtaW4YDSABKAgSOQoRaW5zdGFuY2VfcHJvYmxlbXMYDiADKAsyHi5zZXJtb24ud2ViLnYxLkluc3RhbmNlUHJvYmxlbRIVCg10YWdfZ3JvdXBfaWRzGA8gAygJImkKD0luc3RhbmNlUHJvYmxlbRINCgVjaGVjaxgBIAEoCRINCgVsZXZlbBgCIAEoCRIpCgVzaW5jZRgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFdmFsdWUYBCABKAEiKAoMT3JnYW5pemF0aW9uEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkylgUKC0F1dGhTZXJ2aWNlEkIKBUxvZ2luEhsuc2VybW9uLndlYi52MS5Mb2dpblJlcXVlc3QaHC5zZXJtb24ud2ViLnYxLkxvZ2luUmVzcG9uc2USaQoSVmVyaWZ5U2Vjb25kRmFjdG9yEiguc2VybW9uLndlYi52MS5WZXJpZnlTZWNvbmRGYWN0b3JSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5WZXJpZnlTZWNvbmRGYWN0b3JSZXNwb25zZRJFCgZMb2dvdXQSHC5zZXJtb24ud2ViLnYxLkxvZ291dFJlcXVlc3QaHS5zZXJtb24ud2ViLnYxLkxvZ291dFJlc3BvbnNlElYKCkdldFNlc3Npb24SIC5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXF1ZXN0GiEuc2VybW9uLndlYi52MS5HZXRTZXNzaW9uUmVzcG9uc2UiA5ACARJpChJTd2l0Y2hPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlc3BvbnNlEmAKD0NvbmZpcm1QYXNzd29yZBIlLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USbAoTQ29uZmlybVNlY29uZEZhY3RvchIpLnNlcm1vbi53ZWIudjEuQ29uZmlybVNlY29uZEZhY3RvclJlcXVlc3QaKi5zZXJtb24ud2ViLnYxLkNvbmZpcm1TZWNvbmRGYWN0b3JSZXNwb25zZUK4AQoRY29tLnNlcm1vbi53ZWIudjFCCUF1dGhQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL2F1dGgucHJvdG8SDXNlcm1vbi53ZWIudjEiGAoWR2V0TG9naW5PcHRpb25zUmVxdWVzdCI6ChdHZXRMb2dpbk9wdGlvbnNSZXNwb25zZRIMCgRvaWRjGAEgASgIEhEKCW9pZGNfbmFtZRgCIAEoCSJLChBCZWdpbk9pZGNSZXF1ZXN0EikKBmludGVudBgBIAEoDjIZLnNlcm1vbi53ZWIudjEuT2lkY0ludGVudBIMCgRuZXh0GAIgASgJIi4KEUJlZ2luT2lkY1Jlc3BvbnNlEhkKEWF1dGhvcml6YXRpb25fdXJsGAEgASgJIi8KDExvZ2luUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIQCghwYXNzd29yZBgCIAEoCSJYCg1Mb2dpblJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24SHgoWc2Vjb25kX2ZhY3Rvcl9yZXF1aXJlZBgCIAEoCCIpChlWZXJpZnlTZWNvbmRGYWN0b3JSZXF1ZXN0EgwKBGNvZGUYASABKAkiRQoaVmVyaWZ5U2Vjb25kRmFjdG9yUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIqChpDb25maXJtU2Vjb25kRmFjdG9yUmVxdWVzdBIMCgRjb2RlGAEgASgJIkYKG0NvbmZpcm1TZWNvbmRGYWN0b3JSZXNwb25zZRInCgdzZXNzaW9uGAEgASgLMhYuc2VybW9uLndlYi52MS5TZXNzaW9uIg8KDUxvZ291dFJlcXVlc3QiEAoOTG9nb3V0UmVzcG9uc2UiEwoRR2V0U2Vzc2lvblJlcXVlc3QiPQoSR2V0U2Vzc2lvblJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iNAoZU3dpdGNoT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkiRQoaU3dpdGNoT3JnYW5pemF0aW9uUmVzcG9uc2USJwoHc2Vzc2lvbhgBIAEoCzIWLnNlcm1vbi53ZWIudjEuU2Vzc2lvbiIqChZDb25maXJtUGFzc3dvcmRSZXF1ZXN0EhAKCHBhc3N3b3JkGAEgASgJIkIKF0NvbmZpcm1QYXNzd29yZFJlc3BvbnNlEicKB3Nlc3Npb24YASABKAsyFi5zZXJtb24ud2ViLnYxLlNlc3Npb24iEAoOU3RlcFVwUmVxdWlyZWQiGwoZU2Vjb25kRmFjdG9yU2V0dXBSZXF1aXJlZCLaAwoHU2Vzc2lvbhIPCgd1c2VyX2lkGAEgASgJEg0KBWVtYWlsGAIgASgJEhQKDGRpc3BsYXlfbmFtZRgDIAEoCRIeChZhY3RpdmVfb3JnYW5pemF0aW9uX2lkGAQgASgJEjIKDW9yZ2FuaXphdGlvbnMYBSADKAsyGy5zZXJtb24ud2ViLnYxLk9yZ2FuaXphdGlvbhIxCg1zdGVwX3VwX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIdChVzZWNvbmRfZmFjdG9yX2VuYWJsZWQYByABKAgSJAocc2Vjb25kX2ZhY3Rvcl9zZXR1cF9yZXF1aXJlZBgIIAEoCBIRCglvcmdfYWRtaW4YCSABKAgSGAoQZW5yb2xsX2dyb3VwX2lkcxgKIAMoCRIZChFzaWxlbmNlX2dyb3VwX2lkcxgLIAMoCRIfChdub2RlX2lkZW50aXR5X2dyb3VwX2lkcxgMIAMoCRISCgpzdXBlcmFkbWluGA0gASgIEjkKEWluc3RhbmNlX3Byb2JsZW1zGA4gAygLMh4uc2VybW9uLndlYi52MS5JbnN0YW5jZVByb2JsZW0SFQoNdGFnX2dyb3VwX2lkcxgPIAMoCSJpCg9JbnN0YW5jZVByb2JsZW0SDQoFY2hlY2sYASABKAkSDQoFbGV2ZWwYAiABKAkSKQoFc2luY2UYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBXZhbHVlGAQgASgBIigKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJKm8KCk9pZGNJbnRlbnQSGwoXT0lEQ19JTlRFTlRfVU5TUEVDSUZJRUQQABIVChFPSURDX0lOVEVOVF9MT0dJThABEhQKEE9JRENfSU5URU5UX0xJTksQAhIXChNPSURDX0lOVEVOVF9TVEVQX1VQEAMyzQYKC0F1dGhTZXJ2aWNlEkIKBUxvZ2luEhsuc2VybW9uLndlYi52MS5Mb2dpblJlcXVlc3QaHC5zZXJtb24ud2ViLnYxLkxvZ2luUmVzcG9uc2USaQoSVmVyaWZ5U2Vjb25kRmFjdG9yEiguc2VybW9uLndlYi52MS5WZXJpZnlTZWNvbmRGYWN0b3JSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5WZXJpZnlTZWNvbmRGYWN0b3JSZXNwb25zZRJFCgZMb2dvdXQSHC5zZXJtb24ud2ViLnYxLkxvZ291dFJlcXVlc3QaHS5zZXJtb24ud2ViLnYxLkxvZ291dFJlc3BvbnNlElYKCkdldFNlc3Npb24SIC5zZXJtb24ud2ViLnYxLkdldFNlc3Npb25SZXF1ZXN0GiEuc2VybW9uLndlYi52MS5HZXRTZXNzaW9uUmVzcG9uc2UiA5ACARJpChJTd2l0Y2hPcmdhbml6YXRpb24SKC5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLlN3aXRjaE9yZ2FuaXphdGlvblJlc3BvbnNlEmAKD0NvbmZpcm1QYXNzd29yZBIlLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuQ29uZmlybVBhc3N3b3JkUmVzcG9uc2USbAoTQ29uZmlybVNlY29uZEZhY3RvchIpLnNlcm1vbi53ZWIudjEuQ29uZmlybVNlY29uZEZhY3RvclJlcXVlc3QaKi5zZXJtb24ud2ViLnYxLkNvbmZpcm1TZWNvbmRGYWN0b3JSZXNwb25zZRJlCg9HZXRMb2dpbk9wdGlvbnMSJS5zZXJtb24ud2ViLnYxLkdldExvZ2luT3B0aW9uc1JlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkdldExvZ2luT3B0aW9uc1Jlc3BvbnNlIgOQAgESTgoJQmVnaW5PaWRjEh8uc2VybW9uLndlYi52MS5CZWdpbk9pZGNSZXF1ZXN0GiAuc2VybW9uLndlYi52MS5CZWdpbk9pZGNSZXNwb25zZUK4AQoRY29tLnNlcm1vbi53ZWIudjFCCUF1dGhQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+
+/**
+ * GetLoginOptionsRequest has no fields.
+ *
+ * @generated from message sermon.web.v1.GetLoginOptionsRequest
+ */
+export type GetLoginOptionsRequest = Message<"sermon.web.v1.GetLoginOptionsRequest"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.GetLoginOptionsRequest.
+ * Use `create(GetLoginOptionsRequestSchema)` to create a new message.
+ */
+export const GetLoginOptionsRequestSchema: GenMessage<GetLoginOptionsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 0);
+
+/**
+ * GetLoginOptionsResponse lists the ways to sign in.
+ *
+ * @generated from message sermon.web.v1.GetLoginOptionsResponse
+ */
+export type GetLoginOptionsResponse = Message<"sermon.web.v1.GetLoginOptionsResponse"> & {
+  /**
+   * oidc is set if the instance has an OIDC provider.
+   *
+   * @generated from field: bool oidc = 1;
+   */
+  oidc: boolean;
+
+  /**
+   * oidc_name is the provider's name for the button (set by the operator).
+   *
+   * @generated from field: string oidc_name = 2;
+   */
+  oidcName: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetLoginOptionsResponse.
+ * Use `create(GetLoginOptionsResponseSchema)` to create a new message.
+ */
+export const GetLoginOptionsResponseSchema: GenMessage<GetLoginOptionsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 1);
+
+/**
+ * BeginOidcRequest says what for and where to go afterwards.
+ *
+ * @generated from message sermon.web.v1.BeginOidcRequest
+ */
+export type BeginOidcRequest = Message<"sermon.web.v1.BeginOidcRequest"> & {
+  /**
+   * intent of the sign-in.
+   *
+   * @generated from field: sermon.web.v1.OidcIntent intent = 1;
+   */
+  intent: OidcIntent;
+
+  /**
+   * next is a path of the app to return to (anything else becomes "/").
+   *
+   * @generated from field: string next = 2;
+   */
+  next: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.BeginOidcRequest.
+ * Use `create(BeginOidcRequestSchema)` to create a new message.
+ */
+export const BeginOidcRequestSchema: GenMessage<BeginOidcRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 2);
+
+/**
+ * BeginOidcResponse is where the browser goes.
+ *
+ * @generated from message sermon.web.v1.BeginOidcResponse
+ */
+export type BeginOidcResponse = Message<"sermon.web.v1.BeginOidcResponse"> & {
+  /**
+   * authorization_url is the provider's login page.
+   *
+   * @generated from field: string authorization_url = 1;
+   */
+  authorizationUrl: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.BeginOidcResponse.
+ * Use `create(BeginOidcResponseSchema)` to create a new message.
+ */
+export const BeginOidcResponseSchema: GenMessage<BeginOidcResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_auth, 3);
 
 /**
  * LoginRequest carries the credentials.
@@ -40,7 +132,7 @@ export type LoginRequest = Message<"sermon.web.v1.LoginRequest"> & {
  * Use `create(LoginRequestSchema)` to create a new message.
  */
 export const LoginRequestSchema: GenMessage<LoginRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 0);
+  messageDesc(file_sermon_web_v1_auth, 4);
 
 /**
  * LoginResponse describes the new session.
@@ -68,7 +160,7 @@ export type LoginResponse = Message<"sermon.web.v1.LoginResponse"> & {
  * Use `create(LoginResponseSchema)` to create a new message.
  */
 export const LoginResponseSchema: GenMessage<LoginResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 1);
+  messageDesc(file_sermon_web_v1_auth, 5);
 
 /**
  * VerifySecondFactorRequest carries the code.
@@ -89,7 +181,7 @@ export type VerifySecondFactorRequest = Message<"sermon.web.v1.VerifySecondFacto
  * Use `create(VerifySecondFactorRequestSchema)` to create a new message.
  */
 export const VerifySecondFactorRequestSchema: GenMessage<VerifySecondFactorRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 2);
+  messageDesc(file_sermon_web_v1_auth, 6);
 
 /**
  * VerifySecondFactorResponse describes the full session.
@@ -110,7 +202,7 @@ export type VerifySecondFactorResponse = Message<"sermon.web.v1.VerifySecondFact
  * Use `create(VerifySecondFactorResponseSchema)` to create a new message.
  */
 export const VerifySecondFactorResponseSchema: GenMessage<VerifySecondFactorResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 3);
+  messageDesc(file_sermon_web_v1_auth, 7);
 
 /**
  * ConfirmSecondFactorRequest carries the code.
@@ -131,7 +223,7 @@ export type ConfirmSecondFactorRequest = Message<"sermon.web.v1.ConfirmSecondFac
  * Use `create(ConfirmSecondFactorRequestSchema)` to create a new message.
  */
 export const ConfirmSecondFactorRequestSchema: GenMessage<ConfirmSecondFactorRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 4);
+  messageDesc(file_sermon_web_v1_auth, 8);
 
 /**
  * ConfirmSecondFactorResponse describes the session with the renewed step-up.
@@ -152,7 +244,7 @@ export type ConfirmSecondFactorResponse = Message<"sermon.web.v1.ConfirmSecondFa
  * Use `create(ConfirmSecondFactorResponseSchema)` to create a new message.
  */
 export const ConfirmSecondFactorResponseSchema: GenMessage<ConfirmSecondFactorResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 5);
+  messageDesc(file_sermon_web_v1_auth, 9);
 
 /**
  * LogoutRequest has no parameters.
@@ -167,7 +259,7 @@ export type LogoutRequest = Message<"sermon.web.v1.LogoutRequest"> & {
  * Use `create(LogoutRequestSchema)` to create a new message.
  */
 export const LogoutRequestSchema: GenMessage<LogoutRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 6);
+  messageDesc(file_sermon_web_v1_auth, 10);
 
 /**
  * LogoutResponse has no fields.
@@ -182,7 +274,7 @@ export type LogoutResponse = Message<"sermon.web.v1.LogoutResponse"> & {
  * Use `create(LogoutResponseSchema)` to create a new message.
  */
 export const LogoutResponseSchema: GenMessage<LogoutResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 7);
+  messageDesc(file_sermon_web_v1_auth, 11);
 
 /**
  * GetSessionRequest has no parameters.
@@ -197,7 +289,7 @@ export type GetSessionRequest = Message<"sermon.web.v1.GetSessionRequest"> & {
  * Use `create(GetSessionRequestSchema)` to create a new message.
  */
 export const GetSessionRequestSchema: GenMessage<GetSessionRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 8);
+  messageDesc(file_sermon_web_v1_auth, 12);
 
 /**
  * GetSessionResponse describes the current session.
@@ -218,7 +310,7 @@ export type GetSessionResponse = Message<"sermon.web.v1.GetSessionResponse"> & {
  * Use `create(GetSessionResponseSchema)` to create a new message.
  */
 export const GetSessionResponseSchema: GenMessage<GetSessionResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 9);
+  messageDesc(file_sermon_web_v1_auth, 13);
 
 /**
  * SwitchOrganizationRequest names the target organization.
@@ -239,7 +331,7 @@ export type SwitchOrganizationRequest = Message<"sermon.web.v1.SwitchOrganizatio
  * Use `create(SwitchOrganizationRequestSchema)` to create a new message.
  */
 export const SwitchOrganizationRequestSchema: GenMessage<SwitchOrganizationRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 10);
+  messageDesc(file_sermon_web_v1_auth, 14);
 
 /**
  * SwitchOrganizationResponse describes the moved session.
@@ -260,7 +352,7 @@ export type SwitchOrganizationResponse = Message<"sermon.web.v1.SwitchOrganizati
  * Use `create(SwitchOrganizationResponseSchema)` to create a new message.
  */
 export const SwitchOrganizationResponseSchema: GenMessage<SwitchOrganizationResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 11);
+  messageDesc(file_sermon_web_v1_auth, 15);
 
 /**
  * ConfirmPasswordRequest carries the password of the logged-in user.
@@ -281,7 +373,7 @@ export type ConfirmPasswordRequest = Message<"sermon.web.v1.ConfirmPasswordReque
  * Use `create(ConfirmPasswordRequestSchema)` to create a new message.
  */
 export const ConfirmPasswordRequestSchema: GenMessage<ConfirmPasswordRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 12);
+  messageDesc(file_sermon_web_v1_auth, 16);
 
 /**
  * ConfirmPasswordResponse describes the session with the renewed step-up.
@@ -302,7 +394,7 @@ export type ConfirmPasswordResponse = Message<"sermon.web.v1.ConfirmPasswordResp
  * Use `create(ConfirmPasswordResponseSchema)` to create a new message.
  */
 export const ConfirmPasswordResponseSchema: GenMessage<ConfirmPasswordResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 13);
+  messageDesc(file_sermon_web_v1_auth, 17);
 
 /**
  * StepUpRequired is attached as error detail to FAILED_PRECONDITION when a sensitive action needs
@@ -318,7 +410,7 @@ export type StepUpRequired = Message<"sermon.web.v1.StepUpRequired"> & {
  * Use `create(StepUpRequiredSchema)` to create a new message.
  */
 export const StepUpRequiredSchema: GenMessage<StepUpRequired> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 14);
+  messageDesc(file_sermon_web_v1_auth, 18);
 
 /**
  * SecondFactorSetupRequired is attached as error detail to FAILED_PRECONDITION when the active
@@ -335,7 +427,7 @@ export type SecondFactorSetupRequired = Message<"sermon.web.v1.SecondFactorSetup
  * Use `create(SecondFactorSetupRequiredSchema)` to create a new message.
  */
 export const SecondFactorSetupRequiredSchema: GenMessage<SecondFactorSetupRequired> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 15);
+  messageDesc(file_sermon_web_v1_auth, 19);
 
 /**
  * Session is the view of a login session for the UI.
@@ -462,7 +554,7 @@ export type Session = Message<"sermon.web.v1.Session"> & {
  * Use `create(SessionSchema)` to create a new message.
  */
 export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 16);
+  messageDesc(file_sermon_web_v1_auth, 20);
 
 /**
  * InstanceProblem is a check of the server's self-monitoring that is not OK.
@@ -506,7 +598,7 @@ export type InstanceProblem = Message<"sermon.web.v1.InstanceProblem"> & {
  * Use `create(InstanceProblemSchema)` to create a new message.
  */
 export const InstanceProblemSchema: GenMessage<InstanceProblem> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 17);
+  messageDesc(file_sermon_web_v1_auth, 21);
 
 /**
  * Organization is an organization the user belongs to.
@@ -534,7 +626,48 @@ export type Organization = Message<"sermon.web.v1.Organization"> & {
  * Use `create(OrganizationSchema)` to create a new message.
  */
 export const OrganizationSchema: GenMessage<Organization> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_auth, 18);
+  messageDesc(file_sermon_web_v1_auth, 22);
+
+/**
+ * OidcIntent is what a sign-in at the provider is for.
+ *
+ * @generated from enum sermon.web.v1.OidcIntent
+ */
+export enum OidcIntent {
+  /**
+   * OIDC_INTENT_UNSPECIFIED is not used.
+   *
+   * @generated from enum value: OIDC_INTENT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * OIDC_INTENT_LOGIN signs in.
+   *
+   * @generated from enum value: OIDC_INTENT_LOGIN = 1;
+   */
+  LOGIN = 1,
+
+  /**
+   * OIDC_INTENT_LINK links the provider's identity to the signed-in user.
+   *
+   * @generated from enum value: OIDC_INTENT_LINK = 2;
+   */
+  LINK = 2,
+
+  /**
+   * OIDC_INTENT_STEP_UP renews the step-up with a fresh sign-in at the provider.
+   *
+   * @generated from enum value: OIDC_INTENT_STEP_UP = 3;
+   */
+  STEP_UP = 3,
+}
+
+/**
+ * Describes the enum sermon.web.v1.OidcIntent.
+ */
+export const OidcIntentSchema: GenEnum<OidcIntent> = /*@__PURE__*/
+  enumDesc(file_sermon_web_v1_auth, 0);
 
 /**
  * AuthService handles local login sessions (KONZEPT §7). The session token travels only in the
@@ -624,6 +757,30 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof ConfirmSecondFactorRequestSchema;
     output: typeof ConfirmSecondFactorResponseSchema;
+  },
+  /**
+   * GetLoginOptions tells the login page the ways to sign in besides the password (M3-20).
+   *
+   * @generated from rpc sermon.web.v1.AuthService.GetLoginOptions
+   */
+  getLoginOptions: {
+    methodKind: "unary";
+    input: typeof GetLoginOptionsRequestSchema;
+    output: typeof GetLoginOptionsResponseSchema;
+  },
+  /**
+   * BeginOidc starts a sign-in at the OIDC provider (M3-20, ADR 0033): the browser goes to
+   * authorization_url and returns to /auth/oidc/callback; the flow is bound to a cookie set here.
+   * Linking an identity and the step-up need the session cookie, linking a recent step-up
+   * (FAILED_PRECONDITION with StepUpRequired). FAILED_PRECONDITION without a configured provider,
+   * UNAVAILABLE while it can't be reached, RESOURCE_EXHAUSTED for too many attempts.
+   *
+   * @generated from rpc sermon.web.v1.AuthService.BeginOidc
+   */
+  beginOidc: {
+    methodKind: "unary";
+    input: typeof BeginOidcRequestSchema;
+    output: typeof BeginOidcResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_auth, 0);

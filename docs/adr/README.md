@@ -40,6 +40,7 @@ KONZEPT §2 mit angepasst.
 | [0030](0030-konfiguration-vom-server.md) | Konfiguration vom Server an die Agents | accepted | D17 |
 | [0031](0031-logs-in-loki.md) | Logs in Loki: fester Endpunkt, eigener Client, sparsame Labels | accepted | D13, D17 |
 | [0032](0032-live-tail-durch-abfragen.md) | Live-Tail durch wiederholte Abfragen statt Loki-WebSocket | accepted | D13 |
+| [0033](0033-anmeldung-ueber-oidc.md) | Anmeldung über OpenID Connect | accepted | D10 |
 
 ## Entscheidungslog → ADR
 
@@ -54,7 +55,7 @@ KONZEPT §2 mit angepasst.
 | D7 Zielsysteme | 0016, 0002 |
 | D8 Einzeiler mit Token | 0016, 0012 |
 | D9 Privilegientrennung | 0016, 0012 |
-| D10 Authentifizierung | 0017 |
+| D10 Authentifizierung | 0017, 0033 |
 | D11 Rechte | 0017 |
 | D12 Retention | 0018 |
 | D13 Storage | 0001, 0031, 0032 |

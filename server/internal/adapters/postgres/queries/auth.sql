@@ -39,12 +39,12 @@ WHERE user_id = sqlc.arg(user_id);
 UPDATE user_credentials SET failed_attempts = 0, locked_until = NULL WHERE user_id = sqlc.arg(user_id);
 
 -- name: InsertSession :exec
-INSERT INTO sessions (id, user_id, org_id, created_at, last_seen_at, step_up_at, second_factor_pending)
+INSERT INTO sessions (id, user_id, org_id, created_at, last_seen_at, step_up_at, second_factor_pending, external_mfa)
 VALUES (sqlc.arg(id), sqlc.arg(user_id), sqlc.narg(org_id), sqlc.arg(created_at), sqlc.arg(last_seen_at), sqlc.arg(step_up_at),
-        sqlc.arg(second_factor_pending));
+        sqlc.arg(second_factor_pending), sqlc.arg(external_mfa));
 
 -- name: GetSession :one
-SELECT id, user_id, org_id, created_at, last_seen_at, step_up_at, second_factor_pending FROM sessions WHERE id = sqlc.arg(id);
+SELECT id, user_id, org_id, created_at, last_seen_at, step_up_at, second_factor_pending, external_mfa FROM sessions WHERE id = sqlc.arg(id);
 
 -- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = sqlc.arg(at) WHERE id = sqlc.arg(id);

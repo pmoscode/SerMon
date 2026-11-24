@@ -310,6 +310,19 @@ type NotificationPolicyChannel struct {
 	Position   int16
 }
 
+type OidcFlow struct {
+	StateHash   string
+	BindingHash string
+	Nonce       string
+	Verifier    string
+	Intent      int16
+	UserID      *uuid.UUID
+	SessionID   pgtype.Text
+	NextPath    string
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+}
+
 type Organization struct {
 	ID                  uuid.UUID
 	Name                string
@@ -385,6 +398,7 @@ type Session struct {
 	LastSeenAt          time.Time
 	StepUpAt            time.Time
 	SecondFactorPending bool
+	ExternalMfa         bool
 }
 
 type Superadmin struct {
@@ -405,6 +419,15 @@ type UserCredential struct {
 	PasswordChangedAt time.Time
 	FailedAttempts    int32
 	LockedUntil       *time.Time
+}
+
+type UserIdentity struct {
+	Issuer      string
+	Subject     string
+	UserID      uuid.UUID
+	Email       pgtype.Text
+	CreatedAt   time.Time
+	LastLoginAt *time.Time
 }
 
 type UserRecoveryCode struct {

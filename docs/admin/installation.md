@@ -91,6 +91,7 @@ Die Logs der Container sind auf 5 × 10 MB begrenzt.
 
 ```sh
 git pull
+./secrets.sh          # legt neue Secret-Dateien an (z. B. oidc_client_secret), vorhandene bleiben
 docker compose build
 docker compose up -d
 ```
@@ -115,6 +116,28 @@ Datenbank im MaxMind-DB-Format nach `deploy/compose/geoip/`, etwa „IP to Count
 sich aus der Datei, `SERMON_GEOIP_ATTRIBUTION` ersetzt ihn. Private Adressen haben kein Land. Die Datei liest der Server
 beim Start; ist sie älter als 90 Tage, warnt er im Log. Zum Aktualisieren die Datei ersetzen und den Server neu
 starten (`docker compose restart server`).
+
+## Anmeldung über OIDC (optional)
+
+SerMon kann Anmeldungen eines OpenID-Connect-Providers annehmen (Keycloak, Authentik, Entra ID, Dex …,
+[ADR 0033](../adr/0033-anmeldung-ueber-oidc.md)). Legen Sie beim Provider einen vertraulichen Client an mit der
+Redirect-URI `https://<SERMON_DOMAIN>/auth/oidc/callback` und den Scopes `openid email profile`. Dann in `.env`:
+
+```sh
+SERMON_OIDC_ISSUER=https://id.example.com/realms/ops   # die Issuer-URL des Providers
+SERMON_OIDC_CLIENT_ID=sermon
+SERMON_OIDC_NAME=Firmen-Login                          # Beschriftung des Knopfs, Standard „SSO“
+```
+
+und das Client-Secret ohne Zeilenumbruch nach `secrets/oidc_client_secret`. Der Server spricht den Provider über
+denselben abgesicherten Client wie die Benachrichtigungskanäle an: Liegt er im internen Netz, braucht seine Adresse
+einen Eintrag in `SERMON_OUTBOUND_ALLOWLIST`.
+
+- Angemeldet wird über die Identität beim Provider (Issuer und Subject), nie über die E-Mail. Ein User verknüpft sie in
+  den Einstellungen „Sicherheit“, angemeldet und nach erneuter Bestätigung.
+- **2FA-Pflicht einer Organisation:** `SERMON_OIDC_MFA=amr` (Standard) erkennt einen zweiten Faktor am Claim `amr`
+  des ID-Tokens. Viele Provider setzen ihn nicht; erzwingt Ihr Provider selbst einen zweiten Faktor, setzen Sie
+  `trusted`. Mit `never` gilt immer der zweite Faktor von SerMon.
 
 ## Organisationen löschen
 

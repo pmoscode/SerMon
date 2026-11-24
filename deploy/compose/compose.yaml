@@ -46,6 +46,14 @@ x-server-environment: &server-environment
   # Countries of addresses (M3-18, optional): a MaxMind DB file in ./geoip, e.g. DB-IP Lite.
   SERMON_GEOIP_DB_FILE: ${SERMON_GEOIP_DB_FILE:-}
   SERMON_GEOIP_ATTRIBUTION: ${SERMON_GEOIP_ATTRIBUTION:-}
+  # Sign-in over OIDC (M3-20, optional): the provider and the client; the secret in
+  # secrets/oidc_client_secret.
+  SERMON_OIDC_ISSUER: ${SERMON_OIDC_ISSUER:-}
+  SERMON_OIDC_CLIENT_ID: ${SERMON_OIDC_CLIENT_ID:-}
+  SERMON_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
+  SERMON_OIDC_NAME: ${SERMON_OIDC_NAME:-}
+  SERMON_OIDC_SCOPES: ${SERMON_OIDC_SCOPES:-}
+  SERMON_OIDC_MFA: ${SERMON_OIDC_MFA:-}
   # Production mode: invitations go out by mail only (M1-39).
   SERMON_SMTP_HOST: ${SERMON_SMTP_HOST:?set SERMON_SMTP_HOST in .env}
   SERMON_SMTP_PORT: ${SERMON_SMTP_PORT:-587}
@@ -100,7 +108,7 @@ services:
     environment:
       <<: *server-environment
       SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
-    secrets: [database_url, database_migrate_url, smtp_password]
+    secrets: [database_url, database_migrate_url, smtp_password, oidc_client_secret]
     # The same view as the server: its configuration is checked as a whole.
     volumes: [server-state:/var/lib/sermon, ./downloads:/srv/downloads:ro, ./geoip:/srv/geoip:ro]
     networks: [internal]
@@ -112,7 +120,7 @@ services:
     build: *server-build
     image: sermon-server:${SERMON_VERSION:-source}
     environment: *server-environment
-    secrets: [database_url, smtp_password]
+    secrets: [database_url, smtp_password, oidc_client_secret]
     volumes:
       - server-state:/var/lib/sermon
       # Signed agent binaries for install.sh (ADR 0012), optional.
@@ -175,6 +183,7 @@ secrets:
   database_url: { file: ./secrets/database_url }
   database_migrate_url: { file: ./secrets/database_migrate_url }
   smtp_password: { file: ./secrets/smtp_password }
+  oidc_client_secret: { file: ./secrets/oidc_client_secret }
 
 volumes:
   postgres-data:

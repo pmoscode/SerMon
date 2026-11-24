@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +20,8 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki/lokitest"
+	oidcadapter "github.com/pmoscode/SerMon/server/internal/adapters/oidc"
+	"github.com/pmoscode/SerMon/server/internal/adapters/oidc/oidctest"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
@@ -27,6 +30,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/twofactor"
@@ -51,6 +55,7 @@ import (
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
+	"github.com/pmoscode/SerMon/server/internal/platform/safehttp"
 	"github.com/pmoscode/SerMon/server/internal/secrets"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
 	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
@@ -72,7 +77,15 @@ type stack struct {
 	metrics *timescale.Store
 	// hub is the live view of the processes; no agent is connected, snapshots come from tests.
 	hub *liveview.Hub
+	// idp is the fake OIDC provider of the stack (M3-20).
+	idp *oidctest.Provider
 }
+
+// The fake provider's client (M3-20).
+const (
+	oidcClientID = "sermon"
+	oidcSecret   = "oidc-fixture-secret" // betterleaks:allow
+)
 
 var (
 	testBoxOnce sync.Once
@@ -136,6 +149,21 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 	srv := httptest.NewUnstartedServer(mux)
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
+	idp := oidctest.New(oidcClientID, oidcSecret)
+	t.Cleanup(idp.Close)
+	loopback, err := safehttp.NewPolicy([]netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oidcStore := postgres.NewOIDCStore(pg)
+	sso := oidc.NewService(oidc.Deps{
+		Provider: oidcadapter.New(oidcadapter.Config{
+			Issuer: idp.URL, ClientID: oidcClientID, ClientSecret: oidcSecret, RedirectURL: srv.URL + webapi.OIDCCallbackPath,
+			Scopes: []string{"email", "profile"},
+		}, safehttp.New(safehttp.Options{Policy: loopback}).HTTPClient()),
+		Flows: oidcStore, Identities: oidcStore, Users: creds, Sessions: sessions, SecondFactor: secondFactor,
+		Limiter: ratelimit.New(1000, time.Minute, time.Now), MFA: oidc.MFAByClaim, Now: time.Now,
+	})
 	var inviteOptions []invitation.Option
 	var orgOptions []organization.Option
 	if mailer != nil {
@@ -173,7 +201,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		LiveView: webapi.NewLiveViewHandler(liveViews, nil, slog.New(slog.DiscardHandler)),
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
 			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)).
-			WithInstanceHealth(postgres.NewAccessStore(pg), fakeProblems{}),
+			WithInstanceHealth(postgres.NewAccessStore(pg), fakeProblems{}).WithOIDC(sso, "Test IdP"),
 		System: webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
 			invites, slog.New(slog.DiscardHandler)),
@@ -223,7 +251,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		}), slog.New(slog.DiscardHandler)),
 		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
 	})
-	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore, hub: hub}
+	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore, hub: hub, idp: idp}
 }
 
 // ownerSQL runs statements on one owner connection (set_config persists between them).

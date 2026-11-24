@@ -456,6 +456,13 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
     zweiten Faktor erreichen in dieser Org nur die Einrichtung (`FAILED_PRECONDITION` mit `SecondFactorSetupRequired`).
 - **OIDC/SSO:** `coreos/go-oidc` mit Authorization Code + PKCE. **Gruppen-Claim-Mapping** (OIDC-Gruppe →
   Org/NodeGroup/Rolle) ist konfigurierbar; Just-in-Time-Provisioning ist optional.
+    - Seit M3-20 ([ADR 0033](adr/0033-anmeldung-ueber-oidc.md)): ein Provider pro Instanz (`SERMON_OIDC_ISSUER`,
+      `…_CLIENT_ID`, `…_CLIENT_SECRET_FILE`, `…_SCOPES`, `…_NAME`, `…_MFA`). Discovery, Schlüssel und Token über
+      `safehttp`; `state`, `nonce` und Verifier in einem einmal nutzbaren Flow (10 min), gebunden an ein Cookie des
+      Browsers. Identität über `iss` + `sub`, Verknüpfen nur angemeldet mit Step-up.
+    - Die 2FA-Pflicht einer Org gilt als erfüllt, wenn `amr` einen zweiten Faktor nennt oder der Betreiber dem
+      Provider vertraut; sonst folgt der lokale zweite Faktor. Step-up auch über eine frische Anmeldung beim Provider
+      (`max_age=0`, `auth_time` geprüft).
 - **Sessions:** serverseitig in PG, Cookie `__Host-sermon_session` (Secure, HttpOnly, SameSite=Lax). Idle-Timeout 30
   min, absolut 12 h. **Step-up-Authentifizierung** (erneute 2FA) für sensible Aktionen wie Updates, Reboot oder
   Rechteänderungen.

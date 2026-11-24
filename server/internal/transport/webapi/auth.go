@@ -17,6 +17,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
@@ -51,6 +52,8 @@ type AuthHandler struct {
 	identities   IdentityReader
 	secondFactor SecondFactorView // nil: no second factors
 	principals   PrincipalLoader  // nil: no rights in the session view
+	oidc         *oidc.Service    // nil: no sign-in at an OIDC provider (M3-20)
+	oidcName     string
 	logger       *slog.Logger
 }
 

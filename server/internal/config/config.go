@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pmoscode/SerMon/server/internal/platform/safehttp"
 	"github.com/pmoscode/SerMon/server/internal/secrets"
@@ -71,6 +72,33 @@ type SMTP struct {
 	RootCAs *x509.CertPool
 }
 
+// OIDCMFA says when a login at the identity provider counts as two factors (M3-20).
+type OIDCMFA string
+
+// MFA modes: by the amr claim of the ID token (default), always (the operator enforces it at the
+// IdP) or never (the local second factor applies).
+const (
+	OIDCMFAByClaim OIDCMFA = "amr"
+	OIDCMFAAlways  OIDCMFA = "trusted"
+	OIDCMFANever   OIDCMFA = "never"
+)
+
+// OIDC configures the login over an OpenID Connect provider (M3-20, ADR 0033).
+type OIDC struct {
+	// Issuer is the provider's issuer URL (discovery under /.well-known/openid-configuration).
+	Issuer       string
+	ClientID     string
+	ClientSecret string
+	// Scopes are requested besides openid (default email and profile; "groups" for M3-21).
+	Scopes []string
+	// Name is the provider's name on the login page.
+	Name string
+	// MFA says when the IdP's login satisfies an organization's two-factor requirement.
+	MFA OIDCMFA
+	// RedirectURL is the callback the provider returns to (default: first origin + /auth/oidc/callback).
+	RedirectURL string
+}
+
 // Config is the validated server configuration.
 type Config struct {
 	// Mode is production unless SERMON_MODE=development.
@@ -114,6 +142,8 @@ type Config struct {
 	// Lite); empty: no countries. GeoIPAttribution replaces the licence notice derived from it.
 	GeoIPDBFile      string
 	GeoIPAttribution string
+	// OIDC is the single sign-on of the instance; nil: local accounts only.
+	OIDC *OIDC
 	// SMTP sends mail (invitations; notifications later). Required in production with a
 	// database; nil without.
 	SMTP *SMTP
@@ -149,6 +179,13 @@ const (
 	envLokiURL         = "SERMON_LOKI_URL"
 	envGeoIPDBFile     = "SERMON_GEOIP_DB_FILE"
 	envGeoIPNotice     = "SERMON_GEOIP_ATTRIBUTION"
+	envOIDCIssuer      = "SERMON_OIDC_ISSUER"
+	envOIDCClientID    = "SERMON_OIDC_CLIENT_ID"
+	envOIDCSecret      = "SERMON_OIDC_CLIENT_SECRET" //nolint:gosec // G101: the name of a variable, not a credential
+	envOIDCScopes      = "SERMON_OIDC_SCOPES"
+	envOIDCName        = "SERMON_OIDC_NAME"
+	envOIDCMFA         = "SERMON_OIDC_MFA"
+	envOIDCRedirect    = "SERMON_OIDC_REDIRECT_URL" //nolint:gosec // G101: the name of a variable, not a credential
 	envMode            = "SERMON_MODE"
 	envSMTPHost        = "SERMON_SMTP_HOST"
 	envSMTPPort        = "SERMON_SMTP_PORT"
@@ -226,6 +263,7 @@ func Load(src Source) (Config, error) {
 		l.fail(envMigrateURL, "requires %s (migrations run only together with the database connection)", envDatabaseURL)
 	}
 
+	cfg.OIDC = parseOIDC(&l, cfg.Mode, cfg.AllowedOrigins)
 	cfg.SMTP = parseSMTP(&l, cfg.Mode)
 	if cfg.SMTP != nil && len(cfg.AllowedOrigins) == 0 {
 		l.fail(envAllowedOrigins, "required with %s (mailed links point to the first origin)", envSMTPHost)
@@ -254,6 +292,94 @@ func parseMode(l *loader) Mode {
 	default:
 		l.fail(envMode, "must be production or development, got %q", value)
 		return ModeProduction
+	}
+}
+
+// maxOIDCName bounds the provider's name on the login page.
+const maxOIDCName = 40
+
+// parseOIDC reads the single sign-on (M3-20); nil without SERMON_OIDC_ISSUER.
+func parseOIDC(l *loader, mode Mode, origins []string) *OIDC {
+	issuer := l.string(envOIDCIssuer, "", nil)
+	if issuer == "" {
+		for _, key := range []string{envOIDCClientID, envOIDCSecret, envOIDCScopes, envOIDCName, envOIDCMFA, envOIDCRedirect} {
+			if v, ok := l.raw(key); ok && v != "" {
+				l.fail(key, "requires %s", envOIDCIssuer)
+			}
+		}
+		return nil
+	}
+	o := &OIDC{
+		Issuer:       issuer,
+		ClientID:     l.string(envOIDCClientID, "", nil),
+		ClientSecret: l.string(envOIDCSecret, "", nil),
+		Name:         strings.TrimSpace(l.string(envOIDCName, "SSO", nil)),
+		MFA:          OIDCMFA(l.string(envOIDCMFA, string(OIDCMFAByClaim), nil)),
+		RedirectURL:  l.string(envOIDCRedirect, "", nil),
+	}
+	// Compose sets the optional variables empty: empty means the default.
+	if o.Name == "" {
+		o.Name = "SSO"
+	}
+	if o.MFA == "" {
+		o.MFA = OIDCMFAByClaim
+	}
+	checkOIDCURL(l, envOIDCIssuer, issuer, mode)
+	if o.ClientID == "" || len(o.ClientID) > 255 {
+		l.fail(envOIDCClientID, "required with %s (at most 255 bytes)", envOIDCIssuer)
+	}
+	// Validation messages must never echo the secret.
+	if o.ClientSecret == "" {
+		l.fail(envOIDCSecret, "required with %s (set %s_FILE)", envOIDCIssuer, envOIDCSecret)
+	}
+	if utf8.RuneCountInString(o.Name) > maxOIDCName {
+		l.fail(envOIDCName, "at most %d characters", maxOIDCName)
+	}
+	switch o.MFA {
+	case OIDCMFAByClaim, OIDCMFAAlways, OIDCMFANever:
+	default:
+		l.fail(envOIDCMFA, "must be amr, trusted or never, got %q", o.MFA)
+	}
+	o.Scopes = []string{"email", "profile"}
+	if raw, ok := l.raw(envOIDCScopes); ok && strings.TrimSpace(raw) != "" {
+		o.Scopes = nil
+		for _, sc := range strings.Fields(strings.ReplaceAll(raw, ",", " ")) {
+			if sc == "openid" {
+				continue
+			}
+			if len(sc) > 64 || strings.ContainsFunc(sc, func(r rune) bool { return r < 0x21 || r > 0x7e || r == '"' || r == '\\' }) {
+				l.fail(envOIDCScopes, "invalid scope %q", sc)
+				continue
+			}
+			o.Scopes = append(o.Scopes, sc)
+		}
+	}
+	if o.RedirectURL == "" {
+		if len(origins) == 0 {
+			l.fail(envOIDCRedirect, "required without %s (the provider returns to it)", envAllowedOrigins)
+		} else {
+			o.RedirectURL = origins[0] + "/auth/oidc/callback"
+		}
+	} else {
+		checkOIDCURL(l, envOIDCRedirect, o.RedirectURL, mode)
+		if u, err := url.Parse(o.RedirectURL); err == nil && u.Path != "/auth/oidc/callback" {
+			l.fail(envOIDCRedirect, "must end in /auth/oidc/callback")
+		}
+	}
+	return o
+}
+
+// checkOIDCURL accepts an absolute http(s) URL without credentials, query or fragment; plain
+// http only in development.
+func checkOIDCURL(l *loader, key, raw string, mode Mode) {
+	u, err := url.Parse(raw)
+	switch {
+	case err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http"):
+		l.fail(key, "must be an absolute http(s) URL")
+	case u.User != nil || u.RawQuery != "" || u.Fragment != "":
+		l.fail(key, "must not contain credentials, a query or a fragment")
+	case u.Scheme == "http" && mode != ModeDevelopment:
+		l.fail(key, "only https:// in production (SERMON_MODE=development allows http://)")
 	}
 }
 

@@ -51,6 +51,11 @@ const (
 	// AuthServiceConfirmSecondFactorProcedure is the fully-qualified name of the AuthService's
 	// ConfirmSecondFactor RPC.
 	AuthServiceConfirmSecondFactorProcedure = "/sermon.web.v1.AuthService/ConfirmSecondFactor"
+	// AuthServiceGetLoginOptionsProcedure is the fully-qualified name of the AuthService's
+	// GetLoginOptions RPC.
+	AuthServiceGetLoginOptionsProcedure = "/sermon.web.v1.AuthService/GetLoginOptions"
+	// AuthServiceBeginOidcProcedure is the fully-qualified name of the AuthService's BeginOidc RPC.
+	AuthServiceBeginOidcProcedure = "/sermon.web.v1.AuthService/BeginOidc"
 )
 
 // AuthServiceClient is a client for the sermon.web.v1.AuthService service.
@@ -81,6 +86,14 @@ type AuthServiceClient interface {
 	ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error)
 	// ConfirmSecondFactor renews the step-up with a TOTP or recovery code; errors as ConfirmPassword.
 	ConfirmSecondFactor(context.Context, *connect.Request[v1.ConfirmSecondFactorRequest]) (*connect.Response[v1.ConfirmSecondFactorResponse], error)
+	// GetLoginOptions tells the login page the ways to sign in besides the password (M3-20).
+	GetLoginOptions(context.Context, *connect.Request[v1.GetLoginOptionsRequest]) (*connect.Response[v1.GetLoginOptionsResponse], error)
+	// BeginOidc starts a sign-in at the OIDC provider (M3-20, ADR 0033): the browser goes to
+	// authorization_url and returns to /auth/oidc/callback; the flow is bound to a cookie set here.
+	// Linking an identity and the step-up need the session cookie, linking a recent step-up
+	// (FAILED_PRECONDITION with StepUpRequired). FAILED_PRECONDITION without a configured provider,
+	// UNAVAILABLE while it can't be reached, RESOURCE_EXHAUSTED for too many attempts.
+	BeginOidc(context.Context, *connect.Request[v1.BeginOidcRequest]) (*connect.Response[v1.BeginOidcResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the sermon.web.v1.AuthService service. By default,
@@ -137,6 +150,19 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ConfirmSecondFactor")),
 			connect.WithClientOptions(opts...),
 		),
+		getLoginOptions: connect.NewClient[v1.GetLoginOptionsRequest, v1.GetLoginOptionsResponse](
+			httpClient,
+			baseURL+AuthServiceGetLoginOptionsProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetLoginOptions")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
+		beginOidc: connect.NewClient[v1.BeginOidcRequest, v1.BeginOidcResponse](
+			httpClient,
+			baseURL+AuthServiceBeginOidcProcedure,
+			connect.WithSchema(authServiceMethods.ByName("BeginOidc")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -149,6 +175,8 @@ type authServiceClient struct {
 	switchOrganization  *connect.Client[v1.SwitchOrganizationRequest, v1.SwitchOrganizationResponse]
 	confirmPassword     *connect.Client[v1.ConfirmPasswordRequest, v1.ConfirmPasswordResponse]
 	confirmSecondFactor *connect.Client[v1.ConfirmSecondFactorRequest, v1.ConfirmSecondFactorResponse]
+	getLoginOptions     *connect.Client[v1.GetLoginOptionsRequest, v1.GetLoginOptionsResponse]
+	beginOidc           *connect.Client[v1.BeginOidcRequest, v1.BeginOidcResponse]
 }
 
 // Login calls sermon.web.v1.AuthService.Login.
@@ -186,6 +214,16 @@ func (c *authServiceClient) ConfirmSecondFactor(ctx context.Context, req *connec
 	return c.confirmSecondFactor.CallUnary(ctx, req)
 }
 
+// GetLoginOptions calls sermon.web.v1.AuthService.GetLoginOptions.
+func (c *authServiceClient) GetLoginOptions(ctx context.Context, req *connect.Request[v1.GetLoginOptionsRequest]) (*connect.Response[v1.GetLoginOptionsResponse], error) {
+	return c.getLoginOptions.CallUnary(ctx, req)
+}
+
+// BeginOidc calls sermon.web.v1.AuthService.BeginOidc.
+func (c *authServiceClient) BeginOidc(ctx context.Context, req *connect.Request[v1.BeginOidcRequest]) (*connect.Response[v1.BeginOidcResponse], error) {
+	return c.beginOidc.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the sermon.web.v1.AuthService service.
 type AuthServiceHandler interface {
 	// Login checks e-mail and password and sets the session cookie. All failures return
@@ -214,6 +252,14 @@ type AuthServiceHandler interface {
 	ConfirmPassword(context.Context, *connect.Request[v1.ConfirmPasswordRequest]) (*connect.Response[v1.ConfirmPasswordResponse], error)
 	// ConfirmSecondFactor renews the step-up with a TOTP or recovery code; errors as ConfirmPassword.
 	ConfirmSecondFactor(context.Context, *connect.Request[v1.ConfirmSecondFactorRequest]) (*connect.Response[v1.ConfirmSecondFactorResponse], error)
+	// GetLoginOptions tells the login page the ways to sign in besides the password (M3-20).
+	GetLoginOptions(context.Context, *connect.Request[v1.GetLoginOptionsRequest]) (*connect.Response[v1.GetLoginOptionsResponse], error)
+	// BeginOidc starts a sign-in at the OIDC provider (M3-20, ADR 0033): the browser goes to
+	// authorization_url and returns to /auth/oidc/callback; the flow is bound to a cookie set here.
+	// Linking an identity and the step-up need the session cookie, linking a recent step-up
+	// (FAILED_PRECONDITION with StepUpRequired). FAILED_PRECONDITION without a configured provider,
+	// UNAVAILABLE while it can't be reached, RESOURCE_EXHAUSTED for too many attempts.
+	BeginOidc(context.Context, *connect.Request[v1.BeginOidcRequest]) (*connect.Response[v1.BeginOidcResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -266,6 +312,19 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ConfirmSecondFactor")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceGetLoginOptionsHandler := connect.NewUnaryHandler(
+		AuthServiceGetLoginOptionsProcedure,
+		svc.GetLoginOptions,
+		connect.WithSchema(authServiceMethods.ByName("GetLoginOptions")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceBeginOidcHandler := connect.NewUnaryHandler(
+		AuthServiceBeginOidcProcedure,
+		svc.BeginOidc,
+		connect.WithSchema(authServiceMethods.ByName("BeginOidc")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -282,6 +341,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceConfirmPasswordHandler.ServeHTTP(w, r)
 		case AuthServiceConfirmSecondFactorProcedure:
 			authServiceConfirmSecondFactorHandler.ServeHTTP(w, r)
+		case AuthServiceGetLoginOptionsProcedure:
+			authServiceGetLoginOptionsHandler.ServeHTTP(w, r)
+		case AuthServiceBeginOidcProcedure:
+			authServiceBeginOidcHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -317,4 +380,12 @@ func (UnimplementedAuthServiceHandler) ConfirmPassword(context.Context, *connect
 
 func (UnimplementedAuthServiceHandler) ConfirmSecondFactor(context.Context, *connect.Request[v1.ConfirmSecondFactorRequest]) (*connect.Response[v1.ConfirmSecondFactorResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.ConfirmSecondFactor is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetLoginOptions(context.Context, *connect.Request[v1.GetLoginOptionsRequest]) (*connect.Response[v1.GetLoginOptionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.GetLoginOptions is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) BeginOidc(context.Context, *connect.Request[v1.BeginOidcRequest]) (*connect.Response[v1.BeginOidcResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.BeginOidc is not implemented"))
 }

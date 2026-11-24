@@ -28,6 +28,8 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.InstanceAuditService/ListInstanceAuditLog":     "instance-level log for the superadmin only, no tenant data (role test in app/instanceaudit)",
 	"/sermon.web.v1.AuthService/VerifySecondFactor":                "completes the caller's own login",
 	"/sermon.web.v1.AuthService/ConfirmSecondFactor":               "re-authenticates the caller's own session",
+	"/sermon.web.v1.AuthService/GetLoginOptions":                   "names the instance's sign-in ways, no tenant data",
+	"/sermon.web.v1.AuthService/BeginOidc":                         "starts the caller's own sign-in, link or step-up at the instance's provider",
 	"/sermon.web.v1.TwoFactorService/GetTwoFactorStatus":           "the caller's own second factor (per user, no tenant data)",
 	"/sermon.web.v1.TwoFactorService/BeginTotpSetup":               "the caller's own second factor (per user, no tenant data)",
 	"/sermon.web.v1.TwoFactorService/ConfirmTotpSetup":             "the caller's own second factor (per user, no tenant data)",

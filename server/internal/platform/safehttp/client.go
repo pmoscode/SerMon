@@ -136,6 +136,20 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// HTTPClient returns a standard client for libraries that take one (OIDC discovery, JWKS and
+// token requests, M3-20): every request goes through Do with its checks and bounds; redirects
+// are followed there, by the same rules.
+func (c *Client) HTTPClient() *http.Client {
+	return &http.Client{
+		Transport:     doer{c: c},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+}
+
+type doer struct{ c *Client }
+
+func (d doer) RoundTrip(req *http.Request) (*http.Response, error) { return d.c.Do(req) }
+
 type plainKey struct{}
 
 // nameRefused is the error for a host name that doesn't resolve or resolves to a blocked address:

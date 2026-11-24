@@ -47,6 +47,9 @@ type Session struct {
 	// SecondFactorPending marks a session after the password whose second factor is still
 	// missing: only the second-factor check and logout accept it.
 	SecondFactorPending bool
+	// ExternalMFA marks a login at the OIDC provider with several factors (M3-20): it satisfies
+	// an organization's two-factor requirement for this session.
+	ExternalMFA bool
 }
 
 // SteppedUpWithin reports whether the user authenticated within maxAge (step-up check for
@@ -84,6 +87,13 @@ func (m *Manager) Create(ctx context.Context, user identity.UserID, org tenant.O
 	return m.insert(ctx, Session{User: user, Org: org, CreatedAt: now, LastSeenAt: now, StepUpAt: now})
 }
 
+// CreateExternal starts a session after a login at the OIDC provider (M3-20); mfa: the provider
+// checked several factors.
+func (m *Manager) CreateExternal(ctx context.Context, user identity.UserID, org tenant.OrgID, mfa bool) (string, Session, error) {
+	now := m.now()
+	return m.insert(ctx, Session{User: user, Org: org, CreatedAt: now, LastSeenAt: now, StepUpAt: now, ExternalMFA: mfa})
+}
+
 // CreatePending starts a session after the password of a user with two-factor authentication; it
 // becomes a full session with CompleteSecondFactor and expires after PendingTimeout.
 func (m *Manager) CreatePending(ctx context.Context, user identity.UserID, org tenant.OrgID) (string, Session, error) {
@@ -117,7 +127,7 @@ func (m *Manager) SwitchOrganization(ctx context.Context, token string, org tena
 	if err := m.store.Delete(ctx, old.ID); err != nil {
 		return "", Session{}, fmt.Errorf("delete previous session: %w", err)
 	}
-	return m.insert(ctx, Session{User: old.User, Org: org, CreatedAt: old.CreatedAt, LastSeenAt: m.now(), StepUpAt: old.StepUpAt})
+	return m.insert(ctx, Session{User: old.User, Org: org, CreatedAt: old.CreatedAt, LastSeenAt: m.now(), StepUpAt: old.StepUpAt, ExternalMFA: old.ExternalMFA})
 }
 
 func (m *Manager) insert(ctx context.Context, s Session) (string, Session, error) {

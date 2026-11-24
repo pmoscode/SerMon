@@ -456,3 +456,21 @@ func TestTimesHaveTheStorePrecision(t *testing.T) {
 		t.Errorf("stored step-up %v, returned %v", stored, stepped.StepUpAt)
 	}
 }
+
+// M3-20: a session after the OIDC provider keeps its mark of several factors across an
+// organization switch.
+func TestCreateExternal_KeepsTheProvidersSecondFactor(t *testing.T) {
+	m, _, _ := manager(t)
+	orgB := tenant.OrgID(uuid.MustParse("0193f5a0-0000-7000-8000-00000000000b"))
+	token, s, err := m.CreateExternal(context.Background(), alice, orgA, true)
+	if err != nil || !s.ExternalMFA || s.SecondFactorPending {
+		t.Fatalf("CreateExternal() = %+v, %v", s, err)
+	}
+	switched, s2, err := m.SwitchOrganization(context.Background(), token, orgB)
+	if err != nil || !s2.ExternalMFA || switched == token {
+		t.Errorf("switched %+v, %v", s2, err)
+	}
+	if _, s3, _ := m.CreateExternal(context.Background(), alice, orgA, false); s3.ExternalMFA {
+		t.Error("without the provider's second factor")
+	}
+}

@@ -21,6 +21,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/geoip"
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
+	oidcadapter "github.com/pmoscode/SerMon/server/internal/adapters/oidc"
 	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/notify/discord"
@@ -38,6 +39,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/twofactor"
@@ -514,9 +516,17 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		logger.WarnContext(ctx, "no SMTP configured: invitation links are shown in the UI and prove nothing (development only)")
 	}
 	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID, inviteOptions...)
+	authHandler := webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals).
+		WithInstanceHealth(accessStore, health)
+	if cfg.OIDC != nil {
+		sso, err := newOIDC(ctx, cfg, db, sessions, credentials, secondFactor, logger)
+		if err != nil {
+			return err
+		}
+		authHandler.WithOIDC(sso, cfg.OIDC.Name)
+	}
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
-		Auth: webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals).
-			WithInstanceHealth(accessStore, health),
+		Auth:   authHandler,
 		System: webapi.NewSystemHandler(version),
 		Access: webapi.NewAccessHandler(access.NewService(accessStore, policy, time.Now, access.NewID), invites, logger),
 		Setup:  webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
@@ -551,6 +561,38 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil
+}
+
+// oidcAttemptsPerWindow bounds the sign-ins at the provider per client IP (start and return).
+const (
+	oidcAttemptsPerWindow = 30
+	oidcWindow            = time.Minute
+)
+
+// newOIDC assembles the sign-in at the OIDC provider (M3-20, ADR 0033). Discovery, keys and the
+// token request go through the outbound policy: an internal provider needs the allowlist.
+func newOIDC(ctx context.Context, cfg config.Config, db *postgres.DB, sessions *session.Manager, users oidc.Users,
+	secondFactor oidc.SecondFactor, logger *slog.Logger,
+) (*oidc.Service, error) {
+	outbound, err := safehttp.NewPolicy(cfg.OutboundAllowlist)
+	if err != nil {
+		return nil, fmt.Errorf("outbound policy: %w", err)
+	}
+	o := cfg.OIDC
+	provider := oidcadapter.New(oidcadapter.Config{
+		Issuer: o.Issuer, ClientID: o.ClientID, ClientSecret: o.ClientSecret, RedirectURL: o.RedirectURL, Scopes: o.Scopes,
+	}, safehttp.New(safehttp.Options{Policy: outbound}).HTTPClient())
+	if err := provider.Ready(ctx); err != nil {
+		logger.WarnContext(ctx, "the OIDC provider can't be reached yet – sign-ins fail until it can", "issuer", o.Issuer, "error", err.Error())
+	} else {
+		logger.InfoContext(ctx, "sign-in over OIDC", "issuer", o.Issuer, "name", o.Name)
+	}
+	mfa := map[config.OIDCMFA]oidc.MFAMode{config.OIDCMFAByClaim: oidc.MFAByClaim, config.OIDCMFAAlways: oidc.MFAAlways, config.OIDCMFANever: oidc.MFANever}[o.MFA]
+	store := postgres.NewOIDCStore(db)
+	return oidc.NewService(oidc.Deps{
+		Provider: provider, Flows: store, Identities: store, Users: users, Sessions: sessions, SecondFactor: secondFactor,
+		Limiter: ratelimit.New(oidcAttemptsPerWindow, oidcWindow, time.Now), MFA: mfa, Now: time.Now, Logger: logger,
+	}), nil
 }
 
 // newNotifyDeps assembles the notifier framework. The HTTP channel types share one safehttp

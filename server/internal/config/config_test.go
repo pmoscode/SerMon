@@ -368,6 +368,83 @@ func TestLoad_GeoIP(t *testing.T) {
 	}
 }
 
+// M3-20: the single sign-on of the instance, with its secret from a file.
+func TestLoad_OIDC(t *testing.T) {
+	base := map[string]string{
+		"SERMON_MODE":                    "development",
+		"SERMON_ALLOWED_ORIGINS":         "https://sermon.example.com",
+		"SERMON_OIDC_ISSUER":             "https://idp.example.com/realms/ops",
+		"SERMON_OIDC_CLIENT_ID":          "sermon",
+		"SERMON_OIDC_CLIENT_SECRET_FILE": "/run/secrets/oidc",
+	}
+	files := map[string]string{"/run/secrets/oidc": "oidc-fixture-secret\n"} // betterleaks:allow
+	env := func(extra map[string]string) map[string]string {
+		out := map[string]string{}
+		for k, v := range base {
+			out[k] = v
+		}
+		for k, v := range extra {
+			if v == "-" {
+				delete(out, k)
+			} else {
+				out[k] = v
+			}
+		}
+		return out
+	}
+	cfg, err := config.Load(fakeSource(env(nil), files))
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := cfg.OIDC
+	if o == nil || o.Issuer != "https://idp.example.com/realms/ops" || o.ClientID != "sermon" || o.ClientSecret != "oidc-fixture-secret" ||
+		o.Name != "SSO" || o.MFA != config.OIDCMFAByClaim || o.RedirectURL != "https://sermon.example.com/auth/oidc/callback" ||
+		strings.Join(o.Scopes, " ") != "email profile" {
+		t.Errorf("OIDC = %+v", o)
+	}
+	cfg, err = config.Load(fakeSource(env(map[string]string{
+		"SERMON_OIDC_SCOPES": "openid email profile groups", "SERMON_OIDC_NAME": "Keycloak", "SERMON_OIDC_MFA": "trusted",
+		"SERMON_OIDC_REDIRECT_URL": "http://localhost:5173/auth/oidc/callback", "SERMON_OIDC_ISSUER": "http://dex:5556/dex",
+	}), files))
+	if err != nil || strings.Join(cfg.OIDC.Scopes, " ") != "email profile groups" || cfg.OIDC.Name != "Keycloak" ||
+		cfg.OIDC.MFA != config.OIDCMFAAlways || cfg.OIDC.RedirectURL != "http://localhost:5173/auth/oidc/callback" {
+		t.Errorf("options: %+v, %v", cfg.OIDC, err)
+	}
+	if cfg, err := config.Load(fakeSource(map[string]string{}, nil)); err != nil || cfg.OIDC != nil {
+		t.Errorf("off by default: %+v, %v", cfg.OIDC, err)
+	}
+	// The production compose sets every variable, the optional ones empty.
+	compose := env(map[string]string{"SERMON_OIDC_NAME": "", "SERMON_OIDC_MFA": "", "SERMON_OIDC_SCOPES": ""})
+	if cfg, err := config.Load(fakeSource(compose, files)); err != nil || cfg.OIDC.Name != "SSO" || cfg.OIDC.MFA != config.OIDCMFAByClaim {
+		t.Errorf("empty optional variables: %+v, %v", cfg.OIDC, err)
+	}
+	off := map[string]string{"SERMON_OIDC_ISSUER": "", "SERMON_OIDC_CLIENT_ID": "", "SERMON_OIDC_NAME": "", "SERMON_OIDC_CLIENT_SECRET_FILE": "/run/secrets/empty"}
+	if cfg, err := config.Load(fakeSource(off, map[string]string{"/run/secrets/empty": ""})); err != nil || cfg.OIDC != nil {
+		t.Errorf("compose without OIDC: %+v, %v", cfg.OIDC, err)
+	}
+	for name, extra := range map[string]map[string]string{
+		"no client id":          {"SERMON_OIDC_CLIENT_ID": "-"},
+		"no secret":             {"SERMON_OIDC_CLIENT_SECRET_FILE": "-"},
+		"client without issuer": {"SERMON_OIDC_ISSUER": "-"},
+		"relative issuer":       {"SERMON_OIDC_ISSUER": "/realms/ops"},
+		"issuer with query":     {"SERMON_OIDC_ISSUER": "https://idp.example.com/?x=1"},
+		"issuer with userinfo":  {"SERMON_OIDC_ISSUER": "https://a:b@idp.example.com/"},
+		"http in production":    {"SERMON_MODE": "production", "SERMON_OIDC_ISSUER": "http://idp.example.com/"},
+		"unknown mfa":           {"SERMON_OIDC_MFA": "sometimes"},
+		"long name":             {"SERMON_OIDC_NAME": strings.Repeat("x", 41)},
+		"bad scope":             {"SERMON_OIDC_SCOPES": "email pro\"file"},
+		"other callback":        {"SERMON_OIDC_REDIRECT_URL": "https://sermon.example.com/evil"},
+		"no origin":             {"SERMON_ALLOWED_ORIGINS": "-"},
+	} {
+		_, err := config.Load(fakeSource(env(extra), files))
+		if err == nil {
+			t.Errorf("%s: accepted", name)
+		} else if strings.Contains(err.Error(), "oidc-fixture-secret") {
+			t.Errorf("%s: the error names the secret: %v", name, err)
+		}
+	}
+}
+
 // fullServer is the environment of a server with database (the case that sends invitations).
 func fullServer(t *testing.T, extra map[string]string) (map[string]string, map[string]string) {
 	t.Helper()

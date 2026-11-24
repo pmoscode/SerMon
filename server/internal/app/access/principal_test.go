@@ -116,4 +116,8 @@ func TestLoad_OrganizationsCanRequireASecondFactor(t *testing.T) {
 	if _, err := access.NewLoader(repo, gate{required: true}).Load(context.Background(), session.Session{User: alice}); err != nil {
 		t.Errorf("instance sessions have no organization requirement: %v", err)
 	}
+	// M3-20: a login with several factors at the OIDC provider satisfies it.
+	if _, err := access.NewLoader(repo, gate{required: true}).Load(context.Background(), session.Session{User: alice, Org: orgA, ExternalMFA: true}); err != nil {
+		t.Errorf("a session with the provider's second factor: %v", err)
+	}
 }

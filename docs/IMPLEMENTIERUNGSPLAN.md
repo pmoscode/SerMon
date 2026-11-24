@@ -3471,7 +3471,38 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.7 OIDC (E3.6)
 
-#### ☐ M3-20 – OIDC-Anmeldung · S · L 🔒
+#### ☑ M3-20 – OIDC-Anmeldung · S · L 🔒
+> Erledigt ([ADR 0033](adr/0033-anmeldung-ueber-oidc.md); KONZEPT §7; Threat Model T15, T84, T85; Betrieb:
+> `docs/admin/installation.md`):
+> - **Abhängigkeiten:** `coreos/go-oidc/v3` 3.21 (Apache 2.0), `x/oauth2` 0.38 (BSD), `go-jose/v4` 4.1.9 (Apache
+>   2.0), geprüft: gepflegt, nur asymmetrische Signaturen zugelassen. `safehttp` liefert dafür einen `http.Client`
+>   mit denselben Prüfungen (`HTTPClient`).
+> - **Konfiguration der Instanz:** `SERMON_OIDC_ISSUER`, `…_CLIENT_ID`, `…_CLIENT_SECRET(_FILE)`, `…_SCOPES`,
+>   `…_NAME`, `…_MFA` (`amr`, `trusted`, `never`), `…_REDIRECT_URL` (Standard: erste Origin +
+>   `/auth/oidc/callback`); http nur im Entwicklungsmodus. Die Produktions-Compose reicht sie durch, das Secret als
+>   Datei.
+> - **Ablauf:** `AuthService.BeginOidc` (Anmelden, Verknüpfen, Step-up) und `GetLoginOptions`; Rückkehr über
+>   `GET /auth/oidc/callback` ohne Origin-Prüfung. PKCE (S256), `state`, `nonce` und Verifier in `oidc_flows`
+>   (Migration `00043`, 10 min, einmal), gebunden an das Cookie `__Host-sermon_oidc`. Weiterleitung nur auf Pfade
+>   der App, `Referrer-Policy: no-referrer`. 30 Versuche pro Minute und IP.
+> - **Identität** in `user_identities` über `iss` + `sub`; Verknüpfen nur angemeldet mit frischem Step-up und einem
+>   Eintrag im Audit-Log der Instanz. Unbekannte Identitäten landen wie jeder Fehler auf `/login?sso=failed`.
+> - **2FA-Pflicht:** erfüllt mit `amr` eines zweiten Faktors oder `trusted` (`sessions.external_mfa`, bleibt beim
+>   Org-Wechsel); sonst folgt der lokale zweite Faktor (`/login?sso=second_factor`).
+> - **Step-up** beim Provider mit `prompt=login`, `max_age=0`; `auth_time` muss nach dem Start liegen (1 min
+>   Toleranz), die Identität dem User gehören.
+> - **Abweichung:** Lösen von Verknüpfungen und die Oberfläche kommen mit M3-22, Konten anlegen mit M3-21.
+> - **Tests:**
+>   - Fake-IdP (`oidctest`, eigener RSA-Schlüssel, JWKS, Token-Endpunkt prüft Secret und PKCE). Abgelehnt werden:
+>     abgelaufenes Token, fremde Audience, fremder Issuer, `alg: none`, fremder Schlüssel, falscher oder fehlender
+>     Verifier, falsches Secret, wiederverwendeter Code; ein Provider im internen Netz nur mit Allowlist.
+>   - Dienst: falscher `state`, fremder Browser, falsche `nonce`, abgelaufener Flow, unbekannte Identität, gleiches
+>     Subject bei anderem Issuer; zweite Faktoren je Modus; Verknüpfen nur mit Session und Step-up, nicht fremde
+>     Identitäten; Step-up nur frisch und mit der eigenen Identität; Rate-Limit; sichere Weiterleitung.
+>   - PostgreSQL: Flows einmal und nur vor Ablauf, Identitäten eindeutig, Audit, Löschen mit dem User.
+>   - Über den echten Stack (TLS, Cookies): Verknüpfen, Anmelden mit Rückweg, offener Redirect, Login-CSRF, Ablehnung
+>     beim Provider, Step-up mit und ohne frische Anmeldung, fremde Identität.
+>   - Konfiguration samt leerer Compose-Variablen; Gegenproben für 17 Prüfungen, alle erkannt.
 - **Ziel:**
   - **Ablauf:** Authorization Code mit PKCE (S256); `state` und `nonce` an die Vor-Session gebunden.
   - **Abhängigkeiten:** `coreos/go-oidc` und `x/oauth2`, vorher geprüft. Discovery und JWKS laufen über `safehttp`

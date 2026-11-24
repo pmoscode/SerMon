@@ -69,7 +69,8 @@ func (l *Loader) Load(ctx context.Context, s session.Session) (authz.Principal, 
 	if !membership.Member {
 		return authz.Principal{}, ErrNoMembership
 	}
-	if l.gate != nil {
+	// A login with several factors at the OIDC provider satisfies the requirement (M3-20).
+	if l.gate != nil && !s.ExternalMFA {
 		required, err := l.gate.SetupRequired(ctx, s.Org, s.User)
 		if err != nil {
 			return authz.Principal{}, fmt.Errorf("load principal: %w", err)

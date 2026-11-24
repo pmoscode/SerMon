@@ -97,6 +97,12 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	path, handler = webv1connect.NewLiveViewServiceHandler(h.LiveView, authenticated)
 	mount(path, streamingDeadline(handler))
 
+	// The OIDC provider sends the browser back with a top-level GET: no Origin to check, the flow
+	// is bound to the browser by its cookie (M3-20).
+	if h.Auth != nil {
+		mux.Handle(OIDCCallbackPath, ClientIP(cfg.TrustedProxies)(h.Auth.OIDCCallback()))
+	}
+
 	// Agents send neither Origin nor cookies: no origin check (CSRF needs cookies), the
 	// enrollment token is the credential (ADR 0009).
 	path, handler = agentv1connect.NewEnrollmentServiceHandler(h.AgentEnrollment, anonymous)

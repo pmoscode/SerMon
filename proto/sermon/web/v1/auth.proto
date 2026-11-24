@@ -36,6 +36,56 @@ service AuthService {
   rpc ConfirmPassword(ConfirmPasswordRequest) returns (ConfirmPasswordResponse);
   // ConfirmSecondFactor renews the step-up with a TOTP or recovery code; errors as ConfirmPassword.
   rpc ConfirmSecondFactor(ConfirmSecondFactorRequest) returns (ConfirmSecondFactorResponse);
+  // GetLoginOptions tells the login page the ways to sign in besides the password (M3-20).
+  rpc GetLoginOptions(GetLoginOptionsRequest) returns (GetLoginOptionsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // BeginOidc starts a sign-in at the OIDC provider (M3-20, ADR 0033): the browser goes to
+  // authorization_url and returns to /auth/oidc/callback; the flow is bound to a cookie set here.
+  // Linking an identity and the step-up need the session cookie, linking a recent step-up
+  // (FAILED_PRECONDITION with StepUpRequired). FAILED_PRECONDITION without a configured provider,
+  // UNAVAILABLE while it can't be reached, RESOURCE_EXHAUSTED for too many attempts.
+  rpc BeginOidc(BeginOidcRequest) returns (BeginOidcResponse);
+}
+
+// GetLoginOptionsRequest has no fields.
+message GetLoginOptionsRequest {}
+
+// GetLoginOptionsResponse lists the ways to sign in.
+message GetLoginOptionsResponse {
+  // oidc is set if the instance has an OIDC provider.
+  bool oidc = 1;
+  // oidc_name is the provider's name for the button (set by the operator).
+  string oidc_name = 2;
+}
+
+// OidcIntent is what a sign-in at the provider is for.
+enum OidcIntent {
+  // OIDC_INTENT_UNSPECIFIED is not used.
+  OIDC_INTENT_UNSPECIFIED = 0;
+  // OIDC_INTENT_LOGIN signs in.
+  OIDC_INTENT_LOGIN = 1;
+  // OIDC_INTENT_LINK links the provider's identity to the signed-in user.
+  OIDC_INTENT_LINK = 2;
+  // OIDC_INTENT_STEP_UP renews the step-up with a fresh sign-in at the provider.
+  OIDC_INTENT_STEP_UP = 3;
+}
+
+// BeginOidcRequest says what for and where to go afterwards.
+message BeginOidcRequest {
+  // intent of the sign-in.
+  OidcIntent intent = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // next is a path of the app to return to (anything else becomes "/").
+  string next = 2 [(buf.validate.field).string.max_len = 512];
+}
+
+// BeginOidcResponse is where the browser goes.
+message BeginOidcResponse {
+  // authorization_url is the provider's login page.
+  string authorization_url = 1;
 }
 
 // LoginRequest carries the credentials.

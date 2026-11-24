@@ -146,5 +146,6 @@ secrets: # written by scripts/e2e-demo.sh into .build/, never committed
   database_url: { file: ../e2e/.build/secrets/database_url }
   database_migrate_url: { file: ../e2e/.build/secrets/database_migrate_url }
   smtp_password: { file: ../e2e/.build/secrets/smtp_password }
+  oidc_client_secret: { file: ../e2e/.build/secrets/oidc_client_secret }
   mailpit_ca: { file: ../e2e/.build/mailpit/mailpit.crt }
   slack_mock_ca: { file: ../e2e/.build/slack-mock/slack-mock.crt }

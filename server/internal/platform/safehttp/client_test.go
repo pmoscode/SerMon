@@ -461,3 +461,31 @@ func TestControl_ChecksTheSocketAddress(t *testing.T) {
 		}
 	}
 }
+
+// M3-20: libraries that take an *http.Client (OIDC) get the same checks through HTTPClient.
+func TestClient_HTTPClientKeepsTheChecks(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(hello))
+	defer srv.Close()
+	s := newClient(t, safehttp.Options{}, srv)
+	s.net.name("idp.example.com", "192.0.2.10")
+	s.net.name("intranet.example", "10.0.0.1")
+	s.net.route("192.0.2.10", srv)
+	hc := s.client.HTTPClient()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://idp.example.com/.well-known/openid-configuration", nil)
+	resp, err := hc.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if string(body) != "hello" {
+		t.Errorf("body = %q", body)
+	}
+	req, _ = http.NewRequestWithContext(context.Background(), http.MethodGet, "https://intranet.example/keys", nil)
+	if resp, err := hc.Do(req); !errors.Is(err, safehttp.ErrBlocked) {
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		t.Errorf("internal target: %v", err)
+	}
+}

@@ -14,6 +14,8 @@ require (
 	buf.build/go/protovalidate v1.4.1
 	connectrpc.com/connect v1.21.1
 	connectrpc.com/validate v0.7.0
+	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/oschwald/maxminddb-golang/v2 v2.9.1
@@ -22,6 +24,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.45.0
 	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/crypto v0.59.0
+	golang.org/x/oauth2 v0.38.0
 	google.golang.org/protobuf v1.36.12
 )
 

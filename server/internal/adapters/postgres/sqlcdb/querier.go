@@ -72,6 +72,7 @@ type Querier interface {
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
+	DeleteExpiredOIDCFlows(ctx context.Context, now time.Time) error
 	DeleteGroupLogSettings(ctx context.Context, groupID uuid.UUID) error
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMaintenanceWindow(ctx context.Context, id uuid.UUID) (int64, error)
@@ -100,6 +101,7 @@ type Querier interface {
 	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
 	// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.
 	FailedLoginBuckets(ctx context.Context, arg FailedLoginBucketsParams) ([]FailedLoginBucketsRow, error)
+	FindIdentity(ctx context.Context, arg FindIdentityParams) (uuid.UUID, error)
 	// Series of a metric on the given nodes, restricted to the node groups of the scope and to series
 	// whose labels contain the filter.
 	FindSeries(ctx context.Context, arg FindSeriesParams) ([]FindSeriesRow, error)
@@ -125,6 +127,7 @@ type Querier interface {
 	// Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
 	// wait for the save to end.
 	HoldAlertLease(ctx context.Context, arg HoldAlertLeaseParams) (int64, error)
+	IdentitySeen(ctx context.Context, arg IdentitySeenParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	// One row per transition (COPY doesn't work with row-level security; a round has few).
 	InsertAlertHistory(ctx context.Context, arg InsertAlertHistoryParams) error
@@ -133,6 +136,8 @@ type Querier interface {
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
 	InsertEnrollmentToken(ctx context.Context, arg InsertEnrollmentTokenParams) error
+	// Nothing if the identity belongs to someone or the user has one of the issuer.
+	InsertIdentity(ctx context.Context, arg InsertIdentityParams) (int64, error)
 	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) (int32, error)
 	InsertMaintenanceWindow(ctx context.Context, arg InsertMaintenanceWindowParams) error
 	// Nodes. All queries run inside InTenant (RLS on org_id).
@@ -143,6 +148,8 @@ type Querier interface {
 	InsertNotificationDelivery(ctx context.Context, arg []InsertNotificationDeliveryParams) *InsertNotificationDeliveryBatchResults
 	InsertNotificationPolicy(ctx context.Context, arg InsertNotificationPolicyParams) error
 	InsertNotificationPolicyChannel(ctx context.Context, arg InsertNotificationPolicyChannelParams) error
+	// OIDC (M3-20, ADR 0033): instance-level, like the credentials.
+	InsertOIDCFlow(ctx context.Context, arg InsertOIDCFlowParams) error
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
 	InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults
 	// An event of the server itself (M2-24), inside the transaction of what it reports.
@@ -288,6 +295,8 @@ type Querier interface {
 	SupersedeCertificate(ctx context.Context, arg SupersedeCertificateParams) (int64, error)
 	// Records the source IP of a new session and returns the previous one.
 	SwapNodeLastIP(ctx context.Context, arg SwapNodeLastIPParams) (string, error)
+	// Once: the flow is deleted whether it expired or not.
+	TakeOIDCFlow(ctx context.Context, stateHash string) (TakeOIDCFlowRow, error)
 	// Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
 	// closed. No rows: the window closed meanwhile.
 	TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int64, error)

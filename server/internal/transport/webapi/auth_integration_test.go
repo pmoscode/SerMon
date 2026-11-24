@@ -44,6 +44,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
+	"github.com/pmoscode/SerMon/server/internal/app/oidcmapping"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
@@ -156,6 +157,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		t.Fatal(err)
 	}
 	oidcStore := postgres.NewOIDCStore(pg)
+	mappings := oidcmapping.NewService(postgres.NewOIDCMappingStore(pg), creds, authz.NewPolicy(), time.Now, access.NewID, nil)
 	sso := oidc.NewService(oidc.Deps{
 		Provider: oidcadapter.New(oidcadapter.Config{
 			Issuer: idp.URL, ClientID: oidcClientID, ClientSecret: oidcSecret, RedirectURL: srv.URL + webapi.OIDCCallbackPath,
@@ -163,6 +165,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		}, safehttp.New(safehttp.Options{Policy: loopback}).HTTPClient()),
 		Flows: oidcStore, Identities: oidcStore, Users: creds, Sessions: sessions, SecondFactor: secondFactor,
 		Limiter: ratelimit.New(1000, time.Minute, time.Now), MFA: oidc.MFAByClaim, Now: time.Now,
+		Provisioner: mappings, JIT: true,
 	})
 	var inviteOptions []invitation.Option
 	var orgOptions []organization.Option
@@ -233,6 +236,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Windows:  webapi.NewMaintenanceWindowHandler(policies, slog.New(slog.DiscardHandler)),
 		Logs: webapi.NewLogHandler(
 			logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy()), nil, slog.New(slog.DiscardHandler)),
+		OIDCMappings: webapi.NewOIDCMappingHandler(mappings, true, true, slog.New(slog.DiscardHandler)),
 		LogSettings: webapi.NewLogSettingsHandler(
 			logsettings.NewService(postgres.NewLogSettingsStore(pg), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
 		Rules: webapi.NewAlertRuleHandler(rules.NewService(rules.Deps{

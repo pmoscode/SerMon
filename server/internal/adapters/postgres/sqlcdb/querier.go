@@ -16,6 +16,7 @@ type Querier interface {
 	AcknowledgeAlertInstance(ctx context.Context, arg AcknowledgeAlertInstanceParams) (int64, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
+	AddMembershipOfCurrentOrg(ctx context.Context, userID uuid.UUID) error
 	// Superadmin view of all organizations (SECURITY DEFINER; the caller is checked in the app layer).
 	// Quotas: 0 is the instance default.
 	AdminListOrganizations(ctx context.Context) ([]AdminListOrganizationsRow, error)
@@ -51,6 +52,7 @@ type Querier interface {
 	CopyMetricWindows(ctx context.Context, arg []CopyMetricWindowsParams) (int64, error)
 	CountMembers(ctx context.Context) (int64, error)
 	CountNodes(ctx context.Context) (int64, error)
+	CountOIDCMappings(ctx context.Context) (int64, error)
 	CountOpenAlertSilences(ctx context.Context, now time.Time) (int64, error)
 	// Open invitations for other addresses than email (a new invitation replaces the old one).
 	CountOpenInvitations(ctx context.Context, arg CountOpenInvitationsParams) (int64, error)
@@ -58,6 +60,8 @@ type Querier interface {
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
+	CreateOIDCMapping(ctx context.Context, arg CreateOIDCMappingParams) error
+	CreateOIDCRoleBinding(ctx context.Context, arg CreateOIDCRoleBindingParams) error
 	// Organizations. Row-level security limits every query to the organization of the tenant
 	// transaction (postgres.DB.InTenant); there is no way to read other organizations from here.
 	CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (CreateOrganizationRow, error)
@@ -81,6 +85,8 @@ type Querier interface {
 	DeleteNotificationChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteNotificationPolicy(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteNotificationPolicyChannels(ctx context.Context, policyID uuid.UUID) error
+	DeleteOIDCMapping(ctx context.Context, id uuid.UUID) (DeleteOIDCMappingRow, error)
+	DeleteOIDCRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	// Sessions are instance-level (ADR 0007); only the removed member's sessions in this organization end.
 	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
 	// The sessions in the organization end with the lock (sessions have no row-level security).
@@ -123,6 +129,7 @@ type Querier interface {
 	// Second factors (instance-level, per user; M1-03).
 	GetTOTP(ctx context.Context, userID uuid.UUID) (GetTOTPRow, error)
 	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
+	// The binding counts as given by hand afterwards (M3-21): sign-ins over OIDC leave it.
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
 	// Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
 	// wait for the save to end.
@@ -197,6 +204,8 @@ type Querier interface {
 	// organization's tenant transaction.
 	ListNotificationPolicies(ctx context.Context) ([]ListNotificationPoliciesRow, error)
 	ListNotificationPolicyChannels(ctx context.Context) ([]ListNotificationPolicyChannelsRow, error)
+	// OIDC group mappings (M3-21). All but OIDCMappedOrganizations run inside InTenant.
+	ListOIDCMappings(ctx context.Context) ([]ListOIDCMappingsRow, error)
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
@@ -228,10 +237,12 @@ type Querier interface {
 	NodeTagsForUpdate(ctx context.Context, arg NodeTagsForUpdateParams) (NodeTagsForUpdateRow, error)
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
+	OIDCMappedOrganizations(ctx context.Context, groups []string) ([]uuid.UUID, error)
 	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
 	// The admins of all groups, for the mails about lock and deletion.
 	OrganizationAdminEmails(ctx context.Context) ([]string, error)
 	OrganizationAgentConfig(ctx context.Context) (OrganizationAgentConfigRow, error)
+	OrganizationLocked(ctx context.Context) (bool, error)
 	OrganizationQuotas(ctx context.Context) (OrganizationQuotasRow, error)
 	// The quotas of the organization, locked: enrollments and invitations of one organization are
 	// counted one after the other.
@@ -270,6 +281,7 @@ type Querier interface {
 	RevokeEnrollmentToken(ctx context.Context, arg RevokeEnrollmentTokenParams) (int64, error)
 	RevokeNodeCertificates(ctx context.Context, arg RevokeNodeCertificatesParams) error
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
+	RoleBindingsWithOrigin(ctx context.Context, userID uuid.UUID) ([]RoleBindingsWithOriginRow, error)
 	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
 	SecurityEventHorizon(ctx context.Context) (time.Time, error)
@@ -312,6 +324,7 @@ type Querier interface {
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (UpdateNodeOnConnectRow, error)
 	UpdateNotificationChannel(ctx context.Context, arg UpdateNotificationChannelParams) (int64, error)
 	UpdateNotificationPolicy(ctx context.Context, arg UpdateNotificationPolicyParams) (int64, error)
+	UpdateOIDCRoleBinding(ctx context.Context, arg UpdateOIDCRoleBindingParams) (int64, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (int64, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
@@ -321,6 +334,7 @@ type Querier interface {
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error
+	// A role given by hand is the admin's from now on: sign-ins over OIDC leave it (M3-21).
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
 	UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error)
 	UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64, error)

@@ -37,6 +37,7 @@ type isolationEnv struct {
 	logSettings                     webv1connect.LogSettingsServiceClient
 	logs                            webv1connect.LogServiceClient
 	liveView                        webv1connect.LiveViewServiceClient
+	oidcMappings                    webv1connect.OidcMappingServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -44,6 +45,7 @@ type isolationEnv struct {
 	channelA                        string // a notification channel of Org A, with a delivery
 	policyA                         string // a notification policy of Org A to channelA
 	silenceA, windowA               string // a silence and a maintenance window of Org A's group
+	mappingA                        string // an OIDC group mapping of Org A on its group
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -215,6 +217,23 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.AlertService/AcknowledgeAlert": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.alerts.AcknowledgeAlert(ctx, connect.NewRequest(&webv1.AcknowledgeAlertRequest{Key: alertKeyA(e)}))
+		return err
+	}},
+	"/sermon.web.v1.OidcMappingService/ListOidcMappings": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.oidcMappings.ListOidcMappings(ctx, connect.NewRequest(&webv1.ListOidcMappingsRequest{}))
+		if err == nil && (strings.Contains(res.Msg.String(), e.mappingA) || strings.Contains(res.Msg.String(), "alpha-staff") || leaks(e, res.Msg.String())) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.OidcMappingService/CreateOidcMapping": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.oidcMappings.CreateOidcMapping(ctx, connect.NewRequest(&webv1.CreateOidcMappingRequest{
+			OidcGroup: "pwned", GroupId: e.groupA, Role: webv1.Role_ROLE_ADMIN,
+		}))
+		return err
+	}},
+	"/sermon.web.v1.OidcMappingService/DeleteOidcMapping": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.oidcMappings.DeleteOidcMapping(ctx, connect.NewRequest(&webv1.DeleteOidcMappingRequest{Id: e.mappingA}))
 		return err
 	}},
 	"/sermon.web.v1.AlertService/GetAlertStatistics": {list: true, run: func(ctx context.Context, e isolationEnv) error {

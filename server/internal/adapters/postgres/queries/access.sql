@@ -42,7 +42,8 @@ SELECT pg_advisory_xact_lock(hashtextextended('access:' || current_org_id()::tex
 INSERT INTO role_bindings (id, org_id, user_id, group_id, role)
 VALUES (sqlc.arg(id), current_org_id(), sqlc.arg(user_id), sqlc.narg(group_id), sqlc.arg(role))
 ON CONFLICT (org_id, user_id, COALESCE(group_id, '00000000-0000-0000-0000-000000000000'::uuid))
-DO UPDATE SET role = EXCLUDED.role
+-- A role given by hand is the admin's from now on: sign-ins over OIDC leave it (M3-21).
+DO UPDATE SET role = EXCLUDED.role, origin = 'manual'
 RETURNING id;
 
 -- name: GetRoleBinding :one
@@ -57,7 +58,7 @@ FROM memberships m JOIN users u ON u.id = m.user_id
 ORDER BY lower(u.email), u.id;
 
 -- name: ListRoleBindings :many
-SELECT id, user_id, group_id, role FROM role_bindings ORDER BY created_at, id;
+SELECT id, user_id, group_id, role, origin FROM role_bindings ORDER BY created_at, id;
 
 -- name: DeleteMembership :execrows
 DELETE FROM memberships WHERE user_id = sqlc.arg(user_id);

@@ -28,6 +28,7 @@ INSERT INTO memberships (org_id, user_id) VALUES (current_org_id(), sqlc.arg(use
 ON CONFLICT DO NOTHING;
 
 -- Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
+-- The binding counts as given by hand afterwards (M3-21): sign-ins over OIDC leave it.
 -- name: GrantRoleKeepHigher :exec
 INSERT INTO role_bindings (id, org_id, user_id, group_id, role)
 VALUES (sqlc.arg(id), current_org_id(), sqlc.arg(user_id), sqlc.narg(group_id), sqlc.arg(role))
@@ -35,4 +36,5 @@ ON CONFLICT (org_id, user_id, COALESCE(group_id, '00000000-0000-0000-0000-000000
 DO UPDATE SET role = CASE
     WHEN array_position(ARRAY['viewer', 'operator', 'admin'], EXCLUDED.role)
        > array_position(ARRAY['viewer', 'operator', 'admin'], role_bindings.role)
-    THEN EXCLUDED.role ELSE role_bindings.role END;
+    THEN EXCLUDED.role ELSE role_bindings.role END,
+    origin = 'manual';

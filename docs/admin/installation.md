@@ -138,6 +138,14 @@ einen Eintrag in `SERMON_OUTBOUND_ALLOWLIST`.
 - **2FA-Pflicht einer Organisation:** `SERMON_OIDC_MFA=amr` (Standard) erkennt einen zweiten Faktor am Claim `amr`
   des ID-Tokens. Viele Provider setzen ihn nicht; erzwingt Ihr Provider selbst einen zweiten Faktor, setzen Sie
   `trusted`. Mit `never` gilt immer der zweite Faktor von SerMon.
+- **Gruppen:** Die Admins einer Organisation ordnen Gruppen des Providers Rollen zu (Einstellungen → SSO-Gruppen). Dafür
+  muss das ID-Token den Claim `groups` tragen: `SERMON_OIDC_SCOPES=email profile groups` (bei manchen Providern heißt
+  der Scope anders oder es braucht einen Mapper). Bei jeder Anmeldung folgen die Rollen aus Zuordnungen den Gruppen;
+  von Hand vergebene Rollen bleiben.
+- **Konten anlegen (JIT):** Meldet sich jemand an, den SerMon noch nicht kennt, und passt eine Zuordnung, legt SerMon
+  Konto und Mitgliedschaft an – nur mit bestätigter E-Mail und nur, wenn noch kein Konto diese E-Mail hat (dann muss
+  die Identität dort verknüpft werden). `SERMON_OIDC_JIT=false` schaltet das ab. Bedenken Sie: Mit JIT kann der Admin
+  einer Organisation jedes Mitglied einer Provider-Gruppe in seine Organisation aufnehmen und sieht dessen E-Mail.
 
 ## Organisationen löschen
 

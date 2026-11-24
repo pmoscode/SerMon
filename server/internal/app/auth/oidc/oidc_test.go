@@ -388,3 +388,86 @@ func TestSafeNext(t *testing.T) {
 		}
 	}
 }
+
+// provisioner records what a sign-in asks of the mappings (M3-21).
+type provisioner struct {
+	created   identity.UserID
+	reconcile []string
+	user      identity.UserID
+	join      bool
+	calls     int
+	err       error
+}
+
+func (p *provisioner) Reconcile(_ context.Context, user identity.UserID, groups []string, join bool) error {
+	p.calls++
+	p.user, p.reconcile, p.join = user, groups, join
+	return p.err
+}
+
+func (p *provisioner) Provision(context.Context, oidc.Claims) (identity.UserID, bool, error) {
+	return p.created, !p.created.IsZero(), nil
+}
+
+func withProvisioner(t *testing.T, p *provisioner, jit bool) env {
+	t.Helper()
+	now := t0
+	clock := func() time.Time { return now }
+	idp := &provider{claims: oidc.Claims{Issuer: issuer, Subject: "alice-sub", Groups: []string{"ops"}}}
+	ids := &identities{m: map[[2]string]identity.UserID{{issuer, "alice-sub"}: alice}}
+	sessions := session.NewManager(&memSessions{m: map[string]session.Session{}}, clock)
+	svc := oidc.NewService(oidc.Deps{
+		Provider: idp, Flows: &flows{m: map[string]oidc.Flow{}}, Identities: ids, Users: users{}, Sessions: sessions,
+		Limiter: ratelimit.New(50, time.Minute, clock), Provisioner: p, JIT: jit, Now: clock,
+	})
+	return env{svc: svc, idp: idp, ids: ids, sessions: sessions, now: &now}
+}
+
+func complete(t *testing.T, e env) (oidc.Result, error) {
+	t.Helper()
+	b, err := e.svc.Begin(context.Background(), oidc.IntentLogin, "", "/", "192.0.2.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e.svc.Complete(context.Background(), stateOf(t, b), "code", b.Binding, "", "192.0.2.1")
+}
+
+// M3-21: every sign-in reconciles the roles with the groups; JIT creates unknown accounts.
+func TestLogin_ReconcilesAndProvisions(t *testing.T) {
+	p := &provisioner{}
+	e := withProvisioner(t, p, true)
+	res, err := complete(t, e)
+	if err != nil || res.Session.User != alice || p.calls != 1 || p.user != alice || !p.join || strings.Join(p.reconcile, ",") != "ops" {
+		t.Fatalf("known identity: %+v, %v, %+v", res, err, p)
+	}
+	// Without JIT the mappings still give and take roles, but nobody joins.
+	p = &provisioner{created: bob}
+	e = withProvisioner(t, p, false)
+	if _, err := complete(t, e); err != nil || p.join {
+		t.Errorf("without JIT: %v, join %v", err, p.join)
+	}
+	e.idp.claims.Subject = "new-sub"
+	if _, err := complete(t, e); !errors.Is(err, oidc.ErrUnknownIdentity) {
+		t.Errorf("an unknown identity without JIT: %v", err)
+	}
+	// With JIT an unknown identity gets the account the mappings allow.
+	p = &provisioner{created: bob}
+	e = withProvisioner(t, p, true)
+	e.idp.claims.Subject = "new-sub"
+	res, err = complete(t, e)
+	if err != nil || res.Session.User != bob || p.user != bob {
+		t.Errorf("provisioned: %+v, %v", res, err)
+	}
+	// No mapping matches: nothing is created.
+	e = withProvisioner(t, &provisioner{}, true)
+	e.idp.claims.Subject = "new-sub"
+	if _, err := complete(t, e); !errors.Is(err, oidc.ErrUnknownIdentity) {
+		t.Errorf("nothing provisioned: %v", err)
+	}
+	// A failed reconciliation ends the sign-in: no session with roles the provider took away.
+	p = &provisioner{err: errors.New("database down")}
+	e = withProvisioner(t, p, true)
+	if res, err := complete(t, e); err == nil || res.Token != "" {
+		t.Errorf("failed reconciliation: %+v, %v", res, err)
+	}
+}

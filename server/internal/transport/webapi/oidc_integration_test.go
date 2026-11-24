@@ -166,3 +166,73 @@ func TestOIDC_LinkSignInAndStepUp(t *testing.T) {
 		t.Errorf("another identity: %s", got)
 	}
 }
+
+// M3-21 over the real stack: Alpha's admin maps a provider group; a new identity in it signs in
+// (account and membership by JIT), gets the role, loses it with the group; a viewer can't touch
+// the mappings.
+func TestOIDC_GroupMappingsAndJIT(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ctx := context.Background()
+	group := "alpha-ops-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
+	ownerSQL(t, "DELETE FROM user_identities WHERE subject = 'jit-sub'",
+		"DELETE FROM users WHERE email = 'jit@idp.example'")
+
+	mia := login(t, s, "mia@example.org")
+	if _, err := mia.oidcMappings.ListOidcMappings(ctx, connect.NewRequest(&webv1.ListOidcMappingsRequest{})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("a viewer lists: %v", err)
+	}
+	ann := login(t, s, "ann@example.org")
+	created, err := ann.oidcMappings.CreateOidcMapping(ctx, connect.NewRequest(&webv1.CreateOidcMappingRequest{
+		OidcGroup: group, GroupId: groupAl, Role: webv1.Role_ROLE_OPERATOR,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := ann.oidcMappings.ListOidcMappings(ctx, connect.NewRequest(&webv1.ListOidcMappingsRequest{}))
+	if err != nil || !list.Msg.GetOidc() || !list.Msg.GetProvisioning() || len(list.Msg.GetMappings()) != 2 {
+		t.Fatalf("ListOidcMappings() = %v, %v", list, err)
+	}
+
+	who := oidctest.Login{Subject: "jit-sub", Email: "jit@idp.example", Name: "Jit", Groups: []string{group, "unrelated"}}
+	b := newBrowser(t, s)
+	if got := b.signIn(t, s, webv1.OidcIntent_OIDC_INTENT_LOGIN, "/", who); got != "/" {
+		t.Fatalf("JIT sign-in: back to %s", got)
+	}
+	sess, err := b.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
+	if err != nil || sess.Msg.GetSession().GetEmail() != "jit@idp.example" || sess.Msg.GetSession().GetActiveOrganizationId() != orgAlpha {
+		t.Fatalf("the provisioned session: %v, %v", sess, err)
+	}
+	members, err := ann.access.ListMembers(ctx, connect.NewRequest(&webv1.ListMembersRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jit *webv1.Member
+	for _, m := range members.Msg.GetMembers() {
+		if m.GetEmail() == "jit@idp.example" {
+			jit = m
+		}
+	}
+	if jit == nil || len(jit.GetBindings()) != 1 || jit.GetBindings()[0].GetRole() != webv1.Role_ROLE_OPERATOR ||
+		jit.GetBindings()[0].GetGroupId() != groupAl || !jit.GetBindings()[0].GetFromOidc() {
+		t.Fatalf("the new member: %v", jit)
+	}
+	// Out of the group: the next sign-in takes the role.
+	who.Groups = []string{"unrelated"}
+	if got := newBrowser(t, s).signIn(t, s, webv1.OidcIntent_OIDC_INTENT_LOGIN, "/", who); got != "/" {
+		t.Fatalf("second sign-in: %s", got)
+	}
+	var bindings int
+	ownerQuery(t, "SELECT count(*) FROM role_bindings r JOIN users u ON u.id = r.user_id WHERE u.email = 'jit@idp.example'", &bindings)
+	if bindings != 0 {
+		t.Errorf("%d bindings after leaving the group", bindings)
+	}
+	if _, err := ann.oidcMappings.DeleteOidcMapping(ctx, connect.NewRequest(&webv1.DeleteOidcMappingRequest{Id: created.Msg.GetMapping().GetId()})); err != nil {
+		t.Errorf("DeleteOidcMapping() = %v", err)
+	}
+	var audits int
+	ownerQuery(t, "SELECT count(*) FROM audit_log WHERE org_id = '"+orgAlpha+"' AND action IN ('oidc_mapping.create', 'oidc_mapping.delete') AND target = 'oidc_mapping:"+created.Msg.GetMapping().GetId()+"'", &audits)
+	if audits != 2 {
+		t.Errorf("%d audit entries of the mapping", audits)
+	}
+}

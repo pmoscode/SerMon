@@ -61,6 +61,8 @@ type RoleBinding struct {
 	ID    BindingID
 	Group *tenant.GroupID
 	Role  role.Role
+	// FromOIDC: an OIDC group mapping gave it (M3-21).
+	FromOIDC bool
 }
 
 // Member is a user of the organization with its role bindings.

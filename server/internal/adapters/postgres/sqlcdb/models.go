@@ -323,6 +323,15 @@ type OidcFlow struct {
 	ExpiresAt   time.Time
 }
 
+type OidcGroupMapping struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	OidcGroup string
+	GroupID   *uuid.UUID
+	Role      string
+	CreatedAt time.Time
+}
+
 type Organization struct {
 	ID                  uuid.UUID
 	Name                string
@@ -362,6 +371,7 @@ type RoleBinding struct {
 	GroupID   *uuid.UUID
 	Role      string
 	CreatedAt time.Time
+	Origin    string
 }
 
 type SecurityEvent struct {

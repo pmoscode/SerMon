@@ -3525,7 +3525,35 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M1-02, M1-03, M2-09
 - **Skill:** `sermon-adr`
 
-#### ☐ M3-21 – Gruppen-Mapping und Just-in-Time-Provisioning · S · M 🔒
+#### ☑ M3-21 – Gruppen-Mapping und Just-in-Time-Provisioning · S · M 🔒
+> Erledigt ([ADR 0033](adr/0033-anmeldung-ueber-oidc.md), Abschnitt „Gruppen und Konten“; KONZEPT §7; Threat Model T86;
+> Betrieb: `docs/admin/installation.md`):
+> - **Migration `00044`:** `role_bindings.origin` (`manual` | `oidc`), `oidc_group_mappings` mit RLS, die
+>   SECURITY-DEFINER-Funktion `oidc_mapped_organizations` (nur IDs ungesperrter Orgs). Rollen von Hand und per
+>   Einladung setzen die Herkunft auf `manual`.
+> - **`OidcMappingService`** (List, Create, Delete): Admins für alle Gruppen, Änderungen mit Step-up und Audit
+>   (`oidc_mapping.create`/`delete`), höchstens 200 pro Org, exakte Gruppennamen ohne Steuerzeichen. `RoleBinding`
+>   trägt `from_oidc` für die Oberfläche (M3-22).
+> - **Abgleich** (`app/oidcmapping`) bei jeder Anmeldung vor der Session, in jeder Org des Users (mit JIT auch in
+>   passenden): die höchste Rolle pro Node-Gruppe, nur Bindungen mit Herkunft `oidc` werden gesetzt, geändert und
+>   entzogen. Ein Fehler beendet die Anmeldung. Der letzte org-weite Admin bleibt, gesperrte Orgs sind ausgenommen,
+>   das Kontingent gilt für neue Mitgliedschaften; alles unter `LockAccessChanges` und im Audit-Log ohne Akteur mit
+>   `origin: oidc`.
+> - **JIT** (Standard an, `SERMON_OIDC_JIT=false`): Konto ohne Passwort nur mit bestätigter E-Mail, die keinem Konto
+>   gehört, und passender Zuordnung; Eintrag `oidc.user_provisioned` im Audit-Log der Instanz.
+> - **Abweichung:** Wer alle Rollen verliert, bleibt Mitglied ohne Rechte (Entfernen bleibt dem Admin); Rollen aus
+>   Gruppen ändern sich erst bei der nächsten Anmeldung.
+> - **Tests:**
+>   - `Desired` und `Plan`: höchste Rolle, exakte Namen, Grenze der Gruppen; hinzufügen, ändern, entziehen, von Hand
+>     Vergebenes bleibt.
+>   - Dienst: nur Admins für alle Gruppen, Step-up, Audit, ungültige Namen; Abgleich mit und ohne Beitritt;
+>     Provisionierung nur mit bestätigter E-Mail, Gruppen und Zuordnung, nicht bei vorhandener E-Mail.
+>   - OIDC-Dienst: Abgleich bei jeder Anmeldung, JIT nur eingeschaltet, Fehler beenden die Anmeldung.
+>   - PostgreSQL: Abgleich samt Übernahme von Hand, letzter Admin, Kontingent, gesperrte Org, fremde Zuordnungen,
+>     Beitritt nur mit Rolle, Audit beider Logs, Duplikate, fremde Node-Gruppe, Grenze.
+>   - Über den echten Stack mit dem Fake-IdP: Zuordnung anlegen, JIT-Anmeldung mit Rolle, Entzug bei der nächsten,
+>     Viewer abgewiesen; Tenant-Isolationstest für die drei RPCs. Die Rollen-Matrix deckt `manage_members` ab.
+>   - Gegenproben für 17 Prüfungen, alle erkannt.
 - **Ziel:**
   - **Mapping** OIDC-Gruppe → Node-Gruppe (oder `*`) und Rolle, pro Org gepflegt von ihren Admins (Step-up, Audit).
   - **Abgleich bei jedem Login:** Rollen aus dem Mapping werden gesetzt und entzogen. Von Hand vergebene Rollen

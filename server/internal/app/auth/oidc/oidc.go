@@ -141,6 +141,16 @@ const (
 	MFANever
 )
 
+// Provisioner keeps accounts and roles in step with the provider's groups (M3-21, oidcmapping).
+type Provisioner interface {
+	// Reconcile sets and removes the roles the mappings give; join lets the user join
+	// organizations whose mappings match (just-in-time provisioning).
+	Reconcile(ctx context.Context, user identity.UserID, groups []string, join bool) error
+	// Provision creates an account for an identity nobody has, if a mapping matches; false if
+	// none is created.
+	Provision(ctx context.Context, c Claims) (identity.UserID, bool, error)
+}
+
 // RateLimiter limits attempts per client IP.
 type RateLimiter interface {
 	Allow(key string) bool
@@ -156,8 +166,12 @@ type Deps struct {
 	SecondFactor SecondFactor
 	Limiter      RateLimiter
 	MFA          MFAMode
-	Now          func() time.Time
-	Logger       *slog.Logger
+	// Provisioner reconciles the roles at every sign-in; nil: no group mappings.
+	Provisioner Provisioner
+	// JIT creates accounts and memberships by the mappings (just-in-time provisioning).
+	JIT    bool
+	Now    func() time.Time
+	Logger *slog.Logger
 }
 
 // Service runs the flows.
@@ -353,12 +367,24 @@ func (s *Service) login(ctx context.Context, f Flow, c Claims) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("oidc login: %w", err)
 	}
+	if !found && s.d.JIT && s.d.Provisioner != nil {
+		if user, found, err = s.d.Provisioner.Provision(ctx, c); err != nil {
+			return Result{}, fmt.Errorf("oidc login: %w", err)
+		}
+	}
 	if !found {
 		s.d.Logger.WarnContext(ctx, "oidc login with an unknown identity", "issuer", c.Issuer)
 		return Result{}, ErrUnknownIdentity
 	}
 	if err := s.d.Identities.Seen(ctx, c.Issuer, c.Subject, c.Email, s.d.Now()); err != nil {
 		return Result{}, fmt.Errorf("oidc login: %w", err)
+	}
+	// The roles follow the groups before the session exists: a failure ends the sign-in rather
+	// than leave roles the provider took away.
+	if s.d.Provisioner != nil {
+		if err := s.d.Provisioner.Reconcile(ctx, user, c.Groups, s.d.JIT); err != nil {
+			return Result{}, fmt.Errorf("oidc login: %w", err)
+		}
 	}
 	orgs, err := s.d.Users.Organizations(ctx, user)
 	if err != nil {

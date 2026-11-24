@@ -41,7 +41,8 @@ ON CONFLICT (org_id, user_id, COALESCE(group_id, '00000000-0000-0000-0000-000000
 DO UPDATE SET role = CASE
     WHEN array_position(ARRAY['viewer', 'operator', 'admin'], EXCLUDED.role)
        > array_position(ARRAY['viewer', 'operator', 'admin'], role_bindings.role)
-    THEN EXCLUDED.role ELSE role_bindings.role END
+    THEN EXCLUDED.role ELSE role_bindings.role END,
+    origin = 'manual'
 `
 
 type GrantRoleKeepHigherParams struct {
@@ -52,6 +53,7 @@ type GrantRoleKeepHigherParams struct {
 }
 
 // Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
+// The binding counts as given by hand afterwards (M3-21): sign-ins over OIDC leave it.
 func (q *Queries) GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error {
 	_, err := q.db.Exec(ctx, grantRoleKeepHigher,
 		arg.ID,

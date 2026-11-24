@@ -54,6 +54,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
+	"github.com/pmoscode/SerMon/server/internal/app/oidcmapping"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
@@ -518,8 +519,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID, inviteOptions...)
 	authHandler := webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals).
 		WithInstanceHealth(accessStore, health)
+	mappings := oidcmapping.NewService(postgres.NewOIDCMappingStore(db), credentials, policy, time.Now, access.NewID, logger)
 	if cfg.OIDC != nil {
-		sso, err := newOIDC(ctx, cfg, db, sessions, credentials, secondFactor, logger)
+		sso, err := newOIDC(ctx, cfg, db, sessions, credentials, secondFactor, mappings, logger)
 		if err != nil {
 			return err
 		}
@@ -547,9 +549,10 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
-		LogSettings: webapi.NewLogSettingsHandler(observing.logSettings, logger),
-		Logs:        webapi.NewLogHandler(observing.logQueries, live, logger),
-		LiveView:    webapi.NewLiveViewHandler(observing.liveViews, live, logger),
+		LogSettings:  webapi.NewLogSettingsHandler(observing.logSettings, logger),
+		OIDCMappings: webapi.NewOIDCMappingHandler(mappings, cfg.OIDC != nil, cfg.OIDC != nil && cfg.OIDC.JIT, logger),
+		Logs:         webapi.NewLogHandler(observing.logQueries, live, logger),
+		LiveView:     webapi.NewLiveViewHandler(observing.liveViews, live, logger),
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
 		Notifications: webapi.NewNotificationChannelHandler(notifications, logger),
@@ -572,7 +575,7 @@ const (
 // newOIDC assembles the sign-in at the OIDC provider (M3-20, ADR 0033). Discovery, keys and the
 // token request go through the outbound policy: an internal provider needs the allowlist.
 func newOIDC(ctx context.Context, cfg config.Config, db *postgres.DB, sessions *session.Manager, users oidc.Users,
-	secondFactor oidc.SecondFactor, logger *slog.Logger,
+	secondFactor oidc.SecondFactor, mappings oidc.Provisioner, logger *slog.Logger,
 ) (*oidc.Service, error) {
 	outbound, err := safehttp.NewPolicy(cfg.OutboundAllowlist)
 	if err != nil {
@@ -585,13 +588,14 @@ func newOIDC(ctx context.Context, cfg config.Config, db *postgres.DB, sessions *
 	if err := provider.Ready(ctx); err != nil {
 		logger.WarnContext(ctx, "the OIDC provider can't be reached yet – sign-ins fail until it can", "issuer", o.Issuer, "error", err.Error())
 	} else {
-		logger.InfoContext(ctx, "sign-in over OIDC", "issuer", o.Issuer, "name", o.Name)
+		logger.InfoContext(ctx, "sign-in over OIDC", "issuer", o.Issuer, "name", o.Name, "provisioning", o.JIT)
 	}
 	mfa := map[config.OIDCMFA]oidc.MFAMode{config.OIDCMFAByClaim: oidc.MFAByClaim, config.OIDCMFAAlways: oidc.MFAAlways, config.OIDCMFANever: oidc.MFANever}[o.MFA]
 	store := postgres.NewOIDCStore(db)
 	return oidc.NewService(oidc.Deps{
 		Provider: provider, Flows: store, Identities: store, Users: users, Sessions: sessions, SecondFactor: secondFactor,
 		Limiter: ratelimit.New(oidcAttemptsPerWindow, oidcWindow, time.Now), MFA: mfa, Now: time.Now, Logger: logger,
+		Provisioner: mappings, JIT: o.JIT,
 	}), nil
 }
 

@@ -37,6 +37,7 @@ const (
 	groupAl   = "0193f5a0-0000-7000-8000-0000000001a9"
 	bindingAl = "0193f5a0-0000-7000-8000-0000000001a8"
 	inviteAl  = "0193f5a0-0000-7000-8000-0000000001a7"
+	mappingAl = "0193f5a0-0000-7000-8000-0000000001a4" // OIDC group mapping of Alpha
 	tokenAl   = "0193f5a0-0000-7000-8000-0000000001a6" // enrollment token of Alpha
 	nodeAl    = "0193f5a0-0000-7000-8000-0000000001a5" // node of Alpha (offline)
 	certAl    = "7a0000000000000000000000000001a5"     // its certificate serial
@@ -64,6 +65,8 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgAlpha+"', '"+kaiID+"', 'viewer')",
 		"INSERT INTO audit_log (org_id, seq, action, target, details, prev_hash, hash) VALUES ('"+orgAlpha+"', 0, 'seed', 'by-a', '{}', '\\x', '\\x')",
 		"DELETE FROM invitations WHERE org_id = '"+orgAlpha+"'",
+		"DELETE FROM oidc_group_mappings WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO oidc_group_mappings (id, org_id, oidc_group, group_id, role) VALUES ('"+mappingAl+"', '"+orgAlpha+"', 'alpha-staff', '"+groupAl+"', 'operator')",
 		"DELETE FROM enrollment_tokens WHERE org_id = '"+orgAlpha+"'",
 		"INSERT INTO nodes (id, org_id, group_id, hostname, machine_id, os_id, os_version, kernel_release, architecture, cpu_count, memory_bytes) VALUES ('"+nodeAl+"', '"+orgAlpha+"', '"+groupAl+"', 'alpha-01', '"+strings.Repeat("a", 32)+"', 'debian', '13', '6.12.0', 'amd64', 2, 1073741824) ON CONFLICT DO NOTHING",
 		"DELETE FROM agent_certificates WHERE node_id = '"+nodeAl+"'",
@@ -100,6 +103,7 @@ type loggedIn struct {
 	logSettings  webv1connect.LogSettingsServiceClient
 	logs         webv1connect.LogServiceClient
 	liveView     webv1connect.LiveViewServiceClient
+	oidcMappings webv1connect.OidcMappingServiceClient
 	jar          *cookiejar.Jar
 }
 
@@ -130,6 +134,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		logSettings:  webv1connect.NewLogSettingsServiceClient(hc, s.server.URL),
 		logs:         webv1connect.NewLogServiceClient(hc, s.server.URL),
 		liveView:     webv1connect.NewLiveViewServiceClient(hc, s.server.URL),
+		oidcMappings: webv1connect.NewOidcMappingServiceClient(hc, s.server.URL),
 		jar:          jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
@@ -148,7 +153,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
 		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
-		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView,
+		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl,
 	}

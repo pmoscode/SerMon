@@ -612,7 +612,10 @@ type RoleBinding struct {
 	// group_id is the UUID of the group; empty means all groups of the organization.
 	GroupId string `protobuf:"bytes,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	// role is the granted role.
-	Role          Role `protobuf:"varint,3,opt,name=role,proto3,enum=sermon.web.v1.Role" json:"role,omitempty"`
+	Role Role `protobuf:"varint,3,opt,name=role,proto3,enum=sermon.web.v1.Role" json:"role,omitempty"`
+	// from_oidc marks a role the organization's OIDC group mappings gave (M3-21): the next
+	// sign-in of the member may change or remove it. Granting it by hand makes it manual.
+	FromOidc      bool `protobuf:"varint,4,opt,name=from_oidc,json=fromOidc,proto3" json:"from_oidc,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -666,6 +669,13 @@ func (x *RoleBinding) GetRole() Role {
 		return x.Role
 	}
 	return Role_ROLE_UNSPECIFIED
+}
+
+func (x *RoleBinding) GetFromOidc() bool {
+	if x != nil {
+		return x.FromOidc
+	}
+	return false
 }
 
 // Member is a user of the organization.
@@ -1715,11 +1725,12 @@ const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\x17RenameNodeGroupResponse\"=\n" +
 	"\x16DeleteNodeGroupRequest\x12#\n" +
 	"\bgroup_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\agroupId\"\x19\n" +
-	"\x17DeleteNodeGroupResponse\"a\n" +
+	"\x17DeleteNodeGroupResponse\"~\n" +
 	"\vRoleBinding\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\bgroup_id\x18\x02 \x01(\tR\agroupId\x12'\n" +
-	"\x04role\x18\x03 \x01(\x0e2\x13.sermon.web.v1.RoleR\x04role\"\x92\x01\n" +
+	"\x04role\x18\x03 \x01(\x0e2\x13.sermon.web.v1.RoleR\x04role\x12\x1b\n" +
+	"\tfrom_oidc\x18\x04 \x01(\bR\bfromOidc\"\x92\x01\n" +
 	"\x06Member\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +

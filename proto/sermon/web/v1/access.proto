@@ -149,6 +149,9 @@ message RoleBinding {
   string group_id = 2;
   // role is the granted role.
   Role role = 3;
+  // from_oidc marks a role the organization's OIDC group mappings gave (M3-21): the next
+  // sign-in of the member may change or remove it. Granting it by hand makes it manual.
+  bool from_oidc = 4;
 }
 
 // Member is a user of the organization.

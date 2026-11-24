@@ -54,6 +54,7 @@ x-server-environment: &server-environment
   SERMON_OIDC_NAME: ${SERMON_OIDC_NAME:-}
   SERMON_OIDC_SCOPES: ${SERMON_OIDC_SCOPES:-}
   SERMON_OIDC_MFA: ${SERMON_OIDC_MFA:-}
+  SERMON_OIDC_JIT: ${SERMON_OIDC_JIT:-}
   # Production mode: invitations go out by mail only (M1-39).
   SERMON_SMTP_HOST: ${SERMON_SMTP_HOST:?set SERMON_SMTP_HOST in .env}
   SERMON_SMTP_PORT: ${SERMON_SMTP_PORT:-587}

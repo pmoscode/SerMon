@@ -335,7 +335,7 @@ func (q *Queries) ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) 
 }
 
 const listRoleBindings = `-- name: ListRoleBindings :many
-SELECT id, user_id, group_id, role FROM role_bindings ORDER BY created_at, id
+SELECT id, user_id, group_id, role, origin FROM role_bindings ORDER BY created_at, id
 `
 
 type ListRoleBindingsRow struct {
@@ -343,6 +343,7 @@ type ListRoleBindingsRow struct {
 	UserID  uuid.UUID
 	GroupID *uuid.UUID
 	Role    string
+	Origin  string
 }
 
 func (q *Queries) ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error) {
@@ -359,6 +360,7 @@ func (q *Queries) ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, 
 			&i.UserID,
 			&i.GroupID,
 			&i.Role,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -431,7 +433,7 @@ const upsertRoleBinding = `-- name: UpsertRoleBinding :one
 INSERT INTO role_bindings (id, org_id, user_id, group_id, role)
 VALUES ($1, current_org_id(), $2, $3, $4)
 ON CONFLICT (org_id, user_id, COALESCE(group_id, '00000000-0000-0000-0000-000000000000'::uuid))
-DO UPDATE SET role = EXCLUDED.role
+DO UPDATE SET role = EXCLUDED.role, origin = 'manual'
 RETURNING id
 `
 
@@ -442,6 +444,7 @@ type UpsertRoleBindingParams struct {
 	Role    string
 }
 
+// A role given by hand is the admin's from now on: sign-ins over OIDC leave it (M3-21).
 func (q *Queries) UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, upsertRoleBinding,
 		arg.ID,

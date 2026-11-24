@@ -90,6 +90,7 @@ func (s *AccessStore) ListMembers(ctx context.Context, scope tenant.Scope) ([]ac
 			if err != nil {
 				return err
 			}
+			rb.FromOIDC = b.Origin == "oidc"
 			byUser[b.UserID] = append(byUser[b.UserID], rb)
 		}
 		for _, u := range users {

@@ -97,6 +97,9 @@ type OIDC struct {
 	MFA OIDCMFA
 	// RedirectURL is the callback the provider returns to (default: first origin + /auth/oidc/callback).
 	RedirectURL string
+	// JIT creates accounts and memberships by the organizations' group mappings (M3-21);
+	// SERMON_OIDC_JIT=false turns it off, the mappings still give and take roles.
+	JIT bool
 }
 
 // Config is the validated server configuration.
@@ -186,6 +189,7 @@ const (
 	envOIDCName        = "SERMON_OIDC_NAME"
 	envOIDCMFA         = "SERMON_OIDC_MFA"
 	envOIDCRedirect    = "SERMON_OIDC_REDIRECT_URL" //nolint:gosec // G101: the name of a variable, not a credential
+	envOIDCJIT         = "SERMON_OIDC_JIT"
 	envMode            = "SERMON_MODE"
 	envSMTPHost        = "SERMON_SMTP_HOST"
 	envSMTPPort        = "SERMON_SMTP_PORT"
@@ -302,7 +306,7 @@ const maxOIDCName = 40
 func parseOIDC(l *loader, mode Mode, origins []string) *OIDC {
 	issuer := l.string(envOIDCIssuer, "", nil)
 	if issuer == "" {
-		for _, key := range []string{envOIDCClientID, envOIDCSecret, envOIDCScopes, envOIDCName, envOIDCMFA, envOIDCRedirect} {
+		for _, key := range []string{envOIDCClientID, envOIDCSecret, envOIDCScopes, envOIDCName, envOIDCMFA, envOIDCRedirect, envOIDCJIT} {
 			if v, ok := l.raw(key); ok && v != "" {
 				l.fail(key, "requires %s", envOIDCIssuer)
 			}
@@ -316,6 +320,14 @@ func parseOIDC(l *loader, mode Mode, origins []string) *OIDC {
 		Name:         strings.TrimSpace(l.string(envOIDCName, "SSO", nil)),
 		MFA:          OIDCMFA(l.string(envOIDCMFA, string(OIDCMFAByClaim), nil)),
 		RedirectURL:  l.string(envOIDCRedirect, "", nil),
+		JIT:          true,
+	}
+	switch v := strings.ToLower(strings.TrimSpace(l.string(envOIDCJIT, "", nil))); v {
+	case "", "true":
+	case "false":
+		o.JIT = false
+	default:
+		l.fail(envOIDCJIT, "must be true or false, got %q", v)
 	}
 	// Compose sets the optional variables empty: empty means the default.
 	if o.Name == "" {

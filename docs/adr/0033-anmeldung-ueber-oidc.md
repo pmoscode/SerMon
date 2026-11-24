@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Datum: 2026-11-24
-- Bezug: KONZEPT.md §7 (D10); ADR 0007, ADR 0024; IMPLEMENTIERUNGSPLAN M3-20; Threat Model T15, T84, T85
+- Bezug: KONZEPT.md §7 (D10); ADR 0007, ADR 0024; IMPLEMENTIERUNGSPLAN M3-20, M3-21; Threat Model T15, T84, T85, T86
 
 ## Kontext
 
@@ -35,7 +35,7 @@ Gewählt: **Option 2**, ein Provider pro Instanz (`SERMON_OIDC_*`, das Secret al
   hält den Server nicht an.
 - **Identität:** immer `iss` + `sub` (`user_identities`), nie die E-Mail. Verknüpft wird nur angemeldet mit frischem
   Step-up, ein Eintrag im Audit-Log der Instanz. Eine unbekannte Identität wird abgewiesen wie jeder Fehler
-  (`/login?sso=failed`); ob ein Konto existiert, verrät die Antwort nicht. Konten anlegen kommt mit M3-21.
+  (`/login?sso=failed`); ob ein Konto existiert, verrät die Antwort nicht. Konten anlegen: siehe unten (M3-21).
 - **Zweiter Faktor:** Die Pflicht einer Org gilt als erfüllt, wenn der Betreiber dem Provider vertraut
   (`SERMON_OIDC_MFA=trusted`) oder `amr` einen zweiten Faktor nennt (`mfa`, `mca`, `otp`, `hwk`, `sc`); die Session
   merkt sich das (`external_mfa`). Sonst gilt der lokale zweite Faktor: Wer einen hat, gibt ihn danach ein.
@@ -45,6 +45,27 @@ Gewählt: **Option 2**, ein Provider pro Instanz (`SERMON_OIDC_*`, das Secret al
   `Referrer-Policy: no-referrer`, der Code steht in ihrer URL.
 - **Grenzen:** 30 Starts und Rückkehrer pro Minute und IP.
 
+### Gruppen und Konten (M3-21)
+
+- **Zuordnung pro Org:** Admins für alle Gruppen ordnen eine Provider-Gruppe (exakter Name im Claim `groups`) einer
+  Node-Gruppe oder `*` und einer Rolle zu (`oidc_group_mappings`, höchstens 200, Step-up und Audit).
+- **Abgleich bei jeder Anmeldung**, bevor die Session entsteht; schlägt er fehl, scheitert die Anmeldung (keine Session
+  mit entzogenen Rollen). Die Bindung trägt ihre Herkunft (`role_bindings.origin`): Zuordnungen setzen, ändern und
+  entziehen nur Bindungen mit `oidc`. Vergibt ein Admin eine Rolle von Hand (oder per Einladung), wird sie `manual`
+  und bleibt. Gibt es für eine Node-Gruppe eine Bindung von Hand, bleibt sie, auch wenn eine Zuordnung mehr gäbe.
+- Fehlt der Claim, gilt das als „keine Gruppen“: Die zugeordneten Rollen gehen (sicherer Ausfall).
+- **Grenzen:** Der letzte org-weite Admin bleibt (Warnung im Log). Gesperrte Orgs werden nicht abgeglichen und nimmt
+  niemand neu auf. Das Mitglieder-Kontingent gilt für neue Mitgliedschaften. Wer alle Rollen verliert, bleibt Mitglied
+  ohne Rechte; das Entfernen bleibt dem Admin.
+- **JIT** (Standard an, `SERMON_OIDC_JIT=false`): Eine unbekannte Identität bekommt ein Konto ohne Passwort, wenn die
+  E-Mail bestätigt ist (`email_verified`), keinem Konto gehört und eine Zuordnung einer ungesperrten Org passt; dann
+  wird sie Mitglied der passenden Orgs. Gehört die E-Mail einem Konto, entsteht keines: Die Identität muss dort
+  verknüpft werden (keine Übernahme über die E-Mail). Welche Orgs passen, ermittelt eine SECURITY-DEFINER-Funktion,
+  die nur IDs liefert.
+- **Audit:** Zuordnungen im Audit-Log der Org (`oidc_mapping.create`/`delete`), Änderungen bei der Anmeldung als
+  `role.grant`, `role.revoke`, `member.join` ohne Akteur mit `origin: oidc`, neue Konten im Audit-Log der Instanz
+  (`oidc.user_provisioned`).
+
 ## Konsequenzen
 
 - Drei neue Abhängigkeiten (`go-oidc`, `x/oauth2`, `go-jose`), von Renovate und govulncheck verfolgt.
@@ -52,3 +73,7 @@ Gewählt: **Option 2**, ein Provider pro Instanz (`SERMON_OIDC_*`, das Secret al
   muss der Betreiber bewusst einstellen.
 - Konten ohne Passwort (M3-21) bestätigen den Step-up beim Provider oder mit dem lokalen zweiten Faktor.
 - Abmelden beim Provider (RP-initiated Logout) gibt es nicht: Abmelden beendet nur die Session in SerMon.
+- Rollen aus Gruppen ändern sich erst bei der nächsten Anmeldung; eine laufende Session behält sie bis dahin (höchstens
+  12 h). Wer sofort entziehen muss, entzieht von Hand oder entfernt das Mitglied.
+- Mit JIT kann der Admin einer Org Mitglieder einer Provider-Gruppe aufnehmen und sieht ihre E-Mail. Wer das nicht
+  will, schaltet JIT ab.

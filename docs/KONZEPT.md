@@ -463,6 +463,11 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
     - Die 2FA-Pflicht einer Org gilt als erfüllt, wenn `amr` einen zweiten Faktor nennt oder der Betreiber dem
       Provider vertraut; sonst folgt der lokale zweite Faktor. Step-up auch über eine frische Anmeldung beim Provider
       (`max_age=0`, `auth_time` geprüft).
+    - Seit M3-21: Admins einer Org ordnen Provider-Gruppen (Claim `groups`) einer Node-Gruppe oder `*` und einer Rolle
+      zu. Jede Anmeldung gleicht die Rollen aus Zuordnungen ab (Herkunft `oidc` an der Bindung); von Hand Vergebenes
+      bleibt, der letzte org-weite Admin auch, gesperrte Orgs sind ausgenommen. JIT (abschaltbar mit
+      `SERMON_OIDC_JIT=false`) legt Konto und Mitgliedschaft an, nur mit bestätigter E-Mail, die noch keinem Konto
+      gehört, und im Rahmen des Kontingents.
 - **Sessions:** serverseitig in PG, Cookie `__Host-sermon_session` (Secure, HttpOnly, SameSite=Lax). Idle-Timeout 30
   min, absolut 12 h. **Step-up-Authentifizierung** (erneute 2FA) für sensible Aktionen wie Updates, Reboot oder
   Rechteänderungen.

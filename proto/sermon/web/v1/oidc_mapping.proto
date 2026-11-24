@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/access.proto";
+
+// OidcMappingService keeps the organization's mappings of groups of the OIDC provider to roles
+// (M3-21, ADR 0033). Every sign-in over OIDC gives and takes the mapped roles; roles given by
+// hand stay. Only admins for all groups (manage_members); changes need a recent step-up
+// (FAILED_PRECONDITION with StepUpRequired) and are audited.
+service OidcMappingService {
+  // ListOidcMappings returns the mappings and whether the instance has OIDC and provisioning.
+  rpc ListOidcMappings(ListOidcMappingsRequest) returns (ListOidcMappingsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateOidcMapping maps a provider group to a role on a node group or all groups.
+  // ALREADY_EXISTS for the same group and node group, NOT_FOUND for an unknown node group,
+  // RESOURCE_EXHAUSTED beyond 200 mappings.
+  rpc CreateOidcMapping(CreateOidcMappingRequest) returns (CreateOidcMappingResponse);
+  // DeleteOidcMapping removes a mapping; its roles go with the members' next sign-in.
+  rpc DeleteOidcMapping(DeleteOidcMappingRequest) returns (DeleteOidcMappingResponse);
+}
+
+// OidcMapping gives the members of a provider group a role.
+message OidcMapping {
+  // id is the mapping UUID.
+  string id = 1;
+  // oidc_group is the group as the provider names it in the groups claim (exact match).
+  string oidc_group = 2;
+  // group_id is the node group; empty means all groups.
+  string group_id = 3;
+  // role is the role the members get.
+  Role role = 4;
+  // create_time is when the mapping was made.
+  google.protobuf.Timestamp create_time = 5;
+}
+
+// ListOidcMappingsRequest has no fields.
+message ListOidcMappingsRequest {}
+
+// ListOidcMappingsResponse lists the mappings, by provider group.
+message ListOidcMappingsResponse {
+  // mappings of the organization.
+  repeated OidcMapping mappings = 1;
+  // oidc is set if the instance has an OIDC provider (without one the mappings do nothing).
+  bool oidc = 2;
+  // provisioning is set if sign-ins create accounts and memberships by the mappings.
+  bool provisioning = 3;
+}
+
+// CreateOidcMappingRequest is the new mapping.
+message CreateOidcMappingRequest {
+  // oidc_group is the provider's group name.
+  string oidc_group = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 255
+  }];
+  // group_id is the node group; empty maps to all groups.
+  string group_id = 2 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.uuid = true
+  ];
+  // role is the role to give.
+  Role role = 3 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+// CreateOidcMappingResponse is the stored mapping.
+message CreateOidcMappingResponse {
+  // mapping as stored.
+  OidcMapping mapping = 1;
+}
+
+// DeleteOidcMappingRequest names the mapping.
+message DeleteOidcMappingRequest {
+  // id is the mapping UUID.
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteOidcMappingResponse is empty.
+message DeleteOidcMappingResponse {}

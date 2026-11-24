@@ -124,7 +124,7 @@ func (h *AccessHandler) ListMembers(ctx context.Context, _ *connect.Request[webv
 	for _, m := range members {
 		view := &webv1.Member{UserId: m.User.String(), Email: m.Email, DisplayName: m.DisplayName}
 		for _, b := range m.Bindings {
-			rb := &webv1.RoleBinding{Id: b.ID.String(), Role: roleView(b.Role)}
+			rb := &webv1.RoleBinding{Id: b.ID.String(), Role: roleView(b.Role), FromOidc: b.FromOIDC}
 			if b.Group != nil {
 				rb.GroupId = b.Group.String()
 			}

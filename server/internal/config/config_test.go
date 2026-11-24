@@ -399,8 +399,12 @@ func TestLoad_OIDC(t *testing.T) {
 	o := cfg.OIDC
 	if o == nil || o.Issuer != "https://idp.example.com/realms/ops" || o.ClientID != "sermon" || o.ClientSecret != "oidc-fixture-secret" ||
 		o.Name != "SSO" || o.MFA != config.OIDCMFAByClaim || o.RedirectURL != "https://sermon.example.com/auth/oidc/callback" ||
-		strings.Join(o.Scopes, " ") != "email profile" {
+		strings.Join(o.Scopes, " ") != "email profile" || !o.JIT {
 		t.Errorf("OIDC = %+v", o)
+	}
+	// M3-21: just-in-time provisioning is on unless turned off.
+	if cfg, err := config.Load(fakeSource(env(map[string]string{"SERMON_OIDC_JIT": "false"}), files)); err != nil || cfg.OIDC.JIT {
+		t.Errorf("SERMON_OIDC_JIT=false: %+v, %v", cfg.OIDC, err)
 	}
 	cfg, err = config.Load(fakeSource(env(map[string]string{
 		"SERMON_OIDC_SCOPES": "openid email profile groups", "SERMON_OIDC_NAME": "Keycloak", "SERMON_OIDC_MFA": "trusted",
@@ -414,8 +418,8 @@ func TestLoad_OIDC(t *testing.T) {
 		t.Errorf("off by default: %+v, %v", cfg.OIDC, err)
 	}
 	// The production compose sets every variable, the optional ones empty.
-	compose := env(map[string]string{"SERMON_OIDC_NAME": "", "SERMON_OIDC_MFA": "", "SERMON_OIDC_SCOPES": ""})
-	if cfg, err := config.Load(fakeSource(compose, files)); err != nil || cfg.OIDC.Name != "SSO" || cfg.OIDC.MFA != config.OIDCMFAByClaim {
+	compose := env(map[string]string{"SERMON_OIDC_NAME": "", "SERMON_OIDC_MFA": "", "SERMON_OIDC_SCOPES": "", "SERMON_OIDC_JIT": ""})
+	if cfg, err := config.Load(fakeSource(compose, files)); err != nil || cfg.OIDC.Name != "SSO" || cfg.OIDC.MFA != config.OIDCMFAByClaim || !cfg.OIDC.JIT {
 		t.Errorf("empty optional variables: %+v, %v", cfg.OIDC, err)
 	}
 	off := map[string]string{"SERMON_OIDC_ISSUER": "", "SERMON_OIDC_CLIENT_ID": "", "SERMON_OIDC_NAME": "", "SERMON_OIDC_CLIENT_SECRET_FILE": "/run/secrets/empty"}
@@ -434,6 +438,7 @@ func TestLoad_OIDC(t *testing.T) {
 		"long name":             {"SERMON_OIDC_NAME": strings.Repeat("x", 41)},
 		"bad scope":             {"SERMON_OIDC_SCOPES": "email pro\"file"},
 		"other callback":        {"SERMON_OIDC_REDIRECT_URL": "https://sermon.example.com/evil"},
+		"jit yes":               {"SERMON_OIDC_JIT": "yes"},
 		"no origin":             {"SERMON_ALLOWED_ORIGINS": "-"},
 	} {
 		_, err := config.Load(fakeSource(env(extra), files))

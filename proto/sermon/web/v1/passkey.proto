@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// PasskeyService manages the caller's own passkeys (WebAuthn, M3-23, ADR 0034). Like
+// TwoFactorService it works with any full session, also while the organization waits for a
+// second factor. Adding and deleting need a recent step-up (FAILED_PRECONDITION with
+// StepUpRequired); FAILED_PRECONDITION without one when the server has no allowed origin.
+service PasskeyService {
+  // ListPasskeys returns the caller's passkeys, oldest first.
+  rpc ListPasskeys(ListPasskeysRequest) returns (ListPasskeysResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // BeginPasskeyRegistration returns the options for navigator.credentials.create();
+  // RESOURCE_EXHAUSTED with 10 passkeys.
+  rpc BeginPasskeyRegistration(BeginPasskeyRegistrationRequest) returns (BeginPasskeyRegistrationResponse);
+  // FinishPasskeyRegistration stores the new passkey; PERMISSION_DENIED if the browser's answer
+  // is refused (origin, challenge, used or expired ceremony).
+  rpc FinishPasskeyRegistration(FinishPasskeyRegistrationRequest) returns (FinishPasskeyRegistrationResponse);
+  // RenamePasskey names a passkey anew.
+  rpc RenamePasskey(RenamePasskeyRequest) returns (RenamePasskeyResponse);
+  // DeletePasskey removes a passkey.
+  rpc DeletePasskey(DeletePasskeyRequest) returns (DeletePasskeyResponse);
+}
+
+// Passkey is a passkey of the caller.
+message Passkey {
+  // id is the credential ID (base64url).
+  string id = 1;
+  // name is the caller's name for it.
+  string name = 2;
+  // create_time is when it was added.
+  google.protobuf.Timestamp create_time = 3;
+  // last_use_time is its last use; unset if never.
+  google.protobuf.Timestamp last_use_time = 4;
+  // synced is set for passkeys the authenticator backs up (e.g. in a password manager).
+  bool synced = 5;
+}
+
+// ListPasskeysRequest has no fields.
+message ListPasskeysRequest {}
+
+// ListPasskeysResponse lists the passkeys.
+message ListPasskeysResponse {
+  // passkeys of the caller.
+  repeated Passkey passkeys = 1;
+}
+
+// BeginPasskeyRegistrationRequest names the new passkey.
+message BeginPasskeyRegistrationRequest {
+  // name of the new passkey.
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// BeginPasskeyRegistrationResponse carries the options.
+message BeginPasskeyRegistrationResponse {
+  // ceremony_id goes back with the answer.
+  string ceremony_id = 1;
+  // options_json is the JSON for PublicKeyCredential.parseCreationOptionsFromJSON (its
+  // "publicKey" member).
+  string options_json = 2;
+}
+
+// FinishPasskeyRegistrationRequest carries the browser's answer.
+message FinishPasskeyRegistrationRequest {
+  // ceremony_id of BeginPasskeyRegistration.
+  string ceremony_id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  // credential_json is PublicKeyCredential.toJSON() of the new credential.
+  string credential_json = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 65536
+  }];
+}
+
+// FinishPasskeyRegistrationResponse is the stored passkey.
+message FinishPasskeyRegistrationResponse {
+  // passkey as stored.
+  Passkey passkey = 1;
+}
+
+// RenamePasskeyRequest names a passkey.
+message RenamePasskeyRequest {
+  // id of the passkey (base64url).
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 1400
+  }];
+  // name is the new name.
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// RenamePasskeyResponse is empty.
+message RenamePasskeyResponse {}
+
+// DeletePasskeyRequest names a passkey.
+message DeletePasskeyRequest {
+  // id of the passkey (base64url).
+  string id = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 1400
+  }];
+}
+
+// DeletePasskeyResponse is empty.
+message DeletePasskeyResponse {}

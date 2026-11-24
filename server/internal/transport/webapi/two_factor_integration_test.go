@@ -45,7 +45,7 @@ func TestTwoFactor_LoginNeedsTheCodeAndEveryCodeWorksOnce(t *testing.T) {
 	ctx := context.Background()
 	mia := login(t, s, "mia@example.org")
 	secret, recoveryCodes := enableTOTP(t, mia)
-	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil || !me.Msg.GetSession().GetSecondFactorEnabled() {
+	if me, err := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); err != nil || !me.Msg.GetSession().GetSecondFactorEnabled() || !me.Msg.GetSession().GetTotpEnabled() || me.Msg.GetSession().GetPasskeyCount() != 0 {
 		t.Fatalf("session after the setup = %v, %v", me, err)
 	}
 	if _, err := mia.twoFactor.BeginTotpSetup(ctx, connect.NewRequest(&webv1.BeginTotpSetupRequest{})); connect.CodeOf(err) != connect.CodeAlreadyExists {

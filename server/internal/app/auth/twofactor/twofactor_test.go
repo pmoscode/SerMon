@@ -365,3 +365,35 @@ func TestSetOrganizationRequirement_AdminsWithOwnSecondFactorAndStepUp(t *testin
 		t.Errorf("making it optional again: %v", err)
 	}
 }
+
+type passkeys int
+
+func (p passkeys) Count(context.Context, identity.UserID) (int, error) { return int(p), nil }
+
+// M3-23: a passkey is a second factor, but no TOTP with recovery codes.
+func TestPasskeys_CountAsSecondFactor(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	strict := tenant.OrgID(uuid.New())
+	w.store.required[strict] = true
+	w.svc.WithPasskeys(passkeys(0))
+	if on, _ := w.svc.Enabled(ctx, w.user); on {
+		t.Error("enabled without anything")
+	}
+	w.svc.WithPasskeys(passkeys(1))
+	if on, err := w.svc.Enabled(ctx, w.user); err != nil || !on {
+		t.Errorf("Enabled() with a passkey = %v, %v", on, err)
+	}
+	if required, _ := w.svc.SetupRequired(ctx, strict, w.user); required {
+		t.Error("a passkey doesn't satisfy the organization")
+	}
+	if totpOn, _ := w.svc.TOTPEnabled(ctx, w.user); totpOn {
+		t.Error("TOTP with a passkey only")
+	}
+	if st, err := w.svc.Status(ctx, w.user); err != nil || st.Enabled {
+		t.Errorf("Status() = %+v, %v", st, err)
+	}
+	if _, err := w.svc.RegenerateRecoveryCodes(ctx, w.user, *w.now); !errors.Is(err, twofactor.ErrNotEnabled) {
+		t.Errorf("recovery codes without TOTP: %v", err)
+	}
+}

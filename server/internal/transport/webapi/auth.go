@@ -18,6 +18,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/passkey"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
@@ -42,6 +43,7 @@ type IdentityReader interface {
 // SecondFactorView tells the session view about the user's second factor (twofactor.Service).
 type SecondFactorView interface {
 	Enabled(ctx context.Context, user identity.UserID) (bool, error)
+	TOTPEnabled(ctx context.Context, user identity.UserID) (bool, error)
 	SetupRequired(ctx context.Context, org tenant.OrgID, user identity.UserID) (bool, error)
 }
 
@@ -56,6 +58,7 @@ type AuthHandler struct {
 	principals   PrincipalLoader  // nil: no rights in the session view
 	oidc         *oidc.Service    // nil: no sign-in at an OIDC provider (M3-20)
 	oidcName     string
+	passkeys     *passkey.Service // nil: no passkeys (M3-23)
 	logger       *slog.Logger
 }
 
@@ -340,8 +343,19 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 			return nil, fmt.Errorf("sign-in ways: %w", err)
 		}
 	}
+	if h.passkeys.Available() {
+		view.PasskeysAvailable = true
+		n, err := h.passkeys.Count(ctx, s.User)
+		if err != nil {
+			return nil, fmt.Errorf("passkeys: %w", err)
+		}
+		view.PasskeyCount = uint32(min(n, passkey.MaxPerUser)) //nolint:gosec // G115: at most 10
+	}
 	if h.secondFactor != nil {
 		if view.SecondFactorEnabled, err = h.secondFactor.Enabled(ctx, s.User); err != nil {
+			return nil, fmt.Errorf("second factor: %w", err)
+		}
+		if view.TotpEnabled, err = h.secondFactor.TOTPEnabled(ctx, s.User); err != nil {
 			return nil, fmt.Errorf("second factor: %w", err)
 		}
 		if s.Org != (tenant.OrgID{}) && !view.GetSecondFactorEnabled() {

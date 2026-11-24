@@ -454,6 +454,12 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
     nichts darf. Fehlversuche beim Code zählen zur Kontosperre; das Passwort setzt den Zähler dann nicht zurück.
   - **Org-Pflicht:** Admins (mit eigenem zweiten Faktor) schalten sie per `SecurityPolicyService`. Mitglieder ohne
     zweiten Faktor erreichen in dieser Org nur die Einrichtung (`FAILED_PRECONDITION` mit `SecondFactorSetupRequired`).
+  - **Passkeys** (M3-23, [ADR 0034](docs/adr/0034-passkeys-mit-webauthn.md)): RP-ID ist der Host der ersten Origin,
+    `attestation: none`, höchstens 10 pro User, Hinzufügen und Löschen mit Step-up und Audit. Ein Passkey ist ein
+    zweiter Faktor (Org-Pflicht), die Anmeldung ohne Passwort verlangt User Verification und zählt als zwei Faktoren;
+    dazu zweiter Faktor nach dem Passwort und Step-up. Zeremonien 5 min, einmal, an Session oder Browser-Cookie
+    gebunden; ein rückwärts laufender Zähler wird abgewiesen (synchronisierte Passkeys mit 0 nicht); Fehlversuche
+    zählen zur Kontosperre.
 - **OIDC/SSO:** `coreos/go-oidc` mit Authorization Code + PKCE. **Gruppen-Claim-Mapping** (OIDC-Gruppe →
   Org/NodeGroup/Rolle) ist konfigurierbar; Just-in-Time-Provisioning ist optional.
     - Seit M3-20 ([ADR 0033](docs/adr/0033-anmeldung-ueber-oidc.md)): ein Provider pro Instanz (`SERMON_OIDC_ISSUER`,

@@ -15,6 +15,8 @@ import (
 	"time"
 	_ "time/tzdata" // time zones of maintenance windows without the host's zoneinfo (static binary)
 
+	"github.com/go-webauthn/webauthn/webauthn"
+
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
@@ -40,6 +42,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/passkey"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/twofactor"
@@ -500,6 +503,11 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Now:          time.Now,
 		SecondFactor: secondFactor,
 	})
+	passkeys, err := newPasskeys(ctx, cfg, db, credentials, login, sessions, logger)
+	if err != nil {
+		return err
+	}
+	secondFactor.WithPasskeys(passkeys)
 	accessStore := postgres.NewAccessStore(db)
 	principals := access.NewLoader(accessStore, secondFactor)
 	live := webapi.NewLiveStreams()
@@ -518,7 +526,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	}
 	invites := invitation.NewService(postgres.NewInvitationStore(db), credentials, policy, hasher, time.Now, access.NewID, inviteOptions...)
 	authHandler := webapi.NewAuthHandler(login, sessions, credentials, secondFactor, logger).WithPrincipals(principals).
-		WithInstanceHealth(accessStore, health)
+		WithInstanceHealth(accessStore, health).WithPasskeys(passkeys)
 	mappings := oidcmapping.NewService(postgres.NewOIDCMappingStore(db), credentials, policy, time.Now, access.NewID, logger)
 	if cfg.OIDC != nil {
 		sso, err := newOIDC(ctx, cfg, db, sessions, credentials, secondFactor, mappings, logger)
@@ -550,6 +558,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
 		LogSettings:  webapi.NewLogSettingsHandler(observing.logSettings, logger),
+		Passkeys:     webapi.NewPasskeyHandler(passkeys, logger),
 		OIDCMappings: webapi.NewOIDCMappingHandler(mappings, cfg.OIDC != nil, cfg.OIDC != nil && cfg.OIDC.JIT, logger),
 		Logs:         webapi.NewLogHandler(observing.logQueries, live, logger),
 		LiveView:     webapi.NewLiveViewHandler(observing.liveViews, live, logger),
@@ -564,6 +573,32 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil
+}
+
+// Passkey ceremonies per client IP and window (start and finish, like logins).
+const (
+	passkeyAttemptsPerWindow = 30
+	passkeyWindow            = time.Minute
+)
+
+// newPasskeys assembles the passkeys (M3-23, ADR 0034): the relying party is the host of the
+// first allowed origin; without origins they are off.
+func newPasskeys(ctx context.Context, cfg config.Config, db *postgres.DB, users passkey.Users, lockout passkey.Lockout,
+	sessions *session.Manager, logger *slog.Logger,
+) (*passkey.Service, error) {
+	d := passkey.Deps{
+		Store: postgres.NewPasskeyStore(db), Users: users, Lockout: lockout, Sessions: sessions,
+		Limiter: ratelimit.New(passkeyAttemptsPerWindow, passkeyWindow, time.Now), Now: time.Now, Logger: logger,
+	}
+	if rp, err := passkey.Config(cfg.AllowedOrigins); err == nil {
+		if d.WebAuthn, err = webauthn.New(rp); err != nil {
+			return nil, fmt.Errorf("passkeys: %w", err)
+		}
+		logger.InfoContext(ctx, "passkeys", "rp_id", rp.RPID, "origins", fmt.Sprint(rp.RPOrigins))
+	} else {
+		logger.WarnContext(ctx, "passkeys are off: "+err.Error())
+	}
+	return passkey.NewService(d), nil
 }
 
 // oidcAttemptsPerWindow bounds the sign-ins at the provider per client IP (start and return).

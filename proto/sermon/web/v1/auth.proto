@@ -55,6 +55,70 @@ service AuthService {
   // (FAILED_PRECONDITION with StepUpRequired); FAILED_PRECONDITION without StepUpRequired if it is
   // the only way to sign in, NOT_FOUND if none is linked.
   rpc UnlinkOidcIdentity(UnlinkOidcIdentityRequest) returns (UnlinkOidcIdentityResponse);
+  // BeginPasskey starts an assertion with a passkey (M3-23, ADR 0034): a sign-in without a
+  // password (a cookie binds it to the browser), the second factor of a session waiting for it
+  // or the step-up of a session (UNAUTHENTICATED without). NOT_FOUND if the user has no passkey,
+  // FAILED_PRECONDITION when passkeys are off, RESOURCE_EXHAUSTED for too many attempts.
+  rpc BeginPasskey(BeginPasskeyRequest) returns (BeginPasskeyResponse);
+  // FinishPasskey completes it: the sign-in and the second factor set the session cookie, the
+  // step-up renews it. A refused answer is UNAUTHENTICATED for the sign-in and PERMISSION_DENIED
+  // otherwise; failures count towards the lockout of the account.
+  rpc FinishPasskey(FinishPasskeyRequest) returns (FinishPasskeyResponse);
+}
+
+// PasskeyPurpose is what an assertion with a passkey is for.
+enum PasskeyPurpose {
+  // PASSKEY_PURPOSE_UNSPECIFIED is not used.
+  PASSKEY_PURPOSE_UNSPECIFIED = 0;
+  // PASSKEY_PURPOSE_LOGIN signs in without a password (user verification required).
+  PASSKEY_PURPOSE_LOGIN = 1;
+  // PASSKEY_PURPOSE_SECOND_FACTOR completes a sign-in after the password.
+  PASSKEY_PURPOSE_SECOND_FACTOR = 2;
+  // PASSKEY_PURPOSE_STEP_UP renews the step-up.
+  PASSKEY_PURPOSE_STEP_UP = 3;
+}
+
+// BeginPasskeyRequest names the purpose.
+message BeginPasskeyRequest {
+  // purpose of the assertion.
+  PasskeyPurpose purpose = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+// BeginPasskeyResponse carries the options.
+message BeginPasskeyResponse {
+  // ceremony_id goes back with the answer.
+  string ceremony_id = 1;
+  // options_json is the JSON for PublicKeyCredential.parseRequestOptionsFromJSON (its
+  // "publicKey" member).
+  string options_json = 2;
+}
+
+// FinishPasskeyRequest carries the browser's answer.
+message FinishPasskeyRequest {
+  // purpose as begun.
+  PasskeyPurpose purpose = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // ceremony_id of BeginPasskey.
+  string ceremony_id = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  // credential_json is PublicKeyCredential.toJSON() of the assertion.
+  string credential_json = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 65536
+  }];
+}
+
+// FinishPasskeyResponse is the session.
+message FinishPasskeyResponse {
+  // session is the started or renewed session.
+  Session session = 1;
 }
 
 // OidcIdentity is an account at the provider linked to the user.
@@ -250,7 +314,8 @@ message Session {
   // step_up_until is when the last (re-)authentication stops allowing sensitive actions; after
   // that they fail with FAILED_PRECONDITION until ConfirmPassword is called.
   google.protobuf.Timestamp step_up_until = 6;
-  // second_factor_enabled means the step-up needs ConfirmSecondFactor instead of the password.
+  // second_factor_enabled means the user has a second factor (TOTP or a passkey): the step-up
+  // needs it instead of the password.
   bool second_factor_enabled = 7;
   // second_factor_setup_required means the active organization requires two-factor
   // authentication the user doesn't have yet; only TwoFactorService works until it is set up.
@@ -280,6 +345,12 @@ message Session {
   bool has_password = 16;
   // oidc_linked is set if an identity of the OIDC provider is linked (step-up over it).
   bool oidc_linked = 17;
+  // totp_enabled is set if the user has TOTP (code with ConfirmSecondFactor, M3-23).
+  bool totp_enabled = 18;
+  // passkey_count is how many passkeys the user has (step-up with BeginPasskey).
+  uint32 passkey_count = 19;
+  // passkeys is set if the server offers passkeys (an allowed origin is configured).
+  bool passkeys_available = 20;
 }
 
 // InstanceProblem is a check of the server's self-monitoring that is not OK.

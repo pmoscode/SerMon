@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
@@ -31,6 +32,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
+	"github.com/pmoscode/SerMon/server/internal/app/auth/passkey"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/password"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/twofactor"
@@ -81,6 +83,9 @@ type stack struct {
 	// idp is the fake OIDC provider of the stack (M3-20).
 	idp *oidctest.Provider
 }
+
+// passkeyOrigin is where the software authenticator of the tests says it runs (M3-23).
+const passkeyOrigin = "https://sermon.example.com"
 
 // The fake provider's client (M3-20).
 const (
@@ -145,6 +150,20 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Credentials: creds, Sessions: sessions, Hasher: hasher,
 		IPLimiter: ratelimit.New(loginLimit, time.Minute, time.Now), Now: time.Now, SecondFactor: secondFactor,
 	})
+	// Passkeys (M3-23) for the origin of the software authenticator of the tests.
+	rp, err := passkey.Config([]string{passkeyOrigin})
+	if err != nil {
+		t.Fatal(err)
+	}
+	relyingParty, err := webauthn.New(rp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passkeys := passkey.NewService(passkey.Deps{
+		WebAuthn: relyingParty, Store: postgres.NewPasskeyStore(pg), Users: creds, Lockout: login, Sessions: sessions,
+		Limiter: ratelimit.New(1000, time.Minute, time.Now), Now: time.Now,
+	})
+	secondFactor.WithPasskeys(passkeys)
 
 	mux := http.NewServeMux()
 	srv := httptest.NewUnstartedServer(mux)
@@ -204,8 +223,9 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		LiveView: webapi.NewLiveViewHandler(liveViews, nil, slog.New(slog.DiscardHandler)),
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
 			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)).
-			WithInstanceHealth(postgres.NewAccessStore(pg), fakeProblems{}).WithOIDC(sso, "Test IdP"),
-		System: webapi.NewSystemHandler("test"),
+			WithInstanceHealth(postgres.NewAccessStore(pg), fakeProblems{}).WithOIDC(sso, "Test IdP").WithPasskeys(passkeys),
+		Passkeys: webapi.NewPasskeyHandler(passkeys, slog.New(slog.DiscardHandler)),
+		System:   webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
 			invites, slog.New(slog.DiscardHandler)),
 		Invitation: webapi.NewInvitationHandler(invites, sessions, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),

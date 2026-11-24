@@ -62,6 +62,12 @@ const (
 	// AuthServiceUnlinkOidcIdentityProcedure is the fully-qualified name of the AuthService's
 	// UnlinkOidcIdentity RPC.
 	AuthServiceUnlinkOidcIdentityProcedure = "/sermon.web.v1.AuthService/UnlinkOidcIdentity"
+	// AuthServiceBeginPasskeyProcedure is the fully-qualified name of the AuthService's BeginPasskey
+	// RPC.
+	AuthServiceBeginPasskeyProcedure = "/sermon.web.v1.AuthService/BeginPasskey"
+	// AuthServiceFinishPasskeyProcedure is the fully-qualified name of the AuthService's FinishPasskey
+	// RPC.
+	AuthServiceFinishPasskeyProcedure = "/sermon.web.v1.AuthService/FinishPasskey"
 )
 
 // AuthServiceClient is a client for the sermon.web.v1.AuthService service.
@@ -107,6 +113,15 @@ type AuthServiceClient interface {
 	// (FAILED_PRECONDITION with StepUpRequired); FAILED_PRECONDITION without StepUpRequired if it is
 	// the only way to sign in, NOT_FOUND if none is linked.
 	UnlinkOidcIdentity(context.Context, *connect.Request[v1.UnlinkOidcIdentityRequest]) (*connect.Response[v1.UnlinkOidcIdentityResponse], error)
+	// BeginPasskey starts an assertion with a passkey (M3-23, ADR 0034): a sign-in without a
+	// password (a cookie binds it to the browser), the second factor of a session waiting for it
+	// or the step-up of a session (UNAUTHENTICATED without). NOT_FOUND if the user has no passkey,
+	// FAILED_PRECONDITION when passkeys are off, RESOURCE_EXHAUSTED for too many attempts.
+	BeginPasskey(context.Context, *connect.Request[v1.BeginPasskeyRequest]) (*connect.Response[v1.BeginPasskeyResponse], error)
+	// FinishPasskey completes it: the sign-in and the second factor set the session cookie, the
+	// step-up renews it. A refused answer is UNAUTHENTICATED for the sign-in and PERMISSION_DENIED
+	// otherwise; failures count towards the lockout of the account.
+	FinishPasskey(context.Context, *connect.Request[v1.FinishPasskeyRequest]) (*connect.Response[v1.FinishPasskeyResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the sermon.web.v1.AuthService service. By default,
@@ -189,6 +204,18 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("UnlinkOidcIdentity")),
 			connect.WithClientOptions(opts...),
 		),
+		beginPasskey: connect.NewClient[v1.BeginPasskeyRequest, v1.BeginPasskeyResponse](
+			httpClient,
+			baseURL+AuthServiceBeginPasskeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("BeginPasskey")),
+			connect.WithClientOptions(opts...),
+		),
+		finishPasskey: connect.NewClient[v1.FinishPasskeyRequest, v1.FinishPasskeyResponse](
+			httpClient,
+			baseURL+AuthServiceFinishPasskeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("FinishPasskey")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -205,6 +232,8 @@ type authServiceClient struct {
 	beginOidc           *connect.Client[v1.BeginOidcRequest, v1.BeginOidcResponse]
 	listOidcIdentities  *connect.Client[v1.ListOidcIdentitiesRequest, v1.ListOidcIdentitiesResponse]
 	unlinkOidcIdentity  *connect.Client[v1.UnlinkOidcIdentityRequest, v1.UnlinkOidcIdentityResponse]
+	beginPasskey        *connect.Client[v1.BeginPasskeyRequest, v1.BeginPasskeyResponse]
+	finishPasskey       *connect.Client[v1.FinishPasskeyRequest, v1.FinishPasskeyResponse]
 }
 
 // Login calls sermon.web.v1.AuthService.Login.
@@ -262,6 +291,16 @@ func (c *authServiceClient) UnlinkOidcIdentity(ctx context.Context, req *connect
 	return c.unlinkOidcIdentity.CallUnary(ctx, req)
 }
 
+// BeginPasskey calls sermon.web.v1.AuthService.BeginPasskey.
+func (c *authServiceClient) BeginPasskey(ctx context.Context, req *connect.Request[v1.BeginPasskeyRequest]) (*connect.Response[v1.BeginPasskeyResponse], error) {
+	return c.beginPasskey.CallUnary(ctx, req)
+}
+
+// FinishPasskey calls sermon.web.v1.AuthService.FinishPasskey.
+func (c *authServiceClient) FinishPasskey(ctx context.Context, req *connect.Request[v1.FinishPasskeyRequest]) (*connect.Response[v1.FinishPasskeyResponse], error) {
+	return c.finishPasskey.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the sermon.web.v1.AuthService service.
 type AuthServiceHandler interface {
 	// Login checks e-mail and password and sets the session cookie. All failures return
@@ -305,6 +344,15 @@ type AuthServiceHandler interface {
 	// (FAILED_PRECONDITION with StepUpRequired); FAILED_PRECONDITION without StepUpRequired if it is
 	// the only way to sign in, NOT_FOUND if none is linked.
 	UnlinkOidcIdentity(context.Context, *connect.Request[v1.UnlinkOidcIdentityRequest]) (*connect.Response[v1.UnlinkOidcIdentityResponse], error)
+	// BeginPasskey starts an assertion with a passkey (M3-23, ADR 0034): a sign-in without a
+	// password (a cookie binds it to the browser), the second factor of a session waiting for it
+	// or the step-up of a session (UNAUTHENTICATED without). NOT_FOUND if the user has no passkey,
+	// FAILED_PRECONDITION when passkeys are off, RESOURCE_EXHAUSTED for too many attempts.
+	BeginPasskey(context.Context, *connect.Request[v1.BeginPasskeyRequest]) (*connect.Response[v1.BeginPasskeyResponse], error)
+	// FinishPasskey completes it: the sign-in and the second factor set the session cookie, the
+	// step-up renews it. A refused answer is UNAUTHENTICATED for the sign-in and PERMISSION_DENIED
+	// otherwise; failures count towards the lockout of the account.
+	FinishPasskey(context.Context, *connect.Request[v1.FinishPasskeyRequest]) (*connect.Response[v1.FinishPasskeyResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -383,6 +431,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("UnlinkOidcIdentity")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceBeginPasskeyHandler := connect.NewUnaryHandler(
+		AuthServiceBeginPasskeyProcedure,
+		svc.BeginPasskey,
+		connect.WithSchema(authServiceMethods.ByName("BeginPasskey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceFinishPasskeyHandler := connect.NewUnaryHandler(
+		AuthServiceFinishPasskeyProcedure,
+		svc.FinishPasskey,
+		connect.WithSchema(authServiceMethods.ByName("FinishPasskey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -407,6 +467,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceListOidcIdentitiesHandler.ServeHTTP(w, r)
 		case AuthServiceUnlinkOidcIdentityProcedure:
 			authServiceUnlinkOidcIdentityHandler.ServeHTTP(w, r)
+		case AuthServiceBeginPasskeyProcedure:
+			authServiceBeginPasskeyHandler.ServeHTTP(w, r)
+		case AuthServiceFinishPasskeyProcedure:
+			authServiceFinishPasskeyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -458,4 +522,12 @@ func (UnimplementedAuthServiceHandler) ListOidcIdentities(context.Context, *conn
 
 func (UnimplementedAuthServiceHandler) UnlinkOidcIdentity(context.Context, *connect.Request[v1.UnlinkOidcIdentityRequest]) (*connect.Response[v1.UnlinkOidcIdentityResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.UnlinkOidcIdentity is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) BeginPasskey(context.Context, *connect.Request[v1.BeginPasskeyRequest]) (*connect.Response[v1.BeginPasskeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.BeginPasskey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) FinishPasskey(context.Context, *connect.Request[v1.FinishPasskeyRequest]) (*connect.Response[v1.FinishPasskeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.FinishPasskey is not implemented"))
 }

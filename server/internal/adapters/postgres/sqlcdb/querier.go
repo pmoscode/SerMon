@@ -57,6 +57,7 @@ type Querier interface {
 	// Open invitations for other addresses than email (a new invitation replaces the old one).
 	CountOpenInvitations(ctx context.Context, arg CountOpenInvitationsParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
+	CountPasskeys(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
@@ -77,6 +78,7 @@ type Querier interface {
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
 	DeleteExpiredOIDCFlows(ctx context.Context, now time.Time) error
+	DeleteExpiredWebAuthnCeremonies(ctx context.Context, now time.Time) error
 	DeleteGroupLogSettings(ctx context.Context, groupID uuid.UUID) error
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (string, error)
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
@@ -92,6 +94,7 @@ type Querier interface {
 	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
 	// The sessions in the organization end with the lock (sessions have no row-level security).
 	DeleteOrganizationSessions(ctx context.Context, orgID *uuid.UUID) error
+	DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (string, error)
 	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
@@ -109,6 +112,7 @@ type Querier interface {
 	// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.
 	FailedLoginBuckets(ctx context.Context, arg FailedLoginBucketsParams) ([]FailedLoginBucketsRow, error)
 	FindIdentity(ctx context.Context, arg FindIdentityParams) (uuid.UUID, error)
+	FindPasskey(ctx context.Context, id []byte) (WebauthnCredential, error)
 	// Series of a metric on the given nodes, restricted to the node groups of the scope and to series
 	// whose labels contain the filter.
 	FindSeries(ctx context.Context, arg FindSeriesParams) ([]FindSeriesRow, error)
@@ -160,11 +164,13 @@ type Querier interface {
 	InsertNotificationPolicyChannel(ctx context.Context, arg InsertNotificationPolicyChannelParams) error
 	// OIDC (M3-20, ADR 0033): instance-level, like the credentials.
 	InsertOIDCFlow(ctx context.Context, arg InsertOIDCFlowParams) error
+	InsertPasskey(ctx context.Context, arg InsertPasskeyParams) (int64, error)
 	InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error
 	InsertSecurityEvent(ctx context.Context, arg []InsertSecurityEventParams) *InsertSecurityEventBatchResults
 	// An event of the server itself (M2-24), inside the transaction of what it reports.
 	InsertServerSecurityEvent(ctx context.Context, arg InsertServerSecurityEventParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
+	InsertWebAuthnCeremony(ctx context.Context, arg InsertWebAuthnCeremonyParams) error
 	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
 	InvitationByToken(ctx context.Context, arg InvitationByTokenParams) (InvitationByTokenRow, error)
 	// A member of a locked organization (M2-33) is no member until the lock is lifted: every
@@ -210,6 +216,8 @@ type Querier interface {
 	// OIDC group mappings (M3-21). All but OIDCMappedOrganizations run inside InTenant.
 	ListOIDCMappings(ctx context.Context) ([]ListOIDCMappingsRow, error)
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
+	// Passkeys (M3-23, ADR 0034): instance-level, like the credentials.
+	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]WebauthnCredential, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
 	// callers on all groups). Keyset paging below (before_time, before_id).
@@ -226,6 +234,8 @@ type Querier interface {
 	LockNodeEventSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	// Serializes rollover operations of all server instances.
 	LockPKI(ctx context.Context) error
+	// Serializes adding passkeys of a user (the limit holds under parallel registrations).
+	LockUserPasskeys(ctx context.Context, userID uuid.UUID) error
 	// Moves seen_at forward to the newest data time of a write (never back).
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
 	// The node of a group with this machine-id whose takeover window is open.
@@ -256,6 +266,7 @@ type Querier interface {
 	OrganizationState(ctx context.Context) (OrganizationStateRow, error)
 	// What the organization of the tenant transaction holds, for the superadmin's estimate (M2-32).
 	OrganizationUsage(ctx context.Context) (OrganizationUsageRow, error)
+	PasskeyUsed(ctx context.Context, arg PasskeyUsedParams) error
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
@@ -272,6 +283,7 @@ type Querier interface {
 	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)
+	RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (int64, error)
 	// Compare-and-swap: counts the attempt only if nobody else did in between and the account isn't
 	// locked, so parallel requests can't all pass the lockout check (M1-35).
 	ReserveAttempt(ctx context.Context, arg ReserveAttemptParams) (int64, error)
@@ -315,6 +327,8 @@ type Querier interface {
 	// Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
 	// closed. No rows: the window closed meanwhile.
 	TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int64, error)
+	// Once: the ceremony is deleted whether it expired or not.
+	TakeWebAuthnCeremony(ctx context.Context, idHash string) (TakeWebAuthnCeremonyRow, error)
 	TopFailedIPs(ctx context.Context, arg TopFailedIPsParams) ([]TopFailedIPsRow, error)
 	TopFailedUsers(ctx context.Context, arg TopFailedUsersParams) ([]TopFailedUsersRow, error)
 	TouchNode(ctx context.Context, arg TouchNodeParams) (int64, error)

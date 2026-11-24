@@ -23,6 +23,63 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// PasskeyPurpose is what an assertion with a passkey is for.
+type PasskeyPurpose int32
+
+const (
+	// PASSKEY_PURPOSE_UNSPECIFIED is not used.
+	PasskeyPurpose_PASSKEY_PURPOSE_UNSPECIFIED PasskeyPurpose = 0
+	// PASSKEY_PURPOSE_LOGIN signs in without a password (user verification required).
+	PasskeyPurpose_PASSKEY_PURPOSE_LOGIN PasskeyPurpose = 1
+	// PASSKEY_PURPOSE_SECOND_FACTOR completes a sign-in after the password.
+	PasskeyPurpose_PASSKEY_PURPOSE_SECOND_FACTOR PasskeyPurpose = 2
+	// PASSKEY_PURPOSE_STEP_UP renews the step-up.
+	PasskeyPurpose_PASSKEY_PURPOSE_STEP_UP PasskeyPurpose = 3
+)
+
+// Enum value maps for PasskeyPurpose.
+var (
+	PasskeyPurpose_name = map[int32]string{
+		0: "PASSKEY_PURPOSE_UNSPECIFIED",
+		1: "PASSKEY_PURPOSE_LOGIN",
+		2: "PASSKEY_PURPOSE_SECOND_FACTOR",
+		3: "PASSKEY_PURPOSE_STEP_UP",
+	}
+	PasskeyPurpose_value = map[string]int32{
+		"PASSKEY_PURPOSE_UNSPECIFIED":   0,
+		"PASSKEY_PURPOSE_LOGIN":         1,
+		"PASSKEY_PURPOSE_SECOND_FACTOR": 2,
+		"PASSKEY_PURPOSE_STEP_UP":       3,
+	}
+)
+
+func (x PasskeyPurpose) Enum() *PasskeyPurpose {
+	p := new(PasskeyPurpose)
+	*p = x
+	return p
+}
+
+func (x PasskeyPurpose) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PasskeyPurpose) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_web_v1_auth_proto_enumTypes[0].Descriptor()
+}
+
+func (PasskeyPurpose) Type() protoreflect.EnumType {
+	return &file_sermon_web_v1_auth_proto_enumTypes[0]
+}
+
+func (x PasskeyPurpose) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PasskeyPurpose.Descriptor instead.
+func (PasskeyPurpose) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{0}
+}
+
 // OidcIntent is what a sign-in at the provider is for.
 type OidcIntent int32
 
@@ -64,11 +121,11 @@ func (x OidcIntent) String() string {
 }
 
 func (OidcIntent) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_web_v1_auth_proto_enumTypes[0].Descriptor()
+	return file_sermon_web_v1_auth_proto_enumTypes[1].Descriptor()
 }
 
 func (OidcIntent) Type() protoreflect.EnumType {
-	return &file_sermon_web_v1_auth_proto_enumTypes[0]
+	return &file_sermon_web_v1_auth_proto_enumTypes[1]
 }
 
 func (x OidcIntent) Number() protoreflect.EnumNumber {
@@ -77,7 +134,219 @@ func (x OidcIntent) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use OidcIntent.Descriptor instead.
 func (OidcIntent) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{1}
+}
+
+// BeginPasskeyRequest names the purpose.
+type BeginPasskeyRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// purpose of the assertion.
+	Purpose       PasskeyPurpose `protobuf:"varint,1,opt,name=purpose,proto3,enum=sermon.web.v1.PasskeyPurpose" json:"purpose,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BeginPasskeyRequest) Reset() {
+	*x = BeginPasskeyRequest{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BeginPasskeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BeginPasskeyRequest) ProtoMessage() {}
+
+func (x *BeginPasskeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BeginPasskeyRequest.ProtoReflect.Descriptor instead.
+func (*BeginPasskeyRequest) Descriptor() ([]byte, []int) {
 	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *BeginPasskeyRequest) GetPurpose() PasskeyPurpose {
+	if x != nil {
+		return x.Purpose
+	}
+	return PasskeyPurpose_PASSKEY_PURPOSE_UNSPECIFIED
+}
+
+// BeginPasskeyResponse carries the options.
+type BeginPasskeyResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ceremony_id goes back with the answer.
+	CeremonyId string `protobuf:"bytes,1,opt,name=ceremony_id,json=ceremonyId,proto3" json:"ceremony_id,omitempty"`
+	// options_json is the JSON for PublicKeyCredential.parseRequestOptionsFromJSON (its
+	// "publicKey" member).
+	OptionsJson   string `protobuf:"bytes,2,opt,name=options_json,json=optionsJson,proto3" json:"options_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BeginPasskeyResponse) Reset() {
+	*x = BeginPasskeyResponse{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BeginPasskeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BeginPasskeyResponse) ProtoMessage() {}
+
+func (x *BeginPasskeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BeginPasskeyResponse.ProtoReflect.Descriptor instead.
+func (*BeginPasskeyResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *BeginPasskeyResponse) GetCeremonyId() string {
+	if x != nil {
+		return x.CeremonyId
+	}
+	return ""
+}
+
+func (x *BeginPasskeyResponse) GetOptionsJson() string {
+	if x != nil {
+		return x.OptionsJson
+	}
+	return ""
+}
+
+// FinishPasskeyRequest carries the browser's answer.
+type FinishPasskeyRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// purpose as begun.
+	Purpose PasskeyPurpose `protobuf:"varint,1,opt,name=purpose,proto3,enum=sermon.web.v1.PasskeyPurpose" json:"purpose,omitempty"`
+	// ceremony_id of BeginPasskey.
+	CeremonyId string `protobuf:"bytes,2,opt,name=ceremony_id,json=ceremonyId,proto3" json:"ceremony_id,omitempty"`
+	// credential_json is PublicKeyCredential.toJSON() of the assertion.
+	CredentialJson string `protobuf:"bytes,3,opt,name=credential_json,json=credentialJson,proto3" json:"credential_json,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *FinishPasskeyRequest) Reset() {
+	*x = FinishPasskeyRequest{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FinishPasskeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FinishPasskeyRequest) ProtoMessage() {}
+
+func (x *FinishPasskeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FinishPasskeyRequest.ProtoReflect.Descriptor instead.
+func (*FinishPasskeyRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *FinishPasskeyRequest) GetPurpose() PasskeyPurpose {
+	if x != nil {
+		return x.Purpose
+	}
+	return PasskeyPurpose_PASSKEY_PURPOSE_UNSPECIFIED
+}
+
+func (x *FinishPasskeyRequest) GetCeremonyId() string {
+	if x != nil {
+		return x.CeremonyId
+	}
+	return ""
+}
+
+func (x *FinishPasskeyRequest) GetCredentialJson() string {
+	if x != nil {
+		return x.CredentialJson
+	}
+	return ""
+}
+
+// FinishPasskeyResponse is the session.
+type FinishPasskeyResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// session is the started or renewed session.
+	Session       *Session `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FinishPasskeyResponse) Reset() {
+	*x = FinishPasskeyResponse{}
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FinishPasskeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FinishPasskeyResponse) ProtoMessage() {}
+
+func (x *FinishPasskeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FinishPasskeyResponse.ProtoReflect.Descriptor instead.
+func (*FinishPasskeyResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *FinishPasskeyResponse) GetSession() *Session {
+	if x != nil {
+		return x.Session
+	}
+	return nil
 }
 
 // OidcIdentity is an account at the provider linked to the user.
@@ -99,7 +368,7 @@ type OidcIdentity struct {
 
 func (x *OidcIdentity) Reset() {
 	*x = OidcIdentity{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -111,7 +380,7 @@ func (x *OidcIdentity) String() string {
 func (*OidcIdentity) ProtoMessage() {}
 
 func (x *OidcIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -124,7 +393,7 @@ func (x *OidcIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OidcIdentity.ProtoReflect.Descriptor instead.
 func (*OidcIdentity) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{0}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *OidcIdentity) GetIssuer() string {
@@ -171,7 +440,7 @@ type ListOidcIdentitiesRequest struct {
 
 func (x *ListOidcIdentitiesRequest) Reset() {
 	*x = ListOidcIdentitiesRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -183,7 +452,7 @@ func (x *ListOidcIdentitiesRequest) String() string {
 func (*ListOidcIdentitiesRequest) ProtoMessage() {}
 
 func (x *ListOidcIdentitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -196,7 +465,7 @@ func (x *ListOidcIdentitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOidcIdentitiesRequest.ProtoReflect.Descriptor instead.
 func (*ListOidcIdentitiesRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{1}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{5}
 }
 
 // ListOidcIdentitiesResponse lists the identities.
@@ -210,7 +479,7 @@ type ListOidcIdentitiesResponse struct {
 
 func (x *ListOidcIdentitiesResponse) Reset() {
 	*x = ListOidcIdentitiesResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -222,7 +491,7 @@ func (x *ListOidcIdentitiesResponse) String() string {
 func (*ListOidcIdentitiesResponse) ProtoMessage() {}
 
 func (x *ListOidcIdentitiesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -235,7 +504,7 @@ func (x *ListOidcIdentitiesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOidcIdentitiesResponse.ProtoReflect.Descriptor instead.
 func (*ListOidcIdentitiesResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{2}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListOidcIdentitiesResponse) GetIdentities() []*OidcIdentity {
@@ -256,7 +525,7 @@ type UnlinkOidcIdentityRequest struct {
 
 func (x *UnlinkOidcIdentityRequest) Reset() {
 	*x = UnlinkOidcIdentityRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -268,7 +537,7 @@ func (x *UnlinkOidcIdentityRequest) String() string {
 func (*UnlinkOidcIdentityRequest) ProtoMessage() {}
 
 func (x *UnlinkOidcIdentityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -281,7 +550,7 @@ func (x *UnlinkOidcIdentityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkOidcIdentityRequest.ProtoReflect.Descriptor instead.
 func (*UnlinkOidcIdentityRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{3}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UnlinkOidcIdentityRequest) GetIssuer() string {
@@ -300,7 +569,7 @@ type UnlinkOidcIdentityResponse struct {
 
 func (x *UnlinkOidcIdentityResponse) Reset() {
 	*x = UnlinkOidcIdentityResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -312,7 +581,7 @@ func (x *UnlinkOidcIdentityResponse) String() string {
 func (*UnlinkOidcIdentityResponse) ProtoMessage() {}
 
 func (x *UnlinkOidcIdentityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -325,7 +594,7 @@ func (x *UnlinkOidcIdentityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlinkOidcIdentityResponse.ProtoReflect.Descriptor instead.
 func (*UnlinkOidcIdentityResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{4}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{8}
 }
 
 // GetLoginOptionsRequest has no fields.
@@ -337,7 +606,7 @@ type GetLoginOptionsRequest struct {
 
 func (x *GetLoginOptionsRequest) Reset() {
 	*x = GetLoginOptionsRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -349,7 +618,7 @@ func (x *GetLoginOptionsRequest) String() string {
 func (*GetLoginOptionsRequest) ProtoMessage() {}
 
 func (x *GetLoginOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -362,7 +631,7 @@ func (x *GetLoginOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLoginOptionsRequest.ProtoReflect.Descriptor instead.
 func (*GetLoginOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{5}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{9}
 }
 
 // GetLoginOptionsResponse lists the ways to sign in.
@@ -378,7 +647,7 @@ type GetLoginOptionsResponse struct {
 
 func (x *GetLoginOptionsResponse) Reset() {
 	*x = GetLoginOptionsResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -390,7 +659,7 @@ func (x *GetLoginOptionsResponse) String() string {
 func (*GetLoginOptionsResponse) ProtoMessage() {}
 
 func (x *GetLoginOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -403,7 +672,7 @@ func (x *GetLoginOptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLoginOptionsResponse.ProtoReflect.Descriptor instead.
 func (*GetLoginOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetLoginOptionsResponse) GetOidc() bool {
@@ -433,7 +702,7 @@ type BeginOidcRequest struct {
 
 func (x *BeginOidcRequest) Reset() {
 	*x = BeginOidcRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -445,7 +714,7 @@ func (x *BeginOidcRequest) String() string {
 func (*BeginOidcRequest) ProtoMessage() {}
 
 func (x *BeginOidcRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -458,7 +727,7 @@ func (x *BeginOidcRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginOidcRequest.ProtoReflect.Descriptor instead.
 func (*BeginOidcRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{7}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BeginOidcRequest) GetIntent() OidcIntent {
@@ -486,7 +755,7 @@ type BeginOidcResponse struct {
 
 func (x *BeginOidcResponse) Reset() {
 	*x = BeginOidcResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -498,7 +767,7 @@ func (x *BeginOidcResponse) String() string {
 func (*BeginOidcResponse) ProtoMessage() {}
 
 func (x *BeginOidcResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -511,7 +780,7 @@ func (x *BeginOidcResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginOidcResponse.ProtoReflect.Descriptor instead.
 func (*BeginOidcResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{8}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *BeginOidcResponse) GetAuthorizationUrl() string {
@@ -534,7 +803,7 @@ type LoginRequest struct {
 
 func (x *LoginRequest) Reset() {
 	*x = LoginRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -546,7 +815,7 @@ func (x *LoginRequest) String() string {
 func (*LoginRequest) ProtoMessage() {}
 
 func (x *LoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +828,7 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
 func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{9}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *LoginRequest) GetEmail() string {
@@ -589,7 +858,7 @@ type LoginResponse struct {
 
 func (x *LoginResponse) Reset() {
 	*x = LoginResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[10]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -601,7 +870,7 @@ func (x *LoginResponse) String() string {
 func (*LoginResponse) ProtoMessage() {}
 
 func (x *LoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[10]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -614,7 +883,7 @@ func (x *LoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginResponse.ProtoReflect.Descriptor instead.
 func (*LoginResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{10}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *LoginResponse) GetSession() *Session {
@@ -642,7 +911,7 @@ type VerifySecondFactorRequest struct {
 
 func (x *VerifySecondFactorRequest) Reset() {
 	*x = VerifySecondFactorRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[11]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -654,7 +923,7 @@ func (x *VerifySecondFactorRequest) String() string {
 func (*VerifySecondFactorRequest) ProtoMessage() {}
 
 func (x *VerifySecondFactorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[11]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -667,7 +936,7 @@ func (x *VerifySecondFactorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifySecondFactorRequest.ProtoReflect.Descriptor instead.
 func (*VerifySecondFactorRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{11}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *VerifySecondFactorRequest) GetCode() string {
@@ -688,7 +957,7 @@ type VerifySecondFactorResponse struct {
 
 func (x *VerifySecondFactorResponse) Reset() {
 	*x = VerifySecondFactorResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[12]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -700,7 +969,7 @@ func (x *VerifySecondFactorResponse) String() string {
 func (*VerifySecondFactorResponse) ProtoMessage() {}
 
 func (x *VerifySecondFactorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[12]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -713,7 +982,7 @@ func (x *VerifySecondFactorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifySecondFactorResponse.ProtoReflect.Descriptor instead.
 func (*VerifySecondFactorResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{12}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *VerifySecondFactorResponse) GetSession() *Session {
@@ -734,7 +1003,7 @@ type ConfirmSecondFactorRequest struct {
 
 func (x *ConfirmSecondFactorRequest) Reset() {
 	*x = ConfirmSecondFactorRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[13]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -746,7 +1015,7 @@ func (x *ConfirmSecondFactorRequest) String() string {
 func (*ConfirmSecondFactorRequest) ProtoMessage() {}
 
 func (x *ConfirmSecondFactorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[13]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -759,7 +1028,7 @@ func (x *ConfirmSecondFactorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmSecondFactorRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmSecondFactorRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{13}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ConfirmSecondFactorRequest) GetCode() string {
@@ -780,7 +1049,7 @@ type ConfirmSecondFactorResponse struct {
 
 func (x *ConfirmSecondFactorResponse) Reset() {
 	*x = ConfirmSecondFactorResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[14]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -792,7 +1061,7 @@ func (x *ConfirmSecondFactorResponse) String() string {
 func (*ConfirmSecondFactorResponse) ProtoMessage() {}
 
 func (x *ConfirmSecondFactorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[14]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -805,7 +1074,7 @@ func (x *ConfirmSecondFactorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmSecondFactorResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmSecondFactorResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{14}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ConfirmSecondFactorResponse) GetSession() *Session {
@@ -824,7 +1093,7 @@ type LogoutRequest struct {
 
 func (x *LogoutRequest) Reset() {
 	*x = LogoutRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[15]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -836,7 +1105,7 @@ func (x *LogoutRequest) String() string {
 func (*LogoutRequest) ProtoMessage() {}
 
 func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[15]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -849,7 +1118,7 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{15}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{19}
 }
 
 // LogoutResponse has no fields.
@@ -861,7 +1130,7 @@ type LogoutResponse struct {
 
 func (x *LogoutResponse) Reset() {
 	*x = LogoutResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[16]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -873,7 +1142,7 @@ func (x *LogoutResponse) String() string {
 func (*LogoutResponse) ProtoMessage() {}
 
 func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[16]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -886,7 +1155,7 @@ func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
 func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{16}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{20}
 }
 
 // GetSessionRequest has no parameters.
@@ -898,7 +1167,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -910,7 +1179,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[17]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -923,7 +1192,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{17}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{21}
 }
 
 // GetSessionResponse describes the current session.
@@ -937,7 +1206,7 @@ type GetSessionResponse struct {
 
 func (x *GetSessionResponse) Reset() {
 	*x = GetSessionResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[18]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -949,7 +1218,7 @@ func (x *GetSessionResponse) String() string {
 func (*GetSessionResponse) ProtoMessage() {}
 
 func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[18]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -962,7 +1231,7 @@ func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{18}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetSessionResponse) GetSession() *Session {
@@ -983,7 +1252,7 @@ type SwitchOrganizationRequest struct {
 
 func (x *SwitchOrganizationRequest) Reset() {
 	*x = SwitchOrganizationRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[19]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -995,7 +1264,7 @@ func (x *SwitchOrganizationRequest) String() string {
 func (*SwitchOrganizationRequest) ProtoMessage() {}
 
 func (x *SwitchOrganizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[19]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1008,7 +1277,7 @@ func (x *SwitchOrganizationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchOrganizationRequest.ProtoReflect.Descriptor instead.
 func (*SwitchOrganizationRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{19}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SwitchOrganizationRequest) GetOrganizationId() string {
@@ -1029,7 +1298,7 @@ type SwitchOrganizationResponse struct {
 
 func (x *SwitchOrganizationResponse) Reset() {
 	*x = SwitchOrganizationResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[20]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1041,7 +1310,7 @@ func (x *SwitchOrganizationResponse) String() string {
 func (*SwitchOrganizationResponse) ProtoMessage() {}
 
 func (x *SwitchOrganizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[20]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1054,7 +1323,7 @@ func (x *SwitchOrganizationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchOrganizationResponse.ProtoReflect.Descriptor instead.
 func (*SwitchOrganizationResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{20}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SwitchOrganizationResponse) GetSession() *Session {
@@ -1075,7 +1344,7 @@ type ConfirmPasswordRequest struct {
 
 func (x *ConfirmPasswordRequest) Reset() {
 	*x = ConfirmPasswordRequest{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[21]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1087,7 +1356,7 @@ func (x *ConfirmPasswordRequest) String() string {
 func (*ConfirmPasswordRequest) ProtoMessage() {}
 
 func (x *ConfirmPasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[21]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1100,7 +1369,7 @@ func (x *ConfirmPasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmPasswordRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmPasswordRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{21}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ConfirmPasswordRequest) GetPassword() string {
@@ -1121,7 +1390,7 @@ type ConfirmPasswordResponse struct {
 
 func (x *ConfirmPasswordResponse) Reset() {
 	*x = ConfirmPasswordResponse{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[22]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1133,7 +1402,7 @@ func (x *ConfirmPasswordResponse) String() string {
 func (*ConfirmPasswordResponse) ProtoMessage() {}
 
 func (x *ConfirmPasswordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[22]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1146,7 +1415,7 @@ func (x *ConfirmPasswordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmPasswordResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmPasswordResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{22}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ConfirmPasswordResponse) GetSession() *Session {
@@ -1166,7 +1435,7 @@ type StepUpRequired struct {
 
 func (x *StepUpRequired) Reset() {
 	*x = StepUpRequired{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[23]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1178,7 +1447,7 @@ func (x *StepUpRequired) String() string {
 func (*StepUpRequired) ProtoMessage() {}
 
 func (x *StepUpRequired) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[23]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1191,7 +1460,7 @@ func (x *StepUpRequired) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StepUpRequired.ProtoReflect.Descriptor instead.
 func (*StepUpRequired) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{23}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{27}
 }
 
 // SecondFactorSetupRequired is attached as error detail to FAILED_PRECONDITION when the active
@@ -1205,7 +1474,7 @@ type SecondFactorSetupRequired struct {
 
 func (x *SecondFactorSetupRequired) Reset() {
 	*x = SecondFactorSetupRequired{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[24]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1217,7 +1486,7 @@ func (x *SecondFactorSetupRequired) String() string {
 func (*SecondFactorSetupRequired) ProtoMessage() {}
 
 func (x *SecondFactorSetupRequired) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[24]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1230,7 +1499,7 @@ func (x *SecondFactorSetupRequired) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecondFactorSetupRequired.ProtoReflect.Descriptor instead.
 func (*SecondFactorSetupRequired) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{24}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{28}
 }
 
 // Session is the view of a login session for the UI.
@@ -1249,7 +1518,8 @@ type Session struct {
 	// step_up_until is when the last (re-)authentication stops allowing sensitive actions; after
 	// that they fail with FAILED_PRECONDITION until ConfirmPassword is called.
 	StepUpUntil *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=step_up_until,json=stepUpUntil,proto3" json:"step_up_until,omitempty"`
-	// second_factor_enabled means the step-up needs ConfirmSecondFactor instead of the password.
+	// second_factor_enabled means the user has a second factor (TOTP or a passkey): the step-up
+	// needs it instead of the password.
 	SecondFactorEnabled bool `protobuf:"varint,7,opt,name=second_factor_enabled,json=secondFactorEnabled,proto3" json:"second_factor_enabled,omitempty"`
 	// second_factor_setup_required means the active organization requires two-factor
 	// authentication the user doesn't have yet; only TwoFactorService works until it is set up.
@@ -1278,14 +1548,20 @@ type Session struct {
 	// have none: their step-up goes over the provider or the second factor, M3-22).
 	HasPassword bool `protobuf:"varint,16,opt,name=has_password,json=hasPassword,proto3" json:"has_password,omitempty"`
 	// oidc_linked is set if an identity of the OIDC provider is linked (step-up over it).
-	OidcLinked    bool `protobuf:"varint,17,opt,name=oidc_linked,json=oidcLinked,proto3" json:"oidc_linked,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	OidcLinked bool `protobuf:"varint,17,opt,name=oidc_linked,json=oidcLinked,proto3" json:"oidc_linked,omitempty"`
+	// totp_enabled is set if the user has TOTP (code with ConfirmSecondFactor, M3-23).
+	TotpEnabled bool `protobuf:"varint,18,opt,name=totp_enabled,json=totpEnabled,proto3" json:"totp_enabled,omitempty"`
+	// passkey_count is how many passkeys the user has (step-up with BeginPasskey).
+	PasskeyCount uint32 `protobuf:"varint,19,opt,name=passkey_count,json=passkeyCount,proto3" json:"passkey_count,omitempty"`
+	// passkeys is set if the server offers passkeys (an allowed origin is configured).
+	PasskeysAvailable bool `protobuf:"varint,20,opt,name=passkeys_available,json=passkeysAvailable,proto3" json:"passkeys_available,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
 	*x = Session{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[25]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1297,7 +1573,7 @@ func (x *Session) String() string {
 func (*Session) ProtoMessage() {}
 
 func (x *Session) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[25]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1310,7 +1586,7 @@ func (x *Session) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Session.ProtoReflect.Descriptor instead.
 func (*Session) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{25}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *Session) GetUserId() string {
@@ -1432,6 +1708,27 @@ func (x *Session) GetOidcLinked() bool {
 	return false
 }
 
+func (x *Session) GetTotpEnabled() bool {
+	if x != nil {
+		return x.TotpEnabled
+	}
+	return false
+}
+
+func (x *Session) GetPasskeyCount() uint32 {
+	if x != nil {
+		return x.PasskeyCount
+	}
+	return 0
+}
+
+func (x *Session) GetPasskeysAvailable() bool {
+	if x != nil {
+		return x.PasskeysAvailable
+	}
+	return false
+}
+
 // InstanceProblem is a check of the server's self-monitoring that is not OK.
 type InstanceProblem struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1451,7 +1748,7 @@ type InstanceProblem struct {
 
 func (x *InstanceProblem) Reset() {
 	*x = InstanceProblem{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[26]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1463,7 +1760,7 @@ func (x *InstanceProblem) String() string {
 func (*InstanceProblem) ProtoMessage() {}
 
 func (x *InstanceProblem) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[26]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1476,7 +1773,7 @@ func (x *InstanceProblem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstanceProblem.ProtoReflect.Descriptor instead.
 func (*InstanceProblem) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{26}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *InstanceProblem) GetCheck() string {
@@ -1520,7 +1817,7 @@ type Organization struct {
 
 func (x *Organization) Reset() {
 	*x = Organization{}
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[27]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1532,7 +1829,7 @@ func (x *Organization) String() string {
 func (*Organization) ProtoMessage() {}
 
 func (x *Organization) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_auth_proto_msgTypes[27]
+	mi := &file_sermon_web_v1_auth_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1545,7 +1842,7 @@ func (x *Organization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Organization.ProtoReflect.Descriptor instead.
 func (*Organization) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{27}
+	return file_sermon_web_v1_auth_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *Organization) GetId() string {
@@ -1566,7 +1863,23 @@ var File_sermon_web_v1_auth_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x18sermon/web/v1/auth.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd7\x01\n" +
+	"\x18sermon/web/v1/auth.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"Z\n" +
+	"\x13BeginPasskeyRequest\x12C\n" +
+	"\apurpose\x18\x01 \x01(\x0e2\x1d.sermon.web.v1.PasskeyPurposeB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\apurpose\"Z\n" +
+	"\x14BeginPasskeyResponse\x12\x1f\n" +
+	"\vceremony_id\x18\x01 \x01(\tR\n" +
+	"ceremonyId\x12!\n" +
+	"\foptions_json\x18\x02 \x01(\tR\voptionsJson\"\xbe\x01\n" +
+	"\x14FinishPasskeyRequest\x12C\n" +
+	"\apurpose\x18\x01 \x01(\x0e2\x1d.sermon.web.v1.PasskeyPurposeB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\apurpose\x12+\n" +
+	"\vceremony_id\x18\x02 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\x80\x01R\n" +
+	"ceremonyId\x124\n" +
+	"\x0fcredential_json\x18\x03 \x01(\tB\v\xbaH\br\x06\x10\x01(\x80\x80\x04R\x0ecredentialJson\"I\n" +
+	"\x15FinishPasskeyResponse\x120\n" +
+	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\xd7\x01\n" +
 	"\fOidcIdentity\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x18\n" +
 	"\asubject\x18\x02 \x01(\tR\asubject\x12\x14\n" +
@@ -1624,7 +1937,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\x88\x06\n" +
+	"\x19SecondFactorSetupRequired\"\xff\x06\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -1646,7 +1959,10 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\rtag_group_ids\x18\x0f \x03(\tR\vtagGroupIds\x12!\n" +
 	"\fhas_password\x18\x10 \x01(\bR\vhasPassword\x12\x1f\n" +
 	"\voidc_linked\x18\x11 \x01(\bR\n" +
-	"oidcLinked\"\x85\x01\n" +
+	"oidcLinked\x12!\n" +
+	"\ftotp_enabled\x18\x12 \x01(\bR\vtotpEnabled\x12#\n" +
+	"\rpasskey_count\x18\x13 \x01(\rR\fpasskeyCount\x12-\n" +
+	"\x12passkeys_available\x18\x14 \x01(\bR\x11passkeysAvailable\"\x85\x01\n" +
 	"\x0fInstanceProblem\x12\x14\n" +
 	"\x05check\x18\x01 \x01(\tR\x05check\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x120\n" +
@@ -1654,13 +1970,18 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x05value\x18\x04 \x01(\x01R\x05value\"2\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name*o\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name*\x8c\x01\n" +
+	"\x0ePasskeyPurpose\x12\x1f\n" +
+	"\x1bPASSKEY_PURPOSE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15PASSKEY_PURPOSE_LOGIN\x10\x01\x12!\n" +
+	"\x1dPASSKEY_PURPOSE_SECOND_FACTOR\x10\x02\x12\x1b\n" +
+	"\x17PASSKEY_PURPOSE_STEP_UP\x10\x03*o\n" +
 	"\n" +
 	"OidcIntent\x12\x1b\n" +
 	"\x17OIDC_INTENT_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11OIDC_INTENT_LOGIN\x10\x01\x12\x14\n" +
 	"\x10OIDC_INTENT_LINK\x10\x02\x12\x17\n" +
-	"\x13OIDC_INTENT_STEP_UP\x10\x032\xa8\b\n" +
+	"\x13OIDC_INTENT_STEP_UP\x10\x032\xdd\t\n" +
 	"\vAuthService\x12B\n" +
 	"\x05Login\x12\x1b.sermon.web.v1.LoginRequest\x1a\x1c.sermon.web.v1.LoginResponse\x12i\n" +
 	"\x12VerifySecondFactor\x12(.sermon.web.v1.VerifySecondFactorRequest\x1a).sermon.web.v1.VerifySecondFactorResponse\x12E\n" +
@@ -1673,7 +1994,9 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x0fGetLoginOptions\x12%.sermon.web.v1.GetLoginOptionsRequest\x1a&.sermon.web.v1.GetLoginOptionsResponse\"\x03\x90\x02\x01\x12N\n" +
 	"\tBeginOidc\x12\x1f.sermon.web.v1.BeginOidcRequest\x1a .sermon.web.v1.BeginOidcResponse\x12n\n" +
 	"\x12ListOidcIdentities\x12(.sermon.web.v1.ListOidcIdentitiesRequest\x1a).sermon.web.v1.ListOidcIdentitiesResponse\"\x03\x90\x02\x01\x12i\n" +
-	"\x12UnlinkOidcIdentity\x12(.sermon.web.v1.UnlinkOidcIdentityRequest\x1a).sermon.web.v1.UnlinkOidcIdentityResponseB\xb8\x01\n" +
+	"\x12UnlinkOidcIdentity\x12(.sermon.web.v1.UnlinkOidcIdentityRequest\x1a).sermon.web.v1.UnlinkOidcIdentityResponse\x12W\n" +
+	"\fBeginPasskey\x12\".sermon.web.v1.BeginPasskeyRequest\x1a#.sermon.web.v1.BeginPasskeyResponse\x12Z\n" +
+	"\rFinishPasskey\x12#.sermon.web.v1.FinishPasskeyRequest\x1a$.sermon.web.v1.FinishPasskeyResponseB\xb8\x01\n" +
 	"\x11com.sermon.web.v1B\tAuthProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -1688,82 +2011,94 @@ func file_sermon_web_v1_auth_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_auth_proto_rawDescData
 }
 
-var file_sermon_web_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_sermon_web_v1_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_sermon_web_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_sermon_web_v1_auth_proto_goTypes = []any{
-	(OidcIntent)(0),                     // 0: sermon.web.v1.OidcIntent
-	(*OidcIdentity)(nil),                // 1: sermon.web.v1.OidcIdentity
-	(*ListOidcIdentitiesRequest)(nil),   // 2: sermon.web.v1.ListOidcIdentitiesRequest
-	(*ListOidcIdentitiesResponse)(nil),  // 3: sermon.web.v1.ListOidcIdentitiesResponse
-	(*UnlinkOidcIdentityRequest)(nil),   // 4: sermon.web.v1.UnlinkOidcIdentityRequest
-	(*UnlinkOidcIdentityResponse)(nil),  // 5: sermon.web.v1.UnlinkOidcIdentityResponse
-	(*GetLoginOptionsRequest)(nil),      // 6: sermon.web.v1.GetLoginOptionsRequest
-	(*GetLoginOptionsResponse)(nil),     // 7: sermon.web.v1.GetLoginOptionsResponse
-	(*BeginOidcRequest)(nil),            // 8: sermon.web.v1.BeginOidcRequest
-	(*BeginOidcResponse)(nil),           // 9: sermon.web.v1.BeginOidcResponse
-	(*LoginRequest)(nil),                // 10: sermon.web.v1.LoginRequest
-	(*LoginResponse)(nil),               // 11: sermon.web.v1.LoginResponse
-	(*VerifySecondFactorRequest)(nil),   // 12: sermon.web.v1.VerifySecondFactorRequest
-	(*VerifySecondFactorResponse)(nil),  // 13: sermon.web.v1.VerifySecondFactorResponse
-	(*ConfirmSecondFactorRequest)(nil),  // 14: sermon.web.v1.ConfirmSecondFactorRequest
-	(*ConfirmSecondFactorResponse)(nil), // 15: sermon.web.v1.ConfirmSecondFactorResponse
-	(*LogoutRequest)(nil),               // 16: sermon.web.v1.LogoutRequest
-	(*LogoutResponse)(nil),              // 17: sermon.web.v1.LogoutResponse
-	(*GetSessionRequest)(nil),           // 18: sermon.web.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),          // 19: sermon.web.v1.GetSessionResponse
-	(*SwitchOrganizationRequest)(nil),   // 20: sermon.web.v1.SwitchOrganizationRequest
-	(*SwitchOrganizationResponse)(nil),  // 21: sermon.web.v1.SwitchOrganizationResponse
-	(*ConfirmPasswordRequest)(nil),      // 22: sermon.web.v1.ConfirmPasswordRequest
-	(*ConfirmPasswordResponse)(nil),     // 23: sermon.web.v1.ConfirmPasswordResponse
-	(*StepUpRequired)(nil),              // 24: sermon.web.v1.StepUpRequired
-	(*SecondFactorSetupRequired)(nil),   // 25: sermon.web.v1.SecondFactorSetupRequired
-	(*Session)(nil),                     // 26: sermon.web.v1.Session
-	(*InstanceProblem)(nil),             // 27: sermon.web.v1.InstanceProblem
-	(*Organization)(nil),                // 28: sermon.web.v1.Organization
-	(*timestamppb.Timestamp)(nil),       // 29: google.protobuf.Timestamp
+	(PasskeyPurpose)(0),                 // 0: sermon.web.v1.PasskeyPurpose
+	(OidcIntent)(0),                     // 1: sermon.web.v1.OidcIntent
+	(*BeginPasskeyRequest)(nil),         // 2: sermon.web.v1.BeginPasskeyRequest
+	(*BeginPasskeyResponse)(nil),        // 3: sermon.web.v1.BeginPasskeyResponse
+	(*FinishPasskeyRequest)(nil),        // 4: sermon.web.v1.FinishPasskeyRequest
+	(*FinishPasskeyResponse)(nil),       // 5: sermon.web.v1.FinishPasskeyResponse
+	(*OidcIdentity)(nil),                // 6: sermon.web.v1.OidcIdentity
+	(*ListOidcIdentitiesRequest)(nil),   // 7: sermon.web.v1.ListOidcIdentitiesRequest
+	(*ListOidcIdentitiesResponse)(nil),  // 8: sermon.web.v1.ListOidcIdentitiesResponse
+	(*UnlinkOidcIdentityRequest)(nil),   // 9: sermon.web.v1.UnlinkOidcIdentityRequest
+	(*UnlinkOidcIdentityResponse)(nil),  // 10: sermon.web.v1.UnlinkOidcIdentityResponse
+	(*GetLoginOptionsRequest)(nil),      // 11: sermon.web.v1.GetLoginOptionsRequest
+	(*GetLoginOptionsResponse)(nil),     // 12: sermon.web.v1.GetLoginOptionsResponse
+	(*BeginOidcRequest)(nil),            // 13: sermon.web.v1.BeginOidcRequest
+	(*BeginOidcResponse)(nil),           // 14: sermon.web.v1.BeginOidcResponse
+	(*LoginRequest)(nil),                // 15: sermon.web.v1.LoginRequest
+	(*LoginResponse)(nil),               // 16: sermon.web.v1.LoginResponse
+	(*VerifySecondFactorRequest)(nil),   // 17: sermon.web.v1.VerifySecondFactorRequest
+	(*VerifySecondFactorResponse)(nil),  // 18: sermon.web.v1.VerifySecondFactorResponse
+	(*ConfirmSecondFactorRequest)(nil),  // 19: sermon.web.v1.ConfirmSecondFactorRequest
+	(*ConfirmSecondFactorResponse)(nil), // 20: sermon.web.v1.ConfirmSecondFactorResponse
+	(*LogoutRequest)(nil),               // 21: sermon.web.v1.LogoutRequest
+	(*LogoutResponse)(nil),              // 22: sermon.web.v1.LogoutResponse
+	(*GetSessionRequest)(nil),           // 23: sermon.web.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),          // 24: sermon.web.v1.GetSessionResponse
+	(*SwitchOrganizationRequest)(nil),   // 25: sermon.web.v1.SwitchOrganizationRequest
+	(*SwitchOrganizationResponse)(nil),  // 26: sermon.web.v1.SwitchOrganizationResponse
+	(*ConfirmPasswordRequest)(nil),      // 27: sermon.web.v1.ConfirmPasswordRequest
+	(*ConfirmPasswordResponse)(nil),     // 28: sermon.web.v1.ConfirmPasswordResponse
+	(*StepUpRequired)(nil),              // 29: sermon.web.v1.StepUpRequired
+	(*SecondFactorSetupRequired)(nil),   // 30: sermon.web.v1.SecondFactorSetupRequired
+	(*Session)(nil),                     // 31: sermon.web.v1.Session
+	(*InstanceProblem)(nil),             // 32: sermon.web.v1.InstanceProblem
+	(*Organization)(nil),                // 33: sermon.web.v1.Organization
+	(*timestamppb.Timestamp)(nil),       // 34: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_auth_proto_depIdxs = []int32{
-	29, // 0: sermon.web.v1.OidcIdentity.create_time:type_name -> google.protobuf.Timestamp
-	29, // 1: sermon.web.v1.OidcIdentity.last_login_time:type_name -> google.protobuf.Timestamp
-	1,  // 2: sermon.web.v1.ListOidcIdentitiesResponse.identities:type_name -> sermon.web.v1.OidcIdentity
-	0,  // 3: sermon.web.v1.BeginOidcRequest.intent:type_name -> sermon.web.v1.OidcIntent
-	26, // 4: sermon.web.v1.LoginResponse.session:type_name -> sermon.web.v1.Session
-	26, // 5: sermon.web.v1.VerifySecondFactorResponse.session:type_name -> sermon.web.v1.Session
-	26, // 6: sermon.web.v1.ConfirmSecondFactorResponse.session:type_name -> sermon.web.v1.Session
-	26, // 7: sermon.web.v1.GetSessionResponse.session:type_name -> sermon.web.v1.Session
-	26, // 8: sermon.web.v1.SwitchOrganizationResponse.session:type_name -> sermon.web.v1.Session
-	26, // 9: sermon.web.v1.ConfirmPasswordResponse.session:type_name -> sermon.web.v1.Session
-	28, // 10: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
-	29, // 11: sermon.web.v1.Session.step_up_until:type_name -> google.protobuf.Timestamp
-	27, // 12: sermon.web.v1.Session.instance_problems:type_name -> sermon.web.v1.InstanceProblem
-	29, // 13: sermon.web.v1.InstanceProblem.since:type_name -> google.protobuf.Timestamp
-	10, // 14: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
-	12, // 15: sermon.web.v1.AuthService.VerifySecondFactor:input_type -> sermon.web.v1.VerifySecondFactorRequest
-	16, // 16: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
-	18, // 17: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
-	20, // 18: sermon.web.v1.AuthService.SwitchOrganization:input_type -> sermon.web.v1.SwitchOrganizationRequest
-	22, // 19: sermon.web.v1.AuthService.ConfirmPassword:input_type -> sermon.web.v1.ConfirmPasswordRequest
-	14, // 20: sermon.web.v1.AuthService.ConfirmSecondFactor:input_type -> sermon.web.v1.ConfirmSecondFactorRequest
-	6,  // 21: sermon.web.v1.AuthService.GetLoginOptions:input_type -> sermon.web.v1.GetLoginOptionsRequest
-	8,  // 22: sermon.web.v1.AuthService.BeginOidc:input_type -> sermon.web.v1.BeginOidcRequest
-	2,  // 23: sermon.web.v1.AuthService.ListOidcIdentities:input_type -> sermon.web.v1.ListOidcIdentitiesRequest
-	4,  // 24: sermon.web.v1.AuthService.UnlinkOidcIdentity:input_type -> sermon.web.v1.UnlinkOidcIdentityRequest
-	11, // 25: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
-	13, // 26: sermon.web.v1.AuthService.VerifySecondFactor:output_type -> sermon.web.v1.VerifySecondFactorResponse
-	17, // 27: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
-	19, // 28: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
-	21, // 29: sermon.web.v1.AuthService.SwitchOrganization:output_type -> sermon.web.v1.SwitchOrganizationResponse
-	23, // 30: sermon.web.v1.AuthService.ConfirmPassword:output_type -> sermon.web.v1.ConfirmPasswordResponse
-	15, // 31: sermon.web.v1.AuthService.ConfirmSecondFactor:output_type -> sermon.web.v1.ConfirmSecondFactorResponse
-	7,  // 32: sermon.web.v1.AuthService.GetLoginOptions:output_type -> sermon.web.v1.GetLoginOptionsResponse
-	9,  // 33: sermon.web.v1.AuthService.BeginOidc:output_type -> sermon.web.v1.BeginOidcResponse
-	3,  // 34: sermon.web.v1.AuthService.ListOidcIdentities:output_type -> sermon.web.v1.ListOidcIdentitiesResponse
-	5,  // 35: sermon.web.v1.AuthService.UnlinkOidcIdentity:output_type -> sermon.web.v1.UnlinkOidcIdentityResponse
-	25, // [25:36] is the sub-list for method output_type
-	14, // [14:25] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	0,  // 0: sermon.web.v1.BeginPasskeyRequest.purpose:type_name -> sermon.web.v1.PasskeyPurpose
+	0,  // 1: sermon.web.v1.FinishPasskeyRequest.purpose:type_name -> sermon.web.v1.PasskeyPurpose
+	31, // 2: sermon.web.v1.FinishPasskeyResponse.session:type_name -> sermon.web.v1.Session
+	34, // 3: sermon.web.v1.OidcIdentity.create_time:type_name -> google.protobuf.Timestamp
+	34, // 4: sermon.web.v1.OidcIdentity.last_login_time:type_name -> google.protobuf.Timestamp
+	6,  // 5: sermon.web.v1.ListOidcIdentitiesResponse.identities:type_name -> sermon.web.v1.OidcIdentity
+	1,  // 6: sermon.web.v1.BeginOidcRequest.intent:type_name -> sermon.web.v1.OidcIntent
+	31, // 7: sermon.web.v1.LoginResponse.session:type_name -> sermon.web.v1.Session
+	31, // 8: sermon.web.v1.VerifySecondFactorResponse.session:type_name -> sermon.web.v1.Session
+	31, // 9: sermon.web.v1.ConfirmSecondFactorResponse.session:type_name -> sermon.web.v1.Session
+	31, // 10: sermon.web.v1.GetSessionResponse.session:type_name -> sermon.web.v1.Session
+	31, // 11: sermon.web.v1.SwitchOrganizationResponse.session:type_name -> sermon.web.v1.Session
+	31, // 12: sermon.web.v1.ConfirmPasswordResponse.session:type_name -> sermon.web.v1.Session
+	33, // 13: sermon.web.v1.Session.organizations:type_name -> sermon.web.v1.Organization
+	34, // 14: sermon.web.v1.Session.step_up_until:type_name -> google.protobuf.Timestamp
+	32, // 15: sermon.web.v1.Session.instance_problems:type_name -> sermon.web.v1.InstanceProblem
+	34, // 16: sermon.web.v1.InstanceProblem.since:type_name -> google.protobuf.Timestamp
+	15, // 17: sermon.web.v1.AuthService.Login:input_type -> sermon.web.v1.LoginRequest
+	17, // 18: sermon.web.v1.AuthService.VerifySecondFactor:input_type -> sermon.web.v1.VerifySecondFactorRequest
+	21, // 19: sermon.web.v1.AuthService.Logout:input_type -> sermon.web.v1.LogoutRequest
+	23, // 20: sermon.web.v1.AuthService.GetSession:input_type -> sermon.web.v1.GetSessionRequest
+	25, // 21: sermon.web.v1.AuthService.SwitchOrganization:input_type -> sermon.web.v1.SwitchOrganizationRequest
+	27, // 22: sermon.web.v1.AuthService.ConfirmPassword:input_type -> sermon.web.v1.ConfirmPasswordRequest
+	19, // 23: sermon.web.v1.AuthService.ConfirmSecondFactor:input_type -> sermon.web.v1.ConfirmSecondFactorRequest
+	11, // 24: sermon.web.v1.AuthService.GetLoginOptions:input_type -> sermon.web.v1.GetLoginOptionsRequest
+	13, // 25: sermon.web.v1.AuthService.BeginOidc:input_type -> sermon.web.v1.BeginOidcRequest
+	7,  // 26: sermon.web.v1.AuthService.ListOidcIdentities:input_type -> sermon.web.v1.ListOidcIdentitiesRequest
+	9,  // 27: sermon.web.v1.AuthService.UnlinkOidcIdentity:input_type -> sermon.web.v1.UnlinkOidcIdentityRequest
+	2,  // 28: sermon.web.v1.AuthService.BeginPasskey:input_type -> sermon.web.v1.BeginPasskeyRequest
+	4,  // 29: sermon.web.v1.AuthService.FinishPasskey:input_type -> sermon.web.v1.FinishPasskeyRequest
+	16, // 30: sermon.web.v1.AuthService.Login:output_type -> sermon.web.v1.LoginResponse
+	18, // 31: sermon.web.v1.AuthService.VerifySecondFactor:output_type -> sermon.web.v1.VerifySecondFactorResponse
+	22, // 32: sermon.web.v1.AuthService.Logout:output_type -> sermon.web.v1.LogoutResponse
+	24, // 33: sermon.web.v1.AuthService.GetSession:output_type -> sermon.web.v1.GetSessionResponse
+	26, // 34: sermon.web.v1.AuthService.SwitchOrganization:output_type -> sermon.web.v1.SwitchOrganizationResponse
+	28, // 35: sermon.web.v1.AuthService.ConfirmPassword:output_type -> sermon.web.v1.ConfirmPasswordResponse
+	20, // 36: sermon.web.v1.AuthService.ConfirmSecondFactor:output_type -> sermon.web.v1.ConfirmSecondFactorResponse
+	12, // 37: sermon.web.v1.AuthService.GetLoginOptions:output_type -> sermon.web.v1.GetLoginOptionsResponse
+	14, // 38: sermon.web.v1.AuthService.BeginOidc:output_type -> sermon.web.v1.BeginOidcResponse
+	8,  // 39: sermon.web.v1.AuthService.ListOidcIdentities:output_type -> sermon.web.v1.ListOidcIdentitiesResponse
+	10, // 40: sermon.web.v1.AuthService.UnlinkOidcIdentity:output_type -> sermon.web.v1.UnlinkOidcIdentityResponse
+	3,  // 41: sermon.web.v1.AuthService.BeginPasskey:output_type -> sermon.web.v1.BeginPasskeyResponse
+	5,  // 42: sermon.web.v1.AuthService.FinishPasskey:output_type -> sermon.web.v1.FinishPasskeyResponse
+	30, // [30:43] is the sub-list for method output_type
+	17, // [17:30] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_auth_proto_init() }
@@ -1776,8 +2111,8 @@ func file_sermon_web_v1_auth_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_auth_proto_rawDesc), len(file_sermon_web_v1_auth_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   28,
+			NumEnums:      2,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

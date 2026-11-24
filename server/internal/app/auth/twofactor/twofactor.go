@@ -79,10 +79,22 @@ type Enrollment struct {
 
 // Service manages and checks second factors.
 type Service struct {
-	store  Store
-	box    *secrets.Box
-	policy authz.Policy
-	now    func() time.Time
+	store    Store
+	box      *secrets.Box
+	policy   authz.Policy
+	now      func() time.Time
+	passkeys PasskeyCounter
+}
+
+// PasskeyCounter counts the passkeys of a user (passkey.Service, M3-23): they are second factors.
+type PasskeyCounter interface {
+	Count(ctx context.Context, user identity.UserID) (int, error)
+}
+
+// WithPasskeys counts passkeys as second factors.
+func (s *Service) WithPasskeys(p PasskeyCounter) *Service {
+	s.passkeys = p
+	return s
 }
 
 // NewService returns the service.
@@ -133,8 +145,21 @@ func (s *Service) SetOrganizationRequirement(ctx context.Context, c access.Calle
 
 func associatedData(user identity.UserID) []byte { return []byte("totp:" + user.String()) }
 
-// Enabled reports whether the user has a confirmed second factor.
+// Enabled reports whether the user has a second factor: a confirmed TOTP or a passkey.
 func (s *Service) Enabled(ctx context.Context, user identity.UserID) (bool, error) {
+	totpOn, err := s.TOTPEnabled(ctx, user)
+	if err != nil || totpOn || s.passkeys == nil {
+		return totpOn, err
+	}
+	n, err := s.passkeys.Count(ctx, user)
+	if err != nil {
+		return false, fmt.Errorf("two-factor status: %w", err)
+	}
+	return n > 0, nil
+}
+
+// TOTPEnabled reports whether the user has a confirmed TOTP.
+func (s *Service) TOTPEnabled(ctx context.Context, user identity.UserID) (bool, error) {
 	secret, found, err := s.store.Get(ctx, user)
 	if err != nil {
 		return false, fmt.Errorf("two-factor status: %w", err)
@@ -159,7 +184,7 @@ func (s *Service) SetupRequired(ctx context.Context, org tenant.OrgID, user iden
 
 // Status returns the second factor of the user.
 func (s *Service) Status(ctx context.Context, user identity.UserID) (Status, error) {
-	enabled, err := s.Enabled(ctx, user)
+	enabled, err := s.TOTPEnabled(ctx, user)
 	if err != nil || !enabled {
 		return Status{}, err
 	}
@@ -279,7 +304,7 @@ func (s *Service) RegenerateRecoveryCodes(ctx context.Context, user identity.Use
 	if err := s.requireStepUp(stepUpAt); err != nil {
 		return nil, err
 	}
-	enabled, err := s.Enabled(ctx, user)
+	enabled, err := s.TOTPEnabled(ctx, user)
 	if err != nil {
 		return nil, err
 	}

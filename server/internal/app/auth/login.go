@@ -240,6 +240,25 @@ func (s *Service) checkSecondFactor(ctx context.Context, user identity.UserID, c
 	})
 }
 
+// VerifyFactor runs a check of another factor (a passkey, M3-23) under the lockout of the
+// account: failures count, a locked account fails without a check; ErrWrongCode then. Accounts
+// without a password (created over OIDC) have no lockout state: only the IP rate limit applies.
+func (s *Service) VerifyFactor(ctx context.Context, user identity.UserID, check func() (bool, error)) error {
+	if _, found, err := s.d.Credentials.Get(ctx, user); err != nil {
+		return fmt.Errorf("verify factor: %w", err)
+	} else if !found {
+		ok, err := check()
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrWrongCode
+		}
+		return nil
+	}
+	return s.checkFactor(ctx, user, "", ErrWrongCode, func(Credentials) (bool, error) { return check() })
+}
+
 // checkFactor runs check under the lockout of the user's account: locked accounts fail without a
 // check (dummy hash for the password), failures count, success resets the counter.
 func (s *Service) checkFactor(ctx context.Context, user identity.UserID, pw string, wrong error, check func(Credentials) (bool, error)) error {

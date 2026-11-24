@@ -3603,7 +3603,35 @@ Konfiguration) und M3-06 (Loki).
 
 ### 6.8 Passkeys, Step-up und Querschnitt (E3.7)
 
-#### ☐ M3-23 – Passkeys im Server · S · L 🔒
+#### ☑ M3-23 – Passkeys im Server · S · L 🔒
+> Erledigt ([ADR 0034](adr/0034-passkeys-mit-webauthn.md); KONZEPT §7; Threat Model T15, T87):
+> - **Abhängigkeit:** `go-webauthn/webauthn` 0.18.2 (BSD-3), geprüft: gepflegt, Fuzz-Tests; bringt `fxamacker/cbor`,
+>   `go-tpm`, `golang-jwt` und `msgp` mit. Genutzt wird nur `attestation: none`.
+> - **RP:** RP-ID ist der Host der ersten Origin aus `SERMON_ALLOWED_ORIGINS`, erlaubt sind die Origins auf ihm und
+>   darunter; ohne Origin sind Passkeys aus. Keine neue Variable.
+> - **Migration `00045`:** `webauthn_credentials` (Datensatz von go-webauthn als JSON, Name, Nutzung) und
+>   `webauthn_ceremonies` (5 min, einmal, an Session oder Browser-Cookie gebunden; die DB prüft die Bindung je Zweck).
+> - **`app/auth/passkey`:** Registrierung mit Step-up, Name (1–64 Zeichen) und höchstens 10 (Sperre pro User in der
+>   DB). Anmeldung ohne Passwort mit User Verification (zählt als zwei Faktoren), zweiter Faktor nach dem Passwort,
+>   Step-up. Der User-Handle muss zum Passkey passen; ein rückwärts laufender Zähler wird abgewiesen (0 bei
+>   synchronisierten Passkeys erlaubt). Fehlversuche laufen über `auth.Service.VerifyFactor` in die Kontosperre.
+> - **2FA-Pflicht:** `twofactor.Service` zählt Passkeys als zweiten Faktor; Status und Recovery-Codes bleiben bei TOTP.
+> - **API:** `PasskeyService` (Session genügt, wie `TwoFactorService`), `AuthService.BeginPasskey`/`FinishPasskey`
+>   (Cookie `__Host-sermon_webauthn`); Session-Ansicht mit `totp_enabled`, `passkey_count`, `passkeys_available`.
+> - **Abweichung:** Den letzten zweiten Faktor zu löschen ist erlaubt wie beim Abschalten von TOTP; danach greift die
+>   Org-Pflicht wieder (Test dafür).
+> - **Tests:**
+>   - Software-Authenticator `passkeytest` (ES256, CBOR, `none`-Attestation, steuerbarer Zähler und Flags).
+>   - Abgelehnt werden: falsche Origin, fremde RP-ID, fremder User, andere Session, wiederverwendete und abgelaufene
+>     Zeremonie, Zeremonie eines anderen Zwecks, fremder Browser, fremder User-Handle, unbekannter Passkey, fehlende
+>     User Verification beim Login, Zähler rückwärts; synchronisierte Passkeys mit 0 gehen.
+>   - Grenzen: Step-up beim Beginnen und Abschließen, Name, zehn Passkeys; Kontosperre; Umbenennen und Löschen nur
+>     eigener.
+>   - PostgreSQL: Datensatz als JSON, Zeremonie einmal, Duplikat, Grenze, Audit, Prüfungen der Tabelle.
+>   - Echter Stack: Registrierung während die Org wartet, Anmeldung ohne Passwort, fremder Browser, zweiter Faktor,
+>     Fehlversuch in der Sperre, Step-up, Liste, Umbenennen, Löschen und die Org-Pflicht danach; Isolationstest.
+>   - Gegenproben für 22 Prüfungen, 21 erkannt; die Zweck-Prüfung der Zeremonie (`take`) ist doppelt abgesichert
+>     (Bindung an Session bzw. Cookie und die Prüfungen von go-webauthn), ihr Entfernen bleibt unbemerkt.
 - **Ziel:**
   - **Bibliothek:** `go-webauthn/webauthn`, vorher geprüft. RP-ID und Origins kommen aus `SERMON_ALLOWED_ORIGINS`.
   - **Registrierung:** mit Step-up, Name und höchstens 10 pro User; `attestation: none`.

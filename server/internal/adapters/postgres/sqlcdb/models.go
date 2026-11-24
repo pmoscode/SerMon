@@ -453,3 +453,24 @@ type UserTotp struct {
 	ConfirmedAt  *time.Time
 	LastStep     int64
 }
+
+type WebauthnCeremony struct {
+	IDHash      string
+	BindingHash pgtype.Text
+	Purpose     int16
+	UserID      *uuid.UUID
+	SessionID   pgtype.Text
+	Name        string
+	Data        []byte
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+}
+
+type WebauthnCredential struct {
+	ID         []byte
+	UserID     uuid.UUID
+	Name       string
+	Credential []byte
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+}

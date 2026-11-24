@@ -45,6 +45,7 @@ type Handlers struct {
 	Windows         *MaintenanceWindowHandler
 	LogSettings     *LogSettingsHandler
 	OIDCMappings    *OIDCMappingHandler
+	Passkeys        *PasskeyHandler
 	Logs            *LogHandler
 	LiveView        *LiveViewHandler
 	Authenticator   *Authenticator // required for every service except AuthService
@@ -91,6 +92,8 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	if h.Authenticator != nil {
 		// The user's own second factor must be manageable while the organization waits for it.
 		mount(webv1connect.NewTwoFactorServiceHandler(h.TwoFactor, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))
+		// Passkeys are second factors too (M3-23).
+		mount(webv1connect.NewPasskeyServiceHandler(h.Passkeys, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))
 	}
 	path, handler := webv1connect.NewMetricsServiceHandler(h.Metrics, authenticated)
 	mount(path, streamingDeadline(handler))

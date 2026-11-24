@@ -47,6 +47,8 @@ elif command -v apk >/dev/null 2>&1; then
 	echo "$url/apk" >/etc/apk/repositories
 	apk update -q
 	apk add -q sermon-e2e-demo=1.0.0-r1 sermon-e2e-extra=1.0.0-r1
+	# apk keeps the version in /etc/apk/world and upgrades nothing pinned: unpin, as on a real host.
+	sed -i 's/^\(sermon-e2e-[a-z]*\)=.*/\1/' /etc/apk/world
 else
 	echo "use.sh: no apt, dnf or apk" >&2
 	exit 1

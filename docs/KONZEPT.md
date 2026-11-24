@@ -184,7 +184,8 @@ eine Fake-Implementierung für Tests.
 
 ### 4.2 Root-Helper (`sermon-helper`, Rust)
 
-- Ein eigener, **winziger** Prozess (Ziel: < 1 000 LoC, in CI geprüft) mit eigener systemd-Unit, der als root läuft;
+- Ein eigener, **kleiner** Prozess (höchstens 1 500 eigene Zeilen, in CI geprüft; Ziel war < 1 000) mit eigener
+  systemd-Unit, der als root läuft;
   eigenes Paket `sermon-helper` ([ADR 0035](adr/0035-root-helper.md)).
 - Er lauscht auf `/run/sermon/helper.sock` (Rechte `root:sermon 0660`, unter systemd per Socket-Aktivierung) und prüft
   per `SO_PEERCRED`, dass der Aufrufer die UID `sermon` hat. Eine Anfrage pro Verbindung, Protobuf mit vorangestellter

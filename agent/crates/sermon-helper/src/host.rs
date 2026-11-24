@@ -1,0 +1,869 @@
+//! The work of the operations on this host (ADR 0035, KONZEPT §14): which package manager, the
+//! fixed commands, the lock and the runs. A run is a process of its own (a transient unit under
+//! systemd, a process group of its own under OpenRC): it outlives the agent and the helper, whose
+//! packages it may renew. Its request, start and result lie root-owned in the state directory, the
+//! result for [`KEEP`].
+
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Write};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use prost::Message;
+use sermon_helper_proto::v1::{
+    Command as Output, Distribution, RunPhase, RunState, Scope, StatusInfo, Updates,
+};
+
+use crate::command;
+use crate::request::{Executor, Failure, Run};
+
+/// How long the result of a run is kept.
+pub const KEEP: Duration = Duration::from_hours(7 * 24);
+/// The sources are refreshed at most this often (T89).
+pub const REFRESH_EVERY: Duration = Duration::from_mins(5);
+const LIST_OUTPUT: usize = 2 << 20;
+const RUN_OUTPUT: usize = 256 << 10;
+/// A run that was launched but never started within this time is lost.
+const LAUNCH_TIME: Duration = Duration::from_mins(5);
+/// Every apt-get that changes packages keeps changed configuration files.
+const APT_GET: [&str; 6] = [
+    "-y",
+    "-q",
+    "-o",
+    "Dpkg::Options::=--force-confdef",
+    "-o",
+    "Dpkg::Options::=--force-confold",
+];
+const UNSUPPORTED: &str = "no apt, dnf or apk distribution in /etc/os-release";
+
+/// A fixed command: the program below the host's root and its arguments.
+type Fixed = (&'static str, &'static [&'static str]);
+
+/// The package manager's program and its commands to refresh the sources and to list.
+fn commands(d: Distribution) -> Option<(&'static str, Fixed, &'static [Fixed])> {
+    Some(match d {
+        Distribution::Apt => (
+            "usr/bin/apt-get",
+            ("usr/bin/apt-get", &["update", "-q"]),
+            &[("usr/bin/apt", &["list", "--upgradable"])],
+        ),
+        Distribution::Dnf => (
+            "usr/bin/dnf",
+            ("usr/bin/dnf", &["-q", "makecache"]),
+            &[
+                ("usr/bin/dnf", &["-q", "check-update"]),
+                ("usr/bin/dnf", &["-q", "updateinfo", "list", "--security"]),
+                ("usr/bin/dnf", &["needs-restarting", "-r"]),
+            ],
+        ),
+        Distribution::Apk => (
+            "sbin/apk",
+            ("sbin/apk", &["update", "-q"]),
+            &[("sbin/apk", &["version", "-l", "<"])],
+        ),
+        Distribution::Unspecified => return None,
+    })
+}
+
+/// How a run is started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Launch {
+    /// `systemd-run`: a transient unit of its own.
+    Systemd,
+    /// A process group of its own (OpenRC).
+    Detached,
+    /// In a thread of this process (tests only).
+    #[cfg(test)]
+    Inline,
+}
+
+/// The host: `root` holds `/etc/os-release` and the programs, `state` the runs. Only tests choose
+/// other paths than `/` and `/var/lib/sermon-helper` – no environment, no configuration.
+#[derive(Debug, Clone)]
+pub struct Host {
+    root: PathBuf,
+    state: PathBuf,
+    launch: Launch,
+    list_limit: Duration,
+    run_limit: Duration,
+}
+
+impl Host {
+    /// This host.
+    #[must_use]
+    pub fn system() -> Self {
+        let systemd = Path::new("/run/systemd/system").is_dir();
+        let launch = if systemd {
+            Launch::Systemd
+        } else {
+            Launch::Detached
+        };
+        let (list_limit, run_limit) = (Duration::from_mins(10), Duration::from_hours(1));
+        Self {
+            root: "/".into(),
+            state: "/var/lib/sermon-helper".into(),
+            launch,
+            list_limit,
+            run_limit,
+        }
+    }
+
+    fn distribution(&self) -> Distribution {
+        fs::read_to_string(self.root.join("etc/os-release"))
+            .map_or(Distribution::Unspecified, |t| distribution(&t))
+    }
+
+    fn run(
+        &self,
+        (program, args): (&str, &[&str]),
+        limit: Duration,
+        keep: usize,
+        stderr: bool,
+    ) -> Output {
+        command::run(&self.root.join(program), args, limit, keep, stderr)
+    }
+
+    fn run_dir(&self, id: &str) -> PathBuf {
+        self.state.join("runs").join(id)
+    }
+
+    /// The lock of runs and refreshes, taken without waiting; `None` if held.
+    fn lock(&self) -> io::Result<Option<File>> {
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&self.state)?;
+        let mut open = OpenOptions::new();
+        let file = open
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(self.state.join("lock"))?;
+        match rustix::fs::flock(&file, rustix::fs::FlockOperation::NonBlockingLockExclusive) {
+            Ok(()) => Ok(Some(file)),
+            Err(rustix::io::Errno::WOULDBLOCK) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// The run holding the lock, if any.
+    fn running(&self) -> Option<String> {
+        if self.lock().ok()?.is_some() {
+            return None;
+        }
+        let id = fs::read_to_string(self.state.join("lock")).ok()?;
+        Some(id.trim().to_owned()).filter(|id| !id.is_empty())
+    }
+
+    fn lists(&self, lists: &[Fixed]) -> Vec<Output> {
+        lists
+            .iter()
+            .map(|&c| self.run(c, self.list_limit, LIST_OUTPUT, false))
+            .collect()
+    }
+
+    /// Starts `sermon-helper run <id>` apart from this process.
+    fn spawn(&self, id: &str) -> Result<(), Failure> {
+        let exe = std::env::current_exe().map_err(fail)?;
+        let exe = exe.to_string_lossy();
+        match self.launch {
+            Launch::Systemd => {
+                let unit = format!("--unit=sermon-helper-run-{id}");
+                let args = [
+                    unit.as_str(),
+                    "--collect",
+                    "--quiet",
+                    "--no-block",
+                    &exe,
+                    "run",
+                    id,
+                ];
+                let o = self.run(
+                    ("usr/bin/systemd-run", &args),
+                    Duration::from_secs(30),
+                    1024,
+                    true,
+                );
+                if o.exit_code != 0 {
+                    return Err(Failure::Failed(format!(
+                        "systemd-run: {}",
+                        String::from_utf8_lossy(&o.output).trim()
+                    )));
+                }
+            }
+            Launch::Detached => {
+                let mut c = std::process::Command::new(exe.as_ref());
+                c.args(["run", id])
+                    .env_clear()
+                    .current_dir("/")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null());
+                let mut child = std::os::unix::process::CommandExt::process_group(&mut c, 0)
+                    .spawn()
+                    .map_err(fail)?;
+                std::thread::spawn(move || child.wait());
+            }
+            #[cfg(test)]
+            Launch::Inline => {
+                let (host, id) = (self.clone(), id.to_owned());
+                std::thread::spawn(move || host.execute(&id));
+            }
+        }
+        Ok(())
+    }
+
+    /// Runs the run `id` (`sermon-helper run <id>`) and stores its result.
+    ///
+    /// # Errors
+    ///
+    /// If the run's directory can't be read or written.
+    pub fn execute(&self, id: &str) -> io::Result<()> {
+        let dir = self.run_dir(id);
+        let request = fs::read_to_string(dir.join("request"))?;
+        let started = now();
+        let Some(mut lock) = self.lock()? else {
+            return store(
+                &dir,
+                &done(id, started, failed("another run holds the lock")),
+            );
+        };
+        lock.set_len(0)?;
+        lock.write_all(id.as_bytes())?;
+        write_atomically(&dir.join("started"), started.to_string().as_bytes())?;
+        let d = self.distribution();
+        let result = match request.split_once('\n').unwrap_or((&request, "")) {
+            ("updates security", _) => self.updates(d, true),
+            ("updates all", _) => self.updates(d, false),
+            ("reboot", _) if self.launch == Launch::Detached => {
+                // busybox reboots after the delay and never returns: the result comes first.
+                store(
+                    &dir,
+                    &done(
+                        id,
+                        started,
+                        Output {
+                            name: "reboot -d 60".into(),
+                            ..Output::default()
+                        },
+                    ),
+                )?;
+                let _ = self.run(
+                    ("sbin/reboot", &["-d", "60"]),
+                    Duration::from_mins(2),
+                    1024,
+                    true,
+                );
+                return Ok(());
+            }
+            ("reboot", reason) => self.run(
+                ("usr/sbin/shutdown", &["-r", "+1", reason]),
+                Duration::from_mins(1),
+                4096,
+                true,
+            ),
+            _ => failed("unknown request"),
+        };
+        store(&dir, &done(id, started, result))
+    }
+
+    /// Refreshes the sources and installs the updates; for security only on apt the packages of a
+    /// security suite.
+    fn updates(&self, d: Distribution, security: bool) -> Output {
+        let Some((program, refresh, lists)) = commands(d) else {
+            return failed(UNSUPPORTED);
+        };
+        let refresh = self.run(refresh, self.run_limit, RUN_OUTPUT, true);
+        if refresh.exit_code != 0 {
+            return refresh;
+        }
+        let names = match (d, security) {
+            (Distribution::Apt, true) => security_packages(&String::from_utf8_lossy(
+                &self.lists(lists).remove(0).output,
+            )),
+            _ => Vec::new(),
+        };
+        let mut args: Vec<&str> = match (d, security) {
+            (Distribution::Apt, false) => [&APT_GET[..], &["--with-new-pkgs", "upgrade"]].concat(),
+            (Distribution::Apt, true) if names.is_empty() => {
+                return Output {
+                    output: b"no security updates\n".into(),
+                    ..refresh
+                };
+            }
+            (Distribution::Apt, true) => [&APT_GET[..], &["install", "--only-upgrade"]].concat(),
+            (Distribution::Dnf, false) => vec!["-y", "upgrade"],
+            (Distribution::Dnf, true) => vec!["-y", "upgrade", "--security"],
+            (Distribution::Apk, false) => vec!["upgrade", "-q"],
+            _ => return failed("unsupported scope for this distribution"),
+        };
+        args.extend(names.iter().map(String::as_str));
+        let mut out = self.run((program, &args), self.run_limit, RUN_OUTPUT, true);
+        let mut joined = [refresh.output, out.output].concat();
+        out.truncated |= refresh.truncated || joined.len() > RUN_OUTPUT;
+        out.output = joined.split_off(joined.len().saturating_sub(RUN_OUTPUT));
+        out
+    }
+
+    /// Deletes the runs older than [`KEEP`].
+    pub fn prune(&self) {
+        for entry in fs::read_dir(self.state.join("runs"))
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .is_ok_and(|t| older(t, KEEP))
+            {
+                let _ = fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+}
+
+impl Executor for Host {
+    fn status(&self) -> StatusInfo {
+        let running_run_id = self.running().unwrap_or_default();
+        StatusInfo {
+            distribution: self.distribution().into(),
+            running_run_id,
+            ..StatusInfo::default()
+        }
+    }
+
+    fn list_updates(&mut self, refresh: bool) -> Result<Updates, Failure> {
+        let d = self.distribution();
+        let (_, refresh_command, lists) =
+            commands(d).ok_or_else(|| Failure::Unsupported(UNSUPPORTED.into()))?;
+        let Some(_lock) = self.lock().map_err(fail)? else {
+            return Err(Failure::Busy);
+        };
+        let stamp = self.state.join("refreshed");
+        let refreshed = refresh
+            && fs::metadata(&stamp)
+                .and_then(|m| m.modified())
+                .map_or(true, |t| older(t, REFRESH_EVERY));
+        let mut commands = Vec::new();
+        if refreshed {
+            commands.push(self.run(refresh_command, self.list_limit, RUN_OUTPUT, true));
+            let _ = fs::write(&stamp, b"");
+        }
+        commands.extend(self.lists(lists));
+        let reboot = self.root.join("var/run/reboot-required");
+        let mut pkgs = Vec::new();
+        if let Ok(f) = File::open(reboot.with_extension("pkgs")) {
+            let _ = f.take(64 << 10).read_to_end(&mut pkgs);
+        }
+        Ok(Updates {
+            distribution: d.into(),
+            refreshed,
+            commands,
+            reboot_required_pkgs: pkgs,
+            reboot_required: reboot.exists(),
+        })
+    }
+
+    fn start(&mut self, run: &Run) -> Result<(), Failure> {
+        self.prune();
+        let d = self.distribution();
+        let (id, request) = match run {
+            Run::Updates { .. } if d == Distribution::Unspecified => {
+                return Err(Failure::Unsupported(UNSUPPORTED.into()));
+            }
+            Run::Updates {
+                scope: Scope::Security,
+                ..
+            } if d == Distribution::Apk => {
+                return Err(Failure::Unsupported(
+                    "Alpine has no security metadata: use the scope all".into(),
+                ));
+            }
+            Run::Updates {
+                id,
+                scope: Scope::Security,
+            } => (id, "updates security".to_owned()),
+            Run::Updates { id, .. } => (id, "updates all".to_owned()),
+            Run::Reboot { id, reason } => (id, format!("reboot\n{reason}")),
+            Run::SelfUpdate { .. } => {
+                return Err(Failure::Unsupported(
+                    "self-update follows with ADR 0036".into(),
+                ));
+            }
+        };
+        let dir = self.run_dir(id);
+        if dir.exists() {
+            return Ok(()); // started before: a run happens once
+        }
+        if self.lock().map_err(fail)?.is_none() {
+            return Err(Failure::Busy);
+        }
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&dir)
+            .map_err(fail)?;
+        write_atomically(&dir.join("request"), request.as_bytes()).map_err(fail)?;
+        self.spawn(id)
+    }
+
+    fn result(&self, id: &str) -> RunState {
+        let dir = self.run_dir(id);
+        if let Ok(bytes) = fs::read(dir.join("result")) {
+            return RunState::decode(bytes.as_slice()).unwrap_or_default();
+        }
+        let Ok(meta) = fs::metadata(dir.join("request")) else {
+            return RunState {
+                run_id: id.into(),
+                ..RunState::default()
+            };
+        };
+        let started = fs::read_to_string(dir.join("started"))
+            .ok()
+            .and_then(|s| s.trim().parse().ok());
+        let launching = started.is_none() && meta.modified().is_ok_and(|t| !older(t, LAUNCH_TIME));
+        if launching || self.running().as_deref() == Some(id) {
+            let phase = RunPhase::Running.into();
+            return RunState {
+                run_id: id.into(),
+                phase,
+                started_unix: started.unwrap_or(0),
+                ..RunState::default()
+            };
+        }
+        done(
+            id,
+            started.unwrap_or(0),
+            failed("the run ended without a result (killed, or the host restarted)"),
+        )
+    }
+}
+
+/// The package manager family of `/etc/os-release`.
+#[must_use]
+pub fn distribution(os_release: &str) -> Distribution {
+    let words: Vec<&str> = os_release
+        .lines()
+        .filter_map(|l| l.strip_prefix("ID=").or_else(|| l.strip_prefix("ID_LIKE=")))
+        .flat_map(|v| v.trim_matches(['"', '\'']).split_whitespace())
+        .collect();
+    let any = |names: &[&str]| words.iter().any(|w| names.contains(w));
+    if any(&["debian", "ubuntu"]) {
+        Distribution::Apt
+    } else if any(&["rhel", "fedora", "centos", "rocky", "almalinux"]) {
+        Distribution::Dnf
+    } else if any(&["alpine"]) {
+        Distribution::Apk
+    } else {
+        Distribution::Unspecified
+    }
+}
+
+/// The packages `apt list --upgradable` names from a security suite
+/// (`openssl/bookworm-security 3.0.16-1 amd64 [upgradable from: …]`), only with valid Debian
+/// names: they become arguments of apt-get.
+#[must_use]
+pub fn security_packages(list: &str) -> Vec<String> {
+    let valid = |n: &str| {
+        n.len() >= 2
+            && n.as_bytes()[0].is_ascii_alphanumeric()
+            && n.bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"+-.".contains(&b))
+    };
+    let security = |rest: &str| {
+        rest.split(' ')
+            .next()
+            .is_some_and(|s| s.split(',').any(|s| s.ends_with("-security")))
+    };
+    list.lines()
+        .filter_map(|l| l.split_once('/'))
+        .filter(|(name, rest)| valid(name) && security(rest))
+        .map(|(name, _)| name.to_owned())
+        .collect()
+}
+
+fn fail(e: impl std::fmt::Display) -> Failure {
+    Failure::Failed(e.to_string())
+}
+
+fn older(t: SystemTime, age: Duration) -> bool {
+    t.elapsed().map_or(true, |a| a >= age)
+}
+
+fn now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+}
+
+fn failed(why: &str) -> Output {
+    Output {
+        exit_code: -1,
+        output: why.as_bytes().to_vec(),
+        ..Output::default()
+    }
+}
+
+fn done(id: &str, started: i64, result: Output) -> RunState {
+    let phase = RunPhase::Done.into();
+    RunState {
+        run_id: id.into(),
+        phase,
+        result: Some(result),
+        started_unix: started,
+        ended_unix: now(),
+    }
+}
+
+fn store(dir: &Path, state: &RunState) -> io::Result<()> {
+    write_atomically(&dir.join("result"), &state.encode_to_vec())
+}
+
+fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let tmp = path.with_extension("tmp");
+    let mut f = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&tmp)?;
+    f.write_all(bytes)?;
+    f.sync_all()?;
+    fs::rename(tmp, path)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+    use std::thread::sleep;
+
+    use super::*;
+
+    const ID: &str = "0193f5a0-0000-7000-8000-000000000001";
+    const APT_LIST: &str = "Listing...\n\
+        openssl/bookworm-security 3.0.16-1~deb12u1 arm64 [upgradable from: 3.0.15-1~deb12u1]\n\
+        libc6/bookworm-updates,bookworm-security 2.36-9+deb12u10 arm64 [upgradable from: 2.36-9+deb12u9]\n\
+        tzdata/bookworm-updates 2025b-0+deb12u1 all [upgradable from: 2025a-0+deb12u1]\n";
+
+    /// A host in a temporary root with fake programs that log their arguments to `calls`.
+    struct Fake {
+        /// Keeps the temporary root alive.
+        _dir: tempfile::TempDir,
+        host: Host,
+    }
+
+    impl Fake {
+        fn new(os_release: &str) -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().join("root");
+            fs::create_dir_all(root.join("etc")).unwrap();
+            fs::write(root.join("etc/os-release"), os_release).unwrap();
+            let host = Host {
+                root,
+                state: dir.path().join("state"),
+                launch: Launch::Inline,
+                list_limit: Duration::from_secs(5),
+                run_limit: Duration::from_secs(5),
+            };
+            let fake = Self { _dir: dir, host };
+            for p in [
+                "usr/bin/apt-get",
+                "usr/bin/dnf",
+                "sbin/apk",
+                "usr/sbin/shutdown",
+                "sbin/reboot",
+            ] {
+                fake.program(p, "");
+            }
+            fake.program(
+                "usr/bin/apt",
+                &format!("printf '{}'", APT_LIST.replace('\n', "\\n")),
+            );
+            fake
+        }
+
+        /// A fake program: logs its name and arguments, then runs `body`; fails if the file
+        /// `fail-<name>` exists.
+        fn program(&self, path: &str, body: &str) {
+            let file = self.host.root.join(path);
+            fs::create_dir_all(file.parent().unwrap()).unwrap();
+            let name = Path::new(path)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            let root = self.host.root.display();
+            fs::write(&file, format!("#!/bin/sh\necho \"{name} $*\" >>{root}/calls\nif [ -e {root}/fail-{name} ]; then exit 100; fi\n{body}\n")).unwrap();
+            fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        fn calls(&self) -> String {
+            fs::read_to_string(self.host.root.join("calls")).unwrap_or_default()
+        }
+
+        fn wait(&self, id: &str) -> RunState {
+            for _ in 0..250 {
+                let state = self.host.result(id);
+                if state.phase() == RunPhase::Done {
+                    return state;
+                }
+                sleep(Duration::from_millis(20));
+            }
+            panic!("the run did not end: {:?}", self.host.result(id));
+        }
+    }
+
+    fn updates(scope: Scope) -> Run {
+        Run::Updates {
+            id: ID.into(),
+            scope,
+        }
+    }
+
+    #[test]
+    fn knows_the_package_manager_of_every_target_distribution() {
+        for (os_release, want) in [
+            ("ID=debian\nVERSION_ID=\"12\"\n", Distribution::Apt),
+            ("ID=ubuntu\nID_LIKE=debian\n", Distribution::Apt),
+            (
+                "ID=\"rocky\"\nID_LIKE=\"rhel centos fedora\"\n",
+                Distribution::Dnf,
+            ),
+            (
+                "ID=\"almalinux\"\nID_LIKE=\"rhel centos fedora\"\n",
+                Distribution::Dnf,
+            ),
+            ("ID=fedora\n", Distribution::Dnf),
+            ("ID=alpine\n", Distribution::Apk),
+            ("ID=arch\n", Distribution::Unspecified),
+            ("NAME=\"ID=debian\"\n", Distribution::Unspecified),
+            ("", Distribution::Unspecified),
+        ] {
+            assert_eq!(distribution(os_release), want, "{os_release:?}");
+        }
+    }
+
+    #[test]
+    fn picks_the_packages_of_security_suites_with_valid_names() {
+        let mut list = APT_LIST.to_owned();
+        list.push_str("evil;reboot/bookworm-security 1 all [upgradable from: 0]\nx/bookworm-security 1 all\nUpper/stable-security 1 all\n");
+        assert_eq!(security_packages(&list), ["openssl", "libc6"]);
+        assert_eq!(
+            security_packages("WARNING: apt does not have a stable CLI interface.\n"),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn lists_with_a_refresh_at_most_every_five_minutes() {
+        let fake = Fake::new("ID=debian\n");
+        let mut host = fake.host.clone();
+        fs::create_dir_all(host.root.join("var/run")).unwrap();
+        fs::write(host.root.join("var/run/reboot-required"), "").unwrap();
+        fs::write(
+            host.root.join("var/run/reboot-required.pkgs"),
+            "linux-image-6.1.0-28-arm64\n",
+        )
+        .unwrap();
+        let first = host.list_updates(true).unwrap();
+        assert!(
+            first.refreshed
+                && first.reboot_required
+                && first.reboot_required_pkgs == b"linux-image-6.1.0-28-arm64\n"
+        );
+        assert_eq!(first.distribution(), Distribution::Apt);
+        let names: Vec<_> = first
+            .commands
+            .iter()
+            .map(|c| c.name.rsplit('/').next().unwrap().to_owned())
+            .collect();
+        assert_eq!(names, ["apt-get update -q", "apt list --upgradable"]);
+        assert_eq!(first.commands[1].output, APT_LIST.as_bytes());
+        let second = host.list_updates(true).unwrap();
+        assert!(
+            !second.refreshed && second.commands.len() == 1,
+            "{second:?}"
+        );
+        assert_eq!(fake.calls().matches("apt-get update").count(), 1);
+    }
+
+    #[test]
+    fn keeps_the_exit_codes_of_dnf() {
+        let fake = Fake::new("ID=fedora\n");
+        fake.program("usr/bin/dnf", "[ \"$2\" = check-update ] && { echo 'openssl.x86_64 1:3.2.4-1.fc44 updates'; exit 100; }; exit 0");
+        let updates = fake.host.clone().list_updates(false).unwrap();
+        let codes: Vec<_> = updates
+            .commands
+            .iter()
+            .map(|c| (c.name.rsplit('/').next().unwrap().to_owned(), c.exit_code))
+            .collect();
+        assert_eq!(
+            codes,
+            [
+                ("dnf -q check-update".into(), 100),
+                ("dnf -q updateinfo list --security".into(), 0),
+                ("dnf needs-restarting -r".into(), 0)
+            ]
+        );
+        assert!(!updates.refreshed && !updates.reboot_required);
+    }
+
+    #[test]
+    fn installs_all_updates_or_the_security_ones_once() {
+        let fake = Fake::new("ID=debian\n");
+        let mut host = fake.host.clone();
+        host.start(&updates(Scope::All)).unwrap();
+        let state = fake.wait(ID);
+        assert_eq!(state.result.as_ref().unwrap().exit_code, 0);
+        assert!(state.started_unix > 0 && state.ended_unix >= state.started_unix);
+        // Started again: nothing happens, the result stays.
+        host.start(&updates(Scope::All)).unwrap();
+        sleep(Duration::from_millis(100));
+        let calls = fake.calls();
+        assert_eq!(calls.matches("apt-get update").count(), 1, "{calls}");
+        assert!(calls.contains("apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold --with-new-pkgs upgrade"), "{calls}");
+
+        let fake = Fake::new("ID=ubuntu\nID_LIKE=debian\n");
+        fake.host.clone().start(&updates(Scope::Security)).unwrap();
+        fake.wait(ID);
+        assert!(
+            fake.calls()
+                .contains("--force-confold install --only-upgrade openssl libc6\n"),
+            "{}",
+            fake.calls()
+        );
+
+        let fake = Fake::new("ID=rocky\n");
+        fake.host.clone().start(&updates(Scope::Security)).unwrap();
+        fake.wait(ID);
+        assert!(
+            fake.calls()
+                .contains("dnf -q makecache\ndnf -y upgrade --security\n"),
+            "{}",
+            fake.calls()
+        );
+
+        let fake = Fake::new("ID=alpine\n");
+        fake.host.clone().start(&updates(Scope::All)).unwrap();
+        fake.wait(ID);
+        assert!(
+            fake.calls().contains("apk update -q\napk upgrade -q\n"),
+            "{}",
+            fake.calls()
+        );
+    }
+
+    #[test]
+    fn a_failed_refresh_ends_the_run_with_its_output() {
+        let fake = Fake::new("ID=debian\n");
+        fs::write(fake.host.root.join("fail-apt-get"), "").unwrap();
+        fake.host.clone().start(&updates(Scope::All)).unwrap();
+        let state = fake.wait(ID);
+        assert_eq!(state.result.unwrap().exit_code, 100);
+        assert!(!fake.calls().contains("upgrade"));
+    }
+
+    #[test]
+    fn refuses_what_the_host_cannot_do() {
+        for (os, run) in [
+            ("ID=alpine\n", updates(Scope::Security)),
+            ("ID=arch\n", updates(Scope::All)),
+            ("ID=debian\n", Run::SelfUpdate { id: ID.into() }),
+        ] {
+            let fake = Fake::new(os);
+            assert!(
+                matches!(fake.host.clone().start(&run), Err(Failure::Unsupported(_))),
+                "{os} {run:?}"
+            );
+            assert!(!fake.host.run_dir(ID).exists());
+        }
+        let mut arch = Fake::new("ID=arch\n").host;
+        assert!(matches!(
+            arch.list_updates(false),
+            Err(Failure::Unsupported(_))
+        ));
+    }
+
+    // One run at a time: while the lock is held, neither a run nor a list starts.
+    #[test]
+    fn the_lock_keeps_runs_apart_and_names_the_running_one() {
+        let fake = Fake::new("ID=debian\n");
+        let mut host = fake.host.clone();
+        let mut held = host.lock().unwrap().unwrap();
+        held.write_all(ID.as_bytes()).unwrap();
+        assert_eq!(host.status().running_run_id, ID);
+        assert_eq!(host.start(&updates(Scope::All)), Err(Failure::Busy));
+        assert!(matches!(host.list_updates(true), Err(Failure::Busy)));
+        drop(held);
+        assert_eq!(host.status().running_run_id, "");
+        assert_eq!(host.status().distribution(), Distribution::Apt);
+    }
+
+    #[test]
+    fn reboots_after_a_minute_with_the_reason() {
+        let fake = Fake::new("ID=debian\n");
+        fake.host
+            .clone()
+            .start(&Run::Reboot {
+                id: ID.into(),
+                reason: "updates (SerMon)".into(),
+            })
+            .unwrap();
+        assert_eq!(fake.wait(ID).result.unwrap().exit_code, 0);
+        assert!(
+            fake.calls().contains("shutdown -r +1 updates (SerMon)\n"),
+            "{}",
+            fake.calls()
+        );
+        // OpenRC: busybox waits and never returns, so the result comes first.
+        let mut fake = Fake::new("ID=alpine\n");
+        fake.host.launch = Launch::Detached;
+        fs::create_dir_all(fake.host.run_dir(ID)).unwrap();
+        fs::write(fake.host.run_dir(ID).join("request"), "reboot\nupdates").unwrap();
+        fake.host.execute(ID).unwrap();
+        let state = fake.host.result(ID);
+        assert_eq!(
+            (state.phase(), state.result.unwrap().exit_code),
+            (RunPhase::Done, 0)
+        );
+        assert!(fake.calls().contains("reboot -d 60\n"), "{}", fake.calls());
+    }
+
+    #[test]
+    fn results_of_unknown_lost_and_old_runs() {
+        let fake = Fake::new("ID=debian\n");
+        assert_eq!(fake.host.result(ID).phase(), RunPhase::Unspecified);
+        // Started, but nobody holds the lock and no result came: lost (killed, reboot).
+        let dir = fake.host.run_dir(ID);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("request"), "updates all").unwrap();
+        assert_eq!(
+            fake.host.result(ID).phase(),
+            RunPhase::Running,
+            "just launched"
+        );
+        fs::write(dir.join("started"), "1795000000").unwrap();
+        let lost = fake.host.result(ID);
+        assert_eq!(
+            (
+                lost.phase(),
+                lost.result.unwrap().exit_code,
+                lost.started_unix
+            ),
+            (RunPhase::Done, -1, 1_795_000_000)
+        );
+        // After seven days a run is forgotten.
+        let old = SystemTime::now() - KEEP - Duration::from_secs(60);
+        File::open(&dir).unwrap().set_modified(old).unwrap();
+        let fresh = fake.host.run_dir("0193f5a0-0000-7000-8000-000000000002");
+        fs::create_dir_all(&fresh).unwrap();
+        fake.host.prune();
+        assert!(!dir.exists());
+        assert!(fresh.exists(), "a fresh run was pruned");
+    }
+}

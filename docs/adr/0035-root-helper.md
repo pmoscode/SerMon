@@ -139,7 +139,8 @@ Das Enum aus KONZEPT §4.2, ergänzt um zwei lesende Operationen. Jede weitere b
 
 ### Umfang
 
-`just helper-loc` zählt den eigenen Code des Helpers ohne Tests und generierten Code. Über 1 000 Zeilen schlägt CI
+`just helper-loc` zählt den eigenen Code des Helpers ohne Tests und generierten Code. Über 1 000 Zeilen (seit dem
+Nachtrag M4-03: 1 500) schlägt CI
 fehl.
 
 ## Konsequenzen
@@ -174,4 +175,37 @@ fehl.
 - Die einzige `unsafe`-Stelle übernimmt fd 3 von systemd, nachdem `LISTEN_PID` und `LISTEN_FDS` geprüft sind; fd 3
   muss ein Socket sein.
 - Das Format des Journals: `peer_uid=… op=… run_id=… status=… reason="…"`; eine `run_id` steht nur geprüft darin.
+
+## Nachtrag M4-03: Ausführung, Grenze 1 500 Zeilen
+
+- **Grenze:** Mit den Paketoperationen hat der Helper 1 134 eigene Zeilen (im Stil von rustfmt, ohne Tests und
+  Kommentare); das Self-Update kommt noch hinzu. Die Grenze steigt auf **1 500 Zeilen** und bleibt in CI geprüft
+  (`scripts/helper-loc.sh`). Gezählt wird bis zum Testmodul; ein `#[cfg(test)]` an einem Element im Code zählt mit.
+  Gegen das Ziel „winzig“ spricht das nicht: Die Fläche bleibt das feste Op-Enum ohne freie Argumente.
+- **Befehle** (absolute Pfade, feste Umgebung, eigene Prozessgruppe; Listen 10 min mit 2 MiB nur aus stdout, Läufe
+  60 min mit den letzten 256 KiB aus stdout und stderr):
+
+  | | Quellen | Listen | alle | Security |
+  |---|---|---|---|---|
+  | apt | `apt-get update -q` | `apt list --upgradable` | `apt-get -y -q -o …confdef -o …confold --with-new-pkgs upgrade` | `apt-get … install --only-upgrade NAMEN` |
+  | dnf | `dnf -q makecache` | `check-update`, `updateinfo list --security`, `needs-restarting -r` | `dnf -y upgrade` | `dnf -y upgrade --security` |
+  | apk | `apk update -q` | `apk version -l '<'` | `apk upgrade -q` | – (`UNSUPPORTED`, O6) |
+
+  Ein Lauf aktualisiert erst die Quellen; schlägt das fehl, endet er mit dessen Ausgabe.
+- **Abweichung: apt und „nur Security“.** apt kennt kein Upgrade nur aus Security-Quellen. Der Helper liest dafür doch
+  eine Ausgabe: aus `apt list --upgradable` die Namen der Pakete, deren Suite auf `-security` endet. Er übernimmt nur
+  Namen nach den Regeln von Debian (Kleinbuchstaben, Ziffern, `+-.`, ab zwei Zeichen); sie werden zu Argumenten von
+  `apt-get`, nie zu einer Shell-Zeile.
+- **Reboot:** unter systemd `shutdown -r +1 GRUND`, unter OpenRC `reboot -d 60`. busybox kehrt nicht zurück: Das
+  Ergebnis wird dort vorher geschrieben.
+- **Läufe:** `/var/lib/sermon-helper/runs/<run_id>/` (nur root) mit `request`, `started` und `result` (`RunState`
+  als Protobuf, atomar geschrieben); nach 7 Tagen gelöscht. Unter systemd startet `systemd-run` die Unit
+  `sermon-helper-run-<run_id>`, sonst ein eigener Prozess in eigener Prozessgruppe; beide führen
+  `sermon-helper run <run_id>` aus. Eine schon bekannte `run_id` startet nichts mehr. Ein Lauf ohne Ergebnis,
+  dessen Sperre niemand hält, gilt als verloren (Exit -1).
+- **Sperre:** `/var/lib/sermon-helper/lock` (`flock`), darin die `run_id` des laufenden Laufs für `GetStatus`. Ein
+  Start prüft sie; zwei Starts kurz nacheinander kann nur der Lauf selbst trennen: Der zweite endet dann mit
+  „another run holds the lock“, es laufen nie zwei Paketmanager.
+- **Ausgabe von Daemons:** Startet das Skript eines Pakets einen Dienst, der die Ausgabe offen hält, wartet der Lauf
+  nach dem Ende des Befehls noch 2 s auf die Ausgabe und endet dann.
 

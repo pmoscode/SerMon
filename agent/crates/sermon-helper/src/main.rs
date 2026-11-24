@@ -18,11 +18,12 @@ use prost::Message;
 use sermon_helper_proto::v1::{HelperRequest, HelperResponse, Status};
 
 use sermon_helper::config::{self, Config};
+use sermon_helper::host::Host;
 use sermon_helper::request::{self, Executor};
 use sermon_helper::{peer, wire};
 
 const NAME: &str = "sermon-helper";
-const USAGE: &str = "usage: sermon-helper --version | serve";
+const USAGE: &str = "usage: sermon-helper --version | serve | run RUN_ID";
 /// The socket of the agent.
 const SOCKET: &str = "/run/sermon/helper.sock";
 /// Without a request for so long, a socket-activated helper ends; systemd starts it again.
@@ -42,6 +43,16 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        // A run started by serve, apart from it (ADR 0035); only root can read its request.
+        [cmd, id] if cmd == "run" && request::valid_run_id(id) => {
+            match Host::system().execute(id) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("{NAME}: run {id}: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -59,10 +70,12 @@ fn serve() -> Result<(), String> {
         "{NAME}: serving {SOCKET} for uid {uid}; allow_remote_updates={} allow_remote_reboot={} allow_self_update={}",
         config.allow_remote_updates, config.allow_remote_reboot, config.allow_self_update
     );
+    let host = Host::system();
+    host.prune();
     let mut server = Server {
         config,
         allowed_uid: uid,
-        exec: Box::new(request::Unavailable),
+        exec: Box::new(host),
     };
     loop {
         if activated && !readable_within(&listener, IDLE) {
@@ -243,11 +256,32 @@ mod tests {
 
     const UID: u32 = 997;
 
+    /// An executor that does nothing: the connection's rules are under test, not the work.
+    struct Nothing;
+
+    impl Executor for Nothing {
+        fn status(&self) -> sermon_helper_proto::v1::StatusInfo {
+            sermon_helper_proto::v1::StatusInfo::default()
+        }
+        fn list_updates(
+            &mut self,
+            _: bool,
+        ) -> Result<sermon_helper_proto::v1::Updates, request::Failure> {
+            Err(request::Failure::Busy)
+        }
+        fn start(&mut self, _: &request::Run) -> Result<(), request::Failure> {
+            Err(request::Failure::Busy)
+        }
+        fn result(&self, _: &str) -> sermon_helper_proto::v1::RunState {
+            sermon_helper_proto::v1::RunState::default()
+        }
+    }
+
     fn server(config: Config) -> Server {
         Server {
             config,
             allowed_uid: UID,
-            exec: Box::new(request::Unavailable),
+            exec: Box::new(Nothing),
         }
     }
 

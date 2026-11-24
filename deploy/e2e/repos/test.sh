@@ -58,7 +58,7 @@ apt_checks='
 dnf_checks='
 	dnf -q check-update >/tmp/updates 2>&1; echo "check-update: $?"; grep sermon-e2e /tmp/updates
 	echo "security:"; dnf -q updateinfo list --security 2>/dev/null | grep sermon-e2e'
-apk_checks='echo "upgradable:"; apk version -l "<" 2>/dev/null | grep sermon-e2e'
+apk_checks='echo "upgradable:"; apk version -l "<" 2>/dev/null | grep sermon-e2e; grep -c "=" /etc/apk/world | sed "s/^/pinned: /"'
 
 for host in debian:13 ubuntu:24.04; do
 	out=$(client "$host" "$work/repos/keys" "$apt_checks")
@@ -79,6 +79,8 @@ done
 out=$(client alpine:3.22 "$work/repos/keys" "$apk_checks")
 echo "$out" | grep -q '^sermon-e2e-demo-1\.0\.0-r1  *<  *2\.0\.0-r1' || fail "alpine: demo 2.0.0 missing: $out"
 echo "$out" | grep -q '^sermon-e2e-extra-1\.0\.0-r1  *<  *1\.1\.0-r1' || fail "alpine: extra 1.1.0 missing: $out"
+# Nothing pinned in /etc/apk/world: apk upgrade takes the updates (M4-03).
+echo "$out" | grep -q '^pinned: 0$' || fail "alpine: versions pinned in /etc/apk/world: $out"
 
 # Another key: every distro refuses the sources.
 for host in debian:13 rockylinux:9 alpine:3.22; do

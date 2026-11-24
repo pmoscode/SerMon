@@ -2,8 +2,8 @@
 //! answer an operation gets. Pure: the work itself is behind [`Executor`].
 
 use sermon_helper_proto::v1::{
-    ApplyUpdates, HelperRequest, HelperResponse, Reboot, RunPhase, RunState, Scope, SelfUpdate,
-    Status, StatusInfo, Updates, helper_request::Operation, helper_response::Result as Answer,
+    ApplyUpdates, HelperRequest, HelperResponse, Reboot, RunState, Scope, SelfUpdate, Status,
+    StatusInfo, Updates, helper_request::Operation, helper_response::Result as Answer,
 };
 
 use crate::config::Config;
@@ -24,7 +24,6 @@ pub enum Run {
 
 /// Why the work could not be done.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code, reason = "constructed by the package executor (M4-03)")]
 pub enum Failure {
     /// Another run or refresh holds the lock.
     Busy,
@@ -226,36 +225,9 @@ pub fn valid_reason(reason: &str) -> bool {
         })
 }
 
-/// What the helper can do before M4-03: nothing but describe itself.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Unavailable;
-
-impl Executor for Unavailable {
-    fn status(&self) -> StatusInfo {
-        StatusInfo::default()
-    }
-    fn list_updates(&mut self, _: bool) -> Result<Updates, Failure> {
-        Err(Failure::Unsupported(
-            "package operations are not available in this version".to_owned(),
-        ))
-    }
-    fn start(&mut self, _: &Run) -> Result<(), Failure> {
-        Err(Failure::Unsupported(
-            "package operations are not available in this version".to_owned(),
-        ))
-    }
-    fn result(&self, id: &str) -> RunState {
-        RunState {
-            run_id: id.to_owned(),
-            phase: RunPhase::Unspecified.into(),
-            ..RunState::default()
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use sermon_helper_proto::v1::{GetStatus, ListUpdates, RunResult};
+    use sermon_helper_proto::v1::{GetStatus, ListUpdates, RunPhase, RunResult};
 
     use super::*;
 
@@ -513,32 +485,5 @@ mod tests {
             ask(apply(ID, Scope::All), config, &mut exec).0.status(),
             Status::Busy
         );
-    }
-
-    #[test]
-    fn without_an_executor_only_the_status_works() {
-        let mut exec = Unavailable;
-        let config = all_allowed();
-        let ok = handle(
-            &HelperRequest {
-                operation: Some(Operation::GetStatus(GetStatus {})),
-            },
-            config,
-            &mut exec,
-        );
-        assert_eq!(ok.0.status(), Status::Ok);
-        for op in [
-            apply(ID, Scope::All),
-            Operation::ListUpdates(ListUpdates { refresh: false }),
-        ] {
-            let (r, _) = handle(
-                &HelperRequest {
-                    operation: Some(op),
-                },
-                config,
-                &mut exec,
-            );
-            assert_eq!(r.status(), Status::Unsupported);
-        }
     }
 }

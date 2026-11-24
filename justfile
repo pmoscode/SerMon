@@ -152,6 +152,17 @@ test-scripts:
 test-e2e-repos:
     sh deploy/e2e/repos/test.sh
 
+# Run the root helper's updates against real apt, dnf and apk in containers (M4-03; Docker required)
+test-helper:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case $(docker info --format '{{{{.Architecture}}') in
+    x86_64 | amd64) target=x86_64-unknown-linux-musl ;;
+    *) target=aarch64-unknown-linux-musl ;;
+    esac
+    (cd agent && cargo zigbuild --release --locked -q -p sermon-helper --target "$target")
+    sh scripts/helper-smoke.sh "agent/target/$target/release/sermon-helper"
+
 # Scan the git history for leaked secrets (betterleaks, ADR 0005; no live validation against provider APIs)
 security-secrets:
     betterleaks git --redact --no-banner .

@@ -3927,7 +3927,7 @@ und 0034. Es fehlt kein ADR. Erkenntnisse für M4:
 
 | Epic | Inhalt | Skills | Abhängig von |
 |---|---|---|---|
-| **E4.1 Root-Helper** | Eigene Binary und Unit, Unix-Socket mit `SO_PEERCRED`, festes Enum an Operationen, lokales Veto (`helper.toml`), Audit; < 1 000 LoC | `sermon-adr`, `sermon-security-review` | M1-12 |
+| **E4.1 Root-Helper** | Eigene Binary und Unit, Unix-Socket mit `SO_PEERCRED`, festes Enum an Operationen, lokales Veto (`helper.toml`), Audit; höchstens 1 500 eigene Zeilen (ADR 0035, Nachtrag M4-03) | `sermon-adr`, `sermon-security-review` | M1-12 |
 | **E4.2 Update-Erfassung** | Adapter für apt, dnf und apk (Fixtures der Befehlsausgaben), Security-Kennzeichnung, Erkennung „Reboot nötig“, Auslöser (alle 6 h, nach dpkg-/rpm-Änderungen) | `sermon-tdd` | E4.1 |
 | **E4.3 Policies und Rollout** | Update-Policy pro Gruppe, Wartungsfenster (Zeitzonen! Zeitplan `routing.Schedule` und Stummschaltung aus M2-15 wiederverwenden), Orchestrator mit `maxParallel`, `stopOnFailure` und Health-Check, automatische Silences, manueller Anstoß mit Step-up | `sermon-tdd`, `sermon-security-review` | E4.2, E2.5 |
 | **E4.4 Updates-Dashboard** | Compliance-Übersicht, Alter offener Security-Updates, Historie und Laufprotokolle; Standardregeln Updates und Reboot | `sermon-ui-component`, `sermon-add-alert-rule` | E4.2 |
@@ -4032,7 +4032,41 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   `helper.toml`; Fuzz-Ziel `helper_request` für den Decoder.
 - **Abhängig von:** M4-01
 
-#### ☐ M4-03 – Helper: Paketmanager und Reboot ausführen · A · M 🔒
+#### ☑ M4-03 – Helper: Paketmanager und Reboot ausführen · A · M 🔒
+> Erledigt (ADR 0035, Nachtrag M4-03; KONZEPT §4.2; Threat Model T38):
+> - **`command.rs`:** ein fester Befehl mit leerer und dann fester Umgebung (`PATH`, `LC_ALL=C`, `HOME=/root`,
+>   `DEBIAN_FRONTEND=noninteractive`, `NEEDRESTART_MODE=l` …), ohne Eingabe, in eigener Prozessgruppe. Am Zeitlimit
+>   endet die ganze Gruppe (auch dpkg), der Exit-Code ist -1. Behalten wird nur das Ende der Ausgabe; hält ein
+>   gestarteter Daemon die Ausgabe offen, endet der Befehl trotzdem 2 s nach seinem Ende.
+> - **`host.rs`, der `Executor`:**
+>   - Distro aus `/etc/os-release` (`ID`, `ID_LIKE`).
+>   - Befehle je Paketmanager wie in der Tabelle des Nachtrags; Quellen höchstens alle 5 min.
+>   - `apt` mit Scope `security`: die Pakete aus Suiten auf `-security` (**Abweichung:** der Helper liest dafür
+>     `apt list`, nur gültige Debian-Namen werden Argumente).
+>   - Läufe als `sermon-helper run <run_id>` in einer Unit von `systemd-run` bzw. einer eigenen Prozessgruppe, mit
+>     Anfrage, Start und Ergebnis unter `/var/lib/sermon-helper/runs/` (nur root, 7 Tage); eine bekannte `run_id`
+>     startet nichts.
+>   - Sperre per `flock` mit der laufenden `run_id`; Reboot mit einer Minute Vorlauf (busybox: Ergebnis vorher);
+>     ein Lauf ohne Ergebnis und ohne Sperre gilt als verloren.
+>   - `SelfUpdate` antwortet bis M4-18 `UNSUPPORTED`, ebenso Alpine mit Scope `security` und eine unbekannte Distro.
+> - **Umfang:** 1 134 eigene Zeilen, über dem Ziel von 1 000. **Entscheidung (Product Owner):** Die Grenze steigt auf
+>   1 500 (Platz für das Self-Update) und bleibt in CI geprüft. Die Zählung bricht erst am Testmodul ab, nicht an
+>   einem `#[cfg(test)]` im Code (mit eigenem Testfall).
+> - **Tests:**
+>   - `command.rs`: Exit-Code, Ausgabe mit und ohne stderr, feste Umgebung, Kürzung, Zeitlimit beendet die Gruppe,
+>     offene Ausgabe eines Daemons, fehlendes Programm.
+>   - `host.rs` mit Fake-Programmen in einem Testverzeichnis (nur in Tests wählbar): Distros, Security-Namen,
+>     Aktualisieren alle 5 min und Reboot-Dateien, Exit-Codes von dnf (100), alle und Security-Updates für apt,
+>     dnf und apk einmal je `run_id`, fehlgeschlagenes Aktualisieren, Nicht-Unterstütztes, Sperre und laufende
+>     `run_id`, Reboot unter systemd und OpenRC, unbekannte, verlorene und alte Läufe.
+>   - Unter Linux (Container): alle Tests und clippy.
+>   - **`just test-helper`** (`scripts/helper-smoke.sh`, in CI und nightly): die statische Binary mit echtem apt,
+>     dnf und apk gegen die Quellen aus M4-08. Debian und Ubuntu sowie Rocky und Fedora installieren nur das
+>     Security-Update, Alpine alle.
+> - **Gefunden:** `use.sh` (M4-08) heftete auf Alpine die Versionen in `/etc/apk/world` an, `apk upgrade` tat
+>   nichts. Jetzt werden sie gelöst, und der Test aus M4-08 prüft das.
+> - **Gegenproben** für 18 Prüfungen (17 im Helper, eine in `use.sh`), alle erkannt; zwei Tests vorher verschärft
+>   (Ergebnis des Alpine-Reboots, junge Läufe bleiben beim Aufräumen).
 - **Ziel:** Die Operationen laufen auf Debian/Ubuntu, der RHEL-Familie und Alpine.
   - Befehle aus KONZEPT §14.1 und §14.2 mit absoluten Pfaden, fester Umgebung (`PATH`, `LANG=C`,
     `DEBIAN_FRONTEND=noninteractive`) und Zeitlimit (Liste 10 min, Updates 60 min). Die Distro liest der Helper selbst
@@ -4402,7 +4436,7 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 **M4 fertig, wenn:**
 
 - Der Demo-Test M4-28 ist grün.
-- Der Helper hat weniger als 1 000 LoC, sein Decoder ist gefuzzt, Aufrufer-Prüfung und Veto sind getestet.
+- Der Helper hat höchstens 1 500 eigene Zeilen, sein Decoder ist gefuzzt, Aufrufer-Prüfung und Veto sind getestet.
 - Die Parser haben Fixtures aller Zieldistros und sind gefuzzt.
 - Der Orchestrator ist mit Zeitzonen, Sommerzeit, `stopOnFailure` und Health-Check getestet.
 - Der Benchmark der Anomalie-Erkennung läuft in CI und ist nicht schlechter als die Referenz.
@@ -4449,6 +4483,6 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 | Umfang von M2/M3 wächst | Verzögerung | Kanal- und Modul-Wellen erlauben frühes Kürzen; Priorität: E-Mail, Webhook und ntfy vor den übrigen Kanälen |
 | Security-Findings spät entdeckt | Nacharbeit | 🔒-Aufgaben mit Pflicht-Review, Security-Review am Ende jedes Meilensteins, Fuzzing nightly ab M0 |
 | Reboot lässt sich in den E2E-Containern nicht nachstellen (M4-08) | Rollout mit Reboot ungetestet | ✓ Spike M4-08: geht mit `restart: unless-stopped`; Boot-ID und Uptime bleiben aber gleich, der Health-Check stützt sich auf die neue Session |
-| Root-Helper wächst über 1 000 LoC oder wird zum Einfallstor | A1: root auf allen Nodes | Parsen im Agent, festes Op-Enum, LoC-Prüfung in CI, eigene Review vor der Nutzung (M4-04) |
+| Root-Helper wächst über 1 500 Zeilen oder wird zum Einfallstor | A1: root auf allen Nodes | Parsen im Agent, festes Op-Enum, LoC-Prüfung in CI, eigene Review vor der Nutzung (M4-04) |
 | Anomalie-Erkennung meldet zu viel oder zu wenig | Vertrauen in die Alerts sinkt | beide Verfahren müssen übereinstimmen, Debounce, Lernphase; Benchmark in CI (M4-22); die Regel ist pro Org abschaltbar |
 | Umfang von M4 wächst | Verzögerung | Paket-Repos (M4-20) mit dem Release in v1.0, Kapazität und Heatmap (M4-26, M4-27) nach M5, Kanal `beta` später |

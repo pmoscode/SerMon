@@ -400,6 +400,8 @@ jobs:
       # arm64: nightly.yml.
       # Package sources with updates for the agent hosts first: signatures, the expected updates (M4-08).
       - run: just test-e2e-repos
+      # The root helper's updates against real apt, dnf and apk (M4-03).
+      - run: just test-helper
       - run: just e2e-demo
       # The runner's LSM can deny what works on a developer machine (AppArmor on Ubuntu 24.04).
       - name: Show AppArmor denials

@@ -183,3 +183,27 @@ func TestRun_SendsHSTSBehindTLS(t *testing.T) {
 	cancel()
 	<-done
 }
+
+// Passkeys never stop the server: reached by an IP address or a host name without a dot it runs
+// without them and says why; with a domain name they are on.
+func TestNewPasskeys_OffWithoutADomainNameInsteadOfFailing(t *testing.T) {
+	for _, tc := range []struct {
+		origins []string
+		on      bool
+	}{
+		{[]string{"https://192.168.1.10"}, false},
+		{[]string{"https://monitor:8443"}, false},
+		{nil, false},
+		{[]string{"https://10.0.0.5", "https://sermon.lan"}, true},
+	} {
+		var logs bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&logs, nil))
+		svc := newPasskeys(context.Background(), config.Config{AllowedOrigins: tc.origins}, nil, nil, nil, nil, logger)
+		if svc.Available() != tc.on {
+			t.Errorf("%v: available %v, want %v", tc.origins, svc.Available(), tc.on)
+		}
+		if !tc.on && !strings.Contains(logs.String(), "passkeys are off") {
+			t.Errorf("%v: no warning in %q", tc.origins, logs.String())
+		}
+	}
+}

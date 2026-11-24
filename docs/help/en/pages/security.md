@@ -11,7 +11,7 @@ Set up two-factor authentication for your account here: after the password, SerM
 
 ## Passkeys
 
-A passkey signs you in without a password: your device (fingerprint, face, PIN) or a security key confirms you, and it works only on this SerMon instance – a fake page can't grab it.
+A passkey signs you in without a password: your device (fingerprint, face, PIN) or a security key confirms you, and it works only on this SerMon instance – a fake page can't grab it. Passkeys need a domain name: if you reach SerMon by an IP address or a name without a dot, the section is missing.
 
 - **Add:** enter a name (e.g. “laptop”), choose “Add a passkey” and follow the browser. SerMon asks for a confirmation first. Up to 10 passkeys per account.
 - **Sign in:** “Sign in with a passkey” on the sign-in page, or the browser offers it in the e-mail field.

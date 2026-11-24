@@ -670,10 +670,29 @@ func TestConfig_RelyingPartyFromTheOrigins(t *testing.T) {
 	if cfg, err := passkey.Config([]string{"https://localhost:18443", "https://sermon.test"}); err != nil || cfg.RPID != "localhost" || len(cfg.RPOrigins) != 1 {
 		t.Errorf("e2e origins: %+v, %v", cfg, err)
 	}
-	for _, bad := range [][]string{nil, {"https://[::1]:8443"}, {"nohost"}} {
-		if _, err := passkey.Config(bad); err == nil {
-			t.Errorf("%v accepted", bad)
+	for _, bad := range [][]string{
+		nil,
+		{"https://[::1]:8443"},
+		{"nohost"},
+		{"https://192.168.1.10"},
+		{"https://10.0.0.5:8443", "http://127.0.0.1:8080"},
+		// go-webauthn takes no single label (a host name on the LAN) and no invalid domain.
+		{"https://monitor"},
+		{"https://-bad-.example"},
+		{"https://bücher.example"},
+	} {
+		if _, err := passkey.Config(bad); !errors.Is(err, passkey.ErrUnavailable) {
+			t.Errorf("%v: %v, want ErrUnavailable", bad, err)
 		}
+	}
+	// WebAuthn takes no IP address as relying party: the first origin with a domain name is it,
+	// the addresses stay without passkeys (M4, a server reached by IP failed to start).
+	cfg, err = passkey.Config([]string{"https://192.168.1.10", "https://monitor", "https://sermon.lan", "https://[fd00::1]"})
+	if err != nil || cfg.RPID != "sermon.lan" || len(cfg.RPOrigins) != 1 || cfg.RPOrigins[0] != "https://sermon.lan" {
+		t.Errorf("Config(IP first) = %+v, %v", cfg, err)
+	}
+	if _, err := webauthn.New(cfg); err != nil {
+		t.Errorf("webauthn.New() = %v", err)
 	}
 	var off *passkey.Service
 	if off.Available() || passkey.NewService(passkey.Deps{}).Available() {

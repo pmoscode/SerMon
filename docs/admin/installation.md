@@ -7,7 +7,9 @@ Diese Anleitung richtet SerMon auf einem Linux-Server mit Docker ein. Grundlage 
 
 - Linux-Server mit Docker Engine und dem Compose-Plugin (`docker compose version`).
 - Richtwert für 50 Nodes: 4 vCPU, 8 GB RAM, 200 GB SSD (KONZEPT §22).
-- Ein DNS-Name, der auf den Server zeigt, z. B. `sermon.example.org`.
+- Ein DNS-Name, der auf den Server zeigt, z. B. `sermon.example.org`. Passkeys brauchen ihn: Unter einer IP-Adresse
+  oder einem Namen ohne Punkt (`https://monitor`) läuft SerMon ohne Passkeys und meldet das beim Start im Log
+  (`passkeys are off`).
 - Offene Ports: **80** und **443** (Web-UI, Zertifikat von Let's Encrypt) sowie **8443** (Agents, mTLS).
 - Ein Mailserver mit STARTTLS (Port 587) oder TLS (Port 465). Ohne Mail geht es in Produktion nicht: Einladungen gehen
   nur per Mail raus, damit die Adresse bewiesen ist.

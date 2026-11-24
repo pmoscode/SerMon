@@ -22,7 +22,7 @@ will.
 
 Gewählt: **Option 2**, mit `attestation: none` (keine Herstellerprüfung, keine Metadaten).
 
-- **RP:** RP-ID ist der Host der ersten Origin aus `SERMON_ALLOWED_ORIGINS`; erlaubt sind die Origins mit diesem Host
+- **RP:** RP-ID ist der Host der ersten Origin aus `SERMON_ALLOWED_ORIGINS` (seit dem Nachtrag: der ersten mit Domainnamen); erlaubt sind die Origins mit diesem Host
   oder einer Subdomain davon. Ein Passkey gilt damit für genau eine Instanz.
 - **Speicher:** `webauthn_credentials` pro User (instanzweit wie TOTP): Credential-ID, öffentlicher Schlüssel,
   Zähler, Flags (Backup), AAGUID, Name, letzte Nutzung; höchstens 10 pro User. User-Handle ist die User-ID (keine
@@ -66,3 +66,12 @@ Gewählt: **Option 2**, mit `attestation: none` (keine Herstellerprüfung, keine
 - Start und Antwort zählen in getrennten Rate-Limits, offene Zeremonien höchstens 10 000. Die Conditional UI startet
   erst mit dem Fokus des E-Mail-Felds, nicht bei jedem Aufruf der Anmeldeseite.
 - Das Löschen eines Passkeys beendet die übrigen Sessions des Users.
+
+## Nachtrag: Origins ohne Domainnamen
+
+- Ein Server, dessen erste Origin eine IP-Adresse war (`https://192.168.1.10`), startete nicht: go-webauthn lehnt eine
+  IP als RP-ID ab, ebenso einen Namen ohne Punkt (`https://monitor`) und ungültige Domains. RP-ID ist deshalb der Host
+  der ersten Origin, die go-webauthn annimmt; die übrigen bleiben ohne Passkeys.
+- Gibt es keine solche Origin, sind Passkeys aus, und der Server meldet das beim Start (`passkeys are off`). Passkeys
+  halten den Start nie auf.
+

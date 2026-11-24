@@ -11,7 +11,7 @@ Hier richtest du die Zwei-Faktor-Anmeldung für dein Konto ein: Nach dem Passwor
 
 ## Passkeys
 
-Ein Passkey meldet dich ohne Passwort an: Dein Gerät (Fingerabdruck, Gesicht, PIN) oder ein Sicherheitsschlüssel bestätigt dich, und er funktioniert nur auf dieser SerMon-Instanz – eine nachgemachte Seite kann ihn nicht abgreifen.
+Ein Passkey meldet dich ohne Passwort an: Dein Gerät (Fingerabdruck, Gesicht, PIN) oder ein Sicherheitsschlüssel bestätigt dich, und er funktioniert nur auf dieser SerMon-Instanz – eine nachgemachte Seite kann ihn nicht abgreifen. Passkeys brauchen einen Domainnamen: Erreichst du SerMon über eine IP-Adresse oder einen Namen ohne Punkt, fehlt der Abschnitt.
 
 - **Hinzufügen:** Namen eingeben (z. B. „Laptop“), „Passkey hinzufügen“ wählen und dem Browser folgen. SerMon fragt vorher noch einmal nach der Bestätigung. Bis zu 10 Passkeys pro Konto.
 - **Anmelden:** auf der Anmeldeseite „Mit Passkey anmelden“, oder der Browser schlägt ihn im Feld für die E-Mail vor.

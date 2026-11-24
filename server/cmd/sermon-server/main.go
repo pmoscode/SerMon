@@ -503,10 +503,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Now:          time.Now,
 		SecondFactor: secondFactor,
 	})
-	passkeys, err := newPasskeys(ctx, cfg, db, credentials, login, sessions, logger)
-	if err != nil {
-		return err
-	}
+	passkeys := newPasskeys(ctx, cfg, db, credentials, login, sessions, logger)
 	secondFactor.WithPasskeys(passkeys)
 	accessStore := postgres.NewAccessStore(db)
 	principals := access.NewLoader(accessStore, secondFactor)
@@ -585,22 +582,26 @@ const (
 // first allowed origin; without origins they are off.
 func newPasskeys(ctx context.Context, cfg config.Config, db *postgres.DB, users passkey.Users, lockout passkey.Lockout,
 	sessions *session.Manager, logger *slog.Logger,
-) (*passkey.Service, error) {
+) *passkey.Service {
 	d := passkey.Deps{
 		Store: postgres.NewPasskeyStore(db), Users: users, Lockout: lockout, Sessions: sessions,
 		Limiter: ratelimit.New(passkeyAttemptsPerWindow, passkeyWindow, time.Now),
 		// Answers count apart from starts (M3-29).
 		FinishLimiter: ratelimit.New(passkeyAttemptsPerWindow, passkeyWindow, time.Now), Now: time.Now, Logger: logger,
 	}
-	if rp, err := passkey.Config(cfg.AllowedOrigins); err == nil {
-		if d.WebAuthn, err = webauthn.New(rp); err != nil {
-			return nil, fmt.Errorf("passkeys: %w", err)
-		}
-		logger.InfoContext(ctx, "passkeys", "rp_id", rp.RPID, "origins", fmt.Sprint(rp.RPOrigins))
-	} else {
-		logger.WarnContext(ctx, "passkeys are off: "+err.Error())
+	// Passkeys never stop the server: without a usable origin they are off (a server reached by
+	// its IP address once failed to start).
+	rp, err := passkey.Config(cfg.AllowedOrigins)
+	if err == nil {
+		d.WebAuthn, err = webauthn.New(rp)
 	}
-	return passkey.NewService(d), nil
+	if err != nil {
+		d.WebAuthn = nil
+		logger.WarnContext(ctx, "passkeys are off: "+err.Error())
+		return passkey.NewService(d)
+	}
+	logger.InfoContext(ctx, "passkeys", "rp_id", rp.RPID, "origins", fmt.Sprint(rp.RPOrigins))
+	return passkey.NewService(d)
 }
 
 // oidcAttemptsPerWindow bounds the sign-ins at the provider per client IP (start and return).

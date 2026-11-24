@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -165,19 +166,28 @@ func NewService(d Deps) *Service {
 // Available reports whether passkeys are on.
 func (s *Service) Available() bool { return s != nil && s.d.WebAuthn != nil }
 
-// Config is the relying party from the allowed origins: the host of the first is the RP ID, the
-// origins on it or below it are allowed.
+// Config is the relying party from the allowed origins: the host of the first one WebAuthn takes
+// is the RP ID, the origins on it or below it are allowed. WebAuthn takes no IP address, and
+// go-webauthn no single label (a host name like "monitor") and no invalid domain. ErrUnavailable
+// without such an origin: passkeys are off, the server runs without them.
 func Config(origins []string) (*webauthn.Config, error) {
-	if len(origins) == 0 {
-		return nil, ErrUnavailable
+	var first string
+	for _, o := range origins {
+		h, err := domainOf(o)
+		if err != nil {
+			continue
+		}
+		if _, err := webauthn.New(&webauthn.Config{RPID: h, RPDisplayName: "SerMon", RPOrigins: []string{o}}); err == nil {
+			first = h
+			break
+		}
 	}
-	first, err := hostOf(origins[0])
-	if err != nil {
-		return nil, err
+	if first == "" {
+		return nil, fmt.Errorf("%w: no allowed origin with a domain name such as sermon.example.com (WebAuthn takes no IP address or host name without a dot)", ErrUnavailable)
 	}
 	cfg := &webauthn.Config{RPID: first, RPDisplayName: "SerMon"}
 	for _, o := range origins {
-		h, err := hostOf(o)
+		h, err := domainOf(o)
 		if err == nil && (h == first || strings.HasSuffix(h, "."+first)) {
 			cfg.RPOrigins = append(cfg.RPOrigins, o)
 		}
@@ -185,7 +195,8 @@ func Config(origins []string) (*webauthn.Config, error) {
 	return cfg, nil
 }
 
-func hostOf(origin string) (string, error) {
+// domainOf is the host of an origin if it is a domain name, not an IP address.
+func domainOf(origin string) (string, error) {
 	_, rest, ok := strings.Cut(origin, "://")
 	if !ok || rest == "" {
 		return "", fmt.Errorf("passkey: origin %q has no host", origin)
@@ -199,6 +210,9 @@ func hostOf(origin string) (string, error) {
 	}
 	if h, _, found := strings.Cut(host, ":"); found {
 		host = h
+	}
+	if _, err := netip.ParseAddr(host); err == nil || host == "" {
+		return "", fmt.Errorf("passkey: origin %q has no domain name", origin)
 	}
 	return strings.ToLower(host), nil
 }

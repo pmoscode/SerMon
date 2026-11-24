@@ -38,6 +38,13 @@ export default defineConfig({
 				...devices['Desktop Chrome'],
 				launchOptions: { args: ['--host-resolver-rules=MAP dex.test 127.0.0.1'] }
 			}
+		},
+		// Passkeys (M3-24) last: with one the admin's password sign-in would need it as second factor.
+		{
+			name: 'passkeys',
+			testMatch: 'passkeys.demo.ts',
+			dependencies: ['alerts', 'sso'],
+			use: { ...devices['Desktop Chrome'] }
 		}
 	]
 });

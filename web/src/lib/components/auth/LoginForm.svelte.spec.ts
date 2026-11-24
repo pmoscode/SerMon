@@ -6,6 +6,7 @@ import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { m } from '#lib/paraglide/messages.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
 import { browser, ssoState } from '#lib/stores/sso.svelte.js';
+import { fakeAssertion, notAllowed, requestJson } from '#lib/test/webauthn.js';
 import { fakeSession, PASSPHRASE, rpcError } from '#lib/test/fakes.js';
 import LoginForm from './LoginForm.svelte';
 
@@ -161,5 +162,86 @@ describe('LoginForm', () => {
 		await page.getByRole('button', { name: /Confirm|Verify|Continue/ }).click();
 		await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledOnce());
 		expect(verify.mock.calls[0][0]).toEqual({ code: '123456' });
+	});
+
+	// M3-24: passkeys instead of the password and instead of the code.
+	it('signs in with a passkey and offers it for the second factor', async () => {
+		ssoState.passkeys = true;
+		vi.spyOn(window.PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(
+			false
+		);
+		const begin = vi
+			.spyOn(api.auth, 'beginPasskey')
+			.mockResolvedValue({ ceremonyId: 'c1', optionsJson: requestJson } as never);
+		vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
+		const finish = vi
+			.spyOn(api.auth, 'finishPasskey')
+			.mockResolvedValue({ session: fakeSession() } as never);
+		const onLoggedIn = vi.fn();
+		render(LoginForm, { onLoggedIn });
+		await expect
+			.element(page.getByLabelText('Email address'))
+			.toHaveAttribute('autocomplete', 'username webauthn');
+		await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
+		await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledOnce());
+		expect(begin).toHaveBeenCalledWith({ purpose: 1 });
+		expect(finish.mock.calls[0][0]).toMatchObject({ purpose: 1, ceremonyId: 'c1' });
+		expect(JSON.parse(finish.mock.calls[0][0].credentialJson as string).response.userHandle).toBe(
+			'Bw'
+		);
+		expect(sessionState.status).toBe('authenticated');
+	});
+
+	it('uses the passkey instead of the code and explains refusals and cancels', async () => {
+		ssoState.passkeys = true;
+		vi.spyOn(window.PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(
+			false
+		);
+		const begin = vi.spyOn(api.auth, 'beginPasskey').mockResolvedValue({
+			ceremonyId: 'c1',
+			optionsJson: requestJson
+		} as never);
+		vi.spyOn(navigator.credentials, 'get')
+			.mockRejectedValueOnce(notAllowed())
+			.mockResolvedValue(fakeAssertion());
+		vi.spyOn(api.auth, 'finishPasskey')
+			.mockRejectedValueOnce(rpcError(Code.PermissionDenied))
+			.mockResolvedValue({ session: fakeSession() } as never);
+		const onLoggedIn = vi.fn();
+		render(LoginForm, { onLoggedIn, initialStep: 'code' });
+		const button = page.getByRole('button', { name: 'Use a passkey instead of the code' });
+		await button.click();
+		await expect.element(button).toBeEnabled();
+		expect(page.getByRole('alert').elements()).toHaveLength(0);
+		await button.click();
+		await expect
+			.element(page.getByRole('alert'))
+			.toHaveTextContent('The passkey was not accepted.');
+		await button.click();
+		await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledOnce());
+		expect(begin).toHaveBeenLastCalledWith({ purpose: 2 });
+	});
+
+	it('waits for the passkey in the autofill where the browser offers it', async () => {
+		ssoState.passkeys = true;
+		vi.spyOn(window.PublicKeyCredential, 'isConditionalMediationAvailable').mockResolvedValue(true);
+		vi.spyOn(api.auth, 'beginPasskey').mockResolvedValue({
+			ceremonyId: 'c1',
+			optionsJson: requestJson
+		} as never);
+		const get = vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
+		vi.spyOn(api.auth, 'finishPasskey').mockResolvedValue({ session: fakeSession() } as never);
+		const onLoggedIn = vi.fn();
+		render(LoginForm, { onLoggedIn });
+		await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledOnce());
+		expect(get.mock.calls[0][0]).toMatchObject({ mediation: 'conditional' });
+	});
+
+	it('shows no passkey button without passkeys on the server', async () => {
+		render(LoginForm, { onLoggedIn: vi.fn() });
+		await expect
+			.element(page.getByLabelText('Email address'))
+			.toHaveAttribute('autocomplete', 'username');
+		expect(page.getByRole('button', { name: /passkey/ }).elements()).toHaveLength(0);
 	});
 });

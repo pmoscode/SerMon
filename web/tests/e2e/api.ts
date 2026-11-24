@@ -46,6 +46,7 @@ export function installed(loggedIn: boolean): Record<string, Handler> {
 		// Without an OIDC provider (M3-22); tests with one replace it.
 		'AuthService/GetLoginOptions': () => ({ json: {} }),
 		'AuthService/ListOidcIdentities': () => ({ json: {} }),
+		'PasskeyService/ListPasskeys': () => ({ json: {} }),
 		'FleetService/GetFleetSummary': () => ({ json: {} })
 	};
 }

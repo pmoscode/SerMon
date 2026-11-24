@@ -20,6 +20,8 @@ export const browser = {
 class SsoState {
 	enabled = $state(false);
 	name = $state('');
+	/** The server offers passkeys (M3-24). */
+	passkeys = $state(false);
 	#loading: Promise<void> | undefined;
 
 	/** Asks the server once; failures leave SSO off. */
@@ -29,6 +31,7 @@ class SsoState {
 			.then((res) => {
 				this.enabled = res.oidc;
 				this.name = res.oidcName;
+				this.passkeys = res.passkeys;
 			})
 			.catch(() => {
 				this.#loading = undefined;
@@ -65,6 +68,7 @@ class SsoState {
 	reset(): void {
 		this.enabled = false;
 		this.name = '';
+		this.passkeys = false;
 		this.#loading = undefined;
 	}
 }

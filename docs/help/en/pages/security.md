@@ -9,6 +9,16 @@ Set up two-factor authentication for your account here: after the password, SerM
 3. Enter the 6-digit code shown.
 4. Keep the **recovery codes** safe. They are shown only once; each replaces the app a single time.
 
+## Passkeys
+
+A passkey signs you in without a password: your device (fingerprint, face, PIN) or a security key confirms you, and it works only on this SerMon instance – a fake page can't grab it.
+
+- **Add:** enter a name (e.g. “laptop”), choose “Add a passkey” and follow the browser. SerMon asks for a confirmation first. Up to 10 passkeys per account.
+- **Sign in:** “Sign in with a passkey” on the sign-in page, or the browser offers it in the e-mail field.
+- A passkey is also your **second factor**: after the password instead of the code and for confirming sensitive actions. If your organization requires two factors, a passkey is enough.
+- **Synced** means: your password manager or device account backs up the passkey; it is then available on your other devices too.
+- Deleting needs a confirmation. If you delete your last second factor, an organization that requires one asks for the setup again.
+
 ## Sign-in over SSO
 
 If the instance has an identity provider, link your account with it here (“Link with …”, after a fresh confirmation). Then you sign in over the provider on the sign-in page. SerMon recognizes you by your identity at the provider, not by your e-mail.

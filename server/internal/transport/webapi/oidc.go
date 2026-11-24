@@ -38,7 +38,7 @@ func (h *AuthHandler) WithOIDC(svc *oidc.Service, name string) *AuthHandler {
 
 // GetLoginOptions tells the login page whether there is a provider.
 func (h *AuthHandler) GetLoginOptions(context.Context, *connect.Request[webv1.GetLoginOptionsRequest]) (*connect.Response[webv1.GetLoginOptionsResponse], error) {
-	return connect.NewResponse(&webv1.GetLoginOptionsResponse{Oidc: h.oidc != nil, OidcName: h.oidcName}), nil
+	return connect.NewResponse(&webv1.GetLoginOptionsResponse{Oidc: h.oidc != nil, OidcName: h.oidcName, Passkeys: h.passkeys.Available()}), nil
 }
 
 func oidcCookie(value string, maxAge time.Duration) *http.Cookie {

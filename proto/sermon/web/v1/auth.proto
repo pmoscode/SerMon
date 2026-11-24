@@ -165,6 +165,8 @@ message GetLoginOptionsResponse {
   bool oidc = 1;
   // oidc_name is the provider's name for the button (set by the operator).
   string oidc_name = 2;
+  // passkeys is set if the server offers the sign-in with a passkey (M3-24).
+  bool passkeys = 3;
 }
 
 // OidcIntent is what a sign-in at the provider is for.

@@ -640,7 +640,9 @@ type GetLoginOptionsResponse struct {
 	// oidc is set if the instance has an OIDC provider.
 	Oidc bool `protobuf:"varint,1,opt,name=oidc,proto3" json:"oidc,omitempty"`
 	// oidc_name is the provider's name for the button (set by the operator).
-	OidcName      string `protobuf:"bytes,2,opt,name=oidc_name,json=oidcName,proto3" json:"oidc_name,omitempty"`
+	OidcName string `protobuf:"bytes,2,opt,name=oidc_name,json=oidcName,proto3" json:"oidc_name,omitempty"`
+	// passkeys is set if the server offers the sign-in with a passkey (M3-24).
+	Passkeys      bool `protobuf:"varint,3,opt,name=passkeys,proto3" json:"passkeys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -687,6 +689,13 @@ func (x *GetLoginOptionsResponse) GetOidcName() string {
 		return x.OidcName
 	}
 	return ""
+}
+
+func (x *GetLoginOptionsResponse) GetPasskeys() bool {
+	if x != nil {
+		return x.Passkeys
+	}
+	return false
 }
 
 // BeginOidcRequest says what for and where to go afterwards.
@@ -1896,10 +1905,11 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x06issuer\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01(\x80\x04R\x06issuer\"\x1c\n" +
 	"\x1aUnlinkOidcIdentityResponse\"\x18\n" +
-	"\x16GetLoginOptionsRequest\"J\n" +
+	"\x16GetLoginOptionsRequest\"f\n" +
 	"\x17GetLoginOptionsResponse\x12\x12\n" +
 	"\x04oidc\x18\x01 \x01(\bR\x04oidc\x12\x1b\n" +
-	"\toidc_name\x18\x02 \x01(\tR\boidcName\"o\n" +
+	"\toidc_name\x18\x02 \x01(\tR\boidcName\x12\x1a\n" +
+	"\bpasskeys\x18\x03 \x01(\bR\bpasskeys\"o\n" +
 	"\x10BeginOidcRequest\x12=\n" +
 	"\x06intent\x18\x01 \x01(\x0e2\x19.sermon.web.v1.OidcIntentB\n" +
 	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x06intent\x12\x1c\n" +

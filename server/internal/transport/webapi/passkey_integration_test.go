@@ -30,6 +30,9 @@ func TestPasskeys_RegisterSignInSecondFactorStepUp(t *testing.T) {
 		"UPDATE organizations SET require_second_factor = true WHERE id = '"+orgPass+"'")
 
 	b := newBrowser(t, s)
+	if opts, err := b.auth.GetLoginOptions(ctx, connect.NewRequest(&webv1.GetLoginOptionsRequest{})); err != nil || !opts.Msg.GetPasskeys() {
+		t.Errorf("GetLoginOptions() = %v, %v", opts, err)
+	}
 	passkeys := webv1connect.NewPasskeyServiceClient(b.http, s.server.URL)
 	if _, err := b.auth.Login(ctx, connect.NewRequest(&webv1.LoginRequest{Email: "pia@example.org", Password: userPassword})); err != nil {
 		t.Fatal(err)

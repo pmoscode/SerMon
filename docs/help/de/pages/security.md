@@ -9,6 +9,16 @@ Hier richtest du die Zwei-Faktor-Anmeldung für dein Konto ein: Nach dem Passwor
 3. Den angezeigten 6-stelligen Code eingeben.
 4. Die **Recovery-Codes** sicher aufbewahren. Sie werden nur einmal angezeigt; jeder ersetzt die App ein einziges Mal.
 
+## Passkeys
+
+Ein Passkey meldet dich ohne Passwort an: Dein Gerät (Fingerabdruck, Gesicht, PIN) oder ein Sicherheitsschlüssel bestätigt dich, und er funktioniert nur auf dieser SerMon-Instanz – eine nachgemachte Seite kann ihn nicht abgreifen.
+
+- **Hinzufügen:** Namen eingeben (z. B. „Laptop“), „Passkey hinzufügen“ wählen und dem Browser folgen. SerMon fragt vorher noch einmal nach der Bestätigung. Bis zu 10 Passkeys pro Konto.
+- **Anmelden:** auf der Anmeldeseite „Mit Passkey anmelden“, oder der Browser schlägt ihn im Feld für die E-Mail vor.
+- Ein Passkey ist auch dein **zweiter Faktor**: nach dem Passwort statt des Codes und für Bestätigungen sensibler Aktionen. Verlangt deine Organisation zwei Faktoren, genügt ein Passkey.
+- **Synchronisiert** heißt: Dein Passwort-Manager oder Gerätekonto sichert den Passkey; er steht dann auch auf deinen anderen Geräten bereit.
+- Löschen verlangt eine Bestätigung. Löschst du den letzten zweiten Faktor, fragt eine Organisation mit Pflicht danach erst wieder nach der Einrichtung.
+
 ## Anmeldung über SSO
 
 Hat die Instanz einen Identity Provider, verknüpfst du hier dein Konto damit („Mit … verknüpfen“, nach erneuter Bestätigung). Danach meldest du dich auf der Anmeldeseite über den Provider an. SerMon erkennt dich an deiner Identität beim Provider, nicht an der E-Mail.

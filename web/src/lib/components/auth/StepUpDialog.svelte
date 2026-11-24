@@ -5,15 +5,47 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState, type ConfirmFailure } from '#lib/stores/session.svelte.js';
+	import { supported } from '#lib/auth/webauthn.js';
+	import { assertPasskey, PasskeyPurpose, type PasskeyFailure } from '#lib/stores/passkeys.js';
 	import { OidcIntent, ssoState } from '#lib/stores/sso.svelte.js';
 	import { stepUpState } from '#lib/stores/stepup.svelte.js';
 
-	/** Users with a second factor confirm with a code, the others with the password. */
-	const withCode = $derived(sessionState.current?.secondFactorEnabled ?? false);
-	/** Accounts from the provider may have neither: they confirm there (M3-22). */
-	const local = $derived(withCode || (sessionState.current?.hasPassword ?? true));
-	const withSso = $derived(ssoState.enabled && (sessionState.current?.oidcLinked ?? false));
+	/**
+	 * Users with TOTP confirm with a code, users without a second factor with the password; a
+	 * second factor replaces the password (M1-03). Passkeys (M3-24) and the provider (M3-22) are
+	 * ways of their own; accounts from the provider may have nothing else.
+	 */
+	const current = $derived(sessionState.current);
+	const withCode = $derived(current?.totpEnabled ?? false);
+	const withPassword = $derived(
+		!(current?.secondFactorEnabled ?? false) && (current?.hasPassword ?? true)
+	);
+	const local = $derived(withCode || withPassword);
+	const withPasskey = $derived(
+		(current?.passkeysAvailable ?? false) && (current?.passkeyCount ?? 0) > 0 && supported()
+	);
+	const withSso = $derived(ssoState.enabled && (current?.oidcLinked ?? false));
 	let leaving = $state(false);
+	let checking = $state(false);
+	let passkeyFailure = $state<PasskeyFailure | undefined>();
+
+	/** Confirms with a passkey right here; the action runs on. */
+	async function confirmWithPasskey() {
+		failure = undefined;
+		passkeyFailure = undefined;
+		checking = true;
+		try {
+			passkeyFailure = await assertPasskey(PasskeyPurpose.STEP_UP);
+		} finally {
+			checking = false;
+		}
+		if (!passkeyFailure) {
+			reset();
+			stepUpState.finish(true);
+		} else if (passkeyFailure === 'cancelled') {
+			passkeyFailure = undefined;
+		}
+	}
 
 	$effect(() => {
 		if (stepUpState.open) void ssoState.load();
@@ -48,13 +80,27 @@
 			case 'unavailable':
 				return m.error_unavailable();
 			default:
+				break;
+		}
+		switch (passkeyFailure) {
+			case 'refused':
+				return m.passkey_refused();
+			case 'unsupported':
+				return m.passkey_unsupported();
+			case 'rate_limited':
+				return m.login_error_rate_limited();
+			case undefined:
+			case 'cancelled':
 				return '';
+			default:
+				return m.error_unavailable();
 		}
 	});
 
 	function reset() {
 		password = '';
 		failure = undefined;
+		passkeyFailure = undefined;
 		missing = false;
 	}
 
@@ -93,11 +139,13 @@
 		<Dialog.Header>
 			<Dialog.Title>{m.stepup_title()}</Dialog.Title>
 			<Dialog.Description
-				>{!local
-					? m.stepup_text_sso()
-					: withCode
+				>{local
+					? withCode
 						? m.stepup_text_code()
-						: m.stepup_text()}</Dialog.Description
+						: m.stepup_text()
+					: withPasskey
+						? m.stepup_text_passkey()
+						: m.stepup_text_sso()}</Dialog.Description
 			>
 		</Dialog.Header>
 		<form class="flex flex-col gap-4" novalidate onsubmit={submit}>
@@ -125,6 +173,11 @@
 						<p id="stepup-password-error" class="text-sm text-destructive">{m.field_required()}</p>
 					{/if}
 				</div>
+			{/if}
+			{#if withPasskey}
+				<Button type="button" variant="outline" disabled={checking} onclick={confirmWithPasskey}>
+					{checking ? m.stepup_busy() : m.stepup_passkey()}
+				</Button>
 			{/if}
 			{#if withSso}
 				<Button type="button" variant="outline" disabled={leaving} onclick={confirmWithSso}>

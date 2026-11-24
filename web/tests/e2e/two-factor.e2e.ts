@@ -71,7 +71,8 @@ test.describe('two-factor authentication (mocked API)', () => {
 			}),
 			'TwoFactorService/GetTwoFactorStatus': () => ({ json: { requiredByOrganization: true } }),
 			'AuthService/GetLoginOptions': () => ({ json: {} }),
-			'AuthService/ListOidcIdentities': () => ({ json: {} })
+			'AuthService/ListOidcIdentities': () => ({ json: {} }),
+			'PasskeyService/ListPasskeys': () => ({ json: {} })
 		});
 		await page.goto('/fleet');
 

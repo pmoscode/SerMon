@@ -9,6 +9,7 @@ import { EnrollmentTokenService } from './gen/sermon/web/v1/enrollment_token_pb.
 import { LogSettingsService } from './gen/sermon/web/v1/log_settings_pb.js';
 import { OidcMappingService } from './gen/sermon/web/v1/oidc_mapping_pb.js';
 import { OrganizationService } from './gen/sermon/web/v1/organization_pb.js';
+import { PasskeyService } from './gen/sermon/web/v1/passkey_pb.js';
 import { SecurityPolicyService, TwoFactorService } from './gen/sermon/web/v1/two_factor_pb.js';
 
 export const adminApi = {
@@ -17,6 +18,7 @@ export const adminApi = {
 	logSettings: client(LogSettingsService),
 	oidcMappings: client(OidcMappingService),
 	organization: client(OrganizationService),
+	passkeys: client(PasskeyService),
 	twoFactor: client(TwoFactorService),
 	securityPolicy: client(SecurityPolicyService)
 };

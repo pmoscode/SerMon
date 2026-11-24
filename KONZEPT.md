@@ -460,6 +460,9 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
     dazu zweiter Faktor nach dem Passwort und Step-up. Zeremonien 5 min, einmal, an Session oder Browser-Cookie
     gebunden; ein rückwärts laufender Zähler wird abgewiesen (synchronisierte Passkeys mit 0 nicht); Fehlversuche
     zählen zur Kontosperre.
+    In der UI (M3-24): Karte „Passkeys“ in der Kontosicherheit (hinzufügen, umbenennen, löschen), „Mit Passkey
+    anmelden“ und Conditional UI im E-Mail-Feld, „Passkey statt Code“ nach dem Passwort, Bestätigung im
+    Step-up-Dialog. Mit zweitem Faktor bestätigt das Passwort keinen Step-up mehr.
 - **OIDC/SSO:** `coreos/go-oidc` mit Authorization Code + PKCE. **Gruppen-Claim-Mapping** (OIDC-Gruppe →
   Org/NodeGroup/Rolle) ist konfigurierbar; Just-in-Time-Provisioning ist optional.
     - Seit M3-20 ([ADR 0033](docs/adr/0033-anmeldung-ueber-oidc.md)): ein Provider pro Instanz (`SERMON_OIDC_ISSUER`,

@@ -37,7 +37,7 @@ const (
 	groupAl   = "0193f5a0-0000-7000-8000-0000000001a9"
 	bindingAl = "0193f5a0-0000-7000-8000-0000000001a8"
 	inviteAl  = "0193f5a0-0000-7000-8000-0000000001a7"
-	mappingAl = "0193f5a0-0000-7000-8000-0000000001a4" // OIDC group mapping of Alpha
+	mappingAl = "0193f5a0-0000-7000-8000-0000000001ac" // OIDC group mapping of Alpha
 	tokenAl   = "0193f5a0-0000-7000-8000-0000000001a6" // enrollment token of Alpha
 	nodeAl    = "0193f5a0-0000-7000-8000-0000000001a5" // node of Alpha (offline)
 	certAl    = "7a0000000000000000000000000001a5"     // its certificate serial

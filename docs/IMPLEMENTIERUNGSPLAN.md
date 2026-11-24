@@ -3650,7 +3650,29 @@ Konfiguration) und M3-06 (Loki).
   - Löschen des letzten Faktors bei Org-Pflicht; Rate-Limit; Audit
 - **Abhängig von:** M1-03
 
-#### ☐ M3-24 – Passkeys in der UI · W · M 🔒
+#### ☑ M3-24 – Passkeys in der UI · W · M 🔒
+> Erledigt ([ADR 0034](adr/0034-passkeys-mit-webauthn.md); KONZEPT §7; Threat Model T15):
+> - **Browser-Seite** (`lib/auth/webauthn.ts`): Optionen des Servers nach `navigator.credentials` und die Antwort als
+>   JSON zurück, von Hand umgewandelt (ohne `parse…FromJSON`); Abbruch, fehlende Unterstützung und Fehler getrennt.
+> - **Kontosicherheit:** Karte „Passkeys“ (nur wenn der Server sie anbietet) mit Liste, „synchronisiert“, letzter
+>   Nutzung, Hinzufügen mit Namen nach Step-up, Umbenennen, Löschen mit Bestätigung und Step-up; ohne WebAuthn ein
+>   Hinweis.
+> - **Anmeldeseite:** „Mit Passkey anmelden“ und Conditional UI (`autocomplete="username webauthn"`, wartet auf das
+>   Autofill und wird vor jedem anderen Weg abgebrochen); nach dem Passwort „Passkey statt Code“.
+>   `GetLoginOptions.passkeys` sagt, ob der Server sie anbietet.
+> - **Step-up-Dialog:** „Mit Passkey bestätigen“ direkt im Dialog; mit zweitem Faktor kein Passwortfeld mehr, Code nur
+>   mit TOTP (`totp_enabled`).
+> - Hilfe DE/EN: Abschnitt „Passkeys“ der Seite „Sicherheit“.
+> - **Tests:**
+>   - Umwandlung der Optionen (base64url, Ausschluss- und erlaubte Credentials).
+>   - Komponenten: Hinzufügen mit Step-up, Abbruch ohne Meldung, Ablehnung, zu viele, Namen als Text, Umbenennen und
+>     Löschen; Anmeldung mit Passkey, statt Code, Conditional UI, kein Knopf ohne Passkeys; Step-up mit Passkey und
+>     Ablehnung.
+>   - E2E (Mock-API) mit dem virtuellen Authenticator von Chromium und axe: Passkey anlegen, Anmeldung per Knopf und
+>     per Autofill.
+>   - Demo gegen den echten Server: Passkey anlegen, Anmeldung ohne Passwort, Step-up beim Löschen mit dem Passkey.
+>   - Gegenproben für 17 Prüfungen: 15 erkannt, die zwei übrigen waren überflüssiger Code (Padding vor `atob`, ein
+>     doppeltes Zurücksetzen nach Abbruch) und sind entfernt.
 - **Ziel:**
   - **Einstellungen „Sicherheit“:** Passkey hinzufügen (Name), Liste mit letzter Nutzung, umbenennen, löschen
     (Step-up)

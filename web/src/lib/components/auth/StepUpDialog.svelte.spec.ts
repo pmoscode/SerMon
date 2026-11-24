@@ -6,6 +6,7 @@ import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
 import { browser, ssoState } from '#lib/stores/sso.svelte.js';
 import { stepUpState } from '#lib/stores/stepup.svelte.js';
+import { fakeAssertion, requestJson } from '#lib/test/webauthn.js';
 import { fakeSession, PASSPHRASE, rpcError } from '#lib/test/fakes.js';
 import StepUpDialog from './StepUpDialog.svelte';
 
@@ -68,6 +69,7 @@ describe('StepUpDialog', () => {
 	it('asks users with a second factor for a code instead of the password', async () => {
 		const session = fakeSession();
 		session.secondFactorEnabled = true;
+		session.totpEnabled = true;
 		sessionState.current = session;
 		const confirm = vi
 			.spyOn(api.auth, 'confirmSecondFactor')
@@ -128,5 +130,62 @@ describe('StepUpDialog', () => {
 		await vi.waitFor(() => expect(options).toHaveBeenCalled());
 		await expect.element(page.getByLabelText('Password')).toBeVisible();
 		expect(page.getByRole('button', { name: /Dex/ }).elements()).toHaveLength(0);
+	});
+
+	// M3-24: a passkey confirms right in the dialog; with a second factor the password is no way.
+	it('confirms with a passkey', async () => {
+		vi.spyOn(api.auth, 'beginPasskey').mockResolvedValue({
+			ceremonyId: 'c1',
+			optionsJson: requestJson
+		} as never);
+		vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
+		const finish = vi
+			.spyOn(api.auth, 'finishPasskey')
+			.mockResolvedValue({ session: fakeSession() } as never);
+		sessionState.current = {
+			...fakeSession(),
+			secondFactorEnabled: true,
+			passkeyCount: 1,
+			passkeysAvailable: true
+		};
+		render(StepUpDialog);
+		const confirmed = stepUpState.request();
+		await expect.element(page.getByText(/once more with your passkey/)).toBeVisible();
+		expect(page.getByLabelText('Password').elements()).toHaveLength(0);
+		await page.getByRole('button', { name: 'Confirm with a passkey' }).click();
+		await expect(confirmed).resolves.toBe(true);
+		expect(finish.mock.calls[0][0]).toMatchObject({ purpose: 3 });
+	});
+
+	it('keeps the dialog open when the passkey is refused', async () => {
+		vi.spyOn(api.auth, 'beginPasskey').mockResolvedValue({
+			ceremonyId: 'c1',
+			optionsJson: requestJson
+		} as never);
+		vi.spyOn(navigator.credentials, 'get').mockResolvedValue(fakeAssertion());
+		vi.spyOn(api.auth, 'finishPasskey').mockRejectedValue(rpcError(Code.PermissionDenied));
+		sessionState.current = {
+			...fakeSession(),
+			secondFactorEnabled: true,
+			totpEnabled: true,
+			passkeyCount: 2,
+			passkeysAvailable: true
+		};
+		render(StepUpDialog);
+		void stepUpState.request();
+		await expect.element(page.getByLabelText('Code')).toBeVisible();
+		await page.getByRole('button', { name: 'Confirm with a passkey' }).click();
+		await expect
+			.element(page.getByRole('alert'))
+			.toHaveTextContent('The passkey was not accepted.');
+		expect(stepUpState.open).toBe(true);
+	});
+
+	it('offers no passkey without one', async () => {
+		sessionState.current = { ...fakeSession(), passkeyCount: 0, passkeysAvailable: true };
+		render(StepUpDialog);
+		void stepUpState.request();
+		await expect.element(page.getByLabelText('Password')).toBeVisible();
+		expect(page.getByRole('button', { name: 'Confirm with a passkey' }).elements()).toHaveLength(0);
 	});
 });

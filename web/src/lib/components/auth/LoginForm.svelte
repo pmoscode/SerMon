@@ -8,6 +8,8 @@
 		type LoginFailure,
 		type SecondFactorFailure
 	} from '#lib/stores/session.svelte.js';
+	import { conditionalAvailable, supported } from '#lib/auth/webauthn.js';
+	import { assertPasskey, PasskeyPurpose, type PasskeyFailure } from '#lib/stores/passkeys.js';
 	import { OidcIntent, ssoState, type SsoFailure } from '#lib/stores/sso.svelte.js';
 
 	let {
@@ -28,7 +30,45 @@
 	let ssoFailure = $state<SsoFailure | undefined>();
 	let leaving = $state(false);
 
+	let passkeyFailure = $state<PasskeyFailure | undefined>();
+	let passkeyBusy = $state(false);
+	const passkeys = $derived(ssoState.passkeys && supported());
+	/** The conditional UI's wait for the autofill; aborted before any other sign-in. */
+	let conditional: AbortController | undefined;
+
+	$effect(() => {
+		if (step !== 'password' || !passkeys) return;
+		const controller = new AbortController();
+		conditional = controller;
+		void (async () => {
+			if (!(await conditionalAvailable()) || controller.signal.aborted) return;
+			const result = await assertPasskey(PasskeyPurpose.LOGIN, {
+				conditional: true,
+				signal: controller.signal
+			});
+			if (!result) onLoggedIn();
+			else if (result === 'refused') passkeyFailure = result;
+		})();
+		return () => controller.abort();
+	});
+
+	/** A passkey instead of the password, or instead of the code after it. */
+	async function usePasskey(purpose: PasskeyPurpose) {
+		conditional?.abort();
+		passkeyFailure = undefined;
+		failure = undefined;
+		ssoFailure = undefined;
+		passkeyBusy = true;
+		try {
+			passkeyFailure = await assertPasskey(purpose);
+		} finally {
+			passkeyBusy = false;
+		}
+		if (!passkeyFailure) onLoggedIn();
+	}
+
 	async function signInWithSso() {
+		conditional?.abort();
 		ssoFailure = undefined;
 		failure = undefined;
 		leaving = true;
@@ -56,6 +96,21 @@
 				return m.login_error_code_expired();
 			case 'rate_limited':
 				return m.login_error_rate_limited();
+			case 'unavailable':
+				return m.error_unavailable();
+			default:
+				break;
+		}
+		switch (passkeyFailure) {
+			case 'refused':
+				return m.passkey_refused();
+			case 'none':
+				return m.passkey_none();
+			case 'unsupported':
+				return m.passkey_unsupported();
+			case 'rate_limited':
+				return m.login_error_rate_limited();
+			case 'failed':
 			case 'unavailable':
 				return m.error_unavailable();
 			default:
@@ -113,6 +168,8 @@
 		event.preventDefault();
 		submitted = true;
 		failure = undefined;
+		passkeyFailure = undefined;
+		if (step === 'password') conditional?.abort();
 		await (step === 'password' ? submitPassword() : submitCode());
 	}
 
@@ -136,7 +193,7 @@
 			<Input
 				id="login-email"
 				type="email"
-				autocomplete="username"
+				autocomplete={passkeys ? 'username webauthn' : 'username'}
 				bind:value={email}
 				aria-invalid={emailMissing}
 				aria-describedby={emailMissing ? 'login-email-error' : undefined}
@@ -160,11 +217,23 @@
 			{/if}
 		</div>
 		<Button type="submit" disabled={busy}>{busy ? m.login_busy() : m.login_submit()}</Button>
-		{#if ssoState.enabled}
+		{#if ssoState.enabled || passkeys}
 			<p class="flex items-center gap-2 text-xs text-muted-foreground" aria-hidden="true">
 				<span class="h-px flex-1 bg-border"></span>{m.login_or()}<span class="h-px flex-1 bg-border"
 				></span>
 			</p>
+		{/if}
+		{#if passkeys}
+			<Button
+				type="button"
+				variant="outline"
+				disabled={passkeyBusy}
+				onclick={() => usePasskey(PasskeyPurpose.LOGIN)}
+			>
+				{passkeyBusy ? m.login_busy() : m.passkey_sign_in()}
+			</Button>
+		{/if}
+		{#if ssoState.enabled}
 			<Button type="button" variant="outline" disabled={leaving} onclick={signInWithSso}>
 				{leaving ? m.login_busy() : m.sso_sign_in({ name: ssoState.name })}
 			</Button>
@@ -194,5 +263,15 @@
 				{busy ? m.login_busy() : m.login_code_submit()}
 			</Button>
 		</div>
+		{#if passkeys}
+			<Button
+				type="button"
+				variant="outline"
+				disabled={passkeyBusy}
+				onclick={() => usePasskey(PasskeyPurpose.SECOND_FACTOR)}
+			>
+				{passkeyBusy ? m.login_busy() : m.passkey_instead_of_code()}
+			</Button>
+		{/if}
 	{/if}
 </form>

@@ -11,6 +11,7 @@ default-members = [
   "crates/sermon-collectors",
   "crates/sermon-core",
   "crates/sermon-helper",
+  "crates/sermon-helper-proto",
   "crates/sermon-logs",
   "crates/sermon-modules",
   "crates/sermon-security",
@@ -71,6 +72,7 @@ jiff = { version = "=0.2.46", default-features = false, features = ["std"] }
 sermon-buffer = { path = "crates/sermon-buffer" }
 sermon-collectors = { path = "crates/sermon-collectors" }
 sermon-core = { path = "crates/sermon-core" }
+sermon-helper-proto = { path = "crates/sermon-helper-proto" }
 sermon-logs = { path = "crates/sermon-logs" }
 sermon-security = { path = "crates/sermon-security" }
 sermon-testserver = { path = "crates/sermon-testserver" }

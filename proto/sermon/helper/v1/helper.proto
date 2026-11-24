@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+// The protocol between the agent and the root helper on one host (ADR 0035, KONZEPT §4.2): the
+// agent connects to /run/sermon/helper.sock and sends one HelperRequest, prefixed by its length
+// (4 bytes, big endian); the helper answers with one HelperResponse the same way and closes. A
+// request holds at most 64 KiB, an answer at most 8 MiB.
+//
+// The operations are a fixed set. No operation takes package names, commands, arguments or
+// paths: only enums and run IDs (canonical UUIDs). Every further operation needs an ADR of its own
+// (ADR 0016). Agent and helper come in different packages and may differ in version: an
+// operation the helper doesn't know is answered with STATUS_UNSUPPORTED.
+package sermon.helper.v1;
+
+// HelperRequest is one operation.
+message HelperRequest {
+  // operation is what the agent asks for; none at all is refused.
+  oneof operation {
+    // get_status asks for the helper's version, distribution and local permissions.
+    GetStatus get_status = 1;
+    // list_updates asks for the raw lists of the package manager.
+    ListUpdates list_updates = 2;
+    // apply_updates starts a run that installs updates (veto: allow_remote_updates).
+    ApplyUpdates apply_updates = 3;
+    // reboot starts a run that reboots the host (veto: allow_remote_reboot).
+    Reboot reboot = 4;
+    // self_update starts a run that replaces the agent's binary (veto: allow_self_update, ADR 0036).
+    SelfUpdate self_update = 5;
+    // run_result asks for the state and result of a run.
+    RunResult run_result = 6;
+  }
+}
+
+// GetStatus has no parameters.
+message GetStatus {}
+
+// ListUpdates lists the available updates; the agent parses the output (sermon-updates).
+message ListUpdates {
+  // refresh updates the package sources first (apt-get update, dnf makecache, apk update); the
+  // helper does that at most every 5 minutes and otherwise lists without it.
+  bool refresh = 1;
+}
+
+// Scope says which updates a run installs (KONZEPT §14.2).
+enum Scope {
+  // SCOPE_UNSPECIFIED is refused.
+  SCOPE_UNSPECIFIED = 0;
+  // SCOPE_SECURITY installs security updates only (not on Alpine: no such metadata, KONZEPT O6).
+  SCOPE_SECURITY = 1;
+  // SCOPE_ALL installs all updates.
+  SCOPE_ALL = 2;
+}
+
+// ApplyUpdates starts a run of updates; the answer comes at once, the result with RunResult.
+message ApplyUpdates {
+  // run_id names the run: a canonical, lowercase UUID chosen by the server.
+  string run_id = 1;
+  // scope is which updates to install.
+  Scope scope = 2;
+}
+
+// Reboot reboots the host one minute after the answer.
+message Reboot {
+  // run_id names the run: a canonical, lowercase UUID chosen by the server.
+  string run_id = 1;
+  // reason is shown to logged-in users and written to the journal: at most 200 bytes of
+  // printable UTF-8 without control characters.
+  string reason = 2;
+}
+
+// SelfUpdate replaces the agent's binary; its fields follow with ADR 0036 (M4-17).
+message SelfUpdate {
+  // run_id names the run: a canonical, lowercase UUID chosen by the server.
+  string run_id = 1;
+}
+
+// RunResult asks for a run started by ApplyUpdates, Reboot or SelfUpdate.
+message RunResult {
+  // run_id names the run.
+  string run_id = 1;
+}
+
+// Status is how the helper took a request.
+enum Status {
+  // STATUS_UNSPECIFIED never comes from a helper.
+  STATUS_UNSPECIFIED = 0;
+  // STATUS_OK: done, or for a run: started.
+  STATUS_OK = 1;
+  // STATUS_REFUSED: not allowed or not valid; reason says why. Retrying won't help.
+  STATUS_REFUSED = 2;
+  // STATUS_BUSY: another run or refresh holds the lock; retry later.
+  STATUS_BUSY = 3;
+  // STATUS_UNSUPPORTED: the helper doesn't know the operation, or the host's distribution.
+  STATUS_UNSUPPORTED = 4;
+  // STATUS_FAILED: the operation was allowed but failed; reason says why.
+  STATUS_FAILED = 5;
+}
+
+// HelperResponse is the answer to one request.
+message HelperResponse {
+  // status is how the request was taken.
+  Status status = 1;
+  // reason explains a status other than STATUS_OK (plain text, at most 1 KiB).
+  string reason = 2;
+  // helper_version is the version of the helper, e.g. "0.4.0".
+  string helper_version = 3;
+  // result belongs to the operation, if it succeeded.
+  oneof result {
+    // status_info answers GetStatus.
+    StatusInfo status_info = 4;
+    // updates answers ListUpdates.
+    Updates updates = 5;
+    // run answers RunResult.
+    RunState run = 6;
+  }
+}
+
+// Distribution is the family of the host's package manager.
+enum Distribution {
+  // DISTRIBUTION_UNSPECIFIED: unknown, the helper supports no package operation.
+  DISTRIBUTION_UNSPECIFIED = 0;
+  // DISTRIBUTION_APT: Debian and Ubuntu.
+  DISTRIBUTION_APT = 1;
+  // DISTRIBUTION_DNF: the RHEL family and Fedora.
+  DISTRIBUTION_DNF = 2;
+  // DISTRIBUTION_APK: Alpine.
+  DISTRIBUTION_APK = 3;
+}
+
+// StatusInfo describes the helper and what the host allows (/etc/sermon/helper.toml).
+message StatusInfo {
+  // distribution is the package manager family.
+  Distribution distribution = 1;
+  // allow_remote_updates: ApplyUpdates is allowed.
+  bool allow_remote_updates = 2;
+  // allow_remote_reboot: Reboot is allowed.
+  bool allow_remote_reboot = 3;
+  // allow_self_update: SelfUpdate is allowed.
+  bool allow_self_update = 4;
+  // running_run_id is the run in progress, if any.
+  string running_run_id = 5;
+}
+
+// Command is the output of one command the helper ran.
+message Command {
+  // name says which command it was, e.g. "apt list --upgradable" (fixed by the helper).
+  string name = 1;
+  // exit_code is the command's exit code; -1 if it was killed (time limit).
+  sint32 exit_code = 2;
+  // output is its standard output and error, the last 2 MiB of a list or 256 KiB of a run at
+  // most; raw bytes from the package manager, never trusted (parsed in the agent).
+  bytes output = 3;
+  // truncated: the beginning of the output was cut.
+  bool truncated = 4;
+}
+
+// Updates are the raw lists of the package manager.
+message Updates {
+  // distribution says how to parse them.
+  Distribution distribution = 1;
+  // refreshed: the sources were updated just before.
+  bool refreshed = 2;
+  // commands are the outputs, in the order the helper ran them.
+  repeated Command commands = 3;
+  // reboot_required_pkgs is /var/run/reboot-required.pkgs (apt), at most 64 KiB; empty without.
+  bytes reboot_required_pkgs = 4;
+  // reboot_required: /var/run/reboot-required exists (apt).
+  bool reboot_required = 5;
+}
+
+// RunPhase is how far a run is.
+enum RunPhase {
+  // RUN_PHASE_UNSPECIFIED: unknown run (none with this ID, or its result is older than 7 days).
+  RUN_PHASE_UNSPECIFIED = 0;
+  // RUN_PHASE_RUNNING: the run is in progress.
+  RUN_PHASE_RUNNING = 1;
+  // RUN_PHASE_DONE: the run has ended; exit_code and output tell how.
+  RUN_PHASE_DONE = 2;
+}
+
+// RunState is the state of a run.
+message RunState {
+  // run_id names the run.
+  string run_id = 1;
+  // phase is how far it is.
+  RunPhase phase = 2;
+  // result is the command of the run once it is done.
+  Command result = 3;
+  // started_unix is when the run started, in seconds since the epoch.
+  int64 started_unix = 4;
+  // ended_unix is when the run ended, in seconds since the epoch (0: not yet).
+  int64 ended_unix = 5;
+}

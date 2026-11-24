@@ -63,7 +63,7 @@ gen: gen-proto gen-sql gen-packaging gen-rules
 gen-proto:
     buf generate
     cd ../agent && cargo fmt --all
-    @echo "✓ generated: server/internal/gen, web/src/lib/api/gen, agent/crates/sermon-{transport,testserver}/src/gen"
+    @echo "✓ generated: server/internal/gen, web/src/lib/api/gen, agent/crates/sermon-{transport,testserver,helper-proto}/src/gen"
 
 # Generate typed Go code from SQL queries and migrations (sqlc)
 [working-directory: 'server']
@@ -86,8 +86,8 @@ gen-rules:
 
 # Fail if the committed generated code is not up to date with proto/ (used in CI)
 check-gen: gen
-    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults
-    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
+    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen agent/crates/sermon-helper-proto/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults
+    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen agent/crates/sermon-helper-proto/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
 
 # Install the pinned Rust protoc plugins used by `just gen`
 install-proto-plugins:
@@ -146,6 +146,7 @@ lint-compose:
 test-scripts:
     sh scripts/check-commit-msg_test.sh
     sh scripts/check-compose_test.sh
+    sh scripts/helper-loc_test.sh
 
 # Build the package sources of the E2E environment and check them on five distros (M4-08; Docker required)
 test-e2e-repos:
@@ -183,10 +184,11 @@ agent_targets := "x86_64-unknown-linux-musl aarch64-unknown-linux-musl"
 fmt-agent:
     cargo fmt --all
 
-# Check formatting and run clippy on the agent, its fuzz targets included (workspace members)
+# Check formatting, the root helper's size (ADR 0035) and clippy on the agent, its fuzz targets included
 [working-directory: 'agent']
 lint-agent:
     cargo fmt --all -- --check
+    sh ../scripts/helper-loc.sh
     cargo clippy --workspace --all-targets --locked -- -D warnings
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
@@ -214,6 +216,7 @@ fuzz-agent seconds="60":
     {{ fuzz_profile }} cargo fuzz run security_parser -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run redaction -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run wal_recovery -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run helper_request -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run multiline -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run process_parsers -- -max_total_time={{ seconds }} -max_len=65536
 

@@ -3983,7 +3983,44 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - Threat Model TB4 (T38 bis T41) mit den Entscheidungen; KONZEPT §4.2 und §5 nachziehen.
 - **Abhängig von:** –
 
-#### ☐ M4-02 – Helper: Socket, Aufrufer, Operationen und Veto · A · M 🔒
+#### ☑ M4-02 – Helper: Socket, Aufrufer, Operationen und Veto · A · M 🔒
+> Erledigt (ADR 0035 mit Nachtrag; Threat Model T38, T39, T89):
+> - **Protokoll** `proto/sermon/helper/v1/helper.proto`: `HelperRequest` mit den sechs Operationen, `HelperResponse`
+>   mit Status (`OK`, `REFUSED`, `BUSY`, `UNSUPPORTED`, `FAILED`), Grund, Version und Ergebnis (`StatusInfo`,
+>   `Updates` mit den rohen Ausgaben, `RunState`). Generiert nur für Rust in das neue Crate `sermon-helper-proto`
+>   (nur prost); Go und TypeScript lassen das Paket aus. `just check-gen` prüft es mit.
+> - **`sermon-helper serve`:**
+>   - Unter systemd übernimmt er den Socket von `sermon-helper.socket` (`LISTEN_PID`/`LISTEN_FDS`, fd 3 muss ein
+>     Socket sein; die einzige `unsafe`-Stelle) und endet nach 60 s ohne Anfrage. Sonst bindet er
+>     `/run/sermon/helper.sock` selbst: unter einer umask, also nie offener als `0660`, Gruppe `sermon`, Verzeichnis
+>     `0750`. Ein alter Socket wird ersetzt, eine andere Datei nicht.
+>   - Verbindungen nacheinander; der Agent ist der einzige Aufrufer, ein schreibender Lauf folgt ohnehin der Sperre
+>     (M4-03).
+> - **Aufrufer:** `SO_PEERCRED` (rustix) gegen UID und GID von `sermon` aus `/etc/passwd`, beim Start gelesen. Andere
+>   UIDs, auch root, und Verbindungen ohne Credentials werden geschlossen, ohne die Anfrage zu lesen; ohne den User
+>   startet der Helper nicht.
+> - **Rahmen:** 4 Byte Länge, Anfrage ≤ 64 KiB (eine größere Länge wird abgewiesen, ohne den Rest zu lesen), komplett
+>   in 5 s, auch tröpfchenweise; Antwort ≤ 8 MiB, sonst `FAILED`.
+> - **Regeln** (`request.rs`, rein): `run_id` nur als kleingeschriebene UUID, `scope` nur `security` oder `all`, der
+>   Grund eines Reboots 1 bis 200 Byte ohne Steuer- und unsichtbare Formatzeichen (Bidi). Dann das Veto aus
+>   `helper.toml`, dann der `Executor` (M4-03; bis dahin `UNSUPPORTED` außer `GetStatus`). Die Rechte in `GetStatus`
+>   kommen aus der Konfiguration. Eine unbekannte Operation (neuerer Agent) ist `UNSUPPORTED`.
+> - **`helper.toml`:** Datei und Verzeichnis müssen root gehören und dürfen für Gruppe und andere nicht beschreibbar
+>   sein (ein Symlink hat unter Linux `0777` und fällt damit durch); unbekannte Schlüssel und falsche Typen sind
+>   Fehler. Dann startet der Helper nicht. Ohne Datei gelten die Werte aus ADR 0035, ohne Verzeichnis nicht.
+> - **Journal:** eine Zeile je Verbindung: `peer_uid`, Operation, `run_id` nur geprüft (sonst `-`), Status und
+>   maskierter Grund; auch Ablehnungen und fremde Aufrufer.
+> - **Umfang:** `scripts/helper-loc.sh` (in `just lint-agent`, mit eigenem Test in `just test-scripts`) zählt den Code
+>   ohne Tests, Kommentare und Leerzeilen: 549 von 1 000 Zeilen.
+> - **Tests:** Regeln (gültige und erlaubte Läufe, Veto je Schalter einzeln, 14 ungültige Anfragen ohne ungeprüfte ID im
+>   Journal, unbekannte Operation, Status), Konfiguration (Werte, Tippfehler, Rechte, Symlink, fehlende Datei und
+>   fehlendes Verzeichnis), Rahmen (Grenze vor dem Lesen, Frist, Abbruch), Verbindung (Antwort und Journal, fremde
+>   UIDs ohne Lesen, zu groß, kaputt, leer), Socket-Aktivierung, Rechte des eigenen Sockets; unter Linux (Container)
+>   auch `SO_PEERCRED` und clippy. Fuzz-Ziel `helper_request` (Decoder und Regeln: kein Lauf mit ungültiger ID, ohne
+>   Erlaubnis oder mit ungültigem Grund), 6,4 Mio. Läufe ohne Befund, Seeds je Operation.
+> - **Gegenproben** für 25 Prüfungen: 23 erkannt (eine nach einem zusätzlichen Test: fehlendes Verzeichnis). Die eigene
+>   Prüfung auf Symlinks erwies sich als wirkungslos neben der Rechteprüfung und entfiel. Die Prüfung auf eine
+>   abgelaufene Frist überlebt, weil der Timeout des Sockets die Leseoperation ohnehin beendet.
 - **Ziel:** `sermon-helper` nimmt Anfragen an und lehnt alles außerhalb der Regeln ab.
   - `SO_PEERCRED`: nur die UID des Users `sermon` (aus `/etc/passwd`, nie aus der Umgebung); andere UIDs, auch root,
     werden abgewiesen und protokolliert.

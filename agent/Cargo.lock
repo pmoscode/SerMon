@@ -1305,8 +1305,11 @@ name = "sermon-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
+ "prost",
  "sermon-buffer",
  "sermon-collectors",
+ "sermon-helper",
+ "sermon-helper-proto",
  "sermon-logs",
  "sermon-security",
  "tempfile",
@@ -1315,6 +1318,21 @@ dependencies = [
 [[package]]
 name = "sermon-helper"
 version = "0.0.0"
+dependencies = [
+ "prost",
+ "rustix",
+ "serde",
+ "sermon-helper-proto",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "sermon-helper-proto"
+version = "0.0.0"
+dependencies = [
+ "prost",
+]
 
 [[package]]
 name = "sermon-logs"

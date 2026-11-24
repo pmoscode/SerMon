@@ -48,3 +48,21 @@ for file in ../fixtures/processes/*/proc/*/stat ../fixtures/processes/*/proc/*/s
   name=$(printf '%s' "$file" | tr '/.' '__')
   cp "$file" "corpus/process_parsers/fixture$name"
 done
+# helper_request: a switch byte and one request of each operation (protobuf by hand, ADR 0035).
+mkdir -p corpus/helper_request
+python3 - <<'PY'
+def field(n, wire, payload):
+    key = bytes([n << 3 | wire])
+    return key + (bytes([len(payload)]) + payload if wire == 2 else payload)
+run_id = b"0193f5a0-0000-7000-8000-000000000001"
+ops = {
+    "get_status": field(1, 2, b""),
+    "list_updates": field(2, 2, field(1, 0, b"\x01")),
+    "apply_updates": field(3, 2, field(1, 2, run_id) + field(2, 0, b"\x01")),
+    "reboot": field(4, 2, field(1, 2, run_id) + field(2, 2, b"kernel 6.1.0-28")),
+    "self_update": field(5, 2, field(1, 2, run_id)),
+    "run_result": field(6, 2, field(1, 2, run_id)),
+}
+for name, body in ops.items():
+    open(f"corpus/helper_request/{name}", "wb").write(b"\x07" + body)
+PY

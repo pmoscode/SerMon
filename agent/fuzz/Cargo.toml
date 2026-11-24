@@ -15,6 +15,9 @@ libfuzzer-sys = "=0.4.13"
 tempfile = "=3.27.0"
 sermon-buffer = { path = "../crates/sermon-buffer" }
 sermon-collectors = { path = "../crates/sermon-collectors" }
+sermon-helper = { path = "../crates/sermon-helper" }
+sermon-helper-proto = { path = "../crates/sermon-helper-proto" }
+prost = "=0.14.6"
 sermon-logs = { path = "../crates/sermon-logs" }
 sermon-security = { path = "../crates/sermon-security" }
 
@@ -67,6 +70,13 @@ bench = false
 [[bin]]
 name = "process_parsers"
 path = "fuzz_targets/process_parsers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "helper_request"
+path = "fuzz_targets/helper_request.rs"
 test = false
 doc = false
 bench = false

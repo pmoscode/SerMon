@@ -1,0 +1,15 @@
+[package]
+name = "sermon-helper-proto"
+description = "Protocol between the SerMon agent and its root helper (generated from proto/sermon/helper, ADR 0035)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+prost.workspace = true

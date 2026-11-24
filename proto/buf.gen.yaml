@@ -13,11 +13,14 @@ managed:
     - module: buf.build/bufbuild/protovalidate
 plugins:
   # Go: messages (google.golang.org/protobuf) and Connect/gRPC handlers. Versions: server/go.mod (tool).
+  # The server never talks to the root helper (sermon.helper.v1, ADR 0035).
   - local: ["go", "-C", "../server", "tool", "protoc-gen-go"]
     out: ../server/internal/gen
+    exclude_types: [sermon.helper.v1]
     opt: paths=source_relative
   - local: ["go", "-C", "../server", "tool", "protoc-gen-connect-go"]
     out: ../server/internal/gen
+    exclude_types: [sermon.helper.v1]
     opt: paths=source_relative
 
   # TypeScript (Protobuf-ES v2, includes service descriptors for Connect-ES). Version: web/package.json.
@@ -26,19 +29,19 @@ plugins:
     include_imports: true
     # The UI only talks the web API; validation rules (buf.validate) stay on the server and would
     # bloat the bundle with their descriptors.
-    exclude_types: [sermon.agent.v1, buf.validate]
+    exclude_types: [sermon.agent.v1, sermon.helper.v1, buf.validate]
     opt: target=ts
 
   # Rust: prost messages and tonic client (agent side only). Versions: just setup / CLAUDE.md.
   - local: protoc-gen-prost
     out: ../agent/crates/sermon-transport/src/gen
-    exclude_types: [sermon.web.v1] # the agent only talks the agent API
+    exclude_types: [sermon.web.v1, sermon.helper.v1] # the agent only talks the agent API
     opt:
       - compile_well_known_types
       - extern_path=.google.protobuf=::prost_types
   - local: protoc-gen-tonic
     out: ../agent/crates/sermon-transport/src/gen
-    exclude_types: [sermon.web.v1]
+    exclude_types: [sermon.web.v1, sermon.helper.v1]
     opt:
       - no_server=true
       - compile_well_known_types
@@ -48,10 +51,16 @@ plugins:
   # agent binary). Messages come from sermon-transport.
   - local: protoc-gen-tonic
     out: ../agent/crates/sermon-testserver/src/gen
-    exclude_types: [sermon.web.v1]
+    exclude_types: [sermon.web.v1, sermon.helper.v1]
     opt:
       - no_client=true
       - no_include
       - compile_well_known_types
       - extern_path=.google.protobuf=::prost_types
       - extern_path=.sermon.agent.v1=::sermon_transport::proto::agent::v1
+
+  # Rust: the protocol between agent and root helper (ADR 0035), prost messages only, in a crate of
+  # its own that the helper can use without the gRPC stack.
+  - local: protoc-gen-prost
+    out: ../agent/crates/sermon-helper-proto/src/gen
+    types: [sermon.helper.v1]

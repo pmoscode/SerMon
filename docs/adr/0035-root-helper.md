@@ -160,3 +160,18 @@ fehl.
   - Andere lokale User erreichen den Helper nicht (T39).
 - Folgearbeiten: M4-02 bis M4-04 (Helper und Paket), M4-05 (Server-Protokoll), M4-12 (Agent), ADR 0036
   (`SelfUpdate`); KONZEPT §4.2 und §5 nachgezogen.
+
+## Nachtrag M4-02
+
+- Der Helper bedient Verbindungen nacheinander: Der Agent ist der einzige Aufrufer, und ein schreibender Lauf hält
+  ohnehin die Sperre.
+- Fremde Aufrufer und Verbindungen ohne Credentials schließt er, ohne die Anfrage zu lesen.
+- Eine unsichere, ungültige `helper.toml` (unbekannter Schlüssel, falscher Typ) oder ein fehlendes Verzeichnis
+  `/etc/sermon` verhindern den Start: lieber keine Fernsteuerung als eine mit falschen Rechten. Ohne Datei gelten die
+  Werte oben.
+- Ein selbst gebundener Socket entsteht unter einer umask (nie offener als `0660`), das Verzeichnis `/run/sermon` mit
+  `0750` und der Gruppe `sermon`.
+- Die einzige `unsafe`-Stelle übernimmt fd 3 von systemd, nachdem `LISTEN_PID` und `LISTEN_FDS` geprüft sind; fd 3
+  muss ein Socket sein.
+- Das Format des Journals: `peer_uid=… op=… run_id=… status=… reason="…"`; eine `run_id` steht nur geprüft darin.
+

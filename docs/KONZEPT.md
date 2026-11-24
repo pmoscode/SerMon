@@ -468,6 +468,9 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
       bleibt, der letzte org-weite Admin auch, gesperrte Orgs sind ausgenommen. JIT (abschaltbar mit
       `SERMON_OIDC_JIT=false`) legt Konto und Mitgliedschaft an, nur mit bestätigter E-Mail, die noch keinem Konto
       gehört, und im Rahmen des Kontingents.
+    - Seit M3-22: Knopf auf der Anmeldeseite, Verknüpfen und Lösen unter „Kontosicherheit“ (Lösen nur, wenn ein
+      Passwort oder eine weitere Identität bleibt), Step-up beim Provider im Bestätigungsdialog, Zuordnungen im Reiter
+      „SSO-Gruppen“ der Organisation. Rollen aus Zuordnungen tragen in der Mitgliederliste das Zeichen „SSO“.
 - **Sessions:** serverseitig in PG, Cookie `__Host-sermon_session` (Secure, HttpOnly, SameSite=Lax). Idle-Timeout 30
   min, absolut 12 h. **Step-up-Authentifizierung** (erneute 2FA) für sensible Aktionen wie Updates, Reboot oder
   Rechteänderungen.

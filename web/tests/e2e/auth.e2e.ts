@@ -16,11 +16,11 @@ test.describe('login and app shell (mocked API)', () => {
 
 		await page.getByLabel('Email address').fill('mia@example.org');
 		await page.getByLabel('Password').fill('wrong password');
-		await page.getByRole('button', { name: 'Sign in' }).click();
+		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 		await expect(page.getByRole('alert')).toHaveText('Email address or password is wrong.');
 
 		await page.getByLabel('Password').fill('correct horse battery');
-		await page.getByRole('button', { name: 'Sign in' }).click();
+		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
 		await expect(page).toHaveURL('/fleet?view=list');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Fleet');
@@ -103,7 +103,7 @@ test.describe('login and app shell (mocked API)', () => {
 
 		await page.getByLabel('Email address').fill('mia@example.org');
 		await page.getByLabel('Password').fill('correct horse battery');
-		await page.getByRole('button', { name: 'Sign in' }).click();
+		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
 		await expect(page).toHaveURL('/fleet');
 	});
@@ -114,6 +114,7 @@ test.describe('first start (mocked API)', () => {
 		let required = true;
 		await mockApi(page, {
 			'SetupService/GetSetupStatus': () => ({ json: { setupRequired: required } }),
+			'AuthService/GetLoginOptions': () => ({ json: {} }),
 			'SetupService/CompleteSetup': () => {
 				required = false;
 				return { json: {} };
@@ -137,5 +138,35 @@ test.describe('first start (mocked API)', () => {
 		await expect(page.getByRole('status')).toHaveText(
 			'Setup is complete. Sign in with the new account now.'
 		);
+	});
+
+	// M3-22: the provider's button, the return without details and the second factor after it.
+	test('offers the provider, says only "failed" and asks the second factor after it', async ({
+		page
+	}) => {
+		const begun: unknown[] = [];
+		await mockApi(page, {
+			...installed(false),
+			'AuthService/GetLoginOptions': () => ({ json: { oidc: true, oidcName: 'Keycloak' } }),
+			'AuthService/BeginOidc': (body) => {
+				begun.push(body);
+				return { json: { authorizationUrl: '/login?sso=failed' } };
+			},
+			'AuthService/VerifySecondFactor': () => ({ json: { session } })
+		});
+		await page.goto('/login?redirect=%2Falerts');
+		await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
+		// The fake provider sends the browser straight back as a failure.
+		await expect(page).toHaveURL('/login?sso=failed');
+		expect(begun).toEqual([{ intent: 'OIDC_INTENT_LOGIN', next: '/alerts' }]);
+		await expect(page.getByRole('alert')).toContainText("didn't work");
+		const results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+
+		await page.goto('/login?sso=second_factor&redirect=%2Ffleet%3Fview%3Dlist');
+		await expect(page.getByText(/enter the code of your second factor/)).toBeVisible();
+		await page.getByLabel('Code').fill('123456');
+		await page.getByRole('button', { name: 'Confirm' }).click();
+		await expect(page).toHaveURL('/fleet?view=list');
 	});
 });

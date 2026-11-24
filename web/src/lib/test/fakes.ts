@@ -25,7 +25,8 @@ export function fakeSession(...organizations: string[]): Session {
 		email: 'mia@example.org',
 		displayName: 'Mia',
 		activeOrganizationId: orgs[0].id,
-		organizations: orgs
+		organizations: orgs,
+		hasPassword: true
 	});
 }
 

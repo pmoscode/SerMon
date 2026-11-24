@@ -9,6 +9,14 @@ Hier richtest du die Zwei-Faktor-Anmeldung für dein Konto ein: Nach dem Passwor
 3. Den angezeigten 6-stelligen Code eingeben.
 4. Die **Recovery-Codes** sicher aufbewahren. Sie werden nur einmal angezeigt; jeder ersetzt die App ein einziges Mal.
 
+## Anmeldung über SSO
+
+Hat die Instanz einen Identity Provider, verknüpfst du hier dein Konto damit („Mit … verknüpfen“, nach erneuter Bestätigung). Danach meldest du dich auf der Anmeldeseite über den Provider an. SerMon erkennt dich an deiner Identität beim Provider, nicht an der E-Mail.
+
+- **Lösen** geht nur, wenn dir ein anderer Weg bleibt, meist dein Passwort. Konten, die SerMon bei der ersten Anmeldung über den Provider angelegt hat, haben kein Passwort.
+- Bestätigungen für sensible Aktionen gehen auch über den Provider: Er fragt dann frisch nach der Anmeldung, danach führst du die Aktion noch einmal aus.
+- Verlangt deine Organisation eine Zwei-Faktor-Anmeldung, zählt der zweite Faktor beim Provider, wenn der Betreiber das so eingestellt hat; sonst fragt SerMon nach der Anmeldung deinen eigenen Code ab.
+
 ## Gut zu wissen
 
 - Jeder Code aus der App gilt nur einmal. Passt ein Code nicht, die Uhrzeit des Geräts prüfen.

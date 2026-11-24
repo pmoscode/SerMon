@@ -3566,7 +3566,32 @@ Konfiguration) und M3-06 (Loki).
   - Tenant-Isolationstest; Rollen-Matrix
 - **Abhängig von:** M3-20
 
-#### ☐ M3-22 – OIDC in der UI und E2E mit echtem IdP · W · M 🔒
+#### ☑ M3-22 – OIDC in der UI und E2E mit echtem IdP · W · M 🔒
+> Erledigt ([ADR 0033](adr/0033-anmeldung-ueber-oidc.md), Abschnitt „Oberfläche“; KONZEPT §7; Threat Model T84):
+> - **Server dazu:** `AuthService.ListOidcIdentities` und `UnlinkOidcIdentity` (frischer Step-up, nur wenn ein Passwort
+>   oder eine weitere Identität bleibt, Audit `oidc.identity_unlinked`). Die Session-Ansicht nennt `has_password` und
+>   `oidc_linked`. Der Rückweg mit zweitem Faktor heißt jetzt `/login?sso=second_factor&redirect=…`.
+> - **Anmeldeseite:** Knopf „Mit … anmelden“ nur mit Provider (`GetLoginOptions`). `?sso=failed` zeigt eine Meldung
+>   ohne Details, `?sso=second_factor` beginnt mit dem Code.
+> - **Kontosicherheit:** Karte „Anmeldung über SSO“ mit den Identitäten (Text, nie HTML), Verknüpfen mit Step-up,
+>   Lösen mit Bestätigung; Lösen ist gesperrt, wenn es der einzige Weg ist; `?sso=taken` wird erklärt.
+> - **Step-up-Dialog:** „Bei … bestätigen“, wenn eine Identität verknüpft ist; Konten ohne Passwort und zweiten Faktor
+>   sehen nur diesen Weg. Nach der Rückkehr wird die Aktion von Hand wiederholt.
+> - **Organisation:** Reiter „SSO-Gruppen“ (lädt bei Bedarf) mit Liste, Anlegen und Löschen; Rollen aus Zuordnungen
+>   tragen in der Mitgliederliste „SSO“ (`RoleBinding.from_oidc`).
+> - **E2E-Umgebung:** Dex 2.46.1 (per Digest) im Overlay, Mock-Connector mit Gruppe `authors`, TLS mit Zertifikat des
+>   Laufs, Issuer `https://dex.test:18556/dex` für Server und Browser (Chromium bildet `dex.test` auf 127.0.0.1 ab).
+>   Der Server vertraut für ausgehendes HTTPS nur Slack-Mock und Dex; Client-Secret als Datei.
+> - Hilfe DE/EN: `concepts/oidc-group-mappings`, Seiten „Organisation“ und „Sicherheit“ ergänzt.
+> - **Tests:**
+>   - Komponenten: Knopf nur mit Provider, Start mit sicherem Rückweg, Provider nicht erreichbar, Code nach dem
+>     Provider; Step-up über den Provider und nur dort; Identitäten verknüpfen (auch abgebrochener Step-up), lösen,
+>     letzter Weg gesperrt, Fehler; Zuordnungen als Text, anlegen, löschen, ohne Provider, ohne JIT, Ablehnung.
+>   - Server: Lösen nur mit Step-up und anderem Weg, fremder Issuer; über den echten Stack samt Audit und Session-Ansicht.
+>   - E2E (Mock-API) mit axe: Anmeldeseite mit Provider und Rückkehr, Kontosicherheit, Reiter „SSO-Gruppen“.
+>   - Demo gegen Dex: Admin legt im UI `authors → Operator` an, Anmeldung über Dex legt Konto mit Rolle an (JIT), nach
+>     dem Löschen der Zuordnung fehlt die Rolle bei der nächsten Anmeldung.
+>   - Gegenproben für 13 Prüfungen, alle erkannt.
 - **Ziel:**
   - Button auf der Login-Seite, nur wenn OIDC konfiguriert ist; Rückkehr und Fehlerseite ohne Details
   - **Verknüpfungen im Konto:** Verknüpfen mit Step-up; Lösen nur, wenn ein anderer Anmeldeweg bleibt

@@ -78,6 +78,7 @@ type Querier interface {
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
 	DeleteExpiredOIDCFlows(ctx context.Context, now time.Time) error
 	DeleteGroupLogSettings(ctx context.Context, groupID uuid.UUID) error
+	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (string, error)
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMaintenanceWindow(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -131,9 +132,11 @@ type Querier interface {
 	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
 	// The binding counts as given by hand afterwards (M3-21): sign-ins over OIDC leave it.
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
+	HasPassword(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
 	// wait for the save to end.
 	HoldAlertLease(ctx context.Context, arg HoldAlertLeaseParams) (int64, error)
+	IdentitiesOfUser(ctx context.Context, userID uuid.UUID) ([]IdentitiesOfUserRow, error)
 	IdentitySeen(ctx context.Context, arg IdentitySeenParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
 	// One row per transition (COPY doesn't work with row-level security; a round has few).

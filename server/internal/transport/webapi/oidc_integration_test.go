@@ -107,6 +107,20 @@ func TestOIDC_LinkSignInAndStepUp(t *testing.T) {
 		t.Fatalf("%d identities linked", linked)
 	}
 
+	// M3-22: the identity in the session view and the list; unlinking needs a fresh step-up.
+	view, err := erin.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
+	if err != nil || !view.Msg.GetSession().GetOidcLinked() || !view.Msg.GetSession().GetHasPassword() {
+		t.Errorf("session view: %v, %v", view, err)
+	}
+	ids, err := erin.auth.ListOidcIdentities(ctx, connect.NewRequest(&webv1.ListOidcIdentitiesRequest{}))
+	if err != nil || len(ids.Msg.GetIdentities()) != 1 || ids.Msg.GetIdentities()[0].GetSubject() != "erin-sub" ||
+		ids.Msg.GetIdentities()[0].GetEmail() != "erin@idp.example" || ids.Msg.GetIdentities()[0].GetLastLoginTime() != nil {
+		t.Errorf("ListOidcIdentities() = %v, %v", ids, err)
+	}
+	if _, err := anon.auth.ListOidcIdentities(ctx, connect.NewRequest(&webv1.ListOidcIdentitiesRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
+		t.Errorf("without a session: %v", err)
+	}
+
 	// A fresh browser signs in with it and lands where it wanted.
 	fresh := newBrowser(t, s)
 	if got := fresh.signIn(t, s, webv1.OidcIntent_OIDC_INTENT_LOGIN, "/alerts?tab=rules", oidctest.Login{Subject: "erin-sub"}); got != "/alerts?tab=rules" {
@@ -165,6 +179,23 @@ func TestOIDC_LinkSignInAndStepUp(t *testing.T) {
 	if got := fresh.signIn(t, s, webv1.OidcIntent_OIDC_INTENT_STEP_UP, "/admin", oidctest.Login{Subject: "mallory", AuthTime: time.Now()}); got != "/login?sso=failed" {
 		t.Errorf("another identity: %s", got)
 	}
+	// Unlink: with an old step-up refused, then with a fresh one (Erin keeps her password).
+	ownerSQL(t, "UPDATE sessions SET step_up_at = now() - interval '1 hour' WHERE user_id = '"+erinID+"'")
+	if _, err := fresh.auth.UnlinkOidcIdentity(ctx, connect.NewRequest(&webv1.UnlinkOidcIdentityRequest{Issuer: s.idp.URL})); connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "confirm") {
+		t.Errorf("unlink with an old step-up: %v", err)
+	}
+	ownerSQL(t, "UPDATE sessions SET step_up_at = now() WHERE user_id = '"+erinID+"'")
+	if _, err := fresh.auth.UnlinkOidcIdentity(ctx, connect.NewRequest(&webv1.UnlinkOidcIdentityRequest{Issuer: s.idp.URL})); err != nil {
+		t.Errorf("UnlinkOidcIdentity() = %v", err)
+	}
+	if _, err := fresh.auth.UnlinkOidcIdentity(ctx, connect.NewRequest(&webv1.UnlinkOidcIdentityRequest{Issuer: s.idp.URL})); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("unlink again: %v", err)
+	}
+	var unlinked int
+	ownerQuery(t, "SELECT count(*) FROM instance_audit_log WHERE action = 'oidc.identity_unlinked' AND target = 'user:"+erinID+"'", &unlinked)
+	if unlinked < 1 {
+		t.Error("no audit entry of the unlinking")
+	}
 }
 
 // M3-21 over the real stack: Alpha's admin maps a provider group; a new identity in it signs in
@@ -200,8 +231,14 @@ func TestOIDC_GroupMappingsAndJIT(t *testing.T) {
 		t.Fatalf("JIT sign-in: back to %s", got)
 	}
 	sess, err := b.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
-	if err != nil || sess.Msg.GetSession().GetEmail() != "jit@idp.example" || sess.Msg.GetSession().GetActiveOrganizationId() != orgAlpha {
+	if err != nil || sess.Msg.GetSession().GetEmail() != "jit@idp.example" || sess.Msg.GetSession().GetActiveOrganizationId() != orgAlpha ||
+		sess.Msg.GetSession().GetHasPassword() || !sess.Msg.GetSession().GetOidcLinked() {
 		t.Fatalf("the provisioned session: %v, %v", sess, err)
+	}
+	// M3-22: its only way in can't be unlinked.
+	_, err = b.auth.UnlinkOidcIdentity(ctx, connect.NewRequest(&webv1.UnlinkOidcIdentityRequest{Issuer: s.idp.URL}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || strings.Contains(err.Error(), "confirm") {
+		t.Errorf("unlink the only way in: %v", err)
 	}
 	members, err := ann.access.ListMembers(ctx, connect.NewRequest(&webv1.ListMembersRequest{}))
 	if err != nil {

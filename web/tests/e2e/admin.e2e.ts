@@ -98,7 +98,7 @@ test.describe('organization admin (mocked API)', () => {
 		await page.screenshot({ path: 'test-results/admin-invite.png', fullPage: true });
 
 		for (const tab of ['Groups', 'Security', 'Quotas', 'Audit log']) {
-			await page.getByRole('tab', { name: tab }).click();
+			await page.getByRole('tab', { name: tab, exact: true }).click();
 			results = await new AxeBuilder({ page }).analyze();
 			expect(results.violations, tab).toEqual([]);
 		}
@@ -285,5 +285,70 @@ test.describe('invitation link (mocked API)', () => {
 
 		await page.getByRole('button', { name: 'Join' }).click();
 		await expect(page).toHaveURL('/fleet');
+	});
+});
+
+// M3-22: the groups of the provider as admins keep them, with the roles they gave in the list.
+test.describe('SSO groups (mocked API)', () => {
+	test.use({ expectedHttpErrors: [400, 401] });
+
+	test('lists, creates after the step-up and passes axe', async ({ page }) => {
+		let confirmed = false;
+		const mappings = [
+			{ id: 'm1', oidcGroup: 'CN=Ops,OU=Groups', groupId: 'g1', role: 'ROLE_OPERATOR' }
+		];
+		const created: unknown[] = [];
+		await mockApi(
+			page,
+			adminApi({
+				'AccessService/ListMembers': () => ({
+					json: {
+						members: [
+							members[0],
+							{
+								...members[1],
+								bindings: [{ id: 'b2', groupId: 'g1', role: 'ROLE_OPERATOR', fromOidc: true }]
+							}
+						]
+					}
+				}),
+				'OidcMappingService/ListOidcMappings': () => ({
+					json: { oidc: true, provisioning: true, mappings }
+				}),
+				'OidcMappingService/CreateOidcMapping': (body) => {
+					if (!confirmed) return stepUp;
+					created.push(body);
+					mappings.push({ id: 'm2', oidcGroup: 'admins', groupId: '', role: 'ROLE_ADMIN' });
+					return { json: { mapping: mappings[1] } };
+				},
+				'AuthService/ConfirmPassword': () => {
+					confirmed = true;
+					return { json: { session: admin } };
+				}
+			})
+		);
+		await page.goto('/admin');
+		await expect(page.getByRole('listitem').filter({ hasText: 'kai@example.org' })).toContainText(
+			'SSO'
+		);
+		await page.getByRole('tab', { name: 'SSO groups' }).click();
+		await expect(page.getByRole('row').nth(1)).toContainText('CN=Ops,OU=Groups');
+		await expect(page.getByRole('row').nth(1)).toContainText('web');
+		let results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
+
+		await page.getByLabel('Group at the provider').fill('admins');
+		await page
+			.getByRole('tabpanel')
+			.getByLabel('Role', { exact: true })
+			.selectOption({ label: 'Admin' });
+		await page.getByRole('button', { name: 'Create' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Password').fill('correct horse battery');
+		await dialog.getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByRole('row').nth(2)).toContainText('All groups');
+		expect(created).toEqual([{ oidcGroup: 'admins', role: 'ROLE_ADMIN' }]);
+		results = await new AxeBuilder({ page }).analyze();
+		expect(results.violations).toEqual([]);
 	});
 });

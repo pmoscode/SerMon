@@ -5,10 +5,33 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState, type ConfirmFailure } from '#lib/stores/session.svelte.js';
+	import { OidcIntent, ssoState } from '#lib/stores/sso.svelte.js';
 	import { stepUpState } from '#lib/stores/stepup.svelte.js';
 
 	/** Users with a second factor confirm with a code, the others with the password. */
 	const withCode = $derived(sessionState.current?.secondFactorEnabled ?? false);
+	/** Accounts from the provider may have neither: they confirm there (M3-22). */
+	const local = $derived(withCode || (sessionState.current?.hasPassword ?? true));
+	const withSso = $derived(ssoState.enabled && (sessionState.current?.oidcLinked ?? false));
+	let leaving = $state(false);
+
+	$effect(() => {
+		if (stepUpState.open) void ssoState.load();
+	});
+
+	/** A fresh sign-in at the provider; the browser returns to this page, the action runs again by hand. */
+	async function confirmWithSso() {
+		failure = undefined;
+		leaving = true;
+		const result = await ssoState.start(
+			OidcIntent.STEP_UP,
+			window.location.pathname + window.location.search
+		);
+		if (result) {
+			leaving = false;
+			failure = result === 'rate_limited' ? 'rate_limited' : 'unavailable';
+		}
+	}
 	let password = $state('');
 	let busy = $state(false);
 	let failure = $state<ConfirmFailure | undefined>();
@@ -69,7 +92,13 @@
 	<Dialog.Content closeLabel={m.stepup_cancel()} class="sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>{m.stepup_title()}</Dialog.Title>
-			<Dialog.Description>{withCode ? m.stepup_text_code() : m.stepup_text()}</Dialog.Description>
+			<Dialog.Description
+				>{!local
+					? m.stepup_text_sso()
+					: withCode
+						? m.stepup_text_code()
+						: m.stepup_text()}</Dialog.Description
+			>
 		</Dialog.Header>
 		<form class="flex flex-col gap-4" novalidate onsubmit={submit}>
 			{#if failureText}
@@ -80,23 +109,35 @@
 					{failureText}
 				</p>
 			{/if}
-			<div class="flex flex-col gap-2">
-				<Label for="stepup-password">{withCode ? m.field_code() : m.field_password_label()}</Label>
-				<Input
-					id="stepup-password"
-					type={withCode ? 'text' : 'password'}
-					autocomplete={withCode ? 'one-time-code' : 'current-password'}
-					bind:value={password}
-					aria-invalid={missing}
-					aria-describedby={missing ? 'stepup-password-error' : undefined}
-				/>
-				{#if missing}
-					<p id="stepup-password-error" class="text-sm text-destructive">{m.field_required()}</p>
-				{/if}
-			</div>
+			{#if local}
+				<div class="flex flex-col gap-2">
+					<Label for="stepup-password">{withCode ? m.field_code() : m.field_password_label()}</Label
+					>
+					<Input
+						id="stepup-password"
+						type={withCode ? 'text' : 'password'}
+						autocomplete={withCode ? 'one-time-code' : 'current-password'}
+						bind:value={password}
+						aria-invalid={missing}
+						aria-describedby={missing ? 'stepup-password-error' : undefined}
+					/>
+					{#if missing}
+						<p id="stepup-password-error" class="text-sm text-destructive">{m.field_required()}</p>
+					{/if}
+				</div>
+			{/if}
+			{#if withSso}
+				<Button type="button" variant="outline" disabled={leaving} onclick={confirmWithSso}>
+					{leaving ? m.stepup_busy() : m.stepup_sso({ name: ssoState.name })}
+				</Button>
+				<p class="text-xs text-muted-foreground">{m.stepup_sso_hint()}</p>
+			{/if}
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={cancel}>{m.stepup_cancel()}</Button>
-				<Button type="submit" disabled={busy}>{busy ? m.stepup_busy() : m.stepup_submit()}</Button>
+				{#if local}
+					<Button type="submit" disabled={busy}>{busy ? m.stepup_busy() : m.stepup_submit()}</Button
+					>
+				{/if}
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

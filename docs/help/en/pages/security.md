@@ -9,6 +9,14 @@ Set up two-factor authentication for your account here: after the password, SerM
 3. Enter the 6-digit code shown.
 4. Keep the **recovery codes** safe. They are shown only once; each replaces the app a single time.
 
+## Sign-in over SSO
+
+If the instance has an identity provider, link your account with it here (“Link with …”, after a fresh confirmation). Then you sign in over the provider on the sign-in page. SerMon recognizes you by your identity at the provider, not by your e-mail.
+
+- **Unlink** works only while another way in remains, usually your password. Accounts SerMon created at the first sign-in over the provider have no password.
+- Confirmations for sensitive actions also work over the provider: it asks for a fresh sign-in, then you run the action again.
+- If your organization requires two-factor authentication, the provider's second factor counts if the operator set it up so; otherwise SerMon asks for your own code after the sign-in.
+
 ## Good to know
 
 - Every code from the app works only once. If a code doesn't match, check the device's clock.

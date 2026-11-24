@@ -8,11 +8,33 @@
 		type LoginFailure,
 		type SecondFactorFailure
 	} from '#lib/stores/session.svelte.js';
+	import { OidcIntent, ssoState, type SsoFailure } from '#lib/stores/sso.svelte.js';
 
-	let { onLoggedIn }: { onLoggedIn: () => void } = $props();
+	let {
+		onLoggedIn,
+		initialStep = 'password',
+		next = ''
+	}: {
+		onLoggedIn: () => void;
+		/** code: the provider signed in, the local second factor follows (M3-22). */
+		initialStep?: 'password' | 'code';
+		/** Where the sign-in at the provider returns to. */
+		next?: string;
+	} = $props();
 
 	/** password: e-mail and password; code: the second factor (TOTP or recovery code). */
-	let step = $state<'password' | 'code'>('password');
+	// svelte-ignore state_referenced_locally
+	let step = $state<'password' | 'code'>(initialStep);
+	let ssoFailure = $state<SsoFailure | undefined>();
+	let leaving = $state(false);
+
+	async function signInWithSso() {
+		ssoFailure = undefined;
+		failure = undefined;
+		leaving = true;
+		ssoFailure = await ssoState.start(OidcIntent.LOGIN, next);
+		if (ssoFailure) leaving = false;
+	}
 	let email = $state('');
 	let password = $state('');
 	let code = $state('');
@@ -37,7 +59,15 @@
 			case 'unavailable':
 				return m.error_unavailable();
 			default:
+				break;
+		}
+		switch (ssoFailure) {
+			case 'rate_limited':
+				return m.login_error_rate_limited();
+			case undefined:
 				return '';
+			default:
+				return m.sso_error_unavailable();
 		}
 	});
 
@@ -130,6 +160,15 @@
 			{/if}
 		</div>
 		<Button type="submit" disabled={busy}>{busy ? m.login_busy() : m.login_submit()}</Button>
+		{#if ssoState.enabled}
+			<p class="flex items-center gap-2 text-xs text-muted-foreground" aria-hidden="true">
+				<span class="h-px flex-1 bg-border"></span>{m.login_or()}<span class="h-px flex-1 bg-border"
+				></span>
+			</p>
+			<Button type="button" variant="outline" disabled={leaving} onclick={signInWithSso}>
+				{leaving ? m.login_busy() : m.sso_sign_in({ name: ssoState.name })}
+			</Button>
+		{/if}
 	{:else}
 		<div class="flex flex-col gap-2">
 			<Label for="login-code">{m.field_code()}</Label>

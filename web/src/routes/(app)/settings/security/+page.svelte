@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
+	import SsoIdentities from '#lib/components/security/SsoIdentities.svelte';
 	import TwoFactorSettings from '#lib/components/security/TwoFactorSettings.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
@@ -20,4 +22,7 @@
 	</p>
 {/if}
 
-<TwoFactorSettings />
+<div class="flex flex-col gap-6">
+	<TwoFactorSettings />
+	<SsoIdentities taken={page.url.searchParams.get('sso') === 'taken'} />
+</div>

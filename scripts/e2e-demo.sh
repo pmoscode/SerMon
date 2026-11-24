@@ -31,7 +31,7 @@ aarch64 | arm64) arch=arm64 target=aarch64-unknown-linux-musl ;;
 *) echo "e2e-demo: unsupported Docker architecture" >&2 && exit 1 ;;
 esac
 
-if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ]; then
+if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build/dex/config.yaml" ]; then
 	rm -rf "$build"
 	mkdir -p "$build/secrets" "$build/downloads"
 	# Release key and database passwords: only for the user who runs the demo. The containers see the
@@ -56,6 +56,8 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ]; then
 
 	# Database passwords and URLs as on a real installation; Mailpit accepts any SMTP login.
 	openssl rand -hex 16 | tr -d '\n' >"$build/secrets/smtp_password"
+	# Dex's client secret (M3-22), for the server and Dex's configuration.
+	openssl rand -hex 24 | tr -d '\n' >"$build/secrets/oidc_client_secret"
 	"$root/deploy/compose/secrets.sh" "$build/secrets" >/dev/null
 	# Mailpit's certificate of this run; the server trusts exactly it (SERMON_SMTP_CA_FILE).
 	mkdir -p "$build/mailpit"
@@ -67,6 +69,27 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ]; then
 	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=hooks.slack.com \
 		-addext subjectAltName=DNS:hooks.slack.com -keyout "$build/slack-mock/slack-mock.key" -out "$build/slack-mock/slack-mock.crt" 2>/dev/null
 	chmod 0644 "$build/slack-mock/"*
+	# Dex (M3-22): a certificate for dex.test and its configuration with the client of this run.
+	mkdir -p "$build/dex"
+	openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2 -subj /CN=dex.test \
+		-addext subjectAltName=DNS:dex.test -keyout "$build/dex/dex.key" -out "$build/dex/dex.crt" 2>/dev/null
+	cat >"$build/dex/config.yaml" <<-EOF
+		issuer: https://dex.test:18556/dex
+		storage: { type: memory }
+		web: { https: 0.0.0.0:18556, tlsCert: /etc/dex/dex.crt, tlsKey: /etc/dex/dex.key }
+		oauth2: { skipApprovalScreen: true }
+		staticClients:
+		  - id: sermon
+		    name: SerMon
+		    secret: "$(cat "$build/secrets/oidc_client_secret")"
+		    redirectURIs: ["https://localhost:$port/auth/oidc/callback"]
+		connectors:
+		  - { type: mockCallback, id: mock, name: Example }
+	EOF
+	chmod 0644 "$build/dex/"*
+	# The server's only roots for outgoing HTTPS: the Slack mock and Dex.
+	cat "$build/slack-mock/slack-mock.crt" "$build/dex/dex.crt" >"$build/outbound-ca.pem"
+	chmod 0644 "$build/outbound-ca.pem"
 fi
 
 cleanup() {

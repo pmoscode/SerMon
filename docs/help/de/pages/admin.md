@@ -14,6 +14,10 @@ Eine Rolle gilt für eine Gruppe oder für alle Gruppen. Mehrere Rollen ergänze
 
 Der Reiter **Logs** legt fest, was die Agents jeder Gruppe senden, ob Viewer Logs sehen und welche eigenen Redaction-Regeln gelten; er zeigt auch, welche Einstellungen jeder Agent angewendet hat. Mehr dazu: [Log-Einstellungen](help:concepts/log_settings).
 
+## SSO-Gruppen
+
+Hat die Instanz einen OIDC-Provider, ordnet der Reiter **SSO-Gruppen** Gruppen des Providers einer Rolle zu. Bei jeder Anmeldung folgen diese Rollen den Gruppen; in der Mitgliederliste tragen sie das Zeichen „SSO“. Mehr dazu: [SSO-Gruppen](help:concepts/oidc-group-mappings).
+
 ## Gut zu wissen
 
 - Rechte ändern, Mitglieder entfernen, Gruppen löschen und Einladen verlangen eine erneute Bestätigung (Passwort oder zweiter Faktor).

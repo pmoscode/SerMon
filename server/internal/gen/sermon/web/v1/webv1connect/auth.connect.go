@@ -56,6 +56,12 @@ const (
 	AuthServiceGetLoginOptionsProcedure = "/sermon.web.v1.AuthService/GetLoginOptions"
 	// AuthServiceBeginOidcProcedure is the fully-qualified name of the AuthService's BeginOidc RPC.
 	AuthServiceBeginOidcProcedure = "/sermon.web.v1.AuthService/BeginOidc"
+	// AuthServiceListOidcIdentitiesProcedure is the fully-qualified name of the AuthService's
+	// ListOidcIdentities RPC.
+	AuthServiceListOidcIdentitiesProcedure = "/sermon.web.v1.AuthService/ListOidcIdentities"
+	// AuthServiceUnlinkOidcIdentityProcedure is the fully-qualified name of the AuthService's
+	// UnlinkOidcIdentity RPC.
+	AuthServiceUnlinkOidcIdentityProcedure = "/sermon.web.v1.AuthService/UnlinkOidcIdentity"
 )
 
 // AuthServiceClient is a client for the sermon.web.v1.AuthService service.
@@ -94,6 +100,13 @@ type AuthServiceClient interface {
 	// (FAILED_PRECONDITION with StepUpRequired). FAILED_PRECONDITION without a configured provider,
 	// UNAVAILABLE while it can't be reached, RESOURCE_EXHAUSTED for too many attempts.
 	BeginOidc(context.Context, *connect.Request[v1.BeginOidcRequest]) (*connect.Response[v1.BeginOidcResponse], error)
+	// ListOidcIdentities lists the identities linked to the signed-in user (M3-22).
+	// UNAUTHENTICATED without a session.
+	ListOidcIdentities(context.Context, *connect.Request[v1.ListOidcIdentitiesRequest]) (*connect.Response[v1.ListOidcIdentitiesResponse], error)
+	// UnlinkOidcIdentity removes the user's identity of an issuer after a recent step-up
+	// (FAILED_PRECONDITION with StepUpRequired); FAILED_PRECONDITION without StepUpRequired if it is
+	// the only way to sign in, NOT_FOUND if none is linked.
+	UnlinkOidcIdentity(context.Context, *connect.Request[v1.UnlinkOidcIdentityRequest]) (*connect.Response[v1.UnlinkOidcIdentityResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the sermon.web.v1.AuthService service. By default,
@@ -163,6 +176,19 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("BeginOidc")),
 			connect.WithClientOptions(opts...),
 		),
+		listOidcIdentities: connect.NewClient[v1.ListOidcIdentitiesRequest, v1.ListOidcIdentitiesResponse](
+			httpClient,
+			baseURL+AuthServiceListOidcIdentitiesProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ListOidcIdentities")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
+		unlinkOidcIdentity: connect.NewClient[v1.UnlinkOidcIdentityRequest, v1.UnlinkOidcIdentityResponse](
+			httpClient,
+			baseURL+AuthServiceUnlinkOidcIdentityProcedure,
+			connect.WithSchema(authServiceMethods.ByName("UnlinkOidcIdentity")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -177,6 +203,8 @@ type authServiceClient struct {
 	confirmSecondFactor *connect.Client[v1.ConfirmSecondFactorRequest, v1.ConfirmSecondFactorResponse]
 	getLoginOptions     *connect.Client[v1.GetLoginOptionsRequest, v1.GetLoginOptionsResponse]
 	beginOidc           *connect.Client[v1.BeginOidcRequest, v1.BeginOidcResponse]
+	listOidcIdentities  *connect.Client[v1.ListOidcIdentitiesRequest, v1.ListOidcIdentitiesResponse]
+	unlinkOidcIdentity  *connect.Client[v1.UnlinkOidcIdentityRequest, v1.UnlinkOidcIdentityResponse]
 }
 
 // Login calls sermon.web.v1.AuthService.Login.
@@ -224,6 +252,16 @@ func (c *authServiceClient) BeginOidc(ctx context.Context, req *connect.Request[
 	return c.beginOidc.CallUnary(ctx, req)
 }
 
+// ListOidcIdentities calls sermon.web.v1.AuthService.ListOidcIdentities.
+func (c *authServiceClient) ListOidcIdentities(ctx context.Context, req *connect.Request[v1.ListOidcIdentitiesRequest]) (*connect.Response[v1.ListOidcIdentitiesResponse], error) {
+	return c.listOidcIdentities.CallUnary(ctx, req)
+}
+
+// UnlinkOidcIdentity calls sermon.web.v1.AuthService.UnlinkOidcIdentity.
+func (c *authServiceClient) UnlinkOidcIdentity(ctx context.Context, req *connect.Request[v1.UnlinkOidcIdentityRequest]) (*connect.Response[v1.UnlinkOidcIdentityResponse], error) {
+	return c.unlinkOidcIdentity.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the sermon.web.v1.AuthService service.
 type AuthServiceHandler interface {
 	// Login checks e-mail and password and sets the session cookie. All failures return
@@ -260,6 +298,13 @@ type AuthServiceHandler interface {
 	// (FAILED_PRECONDITION with StepUpRequired). FAILED_PRECONDITION without a configured provider,
 	// UNAVAILABLE while it can't be reached, RESOURCE_EXHAUSTED for too many attempts.
 	BeginOidc(context.Context, *connect.Request[v1.BeginOidcRequest]) (*connect.Response[v1.BeginOidcResponse], error)
+	// ListOidcIdentities lists the identities linked to the signed-in user (M3-22).
+	// UNAUTHENTICATED without a session.
+	ListOidcIdentities(context.Context, *connect.Request[v1.ListOidcIdentitiesRequest]) (*connect.Response[v1.ListOidcIdentitiesResponse], error)
+	// UnlinkOidcIdentity removes the user's identity of an issuer after a recent step-up
+	// (FAILED_PRECONDITION with StepUpRequired); FAILED_PRECONDITION without StepUpRequired if it is
+	// the only way to sign in, NOT_FOUND if none is linked.
+	UnlinkOidcIdentity(context.Context, *connect.Request[v1.UnlinkOidcIdentityRequest]) (*connect.Response[v1.UnlinkOidcIdentityResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -325,6 +370,19 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("BeginOidc")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceListOidcIdentitiesHandler := connect.NewUnaryHandler(
+		AuthServiceListOidcIdentitiesProcedure,
+		svc.ListOidcIdentities,
+		connect.WithSchema(authServiceMethods.ByName("ListOidcIdentities")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceUnlinkOidcIdentityHandler := connect.NewUnaryHandler(
+		AuthServiceUnlinkOidcIdentityProcedure,
+		svc.UnlinkOidcIdentity,
+		connect.WithSchema(authServiceMethods.ByName("UnlinkOidcIdentity")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -345,6 +403,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetLoginOptionsHandler.ServeHTTP(w, r)
 		case AuthServiceBeginOidcProcedure:
 			authServiceBeginOidcHandler.ServeHTTP(w, r)
+		case AuthServiceListOidcIdentitiesProcedure:
+			authServiceListOidcIdentitiesHandler.ServeHTTP(w, r)
+		case AuthServiceUnlinkOidcIdentityProcedure:
+			authServiceUnlinkOidcIdentityHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -388,4 +450,12 @@ func (UnimplementedAuthServiceHandler) GetLoginOptions(context.Context, *connect
 
 func (UnimplementedAuthServiceHandler) BeginOidc(context.Context, *connect.Request[v1.BeginOidcRequest]) (*connect.Response[v1.BeginOidcResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.BeginOidc is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ListOidcIdentities(context.Context, *connect.Request[v1.ListOidcIdentitiesRequest]) (*connect.Response[v1.ListOidcIdentitiesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.ListOidcIdentities is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) UnlinkOidcIdentity(context.Context, *connect.Request[v1.UnlinkOidcIdentityRequest]) (*connect.Response[v1.UnlinkOidcIdentityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AuthService.UnlinkOidcIdentity is not implemented"))
 }

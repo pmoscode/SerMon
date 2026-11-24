@@ -14,6 +14,10 @@ A role applies to one group or to all groups. Several roles add up.
 
 The **Logs** tab sets what each group's agents send, whether viewers see logs and which redaction rules of your own apply; it also shows which settings each agent applied. More: [log settings](help:concepts/log_settings).
 
+## SSO groups
+
+If the instance has an OIDC provider, the **SSO groups** tab maps groups of the provider to a role. At every sign-in these roles follow the groups; in the member list they carry the mark “SSO”. More: [SSO groups](help:concepts/oidc-group-mappings).
+
 ## Good to know
 
 - Changing rights, removing members, deleting groups and inviting need a fresh confirmation (password or second factor).

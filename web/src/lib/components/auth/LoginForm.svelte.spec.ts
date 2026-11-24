@@ -5,6 +5,7 @@ import { api, Code } from '#lib/api/client.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { m } from '#lib/paraglide/messages.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
+import { browser, ssoState } from '#lib/stores/sso.svelte.js';
 import { fakeSession, PASSPHRASE, rpcError } from '#lib/test/fakes.js';
 import LoginForm from './LoginForm.svelte';
 
@@ -18,6 +19,7 @@ describe('LoginForm', () => {
 	beforeEach(() => switchLocale('en'));
 	afterEach(() => {
 		vi.restoreAllMocks();
+		ssoState.reset();
 		sessionState.status = 'unknown';
 		sessionState.current = undefined;
 	});
@@ -108,5 +110,56 @@ describe('LoginForm', () => {
 
 		await expect.element(page.getByRole('alert')).toHaveTextContent(m.login_error_code_expired());
 		await expect.element(page.getByLabelText('Password')).toBeVisible();
+	});
+
+	// M3-22: the provider's button only with a provider; it starts the sign-in with the target.
+	it('signs in over the provider when the instance has one', async () => {
+		render(LoginForm, { onLoggedIn: vi.fn(), next: '/alerts?tab=rules' });
+		await expect.element(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+		expect(page.getByRole('button', { name: /Sign in with/ }).elements()).toHaveLength(0);
+
+		ssoState.enabled = true;
+		ssoState.name = 'Keycloak';
+		const begin = vi
+			.spyOn(api.auth, 'beginOidc')
+			.mockResolvedValueOnce({ authorizationUrl: 'https://id.example/auth' } as never)
+			.mockRejectedValueOnce(rpcError(Code.Unavailable));
+		const leave = vi.spyOn(browser, 'leave').mockImplementation(() => {});
+		await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
+		await vi.waitFor(() => expect(leave).toHaveBeenCalledWith('https://id.example/auth'));
+		expect(begin.mock.calls[0][0]).toEqual({ intent: 1, next: '/alerts?tab=rules' });
+	});
+
+	it('returns only to paths of the app', async () => {
+		ssoState.enabled = true;
+		ssoState.name = 'Keycloak';
+		const begin = vi
+			.spyOn(api.auth, 'beginOidc')
+			.mockResolvedValue({ authorizationUrl: 'https://id.example/auth' } as never);
+		vi.spyOn(browser, 'leave').mockImplementation(() => {});
+		render(LoginForm, { onLoggedIn: vi.fn(), next: '//evil.example/steal' });
+		await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
+		await vi.waitFor(() => expect(begin).toHaveBeenCalledWith({ intent: 1, next: '/fleet' }));
+	});
+
+	it('says so when the provider is down', async () => {
+		ssoState.enabled = true;
+		ssoState.name = 'Keycloak';
+		vi.spyOn(api.auth, 'beginOidc').mockRejectedValue(rpcError(Code.Unavailable));
+		render(LoginForm, { onLoggedIn: vi.fn() });
+		await page.getByRole('button', { name: 'Sign in with Keycloak' }).click();
+		await expect.element(page.getByText(/identity provider can't be reached/)).toBeVisible();
+	});
+
+	it('starts with the code after the provider for users with a second factor', async () => {
+		const verify = vi
+			.spyOn(api.auth, 'verifySecondFactor')
+			.mockResolvedValue({ session: fakeSession() } as never);
+		const onLoggedIn = vi.fn();
+		render(LoginForm, { onLoggedIn, initialStep: 'code' });
+		await page.getByLabelText('Code').fill('123456');
+		await page.getByRole('button', { name: /Confirm|Verify|Continue/ }).click();
+		await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledOnce());
+		expect(verify.mock.calls[0][0]).toEqual({ code: '123456' });
 	});
 });

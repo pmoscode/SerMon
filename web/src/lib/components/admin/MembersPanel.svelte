@@ -100,6 +100,12 @@
 					{#each member.bindings as binding (binding.id)}
 						<li class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
 							{roleName(binding.role)} · {groupName(binding.groupId)}
+							{#if binding.fromOidc}
+								<span
+									class="rounded bg-muted px-1 text-[0.65rem] uppercase"
+									title={m.admin_from_sso_hint()}>{m.admin_from_sso()}</span
+								>
+							{/if}
 							<button
 								type="button"
 								class="rounded-full p-0.5 hover:bg-muted"

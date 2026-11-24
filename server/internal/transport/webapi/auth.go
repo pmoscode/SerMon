@@ -35,6 +35,8 @@ const SessionCookie = "__Host-sermon_session"
 type IdentityReader interface {
 	Profile(ctx context.Context, user identity.UserID) (auth.Profile, bool, error)
 	Organizations(ctx context.Context, user identity.UserID) ([]auth.Organization, error)
+	// HasPassword tells whether the user signs in with a password (M3-22).
+	HasPassword(ctx context.Context, user identity.UserID) (bool, error)
 }
 
 // SecondFactorView tells the session view about the user's second factor (twofactor.Service).
@@ -329,6 +331,14 @@ func (h *AuthHandler) view(ctx context.Context, s session.Session) (*webv1.Sessi
 	}
 	if err := h.describeRights(ctx, s, view); err != nil {
 		return nil, err
+	}
+	if view.HasPassword, err = h.identities.HasPassword(ctx, s.User); err != nil {
+		return nil, fmt.Errorf("password: %w", err)
+	}
+	if h.oidc != nil {
+		if _, view.OidcLinked, err = h.oidc.SignInWays(ctx, s.User); err != nil {
+			return nil, fmt.Errorf("sign-in ways: %w", err)
+		}
 	}
 	if h.secondFactor != nil {
 		if view.SecondFactorEnabled, err = h.secondFactor.Enabled(ctx, s.User); err != nil {

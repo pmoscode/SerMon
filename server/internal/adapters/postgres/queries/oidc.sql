@@ -25,3 +25,13 @@ ON CONFLICT DO NOTHING;
 -- name: IdentitySeen :exec
 UPDATE user_identities SET last_login_at = sqlc.arg(at), email = coalesce(sqlc.narg(email), email)
 WHERE issuer = sqlc.arg(issuer) AND subject = sqlc.arg(subject);
+
+-- name: IdentitiesOfUser :many
+SELECT issuer, subject, coalesce(email, '')::text AS email, created_at, last_login_at
+FROM user_identities WHERE user_id = sqlc.arg(user_id) ORDER BY created_at, issuer;
+
+-- name: DeleteIdentity :one
+DELETE FROM user_identities WHERE user_id = sqlc.arg(user_id) AND issuer = sqlc.arg(issuer) RETURNING subject;
+
+-- name: HasPassword :one
+SELECT EXISTS (SELECT 1 FROM user_credentials WHERE user_id = sqlc.arg(user_id)) AS has_password;

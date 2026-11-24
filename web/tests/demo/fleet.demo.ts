@@ -112,11 +112,13 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	// Nodes belong to a group: the add-node wizard leads to the group management.
 	await page.getByRole('link', { name: 'Add node' }).click();
 	await page.getByRole('link', { name: 'Create a group' }).click();
-	await page.getByRole('tab', { name: 'Groups' }).click();
+	await page.getByRole('tab', { name: 'Groups', exact: true }).click();
 	await page.getByLabel('New group').fill('servers');
 	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	await expect(
-		page.getByRole('tabpanel', { name: 'Groups' }).getByText('servers', { exact: true })
+		page
+			.getByRole('tabpanel', { name: 'Groups', exact: true })
+			.getByText('servers', { exact: true })
 	).toBeVisible();
 
 	// One token for all hosts.

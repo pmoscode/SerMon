@@ -71,6 +71,7 @@
 			<Tabs.Trigger value="invitations">{m.admin_tab_invitations()}</Tabs.Trigger>
 			<Tabs.Trigger value="groups">{m.admin_tab_groups()}</Tabs.Trigger>
 			<Tabs.Trigger value="security">{m.admin_tab_security()}</Tabs.Trigger>
+			<Tabs.Trigger value="sso">{m.admin_tab_sso()}</Tabs.Trigger>
 			<Tabs.Trigger value="logs">{m.admin_tab_logs()}</Tabs.Trigger>
 			<Tabs.Trigger value="quotas">{m.admin_tab_quotas()}</Tabs.Trigger>
 			<Tabs.Trigger value="audit">{m.admin_tab_audit()}</Tabs.Trigger>
@@ -84,6 +85,16 @@
 		<Tabs.Content value="groups" class="pt-4"><GroupsPanel {groups} onChange={load} /></Tabs.Content
 		>
 		<Tabs.Content value="security" class="pt-4"><SecurityPolicyPanel /></Tabs.Content>
+		<!-- Loaded on demand like the log settings (budget). -->
+		<Tabs.Content value="sso" class="pt-4">
+			{#if tab === 'sso'}
+				{#await import('#lib/components/admin/OidcMappingsPanel.svelte')}
+					<p role="status" class="text-muted-foreground">{m.loading()}</p>
+				{:then { default: OidcMappingsPanel }}
+					<OidcMappingsPanel {groups} />
+				{/await}
+			{/if}
+		</Tabs.Content>
 		<!-- Loaded on demand: the log settings are not part of the page's first load (budget). -->
 		<Tabs.Content value="logs" class="pt-4">
 			{#if tab === 'logs'}

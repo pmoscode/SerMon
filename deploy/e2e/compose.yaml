@@ -31,9 +31,10 @@ services:
       SERMON_SMTP_CA_FILE: /run/secrets/mailpit_ca
       # Channels inside the network (M2-27): ntfy and the Slack mock have private addresses.
       SERMON_OUTBOUND_ALLOWLIST: ${SERMON_EDGE_SUBNET:-172.30.78.0/24}
-      # The Slack mock's certificate is the only root for outgoing HTTPS (Go reads SSL_CERT_FILE).
-      SSL_CERT_FILE: /run/secrets/slack_mock_ca
-    secrets: [mailpit_ca, slack_mock_ca]
+      # The certificates of the Slack mock and of Dex are the only roots for outgoing HTTPS (Go
+      # reads SSL_CERT_FILE).
+      SSL_CERT_FILE: /run/secrets/outbound_ca
+    secrets: [mailpit_ca, outbound_ca]
     volumes: ["../e2e/.build/downloads:/srv/downloads:ro"]
     ports: !reset []
     depends_on:
@@ -88,6 +89,21 @@ services:
     ports: ["127.0.0.1:${SERMON_E2E_SLACK_PORT:-18026}:8080"]
     networks:
       edge: { aliases: [hooks.slack.com] }
+
+  # Dex as the OIDC provider (M3-22): its mock connector signs in "Kilgore Trout" (group
+  # "authors") without a login page. The issuer is https://dex.test:18556/dex for the server (alias
+  # in the network) and the browser (Playwright maps dex.test to 127.0.0.1, same port).
+  dex:
+    image: ghcr.io/dexidp/dex:v2.46.1@sha256:65b72ca0f4b0bf6d4ada84ec21da8851782563404ac7b8f926923d27ceced9ab
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes: ["../e2e/.build/dex:/etc/dex:ro"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports: ["127.0.0.1:18556:18556"]
+    networks:
+      edge: { aliases: [dex.test] }
 
   # web-01 runs a real sshd (journald); web-02 attacks it with sshpass (M2-27).
   agent-debian-12:
@@ -148,4 +164,4 @@ secrets: # written by scripts/e2e-demo.sh into .build/, never committed
   smtp_password: { file: ../e2e/.build/secrets/smtp_password }
   oidc_client_secret: { file: ../e2e/.build/secrets/oidc_client_secret }
   mailpit_ca: { file: ../e2e/.build/mailpit/mailpit.crt }
-  slack_mock_ca: { file: ../e2e/.build/slack-mock/slack-mock.crt }
+  outbound_ca: { file: ../e2e/.build/outbound-ca.pem }

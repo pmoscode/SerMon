@@ -198,3 +198,12 @@ func (s *CredentialStore) Profile(ctx context.Context, user identity.UserID) (au
 	}
 	return auth.Profile{Email: row.Email, DisplayName: row.DisplayName}, true, nil
 }
+
+// HasPassword tells whether the user has a password (accounts from OIDC have none, M3-22).
+func (s *CredentialStore) HasPassword(ctx context.Context, user identity.UserID) (bool, error) {
+	ok, err := s.db.withoutTenant().HasPassword(ctx, uuid.UUID(user))
+	if err != nil {
+		return false, fmt.Errorf("has password: %w", err)
+	}
+	return ok, nil
+}

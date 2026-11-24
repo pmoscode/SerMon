@@ -83,9 +83,36 @@ func (f *flows) Take(_ context.Context, h string, now time.Time) (oidc.Flow, boo
 func (f *flows) DeleteExpired(context.Context, time.Time) error { return nil }
 
 type identities struct {
-	m      map[[2]string]identity.UserID
-	seen   int
-	linked []oidc.Identity
+	m         map[[2]string]identity.UserID
+	seen      int
+	linked    []oidc.Identity
+	passwords map[identity.UserID]bool
+	unlinked  []string
+}
+
+func (i *identities) OfUser(_ context.Context, u identity.UserID) ([]oidc.LinkedIdentity, error) {
+	var out []oidc.LinkedIdentity
+	for k, v := range i.m {
+		if v == u {
+			out = append(out, oidc.LinkedIdentity{Issuer: k[0], Subject: k[1]})
+		}
+	}
+	return out, nil
+}
+
+func (i *identities) Unlink(_ context.Context, u identity.UserID, iss string) error {
+	for k, v := range i.m {
+		if v == u && k[0] == iss {
+			delete(i.m, k)
+			i.unlinked = append(i.unlinked, iss)
+			return nil
+		}
+	}
+	return oidc.ErrNotLinked
+}
+
+func (i *identities) HasPassword(_ context.Context, u identity.UserID) (bool, error) {
+	return i.passwords[u], nil
 }
 
 func (i *identities) Find(_ context.Context, iss, sub string) (identity.UserID, bool, error) {
@@ -469,5 +496,56 @@ func TestLogin_ReconcilesAndProvisions(t *testing.T) {
 	e = withProvisioner(t, p, true)
 	if res, err := complete(t, e); err == nil || res.Token != "" {
 		t.Errorf("failed reconciliation: %+v, %v", res, err)
+	}
+}
+
+// M3-22: the identities of the session's user; unlinking needs a step-up and another way in.
+func TestUnlink_KeepsAWayToSignIn(t *testing.T) {
+	e := newEnv(t, oidc.MFAByClaim, nil)
+	ctx := context.Background()
+	if _, err := e.svc.Identities(ctx, "nope"); !errors.Is(err, oidc.ErrNotSignedIn) {
+		t.Errorf("without a session: %v", err)
+	}
+	token := signedIn(t, e, alice)
+	ids, err := e.svc.Identities(ctx, token)
+	if err != nil || len(ids) != 1 || ids[0].Issuer != issuer || ids[0].Subject != "alice-sub" {
+		t.Fatalf("Identities() = %+v, %v", ids, err)
+	}
+	if pw, linked, err := e.svc.SignInWays(ctx, alice); err != nil || pw || !linked {
+		t.Errorf("SignInWays() = %v, %v, %v", pw, linked, err)
+	}
+	// The identity is Alice's only way in.
+	if err := e.svc.Unlink(ctx, token, issuer); !errors.Is(err, oidc.ErrLastSignIn) {
+		t.Errorf("the last way in: %v", err)
+	}
+	if err := e.svc.Unlink(ctx, token, "https://other.example"); !errors.Is(err, oidc.ErrNotLinked) {
+		t.Errorf("another issuer without a password: %v", err)
+	}
+	e.ids.passwords = map[identity.UserID]bool{alice: true}
+	if err := e.svc.Unlink(ctx, token, "https://other.example"); !errors.Is(err, oidc.ErrNotLinked) {
+		t.Errorf("another issuer: %v", err)
+	}
+	*e.now = e.now.Add(20 * time.Minute)
+	if err := e.svc.Unlink(ctx, token, issuer); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("an old step-up: %v", err)
+	}
+	if _, err := e.sessions.StepUp(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Unlink(ctx, "nope", issuer); !errors.Is(err, oidc.ErrNotSignedIn) {
+		t.Errorf("without a session: %v", err)
+	}
+	if err := e.svc.Unlink(ctx, token, issuer); err != nil || len(e.ids.unlinked) != 1 {
+		t.Errorf("Unlink() = %v, %v", err, e.ids.unlinked)
+	}
+	// With two identities one may go without a password.
+	e.ids.passwords = nil
+	e.ids.m[[2]string{"https://a.example", "a"}] = alice
+	e.ids.m[[2]string{"https://b.example", "b"}] = alice
+	if err := e.svc.Unlink(ctx, token, "https://a.example"); err != nil {
+		t.Errorf("one of two: %v", err)
+	}
+	if pw, linked, _ := e.svc.SignInWays(ctx, bob); pw || linked {
+		t.Error("bob signs in somehow")
 	}
 }

@@ -22,6 +22,22 @@ func (q *Queries) DeleteExpiredOIDCFlows(ctx context.Context, now time.Time) err
 	return err
 }
 
+const deleteIdentity = `-- name: DeleteIdentity :one
+DELETE FROM user_identities WHERE user_id = $1 AND issuer = $2 RETURNING subject
+`
+
+type DeleteIdentityParams struct {
+	UserID uuid.UUID
+	Issuer string
+}
+
+func (q *Queries) DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (string, error) {
+	row := q.db.QueryRow(ctx, deleteIdentity, arg.UserID, arg.Issuer)
+	var subject string
+	err := row.Scan(&subject)
+	return subject, err
+}
+
 const findIdentity = `-- name: FindIdentity :one
 SELECT user_id FROM user_identities WHERE issuer = $1 AND subject = $2
 `
@@ -36,6 +52,56 @@ func (q *Queries) FindIdentity(ctx context.Context, arg FindIdentityParams) (uui
 	var user_id uuid.UUID
 	err := row.Scan(&user_id)
 	return user_id, err
+}
+
+const hasPassword = `-- name: HasPassword :one
+SELECT EXISTS (SELECT 1 FROM user_credentials WHERE user_id = $1) AS has_password
+`
+
+func (q *Queries) HasPassword(ctx context.Context, userID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPassword, userID)
+	var has_password bool
+	err := row.Scan(&has_password)
+	return has_password, err
+}
+
+const identitiesOfUser = `-- name: IdentitiesOfUser :many
+SELECT issuer, subject, coalesce(email, '')::text AS email, created_at, last_login_at
+FROM user_identities WHERE user_id = $1 ORDER BY created_at, issuer
+`
+
+type IdentitiesOfUserRow struct {
+	Issuer      string
+	Subject     string
+	Email       string
+	CreatedAt   time.Time
+	LastLoginAt *time.Time
+}
+
+func (q *Queries) IdentitiesOfUser(ctx context.Context, userID uuid.UUID) ([]IdentitiesOfUserRow, error) {
+	rows, err := q.db.Query(ctx, identitiesOfUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IdentitiesOfUserRow{}
+	for rows.Next() {
+		var i IdentitiesOfUserRow
+		if err := rows.Scan(
+			&i.Issuer,
+			&i.Subject,
+			&i.Email,
+			&i.CreatedAt,
+			&i.LastLoginAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const identitySeen = `-- name: IdentitySeen :exec

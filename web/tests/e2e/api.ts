@@ -19,7 +19,8 @@ export const session = {
 	organizations: [
 		{ id: '0193f5a0-0000-7000-8000-00000000000a', name: 'Alpha GmbH' },
 		{ id: '0193f5a0-0000-7000-8000-00000000000b', name: 'Beta AG' }
-	]
+	],
+	hasPassword: true
 };
 
 export async function mockApi(page: Page, handlers: Record<string, Handler>): Promise<string[]> {
@@ -42,6 +43,9 @@ export function installed(loggedIn: boolean): Record<string, Handler> {
 	return {
 		'SetupService/GetSetupStatus': () => ({ json: { setupRequired: false } }),
 		'AuthService/GetSession': () => (loggedIn ? { json: { session } } : unauthenticated),
+		// Without an OIDC provider (M3-22); tests with one replace it.
+		'AuthService/GetLoginOptions': () => ({ json: {} }),
+		'AuthService/ListOidcIdentities': () => ({ json: {} }),
 		'FleetService/GetFleetSummary': () => ({ json: {} })
 	};
 }

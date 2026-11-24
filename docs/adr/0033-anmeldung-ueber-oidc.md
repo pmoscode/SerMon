@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Datum: 2026-11-24
-- Bezug: KONZEPT.md §7 (D10); ADR 0007, ADR 0024; IMPLEMENTIERUNGSPLAN M3-20, M3-21; Threat Model T15, T84, T85, T86
+- Bezug: KONZEPT.md §7 (D10); ADR 0007, ADR 0024; IMPLEMENTIERUNGSPLAN M3-20, M3-21, M3-22; Threat Model T15, T84, T85, T86
 
 ## Kontext
 
@@ -65,6 +65,17 @@ Gewählt: **Option 2**, ein Provider pro Instanz (`SERMON_OIDC_*`, das Secret al
 - **Audit:** Zuordnungen im Audit-Log der Org (`oidc_mapping.create`/`delete`), Änderungen bei der Anmeldung als
   `role.grant`, `role.revoke`, `member.join` ohne Akteur mit `origin: oidc`, neue Konten im Audit-Log der Instanz
   (`oidc.user_provisioned`).
+
+### Oberfläche (M3-22)
+
+- Die Anmeldeseite zeigt den Knopf des Providers nur, wenn einer eingerichtet ist (`GetLoginOptions`). Fehler landen
+  ohne Details auf `/login?sso=failed`; mit lokalem zweiten Faktor folgt die Code-Eingabe (`?sso=second_factor`).
+- Die Session-Ansicht nennt `has_password` und `oidc_linked`. Der Step-up-Dialog bietet die Bestätigung beim Provider
+  an, wenn eine Identität verknüpft ist; Konten ohne Passwort und zweiten Faktor bestätigen nur dort. Nach der
+  Rückkehr wird die Aktion von Hand wiederholt (die Seite wird verlassen).
+- **Lösen** (`UnlinkOidcIdentity`) mit frischem Step-up, nur wenn ein anderer Weg bleibt (Passwort oder eine weitere
+  Identität), mit Eintrag im Audit-Log der Instanz.
+- E2E gegen Dex (Mock-Connector mit Gruppe) in der Produktions-Compose mit Overlay.
 
 ## Konsequenzen
 

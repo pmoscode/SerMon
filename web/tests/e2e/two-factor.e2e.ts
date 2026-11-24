@@ -23,7 +23,7 @@ test.describe('two-factor authentication (mocked API)', () => {
 		await page.goto('/login');
 		await page.getByLabel('Email address').fill('mia@example.org');
 		await page.getByLabel('Password').fill('correct horse battery');
-		await page.getByRole('button', { name: 'Sign in' }).click();
+		await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
 		await expect(page.getByLabel('Code')).toBeFocused();
 		const results = await new AxeBuilder({ page }).analyze();
@@ -69,7 +69,9 @@ test.describe('two-factor authentication (mocked API)', () => {
 			'AuthService/GetSession': () => ({
 				json: { session: { ...session, secondFactorSetupRequired: true } }
 			}),
-			'TwoFactorService/GetTwoFactorStatus': () => ({ json: { requiredByOrganization: true } })
+			'TwoFactorService/GetTwoFactorStatus': () => ({ json: { requiredByOrganization: true } }),
+			'AuthService/GetLoginOptions': () => ({ json: {} }),
+			'AuthService/ListOidcIdentities': () => ({ json: {} })
 		});
 		await page.goto('/fleet');
 
@@ -78,4 +80,41 @@ test.describe('two-factor authentication (mocked API)', () => {
 			'This organization requires two-factor authentication. The other pages are available once it is set up.'
 		);
 	});
+});
+
+// M3-22: the identities of the provider in the account security, unlinking with the step-up.
+test('lists the linked identity, says when one is taken and unlinks it', async ({ page }) => {
+	let linked = true;
+	await mockApi(page, {
+		...installed(true),
+		'AuthService/GetSession': () => ({ json: { session: { ...session, oidcLinked: linked } } }),
+		'AuthService/GetLoginOptions': () => ({ json: { oidc: true, oidcName: 'Keycloak' } }),
+		'TwoFactorService/GetTwoFactorStatus': () => ({ json: {} }),
+		'AuthService/ListOidcIdentities': () => ({
+			json: linked
+				? {
+						identities: [
+							{
+								issuer: 'https://id.example/realms/ops',
+								subject: 's1',
+								email: 'mia@id.example',
+								createTime: new Date().toISOString()
+							}
+						]
+					}
+				: {}
+		}),
+		'AuthService/UnlinkOidcIdentity': () => {
+			linked = false;
+			return { json: {} };
+		}
+	});
+	await page.goto('/settings/security?sso=taken');
+	await expect(page.getByText('mia@id.example')).toBeVisible();
+	await expect(page.getByText(/linked to another account already/)).toBeVisible();
+	const results = await new AxeBuilder({ page }).analyze();
+	expect(results.violations).toEqual([]);
+	await page.getByRole('button', { name: 'Unlink' }).click();
+	await page.getByRole('button', { name: 'Really unlink' }).click();
+	await expect(page.getByRole('button', { name: 'Link with Keycloak' })).toBeVisible();
 });

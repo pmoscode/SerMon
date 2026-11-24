@@ -46,7 +46,51 @@ service AuthService {
   // (FAILED_PRECONDITION with StepUpRequired). FAILED_PRECONDITION without a configured provider,
   // UNAVAILABLE while it can't be reached, RESOURCE_EXHAUSTED for too many attempts.
   rpc BeginOidc(BeginOidcRequest) returns (BeginOidcResponse);
+  // ListOidcIdentities lists the identities linked to the signed-in user (M3-22).
+  // UNAUTHENTICATED without a session.
+  rpc ListOidcIdentities(ListOidcIdentitiesRequest) returns (ListOidcIdentitiesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // UnlinkOidcIdentity removes the user's identity of an issuer after a recent step-up
+  // (FAILED_PRECONDITION with StepUpRequired); FAILED_PRECONDITION without StepUpRequired if it is
+  // the only way to sign in, NOT_FOUND if none is linked.
+  rpc UnlinkOidcIdentity(UnlinkOidcIdentityRequest) returns (UnlinkOidcIdentityResponse);
 }
+
+// OidcIdentity is an account at the provider linked to the user.
+message OidcIdentity {
+  // issuer is the provider's issuer URL.
+  string issuer = 1;
+  // subject is the account's ID at the provider.
+  string subject = 2;
+  // email the provider sent at the last sign-in.
+  string email = 3;
+  // create_time is when it was linked.
+  google.protobuf.Timestamp create_time = 4;
+  // last_login_time is the last sign-in with it; unset if never.
+  google.protobuf.Timestamp last_login_time = 5;
+}
+
+// ListOidcIdentitiesRequest has no fields.
+message ListOidcIdentitiesRequest {}
+
+// ListOidcIdentitiesResponse lists the identities.
+message ListOidcIdentitiesResponse {
+  // identities of the user.
+  repeated OidcIdentity identities = 1;
+}
+
+// UnlinkOidcIdentityRequest names the provider.
+message UnlinkOidcIdentityRequest {
+  // issuer of the identity.
+  string issuer = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 512
+  }];
+}
+
+// UnlinkOidcIdentityResponse is empty.
+message UnlinkOidcIdentityResponse {}
 
 // GetLoginOptionsRequest has no fields.
 message GetLoginOptionsRequest {}
@@ -231,6 +275,11 @@ message Session {
   // tag_group_ids are the groups where the caller may set the tags of nodes (admin, M2-29); the
   // single value "*" stands for all groups.
   repeated string tag_group_ids = 15;
+  // has_password is set if the user can sign in with a password (accounts created over OIDC
+  // have none: their step-up goes over the provider or the second factor, M3-22).
+  bool has_password = 16;
+  // oidc_linked is set if an identity of the OIDC provider is linked (step-up over it).
+  bool oidc_linked = 17;
 }
 
 // InstanceProblem is a check of the server's self-monitoring that is not OK.

@@ -59,6 +59,10 @@ var (
 	// ErrIdentityTaken means the identity belongs to another user, or the user has one of the
 	// provider already.
 	ErrIdentityTaken = errors.New("the identity is linked already")
+	// ErrLastSignIn means unlinking would leave the user no way to sign in.
+	ErrLastSignIn = errors.New("set a password first: this is your only way to sign in")
+	// ErrNotLinked means the user has no identity of the issuer.
+	ErrNotLinked = errors.New("no identity of this provider is linked")
 )
 
 // Claims are the verified claims of an ID token.
@@ -119,6 +123,20 @@ type IdentityStore interface {
 	Link(ctx context.Context, id Identity) error
 	// Seen records a login with the identity.
 	Seen(ctx context.Context, issuer, subject, email string, at time.Time) error
+	// OfUser lists the identities of a user (M3-22).
+	OfUser(ctx context.Context, user identity.UserID) ([]LinkedIdentity, error)
+	// Unlink removes the user's identity of the issuer with an entry in the instance audit log;
+	// ErrNotLinked without one.
+	Unlink(ctx context.Context, user identity.UserID, issuer string) error
+	// HasPassword tells whether the user can sign in with a password.
+	HasPassword(ctx context.Context, user identity.UserID) (bool, error)
+}
+
+// LinkedIdentity is an identity as the user sees it.
+type LinkedIdentity struct {
+	Issuer, Subject, Email string
+	CreatedAt              time.Time
+	LastLoginAt            time.Time // zero: never used to sign in
 }
 
 // Users answers what a login needs to know of a user.
@@ -444,4 +462,60 @@ func (s *Service) stepUp(ctx context.Context, f Flow, c Claims, sessionToken str
 		return Result{}, fmt.Errorf("oidc step-up: %w", err)
 	}
 	return Result{Intent: IntentStepUp, Session: sess, Next: f.Next}, nil
+}
+
+// SignInWays tells the session view how the user signs in: with a password, with an identity of
+// the provider (M3-22).
+func (s *Service) SignInWays(ctx context.Context, user identity.UserID) (password, linked bool, err error) {
+	if password, err = s.d.Identities.HasPassword(ctx, user); err != nil {
+		return false, false, fmt.Errorf("sign-in ways: %w", err)
+	}
+	ids, err := s.d.Identities.OfUser(ctx, user)
+	if err != nil {
+		return false, false, fmt.Errorf("sign-in ways: %w", err)
+	}
+	return password, len(ids) > 0, nil
+}
+
+// Identities lists the identities of the session's user.
+func (s *Service) Identities(ctx context.Context, sessionToken string) ([]LinkedIdentity, error) {
+	current, err := s.d.Sessions.Validate(ctx, sessionToken)
+	if err != nil {
+		return nil, ErrNotSignedIn
+	}
+	ids, err := s.d.Identities.OfUser(ctx, current.User)
+	if err != nil {
+		return nil, fmt.Errorf("identities: %w", err)
+	}
+	return ids, nil
+}
+
+// Unlink removes an identity of the session's user after a recent step-up, as long as another
+// way to sign in remains (a password or another identity).
+func (s *Service) Unlink(ctx context.Context, sessionToken, issuer string) error {
+	current, err := s.d.Sessions.Validate(ctx, sessionToken)
+	if err != nil {
+		return ErrNotSignedIn
+	}
+	if !current.SteppedUpWithin(access.StepUpMaxAge, s.d.Now()) {
+		return access.ErrStepUpRequired
+	}
+	ids, err := s.d.Identities.OfUser(ctx, current.User)
+	if err != nil {
+		return fmt.Errorf("unlink: %w", err)
+	}
+	if !slices.ContainsFunc(ids, func(i LinkedIdentity) bool { return i.Issuer == issuer }) {
+		return ErrNotLinked
+	}
+	password, err := s.d.Identities.HasPassword(ctx, current.User)
+	if err != nil {
+		return fmt.Errorf("unlink: %w", err)
+	}
+	if !password && len(ids) < 2 {
+		return ErrLastSignIn
+	}
+	if err := s.d.Identities.Unlink(ctx, current.User, issuer); err != nil {
+		return fmt.Errorf("unlink: %w", err)
+	}
+	return nil
 }

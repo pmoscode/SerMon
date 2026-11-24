@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
@@ -131,11 +132,63 @@ func (h *AuthHandler) OIDCCallback() http.Handler {
 		if res.Intent == oidc.IntentLogin {
 			if res.Pending {
 				http.SetCookie(w, sessionCookie(res.Token, session.PendingTimeout))
-				next = oidcSecondFactor + "&next=" + url.QueryEscape(res.Next)
+				next = oidcSecondFactor + "&redirect=" + url.QueryEscape(res.Next)
 			} else {
 				http.SetCookie(w, sessionCookie(res.Token, session.AbsoluteTimeout))
 			}
 		}
 		http.Redirect(w, r, next, http.StatusSeeOther)
 	})
+}
+
+// ListOidcIdentities lists the identities of the signed-in user (M3-22).
+func (h *AuthHandler) ListOidcIdentities(ctx context.Context, req *connect.Request[webv1.ListOidcIdentitiesRequest]) (*connect.Response[webv1.ListOidcIdentitiesResponse], error) {
+	res := &webv1.ListOidcIdentitiesResponse{}
+	token, ok := tokenFrom(req.Header())
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	}
+	if h.oidc == nil {
+		if _, err := h.sessions.Validate(ctx, token); err != nil {
+			return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+		}
+		return connect.NewResponse(res), nil
+	}
+	ids, err := h.oidc.Identities(ctx, token)
+	if errors.Is(err, oidc.ErrNotSignedIn) {
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	}
+	if err != nil {
+		return nil, h.internal(ctx, "list oidc identities", err)
+	}
+	for _, i := range ids {
+		v := &webv1.OidcIdentity{Issuer: i.Issuer, Subject: i.Subject, Email: i.Email, CreateTime: timestamppb.New(i.CreatedAt)}
+		if !i.LastLoginAt.IsZero() {
+			v.LastLoginTime = timestamppb.New(i.LastLoginAt)
+		}
+		res.Identities = append(res.Identities, v)
+	}
+	return connect.NewResponse(res), nil
+}
+
+// UnlinkOidcIdentity removes an identity of the signed-in user (M3-22).
+func (h *AuthHandler) UnlinkOidcIdentity(ctx context.Context, req *connect.Request[webv1.UnlinkOidcIdentityRequest]) (*connect.Response[webv1.UnlinkOidcIdentityResponse], error) {
+	token, _ := tokenFrom(req.Header())
+	if h.oidc == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no OIDC provider is configured"))
+	}
+	err := h.oidc.Unlink(ctx, token, req.Msg.GetIssuer())
+	switch {
+	case errors.Is(err, oidc.ErrNotSignedIn):
+		return nil, connect.NewError(connect.CodeUnauthenticated, session.ErrInvalid)
+	case errors.Is(err, access.ErrStepUpRequired):
+		return nil, stepUpRequired()
+	case errors.Is(err, oidc.ErrLastSignIn):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, oidc.ErrLastSignIn)
+	case errors.Is(err, oidc.ErrNotLinked):
+		return nil, connect.NewError(connect.CodeNotFound, oidc.ErrNotLinked)
+	case err != nil:
+		return nil, h.internal(ctx, "unlink oidc identity", err)
+	}
+	return connect.NewResponse(&webv1.UnlinkOidcIdentityResponse{}), nil
 }

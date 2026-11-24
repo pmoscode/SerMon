@@ -28,6 +28,16 @@ export default defineConfig({
 			testMatch: 'alerts.demo.ts',
 			dependencies: ['install'],
 			use: { ...devices['Desktop Chrome'] }
+		},
+		// Dex (M3-22) answers as dex.test on 127.0.0.1:18556, the issuer the server knows too.
+		{
+			name: 'sso',
+			testMatch: 'sso.demo.ts',
+			dependencies: ['install'],
+			use: {
+				...devices['Desktop Chrome'],
+				launchOptions: { args: ['--host-resolver-rules=MAP dex.test 127.0.0.1'] }
+			}
 		}
 	]
 });

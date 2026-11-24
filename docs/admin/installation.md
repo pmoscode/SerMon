@@ -133,12 +133,13 @@ und das Client-Secret ohne Zeilenumbruch nach `secrets/oidc_client_secret`. Der 
 denselben abgesicherten Client wie die Benachrichtigungskanäle an: Liegt er im internen Netz, braucht seine Adresse
 einen Eintrag in `SERMON_OUTBOUND_ALLOWLIST`.
 
-- Angemeldet wird über die Identität beim Provider (Issuer und Subject), nie über die E-Mail. Ein User verknüpft sie in
-  den Einstellungen „Sicherheit“, angemeldet und nach erneuter Bestätigung.
+- Angemeldet wird über die Identität beim Provider (Issuer und Subject), nie über die E-Mail. Ein User verknüpft sie
+  unter „Kontosicherheit“, angemeldet und nach erneuter Bestätigung, und löst sie dort wieder, solange ihm ein Passwort
+  bleibt. Die Anmeldeseite zeigt den Knopf „Mit <SERMON_OIDC_NAME> anmelden“.
 - **2FA-Pflicht einer Organisation:** `SERMON_OIDC_MFA=amr` (Standard) erkennt einen zweiten Faktor am Claim `amr`
   des ID-Tokens. Viele Provider setzen ihn nicht; erzwingt Ihr Provider selbst einen zweiten Faktor, setzen Sie
   `trusted`. Mit `never` gilt immer der zweite Faktor von SerMon.
-- **Gruppen:** Die Admins einer Organisation ordnen Gruppen des Providers Rollen zu (Einstellungen → SSO-Gruppen). Dafür
+- **Gruppen:** Die Admins einer Organisation ordnen Gruppen des Providers Rollen zu (Seite „Organisation“, Reiter „SSO-Gruppen“). Dafür
   muss das ID-Token den Claim `groups` tragen: `SERMON_OIDC_SCOPES=email profile groups` (bei manchen Providern heißt
   der Scope anders oder es braucht einen Mapper). Bei jeder Anmeldung folgen die Rollen aus Zuordnungen den Gruppen;
   von Hand vergebene Rollen bleiben.

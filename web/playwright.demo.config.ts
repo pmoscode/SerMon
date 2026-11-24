@@ -39,11 +39,18 @@ export default defineConfig({
 				launchOptions: { args: ['--host-resolver-rules=MAP dex.test 127.0.0.1'] }
 			}
 		},
+		// The M3 demo (M3-26): troubleshooting without SSH, after the attack of the alerts.
+		{
+			name: 'troubleshoot',
+			testMatch: 'troubleshoot.demo.ts',
+			dependencies: ['alerts'],
+			use: { ...devices['Desktop Chrome'] }
+		},
 		// Passkeys (M3-24) last: with one the admin's password sign-in would need it as second factor.
 		{
 			name: 'passkeys',
 			testMatch: 'passkeys.demo.ts',
-			dependencies: ['alerts', 'sso'],
+			dependencies: ['alerts', 'sso', 'troubleshoot'],
 			use: { ...devices['Desktop Chrome'] }
 		}
 	]

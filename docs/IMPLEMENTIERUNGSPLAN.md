@@ -3411,7 +3411,26 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M3-16
 - **Skill:** `sermon-ui-component`
 
-#### ☐ M3-18 – GeoIP (optional) · S · S
+#### ☑ M3-18 – GeoIP (optional) · S · S
+> Erledigt (KONZEPT §11, §16.4; Threat Model T46; Betrieb: `docs/admin/installation.md`):
+> - **Abhängigkeit:** `oschwald/maxminddb-golang/v2` 2.9.1, geprüft: ISC-Lizenz (mit AGPL vereinbar), gepflegt vom
+>   Maintainer der MaxMind-Reader, zur Laufzeit nur `x/sys`, eigene Fuzz-Tests. Einen Schreiber braucht es nicht: Die
+>   Tests bauen ihre Datenbank mit einem kleinen eigenen Schreiber nach der MMDB-Spezifikation.
+> - **`adapters/geoip`:** öffnet die Datei des Betreibers (`SERMON_GEOIP_DB_FILE`, Typ mit Ländern, sonst Fehler beim
+>   Start), liefert den ISO-Code (`country`, sonst `registered_country`), nur für öffentliche Adressen (nicht privat,
+>   Loopback, Link-local, CGNAT). Der Lizenzhinweis ergibt sich aus dem Typ (DB-IP, GeoLite2) oder der Beschreibung;
+>   `SERMON_GEOIP_ATTRIBUTION` ersetzt ihn. Beim Start loggt der Server Typ und Alter, ab 90 Tagen mit Warnung.
+> - **API:** `country` an `SecurityEvent` und den Top-IPs, `geoip_notice` in der Übersicht, Spalte `country` im
+>   CSV-Export.
+> - **UI:** Ländercode mit Namen (Tooltip und für Screenreader) bei den Top-IPs und in der Spalte „Quelle“; der Hinweis
+>   unter den Top-Listen.
+> - **Compose:** optionales Verzeichnis `./geoip`, Variablen in `env.example`.
+> - **Tests:**
+>   - Lookups mit einer erzeugten MMDB (IPv4, IPv4-mapped, IPv6, Grenzen der Netze, private und CGNAT-Netze in der
+>     Datei, ungültiger Code, nur `registered_country`); Hinweise; Dateien ohne Länder und kaputte Dateien.
+>   - Konfiguration: leer heißt aus, fehlende Datei, Verzeichnis, Hinweis ohne Datei, zu langer Hinweis.
+>   - Dienst und echter Stack: Länder der Top-IPs, eines Events und im Export.
+>   - Gegenproben für 14 Prüfungen, alle erkannt.
 - **Ziel:**
   - **Datenbank:** lokal im MMDB-Format, bereitgestellt vom Betreiber (`SERMON_GEOIP_DB_FILE`, z. B. DB-IP Lite
     unter CC BY 4.0). Der Server lädt nichts herunter (D27, T46).

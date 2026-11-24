@@ -701,8 +701,11 @@ gefuzzt** (`cargo-fuzz`).
   und root als Absender; sudo bleibt dort unverifiziert (setuid, reale UID des Users). Ein Alert mit einem solchen Event
   trägt `source: unverified`; UI und Kanäle sagen es.
 
-**Anreicherung im Server (optional):** GeoIP (Land/ASN) über eine **lokale** MaxMind-GeoLite2-Datenbank, ohne externe
-Abfragen. Für „Login von neuer IP“ dienen die bekannten Quellen pro Node und User (M3-16, oben).
+**Anreicherung im Server (optional, M3-18):** das Land einer Adresse aus einer **lokalen** Datenbank im MaxMind-DB-Format,
+die der Betreiber bereitstellt (`SERMON_GEOIP_DB_FILE`, z. B. DB-IP Lite unter CC BY 4.0 oder GeoLite2 Country). Der
+Server lädt nichts herunter (D27) und fragt keinen Dienst. Private, Loopback-, Link-local- und CGNAT-Adressen haben kein
+Land. Das Dashboard zeigt den Lizenzhinweis der Daten, der Export eine Spalte `country`; ASN gibt es nicht. Für „Login
+von neuer IP“ dienen die bekannten Quellen pro Node und User (M3-16, oben).
 
 ---
 
@@ -1113,7 +1116,7 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
     - Umgesetzt mit M3-17 unter `/security` (Menüpunkt „Security“; die eigene Kontosicherheit steht seitdem im
       Kontomenü) und als Reiter „Security“ der Node-Seite. Der Filter steht in der URL; Summen, Top-Listen und Chart
       filtern die Tabelle mit einem Klick. Jede Zeile führt in die Logs ±15 min; „neu“ und „unverifiziert“ sind mit
-      Symbol und Text markiert. Länder und Weltkarte kommen mit GeoIP (M3-18).
+      Symbol und Text markiert. Mit GeoIP (M3-18) stehen die Länder bei den Top-IPs und in der Tabelle; eine Weltkarte gibt es nicht.
 5. **Updates/Patch-Compliance:** Nodes nach Status (aktuell / Updates / Security-Updates / Reboot nötig), Alter offener
    Security-Updates, nächste Wartungsfenster, Laufhistorie.
 6. **Kapazitätsplanung:** Füllprognosen aller Dateisysteme (sortiert nach „Tage bis voll“), RAM/CPU-Trends über 30 Tage,

@@ -7,6 +7,7 @@
 	import { localeState } from '#lib/i18n/locale.svelte.js';
 	import { displayText } from '#lib/logs/text.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { countryName } from '#lib/security/labels.js';
 
 	/**
 	 * The addresses or user names with the most failed logins. Values come from the hosts' logs
@@ -55,6 +56,14 @@
 							aria-label={pickLabel(shown(item.value))}
 							onclick={() => onPick(item.value)}>{shown(item.value)}</button
 						>
+						{#if item.country}
+							<span
+								class="shrink-0 text-xs text-muted-foreground"
+								title={countryName(item.country, locale)}
+								>{item.country}<span class="sr-only">: {countryName(item.country, locale)}</span
+								></span
+							>
+						{/if}
 						{#if item.unverified > 0n}
 							<span
 								class="inline-flex shrink-0 items-center gap-0.5 text-xs text-amber-700 dark:text-amber-400"

@@ -226,7 +226,10 @@ type SecurityEvent struct {
 	Unverified bool `protobuf:"varint,11,opt,name=unverified,proto3" json:"unverified,omitempty"`
 	// new_source is set on a successful login of the user from an address (or host name) for the
 	// first time on the node (M3-16).
-	NewSource     bool `protobuf:"varint,12,opt,name=new_source,json=newSource,proto3" json:"new_source,omitempty"`
+	NewSource bool `protobuf:"varint,12,opt,name=new_source,json=newSource,proto3" json:"new_source,omitempty"`
+	// country is the ISO 3166-1 alpha-2 code of remote_ip from the operator's GeoIP database
+	// (M3-18); empty without one, for private addresses and unknown ones.
+	Country       string `protobuf:"bytes,13,opt,name=country,proto3" json:"country,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -343,6 +346,13 @@ func (x *SecurityEvent) GetNewSource() bool {
 		return x.NewSource
 	}
 	return false
+}
+
+func (x *SecurityEvent) GetCountry() string {
+	if x != nil {
+		return x.Country
+	}
+	return ""
 }
 
 // SecurityEventDetails are the fields of particular event kinds; unset fields are empty.
@@ -696,7 +706,10 @@ type GetSecurityOverviewResponse struct {
 	// what an attacker tried.
 	TopUsers []*SecurityEventCount `protobuf:"bytes,4,rep,name=top_users,json=topUsers,proto3" json:"top_users,omitempty"`
 	// totals count the events of the range.
-	Totals        *SecurityEventTotals `protobuf:"bytes,5,opt,name=totals,proto3" json:"totals,omitempty"`
+	Totals *SecurityEventTotals `protobuf:"bytes,5,opt,name=totals,proto3" json:"totals,omitempty"`
+	// geoip_notice is the licence notice of the countries (show it with them); empty without
+	// GeoIP.
+	GeoipNotice   string `protobuf:"bytes,6,opt,name=geoip_notice,json=geoipNotice,proto3" json:"geoip_notice,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -764,6 +777,13 @@ func (x *GetSecurityOverviewResponse) GetTotals() *SecurityEventTotals {
 		return x.Totals
 	}
 	return nil
+}
+
+func (x *GetSecurityOverviewResponse) GetGeoipNotice() string {
+	if x != nil {
+		return x.GeoipNotice
+	}
+	return ""
 }
 
 // NodeEventSeries are the counts of one node over time.
@@ -889,7 +909,9 @@ type SecurityEventCount struct {
 	// last_at is the time of the latest one.
 	LastAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`
 	// unverified counts those from classic log files (ADR 0025).
-	Unverified    uint64 `protobuf:"varint,5,opt,name=unverified,proto3" json:"unverified,omitempty"`
+	Unverified uint64 `protobuf:"varint,5,opt,name=unverified,proto3" json:"unverified,omitempty"`
+	// country is the ISO 3166-1 alpha-2 code of an address (top_ips), empty without GeoIP.
+	Country       string `protobuf:"bytes,6,opt,name=country,proto3" json:"country,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -957,6 +979,13 @@ func (x *SecurityEventCount) GetUnverified() uint64 {
 		return x.Unverified
 	}
 	return 0
+}
+
+func (x *SecurityEventCount) GetCountry() string {
+	if x != nil {
+		return x.Country
+	}
+	return ""
 }
 
 // SecurityEventTotals are counts of a time range.
@@ -1180,7 +1209,7 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\x05_user\"z\n" +
 	"\x1aListSecurityEventsResponse\x124\n" +
 	"\x06events\x18\x01 \x03(\v2\x1c.sermon.web.v1.SecurityEventR\x06events\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xb7\x03\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xd1\x03\n" +
 	"\rSecurityEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12;\n" +
@@ -1201,7 +1230,8 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"unverified\x18\v \x01(\bR\n" +
 	"unverified\x12\x1d\n" +
 	"\n" +
-	"new_source\x18\f \x01(\bR\tnewSource\"\xe2\x03\n" +
+	"new_source\x18\f \x01(\bR\tnewSource\x12\x18\n" +
+	"\acountry\x18\r \x01(\tR\acountry\"\xe2\x03\n" +
 	"\x14SecurityEventDetails\x12\x16\n" +
 	"\x06method\x18\x01 \x01(\tR\x06method\x12!\n" +
 	"\finvalid_user\x18\x02 \x01(\bR\vinvalidUser\x12\x19\n" +
@@ -1233,19 +1263,20 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\x1aGetSecurityOverviewRequest\x126\n" +
 	"\x04from\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x04from\x122\n" +
 	"\x02to\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\x02to\x12,\n" +
-	"\bnode_ids\x18\x03 \x03(\tB\x11\xbaH\x0e\x92\x01\v\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\"\xc9\x02\n" +
+	"\bnode_ids\x18\x03 \x03(\tB\x11\xbaH\x0e\x92\x01\v\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\"\xec\x02\n" +
 	"\x1bGetSecurityOverviewResponse\x12-\n" +
 	"\x04step\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x04step\x12C\n" +
 	"\rfailed_logins\x18\x02 \x03(\v2\x1e.sermon.web.v1.NodeEventSeriesR\ffailedLogins\x12:\n" +
 	"\atop_ips\x18\x03 \x03(\v2!.sermon.web.v1.SecurityEventCountR\x06topIps\x12>\n" +
 	"\ttop_users\x18\x04 \x03(\v2!.sermon.web.v1.SecurityEventCountR\btopUsers\x12:\n" +
-	"\x06totals\x18\x05 \x01(\v2\".sermon.web.v1.SecurityEventTotalsR\x06totals\"b\n" +
+	"\x06totals\x18\x05 \x01(\v2\".sermon.web.v1.SecurityEventTotalsR\x06totals\x12!\n" +
+	"\fgeoip_notice\x18\x06 \x01(\tR\vgeoipNotice\"b\n" +
 	"\x0fNodeEventSeries\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x126\n" +
 	"\x06points\x18\x02 \x03(\v2\x1e.sermon.web.v1.EventCountPointR\x06points\"S\n" +
 	"\x0fEventCountPoint\x12*\n" +
 	"\x02at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xab\x01\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xc5\x01\n" +
 	"\x12SecurityEventCount\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x14\n" +
@@ -1253,7 +1284,8 @@ const file_sermon_web_v1_security_event_proto_rawDesc = "" +
 	"\alast_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x06lastAt\x12\x1e\n" +
 	"\n" +
 	"unverified\x18\x05 \x01(\x04R\n" +
-	"unverified\"\xc4\x01\n" +
+	"unverified\x12\x18\n" +
+	"\acountry\x18\x06 \x01(\tR\acountry\"\xc4\x01\n" +
 	"\x13SecurityEventTotals\x12#\n" +
 	"\rfailed_logins\x18\x01 \x01(\x04R\ffailedLogins\x12\x16\n" +
 	"\x06logins\x18\x02 \x01(\x04R\x06logins\x12*\n" +

@@ -57,7 +57,12 @@ func TestWriteCSV_HasAHeaderAndOneRowPerEvent(t *testing.T) {
 		{Node: node, OccurredAt: t0, ReceivedAt: t0, Kind: secevent.SudoCommand, User: "carol", Details: secevent.Details{Command: "-rf /"}},
 	}
 	var buf bytes.Buffer
-	rows, truncated, err := secevents.WriteCSV(&buf, events, map[identity.NodeID]string{node: "@web-01"}, 1<<20)
+	rows, truncated, err := secevents.WriteCSV(&buf, events, map[identity.NodeID]string{node: "@web-01"}, func(ip netip.Addr) string {
+		if ip == netip.MustParseAddr("192.0.2.7") {
+			return "SE"
+		}
+		return ""
+	}, 1<<20)
 	if err != nil || rows != 3 || truncated {
 		t.Fatalf("WriteCSV() = %d, %v, %v", rows, truncated, err)
 	}
@@ -67,13 +72,13 @@ func TestWriteCSV_HasAHeaderAndOneRowPerEvent(t *testing.T) {
 	records := readCSV(t, buf.Bytes())
 	header := strings.Join(records[0], ",")
 	if header != "occurred_at,received_at,node_id,hostname,kind,user,remote_ip,remote_host,remote_port,method,invalid_user,"+
-		"key_type,key_fingerprint,tty,target,command,uid,pid,process,unverified,new_source" {
+		"key_type,key_fingerprint,tty,target,command,uid,pid,process,unverified,new_source,country" {
 		t.Errorf("header = %s", header)
 	}
 	login := records[1]
 	want := []string{
 		"2026-11-20T12:00:00Z", "2026-11-20T12:00:01Z", node.String(), "'@web-01", "ssh.login.success", "'=cmd|' /C calc'!A0",
-		"192.0.2.7", "", "50022", "publickey", "false", "ED25519", "SHA256:abc", "", "", "", "", "", "", "false", "true",
+		"192.0.2.7", "", "50022", "publickey", "false", "ED25519", "SHA256:abc", "", "", "", "", "", "", "false", "true", "SE",
 	}
 	if strings.Join(login, "|") != strings.Join(want, "|") {
 		t.Errorf("login row =\n%q\nwant\n%q", login, want)
@@ -92,7 +97,7 @@ func TestWriteCSV_StopsAtTheSizeLimit(t *testing.T) {
 		events[i] = secevent.Event{Node: node, OccurredAt: t0, ReceivedAt: t0, Kind: secevent.SSHLoginFailed, User: strings.Repeat("u", 100)}
 	}
 	var buf bytes.Buffer
-	rows, truncated, err := secevents.WriteCSV(&buf, events, nil, 2000)
+	rows, truncated, err := secevents.WriteCSV(&buf, events, nil, nil, 2000)
 	if err != nil || !truncated || rows == 0 || rows >= 50 {
 		t.Fatalf("WriteCSV() = %d rows, truncated %v, %v", rows, truncated, err)
 	}

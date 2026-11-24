@@ -74,6 +74,8 @@ type Count struct {
 	Nodes      int
 	Last       time.Time
 	Unverified int64
+	// Country is the ISO code of an address (M3-18), empty without GeoIP.
+	Country string
 }
 
 // Totals count the events of a range.
@@ -88,6 +90,16 @@ type Overview struct {
 	FailedLogins     []NodeSeries
 	TopIPs, TopUsers []Count
 	Totals           Totals
+	// GeoNotice is the licence notice of the countries; empty without GeoIP.
+	GeoNotice string
+}
+
+// Geo knows the countries of public addresses (M3-18, a local database of the operator).
+type Geo interface {
+	// Country returns the ISO 3166-1 alpha-2 code, empty if unknown or not public.
+	Country(ip netip.Addr) string
+	// Notice is the attribution the licence of the data asks for.
+	Notice() string
 }
 
 // Store reads events within a scope (only nodes of the scope's groups).

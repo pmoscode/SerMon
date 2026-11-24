@@ -19,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/geoip"
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
 	"github.com/pmoscode/SerMon/server/internal/adapters/smtp"
 
@@ -442,6 +443,24 @@ type alertingServices struct {
 	rules    *rules.Service
 }
 
+// geoIPStale is the age of a country database the operator is reminded to update at.
+const geoIPStale = 90 * 24 * time.Hour
+
+// openGeoIP opens the operator's country database (M3-18); nothing is downloaded (D27).
+func openGeoIP(ctx context.Context, cfg config.Config, logger *slog.Logger) (*geoip.DB, error) {
+	db, err := geoip.Open(cfg.GeoIPDBFile, cfg.GeoIPAttribution)
+	if err != nil {
+		return nil, fmt.Errorf("SERMON_GEOIP_DB_FILE: %w", err)
+	}
+	built := db.BuildTime()
+	logger.InfoContext(ctx, "countries of addresses from a local GeoIP database", "type", db.Type(), "built", built.Format(time.DateOnly))
+	if time.Since(built) > geoIPStale {
+		logger.WarnContext(ctx, "the GeoIP database is older than 90 days – countries may be wrong; replace the file (SERMON_GEOIP_DB_FILE) with a current one",
+			"built", built.Format(time.DateOnly))
+	}
+	return db, nil
+}
+
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
 	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
 	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, observing observingServices,
@@ -461,6 +480,14 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	credentials := postgres.NewCredentialStore(db)
 	sessions := session.NewManager(postgres.NewSessionStore(db), time.Now)
 	policy := authz.NewPolicy()
+	securityEvents := secevents.NewService(postgres.NewSecurityEventStore(db), policy)
+	if cfg.GeoIPDBFile != "" {
+		countries, err := openGeoIP(ctx, cfg, logger)
+		if err != nil {
+			return err
+		}
+		securityEvents.SetGeo(countries)
+	}
 	secondFactor := twofactor.NewService(postgres.NewTwoFactorStore(db), cfg.MasterKeys, policy, time.Now)
 	login := auth.NewService(auth.Deps{
 		Credentials:  credentials,
@@ -504,10 +531,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		AgentCA: webapi.NewAgentCAHandler(ca, logger),
 		InstanceAudit: webapi.NewInstanceAuditHandler(
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(db), policy), logger),
-		Metrics: metricsHandler,
-		Fleet:   webapi.NewFleetHandler(nodes, logger),
-		SecurityEvents: webapi.NewSecurityEventHandler(
-			secevents.NewService(postgres.NewSecurityEventStore(db), policy), logger),
+		Metrics:        metricsHandler,
+		Fleet:          webapi.NewFleetHandler(nodes, logger),
+		SecurityEvents: webapi.NewSecurityEventHandler(securityEvents, logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

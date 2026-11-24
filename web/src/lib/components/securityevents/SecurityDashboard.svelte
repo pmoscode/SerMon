@@ -132,6 +132,11 @@
 			pickLabel={(v) => m.secdash_pick_user({ user: v })}
 		/>
 	</div>
+	{#if overview?.geoipNotice}
+		<p class="-mt-4 text-xs text-muted-foreground">
+			{m.secdash_geoip_notice({ notice: overview.geoipNotice })}
+		</p>
+	{/if}
 
 	<section class="flex flex-col gap-2" aria-labelledby="sec-events-title">
 		<div class="flex flex-wrap items-center gap-2">

@@ -102,3 +102,13 @@ export function detailText(e: SecurityEvent, locale: Locale): string {
 	}
 	return parts.join(' · ');
 }
+
+/** The name of a country by its ISO code in the UI language; the code if the browser lacks one. */
+export function countryName(code: string, locale: Locale): string {
+	if (!/^[A-Z]{2}$/.test(code)) return '';
+	try {
+		return new Intl.DisplayNames([locale], { type: 'region' }).of(code) ?? code;
+	} catch {
+		return code;
+	}
+}

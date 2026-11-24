@@ -5,6 +5,7 @@ package webapi_test
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 )
 
@@ -56,6 +58,23 @@ func TestSecurityEvents_ListedForTheCallersGroups(t *testing.T) {
 	}
 }
 
+// testGeo knows the country of one address of the tests (M3-18).
+type testGeo struct{}
+
+func (testGeo) Country(ip netip.Addr) string {
+	if ip == netip.MustParseAddr("203.0.113.9") {
+		return "NZ"
+	}
+	return ""
+}
+
+func (testGeo) Notice() string { return "Test countries" }
+
+func withGeo(s *secevents.Service) *secevents.Service {
+	s.SetGeo(testGeo{})
+	return s
+}
+
 // M3-16 over the real stack: the overview and the CSV export of the viewer's group, a formula in
 // a user name defused; with the organization's switch off the viewer gets neither.
 func TestSecurityEvents_OverviewAndExport(t *testing.T) {
@@ -91,9 +110,21 @@ func TestSecurityEvents_OverviewAndExport(t *testing.T) {
 	if u, ok := ips["192.0.2.77"]; !ok || u != 1 {
 		t.Errorf("top IPs = %v, want 192.0.2.77 with its unverified event", o.GetTopIps())
 	}
+	// M3-18: the countries of the addresses and the notice of their source.
+	countries := map[string]string{}
+	for _, c := range o.GetTopIps() {
+		countries[c.GetValue()] = c.GetCountry()
+	}
+	if countries["203.0.113.9"] != "NZ" || countries["192.0.2.77"] != "" || o.GetGeoipNotice() != "Test countries" {
+		t.Errorf("countries %v, notice %q", countries, o.GetGeoipNotice())
+	}
 	listed, err := mia.events.ListSecurityEvents(ctx, connect.NewRequest(&webv1.ListSecurityEventsRequest{From: from, To: to, NewSourcesOnly: true}))
 	if err != nil || len(listed.Msg.GetEvents()) != 1 || !listed.Msg.GetEvents()[0].GetNewSource() || listed.Msg.GetEvents()[0].GetUser() != "root" {
 		t.Errorf("new sources only = %v, %v", listed, err)
+	}
+	invalid, err := mia.events.ListSecurityEvents(ctx, connect.NewRequest(&webv1.ListSecurityEventsRequest{From: from, To: to, Network: "203.0.113.9"}))
+	if err != nil || len(invalid.Msg.GetEvents()) != 1 || invalid.Msg.GetEvents()[0].GetCountry() != "NZ" {
+		t.Errorf("the country of an event = %v, %v", invalid, err)
 	}
 
 	export := func() (*webv1.ExportSecurityEventsResponse, error) {
@@ -112,6 +143,7 @@ func TestSecurityEvents_OverviewAndExport(t *testing.T) {
 	content := string(e.GetContent())
 	if e.GetRows() != 2 || e.GetTruncated() || !strings.HasSuffix(e.GetFileName(), ".csv") ||
 		!strings.Contains(content, `,alpha-01,ssh.login.invalid_user,"'=HYPERLINK(""http://evil.example"")",203.0.113.9,`) ||
+		!strings.Contains(content, ",NZ\r\n") ||
 		strings.Contains(content, `,"=HYPERLINK`) || strings.Contains(content, "alpha-user") {
 		t.Errorf("export %s (%d rows):\n%s", e.GetFileName(), e.GetRows(), content)
 	}

@@ -43,6 +43,9 @@ x-server-environment: &server-environment
   SERMON_OUTBOUND_ALLOWLIST: ${SERMON_OUTBOUND_ALLOWLIST:-}
   # Logs (ADR 0031): only over the internal network.
   SERMON_LOKI_URL: http://loki:3100
+  # Countries of addresses (M3-18, optional): a MaxMind DB file in ./geoip, e.g. DB-IP Lite.
+  SERMON_GEOIP_DB_FILE: ${SERMON_GEOIP_DB_FILE:-}
+  SERMON_GEOIP_ATTRIBUTION: ${SERMON_GEOIP_ATTRIBUTION:-}
   # Production mode: invitations go out by mail only (M1-39).
   SERMON_SMTP_HOST: ${SERMON_SMTP_HOST:?set SERMON_SMTP_HOST in .env}
   SERMON_SMTP_PORT: ${SERMON_SMTP_PORT:-587}
@@ -99,7 +102,7 @@ services:
       SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
     secrets: [database_url, database_migrate_url, smtp_password]
     # The same view as the server: its configuration is checked as a whole.
-    volumes: [server-state:/var/lib/sermon, ./downloads:/srv/downloads:ro]
+    volumes: [server-state:/var/lib/sermon, ./downloads:/srv/downloads:ro, ./geoip:/srv/geoip:ro]
     networks: [internal]
     depends_on:
       postgres: { condition: service_healthy }
@@ -114,6 +117,8 @@ services:
       - server-state:/var/lib/sermon
       # Signed agent binaries for install.sh (ADR 0012), optional.
       - ./downloads:/srv/downloads:ro
+      # A country database for the security dashboard (M3-18), optional.
+      - ./geoip:/srv/geoip:ro
     ports: ["${SERMON_AGENT_PORT:-8443}:8443"]
     networks: [edge, internal]
     depends_on:

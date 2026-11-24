@@ -61,12 +61,20 @@ function stubOverview() {
 				{ nodeId: db01, points: [{ at: timestampFromMs(now - 1800_000), count: 2n }] }
 			],
 			topIps: [
-				{ value: '192.0.2.66', count: 40n, nodes: 2, lastAt: timestampFromMs(now), unverified: 3n }
+				{
+					value: '192.0.2.66',
+					count: 40n,
+					nodes: 2,
+					lastAt: timestampFromMs(now),
+					unverified: 3n,
+					country: 'SE'
+				}
 			],
 			topUsers: [
 				{ value: hostile, count: 30n, nodes: 1, lastAt: timestampFromMs(now) },
 				{ value: '', count: 12n, nodes: 1, lastAt: timestampFromMs(now) }
 			],
+			geoipNotice: 'IP geolocation by DB-IP',
 			totals: {
 				failedLogins: 42n,
 				logins: 7n,
@@ -98,7 +106,7 @@ describe('SecurityDashboard', () => {
 		stubFleet();
 		stubOverview();
 		stubList(
-			event({ id: 2n, user: hostile, unverified: true }),
+			event({ id: 2n, user: hostile, unverified: true, country: 'GB' }),
 			event({
 				id: 3n,
 				kind: 'ssh.login.success',
@@ -127,6 +135,9 @@ describe('SecurityDashboard', () => {
 		await expect.element(page.getByText('2 of them from new sources')).toBeVisible();
 		await expect.element(page.getByRole('figure')).toMatchTextContent(/web-01\s*40.*db-01\s*2/);
 		await expect.element(page.getByText('3 unverified')).toBeVisible();
+		// M3-18: countries by their code, named for screen readers, with the source of the data.
+		await expect.element(page.getByTitle('Sweden')).toHaveTextContent('SE: Sweden');
+		await expect.element(page.getByText('Countries: IP geolocation by DB-IP')).toBeVisible();
 		await expect.element(page.getByText('(empty)').first()).toBeVisible();
 
 		const table = page.getByRole('table');
@@ -136,6 +147,7 @@ describe('SecurityDashboard', () => {
 		await expect.element(table.getByText('unverified', { exact: true })).toBeVisible();
 		await expect.element(table.getByText('new', { exact: true })).toBeVisible();
 		await expect.element(table.getByText('192.0.2.66:50022').first()).toBeVisible();
+		await expect.element(table.getByTitle('United Kingdom')).toBeVisible();
 		await expect
 			.element(table.getByText(/as root · command rm -rf \/tmp\/x⟨U\+202E⟩/))
 			.toBeVisible();

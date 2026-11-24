@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -336,6 +338,33 @@ func TestLoad_AgentDownloadsDir(t *testing.T) {
 	}
 	if _, err := config.Load(fakeSource(map[string]string{"SERMON_AGENT_DOWNLOADS_DIR": dir + "/missing"}, nil)); err == nil {
 		t.Error("a missing directory must be rejected")
+	}
+}
+
+// M3-18: a local country database of the operator, optional, with its own attribution.
+func TestLoad_GeoIP(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "countries.mmdb")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(fakeSource(map[string]string{"SERMON_GEOIP_DB_FILE": file, "SERMON_GEOIP_ATTRIBUTION": "DB-IP.com"}, nil))
+	if err != nil || cfg.GeoIPDBFile != file || cfg.GeoIPAttribution != "DB-IP.com" {
+		t.Errorf("Load() = %q, %q, %v", cfg.GeoIPDBFile, cfg.GeoIPAttribution, err)
+	}
+	for _, env := range []map[string]string{{}, {"SERMON_GEOIP_DB_FILE": "", "SERMON_GEOIP_ATTRIBUTION": ""}} {
+		if cfg, err := config.Load(fakeSource(env, nil)); err != nil || cfg.GeoIPDBFile != "" {
+			t.Errorf("off by default (%v): %q, %v", env, cfg.GeoIPDBFile, err)
+		}
+	}
+	for name, env := range map[string]map[string]string{
+		"missing file":           {"SERMON_GEOIP_DB_FILE": file + ".missing"},
+		"a directory":            {"SERMON_GEOIP_DB_FILE": t.TempDir()},
+		"attribution without db": {"SERMON_GEOIP_ATTRIBUTION": "DB-IP.com"},
+		"long attribution":       {"SERMON_GEOIP_DB_FILE": file, "SERMON_GEOIP_ATTRIBUTION": strings.Repeat("x", 301)},
+	} {
+		if _, err := config.Load(fakeSource(env, nil)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }
 

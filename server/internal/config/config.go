@@ -110,6 +110,10 @@ type Config struct {
 	AgentDownloadsDir string
 	// LokiURL is the Loki instance for logs (ADR 0031); nil: the server takes no logs.
 	LokiURL *url.URL
+	// GeoIPDBFile is a MaxMind DB file with countries the operator provides (M3-18, e.g. DB-IP
+	// Lite); empty: no countries. GeoIPAttribution replaces the licence notice derived from it.
+	GeoIPDBFile      string
+	GeoIPAttribution string
 	// SMTP sends mail (invitations; notifications later). Required in production with a
 	// database; nil without.
 	SMTP *SMTP
@@ -143,6 +147,8 @@ const (
 	envMetricsAddr     = "SERMON_METRICS_ADDR"
 	envDownloadsDir    = "SERMON_AGENT_DOWNLOADS_DIR"
 	envLokiURL         = "SERMON_LOKI_URL"
+	envGeoIPDBFile     = "SERMON_GEOIP_DB_FILE"
+	envGeoIPNotice     = "SERMON_GEOIP_ATTRIBUTION"
 	envMode            = "SERMON_MODE"
 	envSMTPHost        = "SERMON_SMTP_HOST"
 	envSMTPPort        = "SERMON_SMTP_PORT"
@@ -190,6 +196,11 @@ func Load(src Source) (Config, error) {
 		MetricsAddr:        l.string(envMetricsAddr, "", validateAddr),
 		AgentDownloadsDir:  l.string(envDownloadsDir, "", validateDir),
 		LokiURL:            parseLokiURL(&l),
+		GeoIPDBFile:        l.string(envGeoIPDBFile, "", validateFile),
+		GeoIPAttribution:   l.string(envGeoIPNotice, "", validateNotice),
+	}
+	if cfg.GeoIPAttribution != "" && cfg.GeoIPDBFile == "" {
+		l.fail(envGeoIPNotice, "requires %s (the attribution of its countries)", envGeoIPDBFile)
 	}
 	if cfg.OrgDeletionGrace < minDeletionGrace {
 		l.fail(envDeletionGrace, "must be at least %s (7 days), got %s", minDeletionGrace, cfg.OrgDeletionGrace)
@@ -536,6 +547,29 @@ func parsePrefixes(l *loader) []netip.Prefix {
 		prefixes = append(prefixes, p.Masked())
 	}
 	return prefixes
+}
+
+// validateFile accepts an existing regular file, or nothing (compose sets optional variables
+// empty).
+func validateFile(value string) error {
+	if value == "" {
+		return nil
+	}
+	info, err := os.Stat(value)
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("must be an existing file")
+	}
+	return nil
+}
+
+// maxNotice bounds the licence notice of the GeoIP data (geoip.MaxNotice).
+const maxNotice = 300
+
+func validateNotice(value string) error {
+	if len(value) > maxNotice {
+		return fmt.Errorf("at most %d bytes", maxNotice)
+	}
+	return nil
 }
 
 func validateDir(value string) error {

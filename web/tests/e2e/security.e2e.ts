@@ -169,7 +169,11 @@ test('the node page has a security tab that leads to the dashboard', async ({ pa
 test('the menu leads to the dashboard and the account menu to the account security', async ({
 	page
 }) => {
-	await mockApi(page, { ...securityApi(), 'MetricsService/QueryMetrics': () => ({ json: {} }) });
+	await mockApi(page, {
+		...securityApi(),
+		'MetricsService/QueryMetrics': () => ({ json: {} }),
+		'TwoFactorService/GetTwoFactorStatus': () => ({ json: {} })
+	});
 	await page.goto('/fleet');
 	await page.getByRole('navigation').getByRole('link', { name: 'Security' }).click();
 	await expect(page).toHaveURL(/\/security$/);
@@ -179,4 +183,5 @@ test('the menu leads to the dashboard and the account menu to the account securi
 		.click();
 	await page.getByRole('link', { name: 'Account security' }).click();
 	await expect(page).toHaveURL(/\/settings\/security$/);
+	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 });

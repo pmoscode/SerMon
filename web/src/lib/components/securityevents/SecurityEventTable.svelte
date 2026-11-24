@@ -11,7 +11,13 @@
 	import { alertLogsQuery } from '#lib/logs/filter.js';
 	import { displayText } from '#lib/logs/text.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { detailText, failureKind, kindLabel, remoteText } from '#lib/security/labels.js';
+	import {
+		countryName,
+		detailText,
+		failureKind,
+		kindLabel,
+		remoteText
+	} from '#lib/security/labels.js';
 
 	/**
 	 * The events of the filter (KONZEPT §16.4): time · node · result · user · source · details,
@@ -92,7 +98,14 @@
 								class="text-muted-foreground italic">{m.secdash_empty_user()}</span
 							>{:else}{displayText(e.user)}{/if}
 					</td>
-					<td class="px-2 py-1.5 font-mono whitespace-nowrap">{remoteText(e)}</td>
+					<td class="px-2 py-1.5 font-mono whitespace-nowrap"
+						>{remoteText(e)}{#if e.country}
+							<span
+								class="ml-1 font-sans text-xs text-muted-foreground"
+								title={countryName(e.country, locale)}
+								>{e.country}<span class="sr-only">: {countryName(e.country, locale)}</span></span
+							>{/if}</td
+					>
 					<td class="max-w-80 px-2 py-1.5 break-all text-muted-foreground"
 						>{detailText(e, locale)}</td
 					>

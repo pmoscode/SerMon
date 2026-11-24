@@ -935,5 +935,6 @@
 	"secdash_detail_uptime": "ran {uptime}",
 	"secdash_detail_reason": "reason:",
 	"secdash_detail_previous_ip": "before",
-	"secdash_load_more": "Load older events"
+	"secdash_load_more": "Load older events",
+	"secdash_geoip_notice": "Countries: {notice}"
 }

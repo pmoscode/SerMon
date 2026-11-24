@@ -91,6 +91,9 @@ func (h *SecurityEventHandler) ListSecurityEvents(ctx context.Context, req *conn
 	res := &webv1.ListSecurityEventsResponse{NextPageToken: page.Next, Events: make([]*webv1.SecurityEvent, len(page.Events))}
 	for i, e := range page.Events {
 		res.Events[i] = securityEvent(e)
+		if e.Remote != nil {
+			res.Events[i].Country = h.events.Country(e.Remote.IP)
+		}
 	}
 	return connect.NewResponse(res), nil
 }
@@ -117,7 +120,7 @@ func (h *SecurityEventHandler) GetSecurityOverview(ctx context.Context, req *con
 			FailedLogins: count(t.FailedLogins), Logins: count(t.Logins), NewSourceLogins: count(t.NewSourceLogins),
 			RootLogins: count(t.RootLogins), SudoFailures: count(t.SudoFailures),
 		},
-		TopIps: counts(o.TopIPs), TopUsers: counts(o.TopUsers),
+		TopIps: counts(o.TopIPs), TopUsers: counts(o.TopUsers), GeoipNotice: o.GeoNotice,
 	}
 	for _, s := range o.FailedLogins {
 		series := &webv1.NodeEventSeries{NodeId: s.Node.String(), Points: make([]*webv1.EventCountPoint, len(s.Points))}
@@ -136,7 +139,7 @@ func counts(cs []secevents.Count) []*webv1.SecurityEventCount {
 	for i, c := range cs {
 		out[i] = &webv1.SecurityEventCount{
 			Value: c.Value, Count: count(c.Count), Nodes: uint32(min(max(c.Nodes, 0), 1<<31)), LastAt: timestamppb.New(c.Last),
-			Unverified: count(c.Unverified),
+			Unverified: count(c.Unverified), Country: c.Country,
 		}
 	}
 	return out

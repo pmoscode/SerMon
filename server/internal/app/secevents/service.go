@@ -43,11 +43,31 @@ type Page struct {
 type Service struct {
 	store  Store
 	policy authz.Policy
+	geo    Geo
 }
 
 // NewService returns the service.
 func NewService(store Store, policy authz.Policy) *Service {
 	return &Service{store: store, policy: policy}
+}
+
+// SetGeo turns on the countries of addresses (M3-18).
+func (s *Service) SetGeo(g Geo) { s.geo = g }
+
+// Country returns the country of an address, empty without GeoIP.
+func (s *Service) Country(ip netip.Addr) string {
+	if s.geo == nil || !ip.IsValid() {
+		return ""
+	}
+	return s.geo.Country(ip)
+}
+
+// GeoNotice is the licence notice of the countries, empty without GeoIP.
+func (s *Service) GeoNotice() string {
+	if s.geo == nil {
+		return ""
+	}
+	return s.geo.Notice()
 }
 
 func invalid(format string, args ...any) error {
@@ -178,6 +198,14 @@ func (s *Service) Overview(ctx context.Context, c access.Caller, r OverviewReque
 		return Overview{}, fmt.Errorf("security overview: %w", err)
 	}
 	o.Step = step
+	if s.geo != nil {
+		o.GeoNotice = s.geo.Notice()
+		for i, c := range o.TopIPs {
+			if ip, err := netip.ParseAddr(c.Value); err == nil {
+				o.TopIPs[i].Country = s.geo.Country(ip)
+			}
+		}
+	}
 	return o, nil
 }
 
@@ -223,7 +251,7 @@ func (s *Service) Export(ctx context.Context, c access.Caller, f Filter) (Export
 		}
 	}
 	var buf bytes.Buffer
-	rows, cut, err := WriteCSV(&buf, events, names, MaxExportBytes)
+	rows, cut, err := WriteCSV(&buf, events, names, s.Country, MaxExportBytes)
 	if err != nil {
 		return Export{}, err
 	}

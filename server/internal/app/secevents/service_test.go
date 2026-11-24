@@ -32,6 +32,7 @@ var (
 type store struct {
 	n         int
 	user      string
+	remote    *secevent.Remote
 	scope     tenant.Scope
 	filter    secevents.Filter
 	overview  secevents.OverviewQuery
@@ -40,8 +41,23 @@ type store struct {
 
 func (s *store) Overview(_ context.Context, scope tenant.Scope, q secevents.OverviewQuery) (secevents.Overview, error) {
 	s.scope, s.overview = scope, q
-	return secevents.Overview{Totals: secevents.Totals{FailedLogins: 7}}, nil
+	return secevents.Overview{
+		Totals: secevents.Totals{FailedLogins: 7},
+		TopIPs: []secevents.Count{{Value: "81.2.69.1", Count: 3}, {Value: "10.0.0.1", Count: 2}},
+	}, nil
 }
+
+// geo knows one address.
+type geo struct{}
+
+func (geo) Country(ip netip.Addr) string {
+	if ip == netip.MustParseAddr("81.2.69.1") {
+		return "GB"
+	}
+	return ""
+}
+
+func (geo) Notice() string { return "IP geolocation by DB-IP" }
 
 func (s *store) Hostnames(_ context.Context, scope tenant.Scope, ids []identity.NodeID) (map[identity.NodeID]string, error) {
 	s.scope, s.hostnames = scope, ids
@@ -52,7 +68,7 @@ func (s *store) List(_ context.Context, scope tenant.Scope, f secevents.Filter) 
 	s.scope, s.filter = scope, f
 	out := make([]secevent.Event, 0, min(s.n, f.Limit))
 	for i := range min(s.n, f.Limit) {
-		out = append(out, secevent.Event{ID: int64(1000 - i), Node: node, OccurredAt: t0.Add(-time.Duration(i) * time.Second), Kind: secevent.SSHLoginFailed, User: s.user})
+		out = append(out, secevent.Event{ID: int64(1000 - i), Node: node, OccurredAt: t0.Add(-time.Duration(i) * time.Second), Kind: secevent.SSHLoginFailed, User: s.user, Remote: s.remote})
 	}
 	return out, nil
 }
@@ -258,5 +274,29 @@ func TestExport_WritesCSVWithHostnamesAndBounds(t *testing.T) {
 	bad.Kinds = []secevent.Kind{"ssh.root"}
 	if _, err := service(&store{}).Export(context.Background(), caller(role.Admin, true), bad); !errors.Is(err, secevent.ErrInvalid) {
 		t.Errorf("bad filter: %v", err)
+	}
+}
+
+// M3-18: with a country database the top addresses and the export carry the countries.
+func TestGeo_CountriesOfTheTopAddressesAndTheExport(t *testing.T) {
+	s := &store{n: 1}
+	svc := service(s)
+	req := secevents.OverviewRequest{From: t0.Add(-time.Hour), To: t0}
+	o, err := svc.Overview(context.Background(), caller(role.Viewer, true), req)
+	if err != nil || o.GeoNotice != "" || o.TopIPs[0].Country != "" || svc.Country(netip.MustParseAddr("81.2.69.1")) != "" {
+		t.Fatalf("without GeoIP: %+v, %v", o, err)
+	}
+	svc.SetGeo(geo{})
+	o, err = svc.Overview(context.Background(), caller(role.Viewer, true), req)
+	if err != nil || o.GeoNotice != "IP geolocation by DB-IP" || o.TopIPs[0].Country != "GB" || o.TopIPs[1].Country != "" {
+		t.Errorf("with GeoIP: %+v, %v", o, err)
+	}
+	if svc.Country(netip.Addr{}) != "" || svc.GeoNotice() != "IP geolocation by DB-IP" {
+		t.Error("Country of no address or the notice")
+	}
+	s.remote = &secevent.Remote{IP: netip.MustParseAddr("81.2.69.1")}
+	e, err := svc.Export(context.Background(), caller(role.Viewer, true), request().Filter)
+	if err != nil || !strings.Contains(string(e.Content), ",GB\r\n") {
+		t.Errorf("export:\n%s, %v", e.Content, err)
 	}
 }

@@ -106,6 +106,16 @@ Datenbank 80 % davon erreicht ([ADR 0027](../adr/0027-server-ereignisse-und-self
 die Größe der Datenbank, nicht den freien Platz: Setzen Sie die Grenze unter den Platz des Datenträgers. Den Füllstand
 der Volumes misst ein Agent auf dem Server-Host.
 
+## Länder im Security-Dashboard (optional)
+
+Der Server kann zu den Adressen im Security-Dashboard das Land zeigen. Er lädt dafür nichts herunter: Legen Sie eine
+Datenbank im MaxMind-DB-Format nach `deploy/compose/geoip/`, etwa „IP to Country Lite“ von DB-IP
+(<https://db-ip.com/db/lite.php>, CC BY 4.0) oder GeoLite2 Country von MaxMind (Konto nötig), und setzen Sie in `.env`
+`SERMON_GEOIP_DB_FILE=/srv/geoip/<datei>.mmdb`. Den Lizenzhinweis zeigt das Dashboard neben den Ländern; er ergibt
+sich aus der Datei, `SERMON_GEOIP_ATTRIBUTION` ersetzt ihn. Private Adressen haben kein Land. Die Datei liest der Server
+beim Start; ist sie älter als 90 Tage, warnt er im Log. Zum Aktualisieren die Datei ersetzen und den Server neu
+starten (`docker compose restart server`).
+
 ## Organisationen löschen
 
 Eine zum Löschen vorgemerkte Organisation bleibt gesperrt, bis die Frist abläuft; danach löscht der Server sie mit

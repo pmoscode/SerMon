@@ -351,6 +351,250 @@ func (LogSeverity) EnumDescriptor() ([]byte, []int) {
 	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{4}
 }
 
+// UpdateScope says which updates a run installs (KONZEPT §14.2).
+type UpdateScope int32
+
+const (
+	// UPDATE_SCOPE_UNSPECIFIED is invalid.
+	UpdateScope_UPDATE_SCOPE_UNSPECIFIED UpdateScope = 0
+	// UPDATE_SCOPE_SECURITY installs security updates only (not on Alpine, KONZEPT O6).
+	UpdateScope_UPDATE_SCOPE_SECURITY UpdateScope = 1
+	// UPDATE_SCOPE_ALL installs all updates.
+	UpdateScope_UPDATE_SCOPE_ALL UpdateScope = 2
+)
+
+// Enum value maps for UpdateScope.
+var (
+	UpdateScope_name = map[int32]string{
+		0: "UPDATE_SCOPE_UNSPECIFIED",
+		1: "UPDATE_SCOPE_SECURITY",
+		2: "UPDATE_SCOPE_ALL",
+	}
+	UpdateScope_value = map[string]int32{
+		"UPDATE_SCOPE_UNSPECIFIED": 0,
+		"UPDATE_SCOPE_SECURITY":    1,
+		"UPDATE_SCOPE_ALL":         2,
+	}
+)
+
+func (x UpdateScope) Enum() *UpdateScope {
+	p := new(UpdateScope)
+	*p = x
+	return p
+}
+
+func (x UpdateScope) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (UpdateScope) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[5].Descriptor()
+}
+
+func (UpdateScope) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[5]
+}
+
+func (x UpdateScope) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use UpdateScope.Descriptor instead.
+func (UpdateScope) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{5}
+}
+
+// PackageManager is the host's package manager.
+type PackageManager int32
+
+const (
+	// PACKAGE_MANAGER_UNSPECIFIED: unknown (see the report's availability).
+	PackageManager_PACKAGE_MANAGER_UNSPECIFIED PackageManager = 0
+	// PACKAGE_MANAGER_APT: Debian and Ubuntu.
+	PackageManager_PACKAGE_MANAGER_APT PackageManager = 1
+	// PACKAGE_MANAGER_DNF: the RHEL family and Fedora.
+	PackageManager_PACKAGE_MANAGER_DNF PackageManager = 2
+	// PACKAGE_MANAGER_APK: Alpine, without security metadata (KONZEPT O6).
+	PackageManager_PACKAGE_MANAGER_APK PackageManager = 3
+)
+
+// Enum value maps for PackageManager.
+var (
+	PackageManager_name = map[int32]string{
+		0: "PACKAGE_MANAGER_UNSPECIFIED",
+		1: "PACKAGE_MANAGER_APT",
+		2: "PACKAGE_MANAGER_DNF",
+		3: "PACKAGE_MANAGER_APK",
+	}
+	PackageManager_value = map[string]int32{
+		"PACKAGE_MANAGER_UNSPECIFIED": 0,
+		"PACKAGE_MANAGER_APT":         1,
+		"PACKAGE_MANAGER_DNF":         2,
+		"PACKAGE_MANAGER_APK":         3,
+	}
+)
+
+func (x PackageManager) Enum() *PackageManager {
+	p := new(PackageManager)
+	*p = x
+	return p
+}
+
+func (x PackageManager) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PackageManager) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[6].Descriptor()
+}
+
+func (PackageManager) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[6]
+}
+
+func (x PackageManager) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PackageManager.Descriptor instead.
+func (PackageManager) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{6}
+}
+
+// UpdateAvailability says whether the agent could list the updates.
+type UpdateAvailability int32
+
+const (
+	// UPDATE_AVAILABILITY_UNSPECIFIED is invalid.
+	UpdateAvailability_UPDATE_AVAILABILITY_UNSPECIFIED UpdateAvailability = 0
+	// UPDATE_AVAILABILITY_LISTED: the packages below are the host's updates.
+	UpdateAvailability_UPDATE_AVAILABILITY_LISTED UpdateAvailability = 1
+	// UPDATE_AVAILABILITY_NO_HELPER: the root helper is not installed or not running.
+	UpdateAvailability_UPDATE_AVAILABILITY_NO_HELPER UpdateAvailability = 2
+	// UPDATE_AVAILABILITY_HELPER_TOO_OLD: the helper doesn't know the operation.
+	UpdateAvailability_UPDATE_AVAILABILITY_HELPER_TOO_OLD UpdateAvailability = 3
+	// UPDATE_AVAILABILITY_UNSUPPORTED: the host's distribution has no supported package manager.
+	UpdateAvailability_UPDATE_AVAILABILITY_UNSUPPORTED UpdateAvailability = 4
+	// UPDATE_AVAILABILITY_FAILED: listing failed; reason says why.
+	UpdateAvailability_UPDATE_AVAILABILITY_FAILED UpdateAvailability = 5
+)
+
+// Enum value maps for UpdateAvailability.
+var (
+	UpdateAvailability_name = map[int32]string{
+		0: "UPDATE_AVAILABILITY_UNSPECIFIED",
+		1: "UPDATE_AVAILABILITY_LISTED",
+		2: "UPDATE_AVAILABILITY_NO_HELPER",
+		3: "UPDATE_AVAILABILITY_HELPER_TOO_OLD",
+		4: "UPDATE_AVAILABILITY_UNSUPPORTED",
+		5: "UPDATE_AVAILABILITY_FAILED",
+	}
+	UpdateAvailability_value = map[string]int32{
+		"UPDATE_AVAILABILITY_UNSPECIFIED":    0,
+		"UPDATE_AVAILABILITY_LISTED":         1,
+		"UPDATE_AVAILABILITY_NO_HELPER":      2,
+		"UPDATE_AVAILABILITY_HELPER_TOO_OLD": 3,
+		"UPDATE_AVAILABILITY_UNSUPPORTED":    4,
+		"UPDATE_AVAILABILITY_FAILED":         5,
+	}
+)
+
+func (x UpdateAvailability) Enum() *UpdateAvailability {
+	p := new(UpdateAvailability)
+	*p = x
+	return p
+}
+
+func (x UpdateAvailability) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (UpdateAvailability) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[7].Descriptor()
+}
+
+func (UpdateAvailability) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[7]
+}
+
+func (x UpdateAvailability) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use UpdateAvailability.Descriptor instead.
+func (UpdateAvailability) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{7}
+}
+
+// CommandPhase is how far a command of the server has come.
+type CommandPhase int32
+
+const (
+	// COMMAND_PHASE_UNSPECIFIED is invalid.
+	CommandPhase_COMMAND_PHASE_UNSPECIFIED CommandPhase = 0
+	// COMMAND_PHASE_STARTED: the root helper took it and runs it.
+	CommandPhase_COMMAND_PHASE_STARTED CommandPhase = 1
+	// COMMAND_PHASE_SUCCEEDED: it ended with exit code 0.
+	CommandPhase_COMMAND_PHASE_SUCCEEDED CommandPhase = 2
+	// COMMAND_PHASE_FAILED: it ran and failed; exit_code and output tell how.
+	CommandPhase_COMMAND_PHASE_FAILED CommandPhase = 3
+	// COMMAND_PHASE_REFUSED: not run, the host forbids it or the helper refused; reason says why.
+	CommandPhase_COMMAND_PHASE_REFUSED CommandPhase = 4
+	// COMMAND_PHASE_UNSUPPORTED: not run, no helper, a helper too old or an unsupported host.
+	CommandPhase_COMMAND_PHASE_UNSUPPORTED CommandPhase = 5
+	// COMMAND_PHASE_LOST: the helper knows the run no longer (its result expired).
+	CommandPhase_COMMAND_PHASE_LOST CommandPhase = 6
+)
+
+// Enum value maps for CommandPhase.
+var (
+	CommandPhase_name = map[int32]string{
+		0: "COMMAND_PHASE_UNSPECIFIED",
+		1: "COMMAND_PHASE_STARTED",
+		2: "COMMAND_PHASE_SUCCEEDED",
+		3: "COMMAND_PHASE_FAILED",
+		4: "COMMAND_PHASE_REFUSED",
+		5: "COMMAND_PHASE_UNSUPPORTED",
+		6: "COMMAND_PHASE_LOST",
+	}
+	CommandPhase_value = map[string]int32{
+		"COMMAND_PHASE_UNSPECIFIED": 0,
+		"COMMAND_PHASE_STARTED":     1,
+		"COMMAND_PHASE_SUCCEEDED":   2,
+		"COMMAND_PHASE_FAILED":      3,
+		"COMMAND_PHASE_REFUSED":     4,
+		"COMMAND_PHASE_UNSUPPORTED": 5,
+		"COMMAND_PHASE_LOST":        6,
+	}
+)
+
+func (x CommandPhase) Enum() *CommandPhase {
+	p := new(CommandPhase)
+	*p = x
+	return p
+}
+
+func (x CommandPhase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CommandPhase) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[8].Descriptor()
+}
+
+func (CommandPhase) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[8]
+}
+
+func (x CommandPhase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CommandPhase.Descriptor instead.
+func (CommandPhase) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{8}
+}
+
 // SessionRequest is one message from the agent to the server.
 type SessionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -542,6 +786,10 @@ type SessionResponse struct {
 	//	*SessionResponse_ConfigUpdate
 	//	*SessionResponse_StartLiveView
 	//	*SessionResponse_StopLiveView
+	//	*SessionResponse_RefreshUpdateInfo
+	//	*SessionResponse_RunUpdate
+	//	*SessionResponse_RebootNode
+	//	*SessionResponse_SelfUpdate
 	Payload       isSessionResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -656,6 +904,42 @@ func (x *SessionResponse) GetStopLiveView() *StopLiveView {
 	return nil
 }
 
+func (x *SessionResponse) GetRefreshUpdateInfo() *RefreshUpdateInfo {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_RefreshUpdateInfo); ok {
+			return x.RefreshUpdateInfo
+		}
+	}
+	return nil
+}
+
+func (x *SessionResponse) GetRunUpdate() *RunUpdate {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_RunUpdate); ok {
+			return x.RunUpdate
+		}
+	}
+	return nil
+}
+
+func (x *SessionResponse) GetRebootNode() *RebootNode {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_RebootNode); ok {
+			return x.RebootNode
+		}
+	}
+	return nil
+}
+
+func (x *SessionResponse) GetSelfUpdate() *SelfUpdate {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_SelfUpdate); ok {
+			return x.SelfUpdate
+		}
+	}
+	return nil
+}
+
 type isSessionResponse_Payload interface {
 	isSessionResponse_Payload()
 }
@@ -705,6 +989,27 @@ type SessionResponse_StopLiveView struct {
 	StopLiveView *StopLiveView `protobuf:"bytes,8,opt,name=stop_live_view,json=stopLiveView,proto3,oneof"`
 }
 
+type SessionResponse_RefreshUpdateInfo struct {
+	// refresh_update_info asks for a new UpdateReport now (KONZEPT §14.1); the agent does it at
+	// most every 5 minutes.
+	RefreshUpdateInfo *RefreshUpdateInfo `protobuf:"bytes,9,opt,name=refresh_update_info,json=refreshUpdateInfo,proto3,oneof"`
+}
+
+type SessionResponse_RunUpdate struct {
+	// run_update installs updates through the root helper (KONZEPT §14.2, ADR 0035).
+	RunUpdate *RunUpdate `protobuf:"bytes,10,opt,name=run_update,json=runUpdate,proto3,oneof"`
+}
+
+type SessionResponse_RebootNode struct {
+	// reboot_node reboots the host through the root helper.
+	RebootNode *RebootNode `protobuf:"bytes,11,opt,name=reboot_node,json=rebootNode,proto3,oneof"`
+}
+
+type SessionResponse_SelfUpdate struct {
+	// self_update replaces the agent's binary through the root helper (KONZEPT §14.3).
+	SelfUpdate *SelfUpdate `protobuf:"bytes,12,opt,name=self_update,json=selfUpdate,proto3,oneof"`
+}
+
 func (*SessionResponse_Ack) isSessionResponse_Payload() {}
 
 func (*SessionResponse_CertificateIssued) isSessionResponse_Payload() {}
@@ -720,6 +1025,14 @@ func (*SessionResponse_ConfigUpdate) isSessionResponse_Payload() {}
 func (*SessionResponse_StartLiveView) isSessionResponse_Payload() {}
 
 func (*SessionResponse_StopLiveView) isSessionResponse_Payload() {}
+
+func (*SessionResponse_RefreshUpdateInfo) isSessionResponse_Payload() {}
+
+func (*SessionResponse_RunUpdate) isSessionResponse_Payload() {}
+
+func (*SessionResponse_RebootNode) isSessionResponse_Payload() {}
+
+func (*SessionResponse_SelfUpdate) isSessionResponse_Payload() {}
 
 // Hello is the first message of every stream.
 type Hello struct {
@@ -1223,6 +1536,8 @@ type Batch struct {
 	//	*Batch_Metrics
 	//	*Batch_SecurityEvents
 	//	*Batch_Logs
+	//	*Batch_UpdateReport
+	//	*Batch_CommandResult
 	Content       isBatch_Content `protobuf_oneof:"content"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1299,6 +1614,24 @@ func (x *Batch) GetLogs() *LogBatch {
 	return nil
 }
 
+func (x *Batch) GetUpdateReport() *UpdateReport {
+	if x != nil {
+		if x, ok := x.Content.(*Batch_UpdateReport); ok {
+			return x.UpdateReport
+		}
+	}
+	return nil
+}
+
+func (x *Batch) GetCommandResult() *CommandResult {
+	if x != nil {
+		if x, ok := x.Content.(*Batch_CommandResult); ok {
+			return x.CommandResult
+		}
+	}
+	return nil
+}
+
 type isBatch_Content interface {
 	isBatch_Content()
 }
@@ -1318,11 +1651,27 @@ type Batch_Logs struct {
 	Logs *LogBatch `protobuf:"bytes,4,opt,name=logs,proto3,oneof"`
 }
 
+type Batch_UpdateReport struct {
+	// update_report lists the host's available updates (KONZEPT §14.1); the newest one counts.
+	UpdateReport *UpdateReport `protobuf:"bytes,5,opt,name=update_report,json=updateReport,proto3,oneof"`
+}
+
+type Batch_CommandResult struct {
+	// command_result says how a command of the server went (run_update, reboot_node,
+	// self_update): buffered like all batches, so it survives a restart of the agent – also the
+	// one its own update causes. Sent more than once for a run: once per phase.
+	CommandResult *CommandResult `protobuf:"bytes,6,opt,name=command_result,json=commandResult,proto3,oneof"`
+}
+
 func (*Batch_Metrics) isBatch_Content() {}
 
 func (*Batch_SecurityEvents) isBatch_Content() {}
 
 func (*Batch_Logs) isBatch_Content() {}
+
+func (*Batch_UpdateReport) isBatch_Content() {}
+
+func (*Batch_CommandResult) isBatch_Content() {}
 
 // MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
 // converted to per-second rates by the agent; every sample is a gauge.
@@ -3804,6 +4153,611 @@ func (x *ProcessInfo) GetContainer() string {
 	return ""
 }
 
+// RefreshUpdateInfo asks the agent to list its updates now, the package sources refreshed first.
+type RefreshUpdateInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshUpdateInfo) Reset() {
+	*x = RefreshUpdateInfo{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshUpdateInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshUpdateInfo) ProtoMessage() {}
+
+func (x *RefreshUpdateInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshUpdateInfo.ProtoReflect.Descriptor instead.
+func (*RefreshUpdateInfo) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{43}
+}
+
+// RunUpdate installs updates. Rebooting afterwards is a command of its own (RebootNode).
+type RunUpdate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+	RunId string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// scope is which updates to install.
+	Scope         UpdateScope `protobuf:"varint,2,opt,name=scope,proto3,enum=sermon.agent.v1.UpdateScope" json:"scope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RunUpdate) Reset() {
+	*x = RunUpdate{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RunUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunUpdate) ProtoMessage() {}
+
+func (x *RunUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunUpdate.ProtoReflect.Descriptor instead.
+func (*RunUpdate) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *RunUpdate) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *RunUpdate) GetScope() UpdateScope {
+	if x != nil {
+		return x.Scope
+	}
+	return UpdateScope_UPDATE_SCOPE_UNSPECIFIED
+}
+
+// RebootNode reboots the host one minute after the root helper took it.
+type RebootNode struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+	RunId string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// reason is shown to the host's users and written to its journal, e.g. "updates (SerMon)".
+	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RebootNode) Reset() {
+	*x = RebootNode{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RebootNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RebootNode) ProtoMessage() {}
+
+func (x *RebootNode) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RebootNode.ProtoReflect.Descriptor instead.
+func (*RebootNode) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *RebootNode) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *RebootNode) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// SelfUpdate replaces the agent's binary with a signed version (KONZEPT §14.3); how the agent
+// fetches and the helper checks it follows ADR 0036.
+type SelfUpdate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+	RunId string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// version is the agent version to install, e.g. "0.5.0".
+	Version       string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelfUpdate) Reset() {
+	*x = SelfUpdate{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelfUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelfUpdate) ProtoMessage() {}
+
+func (x *SelfUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelfUpdate.ProtoReflect.Descriptor instead.
+func (*SelfUpdate) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *SelfUpdate) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *SelfUpdate) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+// UpdateReport is what the host could update (KONZEPT §14.1), every 6 hours, after the package
+// manager ran and on RefreshUpdateInfo. Names, versions and sources come from the host's package
+// sources: shown as text only.
+type UpdateReport struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// collected_at is the agent's time of the listing.
+	CollectedAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=collected_at,json=collectedAt,proto3" json:"collected_at,omitempty"`
+	// availability says whether the packages below are the host's updates.
+	Availability UpdateAvailability `protobuf:"varint,2,opt,name=availability,proto3,enum=sermon.agent.v1.UpdateAvailability" json:"availability,omitempty"`
+	// reason explains an availability other than listed.
+	Reason string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	// package_manager says how the updates were listed.
+	PackageManager PackageManager `protobuf:"varint,4,opt,name=package_manager,json=packageManager,proto3,enum=sermon.agent.v1.PackageManager" json:"package_manager,omitempty"`
+	// packages are the available updates, security updates first, at most 5000.
+	Packages []*UpdatePackage `protobuf:"bytes,5,rep,name=packages,proto3" json:"packages,omitempty"`
+	// total_count counts all available updates, the omitted ones too.
+	TotalCount uint32 `protobuf:"varint,6,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	// security_count counts the security updates among them (0 without security metadata).
+	SecurityCount uint32 `protobuf:"varint,7,opt,name=security_count,json=securityCount,proto3" json:"security_count,omitempty"`
+	// reboot_required: the host needs a reboot to use what is installed (KONZEPT §14.1).
+	RebootRequired bool `protobuf:"varint,8,opt,name=reboot_required,json=rebootRequired,proto3" json:"reboot_required,omitempty"`
+	// reboot_reason says why, e.g. the packages of /var/run/reboot-required.pkgs.
+	RebootReason string `protobuf:"bytes,9,opt,name=reboot_reason,json=rebootReason,proto3" json:"reboot_reason,omitempty"`
+	// last_upgrade_at is when packages were last upgraded, if known.
+	LastUpgradeAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=last_upgrade_at,json=lastUpgradeAt,proto3" json:"last_upgrade_at,omitempty"`
+	// permissions are what the host allows remotely (/etc/sermon/helper.toml); unset without helper.
+	Permissions *HelperPermissions `protobuf:"bytes,11,opt,name=permissions,proto3" json:"permissions,omitempty"`
+	// refreshed: the package sources were updated just before listing.
+	Refreshed     bool `protobuf:"varint,12,opt,name=refreshed,proto3" json:"refreshed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateReport) Reset() {
+	*x = UpdateReport{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateReport) ProtoMessage() {}
+
+func (x *UpdateReport) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateReport.ProtoReflect.Descriptor instead.
+func (*UpdateReport) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *UpdateReport) GetCollectedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CollectedAt
+	}
+	return nil
+}
+
+func (x *UpdateReport) GetAvailability() UpdateAvailability {
+	if x != nil {
+		return x.Availability
+	}
+	return UpdateAvailability_UPDATE_AVAILABILITY_UNSPECIFIED
+}
+
+func (x *UpdateReport) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *UpdateReport) GetPackageManager() PackageManager {
+	if x != nil {
+		return x.PackageManager
+	}
+	return PackageManager_PACKAGE_MANAGER_UNSPECIFIED
+}
+
+func (x *UpdateReport) GetPackages() []*UpdatePackage {
+	if x != nil {
+		return x.Packages
+	}
+	return nil
+}
+
+func (x *UpdateReport) GetTotalCount() uint32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+func (x *UpdateReport) GetSecurityCount() uint32 {
+	if x != nil {
+		return x.SecurityCount
+	}
+	return 0
+}
+
+func (x *UpdateReport) GetRebootRequired() bool {
+	if x != nil {
+		return x.RebootRequired
+	}
+	return false
+}
+
+func (x *UpdateReport) GetRebootReason() string {
+	if x != nil {
+		return x.RebootReason
+	}
+	return ""
+}
+
+func (x *UpdateReport) GetLastUpgradeAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastUpgradeAt
+	}
+	return nil
+}
+
+func (x *UpdateReport) GetPermissions() *HelperPermissions {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
+func (x *UpdateReport) GetRefreshed() bool {
+	if x != nil {
+		return x.Refreshed
+	}
+	return false
+}
+
+// UpdatePackage is one available update.
+type UpdatePackage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// name is the package's name.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// installed_version is the version installed now.
+	InstalledVersion string `protobuf:"bytes,2,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"`
+	// candidate_version is the version the update installs.
+	CandidateVersion string `protobuf:"bytes,3,opt,name=candidate_version,json=candidateVersion,proto3" json:"candidate_version,omitempty"`
+	// source is where it comes from, e.g. "bookworm-security" or a repository's ID.
+	Source string `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
+	// security: the source marks it as a security update.
+	Security      bool `protobuf:"varint,5,opt,name=security,proto3" json:"security,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePackage) Reset() {
+	*x = UpdatePackage{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePackage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePackage) ProtoMessage() {}
+
+func (x *UpdatePackage) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePackage.ProtoReflect.Descriptor instead.
+func (*UpdatePackage) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *UpdatePackage) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdatePackage) GetInstalledVersion() string {
+	if x != nil {
+		return x.InstalledVersion
+	}
+	return ""
+}
+
+func (x *UpdatePackage) GetCandidateVersion() string {
+	if x != nil {
+		return x.CandidateVersion
+	}
+	return ""
+}
+
+func (x *UpdatePackage) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *UpdatePackage) GetSecurity() bool {
+	if x != nil {
+		return x.Security
+	}
+	return false
+}
+
+// HelperPermissions are the switches of /etc/sermon/helper.toml (ADR 0035).
+type HelperPermissions struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// remote_updates: updates may be installed on request of the server.
+	RemoteUpdates bool `protobuf:"varint,1,opt,name=remote_updates,json=remoteUpdates,proto3" json:"remote_updates,omitempty"`
+	// remote_reboot: the host may be rebooted on request of the server.
+	RemoteReboot bool `protobuf:"varint,2,opt,name=remote_reboot,json=remoteReboot,proto3" json:"remote_reboot,omitempty"`
+	// self_update: the agent may replace its binary on request of the server.
+	SelfUpdate    bool `protobuf:"varint,3,opt,name=self_update,json=selfUpdate,proto3" json:"self_update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HelperPermissions) Reset() {
+	*x = HelperPermissions{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HelperPermissions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HelperPermissions) ProtoMessage() {}
+
+func (x *HelperPermissions) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HelperPermissions.ProtoReflect.Descriptor instead.
+func (*HelperPermissions) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *HelperPermissions) GetRemoteUpdates() bool {
+	if x != nil {
+		return x.RemoteUpdates
+	}
+	return false
+}
+
+func (x *HelperPermissions) GetRemoteReboot() bool {
+	if x != nil {
+		return x.RemoteReboot
+	}
+	return false
+}
+
+func (x *HelperPermissions) GetSelfUpdate() bool {
+	if x != nil {
+		return x.SelfUpdate
+	}
+	return false
+}
+
+// CommandResult is the state of a command of the server.
+type CommandResult struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// run_id is the run's ID from the command.
+	RunId string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// phase is how far it has come.
+	Phase CommandPhase `protobuf:"varint,2,opt,name=phase,proto3,enum=sermon.agent.v1.CommandPhase" json:"phase,omitempty"`
+	// exit_code is the command's exit code once it ran; -1 if it was killed.
+	ExitCode int32 `protobuf:"zigzag32,3,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	// reason explains a refusal or failure.
+	Reason string `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	// output is the end of the command's output, redacted by the agent, at most 256 KiB.
+	Output string `protobuf:"bytes,5,opt,name=output,proto3" json:"output,omitempty"`
+	// output_truncated: the beginning of the output was cut.
+	OutputTruncated bool `protobuf:"varint,6,opt,name=output_truncated,json=outputTruncated,proto3" json:"output_truncated,omitempty"`
+	// started_at is when the helper started the run.
+	StartedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	// ended_at is when it ended.
+	EndedAt       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CommandResult) Reset() {
+	*x = CommandResult{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommandResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommandResult) ProtoMessage() {}
+
+func (x *CommandResult) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
+func (*CommandResult) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *CommandResult) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
+func (x *CommandResult) GetPhase() CommandPhase {
+	if x != nil {
+		return x.Phase
+	}
+	return CommandPhase_COMMAND_PHASE_UNSPECIFIED
+}
+
+func (x *CommandResult) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *CommandResult) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *CommandResult) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *CommandResult) GetOutputTruncated() bool {
+	if x != nil {
+		return x.OutputTruncated
+	}
+	return false
+}
+
+func (x *CommandResult) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *CommandResult) GetEndedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndedAt
+	}
+	return nil
+}
+
 var File_sermon_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_agent_proto_rawDesc = "" +
@@ -3817,7 +4771,7 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x0econfig_applied\x18\x05 \x01(\v2\x1e.sermon.agent.v1.ConfigAppliedH\x00R\rconfigApplied\x12M\n" +
 	"\x10process_snapshot\x18\x06 \x01(\v2 .sermon.agent.v1.ProcessSnapshotH\x00R\x0fprocessSnapshot\x12N\n" +
 	"\x11live_view_refused\x18\a \x01(\v2 .sermon.agent.v1.LiveViewRefusedH\x00R\x0fliveViewRefusedB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xb2\x04\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\xc5\x06\n" +
 	"\x0fSessionResponse\x12(\n" +
 	"\x03ack\x18\x01 \x01(\v2\x14.sermon.agent.v1.AckH\x00R\x03ack\x12S\n" +
 	"\x12certificate_issued\x18\x02 \x01(\v2\".sermon.agent.v1.CertificateIssuedH\x00R\x11certificateIssued\x12;\n" +
@@ -3827,7 +4781,15 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\bthrottle\x18\x05 \x01(\v2\x19.sermon.agent.v1.ThrottleH\x00R\bthrottle\x12D\n" +
 	"\rconfig_update\x18\x06 \x01(\v2\x1d.sermon.agent.v1.ConfigUpdateH\x00R\fconfigUpdate\x12H\n" +
 	"\x0fstart_live_view\x18\a \x01(\v2\x1e.sermon.agent.v1.StartLiveViewH\x00R\rstartLiveView\x12E\n" +
-	"\x0estop_live_view\x18\b \x01(\v2\x1d.sermon.agent.v1.StopLiveViewH\x00R\fstopLiveViewB\x10\n" +
+	"\x0estop_live_view\x18\b \x01(\v2\x1d.sermon.agent.v1.StopLiveViewH\x00R\fstopLiveView\x12T\n" +
+	"\x13refresh_update_info\x18\t \x01(\v2\".sermon.agent.v1.RefreshUpdateInfoH\x00R\x11refreshUpdateInfo\x12;\n" +
+	"\n" +
+	"run_update\x18\n" +
+	" \x01(\v2\x1a.sermon.agent.v1.RunUpdateH\x00R\trunUpdate\x12>\n" +
+	"\vreboot_node\x18\v \x01(\v2\x1b.sermon.agent.v1.RebootNodeH\x00R\n" +
+	"rebootNode\x12>\n" +
+	"\vself_update\x18\f \x01(\v2\x1b.sermon.agent.v1.SelfUpdateH\x00R\n" +
+	"selfUpdateB\x10\n" +
 	"\apayload\x12\x05\xbaH\x02\b\x01\"\xd5\x01\n" +
 	"\x05Hello\x122\n" +
 	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
@@ -3865,12 +4827,14 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x05roots\x18\x01 \x03(\fR\x05roots\"\v\n" +
 	"\tRotateNow\"\x17\n" +
 	"\x03Ack\x12\x10\n" +
-	"\x03seq\x18\x01 \x01(\x04R\x03seq\"\xef\x01\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\"\xfe\x02\n" +
 	"\x05Batch\x12\x19\n" +
 	"\x03seq\x18\x01 \x01(\x04B\a\xbaH\x042\x02 \x00R\x03seq\x128\n" +
 	"\ametrics\x18\x02 \x01(\v2\x1c.sermon.agent.v1.MetricBatchH\x00R\ametrics\x12N\n" +
 	"\x0fsecurity_events\x18\x03 \x01(\v2#.sermon.agent.v1.SecurityEventBatchH\x00R\x0esecurityEvents\x12/\n" +
-	"\x04logs\x18\x04 \x01(\v2\x19.sermon.agent.v1.LogBatchH\x00R\x04logsB\x10\n" +
+	"\x04logs\x18\x04 \x01(\v2\x19.sermon.agent.v1.LogBatchH\x00R\x04logs\x12D\n" +
+	"\rupdate_report\x18\x05 \x01(\v2\x1d.sermon.agent.v1.UpdateReportH\x00R\fupdateReport\x12G\n" +
+	"\x0ecommand_result\x18\x06 \x01(\v2\x1e.sermon.agent.v1.CommandResultH\x00R\rcommandResultB\x10\n" +
 	"\acontent\x12\x05\xbaH\x02\b\x01\"\x94\x01\n" +
 	"\vMetricBatch\x12E\n" +
 	"\fcollected_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\vcollectedAt\x12>\n" +
@@ -4074,7 +5038,59 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\r_memory_ratioB\x12\n" +
 	"\x10_runtime_secondsB\n" +
 	"\n" +
-	"\b_cmdline*\xb0\x01\n" +
+	"\b_cmdline\"\x13\n" +
+	"\x11RefreshUpdateInfo\"\xa9\x01\n" +
+	"\tRunUpdate\x12\\\n" +
+	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x12>\n" +
+	"\x05scope\x18\x02 \x01(\x0e2\x1c.sermon.agent.v1.UpdateScopeB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x05scope\"\xa3\x01\n" +
+	"\n" +
+	"RebootNode\x12\\\n" +
+	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x127\n" +
+	"\x06reason\x18\x02 \x01(\tB\x1f\xbaH\x1cr\x1a\x10\x01(\xc8\x012\x13^[^\\x00-\\x1f\\x7f]*$R\x06reason\"\xb9\x01\n" +
+	"\n" +
+	"SelfUpdate\x12\\\n" +
+	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x12M\n" +
+	"\aversion\x18\x02 \x01(\tB3\xbaH0r.(@2*^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$R\aversion\"\xc5\x05\n" +
+	"\fUpdateReport\x12E\n" +
+	"\fcollected_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\vcollectedAt\x12S\n" +
+	"\favailability\x18\x02 \x01(\x0e2#.sermon.agent.v1.UpdateAvailabilityB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\favailability\x12 \n" +
+	"\x06reason\x18\x03 \x01(\tB\b\xbaH\x05r\x03(\x80\bR\x06reason\x12R\n" +
+	"\x0fpackage_manager\x18\x04 \x01(\x0e2\x1f.sermon.agent.v1.PackageManagerB\b\xbaH\x05\x82\x01\x02\x10\x01R\x0epackageManager\x12E\n" +
+	"\bpackages\x18\x05 \x03(\v2\x1e.sermon.agent.v1.UpdatePackageB\t\xbaH\x06\x92\x01\x03\x10\x88'R\bpackages\x12*\n" +
+	"\vtotal_count\x18\x06 \x01(\rB\t\xbaH\x06*\x04\x18\xc0\x84=R\n" +
+	"totalCount\x120\n" +
+	"\x0esecurity_count\x18\a \x01(\rB\t\xbaH\x06*\x04\x18\xc0\x84=R\rsecurityCount\x12'\n" +
+	"\x0freboot_required\x18\b \x01(\bR\x0erebootRequired\x12-\n" +
+	"\rreboot_reason\x18\t \x01(\tB\b\xbaH\x05r\x03(\x80\bR\frebootReason\x12B\n" +
+	"\x0flast_upgrade_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\rlastUpgradeAt\x12D\n" +
+	"\vpermissions\x18\v \x01(\v2\".sermon.agent.v1.HelperPermissionsR\vpermissions\x12\x1c\n" +
+	"\trefreshed\x18\f \x01(\bR\trefreshed\"\xdb\x01\n" +
+	"\rUpdatePackage\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01(\x80\x02R\x04name\x125\n" +
+	"\x11installed_version\x18\x02 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x10installedVersion\x125\n" +
+	"\x11candidate_version\x18\x03 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x10candidateVersion\x12 \n" +
+	"\x06source\x18\x04 \x01(\tB\b\xbaH\x05r\x03(\x80\x02R\x06source\x12\x1a\n" +
+	"\bsecurity\x18\x05 \x01(\bR\bsecurity\"\x80\x01\n" +
+	"\x11HelperPermissions\x12%\n" +
+	"\x0eremote_updates\x18\x01 \x01(\bR\rremoteUpdates\x12#\n" +
+	"\rremote_reboot\x18\x02 \x01(\bR\fremoteReboot\x12\x1f\n" +
+	"\vself_update\x18\x03 \x01(\bR\n" +
+	"selfUpdate\"\xad\x03\n" +
+	"\rCommandResult\x12\\\n" +
+	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x12?\n" +
+	"\x05phase\x18\x02 \x01(\x0e2\x1d.sermon.agent.v1.CommandPhaseB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x05phase\x12\x1b\n" +
+	"\texit_code\x18\x03 \x01(\x11R\bexitCode\x12 \n" +
+	"\x06reason\x18\x04 \x01(\tB\b\xbaH\x05r\x03(\x80\bR\x06reason\x12!\n" +
+	"\x06output\x18\x05 \x01(\tB\t\xbaH\x06r\x04(\x80\x80\x10R\x06output\x12)\n" +
+	"\x10output_truncated\x18\x06 \x01(\bR\x0foutputTruncated\x129\n" +
+	"\n" +
+	"started_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n" +
+	"\bended_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\aendedAt*\xb0\x01\n" +
 	"\x0eSecuritySource\x12\x1f\n" +
 	"\x1bSECURITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17SECURITY_SOURCE_JOURNAL\x10\x01\x12!\n" +
@@ -4107,7 +5123,31 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x14LOG_SEVERITY_WARNING\x10\x05\x12\x17\n" +
 	"\x13LOG_SEVERITY_NOTICE\x10\x06\x12\x15\n" +
 	"\x11LOG_SEVERITY_INFO\x10\a\x12\x16\n" +
-	"\x12LOG_SEVERITY_DEBUG\x10\b2`\n" +
+	"\x12LOG_SEVERITY_DEBUG\x10\b*\\\n" +
+	"\vUpdateScope\x12\x1c\n" +
+	"\x18UPDATE_SCOPE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15UPDATE_SCOPE_SECURITY\x10\x01\x12\x14\n" +
+	"\x10UPDATE_SCOPE_ALL\x10\x02*|\n" +
+	"\x0ePackageManager\x12\x1f\n" +
+	"\x1bPACKAGE_MANAGER_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13PACKAGE_MANAGER_APT\x10\x01\x12\x17\n" +
+	"\x13PACKAGE_MANAGER_DNF\x10\x02\x12\x17\n" +
+	"\x13PACKAGE_MANAGER_APK\x10\x03*\xe9\x01\n" +
+	"\x12UpdateAvailability\x12#\n" +
+	"\x1fUPDATE_AVAILABILITY_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aUPDATE_AVAILABILITY_LISTED\x10\x01\x12!\n" +
+	"\x1dUPDATE_AVAILABILITY_NO_HELPER\x10\x02\x12&\n" +
+	"\"UPDATE_AVAILABILITY_HELPER_TOO_OLD\x10\x03\x12#\n" +
+	"\x1fUPDATE_AVAILABILITY_UNSUPPORTED\x10\x04\x12\x1e\n" +
+	"\x1aUPDATE_AVAILABILITY_FAILED\x10\x05*\xd1\x01\n" +
+	"\fCommandPhase\x12\x1d\n" +
+	"\x19COMMAND_PHASE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15COMMAND_PHASE_STARTED\x10\x01\x12\x1b\n" +
+	"\x17COMMAND_PHASE_SUCCEEDED\x10\x02\x12\x18\n" +
+	"\x14COMMAND_PHASE_FAILED\x10\x03\x12\x19\n" +
+	"\x15COMMAND_PHASE_REFUSED\x10\x04\x12\x1d\n" +
+	"\x19COMMAND_PHASE_UNSUPPORTED\x10\x05\x12\x16\n" +
+	"\x12COMMAND_PHASE_LOST\x10\x062`\n" +
 	"\fAgentService\x12P\n" +
 	"\aSession\x12\x1f.sermon.agent.v1.SessionRequest\x1a .sermon.agent.v1.SessionResponse(\x010\x01B\xc7\x01\n" +
 	"\x13com.sermon.agent.v1B\n" +
@@ -4125,131 +5165,159 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 	return file_sermon_agent_v1_agent_proto_rawDescData
 }
 
-var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(SecuritySource)(0),           // 0: sermon.agent.v1.SecuritySource
 	(Architecture)(0),             // 1: sermon.agent.v1.Architecture
 	(SshAuthMethod)(0),            // 2: sermon.agent.v1.SshAuthMethod
 	(LogSource)(0),                // 3: sermon.agent.v1.LogSource
 	(LogSeverity)(0),              // 4: sermon.agent.v1.LogSeverity
-	(*SessionRequest)(nil),        // 5: sermon.agent.v1.SessionRequest
-	(*SessionResponse)(nil),       // 6: sermon.agent.v1.SessionResponse
-	(*Hello)(nil),                 // 7: sermon.agent.v1.Hello
-	(*HostFacts)(nil),             // 8: sermon.agent.v1.HostFacts
-	(*Heartbeat)(nil),             // 9: sermon.agent.v1.Heartbeat
-	(*RotateCertificate)(nil),     // 10: sermon.agent.v1.RotateCertificate
-	(*CertificateIssued)(nil),     // 11: sermon.agent.v1.CertificateIssued
-	(*TrustBundle)(nil),           // 12: sermon.agent.v1.TrustBundle
-	(*RotateNow)(nil),             // 13: sermon.agent.v1.RotateNow
-	(*Ack)(nil),                   // 14: sermon.agent.v1.Ack
-	(*Batch)(nil),                 // 15: sermon.agent.v1.Batch
-	(*MetricBatch)(nil),           // 16: sermon.agent.v1.MetricBatch
-	(*Sample)(nil),                // 17: sermon.agent.v1.Sample
-	(*Throttle)(nil),              // 18: sermon.agent.v1.Throttle
-	(*SecurityEventBatch)(nil),    // 19: sermon.agent.v1.SecurityEventBatch
-	(*SecurityEvent)(nil),         // 20: sermon.agent.v1.SecurityEvent
-	(*SshRemote)(nil),             // 21: sermon.agent.v1.SshRemote
-	(*SshLoginFailed)(nil),        // 22: sermon.agent.v1.SshLoginFailed
-	(*SshInvalidUser)(nil),        // 23: sermon.agent.v1.SshInvalidUser
-	(*SshLoginSucceeded)(nil),     // 24: sermon.agent.v1.SshLoginSucceeded
-	(*SshPreauthDisconnect)(nil),  // 25: sermon.agent.v1.SshPreauthDisconnect
-	(*SudoAuthFailed)(nil),        // 26: sermon.agent.v1.SudoAuthFailed
-	(*SudoNotAllowed)(nil),        // 27: sermon.agent.v1.SudoNotAllowed
-	(*SudoCommand)(nil),           // 28: sermon.agent.v1.SudoCommand
-	(*AccountCreated)(nil),        // 29: sermon.agent.v1.AccountCreated
-	(*AccountDeleted)(nil),        // 30: sermon.agent.v1.AccountDeleted
-	(*SystemReboot)(nil),          // 31: sermon.agent.v1.SystemReboot
-	(*OomKill)(nil),               // 32: sermon.agent.v1.OomKill
-	(*LogBatch)(nil),              // 33: sermon.agent.v1.LogBatch
-	(*LogEntry)(nil),              // 34: sermon.agent.v1.LogEntry
-	(*ConfigUpdate)(nil),          // 35: sermon.agent.v1.ConfigUpdate
-	(*AgentConfig)(nil),           // 36: sermon.agent.v1.AgentConfig
-	(*LogConfig)(nil),             // 37: sermon.agent.v1.LogConfig
-	(*LogFileGlob)(nil),           // 38: sermon.agent.v1.LogFileGlob
-	(*RedactionRule)(nil),         // 39: sermon.agent.v1.RedactionRule
-	(*ConfigApplied)(nil),         // 40: sermon.agent.v1.ConfigApplied
-	(*StartLiveView)(nil),         // 41: sermon.agent.v1.StartLiveView
-	(*StopLiveView)(nil),          // 42: sermon.agent.v1.StopLiveView
-	(*LiveViewRefused)(nil),       // 43: sermon.agent.v1.LiveViewRefused
-	(*ProcessSnapshot)(nil),       // 44: sermon.agent.v1.ProcessSnapshot
-	(*SystemSummary)(nil),         // 45: sermon.agent.v1.SystemSummary
-	(*TaskCounts)(nil),            // 46: sermon.agent.v1.TaskCounts
-	(*ProcessInfo)(nil),           // 47: sermon.agent.v1.ProcessInfo
-	nil,                           // 48: sermon.agent.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 49: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 50: google.protobuf.Duration
+	(UpdateScope)(0),              // 5: sermon.agent.v1.UpdateScope
+	(PackageManager)(0),           // 6: sermon.agent.v1.PackageManager
+	(UpdateAvailability)(0),       // 7: sermon.agent.v1.UpdateAvailability
+	(CommandPhase)(0),             // 8: sermon.agent.v1.CommandPhase
+	(*SessionRequest)(nil),        // 9: sermon.agent.v1.SessionRequest
+	(*SessionResponse)(nil),       // 10: sermon.agent.v1.SessionResponse
+	(*Hello)(nil),                 // 11: sermon.agent.v1.Hello
+	(*HostFacts)(nil),             // 12: sermon.agent.v1.HostFacts
+	(*Heartbeat)(nil),             // 13: sermon.agent.v1.Heartbeat
+	(*RotateCertificate)(nil),     // 14: sermon.agent.v1.RotateCertificate
+	(*CertificateIssued)(nil),     // 15: sermon.agent.v1.CertificateIssued
+	(*TrustBundle)(nil),           // 16: sermon.agent.v1.TrustBundle
+	(*RotateNow)(nil),             // 17: sermon.agent.v1.RotateNow
+	(*Ack)(nil),                   // 18: sermon.agent.v1.Ack
+	(*Batch)(nil),                 // 19: sermon.agent.v1.Batch
+	(*MetricBatch)(nil),           // 20: sermon.agent.v1.MetricBatch
+	(*Sample)(nil),                // 21: sermon.agent.v1.Sample
+	(*Throttle)(nil),              // 22: sermon.agent.v1.Throttle
+	(*SecurityEventBatch)(nil),    // 23: sermon.agent.v1.SecurityEventBatch
+	(*SecurityEvent)(nil),         // 24: sermon.agent.v1.SecurityEvent
+	(*SshRemote)(nil),             // 25: sermon.agent.v1.SshRemote
+	(*SshLoginFailed)(nil),        // 26: sermon.agent.v1.SshLoginFailed
+	(*SshInvalidUser)(nil),        // 27: sermon.agent.v1.SshInvalidUser
+	(*SshLoginSucceeded)(nil),     // 28: sermon.agent.v1.SshLoginSucceeded
+	(*SshPreauthDisconnect)(nil),  // 29: sermon.agent.v1.SshPreauthDisconnect
+	(*SudoAuthFailed)(nil),        // 30: sermon.agent.v1.SudoAuthFailed
+	(*SudoNotAllowed)(nil),        // 31: sermon.agent.v1.SudoNotAllowed
+	(*SudoCommand)(nil),           // 32: sermon.agent.v1.SudoCommand
+	(*AccountCreated)(nil),        // 33: sermon.agent.v1.AccountCreated
+	(*AccountDeleted)(nil),        // 34: sermon.agent.v1.AccountDeleted
+	(*SystemReboot)(nil),          // 35: sermon.agent.v1.SystemReboot
+	(*OomKill)(nil),               // 36: sermon.agent.v1.OomKill
+	(*LogBatch)(nil),              // 37: sermon.agent.v1.LogBatch
+	(*LogEntry)(nil),              // 38: sermon.agent.v1.LogEntry
+	(*ConfigUpdate)(nil),          // 39: sermon.agent.v1.ConfigUpdate
+	(*AgentConfig)(nil),           // 40: sermon.agent.v1.AgentConfig
+	(*LogConfig)(nil),             // 41: sermon.agent.v1.LogConfig
+	(*LogFileGlob)(nil),           // 42: sermon.agent.v1.LogFileGlob
+	(*RedactionRule)(nil),         // 43: sermon.agent.v1.RedactionRule
+	(*ConfigApplied)(nil),         // 44: sermon.agent.v1.ConfigApplied
+	(*StartLiveView)(nil),         // 45: sermon.agent.v1.StartLiveView
+	(*StopLiveView)(nil),          // 46: sermon.agent.v1.StopLiveView
+	(*LiveViewRefused)(nil),       // 47: sermon.agent.v1.LiveViewRefused
+	(*ProcessSnapshot)(nil),       // 48: sermon.agent.v1.ProcessSnapshot
+	(*SystemSummary)(nil),         // 49: sermon.agent.v1.SystemSummary
+	(*TaskCounts)(nil),            // 50: sermon.agent.v1.TaskCounts
+	(*ProcessInfo)(nil),           // 51: sermon.agent.v1.ProcessInfo
+	(*RefreshUpdateInfo)(nil),     // 52: sermon.agent.v1.RefreshUpdateInfo
+	(*RunUpdate)(nil),             // 53: sermon.agent.v1.RunUpdate
+	(*RebootNode)(nil),            // 54: sermon.agent.v1.RebootNode
+	(*SelfUpdate)(nil),            // 55: sermon.agent.v1.SelfUpdate
+	(*UpdateReport)(nil),          // 56: sermon.agent.v1.UpdateReport
+	(*UpdatePackage)(nil),         // 57: sermon.agent.v1.UpdatePackage
+	(*HelperPermissions)(nil),     // 58: sermon.agent.v1.HelperPermissions
+	(*CommandResult)(nil),         // 59: sermon.agent.v1.CommandResult
+	nil,                           // 60: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 61: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 62: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
-	7,  // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
-	9,  // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
-	10, // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
-	15, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
-	40, // 4: sermon.agent.v1.SessionRequest.config_applied:type_name -> sermon.agent.v1.ConfigApplied
-	44, // 5: sermon.agent.v1.SessionRequest.process_snapshot:type_name -> sermon.agent.v1.ProcessSnapshot
-	43, // 6: sermon.agent.v1.SessionRequest.live_view_refused:type_name -> sermon.agent.v1.LiveViewRefused
-	14, // 7: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
-	11, // 8: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	13, // 9: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	12, // 10: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
-	18, // 11: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
-	35, // 12: sermon.agent.v1.SessionResponse.config_update:type_name -> sermon.agent.v1.ConfigUpdate
-	41, // 13: sermon.agent.v1.SessionResponse.start_live_view:type_name -> sermon.agent.v1.StartLiveView
-	42, // 14: sermon.agent.v1.SessionResponse.stop_live_view:type_name -> sermon.agent.v1.StopLiveView
-	8,  // 15: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
-	1,  // 16: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	0,  // 17: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
-	49, // 18: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	49, // 19: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	49, // 20: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	16, // 21: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
-	19, // 22: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
-	33, // 23: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
-	49, // 24: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
-	17, // 25: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
-	48, // 26: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
-	50, // 27: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
-	20, // 28: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
-	49, // 29: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	22, // 30: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
-	23, // 31: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
-	24, // 32: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
-	25, // 33: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
-	26, // 34: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
-	27, // 35: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
-	28, // 36: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
-	29, // 37: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
-	30, // 38: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
-	31, // 39: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
-	32, // 40: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
-	21, // 41: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 42: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
-	21, // 43: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
-	21, // 44: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 45: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
-	21, // 46: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
-	50, // 47: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
-	34, // 48: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
-	49, // 49: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
-	3,  // 50: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
-	4,  // 51: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
-	36, // 52: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
-	37, // 53: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
-	39, // 54: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
-	4,  // 55: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
-	38, // 56: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
-	50, // 57: sermon.agent.v1.StartLiveView.interval:type_name -> google.protobuf.Duration
-	49, // 58: sermon.agent.v1.ProcessSnapshot.taken_at:type_name -> google.protobuf.Timestamp
-	45, // 59: sermon.agent.v1.ProcessSnapshot.summary:type_name -> sermon.agent.v1.SystemSummary
-	47, // 60: sermon.agent.v1.ProcessSnapshot.processes:type_name -> sermon.agent.v1.ProcessInfo
-	46, // 61: sermon.agent.v1.SystemSummary.tasks:type_name -> sermon.agent.v1.TaskCounts
-	5,  // 62: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	6,  // 63: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	63, // [63:64] is the sub-list for method output_type
-	62, // [62:63] is the sub-list for method input_type
-	62, // [62:62] is the sub-list for extension type_name
-	62, // [62:62] is the sub-list for extension extendee
-	0,  // [0:62] is the sub-list for field type_name
+	11, // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
+	13, // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
+	14, // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
+	19, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
+	44, // 4: sermon.agent.v1.SessionRequest.config_applied:type_name -> sermon.agent.v1.ConfigApplied
+	48, // 5: sermon.agent.v1.SessionRequest.process_snapshot:type_name -> sermon.agent.v1.ProcessSnapshot
+	47, // 6: sermon.agent.v1.SessionRequest.live_view_refused:type_name -> sermon.agent.v1.LiveViewRefused
+	18, // 7: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	15, // 8: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
+	17, // 9: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	16, // 10: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	22, // 11: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
+	39, // 12: sermon.agent.v1.SessionResponse.config_update:type_name -> sermon.agent.v1.ConfigUpdate
+	45, // 13: sermon.agent.v1.SessionResponse.start_live_view:type_name -> sermon.agent.v1.StartLiveView
+	46, // 14: sermon.agent.v1.SessionResponse.stop_live_view:type_name -> sermon.agent.v1.StopLiveView
+	52, // 15: sermon.agent.v1.SessionResponse.refresh_update_info:type_name -> sermon.agent.v1.RefreshUpdateInfo
+	53, // 16: sermon.agent.v1.SessionResponse.run_update:type_name -> sermon.agent.v1.RunUpdate
+	54, // 17: sermon.agent.v1.SessionResponse.reboot_node:type_name -> sermon.agent.v1.RebootNode
+	55, // 18: sermon.agent.v1.SessionResponse.self_update:type_name -> sermon.agent.v1.SelfUpdate
+	12, // 19: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	1,  // 20: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
+	0,  // 21: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
+	61, // 22: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	61, // 23: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	61, // 24: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	20, // 25: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	23, // 26: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
+	37, // 27: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
+	56, // 28: sermon.agent.v1.Batch.update_report:type_name -> sermon.agent.v1.UpdateReport
+	59, // 29: sermon.agent.v1.Batch.command_result:type_name -> sermon.agent.v1.CommandResult
+	61, // 30: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	21, // 31: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	60, // 32: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	62, // 33: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	24, // 34: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
+	61, // 35: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	26, // 36: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
+	27, // 37: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
+	28, // 38: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
+	29, // 39: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
+	30, // 40: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
+	31, // 41: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
+	32, // 42: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
+	33, // 43: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
+	34, // 44: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
+	35, // 45: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
+	36, // 46: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
+	25, // 47: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 48: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
+	25, // 49: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
+	25, // 50: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
+	2,  // 51: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
+	25, // 52: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
+	62, // 53: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
+	38, // 54: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
+	61, // 55: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	3,  // 56: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
+	4,  // 57: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
+	40, // 58: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
+	41, // 59: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
+	43, // 60: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
+	4,  // 61: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
+	42, // 62: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
+	62, // 63: sermon.agent.v1.StartLiveView.interval:type_name -> google.protobuf.Duration
+	61, // 64: sermon.agent.v1.ProcessSnapshot.taken_at:type_name -> google.protobuf.Timestamp
+	49, // 65: sermon.agent.v1.ProcessSnapshot.summary:type_name -> sermon.agent.v1.SystemSummary
+	51, // 66: sermon.agent.v1.ProcessSnapshot.processes:type_name -> sermon.agent.v1.ProcessInfo
+	50, // 67: sermon.agent.v1.SystemSummary.tasks:type_name -> sermon.agent.v1.TaskCounts
+	5,  // 68: sermon.agent.v1.RunUpdate.scope:type_name -> sermon.agent.v1.UpdateScope
+	61, // 69: sermon.agent.v1.UpdateReport.collected_at:type_name -> google.protobuf.Timestamp
+	7,  // 70: sermon.agent.v1.UpdateReport.availability:type_name -> sermon.agent.v1.UpdateAvailability
+	6,  // 71: sermon.agent.v1.UpdateReport.package_manager:type_name -> sermon.agent.v1.PackageManager
+	57, // 72: sermon.agent.v1.UpdateReport.packages:type_name -> sermon.agent.v1.UpdatePackage
+	61, // 73: sermon.agent.v1.UpdateReport.last_upgrade_at:type_name -> google.protobuf.Timestamp
+	58, // 74: sermon.agent.v1.UpdateReport.permissions:type_name -> sermon.agent.v1.HelperPermissions
+	8,  // 75: sermon.agent.v1.CommandResult.phase:type_name -> sermon.agent.v1.CommandPhase
+	61, // 76: sermon.agent.v1.CommandResult.started_at:type_name -> google.protobuf.Timestamp
+	61, // 77: sermon.agent.v1.CommandResult.ended_at:type_name -> google.protobuf.Timestamp
+	9,  // 78: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	10, // 79: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	79, // [79:80] is the sub-list for method output_type
+	78, // [78:79] is the sub-list for method input_type
+	78, // [78:78] is the sub-list for extension type_name
+	78, // [78:78] is the sub-list for extension extendee
+	0,  // [0:78] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -4275,11 +5343,17 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionResponse_ConfigUpdate)(nil),
 		(*SessionResponse_StartLiveView)(nil),
 		(*SessionResponse_StopLiveView)(nil),
+		(*SessionResponse_RefreshUpdateInfo)(nil),
+		(*SessionResponse_RunUpdate)(nil),
+		(*SessionResponse_RebootNode)(nil),
+		(*SessionResponse_SelfUpdate)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[10].OneofWrappers = []any{
 		(*Batch_Metrics)(nil),
 		(*Batch_SecurityEvents)(nil),
 		(*Batch_Logs)(nil),
+		(*Batch_UpdateReport)(nil),
+		(*Batch_CommandResult)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[12].OneofWrappers = []any{
 		(*Sample_IntValue)(nil),
@@ -4312,8 +5386,8 @@ func file_sermon_agent_v1_agent_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   44,
+			NumEnums:      9,
+			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

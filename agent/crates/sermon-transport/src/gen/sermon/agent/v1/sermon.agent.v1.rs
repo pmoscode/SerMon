@@ -43,7 +43,7 @@ pub mod session_request {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6, 7, 8")]
+    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
@@ -80,6 +80,19 @@ pub mod session_response {
         /// stop_live_view ends the live view.
         #[prost(message, tag="8")]
         StopLiveView(super::StopLiveView),
+        /// refresh_update_info asks for a new UpdateReport now (KONZEPT §14.1); the agent does it at
+        /// most every 5 minutes.
+        #[prost(message, tag="9")]
+        RefreshUpdateInfo(super::RefreshUpdateInfo),
+        /// run_update installs updates through the root helper (KONZEPT §14.2, ADR 0035).
+        #[prost(message, tag="10")]
+        RunUpdate(super::RunUpdate),
+        /// reboot_node reboots the host through the root helper.
+        #[prost(message, tag="11")]
+        RebootNode(super::RebootNode),
+        /// self_update replaces the agent's binary through the root helper (KONZEPT §14.3).
+        #[prost(message, tag="12")]
+        SelfUpdate(super::SelfUpdate),
     }
 }
 /// Hello is the first message of every stream.
@@ -189,7 +202,7 @@ pub struct Batch {
     #[prost(uint64, tag="1")]
     pub seq: u64,
     /// content is the data; exactly one must be set.
-    #[prost(oneof="batch::Content", tags="2, 3, 4")]
+    #[prost(oneof="batch::Content", tags="2, 3, 4, 5, 6")]
     pub content: ::core::option::Option<batch::Content>,
 }
 /// Nested message and enum types in `Batch`.
@@ -206,6 +219,14 @@ pub mod batch {
         /// logs are log entries of the host, redacted by the agent before sending (KONZEPT §10).
         #[prost(message, tag="4")]
         Logs(super::LogBatch),
+        /// update_report lists the host's available updates (KONZEPT §14.1); the newest one counts.
+        #[prost(message, tag="5")]
+        UpdateReport(super::UpdateReport),
+        /// command_result says how a command of the server went (run_update, reboot_node,
+        /// self_update): buffered like all batches, so it survives a restart of the agent – also the
+        /// one its own update causes. Sent more than once for a run: once per phase.
+        #[prost(message, tag="6")]
+        CommandResult(super::CommandResult),
     }
 }
 /// MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
@@ -756,6 +777,143 @@ pub struct ProcessInfo {
     #[prost(string, tag="17")]
     pub container: ::prost::alloc::string::String,
 }
+/// RefreshUpdateInfo asks the agent to list its updates now, the package sources refreshed first.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RefreshUpdateInfo {
+}
+/// RunUpdate installs updates. Rebooting afterwards is a command of its own (RebootNode).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RunUpdate {
+    /// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+    #[prost(string, tag="1")]
+    pub run_id: ::prost::alloc::string::String,
+    /// scope is which updates to install.
+    #[prost(enumeration="UpdateScope", tag="2")]
+    pub scope: i32,
+}
+/// RebootNode reboots the host one minute after the root helper took it.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RebootNode {
+    /// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+    #[prost(string, tag="1")]
+    pub run_id: ::prost::alloc::string::String,
+    /// reason is shown to the host's users and written to its journal, e.g. "updates (SerMon)".
+    #[prost(string, tag="2")]
+    pub reason: ::prost::alloc::string::String,
+}
+/// SelfUpdate replaces the agent's binary with a signed version (KONZEPT §14.3); how the agent
+/// fetches and the helper checks it follows ADR 0036.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SelfUpdate {
+    /// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+    #[prost(string, tag="1")]
+    pub run_id: ::prost::alloc::string::String,
+    /// version is the agent version to install, e.g. "0.5.0".
+    #[prost(string, tag="2")]
+    pub version: ::prost::alloc::string::String,
+}
+/// UpdateReport is what the host could update (KONZEPT §14.1), every 6 hours, after the package
+/// manager ran and on RefreshUpdateInfo. Names, versions and sources come from the host's package
+/// sources: shown as text only.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpdateReport {
+    /// collected_at is the agent's time of the listing.
+    #[prost(message, optional, tag="1")]
+    pub collected_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// availability says whether the packages below are the host's updates.
+    #[prost(enumeration="UpdateAvailability", tag="2")]
+    pub availability: i32,
+    /// reason explains an availability other than listed.
+    #[prost(string, tag="3")]
+    pub reason: ::prost::alloc::string::String,
+    /// package_manager says how the updates were listed.
+    #[prost(enumeration="PackageManager", tag="4")]
+    pub package_manager: i32,
+    /// packages are the available updates, security updates first, at most 5000.
+    #[prost(message, repeated, tag="5")]
+    pub packages: ::prost::alloc::vec::Vec<UpdatePackage>,
+    /// total_count counts all available updates, the omitted ones too.
+    #[prost(uint32, tag="6")]
+    pub total_count: u32,
+    /// security_count counts the security updates among them (0 without security metadata).
+    #[prost(uint32, tag="7")]
+    pub security_count: u32,
+    /// reboot_required: the host needs a reboot to use what is installed (KONZEPT §14.1).
+    #[prost(bool, tag="8")]
+    pub reboot_required: bool,
+    /// reboot_reason says why, e.g. the packages of /var/run/reboot-required.pkgs.
+    #[prost(string, tag="9")]
+    pub reboot_reason: ::prost::alloc::string::String,
+    /// last_upgrade_at is when packages were last upgraded, if known.
+    #[prost(message, optional, tag="10")]
+    pub last_upgrade_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// permissions are what the host allows remotely (/etc/sermon/helper.toml); unset without helper.
+    #[prost(message, optional, tag="11")]
+    pub permissions: ::core::option::Option<HelperPermissions>,
+    /// refreshed: the package sources were updated just before listing.
+    #[prost(bool, tag="12")]
+    pub refreshed: bool,
+}
+/// UpdatePackage is one available update.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UpdatePackage {
+    /// name is the package's name.
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+    /// installed_version is the version installed now.
+    #[prost(string, tag="2")]
+    pub installed_version: ::prost::alloc::string::String,
+    /// candidate_version is the version the update installs.
+    #[prost(string, tag="3")]
+    pub candidate_version: ::prost::alloc::string::String,
+    /// source is where it comes from, e.g. "bookworm-security" or a repository's ID.
+    #[prost(string, tag="4")]
+    pub source: ::prost::alloc::string::String,
+    /// security: the source marks it as a security update.
+    #[prost(bool, tag="5")]
+    pub security: bool,
+}
+/// HelperPermissions are the switches of /etc/sermon/helper.toml (ADR 0035).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct HelperPermissions {
+    /// remote_updates: updates may be installed on request of the server.
+    #[prost(bool, tag="1")]
+    pub remote_updates: bool,
+    /// remote_reboot: the host may be rebooted on request of the server.
+    #[prost(bool, tag="2")]
+    pub remote_reboot: bool,
+    /// self_update: the agent may replace its binary on request of the server.
+    #[prost(bool, tag="3")]
+    pub self_update: bool,
+}
+/// CommandResult is the state of a command of the server.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CommandResult {
+    /// run_id is the run's ID from the command.
+    #[prost(string, tag="1")]
+    pub run_id: ::prost::alloc::string::String,
+    /// phase is how far it has come.
+    #[prost(enumeration="CommandPhase", tag="2")]
+    pub phase: i32,
+    /// exit_code is the command's exit code once it ran; -1 if it was killed.
+    #[prost(sint32, tag="3")]
+    pub exit_code: i32,
+    /// reason explains a refusal or failure.
+    #[prost(string, tag="4")]
+    pub reason: ::prost::alloc::string::String,
+    /// output is the end of the command's output, redacted by the agent, at most 256 KiB.
+    #[prost(string, tag="5")]
+    pub output: ::prost::alloc::string::String,
+    /// output_truncated: the beginning of the output was cut.
+    #[prost(bool, tag="6")]
+    pub output_truncated: bool,
+    /// started_at is when the helper started the run.
+    #[prost(message, optional, tag="7")]
+    pub started_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// ended_at is when it ended.
+    #[prost(message, optional, tag="8")]
+    pub ended_at: ::core::option::Option<::prost_types::Timestamp>,
+}
 /// SecuritySource is where the agent finds the log lines for security events (ADR 0025).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -971,6 +1129,170 @@ impl LogSeverity {
             "LOG_SEVERITY_NOTICE" => Some(Self::Notice),
             "LOG_SEVERITY_INFO" => Some(Self::Info),
             "LOG_SEVERITY_DEBUG" => Some(Self::Debug),
+            _ => None,
+        }
+    }
+}
+/// UpdateScope says which updates a run installs (KONZEPT §14.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum UpdateScope {
+    /// UPDATE_SCOPE_UNSPECIFIED is invalid.
+    Unspecified = 0,
+    /// UPDATE_SCOPE_SECURITY installs security updates only (not on Alpine, KONZEPT O6).
+    Security = 1,
+    /// UPDATE_SCOPE_ALL installs all updates.
+    All = 2,
+}
+impl UpdateScope {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "UPDATE_SCOPE_UNSPECIFIED",
+            Self::Security => "UPDATE_SCOPE_SECURITY",
+            Self::All => "UPDATE_SCOPE_ALL",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "UPDATE_SCOPE_UNSPECIFIED" => Some(Self::Unspecified),
+            "UPDATE_SCOPE_SECURITY" => Some(Self::Security),
+            "UPDATE_SCOPE_ALL" => Some(Self::All),
+            _ => None,
+        }
+    }
+}
+/// PackageManager is the host's package manager.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum PackageManager {
+    /// PACKAGE_MANAGER_UNSPECIFIED: unknown (see the report's availability).
+    Unspecified = 0,
+    /// PACKAGE_MANAGER_APT: Debian and Ubuntu.
+    Apt = 1,
+    /// PACKAGE_MANAGER_DNF: the RHEL family and Fedora.
+    Dnf = 2,
+    /// PACKAGE_MANAGER_APK: Alpine, without security metadata (KONZEPT O6).
+    Apk = 3,
+}
+impl PackageManager {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "PACKAGE_MANAGER_UNSPECIFIED",
+            Self::Apt => "PACKAGE_MANAGER_APT",
+            Self::Dnf => "PACKAGE_MANAGER_DNF",
+            Self::Apk => "PACKAGE_MANAGER_APK",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "PACKAGE_MANAGER_UNSPECIFIED" => Some(Self::Unspecified),
+            "PACKAGE_MANAGER_APT" => Some(Self::Apt),
+            "PACKAGE_MANAGER_DNF" => Some(Self::Dnf),
+            "PACKAGE_MANAGER_APK" => Some(Self::Apk),
+            _ => None,
+        }
+    }
+}
+/// UpdateAvailability says whether the agent could list the updates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum UpdateAvailability {
+    /// UPDATE_AVAILABILITY_UNSPECIFIED is invalid.
+    Unspecified = 0,
+    /// UPDATE_AVAILABILITY_LISTED: the packages below are the host's updates.
+    Listed = 1,
+    /// UPDATE_AVAILABILITY_NO_HELPER: the root helper is not installed or not running.
+    NoHelper = 2,
+    /// UPDATE_AVAILABILITY_HELPER_TOO_OLD: the helper doesn't know the operation.
+    HelperTooOld = 3,
+    /// UPDATE_AVAILABILITY_UNSUPPORTED: the host's distribution has no supported package manager.
+    Unsupported = 4,
+    /// UPDATE_AVAILABILITY_FAILED: listing failed; reason says why.
+    Failed = 5,
+}
+impl UpdateAvailability {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "UPDATE_AVAILABILITY_UNSPECIFIED",
+            Self::Listed => "UPDATE_AVAILABILITY_LISTED",
+            Self::NoHelper => "UPDATE_AVAILABILITY_NO_HELPER",
+            Self::HelperTooOld => "UPDATE_AVAILABILITY_HELPER_TOO_OLD",
+            Self::Unsupported => "UPDATE_AVAILABILITY_UNSUPPORTED",
+            Self::Failed => "UPDATE_AVAILABILITY_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "UPDATE_AVAILABILITY_UNSPECIFIED" => Some(Self::Unspecified),
+            "UPDATE_AVAILABILITY_LISTED" => Some(Self::Listed),
+            "UPDATE_AVAILABILITY_NO_HELPER" => Some(Self::NoHelper),
+            "UPDATE_AVAILABILITY_HELPER_TOO_OLD" => Some(Self::HelperTooOld),
+            "UPDATE_AVAILABILITY_UNSUPPORTED" => Some(Self::Unsupported),
+            "UPDATE_AVAILABILITY_FAILED" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+/// CommandPhase is how far a command of the server has come.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum CommandPhase {
+    /// COMMAND_PHASE_UNSPECIFIED is invalid.
+    Unspecified = 0,
+    /// COMMAND_PHASE_STARTED: the root helper took it and runs it.
+    Started = 1,
+    /// COMMAND_PHASE_SUCCEEDED: it ended with exit code 0.
+    Succeeded = 2,
+    /// COMMAND_PHASE_FAILED: it ran and failed; exit_code and output tell how.
+    Failed = 3,
+    /// COMMAND_PHASE_REFUSED: not run, the host forbids it or the helper refused; reason says why.
+    Refused = 4,
+    /// COMMAND_PHASE_UNSUPPORTED: not run, no helper, a helper too old or an unsupported host.
+    Unsupported = 5,
+    /// COMMAND_PHASE_LOST: the helper knows the run no longer (its result expired).
+    Lost = 6,
+}
+impl CommandPhase {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "COMMAND_PHASE_UNSPECIFIED",
+            Self::Started => "COMMAND_PHASE_STARTED",
+            Self::Succeeded => "COMMAND_PHASE_SUCCEEDED",
+            Self::Failed => "COMMAND_PHASE_FAILED",
+            Self::Refused => "COMMAND_PHASE_REFUSED",
+            Self::Unsupported => "COMMAND_PHASE_UNSUPPORTED",
+            Self::Lost => "COMMAND_PHASE_LOST",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "COMMAND_PHASE_UNSPECIFIED" => Some(Self::Unspecified),
+            "COMMAND_PHASE_STARTED" => Some(Self::Started),
+            "COMMAND_PHASE_SUCCEEDED" => Some(Self::Succeeded),
+            "COMMAND_PHASE_FAILED" => Some(Self::Failed),
+            "COMMAND_PHASE_REFUSED" => Some(Self::Refused),
+            "COMMAND_PHASE_UNSUPPORTED" => Some(Self::Unsupported),
+            "COMMAND_PHASE_LOST" => Some(Self::Lost),
             _ => None,
         }
     }

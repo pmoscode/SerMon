@@ -990,6 +990,55 @@ func TestSession_AcknowledgesLogBatchesWithoutStoringThemYet(t *testing.T) {
 	}
 }
 
+// M4-05: update reports and command results are part of the protocol before the server handles
+// them (M4-09, M4-11): acknowledged in order and dropped, without a metric batch's lag.
+func TestSession_AcknowledgesUpdateReportsAndCommandResultsWithoutHandlingThemYet(t *testing.T) {
+	store := memstore.New()
+	group := tenant.GroupID(uuid.New())
+	store.AddNode(orgX, group, nodeX)
+	config := ingest.DefaultConfig()
+	config.FlushInterval = 20 * time.Millisecond
+	service := ingest.NewService(store, metrics.NewRing(), fakeNodes{group: group}, config, time.Now, slog.New(slog.DiscardHandler))
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithIngest(service)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Receive(); err != nil {
+		t.Fatal(err)
+	}
+	batches := []*agentv1.Batch{
+		{Seq: 4, Content: &agentv1.Batch_UpdateReport{UpdateReport: &agentv1.UpdateReport{
+			CollectedAt: timestamppb.Now(), Availability: agentv1.UpdateAvailability_UPDATE_AVAILABILITY_NO_HELPER,
+		}}},
+		{Seq: 5, Content: &agentv1.Batch_CommandResult{CommandResult: &agentv1.CommandResult{
+			RunId: "0193f5a0-0000-7000-8000-000000000001", Phase: agentv1.CommandPhase_COMMAND_PHASE_STARTED,
+		}}},
+	}
+	for _, b := range batches {
+		if err := stream.Send(&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: b}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var acked uint64
+	for acked < 5 {
+		res, err := stream.Receive()
+		if err != nil || res.GetAck() == nil {
+			t.Fatalf("Receive() = %v, %v; want an Ack", res, err)
+		}
+		acked = res.GetAck().GetSeq()
+	}
+	_ = stream.CloseRequest()
+	if got := store.Aggregates(); len(got) != 0 {
+		t.Errorf("stored %+v", got)
+	}
+	stats := service.Stats()
+	if lag, rejected := stats.LagMillis.Load(), stats.Rejected.Load(); lag != 0 || rejected != 0 {
+		t.Errorf("lag = %d ms, rejected %d after reports and results", lag, rejected)
+	}
+}
+
 // recordingLogs captures what the ingest writes as logs.
 type recordingLogs struct {
 	mu      sync.Mutex

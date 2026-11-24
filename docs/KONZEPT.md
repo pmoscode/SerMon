@@ -275,19 +275,23 @@ eine Fake-Implementierung für Tests.
 ## 5. Kommunikation und Protokoll
 
 - **Schema:** `proto/sermon/agent/v1/*.proto` und `proto/sermon/web/v1/*.proto`, verwaltet mit `buf` (Lint und
-  Breaking-Change-Check in CI).
+  Breaking-Change-Check in CI); dazu `proto/sermon/helper/v1` zwischen Agent und Root-Helper (§4.2).
 - **Agent ↔ Server:** Ein langlebiger **bidirektionaler gRPC-Stream** `AgentService.Session`.
     - Agent → Server: `Hello{agent_version, host_facts, config_version}` (`host_facts` mit `security_source`: Journal,
       Datei verifiziert/unverifiziert oder keine), `Heartbeat`,
       `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“), `Batch{seq, …}` mit genau einem
-      Inhalt: `MetricBatch`, `SecurityEventBatch`, `LogBatch` (M3-01), später `UpdateReport`; dazu `ConfigApplied`
-      (Antwort auf `ConfigUpdate`), `ProcessSnapshot` bzw. `LiveViewRefused{reason}` (Antwort auf `StartLiveView`, M3-13)
-      und `CommandResult` (nicht gepuffert)
+      Inhalt: `MetricBatch`, `SecurityEventBatch`, `LogBatch` (M3-01), `UpdateReport` (verfügbare Updates, Reboot nötig,
+      Rechte des Helpers) und `CommandResult{run_id, phase, exit_code, output}` (M4-05); dazu `ConfigApplied` (Antwort
+      auf `ConfigUpdate`) und `ProcessSnapshot` bzw. `LiveViewRefused{reason}` (Antwort auf `StartLiveView`, M3-13).
+      `CommandResult` ist gepuffert wie alle Batches: Das Ergebnis übersteht den Neustart des Agents, auch den durch
+      sein eigenes Update; es kommt einmal je Phase (gestartet, erfolgreich, fehlgeschlagen, abgelehnt …).
     - Server → Agent: `TrustBundle{roots}` (zu Beginn jeder Session), `Ack{seq}`, `Throttle{min_interval}`,
       `CertificateIssued`, `RotateNow` (Rotation auf Abruf), `ConfigUpdate{version, config}` (Log-Auswahl und
       Redaction-Regeln, [ADR 0030](adr/0030-konfiguration-vom-server.md)),
       `StartLiveView{interval, hide_cmdline}` (eine Lease: ohne Erneuerung endet die Live-Ansicht nach 60 s, ebenso mit
-      der Session), `StopLiveView`, `RunUpdate{run_id, scope}`, `RefreshUpdateInfo`
+      der Session), `StopLiveView`, `RefreshUpdateInfo`, `RunUpdate{run_id, scope}`, `RebootNode{run_id, reason}` und
+      `SelfUpdate{run_id, version}` (M4-05; der Reboot nach einem Update ist ein eigener Befehl). Agents ohne diese
+      Befehle ignorieren sie wie jede unbekannte Nachricht.
 - **Enrollment:** `EnrollmentService.Enroll{token, csr, host_facts}` ist ein einzelner Aufruf über den öffentlichen
   HTTPS-Endpunkt, nicht über den mTLS-Port ([ADR 0009](adr/0009-enrollment-ueber-web-endpunkt.md)).
 - **Batching:** Metriken werden jede Sekunde gesendet, Logs alle 1 s oder bei 256 KB (je nachdem, was zuerst eintritt).

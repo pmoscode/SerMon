@@ -4060,7 +4060,28 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.2 Update-Erfassung (E4.2)
 
-#### ☐ M4-05 – Protokoll für Updates und Befehle · X · S
+#### ☑ M4-05 – Protokoll für Updates und Befehle · X · S
+> Erledigt (KONZEPT §5):
+> - **Agent → Server**, beide als Inhalt von `Batch`:
+>   - `UpdateReport`: Zeitpunkt, `availability` (gelistet, kein Helper, Helper zu alt, nicht unterstützt,
+>     fehlgeschlagen) mit Grund, Paketmanager, höchstens 5 000 `UpdatePackage` (Name, installiert, Kandidat, Quelle,
+>     Security), Gesamt- und Security-Zahl, Reboot nötig mit Grund, letztes Upgrade, die Rechte aus `helper.toml`.
+>   - `CommandResult{run_id, phase, exit_code, reason, output ≤ 256 KiB, output_truncated, started_at, ended_at}`
+>     mit den Phasen gestartet, erfolgreich, fehlgeschlagen, abgelehnt, nicht unterstützt, verloren.
+> - **Abweichung:** `CommandResult` ist gepuffert statt „nicht gepuffert“ (KONZEPT §5 alt): So übersteht das Ergebnis
+>   den Neustart des Agents durch sein eigenes Paket-Update, und das WAL liefert es mindestens einmal; der Server
+>   führt es über `run_id` und Phase zusammen (M4-11).
+> - **Server → Agent:** `RefreshUpdateInfo`, `RunUpdate{run_id, scope}`, `RebootNode{run_id, reason}`,
+>   `SelfUpdate{run_id, version}` (Felder des Self-Updates nach ADR 0036). **Abweichung:** `RunUpdate` hat kein
+>   `reboot`; der Reboot nach einem Update ist ein eigener Befehl, wie im Helper.
+> - **Regeln:** `run_id` nur als kleingeschriebene UUID, Scope und Phasen nur bekannt und nicht `UNSPECIFIED`, der
+>   Grund eines Reboots 1 bis 200 Byte ohne Steuerzeichen, die Version semantisch, Längen aller Texte begrenzt.
+> - **Bis M4-09 und M4-11:** Der Server bestätigt Berichte und Ergebnisse in Reihenfolge und verwirft sie
+>   (`ingest.Batch.Unhandled`), ohne die Lag-Statistik der Metriken zu verfälschen. Der Agent ignoriert die neuen
+>   Befehle bis M4-12 wie ein älterer Agent jede unbekannte Nachricht.
+> - **Tests:** Schema (11 gültige, 29 ungültige Nachrichten), Roundtrip in Rust, Session (Bestätigung ohne Speichern
+>   und ohne Lag, der Agent übersteht die Befehle), Ingest (Reihenfolge der Bestätigung). `just breaking-proto` grün.
+> - **Gegenproben** für 16 Prüfungen (13 Regeln im Schema, die Behandlung im Server), alle erkannt.
 - **Ziel:** Skill `sermon-proto-change`.
   - Agent → Server: `UpdateReport` (Zähler, Paketliste mit Name, installiert, Kandidat, Quelle und Security-Flag,
     Reboot nötig mit Grund, letztes erfolgreiches Update, „nicht verfügbar“ mit Grund) als Inhalt von `Batch`;

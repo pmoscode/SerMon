@@ -264,6 +264,26 @@ func TestIngest_LogBatchesAreAcknowledgedInOrderWithoutAStore(t *testing.T) {
 	}
 }
 
+// M4-05: a batch the server doesn't handle yet waits for the batches before it, like a log batch.
+func TestIngest_UnhandledBatchesAreAcknowledgedInOrder(t *testing.T) {
+	w := newWorld(t, ingest.DefaultConfig())
+	s := w.open(t)
+	last := send(t, w, s, 1, t0, 1, 2, 3)
+	if response := s.Accept(context.Background(), ingest.Batch{Seq: last + 1, Unhandled: true}); response.Ack != 0 {
+		t.Fatalf("Accept(unhandled) = %+v, want nothing before the flush", response)
+	}
+	if ack, err := s.Flush(context.Background()); err != nil || ack != 0 {
+		t.Fatalf("Flush() = %d, %v; want nothing while an earlier batch is open", ack, err)
+	}
+	send(t, w, s, last+2, t0.Add(20*time.Second), 4)
+	if ack, err := s.Flush(context.Background()); err != nil || ack != last+1 {
+		t.Fatalf("Flush() = %d, %v; want %d", ack, err, last+1)
+	}
+	if stats := w.svc.Stats(); stats.Rejected.Load() != 0 {
+		t.Errorf("rejected %d", stats.Rejected.Load())
+	}
+}
+
 func TestIngest_AWriteErrorAcknowledgesNothingAndRetries(t *testing.T) {
 	w := newWorld(t, ingest.DefaultConfig())
 	s := w.open(t)

@@ -265,3 +265,79 @@ fn live_view_messages_roundtrip() {
         (None, Some(""))
     );
 }
+
+// M4-05: update reports and command results go through the buffer as batches; the commands of the
+// root helper are typed, without free arguments.
+#[test]
+fn update_reports_command_results_and_commands_roundtrip() {
+    use sermon_transport::proto::agent::v1::{
+        Batch, CommandPhase, CommandResult, HelperPermissions, PackageManager, RebootNode,
+        RunUpdate, SessionResponse, UpdateAvailability, UpdatePackage, UpdateReport, UpdateScope,
+        batch, session_response,
+    };
+    let report = SessionRequest {
+        payload: Some(Payload::Batch(Batch {
+            seq: 7,
+            content: Some(batch::Content::UpdateReport(UpdateReport {
+                collected_at: Some(std::time::SystemTime::UNIX_EPOCH.into()),
+                availability: UpdateAvailability::Listed.into(),
+                package_manager: PackageManager::Apt.into(),
+                packages: vec![UpdatePackage {
+                    name: "openssl".into(),
+                    installed_version: "3.0.15-1~deb12u1".into(),
+                    candidate_version: "3.0.16-1~deb12u1".into(),
+                    source: "bookworm-security".into(),
+                    security: true,
+                }],
+                total_count: 3,
+                security_count: 1,
+                reboot_required: true,
+                permissions: Some(HelperPermissions {
+                    remote_updates: true,
+                    remote_reboot: false,
+                    self_update: true,
+                }),
+                ..UpdateReport::default()
+            })),
+        })),
+    };
+    assert_eq!(
+        SessionRequest::decode(report.encode_to_vec().as_slice()).unwrap(),
+        report
+    );
+    let result = SessionRequest {
+        payload: Some(Payload::Batch(Batch {
+            seq: 8,
+            content: Some(batch::Content::CommandResult(CommandResult {
+                run_id: "0193f5a0-0000-7000-8000-000000000001".into(),
+                phase: CommandPhase::Failed.into(),
+                exit_code: -1,
+                output: "E: dpkg was interrupted".into(),
+                output_truncated: true,
+                ..CommandResult::default()
+            })),
+        })),
+    };
+    assert_eq!(
+        SessionRequest::decode(result.encode_to_vec().as_slice()).unwrap(),
+        result
+    );
+    for command in [
+        session_response::Payload::RunUpdate(RunUpdate {
+            run_id: "0193f5a0-0000-7000-8000-000000000001".into(),
+            scope: UpdateScope::All.into(),
+        }),
+        session_response::Payload::RebootNode(RebootNode {
+            run_id: "0193f5a0-0000-7000-8000-000000000002".into(),
+            reason: "updates".into(),
+        }),
+    ] {
+        let message = SessionResponse {
+            payload: Some(command),
+        };
+        assert_eq!(
+            SessionResponse::decode(message.encode_to_vec().as_slice()).unwrap(),
+            message
+        );
+    }
+}

@@ -605,6 +605,9 @@ func sendAck(stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionR
 
 // toBatch converts a validated protocol batch. Identity is never taken from it.
 func toBatch(b *agentv1.Batch) ingest.Batch {
+	if b.GetUpdateReport() != nil || b.GetCommandResult() != nil {
+		return ingest.Batch{Seq: b.GetSeq(), Unhandled: true}
+	}
 	if events := b.GetSecurityEvents(); events != nil {
 		batch := ingest.Batch{Seq: b.GetSeq(), Events: make([]secevent.Event, 0, len(events.GetEvents()))}
 		for _, e := range events.GetEvents() {

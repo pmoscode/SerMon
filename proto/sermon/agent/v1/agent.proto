@@ -74,6 +74,15 @@ message SessionResponse {
     StartLiveView start_live_view = 7;
     // stop_live_view ends the live view.
     StopLiveView stop_live_view = 8;
+    // refresh_update_info asks for a new UpdateReport now (KONZEPT §14.1); the agent does it at
+    // most every 5 minutes.
+    RefreshUpdateInfo refresh_update_info = 9;
+    // run_update installs updates through the root helper (KONZEPT §14.2, ADR 0035).
+    RunUpdate run_update = 10;
+    // reboot_node reboots the host through the root helper.
+    RebootNode reboot_node = 11;
+    // self_update replaces the agent's binary through the root helper (KONZEPT §14.3).
+    SelfUpdate self_update = 12;
   }
 }
 
@@ -216,6 +225,12 @@ message Batch {
     SecurityEventBatch security_events = 3;
     // logs are log entries of the host, redacted by the agent before sending (KONZEPT §10).
     LogBatch logs = 4;
+    // update_report lists the host's available updates (KONZEPT §14.1); the newest one counts.
+    UpdateReport update_report = 5;
+    // command_result says how a command of the server went (run_update, reboot_node,
+    // self_update): buffered like all batches, so it survives a restart of the agent – also the
+    // one its own update causes. Sent more than once for a run: once per phase.
+    CommandResult command_result = 6;
   }
 }
 
@@ -764,4 +779,181 @@ message ProcessInfo {
   string unit = 16 [(buf.validate.field).string.max_bytes = 256];
   // container is the first 12 characters of a container ID from the cgroup.
   string container = 17 [(buf.validate.field).string.pattern = "^([0-9a-f]{12})?$"];
+}
+
+// RefreshUpdateInfo asks the agent to list its updates now, the package sources refreshed first.
+message RefreshUpdateInfo {}
+
+// UpdateScope says which updates a run installs (KONZEPT §14.2).
+enum UpdateScope {
+  // UPDATE_SCOPE_UNSPECIFIED is invalid.
+  UPDATE_SCOPE_UNSPECIFIED = 0;
+  // UPDATE_SCOPE_SECURITY installs security updates only (not on Alpine, KONZEPT O6).
+  UPDATE_SCOPE_SECURITY = 1;
+  // UPDATE_SCOPE_ALL installs all updates.
+  UPDATE_SCOPE_ALL = 2;
+}
+
+// RunUpdate installs updates. Rebooting afterwards is a command of its own (RebootNode).
+message RunUpdate {
+  // run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+  string run_id = 1 [(buf.validate.field).string.pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"];
+  // scope is which updates to install.
+  UpdateScope scope = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+// RebootNode reboots the host one minute after the root helper took it.
+message RebootNode {
+  // run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+  string run_id = 1 [(buf.validate.field).string.pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"];
+  // reason is shown to the host's users and written to its journal, e.g. "updates (SerMon)".
+  string reason = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 200
+    pattern: "^[^\\x00-\\x1f\\x7f]*$"
+  }];
+}
+
+// SelfUpdate replaces the agent's binary with a signed version (KONZEPT §14.3); how the agent
+// fetches and the helper checks it follows ADR 0036.
+message SelfUpdate {
+  // run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
+  string run_id = 1 [(buf.validate.field).string.pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"];
+  // version is the agent version to install, e.g. "0.5.0".
+  string version = 2 [(buf.validate.field).string = {
+    max_bytes: 64
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+  }];
+}
+
+// PackageManager is the host's package manager.
+enum PackageManager {
+  // PACKAGE_MANAGER_UNSPECIFIED: unknown (see the report's availability).
+  PACKAGE_MANAGER_UNSPECIFIED = 0;
+  // PACKAGE_MANAGER_APT: Debian and Ubuntu.
+  PACKAGE_MANAGER_APT = 1;
+  // PACKAGE_MANAGER_DNF: the RHEL family and Fedora.
+  PACKAGE_MANAGER_DNF = 2;
+  // PACKAGE_MANAGER_APK: Alpine, without security metadata (KONZEPT O6).
+  PACKAGE_MANAGER_APK = 3;
+}
+
+// UpdateAvailability says whether the agent could list the updates.
+enum UpdateAvailability {
+  // UPDATE_AVAILABILITY_UNSPECIFIED is invalid.
+  UPDATE_AVAILABILITY_UNSPECIFIED = 0;
+  // UPDATE_AVAILABILITY_LISTED: the packages below are the host's updates.
+  UPDATE_AVAILABILITY_LISTED = 1;
+  // UPDATE_AVAILABILITY_NO_HELPER: the root helper is not installed or not running.
+  UPDATE_AVAILABILITY_NO_HELPER = 2;
+  // UPDATE_AVAILABILITY_HELPER_TOO_OLD: the helper doesn't know the operation.
+  UPDATE_AVAILABILITY_HELPER_TOO_OLD = 3;
+  // UPDATE_AVAILABILITY_UNSUPPORTED: the host's distribution has no supported package manager.
+  UPDATE_AVAILABILITY_UNSUPPORTED = 4;
+  // UPDATE_AVAILABILITY_FAILED: listing failed; reason says why.
+  UPDATE_AVAILABILITY_FAILED = 5;
+}
+
+// UpdateReport is what the host could update (KONZEPT §14.1), every 6 hours, after the package
+// manager ran and on RefreshUpdateInfo. Names, versions and sources come from the host's package
+// sources: shown as text only.
+message UpdateReport {
+  // collected_at is the agent's time of the listing.
+  google.protobuf.Timestamp collected_at = 1 [(buf.validate.field).required = true];
+  // availability says whether the packages below are the host's updates.
+  UpdateAvailability availability = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // reason explains an availability other than listed.
+  string reason = 3 [(buf.validate.field).string.max_bytes = 1024];
+  // package_manager says how the updates were listed.
+  PackageManager package_manager = 4 [(buf.validate.field).enum.defined_only = true];
+  // packages are the available updates, security updates first, at most 5000.
+  repeated UpdatePackage packages = 5 [(buf.validate.field).repeated.max_items = 5000];
+  // total_count counts all available updates, the omitted ones too.
+  uint32 total_count = 6 [(buf.validate.field).uint32.lte = 1000000];
+  // security_count counts the security updates among them (0 without security metadata).
+  uint32 security_count = 7 [(buf.validate.field).uint32.lte = 1000000];
+  // reboot_required: the host needs a reboot to use what is installed (KONZEPT §14.1).
+  bool reboot_required = 8;
+  // reboot_reason says why, e.g. the packages of /var/run/reboot-required.pkgs.
+  string reboot_reason = 9 [(buf.validate.field).string.max_bytes = 1024];
+  // last_upgrade_at is when packages were last upgraded, if known.
+  google.protobuf.Timestamp last_upgrade_at = 10;
+  // permissions are what the host allows remotely (/etc/sermon/helper.toml); unset without helper.
+  HelperPermissions permissions = 11;
+  // refreshed: the package sources were updated just before listing.
+  bool refreshed = 12;
+}
+
+// UpdatePackage is one available update.
+message UpdatePackage {
+  // name is the package's name.
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 256
+  }];
+  // installed_version is the version installed now.
+  string installed_version = 2 [(buf.validate.field).string.max_bytes = 256];
+  // candidate_version is the version the update installs.
+  string candidate_version = 3 [(buf.validate.field).string.max_bytes = 256];
+  // source is where it comes from, e.g. "bookworm-security" or a repository's ID.
+  string source = 4 [(buf.validate.field).string.max_bytes = 256];
+  // security: the source marks it as a security update.
+  bool security = 5;
+}
+
+// HelperPermissions are the switches of /etc/sermon/helper.toml (ADR 0035).
+message HelperPermissions {
+  // remote_updates: updates may be installed on request of the server.
+  bool remote_updates = 1;
+  // remote_reboot: the host may be rebooted on request of the server.
+  bool remote_reboot = 2;
+  // self_update: the agent may replace its binary on request of the server.
+  bool self_update = 3;
+}
+
+// CommandPhase is how far a command of the server has come.
+enum CommandPhase {
+  // COMMAND_PHASE_UNSPECIFIED is invalid.
+  COMMAND_PHASE_UNSPECIFIED = 0;
+  // COMMAND_PHASE_STARTED: the root helper took it and runs it.
+  COMMAND_PHASE_STARTED = 1;
+  // COMMAND_PHASE_SUCCEEDED: it ended with exit code 0.
+  COMMAND_PHASE_SUCCEEDED = 2;
+  // COMMAND_PHASE_FAILED: it ran and failed; exit_code and output tell how.
+  COMMAND_PHASE_FAILED = 3;
+  // COMMAND_PHASE_REFUSED: not run, the host forbids it or the helper refused; reason says why.
+  COMMAND_PHASE_REFUSED = 4;
+  // COMMAND_PHASE_UNSUPPORTED: not run, no helper, a helper too old or an unsupported host.
+  COMMAND_PHASE_UNSUPPORTED = 5;
+  // COMMAND_PHASE_LOST: the helper knows the run no longer (its result expired).
+  COMMAND_PHASE_LOST = 6;
+}
+
+// CommandResult is the state of a command of the server.
+message CommandResult {
+  // run_id is the run's ID from the command.
+  string run_id = 1 [(buf.validate.field).string.pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"];
+  // phase is how far it has come.
+  CommandPhase phase = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // exit_code is the command's exit code once it ran; -1 if it was killed.
+  sint32 exit_code = 3;
+  // reason explains a refusal or failure.
+  string reason = 4 [(buf.validate.field).string.max_bytes = 1024];
+  // output is the end of the command's output, redacted by the agent, at most 256 KiB.
+  string output = 5 [(buf.validate.field).string.max_bytes = 262144];
+  // output_truncated: the beginning of the output was cut.
+  bool output_truncated = 6;
+  // started_at is when the helper started the run.
+  google.protobuf.Timestamp started_at = 7;
+  // ended_at is when it ended.
+  google.protobuf.Timestamp ended_at = 8;
 }

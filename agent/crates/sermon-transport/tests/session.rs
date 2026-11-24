@@ -635,6 +635,54 @@ async fn hands_configurations_to_the_sink_and_answers_the_server() {
     harness.stop().await;
 }
 
+// M4-05: the commands of the root helper are part of the protocol before this agent handles
+// them (M4-12): ignored like a newer server's, the session goes on.
+#[tokio::test(flavor = "multi_thread")]
+async fn ignores_the_commands_it_does_not_handle_yet() {
+    use sermon_transport::proto::agent::v1::{
+        RebootNode, RefreshUpdateInfo, RunUpdate, SelfUpdate, UpdateScope,
+    };
+    let sink = Arc::new(FakeConfig::default());
+    let mut setup = Setup::new();
+    setup.config = Some(sink.clone());
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    let run_id = "0193f5a0-0000-7000-8000-000000000001".to_owned();
+    for command in [
+        Payload::RefreshUpdateInfo(RefreshUpdateInfo {}),
+        Payload::RunUpdate(RunUpdate {
+            run_id: run_id.clone(),
+            scope: UpdateScope::Security.into(),
+        }),
+        Payload::RebootNode(RebootNode {
+            run_id: run_id.clone(),
+            reason: "updates".into(),
+        }),
+        Payload::SelfUpdate(SelfUpdate {
+            run_id,
+            version: "0.5.0".into(),
+        }),
+    ] {
+        assert!(harness.api.send(command).await);
+    }
+    assert!(harness.api.send(config_update(5)).await);
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s
+                .first()
+                .is_some_and(|s| s.config_applied.len() == 1))
+            .await
+    );
+    assert_eq!(harness.api.sessions().len(), 1, "the session ended");
+    harness.stop().await;
+}
+
 /// A live source of fixed snapshots, or one that refuses.
 #[derive(Debug, Default)]
 struct FakeLive {

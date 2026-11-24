@@ -473,3 +473,122 @@ func TestSchema_AgentSnapshotIsValid(t *testing.T) {
 		t.Errorf("golden snapshot: %d processes, odd %v, kernel %v, zombie %v", len(snapshot.GetProcesses()), odd, kernel, zombie)
 	}
 }
+
+// Updates and the commands of the root helper (M4-05): the agent's reports and results within
+// the bounds pass, the server's commands only with a lowercase UUID, a known scope and a reason
+// without control characters.
+func TestSchema_UpdatesAndCommands(t *testing.T) {
+	v, err := protovalidate.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const runID = "0193f5a0-0000-7000-8000-000000000001"
+	report := func(change func(*agentv1.UpdateReport)) proto.Message {
+		r := &agentv1.UpdateReport{
+			CollectedAt: timestamppb.Now(), Availability: agentv1.UpdateAvailability_UPDATE_AVAILABILITY_LISTED,
+			PackageManager: agentv1.PackageManager_PACKAGE_MANAGER_APT,
+			Packages: []*agentv1.UpdatePackage{{
+				Name: "openssl", InstalledVersion: "3.0.15-1~deb12u1", CandidateVersion: "3.0.16-1~deb12u1",
+				Source: "bookworm-security", Security: true,
+			}},
+			TotalCount: 1, SecurityCount: 1, RebootRequired: true, RebootReason: "linux-image-6.1.0-28-amd64",
+			Permissions: &agentv1.HelperPermissions{RemoteUpdates: true},
+		}
+		if change != nil {
+			change(r)
+		}
+		return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: &agentv1.Batch{
+			Seq: 1, Content: &agentv1.Batch_UpdateReport{UpdateReport: r},
+		}}}
+	}
+	result := func(change func(*agentv1.CommandResult)) proto.Message {
+		r := &agentv1.CommandResult{
+			RunId: runID, Phase: agentv1.CommandPhase_COMMAND_PHASE_FAILED, ExitCode: 100, Reason: "dpkg was interrupted",
+			Output: "E: dpkg was interrupted", StartedAt: timestamppb.Now(), EndedAt: timestamppb.Now(),
+		}
+		if change != nil {
+			change(r)
+		}
+		return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: &agentv1.Batch{
+			Seq: 2, Content: &agentv1.Batch_CommandResult{CommandResult: r},
+		}}}
+	}
+	command := func(payload any) proto.Message {
+		res := &agentv1.SessionResponse{}
+		switch p := payload.(type) {
+		case *agentv1.RunUpdate:
+			res.Payload = &agentv1.SessionResponse_RunUpdate{RunUpdate: p}
+		case *agentv1.RebootNode:
+			res.Payload = &agentv1.SessionResponse_RebootNode{RebootNode: p}
+		case *agentv1.SelfUpdate:
+			res.Payload = &agentv1.SessionResponse_SelfUpdate{SelfUpdate: p}
+		}
+		return res
+	}
+	security := agentv1.UpdateScope_UPDATE_SCOPE_SECURITY
+	valid := map[string]proto.Message{
+		"report": report(nil),
+		"no helper": report(func(r *agentv1.UpdateReport) {
+			r.Availability, r.Packages, r.Permissions = agentv1.UpdateAvailability_UPDATE_AVAILABILITY_NO_HELPER, nil, nil
+		}),
+		"alpine": report(func(r *agentv1.UpdateReport) {
+			r.PackageManager, r.SecurityCount = agentv1.PackageManager_PACKAGE_MANAGER_APK, 0
+		}),
+		"result": result(nil),
+		"started": result(func(r *agentv1.CommandResult) {
+			r.Phase, r.ExitCode, r.Output, r.EndedAt = agentv1.CommandPhase_COMMAND_PHASE_STARTED, 0, "", nil
+		}),
+		"full output":  result(func(r *agentv1.CommandResult) { r.Output = strings.Repeat("x", 256<<10) }),
+		"refresh":      &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RefreshUpdateInfo{RefreshUpdateInfo: &agentv1.RefreshUpdateInfo{}}},
+		"run update":   command(&agentv1.RunUpdate{RunId: runID, Scope: security}),
+		"reboot":       command(&agentv1.RebootNode{RunId: runID, Reason: "updates (SerMon) – ändern"}),
+		"self update":  command(&agentv1.SelfUpdate{RunId: runID, Version: "0.5.0"}),
+		"beta version": command(&agentv1.SelfUpdate{RunId: runID, Version: "0.5.0-beta.1"}),
+	}
+	for name, msg := range valid {
+		if err := v.Validate(msg); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	many := make([]*agentv1.UpdatePackage, 5001)
+	for i := range many {
+		many[i] = &agentv1.UpdatePackage{Name: "p"}
+	}
+	long := strings.Repeat("x", 257)
+	invalid := map[string]proto.Message{
+		"report without time":    report(func(r *agentv1.UpdateReport) { r.CollectedAt = nil }),
+		"no availability":        report(func(r *agentv1.UpdateReport) { r.Availability = 0 }),
+		"unknown availability":   report(func(r *agentv1.UpdateReport) { r.Availability = 99 }),
+		"unknown manager":        report(func(r *agentv1.UpdateReport) { r.PackageManager = 99 }),
+		"too many packages":      report(func(r *agentv1.UpdateReport) { r.Packages = many }),
+		"package without name":   report(func(r *agentv1.UpdateReport) { r.Packages[0].Name = "" }),
+		"long package name":      report(func(r *agentv1.UpdateReport) { r.Packages[0].Name = long }),
+		"long version":           report(func(r *agentv1.UpdateReport) { r.Packages[0].CandidateVersion = long }),
+		"long source":            report(func(r *agentv1.UpdateReport) { r.Packages[0].Source = long }),
+		"long reboot reason":     report(func(r *agentv1.UpdateReport) { r.RebootReason = strings.Repeat("x", 1025) }),
+		"implausible count":      report(func(r *agentv1.UpdateReport) { r.TotalCount = 1_000_001 }),
+		"result without run":     result(func(r *agentv1.CommandResult) { r.RunId = "" }),
+		"upper case run":         result(func(r *agentv1.CommandResult) { r.RunId = strings.ToUpper(runID) }),
+		"no phase":               result(func(r *agentv1.CommandResult) { r.Phase = 0 }),
+		"unknown phase":          result(func(r *agentv1.CommandResult) { r.Phase = 99 }),
+		"output too long":        result(func(r *agentv1.CommandResult) { r.Output = strings.Repeat("x", 256<<10+1) }),
+		"long reason":            result(func(r *agentv1.CommandResult) { r.Reason = strings.Repeat("x", 1025) }),
+		"update without run":     command(&agentv1.RunUpdate{Scope: security}),
+		"path as run":            command(&agentv1.RunUpdate{RunId: "../../etc/passwd", Scope: security}),
+		"no scope":               command(&agentv1.RunUpdate{RunId: runID}),
+		"unknown scope":          command(&agentv1.RunUpdate{RunId: runID, Scope: 7}),
+		"reboot without reason":  command(&agentv1.RebootNode{RunId: runID}),
+		"reboot reason newline":  command(&agentv1.RebootNode{RunId: runID, Reason: "a\nb"}),
+		"reboot reason escape":   command(&agentv1.RebootNode{RunId: runID, Reason: "\x1b[2J"}),
+		"long reboot":            command(&agentv1.RebootNode{RunId: runID, Reason: strings.Repeat("x", 201)}),
+		"reboot without run":     command(&agentv1.RebootNode{Reason: "x"}),
+		"self update no version": command(&agentv1.SelfUpdate{RunId: runID}),
+		"self update odd":        command(&agentv1.SelfUpdate{RunId: runID, Version: "latest; rm"}),
+		"self update no run":     command(&agentv1.SelfUpdate{Version: "0.5.0"}),
+	}
+	for name, msg := range invalid {
+		if err := v.Validate(msg); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

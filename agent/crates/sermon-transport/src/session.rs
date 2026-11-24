@@ -574,6 +574,14 @@ impl Session<'_> {
                 self.send(session_request::Payload::ConfigApplied(answer))
                     .await?;
             }
+            // The commands of the root helper (M4-05) follow with M4-12; until then like a newer
+            // server's unknown ones.
+            session_response::Payload::RefreshUpdateInfo(_)
+            | session_response::Payload::RunUpdate(_)
+            | session_response::Payload::RebootNode(_)
+            | session_response::Payload::SelfUpdate(_) => {
+                tracing::debug!("ignoring a command of the root helper, not handled yet");
+            }
         }
         Ok(None)
     }

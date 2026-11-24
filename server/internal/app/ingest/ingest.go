@@ -346,6 +346,9 @@ type Batch struct {
 	Events      []secevent.Event
 	// Logs are the entries of a log batch (M3-07).
 	Logs []LogEntry
+	// Unhandled is a batch the server takes but doesn't use yet (M4-05: update reports and
+	// command results until M4-09 and M4-11): acknowledged in order, nothing stored.
+	Unhandled bool
 }
 
 // Response tells the transport what to send back.
@@ -502,6 +505,10 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 	}
 	if len(batch.Logs) > 0 {
 		s.acceptLogs(batch, now)
+		return Response{}
+	}
+	if batch.Unhandled {
+		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
 		return Response{}
 	}
 	stats.LagMillis.Store(now.Sub(batch.CollectedAt).Milliseconds())

@@ -3684,7 +3684,20 @@ Konfiguration) und M3-06 (Loki).
 - **Abhängig von:** M3-23
 - **Skill:** `sermon-ui-component`
 
-#### ☐ M3-25 – Step-up für alle sensiblen Aktionen · S · S 🔒
+#### ☑ M3-25 – Step-up für alle sensiblen Aktionen · S · S 🔒
+> Erledigt (KONZEPT §7; Threat Model T17):
+> - **Tabelle:** `stepUpRequired` (49 RPCs, je mit Grund) und `stepUpExempt` (Anmeldung und Step-up selbst,
+>   Einladung annehmen, Setup, Lesendes ohne Idempotenz-Option, Zugriff entziehen, nur umbenennen, Testnachricht,
+>   Silence beenden, TOTP-Einrichtung abschließen) in `transport/webapi/stepup_cases_test.go`.
+> - **Abdeckung:** `TestStepUp_EveryProcedureIsListed` (läuft mit `go test ./...` in CI) liest alle Prozeduren ohne
+>   `NO_SIDE_EFFECTS` aus den Deskriptoren und verlangt genau einen Eintrag mit Grund und für jede erforderliche einen
+>   Aufruf. Die Aufrufe kommen aus den Tenant-Isolationsfällen (auf eigenen Objekten) oder aus `stepUpOwnCases`.
+> - **Prüfung:** `TestStepUp_SensitiveActionsNeedAFreshStepUp` ruft jede als Admin von Alpha (Organisationen als
+>   Superadmin) mit 16 min altem Step-up auf und erwartet `FAILED_PRECONDITION` mit `StepUpRequired`.
+> - **Gefunden und behoben:** `RenameOrganization` verlangte keinen Step-up (jetzt wie die übrigen Änderungen an
+>   Organisationen). Der Fall für `ImportAlertRules` prüft das Speichern; die Probe (`dry_run`) braucht keinen.
+> - **Gegenproben:** fehlender Eintrag in der Tabelle; Step-up entfernt bei Redaction-Regeln, OIDC-Zuordnung und
+>   Umbenennen einer Organisation – alle vier erkannt.
 - **Ziel:** Liste der sensiblen Aktionen festlegen (KONZEPT §7) und als Tabelle prüfen. Dazu gehören neu
   Log-Einstellungen und Redaction, OIDC-Mapping, Passkeys, der Viewer-Logs-Schalter und der Export des Audit-Logs. Ein
   Test ruft jede schreibende RPC ohne frischen Step-up auf und erwartet `StepUpRequired`. CI erzwingt die Abdeckung

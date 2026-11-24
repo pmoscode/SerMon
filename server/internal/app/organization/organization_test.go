@@ -138,13 +138,16 @@ func TestCreateAndRename_ValidateInput(t *testing.T) {
 	if _, _, err := s.Create(ctx, superadmin(time.Minute), "Beta", "no-mail"); !errors.Is(err, invitation.ErrInvalidEmail) {
 		t.Errorf("bad email: %v", err)
 	}
-	if err := s.Rename(ctx, superadmin(time.Hour), orgA, "a\nb"); !errors.Is(err, organization.ErrInvalidName) {
+	if err := s.Rename(ctx, superadmin(time.Minute), orgA, "a\nb"); !errors.Is(err, organization.ErrInvalidName) {
 		t.Errorf("bad rename: %v", err)
 	}
 	if store.calls != 0 {
 		t.Error("store called with invalid input")
 	}
-	if err := s.Rename(ctx, superadmin(time.Hour), orgA, " Alpha 2 "); err != nil || store.renamed != "Alpha 2" || store.audits[0].Action != "org.rename" {
+	if err := s.Rename(ctx, superadmin(time.Hour), orgA, "Alpha 2"); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("rename with a stale step-up: %v", err)
+	}
+	if err := s.Rename(ctx, superadmin(time.Minute), orgA, " Alpha 2 "); err != nil || store.renamed != "Alpha 2" || store.audits[0].Action != "org.rename" {
 		t.Errorf("Rename() = %v, renamed %q, audits %+v", err, store.renamed, store.audits)
 	}
 }

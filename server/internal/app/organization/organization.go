@@ -138,9 +138,10 @@ func (s *Service) Create(ctx context.Context, c access.Caller, name, adminEmail 
 	return org, "", nil
 }
 
-// Rename renames an organization.
+// Rename renames an organization; like every change of an organization it needs a step-up
+// (M3-25): members recognize their organization by its name.
 func (s *Service) Rename(ctx context.Context, c access.Caller, id tenant.OrgID, name string) error {
-	if err := s.authorize(c, false); err != nil {
+	if err := s.authorize(c, true); err != nil {
 		return err
 	}
 	name, ok := naming.Clean(name, maxName)

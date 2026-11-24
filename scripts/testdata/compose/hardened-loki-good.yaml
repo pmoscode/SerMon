@@ -1,0 +1,9 @@
+services:
+  loki:
+    image: grafana/loki:3.7.10@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes: ["./loki-good.yaml:/etc/loki/loki.yaml:ro"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1g

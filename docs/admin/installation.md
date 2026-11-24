@@ -28,6 +28,10 @@ binden, PostgreSQL zum eigenen Benutzer wechseln) und ohne neue Privilegien. Die
 ohne Route nach außen, ebenso Loki: Loki hat keine eigene Anmeldung, nur der Server erreicht es und nennt bei jedem
 Zugriff die Organisation. Der Agent-Port geht direkt zum Server, damit er die echten Adressen der Agents sieht.
 
+Loki darf höchstens 1 GiB Speicher belegen (`SERMON_LOKI_MEMORY`, dazu `SERMON_LOKI_GOMEMLIMIT` mit etwa 90 % davon),
+damit große Log-Abfragen der Datenbank und dem Server nichts wegnehmen. Für einige hundert Nodes reicht das; wer mehr
+hat, hebt beide Werte gemeinsam an.
+
 Die Datenbank hat drei Rollen ([ADR 0007](../adr/0007-mandantentrennung-rls.md)): Der Superuser `postgres` bleibt im
 Datenbank-Container; `sermon_owner` besitzt das Schema und migriert, aber nur im Service `migrate`; der Server meldet
 sich als `sermon_app` an, für die die Mandantentrennung per Row-Level-Security immer gilt. Ein übernommener Server

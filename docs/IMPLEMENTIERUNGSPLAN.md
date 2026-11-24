@@ -3719,7 +3719,18 @@ Konfiguration) und M3-06 (Loki).
   - **Dateien:** Eine Logdatei per Glob auf dem Alpine-Host.
 - **Abhängig von:** M3-11, M3-15, M3-17, M3-22, M3-24
 
-#### ☐ M3-27 – Ressourcen-Budget mit Logs und Live-Ansicht · X · S
+#### ☑ M3-27 – Ressourcen-Budget mit Logs und Live-Ansicht · X · S
+> Erledigt (KONZEPT §4.1 unverändert, die Grenze hält; Betrieb: `docs/admin/installation.md`):
+> - **Messung in der Demo** (seit M3-04 und M3-14 in `fleet.demo.ts`): `web-01` und `app-01` je 60 s mit 20
+>   Journal-Zeilen pro Sekunde, jede mit einem Geheimnis, das der Agent redigiert; `web-01` hat dabei die Live-Ansicht
+>   offen (alle 2 s ein Snapshot, ein Prozess mit Geheimnis in der Befehlszeile). Gemessen (arm64, Docker auf Apple
+>   Silicon): 0,63 % eines Kerns und 16,6 MiB mit Live-Ansicht, 0,59 % und 18,4 MiB ohne; in einem früheren Lauf
+>   0,70 % und 19,6 MiB bzw. 0,51 % und 18,0 MiB. Die Live-Ansicht braucht keine eigene Grenze.
+> - **Loki begrenzt:** `mem_limit: ${SERMON_LOKI_MEMORY:-1g}` und `GOMEMLIMIT` (`SERMON_LOKI_GOMEMLIMIT`, 900 MiB) in
+>   `deploy/compose/compose.yaml`, beschrieben in `env.example`. In der Demo braucht Loki 130 bis 230 MiB.
+>   `check-compose.sh --hardened` verlangt eine Speichergrenze für Loki (Testfälle mit und ohne).
+> - **Gegenproben:** dieselbe Messung mit Log-Last und Grenzen 0,05 % und 10 MiB schlägt fehl und nennt CPU und RSS;
+>   die Compose ohne `mem_limit` fällt in `just lint-compose` durch.
 - **Ziel:** `agent-budget.sh` misst in der Demo zusätzlich mit Log-Versand (20 Zeilen/s) und aktiver Live-Ansicht.
   - Ziel: < 1 % eines Kerns und < 30 MiB. Braucht die Live-Ansicht mehr, bekommt sie eine eigene, begründete Grenze
     (KONZEPT §4.1 anpassen).

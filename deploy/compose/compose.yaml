@@ -142,6 +142,11 @@ services:
     <<: *hardened
     image: grafana/loki:3.7.10@sha256:b43c257ccfc925d4a50b8717cac61a3b51df8c48d01847936057e5c4075a24a7
     command: ["-config.file=/etc/loki/loki.yaml"]
+    # Bounded memory (M3-27): queries over 14 days must not take the host's memory from the
+    # database and the server. GOMEMLIMIT lets Go collect before the kernel kills at the limit.
+    mem_limit: ${SERMON_LOKI_MEMORY:-1g}
+    environment:
+      GOMEMLIMIT: ${SERMON_LOKI_GOMEMLIMIT:-900MiB}
     volumes:
       - ./loki.yaml:/etc/loki/loki.yaml:ro
       - loki-data:/loki

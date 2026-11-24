@@ -130,6 +130,10 @@ def check(services: dict, base: str, loopback_only: bool, hardened: bool = False
             # Loki has no login of its own: only the server may reach it.
             if hardened and svc.get("ports"):
                 errors.append(f"{name}: Loki must not publish ports")
+            # Large queries must not take the host's memory (M3-27).
+            limits = ((svc.get("deploy") or {}).get("resources") or {}).get("limits") or {}
+            if hardened and not (svc.get("mem_limit") or limits.get("memory")):
+                errors.append(f"{name}: Loki needs a memory limit (mem_limit)")
     return errors
 
 

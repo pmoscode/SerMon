@@ -28,6 +28,9 @@ expect fail "Loki usage reporting not disabled" "$data/loki-telemetry.yaml"
 # Loki without a login of its own (ADR 0031): multi-tenancy on, no published port in production.
 expect fail "Loki without auth_enabled (one tenant for all organizations)" "$data/loki-no-auth.yaml"
 expect fail "Loki port published with --hardened" --hardened "$data/hardened-loki-port.yaml"
+# M3-27: Loki's memory is bounded in production.
+expect pass "hardened Loki with a memory limit" --hardened "$data/hardened-loki-good.yaml"
+expect fail "Loki without a memory limit with --hardened" --hardened "$data/hardened-loki-no-memory.yaml"
 expect pass "ports with variables and loopback defaults" --loopback-only "$data/variable-port.yaml"
 expect fail "missing file" "$data/does-not-exist.yaml"
 expect pass "built images with pinned bases (literal, build arg, earlier stage)" "$data/build-good.yaml"

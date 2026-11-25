@@ -4549,7 +4549,22 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.5 Self-Update und Paket-Repos (E4.5)
 
-#### ☐ M4-17 – ADR Self-Update und Paket-Repos · X · S 🔒
+#### ☑ M4-17 – ADR Self-Update und Paket-Repos · X · S 🔒
+> Erledigt ([ADR 0036](adr/0036-self-update-und-paket-repos.md); KONZEPT §14.3; Threat Model A4, T40; Nachtrag zu ADR 0035):
+> - **Download** über die mTLS-Verbindung des Agents (`AgentService.FetchAgentRelease`, Server-Stream), nicht vom Helper
+>   und nicht über `/downloads`: kein Netz im Helper, kein zweiter TLS-Weg.
+> - **Prüfung auf einer root-eigenen Kopie** (gegen TOCTOU): minisign wie `install.sh`, Release-Key in den Helper
+>   kompiliert (zwei für die Rotation), `file:` mit der Architektur des Helpers und `version:` gleich der angefragten.
+>   Kein Downgrade: Die installierte Version kennt der Helper aus der root-eigenen Signatur der installierten Binary,
+>   nicht vom Agent. Nur `/usr/local/bin/sermon-agent`; Pakete aktualisiert der Paketmanager.
+> - **Rollback:** Die neue Version bestätigt nach ihrer ersten Session (`ConfirmSelfUpdate`); ohne Bestätigung nach
+>   2 min legt der Lauf die vorige zurück. Ein lügender Agent wählt so nur zwischen zwei signierten Fassungen.
+> - **Kanäle:** `stable` ist die Version des Servers, `beta` optional in `downloads/beta/`; der Server liest die Versionen
+>   aus den signierten Trusted Comments (beim Start und alle 5 min). Ringe später.
+> - **Paket-Repos:** OpenPGP (apt, rpm) und RSA (apk), Secrets der Release-Pipeline, öffentliche Schlüssel in
+>   `packaging/keys/`; der Server liefert die Repos unter `/repo/` aus `SERMON_REPO_DIR`; Rotation über ein Release mit
+>   beiden Schlüsseln.
+> - **Folgen:** Grenze des Helpers 1 800 Zeilen, `install_method` im Hello, Downloads je Node begrenzt.
 - **Ziel:** ADR 0036.
   - **Ablauf:** Der Agent lädt die Binary als `sermon` vom Server. Der Helper kopiert sie in ein root-eigenes
     Verzeichnis und prüft dort die minisign-Signatur gegen den eingebetteten Release-Key (wie `install.sh`), samt

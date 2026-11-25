@@ -259,3 +259,9 @@ fehl.
 - **Ausgabe:** Vor dem Senden läuft sie durch die Redaction der Org (wie Logs und Kommandozeilen) und wird auf ihr Ende
   von höchstens 256 KiB gekürzt.
 
+## Nachtrag M4-17
+
+- Ablauf und Felder des Self-Updates regelt [ADR 0036](0036-self-update-und-paket-repos.md): `SelfUpdate` bekommt das
+  Feld `version`, neu ist `ConfirmSelfUpdate{run_id}`. Die Grenze des Helpers steigt dafür von 1 500 auf
+  **1 800 Zeilen**; neue Abhängigkeit `ed25519-dalek`.
+

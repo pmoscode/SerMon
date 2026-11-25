@@ -1164,6 +1164,14 @@ spec:
 - Bei Installation per Skript lädt der Helper die neue Binary, **prüft die Signatur gegen den eingebetteten Public
   Key**, ersetzt sie atomar und startet sie neu. Ein Rollback erfolgt, wenn der Agent nach 2 min nicht verbunden ist.
 - **Kanäle:** `stable` / `beta` pro Gruppe; Ringe für einen gestaffelten Rollout.
+- **Umsetzung ([ADR 0036](adr/0036-self-update-und-paket-repos.md)):** Der Agent lädt Binary und Signatur über seine
+  mTLS-Verbindung (`AgentService.FetchAgentRelease`), der Helper prüft eine root-eigene Kopie (minisign, Release-Key in
+  den Helper kompiliert, Datei, Architektur und Version im Trusted Comment, nur neuer als die installierte) und ersetzt
+  nur `/usr/local/bin/sermon-agent` atomar. Die neue Version bestätigt nach ihrer ersten Session
+  (`ConfirmSelfUpdate`); ohne Bestätigung nach 2 min legt der Helper die vorige zurück. `stable` ist die Version des
+  Servers, `beta` liegt optional in `downloads/beta/`; der Server kennt die Versionen aus den signierten Trusted
+  Comments. Paket-Repos (apt, rpm, apk) liefert der Server unter `/repo/` aus, signiert mit eigenen Schlüsseln der
+  Release-Pipeline; `install.sh --repo` richtet sie ein (O5).
 
 ---
 

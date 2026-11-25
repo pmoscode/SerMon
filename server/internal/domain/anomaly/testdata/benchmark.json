@@ -1,0 +1,60 @@
+{
+  "Total": {
+    "Recall": 0.8823529411764706,
+    "Precision": 0.9923954372623575
+  },
+  "Scenarios": {
+    "constant": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "counts": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "drift": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "gaps": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "level shift": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "nightly job": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "noise": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "noisy spikes": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "outliers": {
+      "Recall": 1,
+      "Precision": 0.9130434782608695
+    },
+    "seasonal": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "spikes": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "spikes in a season": {
+      "Recall": 1,
+      "Precision": 1
+    },
+    "weak spikes": {
+      "Recall": 0.5,
+      "Precision": 1
+    }
+  }
+}

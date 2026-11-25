@@ -109,3 +109,21 @@ Größenordnung (KONZEPT D6, Budget mit Reserve): 200 Nodes × 30 Metriken = 6 0
 - Nach einem Wechsel der Instanz braucht der Worker einen Lauf, um sich aufzuwärmen; bis dahin bewertet er nicht.
 - Muster im Rhythmus der lokalen Zeit verschieben sich mit der Sommerzeit (UTC-Buckets).
 - Severity der Logs und SSH-Fehlversuche fehlen gegenüber §13 bis zur Ausbaustufe.
+
+## Nachtrag M4-22
+
+Der Benchmark (13 synthetische Szenarien) hat drei Änderungen am Verfahren von KONZEPT §13 ergeben:
+
+- **Saisonale Abweichung ab dem üblichen Bereich:** `z = Abstand zu [P5, P95] / (1,4826 · MAD)` statt ab dem Median.
+  Ein nächtlicher Job von 10 Minuten füllt ein Sechstel seiner Stunde; Median und MAD sahen ihn nicht, er war jede
+  Nacht anomal (38 Fehlalarme, jetzt 0). Was in mindestens 5 % der Stunde vorkommt, gilt dort als üblich. Dafür liegt
+  die Schwelle bei normalem Rauschen effektiv bei rund 5,6 σ über dem Median; Sprünge von 4 bis 4,5 σ werden nur zur
+  Hälfte gefunden. Die Baseline speichert dafür zusätzlich P5 und P95.
+- **Kurzfristige Baseline auf der Abweichung vom saisonalen Median:** Ein EWMA der Werte hinkt einem Tageszyklus
+  hinterher, seine Varianz misst dann den Rückstand statt des Rauschens. Ohne saisonale Baseline (Lernphase) folgt er
+  den Werten; ein Wechsel startet ihn neu.
+- **Robuste Aktualisierung:** Ein Wert mehr als 4 Streuungen entfernt verschiebt den Mittelwert nur um 4 Streuungen und
+  lässt die Varianz stehen; sonst hob ein Sprung nach drei Minuten seine eigene Abweichung auf. Ein dauerhafter
+  Niveauwechsel wird trotzdem gelernt, nach rund 1,5 h.
+- **Budget gemessen:** eine Minute mit 6 000 Serien 0,36 ms, eine Baseline aus 240 Werten 4,3 µs (Apple M3).
+

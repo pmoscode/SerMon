@@ -4720,7 +4720,32 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
     `metrics_1m`.
 - **Abhängig von:** –
 
-#### ☐ M4-22 – Detektoren, Golden-Tests und Benchmark · S · M
+#### ☑ M4-22 – Detektoren, Golden-Tests und Benchmark · S · M
+> Erledigt (Nachtrag M4-22 zu ADR 0037):
+> - **`domain/anomaly`** (ohne I/O): `NewBaseline` (Median, MAD, P5 und P95, mindestens 30 Punkte), `EWMA`
+>   (Halbwertszeit 1 h, Aufwärmen 30 Punkte, Neustart nach 6 h Lücke), `Debouncer` (3 von 5), Detektor `Robust` hinter
+>   dem Interface `Detector`, `Seasons` und `Replay` wie der Worker, `HourOfWeek` in UTC. Mindeststreuung: die des
+>   Aufrufers je Einheit, mindestens 1 % des Niveaus.
+> - **Abweichungen von KONZEPT §13, gefunden mit dem Benchmark:**
+>   - Die **saisonale Abweichung zählt ab dem üblichen Bereich** (P5 bis P95 des Buckets) statt ab dem Median: Ein
+>     nächtlicher Job von 10 Minuten füllt nur ein Sechstel der Stunde und wäre jede Nacht anomal gewesen (38 Fehlalarme
+>     im Szenario, jetzt 0). Was in mindestens 5 % der Stunde vorkommt, ist üblich.
+>   - Die **kurzfristige Baseline folgt der Abweichung vom saisonalen Median** (ohne saisonale Baseline dem Wert): Ein
+>     EWMA der Werte hinkt einem Tageszyklus hinterher, seine Varianz misst den Rückstand statt des Rauschens (ein
+>     Sprung am Sonntagabend blieb bei z = 1,1).
+>   - **Robuste Aktualisierung:** Ein Wert mehr als 4 Streuungen entfernt verschiebt den Mittelwert nur um 4 Streuungen und
+>     lässt die Varianz unverändert; sonst verbarg ein Sprung sich nach 3 Minuten selbst. Ein dauerhafter Wechsel des
+>     Niveaus wird trotzdem gelernt (im Szenario nach rund 1,5 h).
+> - **Generator** `Generate` (Seed, Rauschen, Tageszyklus, Wochenende, nächtliche Jobs, Ausreißer, Sprünge,
+>   Niveauwechsel, Drifts, Lücken, Zählwerte) mit Ereignissen: zu finden bis Ende plus Entprellung, erlaubt bis dahin
+>   bzw. 8 Halbwertszeiten nach einem Niveauwechsel.
+> - **Benchmark:** 13 Szenarien über 5 Wochen, bewertet in der letzten; Precision 0,992 und Recall 0,882 (schwache
+>   Sprünge von 4 bis 4,5 σ werden zur Hälfte gefunden). `testdata/benchmark.json` ist die Referenz, `go test` schlägt
+>   fehl, wenn ein Wert insgesamt oder in einem Szenario sinkt; `just bench-anomaly` zeigt die Werte und das
+>   Rechenbudget: eine Minute mit 6 000 Serien 0,36 ms ohne Allokationen, eine Baseline aus 240 Werten 4,3 µs.
+> - **Golden-Tests** je Muster (Rauschen und Tageszyklus, Sprung mit Entprellung, zwei Minuten, Tagesspitze zur
+>   falschen Zeit, nächtlicher Job, Niveauwechsel, konstante Reihe, Lücke) und für die Bausteine.
+> - **Gegenproben** für 32 Prüfungen, alle erkannt (drei erst nach direkten Tests für `Seasons` und die Lücke).
 - **Ziel:** Reines Paket `domain/anomaly` ohne I/O.
   - EWMA mit Halbwertszeit 1 h; saisonaler Median und MAD; robuster Z-Score; anomal nur, wenn beide über 4 liegen;
     Debounce 3 von 5 Minuten.

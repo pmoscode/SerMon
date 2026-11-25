@@ -156,6 +156,12 @@ test-scripts:
 test-e2e-repos:
     sh deploy/e2e/repos/test.sh
 
+# Precision and recall of the anomaly detection on synthetic series against the reference, and its
+# computing budget (M4-22, ADR 0037); `go test ./...` fails as well when a value drops
+bench-anomaly:
+    cd server && go test -count=1 -v -run 'TestBenchmark_' ./internal/domain/anomaly/ | grep -v '^=== '
+    cd server && go test -run '^$' -bench . -benchmem ./internal/domain/anomaly/
+
 # Run the root helper's updates against real apt, dnf and apk in containers (M4-03; Docker required)
 test-helper:
     #!/usr/bin/env bash

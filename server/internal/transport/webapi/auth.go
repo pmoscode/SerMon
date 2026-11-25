@@ -387,6 +387,8 @@ func (h *AuthHandler) describeRights(ctx context.Context, s session.Session, vie
 	view.SilenceGroupIds = groupsFor(policy, p, authz.SilenceAlerts)
 	view.NodeIdentityGroupIds = groupsFor(policy, p, authz.UnlockNode)
 	view.TagGroupIds = groupsFor(policy, p, authz.TagNodes)
+	view.RunUpdatesGroupIds = groupsFor(policy, p, authz.RunUpdates)
+	view.RebootGroupIds = groupsFor(policy, p, authz.RebootNodes)
 	return nil
 }
 

@@ -17,6 +17,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
@@ -246,7 +247,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		SecurityEvents: webapi.NewSecurityEventHandler(withGeo(
 			secevents.NewService(postgres.NewSecurityEventStore(pg), authz.NewPolicy())), slog.New(slog.DiscardHandler)),
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(pg, 0), authz.NewPolicy()).
-			WithRefresher(postgres.NewCommandStore(pg), time.Now), slog.New(slog.DiscardHandler)),
+			WithRefresher(postgres.NewCommandStore(pg), time.Now).
+			WithManual(postgres.NewRolloutStore(pg), postgres.NewUpdatePolicyStore(pg), uuid.New), slog.New(slog.DiscardHandler)),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(
 			updates.NewPolicyService(postgres.NewUpdatePolicyStore(pg), authz.NewPolicy(), time.Now), slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(

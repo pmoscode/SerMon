@@ -503,6 +503,10 @@ type UpdateRollout struct {
 	Reason      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	Manual      bool
+	Mode        pgtype.Int2
+	AutoReboot  bool
+	CreatedBy   *uuid.UUID
 }
 
 type UpdateRolloutNode struct {

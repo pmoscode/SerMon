@@ -214,3 +214,48 @@ func TestRolloutStore_ReadsCriticalAlertsAndFencesTheSave(t *testing.T) {
 		t.Errorf("save with the lease = %v", err)
 	}
 }
+
+// M4-14: a rollout by hand runs with its own mode and reboot in a group that only reports, with
+// the group's maxParallel; a finished one is not followed any more.
+func TestOrchestrator_RunsRolloutsByHand(t *testing.T) {
+	f := newUpdateFixture(t, 0)
+	db := open(t, setup(t).appDSN)
+	ctx := context.Background()
+	group := nodeGroup(t, uuid.UUID(f.org), uuid.UUID(f.node))
+	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE nodes SET last_seen_at = now() WHERE id = $1", uuid.UUID(f.node))
+	r := update.Report{
+		CollectedAt: time.Now(), Availability: update.Listed, Manager: update.Dnf, Total: 4, Security: 1,
+		Permissions: &update.Permissions{RemoteUpdates: true},
+	}
+	if _, err := postgres.NewUpdateStore(db, 0).Write(ctx, f.org, f.node, r, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	store := postgres.NewRolloutStore(db)
+	now := time.Now()
+	manual := updates.RolloutRun{
+		ID: uuid.New(), Group: group, WindowStart: now, WindowEnd: now.Add(updates.ManualWindow), State: updates.RolloutRunning,
+		Manual: true, Mode: updates.ModeSecurityAuto, AutoReboot: true,
+		Nodes: []updates.NodeRun{{Node: f.node, Hostname: "n", State: updates.NodeWaiting, Since: now}},
+	}
+	if err := store.StartRollouts(ctx, f.org, []updates.RolloutRun{manual}, now, auditEntry("updates.start")); err != nil {
+		t.Fatal(err)
+	}
+	c := updates.DefaultOrchestratorConfig("manual-"+f.org.String()[:8], slog.New(slog.DiscardHandler))
+	c.Now = func() time.Time { return now.Add(time.Second) }
+	o := updates.NewOrchestrator(store, c)
+	o.Round(ctx)
+	var kind, scope int
+	queryOwner(t, setup(t).db.OwnerDSN, "SELECT kind, scope FROM node_commands WHERE org_id = $1", []any{uuid.UUID(f.org)}, &kind, &scope)
+	if kind != int(command.Update) || scope != int(command.ScopeSecurity) {
+		t.Errorf("command = %d %d", kind, scope)
+	}
+	state, err := store.Load(ctx, f.org, now)
+	if err != nil || len(state.Groups) != 1 || !state.Groups[0].Rollout.Manual || !state.Groups[0].Policy.AutoReboot ||
+		state.Groups[0].Policy.Mode != updates.ModeSecurityAuto {
+		t.Errorf("loaded = %+v, %v", state.Groups, err)
+	}
+	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE update_rollouts SET state = 2 WHERE id = $1", manual.ID)
+	if state, _ := store.Load(ctx, f.org, now); len(state.Groups) != 0 {
+		t.Errorf("a finished rollout by hand is still loaded: %+v", state.Groups)
+	}
+}

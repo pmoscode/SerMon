@@ -12,7 +12,112 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/update.proto.
  */
 export const file_sermon_web_v1_update: GenFile = /*@__PURE__*/
-  fileDesc("ChpzZXJtb24vd2ViL3YxL3VwZGF0ZS5wcm90bxINc2VybW9uLndlYi52MSIrChhSZWZyZXNoVXBkYXRlSW5mb1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSIbChlSZWZyZXNoVXBkYXRlSW5mb1Jlc3BvbnNlIigKFUdldE5vZGVVcGRhdGVzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJInIKFkdldE5vZGVVcGRhdGVzUmVzcG9uc2USKAoEbm9kZRgBIAEoCzIaLnNlcm1vbi53ZWIudjEuTm9kZVVwZGF0ZXMSLgoIcGFja2FnZXMYAiADKAsyHC5zZXJtb24ud2ViLnYxLlVwZGF0ZVBhY2thZ2UiGQoXTGlzdEZsZWV0VXBkYXRlc1JlcXVlc3QiwgEKGExpc3RGbGVldFVwZGF0ZXNSZXNwb25zZRIpCgVub2RlcxgBIAMoCzIaLnNlcm1vbi53ZWIudjEuTm9kZVVwZGF0ZXMSDwoHdW5rbm93bhgCIAEoBRITCgt1bmF2YWlsYWJsZRgDIAEoBRIPCgdjdXJyZW50GAQgASgFEhQKDHdpdGhfdXBkYXRlcxgFIAEoBRIVCg13aXRoX3NlY3VyaXR5GAYgASgFEhcKD3JlYm9vdF9yZXF1aXJlZBgHIAEoBSKIBQoLTm9kZVVwZGF0ZXMSDwoHbm9kZV9pZBgBIAEoCRIQCghob3N0bmFtZRgCIAEoCRIQCghncm91cF9pZBgDIAEoCRIrCgZzdGF0dXMYBCABKA4yGy5zZXJtb24ud2ViLnYxLlVwZGF0ZVN0YXR1cxI3CgxhdmFpbGFiaWxpdHkYBSABKA4yIS5zZXJtb24ud2ViLnYxLlVwZGF0ZUF2YWlsYWJpbGl0eRIOCgZyZWFzb24YBiABKAkSNgoPcGFja2FnZV9tYW5hZ2VyGAcgASgOMh0uc2VybW9uLndlYi52MS5QYWNrYWdlTWFuYWdlchIwCgxjb2xsZWN0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3JlY2VpdmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBITCgt0b3RhbF9jb3VudBgKIAEoDRIWCg5zZWN1cml0eV9jb3VudBgLIAEoDRIYChBwYWNrYWdlc19vbWl0dGVkGAwgASgIEhcKD3JlYm9vdF9yZXF1aXJlZBgNIAEoCBIVCg1yZWJvb3RfcmVhc29uGA4gASgJEjMKD2xhc3RfdXBncmFkZV9hdBgPIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASOQoVb2xkZXN0X3NlY3VyaXR5X3NpbmNlGBAgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI5CgtwZXJtaXNzaW9ucxgRIAEoCzIkLnNlcm1vbi53ZWIudjEuSG9zdFVwZGF0ZVBlcm1pc3Npb25zEhEKCXJlZnJlc2hlZBgSIAEoCCKoAQoNVXBkYXRlUGFja2FnZRIMCgRuYW1lGAEgASgJEhkKEWluc3RhbGxlZF92ZXJzaW9uGAIgASgJEhkKEWNhbmRpZGF0ZV92ZXJzaW9uGAMgASgJEg4KBnNvdXJjZRgEIAEoCRIQCghzZWN1cml0eRgFIAEoCBIxCg1maXJzdF9zZWVuX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJbChVIb3N0VXBkYXRlUGVybWlzc2lvbnMSFgoOcmVtb3RlX3VwZGF0ZXMYASABKAgSFQoNcmVtb3RlX3JlYm9vdBgCIAEoCBITCgtzZWxmX3VwZGF0ZRgDIAEoCCq5AQoMVXBkYXRlU3RhdHVzEh0KGVVQREFURV9TVEFUVVNfVU5TUEVDSUZJRUQQABIZChVVUERBVEVfU1RBVFVTX1VOS05PV04QARIdChlVUERBVEVfU1RBVFVTX1VOQVZBSUxBQkxFEAISGQoVVVBEQVRFX1NUQVRVU19DVVJSRU5UEAMSGQoVVVBEQVRFX1NUQVRVU19VUERBVEVTEAQSGgoWVVBEQVRFX1NUQVRVU19TRUNVUklUWRAFKukBChJVcGRhdGVBdmFpbGFiaWxpdHkSIwofVVBEQVRFX0FWQUlMQUJJTElUWV9VTlNQRUNJRklFRBAAEh4KGlVQREFURV9BVkFJTEFCSUxJVFlfTElTVEVEEAESIQodVVBEQVRFX0FWQUlMQUJJTElUWV9OT19IRUxQRVIQAhImCiJVUERBVEVfQVZBSUxBQklMSVRZX0hFTFBFUl9UT09fT0xEEAMSIwofVVBEQVRFX0FWQUlMQUJJTElUWV9VTlNVUFBPUlRFRBAEEh4KGlVQREFURV9BVkFJTEFCSUxJVFlfRkFJTEVEEAUqfAoOUGFja2FnZU1hbmFnZXISHwobUEFDS0FHRV9NQU5BR0VSX1VOU1BFQ0lGSUVEEAASFwoTUEFDS0FHRV9NQU5BR0VSX0FQVBABEhcKE1BBQ0tBR0VfTUFOQUdFUl9ETkYQAhIXChNQQUNLQUdFX01BTkFHRVJfQVBLEAMyxQIKDVVwZGF0ZVNlcnZpY2USYgoOR2V0Tm9kZVVwZGF0ZXMSJC5zZXJtb24ud2ViLnYxLkdldE5vZGVVcGRhdGVzUmVxdWVzdBolLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVVwZGF0ZXNSZXNwb25zZSIDkAIBEmgKEExpc3RGbGVldFVwZGF0ZXMSJi5zZXJtb24ud2ViLnYxLkxpc3RGbGVldFVwZGF0ZXNSZXF1ZXN0Gicuc2VybW9uLndlYi52MS5MaXN0RmxlZXRVcGRhdGVzUmVzcG9uc2UiA5ACARJmChFSZWZyZXNoVXBkYXRlSW5mbxInLnNlcm1vbi53ZWIudjEuUmVmcmVzaFVwZGF0ZUluZm9SZXF1ZXN0Giguc2VybW9uLndlYi52MS5SZWZyZXNoVXBkYXRlSW5mb1Jlc3BvbnNlQroBChFjb20uc2VybW9uLndlYi52MUILVXBkYXRlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChpzZXJtb24vd2ViL3YxL3VwZGF0ZS5wcm90bxINc2VybW9uLndlYi52MSJiChNTdGFydFVwZGF0ZXNSZXF1ZXN0EhAKCG5vZGVfaWRzGAEgAygJEikKBXNjb3BlGAIgASgOMhouc2VybW9uLndlYi52MS5VcGRhdGVTY29wZRIOCgZyZWJvb3QYAyABKAgiKwoUU3RhcnRVcGRhdGVzUmVzcG9uc2USEwoLcm9sbG91dF9pZHMYASADKAkiNgoSUmVib290Tm9kZXNSZXF1ZXN0EhAKCG5vZGVfaWRzGAEgAygJEg4KBnJlYXNvbhgCIAEoCSImChNSZWJvb3ROb2Rlc1Jlc3BvbnNlEg8KB3J1bl9pZHMYASADKAkiKwoYUmVmcmVzaFVwZGF0ZUluZm9SZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkiGwoZUmVmcmVzaFVwZGF0ZUluZm9SZXNwb25zZSIoChVHZXROb2RlVXBkYXRlc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSJyChZHZXROb2RlVXBkYXRlc1Jlc3BvbnNlEigKBG5vZGUYASABKAsyGi5zZXJtb24ud2ViLnYxLk5vZGVVcGRhdGVzEi4KCHBhY2thZ2VzGAIgAygLMhwuc2VybW9uLndlYi52MS5VcGRhdGVQYWNrYWdlIhkKF0xpc3RGbGVldFVwZGF0ZXNSZXF1ZXN0IsIBChhMaXN0RmxlZXRVcGRhdGVzUmVzcG9uc2USKQoFbm9kZXMYASADKAsyGi5zZXJtb24ud2ViLnYxLk5vZGVVcGRhdGVzEg8KB3Vua25vd24YAiABKAUSEwoLdW5hdmFpbGFibGUYAyABKAUSDwoHY3VycmVudBgEIAEoBRIUCgx3aXRoX3VwZGF0ZXMYBSABKAUSFQoNd2l0aF9zZWN1cml0eRgGIAEoBRIXCg9yZWJvb3RfcmVxdWlyZWQYByABKAUiiAUKC05vZGVVcGRhdGVzEg8KB25vZGVfaWQYASABKAkSEAoIaG9zdG5hbWUYAiABKAkSEAoIZ3JvdXBfaWQYAyABKAkSKwoGc3RhdHVzGAQgASgOMhsuc2VybW9uLndlYi52MS5VcGRhdGVTdGF0dXMSNwoMYXZhaWxhYmlsaXR5GAUgASgOMiEuc2VybW9uLndlYi52MS5VcGRhdGVBdmFpbGFiaWxpdHkSDgoGcmVhc29uGAYgASgJEjYKD3BhY2thZ2VfbWFuYWdlchgHIAEoDjIdLnNlcm1vbi53ZWIudjEuUGFja2FnZU1hbmFnZXISMAoMY29sbGVjdGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCgtyZWNlaXZlZF9hdBgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEwoLdG90YWxfY291bnQYCiABKA0SFgoOc2VjdXJpdHlfY291bnQYCyABKA0SGAoQcGFja2FnZXNfb21pdHRlZBgMIAEoCBIXCg9yZWJvb3RfcmVxdWlyZWQYDSABKAgSFQoNcmVib290X3JlYXNvbhgOIAEoCRIzCg9sYXN0X3VwZ3JhZGVfYXQYDyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjkKFW9sZGVzdF9zZWN1cml0eV9zaW5jZRgQIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASOQoLcGVybWlzc2lvbnMYESABKAsyJC5zZXJtb24ud2ViLnYxLkhvc3RVcGRhdGVQZXJtaXNzaW9ucxIRCglyZWZyZXNoZWQYEiABKAgiqAEKDVVwZGF0ZVBhY2thZ2USDAoEbmFtZRgBIAEoCRIZChFpbnN0YWxsZWRfdmVyc2lvbhgCIAEoCRIZChFjYW5kaWRhdGVfdmVyc2lvbhgDIAEoCRIOCgZzb3VyY2UYBCABKAkSEAoIc2VjdXJpdHkYBSABKAgSMQoNZmlyc3Rfc2Vlbl9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiWwoVSG9zdFVwZGF0ZVBlcm1pc3Npb25zEhYKDnJlbW90ZV91cGRhdGVzGAEgASgIEhUKDXJlbW90ZV9yZWJvb3QYAiABKAgSEwoLc2VsZl91cGRhdGUYAyABKAgqXAoLVXBkYXRlU2NvcGUSHAoYVVBEQVRFX1NDT1BFX1VOU1BFQ0lGSUVEEAASGQoVVVBEQVRFX1NDT1BFX1NFQ1VSSVRZEAESFAoQVVBEQVRFX1NDT1BFX0FMTBACKrkBCgxVcGRhdGVTdGF0dXMSHQoZVVBEQVRFX1NUQVRVU19VTlNQRUNJRklFRBAAEhkKFVVQREFURV9TVEFUVVNfVU5LTk9XThABEh0KGVVQREFURV9TVEFUVVNfVU5BVkFJTEFCTEUQAhIZChVVUERBVEVfU1RBVFVTX0NVUlJFTlQQAxIZChVVUERBVEVfU1RBVFVTX1VQREFURVMQBBIaChZVUERBVEVfU1RBVFVTX1NFQ1VSSVRZEAUq6QEKElVwZGF0ZUF2YWlsYWJpbGl0eRIjCh9VUERBVEVfQVZBSUxBQklMSVRZX1VOU1BFQ0lGSUVEEAASHgoaVVBEQVRFX0FWQUlMQUJJTElUWV9MSVNURUQQARIhCh1VUERBVEVfQVZBSUxBQklMSVRZX05PX0hFTFBFUhACEiYKIlVQREFURV9BVkFJTEFCSUxJVFlfSEVMUEVSX1RPT19PTEQQAxIjCh9VUERBVEVfQVZBSUxBQklMSVRZX1VOU1VQUE9SVEVEEAQSHgoaVVBEQVRFX0FWQUlMQUJJTElUWV9GQUlMRUQQBSp8Cg5QYWNrYWdlTWFuYWdlchIfChtQQUNLQUdFX01BTkFHRVJfVU5TUEVDSUZJRUQQABIXChNQQUNLQUdFX01BTkFHRVJfQVBUEAESFwoTUEFDS0FHRV9NQU5BR0VSX0RORhACEhcKE1BBQ0tBR0VfTUFOQUdFUl9BUEsQAzL0AwoNVXBkYXRlU2VydmljZRJiCg5HZXROb2RlVXBkYXRlcxIkLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVVwZGF0ZXNSZXF1ZXN0GiUuc2VybW9uLndlYi52MS5HZXROb2RlVXBkYXRlc1Jlc3BvbnNlIgOQAgESaAoQTGlzdEZsZWV0VXBkYXRlcxImLnNlcm1vbi53ZWIudjEuTGlzdEZsZWV0VXBkYXRlc1JlcXVlc3QaJy5zZXJtb24ud2ViLnYxLkxpc3RGbGVldFVwZGF0ZXNSZXNwb25zZSIDkAIBEmYKEVJlZnJlc2hVcGRhdGVJbmZvEicuc2VybW9uLndlYi52MS5SZWZyZXNoVXBkYXRlSW5mb1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLlJlZnJlc2hVcGRhdGVJbmZvUmVzcG9uc2USVwoMU3RhcnRVcGRhdGVzEiIuc2VybW9uLndlYi52MS5TdGFydFVwZGF0ZXNSZXF1ZXN0GiMuc2VybW9uLndlYi52MS5TdGFydFVwZGF0ZXNSZXNwb25zZRJUCgtSZWJvb3ROb2RlcxIhLnNlcm1vbi53ZWIudjEuUmVib290Tm9kZXNSZXF1ZXN0GiIuc2VybW9uLndlYi52MS5SZWJvb3ROb2Rlc1Jlc3BvbnNlQroBChFjb20uc2VybW9uLndlYi52MUILVXBkYXRlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+
+/**
+ * StartUpdatesRequest names the nodes and what to install.
+ *
+ * @generated from message sermon.web.v1.StartUpdatesRequest
+ */
+export type StartUpdatesRequest = Message<"sermon.web.v1.StartUpdatesRequest"> & {
+  /**
+   * node_ids are the nodes, 1 to 100.
+   *
+   * @generated from field: repeated string node_ids = 1;
+   */
+  nodeIds: string[];
+
+  /**
+   * scope is which updates to install.
+   *
+   * @generated from field: sermon.web.v1.UpdateScope scope = 2;
+   */
+  scope: UpdateScope;
+
+  /**
+   * reboot reboots afterwards where needed and allowed.
+   *
+   * @generated from field: bool reboot = 3;
+   */
+  reboot: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.StartUpdatesRequest.
+ * Use `create(StartUpdatesRequestSchema)` to create a new message.
+ */
+export const StartUpdatesRequestSchema: GenMessage<StartUpdatesRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 0);
+
+/**
+ * StartUpdatesResponse names the rollouts.
+ *
+ * @generated from message sermon.web.v1.StartUpdatesResponse
+ */
+export type StartUpdatesResponse = Message<"sermon.web.v1.StartUpdatesResponse"> & {
+  /**
+   * rollout_ids are the rollouts started, one per group.
+   *
+   * @generated from field: repeated string rollout_ids = 1;
+   */
+  rolloutIds: string[];
+};
+
+/**
+ * Describes the message sermon.web.v1.StartUpdatesResponse.
+ * Use `create(StartUpdatesResponseSchema)` to create a new message.
+ */
+export const StartUpdatesResponseSchema: GenMessage<StartUpdatesResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 1);
+
+/**
+ * RebootNodesRequest names the nodes and the reason.
+ *
+ * @generated from message sermon.web.v1.RebootNodesRequest
+ */
+export type RebootNodesRequest = Message<"sermon.web.v1.RebootNodesRequest"> & {
+  /**
+   * node_ids are the nodes, 1 to 100.
+   *
+   * @generated from field: repeated string node_ids = 1;
+   */
+  nodeIds: string[];
+
+  /**
+   * reason is shown to the host's users and in its journal: 1 to 200 bytes, no control characters.
+   *
+   * @generated from field: string reason = 2;
+   */
+  reason: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.RebootNodesRequest.
+ * Use `create(RebootNodesRequestSchema)` to create a new message.
+ */
+export const RebootNodesRequestSchema: GenMessage<RebootNodesRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 2);
+
+/**
+ * RebootNodesResponse names the runs.
+ *
+ * @generated from message sermon.web.v1.RebootNodesResponse
+ */
+export type RebootNodesResponse = Message<"sermon.web.v1.RebootNodesResponse"> & {
+  /**
+   * run_ids are the reboot runs, in the order of the nodes.
+   *
+   * @generated from field: repeated string run_ids = 1;
+   */
+  runIds: string[];
+};
+
+/**
+ * Describes the message sermon.web.v1.RebootNodesResponse.
+ * Use `create(RebootNodesResponseSchema)` to create a new message.
+ */
+export const RebootNodesResponseSchema: GenMessage<RebootNodesResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 3);
 
 /**
  * RefreshUpdateInfoRequest names the node.
@@ -33,7 +138,7 @@ export type RefreshUpdateInfoRequest = Message<"sermon.web.v1.RefreshUpdateInfoR
  * Use `create(RefreshUpdateInfoRequestSchema)` to create a new message.
  */
 export const RefreshUpdateInfoRequestSchema: GenMessage<RefreshUpdateInfoRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 0);
+  messageDesc(file_sermon_web_v1_update, 4);
 
 /**
  * RefreshUpdateInfoResponse has no fields.
@@ -48,7 +153,7 @@ export type RefreshUpdateInfoResponse = Message<"sermon.web.v1.RefreshUpdateInfo
  * Use `create(RefreshUpdateInfoResponseSchema)` to create a new message.
  */
 export const RefreshUpdateInfoResponseSchema: GenMessage<RefreshUpdateInfoResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 1);
+  messageDesc(file_sermon_web_v1_update, 5);
 
 /**
  * GetNodeUpdatesRequest names the node.
@@ -69,7 +174,7 @@ export type GetNodeUpdatesRequest = Message<"sermon.web.v1.GetNodeUpdatesRequest
  * Use `create(GetNodeUpdatesRequestSchema)` to create a new message.
  */
 export const GetNodeUpdatesRequestSchema: GenMessage<GetNodeUpdatesRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 2);
+  messageDesc(file_sermon_web_v1_update, 6);
 
 /**
  * GetNodeUpdatesResponse is the node with its report.
@@ -98,7 +203,7 @@ export type GetNodeUpdatesResponse = Message<"sermon.web.v1.GetNodeUpdatesRespon
  * Use `create(GetNodeUpdatesResponseSchema)` to create a new message.
  */
 export const GetNodeUpdatesResponseSchema: GenMessage<GetNodeUpdatesResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 3);
+  messageDesc(file_sermon_web_v1_update, 7);
 
 /**
  * ListFleetUpdatesRequest has no fields yet.
@@ -113,7 +218,7 @@ export type ListFleetUpdatesRequest = Message<"sermon.web.v1.ListFleetUpdatesReq
  * Use `create(ListFleetUpdatesRequestSchema)` to create a new message.
  */
 export const ListFleetUpdatesRequestSchema: GenMessage<ListFleetUpdatesRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 4);
+  messageDesc(file_sermon_web_v1_update, 8);
 
 /**
  * ListFleetUpdatesResponse is the overview.
@@ -176,7 +281,7 @@ export type ListFleetUpdatesResponse = Message<"sermon.web.v1.ListFleetUpdatesRe
  * Use `create(ListFleetUpdatesResponseSchema)` to create a new message.
  */
 export const ListFleetUpdatesResponseSchema: GenMessage<ListFleetUpdatesResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 5);
+  messageDesc(file_sermon_web_v1_update, 9);
 
 /**
  * NodeUpdates is a node with the counts of its latest report.
@@ -317,7 +422,7 @@ export type NodeUpdates = Message<"sermon.web.v1.NodeUpdates"> & {
  * Use `create(NodeUpdatesSchema)` to create a new message.
  */
 export const NodeUpdatesSchema: GenMessage<NodeUpdates> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 6);
+  messageDesc(file_sermon_web_v1_update, 10);
 
 /**
  * UpdatePackage is one available update.
@@ -373,7 +478,7 @@ export type UpdatePackage = Message<"sermon.web.v1.UpdatePackage"> & {
  * Use `create(UpdatePackageSchema)` to create a new message.
  */
 export const UpdatePackageSchema: GenMessage<UpdatePackage> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 7);
+  messageDesc(file_sermon_web_v1_update, 11);
 
 /**
  * HostUpdatePermissions are the switches of the host's /etc/sermon/helper.toml (ADR 0035); the
@@ -409,7 +514,41 @@ export type HostUpdatePermissions = Message<"sermon.web.v1.HostUpdatePermissions
  * Use `create(HostUpdatePermissionsSchema)` to create a new message.
  */
 export const HostUpdatePermissionsSchema: GenMessage<HostUpdatePermissions> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 8);
+  messageDesc(file_sermon_web_v1_update, 12);
+
+/**
+ * UpdateScope is which updates a run by hand installs.
+ *
+ * @generated from enum sermon.web.v1.UpdateScope
+ */
+export enum UpdateScope {
+  /**
+   * UPDATE_SCOPE_UNSPECIFIED is invalid.
+   *
+   * @generated from enum value: UPDATE_SCOPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * UPDATE_SCOPE_SECURITY installs the security updates (on Alpine nothing: no metadata).
+   *
+   * @generated from enum value: UPDATE_SCOPE_SECURITY = 1;
+   */
+  SECURITY = 1,
+
+  /**
+   * UPDATE_SCOPE_ALL installs all updates.
+   *
+   * @generated from enum value: UPDATE_SCOPE_ALL = 2;
+   */
+  ALL = 2,
+}
+
+/**
+ * Describes the enum sermon.web.v1.UpdateScope.
+ */
+export const UpdateScopeSchema: GenEnum<UpdateScope> = /*@__PURE__*/
+  enumDesc(file_sermon_web_v1_update, 0);
 
 /**
  * UpdateStatus is where a node stands with its updates; a reboot is separate (reboot_required).
@@ -464,7 +603,7 @@ export enum UpdateStatus {
  * Describes the enum sermon.web.v1.UpdateStatus.
  */
 export const UpdateStatusSchema: GenEnum<UpdateStatus> = /*@__PURE__*/
-  enumDesc(file_sermon_web_v1_update, 0);
+  enumDesc(file_sermon_web_v1_update, 1);
 
 /**
  * UpdateAvailability says whether the agent could list the updates.
@@ -519,7 +658,7 @@ export enum UpdateAvailability {
  * Describes the enum sermon.web.v1.UpdateAvailability.
  */
 export const UpdateAvailabilitySchema: GenEnum<UpdateAvailability> = /*@__PURE__*/
-  enumDesc(file_sermon_web_v1_update, 1);
+  enumDesc(file_sermon_web_v1_update, 2);
 
 /**
  * PackageManager is how the updates were listed.
@@ -560,7 +699,7 @@ export enum PackageManager {
  * Describes the enum sermon.web.v1.PackageManager.
  */
 export const PackageManagerSchema: GenEnum<PackageManager> = /*@__PURE__*/
-  enumDesc(file_sermon_web_v1_update, 2);
+  enumDesc(file_sermon_web_v1_update, 3);
 
 /**
  * UpdateService shows what the nodes could update (KONZEPT §14.1, M4-09): the latest report of
@@ -604,6 +743,30 @@ export const UpdateService: GenService<{
     methodKind: "unary";
     input: typeof RefreshUpdateInfoRequestSchema;
     output: typeof RefreshUpdateInfoResponseSchema;
+  },
+  /**
+   * StartUpdates updates the nodes by hand (M4-14): run_updates on their groups (reboot_nodes
+   * with reboot) and a fresh step-up. A rollout per group runs them with the group's
+   * maxParallel within the next two hours; the host's helper.toml may still refuse. In the audit
+   * log. A node the caller can't view is NOT_FOUND.
+   *
+   * @generated from rpc sermon.web.v1.UpdateService.StartUpdates
+   */
+  startUpdates: {
+    methodKind: "unary";
+    input: typeof StartUpdatesRequestSchema;
+    output: typeof StartUpdatesResponseSchema;
+  },
+  /**
+   * RebootNodes reboots the nodes at once with a reason shown on the host (reboot_nodes, a fresh
+   * step-up, in the audit log). Without allow_remote_reboot the host refuses.
+   *
+   * @generated from rpc sermon.web.v1.UpdateService.RebootNodes
+   */
+  rebootNodes: {
+    methodKind: "unary";
+    input: typeof RebootNodesRequestSchema;
+    output: typeof RebootNodesResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_update, 0);

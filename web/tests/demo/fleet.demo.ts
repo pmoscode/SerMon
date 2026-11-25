@@ -113,7 +113,7 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	baseURL
 }) => {
 	// Since M4-12 the hosts also install their updates through the root helper and report again.
-	test.setTimeout(10 * 60_000);
+	test.setTimeout(15 * 60_000);
 	// Setup with the token from the server log, then the first login.
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/setup/);
@@ -482,6 +482,52 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	console.log(
 		`the next reports show nothing to update after ${Math.round((Date.now() - runStarted) / 1000)} s`
 	);
+
+	// Updates by hand (M4-14): the Updates tab of db-01 lists the packages of this run's sources;
+	// "Update now" shows them before the confirmation, a rollout of its group installs them and
+	// the next report has nothing left.
+	const manualStarted = Date.now();
+	await page.goto('/fleet');
+	await page.getByRole('link', { name: 'db-01' }).click();
+	await page.getByRole('tab', { name: 'Updates' }).click();
+	await expect(
+		page
+			.getByRole('table', { name: 'Available updates' })
+			.getByRole('cell', { name: /^sermon-e2e-demo/ })
+	).toBeVisible({ timeout: 30_000 });
+	await page.getByRole('button', { name: 'Update now' }).click();
+	await page.getByRole('radio', { name: /All updates/ }).click();
+	await expect(
+		page
+			.getByRole('table', { name: 'These packages will be updated' })
+			.getByRole('cell', { name: 'sermon-e2e-extra' })
+	).toBeVisible();
+	await page.getByRole('button', { name: 'Update 2 packages' }).click();
+	await expect(page.getByText(/Started – the rollout runs/)).toBeVisible({ timeout: 30_000 });
+	await expect
+		.poll(
+			() =>
+				ownerSQL(
+					`SELECT r.state || ':' || string_agg(n.hostname || '=' || n.state, ',')
+					 FROM update_rollouts r JOIN update_rollout_nodes n ON n.rollout_id = r.id
+					 WHERE r.manual GROUP BY r.state`
+				).trim(),
+			{ timeout: 420_000, intervals: [10_000] }
+		)
+		.toBe('2:db-01=5');
+	const db01 = await call<FleetUpdates>(
+		page.request,
+		baseURL ?? '',
+		'UpdateService/ListFleetUpdates',
+		{}
+	);
+	expect((db01.nodes ?? []).find((n) => n.hostname === 'db-01')?.status).toBe(
+		'UPDATE_STATUS_CURRENT'
+	);
+	expect(ownerSQL(`SELECT count(*) FROM audit_log WHERE action = 'updates.start'`).trim()).toBe(
+		'1'
+	);
+	console.log(`db-01 updated by hand after ${Math.round((Date.now() - manualStarted) / 1000)} s`);
 	// The live view ran the whole time: first offline until the agent's stream started, then a
 	// snapshot every 2 s with the host's processes, the command line redacted (M3-14).
 	const live = await watching;

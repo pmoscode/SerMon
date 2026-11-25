@@ -78,6 +78,11 @@ type RolloutRun struct {
 	State       RolloutState
 	Reason      string
 	Nodes       []NodeRun
+	// Manual: started by hand (M4-14) with its own mode and reboot, not by a window.
+	Manual     bool
+	Mode       Mode
+	AutoReboot bool
+	CreatedBy  identity.UserID
 }
 
 // NodeView is what the rollout knows of a node of the group now.

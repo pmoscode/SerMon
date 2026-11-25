@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
@@ -37,11 +39,14 @@ type Service struct {
 	policy    authz.Policy
 	refresher Refresher
 	now       func() time.Time
+	manual    ManualStore
+	policies  PolicyStore
+	newID     func() uuid.UUID
 }
 
 // NewService returns the service.
 func NewService(store Store, policy authz.Policy) *Service {
-	return &Service{store: store, policy: policy, now: time.Now}
+	return &Service{store: store, policy: policy, now: time.Now, newID: func() uuid.UUID { return uuid.Must(uuid.NewV7()) }}
 }
 
 // WithRefresher lets the service ask agents for fresh update information.

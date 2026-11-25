@@ -78,7 +78,7 @@ func (q *Queries) InsertUpdateRolloutNode(ctx context.Context, arg InsertUpdateR
 
 const latestUpdateRollouts = `-- name: LatestUpdateRollouts :many
 SELECT DISTINCT ON (group_id) id, group_id, window_start, window_end, state, reason
-FROM update_rollouts ORDER BY group_id, window_start DESC
+FROM update_rollouts WHERE NOT manual ORDER BY group_id, window_start DESC
 `
 
 type LatestUpdateRolloutsRow struct {
@@ -90,7 +90,7 @@ type LatestUpdateRolloutsRow struct {
 	Reason      string
 }
 
-// The last rollout of each group.
+// The last scheduled rollout of each group.
 func (q *Queries) LatestUpdateRollouts(ctx context.Context) ([]LatestUpdateRolloutsRow, error) {
 	rows, err := q.db.Query(ctx, latestUpdateRollouts)
 	if err != nil {
@@ -337,10 +337,58 @@ func (q *Queries) PruneUpdateRollouts(ctx context.Context, before time.Time) err
 	return err
 }
 
+const runningManualRollouts = `-- name: RunningManualRollouts :many
+SELECT id, group_id, window_start, window_end, state, reason, mode, auto_reboot
+FROM update_rollouts WHERE manual AND state = 1 ORDER BY window_start, id
+`
+
+type RunningManualRolloutsRow struct {
+	ID          uuid.UUID
+	GroupID     uuid.UUID
+	WindowStart time.Time
+	WindowEnd   time.Time
+	State       int16
+	Reason      string
+	Mode        pgtype.Int2
+	AutoReboot  bool
+}
+
+// The rollouts by hand that still run (M4-14).
+func (q *Queries) RunningManualRollouts(ctx context.Context) ([]RunningManualRolloutsRow, error) {
+	rows, err := q.db.Query(ctx, runningManualRollouts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RunningManualRolloutsRow{}
+	for rows.Next() {
+		var i RunningManualRolloutsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.WindowStart,
+			&i.WindowEnd,
+			&i.State,
+			&i.Reason,
+			&i.Mode,
+			&i.AutoReboot,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertUpdateRollout = `-- name: UpsertUpdateRollout :exec
-INSERT INTO update_rollouts (org_id, id, group_id, window_start, window_end, state, reason, created_at, updated_at)
+INSERT INTO update_rollouts (org_id, id, group_id, window_start, window_end, state, reason, created_at, updated_at,
+                             manual, mode, auto_reboot, created_by)
 VALUES (current_org_id(), $1, $2, $3, $4,
-        $5, $6, $7, $7)
+        $5, $6, $7, $7,
+        $8, $9, $10, $11)
 ON CONFLICT (org_id, id) DO UPDATE SET state = excluded.state, reason = excluded.reason, updated_at = excluded.updated_at
 `
 
@@ -352,6 +400,10 @@ type UpsertUpdateRolloutParams struct {
 	State       int16
 	Reason      string
 	Now         time.Time
+	Manual      bool
+	Mode        pgtype.Int2
+	AutoReboot  bool
+	CreatedBy   *uuid.UUID
 }
 
 func (q *Queries) UpsertUpdateRollout(ctx context.Context, arg UpsertUpdateRolloutParams) error {
@@ -363,6 +415,10 @@ func (q *Queries) UpsertUpdateRollout(ctx context.Context, arg UpsertUpdateRollo
 		arg.State,
 		arg.Reason,
 		arg.Now,
+		arg.Manual,
+		arg.Mode,
+		arg.AutoReboot,
+		arg.CreatedBy,
 	)
 	return err
 }

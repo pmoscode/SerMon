@@ -574,7 +574,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Fleet:          webapi.NewFleetHandler(nodes, logger),
 		SecurityEvents: webapi.NewSecurityEventHandler(securityEvents, logger),
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(db, 0), policy).
-			WithRefresher(postgres.NewCommandStore(db), time.Now), logger),
+			WithRefresher(postgres.NewCommandStore(db), time.Now).
+			WithManual(postgres.NewRolloutStore(db), postgres.NewUpdatePolicyStore(db), func() uuid.UUID { return uuid.Must(uuid.NewV7()) }), logger),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(updates.NewPolicyService(postgres.NewUpdatePolicyStore(db), policy, time.Now), logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),

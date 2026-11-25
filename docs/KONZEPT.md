@@ -1139,6 +1139,9 @@ spec:
   Orgs kommen reihum zuerst. Fehlschläge schreiben die Server-Ereignisse `updates.run_failed` bzw.
   `updates.rollout_stopped`; Reboot- und Offline-Alerts des Nodes sind bis Fensterende plus Health-Check stumm.
 - **Manuell:** Ein Operator kann „Jetzt aktualisieren“ auslösen (Step-up-2FA, Bestätigungsdialog mit Paketliste).
+  Umsetzung (M4-14): je Gruppe ein eigener Rollout mit dem gewählten Umfang (Security oder alle) und Reboot, dem
+  `maxParallel`, Health-Check und `stopOnFailure` der Gruppe, über die nächsten 2 h; „Neu starten“ mit Grund sendet den
+  Reboot sofort (`reboot_nodes`). Beides mit Step-up und im Audit-Log; was der Host verbietet, zeigt die UI an.
 - **Ausführung (Helper):**
   `DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade`
   (bzw. nur Security-Pakete); `dnf -y upgrade [--security]`; `apk upgrade`. Ausgabe und Exit-Code gehen an den Server,

@@ -4445,7 +4445,28 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   ohne `stopOnFailure`; Health-Check verfehlt; Node offline; zwei Instanzen, ein Rollout.
 - **Abhängig von:** M4-10, M4-11
 
-#### ☐ M4-14 – Manuell aktualisieren und neu starten · S+W · S 🔒
+#### ☑ M4-14 – Manuell aktualisieren und neu starten · S+W · S 🔒
+> Erledigt (KONZEPT §14.2; Threat Model T97; Hilfe `concepts/updates`):
+> - **`UpdateService.StartUpdates`** (1 bis 100 Nodes, Umfang Security oder alle, Reboot ja/nein): `run_updates` auf den
+>   Gruppen der Nodes, mit Reboot auch `reboot_nodes`, frischer Step-up. Je Gruppe ein Rollout von Hand (Migration
+>   00050: `manual`, `mode`, `auto_reboot`, `created_by`) über die nächsten 2 h; der Orchestrator führt ihn mit dem
+>   `maxParallel`, Health-Check und `stopOnFailure` der Gruppe aus, auch wenn ihre Policy nur meldet. Audit
+>   `updates.start` mit Umfang, Reboot und allen Nodes.
+> - **`UpdateService.RebootNodes`** mit Grund (1 bis 200 Byte, keine Steuerzeichen): `reboot_nodes`, Step-up, der Befehl
+>   geht sofort hinaus; Audit `nodes.reboot` mit Grund und Nodes. Der Host entscheidet (`allow_remote_reboot`).
+> - **Sitzung:** `run_updates_group_ids` und `reboot_group_ids` sagen der UI, wo der Nutzer darf.
+> - **UI:** Reiter „Updates“ der Node-Seite (lädt bei Bedarf): Stand, Reboot samt Grund, Pakete als Text (Security mit
+>   Symbol und Wort), „Jetzt aktualisieren“ mit Bestätigung samt Paketliste des gewählten Umfangs und Reboot, „Neu
+>   auflisten“ (`RefreshUpdateInfo`, „zu früh“ als Meldung), „Neu starten“ mit Grund. Was `helper.toml` verbietet, steht
+>   da und sperrt den Knopf. Hilfe DE/EN.
+> - **Tests:** Dienst (Rechte, Step-up, Grenzen, Grund), PostgreSQL (Rollout von Hand im Orchestrator, mit eigenem
+>   Modus in einer Gruppe, die nur meldet), Web-API (Rollout, Reboot-Befehl, Audit, Viewer, Grund mit Zeilenumbruch,
+>   Rechte in der Sitzung), Tenant-Isolation und Step-up-Abdeckung; Komponente (Pakete als Text mit feindlichen
+>   Namen, Bestätigung mit Paketliste und Step-up, Veto, Reboot nur mit Recht, Grund, „zu früh“).
+> - **Demo:** db-01 über die UI aktualisiert (Reiter, Paketliste, alle Updates, Bestätigung): Rollout fertig, nächster
+>   Bericht ohne Updates, ein Audit-Eintrag – nach 234 s. Test der Demo darf 15 min dauern.
+> - **Gegenproben** für 17 Prüfungen, 16 erkannt; die übrige ist gleichwertig (`run_updates` und `reboot_nodes` gehören
+>   zur selben Rolle, ein Fehlen der zweiten Prüfung ist ohne eigene Rollen nicht beobachtbar).
 - **Ziel:** „Jetzt aktualisieren“ für einen Node oder eine Auswahl.
   - Operator mit Step-up; der Bestätigungsdialog zeigt die Paketliste des letzten Berichts.
   - `scope` (Security oder alle) und Reboot wählbar; läuft über den Orchestrator mit `maxParallel` der Gruppe.

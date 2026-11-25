@@ -42,6 +42,12 @@ const (
 	// UpdateServiceRefreshUpdateInfoProcedure is the fully-qualified name of the UpdateService's
 	// RefreshUpdateInfo RPC.
 	UpdateServiceRefreshUpdateInfoProcedure = "/sermon.web.v1.UpdateService/RefreshUpdateInfo"
+	// UpdateServiceStartUpdatesProcedure is the fully-qualified name of the UpdateService's
+	// StartUpdates RPC.
+	UpdateServiceStartUpdatesProcedure = "/sermon.web.v1.UpdateService/StartUpdates"
+	// UpdateServiceRebootNodesProcedure is the fully-qualified name of the UpdateService's RebootNodes
+	// RPC.
+	UpdateServiceRebootNodesProcedure = "/sermon.web.v1.UpdateService/RebootNodes"
 )
 
 // UpdateServiceClient is a client for the sermon.web.v1.UpdateService service.
@@ -57,6 +63,14 @@ type UpdateServiceClient interface {
 	// organization, else RESOURCE_EXHAUSTED; a node the caller can't view is NOT_FOUND. The new
 	// report follows within minutes, once the agent is connected.
 	RefreshUpdateInfo(context.Context, *connect.Request[v1.RefreshUpdateInfoRequest]) (*connect.Response[v1.RefreshUpdateInfoResponse], error)
+	// StartUpdates updates the nodes by hand (M4-14): run_updates on their groups (reboot_nodes
+	// with reboot) and a fresh step-up. A rollout per group runs them with the group's
+	// maxParallel within the next two hours; the host's helper.toml may still refuse. In the audit
+	// log. A node the caller can't view is NOT_FOUND.
+	StartUpdates(context.Context, *connect.Request[v1.StartUpdatesRequest]) (*connect.Response[v1.StartUpdatesResponse], error)
+	// RebootNodes reboots the nodes at once with a reason shown on the host (reboot_nodes, a fresh
+	// step-up, in the audit log). Without allow_remote_reboot the host refuses.
+	RebootNodes(context.Context, *connect.Request[v1.RebootNodesRequest]) (*connect.Response[v1.RebootNodesResponse], error)
 }
 
 // NewUpdateServiceClient constructs a client for the sermon.web.v1.UpdateService service. By
@@ -90,6 +104,18 @@ func NewUpdateServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(updateServiceMethods.ByName("RefreshUpdateInfo")),
 			connect.WithClientOptions(opts...),
 		),
+		startUpdates: connect.NewClient[v1.StartUpdatesRequest, v1.StartUpdatesResponse](
+			httpClient,
+			baseURL+UpdateServiceStartUpdatesProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("StartUpdates")),
+			connect.WithClientOptions(opts...),
+		),
+		rebootNodes: connect.NewClient[v1.RebootNodesRequest, v1.RebootNodesResponse](
+			httpClient,
+			baseURL+UpdateServiceRebootNodesProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("RebootNodes")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -98,6 +124,8 @@ type updateServiceClient struct {
 	getNodeUpdates    *connect.Client[v1.GetNodeUpdatesRequest, v1.GetNodeUpdatesResponse]
 	listFleetUpdates  *connect.Client[v1.ListFleetUpdatesRequest, v1.ListFleetUpdatesResponse]
 	refreshUpdateInfo *connect.Client[v1.RefreshUpdateInfoRequest, v1.RefreshUpdateInfoResponse]
+	startUpdates      *connect.Client[v1.StartUpdatesRequest, v1.StartUpdatesResponse]
+	rebootNodes       *connect.Client[v1.RebootNodesRequest, v1.RebootNodesResponse]
 }
 
 // GetNodeUpdates calls sermon.web.v1.UpdateService.GetNodeUpdates.
@@ -115,6 +143,16 @@ func (c *updateServiceClient) RefreshUpdateInfo(ctx context.Context, req *connec
 	return c.refreshUpdateInfo.CallUnary(ctx, req)
 }
 
+// StartUpdates calls sermon.web.v1.UpdateService.StartUpdates.
+func (c *updateServiceClient) StartUpdates(ctx context.Context, req *connect.Request[v1.StartUpdatesRequest]) (*connect.Response[v1.StartUpdatesResponse], error) {
+	return c.startUpdates.CallUnary(ctx, req)
+}
+
+// RebootNodes calls sermon.web.v1.UpdateService.RebootNodes.
+func (c *updateServiceClient) RebootNodes(ctx context.Context, req *connect.Request[v1.RebootNodesRequest]) (*connect.Response[v1.RebootNodesResponse], error) {
+	return c.rebootNodes.CallUnary(ctx, req)
+}
+
 // UpdateServiceHandler is an implementation of the sermon.web.v1.UpdateService service.
 type UpdateServiceHandler interface {
 	// GetNodeUpdates returns a node's report with its packages (view_nodes). A node the caller
@@ -128,6 +166,14 @@ type UpdateServiceHandler interface {
 	// organization, else RESOURCE_EXHAUSTED; a node the caller can't view is NOT_FOUND. The new
 	// report follows within minutes, once the agent is connected.
 	RefreshUpdateInfo(context.Context, *connect.Request[v1.RefreshUpdateInfoRequest]) (*connect.Response[v1.RefreshUpdateInfoResponse], error)
+	// StartUpdates updates the nodes by hand (M4-14): run_updates on their groups (reboot_nodes
+	// with reboot) and a fresh step-up. A rollout per group runs them with the group's
+	// maxParallel within the next two hours; the host's helper.toml may still refuse. In the audit
+	// log. A node the caller can't view is NOT_FOUND.
+	StartUpdates(context.Context, *connect.Request[v1.StartUpdatesRequest]) (*connect.Response[v1.StartUpdatesResponse], error)
+	// RebootNodes reboots the nodes at once with a reason shown on the host (reboot_nodes, a fresh
+	// step-up, in the audit log). Without allow_remote_reboot the host refuses.
+	RebootNodes(context.Context, *connect.Request[v1.RebootNodesRequest]) (*connect.Response[v1.RebootNodesResponse], error)
 }
 
 // NewUpdateServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -157,6 +203,18 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(updateServiceMethods.ByName("RefreshUpdateInfo")),
 		connect.WithHandlerOptions(opts...),
 	)
+	updateServiceStartUpdatesHandler := connect.NewUnaryHandler(
+		UpdateServiceStartUpdatesProcedure,
+		svc.StartUpdates,
+		connect.WithSchema(updateServiceMethods.ByName("StartUpdates")),
+		connect.WithHandlerOptions(opts...),
+	)
+	updateServiceRebootNodesHandler := connect.NewUnaryHandler(
+		UpdateServiceRebootNodesProcedure,
+		svc.RebootNodes,
+		connect.WithSchema(updateServiceMethods.ByName("RebootNodes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.UpdateService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UpdateServiceGetNodeUpdatesProcedure:
@@ -165,6 +223,10 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 			updateServiceListFleetUpdatesHandler.ServeHTTP(w, r)
 		case UpdateServiceRefreshUpdateInfoProcedure:
 			updateServiceRefreshUpdateInfoHandler.ServeHTTP(w, r)
+		case UpdateServiceStartUpdatesProcedure:
+			updateServiceStartUpdatesHandler.ServeHTTP(w, r)
+		case UpdateServiceRebootNodesProcedure:
+			updateServiceRebootNodesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -184,4 +246,12 @@ func (UnimplementedUpdateServiceHandler) ListFleetUpdates(context.Context, *conn
 
 func (UnimplementedUpdateServiceHandler) RefreshUpdateInfo(context.Context, *connect.Request[v1.RefreshUpdateInfoRequest]) (*connect.Response[v1.RefreshUpdateInfoResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.RefreshUpdateInfo is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) StartUpdates(context.Context, *connect.Request[v1.StartUpdatesRequest]) (*connect.Response[v1.StartUpdatesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.StartUpdates is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) RebootNodes(context.Context, *connect.Request[v1.RebootNodesRequest]) (*connect.Response[v1.RebootNodesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.RebootNodes is not implemented"))
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
@@ -25,7 +26,10 @@ type RolloutStore struct {
 	alerts *AlertStore
 }
 
-var _ updates.RolloutStore = (*RolloutStore)(nil)
+var (
+	_ updates.RolloutStore = (*RolloutStore)(nil)
+	_ updates.ManualStore  = (*RolloutStore)(nil)
+)
 
 // NewRolloutStore returns the store on db.
 func NewRolloutStore(db *DB) *RolloutStore { return &RolloutStore{db: db, alerts: NewAlertStore(db)} }
@@ -93,6 +97,21 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 		for _, r := range rollouts {
 			byID[r.ID] = r
 		}
+		manual, err := q.RunningManualRollouts(ctx)
+		if err != nil {
+			return wrap(err, "list rollouts by hand")
+		}
+		manuals := make([]*updates.RolloutRun, 0, len(manual))
+		for _, m := range manual {
+			r := &updates.RolloutRun{
+				ID: m.ID, Group: tenant.GroupID(m.GroupID), WindowStart: m.WindowStart, WindowEnd: m.WindowEnd,
+				State: updates.RolloutState(m.State), Reason: m.Reason, Manual: true, //nolint:gosec // 1 to 3 by the table's check
+				Mode: updates.Mode(m.Mode.Int16), AutoReboot: m.AutoReboot, //nolint:gosec // 2 or 3 by the table's check
+			}
+			manuals = append(manuals, r)
+			byID[r.ID] = r
+			ids = append(ids, r.ID)
+		}
 		nodes, err := q.ListUpdateRolloutNodes(ctx, ids)
 		if err != nil {
 			return wrap(err, "list rollout nodes")
@@ -126,13 +145,24 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 		for _, v := range views {
 			byGroup[tenant.GroupID(v.GroupID)] = append(byGroup[tenant.GroupID(v.GroupID)], nodeView(v, now))
 		}
+		groupPolicy := map[tenant.GroupID]updates.Policy{}
 		for _, row := range policies {
 			p := policyOf(row).Policy
+			groupPolicy[p.Group] = p
 			r := rollouts[p.Group]
 			if p.Mode == updates.ModeReport && (r == nil || !r.Following()) {
 				continue
 			}
 			out.Groups = append(out.Groups, updates.GroupState{Policy: p, Rollout: r, Nodes: byGroup[p.Group]})
+		}
+		// A rollout by hand runs with its own mode and reboot, the rest of the group's policy.
+		for _, r := range manuals {
+			p, ok := groupPolicy[r.Group]
+			if !ok {
+				p = updates.DefaultPolicy(r.Group)
+			}
+			p.Mode, p.AutoReboot, p.Window = r.Mode, r.AutoReboot, nil
+			out.Groups = append(out.Groups, updates.GroupState{Policy: p, Rollout: r, Nodes: byGroup[r.Group]})
 		}
 		commands, err := q.ListNodeCommandsByID(ctx, runs)
 		if err != nil {
@@ -220,10 +250,15 @@ func (s *RolloutStore) Save(ctx context.Context, org tenant.OrgID, holder string
 }
 
 func saveRollout(ctx context.Context, q *sqlcdb.Queries, r updates.RolloutRun, now time.Time) error {
-	if err := q.UpsertUpdateRollout(ctx, sqlcdb.UpsertUpdateRolloutParams{
+	params := sqlcdb.UpsertUpdateRolloutParams{
 		ID: r.ID, GroupID: uuid.UUID(r.Group), WindowStart: r.WindowStart, WindowEnd: r.WindowEnd,
-		State: int16(r.State), Reason: bounded(r.Reason, 1024), Now: now,
-	}); err != nil {
+		State: int16(r.State), Reason: bounded(r.Reason, 1024), Now: now, Manual: r.Manual, AutoReboot: r.AutoReboot,
+		CreatedBy: optionalUser(r.CreatedBy),
+	}
+	if r.Manual {
+		params.Mode = pgtype.Int2{Int16: int16(r.Mode), Valid: true}
+	}
+	if err := q.UpsertUpdateRollout(ctx, params); err != nil {
 		return wrap(err, "store rollout")
 	}
 	if err := q.DeleteUpdateRolloutNodes(ctx, r.ID); err != nil {
@@ -281,4 +316,36 @@ func apply(ctx context.Context, q *sqlcdb.Queries, a updates.Action, now time.Ti
 		}
 	}
 	return nil
+}
+
+// StartRollouts implements updates.ManualStore: the rollouts by hand with their audit entry.
+func (s *RolloutStore) StartRollouts(ctx context.Context, org tenant.OrgID, rollouts []updates.RolloutRun, now time.Time, audit access.AuditEntry) error {
+	scope, err := orgScope(org)
+	if err != nil {
+		return err
+	}
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		for _, r := range rollouts {
+			if err := saveRollout(ctx, q, r, now); err != nil {
+				return err
+			}
+		}
+		return appendAudit(ctx, q, audit)
+	})
+}
+
+// Reboot implements updates.ManualStore: the reboot commands with their audit entry.
+func (s *RolloutStore) Reboot(ctx context.Context, org tenant.OrgID, commands []command.Command, audit access.AuditEntry) error {
+	scope, err := orgScope(org)
+	if err != nil {
+		return err
+	}
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		for _, c := range commands {
+			if err := insertCommand(ctx, q, c); err != nil {
+				return err
+			}
+		}
+		return appendAudit(ctx, q, audit)
+	})
 }

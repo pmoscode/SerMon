@@ -138,3 +138,48 @@ func TestUpdates_RefreshOnRequest(t *testing.T) {
 		t.Errorf("another organization: %v", err)
 	}
 }
+
+// M4-14: Ann (admin, fresh step-up) updates Alpha's node by hand and reboots it; both are in the
+// audit log. Mia (viewer) may not.
+func TestUpdates_ByHand(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ownerSQL(t, "DELETE FROM update_rollouts WHERE org_id = '"+orgAlpha+"'", "DELETE FROM node_commands WHERE org_id = '"+orgAlpha+"'")
+	ctx := context.Background()
+	ann := login(t, s, "ann@example.org")
+	res, err := ann.updates.StartUpdates(ctx, connect.NewRequest(&webv1.StartUpdatesRequest{
+		NodeIds: []string{nodeAl}, Scope: webv1.UpdateScope_UPDATE_SCOPE_SECURITY, Reboot: true,
+	}))
+	if err != nil || len(res.Msg.GetRolloutIds()) != 1 {
+		t.Fatalf("StartUpdates() = %v, %v", res, err)
+	}
+	var got string
+	if ownerQuery(t, "SELECT manual::text || ',' || mode || ',' || auto_reboot::text || ',' || state FROM update_rollouts WHERE id = '"+res.Msg.GetRolloutIds()[0]+"'", &got); got != "true,2,true,1" {
+		t.Errorf("rollout = %q", got)
+	}
+	reboot, err := ann.updates.RebootNodes(ctx, connect.NewRequest(&webv1.RebootNodesRequest{NodeIds: []string{nodeAl}, Reason: "kernel update"}))
+	if err != nil || len(reboot.Msg.GetRunIds()) != 1 {
+		t.Fatalf("RebootNodes() = %v, %v", reboot, err)
+	}
+	if ownerQuery(t, "SELECT kind || ',' || reason FROM node_commands WHERE id = '"+reboot.Msg.GetRunIds()[0]+"'", &got); got != "3,kernel update" {
+		t.Errorf("command = %q", got)
+	}
+	if ownerQuery(t, "SELECT string_agg(action, ',' ORDER BY seq) FROM audit_log WHERE org_id = '"+orgAlpha+"' AND action IN ('updates.start', 'nodes.reboot')", &got); !strings.HasSuffix(got, "updates.start,nodes.reboot") {
+		t.Errorf("audit = %q", got)
+	}
+	mia := login(t, s, "mia@example.org")
+	if _, err := mia.updates.StartUpdates(ctx, connect.NewRequest(&webv1.StartUpdatesRequest{NodeIds: []string{nodeAl}, Scope: webv1.UpdateScope_UPDATE_SCOPE_ALL})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("a viewer updates: %v", err)
+	}
+	if _, err := ann.updates.RebootNodes(ctx, connect.NewRequest(&webv1.RebootNodesRequest{NodeIds: []string{nodeAl}, Reason: "now\n-h"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("a reason with a newline: %v", err)
+	}
+	// The session tells the UI where the caller may update and reboot.
+	session, err := ann.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
+	if err != nil || len(session.Msg.GetSession().GetRunUpdatesGroupIds()) == 0 || len(session.Msg.GetSession().GetRebootGroupIds()) == 0 {
+		t.Errorf("session = %v, %v", session, err)
+	}
+	if s, _ := mia.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{})); len(s.Msg.GetSession().GetRunUpdatesGroupIds()) != 0 {
+		t.Errorf("a viewer may update: %v", s.Msg.GetSession().GetRunUpdatesGroupIds())
+	}
+}

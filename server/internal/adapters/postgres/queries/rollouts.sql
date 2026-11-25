@@ -13,9 +13,14 @@ WHERE update_leases.holder = EXCLUDED.holder OR update_leases.expires_at <= sqlc
 SELECT 1 FROM update_leases WHERE holder = sqlc.arg(holder) AND expires_at > sqlc.arg(now) FOR UPDATE;
 
 -- name: LatestUpdateRollouts :many
--- The last rollout of each group.
+-- The last scheduled rollout of each group.
 SELECT DISTINCT ON (group_id) id, group_id, window_start, window_end, state, reason
-FROM update_rollouts ORDER BY group_id, window_start DESC;
+FROM update_rollouts WHERE NOT manual ORDER BY group_id, window_start DESC;
+
+-- name: RunningManualRollouts :many
+-- The rollouts by hand that still run (M4-14).
+SELECT id, group_id, window_start, window_end, state, reason, mode, auto_reboot
+FROM update_rollouts WHERE manual AND state = 1 ORDER BY window_start, id;
 
 -- name: ListUpdateRolloutNodes :many
 SELECT rollout_id, node_id, hostname, state, reason, update_run, reboot_run, since, deadline
@@ -40,9 +45,11 @@ SELECT id, node_id, kind, scope, reason, version, state, created_at, expires_at,
 FROM node_commands WHERE id = ANY (sqlc.arg(ids)::uuid[]);
 
 -- name: UpsertUpdateRollout :exec
-INSERT INTO update_rollouts (org_id, id, group_id, window_start, window_end, state, reason, created_at, updated_at)
+INSERT INTO update_rollouts (org_id, id, group_id, window_start, window_end, state, reason, created_at, updated_at,
+                             manual, mode, auto_reboot, created_by)
 VALUES (current_org_id(), sqlc.arg(id), sqlc.arg(group_id), sqlc.arg(window_start), sqlc.arg(window_end),
-        sqlc.arg(state), sqlc.arg(reason), sqlc.arg(now), sqlc.arg(now))
+        sqlc.arg(state), sqlc.arg(reason), sqlc.arg(now), sqlc.arg(now),
+        sqlc.arg(manual), sqlc.narg(mode), sqlc.arg(auto_reboot), sqlc.narg(created_by))
 ON CONFLICT (org_id, id) DO UPDATE SET state = excluded.state, reason = excluded.reason, updated_at = excluded.updated_at;
 
 -- name: DeleteUpdateRolloutNodes :exec

@@ -10,6 +10,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
+	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/update"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
@@ -31,6 +32,10 @@ func NewUpdateHandler(svc *updates.Service, logger *slog.Logger) *UpdateHandler 
 
 func (h *UpdateHandler) failure(ctx context.Context, what string, err error) error {
 	switch {
+	case errors.Is(err, access.ErrStepUpRequired):
+		return stepUpRequired()
+	case errors.Is(err, updates.ErrInvalidRequest):
+		return connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, access.ErrForbidden):
 		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
 	case errors.Is(err, access.ErrNotFound):
@@ -83,6 +88,64 @@ func (h *UpdateHandler) RefreshUpdateInfo(ctx context.Context, req *connect.Requ
 		return nil, h.failure(ctx, "refresh update info", err)
 	}
 	return connect.NewResponse(&webv1.RefreshUpdateInfoResponse{}), nil
+}
+
+func nodeIDs(raw []string) ([]identity.NodeID, error) {
+	out := make([]identity.NodeID, 0, len(raw))
+	for _, r := range raw {
+		id, err := parseID(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, identity.NodeID(id))
+	}
+	return out, nil
+}
+
+// StartUpdates updates nodes by hand.
+func (h *UpdateHandler) StartUpdates(ctx context.Context, req *connect.Request[webv1.StartUpdatesRequest]) (*connect.Response[webv1.StartUpdatesResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := nodeIDs(req.Msg.GetNodeIds())
+	if err != nil {
+		return nil, err
+	}
+	scope := command.ScopeAll
+	if req.Msg.GetScope() == webv1.UpdateScope_UPDATE_SCOPE_SECURITY {
+		scope = command.ScopeSecurity
+	}
+	rollouts, err := h.updates.StartUpdates(ctx, c, ids, scope, req.Msg.GetReboot())
+	if err != nil {
+		return nil, h.failure(ctx, "start updates", err)
+	}
+	res := &webv1.StartUpdatesResponse{}
+	for _, r := range rollouts {
+		res.RolloutIds = append(res.RolloutIds, r.ID.String())
+	}
+	return connect.NewResponse(res), nil
+}
+
+// RebootNodes reboots nodes by hand.
+func (h *UpdateHandler) RebootNodes(ctx context.Context, req *connect.Request[webv1.RebootNodesRequest]) (*connect.Response[webv1.RebootNodesResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := nodeIDs(req.Msg.GetNodeIds())
+	if err != nil {
+		return nil, err
+	}
+	commands, err := h.updates.RebootNodes(ctx, c, ids, req.Msg.GetReason())
+	if err != nil {
+		return nil, h.failure(ctx, "reboot nodes", err)
+	}
+	res := &webv1.RebootNodesResponse{}
+	for _, cmd := range commands {
+		res.RunIds = append(res.RunIds, cmd.ID.String())
+	}
+	return connect.NewResponse(res), nil
 }
 
 // ListFleetUpdates returns the visible nodes with their status and the counts per status.

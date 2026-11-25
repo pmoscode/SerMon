@@ -84,6 +84,7 @@
 				<Tabs.Trigger value="processes">{m.node_tab_processes()}</Tabs.Trigger>
 				<Tabs.Trigger value="logs">{m.node_tab_logs()}</Tabs.Trigger>
 				<Tabs.Trigger value="security">{m.node_tab_security()}</Tabs.Trigger>
+				<Tabs.Trigger value="updates">{m.node_tab_updates()}</Tabs.Trigger>
 				<Tabs.Trigger value="identity">{m.node_tab_identity()}</Tabs.Trigger>
 			</Tabs.List>
 
@@ -305,6 +306,16 @@
 					{/await}
 				{/if}
 			</Tabs.Content>
+			<Tabs.Content value="updates" class="pt-4">
+				{#if tab === 'updates'}
+					{#await import('#lib/components/updates/NodeUpdates.svelte')}
+						<p role="status" class="text-muted-foreground">{m.loading()}</p>
+					{:then { default: NodeUpdates }}
+						<NodeUpdates nodeId={id} groupId={nodeState.node.groupId} {now} />
+					{/await}
+				{/if}
+			</Tabs.Content>
+
 			<Tabs.Content value="identity" class="pt-4">
 				{#if tab === 'identity'}
 					{#await import('#lib/components/node/NodeIdentity.svelte')}

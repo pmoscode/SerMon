@@ -207,7 +207,7 @@ type Querier interface {
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Replaces a previous token; false once the setup is completed (definer function, M1-40).
 	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (bool, error)
-	// The last rollout of each group.
+	// The last scheduled rollout of each group.
 	LatestUpdateRollouts(ctx context.Context) ([]LatestUpdateRolloutsRow, error)
 	// Known login sources (M3-16).
 	// Records a successful login of a user from a source on a node; inserted is true for the first
@@ -347,6 +347,8 @@ type Querier interface {
 	RevokeNodeCertificates(ctx context.Context, arg RevokeNodeCertificatesParams) error
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	RoleBindingsWithOrigin(ctx context.Context, userID uuid.UUID) ([]RoleBindingsWithOriginRow, error)
+	// The rollouts by hand that still run (M4-14).
+	RunningManualRollouts(ctx context.Context) ([]RunningManualRolloutsRow, error)
 	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
 	SecurityEventHorizon(ctx context.Context) (time.Time, error)

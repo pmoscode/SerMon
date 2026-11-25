@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
+	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -155,5 +156,97 @@ func TestService_OperatorsAskForFreshUpdateInformation(t *testing.T) {
 	}
 	if len(r.asked) != 2 {
 		t.Errorf("asked %d times, want 2 (not for the viewer or another node)", len(r.asked))
+	}
+}
+
+type manualStore struct {
+	rollouts []updates.RolloutRun
+	reboots  []command.Command
+	audit    []access.AuditEntry
+}
+
+func (m *manualStore) StartRollouts(_ context.Context, _ tenant.OrgID, r []updates.RolloutRun, _ time.Time, a access.AuditEntry) error {
+	m.rollouts = append(m.rollouts, r...)
+	m.audit = append(m.audit, a)
+	return nil
+}
+
+func (m *manualStore) Reboot(_ context.Context, _ tenant.OrgID, c []command.Command, a access.AuditEntry) error {
+	m.reboots = append(m.reboots, c...)
+	m.audit = append(m.audit, a)
+	return nil
+}
+
+func manualService() (*updates.Service, *manualStore) {
+	m := &manualStore{}
+	svc := updates.NewService(&store{}, authz.NewPolicy()).
+		WithRefresher(&refresher{}, func() time.Time { return t0 }).
+		WithManual(m, &policyStore{}, uuid.New)
+	return svc, m
+}
+
+// M4-14: operators of the group update by hand with a fresh step-up; the reboot needs its own
+// right; a rollout of the group's policy runs it, the audit log names it.
+func TestService_UpdatesByHand(t *testing.T) {
+	svc, m := manualService()
+	ctx := context.Background()
+	operator := fresh(caller(role.Operator, false))
+	rollouts, err := svc.StartUpdates(ctx, operator, []identity.NodeID{node, node}, command.ScopeSecurity, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := rollouts[0]
+	if len(rollouts) != 1 || !r.Manual || r.Mode != updates.ModeSecurityAuto || !r.AutoReboot || r.Group != groupX ||
+		len(r.Nodes) != 1 || r.Nodes[0].State != updates.NodeWaiting || !r.WindowEnd.Equal(t0.Add(updates.ManualWindow)) || r.CreatedBy != user {
+		t.Errorf("rollout = %+v", r)
+	}
+	a := m.audit[0]
+	if a.Action != "updates.start" || a.Details["mode"] != "security-auto" || a.Details["reboot"] != "true" || a.Details["nodes"] != node.String() {
+		t.Errorf("audit = %+v", a)
+	}
+	for name, c := range map[string]access.Caller{
+		"viewer": fresh(caller(role.Viewer, true)), "no step-up": caller(role.Operator, true),
+	} {
+		if _, err := svc.StartUpdates(ctx, c, []identity.NodeID{node}, command.ScopeAll, false); !errors.Is(err, access.ErrForbidden) && !errors.Is(err, access.ErrStepUpRequired) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := svc.StartUpdates(ctx, operator, []identity.NodeID{identity.NodeID(uuid.New())}, command.ScopeAll, false); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("another node: %v", err)
+	}
+	for name, ids := range map[string][]identity.NodeID{"none": nil, "too many": make([]identity.NodeID, updates.MaxManualNodes+1)} {
+		if _, err := svc.StartUpdates(ctx, operator, ids, command.ScopeAll, false); !errors.Is(err, updates.ErrInvalidRequest) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := svc.StartUpdates(ctx, operator, []identity.NodeID{node}, 0, false); !errors.Is(err, updates.ErrInvalidRequest) {
+		t.Errorf("no scope: %v", err)
+	}
+	if len(m.rollouts) != 1 {
+		t.Errorf("%d rollouts, want only the first", len(m.rollouts))
+	}
+}
+
+func TestService_RebootsByHand(t *testing.T) {
+	svc, m := manualService()
+	ctx := context.Background()
+	reboots, err := svc.RebootNodes(ctx, fresh(caller(role.Operator, false)), []identity.NodeID{node}, "kernel update")
+	if err != nil || len(reboots) != 1 || reboots[0].Kind != command.Reboot || reboots[0].Reason != "kernel update" || reboots[0].CreatedBy != user {
+		t.Fatalf("RebootNodes() = %+v, %v", reboots, err)
+	}
+	if a := m.audit[0]; a.Action != "nodes.reboot" || a.Details["reason"] != "kernel update" {
+		t.Errorf("audit = %+v", a)
+	}
+	if _, err := svc.RebootNodes(ctx, fresh(caller(role.Viewer, true)), []identity.NodeID{node}, "x"); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("viewer: %v", err)
+	}
+	if _, err := svc.RebootNodes(ctx, caller(role.Admin, true), []identity.NodeID{node}, "x"); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("no step-up: %v", err)
+	}
+	if _, err := svc.RebootNodes(ctx, fresh(caller(role.Admin, true)), []identity.NodeID{node}, "now\n-h"); !errors.Is(err, updates.ErrInvalidRequest) {
+		t.Errorf("control characters: %v", err)
+	}
+	if len(m.reboots) != 1 {
+		t.Errorf("%d reboots", len(m.reboots))
 	}
 }

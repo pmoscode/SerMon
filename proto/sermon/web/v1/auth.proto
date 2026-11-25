@@ -356,6 +356,11 @@ message Session {
   uint32 passkey_count = 19;
   // passkeys is set if the server offers passkeys (an allowed origin is configured).
   bool passkeys_available = 20;
+  // run_updates_group_ids are the groups where the caller may update nodes by hand and ask for
+  // fresh update information (operator or admin, M4-14); "*" stands for all groups.
+  repeated string run_updates_group_ids = 21;
+  // reboot_group_ids are the groups where the caller may reboot nodes (operator or admin).
+  repeated string reboot_group_ids = 22;
 }
 
 // InstanceProblem is a check of the server's self-monitoring that is not OK.

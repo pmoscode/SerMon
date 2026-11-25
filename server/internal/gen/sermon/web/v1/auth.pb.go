@@ -1574,8 +1574,13 @@ type Session struct {
 	PasskeyCount uint32 `protobuf:"varint,19,opt,name=passkey_count,json=passkeyCount,proto3" json:"passkey_count,omitempty"`
 	// passkeys is set if the server offers passkeys (an allowed origin is configured).
 	PasskeysAvailable bool `protobuf:"varint,20,opt,name=passkeys_available,json=passkeysAvailable,proto3" json:"passkeys_available,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// run_updates_group_ids are the groups where the caller may update nodes by hand and ask for
+	// fresh update information (operator or admin, M4-14); "*" stands for all groups.
+	RunUpdatesGroupIds []string `protobuf:"bytes,21,rep,name=run_updates_group_ids,json=runUpdatesGroupIds,proto3" json:"run_updates_group_ids,omitempty"`
+	// reboot_group_ids are the groups where the caller may reboot nodes (operator or admin).
+	RebootGroupIds []string `protobuf:"bytes,22,rep,name=reboot_group_ids,json=rebootGroupIds,proto3" json:"reboot_group_ids,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -1746,6 +1751,20 @@ func (x *Session) GetPasskeysAvailable() bool {
 		return x.PasskeysAvailable
 	}
 	return false
+}
+
+func (x *Session) GetRunUpdatesGroupIds() []string {
+	if x != nil {
+		return x.RunUpdatesGroupIds
+	}
+	return nil
+}
+
+func (x *Session) GetRebootGroupIds() []string {
+	if x != nil {
+		return x.RebootGroupIds
+	}
+	return nil
 }
 
 // InstanceProblem is a check of the server's self-monitoring that is not OK.
@@ -1958,7 +1977,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\xff\x06\n" +
+	"\x19SecondFactorSetupRequired\"\xdc\a\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -1983,7 +2002,9 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"oidcLinked\x12!\n" +
 	"\ftotp_enabled\x18\x12 \x01(\bR\vtotpEnabled\x12#\n" +
 	"\rpasskey_count\x18\x13 \x01(\rR\fpasskeyCount\x12-\n" +
-	"\x12passkeys_available\x18\x14 \x01(\bR\x11passkeysAvailable\"\x85\x01\n" +
+	"\x12passkeys_available\x18\x14 \x01(\bR\x11passkeysAvailable\x121\n" +
+	"\x15run_updates_group_ids\x18\x15 \x03(\tR\x12runUpdatesGroupIds\x12(\n" +
+	"\x10reboot_group_ids\x18\x16 \x03(\tR\x0erebootGroupIds\"\x85\x01\n" +
 	"\x0fInstanceProblem\x12\x14\n" +
 	"\x05check\x18\x01 \x01(\tR\x05check\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x120\n" +

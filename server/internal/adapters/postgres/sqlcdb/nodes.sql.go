@@ -98,8 +98,10 @@ SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
        coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags, n.security_source, n.logs_vetoed,
-       n.learning_since
+       n.learning_since, u.availability AS update_availability, u.total_count AS update_total,
+       u.security_count AS update_security, u.reboot_required AS update_reboot_required
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
+LEFT JOIN node_update_state u ON u.org_id = n.org_id AND u.node_id = n.id
 WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
 ORDER BY n.hostname, n.id
 `
@@ -110,27 +112,31 @@ type ListVisibleNodesParams struct {
 }
 
 type ListVisibleNodesRow struct {
-	ID             uuid.UUID
-	GroupID        uuid.UUID
-	GroupName      string
-	Hostname       string
-	OsID           string
-	OsVersion      string
-	KernelRelease  string
-	Architecture   string
-	CpuCount       int32
-	MemoryBytes    int64
-	AgentVersion   string
-	CreatedAt      time.Time
-	LastSeenAt     *time.Time
-	LockedAt       *time.Time
-	LockReason     string
-	LastIp         string
-	TakeoverUntil  *time.Time
-	Tags           []byte
-	SecuritySource string
-	LogsVetoed     bool
-	LearningSince  time.Time
+	ID                   uuid.UUID
+	GroupID              uuid.UUID
+	GroupName            string
+	Hostname             string
+	OsID                 string
+	OsVersion            string
+	KernelRelease        string
+	Architecture         string
+	CpuCount             int32
+	MemoryBytes          int64
+	AgentVersion         string
+	CreatedAt            time.Time
+	LastSeenAt           *time.Time
+	LockedAt             *time.Time
+	LockReason           string
+	LastIp               string
+	TakeoverUntil        *time.Time
+	Tags                 []byte
+	SecuritySource       string
+	LogsVetoed           bool
+	LearningSince        time.Time
+	UpdateAvailability   pgtype.Int2
+	UpdateTotal          pgtype.Int4
+	UpdateSecurity       pgtype.Int4
+	UpdateRebootRequired pgtype.Bool
 }
 
 // Nodes of the scope's groups with their group name, for the UI (M1-26).
@@ -165,6 +171,10 @@ func (q *Queries) ListVisibleNodes(ctx context.Context, arg ListVisibleNodesPara
 			&i.SecuritySource,
 			&i.LogsVetoed,
 			&i.LearningSince,
+			&i.UpdateAvailability,
+			&i.UpdateTotal,
+			&i.UpdateSecurity,
+			&i.UpdateRebootRequired,
 		); err != nil {
 			return nil, err
 		}

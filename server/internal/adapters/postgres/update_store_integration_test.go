@@ -368,3 +368,27 @@ func TestUpdatePolicyStore_KeepsThePolicyOfAGroup(t *testing.T) {
 		t.Error("all-auto without a window was stored")
 	}
 }
+
+// M4-15: the fleet's nodes carry the counts of their last report (badges of the fleet page).
+func TestFleetStore_NodesCarryTheirUpdates(t *testing.T) {
+	f := newUpdateFixture(t, 0)
+	r := updateReport(updatesNow, pkg("openssl", "3", true), pkg("vim", "2", false))
+	r.RebootRequired = true
+	f.write(t, f.node, r)
+	nodes, err := postgres.NewFleetStore(open(t, setup(t).appDSN)).List(context.Background(), scopeFor(t, uuid.UUID(f.org)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range nodes {
+		switch n.ID {
+		case f.node:
+			if u := n.Updates; u == nil || u.Status != update.StatusSecurity || u.Total != 2 || u.Security != 1 || !u.RebootRequired {
+				t.Errorf("node = %+v", n.Updates)
+			}
+		case f.peer:
+			if n.Updates != nil {
+				t.Errorf("a node without report = %+v", n.Updates)
+			}
+		}
+	}
+}

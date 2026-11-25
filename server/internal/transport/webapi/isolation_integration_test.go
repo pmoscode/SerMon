@@ -40,6 +40,7 @@ const (
 	mappingAl = "0193f5a0-0000-7000-8000-0000000001ac" // OIDC group mapping of Alpha
 	tokenAl   = "0193f5a0-0000-7000-8000-0000000001a6" // enrollment token of Alpha
 	nodeAl    = "0193f5a0-0000-7000-8000-0000000001a5" // node of Alpha (offline)
+	runAl     = "0193f5a0-0000-7000-8000-0000000001b1" // an update run of Alpha's node (M4-15)
 	certAl    = "7a0000000000000000000000000001a5"     // its certificate serial
 	// inviteTokenAl is the link token of inviteAl (fixture, not a secret).
 	inviteTokenAl = "alphaInvitationTokenForCrossTenantTests0001" // betterleaks:allow
@@ -77,6 +78,10 @@ func seedAccessFixtures(t *testing.T) {
 		// A report with a security update and a reboot (M4-09).
 		"INSERT INTO node_update_state (org_id, node_id, collected_at, received_at, availability, package_manager, total_count, security_count, packages_stored, reboot_required, refreshed) VALUES ('"+orgAlpha+"', '"+nodeAl+"', now(), now(), 1, 1, 1, 1, 1, true, false) ON CONFLICT DO NOTHING",
 		"INSERT INTO node_update_packages (org_id, node_id, name, candidate_version, installed_version, source, security, first_seen_at) VALUES ('"+orgAlpha+"', '"+nodeAl+"', 'alpha-openssl', '3', '2', 'main', true, now()) ON CONFLICT DO NOTHING",
+		// A finished update run with output and a rollout (M4-15).
+		"INSERT INTO node_commands (org_id, id, node_id, kind, scope, state, created_at, expires_at, phase, exit_code, output) VALUES ('"+orgAlpha+"', '"+runAl+"', '"+nodeAl+"', 2, 2, 4, now() - interval '1 hour', now(), 2, 0, 'Setting up alpha-openssl') ON CONFLICT DO NOTHING",
+		"INSERT INTO update_rollouts (org_id, id, group_id, window_start, window_end, state, created_at, updated_at) VALUES ('"+orgAlpha+"', '"+runAl+"', '"+groupAl+"', now() - interval '2 hours', now() - interval '1 hour', 2, now(), now()) ON CONFLICT DO NOTHING",
+		"INSERT INTO update_rollout_nodes (org_id, rollout_id, node_id, position, hostname, state, update_run, since) VALUES ('"+orgAlpha+"', '"+runAl+"', '"+nodeAl+"', 0, 'alpha-01', 5, '"+runAl+"', now()) ON CONFLICT DO NOTHING",
 		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
 		"DELETE FROM role_bindings WHERE org_id = '"+orgBeta+"'",
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgBeta+"', '"+beaID+"', 'admin')",
@@ -162,7 +167,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
 		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
-		enrollmentTokenA: tokenAl, nodeA: nodeAl,
+		enrollmentTokenA: tokenAl, nodeA: nodeAl, runA: runAl,
 	}
 	ctx := context.Background()
 

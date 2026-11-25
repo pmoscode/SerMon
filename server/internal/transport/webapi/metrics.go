@@ -140,11 +140,15 @@ func (h *FleetHandler) GetFleetSummary(ctx context.Context, req *connect.Request
 		Total: int32(len(summary.Nodes)), Online: int32(summary.Online), Offline: int32(summary.Offline), //nolint:gosec // G115: nodes of one org
 	}
 	for _, n := range summary.Nodes {
-		res.Nodes = append(res.Nodes, &webv1.NodeSummary{
+		v := &webv1.NodeSummary{
 			NodeId: n.ID.String(), Hostname: n.Hostname, GroupId: n.Group.String(), GroupName: n.GroupName,
 			OsId: n.OSID, OsVersion: n.OSVersion, Online: n.Online, LastSeenAt: optionalTime(n.LastSeenAt), Figures: figuresView(n.Figures),
 			Tags: n.Tags, LogsVetoed: n.LogsVetoed,
-		})
+		}
+		if u := n.Updates; u != nil {
+			v.UpdateStatus, v.SecurityUpdates, v.Updates, v.RebootRequired = updateStatuses[u.Status], u.Security, u.Total, u.RebootRequired
+		}
+		res.Nodes = append(res.Nodes, v)
 	}
 	return connect.NewResponse(res), nil
 }

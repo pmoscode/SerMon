@@ -225,3 +225,104 @@ func output(s string) string {
 	}
 	return s[start:]
 }
+
+// HistoryStore reads the runs and rollouts of the past (M4-15).
+type HistoryStore struct {
+	commands *CommandStore
+	db       *DB
+}
+
+var _ updates.History = (*HistoryStore)(nil)
+
+// NewHistoryStore returns the store on db.
+func NewHistoryStore(db *DB) *HistoryStore {
+	return &HistoryStore{commands: NewCommandStore(db), db: db}
+}
+
+// Run implements updates.History.
+func (s *HistoryStore) Run(ctx context.Context, org tenant.OrgID, id uuid.UUID) (command.Command, bool, error) {
+	return s.commands.Get(ctx, org, id)
+}
+
+// Runs implements updates.History.
+func (s *HistoryStore) Runs(ctx context.Context, org tenant.OrgID, node identity.NodeID, limit int) ([]command.Command, error) {
+	scope, err := orgScope(org)
+	if err != nil {
+		return nil, err
+	}
+	var out []command.Command
+	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		rows, err := q.ListNodeRuns(ctx, sqlcdb.ListNodeRunsParams{NodeID: uuid.UUID(node), MaxRows: int32(min(limit, 1000))}) //nolint:gosec // bounded
+		if err != nil {
+			return wrap(err, "list runs")
+		}
+		out = make([]command.Command, 0, len(rows))
+		for _, r := range rows {
+			c := command.Command{
+				ID: r.ID, Node: node, Kind: command.Kind(r.Kind), Scope: command.Scope(r.Scope.Int16), //nolint:gosec // checked by the table
+				Reason: r.Reason, Version: r.Version, State: command.State(r.State), //nolint:gosec // checked by the table
+				CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, CreatedBy: userOf(r.CreatedBy), SentAt: r.SentAt,
+			}
+			if r.Phase.Valid {
+				c.Result = &command.Result{
+					Phase: command.Phase(r.Phase.Int16), ExitCode: r.ExitCode.Int32, Reason: r.ResultReason, //nolint:gosec // 1 to 6
+					OutputTruncated: r.OutputTruncated, StartedAt: r.StartedAt, EndedAt: r.EndedAt,
+				}
+			}
+			out = append(out, c)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// Rollouts implements updates.History.
+func (s *HistoryStore) Rollouts(ctx context.Context, scope tenant.Scope, limit int) ([]updates.NamedRollout, error) {
+	var out []updates.NamedRollout
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		rows, err := q.ListRecentRollouts(ctx, sqlcdb.ListRecentRolloutsParams{
+			AllGroups: scope.AllGroups(), GroupIds: groupIDs(scope), MaxRows: int32(min(limit, 1000)), //nolint:gosec // bounded
+		})
+		if err != nil {
+			return wrap(err, "list rollouts")
+		}
+		ids := make([]uuid.UUID, 0, len(rows))
+		byID := map[uuid.UUID]int{}
+		out = make([]updates.NamedRollout, 0, len(rows))
+		for _, r := range rows {
+			byID[r.ID] = len(out)
+			ids = append(ids, r.ID)
+			out = append(out, updates.NamedRollout{
+				RolloutRun: updates.RolloutRun{
+					ID: r.ID, Group: tenant.GroupID(r.GroupID), WindowStart: r.WindowStart, WindowEnd: r.WindowEnd,
+					State: updates.RolloutState(r.State), Reason: r.Reason, Manual: r.Manual, //nolint:gosec // 1 to 3 by the table's check
+					Mode: updates.Mode(r.Mode.Int16), AutoReboot: r.AutoReboot, CreatedBy: userOf(r.CreatedBy), //nolint:gosec // 2 or 3
+				},
+				GroupName: r.GroupName, CreatedAt: r.CreatedAt,
+			})
+		}
+		nodes, err := q.ListUpdateRolloutNodes(ctx, ids)
+		if err != nil {
+			return wrap(err, "list rollout nodes")
+		}
+		for _, n := range nodes {
+			i, ok := byID[n.RolloutID]
+			if !ok {
+				continue
+			}
+			run := updates.NodeRun{
+				Node: identity.NodeID(n.NodeID), Hostname: n.Hostname, State: updates.NodeState(n.State), Reason: n.Reason, //nolint:gosec // 1 to 7
+				Since: n.Since,
+			}
+			if n.UpdateRun != nil {
+				run.UpdateRun = *n.UpdateRun
+			}
+			if n.RebootRun != nil {
+				run.RebootRun = *n.RebootRun
+			}
+			out[i].Nodes = append(out[i].Nodes, run)
+		}
+		return nil
+	})
+	return out, err
+}

@@ -258,7 +258,9 @@ type UpdatePolicy struct {
 	// is_default: nobody set a policy for the group.
 	IsDefault bool `protobuf:"varint,4,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
 	// update_time is when it was set (unset for the default).
-	UpdateTime    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
+	UpdateTime *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
+	// next_window is when the next window of the policy begins (unset without one, M4-15).
+	NextWindow    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=next_window,json=nextWindow,proto3" json:"next_window,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -324,6 +326,13 @@ func (x *UpdatePolicy) GetIsDefault() bool {
 func (x *UpdatePolicy) GetUpdateTime() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdateTime
+	}
+	return nil
+}
+
+func (x *UpdatePolicy) GetNextWindow() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NextWindow
 	}
 	return nil
 }
@@ -900,7 +909,7 @@ const file_sermon_web_v1_update_policy_proto_rawDesc = "" +
 	"autoReboot\x12,\n" +
 	"\fmax_parallel\x18\x04 \x01(\x05B\t\xbaH\x06\x1a\x04\x182(\x01R\vmaxParallel\x12&\n" +
 	"\x0fstop_on_failure\x18\x05 \x01(\bR\rstopOnFailure\x12;\n" +
-	"\x14health_check_minutes\x18\x06 \x01(\x05B\t\xbaH\x06\x1a\x04\x18x(\x05R\x12healthCheckMinutes\"\xd9\x01\n" +
+	"\x14health_check_minutes\x18\x06 \x01(\x05B\t\xbaH\x06\x1a\x04\x18x(\x05R\x12healthCheckMinutes\"\x96\x02\n" +
 	"\fUpdatePolicy\x12\x19\n" +
 	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x1d\n" +
 	"\n" +
@@ -909,7 +918,9 @@ const file_sermon_web_v1_update_policy_proto_rawDesc = "" +
 	"\n" +
 	"is_default\x18\x04 \x01(\bR\tisDefault\x12;\n" +
 	"\vupdate_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"updateTime\"=\n" +
+	"updateTime\x12;\n" +
+	"\vnext_window\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"nextWindow\"=\n" +
 	"\x16GetUpdatePolicyRequest\x12#\n" +
 	"\bgroup_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\agroupId\"N\n" +
 	"\x17GetUpdatePolicyResponse\x123\n" +
@@ -990,28 +1001,29 @@ var file_sermon_web_v1_update_policy_proto_depIdxs = []int32{
 	1,  // 2: sermon.web.v1.UpdatePolicySpec.window:type_name -> sermon.web.v1.UpdateWindow
 	2,  // 3: sermon.web.v1.UpdatePolicy.spec:type_name -> sermon.web.v1.UpdatePolicySpec
 	17, // 4: sermon.web.v1.UpdatePolicy.update_time:type_name -> google.protobuf.Timestamp
-	3,  // 5: sermon.web.v1.GetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	3,  // 6: sermon.web.v1.ListUpdatePoliciesResponse.policies:type_name -> sermon.web.v1.UpdatePolicy
-	2,  // 7: sermon.web.v1.SetUpdatePolicyRequest.spec:type_name -> sermon.web.v1.UpdatePolicySpec
-	3,  // 8: sermon.web.v1.SetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	3,  // 9: sermon.web.v1.ImportUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	4,  // 10: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:input_type -> sermon.web.v1.GetUpdatePolicyRequest
-	6,  // 11: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:input_type -> sermon.web.v1.ListUpdatePoliciesRequest
-	8,  // 12: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:input_type -> sermon.web.v1.SetUpdatePolicyRequest
-	10, // 13: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:input_type -> sermon.web.v1.ImportUpdatePolicyRequest
-	12, // 14: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:input_type -> sermon.web.v1.ExportUpdatePolicyRequest
-	14, // 15: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:input_type -> sermon.web.v1.ResetUpdatePolicyRequest
-	5,  // 16: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:output_type -> sermon.web.v1.GetUpdatePolicyResponse
-	7,  // 17: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:output_type -> sermon.web.v1.ListUpdatePoliciesResponse
-	9,  // 18: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:output_type -> sermon.web.v1.SetUpdatePolicyResponse
-	11, // 19: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:output_type -> sermon.web.v1.ImportUpdatePolicyResponse
-	13, // 20: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:output_type -> sermon.web.v1.ExportUpdatePolicyResponse
-	15, // 21: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:output_type -> sermon.web.v1.ResetUpdatePolicyResponse
-	16, // [16:22] is the sub-list for method output_type
-	10, // [10:16] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	17, // 5: sermon.web.v1.UpdatePolicy.next_window:type_name -> google.protobuf.Timestamp
+	3,  // 6: sermon.web.v1.GetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	3,  // 7: sermon.web.v1.ListUpdatePoliciesResponse.policies:type_name -> sermon.web.v1.UpdatePolicy
+	2,  // 8: sermon.web.v1.SetUpdatePolicyRequest.spec:type_name -> sermon.web.v1.UpdatePolicySpec
+	3,  // 9: sermon.web.v1.SetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	3,  // 10: sermon.web.v1.ImportUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	4,  // 11: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:input_type -> sermon.web.v1.GetUpdatePolicyRequest
+	6,  // 12: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:input_type -> sermon.web.v1.ListUpdatePoliciesRequest
+	8,  // 13: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:input_type -> sermon.web.v1.SetUpdatePolicyRequest
+	10, // 14: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:input_type -> sermon.web.v1.ImportUpdatePolicyRequest
+	12, // 15: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:input_type -> sermon.web.v1.ExportUpdatePolicyRequest
+	14, // 16: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:input_type -> sermon.web.v1.ResetUpdatePolicyRequest
+	5,  // 17: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:output_type -> sermon.web.v1.GetUpdatePolicyResponse
+	7,  // 18: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:output_type -> sermon.web.v1.ListUpdatePoliciesResponse
+	9,  // 19: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:output_type -> sermon.web.v1.SetUpdatePolicyResponse
+	11, // 20: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:output_type -> sermon.web.v1.ImportUpdatePolicyResponse
+	13, // 21: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:output_type -> sermon.web.v1.ExportUpdatePolicyResponse
+	15, // 22: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:output_type -> sermon.web.v1.ResetUpdatePolicyResponse
+	17, // [17:23] is the sub-list for method output_type
+	11, // [11:17] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_update_policy_proto_init() }

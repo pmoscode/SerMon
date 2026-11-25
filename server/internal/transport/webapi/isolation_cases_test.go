@@ -44,6 +44,7 @@ type isolationEnv struct {
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
 	nodeA                           string // a node of Org A
+	runA                            string // an update run of nodeA (M4-15)
 	channelA                        string // a notification channel of Org A, with a delivery
 	policyA                         string // a notification policy of Org A to channelA
 	silenceA, windowA               string // a silence and a maintenance window of Org A's group
@@ -352,6 +353,24 @@ var tenantIsolationCases = map[string]isolationCase{
 	"/sermon.web.v1.UpdateService/RebootNodes": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.updates.RebootNodes(ctx, connect.NewRequest(&webv1.RebootNodesRequest{NodeIds: []string{e.nodeA}, Reason: "test"}))
 		return err
+	}},
+	"/sermon.web.v1.UpdateService/ListUpdateRuns": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updates.ListUpdateRuns(ctx, connect.NewRequest(&webv1.ListUpdateRunsRequest{NodeId: e.nodeA}))
+		return err
+	}},
+	"/sermon.web.v1.UpdateService/GetUpdateRun": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updates.GetUpdateRun(ctx, connect.NewRequest(&webv1.GetUpdateRunRequest{RunId: e.runA}))
+		return err
+	}},
+	"/sermon.web.v1.UpdateService/ListRollouts": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.updates.ListRollouts(ctx, connect.NewRequest(&webv1.ListRolloutsRequest{}))
+		if err != nil {
+			return err
+		}
+		if strings.Contains(res.Msg.String(), e.groupA) || strings.Contains(res.Msg.String(), e.nodeA) {
+			return errLeak
+		}
+		return nil
 	}},
 	"/sermon.web.v1.UpdateService/ListFleetUpdates": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.updates.ListFleetUpdates(ctx, connect.NewRequest(&webv1.ListFleetUpdatesRequest{}))

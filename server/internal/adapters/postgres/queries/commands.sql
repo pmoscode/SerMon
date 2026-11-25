@@ -48,3 +48,10 @@ WHERE node_id = sqlc.arg(node_id) AND id = sqlc.arg(id) AND kind <> 1
 SELECT id, node_id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,
        phase, exit_code, result_reason, output, output_truncated, started_at, ended_at
 FROM node_commands WHERE id = sqlc.arg(id);
+
+-- name: ListNodeRuns :many
+-- The runs of a node (no refreshes), newest first, without their output (M4-15).
+SELECT id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,
+       phase, exit_code, result_reason, output_truncated, started_at, ended_at
+FROM node_commands WHERE node_id = sqlc.arg(node_id) AND kind <> 1
+ORDER BY created_at DESC, id DESC LIMIT sqlc.arg(max_rows);

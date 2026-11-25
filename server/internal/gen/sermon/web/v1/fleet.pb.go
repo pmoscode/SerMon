@@ -167,9 +167,17 @@ type NodeSummary struct {
 	Tags map[string]string `protobuf:"bytes,10,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false), as of
 	// its last configuration report (ADR 0030).
-	LogsVetoed    bool `protobuf:"varint,11,opt,name=logs_vetoed,json=logsVetoed,proto3" json:"logs_vetoed,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	LogsVetoed bool `protobuf:"varint,11,opt,name=logs_vetoed,json=logsVetoed,proto3" json:"logs_vetoed,omitempty"`
+	// update_status sums the node's last update report up (M4-15; UNSPECIFIED: no report).
+	UpdateStatus UpdateStatus `protobuf:"varint,12,opt,name=update_status,json=updateStatus,proto3,enum=sermon.web.v1.UpdateStatus" json:"update_status,omitempty"`
+	// security_updates and updates count its available updates.
+	SecurityUpdates uint32 `protobuf:"varint,13,opt,name=security_updates,json=securityUpdates,proto3" json:"security_updates,omitempty"`
+	// updates counts all its available updates.
+	Updates uint32 `protobuf:"varint,14,opt,name=updates,proto3" json:"updates,omitempty"`
+	// reboot_required: it needs a reboot to use what is installed.
+	RebootRequired bool `protobuf:"varint,15,opt,name=reboot_required,json=rebootRequired,proto3" json:"reboot_required,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NodeSummary) Reset() {
@@ -279,6 +287,34 @@ func (x *NodeSummary) GetLogsVetoed() bool {
 	return false
 }
 
+func (x *NodeSummary) GetUpdateStatus() UpdateStatus {
+	if x != nil {
+		return x.UpdateStatus
+	}
+	return UpdateStatus_UPDATE_STATUS_UNSPECIFIED
+}
+
+func (x *NodeSummary) GetSecurityUpdates() uint32 {
+	if x != nil {
+		return x.SecurityUpdates
+	}
+	return 0
+}
+
+func (x *NodeSummary) GetUpdates() uint32 {
+	if x != nil {
+		return x.Updates
+	}
+	return 0
+}
+
+func (x *NodeSummary) GetRebootRequired() bool {
+	if x != nil {
+		return x.RebootRequired
+	}
+	return false
+}
+
 // KeyFigures are current values of a node from the last minute. Ratios are 0..1.
 type KeyFigures struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -383,14 +419,14 @@ var File_sermon_web_v1_fleet_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\n" +
-	"\x19sermon/web/v1/fleet.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"@\n" +
+	"\x19sermon/web/v1/fleet.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1asermon/web/v1/update.proto\"@\n" +
 	"\x16GetFleetSummaryRequest\x12&\n" +
 	"\bgroup_id\x18\x01 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\agroupId\"\x93\x01\n" +
 	"\x17GetFleetSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x16\n" +
 	"\x06online\x18\x02 \x01(\x05R\x06online\x12\x18\n" +
 	"\aoffline\x18\x03 \x01(\x05R\aoffline\x120\n" +
-	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xcf\x03\n" +
+	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xff\x04\n" +
 	"\vNodeSummary\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -407,7 +443,11 @@ const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\x04tags\x18\n" +
 	" \x03(\v2$.sermon.web.v1.NodeSummary.TagsEntryR\x04tags\x12\x1f\n" +
 	"\vlogs_vetoed\x18\v \x01(\bR\n" +
-	"logsVetoed\x1a7\n" +
+	"logsVetoed\x12@\n" +
+	"\rupdate_status\x18\f \x01(\x0e2\x1b.sermon.web.v1.UpdateStatusR\fupdateStatus\x12)\n" +
+	"\x10security_updates\x18\r \x01(\rR\x0fsecurityUpdates\x12\x18\n" +
+	"\aupdates\x18\x0e \x01(\rR\aupdates\x12'\n" +
+	"\x0freboot_required\x18\x0f \x01(\bR\x0erebootRequired\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcd\x04\n" +
@@ -453,19 +493,21 @@ var file_sermon_web_v1_fleet_proto_goTypes = []any{
 	(*KeyFigures)(nil),              // 3: sermon.web.v1.KeyFigures
 	nil,                             // 4: sermon.web.v1.NodeSummary.TagsEntry
 	(*timestamppb.Timestamp)(nil),   // 5: google.protobuf.Timestamp
+	(UpdateStatus)(0),               // 6: sermon.web.v1.UpdateStatus
 }
 var file_sermon_web_v1_fleet_proto_depIdxs = []int32{
 	2, // 0: sermon.web.v1.GetFleetSummaryResponse.nodes:type_name -> sermon.web.v1.NodeSummary
 	5, // 1: sermon.web.v1.NodeSummary.last_seen_at:type_name -> google.protobuf.Timestamp
 	3, // 2: sermon.web.v1.NodeSummary.figures:type_name -> sermon.web.v1.KeyFigures
 	4, // 3: sermon.web.v1.NodeSummary.tags:type_name -> sermon.web.v1.NodeSummary.TagsEntry
-	0, // 4: sermon.web.v1.FleetService.GetFleetSummary:input_type -> sermon.web.v1.GetFleetSummaryRequest
-	1, // 5: sermon.web.v1.FleetService.GetFleetSummary:output_type -> sermon.web.v1.GetFleetSummaryResponse
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	6, // 4: sermon.web.v1.NodeSummary.update_status:type_name -> sermon.web.v1.UpdateStatus
+	0, // 5: sermon.web.v1.FleetService.GetFleetSummary:input_type -> sermon.web.v1.GetFleetSummaryRequest
+	1, // 6: sermon.web.v1.FleetService.GetFleetSummary:output_type -> sermon.web.v1.GetFleetSummaryResponse
+	6, // [6:7] is the sub-list for method output_type
+	5, // [5:6] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_fleet_proto_init() }
@@ -473,6 +515,7 @@ func file_sermon_web_v1_fleet_proto_init() {
 	if File_sermon_web_v1_fleet_proto != nil {
 		return
 	}
+	file_sermon_web_v1_update_proto_init()
 	file_sermon_web_v1_fleet_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

@@ -6,13 +6,15 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
+import type { UpdateStatus } from "./update_pb";
+import { file_sermon_web_v1_update } from "./update_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file sermon/web/v1/fleet.proto.
  */
 export const file_sermon_web_v1_fleet: GenFile = /*@__PURE__*/
-  fileDesc("ChlzZXJtb24vd2ViL3YxL2ZsZWV0LnByb3RvEg1zZXJtb24ud2ViLnYxIioKFkdldEZsZWV0U3VtbWFyeVJlcXVlc3QSEAoIZ3JvdXBfaWQYASABKAkidAoXR2V0RmxlZXRTdW1tYXJ5UmVzcG9uc2USDQoFdG90YWwYASABKAUSDgoGb25saW5lGAIgASgFEg8KB29mZmxpbmUYAyABKAUSKQoFbm9kZXMYBCADKAsyGi5zZXJtb24ud2ViLnYxLk5vZGVTdW1tYXJ5It0CCgtOb2RlU3VtbWFyeRIPCgdub2RlX2lkGAEgASgJEhAKCGhvc3RuYW1lGAIgASgJEhAKCGdyb3VwX2lkGAMgASgJEhIKCmdyb3VwX25hbWUYBCABKAkSDQoFb3NfaWQYBSABKAkSEgoKb3NfdmVyc2lvbhgGIAEoCRIOCgZvbmxpbmUYByABKAgSMAoMbGFzdF9zZWVuX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIqCgdmaWd1cmVzGAkgASgLMhkuc2VybW9uLndlYi52MS5LZXlGaWd1cmVzEjIKBHRhZ3MYCiADKAsyJC5zZXJtb24ud2ViLnYxLk5vZGVTdW1tYXJ5LlRhZ3NFbnRyeRITCgtsb2dzX3ZldG9lZBgLIAEoCBorCglUYWdzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASK+AwoKS2V5RmlndXJlcxIbCg5jcHVfYnVzeV9yYXRpbxgBIAEoAUgAiAEBEh4KEW1lbW9yeV91c2VkX3JhdGlvGAIgASgBSAGIAQESJgoZZmlsZXN5c3RlbV9tYXhfdXNlZF9yYXRpbxgDIAEoAUgCiAEBEhkKDGxvYWRfcGVyX2NwdRgEIAEoAUgDiAEBEhsKDnVwdGltZV9zZWNvbmRzGAUgASgBSASIAQESLQogbmV0d29ya19yZWNlaXZlX2J5dGVzX3Blcl9zZWNvbmQYBiABKAFIBYgBARIuCiFuZXR3b3JrX3RyYW5zbWl0X2J5dGVzX3Blcl9zZWNvbmQYByABKAFIBogBAUIRCg9fY3B1X2J1c3lfcmF0aW9CFAoSX21lbW9yeV91c2VkX3JhdGlvQhwKGl9maWxlc3lzdGVtX21heF91c2VkX3JhdGlvQg8KDV9sb2FkX3Blcl9jcHVCEQoPX3VwdGltZV9zZWNvbmRzQiMKIV9uZXR3b3JrX3JlY2VpdmVfYnl0ZXNfcGVyX3NlY29uZEIkCiJfbmV0d29ya190cmFuc21pdF9ieXRlc19wZXJfc2Vjb25kMnAKDEZsZWV0U2VydmljZRJgCg9HZXRGbGVldFN1bW1hcnkSJS5zZXJtb24ud2ViLnYxLkdldEZsZWV0U3VtbWFyeVJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkdldEZsZWV0U3VtbWFyeVJlc3BvbnNlQrkBChFjb20uc2VybW9uLndlYi52MUIKRmxlZXRQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChlzZXJtb24vd2ViL3YxL2ZsZWV0LnByb3RvEg1zZXJtb24ud2ViLnYxIioKFkdldEZsZWV0U3VtbWFyeVJlcXVlc3QSEAoIZ3JvdXBfaWQYASABKAkidAoXR2V0RmxlZXRTdW1tYXJ5UmVzcG9uc2USDQoFdG90YWwYASABKAUSDgoGb25saW5lGAIgASgFEg8KB29mZmxpbmUYAyABKAUSKQoFbm9kZXMYBCADKAsyGi5zZXJtb24ud2ViLnYxLk5vZGVTdW1tYXJ5ItUDCgtOb2RlU3VtbWFyeRIPCgdub2RlX2lkGAEgASgJEhAKCGhvc3RuYW1lGAIgASgJEhAKCGdyb3VwX2lkGAMgASgJEhIKCmdyb3VwX25hbWUYBCABKAkSDQoFb3NfaWQYBSABKAkSEgoKb3NfdmVyc2lvbhgGIAEoCRIOCgZvbmxpbmUYByABKAgSMAoMbGFzdF9zZWVuX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIqCgdmaWd1cmVzGAkgASgLMhkuc2VybW9uLndlYi52MS5LZXlGaWd1cmVzEjIKBHRhZ3MYCiADKAsyJC5zZXJtb24ud2ViLnYxLk5vZGVTdW1tYXJ5LlRhZ3NFbnRyeRITCgtsb2dzX3ZldG9lZBgLIAEoCBIyCg11cGRhdGVfc3RhdHVzGAwgASgOMhsuc2VybW9uLndlYi52MS5VcGRhdGVTdGF0dXMSGAoQc2VjdXJpdHlfdXBkYXRlcxgNIAEoDRIPCgd1cGRhdGVzGA4gASgNEhcKD3JlYm9vdF9yZXF1aXJlZBgPIAEoCBorCglUYWdzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASK+AwoKS2V5RmlndXJlcxIbCg5jcHVfYnVzeV9yYXRpbxgBIAEoAUgAiAEBEh4KEW1lbW9yeV91c2VkX3JhdGlvGAIgASgBSAGIAQESJgoZZmlsZXN5c3RlbV9tYXhfdXNlZF9yYXRpbxgDIAEoAUgCiAEBEhkKDGxvYWRfcGVyX2NwdRgEIAEoAUgDiAEBEhsKDnVwdGltZV9zZWNvbmRzGAUgASgBSASIAQESLQogbmV0d29ya19yZWNlaXZlX2J5dGVzX3Blcl9zZWNvbmQYBiABKAFIBYgBARIuCiFuZXR3b3JrX3RyYW5zbWl0X2J5dGVzX3Blcl9zZWNvbmQYByABKAFIBogBAUIRCg9fY3B1X2J1c3lfcmF0aW9CFAoSX21lbW9yeV91c2VkX3JhdGlvQhwKGl9maWxlc3lzdGVtX21heF91c2VkX3JhdGlvQg8KDV9sb2FkX3Blcl9jcHVCEQoPX3VwdGltZV9zZWNvbmRzQiMKIV9uZXR3b3JrX3JlY2VpdmVfYnl0ZXNfcGVyX3NlY29uZEIkCiJfbmV0d29ya190cmFuc21pdF9ieXRlc19wZXJfc2Vjb25kMnAKDEZsZWV0U2VydmljZRJgCg9HZXRGbGVldFN1bW1hcnkSJS5zZXJtb24ud2ViLnYxLkdldEZsZWV0U3VtbWFyeVJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkdldEZsZWV0U3VtbWFyeVJlc3BvbnNlQrkBChFjb20uc2VybW9uLndlYi52MUIKRmxlZXRQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_sermon_web_v1_update]);
 
 /**
  * GetFleetSummaryRequest optionally filters by group.
@@ -160,6 +162,34 @@ export type NodeSummary = Message<"sermon.web.v1.NodeSummary"> & {
    * @generated from field: bool logs_vetoed = 11;
    */
   logsVetoed: boolean;
+
+  /**
+   * update_status sums the node's last update report up (M4-15; UNSPECIFIED: no report).
+   *
+   * @generated from field: sermon.web.v1.UpdateStatus update_status = 12;
+   */
+  updateStatus: UpdateStatus;
+
+  /**
+   * security_updates and updates count its available updates.
+   *
+   * @generated from field: uint32 security_updates = 13;
+   */
+  securityUpdates: number;
+
+  /**
+   * updates counts all its available updates.
+   *
+   * @generated from field: uint32 updates = 14;
+   */
+  updates: number;
+
+  /**
+   * reboot_required: it needs a reboot to use what is installed.
+   *
+   * @generated from field: bool reboot_required = 15;
+   */
+  rebootRequired: boolean;
 };
 
 /**

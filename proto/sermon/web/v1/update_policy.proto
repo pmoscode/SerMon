@@ -112,6 +112,8 @@ message UpdatePolicy {
   bool is_default = 4;
   // update_time is when it was set (unset for the default).
   google.protobuf.Timestamp update_time = 5;
+  // next_window is when the next window of the policy begins (unset without one, M4-15).
+  google.protobuf.Timestamp next_window = 6;
 }
 
 // GetUpdatePolicyRequest names the group.

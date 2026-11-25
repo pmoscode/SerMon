@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
@@ -95,10 +96,16 @@ func updatePolicyView(p updates.Policy, name string) *webv1.UpdatePolicy {
 			spec.Window.Days = append(spec.Window.Days, apiWeekday(d))
 		}
 	}
-	return &webv1.UpdatePolicy{
+	v := &webv1.UpdatePolicy{
 		GroupId: p.Group.String(), GroupName: name, Spec: spec, IsDefault: p.UpdatedAt.IsZero(),
 		UpdateTime: optionalTimestamp(p.UpdatedAt),
 	}
+	if w := p.Window; w != nil && p.Mode != updates.ModeReport {
+		if next, ok := w.Next(time.Now()); ok {
+			v.NextWindow = timestamppb.New(next)
+		}
+	}
+	return v
 }
 
 // GetUpdatePolicy returns a visible group's policy.

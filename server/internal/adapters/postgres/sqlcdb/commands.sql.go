@@ -202,6 +202,75 @@ func (q *Queries) InsertNodeCommand(ctx context.Context, arg InsertNodeCommandPa
 	return err
 }
 
+const listNodeRuns = `-- name: ListNodeRuns :many
+SELECT id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,
+       phase, exit_code, result_reason, output_truncated, started_at, ended_at
+FROM node_commands WHERE node_id = $1 AND kind <> 1
+ORDER BY created_at DESC, id DESC LIMIT $2
+`
+
+type ListNodeRunsParams struct {
+	NodeID  uuid.UUID
+	MaxRows int32
+}
+
+type ListNodeRunsRow struct {
+	ID              uuid.UUID
+	Kind            int16
+	Scope           pgtype.Int2
+	Reason          string
+	Version         string
+	State           int16
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	CreatedBy       *uuid.UUID
+	SentAt          *time.Time
+	Phase           pgtype.Int2
+	ExitCode        pgtype.Int4
+	ResultReason    string
+	OutputTruncated bool
+	StartedAt       *time.Time
+	EndedAt         *time.Time
+}
+
+// The runs of a node (no refreshes), newest first, without their output (M4-15).
+func (q *Queries) ListNodeRuns(ctx context.Context, arg ListNodeRunsParams) ([]ListNodeRunsRow, error) {
+	rows, err := q.db.Query(ctx, listNodeRuns, arg.NodeID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNodeRunsRow{}
+	for rows.Next() {
+		var i ListNodeRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Scope,
+			&i.Reason,
+			&i.Version,
+			&i.State,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.CreatedBy,
+			&i.SentAt,
+			&i.Phase,
+			&i.ExitCode,
+			&i.ResultReason,
+			&i.OutputTruncated,
+			&i.StartedAt,
+			&i.EndedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markNodeCommandsSent = `-- name: MarkNodeCommandsSent :exec
 UPDATE node_commands SET state = CASE WHEN kind = 1 THEN 4 ELSE 2 END, sent_at = $1
 WHERE node_id = $2 AND id = ANY ($3::uuid[]) AND state IN (1, 2)

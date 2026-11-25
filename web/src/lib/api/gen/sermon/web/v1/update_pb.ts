@@ -12,7 +12,385 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/update.proto.
  */
 export const file_sermon_web_v1_update: GenFile = /*@__PURE__*/
-  fileDesc("ChpzZXJtb24vd2ViL3YxL3VwZGF0ZS5wcm90bxINc2VybW9uLndlYi52MSJiChNTdGFydFVwZGF0ZXNSZXF1ZXN0EhAKCG5vZGVfaWRzGAEgAygJEikKBXNjb3BlGAIgASgOMhouc2VybW9uLndlYi52MS5VcGRhdGVTY29wZRIOCgZyZWJvb3QYAyABKAgiKwoUU3RhcnRVcGRhdGVzUmVzcG9uc2USEwoLcm9sbG91dF9pZHMYASADKAkiNgoSUmVib290Tm9kZXNSZXF1ZXN0EhAKCG5vZGVfaWRzGAEgAygJEg4KBnJlYXNvbhgCIAEoCSImChNSZWJvb3ROb2Rlc1Jlc3BvbnNlEg8KB3J1bl9pZHMYASADKAkiKwoYUmVmcmVzaFVwZGF0ZUluZm9SZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkiGwoZUmVmcmVzaFVwZGF0ZUluZm9SZXNwb25zZSIoChVHZXROb2RlVXBkYXRlc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSJyChZHZXROb2RlVXBkYXRlc1Jlc3BvbnNlEigKBG5vZGUYASABKAsyGi5zZXJtb24ud2ViLnYxLk5vZGVVcGRhdGVzEi4KCHBhY2thZ2VzGAIgAygLMhwuc2VybW9uLndlYi52MS5VcGRhdGVQYWNrYWdlIhkKF0xpc3RGbGVldFVwZGF0ZXNSZXF1ZXN0IsIBChhMaXN0RmxlZXRVcGRhdGVzUmVzcG9uc2USKQoFbm9kZXMYASADKAsyGi5zZXJtb24ud2ViLnYxLk5vZGVVcGRhdGVzEg8KB3Vua25vd24YAiABKAUSEwoLdW5hdmFpbGFibGUYAyABKAUSDwoHY3VycmVudBgEIAEoBRIUCgx3aXRoX3VwZGF0ZXMYBSABKAUSFQoNd2l0aF9zZWN1cml0eRgGIAEoBRIXCg9yZWJvb3RfcmVxdWlyZWQYByABKAUiiAUKC05vZGVVcGRhdGVzEg8KB25vZGVfaWQYASABKAkSEAoIaG9zdG5hbWUYAiABKAkSEAoIZ3JvdXBfaWQYAyABKAkSKwoGc3RhdHVzGAQgASgOMhsuc2VybW9uLndlYi52MS5VcGRhdGVTdGF0dXMSNwoMYXZhaWxhYmlsaXR5GAUgASgOMiEuc2VybW9uLndlYi52MS5VcGRhdGVBdmFpbGFiaWxpdHkSDgoGcmVhc29uGAYgASgJEjYKD3BhY2thZ2VfbWFuYWdlchgHIAEoDjIdLnNlcm1vbi53ZWIudjEuUGFja2FnZU1hbmFnZXISMAoMY29sbGVjdGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCgtyZWNlaXZlZF9hdBgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEwoLdG90YWxfY291bnQYCiABKA0SFgoOc2VjdXJpdHlfY291bnQYCyABKA0SGAoQcGFja2FnZXNfb21pdHRlZBgMIAEoCBIXCg9yZWJvb3RfcmVxdWlyZWQYDSABKAgSFQoNcmVib290X3JlYXNvbhgOIAEoCRIzCg9sYXN0X3VwZ3JhZGVfYXQYDyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjkKFW9sZGVzdF9zZWN1cml0eV9zaW5jZRgQIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASOQoLcGVybWlzc2lvbnMYESABKAsyJC5zZXJtb24ud2ViLnYxLkhvc3RVcGRhdGVQZXJtaXNzaW9ucxIRCglyZWZyZXNoZWQYEiABKAgiqAEKDVVwZGF0ZVBhY2thZ2USDAoEbmFtZRgBIAEoCRIZChFpbnN0YWxsZWRfdmVyc2lvbhgCIAEoCRIZChFjYW5kaWRhdGVfdmVyc2lvbhgDIAEoCRIOCgZzb3VyY2UYBCABKAkSEAoIc2VjdXJpdHkYBSABKAgSMQoNZmlyc3Rfc2Vlbl9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiWwoVSG9zdFVwZGF0ZVBlcm1pc3Npb25zEhYKDnJlbW90ZV91cGRhdGVzGAEgASgIEhUKDXJlbW90ZV9yZWJvb3QYAiABKAgSEwoLc2VsZl91cGRhdGUYAyABKAgqXAoLVXBkYXRlU2NvcGUSHAoYVVBEQVRFX1NDT1BFX1VOU1BFQ0lGSUVEEAASGQoVVVBEQVRFX1NDT1BFX1NFQ1VSSVRZEAESFAoQVVBEQVRFX1NDT1BFX0FMTBACKrkBCgxVcGRhdGVTdGF0dXMSHQoZVVBEQVRFX1NUQVRVU19VTlNQRUNJRklFRBAAEhkKFVVQREFURV9TVEFUVVNfVU5LTk9XThABEh0KGVVQREFURV9TVEFUVVNfVU5BVkFJTEFCTEUQAhIZChVVUERBVEVfU1RBVFVTX0NVUlJFTlQQAxIZChVVUERBVEVfU1RBVFVTX1VQREFURVMQBBIaChZVUERBVEVfU1RBVFVTX1NFQ1VSSVRZEAUq6QEKElVwZGF0ZUF2YWlsYWJpbGl0eRIjCh9VUERBVEVfQVZBSUxBQklMSVRZX1VOU1BFQ0lGSUVEEAASHgoaVVBEQVRFX0FWQUlMQUJJTElUWV9MSVNURUQQARIhCh1VUERBVEVfQVZBSUxBQklMSVRZX05PX0hFTFBFUhACEiYKIlVQREFURV9BVkFJTEFCSUxJVFlfSEVMUEVSX1RPT19PTEQQAxIjCh9VUERBVEVfQVZBSUxBQklMSVRZX1VOU1VQUE9SVEVEEAQSHgoaVVBEQVRFX0FWQUlMQUJJTElUWV9GQUlMRUQQBSp8Cg5QYWNrYWdlTWFuYWdlchIfChtQQUNLQUdFX01BTkFHRVJfVU5TUEVDSUZJRUQQABIXChNQQUNLQUdFX01BTkFHRVJfQVBUEAESFwoTUEFDS0FHRV9NQU5BR0VSX0RORhACEhcKE1BBQ0tBR0VfTUFOQUdFUl9BUEsQAzL0AwoNVXBkYXRlU2VydmljZRJiCg5HZXROb2RlVXBkYXRlcxIkLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVVwZGF0ZXNSZXF1ZXN0GiUuc2VybW9uLndlYi52MS5HZXROb2RlVXBkYXRlc1Jlc3BvbnNlIgOQAgESaAoQTGlzdEZsZWV0VXBkYXRlcxImLnNlcm1vbi53ZWIudjEuTGlzdEZsZWV0VXBkYXRlc1JlcXVlc3QaJy5zZXJtb24ud2ViLnYxLkxpc3RGbGVldFVwZGF0ZXNSZXNwb25zZSIDkAIBEmYKEVJlZnJlc2hVcGRhdGVJbmZvEicuc2VybW9uLndlYi52MS5SZWZyZXNoVXBkYXRlSW5mb1JlcXVlc3QaKC5zZXJtb24ud2ViLnYxLlJlZnJlc2hVcGRhdGVJbmZvUmVzcG9uc2USVwoMU3RhcnRVcGRhdGVzEiIuc2VybW9uLndlYi52MS5TdGFydFVwZGF0ZXNSZXF1ZXN0GiMuc2VybW9uLndlYi52MS5TdGFydFVwZGF0ZXNSZXNwb25zZRJUCgtSZWJvb3ROb2RlcxIhLnNlcm1vbi53ZWIudjEuUmVib290Tm9kZXNSZXF1ZXN0GiIuc2VybW9uLndlYi52MS5SZWJvb3ROb2Rlc1Jlc3BvbnNlQroBChFjb20uc2VybW9uLndlYi52MUILVXBkYXRlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChpzZXJtb24vd2ViL3YxL3VwZGF0ZS5wcm90bxINc2VybW9uLndlYi52MSLLAwoJVXBkYXRlUnVuEg4KBnJ1bl9pZBgBIAEoCRIPCgdub2RlX2lkGAIgASgJEioKBGtpbmQYAyABKA4yHC5zZXJtb24ud2ViLnYxLlVwZGF0ZVJ1bktpbmQSKQoFc2NvcGUYBCABKA4yGi5zZXJtb24ud2ViLnYxLlVwZGF0ZVNjb3BlEg4KBnJlYXNvbhgFIAEoCRIsCgVzdGF0ZRgGIAEoDjIdLnNlcm1vbi53ZWIudjEuVXBkYXRlUnVuU3RhdGUSFgoJZXhpdF9jb2RlGAcgASgRSACIAQESFQoNcmVzdWx0X3JlYXNvbhgIIAEoCRIYChBvdXRwdXRfdHJ1bmNhdGVkGAkgASgIEi8KC2NyZWF0ZV90aW1lGAogASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpzdGFydF90aW1lGAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIsCghlbmRfdGltZRgMIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEgoKY3JlYXRlZF9ieRgNIAEoCRIOCgZvdXRwdXQYDiABKAlCDAoKX2V4aXRfY29kZSI7ChVMaXN0VXBkYXRlUnVuc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRIRCglwYWdlX3NpemUYAiABKAUiQAoWTGlzdFVwZGF0ZVJ1bnNSZXNwb25zZRImCgRydW5zGAEgAygLMhguc2VybW9uLndlYi52MS5VcGRhdGVSdW4iJQoTR2V0VXBkYXRlUnVuUmVxdWVzdBIOCgZydW5faWQYASABKAkiPQoUR2V0VXBkYXRlUnVuUmVzcG9uc2USJQoDcnVuGAEgASgLMhguc2VybW9uLndlYi52MS5VcGRhdGVSdW4ingEKC1JvbGxvdXROb2RlEg8KB25vZGVfaWQYASABKAkSEAoIaG9zdG5hbWUYAiABKAkSLgoFc3RhdGUYAyABKA4yHy5zZXJtb24ud2ViLnYxLlJvbGxvdXROb2RlU3RhdGUSDgoGcmVhc29uGAQgASgJEhUKDXVwZGF0ZV9ydW5faWQYBSABKAkSFQoNcmVib290X3J1bl9pZBgGIAEoCSKcAgoHUm9sbG91dBISCgpyb2xsb3V0X2lkGAEgASgJEhAKCGdyb3VwX2lkGAIgASgJEhIKCmdyb3VwX25hbWUYAyABKAkSDgoGbWFudWFsGAQgASgIEioKBXN0YXRlGAUgASgOMhsuc2VybW9uLndlYi52MS5Sb2xsb3V0U3RhdGUSDgoGcmVhc29uGAYgASgJEjAKDHdpbmRvd19zdGFydBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKd2luZG93X2VuZBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASKQoFbm9kZXMYCSADKAsyGi5zZXJtb24ud2ViLnYxLlJvbGxvdXROb2RlIigKE0xpc3RSb2xsb3V0c1JlcXVlc3QSEQoJcGFnZV9zaXplGAEgASgFIkAKFExpc3RSb2xsb3V0c1Jlc3BvbnNlEigKCHJvbGxvdXRzGAEgAygLMhYuc2VybW9uLndlYi52MS5Sb2xsb3V0ImIKE1N0YXJ0VXBkYXRlc1JlcXVlc3QSEAoIbm9kZV9pZHMYASADKAkSKQoFc2NvcGUYAiABKA4yGi5zZXJtb24ud2ViLnYxLlVwZGF0ZVNjb3BlEg4KBnJlYm9vdBgDIAEoCCIrChRTdGFydFVwZGF0ZXNSZXNwb25zZRITCgtyb2xsb3V0X2lkcxgBIAMoCSI2ChJSZWJvb3ROb2Rlc1JlcXVlc3QSEAoIbm9kZV9pZHMYASADKAkSDgoGcmVhc29uGAIgASgJIiYKE1JlYm9vdE5vZGVzUmVzcG9uc2USDwoHcnVuX2lkcxgBIAMoCSIrChhSZWZyZXNoVXBkYXRlSW5mb1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSIbChlSZWZyZXNoVXBkYXRlSW5mb1Jlc3BvbnNlIigKFUdldE5vZGVVcGRhdGVzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJInIKFkdldE5vZGVVcGRhdGVzUmVzcG9uc2USKAoEbm9kZRgBIAEoCzIaLnNlcm1vbi53ZWIudjEuTm9kZVVwZGF0ZXMSLgoIcGFja2FnZXMYAiADKAsyHC5zZXJtb24ud2ViLnYxLlVwZGF0ZVBhY2thZ2UiGQoXTGlzdEZsZWV0VXBkYXRlc1JlcXVlc3QiwgEKGExpc3RGbGVldFVwZGF0ZXNSZXNwb25zZRIpCgVub2RlcxgBIAMoCzIaLnNlcm1vbi53ZWIudjEuTm9kZVVwZGF0ZXMSDwoHdW5rbm93bhgCIAEoBRITCgt1bmF2YWlsYWJsZRgDIAEoBRIPCgdjdXJyZW50GAQgASgFEhQKDHdpdGhfdXBkYXRlcxgFIAEoBRIVCg13aXRoX3NlY3VyaXR5GAYgASgFEhcKD3JlYm9vdF9yZXF1aXJlZBgHIAEoBSKIBQoLTm9kZVVwZGF0ZXMSDwoHbm9kZV9pZBgBIAEoCRIQCghob3N0bmFtZRgCIAEoCRIQCghncm91cF9pZBgDIAEoCRIrCgZzdGF0dXMYBCABKA4yGy5zZXJtb24ud2ViLnYxLlVwZGF0ZVN0YXR1cxI3CgxhdmFpbGFiaWxpdHkYBSABKA4yIS5zZXJtb24ud2ViLnYxLlVwZGF0ZUF2YWlsYWJpbGl0eRIOCgZyZWFzb24YBiABKAkSNgoPcGFja2FnZV9tYW5hZ2VyGAcgASgOMh0uc2VybW9uLndlYi52MS5QYWNrYWdlTWFuYWdlchIwCgxjb2xsZWN0ZWRfYXQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3JlY2VpdmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBITCgt0b3RhbF9jb3VudBgKIAEoDRIWCg5zZWN1cml0eV9jb3VudBgLIAEoDRIYChBwYWNrYWdlc19vbWl0dGVkGAwgASgIEhcKD3JlYm9vdF9yZXF1aXJlZBgNIAEoCBIVCg1yZWJvb3RfcmVhc29uGA4gASgJEjMKD2xhc3RfdXBncmFkZV9hdBgPIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASOQoVb2xkZXN0X3NlY3VyaXR5X3NpbmNlGBAgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI5CgtwZXJtaXNzaW9ucxgRIAEoCzIkLnNlcm1vbi53ZWIudjEuSG9zdFVwZGF0ZVBlcm1pc3Npb25zEhEKCXJlZnJlc2hlZBgSIAEoCCKoAQoNVXBkYXRlUGFja2FnZRIMCgRuYW1lGAEgASgJEhkKEWluc3RhbGxlZF92ZXJzaW9uGAIgASgJEhkKEWNhbmRpZGF0ZV92ZXJzaW9uGAMgASgJEg4KBnNvdXJjZRgEIAEoCRIQCghzZWN1cml0eRgFIAEoCBIxCg1maXJzdF9zZWVuX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJbChVIb3N0VXBkYXRlUGVybWlzc2lvbnMSFgoOcmVtb3RlX3VwZGF0ZXMYASABKAgSFQoNcmVtb3RlX3JlYm9vdBgCIAEoCBITCgtzZWxmX3VwZGF0ZRgDIAEoCCqJAQoNVXBkYXRlUnVuS2luZBIfChtVUERBVEVfUlVOX0tJTkRfVU5TUEVDSUZJRUQQABIaChZVUERBVEVfUlVOX0tJTkRfVVBEQVRFEAESGgoWVVBEQVRFX1JVTl9LSU5EX1JFQk9PVBACEh8KG1VQREFURV9SVU5fS0lORF9TRUxGX1VQREFURRADKr8CCg5VcGRhdGVSdW5TdGF0ZRIgChxVUERBVEVfUlVOX1NUQVRFX1VOU1BFQ0lGSUVEEAASHAoYVVBEQVRFX1JVTl9TVEFURV9QRU5ESU5HEAESGQoVVVBEQVRFX1JVTl9TVEFURV9TRU5UEAISHAoYVVBEQVRFX1JVTl9TVEFURV9SVU5OSU5HEAMSHgoaVVBEQVRFX1JVTl9TVEFURV9TVUNDRUVERUQQBBIbChdVUERBVEVfUlVOX1NUQVRFX0ZBSUxFRBAFEhwKGFVQREFURV9SVU5fU1RBVEVfUkVGVVNFRBAGEiAKHFVQREFURV9SVU5fU1RBVEVfVU5TVVBQT1JURUQQBxIZChVVUERBVEVfUlVOX1NUQVRFX0xPU1QQCBIcChhVUERBVEVfUlVOX1NUQVRFX0VYUElSRUQQCSp7CgxSb2xsb3V0U3RhdGUSHQoZUk9MTE9VVF9TVEFURV9VTlNQRUNJRklFRBAAEhkKFVJPTExPVVRfU1RBVEVfUlVOTklORxABEhYKElJPTExPVVRfU1RBVEVfRE9ORRACEhkKFVJPTExPVVRfU1RBVEVfU1RPUFBFRBADKpoCChBSb2xsb3V0Tm9kZVN0YXRlEiIKHlJPTExPVVRfTk9ERV9TVEFURV9VTlNQRUNJRklFRBAAEh4KGlJPTExPVVRfTk9ERV9TVEFURV9XQUlUSU5HEAESHwobUk9MTE9VVF9OT0RFX1NUQVRFX1VQREFUSU5HEAISIAocUk9MTE9VVF9OT0RFX1NUQVRFX1JFQk9PVElORxADEiMKH1JPTExPVVRfTk9ERV9TVEFURV9IRUFMVEhfQ0hFQ0sQBBIbChdST0xMT1VUX05PREVfU1RBVEVfRE9ORRAFEh0KGVJPTExPVVRfTk9ERV9TVEFURV9GQUlMRUQQBhIeChpST0xMT1VUX05PREVfU1RBVEVfU0tJUFBFRBAHKlwKC1VwZGF0ZVNjb3BlEhwKGFVQREFURV9TQ09QRV9VTlNQRUNJRklFRBAAEhkKFVVQREFURV9TQ09QRV9TRUNVUklUWRABEhQKEFVQREFURV9TQ09QRV9BTEwQAiq5AQoMVXBkYXRlU3RhdHVzEh0KGVVQREFURV9TVEFUVVNfVU5TUEVDSUZJRUQQABIZChVVUERBVEVfU1RBVFVTX1VOS05PV04QARIdChlVUERBVEVfU1RBVFVTX1VOQVZBSUxBQkxFEAISGQoVVVBEQVRFX1NUQVRVU19DVVJSRU5UEAMSGQoVVVBEQVRFX1NUQVRVU19VUERBVEVTEAQSGgoWVVBEQVRFX1NUQVRVU19TRUNVUklUWRAFKukBChJVcGRhdGVBdmFpbGFiaWxpdHkSIwofVVBEQVRFX0FWQUlMQUJJTElUWV9VTlNQRUNJRklFRBAAEh4KGlVQREFURV9BVkFJTEFCSUxJVFlfTElTVEVEEAESIQodVVBEQVRFX0FWQUlMQUJJTElUWV9OT19IRUxQRVIQAhImCiJVUERBVEVfQVZBSUxBQklMSVRZX0hFTFBFUl9UT09fT0xEEAMSIwofVVBEQVRFX0FWQUlMQUJJTElUWV9VTlNVUFBPUlRFRBAEEh4KGlVQREFURV9BVkFJTEFCSUxJVFlfRkFJTEVEEAUqfAoOUGFja2FnZU1hbmFnZXISHwobUEFDS0FHRV9NQU5BR0VSX1VOU1BFQ0lGSUVEEAASFwoTUEFDS0FHRV9NQU5BR0VSX0FQVBABEhcKE1BBQ0tBR0VfTUFOQUdFUl9ETkYQAhIXChNQQUNLQUdFX01BTkFHRVJfQVBLEAMylAYKDVVwZGF0ZVNlcnZpY2USYgoOR2V0Tm9kZVVwZGF0ZXMSJC5zZXJtb24ud2ViLnYxLkdldE5vZGVVcGRhdGVzUmVxdWVzdBolLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVVwZGF0ZXNSZXNwb25zZSIDkAIBEmgKEExpc3RGbGVldFVwZGF0ZXMSJi5zZXJtb24ud2ViLnYxLkxpc3RGbGVldFVwZGF0ZXNSZXF1ZXN0Gicuc2VybW9uLndlYi52MS5MaXN0RmxlZXRVcGRhdGVzUmVzcG9uc2UiA5ACARJmChFSZWZyZXNoVXBkYXRlSW5mbxInLnNlcm1vbi53ZWIudjEuUmVmcmVzaFVwZGF0ZUluZm9SZXF1ZXN0Giguc2VybW9uLndlYi52MS5SZWZyZXNoVXBkYXRlSW5mb1Jlc3BvbnNlElcKDFN0YXJ0VXBkYXRlcxIiLnNlcm1vbi53ZWIudjEuU3RhcnRVcGRhdGVzUmVxdWVzdBojLnNlcm1vbi53ZWIudjEuU3RhcnRVcGRhdGVzUmVzcG9uc2USVAoLUmVib290Tm9kZXMSIS5zZXJtb24ud2ViLnYxLlJlYm9vdE5vZGVzUmVxdWVzdBoiLnNlcm1vbi53ZWIudjEuUmVib290Tm9kZXNSZXNwb25zZRJiCg5MaXN0VXBkYXRlUnVucxIkLnNlcm1vbi53ZWIudjEuTGlzdFVwZGF0ZVJ1bnNSZXF1ZXN0GiUuc2VybW9uLndlYi52MS5MaXN0VXBkYXRlUnVuc1Jlc3BvbnNlIgOQAgESXAoMR2V0VXBkYXRlUnVuEiIuc2VybW9uLndlYi52MS5HZXRVcGRhdGVSdW5SZXF1ZXN0GiMuc2VybW9uLndlYi52MS5HZXRVcGRhdGVSdW5SZXNwb25zZSIDkAIBElwKDExpc3RSb2xsb3V0cxIiLnNlcm1vbi53ZWIudjEuTGlzdFJvbGxvdXRzUmVxdWVzdBojLnNlcm1vbi53ZWIudjEuTGlzdFJvbGxvdXRzUmVzcG9uc2UiA5ACAUK6AQoRY29tLnNlcm1vbi53ZWIudjFCC1VwZGF0ZVByb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+
+/**
+ * UpdateRun is a run of a node.
+ *
+ * @generated from message sermon.web.v1.UpdateRun
+ */
+export type UpdateRun = Message<"sermon.web.v1.UpdateRun"> & {
+  /**
+   * run_id names the run.
+   *
+   * @generated from field: string run_id = 1;
+   */
+  runId: string;
+
+  /**
+   * node_id is the node.
+   *
+   * @generated from field: string node_id = 2;
+   */
+  nodeId: string;
+
+  /**
+   * kind is what it did.
+   *
+   * @generated from field: sermon.web.v1.UpdateRunKind kind = 3;
+   */
+  kind: UpdateRunKind;
+
+  /**
+   * scope is which updates (UPDATE kind only).
+   *
+   * @generated from field: sermon.web.v1.UpdateScope scope = 4;
+   */
+  scope: UpdateScope;
+
+  /**
+   * reason is the reason of a reboot.
+   *
+   * @generated from field: string reason = 5;
+   */
+  reason: string;
+
+  /**
+   * state is where it is.
+   *
+   * @generated from field: sermon.web.v1.UpdateRunState state = 6;
+   */
+  state: UpdateRunState;
+
+  /**
+   * exit_code is the command's exit code once it ran.
+   *
+   * @generated from field: optional sint32 exit_code = 7;
+   */
+  exitCode?: number | undefined;
+
+  /**
+   * result_reason explains a refusal or failure (from the host).
+   *
+   * @generated from field: string result_reason = 8;
+   */
+  resultReason: string;
+
+  /**
+   * output_truncated: the beginning of the output was cut.
+   *
+   * @generated from field: bool output_truncated = 9;
+   */
+  outputTruncated: boolean;
+
+  /**
+   * create_time is when the server made it; started and ended are the host's times.
+   *
+   * @generated from field: google.protobuf.Timestamp create_time = 10;
+   */
+  createTime?: Timestamp | undefined;
+
+  /**
+   * start_time is when the host started it.
+   *
+   * @generated from field: google.protobuf.Timestamp start_time = 11;
+   */
+  startTime?: Timestamp | undefined;
+
+  /**
+   * end_time is when it ended.
+   *
+   * @generated from field: google.protobuf.Timestamp end_time = 12;
+   */
+  endTime?: Timestamp | undefined;
+
+  /**
+   * created_by is the user who asked for it (empty: a policy).
+   *
+   * @generated from field: string created_by = 13;
+   */
+  createdBy: string;
+
+  /**
+   * output is the end of the run's output (GetUpdateRun only), redacted by the agent.
+   *
+   * @generated from field: string output = 14;
+   */
+  output: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.UpdateRun.
+ * Use `create(UpdateRunSchema)` to create a new message.
+ */
+export const UpdateRunSchema: GenMessage<UpdateRun> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 0);
+
+/**
+ * ListUpdateRunsRequest names the node.
+ *
+ * @generated from message sermon.web.v1.ListUpdateRunsRequest
+ */
+export type ListUpdateRunsRequest = Message<"sermon.web.v1.ListUpdateRunsRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * page_size is how many runs, 0 means 20, at most 100.
+   *
+   * @generated from field: int32 page_size = 2;
+   */
+  pageSize: number;
+};
+
+/**
+ * Describes the message sermon.web.v1.ListUpdateRunsRequest.
+ * Use `create(ListUpdateRunsRequestSchema)` to create a new message.
+ */
+export const ListUpdateRunsRequestSchema: GenMessage<ListUpdateRunsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 1);
+
+/**
+ * ListUpdateRunsResponse lists the runs.
+ *
+ * @generated from message sermon.web.v1.ListUpdateRunsResponse
+ */
+export type ListUpdateRunsResponse = Message<"sermon.web.v1.ListUpdateRunsResponse"> & {
+  /**
+   * runs are newest first.
+   *
+   * @generated from field: repeated sermon.web.v1.UpdateRun runs = 1;
+   */
+  runs: UpdateRun[];
+};
+
+/**
+ * Describes the message sermon.web.v1.ListUpdateRunsResponse.
+ * Use `create(ListUpdateRunsResponseSchema)` to create a new message.
+ */
+export const ListUpdateRunsResponseSchema: GenMessage<ListUpdateRunsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 2);
+
+/**
+ * GetUpdateRunRequest names the run.
+ *
+ * @generated from message sermon.web.v1.GetUpdateRunRequest
+ */
+export type GetUpdateRunRequest = Message<"sermon.web.v1.GetUpdateRunRequest"> & {
+  /**
+   * run_id names the run.
+   *
+   * @generated from field: string run_id = 1;
+   */
+  runId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetUpdateRunRequest.
+ * Use `create(GetUpdateRunRequestSchema)` to create a new message.
+ */
+export const GetUpdateRunRequestSchema: GenMessage<GetUpdateRunRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 3);
+
+/**
+ * GetUpdateRunResponse is the run with its output.
+ *
+ * @generated from message sermon.web.v1.GetUpdateRunResponse
+ */
+export type GetUpdateRunResponse = Message<"sermon.web.v1.GetUpdateRunResponse"> & {
+  /**
+   * run with output.
+   *
+   * @generated from field: sermon.web.v1.UpdateRun run = 1;
+   */
+  run?: UpdateRun | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.GetUpdateRunResponse.
+ * Use `create(GetUpdateRunResponseSchema)` to create a new message.
+ */
+export const GetUpdateRunResponseSchema: GenMessage<GetUpdateRunResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 4);
+
+/**
+ * RolloutNode is a node of a rollout.
+ *
+ * @generated from message sermon.web.v1.RolloutNode
+ */
+export type RolloutNode = Message<"sermon.web.v1.RolloutNode"> & {
+  /**
+   * node_id is the node.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * hostname is its host name when the rollout began.
+   *
+   * @generated from field: string hostname = 2;
+   */
+  hostname: string;
+
+  /**
+   * state is where it stands.
+   *
+   * @generated from field: sermon.web.v1.RolloutNodeState state = 3;
+   */
+  state: RolloutNodeState;
+
+  /**
+   * reason explains a failure or a skip.
+   *
+   * @generated from field: string reason = 4;
+   */
+  reason: string;
+
+  /**
+   * update_run_id and reboot_run_id name its runs.
+   *
+   * @generated from field: string update_run_id = 5;
+   */
+  updateRunId: string;
+
+  /**
+   * reboot_run_id names its reboot run.
+   *
+   * @generated from field: string reboot_run_id = 6;
+   */
+  rebootRunId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.RolloutNode.
+ * Use `create(RolloutNodeSchema)` to create a new message.
+ */
+export const RolloutNodeSchema: GenMessage<RolloutNode> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 5);
+
+/**
+ * Rollout is the run of a group's policy in one window, or a rollout by hand.
+ *
+ * @generated from message sermon.web.v1.Rollout
+ */
+export type Rollout = Message<"sermon.web.v1.Rollout"> & {
+  /**
+   * rollout_id names it.
+   *
+   * @generated from field: string rollout_id = 1;
+   */
+  rolloutId: string;
+
+  /**
+   * group_id and group_name are its group.
+   *
+   * @generated from field: string group_id = 2;
+   */
+  groupId: string;
+
+  /**
+   * group_name is the group's name.
+   *
+   * @generated from field: string group_name = 3;
+   */
+  groupName: string;
+
+  /**
+   * manual: started by hand.
+   *
+   * @generated from field: bool manual = 4;
+   */
+  manual: boolean;
+
+  /**
+   * state is where it stands; reason says why it stopped.
+   *
+   * @generated from field: sermon.web.v1.RolloutState state = 5;
+   */
+  state: RolloutState;
+
+  /**
+   * reason says why it stopped.
+   *
+   * @generated from field: string reason = 6;
+   */
+  reason: string;
+
+  /**
+   * window_start and window_end bound when nodes may start.
+   *
+   * @generated from field: google.protobuf.Timestamp window_start = 7;
+   */
+  windowStart?: Timestamp | undefined;
+
+  /**
+   * window_end ends the starts of new nodes.
+   *
+   * @generated from field: google.protobuf.Timestamp window_end = 8;
+   */
+  windowEnd?: Timestamp | undefined;
+
+  /**
+   * nodes in their order.
+   *
+   * @generated from field: repeated sermon.web.v1.RolloutNode nodes = 9;
+   */
+  nodes: RolloutNode[];
+};
+
+/**
+ * Describes the message sermon.web.v1.Rollout.
+ * Use `create(RolloutSchema)` to create a new message.
+ */
+export const RolloutSchema: GenMessage<Rollout> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 6);
+
+/**
+ * ListRolloutsRequest bounds the list.
+ *
+ * @generated from message sermon.web.v1.ListRolloutsRequest
+ */
+export type ListRolloutsRequest = Message<"sermon.web.v1.ListRolloutsRequest"> & {
+  /**
+   * page_size is how many rollouts, 0 means 20, at most 50.
+   *
+   * @generated from field: int32 page_size = 1;
+   */
+  pageSize: number;
+};
+
+/**
+ * Describes the message sermon.web.v1.ListRolloutsRequest.
+ * Use `create(ListRolloutsRequestSchema)` to create a new message.
+ */
+export const ListRolloutsRequestSchema: GenMessage<ListRolloutsRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 7);
+
+/**
+ * ListRolloutsResponse lists the rollouts.
+ *
+ * @generated from message sermon.web.v1.ListRolloutsResponse
+ */
+export type ListRolloutsResponse = Message<"sermon.web.v1.ListRolloutsResponse"> & {
+  /**
+   * rollouts are newest first.
+   *
+   * @generated from field: repeated sermon.web.v1.Rollout rollouts = 1;
+   */
+  rollouts: Rollout[];
+};
+
+/**
+ * Describes the message sermon.web.v1.ListRolloutsResponse.
+ * Use `create(ListRolloutsResponseSchema)` to create a new message.
+ */
+export const ListRolloutsResponseSchema: GenMessage<ListRolloutsResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update, 8);
 
 /**
  * StartUpdatesRequest names the nodes and what to install.
@@ -47,7 +425,7 @@ export type StartUpdatesRequest = Message<"sermon.web.v1.StartUpdatesRequest"> &
  * Use `create(StartUpdatesRequestSchema)` to create a new message.
  */
 export const StartUpdatesRequestSchema: GenMessage<StartUpdatesRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 0);
+  messageDesc(file_sermon_web_v1_update, 9);
 
 /**
  * StartUpdatesResponse names the rollouts.
@@ -68,7 +446,7 @@ export type StartUpdatesResponse = Message<"sermon.web.v1.StartUpdatesResponse">
  * Use `create(StartUpdatesResponseSchema)` to create a new message.
  */
 export const StartUpdatesResponseSchema: GenMessage<StartUpdatesResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 1);
+  messageDesc(file_sermon_web_v1_update, 10);
 
 /**
  * RebootNodesRequest names the nodes and the reason.
@@ -96,7 +474,7 @@ export type RebootNodesRequest = Message<"sermon.web.v1.RebootNodesRequest"> & {
  * Use `create(RebootNodesRequestSchema)` to create a new message.
  */
 export const RebootNodesRequestSchema: GenMessage<RebootNodesRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 2);
+  messageDesc(file_sermon_web_v1_update, 11);
 
 /**
  * RebootNodesResponse names the runs.
@@ -117,7 +495,7 @@ export type RebootNodesResponse = Message<"sermon.web.v1.RebootNodesResponse"> &
  * Use `create(RebootNodesResponseSchema)` to create a new message.
  */
 export const RebootNodesResponseSchema: GenMessage<RebootNodesResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 3);
+  messageDesc(file_sermon_web_v1_update, 12);
 
 /**
  * RefreshUpdateInfoRequest names the node.
@@ -138,7 +516,7 @@ export type RefreshUpdateInfoRequest = Message<"sermon.web.v1.RefreshUpdateInfoR
  * Use `create(RefreshUpdateInfoRequestSchema)` to create a new message.
  */
 export const RefreshUpdateInfoRequestSchema: GenMessage<RefreshUpdateInfoRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 4);
+  messageDesc(file_sermon_web_v1_update, 13);
 
 /**
  * RefreshUpdateInfoResponse has no fields.
@@ -153,7 +531,7 @@ export type RefreshUpdateInfoResponse = Message<"sermon.web.v1.RefreshUpdateInfo
  * Use `create(RefreshUpdateInfoResponseSchema)` to create a new message.
  */
 export const RefreshUpdateInfoResponseSchema: GenMessage<RefreshUpdateInfoResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 5);
+  messageDesc(file_sermon_web_v1_update, 14);
 
 /**
  * GetNodeUpdatesRequest names the node.
@@ -174,7 +552,7 @@ export type GetNodeUpdatesRequest = Message<"sermon.web.v1.GetNodeUpdatesRequest
  * Use `create(GetNodeUpdatesRequestSchema)` to create a new message.
  */
 export const GetNodeUpdatesRequestSchema: GenMessage<GetNodeUpdatesRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 6);
+  messageDesc(file_sermon_web_v1_update, 15);
 
 /**
  * GetNodeUpdatesResponse is the node with its report.
@@ -203,7 +581,7 @@ export type GetNodeUpdatesResponse = Message<"sermon.web.v1.GetNodeUpdatesRespon
  * Use `create(GetNodeUpdatesResponseSchema)` to create a new message.
  */
 export const GetNodeUpdatesResponseSchema: GenMessage<GetNodeUpdatesResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 7);
+  messageDesc(file_sermon_web_v1_update, 16);
 
 /**
  * ListFleetUpdatesRequest has no fields yet.
@@ -218,7 +596,7 @@ export type ListFleetUpdatesRequest = Message<"sermon.web.v1.ListFleetUpdatesReq
  * Use `create(ListFleetUpdatesRequestSchema)` to create a new message.
  */
 export const ListFleetUpdatesRequestSchema: GenMessage<ListFleetUpdatesRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 8);
+  messageDesc(file_sermon_web_v1_update, 17);
 
 /**
  * ListFleetUpdatesResponse is the overview.
@@ -281,7 +659,7 @@ export type ListFleetUpdatesResponse = Message<"sermon.web.v1.ListFleetUpdatesRe
  * Use `create(ListFleetUpdatesResponseSchema)` to create a new message.
  */
 export const ListFleetUpdatesResponseSchema: GenMessage<ListFleetUpdatesResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 9);
+  messageDesc(file_sermon_web_v1_update, 18);
 
 /**
  * NodeUpdates is a node with the counts of its latest report.
@@ -422,7 +800,7 @@ export type NodeUpdates = Message<"sermon.web.v1.NodeUpdates"> & {
  * Use `create(NodeUpdatesSchema)` to create a new message.
  */
 export const NodeUpdatesSchema: GenMessage<NodeUpdates> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 10);
+  messageDesc(file_sermon_web_v1_update, 19);
 
 /**
  * UpdatePackage is one available update.
@@ -478,7 +856,7 @@ export type UpdatePackage = Message<"sermon.web.v1.UpdatePackage"> & {
  * Use `create(UpdatePackageSchema)` to create a new message.
  */
 export const UpdatePackageSchema: GenMessage<UpdatePackage> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 11);
+  messageDesc(file_sermon_web_v1_update, 20);
 
 /**
  * HostUpdatePermissions are the switches of the host's /etc/sermon/helper.toml (ADR 0035); the
@@ -514,7 +892,241 @@ export type HostUpdatePermissions = Message<"sermon.web.v1.HostUpdatePermissions
  * Use `create(HostUpdatePermissionsSchema)` to create a new message.
  */
 export const HostUpdatePermissionsSchema: GenMessage<HostUpdatePermissions> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update, 12);
+  messageDesc(file_sermon_web_v1_update, 21);
+
+/**
+ * UpdateRunKind is what a run did.
+ *
+ * @generated from enum sermon.web.v1.UpdateRunKind
+ */
+export enum UpdateRunKind {
+  /**
+   * UPDATE_RUN_KIND_UNSPECIFIED is not used.
+   *
+   * @generated from enum value: UPDATE_RUN_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * UPDATE_RUN_KIND_UPDATE installed updates.
+   *
+   * @generated from enum value: UPDATE_RUN_KIND_UPDATE = 1;
+   */
+  UPDATE = 1,
+
+  /**
+   * UPDATE_RUN_KIND_REBOOT rebooted.
+   *
+   * @generated from enum value: UPDATE_RUN_KIND_REBOOT = 2;
+   */
+  REBOOT = 2,
+
+  /**
+   * UPDATE_RUN_KIND_SELF_UPDATE replaced the agent.
+   *
+   * @generated from enum value: UPDATE_RUN_KIND_SELF_UPDATE = 3;
+   */
+  SELF_UPDATE = 3,
+}
+
+/**
+ * Describes the enum sermon.web.v1.UpdateRunKind.
+ */
+export const UpdateRunKindSchema: GenEnum<UpdateRunKind> = /*@__PURE__*/
+  enumDesc(file_sermon_web_v1_update, 0);
+
+/**
+ * UpdateRunState is where a run is.
+ *
+ * @generated from enum sermon.web.v1.UpdateRunState
+ */
+export enum UpdateRunState {
+  /**
+   * UPDATE_RUN_STATE_UNSPECIFIED is not used.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * UPDATE_RUN_STATE_PENDING waits for the node.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * UPDATE_RUN_STATE_SENT went to the node, no answer yet.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_SENT = 2;
+   */
+  SENT = 2,
+
+  /**
+   * UPDATE_RUN_STATE_RUNNING runs on the node.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_RUNNING = 3;
+   */
+  RUNNING = 3,
+
+  /**
+   * UPDATE_RUN_STATE_SUCCEEDED ended with exit code 0.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_SUCCEEDED = 4;
+   */
+  SUCCEEDED = 4,
+
+  /**
+   * UPDATE_RUN_STATE_FAILED ran and failed.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_FAILED = 5;
+   */
+  FAILED = 5,
+
+  /**
+   * UPDATE_RUN_STATE_REFUSED: the host refused it (helper.toml) or the helper did.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_REFUSED = 6;
+   */
+  REFUSED = 6,
+
+  /**
+   * UPDATE_RUN_STATE_UNSUPPORTED: no helper, one too old or an unsupported host.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_UNSUPPORTED = 7;
+   */
+  UNSUPPORTED = 7,
+
+  /**
+   * UPDATE_RUN_STATE_LOST: the helper knows the run no longer.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_LOST = 8;
+   */
+  LOST = 8,
+
+  /**
+   * UPDATE_RUN_STATE_EXPIRED: the node didn't take it in time.
+   *
+   * @generated from enum value: UPDATE_RUN_STATE_EXPIRED = 9;
+   */
+  EXPIRED = 9,
+}
+
+/**
+ * Describes the enum sermon.web.v1.UpdateRunState.
+ */
+export const UpdateRunStateSchema: GenEnum<UpdateRunState> = /*@__PURE__*/
+  enumDesc(file_sermon_web_v1_update, 1);
+
+/**
+ * RolloutState is where a rollout stands.
+ *
+ * @generated from enum sermon.web.v1.RolloutState
+ */
+export enum RolloutState {
+  /**
+   * ROLLOUT_STATE_UNSPECIFIED is not used.
+   *
+   * @generated from enum value: ROLLOUT_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * ROLLOUT_STATE_RUNNING moves its nodes on.
+   *
+   * @generated from enum value: ROLLOUT_STATE_RUNNING = 1;
+   */
+  RUNNING = 1,
+
+  /**
+   * ROLLOUT_STATE_DONE: all its nodes are through.
+   *
+   * @generated from enum value: ROLLOUT_STATE_DONE = 2;
+   */
+  DONE = 2,
+
+  /**
+   * ROLLOUT_STATE_STOPPED at a failure (stopOnFailure).
+   *
+   * @generated from enum value: ROLLOUT_STATE_STOPPED = 3;
+   */
+  STOPPED = 3,
+}
+
+/**
+ * Describes the enum sermon.web.v1.RolloutState.
+ */
+export const RolloutStateSchema: GenEnum<RolloutState> = /*@__PURE__*/
+  enumDesc(file_sermon_web_v1_update, 2);
+
+/**
+ * RolloutNodeState is where a node of a rollout stands.
+ *
+ * @generated from enum sermon.web.v1.RolloutNodeState
+ */
+export enum RolloutNodeState {
+  /**
+   * ROLLOUT_NODE_STATE_UNSPECIFIED is not used.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * ROLLOUT_NODE_STATE_WAITING for its turn.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_WAITING = 1;
+   */
+  WAITING = 1,
+
+  /**
+   * ROLLOUT_NODE_STATE_UPDATING installs the updates.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_UPDATING = 2;
+   */
+  UPDATING = 2,
+
+  /**
+   * ROLLOUT_NODE_STATE_REBOOTING reboots.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_REBOOTING = 3;
+   */
+  REBOOTING = 3,
+
+  /**
+   * ROLLOUT_NODE_STATE_HEALTH_CHECK waits for the node to be back and healthy.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_HEALTH_CHECK = 4;
+   */
+  HEALTH_CHECK = 4,
+
+  /**
+   * ROLLOUT_NODE_STATE_DONE: through.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_DONE = 5;
+   */
+  DONE = 5,
+
+  /**
+   * ROLLOUT_NODE_STATE_FAILED: its update, reboot or health check failed; reason says why.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_FAILED = 6;
+   */
+  FAILED = 6,
+
+  /**
+   * ROLLOUT_NODE_STATE_SKIPPED: not updated; reason says why.
+   *
+   * @generated from enum value: ROLLOUT_NODE_STATE_SKIPPED = 7;
+   */
+  SKIPPED = 7,
+}
+
+/**
+ * Describes the enum sermon.web.v1.RolloutNodeState.
+ */
+export const RolloutNodeStateSchema: GenEnum<RolloutNodeState> = /*@__PURE__*/
+  enumDesc(file_sermon_web_v1_update, 3);
 
 /**
  * UpdateScope is which updates a run by hand installs.
@@ -548,7 +1160,7 @@ export enum UpdateScope {
  * Describes the enum sermon.web.v1.UpdateScope.
  */
 export const UpdateScopeSchema: GenEnum<UpdateScope> = /*@__PURE__*/
-  enumDesc(file_sermon_web_v1_update, 0);
+  enumDesc(file_sermon_web_v1_update, 4);
 
 /**
  * UpdateStatus is where a node stands with its updates; a reboot is separate (reboot_required).
@@ -603,7 +1215,7 @@ export enum UpdateStatus {
  * Describes the enum sermon.web.v1.UpdateStatus.
  */
 export const UpdateStatusSchema: GenEnum<UpdateStatus> = /*@__PURE__*/
-  enumDesc(file_sermon_web_v1_update, 1);
+  enumDesc(file_sermon_web_v1_update, 5);
 
 /**
  * UpdateAvailability says whether the agent could list the updates.
@@ -658,7 +1270,7 @@ export enum UpdateAvailability {
  * Describes the enum sermon.web.v1.UpdateAvailability.
  */
 export const UpdateAvailabilitySchema: GenEnum<UpdateAvailability> = /*@__PURE__*/
-  enumDesc(file_sermon_web_v1_update, 2);
+  enumDesc(file_sermon_web_v1_update, 6);
 
 /**
  * PackageManager is how the updates were listed.
@@ -699,7 +1311,7 @@ export enum PackageManager {
  * Describes the enum sermon.web.v1.PackageManager.
  */
 export const PackageManagerSchema: GenEnum<PackageManager> = /*@__PURE__*/
-  enumDesc(file_sermon_web_v1_update, 3);
+  enumDesc(file_sermon_web_v1_update, 7);
 
 /**
  * UpdateService shows what the nodes could update (KONZEPT §14.1, M4-09): the latest report of
@@ -767,6 +1379,38 @@ export const UpdateService: GenService<{
     methodKind: "unary";
     input: typeof RebootNodesRequestSchema;
     output: typeof RebootNodesResponseSchema;
+  },
+  /**
+   * ListUpdateRuns returns a node's runs (updates, reboots, self-updates), newest first, without
+   * output (view_nodes; M4-15).
+   *
+   * @generated from rpc sermon.web.v1.UpdateService.ListUpdateRuns
+   */
+  listUpdateRuns: {
+    methodKind: "unary";
+    input: typeof ListUpdateRunsRequestSchema;
+    output: typeof ListUpdateRunsResponseSchema;
+  },
+  /**
+   * GetUpdateRun returns a run with its output, redacted by the agent and shown as text only
+   * (view_logs on the node's group: the output is like a log of the host).
+   *
+   * @generated from rpc sermon.web.v1.UpdateService.GetUpdateRun
+   */
+  getUpdateRun: {
+    methodKind: "unary";
+    input: typeof GetUpdateRunRequestSchema;
+    output: typeof GetUpdateRunResponseSchema;
+  },
+  /**
+   * ListRollouts returns the latest rollouts of the groups the caller can view, newest first.
+   *
+   * @generated from rpc sermon.web.v1.UpdateService.ListRollouts
+   */
+  listRollouts: {
+    methodKind: "unary";
+    input: typeof ListRolloutsRequestSchema;
+    output: typeof ListRolloutsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_update, 0);

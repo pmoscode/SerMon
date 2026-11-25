@@ -16,6 +16,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
 // FleetStore reads node records for the UI (M1-26).
@@ -51,6 +52,13 @@ func (s *FleetStore) List(ctx context.Context, scope tenant.Scope) ([]fleet.Node
 				LockedAt: r.LockedAt, LockReason: r.LockReason, LastIP: r.LastIp, TakeoverUntil: r.TakeoverUntil,
 				Tags: tags, SecuritySource: secevent.Source(r.SecuritySource), LogsVetoed: r.LogsVetoed,
 				LearningSince: r.LearningSince,
+			}
+			if r.UpdateAvailability.Valid {
+				total, security := uint32(max(r.UpdateTotal.Int32, 0)), uint32(max(r.UpdateSecurity.Int32, 0))
+				nodes[i].Updates = &fleet.Updates{
+					Status: update.StatusOf(update.Availability(r.UpdateAvailability.Int16), total, security, true), //nolint:gosec // 1 to 5 by the table's check
+					Total:  total, Security: security, RebootRequired: r.UpdateRebootRequired.Bool,
+				}
 			}
 		}
 		return nil

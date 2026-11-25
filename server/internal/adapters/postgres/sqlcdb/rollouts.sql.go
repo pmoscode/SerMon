@@ -204,6 +204,69 @@ func (q *Queries) ListNodeCommandsByID(ctx context.Context, ids []uuid.UUID) ([]
 	return items, nil
 }
 
+const listRecentRollouts = `-- name: ListRecentRollouts :many
+SELECT r.id, r.group_id, g.name AS group_name, r.window_start, r.window_end, r.state, r.reason, r.manual,
+       r.mode, r.auto_reboot, r.created_by, r.created_at
+FROM update_rollouts r JOIN node_groups g ON g.org_id = r.org_id AND g.id = r.group_id
+WHERE $1::boolean OR r.group_id = ANY ($2::uuid[])
+ORDER BY r.created_at DESC, r.id DESC LIMIT $3
+`
+
+type ListRecentRolloutsParams struct {
+	AllGroups bool
+	GroupIds  []uuid.UUID
+	MaxRows   int32
+}
+
+type ListRecentRolloutsRow struct {
+	ID          uuid.UUID
+	GroupID     uuid.UUID
+	GroupName   string
+	WindowStart time.Time
+	WindowEnd   time.Time
+	State       int16
+	Reason      string
+	Manual      bool
+	Mode        pgtype.Int2
+	AutoReboot  bool
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+}
+
+// The latest rollouts of the scope's groups (M4-15), newest first.
+func (q *Queries) ListRecentRollouts(ctx context.Context, arg ListRecentRolloutsParams) ([]ListRecentRolloutsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentRollouts, arg.AllGroups, arg.GroupIds, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentRolloutsRow{}
+	for rows.Next() {
+		var i ListRecentRolloutsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.GroupID,
+			&i.GroupName,
+			&i.WindowStart,
+			&i.WindowEnd,
+			&i.State,
+			&i.Reason,
+			&i.Manual,
+			&i.Mode,
+			&i.AutoReboot,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRolloutNodeViews = `-- name: ListRolloutNodeViews :many
 SELECT n.id, n.group_id, n.hostname, n.last_seen_at, n.connected_at,
        s.received_at, s.availability, s.package_manager, s.total_count, s.security_count, s.reboot_required,

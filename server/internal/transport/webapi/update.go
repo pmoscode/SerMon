@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
@@ -199,4 +200,148 @@ func nodeUpdatesView(n updates.NodeUpdates) *webv1.NodeUpdates {
 		v.Permissions = &webv1.HostUpdatePermissions{RemoteUpdates: p.RemoteUpdates, RemoteReboot: p.RemoteReboot, SelfUpdate: p.SelfUpdate}
 	}
 	return v
+}
+
+var runKinds = map[command.Kind]webv1.UpdateRunKind{
+	command.Update:     webv1.UpdateRunKind_UPDATE_RUN_KIND_UPDATE,
+	command.Reboot:     webv1.UpdateRunKind_UPDATE_RUN_KIND_REBOOT,
+	command.SelfUpdate: webv1.UpdateRunKind_UPDATE_RUN_KIND_SELF_UPDATE,
+}
+
+// runState is the state a person reads: the agent's final phase, else where the server is.
+func runState(c command.Command) webv1.UpdateRunState {
+	if r := c.Result; r != nil && r.Phase.Final() {
+		return map[command.Phase]webv1.UpdateRunState{
+			command.Succeeded:   webv1.UpdateRunState_UPDATE_RUN_STATE_SUCCEEDED,
+			command.Failed:      webv1.UpdateRunState_UPDATE_RUN_STATE_FAILED,
+			command.Refused:     webv1.UpdateRunState_UPDATE_RUN_STATE_REFUSED,
+			command.Unsupported: webv1.UpdateRunState_UPDATE_RUN_STATE_UNSUPPORTED,
+			command.Lost:        webv1.UpdateRunState_UPDATE_RUN_STATE_LOST,
+		}[r.Phase]
+	}
+	switch c.State {
+	case command.Pending:
+		return webv1.UpdateRunState_UPDATE_RUN_STATE_PENDING
+	case command.Sent:
+		return webv1.UpdateRunState_UPDATE_RUN_STATE_SENT
+	case command.Running:
+		return webv1.UpdateRunState_UPDATE_RUN_STATE_RUNNING
+	case command.Expired:
+		return webv1.UpdateRunState_UPDATE_RUN_STATE_EXPIRED
+	case command.Done:
+	}
+	return webv1.UpdateRunState_UPDATE_RUN_STATE_UNSPECIFIED
+}
+
+func runView(c command.Command) *webv1.UpdateRun {
+	v := &webv1.UpdateRun{
+		RunId: c.ID.String(), NodeId: c.Node.String(), Kind: runKinds[c.Kind], Reason: c.Reason, State: runState(c),
+		CreateTime: timestamppb.New(c.CreatedAt),
+	}
+	if c.Kind == command.Update {
+		v.Scope = webv1.UpdateScope_UPDATE_SCOPE_ALL
+		if c.Scope == command.ScopeSecurity {
+			v.Scope = webv1.UpdateScope_UPDATE_SCOPE_SECURITY
+		}
+	}
+	if !c.CreatedBy.IsZero() {
+		v.CreatedBy = c.CreatedBy.String()
+	}
+	if r := c.Result; r != nil {
+		v.ResultReason, v.OutputTruncated, v.Output = r.Reason, r.OutputTruncated, r.Output
+		v.StartTime, v.EndTime = optionalTime(r.StartedAt), optionalTime(r.EndedAt)
+		if r.Phase == command.Succeeded || r.Phase == command.Failed {
+			code := r.ExitCode
+			v.ExitCode = &code
+		}
+	}
+	return v
+}
+
+// ListUpdateRuns returns a node's runs without output.
+func (h *UpdateHandler) ListUpdateRuns(ctx context.Context, req *connect.Request[webv1.ListUpdateRunsRequest]) (*connect.Response[webv1.ListUpdateRunsResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	size := int(req.Msg.GetPageSize())
+	if size == 0 {
+		size = 20
+	}
+	runs, err := h.updates.Runs(ctx, c, identity.NodeID(id), size)
+	if err != nil {
+		return nil, h.failure(ctx, "list update runs", err)
+	}
+	res := &webv1.ListUpdateRunsResponse{Runs: make([]*webv1.UpdateRun, 0, len(runs))}
+	for _, r := range runs {
+		v := runView(r)
+		v.Output = ""
+		res.Runs = append(res.Runs, v)
+	}
+	return connect.NewResponse(res), nil
+}
+
+// GetUpdateRun returns a run with its output.
+func (h *UpdateHandler) GetUpdateRun(ctx context.Context, req *connect.Request[webv1.GetUpdateRunRequest]) (*connect.Response[webv1.GetUpdateRunResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetRunId())
+	if err != nil {
+		return nil, err
+	}
+	run, err := h.updates.Run(ctx, c, id)
+	if err != nil {
+		return nil, h.failure(ctx, "get update run", err)
+	}
+	return connect.NewResponse(&webv1.GetUpdateRunResponse{Run: runView(run)}), nil
+}
+
+var rolloutStates = map[updates.RolloutState]webv1.RolloutState{
+	updates.RolloutRunning: webv1.RolloutState_ROLLOUT_STATE_RUNNING,
+	updates.RolloutDone:    webv1.RolloutState_ROLLOUT_STATE_DONE,
+	updates.RolloutStopped: webv1.RolloutState_ROLLOUT_STATE_STOPPED,
+}
+
+func idOrEmpty(id uuid.UUID) string {
+	if id == uuid.Nil {
+		return ""
+	}
+	return id.String()
+}
+
+// ListRollouts returns the latest rollouts of the visible groups.
+func (h *UpdateHandler) ListRollouts(ctx context.Context, req *connect.Request[webv1.ListRolloutsRequest]) (*connect.Response[webv1.ListRolloutsResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	size := int(req.Msg.GetPageSize())
+	if size == 0 {
+		size = 20
+	}
+	rollouts, err := h.updates.Rollouts(ctx, c, size)
+	if err != nil {
+		return nil, h.failure(ctx, "list rollouts", err)
+	}
+	res := &webv1.ListRolloutsResponse{Rollouts: make([]*webv1.Rollout, 0, len(rollouts))}
+	for _, r := range rollouts {
+		v := &webv1.Rollout{
+			RolloutId: r.ID.String(), GroupId: r.Group.String(), GroupName: r.GroupName, Manual: r.Manual,
+			State: rolloutStates[r.State], Reason: r.Reason, WindowStart: timestamppb.New(r.WindowStart), WindowEnd: timestamppb.New(r.WindowEnd),
+		}
+		for _, n := range r.Nodes {
+			v.Nodes = append(v.Nodes, &webv1.RolloutNode{
+				NodeId: n.Node.String(), Hostname: n.Hostname, State: webv1.RolloutNodeState(n.State), Reason: n.Reason,
+				UpdateRunId: idOrEmpty(n.UpdateRun), RebootRunId: idOrEmpty(n.RebootRun),
+			})
+		}
+		res.Rollouts = append(res.Rollouts, v)
+	}
+	return connect.NewResponse(res), nil
 }

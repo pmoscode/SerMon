@@ -248,7 +248,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			secevents.NewService(postgres.NewSecurityEventStore(pg), authz.NewPolicy())), slog.New(slog.DiscardHandler)),
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(pg, 0), authz.NewPolicy()).
 			WithRefresher(postgres.NewCommandStore(pg), time.Now).
-			WithManual(postgres.NewRolloutStore(pg), postgres.NewUpdatePolicyStore(pg), uuid.New), slog.New(slog.DiscardHandler)),
+			WithManual(postgres.NewRolloutStore(pg), postgres.NewUpdatePolicyStore(pg), uuid.New).
+			WithHistory(postgres.NewHistoryStore(pg)), slog.New(slog.DiscardHandler)),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(
 			updates.NewPolicyService(postgres.NewUpdatePolicyStore(pg), authz.NewPolicy(), time.Now), slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(

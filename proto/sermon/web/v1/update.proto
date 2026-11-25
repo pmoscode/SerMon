@@ -32,6 +32,202 @@ service UpdateService {
   // RebootNodes reboots the nodes at once with a reason shown on the host (reboot_nodes, a fresh
   // step-up, in the audit log). Without allow_remote_reboot the host refuses.
   rpc RebootNodes(RebootNodesRequest) returns (RebootNodesResponse);
+  // ListUpdateRuns returns a node's runs (updates, reboots, self-updates), newest first, without
+  // output (view_nodes; M4-15).
+  rpc ListUpdateRuns(ListUpdateRunsRequest) returns (ListUpdateRunsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // GetUpdateRun returns a run with its output, redacted by the agent and shown as text only
+  // (view_logs on the node's group: the output is like a log of the host).
+  rpc GetUpdateRun(GetUpdateRunRequest) returns (GetUpdateRunResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListRollouts returns the latest rollouts of the groups the caller can view, newest first.
+  rpc ListRollouts(ListRolloutsRequest) returns (ListRolloutsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// UpdateRunKind is what a run did.
+enum UpdateRunKind {
+  // UPDATE_RUN_KIND_UNSPECIFIED is not used.
+  UPDATE_RUN_KIND_UNSPECIFIED = 0;
+  // UPDATE_RUN_KIND_UPDATE installed updates.
+  UPDATE_RUN_KIND_UPDATE = 1;
+  // UPDATE_RUN_KIND_REBOOT rebooted.
+  UPDATE_RUN_KIND_REBOOT = 2;
+  // UPDATE_RUN_KIND_SELF_UPDATE replaced the agent.
+  UPDATE_RUN_KIND_SELF_UPDATE = 3;
+}
+
+// UpdateRunState is where a run is.
+enum UpdateRunState {
+  // UPDATE_RUN_STATE_UNSPECIFIED is not used.
+  UPDATE_RUN_STATE_UNSPECIFIED = 0;
+  // UPDATE_RUN_STATE_PENDING waits for the node.
+  UPDATE_RUN_STATE_PENDING = 1;
+  // UPDATE_RUN_STATE_SENT went to the node, no answer yet.
+  UPDATE_RUN_STATE_SENT = 2;
+  // UPDATE_RUN_STATE_RUNNING runs on the node.
+  UPDATE_RUN_STATE_RUNNING = 3;
+  // UPDATE_RUN_STATE_SUCCEEDED ended with exit code 0.
+  UPDATE_RUN_STATE_SUCCEEDED = 4;
+  // UPDATE_RUN_STATE_FAILED ran and failed.
+  UPDATE_RUN_STATE_FAILED = 5;
+  // UPDATE_RUN_STATE_REFUSED: the host refused it (helper.toml) or the helper did.
+  UPDATE_RUN_STATE_REFUSED = 6;
+  // UPDATE_RUN_STATE_UNSUPPORTED: no helper, one too old or an unsupported host.
+  UPDATE_RUN_STATE_UNSUPPORTED = 7;
+  // UPDATE_RUN_STATE_LOST: the helper knows the run no longer.
+  UPDATE_RUN_STATE_LOST = 8;
+  // UPDATE_RUN_STATE_EXPIRED: the node didn't take it in time.
+  UPDATE_RUN_STATE_EXPIRED = 9;
+}
+
+// UpdateRun is a run of a node.
+message UpdateRun {
+  // run_id names the run.
+  string run_id = 1;
+  // node_id is the node.
+  string node_id = 2;
+  // kind is what it did.
+  UpdateRunKind kind = 3;
+  // scope is which updates (UPDATE kind only).
+  UpdateScope scope = 4;
+  // reason is the reason of a reboot.
+  string reason = 5;
+  // state is where it is.
+  UpdateRunState state = 6;
+  // exit_code is the command's exit code once it ran.
+  optional sint32 exit_code = 7;
+  // result_reason explains a refusal or failure (from the host).
+  string result_reason = 8;
+  // output_truncated: the beginning of the output was cut.
+  bool output_truncated = 9;
+  // create_time is when the server made it; started and ended are the host's times.
+  google.protobuf.Timestamp create_time = 10;
+  // start_time is when the host started it.
+  google.protobuf.Timestamp start_time = 11;
+  // end_time is when it ended.
+  google.protobuf.Timestamp end_time = 12;
+  // created_by is the user who asked for it (empty: a policy).
+  string created_by = 13;
+  // output is the end of the run's output (GetUpdateRun only), redacted by the agent.
+  string output = 14;
+}
+
+// ListUpdateRunsRequest names the node.
+message ListUpdateRunsRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+  // page_size is how many runs, 0 means 20, at most 100.
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 100
+  }];
+}
+
+// ListUpdateRunsResponse lists the runs.
+message ListUpdateRunsResponse {
+  // runs are newest first.
+  repeated UpdateRun runs = 1;
+}
+
+// GetUpdateRunRequest names the run.
+message GetUpdateRunRequest {
+  // run_id names the run.
+  string run_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetUpdateRunResponse is the run with its output.
+message GetUpdateRunResponse {
+  // run with output.
+  UpdateRun run = 1;
+}
+
+// RolloutState is where a rollout stands.
+enum RolloutState {
+  // ROLLOUT_STATE_UNSPECIFIED is not used.
+  ROLLOUT_STATE_UNSPECIFIED = 0;
+  // ROLLOUT_STATE_RUNNING moves its nodes on.
+  ROLLOUT_STATE_RUNNING = 1;
+  // ROLLOUT_STATE_DONE: all its nodes are through.
+  ROLLOUT_STATE_DONE = 2;
+  // ROLLOUT_STATE_STOPPED at a failure (stopOnFailure).
+  ROLLOUT_STATE_STOPPED = 3;
+}
+
+// RolloutNodeState is where a node of a rollout stands.
+enum RolloutNodeState {
+  // ROLLOUT_NODE_STATE_UNSPECIFIED is not used.
+  ROLLOUT_NODE_STATE_UNSPECIFIED = 0;
+  // ROLLOUT_NODE_STATE_WAITING for its turn.
+  ROLLOUT_NODE_STATE_WAITING = 1;
+  // ROLLOUT_NODE_STATE_UPDATING installs the updates.
+  ROLLOUT_NODE_STATE_UPDATING = 2;
+  // ROLLOUT_NODE_STATE_REBOOTING reboots.
+  ROLLOUT_NODE_STATE_REBOOTING = 3;
+  // ROLLOUT_NODE_STATE_HEALTH_CHECK waits for the node to be back and healthy.
+  ROLLOUT_NODE_STATE_HEALTH_CHECK = 4;
+  // ROLLOUT_NODE_STATE_DONE: through.
+  ROLLOUT_NODE_STATE_DONE = 5;
+  // ROLLOUT_NODE_STATE_FAILED: its update, reboot or health check failed; reason says why.
+  ROLLOUT_NODE_STATE_FAILED = 6;
+  // ROLLOUT_NODE_STATE_SKIPPED: not updated; reason says why.
+  ROLLOUT_NODE_STATE_SKIPPED = 7;
+}
+
+// RolloutNode is a node of a rollout.
+message RolloutNode {
+  // node_id is the node.
+  string node_id = 1;
+  // hostname is its host name when the rollout began.
+  string hostname = 2;
+  // state is where it stands.
+  RolloutNodeState state = 3;
+  // reason explains a failure or a skip.
+  string reason = 4;
+  // update_run_id and reboot_run_id name its runs.
+  string update_run_id = 5;
+  // reboot_run_id names its reboot run.
+  string reboot_run_id = 6;
+}
+
+// Rollout is the run of a group's policy in one window, or a rollout by hand.
+message Rollout {
+  // rollout_id names it.
+  string rollout_id = 1;
+  // group_id and group_name are its group.
+  string group_id = 2;
+  // group_name is the group's name.
+  string group_name = 3;
+  // manual: started by hand.
+  bool manual = 4;
+  // state is where it stands; reason says why it stopped.
+  RolloutState state = 5;
+  // reason says why it stopped.
+  string reason = 6;
+  // window_start and window_end bound when nodes may start.
+  google.protobuf.Timestamp window_start = 7;
+  // window_end ends the starts of new nodes.
+  google.protobuf.Timestamp window_end = 8;
+  // nodes in their order.
+  repeated RolloutNode nodes = 9;
+}
+
+// ListRolloutsRequest bounds the list.
+message ListRolloutsRequest {
+  // page_size is how many rollouts, 0 means 20, at most 50.
+  int32 page_size = 1 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 50
+  }];
+}
+
+// ListRolloutsResponse lists the rollouts.
+message ListRolloutsResponse {
+  // rollouts are newest first.
+  repeated Rollout rollouts = 1;
 }
 
 // UpdateScope is which updates a run by hand installs.

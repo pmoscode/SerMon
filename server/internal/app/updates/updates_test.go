@@ -250,3 +250,66 @@ func TestService_RebootsByHand(t *testing.T) {
 		t.Errorf("%d reboots", len(m.reboots))
 	}
 }
+
+// history has one update run of node and a refresh.
+type history struct {
+	run, refresh command.Command
+}
+
+func (h *history) Runs(_ context.Context, _ tenant.OrgID, n identity.NodeID, limit int) ([]command.Command, error) {
+	if n != node || limit < 1 || limit > updates.MaxRuns {
+		return nil, errors.New("bad call")
+	}
+	return []command.Command{h.run}, nil
+}
+
+func (h *history) Run(_ context.Context, _ tenant.OrgID, id uuid.UUID) (command.Command, bool, error) {
+	switch id {
+	case h.run.ID:
+		return h.run, true, nil
+	case h.refresh.ID:
+		return h.refresh, true, nil
+	}
+	return command.Command{}, false, nil
+}
+
+func (h *history) Rollouts(_ context.Context, scope tenant.Scope, limit int) ([]updates.NamedRollout, error) {
+	if limit < 1 || limit > updates.MaxRollouts || !scope.AllowsGroup(groupX) {
+		return nil, errors.New("bad call")
+	}
+	return []updates.NamedRollout{{GroupName: "web"}}, nil
+}
+
+// M4-15: runs for those who view the node, their output only with view_logs, expired runs shown
+// so; a refresh is no run.
+func TestService_History(t *testing.T) {
+	h := &history{
+		run:     command.Command{ID: uuid.New(), Node: node, Kind: command.Update, State: command.Sent, CreatedAt: t0.Add(-time.Hour), ExpiresAt: t0.Add(-time.Minute)},
+		refresh: command.Command{ID: uuid.New(), Node: node, Kind: command.Refresh},
+	}
+	svc := updates.NewService(&store{}, authz.NewPolicy()).WithRefresher(&refresher{}, func() time.Time { return t0 }).WithHistory(h)
+	ctx := context.Background()
+	runs, err := svc.Runs(ctx, caller(role.Viewer, false), node, 500)
+	if err != nil || len(runs) != 1 || runs[0].State != command.Expired {
+		t.Fatalf("Runs() = %+v, %v", runs, err)
+	}
+	if _, err := svc.Runs(ctx, caller(role.Viewer, false), identity.NodeID(uuid.New()), 5); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("another node: %v", err)
+	}
+	if run, err := svc.Run(ctx, caller(role.Viewer, false), h.run.ID); err != nil || run.ID != h.run.ID {
+		t.Errorf("Run() = %+v, %v", run, err)
+	}
+	noLogs := caller(role.Viewer, true)
+	noLogs.Principal.ViewersWithoutLogs = true
+	if _, err := svc.Run(ctx, noLogs, h.run.ID); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("a viewer without logs: %v", err)
+	}
+	for _, id := range []uuid.UUID{h.refresh.ID, uuid.New()} {
+		if _, err := svc.Run(ctx, caller(role.Admin, true), id); !errors.Is(err, access.ErrNotFound) {
+			t.Errorf("Run(%v) = %v", id, err)
+		}
+	}
+	if list, err := svc.Rollouts(ctx, caller(role.Viewer, false), 0); err != nil || len(list) != 1 {
+		t.Errorf("Rollouts() = %+v, %v", list, err)
+	}
+}

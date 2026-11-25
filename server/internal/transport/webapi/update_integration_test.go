@@ -183,3 +183,54 @@ func TestUpdates_ByHand(t *testing.T) {
 		t.Errorf("a viewer may update: %v", s.Msg.GetSession().GetRunUpdatesGroupIds())
 	}
 }
+
+// M4-15: the run history of Alpha's node, a run's output for those who may read logs, and the
+// rollouts of the visible groups.
+func TestUpdates_RunsAndRollouts(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ctx := context.Background()
+	ann := login(t, s, "ann@example.org")
+	runs, err := ann.updates.ListUpdateRuns(ctx, connect.NewRequest(&webv1.ListUpdateRunsRequest{NodeId: nodeAl}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seeded *webv1.UpdateRun
+	for _, r := range runs.Msg.GetRuns() {
+		if r.GetRunId() == runAl {
+			seeded = r
+		}
+	}
+	if seeded == nil || seeded.GetState() != webv1.UpdateRunState_UPDATE_RUN_STATE_SUCCEEDED || seeded.GetExitCode() != 0 ||
+		seeded.GetKind() != webv1.UpdateRunKind_UPDATE_RUN_KIND_UPDATE || seeded.GetOutput() != "" {
+		t.Errorf("runs = %v", runs.Msg.GetRuns())
+	}
+	run, err := ann.updates.GetUpdateRun(ctx, connect.NewRequest(&webv1.GetUpdateRunRequest{RunId: runAl}))
+	if err != nil || run.Msg.GetRun().GetOutput() != "Setting up alpha-openssl" {
+		t.Errorf("run = %v, %v", run, err)
+	}
+	// A viewer of all groups while viewers may not read logs: the output is like a log.
+	ownerSQL(t, "UPDATE organizations SET viewers_see_logs = false WHERE id = '"+orgAlpha+"'")
+	defer ownerSQL(t, "UPDATE organizations SET viewers_see_logs = true WHERE id = '"+orgAlpha+"'")
+	kai := login(t, s, "kai@example.org")
+	if _, err := kai.updates.GetUpdateRun(ctx, connect.NewRequest(&webv1.GetUpdateRunRequest{RunId: runAl})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("a viewer without logs reads the output: %v", err)
+	}
+	if _, err := kai.updates.ListUpdateRuns(ctx, connect.NewRequest(&webv1.ListUpdateRunsRequest{NodeId: nodeAl})); err != nil {
+		t.Errorf("a viewer lists the runs: %v", err)
+	}
+	rollouts, err := ann.updates.ListRollouts(ctx, connect.NewRequest(&webv1.ListRolloutsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range rollouts.Msg.GetRollouts() {
+		if r.GetRolloutId() == runAl {
+			found = r.GetGroupName() == "alpha-web" && r.GetState() == webv1.RolloutState_ROLLOUT_STATE_DONE &&
+				len(r.GetNodes()) == 1 && r.GetNodes()[0].GetState() == webv1.RolloutNodeState_ROLLOUT_NODE_STATE_DONE
+		}
+	}
+	if !found {
+		t.Errorf("rollouts = %v", rollouts.Msg.GetRollouts())
+	}
+}

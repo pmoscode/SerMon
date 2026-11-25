@@ -4,6 +4,7 @@ package sermon.web.v1;
 
 import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/update.proto";
 
 // FleetService gives the overview of all nodes the caller may view (KONZEPT §8, M1-26).
 service FleetService {
@@ -58,6 +59,14 @@ message NodeSummary {
   // logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false), as of
   // its last configuration report (ADR 0030).
   bool logs_vetoed = 11;
+  // update_status sums the node's last update report up (M4-15; UNSPECIFIED: no report).
+  UpdateStatus update_status = 12;
+  // security_updates and updates count its available updates.
+  uint32 security_updates = 13;
+  // updates counts all its available updates.
+  uint32 updates = 14;
+  // reboot_required: it needs a reboot to use what is installed.
+  bool reboot_required = 15;
 }
 
 // KeyFigures are current values of a node from the last minute. Ratios are 0..1.

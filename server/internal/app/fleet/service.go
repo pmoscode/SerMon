@@ -20,6 +20,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tag"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
 // Time windows of the live values and the forecast.
@@ -69,6 +70,15 @@ type Node struct {
 	// LearningSince is when SerMon began to learn the node's login sources (M3-16): its
 	// enrollment, for nodes enrolled before that the upgrade.
 	LearningSince time.Time
+	// Updates sum its last update report up (M4-15); nil before the first.
+	Updates *Updates
+}
+
+// Updates are the counts of a node's last update report.
+type Updates struct {
+	Status          update.Status
+	Total, Security uint32
+	RebootRequired  bool
 }
 
 // Directory reads node records within a scope.

@@ -48,6 +48,15 @@ const (
 	// UpdateServiceRebootNodesProcedure is the fully-qualified name of the UpdateService's RebootNodes
 	// RPC.
 	UpdateServiceRebootNodesProcedure = "/sermon.web.v1.UpdateService/RebootNodes"
+	// UpdateServiceListUpdateRunsProcedure is the fully-qualified name of the UpdateService's
+	// ListUpdateRuns RPC.
+	UpdateServiceListUpdateRunsProcedure = "/sermon.web.v1.UpdateService/ListUpdateRuns"
+	// UpdateServiceGetUpdateRunProcedure is the fully-qualified name of the UpdateService's
+	// GetUpdateRun RPC.
+	UpdateServiceGetUpdateRunProcedure = "/sermon.web.v1.UpdateService/GetUpdateRun"
+	// UpdateServiceListRolloutsProcedure is the fully-qualified name of the UpdateService's
+	// ListRollouts RPC.
+	UpdateServiceListRolloutsProcedure = "/sermon.web.v1.UpdateService/ListRollouts"
 )
 
 // UpdateServiceClient is a client for the sermon.web.v1.UpdateService service.
@@ -71,6 +80,14 @@ type UpdateServiceClient interface {
 	// RebootNodes reboots the nodes at once with a reason shown on the host (reboot_nodes, a fresh
 	// step-up, in the audit log). Without allow_remote_reboot the host refuses.
 	RebootNodes(context.Context, *connect.Request[v1.RebootNodesRequest]) (*connect.Response[v1.RebootNodesResponse], error)
+	// ListUpdateRuns returns a node's runs (updates, reboots, self-updates), newest first, without
+	// output (view_nodes; M4-15).
+	ListUpdateRuns(context.Context, *connect.Request[v1.ListUpdateRunsRequest]) (*connect.Response[v1.ListUpdateRunsResponse], error)
+	// GetUpdateRun returns a run with its output, redacted by the agent and shown as text only
+	// (view_logs on the node's group: the output is like a log of the host).
+	GetUpdateRun(context.Context, *connect.Request[v1.GetUpdateRunRequest]) (*connect.Response[v1.GetUpdateRunResponse], error)
+	// ListRollouts returns the latest rollouts of the groups the caller can view, newest first.
+	ListRollouts(context.Context, *connect.Request[v1.ListRolloutsRequest]) (*connect.Response[v1.ListRolloutsResponse], error)
 }
 
 // NewUpdateServiceClient constructs a client for the sermon.web.v1.UpdateService service. By
@@ -116,6 +133,27 @@ func NewUpdateServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(updateServiceMethods.ByName("RebootNodes")),
 			connect.WithClientOptions(opts...),
 		),
+		listUpdateRuns: connect.NewClient[v1.ListUpdateRunsRequest, v1.ListUpdateRunsResponse](
+			httpClient,
+			baseURL+UpdateServiceListUpdateRunsProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("ListUpdateRuns")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
+		getUpdateRun: connect.NewClient[v1.GetUpdateRunRequest, v1.GetUpdateRunResponse](
+			httpClient,
+			baseURL+UpdateServiceGetUpdateRunProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("GetUpdateRun")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
+		listRollouts: connect.NewClient[v1.ListRolloutsRequest, v1.ListRolloutsResponse](
+			httpClient,
+			baseURL+UpdateServiceListRolloutsProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("ListRollouts")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -126,6 +164,9 @@ type updateServiceClient struct {
 	refreshUpdateInfo *connect.Client[v1.RefreshUpdateInfoRequest, v1.RefreshUpdateInfoResponse]
 	startUpdates      *connect.Client[v1.StartUpdatesRequest, v1.StartUpdatesResponse]
 	rebootNodes       *connect.Client[v1.RebootNodesRequest, v1.RebootNodesResponse]
+	listUpdateRuns    *connect.Client[v1.ListUpdateRunsRequest, v1.ListUpdateRunsResponse]
+	getUpdateRun      *connect.Client[v1.GetUpdateRunRequest, v1.GetUpdateRunResponse]
+	listRollouts      *connect.Client[v1.ListRolloutsRequest, v1.ListRolloutsResponse]
 }
 
 // GetNodeUpdates calls sermon.web.v1.UpdateService.GetNodeUpdates.
@@ -153,6 +194,21 @@ func (c *updateServiceClient) RebootNodes(ctx context.Context, req *connect.Requ
 	return c.rebootNodes.CallUnary(ctx, req)
 }
 
+// ListUpdateRuns calls sermon.web.v1.UpdateService.ListUpdateRuns.
+func (c *updateServiceClient) ListUpdateRuns(ctx context.Context, req *connect.Request[v1.ListUpdateRunsRequest]) (*connect.Response[v1.ListUpdateRunsResponse], error) {
+	return c.listUpdateRuns.CallUnary(ctx, req)
+}
+
+// GetUpdateRun calls sermon.web.v1.UpdateService.GetUpdateRun.
+func (c *updateServiceClient) GetUpdateRun(ctx context.Context, req *connect.Request[v1.GetUpdateRunRequest]) (*connect.Response[v1.GetUpdateRunResponse], error) {
+	return c.getUpdateRun.CallUnary(ctx, req)
+}
+
+// ListRollouts calls sermon.web.v1.UpdateService.ListRollouts.
+func (c *updateServiceClient) ListRollouts(ctx context.Context, req *connect.Request[v1.ListRolloutsRequest]) (*connect.Response[v1.ListRolloutsResponse], error) {
+	return c.listRollouts.CallUnary(ctx, req)
+}
+
 // UpdateServiceHandler is an implementation of the sermon.web.v1.UpdateService service.
 type UpdateServiceHandler interface {
 	// GetNodeUpdates returns a node's report with its packages (view_nodes). A node the caller
@@ -174,6 +230,14 @@ type UpdateServiceHandler interface {
 	// RebootNodes reboots the nodes at once with a reason shown on the host (reboot_nodes, a fresh
 	// step-up, in the audit log). Without allow_remote_reboot the host refuses.
 	RebootNodes(context.Context, *connect.Request[v1.RebootNodesRequest]) (*connect.Response[v1.RebootNodesResponse], error)
+	// ListUpdateRuns returns a node's runs (updates, reboots, self-updates), newest first, without
+	// output (view_nodes; M4-15).
+	ListUpdateRuns(context.Context, *connect.Request[v1.ListUpdateRunsRequest]) (*connect.Response[v1.ListUpdateRunsResponse], error)
+	// GetUpdateRun returns a run with its output, redacted by the agent and shown as text only
+	// (view_logs on the node's group: the output is like a log of the host).
+	GetUpdateRun(context.Context, *connect.Request[v1.GetUpdateRunRequest]) (*connect.Response[v1.GetUpdateRunResponse], error)
+	// ListRollouts returns the latest rollouts of the groups the caller can view, newest first.
+	ListRollouts(context.Context, *connect.Request[v1.ListRolloutsRequest]) (*connect.Response[v1.ListRolloutsResponse], error)
 }
 
 // NewUpdateServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -215,6 +279,27 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(updateServiceMethods.ByName("RebootNodes")),
 		connect.WithHandlerOptions(opts...),
 	)
+	updateServiceListUpdateRunsHandler := connect.NewUnaryHandler(
+		UpdateServiceListUpdateRunsProcedure,
+		svc.ListUpdateRuns,
+		connect.WithSchema(updateServiceMethods.ByName("ListUpdateRuns")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
+	updateServiceGetUpdateRunHandler := connect.NewUnaryHandler(
+		UpdateServiceGetUpdateRunProcedure,
+		svc.GetUpdateRun,
+		connect.WithSchema(updateServiceMethods.ByName("GetUpdateRun")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
+	updateServiceListRolloutsHandler := connect.NewUnaryHandler(
+		UpdateServiceListRolloutsProcedure,
+		svc.ListRollouts,
+		connect.WithSchema(updateServiceMethods.ByName("ListRollouts")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.UpdateService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UpdateServiceGetNodeUpdatesProcedure:
@@ -227,6 +312,12 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 			updateServiceStartUpdatesHandler.ServeHTTP(w, r)
 		case UpdateServiceRebootNodesProcedure:
 			updateServiceRebootNodesHandler.ServeHTTP(w, r)
+		case UpdateServiceListUpdateRunsProcedure:
+			updateServiceListUpdateRunsHandler.ServeHTTP(w, r)
+		case UpdateServiceGetUpdateRunProcedure:
+			updateServiceGetUpdateRunHandler.ServeHTTP(w, r)
+		case UpdateServiceListRolloutsProcedure:
+			updateServiceListRolloutsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -254,4 +345,16 @@ func (UnimplementedUpdateServiceHandler) StartUpdates(context.Context, *connect.
 
 func (UnimplementedUpdateServiceHandler) RebootNodes(context.Context, *connect.Request[v1.RebootNodesRequest]) (*connect.Response[v1.RebootNodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.RebootNodes is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) ListUpdateRuns(context.Context, *connect.Request[v1.ListUpdateRunsRequest]) (*connect.Response[v1.ListUpdateRunsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.ListUpdateRuns is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) GetUpdateRun(context.Context, *connect.Request[v1.GetUpdateRunRequest]) (*connect.Response[v1.GetUpdateRunResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.GetUpdateRun is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) ListRollouts(context.Context, *connect.Request[v1.ListRolloutsRequest]) (*connect.Response[v1.ListRolloutsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.ListRollouts is not implemented"))
 }

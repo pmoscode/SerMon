@@ -65,3 +65,11 @@ DELETE FROM node_commands WHERE created_at < sqlc.arg(before);
 
 -- name: PruneUpdateRollouts :exec
 DELETE FROM update_rollouts WHERE created_at < sqlc.arg(before);
+
+-- name: ListRecentRollouts :many
+-- The latest rollouts of the scope's groups (M4-15), newest first.
+SELECT r.id, r.group_id, g.name AS group_name, r.window_start, r.window_end, r.state, r.reason, r.manual,
+       r.mode, r.auto_reboot, r.created_by, r.created_at
+FROM update_rollouts r JOIN node_groups g ON g.org_id = r.org_id AND g.id = r.group_id
+WHERE sqlc.arg(all_groups)::boolean OR r.group_id = ANY (sqlc.arg(group_ids)::uuid[])
+ORDER BY r.created_at DESC, r.id DESC LIMIT sqlc.arg(max_rows);

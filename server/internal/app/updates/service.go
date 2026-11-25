@@ -42,6 +42,7 @@ type Service struct {
 	manual    ManualStore
 	policies  PolicyStore
 	newID     func() uuid.UUID
+	history   History
 }
 
 // NewService returns the service.

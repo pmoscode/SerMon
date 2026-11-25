@@ -243,6 +243,8 @@ type Querier interface {
 	// What every agent reported about its configuration (M3-12).
 	ListNodeConfigStatus(ctx context.Context) ([]ListNodeConfigStatusRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
+	// The runs of a node (no refreshes), newest first, without their output (M4-15).
+	ListNodeRuns(ctx context.Context, arg ListNodeRunsParams) ([]ListNodeRunsRow, error)
 	ListNodeUpdatePackages(ctx context.Context, nodeID uuid.UUID) ([]ListNodeUpdatePackagesRow, error)
 	ListNotificationChannels(ctx context.Context) ([]ListNotificationChannelsRow, error)
 	ListNotificationDeliveries(ctx context.Context, arg ListNotificationDeliveriesParams) ([]ListNotificationDeliveriesRow, error)
@@ -255,6 +257,8 @@ type Querier interface {
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	// Passkeys (M3-23, ADR 0034): instance-level, like the credentials.
 	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]WebauthnCredential, error)
+	// The latest rollouts of the scope's groups (M4-15), newest first.
+	ListRecentRollouts(ctx context.Context, arg ListRecentRolloutsParams) ([]ListRecentRolloutsRow, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
 	// The nodes with what a rollout needs: online, their session, their report and whether a
 	// critical alert other than offline or rebooted fires.

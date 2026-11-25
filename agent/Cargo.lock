@@ -1259,6 +1259,7 @@ dependencies = [
  "sermon-security",
  "sermon-testserver",
  "sermon-transport",
+ "sermon-updates",
  "tempfile",
  "thiserror",
  "tokio",

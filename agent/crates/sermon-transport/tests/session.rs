@@ -145,6 +145,7 @@ struct Setup {
     api: Option<FakeAgentApi>,
     config: Option<Arc<dyn ConfigSink>>,
     live: Option<Arc<FakeLive>>,
+    refresh: Option<Arc<tokio::sync::Notify>>,
 }
 
 impl Setup {
@@ -157,6 +158,7 @@ impl Setup {
             api: None,
             config: None,
             live: None,
+            refresh: None,
         }
     }
 
@@ -201,6 +203,9 @@ impl Setup {
         }
         if let Some(live) = self.live {
             transport = transport.with_live(live);
+        }
+        if let Some(refresh) = self.refresh {
+            transport = transport.with_update_refresh(refresh);
         }
         let shutdown = CancellationToken::new();
         let token = shutdown.clone();
@@ -635,8 +640,36 @@ async fn hands_configurations_to_the_sink_and_answers_the_server() {
     harness.stop().await;
 }
 
+// M4-07: RefreshUpdateInfo asks the update collection for a report with fresh sources.
+#[tokio::test(flavor = "multi_thread")]
+async fn passes_a_refresh_of_the_update_info_on() {
+    use sermon_transport::proto::agent::v1::RefreshUpdateInfo;
+    let refresh = Arc::new(tokio::sync::Notify::new());
+    let mut setup = Setup::new();
+    setup.refresh = Some(refresh.clone());
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    let asked = refresh.notified();
+    assert!(
+        harness
+            .api
+            .send(Payload::RefreshUpdateInfo(RefreshUpdateInfo {}))
+            .await
+    );
+    tokio::time::timeout(WAIT, asked)
+        .await
+        .expect("no refresh requested");
+    harness.stop().await;
+}
+
 // M4-05: the commands of the root helper are part of the protocol before this agent handles
-// them (M4-12): ignored like a newer server's, the session goes on.
+// them (M4-12): ignored like a newer server's, the session goes on. Without an update
+// collection a refresh is ignored too.
 #[tokio::test(flavor = "multi_thread")]
 async fn ignores_the_commands_it_does_not_handle_yet() {
     use sermon_transport::proto::agent::v1::{

@@ -823,7 +823,8 @@ pub struct UpdateReport {
     /// availability says whether the packages below are the host's updates.
     #[prost(enumeration="UpdateAvailability", tag="2")]
     pub availability: i32,
-    /// reason explains an availability other than listed.
+    /// reason explains an availability other than listed, or what limits a listing (sources not
+    /// refreshed, an output cut, security updates or the reboot unknown).
     #[prost(string, tag="3")]
     pub reason: ::prost::alloc::string::String,
     /// package_manager says how the updates were listed.

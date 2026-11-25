@@ -462,7 +462,7 @@ type NodeUpdates struct {
 	Status UpdateStatus `protobuf:"varint,4,opt,name=status,proto3,enum=sermon.web.v1.UpdateStatus" json:"status,omitempty"`
 	// availability says whether the agent could list (UNSPECIFIED without report).
 	Availability UpdateAvailability `protobuf:"varint,5,opt,name=availability,proto3,enum=sermon.web.v1.UpdateAvailability" json:"availability,omitempty"`
-	// reason explains an availability other than listed.
+	// reason explains an availability other than listed, or what limits a listing.
 	Reason string `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
 	// package_manager says how the updates were listed.
 	PackageManager PackageManager `protobuf:"varint,7,opt,name=package_manager,json=packageManager,proto3,enum=sermon.web.v1.PackageManager" json:"package_manager,omitempty"`

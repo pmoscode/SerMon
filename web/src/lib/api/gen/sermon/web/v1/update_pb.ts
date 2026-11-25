@@ -184,7 +184,7 @@ export type NodeUpdates = Message<"sermon.web.v1.NodeUpdates"> & {
   availability: UpdateAvailability;
 
   /**
-   * reason explains an availability other than listed.
+   * reason explains an availability other than listed, or what limits a listing.
    *
    * @generated from field: string reason = 6;
    */

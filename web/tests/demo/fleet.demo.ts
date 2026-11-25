@@ -221,6 +221,69 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	const elapsed = Math.round((Date.now() - started) / 1000);
 	console.log(`${agents.length} hosts visible with metrics after ${elapsed} s`);
 
+	// Updates (M4-07, M4-09): every host reports the two updates of the package sources of this
+	// run (deploy/e2e/repos) through its root helper, with fresh sources, shortly after the start.
+	// apt and dnf mark sermon-e2e-demo as security update, Alpine has no such metadata (O6).
+	type FleetUpdates = {
+		nodes?: {
+			nodeId: string;
+			hostname: string;
+			status?: string;
+			totalCount?: number;
+			securityCount?: number;
+			refreshed?: boolean;
+			permissions?: { remoteUpdates?: boolean; remoteReboot?: boolean };
+		}[];
+	};
+	const expectedUpdates = (agent: (typeof agents)[number]) =>
+		agent.os === 'alpine'
+			? { status: 'UPDATE_STATUS_UPDATES', totalCount: 2 }
+			: { status: 'UPDATE_STATUS_SECURITY', totalCount: 2, securityCount: 1 };
+	let fleetUpdates: FleetUpdates = {};
+	await expect
+		.poll(
+			async () => {
+				fleetUpdates = await call<FleetUpdates>(
+					page.request,
+					baseURL ?? '',
+					'UpdateService/ListFleetUpdates',
+					{}
+				);
+				return agents.map((agent) => {
+					const n = (fleetUpdates.nodes ?? []).find((n) => n.hostname === agent.host);
+					return {
+						host: agent.host,
+						status: n?.status,
+						totalCount: n?.totalCount,
+						...(agent.os === 'alpine' ? {} : { securityCount: n?.securityCount })
+					};
+				});
+			},
+			{ timeout: 180_000, intervals: [5_000] }
+		)
+		.toEqual(agents.map((agent) => ({ host: agent.host, ...expectedUpdates(agent) })));
+	for (const n of (fleetUpdates.nodes ?? []).filter((n) =>
+		agents.some((a) => a.host === n.hostname)
+	)) {
+		expect(n.refreshed, n.hostname).toBe(true);
+		expect(n.permissions, n.hostname).toEqual({ remoteUpdates: true, selfUpdate: true });
+	}
+	const web01 = (fleetUpdates.nodes ?? []).find((n) => n.hostname === 'web-01')!;
+	const nodeUpdates = await call<{
+		packages?: { name: string; candidateVersion: string; security?: boolean }[];
+	}>(page.request, baseURL ?? '', 'UpdateService/GetNodeUpdates', { nodeId: web01.nodeId });
+	expect(nodeUpdates.packages).toEqual([
+		expect.objectContaining({
+			name: 'sermon-e2e-demo',
+			candidateVersion: '2.0.0-1',
+			security: true
+		}),
+		expect.objectContaining({ name: 'sermon-e2e-extra', candidateVersion: '1.1.0-1' })
+	]);
+	console.log(
+		`${agents.length} hosts reported their updates after ${Math.round((Date.now() - started) / 1000)} s`
+	);
+
 	// Resource budget (M2-25, KONZEPT §4.1): < 1 % of a core and < 30 MiB RSS over 60 s under
 	// systemd with the journal source, journalctl included. Two hosts nothing else touches measure
 	// in the background while the demo goes on.

@@ -22,6 +22,7 @@ pub mod security;
 #[cfg(feature = "simulate")]
 pub mod simulate;
 pub mod state;
+pub mod updates;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -128,7 +129,10 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         log_stats.clone(),
         logship::into_outbox(outbox.clone()),
     );
-    let transport = transport(config, layout, facts, &outbox, &clock, &agent_config);
+    // Update information (M4-07): the root helper lists, RefreshUpdateInfo asks for it.
+    let update_refresh = Arc::new(tokio::sync::Notify::new());
+    let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
+        .with_update_refresh(update_refresh.clone());
 
     // One thread is enough for < 1 % CPU: collectors read small /proc files, the rest is I/O.
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -182,8 +186,10 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             clock.clone(),
             shutdown.clone(),
         ));
+        let reports = spawn_updates(config, &outbox, &clock, update_refresh, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
+        reports.await.context("update task failed")?;
         collection.await.context("collection task failed")?;
         journal.await.context("journal task failed")?;
         globs.await.context("log file task failed")?;
@@ -219,6 +225,33 @@ fn transport(
         agent_config.subscribe(),
         clock.clone(),
     )))
+}
+
+/// Starts the update reports (M4-07): listed by the root helper, buffered like the metrics.
+fn spawn_updates(
+    config: &AgentConfig,
+    outbox: &Outbox,
+    clock: &Arc<dyn Clock>,
+    refresh: Arc<tokio::sync::Notify>,
+    shutdown: &CancellationToken,
+) -> tokio::task::JoinHandle<()> {
+    let (outbox, clock) = (outbox.clone(), clock.clone());
+    tokio::spawn(updates::run(
+        Arc::new(updates::HelperSource::new(
+            helper::SOCKET,
+            &config.host_root,
+        )),
+        config.host_root.clone(),
+        move |report| {
+            if let Err(error) = outbox.push_update_report(report, clock.now()) {
+                tracing::warn!("cannot buffer the update report: {error}");
+            }
+        },
+        refresh,
+        updates::Schedule::default(),
+        updates::Spread::random(),
+        shutdown.clone(),
+    ))
 }
 
 /// Interval of buffer housekeeping (fsync, age limit).

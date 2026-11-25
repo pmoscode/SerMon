@@ -10,7 +10,7 @@ use sermon_buffer::{Record, Seq, Wal, WalError, WalStats};
 use tokio::sync::Notify;
 
 use crate::proto::agent::v1::{
-    Batch, LogBatch, LogEntry, MetricBatch, SecurityEvent, SecurityEventBatch, batch,
+    Batch, LogBatch, LogEntry, MetricBatch, SecurityEvent, SecurityEventBatch, UpdateReport, batch,
 };
 
 /// Shared handle to the write-ahead log; cheap to clone.
@@ -168,6 +168,26 @@ impl Outbox {
         Ok(seqs)
     }
 
+    /// Buffers an update report (M4-07) and wakes the session.
+    ///
+    /// # Errors
+    ///
+    /// [`WalError`] if the batch can't be written.
+    pub fn push_update_report(
+        &self,
+        report: UpdateReport,
+        now: SystemTime,
+    ) -> Result<Seq, WalError> {
+        let payload = Batch {
+            seq: 0,
+            content: Some(batch::Content::UpdateReport(report)),
+        }
+        .encode_to_vec();
+        let seq = self.wal().append(&payload, now)?;
+        self.inner.ready.notify_one();
+        Ok(seq)
+    }
+
     /// Housekeeping, called periodically: fsync and the age limit (also while disconnected).
     ///
     /// # Errors
@@ -293,6 +313,28 @@ mod tests {
             })
             .collect();
         assert_eq!(back, events);
+    }
+
+    // M4-07: an update report is a batch of its own and wakes the session.
+    #[test]
+    fn update_reports_are_buffered_as_one_batch() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let (wal, _) = Wal::open(dir.path(), WalConfig::default(), now).unwrap();
+        let outbox = Outbox::new(wal);
+        let report = UpdateReport {
+            collected_at: Some(now.into()),
+            total_count: 3,
+            ..UpdateReport::default()
+        };
+        let seq = outbox.push_update_report(report.clone(), now).unwrap();
+        let records = outbox.read_after(Seq::default(), 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].seq, seq);
+        match batch_for(&records[0]).unwrap().content {
+            Some(batch::Content::UpdateReport(back)) => assert_eq!(back, report),
+            other => panic!("{other:?}"),
+        }
     }
 
     fn log_entry(message: &str) -> LogEntry {

@@ -77,6 +77,7 @@ sermon-logs = { path = "crates/sermon-logs" }
 sermon-security = { path = "crates/sermon-security" }
 sermon-testserver = { path = "crates/sermon-testserver" }
 sermon-transport = { path = "crates/sermon-transport" }
+sermon-updates = { path = "crates/sermon-updates" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

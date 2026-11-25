@@ -145,6 +145,7 @@ pub struct Transport {
     clock: Arc<dyn Clock>,
     config_sink: Option<Arc<dyn ConfigSink>>,
     live: Option<Arc<dyn LiveSource>>,
+    update_refresh: Option<Arc<tokio::sync::Notify>>,
 }
 
 impl std::fmt::Debug for Transport {
@@ -202,6 +203,7 @@ impl Transport {
             clock,
             config_sink: None,
             live: None,
+            update_refresh: None,
         }
     }
 
@@ -209,6 +211,14 @@ impl Transport {
     #[must_use]
     pub fn with_live(mut self, source: Arc<dyn LiveSource>) -> Self {
         self.live = Some(source);
+        self
+    }
+
+    /// Wakes `refresh` on the server's `RefreshUpdateInfo` (M4-07): the update collection lists
+    /// with fresh sources; without one the request is ignored.
+    #[must_use]
+    pub fn with_update_refresh(mut self, refresh: Arc<tokio::sync::Notify>) -> Self {
+        self.update_refresh = Some(refresh);
         self
     }
 
@@ -574,10 +584,17 @@ impl Session<'_> {
                 self.send(session_request::Payload::ConfigApplied(answer))
                     .await?;
             }
+            session_response::Payload::RefreshUpdateInfo(_) => {
+                if let Some(refresh) = &self.transport.update_refresh {
+                    tracing::info!("server asks for fresh update information");
+                    refresh.notify_one();
+                } else {
+                    tracing::debug!("ignoring a refresh of the update information");
+                }
+            }
             // The commands of the root helper (M4-05) follow with M4-12; until then like a newer
             // server's unknown ones.
-            session_response::Payload::RefreshUpdateInfo(_)
-            | session_response::Payload::RunUpdate(_)
+            session_response::Payload::RunUpdate(_)
             | session_response::Payload::RebootNode(_)
             | session_response::Payload::SelfUpdate(_) => {
                 tracing::debug!("ignoring a command of the root helper, not handled yet");

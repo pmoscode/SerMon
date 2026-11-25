@@ -4365,7 +4365,8 @@ type UpdateReport struct {
 	CollectedAt *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=collected_at,json=collectedAt,proto3" json:"collected_at,omitempty"`
 	// availability says whether the packages below are the host's updates.
 	Availability UpdateAvailability `protobuf:"varint,2,opt,name=availability,proto3,enum=sermon.agent.v1.UpdateAvailability" json:"availability,omitempty"`
-	// reason explains an availability other than listed.
+	// reason explains an availability other than listed, or what limits a listing (sources not
+	// refreshed, an output cut, security updates or the reboot unknown).
 	Reason string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	// package_manager says how the updates were listed.
 	PackageManager PackageManager `protobuf:"varint,4,opt,name=package_manager,json=packageManager,proto3,enum=sermon.agent.v1.PackageManager" json:"package_manager,omitempty"`

@@ -4194,7 +4194,30 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Fixtures je Distro, leere und kaputte Ausgaben; Fuzz-Ziel `update_parsers`.
 - **Abhängig von:** M4-03
 
-#### ☐ M4-07 – Erfassung im Agent · A · M
+#### ☑ M4-07 – Erfassung im Agent · A · M
+> Erledigt (KONZEPT §14.1):
+> - **`sermon_agent::updates`:** fragt den Helper nach Status und Listen, parst sie mit `sermon-updates` und puffert ein
+>   `UpdateReport` im WAL (`Outbox::push_update_report`). Zahlen gesamt und Security, höchstens 5 000 Pakete
+>   (Security zuerst) und 2 MiB je Bericht, Reboot samt Grund (apt: `reboot-required.pkgs`, dnf: `needs-restarting`,
+>   Alpine: Kernel und `/lib/modules`, beides liest der Agent selbst), die Schalter der `helper.toml`, die Zeit der
+>   letzten Änderung der Paketdatenbanken als letztes Update.
+> - **Zeitplan:** 10 bis 60 s nach dem Start und alle 6 h ± 30 min mit frischen Quellen; 2 min nach der letzten
+>   Änderung der Paketdatenbanken aus den lokalen Listen; auf `RefreshUpdateInfo` (die Session weckt die Erfassung)
+>   mit frischen Quellen, höchstens alle 5 min. Ist der Helper mit einem Lauf beschäftigt, 5 min später noch einmal.
+> - **Ohne Helper** „nicht verfügbar“ samt Grund, Helper ohne die Operation „zu alt“, unbekannte Distribution „nicht
+>   unterstützt“, Fehlschläge mit Befehl, Exit-Code und dem Ende der Ausgabe (ohne Steuerzeichen). Was eine Liste
+>   einschränkt (Quellen nicht aktualisiert, Ausgabe gekürzt, Security-Updates oder Reboot unbekannt), steht im Grund.
+> - **Abweichung:** Die Paketdatenbanken prüft der Agent alle 30 s per `stat` statt per inotify: Bei 2 min Entprellung
+>   spielt die Verzögerung keine Rolle, und es braucht keine Watches und keine Abhängigkeit.
+> - **Tests:** Parser-Ergebnisse aus den Fixtures von M4-06 (apt, dnf, apk), fehlgeschlagene Aktualisierung und Liste,
+>   fehlende Ausgaben, gekürzte Ausgabe, riesige Liste; Helper als Fake-Socket (kein Helper, geschlossen, beschäftigt,
+>   zu alt, Fehler, keine Distribution); Zeitplan mit pausierter Zeit (Start und 6 h, Entprellung, Refresh höchstens
+>   alle 5 min, beschäftigter Helper, Ende); Session (Refresh weckt die Erfassung), Outbox.
+> - **Demo:** Alle sieben Hosts mit `install.sh` melden über ihren Helper die zwei Updates der Paketquellen von M4-08
+>   mit frischen Quellen und den Schaltern der `helper.toml`, apt und dnf mit `sermon-e2e-demo` als Security-Update,
+>   Alpine ohne (O6); im Lauf nach 50 s. Budget gehalten (0,46 bis 0,55 % einer CPU, 18 bis 19 MiB).
+> - **Gegenproben** für 28 Prüfungen (Auswertung, Grenzen, Antworten des Helpers, Zeitplan, Session, Outbox), alle
+>   erkannt: drei erst nach schärferen Tests, eine Stelle (Refresh auf Anforderung) dabei vereinfacht.
 - **Ziel:** Der Agent meldet seine Updates.
   - Alle 6 h mit Streuung, nach Paketmanager-Läufen (inotify auf die Datenbanken von dpkg, rpm und apk, entprellt um
     2 min) und auf `RefreshUpdateInfo` (höchstens alle 5 min).

@@ -868,7 +868,8 @@ message UpdateReport {
     defined_only: true
     not_in: [0]
   }];
-  // reason explains an availability other than listed.
+  // reason explains an availability other than listed, or what limits a listing (sources not
+  // refreshed, an output cut, security updates or the reboot unknown).
   string reason = 3 [(buf.validate.field).string.max_bytes = 1024];
   // package_manager says how the updates were listed.
   PackageManager package_manager = 4 [(buf.validate.field).enum.defined_only = true];

@@ -113,7 +113,7 @@ message NodeUpdates {
   UpdateStatus status = 4;
   // availability says whether the agent could list (UNSPECIFIED without report).
   UpdateAvailability availability = 5;
-  // reason explains an availability other than listed.
+  // reason explains an availability other than listed, or what limits a listing.
   string reason = 6;
   // package_manager says how the updates were listed.
   PackageManager package_manager = 7;

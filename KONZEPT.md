@@ -1098,6 +1098,13 @@ nötig samt Grund, Zeitpunkt des letzten erfolgreichen Updates.
 - `dnf check-update` nennt keine installierte Version: Für dnf bleibt sie leer.
 - `needs-restarting` zählt nach seinem Wortlaut, nicht nach dem Exit-Code: Exit 1 heißt auch „Befehl fehlt“ (Rocky ohne
   `dnf-utils`). Dann ist „Reboot nötig“ unbekannt. Alpine: Reboot nötig, wenn die Module des laufenden Kernels fehlen.
+- Der Agent (M4-07) meldet kurz nach dem Start (10 bis 60 s) und alle 6 h ± 30 min mit frischen Quellen, 2 min nach
+  der letzten Änderung der Paketdatenbanken (`/var/lib/dpkg/status`, rpmdb, `/lib/apk/db/installed`; ihre Zeit alle
+  30 s per `stat` geprüft statt per inotify) aus den lokalen Listen und auf `RefreshUpdateInfo` mit frischen Quellen,
+  höchstens alle 5 min. Ohne Helper meldet er „nicht verfügbar“ samt Grund; ist der Helper mit einem Lauf beschäftigt,
+  fragt er 5 min später wieder. Was eine Liste einschränkt (Quellen nicht aktualisiert, Ausgabe gekürzt, Reboot oder
+  Security-Updates unbekannt), steht im Grund. Ein Bericht hat höchstens 5 000 Pakete und 2 MiB; die Zahlen zählen
+  alle. Die Zeit der letzten Änderung der Paketdatenbanken gilt als letztes Update.
 - Der Server (M4-09) hält je Node den letzten Bericht; ein später erhobener ersetzt ihn, ein älterer oder erneut
   gesendeter ändert nichts. Ein Update (Name und Kandidat) behält den Zeitpunkt, zu dem es zuerst gemeldet wurde: Daraus
   folgt das Alter des ältesten Security-Updates. Namen, Versionen und Quellen sind begrenzt und ohne unsichtbare

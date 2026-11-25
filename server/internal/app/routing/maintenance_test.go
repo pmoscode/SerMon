@@ -124,3 +124,39 @@ func TestMaintenanceWindow_MutesRebootAndOfflineInItsGroups(t *testing.T) {
 		t.Errorf("window without a name: %v", err)
 	}
 }
+
+// M4-13: the window a time lies in, and the next one, across the change to summer time.
+func TestSchedule_CurrentAndNextAcrossDaylightSaving(t *testing.T) {
+	berlin, _ := time.LoadLocation("Europe/Berlin")
+	s := routing.Schedule{Days: []time.Weekday{time.Sunday}, Start: 2*time.Hour + 30*time.Minute, Duration: 2 * time.Hour, TimeZone: "Europe/Berlin"}
+	// 29 March 2026: the clocks go from 02:00 to 03:00; 02:30 doesn't exist and moves on to 03:30.
+	start, end, ok := s.Current(time.Date(2026, 3, 29, 3, 45, 0, 0, berlin))
+	if !ok || !start.Equal(time.Date(2026, 3, 29, 1, 30, 0, 0, time.UTC)) || end.Sub(start) != 2*time.Hour {
+		t.Errorf("summer time: %v – %v, %v", start, end, ok)
+	}
+	if _, _, ok := s.Current(time.Date(2026, 3, 29, 5, 30, 0, 0, berlin)); ok {
+		t.Error("after the window")
+	}
+	// An ordinary Sunday: 02:30 local is 00:30 UTC in summer.
+	start, _, ok = s.Current(time.Date(2026, 4, 5, 2, 30, 0, 0, berlin))
+	if !ok || !start.Equal(time.Date(2026, 4, 5, 0, 30, 0, 0, time.UTC)) {
+		t.Errorf("summer: %v %v", start, ok)
+	}
+	// 25 October 2026: back to winter time; 02:30 local happens twice, the window begins at the
+	// second (as time.Date picks it, in winter time) and lasts two hours of real time.
+	start, end, ok = s.Current(time.Date(2026, 10, 25, 2, 0, 0, 0, time.UTC))
+	if !ok || !start.Equal(time.Date(2026, 10, 25, 1, 30, 0, 0, time.UTC)) || !end.Equal(time.Date(2026, 10, 25, 3, 30, 0, 0, time.UTC)) {
+		t.Errorf("winter time: %v – %v, %v", start, end, ok)
+	}
+	// Next: from a Monday, the coming Sunday; at the start itself, the one a week later.
+	next, ok := s.Next(time.Date(2026, 4, 6, 12, 0, 0, 0, berlin))
+	if !ok || !next.Equal(time.Date(2026, 4, 12, 0, 30, 0, 0, time.UTC)) {
+		t.Errorf("next = %v, %v", next, ok)
+	}
+	if next, _ := s.Next(time.Date(2026, 4, 12, 0, 30, 0, 0, time.UTC)); !next.Equal(time.Date(2026, 4, 19, 0, 30, 0, 0, time.UTC)) {
+		t.Errorf("next after a start = %v", next)
+	}
+	if _, ok := (routing.Schedule{TimeZone: "Europe/Berlin"}).Next(time.Now()); ok {
+		t.Error("a schedule without days has a next window")
+	}
+}

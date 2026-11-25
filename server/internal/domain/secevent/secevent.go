@@ -42,12 +42,17 @@ const (
 	EnrollmentTokenUsed Kind = "enrollment.token_used"
 	NodeLocked          Kind = "node.locked"
 	NodeRotationNewIP   Kind = "node.rotation_new_ip"
+
+	// Written by the update orchestrator (M4-13): a run of a rollout failed (update, reboot or
+	// health check), a rollout stopped at a failure (stopOnFailure).
+	UpdateRunFailed      Kind = "updates.run_failed"
+	UpdateRolloutStopped Kind = "updates.rollout_stopped"
 )
 
 var kinds = []Kind{
 	SSHLoginFailed, SSHInvalidUser, SSHLoginSucceeded, SSHPreauthDisconnect, SudoAuthFailed, SudoNotAllowed,
 	SudoCommand, AccountCreated, AccountDeleted, SystemReboot, OOMKill,
-	EnrollmentTokenUsed, NodeLocked, NodeRotationNewIP,
+	EnrollmentTokenUsed, NodeLocked, NodeRotationNewIP, UpdateRunFailed, UpdateRolloutStopped,
 }
 
 // Noisy reports whether anyone on the internet can produce the kind at will – failed and invalid

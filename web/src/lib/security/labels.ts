@@ -29,7 +29,9 @@ const kinds: Record<string, () => string> = {
 	'system.oom_kill': m.secdash_kind_oom_kill,
 	'enrollment.token_used': m.secdash_kind_token_used,
 	'node.locked': m.secdash_kind_node_locked,
-	'node.rotation_new_ip': m.secdash_kind_rotation_new_ip
+	'node.rotation_new_ip': m.secdash_kind_rotation_new_ip,
+	'updates.run_failed': m.secdash_kind_update_run_failed,
+	'updates.rollout_stopped': m.secdash_kind_update_rollout_stopped
 };
 
 /** The name of an event kind; an unknown kind by its key. */
@@ -94,6 +96,8 @@ export function detailText(e: SecurityEvent, locale: Locale): string {
 				);
 			break;
 		case 'node.locked':
+		case 'updates.run_failed':
+		case 'updates.rollout_stopped':
 			add(m.secdash_detail_reason(), d.reason);
 			break;
 		case 'node.rotation_new_ip':

@@ -185,7 +185,7 @@ type Stats struct {
 	droppedKinds [maxKinds]atomic.Uint64
 }
 
-// maxKinds bounds the kinds counted per kind (there are 14).
+// maxKinds bounds the kinds counted per kind (there are 16).
 const maxKinds = 32
 
 var kindIndex = func() map[secevent.Kind]int {

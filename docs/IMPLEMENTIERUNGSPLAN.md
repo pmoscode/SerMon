@@ -4402,7 +4402,33 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   Debian, Rocky und Alpine.
 - **Abhängig von:** M4-04, M4-08, M4-11
 
-#### ☐ M4-13 – Orchestrator · S · L 🔒
+#### ☑ M4-13 – Orchestrator · S · L 🔒
+> Erledigt (KONZEPT §14.2, §11):
+> - **`updates.Plan`** (rein, mit fester Uhr getestet) bewegt den Rollout einer Gruppe einen Schritt: Er beginnt mit einem
+>   Fenster der Policy (`routing.Schedule.Current`, jetzt mit Beginn und Ende, auch über die Zeitumstellung), wählt die
+>   Nodes mit Security- bzw. beliebigen Updates nach Hostname und startet höchstens `maxParallel` zugleich. Zustände:
+>   wartend, aktualisiert, startet neu, Health-Check, fertig, fehlgeschlagen, übersprungen (offline, kein Helper, Veto,
+>   Alpine in `security-auto`, Fensterende, Rollout gestoppt).
+> - **Reboot** nur bei `autoReboot`, wenn der Host ihn braucht und erlaubt und das Fenster offen ist; entschieden mit dem
+>   Bericht nach dem Update (höchstens 5 min abwarten).
+> - **Health-Check:** online (nach einem Reboot mit einer Session, die danach begann – neue Spalte `nodes.connected_at`),
+>   eine Minute lang ohne kritischen Alert außer offline und neu gestartet; sonst nach `healthCheck` fehlgeschlagen. Ein
+>   Fehlschlag stoppt den Rollout bei `stopOnFailure`: keine neuen Nodes, laufende werden fertig.
+> - **Worker `Orchestrator`** (alle 15 s): Lease je Org (`update_leases`, wie die Alert-Engine), Speichern mit Fencing in
+>   einer Transaktion – Rollout, Befehle samt `NOTIFY`, automatische Silences (Reboot- und Offline-Alerts des Nodes bis
+>   Fensterende plus Health-Check) und Server-Ereignisse. Grenzen: 100 gleichzeitige Läufe je Org, 500 je Instanz; die
+>   Orgs kommen reihum zuerst. Aufbewahrung der Läufe und Rollouts: ein Jahr, einmal am Tag je Org gelöscht (aus M4-11).
+>   Zähler `sermon_server_update_*`.
+> - **Abweichung:** „Das Event `updates.rollout_stopped`“ ist ein Server-Ereignis neben den Security-Events (wie
+>   `node.locked`, ADR 0027), dazu `updates.run_failed` für jeden Fehlschlag; die Regeln dazu folgen mit M4-16.
+> - **Tests:**
+>   - Planung mit fester Uhr: Fensterbeginn und -ende, Sommer- und Winterzeit, `maxParallel`, Reihenfolge, Fehlschlag mit
+>     und ohne `stopOnFailure`, Health-Check verfehlt (offline, kritischer Alert), Warten aufs Einschwingen, Reboot nur
+>     unter allen Bedingungen, Warten auf den Bericht, übersprungene Nodes, abgelaufener Befehl, Grenzen.
+>   - Worker: Grenzen je Org und Instanz, nur mit Lease, verlorenes Lease, Ende mit dem Kontext.
+>   - PostgreSQL: zwei Instanzen, ein Rollout; ein Node bis „fertig“, ein zweiter scheitert und stoppt den Rollout samt
+>     Ereignissen und Silence; kritische Alerts; Fencing beim Speichern; `connected_at` bei jedem Hello.
+> - **Gegenproben** für 30 Prüfungen, alle erkannt (drei erst nach schärferen Tests).
 - **Ziel:** Ein Worker (mit Lease) rollt die Policies aus.
   - Pro Gruppe und Fenster wählt er die Nodes: `security-auto` mit Security-Updates, `all-auto` mit beliebigen
     Updates. Höchstens `maxParallel` gleichzeitig, in fester Reihenfolge.

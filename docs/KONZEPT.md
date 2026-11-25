@@ -734,6 +734,8 @@ Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log gep
 | `enrollment.token_used`               | vom Server: Enrollment oder Übernahme mit einem Token ([ADR 0027](adr/0027-server-ereignisse-und-self-monitoring.md))                  | ts, token, ip                               |
 | `node.locked`                         | vom Server: vorsorgliche Sperre (zweite Session, ersetztes Zertifikat)                  | ts, reason                                  |
 | `node.rotation_new_ip`                | vom Server: Schlüsselrotation von einer neuen Adresse                                   | ts, ip, previous_ip                         |
+| `updates.run_failed`                  | vom Orchestrator: Update, Reboot oder Health-Check eines Rollouts fehlgeschlagen (M4-13) | ts, reason                                  |
+| `updates.rollout_stopped`             | vom Orchestrator: Rollout nach einem Fehlschlag gestoppt (`stopOnFailure`)              | ts, reason                                  |
 
 **Parser-Anforderungen:** Sie müssen sowohl `sshd` als auch `sshd-session` erkennen (Prozessname ab OpenSSH 9.8), IPv4
 und IPv6, und Distro-Varianten. **Jeder Parser wird mit echten Logzeilen aus allen Zieldistros als Fixtures getestet und
@@ -1128,6 +1130,14 @@ spec:
   `report` und kein `autoReboot`. Alpine-Nodes bleiben in `security-auto` bei „melden“ und bekommen einen Hinweis (O6).
 - **Rolling Rollout:** Pro Gruppe laufen höchstens N Nodes gleichzeitig. Nach Update und Reboot muss der Node innerhalb
   von `healthCheck` wieder online und ohne kritische Alerts sein, sonst stoppt der Rollout und ein Alert wird ausgelöst.
+- **Orchestrator (M4-13):** Je Org läuft er unter einem Lease auf einer Instanz und plant alle 15 s. Beginnt ein Fenster,
+  entsteht für die Gruppe ein Rollout mit den Nodes, die etwas zu installieren haben, nach Hostname. Ein Node geht durch
+  „wartend → aktualisiert → startet neu → Health-Check → fertig“, sonst „fehlgeschlagen“ oder „übersprungen“ (offline,
+  ohne Helper, Veto des Hosts, Alpine in `security-auto`). Den Reboot entscheidet der Bericht nach dem Update (höchstens
+  5 min abwarten). Gesund ist ein Node, wenn er online ist (nach einem Reboot mit einer Session, die danach begann), seit
+  einer Minute ohne kritischen Alert (außer offline und neu gestartet). Grenzen: 100 Läufe je Org, 500 je Instanz, die
+  Orgs kommen reihum zuerst. Fehlschläge schreiben die Server-Ereignisse `updates.run_failed` bzw.
+  `updates.rollout_stopped`; Reboot- und Offline-Alerts des Nodes sind bis Fensterende plus Health-Check stumm.
 - **Manuell:** Ein Operator kann „Jetzt aktualisieren“ auslösen (Step-up-2FA, Bestätigungsdialog mit Paketliste).
 - **Ausführung (Helper):**
   `DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade`

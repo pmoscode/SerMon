@@ -248,6 +248,7 @@ type Node struct {
 	LogsVetoed       bool
 	ConfigReportedAt *time.Time
 	LearningSince    time.Time
+	ConnectedAt      *time.Time
 }
 
 type NodeCommand struct {
@@ -470,6 +471,12 @@ type Superadmin struct {
 	CreatedAt time.Time
 }
 
+type UpdateLease struct {
+	OrgID     uuid.UUID
+	Holder    string
+	ExpiresAt time.Time
+}
+
 type UpdatePolicy struct {
 	OrgID              uuid.UUID
 	GroupID            uuid.UUID
@@ -484,6 +491,32 @@ type UpdatePolicy struct {
 	HealthCheckMinutes int32
 	UpdatedAt          time.Time
 	UpdatedBy          *uuid.UUID
+}
+
+type UpdateRollout struct {
+	OrgID       uuid.UUID
+	ID          uuid.UUID
+	GroupID     uuid.UUID
+	WindowStart time.Time
+	WindowEnd   time.Time
+	State       int16
+	Reason      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type UpdateRolloutNode struct {
+	OrgID     uuid.UUID
+	RolloutID uuid.UUID
+	NodeID    uuid.UUID
+	Position  int32
+	Hostname  string
+	State     int16
+	Reason    string
+	UpdateRun *uuid.UUID
+	RebootRun *uuid.UUID
+	Since     time.Time
+	Deadline  *time.Time
 }
 
 type User struct {

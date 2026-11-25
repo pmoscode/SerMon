@@ -30,6 +30,8 @@ func TestFieldsOf_FollowTheTableOfKonzept(t *testing.T) {
 		secevent.EnrollmentTokenUsed:  {"ts", "token", "ip"},
 		secevent.NodeLocked:           {"ts", "reason"},
 		secevent.NodeRotationNewIP:    {"ts", "ip", "previous_ip"},
+		secevent.UpdateRunFailed:      {"ts", "reason"},
+		secevent.UpdateRolloutStopped: {"ts", "reason"},
 	}
 	for _, k := range secevent.Kinds() {
 		want, ok := tests[k]

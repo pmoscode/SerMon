@@ -167,7 +167,8 @@ func userKind(k secevent.Kind) bool {
 		secevent.SudoNotAllowed, secevent.SudoCommand, secevent.AccountCreated, secevent.AccountDeleted:
 		return true
 	case secevent.SSHPreauthDisconnect, secevent.SystemReboot, secevent.OOMKill,
-		secevent.EnrollmentTokenUsed, secevent.NodeLocked, secevent.NodeRotationNewIP:
+		secevent.EnrollmentTokenUsed, secevent.NodeLocked, secevent.NodeRotationNewIP,
+		secevent.UpdateRunFailed, secevent.UpdateRolloutStopped:
 		return false
 	}
 	return false

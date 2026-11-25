@@ -24,6 +24,8 @@ var fieldsOf = map[Kind][]string{
 	EnrollmentTokenUsed:  {"ts", "token", "ip"},
 	NodeLocked:           {"ts", "reason"},
 	NodeRotationNewIP:    {"ts", "ip", "previous_ip"},
+	UpdateRunFailed:      {"ts", "reason"},
+	UpdateRolloutStopped: {"ts", "reason"},
 }
 
 // FieldSource is the alert field set when a counted event is unverified (ADR 0025); it is no

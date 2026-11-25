@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
@@ -11,6 +13,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
+	"github.com/pmoscode/SerMon/server/internal/app/updates"
 
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/config"
@@ -85,6 +88,22 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 }
 
 // registerAlertMetrics adds the counters of the alert engine (M2-02).
+func registerOrchestratorMetrics(r *promtext.Registry, stats *updates.OrchestratorStats) {
+	for _, c := range []struct {
+		name, help string
+		value      func() uint64
+	}{
+		{"sermon_server_update_rounds_total", "Rounds of the update orchestrator.", stats.Rounds.Load},
+		{"sermon_server_update_runs_started_total", "Update runs the orchestrator started.", stats.Started.Load},
+		{"sermon_server_update_runs_failed_total", "Runs of rollouts that failed (update, reboot or health check).", stats.Failed.Load},
+		{"sermon_server_update_rollouts_stopped_total", "Rollouts stopped at a failure.", stats.Stopped.Load},
+		{"sermon_server_update_leases_lost_total", "Rounds dropped because another instance took the organization's lease meanwhile.", stats.LeasesLost.Load},
+		{"sermon_server_update_errors_total", "Organizations whose round failed.", stats.Errors.Load},
+	} {
+		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
+	}
+}
+
 func registerAlertMetrics(r *promtext.Registry, stats *alerting.Stats) {
 	for _, c := range []struct {
 		name, help string
@@ -144,4 +163,11 @@ func newMetricsServer(ctx context.Context, cfg config.Config, registry *promtext
 	mux.Handle("/metrics", registry.Handler())
 	srv := httpserver.New(mux, logger, cfg.ShutdownTimeout, func() {})
 	return func(ctx context.Context) error { return srv.Serve(ctx, ln) }, nil
+}
+
+// instanceHolder identifies this server instance for the leases of its workers.
+func instanceHolder() string {
+	raw := make([]byte, 8)
+	_, _ = rand.Read(raw)
+	return "orchestrator-" + hex.EncodeToString(raw)
 }

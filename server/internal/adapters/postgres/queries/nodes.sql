@@ -18,7 +18,7 @@ UPDATE nodes SET hostname = sqlc.arg(hostname), os_id = sqlc.arg(os_id), os_vers
                  kernel_release = sqlc.arg(kernel_release), architecture = sqlc.arg(architecture),
                  cpu_count = sqlc.arg(cpu_count), memory_bytes = sqlc.arg(memory_bytes),
                  agent_version = sqlc.arg(agent_version), last_seen_at = sqlc.arg(seen_at),
-                 security_source = sqlc.arg(security_source)
+                 connected_at = sqlc.arg(seen_at), security_source = sqlc.arg(security_source)
 WHERE nodes.id = sqlc.arg(id)
 RETURNING group_id,
           (SELECT o.samples_per_second FROM organizations o WHERE o.id = nodes.org_id) AS samples_per_second,

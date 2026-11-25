@@ -53,6 +53,11 @@ func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.
 	if err != nil || hostname != "db-02" || arch != "arm64" || cpus != 8 || version != "1.2.3" || !seen.Equal(at.Add(30*time.Second)) || source != "file_unverified" {
 		t.Errorf("node = %s %s %d %s %v %s, %v", hostname, arch, cpus, version, seen, source, err)
 	}
+	// Each Hello is a new session (M4-13: a node is back after a reboot); Seen doesn't move it.
+	var connectedAt time.Time
+	if err := conn.QueryRow(ctx, "SELECT connected_at FROM nodes WHERE id = $1", node).Scan(&connectedAt); err != nil || !connectedAt.Equal(at) {
+		t.Errorf("connected_at = %v, %v; want %v", connectedAt, err, at)
+	}
 	// An older agent reports no source: it is unknown again, not left over from before (M2-31).
 	facts.SecuritySource = secevent.SourceUnknown
 	if _, err := store.Connected(ctx, tenant.OrgID(orgA), identity.NodeID(node), facts, "1.2.2", at); err != nil {

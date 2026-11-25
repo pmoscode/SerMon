@@ -927,6 +927,8 @@
 	"secdash_kind_oom_kill": "OOM kill",
 	"secdash_kind_token_used": "Enrollment token used",
 	"secdash_kind_node_locked": "Node locked",
+	"secdash_kind_update_run_failed": "Update run failed",
+	"secdash_kind_update_rollout_stopped": "Rollout stopped",
 	"secdash_kind_rotation_new_ip": "Rotation from a new address",
 	"secdash_detail_invalid_user": "unknown user",
 	"secdash_detail_target": "as",

@@ -88,9 +88,18 @@ func (s Schedule) Validate() error {
 
 // Active reports whether t lies in a window: one that began today or yesterday (local time).
 func (s Schedule) Active(t time.Time) bool {
+	_, _, ok := s.Current(t)
+	return ok
+}
+
+// Current returns the window t lies in, the one that began latest if two overlap: its start and
+// end. The start is the local time of day on the day of the window; on the day the clocks go
+// forward a start in the gap moves on by the gap (time.Date), and the window lasts Duration of
+// real time.
+func (s Schedule) Current(t time.Time) (start, end time.Time, ok bool) {
 	loc, err := location(s.TimeZone)
 	if err != nil {
-		return false
+		return time.Time{}, time.Time{}, false
 	}
 	local := t.In(loc)
 	for back := range 2 {
@@ -101,10 +110,27 @@ func (s Schedule) Active(t time.Time) bool {
 		minutes := int(s.Start / time.Minute)
 		start := time.Date(day.Year(), day.Month(), day.Day(), minutes/60, minutes%60, 0, 0, loc)
 		if !t.Before(start) && t.Before(start.Add(s.Duration)) {
-			return true
+			return start, start.Add(s.Duration), true
 		}
 	}
-	return false
+	return time.Time{}, time.Time{}, false
+}
+
+// Next returns the start of the next window that begins after t (within two weeks).
+func (s Schedule) Next(t time.Time) (time.Time, bool) {
+	loc, err := location(s.TimeZone)
+	if err != nil || len(s.Days) == 0 {
+		return time.Time{}, false
+	}
+	local := t.In(loc)
+	minutes := int(s.Start / time.Minute)
+	for ahead := range 15 {
+		day := time.Date(local.Year(), local.Month(), local.Day()+ahead, minutes/60, minutes%60, 0, 0, loc)
+		if slices.Contains(s.Days, day.Weekday()) && day.After(t) {
+			return day, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // MaintenanceWindow mutes the reboot and offline alerts of its groups (all groups if none)

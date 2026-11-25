@@ -295,6 +295,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			Metrics: reader, Events: eventStore, Sink: router, Now: time.Now, Logger: logger,
 		})
 		registerAlertMetrics(registry, engine.Stats())
+		// Update orchestrator (M4-13): rolls the update policies out under a lease per organization.
+		orchestrator := updates.NewOrchestrator(postgres.NewRolloutStore(db), updates.DefaultOrchestratorConfig(instanceHolder(), logger))
+		registerOrchestratorMetrics(registry, orchestrator.Stats())
+		servers = append(servers, orchestrator.Run)
 		registerRoutingMetrics(registry, router.Stats())
 		servers = append(servers, engine.Run, func(ctx context.Context) error {
 			return alerting.Maintenance(ctx, alertStore, time.Now, 6*time.Hour, logger)

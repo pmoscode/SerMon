@@ -108,6 +108,7 @@ type Querier interface {
 	DeleteSession(ctx context.Context, id string) error
 	DeleteTOTP(ctx context.Context, userID uuid.UUID) error
 	DeleteUpdatePolicy(ctx context.Context, groupID uuid.UUID) error
+	DeleteUpdateRolloutNodes(ctx context.Context, rolloutID uuid.UUID) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
 	// What the node's session sends: the pending commands, and after a reconnect the sent ones without
 	// result as well.
@@ -159,6 +160,9 @@ type Querier interface {
 	// Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
 	// wait for the save to end.
 	HoldAlertLease(ctx context.Context, arg HoldAlertLeaseParams) (int64, error)
+	// Fencing: the orchestrator saves only while it holds the lease; the row lock makes a takeover
+	// wait for the save to end.
+	HoldUpdateLease(ctx context.Context, arg HoldUpdateLeaseParams) (int64, error)
 	IdentitiesOfUser(ctx context.Context, userID uuid.UUID) ([]IdentitiesOfUserRow, error)
 	IdentitySeen(ctx context.Context, arg IdentitySeenParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
@@ -192,6 +196,7 @@ type Querier interface {
 	// An event of the server itself (M2-24), inside the transaction of what it reports.
 	InsertServerSecurityEvent(ctx context.Context, arg InsertServerSecurityEventParams) error
 	InsertSession(ctx context.Context, arg InsertSessionParams) error
+	InsertUpdateRolloutNode(ctx context.Context, arg InsertUpdateRolloutNodeParams) error
 	// Only while fewer than max_open ceremonies are open (M3-29).
 	InsertWebAuthnCeremony(ctx context.Context, arg InsertWebAuthnCeremonyParams) (int64, error)
 	InstanceAuditChain(ctx context.Context) ([]InstanceAuditLog, error)
@@ -202,6 +207,8 @@ type Querier interface {
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Replaces a previous token; false once the setup is completed (definer function, M1-40).
 	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (bool, error)
+	// The last rollout of each group.
+	LatestUpdateRollouts(ctx context.Context) ([]LatestUpdateRolloutsRow, error)
 	// Known login sources (M3-16).
 	// Records a successful login of a user from a source on a node; inserted is true for the first
 	// one (the row is new). A node holds at most max_sources: beyond, an unknown source is not
@@ -210,6 +217,9 @@ type Querier interface {
 	// Alert engine (M2-02, ADR 0007). Every query runs in the organization's tenant transaction.
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
 	LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrganizationParams) (int64, error)
+	// The update orchestrator (M4-13), always in the tenant of one organization.
+	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+	LeaseUpdateOrganization(ctx context.Context, arg LeaseUpdateOrganizationParams) (int64, error)
 	ListAlertInstances(ctx context.Context) ([]ListAlertInstancesRow, error)
 	ListAlertRoutingStates(ctx context.Context) ([]ListAlertRoutingStatesRow, error)
 	// Alert rule overrides (M2-04, ADR 0007). Every query runs in the organization's tenant transaction.
@@ -229,6 +239,7 @@ type Querier interface {
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
+	ListNodeCommandsByID(ctx context.Context, ids []uuid.UUID) ([]ListNodeCommandsByIDRow, error)
 	// What every agent reported about its configuration (M3-12).
 	ListNodeConfigStatus(ctx context.Context) ([]ListNodeConfigStatusRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
@@ -245,10 +256,14 @@ type Querier interface {
 	// Passkeys (M3-23, ADR 0034): instance-level, like the credentials.
 	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]WebauthnCredential, error)
 	ListRoleBindings(ctx context.Context) ([]ListRoleBindingsRow, error)
+	// The nodes with what a rollout needs: online, their session, their report and whether a
+	// critical alert other than offline or rebooted fires.
+	ListRolloutNodeViews(ctx context.Context) ([]ListRolloutNodeViewsRow, error)
 	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
 	// callers on all groups). Keyset paging below (before_time, before_id).
 	ListSecurityEvents(ctx context.Context, arg ListSecurityEventsParams) ([]ListSecurityEventsRow, error)
 	ListUpdatePolicies(ctx context.Context, arg ListUpdatePoliciesParams) ([]ListUpdatePoliciesRow, error)
+	ListUpdateRolloutNodes(ctx context.Context, rolloutIds []uuid.UUID) ([]ListUpdateRolloutNodesRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Nodes of the scope's groups with their group name, for the UI (M1-26).
 	ListVisibleNodes(ctx context.Context, arg ListVisibleNodesParams) ([]ListVisibleNodesRow, error)
@@ -301,6 +316,8 @@ type Querier interface {
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
+	PruneNodeCommands(ctx context.Context, before time.Time) error
+	PruneUpdateRollouts(ctx context.Context, before time.Time) error
 	PurgeAlertHistory(ctx context.Context, before time.Time) (int64, error)
 	PurgeAlertSilences(ctx context.Context, before time.Time) error
 	PurgeNotificationDeliveries(ctx context.Context, before time.Time) (int64, error)
@@ -393,6 +410,7 @@ type Querier interface {
 	// A role given by hand is the admin's from now on: sign-ins over OIDC leave it (M3-21).
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
 	UpsertUpdatePolicy(ctx context.Context, arg UpsertUpdatePolicyParams) error
+	UpsertUpdateRollout(ctx context.Context, arg UpsertUpdateRolloutParams) error
 	UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error)
 	UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64, error)
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)

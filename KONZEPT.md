@@ -1268,7 +1268,9 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
 5. **Updates/Patch-Compliance:** Nodes nach Status (aktuell / Updates / Security-Updates / Reboot nötig), Alter offener
    Security-Updates, nächste Wartungsfenster, Laufhistorie.
 6. **Kapazitätsplanung:** Füllprognosen aller Dateisysteme (sortiert nach „Tage bis voll“), RAM/CPU-Trends über 30 Tage,
-   Top-N-Verbraucher der Fleet.
+   Top-N-Verbraucher der Fleet. Umgesetzt (M4-26) als Ansicht der Fleet `/capacity` über `CapacityService.GetCapacity`:
+   höchstens 500 Dateisysteme mit der Prognose von `prediction` (`fleet.FullAt`, 24 h), Tagesmittel von CPU und Speicher
+   je Node, die größten Verbraucher nach dem Mittel der letzten 7 Tage und der Änderung gegenüber den ersten 7.
 7. **Fleet-Heatmap:** Nodes × Zeit, eingefärbt nach CPU, Mem, IO oder Anomalie-Rate. Damit fallen Muster und „Noisy
    Neighbors“ sofort auf.
 8. **Vergleich:** 2–4 Nodes nebeneinander bzw. übereinandergelegt (z. B. vor und nach einer Änderung, oder

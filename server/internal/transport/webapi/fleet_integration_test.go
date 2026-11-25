@@ -85,3 +85,49 @@ func TestFleet_AViewerOfTheGroupSeesNodeFiguresHistoryAndLiveValues(t *testing.T
 		t.Errorf("ListMetrics() = %d metrics, %v", len(catalog.Msg.GetMetrics()), err)
 	}
 }
+
+// M4-26: the capacity planning shows the file systems with their forecast and the daily trends
+// of the nodes a viewer may view – of another organization nothing, even with data.
+func TestFleet_CapacityOfTheVisibleNodes(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ctx := context.Background()
+	org, group, node := tenant.OrgID(uuid.MustParse(orgAlpha)), tenant.GroupID(uuid.MustParse(groupAl)), identity.NodeID(uuid.MustParse(nodeAl))
+	now := time.Now()
+	root := metrics.Labels{"mountpoint": "/"}
+	s.ring.Add(org, group, node, "sermon_filesystem_size_bytes", root, now.Add(-2*time.Second), 100e9)
+	s.ring.Add(org, group, node, "sermon_filesystem_avail_bytes", root, now.Add(-2*time.Second), 30e9)
+	s.ring.Add(org, group, node, "sermon_filesystem_utilization_ratio", root, now.Add(-2*time.Second), 700_000)
+	var history []metrics.Aggregate
+	for hour := 20; hour >= 1; hour-- {
+		at := now.Add(-time.Duration(hour) * time.Hour).Truncate(metrics.Window)
+		v := 30e9 + float64(hour)*1e9
+		history = append(history,
+			metrics.Aggregate{Node: node, Metric: "sermon_filesystem_avail_bytes", Labels: root, Start: at, Avg: v, Min: v, Max: v},
+			metrics.Aggregate{Node: node, Metric: "sermon_memory_utilization_ratio", Labels: metrics.Labels{}, Start: at, Avg: 500_000, Min: 500_000, Max: 500_000})
+	}
+	if err := s.metrics.Write(ctx, org, history, nil); err != nil {
+		t.Fatal(err)
+	}
+	// The forecast reads 1-min values (24 h are just beyond the raw ones), the trends hourly ones.
+	ownerSQL(t, "CALL refresh_continuous_aggregate('metrics_1m', NULL, NULL)", "CALL refresh_continuous_aggregate('metrics_1h', NULL, NULL)")
+	mia := login(t, s, "mia@example.org")
+	res, err := mia.capacity.GetCapacity(ctx, connect.NewRequest(&webv1.GetCapacityRequest{}))
+	if err != nil || len(res.Msg.GetFilesystems()) != 1 {
+		t.Fatalf("GetCapacity() = %v, %v", res, err)
+	}
+	fs := res.Msg.GetFilesystems()[0]
+	if fs.GetNodeId() != nodeAl || fs.GetHostname() != "alpha-01" || fs.GetMountpoint() != "/" || fs.GetSizeBytes() != 100e9 || fs.GetFullAt() == nil {
+		t.Errorf("file system = %v", fs)
+	}
+	if until := time.Until(fs.GetFullAt().AsTime()); until < 25*time.Hour || until > 35*time.Hour {
+		t.Errorf("full in %v, want about 30 h", until)
+	}
+	if trends := res.Msg.GetTrends(); len(trends) != 1 || len(trends[0].GetMemory()) == 0 || trends[0].GetMemory()[0].GetValue() != 0.5 {
+		t.Errorf("trends = %v", trends)
+	}
+	bea := login(t, s, "bea@example.org")
+	if other, err := bea.capacity.GetCapacity(ctx, connect.NewRequest(&webv1.GetCapacityRequest{})); err != nil || len(other.Msg.GetFilesystems())+len(other.Msg.GetTrends()) != 0 {
+		t.Errorf("org Beta sees %v, %v", other, err)
+	}
+}

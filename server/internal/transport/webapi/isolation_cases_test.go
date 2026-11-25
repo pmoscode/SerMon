@@ -30,6 +30,7 @@ type isolationEnv struct {
 	events                          webv1connect.SecurityEventServiceClient
 	updates                         webv1connect.UpdateServiceClient
 	anomalies                       webv1connect.AnomalyServiceClient
+	capacity                        webv1connect.CapacityServiceClient
 	updatePolicies                  webv1connect.UpdatePolicyServiceClient
 	channels                        webv1connect.NotificationChannelServiceClient
 	policies                        webv1connect.NotificationPolicyServiceClient
@@ -467,6 +468,13 @@ var tenantIsolationCases = map[string]isolationCase{
 			return errLeak
 		}
 		return stream.Err()
+	}},
+	"/sermon.web.v1.CapacityService/GetCapacity": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.capacity.GetCapacity(ctx, connect.NewRequest(&webv1.GetCapacityRequest{}))
+		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), e.nodeA) || strings.Contains(res.Msg.String(), "alpha-01")) {
+			return errLeak
+		}
+		return err
 	}},
 	"/sermon.web.v1.FleetService/GetFleetSummary": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.fleet.GetFleetSummary(ctx, connect.NewRequest(&webv1.GetFleetSummaryRequest{GroupId: e.groupA}))

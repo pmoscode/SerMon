@@ -4845,7 +4845,27 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.7 Kapazität und Heatmap (E4.7)
 
-#### ☐ M4-26 – Kapazitäts-Dashboard · S+W · M
+#### ☑ M4-26 – Kapazitäts-Dashboard · S+W · M
+> Erledigt (KONZEPT §16, 6; Hilfe „Kapazität“):
+> - **RPC** `CapacityService.GetCapacity` (eigener Dienst, damit `fleet_pb` auf allen Seiten klein bleibt): die
+>   Dateisysteme der sichtbaren Nodes mit Größe, frei, Belegung, schreibgeschützt und Prognose – dieselbe Rechnung wie
+>   der Regeltyp `prediction` (`fleet.FullAt` über 24 h), schreibgeschützte ohne –, sortiert nach „voll am“, ohne
+>   Prognose nach Belegung, höchstens 500 (mit Hinweis). Dazu je Node die Tagesmittel von CPU (1 − idle) und Speicher
+>   über 30 Tage (Schritt 24 h, aus `metrics_1h`). Gelesen in Blöcken von 7 Nodes: Ein Agent meldet bis zu 64
+>   Dateisysteme, eine Abfrage liefert höchstens 500 Serien.
+> - **Seite** `/capacity` als Ansicht der Fleet (Unternavigation Übersicht · Kapazität · Anomalien): Tabelle der
+>   Dateisysteme (erst 20, „alle zeigen“), die größten Verbraucher nach CPU oder Speicher mit dem Mittel der letzten 7
+>   Tage, der Änderung gegenüber den ersten 7 in Prozentpunkten und dem Verlauf als Sparkline; alle 5 min neu.
+> - **Budget:** Die Belegung steht als Zahl statt als Balken: `Meter` teilte sich sonst einen Chunk mit `TagList` nicht
+>   mehr, und die Seite des Nodes mit Prozess-Tab läge 0,3 KiB über 200 KiB. Kapazität 150,7 KiB; Node 188,0 + 12,0 KiB.
+>   **Abweichung:** Die Grenze aller Chunks zusammen (`check:size`) steigt von 480 auf 520 KiB (jetzt 483,8): Jede
+>   Ansicht der Fleet bringt einen eigenen Chunk, die Heatmap (M4-27) kommt noch; die Grenze je Seite bleibt.
+> - **Tests:** Dienst (Reihenfolge, Prognose, schreibgeschützt, Gruppen und Orgs, Trends 1 − idle und täglich, ohne
+>   Daten kein Trend, Grenze 500 mit vollen Nodes), Web-API (Werte, Prognose über `metrics_1m`, Trends, andere Org),
+>   Tenant-Isolation, Trends (letzte gegen erste Woche, Gleichstand nach Hostname, Tage bis voll), E2E (Reihenfolge,
+>   Hinweise, schreibgeschützt, feindlicher Hostname als Text, Sortierung, „alle zeigen“, leer, Unternavigation, axe,
+>   Budget).
+> - **Gegenproben** für 21 Prüfungen, alle erkannt (zwei erst nach schärferen Tests).
 - **Ziel:** KONZEPT §16, 6.
   - Füllprognosen aller Dateisysteme nach „Tage bis voll“, mit der Rechnung des Regeltyps `prediction`.
   - CPU- und RAM-Trends über 30 Tage aus `metrics_1h`; die größten Verbraucher der Fleet.

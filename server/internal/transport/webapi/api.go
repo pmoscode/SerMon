@@ -32,6 +32,7 @@ type Handlers struct {
 	AgentCA      *AgentCAHandler
 	Metrics      *MetricsHandler
 	Fleet        *FleetHandler
+	Capacity     *CapacityHandler
 	// AgentEnrollment serves sermon.agent.v1.EnrollmentService for new agents (ADR 0009).
 	AgentEnrollment *AgentEnrollmentHandler
 	InstanceAudit   *InstanceAuditHandler
@@ -81,6 +82,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewNodeServiceHandler(h.Node, authenticated))
 	mount(webv1connect.NewAgentCAServiceHandler(h.AgentCA, authenticated))
 	mount(webv1connect.NewFleetServiceHandler(h.Fleet, authenticated))
+	mount(webv1connect.NewCapacityServiceHandler(h.Capacity, authenticated))
 	mount(webv1connect.NewInstanceAuditServiceHandler(h.InstanceAudit, authenticated))
 	mount(webv1connect.NewSecurityEventServiceHandler(h.SecurityEvents, authenticated))
 	mount(webv1connect.NewUpdateServiceHandler(h.Updates, authenticated))

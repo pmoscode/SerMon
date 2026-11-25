@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// CapacityService is the capacity planning of the fleet (KONZEPT §16, M4-26), apart from
+// FleetService so that pages without it don't load its messages. Limited to the node groups in
+// which the caller may view nodes.
+service CapacityService {
+  // GetCapacity returns the fill forecast of every file system, the one running full first, and
+  // the daily CPU and memory of every node over the last 30 days.
+  rpc GetCapacity(GetCapacityRequest) returns (GetCapacityResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// GetCapacityRequest has no parameters: always the nodes the caller may view.
+message GetCapacityRequest {}
+
+// FleetFilesystem is a file system of a node with its forecast.
+message FleetFilesystem {
+  // node_id is the node UUID.
+  string node_id = 1;
+  // hostname is the node's host name.
+  string hostname = 2;
+  // group_name is the name of its node group.
+  string group_name = 3;
+  // mountpoint is where the file system is mounted.
+  string mountpoint = 4;
+  // size_bytes is its size.
+  uint64 size_bytes = 5;
+  // avail_bytes is what is available to unprivileged users.
+  uint64 avail_bytes = 6;
+  // used_ratio is the share in use (0..1).
+  double used_ratio = 7;
+  // readonly: mounted read-only (no forecast).
+  bool readonly = 8;
+  // full_at is when it runs full at the trend of the last 24 h (only within a year).
+  google.protobuf.Timestamp full_at = 9;
+}
+
+// DailyValue is the average of one day.
+message DailyValue {
+  // day is the start of the day (UTC).
+  google.protobuf.Timestamp day = 1;
+  // value is the average, a ratio 0..1.
+  double value = 2;
+}
+
+// NodeTrend is the daily CPU and memory of a node, oldest first.
+message NodeTrend {
+  // node_id is the node UUID.
+  string node_id = 1;
+  // hostname is the node's host name.
+  string hostname = 2;
+  // group_name is the name of its node group.
+  string group_name = 3;
+  // cpu is the share of CPU time not idle.
+  repeated DailyValue cpu = 4;
+  // memory is the share of memory used.
+  repeated DailyValue memory = 5;
+}
+
+// GetCapacityResponse is the capacity planning.
+message GetCapacityResponse {
+  // filesystems are at most 500, those running full first, then the fullest.
+  repeated FleetFilesystem filesystems = 1;
+  // truncated is set when there were more.
+  bool truncated = 2;
+  // trends are the nodes with data, by host name.
+  repeated NodeTrend trends = 3;
+}

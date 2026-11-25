@@ -31,7 +31,7 @@
 			href: resolve('/(app)/fleet'),
 			icon: Server,
 			label: () => m.nav_fleet(),
-			also: [resolve('/(app)/anomalies')]
+			also: [resolve('/(app)/capacity'), resolve('/(app)/anomalies')]
 		},
 		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
 		{ href: resolve('/(app)/logs'), icon: ScrollText, label: () => m.nav_logs() },

@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// AnomalyService reads the results of the anomaly detection (KONZEPT §13, ADR 0037): the band of
+// a node's charts and "what was unusual?". Every call is limited to the node groups in which the
+// caller may view nodes; unknown or foreign nodes are NOT_FOUND. A range is at most 7 days within
+// the last 30 (INVALID_ARGUMENT otherwise).
+service AnomalyService {
+  // GetNodeAnomalies returns the anomalous stretches of a node's scored series and whether the
+  // node is still learning.
+  rpc GetNodeAnomalies(GetNodeAnomaliesRequest) returns (GetNodeAnomaliesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListUnusual returns the series with the highest scores in a range, of one node or of every
+  // node the caller may view.
+  rpc ListUnusual(ListUnusualRequest) returns (ListUnusualResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// GetNodeAnomaliesRequest names the node and the range.
+message GetNodeAnomaliesRequest {
+  option (buf.validate.message).cel = {
+    id: "range"
+    message: "from must be before to and the range at most 7 days"
+    expression: "this.from < this.to && this.to - this.from <= duration('168h')"
+  };
+
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+  // from is the start of the range (inclusive).
+  google.protobuf.Timestamp from = 2 [(buf.validate.field).required = true];
+  // to is the end of the range (exclusive).
+  google.protobuf.Timestamp to = 3 [(buf.validate.field).required = true];
+}
+
+// AnomalyInterval is a stretch of anomalous minutes [from, to).
+message AnomalyInterval {
+  // from is the first anomalous minute.
+  google.protobuf.Timestamp from = 1;
+  // to is the end of the last one.
+  google.protobuf.Timestamp to = 2;
+}
+
+// SeriesAnomalies are the anomalous stretches of one series.
+message SeriesAnomalies {
+  // metric is the metric's name.
+  string metric = 1;
+  // labels are the series' labels.
+  map<string, string> labels = 2;
+  // max_score is the highest score in the range (robust standard deviations).
+  double max_score = 3;
+  // intervals are the anomalous stretches, oldest first.
+  repeated AnomalyInterval intervals = 4;
+}
+
+// GetNodeAnomaliesResponse is the band.
+message GetNodeAnomaliesResponse {
+  // learning_since is when the node began to learn.
+  google.protobuf.Timestamp learning_since = 1;
+  // learning_day is the day of the 7-day learning phase (1 to 7); 0 when it is over.
+  int32 learning_day = 2;
+  // series are the series with a notable minute in the range.
+  repeated SeriesAnomalies series = 3;
+}
+
+// ListUnusualRequest names the range and optionally a node.
+message ListUnusualRequest {
+  option (buf.validate.message).cel = {
+    id: "range"
+    message: "from must be before to and the range at most 7 days"
+    expression: "this.from < this.to && this.to - this.from <= duration('168h')"
+  };
+
+  // node_id restricts the list to one node; empty: every node the caller may view.
+  string node_id = 1 [
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.uuid = true
+  ];
+  // from is the start of the range (inclusive).
+  google.protobuf.Timestamp from = 2 [(buf.validate.field).required = true];
+  // to is the end of the range (exclusive).
+  google.protobuf.Timestamp to = 3 [(buf.validate.field).required = true];
+  // limit is the longest list, 1 to 50 (0: 20).
+  int32 limit = 4 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 50
+  }];
+}
+
+// UnusualSeries is a series of "what was unusual?".
+message UnusualSeries {
+  // node_id is the series' node.
+  string node_id = 1;
+  // metric is the metric's name.
+  string metric = 2;
+  // labels are the series' labels.
+  map<string, string> labels = 3;
+  // max_score is the highest score in the range.
+  double max_score = 4;
+  // peak is when it was reached.
+  google.protobuf.Timestamp peak = 5;
+  // anomalous_minutes counts the anomalous minutes in the range.
+  int32 anomalous_minutes = 6;
+}
+
+// ListUnusualResponse lists the series, the highest score first.
+message ListUnusualResponse {
+  // series are the series.
+  repeated UnusualSeries series = 1;
+}

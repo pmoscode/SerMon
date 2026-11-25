@@ -31,6 +31,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
+	"github.com/pmoscode/SerMon/server/internal/app/anomalies"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/passkey"
@@ -250,6 +251,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			WithRefresher(postgres.NewCommandStore(pg), time.Now).
 			WithManual(postgres.NewRolloutStore(pg), postgres.NewUpdatePolicyStore(pg), uuid.New).
 			WithHistory(postgres.NewHistoryStore(pg)).WithReleases(testReleases{}), slog.New(slog.DiscardHandler)),
+		Anomalies: webapi.NewAnomalyHandler(anomalies.NewService(postgres.NewAnomalyStore(pg), authz.NewPolicy(), time.Now), slog.New(slog.DiscardHandler)),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(
 			updates.NewPolicyService(postgres.NewUpdatePolicyStore(pg), authz.NewPolicy(), time.Now), slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(

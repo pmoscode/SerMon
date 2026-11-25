@@ -60,6 +60,28 @@ type Definition struct {
 	Area        Area
 	// Server: the server derives the metric itself (M4-16); samples of an agent are dropped.
 	Server bool
+	// Anomaly makes the metric a candidate of the anomaly detection (ADR 0037); nil: none.
+	Anomaly *AnomalySpec
+}
+
+// AnomalySpec says how the anomaly detection scores a metric (ADR 0037).
+type AnomalySpec struct {
+	// Only are the label values scored (label → values); nil: every series of the metric.
+	Only map[string][]string
+	// Floor is the smallest meaningful spread in the stored unit (ppm, bytes, …).
+	Floor float64
+	// Counter: a cumulative counter, scored by its increase per minute.
+	Counter bool
+}
+
+// Scores reports whether the detection scores the series with labels.
+func (a AnomalySpec) Scores(labels map[string]string) bool {
+	for name, values := range a.Only {
+		if !slices.Contains(values, labels[name]) {
+			return false
+		}
+	}
+	return true
 }
 
 // DisplayKey is the i18n message key of the metric's name.
@@ -90,22 +112,22 @@ func def(name string, unit Unit, aggregation Aggregation, area Area, labels ...s
 // – the end-to-end test fails when the agent sends a metric that is missing here.
 var definitions = []Definition{
 	// CPU and load
-	def("sermon_cpu_utilization_ratio", UnitRatioPPM, Avg, AreaCPU, "mode"),
+	candidate(def("sermon_cpu_utilization_ratio", UnitRatioPPM, Avg, AreaCPU, "mode"), 5000, "mode", "user", "system", "iowait", "steal"),
 	def("sermon_cpu_core_busy_ratio", UnitRatioPPM, Avg, AreaCPU, "cpu"),
-	def("sermon_cpu_context_switches_per_second", UnitPerSecond, Avg, AreaCPU),
+	candidate(def("sermon_cpu_context_switches_per_second", UnitPerSecond, Avg, AreaCPU), 100),
 	def("sermon_cpu_interrupts_per_second", UnitPerSecond, Avg, AreaCPU),
-	def("sermon_cpu_forks_per_second", UnitPerSecond, Avg, AreaCPU),
+	candidate(def("sermon_cpu_forks_per_second", UnitPerSecond, Avg, AreaCPU), 1),
 	def("sermon_cpu_logical_count", UnitCount, Last, AreaCPU),
-	def("sermon_processes_running", UnitCount, Avg, AreaCPU),
-	def("sermon_processes_blocked", UnitCount, Avg, AreaCPU),
+	candidate(def("sermon_processes_running", UnitCount, Avg, AreaCPU), 1),
+	candidate(def("sermon_processes_blocked", UnitCount, Avg, AreaCPU), 1),
 	def("sermon_load_average", UnitLoad, Avg, AreaCPU, "period"),
-	def("sermon_load_average_per_cpu", UnitLoad, Avg, AreaCPU, "period"),
+	candidate(def("sermon_load_average_per_cpu", UnitLoad, Avg, AreaCPU, "period"), 0.05, "period", "1m"),
 	def("sermon_pressure_stall_ratio", UnitRatioPPM, Avg, AreaCPU, "resource", "kind"),
 
 	// Memory and swap
 	def("sermon_memory_total_bytes", UnitBytes, Last, AreaMemory),
 	def("sermon_memory_free_bytes", UnitBytes, Avg, AreaMemory),
-	def("sermon_memory_available_bytes", UnitBytes, Avg, AreaMemory),
+	candidate(def("sermon_memory_available_bytes", UnitBytes, Avg, AreaMemory), 16<<20),
 	def("sermon_memory_used_bytes", UnitBytes, Avg, AreaMemory),
 	def("sermon_memory_buffers_bytes", UnitBytes, Avg, AreaMemory),
 	def("sermon_memory_cached_bytes", UnitBytes, Avg, AreaMemory),
@@ -115,18 +137,18 @@ var definitions = []Definition{
 	def("sermon_swap_total_bytes", UnitBytes, Last, AreaMemory),
 	def("sermon_swap_used_bytes", UnitBytes, Avg, AreaMemory),
 	def("sermon_swap_utilization_ratio", UnitRatioPPM, Avg, AreaMemory),
-	def("sermon_swap_in_pages_per_second", UnitPagesPerSecond, Avg, AreaMemory),
-	def("sermon_swap_out_pages_per_second", UnitPagesPerSecond, Avg, AreaMemory),
+	candidate(def("sermon_swap_in_pages_per_second", UnitPagesPerSecond, Avg, AreaMemory), 1),
+	candidate(def("sermon_swap_out_pages_per_second", UnitPagesPerSecond, Avg, AreaMemory), 1),
 	def("sermon_memory_major_faults_per_second", UnitPerSecond, Avg, AreaMemory),
 	def("sermon_memory_oom_kills_per_second", UnitPerSecond, Max, AreaMemory),
 
 	// Disk I/O
-	def("sermon_disk_read_bytes_per_second", UnitBytesPerSecond, Avg, AreaDisk, "device"),
-	def("sermon_disk_write_bytes_per_second", UnitBytesPerSecond, Avg, AreaDisk, "device"),
+	candidate(def("sermon_disk_read_bytes_per_second", UnitBytesPerSecond, Avg, AreaDisk, "device"), 64<<10),
+	candidate(def("sermon_disk_write_bytes_per_second", UnitBytesPerSecond, Avg, AreaDisk, "device"), 64<<10),
 	def("sermon_disk_reads_per_second", UnitPerSecond, Avg, AreaDisk, "device"),
 	def("sermon_disk_writes_per_second", UnitPerSecond, Avg, AreaDisk, "device"),
-	def("sermon_disk_busy_ratio", UnitRatioPPM, Avg, AreaDisk, "device"),
-	def("sermon_disk_await_seconds", UnitSeconds, Avg, AreaDisk, "device"),
+	candidate(def("sermon_disk_busy_ratio", UnitRatioPPM, Avg, AreaDisk, "device"), 5000),
+	candidate(def("sermon_disk_await_seconds", UnitSeconds, Avg, AreaDisk, "device"), 0.001),
 	def("sermon_disk_queue_length", UnitCount, Avg, AreaDisk, "device"),
 
 	// File systems
@@ -144,8 +166,8 @@ var definitions = []Definition{
 	def("sermon_raid_sync_ratio", UnitRatioPPM, Last, AreaDisk, "device"),
 
 	// Network
-	def("sermon_network_receive_bytes_per_second", UnitBytesPerSecond, Avg, AreaNetwork, "interface"),
-	def("sermon_network_transmit_bytes_per_second", UnitBytesPerSecond, Avg, AreaNetwork, "interface"),
+	candidate(def("sermon_network_receive_bytes_per_second", UnitBytesPerSecond, Avg, AreaNetwork, "interface"), 16<<10),
+	candidate(def("sermon_network_transmit_bytes_per_second", UnitBytesPerSecond, Avg, AreaNetwork, "interface"), 16<<10),
 	def("sermon_network_receive_packets_per_second", UnitPerSecond, Avg, AreaNetwork, "interface"),
 	def("sermon_network_transmit_packets_per_second", UnitPerSecond, Avg, AreaNetwork, "interface"),
 	def("sermon_network_receive_errors_per_second", UnitPerSecond, Max, AreaNetwork, "interface"),
@@ -154,9 +176,9 @@ var definitions = []Definition{
 	def("sermon_network_transmit_drops_per_second", UnitPerSecond, Max, AreaNetwork, "interface"),
 	def("sermon_network_up", UnitBoolean, Last, AreaNetwork, "interface"),
 	def("sermon_network_speed_bits_per_second", UnitBitsPerSecond, Last, AreaNetwork, "interface"),
-	def("sermon_tcp_established", UnitCount, Avg, AreaNetwork),
+	candidate(def("sermon_tcp_established", UnitCount, Avg, AreaNetwork), 1),
 	def("sermon_tcp_time_wait", UnitCount, Avg, AreaNetwork),
-	def("sermon_tcp_retransmits_per_second", UnitPerSecond, Avg, AreaNetwork),
+	candidate(def("sermon_tcp_retransmits_per_second", UnitPerSecond, Avg, AreaNetwork), 1),
 	def("sermon_tcp_listen_overflows_per_second", UnitPerSecond, Max, AreaNetwork),
 	def("sermon_tcp_listen_drops_per_second", UnitPerSecond, Max, AreaNetwork),
 	def("sermon_conntrack_entries", UnitCount, Avg, AreaNetwork),
@@ -166,7 +188,7 @@ var definitions = []Definition{
 	// System
 	def("sermon_system_uptime_seconds", UnitSeconds, Last, AreaSystem),
 	def("sermon_system_boot_time_seconds", UnitTimestamp, Last, AreaSystem),
-	def("sermon_system_processes", UnitCount, Avg, AreaSystem),
+	candidate(def("sermon_system_processes", UnitCount, Avg, AreaSystem), 1),
 	def("sermon_system_threads", UnitCount, Avg, AreaSystem),
 	def("sermon_system_zombies", UnitCount, Max, AreaSystem),
 	def("sermon_system_file_descriptors_used", UnitCount, Avg, AreaSystem),
@@ -189,7 +211,7 @@ var definitions = []Definition{
 	def("sermon_agent_journal_lost_entries", UnitCount, Last, AreaAgent),
 	def("sermon_agent_journal_invalid_lines", UnitCount, Last, AreaAgent),
 	// Log shipping (M3-04)
-	def("sermon_agent_logs_sent_entries", UnitCount, Last, AreaAgent),
+	counterCandidate(def("sermon_agent_logs_sent_entries", UnitCount, Last, AreaAgent), 1),
 	def("sermon_agent_logs_dropped_entries", UnitCount, Last, AreaAgent, "reason"),
 	def("sermon_agent_logs_redacted_entries", UnitCount, Last, AreaAgent),
 	// Log files of the groups' globs (M3-05)
@@ -202,6 +224,27 @@ var definitions = []Definition{
 	server(def("sermon_updates_security_age_seconds", UnitSeconds, Last, AreaSystem)),
 	server(def("sermon_updates_reboot_required", UnitBoolean, Max, AreaSystem)),
 	server(def("sermon_updates_reboot_required_seconds", UnitSeconds, Last, AreaSystem)),
+
+	// Anomaly detection, written by the server's worker (ADR 0037)
+	server(def("sermon_anomaly_rate_ratio", UnitRatioPPM, Avg, AreaSystem)),
+	server(def("sermon_anomaly_series_scored", UnitCount, Last, AreaSystem)),
+}
+
+// candidate makes d a candidate of the anomaly detection: floor in its unit, optionally only the
+// values of one label (label, value…).
+func candidate(d Definition, floor float64, only ...string) Definition {
+	d.Anomaly = &AnomalySpec{Floor: floor}
+	if len(only) > 0 {
+		d.Anomaly.Only = map[string][]string{only[0]: only[1:]}
+	}
+	return d
+}
+
+// counterCandidate is a cumulative counter scored by its increase per minute.
+func counterCandidate(d Definition, floor float64) Definition {
+	d = candidate(d, floor)
+	d.Anomaly.Counter = true
+	return d
 }
 
 func server(d Definition) Definition {
@@ -221,6 +264,18 @@ var byName = func() map[string]Definition {
 func Lookup(name string) (Definition, bool) {
 	d, ok := byName[name]
 	return d, ok
+}
+
+// Candidates returns the candidates of the anomaly detection in the order of the catalog, which is
+// their priority when a node has more series than the detection scores (ADR 0037).
+func Candidates() []Definition {
+	var out []Definition
+	for _, d := range definitions {
+		if d.Anomaly != nil {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // All returns every definition, sorted by name.

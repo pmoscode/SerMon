@@ -79,3 +79,36 @@ func TestCatalog_EveryMetricHasHelpTexts(t *testing.T) {
 		}
 	}
 }
+
+// ADR 0037: the candidates of the anomaly detection – CPU modes and the load of a minute only,
+// a counter for the log rate; the server writes the rate itself.
+func TestCatalog_AnomalyCandidates(t *testing.T) {
+	count := 0
+	for _, d := range metric.All() {
+		if d.Anomaly == nil {
+			continue
+		}
+		count++
+		if d.Anomaly.Floor <= 0 || d.Server {
+			t.Errorf("%s: %+v", d.Name, d.Anomaly)
+		}
+	}
+	if candidates := metric.Candidates(); count != 19 || len(candidates) != count || candidates[0].Name != "sermon_cpu_utilization_ratio" {
+		t.Errorf("%d candidates, %d in order", count, len(candidates))
+	}
+	cpu, _ := metric.Lookup("sermon_cpu_utilization_ratio")
+	if !cpu.Anomaly.Scores(map[string]string{"mode": "iowait"}) || cpu.Anomaly.Scores(map[string]string{"mode": "idle"}) {
+		t.Error("cpu modes")
+	}
+	disk, _ := metric.Lookup("sermon_disk_busy_ratio")
+	if !disk.Anomaly.Scores(map[string]string{"device": "vda"}) {
+		t.Error("every disk")
+	}
+	logs, _ := metric.Lookup("sermon_agent_logs_sent_entries")
+	if !logs.Anomaly.Counter {
+		t.Error("the log rate is a counter")
+	}
+	if rate, ok := metric.Lookup("sermon_anomaly_rate_ratio"); !ok || !rate.Server || rate.Anomaly != nil {
+		t.Errorf("rate = %+v", rate)
+	}
+}

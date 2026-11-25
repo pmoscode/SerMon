@@ -21,6 +21,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
+	"github.com/pmoscode/SerMon/server/internal/app/anomalies"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/update"
 
@@ -308,6 +309,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		orchestrator := updates.NewOrchestrator(postgres.NewRolloutStore(db), orchestratorConfig)
 		registerOrchestratorMetrics(registry, orchestrator.Stats())
 		servers = append(servers, orchestrator.Run)
+		// Anomaly detection (M4-23, ADR 0037): every minute under a lease per organization.
+		anomalyWorker := anomalies.NewWorker(postgres.NewAnomalyStore(db), metricStore, anomalies.DefaultConfig(instanceHolder(), logger))
+		registerAnomalyMetrics(registry, anomalyWorker.Stats())
+		servers = append(servers, anomalyWorker.Run)
 		registerRoutingMetrics(registry, router.Stats())
 		servers = append(servers, engine.Run, func(ctx context.Context) error {
 			return alerting.Maintenance(ctx, alertStore, time.Now, 6*time.Hour, logger)
@@ -601,6 +606,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			WithManual(postgres.NewRolloutStore(db), postgres.NewUpdatePolicyStore(db), func() uuid.UUID { return uuid.Must(uuid.NewV7()) }).
 			WithHistory(postgres.NewHistoryStore(db)).WithReleases(observing.releases), logger),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(updates.NewPolicyService(postgres.NewUpdatePolicyStore(db), policy, time.Now), logger),
+		Anomalies:      webapi.NewAnomalyHandler(anomalies.NewService(postgres.NewAnomalyStore(db), policy, time.Now), logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

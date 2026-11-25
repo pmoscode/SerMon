@@ -4757,7 +4757,30 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
     fehl, wenn einer der Werte sinkt.
 - **Abhängig von:** M4-21
 
-#### ☐ M4-23 – Anomalie-Worker · S · M 🔒
+#### ☑ M4-23 – Anomalie-Worker · S · M 🔒
+> Erledigt (Nachtrag M4-23 zu ADR 0037; Threat Model T102; Hilfe zu den zwei neuen Serien):
+> - **Speicher** (Migration 00053): `anomaly_baselines` und `anomaly_leases` mit RLS, die Hypertable `anomaly_points`
+>   (Columnstore nach 2 h, 30 Tage) ohne RLS mit den Lesefunktionen `anomaly_points_range` und `anomaly_top`;
+>   `org_purge` löscht die Minuten mit.
+> - **Worker** (`app/anomalies`): jede Minute, Lease je Organisation, wechselnde Reihenfolge, 20 s je Lauf (der nächste
+>   setzt fort). Wählt die Kandidaten des Katalogs (`metric.AnomalySpec`, 19 Metriken, Reihenfolge des Katalogs, 64 je
+>   Node, 4 000 je Org, 20 000 je Instanz), wärmt nach einer Übernahme 6 h auf, rechnet fehlende Stunden der Woche vorher
+>   nach, bewertet die bereiten Minuten gegen die Baseline ihrer Stunde, lernt jede beendete Stunde und schreibt die
+>   auffälligen Minuten sowie `sermon_anomaly_rate_ratio` und `sermon_anomaly_series_scored` je Node. Lernphase 7 Tage
+>   ab `nodes.learning_since` bzw. `series.created_at`: bewertet, nicht gespeichert, Rate 0. Zähler (Log-Rate) nach
+>   ihrem Zuwachs. Metriken `sermon_server_anomaly_*`.
+> - **RPCs:** `AnomalyService.GetNodeAnomalies` (Band) und `ListUnusual` („Was war ungewöhnlich?“), `view_nodes`,
+>   höchstens 7 Tage in den letzten 30, Labels als sichtbarer Text.
+> - **Gefunden:** `seen_at` bewegt sich nur alle 6 h (Fenster jetzt 7 h); `ON CONFLICT (…)` verlangte SELECT auf der
+>   Hypertable (jetzt ohne Konfliktziel); eine Baseline während des Aufwärmens startete die kurzfristige neu (Baselines
+>   jetzt vorher); die Ausgabe zählte ab jetzt statt ab der letzten bereiten Minute.
+> - **Tests:** Worker (Sprung gefunden, Rate, entprellt, nur einmal geschrieben; Lernphase von Node und Serie; eine
+>   Instanz je Org und Übernahme; Zeitbudget; Grenzen und Reihenfolge; Zähler mit Neustart; beendete Stunde, 4 Wochen,
+>   frische Stunden nicht erneut), Dienst (Band, Strecken, Tag der Lernphase, Rechte, Bereiche, Sichtbarkeit,
+>   Sortierung, Grenze), PostgreSQL (4 Wochen Historie mit Sprung über die echten Speicher: Band, „ungewöhnlich“,
+>   lernender Node, Viewer einer anderen Gruppe, andere Org über Dienst und Funktionen, gefälschte Minute, zweite
+>   Instanz, keine doppelte Rate), Web-API (Viewer, Bereiche, unbekannter Node), Tenant-Isolation, Katalog.
+> - **Gegenproben** für 34 Prüfungen, alle erkannt (fünf erst nach schärferen Tests).
 - **Ziel:**
   - Ein Worker (mit Lease) rechnet jede Minute auf `metrics_1m` und schreibt Ergebnisse und die Anomalie-Rate je Node
     als Serie (`anomaly.rate`).

@@ -33,6 +33,13 @@ type Querier interface {
 	AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
 	AllowNodeTakeover(ctx context.Context, arg AllowNodeTakeoverParams) (int64, error)
+	// When each hour of the week was last computed (hours without a row are missing).
+	AnomalyBaselineAges(ctx context.Context) ([]AnomalyBaselineAgesRow, error)
+	AnomalyBaselinesOfHour(ctx context.Context, hour int16) ([]AnomalyBaselinesOfHourRow, error)
+	// The series of the candidate metrics with data since `since`, with when their node began to learn.
+	AnomalyCandidateSeries(ctx context.Context, arg AnomalyCandidateSeriesParams) ([]AnomalyCandidateSeriesRow, error)
+	AnomalyPointsRange(ctx context.Context, arg AnomalyPointsRangeParams) ([]AnomalyPointsRangeRow, error)
+	AnomalyTop(ctx context.Context, arg AnomalyTopParams) ([]AnomalyTopRow, error)
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AppendAuditRow, error)
 	// The trigger instance_audit_log_chain assigns seq, time and the hashes.
 	AppendInstanceAudit(ctx context.Context, arg AppendInstanceAuditParams) error
@@ -171,6 +178,9 @@ type Querier interface {
 	// One row per transition (COPY doesn't work with row-level security; a round has few).
 	InsertAlertHistory(ctx context.Context, arg InsertAlertHistoryParams) error
 	InsertAlertSilence(ctx context.Context, arg InsertAlertSilenceParams) error
+	// The notable minutes; a minute already stored (a second attempt) stays. Only series of the
+	// current organization (the hypertable has no RLS).
+	InsertAnomalyPoints(ctx context.Context, arg InsertAnomalyPointsParams) error
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
@@ -219,6 +229,9 @@ type Querier interface {
 	// Alert engine (M2-02, ADR 0007). Every query runs in the organization's tenant transaction.
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
 	LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrganizationParams) (int64, error)
+	// The anomaly detection (M4-23, ADR 0037), always in the tenant of one organization.
+	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+	LeaseAnomalyOrganization(ctx context.Context, arg LeaseAnomalyOrganizationParams) (int64, error)
 	// The update orchestrator (M4-13), always in the tenant of one organization.
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
 	LeaseUpdateOrganization(ctx context.Context, arg LeaseUpdateOrganizationParams) (int64, error)
@@ -292,6 +305,8 @@ type Querier interface {
 	NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error)
 	NodeGroupExists(ctx context.Context, groupID uuid.UUID) (bool, error)
 	NodeHostnames(ctx context.Context, arg NodeHostnamesParams) ([]NodeHostnamesRow, error)
+	// When the node of the scope began to learn (no row: not visible).
+	NodeLearning(ctx context.Context, arg NodeLearningParams) (time.Time, error)
 	// Node identity in the UI (M2-23).
 	NodeLockedAt(ctx context.Context, id uuid.UUID) (*time.Time, error)
 	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
@@ -357,6 +372,8 @@ type Querier interface {
 	RunningManualRollouts(ctx context.Context) ([]RunningManualRolloutsRow, error)
 	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)
+	// The candidate series of the scope's nodes (all nodes or the given ones), for the readers.
+	ScopedAnomalySeries(ctx context.Context, arg ScopedAnomalySeriesParams) ([]ScopedAnomalySeriesRow, error)
 	SecurityEventHorizon(ctx context.Context) (time.Time, error)
 	SecurityEventTotals(ctx context.Context, arg SecurityEventTotalsParams) (SecurityEventTotalsRow, error)
 	SetLiveHideCmdline(ctx context.Context, hide bool) error
@@ -406,6 +423,8 @@ type Querier interface {
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
 	UpsertAlertRoutingState(ctx context.Context, arg UpsertAlertRoutingStateParams) error
 	UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRuleOverrideParams) error
+	// One row per position of the arrays.
+	UpsertAnomalyBaselines(ctx context.Context, arg UpsertAnomalyBaselinesParams) error
 	UpsertGroupLogSettings(ctx context.Context, arg UpsertGroupLogSettingsParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).

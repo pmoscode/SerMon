@@ -97,6 +97,31 @@ type AlertSilence struct {
 	ExpiredBy *uuid.UUID
 }
 
+type AnomalyBaseline struct {
+	OrgID      uuid.UUID
+	SeriesID   int64
+	Hour       int16
+	Median     float64
+	Mad        float64
+	Low        float64
+	High       float64
+	Points     int32
+	ComputedAt time.Time
+}
+
+type AnomalyLease struct {
+	OrgID     uuid.UUID
+	Holder    string
+	ExpiresAt time.Time
+}
+
+type AnomalyPoint struct {
+	Ts        time.Time
+	SeriesID  int64
+	Score     float32
+	Anomalous bool
+}
+
 type AuditLog struct {
 	ID       int64
 	OrgID    uuid.UUID

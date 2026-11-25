@@ -38,6 +38,7 @@ type Handlers struct {
 	TwoFactor       *TwoFactorHandler
 	SecurityEvents  *SecurityEventHandler
 	Updates         *UpdateHandler
+	Anomalies       *AnomalyHandler
 	UpdatePolicies  *UpdatePolicyHandler
 	Notifications   *NotificationChannelHandler
 	Policies        *NotificationPolicyHandler
@@ -83,6 +84,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewInstanceAuditServiceHandler(h.InstanceAudit, authenticated))
 	mount(webv1connect.NewSecurityEventServiceHandler(h.SecurityEvents, authenticated))
 	mount(webv1connect.NewUpdateServiceHandler(h.Updates, authenticated))
+	mount(webv1connect.NewAnomalyServiceHandler(h.Anomalies, authenticated))
 	mount(webv1connect.NewUpdatePolicyServiceHandler(h.UpdatePolicies, authenticated))
 	mount(webv1connect.NewSecurityPolicyServiceHandler(h.TwoFactor, authenticated))
 	mount(webv1connect.NewLogSettingsServiceHandler(h.LogSettings, authenticated))

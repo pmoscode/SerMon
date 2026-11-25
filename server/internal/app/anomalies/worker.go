@@ -1,0 +1,499 @@
+// Package anomalies runs the anomaly detection (KONZEPT §13, ADR 0037): a worker that scores the
+// candidate series of every organization each minute and the use cases that read the results.
+package anomalies
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"slices"
+	"sync/atomic"
+	"time"
+
+	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/domain/anomaly"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/metric"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+)
+
+// Learning is how long a node or a new series learns before anomalies count (KONZEPT §13).
+const Learning = 7 * 24 * time.Hour
+
+// Series is a candidate series of an organization.
+type Series struct {
+	ID       int64
+	Node     identity.NodeID
+	Metric   string
+	Labels   map[string]string
+	Created  time.Time
+	Learning time.Time // since when its node learns
+}
+
+// Point is one minute of a series (from metrics_1m).
+type Point struct {
+	Series int64
+	T      time.Time
+	V      float64
+}
+
+// Notable is a minute worth storing (score ≥ 3 or anomalous).
+type Notable struct {
+	Series    int64
+	T         time.Time
+	Score     float64
+	Anomalous bool
+}
+
+// Store is the worker's port to the database.
+type Store interface {
+	// Organizations returns the organizations to look after (not locked).
+	Organizations(ctx context.Context) ([]tenant.OrgID, error)
+	// Lease takes or renews the organization's lease until until; false if another holds it.
+	Lease(ctx context.Context, org tenant.OrgID, holder string, now, until time.Time) (bool, error)
+	// Series returns the series of the metrics with data since since, at most limit.
+	Series(ctx context.Context, org tenant.OrgID, metrics []string, since time.Time, limit int) ([]Series, error)
+	// Points returns the 1-min values of the series in [from, to).
+	Points(ctx context.Context, org tenant.OrgID, ids []int64, from, to time.Time) ([]Point, error)
+	// Baselines returns the stored baselines of an hour of the week.
+	Baselines(ctx context.Context, org tenant.OrgID, hour int) (map[int64]anomaly.Baseline, error)
+	// SaveBaselines stores the baselines of an hour of the week, computed at at.
+	SaveBaselines(ctx context.Context, org tenant.OrgID, hour int, at time.Time, baselines map[int64]anomaly.Baseline) error
+	// BaselineAges returns when each stored hour of the week was computed.
+	BaselineAges(ctx context.Context, org tenant.OrgID) (map[int]time.Time, error)
+	// SaveNotable stores notable minutes (a minute stored before stays).
+	SaveNotable(ctx context.Context, org tenant.OrgID, notable []Notable) error
+}
+
+// RateWriter stores the derived series of the nodes (the metric store).
+type RateWriter interface {
+	Write(ctx context.Context, org tenant.OrgID, aggregates []metrics.Aggregate, persisted map[identity.NodeID]uint64) error
+}
+
+// Config are the worker's timing and limits (ADR 0037).
+type Config struct {
+	Holder   string
+	Interval time.Duration
+	LeaseFor time.Duration
+	// Budget bounds a round; what isn't done, the next round continues.
+	Budget time.Duration
+	// Lag is how long metrics_1m takes to hold a minute.
+	Lag time.Duration
+	// Warmup is the history scored after a takeover to warm the short-term baselines; Output is
+	// how far back a round writes results (older minutes only warm up).
+	Warmup, Output time.Duration
+	// Chunk is the most minutes a step scores at once.
+	Chunk time.Duration
+	// Refresh is how often the series are listed again.
+	Refresh time.Duration
+	// PerNode, PerOrg and PerInstance bound the scored series.
+	PerNode, PerOrg, PerInstance int
+	// Backfill is how many missing or stale hours of the week a step computes.
+	Backfill int
+	Now      func() time.Time
+	Logger   *slog.Logger
+}
+
+// DefaultConfig returns the defaults for holder.
+func DefaultConfig(holder string, logger *slog.Logger) Config {
+	return Config{
+		Holder: holder, Interval: time.Minute, LeaseFor: 3 * time.Minute, Budget: 20 * time.Second,
+		Lag: 3 * time.Minute, Warmup: 6 * time.Hour, Output: 5 * time.Minute, Chunk: time.Hour,
+		Refresh: 10 * time.Minute, PerNode: 64, PerOrg: 4000, PerInstance: 20000, Backfill: 4,
+		Now: time.Now, Logger: logger,
+	}
+}
+
+// Stats count the worker's work.
+type Stats struct {
+	Rounds, Scored, Notable, Skipped, Baselines, LeasesLost, Overruns, Errors atomic.Uint64
+}
+
+type seriesState struct {
+	Series
+	spec    metric.AnomalySpec
+	state   anomaly.State
+	last    float64 // a counter's value of the previous minute
+	hasLast bool
+}
+
+type orgState struct {
+	series  []*seriesState
+	byID    map[int64]*seriesState
+	listed  time.Time
+	done    time.Time // minutes before this are scored
+	hour    time.Time // the hour whose baselines are loaded
+	current map[int64]anomaly.Baseline
+}
+
+// Worker scores the candidate series of the organizations whose lease it holds.
+type Worker struct {
+	store  Store
+	rates  RateWriter
+	config Config
+	stats  Stats
+	orgs   map[tenant.OrgID]*orgState
+	turn   int
+	names  []string
+	order  map[string]int
+}
+
+// NewWorker returns the worker.
+func NewWorker(store Store, rates RateWriter, config Config) *Worker {
+	w := &Worker{store: store, rates: rates, config: config, orgs: map[tenant.OrgID]*orgState{}, order: map[string]int{}}
+	for i, d := range metric.Candidates() {
+		w.names = append(w.names, d.Name)
+		w.order[d.Name] = i
+	}
+	return w
+}
+
+// Stats returns the counters.
+func (w *Worker) Stats() *Stats { return &w.stats }
+
+// Run runs a round every interval until ctx ends; rounds never overlap.
+func (w *Worker) Run(ctx context.Context) error {
+	tick := time.NewTicker(w.config.Interval)
+	defer tick.Stop()
+	for {
+		w.Round(ctx)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-tick.C:
+		}
+	}
+}
+
+var errBudget = errors.New("round budget spent")
+
+// Round scores what is ready of every organization, the first one changing each round, within
+// the budget.
+func (w *Worker) Round(ctx context.Context) {
+	w.stats.Rounds.Add(1)
+	started := w.config.Now()
+	orgs, err := w.store.Organizations(ctx)
+	if err != nil {
+		w.stats.Errors.Add(1)
+		w.config.Logger.ErrorContext(ctx, "anomalies: list organizations failed", "error", err)
+		return
+	}
+	for org := range w.orgs {
+		if !slices.Contains(orgs, org) {
+			delete(w.orgs, org)
+		}
+	}
+	if len(orgs) == 0 {
+		return
+	}
+	w.turn = (w.turn + 1) % len(orgs)
+	deadline := started.Add(w.config.Budget)
+	for i := range orgs {
+		org := orgs[(w.turn+i)%len(orgs)]
+		err := w.step(ctx, org, deadline)
+		switch {
+		case errors.Is(err, errBudget):
+			w.stats.Overruns.Add(1)
+			return
+		case err != nil:
+			w.stats.Errors.Add(1)
+			w.config.Logger.ErrorContext(ctx, "anomalies: step failed", "org", org.String(), "error", err)
+		}
+	}
+}
+
+// instanceSeries counts the series this instance scores, without org.
+func (w *Worker) instanceSeries(org tenant.OrgID) int {
+	n := 0
+	for o, s := range w.orgs {
+		if o != org {
+			n += len(s.series)
+		}
+	}
+	return n
+}
+
+func (w *Worker) step(ctx context.Context, org tenant.OrgID, deadline time.Time) error {
+	now := w.config.Now()
+	if !now.Before(deadline) {
+		return errBudget
+	}
+	held, err := w.store.Lease(ctx, org, w.config.Holder, now, now.Add(w.config.LeaseFor))
+	if err != nil {
+		return fmt.Errorf("lease: %w", err)
+	}
+	if !held {
+		// Another instance scores it; a takeover later warms up anew.
+		if _, ok := w.orgs[org]; ok {
+			w.stats.LeasesLost.Add(1)
+			delete(w.orgs, org)
+		}
+		return nil
+	}
+	st := w.orgs[org]
+	if st == nil {
+		st = &orgState{done: now.Truncate(time.Minute).Add(-w.config.Warmup)}
+		w.orgs[org] = st
+	}
+	if st.series == nil || now.Sub(st.listed) >= w.config.Refresh {
+		if err := w.list(ctx, org, st, now); err != nil {
+			return err
+		}
+	}
+	if len(st.series) == 0 {
+		return nil
+	}
+	// Missing hours first: the warm-up after a takeover scores against them at once (a
+	// baseline arriving later would start the short-term baselines anew).
+	if err := w.backfill(ctx, org, st, now, deadline); err != nil {
+		return err
+	}
+	ready := now.Add(-w.config.Lag).Truncate(time.Minute)
+	for st.done.Before(ready) {
+		if !w.config.Now().Before(deadline) {
+			return errBudget
+		}
+		// A chunk stays within an hour: one hour's baselines at a time.
+		hour := st.done.Truncate(time.Hour)
+		to := minTime(ready, minTime(st.done.Add(w.config.Chunk), hour.Add(time.Hour)))
+		if err := w.score(ctx, org, st, st.done, to, now); err != nil {
+			return err
+		}
+		if to.Equal(hour.Add(time.Hour)) {
+			// The hour ended: its bucket learns it for next week.
+			if err := w.recompute(ctx, org, st, hour, now); err != nil {
+				return err
+			}
+		}
+		st.done = to
+	}
+	return nil
+}
+
+// list chooses the scored series: candidates whose labels count, the catalog's order first, at
+// most PerNode per node, PerOrg per organization and PerInstance in all.
+func (w *Worker) list(ctx context.Context, org tenant.OrgID, st *orgState, now time.Time) error {
+	limit := min(w.config.PerOrg, max(w.config.PerInstance-w.instanceSeries(org), 0))
+	// seen_at moves only every SeenResolution: an hour more than that finds every live series.
+	found, err := w.store.Series(ctx, org, w.names, now.Add(-metrics.SeenResolution-time.Hour), w.config.PerOrg*4)
+	if err != nil {
+		return fmt.Errorf("list series: %w", err)
+	}
+	slices.SortStableFunc(found, func(a, b Series) int {
+		if c := a.Node.String(); c != b.Node.String() {
+			if c < b.Node.String() {
+				return -1
+			}
+			return 1
+		}
+		return w.order[a.Metric] - w.order[b.Metric]
+	})
+	perNode := map[identity.NodeID]int{}
+	old := st.byID
+	st.series, st.byID, st.listed = nil, map[int64]*seriesState{}, now
+	skipped := 0
+	for _, s := range found {
+		d, ok := metric.Lookup(s.Metric)
+		if !ok || d.Anomaly == nil || !d.Anomaly.Scores(s.Labels) {
+			continue
+		}
+		if perNode[s.Node] >= w.config.PerNode || len(st.series) >= limit {
+			skipped++
+			continue
+		}
+		perNode[s.Node]++
+		ss := old[s.ID]
+		if ss == nil {
+			ss = &seriesState{Series: s, spec: *d.Anomaly}
+		}
+		ss.Series = s
+		st.series = append(st.series, ss)
+		st.byID[s.ID] = ss
+	}
+	if skipped > 0 {
+		w.stats.Skipped.Add(uint64(skipped))
+	}
+	return nil
+}
+
+// score scores the minutes [from, to) of one hour and writes those from now − Output on.
+func (w *Worker) score(ctx context.Context, org tenant.OrgID, st *orgState, from, to, now time.Time) error {
+	if hour := from.Truncate(time.Hour); !hour.Equal(st.hour) {
+		b, err := w.store.Baselines(ctx, org, anomaly.HourOfWeek(from))
+		if err != nil {
+			return fmt.Errorf("read baselines: %w", err)
+		}
+		st.hour, st.current = hour, b
+	}
+	ids := make([]int64, len(st.series))
+	for i, s := range st.series {
+		ids[i] = s.ID
+	}
+	points, err := w.store.Points(ctx, org, ids, from, to)
+	if err != nil {
+		return fmt.Errorf("read points: %w", err)
+	}
+	values := map[int64]map[time.Time]float64{}
+	for _, p := range points {
+		if values[p.Series] == nil {
+			values[p.Series] = map[time.Time]float64{}
+		}
+		values[p.Series][p.T] = p.V
+	}
+	// The last Output of the ready minutes: after a takeover nothing older is written twice.
+	outputFrom := now.Add(-w.config.Lag - w.config.Output).Truncate(time.Minute)
+	var notable []Notable
+	var aggregates []metrics.Aggregate
+	for m := from; m.Before(to); m = m.Add(time.Minute) {
+		scored := map[identity.NodeID]int{}
+		anomalous := map[identity.NodeID]int{}
+		for _, s := range st.series {
+			v, ok := values[s.ID][m]
+			if !ok {
+				continue
+			}
+			if s.spec.Counter {
+				prev, had := s.last, s.hasLast
+				s.last, s.hasLast = v, true
+				if !had || v < prev {
+					continue // the first value or a restart of the agent
+				}
+				v -= prev
+			}
+			baseline, has := st.current[s.ID]
+			verdict := anomaly.Robust{Floor: s.spec.Floor}.Score(&s.state, m, v, baseline, has && baseline.N >= anomaly.MinPoints)
+			w.stats.Scored.Add(1)
+			if m.Before(outputFrom) {
+				continue // warming up
+			}
+			if learning(s.Series, m) {
+				// Learning: the node's rate is written, as 0.
+				scored[s.Node] += 0
+				continue
+			}
+			scored[s.Node]++
+			if verdict.Anomalous {
+				anomalous[s.Node]++
+			}
+			if verdict.Notable() {
+				notable = append(notable, Notable{Series: s.ID, T: m, Score: verdict.Score, Anomalous: verdict.Anomalous})
+			}
+		}
+		for node, n := range scored {
+			ratio := 0.0
+			if n > 0 {
+				ratio = float64(anomalous[node]) / float64(n) * 1e6
+			}
+			aggregates = append(aggregates,
+				metrics.Aggregate{Node: node, Metric: "sermon_anomaly_rate_ratio", Labels: metrics.Labels{}, Start: m, Avg: ratio, Min: ratio, Max: ratio},
+				metrics.Aggregate{Node: node, Metric: "sermon_anomaly_series_scored", Labels: metrics.Labels{}, Start: m, Avg: float64(n), Min: float64(n), Max: float64(n)})
+		}
+	}
+	if len(notable) > 0 {
+		if err := w.store.SaveNotable(ctx, org, notable); err != nil {
+			return fmt.Errorf("save notable minutes: %w", err)
+		}
+		w.stats.Notable.Add(uint64(len(notable)))
+	}
+	if len(aggregates) > 0 {
+		if err := w.rates.Write(ctx, org, aggregates, nil); err != nil {
+			return fmt.Errorf("write anomaly rates: %w", err)
+		}
+	}
+	return nil
+}
+
+// learning reports whether the series still learns at m: its node or the series itself is
+// younger than Learning.
+func learning(s Series, m time.Time) bool {
+	return m.Before(s.Learning.Add(Learning)) || m.Before(s.Created.Add(Learning))
+}
+
+// recompute computes the bucket of hour from the same hour of the last four weeks, hour itself
+// included: it is the baseline of that hour of the week from next week on.
+func (w *Worker) recompute(ctx context.Context, org tenant.OrgID, st *orgState, hour, now time.Time) error {
+	ids := make([]int64, len(st.series))
+	for i, s := range st.series {
+		ids[i] = s.ID
+	}
+	values := map[int64][]float64{}
+	for week := range 4 {
+		from := hour.Add(-time.Duration(week) * 7 * 24 * time.Hour)
+		points, err := w.store.Points(ctx, org, ids, from, from.Add(time.Hour))
+		if err != nil {
+			return fmt.Errorf("read points for the baselines: %w", err)
+		}
+		// Counters by their increase, like the scores.
+		last := map[int64]float64{}
+		slices.SortFunc(points, func(a, b Point) int { return a.T.Compare(b.T) })
+		for _, p := range points {
+			s := st.byID[p.Series]
+			if s == nil {
+				continue
+			}
+			v := p.V
+			if s.spec.Counter {
+				prev, had := last[p.Series]
+				last[p.Series] = p.V
+				if !had || p.V < prev {
+					continue
+				}
+				v -= prev
+			}
+			values[p.Series] = append(values[p.Series], v)
+		}
+	}
+	baselines := map[int64]anomaly.Baseline{}
+	for id, vs := range values {
+		if b, ok := anomaly.NewBaseline(vs); ok {
+			baselines[id] = b
+		}
+	}
+	bucket := anomaly.HourOfWeek(hour)
+	if err := w.store.SaveBaselines(ctx, org, bucket, now, baselines); err != nil {
+		return fmt.Errorf("save baselines: %w", err)
+	}
+	w.stats.Baselines.Add(1)
+	if anomaly.HourOfWeek(st.hour) == bucket {
+		// The loaded hour changed under us (a backfill of the current bucket).
+		st.hour = time.Time{}
+	}
+	return nil
+}
+
+// backfill computes up to Backfill hours of the week that are missing or older than a week and
+// a day, from their last occurrence before now.
+func (w *Worker) backfill(ctx context.Context, org tenant.OrgID, st *orgState, now, deadline time.Time) error {
+	ages, err := w.store.BaselineAges(ctx, org)
+	if err != nil {
+		return fmt.Errorf("read baseline ages: %w", err)
+	}
+	done := 0
+	last := now.Truncate(time.Hour).Add(-time.Hour)
+	for back := range 168 {
+		if done >= w.config.Backfill {
+			return nil
+		}
+		if !w.config.Now().Before(deadline) {
+			return errBudget
+		}
+		hour := last.Add(-time.Duration(back) * time.Hour)
+		at, ok := ages[anomaly.HourOfWeek(hour)]
+		if ok && now.Sub(at) < 8*24*time.Hour {
+			continue
+		}
+		if err := w.recompute(ctx, org, st, hour, now); err != nil {
+			return err
+		}
+		done++
+	}
+	return nil
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
+}

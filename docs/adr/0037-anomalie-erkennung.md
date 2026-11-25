@@ -127,3 +127,25 @@ Der Benchmark (13 synthetische Szenarien) hat drei Änderungen am Verfahren von 
   Niveauwechsel wird trotzdem gelernt, nach rund 1,5 h.
 - **Budget gemessen:** eine Minute mit 6 000 Serien 0,36 ms, eine Baseline aus 240 Werten 4,3 µs (Apple M3).
 
+## Nachtrag M4-23
+
+- **Kandidaten** im Katalog (`metric.AnomalySpec`: Labelwerte, Mindeststreuung je Einheit, Zähler), 19 Metriken. Geräte
+  und Interfaces filtert schon der Agent (`loop*`, `veth*`, …), ein eigener Ausschluss ist nicht nötig.
+- **Serien mit Daten:** `series.seen_at` bewegt sich nur alle 6 h (`metrics.SeenResolution`); der Worker nimmt daher
+  Serien mit Daten in den letzten 7 h. Eine Stunde reichte nicht (gefunden im Test gegen PostgreSQL).
+- **Reihenfolge:** Fehlende Stunden der Woche rechnet der Worker *vor* dem Bewerten nach (bis zu 4 je Schritt); sonst
+  käme eine Baseline während des Aufwärmens hinzu, und die kurzfristige Baseline begänne neu (30 Minuten ohne Stimme).
+  Endet eine Stunde, lernt ihr Bucket sie (aus 4 Wochen, sie selbst eingeschlossen). Ein Bucket gilt 8 Tage als
+  frisch.
+- **Ausgabe:** nur die letzten 5 der bereiten Minuten (bereit: 3 min nach ihrem Ende, wenn `metrics_1m` sie hat);
+  ältere bewertet der Worker nur zum Aufwärmen. Nach einer Übernahme entstehen so keine doppelten Werte.
+- **Lesen und Schreiben ohne SELECT-Recht:** `INSERT … ON CONFLICT DO NOTHING` ohne Konfliktziel, denn ein Ziel
+  verlangte SELECT auf `anomaly_points`, das `sermon_app` nicht hat (O8). Geschrieben werden nur Minuten von Serien der
+  eigenen Organisation (Filter über die RLS-geschützte `series`). `org_purge` löscht die Minuten mit.
+- **Zähler:** bewertet nach dem Zuwachs je Minute; ein kleinerer Wert (Neustart des Agents) zählt nicht, auch nicht in
+  der Baseline.
+- **RPCs:** `AnomalyService.GetNodeAnomalies` (Band: Strecken anomaler Minuten je Serie, höchster Score, Tag der
+  Lernphase) und `ListUnusual` (höchstens 50 Serien nach Score, ein Node oder alle des Scopes); `view_nodes`, Bereich
+  höchstens 7 Tage in den letzten 30.
+- **Gemessen** gegen PostgreSQL: vier Serien mit 4 Wochen Historie, erster Lauf mit allen 168 Stunden in 2,3 s.
+

@@ -29,6 +29,7 @@ type isolationEnv struct {
 	fleet                           webv1connect.FleetServiceClient
 	events                          webv1connect.SecurityEventServiceClient
 	updates                         webv1connect.UpdateServiceClient
+	anomalies                       webv1connect.AnomalyServiceClient
 	updatePolicies                  webv1connect.UpdatePolicyServiceClient
 	channels                        webv1connect.NotificationChannelServiceClient
 	policies                        webv1connect.NotificationPolicyServiceClient
@@ -364,6 +365,31 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.UpdateService/UpdateAgents": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{e.nodeA}}))
+		return err
+	}},
+	"/sermon.web.v1.AnomalyService/GetNodeAnomalies": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.anomalies.GetNodeAnomalies(ctx, connect.NewRequest(&webv1.GetNodeAnomaliesRequest{
+			NodeId: e.nodeA, From: timestamppb.New(time.Now().Add(-time.Hour)), To: timestamppb.Now(),
+		}))
+		return err
+	}},
+	"/sermon.web.v1.AnomalyService/ListUnusual": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.anomalies.ListUnusual(ctx, connect.NewRequest(&webv1.ListUnusualRequest{
+			From: timestamppb.New(time.Now().Add(-time.Hour)), To: timestamppb.Now(),
+		}))
+		if err == nil && len(res.Msg.GetSeries()) > 0 {
+			return errLeak
+		}
+		if err == nil {
+			_, err = e.anomalies.ListUnusual(ctx, connect.NewRequest(&webv1.ListUnusualRequest{
+				NodeId: e.nodeA, From: timestamppb.New(time.Now().Add(-time.Hour)), To: timestamppb.Now(),
+			}))
+			if connect.CodeOf(err) == connect.CodeNotFound {
+				err = nil
+			} else if err == nil {
+				err = errLeak
+			}
+		}
 		return err
 	}},
 	"/sermon.web.v1.UpdateService/ListAgentReleases": {list: true, run: func(ctx context.Context, e isolationEnv) error {

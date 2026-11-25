@@ -11,6 +11,7 @@ import (
 	"runtime"
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
+	"github.com/pmoscode/SerMon/server/internal/app/anomalies"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
@@ -99,6 +100,24 @@ func registerOrchestratorMetrics(r *promtext.Registry, stats *updates.Orchestrat
 		{"sermon_server_update_rollouts_stopped_total", "Rollouts stopped at a failure.", stats.Stopped.Load},
 		{"sermon_server_update_leases_lost_total", "Rounds dropped because another instance took the organization's lease meanwhile.", stats.LeasesLost.Load},
 		{"sermon_server_update_errors_total", "Organizations whose round failed.", stats.Errors.Load},
+	} {
+		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
+	}
+}
+
+func registerAnomalyMetrics(r *promtext.Registry, stats *anomalies.Stats) {
+	for _, c := range []struct {
+		name, help string
+		value      func() uint64
+	}{
+		{"sermon_server_anomaly_rounds_total", "Rounds of the anomaly detection.", stats.Rounds.Load},
+		{"sermon_server_anomaly_scored_total", "Minutes of series the anomaly detection scored.", stats.Scored.Load},
+		{"sermon_server_anomaly_notable_total", "Notable minutes the anomaly detection stored.", stats.Notable.Load},
+		{"sermon_server_anomaly_series_skipped_total", "Candidate series left out over the limits per node, organization and instance.", stats.Skipped.Load},
+		{"sermon_server_anomaly_baselines_total", "Hours of the week whose baselines were computed.", stats.Baselines.Load},
+		{"sermon_server_anomaly_leases_lost_total", "Organizations another instance took over.", stats.LeasesLost.Load},
+		{"sermon_server_anomaly_overruns_total", "Rounds that spent their time budget; the next one continues.", stats.Overruns.Load},
+		{"sermon_server_anomaly_errors_total", "Organizations whose step failed.", stats.Errors.Load},
 	} {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })
 	}

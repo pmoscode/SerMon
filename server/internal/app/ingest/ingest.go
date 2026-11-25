@@ -22,8 +22,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
+
+	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
@@ -173,6 +177,8 @@ type Stats struct {
 	// Update reports (M4-09): stored, dropped by the buckets, rejected (time, validation, no
 	// store), and older than the stored one.
 	UpdateReports, UpdateReportsDropped, UpdateReportsRejected, UpdateReportsStale atomic.Uint64
+	// Command results (M4-11): stored, and those of no run of the node or after its final phase.
+	CommandResults, CommandResultsIgnored atomic.Uint64
 	// LagMillis is the delay of the latest batch (server time − collection time).
 	LagMillis atomic.Int64
 	// droppedKinds counts the events dropped by the buckets per kind (index in secevent.Kinds).
@@ -241,6 +247,7 @@ type Service struct {
 	eventBucket map[identity.NodeID]*eventBuckets
 
 	updates          UpdateWriter
+	results          ResultWriter
 	nodeUpdateBucket map[identity.NodeID]*bucket
 	orgUpdateBucket  map[tenant.OrgID]*bucket
 
@@ -275,6 +282,17 @@ type UpdateWriter interface {
 	// Packages beyond the organization's limit are left out; their counts stay.
 	Write(ctx context.Context, org tenant.OrgID, node identity.NodeID, r update.Report, receivedAt time.Time) (bool, error)
 }
+
+// ResultWriter stores what the agents report of the server's commands (M4-11).
+type ResultWriter interface {
+	// Record stores the phase of the node's run; false for an unknown run, a run of another node
+	// or a phase after the final one (a resend).
+	Record(ctx context.Context, org tenant.OrgID, node identity.NodeID, run uuid.UUID, r command.Result) (bool, error)
+}
+
+// SetResultWriter stores command results through w; without one they are acknowledged and
+// dropped.
+func (s *Service) SetResultWriter(w ResultWriter) { s.results = w }
 
 // SetUpdateWriter stores update reports through w (M4-09); without one they are acknowledged and
 // dropped.
@@ -411,9 +429,16 @@ type Batch struct {
 	Logs []LogEntry
 	// Update is the report of an update batch (M4-09).
 	Update *update.Report
-	// Unhandled is a batch the server takes but doesn't use yet (M4-05: command results until
-	// M4-11): acknowledged in order, nothing stored.
+	// Result is the agent's phase of a command's run (M4-11).
+	Result *Result
+	// Unhandled is a batch the server takes but doesn't use: acknowledged in order, nothing stored.
 	Unhandled bool
+}
+
+// Result is the phase of a run as the agent reported it.
+type Result struct {
+	Run uuid.UUID
+	command.Result
 }
 
 // Response tells the transport what to send back.
@@ -466,6 +491,7 @@ type Session struct {
 	lastSeen      time.Time
 	events        []secevents.Batch // waiting for the next flush
 	update        *update.Report    // the newest report waiting for the next flush
+	results       []Result          // waiting for the next flush
 	logs          []logBatch        // waiting for the next flush
 	logsFailing   time.Time         // since when the store fails for the waiting logs
 }
@@ -578,6 +604,15 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
 		return Response{}
 	}
+	if batch.Result != nil {
+		if s.service.results == nil {
+			stats.CommandResultsIgnored.Add(1)
+		} else {
+			s.results = append(s.results, *batch.Result)
+		}
+		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
+		return Response{}
+	}
 	if batch.Unhandled {
 		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
 		return Response{}
@@ -663,7 +698,7 @@ func (s *Session) acceptEvents(batch Batch, now time.Time) {
 
 // Due reports whether enough batches wait for an early flush; security events flush at once.
 func (s *Session) Due() bool {
-	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0 || len(s.logs) > 0 || s.update != nil
+	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0 || len(s.logs) > 0 || s.update != nil || len(s.results) > 0
 }
 
 // acceptUpdate keeps a valid report within the time window and the buckets for the next flush,
@@ -720,6 +755,21 @@ func (s *Session) Flush(ctx context.Context) (uint64, error) {
 			s.service.stats.UpdateReportsStale.Add(1)
 		}
 		s.update = nil
+	}
+	// Command results like the report; a resend after a failed acknowledgement is ignored.
+	for len(s.results) > 0 {
+		r := s.results[0]
+		stored, err := s.service.results.Record(ctx, s.org, s.node, r.Run, r.Result)
+		if err != nil {
+			s.service.stats.WriteErrors.Add(1)
+			return 0, fmt.Errorf("flush command result: %w", err)
+		}
+		if stored {
+			s.service.stats.CommandResults.Add(1)
+		} else {
+			s.service.stats.CommandResultsIgnored.Add(1)
+		}
+		s.results = s.results[1:]
 	}
 	// Logs next: while the store fails they wait, and so does the acknowledgement of the batches
 	// from theirs on – at most LogRetryFor (ADR 0031).

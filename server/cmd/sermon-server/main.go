@@ -16,10 +16,12 @@ import (
 	_ "time/tzdata" // time zones of maintenance windows without the host's zoneinfo (static binary)
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/app/alerting"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/geoip"
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
@@ -269,6 +271,18 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		ingestService.SetEventWriter(eventStore)
 		// Update reports (M4-09): the latest of each node with its packages.
 		ingestService.SetUpdateWriter(postgres.NewUpdateStore(db, 0))
+		// Commands to the agents (M4-11): the instance with the node's session delivers them, a
+		// NOTIFY of any instance wakes it, a poll catches what got lost.
+		commandStore := postgres.NewCommandStore(db)
+		ingestService.SetResultWriter(commandStore)
+		servers = append(servers, func(ctx context.Context) error {
+			db.Listen(ctx, postgres.CommandsChannel, 5*time.Second, func(payload string) {
+				if id, err := uuid.Parse(payload); err == nil {
+					sessions.CommandsWaiting(identity.NodeID(id))
+				}
+			}, func(err error) { logger.WarnContext(ctx, "listening for commands failed, retrying", "error", err) })
+			return nil
+		})
 		servers = append(servers, func(ctx context.Context) error {
 			return secevents.Maintenance(ctx, eventStore, time.Now, 6*time.Hour, logger)
 		})
@@ -287,7 +301,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		})
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger,
-				agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(agentConfigs), agentapi.WithLiveView(liveHub))
+				agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(agentConfigs), agentapi.WithLiveView(liveHub),
+				agentapi.WithCommands(commandStore, agentapi.CommandPoll))
 			if err != nil {
 				return err
 			}
@@ -554,7 +569,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Metrics:        metricsHandler,
 		Fleet:          webapi.NewFleetHandler(nodes, logger),
 		SecurityEvents: webapi.NewSecurityEventHandler(securityEvents, logger),
-		Updates:        webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(db, 0), policy), logger),
+		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(db, 0), policy).
+			WithRefresher(postgres.NewCommandStore(db), time.Now), logger),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(updates.NewPolicyService(postgres.NewUpdatePolicyStore(db), policy, time.Now), logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),

@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -137,4 +138,41 @@ func (db *DB) instanceTx(ctx context.Context, fn func(q *sqlcdb.Queries) error) 
 		return fmt.Errorf("instance transaction: %w", err)
 	}
 	return nil
+}
+
+// Listen calls fn with the payload of each notification on channel until ctx ends (M4-11). Its
+// connection leaves the pool for good; after an error it reconnects every retry.
+func (db *DB) Listen(ctx context.Context, channel string, retry time.Duration, fn func(payload string), onError func(error)) {
+	for {
+		err := db.listenOnce(ctx, channel, fn)
+		if ctx.Err() != nil {
+			return
+		}
+		onError(err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retry):
+		}
+	}
+}
+
+func (db *DB) listenOnce(ctx context.Context, channel string, fn func(payload string)) error {
+	pooled, err := db.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	// A listening connection must not go back to the pool: it would hand notifications to others.
+	conn := pooled.Hijack()
+	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
+	if _, err := conn.Exec(ctx, "LISTEN "+pgx.Identifier{channel}.Sanitize()); err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	for {
+		n, err := conn.WaitForNotification(ctx)
+		if err != nil {
+			return fmt.Errorf("wait for notification: %w", err)
+		}
+		fn(n.Payload)
+	}
 }

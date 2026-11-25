@@ -210,6 +210,89 @@ func (PackageManager) EnumDescriptor() ([]byte, []int) {
 	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{2}
 }
 
+// RefreshUpdateInfoRequest names the node.
+type RefreshUpdateInfoRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// node_id is the node UUID.
+	NodeId        string `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshUpdateInfoRequest) Reset() {
+	*x = RefreshUpdateInfoRequest{}
+	mi := &file_sermon_web_v1_update_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshUpdateInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshUpdateInfoRequest) ProtoMessage() {}
+
+func (x *RefreshUpdateInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_update_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshUpdateInfoRequest.ProtoReflect.Descriptor instead.
+func (*RefreshUpdateInfoRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *RefreshUpdateInfoRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+// RefreshUpdateInfoResponse has no fields.
+type RefreshUpdateInfoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RefreshUpdateInfoResponse) Reset() {
+	*x = RefreshUpdateInfoResponse{}
+	mi := &file_sermon_web_v1_update_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RefreshUpdateInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RefreshUpdateInfoResponse) ProtoMessage() {}
+
+func (x *RefreshUpdateInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_update_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RefreshUpdateInfoResponse.ProtoReflect.Descriptor instead.
+func (*RefreshUpdateInfoResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{1}
+}
+
 // GetNodeUpdatesRequest names the node.
 type GetNodeUpdatesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -221,7 +304,7 @@ type GetNodeUpdatesRequest struct {
 
 func (x *GetNodeUpdatesRequest) Reset() {
 	*x = GetNodeUpdatesRequest{}
-	mi := &file_sermon_web_v1_update_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -233,7 +316,7 @@ func (x *GetNodeUpdatesRequest) String() string {
 func (*GetNodeUpdatesRequest) ProtoMessage() {}
 
 func (x *GetNodeUpdatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -246,7 +329,7 @@ func (x *GetNodeUpdatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeUpdatesRequest.ProtoReflect.Descriptor instead.
 func (*GetNodeUpdatesRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{0}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *GetNodeUpdatesRequest) GetNodeId() string {
@@ -270,7 +353,7 @@ type GetNodeUpdatesResponse struct {
 
 func (x *GetNodeUpdatesResponse) Reset() {
 	*x = GetNodeUpdatesResponse{}
-	mi := &file_sermon_web_v1_update_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -282,7 +365,7 @@ func (x *GetNodeUpdatesResponse) String() string {
 func (*GetNodeUpdatesResponse) ProtoMessage() {}
 
 func (x *GetNodeUpdatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -295,7 +378,7 @@ func (x *GetNodeUpdatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeUpdatesResponse.ProtoReflect.Descriptor instead.
 func (*GetNodeUpdatesResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{1}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetNodeUpdatesResponse) GetNode() *NodeUpdates {
@@ -321,7 +404,7 @@ type ListFleetUpdatesRequest struct {
 
 func (x *ListFleetUpdatesRequest) Reset() {
 	*x = ListFleetUpdatesRequest{}
-	mi := &file_sermon_web_v1_update_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -333,7 +416,7 @@ func (x *ListFleetUpdatesRequest) String() string {
 func (*ListFleetUpdatesRequest) ProtoMessage() {}
 
 func (x *ListFleetUpdatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -346,7 +429,7 @@ func (x *ListFleetUpdatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFleetUpdatesRequest.ProtoReflect.Descriptor instead.
 func (*ListFleetUpdatesRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{2}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{4}
 }
 
 // ListFleetUpdatesResponse is the overview.
@@ -372,7 +455,7 @@ type ListFleetUpdatesResponse struct {
 
 func (x *ListFleetUpdatesResponse) Reset() {
 	*x = ListFleetUpdatesResponse{}
-	mi := &file_sermon_web_v1_update_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -384,7 +467,7 @@ func (x *ListFleetUpdatesResponse) String() string {
 func (*ListFleetUpdatesResponse) ProtoMessage() {}
 
 func (x *ListFleetUpdatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -397,7 +480,7 @@ func (x *ListFleetUpdatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFleetUpdatesResponse.ProtoReflect.Descriptor instead.
 func (*ListFleetUpdatesResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{3}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListFleetUpdatesResponse) GetNodes() []*NodeUpdates {
@@ -495,7 +578,7 @@ type NodeUpdates struct {
 
 func (x *NodeUpdates) Reset() {
 	*x = NodeUpdates{}
-	mi := &file_sermon_web_v1_update_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -507,7 +590,7 @@ func (x *NodeUpdates) String() string {
 func (*NodeUpdates) ProtoMessage() {}
 
 func (x *NodeUpdates) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -520,7 +603,7 @@ func (x *NodeUpdates) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeUpdates.ProtoReflect.Descriptor instead.
 func (*NodeUpdates) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{4}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *NodeUpdates) GetNodeId() string {
@@ -670,7 +753,7 @@ type UpdatePackage struct {
 
 func (x *UpdatePackage) Reset() {
 	*x = UpdatePackage{}
-	mi := &file_sermon_web_v1_update_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -682,7 +765,7 @@ func (x *UpdatePackage) String() string {
 func (*UpdatePackage) ProtoMessage() {}
 
 func (x *UpdatePackage) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -695,7 +778,7 @@ func (x *UpdatePackage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePackage.ProtoReflect.Descriptor instead.
 func (*UpdatePackage) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{5}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *UpdatePackage) GetName() string {
@@ -756,7 +839,7 @@ type HostUpdatePermissions struct {
 
 func (x *HostUpdatePermissions) Reset() {
 	*x = HostUpdatePermissions{}
-	mi := &file_sermon_web_v1_update_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -768,7 +851,7 @@ func (x *HostUpdatePermissions) String() string {
 func (*HostUpdatePermissions) ProtoMessage() {}
 
 func (x *HostUpdatePermissions) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_update_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -781,7 +864,7 @@ func (x *HostUpdatePermissions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostUpdatePermissions.ProtoReflect.Descriptor instead.
 func (*HostUpdatePermissions) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *HostUpdatePermissions) GetRemoteUpdates() bool {
@@ -809,7 +892,10 @@ var File_sermon_web_v1_update_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_update_proto_rawDesc = "" +
 	"\n" +
-	"\x1asermon/web/v1/update.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\":\n" +
+	"\x1asermon/web/v1/update.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"=\n" +
+	"\x18RefreshUpdateInfoRequest\x12!\n" +
+	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\"\x1b\n" +
+	"\x19RefreshUpdateInfoResponse\":\n" +
 	"\x15GetNodeUpdatesRequest\x12!\n" +
 	"\anode_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x06nodeId\"\x82\x01\n" +
 	"\x16GetNodeUpdatesResponse\x12.\n" +
@@ -876,10 +962,11 @@ const file_sermon_web_v1_update_proto_rawDesc = "" +
 	"\x1bPACKAGE_MANAGER_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13PACKAGE_MANAGER_APT\x10\x01\x12\x17\n" +
 	"\x13PACKAGE_MANAGER_DNF\x10\x02\x12\x17\n" +
-	"\x13PACKAGE_MANAGER_APK\x10\x032\xdd\x01\n" +
+	"\x13PACKAGE_MANAGER_APK\x10\x032\xc5\x02\n" +
 	"\rUpdateService\x12b\n" +
 	"\x0eGetNodeUpdates\x12$.sermon.web.v1.GetNodeUpdatesRequest\x1a%.sermon.web.v1.GetNodeUpdatesResponse\"\x03\x90\x02\x01\x12h\n" +
-	"\x10ListFleetUpdates\x12&.sermon.web.v1.ListFleetUpdatesRequest\x1a'.sermon.web.v1.ListFleetUpdatesResponse\"\x03\x90\x02\x01B\xba\x01\n" +
+	"\x10ListFleetUpdates\x12&.sermon.web.v1.ListFleetUpdatesRequest\x1a'.sermon.web.v1.ListFleetUpdatesResponse\"\x03\x90\x02\x01\x12f\n" +
+	"\x11RefreshUpdateInfo\x12'.sermon.web.v1.RefreshUpdateInfoRequest\x1a(.sermon.web.v1.RefreshUpdateInfoResponseB\xba\x01\n" +
 	"\x11com.sermon.web.v1B\vUpdateProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -895,39 +982,43 @@ func file_sermon_web_v1_update_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_update_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sermon_web_v1_update_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_sermon_web_v1_update_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_sermon_web_v1_update_proto_goTypes = []any{
-	(UpdateStatus)(0),                // 0: sermon.web.v1.UpdateStatus
-	(UpdateAvailability)(0),          // 1: sermon.web.v1.UpdateAvailability
-	(PackageManager)(0),              // 2: sermon.web.v1.PackageManager
-	(*GetNodeUpdatesRequest)(nil),    // 3: sermon.web.v1.GetNodeUpdatesRequest
-	(*GetNodeUpdatesResponse)(nil),   // 4: sermon.web.v1.GetNodeUpdatesResponse
-	(*ListFleetUpdatesRequest)(nil),  // 5: sermon.web.v1.ListFleetUpdatesRequest
-	(*ListFleetUpdatesResponse)(nil), // 6: sermon.web.v1.ListFleetUpdatesResponse
-	(*NodeUpdates)(nil),              // 7: sermon.web.v1.NodeUpdates
-	(*UpdatePackage)(nil),            // 8: sermon.web.v1.UpdatePackage
-	(*HostUpdatePermissions)(nil),    // 9: sermon.web.v1.HostUpdatePermissions
-	(*timestamppb.Timestamp)(nil),    // 10: google.protobuf.Timestamp
+	(UpdateStatus)(0),                 // 0: sermon.web.v1.UpdateStatus
+	(UpdateAvailability)(0),           // 1: sermon.web.v1.UpdateAvailability
+	(PackageManager)(0),               // 2: sermon.web.v1.PackageManager
+	(*RefreshUpdateInfoRequest)(nil),  // 3: sermon.web.v1.RefreshUpdateInfoRequest
+	(*RefreshUpdateInfoResponse)(nil), // 4: sermon.web.v1.RefreshUpdateInfoResponse
+	(*GetNodeUpdatesRequest)(nil),     // 5: sermon.web.v1.GetNodeUpdatesRequest
+	(*GetNodeUpdatesResponse)(nil),    // 6: sermon.web.v1.GetNodeUpdatesResponse
+	(*ListFleetUpdatesRequest)(nil),   // 7: sermon.web.v1.ListFleetUpdatesRequest
+	(*ListFleetUpdatesResponse)(nil),  // 8: sermon.web.v1.ListFleetUpdatesResponse
+	(*NodeUpdates)(nil),               // 9: sermon.web.v1.NodeUpdates
+	(*UpdatePackage)(nil),             // 10: sermon.web.v1.UpdatePackage
+	(*HostUpdatePermissions)(nil),     // 11: sermon.web.v1.HostUpdatePermissions
+	(*timestamppb.Timestamp)(nil),     // 12: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_update_proto_depIdxs = []int32{
-	7,  // 0: sermon.web.v1.GetNodeUpdatesResponse.node:type_name -> sermon.web.v1.NodeUpdates
-	8,  // 1: sermon.web.v1.GetNodeUpdatesResponse.packages:type_name -> sermon.web.v1.UpdatePackage
-	7,  // 2: sermon.web.v1.ListFleetUpdatesResponse.nodes:type_name -> sermon.web.v1.NodeUpdates
+	9,  // 0: sermon.web.v1.GetNodeUpdatesResponse.node:type_name -> sermon.web.v1.NodeUpdates
+	10, // 1: sermon.web.v1.GetNodeUpdatesResponse.packages:type_name -> sermon.web.v1.UpdatePackage
+	9,  // 2: sermon.web.v1.ListFleetUpdatesResponse.nodes:type_name -> sermon.web.v1.NodeUpdates
 	0,  // 3: sermon.web.v1.NodeUpdates.status:type_name -> sermon.web.v1.UpdateStatus
 	1,  // 4: sermon.web.v1.NodeUpdates.availability:type_name -> sermon.web.v1.UpdateAvailability
 	2,  // 5: sermon.web.v1.NodeUpdates.package_manager:type_name -> sermon.web.v1.PackageManager
-	10, // 6: sermon.web.v1.NodeUpdates.collected_at:type_name -> google.protobuf.Timestamp
-	10, // 7: sermon.web.v1.NodeUpdates.received_at:type_name -> google.protobuf.Timestamp
-	10, // 8: sermon.web.v1.NodeUpdates.last_upgrade_at:type_name -> google.protobuf.Timestamp
-	10, // 9: sermon.web.v1.NodeUpdates.oldest_security_since:type_name -> google.protobuf.Timestamp
-	9,  // 10: sermon.web.v1.NodeUpdates.permissions:type_name -> sermon.web.v1.HostUpdatePermissions
-	10, // 11: sermon.web.v1.UpdatePackage.first_seen_at:type_name -> google.protobuf.Timestamp
-	3,  // 12: sermon.web.v1.UpdateService.GetNodeUpdates:input_type -> sermon.web.v1.GetNodeUpdatesRequest
-	5,  // 13: sermon.web.v1.UpdateService.ListFleetUpdates:input_type -> sermon.web.v1.ListFleetUpdatesRequest
-	4,  // 14: sermon.web.v1.UpdateService.GetNodeUpdates:output_type -> sermon.web.v1.GetNodeUpdatesResponse
-	6,  // 15: sermon.web.v1.UpdateService.ListFleetUpdates:output_type -> sermon.web.v1.ListFleetUpdatesResponse
-	14, // [14:16] is the sub-list for method output_type
-	12, // [12:14] is the sub-list for method input_type
+	12, // 6: sermon.web.v1.NodeUpdates.collected_at:type_name -> google.protobuf.Timestamp
+	12, // 7: sermon.web.v1.NodeUpdates.received_at:type_name -> google.protobuf.Timestamp
+	12, // 8: sermon.web.v1.NodeUpdates.last_upgrade_at:type_name -> google.protobuf.Timestamp
+	12, // 9: sermon.web.v1.NodeUpdates.oldest_security_since:type_name -> google.protobuf.Timestamp
+	11, // 10: sermon.web.v1.NodeUpdates.permissions:type_name -> sermon.web.v1.HostUpdatePermissions
+	12, // 11: sermon.web.v1.UpdatePackage.first_seen_at:type_name -> google.protobuf.Timestamp
+	5,  // 12: sermon.web.v1.UpdateService.GetNodeUpdates:input_type -> sermon.web.v1.GetNodeUpdatesRequest
+	7,  // 13: sermon.web.v1.UpdateService.ListFleetUpdates:input_type -> sermon.web.v1.ListFleetUpdatesRequest
+	3,  // 14: sermon.web.v1.UpdateService.RefreshUpdateInfo:input_type -> sermon.web.v1.RefreshUpdateInfoRequest
+	6,  // 15: sermon.web.v1.UpdateService.GetNodeUpdates:output_type -> sermon.web.v1.GetNodeUpdatesResponse
+	8,  // 16: sermon.web.v1.UpdateService.ListFleetUpdates:output_type -> sermon.web.v1.ListFleetUpdatesResponse
+	4,  // 17: sermon.web.v1.UpdateService.RefreshUpdateInfo:output_type -> sermon.web.v1.RefreshUpdateInfoResponse
+	15, // [15:18] is the sub-list for method output_type
+	12, // [12:15] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
 	12, // [12:12] is the sub-list for extension extendee
 	0,  // [0:12] is the sub-list for field type_name
@@ -944,7 +1035,7 @@ func file_sermon_web_v1_update_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_update_proto_rawDesc), len(file_sermon_web_v1_update_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

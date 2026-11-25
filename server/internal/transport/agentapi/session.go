@@ -102,6 +102,8 @@ type liveSession struct {
 	end      func(error)   // ends the session with the given cause
 	commands chan struct{} // on-demand rotation requests for the stream
 	config   chan struct{} // the organization's agent configuration changed (ADR 0030)
+	// nodeCommands: a command for the node was stored (M4-11).
+	nodeCommands chan struct{}
 	// liveCommands holds the newest start or stop of the live view (M3-14).
 	liveCommands chan liveCommand
 
@@ -308,8 +310,11 @@ type SessionHandler struct {
 	ingest   *ingest.Service
 	configs  AgentConfigs
 	live     LiveViews
-	recheck  time.Duration
-	logger   *slog.Logger
+	commands Commands
+	// commandPoll is how often a session looks for commands without a wake-up.
+	commandPoll time.Duration
+	recheck     time.Duration
+	logger      *slog.Logger
 }
 
 // HandlerOption configures the SessionHandler.
@@ -363,7 +368,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 
 	ctx, end := context.WithCancelCause(ctx)
 	defer end(nil)
-	live := &liveSession{end: end, commands: make(chan struct{}, 1), config: make(chan struct{}, 1), liveCommands: make(chan liveCommand, 1), ActiveSession: ActiveSession{
+	live := &liveSession{end: end, commands: make(chan struct{}, 1), config: make(chan struct{}, 1), nodeCommands: make(chan struct{}, 1), liveCommands: make(chan liveCommand, 1), ActiveSession: ActiveSession{
 		Org: id.Org, Node: id.Node, Serial: id.Serial, RemoteIP: id.RemoteIP,
 		AgentVersion: hello.GetAgentVersion(), Hostname: textsafe.Visible(hello.GetHostFacts().GetHostname()), Since: time.Now(),
 	}}
@@ -409,6 +414,16 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 	if err := h.sendConfig(ctx, id, config, stream); err != nil {
 		return err
 	}
+	// A new session: also what went out before without result (the agent runs a run ID once).
+	if err := h.deliverCommands(ctx, id, true, stream); err != nil {
+		return err
+	}
+	poll := h.commandPoll
+	if poll <= 0 {
+		poll = CommandPoll
+	}
+	commandTick := time.NewTicker(poll)
+	defer commandTick.Stop()
 
 	// Receive in the background, so that the session can be ended from outside (lock, replace).
 	messages := make(chan received)
@@ -452,6 +467,14 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 			}
 		case <-live.config:
 			if err := h.sendConfig(ctx, id, config, stream); err != nil {
+				return err
+			}
+		case <-live.nodeCommands:
+			if err := h.deliverCommands(ctx, id, false, stream); err != nil {
+				return err
+			}
+		case <-commandTick.C:
+			if err := h.deliverCommands(ctx, id, false, stream); err != nil {
 				return err
 			}
 		case <-flush:
@@ -610,7 +633,10 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		report := toReport(r)
 		return ingest.Batch{Seq: b.GetSeq(), Update: &report}
 	}
-	if b.GetCommandResult() != nil {
+	if r := b.GetCommandResult(); r != nil {
+		if result := toResult(r); result != nil {
+			return ingest.Batch{Seq: b.GetSeq(), Result: result}
+		}
 		return ingest.Batch{Seq: b.GetSeq(), Unhandled: true}
 	}
 	if events := b.GetSecurityEvents(); events != nil {

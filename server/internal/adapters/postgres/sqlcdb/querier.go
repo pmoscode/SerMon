@@ -62,6 +62,8 @@ type Querier interface {
 	// The packages stored for the organization's other nodes (its limit).
 	CountOtherNodeUpdatePackages(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	CountPasskeys(ctx context.Context, userID uuid.UUID) (int64, error)
+	// Refreshes asked for the node since node_since and for the organization since org_since.
+	CountRecentRefreshes(ctx context.Context, arg CountRecentRefreshesParams) (CountRecentRefreshesRow, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
@@ -107,6 +109,9 @@ type Querier interface {
 	DeleteTOTP(ctx context.Context, userID uuid.UUID) error
 	DeleteUpdatePolicy(ctx context.Context, groupID uuid.UUID) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
+	// What the node's session sends: the pending commands, and after a reconnect the sent ones without
+	// result as well.
+	DeliverableNodeCommands(ctx context.Context, arg DeliverableNodeCommandsParams) ([]DeliverableNodeCommandsRow, error)
 	EnrollmentTokenByHash(ctx context.Context, arg EnrollmentTokenByHashParams) (EnrollmentTokenByHashRow, error)
 	// Metric series and points (M1-22, ADR 0001). Every query runs in a tenant transaction.
 	// Registers series of the current organization (one row per position of the arrays) and returns
@@ -115,6 +120,7 @@ type Querier interface {
 	EnsureSeries(ctx context.Context, arg EnsureSeriesParams) ([]EnsureSeriesRow, error)
 	// Ends a silence at at; one that has not begun yet is cancelled.
 	ExpireAlertSilence(ctx context.Context, arg ExpireAlertSilenceParams) (int64, error)
+	ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommandsParams) error
 	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
 	// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.
 	FailedLoginBuckets(ctx context.Context, arg FailedLoginBucketsParams) ([]FailedLoginBucketsRow, error)
@@ -134,6 +140,7 @@ type Querier interface {
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
+	GetNodeCommand(ctx context.Context, id uuid.UUID) (GetNodeCommandRow, error)
 	// A node of the scope with its report; no report: the report's columns are NULL.
 	GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) (GetNodeUpdatesRow, error)
 	GetNotificationChannel(ctx context.Context, id uuid.UUID) (GetNotificationChannelRow, error)
@@ -168,6 +175,8 @@ type Querier interface {
 	InsertMaintenanceWindow(ctx context.Context, arg InsertMaintenanceWindowParams) error
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
+	// Commands of the server to the agents (M4-11), always in the tenant of the node's organization.
+	InsertNodeCommand(ctx context.Context, arg InsertNodeCommandParams) error
 	// Notification channels and deliveries (M2-10, ADR 0007). Every query runs in the
 	// organization's tenant transaction.
 	InsertNotificationChannel(ctx context.Context, arg InsertNotificationChannelParams) error
@@ -254,6 +263,8 @@ type Querier interface {
 	LockPKI(ctx context.Context) error
 	// Serializes adding passkeys of a user (the limit holds under parallel registrations).
 	LockUserPasskeys(ctx context.Context, userID uuid.UUID) error
+	// A refresh has no result: sent is done.
+	MarkNodeCommandsSent(ctx context.Context, arg MarkNodeCommandsSentParams) error
 	// Moves seen_at forward to the newest data time of a write (never back).
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
 	// The node of a group with this machine-id whose takeover window is open.
@@ -268,6 +279,8 @@ type Querier interface {
 	NodeTagsForUpdate(ctx context.Context, arg NodeTagsForUpdateParams) (NodeTagsForUpdateRow, error)
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
+	// Wakes the instance holding the node's session; the payload is the node's ID only.
+	NotifyNodeCommands(ctx context.Context, nodeID uuid.UUID) error
 	OIDCMappedOrganizations(ctx context.Context, groups []string) ([]uuid.UUID, error)
 	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
 	// The admins of all groups, for the mails about lock and deletion.
@@ -297,6 +310,8 @@ type Querier interface {
 	// age the ingest accepts (secevent.MaxAge) and a margin before since; it takes 5 min ahead.
 	ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecurityEventsParams) ([]ReceivedSecurityEventsRow, error)
 	RecordAgentConfigApplied(ctx context.Context, arg RecordAgentConfigAppliedParams) (int64, error)
+	// The agent's phase of a run of this node: a start only before any phase, a final phase once.
+	RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int64, error)
 	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
 	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)

@@ -4341,7 +4341,32 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Validierung (Fenster, Zeitzonen, Grenzen), YAML-Round-Trip, Rechte und Step-up (Abdeckungstest).
 - **Abhängig von:** M4-09
 
-#### ☐ M4-11 – Befehle an die Agents über Instanzen hinweg · S · M 🔒
+#### ☑ M4-11 – Befehle an die Agents über Instanzen hinweg · S · M 🔒
+> Erledigt (ADR 0015, Nachtrag M4-11; Threat Model T95, T96):
+> - **`domain/command`:** Arten (Refresh, Update mit Scope, Reboot mit Grund, Self-Update mit Version), Zustände
+>   (wartend, gesendet, läuft, fertig, abgelaufen), Phasen des Agents; die `run_id` ist eine UUID v4 oder v7 des Servers.
+> - **Tabelle `node_commands`** (Migration 00048, RLS): Speichern sendet in derselben Transaktion `NOTIFY
+>   sermon_node_commands` mit der Node-ID. `DB.Listen` hört mit eigener Verbindung zu (außerhalb des Pools) und weckt die
+>   Session über `Sessions.CommandsWaiting`; jede Session schaut zusätzlich alle 30 s nach.
+> - **Session:** Beim Start gehen die wartenden und die gesendeten Befehle ohne Ergebnis hinaus (erneute Zustellung nach
+>   Reconnect), danach nur wartende. Ein Refresh gilt mit dem Senden als erledigt.
+> - **`CommandResult`** geht wie die Berichte durch den Ingest (in Reihenfolge bestätigt) und landet nur bei einem Lauf
+>   des Nodes aus dem Zertifikat: ein Start nur vor jeder Phase, eine Endphase nur einmal. Ausgabe höchstens 256 KiB
+>   ohne NUL (PostgreSQL), Grund ohne unsichtbare Zeichen. Zähler `CommandResults` und `CommandResultsIgnored`.
+> - **Aus M4-09: `UpdateService.RefreshUpdateInfo`** mit `run_updates` auf der Gruppe des Nodes, höchstens einmal je Node
+>   in 5 min und 60 je Org und Minute (`RESOURCE_EXHAUSTED`); ohne Step-up, weil er nur neu auflistet.
+> - **Abweichungen:**
+>   - Abgelaufen wird ein Befehl, wenn die Session seines Nodes nachschaut; Lesende sehen ihn schon vorher so
+>     (`EffectiveState`). Ein Lauf über alle Orgs bräuchte eine Funktion mit Rechten über die Mandanten hinweg.
+>   - Die Aufbewahrung (1 Jahr) übernimmt der Orchestrator in M4-13: Er arbeitet ohnehin je Org unter einem Lease.
+> - **Tests:**
+>   - PostgreSQL: zwei Instanzen (die eine speichert, die andere wird per `NOTIFY` geweckt und stellt zu), einmal je
+>     Session und erneut nach Reconnect, Ablauf, Phasen (Start, Ende, Wiederholung, fremder Node, fremde Org,
+>     unbekannter Lauf, NUL und Steuerzeichen), Grenzen des Refresh.
+>   - Session: Zustellung beim Start, nach dem Wecken, per Abfrage, nach Reconnect, kein abgelaufener und kein fremder
+>     Befehl, Ergebnis unter dem Node des Zertifikats. Ingest: Reihenfolge, Schreibfehler, ohne Speicher.
+>   - Dienst und Web-API: Operator darf, Viewer nicht, fremde Org `NOT_FOUND`, zweiter Refresh `RESOURCE_EXHAUSTED`.
+> - **Gegenproben** für 23 Prüfungen, alle erkannt (eine erst nach einem schärferen Test).
 - **Ziel:** Befehle erreichen den Agent, egal welche Instanz die Session hält (ADR 0015).
   - Tabelle `node_commands` (wartend, gesendet, bestätigt, fertig, abgelaufen); die Instanz mit der Session stellt zu
     (NOTIFY und Abfrage als Rückfall).

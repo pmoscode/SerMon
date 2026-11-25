@@ -2,7 +2,9 @@ package updates
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
@@ -18,15 +20,54 @@ type Fleet struct {
 	RebootRequired int
 }
 
-// Service shows the reports of the nodes a caller may view (ViewNodes).
+// ErrTooSoon means a refresh was asked for the node within 5 minutes, or too many for the
+// organization within a minute.
+var ErrTooSoon = errors.New("refreshed a moment ago, try again later")
+
+// Refresher asks a node's agent for fresh update information (M4-11).
+type Refresher interface {
+	// RequestRefresh enqueues the refresh; ErrTooSoon beyond the limits.
+	RequestRefresh(ctx context.Context, org tenant.OrgID, node identity.NodeID, by identity.UserID, now time.Time) error
+}
+
+// Service shows the reports of the nodes a caller may view (ViewNodes) and asks for fresh ones
+// (RunUpdates).
 type Service struct {
-	store  Store
-	policy authz.Policy
+	store     Store
+	policy    authz.Policy
+	refresher Refresher
+	now       func() time.Time
 }
 
 // NewService returns the service.
 func NewService(store Store, policy authz.Policy) *Service {
-	return &Service{store: store, policy: policy}
+	return &Service{store: store, policy: policy, now: time.Now}
+}
+
+// WithRefresher lets the service ask agents for fresh update information.
+func (s *Service) WithRefresher(r Refresher, now func() time.Time) *Service {
+	s.refresher, s.now = r, now
+	return s
+}
+
+// Refresh asks the node's agent to list its updates with fresh sources (run_updates on its
+// group): access.ErrNotFound for a node the caller can't view, access.ErrForbidden without the
+// right, ErrTooSoon beyond the limits.
+func (s *Service) Refresh(ctx context.Context, c access.Caller, node identity.NodeID) error {
+	n, err := s.Node(ctx, c, node)
+	if err != nil {
+		return err
+	}
+	if !s.policy.Allowed(c.Principal, authz.RunUpdates, authz.InGroup(c.Principal.Org, n.Group)) {
+		return access.ErrForbidden
+	}
+	if s.refresher == nil {
+		return errors.New("no refresher")
+	}
+	if err := s.refresher.RequestRefresh(ctx, c.Principal.Org, node, c.Principal.User, s.now()); err != nil {
+		return fmt.Errorf("request refresh: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) scope(c access.Caller) (tenant.Scope, error) {

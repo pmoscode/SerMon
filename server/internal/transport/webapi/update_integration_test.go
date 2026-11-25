@@ -112,3 +112,29 @@ func TestUpdatePolicies_AdminsSetViewersRead(t *testing.T) {
 		t.Errorf("after reset: %v", got.Msg.GetPolicy())
 	}
 }
+
+// M4-11: Ann (admin) asks for fresh update information of Alpha's node once within 5 minutes;
+// Mia (viewer) may not, Bea (Beta) doesn't find the node.
+func TestUpdates_RefreshOnRequest(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ownerSQL(t, "DELETE FROM node_commands WHERE node_id = '"+nodeAl+"'")
+	ctx := context.Background()
+	refresh := func(l loggedIn) error {
+		_, err := l.updates.RefreshUpdateInfo(ctx, connect.NewRequest(&webv1.RefreshUpdateInfoRequest{NodeId: nodeAl}))
+		return err
+	}
+	ann := login(t, s, "ann@example.org")
+	if err := refresh(ann); err != nil {
+		t.Fatal(err)
+	}
+	if err := refresh(ann); connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Errorf("a second refresh: %v, want RESOURCE_EXHAUSTED", err)
+	}
+	if err := refresh(login(t, s, "mia@example.org")); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("a viewer: %v", err)
+	}
+	if err := refresh(login(t, s, "bea@example.org")); connect.CodeOf(err) != connect.CodeNotFound {
+		t.Errorf("another organization: %v", err)
+	}
+}

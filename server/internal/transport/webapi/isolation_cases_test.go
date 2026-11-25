@@ -339,6 +339,10 @@ var tenantIsolationCases = map[string]isolationCase{
 		_, err := e.updates.GetNodeUpdates(ctx, connect.NewRequest(&webv1.GetNodeUpdatesRequest{NodeId: e.nodeA}))
 		return err
 	}},
+	"/sermon.web.v1.UpdateService/RefreshUpdateInfo": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updates.RefreshUpdateInfo(ctx, connect.NewRequest(&webv1.RefreshUpdateInfoRequest{NodeId: e.nodeA}))
+		return err
+	}},
 	"/sermon.web.v1.UpdateService/ListFleetUpdates": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.updates.ListFleetUpdates(ctx, connect.NewRequest(&webv1.ListFleetUpdatesRequest{}))
 		if err != nil {

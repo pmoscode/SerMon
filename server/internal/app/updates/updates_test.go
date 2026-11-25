@@ -120,3 +120,40 @@ func TestService_OtherNodesAreNotFoundAndNoRightIsForbidden(t *testing.T) {
 		t.Error("Fleet() on a failing store succeeded")
 	}
 }
+
+type refresher struct {
+	asked []identity.NodeID
+	err   error
+}
+
+func (r *refresher) RequestRefresh(_ context.Context, o tenant.OrgID, n identity.NodeID, by identity.UserID, _ time.Time) error {
+	if o != org || by != user {
+		return errors.New("wrong organization or user")
+	}
+	r.asked = append(r.asked, n)
+	return r.err
+}
+
+// M4-11: operators of the node's group ask for a refresh; viewers can't, other nodes are not
+// found, the limits come from the refresher.
+func TestService_OperatorsAskForFreshUpdateInformation(t *testing.T) {
+	r := &refresher{}
+	svc := updates.NewService(&store{}, authz.NewPolicy()).WithRefresher(r, func() time.Time { return t0 })
+	ctx := context.Background()
+	if err := svc.Refresh(ctx, caller(role.Operator, false), node); err != nil || len(r.asked) != 1 || r.asked[0] != node {
+		t.Fatalf("Refresh() = %v, asked %v", err, r.asked)
+	}
+	if err := svc.Refresh(ctx, caller(role.Viewer, true), node); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("a viewer: %v", err)
+	}
+	if err := svc.Refresh(ctx, caller(role.Admin, true), identity.NodeID(uuid.New())); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("another node: %v", err)
+	}
+	r.err = updates.ErrTooSoon
+	if err := svc.Refresh(ctx, caller(role.Admin, true), node); !errors.Is(err, updates.ErrTooSoon) {
+		t.Errorf("too soon: %v", err)
+	}
+	if len(r.asked) != 2 {
+		t.Errorf("asked %d times, want 2 (not for the viewer or another node)", len(r.asked))
+	}
+}

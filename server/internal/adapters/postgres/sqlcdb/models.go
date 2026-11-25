@@ -250,6 +250,28 @@ type Node struct {
 	LearningSince    time.Time
 }
 
+type NodeCommand struct {
+	OrgID           uuid.UUID
+	ID              uuid.UUID
+	NodeID          uuid.UUID
+	Kind            int16
+	Scope           pgtype.Int2
+	Reason          string
+	Version         string
+	State           int16
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	CreatedBy       *uuid.UUID
+	SentAt          *time.Time
+	Phase           pgtype.Int2
+	ExitCode        pgtype.Int4
+	ResultReason    string
+	Output          string
+	OutputTruncated bool
+	StartedAt       *time.Time
+	EndedAt         *time.Time
+}
+
 type NodeGroup struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID

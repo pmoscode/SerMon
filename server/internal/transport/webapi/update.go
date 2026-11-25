@@ -66,6 +66,25 @@ func (h *UpdateHandler) GetNodeUpdates(ctx context.Context, req *connect.Request
 	return connect.NewResponse(res), nil
 }
 
+// RefreshUpdateInfo asks a node's agent for fresh update information.
+func (h *UpdateHandler) RefreshUpdateInfo(ctx context.Context, req *connect.Request[webv1.RefreshUpdateInfoRequest]) (*connect.Response[webv1.RefreshUpdateInfoResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	if err := h.updates.Refresh(ctx, c, identity.NodeID(id)); err != nil {
+		if errors.Is(err, updates.ErrTooSoon) {
+			return nil, connect.NewError(connect.CodeResourceExhausted, updates.ErrTooSoon)
+		}
+		return nil, h.failure(ctx, "refresh update info", err)
+	}
+	return connect.NewResponse(&webv1.RefreshUpdateInfoResponse{}), nil
+}
+
 // ListFleetUpdates returns the visible nodes with their status and the counts per status.
 func (h *UpdateHandler) ListFleetUpdates(ctx context.Context, _ *connect.Request[webv1.ListFleetUpdatesRequest]) (*connect.Response[webv1.ListFleetUpdatesResponse], error) {
 	c, err := callerFrom(ctx)

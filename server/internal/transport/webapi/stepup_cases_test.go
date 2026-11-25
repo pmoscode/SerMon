@@ -95,6 +95,7 @@ var stepUpExempt = map[string]string{
 	"/sermon.web.v1.NodeService/ListFilesystems":                  "reads only (no idempotency option)",
 	"/sermon.web.v1.NotificationChannelService/TestChannel":       "sends a test message, changes no setting (manage_channels)",
 	"/sermon.web.v1.PasskeyService/RenamePasskey":                 "the name only",
+	"/sermon.web.v1.UpdateService/RefreshUpdateInfo":              "lists the updates again, changes nothing on the host (rate-limited)",
 	"/sermon.web.v1.SecurityEventService/ListSecurityEvents":      "reads only (no idempotency option)",
 	"/sermon.web.v1.SetupService/CompleteSetup":                   "first start, proven by the setup token",
 	"/sermon.web.v1.TwoFactorService/ConfirmTotpSetup":            "finishes a setup begun with a step-up, proven with a code of the new secret",

@@ -19,7 +19,21 @@ service UpdateService {
   rpc ListFleetUpdates(ListFleetUpdatesRequest) returns (ListFleetUpdatesResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // RefreshUpdateInfo asks the node's agent to list its updates with fresh sources (run_updates
+  // on its group; M4-11). At most once per node within 5 minutes and 60 times a minute per
+  // organization, else RESOURCE_EXHAUSTED; a node the caller can't view is NOT_FOUND. The new
+  // report follows within minutes, once the agent is connected.
+  rpc RefreshUpdateInfo(RefreshUpdateInfoRequest) returns (RefreshUpdateInfoResponse);
 }
+
+// RefreshUpdateInfoRequest names the node.
+message RefreshUpdateInfoRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// RefreshUpdateInfoResponse has no fields.
+message RefreshUpdateInfoResponse {}
 
 // UpdateStatus is where a node stands with its updates; a reboot is separate (reboot_required).
 enum UpdateStatus {

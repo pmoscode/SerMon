@@ -53,3 +53,17 @@ später soll ein SaaS-Angebot ohne Umbau möglich sein. Die Zielgröße sind kle
   (PostgreSQL `LISTEN/NOTIFY` oder ein Broker) brächte für Daten, die nie gespeichert werden, einen neuen Pfad für
   Mandantendaten. Bei mehreren Instanzen hinter einem Load-Balancer muss dieser Web- und Agent-Verbindungen derselben
   Instanz zuordnen, damit die Live-Ansicht funktioniert. Das wird bei HA neu entschieden.
+
+## Nachtrag M4-11
+
+- **Befehle an die Agents über Instanzen hinweg:** Ein Befehl (Update-Infos auffrischen, Updates installieren, Reboot,
+  Self-Update) liegt in `node_commands` (RLS). Die Instanz, die ihn speichert, sendet in derselben Transaktion
+  `NOTIFY sermon_node_commands` mit der Node-ID als einzigem Inhalt. Jede Instanz hört mit einer eigenen Verbindung zu;
+  die mit der Session des Nodes holt seine Befehle in dessen Mandanten und stellt sie zu. Als Rückfall schaut jede
+  Session alle 30 s nach, falls ein `NOTIFY` verloren ging (etwa während einer neuen Verbindung des Zuhörers).
+- **Anders als die Live-Ansicht** (Nachtrag M3-14): Befehle sind gespeicherte Daten. Über den Bus läuft nur eine ID,
+  kein neuer Pfad für Mandantendaten.
+- **Zustellung mindestens einmal:** Eine neue Session schickt auch die gesendeten Befehle ohne Ergebnis noch einmal; die
+  `run_id` macht sie im Agent idempotent (M4-12). Ein Befehl verfällt, wenn sein Node ihn nicht vor `expires_at` abholt.
+  Ein Refresh hat kein Ergebnis und gilt mit dem Senden als erledigt.
+

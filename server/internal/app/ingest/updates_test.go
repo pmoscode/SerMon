@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
+	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/update"
@@ -238,5 +239,97 @@ func TestUpdates_WithoutAWriterAreDroppedButAcknowledged(t *testing.T) {
 	}
 	if n := w.svc.Stats().UpdateReportsRejected.Load(); n != 1 {
 		t.Errorf("rejected = %d, want 1", n)
+	}
+}
+
+// resultStore records like the database: each run once per phase, a final phase once.
+type resultStore struct {
+	mu     sync.Mutex
+	fail   bool
+	phases map[uuid.UUID][]command.Phase
+	nodes  []identity.NodeID
+	known  map[uuid.UUID]bool
+}
+
+func (s *resultStore) Record(_ context.Context, _ tenant.OrgID, node identity.NodeID, run uuid.UUID, r command.Result) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fail {
+		return false, errors.New("database down")
+	}
+	if !s.known[run] {
+		return false, nil
+	}
+	if s.phases == nil {
+		s.phases = map[uuid.UUID][]command.Phase{}
+	}
+	if p := s.phases[run]; len(p) > 0 && p[len(p)-1].Final() {
+		return false, nil
+	}
+	s.phases[run] = append(s.phases[run], r.Phase)
+	s.nodes = append(s.nodes, node)
+	return true, nil
+}
+
+// M4-11: the agent's phases of a run are written at the flush under the session's node and
+// acknowledged in order; unknown runs and resends are counted, not failed.
+func TestResults_AreRecordedAtTheFlushAndAcknowledgedInOrder(t *testing.T) {
+	w := newWorld(t, ingest.DefaultConfig())
+	run := uuid.Must(uuid.NewV7())
+	store := &resultStore{known: map[uuid.UUID]bool{run: true}}
+	w.svc.SetResultWriter(store)
+	s := w.open(t)
+	ctx := context.Background()
+	last := send(t, w, s, 1, t0, 1, 2, 3)
+	result := func(seq uint64, id uuid.UUID, p command.Phase) ingest.Batch {
+		return ingest.Batch{Seq: seq, Result: &ingest.Result{Run: id, Result: command.Result{Phase: p}}}
+	}
+	s.Accept(ctx, result(last+1, run, command.Started))
+	s.Accept(ctx, result(last+2, run, command.Succeeded))
+	s.Accept(ctx, result(last+3, run, command.Succeeded)) // resent
+	s.Accept(ctx, result(last+4, uuid.Must(uuid.NewV7()), command.Failed))
+	if !s.Due() {
+		t.Error("results waiting should flush at once")
+	}
+	if ack, err := s.Flush(ctx); err != nil || ack != 0 {
+		t.Fatalf("Flush() = %d, %v; the metric window before is open", ack, err)
+	}
+	if got := store.phases[run]; len(got) != 2 || got[1] != command.Succeeded || store.nodes[0] != node {
+		t.Errorf("recorded %v for %v", got, store.nodes)
+	}
+	if st := w.svc.Stats(); st.CommandResults.Load() != 2 || st.CommandResultsIgnored.Load() != 2 {
+		t.Errorf("results %d, ignored %d", st.CommandResults.Load(), st.CommandResultsIgnored.Load())
+	}
+	send(t, w, s, last+5, t0.Add(10*time.Second), 4)
+	if ack, err := s.Flush(ctx); err != nil || ack != last+4 {
+		t.Errorf("Flush() = %d, %v; want %d", ack, err, last+4)
+	}
+}
+
+func TestResults_AWriteErrorAcknowledgesNothingAndRetries(t *testing.T) {
+	w := newWorld(t, ingest.DefaultConfig())
+	run := uuid.Must(uuid.NewV7())
+	store := &resultStore{known: map[uuid.UUID]bool{run: true}, fail: true}
+	w.svc.SetResultWriter(store)
+	s := w.open(t)
+	ctx := context.Background()
+	w.clock.Set(t0.Add(time.Second))
+	s.Accept(ctx, ingest.Batch{Seq: 1, Result: &ingest.Result{Run: run, Result: command.Result{Phase: command.Started}}})
+	if ack, err := s.Flush(ctx); err == nil || ack != 0 {
+		t.Fatalf("Flush() = %d, %v", ack, err)
+	}
+	store.fail = false
+	if ack, err := s.Flush(ctx); err != nil || ack != 1 || len(store.phases[run]) != 1 {
+		t.Fatalf("retry = %d, %v, %v", ack, err, store.phases)
+	}
+}
+
+func TestResults_WithoutAWriterAreAcknowledged(t *testing.T) {
+	w := newWorld(t, ingest.DefaultConfig())
+	s := w.open(t)
+	w.clock.Set(t0.Add(time.Second))
+	s.Accept(context.Background(), ingest.Batch{Seq: 1, Result: &ingest.Result{Run: uuid.New(), Result: command.Result{Phase: command.Lost}}})
+	if ack, err := s.Flush(context.Background()); err != nil || ack != 1 || w.svc.Stats().CommandResultsIgnored.Load() != 1 {
+		t.Fatalf("Flush() = %d, %v", ack, err)
 	}
 }

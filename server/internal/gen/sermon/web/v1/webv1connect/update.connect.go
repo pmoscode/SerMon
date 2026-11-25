@@ -39,6 +39,9 @@ const (
 	// UpdateServiceListFleetUpdatesProcedure is the fully-qualified name of the UpdateService's
 	// ListFleetUpdates RPC.
 	UpdateServiceListFleetUpdatesProcedure = "/sermon.web.v1.UpdateService/ListFleetUpdates"
+	// UpdateServiceRefreshUpdateInfoProcedure is the fully-qualified name of the UpdateService's
+	// RefreshUpdateInfo RPC.
+	UpdateServiceRefreshUpdateInfoProcedure = "/sermon.web.v1.UpdateService/RefreshUpdateInfo"
 )
 
 // UpdateServiceClient is a client for the sermon.web.v1.UpdateService service.
@@ -49,6 +52,11 @@ type UpdateServiceClient interface {
 	// ListFleetUpdates returns the nodes the caller may view with their update status, without
 	// packages, by host name, and how many nodes have each status.
 	ListFleetUpdates(context.Context, *connect.Request[v1.ListFleetUpdatesRequest]) (*connect.Response[v1.ListFleetUpdatesResponse], error)
+	// RefreshUpdateInfo asks the node's agent to list its updates with fresh sources (run_updates
+	// on its group; M4-11). At most once per node within 5 minutes and 60 times a minute per
+	// organization, else RESOURCE_EXHAUSTED; a node the caller can't view is NOT_FOUND. The new
+	// report follows within minutes, once the agent is connected.
+	RefreshUpdateInfo(context.Context, *connect.Request[v1.RefreshUpdateInfoRequest]) (*connect.Response[v1.RefreshUpdateInfoResponse], error)
 }
 
 // NewUpdateServiceClient constructs a client for the sermon.web.v1.UpdateService service. By
@@ -76,13 +84,20 @@ func NewUpdateServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 			connect.WithClientOptions(opts...),
 		),
+		refreshUpdateInfo: connect.NewClient[v1.RefreshUpdateInfoRequest, v1.RefreshUpdateInfoResponse](
+			httpClient,
+			baseURL+UpdateServiceRefreshUpdateInfoProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("RefreshUpdateInfo")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // updateServiceClient implements UpdateServiceClient.
 type updateServiceClient struct {
-	getNodeUpdates   *connect.Client[v1.GetNodeUpdatesRequest, v1.GetNodeUpdatesResponse]
-	listFleetUpdates *connect.Client[v1.ListFleetUpdatesRequest, v1.ListFleetUpdatesResponse]
+	getNodeUpdates    *connect.Client[v1.GetNodeUpdatesRequest, v1.GetNodeUpdatesResponse]
+	listFleetUpdates  *connect.Client[v1.ListFleetUpdatesRequest, v1.ListFleetUpdatesResponse]
+	refreshUpdateInfo *connect.Client[v1.RefreshUpdateInfoRequest, v1.RefreshUpdateInfoResponse]
 }
 
 // GetNodeUpdates calls sermon.web.v1.UpdateService.GetNodeUpdates.
@@ -95,6 +110,11 @@ func (c *updateServiceClient) ListFleetUpdates(ctx context.Context, req *connect
 	return c.listFleetUpdates.CallUnary(ctx, req)
 }
 
+// RefreshUpdateInfo calls sermon.web.v1.UpdateService.RefreshUpdateInfo.
+func (c *updateServiceClient) RefreshUpdateInfo(ctx context.Context, req *connect.Request[v1.RefreshUpdateInfoRequest]) (*connect.Response[v1.RefreshUpdateInfoResponse], error) {
+	return c.refreshUpdateInfo.CallUnary(ctx, req)
+}
+
 // UpdateServiceHandler is an implementation of the sermon.web.v1.UpdateService service.
 type UpdateServiceHandler interface {
 	// GetNodeUpdates returns a node's report with its packages (view_nodes). A node the caller
@@ -103,6 +123,11 @@ type UpdateServiceHandler interface {
 	// ListFleetUpdates returns the nodes the caller may view with their update status, without
 	// packages, by host name, and how many nodes have each status.
 	ListFleetUpdates(context.Context, *connect.Request[v1.ListFleetUpdatesRequest]) (*connect.Response[v1.ListFleetUpdatesResponse], error)
+	// RefreshUpdateInfo asks the node's agent to list its updates with fresh sources (run_updates
+	// on its group; M4-11). At most once per node within 5 minutes and 60 times a minute per
+	// organization, else RESOURCE_EXHAUSTED; a node the caller can't view is NOT_FOUND. The new
+	// report follows within minutes, once the agent is connected.
+	RefreshUpdateInfo(context.Context, *connect.Request[v1.RefreshUpdateInfoRequest]) (*connect.Response[v1.RefreshUpdateInfoResponse], error)
 }
 
 // NewUpdateServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -126,12 +151,20 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 		connect.WithHandlerOptions(opts...),
 	)
+	updateServiceRefreshUpdateInfoHandler := connect.NewUnaryHandler(
+		UpdateServiceRefreshUpdateInfoProcedure,
+		svc.RefreshUpdateInfo,
+		connect.WithSchema(updateServiceMethods.ByName("RefreshUpdateInfo")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.UpdateService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UpdateServiceGetNodeUpdatesProcedure:
 			updateServiceGetNodeUpdatesHandler.ServeHTTP(w, r)
 		case UpdateServiceListFleetUpdatesProcedure:
 			updateServiceListFleetUpdatesHandler.ServeHTTP(w, r)
+		case UpdateServiceRefreshUpdateInfoProcedure:
+			updateServiceRefreshUpdateInfoHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -147,4 +180,8 @@ func (UnimplementedUpdateServiceHandler) GetNodeUpdates(context.Context, *connec
 
 func (UnimplementedUpdateServiceHandler) ListFleetUpdates(context.Context, *connect.Request[v1.ListFleetUpdatesRequest]) (*connect.Response[v1.ListFleetUpdatesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.ListFleetUpdates is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) RefreshUpdateInfo(context.Context, *connect.Request[v1.RefreshUpdateInfoRequest]) (*connect.Response[v1.RefreshUpdateInfoResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.RefreshUpdateInfo is not implemented"))
 }

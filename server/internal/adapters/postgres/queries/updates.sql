@@ -61,7 +61,8 @@ WHERE node_id = sqlc.arg(node_id);
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at
+       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE n.id = sqlc.arg(node_id)
   AND (sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[]));
@@ -76,7 +77,8 @@ ORDER BY security DESC, name, candidate_version;
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at
+       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[])
 ORDER BY n.hostname, n.id;
@@ -86,14 +88,16 @@ ORDER BY n.hostname, n.id;
 -- name: GetUpdatePolicy :one
 -- A group of the scope with its policy; without one the policy's columns are NULL.
 SELECT g.id, g.name, p.mode, p.window_days, p.window_start_minute, p.window_minutes, p.window_time_zone,
-       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by
+       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by,
+       p.agent_update, p.agent_channel
 FROM node_groups g LEFT JOIN update_policies p ON p.org_id = g.org_id AND p.group_id = g.id
 WHERE g.id = sqlc.arg(group_id)
   AND (sqlc.arg(all_groups)::boolean OR g.id = ANY (sqlc.arg(group_ids)::uuid[]));
 
 -- name: ListUpdatePolicies :many
 SELECT g.id, g.name, p.mode, p.window_days, p.window_start_minute, p.window_minutes, p.window_time_zone,
-       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by
+       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by,
+       p.agent_update, p.agent_channel
 FROM node_groups g LEFT JOIN update_policies p ON p.org_id = g.org_id AND p.group_id = g.id
 WHERE sqlc.arg(all_groups)::boolean OR g.id = ANY (sqlc.arg(group_ids)::uuid[])
 ORDER BY g.name, g.id;
@@ -101,17 +105,20 @@ ORDER BY g.name, g.id;
 -- name: UpsertUpdatePolicy :exec
 INSERT INTO update_policies (
     org_id, group_id, mode, window_days, window_start_minute, window_minutes, window_time_zone,
-    auto_reboot, max_parallel, stop_on_failure, health_check_minutes, updated_at, updated_by)
+    auto_reboot, max_parallel, stop_on_failure, health_check_minutes, updated_at, updated_by,
+    agent_update, agent_channel)
 VALUES (
     current_org_id(), sqlc.arg(group_id), sqlc.arg(mode), sqlc.narg(window_days)::smallint[], sqlc.narg(window_start_minute),
     sqlc.narg(window_minutes), sqlc.narg(window_time_zone), sqlc.arg(auto_reboot), sqlc.arg(max_parallel),
-    sqlc.arg(stop_on_failure), sqlc.arg(health_check_minutes), sqlc.arg(updated_at), sqlc.narg(updated_by))
+    sqlc.arg(stop_on_failure), sqlc.arg(health_check_minutes), sqlc.arg(updated_at), sqlc.narg(updated_by),
+    sqlc.arg(agent_update), sqlc.arg(agent_channel))
 ON CONFLICT (org_id, group_id) DO UPDATE SET
     mode = excluded.mode, window_days = excluded.window_days, window_start_minute = excluded.window_start_minute,
     window_minutes = excluded.window_minutes, window_time_zone = excluded.window_time_zone,
     auto_reboot = excluded.auto_reboot, max_parallel = excluded.max_parallel,
     stop_on_failure = excluded.stop_on_failure, health_check_minutes = excluded.health_check_minutes,
-    updated_at = excluded.updated_at, updated_by = excluded.updated_by;
+    updated_at = excluded.updated_at, updated_by = excluded.updated_by,
+    agent_update = excluded.agent_update, agent_channel = excluded.agent_channel;
 
 -- name: DeleteUpdatePolicy :exec
 DELETE FROM update_policies WHERE group_id = sqlc.arg(group_id);

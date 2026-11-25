@@ -92,7 +92,7 @@ func (s *PolicyService) Set(ctx context.Context, c access.Caller, p Policy) (Pol
 	details := map[string]string{
 		"mode": p.Mode.String(), "auto_reboot": strconv.FormatBool(p.AutoReboot),
 		"max_parallel": strconv.Itoa(p.Rollout.MaxParallel), "stop_on_failure": strconv.FormatBool(p.Rollout.StopOnFailure),
-		"health_check": duration(p.Rollout.HealthCheck),
+		"health_check": duration(p.Rollout.HealthCheck), "agent_update": agentUpdateNames[p.AgentUpdate], "channel": p.Channel.String(),
 	}
 	if w := p.Window; w != nil {
 		details["window"] = fmt.Sprintf("%v %s+%s %s", w.Days, duration(w.Start), duration(w.Duration), w.TimeZone)

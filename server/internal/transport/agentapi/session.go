@@ -595,7 +595,9 @@ func (h *SessionHandler) openIngest(ctx context.Context, id Identity, hello *age
 	if h.ingest == nil {
 		return nil, nil, func() {}, nil
 	}
-	feed, err := h.ingest.Open(ctx, id.Org, id.Node, factsFrom(hello.GetHostFacts()), hello.GetAgentVersion())
+	facts := factsFrom(hello.GetHostFacts())
+	facts.InstallMethod = installMethods[hello.GetInstallMethod()]
+	feed, err := h.ingest.Open(ctx, id.Org, id.Node, facts, hello.GetAgentVersion())
 	if err != nil {
 		h.logger.ErrorContext(ctx, "open ingest failed", "node", id.Node.String(), "error", err)
 		return nil, nil, nil, connect.NewError(connect.CodeUnavailable, errors.New("ingest unavailable, retry later"))
@@ -725,6 +727,12 @@ func factsFrom(f *agentv1.HostFacts) ingest.HostFacts {
 		Architecture: architecture, CPUCount: f.GetCpuCount(), MemoryBytes: f.GetMemoryBytes(),
 		SecuritySource: securitySources[f.GetSecuritySource()],
 	}
+}
+
+// installMethods maps the reported install method; unspecified is unknown.
+var installMethods = map[agentv1.InstallMethod]update.InstallMethod{
+	agentv1.InstallMethod_INSTALL_METHOD_SCRIPT:  update.InstallScript,
+	agentv1.InstallMethod_INSTALL_METHOD_PACKAGE: update.InstallPackage,
 }
 
 // securitySources maps the reported source; unspecified and unknown values are SourceUnknown.

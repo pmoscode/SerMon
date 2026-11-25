@@ -23,7 +23,7 @@ SELECT id, group_id, window_start, window_end, state, reason, mode, auto_reboot
 FROM update_rollouts WHERE manual AND state = 1 ORDER BY window_start, id;
 
 -- name: ListUpdateRolloutNodes :many
-SELECT rollout_id, node_id, hostname, state, reason, update_run, reboot_run, since, deadline
+SELECT rollout_id, node_id, hostname, state, reason, update_run, reboot_run, since, deadline, agent_run
 FROM update_rollout_nodes WHERE rollout_id = ANY (sqlc.arg(rollout_ids)::uuid[])
 ORDER BY rollout_id, position;
 
@@ -31,6 +31,7 @@ ORDER BY rollout_id, position;
 -- The nodes with what a rollout needs: online, their session, their report and whether a
 -- critical alert other than offline or rebooted fires.
 SELECT n.id, n.group_id, n.hostname, n.last_seen_at, n.connected_at,
+       coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture,
        s.received_at, s.availability, s.package_manager, s.total_count, s.security_count, s.reboot_required,
        s.allow_remote_updates, s.allow_remote_reboot, s.allow_self_update,
        EXISTS (SELECT 1 FROM alert_instances a
@@ -56,9 +57,9 @@ ON CONFLICT (org_id, id) DO UPDATE SET state = excluded.state, reason = excluded
 DELETE FROM update_rollout_nodes WHERE rollout_id = sqlc.arg(rollout_id);
 
 -- name: InsertUpdateRolloutNode :exec
-INSERT INTO update_rollout_nodes (org_id, rollout_id, node_id, position, hostname, state, reason, update_run, reboot_run, since, deadline)
+INSERT INTO update_rollout_nodes (org_id, rollout_id, node_id, position, hostname, state, reason, update_run, reboot_run, since, deadline, agent_run)
 VALUES (current_org_id(), sqlc.arg(rollout_id), sqlc.arg(node_id), sqlc.arg(position), sqlc.arg(hostname), sqlc.arg(state),
-        sqlc.arg(reason), sqlc.narg(update_run), sqlc.narg(reboot_run), sqlc.arg(since), sqlc.narg(deadline));
+        sqlc.arg(reason), sqlc.narg(update_run), sqlc.narg(reboot_run), sqlc.arg(since), sqlc.narg(deadline), sqlc.narg(agent_run));
 
 -- name: PruneNodeCommands :exec
 DELETE FROM node_commands WHERE created_at < sqlc.arg(before);

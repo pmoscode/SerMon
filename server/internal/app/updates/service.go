@@ -43,6 +43,7 @@ type Service struct {
 	policies  PolicyStore
 	newID     func() uuid.UUID
 	history   History
+	releases  Releases
 }
 
 // NewService returns the service.

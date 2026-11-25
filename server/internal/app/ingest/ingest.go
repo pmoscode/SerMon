@@ -54,6 +54,8 @@ type HostFacts struct {
 	MemoryBytes   uint64
 	// SecuritySource is where the agent reads security events (M2-31).
 	SecuritySource secevent.Source
+	// InstallMethod is how the agent was installed (its Hello, M4-19).
+	InstallMethod update.InstallMethod
 }
 
 // Limits are the ingest quotas of the node's organization (M2-32); 0 is the instance's value.
@@ -185,7 +187,7 @@ type Stats struct {
 	droppedKinds [maxKinds]atomic.Uint64
 }
 
-// maxKinds bounds the kinds counted per kind (there are 16).
+// maxKinds bounds the kinds counted per kind (there are 17).
 const maxKinds = 32
 
 var kindIndex = func() map[secevent.Kind]int {

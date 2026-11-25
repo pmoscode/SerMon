@@ -9,7 +9,7 @@
 		type Rollout
 	} from '#lib/api/gen/sermon/web/v1/update_pb.js';
 	import { UpdateStatus } from '#lib/api/gen/sermon/web/v1/update_status_pb.js';
-	import type { UpdatePolicy } from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
+	import { AgentUpdate, type UpdatePolicy } from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
 	import { updatesApi } from '#lib/api/updates.js';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import PolicyEditor from '#lib/components/updates/PolicyEditor.svelte';
@@ -19,7 +19,13 @@
 	import { displayText } from '#lib/logs/text.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
-	import { modeLabel, rolloutLabel, rolloutNodeLabel, statusLabel } from '#lib/updates/labels.js';
+	import {
+		channelLabel,
+		modeLabel,
+		rolloutLabel,
+		rolloutNodeLabel,
+		statusLabel
+	} from '#lib/updates/labels.js';
 
 	/**
 	 * The updates of the fleet (KONZEPT §16, M4-15): the nodes by status, the age of their oldest
@@ -30,6 +36,7 @@
 	let fleet = $state<ListFleetUpdatesResponse>();
 	let rollouts = $state<Rollout[]>([]);
 	let policies = $state<UpdatePolicy[]>([]);
+	let releases = $state('');
 	let status = $state<'loading' | 'ready' | 'error'>('loading');
 	let filter = $state<Filter>('');
 	let editing = $state(page.url.searchParams.get('group') ?? '');
@@ -48,14 +55,18 @@
 
 	async function load() {
 		try {
-			const [f, r, p] = await Promise.all([
+			const [f, r, p, a] = await Promise.all([
 				updatesApi.updates.listFleetUpdates({}),
 				updatesApi.updates.listRollouts({ pageSize: 20 }),
-				updatesApi.policies.listUpdatePolicies({})
+				updatesApi.policies.listUpdatePolicies({}),
+				updatesApi.updates.listAgentReleases({})
 			]);
 			fleet = f;
 			rollouts = r.rollouts;
 			policies = p.policies;
+			releases = [
+				...new Set(a.releases.map((x) => `${channelLabel(x.channel)} ${x.version}`))
+			].join(' · ');
 			now = new Date();
 			status = 'ready';
 		} catch {
@@ -232,12 +243,18 @@
 				{m.updatespage_policies()}
 				<HelpTip topic="concepts/update-policy" />
 			</h2>
+			{#if releases}
+				<p class="text-sm text-muted-foreground">{m.updatespage_releases({ list: releases })}</p>
+			{/if}
 			<ul class="divide-y rounded-md border text-sm">
 				{#each policies as p (p.groupId)}
 					<li class="flex flex-col gap-2 px-3 py-2">
 						<div class="flex flex-wrap items-center gap-x-3">
 							<span class="font-medium">{p.groupName}</span>
 							<span>{modeLabel(p.spec?.mode ?? 0)}</span>
+							{#if p.spec?.agentUpdate === AgentUpdate.AUTO}
+								<span>{m.updatespage_agent_auto({ channel: channelLabel(p.spec.channel) })}</span>
+							{/if}
 							<span class="text-muted-foreground">
 								{m.updatespage_next_window()}:
 								{p.nextWindow

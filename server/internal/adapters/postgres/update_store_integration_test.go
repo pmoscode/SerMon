@@ -303,14 +303,15 @@ func TestUpdatePolicyStore_KeepsThePolicyOfAGroup(t *testing.T) {
 	scope := scopeFor(t, uuid.UUID(f.org))
 	group := nodeGroup(t, uuid.UUID(f.org), uuid.UUID(f.node))
 	p, ok, err := store.Policy(ctx, scope, group)
-	if err != nil || !ok || p.Mode != updates.ModeReport || p.Window != nil || p.Rollout.MaxParallel != 1 {
+	if err != nil || !ok || p.Mode != updates.ModeReport || p.Window != nil || p.Rollout.MaxParallel != 1 ||
+		p.AgentUpdate != updates.AgentManual || p.Channel != update.ChannelStable {
 		t.Fatalf("default = %+v, %v, %v", p, ok, err)
 	}
 	set := updates.Policy{
 		Group: group, Mode: updates.ModeSecurityAuto, AutoReboot: true,
 		Window:    &routing.Schedule{Days: []time.Weekday{time.Sunday, time.Wednesday}, Start: 3 * time.Hour, Duration: 2 * time.Hour, TimeZone: "Europe/Berlin"},
 		Rollout:   updates.Rollout{MaxParallel: 5, StopOnFailure: true, HealthCheck: 15 * time.Minute},
-		UpdatedAt: updatesNow,
+		UpdatedAt: updatesNow, AgentUpdate: updates.AgentAuto, Channel: update.ChannelBeta,
 	}
 	audit := access.AuditEntry{Action: "update_policy.update", Target: "group:" + group.String()}
 	if err := store.PutPolicy(ctx, scope, group, &set, audit); err != nil {
@@ -318,6 +319,7 @@ func TestUpdatePolicyStore_KeepsThePolicyOfAGroup(t *testing.T) {
 	}
 	got, _, err := store.Policy(ctx, scope, group)
 	if err != nil || got.Mode != set.Mode || !got.AutoReboot || got.Rollout != set.Rollout || !got.UpdatedAt.Equal(updatesNow) ||
+		got.AgentUpdate != updates.AgentAuto || got.Channel != update.ChannelBeta ||
 		got.Window == nil || got.Window.Start != set.Window.Start || got.Window.Duration != set.Window.Duration ||
 		got.Window.TimeZone != "Europe/Berlin" || len(got.Window.Days) != 2 || got.Window.Days[1] != time.Wednesday {
 		t.Errorf("stored = %+v (%+v), %v", got, got.Window, err)
@@ -363,7 +365,7 @@ func TestUpdatePolicyStore_KeepsThePolicyOfAGroup(t *testing.T) {
 		t.Errorf("after reset = %+v", p)
 	}
 	// The table refuses an install mode without a window.
-	bad := updates.Policy{Group: group, Mode: updates.ModeAllAuto, Rollout: set.Rollout, UpdatedAt: updatesNow}
+	bad := updates.Policy{Group: group, Mode: updates.ModeAllAuto, Rollout: set.Rollout, UpdatedAt: updatesNow, AgentUpdate: updates.AgentManual, Channel: update.ChannelStable}
 	if err := store.PutPolicy(ctx, scope, group, &bad, audit); err == nil {
 		t.Error("all-auto without a window was stored")
 	}

@@ -24,3 +24,12 @@ Fensterende startet kein Node mehr; laufende werden fertig.
 
 Ändern braucht Admin-Rechte auf allen Gruppen und eine erneute Anmeldung; jede Änderung steht im Audit-Log. Als YAML
 lässt sich die Policy aus- und einlesen (`kind: UpdatePolicy`).
+
+## Agent
+
+- **Agent im Fenster aktualisieren:** Agents, die per `install.sh` installiert sind, aktualisieren sich im Fenster auf
+  die neueste Version des Kanals – vor den Paketen, einer nach dem anderen wie diese. Per Paket installierte
+  aktualisiert der Paketmanager.
+- **Kanal:** `stabil` ist die Version des Servers, `Beta` eine neuere, die der Server zum Testen anbietet.
+- Der Root-Helper prüft jede neue Version gegen den Release-Schlüssel und rollt sie zurück, wenn sie sich nicht binnen
+  2 Minuten verbindet.

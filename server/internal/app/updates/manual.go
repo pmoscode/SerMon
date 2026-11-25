@@ -31,7 +31,7 @@ var ErrInvalidRequest = errors.New("invalid update request")
 // ManualStore starts rollouts and reboots by hand, each with its audit entry in one transaction.
 type ManualStore interface {
 	StartRollouts(ctx context.Context, org tenant.OrgID, rollouts []RolloutRun, now time.Time, audit access.AuditEntry) error
-	Reboot(ctx context.Context, org tenant.OrgID, commands []command.Command, audit access.AuditEntry) error
+	Enqueue(ctx context.Context, org tenant.OrgID, commands []command.Command, audit access.AuditEntry) error
 }
 
 // WithManual lets the service start updates and reboots by hand.
@@ -164,7 +164,7 @@ func (s *Service) RebootNodes(ctx context.Context, c access.Caller, ids []identi
 		Actor: c.Principal.User, Action: "nodes.reboot", Target: "nodes:" + strconv.Itoa(len(names)),
 		Details: map[string]string{"reason": reason, "nodes": strings.Join(names, ",")},
 	}
-	if err := s.manual.Reboot(ctx, c.Principal.Org, commands, audit); err != nil {
+	if err := s.manual.Enqueue(ctx, c.Principal.Org, commands, audit); err != nil {
 		return nil, fmt.Errorf("reboot: %w", err)
 	}
 	return commands, nil

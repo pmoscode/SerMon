@@ -81,6 +81,112 @@ func (UpdateMode) EnumDescriptor() ([]byte, []int) {
 	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{0}
 }
 
+// AgentUpdate is whether a group's agents update themselves (M4-19, ADR 0036).
+type AgentUpdate int32
+
+const (
+	// AGENT_UPDATE_UNSPECIFIED is taken as manual.
+	AgentUpdate_AGENT_UPDATE_UNSPECIFIED AgentUpdate = 0
+	// AGENT_UPDATE_MANUAL: by hand only.
+	AgentUpdate_AGENT_UPDATE_MANUAL AgentUpdate = 1
+	// AGENT_UPDATE_AUTO: in the window, to the newest release of the channel (needs a window).
+	AgentUpdate_AGENT_UPDATE_AUTO AgentUpdate = 2
+)
+
+// Enum value maps for AgentUpdate.
+var (
+	AgentUpdate_name = map[int32]string{
+		0: "AGENT_UPDATE_UNSPECIFIED",
+		1: "AGENT_UPDATE_MANUAL",
+		2: "AGENT_UPDATE_AUTO",
+	}
+	AgentUpdate_value = map[string]int32{
+		"AGENT_UPDATE_UNSPECIFIED": 0,
+		"AGENT_UPDATE_MANUAL":      1,
+		"AGENT_UPDATE_AUTO":        2,
+	}
+)
+
+func (x AgentUpdate) Enum() *AgentUpdate {
+	p := new(AgentUpdate)
+	*p = x
+	return p
+}
+
+func (x AgentUpdate) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AgentUpdate) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_web_v1_update_policy_proto_enumTypes[1].Descriptor()
+}
+
+func (AgentUpdate) Type() protoreflect.EnumType {
+	return &file_sermon_web_v1_update_policy_proto_enumTypes[1]
+}
+
+func (x AgentUpdate) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AgentUpdate.Descriptor instead.
+func (AgentUpdate) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{1}
+}
+
+// AgentChannel is where a group's agents take their releases from.
+type AgentChannel int32
+
+const (
+	// AGENT_CHANNEL_UNSPECIFIED is taken as stable.
+	AgentChannel_AGENT_CHANNEL_UNSPECIFIED AgentChannel = 0
+	// AGENT_CHANNEL_STABLE is the server's own version.
+	AgentChannel_AGENT_CHANNEL_STABLE AgentChannel = 1
+	// AGENT_CHANNEL_BETA is a newer release the server offers for testing.
+	AgentChannel_AGENT_CHANNEL_BETA AgentChannel = 2
+)
+
+// Enum value maps for AgentChannel.
+var (
+	AgentChannel_name = map[int32]string{
+		0: "AGENT_CHANNEL_UNSPECIFIED",
+		1: "AGENT_CHANNEL_STABLE",
+		2: "AGENT_CHANNEL_BETA",
+	}
+	AgentChannel_value = map[string]int32{
+		"AGENT_CHANNEL_UNSPECIFIED": 0,
+		"AGENT_CHANNEL_STABLE":      1,
+		"AGENT_CHANNEL_BETA":        2,
+	}
+)
+
+func (x AgentChannel) Enum() *AgentChannel {
+	p := new(AgentChannel)
+	*p = x
+	return p
+}
+
+func (x AgentChannel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AgentChannel) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_web_v1_update_policy_proto_enumTypes[2].Descriptor()
+}
+
+func (AgentChannel) Type() protoreflect.EnumType {
+	return &file_sermon_web_v1_update_policy_proto_enumTypes[2]
+}
+
+func (x AgentChannel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AgentChannel.Descriptor instead.
+func (AgentChannel) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{2}
+}
+
 // UpdateWindow is a weekly window in a time zone.
 type UpdateWindow struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -170,8 +276,12 @@ type UpdatePolicySpec struct {
 	// health_check_minutes is how long a node has to come back online without critical alerts (5
 	// to 120).
 	HealthCheckMinutes int32 `protobuf:"varint,6,opt,name=health_check_minutes,json=healthCheckMinutes,proto3" json:"health_check_minutes,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// agent_update: whether the group's agents update themselves in the window.
+	AgentUpdate AgentUpdate `protobuf:"varint,7,opt,name=agent_update,json=agentUpdate,proto3,enum=sermon.web.v1.AgentUpdate" json:"agent_update,omitempty"`
+	// channel is the group's release channel.
+	Channel       AgentChannel `protobuf:"varint,8,opt,name=channel,proto3,enum=sermon.web.v1.AgentChannel" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdatePolicySpec) Reset() {
@@ -244,6 +354,20 @@ func (x *UpdatePolicySpec) GetHealthCheckMinutes() int32 {
 		return x.HealthCheckMinutes
 	}
 	return 0
+}
+
+func (x *UpdatePolicySpec) GetAgentUpdate() AgentUpdate {
+	if x != nil {
+		return x.AgentUpdate
+	}
+	return AgentUpdate_AGENT_UPDATE_UNSPECIFIED
+}
+
+func (x *UpdatePolicySpec) GetChannel() AgentChannel {
+	if x != nil {
+		return x.Channel
+	}
+	return AgentChannel_AGENT_CHANNEL_UNSPECIFIED
 }
 
 // UpdatePolicy is the policy of a group.
@@ -900,7 +1024,7 @@ const file_sermon_web_v1_update_policy_proto_rawDesc = "" +
 	"\xbaH\a\x1a\x05\x18\x9f\v(\x00R\vstartMinute\x125\n" +
 	"\x10duration_minutes\x18\x03 \x01(\x05B\n" +
 	"\xbaH\a\x1a\x05\x18\xa0\v(\x0fR\x0fdurationMinutes\x12&\n" +
-	"\ttime_zone\x18\x04 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\btimeZone\"\xb6\x02\n" +
+	"\ttime_zone\x18\x04 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\btimeZone\"\xc0\x03\n" +
 	"\x10UpdatePolicySpec\x129\n" +
 	"\x04mode\x18\x01 \x01(\x0e2\x19.sermon.web.v1.UpdateModeB\n" +
 	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x04mode\x123\n" +
@@ -909,7 +1033,9 @@ const file_sermon_web_v1_update_policy_proto_rawDesc = "" +
 	"autoReboot\x12,\n" +
 	"\fmax_parallel\x18\x04 \x01(\x05B\t\xbaH\x06\x1a\x04\x182(\x01R\vmaxParallel\x12&\n" +
 	"\x0fstop_on_failure\x18\x05 \x01(\bR\rstopOnFailure\x12;\n" +
-	"\x14health_check_minutes\x18\x06 \x01(\x05B\t\xbaH\x06\x1a\x04\x18x(\x05R\x12healthCheckMinutes\"\x96\x02\n" +
+	"\x14health_check_minutes\x18\x06 \x01(\x05B\t\xbaH\x06\x1a\x04\x18x(\x05R\x12healthCheckMinutes\x12G\n" +
+	"\fagent_update\x18\a \x01(\x0e2\x1a.sermon.web.v1.AgentUpdateB\b\xbaH\x05\x82\x01\x02\x10\x01R\vagentUpdate\x12?\n" +
+	"\achannel\x18\b \x01(\x0e2\x1b.sermon.web.v1.AgentChannelB\b\xbaH\x05\x82\x01\x02\x10\x01R\achannel\"\x96\x02\n" +
 	"\fUpdatePolicy\x12\x19\n" +
 	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x1d\n" +
 	"\n" +
@@ -951,7 +1077,15 @@ const file_sermon_web_v1_update_policy_proto_rawDesc = "" +
 	"\x17UPDATE_MODE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12UPDATE_MODE_REPORT\x10\x01\x12\x1d\n" +
 	"\x19UPDATE_MODE_SECURITY_AUTO\x10\x02\x12\x18\n" +
-	"\x14UPDATE_MODE_ALL_AUTO\x10\x032\x91\x05\n" +
+	"\x14UPDATE_MODE_ALL_AUTO\x10\x03*[\n" +
+	"\vAgentUpdate\x12\x1c\n" +
+	"\x18AGENT_UPDATE_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13AGENT_UPDATE_MANUAL\x10\x01\x12\x15\n" +
+	"\x11AGENT_UPDATE_AUTO\x10\x02*_\n" +
+	"\fAgentChannel\x12\x1d\n" +
+	"\x19AGENT_CHANNEL_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14AGENT_CHANNEL_STABLE\x10\x01\x12\x16\n" +
+	"\x12AGENT_CHANNEL_BETA\x10\x022\x91\x05\n" +
 	"\x13UpdatePolicyService\x12e\n" +
 	"\x0fGetUpdatePolicy\x12%.sermon.web.v1.GetUpdatePolicyRequest\x1a&.sermon.web.v1.GetUpdatePolicyResponse\"\x03\x90\x02\x01\x12n\n" +
 	"\x12ListUpdatePolicies\x12(.sermon.web.v1.ListUpdatePoliciesRequest\x1a).sermon.web.v1.ListUpdatePoliciesResponse\"\x03\x90\x02\x01\x12`\n" +
@@ -973,57 +1107,61 @@ func file_sermon_web_v1_update_policy_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_update_policy_proto_rawDescData
 }
 
-var file_sermon_web_v1_update_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_sermon_web_v1_update_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_sermon_web_v1_update_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_sermon_web_v1_update_policy_proto_goTypes = []any{
 	(UpdateMode)(0),                    // 0: sermon.web.v1.UpdateMode
-	(*UpdateWindow)(nil),               // 1: sermon.web.v1.UpdateWindow
-	(*UpdatePolicySpec)(nil),           // 2: sermon.web.v1.UpdatePolicySpec
-	(*UpdatePolicy)(nil),               // 3: sermon.web.v1.UpdatePolicy
-	(*GetUpdatePolicyRequest)(nil),     // 4: sermon.web.v1.GetUpdatePolicyRequest
-	(*GetUpdatePolicyResponse)(nil),    // 5: sermon.web.v1.GetUpdatePolicyResponse
-	(*ListUpdatePoliciesRequest)(nil),  // 6: sermon.web.v1.ListUpdatePoliciesRequest
-	(*ListUpdatePoliciesResponse)(nil), // 7: sermon.web.v1.ListUpdatePoliciesResponse
-	(*SetUpdatePolicyRequest)(nil),     // 8: sermon.web.v1.SetUpdatePolicyRequest
-	(*SetUpdatePolicyResponse)(nil),    // 9: sermon.web.v1.SetUpdatePolicyResponse
-	(*ImportUpdatePolicyRequest)(nil),  // 10: sermon.web.v1.ImportUpdatePolicyRequest
-	(*ImportUpdatePolicyResponse)(nil), // 11: sermon.web.v1.ImportUpdatePolicyResponse
-	(*ExportUpdatePolicyRequest)(nil),  // 12: sermon.web.v1.ExportUpdatePolicyRequest
-	(*ExportUpdatePolicyResponse)(nil), // 13: sermon.web.v1.ExportUpdatePolicyResponse
-	(*ResetUpdatePolicyRequest)(nil),   // 14: sermon.web.v1.ResetUpdatePolicyRequest
-	(*ResetUpdatePolicyResponse)(nil),  // 15: sermon.web.v1.ResetUpdatePolicyResponse
-	(Weekday)(0),                       // 16: sermon.web.v1.Weekday
-	(*timestamppb.Timestamp)(nil),      // 17: google.protobuf.Timestamp
+	(AgentUpdate)(0),                   // 1: sermon.web.v1.AgentUpdate
+	(AgentChannel)(0),                  // 2: sermon.web.v1.AgentChannel
+	(*UpdateWindow)(nil),               // 3: sermon.web.v1.UpdateWindow
+	(*UpdatePolicySpec)(nil),           // 4: sermon.web.v1.UpdatePolicySpec
+	(*UpdatePolicy)(nil),               // 5: sermon.web.v1.UpdatePolicy
+	(*GetUpdatePolicyRequest)(nil),     // 6: sermon.web.v1.GetUpdatePolicyRequest
+	(*GetUpdatePolicyResponse)(nil),    // 7: sermon.web.v1.GetUpdatePolicyResponse
+	(*ListUpdatePoliciesRequest)(nil),  // 8: sermon.web.v1.ListUpdatePoliciesRequest
+	(*ListUpdatePoliciesResponse)(nil), // 9: sermon.web.v1.ListUpdatePoliciesResponse
+	(*SetUpdatePolicyRequest)(nil),     // 10: sermon.web.v1.SetUpdatePolicyRequest
+	(*SetUpdatePolicyResponse)(nil),    // 11: sermon.web.v1.SetUpdatePolicyResponse
+	(*ImportUpdatePolicyRequest)(nil),  // 12: sermon.web.v1.ImportUpdatePolicyRequest
+	(*ImportUpdatePolicyResponse)(nil), // 13: sermon.web.v1.ImportUpdatePolicyResponse
+	(*ExportUpdatePolicyRequest)(nil),  // 14: sermon.web.v1.ExportUpdatePolicyRequest
+	(*ExportUpdatePolicyResponse)(nil), // 15: sermon.web.v1.ExportUpdatePolicyResponse
+	(*ResetUpdatePolicyRequest)(nil),   // 16: sermon.web.v1.ResetUpdatePolicyRequest
+	(*ResetUpdatePolicyResponse)(nil),  // 17: sermon.web.v1.ResetUpdatePolicyResponse
+	(Weekday)(0),                       // 18: sermon.web.v1.Weekday
+	(*timestamppb.Timestamp)(nil),      // 19: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_update_policy_proto_depIdxs = []int32{
-	16, // 0: sermon.web.v1.UpdateWindow.days:type_name -> sermon.web.v1.Weekday
+	18, // 0: sermon.web.v1.UpdateWindow.days:type_name -> sermon.web.v1.Weekday
 	0,  // 1: sermon.web.v1.UpdatePolicySpec.mode:type_name -> sermon.web.v1.UpdateMode
-	1,  // 2: sermon.web.v1.UpdatePolicySpec.window:type_name -> sermon.web.v1.UpdateWindow
-	2,  // 3: sermon.web.v1.UpdatePolicy.spec:type_name -> sermon.web.v1.UpdatePolicySpec
-	17, // 4: sermon.web.v1.UpdatePolicy.update_time:type_name -> google.protobuf.Timestamp
-	17, // 5: sermon.web.v1.UpdatePolicy.next_window:type_name -> google.protobuf.Timestamp
-	3,  // 6: sermon.web.v1.GetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	3,  // 7: sermon.web.v1.ListUpdatePoliciesResponse.policies:type_name -> sermon.web.v1.UpdatePolicy
-	2,  // 8: sermon.web.v1.SetUpdatePolicyRequest.spec:type_name -> sermon.web.v1.UpdatePolicySpec
-	3,  // 9: sermon.web.v1.SetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	3,  // 10: sermon.web.v1.ImportUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	4,  // 11: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:input_type -> sermon.web.v1.GetUpdatePolicyRequest
-	6,  // 12: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:input_type -> sermon.web.v1.ListUpdatePoliciesRequest
-	8,  // 13: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:input_type -> sermon.web.v1.SetUpdatePolicyRequest
-	10, // 14: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:input_type -> sermon.web.v1.ImportUpdatePolicyRequest
-	12, // 15: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:input_type -> sermon.web.v1.ExportUpdatePolicyRequest
-	14, // 16: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:input_type -> sermon.web.v1.ResetUpdatePolicyRequest
-	5,  // 17: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:output_type -> sermon.web.v1.GetUpdatePolicyResponse
-	7,  // 18: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:output_type -> sermon.web.v1.ListUpdatePoliciesResponse
-	9,  // 19: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:output_type -> sermon.web.v1.SetUpdatePolicyResponse
-	11, // 20: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:output_type -> sermon.web.v1.ImportUpdatePolicyResponse
-	13, // 21: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:output_type -> sermon.web.v1.ExportUpdatePolicyResponse
-	15, // 22: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:output_type -> sermon.web.v1.ResetUpdatePolicyResponse
-	17, // [17:23] is the sub-list for method output_type
-	11, // [11:17] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	3,  // 2: sermon.web.v1.UpdatePolicySpec.window:type_name -> sermon.web.v1.UpdateWindow
+	1,  // 3: sermon.web.v1.UpdatePolicySpec.agent_update:type_name -> sermon.web.v1.AgentUpdate
+	2,  // 4: sermon.web.v1.UpdatePolicySpec.channel:type_name -> sermon.web.v1.AgentChannel
+	4,  // 5: sermon.web.v1.UpdatePolicy.spec:type_name -> sermon.web.v1.UpdatePolicySpec
+	19, // 6: sermon.web.v1.UpdatePolicy.update_time:type_name -> google.protobuf.Timestamp
+	19, // 7: sermon.web.v1.UpdatePolicy.next_window:type_name -> google.protobuf.Timestamp
+	5,  // 8: sermon.web.v1.GetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	5,  // 9: sermon.web.v1.ListUpdatePoliciesResponse.policies:type_name -> sermon.web.v1.UpdatePolicy
+	4,  // 10: sermon.web.v1.SetUpdatePolicyRequest.spec:type_name -> sermon.web.v1.UpdatePolicySpec
+	5,  // 11: sermon.web.v1.SetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	5,  // 12: sermon.web.v1.ImportUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	6,  // 13: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:input_type -> sermon.web.v1.GetUpdatePolicyRequest
+	8,  // 14: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:input_type -> sermon.web.v1.ListUpdatePoliciesRequest
+	10, // 15: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:input_type -> sermon.web.v1.SetUpdatePolicyRequest
+	12, // 16: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:input_type -> sermon.web.v1.ImportUpdatePolicyRequest
+	14, // 17: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:input_type -> sermon.web.v1.ExportUpdatePolicyRequest
+	16, // 18: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:input_type -> sermon.web.v1.ResetUpdatePolicyRequest
+	7,  // 19: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:output_type -> sermon.web.v1.GetUpdatePolicyResponse
+	9,  // 20: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:output_type -> sermon.web.v1.ListUpdatePoliciesResponse
+	11, // 21: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:output_type -> sermon.web.v1.SetUpdatePolicyResponse
+	13, // 22: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:output_type -> sermon.web.v1.ImportUpdatePolicyResponse
+	15, // 23: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:output_type -> sermon.web.v1.ExportUpdatePolicyResponse
+	17, // 24: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:output_type -> sermon.web.v1.ResetUpdatePolicyResponse
+	19, // [19:25] is the sub-list for method output_type
+	13, // [13:19] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_update_policy_proto_init() }
@@ -1037,7 +1175,7 @@ func file_sermon_web_v1_update_policy_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_update_policy_proto_rawDesc), len(file_sermon_web_v1_update_policy_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      3,
 			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,

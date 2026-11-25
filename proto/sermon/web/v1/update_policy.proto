@@ -43,6 +43,26 @@ enum UpdateMode {
   UPDATE_MODE_ALL_AUTO = 3;
 }
 
+// AgentUpdate is whether a group's agents update themselves (M4-19, ADR 0036).
+enum AgentUpdate {
+  // AGENT_UPDATE_UNSPECIFIED is taken as manual.
+  AGENT_UPDATE_UNSPECIFIED = 0;
+  // AGENT_UPDATE_MANUAL: by hand only.
+  AGENT_UPDATE_MANUAL = 1;
+  // AGENT_UPDATE_AUTO: in the window, to the newest release of the channel (needs a window).
+  AGENT_UPDATE_AUTO = 2;
+}
+
+// AgentChannel is where a group's agents take their releases from.
+enum AgentChannel {
+  // AGENT_CHANNEL_UNSPECIFIED is taken as stable.
+  AGENT_CHANNEL_UNSPECIFIED = 0;
+  // AGENT_CHANNEL_STABLE is the server's own version.
+  AGENT_CHANNEL_STABLE = 1;
+  // AGENT_CHANNEL_BETA is a newer release the server offers for testing.
+  AGENT_CHANNEL_BETA = 2;
+}
+
 // UpdateWindow is a weekly window in a time zone.
 message UpdateWindow {
   // days the window begins on.
@@ -98,6 +118,10 @@ message UpdatePolicySpec {
     gte: 5
     lte: 120
   }];
+  // agent_update: whether the group's agents update themselves in the window.
+  AgentUpdate agent_update = 7 [(buf.validate.field).enum.defined_only = true];
+  // channel is the group's release channel.
+  AgentChannel channel = 8 [(buf.validate.field).enum.defined_only = true];
 }
 
 // UpdatePolicy is the policy of a group.

@@ -8,7 +8,9 @@ import {
 	ImportUpdatePolicyResponseSchema,
 	SetUpdatePolicyResponseSchema,
 	UpdateMode,
-	UpdatePolicySchema
+	UpdatePolicySchema,
+	AgentChannel,
+	AgentUpdate
 } from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
 import { updatesApi } from '#lib/api/updates.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
@@ -50,6 +52,8 @@ describe('PolicyEditor', () => {
 		await page.getByLabelText(/Time zone/).fill('Europe/Berlin');
 		await page.getByLabelText(/At once/).fill('5');
 		await page.getByRole('checkbox', { name: /Reboot after updates/ }).click();
+		await page.getByRole('checkbox', { name: /Update the agent in the window/ }).click();
+		await page.getByLabelText('Channel of the agent versions').selectOptions('beta');
 		await page.getByRole('button', { name: 'Save' }).click();
 		await vi.waitFor(() => expect(stepUpState.open).toBe(true));
 		stepUpState.finish(true);
@@ -62,6 +66,8 @@ describe('PolicyEditor', () => {
 				maxParallel: 5,
 				stopOnFailure: true,
 				healthCheckMinutes: 10,
+				agentUpdate: AgentUpdate.AUTO,
+				channel: AgentChannel.BETA,
 				window: {
 					days: [Weekday.SUNDAY],
 					startMinute: 210,

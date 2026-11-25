@@ -4,6 +4,7 @@ package sermon.web.v1;
 
 import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/update_policy.proto";
 import "sermon/web/v1/update_status.proto";
 
 // UpdateService shows what the nodes could update (KONZEPT §14.1, M4-09): the latest report of
@@ -47,6 +48,87 @@ service UpdateService {
   rpc ListRollouts(ListRolloutsRequest) returns (ListRolloutsResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // UpdateAgents updates the agents of the nodes to the newest release of their group's channel
+  // (M4-19, ADR 0036): run_updates on their groups and a fresh step-up, in the audit log. Nodes
+  // installed by a package, without a newer release or whose host forbids it are skipped with
+  // the reason. A node the caller can't view is NOT_FOUND.
+  rpc UpdateAgents(UpdateAgentsRequest) returns (UpdateAgentsResponse);
+  // ListAgentReleases returns the agent releases the server offers per channel (view_nodes).
+  rpc ListAgentReleases(ListAgentReleasesRequest) returns (ListAgentReleasesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// InstallMethod is how a node's agent was installed.
+enum InstallMethod {
+  // INSTALL_METHOD_UNSPECIFIED: unknown (agents before M4-18).
+  INSTALL_METHOD_UNSPECIFIED = 0;
+  // INSTALL_METHOD_SCRIPT: install.sh; the agent updates itself.
+  INSTALL_METHOD_SCRIPT = 1;
+  // INSTALL_METHOD_PACKAGE: a package; the package manager updates it.
+  INSTALL_METHOD_PACKAGE = 2;
+}
+
+// AgentInfo is a node's agent and the release of its group's channel.
+message AgentInfo {
+  // version is the agent's version.
+  string version = 1;
+  // install_method is how it was installed.
+  InstallMethod install_method = 2;
+  // channel is the group's release channel.
+  AgentChannel channel = 3;
+  // latest is the channel's newest release for the node's architecture (empty: none).
+  string latest = 4;
+  // target is what an agent update installs (empty: nothing, e.g. not newer or a package).
+  string target = 5;
+}
+
+// UpdateAgentsRequest names the nodes.
+message UpdateAgentsRequest {
+  // node_ids are the nodes, 1 to 100.
+  repeated string node_ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 100
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+}
+
+// SkippedNode is a node left out, with the reason.
+message SkippedNode {
+  // node_id is the node.
+  string node_id = 1;
+  // reason says why.
+  string reason = 2;
+}
+
+// UpdateAgentsResponse names the runs and the skipped nodes.
+message UpdateAgentsResponse {
+  // run_ids are the self-update runs.
+  repeated string run_ids = 1;
+  // skipped are the nodes left out.
+  repeated SkippedNode skipped = 2;
+}
+
+// ListAgentReleasesRequest has no fields.
+message ListAgentReleasesRequest {}
+
+// AgentRelease is a release of a channel.
+message AgentRelease {
+  // channel is stable or beta.
+  AgentChannel channel = 1;
+  // architecture is amd64 or arm64.
+  string architecture = 2;
+  // version is the release's version.
+  string version = 3;
+}
+
+// ListAgentReleasesResponse lists the releases.
+message ListAgentReleasesResponse {
+  // releases per channel and architecture.
+  repeated AgentRelease releases = 1;
 }
 
 // UpdateRunKind is what a run did.
@@ -176,6 +258,8 @@ enum RolloutNodeState {
   ROLLOUT_NODE_STATE_FAILED = 6;
   // ROLLOUT_NODE_STATE_SKIPPED: not updated; reason says why.
   ROLLOUT_NODE_STATE_SKIPPED = 7;
+  // ROLLOUT_NODE_STATE_AGENT_UPDATING: its agent updates itself first (M4-19).
+  ROLLOUT_NODE_STATE_AGENT_UPDATING = 8;
 }
 
 // RolloutNode is a node of a rollout.
@@ -192,6 +276,8 @@ message RolloutNode {
   string update_run_id = 5;
   // reboot_run_id names its reboot run.
   string reboot_run_id = 6;
+  // agent_run_id names its self-update run (M4-19).
+  string agent_run_id = 7;
 }
 
 // Rollout is the run of a group's policy in one window, or a rollout by hand.
@@ -342,6 +428,8 @@ message GetNodeUpdatesResponse {
   // packages are the available updates, security updates first, at most 5000 (fewer than
   // node.total_count if packages_omitted).
   repeated UpdatePackage packages = 2;
+  // agent is the node's agent and its channel's release (M4-19).
+  AgentInfo agent = 3;
 }
 
 // ListFleetUpdatesRequest has no fields yet.

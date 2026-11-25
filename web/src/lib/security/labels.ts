@@ -31,7 +31,8 @@ const kinds: Record<string, () => string> = {
 	'node.locked': m.secdash_kind_node_locked,
 	'node.rotation_new_ip': m.secdash_kind_rotation_new_ip,
 	'updates.run_failed': m.secdash_kind_update_run_failed,
-	'updates.rollout_stopped': m.secdash_kind_update_rollout_stopped
+	'updates.rollout_stopped': m.secdash_kind_update_rollout_stopped,
+	'agent.self_update_failed': m.secdash_kind_agent_self_update_failed
 };
 
 /** The name of an event kind; an unknown kind by its key. */
@@ -98,6 +99,7 @@ export function detailText(e: SecurityEvent, locale: Locale): string {
 		case 'node.locked':
 		case 'updates.run_failed':
 		case 'updates.rollout_stopped':
+		case 'agent.self_update_failed':
 			add(m.secdash_detail_reason(), d.reason);
 			break;
 		case 'node.rotation_new_ip':

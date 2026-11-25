@@ -61,9 +61,11 @@ type OrchestratorConfig struct {
 	OrgLimit      int // runs at once per organization
 	InstanceLimit int // runs at once on this instance, all organizations
 	Retention     time.Duration
-	Now           func() time.Time
-	NewID         func() uuid.UUID
-	Logger        *slog.Logger
+	// Releases are the agent releases for the groups that update their agents (nil: none).
+	Releases Releases
+	Now      func() time.Time
+	NewID    func() uuid.UUID
+	Logger   *slog.Logger
 }
 
 // DefaultOrchestratorConfig returns the defaults for holder.
@@ -171,6 +173,17 @@ func (o *Orchestrator) step(ctx context.Context, org tenant.OrgID, instanceActiv
 	state, err := o.store.Load(ctx, org, now)
 	if err != nil {
 		return 0, fmt.Errorf("load: %w", err)
+	}
+	if o.config.Releases != nil {
+		for i, g := range state.Groups {
+			if g.Policy.AgentUpdate != AgentAuto {
+				continue
+			}
+			for j, n := range g.Nodes {
+				latest, _ := o.config.Releases.Latest(g.Policy.Channel, n.Agent.Arch)
+				state.Groups[i].Nodes[j].AgentTarget = n.Agent.Target(latest)
+			}
+		}
 	}
 	orgActive := 0
 	for _, g := range state.Groups {

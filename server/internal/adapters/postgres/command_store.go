@@ -16,6 +16,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 )
@@ -149,7 +150,7 @@ func (s *CommandStore) Record(ctx context.Context, org tenant.OrgID, node identi
 	if err != nil {
 		return false, err
 	}
-	var n int64
+	recorded := false
 	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		params := sqlcdb.RecordNodeCommandResultParams{
 			Phase: pgtype.Int2{Int16: int16(r.Phase), Valid: true}, ResultReason: bounded(textsafe.Visible(r.Reason), command.MaxResult),
@@ -159,11 +160,28 @@ func (s *CommandStore) Record(ctx context.Context, org tenant.OrgID, node identi
 		if r.Phase.Final() && r.Phase != command.Lost {
 			params.ExitCode = pgtype.Int4{Int32: r.ExitCode, Valid: true}
 		}
-		rows, recordErr := q.RecordNodeCommandResult(ctx, params)
-		n = rows
-		return wrap(recordErr, "record command result")
+		kind, recordErr := q.RecordNodeCommandResult(ctx, params)
+		if errors.Is(recordErr, pgx.ErrNoRows) {
+			return nil
+		}
+		if recordErr != nil {
+			return wrap(recordErr, "record command result")
+		}
+		recorded = true
+		// A self-update that didn't take is a server event (M4-19): the rule alerts on it.
+		if command.Kind(kind) == command.SelfUpdate && r.Phase.Final() && r.Phase != command.Succeeded { //nolint:gosec // 1 to 4 by the table's check
+			why := params.ResultReason
+			if why == "" {
+				why = fmt.Sprintf("exit code %d", r.ExitCode)
+			}
+			e := secevent.Event{Node: node, OccurredAt: time.Now(), Kind: secevent.AgentSelfUpdateFailed, Details: secevent.Details{Reason: bounded(why, secevent.MaxReason)}}
+			if err := insertServerEvent(ctx, q, e.Normalized()); err != nil {
+				return fmt.Errorf("self-update event: %w", err)
+			}
+		}
+		return nil
 	})
-	return n == 1, err
+	return recorded, err
 }
 
 // Get returns a command of the organization; false if there is none.
@@ -319,6 +337,9 @@ func (s *HistoryStore) Rollouts(ctx context.Context, scope tenant.Scope, limit i
 			}
 			if n.RebootRun != nil {
 				run.RebootRun = *n.RebootRun
+			}
+			if n.AgentRun != nil {
+				run.AgentRun = *n.AgentRun
 			}
 			out[i].Nodes = append(out[i].Nodes, run)
 		}

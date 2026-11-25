@@ -22,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/geoip"
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
@@ -261,7 +262,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		liveHub := liveview.NewHub(sessions)
 		liveViews := liveview.NewService(liveHub, postgres.NewFleetStore(db), agentConfigs, authz.NewPolicy())
 		servers = append(servers, liveViews.Run)
-		observing := observingServices{logSettings: logSettings, logQueries: logQueries, liveViews: liveViews}
+		// Signed agent releases for the self-update (ADR 0036).
+		releases, err := download.NewReleases(cfg.AgentDownloadsDir, releaseKey, version, logger)
+		if err != nil {
+			return fmt.Errorf("agent releases: %w", err)
+		}
+		servers = append(servers, releases.Run)
+		observing := observingServices{logSettings: logSettings, logQueries: logQueries, liveViews: liveViews, releases: agentReleases{releases}}
 		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, observing, registry, logger); err != nil {
 			return err
 		}
@@ -296,7 +303,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		})
 		registerAlertMetrics(registry, engine.Stats())
 		// Update orchestrator (M4-13): rolls the update policies out under a lease per organization.
-		orchestrator := updates.NewOrchestrator(postgres.NewRolloutStore(db), updates.DefaultOrchestratorConfig(instanceHolder(), logger))
+		orchestratorConfig := updates.DefaultOrchestratorConfig(instanceHolder(), logger)
+		orchestratorConfig.Releases = agentReleases{releases}
+		orchestrator := updates.NewOrchestrator(postgres.NewRolloutStore(db), orchestratorConfig)
 		registerOrchestratorMetrics(registry, orchestrator.Stats())
 		servers = append(servers, orchestrator.Run)
 		registerRoutingMetrics(registry, router.Stats())
@@ -304,12 +313,6 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return alerting.Maintenance(ctx, alertStore, time.Now, 6*time.Hour, logger)
 		})
 		if cfg.AgentAddr != "" {
-			// Signed agent releases for the self-update (ADR 0036).
-			releases, err := download.NewReleases(cfg.AgentDownloadsDir, releaseKey, version, logger)
-			if err != nil {
-				return fmt.Errorf("agent releases: %w", err)
-			}
-			servers = append(servers, releases.Run)
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger,
 				agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(agentConfigs), agentapi.WithLiveView(liveHub),
 				agentapi.WithCommands(commandStore, agentapi.CommandPoll), agentapi.WithReleases(releases))
@@ -467,6 +470,15 @@ type observingServices struct {
 	logSettings *logsettings.Service
 	logQueries  *logs.Service
 	liveViews   *liveview.Service
+	releases    updates.Releases
+}
+
+// agentReleases are the downloads' releases for the update use cases.
+type agentReleases struct{ releases *download.Releases }
+
+func (a agentReleases) Latest(channel update.Channel, arch string) (string, bool) {
+	rel, ok := a.releases.Latest(channel.String(), arch)
+	return rel.Version, ok
 }
 
 // alertingServices are the use cases of alerting behind the web API.
@@ -582,7 +594,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(db, 0), policy).
 			WithRefresher(postgres.NewCommandStore(db), time.Now).
 			WithManual(postgres.NewRolloutStore(db), postgres.NewUpdatePolicyStore(db), func() uuid.UUID { return uuid.Must(uuid.NewV7()) }).
-			WithHistory(postgres.NewHistoryStore(db)), logger),
+			WithHistory(postgres.NewHistoryStore(db)).WithReleases(observing.releases), logger),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(updates.NewPolicyService(postgres.NewUpdatePolicyStore(db), policy, time.Now), logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),

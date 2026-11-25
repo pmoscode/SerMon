@@ -54,6 +54,20 @@ func invalidPolicy(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalidPolicy, fmt.Sprintf(format, args...))
 }
 
+// AgentUpdate says whether a group updates its agents on its own (ADR 0036).
+type AgentUpdate uint8
+
+// The agent update modes.
+const (
+	// AgentManual updates agents by hand only.
+	AgentManual AgentUpdate = iota + 1
+	// AgentAuto updates the agents of script installations in the window, to the newest release
+	// of the group's channel.
+	AgentAuto
+)
+
+var agentUpdateNames = map[AgentUpdate]string{AgentManual: "manual", AgentAuto: "auto"}
+
 // Rollout says how many nodes of the group update at once and when it stops.
 type Rollout struct {
 	MaxParallel   int
@@ -70,6 +84,9 @@ type Policy struct {
 	Window     *routing.Schedule
 	AutoReboot bool
 	Rollout    Rollout
+	// AgentUpdate and Channel: whether and from where the group's agents update themselves.
+	AgentUpdate AgentUpdate
+	Channel     update.Channel
 	// UpdatedAt and UpdatedBy are zero for the default of a group without a policy.
 	UpdatedAt time.Time
 	UpdatedBy identity.UserID
@@ -78,7 +95,7 @@ type Policy struct {
 // DefaultPolicy is the policy of a group nobody set one for: report only.
 func DefaultPolicy(group tenant.GroupID) Policy {
 	return Policy{
-		Group: group, Mode: ModeReport,
+		Group: group, Mode: ModeReport, AgentUpdate: AgentManual, Channel: update.ChannelStable,
 		Rollout: Rollout{MaxParallel: 1, StopOnFailure: true, HealthCheck: 10 * time.Minute},
 	}
 }
@@ -88,9 +105,18 @@ func (p Policy) Validate() error {
 	if _, ok := modeNames[p.Mode]; !ok {
 		return invalidPolicy("mode must be report, security-auto or all-auto")
 	}
+	if _, ok := agentUpdateNames[p.AgentUpdate]; !ok {
+		return invalidPolicy("agentUpdate must be manual or auto")
+	}
+	if p.Channel != update.ChannelStable && p.Channel != update.ChannelBeta {
+		return invalidPolicy("channel must be stable or beta")
+	}
 	if p.Window == nil {
 		if p.Mode != ModeReport {
 			return invalidPolicy("%s needs a window", p.Mode)
+		}
+		if p.AgentUpdate == AgentAuto {
+			return invalidPolicy("agentUpdate auto needs a window")
 		}
 		if p.AutoReboot {
 			return invalidPolicy("autoReboot needs a window")
@@ -124,10 +150,12 @@ type (
 		Spec policySpec `yaml:"spec"`
 	}
 	policySpec struct {
-		Mode       string      `yaml:"mode"`
-		Window     *windowSpec `yaml:"window,omitempty"`
-		AutoReboot bool        `yaml:"autoReboot"`
-		Rollout    rolloutSpec `yaml:"rollout"`
+		Mode        string      `yaml:"mode"`
+		Window      *windowSpec `yaml:"window,omitempty"`
+		AutoReboot  bool        `yaml:"autoReboot"`
+		Rollout     rolloutSpec `yaml:"rollout"`
+		AgentUpdate string      `yaml:"agentUpdate,omitempty"`
+		Channel     string      `yaml:"channel,omitempty"`
 	}
 	windowSpec struct {
 		Days     []string `yaml:"days,flow"`
@@ -173,6 +201,22 @@ func ParsePolicy(group tenant.GroupID, data []byte) (Policy, error) {
 		}
 	}
 	p.AutoReboot = doc.Spec.AutoReboot
+	if doc.Spec.AgentUpdate != "" {
+		p.AgentUpdate = 0
+		for a, name := range agentUpdateNames {
+			if doc.Spec.AgentUpdate == name {
+				p.AgentUpdate = a
+			}
+		}
+	}
+	if doc.Spec.Channel != "" {
+		p.Channel = 0
+		for _, c := range []update.Channel{update.ChannelStable, update.ChannelBeta} {
+			if doc.Spec.Channel == c.String() {
+				p.Channel = c
+			}
+		}
+	}
 	r := doc.Spec.Rollout
 	if r.MaxParallel != 0 {
 		p.Rollout.MaxParallel = r.MaxParallel
@@ -233,7 +277,7 @@ func duration(d time.Duration) string {
 // YAML writes the policy as ParsePolicy reads it.
 func (p Policy) YAML() []byte {
 	doc := policyDoc{Kind: "UpdatePolicy", Spec: policySpec{
-		Mode: p.Mode.String(), AutoReboot: p.AutoReboot,
+		Mode: p.Mode.String(), AutoReboot: p.AutoReboot, AgentUpdate: agentUpdateNames[p.AgentUpdate], Channel: p.Channel.String(),
 		Rollout: rolloutSpec{MaxParallel: p.Rollout.MaxParallel, StopOnFailure: p.Rollout.StopOnFailure, HealthCheck: duration(p.Rollout.HealthCheck)},
 	}}
 	if w := p.Window; w != nil {

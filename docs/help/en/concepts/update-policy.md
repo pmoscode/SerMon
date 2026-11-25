@@ -24,3 +24,12 @@ no node starts; running ones finish.
 
 Changing needs admin rights on all groups and a fresh sign-in; every change is in the audit log. The policy can be
 exported and imported as YAML (`kind: UpdatePolicy`).
+
+## Agent
+
+- **Update the agent in the window:** agents installed by `install.sh` update themselves in the window to the newest
+  version of the channel – before the packages, one after another like these. Installations by package are updated
+  by the package manager.
+- **Channel:** `stable` is the server's version, `beta` a newer one the server offers for testing.
+- The root helper checks every new version against the release key and rolls it back if it doesn't connect within
+  2 minutes.

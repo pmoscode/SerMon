@@ -334,7 +334,7 @@ type Querier interface {
 	ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecurityEventsParams) ([]ReceivedSecurityEventsRow, error)
 	RecordAgentConfigApplied(ctx context.Context, arg RecordAgentConfigAppliedParams) (int64, error)
 	// The agent's phase of a run of this node: a start only before any phase, a final phase once.
-	RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int64, error)
+	RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int16, error)
 	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
 	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)

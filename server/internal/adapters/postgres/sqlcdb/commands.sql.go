@@ -298,7 +298,7 @@ func (q *Queries) NotifyNodeCommands(ctx context.Context, nodeID uuid.UUID) erro
 	return err
 }
 
-const recordNodeCommandResult = `-- name: RecordNodeCommandResult :execrows
+const recordNodeCommandResult = `-- name: RecordNodeCommandResult :one
 UPDATE node_commands SET
     phase = $1, state = CASE WHEN $1::smallint = 1 THEN 3 ELSE 4 END,
     exit_code = $2, result_reason = $3, output = $4,
@@ -306,6 +306,7 @@ UPDATE node_commands SET
     ended_at = $7
 WHERE node_id = $8 AND id = $9 AND kind <> 1
   AND (phase IS NULL OR (phase = 1 AND $1::smallint <> 1))
+RETURNING kind
 `
 
 type RecordNodeCommandResultParams struct {
@@ -321,8 +322,8 @@ type RecordNodeCommandResultParams struct {
 }
 
 // The agent's phase of a run of this node: a start only before any phase, a final phase once.
-func (q *Queries) RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recordNodeCommandResult,
+func (q *Queries) RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int16, error) {
+	row := q.db.QueryRow(ctx, recordNodeCommandResult,
 		arg.Phase,
 		arg.ExitCode,
 		arg.ResultReason,
@@ -333,8 +334,7 @@ func (q *Queries) RecordNodeCommandResult(ctx context.Context, arg RecordNodeCom
 		arg.NodeID,
 		arg.ID,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var kind int16
+	err := row.Scan(&kind)
+	return kind, err
 }

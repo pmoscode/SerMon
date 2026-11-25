@@ -777,6 +777,34 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	// start is rolled back after 2 minutes, a working one stays. The helper checks the signature of
 	// the release key and that each is newer than what runs.
 	const selfUpdated = agents.find((a) => a.host === 'web-02')!;
+	// The server knows how web-02's agent was installed and that it runs the stable release
+	// (M4-19): nothing to update in its channel.
+	const web02 = (
+		await call<{ nodes?: { nodeId: string; hostname: string }[] }>(
+			page.request,
+			baseURL ?? '',
+			'FleetService/GetFleetSummary',
+			{}
+		)
+	).nodes!.find((n) => n.hostname === 'web-02')!;
+	const agentInfo = () =>
+		call<{ agent?: Record<string, string> }>(
+			page.request,
+			baseURL ?? '',
+			'UpdateService/GetNodeUpdates',
+			{
+				nodeId: web02.nodeId
+			}
+		).then((r) => r.agent);
+	expect(await agentInfo()).toEqual(
+		expect.objectContaining({
+			version: '0.0.1-e2e',
+			installMethod: 'INSTALL_METHOD_SCRIPT',
+			channel: 'AGENT_CHANNEL_STABLE',
+			latest: '0.0.1-e2e'
+		})
+	);
+	expect((await agentInfo())?.target ?? '').toBe('');
 	const selfUpdateStarted = Date.now();
 	const sha = exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0];
 	const selfUpdate = (version: string) =>
@@ -820,5 +848,18 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	);
 	console.log(
 		`web-02 updated itself after ${Math.round((Date.now() - selfUpdateStarted) / 1000)} s`
+	);
+	// The fetch made the server read the new beta: the updates page lists it.
+	const releases = await call<{ releases?: { channel: string; version: string }[] }>(
+		page.request,
+		baseURL ?? '',
+		'UpdateService/ListAgentReleases',
+		{}
+	);
+	expect(releases.releases).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ channel: 'AGENT_CHANNEL_STABLE', version: '0.0.1-e2e' }),
+			expect.objectContaining({ channel: 'AGENT_CHANNEL_BETA', version: '0.0.3-e2e' })
+		])
 	);
 });

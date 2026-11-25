@@ -26,11 +26,13 @@ const (
 	NodeDone
 	NodeFailed
 	NodeSkipped
+	// NodeAgentUpdating: the agent updates itself first (M4-19, ADR 0036).
+	NodeAgentUpdating
 )
 
 // Active reports whether the node takes one of the rollout's parallel places.
 func (s NodeState) Active() bool {
-	return s == NodeUpdating || s == NodeRebooting || s == NodeHealthCheck
+	return s == NodeUpdating || s == NodeRebooting || s == NodeHealthCheck || s == NodeAgentUpdating
 }
 
 // RolloutState is where a rollout stands.
@@ -64,6 +66,7 @@ type NodeRun struct {
 	Reason    string
 	UpdateRun uuid.UUID
 	RebootRun uuid.UUID
+	AgentRun  uuid.UUID
 	// Since is when the node entered its state; Deadline ends its health check.
 	Since    time.Time
 	Deadline time.Time
@@ -97,6 +100,10 @@ type NodeView struct {
 	ReportAt time.Time
 	// Critical: an alert of the node is critical now (the maintenance rules excluded).
 	Critical bool
+	// AgentTarget is the release its agent updates itself to ("" if none, M4-19).
+	AgentTarget string
+	// Agent is the node's agent, for the orchestrator's AgentTarget.
+	Agent update.Agent
 }
 
 // Action is what a planning step asks the store to do with the rollout's new state.
@@ -145,7 +152,7 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 		views[n.ID] = n
 	}
 	var actions []Action
-	windowOpen := now.Before(r.WindowEnd) && p.Mode != ModeReport
+	windowOpen := now.Before(r.WindowEnd) && (p.Mode != ModeReport || p.AgentUpdate == AgentAuto)
 	for i := range r.Nodes {
 		n := &r.Nodes[i]
 		if !n.State.Active() {
@@ -189,6 +196,19 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 			n.State, n.Reason = NodeSkipped, "the node is offline"
 		case v.Report == nil || v.Report.Permissions == nil:
 			n.State, n.Reason = NodeSkipped, "the node has no root helper"
+		case p.AgentUpdate == AgentAuto && v.AgentTarget != "" && v.Report.Permissions.SelfUpdate:
+			c := command.Command{
+				ID: newID(), Node: n.Node, Kind: command.SelfUpdate, Version: v.AgentTarget, CreatedAt: now,
+				ExpiresAt: now.Add(command.DefaultExpiry),
+			}
+			n.State, n.AgentRun = NodeAgentUpdating, c.ID
+			active++
+			room--
+			actions = append(actions, Action{Command: &c, Node: n.Node, SilenceUntil: r.WindowEnd.Add(p.Rollout.HealthCheck)})
+		case p.Mode == ModeReport && v.AgentTarget != "":
+			n.State, n.Reason = NodeSkipped, "the host forbids self-updates (allow_self_update)"
+		case p.Mode == ModeReport:
+			n.State, n.Reason = NodeDone, "nothing to update any more"
 		case !v.Report.Permissions.RemoteUpdates:
 			n.State, n.Reason = NodeSkipped, "the host forbids remote updates (allow_remote_updates)"
 		case mode == ModeReport:
@@ -196,13 +216,7 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 		case !wants(mode, v.Report):
 			n.State, n.Reason = NodeDone, "nothing to update any more"
 		default:
-			scope := command.ScopeAll
-			if mode == ModeSecurityAuto {
-				scope = command.ScopeSecurity
-			}
-			c := command.Command{
-				ID: newID(), Node: n.Node, Kind: command.Update, Scope: scope, CreatedAt: now, ExpiresAt: now.Add(command.DefaultExpiry),
-			}
+			c := updateCommand(now, n.Node, mode, newID)
 			n.State, n.UpdateRun = NodeUpdating, c.ID
 			active++
 			room--
@@ -214,6 +228,17 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 		r.State = RolloutDone
 	}
 	return r, actions
+}
+
+// updateCommand installs the updates of mode on node.
+func updateCommand(now time.Time, node identity.NodeID, mode Mode, newID func() uuid.UUID) command.Command {
+	scope := command.ScopeAll
+	if mode == ModeSecurityAuto {
+		scope = command.ScopeSecurity
+	}
+	return command.Command{
+		ID: newID(), Node: node, Kind: command.Update, Scope: scope, CreatedAt: now, ExpiresAt: now.Add(command.DefaultExpiry),
+	}
 }
 
 // stillFollowing reports whether a stopped rollout has nodes to follow.
@@ -239,7 +264,8 @@ func wants(mode Mode, r *update.Report) bool {
 // begin starts a rollout when a window of the policy is open and none ran in it yet; the nodes
 // with something to install, by host name.
 func begin(now time.Time, p Policy, last *RolloutRun, nodes []NodeView, newID func() uuid.UUID) *RolloutRun {
-	if p.Mode == ModeReport || p.Window == nil {
+	agents := p.AgentUpdate == AgentAuto
+	if p.Window == nil || (p.Mode == ModeReport && !agents) {
 		return nil
 	}
 	start, end, ok := p.Window.Current(now)
@@ -252,6 +278,13 @@ func begin(now time.Time, p Policy, last *RolloutRun, nodes []NodeView, newID fu
 	})
 	for _, n := range sorted {
 		if n.Report == nil {
+			continue
+		}
+		if agents && n.AgentTarget != "" {
+			r.Nodes = append(r.Nodes, NodeRun{Node: n.ID, Hostname: n.Hostname, State: NodeWaiting, Since: now})
+			continue
+		}
+		if p.Mode == ModeReport {
 			continue
 		}
 		mode, _ := p.ModeFor(n.Report.Manager)
@@ -274,6 +307,23 @@ func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]
 		return true
 	}
 	switch n.State {
+	case NodeAgentUpdating:
+		run, ok := runs[n.AgentRun]
+		if done, reason := finished(run, ok, now); !done {
+			return false
+		} else if reason != "" {
+			return fail("agent update: " + reason)
+		}
+		// Then the packages, if the policy installs some and the window is still open.
+		if r := v.Report; windowOpen && p.Mode != ModeReport && r != nil && r.Permissions != nil && r.Permissions.RemoteUpdates {
+			if mode, _ := p.ModeFor(r.Manager); mode != ModeReport && wants(mode, r) {
+				c := updateCommand(now, n.Node, mode, newID)
+				n.State, n.UpdateRun, n.Since = NodeUpdating, c.ID, now
+				*actions = append(*actions, Action{Command: &c, Node: n.Node})
+				return false
+			}
+		}
+		n.State, n.Since, n.Deadline = NodeHealthCheck, endOf(run), endOf(run).Add(p.Rollout.HealthCheck)
 	case NodeUpdating:
 		run, ok := runs[n.UpdateRun]
 		if done, reason := finished(run, ok, now); !done {
@@ -306,8 +356,9 @@ func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]
 		}
 		n.State, n.Since, n.Deadline = NodeHealthCheck, endOf(run), endOf(run).Add(p.Rollout.HealthCheck)
 	case NodeHealthCheck:
+		// After a reboot or a new agent (as the last step) the node must have connected anew.
 		back := v.Online && !v.ConnectedAt.Before(n.Since)
-		if n.RebootRun == uuid.Nil {
+		if n.RebootRun == uuid.Nil && (n.AgentRun == uuid.Nil || n.UpdateRun != uuid.Nil) {
 			back = v.Online
 		}
 		if back && !v.Critical && !now.Before(n.Since.Add(Settle)) {

@@ -106,6 +106,9 @@ func (w *world) finish(host string, phase command.Phase, rebootNeeded bool) {
 	if n.State == updates.NodeRebooting {
 		id = n.RebootRun
 	}
+	if n.State == updates.NodeAgentUpdating {
+		id = n.AgentRun
+	}
 	c := w.runs[id]
 	end := w.now
 	c.Result, c.State = &command.Result{Phase: phase, EndedAt: &end, ExitCode: 100}, command.Done
@@ -401,5 +404,92 @@ func TestPlan_AHealthyNodeSettlesBeforeItIsDone(t *testing.T) {
 	w.at(2*time.Minute + time.Second).step()
 	if n := w.run("web-01"); n.State != updates.NodeDone {
 		t.Errorf("after settling: %+v", n)
+	}
+}
+
+func agentPolicy(mode updates.Mode) updates.Policy {
+	p := policy(mode, 1, true, false)
+	p.AgentUpdate, p.Channel = updates.AgentAuto, update.ChannelStable
+	return p
+}
+
+// M4-19: with agentUpdate auto a node with a newer release updates its agent first in the
+// window; afterwards, without packages, it must connect anew before it is done.
+func TestPlan_AgentsUpdateThemselvesFirst(t *testing.T) {
+	w := newWorld(t, agentPolicy(updates.ModeReport), 2)
+	w.view("web-01").AgentTarget = "1.1.0"
+	w.view("web-01").Report.Permissions.SelfUpdate = true
+	actions := w.at(0).step()
+	if got := w.states(); got != "web-01=8" || len(actions) != 1 || actions[0].Command.Kind != command.SelfUpdate || actions[0].Command.Version != "1.1.0" {
+		t.Fatalf("start: %s %+v", got, actions)
+	}
+	w.at(time.Minute).finish("web-01", command.Succeeded, false)
+	w.at(time.Minute + time.Second).step()
+	w.at(3 * time.Minute).step()
+	if n := w.run("web-01"); n.State != updates.NodeHealthCheck {
+		t.Fatalf("the old session counted: %+v", n)
+	}
+	w.view("web-01").ConnectedAt = windowStart.Add(2 * time.Minute)
+	w.at(4 * time.Minute).step()
+	if n := w.run("web-01"); n.State != updates.NodeDone || w.rollout.State != updates.RolloutDone {
+		t.Errorf("after the new session: %+v, %d", n, w.rollout.State)
+	}
+}
+
+// With packages too: the agent first, then the updates, then the health check without a new
+// session (the update restarts nothing).
+func TestPlan_AgentThenPackages(t *testing.T) {
+	w := newWorld(t, agentPolicy(updates.ModeAllAuto), 1)
+	w.view("web-01").AgentTarget = "1.1.0"
+	w.view("web-01").Report.Permissions.SelfUpdate = true
+	w.at(0).step()
+	w.at(time.Minute).finish("web-01", command.Succeeded, false)
+	if got := commands(w.at(time.Minute + time.Second).step()); len(got) != 1 || got[0] != command.Update {
+		t.Fatalf("after the agent: %v (%s)", got, w.states())
+	}
+	w.view("web-01").ConnectedAt = windowStart.Add(time.Minute)
+	w.at(2*time.Minute).finish("web-01", command.Succeeded, false)
+	w.at(2*time.Minute + time.Second).step()
+	w.at(4 * time.Minute).step()
+	if n := w.run("web-01"); n.State != updates.NodeDone || n.AgentRun == uuid.Nil || n.UpdateRun == uuid.Nil {
+		t.Errorf("end: %+v", n)
+	}
+}
+
+// A host that forbids self-updates is skipped, a failed one fails the node; no release, no rollout.
+func TestPlan_AgentUpdatesSkippedFailedOrNone(t *testing.T) {
+	w := newWorld(t, agentPolicy(updates.ModeReport), 2)
+	w.policy.Rollout.MaxParallel = 2
+	for _, h := range []string{"web-01", "web-02"} {
+		w.view(h).AgentTarget = "1.1.0"
+	}
+	w.view("web-01").Report.Permissions.SelfUpdate = true
+	w.at(0).step()
+	if n := w.run("web-02"); n.State != updates.NodeSkipped || !strings.Contains(n.Reason, "allow_self_update") {
+		t.Errorf("forbidden: %+v", n)
+	}
+	w.at(time.Minute).finish("web-01", command.Failed, false)
+	w.at(time.Minute + time.Second).step()
+	if n := w.run("web-01"); n.State != updates.NodeFailed || !strings.Contains(n.Reason, "agent update:") {
+		t.Errorf("failed: %+v", n)
+	}
+	w = newWorld(t, agentPolicy(updates.ModeReport), 2)
+	if r, a := updates.Plan(windowStart, w.policy, nil, w.nodes, w.runs, 10, uuid.New); r == nil || len(r.Nodes) != 0 || a != nil {
+		t.Errorf("no release: %+v %+v", r, a)
+	}
+	// Manual agent updates in a group that installs: a node with nothing but a newer agent waits.
+	installs := agentPolicy(updates.ModeAllAuto)
+	installs.AgentUpdate = updates.AgentManual
+	w = newWorld(t, installs, 1)
+	w.view("web-01").AgentTarget, w.view("web-01").Report.Total = "1.1.0", 0
+	if r, _ := updates.Plan(windowStart, w.policy, nil, w.nodes, w.runs, 10, uuid.New); r == nil || len(r.Nodes) != 0 {
+		t.Errorf("manual agent updates took the node: %+v", r)
+	}
+	manual := agentPolicy(updates.ModeReport)
+	manual.AgentUpdate = updates.AgentManual
+	w = newWorld(t, manual, 1)
+	w.view("web-01").AgentTarget = "1.1.0"
+	if r, _ := updates.Plan(windowStart, w.policy, nil, w.nodes, w.runs, 10, uuid.New); r != nil {
+		t.Errorf("manual agent updates started a rollout: %+v", r)
 	}
 }

@@ -249,6 +249,7 @@ type Node struct {
 	ConfigReportedAt *time.Time
 	LearningSince    time.Time
 	ConnectedAt      *time.Time
+	InstallMethod    int16
 }
 
 type NodeCommand struct {
@@ -492,6 +493,8 @@ type UpdatePolicy struct {
 	HealthCheckMinutes int32
 	UpdatedAt          time.Time
 	UpdatedBy          *uuid.UUID
+	AgentUpdate        int16
+	AgentChannel       int16
 }
 
 type UpdateRollout struct {
@@ -522,6 +525,7 @@ type UpdateRolloutNode struct {
 	RebootRun *uuid.UUID
 	Since     time.Time
 	Deadline  *time.Time
+	AgentRun  *uuid.UUID
 }
 
 type User struct {

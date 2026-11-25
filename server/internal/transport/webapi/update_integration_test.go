@@ -9,6 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 )
 
@@ -68,6 +69,7 @@ func TestUpdatePolicies_AdminsSetViewersRead(t *testing.T) {
 	ann, mia, bea := login(t, s, "ann@example.org"), login(t, s, "mia@example.org"), login(t, s, "bea@example.org")
 	spec := &webv1.UpdatePolicySpec{
 		Mode: webv1.UpdateMode_UPDATE_MODE_SECURITY_AUTO, AutoReboot: true, MaxParallel: 2, StopOnFailure: true, HealthCheckMinutes: 15,
+		AgentUpdate: webv1.AgentUpdate_AGENT_UPDATE_AUTO, Channel: webv1.AgentChannel_AGENT_CHANNEL_BETA,
 		Window: &webv1.UpdateWindow{Days: []webv1.Weekday{webv1.Weekday_WEEKDAY_SUNDAY}, StartMinute: 180, DurationMinutes: 120, TimeZone: "Europe/Berlin"},
 	}
 	set, err := ann.updatePolicies.SetUpdatePolicy(ctx, connect.NewRequest(&webv1.SetUpdatePolicyRequest{GroupId: groupAl, Spec: spec}))
@@ -75,6 +77,7 @@ func TestUpdatePolicies_AdminsSetViewersRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	if p := set.Msg.GetPolicy(); p.GetIsDefault() || p.GetUpdateTime() == nil || p.GetSpec().GetMaxParallel() != 2 || !p.GetSpec().GetAutoReboot() ||
+		p.GetSpec().GetAgentUpdate() != webv1.AgentUpdate_AGENT_UPDATE_AUTO || p.GetSpec().GetChannel() != webv1.AgentChannel_AGENT_CHANNEL_BETA ||
 		!p.GetSpec().GetStopOnFailure() || p.GetSpec().GetHealthCheckMinutes() != 15 || p.GetSpec().GetWindow().GetStartMinute() != 180 {
 		t.Errorf("set = %v", p)
 	}
@@ -232,5 +235,53 @@ func TestUpdates_RunsAndRollouts(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("rollouts = %v", rollouts.Msg.GetRollouts())
+	}
+}
+
+// testReleases offers 9.9.9 in stable and 10.0.0-rc.1 in beta for arm64 and amd64.
+type testReleases struct{}
+
+func (testReleases) Latest(c update.Channel, _ string) (string, bool) {
+	if c == update.ChannelBeta {
+		return "10.0.0-rc.1", true
+	}
+	return "9.9.9", true
+}
+
+// M4-19: Ann updates the agent of Alpha's script-installed node by hand, the node shows its
+// agent with the channel's release; a package installation is skipped; Mia (viewer) may not.
+func TestUpdates_AgentsByHand(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ownerSQL(t, "UPDATE nodes SET install_method = 1, agent_version = '1.0.0' WHERE id = '"+nodeAl+"'",
+		"DELETE FROM node_commands WHERE org_id = '"+orgAlpha+"' AND kind = 4")
+	ctx := context.Background()
+	ann := login(t, s, "ann@example.org")
+	got, err := ann.updates.GetNodeUpdates(ctx, connect.NewRequest(&webv1.GetNodeUpdatesRequest{NodeId: nodeAl}))
+	if a := got.Msg.GetAgent(); err != nil || a.GetVersion() != "1.0.0" || a.GetInstallMethod() != webv1.InstallMethod_INSTALL_METHOD_SCRIPT ||
+		a.GetChannel() != webv1.AgentChannel_AGENT_CHANNEL_STABLE || a.GetLatest() != "9.9.9" || a.GetTarget() != "9.9.9" {
+		t.Fatalf("agent = %v, %v", got.Msg.GetAgent(), err)
+	}
+	res, err := ann.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{nodeAl}}))
+	if err != nil || len(res.Msg.GetRunIds()) != 1 || len(res.Msg.GetSkipped()) != 0 {
+		t.Fatalf("UpdateAgents() = %v, %v", res, err)
+	}
+	var cmd string
+	ownerQuery(t, "SELECT kind || ',' || version FROM node_commands WHERE id = '"+res.Msg.GetRunIds()[0]+"'", &cmd)
+	if cmd != "4,9.9.9" {
+		t.Errorf("command = %q", cmd)
+	}
+	ownerSQL(t, "UPDATE nodes SET install_method = 2 WHERE id = '"+nodeAl+"'")
+	res, err = ann.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{nodeAl}}))
+	if err != nil || len(res.Msg.GetRunIds()) != 0 || len(res.Msg.GetSkipped()) != 1 || !strings.Contains(res.Msg.GetSkipped()[0].GetReason(), "package") {
+		t.Errorf("a package install: %v, %v", res, err)
+	}
+	mia := login(t, s, "mia@example.org")
+	if _, err := mia.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{nodeAl}})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("a viewer: %v", err)
+	}
+	rel, err := mia.updates.ListAgentReleases(ctx, connect.NewRequest(&webv1.ListAgentReleasesRequest{}))
+	if err != nil || len(rel.Msg.GetReleases()) != 4 {
+		t.Errorf("releases = %v, %v", rel, err)
 	}
 }

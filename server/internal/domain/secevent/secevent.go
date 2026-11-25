@@ -47,12 +47,15 @@ const (
 	// health check), a rollout stopped at a failure (stopOnFailure).
 	UpdateRunFailed      Kind = "updates.run_failed"
 	UpdateRolloutStopped Kind = "updates.rollout_stopped"
+	// Written when an agent reports a failed self-update (M4-19): refused, failed or rolled back.
+	AgentSelfUpdateFailed Kind = "agent.self_update_failed"
 )
 
 var kinds = []Kind{
 	SSHLoginFailed, SSHInvalidUser, SSHLoginSucceeded, SSHPreauthDisconnect, SudoAuthFailed, SudoNotAllowed,
 	SudoCommand, AccountCreated, AccountDeleted, SystemReboot, OOMKill,
 	EnrollmentTokenUsed, NodeLocked, NodeRotationNewIP, UpdateRunFailed, UpdateRolloutStopped,
+	AgentSelfUpdateFailed,
 }
 
 // Noisy reports whether anyone on the internet can produce the kind at will – failed and invalid

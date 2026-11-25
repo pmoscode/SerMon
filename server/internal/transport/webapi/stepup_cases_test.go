@@ -36,6 +36,7 @@ var stepUpRequired = map[string]string{
 	"/sermon.web.v1.UpdatePolicyService/SetUpdatePolicy":              "installs updates and reboots nodes on its own (M4-10)",
 	"/sermon.web.v1.UpdateService/StartUpdates":                       "installs updates and reboots nodes (M4-14)",
 	"/sermon.web.v1.UpdateService/RebootNodes":                        "reboots nodes (M4-14)",
+	"/sermon.web.v1.UpdateService/UpdateAgents":                       "replaces the agents of nodes (M4-19)",
 	"/sermon.web.v1.UpdatePolicyService/ImportUpdatePolicy":           "installs updates and reboots nodes on its own (M4-10)",
 	"/sermon.web.v1.UpdatePolicyService/ResetUpdatePolicy":            "stops the automatic updates of a group (M4-10)",
 	"/sermon.web.v1.NotificationChannelService/CreateChannel":         "where alerts go",

@@ -191,7 +191,10 @@ func (s *UpdateStore) Fleet(ctx context.Context, scope tenant.Scope) ([]updates.
 
 // nodeUpdates converts a node with its report; without a report its columns are NULL.
 func nodeUpdates(row sqlcdb.GetNodeUpdatesRow) updates.NodeUpdates {
-	n := updates.NodeUpdates{Node: identity.NodeID(row.ID), Hostname: row.Hostname, Group: tenant.GroupID(row.GroupID)}
+	n := updates.NodeUpdates{
+		Node: identity.NodeID(row.ID), Hostname: row.Hostname, Group: tenant.GroupID(row.GroupID),
+		Agent: update.Agent{Version: row.AgentVersion, Method: update.InstallMethod(row.InstallMethod), Arch: row.Architecture}, //nolint:gosec // 0 to 2 by the table's check
+	}
 	if row.CollectedAt == nil {
 		return n
 	}
@@ -270,7 +273,8 @@ func policyOf(row sqlcdb.ListUpdatePoliciesRow) updates.NamedPolicy {
 			MaxParallel: int(row.MaxParallel.Int32), StopOnFailure: row.StopOnFailure.Bool,
 			HealthCheck: time.Duration(row.HealthCheckMinutes.Int32) * time.Minute,
 		},
-		UpdatedBy: userOf(row.UpdatedBy),
+		UpdatedBy:   userOf(row.UpdatedBy),
+		AgentUpdate: updates.AgentUpdate(row.AgentUpdate.Int16), Channel: update.Channel(row.AgentChannel.Int16), //nolint:gosec // 1 or 2 by the table's checks
 	}
 	if row.UpdatedAt != nil {
 		p.UpdatedAt = *row.UpdatedAt
@@ -305,6 +309,7 @@ func (s *UpdatePolicyStore) PutPolicy(ctx context.Context, scope tenant.Scope, g
 				GroupID: uuid.UUID(group), Mode: int16(p.Mode), AutoReboot: p.AutoReboot,
 				MaxParallel: int32(p.Rollout.MaxParallel), StopOnFailure: p.Rollout.StopOnFailure, //nolint:gosec // validated: 1 to 50
 				HealthCheckMinutes: int32(p.Rollout.HealthCheck / time.Minute), UpdatedAt: p.UpdatedAt, UpdatedBy: optionalUser(p.UpdatedBy), //nolint:gosec // validated: 5 to 120
+				AgentUpdate: int16(p.AgentUpdate), AgentChannel: int16(p.Channel),
 			}
 			if w := p.Window; w != nil {
 				params.WindowStartMinute = pgtype.Int4{Int32: int32(w.Start / time.Minute), Valid: true} //nolint:gosec // validated: within a day

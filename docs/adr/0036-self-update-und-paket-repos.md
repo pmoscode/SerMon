@@ -160,3 +160,11 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
   Version (höchstens alle 10 s); unveränderte Dateien (Größe, Änderungszeit) werden nicht erneut geprüft.
 - **E2E:** Die Version des Servers ist dort jetzt `0.0.1-e2e` (SemVer statt `e2e`), damit der Helper vergleichen kann.
 
+## Nachtrag M4-19
+
+- **Version des Agents:** Der Agent meldet `SERMON_VERSION` aus seinem Build, sonst die Version der Crate. Die
+  Release-Pipeline baut Agent und Helper mit der Version, die sie auch signiert; sonst vergliche der Server eine andere
+  Version als der Helper.
+- **Kanal und `agentUpdate`** stehen in der Update-Policy der Gruppe; mit `auto` aktualisiert der Orchestrator im
+  Fenster zuerst den Agent, dann die Pakete (KONZEPT §14.3).
+

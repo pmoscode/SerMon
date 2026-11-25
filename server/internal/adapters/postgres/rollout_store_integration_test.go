@@ -49,6 +49,7 @@ func TestOrchestrator_RollsOutOverTheDatabase(t *testing.T) {
 	report(f.node, start.Add(-time.Hour), 2)
 	report(f.peer, start.Add(-time.Hour), 3)
 	policy := updates.Policy{
+		AgentUpdate: updates.AgentManual, Channel: update.ChannelStable,
 		Group: group, Mode: updates.ModeAllAuto, UpdatedAt: start,
 		Window:  &routing.Schedule{Days: []time.Weekday{0, 1, 2, 3, 4, 5, 6}, Start: 0, Duration: 24 * time.Hour, TimeZone: "UTC"},
 		Rollout: updates.Rollout{MaxParallel: 1, StopOnFailure: true, HealthCheck: 5 * time.Minute},
@@ -174,6 +175,7 @@ func TestRolloutStore_ReadsCriticalAlertsAndFencesTheSave(t *testing.T) {
 	store := postgres.NewRolloutStore(db)
 	group := nodeGroup(t, uuid.UUID(f.org), uuid.UUID(f.node))
 	policy := updates.Policy{
+		AgentUpdate: updates.AgentManual, Channel: update.ChannelStable,
 		Group: group, Mode: updates.ModeAllAuto, UpdatedAt: time.Now(),
 		Window:  &routing.Schedule{Days: []time.Weekday{0, 1, 2, 3, 4, 5, 6}, Start: 0, Duration: 24 * time.Hour, TimeZone: "UTC"},
 		Rollout: updates.Rollout{MaxParallel: 1, HealthCheck: 5 * time.Minute},
@@ -210,8 +212,22 @@ func TestRolloutStore_ReadsCriticalAlertsAndFencesTheSave(t *testing.T) {
 	if err := store.Save(ctx, f.org, "holder-b", now, []updates.Change{change}); !errors.Is(err, updates.ErrLeaseLost) {
 		t.Errorf("save without the lease = %v", err)
 	}
+	// M4-19: a node's agent and its self-update run come back from the store.
+	agentRun := uuid.New()
+	change.Rollout.Nodes = []updates.NodeRun{{Node: f.node, Hostname: "n", State: updates.NodeAgentUpdating, AgentRun: agentRun, Since: now}}
 	if err := store.Save(ctx, f.org, "holder-a", now, []updates.Change{change}); err != nil {
 		t.Errorf("save with the lease = %v", err)
+	}
+	ownerExec(t, owner, "UPDATE nodes SET install_method = 1, agent_version = '1.0.0' WHERE id = $1", uuid.UUID(f.node))
+	state, err := store.Load(ctx, f.org, now)
+	if err != nil || len(state.Groups) != 1 || state.Groups[0].Rollout == nil || len(state.Groups[0].Rollout.Nodes) != 1 ||
+		state.Groups[0].Rollout.Nodes[0].AgentRun != agentRun {
+		t.Fatalf("Load() = %+v, %v", state.Groups, err)
+	}
+	for _, n := range state.Groups[0].Nodes {
+		if n.ID == f.node && (n.Agent.Version != "1.0.0" || n.Agent.Method != update.InstallScript || n.Agent.Arch == "") {
+			t.Errorf("agent = %+v", n.Agent)
+		}
 	}
 }
 
@@ -254,6 +270,19 @@ func TestOrchestrator_RunsRolloutsByHand(t *testing.T) {
 		state.Groups[0].Policy.Mode != updates.ModeSecurityAuto {
 		t.Errorf("loaded = %+v, %v", state.Groups, err)
 	}
+	// The group updates its agents in its window; by hand only the packages (M4-19).
+	auto := updates.Policy{
+		Group: group, Mode: updates.ModeReport, AgentUpdate: updates.AgentAuto, Channel: update.ChannelStable, UpdatedAt: now,
+		Window:  &routing.Schedule{Days: []time.Weekday{time.Weekday((int(now.Weekday()) + 3) % 7)}, Start: 0, Duration: time.Hour, TimeZone: "UTC"},
+		Rollout: updates.Rollout{MaxParallel: 1, HealthCheck: 5 * time.Minute},
+	}
+	if err := postgres.NewUpdatePolicyStore(db).PutPolicy(ctx, scopeFor(t, uuid.UUID(f.org)), group, &auto, auditEntry("update_policy.update")); err != nil {
+		t.Fatal(err)
+	}
+	if state, _ := store.Load(ctx, f.org, now); len(state.Groups) != 2 || state.Groups[1].Policy.AgentUpdate != updates.AgentManual || state.Groups[0].Policy.AgentUpdate != updates.AgentAuto {
+		t.Errorf("agent update of the rollout by hand: %+v", state.Groups)
+	}
+	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE update_policies SET agent_update = 1 WHERE group_id = $1", uuid.UUID(group))
 	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE update_rollouts SET state = 2 WHERE id = $1", manual.ID)
 	if state, _ := store.Load(ctx, f.org, now); len(state.Groups) != 0 {
 		t.Errorf("a finished rollout by hand is still loaded: %+v", state.Groups)

@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { Weekday } from '#lib/api/gen/sermon/web/v1/silence_pb.js';
-	import { UpdateMode, type UpdatePolicy } from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
+	import {
+		AgentChannel,
+		AgentUpdate,
+		UpdateMode,
+		type UpdatePolicy
+	} from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
 	import { updatesApi } from '#lib/api/updates.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -31,12 +36,14 @@
 	let parallel = $state(spec?.maxParallel ?? 1);
 	let stop = $state(spec?.stopOnFailure ?? true);
 	let health = $state(spec?.healthCheckMinutes ?? 10);
+	let agentAuto = $state(spec?.agentUpdate === AgentUpdate.AUTO);
+	let channel = $state<AgentChannel>(spec?.channel || AgentChannel.STABLE);
 	let yaml = $state('');
 	let busy = $state(false);
 	let failure = $state('');
 	let done = $state('');
 
-	const windowed = $derived(mode !== UpdateMode.REPORT || autoReboot);
+	const windowed = $derived(mode !== UpdateMode.REPORT || autoReboot || agentAuto);
 	const complete = $derived(
 		(!windowed || (days.length > 0 && minutesOfTime(start) !== undefined)) &&
 			duration >= 15 &&
@@ -74,6 +81,8 @@
 					maxParallel: parallel,
 					stopOnFailure: stop,
 					healthCheckMinutes: health,
+					agentUpdate: agentAuto ? AgentUpdate.AUTO : AgentUpdate.MANUAL,
+					channel,
 					window:
 						days.length > 0
 							? {
@@ -177,6 +186,23 @@
 			<input type="checkbox" class="size-4" bind:checked={autoReboot} />
 			{m.policy_auto_reboot()}
 		</label>
+	</div>
+	<div class="flex flex-wrap items-end gap-3">
+		<label class="flex h-9 items-center gap-2 text-sm">
+			<input type="checkbox" class="size-4" bind:checked={agentAuto} />
+			{m.policy_agent_auto()}
+		</label>
+		<div class="flex flex-col gap-1">
+			<Label for="policy-channel">{m.policy_channel()}</Label>
+			<select
+				id="policy-channel"
+				class="h-9 rounded-md border bg-background px-2 text-sm"
+				bind:value={channel}
+			>
+				<option value={AgentChannel.STABLE}>{m.channel_stable()}</option>
+				<option value={AgentChannel.BETA}>{m.channel_beta()}</option>
+			</select>
+		</div>
 	</div>
 	{#if windowed && days.length === 0}
 		<p class="text-sm" role="note">{m.policy_need_window()}</p>

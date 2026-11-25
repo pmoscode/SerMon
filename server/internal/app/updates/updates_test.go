@@ -3,6 +3,7 @@ package updates_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +35,9 @@ func listed(packages ...update.Package) update.Report {
 type store struct {
 	scope tenant.Scope
 	fail  bool
+	// agent is the node's agent (M4-19); permissions of its report, nil without helper.
+	agent       update.Agent
+	permissions *update.Permissions
 }
 
 func (s *store) visible(scope tenant.Scope) bool {
@@ -50,7 +54,8 @@ func (s *store) Node(_ context.Context, scope tenant.Scope, id identity.NodeID) 
 	}
 	r := listed(update.Package{Name: "openssl", Security: true})
 	r.Total, r.Security = 1, 1
-	return updates.NodeUpdates{Node: node, Group: groupX, Report: &r}, true, nil
+	r.Permissions = s.permissions
+	return updates.NodeUpdates{Node: node, Group: groupX, Report: &r, Agent: s.agent}, true, nil
 }
 
 func (s *store) Fleet(_ context.Context, scope tenant.Scope) ([]updates.NodeUpdates, error) {
@@ -171,7 +176,7 @@ func (m *manualStore) StartRollouts(_ context.Context, _ tenant.OrgID, r []updat
 	return nil
 }
 
-func (m *manualStore) Reboot(_ context.Context, _ tenant.OrgID, c []command.Command, a access.AuditEntry) error {
+func (m *manualStore) Enqueue(_ context.Context, _ tenant.OrgID, c []command.Command, a access.AuditEntry) error {
 	m.reboots = append(m.reboots, c...)
 	m.audit = append(m.audit, a)
 	return nil
@@ -311,5 +316,70 @@ func TestService_History(t *testing.T) {
 	}
 	if list, err := svc.Rollouts(ctx, caller(role.Viewer, false), 0); err != nil || len(list) != 1 {
 		t.Errorf("Rollouts() = %+v, %v", list, err)
+	}
+}
+
+type releases map[update.Channel]string
+
+func (r releases) Latest(c update.Channel, arch string) (string, bool) {
+	v, ok := r[c]
+	return v, ok && arch == "arm64"
+}
+
+// M4-19: operators update agents by hand with a fresh step-up, to the newest release of the
+// group's channel; package installs, hosts that forbid it and agents as new are skipped.
+func TestService_UpdatesAgentsByHand(t *testing.T) {
+	st := &store{agent: update.Agent{Version: "1.0.0", Method: update.InstallScript, Arch: "arm64"}, permissions: &update.Permissions{SelfUpdate: true}}
+	m := &manualStore{}
+	policies := &policyStore{}
+	beta := updates.DefaultPolicy(groupX)
+	beta.Channel = update.ChannelBeta
+	policies.stored = &beta
+	svc := updates.NewService(st, authz.NewPolicy()).WithRefresher(&refresher{}, func() time.Time { return t0 }).
+		WithManual(m, policies, uuid.New).WithReleases(releases{update.ChannelStable: "1.0.0", update.ChannelBeta: "1.1.0-rc.1"})
+	ctx := context.Background()
+	operator := fresh(caller(role.Operator, false))
+	runs, skipped, err := svc.UpdateAgents(ctx, operator, []identity.NodeID{node})
+	if err != nil || len(runs) != 1 || len(skipped) != 0 || runs[0].Kind != command.SelfUpdate || runs[0].Version != "1.1.0-rc.1" || runs[0].CreatedBy != user {
+		t.Fatalf("UpdateAgents() = %+v, %+v, %v", runs, skipped, err)
+	}
+	if a := m.audit[0]; a.Action != "agents.update" || a.Details["nodes"] != node.String()+"=1.1.0-rc.1" {
+		t.Errorf("audit = %+v", a)
+	}
+	state, err := svc.AgentState(ctx, caller(role.Viewer, false), updates.NodeUpdates{Node: node, Group: groupX, Agent: st.agent})
+	if err != nil || state.Channel != update.ChannelBeta || state.Latest != "1.1.0-rc.1" || state.Target != "1.1.0-rc.1" {
+		t.Errorf("AgentState() = %+v, %v", state, err)
+	}
+	reasons := map[string]string{"package": "package manager", "unknown": "install.sh", "forbidden": "allow_self_update", "as new": "no newer release"}
+	for name, change := range map[string]func(){
+		"package":   func() { st.agent.Method = update.InstallPackage },
+		"unknown":   func() { st.agent.Method = update.InstallUnknown },
+		"forbidden": func() { st.permissions.SelfUpdate = false },
+		"as new":    func() { st.agent.Version = "1.1.0-rc.1" },
+	} {
+		before := *st
+		permissions := *st.permissions
+		change()
+		runs, skipped, err := svc.UpdateAgents(ctx, operator, []identity.NodeID{node})
+		if err != nil || len(runs) != 0 || len(skipped) != 1 || !strings.Contains(skipped[0].Reason, reasons[name]) {
+			t.Errorf("%s: %+v %+v %v", name, runs, skipped, err)
+		}
+		*st = before
+		*st.permissions = permissions
+	}
+	if _, _, err := svc.UpdateAgents(ctx, caller(role.Operator, false), []identity.NodeID{node}); !errors.Is(err, access.ErrStepUpRequired) {
+		t.Errorf("no step-up: %v", err)
+	}
+	if _, _, err := svc.UpdateAgents(ctx, fresh(caller(role.Viewer, true)), []identity.NodeID{node}); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("viewer: %v", err)
+	}
+	if len(m.reboots) != 1 {
+		t.Errorf("%d commands, want the first only", len(m.reboots))
+	}
+	if got, err := svc.Releases(caller(role.Viewer, false)); err != nil || got[update.ChannelBeta]["arm64"] != "1.1.0-rc.1" || len(got[update.ChannelStable]) != 1 {
+		t.Errorf("Releases() = %v, %v", got, err)
+	}
+	if _, err := svc.Releases(access.Caller{}); err == nil {
+		t.Error("Releases() without a role")
 	}
 }

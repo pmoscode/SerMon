@@ -168,7 +168,7 @@ func userKind(k secevent.Kind) bool {
 		return true
 	case secevent.SSHPreauthDisconnect, secevent.SystemReboot, secevent.OOMKill,
 		secevent.EnrollmentTokenUsed, secevent.NodeLocked, secevent.NodeRotationNewIP,
-		secevent.UpdateRunFailed, secevent.UpdateRolloutStopped:
+		secevent.UpdateRunFailed, secevent.UpdateRolloutStopped, secevent.AgentSelfUpdateFailed:
 		return false
 	}
 	return false

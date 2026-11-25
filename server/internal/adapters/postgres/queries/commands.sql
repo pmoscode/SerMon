@@ -34,7 +34,7 @@ LIMIT 100;
 UPDATE node_commands SET state = CASE WHEN kind = 1 THEN 4 ELSE 2 END, sent_at = sqlc.arg(now)
 WHERE node_id = sqlc.arg(node_id) AND id = ANY (sqlc.arg(ids)::uuid[]) AND state IN (1, 2);
 
--- name: RecordNodeCommandResult :execrows
+-- name: RecordNodeCommandResult :one
 -- The agent's phase of a run of this node: a start only before any phase, a final phase once.
 UPDATE node_commands SET
     phase = sqlc.arg(phase), state = CASE WHEN sqlc.arg(phase)::smallint = 1 THEN 3 ELSE 4 END,
@@ -42,7 +42,8 @@ UPDATE node_commands SET
     output_truncated = sqlc.arg(output_truncated), started_at = coalesce(sqlc.narg(started_at), started_at),
     ended_at = sqlc.narg(ended_at)
 WHERE node_id = sqlc.arg(node_id) AND id = sqlc.arg(id) AND kind <> 1
-  AND (phase IS NULL OR (phase = 1 AND sqlc.arg(phase)::smallint <> 1));
+  AND (phase IS NULL OR (phase = 1 AND sqlc.arg(phase)::smallint <> 1))
+RETURNING kind;
 
 -- name: GetNodeCommand :one
 SELECT id, node_id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,

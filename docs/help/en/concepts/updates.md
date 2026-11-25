@@ -21,3 +21,10 @@ only. Alpine has no security updates: there is only "all".
 In `/etc/sermon/helper.toml` the host decides itself: `allow_remote_updates` (on by default) and `allow_remote_reboot`
 (off by default). The server can't change that; the buttons are then locked and say why. Without the root helper there
 are no remote updates.
+
+## Agent
+
+The agent's version, how it was installed and its channel. If it was installed by `install.sh` and the channel offers a
+newer version, **Update the agent** updates it (with a fresh sign-in). The root helper checks the signature, replaces
+the binary and puts the old one back if the new one doesn't connect within 2 minutes. The host can forbid it with
+`allow_self_update = false`.

@@ -44,8 +44,12 @@ use crate::identity::FileIdentity;
 use crate::scheduler::Scheduler;
 use crate::state::StateLayout;
 
-/// Name and version as printed by `--version`.
-pub const VERSION_LINE: &str = concat!("sermon-agent ", env!("CARGO_PKG_VERSION"));
+/// The agent's version: `SERMON_VERSION` at build time (the release, as in its signature), else
+/// the crate's. The server compares it with the releases of the channel (ADR 0036).
+pub const VERSION: &str = match option_env!("SERMON_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 /// Executes a parsed command line.
 ///
@@ -55,7 +59,7 @@ pub const VERSION_LINE: &str = concat!("sermon-agent ", env!("CARGO_PKG_VERSION"
 pub fn execute(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Version => {
-            println!("{VERSION_LINE}");
+            println!("sermon-agent {VERSION}");
             Ok(())
         }
         Command::Run => {
@@ -141,7 +145,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         let shutdown = CancellationToken::new();
         let signals = tokio::spawn(cancel_on_signal(shutdown.clone()));
         tracing::info!(
-            version = env!("CARGO_PKG_VERSION"),
+            version = VERSION,
             server = %config.agent_url,
             "agent started"
         );
@@ -211,8 +215,7 @@ fn transport(
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
 ) -> Transport {
-    let mut transport_config =
-        TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION"));
+    let mut transport_config = TransportConfig::new(config.agent_url.uri().clone(), VERSION);
     transport_config.install_method = install_method();
     Transport::new(
         transport_config,

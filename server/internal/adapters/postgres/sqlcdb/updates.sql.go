@@ -90,7 +90,8 @@ const getNodeUpdates = `-- name: GetNodeUpdates :one
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at
+       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE n.id = $1
   AND ($2::boolean OR n.group_id = ANY ($3::uuid[]))
@@ -122,6 +123,9 @@ type GetNodeUpdatesRow struct {
 	AllowSelfUpdate    pgtype.Bool
 	Refreshed          pgtype.Bool
 	OldestSecurityAt   *time.Time
+	AgentVersion       string
+	InstallMethod      int16
+	Architecture       string
 }
 
 // A node of the scope with its report; no report: the report's columns are NULL.
@@ -148,6 +152,9 @@ func (q *Queries) GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) 
 		&i.AllowSelfUpdate,
 		&i.Refreshed,
 		&i.OldestSecurityAt,
+		&i.AgentVersion,
+		&i.InstallMethod,
+		&i.Architecture,
 	)
 	return i, err
 }
@@ -155,7 +162,8 @@ func (q *Queries) GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) 
 const getUpdatePolicy = `-- name: GetUpdatePolicy :one
 
 SELECT g.id, g.name, p.mode, p.window_days, p.window_start_minute, p.window_minutes, p.window_time_zone,
-       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by
+       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by,
+       p.agent_update, p.agent_channel
 FROM node_groups g LEFT JOIN update_policies p ON p.org_id = g.org_id AND p.group_id = g.id
 WHERE g.id = $1
   AND ($2::boolean OR g.id = ANY ($3::uuid[]))
@@ -181,6 +189,8 @@ type GetUpdatePolicyRow struct {
 	HealthCheckMinutes pgtype.Int4
 	UpdatedAt          *time.Time
 	UpdatedBy          *uuid.UUID
+	AgentUpdate        pgtype.Int2
+	AgentChannel       pgtype.Int2
 }
 
 // Update policies (M4-10).
@@ -202,6 +212,8 @@ func (q *Queries) GetUpdatePolicy(ctx context.Context, arg GetUpdatePolicyParams
 		&i.HealthCheckMinutes,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.AgentUpdate,
+		&i.AgentChannel,
 	)
 	return i, err
 }
@@ -210,7 +222,8 @@ const listFleetUpdates = `-- name: ListFleetUpdates :many
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at
+       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
 ORDER BY n.hostname, n.id
@@ -241,6 +254,9 @@ type ListFleetUpdatesRow struct {
 	AllowSelfUpdate    pgtype.Bool
 	Refreshed          pgtype.Bool
 	OldestSecurityAt   *time.Time
+	AgentVersion       string
+	InstallMethod      int16
+	Architecture       string
 }
 
 // The nodes of the scope with their reports, without packages.
@@ -273,6 +289,9 @@ func (q *Queries) ListFleetUpdates(ctx context.Context, arg ListFleetUpdatesPara
 			&i.AllowSelfUpdate,
 			&i.Refreshed,
 			&i.OldestSecurityAt,
+			&i.AgentVersion,
+			&i.InstallMethod,
+			&i.Architecture,
 		); err != nil {
 			return nil, err
 		}
@@ -328,7 +347,8 @@ func (q *Queries) ListNodeUpdatePackages(ctx context.Context, nodeID uuid.UUID) 
 
 const listUpdatePolicies = `-- name: ListUpdatePolicies :many
 SELECT g.id, g.name, p.mode, p.window_days, p.window_start_minute, p.window_minutes, p.window_time_zone,
-       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by
+       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by,
+       p.agent_update, p.agent_channel
 FROM node_groups g LEFT JOIN update_policies p ON p.org_id = g.org_id AND p.group_id = g.id
 WHERE $1::boolean OR g.id = ANY ($2::uuid[])
 ORDER BY g.name, g.id
@@ -353,6 +373,8 @@ type ListUpdatePoliciesRow struct {
 	HealthCheckMinutes pgtype.Int4
 	UpdatedAt          *time.Time
 	UpdatedBy          *uuid.UUID
+	AgentUpdate        pgtype.Int2
+	AgentChannel       pgtype.Int2
 }
 
 func (q *Queries) ListUpdatePolicies(ctx context.Context, arg ListUpdatePoliciesParams) ([]ListUpdatePoliciesRow, error) {
@@ -378,6 +400,8 @@ func (q *Queries) ListUpdatePolicies(ctx context.Context, arg ListUpdatePolicies
 			&i.HealthCheckMinutes,
 			&i.UpdatedAt,
 			&i.UpdatedBy,
+			&i.AgentUpdate,
+			&i.AgentChannel,
 		); err != nil {
 			return nil, err
 		}
@@ -509,17 +533,20 @@ func (q *Queries) UpsertNodeUpdateState(ctx context.Context, arg UpsertNodeUpdat
 const upsertUpdatePolicy = `-- name: UpsertUpdatePolicy :exec
 INSERT INTO update_policies (
     org_id, group_id, mode, window_days, window_start_minute, window_minutes, window_time_zone,
-    auto_reboot, max_parallel, stop_on_failure, health_check_minutes, updated_at, updated_by)
+    auto_reboot, max_parallel, stop_on_failure, health_check_minutes, updated_at, updated_by,
+    agent_update, agent_channel)
 VALUES (
     current_org_id(), $1, $2, $3::smallint[], $4,
     $5, $6, $7, $8,
-    $9, $10, $11, $12)
+    $9, $10, $11, $12,
+    $13, $14)
 ON CONFLICT (org_id, group_id) DO UPDATE SET
     mode = excluded.mode, window_days = excluded.window_days, window_start_minute = excluded.window_start_minute,
     window_minutes = excluded.window_minutes, window_time_zone = excluded.window_time_zone,
     auto_reboot = excluded.auto_reboot, max_parallel = excluded.max_parallel,
     stop_on_failure = excluded.stop_on_failure, health_check_minutes = excluded.health_check_minutes,
-    updated_at = excluded.updated_at, updated_by = excluded.updated_by
+    updated_at = excluded.updated_at, updated_by = excluded.updated_by,
+    agent_update = excluded.agent_update, agent_channel = excluded.agent_channel
 `
 
 type UpsertUpdatePolicyParams struct {
@@ -535,6 +562,8 @@ type UpsertUpdatePolicyParams struct {
 	HealthCheckMinutes int32
 	UpdatedAt          time.Time
 	UpdatedBy          *uuid.UUID
+	AgentUpdate        int16
+	AgentChannel       int16
 }
 
 func (q *Queries) UpsertUpdatePolicy(ctx context.Context, arg UpsertUpdatePolicyParams) error {
@@ -551,6 +580,8 @@ func (q *Queries) UpsertUpdatePolicy(ctx context.Context, arg UpsertUpdatePolicy
 		arg.HealthCheckMinutes,
 		arg.UpdatedAt,
 		arg.UpdatedBy,
+		arg.AgentUpdate,
+		arg.AgentChannel,
 	)
 	return err
 }

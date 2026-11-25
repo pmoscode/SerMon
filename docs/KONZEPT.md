@@ -736,6 +736,7 @@ Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log gep
 | `node.rotation_new_ip`                | vom Server: Schlüsselrotation von einer neuen Adresse                                   | ts, ip, previous_ip                         |
 | `updates.run_failed`                  | vom Orchestrator: Update, Reboot oder Health-Check eines Rollouts fehlgeschlagen (M4-13) | ts, reason                                  |
 | `updates.rollout_stopped`             | vom Orchestrator: Rollout nach einem Fehlschlag gestoppt (`stopOnFailure`)              | ts, reason                                  |
+| `agent.self_update_failed`            | vom Server: Self-Update des Agents abgelehnt, fehlgeschlagen oder zurückgerollt (M4-19)  | ts, reason                                  |
 
 **Parser-Anforderungen:** Sie müssen sowohl `sshd` als auch `sshd-session` erkennen (Prozessname ab OpenSSH 9.8), IPv4
 und IPv6, und Distro-Varianten. **Jeder Parser wird mit echten Logzeilen aus allen Zieldistros als Fixtures getestet und
@@ -935,6 +936,7 @@ einen **Dry-Run-Diff**.
 |                   | Reboot erforderlich                                            | threshold         | > 1 Tag / > 7 Tage                   |
 |                   | Update-Lauf fehlgeschlagen                                     | event             | – / ✓                               |
 |                   | Rollout gestoppt                                               | event             | – / ✓                               |
+|                   | Agent-Update fehlgeschlagen                                    | event             | ✓ / –                               |
 | **Anomalien**     | Anomalie-Rate des Nodes hoch                                   | anomaly           | 10 % / 25 % der Metriken             |
 
 Seit M2-04 mitgeliefert sind die Regeln für Verfügbarkeit, CPU, Memory, Disk, Netzwerk und System, soweit ihre Daten
@@ -1172,6 +1174,12 @@ spec:
   Servers, `beta` liegt optional in `downloads/beta/`; der Server kennt die Versionen aus den signierten Trusted
   Comments. Paket-Repos (apt, rpm, apk) liefert der Server unter `/repo/` aus, signiert mit eigenen Schlüsseln der
   Release-Pipeline; `install.sh --repo` richtet sie ein (O5).
+- **Im Server (M4-19):** Kanal und `agentUpdate` (`manual`/`auto`) stehen in der Update-Policy der Gruppe. Von Hand
+  aktualisiert ein Operator mit `run_updates` und frischem Step-up (`UpdateService.UpdateAgents`); mit `auto`
+  aktualisiert der Orchestrator im Fenster zuerst den Agent, dann die Pakete, mit `maxParallel` und Health-Check.
+  Angeboten wird nur Skript-Installationen (`install_method` aus dem Hello) mit einer neueren Version im Kanal. Ein
+  fehlgeschlagenes Self-Update schreibt das Server-Ereignis `agent.self_update_failed` (Regel
+  `system.agent.self_update_failed`, Warnung).
 
 ---
 

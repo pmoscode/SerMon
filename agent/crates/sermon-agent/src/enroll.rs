@@ -58,7 +58,7 @@ pub fn enroll(config: &AgentConfig, args: &EnrollArgs) -> anyhow::Result<()> {
             &key,
             token.expose(),
             &facts,
-            env!("CARGO_PKG_VERSION"),
+            crate::VERSION,
             &SystemClock::new(),
         )
         .await?;

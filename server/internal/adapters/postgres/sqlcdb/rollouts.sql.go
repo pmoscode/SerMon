@@ -42,9 +42,9 @@ func (q *Queries) HoldUpdateLease(ctx context.Context, arg HoldUpdateLeaseParams
 }
 
 const insertUpdateRolloutNode = `-- name: InsertUpdateRolloutNode :exec
-INSERT INTO update_rollout_nodes (org_id, rollout_id, node_id, position, hostname, state, reason, update_run, reboot_run, since, deadline)
+INSERT INTO update_rollout_nodes (org_id, rollout_id, node_id, position, hostname, state, reason, update_run, reboot_run, since, deadline, agent_run)
 VALUES (current_org_id(), $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10)
+        $6, $7, $8, $9, $10, $11)
 `
 
 type InsertUpdateRolloutNodeParams struct {
@@ -58,6 +58,7 @@ type InsertUpdateRolloutNodeParams struct {
 	RebootRun *uuid.UUID
 	Since     time.Time
 	Deadline  *time.Time
+	AgentRun  *uuid.UUID
 }
 
 func (q *Queries) InsertUpdateRolloutNode(ctx context.Context, arg InsertUpdateRolloutNodeParams) error {
@@ -72,6 +73,7 @@ func (q *Queries) InsertUpdateRolloutNode(ctx context.Context, arg InsertUpdateR
 		arg.RebootRun,
 		arg.Since,
 		arg.Deadline,
+		arg.AgentRun,
 	)
 	return err
 }
@@ -269,6 +271,7 @@ func (q *Queries) ListRecentRollouts(ctx context.Context, arg ListRecentRollouts
 
 const listRolloutNodeViews = `-- name: ListRolloutNodeViews :many
 SELECT n.id, n.group_id, n.hostname, n.last_seen_at, n.connected_at,
+       coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture,
        s.received_at, s.availability, s.package_manager, s.total_count, s.security_count, s.reboot_required,
        s.allow_remote_updates, s.allow_remote_reboot, s.allow_self_update,
        EXISTS (SELECT 1 FROM alert_instances a
@@ -284,6 +287,9 @@ type ListRolloutNodeViewsRow struct {
 	Hostname           string
 	LastSeenAt         *time.Time
 	ConnectedAt        *time.Time
+	AgentVersion       string
+	InstallMethod      int16
+	Architecture       string
 	ReceivedAt         *time.Time
 	Availability       pgtype.Int2
 	PackageManager     pgtype.Int2
@@ -313,6 +319,9 @@ func (q *Queries) ListRolloutNodeViews(ctx context.Context) ([]ListRolloutNodeVi
 			&i.Hostname,
 			&i.LastSeenAt,
 			&i.ConnectedAt,
+			&i.AgentVersion,
+			&i.InstallMethod,
+			&i.Architecture,
 			&i.ReceivedAt,
 			&i.Availability,
 			&i.PackageManager,
@@ -335,7 +344,7 @@ func (q *Queries) ListRolloutNodeViews(ctx context.Context) ([]ListRolloutNodeVi
 }
 
 const listUpdateRolloutNodes = `-- name: ListUpdateRolloutNodes :many
-SELECT rollout_id, node_id, hostname, state, reason, update_run, reboot_run, since, deadline
+SELECT rollout_id, node_id, hostname, state, reason, update_run, reboot_run, since, deadline, agent_run
 FROM update_rollout_nodes WHERE rollout_id = ANY ($1::uuid[])
 ORDER BY rollout_id, position
 `
@@ -350,6 +359,7 @@ type ListUpdateRolloutNodesRow struct {
 	RebootRun *uuid.UUID
 	Since     time.Time
 	Deadline  *time.Time
+	AgentRun  *uuid.UUID
 }
 
 func (q *Queries) ListUpdateRolloutNodes(ctx context.Context, rolloutIds []uuid.UUID) ([]ListUpdateRolloutNodesRow, error) {
@@ -371,6 +381,7 @@ func (q *Queries) ListUpdateRolloutNodes(ctx context.Context, rolloutIds []uuid.
 			&i.RebootRun,
 			&i.Since,
 			&i.Deadline,
+			&i.AgentRun,
 		); err != nil {
 			return nil, err
 		}

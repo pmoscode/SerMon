@@ -57,6 +57,12 @@ const (
 	// UpdateServiceListRolloutsProcedure is the fully-qualified name of the UpdateService's
 	// ListRollouts RPC.
 	UpdateServiceListRolloutsProcedure = "/sermon.web.v1.UpdateService/ListRollouts"
+	// UpdateServiceUpdateAgentsProcedure is the fully-qualified name of the UpdateService's
+	// UpdateAgents RPC.
+	UpdateServiceUpdateAgentsProcedure = "/sermon.web.v1.UpdateService/UpdateAgents"
+	// UpdateServiceListAgentReleasesProcedure is the fully-qualified name of the UpdateService's
+	// ListAgentReleases RPC.
+	UpdateServiceListAgentReleasesProcedure = "/sermon.web.v1.UpdateService/ListAgentReleases"
 )
 
 // UpdateServiceClient is a client for the sermon.web.v1.UpdateService service.
@@ -88,6 +94,13 @@ type UpdateServiceClient interface {
 	GetUpdateRun(context.Context, *connect.Request[v1.GetUpdateRunRequest]) (*connect.Response[v1.GetUpdateRunResponse], error)
 	// ListRollouts returns the latest rollouts of the groups the caller can view, newest first.
 	ListRollouts(context.Context, *connect.Request[v1.ListRolloutsRequest]) (*connect.Response[v1.ListRolloutsResponse], error)
+	// UpdateAgents updates the agents of the nodes to the newest release of their group's channel
+	// (M4-19, ADR 0036): run_updates on their groups and a fresh step-up, in the audit log. Nodes
+	// installed by a package, without a newer release or whose host forbids it are skipped with
+	// the reason. A node the caller can't view is NOT_FOUND.
+	UpdateAgents(context.Context, *connect.Request[v1.UpdateAgentsRequest]) (*connect.Response[v1.UpdateAgentsResponse], error)
+	// ListAgentReleases returns the agent releases the server offers per channel (view_nodes).
+	ListAgentReleases(context.Context, *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error)
 }
 
 // NewUpdateServiceClient constructs a client for the sermon.web.v1.UpdateService service. By
@@ -154,6 +167,19 @@ func NewUpdateServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 			connect.WithClientOptions(opts...),
 		),
+		updateAgents: connect.NewClient[v1.UpdateAgentsRequest, v1.UpdateAgentsResponse](
+			httpClient,
+			baseURL+UpdateServiceUpdateAgentsProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("UpdateAgents")),
+			connect.WithClientOptions(opts...),
+		),
+		listAgentReleases: connect.NewClient[v1.ListAgentReleasesRequest, v1.ListAgentReleasesResponse](
+			httpClient,
+			baseURL+UpdateServiceListAgentReleasesProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("ListAgentReleases")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -167,6 +193,8 @@ type updateServiceClient struct {
 	listUpdateRuns    *connect.Client[v1.ListUpdateRunsRequest, v1.ListUpdateRunsResponse]
 	getUpdateRun      *connect.Client[v1.GetUpdateRunRequest, v1.GetUpdateRunResponse]
 	listRollouts      *connect.Client[v1.ListRolloutsRequest, v1.ListRolloutsResponse]
+	updateAgents      *connect.Client[v1.UpdateAgentsRequest, v1.UpdateAgentsResponse]
+	listAgentReleases *connect.Client[v1.ListAgentReleasesRequest, v1.ListAgentReleasesResponse]
 }
 
 // GetNodeUpdates calls sermon.web.v1.UpdateService.GetNodeUpdates.
@@ -209,6 +237,16 @@ func (c *updateServiceClient) ListRollouts(ctx context.Context, req *connect.Req
 	return c.listRollouts.CallUnary(ctx, req)
 }
 
+// UpdateAgents calls sermon.web.v1.UpdateService.UpdateAgents.
+func (c *updateServiceClient) UpdateAgents(ctx context.Context, req *connect.Request[v1.UpdateAgentsRequest]) (*connect.Response[v1.UpdateAgentsResponse], error) {
+	return c.updateAgents.CallUnary(ctx, req)
+}
+
+// ListAgentReleases calls sermon.web.v1.UpdateService.ListAgentReleases.
+func (c *updateServiceClient) ListAgentReleases(ctx context.Context, req *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error) {
+	return c.listAgentReleases.CallUnary(ctx, req)
+}
+
 // UpdateServiceHandler is an implementation of the sermon.web.v1.UpdateService service.
 type UpdateServiceHandler interface {
 	// GetNodeUpdates returns a node's report with its packages (view_nodes). A node the caller
@@ -238,6 +276,13 @@ type UpdateServiceHandler interface {
 	GetUpdateRun(context.Context, *connect.Request[v1.GetUpdateRunRequest]) (*connect.Response[v1.GetUpdateRunResponse], error)
 	// ListRollouts returns the latest rollouts of the groups the caller can view, newest first.
 	ListRollouts(context.Context, *connect.Request[v1.ListRolloutsRequest]) (*connect.Response[v1.ListRolloutsResponse], error)
+	// UpdateAgents updates the agents of the nodes to the newest release of their group's channel
+	// (M4-19, ADR 0036): run_updates on their groups and a fresh step-up, in the audit log. Nodes
+	// installed by a package, without a newer release or whose host forbids it are skipped with
+	// the reason. A node the caller can't view is NOT_FOUND.
+	UpdateAgents(context.Context, *connect.Request[v1.UpdateAgentsRequest]) (*connect.Response[v1.UpdateAgentsResponse], error)
+	// ListAgentReleases returns the agent releases the server offers per channel (view_nodes).
+	ListAgentReleases(context.Context, *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error)
 }
 
 // NewUpdateServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -300,6 +345,19 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 		connect.WithHandlerOptions(opts...),
 	)
+	updateServiceUpdateAgentsHandler := connect.NewUnaryHandler(
+		UpdateServiceUpdateAgentsProcedure,
+		svc.UpdateAgents,
+		connect.WithSchema(updateServiceMethods.ByName("UpdateAgents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	updateServiceListAgentReleasesHandler := connect.NewUnaryHandler(
+		UpdateServiceListAgentReleasesProcedure,
+		svc.ListAgentReleases,
+		connect.WithSchema(updateServiceMethods.ByName("ListAgentReleases")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.UpdateService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UpdateServiceGetNodeUpdatesProcedure:
@@ -318,6 +376,10 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 			updateServiceGetUpdateRunHandler.ServeHTTP(w, r)
 		case UpdateServiceListRolloutsProcedure:
 			updateServiceListRolloutsHandler.ServeHTTP(w, r)
+		case UpdateServiceUpdateAgentsProcedure:
+			updateServiceUpdateAgentsHandler.ServeHTTP(w, r)
+		case UpdateServiceListAgentReleasesProcedure:
+			updateServiceListAgentReleasesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -357,4 +419,12 @@ func (UnimplementedUpdateServiceHandler) GetUpdateRun(context.Context, *connect.
 
 func (UnimplementedUpdateServiceHandler) ListRollouts(context.Context, *connect.Request[v1.ListRolloutsRequest]) (*connect.Response[v1.ListRolloutsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.ListRollouts is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) UpdateAgents(context.Context, *connect.Request[v1.UpdateAgentsRequest]) (*connect.Response[v1.UpdateAgentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.UpdateAgents is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) ListAgentReleases(context.Context, *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.ListAgentReleases is not implemented"))
 }

@@ -130,6 +130,10 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 				run.RebootRun = *n.RebootRun
 				runs = append(runs, run.RebootRun)
 			}
+			if n.AgentRun != nil {
+				run.AgentRun = *n.AgentRun
+				runs = append(runs, run.AgentRun)
+			}
 			if n.Deadline != nil {
 				run.Deadline = *n.Deadline
 			}
@@ -150,7 +154,7 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 			p := policyOf(row).Policy
 			groupPolicy[p.Group] = p
 			r := rollouts[p.Group]
-			if p.Mode == updates.ModeReport && (r == nil || !r.Following()) {
+			if p.Mode == updates.ModeReport && p.AgentUpdate != updates.AgentAuto && (r == nil || !r.Following()) {
 				continue
 			}
 			out.Groups = append(out.Groups, updates.GroupState{Policy: p, Rollout: r, Nodes: byGroup[p.Group]})
@@ -161,7 +165,8 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 			if !ok {
 				p = updates.DefaultPolicy(r.Group)
 			}
-			p.Mode, p.AutoReboot, p.Window = r.Mode, r.AutoReboot, nil
+			// By hand only the packages: agents are updated by hand on their own (UpdateAgents).
+			p.Mode, p.AutoReboot, p.Window, p.AgentUpdate = r.Mode, r.AutoReboot, nil, updates.AgentManual
 			out.Groups = append(out.Groups, updates.GroupState{Policy: p, Rollout: r, Nodes: byGroup[r.Group]})
 		}
 		commands, err := q.ListNodeCommandsByID(ctx, runs)
@@ -179,6 +184,7 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 func nodeView(v sqlcdb.ListRolloutNodeViewsRow, now time.Time) updates.NodeView {
 	out := updates.NodeView{
 		ID: identity.NodeID(v.ID), Hostname: v.Hostname, Online: ingest.Online(v.LastSeenAt, now), Critical: v.Critical,
+		Agent: update.Agent{Version: v.AgentVersion, Method: update.InstallMethod(v.InstallMethod), Arch: v.Architecture}, //nolint:gosec // 0 to 2 by the table's check
 	}
 	if v.ConnectedAt != nil {
 		out.ConnectedAt = *v.ConnectedAt
@@ -268,7 +274,7 @@ func saveRollout(ctx context.Context, q *sqlcdb.Queries, r updates.RolloutRun, n
 		if err := q.InsertUpdateRolloutNode(ctx, sqlcdb.InsertUpdateRolloutNodeParams{
 			RolloutID: r.ID, NodeID: uuid.UUID(n.Node), Position: int32(i), Hostname: n.Hostname,
 			State: int16(n.State), Reason: bounded(n.Reason, 1024), UpdateRun: optionalID(n.UpdateRun), RebootRun: optionalID(n.RebootRun),
-			Since: n.Since, Deadline: optionalTime(n.Deadline),
+			Since: n.Since, Deadline: optionalTime(n.Deadline), AgentRun: optionalID(n.AgentRun),
 		}); err != nil {
 			return wrap(err, "store rollout node")
 		}
@@ -334,8 +340,8 @@ func (s *RolloutStore) StartRollouts(ctx context.Context, org tenant.OrgID, roll
 	})
 }
 
-// Reboot implements updates.ManualStore: the reboot commands with their audit entry.
-func (s *RolloutStore) Reboot(ctx context.Context, org tenant.OrgID, commands []command.Command, audit access.AuditEntry) error {
+// Enqueue implements updates.ManualStore: commands (reboots, self-updates) with their audit entry.
+func (s *RolloutStore) Enqueue(ctx context.Context, org tenant.OrgID, commands []command.Command, audit access.AuditEntry) error {
 	scope, err := orgScope(org)
 	if err != nil {
 		return err

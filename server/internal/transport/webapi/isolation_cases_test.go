@@ -362,6 +362,14 @@ var tenantIsolationCases = map[string]isolationCase{
 		_, err := e.updates.GetUpdateRun(ctx, connect.NewRequest(&webv1.GetUpdateRunRequest{RunId: e.runA}))
 		return err
 	}},
+	"/sermon.web.v1.UpdateService/UpdateAgents": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{e.nodeA}}))
+		return err
+	}},
+	"/sermon.web.v1.UpdateService/ListAgentReleases": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updates.ListAgentReleases(ctx, connect.NewRequest(&webv1.ListAgentReleasesRequest{}))
+		return err
+	}},
 	"/sermon.web.v1.UpdateService/ListRollouts": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.updates.ListRollouts(ctx, connect.NewRequest(&webv1.ListRolloutsRequest{}))
 		if err != nil {

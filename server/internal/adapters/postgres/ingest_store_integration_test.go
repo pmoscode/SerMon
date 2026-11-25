@@ -16,6 +16,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
 func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.T) {
@@ -26,7 +27,7 @@ func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.
 	node := uuid.New()
 	createNode(t, f.db.OwnerDSN, orgA, node)
 	at := time.Now().Truncate(time.Second)
-	facts := ingest.HostFacts{Hostname: "db-02", OSID: "ubuntu", OSVersion: "24.04", KernelRelease: "6.8.0", Architecture: "arm64", CPUCount: 8, MemoryBytes: 16 << 30, SecuritySource: secevent.SourceFileUnverified}
+	facts := ingest.HostFacts{Hostname: "db-02", OSID: "ubuntu", OSVersion: "24.04", KernelRelease: "6.8.0", Architecture: "arm64", CPUCount: 8, MemoryBytes: 16 << 30, SecuritySource: secevent.SourceFileUnverified, InstallMethod: update.InstallScript}
 
 	connected, err := store.Connected(ctx, tenant.OrgID(orgA), identity.NodeID(node), facts, "1.2.3", at)
 	if err != nil || uuid.UUID(connected.Group) == uuid.Nil || connected.Limits != (ingest.Limits{}) {
@@ -55,8 +56,9 @@ func TestIngestNodeStore_RecordsHelloAndContactWithinTheOrganization(t *testing.
 	}
 	// Each Hello is a new session (M4-13: a node is back after a reboot); Seen doesn't move it.
 	var connectedAt time.Time
-	if err := conn.QueryRow(ctx, "SELECT connected_at FROM nodes WHERE id = $1", node).Scan(&connectedAt); err != nil || !connectedAt.Equal(at) {
-		t.Errorf("connected_at = %v, %v; want %v", connectedAt, err, at)
+	var method int
+	if err := conn.QueryRow(ctx, "SELECT connected_at, install_method FROM nodes WHERE id = $1", node).Scan(&connectedAt, &method); err != nil || !connectedAt.Equal(at) || method != 1 {
+		t.Errorf("connected_at = %v, install_method %d, %v; want %v", connectedAt, method, err, at)
 	}
 	// An older agent reports no source: it is unknown again, not left over from before (M2-31).
 	facts.SecuritySource = secevent.SourceUnknown

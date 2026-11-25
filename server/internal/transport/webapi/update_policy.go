@@ -13,6 +13,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -58,7 +59,7 @@ var apiModes = map[updates.Mode]webv1.UpdateMode{
 
 func updatePolicyOf(group tenant.GroupID, spec *webv1.UpdatePolicySpec) updates.Policy {
 	p := updates.Policy{
-		Group: group, AutoReboot: spec.GetAutoReboot(),
+		Group: group, AutoReboot: spec.GetAutoReboot(), AgentUpdate: updates.AgentManual, Channel: update.ChannelStable,
 		Rollout: updates.Rollout{
 			MaxParallel: int(spec.GetMaxParallel()), StopOnFailure: spec.GetStopOnFailure(),
 			HealthCheck: time.Duration(spec.GetHealthCheckMinutes()) * time.Minute,
@@ -68,6 +69,12 @@ func updatePolicyOf(group tenant.GroupID, spec *webv1.UpdatePolicySpec) updates.
 		if v == spec.GetMode() {
 			p.Mode = m
 		}
+	}
+	if spec.GetAgentUpdate() == webv1.AgentUpdate_AGENT_UPDATE_AUTO {
+		p.AgentUpdate = updates.AgentAuto
+	}
+	if spec.GetChannel() == webv1.AgentChannel_AGENT_CHANNEL_BETA {
+		p.Channel = update.ChannelBeta
 	}
 	if w := spec.GetWindow(); w != nil {
 		s := &routing.Schedule{
@@ -86,6 +93,10 @@ func updatePolicyView(p updates.Policy, name string) *webv1.UpdatePolicy {
 	spec := &webv1.UpdatePolicySpec{
 		Mode: apiModes[p.Mode], AutoReboot: p.AutoReboot, MaxParallel: int32(p.Rollout.MaxParallel), //nolint:gosec // 1 to 50
 		StopOnFailure: p.Rollout.StopOnFailure, HealthCheckMinutes: int32(p.Rollout.HealthCheck / time.Minute), //nolint:gosec // 5 to 120
+		AgentUpdate: webv1.AgentUpdate_AGENT_UPDATE_MANUAL, Channel: apiChannels[p.Channel],
+	}
+	if p.AgentUpdate == updates.AgentAuto {
+		spec.AgentUpdate = webv1.AgentUpdate_AGENT_UPDATE_AUTO
 	}
 	if w := p.Window; w != nil {
 		spec.Window = &webv1.UpdateWindow{

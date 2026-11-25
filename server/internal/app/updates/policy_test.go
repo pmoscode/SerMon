@@ -36,13 +36,14 @@ func TestParsePolicy_TheExampleOfTheConceptRoundTrips(t *testing.T) {
 	}
 	want := updates.Policy{
 		Group: groupX, Mode: updates.ModeSecurityAuto, Window: sunday(), AutoReboot: true,
+		AgentUpdate: updates.AgentManual, Channel: update.ChannelStable,
 		Rollout: updates.Rollout{MaxParallel: 1, StopOnFailure: true, HealthCheck: 10 * time.Minute},
 	}
 	if !equal(p, want) {
 		t.Fatalf("parsed %+v (%+v)", p, p.Window)
 	}
 	out := p.YAML()
-	for _, part := range []string{"kind: UpdatePolicy", "mode: security-auto", "days: [sun]", `start: "03:00"`, "duration: 2h", "timezone: Europe/Berlin", "healthCheck: 10m", "maxParallel: 1"} {
+	for _, part := range []string{"kind: UpdatePolicy", "agentUpdate: manual", "channel: stable", "mode: security-auto", "days: [sun]", `start: "03:00"`, "duration: 2h", "timezone: Europe/Berlin", "healthCheck: 10m", "maxParallel: 1"} {
 		if !strings.Contains(string(out), part) {
 			t.Errorf("export lacks %q:\n%s", part, out)
 		}
@@ -53,7 +54,7 @@ func TestParsePolicy_TheExampleOfTheConceptRoundTrips(t *testing.T) {
 	}
 	// Without a window, report only; several days, minutes.
 	other := updates.Policy{
-		Group: groupX, Mode: updates.ModeAllAuto, AutoReboot: false,
+		Group: groupX, Mode: updates.ModeAllAuto, AutoReboot: false, AgentUpdate: updates.AgentAuto, Channel: update.ChannelBeta,
 		Window:  &routing.Schedule{Days: []time.Weekday{time.Monday, time.Saturday}, Start: 22*time.Hour + 30*time.Minute, Duration: 90 * time.Minute, TimeZone: "UTC"},
 		Rollout: updates.Rollout{MaxParallel: 50, HealthCheck: 2 * time.Hour},
 	}
@@ -106,6 +107,9 @@ func TestParsePolicy_RefusesWhatIsNotAPolicy(t *testing.T) {
 		"health seconds":   strings.Replace(konzept, "healthCheck: 10m", "healthCheck: 10m30s", 1),
 		"auto no window":   "kind: UpdatePolicy\nspec:\n  mode: all-auto\n",
 		"reboot no window": "kind: UpdatePolicy\nspec:\n  mode: report\n  autoReboot: true\n",
+		"agent update":     strings.Replace(konzept, "autoReboot: true", "autoReboot: true\n  agentUpdate: always", 1),
+		"channel":          strings.Replace(konzept, "autoReboot: true", "autoReboot: true\n  channel: nightly", 1),
+		"agent no window":  "kind: UpdatePolicy\nspec:\n  mode: report\n  agentUpdate: auto\n",
 		"two documents":    konzept + "---\n" + konzept,
 		"not yaml":         "kind: [",
 		"too large":        konzept + "#" + strings.Repeat("x", updates.MaxPolicyBytes),

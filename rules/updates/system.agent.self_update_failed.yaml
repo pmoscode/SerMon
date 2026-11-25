@@ -1,0 +1,23 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.agent.self_update_failed
+  name: { de: "Agent-Update fehlgeschlagen", en: "Agent update failed" }
+  labels: { category: updates }
+spec:
+  type: event
+  event: agent.self_update_failed
+  count: { window: 1h, warning: 1 }
+  notifyFields: [ ts, reason ]
+  help:
+    de: >-
+      Der Agent des Nodes konnte sich nicht auf die neue Version aktualisieren. Der Grund nennt den Schritt: Die Release
+      ließ sich nicht laden, der Root-Helper lehnte sie ab (Signatur, Version, allow_self_update in
+      /etc/sermon/helper.toml), oder die neue Version verband sich nicht binnen 2 Minuten und wurde zurückgerollt. Der
+      Node läuft mit der bisherigen Version weiter. Im Reiter Updates des Nodes steht der Lauf mit seiner Ausgabe; das
+      Journal von sermon-helper und sermon-agent zeigt mehr.
+    en: >-
+      The node's agent could not update itself to the new version. The reason names the step: the release could not be
+      fetched, the root helper refused it (signature, version, allow_self_update in /etc/sermon/helper.toml), or the
+      new version did not connect within 2 minutes and was rolled back. The node keeps running the previous version.
+      The node's Updates tab has the run with its output; the journal of sermon-helper and sermon-agent shows more.

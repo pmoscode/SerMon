@@ -59,7 +59,14 @@ func (h *UpdateHandler) GetNodeUpdates(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, h.failure(ctx, "get node updates", err)
 	}
-	res := &webv1.GetNodeUpdatesResponse{Node: nodeUpdatesView(n)}
+	agent, err := h.updates.AgentState(ctx, c, n)
+	if err != nil {
+		return nil, h.failure(ctx, "get node updates", err)
+	}
+	res := &webv1.GetNodeUpdatesResponse{Node: nodeUpdatesView(n), Agent: &webv1.AgentInfo{
+		Version: agent.Version, InstallMethod: webv1.InstallMethod(agent.Method), Channel: apiChannels[agent.Channel],
+		Latest: agent.Latest, Target: agent.Target,
+	}}
 	if n.Report != nil {
 		res.Packages = make([]*webv1.UpdatePackage, 0, len(n.Report.Packages))
 		for _, p := range n.Report.Packages {
@@ -338,10 +345,60 @@ func (h *UpdateHandler) ListRollouts(ctx context.Context, req *connect.Request[w
 		for _, n := range r.Nodes {
 			v.Nodes = append(v.Nodes, &webv1.RolloutNode{
 				NodeId: n.Node.String(), Hostname: n.Hostname, State: webv1.RolloutNodeState(n.State), Reason: n.Reason,
-				UpdateRunId: idOrEmpty(n.UpdateRun), RebootRunId: idOrEmpty(n.RebootRun),
+				UpdateRunId: idOrEmpty(n.UpdateRun), RebootRunId: idOrEmpty(n.RebootRun), AgentRunId: idOrEmpty(n.AgentRun),
 			})
 		}
 		res.Rollouts = append(res.Rollouts, v)
+	}
+	return connect.NewResponse(res), nil
+}
+
+var apiChannels = map[update.Channel]webv1.AgentChannel{
+	update.ChannelStable: webv1.AgentChannel_AGENT_CHANNEL_STABLE,
+	update.ChannelBeta:   webv1.AgentChannel_AGENT_CHANNEL_BETA,
+}
+
+// UpdateAgents updates the agents of nodes by hand.
+func (h *UpdateHandler) UpdateAgents(ctx context.Context, req *connect.Request[webv1.UpdateAgentsRequest]) (*connect.Response[webv1.UpdateAgentsResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := nodeIDs(req.Msg.GetNodeIds())
+	if err != nil {
+		return nil, err
+	}
+	runs, skipped, err := h.updates.UpdateAgents(ctx, c, ids)
+	if err != nil {
+		return nil, h.failure(ctx, "update agents", err)
+	}
+	res := &webv1.UpdateAgentsResponse{}
+	for _, r := range runs {
+		res.RunIds = append(res.RunIds, r.ID.String())
+	}
+	for _, s := range skipped {
+		res.Skipped = append(res.Skipped, &webv1.SkippedNode{NodeId: s.Node.String(), Reason: s.Reason})
+	}
+	return connect.NewResponse(res), nil
+}
+
+// ListAgentReleases returns the agent releases per channel.
+func (h *UpdateHandler) ListAgentReleases(ctx context.Context, _ *connect.Request[webv1.ListAgentReleasesRequest]) (*connect.Response[webv1.ListAgentReleasesResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	releases, err := h.updates.Releases(c)
+	if err != nil {
+		return nil, h.failure(ctx, "list agent releases", err)
+	}
+	res := &webv1.ListAgentReleasesResponse{}
+	for _, channel := range []update.Channel{update.ChannelStable, update.ChannelBeta} {
+		for _, arch := range []string{"amd64", "arm64"} {
+			if v, ok := releases[channel][arch]; ok {
+				res.Releases = append(res.Releases, &webv1.AgentRelease{Channel: apiChannels[channel], Architecture: arch, Version: v})
+			}
+		}
 	}
 	return connect.NewResponse(res), nil
 }

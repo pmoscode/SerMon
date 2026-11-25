@@ -198,3 +198,36 @@ func TestCommandStore_RefreshesOnRequestAreLimited(t *testing.T) {
 		t.Error("a command for a node of another organization was stored")
 	}
 }
+
+// M4-19: a failed self-update is a server event of the node; a successful one and other runs aren't.
+func TestCommandStore_AFailedSelfUpdateIsAnEvent(t *testing.T) {
+	f := newUpdateFixture(t, 0)
+	s := postgres.NewCommandStore(open(t, setup(t).appDSN))
+	ctx := context.Background()
+	failed, ok, update := newCommand(f.node, command.SelfUpdate, updatesNow), newCommand(f.node, command.SelfUpdate, updatesNow), newCommand(f.node, command.Update, updatesNow)
+	failed.Version, ok.Version = "1.1.0", "1.2.0"
+	for _, c := range []command.Command{failed, ok, update} {
+		if err := s.Enqueue(ctx, f.org, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for c, phase := range map[uuid.UUID]command.Phase{failed.ID: command.Failed, ok.ID: command.Succeeded, update.ID: command.Failed} {
+		if stored, err := s.Record(ctx, f.org, f.node, c, command.Result{Phase: phase, ExitCode: 1, Reason: map[bool]string{true: "rolled back"}[c == failed.ID]}); err != nil || !stored {
+			t.Fatalf("record = %v, %v", stored, err)
+		}
+	}
+	var events string
+	queryOwner(t, setup(t).db.OwnerDSN, "SELECT coalesce(string_agg(kind || '=' || (details->>'reason'), ','), '') FROM security_events WHERE org_id = $1", []any{uuid.UUID(f.org)}, &events)
+	if events != "agent.self_update_failed=rolled back" {
+		t.Errorf("events = %q", events)
+	}
+	// A resend changes nothing and writes no second event.
+	if stored, _ := s.Record(ctx, f.org, f.node, failed.ID, command.Result{Phase: command.Failed}); stored {
+		t.Error("a resend was recorded")
+	}
+	var n int
+	queryOwner(t, setup(t).db.OwnerDSN, "SELECT count(*) FROM security_events WHERE org_id = $1", []any{uuid.UUID(f.org)}, &n)
+	if n != 1 {
+		t.Errorf("%d events", n)
+	}
+}

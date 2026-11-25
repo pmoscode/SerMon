@@ -11,7 +11,7 @@ use crate::config::DEFAULT_CONFIG_PATH;
 
 /// SerMon agent: collects metrics, logs and security events and streams them to the server.
 #[derive(Debug, Parser)]
-#[command(name = "sermon-agent", version, propagate_version = true)]
+#[command(name = "sermon-agent", version = crate::VERSION, propagate_version = true)]
 pub struct Cli {
     /// Path of the agent configuration.
     #[arg(

@@ -300,6 +300,10 @@ var scenarios = map[alert.RuleID]scenario{
 		fireEvents: []secevent.Event{event(secevent.UpdateRolloutStopped, web, time.Minute, "", "")},
 		calmEvents: []secevent.Event{event(secevent.UpdateRolloutStopped, web, 2*time.Hour, "", "")}, want: critical,
 	},
+	"system.agent.self_update_failed": {
+		fireEvents: []secevent.Event{event(secevent.AgentSelfUpdateFailed, web, time.Minute, "", "")},
+		calmEvents: []secevent.Event{event(secevent.AgentSelfUpdateFailed, web, 2*time.Hour, "", "")}, want: warning,
+	},
 	"security.node.rotation_new_ip": {
 		fireEvents: []secevent.Event{event(secevent.NodeRotationNewIP, web, time.Minute, "192.0.2.31", "")},
 		calmEvents: []secevent.Event{event(secevent.NodeRotationNewIP, web, time.Hour, "192.0.2.31", "")}, want: warning,

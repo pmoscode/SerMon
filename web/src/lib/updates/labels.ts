@@ -6,7 +6,7 @@ import {
 	UpdateRunState
 } from '#lib/api/gen/sermon/web/v1/update_pb.js';
 import { UpdateStatus } from '#lib/api/gen/sermon/web/v1/update_status_pb.js';
-import { UpdateMode } from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
+import { AgentChannel, UpdateMode } from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
 import { m } from '#lib/paraglide/messages.js';
 
 export function statusLabel(s: UpdateStatus): string {
@@ -39,7 +39,8 @@ const nodeStates: Record<number, () => string> = {
 	[RolloutNodeState.HEALTH_CHECK]: m.rnode_health,
 	[RolloutNodeState.DONE]: m.rnode_done,
 	[RolloutNodeState.FAILED]: m.rnode_failed,
-	[RolloutNodeState.SKIPPED]: m.rnode_skipped
+	[RolloutNodeState.SKIPPED]: m.rnode_skipped,
+	[RolloutNodeState.AGENT_UPDATING]: m.rnode_agent
 };
 
 export function rolloutNodeLabel(s: RolloutNodeState): string {
@@ -87,4 +88,8 @@ export function runFailed(s: UpdateRunState): boolean {
 		UpdateRunState.LOST,
 		UpdateRunState.EXPIRED
 	].includes(s);
+}
+
+export function channelLabel(c: AgentChannel): string {
+	return c === AgentChannel.BETA ? m.channel_beta() : m.channel_stable();
 }

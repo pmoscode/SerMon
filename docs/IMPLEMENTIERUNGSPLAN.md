@@ -4620,7 +4620,36 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
     startet, wird nach 2 min zurückgerollt.
 - **Abhängig von:** M4-12, M4-17
 
-#### ☐ M4-19 – Kanäle und Self-Update im Server · S+W · M 🔒
+#### ☑ M4-19 – Kanäle und Self-Update im Server · S+W · M 🔒
+> Erledigt (KONZEPT §12.3, §14.3; Threat Model T100; Hilfe „Updates“ und „Update-Policy“):
+> - **Daten:** Migration 00052 – `nodes.install_method` (aus dem Hello), `update_policies.agent_update` und
+>   `agent_channel` (`auto` nur mit Fenster), `update_rollout_nodes.agent_run` und der Zustand 8 „Agent aktualisiert
+>   sich“, das Server-Ereignis `agent.self_update_failed`.
+> - **Versionen je Kanal** aus `download.Releases` (M4-18): `stable` die des Servers, `beta` die aus `downloads/beta/`.
+>   Ziel ist die neueste des Kanals für die Architektur, nur für Skript-Installationen und nur, wenn sie neuer ist
+>   (SemVer wie im Helper).
+> - **Von Hand:** `UpdateService.UpdateAgents` (`run_updates`, frischer Step-up, Audit `agents.update`); Pakete,
+>   Hosts mit `allow_self_update = false` und aktuelle Agents werden mit Grund übersprungen. `ListAgentReleases` zeigt
+>   die Versionen (`view_nodes`).
+> - **Per Policy** (`agentUpdate: auto`, `channel`): Der Orchestrator nimmt im Fenster Nodes mit neuerem Agent auf,
+>   auch bei `mode: report`; erst das Self-Update, dann die Pakete, danach der Health-Check – nach einem Agent als
+>   letztem Schritt erst mit neuer Session. Rollouts von Hand aktualisieren nur Pakete.
+> - **Ergebnis:** Ein abgelehntes, fehlgeschlagenes oder zurückgerolltes Self-Update schreibt beim Speichern des
+>   Ergebnisses das Server-Ereignis; Regel `system.agent.self_update_failed` (Warnung, 1 h).
+> - **UI:** Reiter Updates mit Abschnitt „Agent“ (Version, Installation, Kanal, neueste Version, Knopf mit Step-up,
+>   Hinweis auf das Veto), Policy-Editor mit Agent-Update und Kanal, Seite Updates mit den Versionen der Kanäle.
+> - **Tests:** SemVer und Ziel, Policy (YAML, Prüfungen), Plan (Agent zuerst, Agent dann Pakete, verboten,
+>   fehlgeschlagen, ohne Release, manuell), Dienst (Kanal, Gründe, Step-up, Rechte), PostgreSQL (Ereignis nur bei
+>   Fehlschlag und einmal, Policy, Laufnummer und Agent im Rollout, `install_method`, Rollout von Hand), Web-API
+>   (von Hand, Paket übersprungen, Viewer, Tenant-Isolation, Step-up), Szenario der Regel, Komponenten.
+> - **Gefunden beim Abschluss:** Der Agent meldete seine Crate-Version (`0.0.0`), der Helper kennt aber die signierte.
+>   Der Server hätte so jeder Skript-Installation die stabile Version angeboten und mit `auto` in jedem Fenster ein
+>   Self-Update gestartet, das der Helper ablehnt. Jetzt meldet der Agent `SERMON_VERSION` aus dem Build (wie der
+>   Server), sonst die Crate-Version; die Release-Pipeline muss sie setzen.
+> - **Demo:** web-02 zeigt Version `0.0.1-e2e`, Installation per Skript, Kanal stabil, nichts zu aktualisieren; nach dem
+>   Self-Update listet der Server die Beta `0.0.3-e2e`.
+> - **Gegenproben** für 21 Prüfungen, 20 erkannt (vier erst nach schärferen Tests); die übrige ist gleichwertig: Der
+>   Orchestrator berechnet das Ziel auch für Gruppen mit `agentUpdate: manual`, `Plan` beachtet es dort aber nicht.
 - **Ziel:**
   - Kanal pro Gruppe (`stable`, `beta`) und die verfügbaren Versionen je Kanal.
   - Self-Update manuell (Operator, Step-up) oder per Policy (`agentUpdate: auto`) über den Orchestrator.

@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import {
+	AgentInfoSchema,
 	GetNodeUpdatesResponseSchema,
+	InstallMethod,
+	UpdateAgentsResponseSchema,
 	ListUpdateRunsResponseSchema,
 	RebootNodesResponseSchema,
 	StartUpdatesResponseSchema,
@@ -13,6 +16,7 @@ import {
 	UpdateScope
 } from '#lib/api/gen/sermon/web/v1/update_pb.js';
 import { UpdateStatus } from '#lib/api/gen/sermon/web/v1/update_status_pb.js';
+import { AgentChannel } from '#lib/api/gen/sermon/web/v1/update_policy_pb.js';
 import { updatesApi } from '#lib/api/updates.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
@@ -185,6 +189,54 @@ describe('NodeUpdates', () => {
 		await vi.waitFor(() =>
 			expect(reboot).toHaveBeenCalledWith({ nodeIds: [nodeId], reason: 'kernel 6.12' })
 		);
+	});
+
+	it("shows the agent and updates it to the channel's release after a step-up", async () => {
+		rights([group]);
+		const r = report();
+		r.agent = create(AgentInfoSchema, {
+			version: '1.0.0',
+			installMethod: InstallMethod.SCRIPT,
+			channel: AgentChannel.BETA,
+			latest: '1.1.0-rc.1',
+			target: '1.1.0-rc.1'
+		});
+		r.node!.permissions!.selfUpdate = true;
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(r);
+		const update = vi
+			.spyOn(updatesApi.updates, 'updateAgents')
+			.mockRejectedValueOnce(stepUpError())
+			.mockResolvedValueOnce(create(UpdateAgentsResponseSchema, { runIds: ['x'] }));
+		show();
+		await expect.element(page.getByText('by install.sh – updates itself')).toBeVisible();
+		await expect.element(page.getByText('beta', { exact: true })).toBeVisible();
+		await page.getByRole('button', { name: 'Update the agent to 1.1.0-rc.1' }).click();
+		await vi.waitFor(() => expect(stepUpState.open).toBe(true));
+		stepUpState.finish(true);
+		await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+		expect(update.mock.calls[1][0]).toEqual({ nodeIds: [nodeId] });
+		await expect.element(page.getByText(/the agent fetches the new version/)).toBeVisible();
+	});
+
+	it('offers no agent update for a package or without a newer release', async () => {
+		rights([group]);
+		const r = report();
+		r.agent = create(AgentInfoSchema, {
+			version: '1.0.0',
+			installMethod: InstallMethod.PACKAGE,
+			latest: '1.1.0'
+		});
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(r);
+		show();
+		await expect.element(page.getByText(/package manager updates it/)).toBeVisible();
+		expect(page.getByRole('button', { name: /Update the agent/ }).elements()).toHaveLength(0);
+		// A viewer sees a newer release but can't update.
+		rights([]);
+		r.agent.installMethod = InstallMethod.SCRIPT;
+		r.agent.target = '1.1.0';
+		show();
+		await expect.element(page.getByText('by install.sh – updates itself')).toBeVisible();
+		expect(page.getByRole('button', { name: /Update the agent/ }).elements()).toHaveLength(0);
 	});
 
 	it('asks for a new list and says when it is too soon', async () => {

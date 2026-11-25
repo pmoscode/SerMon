@@ -29,6 +29,8 @@ type NodeUpdates struct {
 	PackagesOmitted bool
 	// OldestSecurity is when the oldest open security update was first listed.
 	OldestSecurity *time.Time
+	// Agent is the node's agent (M4-19).
+	Agent update.Agent
 }
 
 // Status is the node's status.

@@ -64,6 +64,14 @@ function updatesApi(): Record<string, Handler> {
 				]
 			}
 		}),
+		'UpdateService/ListAgentReleases': () => ({
+			json: {
+				releases: [
+					{ channel: 'AGENT_CHANNEL_STABLE', architecture: 'arm64', version: '0.5.0' },
+					{ channel: 'AGENT_CHANNEL_BETA', architecture: 'arm64', version: '0.6.0-rc.1' }
+				]
+			}
+		}),
 		'UpdatePolicyService/ListUpdatePolicies': () => ({
 			json: {
 				policies: [
@@ -95,6 +103,7 @@ test('the updates page shows the nodes by status, the rollouts and the policies'
 	await expect(nodes.getByRole('row')).toHaveCount(2);
 	await expect(page.getByText(/web-01: failed/)).toBeVisible();
 	await expect(page.getByText('security updates automatically')).toBeVisible();
+	await expect(page.getByText('Agent versions: stable 0.5.0 · beta 0.6.0-rc.1')).toBeVisible();
 	const results = await new AxeBuilder({ page }).analyze();
 	expect(results.violations).toEqual([]);
 });

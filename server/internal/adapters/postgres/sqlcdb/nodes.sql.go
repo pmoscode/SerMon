@@ -248,8 +248,9 @@ UPDATE nodes SET hostname = $1, os_id = $2, os_version = $3,
                  kernel_release = $4, architecture = $5,
                  cpu_count = $6, memory_bytes = $7,
                  agent_version = $8, last_seen_at = $9,
-                 connected_at = $9, security_source = $10
-WHERE nodes.id = $11
+                 connected_at = $9, security_source = $10,
+                 install_method = $11
+WHERE nodes.id = $12
 RETURNING group_id,
           (SELECT o.samples_per_second FROM organizations o WHERE o.id = nodes.org_id) AS samples_per_second,
           (SELECT o.series_per_node FROM organizations o WHERE o.id = nodes.org_id) AS series_per_node
@@ -266,6 +267,7 @@ type UpdateNodeOnConnectParams struct {
 	AgentVersion   pgtype.Text
 	SeenAt         *time.Time
 	SecuritySource string
+	InstallMethod  int16
 	ID             uuid.UUID
 }
 
@@ -288,6 +290,7 @@ func (q *Queries) UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConne
 		arg.AgentVersion,
 		arg.SeenAt,
 		arg.SecuritySource,
+		arg.InstallMethod,
 		arg.ID,
 	)
 	var i UpdateNodeOnConnectRow

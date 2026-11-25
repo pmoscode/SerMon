@@ -34,7 +34,7 @@ func TestKinds_AreTheNamesOfKonzept(t *testing.T) {
 		// Written by the server itself (M2-24, T3, T4).
 		"enrollment.token_used", "node.locked", "node.rotation_new_ip",
 		// Written by the update orchestrator (M4-13).
-		"updates.run_failed", "updates.rollout_stopped",
+		"updates.run_failed", "updates.rollout_stopped", "agent.self_update_failed",
 	}
 	got := secevent.Kinds()
 	if strings.Join(kindNames(got), ",") != strings.Join(want, ",") {

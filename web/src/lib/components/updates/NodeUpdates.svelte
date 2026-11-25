@@ -5,6 +5,7 @@
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import { codeOf, Code } from '#lib/api/client.js';
 	import {
+		InstallMethod,
 		UpdateAvailability,
 		UpdateScope,
 		type GetNodeUpdatesResponse
@@ -22,6 +23,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
 	import { withStepUp } from '#lib/stores/stepup.svelte.js';
+	import { channelLabel } from '#lib/updates/labels.js';
 	import PackageTable from './PackageTable.svelte';
 	import RunHistory from './RunHistory.svelte';
 
@@ -64,6 +66,14 @@
 	});
 
 	const node = $derived(data?.node);
+	const agent = $derived(data?.agent);
+	const installText = $derived(
+		agent?.installMethod === InstallMethod.SCRIPT
+			? m.agent_install_script()
+			: agent?.installMethod === InstallMethod.PACKAGE
+				? m.agent_install_package()
+				: m.agent_install_unknown()
+	);
 	const packages = $derived(data?.packages ?? []);
 	const listed = $derived(node?.availability === UpdateAvailability.LISTED);
 	const permissions = $derived(node?.permissions);
@@ -115,6 +125,16 @@
 				reboot
 			});
 			return m.updates_started();
+		});
+	}
+
+	function updateAgent() {
+		return act(async () => {
+			const res = await updatesApi.updates.updateAgents({ nodeIds: [nodeId] });
+			const skipped = res.skipped[0];
+			return skipped
+				? m.agent_update_skipped({ reason: displayText(skipped.reason) })
+				: m.agent_update_started();
 		});
 	}
 
@@ -314,6 +334,36 @@
 				</label>
 			</div>
 			<PackageTable packages={shownPackages} caption={m.updates_packages()} />
+		{/if}
+
+		{#if agent}
+			<section class="flex flex-col gap-2" aria-labelledby="agent-title">
+				<h3 id="agent-title" class="font-medium">{m.agent_title()}</h3>
+				<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+					<dt class="text-muted-foreground">{m.agent_version()}</dt>
+					<dd class="font-mono">{displayText(agent.version) || '–'}</dd>
+					<dt class="text-muted-foreground">{m.agent_install()}</dt>
+					<dd>{installText}</dd>
+					<dt class="text-muted-foreground">{m.agent_channel()}</dt>
+					<dd>{channelLabel(agent.channel)}</dd>
+					<dt class="text-muted-foreground">{m.agent_latest()}</dt>
+					<dd class="font-mono">{agent.latest || m.agent_none()}</dd>
+				</dl>
+				{#if permissions && !permissions.selfUpdate && agent.installMethod === InstallMethod.SCRIPT}
+					<p class="text-sm text-muted-foreground" role="note">{m.agent_veto()}</p>
+				{/if}
+				{#if mayUpdate && agent.target}
+					<Button
+						variant="outline"
+						size="sm"
+						class="self-start"
+						disabled={busy || !permissions?.selfUpdate}
+						onclick={updateAgent}
+					>
+						{m.agent_update({ version: agent.target })}
+					</Button>
+				{/if}
+			</section>
 		{/if}
 
 		<RunHistory {nodeId} {now} />

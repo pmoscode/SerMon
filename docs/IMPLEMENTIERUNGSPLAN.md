@@ -4579,7 +4579,39 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - Threat Model A4 und T40; KONZEPT §14.3.
 - **Abhängig von:** M4-01
 
-#### ☐ M4-18 – Self-Update über den Helper · A · M 🔒
+#### ☑ M4-18 – Self-Update über den Helper · A · M 🔒
+> Erledigt (ADR 0036 mit Nachtrag M4-18; Threat Model T40, T99):
+> - **Helper:** `SelfUpdate{run_id, version}` liest die vom Agent bereitgelegten Dateien ohne Symlinks (`openat` mit
+>   `O_NOFOLLOW` ab `/`, nur reguläre Dateien, 64 MiB bzw. 4 KiB) und prüft genau diese Bytes: minisign „Ed“ mit dem
+>   eingebauten Release-Key (`SERMON_RELEASE_KEY`, für die Rotation `SERMON_RELEASE_KEY_NEXT`), Trusted Comment mit
+>   `file:sermon-agent-linux-<arch>` und der angefragten Version, nur neuer als die installierte (SemVer-Vorrang). Die
+>   installierte kennt er aus seiner eigenen, erneut geprüften Kopie der Signatur (`/var/lib/sermon-helper/agent.minisig`,
+>   von `install.sh` abgelegt). Der Lauf ersetzt `/usr/local/bin/sermon-agent` per `rename`, startet den Agent neu und
+>   wartet 2 min auf `ConfirmSelfUpdate`; sonst legt er die vorige Binary samt Signatur zurück. Ed25519 aus `ring`
+>   (schon im Workspace). Größe 1 546 Zeilen (Grenze jetzt 1 800).
+> - **Agent:** holt die Version über `AgentService.FetchAgentRelease` (mTLS, Größe geprüft), legt sie für den Helper ab,
+>   trägt den Lauf mit der Kennung seines Prozesses ins Laufbuch und bestätigt als neue Version nach der ersten Session
+>   (`CommandSink::connected`). Im Hello steht `install_method` (Skript oder Paket, aus dem Pfad der Binary).
+> - **Server:** `download.Releases` kennt die signierten Binaries (`stable` = eigene Version, `beta/`), geprüft mit dem
+>   Release-Key (neues Paket `platform/minisign`), neu gelesen alle 5 min und bei unbekannter Version;
+>   `FetchAgentRelease` streamt sie in Blöcken zu 256 KiB, je Node einer zur Zeit und 10 je Stunde.
+> - **Tests:** Helper (Einsatz nach Bestätigung, Rollback ohne, 13 abgelehnte Fälle: fremder Schlüssel, andere Datei,
+>   andere Version, veränderte Binary, fehlende oder fremde Aufzeichnung, Symlink auf Datei und Verzeichnis,
+>   Verzeichnis statt Datei, zu groß, Downgrade, gleiche Version, Paket-Installation, ohne Schlüssel; Bestätigung vor dem
+>   Ersetzen und nach dem Ende), minisign und SemVer, Agent (Bereitstellen, Bestätigen nur durch den neuen Prozess,
+>   fehlende Release, beschäftigter Helper), Transport (Abruf in Blöcken, zu viele oder zu wenige Bytes, einmal
+>   „verbunden“ je Session), Server (Kanäle, fremde Signaturen, Rescan, Grenzen des Abrufs), `install.sh` (bats).
+> - **Demo:** web-02 (per Skript installiert) bekommt ein signiertes Beta, das nicht startet – nach 124 s
+>   zurückgerollt, Binary unverändert –, dann ein funktionierendes, das bleibt (nach 438 s: Der Helper startet ein
+>   Self-Update höchstens alle 5 min). Als letzter Schritt der Demo, da web-02 dabei minutenlang fehlt; der Test darf
+>   25 min dauern. Die Version des Servers in E2E ist `0.0.1-e2e` (SemVer). 5/5 grün in 21,4 min, Budget 0,64–0,73 %
+>   eines Kerns, 21–22 MiB.
+> - **Gefunden in der Demo:** Ein beschäftigter Helper (der Abstand von 5 min zwischen zwei Self-Updates) ließ den Agent
+>   die Release bei jedem neuen Versuch alle 30 s erneut holen, bis die Grenze von 10 je Stunde griff. Jetzt holt er sie
+>   je Lauf einmal.
+> - **Gegenproben** für 35 Prüfungen, 34 erkannt (sieben erst nach schärferen Tests). Offen bleibt eine: Läse der
+>   Helper die Datei nach der Prüfung erneut, fiele das ohne einen Eingriff zwischen Prüfen und Schreiben nicht auf; der
+>   Code schreibt dieselben Bytes, die er geprüft hat (Review).
 - **Ziel:** `SelfUpdate` nach ADR 0036 im Helper und im Agent, mit Rollback.
 - **Tests zuerst:**
   - Falsche oder fehlende Signatur, fremde Datei, Downgrade, getauschte Datei zwischen Prüfung und Ersetzen (TOCTOU),

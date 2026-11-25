@@ -32,6 +32,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// InstallMethod is how the agent was installed.
+type InstallMethod int32
+
+const (
+	// INSTALL_METHOD_UNSPECIFIED: not reported (older agents) or elsewhere.
+	InstallMethod_INSTALL_METHOD_UNSPECIFIED InstallMethod = 0
+	// INSTALL_METHOD_SCRIPT: install.sh, /usr/local/bin/sermon-agent.
+	InstallMethod_INSTALL_METHOD_SCRIPT InstallMethod = 1
+	// INSTALL_METHOD_PACKAGE: a package, /usr/bin/sermon-agent.
+	InstallMethod_INSTALL_METHOD_PACKAGE InstallMethod = 2
+)
+
+// Enum value maps for InstallMethod.
+var (
+	InstallMethod_name = map[int32]string{
+		0: "INSTALL_METHOD_UNSPECIFIED",
+		1: "INSTALL_METHOD_SCRIPT",
+		2: "INSTALL_METHOD_PACKAGE",
+	}
+	InstallMethod_value = map[string]int32{
+		"INSTALL_METHOD_UNSPECIFIED": 0,
+		"INSTALL_METHOD_SCRIPT":      1,
+		"INSTALL_METHOD_PACKAGE":     2,
+	}
+)
+
+func (x InstallMethod) Enum() *InstallMethod {
+	p := new(InstallMethod)
+	*p = x
+	return p
+}
+
+func (x InstallMethod) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (InstallMethod) Descriptor() protoreflect.EnumDescriptor {
+	return file_sermon_agent_v1_agent_proto_enumTypes[0].Descriptor()
+}
+
+func (InstallMethod) Type() protoreflect.EnumType {
+	return &file_sermon_agent_v1_agent_proto_enumTypes[0]
+}
+
+func (x InstallMethod) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use InstallMethod.Descriptor instead.
+func (InstallMethod) EnumDescriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{0}
+}
+
 // SecuritySource is where the agent finds the log lines for security events (ADR 0025).
 type SecuritySource int32
 
@@ -79,11 +132,11 @@ func (x SecuritySource) String() string {
 }
 
 func (SecuritySource) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[0].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[1].Descriptor()
 }
 
 func (SecuritySource) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[0]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[1]
 }
 
 func (x SecuritySource) Number() protoreflect.EnumNumber {
@@ -92,7 +145,7 @@ func (x SecuritySource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SecuritySource.Descriptor instead.
 func (SecuritySource) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{0}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{1}
 }
 
 // Architecture is a supported CPU architecture.
@@ -132,11 +185,11 @@ func (x Architecture) String() string {
 }
 
 func (Architecture) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[1].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[2].Descriptor()
 }
 
 func (Architecture) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[1]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[2]
 }
 
 func (x Architecture) Number() protoreflect.EnumNumber {
@@ -145,7 +198,7 @@ func (x Architecture) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Architecture.Descriptor instead.
 func (Architecture) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{1}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{2}
 }
 
 // SshAuthMethod is how an SSH login was tried.
@@ -205,11 +258,11 @@ func (x SshAuthMethod) String() string {
 }
 
 func (SshAuthMethod) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[2].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[3].Descriptor()
 }
 
 func (SshAuthMethod) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[2]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[3]
 }
 
 func (x SshAuthMethod) Number() protoreflect.EnumNumber {
@@ -218,7 +271,7 @@ func (x SshAuthMethod) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SshAuthMethod.Descriptor instead.
 func (SshAuthMethod) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{2}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{3}
 }
 
 // LogSource is where a log entry comes from (KONZEPT §10.1).
@@ -258,11 +311,11 @@ func (x LogSource) String() string {
 }
 
 func (LogSource) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[3].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[4].Descriptor()
 }
 
 func (LogSource) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[3]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[4]
 }
 
 func (x LogSource) Number() protoreflect.EnumNumber {
@@ -271,7 +324,7 @@ func (x LogSource) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LogSource.Descriptor instead.
 func (LogSource) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{3}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{4}
 }
 
 // LogSeverity is the syslog priority of an entry, from the most to the least severe.
@@ -335,11 +388,11 @@ func (x LogSeverity) String() string {
 }
 
 func (LogSeverity) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[4].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[5].Descriptor()
 }
 
 func (LogSeverity) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[4]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[5]
 }
 
 func (x LogSeverity) Number() protoreflect.EnumNumber {
@@ -348,7 +401,7 @@ func (x LogSeverity) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LogSeverity.Descriptor instead.
 func (LogSeverity) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{4}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{5}
 }
 
 // UpdateScope says which updates a run installs (KONZEPT §14.2).
@@ -388,11 +441,11 @@ func (x UpdateScope) String() string {
 }
 
 func (UpdateScope) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[5].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[6].Descriptor()
 }
 
 func (UpdateScope) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[5]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[6]
 }
 
 func (x UpdateScope) Number() protoreflect.EnumNumber {
@@ -401,7 +454,7 @@ func (x UpdateScope) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpdateScope.Descriptor instead.
 func (UpdateScope) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{5}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{6}
 }
 
 // PackageManager is the host's package manager.
@@ -445,11 +498,11 @@ func (x PackageManager) String() string {
 }
 
 func (PackageManager) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[6].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[7].Descriptor()
 }
 
 func (PackageManager) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[6]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[7]
 }
 
 func (x PackageManager) Number() protoreflect.EnumNumber {
@@ -458,7 +511,7 @@ func (x PackageManager) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PackageManager.Descriptor instead.
 func (PackageManager) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{6}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{7}
 }
 
 // UpdateAvailability says whether the agent could list the updates.
@@ -510,11 +563,11 @@ func (x UpdateAvailability) String() string {
 }
 
 func (UpdateAvailability) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[7].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[8].Descriptor()
 }
 
 func (UpdateAvailability) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[7]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[8]
 }
 
 func (x UpdateAvailability) Number() protoreflect.EnumNumber {
@@ -523,7 +576,7 @@ func (x UpdateAvailability) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpdateAvailability.Descriptor instead.
 func (UpdateAvailability) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{7}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{8}
 }
 
 // CommandPhase is how far a command of the server has come.
@@ -579,11 +632,11 @@ func (x CommandPhase) String() string {
 }
 
 func (CommandPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_agent_v1_agent_proto_enumTypes[8].Descriptor()
+	return file_sermon_agent_v1_agent_proto_enumTypes[9].Descriptor()
 }
 
 func (CommandPhase) Type() protoreflect.EnumType {
-	return &file_sermon_agent_v1_agent_proto_enumTypes[8]
+	return &file_sermon_agent_v1_agent_proto_enumTypes[9]
 }
 
 func (x CommandPhase) Number() protoreflect.EnumNumber {
@@ -592,7 +645,204 @@ func (x CommandPhase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CommandPhase.Descriptor instead.
 func (CommandPhase) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{8}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{9}
+}
+
+// FetchAgentReleaseRequest names the release.
+type FetchAgentReleaseRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// version is the agent version, as in SelfUpdate.
+	Version string `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	// architecture is the binary's architecture.
+	Architecture  Architecture `protobuf:"varint,2,opt,name=architecture,proto3,enum=sermon.agent.v1.Architecture" json:"architecture,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FetchAgentReleaseRequest) Reset() {
+	*x = FetchAgentReleaseRequest{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchAgentReleaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchAgentReleaseRequest) ProtoMessage() {}
+
+func (x *FetchAgentReleaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchAgentReleaseRequest.ProtoReflect.Descriptor instead.
+func (*FetchAgentReleaseRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *FetchAgentReleaseRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *FetchAgentReleaseRequest) GetArchitecture() Architecture {
+	if x != nil {
+		return x.Architecture
+	}
+	return Architecture_ARCHITECTURE_UNSPECIFIED
+}
+
+// FetchAgentReleaseResponse is one message of the stream: the header first, then the chunks.
+type FetchAgentReleaseResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// part is the header or a chunk of the binary.
+	//
+	// Types that are valid to be assigned to Part:
+	//
+	//	*FetchAgentReleaseResponse_Header
+	//	*FetchAgentReleaseResponse_Chunk
+	Part          isFetchAgentReleaseResponse_Part `protobuf_oneof:"part"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FetchAgentReleaseResponse) Reset() {
+	*x = FetchAgentReleaseResponse{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchAgentReleaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchAgentReleaseResponse) ProtoMessage() {}
+
+func (x *FetchAgentReleaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchAgentReleaseResponse.ProtoReflect.Descriptor instead.
+func (*FetchAgentReleaseResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *FetchAgentReleaseResponse) GetPart() isFetchAgentReleaseResponse_Part {
+	if x != nil {
+		return x.Part
+	}
+	return nil
+}
+
+func (x *FetchAgentReleaseResponse) GetHeader() *AgentReleaseHeader {
+	if x != nil {
+		if x, ok := x.Part.(*FetchAgentReleaseResponse_Header); ok {
+			return x.Header
+		}
+	}
+	return nil
+}
+
+func (x *FetchAgentReleaseResponse) GetChunk() []byte {
+	if x != nil {
+		if x, ok := x.Part.(*FetchAgentReleaseResponse_Chunk); ok {
+			return x.Chunk
+		}
+	}
+	return nil
+}
+
+type isFetchAgentReleaseResponse_Part interface {
+	isFetchAgentReleaseResponse_Part()
+}
+
+type FetchAgentReleaseResponse_Header struct {
+	// header comes first.
+	Header *AgentReleaseHeader `protobuf:"bytes,1,opt,name=header,proto3,oneof"`
+}
+
+type FetchAgentReleaseResponse_Chunk struct {
+	// chunk is the next up to 256 KiB of the binary.
+	Chunk []byte `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"`
+}
+
+func (*FetchAgentReleaseResponse_Header) isFetchAgentReleaseResponse_Part() {}
+
+func (*FetchAgentReleaseResponse_Chunk) isFetchAgentReleaseResponse_Part() {}
+
+// AgentReleaseHeader describes the binary that follows.
+type AgentReleaseHeader struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// size is the binary's size in bytes.
+	Size uint64 `protobuf:"varint,1,opt,name=size,proto3" json:"size,omitempty"`
+	// signature is the minisign signature file (.minisig) of the binary.
+	Signature     string `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentReleaseHeader) Reset() {
+	*x = AgentReleaseHeader{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentReleaseHeader) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentReleaseHeader) ProtoMessage() {}
+
+func (x *AgentReleaseHeader) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentReleaseHeader.ProtoReflect.Descriptor instead.
+func (*AgentReleaseHeader) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *AgentReleaseHeader) GetSize() uint64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *AgentReleaseHeader) GetSignature() string {
+	if x != nil {
+		return x.Signature
+	}
+	return ""
 }
 
 // SessionRequest is one message from the agent to the server.
@@ -616,7 +866,7 @@ type SessionRequest struct {
 
 func (x *SessionRequest) Reset() {
 	*x = SessionRequest{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[0]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -628,7 +878,7 @@ func (x *SessionRequest) String() string {
 func (*SessionRequest) ProtoMessage() {}
 
 func (x *SessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[0]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -641,7 +891,7 @@ func (x *SessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionRequest.ProtoReflect.Descriptor instead.
 func (*SessionRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{0}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SessionRequest) GetPayload() isSessionRequest_Payload {
@@ -797,7 +1047,7 @@ type SessionResponse struct {
 
 func (x *SessionResponse) Reset() {
 	*x = SessionResponse{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[1]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +1059,7 @@ func (x *SessionResponse) String() string {
 func (*SessionResponse) ProtoMessage() {}
 
 func (x *SessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[1]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +1072,7 @@ func (x *SessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionResponse.ProtoReflect.Descriptor instead.
 func (*SessionResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{1}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SessionResponse) GetPayload() isSessionResponse_Payload {
@@ -1046,13 +1296,16 @@ type Hello struct {
 	// config_version is the version of the server-provided configuration the agent currently
 	// applies (0 = none yet); the server sends a newer one if available.
 	ConfigVersion uint64 `protobuf:"varint,4,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
+	// install_method is how the agent was installed, from the path of its binary (ADR 0036):
+	// only script installations update themselves.
+	InstallMethod InstallMethod `protobuf:"varint,5,opt,name=install_method,json=installMethod,proto3,enum=sermon.agent.v1.InstallMethod" json:"install_method,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Hello) Reset() {
 	*x = Hello{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[2]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1064,7 +1317,7 @@ func (x *Hello) String() string {
 func (*Hello) ProtoMessage() {}
 
 func (x *Hello) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[2]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1077,7 +1330,7 @@ func (x *Hello) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Hello.ProtoReflect.Descriptor instead.
 func (*Hello) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{2}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Hello) GetProtocolVersion() uint32 {
@@ -1108,6 +1361,13 @@ func (x *Hello) GetConfigVersion() uint64 {
 	return 0
 }
 
+func (x *Hello) GetInstallMethod() InstallMethod {
+	if x != nil {
+		return x.InstallMethod
+	}
+	return InstallMethod_INSTALL_METHOD_UNSPECIFIED
+}
+
 // HostFacts are static properties of the monitored host.
 type HostFacts struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1136,7 +1396,7 @@ type HostFacts struct {
 
 func (x *HostFacts) Reset() {
 	*x = HostFacts{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[3]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1148,7 +1408,7 @@ func (x *HostFacts) String() string {
 func (*HostFacts) ProtoMessage() {}
 
 func (x *HostFacts) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[3]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1161,7 +1421,7 @@ func (x *HostFacts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostFacts.ProtoReflect.Descriptor instead.
 func (*HostFacts) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{3}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *HostFacts) GetHostname() string {
@@ -1238,7 +1498,7 @@ type Heartbeat struct {
 
 func (x *Heartbeat) Reset() {
 	*x = Heartbeat{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[4]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1250,7 +1510,7 @@ func (x *Heartbeat) String() string {
 func (*Heartbeat) ProtoMessage() {}
 
 func (x *Heartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[4]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1263,7 +1523,7 @@ func (x *Heartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
 func (*Heartbeat) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{4}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Heartbeat) GetSentAt() *timestamppb.Timestamp {
@@ -1284,7 +1544,7 @@ type RotateCertificate struct {
 
 func (x *RotateCertificate) Reset() {
 	*x = RotateCertificate{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[5]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1296,7 +1556,7 @@ func (x *RotateCertificate) String() string {
 func (*RotateCertificate) ProtoMessage() {}
 
 func (x *RotateCertificate) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[5]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1309,7 +1569,7 @@ func (x *RotateCertificate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateCertificate.ProtoReflect.Descriptor instead.
 func (*RotateCertificate) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{5}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RotateCertificate) GetCsr() []byte {
@@ -1336,7 +1596,7 @@ type CertificateIssued struct {
 
 func (x *CertificateIssued) Reset() {
 	*x = CertificateIssued{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[6]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1348,7 +1608,7 @@ func (x *CertificateIssued) String() string {
 func (*CertificateIssued) ProtoMessage() {}
 
 func (x *CertificateIssued) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[6]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1361,7 +1621,7 @@ func (x *CertificateIssued) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CertificateIssued.ProtoReflect.Descriptor instead.
 func (*CertificateIssued) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{6}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CertificateIssued) GetCertificate() []byte {
@@ -1403,7 +1663,7 @@ type TrustBundle struct {
 
 func (x *TrustBundle) Reset() {
 	*x = TrustBundle{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1415,7 +1675,7 @@ func (x *TrustBundle) String() string {
 func (*TrustBundle) ProtoMessage() {}
 
 func (x *TrustBundle) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[7]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1428,7 +1688,7 @@ func (x *TrustBundle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrustBundle.ProtoReflect.Descriptor instead.
 func (*TrustBundle) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{7}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TrustBundle) GetRoots() [][]byte {
@@ -1447,7 +1707,7 @@ type RotateNow struct {
 
 func (x *RotateNow) Reset() {
 	*x = RotateNow{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1459,7 +1719,7 @@ func (x *RotateNow) String() string {
 func (*RotateNow) ProtoMessage() {}
 
 func (x *RotateNow) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[8]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1472,7 +1732,7 @@ func (x *RotateNow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateNow.ProtoReflect.Descriptor instead.
 func (*RotateNow) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{8}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{11}
 }
 
 // Ack confirms persisted agent data; the agent may then drop it from its buffer.
@@ -1486,7 +1746,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[9]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1498,7 +1758,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[9]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1511,7 +1771,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{9}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Ack) GetSeq() uint64 {
@@ -1545,7 +1805,7 @@ type Batch struct {
 
 func (x *Batch) Reset() {
 	*x = Batch{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[10]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1557,7 +1817,7 @@ func (x *Batch) String() string {
 func (*Batch) ProtoMessage() {}
 
 func (x *Batch) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[10]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1570,7 +1830,7 @@ func (x *Batch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Batch.ProtoReflect.Descriptor instead.
 func (*Batch) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{10}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Batch) GetSeq() uint64 {
@@ -1687,7 +1947,7 @@ type MetricBatch struct {
 
 func (x *MetricBatch) Reset() {
 	*x = MetricBatch{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[11]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1699,7 +1959,7 @@ func (x *MetricBatch) String() string {
 func (*MetricBatch) ProtoMessage() {}
 
 func (x *MetricBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[11]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1712,7 +1972,7 @@ func (x *MetricBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricBatch.ProtoReflect.Descriptor instead.
 func (*MetricBatch) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{11}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MetricBatch) GetCollectedAt() *timestamppb.Timestamp {
@@ -1751,7 +2011,7 @@ type Sample struct {
 
 func (x *Sample) Reset() {
 	*x = Sample{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[12]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1763,7 +2023,7 @@ func (x *Sample) String() string {
 func (*Sample) ProtoMessage() {}
 
 func (x *Sample) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[12]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1776,7 +2036,7 @@ func (x *Sample) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Sample.ProtoReflect.Descriptor instead.
 func (*Sample) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{12}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Sample) GetMetric() string {
@@ -1847,7 +2107,7 @@ type Throttle struct {
 
 func (x *Throttle) Reset() {
 	*x = Throttle{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[13]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1859,7 +2119,7 @@ func (x *Throttle) String() string {
 func (*Throttle) ProtoMessage() {}
 
 func (x *Throttle) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[13]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1872,7 +2132,7 @@ func (x *Throttle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Throttle.ProtoReflect.Descriptor instead.
 func (*Throttle) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{13}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Throttle) GetMinInterval() *durationpb.Duration {
@@ -1894,7 +2154,7 @@ type SecurityEventBatch struct {
 
 func (x *SecurityEventBatch) Reset() {
 	*x = SecurityEventBatch{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[14]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1906,7 +2166,7 @@ func (x *SecurityEventBatch) String() string {
 func (*SecurityEventBatch) ProtoMessage() {}
 
 func (x *SecurityEventBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[14]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1919,7 +2179,7 @@ func (x *SecurityEventBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecurityEventBatch.ProtoReflect.Descriptor instead.
 func (*SecurityEventBatch) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{14}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SecurityEventBatch) GetEvents() []*SecurityEvent {
@@ -1962,7 +2222,7 @@ type SecurityEvent struct {
 
 func (x *SecurityEvent) Reset() {
 	*x = SecurityEvent{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[15]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1974,7 +2234,7 @@ func (x *SecurityEvent) String() string {
 func (*SecurityEvent) ProtoMessage() {}
 
 func (x *SecurityEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[15]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1987,7 +2247,7 @@ func (x *SecurityEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecurityEvent.ProtoReflect.Descriptor instead.
 func (*SecurityEvent) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{15}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SecurityEvent) GetOccurredAt() *timestamppb.Timestamp {
@@ -2209,7 +2469,7 @@ type SshRemote struct {
 
 func (x *SshRemote) Reset() {
 	*x = SshRemote{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[16]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2221,7 +2481,7 @@ func (x *SshRemote) String() string {
 func (*SshRemote) ProtoMessage() {}
 
 func (x *SshRemote) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[16]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2234,7 +2494,7 @@ func (x *SshRemote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SshRemote.ProtoReflect.Descriptor instead.
 func (*SshRemote) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{16}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SshRemote) GetAddress() isSshRemote_Address {
@@ -2304,7 +2564,7 @@ type SshLoginFailed struct {
 
 func (x *SshLoginFailed) Reset() {
 	*x = SshLoginFailed{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[17]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2316,7 +2576,7 @@ func (x *SshLoginFailed) String() string {
 func (*SshLoginFailed) ProtoMessage() {}
 
 func (x *SshLoginFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[17]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2329,7 +2589,7 @@ func (x *SshLoginFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SshLoginFailed.ProtoReflect.Descriptor instead.
 func (*SshLoginFailed) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{17}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SshLoginFailed) GetUser() string {
@@ -2373,7 +2633,7 @@ type SshInvalidUser struct {
 
 func (x *SshInvalidUser) Reset() {
 	*x = SshInvalidUser{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[18]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2385,7 +2645,7 @@ func (x *SshInvalidUser) String() string {
 func (*SshInvalidUser) ProtoMessage() {}
 
 func (x *SshInvalidUser) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[18]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2398,7 +2658,7 @@ func (x *SshInvalidUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SshInvalidUser.ProtoReflect.Descriptor instead.
 func (*SshInvalidUser) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{18}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SshInvalidUser) GetUser() string {
@@ -2434,7 +2694,7 @@ type SshLoginSucceeded struct {
 
 func (x *SshLoginSucceeded) Reset() {
 	*x = SshLoginSucceeded{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[19]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2446,7 +2706,7 @@ func (x *SshLoginSucceeded) String() string {
 func (*SshLoginSucceeded) ProtoMessage() {}
 
 func (x *SshLoginSucceeded) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[19]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2459,7 +2719,7 @@ func (x *SshLoginSucceeded) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SshLoginSucceeded.ProtoReflect.Descriptor instead.
 func (*SshLoginSucceeded) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{19}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SshLoginSucceeded) GetUser() string {
@@ -2512,7 +2772,7 @@ type SshPreauthDisconnect struct {
 
 func (x *SshPreauthDisconnect) Reset() {
 	*x = SshPreauthDisconnect{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[20]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2524,7 +2784,7 @@ func (x *SshPreauthDisconnect) String() string {
 func (*SshPreauthDisconnect) ProtoMessage() {}
 
 func (x *SshPreauthDisconnect) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[20]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2537,7 +2797,7 @@ func (x *SshPreauthDisconnect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SshPreauthDisconnect.ProtoReflect.Descriptor instead.
 func (*SshPreauthDisconnect) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{20}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SshPreauthDisconnect) GetUser() string {
@@ -2574,7 +2834,7 @@ type SudoAuthFailed struct {
 
 func (x *SudoAuthFailed) Reset() {
 	*x = SudoAuthFailed{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[21]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2586,7 +2846,7 @@ func (x *SudoAuthFailed) String() string {
 func (*SudoAuthFailed) ProtoMessage() {}
 
 func (x *SudoAuthFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[21]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2599,7 +2859,7 @@ func (x *SudoAuthFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SudoAuthFailed.ProtoReflect.Descriptor instead.
 func (*SudoAuthFailed) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{21}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SudoAuthFailed) GetUser() string {
@@ -2631,7 +2891,7 @@ type SudoNotAllowed struct {
 
 func (x *SudoNotAllowed) Reset() {
 	*x = SudoNotAllowed{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[22]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2643,7 +2903,7 @@ func (x *SudoNotAllowed) String() string {
 func (*SudoNotAllowed) ProtoMessage() {}
 
 func (x *SudoNotAllowed) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[22]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2656,7 +2916,7 @@ func (x *SudoNotAllowed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SudoNotAllowed.ProtoReflect.Descriptor instead.
 func (*SudoNotAllowed) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{22}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SudoNotAllowed) GetUser() string {
@@ -2697,7 +2957,7 @@ type SudoCommand struct {
 
 func (x *SudoCommand) Reset() {
 	*x = SudoCommand{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[23]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2709,7 +2969,7 @@ func (x *SudoCommand) String() string {
 func (*SudoCommand) ProtoMessage() {}
 
 func (x *SudoCommand) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[23]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2722,7 +2982,7 @@ func (x *SudoCommand) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SudoCommand.ProtoReflect.Descriptor instead.
 func (*SudoCommand) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{23}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SudoCommand) GetUser() string {
@@ -2766,7 +3026,7 @@ type AccountCreated struct {
 
 func (x *AccountCreated) Reset() {
 	*x = AccountCreated{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[24]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2778,7 +3038,7 @@ func (x *AccountCreated) String() string {
 func (*AccountCreated) ProtoMessage() {}
 
 func (x *AccountCreated) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[24]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2791,7 +3051,7 @@ func (x *AccountCreated) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountCreated.ProtoReflect.Descriptor instead.
 func (*AccountCreated) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{24}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *AccountCreated) GetUser() string {
@@ -2819,7 +3079,7 @@ type AccountDeleted struct {
 
 func (x *AccountDeleted) Reset() {
 	*x = AccountDeleted{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[25]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2831,7 +3091,7 @@ func (x *AccountDeleted) String() string {
 func (*AccountDeleted) ProtoMessage() {}
 
 func (x *AccountDeleted) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[25]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2844,7 +3104,7 @@ func (x *AccountDeleted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountDeleted.ProtoReflect.Descriptor instead.
 func (*AccountDeleted) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{25}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AccountDeleted) GetUser() string {
@@ -2867,7 +3127,7 @@ type SystemReboot struct {
 
 func (x *SystemReboot) Reset() {
 	*x = SystemReboot{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[26]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2879,7 +3139,7 @@ func (x *SystemReboot) String() string {
 func (*SystemReboot) ProtoMessage() {}
 
 func (x *SystemReboot) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[26]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2892,7 +3152,7 @@ func (x *SystemReboot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemReboot.ProtoReflect.Descriptor instead.
 func (*SystemReboot) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{26}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *SystemReboot) GetPreviousBootId() string {
@@ -2922,7 +3182,7 @@ type OomKill struct {
 
 func (x *OomKill) Reset() {
 	*x = OomKill{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[27]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2934,7 +3194,7 @@ func (x *OomKill) String() string {
 func (*OomKill) ProtoMessage() {}
 
 func (x *OomKill) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[27]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2947,7 +3207,7 @@ func (x *OomKill) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OomKill.ProtoReflect.Descriptor instead.
 func (*OomKill) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{27}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *OomKill) GetPid() uint32 {
@@ -2977,7 +3237,7 @@ type LogBatch struct {
 
 func (x *LogBatch) Reset() {
 	*x = LogBatch{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[28]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2989,7 +3249,7 @@ func (x *LogBatch) String() string {
 func (*LogBatch) ProtoMessage() {}
 
 func (x *LogBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[28]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3002,7 +3262,7 @@ func (x *LogBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogBatch.ProtoReflect.Descriptor instead.
 func (*LogBatch) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{28}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *LogBatch) GetEntries() []*LogEntry {
@@ -3051,7 +3311,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[29]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3063,7 +3323,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[29]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3076,7 +3336,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{29}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *LogEntry) GetOccurredAt() *timestamppb.Timestamp {
@@ -3191,7 +3451,7 @@ type ConfigUpdate struct {
 
 func (x *ConfigUpdate) Reset() {
 	*x = ConfigUpdate{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[30]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3203,7 +3463,7 @@ func (x *ConfigUpdate) String() string {
 func (*ConfigUpdate) ProtoMessage() {}
 
 func (x *ConfigUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[30]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3216,7 +3476,7 @@ func (x *ConfigUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigUpdate.ProtoReflect.Descriptor instead.
 func (*ConfigUpdate) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{30}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ConfigUpdate) GetVersion() uint64 {
@@ -3246,7 +3506,7 @@ type AgentConfig struct {
 
 func (x *AgentConfig) Reset() {
 	*x = AgentConfig{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[31]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3258,7 +3518,7 @@ func (x *AgentConfig) String() string {
 func (*AgentConfig) ProtoMessage() {}
 
 func (x *AgentConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[31]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3271,7 +3531,7 @@ func (x *AgentConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentConfig.ProtoReflect.Descriptor instead.
 func (*AgentConfig) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{31}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AgentConfig) GetLogs() *LogConfig {
@@ -3307,7 +3567,7 @@ type LogConfig struct {
 
 func (x *LogConfig) Reset() {
 	*x = LogConfig{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[32]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3319,7 +3579,7 @@ func (x *LogConfig) String() string {
 func (*LogConfig) ProtoMessage() {}
 
 func (x *LogConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[32]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3332,7 +3592,7 @@ func (x *LogConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogConfig.ProtoReflect.Descriptor instead.
 func (*LogConfig) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{32}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *LogConfig) GetEnabled() bool {
@@ -3377,7 +3637,7 @@ type LogFileGlob struct {
 
 func (x *LogFileGlob) Reset() {
 	*x = LogFileGlob{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[33]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3389,7 +3649,7 @@ func (x *LogFileGlob) String() string {
 func (*LogFileGlob) ProtoMessage() {}
 
 func (x *LogFileGlob) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[33]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3402,7 +3662,7 @@ func (x *LogFileGlob) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogFileGlob.ProtoReflect.Descriptor instead.
 func (*LogFileGlob) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{33}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *LogFileGlob) GetPattern() string {
@@ -3430,7 +3690,7 @@ type RedactionRule struct {
 
 func (x *RedactionRule) Reset() {
 	*x = RedactionRule{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[34]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3442,7 +3702,7 @@ func (x *RedactionRule) String() string {
 func (*RedactionRule) ProtoMessage() {}
 
 func (x *RedactionRule) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[34]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3455,7 +3715,7 @@ func (x *RedactionRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedactionRule.ProtoReflect.Descriptor instead.
 func (*RedactionRule) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{34}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *RedactionRule) GetPattern() string {
@@ -3480,7 +3740,7 @@ type ConfigApplied struct {
 
 func (x *ConfigApplied) Reset() {
 	*x = ConfigApplied{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[35]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3492,7 +3752,7 @@ func (x *ConfigApplied) String() string {
 func (*ConfigApplied) ProtoMessage() {}
 
 func (x *ConfigApplied) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[35]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3505,7 +3765,7 @@ func (x *ConfigApplied) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigApplied.ProtoReflect.Descriptor instead.
 func (*ConfigApplied) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{35}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ConfigApplied) GetVersion() uint64 {
@@ -3544,7 +3804,7 @@ type StartLiveView struct {
 
 func (x *StartLiveView) Reset() {
 	*x = StartLiveView{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[36]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3556,7 +3816,7 @@ func (x *StartLiveView) String() string {
 func (*StartLiveView) ProtoMessage() {}
 
 func (x *StartLiveView) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[36]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3569,7 +3829,7 @@ func (x *StartLiveView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartLiveView.ProtoReflect.Descriptor instead.
 func (*StartLiveView) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{36}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *StartLiveView) GetInterval() *durationpb.Duration {
@@ -3595,7 +3855,7 @@ type StopLiveView struct {
 
 func (x *StopLiveView) Reset() {
 	*x = StopLiveView{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[37]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3607,7 +3867,7 @@ func (x *StopLiveView) String() string {
 func (*StopLiveView) ProtoMessage() {}
 
 func (x *StopLiveView) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[37]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3620,7 +3880,7 @@ func (x *StopLiveView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopLiveView.ProtoReflect.Descriptor instead.
 func (*StopLiveView) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{37}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{40}
 }
 
 // LiveViewRefused says why the agent does not start the live view.
@@ -3634,7 +3894,7 @@ type LiveViewRefused struct {
 
 func (x *LiveViewRefused) Reset() {
 	*x = LiveViewRefused{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[38]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3646,7 +3906,7 @@ func (x *LiveViewRefused) String() string {
 func (*LiveViewRefused) ProtoMessage() {}
 
 func (x *LiveViewRefused) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[38]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3659,7 +3919,7 @@ func (x *LiveViewRefused) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LiveViewRefused.ProtoReflect.Descriptor instead.
 func (*LiveViewRefused) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{38}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *LiveViewRefused) GetReason() string {
@@ -3686,7 +3946,7 @@ type ProcessSnapshot struct {
 
 func (x *ProcessSnapshot) Reset() {
 	*x = ProcessSnapshot{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[39]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3698,7 +3958,7 @@ func (x *ProcessSnapshot) String() string {
 func (*ProcessSnapshot) ProtoMessage() {}
 
 func (x *ProcessSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[39]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3711,7 +3971,7 @@ func (x *ProcessSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessSnapshot.ProtoReflect.Descriptor instead.
 func (*ProcessSnapshot) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{39}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ProcessSnapshot) GetTakenAt() *timestamppb.Timestamp {
@@ -3773,7 +4033,7 @@ type SystemSummary struct {
 
 func (x *SystemSummary) Reset() {
 	*x = SystemSummary{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[40]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3785,7 +4045,7 @@ func (x *SystemSummary) String() string {
 func (*SystemSummary) ProtoMessage() {}
 
 func (x *SystemSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[40]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3798,7 +4058,7 @@ func (x *SystemSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemSummary.ProtoReflect.Descriptor instead.
 func (*SystemSummary) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{40}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SystemSummary) GetCpuBusyRatio() float64 {
@@ -3897,7 +4157,7 @@ type TaskCounts struct {
 
 func (x *TaskCounts) Reset() {
 	*x = TaskCounts{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[41]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3909,7 +4169,7 @@ func (x *TaskCounts) String() string {
 func (*TaskCounts) ProtoMessage() {}
 
 func (x *TaskCounts) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[41]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3922,7 +4182,7 @@ func (x *TaskCounts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskCounts.ProtoReflect.Descriptor instead.
 func (*TaskCounts) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{41}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *TaskCounts) GetTotal() uint32 {
@@ -4006,7 +4266,7 @@ type ProcessInfo struct {
 
 func (x *ProcessInfo) Reset() {
 	*x = ProcessInfo{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[42]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4018,7 +4278,7 @@ func (x *ProcessInfo) String() string {
 func (*ProcessInfo) ProtoMessage() {}
 
 func (x *ProcessInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[42]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4031,7 +4291,7 @@ func (x *ProcessInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessInfo.ProtoReflect.Descriptor instead.
 func (*ProcessInfo) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{42}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ProcessInfo) GetPid() uint32 {
@@ -4162,7 +4422,7 @@ type RefreshUpdateInfo struct {
 
 func (x *RefreshUpdateInfo) Reset() {
 	*x = RefreshUpdateInfo{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[43]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4174,7 +4434,7 @@ func (x *RefreshUpdateInfo) String() string {
 func (*RefreshUpdateInfo) ProtoMessage() {}
 
 func (x *RefreshUpdateInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[43]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4187,7 +4447,7 @@ func (x *RefreshUpdateInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshUpdateInfo.ProtoReflect.Descriptor instead.
 func (*RefreshUpdateInfo) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{43}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{46}
 }
 
 // RunUpdate installs updates. Rebooting afterwards is a command of its own (RebootNode).
@@ -4203,7 +4463,7 @@ type RunUpdate struct {
 
 func (x *RunUpdate) Reset() {
 	*x = RunUpdate{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[44]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4215,7 +4475,7 @@ func (x *RunUpdate) String() string {
 func (*RunUpdate) ProtoMessage() {}
 
 func (x *RunUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[44]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4228,7 +4488,7 @@ func (x *RunUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunUpdate.ProtoReflect.Descriptor instead.
 func (*RunUpdate) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{44}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *RunUpdate) GetRunId() string {
@@ -4258,7 +4518,7 @@ type RebootNode struct {
 
 func (x *RebootNode) Reset() {
 	*x = RebootNode{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[45]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4270,7 +4530,7 @@ func (x *RebootNode) String() string {
 func (*RebootNode) ProtoMessage() {}
 
 func (x *RebootNode) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[45]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4283,7 +4543,7 @@ func (x *RebootNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RebootNode.ProtoReflect.Descriptor instead.
 func (*RebootNode) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{45}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *RebootNode) GetRunId() string {
@@ -4314,7 +4574,7 @@ type SelfUpdate struct {
 
 func (x *SelfUpdate) Reset() {
 	*x = SelfUpdate{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[46]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4326,7 +4586,7 @@ func (x *SelfUpdate) String() string {
 func (*SelfUpdate) ProtoMessage() {}
 
 func (x *SelfUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[46]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4339,7 +4599,7 @@ func (x *SelfUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelfUpdate.ProtoReflect.Descriptor instead.
 func (*SelfUpdate) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{46}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *SelfUpdate) GetRunId() string {
@@ -4392,7 +4652,7 @@ type UpdateReport struct {
 
 func (x *UpdateReport) Reset() {
 	*x = UpdateReport{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[47]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4404,7 +4664,7 @@ func (x *UpdateReport) String() string {
 func (*UpdateReport) ProtoMessage() {}
 
 func (x *UpdateReport) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[47]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4417,7 +4677,7 @@ func (x *UpdateReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateReport.ProtoReflect.Descriptor instead.
 func (*UpdateReport) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{47}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *UpdateReport) GetCollectedAt() *timestamppb.Timestamp {
@@ -4523,7 +4783,7 @@ type UpdatePackage struct {
 
 func (x *UpdatePackage) Reset() {
 	*x = UpdatePackage{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[48]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4535,7 +4795,7 @@ func (x *UpdatePackage) String() string {
 func (*UpdatePackage) ProtoMessage() {}
 
 func (x *UpdatePackage) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[48]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4548,7 +4808,7 @@ func (x *UpdatePackage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePackage.ProtoReflect.Descriptor instead.
 func (*UpdatePackage) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{48}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *UpdatePackage) GetName() string {
@@ -4601,7 +4861,7 @@ type HelperPermissions struct {
 
 func (x *HelperPermissions) Reset() {
 	*x = HelperPermissions{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[49]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4613,7 +4873,7 @@ func (x *HelperPermissions) String() string {
 func (*HelperPermissions) ProtoMessage() {}
 
 func (x *HelperPermissions) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[49]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4626,7 +4886,7 @@ func (x *HelperPermissions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HelperPermissions.ProtoReflect.Descriptor instead.
 func (*HelperPermissions) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{49}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *HelperPermissions) GetRemoteUpdates() bool {
@@ -4675,7 +4935,7 @@ type CommandResult struct {
 
 func (x *CommandResult) Reset() {
 	*x = CommandResult{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4687,7 +4947,7 @@ func (x *CommandResult) String() string {
 func (*CommandResult) ProtoMessage() {}
 
 func (x *CommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4700,7 +4960,7 @@ func (x *CommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
 func (*CommandResult) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{50}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *CommandResult) GetRunId() string {
@@ -4763,7 +5023,18 @@ var File_sermon_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xfb\x03\n" +
+	"\x1bsermon/agent/v1/agent.proto\x12\x0fsermon.agent.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb8\x01\n" +
+	"\x18FetchAgentReleaseRequest\x12M\n" +
+	"\aversion\x18\x01 \x01(\tB3\xbaH0r.(@2*^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$R\aversion\x12M\n" +
+	"\farchitecture\x18\x02 \x01(\x0e2\x1d.sermon.agent.v1.ArchitectureB\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\farchitecture\"z\n" +
+	"\x19FetchAgentReleaseResponse\x12=\n" +
+	"\x06header\x18\x01 \x01(\v2#.sermon.agent.v1.AgentReleaseHeaderH\x00R\x06header\x12\x16\n" +
+	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunkB\x06\n" +
+	"\x04part\"F\n" +
+	"\x12AgentReleaseHeader\x12\x12\n" +
+	"\x04size\x18\x01 \x01(\x04R\x04size\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\tR\tsignature\"\xfb\x03\n" +
 	"\x0eSessionRequest\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.sermon.agent.v1.HelloH\x00R\x05hello\x12:\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1a.sermon.agent.v1.HeartbeatH\x00R\theartbeat\x12S\n" +
@@ -4791,13 +5062,14 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"rebootNode\x12>\n" +
 	"\vself_update\x18\f \x01(\v2\x1b.sermon.agent.v1.SelfUpdateH\x00R\n" +
 	"selfUpdateB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xd5\x01\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\xa6\x02\n" +
 	"\x05Hello\x122\n" +
 	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
 	"\ragent_version\x18\x02 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\fagentVersion\x12A\n" +
 	"\n" +
 	"host_facts\x18\x03 \x01(\v2\x1a.sermon.agent.v1.HostFactsB\x06\xbaH\x03\xc8\x01\x01R\thostFacts\x12%\n" +
-	"\x0econfig_version\x18\x04 \x01(\x04R\rconfigVersion\"\xdc\x03\n" +
+	"\x0econfig_version\x18\x04 \x01(\x04R\rconfigVersion\x12O\n" +
+	"\x0einstall_method\x18\x05 \x01(\x0e2\x1e.sermon.agent.v1.InstallMethodB\b\xbaH\x05\x82\x01\x02\x10\x01R\rinstallMethod\"\xdc\x03\n" +
 	"\tHostFacts\x12&\n" +
 	"\bhostname\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xfd\x01R\bhostname\x124\n" +
@@ -5091,7 +5363,11 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x10output_truncated\x18\x06 \x01(\bR\x0foutputTruncated\x129\n" +
 	"\n" +
 	"started_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n" +
-	"\bended_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\aendedAt*\xb0\x01\n" +
+	"\bended_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\aendedAt*f\n" +
+	"\rInstallMethod\x12\x1e\n" +
+	"\x1aINSTALL_METHOD_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15INSTALL_METHOD_SCRIPT\x10\x01\x12\x1a\n" +
+	"\x16INSTALL_METHOD_PACKAGE\x10\x02*\xb0\x01\n" +
 	"\x0eSecuritySource\x12\x1f\n" +
 	"\x1bSECURITY_SOURCE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17SECURITY_SOURCE_JOURNAL\x10\x01\x12!\n" +
@@ -5148,9 +5424,10 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x14COMMAND_PHASE_FAILED\x10\x03\x12\x19\n" +
 	"\x15COMMAND_PHASE_REFUSED\x10\x04\x12\x1d\n" +
 	"\x19COMMAND_PHASE_UNSUPPORTED\x10\x05\x12\x16\n" +
-	"\x12COMMAND_PHASE_LOST\x10\x062`\n" +
+	"\x12COMMAND_PHASE_LOST\x10\x062\xce\x01\n" +
 	"\fAgentService\x12P\n" +
-	"\aSession\x12\x1f.sermon.agent.v1.SessionRequest\x1a .sermon.agent.v1.SessionResponse(\x010\x01B\xc7\x01\n" +
+	"\aSession\x12\x1f.sermon.agent.v1.SessionRequest\x1a .sermon.agent.v1.SessionResponse(\x010\x01\x12l\n" +
+	"\x11FetchAgentRelease\x12).sermon.agent.v1.FetchAgentReleaseRequest\x1a*.sermon.agent.v1.FetchAgentReleaseResponse0\x01B\xc7\x01\n" +
 	"\x13com.sermon.agent.v1B\n" +
 	"AgentProtoP\x01ZFgithub.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1;agentv1\xa2\x02\x03SAX\xaa\x02\x0fSermon.Agent.V1\xca\x02\x0fSermon\\Agent\\V1\xe2\x02\x1bSermon\\Agent\\V1\\GPBMetadata\xea\x02\x11Sermon::Agent::V1b\x06proto3"
 
@@ -5166,159 +5443,168 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 	return file_sermon_agent_v1_agent_proto_rawDescData
 }
 
-var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
-	(SecuritySource)(0),           // 0: sermon.agent.v1.SecuritySource
-	(Architecture)(0),             // 1: sermon.agent.v1.Architecture
-	(SshAuthMethod)(0),            // 2: sermon.agent.v1.SshAuthMethod
-	(LogSource)(0),                // 3: sermon.agent.v1.LogSource
-	(LogSeverity)(0),              // 4: sermon.agent.v1.LogSeverity
-	(UpdateScope)(0),              // 5: sermon.agent.v1.UpdateScope
-	(PackageManager)(0),           // 6: sermon.agent.v1.PackageManager
-	(UpdateAvailability)(0),       // 7: sermon.agent.v1.UpdateAvailability
-	(CommandPhase)(0),             // 8: sermon.agent.v1.CommandPhase
-	(*SessionRequest)(nil),        // 9: sermon.agent.v1.SessionRequest
-	(*SessionResponse)(nil),       // 10: sermon.agent.v1.SessionResponse
-	(*Hello)(nil),                 // 11: sermon.agent.v1.Hello
-	(*HostFacts)(nil),             // 12: sermon.agent.v1.HostFacts
-	(*Heartbeat)(nil),             // 13: sermon.agent.v1.Heartbeat
-	(*RotateCertificate)(nil),     // 14: sermon.agent.v1.RotateCertificate
-	(*CertificateIssued)(nil),     // 15: sermon.agent.v1.CertificateIssued
-	(*TrustBundle)(nil),           // 16: sermon.agent.v1.TrustBundle
-	(*RotateNow)(nil),             // 17: sermon.agent.v1.RotateNow
-	(*Ack)(nil),                   // 18: sermon.agent.v1.Ack
-	(*Batch)(nil),                 // 19: sermon.agent.v1.Batch
-	(*MetricBatch)(nil),           // 20: sermon.agent.v1.MetricBatch
-	(*Sample)(nil),                // 21: sermon.agent.v1.Sample
-	(*Throttle)(nil),              // 22: sermon.agent.v1.Throttle
-	(*SecurityEventBatch)(nil),    // 23: sermon.agent.v1.SecurityEventBatch
-	(*SecurityEvent)(nil),         // 24: sermon.agent.v1.SecurityEvent
-	(*SshRemote)(nil),             // 25: sermon.agent.v1.SshRemote
-	(*SshLoginFailed)(nil),        // 26: sermon.agent.v1.SshLoginFailed
-	(*SshInvalidUser)(nil),        // 27: sermon.agent.v1.SshInvalidUser
-	(*SshLoginSucceeded)(nil),     // 28: sermon.agent.v1.SshLoginSucceeded
-	(*SshPreauthDisconnect)(nil),  // 29: sermon.agent.v1.SshPreauthDisconnect
-	(*SudoAuthFailed)(nil),        // 30: sermon.agent.v1.SudoAuthFailed
-	(*SudoNotAllowed)(nil),        // 31: sermon.agent.v1.SudoNotAllowed
-	(*SudoCommand)(nil),           // 32: sermon.agent.v1.SudoCommand
-	(*AccountCreated)(nil),        // 33: sermon.agent.v1.AccountCreated
-	(*AccountDeleted)(nil),        // 34: sermon.agent.v1.AccountDeleted
-	(*SystemReboot)(nil),          // 35: sermon.agent.v1.SystemReboot
-	(*OomKill)(nil),               // 36: sermon.agent.v1.OomKill
-	(*LogBatch)(nil),              // 37: sermon.agent.v1.LogBatch
-	(*LogEntry)(nil),              // 38: sermon.agent.v1.LogEntry
-	(*ConfigUpdate)(nil),          // 39: sermon.agent.v1.ConfigUpdate
-	(*AgentConfig)(nil),           // 40: sermon.agent.v1.AgentConfig
-	(*LogConfig)(nil),             // 41: sermon.agent.v1.LogConfig
-	(*LogFileGlob)(nil),           // 42: sermon.agent.v1.LogFileGlob
-	(*RedactionRule)(nil),         // 43: sermon.agent.v1.RedactionRule
-	(*ConfigApplied)(nil),         // 44: sermon.agent.v1.ConfigApplied
-	(*StartLiveView)(nil),         // 45: sermon.agent.v1.StartLiveView
-	(*StopLiveView)(nil),          // 46: sermon.agent.v1.StopLiveView
-	(*LiveViewRefused)(nil),       // 47: sermon.agent.v1.LiveViewRefused
-	(*ProcessSnapshot)(nil),       // 48: sermon.agent.v1.ProcessSnapshot
-	(*SystemSummary)(nil),         // 49: sermon.agent.v1.SystemSummary
-	(*TaskCounts)(nil),            // 50: sermon.agent.v1.TaskCounts
-	(*ProcessInfo)(nil),           // 51: sermon.agent.v1.ProcessInfo
-	(*RefreshUpdateInfo)(nil),     // 52: sermon.agent.v1.RefreshUpdateInfo
-	(*RunUpdate)(nil),             // 53: sermon.agent.v1.RunUpdate
-	(*RebootNode)(nil),            // 54: sermon.agent.v1.RebootNode
-	(*SelfUpdate)(nil),            // 55: sermon.agent.v1.SelfUpdate
-	(*UpdateReport)(nil),          // 56: sermon.agent.v1.UpdateReport
-	(*UpdatePackage)(nil),         // 57: sermon.agent.v1.UpdatePackage
-	(*HelperPermissions)(nil),     // 58: sermon.agent.v1.HelperPermissions
-	(*CommandResult)(nil),         // 59: sermon.agent.v1.CommandResult
-	nil,                           // 60: sermon.agent.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 61: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 62: google.protobuf.Duration
+	(InstallMethod)(0),                // 0: sermon.agent.v1.InstallMethod
+	(SecuritySource)(0),               // 1: sermon.agent.v1.SecuritySource
+	(Architecture)(0),                 // 2: sermon.agent.v1.Architecture
+	(SshAuthMethod)(0),                // 3: sermon.agent.v1.SshAuthMethod
+	(LogSource)(0),                    // 4: sermon.agent.v1.LogSource
+	(LogSeverity)(0),                  // 5: sermon.agent.v1.LogSeverity
+	(UpdateScope)(0),                  // 6: sermon.agent.v1.UpdateScope
+	(PackageManager)(0),               // 7: sermon.agent.v1.PackageManager
+	(UpdateAvailability)(0),           // 8: sermon.agent.v1.UpdateAvailability
+	(CommandPhase)(0),                 // 9: sermon.agent.v1.CommandPhase
+	(*FetchAgentReleaseRequest)(nil),  // 10: sermon.agent.v1.FetchAgentReleaseRequest
+	(*FetchAgentReleaseResponse)(nil), // 11: sermon.agent.v1.FetchAgentReleaseResponse
+	(*AgentReleaseHeader)(nil),        // 12: sermon.agent.v1.AgentReleaseHeader
+	(*SessionRequest)(nil),            // 13: sermon.agent.v1.SessionRequest
+	(*SessionResponse)(nil),           // 14: sermon.agent.v1.SessionResponse
+	(*Hello)(nil),                     // 15: sermon.agent.v1.Hello
+	(*HostFacts)(nil),                 // 16: sermon.agent.v1.HostFacts
+	(*Heartbeat)(nil),                 // 17: sermon.agent.v1.Heartbeat
+	(*RotateCertificate)(nil),         // 18: sermon.agent.v1.RotateCertificate
+	(*CertificateIssued)(nil),         // 19: sermon.agent.v1.CertificateIssued
+	(*TrustBundle)(nil),               // 20: sermon.agent.v1.TrustBundle
+	(*RotateNow)(nil),                 // 21: sermon.agent.v1.RotateNow
+	(*Ack)(nil),                       // 22: sermon.agent.v1.Ack
+	(*Batch)(nil),                     // 23: sermon.agent.v1.Batch
+	(*MetricBatch)(nil),               // 24: sermon.agent.v1.MetricBatch
+	(*Sample)(nil),                    // 25: sermon.agent.v1.Sample
+	(*Throttle)(nil),                  // 26: sermon.agent.v1.Throttle
+	(*SecurityEventBatch)(nil),        // 27: sermon.agent.v1.SecurityEventBatch
+	(*SecurityEvent)(nil),             // 28: sermon.agent.v1.SecurityEvent
+	(*SshRemote)(nil),                 // 29: sermon.agent.v1.SshRemote
+	(*SshLoginFailed)(nil),            // 30: sermon.agent.v1.SshLoginFailed
+	(*SshInvalidUser)(nil),            // 31: sermon.agent.v1.SshInvalidUser
+	(*SshLoginSucceeded)(nil),         // 32: sermon.agent.v1.SshLoginSucceeded
+	(*SshPreauthDisconnect)(nil),      // 33: sermon.agent.v1.SshPreauthDisconnect
+	(*SudoAuthFailed)(nil),            // 34: sermon.agent.v1.SudoAuthFailed
+	(*SudoNotAllowed)(nil),            // 35: sermon.agent.v1.SudoNotAllowed
+	(*SudoCommand)(nil),               // 36: sermon.agent.v1.SudoCommand
+	(*AccountCreated)(nil),            // 37: sermon.agent.v1.AccountCreated
+	(*AccountDeleted)(nil),            // 38: sermon.agent.v1.AccountDeleted
+	(*SystemReboot)(nil),              // 39: sermon.agent.v1.SystemReboot
+	(*OomKill)(nil),                   // 40: sermon.agent.v1.OomKill
+	(*LogBatch)(nil),                  // 41: sermon.agent.v1.LogBatch
+	(*LogEntry)(nil),                  // 42: sermon.agent.v1.LogEntry
+	(*ConfigUpdate)(nil),              // 43: sermon.agent.v1.ConfigUpdate
+	(*AgentConfig)(nil),               // 44: sermon.agent.v1.AgentConfig
+	(*LogConfig)(nil),                 // 45: sermon.agent.v1.LogConfig
+	(*LogFileGlob)(nil),               // 46: sermon.agent.v1.LogFileGlob
+	(*RedactionRule)(nil),             // 47: sermon.agent.v1.RedactionRule
+	(*ConfigApplied)(nil),             // 48: sermon.agent.v1.ConfigApplied
+	(*StartLiveView)(nil),             // 49: sermon.agent.v1.StartLiveView
+	(*StopLiveView)(nil),              // 50: sermon.agent.v1.StopLiveView
+	(*LiveViewRefused)(nil),           // 51: sermon.agent.v1.LiveViewRefused
+	(*ProcessSnapshot)(nil),           // 52: sermon.agent.v1.ProcessSnapshot
+	(*SystemSummary)(nil),             // 53: sermon.agent.v1.SystemSummary
+	(*TaskCounts)(nil),                // 54: sermon.agent.v1.TaskCounts
+	(*ProcessInfo)(nil),               // 55: sermon.agent.v1.ProcessInfo
+	(*RefreshUpdateInfo)(nil),         // 56: sermon.agent.v1.RefreshUpdateInfo
+	(*RunUpdate)(nil),                 // 57: sermon.agent.v1.RunUpdate
+	(*RebootNode)(nil),                // 58: sermon.agent.v1.RebootNode
+	(*SelfUpdate)(nil),                // 59: sermon.agent.v1.SelfUpdate
+	(*UpdateReport)(nil),              // 60: sermon.agent.v1.UpdateReport
+	(*UpdatePackage)(nil),             // 61: sermon.agent.v1.UpdatePackage
+	(*HelperPermissions)(nil),         // 62: sermon.agent.v1.HelperPermissions
+	(*CommandResult)(nil),             // 63: sermon.agent.v1.CommandResult
+	nil,                               // 64: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil),     // 65: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),       // 66: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
-	11, // 0: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
-	13, // 1: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
-	14, // 2: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
-	19, // 3: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
-	44, // 4: sermon.agent.v1.SessionRequest.config_applied:type_name -> sermon.agent.v1.ConfigApplied
-	48, // 5: sermon.agent.v1.SessionRequest.process_snapshot:type_name -> sermon.agent.v1.ProcessSnapshot
-	47, // 6: sermon.agent.v1.SessionRequest.live_view_refused:type_name -> sermon.agent.v1.LiveViewRefused
-	18, // 7: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
-	15, // 8: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
-	17, // 9: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
-	16, // 10: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
-	22, // 11: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
-	39, // 12: sermon.agent.v1.SessionResponse.config_update:type_name -> sermon.agent.v1.ConfigUpdate
-	45, // 13: sermon.agent.v1.SessionResponse.start_live_view:type_name -> sermon.agent.v1.StartLiveView
-	46, // 14: sermon.agent.v1.SessionResponse.stop_live_view:type_name -> sermon.agent.v1.StopLiveView
-	52, // 15: sermon.agent.v1.SessionResponse.refresh_update_info:type_name -> sermon.agent.v1.RefreshUpdateInfo
-	53, // 16: sermon.agent.v1.SessionResponse.run_update:type_name -> sermon.agent.v1.RunUpdate
-	54, // 17: sermon.agent.v1.SessionResponse.reboot_node:type_name -> sermon.agent.v1.RebootNode
-	55, // 18: sermon.agent.v1.SessionResponse.self_update:type_name -> sermon.agent.v1.SelfUpdate
-	12, // 19: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
-	1,  // 20: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	0,  // 21: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
-	61, // 22: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	61, // 23: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	61, // 24: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	20, // 25: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
-	23, // 26: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
-	37, // 27: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
-	56, // 28: sermon.agent.v1.Batch.update_report:type_name -> sermon.agent.v1.UpdateReport
-	59, // 29: sermon.agent.v1.Batch.command_result:type_name -> sermon.agent.v1.CommandResult
-	61, // 30: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
-	21, // 31: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
-	60, // 32: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
-	62, // 33: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
-	24, // 34: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
-	61, // 35: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	26, // 36: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
-	27, // 37: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
-	28, // 38: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
-	29, // 39: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
-	30, // 40: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
-	31, // 41: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
-	32, // 42: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
-	33, // 43: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
-	34, // 44: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
-	35, // 45: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
-	36, // 46: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
-	25, // 47: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 48: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
-	25, // 49: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
-	25, // 50: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
-	2,  // 51: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
-	25, // 52: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
-	62, // 53: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
-	38, // 54: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
-	61, // 55: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
-	3,  // 56: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
-	4,  // 57: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
-	40, // 58: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
-	41, // 59: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
-	43, // 60: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
-	4,  // 61: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
-	42, // 62: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
-	62, // 63: sermon.agent.v1.StartLiveView.interval:type_name -> google.protobuf.Duration
-	61, // 64: sermon.agent.v1.ProcessSnapshot.taken_at:type_name -> google.protobuf.Timestamp
-	49, // 65: sermon.agent.v1.ProcessSnapshot.summary:type_name -> sermon.agent.v1.SystemSummary
-	51, // 66: sermon.agent.v1.ProcessSnapshot.processes:type_name -> sermon.agent.v1.ProcessInfo
-	50, // 67: sermon.agent.v1.SystemSummary.tasks:type_name -> sermon.agent.v1.TaskCounts
-	5,  // 68: sermon.agent.v1.RunUpdate.scope:type_name -> sermon.agent.v1.UpdateScope
-	61, // 69: sermon.agent.v1.UpdateReport.collected_at:type_name -> google.protobuf.Timestamp
-	7,  // 70: sermon.agent.v1.UpdateReport.availability:type_name -> sermon.agent.v1.UpdateAvailability
-	6,  // 71: sermon.agent.v1.UpdateReport.package_manager:type_name -> sermon.agent.v1.PackageManager
-	57, // 72: sermon.agent.v1.UpdateReport.packages:type_name -> sermon.agent.v1.UpdatePackage
-	61, // 73: sermon.agent.v1.UpdateReport.last_upgrade_at:type_name -> google.protobuf.Timestamp
-	58, // 74: sermon.agent.v1.UpdateReport.permissions:type_name -> sermon.agent.v1.HelperPermissions
-	8,  // 75: sermon.agent.v1.CommandResult.phase:type_name -> sermon.agent.v1.CommandPhase
-	61, // 76: sermon.agent.v1.CommandResult.started_at:type_name -> google.protobuf.Timestamp
-	61, // 77: sermon.agent.v1.CommandResult.ended_at:type_name -> google.protobuf.Timestamp
-	9,  // 78: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	10, // 79: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	79, // [79:80] is the sub-list for method output_type
-	78, // [78:79] is the sub-list for method input_type
-	78, // [78:78] is the sub-list for extension type_name
-	78, // [78:78] is the sub-list for extension extendee
-	0,  // [0:78] is the sub-list for field type_name
+	2,  // 0: sermon.agent.v1.FetchAgentReleaseRequest.architecture:type_name -> sermon.agent.v1.Architecture
+	12, // 1: sermon.agent.v1.FetchAgentReleaseResponse.header:type_name -> sermon.agent.v1.AgentReleaseHeader
+	15, // 2: sermon.agent.v1.SessionRequest.hello:type_name -> sermon.agent.v1.Hello
+	17, // 3: sermon.agent.v1.SessionRequest.heartbeat:type_name -> sermon.agent.v1.Heartbeat
+	18, // 4: sermon.agent.v1.SessionRequest.rotate_certificate:type_name -> sermon.agent.v1.RotateCertificate
+	23, // 5: sermon.agent.v1.SessionRequest.batch:type_name -> sermon.agent.v1.Batch
+	48, // 6: sermon.agent.v1.SessionRequest.config_applied:type_name -> sermon.agent.v1.ConfigApplied
+	52, // 7: sermon.agent.v1.SessionRequest.process_snapshot:type_name -> sermon.agent.v1.ProcessSnapshot
+	51, // 8: sermon.agent.v1.SessionRequest.live_view_refused:type_name -> sermon.agent.v1.LiveViewRefused
+	22, // 9: sermon.agent.v1.SessionResponse.ack:type_name -> sermon.agent.v1.Ack
+	19, // 10: sermon.agent.v1.SessionResponse.certificate_issued:type_name -> sermon.agent.v1.CertificateIssued
+	21, // 11: sermon.agent.v1.SessionResponse.rotate_now:type_name -> sermon.agent.v1.RotateNow
+	20, // 12: sermon.agent.v1.SessionResponse.trust_bundle:type_name -> sermon.agent.v1.TrustBundle
+	26, // 13: sermon.agent.v1.SessionResponse.throttle:type_name -> sermon.agent.v1.Throttle
+	43, // 14: sermon.agent.v1.SessionResponse.config_update:type_name -> sermon.agent.v1.ConfigUpdate
+	49, // 15: sermon.agent.v1.SessionResponse.start_live_view:type_name -> sermon.agent.v1.StartLiveView
+	50, // 16: sermon.agent.v1.SessionResponse.stop_live_view:type_name -> sermon.agent.v1.StopLiveView
+	56, // 17: sermon.agent.v1.SessionResponse.refresh_update_info:type_name -> sermon.agent.v1.RefreshUpdateInfo
+	57, // 18: sermon.agent.v1.SessionResponse.run_update:type_name -> sermon.agent.v1.RunUpdate
+	58, // 19: sermon.agent.v1.SessionResponse.reboot_node:type_name -> sermon.agent.v1.RebootNode
+	59, // 20: sermon.agent.v1.SessionResponse.self_update:type_name -> sermon.agent.v1.SelfUpdate
+	16, // 21: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	0,  // 22: sermon.agent.v1.Hello.install_method:type_name -> sermon.agent.v1.InstallMethod
+	2,  // 23: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
+	1,  // 24: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
+	65, // 25: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	65, // 26: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	65, // 27: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	24, // 28: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	27, // 29: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
+	41, // 30: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
+	60, // 31: sermon.agent.v1.Batch.update_report:type_name -> sermon.agent.v1.UpdateReport
+	63, // 32: sermon.agent.v1.Batch.command_result:type_name -> sermon.agent.v1.CommandResult
+	65, // 33: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	25, // 34: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	64, // 35: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	66, // 36: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	28, // 37: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
+	65, // 38: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	30, // 39: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
+	31, // 40: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
+	32, // 41: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
+	33, // 42: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
+	34, // 43: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
+	35, // 44: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
+	36, // 45: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
+	37, // 46: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
+	38, // 47: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
+	39, // 48: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
+	40, // 49: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
+	29, // 50: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
+	3,  // 51: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
+	29, // 52: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
+	29, // 53: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
+	3,  // 54: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
+	29, // 55: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
+	66, // 56: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
+	42, // 57: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
+	65, // 58: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	4,  // 59: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
+	5,  // 60: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
+	44, // 61: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
+	45, // 62: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
+	47, // 63: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
+	5,  // 64: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
+	46, // 65: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
+	66, // 66: sermon.agent.v1.StartLiveView.interval:type_name -> google.protobuf.Duration
+	65, // 67: sermon.agent.v1.ProcessSnapshot.taken_at:type_name -> google.protobuf.Timestamp
+	53, // 68: sermon.agent.v1.ProcessSnapshot.summary:type_name -> sermon.agent.v1.SystemSummary
+	55, // 69: sermon.agent.v1.ProcessSnapshot.processes:type_name -> sermon.agent.v1.ProcessInfo
+	54, // 70: sermon.agent.v1.SystemSummary.tasks:type_name -> sermon.agent.v1.TaskCounts
+	6,  // 71: sermon.agent.v1.RunUpdate.scope:type_name -> sermon.agent.v1.UpdateScope
+	65, // 72: sermon.agent.v1.UpdateReport.collected_at:type_name -> google.protobuf.Timestamp
+	8,  // 73: sermon.agent.v1.UpdateReport.availability:type_name -> sermon.agent.v1.UpdateAvailability
+	7,  // 74: sermon.agent.v1.UpdateReport.package_manager:type_name -> sermon.agent.v1.PackageManager
+	61, // 75: sermon.agent.v1.UpdateReport.packages:type_name -> sermon.agent.v1.UpdatePackage
+	65, // 76: sermon.agent.v1.UpdateReport.last_upgrade_at:type_name -> google.protobuf.Timestamp
+	62, // 77: sermon.agent.v1.UpdateReport.permissions:type_name -> sermon.agent.v1.HelperPermissions
+	9,  // 78: sermon.agent.v1.CommandResult.phase:type_name -> sermon.agent.v1.CommandPhase
+	65, // 79: sermon.agent.v1.CommandResult.started_at:type_name -> google.protobuf.Timestamp
+	65, // 80: sermon.agent.v1.CommandResult.ended_at:type_name -> google.protobuf.Timestamp
+	13, // 81: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	10, // 82: sermon.agent.v1.AgentService.FetchAgentRelease:input_type -> sermon.agent.v1.FetchAgentReleaseRequest
+	14, // 83: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	11, // 84: sermon.agent.v1.AgentService.FetchAgentRelease:output_type -> sermon.agent.v1.FetchAgentReleaseResponse
+	83, // [83:85] is the sub-list for method output_type
+	81, // [81:83] is the sub-list for method input_type
+	81, // [81:81] is the sub-list for extension type_name
+	81, // [81:81] is the sub-list for extension extendee
+	0,  // [0:81] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -5326,7 +5612,11 @@ func file_sermon_agent_v1_agent_proto_init() {
 	if File_sermon_agent_v1_agent_proto != nil {
 		return
 	}
-	file_sermon_agent_v1_agent_proto_msgTypes[0].OneofWrappers = []any{
+	file_sermon_agent_v1_agent_proto_msgTypes[1].OneofWrappers = []any{
+		(*FetchAgentReleaseResponse_Header)(nil),
+		(*FetchAgentReleaseResponse_Chunk)(nil),
+	}
+	file_sermon_agent_v1_agent_proto_msgTypes[3].OneofWrappers = []any{
 		(*SessionRequest_Hello)(nil),
 		(*SessionRequest_Heartbeat)(nil),
 		(*SessionRequest_RotateCertificate)(nil),
@@ -5335,7 +5625,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionRequest_ProcessSnapshot)(nil),
 		(*SessionRequest_LiveViewRefused)(nil),
 	}
-	file_sermon_agent_v1_agent_proto_msgTypes[1].OneofWrappers = []any{
+	file_sermon_agent_v1_agent_proto_msgTypes[4].OneofWrappers = []any{
 		(*SessionResponse_Ack)(nil),
 		(*SessionResponse_CertificateIssued)(nil),
 		(*SessionResponse_RotateNow)(nil),
@@ -5349,18 +5639,18 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionResponse_RebootNode)(nil),
 		(*SessionResponse_SelfUpdate)(nil),
 	}
-	file_sermon_agent_v1_agent_proto_msgTypes[10].OneofWrappers = []any{
+	file_sermon_agent_v1_agent_proto_msgTypes[13].OneofWrappers = []any{
 		(*Batch_Metrics)(nil),
 		(*Batch_SecurityEvents)(nil),
 		(*Batch_Logs)(nil),
 		(*Batch_UpdateReport)(nil),
 		(*Batch_CommandResult)(nil),
 	}
-	file_sermon_agent_v1_agent_proto_msgTypes[12].OneofWrappers = []any{
+	file_sermon_agent_v1_agent_proto_msgTypes[15].OneofWrappers = []any{
 		(*Sample_IntValue)(nil),
 		(*Sample_DoubleValue)(nil),
 	}
-	file_sermon_agent_v1_agent_proto_msgTypes[15].OneofWrappers = []any{
+	file_sermon_agent_v1_agent_proto_msgTypes[18].OneofWrappers = []any{
 		(*SecurityEvent_SshLoginFailed)(nil),
 		(*SecurityEvent_SshInvalidUser)(nil),
 		(*SecurityEvent_SshLoginSucceeded)(nil),
@@ -5373,22 +5663,22 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SecurityEvent_SystemReboot)(nil),
 		(*SecurityEvent_OomKill)(nil),
 	}
-	file_sermon_agent_v1_agent_proto_msgTypes[16].OneofWrappers = []any{
+	file_sermon_agent_v1_agent_proto_msgTypes[19].OneofWrappers = []any{
 		(*SshRemote_Ip)(nil),
 		(*SshRemote_Host)(nil),
 	}
-	file_sermon_agent_v1_agent_proto_msgTypes[20].OneofWrappers = []any{}
-	file_sermon_agent_v1_agent_proto_msgTypes[24].OneofWrappers = []any{}
-	file_sermon_agent_v1_agent_proto_msgTypes[29].OneofWrappers = []any{}
-	file_sermon_agent_v1_agent_proto_msgTypes[40].OneofWrappers = []any{}
-	file_sermon_agent_v1_agent_proto_msgTypes[42].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[23].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[27].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[32].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[43].OneofWrappers = []any{}
+	file_sermon_agent_v1_agent_proto_msgTypes[45].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
-			NumEnums:      9,
-			NumMessages:   52,
+			NumEnums:      10,
+			NumMessages:   55,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

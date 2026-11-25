@@ -8,5 +8,6 @@ pub mod fingerprint;
 pub mod identity;
 pub mod outbox;
 pub mod proto;
+pub mod release;
 pub mod session;
 pub mod tls;

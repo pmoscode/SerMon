@@ -10,6 +10,7 @@ import {
 	invitationLink,
 	login,
 	ownerSQL,
+	publishBeta,
 	repoScript,
 	setupToken,
 	tamperDownload,
@@ -113,7 +114,7 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	baseURL
 }) => {
 	// Since M4-12 the hosts also install their updates through the root helper and report again.
-	test.setTimeout(15 * 60_000);
+	test.setTimeout(25 * 60_000);
 	// Setup with the token from the server log, then the first login.
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/setup/);
@@ -552,6 +553,7 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		'1'
 	);
 	console.log(`db-01 updated by hand after ${Math.round((Date.now() - manualStarted) / 1000)} s`);
+
 	// The live view ran the whole time: first offline until the agent's stream started, then a
 	// snapshot every 2 s with the host's processes, the command line redacted (M3-14).
 	const live = await watching;
@@ -634,7 +636,7 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		const lokiLines = (tenant: string) =>
 			exec(
 				'postgres',
-				`wget -qO- --header 'X-Scope-OrgID: ${tenant}' 'http://loki:3100/loki/api/v1/query_range?query=${query}&limit=5000&since=10m'`
+				`wget -qO- --header 'X-Scope-OrgID: ${tenant}' 'http://loki:3100/loki/api/v1/query_range?query=${query}&limit=5000&since=1h'`
 			);
 		await expect
 			.poll(() => (lokiLines(orgID).match(/load line \d+ password=\*\*\*/g) ?? []).length, {
@@ -769,4 +771,54 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	);
 	expect(summary.nodes ?? []).toHaveLength(0);
 	await context.close();
+
+	// Last, as it takes web-02 away for minutes:
+	// Self-update (M4-18, ADR 0036) of web-02, installed by install.sh: a signed beta that doesn't
+	// start is rolled back after 2 minutes, a working one stays. The helper checks the signature of
+	// the release key and that each is newer than what runs.
+	const selfUpdated = agents.find((a) => a.host === 'web-02')!;
+	const selfUpdateStarted = Date.now();
+	const sha = exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0];
+	const selfUpdate = (version: string) =>
+		ownerSQL(
+			`INSERT INTO node_commands (org_id, id, node_id, kind, version, created_at, expires_at)
+			 SELECT org_id, gen_random_uuid(), id, 4, '${version}', now(), now() + interval '15 minutes' FROM nodes WHERE hostname = 'web-02';
+			 SELECT pg_notify('sermon_node_commands', id::text) FROM nodes WHERE hostname = 'web-02';`
+		);
+	const outcome = (version: string) =>
+		ownerSQL(
+			`SELECT coalesce(c.phase, 0) || ':' || coalesce(c.exit_code, -9) || ':' || c.result_reason FROM node_commands c
+			 JOIN nodes n ON n.id = c.node_id WHERE n.hostname = 'web-02' AND c.kind = 4 AND c.version = '${version}'`
+		).trim();
+	publishBeta('0.0.2-broken', Buffer.from('#!/bin/sh\nexit 1\n'));
+	selfUpdate('0.0.2-broken');
+	await expect
+		.poll(() => outcome('0.0.2-broken'), { timeout: 300_000, intervals: [5_000] })
+		.toMatch(/^3:1:/);
+	expect(
+		ownerSQL(
+			`SELECT c.output FROM node_commands c JOIN nodes n ON n.id = c.node_id WHERE n.hostname = 'web-02' AND c.version = '0.0.2-broken'`
+		)
+	).toContain('rolled back');
+	expect(exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0]).toBe(
+		sha
+	);
+	console.log(
+		`a broken self-update rolled back after ${Math.round((Date.now() - selfUpdateStarted) / 1000)} s`
+	);
+	// The helper starts a self-update at most every 5 minutes; the agent asks again every 30 s.
+	const working = publishBeta('0.0.3-e2e');
+	selfUpdate('0.0.3-e2e');
+	await expect
+		.poll(() => outcome('0.0.3-e2e'), { timeout: 480_000, intervals: [5_000] })
+		.toMatch(/^2:0:/);
+	expect(exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0]).toBe(
+		working
+	);
+	expect(exec(selfUpdated.service, 'cat /var/lib/sermon-helper/agent.minisig')).toContain(
+		'version:0.0.3-e2e'
+	);
+	console.log(
+		`web-02 updated itself after ${Math.round((Date.now() - selfUpdateStarted) / 1000)} s`
+	);
 });

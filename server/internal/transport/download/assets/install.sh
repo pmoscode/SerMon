@@ -314,6 +314,14 @@ remove_helper() {
 	say "--no-helper: the root helper is switched off (no remote updates or reboots)"
 }
 
+# keep_agent_signature SIGFILE keeps the checked signature of the installed agent for the root
+# helper: its record of the installed version, which a self-update must exceed (ADR 0036).
+keep_agent_signature() {
+	mkdir -p "$ROOT/var/lib/sermon-helper"
+	chmod 0700 "$ROOT/var/lib/sermon-helper"
+	install -m 0600 "$1" "$ROOT/var/lib/sermon-helper/agent.minisig"
+}
+
 # install_helper WORK ARCH INIT installs the signed root helper and starts its socket (systemd) or
 # service (OpenRC). A server without helper binary leaves the agent without remote updates.
 install_helper() {
@@ -486,6 +494,7 @@ main() {
 	create_user
 	ensure_machine_id
 	install -m 0755 "$work/$binary" "$BIN_DIR/sermon-agent"
+	keep_agent_signature "$work/$binary.minisig"
 	write_config
 	chown root:sermon "$CONFIG_DIR" "$CONFIG_DIR/agent.toml"
 	chmod 0750 "$CONFIG_DIR"

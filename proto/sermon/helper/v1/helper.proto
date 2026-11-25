@@ -27,6 +27,8 @@ message HelperRequest {
     SelfUpdate self_update = 5;
     // run_result asks for the state and result of a run.
     RunResult run_result = 6;
+    // confirm_self_update says the new agent of a self-update connected to its server (ADR 0036).
+    ConfirmSelfUpdate confirm_self_update = 7;
   }
 }
 
@@ -67,9 +69,22 @@ message Reboot {
   string reason = 2;
 }
 
-// SelfUpdate replaces the agent's binary; its fields follow with ADR 0036 (M4-17).
+// SelfUpdate replaces the agent's binary (ADR 0036). The agent has put the new binary and its
+// minisign signature into /var/lib/sermon-agent/self-update/ (sermon-agent and
+// sermon-agent.minisig); the helper copies both, checks the copy against the release key and
+// installs it only if its trusted comment names this host's architecture and version, and version
+// is newer than the installed one. The new agent confirms with ConfirmSelfUpdate; without a
+// confirmation within 2 minutes the run restores the previous binary.
 message SelfUpdate {
   // run_id names the run: a canonical, lowercase UUID chosen by the server.
+  string run_id = 1;
+  // version is the version to install, as in the signature's trusted comment (semantic version).
+  string version = 2;
+}
+
+// ConfirmSelfUpdate confirms a self-update run once the new agent's first session stands.
+message ConfirmSelfUpdate {
+  // run_id names the self-update run.
   string run_id = 1;
 }
 

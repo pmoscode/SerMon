@@ -4,6 +4,7 @@
 pub mod command;
 pub mod config;
 pub mod host;
+pub mod minisign;
 pub mod peer;
 pub mod request;
 pub mod wire;

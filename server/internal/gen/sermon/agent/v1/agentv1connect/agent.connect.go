@@ -42,6 +42,9 @@ const (
 const (
 	// AgentServiceSessionProcedure is the fully-qualified name of the AgentService's Session RPC.
 	AgentServiceSessionProcedure = "/sermon.agent.v1.AgentService/Session"
+	// AgentServiceFetchAgentReleaseProcedure is the fully-qualified name of the AgentService's
+	// FetchAgentRelease RPC.
+	AgentServiceFetchAgentReleaseProcedure = "/sermon.agent.v1.AgentService/FetchAgentRelease"
 )
 
 // AgentServiceClient is a client for the sermon.agent.v1.AgentService service.
@@ -49,6 +52,11 @@ type AgentServiceClient interface {
 	// Session opens the long-lived bidirectional stream of a connected agent. The agent must
 	// send a Hello as its first message; the server answers with Ack messages and commands.
 	Session(context.Context) *connect.BidiStreamForClient[v1.SessionRequest, v1.SessionResponse]
+	// FetchAgentRelease streams a signed agent binary for a self-update (ADR 0036): first its
+	// size and minisign signature, then chunks of 256 KiB. Only versions the server knows with a
+	// valid signature of the release key; NOT_FOUND otherwise. At most one at a time per node and 10
+	// an hour (RESOURCE_EXHAUSTED). The node comes from the certificate.
+	FetchAgentRelease(context.Context, *connect.Request[v1.FetchAgentReleaseRequest]) (*connect.ServerStreamForClient[v1.FetchAgentReleaseResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the sermon.agent.v1.AgentService service. By
@@ -68,12 +76,19 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("Session")),
 			connect.WithClientOptions(opts...),
 		),
+		fetchAgentRelease: connect.NewClient[v1.FetchAgentReleaseRequest, v1.FetchAgentReleaseResponse](
+			httpClient,
+			baseURL+AgentServiceFetchAgentReleaseProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("FetchAgentRelease")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // agentServiceClient implements AgentServiceClient.
 type agentServiceClient struct {
-	session *connect.Client[v1.SessionRequest, v1.SessionResponse]
+	session           *connect.Client[v1.SessionRequest, v1.SessionResponse]
+	fetchAgentRelease *connect.Client[v1.FetchAgentReleaseRequest, v1.FetchAgentReleaseResponse]
 }
 
 // Session calls sermon.agent.v1.AgentService.Session.
@@ -81,11 +96,21 @@ func (c *agentServiceClient) Session(ctx context.Context) *connect.BidiStreamFor
 	return c.session.CallBidiStream(ctx)
 }
 
+// FetchAgentRelease calls sermon.agent.v1.AgentService.FetchAgentRelease.
+func (c *agentServiceClient) FetchAgentRelease(ctx context.Context, req *connect.Request[v1.FetchAgentReleaseRequest]) (*connect.ServerStreamForClient[v1.FetchAgentReleaseResponse], error) {
+	return c.fetchAgentRelease.CallServerStream(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the sermon.agent.v1.AgentService service.
 type AgentServiceHandler interface {
 	// Session opens the long-lived bidirectional stream of a connected agent. The agent must
 	// send a Hello as its first message; the server answers with Ack messages and commands.
 	Session(context.Context, *connect.BidiStream[v1.SessionRequest, v1.SessionResponse]) error
+	// FetchAgentRelease streams a signed agent binary for a self-update (ADR 0036): first its
+	// size and minisign signature, then chunks of 256 KiB. Only versions the server knows with a
+	// valid signature of the release key; NOT_FOUND otherwise. At most one at a time per node and 10
+	// an hour (RESOURCE_EXHAUSTED). The node comes from the certificate.
+	FetchAgentRelease(context.Context, *connect.Request[v1.FetchAgentReleaseRequest], *connect.ServerStream[v1.FetchAgentReleaseResponse]) error
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -101,10 +126,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("Session")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceFetchAgentReleaseHandler := connect.NewServerStreamHandler(
+		AgentServiceFetchAgentReleaseProcedure,
+		svc.FetchAgentRelease,
+		connect.WithSchema(agentServiceMethods.ByName("FetchAgentRelease")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.agent.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceSessionProcedure:
 			agentServiceSessionHandler.ServeHTTP(w, r)
+		case AgentServiceFetchAgentReleaseProcedure:
+			agentServiceFetchAgentReleaseHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -116,4 +149,8 @@ type UnimplementedAgentServiceHandler struct{}
 
 func (UnimplementedAgentServiceHandler) Session(context.Context, *connect.BidiStream[v1.SessionRequest, v1.SessionResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("sermon.agent.v1.AgentService.Session is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) FetchAgentRelease(context.Context, *connect.Request[v1.FetchAgentReleaseRequest], *connect.ServerStream[v1.FetchAgentReleaseResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("sermon.agent.v1.AgentService.FetchAgentRelease is not implemented"))
 }

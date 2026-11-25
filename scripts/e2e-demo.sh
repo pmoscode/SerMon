@@ -43,10 +43,13 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 	"$root/scripts/release-sign.sh" generate "$build/release.pem" >"$build/release.pub"
 
 	echo "▸ building the agent ($target)"
-	(cd "$root/agent" && cargo zigbuild --release --locked -q -p sermon-agent -p sermon-helper --target "$target")
+	# The helper takes self-updates signed with this key only (ADR 0036).
+	(cd "$root/agent" && SERMON_RELEASE_KEY=$(cat "$build/release.pub") cargo zigbuild --release --locked -q -p sermon-agent -p sermon-helper --target "$target")
 	cp "$root/agent/target/$target/release/sermon-agent" "$build/downloads/sermon-agent-linux-$arch"
 	cp "$root/agent/target/$target/release/sermon-helper" "$build/downloads/sermon-helper-linux-$arch"
-	"$root/scripts/release-sign.sh" sign "$build/release.pem" --version e2e \
+	# The server's version (e2e.env): install.sh and the self-update compare against it.
+	version=$(sed -n 's/^SERMON_VERSION=//p' "$e2e/e2e.env")
+	"$root/scripts/release-sign.sh" sign "$build/release.pem" --version "$version" \
 		"$build/downloads/sermon-agent-linux-$arch" "$build/downloads/sermon-helper-linux-$arch"
 
 	echo "▸ packaging the agent (.deb, .rpm, .apk)"

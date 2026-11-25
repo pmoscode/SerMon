@@ -18,6 +18,44 @@ service AgentService {
   // Session opens the long-lived bidirectional stream of a connected agent. The agent must
   // send a Hello as its first message; the server answers with Ack messages and commands.
   rpc Session(stream SessionRequest) returns (stream SessionResponse);
+  // FetchAgentRelease streams a signed agent binary for a self-update (ADR 0036): first its
+  // size and minisign signature, then chunks of 256 KiB. Only versions the server knows with a
+  // valid signature of the release key; NOT_FOUND otherwise. At most one at a time per node and 10
+  // an hour (RESOURCE_EXHAUSTED). The node comes from the certificate.
+  rpc FetchAgentRelease(FetchAgentReleaseRequest) returns (stream FetchAgentReleaseResponse);
+}
+
+// FetchAgentReleaseRequest names the release.
+message FetchAgentReleaseRequest {
+  // version is the agent version, as in SelfUpdate.
+  string version = 1 [(buf.validate.field).string = {
+    max_bytes: 64
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+  }];
+  // architecture is the binary's architecture.
+  Architecture architecture = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+}
+
+// FetchAgentReleaseResponse is one message of the stream: the header first, then the chunks.
+message FetchAgentReleaseResponse {
+  // part is the header or a chunk of the binary.
+  oneof part {
+    // header comes first.
+    AgentReleaseHeader header = 1;
+    // chunk is the next up to 256 KiB of the binary.
+    bytes chunk = 2;
+  }
+}
+
+// AgentReleaseHeader describes the binary that follows.
+message AgentReleaseHeader {
+  // size is the binary's size in bytes.
+  uint64 size = 1;
+  // signature is the minisign signature file (.minisig) of the binary.
+  string signature = 2;
 }
 
 // SessionRequest is one message from the agent to the server.
@@ -100,6 +138,19 @@ message Hello {
   // config_version is the version of the server-provided configuration the agent currently
   // applies (0 = none yet); the server sends a newer one if available.
   uint64 config_version = 4;
+  // install_method is how the agent was installed, from the path of its binary (ADR 0036):
+  // only script installations update themselves.
+  InstallMethod install_method = 5 [(buf.validate.field).enum.defined_only = true];
+}
+
+// InstallMethod is how the agent was installed.
+enum InstallMethod {
+  // INSTALL_METHOD_UNSPECIFIED: not reported (older agents) or elsewhere.
+  INSTALL_METHOD_UNSPECIFIED = 0;
+  // INSTALL_METHOD_SCRIPT: install.sh, /usr/local/bin/sermon-agent.
+  INSTALL_METHOD_SCRIPT = 1;
+  // INSTALL_METHOD_PACKAGE: a package, /usr/bin/sermon-agent.
+  INSTALL_METHOD_PACKAGE = 2;
 }
 
 // HostFacts are static properties of the monitored host.

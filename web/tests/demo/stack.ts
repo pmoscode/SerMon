@@ -1,7 +1,7 @@
 import { type APIRequestContext, type Page, expect } from '@playwright/test';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { X509Certificate } from 'node:crypto';
-import { appendFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { X509Certificate, createHash } from 'node:crypto';
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
@@ -112,6 +112,27 @@ export function tamperDownload(): () => void {
 	const original = readFileSync(path);
 	appendFileSync(path, Buffer.from([0]));
 	return () => writeFileSync(path, original);
+}
+
+/**
+ * Puts a beta release of the agent into the downloads (ADR 0036), signed with the run's release
+ * key for VERSION: BINARY or, without, the agent binary of this run. Returns its SHA-256.
+ */
+export function publishBeta(version: string, binary?: Buffer): string {
+	const dir = join(e2eDir, '.build', 'downloads');
+	const name = readdirSync(dir).find((f) => /^sermon-agent-linux-\w+$/.test(f));
+	if (!name) throw new Error(`no agent binary in ${dir}`);
+	mkdirSync(join(dir, 'beta'), { recursive: true });
+	const path = join(dir, 'beta', name);
+	writeFileSync(path, binary ?? readFileSync(join(dir, name)), { mode: 0o755 });
+	execFileSync(join(e2eDir, '..', '..', 'scripts', 'release-sign.sh'), [
+		'sign',
+		join(e2eDir, '.build', 'release.pem'),
+		'--version',
+		version,
+		path
+	]);
+	return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
 /** Mailpit's API of the e2e environment (published on 127.0.0.1). */

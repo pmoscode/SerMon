@@ -291,6 +291,9 @@ mod tests {
         fn result(&self, _: &str) -> sermon_helper_proto::v1::RunState {
             sermon_helper_proto::v1::RunState::default()
         }
+        fn confirm(&mut self, _: &str) -> Result<(), request::Failure> {
+            Err(request::Failure::Busy)
+        }
     }
 
     fn server(config: Config) -> Server {

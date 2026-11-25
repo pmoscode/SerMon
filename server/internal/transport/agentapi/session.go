@@ -311,6 +311,8 @@ type SessionHandler struct {
 	configs  AgentConfigs
 	live     LiveViews
 	commands Commands
+	releases Releases
+	fetches  fetchLimits
 	// commandPoll is how often a session looks for commands without a wake-up.
 	commandPoll time.Duration
 	recheck     time.Duration

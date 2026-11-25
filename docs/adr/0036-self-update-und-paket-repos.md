@@ -78,7 +78,7 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
    Signatur über den Trusted Comment. Der Comment muss `file:sermon-agent-linux-<arch>` (Architektur des Helpers) und
    `version:<V>` mit `V` = angefragte Version enthalten. Der Public Key ist **in den Helper kompiliert** (aus
    `SERMON_RELEASE_KEY` bzw. `packaging/release.pub`, wie im Server); der Helper nimmt bis zu zwei Schlüssel an (für
-   die Rotation). Ed25519 kommt aus `ed25519-dalek` (ohne Standard-Features), Base64 selbst.
+   die Rotation). Ed25519 kommt aus `ring` (schon im Workspace, Nachtrag M4-18), Base64 selbst.
 4. **Kein Downgrade:** `V` muss nach SemVer größer sein als die installierte Version. Die kennt der Helper aus der
    Signatur der installierten Binary, die `install.sh` und jedes Self-Update root-eigen ablegen
    (`/var/lib/sermon-helper/agent.minisig`, beim Lesen erneut geprüft). Fehlt sie (Installation vor M4-18), lehnt der
@@ -137,7 +137,7 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
   `allow_self_update = false`. Wer den Release-Key hat (A4), hat root auf allen Nodes mit Self-Update; das war mit
   `install.sh` schon so und bleibt die zentrale Annahme.
 - **Der Helper wächst** um Kopieren, Prüfen der Signatur und Rollback. Die Grenze aus ADR 0035 steigt von 1 500 auf
-  **1 800 Zeilen** und bleibt in CI geprüft. Neu ist eine Abhängigkeit (`ed25519-dalek`).
+  **1 800 Zeilen** und bleibt in CI geprüft. Neu im Helper ist die Abhängigkeit `ring` (Nachtrag M4-18).
 - **Neue Operation des Helpers:** `ConfirmSelfUpdate{run_id}`; `SelfUpdate` bekommt das Feld `version`. Beides ist
   additiv (`buf breaking`). Ein Helper vor M4-18 antwortet `UNSUPPORTED`.
 - **Neues RPC** `AgentService.FetchAgentRelease` (mTLS, Org und Node aus dem Zertifikat); Downloads werden je Node
@@ -145,3 +145,18 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
 - **Hello** trägt `install_method`.
 - `install.sh` legt ab M4-18 die Signatur der installierten Binary für den Helper ab.
 - Die Paket-Repos sind kürzbar: Fehlt die Zeit, kommen sie mit dem Release-Prozess in v1.0 (M4-20).
+
+## Nachtrag M4-18
+
+- **`ring` statt `ed25519-dalek`:** `ring` ist im Workspace schon für TLS da (`rustls`) und kann Ed25519 prüfen; der
+  Helper bekommt so keine neue Abhängigkeit, nur eine weitere Nutzung. Der Helper hat jetzt 1 546 Zeilen.
+- **Der Agent trägt den Lauf vor dem Start ins Laufbuch ein**, mit der Kennung seines Prozesses
+  (`self-update:<instance>`). Nur ein anderer Prozess – die neue Version nach dem Neustart – bestätigt ihn; der alte
+  Agent bestätigt auch dann nicht, wenn er vor dem Neustart noch einmal verbindet. Ein beschäftigter Helper nimmt den
+  Eintrag wieder heraus, bis der Lauf wirklich startet.
+- **Ersetzt und bestätigt wird über Marken im Laufverzeichnis:** `replaced` vor dem Neustart, `confirmed` von
+  `ConfirmSelfUpdate`; der Helper nimmt eine Bestätigung nur zwischen beiden und vor dem Ergebnis an.
+- **Kanäle im Server:** `download.Releases` liest die Signaturen beim Start, alle 5 min und bei einer unbekannten
+  Version (höchstens alle 10 s); unveränderte Dateien (Größe, Änderungszeit) werden nicht erneut geprüft.
+- **E2E:** Die Version des Servers ist dort jetzt `0.0.1-e2e` (SemVer statt `e2e`), damit der Helper vergleichen kann.
+

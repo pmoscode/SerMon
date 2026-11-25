@@ -1,13 +1,13 @@
 #!/bin/sh
-# Counts the root helper's own code (ADR 0035: at most 1 500 lines) and fails above the limit:
+# Counts the root helper's own code (ADR 0035, ADR 0036: at most 1 800 lines) and fails above the limit:
 # lines of agent/crates/sermon-helper/src/*.rs up to their test module, without blank and
 # comment lines. Generated code (sermon-helper-proto) and the tests don't count.
 #
-#   sh scripts/helper-loc.sh [DIR] [LIMIT]    defaults: the helper's src/, 1500
+#   sh scripts/helper-loc.sh [DIR] [LIMIT]    defaults: the helper's src/, 1800
 set -eu
 
 dir=${1:-$(cd "$(dirname "$0")/.." && pwd)/agent/crates/sermon-helper/src}
-limit=${2:-1500}
+limit=${2:-1800}
 total=0
 for file in "$dir"/*.rs; do
 	# The test module ends the count; a #[cfg(test)] on an item inside the code counts like code.

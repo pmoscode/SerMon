@@ -22,6 +22,10 @@ struct Fake {
     start: Mutex<VecDeque<Start>>,
     polls: Mutex<BTreeMap<String, VecDeque<Poll>>>,
     asked: AtomicUsize,
+    /// Versions staged for a self-update; `stage_fails` makes the next one fail.
+    staged: Mutex<Vec<String>>,
+    stage_fails: Mutex<Option<String>>,
+    confirmed: Mutex<Vec<String>>,
 }
 
 impl Fake {
@@ -61,6 +65,16 @@ impl Helper for Fake {
             queue.front().cloned().unwrap_or(Poll::Running)
         };
         std::future::ready(p)
+    }
+
+    fn stage(&self, version: &str) -> impl Future<Output = Result<(), String>> + Send {
+        self.staged.lock().unwrap().push(version.to_owned());
+        std::future::ready(self.stage_fails.lock().unwrap().take().map_or(Ok(()), Err))
+    }
+
+    fn confirm(&self, run_id: &str) -> impl Future<Output = Result<(), String>> + Send {
+        self.confirmed.lock().unwrap().push(run_id.to_owned());
+        std::future::ready(Ok(()))
     }
 }
 
@@ -111,7 +125,12 @@ impl Running {
 }
 
 fn book(dir: &tempfile::TempDir) -> Book {
-    Book::open(&dir.path().join("runs"))
+    Book::open(&dir.path().join("runs"), "first")
+}
+
+/// The book of the agent process after a restart.
+fn book_after_restart(dir: &tempfile::TempDir) -> Book {
+    Book::open(&dir.path().join("runs"), "second")
 }
 
 // A run starts once, reports its start and, polled, its end with the redacted output; a
@@ -177,7 +196,7 @@ async fn after_a_restart_it_asks_for_the_runs_still_going() {
         vec![],
         vec![(ID, vec![failed]), (OTHER, vec![Poll::Unknown])],
     );
-    let second = start_runner(fake.clone(), book(&dir));
+    let second = start_runner(fake.clone(), book_after_restart(&dir));
     tokio::time::sleep(Duration::from_secs(1)).await;
     let mut phases = second.phases();
     phases.sort();
@@ -293,7 +312,7 @@ fn the_book_survives_broken_lines_and_stays_bounded() {
         format!("{ID} running 5\nnot a line\n../../etc running 1\n{OTHER} done 3\n"),
     )
     .unwrap();
-    let mut b = Book::open(&path);
+    let mut b = Book::open(&path, "first");
     assert_eq!(b.running(), [ID]);
     assert!(!b.knows(OTHER) && !b.knows("../../etc"));
     let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_795_000_000);
@@ -313,6 +332,101 @@ fn the_book_survives_broken_lines_and_stays_bounded() {
     let later = now + KEEP + Duration::from_secs(1);
     b.set(OTHER, Entry::Ended, later);
     assert_eq!(b.runs.len(), 2);
-    let reread = Book::open(&path);
+    let reread = Book::open(&path, "first");
     assert!(reread.knows(ID) && reread.knows(OTHER));
+}
+
+fn self_update(id: &str) -> HelperCommand {
+    HelperCommand::SelfUpdate(sermon_transport::proto::agent::v1::SelfUpdate {
+        run_id: id.into(),
+        version: "1.1.0".into(),
+    })
+}
+
+// ADR 0036: the release is staged before the helper starts the run, and the run is in the book
+// before the helper replaces this process. The new agent (another process) confirms it once its
+// session stands; the old one never does.
+#[tokio::test(start_paused = true)]
+async fn a_self_update_is_staged_and_confirmed_by_the_new_agent() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::with(vec![], vec![]);
+    let old = start_runner(fake.clone(), book(&dir));
+    old.inbox.command(self_update(ID));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(*fake.staged.lock().unwrap(), ["1.1.0"]);
+    assert_eq!(old.phases(), [(ID.into(), CommandPhase::Started)]);
+    let text = std::fs::read_to_string(dir.path().join("runs")).unwrap();
+    assert!(
+        text.contains(&format!("{ID} running ")) && text.contains("self-update:first"),
+        "{text}"
+    );
+    old.inbox.connected();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(
+        fake.confirmed.lock().unwrap().is_empty(),
+        "the old agent confirmed"
+    );
+    old.stop().await;
+
+    let done = Poll::Done {
+        exit_code: 0,
+        output: Vec::new(),
+        truncated: false,
+        started: 1,
+        ended: 2,
+    };
+    let helper = Fake::with(vec![], vec![(ID, vec![Poll::Running, done])]);
+    let new = start_runner(helper.clone(), book_after_restart(&dir));
+    new.inbox.connected();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(*helper.confirmed.lock().unwrap(), [ID]);
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    assert_eq!(new.phases(), [(ID.into(), CommandPhase::Succeeded)]);
+    // Ended: a later session confirms nothing.
+    new.inbox.connected();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(helper.confirmed.lock().unwrap().len(), 1);
+    new.stop().await;
+}
+
+// A release that can't be fetched fails the run without the helper; a busy helper starts it
+// later, and until then the run is not in the book (no lost run while it waits).
+#[tokio::test(start_paused = true)]
+async fn a_self_update_without_its_release_fails_and_a_busy_one_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::with(vec![Start::Busy("a run".into())], vec![]);
+    *fake.stage_fails.lock().unwrap() = Some("NOT_FOUND".into());
+    let r = start_runner(fake.clone(), book(&dir));
+    r.inbox.command(self_update(ID));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(r.phases(), [(ID.into(), CommandPhase::Failed)]);
+    assert!(
+        r.results.lock().unwrap()[0]
+            .reason
+            .contains("cannot fetch the release: NOT_FOUND")
+    );
+    assert!(fake.starts.lock().unwrap().is_empty());
+    r.inbox.command(self_update(OTHER));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(r.phases().len(), 1, "busy: nothing reported yet");
+    let asked = fake.asked.load(Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_secs(15)).await;
+    assert_eq!(
+        fake.asked.load(Ordering::SeqCst),
+        asked,
+        "a waiting run was polled"
+    );
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    assert_eq!(
+        r.phases().last().unwrap(),
+        &(OTHER.to_owned(), CommandPhase::Started)
+    );
+    // Staged once: a busy helper doesn't make the agent fetch the release again (the server
+    // allows 10 an hour).
+    assert_eq!(
+        fake.staged.lock().unwrap().len(),
+        2,
+        "staged again for the retry"
+    );
+    r.stop().await;
 }

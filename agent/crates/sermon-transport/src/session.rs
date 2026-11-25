@@ -22,7 +22,7 @@ use crate::identity::{AgentKey, CertificateOffer, Credentials, IssuedCertificate
 use crate::outbox::{Outbox, batch_for};
 use crate::proto::agent::v1::agent_service_client::AgentServiceClient;
 use crate::proto::agent::v1::{
-    ConfigApplied, ConfigUpdate, Heartbeat, Hello, LiveViewRefused, ProcessSnapshot,
+    ConfigApplied, ConfigUpdate, Heartbeat, Hello, InstallMethod, LiveViewRefused, ProcessSnapshot,
     RotateCertificate, SessionRequest, SessionResponse, StartLiveView, session_request,
     session_response,
 };
@@ -48,6 +48,9 @@ pub enum HelperCommand {
 pub trait CommandSink: Send + Sync {
     /// Takes one command; the session goes on at once.
     fn command(&self, command: HelperCommand);
+    /// A session stands: the server answered the `Hello` (a new agent confirms its self-update,
+    /// ADR 0036).
+    fn connected(&self) {}
 }
 
 /// Version of the agent protocol sent in `Hello`.
@@ -131,6 +134,8 @@ pub struct TransportConfig {
     pub expired_retry: Duration,
     /// How long a `StartLiveView` holds without renewal (KONZEPT §9: 60 s).
     pub live_lease: Duration,
+    /// How the agent was installed (for `Hello`, ADR 0036).
+    pub install_method: InstallMethod,
 }
 
 impl TransportConfig {
@@ -146,6 +151,7 @@ impl TransportConfig {
             max_in_flight: 64,
             expired_retry: Duration::from_mins(5),
             live_lease: Duration::from_mins(1),
+            install_method: InstallMethod::Unspecified,
         }
     }
 }
@@ -318,6 +324,7 @@ impl Transport {
             agent_version: self.config.agent_version.clone(),
             host_facts: Some((&facts).into()),
             config_version: self.config_sink.as_ref().map_or(0, |sink| sink.version()),
+            install_method: self.config.install_method.into(),
         }));
         outgoing
             .send(hello)
@@ -557,6 +564,11 @@ impl Session<'_> {
                 self.sent = self.sent.max(self.acked);
             }
             session_response::Payload::TrustBundle(bundle) => {
+                if !self.established
+                    && let Some(sink) = &self.transport.commands
+                {
+                    sink.connected();
+                }
                 self.established = true;
                 self.update_trust_bundle(bundle.roots);
             }

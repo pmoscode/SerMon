@@ -17,6 +17,7 @@ use sermon_helper_proto::v1::{
 };
 
 use crate::command;
+use crate::minisign::{self, PublicKey};
 use crate::request::{Executor, Failure, Run};
 
 /// How long the result of a run is kept.
@@ -39,6 +40,12 @@ const APT_GET: [&str; 6] = [
     "Dpkg::Options::=--force-confold",
 ];
 const UNSUPPORTED: &str = "no apt, dnf or apk distribution in /etc/os-release";
+/// The agent of a script installation, the only one the self-update replaces (ADR 0036).
+const AGENT: &str = "usr/local/bin/sermon-agent";
+/// Where the agent puts the new binary and its signature, below the host's root.
+const STAGED: [&str; 4] = ["var", "lib", "sermon-agent", "self-update"];
+const MAX_BINARY: u64 = 64 << 20;
+const MAX_SIGNATURE: u64 = 4 << 10;
 
 /// A fixed command: the program below the host's root and its arguments.
 type Fixed = (&'static str, &'static [&'static str]);
@@ -90,6 +97,10 @@ pub struct Host {
     launch: Launch,
     list_limit: Duration,
     run_limit: Duration,
+    /// The release keys a new agent must be signed with.
+    keys: Vec<PublicKey>,
+    /// How long a self-update waits for the new agent to connect before it rolls back.
+    confirm_within: Duration,
 }
 
 impl Host {
@@ -109,6 +120,8 @@ impl Host {
             launch,
             list_limit,
             run_limit,
+            keys: minisign::release_keys(),
+            confirm_within: Duration::from_mins(2),
         }
     }
 
@@ -256,6 +269,7 @@ impl Host {
         let result = match request.split_once('\n').unwrap_or((&request, "")) {
             ("updates security", _) => self.updates(d, true),
             ("updates all", _) => self.updates(d, false),
+            (first, _) if first.starts_with("self-update ") => self.self_update(&dir),
             ("reboot", _) if self.launch == Launch::Detached => {
                 // busybox reboots after the delay and never returns: the result comes first.
                 store(
@@ -334,6 +348,164 @@ impl Host {
         out.truncated |= refresh.truncated || joined.len() > RUN_OUTPUT;
         out.output = joined.split_off(joined.len().saturating_sub(RUN_OUTPUT));
         out
+    }
+
+    /// Reads a file the agent staged for its self-update without following a link anywhere below
+    /// the host's root, at most `max` bytes of a regular file.
+    fn staged(&self, name: &str, max: u64) -> Result<Vec<u8>, String> {
+        use rustix::fs::{FileType, Mode, OFlags, fstat, open, openat};
+        let flags = OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW;
+        let why = |e: rustix::io::Errno| format!("cannot read the staged {name}: {e}");
+        let mut dir = open(
+            &self.root,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(why)?;
+        for part in STAGED {
+            dir = openat(&dir, part, flags | OFlags::DIRECTORY, Mode::empty()).map_err(why)?;
+        }
+        let fd = openat(&dir, name, flags | OFlags::NONBLOCK, Mode::empty()).map_err(why)?;
+        let st = fstat(&fd).map_err(why)?;
+        if FileType::from_raw_mode(st.st_mode) != FileType::RegularFile {
+            return Err(format!("the staged {name} is no regular file"));
+        }
+        let mut bytes = Vec::new();
+        File::from(fd)
+            .take(max + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("cannot read the staged {name}: {e}"))?;
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max {
+            return Err(format!("the staged {name} is larger than {max} bytes"));
+        }
+        Ok(bytes)
+    }
+
+    /// Checks the staged agent of a self-update and keeps a copy of exactly the checked bytes in
+    /// the run's directory: what the agent changes afterwards has no effect (ADR 0036).
+    fn prepare(&self, dir: &Path, version: &str) -> Result<(), Failure> {
+        if self.keys.is_empty() {
+            return Err(Failure::Unsupported(
+                "this helper was built without a release key".into(),
+            ));
+        }
+        let agent = self.root.join(AGENT);
+        if !fs::symlink_metadata(&agent).is_ok_and(|m| m.is_file()) {
+            return Err(Failure::Unsupported(
+                "no /usr/local/bin/sermon-agent: a package installation is updated by the package manager".into(),
+            ));
+        }
+        let file = format!("sermon-agent-linux-{}", arch());
+        let installed = fs::read(&agent)
+            .ok()
+            .zip(fs::read_to_string(self.state.join("agent.minisig")).ok())
+            .and_then(|(bytes, sig)| minisign::verify(&self.keys, &sig, &bytes).ok())
+            .filter(|s| s.file == file)
+            .ok_or_else(|| {
+                Failure::Refused("the installed version is unknown: run install.sh again".into())
+            })?;
+        let binary = self
+            .staged("sermon-agent", MAX_BINARY)
+            .map_err(Failure::Refused)?;
+        let signature = self
+            .staged("sermon-agent.minisig", MAX_SIGNATURE)
+            .map_err(Failure::Refused)?;
+        let signature = String::from_utf8(signature)
+            .map_err(|_| Failure::Refused("malformed signature file".into()))?;
+        let signed = minisign::verify(&self.keys, &signature, &binary).map_err(Failure::Refused)?;
+        if signed.file != file || signed.version != version {
+            return Err(Failure::Refused(format!(
+                "the signature is for {} {}, not {file} {version}",
+                signed.file, signed.version
+            )));
+        }
+        if !minisign::newer(version, &installed.version) {
+            return Err(Failure::Refused(format!(
+                "{version} is not newer than the installed {}",
+                installed.version
+            )));
+        }
+        write_atomically(&dir.join("agent"), &binary).map_err(fail)?;
+        write_atomically(&dir.join("agent.minisig"), signature.as_bytes()).map_err(fail)
+    }
+
+    /// Puts `binary` in place of the agent (`rename` in its directory) and `signature` as the
+    /// record of the installed version.
+    fn install(&self, binary: &Path, signature: &Path) -> io::Result<()> {
+        let agent = self.root.join(AGENT);
+        let next = agent.with_file_name(".sermon-agent.new");
+        let mut f = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o755)
+            .open(&next)?;
+        io::copy(&mut File::open(binary)?, &mut f)?;
+        f.sync_all()?;
+        fs::rename(&next, &agent)?;
+        File::open(agent.parent().unwrap_or(&self.root))?.sync_all()?;
+        write_atomically(&self.state.join("agent.minisig"), &fs::read(signature)?)
+    }
+
+    /// Restarts the agent's service.
+    fn restart_agent(&self) -> Output {
+        let command: Fixed = match self.launch {
+            Launch::Detached => ("sbin/rc-service", &["sermon-agent", "restart"]),
+            #[cfg(test)]
+            Launch::Inline => ("usr/bin/systemctl", &["restart", "sermon-agent"]),
+            Launch::Systemd => ("usr/bin/systemctl", &["restart", "sermon-agent"]),
+        };
+        self.run(command, Duration::from_mins(1), 4096, true)
+    }
+
+    /// Replaces the agent with the checked copy, restarts it and waits for the new one to
+    /// connect; without its confirmation the previous binary comes back (ADR 0036).
+    fn self_update(&self, dir: &Path) -> Output {
+        let keep = self.state.join("self-update");
+        let saved = fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&keep)
+            .and_then(|()| fs::copy(self.root.join(AGENT), keep.join("previous")))
+            .and_then(|_| {
+                fs::copy(
+                    self.state.join("agent.minisig"),
+                    keep.join("previous.minisig"),
+                )
+            });
+        if let Err(e) =
+            saved.and_then(|_| self.install(&dir.join("agent"), &dir.join("agent.minisig")))
+        {
+            return failed(&format!("cannot replace the agent: {e}"));
+        }
+        let _ = write_atomically(&dir.join("replaced"), now().to_string().as_bytes());
+        let restart = self.restart_agent();
+        let deadline = std::time::Instant::now() + self.confirm_within;
+        while std::time::Instant::now() < deadline {
+            if dir.join("confirmed").exists() {
+                return Output {
+                    name: "self-update".into(),
+                    output: b"the new agent is installed and connected\n".to_vec(),
+                    ..Output::default()
+                };
+            }
+            std::thread::sleep(self.confirm_within / 60);
+        }
+        let back = self.install(&keep.join("previous"), &keep.join("previous.minisig"));
+        let again = self.restart_agent();
+        let why = match back {
+            Ok(()) => "rolled back: the new agent did not connect in time".to_owned(),
+            Err(e) => {
+                format!("the new agent did not connect in time, and the rollback failed: {e}")
+            }
+        };
+        let log = [restart.output, again.output].concat();
+        Output {
+            name: "self-update".into(),
+            exit_code: 1,
+            output: [why.as_bytes(), b"\n", &log].concat(),
+            ..Output::default()
+        }
     }
 
     /// The runs with the time of their start and their request, the newest first.
@@ -425,11 +597,7 @@ impl Executor for Host {
             } => (id, "updates security".to_owned()),
             Run::Updates { id, .. } => (id, "updates all".to_owned()),
             Run::Reboot { id, reason } => (id, format!("reboot\n{reason}")),
-            Run::SelfUpdate { .. } => {
-                return Err(Failure::Unsupported(
-                    "self-update follows with ADR 0036".into(),
-                ));
-            }
+            Run::SelfUpdate { id, version } => (id, format!("self-update {version}")),
         };
         let dir = self.run_dir(id);
         if let Ok(before) = fs::read_to_string(dir.join("request")) {
@@ -459,8 +627,28 @@ impl Executor for Host {
             .mode(0o700)
             .create(&dir)
             .map_err(fail)?;
+        if let Run::SelfUpdate { version, .. } = run
+            && let Err(e) = self.prepare(&dir, version)
+        {
+            let _ = fs::remove_dir_all(&dir);
+            return Err(e);
+        }
         write_atomically(&dir.join("request"), request.as_bytes()).map_err(fail)?;
         self.spawn(id)
+    }
+
+    fn confirm(&mut self, id: &str) -> Result<(), Failure> {
+        let dir = self.run_dir(id);
+        let request = fs::read_to_string(dir.join("request")).unwrap_or_default();
+        if !request.starts_with("self-update ")
+            || !dir.join("replaced").exists()
+            || dir.join("result").exists()
+        {
+            return Err(Failure::Refused(
+                "no self-update of this run waits for a confirmation".into(),
+            ));
+        }
+        write_atomically(&dir.join("confirmed"), b"").map_err(fail)
     }
 
     fn result(&self, id: &str) -> RunState {
@@ -538,6 +726,15 @@ pub fn security_packages(list: &str) -> Vec<String> {
         .collect()
 }
 
+/// The architecture as in the names of the release files.
+fn arch() -> &'static str {
+    match std::env::consts::ARCH {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        other => other,
+    }
+}
+
 fn fail(e: impl std::fmt::Display) -> Failure {
     Failure::Failed(e.to_string())
 }
@@ -596,6 +793,7 @@ mod tests {
     use super::*;
 
     const ID: &str = "0193f5a0-0000-7000-8000-000000000001";
+    const OTHER_ID: &str = "0193f5a0-0000-7000-8000-000000000002";
     const APT_LIST: &str = "Listing...\n\
         openssl/bookworm-security 3.0.16-1~deb12u1 arm64 [upgradable from: 3.0.15-1~deb12u1]\n\
         libc6/bookworm-updates,bookworm-security 2.36-9+deb12u10 arm64 [upgradable from: 2.36-9+deb12u9]\n\
@@ -620,6 +818,8 @@ mod tests {
                 launch: Launch::Inline,
                 list_limit: Duration::from_secs(5),
                 run_limit: Duration::from_secs(5),
+                keys: Vec::new(),
+                confirm_within: Duration::from_secs(1),
             };
             let fake = Self { _dir: dir, host };
             for p in [
@@ -628,6 +828,7 @@ mod tests {
                 "sbin/apk",
                 "usr/sbin/shutdown",
                 "sbin/reboot",
+                "usr/bin/systemctl",
             ] {
                 fake.program(p, "");
             }
@@ -824,7 +1025,13 @@ mod tests {
         for (os, run) in [
             ("ID=alpine\n", updates(Scope::Security)),
             ("ID=arch\n", updates(Scope::All)),
-            ("ID=debian\n", Run::SelfUpdate { id: ID.into() }),
+            (
+                "ID=debian\n",
+                Run::SelfUpdate {
+                    id: ID.into(),
+                    version: "1.0.0".into(),
+                },
+            ),
         ] {
             let fake = Fake::new(os);
             assert!(
@@ -998,5 +1205,256 @@ mod tests {
             MAX_RUNS
         );
         assert!(!oldest.exists());
+    }
+
+    /// A script installation of agent 1.0.0 and a staged 1.1.0, signed with `signer`.
+    fn installed(signer: &minisign::tests::Signer) -> Fake {
+        let mut fake = Fake::new("ID=debian\n");
+        fake.host.keys = vec![signer.key.clone()];
+        let file = format!("sermon-agent-linux-{}", arch());
+        fs::create_dir_all(fake.host.root.join("usr/local/bin")).unwrap();
+        fs::create_dir_all(&fake.host.state).unwrap();
+        fs::write(fake.host.root.join(AGENT), b"agent 1.0.0").unwrap();
+        fs::write(
+            fake.host.state.join("agent.minisig"),
+            signer.sign(b"agent 1.0.0", &file, "1.0.0"),
+        )
+        .unwrap();
+        fake.stage(b"agent 1.1.0", &signer.sign(b"agent 1.1.0", &file, "1.1.0"));
+        fake
+    }
+
+    impl Fake {
+        fn stage(&self, binary: &[u8], signature: &str) {
+            let staged = self.host.root.join("var/lib/sermon-agent/self-update");
+            fs::create_dir_all(&staged).unwrap();
+            fs::write(staged.join("sermon-agent"), binary).unwrap();
+            fs::write(staged.join("sermon-agent.minisig"), signature).unwrap();
+        }
+
+        fn agent(&self) -> Vec<u8> {
+            fs::read(self.host.root.join(AGENT)).unwrap()
+        }
+    }
+
+    /// A change of the installation that makes a self-update invalid.
+    type Change<'a> = Box<dyn Fn(&Fake) + 'a>;
+
+    fn self_update(version: &str) -> Run {
+        Run::SelfUpdate {
+            id: ID.into(),
+            version: version.into(),
+        }
+    }
+
+    // ADR 0036: the checked copy replaces the agent, the service restarts, the new agent confirms:
+    // installed, and its signature is the record of the installed version. A change of the staged
+    // file after the check has no effect.
+    #[test]
+    fn a_self_update_installs_the_checked_copy_once_the_new_agent_confirms() {
+        let signer = minisign::tests::Signer::new(1);
+        let fake = installed(&signer);
+        let mut host = fake.host.clone();
+        host.confirm_within = Duration::from_secs(4);
+        assert_eq!(
+            host.confirm(ID),
+            Err(Failure::Refused(
+                "no self-update of this run waits for a confirmation".into()
+            ))
+        );
+        host.start(&self_update("1.1.0")).unwrap();
+        fake.stage(b"evil", "");
+        for _ in 0..100 {
+            if fake.calls().contains("systemctl") {
+                break;
+            }
+            sleep(Duration::from_millis(20));
+        }
+        assert_eq!(fake.agent(), b"agent 1.1.0");
+        assert!(
+            fake.calls().contains("systemctl restart sermon-agent"),
+            "{}",
+            fake.calls()
+        );
+        host.confirm(ID).unwrap();
+        let state = fake.wait(ID);
+        assert_eq!(state.result.unwrap().exit_code, 0);
+        assert_eq!(fake.agent(), b"agent 1.1.0");
+        let record = fs::read_to_string(host.state.join("agent.minisig")).unwrap();
+        assert!(record.contains("version:1.1.0"));
+        // Ended: no confirmation any more, the same run starts nothing again.
+        assert!(matches!(host.confirm(ID), Err(Failure::Refused(_))));
+        host.start(&self_update("1.1.0")).unwrap();
+        assert_eq!(fake.calls().matches("systemctl").count(), 1);
+        // A self-update not replaced yet: no confirmation either.
+        let early = host.run_dir(OTHER_ID);
+        fs::create_dir_all(&early).unwrap();
+        fs::write(early.join("request"), "self-update 1.1.0").unwrap();
+        assert!(matches!(host.confirm(OTHER_ID), Err(Failure::Refused(_))));
+        fs::write(early.join("replaced"), "1").unwrap();
+        assert_eq!(host.confirm(OTHER_ID), Ok(()));
+    }
+
+    // Without a confirmation in time the previous binary and its record come back.
+    #[test]
+    fn a_self_update_without_confirmation_rolls_back() {
+        let signer = minisign::tests::Signer::new(1);
+        let fake = installed(&signer);
+        let before = fs::read_to_string(fake.host.state.join("agent.minisig")).unwrap();
+        fake.host.clone().start(&self_update("1.1.0")).unwrap();
+        let state = fake.wait(ID);
+        let result = state.result.unwrap();
+        assert_eq!(result.exit_code, 1);
+        assert!(String::from_utf8_lossy(&result.output).contains("rolled back"));
+        assert_eq!(fake.agent(), b"agent 1.0.0");
+        assert_eq!(
+            fs::read_to_string(fake.host.state.join("agent.minisig")).unwrap(),
+            before
+        );
+        assert_eq!(
+            fake.calls()
+                .matches("systemctl restart sermon-agent")
+                .count(),
+            2
+        );
+    }
+
+    // Only a newer version of this architecture, signed with the release key, from regular files
+    // of the agent's staging directory; nothing is started otherwise.
+    #[test]
+    #[expect(clippy::too_many_lines, reason = "one case per line of the table")]
+    fn a_self_update_refuses_what_is_not_a_newer_signed_agent() {
+        let signer = minisign::tests::Signer::new(1);
+        let other = minisign::tests::Signer::new(2);
+        let file = format!("sermon-agent-linux-{}", arch());
+        let new = b"agent 1.1.0";
+        let cases: Vec<(&str, Change, &str)> = vec![
+            (
+                "another key",
+                Box::new(|f| f.stage(new, &other.sign(new, &file, "1.1.0"))),
+                "another key",
+            ),
+            (
+                "another file",
+                Box::new(|f| f.stage(new, &signer.sign(new, "sermon-helper-linux-amd64", "1.1.0"))),
+                "not sermon-agent",
+            ),
+            (
+                "another version",
+                Box::new(|f| f.stage(new, &signer.sign(new, &file, "1.2.0"))),
+                "1.2.0, not",
+            ),
+            (
+                "changed binary",
+                Box::new(|f| f.stage(b"agent 1.1.1", &signer.sign(new, &file, "1.1.0"))),
+                "does not match",
+            ),
+            (
+                "no record",
+                Box::new(|f| fs::remove_file(f.host.state.join("agent.minisig")).unwrap()),
+                "run install.sh",
+            ),
+            (
+                "forged record",
+                Box::new(|f| {
+                    fs::write(
+                        f.host.state.join("agent.minisig"),
+                        other.sign(b"agent 1.0.0", &file, "0.0.1"),
+                    )
+                    .unwrap();
+                }),
+                "run install.sh",
+            ),
+            (
+                "record of another file",
+                Box::new(|f| {
+                    fs::write(
+                        f.host.state.join("agent.minisig"),
+                        signer.sign(b"agent 1.0.0", "sermon-helper-linux-amd64", "0.0.1"),
+                    )
+                    .unwrap();
+                }),
+                "run install.sh",
+            ),
+            (
+                "not staged",
+                Box::new(|f| {
+                    fs::remove_dir_all(f.host.root.join("var/lib/sermon-agent/self-update"))
+                        .unwrap();
+                }),
+                "cannot read",
+            ),
+            (
+                "linked file",
+                Box::new(|f| {
+                    let staged = f
+                        .host
+                        .root
+                        .join("var/lib/sermon-agent/self-update/sermon-agent");
+                    fs::remove_file(&staged).unwrap();
+                    std::os::unix::fs::symlink(f.host.root.join(AGENT), &staged).unwrap();
+                }),
+                "cannot read",
+            ),
+            (
+                "linked directory",
+                Box::new(|f| {
+                    let lib = f.host.root.join("var/lib");
+                    fs::rename(lib.join("sermon-agent"), lib.join("elsewhere")).unwrap();
+                    std::os::unix::fs::symlink(lib.join("elsewhere"), lib.join("sermon-agent"))
+                        .unwrap();
+                }),
+                "cannot read",
+            ),
+            (
+                "a directory",
+                Box::new(|f| {
+                    let staged = f
+                        .host
+                        .root
+                        .join("var/lib/sermon-agent/self-update/sermon-agent");
+                    fs::remove_file(&staged).unwrap();
+                    fs::create_dir(&staged).unwrap();
+                }),
+                "no regular file",
+            ),
+        ];
+        for (name, change, why) in cases {
+            let fake = installed(&signer);
+            change(&fake);
+            match fake.host.clone().start(&self_update("1.1.0")) {
+                Err(Failure::Refused(r)) => assert!(r.contains(why), "{name}: {r}"),
+                other => panic!("{name}: {other:?}"),
+            }
+            assert!(!fake.host.run_dir(ID).exists(), "{name}");
+            assert_eq!(fake.agent(), b"agent 1.0.0", "{name}");
+        }
+        for version in ["1.0.0", "0.9.0", "1.0.0-rc.1"] {
+            let fake = installed(&signer);
+            fake.stage(new, &signer.sign(new, &file, version));
+            let r = fake.host.clone().start(&self_update(version));
+            assert!(
+                matches!(&r, Err(Failure::Refused(why)) if why.contains("not newer")),
+                "{version}: {r:?}"
+            );
+        }
+        let fake = installed(&signer);
+        fake.stage(&vec![0; usize::try_from(MAX_BINARY).unwrap() + 1], "");
+        assert!(
+            matches!(fake.host.clone().start(&self_update("1.1.0")), Err(Failure::Refused(r)) if r.contains("larger"))
+        );
+        // A package installation, a helper without a key.
+        let fake = installed(&signer);
+        fs::remove_file(fake.host.root.join(AGENT)).unwrap();
+        assert!(matches!(
+            fake.host.clone().start(&self_update("1.1.0")),
+            Err(Failure::Unsupported(_))
+        ));
+        let mut fake = installed(&signer);
+        fake.host.keys.clear();
+        assert!(matches!(
+            fake.host.clone().start(&self_update("1.1.0")),
+            Err(Failure::Unsupported(_))
+        ));
     }
 }

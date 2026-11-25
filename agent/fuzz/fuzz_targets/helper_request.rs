@@ -32,13 +32,21 @@ impl Executor for Checker {
                     valid_run_id(id) && valid_reason(reason) && self.config.allow_remote_reboot
                 );
             }
-            Run::SelfUpdate { id } => assert!(valid_run_id(id) && self.config.allow_self_update),
+            Run::SelfUpdate { id, version } => assert!(
+                valid_run_id(id)
+                    && sermon_helper::minisign::valid_version(version)
+                    && self.config.allow_self_update
+            ),
         }
         Ok(())
     }
     fn result(&self, id: &str) -> RunState {
         assert!(valid_run_id(id));
         RunState::default()
+    }
+    fn confirm(&mut self, id: &str) -> Result<(), Failure> {
+        assert!(valid_run_id(id));
+        Ok(())
     }
 }
 

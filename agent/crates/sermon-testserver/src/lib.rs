@@ -499,6 +499,8 @@ struct AgentApiState {
     cut_after: std::collections::VecDeque<Option<usize>>,
     current: Option<tokio::sync::mpsc::Sender<Result<SessionResponse, Status>>>,
     end_after_rotation: bool,
+    /// Releases for `FetchAgentRelease`: version → binary, signature and announced size (ADR 0036).
+    releases: std::collections::HashMap<String, (Vec<u8>, String, u64)>,
 }
 
 /// `AgentService` for transport tests: records everything, acknowledges and rotates like the real
@@ -515,6 +517,35 @@ use sermon_transport::proto::agent::v1::{
 };
 
 impl FakeAgentApi {
+    /// Offers `version` for the self-update.
+    ///
+    /// # Panics
+    ///
+    /// If the state lock is poisoned.
+    pub fn add_release(&self, version: &str, binary: Vec<u8>, signature: &str) {
+        let size = u64::try_from(binary.len()).unwrap_or(u64::MAX);
+        self.add_release_announcing(version, binary, signature, size);
+    }
+
+    /// Offers `version` with a header that announces `size` bytes, whatever follows.
+    ///
+    /// # Panics
+    ///
+    /// If the state lock is poisoned.
+    pub fn add_release_announcing(
+        &self,
+        version: &str,
+        binary: Vec<u8>,
+        signature: &str,
+        size: u64,
+    ) {
+        self.state
+            .lock()
+            .unwrap()
+            .releases
+            .insert(version.to_owned(), (binary, signature.to_owned(), size));
+    }
+
     /// A fake whose trust bundle is the root of `pki` and that signs rotations with it.
     #[must_use]
     pub fn new(pki: Arc<TestPki>) -> Self {
@@ -530,6 +561,7 @@ impl FakeAgentApi {
                 cut_after: std::collections::VecDeque::new(),
                 current: None,
                 end_after_rotation: false,
+                releases: std::collections::HashMap::new(),
             })),
         }
     }
@@ -742,6 +774,43 @@ impl FakeAgentApi {
 #[tonic::async_trait]
 impl proto::agent_service_server::AgentService for FakeAgentApi {
     type SessionStream = tokio_stream::wrappers::ReceiverStream<Result<SessionResponse, Status>>;
+    type FetchAgentReleaseStream = tokio_stream::Iter<
+        std::vec::IntoIter<
+            Result<sermon_transport::proto::agent::v1::FetchAgentReleaseResponse, Status>,
+        >,
+    >;
+
+    async fn fetch_agent_release(
+        &self,
+        request: Request<sermon_transport::proto::agent::v1::FetchAgentReleaseRequest>,
+    ) -> Result<Response<Self::FetchAgentReleaseStream>, Status> {
+        use sermon_transport::proto::agent::v1::fetch_agent_release_response::Part;
+        let Some((binary, signature, size)) = self
+            .state
+            .lock()
+            .unwrap()
+            .releases
+            .get(&request.get_ref().version)
+            .cloned()
+        else {
+            return Err(Status::not_found("no such release"));
+        };
+        let mut parts = vec![Ok(
+            sermon_transport::proto::agent::v1::FetchAgentReleaseResponse {
+                part: Some(Part::Header(
+                    sermon_transport::proto::agent::v1::AgentReleaseHeader { size, signature },
+                )),
+            },
+        )];
+        parts.extend(binary.chunks(256 << 10).map(|c| {
+            Ok(
+                sermon_transport::proto::agent::v1::FetchAgentReleaseResponse {
+                    part: Some(Part::Chunk(c.to_vec())),
+                },
+            )
+        }));
+        Ok(Response::new(tokio_stream::iter(parts)))
+    }
 
     async fn session(
         &self,

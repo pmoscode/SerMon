@@ -23,6 +23,7 @@ fn hello() -> SessionRequest {
                 security_source: SecuritySource::FileUnverified.into(),
             }),
             config_version: 0,
+            install_method: 0,
         })),
     }
 }

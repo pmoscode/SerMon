@@ -27,6 +27,24 @@ pub mod agent_service_server {
                 tonic::Streaming<::sermon_transport::proto::agent::v1::SessionRequest>,
             >,
         ) -> std::result::Result<tonic::Response<Self::SessionStream>, tonic::Status>;
+        /// Server streaming response type for the FetchAgentRelease method.
+        type FetchAgentReleaseStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<
+                    ::sermon_transport::proto::agent::v1::FetchAgentReleaseResponse,
+                    tonic::Status,
+                >,
+            >
+            + std::marker::Send
+            + 'static;
+        async fn fetch_agent_release(
+            &self,
+            request: tonic::Request<
+                ::sermon_transport::proto::agent::v1::FetchAgentReleaseRequest,
+            >,
+        ) -> std::result::Result<
+            tonic::Response<Self::FetchAgentReleaseStream>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
     pub struct AgentServiceServer<T> {
@@ -151,6 +169,56 @@ pub mod agent_service_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sermon.agent.v1.AgentService/FetchAgentRelease" => {
+                    #[allow(non_camel_case_types)]
+                    struct FetchAgentReleaseSvc<T: AgentService>(pub Arc<T>);
+                    impl<
+                        T: AgentService,
+                    > tonic::server::ServerStreamingService<
+                        ::sermon_transport::proto::agent::v1::FetchAgentReleaseRequest,
+                    > for FetchAgentReleaseSvc<T> {
+                        type Response = ::sermon_transport::proto::agent::v1::FetchAgentReleaseResponse;
+                        type ResponseStream = T::FetchAgentReleaseStream;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::ResponseStream>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                ::sermon_transport::proto::agent::v1::FetchAgentReleaseRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AgentService>::fetch_agent_release(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = FetchAgentReleaseSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)

@@ -133,7 +133,7 @@ struct Harness {
     outbox: Outbox,
     shutdown: CancellationToken,
     task: tokio::task::JoinHandle<()>,
-    _server: RunningServer,
+    server: RunningServer,
     _dir: tempfile::TempDir,
 }
 
@@ -221,7 +221,7 @@ impl Setup {
             outbox,
             shutdown,
             task,
-            _server: server,
+            server,
             _dir: dir,
         }
     }
@@ -674,12 +674,99 @@ async fn passes_a_refresh_of_the_update_info_on() {
 
 /// A sink that records the commands of the root helper.
 #[derive(Debug, Default)]
-struct FakeCommands(Mutex<Vec<sermon_transport::session::HelperCommand>>);
+struct FakeCommands(
+    Mutex<Vec<sermon_transport::session::HelperCommand>>,
+    std::sync::atomic::AtomicUsize,
+);
 
 impl sermon_transport::session::CommandSink for FakeCommands {
     fn command(&self, command: sermon_transport::session::HelperCommand) {
         self.0.lock().unwrap().push(command);
     }
+    fn connected(&self) {
+        self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+// ADR 0036: the Hello names how the agent was installed, the command sink hears once per session
+// that it stands, and a release comes over the agent API in chunks with its signature.
+#[tokio::test(flavor = "multi_thread")]
+async fn fetches_a_release_and_says_when_a_session_stands() {
+    use sermon_transport::proto::agent::v1::InstallMethod;
+    use sermon_transport::release::ReleaseFetcher;
+    let sink = Arc::new(FakeCommands::default());
+    let mut setup = Setup::new();
+    setup.commands = Some(sink.clone());
+    setup.tweak = |c| c.install_method = InstallMethod::Script;
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    let hello = harness.api.sessions()[0].hello.clone().unwrap();
+    assert_eq!(hello.install_method(), InstallMethod::Script);
+    let deadline = std::time::Instant::now() + WAIT;
+    while sink.1.load(std::sync::atomic::Ordering::SeqCst) == 0
+        && std::time::Instant::now() < deadline
+    {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(sink.1.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let binary: Vec<u8> = (0..600_000u32)
+        .map(|i| u8::try_from(i % 251).unwrap())
+        .collect();
+    harness
+        .api
+        .add_release("1.3.0", binary.clone(), "untrusted comment: x\nsig\n");
+    let fetcher = ReleaseFetcher::new(
+        harness.server.https_url().parse().unwrap(),
+        harness.identity.clone(),
+    );
+    let release = fetcher.fetch("1.3.0").await.unwrap();
+    assert_eq!(release.binary, binary);
+    assert_eq!(release.signature, "untrusted comment: x\nsig\n");
+    assert!(
+        fetcher
+            .fetch("9.9.9")
+            .await
+            .unwrap_err()
+            .contains("refused")
+    );
+    // A server that sends more or fewer bytes than it announced.
+    harness
+        .api
+        .add_release_announcing("1.4.0", binary.clone(), "s", 1000);
+    assert!(
+        fetcher
+            .fetch("1.4.0")
+            .await
+            .unwrap_err()
+            .contains("more bytes")
+    );
+    harness
+        .api
+        .add_release_announcing("1.5.0", binary.clone(), "s", 700_000);
+    assert!(
+        fetcher
+            .fetch("1.5.0")
+            .await
+            .unwrap_err()
+            .contains("fewer bytes")
+    );
+    // A trust bundle again in the same session: still one session that stands.
+    assert!(
+        harness
+            .api
+            .send(Payload::TrustBundle(
+                sermon_transport::proto::agent::v1::TrustBundle { roots: Vec::new() }
+            ))
+            .await
+    );
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(sink.1.load(std::sync::atomic::Ordering::SeqCst), 1);
+    harness.stop().await;
 }
 
 // M4-12: RunUpdate, RebootNode and SelfUpdate go to the command sink, the session goes on.

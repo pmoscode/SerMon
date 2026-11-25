@@ -359,6 +359,15 @@ without_minisign() {
 	[ "$(grep -c '^allow_remote_updates' "$conf")" = 1 ]
 }
 
+@test "keeps the agent's signature for the helper's self-update, root only" {
+	keep_agent_signature "$BIN.minisig"
+	kept="$SERMON_INSTALL_ROOT/var/lib/sermon-helper/agent.minisig"
+	cmp "$BIN.minisig" "$kept"
+	[ "$(stat -c %a "$kept")" = 600 ]
+	[ "$(stat -c %a "$SERMON_INSTALL_ROOT/var/lib/sermon-helper")" = 700 ]
+	grep -q 'version:1.2.3' "$kept"
+}
+
 @test "takes the helper's flags and --no-helper" {
 	parse_args --server https://sermon.example.com --token-file <(echo sme_x) 2>/dev/null
 	[ -z "$NO_HELPER" ] && [ -z "$HELPER_FLAGS" ]

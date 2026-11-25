@@ -127,8 +127,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     // Update information (M4-07): the root helper lists, RefreshUpdateInfo asks for it.
     let update_refresh = Arc::new(tokio::sync::Notify::new());
     // The server's commands for the root helper (M4-12).
-    let (inbox, commands) = runs::Inbox::new();
-    let book = runs::Book::open(&layout.runs_file());
+    let (inbox, ports) = run_ports(config, &layout, &clock);
     let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
         .with_update_refresh(update_refresh.clone())
         .with_commands(Arc::new(inbox));
@@ -186,7 +185,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             shutdown.clone(),
         ));
         let reports = spawn_updates(config, &outbox, &clock, update_refresh, &shutdown);
-        let runner = spawn_runs(book, commands, &outbox, &clock, &agent_config, &shutdown);
+        let runner = spawn_runs(ports, &outbox, &clock, &agent_config, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         reports.await.context("update task failed")?;
@@ -212,8 +211,11 @@ fn transport(
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
 ) -> Transport {
+    let mut transport_config =
+        TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION"));
+    transport_config.install_method = install_method();
     Transport::new(
-        TransportConfig::new(config.agent_url.uri().clone(), env!("CARGO_PKG_VERSION")),
+        transport_config,
         Arc::new(FileIdentity::new(layout)),
         facts,
         outbox.clone(),
@@ -226,6 +228,48 @@ fn transport(
         agent_config.subscribe(),
         clock.clone(),
     )))
+}
+
+/// The root helper of the runs, with the release fetcher of the self-update, and the run book of
+/// this process: a self-update's new agent confirms the run the old one took (ADR 0036).
+fn run_ports(
+    config: &AgentConfig,
+    layout: &StateLayout,
+    clock: &Arc<dyn Clock>,
+) -> (runs::Inbox, RunPorts) {
+    let started = clock
+        .now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let instance = format!("{}x{}", std::process::id(), started.as_nanos());
+    let helper = runs::SocketHelper {
+        socket: helper::SOCKET.into(),
+        fetcher: Some(sermon_transport::release::ReleaseFetcher::new(
+            config.agent_url.uri().clone(),
+            Arc::new(FileIdentity::new(layout.clone())),
+        )),
+        staging: layout.root().join("self-update"),
+    };
+    let (inbox, commands) = runs::Inbox::new();
+    let book = runs::Book::open(&layout.runs_file(), &instance);
+    (inbox, (helper, book, commands))
+}
+
+/// What the runner works with.
+type RunPorts = (runs::SocketHelper, runs::Book, runs::Commands);
+
+/// How this agent was installed, from the path of its binary (ADR 0036).
+fn install_method() -> sermon_transport::proto::agent::v1::InstallMethod {
+    use sermon_transport::proto::agent::v1::InstallMethod;
+    match std::env::current_exe()
+        .ok()
+        .as_deref()
+        .and_then(std::path::Path::to_str)
+    {
+        Some("/usr/local/bin/sermon-agent") => InstallMethod::Script,
+        Some("/usr/bin/sermon-agent") => InstallMethod::Package,
+        _ => InstallMethod::Unspecified,
+    }
 }
 
 /// Starts the update reports (M4-07): listed by the root helper, buffered like the metrics.
@@ -269,8 +313,7 @@ fn facts_source(config: &AgentConfig) -> FactsSource {
 /// Starts the runs of the root helper (M4-12): their results are buffered like the metrics, their
 /// output redacted like the logs.
 fn spawn_runs(
-    book: runs::Book,
-    commands: tokio::sync::mpsc::Receiver<sermon_transport::session::HelperCommand>,
+    (helper, book, commands): RunPorts,
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
@@ -283,7 +326,7 @@ fn spawn_runs(
         agent_config.clone(),
     );
     tokio::spawn(runs::run(
-        Arc::new(runs::SocketHelper(helper::SOCKET.into())),
+        Arc::new(helper),
         book,
         commands,
         move |result| {

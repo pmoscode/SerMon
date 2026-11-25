@@ -1323,6 +1323,7 @@ name = "sermon-helper"
 version = "0.0.0"
 dependencies = [
  "prost",
+ "ring",
  "rustix",
  "serde",
  "sermon-helper-proto",

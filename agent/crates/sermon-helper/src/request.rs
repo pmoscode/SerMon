@@ -18,8 +18,8 @@ pub enum Run {
     Updates { id: String, scope: Scope },
     /// Reboot the host.
     Reboot { id: String, reason: String },
-    /// Replace the agent's binary (ADR 0036).
-    SelfUpdate { id: String },
+    /// Replace the agent's binary with `version` (ADR 0036).
+    SelfUpdate { id: String, version: String },
 }
 
 /// Why the work could not be done.
@@ -31,6 +31,8 @@ pub enum Failure {
     Later(String),
     /// Not on this host (distribution, version of the helper).
     Unsupported(String),
+    /// Not allowed: the request doesn't hold (signature, version, state of the run).
+    Refused(String),
     /// It failed.
     Failed(String),
 }
@@ -53,6 +55,12 @@ pub trait Executor {
     fn start(&mut self, run: &Run) -> Result<(), Failure>;
     /// The state of a run.
     fn result(&self, id: &str) -> RunState;
+    /// The new agent of the self-update `id` connected (ADR 0036).
+    ///
+    /// # Errors
+    ///
+    /// [`Failure`] if no self-update of this run waits for it.
+    fn confirm(&mut self, id: &str) -> Result<(), Failure>;
 }
 
 /// One line for the journal: what was asked and how it ended.
@@ -102,6 +110,11 @@ pub fn handle(
             s.run_id.as_str(),
             start(self_update(s), config, exec),
         ),
+        Some(Operation::ConfirmSelfUpdate(c)) => (
+            "confirm_self_update",
+            c.run_id.as_str(),
+            run_id(&c.run_id).and_then(|id| exec.confirm(&id).map(|()| None).map_err(answer)),
+        ),
         Some(Operation::RunResult(r)) => (
             "run_result",
             r.run_id.as_str(),
@@ -150,6 +163,7 @@ fn answer(f: Failure) -> (Status, String) {
         Failure::Busy => (Status::Busy, "another run is in progress".to_owned()),
         Failure::Later(r) => (Status::Busy, r),
         Failure::Unsupported(r) => (Status::Unsupported, r),
+        Failure::Refused(r) => (Status::Refused, r),
         Failure::Failed(r) => (Status::Failed, r),
     }
 }
@@ -193,8 +207,15 @@ fn reboot(r: &Reboot) -> Result<Run, (Status, String)> {
 }
 
 fn self_update(s: &SelfUpdate) -> Result<Run, (Status, String)> {
+    let id = run_id(&s.run_id)?;
+    if !crate::minisign::valid_version(&s.version) {
+        return Err(refused(
+            "version must be a semantic version of at most 64 bytes",
+        ));
+    }
     Ok(Run::SelfUpdate {
-        id: run_id(&s.run_id)?,
+        id,
+        version: s.version.clone(),
     })
 }
 
@@ -230,7 +251,7 @@ pub fn valid_reason(reason: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use sermon_helper_proto::v1::{GetStatus, ListUpdates, RunPhase, RunResult};
+    use sermon_helper_proto::v1::{ConfirmSelfUpdate, GetStatus, ListUpdates, RunPhase, RunResult};
 
     use super::*;
 
@@ -241,6 +262,7 @@ mod tests {
     struct Recorder {
         started: Vec<Run>,
         busy: bool,
+        confirmed: Vec<String>,
     }
 
     impl Executor for Recorder {
@@ -270,6 +292,13 @@ mod tests {
                 phase: RunPhase::Running.into(),
                 ..RunState::default()
             }
+        }
+        fn confirm(&mut self, id: &str) -> Result<(), Failure> {
+            if self.busy {
+                return Err(Failure::Refused("no self-update waits".into()));
+            }
+            self.confirmed.push(id.to_owned());
+            Ok(())
         }
     }
 
@@ -315,6 +344,7 @@ mod tests {
             reboot_op("kernel 6.1.0-28"),
             Operation::SelfUpdate(SelfUpdate {
                 run_id: ID.to_owned(),
+                version: "1.2.3-rc.1".to_owned(),
             }),
         ] {
             let (r, audit) = ask(op, config, &mut exec);
@@ -337,7 +367,10 @@ mod tests {
                     id: ID.into(),
                     reason: "kernel 6.1.0-28".into()
                 },
-                Run::SelfUpdate { id: ID.into() },
+                Run::SelfUpdate {
+                    id: ID.into(),
+                    version: "1.2.3-rc.1".into()
+                },
             ]
         );
     }
@@ -357,6 +390,7 @@ mod tests {
             (
                 Operation::SelfUpdate(SelfUpdate {
                     run_id: ID.to_owned(),
+                    version: "1.2.3".to_owned(),
                 }),
                 "allow_self_update",
             ),
@@ -423,6 +457,17 @@ mod tests {
             Operation::RunResult(RunResult {
                 run_id: "x; reboot".to_owned(),
             }),
+            Operation::SelfUpdate(SelfUpdate {
+                run_id: ID.to_owned(),
+                version: "../../bin/sh".to_owned(),
+            }),
+            Operation::SelfUpdate(SelfUpdate {
+                run_id: ID.to_owned(),
+                version: "e2e".to_owned(),
+            }),
+            Operation::ConfirmSelfUpdate(ConfirmSelfUpdate {
+                run_id: "../x".to_owned(),
+            }),
         ] {
             let (r, audit) = ask(op.clone(), config, &mut exec);
             assert_eq!(r.status(), Status::Refused, "{op:?}");
@@ -483,10 +528,25 @@ mod tests {
             matches!(&r.result, Some(Answer::Run(s)) if s.run_id == ID && s.phase() == RunPhase::Running)
         );
         assert_eq!(audit.run_id, ID);
+        let confirm = || {
+            Operation::ConfirmSelfUpdate(ConfirmSelfUpdate {
+                run_id: ID.to_owned(),
+            })
+        };
+        let (r, audit) = ask(confirm(), config, &mut exec);
+        assert_eq!(
+            (r.status(), audit.operation),
+            (Status::Ok, "confirm_self_update")
+        );
+        assert_eq!(exec.confirmed, [ID]);
         exec.busy = true;
         assert_eq!(
             ask(apply(ID, Scope::All), config, &mut exec).0.status(),
             Status::Busy
+        );
+        assert_eq!(
+            ask(confirm(), config, &mut exec).0.status(),
+            Status::Refused
         );
     }
 }

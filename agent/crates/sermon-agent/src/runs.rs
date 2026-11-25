@@ -16,12 +16,12 @@ use std::time::{Duration, SystemTime};
 
 use prost_types::Timestamp;
 use sermon_helper_proto::v1::{
-    ApplyUpdates, HelperRequest, Reboot, RunPhase, RunResult, Scope, SelfUpdate, Status,
-    helper_request::Operation, helper_response::Result as Answer,
+    ApplyUpdates, ConfirmSelfUpdate, HelperRequest, Reboot, RunPhase, RunResult, Scope, SelfUpdate,
+    Status, helper_request::Operation, helper_response::Result as Answer,
 };
 use sermon_transport::proto::agent::v1::{CommandPhase, CommandResult, UpdateScope};
 use sermon_transport::session::{CommandSink, HelperCommand};
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
@@ -88,11 +88,23 @@ pub enum Poll {
 pub trait Helper: Send + Sync + 'static {
     fn start(&self, command: &HelperCommand) -> impl Future<Output = Start> + Send;
     fn result(&self, run_id: &str) -> impl Future<Output = Poll> + Send;
+    /// Fetches the release `version` and puts it where the helper takes it (ADR 0036).
+    fn stage(&self, _version: &str) -> impl Future<Output = Result<(), String>> + Send {
+        std::future::ready(Ok(()))
+    }
+    /// Tells the helper that this new agent connected after its self-update `run_id`.
+    fn confirm(&self, _run_id: &str) -> impl Future<Output = Result<(), String>> + Send {
+        std::future::ready(Ok(()))
+    }
 }
 
-/// The helper at its socket.
+/// The helper at its socket; releases for a self-update come through `fetcher` into `staging`.
 #[derive(Debug, Clone)]
-pub struct SocketHelper(pub PathBuf);
+pub struct SocketHelper {
+    pub socket: PathBuf,
+    pub fetcher: Option<sermon_transport::release::ReleaseFetcher>,
+    pub staging: PathBuf,
+}
 
 fn request(command: &HelperCommand) -> HelperRequest {
     let operation = match command {
@@ -111,6 +123,7 @@ fn request(command: &HelperCommand) -> HelperRequest {
         }),
         HelperCommand::SelfUpdate(s) => Operation::SelfUpdate(SelfUpdate {
             run_id: s.run_id.clone(),
+            version: s.version.clone(),
         }),
     };
     HelperRequest {
@@ -120,7 +133,7 @@ fn request(command: &HelperCommand) -> HelperRequest {
 
 impl SocketHelper {
     fn start_blocking(&self, command: &HelperCommand) -> Start {
-        match helper::call(&self.0, &request(command), TIMEOUT) {
+        match helper::call(&self.socket, &request(command), TIMEOUT) {
             Err(e @ (HelperError::Unreachable(_) | HelperError::NoAnswer)) => {
                 Start::Unsupported(e.to_string())
             }
@@ -148,7 +161,7 @@ impl SocketHelper {
                 run_id: run_id.to_owned(),
             })),
         };
-        match helper::call(&self.0, &request, TIMEOUT) {
+        match helper::call(&self.socket, &request, TIMEOUT) {
             Err(e) => Poll::Unreachable(e.to_string()),
             Ok(r) if r.status() != Status::Ok => Poll::Unreachable(format!(
                 "the root helper answered {}: {}",
@@ -190,22 +203,102 @@ impl Helper for SocketHelper {
             .await
             .unwrap_or_else(|e| Poll::Unreachable(e.to_string()))
     }
+
+    async fn stage(&self, version: &str) -> Result<(), String> {
+        let fetcher = self
+            .fetcher
+            .as_ref()
+            .ok_or("no server to fetch the release from")?;
+        let release = fetcher.fetch(version).await?;
+        let dir = self.staging.clone();
+        tokio::task::spawn_blocking(move || stage_files(&dir, &release))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| format!("cannot stage the release: {e}"))
+    }
+
+    async fn confirm(&self, run_id: &str) -> Result<(), String> {
+        let request = HelperRequest {
+            operation: Some(Operation::ConfirmSelfUpdate(ConfirmSelfUpdate {
+                run_id: run_id.to_owned(),
+            })),
+        };
+        let socket = self.socket.clone();
+        let answer = tokio::task::spawn_blocking(move || helper::call(&socket, &request, TIMEOUT))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+        if answer.status() == Status::Ok {
+            Ok(())
+        } else {
+            Err(format!(
+                "the root helper answered {}: {}",
+                answer.status().as_str_name(),
+                answer.reason
+            ))
+        }
+    }
 }
 
-/// The commands from the session, into the runner (never blocks the session).
+/// Writes the release where the helper reads it: the state directory's `self-update/`, only for
+/// the agent's user (the helper copies and checks it as root).
+fn stage_files(dir: &Path, release: &sermon_transport::release::Release) -> std::io::Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)?;
+    for (name, bytes) in [
+        ("sermon-agent", release.binary.as_slice()),
+        ("sermon-agent.minisig", release.signature.as_bytes()),
+    ] {
+        let tmp = dir.join(format!(".{name}.tmp"));
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)?;
+        std::io::Write::write_all(&mut file, bytes)?;
+        file.sync_all()?;
+        std::fs::rename(&tmp, dir.join(name))?;
+    }
+    Ok(())
+}
+
+/// The commands from the session, into the runner (never blocks the session), and the news
+/// that a session stands.
 #[derive(Debug, Clone)]
-pub struct Inbox(mpsc::Sender<HelperCommand>);
+pub struct Inbox(mpsc::Sender<HelperCommand>, Arc<Notify>);
+
+/// The receiving end of an [`Inbox`], for [`run`].
+#[derive(Debug)]
+pub struct Commands {
+    commands: mpsc::Receiver<HelperCommand>,
+    connected: Arc<Notify>,
+}
 
 impl Inbox {
     /// An inbox and its receiving end for [`run`].
     #[must_use]
-    pub fn new() -> (Self, mpsc::Receiver<HelperCommand>) {
+    pub fn new() -> (Self, Commands) {
         let (tx, rx) = mpsc::channel(64);
-        (Self(tx), rx)
+        let connected = Arc::new(Notify::new());
+        (
+            Self(tx, connected.clone()),
+            Commands {
+                commands: rx,
+                connected,
+            },
+        )
     }
 }
 
 impl CommandSink for Inbox {
+    fn connected(&self) {
+        self.1.notify_one();
+    }
+
     fn command(&self, command: HelperCommand) {
         if self.0.try_send(command).is_err() {
             tracing::warn!(
@@ -222,11 +315,16 @@ enum Entry {
     Ended,
 }
 
-/// The runs taken, with the time of their last change, persisted as lines `run_id state unix`.
+/// The runs taken, with the time of their last change, persisted as lines `run_id state unix`;
+/// a self-update adds `self-update:<instance>`, the agent process that took it (ADR 0036).
 #[derive(Debug)]
 pub struct Book {
     path: PathBuf,
     runs: BTreeMap<String, (Entry, u64)>,
+    /// The self-updates and the instance that took each.
+    self_updates: BTreeMap<String, String>,
+    /// This agent process.
+    instance: String,
 }
 
 fn unix(t: SystemTime) -> u64 {
@@ -238,7 +336,8 @@ impl Book {
     /// Reads the book at `path`; a missing or broken file is an empty book (lines that don't
     /// parse are dropped).
     #[must_use]
-    pub fn open(path: &Path) -> Self {
+    pub fn open(path: &Path, instance: &str) -> Self {
+        let mut self_updates = BTreeMap::new();
         let runs = std::fs::read_to_string(path)
             .unwrap_or_default()
             .lines()
@@ -250,13 +349,36 @@ impl Book {
                     "ended" => Entry::Ended,
                     _ => return None,
                 };
-                uuid_like(id).then(|| (id.to_owned(), (entry, at)))
+                if !uuid_like(id) {
+                    return None;
+                }
+                if let Some(owner) = parts.next().and_then(|p| p.strip_prefix("self-update:")) {
+                    self_updates.insert(id.to_owned(), owner.to_owned());
+                }
+                Some((id.to_owned(), (entry, at)))
             })
             .collect();
         Self {
             path: path.to_owned(),
             runs,
+            self_updates,
+            instance: instance
+                .chars()
+                .filter(char::is_ascii_alphanumeric)
+                .collect(),
         }
+    }
+
+    /// The self-updates still going that another agent process took: this one is the new agent.
+    fn to_confirm(&self) -> Vec<String> {
+        self.running()
+            .into_iter()
+            .filter(|id| {
+                self.self_updates
+                    .get(id)
+                    .is_some_and(|o| *o != self.instance)
+            })
+            .collect()
     }
 
     fn running(&self) -> Vec<String> {
@@ -271,12 +393,20 @@ impl Book {
         self.runs.contains_key(id)
     }
 
+    /// Forgets a run that was taken too early (a busy helper starts it later).
+    fn forget(&mut self, id: &str) {
+        self.runs.remove(id);
+        self.self_updates.remove(id);
+        self.save();
+    }
+
     /// Records the run and writes the book (atomically), forgetting old ended runs.
     fn set(&mut self, id: &str, entry: Entry, now: SystemTime) {
         self.runs.insert(id.to_owned(), (entry, unix(now)));
         let horizon = unix(now).saturating_sub(KEEP.as_secs());
         self.runs
             .retain(|_, (e, at)| *e == Entry::Running || *at >= horizon);
+        self.self_updates.retain(|id, _| self.runs.contains_key(id));
         while self.runs.len() > MAX_RUNS {
             let oldest = self
                 .runs
@@ -285,10 +415,18 @@ impl Book {
                 .min_by_key(|(_, (_, at))| *at)
                 .map(|(id, _)| id.clone());
             match oldest {
-                Some(id) => self.runs.remove(&id),
+                Some(id) => {
+                    self.runs.remove(&id);
+                    self.self_updates.remove(&id);
+                }
                 None => break,
-            };
+            }
         }
+        self.save();
+    }
+
+    /// Writes the book atomically.
+    fn save(&self) {
         let mut text = String::new();
         for (id, (e, at)) in &self.runs {
             let state = if *e == Entry::Running {
@@ -296,7 +434,11 @@ impl Book {
             } else {
                 "ended"
             };
-            let _ = writeln!(text, "{id} {state} {at}");
+            match self.self_updates.get(id) {
+                Some(owner) => writeln!(text, "{id} {state} {at} self-update:{owner}"),
+                None => writeln!(text, "{id} {state} {at}"),
+            }
+            .ok();
         }
         let tmp = self.path.with_extension("tmp");
         if let Err(error) =
@@ -369,6 +511,8 @@ struct Waiting {
     command: HelperCommand,
     next: Instant,
     until: Instant,
+    /// The release of a self-update is staged already: a retry doesn't fetch it again.
+    staged: bool,
 }
 
 /// Runs the commands from `inbox` through `helper` until `shutdown`, the results into `sink`.
@@ -379,13 +523,17 @@ struct Waiting {
 pub async fn run<H: Helper>(
     helper: Arc<H>,
     mut book: Book,
-    mut inbox: mpsc::Receiver<HelperCommand>,
+    inbox: Commands,
     mut sink: impl FnMut(CommandResult) + Send,
     redact: impl Fn(&str) -> String + Send,
     now: impl Fn() -> SystemTime + Send,
     schedule: Schedule,
     shutdown: CancellationToken,
 ) {
+    let Commands {
+        commands: mut inbox,
+        connected,
+    } = inbox;
     let mut waiting: VecDeque<Waiting> = VecDeque::new();
     let mut poll = tokio::time::interval(schedule.poll);
     poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -393,6 +541,14 @@ pub async fn run<H: Helper>(
         let retry_at = waiting.iter().map(|w| w.next).min();
         tokio::select! {
             () = shutdown.cancelled() => return,
+            () = connected.notified() => {
+                for id in book.to_confirm() {
+                    match helper.confirm(&id).await {
+                        Ok(()) => tracing::info!(run_id = %id, "the new agent confirmed its self-update"),
+                        Err(why) => tracing::warn!(run_id = %id, "cannot confirm the self-update: {why}"),
+                    }
+                }
+            }
             command = inbox.recv() => {
                 let Some(command) = command else { return };
                 let id = run_id(&command).to_owned();
@@ -401,7 +557,8 @@ pub async fn run<H: Helper>(
                     continue;
                 }
                 let first = Instant::now();
-                start(&*helper, &mut book, &mut sink, &now, command, first + schedule.busy_for, &mut waiting, schedule).await;
+                let job = Waiting { command, next: first, until: first + schedule.busy_for, staged: false };
+                start(&*helper, &mut book, &mut sink, &now, job, &mut waiting, schedule).await;
             }
             () = async { tokio::time::sleep_until(retry_at.unwrap_or_else(Instant::now)).await }, if retry_at.is_some() => {
                 let due: Vec<Waiting> = {
@@ -411,7 +568,7 @@ pub async fn run<H: Helper>(
                     due
                 };
                 for w in due {
-                    start(&*helper, &mut book, &mut sink, &now, w.command, w.until, &mut waiting, schedule).await;
+                    start(&*helper, &mut book, &mut sink, &now, w, &mut waiting, schedule).await;
                 }
             }
             _ = poll.tick() => {
@@ -442,22 +599,38 @@ pub async fn run<H: Helper>(
     }
 }
 
-/// Starts a command; a busy helper puts it back on `waiting` until `until`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the runner's state, passed down once"
-)]
+/// Starts a command; a busy helper puts it back on `waiting` until its `until`.
 async fn start<H: Helper>(
     helper: &H,
     book: &mut Book,
     sink: &mut (impl FnMut(CommandResult) + Send),
     now: &(impl Fn() -> SystemTime + Send),
-    command: HelperCommand,
-    until: Instant,
+    job: Waiting,
     waiting: &mut VecDeque<Waiting>,
     schedule: Schedule,
 ) {
+    let Waiting {
+        command,
+        until,
+        staged,
+        ..
+    } = job;
     let id = run_id(&command).to_owned();
+    if let HelperCommand::SelfUpdate(s) = &command {
+        if !staged && let Err(why) = helper.stage(&s.version).await {
+            tracing::warn!(run_id = %id, "cannot fetch the release for the self-update: {why}");
+            sink(result(
+                &id,
+                CommandPhase::Failed,
+                &format!("cannot fetch the release: {why}"),
+            ));
+            book.set(&id, Entry::Ended, now());
+            return;
+        }
+        // Before the helper replaces this process: the new agent finds the run and confirms it.
+        book.self_updates.insert(id.clone(), book.instance.clone());
+        book.set(&id, Entry::Running, now());
+    }
     let (phase, reason) = match helper.start(&command).await {
         Start::Started => {
             book.set(&id, Entry::Running, now());
@@ -469,10 +642,12 @@ async fn start<H: Helper>(
         }
         Start::Busy(why) if Instant::now() + schedule.retry < until => {
             tracing::info!(run_id = %id, "the root helper is busy, starting the run later: {why}");
+            book.forget(&id);
             waiting.push_back(Waiting {
                 command,
                 next: Instant::now() + schedule.retry,
                 until,
+                staged: true,
             });
             return;
         }

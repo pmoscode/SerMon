@@ -4,7 +4,7 @@
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct HelperRequest {
     /// operation is what the agent asks for; none at all is refused.
-    #[prost(oneof="helper_request::Operation", tags="1, 2, 3, 4, 5, 6")]
+    #[prost(oneof="helper_request::Operation", tags="1, 2, 3, 4, 5, 6, 7")]
     pub operation: ::core::option::Option<helper_request::Operation>,
 }
 /// Nested message and enum types in `HelperRequest`.
@@ -30,6 +30,9 @@ pub mod helper_request {
         /// run_result asks for the state and result of a run.
         #[prost(message, tag="6")]
         RunResult(super::RunResult),
+        /// confirm_self_update says the new agent of a self-update connected to its server (ADR 0036).
+        #[prost(message, tag="7")]
+        ConfirmSelfUpdate(super::ConfirmSelfUpdate),
     }
 }
 /// GetStatus has no parameters.
@@ -65,10 +68,25 @@ pub struct Reboot {
     #[prost(string, tag="2")]
     pub reason: ::prost::alloc::string::String,
 }
-/// SelfUpdate replaces the agent's binary; its fields follow with ADR 0036 (M4-17).
+/// SelfUpdate replaces the agent's binary (ADR 0036). The agent has put the new binary and its
+/// minisign signature into /var/lib/sermon-agent/self-update/ (sermon-agent and
+/// sermon-agent.minisig); the helper copies both, checks the copy against the release key and
+/// installs it only if its trusted comment names this host's architecture and version, and version
+/// is newer than the installed one. The new agent confirms with ConfirmSelfUpdate; without a
+/// confirmation within 2 minutes the run restores the previous binary.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SelfUpdate {
     /// run_id names the run: a canonical, lowercase UUID chosen by the server.
+    #[prost(string, tag="1")]
+    pub run_id: ::prost::alloc::string::String,
+    /// version is the version to install, as in the signature's trusted comment (semantic version).
+    #[prost(string, tag="2")]
+    pub version: ::prost::alloc::string::String,
+}
+/// ConfirmSelfUpdate confirms a self-update run once the new agent's first session stands.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ConfirmSelfUpdate {
+    /// run_id names the self-update run.
     #[prost(string, tag="1")]
     pub run_id: ::prost::alloc::string::String,
 }

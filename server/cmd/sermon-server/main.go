@@ -304,9 +304,15 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return alerting.Maintenance(ctx, alertStore, time.Now, 6*time.Hour, logger)
 		})
 		if cfg.AgentAddr != "" {
+			// Signed agent releases for the self-update (ADR 0036).
+			releases, err := download.NewReleases(cfg.AgentDownloadsDir, releaseKey, version, logger)
+			if err != nil {
+				return fmt.Errorf("agent releases: %w", err)
+			}
+			servers = append(servers, releases.Run)
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger,
 				agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(agentConfigs), agentapi.WithLiveView(liveHub),
-				agentapi.WithCommands(commandStore, agentapi.CommandPoll))
+				agentapi.WithCommands(commandStore, agentapi.CommandPoll), agentapi.WithReleases(releases))
 			if err != nil {
 				return err
 			}

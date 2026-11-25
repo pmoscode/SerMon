@@ -13,6 +13,8 @@ workspace = true
 
 [dependencies]
 prost.workspace = true
+# Ed25519 of the release key for the self-update (ADR 0036), already used by the transport.
+ring.workspace = true
 rustix = { workspace = true, features = ["event", "net"] }
 serde.workspace = true
 sermon-helper-proto.workspace = true

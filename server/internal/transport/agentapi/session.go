@@ -22,11 +22,11 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
-	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
 )
@@ -642,22 +642,22 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 }
 
 // toReport converts a validated update report (M4-09); the ingest normalizes it.
-func toReport(r *agentv1.UpdateReport) updates.Report {
-	out := updates.Report{
-		CollectedAt: r.GetCollectedAt().AsTime(), Availability: updates.Availability(r.GetAvailability()), //nolint:gosec // enum values checked by the schema
-		Reason: r.GetReason(), Manager: updates.Manager(r.GetPackageManager()), //nolint:gosec // as above
+func toReport(r *agentv1.UpdateReport) update.Report {
+	out := update.Report{
+		CollectedAt: r.GetCollectedAt().AsTime(), Availability: update.Availability(r.GetAvailability()), //nolint:gosec // enum values checked by the schema
+		Reason: r.GetReason(), Manager: update.Manager(r.GetPackageManager()), //nolint:gosec // as above
 		Total: r.GetTotalCount(), Security: r.GetSecurityCount(), RebootRequired: r.GetRebootRequired(),
-		RebootReason: r.GetRebootReason(), Refreshed: r.GetRefreshed(), Packages: make([]updates.Package, 0, len(r.GetPackages())),
+		RebootReason: r.GetRebootReason(), Refreshed: r.GetRefreshed(), Packages: make([]update.Package, 0, len(r.GetPackages())),
 	}
 	if r.GetLastUpgradeAt() != nil {
 		at := r.GetLastUpgradeAt().AsTime()
 		out.LastUpgradeAt = &at
 	}
 	if p := r.GetPermissions(); p != nil {
-		out.Permissions = &updates.Permissions{RemoteUpdates: p.GetRemoteUpdates(), RemoteReboot: p.GetRemoteReboot(), SelfUpdate: p.GetSelfUpdate()}
+		out.Permissions = &update.Permissions{RemoteUpdates: p.GetRemoteUpdates(), RemoteReboot: p.GetRemoteReboot(), SelfUpdate: p.GetSelfUpdate()}
 	}
 	for _, p := range r.GetPackages() {
-		out.Packages = append(out.Packages, updates.Package{
+		out.Packages = append(out.Packages, update.Package{
 			Name: p.GetName(), Installed: p.GetInstalledVersion(), Candidate: p.GetCandidateVersion(), Source: p.GetSource(), Security: p.GetSecurity(),
 		})
 	}

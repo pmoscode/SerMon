@@ -1122,6 +1122,10 @@ spec:
   rollout: { maxParallel: 1, stopOnFailure: true, healthCheck: 10m }
 ```
 
+- **Rechte (M4-10):** Lesen mit `view_nodes` auf der Gruppe; Setzen, Import und Zurücksetzen mit `manage_policies`
+  (Admin auf allen Gruppen) und frischem Step-up, jeweils im Audit-Log. Ohne Policy nur „melden“; `maxParallel` 1 bis 50,
+  `healthCheck` 5 min bis 2 h in Minuten, das Fenster wie ein Wartungsfenster (15 min bis 24 h); ohne Fenster nur
+  `report` und kein `autoReboot`. Alpine-Nodes bleiben in `security-auto` bei „melden“ und bekommen einen Hinweis (O6).
 - **Rolling Rollout:** Pro Gruppe laufen höchstens N Nodes gleichzeitig. Nach Update und Reboot muss der Node innerhalb
   von `healthCheck` wieder online und ohne kritische Alerts sein, sonst stoppt der Rollout und ein Alert wird ausgelöst.
 - **Manuell:** Ein Operator kann „Jetzt aktualisieren“ auslösen (Step-up-2FA, Bestätigungsdialog mit Paketliste).

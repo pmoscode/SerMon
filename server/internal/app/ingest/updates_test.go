@@ -10,20 +10,20 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
-	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
 // updateStore stores like the database: the newer report of a node wins.
 type updateStore struct {
 	mu      sync.Mutex
 	fail    bool
-	reports map[identity.NodeID]updates.Report
+	reports map[identity.NodeID]update.Report
 	writes  int
 }
 
-func (s *updateStore) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, r updates.Report, _ time.Time) (bool, error) {
+func (s *updateStore) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, r update.Report, _ time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.writes++
@@ -31,7 +31,7 @@ func (s *updateStore) Write(_ context.Context, _ tenant.OrgID, node identity.Nod
 		return false, errors.New("database down")
 	}
 	if s.reports == nil {
-		s.reports = map[identity.NodeID]updates.Report{}
+		s.reports = map[identity.NodeID]update.Report{}
 	}
 	if old, ok := s.reports[node]; ok && !r.CollectedAt.After(old.CollectedAt) {
 		return false, nil
@@ -40,22 +40,22 @@ func (s *updateStore) Write(_ context.Context, _ tenant.OrgID, node identity.Nod
 	return true, nil
 }
 
-func (s *updateStore) stored(n identity.NodeID) (updates.Report, bool) {
+func (s *updateStore) stored(n identity.NodeID) (update.Report, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, ok := s.reports[n]
 	return r, ok
 }
 
-func report(at time.Time, names ...string) *updates.Report {
-	r := updates.Report{CollectedAt: at, Availability: updates.Listed, Manager: updates.Apt}
+func report(at time.Time, names ...string) *update.Report {
+	r := update.Report{CollectedAt: at, Availability: update.Listed, Manager: update.Apt}
 	for _, n := range names {
-		r.Packages = append(r.Packages, updates.Package{Name: n, Candidate: "2"})
+		r.Packages = append(r.Packages, update.Package{Name: n, Candidate: "2"})
 	}
 	return &r
 }
 
-func updateBatch(seq uint64, r *updates.Report) ingest.Batch {
+func updateBatch(seq uint64, r *update.Report) ingest.Batch {
 	return ingest.Batch{Seq: seq, Update: r}
 }
 
@@ -158,8 +158,8 @@ func TestUpdates_OutsideTheTimeWindowOrInvalidAreDroppedButAcknowledged(t *testi
 	ctx := context.Background()
 	config := ingest.DefaultConfig()
 	invalid := report(t0, "vim")
-	invalid.Availability = updates.AvailabilityUnknown
-	for i, r := range []*updates.Report{
+	invalid.Availability = update.AvailabilityUnknown
+	for i, r := range []*update.Report{
 		report(t0.Add(config.MaxFuture+time.Second), "future"),
 		report(t0.Add(-config.UpdateMaxAge-time.Second), "ancient"),
 		invalid,

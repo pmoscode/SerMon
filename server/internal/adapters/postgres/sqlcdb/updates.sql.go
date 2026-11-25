@@ -48,6 +48,15 @@ func (q *Queries) DeleteGoneNodeUpdatePackages(ctx context.Context, arg DeleteGo
 	return err
 }
 
+const deleteUpdatePolicy = `-- name: DeleteUpdatePolicy :exec
+DELETE FROM update_policies WHERE group_id = $1
+`
+
+func (q *Queries) DeleteUpdatePolicy(ctx context.Context, groupID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUpdatePolicy, groupID)
+	return err
+}
+
 const getNodeUpdates = `-- name: GetNodeUpdates :one
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
@@ -110,6 +119,60 @@ func (q *Queries) GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) 
 		&i.AllowSelfUpdate,
 		&i.Refreshed,
 		&i.OldestSecurityAt,
+	)
+	return i, err
+}
+
+const getUpdatePolicy = `-- name: GetUpdatePolicy :one
+
+SELECT g.id, g.name, p.mode, p.window_days, p.window_start_minute, p.window_minutes, p.window_time_zone,
+       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by
+FROM node_groups g LEFT JOIN update_policies p ON p.org_id = g.org_id AND p.group_id = g.id
+WHERE g.id = $1
+  AND ($2::boolean OR g.id = ANY ($3::uuid[]))
+`
+
+type GetUpdatePolicyParams struct {
+	GroupID   uuid.UUID
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+type GetUpdatePolicyRow struct {
+	ID                 uuid.UUID
+	Name               string
+	Mode               pgtype.Int2
+	WindowDays         []int16
+	WindowStartMinute  pgtype.Int4
+	WindowMinutes      pgtype.Int4
+	WindowTimeZone     pgtype.Text
+	AutoReboot         pgtype.Bool
+	MaxParallel        pgtype.Int4
+	StopOnFailure      pgtype.Bool
+	HealthCheckMinutes pgtype.Int4
+	UpdatedAt          *time.Time
+	UpdatedBy          *uuid.UUID
+}
+
+// Update policies (M4-10).
+// A group of the scope with its policy; without one the policy's columns are NULL.
+func (q *Queries) GetUpdatePolicy(ctx context.Context, arg GetUpdatePolicyParams) (GetUpdatePolicyRow, error) {
+	row := q.db.QueryRow(ctx, getUpdatePolicy, arg.GroupID, arg.AllGroups, arg.GroupIds)
+	var i GetUpdatePolicyRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Mode,
+		&i.WindowDays,
+		&i.WindowStartMinute,
+		&i.WindowMinutes,
+		&i.WindowTimeZone,
+		&i.AutoReboot,
+		&i.MaxParallel,
+		&i.StopOnFailure,
+		&i.HealthCheckMinutes,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
 	)
 	return i, err
 }
@@ -234,6 +297,69 @@ func (q *Queries) ListNodeUpdatePackages(ctx context.Context, nodeID uuid.UUID) 
 	return items, nil
 }
 
+const listUpdatePolicies = `-- name: ListUpdatePolicies :many
+SELECT g.id, g.name, p.mode, p.window_days, p.window_start_minute, p.window_minutes, p.window_time_zone,
+       p.auto_reboot, p.max_parallel, p.stop_on_failure, p.health_check_minutes, p.updated_at, p.updated_by
+FROM node_groups g LEFT JOIN update_policies p ON p.org_id = g.org_id AND p.group_id = g.id
+WHERE $1::boolean OR g.id = ANY ($2::uuid[])
+ORDER BY g.name, g.id
+`
+
+type ListUpdatePoliciesParams struct {
+	AllGroups bool
+	GroupIds  []uuid.UUID
+}
+
+type ListUpdatePoliciesRow struct {
+	ID                 uuid.UUID
+	Name               string
+	Mode               pgtype.Int2
+	WindowDays         []int16
+	WindowStartMinute  pgtype.Int4
+	WindowMinutes      pgtype.Int4
+	WindowTimeZone     pgtype.Text
+	AutoReboot         pgtype.Bool
+	MaxParallel        pgtype.Int4
+	StopOnFailure      pgtype.Bool
+	HealthCheckMinutes pgtype.Int4
+	UpdatedAt          *time.Time
+	UpdatedBy          *uuid.UUID
+}
+
+func (q *Queries) ListUpdatePolicies(ctx context.Context, arg ListUpdatePoliciesParams) ([]ListUpdatePoliciesRow, error) {
+	rows, err := q.db.Query(ctx, listUpdatePolicies, arg.AllGroups, arg.GroupIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUpdatePoliciesRow{}
+	for rows.Next() {
+		var i ListUpdatePoliciesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Mode,
+			&i.WindowDays,
+			&i.WindowStartMinute,
+			&i.WindowMinutes,
+			&i.WindowTimeZone,
+			&i.AutoReboot,
+			&i.MaxParallel,
+			&i.StopOnFailure,
+			&i.HealthCheckMinutes,
+			&i.UpdatedAt,
+			&i.UpdatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setOldestSecurityUpdate = `-- name: SetOldestSecurityUpdate :exec
 UPDATE node_update_state SET oldest_security_at = (
     SELECT min(p.first_seen_at) FROM node_update_packages p WHERE p.node_id = $1 AND p.security)
@@ -346,4 +472,53 @@ func (q *Queries) UpsertNodeUpdateState(ctx context.Context, arg UpsertNodeUpdat
 	var node_id uuid.UUID
 	err := row.Scan(&node_id)
 	return node_id, err
+}
+
+const upsertUpdatePolicy = `-- name: UpsertUpdatePolicy :exec
+INSERT INTO update_policies (
+    org_id, group_id, mode, window_days, window_start_minute, window_minutes, window_time_zone,
+    auto_reboot, max_parallel, stop_on_failure, health_check_minutes, updated_at, updated_by)
+VALUES (
+    current_org_id(), $1, $2, $3::smallint[], $4,
+    $5, $6, $7, $8,
+    $9, $10, $11, $12)
+ON CONFLICT (org_id, group_id) DO UPDATE SET
+    mode = excluded.mode, window_days = excluded.window_days, window_start_minute = excluded.window_start_minute,
+    window_minutes = excluded.window_minutes, window_time_zone = excluded.window_time_zone,
+    auto_reboot = excluded.auto_reboot, max_parallel = excluded.max_parallel,
+    stop_on_failure = excluded.stop_on_failure, health_check_minutes = excluded.health_check_minutes,
+    updated_at = excluded.updated_at, updated_by = excluded.updated_by
+`
+
+type UpsertUpdatePolicyParams struct {
+	GroupID            uuid.UUID
+	Mode               int16
+	WindowDays         []int16
+	WindowStartMinute  pgtype.Int4
+	WindowMinutes      pgtype.Int4
+	WindowTimeZone     pgtype.Text
+	AutoReboot         bool
+	MaxParallel        int32
+	StopOnFailure      bool
+	HealthCheckMinutes int32
+	UpdatedAt          time.Time
+	UpdatedBy          *uuid.UUID
+}
+
+func (q *Queries) UpsertUpdatePolicy(ctx context.Context, arg UpsertUpdatePolicyParams) error {
+	_, err := q.db.Exec(ctx, upsertUpdatePolicy,
+		arg.GroupID,
+		arg.Mode,
+		arg.WindowDays,
+		arg.WindowStartMinute,
+		arg.WindowMinutes,
+		arg.WindowTimeZone,
+		arg.AutoReboot,
+		arg.MaxParallel,
+		arg.StopOnFailure,
+		arg.HealthCheckMinutes,
+		arg.UpdatedAt,
+		arg.UpdatedBy,
+	)
+	return err
 }

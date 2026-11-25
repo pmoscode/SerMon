@@ -32,10 +32,10 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics/memstore"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
-	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
@@ -995,10 +995,10 @@ func TestSession_AcknowledgesLogBatchesWithoutStoringThemYet(t *testing.T) {
 type recordingUpdates struct {
 	mu      sync.Mutex
 	node    identity.NodeID
-	reports []updates.Report
+	reports []update.Report
 }
 
-func (r *recordingUpdates) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, report updates.Report, _ time.Time) (bool, error) {
+func (r *recordingUpdates) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, report update.Report, _ time.Time) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.node = node
@@ -1063,18 +1063,18 @@ func TestSession_StoresUpdateReports(t *testing.T) {
 		t.Fatalf("stored %d reports for %v", len(recorded.reports), recorded.node)
 	}
 	r := recorded.reports[0]
-	if !r.CollectedAt.Equal(at) || r.Availability != updates.Listed || r.Manager != updates.Dnf || r.Total != 3 || r.Security != 1 ||
+	if !r.CollectedAt.Equal(at) || r.Availability != update.Listed || r.Manager != update.Dnf || r.Total != 3 || r.Security != 1 ||
 		!r.RebootRequired || r.RebootReason != "kernel" || r.LastUpgradeAt == nil || !r.LastUpgradeAt.Equal(upgraded) || !r.Refreshed {
 		t.Errorf("report = %+v", r)
 	}
-	if r.Permissions == nil || *r.Permissions != (updates.Permissions{RemoteUpdates: true, SelfUpdate: true}) {
+	if r.Permissions == nil || *r.Permissions != (update.Permissions{RemoteUpdates: true, SelfUpdate: true}) {
 		t.Errorf("permissions = %+v", r.Permissions)
 	}
-	want := updates.Package{Name: "openssl", Installed: "3.2-1", Candidate: "3.2-2", Source: "baseos", Security: true}
+	want := update.Package{Name: "openssl", Installed: "3.2-1", Candidate: "3.2-2", Source: "baseos", Security: true}
 	if len(r.Packages) != 2 || r.Packages[0] != want || r.Packages[1].Name != "vim-minimal" {
 		t.Errorf("packages = %+v, want openssl first", r.Packages)
 	}
-	if n := recorded.reports[1]; n.Availability != updates.NoHelper || n.Reason != "no helper" || n.Permissions != nil || n.LastUpgradeAt != nil {
+	if n := recorded.reports[1]; n.Availability != update.NoHelper || n.Reason != "no helper" || n.Permissions != nil || n.LastUpgradeAt != nil {
 		t.Errorf("report without helper = %+v", n)
 	}
 }

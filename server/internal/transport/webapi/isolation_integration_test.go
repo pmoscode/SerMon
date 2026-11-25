@@ -84,31 +84,32 @@ func seedAccessFixtures(t *testing.T) {
 }
 
 type loggedIn struct {
-	auth         webv1connect.AuthServiceClient
-	access       webv1connect.AccessServiceClient
-	system       webv1connect.SystemServiceClient
-	invitation   webv1connect.InvitationServiceClient
-	organization webv1connect.OrganizationServiceClient
-	enrollment   webv1connect.EnrollmentTokenServiceClient
-	node         webv1connect.NodeServiceClient
-	agentCA      webv1connect.AgentCAServiceClient
-	metrics      webv1connect.MetricsServiceClient
-	fleet        webv1connect.FleetServiceClient
-	twoFactor    webv1connect.TwoFactorServiceClient
-	events       webv1connect.SecurityEventServiceClient
-	updates      webv1connect.UpdateServiceClient
-	channels     webv1connect.NotificationChannelServiceClient
-	policies     webv1connect.NotificationPolicyServiceClient
-	silences     webv1connect.AlertSilenceServiceClient
-	alerts       webv1connect.AlertServiceClient
-	rules        webv1connect.AlertRuleServiceClient
-	windows      webv1connect.MaintenanceWindowServiceClient
-	policy       webv1connect.SecurityPolicyServiceClient
-	logSettings  webv1connect.LogSettingsServiceClient
-	logs         webv1connect.LogServiceClient
-	liveView     webv1connect.LiveViewServiceClient
-	oidcMappings webv1connect.OidcMappingServiceClient
-	jar          *cookiejar.Jar
+	auth           webv1connect.AuthServiceClient
+	access         webv1connect.AccessServiceClient
+	system         webv1connect.SystemServiceClient
+	invitation     webv1connect.InvitationServiceClient
+	organization   webv1connect.OrganizationServiceClient
+	enrollment     webv1connect.EnrollmentTokenServiceClient
+	node           webv1connect.NodeServiceClient
+	agentCA        webv1connect.AgentCAServiceClient
+	metrics        webv1connect.MetricsServiceClient
+	fleet          webv1connect.FleetServiceClient
+	twoFactor      webv1connect.TwoFactorServiceClient
+	events         webv1connect.SecurityEventServiceClient
+	updates        webv1connect.UpdateServiceClient
+	updatePolicies webv1connect.UpdatePolicyServiceClient
+	channels       webv1connect.NotificationChannelServiceClient
+	policies       webv1connect.NotificationPolicyServiceClient
+	silences       webv1connect.AlertSilenceServiceClient
+	alerts         webv1connect.AlertServiceClient
+	rules          webv1connect.AlertRuleServiceClient
+	windows        webv1connect.MaintenanceWindowServiceClient
+	policy         webv1connect.SecurityPolicyServiceClient
+	logSettings    webv1connect.LogSettingsServiceClient
+	logs           webv1connect.LogServiceClient
+	liveView       webv1connect.LiveViewServiceClient
+	oidcMappings   webv1connect.OidcMappingServiceClient
+	jar            *cookiejar.Jar
 }
 
 func login(t *testing.T, s stack, email string) loggedIn {
@@ -116,31 +117,32 @@ func login(t *testing.T, s stack, email string) loggedIn {
 	jar, _ := cookiejar.New(nil)
 	hc := s.httpClient(jar, s.origin)
 	l := loggedIn{
-		auth:         webv1connect.NewAuthServiceClient(hc, s.server.URL),
-		access:       webv1connect.NewAccessServiceClient(hc, s.server.URL),
-		system:       webv1connect.NewSystemServiceClient(hc, s.server.URL),
-		invitation:   webv1connect.NewInvitationServiceClient(hc, s.server.URL),
-		organization: webv1connect.NewOrganizationServiceClient(hc, s.server.URL),
-		enrollment:   webv1connect.NewEnrollmentTokenServiceClient(hc, s.server.URL),
-		node:         webv1connect.NewNodeServiceClient(hc, s.server.URL),
-		agentCA:      webv1connect.NewAgentCAServiceClient(hc, s.server.URL),
-		metrics:      webv1connect.NewMetricsServiceClient(hc, s.server.URL),
-		fleet:        webv1connect.NewFleetServiceClient(hc, s.server.URL),
-		twoFactor:    webv1connect.NewTwoFactorServiceClient(hc, s.server.URL),
-		events:       webv1connect.NewSecurityEventServiceClient(hc, s.server.URL),
-		updates:      webv1connect.NewUpdateServiceClient(hc, s.server.URL),
-		channels:     webv1connect.NewNotificationChannelServiceClient(hc, s.server.URL),
-		policies:     webv1connect.NewNotificationPolicyServiceClient(hc, s.server.URL),
-		silences:     webv1connect.NewAlertSilenceServiceClient(hc, s.server.URL),
-		alerts:       webv1connect.NewAlertServiceClient(hc, s.server.URL),
-		rules:        webv1connect.NewAlertRuleServiceClient(hc, s.server.URL),
-		windows:      webv1connect.NewMaintenanceWindowServiceClient(hc, s.server.URL),
-		policy:       webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
-		logSettings:  webv1connect.NewLogSettingsServiceClient(hc, s.server.URL),
-		logs:         webv1connect.NewLogServiceClient(hc, s.server.URL),
-		liveView:     webv1connect.NewLiveViewServiceClient(hc, s.server.URL),
-		oidcMappings: webv1connect.NewOidcMappingServiceClient(hc, s.server.URL),
-		jar:          jar,
+		auth:           webv1connect.NewAuthServiceClient(hc, s.server.URL),
+		access:         webv1connect.NewAccessServiceClient(hc, s.server.URL),
+		system:         webv1connect.NewSystemServiceClient(hc, s.server.URL),
+		invitation:     webv1connect.NewInvitationServiceClient(hc, s.server.URL),
+		organization:   webv1connect.NewOrganizationServiceClient(hc, s.server.URL),
+		enrollment:     webv1connect.NewEnrollmentTokenServiceClient(hc, s.server.URL),
+		node:           webv1connect.NewNodeServiceClient(hc, s.server.URL),
+		agentCA:        webv1connect.NewAgentCAServiceClient(hc, s.server.URL),
+		metrics:        webv1connect.NewMetricsServiceClient(hc, s.server.URL),
+		fleet:          webv1connect.NewFleetServiceClient(hc, s.server.URL),
+		twoFactor:      webv1connect.NewTwoFactorServiceClient(hc, s.server.URL),
+		events:         webv1connect.NewSecurityEventServiceClient(hc, s.server.URL),
+		updates:        webv1connect.NewUpdateServiceClient(hc, s.server.URL),
+		updatePolicies: webv1connect.NewUpdatePolicyServiceClient(hc, s.server.URL),
+		channels:       webv1connect.NewNotificationChannelServiceClient(hc, s.server.URL),
+		policies:       webv1connect.NewNotificationPolicyServiceClient(hc, s.server.URL),
+		silences:       webv1connect.NewAlertSilenceServiceClient(hc, s.server.URL),
+		alerts:         webv1connect.NewAlertServiceClient(hc, s.server.URL),
+		rules:          webv1connect.NewAlertRuleServiceClient(hc, s.server.URL),
+		windows:        webv1connect.NewMaintenanceWindowServiceClient(hc, s.server.URL),
+		policy:         webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
+		logSettings:    webv1connect.NewLogSettingsServiceClient(hc, s.server.URL),
+		logs:           webv1connect.NewLogServiceClient(hc, s.server.URL),
+		liveView:       webv1connect.NewLiveViewServiceClient(hc, s.server.URL),
+		oidcMappings:   webv1connect.NewOidcMappingServiceClient(hc, s.server.URL),
+		jar:            jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
 		t.Fatalf("login %s: %v", email, err)
@@ -156,7 +158,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
-		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, updates: bea.updates, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
+		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, updates: bea.updates, updatePolicies: bea.updatePolicies, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
 		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,

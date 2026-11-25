@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -13,9 +14,12 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
 var updatesNow = time.Now().UTC().Truncate(time.Microsecond)
@@ -41,17 +45,17 @@ func newUpdateFixture(t *testing.T, limit int) updateFixture {
 	}
 }
 
-func pkg(name, candidate string, security bool) updates.Package {
-	return updates.Package{Name: name, Installed: "1", Candidate: candidate, Source: "main", Security: security}
+func pkg(name, candidate string, security bool) update.Package {
+	return update.Package{Name: name, Installed: "1", Candidate: candidate, Source: "main", Security: security}
 }
 
-func updateReport(at time.Time, packages ...updates.Package) updates.Report {
-	return updates.Report{
-		CollectedAt: at, Availability: updates.Listed, Manager: updates.Apt, Packages: packages,
+func updateReport(at time.Time, packages ...update.Package) update.Report {
+	return update.Report{
+		CollectedAt: at, Availability: update.Listed, Manager: update.Apt, Packages: packages,
 	}.Normalized()
 }
 
-func (f updateFixture) write(t *testing.T, node identity.NodeID, r updates.Report) bool {
+func (f updateFixture) write(t *testing.T, node identity.NodeID, r update.Report) bool {
 	t.Helper()
 	stored, err := f.store.Write(context.Background(), f.org, node, r, updatesNow)
 	if err != nil {
@@ -86,18 +90,18 @@ func TestUpdateStore_ANewerReportReplacesTheOld(t *testing.T) {
 	first.RebootRequired, first.RebootReason = true, "linux-image"
 	last := updatesNow.Add(-48 * time.Hour)
 	first.LastUpgradeAt = &last
-	first.Permissions = &updates.Permissions{RemoteUpdates: true, SelfUpdate: true}
+	first.Permissions = &update.Permissions{RemoteUpdates: true, SelfUpdate: true}
 	if !f.write(t, f.node, first) {
 		t.Fatal("the first report was not stored")
 	}
 	n, ok := f.get(t, scope, f.node)
-	if !ok || n.Report == nil || names(n) != "openssl=3.1 curl=8 vim=2" || n.Status() != updates.StatusSecurity {
+	if !ok || n.Report == nil || names(n) != "openssl=3.1 curl=8 vim=2" || n.Status() != update.StatusSecurity {
 		t.Fatalf("node = %+v (%s)", n, names(n))
 	}
 	r := n.Report
 	if !r.CollectedAt.Equal(first.CollectedAt) || !n.ReceivedAt.Equal(updatesNow) || r.Total != 3 || r.Security != 1 ||
 		!r.RebootRequired || r.RebootReason != "linux-image" || r.LastUpgradeAt == nil || !r.LastUpgradeAt.Equal(last) ||
-		r.Permissions == nil || *r.Permissions != *first.Permissions || n.PackagesOmitted || r.Manager != updates.Apt {
+		r.Permissions == nil || *r.Permissions != *first.Permissions || n.PackagesOmitted || r.Manager != update.Apt {
 		t.Errorf("report = %+v", r)
 	}
 	if n.OldestSecurity == nil || !n.OldestSecurity.Equal(first.CollectedAt) || !r.Packages[0].FirstSeenAt.Equal(first.CollectedAt) {
@@ -139,12 +143,12 @@ func TestUpdateStore_ANewerReportReplacesTheOld(t *testing.T) {
 		t.Fatal("an empty report was not stored")
 	}
 	n, _ = f.get(t, scope, f.node)
-	if len(n.Report.Packages) != 0 || n.OldestSecurity != nil || n.Status() != updates.StatusCurrent {
+	if len(n.Report.Packages) != 0 || n.OldestSecurity != nil || n.Status() != update.StatusCurrent {
 		t.Errorf("after an empty report: %+v", n)
 	}
-	gone := updates.Report{CollectedAt: updatesNow, Availability: updates.NoHelper, Reason: "no helper"}.Normalized()
+	gone := update.Report{CollectedAt: updatesNow, Availability: update.NoHelper, Reason: "no helper"}.Normalized()
 	f.write(t, f.node, gone)
-	if n, _ = f.get(t, scope, f.node); n.Status() != updates.StatusUnavailable || n.Report.Reason != "no helper" {
+	if n, _ = f.get(t, scope, f.node); n.Status() != update.StatusUnavailable || n.Report.Reason != "no helper" {
 		t.Errorf("without helper: %+v", n.Report)
 	}
 }
@@ -226,7 +230,7 @@ func TestUpdateStore_KeepsOrganizationsAndGroupsApart(t *testing.T) {
 		t.Error("a group scope sees a node of another group")
 	}
 	peer, ok := f.get(t, scope, f.peer)
-	if !ok || peer.Report != nil || peer.Status() != updates.StatusUnknown || peer.Hostname == "" {
+	if !ok || peer.Report != nil || peer.Status() != update.StatusUnknown || peer.Hostname == "" {
 		t.Errorf("peer without report = %+v, %v", peer, ok)
 	}
 	fleet, err = f.store.Fleet(context.Background(), scope)
@@ -248,9 +252,9 @@ func TestUpdateStore_KeepsOrganizationsAndGroupsApart(t *testing.T) {
 func TestUpdateStore_TheTablesCheckTheBounds(t *testing.T) {
 	f := newUpdateFixture(t, 0)
 	ctx := context.Background()
-	for name, r := range map[string]updates.Report{
-		"long name":        {CollectedAt: updatesNow, Availability: updates.Listed, Total: 1, Packages: []updates.Package{{Name: strings.Repeat("a", 257)}}},
-		"security > total": {CollectedAt: updatesNow, Availability: updates.Listed, Total: 1, Security: 2},
+	for name, r := range map[string]update.Report{
+		"long name":        {CollectedAt: updatesNow, Availability: update.Listed, Total: 1, Packages: []update.Package{{Name: strings.Repeat("a", 257)}}},
+		"security > total": {CollectedAt: updatesNow, Availability: update.Listed, Total: 1, Security: 2},
 		"availability":     {CollectedAt: updatesNow, Availability: 9},
 	} {
 		if _, err := f.store.Write(ctx, f.org, f.node, r, updatesNow); err == nil {
@@ -287,5 +291,80 @@ func TestUpdateStore_RowsGoWithTheNode(t *testing.T) {
 	}
 	if state != 0 || packages != 0 {
 		t.Errorf("left after the node: %d states, %d packages", state, packages)
+	}
+}
+
+// Update policies (M4-10): a group without one reports only; a stored one comes back as it went
+// in, with its audit entry; another organization and another group scope see nothing of it.
+func TestUpdatePolicyStore_KeepsThePolicyOfAGroup(t *testing.T) {
+	f := newUpdateFixture(t, 0)
+	store := postgres.NewUpdatePolicyStore(open(t, setup(t).appDSN))
+	ctx := context.Background()
+	scope := scopeFor(t, uuid.UUID(f.org))
+	group := nodeGroup(t, uuid.UUID(f.org), uuid.UUID(f.node))
+	p, ok, err := store.Policy(ctx, scope, group)
+	if err != nil || !ok || p.Mode != updates.ModeReport || p.Window != nil || p.Rollout.MaxParallel != 1 {
+		t.Fatalf("default = %+v, %v, %v", p, ok, err)
+	}
+	set := updates.Policy{
+		Group: group, Mode: updates.ModeSecurityAuto, AutoReboot: true,
+		Window:    &routing.Schedule{Days: []time.Weekday{time.Sunday, time.Wednesday}, Start: 3 * time.Hour, Duration: 2 * time.Hour, TimeZone: "Europe/Berlin"},
+		Rollout:   updates.Rollout{MaxParallel: 5, StopOnFailure: true, HealthCheck: 15 * time.Minute},
+		UpdatedAt: updatesNow,
+	}
+	audit := access.AuditEntry{Action: "update_policy.update", Target: "group:" + group.String()}
+	if err := store.PutPolicy(ctx, scope, group, &set, audit); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := store.Policy(ctx, scope, group)
+	if err != nil || got.Mode != set.Mode || !got.AutoReboot || got.Rollout != set.Rollout || !got.UpdatedAt.Equal(updatesNow) ||
+		got.Window == nil || got.Window.Start != set.Window.Start || got.Window.Duration != set.Window.Duration ||
+		got.Window.TimeZone != "Europe/Berlin" || len(got.Window.Days) != 2 || got.Window.Days[1] != time.Wednesday {
+		t.Errorf("stored = %+v (%+v), %v", got, got.Window, err)
+	}
+	var audits int
+	queryOwner(t, setup(t).db.OwnerDSN, "SELECT count(*) FROM audit_log WHERE org_id = $1 AND action = 'update_policy.update'", []any{uuid.UUID(f.org)}, &audits)
+	if audits != 1 {
+		t.Errorf("%d audit entries", audits)
+	}
+	list, err := store.Policies(ctx, scope)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("policies = %+v, %v", list, err)
+	}
+	for _, n := range list {
+		if (n.Group == group) != (n.Mode == updates.ModeSecurityAuto) || n.GroupName == "" {
+			t.Errorf("policy of %s = %+v", n.GroupName, n.Policy)
+		}
+	}
+	// Another organization, another group, an unknown group.
+	other := newUpdateFixture(t, 0)
+	if _, ok, _ := store.Policy(ctx, scopeFor(t, uuid.UUID(other.org)), group); ok {
+		t.Error("another organization sees the group")
+	}
+	if err := store.PutPolicy(ctx, scopeFor(t, uuid.UUID(other.org)), group, &set, audit); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("a write from another organization = %v", err)
+	}
+	peerGroup := nodeGroup(t, uuid.UUID(f.org), uuid.UUID(f.peer))
+	narrow, err := tenant.ForGroups(f.org, peerGroup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := store.Policy(ctx, narrow, group); ok {
+		t.Error("a group scope sees another group's policy")
+	}
+	if list, _ := store.Policies(ctx, narrow); len(list) != 1 || list[0].Group != peerGroup {
+		t.Errorf("policies of the group scope = %+v", list)
+	}
+	// Reset: the default again.
+	if err := store.PutPolicy(ctx, scope, group, nil, access.AuditEntry{Action: "update_policy.reset", Target: "group:" + group.String()}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _, _ := store.Policy(ctx, scope, group); p.Mode != updates.ModeReport || !p.UpdatedAt.IsZero() {
+		t.Errorf("after reset = %+v", p)
+	}
+	// The table refuses an install mode without a window.
+	bad := updates.Policy{Group: group, Mode: updates.ModeAllAuto, Rollout: set.Rollout, UpdatedAt: updatesNow}
+	if err := store.PutPolicy(ctx, scope, group, &bad, audit); err == nil {
+		t.Error("all-auto without a window was stored")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -75,11 +76,11 @@ func (h *UpdateHandler) ListFleetUpdates(ctx context.Context, _ *connect.Request
 	if err != nil {
 		return nil, h.failure(ctx, "list fleet updates", err)
 	}
-	count := func(s updates.Status) int32 { return int32(min(fleet.Counts[s], 1<<31-1)) } //nolint:gosec // bounded
+	count := func(s update.Status) int32 { return int32(min(fleet.Counts[s], 1<<31-1)) } //nolint:gosec // bounded
 	res := &webv1.ListFleetUpdatesResponse{
-		Nodes: make([]*webv1.NodeUpdates, 0, len(fleet.Nodes)), Unknown: count(updates.StatusUnknown),
-		Unavailable: count(updates.StatusUnavailable), Current: count(updates.StatusCurrent),
-		WithUpdates: count(updates.StatusUpdates), WithSecurity: count(updates.StatusSecurity),
+		Nodes: make([]*webv1.NodeUpdates, 0, len(fleet.Nodes)), Unknown: count(update.StatusUnknown),
+		Unavailable: count(update.StatusUnavailable), Current: count(update.StatusCurrent),
+		WithUpdates: count(update.StatusUpdates), WithSecurity: count(update.StatusSecurity),
 		RebootRequired: int32(min(fleet.RebootRequired, 1<<31-1)), //nolint:gosec // bounded
 	}
 	for _, n := range fleet.Nodes {
@@ -88,12 +89,12 @@ func (h *UpdateHandler) ListFleetUpdates(ctx context.Context, _ *connect.Request
 	return connect.NewResponse(res), nil
 }
 
-var updateStatuses = map[updates.Status]webv1.UpdateStatus{
-	updates.StatusUnknown:     webv1.UpdateStatus_UPDATE_STATUS_UNKNOWN,
-	updates.StatusUnavailable: webv1.UpdateStatus_UPDATE_STATUS_UNAVAILABLE,
-	updates.StatusCurrent:     webv1.UpdateStatus_UPDATE_STATUS_CURRENT,
-	updates.StatusUpdates:     webv1.UpdateStatus_UPDATE_STATUS_UPDATES,
-	updates.StatusSecurity:    webv1.UpdateStatus_UPDATE_STATUS_SECURITY,
+var updateStatuses = map[update.Status]webv1.UpdateStatus{
+	update.StatusUnknown:     webv1.UpdateStatus_UPDATE_STATUS_UNKNOWN,
+	update.StatusUnavailable: webv1.UpdateStatus_UPDATE_STATUS_UNAVAILABLE,
+	update.StatusCurrent:     webv1.UpdateStatus_UPDATE_STATUS_CURRENT,
+	update.StatusUpdates:     webv1.UpdateStatus_UPDATE_STATUS_UPDATES,
+	update.StatusSecurity:    webv1.UpdateStatus_UPDATE_STATUS_SECURITY,
 }
 
 // nodeUpdatesView converts a node with its report, without packages. The enum values of

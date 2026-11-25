@@ -24,11 +24,11 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
-	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
 // OfflineAfter is how long a node may stay silent before it counts as offline (KONZEPT §5).
@@ -240,7 +240,7 @@ type Service struct {
 	bucketMu    sync.Mutex
 	eventBucket map[identity.NodeID]*eventBuckets
 
-	updates          updates.Writer
+	updates          UpdateWriter
 	nodeUpdateBucket map[identity.NodeID]*bucket
 	orgUpdateBucket  map[tenant.OrgID]*bucket
 
@@ -268,9 +268,17 @@ const maxEventBuckets = 100_000
 // dropped (a server without a database).
 func (s *Service) SetEventWriter(w secevents.Writer) { s.events = w }
 
+// UpdateWriter stores the update reports (M4-09).
+type UpdateWriter interface {
+	// Write makes r the node's current report unless the stored one was collected at the same
+	// time or later (a resend, or an older batch): then it returns false and changes nothing.
+	// Packages beyond the organization's limit are left out; their counts stay.
+	Write(ctx context.Context, org tenant.OrgID, node identity.NodeID, r update.Report, receivedAt time.Time) (bool, error)
+}
+
 // SetUpdateWriter stores update reports through w (M4-09); without one they are acknowledged and
 // dropped.
-func (s *Service) SetUpdateWriter(w updates.Writer) { s.updates = w }
+func (s *Service) SetUpdateWriter(w UpdateWriter) { s.updates = w }
 
 // admitUpdate spends a report of the node's and the organization's buckets; false if either is
 // empty (then neither is charged).
@@ -402,7 +410,7 @@ type Batch struct {
 	// Logs are the entries of a log batch (M3-07).
 	Logs []LogEntry
 	// Update is the report of an update batch (M4-09).
-	Update *updates.Report
+	Update *update.Report
 	// Unhandled is a batch the server takes but doesn't use yet (M4-05: command results until
 	// M4-11): acknowledged in order, nothing stored.
 	Unhandled bool
@@ -457,7 +465,7 @@ type Session struct {
 	eventsDropped bool
 	lastSeen      time.Time
 	events        []secevents.Batch // waiting for the next flush
-	update        *updates.Report   // the newest report waiting for the next flush
+	update        *update.Report    // the newest report waiting for the next flush
 	logs          []logBatch        // waiting for the next flush
 	logsFailing   time.Time         // since when the store fails for the waiting logs
 }
@@ -660,7 +668,7 @@ func (s *Session) Due() bool {
 
 // acceptUpdate keeps a valid report within the time window and the buckets for the next flush,
 // the newest one if several arrive in between; its batch is acknowledged in order like the others.
-func (s *Session) acceptUpdate(r updates.Report, now time.Time) {
+func (s *Session) acceptUpdate(r update.Report, now time.Time) {
 	stats := &s.service.stats
 	config := s.service.config
 	if s.service.updates == nil || !r.Valid() ||

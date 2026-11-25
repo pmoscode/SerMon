@@ -1,0 +1,188 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/silence.proto";
+
+// UpdatePolicyService keeps the update policies of the node groups (KONZEPT §14.2, M4-10). Reading
+// needs view_nodes on the group, changing manage_policies (admin on all groups) with a fresh
+// step-up; every change is in the audit log. A group without a policy reports only.
+service UpdatePolicyService {
+  // GetUpdatePolicy returns the group's policy; a group the caller can't view is NOT_FOUND.
+  rpc GetUpdatePolicy(GetUpdatePolicyRequest) returns (GetUpdatePolicyResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListUpdatePolicies returns the policies of the groups the caller can view, by group name.
+  rpc ListUpdatePolicies(ListUpdatePoliciesRequest) returns (ListUpdatePoliciesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // SetUpdatePolicy replaces the group's policy.
+  rpc SetUpdatePolicy(SetUpdatePolicyRequest) returns (SetUpdatePolicyResponse);
+  // ImportUpdatePolicy sets the group's policy from YAML (kind: UpdatePolicy, as exported).
+  rpc ImportUpdatePolicy(ImportUpdatePolicyRequest) returns (ImportUpdatePolicyResponse);
+  // ExportUpdatePolicy returns the group's policy as YAML; rights as GetUpdatePolicy.
+  rpc ExportUpdatePolicy(ExportUpdatePolicyRequest) returns (ExportUpdatePolicyResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ResetUpdatePolicy returns the group to the default (report only).
+  rpc ResetUpdatePolicy(ResetUpdatePolicyRequest) returns (ResetUpdatePolicyResponse);
+}
+
+// UpdateMode is what a group does with its updates on its own.
+enum UpdateMode {
+  // UPDATE_MODE_UNSPECIFIED is invalid.
+  UPDATE_MODE_UNSPECIFIED = 0;
+  // UPDATE_MODE_REPORT only reports; updates come by hand.
+  UPDATE_MODE_REPORT = 1;
+  // UPDATE_MODE_SECURITY_AUTO installs the security updates in the window (on Alpine: reports,
+  // there is no security metadata).
+  UPDATE_MODE_SECURITY_AUTO = 2;
+  // UPDATE_MODE_ALL_AUTO installs all updates in the window.
+  UPDATE_MODE_ALL_AUTO = 3;
+}
+
+// UpdateWindow is a weekly window in a time zone.
+message UpdateWindow {
+  // days the window begins on.
+  repeated Weekday days = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 7
+    unique: true
+    items: {
+      enum: {
+        defined_only: true
+        not_in: [0]
+      }
+    }
+  }];
+  // start_minute is the local time of the start in minutes after midnight.
+  int32 start_minute = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 1439
+  }];
+  // duration_minutes is how long it lasts (15 to 1440).
+  int32 duration_minutes = 3 [(buf.validate.field).int32 = {
+    gte: 15
+    lte: 1440
+  }];
+  // time_zone is an IANA name, e.g. Europe/Berlin.
+  string time_zone = 4 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+// UpdatePolicySpec is what a policy says.
+message UpdatePolicySpec {
+  // mode is what the group does on its own.
+  UpdateMode mode = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // window is when updates and reboots may run; required unless the mode is report.
+  UpdateWindow window = 2;
+  // auto_reboot reboots after updates when needed, within the window only.
+  bool auto_reboot = 3;
+  // max_parallel is how many nodes of the group update at once (1 to 50).
+  int32 max_parallel = 4 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 50
+  }];
+  // stop_on_failure stops the rollout at a failed node.
+  bool stop_on_failure = 5;
+  // health_check_minutes is how long a node has to come back online without critical alerts (5
+  // to 120).
+  int32 health_check_minutes = 6 [(buf.validate.field).int32 = {
+    gte: 5
+    lte: 120
+  }];
+}
+
+// UpdatePolicy is the policy of a group.
+message UpdatePolicy {
+  // group_id is the node group.
+  string group_id = 1;
+  // group_name is its name.
+  string group_name = 2;
+  // spec is the policy.
+  UpdatePolicySpec spec = 3;
+  // is_default: nobody set a policy for the group.
+  bool is_default = 4;
+  // update_time is when it was set (unset for the default).
+  google.protobuf.Timestamp update_time = 5;
+}
+
+// GetUpdatePolicyRequest names the group.
+message GetUpdatePolicyRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetUpdatePolicyResponse is the policy.
+message GetUpdatePolicyResponse {
+  // policy of the group.
+  UpdatePolicy policy = 1;
+}
+
+// ListUpdatePoliciesRequest has no fields.
+message ListUpdatePoliciesRequest {}
+
+// ListUpdatePoliciesResponse lists the policies.
+message ListUpdatePoliciesResponse {
+  // policies of the visible groups.
+  repeated UpdatePolicy policies = 1;
+}
+
+// SetUpdatePolicyRequest is the new policy of a group.
+message SetUpdatePolicyRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // spec is the policy.
+  UpdatePolicySpec spec = 2 [(buf.validate.field).required = true];
+}
+
+// SetUpdatePolicyResponse is the stored policy.
+message SetUpdatePolicyResponse {
+  // policy as stored.
+  UpdatePolicy policy = 1;
+}
+
+// ImportUpdatePolicyRequest is a policy as YAML.
+message ImportUpdatePolicyRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // yaml is the document, at most 8 KiB.
+  string yaml = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 8192
+  }];
+}
+
+// ImportUpdatePolicyResponse is the stored policy.
+message ImportUpdatePolicyResponse {
+  // policy as stored.
+  UpdatePolicy policy = 1;
+}
+
+// ExportUpdatePolicyRequest names the group.
+message ExportUpdatePolicyRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ExportUpdatePolicyResponse is the YAML.
+message ExportUpdatePolicyResponse {
+  // yaml is the policy as ImportUpdatePolicy reads it.
+  string yaml = 1;
+}
+
+// ResetUpdatePolicyRequest names the group.
+message ResetUpdatePolicyRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ResetUpdatePolicyResponse has no fields.
+message ResetUpdatePolicyResponse {}

@@ -105,6 +105,7 @@ type Querier interface {
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteTOTP(ctx context.Context, userID uuid.UUID) error
+	DeleteUpdatePolicy(ctx context.Context, groupID uuid.UUID) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
 	EnrollmentTokenByHash(ctx context.Context, arg EnrollmentTokenByHashParams) (EnrollmentTokenByHashRow, error)
 	// Metric series and points (M1-22, ADR 0001). Every query runs in a tenant transaction.
@@ -141,6 +142,9 @@ type Querier interface {
 	GetSession(ctx context.Context, id string) (Session, error)
 	// Second factors (instance-level, per user; M1-03).
 	GetTOTP(ctx context.Context, userID uuid.UUID) (GetTOTPRow, error)
+	// Update policies (M4-10).
+	// A group of the scope with its policy; without one the policy's columns are NULL.
+	GetUpdatePolicy(ctx context.Context, arg GetUpdatePolicyParams) (GetUpdatePolicyRow, error)
 	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
 	// The binding counts as given by hand afterwards (M3-21): sign-ins over OIDC leave it.
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
@@ -235,6 +239,7 @@ type Querier interface {
 	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
 	// callers on all groups). Keyset paging below (before_time, before_id).
 	ListSecurityEvents(ctx context.Context, arg ListSecurityEventsParams) ([]ListSecurityEventsRow, error)
+	ListUpdatePolicies(ctx context.Context, arg ListUpdatePoliciesParams) ([]ListUpdatePoliciesRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Nodes of the scope's groups with their group name, for the UI (M1-26).
 	ListVisibleNodes(ctx context.Context, arg ListVisibleNodesParams) ([]ListVisibleNodesRow, error)
@@ -372,6 +377,7 @@ type Querier interface {
 	UpsertNodeUpdateState(ctx context.Context, arg UpsertNodeUpdateStateParams) (uuid.UUID, error)
 	// A role given by hand is the admin's from now on: sign-ins over OIDC leave it (M3-21).
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
+	UpsertUpdatePolicy(ctx context.Context, arg UpsertUpdatePolicyParams) error
 	UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error)
 	UseTOTPStep(ctx context.Context, arg UseTOTPStepParams) (int64, error)
 	UserOrganizations(ctx context.Context, userID uuid.UUID) ([]UserOrganizationsRow, error)

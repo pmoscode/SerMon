@@ -29,6 +29,7 @@ type isolationEnv struct {
 	fleet                           webv1connect.FleetServiceClient
 	events                          webv1connect.SecurityEventServiceClient
 	updates                         webv1connect.UpdateServiceClient
+	updatePolicies                  webv1connect.UpdatePolicyServiceClient
 	channels                        webv1connect.NotificationChannelServiceClient
 	policies                        webv1connect.NotificationPolicyServiceClient
 	silences                        webv1connect.AlertSilenceServiceClient
@@ -347,6 +348,40 @@ var tenantIsolationCases = map[string]isolationCase{
 			return errLeak
 		}
 		return nil
+	}},
+	"/sermon.web.v1.UpdatePolicyService/GetUpdatePolicy": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updatePolicies.GetUpdatePolicy(ctx, connect.NewRequest(&webv1.GetUpdatePolicyRequest{GroupId: e.groupA}))
+		return err
+	}},
+	"/sermon.web.v1.UpdatePolicyService/ExportUpdatePolicy": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updatePolicies.ExportUpdatePolicy(ctx, connect.NewRequest(&webv1.ExportUpdatePolicyRequest{GroupId: e.groupA}))
+		return err
+	}},
+	"/sermon.web.v1.UpdatePolicyService/ListUpdatePolicies": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.updatePolicies.ListUpdatePolicies(ctx, connect.NewRequest(&webv1.ListUpdatePoliciesRequest{}))
+		if err != nil {
+			return err
+		}
+		if strings.Contains(res.Msg.String(), e.groupA) {
+			return errLeak
+		}
+		return nil
+	}},
+	"/sermon.web.v1.UpdatePolicyService/SetUpdatePolicy": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updatePolicies.SetUpdatePolicy(ctx, connect.NewRequest(&webv1.SetUpdatePolicyRequest{GroupId: e.groupA, Spec: &webv1.UpdatePolicySpec{
+			Mode: webv1.UpdateMode_UPDATE_MODE_REPORT, MaxParallel: 1, HealthCheckMinutes: 10,
+		}}))
+		return err
+	}},
+	"/sermon.web.v1.UpdatePolicyService/ImportUpdatePolicy": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updatePolicies.ImportUpdatePolicy(ctx, connect.NewRequest(&webv1.ImportUpdatePolicyRequest{
+			GroupId: e.groupA, Yaml: "kind: UpdatePolicy\nspec:\n  mode: report\n",
+		}))
+		return err
+	}},
+	"/sermon.web.v1.UpdatePolicyService/ResetUpdatePolicy": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updatePolicies.ResetUpdatePolicy(ctx, connect.NewRequest(&webv1.ResetUpdatePolicyRequest{GroupId: e.groupA}))
+		return err
 	}},
 	"/sermon.web.v1.MetricsService/QueryMetrics": {run: func(ctx context.Context, e isolationEnv) error {
 		now := time.Now()

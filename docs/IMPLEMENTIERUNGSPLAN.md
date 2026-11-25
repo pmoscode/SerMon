@@ -4315,7 +4315,23 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.3 Policies und Rollout (E4.3)
 
-#### ☐ M4-10 – Update-Policies pro Gruppe · S · M 🔒
+#### ☑ M4-10 – Update-Policies pro Gruppe · S · M 🔒
+> Erledigt (KONZEPT §14.2; Threat Model T94):
+> - **`updates.Policy`:** `mode` (`report`, `security-auto`, `all-auto`), `window` als `routing.Schedule`, `autoReboot`,
+>   `rollout` (`maxParallel` 1 bis 50, `stopOnFailure`, `healthCheck` 5 min bis 2 h in Minuten). Ohne Fenster nur
+>   `report` und kein `autoReboot`; ohne Policy gilt „melden“. `ModeFor` gibt Alpine in `security-auto` „melden“ samt
+>   Hinweis (O6) – Orchestrator (M4-13) und UI (M4-15) nutzen ihn.
+> - **YAML** wie in KONZEPT §14.2 (`kind: UpdatePolicy`), strikt gelesen (unbekannte Felder, zweites Dokument, über
+>   8 KiB abgelehnt), Export im selben Format.
+> - **Tabelle** `update_policies` (Migration 00047, RLS, Prüfungen wie in der Validierung) und `UpdatePolicyService`:
+>   Lesen, Liste und Export mit `view_nodes` auf der Gruppe; Setzen, Import und Zurücksetzen mit `manage_policies` und
+>   frischem Step-up, Audit-Eintrag mit allen Werten in derselben Transaktion.
+> - **Umbau:** Die Berichte (`Report`, Normalisierung, Status) liegen jetzt in `domain/update`, der Ingest hat seinen
+>   eigenen `UpdateWriter`: Sonst hätte `app/updates` über `routing` einen Importzyklus mit dem Ingest gebildet.
+> - **Tests:** Validierung (Fenster, Zeitzonen, Grenzen), YAML-Round-Trip mit dem Beispiel des Konzepts, 23 abgelehnte
+>   Dokumente, Rechte und Step-up im Dienst, PostgreSQL (Standard, Round-Trip, Audit, Orgs und Gruppen getrennt,
+>   Reset), Web-API mit Tenant-Isolation und Step-up-Abdeckung.
+> - **Gegenproben** für 18 Prüfungen, alle erkannt (zwei erst nach schärferen Tests).
 - **Ziel:** `UpdatePolicy` nach KONZEPT §14.2.
   - `mode` (`report`, `security-auto`, `all-auto`), `window` als `routing.Schedule` (M2-15), `autoReboot`, `rollout`
     (`maxParallel` 1 bis 50, `stopOnFailure`, `healthCheck` 5 min bis 2 h).

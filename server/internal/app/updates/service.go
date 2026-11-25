@@ -8,12 +8,13 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
 // Fleet is the overview: every visible node with its status, and how many nodes have each status.
 type Fleet struct {
 	Nodes          []NodeUpdates
-	Counts         map[Status]int
+	Counts         map[update.Status]int
 	RebootRequired int
 }
 
@@ -63,7 +64,7 @@ func (s *Service) Fleet(ctx context.Context, c access.Caller) (Fleet, error) {
 	if err != nil {
 		return Fleet{}, fmt.Errorf("read fleet updates: %w", err)
 	}
-	fleet := Fleet{Nodes: nodes, Counts: map[Status]int{}}
+	fleet := Fleet{Nodes: nodes, Counts: map[update.Status]int{}}
 	for _, n := range nodes {
 		fleet.Counts[n.Status()]++
 		if n.Report != nil && n.Report.RebootRequired {

@@ -448,6 +448,22 @@ type Superadmin struct {
 	CreatedAt time.Time
 }
 
+type UpdatePolicy struct {
+	OrgID              uuid.UUID
+	GroupID            uuid.UUID
+	Mode               int16
+	WindowDays         []int16
+	WindowStartMinute  pgtype.Int4
+	WindowMinutes      pgtype.Int4
+	WindowTimeZone     pgtype.Text
+	AutoReboot         bool
+	MaxParallel        int32
+	StopOnFailure      bool
+	HealthCheckMinutes int32
+	UpdatedAt          time.Time
+	UpdatedBy          *uuid.UUID
+}
+
 type User struct {
 	ID          uuid.UUID
 	Email       string

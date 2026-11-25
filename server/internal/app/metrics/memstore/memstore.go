@@ -208,6 +208,10 @@ func (s *Store) Query(_ context.Context, scope tenant.Scope, q metrics.Query) ([
 		}
 		return compareStrings(a.labels, b.labels)
 	})
+	// At most MaxSeries, like the TimescaleDB store (M4-27: callers must stay within it).
+	if len(order) > metrics.MaxSeries {
+		order = order[:metrics.MaxSeries]
+	}
 	out := make([]metrics.Series, 0, len(order))
 	for _, key := range order {
 		series := bySeries[key]

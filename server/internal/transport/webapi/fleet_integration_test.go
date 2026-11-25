@@ -131,3 +131,56 @@ func TestFleet_CapacityOfTheVisibleNodes(t *testing.T) {
 		t.Errorf("org Beta sees %v, %v", other, err)
 	}
 }
+
+// M4-27: the heatmap of a viewer's nodes – CPU busy per column, rounded; another organization
+// sees none of them; ranges outside 10 minutes to 30 days are INVALID_ARGUMENT.
+func TestFleet_HeatmapOfTheVisibleNodes(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ctx := context.Background()
+	org, node := tenant.OrgID(uuid.MustParse(orgAlpha)), identity.NodeID(uuid.MustParse(nodeAl))
+	to := time.Now().Truncate(time.Minute)
+	from := to.Add(-20 * time.Minute)
+	at := from.Add(5 * time.Minute)
+	if err := s.metrics.Write(ctx, org, []metrics.Aggregate{
+		{Node: node, Metric: "sermon_cpu_utilization_ratio", Labels: metrics.Labels{"mode": "idle"}, Start: at, Avg: 666_666, Min: 666_666, Max: 666_666},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	mia := login(t, s, "mia@example.org")
+	res, err := mia.heatmap.GetHeatmap(ctx, connect.NewRequest(&webv1.GetHeatmapRequest{Kind: webv1.HeatmapKind_HEATMAP_KIND_CPU, From: timestamppb.New(from), To: timestamppb.New(to)}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Msg.GetColumns() != 120 || res.Msg.GetStep().AsDuration() != 10*time.Second {
+		t.Fatalf("heatmap = %d columns of %v", res.Msg.GetColumns(), res.Msg.GetStep().AsDuration())
+	}
+	// Other tests of the package add nodes to the group: its node among them.
+	var row *webv1.HeatmapRow
+	for _, r := range res.Msg.GetRows() {
+		if r.GetNodeId() == nodeAl {
+			row = r
+		}
+	}
+	if row == nil {
+		t.Fatalf("no row of %s in %v", nodeAl, res.Msg.GetRows())
+	}
+	i := int(at.Sub(res.Msg.GetStart().AsTime()) / (10 * time.Second))
+	if row.GetNodeId() != nodeAl || row.GetHostname() != "alpha-01" || len(row.GetValues()) != 120 || row.GetValues()[i] != 0.333 || row.GetValues()[i+1] != -1 {
+		t.Errorf("row = %v (cell %d)", row, i)
+	}
+	bea := login(t, s, "bea@example.org")
+	if other, err := bea.heatmap.GetHeatmap(ctx, connect.NewRequest(&webv1.GetHeatmapRequest{Kind: webv1.HeatmapKind_HEATMAP_KIND_CPU, From: timestamppb.New(from), To: timestamppb.New(to)})); err != nil || len(other.Msg.GetRows()) != 0 {
+		t.Errorf("org Beta sees %v, %v", other, err)
+	}
+	for name, req := range map[string]*webv1.GetHeatmapRequest{
+		"5 minutes": {Kind: webv1.HeatmapKind_HEATMAP_KIND_CPU, From: timestamppb.New(to.Add(-5 * time.Minute)), To: timestamppb.New(to)},
+		"31 days":   {Kind: webv1.HeatmapKind_HEATMAP_KIND_CPU, From: timestamppb.New(to.Add(-31 * 24 * time.Hour)), To: timestamppb.New(to)},
+		"no kind":   {From: timestamppb.New(from), To: timestamppb.New(to)},
+		"unknown":   {Kind: 9, From: timestamppb.New(from), To: timestamppb.New(to)},
+	} {
+		if _, err := mia.heatmap.GetHeatmap(ctx, connect.NewRequest(req)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

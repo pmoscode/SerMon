@@ -104,6 +104,7 @@ type loggedIn struct {
 	updates        webv1connect.UpdateServiceClient
 	anomalies      webv1connect.AnomalyServiceClient
 	capacity       webv1connect.CapacityServiceClient
+	heatmap        webv1connect.HeatmapServiceClient
 	updatePolicies webv1connect.UpdatePolicyServiceClient
 	channels       webv1connect.NotificationChannelServiceClient
 	policies       webv1connect.NotificationPolicyServiceClient
@@ -139,6 +140,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		updates:        webv1connect.NewUpdateServiceClient(hc, s.server.URL),
 		anomalies:      webv1connect.NewAnomalyServiceClient(hc, s.server.URL),
 		capacity:       webv1connect.NewCapacityServiceClient(hc, s.server.URL),
+		heatmap:        webv1connect.NewHeatmapServiceClient(hc, s.server.URL),
 		updatePolicies: webv1connect.NewUpdatePolicyServiceClient(hc, s.server.URL),
 		channels:       webv1connect.NewNotificationChannelServiceClient(hc, s.server.URL),
 		policies:       webv1connect.NewNotificationPolicyServiceClient(hc, s.server.URL),
@@ -167,7 +169,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
-		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, updates: bea.updates, anomalies: bea.anomalies, capacity: bea.capacity, updatePolicies: bea.updatePolicies, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
+		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, updates: bea.updates, anomalies: bea.anomalies, capacity: bea.capacity, heatmap: bea.heatmap, updatePolicies: bea.updatePolicies, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
 		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,

@@ -246,6 +246,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Metrics:  webapi.NewMetricsHandler(nodes, nil, slog.New(slog.DiscardHandler)),
 		Fleet:    webapi.NewFleetHandler(nodes, slog.New(slog.DiscardHandler)),
 		Capacity: webapi.NewCapacityHandler(nodes, slog.New(slog.DiscardHandler)),
+		Heatmap:  webapi.NewHeatmapHandler(nodes, slog.New(slog.DiscardHandler)),
 		SecurityEvents: webapi.NewSecurityEventHandler(withGeo(
 			secevents.NewService(postgres.NewSecurityEventStore(pg), authz.NewPolicy())), slog.New(slog.DiscardHandler)),
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(pg, 0), authz.NewPolicy()).

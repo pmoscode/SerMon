@@ -16,6 +16,7 @@
 	import { parseNodeView } from '#lib/alerts/links.js';
 	import type { LogFilter } from '#lib/logs/filter.js';
 	import type { SecurityFilter } from '#lib/security/filter.js';
+	import { displayText } from '#lib/logs/text.js';
 	import { NodeState } from '#lib/node/node.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
@@ -62,7 +63,7 @@
 </script>
 
 <svelte:head>
-	<title>{nodeState.node?.hostname ?? m.node_title()} · SerMon</title>
+	<title>{nodeState.node ? displayText(nodeState.node.hostname) : m.node_title()} · SerMon</title>
 </svelte:head>
 
 <Button href={resolve('/(app)/fleet')} variant="ghost" size="sm" class="mb-3">

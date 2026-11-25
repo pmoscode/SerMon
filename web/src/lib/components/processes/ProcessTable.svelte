@@ -1,6 +1,5 @@
 <script lang="ts">
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
-	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import type { ProcessInfo } from '#lib/api/gen/sermon/web/v1/live_view_pb.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
 	import { displayText } from '#lib/logs/text.js';
@@ -100,10 +99,8 @@
 						>
 							{c.label()}
 							{#if sort.key === c.key}
-								{#if sort.desc}<ArrowDown class="size-3.5" aria-hidden="true" />{:else}<ArrowUp
-										class="size-3.5"
-										aria-hidden="true"
-									/>{/if}
+								<!-- One icon, turned for ascending: a second one would be a chunk of its own (M2-34). -->
+								<ArrowDown class="size-3.5 {sort.desc ? '' : 'rotate-180'}" aria-hidden="true" />
 							{/if}
 						</button>
 					</th>

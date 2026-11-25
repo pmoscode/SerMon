@@ -4873,7 +4873,33 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Prognose gegen dieselben Fälle wie die Regel, Tenant-Isolation, Komponenten.
 - **Abhängig von:** –
 
-#### ☐ M4-27 – Fleet-Heatmap · S+W · M
+#### ☑ M4-27 – Fleet-Heatmap · S+W · M
+> Erledigt (KONZEPT §16, 7; Hilfe „Heatmap“):
+> - **RPC** `HeatmapService.GetHeatmap` (eigener Dienst wie Kapazität): Art (CPU als 1 − idle, Speicher, IO als die am
+>   stärksten ausgelastete Disk, Anomalie-Rate), Bereich 10 min bis 30 Tage. Der Server wählt den kleinsten Schritt aus
+>   10 s … 4 h, der höchstens 200 Spalten ergibt; die Schritte teilen einen Tag, so beginnen Spalten und Buckets des
+>   Speichers gleich. Je Zelle der höchste Mittelwert (0..1, auf 0,001 gerundet), −1 ohne Daten; höchstens 500 Nodes
+>   nach Hostname (mit Hinweis), gelesen in Blöcken von 20 (mehrere Disks je Node, 500 Serien je Abfrage).
+> - **Seite** `/heatmap` als Ansicht der Fleet: Zellen auf einem Canvas, Hostnamen als Text daneben; Pointer und
+>   Pfeiltasten (Pos1, Ende, Bild auf/ab) bewegen einen Cursor, eine Statuszeile nennt Node, Abschnitt und Wert.
+>   Legende (Viridis, hell = viel, leer = keine Daten), Reihenfolge nach Name, höchstem oder mittlerem Wert, „Als
+>   Tabelle“ mit Mittel, höchstem Wert und Zeitpunkt je Node. Eigener Zeitraum 1 h bis 30 Tage, jede Minute neu.
+> - **Budget:** Die Seite teilt bewusst nichts mit der Seite des Nodes, was dort noch im eigenen Chunk lag
+>   (`TimeRangePicker`, der Zeitraum-Store und seine Texte hätten ihn je um 0,2 bis 0,5 KiB vergrößert). Heatmap
+>   151,2 KiB; Node 188,7 KiB, Prozess-Tab 11,3 KiB; alles zusammen 490,4 von 520 KiB.
+>   **Abweichung:** Die Prüfung „Seite des Nodes plus Prozess-Tab < 200 KiB“ (M3-15) lag bei 200,0 KiB; jede neue Route
+>   vergrößert den gemeinsamen Einstieg um rund 20 Bytes. Sie prüft jetzt wie KONZEPT §17 den ersten Aufruf (mit der
+>   Reserve aus M2-34: < 190 KiB) und den Tab getrennt (< 16 KiB). Dabei gefunden und behoben: Die Überschrift der
+>   Node-Seite und der Titel zeigten den Hostnamen ohne `displayText` (Steuerzeichen unsichtbar, M2-28); das
+>   Sortiersymbol der Prozesse lädt kein zweites Icon mehr.
+> - **Tests:** Raster an den Grenzen (kürzester und längster Bereich, 200 Spalten, eine Minute mehr, Ausrichtung),
+>   Zellen (Spaltengrenzen, davor, danach, höchste Serie, NaN, Begrenzung), Dienst (Arten, Sichtbarkeit, Grenze 500,
+>   Nodes mit 20 Disks), Web-API (Spalten, Rundung, andere Org, Bereiche), Tenant-Isolation, Logik (Bereich, Farben,
+>   Zusammenfassung, Reihenfolge, Cursor), Komponente (Tastatur, Zeiger, Fokus), E2E (Tastatur, feindlicher Hostname,
+>   Art, Reihenfolge, Tabelle, Zeitraum, axe, Budget; Hostname auf der Node-Seite).
+> - **Gegenproben** für 26 Prüfungen: 25 erkannt (zwei erst mit schärferen Tests; der Speicher im Test begrenzt jetzt
+>   wie die echten auf 500 Serien), eine war gleichwertig – die ausdrückliche Abhängigkeitsliste des Effekts; sie ist
+>   entfernt, `load()` liest Art und Zeitraum vor dem ersten `await`.
 - **Ziel:** KONZEPT §16, 7.
   - Nodes × Zeit, eingefärbt nach CPU, Speicher, IO oder Anomalie-Rate; der Server fasst auf höchstens 200 Spalten
     zusammen.

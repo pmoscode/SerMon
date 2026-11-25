@@ -31,6 +31,7 @@ type isolationEnv struct {
 	updates                         webv1connect.UpdateServiceClient
 	anomalies                       webv1connect.AnomalyServiceClient
 	capacity                        webv1connect.CapacityServiceClient
+	heatmap                         webv1connect.HeatmapServiceClient
 	updatePolicies                  webv1connect.UpdatePolicyServiceClient
 	channels                        webv1connect.NotificationChannelServiceClient
 	policies                        webv1connect.NotificationPolicyServiceClient
@@ -468,6 +469,15 @@ var tenantIsolationCases = map[string]isolationCase{
 			return errLeak
 		}
 		return stream.Err()
+	}},
+	"/sermon.web.v1.HeatmapService/GetHeatmap": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.heatmap.GetHeatmap(ctx, connect.NewRequest(&webv1.GetHeatmapRequest{
+			Kind: webv1.HeatmapKind_HEATMAP_KIND_CPU, From: timestamppb.New(time.Now().Add(-time.Hour)), To: timestamppb.Now(),
+		}))
+		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), e.nodeA) || strings.Contains(res.Msg.String(), "alpha-01")) {
+			return errLeak
+		}
+		return err
 	}},
 	"/sermon.web.v1.CapacityService/GetCapacity": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.capacity.GetCapacity(ctx, connect.NewRequest(&webv1.GetCapacityRequest{}))

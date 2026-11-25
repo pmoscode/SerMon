@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// HeatmapService is the fleet heatmap (KONZEPT §16, 7; M4-27): nodes × time, one ratio per cell.
+// Limited to the node groups in which the caller may view nodes.
+service HeatmapService {
+  // GetHeatmap returns the cells of the visible nodes (at most 500, by host name) for a range of
+  // 10 minutes to 30 days, summed up to at most 200 columns.
+  rpc GetHeatmap(GetHeatmapRequest) returns (GetHeatmapResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// HeatmapKind is what colours the cells; every value is a ratio 0..1.
+enum HeatmapKind {
+  // HEATMAP_KIND_UNSPECIFIED is invalid.
+  HEATMAP_KIND_UNSPECIFIED = 0;
+  // HEATMAP_KIND_CPU is the share of CPU time not idle.
+  HEATMAP_KIND_CPU = 1;
+  // HEATMAP_KIND_MEMORY is the share of memory used.
+  HEATMAP_KIND_MEMORY = 2;
+  // HEATMAP_KIND_IO is the utilization of the node's busiest disk.
+  HEATMAP_KIND_IO = 3;
+  // HEATMAP_KIND_ANOMALY is the anomaly rate (ADR 0037).
+  HEATMAP_KIND_ANOMALY = 4;
+}
+
+// GetHeatmapRequest names the kind and the range.
+message GetHeatmapRequest {
+  option (buf.validate.message).cel = {
+    id: "range"
+    message: "the range must be 10 minutes to 30 days"
+    expression: "this.to - this.from >= duration('10m') && this.to - this.from <= duration('720h')"
+  };
+
+  // kind is what colours the cells.
+  HeatmapKind kind = 1 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // from is the start of the range (inclusive).
+  google.protobuf.Timestamp from = 2 [(buf.validate.field).required = true];
+  // to is the end of the range (exclusive).
+  google.protobuf.Timestamp to = 3 [(buf.validate.field).required = true];
+}
+
+// HeatmapRow is a node with one value per column, oldest first.
+message HeatmapRow {
+  // node_id is the node UUID.
+  string node_id = 1;
+  // hostname is the node's host name.
+  string hostname = 2;
+  // group_name is the name of its node group.
+  string group_name = 3;
+  // values are the ratios 0..1 (rounded to 0.001), -1 for a column without data.
+  repeated float values = 4;
+}
+
+// GetHeatmapResponse is the heatmap.
+message GetHeatmapResponse {
+  // start is the start of the first column; the columns are step wide.
+  google.protobuf.Timestamp start = 1;
+  // step is the width of a column.
+  google.protobuf.Duration step = 2;
+  // columns is their number (at most 200).
+  int32 columns = 3;
+  // rows are the nodes by host name.
+  repeated HeatmapRow rows = 4;
+  // truncated is set when there were more than 500 nodes.
+  bool truncated = 5;
+}

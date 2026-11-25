@@ -601,6 +601,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Metrics:        metricsHandler,
 		Fleet:          webapi.NewFleetHandler(nodes, logger),
 		Capacity:       webapi.NewCapacityHandler(nodes, logger),
+		Heatmap:        webapi.NewHeatmapHandler(nodes, logger),
 		SecurityEvents: webapi.NewSecurityEventHandler(securityEvents, logger),
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(db, 0), policy).
 			WithRefresher(postgres.NewCommandStore(db), time.Now).

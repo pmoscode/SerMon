@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { displayText } from '#lib/logs/text.js';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import type { Node } from '#lib/api/gen/sermon/web/v1/node_pb.js';
@@ -25,7 +26,9 @@
 <section class="flex flex-col gap-4 rounded-lg border bg-card p-4" aria-labelledby="node-title">
 	<div class="flex flex-wrap items-start justify-between gap-2">
 		<div>
-			<h1 id="node-title" class="text-2xl font-semibold tracking-tight">{node.hostname}</h1>
+			<h1 id="node-title" class="text-2xl font-semibold tracking-tight">
+				{displayText(node.hostname)}
+			</h1>
 			<p class="text-sm text-muted-foreground">
 				{node.groupName} · {node.osId}
 				{node.osVersion} · {m.node_kernel()}

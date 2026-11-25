@@ -1272,7 +1272,9 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
    höchstens 500 Dateisysteme mit der Prognose von `prediction` (`fleet.FullAt`, 24 h), Tagesmittel von CPU und Speicher
    je Node, die größten Verbraucher nach dem Mittel der letzten 7 Tage und der Änderung gegenüber den ersten 7.
 7. **Fleet-Heatmap:** Nodes × Zeit, eingefärbt nach CPU, Mem, IO oder Anomalie-Rate. Damit fallen Muster und „Noisy
-   Neighbors“ sofort auf.
+   Neighbors“ sofort auf. Umgesetzt (M4-27) als Ansicht der Fleet `/heatmap` über `HeatmapService.GetHeatmap`: 10 min
+   bis 30 Tage, höchstens 200 Spalten (Schritte, die einen Tag teilen), je Zelle der höchste Mittelwert, IO die
+   ausgelastetste Disk; Werte per Zeiger und Pfeiltasten, Legende, Tabelle als Alternative zur Farbe.
 8. **Vergleich:** 2–4 Nodes nebeneinander bzw. übereinandergelegt (z. B. vor und nach einer Änderung, oder
    Cluster-Mitglieder).
 9. **Anomalien:** Nodes nach Anomalie-Rate, „Was war ungewöhnlich?“ für einen Zeitraum.

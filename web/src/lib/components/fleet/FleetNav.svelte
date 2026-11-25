@@ -7,6 +7,7 @@
 	const views = [
 		{ href: resolve('/(app)/fleet'), label: () => m.fleet_view_overview() },
 		{ href: resolve('/(app)/capacity'), label: () => m.capacity_title() },
+		{ href: resolve('/(app)/heatmap'), label: () => m.heatmap_title() },
 		{ href: resolve('/(app)/anomalies'), label: () => m.anomalies_title() }
 	];
 </script>

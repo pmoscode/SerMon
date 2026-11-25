@@ -147,6 +147,20 @@ test.describe('node detail (mocked API)', () => {
 
 	// M2-23: a locked node says so at the top; the identity tab loads on demand and offers the
 	// actions to an operator of its group.
+	// The host chose its name: the heading and the title show it as text, controls visible (M4-27).
+	test('shows a hostile host name as text', async ({ page }) => {
+		const hostile = '<img src=x onerror=alert(1)>\u202Elacol';
+		await mockApi(page, {
+			...nodeApi,
+			'NodeService/GetNode': () => ({ json: { node: { ...node, hostname: hostile } } })
+		});
+		await page.goto(`/nodes/${nodeId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toContainText('<img src=x');
+		await expect(page.getByRole('heading', { level: 1 })).toContainText('⟨U+202E⟩');
+		expect(await page.locator('img[src="x"]').count()).toBe(0);
+		await expect(page).toHaveTitle(/⟨U\+202E⟩/);
+	});
+
 	test('shows a lock and the identity tab', async ({ page }) => {
 		await mockApi(page, {
 			...nodeApi,

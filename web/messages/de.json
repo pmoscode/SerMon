@@ -1129,5 +1129,8 @@
 	"policy_saved": "Gespeichert.",
 	"policy_need_window": "Automatische Modi brauchen ein Fenster mit mindestens einem Tag.",
 	"policy_alpine": "Alpine-Nodes melden bei „Security-Updates automatisch“ nur: Alpine kennt keine Security-Updates.",
-	"policy_link": "Update-Policy"
+	"policy_link": "Update-Policy",
+	"chart_updates": "Verfügbare Updates",
+	"chart_updates_all": "alle",
+	"chart_updates_security": "Security"
 }

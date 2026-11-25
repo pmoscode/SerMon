@@ -58,6 +58,8 @@ type Definition struct {
 	Labels      []string // exactly these labels, sorted
 	Aggregation Aggregation
 	Area        Area
+	// Server: the server derives the metric itself (M4-16); samples of an agent are dropped.
+	Server bool
 }
 
 // DisplayKey is the i18n message key of the metric's name.
@@ -193,6 +195,18 @@ var definitions = []Definition{
 	// Log files of the groups' globs (M3-05)
 	def("sermon_agent_log_files_followed", UnitCount, Last, AreaAgent),
 	def("sermon_agent_log_files_rejected", UnitCount, Last, AreaAgent),
+
+	// Updates, derived by the server from the node's update report (M4-16)
+	server(def("sermon_updates_pending", UnitCount, Last, AreaSystem)),
+	server(def("sermon_updates_security_pending", UnitCount, Last, AreaSystem)),
+	server(def("sermon_updates_security_age_seconds", UnitSeconds, Last, AreaSystem)),
+	server(def("sermon_updates_reboot_required", UnitBoolean, Max, AreaSystem)),
+	server(def("sermon_updates_reboot_required_seconds", UnitSeconds, Last, AreaSystem)),
+}
+
+func server(d Definition) Definition {
+	d.Server = true
+	return d
 }
 
 var byName = func() map[string]Definition {

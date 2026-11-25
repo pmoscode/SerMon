@@ -292,24 +292,25 @@ type NodeUpdatePackage struct {
 }
 
 type NodeUpdateState struct {
-	OrgID              uuid.UUID
-	NodeID             uuid.UUID
-	CollectedAt        time.Time
-	ReceivedAt         time.Time
-	Availability       int16
-	Reason             string
-	PackageManager     int16
-	TotalCount         int32
-	SecurityCount      int32
-	PackagesStored     int32
-	RebootRequired     bool
-	RebootReason       string
-	LastUpgradeAt      *time.Time
-	AllowRemoteUpdates pgtype.Bool
-	AllowRemoteReboot  pgtype.Bool
-	AllowSelfUpdate    pgtype.Bool
-	Refreshed          bool
-	OldestSecurityAt   *time.Time
+	OrgID               uuid.UUID
+	NodeID              uuid.UUID
+	CollectedAt         time.Time
+	ReceivedAt          time.Time
+	Availability        int16
+	Reason              string
+	PackageManager      int16
+	TotalCount          int32
+	SecurityCount       int32
+	PackagesStored      int32
+	RebootRequired      bool
+	RebootReason        string
+	LastUpgradeAt       *time.Time
+	AllowRemoteUpdates  pgtype.Bool
+	AllowRemoteReboot   pgtype.Bool
+	AllowSelfUpdate     pgtype.Bool
+	Refreshed           bool
+	OldestSecurityAt    *time.Time
+	RebootRequiredSince *time.Time
 }
 
 type NotificationChannel struct {

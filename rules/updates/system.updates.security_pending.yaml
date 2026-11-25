@@ -1,0 +1,29 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.updates.security_pending
+  name: { de: "Security-Updates offen", en: "Security updates pending" }
+  labels: { category: updates }
+spec:
+  type: threshold
+  metric: sermon_updates_security_age_seconds
+  aggregate: last
+  window: 5m
+  warning: { op: ">", value: 259200 }    # 3 days
+  critical: { op: ">", value: 1209600 }  # 14 days
+  clear: { op: "<", value: 259200 }
+  for: 10m
+  help:
+    de: >-
+      Für den Node liegt seit mehr als 3 Tagen (kritisch: 14 Tagen) mindestens ein Security-Update bereit, das nicht
+      installiert ist. Die Zeit zählt ab dem Bericht, in dem SerMon das älteste offene Security-Update zuerst gesehen hat.
+      Typische Ursachen: Die Gruppe meldet nur (Policy „nur melden“), ihr Fenster liegt erst später, der Host verbietet
+      Updates aus der Ferne (allow_remote_updates), ein Rollout ist gescheitert oder der Node war im Fenster offline.
+      Im Reiter Updates des Nodes stehen die Pakete; „Jetzt aktualisieren“ installiert sie, die Update-Policy der Gruppe
+      kann sie künftig automatisch einspielen.
+    en: >-
+      At least one security update has been available for the node for more than 3 days (critical: 14 days) and is not
+      installed. The time counts from the report in which SerMon first saw the oldest open security update. Typical
+      causes: the group only reports (policy "report only"), its window is still ahead, the host forbids remote updates
+      (allow_remote_updates), a rollout failed or the node was offline during the window. The node's Updates tab lists
+      the packages; "Update now" installs them, and the group's update policy can install them automatically in future.

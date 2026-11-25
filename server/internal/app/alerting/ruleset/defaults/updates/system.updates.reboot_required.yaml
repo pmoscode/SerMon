@@ -1,0 +1,27 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.updates.reboot_required
+  name: { de: "Neustart nötig", en: "Reboot required" }
+  labels: { category: updates }
+spec:
+  type: threshold
+  metric: sermon_updates_reboot_required_seconds
+  aggregate: last
+  window: 5m
+  warning: { op: ">", value: 86400 }    # 1 day
+  critical: { op: ">", value: 604800 }  # 7 days
+  clear: { op: "<", value: 86400 }
+  for: 10m
+  help:
+    de: >-
+      Der Node braucht seit mehr als einem Tag (kritisch: 7 Tagen) einen Neustart: Installierte Updates, meist ein neuer
+      Kernel oder Bibliotheken wie libc oder OpenSSL, wirken erst danach – bis dahin läuft der alte, womöglich angreifbare
+      Code weiter. Der Grund steht im Reiter Updates des Nodes. Starte ihn in einem passenden Moment neu („Neu starten“,
+      wenn der Host es erlaubt: allow_remote_reboot), oder lass die Update-Policy der Gruppe nach Updates im Fenster neu
+      starten (autoReboot).
+    en: >-
+      The node has needed a reboot for more than a day (critical: 7 days): installed updates, usually a new kernel or
+      libraries such as libc or OpenSSL, only take effect afterwards – until then the old, possibly vulnerable code keeps
+      running. The reason is in the node's Updates tab. Reboot it at a suitable moment ("Reboot", if the host allows it:
+      allow_remote_reboot), or let the group's update policy reboot after updates in its window (autoReboot).

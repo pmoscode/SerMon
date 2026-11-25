@@ -142,6 +142,8 @@ type Querier interface {
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
 	GetNodeCommand(ctx context.Context, id uuid.UUID) (GetNodeCommandRow, error)
+	// What the derived series of the node's updates show (M4-16).
+	GetNodeUpdateGauge(ctx context.Context, nodeID uuid.UUID) (GetNodeUpdateGaugeRow, error)
 	// A node of the scope with its report; no report: the report's columns are NULL.
 	GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) (GetNodeUpdatesRow, error)
 	GetNotificationChannel(ctx context.Context, id uuid.UUID) (GetNotificationChannelRow, error)

@@ -105,6 +105,39 @@ func (s *UpdateStore) Write(ctx context.Context, org tenant.OrgID, node identity
 	return stored, nil
 }
 
+// Gauge implements ingest.UpdateWriter: the stored report for the derived series (M4-16).
+func (s *UpdateStore) Gauge(ctx context.Context, org tenant.OrgID, node identity.NodeID) (update.Gauge, bool, error) {
+	scope, err := tenant.ForAllGroups(org)
+	if err != nil {
+		return update.Gauge{}, false, fmt.Errorf("read update gauge: %w", err)
+	}
+	var out update.Gauge
+	found := false
+	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		row, err := q.GetNodeUpdateGauge(ctx, uuid.UUID(node))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return wrap(err, "read update gauge")
+		}
+		found = true
+		out = update.Gauge{
+			Listed: update.Availability(row.Availability) == update.Listed, //nolint:gosec // 1 to 5 by the table's check
+			Total:  uint32(max(row.TotalCount, 0)), Security: uint32(max(row.SecurityCount, 0)),
+			RebootRequired: row.RebootRequired,
+		}
+		if row.OldestSecurityAt != nil {
+			out.OldestSecurity = *row.OldestSecurityAt
+		}
+		if row.RebootRequiredSince != nil {
+			out.RebootSince = *row.RebootRequiredSince
+		}
+		return nil
+	})
+	return out, found, err
+}
+
 // Node returns a node of the scope with its report and packages.
 func (s *UpdateStore) Node(ctx context.Context, scope tenant.Scope, node identity.NodeID) (updates.NodeUpdates, bool, error) {
 	var out updates.NodeUpdates

@@ -1129,5 +1129,8 @@
 	"policy_saved": "Saved.",
 	"policy_need_window": "Automatic modes need a window with at least one day.",
 	"policy_alpine": "Alpine nodes only report with \"security updates automatically\": Alpine has no security updates.",
-	"policy_link": "Update policy"
+	"policy_link": "Update policy",
+	"chart_updates": "Available updates",
+	"chart_updates_all": "all",
+	"chart_updates_security": "security"
 }

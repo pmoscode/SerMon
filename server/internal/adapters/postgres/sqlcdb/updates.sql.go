@@ -57,6 +57,35 @@ func (q *Queries) DeleteUpdatePolicy(ctx context.Context, groupID uuid.UUID) err
 	return err
 }
 
+const getNodeUpdateGauge = `-- name: GetNodeUpdateGauge :one
+SELECT availability, total_count, security_count, oldest_security_at, reboot_required, reboot_required_since
+FROM node_update_state WHERE node_id = $1
+`
+
+type GetNodeUpdateGaugeRow struct {
+	Availability        int16
+	TotalCount          int32
+	SecurityCount       int32
+	OldestSecurityAt    *time.Time
+	RebootRequired      bool
+	RebootRequiredSince *time.Time
+}
+
+// What the derived series of the node's updates show (M4-16).
+func (q *Queries) GetNodeUpdateGauge(ctx context.Context, nodeID uuid.UUID) (GetNodeUpdateGaugeRow, error) {
+	row := q.db.QueryRow(ctx, getNodeUpdateGauge, nodeID)
+	var i GetNodeUpdateGaugeRow
+	err := row.Scan(
+		&i.Availability,
+		&i.TotalCount,
+		&i.SecurityCount,
+		&i.OldestSecurityAt,
+		&i.RebootRequired,
+		&i.RebootRequiredSince,
+	)
+	return i, err
+}
+
 const getNodeUpdates = `-- name: GetNodeUpdates :one
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
@@ -410,12 +439,13 @@ const upsertNodeUpdateState = `-- name: UpsertNodeUpdateState :one
 INSERT INTO node_update_state AS s (
     org_id, node_id, collected_at, received_at, availability, reason, package_manager, total_count,
     security_count, packages_stored, reboot_required, reboot_reason, last_upgrade_at,
-    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed)
+    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed, reboot_required_since)
 VALUES (
     current_org_id(), $1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, $10, $11, $12,
-    $13, $14, $15, $16)
+    $13, $14, $15, $16,
+    CASE WHEN $10::boolean THEN $2::timestamptz END)
 ON CONFLICT (org_id, node_id) DO UPDATE SET
     collected_at = excluded.collected_at, received_at = excluded.received_at,
     availability = excluded.availability, reason = excluded.reason,
@@ -424,7 +454,9 @@ ON CONFLICT (org_id, node_id) DO UPDATE SET
     reboot_required = excluded.reboot_required, reboot_reason = excluded.reboot_reason,
     last_upgrade_at = excluded.last_upgrade_at, allow_remote_updates = excluded.allow_remote_updates,
     allow_remote_reboot = excluded.allow_remote_reboot, allow_self_update = excluded.allow_self_update,
-    refreshed = excluded.refreshed
+    refreshed = excluded.refreshed,
+    -- Since the first report that needed the reboot (M4-16).
+    reboot_required_since = CASE WHEN excluded.reboot_required THEN coalesce(s.reboot_required_since, excluded.collected_at) END
 WHERE s.collected_at < excluded.collected_at
 RETURNING s.node_id
 `

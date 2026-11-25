@@ -306,7 +306,18 @@
 					{/await}
 				{/if}
 			</Tabs.Content>
-			<Tabs.Content value="updates" class="pt-4">
+			<Tabs.Content value="updates" class="flex flex-col gap-6 pt-4">
+				<!-- The derived series of the updates (M4-16), written by the server with the metrics. -->
+				<MetricChart
+					nodeId={id}
+					title={m.chart_updates()}
+					unit="count"
+					height={140}
+					queries={[
+						{ metric: 'sermon_updates_pending', label: m.chart_updates_all() },
+						{ metric: 'sermon_updates_security_pending', label: m.chart_updates_security() }
+					]}
+				/>
 				{#if tab === 'updates'}
 					{#await import('#lib/components/updates/NodeUpdates.svelte')}
 						<p role="status" class="text-muted-foreground">{m.loading()}</p>

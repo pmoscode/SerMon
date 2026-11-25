@@ -4512,7 +4512,31 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Komponenten (Status, feindliche Paketnamen und Ausgaben, leere Zustände), axe, `check:size`.
 - **Abhängig von:** M4-09, M4-10, M4-13
 
-#### ☐ M4-16 – Standardregeln für Updates und Reboot · S · S
+#### ☑ M4-16 – Standardregeln für Updates und Reboot · S · S
+> Erledigt (KONZEPT §12.3; Threat Model T98; Hilfe zu den fünf neuen Metriken):
+> - **Abgeleitete Serien:** Die Ingest-Session schreibt aus dem gespeicherten Bericht des Nodes einmal je 10-s-Fenster,
+>   zur Zeit der Proben des Agents, `sermon_updates_pending`, `sermon_updates_security_pending`,
+>   `sermon_updates_security_age_seconds` (Alter des ältesten offenen Security-Updates), `sermon_updates_reboot_required`
+>   und `sermon_updates_reboot_required_seconds` – in Ring und Speicher wie jede Metrik, also für Regeln und Charts.
+>   Gelesen beim Öffnen der Session und nach jedem gespeicherten Bericht (`UpdateWriter.Gauge`); ohne Liste nur der
+>   Reboot. Seit wann der Reboot nötig ist, hält die neue Spalte `node_update_state.reboot_required_since`
+>   (Migration 00051). Die Metriken stehen im Katalog als „vom Server“: Proben eines Agents mit ihren Namen verwirft der
+>   Ingest (T98).
+> - **Regeln** (Kategorie `updates`): `system.updates.security_pending` (Warnung nach 3, kritisch nach 14 Tagen),
+>   `system.updates.reboot_required` (1 bzw. 7 Tage), `system.updates.run_failed` und
+>   `system.updates.rollout_stopped` (kritisch, Server-Ereignisse aus M4-13). Hilfe DE/EN mit Ursachen und Schritten.
+> - **Entscheidung:** „Updates verfügbar (alle)“ bekommt keine Regel; Dashboard und Abzeichen der Flotte zeigen sie.
+> - **Abweichung:** Die beiden Zustandsregeln sind Schwellen (`threshold`, `last`) auf dem Alter statt `state` mit
+>   Dauer: Ein Bericht kommt nur alle 6 h, die Dauer steckt deshalb im Wert. Fehlt das älteste Security-Update in der
+>   Paketliste (Grenze der Org überschritten), bleibt das Alter 0.
+> - **UI:** Der Reiter „Updates“ zeigt einen Chart der verfügbaren und der Security-Updates; Alerts der Kategorie
+>   `updates` öffnen diesen Reiter.
+> - **Tests:** Szenario je Regel; Werte der Serien (Alter, kein negatives, ohne Liste nur Reboot); Ingest (einmal je
+>   Fenster, neuer Bericht wirkt sofort, gefälschte Serie des Agents verworfen, ohne Bericht keine Serie, Lesefehler);
+>   PostgreSQL (Reboot seit dem ersten Bericht, zurückgesetzt nach dem Update, neu gezählt, nicht gelistet, andere Org).
+> - **Demo:** web-01 zeigt nach seinem ersten Bericht `sermon_updates_pending` 2 und `sermon_updates_security_pending` 1
+>   (5/5 grün, 13,7 min; Budget 0,62–0,74 % eines Kerns, 21–24 MiB).
+> - **Gegenproben** für 16 Prüfungen, alle erkannt (eine erst nach einem schärferen Test).
 - **Ziel:** Skill `sermon-add-alert-rule`, Tabelle KONZEPT §12.3.
   - Security-Updates offen seit 3 bzw. 14 Tagen; Reboot nötig seit 1 bzw. 7 Tagen; Update-Lauf fehlgeschlagen;
     Rollout gestoppt.

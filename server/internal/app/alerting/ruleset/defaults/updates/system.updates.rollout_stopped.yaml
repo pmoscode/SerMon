@@ -1,0 +1,22 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.updates.rollout_stopped
+  name: { de: "Rollout gestoppt", en: "Rollout stopped" }
+  labels: { category: updates }
+spec:
+  type: event
+  event: updates.rollout_stopped
+  count: { window: 1h, critical: 1 }
+  notifyFields: [ ts, reason ]
+  help:
+    de: >-
+      Ein Rollout der Gruppe hat beim ersten Fehlschlag angehalten (stopOnFailure): Die übrigen Nodes der Gruppe wurden
+      in diesem Fenster nicht aktualisiert. Der Alert hängt am Node, der gescheitert ist; der Grund nennt ihn und den
+      Schritt. Auf der Seite Updates steht der Rollout mit dem Stand jedes Nodes. Behebe die Ursache am gescheiterten
+      Node und aktualisiere die übrigen von Hand oder im nächsten Fenster.
+    en: >-
+      A rollout of the group stopped at its first failure (stopOnFailure): the other nodes of the group were not updated
+      in this window. The alert is on the node that failed; the reason names it and the step. The Updates page shows the
+      rollout with the state of each node. Fix the cause on the failed node and update the others by hand or in the next
+      window.

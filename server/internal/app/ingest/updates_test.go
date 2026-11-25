@@ -3,6 +3,9 @@ package ingest_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
+	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -22,6 +26,19 @@ type updateStore struct {
 	fail    bool
 	reports map[identity.NodeID]update.Report
 	writes  int
+	// gauges are what Gauge returns; a stored report sets them like the database.
+	gauges    map[identity.NodeID]update.Gauge
+	gaugeFail bool
+}
+
+func (s *updateStore) Gauge(_ context.Context, _ tenant.OrgID, node identity.NodeID) (update.Gauge, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.gaugeFail {
+		return update.Gauge{}, false, errors.New("database down")
+	}
+	g, ok := s.gauges[node]
+	return g, ok, nil
 }
 
 func (s *updateStore) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, r update.Report, _ time.Time) (bool, error) {
@@ -38,6 +55,13 @@ func (s *updateStore) Write(_ context.Context, _ tenant.OrgID, node identity.Nod
 		return false, nil
 	}
 	s.reports[node] = r
+	if s.gauges == nil {
+		s.gauges = map[identity.NodeID]update.Gauge{}
+	}
+	s.gauges[node] = update.Gauge{
+		Listed: r.Availability == update.Listed, Total: r.Total, Security: r.Security,
+		RebootRequired: r.RebootRequired, RebootSince: r.CollectedAt,
+	}
 	return true, nil
 }
 
@@ -331,5 +355,105 @@ func TestResults_WithoutAWriterAreAcknowledged(t *testing.T) {
 	s.Accept(context.Background(), ingest.Batch{Seq: 1, Result: &ingest.Result{Run: uuid.New(), Result: command.Result{Phase: command.Lost}}})
 	if ack, err := s.Flush(context.Background()); err != nil || ack != 1 || w.svc.Stats().CommandResultsIgnored.Load() != 1 {
 		t.Fatalf("Flush() = %d, %v", ack, err)
+	}
+}
+
+// derived returns the derived update series of the node's stored windows: metric → averages.
+func derived(w *world) map[string][]float64 {
+	out := map[string][]float64{}
+	aggregates := w.store.Aggregates()
+	slices.SortFunc(aggregates, func(a, b metrics.Aggregate) int { return a.Start.Compare(b.Start) })
+	for _, a := range aggregates {
+		if strings.HasPrefix(a.Metric, "sermon_updates_") {
+			out[a.Metric] = append(out[a.Metric], a.Avg)
+		}
+	}
+	return out
+}
+
+// M4-16: with a stored report the session writes the derived series once per window, at the time
+// of the agent's samples; a new report changes them at once. An agent can't send them itself.
+func TestUpdates_TheDerivedSeriesFollowTheStoredReport(t *testing.T) {
+	w, store := updateWorld(t, ingest.DefaultConfig())
+	store.gauges = map[identity.NodeID]update.Gauge{node: {
+		Listed: true, Total: 5, Security: 2, OldestSecurity: t0.Add(-72 * time.Hour),
+		RebootRequired: true, RebootSince: t0.Add(-time.Hour),
+	}}
+	s := w.open(t)
+	ctx := context.Background()
+	// Two batches in the first window, one carrying a forged derived series.
+	w.clock.Set(t0.Add(200 * time.Millisecond))
+	forged := batch(1, t0, 1)
+	forged.Samples = append(forged.Samples, ingest.Sample{Metric: update.MetricSecurityAge, Labels: metrics.Labels{}, Value: 0})
+	s.Accept(ctx, forged)
+	last := send(t, w, s, 2, t0.Add(time.Second), 2)
+	last = send(t, w, s, last+1, t0.Add(10*time.Second), 3) // the next window
+	last = send(t, w, s, last+1, t0.Add(20*time.Second), 4) // closes it
+	if _, err := s.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got := derived(w)
+	want := map[string][]float64{
+		update.MetricPending: {5, 5}, update.MetricSecurityPending: {2, 2},
+		update.MetricSecurityAge: {72 * 3600, 72*3600 + 10}, update.MetricRebootRequired: {1, 1},
+		update.MetricRebootRequiredSeconds: {3600, 3610},
+	}
+	for m, v := range want {
+		if fmt.Sprint(got[m]) != fmt.Sprint(v) {
+			t.Errorf("%s = %v, want %v", m, got[m], v)
+		}
+	}
+	if w.svc.Stats().Unknown.Load() != 1 {
+		t.Errorf("the forged series was taken: unknown = %d", w.svc.Stats().Unknown.Load())
+	}
+	ring := w.ring.Query(func() tenant.Scope { s, _ := tenant.ForAllGroups(org); return s }(), metrics.Query{
+		Metric: update.MetricSecurityPending, Nodes: []identity.NodeID{node}, From: t0, To: t0.Add(time.Minute), Step: 10 * time.Second,
+	})
+	if len(ring) != 1 || len(ring[0].Points) == 0 {
+		t.Errorf("ring = %+v, want the derived series for the rules", ring)
+	}
+	// A new report: nothing to update any more, no reboot.
+	r := report(t0.Add(25 * time.Second))
+	s.Accept(ctx, updateBatch(last+1, r))
+	if _, err := s.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Still the window of 00:20: the new values go out at once, not only from the next window.
+	last = send(t, w, s, last+2, t0.Add(26*time.Second), 5)
+	now := w.ring.Query(func() tenant.Scope { s, _ := tenant.ForAllGroups(org); return s }(), metrics.Query{
+		Metric: update.MetricPending, Nodes: []identity.NodeID{node}, From: t0.Add(26 * time.Second), To: t0.Add(27 * time.Second), Step: time.Second,
+	})
+	if len(now) != 1 || len(now[0].Points) != 1 || now[0].Points[0].Avg != 0 {
+		t.Errorf("right after the report = %+v", now)
+	}
+	last = send(t, w, s, last+1, t0.Add(30*time.Second), 6)
+	send(t, w, s, last+1, t0.Add(40*time.Second), 7)
+	if _, err := s.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got = derived(w)
+	for _, m := range []string{update.MetricPending, update.MetricSecurityAge, update.MetricRebootRequired} {
+		if v := got[m]; v[len(v)-1] != 0 {
+			t.Errorf("%s after the new report = %v", m, v)
+		}
+	}
+}
+
+// Without a report there are no derived series; a failing read keeps the session from opening
+// (the agent retries), a failing refresh keeps the old values.
+func TestUpdates_NoDerivedSeriesWithoutAReport(t *testing.T) {
+	w, store := updateWorld(t, ingest.DefaultConfig())
+	s := w.open(t)
+	last := send(t, w, s, 1, t0, 1)
+	send(t, w, s, last+1, t0.Add(10*time.Second), 2)
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := derived(w); len(got) != 0 {
+		t.Errorf("derived = %v", got)
+	}
+	store.gaugeFail = true
+	if _, err := w.svc.Open(context.Background(), org, node, ingest.HostFacts{}, "1"); !errors.Is(err, ingest.ErrOpen) {
+		t.Errorf("Open() = %v", err)
 	}
 }

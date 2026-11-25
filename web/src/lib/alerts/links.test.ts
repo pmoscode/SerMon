@@ -21,6 +21,7 @@ describe('links from alerts into the node page', () => {
 
 	it('maps the categories that have an area', () => {
 		expect(tabOfCategory('security')).toBe('security');
+		expect(tabOfCategory('updates')).toBe('updates');
 		expect(tabOfCategory('availability')).toBeUndefined();
 		expect(tabOfCategory('system')).toBeUndefined();
 		expect(tabOfCategory(undefined)).toBeUndefined();

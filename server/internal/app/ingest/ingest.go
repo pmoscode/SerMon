@@ -281,6 +281,9 @@ type UpdateWriter interface {
 	// time or later (a resend, or an older batch): then it returns false and changes nothing.
 	// Packages beyond the organization's limit are left out; their counts stay.
 	Write(ctx context.Context, org tenant.OrgID, node identity.NodeID, r update.Report, receivedAt time.Time) (bool, error)
+	// Gauge returns what the node's stored report says for the derived series (M4-16); false
+	// before the first report.
+	Gauge(ctx context.Context, org tenant.OrgID, node identity.NodeID) (update.Gauge, bool, error)
 }
 
 // ResultWriter stores what the agents report of the server's commands (M4-11).
@@ -491,9 +494,13 @@ type Session struct {
 	lastSeen      time.Time
 	events        []secevents.Batch // waiting for the next flush
 	update        *update.Report    // the newest report waiting for the next flush
-	results       []Result          // waiting for the next flush
-	logs          []logBatch        // waiting for the next flush
-	logsFailing   time.Time         // since when the store fails for the waiting logs
+	// gauge is the node's stored report for the derived series (nil: none yet); gaugeWindow is
+	// the latest window they were written for (M4-16).
+	gauge       *update.Gauge
+	gaugeWindow time.Time
+	results     []Result   // waiting for the next flush
+	logs        []logBatch // waiting for the next flush
+	logsFailing time.Time  // since when the store fails for the waiting logs
 }
 
 // ErrOpen means the session could not be prepared (database unavailable); the agent retries.
@@ -522,6 +529,16 @@ func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.Node
 	for _, k := range known {
 		series[seriesID(k.Metric, k.Labels)] = struct{}{}
 	}
+	var gauge *update.Gauge
+	if s.updates != nil {
+		g, ok, err := s.updates.Gauge(ctx, org, node)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrOpen, err)
+		}
+		if ok {
+			gauge = &g
+		}
+	}
 	rate, burst, seriesLimit := s.config.SampleRate, s.config.SampleBurst, s.config.SeriesLimit
 	if q := conn.Limits.SamplesPerSecond; q > 0 {
 		// The burst keeps the instance's ratio to the rate.
@@ -533,7 +550,7 @@ func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.Node
 	return &Session{
 		service: s, org: org, group: conn.Group, node: node, persisted: persisted, received: persisted,
 		windows: map[windowKey]*window{}, series: series, rate: rate, burst: burst, seriesLimit: seriesLimit,
-		tokens: burst, refilled: now, lastSeen: now,
+		tokens: burst, refilled: now, lastSeen: now, gauge: gauge,
 	}, nil
 }
 
@@ -649,20 +666,35 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		if math.IsNaN(sample.Value) || math.IsInf(sample.Value, 0) || !s.known(sample) || !s.admitSeries(sample) {
 			continue
 		}
-		stats.Samples.Add(1)
-		s.service.ring.Add(s.org, s.group, s.node, sample.Metric, sample.Labels, at, sample.Value)
-		key := windowKey{metric: sample.Metric, labels: sample.Labels.Key(), start: start}
-		w, ok := s.windows[key]
-		if !ok {
-			w = &window{labels: sample.Labels, min: sample.Value, max: sample.Value}
-			s.windows[key] = w
+		s.add(sample, at, start)
+	}
+	// The derived series of the updates, once per window, at the time of the agent's samples.
+	if s.gauge != nil && start.After(s.gaugeWindow) {
+		s.gaugeWindow = start
+		for _, v := range s.gauge.Values(at) {
+			sample := Sample{Metric: v.Metric, Labels: metrics.Labels{}, Value: v.Value}
+			if s.admitSeries(sample) {
+				s.add(sample, at, start)
+			}
 		}
-		w.sum += sample.Value
-		w.count++
-		w.min = min(w.min, sample.Value)
-		w.max = max(w.max, sample.Value)
 	}
 	return response
+}
+
+// add puts an admitted sample into the ring and its window.
+func (s *Session) add(sample Sample, at, start time.Time) {
+	s.service.stats.Samples.Add(1)
+	s.service.ring.Add(s.org, s.group, s.node, sample.Metric, sample.Labels, at, sample.Value)
+	key := windowKey{metric: sample.Metric, labels: sample.Labels.Key(), start: start}
+	w, ok := s.windows[key]
+	if !ok {
+		w = &window{labels: sample.Labels, min: sample.Value, max: sample.Value}
+		s.windows[key] = w
+	}
+	w.sum += sample.Value
+	w.count++
+	w.min = min(w.min, sample.Value)
+	w.max = max(w.max, sample.Value)
 }
 
 // acceptEvents keeps the valid events within the time window and the node's bucket for the next
@@ -751,6 +783,7 @@ func (s *Session) Flush(ctx context.Context) (uint64, error) {
 		}
 		if stored {
 			s.service.stats.UpdateReports.Add(1)
+			s.refreshGauge(ctx)
 		} else {
 			s.service.stats.UpdateReportsStale.Add(1)
 		}
@@ -816,6 +849,21 @@ func (s *Session) Flush(ctx context.Context) (uint64, error) {
 	return ack, nil
 }
 
+// refreshGauge reads the derived series' state after a stored report; on an error the old one
+// stays until the next report (the report itself is stored).
+func (s *Session) refreshGauge(ctx context.Context) {
+	g, ok, err := s.service.updates.Gauge(ctx, s.org, s.node)
+	if err != nil {
+		s.service.logger.WarnContext(ctx, "reading the update gauge failed", "node", s.node.String(), "error", err)
+		return
+	}
+	if ok {
+		s.gauge = &g
+		// The next window shows the new report at once.
+		s.gaugeWindow = time.Time{}
+	}
+}
+
 // Close writes what is complete; open windows are left to the agent's resend.
 func (s *Session) Close(ctx context.Context) {
 	if _, err := s.Flush(ctx); err != nil {
@@ -841,7 +889,7 @@ func (s *Session) seen(ctx context.Context, now time.Time) {
 // unbounded labels, no metrics the UI can't describe). Unknown ones are counted and logged once.
 func (s *Session) known(sample Sample) bool {
 	definition, ok := metric.Lookup(sample.Metric)
-	if ok && definition.AcceptsLabels(sample.Labels) {
+	if ok && definition.AcceptsLabels(sample.Labels) && !definition.Server {
 		return true
 	}
 	s.service.stats.Unknown.Add(1)

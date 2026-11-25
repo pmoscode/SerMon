@@ -1006,6 +1006,10 @@ func (r *recordingUpdates) Write(_ context.Context, _ tenant.OrgID, node identit
 	return true, nil
 }
 
+func (r *recordingUpdates) Gauge(context.Context, tenant.OrgID, identity.NodeID) (update.Gauge, bool, error) {
+	return update.Gauge{}, false, nil
+}
+
 // Update reports (M4-09): converted field by field, stored under the certificate's node.
 func TestSession_StoresUpdateReports(t *testing.T) {
 	store := memstore.New()

@@ -392,3 +392,46 @@ func TestFleetStore_NodesCarryTheirUpdates(t *testing.T) {
 		}
 	}
 }
+
+// M4-16: the gauge of the derived series – the oldest open security update and since when the
+// reboot is needed, kept across reports while it is, cleared after; nothing for another
+// organization or before the first report.
+func TestUpdateStore_GaugeOfTheDerivedSeries(t *testing.T) {
+	f := newUpdateFixture(t, 0)
+	ctx := context.Background()
+	if _, ok, err := f.store.Gauge(ctx, f.org, f.node); ok || err != nil {
+		t.Fatalf("before a report: %v, %v", ok, err)
+	}
+	first := updatesNow.Add(-48 * time.Hour)
+	r := updateReport(first, pkg("openssl", "3", true), pkg("vim", "2", false))
+	r.RebootRequired = true
+	f.write(t, f.node, r)
+	r = updateReport(updatesNow, pkg("openssl", "3", true), pkg("vim", "2", false), pkg("curl", "8", true))
+	r.RebootRequired = true
+	f.write(t, f.node, r)
+	g, ok, err := f.store.Gauge(ctx, f.org, f.node)
+	if err != nil || !ok || !g.Listed || g.Total != 3 || g.Security != 2 || !g.RebootRequired ||
+		!g.OldestSecurity.Equal(first) || !g.RebootSince.Equal(first) {
+		t.Fatalf("gauge = %+v, %v, %v", g, ok, err)
+	}
+	if _, ok, _ := f.store.Gauge(ctx, newUpdateFixture(t, 0).org, f.node); ok {
+		t.Error("another organization reads the gauge")
+	}
+	// Rebooted and updated: cleared; the next reboot counts anew.
+	f.write(t, f.node, updateReport(updatesNow.Add(time.Hour)))
+	if g, _, _ := f.store.Gauge(ctx, f.org, f.node); g.RebootRequired || !g.RebootSince.IsZero() || g.Security != 0 {
+		t.Errorf("after the update = %+v", g)
+	}
+	again := updateReport(updatesNow.Add(2 * time.Hour))
+	again.RebootRequired = true
+	f.write(t, f.node, again)
+	if g, _, _ := f.store.Gauge(ctx, f.org, f.node); !g.RebootSince.Equal(updatesNow.Add(2 * time.Hour)) {
+		t.Errorf("a new reboot = %+v", g)
+	}
+	// An unlisted report has no counts.
+	failed := update.Report{CollectedAt: updatesNow.Add(3 * time.Hour), Availability: update.Failed, Reason: "apt is locked"}.Normalized()
+	f.write(t, f.node, failed)
+	if g, _, _ := f.store.Gauge(ctx, f.org, f.node); g.Listed {
+		t.Errorf("unlisted = %+v", g)
+	}
+}

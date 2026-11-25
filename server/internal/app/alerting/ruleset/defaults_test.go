@@ -284,6 +284,22 @@ var scenarios = map[alert.RuleID]scenario{
 		fireEvents: []secevent.Event{event(secevent.NodeLocked, web, time.Minute, "", "")},
 		calmEvents: []secevent.Event{event(secevent.NodeLocked, web, 2*time.Hour, "", "")}, want: critical,
 	},
+	// M4-16: the derived series of the updates (seconds since the oldest open security update,
+	// since the reboot became needed) and the rollout's server events.
+	"system.updates.security_pending": {
+		fire: one("sermon_updates_security_age_seconds", steady(15*86400)), calm: one("sermon_updates_security_age_seconds", steady(2*86400)), want: critical,
+	},
+	"system.updates.reboot_required": {
+		fire: one("sermon_updates_reboot_required_seconds", steady(2*86400)), calm: one("sermon_updates_reboot_required_seconds", steady(3600)), want: warning,
+	},
+	"system.updates.run_failed": {
+		fireEvents: []secevent.Event{event(secevent.UpdateRunFailed, web, time.Minute, "", "")},
+		calmEvents: []secevent.Event{event(secevent.UpdateRunFailed, web, 2*time.Hour, "", "")}, want: critical,
+	},
+	"system.updates.rollout_stopped": {
+		fireEvents: []secevent.Event{event(secevent.UpdateRolloutStopped, web, time.Minute, "", "")},
+		calmEvents: []secevent.Event{event(secevent.UpdateRolloutStopped, web, 2*time.Hour, "", "")}, want: critical,
+	},
 	"security.node.rotation_new_ip": {
 		fireEvents: []secevent.Event{event(secevent.NodeRotationNewIP, web, time.Minute, "192.0.2.31", "")},
 		calmEvents: []secevent.Event{event(secevent.NodeRotationNewIP, web, time.Hour, "192.0.2.31", "")}, want: warning,

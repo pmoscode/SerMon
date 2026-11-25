@@ -1,0 +1,24 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.updates.run_failed
+  name: { de: "Update-Lauf fehlgeschlagen", en: "Update run failed" }
+  labels: { category: updates }
+spec:
+  type: event
+  event: updates.run_failed
+  count: { window: 1h, critical: 1 }
+  notifyFields: [ ts, reason ]
+  help:
+    de: >-
+      Ein Rollout konnte den Node nicht aktualisieren: Das Update, der Neustart oder der Health-Check danach ist
+      gescheitert. Der Grund nennt den Schritt – etwa den Exit-Code des Paketmanagers, eine Ablehnung durch den Host
+      (helper.toml), einen Node, der nach dem Neustart nicht rechtzeitig zurückkam, oder einen kritischen Alert danach.
+      Im Reiter Updates des Nodes steht der Lauf mit seiner Ausgabe; prüfe sie (oft ein gesperrter oder unterbrochener
+      Paketmanager, voller Platz oder eine fehlerhafte Paketquelle), behebe die Ursache und aktualisiere erneut.
+    en: >-
+      A rollout could not update the node: the update, the reboot or the health check afterwards failed. The reason
+      names the step – such as the exit code of the package manager, a refusal by the host (helper.toml), a node that
+      didn't come back in time after the reboot, or a critical alert afterwards. The node's Updates tab has the run with
+      its output; check it (often a locked or interrupted package manager, a full disk or a broken package source), fix
+      the cause and update again.

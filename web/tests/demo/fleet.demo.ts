@@ -282,6 +282,30 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		}),
 		expect.objectContaining({ name: 'sermon-e2e-extra', candidateVersion: '1.1.0-1' })
 	]);
+	// The server derives series from the report (M4-16): web-01 has one security update and two
+	// in all, written with its metrics for the rules and the charts.
+	await expect
+		.poll(
+			async () => {
+				const latest: Record<string, number | undefined> = {};
+				for (const metric of ['sermon_updates_pending', 'sermon_updates_security_pending']) {
+					const res = await call<{ series?: { points?: { avg?: number }[] }[] }>(
+						page.request,
+						baseURL ?? '',
+						'MetricsService/QueryMetrics',
+						{
+							selector: { metric, nodeIds: [web01.nodeId] },
+							from: new Date(Date.now() - 5 * 60_000).toISOString(),
+							to: new Date().toISOString()
+						}
+					);
+					latest[metric] = res.series?.[0]?.points?.at(-1)?.avg;
+				}
+				return latest;
+			},
+			{ timeout: 60_000, intervals: [5_000] }
+		)
+		.toEqual({ sermon_updates_pending: 2, sermon_updates_security_pending: 1 });
 	console.log(
 		`${agents.length} hosts reported their updates after ${Math.round((Date.now() - started) / 1000)} s`
 	);

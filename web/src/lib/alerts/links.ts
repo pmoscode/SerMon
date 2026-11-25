@@ -20,10 +20,10 @@ export const nodeTabs = [
 ] as const;
 export type NodeTab = (typeof nodeTabs)[number];
 
-/** The area of a rule's category: cpu, memory, disk, network and security have their own. */
+/** The area of a rule's category: cpu, memory, disk, network, security and updates have their own. */
 export function tabOfCategory(category: string | undefined): NodeTab | undefined {
 	return category &&
-		(['cpu', 'memory', 'disk', 'network', 'security'] as string[]).includes(category)
+		(['cpu', 'memory', 'disk', 'network', 'security', 'updates'] as string[]).includes(category)
 		? (category as NodeTab)
 		: undefined;
 }

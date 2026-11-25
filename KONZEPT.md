@@ -930,10 +930,11 @@ einen **Dry-Run-Diff**.
 |                   | sudo-Authentifizierungsfehler                                  | event             | 3 / 10 in 10 min                     |
 |                   | sudo ohne Berechtigung („not in sudoers“)                      | event             | ✓                                   |
 |                   | Neuer Benutzer angelegt                                        | event             | ✓                                   |
-| **Updates**       | Security-Updates verfügbar                                     | state             | > 0 seit 3 Tagen / > 0 seit 14 Tagen |
-|                   | Updates verfügbar (alle)                                       | state             | Info                                 |
-|                   | Reboot erforderlich                                            | state             | > 1 Tag / > 7 Tage                   |
+| **Updates**       | Security-Updates verfügbar                                     | threshold         | > 0 seit 3 Tagen / > 0 seit 14 Tagen |
+|                   | Updates verfügbar (alle)                                       | –                 | nur Dashboard                        |
+|                   | Reboot erforderlich                                            | threshold         | > 1 Tag / > 7 Tage                   |
 |                   | Update-Lauf fehlgeschlagen                                     | event             | – / ✓                               |
+|                   | Rollout gestoppt                                               | event             | – / ✓                               |
 | **Anomalien**     | Anomalie-Rate des Nodes hoch                                   | anomaly           | 10 % / 25 % der Metriken             |
 
 Seit M2-04 mitgeliefert sind die Regeln für Verfügbarkeit, CPU, Memory, Disk, Netzwerk und System, soweit ihre Daten
@@ -954,8 +955,15 @@ vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
   synchronisiert (Warnung nach 30 min) – [ADR 0026](docs/adr/0026-zustands-collectors.md).
 - **Login von neuer Quelle** (M3-16): `security.ssh.login_new_source` meldet eine Warnung pro User und Quelle, wenn
   SerMon den Node schon 7 Tage kennt (`learning: 168h`); „Info“ gibt es als Stufe nicht.
-- **Später:** „Login aus neuem Land“ braucht GeoIP (§11, M3-18). Updates und Anomalien kommen in späteren
-  Meilensteinen.
+- **Updates (M4-16):** Der Server leitet aus dem letzten Update-Bericht eines Nodes eigene Serien ab und schreibt sie mit
+  dessen Metriken, alle 10 s: `sermon_updates_pending`, `sermon_updates_security_pending`,
+  `sermon_updates_security_age_seconds` (seit wann das älteste offene Security-Update bekannt ist),
+  `sermon_updates_reboot_required` und `sermon_updates_reboot_required_seconds` (seit dem ersten Bericht, der den
+  Reboot verlangte). Ein Agent kann sie nicht selbst senden. Die Regeln `system.updates.security_pending` und
+  `system.updates.reboot_required` sind daher Schwellen auf dem Alter (statt `state`); `system.updates.run_failed`
+  und `system.updates.rollout_stopped` zählen die Server-Ereignisse des Orchestrators (kritisch). „Updates verfügbar
+  (alle)“ bleibt ohne Regel: Viele Updates sind für sich kein Problem, das Dashboard und das Abzeichen zeigen sie.
+- **Später:** „Login aus neuem Land“ braucht GeoIP (§11, M3-18). Anomalien kommen in einem späteren Meilenstein.
 
 ### 12.4 Benachrichtigungskanäle
 

@@ -11,12 +11,13 @@ SELECT count(*) FROM node_update_packages WHERE node_id <> sqlc.arg(node_id);
 INSERT INTO node_update_state AS s (
     org_id, node_id, collected_at, received_at, availability, reason, package_manager, total_count,
     security_count, packages_stored, reboot_required, reboot_reason, last_upgrade_at,
-    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed)
+    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed, reboot_required_since)
 VALUES (
     current_org_id(), sqlc.arg(node_id), sqlc.arg(collected_at), sqlc.arg(received_at), sqlc.arg(availability),
     sqlc.arg(reason), sqlc.arg(package_manager), sqlc.arg(total_count), sqlc.arg(security_count),
     sqlc.arg(packages_stored), sqlc.arg(reboot_required), sqlc.arg(reboot_reason), sqlc.narg(last_upgrade_at),
-    sqlc.narg(allow_remote_updates), sqlc.narg(allow_remote_reboot), sqlc.narg(allow_self_update), sqlc.arg(refreshed))
+    sqlc.narg(allow_remote_updates), sqlc.narg(allow_remote_reboot), sqlc.narg(allow_self_update), sqlc.arg(refreshed),
+    CASE WHEN sqlc.arg(reboot_required)::boolean THEN sqlc.arg(collected_at)::timestamptz END)
 ON CONFLICT (org_id, node_id) DO UPDATE SET
     collected_at = excluded.collected_at, received_at = excluded.received_at,
     availability = excluded.availability, reason = excluded.reason,
@@ -25,7 +26,9 @@ ON CONFLICT (org_id, node_id) DO UPDATE SET
     reboot_required = excluded.reboot_required, reboot_reason = excluded.reboot_reason,
     last_upgrade_at = excluded.last_upgrade_at, allow_remote_updates = excluded.allow_remote_updates,
     allow_remote_reboot = excluded.allow_remote_reboot, allow_self_update = excluded.allow_self_update,
-    refreshed = excluded.refreshed
+    refreshed = excluded.refreshed,
+    -- Since the first report that needed the reboot (M4-16).
+    reboot_required_since = CASE WHEN excluded.reboot_required THEN coalesce(s.reboot_required_since, excluded.collected_at) END
 WHERE s.collected_at < excluded.collected_at
 RETURNING s.node_id;
 
@@ -112,3 +115,8 @@ ON CONFLICT (org_id, group_id) DO UPDATE SET
 
 -- name: DeleteUpdatePolicy :exec
 DELETE FROM update_policies WHERE group_id = sqlc.arg(group_id);
+
+-- name: GetNodeUpdateGauge :one
+-- What the derived series of the node's updates show (M4-16).
+SELECT availability, total_count, security_count, oldest_security_at, reboot_required, reboot_required_since
+FROM node_update_state WHERE node_id = sqlc.arg(node_id);

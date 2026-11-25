@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// UpdateService shows what the nodes could update (KONZEPT §14.1, M4-09): the latest report of
+// each node's agent. Names, versions, sources and reasons come from the host's package sources (a
+// third party): bounded, invisible characters replaced, to be shown as text only.
+service UpdateService {
+  // GetNodeUpdates returns a node's report with its packages (view_nodes). A node the caller
+  // can't view is NOT_FOUND.
+  rpc GetNodeUpdates(GetNodeUpdatesRequest) returns (GetNodeUpdatesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListFleetUpdates returns the nodes the caller may view with their update status, without
+  // packages, by host name, and how many nodes have each status.
+  rpc ListFleetUpdates(ListFleetUpdatesRequest) returns (ListFleetUpdatesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// UpdateStatus is where a node stands with its updates; a reboot is separate (reboot_required).
+enum UpdateStatus {
+  // UPDATE_STATUS_UNSPECIFIED is not used.
+  UPDATE_STATUS_UNSPECIFIED = 0;
+  // UPDATE_STATUS_UNKNOWN: no report yet.
+  UPDATE_STATUS_UNKNOWN = 1;
+  // UPDATE_STATUS_UNAVAILABLE: the agent couldn't list the updates (see availability).
+  UPDATE_STATUS_UNAVAILABLE = 2;
+  // UPDATE_STATUS_CURRENT: nothing to update.
+  UPDATE_STATUS_CURRENT = 3;
+  // UPDATE_STATUS_UPDATES: updates, none for security.
+  UPDATE_STATUS_UPDATES = 4;
+  // UPDATE_STATUS_SECURITY: security updates.
+  UPDATE_STATUS_SECURITY = 5;
+}
+
+// UpdateAvailability says whether the agent could list the updates.
+enum UpdateAvailability {
+  // UPDATE_AVAILABILITY_UNSPECIFIED: no report.
+  UPDATE_AVAILABILITY_UNSPECIFIED = 0;
+  // UPDATE_AVAILABILITY_LISTED: the packages are the host's updates.
+  UPDATE_AVAILABILITY_LISTED = 1;
+  // UPDATE_AVAILABILITY_NO_HELPER: the root helper is not installed or not running.
+  UPDATE_AVAILABILITY_NO_HELPER = 2;
+  // UPDATE_AVAILABILITY_HELPER_TOO_OLD: the helper doesn't know the operation.
+  UPDATE_AVAILABILITY_HELPER_TOO_OLD = 3;
+  // UPDATE_AVAILABILITY_UNSUPPORTED: no supported package manager on the host.
+  UPDATE_AVAILABILITY_UNSUPPORTED = 4;
+  // UPDATE_AVAILABILITY_FAILED: listing failed; reason says why.
+  UPDATE_AVAILABILITY_FAILED = 5;
+}
+
+// PackageManager is how the updates were listed.
+enum PackageManager {
+  // PACKAGE_MANAGER_UNSPECIFIED: unknown.
+  PACKAGE_MANAGER_UNSPECIFIED = 0;
+  // PACKAGE_MANAGER_APT: Debian and Ubuntu.
+  PACKAGE_MANAGER_APT = 1;
+  // PACKAGE_MANAGER_DNF: the RHEL family and Fedora.
+  PACKAGE_MANAGER_DNF = 2;
+  // PACKAGE_MANAGER_APK: Alpine, without security metadata (KONZEPT O6).
+  PACKAGE_MANAGER_APK = 3;
+}
+
+// GetNodeUpdatesRequest names the node.
+message GetNodeUpdatesRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetNodeUpdatesResponse is the node with its report.
+message GetNodeUpdatesResponse {
+  // node is the node's status and counts.
+  NodeUpdates node = 1;
+  // packages are the available updates, security updates first, at most 5000 (fewer than
+  // node.total_count if packages_omitted).
+  repeated UpdatePackage packages = 2;
+}
+
+// ListFleetUpdatesRequest has no fields yet.
+message ListFleetUpdatesRequest {}
+
+// ListFleetUpdatesResponse is the overview.
+message ListFleetUpdatesResponse {
+  // nodes are the visible nodes, by host name.
+  repeated NodeUpdates nodes = 1;
+  // unknown counts the nodes without report.
+  int32 unknown = 2;
+  // unavailable counts the nodes whose agent couldn't list.
+  int32 unavailable = 3;
+  // current counts the nodes with nothing to update.
+  int32 current = 4;
+  // with_updates counts the nodes with updates, none for security.
+  int32 with_updates = 5;
+  // with_security counts the nodes with security updates.
+  int32 with_security = 6;
+  // reboot_required counts the nodes that need a reboot.
+  int32 reboot_required = 7;
+}
+
+// NodeUpdates is a node with the counts of its latest report.
+message NodeUpdates {
+  // node_id is the node UUID.
+  string node_id = 1;
+  // hostname is the host name from the agent.
+  string hostname = 2;
+  // group_id is the node group.
+  string group_id = 3;
+  // status sums the report up.
+  UpdateStatus status = 4;
+  // availability says whether the agent could list (UNSPECIFIED without report).
+  UpdateAvailability availability = 5;
+  // reason explains an availability other than listed.
+  string reason = 6;
+  // package_manager says how the updates were listed.
+  PackageManager package_manager = 7;
+  // collected_at is when the agent listed (its clock).
+  google.protobuf.Timestamp collected_at = 8;
+  // received_at is when the server stored the report.
+  google.protobuf.Timestamp received_at = 9;
+  // total_count counts all available updates.
+  uint32 total_count = 10;
+  // security_count counts the security updates (0 without security metadata, Alpine).
+  uint32 security_count = 11;
+  // packages_omitted: fewer packages are stored than total_count (the agent's or the
+  // organization's limit).
+  bool packages_omitted = 12;
+  // reboot_required: the host needs a reboot to use what is installed.
+  bool reboot_required = 13;
+  // reboot_reason names e.g. the packages that asked for the reboot.
+  string reboot_reason = 14;
+  // last_upgrade_at is when packages were last upgraded, if known.
+  google.protobuf.Timestamp last_upgrade_at = 15;
+  // oldest_security_since is when the oldest open security update was first reported.
+  google.protobuf.Timestamp oldest_security_since = 16;
+  // permissions are what the host allows remotely (/etc/sermon/helper.toml); unset without helper.
+  HostUpdatePermissions permissions = 17;
+  // refreshed: the package sources were updated just before listing.
+  bool refreshed = 18;
+}
+
+// UpdatePackage is one available update.
+message UpdatePackage {
+  // name is the package's name.
+  string name = 1;
+  // installed_version is the version installed now (empty if the package manager doesn't say).
+  string installed_version = 2;
+  // candidate_version is the version the update installs.
+  string candidate_version = 3;
+  // source is where it comes from, e.g. "bookworm-security" or a repository's ID.
+  string source = 4;
+  // security: the source marks it as a security update.
+  bool security = 5;
+  // first_seen_at is when a report first listed this update.
+  google.protobuf.Timestamp first_seen_at = 6;
+}
+
+// HostUpdatePermissions are the switches of the host's /etc/sermon/helper.toml (ADR 0035); the
+// server can't change them.
+message HostUpdatePermissions {
+  // remote_updates: updates may be installed on request of the server.
+  bool remote_updates = 1;
+  // remote_reboot: the host may be rebooted on request of the server.
+  bool remote_reboot = 2;
+  // self_update: the agent may replace its binary on request of the server.
+  bool self_update = 3;
+}

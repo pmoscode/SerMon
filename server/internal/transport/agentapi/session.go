@@ -22,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
+	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -605,7 +606,11 @@ func sendAck(stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionR
 
 // toBatch converts a validated protocol batch. Identity is never taken from it.
 func toBatch(b *agentv1.Batch) ingest.Batch {
-	if b.GetUpdateReport() != nil || b.GetCommandResult() != nil {
+	if r := b.GetUpdateReport(); r != nil {
+		report := toReport(r)
+		return ingest.Batch{Seq: b.GetSeq(), Update: &report}
+	}
+	if b.GetCommandResult() != nil {
 		return ingest.Batch{Seq: b.GetSeq(), Unhandled: true}
 	}
 	if events := b.GetSecurityEvents(); events != nil {
@@ -634,6 +639,29 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		batch.Samples = append(batch.Samples, ingest.Sample{Metric: sample.GetMetric(), Labels: sample.GetLabels(), Value: value})
 	}
 	return batch
+}
+
+// toReport converts a validated update report (M4-09); the ingest normalizes it.
+func toReport(r *agentv1.UpdateReport) updates.Report {
+	out := updates.Report{
+		CollectedAt: r.GetCollectedAt().AsTime(), Availability: updates.Availability(r.GetAvailability()), //nolint:gosec // enum values checked by the schema
+		Reason: r.GetReason(), Manager: updates.Manager(r.GetPackageManager()), //nolint:gosec // as above
+		Total: r.GetTotalCount(), Security: r.GetSecurityCount(), RebootRequired: r.GetRebootRequired(),
+		RebootReason: r.GetRebootReason(), Refreshed: r.GetRefreshed(), Packages: make([]updates.Package, 0, len(r.GetPackages())),
+	}
+	if r.GetLastUpgradeAt() != nil {
+		at := r.GetLastUpgradeAt().AsTime()
+		out.LastUpgradeAt = &at
+	}
+	if p := r.GetPermissions(); p != nil {
+		out.Permissions = &updates.Permissions{RemoteUpdates: p.GetRemoteUpdates(), RemoteReboot: p.GetRemoteReboot(), SelfUpdate: p.GetSelfUpdate()}
+	}
+	for _, p := range r.GetPackages() {
+		out.Packages = append(out.Packages, updates.Package{
+			Name: p.GetName(), Installed: p.GetInstalledVersion(), Candidate: p.GetCandidateVersion(), Source: p.GetSource(), Security: p.GetSecurity(),
+		})
+	}
+	return out
 }
 
 // toLogEntry converts a validated log entry; the node is the session's.

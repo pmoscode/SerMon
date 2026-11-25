@@ -57,6 +57,10 @@ type Querier interface {
 	// Open invitations for other addresses than email (a new invitation replaces the old one).
 	CountOpenInvitations(ctx context.Context, arg CountOpenInvitationsParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
+	// Updates of the nodes (M4-09). Writes run in the tenant of the node's organization, reads within
+	// a scope: the scope's groups are those of the node now.
+	// The packages stored for the organization's other nodes (its limit).
+	CountOtherNodeUpdatePackages(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	CountPasskeys(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
@@ -79,6 +83,8 @@ type Querier interface {
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
 	DeleteExpiredOIDCFlows(ctx context.Context, now time.Time) error
 	DeleteExpiredWebAuthnCeremonies(ctx context.Context, now time.Time) error
+	// Deletes the node's packages the new report doesn't list.
+	DeleteGoneNodeUpdatePackages(ctx context.Context, arg DeleteGoneNodeUpdatePackagesParams) error
 	DeleteGroupLogSettings(ctx context.Context, groupID uuid.UUID) error
 	DeleteIdentity(ctx context.Context, arg DeleteIdentityParams) (string, error)
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
@@ -127,6 +133,8 @@ type Querier interface {
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
+	// A node of the scope with its report; no report: the report's columns are NULL.
+	GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) (GetNodeUpdatesRow, error)
 	GetNotificationChannel(ctx context.Context, id uuid.UUID) (GetNotificationChannelRow, error)
 	GetOrganization(ctx context.Context, id uuid.UUID) (GetOrganizationRow, error)
 	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
@@ -199,6 +207,8 @@ type Querier interface {
 	ListEnabledNotificationChannelIDs(ctx context.Context) ([]uuid.UUID, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
+	// The nodes of the scope with their reports, without packages.
+	ListFleetUpdates(ctx context.Context, arg ListFleetUpdatesParams) ([]ListFleetUpdatesRow, error)
 	// Log settings and redaction rules (M3-03, ADR 0030). Every query runs in the organization's
 	// tenant transaction.
 	ListGroupLogSettings(ctx context.Context) ([]ListGroupLogSettingsRow, error)
@@ -209,6 +219,7 @@ type Querier interface {
 	// What every agent reported about its configuration (M3-12).
 	ListNodeConfigStatus(ctx context.Context) ([]ListNodeConfigStatusRow, error)
 	ListNodeGroups(ctx context.Context, arg ListNodeGroupsParams) ([]NodeGroup, error)
+	ListNodeUpdatePackages(ctx context.Context, nodeID uuid.UUID) ([]ListNodeUpdatePackagesRow, error)
 	ListNotificationChannels(ctx context.Context) ([]ListNotificationChannelsRow, error)
 	ListNotificationDeliveries(ctx context.Context, arg ListNotificationDeliveriesParams) ([]ListNotificationDeliveriesRow, error)
 	// Notification policies and the routing state (M2-14, ADR 0007). Every query runs in the
@@ -306,6 +317,7 @@ type Querier interface {
 	SetLiveHideCmdline(ctx context.Context, hide bool) error
 	SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error
 	SetNodeTags(ctx context.Context, arg SetNodeTagsParams) error
+	SetOldestSecurityUpdate(ctx context.Context, nodeID uuid.UUID) error
 	SetOrganizationLock(ctx context.Context, arg SetOrganizationLockParams) (int64, error)
 	SetOrganizationRequiresSecondFactor(ctx context.Context, required bool) (int64, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
@@ -353,6 +365,11 @@ type Querier interface {
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error
+	// Stores the listed packages; one listed before keeps its first_seen_at.
+	UpsertNodeUpdatePackages(ctx context.Context, arg UpsertNodeUpdatePackagesParams) error
+	// Makes the report the node's current one unless the stored one was collected at the same time or
+	// later; returns nothing then.
+	UpsertNodeUpdateState(ctx context.Context, arg UpsertNodeUpdateStateParams) (uuid.UUID, error)
 	// A role given by hand is the admin's from now on: sign-ins over OIDC leave it (M3-21).
 	UpsertRoleBinding(ctx context.Context, arg UpsertRoleBindingParams) (uuid.UUID, error)
 	UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams) (int64, error)

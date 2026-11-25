@@ -46,12 +46,16 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 		{"sermon_server_ingest_rejected_samples_total", "Samples dropped for implausible times or the rate limit.", stats.Rejected.Load},
 		{"sermon_server_ingest_unknown_samples_total", "Samples of metrics or labels missing from the catalog.", stats.Unknown.Load},
 		{"sermon_server_ingest_dropped_series_total", "Samples dropped by the series limit per node.", stats.DroppedSeries.Load},
-		{"sermon_server_ingest_write_errors_total", "Failed writes to the metric or security event store.", stats.WriteErrors.Load},
+		{"sermon_server_ingest_write_errors_total", "Failed writes to the metric, security event or update store.", stats.WriteErrors.Load},
 		{"sermon_server_ingest_security_events_total", "Stored security events.", stats.Events.Load},
 		{"sermon_server_ingest_dropped_security_events_total", "Security events dropped by the rate limits per node (all kinds).", stats.EventsDropped.Load},
 		{"sermon_server_ingest_rejected_security_events_total", "Security events dropped for implausible times or invalid fields.", stats.EventsRejected.Load},
 		{"sermon_server_ingest_duplicate_security_event_batches_total", "Security event batches stored before (resent after a reconnect).", stats.EventDuplicates.Load},
 		{"sermon_server_ingest_log_entries_total", "Log entries stored in Loki.", stats.LogEntries.Load},
+		{"sermon_server_ingest_update_reports_total", "Stored update reports (M4-09).", stats.UpdateReports.Load},
+		{"sermon_server_ingest_dropped_update_reports_total", "Update reports dropped by the limits per node and organization.", stats.UpdateReportsDropped.Load},
+		{"sermon_server_ingest_rejected_update_reports_total", "Update reports dropped for implausible times, invalid fields or without a store.", stats.UpdateReportsRejected.Load},
+		{"sermon_server_ingest_stale_update_reports_total", "Update reports not newer than the stored one (resent or out of order).", stats.UpdateReportsStale.Load},
 	}
 	for _, c := range counters {
 		r.Counter(c.name, c.help, func() float64 { return float64(c.value()) })

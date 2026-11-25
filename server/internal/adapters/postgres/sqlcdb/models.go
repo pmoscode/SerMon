@@ -257,6 +257,38 @@ type NodeGroup struct {
 	CreatedAt time.Time
 }
 
+type NodeUpdatePackage struct {
+	OrgID            uuid.UUID
+	NodeID           uuid.UUID
+	Name             string
+	CandidateVersion string
+	InstalledVersion string
+	Source           string
+	Security         bool
+	FirstSeenAt      time.Time
+}
+
+type NodeUpdateState struct {
+	OrgID              uuid.UUID
+	NodeID             uuid.UUID
+	CollectedAt        time.Time
+	ReceivedAt         time.Time
+	Availability       int16
+	Reason             string
+	PackageManager     int16
+	TotalCount         int32
+	SecurityCount      int32
+	PackagesStored     int32
+	RebootRequired     bool
+	RebootReason       string
+	LastUpgradeAt      *time.Time
+	AllowRemoteUpdates pgtype.Bool
+	AllowRemoteReboot  pgtype.Bool
+	AllowSelfUpdate    pgtype.Bool
+	Refreshed          bool
+	OldestSecurityAt   *time.Time
+}
+
 type NotificationChannel struct {
 	OrgID         uuid.UUID
 	ID            uuid.UUID

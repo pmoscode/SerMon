@@ -24,6 +24,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
+	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
@@ -125,6 +126,13 @@ type Config struct {
 	LogDownFor time.Duration
 	// LogWriteTimeout bounds one write to the store.
 	LogWriteTimeout time.Duration
+	// UpdateReportRate and UpdateReportBurst form a node's bucket for update reports (reports per
+	// second), across reconnects; OrgUpdateReportRate and OrgUpdateReportBurst the
+	// organization's (M4-09). Reports beyond them are acknowledged and dropped.
+	UpdateReportRate, UpdateReportBurst       float64
+	OrgUpdateReportRate, OrgUpdateReportBurst float64
+	// UpdateMaxAge bounds how old a report may be (MaxFuture applies too).
+	UpdateMaxAge time.Duration
 }
 
 // DefaultConfig returns the default limits: about 60× the normal rate of a node.
@@ -146,6 +154,11 @@ func DefaultConfig() Config {
 		OrgLogBytesRate: 3 << 20, OrgLogBytesBurst: 12 << 20,
 		LogMaxAge:   7 * 24 * time.Hour,
 		LogRetryFor: 30 * time.Second, LogDownFor: 30 * time.Second, LogWriteTimeout: 10 * time.Second,
+		// The agent reports every 6 hours, after the package manager ran and on request; 12 an
+		// hour leave room for a busy admin. An organization of 10,000 nodes sends ~1,700 an hour.
+		UpdateReportRate: 12.0 / 3600, UpdateReportBurst: 12,
+		OrgUpdateReportRate: 20_000.0 / 3600, OrgUpdateReportBurst: 20_000,
+		UpdateMaxAge: 30 * 24 * time.Hour,
 	}
 }
 
@@ -157,6 +170,9 @@ type Stats struct {
 	Events, EventsDropped, EventsRejected, EventDuplicates atomic.Uint64
 	// Log entries: stored, and dropped by reason (M3-07).
 	LogEntries, LogsDroppedRate, LogsDroppedAge, LogsDroppedRejected, LogsDroppedUnavailable, LogsDroppedNoStore atomic.Uint64
+	// Update reports (M4-09): stored, dropped by the buckets, rejected (time, validation, no
+	// store), and older than the stored one.
+	UpdateReports, UpdateReportsDropped, UpdateReportsRejected, UpdateReportsStale atomic.Uint64
 	// LagMillis is the delay of the latest batch (server time − collection time).
 	LagMillis atomic.Int64
 	// droppedKinds counts the events dropped by the buckets per kind (index in secevent.Kinds).
@@ -224,6 +240,10 @@ type Service struct {
 	bucketMu    sync.Mutex
 	eventBucket map[identity.NodeID]*eventBuckets
 
+	updates          updates.Writer
+	nodeUpdateBucket map[identity.NodeID]*bucket
+	orgUpdateBucket  map[tenant.OrgID]*bucket
+
 	logs           LogWriter
 	logMu          sync.Mutex
 	nodeLogBuckets map[identity.NodeID]*bucket
@@ -247,6 +267,41 @@ const maxEventBuckets = 100_000
 // SetEventWriter stores security events through w; without one they are acknowledged and
 // dropped (a server without a database).
 func (s *Service) SetEventWriter(w secevents.Writer) { s.events = w }
+
+// SetUpdateWriter stores update reports through w (M4-09); without one they are acknowledged and
+// dropped.
+func (s *Service) SetUpdateWriter(w updates.Writer) { s.updates = w }
+
+// admitUpdate spends a report of the node's and the organization's buckets; false if either is
+// empty (then neither is charged).
+func (s *Service) admitUpdate(org tenant.OrgID, node identity.NodeID, now time.Time) bool {
+	s.bucketMu.Lock()
+	defer s.bucketMu.Unlock()
+	nb := bucketOf(s.nodeUpdateBucket, node, s.config.UpdateReportBurst, now)
+	ob := bucketOf(s.orgUpdateBucket, org, s.config.OrgUpdateReportBurst, now)
+	nb.refill(now, s.config.UpdateReportRate, s.config.UpdateReportBurst)
+	ob.refill(now, s.config.OrgUpdateReportRate, s.config.OrgUpdateReportBurst)
+	if nb.tokens < 1 || ob.tokens < 1 {
+		return false
+	}
+	nb.take()
+	ob.take()
+	return true
+}
+
+// bucketOf returns the bucket of key, a full one if it is new; beyond maxEventBuckets the map is
+// forgotten (and its buckets start full).
+func bucketOf[K comparable](buckets map[K]*bucket, key K, burst float64, now time.Time) *bucket {
+	b, ok := buckets[key]
+	if !ok {
+		if len(buckets) >= maxEventBuckets {
+			clear(buckets)
+		}
+		b = &bucket{tokens: burst, refilled: now}
+		buckets[key] = b
+	}
+	return b
+}
 
 // refill adds what accrued since the last refill, up to burst.
 func (b *bucket) refill(now time.Time, rate, burst float64) {
@@ -307,7 +362,7 @@ type orgCount struct {
 func NewService(store metrics.Store, ring *metrics.Ring, nodes Nodes, config Config, now func() time.Time, logger *slog.Logger) *Service {
 	return &Service{
 		eventBucket: map[identity.NodeID]*eventBuckets{}, nodeLogBuckets: map[identity.NodeID]*bucket{},
-		orgLogBuckets: map[tenant.OrgID]*bucket{}, units: map[identity.NodeID]map[string]struct{}{}, store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{},
+		orgLogBuckets: map[tenant.OrgID]*bucket{}, nodeUpdateBucket: map[identity.NodeID]*bucket{}, orgUpdateBucket: map[tenant.OrgID]*bucket{}, units: map[identity.NodeID]map[string]struct{}{}, store: store, ring: ring, nodes: nodes, config: config, now: now, logger: logger, unknown: map[string]struct{}{}, orgCounts: map[tenant.OrgID]orgCount{},
 	}
 }
 
@@ -346,8 +401,10 @@ type Batch struct {
 	Events      []secevent.Event
 	// Logs are the entries of a log batch (M3-07).
 	Logs []LogEntry
-	// Unhandled is a batch the server takes but doesn't use yet (M4-05: update reports and
-	// command results until M4-09 and M4-11): acknowledged in order, nothing stored.
+	// Update is the report of an update batch (M4-09).
+	Update *updates.Report
+	// Unhandled is a batch the server takes but doesn't use yet (M4-05: command results until
+	// M4-11): acknowledged in order, nothing stored.
 	Unhandled bool
 }
 
@@ -400,6 +457,7 @@ type Session struct {
 	eventsDropped bool
 	lastSeen      time.Time
 	events        []secevents.Batch // waiting for the next flush
+	update        *updates.Report   // the newest report waiting for the next flush
 	logs          []logBatch        // waiting for the next flush
 	logsFailing   time.Time         // since when the store fails for the waiting logs
 }
@@ -507,6 +565,11 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		s.acceptLogs(batch, now)
 		return Response{}
 	}
+	if batch.Update != nil {
+		s.acceptUpdate(*batch.Update, now)
+		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
+		return Response{}
+	}
 	if batch.Unhandled {
 		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
 		return Response{}
@@ -592,7 +655,31 @@ func (s *Session) acceptEvents(batch Batch, now time.Time) {
 
 // Due reports whether enough batches wait for an early flush; security events flush at once.
 func (s *Session) Due() bool {
-	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0 || len(s.logs) > 0
+	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0 || len(s.logs) > 0 || s.update != nil
+}
+
+// acceptUpdate keeps a valid report within the time window and the buckets for the next flush,
+// the newest one if several arrive in between; its batch is acknowledged in order like the others.
+func (s *Session) acceptUpdate(r updates.Report, now time.Time) {
+	stats := &s.service.stats
+	config := s.service.config
+	if s.service.updates == nil || !r.Valid() ||
+		r.CollectedAt.After(now.Add(config.MaxFuture)) || r.CollectedAt.Before(now.Add(-config.UpdateMaxAge)) {
+		stats.UpdateReportsRejected.Add(1)
+		return
+	}
+	if s.update != nil && !r.CollectedAt.After(s.update.CollectedAt) {
+		stats.UpdateReportsStale.Add(1)
+		return
+	}
+	if !s.service.admitUpdate(s.org, s.node, now) {
+		if stats.UpdateReportsDropped.Add(1) == 1 {
+			s.service.logger.Warn("update reports over the limit, dropping", "node", s.node.String())
+		}
+		return
+	}
+	normalized := r.Normalized()
+	s.update = &normalized
 }
 
 // Flush writes the complete windows and returns the sequence number to acknowledge (0: none).
@@ -611,6 +698,20 @@ func (s *Session) Flush(ctx context.Context) (uint64, error) {
 		}
 		s.service.stats.EventDuplicates.Add(uint64(max(len(s.events)-len(written), 0)))
 		s.events = nil
+	}
+	// The update report next, like the events: a resend is older or as old and changes nothing.
+	if s.update != nil {
+		stored, err := s.service.updates.Write(ctx, s.org, s.node, *s.update, s.service.now())
+		if err != nil {
+			s.service.stats.WriteErrors.Add(1)
+			return 0, fmt.Errorf("flush update report: %w", err)
+		}
+		if stored {
+			s.service.stats.UpdateReports.Add(1)
+		} else {
+			s.service.stats.UpdateReportsStale.Add(1)
+		}
+		s.update = nil
 	}
 	// Logs next: while the store fails they wait, and so does the acknowledgement of the batches
 	// from theirs on – at most LogRetryFor (ADR 0031).

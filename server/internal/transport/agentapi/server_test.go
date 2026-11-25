@@ -32,6 +32,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/metrics/memstore"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
+	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -990,8 +991,97 @@ func TestSession_AcknowledgesLogBatchesWithoutStoringThemYet(t *testing.T) {
 	}
 }
 
-// M4-05: update reports and command results are part of the protocol before the server handles
-// them (M4-09, M4-11): acknowledged in order and dropped, without a metric batch's lag.
+// recordingUpdates captures what the ingest writes as update reports.
+type recordingUpdates struct {
+	mu      sync.Mutex
+	node    identity.NodeID
+	reports []updates.Report
+}
+
+func (r *recordingUpdates) Write(_ context.Context, _ tenant.OrgID, node identity.NodeID, report updates.Report, _ time.Time) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.node = node
+	r.reports = append(r.reports, report)
+	return true, nil
+}
+
+// Update reports (M4-09): converted field by field, stored under the certificate's node.
+func TestSession_StoresUpdateReports(t *testing.T) {
+	store := memstore.New()
+	group := tenant.GroupID(uuid.New())
+	store.AddNode(orgX, group, nodeX)
+	config := ingest.DefaultConfig()
+	config.FlushInterval = 20 * time.Millisecond
+	service := ingest.NewService(store, metrics.NewRing(), fakeNodes{group: group}, config, time.Now, slog.New(slog.DiscardHandler))
+	recorded := &recordingUpdates{}
+	service.SetUpdateWriter(recorded)
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithIngest(service)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(context.Background())
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Receive(); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().Add(-time.Minute).Truncate(time.Microsecond)
+	upgraded := at.Add(-24 * time.Hour)
+	batches := []*agentv1.Batch{
+		{Seq: 4, Content: &agentv1.Batch_UpdateReport{UpdateReport: &agentv1.UpdateReport{
+			CollectedAt: timestamppb.New(at), Availability: agentv1.UpdateAvailability_UPDATE_AVAILABILITY_LISTED,
+			PackageManager: agentv1.PackageManager_PACKAGE_MANAGER_DNF, TotalCount: 3, SecurityCount: 1,
+			Packages: []*agentv1.UpdatePackage{
+				{Name: "vim-minimal", InstalledVersion: "9.1-1", CandidateVersion: "9.1-2", Source: "baseos"},
+				{Name: "openssl", InstalledVersion: "3.2-1", CandidateVersion: "3.2-2", Source: "baseos", Security: true},
+			},
+			RebootRequired: true, RebootReason: "kernel", LastUpgradeAt: timestamppb.New(upgraded),
+			Permissions: &agentv1.HelperPermissions{RemoteUpdates: true, SelfUpdate: true}, Refreshed: true,
+		}}},
+		{Seq: 5, Content: &agentv1.Batch_UpdateReport{UpdateReport: &agentv1.UpdateReport{
+			CollectedAt: timestamppb.New(at.Add(time.Second)), Availability: agentv1.UpdateAvailability_UPDATE_AVAILABILITY_NO_HELPER,
+			Reason: "no helper",
+		}}},
+	}
+	for _, b := range batches {
+		if err := stream.Send(&agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: b}}); err != nil {
+			t.Fatal(err)
+		}
+		var acked uint64
+		for acked < b.GetSeq() {
+			res, err := stream.Receive()
+			if err != nil || res.GetAck() == nil {
+				t.Fatalf("Receive() = %v, %v; want an Ack", res, err)
+			}
+			acked = res.GetAck().GetSeq()
+		}
+	}
+	_ = stream.CloseRequest()
+	recorded.mu.Lock()
+	defer recorded.mu.Unlock()
+	if recorded.node != nodeX || len(recorded.reports) != 2 {
+		t.Fatalf("stored %d reports for %v", len(recorded.reports), recorded.node)
+	}
+	r := recorded.reports[0]
+	if !r.CollectedAt.Equal(at) || r.Availability != updates.Listed || r.Manager != updates.Dnf || r.Total != 3 || r.Security != 1 ||
+		!r.RebootRequired || r.RebootReason != "kernel" || r.LastUpgradeAt == nil || !r.LastUpgradeAt.Equal(upgraded) || !r.Refreshed {
+		t.Errorf("report = %+v", r)
+	}
+	if r.Permissions == nil || *r.Permissions != (updates.Permissions{RemoteUpdates: true, SelfUpdate: true}) {
+		t.Errorf("permissions = %+v", r.Permissions)
+	}
+	want := updates.Package{Name: "openssl", Installed: "3.2-1", Candidate: "3.2-2", Source: "baseos", Security: true}
+	if len(r.Packages) != 2 || r.Packages[0] != want || r.Packages[1].Name != "vim-minimal" {
+		t.Errorf("packages = %+v, want openssl first", r.Packages)
+	}
+	if n := recorded.reports[1]; n.Availability != updates.NoHelper || n.Reason != "no helper" || n.Permissions != nil || n.LastUpgradeAt != nil {
+		t.Errorf("report without helper = %+v", n)
+	}
+}
+
+// M4-05: command results are part of the protocol before the server handles them (M4-11):
+// acknowledged in order and dropped, without a metric batch's lag. Update reports without a
+// writer likewise.
 func TestSession_AcknowledgesUpdateReportsAndCommandResultsWithoutHandlingThemYet(t *testing.T) {
 	store := memstore.New()
 	group := tenant.GroupID(uuid.New())

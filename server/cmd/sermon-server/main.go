@@ -64,6 +64,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/rules"
 	"github.com/pmoscode/SerMon/server/internal/app/secevents"
 	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
+	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
@@ -266,6 +267,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// Security events (M2-07): stored by the ingest, partitions kept by the maintenance.
 		eventStore := postgres.NewSecurityEventStore(db)
 		ingestService.SetEventWriter(eventStore)
+		// Update reports (M4-09): the latest of each node with its packages.
+		ingestService.SetUpdateWriter(postgres.NewUpdateStore(db, 0))
 		servers = append(servers, func(ctx context.Context) error {
 			return secevents.Maintenance(ctx, eventStore, time.Now, 6*time.Hour, logger)
 		})
@@ -551,6 +554,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Metrics:        metricsHandler,
 		Fleet:          webapi.NewFleetHandler(nodes, logger),
 		SecurityEvents: webapi.NewSecurityEventHandler(securityEvents, logger),
+		Updates:        webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(db, 0), policy), logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

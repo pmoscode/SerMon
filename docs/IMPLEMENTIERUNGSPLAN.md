@@ -4248,7 +4248,38 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   Updates.
 - **Abhängig von:** –
 
-#### ☐ M4-09 – Update-Ingest und -Abfrage im Server · S · M 🔒
+#### ☑ M4-09 – Update-Ingest und -Abfrage im Server · S · M 🔒
+> Erledigt (KONZEPT §14.1; Threat Model T92, T93):
+> - **Tabellen** (Migration 00046, `ENABLE` + `FORCE ROW LEVEL SECURITY`): `node_update_state` je Node mit Zahlen,
+>   Verfügbarkeit, Reboot samt Grund, letztem Upgrade, den Schaltern der `helper.toml` und dem ältesten offenen
+>   Security-Update; `node_update_packages` mit `first_seen_at` je Name und Kandidat. Beide gehen mit dem Node.
+> - **Ingest** (`app/updates`, `ingest`): Ein später erhobener Bericht ersetzt den alten in einer Transaktion, ein
+>   älterer oder erneut gesendeter ändert nichts (Bedingung im `ON CONFLICT`); ein weiter gemeldetes Update behält
+>   `first_seen_at`. Vor dem Speichern: ungültiges UTF-8 und unsichtbare Zeichen ersetzt, Texte danach wieder auf
+>   256 bzw. 1 024 Byte gekürzt (an Zeichengrenzen), jedes Update einmal (dnf meldet Pakete je Architektur),
+>   Security-Updates zuerst, Zahlen nie kleiner als die Liste.
+> - **Grenzen:** 12 Berichte pro Stunde und Node (über Reconnects) und 20 000 pro Org, darüber bestätigt und
+>   verworfen; Erhebungszeit höchstens 5 min in der Zukunft (sonst blockierte sie spätere Berichte) und 30 Tage alt;
+>   zwischen zwei Flushes nur der neueste Bericht; höchstens 1 Mio. Pakete pro Org (`packages_omitted`, die Zahlen
+>   bleiben). Zähler `sermon_server_ingest_{,dropped_,rejected_,stale_}update_reports_total`.
+> - **RPCs** (`UpdateService`, `view_nodes`, ohne Seiteneffekte): `GetNodeUpdates` (Node mit Paketen, fremder Node
+>   `NOT_FOUND`) und `ListFleetUpdates` (Nodes mit Status unbekannt, nicht verfügbar, aktuell, Updates,
+>   Security-Updates, dazu die Zahl je Status und „Reboot nötig“).
+> - **Abweichungen:**
+>   - `RefreshUpdateInfo` kommt mit M4-11: Ohne Zustellung von Befehlen über Instanzen hinweg erreicht er den Agent
+>     nicht.
+>   - Die abgeleiteten Serien (`updates.pending` usw.) kommen mit M4-16, wo die Regeln sie brauchen: Ein Bericht alle
+>     6 h ergibt keine Serie, die Regeln über Tage auswerten können. Der Zustand mit dem ältesten Security-Update
+>     liegt dafür bereit.
+> - **Tests:**
+>   - PostgreSQL: neuer Bericht ersetzt den alten, älterer und erneuter ändern nichts, `first_seen_at` bleibt,
+>     gleichzeitige Schreiber, Grenze der Org, Orgs und Gruppen getrennt, Zeilen gehen mit dem Node, Prüfungen der
+>     Tabelle.
+>   - Ingest: Bestätigung in Reihenfolge, der neueste gewinnt, Schreibfehler, Zeitfenster, Grenzen pro Node und Org.
+>   - Session (Umwandlung Feld für Feld), Dienst (Scope, `NOT_FOUND`, Zahlen je Status), Web-API mit
+>     Tenant-Isolation; Step-up entfällt (nur Lesen).
+> - **Gegenproben** für 34 Prüfungen (Normalisierung, Grenzen, SQL, Rechte, Umwandlung), 33 erkannt (zwei erst nach
+>   schärferen Tests); die übrige ist gleichwertig (der Startwert des Org-Eimers wird beim Auffüllen ohnehin begrenzt).
 - **Ziel:**
   - Tabellen mit RLS für den letzten Bericht je Node und seine Pakete.
   - Abgeleitete Serien für Regeln und Charts (`updates.pending`, `updates.security_pending`,
@@ -4277,6 +4308,7 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
     (NOTIFY und Abfrage als Rückfall).
   - `run_id` macht jeden Befehl idempotent; ein Befehl verfällt, wenn der Node nicht rechtzeitig online ist.
   - `CommandResult` schreibt Phase und Ergebnis zurück; die Ausgabe ist im Agent redigiert und gekürzt.
+  - Aus M4-09: RPC `RefreshUpdateInfo` (Operator, begrenzt pro Node und Org).
 - **Tests zuerst:** Zustellung über zwei Instanzen, doppelte Zustellung nach Reconnect, Ablauf, fremde Org.
 - **Abhängig von:** M4-05
 
@@ -4335,6 +4367,8 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
     Rollout gestoppt.
   - „Updates verfügbar (alle)“ ist als Info gedacht, die Stufe gibt es nicht (M2-08): Die Aufgabe entscheidet zwischen
     „nur im Dashboard“ und einer Warnung nach langer Zeit.
+  - Aus M4-09: die abgeleiteten Serien für Regeln und Charts (`updates.pending`, `updates.security_pending`,
+    `updates.reboot_required`, Alter des ältesten Security-Updates) aus `node_update_state`.
 - **Tests zuerst:** Szenariotest je Regel (der Test aus M2-04 verlangt ihn), Hilfetexte.
 - **Abhängig von:** M4-09, M4-13
 

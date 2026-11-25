@@ -74,6 +74,9 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO enrollment_tokens (id, org_id, group_id, token_hash, expires_at, max_uses) VALUES ('"+tokenAl+"', '"+orgAlpha+"', '"+groupAl+"', sha256(convert_to('"+tokenAl+"', 'UTF8')), now() + interval '1 hour', 1)",
 		"INSERT INTO invitations (id, org_id, email, role, token_hash, expires_at) VALUES ('"+inviteAl+"', '"+orgAlpha+"', 'invited-a@example.org', 'admin', sha256(convert_to('"+inviteTokenAl+"', 'UTF8')), now() + interval '1 day')",
 		"INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name, remote_ip, unverified) SELECT '"+orgAlpha+"', '"+nodeAl+"', now() - interval '1 minute', 'ssh.login.failed', 'alpha-user', '192.0.2.77', true WHERE NOT EXISTS (SELECT 1 FROM security_events WHERE user_name = 'alpha-user')",
+		// A report with a security update and a reboot (M4-09).
+		"INSERT INTO node_update_state (org_id, node_id, collected_at, received_at, availability, package_manager, total_count, security_count, packages_stored, reboot_required, refreshed) VALUES ('"+orgAlpha+"', '"+nodeAl+"', now(), now(), 1, 1, 1, 1, 1, true, false) ON CONFLICT DO NOTHING",
+		"INSERT INTO node_update_packages (org_id, node_id, name, candidate_version, installed_version, source, security, first_seen_at) VALUES ('"+orgAlpha+"', '"+nodeAl+"', 'alpha-openssl', '3', '2', 'main', true, now()) ON CONFLICT DO NOTHING",
 		"SELECT set_config('sermon.org_id', '"+orgBeta+"', false)",
 		"DELETE FROM role_bindings WHERE org_id = '"+orgBeta+"'",
 		"INSERT INTO role_bindings (id, org_id, user_id, role) VALUES (gen_random_uuid(), '"+orgBeta+"', '"+beaID+"', 'admin')",
@@ -93,6 +96,7 @@ type loggedIn struct {
 	fleet        webv1connect.FleetServiceClient
 	twoFactor    webv1connect.TwoFactorServiceClient
 	events       webv1connect.SecurityEventServiceClient
+	updates      webv1connect.UpdateServiceClient
 	channels     webv1connect.NotificationChannelServiceClient
 	policies     webv1connect.NotificationPolicyServiceClient
 	silences     webv1connect.AlertSilenceServiceClient
@@ -124,6 +128,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		fleet:        webv1connect.NewFleetServiceClient(hc, s.server.URL),
 		twoFactor:    webv1connect.NewTwoFactorServiceClient(hc, s.server.URL),
 		events:       webv1connect.NewSecurityEventServiceClient(hc, s.server.URL),
+		updates:      webv1connect.NewUpdateServiceClient(hc, s.server.URL),
 		channels:     webv1connect.NewNotificationChannelServiceClient(hc, s.server.URL),
 		policies:     webv1connect.NewNotificationPolicyServiceClient(hc, s.server.URL),
 		silences:     webv1connect.NewAlertSilenceServiceClient(hc, s.server.URL),
@@ -151,7 +156,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
-		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
+		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, updates: bea.updates, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
 		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,

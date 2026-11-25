@@ -28,6 +28,7 @@ type isolationEnv struct {
 	metrics                         webv1connect.MetricsServiceClient
 	fleet                           webv1connect.FleetServiceClient
 	events                          webv1connect.SecurityEventServiceClient
+	updates                         webv1connect.UpdateServiceClient
 	channels                        webv1connect.NotificationChannelServiceClient
 	policies                        webv1connect.NotificationPolicyServiceClient
 	silences                        webv1connect.AlertSilenceServiceClient
@@ -329,6 +330,20 @@ var tenantIsolationCases = map[string]isolationCase{
 			return err
 		}
 		if content := string(res.Msg.GetContent()); res.Msg.GetRows() > 0 || strings.Contains(content, e.nodeA) || strings.Contains(content, "alpha-user") {
+			return errLeak
+		}
+		return nil
+	}},
+	"/sermon.web.v1.UpdateService/GetNodeUpdates": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.updates.GetNodeUpdates(ctx, connect.NewRequest(&webv1.GetNodeUpdatesRequest{NodeId: e.nodeA}))
+		return err
+	}},
+	"/sermon.web.v1.UpdateService/ListFleetUpdates": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.updates.ListFleetUpdates(ctx, connect.NewRequest(&webv1.ListFleetUpdatesRequest{}))
+		if err != nil {
+			return err
+		}
+		if m := res.Msg; strings.Contains(m.String(), e.nodeA) || m.GetWithSecurity() > 0 || m.GetRebootRequired() > 0 {
 			return errLeak
 		}
 		return nil

@@ -1098,6 +1098,11 @@ nötig samt Grund, Zeitpunkt des letzten erfolgreichen Updates.
 - `dnf check-update` nennt keine installierte Version: Für dnf bleibt sie leer.
 - `needs-restarting` zählt nach seinem Wortlaut, nicht nach dem Exit-Code: Exit 1 heißt auch „Befehl fehlt“ (Rocky ohne
   `dnf-utils`). Dann ist „Reboot nötig“ unbekannt. Alpine: Reboot nötig, wenn die Module des laufenden Kernels fehlen.
+- Der Server (M4-09) hält je Node den letzten Bericht; ein später erhobener ersetzt ihn, ein älterer oder erneut
+  gesendeter ändert nichts. Ein Update (Name und Kandidat) behält den Zeitpunkt, zu dem es zuerst gemeldet wurde: Daraus
+  folgt das Alter des ältesten Security-Updates. Namen, Versionen und Quellen sind begrenzt und ohne unsichtbare
+  Zeichen gespeichert und werden nur als Text gezeigt. Grenzen: 12 Berichte pro Stunde und Node, 20 000 pro Org,
+  höchstens 1 Mio. gespeicherte Pakete pro Org (darüber bleiben die Zahlen, die Liste wird kürzer).
 
 ### 14.2 Update-Policies (pro Node-Gruppe)
 

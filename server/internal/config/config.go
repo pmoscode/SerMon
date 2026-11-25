@@ -139,6 +139,8 @@ type Config struct {
 	MetricsAddr string
 	// AgentDownloadsDir holds the signed agent binaries served under /downloads (ADR 0012).
 	AgentDownloadsDir string
+	// RepoDir holds the signed package repositories served under /repo (M4-20, ADR 0036).
+	RepoDir string
 	// LokiURL is the Loki instance for logs (ADR 0031); nil: the server takes no logs.
 	LokiURL *url.URL
 	// GeoIPDBFile is a MaxMind DB file with countries the operator provides (M3-18, e.g. DB-IP
@@ -179,6 +181,7 @@ const (
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
 	envMetricsAddr     = "SERMON_METRICS_ADDR"
 	envDownloadsDir    = "SERMON_AGENT_DOWNLOADS_DIR"
+	envRepoDir         = "SERMON_REPO_DIR"
 	envLokiURL         = "SERMON_LOKI_URL"
 	envGeoIPDBFile     = "SERMON_GEOIP_DB_FILE"
 	envGeoIPNotice     = "SERMON_GEOIP_ATTRIBUTION"
@@ -236,6 +239,7 @@ func Load(src Source) (Config, error) {
 		AgentHostnames:     parseHostnames(&l),
 		MetricsAddr:        l.string(envMetricsAddr, "", validateAddr),
 		AgentDownloadsDir:  l.string(envDownloadsDir, "", validateDir),
+		RepoDir:            l.string(envRepoDir, "", validateDir),
 		LokiURL:            parseLokiURL(&l),
 		GeoIPDBFile:        l.string(envGeoIPDBFile, "", validateFile),
 		GeoIPAttribution:   l.string(envGeoIPNotice, "", validateNotice),

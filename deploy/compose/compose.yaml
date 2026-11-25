@@ -38,6 +38,8 @@ x-server-environment: &server-environment
   SERMON_AGENT_ADDR: ":8443"
   SERMON_AGENT_HOSTNAMES: ${SERMON_DOMAIN}
   SERMON_AGENT_DOWNLOADS_DIR: /srv/downloads
+  # The signed package repositories of scripts/build-repos.sh (install.sh --repo, M4-20).
+  SERMON_REPO_DIR: /srv/repo
   SERMON_DATABASE_SIZE_LIMIT: ${SERMON_DATABASE_SIZE_LIMIT:-}
   SERMON_ORG_DELETION_GRACE: ${SERMON_ORG_DELETION_GRACE:-720h}
   SERMON_OUTBOUND_ALLOWLIST: ${SERMON_OUTBOUND_ALLOWLIST:-}
@@ -111,7 +113,7 @@ services:
       SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
     secrets: [database_url, database_migrate_url, smtp_password, oidc_client_secret]
     # The same view as the server: its configuration is checked as a whole.
-    volumes: [server-state:/var/lib/sermon, ./downloads:/srv/downloads:ro, ./geoip:/srv/geoip:ro]
+    volumes: [server-state:/var/lib/sermon, ./downloads:/srv/downloads:ro, ./repo:/srv/repo:ro, ./geoip:/srv/geoip:ro]
     networks: [internal]
     depends_on:
       postgres: { condition: service_healthy }
@@ -126,6 +128,7 @@ services:
       - server-state:/var/lib/sermon
       # Signed agent binaries for install.sh (ADR 0012), optional.
       - ./downloads:/srv/downloads:ro
+      - ./repo:/srv/repo:ro
       # A country database for the security dashboard (M3-18), optional.
       - ./geoip:/srv/geoip:ro
     ports: ["${SERMON_AGENT_PORT:-8443}:8443"]

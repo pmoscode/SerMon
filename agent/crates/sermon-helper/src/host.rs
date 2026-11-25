@@ -60,7 +60,7 @@ fn commands(d: Distribution) -> Option<(&'static str, Fixed, &'static [Fixed])> 
         ),
         Distribution::Dnf => (
             "usr/bin/dnf",
-            ("usr/bin/dnf", &["-q", "makecache"]),
+            ("usr/bin/dnf", &["-q", "makecache", "--refresh"]),
             &[
                 ("usr/bin/dnf", &["-q", "check-update"]),
                 ("usr/bin/dnf", &["-q", "updateinfo", "list", "--security"]),
@@ -69,7 +69,7 @@ fn commands(d: Distribution) -> Option<(&'static str, Fixed, &'static [Fixed])> 
         ),
         Distribution::Apk => (
             "sbin/apk",
-            ("sbin/apk", &["update", "-q"]),
+            ("sbin/apk", &["update", "-q", "--force-refresh"]),
             &[("sbin/apk", &["version", "-l", "<"])],
         ),
         Distribution::Unspecified => return None,
@@ -995,7 +995,7 @@ mod tests {
         fake.wait(ID);
         assert!(
             fake.calls()
-                .contains("dnf -q makecache\ndnf -y upgrade --security\n"),
+                .contains("dnf -q makecache --refresh\ndnf -y upgrade --security\n"),
             "{}",
             fake.calls()
         );
@@ -1004,7 +1004,8 @@ mod tests {
         fake.host.clone().start(&updates(Scope::All)).unwrap();
         fake.wait(ID);
         assert!(
-            fake.calls().contains("apk update -q\napk upgrade -q\n"),
+            fake.calls()
+                .contains("apk update -q --force-refresh\napk upgrade -q\n"),
             "{}",
             fake.calls()
         );

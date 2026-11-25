@@ -1,7 +1,15 @@
 import { type APIRequestContext, type Page, expect } from '@playwright/test';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { X509Certificate, createHash } from 'node:crypto';
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+	appendFileSync,
+	cpSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
@@ -133,6 +141,17 @@ export function publishBeta(version: string, binary?: Buffer): string {
 		path
 	]);
 	return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+/**
+ * Offers one of the agent's package repositories of this run under /repo (M4-20, the bind mount
+ * of .build/agent-repo): the current version, with the next one, or with indexes another key
+ * signed. The directory itself stays: the server holds it open.
+ */
+export function publishAgentRepo(which: 'current' | 'next' | 'forged') {
+	const served = join(e2eDir, '.build', 'agent-repo');
+	for (const entry of readdirSync(served)) rmSync(join(served, entry), { recursive: true });
+	cpSync(join(e2eDir, '.build', 'agent-repos', which), served, { recursive: true });
 }
 
 /** Mailpit's API of the e2e environment (published on 127.0.0.1). */

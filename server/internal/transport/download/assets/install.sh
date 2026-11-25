@@ -11,6 +11,8 @@
 # signatures against the release key embedded below before anything is installed; a wrong or
 # missing signature aborts. The root helper (ADR 0035) takes updates and reboots for the agent as
 # root; /etc/sermon/helper.toml says what this host allows, --no-helper leaves it out entirely.
+# With --repo the packages come from the server's signed package repository instead (apt, dnf or
+# apk, ADR 0036): the package manager keeps them up to date.
 # Read it before you run it: https://<server>/install.sh
 set -eu
 
@@ -22,6 +24,9 @@ RELEASE_KEY='@SERMON_RELEASE_KEY@'
 AGENT_VERSION='@SERMON_AGENT_VERSION@'
 
 BIN_DIR=/usr/local/bin
+# Where the packages install the binaries, and the server of their example configuration.
+PACKAGE_BIN_DIR=/usr/bin
+PACKAGE_EXAMPLE=https://sermon.example.com
 CONFIG_DIR=/etc/sermon
 STATE_DIR=/var/lib/sermon-agent
 AGENT_PORT=8443
@@ -37,13 +42,16 @@ die() {
 usage() {
 	cat >&2 <<'USAGE'
 usage: install.sh --server URL [--token-file FILE] [--ca-fingerprint sha256:…] [--agent-url URL] [--force]
-                  [--grant-log-access] [--no-helper | --no-remote-updates --allow-remote-reboot --no-self-update]
+                  [--repo] [--grant-log-access]
+                  [--no-helper | --no-remote-updates --allow-remote-reboot --no-self-update]
 
   --server URL           public HTTPS address of sermon-server (as in the browser)
   --token-file FILE      file with the enrollment token from the UI (or SERMON_ENROLLMENT_TOKEN)
   --ca-fingerprint FP    SHA-256 fingerprint of a self-signed server certificate
   --agent-url URL        mTLS agent API if not <server host>:8443
   --force                replace an existing enrollment of this host
+  --repo                 install the packages from the server's signed repository (apt, dnf, apk)
+                         instead of the binaries; the package manager updates them from then on
   --grant-log-access     without journald (Alpine): let busybox syslogd write its files with the
                          group sermon instead of wheel, so the agent reads the security events
   --no-helper            no root helper: the server can't install updates or reboot this host
@@ -244,7 +252,8 @@ write_config() {
 			say "keeping the existing $CONFIG_DIR/agent.toml"
 			return 0
 		fi
-		[ -n "$FORCE" ] || die "$CONFIG_DIR/agent.toml points to ${current:-an unknown server}, not $SERVER – use --force to replace it"
+		# The example of the package (--repo) points nowhere yet.
+		[ -n "$FORCE" ] || { [ -n "${REPO:-}" ] && [ "$current" = "$PACKAGE_EXAMPLE" ]; } || die "$CONFIG_DIR/agent.toml points to ${current:-an unknown server}, not $SERVER – use --force to replace it"
 		say "replacing $CONFIG_DIR/agent.toml (was ${current:-unknown})"
 	fi
 	cat >"$ROOT$CONFIG_DIR/agent.toml" <<EOF
@@ -314,6 +323,14 @@ remove_helper() {
 	say "--no-helper: the root helper is switched off (no remote updates or reboots)"
 }
 
+# restart_helper INIT makes a running helper read helper.toml again.
+restart_helper() {
+	case $1 in
+	systemd) systemctl try-restart sermon-helper.service ;;
+	openrc) rc-service --ifstarted sermon-helper restart ;;
+	esac
+}
+
 # keep_agent_signature SIGFILE keeps the checked signature of the installed agent for the root
 # helper: its record of the installed version, which a self-update must exceed (ADR 0036).
 keep_agent_signature() {
@@ -365,6 +382,59 @@ SERVICE
 		;;
 	esac
 	say "root helper installed, $CONFIG_DIR/helper.toml: $(grep '^allow_' "$ROOT$CONFIG_DIR/helper.toml" | tr '\n' ' ')"
+}
+
+# install_from_repo DISTRO sets up the server's package repository with its keys and installs the
+# agent (and the root helper unless --no-helper). The keys come from the server over the same
+# verified TLS connection as this script; apt, dnf and apk check every index and package against
+# them (ADR 0036).
+install_from_repo() {
+	repo="$SERVER/repo"
+	packages=sermon-agent
+	[ -n "$NO_HELPER" ] || packages="sermon-agent sermon-helper"
+	case $1 in
+	debian | ubuntu)
+		mkdir -p "$ROOT/etc/apt/keyrings" "$ROOT/etc/apt/sources.list.d"
+		download "$repo/keys/sermon.asc" "$ROOT/etc/apt/keyrings/sermon.asc" || die "cannot download the repository key from $SERVER"
+		chmod 0644 "$ROOT/etc/apt/keyrings/sermon.asc"
+		cat >"$ROOT/etc/apt/sources.list.d/sermon.sources" <<EOF
+Types: deb
+URIs: $repo/apt
+Suites: stable
+Components: main
+Signed-By: /etc/apt/keyrings/sermon.asc
+EOF
+		apt-get update -qq || die "apt cannot read the repository of $SERVER"
+		# Without recommends: --no-helper means no helper.
+		# shellcheck disable=SC2086 # one word per package
+		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $packages >/dev/null ||
+			die "apt cannot install $packages"
+		;;
+	rhel | rocky | almalinux | centos | fedora)
+		mkdir -p "$ROOT/etc/pki/rpm-gpg" "$ROOT/etc/yum.repos.d"
+		download "$repo/keys/sermon.asc" "$ROOT/etc/pki/rpm-gpg/RPM-GPG-KEY-sermon" || die "cannot download the repository key from $SERVER"
+		cat >"$ROOT/etc/yum.repos.d/sermon.repo" <<EOF
+[sermon]
+name=SerMon
+baseurl=$repo/rpm
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-sermon
+EOF
+		# shellcheck disable=SC2086 # one word per package
+		dnf install -y -q --setopt=install_weak_deps=False $packages >/dev/null || die "dnf cannot install $packages"
+		;;
+	alpine)
+		mkdir -p "$ROOT/etc/apk/keys"
+		download "$repo/keys/sermon-agent.rsa.pub" "$ROOT/etc/apk/keys/sermon-agent.rsa.pub" || die "cannot download the repository key from $SERVER"
+		grep -qxF "$repo/apk" "$ROOT/etc/apk/repositories" 2>/dev/null || echo "$repo/apk" >>"$ROOT/etc/apk/repositories"
+		apk update -q || die "apk cannot read the repository of $SERVER"
+		# shellcheck disable=SC2086 # one word per package
+		apk add -q $packages || die "apk cannot install $packages"
+		;;
+	*) die "--repo knows apt, dnf and apk distributions, not $1 – install without --repo" ;;
+	esac
+	say "installed $packages from $repo"
 }
 
 # ensure_machine_id creates /etc/machine-id (128 random bits, like systemd-machine-id-setup) where
@@ -436,6 +506,7 @@ parse_args() {
 	FINGERPRINT=''
 	AGENT_URL=''
 	FORCE=''
+	REPO=''
 	GRANT_LOG_ACCESS=''
 	NO_HELPER=''
 	# Empty: not given, helper.toml keeps its value (or the default of a new file).
@@ -454,6 +525,7 @@ parse_args() {
 		--ca-fingerprint) FINGERPRINT=${2:-} && shift ;;
 		--agent-url) AGENT_URL=${2:-} && shift ;;
 		--force) FORCE=--force ;;
+		--repo) REPO=1 ;;
 		--grant-log-access) GRANT_LOG_ACCESS=1 ;;
 		--no-helper) NO_HELPER=1 ;;
 		--no-remote-updates) REMOTE_UPDATES=false HELPER_FLAGS=1 ;;
@@ -472,6 +544,9 @@ parse_args() {
 	if [ -n "$NO_HELPER" ] && [ -n "$HELPER_FLAGS" ]; then
 		die "--no-helper takes no flags of the helper"
 	fi
+	if [ -n "$REPO" ] && [ -n "$FINGERPRINT" ]; then
+		die "--repo needs a certificate the package manager trusts – install the server's CA instead of --ca-fingerprint"
+	fi
 }
 
 main() {
@@ -485,16 +560,21 @@ main() {
 
 	work=$(mktemp -d)
 	trap 'rm -rf "$work"' EXIT
-	binary="sermon-agent-linux-$arch"
-	download "$SERVER/downloads/$binary" "$work/$binary" || die "cannot download the agent from $SERVER"
-	download "$SERVER/downloads/$binary.minisig" "$work/$binary.minisig" || die "cannot download the signature"
-	verify "$work/$binary" "$work/$binary.minisig"
-	say "signature ok"
-
-	create_user
+	agent=$BIN_DIR/sermon-agent
+	if [ -n "$REPO" ]; then
+		install_from_repo "$distro"
+		agent=$PACKAGE_BIN_DIR/sermon-agent
+	else
+		binary="sermon-agent-linux-$arch"
+		download "$SERVER/downloads/$binary" "$work/$binary" || die "cannot download the agent from $SERVER"
+		download "$SERVER/downloads/$binary.minisig" "$work/$binary.minisig" || die "cannot download the signature"
+		verify "$work/$binary" "$work/$binary.minisig"
+		say "signature ok"
+		create_user
+		install -m 0755 "$work/$binary" "$BIN_DIR/sermon-agent"
+		keep_agent_signature "$work/$binary.minisig"
+	fi
 	ensure_machine_id
-	install -m 0755 "$work/$binary" "$BIN_DIR/sermon-agent"
-	keep_agent_signature "$work/$binary.minisig"
 	write_config
 	chown root:sermon "$CONFIG_DIR" "$CONFIG_DIR/agent.toml"
 	chmod 0750 "$CONFIG_DIR"
@@ -505,11 +585,12 @@ main() {
 	set -- enroll --config "$CONFIG_DIR/agent.toml"
 	[ -z "$FINGERPRINT" ] || set -- "$@" --ca-fingerprint "$FINGERPRINT"
 	[ -z "$FORCE" ] || set -- "$@" "$FORCE"
-	as_service_user "$BIN_DIR/sermon-agent" "$@" || die "enrollment failed (see above)"
+	as_service_user "$agent" "$@" || die "enrollment failed (see above)"
 
 	case $init in
 	systemd)
-		install_systemd_unit
+		# The packages bring their units.
+		[ -n "$REPO" ] || install_systemd_unit
 		systemctl daemon-reload
 		systemctl enable --now sermon-agent
 		;;
@@ -523,12 +604,22 @@ main() {
 			done
 			say "syslogd writes with the group sermon now"
 		fi
-		install_openrc_service
+		[ -n "$REPO" ] || install_openrc_service
 		rc-update add sermon-agent default
 		rc-service sermon-agent restart
 		;;
 	esac
-	if [ -n "$NO_HELPER" ]; then remove_helper "$init"; else install_helper "$work" "$arch" "$init"; fi
+	if [ -n "$REPO" ]; then
+		# The package brought the helper with its helper.toml; the flags change only their values.
+		if [ -z "$NO_HELPER" ] && [ -n "$HELPER_FLAGS" ]; then
+			write_helper_config
+			restart_helper "$init"
+		fi
+	elif [ -n "$NO_HELPER" ]; then
+		remove_helper "$init"
+	else
+		install_helper "$work" "$arch" "$init"
+	fi
 	log_source_hint
 	say "done – the node shows up in the UI within seconds"
 }

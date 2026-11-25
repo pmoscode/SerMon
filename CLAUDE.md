@@ -86,6 +86,8 @@ Wichtige Variablen:
   öffentliche Adressen; `just dev`: `127.0.0.1/32`)
 - `SERMON_AGENT_DOWNLOADS_DIR` (signierte Agent-Binaries für `/downloads`, ADR 0012; Release-Key wird beim Build
   über `SERMON_RELEASE_KEY` bzw. `packaging/release.pub` einkompiliert)
+- `SERMON_REPO_DIR` (signierte Paket-Repos aus `scripts/build-repos.sh` für `/repo` und `install.sh --repo`,
+  ADR 0036)
 
 Erstinstallation: `sermon-server init` (Schlüssel, Migrationen, Agent-CA, Setup-Token). Solange die Einrichtung offen
 ist, steht ein Setup-Token im Server-Log (`just dev`: Ausgabe von `sermon-server`); damit legt `SetupService` den

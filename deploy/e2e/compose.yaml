@@ -39,14 +39,14 @@ services:
       # reads SSL_CERT_FILE).
       SSL_CERT_FILE: /run/secrets/outbound_ca
     secrets: [mailpit_ca, outbound_ca]
-    volumes: ["../e2e/.build/downloads:/srv/downloads:ro"]
+    volumes: ["../e2e/.build/downloads:/srv/downloads:ro", "../e2e/.build/agent-repo:/srv/repo:ro"]
     ports: !reset []
     depends_on:
       mailpit: { condition: service_started }
 
   # The one-shot migration and "init" (M2-36) see the server's downloads as in production.
   migrate:
-    volumes: ["../e2e/.build/downloads:/srv/downloads:ro"]
+    volumes: ["../e2e/.build/downloads:/srv/downloads:ro", "../e2e/.build/agent-repo:/srv/repo:ro"]
 
   caddy:
     # tls internal: Caddy's own CA, like a self-hosted server without a public certificate.
@@ -160,18 +160,18 @@ services:
     <<: *agent-host
     build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6" } }
     hostname: pkg-01
-    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro", "../e2e/repos/use.sh:/e2e/use.sh:ro", "../e2e/.build/repos/keys:/e2e/keys:ro"]
   pkg-rockylinux-9:
     <<: *agent-host
     build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "rockylinux:9@sha256:03303863808e9cd79f0c58c833db3e5f9cde9f2abe16804a267b05dc54af86e4" } }
     hostname: pkg-02
-    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro", "../e2e/repos/use.sh:/e2e/use.sh:ro", "../e2e/.build/repos/keys:/e2e/keys:ro"]
   pkg-alpine-3-22:
     <<: *agent-host
     build: { context: ../e2e, dockerfile: agent-alpine.Dockerfile, args: { BASE: "alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f" } }
     hostname: pkg-03
     stop_signal: SIGUSR2 # busybox init
-    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/.build/packages:/packages:ro", "../e2e/repos/use.sh:/e2e/use.sh:ro", "../e2e/.build/repos/keys:/e2e/keys:ro"]
 
 secrets: # written by scripts/e2e-demo.sh into .build/, never committed
   postgres_password: { file: ../e2e/.build/secrets/postgres_password }

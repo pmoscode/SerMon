@@ -188,8 +188,8 @@ fehl.
   | | Quellen | Listen | alle | Security |
   |---|---|---|---|---|
   | apt | `apt-get update -q` | `apt list --upgradable` | `apt-get -y -q -o …confdef -o …confold --with-new-pkgs upgrade` | `apt-get … install --only-upgrade NAMEN` |
-  | dnf | `dnf -q makecache` | `check-update`, `updateinfo list --security`, `needs-restarting -r` | `dnf -y upgrade` | `dnf -y upgrade --security` |
-  | apk | `apk update -q` | `apk version -l '<'` | `apk upgrade -q` | – (`UNSUPPORTED`, O6) |
+  | dnf | `dnf -q makecache --refresh` (Nachtrag M4-20) | `check-update`, `updateinfo list --security`, `needs-restarting -r` | `dnf -y upgrade` | `dnf -y upgrade --security` |
+  | apk | `apk update -q --force-refresh` (Nachtrag M4-20) | `apk version -l '<'` | `apk upgrade -q` | – (`UNSUPPORTED`, O6) |
 
   Ein Lauf aktualisiert erst die Quellen; schlägt das fehl, endet er mit dessen Ausgabe.
 - **Abweichung: apt und „nur Security“.** apt kennt kein Upgrade nur aus Security-Quellen. Der Helper liest dafür doch
@@ -264,4 +264,12 @@ fehl.
 - Ablauf und Felder des Self-Updates regelt [ADR 0036](0036-self-update-und-paket-repos.md): `SelfUpdate` bekommt das
   Feld `version`, neu ist `ConfirmSelfUpdate{run_id}`. Die Grenze des Helpers steigt dafür von 1 500 auf
   **1 800 Zeilen**; Ed25519 kommt aus `ring` (schon im Workspace, Nachtrag M4-18 zu ADR 0036).
+
+## Nachtrag M4-20
+
+- **dnf und apk frischen die Quellen wirklich auf:** `dnf makecache` lädt nichts, solange die Metadaten jünger als
+  `metadata_expire` sind (Standard 48 h), `apk update` nichts, solange sein Cache jünger als `cache-max-age` ist (4 h,
+  gefunden in der Demo: das neue Paket im Repo des Servers kam auf Alpine nicht an). Nur `apt-get update` lädt immer.
+  Der Helper ruft daher `dnf -q makecache --refresh` und `apk update -q --force-refresh`; er frischt höchstens alle
+  5 min auf (T89), die Last bleibt begrenzt.
 

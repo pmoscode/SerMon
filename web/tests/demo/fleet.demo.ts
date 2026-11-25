@@ -10,6 +10,7 @@ import {
 	invitationLink,
 	login,
 	ownerSQL,
+	publishAgentRepo,
 	publishBeta,
 	repoScript,
 	setupToken,
@@ -60,29 +61,37 @@ const agents = [
 ] as const;
 /** Containers reach the proxy as sermon.test and the agent port of the server directly. */
 const inside = 'https://sermon.test';
-/** Fresh hosts for the signed agent packages (M2-21). */
+/**
+ * Fresh hosts for the signed agent packages (M2-21), installed by install.sh --repo from the
+ * server's package repository (M4-20).
+ */
 const packageHosts = [
 	{
 		service: 'pkg-debian-13',
 		host: 'pkg-01',
 		init: 'systemd',
-		install: 'apt-get install -y -qq /packages/*.deb',
+		// The versions of agent and helper, one per line; release as the package manager writes it.
+		versions: "dpkg-query -W -f='${Version}\\n' sermon-agent sermon-helper",
+		release: '1',
+		refused: 'apt cannot read the repository',
 		remove: 'apt-get remove -y -qq sermon-agent'
 	},
 	{
 		service: 'pkg-rockylinux-9',
 		host: 'pkg-02',
 		init: 'systemd',
-		install:
-			'rpm --import /packages/gpg.pub.asc && rpm -K /packages/*.rpm | grep -q "signatures OK" && dnf install -y -q /packages/*.rpm',
+		versions: "rpm -q --qf '%{VERSION}-%{RELEASE}\\n' sermon-agent sermon-helper",
+		release: '1',
+		refused: 'dnf cannot install',
 		remove: 'dnf remove -y -q sermon-agent'
 	},
-	// apk refuses a package whose key is not in /etc/apk/keys.
 	{
 		service: 'pkg-alpine-3-22',
 		host: 'pkg-03',
 		init: 'openrc',
-		install: 'cp /packages/sermon-agent.rsa.pub /etc/apk/keys/ && apk add -q /packages/*.apk',
+		versions: "apk info -e -v sermon-agent sermon-helper | sed 's/^sermon-[a-z]*-//'",
+		release: 'r1',
+		refused: 'apk cannot read the repository',
 		remove: 'apk del -q sermon-agent sermon-helper'
 	}
 ] as const;
@@ -678,32 +687,28 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	expect(lowered.output).toContain('CPU over budget');
 	expect(lowered.output).toContain('RSS over budget');
 
-	// Signed packages (M2-21): install, set the server, enroll as sermon, start; the node reports.
-	// Removal stops the agent and leaves nothing but the configuration.
-	const token = /SERMON_ENROLLMENT_TOKEN=(sme_\S+)/.exec(command)?.[1] ?? '';
-	expect(token).not.toBe('');
+	// Signed packages (M2-21) from the server's repository (M4-20): install.sh --repo sets up the
+	// source with its key, the package manager installs agent and helper, the script enrolls and
+	// starts. A repository whose indexes another key signed is refused first, on every manager.
+	const fromRepo = `${command.replaceAll(new URL(baseURL ?? '').origin, inside)} --agent-url ${agentURL} --repo`;
+	const versionsOf = (host: (typeof packageHosts)[number]) =>
+		exec(host.service, host.versions).trim().split(/\s+/);
+	publishAgentRepo('forged');
 	for (const host of packageHosts) {
 		exec(host.service, trustCA, ca.root);
-		exec(host.service, `${host.install} 2>&1`);
-		exec(
-			host.service,
-			`sed -i 's#^url = .*#url = "${inside}"#' /etc/sermon/agent.toml && echo 'agent_url = "${agentURL}"' >> /etc/sermon/agent.toml`
-		);
-		exec(
-			host.service,
-			'runuser -u sermon -- /usr/bin/sermon-agent enroll --config /etc/sermon/agent.toml 2>&1',
-			undefined,
-			{
-				SERMON_ENROLLMENT_TOKEN: token
-			}
-		);
-		exec(
-			host.service,
-			host.init === 'systemd'
-				? 'systemctl enable --now sermon-agent 2>&1'
-				: 'rc-update add sermon-agent default >/dev/null && rc-service sermon-agent start 2>&1'
-		);
+		const refused = exec(host.service, `(${fromRepo}) 2>&1 || echo "exit=$?"`);
+		expect(refused, host.service).toContain(host.refused);
+		expect(refused).toMatch(/exit=1$/m);
+		expect(
+			exec(host.service, 'test -e /usr/bin/sermon-agent || echo none').trim(),
+			host.service
+		).toBe('none');
+	}
+	publishAgentRepo('current');
+	for (const host of packageHosts) {
+		exec(host.service, `(${fromRepo}) 2>&1`);
 		expect(serviceState(host)).toBe('running');
+		expect(versionsOf(host), host.service).toEqual(Array(2).fill(`0.0.1-${host.release}`));
 		// The package sermon-helper came along and started on its own (M4-04).
 		expectHelperForSermonOnly(
 			host.service,
@@ -716,6 +721,44 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		const tile = page.getByRole('article').filter({ hasText: host.host });
 		await expect(tile.getByRole('meter', { name: 'CPU' })).toBeVisible({ timeout: 60_000 });
 	}
+	// A new version through the package manager (M4-20): the repository offers 0.0.2, an update of
+	// all packages through the helper installs it; agent and helper restart, the run's result still
+	// comes back.
+	publishAgentRepo('next');
+	const pkgIds = (
+		await call<{ nodes?: { nodeId: string; hostname: string }[] }>(
+			page.request,
+			baseURL ?? '',
+			'FleetService/GetFleetSummary',
+			{}
+		)
+	)
+		.nodes!.filter((n) => packageHosts.some((h) => h.host === n.hostname))
+		.map((n) => `'${n.nodeId}'`);
+	expect(pkgIds).toHaveLength(packageHosts.length);
+	ownerSQL(
+		`INSERT INTO node_commands (org_id, id, node_id, kind, scope, created_at, expires_at)
+		 SELECT org_id, gen_random_uuid(), id, 2, 2, now(), now() + interval '15 minutes' FROM nodes WHERE id IN (${pkgIds.join(',')});
+		 SELECT pg_notify('sermon_node_commands', id::text) FROM nodes WHERE id IN (${pkgIds.join(',')});`
+	);
+	const upgradeStarted = Date.now();
+	await expect
+		.poll(
+			() =>
+				ownerSQL(
+					`SELECT string_agg(n.hostname || ':' || coalesce(c.phase, 0) || ':' || coalesce(c.exit_code, -9), ',' ORDER BY n.hostname)
+					 FROM node_commands c JOIN nodes n ON n.id = c.node_id WHERE c.kind = 2 AND n.hostname LIKE 'pkg-%'`
+				).trim(),
+			{ timeout: 300_000, intervals: [5_000] }
+		)
+		.toBe('pkg-01:2:0,pkg-02:2:0,pkg-03:2:0');
+	for (const host of packageHosts) {
+		expect(versionsOf(host), host.service).toEqual(Array(2).fill(`0.0.2-${host.release}`));
+		expect(serviceState(host)).toBe('running');
+	}
+	console.log(
+		`the package manager updated the agent to 0.0.2 after ${Math.round((Date.now() - upgradeStarted) / 1000)} s`
+	);
 	for (const host of packageHosts) {
 		exec(host.service, `${host.remove} 2>&1`);
 		expect(

@@ -334,6 +334,11 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		logger.WarnContext(ctx, "built without release key – /install.sh refuses to install agents")
 	}
 	downloads.Register(mux)
+	repositories, err := download.NewRepository(cfg.RepoDir)
+	if err != nil {
+		return fmt.Errorf("package repositories: %w", err)
+	}
+	repositories.Register(mux)
 	if err := mountUI(ctx, mux, logger); err != nil {
 		return err
 	}

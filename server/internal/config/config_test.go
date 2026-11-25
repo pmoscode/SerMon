@@ -339,6 +339,13 @@ func TestLoad_AgentDownloadsDir(t *testing.T) {
 	if _, err := config.Load(fakeSource(map[string]string{"SERMON_AGENT_DOWNLOADS_DIR": dir + "/missing"}, nil)); err == nil {
 		t.Error("a missing directory must be rejected")
 	}
+	// M4-20: the package repositories.
+	if cfg, err := config.Load(fakeSource(map[string]string{"SERMON_REPO_DIR": dir}, nil)); err != nil || cfg.RepoDir != dir {
+		t.Errorf("Load() = %q, %v", cfg.RepoDir, err)
+	}
+	if _, err := config.Load(fakeSource(map[string]string{"SERMON_REPO_DIR": dir + "/missing"}, nil)); err == nil {
+		t.Error("a missing repository directory must be rejected")
+	}
 }
 
 // M3-18: a local country database of the operator, optional, with its own attribution.

@@ -434,3 +434,54 @@ without_minisign() {
 	[[ "$output" == *"switched off"* ]]
 	grep -q 'systemctl disable --now sermon-helper.socket sermon-helper.service' "$TMP/calls"
 }
+
+# --repo (M4-20, ADR 0036): the repository with its key for apt, dnf and apk, the packages through
+# the package manager; without recommends or weak dependencies --no-helper means no helper.
+@test "sets up the server's repository and installs the packages through the package manager" {
+	mkdir -p "$TMP/fake"
+	for tool in apt-get dnf apk; do
+		printf '#!/bin/sh\necho "%s $*" >>%s/calls\n' "$tool" "$TMP" >"$TMP/fake/$tool"
+		chmod 0755 "$TMP/fake/$tool"
+	done
+	download() { echo "key of $1" >"$2"; }
+	SERVER=https://sermon.example.org NO_HELPER=''
+	PATH="$TMP/fake:$PATH" install_from_repo debian 2>/dev/null
+	grep -q '^URIs: https://sermon.example.org/repo/apt$' "$SERMON_INSTALL_ROOT/etc/apt/sources.list.d/sermon.sources"
+	grep -q '^Signed-By: /etc/apt/keyrings/sermon.asc$' "$SERMON_INSTALL_ROOT/etc/apt/sources.list.d/sermon.sources"
+	grep -q 'repo/keys/sermon.asc' "$SERMON_INSTALL_ROOT/etc/apt/keyrings/sermon.asc"
+	grep -q '^apt-get install .*--no-install-recommends sermon-agent sermon-helper$' "$TMP/calls"
+
+	NO_HELPER=1
+	PATH="$TMP/fake:$PATH" install_from_repo rocky 2>/dev/null
+	grep -q '^baseurl=https://sermon.example.org/repo/rpm$' "$SERMON_INSTALL_ROOT/etc/yum.repos.d/sermon.repo"
+	grep -q '^repo_gpgcheck=1$' "$SERMON_INSTALL_ROOT/etc/yum.repos.d/sermon.repo"
+	grep -q '^dnf install .*install_weak_deps=False sermon-agent$' "$TMP/calls"
+
+	NO_HELPER=''
+	PATH="$TMP/fake:$PATH" install_from_repo alpine 2>/dev/null
+	PATH="$TMP/fake:$PATH" install_from_repo alpine 2>/dev/null
+	[ "$(grep -c 'sermon.example.org/repo/apk' "$SERMON_INSTALL_ROOT/etc/apk/repositories")" = 1 ]
+	grep -q 'sermon-agent.rsa.pub' "$SERMON_INSTALL_ROOT/etc/apk/keys/sermon-agent.rsa.pub"
+	grep -q '^apk add -q sermon-agent sermon-helper$' "$TMP/calls"
+
+	run install_from_repo arch
+	[[ "$output" == *"apt, dnf and apk"* ]]
+}
+
+@test "--repo takes the package's example configuration but needs a trusted certificate" {
+	SERMON_ENROLLMENT_TOKEN=sme_x parse_args --server https://sermon.example.org --repo
+	[ "$REPO" = 1 ]
+	SERMON_ENROLLMENT_TOKEN=sme_x run parse_args --server https://sermon.example.org --repo --ca-fingerprint sha256:ab
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"--repo needs a certificate"* ]]
+	mkdir -p "$SERMON_INSTALL_ROOT/etc/sermon"
+	printf '[server]\nurl = "https://sermon.example.com"\n' >"$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
+	SERVER=https://sermon.example.org AGENT_URL=https://sermon.example.org:8443 CONFIG_DIR=/etc/sermon FORCE=''
+	# Without --repo it is a configuration like any other.
+	REPO=''
+	run write_config
+	[ "$status" -ne 0 ]
+	REPO=1
+	write_config
+	grep -q '^url = "https://sermon.example.org"$' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
+}

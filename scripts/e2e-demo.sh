@@ -32,7 +32,7 @@ aarch64 | arm64) arch=arm64 target=aarch64-unknown-linux-musl ;;
 *) echo "e2e-demo: unsupported Docker architecture" >&2 && exit 1 ;;
 esac
 
-if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build/dex/config.yaml" ] || [ ! -f "$build/repos/keys/gpg.pub.asc" ]; then
+if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build/dex/config.yaml" ] || [ ! -f "$build/repos/keys/gpg.pub.asc" ] || [ ! -f "$build/agent-repos/current/keys/sermon.asc" ]; then
 	rm -rf "$build"
 	mkdir -p "$build/secrets" "$build/downloads"
 	# Release key and database passwords: only for the user who runs the demo. The containers see the
@@ -64,6 +64,20 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 	# Package sources with updates for the agent hosts (M4-08), signed with the same keys.
 	echo "▸ building the package sources with updates"
 	sh "$e2e/repos/build.sh" "$build/package-keys" "$build/repos" >/dev/null
+	# The agent's repositories (M4-20): this version; with the next one (0.0.2, the same binaries)
+	# for an update by the package manager; and one whose indexes another key signed.
+	echo "▸ building the agent's package repositories"
+	SERMON_PKG_GPG_KEY="$build/package-keys/gpg.asc" SERMON_PKG_APK_KEY="$build/package-keys/apk.rsa" \
+		"$root/scripts/package-agent.sh" "$arch" 0.0.2 "$build/downloads/sermon-agent-linux-$arch" \
+		"$build/downloads/sermon-helper-linux-$arch" "$build/packages-next" >/dev/null
+	cp "$build/packages/"*.deb "$build/packages/"*.rpm "$build/packages/"*.apk "$build/packages-next/"
+	"$root/scripts/package-test-keys.sh" "$build/other-keys"
+	mkdir -p "$build/forged-keys"
+	cp "$build/other-keys/gpg.asc" "$build/other-keys/apk.rsa" "$build/forged-keys/"
+	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/sermon-agent.rsa.pub" "$build/forged-keys/"
+	"$root/scripts/build-repos.sh" "$build/packages" "$build/package-keys" "$build/agent-repos/current" >/dev/null
+	"$root/scripts/build-repos.sh" "$build/packages-next" "$build/package-keys" "$build/agent-repos/next" >/dev/null
+	"$root/scripts/build-repos.sh" "$build/packages" "$build/forged-keys" "$build/agent-repos/forged" >/dev/null
 
 	# Database passwords and URLs as on a real installation; Mailpit accepts any SMTP login.
 	openssl rand -hex 16 | tr -d '\n' >"$build/secrets/smtp_password"
@@ -122,6 +136,10 @@ export SERMON_RELEASE_KEY
 echo "▸ building the server image from source (deploy/compose/server.Dockerfile)"
 compose down -v --remove-orphans >/dev/null 2>&1 || true
 compose build --quiet
+# The server offers the agent's current repository; the demo switches it (web/tests/demo/stack.ts).
+rm -rf "$build/agent-repo"
+cp -R "$build/agent-repos/current" "$build/agent-repo"
+
 echo "▸ first installation: sermon-server init, then docker compose up"
 compose run --rm --quiet-pull migrate init --master-keys-file /var/lib/sermon/master_keys >/dev/null
 compose up -d --quiet-pull
@@ -131,10 +149,11 @@ for _ in $(seq 1 90); do
 done
 curl -fsSk "https://localhost:$port/readyz" >/dev/null
 
-# The agent hosts take their updates from the package sources of this run only (M4-08).
+# The agent hosts take their updates from the package sources of this run only (M4-08), the
+# package hosts, too (their agent repository comes from the server, M4-20).
 echo "▸ switching the agent hosts to the package sources of this run"
 pids=""
-for service in $(compose config --services | grep '^agent-'); do
+for service in $(compose config --services | grep -E '^(agent|pkg)-'); do
 	compose exec -T "$service" sh /e2e/use.sh http://packages.test:8080 /e2e/keys >"$build/use-$service.log" 2>&1 &
 	pids="$pids $!"
 done

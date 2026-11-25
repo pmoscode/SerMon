@@ -4657,7 +4657,35 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Auswahl der Version je Kanal, Rechte und Step-up, Tenant-Isolation, Szenariotest der Regel.
 - **Abhängig von:** M4-13, M4-18
 
-#### ☐ M4-20 – Signierte Paket-Repos · X · M 🔒
+#### ☑ M4-20 – Signierte Paket-Repos · X · M 🔒
+> Erledigt (Nachtrag M4-20 zu ADR 0036 und ADR 0035; KONZEPT §14.3, O5; Threat Model T101; Betriebsdoku „Paket-Repos“):
+> - **`scripts/build-repos.sh PACKAGES KEYS OUT`** baut aus allen Paketen von `package-agent.sh` die Repos: apt (Suite
+>   `stable`, `InRelease` und `Release.gpg`), rpm (beide Architekturen, `repomd.xml.asc`), apk (`x86_64/`, `aarch64/`,
+>   signierter `APKINDEX`) und `keys/` mit den öffentlichen Schlüsseln; `KEYS/next/` legt die des nächsten Paares für eine
+>   Rotation dazu. Die Werkzeuge laufen als Container (`packaging/repo/*.Dockerfile`, jetzt auch für die Quellen von
+>   M4-08).
+> - **Server:** `GET /repo/{apt,rpm,apk,keys}/…` aus `SERMON_REPO_DIR` (Compose: `deploy/compose/repo/`), nur lesend über
+>   `os.Root`, ohne Listen, versteckte Dateien und andere Bereiche.
+> - **`install.sh --repo`** holt die Schlüssel vom Server, richtet die Quelle ein (apt `sermon.sources` mit `Signed-By`,
+>   dnf mit `gpgcheck` und `repo_gpgcheck`, apk) und installiert `sermon-agent` und `sermon-helper` – ohne Recommends bzw.
+>   schwache Abhängigkeiten, damit `--no-helper` gilt –, dann Konfiguration (die Beispieldatei des Pakets gilt nicht als
+>   Enrollment), Enrollment und Start mit den Units der Pakete. Mit `--ca-fingerprint` abgelehnt: Der Paketmanager
+>   braucht ein vertrautes Zertifikat.
+> - **Gefunden in der Demo:** `dnf makecache` und `apk update` laden nichts, solange ihr Cache jung ist (48 h bzw. 4 h);
+>   das neue Paket kam auf Alpine nicht an. Der Helper frischt jetzt mit `makecache --refresh` bzw.
+>   `update --force-refresh` auf (höchstens alle 5 min).
+> - **Abweichung:** Die neue Version kommt in der Demo über einen Update-Lauf mit allen Paketen, den Befehl, den eine
+>   `all-auto`-Policy im Fenster schickt; den Weg über die Policy zeigt M4-28.
+> - **Tests:** Handler (Bereiche, versteckte Dateien, Verzeichnisse, Symlink nach außen, `..`, ohne Verzeichnis),
+>   Konfiguration, bats (Quelle und Schlüssel je Paketmanager, `--no-helper`, keine doppelte apk-Quelle, unbekannte
+>   Distribution, `--ca-fingerprint`, Beispielkonfiguration nur mit `--repo`), Helper gegen echte Paketmanager.
+> - **Demo:** Die drei Paket-Hosts (Debian 13, Rocky 9, Alpine 3.22) lehnen zuerst ein Repo ab, dessen Indizes ein
+>   anderer Schlüssel signiert hat, installieren dann per `install.sh --repo`, melden sich und bekommen 0.0.2 über den
+>   Paketmanager (nach 16 s). Die Paket-Hosts nutzen dafür die Quellen des Laufs (offline, reproduzierbar). 5/5 grün in
+>   21,7 min. Dabei gefunden: `tests/` stand nicht in `web/tsconfig.json`, ein fehlender Import fiel erst zur Laufzeit
+>   auf – jetzt prüft `pnpm check` auch die Tests.
+> - **Gegenproben** für 18 Prüfungen, alle erkannt (zwei erst nach einem strengeren Test des Handlers: Verzeichnisse
+>   und Dateien der obersten Ebene).
 - **Ziel:**
   - Ein Skript baut aus `dist/packages` signierte apt-, rpm- und apk-Repos (ADR 0036), ausgeliefert wie dort
     entschieden.

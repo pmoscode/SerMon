@@ -11,7 +11,7 @@
 #
 #   sh deploy/e2e/repos/build.sh KEYS OUT    KEYS from package-test-keys.sh, OUT gets apt/ rpm/ apk/ keys/
 #
-# nfpm and the repository tools run as containers (pinned in the Dockerfiles here); nothing is
+# nfpm and the repository tools run as containers (pinned in packaging/repo/*.Dockerfile); nothing is
 # installed on the host. Never for releases: the keys are those of one test run.
 set -eu
 
@@ -41,7 +41,7 @@ cp "$keys/gpg.asc" "$work/keys/gpg.asc"
 cp "$keys/apk.rsa" "$work/keys/sermon-agent.rsa"
 
 for tool in apt rpm apk; do
-	docker build -q -t "sermon-e2e-repo-$tool" -f "$here/$tool.Dockerfile" "$here" >/dev/null
+	docker build -q -t "sermon-e2e-repo-$tool" -f "$here/../../../packaging/repo/$tool.Dockerfile" "$here" >/dev/null
 done
 
 # package NAME VERSION [reboot]: .deb, .rpm and .apk of a dummy package into work/NAME-VERSION/.

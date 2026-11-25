@@ -1173,7 +1173,8 @@ spec:
   (`ConfirmSelfUpdate`); ohne Bestätigung nach 2 min legt der Helper die vorige zurück. `stable` ist die Version des
   Servers, `beta` liegt optional in `downloads/beta/`; der Server kennt die Versionen aus den signierten Trusted
   Comments. Paket-Repos (apt, rpm, apk) liefert der Server unter `/repo/` aus, signiert mit eigenen Schlüsseln der
-  Release-Pipeline; `install.sh --repo` richtet sie ein (O5).
+  Release-Pipeline; `install.sh --repo` richtet sie ein (O5). Gebaut werden sie mit `scripts/build-repos.sh`, der
+  Server liefert sie aus `SERMON_REPO_DIR` (M4-20).
 - **Im Server (M4-19):** Kanal und `agentUpdate` (`manual`/`auto`) stehen in der Update-Policy der Gruppe. Von Hand
   aktualisiert ein Operator mit `run_updates` und frischem Step-up (`UpdateService.UpdateAgents`); mit `auto`
   aktualisiert der Orchestrator im Fenster zuerst den Agent, dann die Pakete, mit `maxParallel` und Health-Check.
@@ -1636,7 +1637,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | O2  | Timescale-Lizenz             | Kompression und Continuous Aggregates stehen unter der Timescale License (TSL), nicht Apache-2.0 | Erlaubt für Self-Hosting und SerMon als Produkt bzw. SaaS; verboten wäre nur, TimescaleDB selbst als DBaaS anzubieten. Vor einem SaaS-Start juristisch prüfen |
 | O3  | Prozessdetails               | Ohne `CAP_SYS_PTRACE` keine IO/FD-Infos fremder Prozesse                         | Akzeptiert („n/a“). Später ggf. eine feste Helper-Op „ProcessDetails(pid)“ mit Rate-Limit  |
 | O4  | Docker-Socket                | root-äquivalent                                                                  | Modul aus + Warnung; cgroup-Variante ohne Socket bevorzugen                                |
-| O5  | `curl \| sh`                 | Wird in Security-Kreisen kritisch gesehen                                        | Signaturprüfung im Skript, Option „erst ansehen“, Paket-Repo als gleichwertige Alternative |
+| O5  | `curl \| sh`                 | Wird in Security-Kreisen kritisch gesehen                                        | Signaturprüfung im Skript, Option „erst ansehen“, Paket-Repo als gleichwertige Alternative (M4-20: `install.sh --repo`, Repos unter `/repo/`) |
 | O6  | Alpine-Security-Updates      | apk hat keine Security-Metadaten                                                 | Nur `report`/`all-auto`; ggf. später den secdb-Feed von Alpine auswerten                   |
 | O7  | Projekt-/Domainname          | „SerMon“ – Marke/Domain prüfen                                                   | vor dem ersten Release                                                                     |
 | O8  | Mandanten in den Metriken    | ✓ Geklärt (Spike M0-09): keine RLS auf Hypertables mit Columnstore und auf Continuous Aggregates | Scope-Pflicht in der Query-Schicht; zusätzlich kein direktes SELECT für `sermon_app`, Lesen nur über `SECURITY DEFINER`-Funktion mit RLS-geschützter `series` (M1-22) |

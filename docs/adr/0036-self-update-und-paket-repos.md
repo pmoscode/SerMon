@@ -168,3 +168,20 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
 - **Kanal und `agentUpdate`** stehen in der Update-Policy der Gruppe; mit `auto` aktualisiert der Orchestrator im
   Fenster zuerst den Agent, dann die Pakete (KONZEPT §14.3).
 
+## Nachtrag M4-20
+
+- **Bau:** `scripts/build-repos.sh PACKAGES KEYS OUT` baut aus allen Paketen in `PACKAGES` (jede Version und
+  Architektur) apt (Suite `stable`, Komponente `main`), rpm (ein Repo für beide Architekturen) und apk (`x86_64/`,
+  `aarch64/`). Die Werkzeuge laufen als Container (`packaging/repo/*.Dockerfile`, auch für die Quellen von M4-08). Wie
+  viele Versionen im Repo bleiben, entscheidet die Pipeline über den Inhalt von `PACKAGES`.
+- **Auslieferung:** `GET /repo/{apt,rpm,apk,keys}/…` aus `SERMON_REPO_DIR` über `os.Root`; keine Listen, keine
+  versteckten Dateien (etwa `.work/` des Skripts), nichts außerhalb der vier Bereiche.
+- **`install.sh --repo`** holt die öffentlichen Schlüssel vom Server (dieselbe geprüfte TLS-Verbindung wie das Skript),
+  richtet die Quelle ein und installiert `sermon-agent` und `sermon-helper` (ohne Recommends bzw. schwache
+  Abhängigkeiten, damit `--no-helper` gilt); danach Konfiguration, Enrollment und Start wie bisher. Mit
+  `--ca-fingerprint` geht es nicht: Der Paketmanager braucht ein Zertifikat, dem er vertraut.
+- **dnf und apk** frischen die Quellen im Helper jetzt ohne Cache auf (`makecache --refresh`, `update --force-refresh`,
+  Nachtrag M4-20 zu ADR 0035), sonst sähe ein Host neue Pakete erst nach 48 h bzw. 4 h.
+- **Rotation:** Öffentliche Schlüssel des nächsten Paares in `KEYS/next/` werden mit ausgeliefert (apt und dnf in einer
+  Datei, apk als zweite Datei). `Valid-Until` setzt das apt-Repo nicht: Es wird nur mit Releases neu gebaut (T101).
+

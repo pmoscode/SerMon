@@ -79,6 +79,23 @@ In der UI unter **Nodes → Node hinzufügen** entsteht ein Befehl mit Enrollmen
 
 Ohne Release-Schlüssel verweigert `install.sh` die Installation; die Agent-Pakete (.deb, .rpm, .apk) gehen auch ohne.
 
+### Paket-Repos (`install.sh --repo`)
+
+Statt der Binaries kann `install.sh --repo` die Pakete `sermon-agent` und `sermon-helper` aus einem signierten Repo
+des Servers installieren (apt, dnf, apk); danach aktualisiert der Paketmanager sie, auch über eine Update-Policy. Der
+Server liefert die Repos unter `https://<SERMON_DOMAIN>/repo/` aus `deploy/compose/repo/` aus:
+
+```sh
+scripts/build-repos.sh dist/packages KEYS deploy/compose/repo
+```
+
+`dist/packages` enthält die signierten Pakete aller gewünschten Versionen (`scripts/package-agent.sh`), `KEYS` die
+Paketschlüssel (`gpg.asc`, `gpg.pub.asc`, `apk.rsa`, `sermon-agent.rsa.pub`). Die öffentlichen Schlüssel landen
+unter `/repo/keys/`; `install.sh --repo` richtet sie mit der Quelle ein. Der Paketmanager muss dem Zertifikat des
+Servers vertrauen: Mit einem selbstsignierten Zertifikat (`--ca-fingerprint`) geht `--repo` nicht, dann die CA des
+Servers auf dem Host installieren. Für einen Schlüsselwechsel liegen die öffentlichen Schlüssel des neuen Paares in
+`KEYS/next/`; sie werden ein Release lang mit ausgeliefert ([ADR 0036](../adr/0036-self-update-und-paket-repos.md)).
+
 ### Root-Helper (Updates und Reboots)
 
 Neben dem Agent installiert `install.sh` den Root-Helper `sermon-helper` (signiert wie der Agent, Binaries

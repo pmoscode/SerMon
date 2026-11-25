@@ -76,6 +76,10 @@ gen-packaging:
     cp packaging/install.sh server/internal/transport/download/assets/install.sh
     cp packaging/systemd/sermon-agent.service server/internal/transport/download/assets/sermon-agent.service
     cp packaging/openrc/sermon-agent server/internal/transport/download/assets/sermon-agent.openrc
+    cp packaging/systemd/sermon-helper.service server/internal/transport/download/assets/sermon-helper.service
+    cp packaging/systemd/sermon-helper.socket server/internal/transport/download/assets/sermon-helper.socket
+    cp packaging/openrc/sermon-helper server/internal/transport/download/assets/sermon-helper.openrc
+    cp packaging/helper.toml server/internal/transport/download/assets/helper.toml
     @echo "✓ copied: server/internal/transport/download/assets"
 
 # Copy the default alert rules into the server, which embeds them (M2-04)
@@ -246,27 +250,30 @@ test-packages:
     x86_64 | amd64) target=x86_64-unknown-linux-musl ;;
     *) target=aarch64-unknown-linux-musl ;;
     esac
-    (cd agent && cargo zigbuild --release --locked -q -p sermon-agent --target "$target")
-    scripts/test-packages.sh "agent/target/$target/release/sermon-agent"
+    (cd agent && cargo zigbuild --release --locked -q -p sermon-agent -p sermon-helper --target "$target")
+    scripts/test-packages.sh "agent/target/$target/release/sermon-agent" "agent/target/$target/release/sermon-helper"
 
-# Signed agent packages of VERSION (amd64, arm64) into dist/packages/; keys: see scripts/package-agent.sh (M2-21)
+# Signed packages of agent and helper of VERSION (amd64, arm64) into dist/packages/; keys: see scripts/package-agent.sh (M2-21, M4-04)
 package-agent version: build-agent
-    scripts/package-agent.sh amd64 "{{ version }}" agent/target/x86_64-unknown-linux-musl/release/sermon-agent dist/packages
-    scripts/package-agent.sh arm64 "{{ version }}" agent/target/aarch64-unknown-linux-musl/release/sermon-agent dist/packages
+    scripts/package-agent.sh amd64 "{{ version }}" agent/target/x86_64-unknown-linux-musl/release/sermon-agent agent/target/x86_64-unknown-linux-musl/release/sermon-helper dist/packages
+    scripts/package-agent.sh arm64 "{{ version }}" agent/target/aarch64-unknown-linux-musl/release/sermon-agent agent/target/aarch64-unknown-linux-musl/release/sermon-helper dist/packages
 
-# Test install.sh and the systemd unit in Debian: bats (signature, detection) and `systemd-analyze security` < 2.0
+# Test install.sh and the systemd units in Debian: bats (signature, detection, helper) and `systemd-analyze security` (agent < 2.0, helper ≤ 6.0, ADR 0035)
 test-packaging:
     docker run --rm -q -v "{{ justfile_directory() }}:/src:ro" -w /src debian:13 sh -c '\
         apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends bats openssl minisign systemd >/dev/null 2>&1 && \
         bats packaging/test && \
-        { systemd-analyze security --offline=true --threshold=20 packaging/systemd/sermon-agent.service >/tmp/score; status=$?; tail -1 /tmp/score; exit $status; }'
+        { systemd-analyze security --offline=true --threshold=20 packaging/systemd/sermon-agent.service >/tmp/score; status=$?; tail -1 /tmp/score; [ $status -eq 0 ] || exit $status; } && \
+        { systemd-analyze security --offline=true --threshold=60 packaging/systemd/sermon-helper.service >/tmp/score; status=$?; tail -1 /tmp/score; exit $status; }'
 
-# Sign the release binaries of VERSION (= server version) with KEY into dist/agent/ (SERMON_AGENT_DOWNLOADS_DIR)
+# Sign the release binaries of agent and helper of VERSION (= server version) with KEY into dist/agent/ (SERMON_AGENT_DOWNLOADS_DIR)
 sign-agent key version: build-agent
     mkdir -p dist/agent
     cp agent/target/x86_64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-amd64
     cp agent/target/aarch64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-arm64
-    scripts/release-sign.sh sign "{{ key }}" --version "{{ version }}" dist/agent/sermon-agent-linux-amd64 dist/agent/sermon-agent-linux-arm64
+    cp agent/target/x86_64-unknown-linux-musl/release/sermon-helper dist/agent/sermon-helper-linux-amd64
+    cp agent/target/aarch64-unknown-linux-musl/release/sermon-helper dist/agent/sermon-helper-linux-arm64
+    scripts/release-sign.sh sign "{{ key }}" --version "{{ version }}" dist/agent/sermon-agent-linux-amd64 dist/agent/sermon-agent-linux-arm64 dist/agent/sermon-helper-linux-amd64 dist/agent/sermon-helper-linux-arm64
     @echo "✓ dist/agent: binaries and minisign signatures"
 
 # Build static release binaries for amd64 and arm64 (cargo-zigbuild, see ADR 0002)

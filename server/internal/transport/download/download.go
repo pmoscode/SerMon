@@ -1,5 +1,5 @@
-// Package download serves the agent installer and the agent binaries (KONZEPT §6, ADR 0012):
-// GET /install.sh and GET /downloads/sermon-agent-linux-<arch>[.minisig].
+// Package download serves the agent installer and the binaries of agent and root helper (KONZEPT
+// §6, ADR 0012, ADR 0035): GET /install.sh and GET /downloads/sermon-{agent,helper}-linux-<arch>[.minisig].
 //
 // The installer is rendered once at startup with the release public key, the server version and
 // the init files. The key is compiled into the server (not configurable at runtime), so the script
@@ -33,6 +33,14 @@ var (
 	systemdUnit string
 	//go:embed assets/sermon-agent.openrc
 	openrcService string
+	//go:embed assets/sermon-helper.service
+	helperUnit string
+	//go:embed assets/sermon-helper.socket
+	helperSocket string
+	//go:embed assets/sermon-helper.openrc
+	helperService string
+	//go:embed assets/helper.toml
+	helperConfig string
 )
 
 // ErrInvalidKey means the release key is not a minisign Ed25519 public key.
@@ -46,7 +54,7 @@ var ErrInvalidVersion = errors.New("server version must consist of letters, digi
 
 var version = regexp.MustCompile(`^[0-9A-Za-z.+_-]+$`)
 
-var fileName = regexp.MustCompile(`^sermon-agent-linux-(amd64|arm64)(\.minisig)?$`)
+var fileName = regexp.MustCompile(`^sermon-(agent|helper)-linux-(amd64|arm64)(\.minisig)?$`)
 
 // Handler serves the installer and the binaries.
 type Handler struct {
@@ -74,6 +82,10 @@ func New(releaseKey, serverVersion, dir string) (*Handler, error) {
 	script = strings.Replace(script, "@SERMON_AGENT_VERSION@", serverVersion, 1)
 	script = strings.Replace(script, "@SERMON_SYSTEMD_UNIT@", strings.TrimRight(systemdUnit, "\n"), 1)
 	script = strings.Replace(script, "@SERMON_OPENRC_SERVICE@", strings.TrimRight(openrcService, "\n"), 1)
+	script = strings.Replace(script, "@SERMON_HELPER_UNIT@", strings.TrimRight(helperUnit, "\n"), 1)
+	script = strings.Replace(script, "@SERMON_HELPER_SOCKET@", strings.TrimRight(helperSocket, "\n"), 1)
+	script = strings.Replace(script, "@SERMON_HELPER_SERVICE@", strings.TrimRight(helperService, "\n"), 1)
+	script = strings.Replace(script, "@SERMON_HELPER_CONFIG@", strings.TrimRight(helperConfig, "\n"), 1)
 	sum := sha256.Sum256([]byte(script))
 	h := &Handler{script: []byte(script), digest: hex.EncodeToString(sum[:])}
 	if dir != "" {

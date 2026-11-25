@@ -1254,6 +1254,7 @@ dependencies = [
  "sermon-buffer",
  "sermon-collectors",
  "sermon-core",
+ "sermon-helper-proto",
  "sermon-logs",
  "sermon-security",
  "sermon-testserver",

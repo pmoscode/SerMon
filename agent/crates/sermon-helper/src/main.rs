@@ -26,6 +26,8 @@ const NAME: &str = "sermon-helper";
 const USAGE: &str = "usage: sermon-helper --version | serve | run RUN_ID";
 /// The socket of the agent.
 const SOCKET: &str = "/run/sermon/helper.sock";
+/// The time between two connections.
+const PACE: Duration = Duration::from_millis(50);
 /// Without a request for so long, a socket-activated helper ends; systemd starts it again.
 const IDLE: Duration = Duration::from_secs(60);
 
@@ -85,6 +87,9 @@ fn serve() -> Result<(), String> {
             Ok((stream, _)) => {
                 let peer = peer::peer_uid(&stream);
                 eprintln!("{NAME}: {}", server.connection(stream, peer));
+                // At most 20 requests a second: a looping agent can't flood the journal and push
+                // the lines of real runs out of its rate limit (review M4-04).
+                std::thread::sleep(PACE);
             }
             Err(e) => eprintln!("{NAME}: accept: {e}"),
         }
@@ -150,6 +155,7 @@ impl Server {
             body = HelperResponse {
                 status: Status::Failed.into(),
                 reason: "answer too large".into(),
+                result: None,
                 ..response
             }
             .encode_to_vec();
@@ -209,9 +215,19 @@ fn inherited() -> io::Result<UnixListener> {
     // `activation`), so fd 3 is open, belongs to us alone and nothing else owns it in this
     // process; it is taken over once, at start.
     let fd = unsafe { OwnedFd::from_raw_fd(3) };
+    // systemd passes it inheritable: apt, dnf and systemd-run must not get it (review M4-04).
+    rustix::io::fcntl_setfd(&fd, rustix::io::FdFlags::CLOEXEC)?;
     let stat = rustix::fs::fstat(&fd)?;
-    if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Socket {
-        return Err(io::Error::other("fd 3 is not a socket"));
+    #[cfg(target_os = "linux")]
+    let unix_stream = rustix::net::sockopt::socket_domain(&fd)? == rustix::net::AddressFamily::UNIX
+        && rustix::net::sockopt::socket_type(&fd)? == rustix::net::SocketType::STREAM
+        && rustix::net::sockopt::socket_acceptconn(&fd)?;
+    #[cfg(not(target_os = "linux"))]
+    let unix_stream = rustix::net::sockopt::socket_type(&fd)? == rustix::net::SocketType::STREAM;
+    if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Socket
+        || !unix_stream
+    {
+        return Err(io::Error::other("fd 3 is no listening Unix stream socket"));
     }
     Ok(UnixListener::from(fd))
 }

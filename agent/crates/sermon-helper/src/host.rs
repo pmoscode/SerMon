@@ -27,6 +27,8 @@ const LIST_OUTPUT: usize = 2 << 20;
 const RUN_OUTPUT: usize = 256 << 10;
 /// A run that was launched but never started within this time is lost.
 const LAUNCH_TIME: Duration = Duration::from_mins(5);
+/// Runs kept at most, the newest (review M4-04: no disk filled with runs).
+const MAX_RUNS: usize = 500;
 /// Every apt-get that changes packages keeps changed configuration files.
 const APT_GET: [&str; 6] = [
     "-y",
@@ -150,6 +152,17 @@ impl Host {
         }
     }
 
+    /// The lock for a run or a list: a `GetStatus` may hold it for a moment.
+    fn lock_waiting(&self) -> io::Result<Option<File>> {
+        for _ in 0..25 {
+            if let Some(lock) = self.lock()? {
+                return Ok(Some(lock));
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        Ok(None)
+    }
+
     /// The run holding the lock, if any.
     fn running(&self) -> Option<String> {
         if self.lock().ok()?.is_some() {
@@ -202,7 +215,7 @@ impl Host {
                     .current_dir("/")
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
-                    .stderr(Stdio::null());
+                    .stderr(Stdio::inherit());
                 let mut child = std::os::unix::process::CommandExt::process_group(&mut c, 0)
                     .spawn()
                     .map_err(fail)?;
@@ -226,7 +239,11 @@ impl Host {
         let dir = self.run_dir(id);
         let request = fs::read_to_string(dir.join("request"))?;
         let started = now();
-        let Some(mut lock) = self.lock()? else {
+        eprintln!(
+            "sermon-helper: run {id} started: {}",
+            request.lines().next().unwrap_or_default()
+        );
+        let Some(mut lock) = self.lock_waiting()? else {
             return store(
                 &dir,
                 &done(id, started, failed("another run holds the lock")),
@@ -260,14 +277,22 @@ impl Host {
                 );
                 return Ok(());
             }
+            // "--" ends the options and the prefix keeps a reason from being one (review M4-04).
             ("reboot", reason) => self.run(
-                ("usr/sbin/shutdown", &["-r", "+1", reason]),
+                (
+                    "usr/sbin/shutdown",
+                    &["-r", "--", "+1", &format!("SerMon: {reason}")],
+                ),
                 Duration::from_mins(1),
                 4096,
                 true,
             ),
             _ => failed("unknown request"),
         };
+        eprintln!(
+            "sermon-helper: run {id} ended with exit code {}",
+            result.exit_code
+        );
         store(&dir, &done(id, started, result))
     }
 
@@ -295,7 +320,9 @@ impl Host {
                     ..refresh
                 };
             }
-            (Distribution::Apt, true) => [&APT_GET[..], &["install", "--only-upgrade"]].concat(),
+            (Distribution::Apt, true) => {
+                [&APT_GET[..], &["--no-remove", "install", "--only-upgrade"]].concat()
+            }
             (Distribution::Dnf, false) => vec!["-y", "upgrade"],
             (Distribution::Dnf, true) => vec!["-y", "upgrade", "--security"],
             (Distribution::Apk, false) => vec!["upgrade", "-q"],
@@ -309,19 +336,27 @@ impl Host {
         out
     }
 
-    /// Deletes the runs older than [`KEEP`].
-    pub fn prune(&self) {
-        for entry in fs::read_dir(self.state.join("runs"))
+    /// The runs with the time of their start and their request, the newest first.
+    fn runs(&self) -> Vec<(SystemTime, PathBuf, String)> {
+        let mut runs: Vec<_> = fs::read_dir(self.state.join("runs"))
             .into_iter()
             .flatten()
             .flatten()
-        {
-            if entry
-                .metadata()
-                .and_then(|m| m.modified())
-                .is_ok_and(|t| older(t, KEEP))
-            {
-                let _ = fs::remove_dir_all(entry.path());
+            .filter_map(|e| {
+                let modified = e.metadata().and_then(|m| m.modified()).ok()?;
+                let request = fs::read_to_string(e.path().join("request")).unwrap_or_default();
+                Some((modified, e.path(), request))
+            })
+            .collect();
+        runs.sort_by_key(|r| std::cmp::Reverse(r.0));
+        runs
+    }
+
+    /// Deletes the runs older than [`KEEP`] and all but the newest [`MAX_RUNS`].
+    pub fn prune(&self) {
+        for (i, (modified, path, _)) in self.runs().into_iter().enumerate() {
+            if i >= MAX_RUNS || older(modified, KEEP) {
+                let _ = fs::remove_dir_all(path);
             }
         }
     }
@@ -341,7 +376,7 @@ impl Executor for Host {
         let d = self.distribution();
         let (_, refresh_command, lists) =
             commands(d).ok_or_else(|| Failure::Unsupported(UNSUPPORTED.into()))?;
-        let Some(_lock) = self.lock().map_err(fail)? else {
+        let Some(_lock) = self.lock_waiting().map_err(fail)? else {
             return Err(Failure::Busy);
         };
         let stamp = self.state.join("refreshed");
@@ -397,8 +432,24 @@ impl Executor for Host {
             }
         };
         let dir = self.run_dir(id);
-        if dir.exists() {
-            return Ok(()); // started before: a run happens once
+        if let Ok(before) = fs::read_to_string(dir.join("request")) {
+            // Started before: a run happens once, and its ID names that run only.
+            return if before == request {
+                Ok(())
+            } else {
+                Err(fail(format!("run_id {id} names another run")))
+            };
+        }
+        let kind = |r: &str| r.split([' ', '\n']).next().unwrap_or_default().to_owned();
+        if self
+            .runs()
+            .iter()
+            .any(|(t, _, r)| kind(r) == kind(&request) && !older(*t, REFRESH_EVERY))
+        {
+            return Err(Failure::Later(format!(
+                "a {} run started less than 5 minutes ago",
+                kind(&request)
+            )));
         }
         if self.lock().map_err(fail)?.is_none() {
             return Err(Failure::Busy);
@@ -733,7 +784,7 @@ mod tests {
         fake.wait(ID);
         assert!(
             fake.calls()
-                .contains("--force-confold install --only-upgrade openssl libc6\n"),
+                .contains("--force-confold --no-remove install --only-upgrade openssl libc6\n"),
             "{}",
             fake.calls()
         );
@@ -790,6 +841,57 @@ mod tests {
     }
 
     // One run at a time: while the lock is held, neither a run nor a list starts.
+    // Review M4-04: a run of a kind starts at most every five minutes (no refresh flood through
+    // ApplyUpdates), a reboot after the updates still can; a run ID names one run only.
+    #[test]
+    fn runs_of_a_kind_start_at_most_every_five_minutes() {
+        let fake = Fake::new("ID=debian\n");
+        let mut host = fake.host.clone();
+        host.start(&updates(Scope::All)).unwrap();
+        fake.wait(ID);
+        let second = Run::Updates {
+            id: "0193f5a0-0000-7000-8000-000000000002".into(),
+            scope: Scope::Security,
+        };
+        assert!(matches!(host.start(&second), Err(Failure::Later(_))));
+        let reboot = Run::Reboot {
+            id: "0193f5a0-0000-7000-8000-000000000003".into(),
+            reason: "updates".into(),
+        };
+        host.start(&reboot).unwrap();
+        // The same ID for another run is refused, not taken as the earlier one.
+        let reused = Run::Reboot {
+            id: ID.into(),
+            reason: "updates".into(),
+        };
+        assert!(
+            matches!(host.start(&reused), Err(Failure::Failed(why)) if why.contains("another run"))
+        );
+        // Five minutes later the next updates may start (once the reboot run is done).
+        fake.wait("0193f5a0-0000-7000-8000-000000000003");
+        let old = SystemTime::now() - REFRESH_EVERY - Duration::from_secs(1);
+        File::open(fake.host.run_dir(ID))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        host.start(&second).unwrap();
+    }
+
+    // Review M4-04: a run waits a moment for the lock a GetStatus or a list holds briefly.
+    #[test]
+    fn a_run_waits_briefly_for_the_lock() {
+        let fake = Fake::new("ID=debian\n");
+        let host = fake.host.clone();
+        let held = host.lock().unwrap().unwrap();
+        fs::create_dir_all(host.run_dir(ID)).unwrap();
+        fs::write(host.run_dir(ID).join("request"), "updates all").unwrap();
+        let runner = std::thread::spawn(move || host.execute(ID));
+        sleep(Duration::from_millis(500));
+        drop(held);
+        runner.join().unwrap().unwrap();
+        assert_eq!(fake.host.result(ID).result.unwrap().exit_code, 0);
+    }
+
     #[test]
     fn the_lock_keeps_runs_apart_and_names_the_running_one() {
         let fake = Fake::new("ID=debian\n");
@@ -798,8 +900,18 @@ mod tests {
         held.write_all(ID.as_bytes()).unwrap();
         assert_eq!(host.status().running_run_id, ID);
         assert_eq!(host.start(&updates(Scope::All)), Err(Failure::Busy));
-        assert!(matches!(host.list_updates(true), Err(Failure::Busy)));
+        assert!(
+            matches!(host.list_updates(true), Err(Failure::Busy)),
+            "the list waited 5 s in vain"
+        );
         drop(held);
+        // Another test's child may hold a copy of the descriptor until its exec, for a moment.
+        for _ in 0..50 {
+            if host.status().running_run_id.is_empty() {
+                break;
+            }
+            sleep(Duration::from_millis(20));
+        }
         assert_eq!(host.status().running_run_id, "");
         assert_eq!(host.status().distribution(), Distribution::Apt);
     }
@@ -816,7 +928,9 @@ mod tests {
             .unwrap();
         assert_eq!(fake.wait(ID).result.unwrap().exit_code, 0);
         assert!(
-            fake.calls().contains("shutdown -r +1 updates (SerMon)\n"),
+            // Review M4-04: "--" ends the options, the prefix keeps a reason from being one.
+            fake.calls()
+                .contains("shutdown -r -- +1 SerMon: updates (SerMon)\n"),
             "{}",
             fake.calls()
         );
@@ -865,5 +979,24 @@ mod tests {
         fake.host.prune();
         assert!(!dir.exists());
         assert!(fresh.exists(), "a fresh run was pruned");
+        // At most MAX_RUNS stay, the newest.
+        for i in 0..MAX_RUNS + 2 {
+            fs::create_dir_all(
+                fake.host
+                    .run_dir(&format!("0193f5a0-0000-7000-8000-{i:012}")),
+            )
+            .unwrap();
+        }
+        let oldest = fake.host.run_dir("0193f5a0-0000-7000-8000-000000000000");
+        File::open(&oldest)
+            .unwrap()
+            .set_modified(SystemTime::now() - Duration::from_secs(3600))
+            .unwrap();
+        fake.host.prune();
+        assert_eq!(
+            fs::read_dir(fake.host.state.join("runs")).unwrap().count(),
+            MAX_RUNS
+        );
+        assert!(!oldest.exists());
     }
 }

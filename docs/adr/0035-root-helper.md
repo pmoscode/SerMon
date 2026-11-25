@@ -44,7 +44,7 @@ Kräfte, die das Konzept noch offen ließ:
 1. **Als Kindprozess des Helpers:** einfach, stirbt aber mit der Unit des Helpers.
 2. **`KillMode=process` für den Helper:** Kinder überleben, aber systemd verliert die Kontrolle über sie (Zeitlimit,
    Aufräumen), und der Modus gilt als veraltet.
-3. **Eigene Unit pro Lauf** (`systemd-run`), unter OpenRC ein abgelöster Prozess in eigener Session: Der Lauf hängt
+3. **Eigene Unit pro Lauf** (`systemd-run`), unter OpenRC ein abgelöster Prozess in eigener Prozessgruppe: Der Lauf hängt
    weder am Agent noch am Helper.
 
 **Woran der Helper den Aufrufer erkennt**
@@ -99,7 +99,7 @@ Das Enum aus KONZEPT §4.2, ergänzt um zwei lesende Operationen. Jede weitere b
 - **Ein Lauf ist eine eigene Unit:** Der Helper legt die Anfrage root-eigen unter
   `/var/lib/sermon-helper/runs/<run_id>/` ab und startet
   `systemd-run --unit=sermon-helper-run-<run_id> --collect /usr/bin/sermon-helper run <run_id>`. Unter OpenRC startet
-  er denselben Befehl abgelöst in einer eigenen Session (`setsid`). Der Lauf schreibt sein Ergebnis in dasselbe
+  er denselben Befehl abgelöst in einer eigenen Prozessgruppe (`supervise-daemon` signalisiert nur den Helper). Der Lauf schreibt sein Ergebnis in dasselbe
   Verzeichnis; nach 7 Tagen wird es gelöscht.
 - Der Agent fragt das Ergebnis mit `RunResult` ab, auch nach seinem eigenen Neustart (M4-12).
 
@@ -208,4 +208,37 @@ fehl.
   „another run holds the lock“, es laufen nie zwei Paketmanager.
 - **Ausgabe von Daemons:** Startet das Skript eines Pakets einen Dienst, der die Ausgabe offen hält, wartet der Lauf
   nach dem Ende des Befehls noch 2 s auf die Ausgabe und endet dann.
+
+## Nachtrag M4-04: Paket, install.sh, Review vor der Nutzung
+
+- **Paket `sermon-helper`** (`.deb`, `.rpm`, `.apk`): Binary, `sermon-helper.socket` und `.service` bzw. das
+  OpenRC-Skript, `helper.toml` als Konfiguration (`root:root 0644`, bleibt bei Updates). Es hängt vom Agent ab, der
+  Agent empfiehlt es. Die Paketskripte aktivieren Socket bzw. Dienst nur bei der Erstinstallation; ein Update startet
+  einen laufenden Helper neu, aktiviert aber keinen, den der Admin abgeschaltet hat. Das `%pre` legt den User `sermon`
+  wie das Agent-Paket an: rpm führte in der Demo das `%post` des Helpers vor dem `%pre` des Agents aus, und der Socket
+  braucht die Gruppe.
+- **`install.sh`** lädt und prüft die signierte Binary wie die des Agents (fehlt sie beim Server, läuft der Agent ohne
+  Helper weiter, eine falsche Signatur bricht ab). Schalter `--no-remote-updates`, `--allow-remote-reboot`,
+  `--no-self-update` ändern nur ihren Wert in `helper.toml`; ohne Schalter bleibt eine vorhandene Datei unverändert.
+  Nur die Erstinstallation aktiviert den Helper; `--no-helper` schaltet einen vorhandenen ab.
+- **`/run/sermon`** ist unter systemd `0755 root:root` (`DirectoryMode`), unter OpenRC `0750 root:sermon`; maßgeblich
+  ist der Socket mit `0660 root:sermon`.
+- **Unit:** `systemd-analyze security` 5,8 (in `just test-packaging` höchstens 6,0); `ProtectSystem=full`,
+  `ProtectHome`, `NoNewPrivileges`, Namensräume, `UMask=0022`, `Nice=10`, IO-Klasse `idle`, `CPUQuota=50%`. Die Läufe
+  sind eigene Units und daran nicht gebunden.
+- **Review vor der Nutzung** (ohne Kontext der Umsetzung): kein kritischer Befund; behoben:
+  - **Hoch (mit erlaubtem Reboot):** Der Grund ging als Argument an `shutdown`, `-h` hätte die Flotte ausgeschaltet.
+    Jetzt `shutdown -r -- +1 "SerMon: GRUND"`.
+  - **Mittel:** Läufe in Folge umgingen die Grenze fürs Aktualisieren und füllten das State-Verzeichnis: Je Art
+    (Updates, Reboot) startet höchstens ein Lauf in 5 min (sonst `BUSY` mit Grund), höchstens 500 Läufe bleiben.
+    `install.sh` respektierte `--no-helper` und einen abgeschalteten Helper nicht.
+  - **Niedrig:**
+    - Der Socket von systemd (fd 3) vererbte sich an apt, dnf und `systemd-run`: jetzt `FD_CLOEXEC`, und fd 3 muss
+      ein lauschender Unix-Stream-Socket sein.
+    - Die Ersatzantwort für zu Großes war selbst zu groß.
+    - Das Journal ließ sich fluten: höchstens 20 Anfragen je Sekunde; Läufe schreiben Start und Ende; unter OpenRC
+      loggt der Helper über syslog, das rotiert.
+    - Listen ohne Grenze an CPU: `Nice`, IO-Klasse, `CPUQuota`.
+  - **Hinweise:** Eine bekannte `run_id` für einen anderen Lauf wird abgelehnt; ein Lauf wartet bis zu 5 s auf die
+    Sperre (statt an einem kurzen `GetStatus` zu scheitern), Listen ebenso; Security-Updates mit `apt-get --no-remove`.
 

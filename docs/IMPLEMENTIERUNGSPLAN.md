@@ -3957,7 +3957,7 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 >   Lauf (`flock`), Aktualisieren der Quellen höchstens alle 5 min.
 > - **Arbeitsteilung:** Der Helper führt feste Befehle mit fester Umgebung aus und gibt die Ausgabe begrenzt zurück;
 >   geparst wird im Agent.
-> - **Läufe** sind eigene Units (`systemd-run`, unter OpenRC eine eigene Session) und überstehen den Neustart von Agent
+> - **Läufe** sind eigene Units (`systemd-run`, unter OpenRC eine eigene Prozessgruppe) und überstehen den Neustart von Agent
 >   und Helper durch ihre eigenen Pakete; das Ergebnis liegt 7 Tage beim Helper.
 > - **Aufrufer:** Dateirechte und `SO_PEERCRED` mit der UID von `sermon` aus `/etc/passwd`; die Binary des Aufrufers
 >   wird nicht geprüft (Rennen, kein Schutz vor einem kompromittierten Agent).
@@ -4080,7 +4080,44 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   Verbindung, Ergebnis wird einmal abgeholt.
 - **Abhängig von:** M4-02
 
-#### ☐ M4-04 – Helper paketieren und vorab reviewen · A · S 🔒
+#### ☑ M4-04 – Helper paketieren und vorab reviewen · A · S 🔒
+> Erledigt (ADR 0035, Nachtrag M4-04; Threat Model T39, T88 bis T91; `docs/admin/installation.md`):
+> - **Units:** `sermon-helper.socket` (`/run/sermon/helper.sock`, `root:sermon 0660`) und `sermon-helper.service`
+>   (`systemd-analyze security` 5,8, Grenze 6,0 in `just test-packaging`); OpenRC-Skript mit Log über syslog;
+>   `packaging/helper.toml` mit den Werten ab Werk.
+> - **Paket `sermon-helper`** (`.deb`, `.rpm`, `.apk`, aus `scripts/package-agent.sh` neben dem Agent): hängt vom Agent
+>   ab, der Agent empfiehlt es. Erstinstallation aktiviert Socket bzw. Dienst, ein Update startet nur neu; Entfernen
+>   räumt State und Socket weg und lässt `helper.toml`. **Gefunden:** rpm führte das `%post` des Helpers vor dem `%pre`
+>   des Agents aus, der Socket fand die Gruppe nicht – das Helper-Paket legt den User jetzt selbst an.
+> - **Server:** liefert `sermon-helper-linux-<arch>[.minisig]` aus und setzt Units und `helper.toml` ins `install.sh`.
+>   **`install.sh`:** lädt und prüft die signierte Binary, `--no-remote-updates`, `--allow-remote-reboot`,
+>   `--no-self-update` ändern nur ihren Wert, `--no-helper` lässt ihn weg bzw. schaltet ihn ab; nur die
+>   Erstinstallation aktiviert ihn. `just sign-agent` und die Demo signieren beide Binaries.
+> - **Agent:** Client `sermon_agent::helper` (Rahmen, Zeitlimits, 8 MiB, Fehler mit Ursache) und
+>   `sermon-agent helper status`.
+> - **Review vorab** (ohne Kontext der Umsetzung): kein kritischer Befund, ein hoher (mit erlaubtem Reboot), zwei
+>   mittlere, vier niedrige, alle behoben – Einzelheiten im Nachtrag des ADR:
+>   - `shutdown -r -- +1 "SerMon: GRUND"`
+>   - je Art ein Lauf in 5 min, höchstens 500 Läufe; `install.sh` respektiert `--no-helper` und einen abgeschalteten
+>     Helper
+>   - fd 3 mit `FD_CLOEXEC` und geprüft; 20 Anfragen je Sekunde; Start und Ende von Läufen im Journal; Grenzen an CPU
+>     und IO; `UMask=0022`
+>   - `run_id` eines anderen Laufs abgelehnt; kurzes Warten auf die Sperre; `apt-get --no-remove`
+> - **Tests:**
+>   - Paket-Tests (Debian, Rocky, Alpine mit OpenRC): Signaturen beider Pakete, Rechte von `helper.toml` und State,
+>     Reboot ab Werk aus, ein Update behält eine geänderte `helper.toml`, Entfernen lässt nichts zurück.
+>   - bats: `helper.toml` einmal schreiben, Schalter nur für ihren Wert, Paketskript aktiviert nur bei der
+>     Erstinstallation, ein erneuter Lauf von `install.sh` aktiviert nicht, `--no-helper` schaltet ab.
+>   - Server: Downloads nur mit festem Namen, Units im Skript.
+>   - Helper: Reboot-Argumente, Takt der Läufe, Obergrenze, fremde `run_id`, Warten auf die Sperre. Client gegen einen
+>     Fake-Socket.
+>   - **Demo:** Auf allen sieben Hosts mit `install.sh` (systemd mit Socket-Aktivierung, Alpine mit OpenRC) und den drei
+>     Paket-Hosts erreicht `sermon` den Helper, `nobody` nicht, root bekommt keine Antwort; nach dem Entfernen der
+>     Pakete bleibt nichts.
+> - **Gefunden:** Unter OpenRC blieb nach dem Stoppen die Socket-Datei liegen (`stop_post` und Paketskript räumen sie
+>   weg). Parallele Tests hielten über `fork` kurz eine Kopie des Sperr-Deskriptors; Listen und Läufe warten deshalb
+>   bis zu 5 s.
+> - **Gegenproben** für 10 Prüfungen (Befunde des Reviews in Helper und `install.sh`), alle erkannt.
 - **Ziel:**
   - Helper in `.deb`, `.rpm` und `.apk` und in `install.sh`: Binary, systemd-Unit und Socket, OpenRC-Skript,
     `helper.toml` als Konfigurationsdatei. Deinstallation entfernt alles außer der Konfiguration.

@@ -17,6 +17,9 @@ license: AGPL-3.0-only
 description: |-
   SerMon agent: metrics, logs and security events of this host for sermon-server.
   Runs unprivileged as the user sermon; enroll it with a token from the SerMon UI.
+# The root helper is a package of its own (ADR 0035): without it no remote updates or reboots.
+recommends:
+  - sermon-helper
 
 contents:
   - src: root/sermon-agent

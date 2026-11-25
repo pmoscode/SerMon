@@ -1,0 +1,71 @@
+# Root helper package (M4-04, ADR 0035): .deb, .rpm and .apk next to the agent's, built with nfpm by
+# scripts/package-agent.sh (PKG_ARCH, PKG_VERSION, root/ and keys/ as for nfpm.yaml). Without it
+# the server can't install updates or reboot the host: the strongest local veto.
+name: sermon-helper
+arch: ${PKG_ARCH}
+platform: linux
+version: ${PKG_VERSION}
+release: "1"
+section: admin
+priority: optional
+maintainer: SerMon project
+vendor: SerMon
+homepage: https://github.com/pmoscode/SerMon
+license: AGPL-3.0-only
+description: |-
+  SerMon root helper: package updates and reboots for the SerMon agent.
+  Takes a fixed set of operations from the agent's user only; /etc/sermon/helper.toml says
+  what this host allows.
+depends:
+  - sermon-agent
+
+contents:
+  - src: root/sermon-helper
+    dst: /usr/bin/sermon-helper
+    file_info: { mode: 0755 }
+  - src: root/sermon-helper.service
+    dst: /usr/lib/systemd/system/sermon-helper.service
+    packager: deb
+    file_info: { mode: 0644 }
+  - src: root/sermon-helper.socket
+    dst: /usr/lib/systemd/system/sermon-helper.socket
+    packager: deb
+    file_info: { mode: 0644 }
+  - src: root/sermon-helper.service
+    dst: /usr/lib/systemd/system/sermon-helper.service
+    packager: rpm
+    file_info: { mode: 0644 }
+  - src: root/sermon-helper.socket
+    dst: /usr/lib/systemd/system/sermon-helper.socket
+    packager: rpm
+    file_info: { mode: 0644 }
+  - src: root/sermon-helper.openrc
+    dst: /etc/init.d/sermon-helper
+    packager: apk
+    file_info: { mode: 0755 }
+  - src: root/helper.toml
+    dst: /etc/sermon/helper.toml
+    type: config|noreplace
+    file_info: { mode: 0644, owner: root, group: root }
+
+scripts:
+  # The user sermon, as the agent's package creates it: rpm may run this package's scripts before
+  # the agent's (found in the E2E demo), and the socket needs the group.
+  preinstall: root/preinstall.sh
+  postinstall: root/helper-postinstall.sh
+  preremove: root/helper-preremove.sh
+  postremove: root/helper-postremove.sh
+
+deb:
+  signature:
+    key_file: keys/gpg.asc
+    type: origin
+rpm:
+  signature:
+    key_file: keys/gpg.asc
+apk:
+  scripts:
+    postupgrade: root/helper-postupgrade.sh
+  signature:
+    key_file: keys/apk.rsa
+    key_name: sermon-agent

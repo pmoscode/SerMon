@@ -50,10 +50,15 @@ func TestInstallScript_IsRenderedWithKeyAndInitFiles(t *testing.T) {
 	if !strings.Contains(body, "RELEASE_KEY='"+key+"'") || !strings.Contains(body, "AGENT_VERSION='1.2.3'") || strings.Contains(body, "@SERMON_") {
 		t.Error("placeholders left, key or version missing")
 	}
-	unit, _ := os.ReadFile("../../../../packaging/systemd/sermon-agent.service")
-	service, _ := os.ReadFile("../../../../packaging/openrc/sermon-agent")
-	if !strings.Contains(body, strings.TrimRight(string(unit), "\n")) || !strings.Contains(body, strings.TrimRight(string(service), "\n")) {
-		t.Error("the script must contain the init files of packaging/")
+	// The init files of agent and root helper (M4-04) and the helper's configuration.
+	for _, file := range []string{
+		"systemd/sermon-agent.service", "openrc/sermon-agent", "systemd/sermon-helper.service",
+		"systemd/sermon-helper.socket", "openrc/sermon-helper", "helper.toml",
+	} {
+		content, err := os.ReadFile("../../../../packaging/" + file)
+		if err != nil || !strings.Contains(body, strings.TrimRight(string(content), "\n")) {
+			t.Errorf("the script must contain packaging/%s (%v)", file, err)
+		}
 	}
 }
 
@@ -62,6 +67,11 @@ func TestAssets_MatchPackaging(t *testing.T) {
 		"assets/install.sh":           "../../../../packaging/install.sh",
 		"assets/sermon-agent.service": "../../../../packaging/systemd/sermon-agent.service",
 		"assets/sermon-agent.openrc":  "../../../../packaging/openrc/sermon-agent",
+		// The root helper (M4-04).
+		"assets/sermon-helper.service": "../../../../packaging/systemd/sermon-helper.service",
+		"assets/sermon-helper.socket":  "../../../../packaging/systemd/sermon-helper.socket",
+		"assets/sermon-helper.openrc":  "../../../../packaging/openrc/sermon-helper",
+		"assets/helper.toml":           "../../../../packaging/helper.toml",
 	} {
 		a, errA := os.ReadFile(asset)
 		b, errB := os.ReadFile(source)
@@ -113,6 +123,7 @@ func TestDownloads_ServeOnlyTheAgentFiles(t *testing.T) {
 	dir := t.TempDir()
 	for name, content := range map[string]string{
 		"sermon-agent-linux-amd64": "binary", "sermon-agent-linux-amd64.minisig": "signature", "secret.txt": "no",
+		"sermon-helper-linux-arm64": "helper", "sermon-helper-linux-arm64.minisig": "helper signature", "sermon-helper.toml": "no",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
@@ -133,9 +144,18 @@ func TestDownloads_ServeOnlyTheAgentFiles(t *testing.T) {
 	if rec := serve(t, h, http.MethodGet, "/downloads/sermon-agent-linux-amd64.minisig"); rec.Code != http.StatusOK || rec.Body.String() != "signature" {
 		t.Errorf("signature = %d", rec.Code)
 	}
+	// The root helper's binary and signature (M4-04), nothing else of it.
+	for path, want := range map[string]string{
+		"/downloads/sermon-helper-linux-arm64": "helper", "/downloads/sermon-helper-linux-arm64.minisig": "helper signature",
+	} {
+		if rec := serve(t, h, http.MethodGet, path); rec.Code != http.StatusOK || rec.Body.String() != want {
+			t.Errorf("%s = %d %q", path, rec.Code, rec.Body.String())
+		}
+	}
 	for _, path := range []string{
 		"/downloads/secret.txt", "/downloads/..%2fsecret.txt", "/downloads/sermon-agent-linux-arm64",
-		"/downloads/sermon-agent-linux-riscv64",
+		"/downloads/sermon-agent-linux-riscv64", "/downloads/sermon-helper.toml", "/downloads/sermon-helper-linux-amd64",
+		"/downloads/sermon-tools-linux-amd64",
 	} {
 		if rec := serve(t, h, http.MethodGet, path); rec.Code == http.StatusOK {
 			t.Errorf("%s served: %q", path, rec.Body.String())

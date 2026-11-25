@@ -1,0 +1,17 @@
+# SerMon root helper's socket (ADR 0035): systemd creates it as root:sermon 0660 and starts the
+# helper on the first request; installed by install.sh and the package sermon-helper.
+[Unit]
+Description=SerMon root helper socket
+Documentation=https://github.com/pmoscode/SerMon
+
+[Socket]
+ListenStream=/run/sermon/helper.sock
+SocketUser=root
+SocketGroup=sermon
+SocketMode=0660
+# /run/sermon is only the way to the socket; the socket's mode keeps others out.
+DirectoryMode=0755
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

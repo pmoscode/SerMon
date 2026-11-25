@@ -38,11 +38,21 @@ pub enum Command {
     Collect(CollectArgs),
     /// Remove the local identity and buffered data of this agent.
     Uninstall(UninstallArgs),
+    /// Talk to the root helper (updates and reboots, ADR 0035).
+    #[command(subcommand)]
+    Helper(HelperCommand),
     /// Run virtual nodes with synthetic metrics against a server (development and load tests).
     #[cfg(feature = "simulate")]
     Simulate(SimulateArgs),
     /// Print the version.
     Version,
+}
+
+/// What to ask the root helper.
+#[derive(Debug, Clone, Copy, Subcommand)]
+pub enum HelperCommand {
+    /// Print its version, the package manager and what this host allows (as the user sermon).
+    Status,
 }
 
 /// Arguments of `enroll`.
@@ -225,6 +235,15 @@ mod tests {
 
     fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
         Cli::try_parse_from(std::iter::once("sermon-agent").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn asks_the_helper_for_its_status() {
+        assert!(matches!(
+            parse(&["helper", "status"]).unwrap().command,
+            Command::Helper(HelperCommand::Status)
+        ));
+        assert!(parse(&["helper"]).is_err());
     }
 
     #[test]

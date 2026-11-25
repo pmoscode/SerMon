@@ -1,22 +1,22 @@
 #!/bin/sh
 # The scripts in single quotes run inside the containers, expansions happen there.
 # shellcheck disable=SC2016
-# Tests of the agent packages (M2-21) without a server: build .deb, .rpm and .apk for the Docker
-# architecture with keys of this run, then per distribution in a container: the signature is
-# checked (and a package without the key is refused), the package installs the agent, the user
-# sermon and the rights, an upgrade keeps the identity, and the removal leaves nothing but the
-# configuration (and the user).
+# Tests of the packages of agent (M2-21) and root helper (M4-04) without a server: build .deb, .rpm
+# and .apk for the Docker architecture with keys of this run, then per distribution in a
+# container: the signature is checked (and a package without the key is refused), the packages
+# install agent and helper, the user sermon and the rights, an upgrade keeps the identity and a
+# changed helper.toml, and the removal leaves nothing but the configuration (and the user).
 # Running as a service against a server: the E2E demo (web/tests/demo).
 #
-#   scripts/test-packages.sh BINARY   (static agent binary of the Docker architecture)
+#   scripts/test-packages.sh AGENT HELPER   (static binaries of the Docker architecture)
 set -eu
 
-[ $# -eq 1 ] || {
-	echo "usage: $0 BINARY" >&2
+[ $# -eq 2 ] || {
+	echo "usage: $0 AGENT HELPER" >&2
 	exit 1
 }
 root=$(cd "$(dirname "$0")/.." && pwd)
-binary=$1
+binary=$1 helper=$2
 case $(docker info --format '{{.Architecture}}') in
 x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
@@ -31,7 +31,7 @@ trap 'rm -rf "$work"' EXIT
 # Two versions: an upgrade must keep the identity (deb and rpm run the removal scripts then, too).
 for version in 0.0.1 0.0.2; do
 	SERMON_PKG_GPG_KEY="$work/keys/gpg.asc" SERMON_PKG_APK_KEY="$work/keys/apk.rsa" \
-		"$root/scripts/package-agent.sh" "$arch" "$version" "$binary" "$work/out/$version"
+		"$root/scripts/package-agent.sh" "$arch" "$version" "$binary" "$helper" "$work/out/$version"
 done
 # Only the public keys go into the containers.
 mkdir -p "$work/pub"
@@ -46,6 +46,13 @@ installed() {
 	/usr/bin/sermon-agent --version | grep -q sermon-agent || { echo "binary does not run"; exit 1; }
 	[ -s /etc/machine-id ] || [ -s /var/lib/dbus/machine-id ] || { echo "no machine-id"; exit 1; }
 	! grep -rq /usr/local/bin "$1" || { echo "$1 names /usr/local/bin"; exit 1; }
+	/usr/bin/sermon-helper --version | grep -q sermon-helper || { echo "the helper does not run"; exit 1; }
+	[ "$(stat -c "%U:%G %a" /etc/sermon/helper.toml)" = "root:root 644" ] || { echo "rights of helper.toml"; exit 1; }
+	[ "$(stat -c "%U:%G %a" /var/lib/sermon-helper)" = "root:root 700" ] || { echo "rights of the helper state"; exit 1; }
+	grep -q "^allow_remote_reboot = false" /etc/sermon/helper.toml || { echo "remote reboots allowed by default"; exit 1; }
+	! grep -rq /usr/local/bin "$2" || { echo "$2 names /usr/local/bin"; exit 1; }
+	# The admin allows reboots: an upgrade keeps that.
+	sed -i "s/^allow_remote_reboot = false/allow_remote_reboot = true/" /etc/sermon/helper.toml
 }
 enroll_fake() {
 	mkdir -p /var/lib/sermon-agent/identity && echo key >/var/lib/sermon-agent/identity/agent.key
@@ -53,9 +60,11 @@ enroll_fake() {
 kept() {
 	[ -f /var/lib/sermon-agent/identity/agent.key ] || { echo "the upgrade removed the identity"; exit 1; }
 	[ -x /usr/bin/sermon-agent ] || { echo "the upgrade removed the binary"; exit 1; }
+	[ -x /usr/bin/sermon-helper ] || { echo "the upgrade removed the helper"; exit 1; }
+	grep -q "^allow_remote_reboot = true" /etc/sermon/helper.toml || { echo "the upgrade replaced helper.toml"; exit 1; }
 }
 removed() {
-	for path in /usr/bin/sermon-agent /var/lib/sermon-agent "$1"; do
+	for path in /usr/bin/sermon-agent /usr/bin/sermon-helper /var/lib/sermon-agent /var/lib/sermon-helper "$@"; do
 		[ ! -e "$path" ] || { echo "left behind: $path"; exit 1; }
 	done
 }
@@ -73,41 +82,52 @@ run() {
 run debian-13 debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6 '
 apt-get update -qq >/dev/null
 apt-get install -y -qq --no-install-recommends gpg gpg-agent binutils >/dev/null 2>&1
-cd /tmp && ar x /p/0.0.1/*.deb && cat debian-binary control.tar.* data.tar.* >signed
 export GNUPGHOME=/tmp/gnupg && mkdir -m 0700 "$GNUPGHOME"
-! gpg --verify _gpgorigin signed 2>/dev/null || { echo "verified without the key"; exit 1; }
+for deb in /p/0.0.1/*.deb; do
+	rm -rf /tmp/deb && mkdir /tmp/deb && cd /tmp/deb && ar x "$deb" && cat debian-binary control.tar.* data.tar.* >signed
+	! gpg --verify _gpgorigin signed 2>/dev/null || { echo "verified without the key: $deb"; exit 1; }
+done
 gpg --quiet --import /k/gpg.pub.asc 2>/dev/null
-gpg --verify _gpgorigin signed 2>/dev/null || { echo "bad signature"; exit 1; }
-echo x >>signed
-! gpg --verify _gpgorigin signed 2>/dev/null || { echo "a changed package verifies"; exit 1; }
+for deb in /p/0.0.1/*.deb; do
+	rm -rf /tmp/deb && mkdir /tmp/deb && cd /tmp/deb && ar x "$deb" && cat debian-binary control.tar.* data.tar.* >signed
+	gpg --verify _gpgorigin signed 2>/dev/null || { echo "bad signature: $deb"; exit 1; }
+	echo x >>signed
+	! gpg --verify _gpgorigin signed 2>/dev/null || { echo "a changed package verifies: $deb"; exit 1; }
+done
+cd /
 apt-get install -y -qq /p/0.0.1/*.deb >/dev/null 2>&1
-installed /usr/lib/systemd/system/sermon-agent.service
+installed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/sermon-helper.service
+[ -f /usr/lib/systemd/system/sermon-helper.socket ] || { echo "no socket unit"; exit 1; }
 enroll_fake
 apt-get install -y -qq /p/0.0.2/*.deb >/dev/null 2>&1
 kept
 apt-get remove -y -qq sermon-agent >/dev/null 2>&1
-removed /usr/lib/systemd/system/sermon-agent.service
-[ -f /etc/sermon/agent.toml ] || { echo "the configuration went (deb keeps it until purge)"; exit 1; }'
+removed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/sermon-helper.service
+[ -f /etc/sermon/agent.toml ] || { echo "the configuration went (deb keeps it until purge)"; exit 1; }
+[ -f /etc/sermon/helper.toml ] || { echo "the helper configuration went (deb keeps it until purge)"; exit 1; }'
 
 run rockylinux-9 rockylinux:9@sha256:03303863808e9cd79f0c58c833db3e5f9cde9f2abe16804a267b05dc54af86e4 '
 ! rpm -K /p/0.0.1/*.rpm >/dev/null 2>&1 || { echo "verified without the key"; exit 1; }
 rpm --import /k/gpg.pub.asc
 rpm -K /p/0.0.1/*.rpm | grep -q "digests signatures OK" || { echo "bad signature"; exit 1; }
 dnf install -y -q /p/0.0.1/*.rpm >/dev/null
-installed /usr/lib/systemd/system/sermon-agent.service
+installed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/sermon-helper.service
 enroll_fake
 dnf install -y -q /p/0.0.2/*.rpm >/dev/null
 kept
 dnf remove -y -q sermon-agent >/dev/null
-removed /usr/lib/systemd/system/sermon-agent.service'
+removed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/sermon-helper.socket'
 
 run alpine-3.22 alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f '
+# OpenRC as on a host: the helper package enters its service into the default runlevel.
+apk add -q openrc >/dev/null
 ! apk add -q /p/0.0.1/*.apk 2>/dev/null || { echo "installed without the key"; exit 1; }
 cp /k/sermon-agent.rsa.pub /etc/apk/keys/
 apk add -q /p/0.0.1/*.apk >/dev/null
-installed /etc/init.d/sermon-agent
+installed /etc/init.d/sermon-agent /etc/init.d/sermon-helper
+rc-update show default 2>/dev/null | grep -q sermon-helper || { echo "the helper is not in the default runlevel"; exit 1; }
 enroll_fake
 apk add -q /p/0.0.2/*.apk >/dev/null
 kept
-apk del -q sermon-agent
-removed /etc/init.d/sermon-agent'
+apk del -q sermon-agent sermon-helper
+removed /etc/init.d/sermon-agent /etc/init.d/sermon-helper'

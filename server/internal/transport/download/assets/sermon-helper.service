@@ -1,0 +1,39 @@
+# SerMon root helper (KONZEPT §4.2, ADR 0035): takes the agent's fixed operations as root. Started
+# by sermon-helper.socket, it ends after a minute without requests. A run (updates, reboot) is a
+# unit of its own (systemd-run) with the rights a package manager needs: this hardening binds the
+# helper and its lists, not the runs.
+[Unit]
+Description=SerMon root helper (updates, reboot)
+Documentation=https://github.com/pmoscode/SerMon
+Requires=sermon-helper.socket
+After=sermon-helper.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sermon-helper serve
+# Refreshing the sources writes below /var (apt lists, dnf cache) and the helper its state;
+# /usr, /boot and /etc stay read-only.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# The caches of apt and dnf stay readable; the helper writes its own files with explicit modes.
+UMask=0022
+# A looping agent can't make the lists eat the host (review M4-04); the runs are units of their own.
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=50%
+StateDirectory=sermon-helper
+StateDirectoryMode=0700

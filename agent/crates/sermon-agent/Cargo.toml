@@ -28,6 +28,7 @@ sermon-collectors.workspace = true
 sermon-core.workspace = true
 sermon-logs.workspace = true
 sermon-security.workspace = true
+sermon-helper-proto.workspace = true
 prost.workspace = true
 regex.workspace = true
 prost-types.workspace = true

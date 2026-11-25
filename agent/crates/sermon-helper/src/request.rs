@@ -27,6 +27,8 @@ pub enum Run {
 pub enum Failure {
     /// Another run or refresh holds the lock.
     Busy,
+    /// Not yet: a run of this kind started a short while ago.
+    Later(String),
     /// Not on this host (distribution, version of the helper).
     Unsupported(String),
     /// It failed.
@@ -146,6 +148,7 @@ fn unsupported(reason: &str) -> (Status, String) {
 fn answer(f: Failure) -> (Status, String) {
     match f {
         Failure::Busy => (Status::Busy, "another run is in progress".to_owned()),
+        Failure::Later(r) => (Status::Busy, r),
         Failure::Unsupported(r) => (Status::Unsupported, r),
         Failure::Failed(r) => (Status::Failed, r),
     }

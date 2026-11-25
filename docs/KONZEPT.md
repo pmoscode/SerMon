@@ -194,7 +194,7 @@ eine Fake-Implementierung für Tests.
   `ApplyUpdates{run_id, scope: security|all}`, `Reboot{run_id, reason}`, `SelfUpdate` (ADR 0036) und
   `RunResult{run_id}`. Freie Kommandos, Paketnamen oder Pfade gibt es nicht.
 - Er führt nur feste Befehle aus und gibt ihre Ausgabe begrenzt zurück; **geparst wird im Agent** ohne Rechte.
-- Ein Lauf ist eine eigene Unit (`systemd-run`, unter OpenRC eine eigene Session): Er übersteht den Neustart von
+- Ein Lauf ist eine eigene Unit (`systemd-run`, unter OpenRC eine eigene Prozessgruppe): Er übersteht den Neustart von
   Agent und Helper, wenn ein Update deren Pakete erneuert. Das Ergebnis holt der Agent mit `RunResult` ab.
 - **Lokale Hoheit:** `/etc/sermon/helper.toml` mit `allow_remote_updates` (ab Werk an), `allow_remote_reboot` (aus)
   und `allow_self_update` (an). Diese Werte kann der Server **nicht** überschreiben; ohne Helper gibt es keine

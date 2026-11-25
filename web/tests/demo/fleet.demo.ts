@@ -82,13 +82,30 @@ const packageHosts = [
 		host: 'pkg-03',
 		init: 'openrc',
 		install: 'cp /packages/sermon-agent.rsa.pub /etc/apk/keys/ && apk add -q /packages/*.apk',
-		remove: 'apk del -q sermon-agent'
+		remove: 'apk del -q sermon-agent sermon-helper'
 	}
 ] as const;
 /** Trusts Caddy's CA system-wide: update-ca-certificates (Debian, Ubuntu, Alpine) or update-ca-trust (RHEL, Fedora). */
 const trustCA =
 	'if command -v update-ca-certificates >/dev/null; then cat > /usr/local/share/ca-certificates/sermon-e2e.crt && update-ca-certificates >/dev/null 2>&1; else cat > /etc/pki/ca-trust/source/anchors/sermon-e2e.crt && update-ca-trust; fi';
 const agentURL = 'https://server:8443';
+
+/**
+ * The root helper (M4-04, ADR 0035) answers the user sermon only: everyone else finds its socket
+ * closed (0660) or, as root, gets no answer (SO_PEERCRED).
+ */
+function expectHelperForSermonOnly(service: string, agent: string, manager: RegExp) {
+	const ask = (user: string) =>
+		exec(service, `runuser -u ${user} -- ${agent} helper status 2>&1 || echo "exit=$?"`);
+	const status = ask('sermon');
+	expect(status, `${service}: ${status}`).toMatch(manager);
+	expect(status).toContain('allow_remote_reboot = false');
+	expect(ask('nobody'), service).toMatch(/no right to the root helper's socket[\s\S]*exit=1/);
+	expect(
+		exec(service, `${agent} helper status 2>&1 || echo "exit=$?"`),
+		`${service} as root`
+	).toMatch(/closed without an answer[\s\S]*exit=1/);
+}
 
 test('a fresh installation monitors seven hosts within two minutes, packages install and remove cleanly, and Org B sees nothing', async ({
 	page,
@@ -167,7 +184,17 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		const extra = agent.init === 'openrc' ? ' --grant-log-access' : '';
 		const output = exec(agent.service, `${forCommand(agent)}${extra} 2>&1`);
 		expect(output, `${agent.service}:\n${output}`).toContain('signature ok');
+		expect(output).toContain('root helper installed');
 		expect(serviceState(agent)).toBe('running');
+	}
+	// The root helper on every host, under systemd (socket activation) and OpenRC (M4-04).
+	for (const agent of agents) {
+		const manager = { debian: 'apt', ubuntu: 'apt', alpine: 'apk' }[agent.os as string] ?? 'dnf';
+		expectHelperForSermonOnly(
+			agent.service,
+			'/usr/local/bin/sermon-agent',
+			new RegExp(`package manager: ${manager}`)
+		);
 	}
 
 	// OpenRC stops and starts the agent, which runs as sermon (M2-20).
@@ -490,6 +517,12 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 				: 'rc-update add sermon-agent default >/dev/null && rc-service sermon-agent start 2>&1'
 		);
 		expect(serviceState(host)).toBe('running');
+		// The package sermon-helper came along and started on its own (M4-04).
+		expectHelperForSermonOnly(
+			host.service,
+			'/usr/bin/sermon-agent',
+			/package manager: (apt|dnf|apk)/
+		);
 	}
 	await page.goto('/fleet');
 	for (const host of packageHosts) {
@@ -504,7 +537,7 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		expect(
 			exec(
 				host.service,
-				'for p in /usr/bin/sermon-agent /var/lib/sermon-agent; do test ! -e $p || echo $p; done'
+				'for p in /usr/bin/sermon-agent /var/lib/sermon-agent /usr/bin/sermon-helper /var/lib/sermon-helper /run/sermon/helper.sock; do test ! -e $p || echo $p; done'
 			).trim()
 		).toBe('');
 	}

@@ -1,0 +1,11 @@
+# SerMon root helper: what this host allows the SerMon server (KONZEPT §4.2, ADR 0035). The server
+# can't change these values. Only root may write this file, else the helper doesn't start.
+# Without the helper (package sermon-helper, or install.sh --no-helper) nothing is allowed at all.
+
+# Install updates from the distribution's signed sources on request.
+allow_remote_updates = true
+# Reboot on request (needed for autoReboot in an update policy). Off: a reboot of the whole fleet
+# would be the worst a compromised server could do.
+allow_remote_reboot = false
+# Replace the agent with a version signed by the release key (installations by install.sh).
+allow_self_update = true

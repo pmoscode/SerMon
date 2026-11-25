@@ -7,8 +7,10 @@
 #
 # The token comes from SERMON_ENROLLMENT_TOKEN or --token-file; arguments are visible to every
 # local user in the process list (the leading space keeps the export out of the bash history).
-# The script downloads the agent binary of this server and checks its signature against the
-# release key embedded below before anything is installed; a wrong or missing signature aborts.
+# The script downloads the binaries of agent and root helper from this server and checks their
+# signatures against the release key embedded below before anything is installed; a wrong or
+# missing signature aborts. The root helper (ADR 0035) takes updates and reboots for the agent as
+# root; /etc/sermon/helper.toml says what this host allows, --no-helper leaves it out entirely.
 # Read it before you run it: https://<server>/install.sh
 set -eu
 
@@ -35,7 +37,7 @@ die() {
 usage() {
 	cat >&2 <<'USAGE'
 usage: install.sh --server URL [--token-file FILE] [--ca-fingerprint sha256:…] [--agent-url URL] [--force]
-                  [--grant-log-access]
+                  [--grant-log-access] [--no-helper | --no-remote-updates --allow-remote-reboot --no-self-update]
 
   --server URL           public HTTPS address of sermon-server (as in the browser)
   --token-file FILE      file with the enrollment token from the UI (or SERMON_ENROLLMENT_TOKEN)
@@ -44,6 +46,11 @@ usage: install.sh --server URL [--token-file FILE] [--ca-fingerprint sha256:…]
   --force                replace an existing enrollment of this host
   --grant-log-access     without journald (Alpine): let busybox syslogd write its files with the
                          group sermon instead of wheel, so the agent reads the security events
+  --no-helper            no root helper: the server can't install updates or reboot this host
+  --no-remote-updates    the helper installs no updates on request (helper.toml)
+  --allow-remote-reboot  the helper reboots on request, e.g. after updates (off by default)
+  --no-self-update       the helper doesn't replace the agent with a new signed version
+                         Without these flags an existing /etc/sermon/helper.toml stays as it is.
 USAGE
 }
 
@@ -262,6 +269,96 @@ SERVICE
 	chmod 0755 "$ROOT/etc/init.d/sermon-agent"
 }
 
+# --- root helper (ADR 0035) --------------------------------------------------------------------
+
+# set_option KEY VALUE sets KEY in helper.toml, appended if missing.
+set_option() {
+	conf="$ROOT$CONFIG_DIR/helper.toml"
+	if grep -q "^$1 *=" "$conf"; then
+		sed -i "s/^$1 *=.*/$1 = $2/" "$conf"
+	else
+		echo "$1 = $2" >>"$conf"
+	fi
+}
+
+# write_helper_config writes /etc/sermon/helper.toml once; later runs change only the values of
+# the flags given – the host's own choices stay.
+write_helper_config() {
+	conf="$ROOT$CONFIG_DIR/helper.toml"
+	mkdir -p "$ROOT$CONFIG_DIR"
+	if [ ! -e "$conf" ]; then
+		cat >"$conf" <<'TOML'
+@SERMON_HELPER_CONFIG@
+TOML
+	elif [ -z "$HELPER_FLAGS" ]; then
+		say "keeping the existing $CONFIG_DIR/helper.toml"
+	fi
+	[ -z "$REMOTE_UPDATES" ] || set_option allow_remote_updates "$REMOTE_UPDATES"
+	[ -z "$REMOTE_REBOOT" ] || set_option allow_remote_reboot "$REMOTE_REBOOT"
+	[ -z "$SELF_UPDATE" ] || set_option allow_self_update "$SELF_UPDATE"
+	[ -n "$ROOT" ] || chown root:root "$conf"
+	chmod 0644 "$conf"
+}
+
+# remove_helper INIT switches an installed helper off for --no-helper: the server can't install
+# updates or reboot this host any more. Its files stay, so it can be switched on again.
+remove_helper() {
+	[ -e "$ROOT$BIN_DIR/sermon-helper" ] || return 0
+	case $1 in
+	systemd) systemctl disable --now sermon-helper.socket sermon-helper.service >/dev/null 2>&1 || true ;;
+	openrc)
+		rc-service sermon-helper stop >/dev/null 2>&1 || true
+		rc-update del sermon-helper default >/dev/null 2>&1 || true
+		;;
+	esac
+	say "--no-helper: the root helper is switched off (no remote updates or reboots)"
+}
+
+# install_helper WORK ARCH INIT installs the signed root helper and starts its socket (systemd) or
+# service (OpenRC). A server without helper binary leaves the agent without remote updates.
+install_helper() {
+	helper="sermon-helper-linux-$2"
+	if ! download "$SERVER/downloads/$helper" "$1/$helper" 2>/dev/null; then
+		say "warning: $SERVER offers no root helper – this host gets no remote updates or reboots"
+		return 0
+	fi
+	download "$SERVER/downloads/$helper.minisig" "$1/$helper.minisig" || die "cannot download the helper's signature"
+	verify "$1/$helper" "$1/$helper.minisig"
+	# Enabled on the first installation only: an admin who switched the helper off keeps it off.
+	first=1
+	[ ! -e "$ROOT$BIN_DIR/sermon-helper" ] || first=''
+	install -m 0755 "$1/$helper" "$BIN_DIR/sermon-helper"
+	write_helper_config
+	mkdir -p /var/lib/sermon-helper
+	chmod 0700 /var/lib/sermon-helper
+	case $3 in
+	systemd)
+		cat >"$ROOT/etc/systemd/system/sermon-helper.service" <<'UNIT'
+@SERMON_HELPER_UNIT@
+UNIT
+		cat >"$ROOT/etc/systemd/system/sermon-helper.socket" <<'UNIT'
+@SERMON_HELPER_SOCKET@
+UNIT
+		systemctl daemon-reload
+		[ -z "$first" ] || systemctl enable --now sermon-helper.socket
+		systemctl try-restart sermon-helper.service
+		;;
+	openrc)
+		cat >"$ROOT/etc/init.d/sermon-helper" <<'SERVICE'
+@SERMON_HELPER_SERVICE@
+SERVICE
+		chmod 0755 "$ROOT/etc/init.d/sermon-helper"
+		if [ -n "$first" ]; then
+			rc-update add sermon-helper default
+			rc-service sermon-helper restart
+		else
+			rc-service --ifstarted sermon-helper restart
+		fi
+		;;
+	esac
+	say "root helper installed, $CONFIG_DIR/helper.toml: $(grep '^allow_' "$ROOT$CONFIG_DIR/helper.toml" | tr '\n' ' ')"
+}
+
 # ensure_machine_id creates /etc/machine-id (128 random bits, like systemd-machine-id-setup) where
 # neither systemd nor dbus left one, as on Alpine: the agent names the host by it.
 ensure_machine_id() {
@@ -323,7 +420,8 @@ start_pre() {
 CONF
 }
 
-# parse_args ARG… sets SERVER, TOKEN, FINGERPRINT, AGENT_URL, FORCE and GRANT_LOG_ACCESS and checks them.
+# parse_args ARG… sets SERVER, TOKEN, FINGERPRINT, AGENT_URL, FORCE, GRANT_LOG_ACCESS and the
+# helper's NO_HELPER, REMOTE_UPDATES, REMOTE_REBOOT, SELF_UPDATE and HELPER_FLAGS and checks them.
 parse_args() {
 	SERVER=''
 	TOKEN=${SERMON_ENROLLMENT_TOKEN:-}
@@ -331,6 +429,9 @@ parse_args() {
 	AGENT_URL=''
 	FORCE=''
 	GRANT_LOG_ACCESS=''
+	NO_HELPER=''
+	# Empty: not given, helper.toml keeps its value (or the default of a new file).
+	REMOTE_UPDATES='' REMOTE_REBOOT='' SELF_UPDATE='' HELPER_FLAGS=''
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--server) SERVER=${2:-} && shift ;;
@@ -346,6 +447,10 @@ parse_args() {
 		--agent-url) AGENT_URL=${2:-} && shift ;;
 		--force) FORCE=--force ;;
 		--grant-log-access) GRANT_LOG_ACCESS=1 ;;
+		--no-helper) NO_HELPER=1 ;;
+		--no-remote-updates) REMOTE_UPDATES=false HELPER_FLAGS=1 ;;
+		--allow-remote-reboot) REMOTE_REBOOT=true HELPER_FLAGS=1 ;;
+		--no-self-update) SELF_UPDATE=false HELPER_FLAGS=1 ;;
 		-h | --help) usage && exit 0 ;;
 		*) usage && die "unknown argument $1" ;;
 		esac
@@ -356,6 +461,9 @@ parse_args() {
 	SERVER=${SERVER%/}
 	[ -n "$TOKEN" ] || die "an enrollment token is required (SERMON_ENROLLMENT_TOKEN or --token-file)"
 	[ -n "$AGENT_URL" ] || AGENT_URL=$(agent_url_for "$SERVER")
+	if [ -n "$NO_HELPER" ] && [ -n "$HELPER_FLAGS" ]; then
+		die "--no-helper takes no flags of the helper"
+	fi
 }
 
 main() {
@@ -411,6 +519,7 @@ main() {
 		rc-service sermon-agent restart
 		;;
 	esac
+	if [ -n "$NO_HELPER" ]; then remove_helper "$init"; else install_helper "$work" "$arch" "$init"; fi
 	log_source_hint
 	say "done – the node shows up in the UI within seconds"
 }

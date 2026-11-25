@@ -43,14 +43,17 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 	"$root/scripts/release-sign.sh" generate "$build/release.pem" >"$build/release.pub"
 
 	echo "▸ building the agent ($target)"
-	(cd "$root/agent" && cargo zigbuild --release --locked -q -p sermon-agent --target "$target")
+	(cd "$root/agent" && cargo zigbuild --release --locked -q -p sermon-agent -p sermon-helper --target "$target")
 	cp "$root/agent/target/$target/release/sermon-agent" "$build/downloads/sermon-agent-linux-$arch"
-	"$root/scripts/release-sign.sh" sign "$build/release.pem" --version e2e "$build/downloads/sermon-agent-linux-$arch"
+	cp "$root/agent/target/$target/release/sermon-helper" "$build/downloads/sermon-helper-linux-$arch"
+	"$root/scripts/release-sign.sh" sign "$build/release.pem" --version e2e \
+		"$build/downloads/sermon-agent-linux-$arch" "$build/downloads/sermon-helper-linux-$arch"
 
 	echo "▸ packaging the agent (.deb, .rpm, .apk)"
 	"$root/scripts/package-test-keys.sh" "$build/package-keys"
 	SERMON_PKG_GPG_KEY="$build/package-keys/gpg.asc" SERMON_PKG_APK_KEY="$build/package-keys/apk.rsa" \
-		"$root/scripts/package-agent.sh" "$arch" 0.0.1 "$build/downloads/sermon-agent-linux-$arch" "$build/packages" >/dev/null
+		"$root/scripts/package-agent.sh" "$arch" 0.0.1 "$build/downloads/sermon-agent-linux-$arch" \
+		"$build/downloads/sermon-helper-linux-$arch" "$build/packages" >/dev/null
 	# The package hosts get the packages and the public keys only.
 	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/sermon-agent.rsa.pub" "$build/packages/"
 	chmod 0644 "$build/packages/"*

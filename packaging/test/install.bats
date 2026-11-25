@@ -5,8 +5,10 @@ setup() {
 	TMP=$(mktemp -d)
 	export SERMON_INSTALL_TEST=1 SERMON_INSTALL_ROOT="$TMP/root"
 	mkdir -p "$SERMON_INSTALL_ROOT/etc"
+	# The helper's configuration as the server renders it into the script (M4-04).
+	sed -e "/@SERMON_HELPER_CONFIG@/{r $BATS_TEST_DIRNAME/../helper.toml" -e "d}" "$BATS_TEST_DIRNAME/../install.sh" >"$TMP/install.sh"
 	# shellcheck source=../install.sh
-	. "$BATS_TEST_DIRNAME/../install.sh"
+	. "$TMP/install.sh"
 	KEY="$TMP/key.pem"
 	RELEASE_KEY=$("$BATS_TEST_DIRNAME/../../scripts/release-sign.sh" generate "$KEY")
 	# The version the server expects (written into the script when the server is built).
@@ -327,4 +329,99 @@ without_minisign() {
 	printf 'fedcba9876543210fedcba9876543210\n' >"$SERMON_INSTALL_ROOT/var/lib/dbus/machine-id"
 	ensure_machine_id
 	[ ! -e "$SERMON_INSTALL_ROOT/etc/machine-id" ]
+}
+
+# M4-04: the root helper's configuration is the host's veto (ADR 0035). Without flags an existing
+# helper.toml stays as the admin wrote it; a flag changes its own value only.
+@test "writes the helper's configuration and keeps the admin's values" {
+	CONFIG_DIR=/etc/sermon
+	conf="$SERMON_INSTALL_ROOT/etc/sermon/helper.toml"
+	parse_args --server https://sermon.example.com --token-file <(echo sme_x) 2>/dev/null
+	write_helper_config
+	grep -q '^allow_remote_updates = true$' "$conf"
+	grep -q '^allow_remote_reboot = false$' "$conf"
+	grep -q '^allow_self_update = true$' "$conf"
+	[ "$(stat -c %a "$conf")" = 644 ]
+	[ "$(grep -c '^allow_' "$conf")" = 3 ]
+	# The admin allows reboots; a second run without flags keeps that.
+	sed -i 's/^allow_remote_reboot = false$/allow_remote_reboot = true/' "$conf"
+	echo '# own note' >>"$conf"
+	write_helper_config
+	grep -q '^allow_remote_reboot = true$' "$conf"
+	grep -q '^# own note$' "$conf"
+	# A flag changes only its value.
+	parse_args --server https://sermon.example.com --token-file <(echo sme_x) --no-remote-updates --no-self-update 2>/dev/null
+	write_helper_config
+	grep -q '^allow_remote_updates = false$' "$conf"
+	grep -q '^allow_self_update = false$' "$conf"
+	grep -q '^allow_remote_reboot = true$' "$conf"
+	grep -q '^# own note$' "$conf"
+	[ "$(grep -c '^allow_remote_updates' "$conf")" = 1 ]
+}
+
+@test "takes the helper's flags and --no-helper" {
+	parse_args --server https://sermon.example.com --token-file <(echo sme_x) 2>/dev/null
+	[ -z "$NO_HELPER" ] && [ -z "$HELPER_FLAGS" ]
+	parse_args --server https://sermon.example.com --token-file <(echo sme_x) --allow-remote-reboot 2>/dev/null
+	[ "$REMOTE_REBOOT" = true ] && [ -n "$HELPER_FLAGS" ]
+	parse_args --server https://sermon.example.com --token-file <(echo sme_x) --no-helper 2>/dev/null
+	[ -n "$NO_HELPER" ]
+	run parse_args --server https://sermon.example.com --token-file <(echo sme_x) --no-helper --allow-remote-reboot
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"--no-helper"* ]]
+}
+
+# The package's script enables the helper on the first installation only: an admin who switched
+# it off keeps it off across upgrades (deb: configure OLD, rpm: 2).
+@test "the helper package enables the helper only when first installed" {
+	mkdir -p "$TMP/fake" "$TMP/run/systemd/system"
+	printf '#!/bin/sh\necho "systemctl $*" >>%s/calls\n' "$TMP" >"$TMP/fake/systemctl"
+	chmod 0755 "$TMP/fake/systemctl"
+	script="$BATS_TEST_DIRNAME/../nfpm/helper-postinstall.sh"
+	helper_postinstall() { sed -e "s#/run/systemd/system#$TMP/run/systemd/system#" -e "s#/var/lib/sermon-helper#$TMP/state#g" "$script" | PATH="$TMP/fake:$PATH" sh -s -- "$@"; }
+	for args in "configure" "configure ''" "1"; do
+		rm -f "$TMP/calls"
+		eval "helper_postinstall $args"
+		grep -q 'enable --now sermon-helper.socket' "$TMP/calls" || { echo "not enabled on first install ($args)"; return 1; }
+	done
+	[ "$(stat -c %a "$TMP/state")" = 700 ]
+	for args in "configure 0.0.1" "2"; do
+		rm -f "$TMP/calls"
+		eval "helper_postinstall $args"
+		! grep -q 'enable' "$TMP/calls" || { echo "enabled again on an upgrade ($args)"; return 1; }
+		grep -q 'try-restart sermon-helper.service' "$TMP/calls"
+	done
+}
+
+# Review M4-04: a rerun enables the helper only if it was not installed before, and --no-helper
+# switches an installed one off.
+@test "a rerun respects a helper the admin switched off, --no-helper switches it off" {
+	mkdir -p "$TMP/fake" "$SERMON_INSTALL_ROOT/etc/systemd/system" "$SERMON_INSTALL_ROOT/usr/local/bin" "$TMP/work"
+	for tool in systemctl rc-update rc-service; do
+		printf '#!/bin/sh\necho "%s $*" >>%s/calls\n' "$tool" "$TMP" >"$TMP/fake/$tool"
+		chmod 0755 "$TMP/fake/$tool"
+	done
+	printf '#!/bin/sh\necho "install $*" >>%s/calls\n' "$TMP" >"$TMP/fake/install"
+	chmod 0755 "$TMP/fake/install"
+	download() { cp "$BIN" "$2"; }
+	verify() { :; }
+	SERVER=https://sermon.example.com CONFIG_DIR=/etc/sermon BIN_DIR=/usr/local/bin
+	REMOTE_UPDATES='' REMOTE_REBOOT='' SELF_UPDATE='' HELPER_FLAGS=''
+	PATH="$TMP/fake:$PATH" install_helper "$TMP/work" amd64 systemd 2>/dev/null || true
+	grep -q 'systemctl enable --now sermon-helper.socket' "$TMP/calls"
+	# Installed before: a rerun restarts but doesn't enable.
+	touch "$SERMON_INSTALL_ROOT/usr/local/bin/sermon-helper"
+	rm "$TMP/calls"
+	PATH="$TMP/fake:$PATH" install_helper "$TMP/work" amd64 systemd 2>/dev/null || true
+	! grep -q 'enable' "$TMP/calls"
+	grep -q 'try-restart sermon-helper.service' "$TMP/calls"
+	rm "$TMP/calls"
+	PATH="$TMP/fake:$PATH" install_helper "$TMP/work" amd64 openrc 2>/dev/null || true
+	! grep -q 'rc-update add' "$TMP/calls"
+	grep -q 'rc-service --ifstarted sermon-helper restart' "$TMP/calls"
+	# --no-helper: switched off.
+	rm "$TMP/calls"
+	PATH="$TMP/fake:$PATH" run remove_helper systemd
+	[[ "$output" == *"switched off"* ]]
+	grep -q 'systemctl disable --now sermon-helper.socket sermon-helper.service' "$TMP/calls"
 }

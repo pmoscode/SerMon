@@ -78,6 +78,24 @@ In der UI unter **Nodes → Node hinzufügen** entsteht ein Befehl mit Enrollmen
   `deploy/compose/downloads/`.
 
 Ohne Release-Schlüssel verweigert `install.sh` die Installation; die Agent-Pakete (.deb, .rpm, .apk) gehen auch ohne.
+
+### Root-Helper (Updates und Reboots)
+
+Neben dem Agent installiert `install.sh` den Root-Helper `sermon-helper` (signiert wie der Agent, Binaries
+`sermon-helper-linux-amd64` und `…-arm64` in `deploy/compose/downloads/`; als Paket `sermon-helper`). Er führt für den
+Agent Paket-Updates und Reboots aus, nur feste Operationen und nur für den User `sermon`. Was der Host erlaubt, steht
+in `/etc/sermon/helper.toml`; der Server kann es nicht ändern:
+
+| Schlüssel | ab Werk | Schalter von `install.sh` |
+|---|---|---|
+| `allow_remote_updates` | an | `--no-remote-updates` |
+| `allow_remote_reboot` | **aus** | `--allow-remote-reboot` |
+| `allow_self_update` | an | `--no-self-update` |
+
+Ohne Schalter bleibt eine vorhandene `helper.toml` unverändert. `--no-helper` installiert keinen Helper bzw. schaltet
+einen vorhandenen ab; dann gibt es keine Fernsteuerung. Ein abgeschalteter Helper (`systemctl disable --now
+sermon-helper.socket`) bleibt auch nach Updates aus. `sermon-agent helper status` (als `sermon`) zeigt, was der Helper
+erlaubt.
 Veröffentlichte Releases mit Schlüssel und Binaries folgen mit v1.0.
 
 ## Was wo liegt

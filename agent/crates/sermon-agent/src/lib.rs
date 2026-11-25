@@ -7,6 +7,7 @@ pub mod agent_config;
 pub mod cli;
 pub mod config;
 pub mod enroll;
+pub mod helper;
 pub mod identity;
 pub mod journal;
 pub mod liveview;
@@ -35,7 +36,7 @@ use sermon_transport::outbox::Outbox;
 use sermon_transport::session::{FactsSource, Transport, TransportConfig};
 use tokio_util::sync::CancellationToken;
 
-use crate::cli::{Cli, Command, UninstallArgs};
+use crate::cli::{Cli, Command, HelperCommand, UninstallArgs};
 use crate::config::AgentConfig;
 use crate::identity::FileIdentity;
 use crate::scheduler::Scheduler;
@@ -80,6 +81,10 @@ pub fn execute(cli: Cli) -> anyhow::Result<()> {
         Command::Uninstall(args) => {
             let config = AgentConfig::load(&cli.config)?;
             uninstall(&StateLayout::new(&config.state_dir), &args)
+        }
+        Command::Helper(HelperCommand::Status) => {
+            print!("{}", helper::status(std::path::Path::new(helper::SOCKET))?);
+            Ok(())
         }
     }
 }

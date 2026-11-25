@@ -4697,7 +4697,18 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.6 Anomalie-Erkennung (E4.6)
 
-#### ☐ M4-21 – ADR Anomalie-Erkennung · S · S
+#### ☑ M4-21 – ADR Anomalie-Erkennung · S · S
+> Erledigt ([ADR 0037](adr/0037-anomalie-erkennung.md); KONZEPT §13 „Umsetzung“):
+> - **Baselines** in `anomaly_baselines` (RLS) je Serie und Stunde der Woche (UTC). Stündlich wird nur der Bucket der
+>   abgelaufenen Stunde neu gerechnet: Alle 168 kosteten rund 240 Mio. Zeilen je Stunde, einer 1,4 Mio. Punkte. Gerechnet
+>   wird in Go (`domain/anomaly`) auf den Punkten von `metric_points_1m`, damit Worker, Golden-Tests und Benchmark
+>   denselben Code nutzen. EWMA und Entprellung im Speicher, beim Start aus 6 h Historie aufgewärmt.
+> - **Ergebnisse** in der Hypertable `anomaly_points` ohne RLS, nur auffällige Minuten (Score ≥ 3 oder anomal), gelesen
+>   über `SECURITY DEFINER`-Funktionen (O8). Die Anomalie-Rate je Node als Serie `sermon_anomaly_rate_ratio` vom Server.
+> - **Budget:** 6 000 Serien je Minute in < 2 s, Baselines < 60 s je Stunde; Lauf höchstens 20 s, der nächste setzt fort;
+>   je Node 64, je Org 4 000, je Instanz 20 000 Serien. Lease je Organisation wie beim Orchestrator.
+> - **Kandidaten** im Katalog (`Anomaly`); **Abweichungen:** Log-Rate ohne Severity aus dem Zähler des Agents,
+>   SSH-Fehlversuche erst mit der Ausbaustufe. Lernphase ab `nodes.learning_since` bzw. `series.created_at`.
 - **Ziel:** ADR 0037 zu KONZEPT §13.
   - **Speicher:** Baselines je Node, Metrik und Stunde der Woche (168 Buckets), stündlich aus `metrics_1m` neu
     berechnet. Die 30 Tage Retention von `metrics_1m` reichen für 4 Wochen.

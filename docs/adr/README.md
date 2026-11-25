@@ -44,6 +44,7 @@ KONZEPT §2 mit angepasst.
 | [0034](0034-passkeys-mit-webauthn.md) | Passkeys mit WebAuthn | accepted | D10 |
 | [0035](0035-root-helper.md) | Root-Helper: Protokoll, Operationen und Läufe | accepted | D9, D15 |
 | [0036](0036-self-update-und-paket-repos.md) | Self-Update des Agents und signierte Paket-Repos | accepted | D8, D15 |
+| [0037](0037-anomalie-erkennung.md) | Anomalie-Erkennung: Baselines, Ergebnisse und Worker | accepted | D16, D13 |
 
 ## Entscheidungslog → ADR
 
@@ -61,10 +62,10 @@ KONZEPT §2 mit angepasst.
 | D10 Authentifizierung | 0017, 0033, 0034 |
 | D11 Rechte | 0017 |
 | D12 Retention | 0018 |
-| D13 Storage | 0001, 0031, 0032 |
+| D13 Storage | 0001, 0031, 0032, 0037 |
 | D14 Alert-Kanäle | 0019 |
 | D15 Updates | 0020, 0035, 0036 |
-| D16 Anomalien | 0019 |
+| D16 Anomalien | 0019, 0037 |
 | D17 Logs | 0020, 0013 |
 | D18 Module | 0020 |
 | D19 Live-Ansicht nur lesend | 0016 |

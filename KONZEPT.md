@@ -1088,6 +1088,18 @@ Kanäle der dritten Welle (M2-13):
 - Ausbaustufe (v2): Isolation Forest bzw. k-means auf Feature-Vektoren als zusätzlicher Detektor hinter demselben
   Interface `Detector`.
 
+### Umsetzung ([ADR 0037](adr/0037-anomalie-erkennung.md))
+
+- **Baselines** in `anomaly_baselines` (RLS) je Serie und Stunde der Woche in UTC; stündlich wird nur der Bucket der
+  abgelaufenen Stunde aus `metrics_1m` neu gerechnet (rund 1,4 Mio. Punkte bei 6 000 Serien). EWMA und Entprellung
+  hält der Worker im Speicher und wärmt sie beim Start aus 6 h Historie auf.
+- **Ergebnisse** in der Hypertable `anomaly_points` ohne RLS, nur auffällige Minuten (Score ≥ 3 oder anomal), gelesen
+  über `SECURITY DEFINER`-Funktionen wie die Metriken (O8). Die Anomalie-Rate je Node ist die Serie
+  `sermon_anomaly_rate_ratio`, geschrieben vom Server.
+- **Worker** mit Lease je Organisation, Zeitbudget 20 s je Lauf (der nächste setzt fort), Grenzen je Node (64 Serien),
+  Organisation und Instanz.
+- **Abweichungen:** Log-Rate ohne Severity (aus dem Zähler des Agents); SSH-Fehlversuche erst mit der Ausbaustufe.
+
 ---
 
 ## 14. Paket-Updates und Auto-Update

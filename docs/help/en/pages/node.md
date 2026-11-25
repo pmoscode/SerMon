@@ -13,6 +13,13 @@ Everything about one server: a header with host facts and current key figures, b
 - The **Security** tab shows the node's security events with totals, chart, top IPs and top users; "Open in the security dashboard" leads to the [Security](/security) page with the same filter – more in [Security](help:pages/security_events).
 - The Identity tab shows whether the node is locked, its last address and an open takeover window; operators rotate, revoke and unlock the key there or allow the takeover after a reinstallation – more in [Node identity](help:concepts/node-identity).
 
+## Anomalies
+
+The red band in the charts marks minutes in which a metric deviated both from its usual hour of the week and from the
+course of the last hours; the title then says "unusual". **What was unusual?** checks the chosen range and names the
+metrics with the highest score. During the first 7 days the top of the page says "still learning"
+([anomalies](help:concepts/anomalies)).
+
 ## Typical next steps
 
 1. Narrow down an unusual figure in the chart: choose the time range, zoom into the spike.

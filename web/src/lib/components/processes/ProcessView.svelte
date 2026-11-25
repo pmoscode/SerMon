@@ -19,7 +19,6 @@
 		users,
 		type Sort
 	} from '#lib/processes/table.js';
-	import ProcessDrawer from './ProcessDrawer.svelte';
 	import ProcessSummary from './ProcessSummary.svelte';
 	import ProcessTable from './ProcessTable.svelte';
 
@@ -116,6 +115,11 @@
 				? m.procs_regex_invalid({ detail: regex.detail ?? '' })
 				: ''
 	);
+	// Once loaded, the drawer stays: it animates closing.
+	let drawerLoaded = $state(false);
+	$effect(() => {
+		if (shownProcess) drawerLoaded = true;
+	});
 </script>
 
 <div class="flex flex-col gap-4">
@@ -234,12 +238,17 @@
 	{/if}
 </div>
 
-<ProcessDrawer
-	process={shownProcess}
-	parent={shownProcess ? byPid.get(shownProcess.ppid) : undefined}
-	ended={shownProcess !== undefined && current === undefined}
-	onClose={() => {
-		selectedPid = undefined;
-		lastSelected = undefined;
-	}}
-/>
+<!-- The details load with the first opened process (M2-34: on demand). -->
+{#if shownProcess || drawerLoaded}
+	{#await import('./ProcessDrawer.svelte') then { default: ProcessDrawer }}
+		<ProcessDrawer
+			process={shownProcess}
+			parent={shownProcess ? byPid.get(shownProcess.ppid) : undefined}
+			ended={shownProcess !== undefined && current === undefined}
+			onClose={() => {
+				selectedPid = undefined;
+				lastSelected = undefined;
+			}}
+		/>
+	{/await}
+{/if}

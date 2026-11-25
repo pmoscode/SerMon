@@ -89,4 +89,14 @@ describe('TimeSeries', () => {
 		await rerender({ error: '' });
 		await expect.element(page.getByText('No data in the selected time range.')).toBeVisible();
 	});
+
+	// M4-25: the anomaly band – named next to the title and for screen readers, not by color alone.
+	it('names anomalous stretches next to the title and for screen readers', async () => {
+		const { rerender } = await render(TimeSeries, { title: 'CPU busy', unit: 'ratio_ppm', series });
+		expect(page.getByText('unusual', { exact: true }).elements()).toHaveLength(0);
+
+		await rerender({ bands: [{ from: now - 30 * minute, to: now - 20 * minute }] });
+		await expect.element(page.getByText('unusual', { exact: true })).toBeVisible();
+		await expect.element(page.getByText(/^Unusual: .+ – .+$/)).toBeInTheDocument();
+	});
 });

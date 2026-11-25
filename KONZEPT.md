@@ -1102,6 +1102,10 @@ Kanäle der dritten Welle (M2-13):
 - **Worker** mit Lease je Organisation, Zeitbudget 20 s je Lauf (der nächste setzt fort), Grenzen je Node (64 Serien),
   Organisation und Instanz.
 - **Abweichungen:** Log-Rate ohne Severity (aus dem Zähler des Agents); SSH-Fehlversuche erst mit der Ausbaustufe.
+- **UI (M4-25):** Band in allen Charts eines Nodes (rot, dazu „ungewöhnlich“ am Titel und als Text für Screenreader),
+  „lernt noch (Tag 3/7)“, „Was war ungewöhnlich?“ für den gezoomten Zeitraum, das Dashboard „Anomalien“ als Ansicht der
+  Fleet und die Rate der Fleet in der Übersicht. Das optionale Baseline-Band fehlt noch: Es bräuchte die Baselines je
+  Stunde im Browser.
 - **Verfahren (M4-22):** Die saisonale Abweichung zählt ab dem üblichen Bereich des Buckets (P5 bis P95) statt ab dem
   Median, damit kurze tägliche Jobs nicht jede Nacht anomal sind; der EWMA folgt der Abweichung vom saisonalen Median
   und lässt Werte über 4σ nur gekappt ein. Benchmark: Precision 0,99, Recall 0,88.

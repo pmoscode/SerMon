@@ -13,6 +13,13 @@ Alles zu einem Server: Kopfzeile mit Host-Fakten und aktuellen Kennzahlen, darun
 - Der Reiter **Security** zeigt die Security-Events des Nodes mit Summen, Chart, Top-IPs und Top-Usern; „Im Security-Dashboard öffnen“ führt mit demselben Filter zur Seite [Security](/security) – mehr unter [Security](help:pages/security_events).
 - Der Reiter Identität zeigt, ob der Node gesperrt ist, seine letzte Adresse und ein offenes Übernahmefenster; Operatoren rotieren, widerrufen und entsperren dort den Schlüssel oder erlauben die Übernahme nach einer Neuinstallation – mehr unter [Identität des Nodes](help:concepts/node-identity).
 
+## Anomalien
+
+Das rote Band in den Charts markiert Minuten, in denen eine Metrik zugleich von ihrer üblichen Stunde der Woche und vom
+Verlauf der letzten Stunden abwich; neben dem Titel steht dann „ungewöhnlich“. **Was war ungewöhnlich?** prüft den
+gewählten Zeitraum und nennt die Metriken mit dem höchsten Score. In den ersten 7 Tagen steht „lernt noch“ oben auf der
+Seite ([Anomalien](help:concepts/anomalies)).
+
 ## Typische nächste Schritte
 
 1. Auffällige Kennzahl im Chart eingrenzen: Zeitraum wählen, in den Ausschlag hineinzoomen.

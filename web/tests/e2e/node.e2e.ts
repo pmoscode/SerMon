@@ -70,6 +70,26 @@ const nodeApi = {
 			]
 		}
 	}),
+	// M4-25: the CPU user mode was anomalous for 10 minutes; the node learns (day 3).
+	'AnomalyService/GetNodeAnomalies': () => ({
+		json: {
+			learningSince: new Date(now - 2.5 * 86400_000).toISOString(),
+			learningDay: 3,
+			series: [
+				{
+					metric: 'sermon_cpu_utilization_ratio',
+					labels: { mode: 'user' },
+					maxScore: 9,
+					intervals: [
+						{
+							from: new Date(now - 1800_000).toISOString(),
+							to: new Date(now - 1200_000).toISOString()
+						}
+					]
+				}
+			]
+		}
+	}),
 	'MetricsService/QueryMetrics': (body: unknown) => {
 		const metric = (body as { selector: { metric: string } }).selector.metric;
 		if (metric === 'sermon_cpu_utilization_ratio')
@@ -99,6 +119,14 @@ test.describe('node detail (mocked API)', () => {
 		await expect(page.locator('canvas').first()).toBeVisible();
 		await expect(page.getByText(/^user: minimum/)).toBeAttached();
 		await expect(page.getByText(/^idle: minimum/)).toHaveCount(0);
+		// The anomaly band of the CPU chart and the learning phase (M4-25); the load chart has none.
+		await expect(page.getByText('still learning (day 3/7)')).toBeVisible();
+		await expect(
+			page.getByRole('figure', { name: 'CPU by mode' }).getByText('unusual', { exact: true })
+		).toBeVisible();
+		await expect(
+			page.getByRole('figure', { name: 'Load per CPU' }).getByText('unusual', { exact: true })
+		).toHaveCount(0);
 		await page.screenshot({ path: 'test-results/node-cpu.png', fullPage: true });
 		let results = await new AxeBuilder({ page }).analyze();
 		expect(results.violations).toEqual([]);

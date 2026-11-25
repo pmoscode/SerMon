@@ -17,8 +17,9 @@ const presetMs: Record<LogPreset, number> = {
 	'14d': 14 * 86400_000
 };
 
-/** The longest range of a query. */
-export const MAX_RANGE = 14 * 86400_000;
+import { MAX_RANGE } from './link.js';
+
+export { MAX_RANGE, ALERT_WINDOW, alertLogsQuery, logsQuery } from './link.js';
 /** Bounds of the server (LogFilter). */
 export const MAX_NODES = 100;
 export const MAX_UNITS = 20;
@@ -134,18 +135,4 @@ export function rangeOf(f: LogFilter, now: number): { from: number; to: number }
 		return { from: Math.max(f.from, to - MAX_RANGE), to };
 	}
 	return { from: now - presetMs[f.preset], to: now };
-}
-
-/** The query of a link to the logs of a node in a range (e.g. a chart's), at most 14 days. */
-export function logsQuery(node: string, from: number, to: number): string {
-	const f = { ...emptyFilter(), nodes: [node], from: Math.max(from, to - MAX_RANGE), to };
-	return `?${filterParams(f)}`;
-}
-
-/** Around an alert's start: 15 minutes before and after, but not beyond now. */
-export const ALERT_WINDOW = 15 * 60_000;
-
-/** The query of a link to the logs of a node around the start of an alert. */
-export function alertLogsQuery(node: string, since: number, now: number): string {
-	return logsQuery(node, since - ALERT_WINDOW, Math.min(since + ALERT_WINDOW, now));
 }

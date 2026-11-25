@@ -4,8 +4,12 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import Table from '@lucide/svelte/icons/table';
+	import Activity from '@lucide/svelte/icons/activity';
+	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
+	import { fleetRate, loadRates } from '#lib/anomalies/fleet.js';
 	import FleetHeader from '#lib/components/fleet/FleetHeader.svelte';
+	import FleetNav from '#lib/components/fleet/FleetNav.svelte';
 	import NodeTable from '#lib/components/fleet/NodeTable.svelte';
 	import NodeTile from '#lib/components/fleet/NodeTile.svelte';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
@@ -47,6 +51,27 @@
 
 	$effect(() => fleet.start());
 
+	// The fleet's anomaly rate (M4-25), every minute, in the header.
+	let anomalyRate = $state<number | undefined>();
+	$effect(() => {
+		const run = () => {
+			const ids = untrack(() => (fleet.summary?.nodes ?? []).map((n) => n.nodeId));
+			if (ids.length === 0) return;
+			loadRates(ids)
+				.then((rates) => (anomalyRate = fleetRate(rates)))
+				.catch(() => (anomalyRate = undefined));
+		};
+		const first = setTimeout(run, 2000);
+		const timer = setInterval(run, 60_000);
+		return () => {
+			clearTimeout(first);
+			clearInterval(timer);
+		};
+	});
+	const percent = $derived(
+		new Intl.NumberFormat(localeState.current, { style: 'percent', maximumFractionDigits: 1 })
+	);
+
 	const nodes = $derived(fleet.summary?.nodes ?? []);
 	const shown = $derived(filterNodes(nodes, { search, group, status, tag }));
 	const counts = $derived(countByStatus(nodes));
@@ -68,6 +93,8 @@
 <svelte:head>
 	<title>{m.fleet_title()} · SerMon</title>
 </svelte:head>
+
+<FleetNav />
 
 <div class="mb-6 flex flex-wrap items-center gap-2">
 	<h1 class="text-2xl font-semibold tracking-tight">{m.fleet_title()}</h1>
@@ -108,6 +135,15 @@
 {:else}
 	<div class="flex flex-col gap-4">
 		<FleetHeader total={nodes.length} {counts} active={status} onSelect={(s) => (status = s)} />
+		{#if anomalyRate !== undefined}
+			<a
+				href={resolve('/(app)/anomalies')}
+				class="inline-flex items-center gap-1 self-start text-sm text-muted-foreground underline-offset-2 hover:underline"
+			>
+				<Activity class="size-4" aria-hidden="true" />
+				{m.anomalies_fleet_rate({ rate: percent.format(anomalyRate) })}
+			</a>
+		{/if}
 
 		<div class="flex flex-wrap items-end gap-3" role="search" aria-label={m.fleet_filter()}>
 			<div class="flex flex-col gap-1">

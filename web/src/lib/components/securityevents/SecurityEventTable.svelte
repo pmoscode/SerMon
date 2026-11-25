@@ -8,7 +8,7 @@
 	import type { SecurityEvent } from '#lib/api/gen/sermon/web/v1/security_event_pb.js';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
-	import { alertLogsQuery } from '#lib/logs/filter.js';
+	import { alertLogsQuery } from '#lib/logs/link.js';
 	import { displayText } from '#lib/logs/text.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import {

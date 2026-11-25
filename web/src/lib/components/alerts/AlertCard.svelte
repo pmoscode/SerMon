@@ -20,7 +20,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { formatAgo } from '#lib/format/format.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
-	import { alertLogsQuery } from '#lib/logs/filter.js';
+	import { alertLogsQuery } from '#lib/logs/link.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import AlertStateBadge from './AlertStateBadge.svelte';
 	import AlertTimeline from './AlertTimeline.svelte';

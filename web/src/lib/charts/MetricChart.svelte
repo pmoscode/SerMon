@@ -4,8 +4,10 @@
 	import { resolve } from '$app/paths';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import type { Unit } from '#lib/format/format.js';
-	import { logsQuery } from '#lib/logs/filter.js';
+	import { logsQuery } from '#lib/logs/link.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { bandsFor } from '#lib/anomalies/band.js';
+	import { nodeAnomalies } from '#lib/anomalies/node.svelte.js';
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
 	import type { ChartSeries } from './data.js';
 	import { loadSeries, type ChartQuery } from './query.js';
@@ -27,6 +29,10 @@
 		bits?: boolean;
 		height?: number;
 	} = $props();
+
+	// The anomaly band of the node page (M4-25), if the chart is on one.
+	const anomalies = nodeAnomalies();
+	const bands = $derived(anomalies ? bandsFor(anomalies.series, queries) : []);
 
 	let series = $state<ChartSeries[]>([]);
 	let loading = $state(true);
@@ -53,7 +59,7 @@
 	});
 </script>
 
-<TimeSeries {title} {unit} {series} {bits} {height} {loading} {error}>
+<TimeSeries {title} {unit} {series} {bits} {height} {loading} {error} {bands}>
 	{#snippet actions()}
 		<HelpTip topic={'metrics/' + queries[0].metric} />
 		<!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() with the query of the filter -->

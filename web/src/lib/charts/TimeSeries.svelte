@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import uPlot from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
 	import { untrack, type Snippet } from 'svelte';
@@ -7,6 +8,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
 	import { isDark, themeState } from '#lib/theme/theme.svelte.js';
+	import type { Band } from '#lib/anomalies/band.js';
 	import { align, summarize, yRange, type ChartSeries } from './data.js';
 
 	interface Props {
@@ -22,6 +24,8 @@
 		error?: string;
 		/** Next to the title, e.g. a HelpTip. */
 		actions?: Snippet;
+		/** Anomalous stretches (M4-25): marked in the chart, named next to the title. */
+		bands?: Band[];
 	}
 
 	let {
@@ -32,7 +36,8 @@
 		bits = false,
 		loading = false,
 		error = '',
-		actions
+		actions,
+		bands = []
 	}: Props = $props();
 
 	/** All charts with this key share the crosshair. */
@@ -54,6 +59,28 @@
 		new Intl.DateTimeFormat(localeState.current, { dateStyle: 'short', timeStyle: 'short' }).format(
 			ms
 		);
+
+	// What the draw hook paints; set by the effect below, which redraws.
+	let painted: Band[] = [];
+
+	/** Marks the anomalous stretches: a light area over the plot and a strip along its top. */
+	function paintBands(u: uPlot) {
+		if (painted.length === 0) return;
+		const ctx = u.ctx;
+		const { top, height: h } = u.bbox;
+		ctx.save();
+		ctx.fillStyle = token('--destructive');
+		for (const b of painted) {
+			const x0 = Math.max(u.bbox.left, u.valToPos(b.from / 1000, 'x', true));
+			const x1 = Math.min(u.bbox.left + u.bbox.width, u.valToPos(b.to / 1000, 'x', true));
+			if (x1 <= x0) continue;
+			ctx.globalAlpha = 0.12;
+			ctx.fillRect(x0, top, x1 - x0, h);
+			ctx.globalAlpha = 0.9;
+			ctx.fillRect(x0, top, x1 - x0, 3 * devicePixelRatio);
+		}
+		ctx.restore();
+	}
 
 	function token(name: string): string {
 		return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -115,6 +142,7 @@
 				}
 			},
 			hooks: {
+				draw: [paintBands],
 				setSelect: [
 					(u) => {
 						if (u.select.width < 2) return;
@@ -146,6 +174,11 @@
 	});
 
 	$effect(() => {
+		painted = bands;
+		chart?.redraw(false, false);
+	});
+
+	$effect(() => {
 		const { from, to } = timeRange.range;
 		chart?.setScale('x', { min: from / 1000, max: to / 1000 });
 	});
@@ -159,6 +192,12 @@
 	<figcaption class="flex items-center gap-1 text-sm font-medium">
 		<span id="{id}-title">{title}</span>
 		{@render actions?.()}
+		{#if bands.length > 0}
+			<span class="inline-flex items-center gap-1 text-xs font-normal text-destructive">
+				<TriangleAlert class="size-3.5" aria-hidden="true" />
+				{m.chart_unusual()}
+			</span>
+		{/if}
 	</figcaption>
 	<div class="relative" bind:clientWidth={width}>
 		<div bind:this={container} aria-hidden="true" class="sermon-chart"></div>
@@ -186,6 +225,13 @@
 		<p>
 			{m.chart_range({ from: dateTime(timeRange.range.from), to: dateTime(timeRange.range.to) })}
 		</p>
+		{#if bands.length > 0}
+			<p>
+				{m.chart_unusual_at({
+					stretches: bands.map((b) => `${dateTime(b.from)} – ${dateTime(b.to)}`).join(', ')
+				})}
+			</p>
+		{/if}
 		<ul>
 			{#each summaries as s (s.label)}
 				<li>

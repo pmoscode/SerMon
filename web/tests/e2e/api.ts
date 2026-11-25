@@ -47,7 +47,9 @@ export function installed(loggedIn: boolean): Record<string, Handler> {
 		'AuthService/GetLoginOptions': () => ({ json: {} }),
 		'AuthService/ListOidcIdentities': () => ({ json: {} }),
 		'PasskeyService/ListPasskeys': () => ({ json: {} }),
-		'FleetService/GetFleetSummary': () => ({ json: {} })
+		'FleetService/GetFleetSummary': () => ({ json: {} }),
+		// The anomaly band of the node pages (M4-25): none, the node learnt.
+		'AnomalyService/GetNodeAnomalies': () => ({ json: {} })
 	};
 }
 

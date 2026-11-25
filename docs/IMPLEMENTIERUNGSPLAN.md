@@ -4810,7 +4810,30 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Szenariotest der Regel, Lernphase, Validierung im Regel-Editor und Import.
 - **Abhängig von:** M4-23
 
-#### ☐ M4-25 – Anomalien in der UI · W · M
+#### ☑ M4-25 – Anomalien in der UI · W · M
+> Erledigt (KONZEPT §13 „Umsetzung“; Hilfe „Anomalien“ als Konzept und Seite, Abschnitt auf der Seite des Nodes):
+> - **Band:** Die Seite eines Nodes lädt die Anomalien ihres Zeitraums einmal (die letzten 7 der 30 Tage) und gibt sie
+>   über den Kontext an jeden Chart; `TimeSeries` malt die Strecken (Fläche und Streifen) und nennt sie am Titel
+>   („ungewöhnlich“, nicht nur per Farbe) und für Screenreader. Ein Fehler lässt die Charts, wie sie sind.
+> - **Lernphase:** „lernt noch (Tag 3/7)“ oben auf der Seite, mit Hilfe.
+> - **„Was war ungewöhnlich?“** prüft auf Knopfdruck den gewählten Zeitraum (Ziehen im Chart zoomt alle Charts, das ist
+>   die Markierung): Metrik, Labels, höchster Score, anomale Minuten, Zeitpunkt; der Teil lädt erst dann.
+> - **Dashboard „Anomalien“** (`/anomalies`): Nodes nach Rate jetzt und höchster der letzten 15 min, ab 10 % „hoch“,
+>   die Rate der Fleet, „Was war ungewöhnlich?“ der Fleet für die letzte Stunde; jede Minute neu. In der Übersicht steht
+>   die Rate der Fleet als Link. Die Dashboards sind **Ansichten der Fleet** (Unternavigation Übersicht · Anomalien):
+>   Ein weiterer Eintrag oben brach die Kopfzeile bei 1 280 px um, und Kapazität und Heatmap kommen noch dazu.
+> - **Budget (M2-34):** Die Seite des Nodes plus Prozess-Tab lag schon vorher bei 199,2 von 200 KiB. Was nur bei Bedarf
+>   gebraucht wird, lädt jetzt erst dann: die Details eines Prozesses, die Filter-Module der Reiter Logs und Security
+>   (der Link der Charts in die Logs braucht sie nicht mehr, `logs/link.ts`), „Was war ungewöhnlich?“. Ergebnis:
+>   Node 187,8 KiB, mit Prozess-Tab 199,8 KiB; Anomalien 150,2 KiB; alles zusammen 476,9 von 480 KiB.
+> - **Abweichung:** Das optionale Baseline-Band fehlt (es bräuchte die Baselines je Stunde im Browser).
+> - **Gefunden:** Nach einem Fehler zeigte „Was war ungewöhnlich?“ wieder den Hinweis statt des Fehlers.
+> - **Tests:** Band (Zusammenfassen, Label-Filter und Ausnahmen, Bereich), Zustand der Seite (7 Tage, Lerntag, neuere
+>   Anfrage gewinnt, Fehler, zu alter Bereich), Raten der Fleet (in Blöcken zu 100, ppm, Mittel), `TimeSeries` mit Band,
+>   Panel (auf Knopfdruck, Fleet mit Links, nichts gefunden, zu alt, Fehler); E2E: Node (Lernphase, Band nur am
+>   CPU-Chart, Panel), Dashboard (Reihenfolge, „hoch“, Rate der Fleet, feindlicher Hostname als Text, Liste,
+>   Unternavigation, axe, Budget), Kopfzeile, alle Budgets.
+> - **Gegenproben** für 17 Prüfungen, alle erkannt.
 - **Ziel:**
   - Anomalie-Band in allen Charts (uPlot-Plugin), optional das Baseline-Band; „lernt noch (Tag 3/7)“.
   - „Was war ungewöhnlich?“ aus einem markierten Zeitbereich.

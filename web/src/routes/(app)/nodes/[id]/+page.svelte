@@ -2,7 +2,11 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { NodeAnomalies, provideNodeAnomalies } from '#lib/anomalies/node.svelte.js';
 	import MetricChart from '#lib/charts/MetricChart.svelte';
+	import type { Component } from 'svelte';
+	import type { Range } from '#lib/stores/timerange.svelte.js';
+	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import NodeFacts from '#lib/components/node/NodeFacts.svelte';
 	import NodeTags from '#lib/components/node/NodeTags.svelte';
 	import SecuritySourceNotice from '#lib/components/node/SecuritySourceNotice.svelte';
@@ -10,12 +14,8 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { parseNodeView } from '#lib/alerts/links.js';
-	import { emptyFilter, filterParams, type LogFilter } from '#lib/logs/filter.js';
-	import {
-		emptySecurityFilter,
-		securityFilterParams,
-		type SecurityFilter
-	} from '#lib/security/filter.js';
+	import type { LogFilter } from '#lib/logs/filter.js';
+	import type { SecurityFilter } from '#lib/security/filter.js';
 	import { NodeState } from '#lib/node/node.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
@@ -24,15 +24,32 @@
 	const LIVE_INTERVAL = 10_000;
 
 	const nodeState = new NodeState(page.params.id ?? '');
+	// The anomaly band of every chart and the learning phase (M4-25).
+	const anomalies = new NodeAnomalies(page.params.id ?? '');
+	provideNodeAnomalies(anomalies);
 	// A link from an alert (M3-19) names the range of the charts and the area to open.
 	const linked = parseNodeView(page.url.searchParams);
 	if (linked.range) timeRange.zoom(linked.range.from, linked.range.to);
 	let bits = $state(false);
 	let tab = $state<string>(linked.tab ?? 'cpu');
-	let logFilter = $state<LogFilter>(emptyFilter());
-	let securityFilter = $state<SecurityFilter>(emptySecurityFilter());
+	// The filter of the logs tab, from its first opening (the module loads with the tab).
+	let logFilter = $state<LogFilter | undefined>();
+	// The filter of the security tab, from its first opening (the module loads with the tab).
+	let securityFilter = $state<SecurityFilter | undefined>();
 
 	$effect(() => nodeState.start());
+	$effect(() => {
+		void anomalies.load(timeRange.range);
+	});
+
+	// "What was unusual?" for the range marked by zooming; the panel loads on demand (M2-34).
+	type Unusual = Component<{ range: Range; nodeId?: string; auto?: boolean }>;
+	let Unusual = $state<Unusual | undefined>();
+	let checked = $state<Range | undefined>();
+	async function checkUnusual() {
+		Unusual ??= (await import('#lib/components/anomalies/UnusualPanel.svelte')).default as Unusual;
+		checked = { ...timeRange.range };
+	}
 	$effect(() => {
 		const timer = setInterval(() => timeRange.refresh(), LIVE_INTERVAL);
 		return () => clearInterval(timer);
@@ -73,6 +90,20 @@
 
 		<div class="flex flex-wrap items-center justify-between gap-2">
 			<TimeRangePicker />
+			{#if anomalies.learningDay > 0}
+				<span class="inline-flex items-center gap-1 text-sm text-muted-foreground">
+					{m.anomaly_learning({ day: anomalies.learningDay })}
+					<HelpTip topic="concepts/anomalies" />
+				</span>
+			{/if}
+		</div>
+		<div class="flex flex-col items-start gap-2">
+			<Button variant="outline" size="sm" onclick={checkUnusual}>
+				{m.unusual_title()}
+			</Button>
+			{#if Unusual && checked}
+				<Unusual nodeId={id} range={checked} auto />
+			{/if}
 		</div>
 
 		<Tabs.Root bind:value={tab}>
@@ -270,36 +301,38 @@
 			<!-- Loaded on demand: keeps the first load of the page within its budget (KONZEPT §17). -->
 			<Tabs.Content value="logs" class="flex flex-col gap-3 pt-4">
 				{#if tab === 'logs'}
-					<Button
-						href={`${resolve('/(app)/logs')}?${filterParams({ ...logFilter, nodes: [id] })}`}
-						variant="link"
-						size="sm"
-						class="self-end px-0"
-					>
-						{m.node_logs_open()}
-					</Button>
-					{#await import('#lib/components/logs/LogExplorer.svelte')}
+					{#await Promise.all( [import('#lib/logs/filter.js'), import('#lib/components/logs/LogExplorer.svelte')] )}
 						<p role="status" class="text-muted-foreground">{m.loading()}</p>
-					{:then { default: LogExplorer }}
-						<LogExplorer filter={logFilter} onFilter={(f) => (logFilter = f)} fixedNode={id} />
+					{:then [filters, { default: LogExplorer }]}
+						{@const shown = logFilter ?? filters.emptyFilter()}
+						<Button
+							href={`${resolve('/(app)/logs')}?${filters.filterParams({ ...shown, nodes: [id] })}`}
+							variant="link"
+							size="sm"
+							class="self-end px-0"
+						>
+							{m.node_logs_open()}
+						</Button>
+						<LogExplorer filter={shown} onFilter={(f) => (logFilter = f)} fixedNode={id} />
 					{/await}
 				{/if}
 			</Tabs.Content>
 			<Tabs.Content value="security" class="flex flex-col gap-3 pt-4">
 				{#if tab === 'security'}
-					<Button
-						href={`${resolve('/(app)/security')}?${securityFilterParams({ ...securityFilter, nodes: [id] })}`}
-						variant="link"
-						size="sm"
-						class="self-end px-0"
-					>
-						{m.node_security_open()}
-					</Button>
-					{#await import('#lib/components/securityevents/SecurityDashboard.svelte')}
+					{#await Promise.all( [import('#lib/security/filter.js'), import('#lib/components/securityevents/SecurityDashboard.svelte')] )}
 						<p role="status" class="text-muted-foreground">{m.loading()}</p>
-					{:then { default: SecurityDashboard }}
+					{:then [filters, { default: SecurityDashboard }]}
+						{@const shown = securityFilter ?? filters.emptySecurityFilter()}
+						<Button
+							href={`${resolve('/(app)/security')}?${filters.securityFilterParams({ ...shown, nodes: [id] })}`}
+							variant="link"
+							size="sm"
+							class="self-end px-0"
+						>
+							{m.node_security_open()}
+						</Button>
 						<SecurityDashboard
-							filter={securityFilter}
+							filter={shown}
 							onFilter={(f) => (securityFilter = f)}
 							fixedNode={id}
 						/>

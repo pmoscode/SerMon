@@ -26,7 +26,13 @@
 	let { children, onLogout }: { children: Snippet; onLogout: () => void } = $props();
 
 	const nav = $derived([
-		{ href: resolve('/(app)/fleet'), icon: Server, label: () => m.nav_fleet() },
+		// The fleet's dashboards (anomalies, M4-25) are part of it.
+		{
+			href: resolve('/(app)/fleet'),
+			icon: Server,
+			label: () => m.nav_fleet(),
+			also: [resolve('/(app)/anomalies')]
+		},
 		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
 		{ href: resolve('/(app)/logs'), icon: ScrollText, label: () => m.nav_logs() },
 		{ href: resolve('/(app)/security'), icon: ShieldAlert, label: () => m.nav_security_events() },
@@ -82,7 +88,9 @@
 			<a href={resolve('/(app)/fleet')} class="font-semibold tracking-tight">SerMon</a>
 			<nav aria-label={m.shell_navigation()} class="flex gap-1">
 				{#each nav as item (item.href)}
-					{@const current = page.url.pathname.startsWith(item.href)}
+					{@const current = [item.href, ...('also' in item ? (item.also ?? []) : [])].some((h) =>
+						page.url.pathname.startsWith(h)
+					)}
 					<Button
 						href={item.href}
 						variant={current ? 'secondary' : 'ghost'}

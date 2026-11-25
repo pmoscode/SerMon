@@ -36,6 +36,20 @@ async fn live_tick(live: Option<Live>) {
     }
 }
 
+/// A command of the server for the root helper (M4-12); the run ID makes it idempotent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HelperCommand {
+    Update(crate::proto::agent::v1::RunUpdate),
+    Reboot(crate::proto::agent::v1::RebootNode),
+    SelfUpdate(crate::proto::agent::v1::SelfUpdate),
+}
+
+/// Takes the server's commands for the root helper without blocking the session.
+pub trait CommandSink: Send + Sync {
+    /// Takes one command; the session goes on at once.
+    fn command(&self, command: HelperCommand);
+}
+
 /// Version of the agent protocol sent in `Hello`.
 pub const PROTOCOL_VERSION: u32 = 1;
 /// Messages queued for sending; a full queue slows the session down (backpressure).
@@ -146,6 +160,7 @@ pub struct Transport {
     config_sink: Option<Arc<dyn ConfigSink>>,
     live: Option<Arc<dyn LiveSource>>,
     update_refresh: Option<Arc<tokio::sync::Notify>>,
+    commands: Option<Arc<dyn CommandSink>>,
 }
 
 impl std::fmt::Debug for Transport {
@@ -204,6 +219,7 @@ impl Transport {
             config_sink: None,
             live: None,
             update_refresh: None,
+            commands: None,
         }
     }
 
@@ -219,6 +235,14 @@ impl Transport {
     #[must_use]
     pub fn with_update_refresh(mut self, refresh: Arc<tokio::sync::Notify>) -> Self {
         self.update_refresh = Some(refresh);
+        self
+    }
+
+    /// Hands the server's commands for the root helper (`RunUpdate`, `RebootNode`, `SelfUpdate`)
+    /// to `sink` (M4-12); without one they are ignored.
+    #[must_use]
+    pub fn with_commands(mut self, sink: Arc<dyn CommandSink>) -> Self {
+        self.commands = Some(sink);
         self
     }
 
@@ -592,15 +616,23 @@ impl Session<'_> {
                     tracing::debug!("ignoring a refresh of the update information");
                 }
             }
-            // The commands of the root helper (M4-05) follow with M4-12; until then like a newer
-            // server's unknown ones.
-            session_response::Payload::RunUpdate(_)
-            | session_response::Payload::RebootNode(_)
-            | session_response::Payload::SelfUpdate(_) => {
-                tracing::debug!("ignoring a command of the root helper, not handled yet");
+            session_response::Payload::RunUpdate(run) => self.command(HelperCommand::Update(run)),
+            session_response::Payload::RebootNode(reboot) => {
+                self.command(HelperCommand::Reboot(reboot));
+            }
+            session_response::Payload::SelfUpdate(update) => {
+                self.command(HelperCommand::SelfUpdate(update));
             }
         }
         Ok(None)
+    }
+
+    fn command(&self, command: HelperCommand) {
+        if let Some(sink) = &self.transport.commands {
+            sink.command(command);
+        } else {
+            tracing::debug!("ignoring a command of the root helper, none is run here");
+        }
     }
 
     fn update_trust_bundle(&mut self, roots: Vec<Vec<u8>>) {

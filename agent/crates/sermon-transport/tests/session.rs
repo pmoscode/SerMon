@@ -146,6 +146,7 @@ struct Setup {
     config: Option<Arc<dyn ConfigSink>>,
     live: Option<Arc<FakeLive>>,
     refresh: Option<Arc<tokio::sync::Notify>>,
+    commands: Option<Arc<FakeCommands>>,
 }
 
 impl Setup {
@@ -159,6 +160,7 @@ impl Setup {
             config: None,
             live: None,
             refresh: None,
+            commands: None,
         }
     }
 
@@ -206,6 +208,9 @@ impl Setup {
         }
         if let Some(refresh) = self.refresh {
             transport = transport.with_update_refresh(refresh);
+        }
+        if let Some(commands) = self.commands {
+            transport = transport.with_commands(commands);
         }
         let shutdown = CancellationToken::new();
         let token = shutdown.clone();
@@ -667,9 +672,69 @@ async fn passes_a_refresh_of_the_update_info_on() {
     harness.stop().await;
 }
 
-// M4-05: the commands of the root helper are part of the protocol before this agent handles
-// them (M4-12): ignored like a newer server's, the session goes on. Without an update
-// collection a refresh is ignored too.
+/// A sink that records the commands of the root helper.
+#[derive(Debug, Default)]
+struct FakeCommands(Mutex<Vec<sermon_transport::session::HelperCommand>>);
+
+impl sermon_transport::session::CommandSink for FakeCommands {
+    fn command(&self, command: sermon_transport::session::HelperCommand) {
+        self.0.lock().unwrap().push(command);
+    }
+}
+
+// M4-12: RunUpdate, RebootNode and SelfUpdate go to the command sink, the session goes on.
+#[tokio::test(flavor = "multi_thread")]
+async fn hands_the_helpers_commands_on() {
+    use sermon_transport::proto::agent::v1::{RebootNode, RunUpdate, SelfUpdate, UpdateScope};
+    use sermon_transport::session::HelperCommand;
+    let sink = Arc::new(FakeCommands::default());
+    let mut setup = Setup::new();
+    setup.commands = Some(sink.clone());
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    let run_id = "0193f5a0-0000-7000-8000-000000000001".to_owned();
+    let update = RunUpdate {
+        run_id: run_id.clone(),
+        scope: UpdateScope::All.into(),
+    };
+    let reboot = RebootNode {
+        run_id: run_id.clone(),
+        reason: "updates".into(),
+    };
+    let self_update = SelfUpdate {
+        run_id,
+        version: "0.5.0".into(),
+    };
+    for command in [
+        Payload::RunUpdate(update.clone()),
+        Payload::RebootNode(reboot.clone()),
+        Payload::SelfUpdate(self_update.clone()),
+    ] {
+        assert!(harness.api.send(command).await);
+    }
+    let deadline = std::time::Instant::now() + WAIT;
+    while sink.0.lock().unwrap().len() < 3 && std::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(
+        *sink.0.lock().unwrap(),
+        [
+            HelperCommand::Update(update),
+            HelperCommand::Reboot(reboot),
+            HelperCommand::SelfUpdate(self_update)
+        ]
+    );
+    assert_eq!(harness.api.sessions().len(), 1, "the session ended");
+    harness.stop().await;
+}
+
+// M4-05: without a sink the commands of the root helper are ignored like a newer server's, the
+// session goes on. Without an update collection a refresh is ignored too.
 #[tokio::test(flavor = "multi_thread")]
 async fn ignores_the_commands_it_does_not_handle_yet() {
     use sermon_transport::proto::agent::v1::{

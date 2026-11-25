@@ -17,6 +17,7 @@ pub mod logglob;
 pub mod logs;
 pub mod logship;
 pub mod reboot;
+pub mod runs;
 pub mod scheduler;
 pub mod security;
 #[cfg(feature = "simulate")]
@@ -107,15 +108,9 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     let (wal, recovery) = Wal::open(&layout.wal_dir(), WalConfig::default(), clock.now())
         .context("cannot open the buffer")?;
     let outbox = Outbox::new(wal);
-    let host_root = ProcRoot::new(&config.host_root);
     let journal_layout = layout.clone();
-    let scheduler_root = host_root.clone();
-    let facts_root = config.host_root.clone();
-    let facts: FactsSource = Arc::new(move || {
-        let mut facts = read_host_facts(&host_root)?;
-        facts.security_source = logfile::security_source(&facts_root);
-        Ok(facts)
-    });
+    let scheduler_root = ProcRoot::new(&config.host_root);
+    let facts = facts_source(config);
     // The configuration from the server (ADR 0030); the log pipeline follows it (M3-04).
     let agent_config = Arc::new(agent_config::ConfigStore::open(
         layout.agent_config_file(),
@@ -131,8 +126,12 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     );
     // Update information (M4-07): the root helper lists, RefreshUpdateInfo asks for it.
     let update_refresh = Arc::new(tokio::sync::Notify::new());
+    // The server's commands for the root helper (M4-12).
+    let (inbox, commands) = runs::Inbox::new();
+    let book = runs::Book::open(&layout.runs_file());
     let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
-        .with_update_refresh(update_refresh.clone());
+        .with_update_refresh(update_refresh.clone())
+        .with_commands(Arc::new(inbox));
 
     // One thread is enough for < 1 % CPU: collectors read small /proc files, the rest is I/O.
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -187,9 +186,11 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             shutdown.clone(),
         ));
         let reports = spawn_updates(config, &outbox, &clock, update_refresh, &shutdown);
+        let runner = spawn_runs(book, commands, &outbox, &clock, &agent_config, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         reports.await.context("update task failed")?;
+        runner.await.context("run task failed")?;
         collection.await.context("collection task failed")?;
         journal.await.context("journal task failed")?;
         globs.await.context("log file task failed")?;
@@ -250,6 +251,49 @@ fn spawn_updates(
         refresh,
         updates::Schedule::default(),
         updates::Spread::random(),
+        shutdown.clone(),
+    ))
+}
+
+/// The host facts of the Hello, read at each connect.
+fn facts_source(config: &AgentConfig) -> FactsSource {
+    let host_root = ProcRoot::new(&config.host_root);
+    let facts_root = config.host_root.clone();
+    Arc::new(move || {
+        let mut facts = read_host_facts(&host_root)?;
+        facts.security_source = logfile::security_source(&facts_root);
+        Ok(facts)
+    })
+}
+
+/// Starts the runs of the root helper (M4-12): their results are buffered like the metrics, their
+/// output redacted like the logs.
+fn spawn_runs(
+    book: runs::Book,
+    commands: tokio::sync::mpsc::Receiver<sermon_transport::session::HelperCommand>,
+    outbox: &Outbox,
+    clock: &Arc<dyn Clock>,
+    agent_config: &Arc<agent_config::ConfigStore>,
+    shutdown: &CancellationToken,
+) -> tokio::task::JoinHandle<()> {
+    let (outbox, sink_clock, now_clock, config) = (
+        outbox.clone(),
+        clock.clone(),
+        clock.clone(),
+        agent_config.clone(),
+    );
+    tokio::spawn(runs::run(
+        Arc::new(runs::SocketHelper(helper::SOCKET.into())),
+        book,
+        commands,
+        move |result| {
+            if let Err(error) = outbox.push_command_result(result, sink_clock.now()) {
+                tracing::warn!("cannot buffer the result of a run: {error}");
+            }
+        },
+        move |text: &str| config.current().redactor.redact(text).into_owned(),
+        move || now_clock.now(),
+        runs::Schedule::default(),
         shutdown.clone(),
     ))
 }

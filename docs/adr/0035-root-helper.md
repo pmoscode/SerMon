@@ -242,3 +242,20 @@ fehl.
   - **Hinweise:** Eine bekannte `run_id` für einen anderen Lauf wird abgelehnt; ein Lauf wartet bis zu 5 s auf die
     Sperre (statt an einem kurzen `GetStatus` zu scheitern), Listen ebenso; Security-Updates mit `apt-get --no-remove`.
 
+## Nachtrag M4-12: Befehle im Agent
+
+- Die Session reicht `RunUpdate`, `RebootNode` und `SelfUpdate` an den Läufer des Agents weiter (Kanal mit 64
+  Plätzen, die Session wartet nie). Er startet den Lauf beim Helper (`ApplyUpdates`, `Reboot`, `SelfUpdate`), meldet
+  `STARTED` und fragt alle 10 s mit `RunResult` nach dem Ende; das Ergebnis (`SUCCEEDED` bei Exit-Code 0, sonst
+  `FAILED`, `LOST`, wenn der Helper den Lauf nicht mehr kennt) geht gepuffert an den Server.
+- **Einmal je `run_id`:** Das Laufbuch (`/var/lib/sermon-agent/runs`, Zeilen `run_id Zustand Zeit`) kennt jeden
+  genommenen Lauf. Ein erneut zugestellter Befehl startet nichts. Nach einem Neustart des Agents (etwa durch sein
+  eigenes Paket-Update) fragt er die laufenden weiter ab. Fällt der Agent zwischen Start und Eintrag aus, stellt der
+  Server den Befehl beim nächsten Reconnect erneut zu; der Helper nimmt dieselbe `run_id` mit derselben Anfrage als
+  schon gestartet an. Das Buch hält höchstens 500 Läufe, beendete höchstens 8 Tage.
+- **Veto und Fehler:** Ein abgelehnter Start (`helper.toml`) wird `REFUSED`, kein oder ein zu alter Helper
+  `UNSUPPORTED`, jeweils mit Grund. Ein beschäftigter Helper wird alle 30 s erneut gefragt, nach 15 min wird der Lauf
+  `FAILED`.
+- **Ausgabe:** Vor dem Senden läuft sie durch die Redaction der Org (wie Logs und Kommandozeilen) und wird auf ihr Ende
+  von höchstens 256 KiB gekürzt.
+

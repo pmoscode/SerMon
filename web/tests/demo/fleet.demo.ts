@@ -112,6 +112,8 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	browser,
 	baseURL
 }) => {
+	// Since M4-12 the hosts also install their updates through the root helper and report again.
+	test.setTimeout(10 * 60_000);
 	// Setup with the token from the server log, then the first login.
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/setup/);
@@ -430,6 +432,56 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		expect(result.status, `${budgetHosts[i].host}:\n${result.output}`).toBe(0);
 		expect(result.output).toMatch(/, [2-9] processes/);
 	}
+
+	// Updates through the root helper (M4-11, M4-12): a command for Debian, Rocky and Alpine reaches
+	// the agent over its session (NOTIFY), the helper installs the updates of this run's package
+	// sources, the result comes back, and the next report has nothing left to update.
+	const updated = agents.filter((a) => ['web-01', 'app-01', 'edge-01'].includes(a.host));
+	const updatedIds = updated.map(
+		(a) => `'${(fleetUpdates.nodes ?? []).find((n) => n.hostname === a.host)!.nodeId}'`
+	);
+	ownerSQL(
+		`INSERT INTO node_commands (org_id, id, node_id, kind, scope, created_at, expires_at)
+		 SELECT org_id, gen_random_uuid(), id, 2, 2, now(), now() + interval '15 minutes' FROM nodes WHERE id IN (${updatedIds.join(',')});
+		 SELECT pg_notify('sermon_node_commands', id::text) FROM nodes WHERE id IN (${updatedIds.join(',')});`
+	);
+	const runStarted = Date.now();
+	await expect
+		.poll(
+			() =>
+				ownerSQL(
+					`SELECT string_agg(n.hostname || ':' || coalesce(c.phase, 0) || ':' || coalesce(c.exit_code, -9), ',' ORDER BY n.hostname)
+					 FROM node_commands c JOIN nodes n ON n.id = c.node_id WHERE c.kind = 2`
+				).trim(),
+			{ timeout: 240_000, intervals: [5_000] }
+		)
+		.toBe('app-01:2:0,edge-01:2:0,web-01:2:0');
+	const output = ownerSQL(
+		`SELECT c.output FROM node_commands c JOIN nodes n ON n.id = c.node_id WHERE n.hostname = 'web-01' AND c.kind = 2`
+	);
+	expect(output).toContain('sermon-e2e-demo');
+	console.log(
+		`updates installed on ${updated.length} hosts after ${Math.round((Date.now() - runStarted) / 1000)} s`
+	);
+	await expect
+		.poll(
+			async () => {
+				const fleet = await call<FleetUpdates>(
+					page.request,
+					baseURL ?? '',
+					'UpdateService/ListFleetUpdates',
+					{}
+				);
+				return updated.map(
+					(a) => (fleet.nodes ?? []).find((n) => n.hostname === a.host)?.status ?? 'none'
+				);
+			},
+			{ timeout: 240_000, intervals: [10_000] }
+		)
+		.toEqual(updated.map(() => 'UPDATE_STATUS_CURRENT'));
+	console.log(
+		`the next reports show nothing to update after ${Math.round((Date.now() - runStarted) / 1000)} s`
+	);
 	// The live view ran the whole time: first offline until the agent's stream started, then a
 	// snapshot every 2 s with the host's processes, the command line redacted (M3-14).
 	const live = await watching;

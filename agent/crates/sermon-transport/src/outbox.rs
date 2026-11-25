@@ -10,7 +10,8 @@ use sermon_buffer::{Record, Seq, Wal, WalError, WalStats};
 use tokio::sync::Notify;
 
 use crate::proto::agent::v1::{
-    Batch, LogBatch, LogEntry, MetricBatch, SecurityEvent, SecurityEventBatch, UpdateReport, batch,
+    Batch, CommandResult, LogBatch, LogEntry, MetricBatch, SecurityEvent, SecurityEventBatch,
+    UpdateReport, batch,
 };
 
 /// Shared handle to the write-ahead log; cheap to clone.
@@ -181,6 +182,27 @@ impl Outbox {
         let payload = Batch {
             seq: 0,
             content: Some(batch::Content::UpdateReport(report)),
+        }
+        .encode_to_vec();
+        let seq = self.wal().append(&payload, now)?;
+        self.inner.ready.notify_one();
+        Ok(seq)
+    }
+
+    /// Buffers a command result (M4-12) and wakes the session: buffered, so a result survives the
+    /// agent's restart by its own package update.
+    ///
+    /// # Errors
+    ///
+    /// [`WalError`] if the batch can't be written.
+    pub fn push_command_result(
+        &self,
+        result: CommandResult,
+        now: SystemTime,
+    ) -> Result<Seq, WalError> {
+        let payload = Batch {
+            seq: 0,
+            content: Some(batch::Content::CommandResult(result)),
         }
         .encode_to_vec();
         let seq = self.wal().append(&payload, now)?;

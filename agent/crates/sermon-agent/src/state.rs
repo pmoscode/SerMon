@@ -99,6 +99,12 @@ impl StateLayout {
         self.root.join("boot_id")
     }
 
+    /// The runs of the root helper the agent took (M4-12).
+    #[must_use]
+    pub fn runs_file(&self) -> PathBuf {
+        self.root.join("runs")
+    }
+
     /// The configuration from the server (ADR 0030, M3-03).
     #[must_use]
     pub fn agent_config_file(&self) -> PathBuf {

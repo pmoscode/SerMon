@@ -4376,7 +4376,24 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Zustellung über zwei Instanzen, doppelte Zustellung nach Reconnect, Ablauf, fremde Org.
 - **Abhängig von:** M4-05
 
-#### ☐ M4-12 – Befehle im Agent ausführen · A · M 🔒
+#### ☑ M4-12 – Befehle im Agent ausführen · A · M 🔒
+> Erledigt (ADR 0035, Nachtrag M4-12; Threat Model T96):
+> - **Session:** `RunUpdate`, `RebootNode` und `SelfUpdate` gehen an einen `CommandSink` (Kanal mit 64 Plätzen, die
+>   Session wartet nie); `RefreshUpdateInfo` weckt seit M4-07 die Erfassung.
+> - **`sermon_agent::runs`:** startet den Lauf beim Helper, meldet `STARTED`, fragt alle 10 s mit `RunResult` nach dem
+>   Ende und puffert das Ergebnis (`Outbox::push_command_result`): `SUCCEEDED` bei Exit-Code 0, sonst `FAILED`, `LOST`
+>   für einen Lauf, den der Helper nicht mehr kennt. Veto `REFUSED`, kein oder ein zu alter Helper `UNSUPPORTED`, ein
+>   beschäftigter Helper alle 30 s erneut, nach 15 min `FAILED` – jeweils mit Grund.
+> - **Laufbuch** im Zustandsverzeichnis (`runs`): jede `run_id` nur einmal; nach einem Neustart werden laufende Läufe
+>   weiter abgefragt. Höchstens 500 Einträge, beendete 8 Tage; kaputte Zeilen und fremde IDs werden verworfen.
+> - **Ausgabe** durch die Redaction der Org, dann auf ihr Ende von höchstens 256 KiB gekürzt (an Zeichengrenzen).
+> - **Tests:** wiederholter Befehl, Neustart mitten im Lauf (Ende und verlorener Lauf), Veto, kein Helper, beschäftigter
+>   Helper bis zum Start und bis zum Aufgeben, Redaction, Kürzung, Laufbuch; Session reicht die drei Befehle weiter.
+> - **Demo:** Ein Befehl für Debian, Rocky und Alpine erreicht per `NOTIFY` die Session; der Helper installiert die
+>   Updates der Paketquellen von M4-08 (nach 10 s fertig, Exit-Code 0, Ausgabe mit `sermon-e2e-demo`), der nächste
+>   Bericht zeigt nichts mehr zu aktualisieren (nach rund 150 s: 2 min Entprellung). Budget gehalten. Der Test der
+>   Demo darf dafür 10 statt 6 min dauern.
+> - **Gegenproben** für 15 Prüfungen, alle erkannt.
 - **Ziel:** Der Agent reicht `RunUpdate`, `RebootNode` und `RefreshUpdateInfo` an den Helper weiter.
   - Er merkt sich bearbeitete `run_id`s im Zustandsverzeichnis und führt keinen Befehl zweimal aus.
   - Nach einem Neustart holt er offene Ergebnisse beim Helper ab und meldet sie.

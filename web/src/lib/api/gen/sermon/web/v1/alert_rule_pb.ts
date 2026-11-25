@@ -128,7 +128,8 @@ export const LocalizedTextSchema: GenMessage<LocalizedText> = /*@__PURE__*/
  */
 export type AlertRuleSpec = Message<"sermon.web.v1.AlertRuleSpec"> & {
   /**
-   * type is threshold, rate, absence, state, prediction or event.
+   * type is threshold, rate, absence, state, prediction, event or anomaly. An anomaly rule compares
+   * a node's anomaly rate (0..1, ADR 0037) aggregated over window (avg or max); it takes no metric.
    *
    * @generated from field: string type = 1;
    */

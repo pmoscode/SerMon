@@ -23,7 +23,7 @@ Eine Silence schaltet die Benachrichtigungen passender Alerts bis zu 30 Tage stu
 
 Die Regeln bestimmen, wann ein Alert feuert. Jedes Mitglied kann sie mit Hilfetext und YAML lesen. Admins schalten Regeln ab, passen sie an, fügen eigene hinzu oder importieren mehrere auf einmal:
 
-- Regeln sind typisierte YAML-Dokumente (threshold, rate, state, absence, prediction, event) – keine freien Abfragen. Der Editor prüft jedes Dokument; **Prüfen** zeigt Fehler mit Dokument und Zeile sowie die Änderungen als Diff, ohne etwas zu speichern. **Speichern** speichert alle Dokumente oder keines.
+- Regeln sind typisierte YAML-Dokumente (threshold, rate, state, absence, prediction, event, anomaly) – keine freien Abfragen. `anomaly` vergleicht die Anomalie-Rate eines Nodes (0 bis 1) über ein Fenster und schweigt, solange der Node lernt. Der Editor prüft jedes Dokument; **Prüfen** zeigt Fehler mit Dokument und Zeile sowie die Änderungen als Diff, ohne etwas zu speichern. **Speichern** speichert alle Dokumente oder keines.
 - Eine angepasste Standardregel lässt sich mit der mitgelieferten vergleichen und zurücksetzen; eine eigene Regel lässt sich löschen.
 - **Exportieren** liefert die angepassten und eigenen Regeln (oder alle) als eine YAML-Datei, z. B. für eine andere Organisation. Ob eine Regel abgeschaltet ist, steht nicht in der Datei.
 - Änderungen gelten ab der nächsten Auswertung (innerhalb von 10 Sekunden) und fragen noch einmal nach dem Passwort.

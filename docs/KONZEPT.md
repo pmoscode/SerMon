@@ -965,7 +965,10 @@ vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:
   `system.updates.reboot_required` sind daher Schwellen auf dem Alter (statt `state`); `system.updates.run_failed`
   und `system.updates.rollout_stopped` zählen die Server-Ereignisse des Orchestrators (kritisch). „Updates verfügbar
   (alle)“ bleibt ohne Regel: Viele Updates sind für sich kein Problem, das Dashboard und das Abzeichen zeigen sie.
-- **Später:** „Login aus neuem Land“ braucht GeoIP (§11, M3-18). Anomalien kommen in einem späteren Meilenstein.
+- **Anomalien (M4-24):** Der Regeltyp `anomaly` vergleicht `sermon_anomaly_rate_ratio` (0..1, ADR 0037) über ein
+  Fenster (`avg` oder `max`) und lässt Nodes in der Lernphase aus; die Standardregel `system.anomaly.rate_high` warnt
+  ab 10 % und wird ab 25 % kritisch (Mittel über 10 min, `for: 5m`).
+- **Später:** „Login aus neuem Land“ braucht GeoIP (§11, M3-18).
 
 ### 12.4 Benachrichtigungskanäle
 

@@ -4791,7 +4791,19 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   zwei Instanzen.
 - **Abhängig von:** M4-22
 
-#### ☐ M4-24 – Regeltyp `anomaly` und Standardregel · S · S
+#### ☑ M4-24 – Regeltyp `anomaly` und Standardregel · S · S
+> Erledigt (KONZEPT §12.3; Hilfe „Alerts“):
+> - **Regeltyp `anomaly`:** vergleicht die Anomalie-Rate des Nodes (`sermon_anomaly_rate_ratio`, 0..1) über `window` mit
+>   `avg` (Standard) oder `max`; nimmt nur Bedingungen, `window` und `aggregate`, keine Metrik oder Labels. Nodes in der
+>   Lernphase (7 Tage ab `learning_since`) wertet er nicht aus, auch wenn eine Rate da wäre. Werte als Anteil, nicht in
+>   Prozent. Im Schema (`alert_rule.proto`) additiv.
+> - **Standardregel** `system.anomaly.rate_high` (Kategorie `anomaly`): Warnung über 10 %, kritisch über 25 %, Ende unter
+>   5 %, Mittel über 10 min, `for: 5m`; Hilfe DE/EN mit Ursachen und dem Weg zu „Was war ungewöhnlich?“.
+> - **Tests:** Szenario der Regel, Auswertung (Anteil, Lernphase bis zum Tag 7, ohne Nodes, Validierung), Parser (der Weg
+>   von Regel-Editor und Import: Fenster, `max`, Metrik und Labels abgelehnt, Prozent, `last`, ohne und zu langes
+>   Fenster).
+> - **Gegenproben** für 9 Prüfungen, alle erkannt (das Fenster der Standardregel erst mit einem kurzen Ausschlag als
+>   ruhigem Fall: über 10 min unter 10 %, über 1 min kritisch).
 - **Ziel:** Die Alert-Engine wertet den Regeltyp `anomaly` aus.
   - Standardregel „Anomalie-Rate des Nodes hoch“ mit 10 % bzw. 25 % der Metriken (KONZEPT §12.3).
   - Keine Alerts in der Lernphase.

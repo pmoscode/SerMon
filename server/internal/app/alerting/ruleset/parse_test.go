@@ -318,3 +318,49 @@ func TestParse_RejectsInvalidEventRules(t *testing.T) {
 		})
 	}
 }
+
+const anomalyRule = `apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: custom.anomaly.rate_high
+  name: { de: "Viele Anomalien", en: "Many anomalies" }
+spec:
+  type: anomaly
+  window: 15m
+  warning: { op: ">", value: 0.2 }
+  help:
+    de: "Viele Metriken sind ungewöhnlich."
+    en: "Many metrics are unusual."
+`
+
+// M4-24: an anomaly rule takes window, aggregate (avg or max) and conditions in ratios, no
+// metric; the rule editor and the import use the same parser.
+func TestParse_AnomalyRule(t *testing.T) {
+	def, err := ruleset.Parse([]byte(anomalyRule))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := def.Rule.Evaluator.(alerting.AnomalyRule)
+	if !ok || r.Aggregate != alerting.Avg || r.Window != 15*time.Minute || r.Thresholds.Warning.Value != 0.2 {
+		t.Fatalf("evaluator = %#v", def.Rule.Evaluator)
+	}
+	withMax := strings.Replace(anomalyRule, "window: 15m", "window: 15m\n  aggregate: max", 1)
+	if def, err := ruleset.Parse([]byte(withMax)); err != nil {
+		t.Errorf("max: %v", err)
+	} else if r, _ := def.Rule.Evaluator.(alerting.AnomalyRule); r.Aggregate != alerting.Max {
+		t.Errorf("max: %v", err)
+	}
+	for name, tc := range map[string]struct{ old, new, hint string }{
+		"a metric":         {"window: 15m", "window: 15m\n  metric: sermon_cpu_utilization_ratio", "metric does not apply"},
+		"labels":           {"window: 15m", "window: 15m\n  labels: { mode: user }", "labels does not apply"},
+		"percent":          {"value: 0.2 }", "value: 20 }", "0..1"},
+		"last":             {"window: 15m", "window: 15m\n  aggregate: last", "avg or max"},
+		"no window":        {"  window: 15m\n", "", "window"},
+		"a week of window": {"window: 15m", "window: 200h", "window"},
+	} {
+		_, err := ruleset.Parse([]byte(strings.Replace(anomalyRule, tc.old, tc.new, 1)))
+		if !errors.Is(err, alert.ErrInvalidRule) || !strings.Contains(err.Error(), tc.hint) {
+			t.Errorf("%s: %v, want %q", name, err, tc.hint)
+		}
+	}
+}

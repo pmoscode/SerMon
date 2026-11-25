@@ -27,6 +27,8 @@ const (
 	// Window and Needed debounce: anomalous once Needed of the last Window minutes are.
 	Window = 5
 	Needed = 3
+	// Learning is how long a node or a new series learns before anomalies count.
+	Learning = 7 * 24 * time.Hour
 	// madScale makes the MAD comparable to a standard deviation of normal data.
 	madScale = 1.4826
 	// relativeFloor is the smallest spread relative to the level (1 %), for constant series.

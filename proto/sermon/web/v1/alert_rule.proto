@@ -59,7 +59,8 @@ message LocalizedText {
 
 // AlertRuleSpec is what a rule checks; which fields apply depends on the type.
 message AlertRuleSpec {
-  // type is threshold, rate, absence, state, prediction or event.
+  // type is threshold, rate, absence, state, prediction, event or anomaly. An anomaly rule compares
+  // a node's anomaly rate (0..1, ADR 0037) aggregated over window (avg or max); it takes no metric.
   string type = 1 [(buf.validate.field).string = {
     in: [
       "threshold",
@@ -67,7 +68,8 @@ message AlertRuleSpec {
       "absence",
       "state",
       "prediction",
-      "event"
+      "event",
+      "anomaly"
     ]
   }];
   // metric is a metric of the catalog (not for absence).

@@ -19,7 +19,7 @@ import (
 )
 
 // Learning is how long a node or a new series learns before anomalies count (KONZEPT §13).
-const Learning = 7 * 24 * time.Hour
+const Learning = anomaly.Learning
 
 // Series is a candidate series of an organization.
 type Series struct {

@@ -1,0 +1,29 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: system.anomaly.rate_high
+  name: { de: "Anomalie-Rate des Nodes hoch", en: "Node anomaly rate high" }
+  labels: { category: anomaly }
+spec:
+  type: anomaly
+  aggregate: avg
+  window: 10m
+  warning: { op: ">", value: 0.10 }
+  critical: { op: ">", value: 0.25 }
+  clear: { op: "<", value: 0.05 }
+  for: 5m
+  help:
+    de: >-
+      Ein ungewöhnlich großer Teil der Metriken des Nodes weicht zugleich von dem ab, was zu dieser Stunde der Woche
+      üblich ist, und vom Verlauf der letzten Stunden (mehr als 10 %, kritisch 25 %, im Mittel über 10 Minuten). Einzelne
+      Ausreißer reichen dafür nicht; meist hat sich etwas am Host geändert: ein neuer oder hängender Prozess, ein
+      Lastsprung, ein Backup zur falschen Zeit, ein Angriff oder ein Fehler im Netz. „Was war ungewöhnlich?“ auf der
+      Seite des Nodes nennt die Metriken mit den höchsten Scores; das Anomalie-Band in den Charts zeigt, seit wann. In
+      den ersten 7 Tagen lernt SerMon den Node kennen und meldet nichts.
+    en: >-
+      An unusually large share of the node's metrics deviates at the same time from what is usual at this hour of the
+      week and from the course of the last hours (more than 10 %, critical 25 %, averaged over 10 minutes). Single
+      outliers aren't enough; usually something changed on the host: a new or hanging process, a jump in load, a backup
+      at the wrong time, an attack or a fault in the network. "What was unusual?" on the node's page names the metrics
+      with the highest scores; the anomaly band in the charts shows since when. During its first 7 days SerMon learns
+      the node and reports nothing.

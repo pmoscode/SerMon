@@ -87,6 +87,18 @@ func was(before, current float64) []metrics.Point {
 	return append(at(time.Hour, before, before, before), metrics.Point{Time: now.Add(-30 * time.Second), Avg: current, Min: current, Max: current})
 }
 
+// burst is steady at base for 10 minutes in 10 s steps, the last n points at peak.
+func burst(base, peak float64, n int) []metrics.Point {
+	values := make([]float64, 60)
+	for i := range values {
+		values[i] = base
+		if i >= len(values)-n {
+			values[i] = peak
+		}
+	}
+	return at(10*time.Second, values...)
+}
+
 func series(metric string, labels metrics.Labels, points []metrics.Point) metrics.Series {
 	l := metrics.Labels{"__metric": metric}
 	for k, v := range labels {
@@ -303,6 +315,11 @@ var scenarios = map[alert.RuleID]scenario{
 	"system.agent.self_update_failed": {
 		fireEvents: []secevent.Event{event(secevent.AgentSelfUpdateFailed, web, time.Minute, "", "")},
 		calmEvents: []secevent.Event{event(secevent.AgentSelfUpdateFailed, web, 2*time.Hour, "", "")}, want: warning,
+	},
+	// M4-24: the anomaly rate the worker writes (0..1 in ppm).
+	// A burst of a minute is no alert: averaged over 10 minutes it stays under 10 %.
+	"system.anomaly.rate_high": {
+		fire: one("sermon_anomaly_rate_ratio", steady(300_000)), calm: one("sermon_anomaly_rate_ratio", burst(20_000, 600_000, 6)), want: critical,
 	},
 	"security.node.rotation_new_ip": {
 		fireEvents: []secevent.Event{event(secevent.NodeRotationNewIP, web, time.Minute, "192.0.2.31", "")},

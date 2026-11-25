@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
+	"github.com/pmoscode/SerMon/server/internal/domain/anomaly"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
 )
@@ -331,6 +332,44 @@ func (r ThresholdRule) Evaluate(ctx context.Context, env Env) ([]Result, error) 
 		values = divideBy(values, reduce(totals, r.Aggregate, 1))
 	}
 	return results(values, r.Thresholds), nil
+}
+
+// AnomalyMetric is the anomaly rate of a node the worker writes (ADR 0037).
+const AnomalyMetric = "sermon_anomaly_rate_ratio"
+
+// AnomalyRule compares a node's anomaly rate (0..1) over a window (M4-24). Nodes still learning
+// are left out, even if a rate reached the store some other way (KONZEPT §13).
+type AnomalyRule struct {
+	Aggregate  Aggregate
+	Window     time.Duration
+	Thresholds alert.Thresholds
+}
+
+func (r AnomalyRule) threshold() ThresholdRule {
+	return ThresholdRule{Series: SeriesSpec{Metric: AnomalyMetric}, Aggregate: r.Aggregate, Window: r.Window, Thresholds: r.Thresholds}
+}
+
+// Validate checks the rule.
+func (r AnomalyRule) Validate() error {
+	if r.Aggregate != Avg && r.Aggregate != Max {
+		return fmt.Errorf("%w: an anomaly rule aggregates with avg or max", alert.ErrInvalidRule)
+	}
+	return r.threshold().Validate()
+}
+
+// Evaluate implements Evaluator.
+func (r AnomalyRule) Evaluate(ctx context.Context, env Env) ([]Result, error) {
+	learnt := make([]fleet.Node, 0, len(env.Nodes))
+	for _, n := range env.Nodes {
+		if !env.Now.Before(n.LearningSince.Add(anomaly.Learning)) {
+			learnt = append(learnt, n)
+		}
+	}
+	env.Nodes = learnt
+	if len(learnt) == 0 {
+		return nil, nil
+	}
+	return r.threshold().Evaluate(ctx, env)
 }
 
 // RateRule compares the average of a per-second metric over a window, per second or per minute

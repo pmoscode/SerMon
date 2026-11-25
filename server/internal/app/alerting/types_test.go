@@ -565,3 +565,49 @@ func TestQueries_LongWindowsUseCoarseSteps(t *testing.T) {
 		}
 	}
 }
+
+// M4-24: an anomaly rule compares the node's anomaly rate in ratios; a node still learning
+// reports nothing, even with a rate.
+func TestAnomalyRule_ComparesTheRateOfLearntNodes(t *testing.T) {
+	m := &fakeMetrics{series: map[string][]metrics.Series{alerting.AnomalyMetric: {
+		{Node: web, Labels: metrics.Labels{}, Points: points(time.Minute, 200_000, 300_000, 400_000)},
+		{Node: db01, Labels: metrics.Labels{}, Points: points(time.Minute, 900_000)},
+	}}}
+	rule := alerting.AnomalyRule{Aggregate: alerting.Avg, Window: 10 * time.Minute, Thresholds: alert.Thresholds{Warning: gt(0.10), Critical: gt(0.25)}}
+	if err := rule.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	e := env(m, webNode, dbNode)
+	learning := dbNode
+	learning.LearningSince = e.Now.Add(-6 * 24 * time.Hour)
+	e.Nodes = []fleet.Node{webNode, learning}
+	results, err := rule.Evaluate(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byKey(t, results)
+	if o := got[web.String()+"|"]; o.Level != alert.LevelCritical || math.Abs(o.Value-0.3) > 1e-9 {
+		t.Errorf("web: %+v", o)
+	}
+	if _, ok := got[db01.String()+"|"]; ok || len(got) != 1 {
+		t.Errorf("the learning node was evaluated: %+v", got)
+	}
+	// A week after: it counts.
+	learning.LearningSince = e.Now.Add(-7 * 24 * time.Hour)
+	e.Nodes = []fleet.Node{learning}
+	if results, _ := rule.Evaluate(context.Background(), e); len(results) != 1 {
+		t.Errorf("after the learning phase: %+v", results)
+	}
+	e.Nodes = []fleet.Node{}
+	if results, err := rule.Evaluate(context.Background(), e); err != nil || results != nil {
+		t.Errorf("no nodes: %+v, %v", results, err)
+	}
+	for _, bad := range []alerting.AnomalyRule{
+		{Aggregate: alerting.Last, Window: time.Minute, Thresholds: rule.Thresholds},
+		{Aggregate: alerting.Avg, Thresholds: rule.Thresholds},
+	} {
+		if bad.Validate() == nil {
+			t.Errorf("%+v is valid", bad)
+		}
+	}
+}

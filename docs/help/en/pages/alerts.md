@@ -23,7 +23,7 @@ A silence mutes the notifications of matching alerts for up to 30 days: groups, 
 
 The rules decide when an alert fires. Every member can read them with their help and YAML. Admins switch rules off, adapt them, add their own or import several at once:
 
-- Rules are typed YAML documents (threshold, rate, state, absence, prediction, event) – no free queries. The editor checks every document; **Check** shows problems with document and line, and the changes as a diff, without storing anything. **Save** stores all documents or none.
+- Rules are typed YAML documents (threshold, rate, state, absence, prediction, event, anomaly) – no free queries. `anomaly` compares a node's anomaly rate (0 to 1) over a window and stays silent while the node learns. The editor checks every document; **Check** shows problems with document and line, and the changes as a diff, without storing anything. **Save** stores all documents or none.
 - A changed default rule can be compared with the shipped one and reset; an own rule can be deleted.
 - **Export** gives the changed and own rules (or all) as one YAML file, e.g. for another organization. Whether a rule is switched off is not part of the file.
 - Changes apply from the next evaluation (within 10 seconds) and ask for your password again.

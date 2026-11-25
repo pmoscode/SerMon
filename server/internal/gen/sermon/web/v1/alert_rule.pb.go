@@ -220,7 +220,8 @@ func (x *LocalizedText) GetEn() string {
 // AlertRuleSpec is what a rule checks; which fields apply depends on the type.
 type AlertRuleSpec struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// type is threshold, rate, absence, state, prediction or event.
+	// type is threshold, rate, absence, state, prediction, event or anomaly. An anomaly rule compares
+	// a node's anomaly rate (0..1, ADR 0037) aggregated over window (avg or max); it takes no metric.
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// metric is a metric of the catalog (not for absence).
 	Metric string `protobuf:"bytes,2,opt,name=metric,proto3" json:"metric,omitempty"`
@@ -832,10 +833,10 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x02de\x18\x01 \x01(\tB\n" +
 	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02de\x12\x1a\n" +
 	"\x02en\x18\x02 \x01(\tB\n" +
-	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\xfb\f\n" +
-	"\rAlertRuleSpec\x12M\n" +
-	"\x04type\x18\x01 \x01(\tB9\xbaH6r4R\tthresholdR\x04rateR\aabsenceR\x05stateR\n" +
-	"predictionR\x05eventR\x04type\x12 \n" +
+	"\xbaH\ar\x05\x10\x01\x18\xd0\x0fR\x02en\"\x84\r\n" +
+	"\rAlertRuleSpec\x12V\n" +
+	"\x04type\x18\x01 \x01(\tBB\xbaH?r=R\tthresholdR\x04rateR\aabsenceR\x05stateR\n" +
+	"predictionR\x05eventR\aanomalyR\x04type\x12 \n" +
 	"\x06metric\x18\x02 \x01(\tB\b\xbaH\x05r\x03\x18\x80\x01R\x06metric\x12W\n" +
 	"\x06labels\x18\x03 \x03(\v2(.sermon.web.v1.AlertRuleSpec.LabelsEntryB\x15\xbaH\x12\x9a\x01\x0f\x10\b\"\x04r\x02\x18@*\x05r\x03\x18\x80\x02R\x06labels\x120\n" +
 	"\n" +

@@ -211,6 +211,7 @@ var (
 		alert.StateRule:  append(slices.Clone(seriesFields), "seen", "seen_window"),
 		alert.Prediction: append(slices.Clone(seriesFields), "lookback"),
 		alert.Event:      {"event", "match", "group_by", "count", "after", "notify_fields", "learning"},
+		alert.Anomaly:    append(slices.Clone(conditionFields), "aggregate", "window"),
 	}
 )
 
@@ -344,7 +345,7 @@ func evaluatorOf(typ alert.Type, spec *webv1.AlertRuleSpec, th alert.Thresholds)
 	if err != nil {
 		return nil, err
 	}
-	switch typ { //nolint:exhaustive // onlyFieldsOf rejects the types not supported yet
+	switch typ {
 	case alert.Event:
 		return eventOf(spec)
 	case alert.Threshold:
@@ -357,6 +358,12 @@ func evaluatorOf(typ alert.Type, spec *webv1.AlertRuleSpec, th alert.Thresholds)
 		return alerting.RateRule{Series: series, Per: per, RelativeTo: spec.GetRelativeTo(), Window: window, Thresholds: th}, nil
 	case alert.Absence:
 		return alerting.AbsenceRule{Thresholds: th}, nil
+	case alert.Anomaly:
+		aggregate := alerting.Avg
+		if spec.GetAggregate() != "" {
+			aggregate = aggregates[spec.GetAggregate()]
+		}
+		return alerting.AnomalyRule{Aggregate: aggregate, Window: window, Thresholds: th}, nil
 	case alert.StateRule:
 		seenWindow, err := duration("seenWindow", spec.GetSeenWindow())
 		if err != nil {
@@ -413,7 +420,7 @@ func checkUnits(typ alert.Type, spec *webv1.AlertRuleSpec, th alert.Thresholds) 
 	lo, hi, unit := 0.0, 1.0, "a ratio (0..1, not percent)"
 	def, _ := metric.Lookup(spec.GetMetric())
 	switch {
-	case spec.GetRelativeTo() != "", def.Unit == metric.UnitRatioPPM, def.Unit == metric.UnitBoolean:
+	case spec.GetRelativeTo() != "", def.Unit == metric.UnitRatioPPM, def.Unit == metric.UnitBoolean, typ == alert.Anomaly:
 	case typ == alert.Absence:
 		hi, unit = maxFloat, "seconds (not negative)"
 	case typ == alert.Prediction:

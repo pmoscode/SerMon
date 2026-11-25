@@ -419,7 +419,7 @@ var File_sermon_web_v1_fleet_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\n" +
-	"\x19sermon/web/v1/fleet.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1asermon/web/v1/update.proto\"@\n" +
+	"\x19sermon/web/v1/fleet.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a!sermon/web/v1/update_status.proto\"@\n" +
 	"\x16GetFleetSummaryRequest\x12&\n" +
 	"\bgroup_id\x18\x01 \x01(\tB\v\xbaH\b\xd8\x01\x01r\x03\xb0\x01\x01R\agroupId\"\x93\x01\n" +
 	"\x17GetFleetSummaryResponse\x12\x14\n" +
@@ -515,7 +515,7 @@ func file_sermon_web_v1_fleet_proto_init() {
 	if File_sermon_web_v1_fleet_proto != nil {
 		return
 	}
-	file_sermon_web_v1_update_proto_init()
+	file_sermon_web_v1_update_status_proto_init()
 	file_sermon_web_v1_fleet_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

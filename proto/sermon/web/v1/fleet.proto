@@ -4,7 +4,7 @@ package sermon.web.v1;
 
 import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
-import "sermon/web/v1/update.proto";
+import "sermon/web/v1/update_status.proto";
 
 // FleetService gives the overview of all nodes the caller may view (KONZEPT §8, M1-26).
 service FleetService {

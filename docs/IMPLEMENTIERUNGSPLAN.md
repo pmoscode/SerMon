@@ -4477,7 +4477,30 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.4 Updates-Dashboard (E4.4)
 
-#### ☐ M4-15 – Updates-Dashboard und Reiter „Updates“ · W · L
+#### ☑ M4-15 – Updates-Dashboard und Reiter „Updates“ · W · L
+> Erledigt (KONZEPT §16; Hilfe `pages/updates`, `concepts/update-policy`):
+> - **Server:** `UpdateService.ListUpdateRuns` (Läufe eines Nodes ohne Ausgabe, `view_nodes`), `GetUpdateRun` (mit
+>   Ausgabe – wie ein Log des Hosts, daher `view_logs` auf der Gruppe), `ListRollouts` (letzte Rollouts der sichtbaren
+>   Gruppen mit ihren Nodes); `UpdatePolicy.next_window`; die Nodes der Flotte tragen Stand, Security-Updates, Updates
+>   und Reboot ihres letzten Berichts (`ListVisibleNodes` mit `node_update_state`). `UpdateStatus` liegt in einer eigenen
+>   Datei, damit die Flotte nicht die Beschreibung des ganzen `UpdateService` lädt.
+> - **Seite `/updates`** (Navigation „Updates“): Knöpfe je Stand als Filter (Security, Updates, Neustart nötig,
+>   aktuell, nicht verfügbar, kein Bericht), Tabelle mit Alter des ältesten Security-Updates und Link in den Reiter
+>   des Nodes, letzte Rollouts mit den Zuständen und Gründen ihrer Nodes, Policies der Gruppen mit nächstem Fenster und
+>   Editor für Admins (Formular und YAML aus- und einlesen, Zurücksetzen, Step-up). Gruppen in der Verwaltung verlinken
+>   ihre Policy.
+> - **Reiter „Updates“:** Paketfilter (Name, nur Security), Läufe mit Stand, Exit-Code, Grund und „von Hand/nach
+>   Policy“, Ausgabe auf Anfrage als Text mit markierten Steuerzeichen (`LogText`), gekürzte Ausgabe gekennzeichnet.
+> - **Flotte:** Abzeichen „N Security“ und „Neustart nötig“ an Kacheln und Tabelle, in der Kopfzeile die Zahl der Nodes
+>   mit Security-Updates mit Link auf `/updates`. Jeder Stand hat ein Wort, nie nur eine Farbe.
+> - **Abweichung:** Die Grenze aller Chunks zusammen (`check:size`) steigt von 450 auf 480 KiB (jetzt 459 KiB). Jede
+>   Seite bleibt beim ersten Laden unter 190 KiB (Updates 159, Flotte 154, Node 186 KiB, mit Prozess-Reiter 199 KiB).
+> - **Tests:** Komponenten (feindliche Paketnamen, Gründe und Ausgaben als Text, Steuerzeichen markiert, Ausgabe ohne
+>   Recht, Paketfilter, Policy-Formular mit Fenster und Step-up, YAML, Abzeichen), E2E mit gemockter API (Seite, Filter,
+>   axe, Budget), Dienst (Läufe, abgelaufen, Ausgabe nur mit `view_logs`, Refresh kein Lauf), Web-API (Läufe, Ausgabe,
+>   Viewer ohne Logs, Rollouts) mit Tenant-Isolation, PostgreSQL (Abzeichen der Flotte).
+> - **Gegenproben** für 14 Prüfungen, 13 erkannt (eine erst nach einem schärferen Test); die übrige ist gleichwertig
+>   (`ListUpdateRuns` leert die Ausgabe, die seine Abfrage gar nicht liest).
 - **Ziel:** KONZEPT §16, Dashboard 5.
   - Seite `/updates`: Nodes nach Status, Alter offener Security-Updates, nächste Wartungsfenster, Laufhistorie mit
     Protokollen.

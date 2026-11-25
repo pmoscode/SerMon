@@ -4,6 +4,7 @@ package sermon.web.v1;
 
 import "buf/validate/validate.proto";
 import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/update_status.proto";
 
 // UpdateService shows what the nodes could update (KONZEPT §14.1, M4-09): the latest report of
 // each node's agent. Names, versions, sources and reasons come from the host's package sources (a
@@ -299,22 +300,6 @@ message RefreshUpdateInfoRequest {
 
 // RefreshUpdateInfoResponse has no fields.
 message RefreshUpdateInfoResponse {}
-
-// UpdateStatus is where a node stands with its updates; a reboot is separate (reboot_required).
-enum UpdateStatus {
-  // UPDATE_STATUS_UNSPECIFIED is not used.
-  UPDATE_STATUS_UNSPECIFIED = 0;
-  // UPDATE_STATUS_UNKNOWN: no report yet.
-  UPDATE_STATUS_UNKNOWN = 1;
-  // UPDATE_STATUS_UNAVAILABLE: the agent couldn't list the updates (see availability).
-  UPDATE_STATUS_UNAVAILABLE = 2;
-  // UPDATE_STATUS_CURRENT: nothing to update.
-  UPDATE_STATUS_CURRENT = 3;
-  // UPDATE_STATUS_UPDATES: updates, none for security.
-  UPDATE_STATUS_UPDATES = 4;
-  // UPDATE_STATUS_SECURITY: security updates.
-  UPDATE_STATUS_SECURITY = 5;
-}
 
 // UpdateAvailability says whether the agent could list the updates.
 enum UpdateAvailability {

@@ -3,6 +3,7 @@
 	import Building2 from '@lucide/svelte/icons/building-2';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import Megaphone from '@lucide/svelte/icons/megaphone';
+	import PackageCheck from '@lucide/svelte/icons/package-check';
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
@@ -29,6 +30,7 @@
 		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
 		{ href: resolve('/(app)/logs'), icon: ScrollText, label: () => m.nav_logs() },
 		{ href: resolve('/(app)/security'), icon: ShieldAlert, label: () => m.nav_security_events() },
+		{ href: resolve('/(app)/updates'), icon: PackageCheck, label: () => m.nav_updates() },
 		...(sessionState.current?.orgAdmin
 			? [
 					{

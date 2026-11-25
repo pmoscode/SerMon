@@ -2,6 +2,7 @@
 	import LayoutGrid from '@lucide/svelte/icons/layout-grid';
 	import Server from '@lucide/svelte/icons/server';
 	import Plus from '@lucide/svelte/icons/plus';
+	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import Table from '@lucide/svelte/icons/table';
 	import { resolve } from '$app/paths';
 	import FleetHeader from '#lib/components/fleet/FleetHeader.svelte';
@@ -49,6 +50,8 @@
 	const nodes = $derived(fleet.summary?.nodes ?? []);
 	const shown = $derived(filterNodes(nodes, { search, group, status, tag }));
 	const counts = $derived(countByStatus(nodes));
+	// Nodes with security updates (M4-15), in the header with a link to the updates.
+	const securityNodes = $derived(nodes.filter((n) => n.securityUpdates > 0).length);
 	const groups = $derived(groupsOf(nodes));
 	const tags = $derived(tagsOf(nodes));
 	const now = $derived(new Date(fleet.updatedAt ?? Date.now()));
@@ -69,6 +72,15 @@
 <div class="mb-6 flex flex-wrap items-center gap-2">
 	<h1 class="text-2xl font-semibold tracking-tight">{m.fleet_title()}</h1>
 	<HelpTip topic="pages/fleet" />
+	{#if securityNodes > 0}
+		<a
+			href={resolve('/(app)/updates')}
+			class="inline-flex items-center gap-1 rounded-md border border-red-600/40 px-2 py-0.5 text-sm text-red-700 hover:underline dark:text-red-400"
+		>
+			<ShieldAlert class="size-4" aria-hidden="true" />
+			{m.fleet_security_nodes({ count: securityNodes })}
+		</a>
+	{/if}
 	{#if (sessionState.current?.enrollGroupIds.length ?? 0) > 0}
 		<Button href={resolve('/(app)/nodes/add')} size="sm" class="ml-auto">
 			<Plus aria-hidden="true" />

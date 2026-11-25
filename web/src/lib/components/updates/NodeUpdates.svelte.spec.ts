@@ -6,12 +6,13 @@ import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import {
 	GetNodeUpdatesResponseSchema,
+	ListUpdateRunsResponseSchema,
 	RebootNodesResponseSchema,
 	StartUpdatesResponseSchema,
 	UpdateAvailability,
-	UpdateScope,
-	UpdateStatus
+	UpdateScope
 } from '#lib/api/gen/sermon/web/v1/update_pb.js';
+import { UpdateStatus } from '#lib/api/gen/sermon/web/v1/update_status_pb.js';
 import { updatesApi } from '#lib/api/updates.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
 import { sessionState } from '#lib/stores/session.svelte.js';
@@ -69,7 +70,12 @@ function show() {
 }
 
 describe('NodeUpdates', () => {
-	beforeEach(() => switchLocale('en'));
+	beforeEach(() => {
+		switchLocale('en');
+		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockResolvedValue(
+			create(ListUpdateRunsResponseSchema, {})
+		);
+	});
 	afterEach(() => {
 		vi.restoreAllMocks();
 		if (stepUpState.open) stepUpState.finish(false);
@@ -90,7 +96,26 @@ describe('NodeUpdates', () => {
 		await expect.element(page.getByText('evil\u202eliam')).not.toBeInTheDocument();
 		await expect.element(page.getByText(/^evil.+liam$/)).toBeVisible();
 		await expect.element(page.getByText('security', { exact: true })).toBeVisible();
-		expect(page.getByRole('button').elements()).toHaveLength(0);
+		for (const name of ['Update now', 'List again', 'Reboot']) {
+			expect(page.getByRole('button', { name, exact: true }).elements()).toHaveLength(0);
+		}
+	});
+
+	it('filters the packages by name and to the security updates', async () => {
+		rights([]);
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(report());
+		show();
+		const table = page.getByRole('table', { name: 'Available updates' });
+		await expect.element(table.getByRole('cell', { name: 'vim', exact: true })).toBeVisible();
+		await page.getByRole('checkbox', { name: 'Security updates only' }).click();
+		await expect
+			.element(table.getByRole('cell', { name: 'vim', exact: true }))
+			.not.toBeInTheDocument();
+		await expect.element(table.getByRole('cell', { name: /^openssl/ })).toBeVisible();
+		await page.getByRole('checkbox', { name: 'Security updates only' }).click();
+		await page.getByLabelText('Filter packages').fill('VI');
+		await expect.element(table.getByRole('cell', { name: 'vim', exact: true })).toBeVisible();
+		await expect.element(table.getByRole('cell', { name: /^openssl/ })).not.toBeInTheDocument();
 	});
 
 	it('updates after a confirmation with the package list and a step-up', async () => {

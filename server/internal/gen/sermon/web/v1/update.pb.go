@@ -344,71 +344,6 @@ func (UpdateScope) EnumDescriptor() ([]byte, []int) {
 	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{4}
 }
 
-// UpdateStatus is where a node stands with its updates; a reboot is separate (reboot_required).
-type UpdateStatus int32
-
-const (
-	// UPDATE_STATUS_UNSPECIFIED is not used.
-	UpdateStatus_UPDATE_STATUS_UNSPECIFIED UpdateStatus = 0
-	// UPDATE_STATUS_UNKNOWN: no report yet.
-	UpdateStatus_UPDATE_STATUS_UNKNOWN UpdateStatus = 1
-	// UPDATE_STATUS_UNAVAILABLE: the agent couldn't list the updates (see availability).
-	UpdateStatus_UPDATE_STATUS_UNAVAILABLE UpdateStatus = 2
-	// UPDATE_STATUS_CURRENT: nothing to update.
-	UpdateStatus_UPDATE_STATUS_CURRENT UpdateStatus = 3
-	// UPDATE_STATUS_UPDATES: updates, none for security.
-	UpdateStatus_UPDATE_STATUS_UPDATES UpdateStatus = 4
-	// UPDATE_STATUS_SECURITY: security updates.
-	UpdateStatus_UPDATE_STATUS_SECURITY UpdateStatus = 5
-)
-
-// Enum value maps for UpdateStatus.
-var (
-	UpdateStatus_name = map[int32]string{
-		0: "UPDATE_STATUS_UNSPECIFIED",
-		1: "UPDATE_STATUS_UNKNOWN",
-		2: "UPDATE_STATUS_UNAVAILABLE",
-		3: "UPDATE_STATUS_CURRENT",
-		4: "UPDATE_STATUS_UPDATES",
-		5: "UPDATE_STATUS_SECURITY",
-	}
-	UpdateStatus_value = map[string]int32{
-		"UPDATE_STATUS_UNSPECIFIED": 0,
-		"UPDATE_STATUS_UNKNOWN":     1,
-		"UPDATE_STATUS_UNAVAILABLE": 2,
-		"UPDATE_STATUS_CURRENT":     3,
-		"UPDATE_STATUS_UPDATES":     4,
-		"UPDATE_STATUS_SECURITY":    5,
-	}
-)
-
-func (x UpdateStatus) Enum() *UpdateStatus {
-	p := new(UpdateStatus)
-	*p = x
-	return p
-}
-
-func (x UpdateStatus) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (UpdateStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_web_v1_update_proto_enumTypes[5].Descriptor()
-}
-
-func (UpdateStatus) Type() protoreflect.EnumType {
-	return &file_sermon_web_v1_update_proto_enumTypes[5]
-}
-
-func (x UpdateStatus) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use UpdateStatus.Descriptor instead.
-func (UpdateStatus) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{5}
-}
-
 // UpdateAvailability says whether the agent could list the updates.
 type UpdateAvailability int32
 
@@ -458,11 +393,11 @@ func (x UpdateAvailability) String() string {
 }
 
 func (UpdateAvailability) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_web_v1_update_proto_enumTypes[6].Descriptor()
+	return file_sermon_web_v1_update_proto_enumTypes[5].Descriptor()
 }
 
 func (UpdateAvailability) Type() protoreflect.EnumType {
-	return &file_sermon_web_v1_update_proto_enumTypes[6]
+	return &file_sermon_web_v1_update_proto_enumTypes[5]
 }
 
 func (x UpdateAvailability) Number() protoreflect.EnumNumber {
@@ -471,7 +406,7 @@ func (x UpdateAvailability) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UpdateAvailability.Descriptor instead.
 func (UpdateAvailability) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{5}
 }
 
 // PackageManager is how the updates were listed.
@@ -515,11 +450,11 @@ func (x PackageManager) String() string {
 }
 
 func (PackageManager) Descriptor() protoreflect.EnumDescriptor {
-	return file_sermon_web_v1_update_proto_enumTypes[7].Descriptor()
+	return file_sermon_web_v1_update_proto_enumTypes[6].Descriptor()
 }
 
 func (PackageManager) Type() protoreflect.EnumType {
-	return &file_sermon_web_v1_update_proto_enumTypes[7]
+	return &file_sermon_web_v1_update_proto_enumTypes[6]
 }
 
 func (x PackageManager) Number() protoreflect.EnumNumber {
@@ -528,7 +463,7 @@ func (x PackageManager) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PackageManager.Descriptor instead.
 func (PackageManager) EnumDescriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{7}
+	return file_sermon_web_v1_update_proto_rawDescGZIP(), []int{6}
 }
 
 // UpdateRun is a run of a node.
@@ -2081,7 +2016,7 @@ var File_sermon_web_v1_update_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_update_proto_rawDesc = "" +
 	"\n" +
-	"\x1asermon/web/v1/update.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd2\x04\n" +
+	"\x1asermon/web/v1/update.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a!sermon/web/v1/update_status.proto\"\xd2\x04\n" +
 	"\tUpdateRun\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x120\n" +
@@ -2233,14 +2168,7 @@ const file_sermon_web_v1_update_proto_rawDesc = "" +
 	"\vUpdateScope\x12\x1c\n" +
 	"\x18UPDATE_SCOPE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15UPDATE_SCOPE_SECURITY\x10\x01\x12\x14\n" +
-	"\x10UPDATE_SCOPE_ALL\x10\x02*\xb9\x01\n" +
-	"\fUpdateStatus\x12\x1d\n" +
-	"\x19UPDATE_STATUS_UNSPECIFIED\x10\x00\x12\x19\n" +
-	"\x15UPDATE_STATUS_UNKNOWN\x10\x01\x12\x1d\n" +
-	"\x19UPDATE_STATUS_UNAVAILABLE\x10\x02\x12\x19\n" +
-	"\x15UPDATE_STATUS_CURRENT\x10\x03\x12\x19\n" +
-	"\x15UPDATE_STATUS_UPDATES\x10\x04\x12\x1a\n" +
-	"\x16UPDATE_STATUS_SECURITY\x10\x05*\xe9\x01\n" +
+	"\x10UPDATE_SCOPE_ALL\x10\x02*\xe9\x01\n" +
 	"\x12UpdateAvailability\x12#\n" +
 	"\x1fUPDATE_AVAILABILITY_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aUPDATE_AVAILABILITY_LISTED\x10\x01\x12!\n" +
@@ -2276,7 +2204,7 @@ func file_sermon_web_v1_update_proto_rawDescGZIP() []byte {
 	return file_sermon_web_v1_update_proto_rawDescData
 }
 
-var file_sermon_web_v1_update_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_sermon_web_v1_update_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
 var file_sermon_web_v1_update_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_sermon_web_v1_update_proto_goTypes = []any{
 	(UpdateRunKind)(0),                // 0: sermon.web.v1.UpdateRunKind
@@ -2284,77 +2212,77 @@ var file_sermon_web_v1_update_proto_goTypes = []any{
 	(RolloutState)(0),                 // 2: sermon.web.v1.RolloutState
 	(RolloutNodeState)(0),             // 3: sermon.web.v1.RolloutNodeState
 	(UpdateScope)(0),                  // 4: sermon.web.v1.UpdateScope
-	(UpdateStatus)(0),                 // 5: sermon.web.v1.UpdateStatus
-	(UpdateAvailability)(0),           // 6: sermon.web.v1.UpdateAvailability
-	(PackageManager)(0),               // 7: sermon.web.v1.PackageManager
-	(*UpdateRun)(nil),                 // 8: sermon.web.v1.UpdateRun
-	(*ListUpdateRunsRequest)(nil),     // 9: sermon.web.v1.ListUpdateRunsRequest
-	(*ListUpdateRunsResponse)(nil),    // 10: sermon.web.v1.ListUpdateRunsResponse
-	(*GetUpdateRunRequest)(nil),       // 11: sermon.web.v1.GetUpdateRunRequest
-	(*GetUpdateRunResponse)(nil),      // 12: sermon.web.v1.GetUpdateRunResponse
-	(*RolloutNode)(nil),               // 13: sermon.web.v1.RolloutNode
-	(*Rollout)(nil),                   // 14: sermon.web.v1.Rollout
-	(*ListRolloutsRequest)(nil),       // 15: sermon.web.v1.ListRolloutsRequest
-	(*ListRolloutsResponse)(nil),      // 16: sermon.web.v1.ListRolloutsResponse
-	(*StartUpdatesRequest)(nil),       // 17: sermon.web.v1.StartUpdatesRequest
-	(*StartUpdatesResponse)(nil),      // 18: sermon.web.v1.StartUpdatesResponse
-	(*RebootNodesRequest)(nil),        // 19: sermon.web.v1.RebootNodesRequest
-	(*RebootNodesResponse)(nil),       // 20: sermon.web.v1.RebootNodesResponse
-	(*RefreshUpdateInfoRequest)(nil),  // 21: sermon.web.v1.RefreshUpdateInfoRequest
-	(*RefreshUpdateInfoResponse)(nil), // 22: sermon.web.v1.RefreshUpdateInfoResponse
-	(*GetNodeUpdatesRequest)(nil),     // 23: sermon.web.v1.GetNodeUpdatesRequest
-	(*GetNodeUpdatesResponse)(nil),    // 24: sermon.web.v1.GetNodeUpdatesResponse
-	(*ListFleetUpdatesRequest)(nil),   // 25: sermon.web.v1.ListFleetUpdatesRequest
-	(*ListFleetUpdatesResponse)(nil),  // 26: sermon.web.v1.ListFleetUpdatesResponse
-	(*NodeUpdates)(nil),               // 27: sermon.web.v1.NodeUpdates
-	(*UpdatePackage)(nil),             // 28: sermon.web.v1.UpdatePackage
-	(*HostUpdatePermissions)(nil),     // 29: sermon.web.v1.HostUpdatePermissions
-	(*timestamppb.Timestamp)(nil),     // 30: google.protobuf.Timestamp
+	(UpdateAvailability)(0),           // 5: sermon.web.v1.UpdateAvailability
+	(PackageManager)(0),               // 6: sermon.web.v1.PackageManager
+	(*UpdateRun)(nil),                 // 7: sermon.web.v1.UpdateRun
+	(*ListUpdateRunsRequest)(nil),     // 8: sermon.web.v1.ListUpdateRunsRequest
+	(*ListUpdateRunsResponse)(nil),    // 9: sermon.web.v1.ListUpdateRunsResponse
+	(*GetUpdateRunRequest)(nil),       // 10: sermon.web.v1.GetUpdateRunRequest
+	(*GetUpdateRunResponse)(nil),      // 11: sermon.web.v1.GetUpdateRunResponse
+	(*RolloutNode)(nil),               // 12: sermon.web.v1.RolloutNode
+	(*Rollout)(nil),                   // 13: sermon.web.v1.Rollout
+	(*ListRolloutsRequest)(nil),       // 14: sermon.web.v1.ListRolloutsRequest
+	(*ListRolloutsResponse)(nil),      // 15: sermon.web.v1.ListRolloutsResponse
+	(*StartUpdatesRequest)(nil),       // 16: sermon.web.v1.StartUpdatesRequest
+	(*StartUpdatesResponse)(nil),      // 17: sermon.web.v1.StartUpdatesResponse
+	(*RebootNodesRequest)(nil),        // 18: sermon.web.v1.RebootNodesRequest
+	(*RebootNodesResponse)(nil),       // 19: sermon.web.v1.RebootNodesResponse
+	(*RefreshUpdateInfoRequest)(nil),  // 20: sermon.web.v1.RefreshUpdateInfoRequest
+	(*RefreshUpdateInfoResponse)(nil), // 21: sermon.web.v1.RefreshUpdateInfoResponse
+	(*GetNodeUpdatesRequest)(nil),     // 22: sermon.web.v1.GetNodeUpdatesRequest
+	(*GetNodeUpdatesResponse)(nil),    // 23: sermon.web.v1.GetNodeUpdatesResponse
+	(*ListFleetUpdatesRequest)(nil),   // 24: sermon.web.v1.ListFleetUpdatesRequest
+	(*ListFleetUpdatesResponse)(nil),  // 25: sermon.web.v1.ListFleetUpdatesResponse
+	(*NodeUpdates)(nil),               // 26: sermon.web.v1.NodeUpdates
+	(*UpdatePackage)(nil),             // 27: sermon.web.v1.UpdatePackage
+	(*HostUpdatePermissions)(nil),     // 28: sermon.web.v1.HostUpdatePermissions
+	(*timestamppb.Timestamp)(nil),     // 29: google.protobuf.Timestamp
+	(UpdateStatus)(0),                 // 30: sermon.web.v1.UpdateStatus
 }
 var file_sermon_web_v1_update_proto_depIdxs = []int32{
 	0,  // 0: sermon.web.v1.UpdateRun.kind:type_name -> sermon.web.v1.UpdateRunKind
 	4,  // 1: sermon.web.v1.UpdateRun.scope:type_name -> sermon.web.v1.UpdateScope
 	1,  // 2: sermon.web.v1.UpdateRun.state:type_name -> sermon.web.v1.UpdateRunState
-	30, // 3: sermon.web.v1.UpdateRun.create_time:type_name -> google.protobuf.Timestamp
-	30, // 4: sermon.web.v1.UpdateRun.start_time:type_name -> google.protobuf.Timestamp
-	30, // 5: sermon.web.v1.UpdateRun.end_time:type_name -> google.protobuf.Timestamp
-	8,  // 6: sermon.web.v1.ListUpdateRunsResponse.runs:type_name -> sermon.web.v1.UpdateRun
-	8,  // 7: sermon.web.v1.GetUpdateRunResponse.run:type_name -> sermon.web.v1.UpdateRun
+	29, // 3: sermon.web.v1.UpdateRun.create_time:type_name -> google.protobuf.Timestamp
+	29, // 4: sermon.web.v1.UpdateRun.start_time:type_name -> google.protobuf.Timestamp
+	29, // 5: sermon.web.v1.UpdateRun.end_time:type_name -> google.protobuf.Timestamp
+	7,  // 6: sermon.web.v1.ListUpdateRunsResponse.runs:type_name -> sermon.web.v1.UpdateRun
+	7,  // 7: sermon.web.v1.GetUpdateRunResponse.run:type_name -> sermon.web.v1.UpdateRun
 	3,  // 8: sermon.web.v1.RolloutNode.state:type_name -> sermon.web.v1.RolloutNodeState
 	2,  // 9: sermon.web.v1.Rollout.state:type_name -> sermon.web.v1.RolloutState
-	30, // 10: sermon.web.v1.Rollout.window_start:type_name -> google.protobuf.Timestamp
-	30, // 11: sermon.web.v1.Rollout.window_end:type_name -> google.protobuf.Timestamp
-	13, // 12: sermon.web.v1.Rollout.nodes:type_name -> sermon.web.v1.RolloutNode
-	14, // 13: sermon.web.v1.ListRolloutsResponse.rollouts:type_name -> sermon.web.v1.Rollout
+	29, // 10: sermon.web.v1.Rollout.window_start:type_name -> google.protobuf.Timestamp
+	29, // 11: sermon.web.v1.Rollout.window_end:type_name -> google.protobuf.Timestamp
+	12, // 12: sermon.web.v1.Rollout.nodes:type_name -> sermon.web.v1.RolloutNode
+	13, // 13: sermon.web.v1.ListRolloutsResponse.rollouts:type_name -> sermon.web.v1.Rollout
 	4,  // 14: sermon.web.v1.StartUpdatesRequest.scope:type_name -> sermon.web.v1.UpdateScope
-	27, // 15: sermon.web.v1.GetNodeUpdatesResponse.node:type_name -> sermon.web.v1.NodeUpdates
-	28, // 16: sermon.web.v1.GetNodeUpdatesResponse.packages:type_name -> sermon.web.v1.UpdatePackage
-	27, // 17: sermon.web.v1.ListFleetUpdatesResponse.nodes:type_name -> sermon.web.v1.NodeUpdates
-	5,  // 18: sermon.web.v1.NodeUpdates.status:type_name -> sermon.web.v1.UpdateStatus
-	6,  // 19: sermon.web.v1.NodeUpdates.availability:type_name -> sermon.web.v1.UpdateAvailability
-	7,  // 20: sermon.web.v1.NodeUpdates.package_manager:type_name -> sermon.web.v1.PackageManager
-	30, // 21: sermon.web.v1.NodeUpdates.collected_at:type_name -> google.protobuf.Timestamp
-	30, // 22: sermon.web.v1.NodeUpdates.received_at:type_name -> google.protobuf.Timestamp
-	30, // 23: sermon.web.v1.NodeUpdates.last_upgrade_at:type_name -> google.protobuf.Timestamp
-	30, // 24: sermon.web.v1.NodeUpdates.oldest_security_since:type_name -> google.protobuf.Timestamp
-	29, // 25: sermon.web.v1.NodeUpdates.permissions:type_name -> sermon.web.v1.HostUpdatePermissions
-	30, // 26: sermon.web.v1.UpdatePackage.first_seen_at:type_name -> google.protobuf.Timestamp
-	23, // 27: sermon.web.v1.UpdateService.GetNodeUpdates:input_type -> sermon.web.v1.GetNodeUpdatesRequest
-	25, // 28: sermon.web.v1.UpdateService.ListFleetUpdates:input_type -> sermon.web.v1.ListFleetUpdatesRequest
-	21, // 29: sermon.web.v1.UpdateService.RefreshUpdateInfo:input_type -> sermon.web.v1.RefreshUpdateInfoRequest
-	17, // 30: sermon.web.v1.UpdateService.StartUpdates:input_type -> sermon.web.v1.StartUpdatesRequest
-	19, // 31: sermon.web.v1.UpdateService.RebootNodes:input_type -> sermon.web.v1.RebootNodesRequest
-	9,  // 32: sermon.web.v1.UpdateService.ListUpdateRuns:input_type -> sermon.web.v1.ListUpdateRunsRequest
-	11, // 33: sermon.web.v1.UpdateService.GetUpdateRun:input_type -> sermon.web.v1.GetUpdateRunRequest
-	15, // 34: sermon.web.v1.UpdateService.ListRollouts:input_type -> sermon.web.v1.ListRolloutsRequest
-	24, // 35: sermon.web.v1.UpdateService.GetNodeUpdates:output_type -> sermon.web.v1.GetNodeUpdatesResponse
-	26, // 36: sermon.web.v1.UpdateService.ListFleetUpdates:output_type -> sermon.web.v1.ListFleetUpdatesResponse
-	22, // 37: sermon.web.v1.UpdateService.RefreshUpdateInfo:output_type -> sermon.web.v1.RefreshUpdateInfoResponse
-	18, // 38: sermon.web.v1.UpdateService.StartUpdates:output_type -> sermon.web.v1.StartUpdatesResponse
-	20, // 39: sermon.web.v1.UpdateService.RebootNodes:output_type -> sermon.web.v1.RebootNodesResponse
-	10, // 40: sermon.web.v1.UpdateService.ListUpdateRuns:output_type -> sermon.web.v1.ListUpdateRunsResponse
-	12, // 41: sermon.web.v1.UpdateService.GetUpdateRun:output_type -> sermon.web.v1.GetUpdateRunResponse
-	16, // 42: sermon.web.v1.UpdateService.ListRollouts:output_type -> sermon.web.v1.ListRolloutsResponse
+	26, // 15: sermon.web.v1.GetNodeUpdatesResponse.node:type_name -> sermon.web.v1.NodeUpdates
+	27, // 16: sermon.web.v1.GetNodeUpdatesResponse.packages:type_name -> sermon.web.v1.UpdatePackage
+	26, // 17: sermon.web.v1.ListFleetUpdatesResponse.nodes:type_name -> sermon.web.v1.NodeUpdates
+	30, // 18: sermon.web.v1.NodeUpdates.status:type_name -> sermon.web.v1.UpdateStatus
+	5,  // 19: sermon.web.v1.NodeUpdates.availability:type_name -> sermon.web.v1.UpdateAvailability
+	6,  // 20: sermon.web.v1.NodeUpdates.package_manager:type_name -> sermon.web.v1.PackageManager
+	29, // 21: sermon.web.v1.NodeUpdates.collected_at:type_name -> google.protobuf.Timestamp
+	29, // 22: sermon.web.v1.NodeUpdates.received_at:type_name -> google.protobuf.Timestamp
+	29, // 23: sermon.web.v1.NodeUpdates.last_upgrade_at:type_name -> google.protobuf.Timestamp
+	29, // 24: sermon.web.v1.NodeUpdates.oldest_security_since:type_name -> google.protobuf.Timestamp
+	28, // 25: sermon.web.v1.NodeUpdates.permissions:type_name -> sermon.web.v1.HostUpdatePermissions
+	29, // 26: sermon.web.v1.UpdatePackage.first_seen_at:type_name -> google.protobuf.Timestamp
+	22, // 27: sermon.web.v1.UpdateService.GetNodeUpdates:input_type -> sermon.web.v1.GetNodeUpdatesRequest
+	24, // 28: sermon.web.v1.UpdateService.ListFleetUpdates:input_type -> sermon.web.v1.ListFleetUpdatesRequest
+	20, // 29: sermon.web.v1.UpdateService.RefreshUpdateInfo:input_type -> sermon.web.v1.RefreshUpdateInfoRequest
+	16, // 30: sermon.web.v1.UpdateService.StartUpdates:input_type -> sermon.web.v1.StartUpdatesRequest
+	18, // 31: sermon.web.v1.UpdateService.RebootNodes:input_type -> sermon.web.v1.RebootNodesRequest
+	8,  // 32: sermon.web.v1.UpdateService.ListUpdateRuns:input_type -> sermon.web.v1.ListUpdateRunsRequest
+	10, // 33: sermon.web.v1.UpdateService.GetUpdateRun:input_type -> sermon.web.v1.GetUpdateRunRequest
+	14, // 34: sermon.web.v1.UpdateService.ListRollouts:input_type -> sermon.web.v1.ListRolloutsRequest
+	23, // 35: sermon.web.v1.UpdateService.GetNodeUpdates:output_type -> sermon.web.v1.GetNodeUpdatesResponse
+	25, // 36: sermon.web.v1.UpdateService.ListFleetUpdates:output_type -> sermon.web.v1.ListFleetUpdatesResponse
+	21, // 37: sermon.web.v1.UpdateService.RefreshUpdateInfo:output_type -> sermon.web.v1.RefreshUpdateInfoResponse
+	17, // 38: sermon.web.v1.UpdateService.StartUpdates:output_type -> sermon.web.v1.StartUpdatesResponse
+	19, // 39: sermon.web.v1.UpdateService.RebootNodes:output_type -> sermon.web.v1.RebootNodesResponse
+	9,  // 40: sermon.web.v1.UpdateService.ListUpdateRuns:output_type -> sermon.web.v1.ListUpdateRunsResponse
+	11, // 41: sermon.web.v1.UpdateService.GetUpdateRun:output_type -> sermon.web.v1.GetUpdateRunResponse
+	15, // 42: sermon.web.v1.UpdateService.ListRollouts:output_type -> sermon.web.v1.ListRolloutsResponse
 	35, // [35:43] is the sub-list for method output_type
 	27, // [27:35] is the sub-list for method input_type
 	27, // [27:27] is the sub-list for extension type_name
@@ -2367,13 +2295,14 @@ func file_sermon_web_v1_update_proto_init() {
 	if File_sermon_web_v1_update_proto != nil {
 		return
 	}
+	file_sermon_web_v1_update_status_proto_init()
 	file_sermon_web_v1_update_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_update_proto_rawDesc), len(file_sermon_web_v1_update_proto_rawDesc)),
-			NumEnums:      8,
+			NumEnums:      7,
 			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,

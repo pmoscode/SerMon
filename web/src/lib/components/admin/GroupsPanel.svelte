@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import { adminApi } from '#lib/api/admin.js';
 	import { adminError } from '#lib/admin/admin.js';
@@ -75,6 +76,11 @@
 				{:else}
 					<span class="font-medium">{group.name}</span>
 					<span class="flex gap-1">
+						<Button
+							size="sm"
+							variant="ghost"
+							href={`${resolve('/(app)/updates')}?group=${group.id}`}>{m.policy_link()}</Button
+						>
 						<Button
 							size="sm"
 							variant="ghost"

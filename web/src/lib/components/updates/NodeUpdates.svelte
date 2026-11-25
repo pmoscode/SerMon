@@ -7,9 +7,9 @@
 	import {
 		UpdateAvailability,
 		UpdateScope,
-		UpdateStatus,
 		type GetNodeUpdatesResponse
 	} from '#lib/api/gen/sermon/web/v1/update_pb.js';
+	import { UpdateStatus } from '#lib/api/gen/sermon/web/v1/update_status_pb.js';
 	import { updatesApi } from '#lib/api/updates.js';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -23,6 +23,7 @@
 	import { sessionState } from '#lib/stores/session.svelte.js';
 	import { withStepUp } from '#lib/stores/stepup.svelte.js';
 	import PackageTable from './PackageTable.svelte';
+	import RunHistory from './RunHistory.svelte';
 
 	/**
 	 * The Updates tab of a node (M4-14): its last report with the packages; "update now" and
@@ -44,6 +45,8 @@
 	let reboot = $state(false);
 	let reason = $state('');
 	let busy = $state(false);
+	let filter = $state('');
+	let securityOnly = $state(false);
 	let failure = $state('');
 	let done = $state('');
 
@@ -66,6 +69,13 @@
 	const permissions = $derived(node?.permissions);
 	const security = $derived(packages.filter((p) => p.security));
 	const chosen = $derived(scope === 'security' ? security : packages);
+	const shownPackages = $derived(
+		packages.filter(
+			(p) =>
+				(!securityOnly || p.security) &&
+				(filter.trim() === '' || p.name.toLowerCase().includes(filter.trim().toLowerCase()))
+		)
+	);
 	const collectedAt = $derived(node?.collectedAt ? timestampDate(node.collectedAt) : undefined);
 
 	const statusText = $derived.by(() => {
@@ -293,8 +303,20 @@
 		{/if}
 
 		{#if packages.length > 0 && confirm !== 'update'}
-			<PackageTable {packages} caption={m.updates_packages()} />
+			<div class="flex flex-wrap items-end gap-3">
+				<div class="flex flex-col gap-1">
+					<Label for="package-filter">{m.updates_filter()}</Label>
+					<Input id="package-filter" class="w-64" bind:value={filter} maxlength={256} />
+				</div>
+				<label class="flex h-9 items-center gap-2 text-sm">
+					<input type="checkbox" class="size-4" bind:checked={securityOnly} />
+					{m.updates_security_only()}
+				</label>
+			</div>
+			<PackageTable packages={shownPackages} caption={m.updates_packages()} />
 		{/if}
+
+		<RunHistory {nodeId} {now} />
 
 		{#if done}
 			<p class="text-sm" aria-live="polite">{done}</p>

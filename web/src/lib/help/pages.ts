@@ -4,6 +4,7 @@ export const pageHelp: Record<string, string> = {
 	'/(app)/alerts': 'pages/alerts',
 	'/(app)/logs': 'pages/logs',
 	'/(app)/security': 'pages/security_events',
+	'/(app)/updates': 'pages/updates',
 	'/(app)/notifications': 'pages/notifications',
 	'/(app)/settings/security': 'pages/security',
 	'/(app)/nodes/[id]': 'pages/node',

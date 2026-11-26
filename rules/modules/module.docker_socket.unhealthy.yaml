@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.docker_socket.unhealthy
+  name: { de: "Container ungesund", en: "Container unhealthy" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_docker_socket_healthy
+  dimensions: [ container, name ]
+  warning: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: docker_socket }
+  help:
+    de: >-
+      Der Health-Check eines Containers schlägt seit 2 Minuten fehl. Der Prozess läuft, beantwortet seinen eigenen Test aber nicht. docker inspect <name> zeigt unter State.Health die letzten Prüfungen und ihre Ausgabe.
+    en: >-
+      The health check of a container has failed for 2 minutes. The process runs but doesn't pass its own test. docker inspect <name> shows the last checks and their output under State.Health.

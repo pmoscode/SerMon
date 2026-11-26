@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.tls.name_invalid
+  name: { de: "Zertifikat passt nicht zum Namen", en: "Certificate does not match the name" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_tls_name_valid
+  dimensions: [ target ]
+  warning: { op: "<", value: 1 }
+  for: 10m
+  selector: { module: tls }
+  help:
+    de: >-
+      Das Zertifikat eines Endpunkts gilt seit 10 Minuten nicht für dessen Namen (oder server_name): Clients lehnen es ab. Typisch nach einem Umzug oder wenn der falsche virtuelle Host antwortet. Stelle ein Zertifikat mit dem Namen aus oder setze server_name im Modul auf den Namen, unter dem Clients den Dienst erreichen.
+    en: >-
+      The certificate of an endpoint has not been valid for its name (or server_name) for 10 minutes: clients refuse it. Typical after a move or when the wrong virtual host answers. Issue a certificate with the name or set server_name in the module to the name clients use.

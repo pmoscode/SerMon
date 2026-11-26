@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.tls.unreadable
+  name: { de: "Zertifikat nicht lesbar", en: "Certificate unreadable" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_tls_up
+  dimensions: [ target ]
+  warning: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: tls }
+  help:
+    de: >-
+      Ein überwachtes Zertifikat ist seit 2 Minuten nicht lesbar: Die Datei fehlt oder ist kein PEM, oder der Endpunkt antwortet nicht mit TLS. Prüfe Pfad, Rechte (der Agent liest als User sermon) und den Dienst; die Gesundheit des Moduls am Node nennt den Grund.
+    en: >-
+      A watched certificate has not been readable for 2 minutes: the file is missing or no PEM, or the endpoint doesn't answer with TLS. Check the path, the rights (the agent reads as user sermon) and the service; the module health on the node gives the reason.

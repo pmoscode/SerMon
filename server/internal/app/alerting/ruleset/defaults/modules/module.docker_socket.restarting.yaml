@@ -1,0 +1,22 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.docker_socket.restarting
+  name: { de: "Container startet ständig neu", en: "Container keeps restarting" }
+  labels: { category: modules }
+spec:
+  type: threshold
+  metric: sermon_docker_socket_restarts
+  dimensions: [ container, name ]
+  aggregate: increase
+  window: 30m
+  warning: { op: ">=", value: 3 }
+  critical: { op: ">=", value: 10 }
+  clear: { op: "<", value: 1 }
+  for: 1m
+  selector: { module: docker_socket }
+  help:
+    de: >-
+      Ein Container wurde in den letzten 30 Minuten mindestens dreimal von seiner Restart-Policy neu gestartet (kritisch: zehnmal): Er stürzt ab oder sein Prozess endet gleich nach dem Start. Sieh mit docker logs <name> und docker inspect <name> (State, ExitCode, OOMKilled) nach der Ursache, etwa fehlende Konfiguration, ein nicht erreichbarer Dienst oder zu wenig Speicher. Der Alert endet 30 Minuten nach dem letzten Neustart.
+    en: >-
+      A container was restarted by its restart policy at least three times in the last 30 minutes (critical: ten times): it crashes or its process ends right after the start. Look for the cause with docker logs <name> and docker inspect <name> (State, ExitCode, OOMKilled), e.g. missing configuration, an unreachable service or too little memory. The alert ends 30 minutes after the last restart.

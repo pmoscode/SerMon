@@ -159,10 +159,12 @@ var (
 )
 
 var (
-	site     = metrics.Labels{"target": "https://127.0.0.1/health"}
-	port5432 = metrics.Labels{"target": "127.0.0.1:5432"}
-	replica  = metrics.Labels{"replica": "standby-1"}
-	day      = 86400.0
+	site           = metrics.Labels{"target": "https://127.0.0.1/health"}
+	port5432       = metrics.Labels{"target": "127.0.0.1:5432"}
+	replica        = metrics.Labels{"replica": "standby-1"}
+	nginxContainer = metrics.Labels{"container": "3f2a9c1b7d4e", "name": "nginx"}
+	runcContainer  = metrics.Labels{"container": "3f2a9c1b7d4e", "name": "nginx", "runtime": "docker"}
+	day            = 86400.0
 )
 
 // moduleDown is a module's "up" going from 1 to 0.
@@ -274,6 +276,19 @@ var scenarios = map[alert.RuleID]scenario{
 	"module.systemd_units.not_active":  moduleDown("sermon_systemd_units_active", backup, warning),
 	"module.smart.failed":              moduleDown("sermon_smart_passed", sda, critical),
 	"module.mysql.replication_stopped": moduleDown("sermon_mysql_replication_running", nil, critical),
+	"module.docker_socket.down":        moduleDown("sermon_docker_socket_up", nil, critical),
+	"module.docker_socket.unhealthy":   moduleDown("sermon_docker_socket_healthy", nginxContainer, warning),
+	"module.docker_socket.restarting": {
+		fire: labeled("sermon_docker_socket_restarts", nginxContainer, at(time.Minute, 0, 0, 2, 5, 8, 12)),
+		calm: labeled("sermon_docker_socket_restarts", nginxContainer, steady(3)), want: critical,
+	},
+	"module.docker.oom_kill": {
+		fire: labeled("sermon_docker_oom_kills", runcContainer, at(time.Minute, 0, 0, 1)),
+		calm: labeled("sermon_docker_oom_kills", runcContainer, steady(1)), want: warning,
+	},
+	"module.tls.chain_invalid": moduleDown("sermon_tls_chain_valid", site, warning),
+	"module.tls.name_invalid":  moduleDown("sermon_tls_name_valid", site, warning),
+	"module.tls.unreadable":    moduleDown("sermon_tls_up", site, warning),
 	"module.mysql.replication_lag": {
 		fire: one("sermon_mysql_replication_lag_seconds", steady(400)),
 		calm: one("sermon_mysql_replication_lag_seconds", steady(1)), want: critical,

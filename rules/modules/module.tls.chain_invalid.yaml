@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.tls.chain_invalid
+  name: { de: "Zertifikatskette ungültig", en: "Certificate chain invalid" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_tls_chain_valid
+  dimensions: [ target ]
+  warning: { op: "<", value: 1 }
+  for: 10m
+  selector: { module: tls }
+  help:
+    de: >-
+      Die Kette eines überwachten Zertifikats führt seit 10 Minuten zu keiner vertrauenswürdigen CA: ein fehlendes Zwischenzertifikat, eine selbstsignierte oder interne CA ohne ca_file, ein abgelaufenes Zwischenzertifikat. Clients lehnen die Verbindung ab. Liefere die vollständige Kette (fullchain.pem) aus oder gib dem Modul die interne CA als ca_file.
+    en: >-
+      The chain of a watched certificate has not led to a trusted CA for 10 minutes: a missing intermediate, a self-signed or internal CA without ca_file, an expired intermediate. Clients refuse the connection. Serve the full chain (fullchain.pem) or give the module the internal CA as ca_file.

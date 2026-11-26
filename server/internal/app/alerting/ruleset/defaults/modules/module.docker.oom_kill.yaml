@@ -1,0 +1,21 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.docker.oom_kill
+  name: { de: "OOM-Kill in einem Container", en: "OOM kill in a container" }
+  labels: { category: modules }
+spec:
+  type: threshold
+  metric: sermon_docker_oom_kills
+  dimensions: [ container, name, runtime ]
+  aggregate: increase
+  window: 15m
+  warning: { op: ">=", value: 1 }
+  clear: { op: "<", value: 1 }
+  for: 1m
+  selector: { module: docker }
+  help:
+    de: >-
+      Der OOM-Killer hat in den letzten 15 Minuten einen Prozess in einem Container beendet: Der Container hat sein Speicherlimit erreicht. Prüfe den Speicherbedarf (sermon_docker_memory_used_bytes gegen das Limit) und erhöhe das Limit oder suche ein Speicherleck. Der Alert endet 15 Minuten nach dem letzten Kill.
+    en: >-
+      The OOM killer ended a process in a container in the last 15 minutes: the container reached its memory limit. Check its memory (sermon_docker_memory_used_bytes against the limit) and raise the limit or look for a leak. The alert ends 15 minutes after the last kill.

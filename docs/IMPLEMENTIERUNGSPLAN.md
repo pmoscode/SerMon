@@ -5745,18 +5745,25 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures des Textformats (und OpenMetrics), Fuzz-Ziel für den Parser, zu viele Serien.
 - **Abhängig von:** M5-03, M5-08
 
-#### ☐ M5-20 – Standardregeln der Module · S · M
-> Stand (teilweise, `rules/modules/`): Regeln für die Module, die es gibt – nicht erreichbar (`http_check`,
-> `tcp_check`, `nginx`, `apache`, `redis` kritisch; `prometheus`-Ziel und überwachte `systemd_units` als Warnung, je
-> 2 min), Zertifikat läuft ab (`tls`, `http_check`: < 21 Tage Warnung, < 7 Tage kritisch, Ende ab 22 Tagen),
-> Replikations-Lag von PostgreSQL und MySQL (> 60 s / > 300 s), MySQL-Replikation steht (kritisch), Redis-Replikation
-> unterbrochen, SMART meldet Fehler (kritisch). Neu
-> ist der Selektor `selector: { module: <id> }` (`AlertSelector.module`): Die Regel gilt nur für Nodes, deren Gruppe das
-> Modul eingeschaltet hat und deren Agent es eingebaut hat (`fleet.Node.Modules`); eine Regel auf einer Metrik eines
-> Moduls muss es nennen, der Loader prüft das. Wird ein Modul ausgeschaltet, enden seine Alerts wie bei einem Node,
-> für den eine Regel nicht mehr gilt. Tests: Szenario je Regel, Engine (ein Node ohne das Modul bekommt keinen Alert),
-> Loader (Selektor fehlt, falsches Modul), Fleet-Store (eingeschaltet und eingebaut); Gegenproben 12/12.
-> **Offen:** „Container startet ständig neu“ – braucht den Docker-Socket (M5-17), das Modul ist noch nicht da.
+#### ☑ M5-20 – Standardregeln der Module · S · M
+> Erledigt (`rules/modules/`, 21 Regeln, Kategorie `modules`):
+> - **Nicht erreichbar** (`state`, 2 min): `http_check`, `tcp_check`, `nginx`, `apache`, `redis`, Docker-API
+>   (`docker_socket`) kritisch; `prometheus`-Ziel, überwachte `systemd_units`, unlesbares Zertifikat (`tls`) als Warnung.
+> - **Zertifikat läuft ab** (`tls`, `http_check`): < 21 Tage Warnung, < 7 Tage kritisch, Ende ab 22 Tagen; dazu Kette
+>   ungültig und Name passt nicht (`tls`, Warnung nach 10 min).
+> - **Replikation:** Lag von PostgreSQL und MySQL (> 60 s / > 300 s), MySQL-Replikation steht (kritisch),
+>   Redis-Replikation unterbrochen.
+> - **Container:** startet ständig neu (`docker_socket`, Zuwachs der Neustarts in 30 min ≥ 3 / ≥ 10), Health-Check
+>   schlägt fehl (`docker_socket`), OOM-Kill im Container (`docker`, cgroups).
+> - **SMART meldet Fehler** (kritisch).
+> - **Selektor** `selector: { module: <id> }` (`AlertSelector.module`): Die Regel gilt nur für Nodes, deren Gruppe das
+>   Modul eingeschaltet hat und deren Agent es eingebaut hat (`fleet.Node.Modules`); eine Regel auf einer Metrik eines
+>   Moduls muss es nennen, der Loader prüft das (auch bei eigenen Regeln). Wird ein Modul ausgeschaltet, enden seine
+>   Alerts wie bei einem Node, für den eine Regel nicht mehr gilt. Keine Event-Regeln, also keine `notifyFields`;
+>   Hilfetexte DE und EN mit Ursachen und nächsten Schritten.
+> - Tests: Szenario je Regel (feuert auf der erwarteten Stufe, ruhige Daten bleiben ok), jede Modul-Regel gilt für
+>   keinen Node ohne das Modul, Engine (ein Node ohne das Modul bekommt keinen Alert), Loader (Selektor fehlt, falsches
+>   Modul, Metrik keines Moduls), Fleet-Store (eingeschaltet und eingebaut); Gegenproben 15/15.
 - **Ziel:** Regeln je Modul (Skill `sermon-add-alert-rule`): Dienst nicht erreichbar, Zertifikat läuft in 21 bzw.
   7 Tagen ab, Replikations-Lag, Container startet ständig neu, SMART meldet Fehler; Selektor „Nodes mit aktivem
   Modul“; Hilfetexte und Felder für Benachrichtigungen.

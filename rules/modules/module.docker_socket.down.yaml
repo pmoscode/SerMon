@@ -1,0 +1,17 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.docker_socket.down
+  name: { de: "Docker nicht erreichbar", en: "Docker unreachable" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_docker_socket_up
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: docker_socket }
+  help:
+    de: >-
+      Die Docker-API (oder die von Podman) antwortet seit 2 Minuten nicht über ihren Socket. Typische Ursachen: der Daemon ist gestoppt oder hängt, der Socket wurde verschoben, die Rechte des Agents fehlen. Prüfe systemctl status docker und die Gesundheit des Moduls am Node.
+    en: >-
+      The Docker (or Podman) API has not answered over its socket for 2 minutes. Typical causes: the daemon stopped or hangs, the socket moved, the agent lacks the rights. Check systemctl status docker and the module health on the node.

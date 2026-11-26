@@ -960,13 +960,15 @@ einen **Dry-Run-Diff**.
 |                   | Rollout gestoppt                                               | event             | – / ✓                               |
 |                   | Agent-Update fehlgeschlagen                                    | event             | ✓ / –                               |
 | **Anomalien**     | Anomalie-Rate des Nodes hoch                                   | anomaly           | 10 % / 25 % der Metriken             |
-| **Module**        | Dienst nicht erreichbar (HTTP, TCP, nginx, Apache, Redis)      | state             | – / 2 min                            |
-|                   | Prometheus-Ziel / überwachte Unit nicht aktiv                  | state             | 2 min / –                            |
+| **Module**        | Dienst nicht erreichbar (HTTP, TCP, nginx, Apache, Redis, Docker) | state             | – / 2 min                            |
+|                   | Prometheus-Ziel, überwachte Unit, Zertifikat nicht lesbar      | state             | 2 min / –                            |
 |                   | Zertifikat läuft ab (TLS, HTTPS-Check)                         | threshold         | < 21 Tage / < 7 Tage                 |
+|                   | Zertifikatskette ungültig / Name passt nicht                   | state             | 10 min / –                           |
 |                   | PostgreSQL-Replikations-Lag                                    | threshold         | > 60 s / > 300 s                     |
 |                   | Redis-Replikation unterbrochen                                 | state             | 2 min / –                            |
 |                   | SMART meldet Fehler                                            | state             | – / ✓                                |
-|                   | Container startet ständig neu (Docker-Socket, M5-17)           | –                 | folgt                                |
+|                   | Container startet ständig neu (Neustarts in 30 min)            | threshold         | ≥ 3 / ≥ 10                           |
+|                   | Container ungesund / OOM-Kill im Container                     | state / threshold | 2 min / –; jeder / –                 |
 |                   | MySQL-Replikations-Lag / Replikation steht                     | threshold / state | > 60 s / > 300 s; – / 2 min          |
 
 Seit M2-04 mitgeliefert sind die Regeln für Verfügbarkeit, CPU, Memory, Disk, Netzwerk und System, soweit ihre Daten

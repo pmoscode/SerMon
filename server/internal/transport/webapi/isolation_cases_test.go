@@ -43,6 +43,7 @@ type isolationEnv struct {
 	logs                            webv1connect.LogServiceClient
 	liveView                        webv1connect.LiveViewServiceClient
 	oidcMappings                    webv1connect.OidcMappingServiceClient
+	dashboards                      webv1connect.DashboardServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -52,6 +53,7 @@ type isolationEnv struct {
 	policyA                         string // a notification policy of Org A to channelA
 	silenceA, windowA               string // a silence and a maintenance window of Org A's group
 	mappingA                        string // an OIDC group mapping of Org A on its group
+	dashboardA                      string // a shared dashboard of Org A with a chart of nodeA
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -65,6 +67,22 @@ type isolationCase struct {
 }
 
 var errLeak = errors.New("response contains data of another organization")
+
+// chartSpecOf is a dashboard with a chart of the node.
+func chartSpecOf(node string) *webv1.DashboardSpec {
+	return &webv1.DashboardSpec{Version: 1, Title: "x", Widgets: []*webv1.Widget{{
+		Id: "cpu", Kind: webv1.WidgetKind_WIDGET_KIND_TIMESERIES, Title: "CPU", Position: &webv1.WidgetPosition{W: 6, H: 4},
+		Query: &webv1.WidgetQuery{Metric: "sermon_cpu_utilization_ratio", Target: &webv1.WidgetTarget{NodeIds: []string{node}}},
+	}}}
+}
+
+// alertSpec is a dashboard with an alert list only (no IDs).
+func alertSpec() *webv1.DashboardSpec {
+	return &webv1.DashboardSpec{Version: 1, Title: "x", Widgets: []*webv1.Widget{{
+		Id: "alerts", Kind: webv1.WidgetKind_WIDGET_KIND_ALERT_LIST, Title: "Alerts", Position: &webv1.WidgetPosition{W: 4, H: 3},
+		Query: &webv1.WidgetQuery{},
+	}}}
+}
 
 // logFilterOf asks for the last hour of Org A's node and group.
 func logFilterOf(e isolationEnv) *webv1.LogFilter {
@@ -223,6 +241,44 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.AlertService/AcknowledgeAlert": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.alerts.AcknowledgeAlert(ctx, connect.NewRequest(&webv1.AcknowledgeAlertRequest{Key: alertKeyA(e)}))
+		return err
+	}},
+	"/sermon.web.v1.DashboardService/ListDashboards": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.dashboards.ListDashboards(ctx, connect.NewRequest(&webv1.ListDashboardsRequest{}))
+		if err == nil && (strings.Contains(res.Msg.String(), e.dashboardA) || strings.Contains(res.Msg.String(), "alpha-board") || leaks(e, res.Msg.String())) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.DashboardService/GetDashboard": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.dashboards.GetDashboard(ctx, connect.NewRequest(&webv1.GetDashboardRequest{DashboardId: e.dashboardA}))
+		return err
+	}},
+	// A document with Org A's node is rejected like one with a node of nobody.
+	"/sermon.web.v1.DashboardService/CreateDashboard": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.dashboards.CreateDashboard(ctx, connect.NewRequest(&webv1.CreateDashboardRequest{Spec: chartSpecOf(e.nodeA)}))
+		return err
+	}},
+	"/sermon.web.v1.DashboardService/UpdateDashboard": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.dashboards.UpdateDashboard(ctx, connect.NewRequest(&webv1.UpdateDashboardRequest{
+			DashboardId: e.dashboardA, Revision: 1, Spec: alertSpec(),
+		}))
+		return err
+	}},
+	"/sermon.web.v1.DashboardService/SetDashboardShared": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.dashboards.SetDashboardShared(ctx, connect.NewRequest(&webv1.SetDashboardSharedRequest{DashboardId: e.dashboardA}))
+		return err
+	}},
+	"/sermon.web.v1.DashboardService/DeleteDashboard": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.dashboards.DeleteDashboard(ctx, connect.NewRequest(&webv1.DeleteDashboardRequest{DashboardId: e.dashboardA}))
+		return err
+	}},
+	"/sermon.web.v1.DashboardService/ImportDashboard": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.dashboards.ImportDashboard(ctx, connect.NewRequest(&webv1.ImportDashboardRequest{Json: `{"version":1,"title":"x","widgets":[{"id":"cpu","kind":"WIDGET_KIND_TIMESERIES","title":"CPU","position":{"w":6,"h":4},"query":{"metric":"sermon_cpu_utilization_ratio","target":{"nodeIds":["` + e.nodeA + `"]}}}]}`}))
+		return err
+	}},
+	"/sermon.web.v1.DashboardService/ExportDashboard": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.dashboards.ExportDashboard(ctx, connect.NewRequest(&webv1.ExportDashboardRequest{DashboardId: e.dashboardA}))
 		return err
 	}},
 	"/sermon.web.v1.OidcMappingService/ListOidcMappings": {list: true, run: func(ctx context.Context, e isolationEnv) error {

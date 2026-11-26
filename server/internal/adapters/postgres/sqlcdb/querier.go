@@ -71,6 +71,7 @@ type Querier interface {
 	// Atomic: concurrent redemptions cannot exceed max_uses.
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
 	CopyMetricWindows(ctx context.Context, arg []CopyMetricWindowsParams) (int64, error)
+	CountDashboards(ctx context.Context) (int64, error)
 	CountMembers(ctx context.Context) (int64, error)
 	CountNodes(ctx context.Context) (int64, error)
 	CountOIDCMappings(ctx context.Context) (int64, error)
@@ -86,6 +87,7 @@ type Querier interface {
 	// Refreshes asked for the node since node_since and for the organization since org_since.
 	CountRecentRefreshes(ctx context.Context, arg CountRecentRefreshesParams) (CountRecentRefreshesRow, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
+	CreateDashboard(ctx context.Context, arg CreateDashboardParams) error
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
 	CreateOIDCMapping(ctx context.Context, arg CreateOIDCMappingParams) error
@@ -104,6 +106,7 @@ type Querier interface {
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
+	DeleteDashboard(ctx context.Context, id uuid.UUID) error
 	DeleteExpiredOIDCFlows(ctx context.Context, now time.Time) error
 	DeleteExpiredWebAuthnCeremonies(ctx context.Context, now time.Time) error
 	// Deletes the node's packages the new report doesn't list.
@@ -167,6 +170,7 @@ type Querier interface {
 	ForgetLoginSources(ctx context.Context, arg ForgetLoginSourcesParams) error
 	GetAlertSilence(ctx context.Context, id uuid.UUID) (GetAlertSilenceRow, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
+	GetDashboard(ctx context.Context, arg GetDashboardParams) (GetDashboardRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
 	GetNodeCommand(ctx context.Context, id uuid.UUID) (GetNodeCommandRow, error)
@@ -269,6 +273,9 @@ type Querier interface {
 	// Silences that end after since (active, upcoming and recently ended ones).
 	ListAlertSilences(ctx context.Context, since time.Time) ([]ListAlertSilencesRow, error)
 	ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLog, error)
+	// Custom dashboards (M5-23, ADR 0040). All queries run inside InTenant; the owner's or the
+	// shared ones only.
+	ListDashboards(ctx context.Context, userID uuid.UUID) ([]ListDashboardsRow, error)
 	ListEnabledNotificationChannelIDs(ctx context.Context) ([]uuid.UUID, error)
 	// Open tokens (not revoked, not expired, not used up) of the given groups.
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
@@ -319,6 +326,9 @@ type Querier interface {
 	LiveHideCmdline(ctx context.Context) (bool, error)
 	// Serializes changes of rights within the organization (last-admin check without races).
 	LockAccessChanges(ctx context.Context) error
+	LockDashboard(ctx context.Context, arg LockDashboardParams) (LockDashboardRow, error)
+	// Serializes the creations of an organization against its limit.
+	LockDashboardCount(ctx context.Context) error
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
 	// Security events (M2-07, ADR 0007). Tenant queries run in the organization's tenant transaction.
 	// The node's stored event sequence, locked until the batches of this transaction are written.
@@ -457,6 +467,7 @@ type Querier interface {
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).
 	TrustedAuthorities(ctx context.Context) ([]TrustedAuthoritiesRow, error)
 	UnlockNode(ctx context.Context, id uuid.UUID) (int64, error)
+	UpdateDashboard(ctx context.Context, arg UpdateDashboardParams) error
 	UpdateMaintenanceWindow(ctx context.Context, arg UpdateMaintenanceWindowParams) (int64, error)
 	// The agent's Hello: current host facts and version (the machine-id never changes here).
 	UpdateNodeOnConnect(ctx context.Context, arg UpdateNodeOnConnectParams) (UpdateNodeOnConnectRow, error)
@@ -491,8 +502,10 @@ type Querier interface {
 	// The organization's switch (M3-12), in its tenant transaction.
 	ViewersSeeLogs(ctx context.Context) (bool, error)
 	VisibleGroupExists(ctx context.Context, arg VisibleGroupExistsParams) (bool, error)
+	VisibleGroupIDs(ctx context.Context, arg VisibleGroupIDsParams) ([]uuid.UUID, error)
 	// The group of one node of the scope's groups (the live view, M3-29).
 	VisibleNodeGroup(ctx context.Context, arg VisibleNodeGroupParams) (uuid.UUID, error)
+	VisibleNodeIDs(ctx context.Context, arg VisibleNodeIDsParams) ([]uuid.UUID, error)
 }
 
 var _ Querier = (*Queries)(nil)

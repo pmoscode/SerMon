@@ -51,6 +51,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/twofactor"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
+	"github.com/pmoscode/SerMon/server/internal/app/dashboards"
 	"github.com/pmoscode/SerMon/server/internal/app/enrollment"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
@@ -627,6 +628,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Windows:       webapi.NewMaintenanceWindowHandler(alertingAPI.policies, logger),
 		Alerts:        webapi.NewAlertHandler(alertingAPI.alerts, logger),
 		Rules:         webapi.NewAlertRuleHandler(alertingAPI.rules, logger),
+		Dashboards:    webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(db), policy, time.Now, access.NewID), logger),
 		Authenticator: webapi.NewAuthenticator(sessions, principals, logger),
 	})
 	return nil

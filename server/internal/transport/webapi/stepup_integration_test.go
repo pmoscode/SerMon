@@ -54,7 +54,7 @@ func TestStepUp_SensitiveActionsNeedAFreshStepUp(t *testing.T) {
 			logSettings: ann.logSettings, logs: ann.logs, liveView: ann.liveView, oidcMappings: ann.oidcMappings,
 			orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 			enrollmentTokenA: tokenAl, nodeA: nodeAl, runA: runAl, channelA: channelAl, policyA: policyAl, silenceA: silenceAl, windowA: windowAl,
-			mappingA: mappingAl,
+			mappingA: mappingAl, dashboards: ann.dashboards, dashboardA: dashAl,
 		},
 		twoFactor: ann.twoFactor, policy: ann.policy, passkeys: webv1connect.NewPasskeyServiceClient(hc, s.server.URL),
 	}

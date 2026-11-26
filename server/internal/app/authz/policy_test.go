@@ -50,6 +50,8 @@ var matrix = []struct {
 	{authz.ManageGroups, role.Admin, true},
 	{authz.ViewAuditLog, role.Admin, true},
 	{authz.ManageLogSettings, role.Admin, true},
+	{authz.UseDashboards, role.Viewer, false},
+	{authz.ManageDashboards, role.Admin, true},
 }
 
 func TestPolicy_RoleMatrix(t *testing.T) {
@@ -174,6 +176,29 @@ func TestPolicy_TheOrganizationsSwitchComesWithThePrincipal(t *testing.T) {
 	viewer.ViewersWithoutLogs = false
 	if !policy.Allowed(viewer, authz.ViewLogs, target) {
 		t.Error("with the switch off viewers see logs")
+	}
+}
+
+// Own dashboards (ADR 0040) need a role on any group of the organization, whichever is the target.
+func TestPolicy_DashboardsNeedARoleOnAnyGroup(t *testing.T) {
+	policy := authz.NewPolicy()
+	onY := member(authz.Binding{Group: groupY, Role: role.Viewer})
+	for _, target := range []authz.Target{authz.InOrg(orgA), authz.InGroup(orgA, groupX)} {
+		if !policy.Allowed(onY, authz.UseDashboards, target) {
+			t.Errorf("a viewer of group Y must use dashboards (target %+v)", target)
+		}
+	}
+	if policy.Allowed(member(), authz.UseDashboards, authz.InOrg(orgA)) {
+		t.Error("a member without any role must not use dashboards")
+	}
+	if policy.Allowed(member(authz.Binding{Group: groupY, Role: role.Role(0)}), authz.UseDashboards, authz.InOrg(orgA)) {
+		t.Error("an invalid binding grants nothing")
+	}
+	if !policy.Allowed(member(authz.Binding{Group: groupY, Role: role.Viewer}, authz.Binding{Group: groupX, Role: role.Role(99)}), authz.UseDashboards, authz.InOrg(orgA)) {
+		t.Error("an invalid binding must not hide a valid one")
+	}
+	if policy.Allowed(onY, authz.UseDashboards, authz.InOrg(orgB)) {
+		t.Error("dashboards of another organization must be denied")
 	}
 }
 

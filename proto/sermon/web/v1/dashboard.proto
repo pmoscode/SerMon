@@ -1,0 +1,339 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/log_settings.proto";
+
+// DashboardService keeps the custom dashboards of the caller's organization (KONZEPT §16, ADR
+// 0040). Every member sees their own dashboards and the shared ones; the owner changes them, a
+// shared dashboard also an admin of all groups (manage_dashboards). The widgets read through the
+// existing services with the viewer's rights; saving and importing reject node and group IDs the
+// caller can't view. Dashboards the caller can't see, also those of other organizations, are
+// NOT_FOUND. Changes are in the audit log and need no step-up.
+service DashboardService {
+  // ListDashboards returns the caller's and the shared dashboards by title (without widgets).
+  rpc ListDashboards(ListDashboardsRequest) returns (ListDashboardsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // GetDashboard returns a dashboard with its document.
+  rpc GetDashboard(GetDashboardRequest) returns (GetDashboardResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateDashboard adds a private dashboard of the caller (at most 200 per organization).
+  rpc CreateDashboard(CreateDashboardRequest) returns (CreateDashboardResponse);
+  // UpdateDashboard replaces the document; ABORTED if the revision is not the current one.
+  rpc UpdateDashboard(UpdateDashboardRequest) returns (UpdateDashboardResponse);
+  // SetDashboardShared shares the dashboard with the organization or makes it private again.
+  rpc SetDashboardShared(SetDashboardSharedRequest) returns (SetDashboardSharedResponse);
+  // DeleteDashboard removes the dashboard.
+  rpc DeleteDashboard(DeleteDashboardRequest) returns (DeleteDashboardResponse);
+  // ImportDashboard adds a private dashboard of the caller from the JSON of ExportDashboard.
+  rpc ImportDashboard(ImportDashboardRequest) returns (ImportDashboardResponse);
+  // ExportDashboard returns the document as JSON (without ID, owner and revision).
+  rpc ExportDashboard(ExportDashboardRequest) returns (ExportDashboardResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// TimePreset is the default time range of a dashboard.
+enum TimePreset {
+  // TIME_PRESET_UNSPECIFIED is the last hour.
+  TIME_PRESET_UNSPECIFIED = 0;
+  // TIME_PRESET_15M is the last 15 minutes.
+  TIME_PRESET_15M = 1;
+  // TIME_PRESET_1H is the last hour.
+  TIME_PRESET_1H = 2;
+  // TIME_PRESET_6H is the last 6 hours.
+  TIME_PRESET_6H = 3;
+  // TIME_PRESET_24H is the last 24 hours.
+  TIME_PRESET_24H = 4;
+  // TIME_PRESET_7D is the last 7 days.
+  TIME_PRESET_7D = 5;
+  // TIME_PRESET_30D is the last 30 days.
+  TIME_PRESET_30D = 6;
+}
+
+// WidgetKind is what a widget shows.
+enum WidgetKind {
+  // WIDGET_KIND_UNSPECIFIED is invalid.
+  WIDGET_KIND_UNSPECIFIED = 0;
+  // WIDGET_KIND_TIMESERIES is a chart of a metric over the time range.
+  WIDGET_KIND_TIMESERIES = 1;
+  // WIDGET_KIND_GAUGE is the latest value of a metric of one node against its range.
+  WIDGET_KIND_GAUGE = 2;
+  // WIDGET_KIND_STAT is the latest value of a metric of one node with a sparkline.
+  WIDGET_KIND_STAT = 3;
+  // WIDGET_KIND_TABLE is the latest value of a metric per node and series.
+  WIDGET_KIND_TABLE = 4;
+  // WIDGET_KIND_LOG_STREAM is the newest log lines.
+  WIDGET_KIND_LOG_STREAM = 5;
+  // WIDGET_KIND_ALERT_LIST is the active alerts.
+  WIDGET_KIND_ALERT_LIST = 6;
+}
+
+// VariableKind is what a variable selects.
+enum VariableKind {
+  // VARIABLE_KIND_UNSPECIFIED is invalid.
+  VARIABLE_KIND_UNSPECIFIED = 0;
+  // VARIABLE_KIND_NODE selects one node.
+  VARIABLE_KIND_NODE = 1;
+  // VARIABLE_KIND_GROUP selects one node group.
+  VARIABLE_KIND_GROUP = 2;
+}
+
+// DashboardVariable is a choice of the viewer that widgets refer to (the choice is in the URL,
+// not stored).
+message DashboardVariable {
+  // name is referred to by WidgetTarget.variable.
+  string name = 1 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+  // kind is what the variable selects.
+  VariableKind kind = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // default_id is the UUID of the node or group selected first; empty: none.
+  string default_id = 3 [(buf.validate.field).string = {
+    max_len: 36
+    pattern: "^$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+  }];
+}
+
+// WidgetPosition is the place of a widget in the grid of 12 columns.
+message WidgetPosition {
+  option (buf.validate.message).cel = {
+    id: "columns"
+    message: "a widget must end within the 12 columns"
+    expression: "this.x + this.w <= 12"
+  };
+
+  // x is the first column (0 to 11).
+  int32 x = 1 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 11
+  }];
+  // y is the first row (0 to 99).
+  int32 y = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 99
+  }];
+  // w is the width in columns (1 to 12).
+  int32 w = 3 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 12
+  }];
+  // h is the height in rows (1 to 12).
+  int32 h = 4 [(buf.validate.field).int32 = {
+    gte: 1
+    lte: 12
+  }];
+}
+
+// WidgetTarget names the nodes of a query: fixed nodes, a group or a variable (at most one).
+message WidgetTarget {
+  option (buf.validate.message).cel = {
+    id: "one_target"
+    message: "name nodes, a group or a variable, not several"
+    expression: "(size(this.node_ids) > 0 ? 1 : 0) + (this.group_id != '' ? 1 : 0) + (this.variable != '' ? 1 : 0) <= 1"
+  };
+
+  // node_ids are fixed nodes (UUIDs).
+  repeated string node_ids = 1 [(buf.validate.field).repeated = {
+    max_items: 20
+    unique: true
+    items: {
+      string: {uuid: true}
+    }
+  }];
+  // group_id is a node group (UUID); the widget reads its nodes.
+  string group_id = 2 [(buf.validate.field).string = {
+    max_len: 36
+    pattern: "^$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+  }];
+  // variable is the name of a variable of the dashboard.
+  string variable = 3 [(buf.validate.field).string.pattern = "^$|^[a-z][a-z0-9_]{0,31}$"];
+}
+
+// WidgetQuery is the one query of a widget.
+message WidgetQuery {
+  // metric is the metric of a timeseries, gauge, stat or table (catalog of ListMetrics).
+  string metric = 1 [(buf.validate.field).string.pattern = "^$|^sermon_[a-z0-9_]{1,120}$"];
+  // labels filter the series of the metric.
+  map<string, string> labels = 2 [(buf.validate.field).map = {
+    max_pairs: 8
+    keys: {
+      string: {pattern: "^[a-z][a-z0-9_]{0,31}$"}
+    }
+    values: {
+      string: {max_len: 256}
+    }
+  }];
+  // target names the nodes; required except for an alert list (empty: all visible nodes).
+  WidgetTarget target = 3;
+  // text is a part of the log lines of a log stream, as typed (no regex).
+  string text = 4 [(buf.validate.field).string.max_bytes = 256];
+  // min_severity keeps log lines of this severity and more severe ones; unspecified keeps all.
+  LogSeverity min_severity = 5 [(buf.validate.field).enum.defined_only = true];
+}
+
+// Widget is one tile of a dashboard.
+message Widget {
+  // id is unique within the dashboard.
+  string id = 1 [(buf.validate.field).string.pattern = "^[a-z0-9_-]{1,32}$"];
+  // kind is what the widget shows.
+  WidgetKind kind = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // title is the visible title.
+  string title = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // position is the place in the grid; widgets must not overlap.
+  WidgetPosition position = 4 [(buf.validate.field).required = true];
+  // query is what the widget reads.
+  WidgetQuery query = 5 [(buf.validate.field).required = true];
+}
+
+// DashboardSpec is the document of a dashboard (ADR 0040); its JSON is the format of export and
+// import.
+message DashboardSpec {
+  // version of the model; 1.
+  int32 version = 1 [(buf.validate.field).int32.const = 1];
+  // title is the name of the dashboard.
+  string title = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+  // description says what the dashboard is for.
+  string description = 3 [(buf.validate.field).string.max_len = 2000];
+  // time_range is the default range of the page.
+  TimePreset time_range = 4 [(buf.validate.field).enum.defined_only = true];
+  // variables are the choices of the viewer.
+  repeated DashboardVariable variables = 5 [(buf.validate.field).repeated.max_items = 4];
+  // widgets are the tiles.
+  repeated Widget widgets = 6 [(buf.validate.field).repeated.max_items = 30];
+}
+
+// Dashboard is a stored dashboard.
+message Dashboard {
+  // id is the dashboard UUID.
+  string id = 1;
+  // spec is the document.
+  DashboardSpec spec = 2;
+  // owner_id is the UUID of the owner.
+  string owner_id = 3;
+  // owner_name is the display name of the owner.
+  string owner_name = 4;
+  // shared dashboards are seen by every member of the organization.
+  bool shared = 5;
+  // revision counts the changes; UpdateDashboard names the one it changes.
+  int64 revision = 6;
+  // can_edit tells whether the caller may change, share and delete it.
+  bool can_edit = 7;
+  // create_time is when it was created.
+  google.protobuf.Timestamp create_time = 8;
+  // update_time is when it was changed last.
+  google.protobuf.Timestamp update_time = 9;
+}
+
+// ListDashboardsRequest has no parameters.
+message ListDashboardsRequest {}
+
+// ListDashboardsResponse lists the dashboards by title; spec holds only title and description.
+message ListDashboardsResponse {
+  // dashboards the caller sees.
+  repeated Dashboard dashboards = 1;
+}
+
+// GetDashboardRequest names the dashboard.
+message GetDashboardRequest {
+  // dashboard_id is the UUID of the dashboard.
+  string dashboard_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetDashboardResponse holds the dashboard.
+message GetDashboardResponse {
+  // dashboard with its document.
+  Dashboard dashboard = 1;
+}
+
+// CreateDashboardRequest is the document of the new dashboard.
+message CreateDashboardRequest {
+  // spec of the dashboard.
+  DashboardSpec spec = 1 [(buf.validate.field).required = true];
+}
+
+// CreateDashboardResponse returns the dashboard.
+message CreateDashboardResponse {
+  // dashboard as stored.
+  Dashboard dashboard = 1;
+}
+
+// UpdateDashboardRequest replaces a document.
+message UpdateDashboardRequest {
+  // dashboard_id is the UUID of the dashboard.
+  string dashboard_id = 1 [(buf.validate.field).string.uuid = true];
+  // spec replaces the document.
+  DashboardSpec spec = 2 [(buf.validate.field).required = true];
+  // revision is the revision the change is based on.
+  int64 revision = 3 [(buf.validate.field).int64.gte = 1];
+}
+
+// UpdateDashboardResponse returns the changed dashboard.
+message UpdateDashboardResponse {
+  // dashboard as stored.
+  Dashboard dashboard = 1;
+}
+
+// SetDashboardSharedRequest shares a dashboard or makes it private.
+message SetDashboardSharedRequest {
+  // dashboard_id is the UUID of the dashboard.
+  string dashboard_id = 1 [(buf.validate.field).string.uuid = true];
+  // shared with the organization.
+  bool shared = 2;
+}
+
+// SetDashboardSharedResponse returns the dashboard.
+message SetDashboardSharedResponse {
+  // dashboard as stored.
+  Dashboard dashboard = 1;
+}
+
+// DeleteDashboardRequest names the dashboard.
+message DeleteDashboardRequest {
+  // dashboard_id is the UUID of the dashboard.
+  string dashboard_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeleteDashboardResponse has no fields.
+message DeleteDashboardResponse {}
+
+// ImportDashboardRequest is a document as JSON.
+message ImportDashboardRequest {
+  // json is the document as ExportDashboard returns it, at most 32 KiB.
+  string json = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_bytes: 32768
+  }];
+}
+
+// ImportDashboardResponse returns the new dashboard.
+message ImportDashboardResponse {
+  // dashboard as stored.
+  Dashboard dashboard = 1;
+}
+
+// ExportDashboardRequest names the dashboard.
+message ExportDashboardRequest {
+  // dashboard_id is the UUID of the dashboard.
+  string dashboard_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ExportDashboardResponse is the JSON.
+message ExportDashboardResponse {
+  // json is the document as ImportDashboard reads it.
+  string json = 1;
+}

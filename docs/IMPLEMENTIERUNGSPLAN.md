@@ -5470,7 +5470,27 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
   Bedienung per Tastatur und Lizenz.
 - **Abhängig von:** –
 
-#### ☐ M5-23 – Dashboards im Server · S · M 🔒
+#### ☑ M5-23 – Dashboards im Server · S · M 🔒
+> Erledigt (`domain/dashboard`, `app/dashboards`, `DashboardService`, Migration 00060; Threat Model T112):
+> - **Modell:** `DashboardSpec` in `proto/sermon/web/v1/dashboard.proto` mit protovalidate-Grenzen; die Domäne prüft
+>   den Rest (Version 1, Titel über `naming.Clean`, 12 Spalten × 100 Zeilen ohne Überlappung, Widget-IDs eindeutig,
+>   Metrik aus dem Katalog mit eigenen Labels, Ziel genau eines von Nodes/Gruppe/Variable, Gauge und Stat nur ein
+>   Node, Text und Schweregrad nur im Log-Stream); Fehler nennen Widget oder Variable, nie einen Wert.
+> - **Rechte:** neue Aktionen `use_dashboards` (Rolle auf irgendeiner Gruppe, neue Art `anyGroup` in der Policy) und
+>   `manage_dashboards` (Admin für alle Gruppen); private Dashboards sieht nur der Eigentümer, auch kein Admin
+>   (jede Abfrage filtert `owner_id = $user OR shared`), Ändern, Teilen und Löschen sperren die Zeile und
+>   entscheiden im Service. Speichern und Import prüfen jede Node-, Gruppen- und Vorgabe-ID gegen `view_nodes` des
+>   Speichernden: fremd, unbekannt oder unsichtbar ist `NOT_FOUND` mit dem Namen des Widgets. Kein Step-up (eine
+>   Ansicht), Audit `dashboard.create|import|update|share|delete`; Revision gegen verlorene Änderungen (`ABORTED`).
+> - **Speicher:** Tabelle `dashboards` mit `ENABLE` + `FORCE ROW LEVEL SECURITY`, Dokument als JSON der Domäne (IDs
+>   als Text), höchstens 200 je Org (Advisory-Lock beim Anlegen).
+> - **Import/Export:** Export als kanonisches `protojson` ohne ID, Eigentümer und Revision; Import bis 32 KiB, streng
+>   gelesen (unbekannte Felder abgelehnt) und wie ein Request geprüft. Die Leser der Widgets bleiben die vorhandenen
+>   RPCs, es gibt keinen neuen Abfragepfad.
+> - Tests: Domäne (rund 40 Fälle ungültiger Dokumente, JSON-Roundtrip), Service mit Fake-Store (Rechte, Revision,
+>   Referenzen, Grenze), Store-Integration (privat/geteilt, fremde Gruppe und Org, RLS ohne Tenant und beim
+>   Schreiben, Grenze je Org), Web-API (Teilen und Rechte, Import/Export mit kaputtem, fremdem, zu großem und
+>   überlappendem Dokument); alle acht RPCs in den Tabellen der Tenant-Isolation und des Step-up; Gegenproben 16/16.
 - **Ziel:** Tabelle mit RLS, CRUD-RPCs, Teilen in der Org, Import und Export als JSON mit Prüfung des Modells, Audit;
   die Abfragen der Widgets laufen über die vorhandenen Leser mit ihren Grenzen.
 - **Tests zuerst:** Tenant-Isolations- und Step-up-Tabellen, ungültige und zu große Dokumente, fremde Node-IDs im

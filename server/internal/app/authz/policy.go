@@ -39,6 +39,9 @@ const (
 	AllowNodeTakeover      // let the next enrollment with the node's machine-id take it over (M2-23)
 	TagNodes               // set the free tags of nodes (M2-29); they steer rules and notifications
 
+	// Actions that need a role on any group of the organization.
+	UseDashboards // own dashboards and the shared ones (ADR 0040); the widgets read with the viewer's rights
+
 	// Organization-wide actions (Admin on all groups).
 	ManageAlertRules
 	ManageChannels
@@ -48,6 +51,7 @@ const (
 	ManageGroups
 	ViewAuditLog
 	ManageLogSettings // what agents send as logs and how they redact them (M3-03)
+	ManageDashboards  // change and delete the shared dashboards of others (ADR 0040)
 
 	// Instance-level actions (superadmin).
 	ManageOrganizations
@@ -69,6 +73,7 @@ type scopeKind uint8
 
 const (
 	groupScoped scopeKind = iota + 1
+	anyGroup
 	orgWide
 	instanceLevel
 )
@@ -95,6 +100,8 @@ var rules = map[Action]rule{
 	ManageGroups:           {name: "manage_groups", minimum: role.Admin, scope: orgWide},
 	ViewAuditLog:           {name: "view_audit_log", minimum: role.Admin, scope: orgWide},
 	ManageLogSettings:      {name: "manage_log_settings", minimum: role.Admin, scope: orgWide},
+	UseDashboards:          {name: "use_dashboards", minimum: role.Viewer, scope: anyGroup},
+	ManageDashboards:       {name: "manage_dashboards", minimum: role.Admin, scope: orgWide},
 	ManageOrganizations:    {name: "manage_organizations", scope: instanceLevel},
 	ManageAgentCA:          {name: "manage_agent_ca", scope: instanceLevel},
 	ViewInstanceAudit:      {name: "view_instance_audit", scope: instanceLevel},
@@ -189,6 +196,8 @@ func (pol Policy) Allowed(p Principal, action Action, target Target) bool {
 			return false
 		}
 		held = p.roleFor(target.group)
+	case anyGroup:
+		held = p.highestRole()
 	case orgWide:
 		held = p.roleOnAllGroups()
 	case instanceLevel:
@@ -213,6 +222,17 @@ func (p Principal) roleFor(group tenant.GroupID) role.Role {
 	var best role.Role
 	for _, b := range p.Bindings {
 		if (b.AllGroups || b.Group == group) && b.Role.Valid() && b.Role > best {
+			best = b.Role
+		}
+	}
+	return best
+}
+
+// highestRole returns the highest role of p on any group.
+func (p Principal) highestRole() role.Role {
+	var best role.Role
+	for _, b := range p.Bindings {
+		if b.Role.Valid() && b.Role > best {
 			best = b.Role
 		}
 	}

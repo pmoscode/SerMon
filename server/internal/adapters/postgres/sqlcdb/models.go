@@ -135,6 +135,18 @@ type AuditLog struct {
 	Hash     []byte
 }
 
+type Dashboard struct {
+	OrgID     uuid.UUID
+	ID        uuid.UUID
+	OwnerID   uuid.UUID
+	Title     string
+	Shared    bool
+	Revision  int64
+	Spec      []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type EnrollmentToken struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID

@@ -128,14 +128,11 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         log_stats.clone(),
         logship::into_outbox(outbox.clone()),
     );
-    // Update information (M4-07): the root helper lists, RefreshUpdateInfo asks for it.
-    let update_refresh = Arc::new(tokio::sync::Notify::new());
-    // A run of the root helper ended: the update information follows at once (M4-28).
-    let run_ended = Arc::new(tokio::sync::Notify::new());
+    let updates = UpdateSignals::default();
     // The server's commands for the root helper (M4-12).
     let (inbox, ports) = run_ports(config, &layout, &clock);
     let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
-        .with_update_refresh(update_refresh.clone())
+        .with_update_refresh(updates.refresh.clone())
         .with_commands(Arc::new(inbox));
 
     // One thread is enough for < 1 % CPU: collectors read small /proc files, the rest is I/O.
@@ -190,15 +187,8 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             clock.clone(),
             shutdown.clone(),
         ));
-        let reports = spawn_updates(
-            config,
-            &outbox,
-            &clock,
-            update_refresh,
-            run_ended.clone(),
-            &shutdown,
-        );
-        let runner = spawn_runs(ports, &outbox, &clock, &agent_config, run_ended, &shutdown);
+        let reports = spawn_updates(config, &outbox, &clock, &updates, &shutdown);
+        let runner = spawn_runs(ports, &outbox, &clock, &agent_config, &updates, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         reports.await.context("update task failed")?;
@@ -284,13 +274,20 @@ fn install_method() -> sermon_transport::proto::agent::v1::InstallMethod {
     }
 }
 
+/// What wakes the update information (M4-07): the server's `RefreshUpdateInfo` and the end of a
+/// run of the root helper (M4-28).
+#[derive(Default)]
+struct UpdateSignals {
+    refresh: Arc<tokio::sync::Notify>,
+    ran: Arc<tokio::sync::Notify>,
+}
+
 /// Starts the update reports (M4-07): listed by the root helper, buffered like the metrics.
 fn spawn_updates(
     config: &AgentConfig,
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
-    refresh: Arc<tokio::sync::Notify>,
-    ran: Arc<tokio::sync::Notify>,
+    signals: &UpdateSignals,
     shutdown: &CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     let (outbox, clock) = (outbox.clone(), clock.clone());
@@ -305,8 +302,8 @@ fn spawn_updates(
                 tracing::warn!("cannot buffer the update report: {error}");
             }
         },
-        refresh,
-        ran,
+        signals.refresh.clone(),
+        signals.ran.clone(),
         updates::Schedule::default(),
         updates::Spread::random(),
         shutdown.clone(),
@@ -331,7 +328,7 @@ fn spawn_runs(
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
-    ended: Arc<tokio::sync::Notify>,
+    signals: &UpdateSignals,
     shutdown: &CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     let (outbox, sink_clock, now_clock, config) = (
@@ -351,7 +348,7 @@ fn spawn_runs(
         },
         move |text: &str| config.current().redactor.redact(text).into_owned(),
         move || now_clock.now(),
-        ended,
+        signals.ran.clone(),
         runs::Schedule::default(),
         shutdown.clone(),
     ))

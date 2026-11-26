@@ -8,8 +8,13 @@
 # binaries.
 # The keys come from the environment, as files:
 #   SERMON_PKG_GPG_KEY   armored OpenPGP secret key, signs .deb (origin) and .rpm
-#   SERMON_PKG_APK_KEY   RSA private key (PEM), signs .apk as sermon-agent.rsa.pub
+#   SERMON_PKG_APK_KEY   RSA private key (PEM), signs .apk
 #   SERMON_PKG_KEY_PASSPHRASE   their passphrase, if any
+#   SERMON_PKG_PUBLIC_KEYS   directory with gpg.pub.asc and apk.rsa.pub of these keys, during a
+#                        rotation next/ with those of the next pair (as KEYS of build-repos.sh).
+#                        The agent package installs them for the package manager, so that its
+#                        updates bring new repository keys (M4-31); the .apk are signed under the
+#                        name of apk.rsa.pub (scripts/repo-keys.sh).
 # nfpm runs as a container image pinned by digest; nothing is installed on the host.
 set -eu
 
@@ -28,6 +33,8 @@ case $version in [0-9]*) ;; *) die "the version must start with a digit: $versio
 [ -x "$helper" ] || die "no helper binary at $helper"
 [ -r "${SERMON_PKG_GPG_KEY:-}" ] || die "SERMON_PKG_GPG_KEY must name the OpenPGP key file (packages are always signed)"
 [ -r "${SERMON_PKG_APK_KEY:-}" ] || die "SERMON_PKG_APK_KEY must name the RSA key file for .apk"
+[ -r "${SERMON_PKG_PUBLIC_KEYS:-}/gpg.pub.asc" ] && [ -r "$SERMON_PKG_PUBLIC_KEYS/apk.rsa.pub" ] ||
+	die "SERMON_PKG_PUBLIC_KEYS must name the directory of the public keys (gpg.pub.asc, apk.rsa.pub)"
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$out"
@@ -52,7 +59,12 @@ cp "$root/packaging/systemd/sermon-helper.socket" "$root/packaging/helper.toml" 
 if grep -q /usr/local/bin "$work/root"/*.service "$work/root"/*.openrc; then
 	die "a service file still names /usr/local/bin"
 fi
-cp "$root/packaging/nfpm/nfpm.yaml" "$root/packaging/nfpm/helper.yaml" "$root/packaging/nfpm/agent.toml" "$root"/packaging/nfpm/*.sh "$work/root/"
+cp "$root/packaging/nfpm/agent.toml" "$root"/packaging/nfpm/*.sh "$work/root/"
+"$root/scripts/repo-keys.sh" publish "$SERMON_PKG_PUBLIC_KEYS" "$work/root/repo-keys"
+apk_key=$("$root/scripts/repo-keys.sh" apk-name "$SERMON_PKG_PUBLIC_KEYS/apk.rsa.pub")
+for config in nfpm helper; do
+	sed "s/@APK_KEY_NAME@/$apk_key/" "$root/packaging/nfpm/$config.yaml" >"$work/root/$config.yaml"
+done
 cp "$SERMON_PKG_GPG_KEY" "$work/keys/gpg.asc"
 cp "$SERMON_PKG_APK_KEY" "$work/keys/apk.rsa"
 

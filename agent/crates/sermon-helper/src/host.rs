@@ -60,7 +60,9 @@ fn commands(d: Distribution) -> Option<(&'static str, Fixed, &'static [Fixed])> 
         ),
         Distribution::Dnf => (
             "usr/bin/dnf",
-            ("usr/bin/dnf", &["-q", "makecache", "--refresh"]),
+            // -y: dnf asks before it takes a new key of the sources from their gpgkey file, as
+            // after a rotation of the SerMon repository keys (M4-31); nobody is there to answer.
+            ("usr/bin/dnf", &["-y", "-q", "makecache", "--refresh"]),
             &[
                 ("usr/bin/dnf", &["-q", "check-update"]),
                 ("usr/bin/dnf", &["-q", "updateinfo", "list", "--security"]),
@@ -1056,7 +1058,7 @@ mod tests {
         fake.wait(ID);
         assert!(
             fake.calls()
-                .contains("dnf -q makecache --refresh\ndnf -y upgrade --security\n"),
+                .contains("dnf -y -q makecache --refresh\ndnf -y upgrade --security\n"),
             "{}",
             fake.calls()
         );

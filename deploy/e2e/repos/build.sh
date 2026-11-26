@@ -23,7 +23,7 @@ die() {
 }
 
 [ $# -eq 2 ] || die "usage: $0 KEYS OUT"
-for f in gpg.asc gpg.pub.asc apk.rsa sermon-agent.rsa.pub; do
+for f in gpg.asc gpg.pub.asc apk.rsa apk.rsa.pub; do
 	[ -r "$1/$f" ] || die "$1 needs $f (scripts/package-test-keys.sh)"
 done
 here=$(cd "$(dirname "$0")" && pwd)
@@ -37,7 +37,8 @@ chmod 0700 "$work/keys"
 trap 'rm -rf "$work"' EXIT
 trap 'exit 130' INT TERM HUP
 cp "$keys/gpg.asc" "$work/keys/gpg.asc"
-# abuild-sign names the signature after the key file: the same name as the packages' (sermon-agent).
+# abuild-sign names the signature after the key file: sermon-agent, the name use.sh gives the key
+# (the agent's repositories name it by its fingerprint, scripts/repo-keys.sh).
 cp "$keys/apk.rsa" "$work/keys/sermon-agent.rsa"
 
 for tool in apt rpm apk; do
@@ -153,7 +154,8 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:r
 	cp /tmp/APKINDEX.tar.gz /apk/x86_64/
 	cp /tmp/APKINDEX.tar.gz /apk/aarch64/'
 
-# The public keys for use.sh.
-cp "$keys/gpg.pub.asc" "$keys/sermon-agent.rsa.pub" "$out/keys/"
+# The public keys for use.sh, the apk key under the name of the signatures.
+cp "$keys/gpg.pub.asc" "$out/keys/"
+cp "$keys/apk.rsa.pub" "$out/keys/sermon-agent.rsa.pub"
 chmod -R a+rX "$out"
 echo "✓ $out: apt, rpm and apk sources with sermon-e2e-demo 2.0.0 (security) and sermon-e2e-extra 1.1.0"

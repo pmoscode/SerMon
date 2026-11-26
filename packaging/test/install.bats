@@ -435,37 +435,144 @@ without_minisign() {
 	grep -q 'systemctl disable --now sermon-helper.socket sermon-helper.service' "$TMP/calls"
 }
 
-# --repo (M4-20, ADR 0036): the repository with its key for apt, dnf and apk, the packages through
-# the package manager; without recommends or weak dependencies --no-helper means no helper.
-@test "sets up the server's repository and installs the packages through the package manager" {
-	mkdir -p "$TMP/fake"
+# repo_server publishes the fake repository keys of sermon.example.org under $TMP/srv/repo/keys/:
+# sermon.asc and two apk keys (current and next of a rotation), listed in SHA256SUMS signed by the
+# release key; download reads from there. The fake package managers note their calls.
+repo_server() {
+	keys="$TMP/srv/repo/keys"
+	mkdir -p "$keys" "$TMP/fake" "$TMP/work"
+	echo "openpgp keys" >"$keys/sermon.asc"
+	echo "apk key, current" >"$keys/sermon-0123456789abcdef.rsa.pub"
+	echo "apk key, next" >"$keys/sermon-fedcba9876543210.rsa.pub"
+	(cd "$keys" && sha256sum sermon-*.rsa.pub sermon.asc >SHA256SUMS)
+	sign "$KEY" "$keys/SHA256SUMS"
 	for tool in apt-get dnf apk; do
 		printf '#!/bin/sh\necho "%s $*" >>%s/calls\n' "$tool" "$TMP" >"$TMP/fake/$tool"
 		chmod 0755 "$TMP/fake/$tool"
 	done
-	download() { echo "key of $1" >"$2"; }
+	download() { cp "$TMP/srv${1#https://sermon.example.org}" "$2" 2>/dev/null; }
 	SERVER=https://sermon.example.org NO_HELPER=''
-	PATH="$TMP/fake:$PATH" install_from_repo debian 2>/dev/null
+}
+
+# --repo (M4-20, ADR 0036): the repository with its keys for apt, dnf and apk, the packages through
+# the package manager; without recommends or weak dependencies --no-helper means no helper. The
+# keys go where the agent package keeps them: its updates replace them (rotation, M4-31).
+@test "sets up the server's repository and installs the packages through the package manager" {
+	repo_server
+	PATH="$TMP/fake:$PATH" install_from_repo debian "$TMP/work" 2>/dev/null
 	grep -q '^URIs: https://sermon.example.org/repo/apt$' "$SERMON_INSTALL_ROOT/etc/apt/sources.list.d/sermon.sources"
-	grep -q '^Signed-By: /etc/apt/keyrings/sermon.asc$' "$SERMON_INSTALL_ROOT/etc/apt/sources.list.d/sermon.sources"
-	grep -q 'repo/keys/sermon.asc' "$SERMON_INSTALL_ROOT/etc/apt/keyrings/sermon.asc"
+	grep -q '^Signed-By: /usr/share/keyrings/sermon-archive-keyring.asc$' "$SERMON_INSTALL_ROOT/etc/apt/sources.list.d/sermon.sources"
+	cmp "$TMP/srv/repo/keys/sermon.asc" "$SERMON_INSTALL_ROOT/usr/share/keyrings/sermon-archive-keyring.asc"
 	grep -q '^apt-get install .*--no-install-recommends sermon-agent sermon-helper$' "$TMP/calls"
 
 	NO_HELPER=1
-	PATH="$TMP/fake:$PATH" install_from_repo rocky 2>/dev/null
+	PATH="$TMP/fake:$PATH" install_from_repo rocky "$TMP/work" 2>/dev/null
 	grep -q '^baseurl=https://sermon.example.org/repo/rpm$' "$SERMON_INSTALL_ROOT/etc/yum.repos.d/sermon.repo"
 	grep -q '^repo_gpgcheck=1$' "$SERMON_INSTALL_ROOT/etc/yum.repos.d/sermon.repo"
+	grep -q '^gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-sermon$' "$SERMON_INSTALL_ROOT/etc/yum.repos.d/sermon.repo"
+	cmp "$TMP/srv/repo/keys/sermon.asc" "$SERMON_INSTALL_ROOT/etc/pki/rpm-gpg/RPM-GPG-KEY-sermon"
 	grep -q '^dnf install .*install_weak_deps=False sermon-agent$' "$TMP/calls"
 
 	NO_HELPER=''
-	PATH="$TMP/fake:$PATH" install_from_repo alpine 2>/dev/null
-	PATH="$TMP/fake:$PATH" install_from_repo alpine 2>/dev/null
+	PATH="$TMP/fake:$PATH" install_from_repo alpine "$TMP/work" 2>/dev/null
+	PATH="$TMP/fake:$PATH" install_from_repo alpine "$TMP/work" 2>/dev/null
 	[ "$(grep -c 'sermon.example.org/repo/apk' "$SERMON_INSTALL_ROOT/etc/apk/repositories")" = 1 ]
-	grep -q 'sermon-agent.rsa.pub' "$SERMON_INSTALL_ROOT/etc/apk/keys/sermon-agent.rsa.pub"
 	grep -q '^apk add -q sermon-agent sermon-helper$' "$TMP/calls"
 
-	run install_from_repo arch
+	run install_from_repo arch "$TMP/work"
 	[[ "$output" == *"apt, dnf and apk"* ]]
+}
+
+# apk takes several keys as files of their own: during a rotation the next one, too (M4-31).
+@test "--repo installs every apk key of the server, under its own name" {
+	repo_server
+	PATH="$TMP/fake:$PATH" install_from_repo alpine "$TMP/work" 2>/dev/null
+	cmp "$TMP/srv/repo/keys/sermon-0123456789abcdef.rsa.pub" "$SERMON_INSTALL_ROOT/etc/apk/keys/sermon-0123456789abcdef.rsa.pub"
+	cmp "$TMP/srv/repo/keys/sermon-fedcba9876543210.rsa.pub" "$SERMON_INSTALL_ROOT/etc/apk/keys/sermon-fedcba9876543210.rsa.pub"
+	[ "$(find "$SERMON_INSTALL_ROOT/etc/apk/keys" -type f | wc -l)" = 2 ]
+}
+
+# The list of the keys names only files of the form install.sh expects: no other name, no path.
+@test "--repo takes no other apk key names from the list" {
+	repo_server
+	keys="$TMP/srv/repo/keys"
+	echo "evil" >"$keys/evil.rsa.pub"
+	{
+		sha256sum "$keys/evil.rsa.pub" | sed 's#  .*#  ../../../etc/evil.rsa.pub#'
+		sha256sum "$keys/evil.rsa.pub" | sed 's#  .*#  evil.rsa.pub#'
+	} >>"$keys/SHA256SUMS"
+	sign "$KEY" "$keys/SHA256SUMS"
+	PATH="$TMP/fake:$PATH" install_from_repo alpine "$TMP/work" 2>/dev/null
+	[ "$(find "$SERMON_INSTALL_ROOT/etc" -name 'evil*' | wc -l)" = 0 ]
+	[ "$(find "$SERMON_INSTALL_ROOT/etc/apk/keys" -type f | wc -l)" = 2 ]
+	# Without a single apk key of the expected form nothing is set up.
+	sed -i '/rsa\.pub$/d' "$keys/SHA256SUMS"
+	sign "$KEY" "$keys/SHA256SUMS"
+	rm -rf "$SERMON_INSTALL_ROOT/etc/apk" "$TMP/calls"
+	run install_from_repo alpine "$TMP/work"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"no apk key"* ]]
+	[ ! -e "$TMP/calls" ]
+}
+
+# The keys come with SHA256SUMS signed by the release key (M4-31): neither a changed key nor a
+# changed, unsigned or old list is installed.
+@test "--repo checks the repository keys against their list signed by the release key" {
+	repo_server
+	keys="$TMP/srv/repo/keys"
+	echo "other key" >"$keys/sermon.asc"
+	PATH="$TMP/fake:$PATH" run install_from_repo debian "$TMP/work"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"sermon.asc does not match"* ]]
+	[ ! -e "$SERMON_INSTALL_ROOT/usr/share/keyrings/sermon-archive-keyring.asc" ]
+	[ ! -e "$SERMON_INSTALL_ROOT/etc/apt/sources.list.d/sermon.sources" ]
+	[ ! -e "$TMP/calls" ]
+
+	(cd "$keys" && sha256sum sermon-*.rsa.pub sermon.asc >SHA256SUMS)
+	PATH="$TMP/fake:$PATH" run install_from_repo rocky "$TMP/work"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"signature check failed for SHA256SUMS"* ]]
+	[ ! -e "$SERMON_INSTALL_ROOT/etc/pki/rpm-gpg/RPM-GPG-KEY-sermon" ]
+
+	SIGN_VERSION=1.2.2 sign "$KEY" "$keys/SHA256SUMS"
+	PATH="$TMP/fake:$PATH" run install_from_repo alpine "$TMP/work"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"version 1.2.2"* ]]
+
+	rm "$keys/SHA256SUMS.minisig"
+	PATH="$TMP/fake:$PATH" run install_from_repo debian "$TMP/work"
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"signature of the repository keys"* ]]
+	[ ! -e "$TMP/calls" ]
+
+	# A server without release key: only TLS vouches for the keys, as before.
+	RELEASE_KEY='@SERMON_RELEASE_KEY@'
+	PATH="$TMP/fake:$PATH" run install_from_repo debian "$TMP/work"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"no release key"* ]]
+	cmp "$keys/sermon.asc" "$SERMON_INSTALL_ROOT/usr/share/keyrings/sermon-archive-keyring.asc"
+}
+
+# A source with a newer package of the same name doesn't replace the agent (M4-31); dnf takes
+# nothing but the SerMon packages from the SerMon repository. apk has no priorities.
+@test "--repo prefers the SerMon repository for its packages, and only for them" {
+	repo_server
+	PATH="$TMP/fake:$PATH" install_from_repo debian "$TMP/work" 2>/dev/null
+	pin="$SERMON_INSTALL_ROOT/etc/apt/preferences.d/sermon"
+	grep -q '^Package: sermon-agent sermon-helper$' "$pin"
+	grep -q '^Pin: release o=SerMon,l=SerMon$' "$pin"
+	grep -q '^Pin-Priority: 999$' "$pin"
+	PATH="$TMP/fake:$PATH" install_from_repo rocky "$TMP/work" 2>/dev/null
+	grep -q '^includepkgs=sermon-agent sermon-helper$' "$SERMON_INSTALL_ROOT/etc/yum.repos.d/sermon.repo"
+	grep -q '^priority=10$' "$SERMON_INSTALL_ROOT/etc/yum.repos.d/sermon.repo"
+}
+
+@test "computes SHA-256 with sha256sum or openssl" {
+	printf 'abc' >"$TMP/abc"
+	[ "$(sha256_of "$TMP/abc")" = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ]
+	mkdir -p "$TMP/bin"
+	for tool in openssl sed; do ln -sf "$(command -v "$tool")" "$TMP/bin/$tool"; done
+	[ "$(PATH="$TMP/bin" sha256_of "$TMP/abc")" = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad ]
 }
 
 @test "--repo takes the package's example configuration but needs a trusted certificate" {

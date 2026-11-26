@@ -90,11 +90,34 @@ scripts/build-repos.sh dist/packages KEYS deploy/compose/repo
 ```
 
 `dist/packages` enthält die signierten Pakete aller gewünschten Versionen (`scripts/package-agent.sh`), `KEYS` die
-Paketschlüssel (`gpg.asc`, `gpg.pub.asc`, `apk.rsa`, `sermon-agent.rsa.pub`). Die öffentlichen Schlüssel landen
-unter `/repo/keys/`; `install.sh --repo` richtet sie mit der Quelle ein. Der Paketmanager muss dem Zertifikat des
-Servers vertrauen: Mit einem selbstsignierten Zertifikat (`--ca-fingerprint`) geht `--repo` nicht, dann die CA des
-Servers auf dem Host installieren. Für einen Schlüsselwechsel liegen die öffentlichen Schlüssel des neuen Paares in
-`KEYS/next/`; sie werden ein Release lang mit ausgeliefert ([ADR 0036](../adr/0036-self-update-und-paket-repos.md)).
+Paketschlüssel (`gpg.asc`, `gpg.pub.asc`, `apk.rsa`, `apk.rsa.pub`). Die öffentlichen Schlüssel landen unter
+`/repo/keys/` (`sermon.asc` für apt und dnf, `sermon-<id>.rsa.pub` für apk, benannt nach dem Fingerprint des
+Schlüssels) mit der Liste `SHA256SUMS`. Die Liste signiert der Release-Schlüssel:
+
+```sh
+scripts/release-sign.sh sign KEY.pem --version VERSION deploy/compose/repo/keys/SHA256SUMS
+```
+
+`VERSION` ist die Version des Servers. Hat der Server einen Release-Schlüssel, richtet `install.sh --repo` nur
+Schlüssel ein, die in der signierten Liste stehen; ohne Release-Schlüssel bürgt nur TLS für sie. Der Paketmanager
+muss dem Zertifikat des Servers vertrauen: Mit einem selbstsignierten Zertifikat (`--ca-fingerprint`) geht `--repo`
+nicht, dann die CA des Servers auf dem Host installieren.
+
+`install.sh --repo` legt die Schlüssel dort ab, wo sie das Paket `sermon-agent` hält
+(`/usr/share/keyrings/sermon-archive-keyring.asc`, `/etc/pki/rpm-gpg/RPM-GPG-KEY-sermon`,
+`/etc/apk/keys/sermon-<id>.rsa.pub`); jedes Update des Agents ersetzt sie. Außerdem bekommen `sermon-agent` und
+`sermon-helper` Vorrang vor gleichnamigen Paketen anderer Quellen (apt: `/etc/apt/preferences.d/sermon`, dnf:
+`priority` und `includepkgs` in `/etc/yum.repos.d/sermon.repo`; apk kennt das nicht).
+
+**Schlüsselwechsel** ([ADR 0036](../adr/0036-self-update-und-paket-repos.md)): Die öffentlichen Schlüssel des neuen
+Paares liegen beim Bau in `KEYS/next/` (auch für `scripts/package-agent.sh`, `SERMON_PKG_PUBLIC_KEYS`). Dieses
+Release ist noch mit den alten Schlüsseln signiert und bringt die neuen mit dem Paket auf die Hosts; das nächste
+signiert nur mit den neuen, sein Paket entfernt die alten. Ein Host muss dazwischen also ein Update bekommen haben.
+dnf behält einen einmal importierten Schlüssel: Soll der alte nicht mehr gelten (etwa nach einer Kompromittierung),
+auf dem Host `rpm -e gpg-pubkey-<id>` und `dnf clean all`.
+
+Wer `sermon-agent` entfernt, entfernt auch die Schlüssel; die Quelle (`/etc/apt/sources.list.d/sermon.sources`,
+`/etc/yum.repos.d/sermon.repo` bzw. die Zeile in `/etc/apk/repositories`) dann ebenfalls löschen.
 
 ### Root-Helper (Updates und Reboots)
 

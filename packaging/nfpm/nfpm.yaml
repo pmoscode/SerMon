@@ -1,5 +1,6 @@
 # Agent packages (M2-21): .deb, .rpm and .apk, built with nfpm by scripts/package-agent.sh, which
-# sets PKG_ARCH and PKG_VERSION and fills root/ and keys/ (paths relative to its work directory).
+# sets PKG_ARCH and PKG_VERSION, writes the name of the apk key for @APK_KEY_NAME@ and fills root/
+# and keys/ (paths relative to its work directory).
 # The packages install the agent but do not enroll it: the admin sets the server in
 # /etc/sermon/agent.toml and enrolls (postinstall says how). Every package is signed; the script
 # refuses to build without keys.
@@ -41,6 +42,20 @@ contents:
     dst: /etc/sermon/agent.toml
     type: config|noreplace
     file_info: { mode: 0640 }
+  # The public keys of the package repositories (M4-31, scripts/repo-keys.sh), where install.sh
+  # --repo puts them: every update replaces them, so the keys of a rotation reach the host.
+  - src: root/repo-keys/sermon.asc
+    dst: /usr/share/keyrings/sermon-archive-keyring.asc
+    packager: deb
+    file_info: { mode: 0644 }
+  - src: root/repo-keys/sermon.asc
+    dst: /etc/pki/rpm-gpg/RPM-GPG-KEY-sermon
+    packager: rpm
+    file_info: { mode: 0644 }
+  - src: root/repo-keys/sermon-*.rsa.pub
+    dst: /etc/apk/keys
+    packager: apk
+    file_info: { mode: 0644 }
 
 scripts:
   preinstall: root/preinstall.sh
@@ -60,4 +75,4 @@ apk:
     postupgrade: root/postinstall.sh
   signature:
     key_file: keys/apk.rsa
-    key_name: sermon-agent
+    key_name: "@APK_KEY_NAME@"

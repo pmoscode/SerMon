@@ -58,11 +58,11 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 
 	echo "▸ packaging the agent (.deb, .rpm, .apk)"
 	"$root/scripts/package-test-keys.sh" "$build/package-keys"
-	SERMON_PKG_GPG_KEY="$build/package-keys/gpg.asc" SERMON_PKG_APK_KEY="$build/package-keys/apk.rsa" \
+	SERMON_PKG_GPG_KEY="$build/package-keys/gpg.asc" SERMON_PKG_APK_KEY="$build/package-keys/apk.rsa" SERMON_PKG_PUBLIC_KEYS="$build/package-keys" \
 		"$root/scripts/package-agent.sh" "$arch" 0.0.1 "$build/downloads/sermon-agent-linux-$arch" \
 		"$build/downloads/sermon-helper-linux-$arch" "$build/packages" >/dev/null
 	# The package hosts get the packages and the public keys only.
-	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/sermon-agent.rsa.pub" "$build/packages/"
+	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/apk.rsa.pub" "$build/packages/"
 	chmod 0644 "$build/packages/"*
 	# Package sources with updates for the agent hosts (M4-08), signed with the same keys.
 	echo "▸ building the package sources with updates"
@@ -70,17 +70,21 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 	# The agent's repositories (M4-20): this version; with the next one (0.0.2, the same binaries)
 	# for an update by the package manager; and one whose indexes another key signed.
 	echo "▸ building the agent's package repositories"
-	SERMON_PKG_GPG_KEY="$build/package-keys/gpg.asc" SERMON_PKG_APK_KEY="$build/package-keys/apk.rsa" \
+	SERMON_PKG_GPG_KEY="$build/package-keys/gpg.asc" SERMON_PKG_APK_KEY="$build/package-keys/apk.rsa" SERMON_PKG_PUBLIC_KEYS="$build/package-keys" \
 		"$root/scripts/package-agent.sh" "$arch" 0.0.2 "$build/downloads/sermon-agent-linux-$arch" \
 		"$build/downloads/sermon-helper-linux-$arch" "$build/packages-next" >/dev/null
 	cp "$build/packages/"*.deb "$build/packages/"*.rpm "$build/packages/"*.apk "$build/packages-next/"
 	"$root/scripts/package-test-keys.sh" "$build/other-keys"
 	mkdir -p "$build/forged-keys"
 	cp "$build/other-keys/gpg.asc" "$build/other-keys/apk.rsa" "$build/forged-keys/"
-	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/sermon-agent.rsa.pub" "$build/forged-keys/"
+	cp "$build/package-keys/gpg.pub.asc" "$build/package-keys/apk.rsa.pub" "$build/forged-keys/"
 	"$root/scripts/build-repos.sh" "$build/packages" "$build/package-keys" "$build/agent-repos/current" >/dev/null
 	"$root/scripts/build-repos.sh" "$build/packages-next" "$build/package-keys" "$build/agent-repos/next" >/dev/null
 	"$root/scripts/build-repos.sh" "$build/packages" "$build/forged-keys" "$build/agent-repos/forged" >/dev/null
+	# The list of the repository keys, signed like a release: install.sh --repo checks it (M4-31).
+	for repo in current next forged; do
+		"$root/scripts/release-sign.sh" sign "$build/release.pem" --version "$version" "$build/agent-repos/$repo/keys/SHA256SUMS"
+	done
 
 	# Database passwords and URLs as on a real installation; Mailpit accepts any SMTP login.
 	openssl rand -hex 16 | tr -d '\n' >"$build/secrets/smtp_password"

@@ -68,4 +68,4 @@ apk:
     postupgrade: root/helper-postupgrade.sh
   signature:
     key_file: keys/apk.rsa
-    key_name: sermon-agent
+    key_name: "@APK_KEY_NAME@"

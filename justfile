@@ -157,6 +157,7 @@ test-scripts:
     sh scripts/helper-loc_test.sh
     sh scripts/agent-budget_test.sh
     sh scripts/check-agent-allocator_test.sh
+    sh scripts/repo-keys_test.sh
 
 # Build the package sources of the E2E environment and check them on five distros (M4-08; Docker required)
 test-e2e-repos:

@@ -27,6 +27,9 @@ BIN_DIR=/usr/local/bin
 # Where the packages install the binaries, and the server of their example configuration.
 PACKAGE_BIN_DIR=/usr/bin
 PACKAGE_EXAMPLE=https://sermon.example.com
+# The repository keys as the agent package installs them (scripts/package-agent.sh).
+APT_KEYRING=/usr/share/keyrings/sermon-archive-keyring.asc
+RPM_KEY=/etc/pki/rpm-gpg/RPM-GPG-KEY-sermon
 CONFIG_DIR=/etc/sermon
 STATE_DIR=/var/lib/sermon-agent
 AGENT_PORT=8443
@@ -167,7 +170,7 @@ check_comment() {
 	[ "$comment_file" = "$1" ] ||
 		die "the signature belongs to ${comment_file:-an unnamed file}, not $1 – not installing"
 	[ "$comment_version" = "$AGENT_VERSION" ] ||
-		die "the agent is signed for version ${comment_version:-unknown}, this server runs $AGENT_VERSION – not installing"
+		die "$1 is signed for version ${comment_version:-unknown}, this server runs $AGENT_VERSION – not installing"
 }
 
 # --- installation ------------------------------------------------------------------------------
@@ -384,25 +387,66 @@ SERVICE
 	say "root helper installed, $CONFIG_DIR/helper.toml: $(grep '^allow_' "$ROOT$CONFIG_DIR/helper.toml" | tr '\n' ' ')"
 }
 
-# install_from_repo DISTRO sets up the server's package repository with its keys and installs the
-# agent (and the root helper unless --no-helper). The keys come from the server over the same
-# verified TLS connection as this script; apt, dnf and apk check every index and package against
-# them (ADR 0036).
+# sha256_of FILE prints the SHA-256 of FILE in hex.
+sha256_of() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1" | cut -d' ' -f1
+	else
+		openssl dgst -sha256 <"$1" | sed 's/^.*= //'
+	fi
+}
+
+# fetch_key_list WORK downloads the list of the repository's public keys (keys/SHA256SUMS, from
+# scripts/repo-keys.sh). With a release key it must carry the release's signature, like the
+# binaries: whoever can change the files the server serves can't swap the keys.
+fetch_key_list() {
+	download "$repo/keys/SHA256SUMS" "$1/SHA256SUMS" || die "cannot download the repository keys from $SERVER"
+	case $RELEASE_KEY in
+	@*@ | "") say "warning: this server has no release key – only TLS vouches for the repository keys" ;;
+	*)
+		download "$repo/keys/SHA256SUMS.minisig" "$1/SHA256SUMS.minisig" ||
+			die "cannot download the signature of the repository keys from $SERVER"
+		verify "$1/SHA256SUMS" "$1/SHA256SUMS.minisig"
+		;;
+	esac
+}
+
+# install_key WORK NAME DEST downloads the key NAME of the list to DEST if its SHA-256 matches.
+install_key() {
+	key_sum=$(awk -v name="$2" '$2 == name { print $1 }' "$1/SHA256SUMS")
+	[ -n "$key_sum" ] || die "the repository of $SERVER lists no key $2"
+	download "$repo/keys/$2" "$1/$2" || die "cannot download the repository key $2 from $SERVER"
+	[ "$(sha256_of "$1/$2")" = "$key_sum" ] || die "the repository key $2 does not match its checksum – not installing"
+	cp "$1/$2" "$3"
+	chmod 0644 "$3"
+}
+
+# install_from_repo DISTRO WORK sets up the server's package repository with its keys and installs
+# the agent (and the root helper unless --no-helper); apt, dnf and apk check every index and
+# package against the keys (ADR 0036). The keys go where the agent package keeps them: from then on
+# every update of it brings the keys of the next rotation (M4-31).
 install_from_repo() {
 	repo="$SERVER/repo"
 	packages=sermon-agent
 	[ -n "$NO_HELPER" ] || packages="sermon-agent sermon-helper"
 	case $1 in
 	debian | ubuntu)
-		mkdir -p "$ROOT/etc/apt/keyrings" "$ROOT/etc/apt/sources.list.d"
-		download "$repo/keys/sermon.asc" "$ROOT/etc/apt/keyrings/sermon.asc" || die "cannot download the repository key from $SERVER"
-		chmod 0644 "$ROOT/etc/apt/keyrings/sermon.asc"
+		fetch_key_list "$2"
+		mkdir -p "$ROOT/usr/share/keyrings" "$ROOT/etc/apt/sources.list.d" "$ROOT/etc/apt/preferences.d"
+		install_key "$2" sermon.asc "$ROOT$APT_KEYRING"
 		cat >"$ROOT/etc/apt/sources.list.d/sermon.sources" <<EOF
 Types: deb
 URIs: $repo/apt
 Suites: stable
 Components: main
-Signed-By: /etc/apt/keyrings/sermon.asc
+Signed-By: $APT_KEYRING
+EOF
+		# A newer package of the same name from another source would replace the agent with
+		# the next upgrade (M4-31). Origin and label as build-repos.sh sets them.
+		cat >"$ROOT/etc/apt/preferences.d/sermon" <<EOF
+Package: sermon-agent sermon-helper
+Pin: release o=SerMon,l=SerMon
+Pin-Priority: 999
 EOF
 		apt-get update -qq || die "apt cannot read the repository of $SERVER"
 		# Without recommends: --no-helper means no helper.
@@ -411,22 +455,32 @@ EOF
 			die "apt cannot install $packages"
 		;;
 	rhel | rocky | almalinux | centos | fedora)
+		fetch_key_list "$2"
 		mkdir -p "$ROOT/etc/pki/rpm-gpg" "$ROOT/etc/yum.repos.d"
-		download "$repo/keys/sermon.asc" "$ROOT/etc/pki/rpm-gpg/RPM-GPG-KEY-sermon" || die "cannot download the repository key from $SERVER"
+		install_key "$2" sermon.asc "$ROOT$RPM_KEY"
+		# Only the SerMon packages from here, and these before any other source (M4-31).
 		cat >"$ROOT/etc/yum.repos.d/sermon.repo" <<EOF
 [sermon]
 name=SerMon
 baseurl=$repo/rpm
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-sermon
+gpgkey=file://$RPM_KEY
+includepkgs=sermon-agent sermon-helper
+priority=10
 EOF
 		# shellcheck disable=SC2086 # one word per package
 		dnf install -y -q --setopt=install_weak_deps=False $packages >/dev/null || die "dnf cannot install $packages"
 		;;
 	alpine)
+		fetch_key_list "$2"
+		# apk knows a key by its file name (scripts/repo-keys.sh): only names of that form.
+		apk_keys=$(sed -n 's/^[0-9a-f]\{64\}  \(sermon-[0-9a-f]\{16\}\.rsa\.pub\)$/\1/p' "$2/SHA256SUMS")
+		[ -n "$apk_keys" ] || die "the repository of $SERVER lists no apk key"
 		mkdir -p "$ROOT/etc/apk/keys"
-		download "$repo/keys/sermon-agent.rsa.pub" "$ROOT/etc/apk/keys/sermon-agent.rsa.pub" || die "cannot download the repository key from $SERVER"
+		for key in $apk_keys; do
+			install_key "$2" "$key" "$ROOT/etc/apk/keys/$key"
+		done
 		grep -qxF "$repo/apk" "$ROOT/etc/apk/repositories" 2>/dev/null || echo "$repo/apk" >>"$ROOT/etc/apk/repositories"
 		apk update -q || die "apk cannot read the repository of $SERVER"
 		# shellcheck disable=SC2086 # one word per package
@@ -562,7 +616,7 @@ main() {
 	trap 'rm -rf "$work"' EXIT
 	agent=$BIN_DIR/sermon-agent
 	if [ -n "$REPO" ]; then
-		install_from_repo "$distro"
+		install_from_repo "$distro" "$work"
 		agent=$PACKAGE_BIN_DIR/sermon-agent
 	else
 		binary="sermon-agent-linux-$arch"

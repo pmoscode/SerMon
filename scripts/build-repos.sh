@@ -5,15 +5,18 @@
 #   OUT/apt/    suite stable, component main (InRelease and Release.gpg, OpenPGP)
 #   OUT/rpm/    one repository for x86_64 and aarch64 (repomd.xml.asc, OpenPGP; the packages are
 #               signed themselves)
-#   OUT/apk/    x86_64/ and aarch64/ with a signed APKINDEX (RSA, key name sermon-agent)
-#   OUT/keys/   sermon.asc (OpenPGP) and sermon-agent.rsa.pub (apk) for install.sh --repo
+#   OUT/apk/    x86_64/ and aarch64/ with a signed APKINDEX (RSA, key name sermon-<id> from
+#               scripts/repo-keys.sh)
+#   OUT/keys/   sermon.asc (OpenPGP), sermon-<id>.rsa.pub (apk) and their SHA256SUMS for
+#               install.sh --repo (scripts/repo-keys.sh)
 #
 #   scripts/build-repos.sh PACKAGES KEYS OUT
 #
-# KEYS holds gpg.asc, gpg.pub.asc, apk.rsa and sermon-agent.rsa.pub (scripts/package-test-keys.sh
-# for tests; in a release the secrets of the pipeline). For a key rotation, KEYS/next/ may hold the
-# public keys of the next keys: they are published alongside (ADR 0036). The server serves OUT under
-# /repo/ (SERMON_REPO_DIR). The tools run as containers (packaging/repo/*.Dockerfile).
+# KEYS holds gpg.asc, gpg.pub.asc, apk.rsa and apk.rsa.pub (scripts/package-test-keys.sh for tests;
+# in a release the secrets of the pipeline). For a key rotation, KEYS/next/ may hold the public keys
+# of the next pair: they are published alongside (ADR 0036). The release signs OUT/keys/SHA256SUMS
+# afterwards (scripts/release-sign.sh), install.sh checks it. The server serves OUT under /repo/
+# (SERMON_REPO_DIR). The tools run as containers (packaging/repo/*.Dockerfile).
 set -eu
 
 die() {
@@ -27,7 +30,7 @@ packages=$(cd "$1" && pwd)
 keys=$(cd "$2" && pwd)
 mkdir -p "$3"
 out=$(cd "$3" && pwd)
-for f in gpg.asc gpg.pub.asc apk.rsa sermon-agent.rsa.pub; do
+for f in gpg.asc gpg.pub.asc apk.rsa apk.rsa.pub; do
 	[ -r "$keys/$f" ] || die "$keys needs $f"
 done
 set -- "$packages"/*.deb
@@ -41,14 +44,19 @@ chmod 0700 "$work" "$work/keys"
 trap 'rm -rf "$work"' EXIT
 trap 'exit 130' INT TERM HUP
 cp "$keys/gpg.asc" "$work/keys/gpg.asc"
-# abuild-sign names the signature after the key file: the name of the packages' key.
-cp "$keys/apk.rsa" "$work/keys/sermon-agent.rsa"
+# abuild-sign names the signature after the key file: the name of the public key, as in the
+# packages.
+apk_key=$("$root/scripts/repo-keys.sh" apk-name "$keys/apk.rsa.pub")
+cp "$keys/apk.rsa" "$work/keys/$apk_key.rsa"
 
 for tool in apt rpm apk; do
 	docker build -q -t "sermon-repo-$tool" -f "$root/packaging/repo/$tool.Dockerfile" "$root/packaging/repo" >/dev/null
 done
 
-# apt
+# apt. No Valid-Until (M4-31): an expired Release fails apt-get update, and with it every update run
+# of the helper, distribution updates included, whenever a release is late; an old Release only
+# holds updates back, which whoever serves the repository can do anyway, and apt never downgrades.
+# Origin and label: install.sh pins sermon-agent and sermon-helper to them.
 cp "$packages"/*.deb "$out/apt/pool/main/"
 docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apt:/apt" -v "$work/keys:/keys:ro" -w /apt -e GNUPGHOME=/tmp/gnupg \
 	sermon-repo-apt sh -euc '
@@ -84,7 +92,7 @@ for apk in "$packages"/*.apk; do
 	name=${file%_*}
 	cp "$apk" "$out/apk/$arch/$(echo "$name" | sed 's/_/-/').apk"
 done
-docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:ro" sermon-repo-apk sh -euc '
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:ro" -e APK_KEY="$apk_key" sermon-repo-apk sh -euc '
 	for arch in x86_64 aarch64; do
 		cd /apk/$arch
 		set -- ./*.apk
@@ -93,19 +101,12 @@ docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$wo
 		else
 			apk index -q --allow-untrusted --no-warnings -o /tmp/APKINDEX.tar.gz
 		fi
-		abuild-sign -q -k /keys/sermon-agent.rsa /tmp/APKINDEX.tar.gz
+		abuild-sign -q -k "/keys/$APK_KEY.rsa" /tmp/APKINDEX.tar.gz
 		mv /tmp/APKINDEX.tar.gz APKINDEX.tar.gz
 	done'
 
-# The public keys; during a rotation the next ones, too (apt and dnf take several in one file).
-cp "$keys/gpg.pub.asc" "$out/keys/sermon.asc"
-cp "$keys/sermon-agent.rsa.pub" "$out/keys/sermon-agent.rsa.pub"
-if [ -r "$keys/next/gpg.pub.asc" ]; then
-	cat "$keys/next/gpg.pub.asc" >>"$out/keys/sermon.asc"
-fi
-if [ -r "$keys/next/sermon-agent.rsa.pub" ]; then
-	cp "$keys/next/sermon-agent.rsa.pub" "$out/keys/sermon-agent-next.rsa.pub"
-fi
+# The public keys; during a rotation the next ones, too.
+"$root/scripts/repo-keys.sh" publish "$keys" "$out/keys"
 rm -rf "$work"
 # Readable for the server: the four areas, nothing else of OUT.
 chmod -R a+rX "$out/apt" "$out/rpm" "$out/apk" "$out/keys"

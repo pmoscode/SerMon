@@ -35,7 +35,8 @@ image() {
 "$root/scripts/package-test-keys.sh" "$work/keys" >/dev/null
 "$root/scripts/package-test-keys.sh" "$work/other" >/dev/null
 mkdir "$work/other-public"
-cp "$work/other/gpg.pub.asc" "$work/other/sermon-agent.rsa.pub" "$work/other-public/"
+cp "$work/other/gpg.pub.asc" "$work/other-public/"
+cp "$work/other/apk.rsa.pub" "$work/other-public/sermon-agent.rsa.pub"
 sh "$here/build.sh" "$work/keys" "$work/repos" >/dev/null
 
 docker network create "$run" >/dev/null

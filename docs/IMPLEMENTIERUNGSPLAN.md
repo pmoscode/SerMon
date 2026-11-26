@@ -5042,6 +5042,10 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 >   Orchestrators mit der Zeit der Datenbank (die der Alert-Engine bleiben bei der Uhr der Instanz: ihre Tests spielen
 >   den Ablauf über sie). UI: Abbrechen in Rollout-Liste und Läufen, Hinweis und Schalter „Updates pausieren“,
 >   Hilfetexte. Gegenproben 19 von 19 (Server, Agent) und 21 von 21 (UI) erkannt.
+> - **Repo-Schlüssel (T101):** Rotation über das Agent-Paket auf eingerichteten Hosts, apk-Schlüssel nach Fingerprint,
+>   `install.sh` holt alle apk-Schlüssel, die Schlüsselliste `SHA256SUMS` ist vom Release-Key signiert, Pinning für apt
+>   und dnf, bewusst kein `Valid-Until` (ADR 0036). `test-packages` spielt eine Rotation über drei Releases auf Debian,
+>   Rocky und Alpine durch. Gegenproben 13 von 13 erkannt.
 - **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
   - **Mittel:**
     - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys

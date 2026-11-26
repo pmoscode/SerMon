@@ -184,6 +184,7 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
   Nachtrag M4-20 zu ADR 0035), sonst sähe ein Host neue Pakete erst nach 48 h bzw. 4 h.
 - **Rotation:** Öffentliche Schlüssel des nächsten Paares in `KEYS/next/` werden mit ausgeliefert (apt und dnf in einer
   Datei, apk als zweite Datei). `Valid-Until` setzt das apt-Repo nicht: Es wird nur mit Releases neu gebaut (T101).
+  Seit M4-31 erreichen sie eingerichtete Hosts über das Agent-Paket (Nachtrag unten).
 
 
 ## Nachtrag M4-30 (Security-Review)
@@ -197,3 +198,38 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
 - **Offen (M4-31):** Der Helper aktualisiert sich nicht selbst, ein neuer oder widerrufener Release-Schlüssel erreicht
   per Skript installierte Hosts erst mit `install.sh`; die Schlüssel der Paket-Repos erneuern sich auf eingerichteten
   Hosts nicht, apk erkennt Schlüssel am Dateinamen; der Kanal steht nicht im signierten Kommentar.
+
+## Nachtrag M4-31 (Repo-Schlüssel)
+
+- **Rotation über das Paket:** `sermon-agent` bringt die öffentlichen Repo-Schlüssel mit (aktuelle und nächste aus
+  `KEYS/next/`, `SERMON_PKG_PUBLIC_KEYS` von `package-agent.sh`) und legt sie dort ab, wo `install.sh --repo` sie
+  einrichtet: apt `/usr/share/keyrings/sermon-archive-keyring.asc` (`Signed-By`), dnf
+  `/etc/pki/rpm-gpg/RPM-GPG-KEY-sermon` (`gpgkey`), apk `/etc/apk/keys/`. Jedes Update ersetzt sie, geprüft mit dem
+  alten Schlüssel. Ablauf: Release N signiert noch mit dem alten Paar und verteilt das neue, N+1 signiert nur mit dem
+  neuen, sein Paket entfernt das alte. Kein eigenes Keyring-Paket: Jeder Repo-Host hat den Agent, und wer ihn entfernt,
+  entfernt auch das Vertrauen ins Repo. `scripts/test-packages.sh` spielt das über drei Releases auf Debian, Rocky und
+  Alpine durch.
+- **dnf fragt beim Import:** Einen neuen Schlüssel für die Metadaten importiert dnf nur nach Rückfrage; der Helper
+  frischt deshalb mit `dnf -y -q makecache --refresh` auf (das Upgrade lief schon mit `-y`). Einmal importierte
+  Schlüssel behält dnf (rpmdb und Repo-Keyring); ein widerrufener Schlüssel braucht auf dem Host
+  `rpm -e gpg-pubkey-<id>` und `dnf clean all` (`docs/admin/installation.md`).
+- **apk-Schlüssel nach Fingerprint:** `sermon-<id>.rsa.pub`, `<id>` = die ersten 16 Hex-Ziffern von SHA-256 über den
+  DER-Public-Key (`scripts/repo-keys.sh`), gleich in `build-repos.sh` (APKINDEX), `package-agent.sh` (`key_name`),
+  Paket und `install.sh`. Der Name bleibt über Releases und Rotation stabil; der Schlüssel in `KEYS` heißt jetzt
+  `apk.rsa.pub`. `sermon.asc` enthält beide OpenPGP-Schlüssel in einem Armor-Block.
+- **Signierte Schlüsselliste:** `/repo/keys/SHA256SUMS` listet alle veröffentlichten Schlüssel; das Release signiert
+  sie mit dem Release-Key (`release-sign.sh`, Version des Servers). `install.sh --repo` prüft die Signatur (Datei und
+  Version wie bei den Binaries) und jeden Schlüssel gegen seine Prüfsumme, auf Alpine alle apk-Schlüssel der Liste
+  (auch den nächsten), nur Namen der Form `sermon-<16 hex>.rsa.pub`. Ohne Release-Key bürgt nur TLS (Warnung).
+- **Vorrang vor fremden Quellen:** Die Gefahr ist, dass eine andere Quelle mit gleichnamigem, neuerem Paket den Agent
+  beim unbeaufsichtigten Upgrade ersetzt; gegen böswillige Signierer hilft Pinning nicht, alle Quellen sind root.
+  apt: `/etc/apt/preferences.d/sermon` (`o=SerMon,l=SerMon`, 999, auch für Spiegel); dnf: `priority=10` mit
+  `includepkgs=sermon-agent sermon-helper`, damit das SerMon-Repo nichts anderes überstimmt. apk kennt keine
+  Prioritäten je Paket.
+- **Weiter kein `Valid-Until`:** Ein abgelaufenes Release lässt `apt-get update` und damit jeden Update-Lauf des
+  Helpers scheitern, auch die Sicherheitsupdates der Distribution, sobald ein Release sich verspätet. Ein altes
+  Release hält nur Updates zurück (das kann, wer das Repo ausliefert, ohnehin), apt stuft nie herab, dnf und apk haben
+  kein Gegenstück.
+- **Offen:** `apk update` meldet eine falsche Signatur nur als Warnung (Exit 0); erst `apk add` scheitert. Die Demo
+  prüft das am gefälschten Repo.
+

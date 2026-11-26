@@ -20,6 +20,9 @@ func TestRepository_ServesTheRepositoriesAndNothingElse(t *testing.T) {
 		"apt/dists/stable/InRelease":            "signed index",
 		"apk/aarch64/sermon-agent-1.0.0-r1.apk": "apk",
 		"keys/sermon.asc":                       "key",
+		"keys/sermon-0123456789abcdef.rsa.pub":  "apk key",
+		"keys/SHA256SUMS":                       "sums",
+		"keys/SHA256SUMS.minisig":               "signature",
 		"rpm/repodata/repomd.xml":               "<repomd/>",
 		".work/keys/gpg.asc":                    "private!",
 		"apt/.hidden":                           "hidden",
@@ -55,6 +58,9 @@ func TestRepository_ServesTheRepositoriesAndNothingElse(t *testing.T) {
 		"/repo/apt/dists/stable/InRelease":            "signed index",
 		"/repo/apk/aarch64/sermon-agent-1.0.0-r1.apk": "apk",
 		"/repo/keys/sermon.asc":                       "key",
+		"/repo/keys/sermon-0123456789abcdef.rsa.pub":  "apk key",
+		"/repo/keys/SHA256SUMS":                       "sums",
+		"/repo/keys/SHA256SUMS.minisig":               "signature",
 		"/repo/rpm/repodata/repomd.xml":               "<repomd/>",
 	} {
 		code, body, h := get(p)

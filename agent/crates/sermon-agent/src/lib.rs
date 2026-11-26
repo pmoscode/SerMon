@@ -130,6 +130,8 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     );
     // Update information (M4-07): the root helper lists, RefreshUpdateInfo asks for it.
     let update_refresh = Arc::new(tokio::sync::Notify::new());
+    // A run of the root helper ended: the update information follows at once (M4-28).
+    let run_ended = Arc::new(tokio::sync::Notify::new());
     // The server's commands for the root helper (M4-12).
     let (inbox, ports) = run_ports(config, &layout, &clock);
     let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
@@ -188,8 +190,15 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
             clock.clone(),
             shutdown.clone(),
         ));
-        let reports = spawn_updates(config, &outbox, &clock, update_refresh, &shutdown);
-        let runner = spawn_runs(ports, &outbox, &clock, &agent_config, &shutdown);
+        let reports = spawn_updates(
+            config,
+            &outbox,
+            &clock,
+            update_refresh,
+            run_ended.clone(),
+            &shutdown,
+        );
+        let runner = spawn_runs(ports, &outbox, &clock, &agent_config, run_ended, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         reports.await.context("update task failed")?;
@@ -281,6 +290,7 @@ fn spawn_updates(
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     refresh: Arc<tokio::sync::Notify>,
+    ran: Arc<tokio::sync::Notify>,
     shutdown: &CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     let (outbox, clock) = (outbox.clone(), clock.clone());
@@ -296,6 +306,7 @@ fn spawn_updates(
             }
         },
         refresh,
+        ran,
         updates::Schedule::default(),
         updates::Spread::random(),
         shutdown.clone(),
@@ -320,6 +331,7 @@ fn spawn_runs(
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
+    ended: Arc<tokio::sync::Notify>,
     shutdown: &CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
     let (outbox, sink_clock, now_clock, config) = (
@@ -339,6 +351,7 @@ fn spawn_runs(
         },
         move |text: &str| config.current().redactor.redact(text).into_owned(),
         move || now_clock.now(),
+        ended,
         runs::Schedule::default(),
         shutdown.clone(),
     ))

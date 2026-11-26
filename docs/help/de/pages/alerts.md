@@ -9,7 +9,7 @@ Die aktiven Alerts der Nodes, die du sehen darfst: was feuert, was auf seine Dau
 - **Flattert** heißt: Der Alert wechselt zu oft; seine Benachrichtigungen werden gedrosselt, bis er wieder stabil ist.
 - Werte der Hosts (Hostnamen, User-Namen, Adressen) erscheinen als Text. User und Adresse von Security-Alerts sehen nur Mitglieder, die die Security-Events sehen dürfen.
 - **Verlauf** zeigt die Änderungen eines Alerts, die neueste zuerst; er bleibt ein Jahr gespeichert.
-- **Charts um den Zeitpunkt** öffnet die Node-Seite eine Stunde vor bis eine Stunde nach dem Auslösen, im Bereich der Regel (CPU, Speicher, Datenträger, Netzwerk, Security); **Logs** zeigt die Logs des Nodes um den Zeitpunkt.
+- **Charts um den Zeitpunkt** öffnet die Node-Seite eine Stunde vor bis eine Stunde nach dem Auslösen, im Bereich der Regel (CPU, Speicher, Datenträger, Netzwerk, Security); **Logs** zeigt die Logs des Nodes um den Zeitpunkt, bei einem Alert einer systemd-Unit nur die Zeilen dieser Unit.
 
 ## Quittieren
 

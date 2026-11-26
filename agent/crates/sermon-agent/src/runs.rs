@@ -527,6 +527,7 @@ pub async fn run<H: Helper>(
     mut sink: impl FnMut(CommandResult) + Send,
     redact: impl Fn(&str) -> String + Send,
     now: impl Fn() -> SystemTime + Send,
+    ended: Arc<Notify>,
     schedule: Schedule,
     shutdown: CancellationToken,
 ) {
@@ -592,6 +593,8 @@ pub async fn run<H: Helper>(
                         tracing::info!(run_id = %id, phase = r.phase, exit_code = r.exit_code, "run of the root helper ended");
                         sink(r);
                         book.set(&id, Entry::Ended, now());
+                        // The update information follows at once (M4-28): the package manager is done.
+                        ended.notify_one();
                     }
                 }
             }

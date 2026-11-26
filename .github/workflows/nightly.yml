@@ -1,5 +1,6 @@
-# Nightly checks that take too long for every push (M2-21): the E2E demo on a native arm64 runner
-# (ci.yml runs it on amd64 for every change) and the agent packages for arm64.
+# Nightly checks that take too long for every push (M2-21): the whole E2E demo on a native arm64
+# runner (ci.yml runs the fast one on amd64 for every change; since M4-28 only this one has the
+# anomalies, the rollout and the budget during a listing) and the agent packages for arm64.
 name: nightly
 
 on:
@@ -33,7 +34,7 @@ jobs:
   e2e-demo-arm64:
     name: e2e demo on arm64 (real stack, agents in systemd and OpenRC containers)
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,11 +81,11 @@ jobs:
       - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
         with:
           tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
-      # The same demo as in ci.yml, natively on arm64 (no QEMU): install.sh, OpenRC, packages,
-      # resource budget.
+      # The whole demo, natively on arm64 (no QEMU): install.sh, OpenRC, packages, resource budget,
+      # and the long scenarios of M4-28.
       - run: just test-e2e-repos
       - run: just test-helper
-      - run: just e2e-demo
+      - run: just e2e-demo-full
       # .deb, .rpm and .apk for arm64: signature, install, upgrade, removal.
       - run: just test-packages
       # The runner's LSM can deny what works on a developer machine (AppArmor on Ubuntu 24.04).

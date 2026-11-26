@@ -204,7 +204,7 @@
 			<Button
 				size="sm"
 				variant="ghost"
-				href={`${resolve('/(app)/logs')}${alertLogsQuery(alert.key.nodeId, since.getTime(), now.getTime())}`}
+				href={`${resolve('/(app)/logs')}${alertLogsQuery(alert.key.nodeId, since.getTime(), now.getTime(), alert.dimensionLabels.unit)}`}
 			>
 				<ScrollText aria-hidden="true" />
 				{m.alert_logs_link()}

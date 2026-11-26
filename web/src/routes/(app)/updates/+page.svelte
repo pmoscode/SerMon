@@ -227,7 +227,7 @@
 								</p>{/if}
 							{#if r.nodes.length > 0}
 								<p class="text-muted-foreground">
-									{#each r.nodes as n, i (n.nodeId)}{i > 0 ? ' · ' : ''}{n.hostname}: {rolloutNodeLabel(
+									{#each r.nodes as n, i (n.nodeId)}{i > 0 ? ' · ' : ''}{displayText(n.hostname)}: {rolloutNodeLabel(
 											n.state
 										)}{n.reason ? ` (${displayText(n.reason)})` : ''}{/each}
 								</p>

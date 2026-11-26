@@ -12,6 +12,8 @@
 #
 #   scripts/e2e-demo.sh          run and tear down
 #   KEEP=1 scripts/e2e-demo.sh   leave the environment running (https://localhost:18443)
+#   FULL=1 …                     the whole demo, with what takes long (M4-28: anomalies, the rollout
+#                                of a policy, the budget during a listing); without it the fast one
 #   SKIP_BUILD=1 …               reuse the agent, packages and secrets of the last run (deploy/e2e/.build)
 #   SERMON_E2E_{PORT,MAIL_PORT,NTFY_PORT,SLACK_PORT}  ports on 127.0.0.1 (18443, 18025, 18090, 18026)
 set -eu

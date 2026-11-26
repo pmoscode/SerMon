@@ -9,7 +9,7 @@ The active alerts of the nodes you may see: what fires, what waits for its durat
 - **Flapping** alerts change too often; their notifications are throttled until they are stable again.
 - Values of the hosts (host names, user names, addresses) are shown as text. User and address of security alerts appear only for members who may see the security events.
 - **History** shows the changes of an alert, newest first; it is kept for a year.
-- **Charts around the time** opens the node page an hour before to an hour after the alert fired, in the area of its rule (CPU, memory, disks, network, security); **Logs** shows the node's logs around the time.
+- **Charts around the time** opens the node page an hour before to an hour after the alert fired, in the area of its rule (CPU, memory, disks, network, security); **Logs** shows the node's logs around the time, for an alert of a systemd unit only that unit's lines.
 
 ## Acknowledging
 

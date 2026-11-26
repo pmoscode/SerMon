@@ -66,7 +66,8 @@ test('a failed service leads from its alert into the redacted logs; the dashboar
 
 	// From the alert into the logs of the node around its time: the line, redacted.
 	await alert.getByRole('link', { name: 'Logs around this time' }).click();
-	await expect(page).toHaveURL(/\/logs\?.*node=/);
+	// Only the unit's lines (M4-28): the node's other lines can't push it out of the first 200.
+	await expect(page).toHaveURL(/\/logs\?.*node=.*&unit=e2e-migrate-/);
 	const lines = page.getByRole('region', { name: 'Lines' });
 	await expect(lines.getByText('migration failed: password=***').first()).toBeVisible({
 		timeout: 60_000

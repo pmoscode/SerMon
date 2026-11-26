@@ -520,6 +520,7 @@ impl Source for Fake {
 struct Running {
     fake: Arc<Fake>,
     refresh: Arc<Notify>,
+    ran: Arc<Notify>,
     reports: Arc<AtomicUsize>,
     shutdown: CancellationToken,
     task: tokio::task::JoinHandle<()>,
@@ -536,6 +537,7 @@ fn start(busy: usize) -> Running {
     std::fs::create_dir_all(root.path().join("var/lib/dpkg")).unwrap();
     std::fs::write(root.path().join("var/lib/dpkg/status"), "").unwrap();
     let refresh = Arc::new(Notify::new());
+    let ran = Arc::new(Notify::new());
     let reports = Arc::new(AtomicUsize::new(0));
     let shutdown = CancellationToken::new();
     let counted = reports.clone();
@@ -546,6 +548,7 @@ fn start(busy: usize) -> Running {
             counted.fetch_add(1, Ordering::SeqCst);
         },
         refresh.clone(),
+        ran.clone(),
         Schedule::default(),
         Spread::seeded(42),
         shutdown.clone(),
@@ -553,6 +556,7 @@ fn start(busy: usize) -> Running {
     Running {
         fake,
         refresh,
+        ran,
         reports,
         shutdown,
         task,
@@ -656,6 +660,29 @@ async fn reports_two_minutes_after_the_package_manager_ran() {
     assert!(!calls[1].1, "no refresh of the sources");
     advance(Duration::from_mins(10)).await;
     assert_eq!(r.calls().len(), 2, "no change, no report");
+    r.stop().await;
+}
+
+// A run of the helper ended (M4-28): the agent knows the package manager is done and reports from
+// the local lists a few seconds later, without the debounce and only once – a rollout waits for
+// this report before it decides on the reboot.
+#[tokio::test(start_paused = true)]
+async fn reports_right_after_a_run_of_the_helper() {
+    let r = start(0);
+    advance(Duration::from_mins(10)).await;
+    assert_eq!(r.calls().len(), 1);
+    // The run changed the database just before it ended – the poll hasn't seen it yet.
+    advance(Duration::from_secs(1)).await;
+    r.touch();
+    r.ran.notify_one();
+    advance(Duration::from_secs(10)).await;
+    let calls = r.calls();
+    assert_eq!(calls.len(), 2, "{calls:?}");
+    let after = calls[1].0.checked_sub(Duration::from_secs(601)).unwrap();
+    assert!(after <= Schedule::default().after_run, "{after:?}");
+    assert!(!calls[1].1, "no refresh of the sources");
+    advance(Duration::from_mins(5)).await;
+    assert_eq!(r.calls().len(), 2, "the change of the run is reported once");
     r.stop().await;
 }
 

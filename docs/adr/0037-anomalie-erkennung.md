@@ -149,3 +149,13 @@ Der Benchmark (13 synthetische Szenarien) hat drei Änderungen am Verfahren von 
   höchstens 7 Tage in den letzten 30.
 - **Gemessen** gegen PostgreSQL: vier Serien mit 4 Wochen Historie, erster Lauf mit allen 168 Stunden in 2,3 s.
 
+
+## Nachtrag M4-28
+
+- **Reihenfolge des Nachrechnens** (gefunden in der Demo): Nach einer Übernahme rechnete der Worker die fehlenden
+  Stunden vom letzten Bucket rückwärts nach; die sieben Stunden des Aufwärmens kamen erst Runden später dran, und eine
+  Lastspitze im ersten Fenster blieb unbewertet. Jetzt zuerst – und alle – die Stunden, gegen die die Minuten von
+  `done` bis jetzt bewertet werden (ihre Buckets eine Woche zurück), danach bis zu `Backfill` weitere ab der aktuellen
+  Stunde vorwärts: die als Nächstes gebrauchten zuerst.
+- **Stunden ohne Daten** bleiben fehlend (eine Baseline braucht 30 Werte) und wurden jede Minute erneut gerechnet; jetzt
+  höchstens einmal je Stunde (`orgState.tried`).

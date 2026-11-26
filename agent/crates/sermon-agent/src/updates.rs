@@ -2,8 +2,9 @@
 //! this module parses its raw lists (`sermon-updates`) and buffers an `UpdateReport`.
 //!
 //! A report comes shortly after the start and every 6 hours with spread (with fresh sources),
-//! 2 minutes after the package databases of dpkg, rpm or apk last changed (an admin or a run
-//! installed something; from the local lists) and on the server's `RefreshUpdateInfo` (fresh
+//! 2 minutes after the package databases of dpkg, rpm or apk last changed (an admin installed
+//! something; from the local lists), a few seconds after a run of the root helper ended (the agent
+//! knows the package manager is done: no debounce, M4-28) and on the server's `RefreshUpdateInfo` (fresh
 //! sources, at most every 5 minutes). Without a helper the report says so instead of failing; a
 //! busy helper (a run holds its lock) is asked again 5 minutes later.
 //!
@@ -66,6 +67,8 @@ pub struct Schedule {
     pub retry: Duration,
     /// How often the package databases are looked at.
     pub poll: Duration,
+    /// After a run of the root helper ended (it releases its lock just after the result).
+    pub after_run: Duration,
 }
 
 impl Default for Schedule {
@@ -78,6 +81,7 @@ impl Default for Schedule {
             refresh_every: Duration::from_mins(5),
             retry: Duration::from_mins(5),
             poll: Duration::from_secs(30),
+            after_run: Duration::from_secs(5),
         }
     }
 }
@@ -500,12 +504,17 @@ fn first_report(schedule: &Schedule, spread: &mut Spread) -> Duration {
 }
 
 /// Reports what `source` lists into `sink` on the [`Schedule`] until `shutdown`; `refresh` is
-/// woken by the server's `RefreshUpdateInfo`.
+/// woken by the server's `RefreshUpdateInfo`, `ran` when a run of the root helper ended.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the ports of the task, wired once"
+)]
 pub async fn run<S: Source>(
     source: Arc<S>,
     root: PathBuf,
     mut sink: impl FnMut(UpdateReport) + Send,
     refresh: Arc<Notify>,
+    ran: Arc<Notify>,
     schedule: Schedule,
     mut spread: Spread,
     shutdown: CancellationToken,
@@ -531,6 +540,12 @@ pub async fn run<S: Source>(
                 let due = last_refresh.map_or(now, |t| (t + schedule.refresh_every).max(now));
                 // Always 5 minutes after the last fresh sources, also if those came meanwhile.
                 requested = Some(due);
+                continue;
+            }
+            () = ran.notified() => {
+                // The run's own change is reported now, not again by the poll.
+                seen = last_change(&root);
+                changed = Some(Instant::now() + schedule.after_run);
                 continue;
             }
             _ = poll.tick() => {

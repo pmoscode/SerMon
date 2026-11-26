@@ -1095,7 +1095,8 @@ Kanäle der dritten Welle (M2-13):
 
 - **Baselines** in `anomaly_baselines` (RLS) je Serie und Stunde der Woche in UTC; stündlich wird nur der Bucket der
   abgelaufenen Stunde aus `metrics_1m` neu gerechnet (rund 1,4 Mio. Punkte bei 6 000 Serien). EWMA und Entprellung
-  hält der Worker im Speicher und wärmt sie beim Start aus 6 h Historie auf.
+  hält der Worker im Speicher und wärmt sie beim Start aus 6 h Historie auf. Fehlende Buckets rechnet er zuerst für
+  die Stunden des Aufwärmens, dann die als Nächstes gebrauchten (M4-28).
 - **Ergebnisse** in der Hypertable `anomaly_points` ohne RLS, nur auffällige Minuten (Score ≥ 3 oder anomal), gelesen
   über `SECURITY DEFINER`-Funktionen wie die Metriken (O8). Die Anomalie-Rate je Node ist die Serie
   `sermon_anomaly_rate_ratio`, geschrieben vom Server.
@@ -1254,7 +1255,7 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
       Behebung, Auslösungen vor dem Zeitraum fehlen. Die zehn lautesten Regeln mit Nodes, offenen und flatternden
       Auslösungen; höchstens 200 000 Übergänge pro Auswertung.
     - Jeder Alert führt in die Charts seines Nodes eine Stunde vor bis nach dem Auslösen (Zeitraum und Reiter in der
-      URL der Node-Seite) und in die Logs um den Zeitpunkt.
+      URL der Node-Seite) und in die Logs um den Zeitpunkt; ein Alert einer systemd-Unit nur in ihre Zeilen (M4-28).
 4. **Security-Dashboard:**
     - Fehlgeschlagene Logins über Zeit (gestapelt nach Node), **Top-IPs, Top-Usernamen**, Länder (bei GeoIP), Weltkarte
       optional

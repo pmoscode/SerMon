@@ -116,9 +116,13 @@ test-integration:
 e2e:
     pnpm run test:e2e
 
-# Demo end to end (M1-33): real stack in Docker, install.sh in systemd containers, Playwright (KEEP=1 keeps it running)
+# Fast demo end to end for every change (M1-33): real stack, install.sh in containers, Playwright (KEEP=1 keeps it running)
 e2e-demo:
     scripts/e2e-demo.sh
+
+# Whole demo with the long scenarios of M4-28 (anomalies, rollout, budget during a listing): nightly, before a release
+e2e-demo-full:
+    FULL=1 scripts/e2e-demo.sh
 
 # Run the Rust agent binary against the real server (Testcontainers; Docker and Rust required)
 e2e-agent:

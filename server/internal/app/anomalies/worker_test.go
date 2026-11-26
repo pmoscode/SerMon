@@ -41,6 +41,7 @@ type fake struct {
 	holders   map[tenant.OrgID]string
 	reads     int
 	asked     map[int64]bool // the series whose points were read
+	saved     map[int]int    // how often each hour of the week was computed
 	fail      error
 }
 
@@ -101,7 +102,8 @@ func (f *fake) Points(_ context.Context, _ tenant.OrgID, ids []int64, from, to t
 		f.asked[id] = true
 		for t := from; t.Before(to); t = t.Add(time.Minute) {
 			if v, ok := f.value(id, t); ok {
-				out = append(out, anomalies.Point{Series: id, T: t, V: v})
+				// In UTC, as the store returns them.
+				out = append(out, anomalies.Point{Series: id, T: t.UTC(), V: v})
 			}
 		}
 	}
@@ -120,7 +122,14 @@ func (f *fake) SaveBaselines(_ context.Context, org tenant.OrgID, hour int, at t
 	if f.baselines[org] == nil {
 		f.baselines[org], f.ages[org] = map[int]map[int64]anomaly.Baseline{}, map[int]time.Time{}
 	}
-	f.baselines[org][hour], f.ages[org][hour] = b, at
+	if f.saved == nil {
+		f.saved = map[int]int{}
+	}
+	f.saved[hour]++
+	// Like PostgreSQL: the age of an hour comes from its rows; an hour without any stays missing.
+	if len(b) > 0 {
+		f.baselines[org][hour], f.ages[org][hour] = b, at
+	}
 	return nil
 }
 
@@ -483,5 +492,97 @@ func TestWorker_ListingFails(t *testing.T) {
 	w.Round(context.Background())
 	if w.Stats().Errors.Load() != 1 || len(f.rates[orgA]) != 0 {
 		t.Errorf("errors = %d", w.Stats().Errors.Load())
+	}
+}
+
+// After a takeover the warm-up scores against the baselines of its hours at once, even without
+// any other backfill: a spike in the first minutes written is found in the very first round.
+func TestWorker_TheWarmUpHasItsBaselines(t *testing.T) {
+	f := newFake()
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	spike := now0.Add(-8 * time.Minute) // in the five minutes the first round writes
+	base := f.value
+	f.value = func(id int64, t time.Time) (float64, bool) {
+		v, ok := base(id, t)
+		if !t.Before(spike) {
+			v += 500_000
+		}
+		return v, ok
+	}
+	w := worker(t, f, &clock{t: now0}, func(cfg *anomalies.Config) { cfg.Backfill = 0 })
+	w.Round(context.Background())
+	// 04:00 to 10:00: the seven hours of the warm-up, each from the weeks before.
+	if got := w.Stats().Baselines.Load(); got < 7 {
+		t.Fatalf("%d baselines", got)
+	}
+	for h := now0.Add(-6 * time.Hour).Truncate(time.Hour); !h.After(now0); h = h.Add(time.Hour) {
+		if _, ok := f.ages[orgA][anomaly.HourOfWeek(h)]; !ok {
+			t.Errorf("no baseline for %v", h)
+		}
+	}
+	if !slices.ContainsFunc(f.notable[orgA], func(n anomalies.Notable) bool { return n.Anomalous }) {
+		t.Error("the spike is not found in the first round")
+	}
+}
+
+// The other missing hours come from the current one forwards, Backfill per round; an hour
+// without data is tried again only an hour later, not every round.
+func TestWorker_BackfillsTheHoursNeededNextAndRetriesHourly(t *testing.T) {
+	f := newFake()
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	f.value = func(int64, time.Time) (float64, bool) { return 0, false } // no data at all
+	c := &clock{t: now0}
+	w := worker(t, f, c, func(cfg *anomalies.Config) { cfg.Backfill = 2 })
+	w.Round(context.Background())
+	eleven := anomaly.HourOfWeek(now0.Add(30 * time.Minute)) // 11:00, the first after the warm-up
+	if f.saved[eleven] != 1 || f.saved[anomaly.HourOfWeek(now0.Add(90*time.Minute))] != 1 {
+		t.Errorf("after the warm-up's hours not the next ones: %v", f.saved)
+	}
+	before := len(f.saved)
+	c.set(now0.Add(time.Minute))
+	w.Round(context.Background())
+	if f.saved[eleven] != 1 || len(f.saved) != before+2 {
+		t.Errorf("second round: %d hours more, 11:00 computed %d times", len(f.saved)-before, f.saved[eleven])
+	}
+	c.set(now0.Add(61 * time.Minute))
+	w.Round(context.Background())
+	if f.saved[eleven] != 2 {
+		t.Errorf("an hour later 11:00 computed %d times, want tried again", f.saved[eleven])
+	}
+
+	// With data, after the warm-up's hours the ones right after now, Backfill of them.
+	g := newFake()
+	g.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	w2 := worker(t, g, &clock{t: now0}, func(cfg *anomalies.Config) { cfg.Backfill = 2 })
+	w2.Round(context.Background())
+	for _, h := range []time.Duration{30 * time.Minute, 90 * time.Minute} {
+		if _, ok := g.ages[orgA][anomaly.HourOfWeek(now0.Add(h))]; !ok {
+			t.Errorf("the hour at %v after now has no baseline", h)
+		}
+	}
+	if _, ok := g.ages[orgA][anomaly.HourOfWeek(now0.Add(150*time.Minute))]; ok {
+		t.Error("more than Backfill hours computed")
+	}
+	// A fresh hour (with data) is not computed again, also after the retry of missing ones.
+	w3 := worker(t, g, &clock{t: now0.Add(61 * time.Minute)}, func(cfg *anomalies.Config) { cfg.Backfill = 2 })
+	w3.Round(context.Background())
+	if n := g.saved[eleven]; n != 1 {
+		t.Errorf("the fresh 11:00 computed %d times", n)
+	}
+}
+
+// The server's clock runs in time.Local, the store answers in UTC: the same minutes, other
+// locations. Found in the demo (M4-28): the worker scored nothing and wrote no rate.
+func TestWorker_ScoresWhateverTheLocationOfTheClock(t *testing.T) {
+	f := newFake()
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	c := &clock{t: now0.In(time.FixedZone("CET", 3600))}
+	w := worker(t, f, c, nil)
+	w.Round(context.Background())
+	if got := w.Stats().Scored.Load(); got == 0 {
+		t.Fatal("nothing scored")
+	}
+	if n := len(lastRates(f, orgA, node1, "sermon_anomaly_rate_ratio")); n != 5 {
+		t.Errorf("%d rates written", n)
 	}
 }

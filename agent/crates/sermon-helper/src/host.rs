@@ -101,6 +101,8 @@ pub struct Host {
     keys: Vec<PublicKey>,
     /// How long a self-update waits for the new agent to connect before it rolls back.
     confirm_within: Duration,
+    /// How long a reboot waits before it acts: the helper answers the agent first (M4-28).
+    answer_wait: Duration,
 }
 
 impl Host {
@@ -122,6 +124,7 @@ impl Host {
             run_limit,
             keys: minisign::release_keys(),
             confirm_within: Duration::from_mins(2),
+            answer_wait: Duration::from_secs(2),
         }
     }
 
@@ -292,15 +295,30 @@ impl Host {
                 return Ok(());
             }
             // "--" ends the options and the prefix keeps a reason from being one (review M4-04).
-            ("reboot", reason) => self.run(
-                (
-                    "usr/sbin/shutdown",
-                    &["-r", "--", "+1", &format!("SerMon: {reason}")],
-                ),
-                Duration::from_mins(1),
-                4096,
-                true,
-            ),
+            // Without logind systemd's shutdown reboots at once instead of in a minute (M4-28):
+            // the result comes first, and the helper's answer reaches the agent before.
+            ("reboot", reason) => {
+                let requested = Output {
+                    name: "shutdown -r +1".into(),
+                    ..Output::default()
+                };
+                store(&dir, &done(id, started, requested))?;
+                std::thread::sleep(self.answer_wait);
+                let result = self.run(
+                    (
+                        "usr/sbin/shutdown",
+                        &["-r", "--", "+1", &format!("SerMon: {reason}")],
+                    ),
+                    Duration::from_mins(1),
+                    4096,
+                    true,
+                );
+                eprintln!(
+                    "sermon-helper: run {id} ended with exit code {}",
+                    result.exit_code
+                );
+                return store(&dir, &done(id, started, result));
+            }
             _ => failed("unknown request"),
         };
         eprintln!(
@@ -820,6 +838,7 @@ mod tests {
                 run_limit: Duration::from_secs(5),
                 keys: Vec::new(),
                 confirm_within: Duration::from_secs(1),
+                answer_wait: Duration::ZERO,
             };
             let fake = Self { _dir: dir, host };
             for p in [
@@ -860,9 +879,10 @@ mod tests {
 
         fn wait(&self, id: &str) -> RunState {
             for _ in 0..250 {
+                // Done and the lock free: a reboot stores its result before it acts (M4-28).
                 let state = self.host.result(id);
-                if state.phase() == RunPhase::Done {
-                    return state;
+                if state.phase() == RunPhase::Done && self.host.running().is_none() {
+                    return self.host.result(id);
                 }
                 sleep(Duration::from_millis(20));
             }
@@ -1154,6 +1174,38 @@ mod tests {
             (RunPhase::Done, 0)
         );
         assert!(fake.calls().contains("reboot -d 60\n"), "{}", fake.calls());
+    }
+
+    // systemd's shutdown reboots at once without logind (minimal hosts, containers; found in the
+    // demo, M4-28): the result comes first and the run waits for the helper's answer to the agent;
+    // if shutdown fails, that is the result.
+    #[test]
+    fn a_reboot_without_logind_comes_after_the_answer_and_its_result() {
+        let mut fake = Fake::new("ID=debian\n");
+        fake.host.answer_wait = Duration::from_millis(300);
+        let result = fake.host.run_dir(ID).join("result");
+        fake.program(
+            "usr/sbin/shutdown",
+            &format!("test -f '{}' && echo result-first", result.display()),
+        );
+        fs::create_dir_all(fake.host.run_dir(ID)).unwrap();
+        fs::write(fake.host.run_dir(ID).join("request"), "reboot\nupdates").unwrap();
+        let started = std::time::Instant::now();
+        fake.host.execute(ID).unwrap();
+        assert!(
+            started.elapsed() >= Duration::from_millis(300),
+            "no wait for the answer"
+        );
+        let state = fake.host.result(ID);
+        assert_eq!(state.result.as_ref().unwrap().exit_code, 0);
+        assert!(String::from_utf8_lossy(&state.result.unwrap().output).contains("result-first"));
+        // A failing shutdown is the run's result.
+        fs::remove_dir_all(fake.host.run_dir(ID)).unwrap();
+        fs::create_dir_all(fake.host.run_dir(ID)).unwrap();
+        fs::write(fake.host.run_dir(ID).join("request"), "reboot\nupdates").unwrap();
+        fake.program("usr/sbin/shutdown", "exit 1");
+        fake.host.execute(ID).unwrap();
+        assert_ne!(fake.host.result(ID).result.unwrap().exit_code, 0);
     }
 
     #[test]

@@ -4910,7 +4910,41 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
 ### 7.8 Querschnitt
 
-#### ☐ M4-28 – E2E-Demo M4 · X · M
+#### ☑ M4-28 – E2E-Demo M4 · X · M
+> Erledigt: `just e2e-demo-full` mit sieben Projekten grün in 31,7 min Testzeit (lokal arm64, mit Build rund 38 min;
+> vorher rund 75 min):
+> - **Dashboard** (`install`): Die Updates-Seite zeigt jeden Node mit dem Security-Update der Quellen dieses Laufs,
+>   Alpine mit Updates ohne Security-Kennzeichnung.
+> - **Rollout** (`patch.demo.ts`): Gruppe aus vier Nodes (verschoben per SQL – zum Verschieben gibt es noch kein RPC),
+>   Policy `security-auto` mit Fenster ab jetzt − 2 min, `maxParallel: 1`, Reboot bei Bedarf, 5 min Health-Check.
+>   app-02, dev-01 und web-02 nacheinander (jeder Lauf beginnt nach dem Ende des vorigen), db-01 mit Veto
+>   (`allow_remote_updates = false`) übersprungen mit Grund; web-02 (Debian) startet neu, sein Agent kommt 75 s später:
+>   der Offline-Alert wird kritisch, ist aber stumm (drei Silences des Rollouts, keine Benachrichtigung über die
+>   Policy der Verfügbarkeit). Fertig nach 338 s; danach kein Security-Update mehr, das gewöhnliche bleibt.
+> - **Von Hand** (`passkeys`): „Jetzt aktualisieren“ für db-01, Paketliste im Dialog, Step-up per Passkey, fertig nach
+>   105 s; das Audit-Log zeigt wer, wann, Modus und den Node (als ID: ein Host wählt seinen Namen selbst).
+> - **Anomalie** (`anomaly.demo.ts`): 4 Wochen Historie für web-01 per SQL (aus seinen eigenen Werten, nur in der
+>   E2E-Umgebung), Neustart des Servers, Baselines, 3 min Last auf allen Kernen: Band nach 361 s, oben in „Was war
+>   ungewöhnlich?“ und im Dashboard „Anomalien“.
+> - **Schnell und vollständig:** `just e2e-demo` (Push und PR, Timeout 60 min) ohne Anomalie, Rollout und Budget
+>   während einer Liste; `just e2e-demo-full` (`FULL=1`) nachts auf arm64 (Timeout 120 min) und vor einem Release.
+>   Kürzer ohne kleinere Grenzen: Das Self-Update von web-02 läuft im Hintergrund weiter, statt die 5 min des
+>   Helpers abzuwarten; die Messung während einer Liste steht am Ende (install 11,4 statt 20,3 min).
+> - **Dabei gefunden und behoben:**
+>   - Der Anomalie-Worker bewertete in Produktion nichts (seit M4-23): Er legte die Punkte unter `time.Time` ab, die
+>     Datenbank antwortet in UTC, die Uhr läuft in `time.Local` – gleiche Zeit, andere Schlüssel. Jetzt die
+>     Unix-Zeit; Test mit einer anderen Zeitzone (die Tests rechneten nur in UTC).
+>   - Nach einer Übernahme rechnet der Worker zuerst die Stunden nach, gegen die das Aufwärmen bewertet, fehlende
+>     höchstens einmal je Stunde (Nachtrag ADR 0037).
+>   - Ohne logind startet `shutdown -r +1` sofort neu (systemd 257): Der Reboot kam der Antwort des Helpers zuvor, der
+>     Rollout stoppte. Jetzt speichert der Helper das Ergebnis zuerst und wartet 2 s auf seine Antwort.
+>   - Der Agent meldet die Updates 5 s nach dem Ende eines eigenen Laufs statt 2 min nach der letzten Änderung der
+>     Paketdatenbank: ein Rollout spart je Node 2 min.
+>   - Ein Alert einer systemd-Unit führt in die Logs nur dieser Unit (sonst verdrängten andere Zeilen sie aus den
+>     ersten 200); die Hostnamen der Rollouts über `displayText`.
+>   - Daraus neu: **M4-32** (Speicherwachstum des Agents über lange Läufe).
+> - **Gegenproben** für 13 Prüfungen (Nachrechnen, Bericht nach dem Lauf, Reboot, Zeitschlüssel), alle erkannt (eine
+>   erst nach einem schärferen Test).
 - **Ziel:** „Patch-Compliance auf einen Blick“ in `web/tests/demo/`.
   - **Dashboard:** Das Updates-Dashboard zeigt alle Nodes mit offenen Security-Updates aus den Quellen von M4-08;
     Alpine steht mit Updates ohne Security-Kennzeichnung da.
@@ -4943,6 +4977,22 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   Danach das Threat Model aktualisieren (T38 bis T41 und neue Zeilen) und Befunde als Aufgaben anlegen.
 - **Abhängig von:** alle M4-Aufgaben
 
+#### ☐ M4-32 – Speicherwachstum des Agents · A · M
+- **Ziel:** Der Agent bleibt auch nach langer Laufzeit unter dem Budget von KONZEPT §4.1 (< 30 MB RSS).
+  - **Befund aus der Demo M4-28:** Die Messung von M4-29 besteht (früh im Lauf 4–5 MiB eigener Speicher, während einer
+    Update-Liste 12–16 MiB), aber am Ende eines vollen Laufs (~75 min) hält der Agent auf web-01 26,5 MiB eigenen
+    Speicher (`RssAnon`), RSS 31,9 MiB; app-01 21,8, dev-01 12,4 MiB. Das Wachstum kommt in Sprüngen bis 5 MiB (web-01:
+    13 → 22 MiB um die Troubleshooting-Szenen, 24 → 29 MiB später). Im grünen Lauf (32 min) am Ende 11,2–19,0 MiB
+    eigener Speicher, 16,5–24,2 MiB RSS.
+  - **Schon ausgeschlossen:** Neustart des Servers samt Wiederverbinden, CPU-Last mit vielen neuen Prozessen, Redaction
+    großer Lauf-Ausgaben (0,7 MiB). Log-Bursts kosten 0,4–0,6 MiB je 5 000–15 000 Zeilen und bleiben.
+  - **Vorgehen:** Heap-Profil des Agents (zählender Allocator oder `dhat`) über die Szenen der Demo – Live-Ansicht,
+    Live-Tail, Log-Globs, Konfigurationswechsel, Läufe des Helpers, Self-Update –, die Ursache beheben, Grenzen für
+    Puffer und Caches dort, wo sie fehlen.
+- **Tests zuerst:** ein Test, der das Wachstum der gefundenen Ursache zeigt; in der vollen Demo eine zweite Messung des
+  Agents am Ende des Laufs (eigener Speicher und RSS unter dem Budget).
+- **Abhängig von:** M4-29
+
 **M4 fertig, wenn:**
 
 - Der Demo-Test M4-28 ist grün.
@@ -4951,7 +5001,7 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - Der Orchestrator ist mit Zeitzonen, Sommerzeit, `stopOnFailure` und Health-Check getestet.
 - Der Benchmark der Anomalie-Erkennung läuft in CI und ist nicht schlechter als die Referenz.
 - Alle neuen RPCs stehen in den Tenant-Isolations- und Step-up-Tabellen.
-- Das Ressourcen-Budget ist mit Update-Erfassung eingehalten.
+- Das Ressourcen-Budget ist mit Update-Erfassung eingehalten, auch am Ende eines vollen Demo-Laufs (M4-32).
 - Die Security-Review hat keine offenen kritischen Findings; TB4 im Threat Model ist erledigt.
 
 ---

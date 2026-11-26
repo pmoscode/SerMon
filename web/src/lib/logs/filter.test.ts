@@ -120,5 +120,12 @@ describe('links into the log explorer', () => {
 		// A fresh alert: up to now.
 		const fresh = new URLSearchParams(alertLogsQuery(node, now - 60_000, now));
 		expect(Date.parse(fresh.get('to')!)).toBe(now);
+		expect(fresh.getAll('unit')).toEqual([]);
+		// M4-28: an alert of a unit shows its lines, the filter reads them back.
+		const unit = alertLogsQuery(node, since, now, 'e2e migrate&x.service');
+		expect(new URLSearchParams(unit).getAll('unit')).toEqual(['e2e migrate&x.service']);
+		expect(
+			parseFilter(new URLSearchParams(alertLogsQuery(node, since, now, 'cron.service'))).units
+		).toEqual(['cron.service']);
 	});
 });

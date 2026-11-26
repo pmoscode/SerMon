@@ -319,6 +319,22 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	console.log(
 		`${agents.length} hosts reported their updates after ${Math.round((Date.now() - started) / 1000)} s`
 	);
+	// Patch compliance at a glance (M4-28): the updates dashboard shows every node with the
+	// security update of this run's sources; Alpine has its updates without a security label (O6).
+	await page.goto('/updates');
+	const updateNodes = page.getByRole('table', { name: 'Nodes' });
+	for (const agent of agents) {
+		const row = updateNodes.getByRole('row', { name: new RegExp(`\\b${agent.host}\\b`) });
+		if (agent.os === 'alpine') {
+			await expect(row).toContainText('Updates');
+			await expect(row).not.toContainText('Security updates');
+		} else {
+			await expect(row).toContainText('Security updates');
+		}
+	}
+	await page.screenshot({ path: 'test-results/demo-updates.png', fullPage: true });
+	// Its host links open the Updates tab; the story goes on from the fleet.
+	await page.goto('/fleet');
 
 	// Resource budget (M2-25, KONZEPT §4.1): < 1 % of a core and < 30 MiB RSS over 60 s under
 	// systemd with the journal source, journalctl included. Two hosts nothing else touches measure
@@ -466,6 +482,102 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		expect(result.status, `${budgetHosts[i].host}:\n${result.output}`).toBe(0);
 		expect(result.output).toMatch(/, [2-9] processes/);
 	}
+	// In the background from here on, as it takes web-02 away for minutes and the helper starts
+	// a self-update at most every 5 minutes (T89): the steps below don't need web-02 (M4-28).
+	const selfUpdating = (async () => {
+		// Self-update (M4-18, ADR 0036) of web-02, installed by install.sh: a signed beta that doesn't
+		// start is rolled back after 2 minutes, a working one stays. The helper checks the signature of
+		// the release key and that each is newer than what runs.
+		const selfUpdated = agents.find((a) => a.host === 'web-02')!;
+		// The server knows how web-02's agent was installed and that it runs the stable release
+		// (M4-19): nothing to update in its channel.
+		const web02 = (
+			await call<{ nodes?: { nodeId: string; hostname: string }[] }>(
+				page.request,
+				baseURL ?? '',
+				'FleetService/GetFleetSummary',
+				{}
+			)
+		).nodes!.find((n) => n.hostname === 'web-02')!;
+		const agentInfo = () =>
+			call<{ agent?: Record<string, string> }>(
+				page.request,
+				baseURL ?? '',
+				'UpdateService/GetNodeUpdates',
+				{
+					nodeId: web02.nodeId
+				}
+			).then((r) => r.agent);
+		expect(await agentInfo()).toEqual(
+			expect.objectContaining({
+				version: '0.0.1-e2e',
+				installMethod: 'INSTALL_METHOD_SCRIPT',
+				channel: 'AGENT_CHANNEL_STABLE',
+				latest: '0.0.1-e2e'
+			})
+		);
+		expect((await agentInfo())?.target ?? '').toBe('');
+		const selfUpdateStarted = Date.now();
+		const sha = exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0];
+		const selfUpdate = (version: string) =>
+			ownerSQL(
+				`INSERT INTO node_commands (org_id, id, node_id, kind, version, created_at, expires_at)
+				 SELECT org_id, gen_random_uuid(), id, 4, '${version}', now(), now() + interval '15 minutes' FROM nodes WHERE hostname = 'web-02';
+				 SELECT pg_notify('sermon_node_commands', id::text) FROM nodes WHERE hostname = 'web-02';`
+			);
+		const outcome = (version: string) =>
+			ownerSQL(
+				`SELECT coalesce(c.phase, 0) || ':' || coalesce(c.exit_code, -9) || ':' || c.result_reason FROM node_commands c
+				 JOIN nodes n ON n.id = c.node_id WHERE n.hostname = 'web-02' AND c.kind = 4 AND c.version = '${version}'`
+			).trim();
+		publishBeta('0.0.2-broken', Buffer.from('#!/bin/sh\nexit 1\n'));
+		selfUpdate('0.0.2-broken');
+		await expect
+			.poll(() => outcome('0.0.2-broken'), { timeout: 300_000, intervals: [5_000] })
+			.toMatch(/^3:1:/);
+		expect(
+			ownerSQL(
+				`SELECT c.output FROM node_commands c JOIN nodes n ON n.id = c.node_id WHERE n.hostname = 'web-02' AND c.version = '0.0.2-broken'`
+			)
+		).toContain('rolled back');
+		expect(exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0]).toBe(
+			sha
+		);
+		console.log(
+			`a broken self-update rolled back after ${Math.round((Date.now() - selfUpdateStarted) / 1000)} s`
+		);
+		// The helper starts a self-update at most every 5 minutes; the agent asks again every 30 s.
+		const working = publishBeta('0.0.3-e2e');
+		selfUpdate('0.0.3-e2e');
+		await expect
+			.poll(() => outcome('0.0.3-e2e'), { timeout: 480_000, intervals: [5_000] })
+			.toMatch(/^2:0:/);
+		expect(exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0]).toBe(
+			working
+		);
+		expect(exec(selfUpdated.service, 'cat /var/lib/sermon-helper/agent.minisig')).toContain(
+			'version:0.0.3-e2e'
+		);
+		console.log(
+			`web-02 updated itself after ${Math.round((Date.now() - selfUpdateStarted) / 1000)} s`
+		);
+		// The fetch made the server read the new beta: the updates page lists it.
+		const releases = await call<{ releases?: { channel: string; version: string }[] }>(
+			page.request,
+			baseURL ?? '',
+			'UpdateService/ListAgentReleases',
+			{}
+		);
+		expect(releases.releases).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ channel: 'AGENT_CHANNEL_STABLE', version: '0.0.1-e2e' }),
+				expect.objectContaining({ channel: 'AGENT_CHANNEL_BETA', version: '0.0.3-e2e' })
+			])
+		);
+	})().then(
+		() => undefined,
+		(e: unknown) => e
+	);
 
 	// Updates through the root helper (M4-11, M4-12): a command for Debian, Rocky and Alpine reaches
 	// the agent over its session (NOTIFY), the helper installs the updates of this run's package
@@ -517,51 +629,8 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 		`the next reports show nothing to update after ${Math.round((Date.now() - runStarted) / 1000)} s`
 	);
 
-	// Updates by hand (M4-14): the Updates tab of db-01 lists the packages of this run's sources;
-	// "Update now" shows them before the confirmation, a rollout of its group installs them and
-	// the next report has nothing left.
-	const manualStarted = Date.now();
-	await page.goto('/fleet');
-	await page.getByRole('link', { name: 'db-01' }).click();
-	await page.getByRole('tab', { name: 'Updates' }).click();
-	await expect(
-		page
-			.getByRole('table', { name: 'Available updates' })
-			.getByRole('cell', { name: /^sermon-e2e-demo/ })
-	).toBeVisible({ timeout: 30_000 });
-	await page.getByRole('button', { name: 'Update now' }).click();
-	await page.getByRole('radio', { name: /All updates/ }).click();
-	await expect(
-		page
-			.getByRole('table', { name: 'These packages will be updated' })
-			.getByRole('cell', { name: 'sermon-e2e-extra' })
-	).toBeVisible();
-	await page.getByRole('button', { name: 'Update 2 packages' }).click();
-	await expect(page.getByText(/Started – the rollout runs/)).toBeVisible({ timeout: 30_000 });
-	await expect
-		.poll(
-			() =>
-				ownerSQL(
-					`SELECT r.state || ':' || string_agg(n.hostname || '=' || n.state, ',')
-					 FROM update_rollouts r JOIN update_rollout_nodes n ON n.rollout_id = r.id
-					 WHERE r.manual GROUP BY r.state`
-				).trim(),
-			{ timeout: 420_000, intervals: [10_000] }
-		)
-		.toBe('2:db-01=5');
-	const db01 = await call<FleetUpdates>(
-		page.request,
-		baseURL ?? '',
-		'UpdateService/ListFleetUpdates',
-		{}
-	);
-	expect((db01.nodes ?? []).find((n) => n.hostname === 'db-01')?.status).toBe(
-		'UPDATE_STATUS_CURRENT'
-	);
-	expect(ownerSQL(`SELECT count(*) FROM audit_log WHERE action = 'updates.start'`).trim()).toBe(
-		'1'
-	);
-	console.log(`db-01 updated by hand after ${Math.round((Date.now() - manualStarted) / 1000)} s`);
+	// Updates by hand (M4-14) come with the passkey demo (M4-28): db-01 keeps its updates for the
+	// rollout of patch.demo.ts, where it vetoes them.
 
 	// The live view ran the whole time: first offline until the agent's stream started, then a
 	// snapshot every 2 s with the host's processes, the command line redacted (M3-14).
@@ -815,94 +884,6 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	expect(summary.nodes ?? []).toHaveLength(0);
 	await context.close();
 
-	// Last, as it takes web-02 away for minutes:
-	// Self-update (M4-18, ADR 0036) of web-02, installed by install.sh: a signed beta that doesn't
-	// start is rolled back after 2 minutes, a working one stays. The helper checks the signature of
-	// the release key and that each is newer than what runs.
-	const selfUpdated = agents.find((a) => a.host === 'web-02')!;
-	// The server knows how web-02's agent was installed and that it runs the stable release
-	// (M4-19): nothing to update in its channel.
-	const web02 = (
-		await call<{ nodes?: { nodeId: string; hostname: string }[] }>(
-			page.request,
-			baseURL ?? '',
-			'FleetService/GetFleetSummary',
-			{}
-		)
-	).nodes!.find((n) => n.hostname === 'web-02')!;
-	const agentInfo = () =>
-		call<{ agent?: Record<string, string> }>(
-			page.request,
-			baseURL ?? '',
-			'UpdateService/GetNodeUpdates',
-			{
-				nodeId: web02.nodeId
-			}
-		).then((r) => r.agent);
-	expect(await agentInfo()).toEqual(
-		expect.objectContaining({
-			version: '0.0.1-e2e',
-			installMethod: 'INSTALL_METHOD_SCRIPT',
-			channel: 'AGENT_CHANNEL_STABLE',
-			latest: '0.0.1-e2e'
-		})
-	);
-	expect((await agentInfo())?.target ?? '').toBe('');
-	const selfUpdateStarted = Date.now();
-	const sha = exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0];
-	const selfUpdate = (version: string) =>
-		ownerSQL(
-			`INSERT INTO node_commands (org_id, id, node_id, kind, version, created_at, expires_at)
-			 SELECT org_id, gen_random_uuid(), id, 4, '${version}', now(), now() + interval '15 minutes' FROM nodes WHERE hostname = 'web-02';
-			 SELECT pg_notify('sermon_node_commands', id::text) FROM nodes WHERE hostname = 'web-02';`
-		);
-	const outcome = (version: string) =>
-		ownerSQL(
-			`SELECT coalesce(c.phase, 0) || ':' || coalesce(c.exit_code, -9) || ':' || c.result_reason FROM node_commands c
-			 JOIN nodes n ON n.id = c.node_id WHERE n.hostname = 'web-02' AND c.kind = 4 AND c.version = '${version}'`
-		).trim();
-	publishBeta('0.0.2-broken', Buffer.from('#!/bin/sh\nexit 1\n'));
-	selfUpdate('0.0.2-broken');
-	await expect
-		.poll(() => outcome('0.0.2-broken'), { timeout: 300_000, intervals: [5_000] })
-		.toMatch(/^3:1:/);
-	expect(
-		ownerSQL(
-			`SELECT c.output FROM node_commands c JOIN nodes n ON n.id = c.node_id WHERE n.hostname = 'web-02' AND c.version = '0.0.2-broken'`
-		)
-	).toContain('rolled back');
-	expect(exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0]).toBe(
-		sha
-	);
-	console.log(
-		`a broken self-update rolled back after ${Math.round((Date.now() - selfUpdateStarted) / 1000)} s`
-	);
-	// The helper starts a self-update at most every 5 minutes; the agent asks again every 30 s.
-	const working = publishBeta('0.0.3-e2e');
-	selfUpdate('0.0.3-e2e');
-	await expect
-		.poll(() => outcome('0.0.3-e2e'), { timeout: 480_000, intervals: [5_000] })
-		.toMatch(/^2:0:/);
-	expect(exec(selfUpdated.service, 'sha256sum /usr/local/bin/sermon-agent').split(' ')[0]).toBe(
-		working
-	);
-	expect(exec(selfUpdated.service, 'cat /var/lib/sermon-helper/agent.minisig')).toContain(
-		'version:0.0.3-e2e'
-	);
-	console.log(
-		`web-02 updated itself after ${Math.round((Date.now() - selfUpdateStarted) / 1000)} s`
-	);
-	// The fetch made the server read the new beta: the updates page lists it.
-	const releases = await call<{ releases?: { channel: string; version: string }[] }>(
-		page.request,
-		baseURL ?? '',
-		'UpdateService/ListAgentReleases',
-		{}
-	);
-	expect(releases.releases).toEqual(
-		expect.arrayContaining([
-			expect.objectContaining({ channel: 'AGENT_CHANNEL_STABLE', version: '0.0.1-e2e' }),
-			expect.objectContaining({ channel: 'AGENT_CHANNEL_BETA', version: '0.0.3-e2e' })
-		])
-	);
+	const failed = await selfUpdating;
+	if (failed) throw failed;
 });

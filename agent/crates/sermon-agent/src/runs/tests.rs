@@ -81,6 +81,7 @@ impl Helper for Fake {
 struct Running {
     inbox: Inbox,
     results: Arc<Mutex<Vec<CommandResult>>>,
+    ended: Arc<Notify>,
     shutdown: CancellationToken,
     task: tokio::task::JoinHandle<()>,
 }
@@ -90,6 +91,7 @@ fn start_runner(fake: Arc<Fake>, book: Book) -> Running {
     let results = Arc::new(Mutex::new(Vec::new()));
     let shutdown = CancellationToken::new();
     let sink = results.clone();
+    let ended = Arc::new(Notify::new());
     let task = tokio::spawn(run(
         fake,
         book,
@@ -97,12 +99,14 @@ fn start_runner(fake: Arc<Fake>, book: Book) -> Running {
         move |r| sink.lock().unwrap().push(r),
         |text: &str| text.replace("hunter2", "[REDACTED]"),
         || SystemTime::UNIX_EPOCH + Duration::from_secs(1_795_000_000),
+        ended.clone(),
         Schedule::default(),
         shutdown.clone(),
     ));
     Running {
         inbox,
         results,
+        ended,
         shutdown,
         task,
     }
@@ -150,6 +154,9 @@ async fn runs_a_command_once_and_reports_its_phases() {
     r.inbox.command(update(ID));
     tokio::time::sleep(Duration::from_secs(1)).await;
     r.inbox.command(update(ID));
+    // M4-28: the end wakes the update information.
+    let woken = tokio::time::timeout(Duration::from_secs(25), r.ended.notified()).await;
+    assert!(woken.is_ok(), "the end of the run woke nothing");
     tokio::time::sleep(Duration::from_secs(25)).await;
     assert_eq!(*fake.starts.lock().unwrap(), [ID], "started once");
     assert_eq!(

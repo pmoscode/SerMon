@@ -125,6 +125,9 @@ type orgState struct {
 	done    time.Time // minutes before this are scored
 	hour    time.Time // the hour whose baselines are loaded
 	current map[int64]anomaly.Baseline
+	// tried is when a missing hour of the week was last computed: without data it stays missing
+	// and is tried again an hour later, not every minute.
+	tried map[int]time.Time
 }
 
 // Worker scores the candidate series of the organizations whose lease it holds.
@@ -334,12 +337,14 @@ func (w *Worker) score(ctx context.Context, org tenant.OrgID, st *orgState, from
 	if err != nil {
 		return fmt.Errorf("read points: %w", err)
 	}
-	values := map[int64]map[time.Time]float64{}
+	// By the minute's Unix time: the store answers in UTC, the clock may run in time.Local – equal
+	// instants, but other map keys (M4-28).
+	values := map[int64]map[int64]float64{}
 	for _, p := range points {
 		if values[p.Series] == nil {
-			values[p.Series] = map[time.Time]float64{}
+			values[p.Series] = map[int64]float64{}
 		}
-		values[p.Series][p.T] = p.V
+		values[p.Series][p.T.Unix()] = p.V
 	}
 	// The last Output of the ready minutes: after a takeover nothing older is written twice.
 	outputFrom := now.Add(-w.config.Lag - w.config.Output).Truncate(time.Minute)
@@ -349,7 +354,7 @@ func (w *Worker) score(ctx context.Context, org tenant.OrgID, st *orgState, from
 		scored := map[identity.NodeID]int{}
 		anomalous := map[identity.NodeID]int{}
 		for _, s := range st.series {
-			v, ok := values[s.ID][m]
+			v, ok := values[s.ID][m.Unix()]
 			if !ok {
 				continue
 			}
@@ -462,28 +467,55 @@ func (w *Worker) recompute(ctx context.Context, org tenant.OrgID, st *orgState, 
 	return nil
 }
 
-// backfill computes up to Backfill hours of the week that are missing or older than a week and
-// a day, from their last occurrence before now.
+// week is how far back the occurrence of an hour lies whose bucket scores it.
+const week = 7 * 24 * time.Hour
+
+// retryMissing is how long a missing hour of the week waits for its next attempt.
+const retryMissing = time.Hour
+
+// backfill computes the hours of the week that are missing or older than a week and a day, from
+// their last occurrence before now: first, and all of them, those the minutes from st.done to now
+// are scored against (after a takeover the six hours of the warm-up); then up to Backfill others,
+// from the current hour on – the ones needed next first. A missing hour is tried at most once
+// per retryMissing.
 func (w *Worker) backfill(ctx context.Context, org tenant.OrgID, st *orgState, now, deadline time.Time) error {
 	ages, err := w.store.BaselineAges(ctx, org)
 	if err != nil {
 		return fmt.Errorf("read baseline ages: %w", err)
 	}
-	done := 0
-	last := now.Truncate(time.Hour).Add(-time.Hour)
-	for back := range 168 {
-		if done >= w.config.Backfill {
-			return nil
+	if st.tried == nil {
+		st.tried = map[int]time.Time{}
+	}
+	due := func(hour time.Time) bool {
+		bucket := anomaly.HourOfWeek(hour)
+		if at, ok := ages[bucket]; ok && now.Sub(at) < week+24*time.Hour {
+			return false
 		}
+		at, ok := st.tried[bucket]
+		return !ok || now.Sub(at) >= retryMissing
+	}
+	compute := func(hour time.Time) error {
 		if !w.config.Now().Before(deadline) {
 			return errBudget
 		}
-		hour := last.Add(-time.Duration(back) * time.Hour)
-		at, ok := ages[anomaly.HourOfWeek(hour)]
-		if ok && now.Sub(at) < 8*24*time.Hour {
+		st.tried[anomaly.HourOfWeek(hour)] = now
+		return w.recompute(ctx, org, st, hour, now)
+	}
+	current := now.Truncate(time.Hour)
+	for hour := st.done.Truncate(time.Hour); !hour.After(current); hour = hour.Add(time.Hour) {
+		if due(hour.Add(-week)) {
+			if err := compute(hour.Add(-week)); err != nil {
+				return err
+			}
+		}
+	}
+	done := 0
+	for back := 168; back >= 1 && done < w.config.Backfill; back-- {
+		hour := current.Add(-time.Duration(back) * time.Hour)
+		if !due(hour) {
 			continue
 		}
-		if err := w.recompute(ctx, org, st, hour, now); err != nil {
+		if err := compute(hour); err != nil {
 			return err
 		}
 		done++

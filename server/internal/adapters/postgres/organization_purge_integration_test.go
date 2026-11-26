@@ -50,6 +50,22 @@ func seedPurgeOrg(t *testing.T, ownerDSN string, other uuid.UUID) purgeOrg {
 	exec(`INSERT INTO metrics_raw (ts, series_id, avg, min, max)
 	      SELECT now() - interval '5 minutes', id, 1, 1, 1 FROM series WHERE org_id = $1`, p.org)
 	exec(`INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name) VALUES ($1, $2, now(), 'ssh.login.failed', 'root')`, p.org, p.node)
+	// M4-31: the updates and the anomaly detection of the organization go along.
+	run, rollout := uuid.New(), uuid.New()
+	exec(`INSERT INTO node_update_state (org_id, node_id, collected_at, received_at, availability, package_manager, total_count,
+	      security_count, packages_stored, reboot_required, refreshed) VALUES ($1, $2, now(), now(), 1, 1, 0, 0, 0, false, false)`, p.org, p.node)
+	exec(`INSERT INTO update_policies (org_id, group_id, mode, auto_reboot, max_parallel, stop_on_failure, health_check_minutes, updated_at)
+	      VALUES ($1, $2, 1, false, 1, true, 10, now())`, p.org, group)
+	exec("INSERT INTO update_leases (org_id, holder, expires_at) VALUES ($1, 'x', now())", p.org)
+	exec(`INSERT INTO update_rollouts (org_id, id, group_id, window_start, window_end, state, created_at, updated_at)
+	      VALUES ($1, $2, $3, now(), now() + interval '1 hour', 1, now(), now())`, p.org, rollout, group)
+	exec(`INSERT INTO update_rollout_nodes (org_id, rollout_id, node_id, position, hostname, state, reason, since)
+	      VALUES ($1, $2, $3, 0, 'host', 1, '', now())`, p.org, rollout, p.node)
+	exec(`INSERT INTO node_commands (org_id, id, node_id, kind, scope, created_at, expires_at) VALUES ($1, $2, $3, 2, 1, now(), now() + interval '1 hour')`, p.org, run, p.node)
+	exec("INSERT INTO anomaly_leases (org_id, holder, expires_at) VALUES ($1, 'x', now())", p.org)
+	exec(`INSERT INTO anomaly_baselines (org_id, series_id, hour, median, mad, low, high, points, computed_at)
+	      SELECT $1, id, 0, 1, 0, 1, 1, 30, now() FROM series WHERE org_id = $1`, p.org)
+	exec(`INSERT INTO anomaly_points (ts, series_id, score, anomalous) SELECT now(), id, 5, true FROM series WHERE org_id = $1`, p.org)
 	hash := sha256.Sum256([]byte(p.org.String()))
 	exec(`INSERT INTO invitations (id, org_id, email, role, token_hash, expires_at)
 	      VALUES ($1, $2, $3, 'viewer', $4, now() + interval '1 day')`, uuid.New(), p.org, uuid.NewString()+"@example.org", hash[:])
@@ -95,7 +111,7 @@ func orgRows(t *testing.T, conn *pgx.Conn, org uuid.UUID, series []int64) map[st
 		}
 		out[table] = n
 	}
-	for _, table := range []string{"metrics_raw", "metrics_1m"} {
+	for _, table := range []string{"metrics_raw", "metrics_1m", "anomaly_points"} {
 		var n int64
 		if err := conn.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE series_id = ANY($1)", series).Scan(&n); err != nil {
 			t.Fatal(err)
@@ -135,7 +151,9 @@ func TestOrgPurge_RemovesEverythingOfTheOrganizationAndNothingElse(t *testing.T)
 	series, otherSeries := seriesOf(t, owner, p.org), seriesOf(t, owner, other.org)
 	before := orgRows(t, owner, p.org, series)
 	if before["nodes"] != 1 || before["series"] != 1 || before["metrics_raw"] != 1 || before["metrics_1m"] != 1 ||
-		before["security_events"] != 1 || before["audit_log"] != 1 || before["invitations"] != 1 || before["memberships"] != 3 {
+		before["security_events"] != 1 || before["audit_log"] != 1 || before["invitations"] != 1 || before["memberships"] != 3 ||
+		before["node_commands"] != 1 || before["update_rollouts"] != 1 || before["update_rollout_nodes"] != 1 || before["update_policies"] != 1 ||
+		before["node_update_state"] != 1 || before["anomaly_baselines"] != 1 || before["anomaly_points"] != 1 || before["anomaly_leases"] != 1 {
 		t.Fatalf("fixture incomplete: %v", before)
 	}
 	otherBefore := orgRows(t, owner, other.org, otherSeries)

@@ -235,7 +235,7 @@ security-agent:
 # (__sancov_gen_) on Linux; debug info names the lines of a crash.
 fuzz_profile := "CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_PROFILE_RELEASE_STRIP=none CARGO_PROFILE_RELEASE_DEBUG=1"
 
-# Fuzz the parsers of untrusted input: /proc texts, journal lines, security events, redaction, WAL recovery, multi-line log entries and process files (cargo-fuzz, pinned nightly)
+# Fuzz the parsers of untrusted input: /proc texts, journal lines, security events, redaction, WAL recovery, multi-line log entries, process files and what the root helper reads (cargo-fuzz, pinned nightly)
 [working-directory: 'agent/fuzz']
 fuzz-agent seconds="60":
     ./seed.sh
@@ -248,6 +248,7 @@ fuzz-agent seconds="60":
     {{ fuzz_profile }} cargo fuzz run update_parsers -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run multiline -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run process_parsers -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run helper_parsers -- -max_total_time={{ seconds }} -max_len=65536
 
 # Fuzz the server's LogQL builder (no input may break the structure of a query, M3-08) and its copy of the redaction (M3-12) (Go fuzzing)
 [working-directory: 'server']

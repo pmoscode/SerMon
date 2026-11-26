@@ -1370,7 +1370,8 @@ type Hello struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// protocol_version is the agent's protocol version; the server supports N and N-1.
 	ProtocolVersion uint32 `protobuf:"varint,1,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
-	// agent_version is the semantic version of the agent binary, e.g. "1.4.2".
+	// agent_version is the semantic version of the agent binary, e.g. "1.4.2"; only digits, dots and
+	// a prerelease of letters, digits, dots and hyphens (M4-31): it is shown and compared.
 	AgentVersion string `protobuf:"bytes,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
 	// host_facts describe the machine the agent runs on.
 	HostFacts *HostFacts `protobuf:"bytes,3,opt,name=host_facts,json=hostFacts,proto3" json:"host_facts,omitempty"`
@@ -5238,10 +5239,10 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"selfUpdate\x12;\n" +
 	"\n" +
 	"cancel_run\x18\r \x01(\v2\x1a.sermon.agent.v1.CancelRunH\x00R\tcancelRunB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xa6\x02\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\xd2\x02\n" +
 	"\x05Hello\x122\n" +
-	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
-	"\ragent_version\x18\x02 \x01(\tB\t\xbaH\x06r\x04\x10\x01\x18@R\fagentVersion\x12A\n" +
+	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12Z\n" +
+	"\ragent_version\x18\x02 \x01(\tB5\xbaH2r0\x10\x01\x18@2*^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$R\fagentVersion\x12A\n" +
 	"\n" +
 	"host_facts\x18\x03 \x01(\v2\x1a.sermon.agent.v1.HostFactsB\x06\xbaH\x03\xc8\x01\x01R\thostFacts\x12%\n" +
 	"\x0econfig_version\x18\x04 \x01(\x04R\rconfigVersion\x12O\n" +

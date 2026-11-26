@@ -308,3 +308,19 @@ fehl.
 - Abbrechen und Pausieren nehmen die Zeile der Update-Lease (`FOR UPDATE`): Eine Speicherung des Orchestrators wartet,
   die nächste verwirft, was sie ohne den Abbruch oder während der Pause geplant hatte.
 
+## Nachtrag M4-31 (übrige Befunde)
+
+- **dnf aus dem Cache:** `check-update` und `updateinfo` laufen mit `-C`; sonst frischt dnf die Quellen selbst auf –
+  öfter als `REFRESH_EVERY` und nach einer Rotation mit einer Rückfrage, auf die niemand antwortet. Die erste Liste
+  frischt deshalb immer auf (`makecache`), auch ohne Wunsch des Agents.
+- **Log ohne Panik:** Unter OpenRC schreibt ein Lauf in die Pipe des Dienstes, der ihn startete; nach einem Neustart
+  liest sie niemand mehr, und `eprintln!` beendete den Lauf mitten im Update. Alle Zeilen gehen über `log`, das
+  Schreibfehler übergeht; `clippy::print_stderr` ist im Crate verboten.
+- **Grenzen:** Der Dienst hat `MemoryMax=1G` und `TasksMax=256` (er listet selbst), ein Lauf als eigene Unit
+  `RuntimeMaxSec=2h`, `TasksMax=1024` und `MemoryMax=75%`; unter OpenRC begrenzt `rc_cgroup_settings` Dienst und Läufe
+  zusammen (2 GiB, 1 024 Prozesse; mit cgroups v2).
+- **Eigener Socket (OpenRC):** Das Verzeichnis `/run/sermon` darf kein Link sein; sonst gingen dessen Rechte und Gruppe
+  an das Ziel.
+- **Fuzzing:** `helper_parsers` prüft minisign (nichts verifiziert ohne den Schlüssel), die Security-Liste von apt (nur
+  Debian-Namen als Argumente) und den Versionsvergleich.
+

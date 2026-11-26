@@ -5013,8 +5013,11 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
   Danach das Threat Model aktualisieren (T38 bis T41 und neue Zeilen) und Befunde als Aufgaben anlegen.
 - **Abhängig von:** alle M4-Aufgaben
 
-#### ☐ M4-31 – Übrige Befunde der Security-Review M4 · X · M 🔒
-> Stand (Teilschritte mit eigenem Commit):
+#### ☑ M4-31 – Übrige Befunde der Security-Review M4 · X · M 🔒
+> Erledigt in sieben Teilschritten mit eigenem Commit; alle Befunde aus M4-30 sind damit abgearbeitet. Bewusst nicht
+> umgesetzt, jeweils begründet in ADR 0036: der Kanal im signierten Kommentar (die Version schützt den Host),
+> `Valid-Until` für apt (ein verspätetes Release ließe jeden Update-Lauf scheitern); `release.yml` entsteht mit dem
+> ersten Release. Die Leases der Alert-Engine bleiben bei der Uhr der Instanz.
 > - **Leser und Anomalie-Worker (T105, T106):** Grenzen der Gleichzeitigkeit für Anomalien, Kapazität und Heatmap
 >   (höchstens die Hälfte des Pools), `anomaly_top` ohne `array_agg`, Trends höchstens von 1 000 Nodes, Mountpoints
 >   durch `textsafe`; Kandidaten je Node in SQL, faire Kapazität der Instanz, Lease nicht ohne Serien, Leases mit der
@@ -5055,6 +5058,13 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 >   Pause nach einer Ablehnung, Helper mit `SERMON_VERSION`, `just sign-agent` baut mit Schlüssel und Version und prüft
 >   beides. Der Kanal bleibt bewusst aus dem signierten Kommentar (ADR 0036). Helper 1 741 von 1 800 Zeilen.
 >   Gegenproben 12 von 13 (Agent, Helper; `O_EXCL` allein ist ohne Rennen nicht prüfbar) und 17 von 17 (Server, UI).
+> - **Übrige niedrige und Info-Befunde:** dnf listet aus dem Cache (`-C`), die erste Liste frischt immer auf; der Helper
+>   schreibt ins Log ohne Panik, wenn niemand mehr liest (OpenRC nach einem Neustart des Dienstes; `eprintln!` per
+>   Clippy verboten); Grenzen für den Dienst (`MemoryMax`, `TasksMax`, OpenRC `rc_cgroup_settings`) und die Läufe
+>   (`systemd-run` mit `RuntimeMaxSec`, `TasksMax`, `MemoryMax`); das Verzeichnis des eigenen Sockets darf kein Link
+>   sein; `Hello.agent_version` mit Muster; Fuzz-Ziel `helper_parsers` (minisign, Security-Liste von apt, Versionen);
+>   der Test von `org_purge` deckt die Tabellen aus M4 ab. Gegenproben 7 von 7 erkannt (die Grenzen von `systemd-run`
+>   prüft nur die Demo).
 - **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
   - **Mittel:**
     - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys

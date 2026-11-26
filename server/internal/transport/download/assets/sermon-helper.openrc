@@ -13,6 +13,11 @@ respawn_delay=5
 respawn_max=0
 # To syslog, which rotates (busybox syslogd): a looping agent can't fill /var/log (review M4-04).
 error_logger="logger -t sermon-helper -p daemon.info"
+# Bounds of the service and of its runs, which stay in its cgroup (M4-31; with cgroups v2).
+rc_cgroup_settings="
+memory.max 2147483648
+pids.max 1024
+"
 
 depend() {
 	need localmount

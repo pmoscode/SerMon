@@ -5,6 +5,8 @@
 //! - `sermon-helper serve`: under systemd with the socket of `sermon-helper.socket` (ending after
 //!   [`IDLE`] without requests), under OpenRC with a socket of its own.
 //! - The package operations themselves follow with M4-03 ([`request::Executor`]).
+// Only through `sermon_helper::log`: eprintln! panics when nobody reads the log (M4-31).
+#![deny(clippy::print_stderr)]
 
 use std::fs;
 use std::io;
@@ -41,7 +43,7 @@ fn main() -> ExitCode {
         [cmd] if cmd == "serve" => match serve() {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
-                eprintln!("{NAME}: {e}");
+                sermon_helper::log(&format!("{NAME}: {e}"));
                 ExitCode::FAILURE
             }
         },
@@ -50,13 +52,13 @@ fn main() -> ExitCode {
             match Host::system().execute(id) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
-                    eprintln!("{NAME}: run {id}: {e}");
+                    sermon_helper::log(&format!("{NAME}: run {id}: {e}"));
                     ExitCode::FAILURE
                 }
             }
         }
         _ => {
-            eprintln!("{USAGE}");
+            sermon_helper::log(USAGE);
             ExitCode::from(2)
         }
     }
@@ -68,10 +70,10 @@ fn serve() -> Result<(), String> {
     let (uid, gid) = peer::ids_of(&passwd, peer::USER)
         .ok_or_else(|| format!("no user {} in /etc/passwd", peer::USER))?;
     let (listener, activated) = listen(gid).map_err(|e| format!("socket {SOCKET}: {e}"))?;
-    eprintln!(
+    sermon_helper::log(&format!(
         "{NAME}: serving {SOCKET} for uid {uid}; allow_remote_updates={} allow_remote_reboot={} allow_self_update={}",
         config.allow_remote_updates, config.allow_remote_reboot, config.allow_self_update
-    );
+    ));
     let host = Host::system();
     host.prune();
     let mut server = Server {
@@ -88,12 +90,15 @@ fn serve() -> Result<(), String> {
                 let peer = peer::peer_uid(&stream);
                 // The caller's PID too: the agent and a child of it running as sermon differ.
                 let pid = peer::peer_pid(&stream).map_or_else(|_| "-".into(), |p| p.to_string());
-                eprintln!("{NAME}: peer_pid={pid} {}", server.connection(stream, peer));
+                sermon_helper::log(&format!(
+                    "{NAME}: peer_pid={pid} {}",
+                    server.connection(stream, peer)
+                ));
                 // At most 20 requests a second: a looping agent can't flood the journal and push
                 // the lines of real runs out of its rate limit (review M4-04).
                 std::thread::sleep(PACE);
             }
-            Err(e) => eprintln!("{NAME}: accept: {e}"),
+            Err(e) => sermon_helper::log(&format!("{NAME}: accept: {e}")),
         }
     }
 }
@@ -256,7 +261,15 @@ fn inherited() -> io::Result<UnixListener> {
 /// never more open than that, and an old socket is replaced (nothing else).
 fn bind(path: &Path, gid: u32) -> io::Result<UnixListener> {
     let dir = path.parent().unwrap_or(Path::new("/run"));
-    fs::create_dir_all(dir)?;
+    // A link in the directory's place would hand its permissions elsewhere (M4-31).
+    match fs::symlink_metadata(dir) {
+        Ok(m) if !m.is_dir() => {
+            return Err(io::Error::other("the socket's directory is no directory"));
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => fs::create_dir_all(dir)?,
+        Err(e) => return Err(e),
+    }
     fs::set_permissions(dir, fs::Permissions::from_mode(0o750))?;
     rustix::fs::chown(dir, None, Some(rustix::process::Gid::from_raw(gid)))?;
     match fs::symlink_metadata(path) {
@@ -491,5 +504,15 @@ mod tests {
         fs::write(&file, "x").unwrap();
         assert!(bind(&file, gid).is_err());
         assert!(fs::metadata(&file).unwrap().is_file());
+        // M4-31: a link in the directory's place: its target keeps its permissions.
+        let target = dir.path().join("target");
+        fs::create_dir(&target).unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o700)).unwrap();
+        std::os::unix::fs::symlink(&target, dir.path().join("linked")).unwrap();
+        assert!(bind(&dir.path().join("linked/helper.sock"), gid).is_err());
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
     }
 }

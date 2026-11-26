@@ -88,3 +88,10 @@ path = "fuzz_targets/update_parsers.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "helper_parsers"
+path = "fuzz_targets/helper_parsers.rs"
+test = false
+doc = false
+bench = false

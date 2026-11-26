@@ -144,10 +144,12 @@ message SessionResponse {
 message Hello {
   // protocol_version is the agent's protocol version; the server supports N and N-1.
   uint32 protocol_version = 1 [(buf.validate.field).uint32.gte = 1];
-  // agent_version is the semantic version of the agent binary, e.g. "1.4.2".
+  // agent_version is the semantic version of the agent binary, e.g. "1.4.2"; only digits, dots and
+  // a prerelease of letters, digits, dots and hyphens (M4-31): it is shown and compared.
   string agent_version = 2 [(buf.validate.field).string = {
     min_len: 1
     max_len: 64
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
   }];
   // host_facts describe the machine the agent runs on.
   HostFacts host_facts = 3 [(buf.validate.field).required = true];

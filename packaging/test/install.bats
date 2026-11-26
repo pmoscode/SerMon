@@ -593,3 +593,12 @@ repo_server() {
 	write_config
 	grep -q '^url = "https://sermon.example.org"$' "$SERMON_INSTALL_ROOT/etc/sermon/agent.toml"
 }
+
+# M4-31: the helper's service and its runs are bounded – memory, tasks, and under systemd the run
+# units the helper starts (sermon-helper, systemd-run) – under systemd and OpenRC alike.
+@test "the helper's service is bounded under systemd and OpenRC" {
+	grep -q '^MemoryMax=' packaging/systemd/sermon-helper.service
+	grep -q '^TasksMax=' packaging/systemd/sermon-helper.service
+	grep -q '^memory.max ' packaging/openrc/sermon-helper
+	grep -q '^pids.max ' packaging/openrc/sermon-helper
+}

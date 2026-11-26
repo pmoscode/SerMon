@@ -35,5 +35,9 @@ UMask=0022
 Nice=10
 IOSchedulingClass=idle
 CPUQuota=50%
+# Bounds of the service, which lists the updates itself (M4-31); a run is a unit of its own with
+# its own bounds (systemd-run in the helper).
+MemoryMax=1G
+TasksMax=256
 StateDirectory=sermon-helper
 StateDirectoryMode=0700

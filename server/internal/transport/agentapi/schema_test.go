@@ -126,6 +126,12 @@ func TestSchema_RejectsInvalidMessages(t *testing.T) {
 		"hello without host facts": hello(nil),
 		"protocol version 0":       &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Hello{Hello: &agentv1.Hello{AgentVersion: "1", HostFacts: validHostFacts()}}},
 		"heartbeat without time":   &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Heartbeat{Heartbeat: &agentv1.Heartbeat{}}},
+		"agent version with a bidi": &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Hello{Hello: &agentv1.Hello{
+			ProtocolVersion: 1, AgentVersion: "1.2.3\u202e", HostFacts: validHostFacts(),
+		}}},
+		"agent version no version": &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Hello{Hello: &agentv1.Hello{
+			ProtocolVersion: 1, AgentVersion: "latest", HostFacts: validHostFacts(),
+		}}},
 		"empty hostname":           withFacts(func(f *agentv1.HostFacts) { f.Hostname = "" }),
 		"hostname too long":        withFacts(func(f *agentv1.HostFacts) { f.Hostname = string(make([]byte, 254)) }),
 		"machine id upper case":    withFacts(func(f *agentv1.HostFacts) { f.MachineId = "0123456789ABCDEF0123456789ABCDEF" }),

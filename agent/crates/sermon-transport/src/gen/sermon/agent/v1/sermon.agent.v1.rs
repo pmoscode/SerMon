@@ -149,7 +149,8 @@ pub struct Hello {
     /// protocol_version is the agent's protocol version; the server supports N and N-1.
     #[prost(uint32, tag="1")]
     pub protocol_version: u32,
-    /// agent_version is the semantic version of the agent binary, e.g. "1.4.2".
+    /// agent_version is the semantic version of the agent binary, e.g. "1.4.2"; only digits, dots and
+    /// a prerelease of letters, digits, dots and hyphens (M4-31): it is shown and compared.
     #[prost(string, tag="2")]
     pub agent_version: ::prost::alloc::string::String,
     /// host_facts describe the machine the agent runs on.

@@ -66,8 +66,12 @@ fn commands(d: Distribution) -> Option<(&'static str, Fixed, &'static [Fixed])> 
             // after a rotation of the SerMon repository keys (M4-31); nobody is there to answer.
             ("usr/bin/dnf", &["-y", "-q", "makecache", "--refresh"]),
             &[
-                ("usr/bin/dnf", &["-q", "check-update"]),
-                ("usr/bin/dnf", &["-q", "updateinfo", "list", "--security"]),
+                // -C: from the cache makecache fills; dnf refreshes on its own otherwise (M4-31).
+                ("usr/bin/dnf", &["-q", "-C", "check-update"]),
+                (
+                    "usr/bin/dnf",
+                    &["-q", "-C", "updateinfo", "list", "--security"],
+                ),
                 ("usr/bin/dnf", &["needs-restarting", "-r"]),
             ],
         ),
@@ -235,11 +239,16 @@ impl Host {
         match self.launch {
             Launch::Systemd => {
                 let unit = format!("--unit=sermon-helper-run-{id}");
+                // Bounds of a run (M4-31): the package manager's longest run plus the wait for
+                // a new agent, and no host full of its processes or out of memory.
                 let args = [
                     unit.as_str(),
                     "--collect",
                     "--quiet",
                     "--no-block",
+                    "--property=RuntimeMaxSec=2h",
+                    "--property=TasksMax=1024",
+                    "--property=MemoryMax=75%",
                     &exe,
                     "run",
                     id,
@@ -288,12 +297,12 @@ impl Host {
         let dir = self.run_dir(id);
         let request = fs::read_to_string(dir.join("request"))?;
         let started = now();
-        eprintln!(
+        crate::log(&format!(
             "sermon-helper: run {id} started: {}",
             request.lines().next().unwrap_or_default()
-        );
+        ));
         if let Some(reason) = self.vetoed(&request) {
-            eprintln!("sermon-helper: run {id} refused: {reason}");
+            crate::log(&format!("sermon-helper: run {id} refused: {reason}"));
             return store(&dir, &done(id, started, failed(&reason)));
         }
         let Some(mut lock) = self.lock_waiting()? else {
@@ -350,18 +359,18 @@ impl Host {
                     4096,
                     true,
                 );
-                eprintln!(
+                crate::log(&format!(
                     "sermon-helper: run {id} ended with exit code {}",
                     result.exit_code
-                );
+                ));
                 return store(&dir, &done(id, started, result));
             }
             _ => failed("unknown request"),
         };
-        eprintln!(
+        crate::log(&format!(
             "sermon-helper: run {id} ended with exit code {}",
             result.exit_code
-        );
+        ));
         store(&dir, &done(id, started, result))
     }
 
@@ -682,11 +691,10 @@ impl Executor for Host {
         let Some(_lock) = self.lock_waiting().map_err(fail)? else {
             return Err(Failure::Busy);
         };
+        // The first list refreshes in any case: dnf lists from a cache only then (M4-31).
         let stamp = self.state.join("refreshed");
-        let refreshed = refresh
-            && fs::metadata(&stamp)
-                .and_then(|m| m.modified())
-                .map_or(true, |t| older(t, REFRESH_EVERY));
+        let last = fs::metadata(&stamp).and_then(|m| m.modified());
+        let refreshed = last.is_err() || refresh && last.is_ok_and(|t| older(t, REFRESH_EVERY));
         let mut commands = Vec::new();
         if refreshed {
             commands.push(self.run(refresh_command, self.list_limit, RUN_OUTPUT, true));
@@ -1118,10 +1126,30 @@ mod tests {
         assert_eq!(fake.calls().matches("apt-get update").count(), 1);
     }
 
+    // Review M4-30: dnf lists from its cache only (-C) – without, a list refreshes the sources
+    // itself, beyond REFRESH_EVERY and waiting for a key's prompt –, and the first list ever
+    // refreshes, so the cache is there.
+    #[test]
+    fn dnf_lists_from_its_cache_which_the_first_list_fills() {
+        let fake = Fake::new("ID=rocky\n");
+        let updates = fake.host.clone().list_updates(false).unwrap();
+        assert!(updates.refreshed, "the first list didn't refresh");
+        assert!(
+            fake.calls()
+                .starts_with("dnf -y -q makecache --refresh\ndnf -q -C check-update\n"),
+            "{}",
+            fake.calls()
+        );
+        let again = fake.host.clone().list_updates(false).unwrap();
+        assert!(!again.refreshed);
+    }
+
     #[test]
     fn keeps_the_exit_codes_of_dnf() {
         let fake = Fake::new("ID=fedora\n");
-        fake.program("usr/bin/dnf", "[ \"$2\" = check-update ] && { echo 'openssl.x86_64 1:3.2.4-1.fc44 updates'; exit 100; }; exit 0");
+        fake.program("usr/bin/dnf", "case \"$*\" in *check-update*) echo 'openssl.x86_64 1:3.2.4-1.fc44 updates'; exit 100;; esac; exit 0");
+        fs::create_dir_all(&fake.host.state).unwrap();
+        fs::write(fake.host.state.join("refreshed"), b"").unwrap();
         let updates = fake.host.clone().list_updates(false).unwrap();
         let codes: Vec<_> = updates
             .commands
@@ -1131,8 +1159,8 @@ mod tests {
         assert_eq!(
             codes,
             [
-                ("dnf -q check-update".into(), 100),
-                ("dnf -q updateinfo list --security".into(), 0),
+                ("dnf -q -C check-update".into(), 100),
+                ("dnf -q -C updateinfo list --security".into(), 0),
                 ("dnf needs-restarting -r".into(), 0)
             ]
         );

@@ -1,0 +1,52 @@
+{
+  "columns": [
+    "Variable_name",
+    "Value"
+  ],
+  "rows": [
+    [
+      "Aborted_connects",
+      "1"
+    ],
+    [
+      "Bytes_received",
+      "26794"
+    ],
+    [
+      "Bytes_sent",
+      "30510"
+    ],
+    [
+      "Innodb_buffer_pool_pages_free",
+      "7817"
+    ],
+    [
+      "Innodb_buffer_pool_pages_total",
+      "8112"
+    ],
+    [
+      "Innodb_buffer_pool_read_requests",
+      "8540"
+    ],
+    [
+      "Innodb_buffer_pool_reads",
+      "149"
+    ],
+    [
+      "Queries",
+      "336"
+    ],
+    [
+      "Slow_queries",
+      "76"
+    ],
+    [
+      "Threads_connected",
+      "2"
+    ],
+    [
+      "Threads_running",
+      "2"
+    ]
+  ]
+}

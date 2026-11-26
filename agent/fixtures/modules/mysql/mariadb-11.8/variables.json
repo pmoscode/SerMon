@@ -1,0 +1,20 @@
+{
+  "columns": [
+    "Variable_name",
+    "Value"
+  ],
+  "rows": [
+    [
+      "innodb_buffer_pool_size",
+      "134217728"
+    ],
+    [
+      "max_connections",
+      "151"
+    ],
+    [
+      "version",
+      "11.8.9-MariaDB-ubu2404-log"
+    ]
+  ]
+}

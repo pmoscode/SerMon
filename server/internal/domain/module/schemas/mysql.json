@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MySQL/MariaDB",
+  "description": "Connections, queries, slow queries, traffic, InnoDB buffer pool and replication, with a user that has PROCESS and REPLICATION CLIENT.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "address": {
+      "type": "string",
+      "title": "Address",
+      "description": "host:port of the server (loopback unless module_targets of agent.toml allows more).",
+      "format": "host-port",
+      "maxLength": 255,
+      "default": "127.0.0.1:3306"
+    },
+    "socket": {
+      "type": "string",
+      "title": "Unix socket",
+      "description": "Instead of the address, e.g. /run/mysqld/mysqld.sock.",
+      "format": "path",
+      "maxLength": 255
+    },
+    "user": {
+      "type": "string",
+      "title": "User",
+      "description": "A user with PROCESS and REPLICATION CLIENT (MariaDB: REPLICA MONITOR) and nothing more.",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9_.$-]+$",
+      "default": "sermon"
+    },
+    "secret": {
+      "type": "string",
+      "title": "Password",
+      "writeOnly": true,
+      "maxLength": 256
+    },
+    "tls": {
+      "type": "string",
+      "title": "TLS",
+      "description": "off, verify (the certificate against the system's CAs), no_verify (any certificate; MySQL's own certificates). MySQL 8 needs TLS or the socket for the first login of caching_sha2_password.",
+      "enum": ["off", "verify", "no_verify"],
+      "maxLength": 9,
+      "default": "off"
+    }
+  }
+}

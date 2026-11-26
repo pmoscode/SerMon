@@ -1,0 +1,13 @@
+{
+  "columns": [
+    "PRIVILEGE_TYPE"
+  ],
+  "rows": [
+    [
+      "PROCESS"
+    ],
+    [
+      "SLAVE MONITOR"
+    ]
+  ]
+}

@@ -15,6 +15,7 @@ const names: Record<string, Text> = {
 	tcp_check: m.module_tcp_check,
 	smart: m.module_smart,
 	docker: m.module_docker,
+	mysql: m.module_mysql,
 	postgres: m.module_postgres,
 	systemd_units: m.module_systemd_units,
 	tls: m.module_tls,
@@ -51,6 +52,13 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 	},
 	docker: {
 		max_containers: [m.module_docker_max_containers, m.module_docker_max_containers_help]
+	},
+	mysql: {
+		address: [m.module_mysql_address, m.module_mysql_address_help],
+		socket: [m.module_mysql_socket, m.module_mysql_socket_help],
+		user: [m.module_mysql_user, m.module_mysql_user_help],
+		secret: [m.module_mysql_secret, m.module_mysql_secret_help],
+		tls: [m.module_mysql_tls, m.module_mysql_tls_help]
 	},
 	postgres: {
 		address: [m.module_postgres_address, m.module_postgres_address_help],

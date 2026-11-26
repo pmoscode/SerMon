@@ -150,3 +150,26 @@ for file in ../fixtures/modules/prometheus/*/metrics-*.txt; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\010'; head -c 60000 "$file"; } >"corpus/module_parsers/fixture$name"
 done
+# mysql_wire: the recorded handshakes, and the result sets as the server frames them (M5-14).
+mkdir -p corpus/mysql_wire
+python3 - <<'PY'
+import json, glob, os
+def packet(seq, body):
+    return len(body).to_bytes(3, "little") + bytes([seq]) + body
+def lenenc(b):
+    return bytes([0xfb]) if b is None else bytes([len(b)]) + b if len(b) < 251 else b"\xfc" + len(b).to_bytes(2, "little") + b
+for f in glob.glob("../fixtures/modules/mysql/*/handshake.bin"):
+    name = f.replace("/", "_").replace(".", "_")
+    open(os.path.join("corpus/mysql_wire", "fixture" + name), "wb").write(open(f, "rb").read())
+for f in glob.glob("../fixtures/modules/mysql/*/*.json"):
+    s = json.load(open(f))
+    out, seq = packet(1, bytes([len(s["columns"])])), 2
+    for c in s["columns"]:
+        out += packet(seq, b"".join(lenenc(x) for x in [b"def", b"", b"", b"", c.encode(), c.encode()]) + bytes(12)); seq += 1
+    out += packet(seq, b"\xfe\0\0\x02\0"); seq += 1
+    for r in s["rows"]:
+        out += packet(seq % 256, b"".join(lenenc(None if v is None else v.encode()) for v in r)); seq += 1
+    out += packet(seq % 256, b"\xfe\0\0\x02\0")
+    name = f.replace("/", "_").replace(".", "_")
+    open(os.path.join("corpus/mysql_wire", "fixture" + name), "wb").write(out)
+PY

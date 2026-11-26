@@ -5590,7 +5590,28 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
   fehlende Rechte als Gesundheit statt Fehler.
 - **Abhängig von:** M5-03, M5-05
 
-#### ☐ M5-14 – MySQL/MariaDB · A · M 🔒
+#### ☑ M5-14 – MySQL/MariaDB · A · M 🔒
+> Erledigt (Modul `mysql`, `sermon-modules/src/mysql.rs`, Client `mysql/wire.rs`, gemeinsam `sql.rs` mit M5-13):
+> - **Client:** eigener, kleiner Client wie bei PostgreSQL – `mysql_async` zöge `mysql_common` mit Dutzenden Crates
+>   (Zahlen-, Datums-, Kompressions-Crates) nach. Gebraucht wird Handshake v10, Anmeldung und `COM_QUERY` mit Text:
+>   `mysql_native_password` (SHA-1 aus `ring`), `caching_sha2_password` schnell (SHA-256) und voll – das Passwort
+>   selbst nur über TLS oder den Unix-Socket, den RSA-Weg ohne TLS gibt es nicht (bräuchte ein RSA-Crate) –, Auth
+>   Switch zwischen beiden, TLS mit rustls auf Wunsch (`no_verify` für das eigene Zertifikat von MySQL). Grenzen: Paket
+>   ≤ 1 MiB (keine Multi-Pakete), Antwort ≤ 1 MiB und 4 096 Zeilen, Scramble genau 20 Byte, Anmeldung höchstens vier
+>   Schritte; Decoder synchron und gefuzzt (`mysql_wire`).
+> - **Rechte:** `PROCESS` (oder `SUPER`) wird vorab geprüft (`USER_PRIVILEGES`), die Replikation braucht
+>   `REPLICATION CLIENT` (MariaDB ab 10.5: `REPLICA MONITOR`); ohne sie `error` mit dem nötigen `GRANT` bzw. der
+>   Meldung des Servers. Falsches Passwort (1045) ist „login refused“; ohne TLS sieht es bei `caching_sha2_password`
+>   aus wie eine erste Anmeldung – die Meldung nennt beides. `SHOW REPLICA STATUS`, vor 8.0.22 `SHOW SLAVE STATUS`.
+> - **Metriken** (für M5-20): `sermon_mysql_connections`, `_connections_running`, `_connections_limit`,
+>   `_aborted_connects_per_second`, `_queries_per_second`, `_slow_queries_per_second`, `_long_queries` (> 60 s),
+>   `_received_bytes_per_second`, `_sent_bytes_per_second`, `_innodb_buffer_pool_bytes`,
+>   `_innodb_buffer_pool_utilization_ratio`, `_innodb_buffer_pool_hit_ratio`, `_replica`, `_replication_running`,
+>   `_replication_lag_seconds`. Discovery über `mysqld`/`mariadbd`, Units, Port 3306 und die üblichen Sockets.
+> - **Tests:** Fixtures echter Antworten (samt Handshake) von MySQL 8.4 und 9, MariaDB 10.11, 11.4 und 11.8 unter Last
+>   und je einer Replica von MySQL 8.4 und MariaDB 11.4; `just test-db-modules` prüft das Modul gegen diese Server:
+>   erste Anmeldung ohne TLS abgelehnt, mit TLS und danach schnell ohne, falsches Passwort, User ohne Rechte,
+>   Replikation. Gegenproben 20/20.
 - **Ziel:** Verbindungen, Queries, Slow Queries, Replikation, InnoDB-Buffer; Rechte `PROCESS, REPLICATION CLIENT`.
 - **Tests zuerst:** Fixtures von MySQL und MariaDB, Integrationstest gegen Container.
 - **Abhängig von:** M5-03, M5-05

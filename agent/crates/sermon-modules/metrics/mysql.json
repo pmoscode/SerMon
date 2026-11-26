@@ -1,0 +1,79 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_mysql_connections",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_connections_running",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_connections_limit",
+      "unit": "count",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_mysql_aborted_connects_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_queries_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_slow_queries_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_long_queries",
+      "unit": "count",
+      "aggregation": "max"
+    },
+    {
+      "name": "sermon_mysql_received_bytes_per_second",
+      "unit": "bytes_per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_sent_bytes_per_second",
+      "unit": "bytes_per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_innodb_buffer_pool_bytes",
+      "unit": "bytes",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_mysql_innodb_buffer_pool_utilization_ratio",
+      "unit": "ratio_ppm",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_innodb_buffer_pool_hit_ratio",
+      "unit": "ratio_ppm",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_mysql_replica",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_mysql_replication_running",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_mysql_replication_lag_seconds",
+      "unit": "seconds",
+      "aggregation": "max"
+    }
+  ]
+}

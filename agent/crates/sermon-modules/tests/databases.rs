@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use sermon_core::Sample;
+use sermon_modules::mysql;
 use sermon_modules::postgres::{self, wire};
 use sermon_modules::{Host, Module, Run, RunError, Schema, Secrets, Setup, Veto};
 
@@ -168,4 +169,165 @@ async fn write_fixtures(version: &str, address: &str, pw: &str) {
         let text = serde_json::to_string_pretty(&json(sets)).unwrap();
         std::fs::write(dir.join(format!("{name}.json")), text + "\n").unwrap();
     }
+}
+
+fn has(samples: &[Sample], metric: &str) -> Option<sermon_core::Value> {
+    samples.iter().find(|s| s.metric == metric).map(|s| s.value)
+}
+
+// MySQL 8.4 and 9, MariaDB 10.11, 11.4 and 11.8 (`SERMON_TEST_MYSQL`, `name@host:port`), users
+// `sermon` (PROCESS and the replication's right), `fresh` (the same, never logged in) and
+// `plain` (no rights); replicas of some in `SERMON_TEST_MYSQL_REPLICAS`.
+#[tokio::test]
+#[ignore = "needs the servers of scripts/test-db-modules.sh"]
+async fn mysql_against_every_version() {
+    let primaries = servers("SERMON_TEST_MYSQL");
+    assert!(!primaries.is_empty(), "SERMON_TEST_MYSQL names no server");
+    let replicas = servers("SERMON_TEST_MYSQL_REPLICAS");
+    let pw = password();
+    for (version, address) in primaries {
+        let config = |user: &str, tls: &str| {
+            format!(r#"{{"address":"{address}","user":"{user}","tls":"{tls}"}}"#)
+        };
+        if version.starts_with("mysql") {
+            // caching_sha2_password: the first login sends the password, only over TLS.
+            let Err(RunError::Failed(why)) =
+                collect(&mysql::Mysql, &config("fresh", "off"), &pw).await
+            else {
+                panic!("{version}: a full login without TLS");
+            };
+            assert!(why.contains("TLS"), "{version}: {why}");
+            collect(&mysql::Mysql, &config("sermon", "no_verify"), &pw)
+                .await
+                .unwrap_or_else(|e| panic!("{version} over TLS: {e}"));
+        }
+        // From then on the fast login (MySQL) or mysql_native_password (MariaDB) without TLS.
+        let samples = collect(&mysql::Mysql, &config("sermon", "off"), &pw)
+            .await
+            .unwrap_or_else(|e| panic!("{version}: {e}"));
+        let seen = metrics(&samples);
+        for want in [
+            "sermon_mysql_connections",
+            "sermon_mysql_connections_limit",
+            "sermon_mysql_queries_per_second",
+            "sermon_mysql_slow_queries_per_second",
+            "sermon_mysql_innodb_buffer_pool_hit_ratio",
+            "sermon_mysql_innodb_buffer_pool_utilization_ratio",
+            "sermon_mysql_long_queries",
+        ] {
+            assert!(seen.contains(want), "{version}: no {want} in {seen:?}");
+        }
+        assert_eq!(
+            has(&samples, "sermon_mysql_replica"),
+            Some(sermon_core::Value::Int(0)),
+            "{version}"
+        );
+        // A wrong password: refused over TLS; without, caching_sha2_password asks for the full
+        // login, which needs TLS – the reason says both.
+        let tls = if version.starts_with("mysql") {
+            "no_verify"
+        } else {
+            "off"
+        };
+        let Err(RunError::Failed(why)) =
+            collect(&mysql::Mysql, &config("sermon", tls), "wrong").await
+        else {
+            panic!("{version}: a wrong password was taken");
+        };
+        assert!(
+            why.contains("login refused") && !why.contains(&pw),
+            "{version}: {why}"
+        );
+        if version.starts_with("mysql") {
+            let Err(RunError::Failed(why)) =
+                collect(&mysql::Mysql, &config("sermon", "off"), "wrong").await
+            else {
+                panic!("{version}: a wrong password was taken");
+            };
+            assert!(why.contains("password is wrong"), "{version}: {why}");
+        }
+        let Err(RunError::Failed(why)) = collect(&mysql::Mysql, &config("plain", tls), &pw).await
+        else {
+            panic!("{version}: a user without rights");
+        };
+        assert!(why.contains("PROCESS"), "{version}: {why}");
+        write_mysql_fixtures(&version, &address, &pw).await;
+        if let Some((_, at)) = replicas.iter().find(|(v, _)| *v == version) {
+            let config = format!(r#"{{"address":"{at}","user":"sermon","tls":"no_verify"}}"#);
+            let on_replica = collect(&mysql::Mysql, &config, &pw)
+                .await
+                .unwrap_or_else(|e| panic!("{version} replica: {e}"));
+            assert_eq!(
+                has(&on_replica, "sermon_mysql_replica"),
+                Some(sermon_core::Value::Int(1)),
+                "{version}"
+            );
+            assert_eq!(
+                has(&on_replica, "sermon_mysql_replication_running"),
+                Some(sermon_core::Value::Int(1)),
+                "{version}"
+            );
+            assert!(
+                has(&on_replica, "sermon_mysql_replication_lag_seconds").is_some(),
+                "{version}"
+            );
+            write_mysql_fixtures(&format!("{version}-replica"), at, &pw).await;
+        }
+    }
+}
+
+/// Writes the handshake and the answers of the server at `address` below `SERMON_FIXTURES_OUT`
+/// (`mysql/<version>/`); the user `sermon` logs in fast (its login is cached by then).
+async fn write_mysql_fixtures(version: &str, address: &str, pw: &str) {
+    let Some(out) = std::env::var("SERMON_FIXTURES_OUT")
+        .ok()
+        .filter(|o| !o.is_empty())
+    else {
+        return;
+    };
+    let (host, port) = address.rsplit_once(':').unwrap();
+    let io = tokio::net::TcpStream::connect((host, port.parse::<u16>().unwrap()))
+        .await
+        .unwrap();
+    let mut packets = mysql::wire::Packets::new(io);
+    let greeting = packets.read().await.unwrap();
+    let handshake = mysql::wire::Handshake::parse(&greeting).unwrap();
+    let login = mysql::wire::Login {
+        user: "sermon",
+        password: pw,
+        database: "",
+        secure: false,
+    };
+    packets
+        .write(&mysql::wire::handshake_response(&handshake, &login, false).unwrap())
+        .await
+        .unwrap();
+    mysql::wire::finish_login(&mut packets, &login)
+        .await
+        .unwrap();
+    let dir = std::path::Path::new(&out).join("mysql").join(version);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("handshake.bin"), &greeting).unwrap();
+    let replica = match packets.query(mysql::REPLICA).await {
+        Err(_) => packets.query(mysql::REPLICA_OLD).await.unwrap(),
+        Ok(set) => set,
+    };
+    for (name, sql) in [
+        ("privileges", mysql::PRIVILEGES),
+        ("status", mysql::STATUS),
+        ("variables", mysql::VARIABLES),
+        ("long", mysql::LONG),
+    ] {
+        let set = packets.query(sql).await.unwrap();
+        let text = serde_json::to_string_pretty(
+            &serde_json::json!({ "columns": set.columns, "rows": set.rows }),
+        )
+        .unwrap();
+        std::fs::write(dir.join(format!("{name}.json")), text + "\n").unwrap();
+    }
+    let text = serde_json::to_string_pretty(
+        &serde_json::json!({ "columns": replica.columns, "rows": replica.rows }),
+    )
+    .unwrap();
+    std::fs::write(dir.join("replica.json"), text + "\n").unwrap();
 }

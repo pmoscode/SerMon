@@ -124,3 +124,10 @@ path = "fuzz_targets/postgres_wire.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "mysql_wire"
+path = "fuzz_targets/mysql_wire.rs"
+test = false
+doc = false
+bench = false

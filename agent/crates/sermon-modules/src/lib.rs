@@ -16,6 +16,8 @@ pub mod fields;
 pub mod http;
 #[cfg(feature = "http_check")]
 pub mod http_check;
+#[cfg(feature = "mysql")]
+pub mod mysql;
 #[cfg(feature = "nginx")]
 pub mod nginx;
 #[cfg(feature = "http")]
@@ -70,6 +72,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(docker::Docker),
         #[cfg(feature = "http_check")]
         Arc::new(http_check::HttpCheck),
+        #[cfg(feature = "mysql")]
+        Arc::new(mysql::Mysql),
         #[cfg(feature = "nginx")]
         Arc::new(nginx::Nginx),
         #[cfg(feature = "postgres")]

@@ -37,9 +37,12 @@ func TestValidate(t *testing.T) {
 		"long reason":    func(c *command.Command) { c.Kind, c.Reason = command.Reboot, strings.Repeat("x", 201) },
 		"control reason": func(c *command.Command) { c.Kind, c.Reason = command.Reboot, "now\n-h" },
 		"broken reason":  func(c *command.Command) { c.Kind, c.Reason = command.Reboot, "\xff" },
-		"no version":     func(c *command.Command) { c.Kind, c.Version = command.SelfUpdate, "" },
-		"long version":   func(c *command.Command) { c.Kind, c.Version = command.SelfUpdate, strings.Repeat("1", 65) },
-		"expired":        func(c *command.Command) { c.ExpiresAt = c.CreatedAt },
+		// Review M4-30: format and separator characters, too.
+		"bidi reason":      func(c *command.Command) { c.Kind, c.Reason = command.Reboot, "ok\u202etxet" },
+		"separator reason": func(c *command.Command) { c.Kind, c.Reason = command.Reboot, "a\u2028b" },
+		"no version":       func(c *command.Command) { c.Kind, c.Version = command.SelfUpdate, "" },
+		"long version":     func(c *command.Command) { c.Kind, c.Version = command.SelfUpdate, strings.Repeat("1", 65) },
+		"expired":          func(c *command.Command) { c.ExpiresAt = c.CreatedAt },
 	} {
 		c := valid(command.Refresh)
 		change(&c)

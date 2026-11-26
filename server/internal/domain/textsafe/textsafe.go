@@ -11,8 +11,13 @@ import (
 )
 
 // Invisible reports whether r changes the display without being visible itself: control (Cc),
-// format (Cf: bidi marks and overrides, zero width, BOM) and line or paragraph separators.
+// format (Cf: bidi marks and overrides, zero width, BOM), line or paragraph separators, and the
+// Hangul fillers that render blank (review M4-30, like the UI's displayText).
 func Invisible(r rune) bool {
+	switch r {
+	case '\u115f', '\u1160', '\u3164', '\uffa0':
+		return true
+	}
 	return unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp)
 }
 

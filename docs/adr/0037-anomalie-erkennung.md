@@ -159,3 +159,16 @@ Der Benchmark (13 synthetische Szenarien) hat drei Änderungen am Verfahren von 
   Stunde vorwärts: die als Nächstes gebrauchten zuerst.
 - **Stunden ohne Daten** bleiben fehlend (eine Baseline braucht 30 Werte) und wurden jede Minute erneut gerechnet; jetzt
   höchstens einmal je Stunde (`orgState.tried`).
+
+## Nachtrag M4-30 (Security-Review)
+
+- **Baselines ersetzen ihre Stunde:** `SaveBaselines` löscht die Zeilen der Stunde von Serien, die nicht mehr bewertet
+  werden (Platte entfernt, Grenze erreicht, zu wenig Werte). Sonst behielt die Stunde eine alte Zeile, ihr Alter
+  (`min(computed_at)`) lag über 8 Tagen, und nach einer Woche rechnete der Worker alle 168 Stunden stündlich neu.
+- **Reihenfolge der Organisationen:** Ging einer Runde das Budget aus, beginnt die nächste *nach* der Organisation, bei
+  der es ausging; ohne Überlauf rückt der Anfang wie bisher um eins weiter. Eine große Organisation nimmt so nicht mehr
+  allen anderen die Runden.
+- **Ausgabe:** Die letzten 5 min gelten nur für die erste Runde nach einer Übernahme (`writeFrom`); danach schreibt der
+  Worker jede bewertete Minute. Bisher gingen Minuten verloren, wenn eine Organisation länger als 5 Runden wartete.
+- **Leser** der Anomalien (wie Kapazität und Heatmap) enden nach 15 s mit `DEADLINE_EXCEEDED`. Grenzen der
+  Gleichzeitigkeit und ein günstigeres `anomaly_top` folgen in M4-31.

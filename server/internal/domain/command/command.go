@@ -5,13 +5,14 @@ package command
 
 import (
 	"errors"
+	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 )
 
 // Kind is what the command does.
@@ -121,12 +122,9 @@ func validReason(s string) bool {
 	if s == "" || len(s) > MaxReason || !utf8.ValidString(s) {
 		return false
 	}
-	for _, r := range s {
-		if unicode.IsControl(r) {
-			return false
-		}
-	}
-	return true
+	// No control, format or separator characters (review M4-30): the reason reaches the host's
+	// terminals, its journal and the audit log, where a bidi override would forge what it says.
+	return !strings.ContainsFunc(s, textsafe.Invisible)
 }
 
 // Result is what the agent reported of a run.

@@ -58,7 +58,8 @@ type Store interface {
 	Points(ctx context.Context, org tenant.OrgID, ids []int64, from, to time.Time) ([]Point, error)
 	// Baselines returns the stored baselines of an hour of the week.
 	Baselines(ctx context.Context, org tenant.OrgID, hour int) (map[int64]anomaly.Baseline, error)
-	// SaveBaselines stores the baselines of an hour of the week, computed at at.
+	// SaveBaselines stores the baselines of an hour of the week, computed at at, in place of all
+	// it had: the hour's age is that of its oldest row.
 	SaveBaselines(ctx context.Context, org tenant.OrgID, hour int, at time.Time, baselines map[int64]anomaly.Baseline) error
 	// BaselineAges returns when each stored hour of the week was computed.
 	BaselineAges(ctx context.Context, org tenant.OrgID) (map[int]time.Time, error)
@@ -81,7 +82,8 @@ type Config struct {
 	// Lag is how long metrics_1m takes to hold a minute.
 	Lag time.Duration
 	// Warmup is the history scored after a takeover to warm the short-term baselines; Output is
-	// how far back a round writes results (older minutes only warm up).
+	// how far back the first round after it writes results (older minutes only warm up). From
+	// then on every minute is written, however long the organization waited for its turn.
 	Warmup, Output time.Duration
 	// Chunk is the most minutes a step scores at once.
 	Chunk time.Duration
@@ -119,12 +121,15 @@ type seriesState struct {
 }
 
 type orgState struct {
-	series  []*seriesState
-	byID    map[int64]*seriesState
-	listed  time.Time
-	done    time.Time // minutes before this are scored
-	hour    time.Time // the hour whose baselines are loaded
-	current map[int64]anomaly.Baseline
+	series []*seriesState
+	byID   map[int64]*seriesState
+	listed time.Time
+	done   time.Time // minutes before this are scored
+	// writeFrom: results are written from this minute on, older ones only warm up (the takeover's
+	// Output; review M4-30: not the last Output of every round, a wait would lose minutes).
+	writeFrom time.Time
+	hour      time.Time // the hour whose baselines are loaded
+	current   map[int64]anomaly.Baseline
 	// tried is when a missing hour of the week was last computed: without data it stays missing
 	// and is tried again an hour later, not every minute.
 	tried map[int]time.Time
@@ -138,6 +143,10 @@ type Worker struct {
 	stats  Stats
 	orgs   map[tenant.OrgID]*orgState
 	turn   int
+	// cut is the organization whose step ran out of the budget last round (cutOff): the next
+	// round starts after it, so one big organization can't take every round (review M4-30).
+	cut    tenant.OrgID
+	cutOff bool
 	names  []string
 	order  map[string]int
 }
@@ -171,8 +180,8 @@ func (w *Worker) Run(ctx context.Context) error {
 
 var errBudget = errors.New("round budget spent")
 
-// Round scores what is ready of every organization, the first one changing each round, within
-// the budget.
+// Round scores what is ready of every organization within the budget: the first one changes each
+// round, after a round that ran out of it the one after the organization it ran out in.
 func (w *Worker) Round(ctx context.Context) {
 	w.stats.Rounds.Add(1)
 	started := w.config.Now()
@@ -191,6 +200,10 @@ func (w *Worker) Round(ctx context.Context) {
 		return
 	}
 	w.turn = (w.turn + 1) % len(orgs)
+	if i := slices.Index(orgs, w.cut); w.cutOff && i >= 0 {
+		w.turn = (i + 1) % len(orgs)
+	}
+	w.cutOff = false
 	deadline := started.Add(w.config.Budget)
 	for i := range orgs {
 		org := orgs[(w.turn+i)%len(orgs)]
@@ -198,6 +211,7 @@ func (w *Worker) Round(ctx context.Context) {
 		switch {
 		case errors.Is(err, errBudget):
 			w.stats.Overruns.Add(1)
+			w.cut, w.cutOff = org, true
 			return
 		case err != nil:
 			w.stats.Errors.Add(1)
@@ -236,7 +250,10 @@ func (w *Worker) step(ctx context.Context, org tenant.OrgID, deadline time.Time)
 	}
 	st := w.orgs[org]
 	if st == nil {
-		st = &orgState{done: now.Truncate(time.Minute).Add(-w.config.Warmup)}
+		st = &orgState{
+			done:      now.Truncate(time.Minute).Add(-w.config.Warmup),
+			writeFrom: now.Add(-w.config.Lag - w.config.Output).Truncate(time.Minute),
+		}
 		w.orgs[org] = st
 	}
 	if st.series == nil || now.Sub(st.listed) >= w.config.Refresh {
@@ -260,7 +277,7 @@ func (w *Worker) step(ctx context.Context, org tenant.OrgID, deadline time.Time)
 		// A chunk stays within an hour: one hour's baselines at a time.
 		hour := st.done.Truncate(time.Hour)
 		to := minTime(ready, minTime(st.done.Add(w.config.Chunk), hour.Add(time.Hour)))
-		if err := w.score(ctx, org, st, st.done, to, now); err != nil {
+		if err := w.score(ctx, org, st, st.done, to); err != nil {
 			return err
 		}
 		if to.Equal(hour.Add(time.Hour)) {
@@ -320,8 +337,8 @@ func (w *Worker) list(ctx context.Context, org tenant.OrgID, st *orgState, now t
 	return nil
 }
 
-// score scores the minutes [from, to) of one hour and writes those from now − Output on.
-func (w *Worker) score(ctx context.Context, org tenant.OrgID, st *orgState, from, to, now time.Time) error {
+// score scores the minutes [from, to) of one hour and writes those from st.writeFrom on.
+func (w *Worker) score(ctx context.Context, org tenant.OrgID, st *orgState, from, to time.Time) error {
 	if hour := from.Truncate(time.Hour); !hour.Equal(st.hour) {
 		b, err := w.store.Baselines(ctx, org, anomaly.HourOfWeek(from))
 		if err != nil {
@@ -346,8 +363,8 @@ func (w *Worker) score(ctx context.Context, org tenant.OrgID, st *orgState, from
 		}
 		values[p.Series][p.T.Unix()] = p.V
 	}
-	// The last Output of the ready minutes: after a takeover nothing older is written twice.
-	outputFrom := now.Add(-w.config.Lag - w.config.Output).Truncate(time.Minute)
+	// After a takeover only the last Output of the warm-up: nothing older is written twice.
+	outputFrom := st.writeFrom
 	var notable []Notable
 	var aggregates []metrics.Aggregate
 	for m := from; m.Before(to); m = m.Add(time.Minute) {

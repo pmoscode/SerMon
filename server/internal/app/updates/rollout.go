@@ -104,6 +104,8 @@ type NodeView struct {
 	AgentTarget string
 	// Agent is the node's agent, for the orchestrator's AgentTarget.
 	Agent update.Agent
+	// Busy: the node takes part in another rollout right now (review M4-30); it waits.
+	Busy bool
 }
 
 // Action is what a planning step asks the store to do with the rollout's new state.
@@ -185,6 +187,9 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 			break
 		}
 		v, known := views[n.Node]
+		if known && v.Busy {
+			continue
+		}
 		mode := ModeReport
 		if known && v.Report != nil {
 			mode, _ = p.ModeFor(v.Report.Manager)
@@ -323,7 +328,7 @@ func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]
 				return false
 			}
 		}
-		n.State, n.Since, n.Deadline = NodeHealthCheck, endOf(run), endOf(run).Add(p.Rollout.HealthCheck)
+		n.State, n.Since, n.Deadline = NodeHealthCheck, now, now.Add(p.Rollout.HealthCheck)
 	case NodeUpdating:
 		run, ok := runs[n.UpdateRun]
 		if done, reason := finished(run, ok, now); !done {
@@ -354,12 +359,17 @@ func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]
 		} else if reason != "" {
 			return fail("reboot: " + reason)
 		}
-		n.State, n.Since, n.Deadline = NodeHealthCheck, endOf(run), endOf(run).Add(p.Rollout.HealthCheck)
+		n.State, n.Since, n.Deadline = NodeHealthCheck, now, now.Add(p.Rollout.HealthCheck)
 	case NodeHealthCheck:
-		// After a reboot or a new agent (as the last step) the node must have connected anew.
-		back := v.Online && !v.ConnectedAt.Before(n.Since)
-		if n.RebootRun == uuid.Nil && (n.AgentRun == uuid.Nil || n.UpdateRun != uuid.Nil) {
-			back = v.Online
+		// After a reboot or a new agent (as the last step) the node must have connected anew:
+		// a session begun after the server sent the run. Times of the server only, never of the
+		// host (review M4-30): a new agent connects before its helper notes the end, and a host
+		// clock could hold the check forever.
+		back := v.Online
+		if n.RebootRun != uuid.Nil {
+			back = back && !v.ConnectedAt.Before(sentOf(runs[n.RebootRun], n.Since))
+		} else if n.AgentRun != uuid.Nil && n.UpdateRun == uuid.Nil {
+			back = back && !v.ConnectedAt.Before(sentOf(runs[n.AgentRun], n.Since))
 		}
 		if back && !v.Critical && !now.Before(n.Since.Add(Settle)) {
 			n.State, n.Since = NodeDone, now
@@ -401,6 +411,17 @@ func finished(run command.Command, known bool, now time.Time) (bool, string) {
 		return true, "failed: " + run.Result.Reason
 	}
 	return true, fmt.Sprintf("failed with exit code %d", run.Result.ExitCode)
+}
+
+// sentOf is when the server sent the run, else when it created it; fallback without the run.
+func sentOf(run command.Command, fallback time.Time) time.Time {
+	switch {
+	case run.SentAt != nil:
+		return *run.SentAt
+	case !run.CreatedAt.IsZero():
+		return run.CreatedAt
+	}
+	return fallback
 }
 
 func endOf(run command.Command) time.Time {

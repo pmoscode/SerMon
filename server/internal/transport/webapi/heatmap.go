@@ -41,6 +41,8 @@ func (h *HeatmapHandler) GetHeatmap(ctx context.Context, req *connect.Request[we
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := heavyRead(ctx)
+	defer cancel()
 	heatmap, err := h.fleet.Heatmap(ctx, c, heatmapKinds[req.Msg.GetKind()], req.Msg.GetFrom().AsTime(), req.Msg.GetTo().AsTime())
 	if errors.Is(err, fleet.ErrInvalidHeatmap) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)

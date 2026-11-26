@@ -139,6 +139,14 @@ func TestOrchestrator_RollsOutOverTheDatabase(t *testing.T) {
 	if rollouts != 1 {
 		t.Errorf("%d rollouts", rollouts)
 	}
+	// T41 (review M4-30): every run the rollout sent and its end are in the audit log.
+	var sent, failed int
+	queryOwner(t, setup(t).db.OwnerDSN, `SELECT count(*) FILTER (WHERE action = 'node.command' AND details->>'by' = 'update policy' AND details->>'kind' = 'update'),
+		count(*) FILTER (WHERE action = 'node.run_ended' AND details->>'phase' = 'failed' AND details->>'exit_code' = '100' AND target = 'node:' || $2::text)
+		FROM audit_log WHERE org_id = $1`, []any{uuid.UUID(f.org), uuid.UUID(f.peer).String()}, &sent, &failed)
+	if sent != 2 || failed != 1 {
+		t.Errorf("audit: %d runs sent, %d ended failed", sent, failed)
+	}
 }
 
 func auditEntry(action string) access.AuditEntry {
@@ -264,6 +272,11 @@ func TestOrchestrator_RunsRolloutsByHand(t *testing.T) {
 	queryOwner(t, setup(t).db.OwnerDSN, "SELECT kind, scope FROM node_commands WHERE org_id = $1", []any{uuid.UUID(f.org)}, &kind, &scope)
 	if kind != int(command.Update) || scope != int(command.ScopeSecurity) {
 		t.Errorf("command = %d %d", kind, scope)
+	}
+	var byHand int
+	queryOwner(t, setup(t).db.OwnerDSN, "SELECT count(*) FROM audit_log WHERE org_id = $1 AND action = 'node.command' AND details->>'by' = 'rollout by hand'", []any{uuid.UUID(f.org)}, &byHand)
+	if byHand != 1 {
+		t.Errorf("%d audit entries of the run by hand", byHand)
 	}
 	state, err := store.Load(ctx, f.org, now)
 	if err != nil || len(state.Groups) != 1 || !state.Groups[0].Rollout.Manual || !state.Groups[0].Policy.AutoReboot ||

@@ -31,6 +31,27 @@ pub fn peer_uid(stream: &UnixStream) -> io::Result<u32> {
     Ok(cred.uid.as_raw())
 }
 
+/// The PID of the process at the other end of `stream`, for the journal.
+///
+/// # Errors
+///
+/// If the kernel doesn't tell.
+#[cfg(target_os = "linux")]
+pub fn peer_pid(stream: &UnixStream) -> io::Result<i32> {
+    let cred = rustix::net::sockopt::socket_peercred(stream)?;
+    Ok(cred.pid.as_raw_nonzero().get())
+}
+
+/// Without `SO_PEERCRED` there is no PID.
+///
+/// # Errors
+///
+/// Always: unsupported.
+#[cfg(not(target_os = "linux"))]
+pub fn peer_pid(_: &UnixStream) -> io::Result<i32> {
+    Err(io::ErrorKind::Unsupported.into())
+}
+
 /// Without `SO_PEERCRED` nobody is let in.
 ///
 /// # Errors

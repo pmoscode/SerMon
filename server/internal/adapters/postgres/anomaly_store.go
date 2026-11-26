@@ -144,6 +144,9 @@ func (s *AnomalyStore) SaveBaselines(ctx context.Context, org tenant.OrgID, hour
 		p.Counts = append(p.Counts, int32(min(b.N, 1<<30))) //nolint:gosec // bounded
 	}
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := q.DeleteOtherAnomalyBaselines(ctx, sqlcdb.DeleteOtherAnomalyBaselinesParams{Hour: p.Hour, SeriesIds: p.SeriesIds}); err != nil {
+			return wrap(err, "delete old baselines")
+		}
 		return wrap(q.UpsertAnomalyBaselines(ctx, p), "save baselines")
 	})
 }

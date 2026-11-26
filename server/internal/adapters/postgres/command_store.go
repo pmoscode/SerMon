@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
+	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
@@ -168,6 +170,19 @@ func (s *CommandStore) Record(ctx context.Context, org tenant.OrgID, node identi
 			return wrap(recordErr, "record command result")
 		}
 		recorded = true
+		// The end of every run in the audit log (T41, review M4-30): node, run, kind, outcome.
+		if r.Phase.Final() {
+			details := map[string]string{"run": run.String(), "kind": kindNames[command.Kind(kind)], "phase": phaseNames[r.Phase]} //nolint:gosec // 1 to 4 by the table's check
+			if params.ExitCode.Valid {
+				details["exit_code"] = strconv.Itoa(int(r.ExitCode))
+			}
+			if params.ResultReason != "" {
+				details["reason"] = bounded(params.ResultReason, 200)
+			}
+			if err := appendAudit(ctx, q, access.AuditEntry{Action: "node.run_ended", Target: "node:" + node.String(), Details: details}); err != nil {
+				return err
+			}
+		}
 		// A self-update that didn't take is a server event (M4-19): the rule alerts on it.
 		if command.Kind(kind) == command.SelfUpdate && r.Phase.Final() && r.Phase != command.Succeeded { //nolint:gosec // 1 to 4 by the table's check
 			why := params.ResultReason
@@ -347,3 +362,12 @@ func (s *HistoryStore) Rollouts(ctx context.Context, scope tenant.Scope, limit i
 	})
 	return out, err
 }
+
+// kindNames and phaseNames are the words of the audit log.
+var (
+	kindNames  = map[command.Kind]string{command.Refresh: "refresh", command.Update: "update", command.Reboot: "reboot", command.SelfUpdate: "self-update"}
+	phaseNames = map[command.Phase]string{
+		command.Succeeded: "succeeded", command.Failed: "failed", command.Refused: "refused",
+		command.Unsupported: "unsupported", command.Lost: "lost",
+	}
+)

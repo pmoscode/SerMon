@@ -249,9 +249,30 @@ func (s *RolloutStore) Save(ctx context.Context, org tenant.OrgID, holder string
 				if err := apply(ctx, q, a, now); err != nil {
 					return err
 				}
+				if err := auditCommand(ctx, q, c.Rollout, a); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
+	})
+}
+
+// auditCommand notes a run the rollout sends (T41, review M4-30): which rollout, by policy or
+// by whom; the policy's changes have their own entries.
+func auditCommand(ctx context.Context, q *sqlcdb.Queries, r updates.RolloutRun, a updates.Action) error {
+	if a.Command == nil {
+		return nil
+	}
+	details := map[string]string{"run": a.Command.ID.String(), "kind": kindNames[a.Command.Kind], "rollout": r.ID.String(), "by": "update policy"}
+	if r.Manual {
+		details["by"] = "rollout by hand"
+	}
+	if a.Command.Version != "" {
+		details["version"] = a.Command.Version
+	}
+	return appendAudit(ctx, q, access.AuditEntry{
+		Actor: r.CreatedBy, Action: "node.command", Target: "node:" + a.Command.Node.String(), Details: details,
 	})
 }
 

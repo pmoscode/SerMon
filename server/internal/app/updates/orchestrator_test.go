@@ -166,3 +166,72 @@ func TestOrchestrator_RunEndsWithTheContext(t *testing.T) {
 		t.Fatal("Run() didn't end")
 	}
 }
+
+// Review M4-30: maxParallel holds for the group across its rollouts – the policy's and one by
+// hand – and a node runs in one at a time.
+func TestOrchestrator_MaxParallelPerGroupAcrossRollouts(t *testing.T) {
+	store, o := orchestrated(t, 1, 3, func(*updates.OrchestratorConfig) {})
+	org := store.orgs[0]
+	scheduled := store.groups[org][0]
+	scheduled.Policy.Rollout.MaxParallel = 2
+	manual := scheduled
+	manual.Policy.Window = nil
+	r := updates.RolloutRun{
+		ID: uuid.New(), Group: scheduled.Policy.Group, WindowStart: windowStart, WindowEnd: windowStart.Add(2 * time.Hour),
+		State: updates.RolloutRunning, Manual: true, Mode: updates.ModeAllAuto,
+	}
+	for _, n := range scheduled.Nodes {
+		r.Nodes = append(r.Nodes, updates.NodeRun{Node: n.ID, Hostname: n.Hostname, State: updates.NodeWaiting, Since: windowStart})
+	}
+	manual.Rollout = &r
+	store.groups[org] = []updates.GroupState{scheduled, manual}
+	o.Round(context.Background())
+	if n := started(store.saved[org]); n != 2 {
+		t.Errorf("started %d runs in the group, maxParallel 2", n)
+	}
+	seen := map[uuid.UUID]int{}
+	for _, c := range store.saved[org] {
+		for _, a := range c.Actions {
+			if a.Command != nil {
+				seen[uuid.UUID(a.Node)]++
+			}
+		}
+	}
+	for node, n := range seen {
+		if n > 1 {
+			t.Errorf("%v got %d runs", node, n)
+		}
+	}
+}
+
+// Review M4-30: a node active in one rollout waits in the others, even with room in them – the
+// next one of the group starts instead.
+func TestOrchestrator_ANodeRunsInOneRolloutAtATime(t *testing.T) {
+	store, o := orchestrated(t, 1, 3, func(*updates.OrchestratorConfig) {})
+	org := store.orgs[0]
+	scheduled := store.groups[org][0]
+	scheduled.Policy.Rollout.MaxParallel = 2
+	busy := scheduled.Nodes[2] // web-01, the first by host name
+	run := command.Command{ID: uuid.New(), Node: busy.ID, Kind: command.Update, Scope: command.ScopeAll, State: command.Sent, CreatedAt: windowStart, ExpiresAt: windowStart.Add(time.Hour)}
+	store.runs[run.ID] = run
+	manual := scheduled
+	manual.Policy.Window = nil
+	manual.Rollout = &updates.RolloutRun{
+		ID: uuid.New(), Group: scheduled.Policy.Group, WindowStart: windowStart, WindowEnd: windowStart.Add(2 * time.Hour),
+		State: updates.RolloutRunning, Manual: true, Mode: updates.ModeAllAuto,
+		Nodes: []updates.NodeRun{{Node: busy.ID, Hostname: busy.Hostname, State: updates.NodeUpdating, UpdateRun: run.ID, Since: windowStart}},
+	}
+	store.groups[org] = []updates.GroupState{scheduled, manual}
+	o.Round(context.Background())
+	var nodes []string
+	for _, c := range store.saved[org] {
+		for _, a := range c.Actions {
+			if a.Command != nil && a.Command.Kind == command.Update {
+				nodes = append(nodes, a.Node.String())
+			}
+		}
+	}
+	if len(nodes) != 1 || nodes[0] == busy.ID.String() {
+		t.Errorf("started %v; %v runs already", nodes, busy.ID)
+	}
+}

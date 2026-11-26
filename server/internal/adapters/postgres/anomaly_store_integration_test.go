@@ -19,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/anomalies"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/domain/anomaly"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -178,5 +179,58 @@ func TestAnomalies_FindASpikeInFourWeeksOfHistory(t *testing.T) {
 		WHERE s.node_id = $1 AND s.metric = 'sermon_anomaly_rate_ratio' GROUP BY r.ts HAVING count(*) > 1) d`, []any{web}, &dup)
 	if dup != 0 {
 		t.Errorf("%d minutes of the rate written twice", dup)
+	}
+}
+
+// Review M4-30: the baselines of an hour replace its others – a series no longer scored leaves
+// no old row behind that would make the hour look stale for good; an hour without any is missing.
+func TestAnomalies_BaselinesReplaceTheHour(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	org := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Baselines ' || $1::uuid::text)", org)
+	node := uuid.New()
+	createNode(t, f.db.OwnerDSN, org, node)
+	at := time.Now().UTC().Truncate(time.Minute).Add(-time.Hour)
+	var points []metrics.Aggregate
+	for _, mode := range []string{"user", "system"} {
+		points = append(points, metrics.Aggregate{Node: identity.NodeID(node), Metric: "sermon_cpu_utilization_ratio", Labels: metrics.Labels{"mode": mode}, Start: at, Avg: 1, Min: 1, Max: 1})
+	}
+	if err := timescale.New(db).Write(ctx, tenant.OrgID(org), points, nil); err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	if err := db.InTenant(ctx, scopeFor(t, org), func(q *sqlcdb.Queries) error {
+		rows, err := q.ScopedAnomalySeries(ctx, sqlcdb.ScopedAnomalySeriesParams{Metrics: []string{"sermon_cpu_utilization_ratio"}, AllGroups: true, MaxSeries: 100})
+		for _, r := range rows {
+			ids = append(ids, r.ID)
+		}
+		return err
+	}); err != nil || len(ids) != 2 {
+		t.Fatalf("series = %v, %v", ids, err)
+	}
+	store := postgres.NewAnomalyStore(db)
+	b := anomaly.Baseline{Median: 1, MAD: 0.1, Low: 0.5, High: 1.5, N: 60}
+	old, later := at.Add(-9*24*time.Hour), at
+	if err := store.SaveBaselines(ctx, tenant.OrgID(org), 5, old, map[int64]anomaly.Baseline{ids[0]: b, ids[1]: b}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveBaselines(ctx, tenant.OrgID(org), 5, later, map[int64]anomaly.Baseline{ids[0]: b}); err != nil {
+		t.Fatal(err)
+	}
+	ages, err := store.BaselineAges(ctx, tenant.OrgID(org))
+	if err != nil || !ages[5].Equal(later) {
+		t.Fatalf("age of the hour = %v, %v; the stopped series kept its row", ages[5], err)
+	}
+	loaded, err := store.Baselines(ctx, tenant.OrgID(org), 5)
+	if _, kept := loaded[ids[1]]; err != nil || kept || len(loaded) != 1 {
+		t.Errorf("baselines = %v, %v", loaded, err)
+	}
+	if err := store.SaveBaselines(ctx, tenant.OrgID(org), 5, later, nil); err != nil {
+		t.Fatal(err)
+	}
+	if ages, _ := store.BaselineAges(ctx, tenant.OrgID(org)); !ages[5].IsZero() {
+		t.Errorf("an hour without baselines has the age %v", ages[5])
 	}
 }

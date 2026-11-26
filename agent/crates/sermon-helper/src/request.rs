@@ -71,6 +71,9 @@ pub struct Audit {
     pub run_id: String,
     pub status: Status,
     pub reason: String,
+    /// What the run was asked to do (scope, version, reboot reason), escaped: the journal says
+    /// who triggered what (T41, review M4-30).
+    pub params: String,
 }
 
 /// Answers one request.
@@ -125,6 +128,20 @@ pub fn handle(
             },
         ),
     };
+    let params = match &request.operation {
+        Some(Operation::ApplyUpdates(a)) => format!(
+            "scope={}",
+            Scope::try_from(a.scope).map_or("invalid", |s| match s {
+                Scope::Security => "security",
+                Scope::All => "all",
+                Scope::Unspecified => "invalid",
+            })
+        ),
+        Some(Operation::Reboot(r)) => format!("reason={:?}", truncated(&r.reason)),
+        Some(Operation::SelfUpdate(s)) => format!("version={:?}", truncated(&s.version)),
+        Some(Operation::ListUpdates(l)) => format!("refresh={}", l.refresh),
+        _ => String::new(),
+    };
     let (status, reason, result) = match outcome {
         Ok(result) => (Status::Ok, String::new(), result),
         Err((status, reason)) => (status, reason, None),
@@ -138,6 +155,7 @@ pub fn handle(
         },
         status,
         reason: reason.clone(),
+        params,
     };
     let response = HelperResponse {
         status: status.into(),
@@ -183,6 +201,15 @@ fn start(run: Result<Run, (Status, String)>, config: Config, exec: &mut dyn Exec
         )));
     }
     exec.start(&run).map(|()| None).map_err(answer)
+}
+
+/// At most [`MAX_REASON`] bytes of what a caller sent, for the journal.
+fn truncated(s: &str) -> &str {
+    let mut end = s.len().min(MAX_REASON);
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
 }
 
 fn updates(a: &ApplyUpdates) -> Result<Run, (Status, String)> {
@@ -237,15 +264,21 @@ pub fn valid_run_id(id: &str) -> bool {
         })
 }
 
-/// Printable text for the journal and the users' terminals: no control or invisible formatting
-/// characters (bidi overrides included).
+/// Printable text for the journal and the users' terminals: no control or format characters
+/// (Cf: bidi overrides, zero width, soft hyphen, tags), no line or paragraph separators and no
+/// Hangul fillers – the same as the server's textsafe (review M4-30).
 #[must_use]
 pub fn valid_reason(reason: &str) -> bool {
     !reason.is_empty()
         && reason.len() <= MAX_REASON
         && !reason.chars().any(|c| {
             c.is_control()
-                || matches!(c, '\u{061c}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2069}' | '\u{feff}')
+                || matches!(c, '\u{00ad}' | '\u{0600}'..='\u{0605}' | '\u{061c}' | '\u{06dd}' | '\u{070f}'
+                    | '\u{08e2}' | '\u{115f}' | '\u{1160}' | '\u{180e}' | '\u{200b}'..='\u{200f}'
+                    | '\u{2028}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{3164}' | '\u{feff}'
+                    | '\u{ffa0}' | '\u{fff9}'..='\u{fffb}' | '\u{110bd}' | '\u{110cd}'
+                    | '\u{13430}'..='\u{1343f}' | '\u{1bca0}'..='\u{1bca3}' | '\u{1d173}'..='\u{1d17a}'
+                    | '\u{e0001}' | '\u{e0020}'..='\u{e007f}')
         })
 }
 
@@ -454,6 +487,11 @@ mod tests {
             reboot_op("\u{1b}[2J"),
             reboot_op("evil\u{202e}txt"),
             reboot_op("zero\u{200b}width"),
+            // Review M4-30: all format characters, separators and blank fillers.
+            reboot_op("soft\u{ad}hyphen"),
+            reboot_op("line\u{2028}separator"),
+            reboot_op("tag\u{e0041}"),
+            reboot_op("blank\u{3164}"),
             Operation::RunResult(RunResult {
                 run_id: "x; reboot".to_owned(),
             }),
@@ -475,6 +513,41 @@ mod tests {
         }
         assert_eq!(exec.started, []);
         assert!(valid_reason(&"ä".repeat(MAX_REASON / 2)));
+    }
+
+    // T41 (review M4-30): the journal names what a run was asked to do, escaped and bounded.
+    #[test]
+    fn the_journal_line_names_the_parameters() {
+        let mut exec = Recorder::default();
+        let config = Config {
+            allow_remote_reboot: true,
+            ..Config::default()
+        };
+        for (op, want) in [
+            (
+                reboot_op("kernel update"),
+                r#"reason="kernel update""#.to_owned(),
+            ),
+            (
+                reboot_op("line\nbreak"),
+                r#"reason="line\nbreak""#.to_owned(),
+            ),
+            (
+                reboot_op(&"x".repeat(MAX_REASON + 50)),
+                format!("reason={:?}", "x".repeat(MAX_REASON)),
+            ),
+            (apply(ID, Scope::Security), "scope=security".to_owned()),
+            (
+                Operation::SelfUpdate(SelfUpdate {
+                    run_id: ID.to_owned(),
+                    version: "1.2.3".to_owned(),
+                }),
+                r#"version="1.2.3""#.to_owned(),
+            ),
+        ] {
+            let (_, audit) = ask(op, config, &mut exec);
+            assert_eq!(audit.params, want);
+        }
     }
 
     // A newer agent asks for an operation this helper doesn't know: prost leaves it out.

@@ -670,7 +670,8 @@ export type RebootNodesRequest = Message<"sermon.web.v1.RebootNodesRequest"> & {
   nodeIds: string[];
 
   /**
-   * reason is shown to the host's users and in its journal: 1 to 200 bytes, no control characters.
+   * reason is shown to the host's users and in its journal: 1 to 200 bytes, no control, format
+   * or separator characters (bidi overrides, zero width).
    *
    * @generated from field: string reason = 2;
    */

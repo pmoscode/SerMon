@@ -303,12 +303,13 @@ func TestPlan_AMissedHealthCheckFails(t *testing.T) {
 		w.view("web-01").Online = critical
 		w.view("web-01").Critical = critical
 		w.view("web-01").ConnectedAt = windowStart.Add(4 * time.Minute)
+		// The deadline counts from when the server saw the reboot end (4 min), not the host's time.
 		w.at(4 * time.Minute).step()
-		w.at(12 * time.Minute).step()
+		w.at(13 * time.Minute).step()
 		if w.run("web-01").State != updates.NodeHealthCheck {
 			t.Fatalf("%s: failed before the deadline: %s", name, w.states())
 		}
-		w.at(13 * time.Minute).step()
+		w.at(14 * time.Minute).step()
 		n := w.run("web-01")
 		want := map[bool]string{false: "not back online in time", true: "a critical alert is firing"}[critical]
 		if n.State != updates.NodeFailed || !strings.Contains(n.Reason, want) || w.rollout.State != updates.RolloutStopped {
@@ -411,6 +412,52 @@ func agentPolicy(mode updates.Mode) updates.Policy {
 	p := policy(mode, 1, true, false)
 	p.AgentUpdate, p.Channel = updates.AgentAuto, update.ChannelStable
 	return p
+}
+
+// Review M4-30: the host's times don't count. A new agent connects before its helper notes the
+// end (the order of the real self-update); a host whose clock runs ahead or reports an end far
+// in the future doesn't hold the health check.
+func TestPlan_TheHealthCheckRunsOnTheServersTimes(t *testing.T) {
+	w := newWorld(t, agentPolicy(updates.ModeReport), 1)
+	w.view("web-01").AgentTarget = "1.1.0"
+	w.view("web-01").Report.Permissions.SelfUpdate = true
+	w.at(0).step()
+	// The new agent connects at 1 min, its helper ends at 2 min (host clock: in a year).
+	w.view("web-01").ConnectedAt = windowStart.Add(time.Minute)
+	w.at(2*time.Minute).finish("web-01", command.Succeeded, false)
+	run := w.run("web-01")
+	c := w.runs[run.AgentRun]
+	future := windowStart.Add(365 * 24 * time.Hour)
+	c.Result.EndedAt = &future
+	w.runs[run.AgentRun] = c
+	w.at(2*time.Minute + time.Second).step()
+	if n := w.run("web-01"); n.State != updates.NodeHealthCheck || !n.Since.Equal(windowStart.Add(2*time.Minute+time.Second)) || !n.Deadline.Before(future) {
+		t.Fatalf("health check from the host's time: %+v", n)
+	}
+	w.at(4 * time.Minute).step()
+	if n := w.run("web-01"); n.State != updates.NodeDone {
+		t.Errorf("the new session before the helper's end didn't count: %+v", n)
+	}
+}
+
+// Review M4-30: after a reboot the node is back with a session begun after the server sent the
+// reboot – also when the agent reports the reboot's end only after it connected again (as it
+// does: the result outlives the reboot). A session from before the reboot doesn't count.
+func TestPlan_BackAfterARebootCountsFromItsSending(t *testing.T) {
+	for name, connected := range map[string]time.Duration{"after the reboot": 150 * time.Second, "before it": 90 * time.Second} {
+		w := newWorld(t, policy(updates.ModeAllAuto, 1, true, true), 1)
+		w.at(0).step()
+		w.at(time.Minute).finish("web-01", command.Succeeded, true)
+		w.at(2 * time.Minute).step() // the reboot, sent at 2 min
+		w.view("web-01").ConnectedAt = windowStart.Add(connected)
+		w.at(3*time.Minute).finish("web-01", command.Succeeded, false)
+		w.at(4 * time.Minute).step() // health check from 4 min (server time)
+		w.at(6 * time.Minute).step()
+		n := w.run("web-01")
+		if want := map[bool]updates.NodeState{true: updates.NodeDone, false: updates.NodeHealthCheck}[connected > 2*time.Minute]; n.State != want {
+			t.Errorf("%s: %+v, want state %d", name, n, want)
+		}
+	}
 }
 
 // M4-19: with agentUpdate auto a node with a newer release updates its agent first in the

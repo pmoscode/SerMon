@@ -3917,7 +3917,7 @@ und 0034. Es fehlt kein ADR. Erkenntnisse für M4:
   - Nodes löschen, Retention pro Org einstellen (M3-10): noch nicht eingeplant
   - Vorprüfung der Regex-Größe im Server: nur auf Wunsch
 
-**3. M4 ist in Aufgaben zerlegt** (§7.1 bis §7.8, M4-01 bis M4-30).
+**3. M4 ist in Aufgaben zerlegt** (§7.1 bis §7.8, M4-01 bis M4-32; M4-31 aus der Security-Review M4-30, M4-32 aus der Demo M4-28).
 
 ---
 
@@ -4980,7 +4980,28 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** Gegenprobe mit gesenkter Grenze schlägt fehl.
 - **Abhängig von:** M4-07
 
-#### ☐ M4-30 – Security-Review M4 · X · S 🔒
+#### ☑ M4-30 – Security-Review M4 · X · S 🔒
+> Erledigt: fünf Teil-Reviews ohne Kontext der Umsetzung (Helper und TB4 mit Self-Update; Befehle, Orchestrator und
+> Rechte; Self-Update, Signaturen und Paket-Repos; Anomalie- und Update-Worker; Darstellung fremder Daten in der UI)
+> und `just security` ohne Befund. **Kein kritischer und kein hoher Befund.** Ergebnis im Threat Model §9 (neu T103 bis
+> T106, TB4 erledigt), Nachträge in ADR 0035, 0036 und 0037. Behoben, jeweils mit Test:
+> - **Helper:** liest `helper.toml` bei jeder Anfrage (fail closed) und prüft das Veto beim Start eines Laufs erneut
+>   (T103); die Zeile im Journal nennt Scope, Version, Grund und PID des Aufrufers (T41); der Grund eines Reboots
+>   ohne alle Format- und Trennzeichen wie im Server.
+> - **Orchestrator:** `maxParallel` je Gruppe über alle ihre Rollouts, ein Node läuft in höchstens einem (`Busy`);
+>   Health-Check nur mit Zeiten des Servers – ein Ende in der Zukunft hielt den Rollout an, ein Self-Update ohne Pakete
+>   scheiterte stets (T104); Zeiten der Ergebnisse auf die des Servers gekappt; das Audit-Log nennt jeden Lauf eines
+>   Rollouts (`node.command`) und jedes Ende (`node.run_ended`, T41).
+> - **Texte von Hosts und Nutzern:** Host-Fakten beim Enrollment durch `textsafe`, Hangul-Füllzeichen unsichtbar,
+>   Reboot-Gründe ohne Cf/Zl/Zp in Schema und Dienst, Hostnamen der Updates-Seite und das Audit-Log über `displayText`,
+>   Schlüssel der Listen ohne Kollision (Anomalien, Pakete).
+> - **Worker:** Baselines ersetzen ihre Stunde (verwaiste Zeilen ließen alle 168 Stunden stündlich neu rechnen);
+>   nach einem Überlauf beginnt die nächste Runde nach der Organisation, bei der das Budget ausging; nach der Übernahme
+>   wird jede Minute geschrieben, nicht nur die letzten 5 (T105); die Leser der Dashboards enden nach 15 s (T106).
+> - **Repos:** private Schlüssel neben statt in der Ausgabe, nur `apt/ rpm/ apk/ keys/` lesbar, Signieren ohne Netz
+>   (T101).
+> - **Gegenproben** für 37 Prüfungen, alle erkannt (vier erst nach schärferen Tests).
+> - Die übrigen Befunde stehen in M4-31.
 - **Ziel:** Skill `sermon-security-review` über alle M4-Änderungen, in Teil-Reviews ohne Kontext der Umsetzung:
   - Helper und TB4 (nach der Review aus M4-04 erneut, mit Self-Update)
   - Befehle, Orchestrator und Rechte: Was kann ein kompromittierter Server oder ein Operator auf den Nodes auslösen
@@ -4991,6 +5012,34 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 
   Danach das Threat Model aktualisieren (T38 bis T41 und neue Zeilen) und Befunde als Aufgaben anlegen.
 - **Abhängig von:** alle M4-Aufgaben
+
+#### ☐ M4-31 – Übrige Befunde der Security-Review M4 · X · M 🔒
+- **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
+  - **Mittel:**
+    - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys
+      erreichen auch per Skript installierte Hosts; bis dahin warnt der Server bei einem älteren Helper (T40, A4).
+    - Rotation der Repo-Schlüssel auf eingerichteten Hosts (Schlüsselpaket oder signierte Liste), eindeutige
+      apk-Schlüsselnamen, `install.sh` holt den nächsten apk-Schlüssel (T101).
+    - Frist der Befehle im Protokoll (`valid_for_seconds`), Ablauf eines Rollout-Befehls spätestens mit dem Fenster,
+      gesendete Befehle laufen nicht still ab (T40, T97).
+    - `CancelRollout` und `CancelRun` (Step-up, Audit), ein Schalter „Updates pausieren“ je Organisation (T97).
+    - Grenzen der Gleichzeitigkeit für Anomalien, Kapazität und Heatmap wie bei den Logs, `anomaly_top` ohne
+      `array_agg`, Trends der Kapazität begrenzt (T106).
+  - **Niedrig:** gestoppte Rollouts von Hand verlassen laufende Nodes; Self-Updates, Reboots und `UpdateAgents` ohne
+    die Grenzen je Org und Instanz, doppelte Reboots; Downloads ohne Grenze je Org; Silences nach dem Ende des Nodes
+    verkürzen; ein gekürztes Fenster und ein gestoppter Rollout starten keinen Reboot mehr; `stopOnFailure` beim Import
+    `true` als Vorgabe; Rollout-Listen nach Scope; Leases mit der Zeit der Datenbank; Beta-Kanal hinter Stable,
+    Kanal im signierten Kommentar und `allow_prerelease`; Schlüssel und Version beim Release-Build, Release-Pipeline;
+    Repo-Schlüssel mit dem Release-Key signiert, Pinning gegen Distro-Pakete, `Valid-Until`; abgelehnte Self-Updates
+    begrenzt und günstige Prüfungen zuerst; dnf-Listen mit `-C`; Ersetzen des Agents mit `O_EXCL|O_NOFOLLOW` und
+    Rückfall nach einem Absturz; OpenRC: Ausgaben eines Laufs ohne Panik, Grenzen der Unit; `MemoryMax`, `TasksMax`,
+    `RuntimeMaxSec`; Kandidaten je Node in SQL, faire Kapazität der Instanz, Lease nicht ohne Serien, Schreiben mit
+    Lease-Prüfung; NaN und extreme Scores; Mountpoints durch `textsafe`; Zähler gelöschter Orgs im Orchestrator;
+    teilweise gespeicherte Schritte; Laufausgabe im falschen Lauf (`RunHistory`); Agent-Version ohne Muster;
+    Info-Befunde (Fuzz-Ziele für `minisign` und Security-Pakete, Socket unter OpenRC, `anomaly_points` nur über
+    Funktionen schreiben, Grenzen der Definer-Funktionen, Tests des Purge).
+- **Tests zuerst:** je Befund ein Test, der ihn vorher zeigt; Gegenproben.
+- **Abhängig von:** M4-30
 
 #### ☐ M4-32 – Speicherwachstum des Agents · A · M
 - **Ziel:** Der Agent bleibt auch nach langer Laufzeit unter dem Budget von KONZEPT §4.1 (< 30 MB RSS).
@@ -5011,7 +5060,7 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 **M4 fertig, wenn:**
 
 - Der Demo-Test M4-28 ist grün.
-- Der Helper hat höchstens 1 500 eigene Zeilen, sein Decoder ist gefuzzt, Aufrufer-Prüfung und Veto sind getestet.
+- Der Helper hat höchstens 1 800 eigene Zeilen (ADR 0036, vorher 1 500), sein Decoder ist gefuzzt, Aufrufer-Prüfung und Veto sind getestet.
 - Die Parser haben Fixtures aller Zieldistros und sind gefuzzt.
 - Der Orchestrator ist mit Zeitzonen, Sommerzeit, `stopOnFailure` und Health-Check getestet.
 - Der Benchmark der Anomalie-Erkennung läuft in CI und ist nicht schlechter als die Referenz.

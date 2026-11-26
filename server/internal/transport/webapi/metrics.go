@@ -241,8 +241,21 @@ func optionalTime(t *time.Time) *timestamppb.Timestamp {
 }
 
 // readFailure maps read-side errors to Connect codes; unexpected errors are logged and generic.
+// heavyReadTimeout bounds the reads of a fleet's dashboards (anomalies, capacity, heatmap): a
+// viewer can't hold the database connections every organization shares (review M4-30).
+const heavyReadTimeout = 15 * time.Second
+
+// errReadTooLong answers a read that ran out of its time.
+var errReadTooLong = errors.New("the query took too long: choose a shorter range or fewer nodes")
+
+func heavyRead(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, heavyReadTimeout)
+}
+
 func readFailure(ctx context.Context, logger *slog.Logger, op string, err error) error {
 	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return connect.NewError(connect.CodeDeadlineExceeded, errReadTooLong)
 	case errors.Is(err, access.ErrForbidden):
 		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
 	case errors.Is(err, access.ErrNotFound):

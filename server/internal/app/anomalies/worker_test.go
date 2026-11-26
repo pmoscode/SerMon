@@ -3,6 +3,7 @@ package anomalies_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"slices"
@@ -43,6 +44,9 @@ type fake struct {
 	asked     map[int64]bool // the series whose points were read
 	saved     map[int]int    // how often each hour of the week was computed
 	fail      error
+	// onPoints runs at each read of an organization's points (a slow database for one).
+	onPoints func(tenant.OrgID)
+	readsOf  map[tenant.OrgID]int
 }
 
 func newFake() *fake {
@@ -90,10 +94,17 @@ func (f *fake) Series(_ context.Context, org tenant.OrgID, names []string, _ tim
 	return out, nil
 }
 
-func (f *fake) Points(_ context.Context, _ tenant.OrgID, ids []int64, from, to time.Time) ([]anomalies.Point, error) {
+func (f *fake) Points(_ context.Context, org tenant.OrgID, ids []int64, from, to time.Time) ([]anomalies.Point, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.reads++
+	if f.readsOf == nil {
+		f.readsOf = map[tenant.OrgID]int{}
+	}
+	f.readsOf[org]++
+	if f.onPoints != nil {
+		f.onPoints(org)
+	}
 	if f.asked == nil {
 		f.asked = map[int64]bool{}
 	}
@@ -126,10 +137,14 @@ func (f *fake) SaveBaselines(_ context.Context, org tenant.OrgID, hour int, at t
 		f.saved = map[int]int{}
 	}
 	f.saved[hour]++
-	// Like PostgreSQL: the age of an hour comes from its rows; an hour without any stays missing.
-	if len(b) > 0 {
-		f.baselines[org][hour], f.ages[org][hour] = b, at
+	// Like PostgreSQL: the baselines replace the hour's (review M4-30), its age comes from its
+	// rows; an hour without any is missing.
+	if len(b) == 0 {
+		delete(f.baselines[org], hour)
+		delete(f.ages[org], hour)
+		return nil
 	}
+	f.baselines[org][hour], f.ages[org][hour] = b, at
 	return nil
 }
 
@@ -568,6 +583,73 @@ func TestWorker_BackfillsTheHoursNeededNextAndRetriesHourly(t *testing.T) {
 	w3.Round(context.Background())
 	if n := g.saved[eleven]; n != 1 {
 		t.Errorf("the fresh 11:00 computed %d times", n)
+	}
+}
+
+// Review M4-30: an organization that runs out of the budget every round doesn't take the others'
+// turns: the next round starts after it, every other one is served every round.
+func TestWorker_ABigOrganizationLeavesTheOthersTheirTurn(t *testing.T) {
+	f := newFake()
+	orgs := []tenant.OrgID{orgA}
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	for i := range 7 {
+		org := tenant.OrgID(uuid.MustParse(fmt.Sprintf("0193f5a0-0000-7000-8000-0000000000c%d", i)))
+		orgs = append(orgs, org)
+		f.series[org] = []anomalies.Series{cpu(int64(10+i), identity.NodeID(uuid.New()), "user")}
+	}
+	c := &clock{t: now0}
+	w := worker(t, f, c, func(cfg *anomalies.Config) { cfg.Backfill = 0 })
+	// orgA (the first by ID) spends the whole budget at its first read.
+	f.onPoints = func(org tenant.OrgID) {
+		if org == orgA {
+			c.mu.Lock()
+			c.t = c.t.Add(time.Hour)
+			c.mu.Unlock()
+		}
+	}
+	for round := range 10 {
+		before := map[tenant.OrgID]int{}
+		for _, org := range orgs {
+			before[org] = f.readsOf[org]
+		}
+		c.set(now0.Add(time.Duration(round) * time.Minute))
+		w.Round(context.Background())
+		for _, org := range orgs[1:] {
+			if f.readsOf[org] == before[org] && round > 0 {
+				t.Errorf("round %d: %v got no turn", round, org)
+			}
+		}
+	}
+}
+
+// Review M4-30: after the takeover's warm-up every minute is written, also those of a longer wait
+// between two turns (more than Output).
+func TestWorker_WritesEveryMinuteAfterAWait(t *testing.T) {
+	f := newFake()
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	c := &clock{t: now0}
+	w := worker(t, f, c, func(cfg *anomalies.Config) { cfg.Backfill = 0 })
+	for _, at := range []time.Duration{0, 12 * time.Minute, 30 * time.Minute} {
+		c.set(now0.Add(at))
+		w.Round(context.Background())
+	}
+	minutes := map[time.Time]bool{}
+	f.mu.Lock()
+	for _, a := range f.rates[orgA] {
+		if a.Metric == "sermon_anomaly_rate_ratio" {
+			minutes[a.Start] = true
+		}
+	}
+	f.mu.Unlock()
+	first := now0.Add(-8 * time.Minute) // the takeover's Output (Lag 3 min, Output 5 min)
+	last := now0.Add(27 * time.Minute)
+	for m := first; m.Before(last); m = m.Add(time.Minute) {
+		if !minutes[m] {
+			t.Errorf("no rate for %v", m.Format("15:04"))
+		}
+	}
+	if minutes[first.Add(-time.Minute)] {
+		t.Error("a minute of the warm-up was written")
 	}
 }
 

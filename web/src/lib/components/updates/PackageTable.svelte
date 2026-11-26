@@ -24,7 +24,8 @@
 			</tr>
 		</thead>
 		<tbody>
-			{#each packages as p (p.name + ' ' + p.candidateVersion)}
+			<!-- Unambiguous: a name with a space must not meet another package's (review M4-30). -->
+			{#each packages as p (JSON.stringify([p.name, p.candidateVersion]))}
 				<tr class="border-t">
 					<td class="px-2 py-1 font-mono break-all">
 						{displayText(p.name)}

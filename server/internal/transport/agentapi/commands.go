@@ -105,7 +105,13 @@ var phases = map[agentv1.CommandPhase]command.Phase{
 }
 
 // toResult converts a validated command result (the run ID's form is checked by the schema).
+// The host's times are capped at the server's (review M4-30): shown and stored, they say nothing
+// a host could use to hold a rollout.
 func toResult(r *agentv1.CommandResult) *ingest.Result {
+	return toResultAt(r, time.Now())
+}
+
+func toResultAt(r *agentv1.CommandResult, now time.Time) *ingest.Result {
 	run, err := uuid.Parse(r.GetRunId())
 	if err != nil {
 		return nil
@@ -114,13 +120,23 @@ func toResult(r *agentv1.CommandResult) *ingest.Result {
 		Phase: phases[r.GetPhase()], ExitCode: r.GetExitCode(), Reason: r.GetReason(), Output: r.GetOutput(),
 		OutputTruncated: r.GetOutputTruncated(),
 	}}
-	if r.GetStartedAt() != nil {
-		at := r.GetStartedAt().AsTime()
-		out.StartedAt = &at
-	}
 	if r.GetEndedAt() != nil {
-		at := r.GetEndedAt().AsTime()
+		at := minTime(r.GetEndedAt().AsTime(), now)
 		out.EndedAt = &at
 	}
+	if r.GetStartedAt() != nil {
+		at := minTime(r.GetStartedAt().AsTime(), now)
+		if out.EndedAt != nil {
+			at = minTime(at, *out.EndedAt)
+		}
+		out.StartedAt = &at
+	}
 	return out
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
 }

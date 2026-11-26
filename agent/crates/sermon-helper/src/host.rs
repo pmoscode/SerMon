@@ -16,9 +16,9 @@ use sermon_helper_proto::v1::{
     Command as Output, Distribution, RunPhase, RunState, Scope, StatusInfo, Updates,
 };
 
-use crate::command;
 use crate::minisign::{self, PublicKey};
 use crate::request::{Executor, Failure, Run};
+use crate::{command, config};
 
 /// How long the result of a run is kept.
 pub const KEEP: Duration = Duration::from_hours(7 * 24);
@@ -101,6 +101,10 @@ pub struct Host {
     keys: Vec<PublicKey>,
     /// How long a self-update waits for the new agent to connect before it rolls back.
     confirm_within: Duration,
+    /// helper.toml and the owner it must have: a run checks the veto again when it starts
+    /// (review M4-30), a change applies to every run not yet begun.
+    config: PathBuf,
+    config_owner: u32,
     /// How long a reboot waits before it acts: the helper answers the agent first (M4-28).
     answer_wait: Duration,
 }
@@ -124,8 +128,30 @@ impl Host {
             run_limit,
             keys: minisign::release_keys(),
             confirm_within: Duration::from_mins(2),
+            config: config::PATH.into(),
+            config_owner: 0,
             answer_wait: Duration::from_secs(2),
         }
+    }
+
+    /// Why the host's helper.toml forbids the run `request` now (or can't be read); None if it
+    /// allows it.
+    fn vetoed(&self, request: &str) -> Option<String> {
+        let c = match config::load_owned(&self.config, self.config_owner) {
+            Ok(c) => c,
+            Err(e) => return Some(format!("helper.toml: {e}")),
+        };
+        let first = request.lines().next().unwrap_or_default();
+        let (allowed, key) = if first.starts_with("updates ") {
+            (c.allow_remote_updates, "allow_remote_updates")
+        } else if first == "reboot" {
+            (c.allow_remote_reboot, "allow_remote_reboot")
+        } else if first.starts_with("self-update ") {
+            (c.allow_self_update, "allow_self_update")
+        } else {
+            return None;
+        };
+        (!allowed).then(|| format!("{key} = false in helper.toml since the request"))
     }
 
     fn distribution(&self) -> Distribution {
@@ -259,6 +285,10 @@ impl Host {
             "sermon-helper: run {id} started: {}",
             request.lines().next().unwrap_or_default()
         );
+        if let Some(reason) = self.vetoed(&request) {
+            eprintln!("sermon-helper: run {id} refused: {reason}");
+            return store(&dir, &done(id, started, failed(&reason)));
+        }
         let Some(mut lock) = self.lock_waiting()? else {
             return store(
                 &dir,
@@ -818,6 +848,12 @@ mod tests {
         tzdata/bookworm-updates 2025b-0+deb12u1 all [upgradable from: 2025a-0+deb12u1]\n";
 
     /// A host in a temporary root with fake programs that log their arguments to `calls`.
+    /// Writes the fake host's helper.toml (0644, its owner the test's user).
+    fn fake_config(host: &Host, text: &str) {
+        fs::write(&host.config, text).unwrap();
+        fs::set_permissions(&host.config, fs::Permissions::from_mode(0o644)).unwrap();
+    }
+
     struct Fake {
         /// Keeps the temporary root alive.
         _dir: tempfile::TempDir,
@@ -838,8 +874,13 @@ mod tests {
                 run_limit: Duration::from_secs(5),
                 keys: Vec::new(),
                 confirm_within: Duration::from_secs(1),
+                config: dir.path().join("etc/helper.toml"),
+                config_owner: rustix::process::getuid().as_raw(),
                 answer_wait: Duration::ZERO,
             };
+            // A host that allows everything; tests of the veto write their own.
+            fs::create_dir_all(dir.path().join("etc")).unwrap();
+            fake_config(&host, "allow_remote_reboot = true\n");
             let fake = Self { _dir: dir, host };
             for p in [
                 "usr/bin/apt-get",
@@ -1142,6 +1183,54 @@ mod tests {
         }
         assert_eq!(host.status().running_run_id, "");
         assert_eq!(host.status().distribution(), Distribution::Apt);
+    }
+
+    // The veto counts when the run starts, not only when it was asked for (review M4-30).
+    #[test]
+    fn a_run_checks_the_veto_when_it_starts() {
+        let fake = Fake::new("ID=debian\n");
+        for (config, request, refused) in [
+            (
+                "allow_remote_updates = false\n",
+                "updates all",
+                Some("allow_remote_updates"),
+            ),
+            (
+                "allow_remote_reboot = false\n",
+                "reboot\nupdates",
+                Some("allow_remote_reboot"),
+            ),
+            (
+                "allow_self_update = false\n",
+                "self-update 1.2.3",
+                Some("allow_self_update"),
+            ),
+            ("allow_remote_reboot = true\n", "reboot\nupdates", None),
+        ] {
+            fake_config(&fake.host, config);
+            let _ = fs::remove_dir_all(fake.host.run_dir(ID));
+            fs::create_dir_all(fake.host.run_dir(ID)).unwrap();
+            fs::write(fake.host.run_dir(ID).join("request"), request).unwrap();
+            fake.host.execute(ID).unwrap();
+            let result = fake.host.result(ID).result.unwrap();
+            match refused {
+                Some(key) => {
+                    let output = String::from_utf8_lossy(&result.output);
+                    assert!(output.contains(key), "{request}: {output}");
+                    assert_ne!(result.exit_code, 0);
+                }
+                None => assert_eq!(result.exit_code, 0, "{result:?}"),
+            }
+        }
+        // An unsafe helper.toml refuses every run.
+        let p = fake.host.config.clone();
+        fs::set_permissions(&p, fs::Permissions::from_mode(0o666)).unwrap();
+        let _ = fs::remove_dir_all(fake.host.run_dir(ID));
+        fs::create_dir_all(fake.host.run_dir(ID)).unwrap();
+        fs::write(fake.host.run_dir(ID).join("request"), "updates all").unwrap();
+        fake.host.execute(ID).unwrap();
+        let output = fake.host.result(ID).result.unwrap().output;
+        assert!(String::from_utf8_lossy(&output).starts_with("helper.toml:"));
     }
 
     #[test]

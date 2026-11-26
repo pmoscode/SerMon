@@ -273,3 +273,15 @@ fehl.
   Der Helper ruft daher `dnf -q makecache --refresh` und `apk update -q --force-refresh`; er frischt höchstens alle
   5 min auf (T89), die Last bleibt begrenzt.
 
+
+## Nachtrag M4-30 (Security-Review)
+
+- **Veto bei jeder Anfrage:** `helper.toml` wird nicht mehr nur beim Start gelesen, sondern für jede Anfrage; ist die
+  Datei unlesbar oder unsicher, lehnt der Helper jede Anfrage ab (fail closed). Ein angenommener Lauf prüft das Veto
+  bei seinem Start erneut und endet sonst mit dem Grund. Eine Änderung gilt damit ab der nächsten Anfrage, auch wenn
+  der Agent den per Socket gestarteten Helper durch seine Abfragen wach hält.
+- **Journal:** Die Zeile jeder Anfrage nennt die PID des Aufrufers und die Parameter (Scope, Version, Grund – maskiert
+  und auf 200 Bytes gekürzt).
+- **Grund eines Reboots:** abgelehnt werden alle Format- und Trennzeichen (Cf, Zl, Zp) und die Hangul-Füllzeichen,
+  wie im Server (`textsafe`) und im Schema.
+- **Umfang:** 1 628 eigene Zeilen (Grenze 1 800, ADR 0036).

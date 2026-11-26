@@ -32,11 +32,11 @@ case $version in [0-9]*) ;; *) die "the version must start with a digit: $versio
 root=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
-# Inside the output directory: Docker Desktop shares it with the container, unlike most temp dirs.
-work="$out/.package-$arch"
-rm -rf "$work"
+# Next to the output directory, not inside it (review M4-30: a killed run left the key copies
+# among the packages); Docker Desktop shares it with the container, unlike most temp dirs.
+work=$(mktemp -d "$(dirname "$out")/.package-$arch.XXXXXX")
 mkdir -p "$work/root" "$work/keys"
-chmod 0700 "$work/keys"
+chmod 0700 "$work" "$work/keys"
 # The key copies go on every way out, interrupts included (dash runs EXIT traps only on exit).
 trap 'rm -rf "$work"' EXIT
 trap 'exit 130' INT TERM HUP
@@ -61,7 +61,7 @@ NFPM_PASSPHRASE="${SERMON_PKG_KEY_PASSPHRASE:-}"
 export NFPM_PASSPHRASE
 for config in nfpm helper; do
 	for packager in deb rpm apk; do
-		docker run --rm -q -u "$(id -u):$(id -g)" -v "$work:/work" -w /work \
+		docker run --rm -q --network none -u "$(id -u):$(id -g)" -v "$work:/work" -w /work \
 			-e PKG_ARCH="$arch" -e PKG_VERSION="$version" \
 			-e NFPM_PASSPHRASE \
 			"$NFPM_IMAGE" package --config "/work/root/$config.yaml" --packager "$packager" --target /work/ >/dev/null

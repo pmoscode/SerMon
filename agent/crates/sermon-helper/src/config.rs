@@ -61,7 +61,12 @@ impl std::fmt::Display for ConfigError {
 /// Whether root alone can change a file or directory with this owner and mode.
 #[must_use]
 pub fn only_root_writes(uid: u32, mode: u32) -> bool {
-    uid == 0 && mode & 0o022 == 0
+    only_owner_writes(uid, mode, 0)
+}
+
+/// Whether `owner` alone can change a file or directory with this owner and mode.
+fn only_owner_writes(uid: u32, mode: u32, owner: u32) -> bool {
+    uid == owner && mode & 0o022 == 0
 }
 
 /// Reads the configuration at `path`; a missing file gives the defaults, but its directory must
@@ -71,6 +76,15 @@ pub fn only_root_writes(uid: u32, mode: u32) -> bool {
 ///
 /// [`ConfigError`] if file or directory are unsafe, unreadable or the file is invalid.
 pub fn load(path: &Path) -> Result<Config, ConfigError> {
+    load_owned(path, 0)
+}
+
+/// [`load`] with another owner than root (tests).
+///
+/// # Errors
+///
+/// As [`load`].
+pub fn load_owned(path: &Path, owner: u32) -> Result<Config, ConfigError> {
     let dir = path.parent().unwrap_or(Path::new("/"));
     for (what, p) in [("directory", dir), ("file", path)] {
         let meta = match fs::symlink_metadata(p) {
@@ -81,7 +95,7 @@ pub fn load(path: &Path) -> Result<Config, ConfigError> {
             Err(e) => return Err(ConfigError::Io(e)),
         };
         // A symlink has the mode 0777 on Linux: refused like any file others could write.
-        if !only_root_writes(meta.uid(), meta.mode()) {
+        if !only_owner_writes(meta.uid(), meta.mode(), owner) {
             return Err(ConfigError::Unsafe(format!(
                 "{} must belong to root and not be writable by group or others",
                 p.display()

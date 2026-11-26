@@ -177,6 +177,10 @@ func TestUpdates_ByHand(t *testing.T) {
 	if _, err := ann.updates.RebootNodes(ctx, connect.NewRequest(&webv1.RebootNodesRequest{NodeIds: []string{nodeAl}, Reason: "now\n-h"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("a reason with a newline: %v", err)
 	}
+	// Review M4-30: nor with a bidi override (schema and service).
+	if _, err := ann.updates.RebootNodes(ctx, connect.NewRequest(&webv1.RebootNodesRequest{NodeIds: []string{nodeAl}, Reason: "kernel\u202eetadpu"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("a reason with a bidi override: %v", err)
+	}
 	// The session tells the UI where the caller may update and reboot.
 	session, err := ann.auth.GetSession(ctx, connect.NewRequest(&webv1.GetSessionRequest{}))
 	if err != nil || len(session.Msg.GetSession().GetRunUpdatesGroupIds()) == 0 || len(session.Msg.GetSession().GetRebootGroupIds()) == 0 {

@@ -1100,8 +1100,8 @@ Kanäle der dritten Welle (M2-13):
 - **Ergebnisse** in der Hypertable `anomaly_points` ohne RLS, nur auffällige Minuten (Score ≥ 3 oder anomal), gelesen
   über `SECURITY DEFINER`-Funktionen wie die Metriken (O8). Die Anomalie-Rate je Node ist die Serie
   `sermon_anomaly_rate_ratio`, geschrieben vom Server.
-- **Worker** mit Lease je Organisation, Zeitbudget 20 s je Lauf (der nächste setzt fort), Grenzen je Node (64 Serien),
-  Organisation und Instanz.
+- **Worker** mit Lease je Organisation, Zeitbudget 20 s je Lauf (der nächste setzt fort und beginnt nach der
+  Organisation, bei der das Budget ausging; M4-30), Grenzen je Node (64 Serien), Organisation und Instanz.
 - **Abweichungen:** Log-Rate ohne Severity (aus dem Zähler des Agents); SSH-Fehlversuche erst mit der Ausbaustufe.
 - **UI (M4-25):** Band in allen Charts eines Nodes (rot, dazu „ungewöhnlich“ am Titel und als Text für Screenreader),
   „lernt noch (Tag 3/7)“, „Was war ungewöhnlich?“ für den gezoomten Zeitraum, das Dashboard „Anomalien“ als Ansicht der

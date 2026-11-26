@@ -1689,7 +1689,8 @@ type RebootNodesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// node_ids are the nodes, 1 to 100.
 	NodeIds []string `protobuf:"bytes,1,rep,name=node_ids,json=nodeIds,proto3" json:"node_ids,omitempty"`
-	// reason is shown to the host's users and in its journal: 1 to 200 bytes, no control characters.
+	// reason is shown to the host's users and in its journal: 1 to 200 bytes, no control, format
+	// or separator characters (bidi overrides, zero width).
 	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2561,10 +2562,10 @@ const file_sermon_web_v1_update_proto_rawDesc = "" +
 	"\x06reboot\x18\x03 \x01(\bR\x06reboot\"7\n" +
 	"\x14StartUpdatesResponse\x12\x1f\n" +
 	"\vrollout_ids\x18\x01 \x03(\tR\n" +
-	"rolloutIds\"}\n" +
+	"rolloutIds\"\x88\x01\n" +
 	"\x12RebootNodesRequest\x12.\n" +
-	"\bnode_ids\x18\x01 \x03(\tB\x13\xbaH\x10\x92\x01\r\b\x01\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\x127\n" +
-	"\x06reason\x18\x02 \x01(\tB\x1f\xbaH\x1cr\x1a\x10\x01(\xc8\x012\x13^[^\\x00-\\x1f\\x7f]*$R\x06reason\".\n" +
+	"\bnode_ids\x18\x01 \x03(\tB\x13\xbaH\x10\x92\x01\r\b\x01\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\x12B\n" +
+	"\x06reason\x18\x02 \x01(\tB*\xbaH'r%\x10\x01(\xc8\x012\x1e^[^\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]*$R\x06reason\".\n" +
 	"\x13RebootNodesResponse\x12\x17\n" +
 	"\arun_ids\x18\x01 \x03(\tR\x06runIds\"=\n" +
 	"\x18RefreshUpdateInfoRequest\x12!\n" +

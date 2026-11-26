@@ -33,9 +33,11 @@ done
 set -- "$packages"/*.deb
 [ -e "$1" ] || die "no .deb in $packages"
 rm -rf "$out/apt" "$out/rpm" "$out/apk" "$out/keys" "$out/.work"
-work="$out/.work" # inside OUT: Docker Desktop shares it with the containers
+# The private keys next to OUT, never inside it (review M4-30: OUT is served and archived as it
+# is, and a killed run would leave them there); Docker Desktop shares the parent as well.
+work=$(mktemp -d "$(dirname "$out")/.repo-keys.XXXXXX")
 mkdir -p "$work/keys" "$out/apt/pool/main" "$out/rpm" "$out/apk/x86_64" "$out/apk/aarch64" "$out/keys"
-chmod 0700 "$work/keys"
+chmod 0700 "$work" "$work/keys"
 trap 'rm -rf "$work"' EXIT
 trap 'exit 130' INT TERM HUP
 cp "$keys/gpg.asc" "$work/keys/gpg.asc"
@@ -48,7 +50,7 @@ done
 
 # apt
 cp "$packages"/*.deb "$out/apt/pool/main/"
-docker run --rm -u "$(id -u):$(id -g)" -v "$out/apt:/apt" -v "$work/keys:/keys:ro" -w /apt -e GNUPGHOME=/tmp/gnupg \
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apt:/apt" -v "$work/keys:/keys:ro" -w /apt -e GNUPGHOME=/tmp/gnupg \
 	sermon-repo-apt sh -euc '
 		mkdir -m 0700 /tmp/gnupg && gpg --batch -q --import /keys/gpg.asc
 		for arch in amd64 arm64; do
@@ -66,7 +68,7 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$out/apt:/apt" -v "$work/keys:/keys:r
 
 # rpm
 for rpm in "$packages"/*.rpm; do [ ! -e "$rpm" ] || cp "$rpm" "$out/rpm/"; done
-docker run --rm -u "$(id -u):$(id -g)" -v "$out/rpm:/rpm" -v "$work/keys:/keys:ro" -w /rpm -e GNUPGHOME=/tmp/gnupg \
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/rpm:/rpm" -v "$work/keys:/keys:ro" -w /rpm -e GNUPGHOME=/tmp/gnupg \
 	sermon-repo-rpm sh -euc '
 		createrepo_c -q .
 		mkdir -m 0700 /tmp/gnupg && gpg --batch -q --import /keys/gpg.asc
@@ -82,7 +84,7 @@ for apk in "$packages"/*.apk; do
 	name=${file%_*}
 	cp "$apk" "$out/apk/$arch/$(echo "$name" | sed 's/_/-/').apk"
 done
-docker run --rm -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:ro" sermon-repo-apk sh -euc '
+docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:ro" sermon-repo-apk sh -euc '
 	for arch in x86_64 aarch64; do
 		cd /apk/$arch
 		set -- ./*.apk
@@ -104,5 +106,7 @@ fi
 if [ -r "$keys/next/sermon-agent.rsa.pub" ]; then
 	cp "$keys/next/sermon-agent.rsa.pub" "$out/keys/sermon-agent-next.rsa.pub"
 fi
-chmod -R a+rX "$out"
+rm -rf "$work"
+# Readable for the server: the four areas, nothing else of OUT.
+chmod -R a+rX "$out/apt" "$out/rpm" "$out/apk" "$out/keys"
 echo "✓ $out: apt, rpm and apk repositories of $(find "$packages" -maxdepth 1 -name '*.deb' -o -maxdepth 1 -name '*.rpm' -o -maxdepth 1 -name '*.apk' | wc -l | tr -d ' ') packages"

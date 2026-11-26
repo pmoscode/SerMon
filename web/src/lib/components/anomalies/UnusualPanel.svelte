@@ -117,7 +117,8 @@
 				</tr>
 			</thead>
 			<tbody class="divide-y">
-				{#each found as s (s.nodeId + s.metric + labelsText(s.labels))}
+				<!-- By position: labels a host chose may look alike once made visible (review M4-30). -->
+				{#each found as s, i (i)}
 					<tr>
 						{#if !nodeId}
 							<td class="py-1 pr-3">

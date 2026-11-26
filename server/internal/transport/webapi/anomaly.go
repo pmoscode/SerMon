@@ -33,6 +33,8 @@ func (h *AnomalyHandler) failure(ctx context.Context, what string, err error) er
 	switch {
 	case errors.Is(err, anomalies.ErrInvalidRange):
 		return connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, context.DeadlineExceeded):
+		return connect.NewError(connect.CodeDeadlineExceeded, errReadTooLong)
 	case errors.Is(err, access.ErrForbidden):
 		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
 	case errors.Is(err, access.ErrNotFound):
@@ -60,6 +62,8 @@ func (h *AnomalyHandler) GetNodeAnomalies(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := heavyRead(ctx)
+	defer cancel()
 	band, err := h.anomalies.Node(ctx, c, identity.NodeID(id), req.Msg.GetFrom().AsTime(), req.Msg.GetTo().AsTime())
 	if err != nil {
 		return nil, h.failure(ctx, "get node anomalies", err)
@@ -94,6 +98,8 @@ func (h *AnomalyHandler) ListUnusual(ctx context.Context, req *connect.Request[w
 	if limit == 0 {
 		limit = 20
 	}
+	ctx, cancel := heavyRead(ctx)
+	defer cancel()
 	found, err := h.anomalies.Unusual(ctx, c, node, req.Msg.GetFrom().AsTime(), req.Msg.GetTo().AsTime(), limit)
 	if err != nil {
 		return nil, h.failure(ctx, "list unusual series", err)

@@ -68,4 +68,22 @@ describe('UnusualPanel', () => {
 		await page.getByRole('button', { name: 'Check the range' }).click();
 		await expect.element(page.getByRole('alert')).toBeVisible();
 	});
+
+	// Review M4-30: two series whose labels look the same once made visible still both show
+	// (keys from them would collide and break the list).
+	it('shows series whose labels look alike', async () => {
+		const twin = (device: string) => ({
+			nodeId: 'n1',
+			metric: 'sermon_disk_busy_ratio',
+			labels: { device },
+			maxScore: 9,
+			anomalousMinutes: 3,
+			peak: timestampFromMs(now - 600_000)
+		});
+		vi.spyOn(anomaliesApi, 'listUnusual').mockResolvedValue(
+			create(ListUnusualResponseSchema, { series: [twin('sda\ufffd'), twin('sda\ufffd')] })
+		);
+		render(UnusualPanel, { range, hostnames: { n1: 'web-01' }, auto: true });
+		await expect.element(page.getByRole('link', { name: 'web-01' }).nth(1)).toBeVisible();
+	});
 });

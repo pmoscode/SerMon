@@ -75,7 +75,7 @@ fn serve() -> Result<(), String> {
     let host = Host::system();
     host.prune();
     let mut server = Server {
-        config,
+        config: Box::new(|| config::load(Path::new(config::PATH)).map_err(|e| e.to_string())),
         allowed_uid: uid,
         exec: Box::new(host),
     };
@@ -86,7 +86,9 @@ fn serve() -> Result<(), String> {
         match listener.accept() {
             Ok((stream, _)) => {
                 let peer = peer::peer_uid(&stream);
-                eprintln!("{NAME}: {}", server.connection(stream, peer));
+                // The caller's PID too: the agent and a child of it running as sermon differ.
+                let pid = peer::peer_pid(&stream).map_or_else(|_| "-".into(), |p| p.to_string());
+                eprintln!("{NAME}: peer_pid={pid} {}", server.connection(stream, peer));
                 // At most 20 requests a second: a looping agent can't flood the journal and push
                 // the lines of real runs out of its rate limit (review M4-04).
                 std::thread::sleep(PACE);
@@ -96,9 +98,14 @@ fn serve() -> Result<(), String> {
     }
 }
 
+/// Reads helper.toml.
+type ConfigSource = Box<dyn FnMut() -> Result<Config, String>>;
+
 /// The helper's state across connections.
 struct Server {
-    config: Config,
+    /// helper.toml, read again for every request (review M4-30): a veto applies to the next
+    /// request, even if the agent keeps the socket-activated helper running.
+    config: ConfigSource,
     allowed_uid: u32,
     exec: Box<dyn Executor>,
 }
@@ -130,10 +137,23 @@ impl Server {
             let line = format!("peer_uid={uid} status=refused reason=\"malformed request\"");
             return Self::reply(&mut stream, refusal("malformed request"), line);
         };
-        let (response, audit) = request::handle(&request, self.config, self.exec.as_mut());
+        // Fail closed: without a readable, safe helper.toml nothing is answered.
+        let config = match (self.config)() {
+            Ok(c) => c,
+            Err(e) => {
+                let line = format!(
+                    "peer_uid={uid} status=refused reason={:?}",
+                    format!("helper.toml: {e}")
+                );
+                return Self::reply(&mut stream, refusal(&format!("helper.toml: {e}")), line);
+            }
+        };
+        let (response, audit) = request::handle(&request, config, self.exec.as_mut());
         let line = format!(
-            "peer_uid={uid} op={} run_id={} status={} reason={:?}",
+            "peer_uid={uid} op={}{}{} run_id={} status={} reason={:?}",
             audit.operation,
+            if audit.params.is_empty() { "" } else { " " },
+            audit.params,
             if audit.run_id.is_empty() {
                 "-"
             } else {
@@ -298,7 +318,7 @@ mod tests {
 
     fn server(config: Config) -> Server {
         Server {
-            config,
+            config: Box::new(move || Ok(config)),
             allowed_uid: UID,
             exec: Box::new(Nothing),
         }
@@ -358,7 +378,52 @@ mod tests {
         });
         let (r, line) = call(&mut vetoed, &request(apply), Ok(UID));
         assert_eq!(r.unwrap().status(), Status::Refused);
-        assert!(line.starts_with("peer_uid=997 op=apply_updates run_id=0193f5a0-0000-7000-8000-000000000001 status=refused reason=\"allow_remote_updates = false"), "{line}");
+        assert!(line.starts_with("peer_uid=997 op=apply_updates scope=all run_id=0193f5a0-0000-7000-8000-000000000001 status=refused reason=\"allow_remote_updates = false"), "{line}");
+    }
+
+    // The veto applies to the next request (review M4-30); without a readable helper.toml the
+    // helper answers nothing but the refusal.
+    #[test]
+    fn reads_the_veto_for_every_request() {
+        let allowed = std::rc::Rc::new(std::cell::Cell::new(true));
+        let seen = allowed.clone();
+        let mut s = Server {
+            config: Box::new(move || {
+                Ok(Config {
+                    allow_remote_updates: seen.get(),
+                    ..Config::default()
+                })
+            }),
+            allowed_uid: UID,
+            exec: Box::new(Nothing),
+        };
+        let apply = || {
+            request(Operation::ApplyUpdates(ApplyUpdates {
+                run_id: "0193f5a0-0000-7000-8000-000000000001".into(),
+                scope: Scope::All.into(),
+            }))
+        };
+        // Allowed: the executor is asked (and is busy).
+        let (r, _) = call(&mut s, &apply(), Ok(UID));
+        assert_eq!(r.unwrap().status(), Status::Busy);
+        allowed.set(false);
+        let (r, line) = call(&mut s, &apply(), Ok(UID));
+        assert_eq!(r.unwrap().status(), Status::Refused);
+        assert!(line.contains("allow_remote_updates = false"), "{line}");
+        let mut broken = Server {
+            config: Box::new(|| Err("not owned by root".into())),
+            allowed_uid: UID,
+            exec: Box::new(Nothing),
+        };
+        let (r, line) = call(
+            &mut broken,
+            &request(Operation::GetStatus(GetStatus {})),
+            Ok(UID),
+        );
+        let r = r.unwrap();
+        assert_eq!(r.status(), Status::Refused);
+        assert_eq!(r.reason, "helper.toml: not owned by root");
+        assert!(line.contains("status=refused"), "{line}");
     }
 
     // Other users, root included, get no answer: their request is not even read.

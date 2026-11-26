@@ -175,7 +175,8 @@
 								<tr class="border-t">
 									<th scope="row" class="px-2 py-1 text-left font-medium">
 										<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with the tab -->
-										<a class="underline-offset-2 hover:underline" href={nodeHref(n)}>{n.hostname}</a
+										<a class="underline-offset-2 hover:underline" href={nodeHref(n)}
+											>{displayText(n.hostname)}</a
 										>
 									</th>
 									<td class="px-2 py-1">

@@ -145,6 +145,16 @@ func TestCommandStore_RecordsThePhasesOfARunOnce(t *testing.T) {
 		!r.StartedAt.Equal(started) || r.EndedAt == nil || r.Reason != "apt\uFFFDfailed" {
 		t.Errorf("after the failure = %+v %+v", got, r)
 	}
+	// T41 (review M4-30): the end in the audit log, the start not.
+	var entries int
+	var details string
+	queryOwner(t, setup(t).db.OwnerDSN, "SELECT count(*), coalesce(max(details::text), '') FROM audit_log WHERE org_id = $1 AND action = 'node.run_ended' AND target = $2",
+		[]any{uuid.UUID(f.org), "node:" + uuid.UUID(f.node).String()}, &entries, &details)
+	for _, want := range []string{`"phase": "failed"`, `"kind": "update"`, `"exit_code": "100"`, `"run": "` + c.ID.String()} {
+		if entries != 1 || !strings.Contains(details, want) {
+			t.Errorf("%d audit entries, %s lacks %s", entries, details, want)
+		}
+	}
 	if len(r.Output) > command.MaxOutput || strings.Contains(r.Output, "\x00") || !strings.HasSuffix(r.Output, "xxx") {
 		t.Errorf("output of %d bytes, NUL kept: %v", len(r.Output), strings.Contains(r.Output, "\x00"))
 	}

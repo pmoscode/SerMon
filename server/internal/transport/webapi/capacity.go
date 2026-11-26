@@ -31,6 +31,8 @@ func (h *CapacityHandler) GetCapacity(ctx context.Context, _ *connect.Request[we
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := heavyRead(ctx)
+	defer cancel()
 	capacity, err := h.fleet.Capacity(ctx, c)
 	if err != nil {
 		return nil, readFailure(ctx, h.logger, "capacity", err)

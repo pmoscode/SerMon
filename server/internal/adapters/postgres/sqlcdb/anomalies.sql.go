@@ -232,6 +232,22 @@ func (q *Queries) AnomalyTop(ctx context.Context, arg AnomalyTopParams) ([]Anoma
 	return items, nil
 }
 
+const deleteOtherAnomalyBaselines = `-- name: DeleteOtherAnomalyBaselines :exec
+DELETE FROM anomaly_baselines WHERE hour = $1 AND series_id <> ALL(coalesce($2::bigint[], '{}'))
+`
+
+type DeleteOtherAnomalyBaselinesParams struct {
+	Hour      int16
+	SeriesIds []int64
+}
+
+// The rows of the hour of series no longer scored (review M4-30): a series that stopped would
+// keep its old row and make the hour look stale for good.
+func (q *Queries) DeleteOtherAnomalyBaselines(ctx context.Context, arg DeleteOtherAnomalyBaselinesParams) error {
+	_, err := q.db.Exec(ctx, deleteOtherAnomalyBaselines, arg.Hour, arg.SeriesIds)
+	return err
+}
+
 const insertAnomalyPoints = `-- name: InsertAnomalyPoints :exec
 INSERT INTO anomaly_points (ts, series_id, score, anomalous)
 SELECT t.v, id.v, sc.v, an.v

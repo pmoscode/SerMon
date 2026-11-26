@@ -185,3 +185,15 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
 - **Rotation:** Öffentliche Schlüssel des nächsten Paares in `KEYS/next/` werden mit ausgeliefert (apt und dnf in einer
   Datei, apk als zweite Datei). `Valid-Until` setzt das apt-Repo nicht: Es wird nur mit Releases neu gebaut (T101).
 
+
+## Nachtrag M4-30 (Security-Review)
+
+- **Health-Check mit Zeiten des Servers:** Der neue Agent verbindet sich, bevor sein Helper das Ende notiert; der
+  Health-Check verlangte aber eine Session nach diesem (vom Host gemeldeten) Ende – ein Self-Update ohne Pakete scheiterte
+  so immer. Jetzt beginnt der Health-Check mit der Zeit des Servers, und „wieder da“ heißt eine Session nach dem Senden
+  des Laufs. Start und Ende eines Laufs kappt der Server beim Empfang auf seine Zeit.
+- **Schlüssel beim Bau:** `build-repos.sh` und `package-agent.sh` legen die privaten Schlüssel in ein eigenes
+  Verzeichnis *neben* der Ausgabe (nie darin), machen nur `apt/ rpm/ apk/ keys/` lesbar und signieren ohne Netz.
+- **Offen (M4-31):** Der Helper aktualisiert sich nicht selbst, ein neuer oder widerrufener Release-Schlüssel erreicht
+  per Skript installierte Hosts erst mit `install.sh`; die Schlüssel der Paket-Repos erneuern sich auf eingerichteten
+  Hosts nicht, apk erkennt Schlüssel am Dateinamen; der Kanal steht nicht im signierten Kommentar.

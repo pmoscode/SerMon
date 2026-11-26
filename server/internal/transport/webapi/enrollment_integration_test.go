@@ -164,3 +164,30 @@ func TestEnrollment_RevokedTokensStopWorking(t *testing.T) {
 		t.Errorf("revoked token: %v, want UNAUTHENTICATED", err)
 	}
 }
+
+// Review M4-30: the facts a host chose are stored made visible already at its enrollment – a
+// node that never opens a session keeps them as enrolled.
+func TestEnrollment_StoresTheHostsFactsVisible(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ann := login(t, s, "ann@example.org")
+	ctx := context.Background()
+	token, err := ann.enrollment.CreateEnrollmentToken(ctx, connect.NewRequest(&webv1.CreateEnrollmentTokenRequest{GroupId: groupAl, MaxUses: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := enrollRequest(token.Msg.GetSecret(), p256CSR(t), newMachineID())
+	req.Msg.HostFacts.Hostname = "web\u202e10-bew"
+	req.Msg.HostFacts.OsId = "deb\u200bian"
+	res, err := agentClient(s).Enroll(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := ann.node.GetNode(ctx, connect.NewRequest(&webv1.GetNodeRequest{NodeId: res.Msg.GetNodeId()}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := node.Msg.GetNode(); got.GetHostname() != "web\ufffd10-bew" || got.GetOsId() != "deb\ufffdian" {
+		t.Errorf("stored %q, %q", got.GetHostname(), got.GetOsId())
+	}
+}

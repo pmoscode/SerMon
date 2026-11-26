@@ -33,6 +33,11 @@ ON CONFLICT (series_id, hour) DO UPDATE SET
     median = excluded.median, mad = excluded.mad, low = excluded.low, high = excluded.high,
     points = excluded.points, computed_at = excluded.computed_at;
 
+-- name: DeleteOtherAnomalyBaselines :exec
+-- The rows of the hour of series no longer scored (review M4-30): a series that stopped would
+-- keep its old row and make the hour look stale for good.
+DELETE FROM anomaly_baselines WHERE hour = sqlc.arg(hour) AND series_id <> ALL(coalesce(sqlc.arg(series_ids)::bigint[], '{}'));
+
 -- name: AnomalyBaselineAges :many
 -- When each hour of the week was last computed (hours without a row are missing).
 SELECT hour, min(computed_at)::timestamptz AS computed_at FROM anomaly_baselines GROUP BY hour;

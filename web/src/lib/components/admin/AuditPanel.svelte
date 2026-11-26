@@ -5,6 +5,7 @@
 	import { adminError } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { formatTimestamp } from '#lib/format/format.js';
+	import { displayText } from '#lib/logs/text.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
 	import { m } from '#lib/paraglide/messages.js';
 
@@ -65,9 +66,10 @@
 						<td class="px-3 py-2">{actor(entry.actorId)}</td>
 						<td class="px-3 py-2 font-mono text-xs">{entry.action}</td>
 						<td class="px-3 py-2 font-mono text-xs text-muted-foreground">
-							{entry.target}
+							<!-- Free text of users and hosts (reasons, names): controls visible (review M4-30). -->
+							{displayText(entry.target)}
 							{#each Object.entries(entry.details) as [key, value] (key)}
-								<span class="block">{key}={value}</span>
+								<span class="block">{key}={displayText(value)}</span>
 							{/each}
 						</td>
 					</tr>

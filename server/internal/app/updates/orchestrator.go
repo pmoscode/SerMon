@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/command"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -197,12 +199,44 @@ func (o *Orchestrator) step(ctx context.Context, org tenant.OrgID, instanceActiv
 	}
 	instanceOthers := instanceActive - o.active[org]
 	room := Room(min(o.config.OrgLimit-orgActive, o.config.InstanceLimit-instanceOthers-orgActive))
+	// maxParallel holds for the group, not per rollout: a rollout by hand during the policy's,
+	// or two by hand, share it; a node active in one waits in the others (review M4-30).
+	activeIn := map[identity.NodeID]uuid.UUID{}
+	groupActive := map[tenant.GroupID]int{}
+	for _, g := range state.Groups {
+		if g.Rollout != nil {
+			for _, n := range g.Rollout.Nodes {
+				if n.State.Active() {
+					activeIn[n.Node] = g.Rollout.ID
+					groupActive[g.Rollout.Group]++
+				}
+			}
+		}
+	}
 	var changes []Change
 	after := 0
 	for _, g := range state.Groups {
-		r, actions := Plan(now, g.Policy, g.Rollout, g.Nodes, state.Runs, room, o.config.NewID)
+		var id uuid.UUID
+		own := 0
+		if g.Rollout != nil {
+			id, own = g.Rollout.ID, activeOf(*g.Rollout)
+		}
+		nodes := slices.Clone(g.Nodes)
+		for i := range nodes {
+			if in, ok := activeIn[nodes[i].ID]; ok && in != id {
+				nodes[i].Busy = true
+			}
+		}
+		groupRoom := Room(g.Policy.Rollout.MaxParallel - (groupActive[g.Policy.Group] - own))
+		r, actions := Plan(now, g.Policy, g.Rollout, nodes, state.Runs, min(room, groupRoom), o.config.NewID)
 		if r == nil {
 			continue
+		}
+		groupActive[g.Policy.Group] += activeOf(*r) - own
+		for _, n := range r.Nodes {
+			if n.State.Active() {
+				activeIn[n.Node] = r.ID
+			}
 		}
 		for _, a := range actions {
 			switch {
@@ -231,6 +265,17 @@ func (o *Orchestrator) step(ctx context.Context, org tenant.OrgID, instanceActiv
 		return orgActive, fmt.Errorf("save: %w", err)
 	}
 	return after, nil
+}
+
+// activeOf counts the rollout's nodes that take a place of maxParallel.
+func activeOf(r RolloutRun) int {
+	n := 0
+	for _, node := range r.Nodes {
+		if node.State.Active() {
+			n++
+		}
+	}
+	return n
 }
 
 // changed reports whether a step changed the rollout.

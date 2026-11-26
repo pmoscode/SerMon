@@ -20,6 +20,7 @@ func TestVisible_ReplacesWhatAReaderCannotSee(t *testing.T) {
 		"\u2066x\u2069":         "\ufffdx\ufffd",
 		"\xef\xbb\xbfbom\u061c": "\ufffdbom\ufffd",
 		"tab\there\x7f":         "tab\ufffdhere\ufffd",
+		"web\u3164-01\u115f":    "web\ufffd-01\ufffd",
 	} {
 		if got := textsafe.Visible(in); got != want {
 			t.Errorf("Visible(%q) = %q, want %q", in, got, want)

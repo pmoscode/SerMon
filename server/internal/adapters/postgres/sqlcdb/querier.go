@@ -109,6 +109,9 @@ type Querier interface {
 	DeleteOrgSessionsOfUser(ctx context.Context, userID uuid.UUID) error
 	// The sessions in the organization end with the lock (sessions have no row-level security).
 	DeleteOrganizationSessions(ctx context.Context, orgID *uuid.UUID) error
+	// The rows of the hour of series no longer scored (review M4-30): a series that stopped would
+	// keep its old row and make the hour look stale for good.
+	DeleteOtherAnomalyBaselines(ctx context.Context, arg DeleteOtherAnomalyBaselinesParams) error
 	DeletePasskey(ctx context.Context, arg DeletePasskeyParams) (string, error)
 	DeleteRecoveryCodes(ctx context.Context, userID uuid.UUID) error
 	DeleteRoleBinding(ctx context.Context, id uuid.UUID) (int64, error)

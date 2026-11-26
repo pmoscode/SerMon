@@ -85,6 +85,23 @@ func equal(a, b updates.Policy) bool {
 	return a == b
 }
 
+// M4-31: what an import leaves out keeps the default – stopOnFailure too, which stops a rollout
+// at its first failure; written as false it stays false.
+func TestParsePolicy_AnOmittedStopOnFailureStopsTheRollout(t *testing.T) {
+	without := strings.Replace(konzept, " stopOnFailure: true,", "", 1)
+	if without == konzept {
+		t.Fatal("the example has no stopOnFailure")
+	}
+	p, err := updates.ParsePolicy(groupX, []byte(without))
+	if err != nil || !p.Rollout.StopOnFailure {
+		t.Errorf("omitted: %+v, %v", p.Rollout, err)
+	}
+	p, err = updates.ParsePolicy(groupX, []byte(strings.Replace(konzept, "stopOnFailure: true", "stopOnFailure: false", 1)))
+	if err != nil || p.Rollout.StopOnFailure {
+		t.Errorf("false: %+v, %v", p.Rollout, err)
+	}
+}
+
 func TestParsePolicy_RefusesWhatIsNotAPolicy(t *testing.T) {
 	for name, doc := range map[string]string{
 		"unknown field":    strings.Replace(konzept, "autoReboot", "autoreboot", 1),

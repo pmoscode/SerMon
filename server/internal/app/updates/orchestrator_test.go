@@ -235,3 +235,59 @@ func TestOrchestrator_ANodeRunsInOneRolloutAtATime(t *testing.T) {
 		t.Errorf("started %v; %v runs already", nodes, busy.ID)
 	}
 }
+
+// M4-31: an organization that is gone (deleted or locked) doesn't keep its places of the instance.
+func TestOrchestrator_AGoneOrganizationFreesItsPlaces(t *testing.T) {
+	store, o := orchestrated(t, 2, 10, func(c *updates.OrchestratorConfig) { c.OrgLimit, c.InstanceLimit = 4, 4 })
+	o.Round(context.Background())
+	var full, other tenant.OrgID
+	for _, org := range store.orgs {
+		if started(store.saved[org]) == 4 {
+			full = org
+		} else {
+			other = org
+		}
+	}
+	if full == (tenant.OrgID{}) || started(store.saved[other]) != 0 {
+		t.Fatalf("first round: %d and %d", started(store.saved[store.orgs[0]]), started(store.saved[store.orgs[1]]))
+	}
+	store.mu.Lock()
+	store.orgs = []tenant.OrgID{other}
+	store.mu.Unlock()
+	o.Round(context.Background())
+	if n := started(store.saved[other]); n != 4 {
+		t.Errorf("after the other organization went, %d started, want the instance's 4", n)
+	}
+}
+
+// M4-31: agent updates take places of the organization and the instance like package updates,
+// across the groups of an organization.
+func TestOrchestrator_AgentUpdatesCountAgainstTheLimits(t *testing.T) {
+	store, o := orchestrated(t, 1, 0, func(c *updates.OrchestratorConfig) { c.OrgLimit = 4 })
+	org := store.orgs[0]
+	var groups []updates.GroupState
+	for g := range 2 {
+		w := newWorld(t, agentPolicy(updates.ModeReport), 6)
+		w.policy.Group = tenant.GroupID(uuid.New())
+		w.policy.Rollout.MaxParallel = 50
+		for i := range w.nodes {
+			w.nodes[i].ID = nodeID(100*(g+1) + i)
+			w.nodes[i].AgentTarget = "1.1.0"
+			w.nodes[i].Report.Permissions.SelfUpdate = true
+		}
+		groups = append(groups, updates.GroupState{Policy: w.policy, Nodes: w.nodes})
+	}
+	store.groups[org] = groups
+	o.Round(context.Background())
+	n := 0
+	for _, c := range store.saved[org] {
+		for _, a := range c.Actions {
+			if a.Command != nil && a.Command.Kind == command.SelfUpdate {
+				n++
+			}
+		}
+	}
+	if n != 4 {
+		t.Errorf("%d agent updates started across two groups, organization limit 4", n)
+	}
+}

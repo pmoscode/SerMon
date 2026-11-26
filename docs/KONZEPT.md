@@ -1172,7 +1172,9 @@ spec:
   5 min abwarten). Gesund ist ein Node, wenn er online ist (nach einem Reboot mit einer Session, die danach begann), seit
   einer Minute ohne kritischen Alert (außer offline und neu gestartet). Grenzen: 100 Läufe je Org, 500 je Instanz, die
   Orgs kommen reihum zuerst. Fehlschläge schreiben die Server-Ereignisse `updates.run_failed` bzw.
-  `updates.rollout_stopped`; Reboot- und Offline-Alerts des Nodes sind bis Fensterende plus Health-Check stumm.
+  `updates.rollout_stopped`; Reboot- und Offline-Alerts des Nodes sind bis Fensterende plus Health-Check stumm, höchstens
+  bis sein Teil des Rollouts endet. Ein gestoppter Rollout führt seine laufenden Nodes zu Ende, startet aber weder Reboot
+  noch Pakete; ein nachträglich gekürztes Fenster gilt (M4-31).
 - **Manuell:** Ein Operator kann „Jetzt aktualisieren“ auslösen (Step-up-2FA, Bestätigungsdialog mit Paketliste).
   Umsetzung (M4-14): je Gruppe ein eigener Rollout mit dem gewählten Umfang (Security oder alle) und Reboot, dem
   `maxParallel`, Health-Check und `stopOnFailure` der Gruppe, über die nächsten 2 h; „Neu starten“ mit Grund sendet den

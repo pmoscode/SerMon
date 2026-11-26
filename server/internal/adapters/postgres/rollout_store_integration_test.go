@@ -132,6 +132,14 @@ func TestOrchestrator_RollsOutOverTheDatabase(t *testing.T) {
 	if states != "a-node=5,b-node=6" {
 		t.Errorf("node states = %s", states)
 	}
+	// M4-31: with their part of the rollout the nodes' silences ended, both in the audit log.
+	var muted, expired int
+	queryOwner(t, setup(t).db.OwnerDSN, `SELECT (SELECT count(*) FROM alert_silences WHERE org_id = $1 AND ends_at > $2),
+		(SELECT count(*) FROM audit_log WHERE org_id = $1 AND action = 'silence.expire' AND details->>'by' = 'update rollout')`,
+		[]any{uuid.UUID(f.org), now}, &muted, &expired)
+	if muted != 0 || expired != 2 {
+		t.Errorf("%d silences still running, %d ended in the audit log", muted, expired)
+	}
 	// Another round in the same window starts no second rollout.
 	a.Round(ctx)
 	var rollouts int
@@ -296,6 +304,15 @@ func TestOrchestrator_RunsRolloutsByHand(t *testing.T) {
 		t.Errorf("agent update of the rollout by hand: %+v", state.Groups)
 	}
 	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE update_policies SET agent_update = 1 WHERE group_id = $1", uuid.UUID(group))
+	// M4-31: stopped, the rollout by hand still follows its running node.
+	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE update_rollouts SET state = 3 WHERE id = $1", manual.ID)
+	if state, _ := store.Load(ctx, f.org, now); len(state.Groups) != 1 || state.Groups[0].Rollout == nil || state.Groups[0].Rollout.ID != manual.ID {
+		t.Errorf("a stopped rollout by hand with a running node is not loaded: %+v", state.Groups)
+	}
+	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE update_rollout_nodes SET state = 5 WHERE rollout_id = $1", manual.ID)
+	if state, _ := store.Load(ctx, f.org, now); len(state.Groups) != 0 {
+		t.Errorf("a stopped rollout by hand without running nodes is still loaded: %+v", state.Groups)
+	}
 	ownerExec(t, setup(t).db.OwnerDSN, "UPDATE update_rollouts SET state = 2 WHERE id = $1", manual.ID)
 	if state, _ := store.Load(ctx, f.org, now); len(state.Groups) != 0 {
 		t.Errorf("a finished rollout by hand is still loaded: %+v", state.Groups)

@@ -165,7 +165,7 @@ type (
 	}
 	rolloutSpec struct {
 		MaxParallel   int    `yaml:"maxParallel"`
-		StopOnFailure bool   `yaml:"stopOnFailure"`
+		StopOnFailure *bool  `yaml:"stopOnFailure"`
 		HealthCheck   string `yaml:"healthCheck"`
 	}
 )
@@ -221,7 +221,10 @@ func ParsePolicy(group tenant.GroupID, data []byte) (Policy, error) {
 	if r.MaxParallel != 0 {
 		p.Rollout.MaxParallel = r.MaxParallel
 	}
-	p.Rollout.StopOnFailure = r.StopOnFailure
+	// Left out, the default (true) holds like for the other fields (M4-31).
+	if r.StopOnFailure != nil {
+		p.Rollout.StopOnFailure = *r.StopOnFailure
+	}
 	if r.HealthCheck != "" {
 		d, err := time.ParseDuration(r.HealthCheck)
 		if err != nil {
@@ -278,7 +281,7 @@ func duration(d time.Duration) string {
 func (p Policy) YAML() []byte {
 	doc := policyDoc{Kind: "UpdatePolicy", Spec: policySpec{
 		Mode: p.Mode.String(), AutoReboot: p.AutoReboot, AgentUpdate: agentUpdateNames[p.AgentUpdate], Channel: p.Channel.String(),
-		Rollout: rolloutSpec{MaxParallel: p.Rollout.MaxParallel, StopOnFailure: p.Rollout.StopOnFailure, HealthCheck: duration(p.Rollout.HealthCheck)},
+		Rollout: rolloutSpec{MaxParallel: p.Rollout.MaxParallel, StopOnFailure: &p.Rollout.StopOnFailure, HealthCheck: duration(p.Rollout.HealthCheck)},
 	}}
 	if w := p.Window; w != nil {
 		spec := &windowSpec{

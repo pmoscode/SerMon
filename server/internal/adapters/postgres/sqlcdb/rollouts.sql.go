@@ -22,6 +22,27 @@ func (q *Queries) DeleteUpdateRolloutNodes(ctx context.Context, rolloutID uuid.U
 	return err
 }
 
+const endRolloutSilences = `-- name: EndRolloutSilences :execrows
+UPDATE alert_silences SET ends_at = $1, starts_at = LEAST(starts_at, $1)
+WHERE node_ids = ARRAY[$2::uuid] AND created_by IS NULL AND comment = $3
+  AND ends_at > $1
+`
+
+type EndRolloutSilencesParams struct {
+	At      time.Time
+	NodeID  uuid.UUID
+	Comment string
+}
+
+// The silences a rollout set for the node end at at: its part of the rollout ended (M4-31).
+func (q *Queries) EndRolloutSilences(ctx context.Context, arg EndRolloutSilencesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, endRolloutSilences, arg.At, arg.NodeID, arg.Comment)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const holdUpdateLease = `-- name: HoldUpdateLease :execrows
 SELECT 1 FROM update_leases WHERE holder = $1 AND expires_at > $2 FOR UPDATE
 `
@@ -343,6 +364,66 @@ func (q *Queries) ListRolloutNodeViews(ctx context.Context) ([]ListRolloutNodeVi
 	return items, nil
 }
 
+const listScopedRolloutNodes = `-- name: ListScopedRolloutNodes :many
+SELECT rn.rollout_id, rn.node_id, rn.hostname, rn.state, rn.reason, rn.update_run, rn.reboot_run, rn.since, rn.deadline, rn.agent_run
+FROM update_rollout_nodes rn JOIN nodes n ON n.org_id = rn.org_id AND n.id = rn.node_id
+WHERE rn.rollout_id = ANY ($1::uuid[])
+  AND ($2::boolean OR n.group_id = ANY ($3::uuid[]))
+ORDER BY rn.rollout_id, rn.position
+`
+
+type ListScopedRolloutNodesParams struct {
+	RolloutIds []uuid.UUID
+	AllGroups  bool
+	GroupIds   []uuid.UUID
+}
+
+type ListScopedRolloutNodesRow struct {
+	RolloutID uuid.UUID
+	NodeID    uuid.UUID
+	Hostname  string
+	State     int16
+	Reason    string
+	UpdateRun *uuid.UUID
+	RebootRun *uuid.UUID
+	Since     time.Time
+	Deadline  *time.Time
+	AgentRun  *uuid.UUID
+}
+
+// The nodes of the rollouts the scope may still view: one that moved to another group leaves the
+// history of its old group for those who can't view the new one (M4-31).
+func (q *Queries) ListScopedRolloutNodes(ctx context.Context, arg ListScopedRolloutNodesParams) ([]ListScopedRolloutNodesRow, error) {
+	rows, err := q.db.Query(ctx, listScopedRolloutNodes, arg.RolloutIds, arg.AllGroups, arg.GroupIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScopedRolloutNodesRow{}
+	for rows.Next() {
+		var i ListScopedRolloutNodesRow
+		if err := rows.Scan(
+			&i.RolloutID,
+			&i.NodeID,
+			&i.Hostname,
+			&i.State,
+			&i.Reason,
+			&i.UpdateRun,
+			&i.RebootRun,
+			&i.Since,
+			&i.Deadline,
+			&i.AgentRun,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUpdateRolloutNodes = `-- name: ListUpdateRolloutNodes :many
 SELECT rollout_id, node_id, hostname, state, reason, update_run, reboot_run, since, deadline, agent_run
 FROM update_rollout_nodes WHERE rollout_id = ANY ($1::uuid[])
@@ -412,8 +493,12 @@ func (q *Queries) PruneUpdateRollouts(ctx context.Context, before time.Time) err
 }
 
 const runningManualRollouts = `-- name: RunningManualRollouts :many
-SELECT id, group_id, window_start, window_end, state, reason, mode, auto_reboot
-FROM update_rollouts WHERE manual AND state = 1 ORDER BY window_start, id
+SELECT r.id, r.group_id, r.window_start, r.window_end, r.state, r.reason, r.mode, r.auto_reboot
+FROM update_rollouts r
+WHERE r.manual AND (r.state = 1 OR (r.state = 3 AND EXISTS (
+    SELECT 1 FROM update_rollout_nodes n
+    WHERE n.org_id = r.org_id AND n.rollout_id = r.id AND n.state IN (2, 3, 4, 8))))
+ORDER BY r.window_start, r.id
 `
 
 type RunningManualRolloutsRow struct {
@@ -427,7 +512,8 @@ type RunningManualRolloutsRow struct {
 	AutoReboot  bool
 }
 
-// The rollouts by hand that still run (M4-14).
+// The rollouts by hand that still run (M4-14), and stopped ones with nodes in a run: they are
+// followed to the end of those (M4-31).
 func (q *Queries) RunningManualRollouts(ctx context.Context) ([]RunningManualRolloutsRow, error) {
 	rows, err := q.db.Query(ctx, runningManualRollouts)
 	if err != nil {

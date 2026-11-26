@@ -26,30 +26,40 @@
 	let output = $state<UpdateRun>();
 	let failure = $state('');
 
-	async function load() {
+	// Answers count only for the node and the run still shown (M4-31): a slow one of before would
+	// put another node's runs or another run's output in their place.
+	async function load(node: string) {
+		open = '';
+		output = undefined;
+		status = 'loading';
 		try {
-			runs = (await updatesApi.updates.listUpdateRuns({ nodeId, pageSize: 20 })).runs;
+			const list = (await updatesApi.updates.listUpdateRuns({ nodeId: node, pageSize: 20 })).runs;
+			if (node !== nodeId) return;
+			runs = list;
 			status = 'ready';
 		} catch {
-			status = 'error';
+			if (node === nodeId) status = 'error';
 		}
 	}
 
 	$effect(() => {
-		void load();
+		void load(nodeId);
 	});
 
 	async function show(run: UpdateRun) {
-		if (open === run.runId) {
+		const id = run.runId;
+		if (open === id) {
 			open = '';
 			return;
 		}
-		open = run.runId;
+		open = id;
 		output = undefined;
 		failure = '';
 		try {
-			output = (await updatesApi.updates.getUpdateRun({ runId: run.runId })).run;
+			const got = (await updatesApi.updates.getUpdateRun({ runId: id })).run;
+			if (open === id) output = got;
 		} catch (error) {
+			if (open !== id) return;
 			failure =
 				codeOf(error) === Code.PermissionDenied ? m.runs_output_forbidden() : notifyError(error);
 		}

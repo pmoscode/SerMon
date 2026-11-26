@@ -18,14 +18,34 @@ SELECT DISTINCT ON (group_id) id, group_id, window_start, window_end, state, rea
 FROM update_rollouts WHERE NOT manual ORDER BY group_id, window_start DESC;
 
 -- name: RunningManualRollouts :many
--- The rollouts by hand that still run (M4-14).
-SELECT id, group_id, window_start, window_end, state, reason, mode, auto_reboot
-FROM update_rollouts WHERE manual AND state = 1 ORDER BY window_start, id;
+-- The rollouts by hand that still run (M4-14), and stopped ones with nodes in a run: they are
+-- followed to the end of those (M4-31).
+SELECT r.id, r.group_id, r.window_start, r.window_end, r.state, r.reason, r.mode, r.auto_reboot
+FROM update_rollouts r
+WHERE r.manual AND (r.state = 1 OR (r.state = 3 AND EXISTS (
+    SELECT 1 FROM update_rollout_nodes n
+    WHERE n.org_id = r.org_id AND n.rollout_id = r.id AND n.state IN (2, 3, 4, 8))))
+ORDER BY r.window_start, r.id;
+
+-- name: EndRolloutSilences :execrows
+-- The silences a rollout set for the node end at at: its part of the rollout ended (M4-31).
+UPDATE alert_silences SET ends_at = sqlc.arg(at), starts_at = LEAST(starts_at, sqlc.arg(at))
+WHERE node_ids = ARRAY[sqlc.arg(node_id)::uuid] AND created_by IS NULL AND comment = sqlc.arg(comment)
+  AND ends_at > sqlc.arg(at);
 
 -- name: ListUpdateRolloutNodes :many
 SELECT rollout_id, node_id, hostname, state, reason, update_run, reboot_run, since, deadline, agent_run
 FROM update_rollout_nodes WHERE rollout_id = ANY (sqlc.arg(rollout_ids)::uuid[])
 ORDER BY rollout_id, position;
+
+-- name: ListScopedRolloutNodes :many
+-- The nodes of the rollouts the scope may still view: one that moved to another group leaves the
+-- history of its old group for those who can't view the new one (M4-31).
+SELECT rn.rollout_id, rn.node_id, rn.hostname, rn.state, rn.reason, rn.update_run, rn.reboot_run, rn.since, rn.deadline, rn.agent_run
+FROM update_rollout_nodes rn JOIN nodes n ON n.org_id = rn.org_id AND n.id = rn.node_id
+WHERE rn.rollout_id = ANY (sqlc.arg(rollout_ids)::uuid[])
+  AND (sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[]))
+ORDER BY rn.rollout_id, rn.position;
 
 -- name: ListRolloutNodeViews :many
 -- The nodes with what a rollout needs: online, their session, their report and whether a

@@ -582,3 +582,82 @@ func TestPlan_AgentUpdatesSkippedFailedOrNone(t *testing.T) {
 		t.Errorf("manual agent updates started a rollout: %+v", r)
 	}
 }
+
+// M4-31: a stopped rollout follows its running nodes to their end but starts nothing more – no
+// reboot after an update, no packages after an agent update.
+func TestPlan_AStoppedRolloutStartsNoMoreRuns(t *testing.T) {
+	w := newWorld(t, policy(updates.ModeAllAuto, 2, true, true), 2)
+	w.at(0).step()
+	w.at(time.Minute).finish("web-01", command.Failed, false)
+	w.at(time.Minute + time.Second).step()
+	if w.rollout.State != updates.RolloutStopped {
+		t.Fatalf("not stopped: %d", w.rollout.State)
+	}
+	w.at(2*time.Minute).finish("web-02", command.Succeeded, true)
+	if got := commands(w.at(2*time.Minute + time.Second).step()); len(got) != 0 {
+		t.Errorf("the stopped rollout started %v", got)
+	}
+	if n := w.run("web-02"); n.State != updates.NodeHealthCheck {
+		t.Errorf("web-02 = %+v, want its health check", n)
+	}
+
+	agent := newWorld(t, agentPolicy(updates.ModeAllAuto), 1)
+	agent.view("web-01").AgentTarget = "1.1.0"
+	agent.view("web-01").Report.Permissions.SelfUpdate = true
+	agent.at(0).step()
+	agent.rollout.State = updates.RolloutStopped
+	agent.at(time.Minute).finish("web-01", command.Succeeded, false)
+	agent.view("web-01").ConnectedAt = windowStart.Add(time.Minute)
+	if got := commands(agent.at(time.Minute + time.Second).step()); len(got) != 0 {
+		t.Errorf("after the agent update of a stopped rollout: %v", got)
+	}
+}
+
+// M4-31: a window shortened after the rollout began counts: no reboot and no new node after its
+// new end.
+func TestPlan_AShortenedWindowEndsTheRollout(t *testing.T) {
+	w := newWorld(t, policy(updates.ModeAllAuto, 1, false, true), 2)
+	w.at(0).step()
+	short := *w.policy.Window
+	short.Duration = 30 * time.Minute
+	w.policy.Window = &short
+	w.at(45*time.Minute).finish("web-01", command.Succeeded, true)
+	if got := commands(w.at(45*time.Minute + time.Second).step()); len(got) != 0 {
+		t.Errorf("after the shortened window: %v", got)
+	}
+	if n := w.run("web-02"); n.State != updates.NodeSkipped || !strings.Contains(n.Reason, "window") {
+		t.Errorf("web-02 = %+v", n)
+	}
+	// Shortened but still open: the reboot expires with the new end.
+	open := newWorld(t, policy(updates.ModeAllAuto, 1, false, true), 1)
+	open.at(0).step()
+	shorter := *open.policy.Window
+	shorter.Duration = 50 * time.Minute
+	open.policy.Window = &shorter
+	open.at(40*time.Minute).finish("web-01", command.Succeeded, true)
+	open.at(40*time.Minute + time.Second).step()
+	if reboot, ok := open.runs[open.run("web-01").RebootRun]; !ok || !reboot.ExpiresAt.Equal(windowStart.Add(50*time.Minute)) {
+		t.Errorf("the reboot expires at %v (%v), the shortened window ends at %v", reboot.ExpiresAt, ok, windowStart.Add(50*time.Minute))
+	}
+}
+
+// M4-31: the node's silence ends with its run in the rollout, not at the end of the window.
+func TestPlan_TheSilenceEndsWithTheNode(t *testing.T) {
+	w := newWorld(t, policy(updates.ModeAllAuto, 2, false, false), 2)
+	w.at(0).step()
+	w.at(time.Minute).finish("web-01", command.Succeeded, false)
+	w.at(time.Minute + time.Second).step()
+	w.at(time.Minute).finish("web-02", command.Failed, false)
+	ended := map[identity.NodeID]bool{}
+	for _, a := range append(w.at(2*time.Minute+time.Second).step(), w.at(3*time.Minute).step()...) {
+		if a.EndSilence {
+			ended[a.Node] = true
+		}
+	}
+	if w.run("web-01").State != updates.NodeDone || w.run("web-02").State != updates.NodeFailed {
+		t.Fatalf("states: %s", w.states())
+	}
+	if !ended[w.run("web-01").Node] || !ended[w.run("web-02").Node] {
+		t.Errorf("silences ended: %v", ended)
+	}
+}

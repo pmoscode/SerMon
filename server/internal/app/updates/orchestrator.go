@@ -128,6 +128,17 @@ func (o *Orchestrator) Round(ctx context.Context) {
 		o.config.Logger.ErrorContext(ctx, "updates: list organizations failed", "error", err)
 		return
 	}
+	// An organization gone (deleted or locked) frees its places of the instance (M4-31).
+	for org := range o.active {
+		if !slices.Contains(orgs, org) {
+			delete(o.active, org)
+		}
+	}
+	for org := range o.pruned {
+		if !slices.Contains(orgs, org) {
+			delete(o.pruned, org)
+		}
+	}
 	if len(orgs) == 0 {
 		return
 	}
@@ -233,6 +244,8 @@ func (o *Orchestrator) step(ctx context.Context, org tenant.OrgID, instanceActiv
 			continue
 		}
 		groupActive[g.Policy.Group] += activeOf(*r) - own
+		// Every node that began a run takes a place, an agent update like packages (M4-31).
+		room -= Room(max(activeOf(*r)-own, 0))
 		for _, n := range r.Nodes {
 			if n.State.Active() {
 				activeIn[n.Node] = r.ID
@@ -240,8 +253,7 @@ func (o *Orchestrator) step(ctx context.Context, org tenant.OrgID, instanceActiv
 		}
 		for _, a := range actions {
 			switch {
-			case a.Command != nil && a.Command.Kind == command.Update:
-				room--
+			case a.Command != nil && (a.Command.Kind == command.Update || a.Command.Kind == command.SelfUpdate):
 				o.stats.Started.Add(1)
 			case a.Event == EventRunFailed:
 				o.stats.Failed.Add(1)

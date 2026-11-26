@@ -240,6 +240,21 @@ func TestUpdates_RunsAndRollouts(t *testing.T) {
 	if !found {
 		t.Errorf("rollouts = %v", rollouts.Msg.GetRollouts())
 	}
+	// M4-31: a node that moved to a group Mia can't view leaves the rollouts she sees.
+	other := "0193f5a0-0000-7000-8000-0000000031a1"
+	ownerSQL(t, "INSERT INTO node_groups (id, org_id, name) VALUES ('"+other+"', '"+orgAlpha+"', 'alpha-db-m431') ON CONFLICT DO NOTHING")
+	ownerSQL(t, "UPDATE nodes SET group_id = '"+other+"' WHERE id = '"+nodeAl+"'")
+	defer ownerSQL(t, "UPDATE nodes SET group_id = '"+groupAl+"' WHERE id = '"+nodeAl+"'")
+	mia := login(t, s, "mia@example.org")
+	seen, err := mia.updates.ListRollouts(ctx, connect.NewRequest(&webv1.ListRolloutsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range seen.Msg.GetRollouts() {
+		if r.GetRolloutId() == runAl && len(r.GetNodes()) != 0 {
+			t.Errorf("Mia sees the moved node in the rollout: %v", r.GetNodes())
+		}
+	}
 }
 
 // testReleases offers 9.9.9 in stable and 10.0.0-rc.1 in beta for arm64 and amd64.

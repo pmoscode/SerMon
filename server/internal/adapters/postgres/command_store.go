@@ -334,7 +334,7 @@ func (s *HistoryStore) Rollouts(ctx context.Context, scope tenant.Scope, limit i
 				GroupName: r.GroupName, CreatedAt: r.CreatedAt,
 			})
 		}
-		nodes, err := q.ListUpdateRolloutNodes(ctx, ids)
+		nodes, err := q.ListScopedRolloutNodes(ctx, sqlcdb.ListScopedRolloutNodesParams{RolloutIds: ids, AllGroups: scope.AllGroups(), GroupIds: groupIDs(scope)})
 		if err != nil {
 			return wrap(err, "list rollout nodes")
 		}

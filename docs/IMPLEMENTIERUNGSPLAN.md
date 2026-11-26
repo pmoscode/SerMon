@@ -5025,6 +5025,14 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 >   eines Rollouts laufen spätestens mit dem Fenster ab (auch der Reboot); der Agent startet nichts nach der Frist,
 >   auch nicht nach einem langsamen Download, und meldet es; gesendete Befehle warten 15 min auf die Antwort
 >   (`SentGrace`), bevor sie ablaufen. Gegenproben 10 von 10 erkannt.
+> - **Rollouts, niedrige Befunde:** von Hand gestoppte Rollouts folgen ihren laufenden Nodes weiter; ein gestoppter
+>   Rollout startet keinen Reboot und keine Pakete nach dem Agent-Update mehr, ein gekürztes Fenster gilt; die Silence
+>   eines Nodes endet mit seinem Teil des Rollouts (Audit `silence.expire`); `stopOnFailure` ausgelassen beim Import ist
+>   `true`; die Rollout-Liste zeigt nur Nodes, die der Aufrufer noch sehen darf; gelöschte oder gesperrte Orgs geben
+>   ihre Plätze der Instanz frei; Agent-Updates zählen gegen die Grenzen je Org und Instanz. „Teilweise gespeicherte
+>   Schritte“ geprüft: `Save` schreibt Rollout, Knoten und Aktionen in einer Transaktion hinter der Lease – nur die
+>   Zählung der Plätze war falsch. `RunHistory` zeigt keine Ausgabe und keine Liste einer älteren Anfrage mehr.
+>   Gegenproben 11 von 11 erkannt (eine erst nach einem schärferen Test).
 - **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
   - **Mittel:**
     - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys

@@ -114,6 +114,8 @@ type Action struct {
 	Command *command.Command
 	// SilenceUntil mutes the node's reboot and offline alerts until then (with Command).
 	SilenceUntil time.Time
+	// EndSilence ends that silence: the node's part of the rollout ended (M4-31).
+	EndSilence bool
 	// Event is a server event of the node: EventRunFailed or EventRolloutStopped.
 	Event  string
 	Node   identity.NodeID
@@ -154,13 +156,20 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 		views[n.ID] = n
 	}
 	var actions []Action
-	windowOpen := now.Before(r.WindowEnd) && (p.Mode != ModeReport || p.AgentUpdate == AgentAuto)
+	end := r.windowEnd(p, now)
+	windowOpen := now.Before(end) && (p.Mode != ModeReport || p.AgentUpdate == AgentAuto)
 	for i := range r.Nodes {
 		n := &r.Nodes[i]
 		if !n.State.Active() {
 			continue
 		}
-		if failed := follow(now, p, n, views[n.Node], runs, window{open: windowOpen, end: r.WindowEnd}, newID, &actions); failed && p.Rollout.StopOnFailure && r.State == RolloutRunning {
+		// A stopped rollout follows its running nodes but starts no reboot and no packages (M4-31).
+		w := window{open: windowOpen && r.State == RolloutRunning, end: end}
+		failed := follow(now, p, n, views[n.Node], runs, w, newID, &actions)
+		if !n.State.Active() {
+			actions = append(actions, Action{Node: n.Node, EndSilence: true})
+		}
+		if failed && p.Rollout.StopOnFailure && r.State == RolloutRunning {
 			r.State, r.Reason = RolloutStopped, n.Hostname+": "+n.Reason
 			actions = append(actions, Action{Event: EventRolloutStopped, Node: n.Node, Reason: r.Reason})
 		}
@@ -244,6 +253,25 @@ func updateCommand(now, windowEnd time.Time, node identity.NodeID, mode Mode, ne
 	return command.Command{
 		ID: newID(), Node: node, Kind: command.Update, Scope: scope, CreatedAt: now, ExpiresAt: command.Expiry(now, windowEnd),
 	}
+}
+
+// windowEnd is when the rollout's window ends: a scheduled one's with the policy's current window
+// if that ends earlier or closed (a window shortened or moved after the rollout began, M4-31).
+func (r RolloutRun) windowEnd(p Policy, now time.Time) time.Time {
+	if r.Manual {
+		return r.WindowEnd
+	}
+	if p.Window == nil {
+		return now
+	}
+	_, end, ok := p.Window.Current(now)
+	switch {
+	case !ok:
+		return now
+	case end.Before(r.WindowEnd):
+		return end
+	}
+	return r.WindowEnd
 }
 
 // stillFollowing reports whether a stopped rollout has nodes to follow.

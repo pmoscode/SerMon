@@ -92,4 +92,48 @@ describe('RunHistory', () => {
 		await page.getByRole('button', { name: 'Output' }).first().click();
 		await expect.element(page.getByRole('alert')).toMatchTextContent(/like a log of the host/);
 	});
+
+	// M4-31: a slow answer for a run opened before never shows under the one open now.
+	it('shows the output of the open run, whatever answers last', async () => {
+		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockResolvedValue(runs());
+		let answerFirst: (v: unknown) => void = () => {};
+		vi.spyOn(updatesApi.updates, 'getUpdateRun').mockImplementation((({
+			runId
+		}: {
+			runId: string;
+		}) =>
+			runId === 'r1'
+				? new Promise((resolve) => (answerFirst = resolve))
+				: Promise.resolve(
+						create(GetUpdateRunResponseSchema, { run: { runId: 'r2', output: 'second run' } })
+					)) as never);
+		render(RunHistory, { nodeId, now: new Date(now) });
+		await page.getByRole('button', { name: 'Output' }).first().click();
+		await page.getByRole('button', { name: 'Output' }).last().click();
+		await expect.element(page.getByLabelText('Output')).toMatchTextContent(/second run/);
+		answerFirst(create(GetUpdateRunResponseSchema, { run: { runId: 'r1', output: 'first run' } }));
+		await new Promise((r) => setTimeout(r, 50));
+		expect(page.getByLabelText('Output').element().textContent).toContain('second run');
+		expect(document.body.textContent).not.toContain('first run');
+	});
+
+	// M4-31: the list of a node shown before doesn't replace the one of the node shown now.
+	it('lists the runs of the node shown now', async () => {
+		const other = '0193f5a0-0000-7000-8000-0000000000d2';
+		let answerFirst: (v: unknown) => void = () => {};
+		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockImplementation((({
+			nodeId: asked
+		}: {
+			nodeId: string;
+		}) =>
+			asked === nodeId
+				? new Promise((resolve) => (answerFirst = resolve))
+				: Promise.resolve(create(ListUpdateRunsResponseSchema, { runs: [] }))) as never);
+		const { rerender } = await render(RunHistory, { nodeId, now: new Date(now) });
+		await rerender({ nodeId: other });
+		await expect.element(page.getByText('No runs yet.')).toBeVisible();
+		answerFirst(runs());
+		await new Promise((r) => setTimeout(r, 50));
+		expect(document.body.textContent).not.toContain('Updates (security)');
+	});
 });

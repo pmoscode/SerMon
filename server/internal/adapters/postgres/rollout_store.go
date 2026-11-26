@@ -303,6 +303,9 @@ func saveRollout(ctx context.Context, q *sqlcdb.Queries, r updates.RolloutRun, n
 	return nil
 }
 
+// rolloutSilence is the comment of the silences a rollout sets: they have no creator.
+const rolloutSilence = "updates of the rollout (SerMon)"
+
 // apply carries out an action of a rollout step in the save's transaction.
 func apply(ctx context.Context, q *sqlcdb.Queries, a updates.Action, now time.Time) error {
 	if a.Command != nil {
@@ -321,7 +324,7 @@ func apply(ctx context.Context, q *sqlcdb.Queries, a updates.Action, now time.Ti
 		}
 		if err := q.InsertAlertSilence(ctx, sqlcdb.InsertAlertSilenceParams{
 			ID: uuid.Must(uuid.NewV7()), Matchers: match, NodeIds: []uuid.UUID{uuid.UUID(a.Node)}, StartsAt: now, EndsAt: a.SilenceUntil,
-			Comment: "updates of the rollout (SerMon)", CreatedAt: now,
+			Comment: rolloutSilence, CreatedAt: now,
 		}); err != nil {
 			return wrap(err, "silence the node")
 		}
@@ -330,6 +333,19 @@ func apply(ctx context.Context, q *sqlcdb.Queries, a updates.Action, now time.Ti
 			Details: map[string]string{"by": "update rollout", "until": a.SilenceUntil.UTC().Format(time.RFC3339)},
 		}); err != nil {
 			return err
+		}
+	}
+	if a.EndSilence {
+		n, err := q.EndRolloutSilences(ctx, sqlcdb.EndRolloutSilencesParams{At: now, NodeID: uuid.UUID(a.Node), Comment: rolloutSilence})
+		if err != nil {
+			return wrap(err, "end the node's silence")
+		}
+		if n > 0 {
+			if err := appendAudit(ctx, q, access.AuditEntry{
+				Action: "silence.expire", Target: "node:" + a.Node.String(), Details: map[string]string{"by": "update rollout"},
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	if a.Event != "" {

@@ -125,6 +125,8 @@ type Querier interface {
 	// What the node's session sends: the pending commands, and after a reconnect the sent ones without
 	// result as well.
 	DeliverableNodeCommands(ctx context.Context, arg DeliverableNodeCommandsParams) ([]DeliverableNodeCommandsRow, error)
+	// The silences a rollout set for the node end at at: its part of the rollout ended (M4-31).
+	EndRolloutSilences(ctx context.Context, arg EndRolloutSilencesParams) (int64, error)
 	EnrollmentTokenByHash(ctx context.Context, arg EnrollmentTokenByHashParams) (EnrollmentTokenByHashRow, error)
 	// Metric series and points (M1-22, ADR 0001). Every query runs in a tenant transaction.
 	// Registers series of the current organization (one row per position of the arrays) and returns
@@ -289,6 +291,9 @@ type Querier interface {
 	// The nodes with what a rollout needs: online, their session, their report and whether a
 	// critical alert other than offline or rebooted fires.
 	ListRolloutNodeViews(ctx context.Context) ([]ListRolloutNodeViewsRow, error)
+	// The nodes of the rollouts the scope may still view: one that moved to another group leaves the
+	// history of its old group for those who can't view the new one (M4-31).
+	ListScopedRolloutNodes(ctx context.Context, arg ListScopedRolloutNodesParams) ([]ListScopedRolloutNodesRow, error)
 	// Newest first; the scope's groups are those of the node now (events of removed nodes only for
 	// callers on all groups). Keyset paging below (before_time, before_id).
 	ListSecurityEvents(ctx context.Context, arg ListSecurityEventsParams) ([]ListSecurityEventsRow, error)
@@ -381,7 +386,8 @@ type Querier interface {
 	RevokeNodeCertificates(ctx context.Context, arg RevokeNodeCertificatesParams) error
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	RoleBindingsWithOrigin(ctx context.Context, userID uuid.UUID) ([]RoleBindingsWithOriginRow, error)
-	// The rollouts by hand that still run (M4-14).
+	// The rollouts by hand that still run (M4-14), and stopped ones with nodes in a run: they are
+	// followed to the end of those (M4-31).
 	RunningManualRollouts(ctx context.Context) ([]RunningManualRolloutsRow, error)
 	// Replaces an unconfirmed secret; a confirmed one stays (0 rows).
 	SavePendingTOTP(ctx context.Context, arg SavePendingTOTPParams) (int64, error)

@@ -77,6 +77,11 @@ Alpine). Die Verbindungen zu den Paket-Mirrors (`TIME_WAIT`) bleiben drin, ihre 
 eine Zwischen-CA, ein Zertifikat für `localhost` und `127.0.0.1` als Kette und allein, ein abgelaufenes, eines für
 `other.example` und ein selbst signiertes, mit festen Daten (2025 bis 2045). Die Schlüssel verwirft das Skript.
 
+`modules/systemd_units/capture.sh` (M5-10) nimmt `systemctl show` mit den festen Eigenschaften des Moduls in den
+E2E-Images mit systemd auf (Debian 13, Ubuntu 24.04, Rocky 9, Alma 10, Fedora 44): ein laufender Dienst, eine
+Neustart-Schleife (`Restart=always`), ein fehlgeschlagener Dienst, eine Template-Instanz, ein Timer und eine unbekannte
+Unit. Auf Rocky und Alma ist `dbus.service` ein Alias von `dbus-broker.service`.
+
 ## Updates (`updates/`)
 
 `updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in

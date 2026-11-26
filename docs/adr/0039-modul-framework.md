@@ -198,3 +198,11 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
   `sermon_<id>_…`, Einheit, Aggregation, Labels); `just gen` kopiert die Datei in den Server, der sie in den Katalog
   aufnimmt (Bereich `module`). So bringt ein neues Modul seine Metriken mit, ohne dass jemand den Katalog im Server
   ändert; ein Test im Agent prüft, dass die Samples eines Moduls in seiner Datei stehen.
+
+## Nachtrag M5-10 (systemd)
+
+- „Kein Modul startet Programme“ bleibt: Den Zustand von Units bekommt ein Modul über den Port `Systemd` in
+  `Setup.host`, den der Agent mit demselben `systemctl` wie der Collector der fehlgeschlagenen Units erfüllt (M2-22:
+  feste Argumente, leere Umgebung, Zeitgrenze, begrenzte Ausgabe). Erlaubt ist nur `systemctl show` mit festen
+  Eigenschaften (`Id`, `LoadState`, `ActiveState`, `SubState`, `NRestarts`) für höchstens 32 geprüfte Unit-Namen nach
+  `--`. Ein eigener D-Bus-Client wäre eine schwere neue Abhängigkeit für dieselbe Auskunft.

@@ -1,0 +1,36 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_systemd_units_loaded",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "unit"
+      ]
+    },
+    {
+      "name": "sermon_systemd_units_active",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "unit"
+      ]
+    },
+    {
+      "name": "sermon_systemd_units_failed",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "unit"
+      ]
+    },
+    {
+      "name": "sermon_systemd_units_restarts",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "unit"
+      ]
+    }
+  ]
+}

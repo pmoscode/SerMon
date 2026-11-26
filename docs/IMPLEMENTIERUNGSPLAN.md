@@ -5445,7 +5445,22 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures (PEM, Kette, abgelaufen, fremder Name), ein Pfad außerhalb der erlaubten abgelehnt.
 - **Abhängig von:** M5-03
 
-#### ☐ M5-10 – systemd-Units (erweitert) · A · S
+#### ☑ M5-10 – systemd-Units (erweitert) · A · S
+> Erledigt (`sermon-modules/src/systemd_units.rs`, Modul `systemd_units`; Nachtrag in ADR 0039):
+> - **Quelle:** neuer Port `Systemd` in `Host` (`Setup.host.systemd`), den der Agent mit dem `systemctl` des
+>   Collectors der fehlgeschlagenen Units (M2-22) erfüllt: `systemctl show --property=Id,LoadState,ActiveState,SubState,
+>   NRestarts -- <units>`, Namen geprüft (gültige Unit, nicht mit `-` beginnend, nach `--`), höchstens 32, leere
+>   Umgebung, 10 s, 256 KiB. Das Modul selbst startet nichts. Ohne systemd (Alpine) ist es `invalid_config`.
+> - **Metriken** (Label `unit` = konfigurierter Name, höchstens 32): `sermon_systemd_units_loaded`, `…_active`,
+>   `…_failed`, `…_restarts` (`NRestarts`, nur Dienste). Blöcke nach Position zugeordnet, weil ein Alias eine andere
+>   `Id` trägt (`dbus.service` → `dbus-broker.service` auf Rocky/Alma), sonst nach `Id`. Katalog, Hilfetexte DE + EN.
+> - **Fixtures** `agent/fixtures/modules/systemd_units/<distro>/show.txt` (Debian 13, Ubuntu 24.04, Rocky 9, Alma 10,
+>   Fedora 44) aus `capture.sh` mit einem laufenden Dienst, einer Neustart-Schleife, einem fehlgeschlagenen Dienst,
+>   einer Template-Instanz, einem Timer und einer unbekannten Unit; dabei gezeigt: eine Neustart-Schleife ist zum
+>   Zeitpunkt der Abfrage auch mal `active`, ihre Neustarts steigen. Fuzz-Ziel `module_parsers` um `systemctl show`
+>   erweitert.
+> - Tests: jede Distro, kaputte Zeilen, Grenzen, Zuordnung nach `Id`, Fehler von `systemctl`, Schema, ohne systemd,
+>   Argumente von `systemctl` über ein Fake-Programm; Gegenproben 10/10.
 - **Ziel:** Zustand und Restarts ausgewählter Units, aufbauend auf dem Collector der fehlgeschlagenen Units (M2-22),
   ohne Zusatzrechte.
 - **Tests zuerst:** Fixtures von `systemctl show` der Zieldistros, Grenzen der Zahl der Units.

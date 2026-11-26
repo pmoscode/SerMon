@@ -20,6 +20,8 @@ pub mod schema;
 pub mod simulate;
 #[cfg(feature = "smart")]
 pub mod smart;
+#[cfg(feature = "systemd_units")]
+pub mod systemd_units;
 #[cfg(feature = "tcp_check")]
 pub mod tcp_check;
 #[cfg(feature = "tls")]
@@ -53,6 +55,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(http_check::HttpCheck),
         #[cfg(feature = "smart")]
         Arc::new(smart::Smart),
+        #[cfg(feature = "systemd_units")]
+        Arc::new(systemd_units::SystemdUnits),
         #[cfg(feature = "tcp_check")]
         Arc::new(tcp_check::TcpCheck),
         #[cfg(feature = "tls")]
@@ -123,6 +127,8 @@ pub struct Host {
     pub root: ProcRoot,
     /// The root helper; `None`: the agent has none (tests, virtual nodes).
     pub helper: Option<Arc<dyn Helper>>,
+    /// systemd; `None`: the host has none (Alpine, tests).
+    pub systemd: Option<Arc<dyn Systemd>>,
 }
 
 impl Default for Host {
@@ -131,6 +137,7 @@ impl Default for Host {
         Self {
             root: ProcRoot::host(),
             helper: None,
+            systemd: None,
         }
     }
 }
@@ -140,6 +147,7 @@ impl fmt::Debug for Host {
         f.debug_struct("Host")
             .field("root", &self.root)
             .field("helper", &self.helper.is_some())
+            .field("systemd", &self.systemd.is_some())
             .finish()
     }
 }
@@ -153,6 +161,18 @@ pub trait Helper: Send + Sync + 'static {
     ///
     /// Why there is no answer (no helper, no right to its socket, a broken answer).
     fn call(&self, request: &HelperRequest) -> Result<HelperResponse, String>;
+}
+
+/// systemd as the agent asks it (M5-10): `systemctl show` with fixed properties and checked
+/// unit names, no shell – the same `systemctl` as the collector of the failed units. Blocking:
+/// call it in [`Run::blocking`].
+pub trait Systemd: Send + Sync + 'static {
+    /// The `systemctl show` blocks of `units`, in their order.
+    ///
+    /// # Errors
+    ///
+    /// Why there is no answer (a name that is no unit, systemctl fails or takes too long).
+    fn show(&self, units: &[String]) -> Result<String, String>;
 }
 
 /// Why a module can't be built.

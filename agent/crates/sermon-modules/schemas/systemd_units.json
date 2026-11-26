@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "systemd units",
+  "description": "State and automatic restarts of selected systemd units, asked through systemctl without extra rights.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["units"],
+  "properties": {
+    "units": {
+      "type": "array",
+      "title": "Units",
+      "description": "Unit names with their type, e.g. nginx.service, postgresql@17-main.service, backup.timer.",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 255,
+        "pattern": "^[A-Za-z0-9:_.@\\\\][A-Za-z0-9:_.@\\\\-]*\\.(service|socket|target|device|mount|automount|swap|timer|path|slice|scope)$"
+      }
+    }
+  }
+}

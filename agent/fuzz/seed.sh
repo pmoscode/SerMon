@@ -103,3 +103,8 @@ find ../fixtures/modules/docker -type f ! -name '*.sh' ! -name '*.md' | while IF
   name=$(printf '%s' "$file" | tr '/.' '__')
   cp "$file" "corpus/cgroup_parsers/fixture$name"
 done
+# 4: systemctl show of the module systemd_units (M5-10).
+for file in ../fixtures/modules/systemd_units/*/show.txt; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\004'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done

@@ -154,13 +154,42 @@ impl Systemctl {
         self.list_units(&["--type=service", "--state=running"])
     }
 
-    /// `systemctl list-units` with `filter` and fixed arguments otherwise: no shell, an empty
-    /// environment, the output bounded, a timeout.
+    /// `systemctl show` of the properties `Id`, `LoadState`, `ActiveState`, `SubState` and
+    /// `NRestarts` of `units` (module `systemd_units`, M5-10): a block per unit in their order.
+    ///
+    /// # Errors
+    ///
+    /// A name that is no unit (nothing runs then), systemctl fails or takes too long.
+    pub fn show(&self, units: &[String]) -> io::Result<String> {
+        let valid = |u: &String| valid_unit(u) && !u.starts_with('-');
+        if units.is_empty() || units.len() > MAX_UNITS || !units.iter().all(valid) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a list of units",
+            ));
+        }
+        let mut args = vec![
+            "show",
+            "--no-pager",
+            "--property=Id,LoadState,ActiveState,SubState,NRestarts",
+            "--",
+        ];
+        args.extend(units.iter().map(String::as_str));
+        self.run(&args)
+    }
+
+    /// `systemctl list-units` with `filter` and fixed arguments otherwise.
     fn list_units(&self, filter: &[&str]) -> io::Result<String> {
+        let mut args = vec!["list-units"];
+        args.extend_from_slice(filter);
+        args.extend_from_slice(&["--plain", "--no-legend", "--no-pager", "--full"]);
+        self.run(&args)
+    }
+
+    /// systemctl with `args`: no shell, an empty environment, the output bounded, a timeout.
+    fn run(&self, args: &[&str]) -> io::Result<String> {
         let mut child = Command::new(&self.program)
-            .arg("list-units")
-            .args(filter)
-            .args(["--plain", "--no-legend", "--no-pager", "--full"])
+            .args(args)
             .env_clear()
             .env("LC_ALL", "C")
             .env("SYSTEMD_COLORS", "0")
@@ -488,6 +517,35 @@ mod tests {
                 "{distro}"
             );
             assert_eq!(parse_units(&text, 2).len(), 2, "bounded");
+        }
+    }
+
+    // M5-10: only valid unit names, after `--`.
+    #[test]
+    fn shows_only_valid_units() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let program = dir.path().join("usr/bin/systemctl");
+        std::fs::create_dir_all(program.parent().unwrap()).unwrap();
+        std::fs::write(&program, "#!/bin/sh\nprintf '%s\\n' \"$*\"\n").unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let systemctl = Systemctl::find(dir.path()).unwrap();
+        let units = [
+            "nginx.service".to_owned(),
+            "app@web\\x2d01.service".to_owned(),
+        ];
+        assert_eq!(
+            systemctl.show(&units).unwrap(),
+            "show --no-pager --property=Id,LoadState,ActiveState,SubState,NRestarts -- nginx.service app@web\\x2d01.service\n"
+        );
+        for bad in [
+            vec![],
+            vec!["--now.service".to_owned()],
+            vec!["a b.service".to_owned()],
+            vec!["nginx".to_owned()],
+            (0..=MAX_UNITS).map(|i| format!("u{i}.service")).collect(),
+        ] {
+            assert!(systemctl.show(&bad).is_err(), "{bad:?}");
         }
     }
 

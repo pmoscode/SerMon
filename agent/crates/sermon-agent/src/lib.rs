@@ -264,6 +264,8 @@ fn module_runtime(
     .with_host(sermon_modules::Host {
         root: ProcRoot::new(&config.host_root),
         helper: Some(Arc::new(helper::ModuleHelper::new(helper::SOCKET))),
+        systemd: Systemctl::on_host(&config.host_root)
+            .map(|s| -> Arc<dyn sermon_modules::Systemd> { Arc::new(modules::Systemd(s)) }),
     });
     (runtime, discover(config, outbox, clock))
 }

@@ -98,6 +98,16 @@ fn cut(mut text: String, max: usize) -> String {
     text
 }
 
+/// systemd for the modules (M5-10): the collector's `systemctl`, fixed arguments.
+#[derive(Debug)]
+pub struct Systemd(pub sermon_collectors::systemd::Systemctl);
+
+impl sermon_modules::Systemd for Systemd {
+    fn show(&self, units: &[String]) -> Result<String, String> {
+        self.0.show(units).map_err(|e| format!("systemctl: {e}"))
+    }
+}
+
 /// Runs the modules of the configuration until `shutdown`: a change applies at once, the state
 /// goes out again every [`REPORT_EVERY`].
 pub async fn run(

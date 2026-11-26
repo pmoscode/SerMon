@@ -8,6 +8,7 @@
 use libfuzzer_sys::fuzz_target;
 use sermon_modules::discovery::{self, MAX_FACTS};
 use sermon_modules::http::Url;
+use sermon_modules::systemd_units;
 use sermon_modules::x509;
 
 fuzz_target!(|data: &[u8]| {
@@ -15,10 +16,19 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
     let text = String::from_utf8_lossy(rest);
-    match pick % 4 {
+    match pick % 5 {
         0 => {
             let listeners = discovery::parse_tcp(&text);
             assert!(listeners.len() <= MAX_FACTS);
+        }
+        4 => {
+            let units = systemd_units::parse_show(&text);
+            assert!(units.len() <= systemd_units::MAX_UNITS);
+            for u in &units {
+                for v in [&u.id, &u.load, &u.active, &u.sub] {
+                    assert!(v.len() <= 255 && !v.chars().any(char::is_control));
+                }
+            }
         }
         2 => {
             if let Some(v) = x509::validity(rest) {

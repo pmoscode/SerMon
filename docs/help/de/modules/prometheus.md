@@ -20,7 +20,10 @@ Antwort, höchstens drei Weiterleitungen innerhalb der erlaubten Ziele.
 - **Endpunkte:** bis zu 8 URLs.
 - **Metriken:** Namen, die übernommen werden, `prefix*` für alle mit einem Anfang; leer heißt alle bis zur Grenze.
   Besser eng fassen: Exporter wie der node exporter liefern Tausende Serien.
-- **Serien je Endpunkt:** ab Werk 50, alle Endpunkte zusammen höchstens 250.
+- **Serien je Endpunkt:** ab Werk 50, alle Endpunkte zusammen höchstens 250. Die Plätze sind fest: Eine Serie, die
+  einmal einen Platz hat, behält ihn; eine neue bekommt erst einen, wenn eine bekannte eine Stunde lang fehlt. So füllt
+  ein Exporter, dessen Labels sich mit jeder Anfrage ändern (Pfade, User-IDs), nicht das Serien-Budget des Nodes; die
+  übrigen zählt `sermon_prometheus_dropped_series`.
 - **Bearer-Token:** geht als `Authorization: Bearer …` nur an die eingestellten Endpunkte, nie nach einer
   Weiterleitung an einen anderen Host; es liegt beim Agent nur im Speicher (M5-05). Über `http://` geht es im
   Klartext an jeden, der dort lauscht – bei gestopptem Exporter auch an einen anderen lokalen Benutzer, der den Port

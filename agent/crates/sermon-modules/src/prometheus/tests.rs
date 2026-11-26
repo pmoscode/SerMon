@@ -255,7 +255,7 @@ async fn bounds_the_series() {
 fn drops_labels_beyond_the_bounds() {
     let long = "v".repeat(MAX_LABEL);
     let page = expo::parse(&format!("ok 1\nlong{{a=\"{long}\"}} 2\nok 3\n"));
-    let (kept, dropped) = select(page, &[], 10);
+    let (kept, dropped) = select(page, &[], 10, &mut Known::default(), Monotonic::default());
     assert_eq!(
         kept.len(),
         1,
@@ -367,4 +367,67 @@ async fn no_rate_across_an_outage() {
         get(&again, "sermon_prometheus_rate", "jobs_total", ""),
         None
     );
+}
+
+// M5-33: an exporter whose labels follow outside input (a request path, a user ID) must not
+// fill the node's series budget run after run: the series of an endpoint are a stable set of at
+// most `max_series`; new ones get a place only when a known one was absent for an hour.
+#[test]
+fn the_series_of_an_endpoint_stay_a_stable_set() {
+    let at = |s: u64| Monotonic::from_origin(Duration::from_secs(s));
+    let mut known = Known::default();
+    let page = |text: &str| expo::parse(text);
+    let names = |kept: &[(String, String, f64, bool)]| {
+        kept.iter()
+            .map(|(_, l, _, _)| l.clone())
+            .collect::<Vec<_>>()
+    };
+    let (kept, dropped) = select(
+        page("r{p=\"/a\"} 1\nr{p=\"/b\"} 1\nr{p=\"/c\"} 1\n"),
+        &[],
+        2,
+        &mut known,
+        at(0),
+    );
+    assert_eq!(names(&kept), [r#"p="/a""#, r#"p="/b""#]);
+    assert_eq!(dropped, 1);
+    // New paths every run: none of them takes a place while /a and /b are known.
+    for (i, path) in ["/x", "/y", "/z"].iter().enumerate() {
+        let (kept, dropped) = select(
+            page(&format!("r{{p=\"{path}\"}} 1\nr{{p=\"/a\"}} 1\n")),
+            &[],
+            2,
+            &mut known,
+            at(10 * (u64::try_from(i).unwrap() + 1)),
+        );
+        assert_eq!(names(&kept), [r#"p="/a""#], "{path}");
+        assert_eq!(dropped, 1, "{path}");
+    }
+    assert_eq!(
+        known.get(&("r".to_owned(), r#"p="/a""#.to_owned())),
+        Some(&at(30)),
+        "seen last at 30 s"
+    );
+    // /b has been absent for an hour: its place is free again.
+    let (kept, _) = select(
+        page("r{p=\"/new\"} 1\nr{p=\"/a\"} 1\n"),
+        &[],
+        2,
+        &mut known,
+        at(3600 + 1),
+    );
+    assert_eq!(names(&kept), [r#"p="/new""#, r#"p="/a""#]);
+    let (kept, dropped) = select(
+        page("r{p=\"/b\"} 1\nr{p=\"/a\"} 1\nr{p=\"/new\"} 1\n"),
+        &[],
+        2,
+        &mut known,
+        at(3602),
+    );
+    assert_eq!(
+        names(&kept),
+        [r#"p="/a""#, r#"p="/new""#],
+        "/b came too late"
+    );
+    assert_eq!(dropped, 1);
 }

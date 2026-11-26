@@ -105,6 +105,7 @@ impl Module for Prometheus {
             max_series,
             timeout,
             last: BTreeMap::new(),
+            known: BTreeMap::new(),
         }))
     }
 }
@@ -118,12 +119,25 @@ fn wanted(filter: &[String], name: &str) -> bool {
         })
 }
 
-/// The series of a page within the limits: kept, and how many were left out.
+/// How long a series of an endpoint keeps its place while it is absent.
+const KEEP_FOR: Duration = Duration::from_secs(3600);
+
+/// The series an endpoint has a place for (name and labels), with when each was last seen.
+type Known = BTreeMap<(String, String), Monotonic>;
+
+/// The series of a page within the limits: kept, and how many were left out. The places of an
+/// endpoint are a stable set (`known`, at most `max`, M5-33): a known series keeps its place, a
+/// new one gets one only while places are free, and a place frees up after [`KEEP_FOR`] without
+/// the series. So an exporter whose labels follow outside input (request paths, user IDs) can't
+/// fill the node's series budget on the server run after run.
 fn select(
     page: expo::Page,
     filter: &[String],
     max: usize,
+    known: &mut Known,
+    now: Monotonic,
 ) -> (Vec<(String, String, f64, bool)>, usize) {
+    known.retain(|_, seen| now.saturating_duration_since(*seen) <= KEEP_FOR);
     let mut kept = Vec::new();
     let mut dropped = page.broken;
     for s in page.series {
@@ -132,14 +146,15 @@ fn select(
         }
         let series = expo::canonical(&s.labels);
         let fits = s.name.len() <= MAX_LABEL && series.len() <= MAX_LABEL;
-        if !fits
-            || kept.len() >= max
-            || kept.iter().any(|(n, l, _, _)| *n == s.name && *l == series)
-        {
+        let key = (s.name, series);
+        let duplicate = kept.iter().any(|(n, l, _, _)| *n == key.0 && *l == key.1);
+        let place = known.contains_key(&key) || known.len() < max;
+        if !fits || duplicate || !place {
             dropped += 1;
             continue;
         }
-        kept.push((s.name, series, s.value, s.counter));
+        known.insert(key.clone(), now);
+        kept.push((key.0, key.1, s.value, s.counter));
     }
     (kept, dropped)
 }
@@ -152,6 +167,8 @@ struct Scraper {
     timeout: Duration,
     /// The last value of every counter taken, by endpoint, name and labels.
     last: BTreeMap<(usize, String, String), (f64, Monotonic)>,
+    /// The places of the series, by endpoint.
+    known: BTreeMap<usize, Known>,
 }
 
 impl Instance for Scraper {
@@ -195,7 +212,8 @@ impl Instance for Scraper {
                         "{target}: not the Prometheus text format"
                     )));
                 }
-                let (kept, dropped) = select(page, &self.filter, self.max_series);
+                let known = self.known.entry(i).or_default();
+                let (kept, dropped) = select(page, &self.filter, self.max_series, known, now);
                 let count = |n: usize| i64::try_from(n).unwrap_or(i64::MAX);
                 samples
                     .push(Sample::int("sermon_prometheus_up", 1).label("target", target.clone()));

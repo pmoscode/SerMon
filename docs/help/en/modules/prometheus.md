@@ -20,7 +20,10 @@ an answer, at most three redirects within the allowed targets.
 - **Endpoints:** up to 8 URLs.
 - **Metrics:** names to take, `prefix*` for all starting so; empty means all up to the limit. Better keep it narrow:
   exporters like the node exporter deliver thousands of series.
-- **Series per endpoint:** by default 50, all endpoints together at most 250.
+- **Series per endpoint:** by default 50, all endpoints together at most 250. The places are fixed: a series that has
+  a place keeps it; a new one gets one only once a known one has been absent for an hour. So an exporter whose labels
+  change with every request (paths, user IDs) can't fill the node's series budget; the others count in
+  `sermon_prometheus_dropped_series`.
 - **Bearer token:** sent as `Authorization: Bearer …` to the configured endpoints only, never after a redirect to
   another host; the agent keeps it in memory only (M5-05). Over `http://` it goes in clear text to whoever listens
   there – while the exporter is stopped also to another local user who takes the port. So with a token use

@@ -36,6 +36,7 @@ var stepUpRequired = map[string]string{
 	"/sermon.web.v1.NodeService/AllowNodeTakeover":                    "identities of nodes",
 	"/sermon.web.v1.NodeService/SetNodeTags":                          "tags select alert rules and routing",
 	"/sermon.web.v1.NodeService/DeactivateNode":                       "revokes a node (M5-29)",
+	"/sermon.web.v1.AccessService/SetRetention":                       "deletes logs and events earlier (M5-30)",
 	"/sermon.web.v1.NodeService/DeleteNode":                           "deletes a node and its data (M5-29)",
 	"/sermon.web.v1.NodeService/CancelNodeDeletion":                   "keeps data meant to be deleted (M5-29)",
 	"/sermon.web.v1.UpdatePolicyService/SetUpdatePolicy":              "installs updates and reboots nodes on its own (M4-10)",
@@ -123,6 +124,10 @@ var stepUpOwnCases = map[string]func(ctx context.Context, e stepUpEnv) error{
 	// The tenant-isolation case only checks (dry run); storing needs the step-up.
 	"/sermon.web.v1.AlertRuleService/ImportAlertRules": func(ctx context.Context, e stepUpEnv) error {
 		_, err := e.rules.ImportAlertRules(ctx, connect.NewRequest(&webv1.ImportAlertRulesRequest{Yaml: "apiVersion: sermon/v1\n"}))
+		return err
+	},
+	"/sermon.web.v1.AccessService/SetRetention": func(ctx context.Context, e stepUpEnv) error {
+		_, err := e.access.SetRetention(ctx, connect.NewRequest(&webv1.SetRetentionRequest{LogRetentionDays: 1}))
 		return err
 	},
 	"/sermon.web.v1.LogSettingsService/SetRedactionRules": func(ctx context.Context, e stepUpEnv) error {

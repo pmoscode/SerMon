@@ -52,6 +52,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/oidcmapping"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
+	"github.com/pmoscode/SerMon/server/internal/app/orgretention"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/rules"
@@ -233,7 +234,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Passkeys: webapi.NewPasskeyHandler(passkeys, slog.New(slog.DiscardHandler)),
 		System:   webapi.NewSystemHandler("test"),
 		Access: webapi.NewAccessHandler(access.NewService(postgres.NewAccessStore(pg), authz.NewPolicy(), time.Now, access.NewID),
-			invites, slog.New(slog.DiscardHandler)),
+			invites, slog.New(slog.DiscardHandler)).WithRetention(orgretention.NewService(postgres.NewRetentionStore(pg), authz.NewPolicy(), time.Now)),
 		Invitation: webapi.NewInvitationHandler(invites, sessions, ratelimit.New(1000, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
 		Organization: webapi.NewOrganizationHandler(
 			organization.NewService(postgres.NewOrganizationStore(pg), authz.NewPolicy(), time.Now, access.NewID, orgOptions...), slog.New(slog.DiscardHandler)).

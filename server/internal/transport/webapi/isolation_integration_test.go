@@ -60,7 +60,10 @@ func seedAccessFixtures(t *testing.T) {
 	seedLogin(t, kaiID, "kai@example.org", orgAlpha, orgBeta)
 	ownerSQL(t,
 		"DELETE FROM user_totp WHERE user_id IN ('"+annID+"', '"+miaID+"', '"+beaID+"', '"+kaiID+"')",
-		"UPDATE organizations SET require_second_factor = false WHERE id IN ('"+orgAlpha+"', '"+orgBeta+"')")
+		"UPDATE organizations SET require_second_factor = false WHERE id IN ('"+orgAlpha+"', '"+orgBeta+"')",
+		// M5-30: Alpha keeps its events 77 days, Beta the instance's default.
+		"UPDATE organizations SET event_retention_days = 77, log_retention_days = NULL WHERE id = '"+orgAlpha+"'",
+		"UPDATE organizations SET event_retention_days = NULL, log_retention_days = NULL WHERE id = '"+orgBeta+"'")
 	ownerSQL(t,
 		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
 		"INSERT INTO node_groups (id, org_id, name) VALUES ('"+groupAl+"', '"+orgAlpha+"', 'alpha-web') ON CONFLICT DO NOTHING",

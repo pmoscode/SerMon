@@ -143,7 +143,7 @@ describe('loadHelp and lintHelp', () => {
 	});
 });
 
-// M5-29: every page loads only the titles, the popover the summaries, the panel the full texts.
+// M5-29: every page loads only the titles, popovers and the panel the full texts.
 describe('helpPlugin', () => {
 	const plugin = helpPlugin({ root: fileURLToPath(new URL('../../docs/help', import.meta.url)) });
 	const ctx = {
@@ -159,19 +159,18 @@ describe('helpPlugin', () => {
 		return JSON.parse(code.replace(/^export default /, '').replace(/;$/, ''));
 	};
 
-	it('serves titles, summaries and full texts', () => {
+	it('serves titles and full texts', () => {
 		const titles = load('virtual:sermon-help/en/titles');
-		const summaries = load('virtual:sermon-help/en/summary');
 		const full = load('virtual:sermon-help/en');
 		expect(titles['pages/fleet']).toEqual({ title: 'Fleet', summary: [], body: [], more: true });
-		expect(summaries['pages/fleet'].summary.length).toBeGreaterThan(0);
-		expect(summaries['pages/fleet'].body).toEqual([]);
+		expect(full['pages/fleet'].summary.length).toBeGreaterThan(0);
 		expect(full['pages/fleet'].body.length).toBeGreaterThan(0);
 		expect(Object.keys(titles)).toEqual(Object.keys(full));
-		expect(JSON.stringify(titles).length).toBeLessThan(JSON.stringify(summaries).length / 2);
+		expect(JSON.stringify(titles).length).toBeLessThan(JSON.stringify(full).length / 5);
 	});
 
 	it('knows no other parts', () => {
+		expect(plugin.resolveId('virtual:sermon-help/en/summary')).toBeUndefined();
 		expect(plugin.resolveId('virtual:sermon-help/en/other')).toBeUndefined();
 		expect(plugin.resolveId('virtual:sermon-help/xx/titles')).toBeUndefined();
 	});

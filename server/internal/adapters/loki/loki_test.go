@@ -337,6 +337,27 @@ func TestEraser_EraseNodeAsksForTheNodesStreams(t *testing.T) {
 	}
 }
 
+// M5-30: an organization's own retention asks for the deletion of its lines before it, from a day
+// before the instance's retention, in its tenant only.
+func TestEraser_EraseBeforeAsksForTheOrganizationsOldLines(t *testing.T) {
+	rec := &recorded{}
+	e := loki.NewEraser(client(t, rec.handler(http.StatusNoContent, "")))
+	before := time.Now().Add(-72 * time.Hour)
+	if err := e.EraseBefore(context.Background(), org, before); err != nil {
+		t.Fatal(err)
+	}
+	req := rec.requests[0]
+	params := req.URL.Query()
+	start, _ := strconv.ParseInt(params.Get("start"), 10, 64)
+	end, _ := strconv.ParseInt(params.Get("end"), 10, 64)
+	if req.Header.Get("X-Scope-OrgID") != org.String() || params.Get("query") != `{node_id=~".+"}` || end != before.Unix() {
+		t.Errorf("request = %s (tenant %q)", req.URL, req.Header.Get("X-Scope-OrgID"))
+	}
+	if want := time.Now().Add(-15 * 24 * time.Hour).Unix(); start < want-5 || start > want+5 {
+		t.Errorf("start = %d, want 15 days back (%d)", start, want)
+	}
+}
+
 // M3-29: an answer beyond the bound is ErrTooLarge (the caller asks for fewer lines), not a
 // broken answer.
 func TestQuery_AnAnswerBeyondTheBoundIsTooLarge(t *testing.T) {

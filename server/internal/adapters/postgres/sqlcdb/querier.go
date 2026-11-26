@@ -161,6 +161,7 @@ type Querier interface {
 	// Pending commands at their expiry, sent ones without an answer only before sent_before – the
 	// expiry plus command.SentGrace (M4-31): the agent's answer may still be on its way.
 	ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommandsParams) error
+	ExpireOrganizationEvents(ctx context.Context, arg ExpireOrganizationEventsParams) (int64, error)
 	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
 	// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.
 	FailedLoginBuckets(ctx context.Context, arg FailedLoginBucketsParams) ([]FailedLoginBucketsRow, error)
@@ -188,6 +189,8 @@ type Querier interface {
 	GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) (GetNodeUpdatesRow, error)
 	GetNotificationChannel(ctx context.Context, id uuid.UUID) (GetNotificationChannelRow, error)
 	GetOrganization(ctx context.Context, id uuid.UUID) (GetOrganizationRow, error)
+	// Retention per organization (M5-30). Get, set and mark run inside InTenant.
+	GetRetention(ctx context.Context) (GetRetentionRow, error)
 	GetRoleBinding(ctx context.Context, id uuid.UUID) (GetRoleBindingRow, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	// Second factors (instance-level, per user; M1-03).
@@ -360,6 +363,7 @@ type Querier interface {
 	// Serializes adding passkeys of a user (the limit holds under parallel registrations).
 	LockUserPasskeys(ctx context.Context, userID uuid.UUID) error
 	MarkCancelsSent(ctx context.Context, arg MarkCancelsSentParams) error
+	MarkLogsErased(ctx context.Context, at *time.Time) error
 	// A refresh has no result: sent is done.
 	MarkNodeCommandsSent(ctx context.Context, arg MarkNodeCommandsSentParams) error
 	// Moves seen_at forward to the newest data time of a write (never back).
@@ -406,6 +410,8 @@ type Querier interface {
 	OrganizationQuotasForUpdate(ctx context.Context) (OrganizationQuotasForUpdateRow, error)
 	// In the tenant transaction of the organization (RLS).
 	OrganizationRequiresSecondFactor(ctx context.Context) (bool, error)
+	// Unset is 0; never erased is the epoch.
+	OrganizationRetentions(ctx context.Context) ([]OrganizationRetentionsRow, error)
 	// Lock and deletion (M2-33). All in the organization's tenant transaction.
 	OrganizationState(ctx context.Context) (OrganizationStateRow, error)
 	// What the organization of the tenant transaction holds, for the superadmin's estimate (M2-32).
@@ -468,6 +474,7 @@ type Querier interface {
 	SetOrganizationRequiresSecondFactor(ctx context.Context, required bool) (int64, error)
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetRedactionRules(ctx context.Context, rules []byte) error
+	SetRetention(ctx context.Context, arg SetRetentionParams) (int64, error)
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
 	SetUpdatesPaused(ctx context.Context, arg SetUpdatesPausedParams) error
 	SetViewersSeeLogs(ctx context.Context, see bool) error

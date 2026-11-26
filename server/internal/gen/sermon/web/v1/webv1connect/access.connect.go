@@ -71,6 +71,12 @@ const (
 	// AccessServiceGetOrganizationQuotasProcedure is the fully-qualified name of the AccessService's
 	// GetOrganizationQuotas RPC.
 	AccessServiceGetOrganizationQuotasProcedure = "/sermon.web.v1.AccessService/GetOrganizationQuotas"
+	// AccessServiceGetRetentionProcedure is the fully-qualified name of the AccessService's
+	// GetRetention RPC.
+	AccessServiceGetRetentionProcedure = "/sermon.web.v1.AccessService/GetRetention"
+	// AccessServiceSetRetentionProcedure is the fully-qualified name of the AccessService's
+	// SetRetention RPC.
+	AccessServiceSetRetentionProcedure = "/sermon.web.v1.AccessService/SetRetention"
 )
 
 // AccessServiceClient is a client for the sermon.web.v1.AccessService service.
@@ -109,6 +115,13 @@ type AccessServiceClient interface {
 	// GetOrganizationQuotas returns the quotas the superadmin set and how much of them is used
 	// (org admin, M2-32).
 	GetOrganizationQuotas(context.Context, *connect.Request[v1.GetOrganizationQuotasRequest]) (*connect.Response[v1.GetOrganizationQuotasResponse], error)
+	// GetRetention returns how long the organization keeps its logs and security events, the
+	// instance's limits and the organization's cap (org admin, M5-30).
+	GetRetention(context.Context, *connect.Request[v1.GetRetentionRequest]) (*connect.Response[v1.GetRetentionResponse], error)
+	// SetRetention changes it within the limits and the cap (INVALID_ARGUMENT otherwise); org admin
+	// with a recent re-authentication. Older data goes with the next run of the job: events within
+	// an hour, logs within a day.
+	SetRetention(context.Context, *connect.Request[v1.SetRetentionRequest]) (*connect.Response[v1.SetRetentionResponse], error)
 }
 
 // NewAccessServiceClient constructs a client for the sermon.web.v1.AccessService service. By
@@ -205,6 +218,19 @@ func NewAccessServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 			connect.WithClientOptions(opts...),
 		),
+		getRetention: connect.NewClient[v1.GetRetentionRequest, v1.GetRetentionResponse](
+			httpClient,
+			baseURL+AccessServiceGetRetentionProcedure,
+			connect.WithSchema(accessServiceMethods.ByName("GetRetention")),
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
+		),
+		setRetention: connect.NewClient[v1.SetRetentionRequest, v1.SetRetentionResponse](
+			httpClient,
+			baseURL+AccessServiceSetRetentionProcedure,
+			connect.WithSchema(accessServiceMethods.ByName("SetRetention")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -223,6 +249,8 @@ type accessServiceClient struct {
 	revokeInvitation      *connect.Client[v1.RevokeInvitationRequest, v1.RevokeInvitationResponse]
 	listAuditLog          *connect.Client[v1.ListAuditLogRequest, v1.ListAuditLogResponse]
 	getOrganizationQuotas *connect.Client[v1.GetOrganizationQuotasRequest, v1.GetOrganizationQuotasResponse]
+	getRetention          *connect.Client[v1.GetRetentionRequest, v1.GetRetentionResponse]
+	setRetention          *connect.Client[v1.SetRetentionRequest, v1.SetRetentionResponse]
 }
 
 // ListNodeGroups calls sermon.web.v1.AccessService.ListNodeGroups.
@@ -290,6 +318,16 @@ func (c *accessServiceClient) GetOrganizationQuotas(ctx context.Context, req *co
 	return c.getOrganizationQuotas.CallUnary(ctx, req)
 }
 
+// GetRetention calls sermon.web.v1.AccessService.GetRetention.
+func (c *accessServiceClient) GetRetention(ctx context.Context, req *connect.Request[v1.GetRetentionRequest]) (*connect.Response[v1.GetRetentionResponse], error) {
+	return c.getRetention.CallUnary(ctx, req)
+}
+
+// SetRetention calls sermon.web.v1.AccessService.SetRetention.
+func (c *accessServiceClient) SetRetention(ctx context.Context, req *connect.Request[v1.SetRetentionRequest]) (*connect.Response[v1.SetRetentionResponse], error) {
+	return c.setRetention.CallUnary(ctx, req)
+}
+
 // AccessServiceHandler is an implementation of the sermon.web.v1.AccessService service.
 type AccessServiceHandler interface {
 	// ListNodeGroups returns the node groups the caller can see (at least viewer).
@@ -326,6 +364,13 @@ type AccessServiceHandler interface {
 	// GetOrganizationQuotas returns the quotas the superadmin set and how much of them is used
 	// (org admin, M2-32).
 	GetOrganizationQuotas(context.Context, *connect.Request[v1.GetOrganizationQuotasRequest]) (*connect.Response[v1.GetOrganizationQuotasResponse], error)
+	// GetRetention returns how long the organization keeps its logs and security events, the
+	// instance's limits and the organization's cap (org admin, M5-30).
+	GetRetention(context.Context, *connect.Request[v1.GetRetentionRequest]) (*connect.Response[v1.GetRetentionResponse], error)
+	// SetRetention changes it within the limits and the cap (INVALID_ARGUMENT otherwise); org admin
+	// with a recent re-authentication. Older data goes with the next run of the job: events within
+	// an hour, logs within a day.
+	SetRetention(context.Context, *connect.Request[v1.SetRetentionRequest]) (*connect.Response[v1.SetRetentionResponse], error)
 }
 
 // NewAccessServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -418,6 +463,19 @@ func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect.HandlerOp
 		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 		connect.WithHandlerOptions(opts...),
 	)
+	accessServiceGetRetentionHandler := connect.NewUnaryHandler(
+		AccessServiceGetRetentionProcedure,
+		svc.GetRetention,
+		connect.WithSchema(accessServiceMethods.ByName("GetRetention")),
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
+	)
+	accessServiceSetRetentionHandler := connect.NewUnaryHandler(
+		AccessServiceSetRetentionProcedure,
+		svc.SetRetention,
+		connect.WithSchema(accessServiceMethods.ByName("SetRetention")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.AccessService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AccessServiceListNodeGroupsProcedure:
@@ -446,6 +504,10 @@ func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect.HandlerOp
 			accessServiceListAuditLogHandler.ServeHTTP(w, r)
 		case AccessServiceGetOrganizationQuotasProcedure:
 			accessServiceGetOrganizationQuotasHandler.ServeHTTP(w, r)
+		case AccessServiceGetRetentionProcedure:
+			accessServiceGetRetentionHandler.ServeHTTP(w, r)
+		case AccessServiceSetRetentionProcedure:
+			accessServiceSetRetentionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -505,4 +567,12 @@ func (UnimplementedAccessServiceHandler) ListAuditLog(context.Context, *connect.
 
 func (UnimplementedAccessServiceHandler) GetOrganizationQuotas(context.Context, *connect.Request[v1.GetOrganizationQuotasRequest]) (*connect.Response[v1.GetOrganizationQuotasResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.GetOrganizationQuotas is not implemented"))
+}
+
+func (UnimplementedAccessServiceHandler) GetRetention(context.Context, *connect.Request[v1.GetRetentionRequest]) (*connect.Response[v1.GetRetentionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.GetRetention is not implemented"))
+}
+
+func (UnimplementedAccessServiceHandler) SetRetention(context.Context, *connect.Request[v1.SetRetentionRequest]) (*connect.Response[v1.SetRetentionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.AccessService.SetRetention is not implemented"))
 }

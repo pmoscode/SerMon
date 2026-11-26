@@ -53,6 +53,7 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.LogSettingsService/TestRedaction":              "no stored data, no IDs: redacts the request's own sample",
 	"/sermon.web.v1.ModuleService/ListModules":                     "the static module catalog of the agent's build, no tenant data (requires a role)",
 	"/sermon.web.v1.UpdatePolicyService/SetUpdatesPaused":          "only the caller's own organization, no IDs (update_integration_test.go)",
+	"/sermon.web.v1.AccessService/SetRetention":                    "only the caller's own organization, no IDs (retention_integration_test.go)",
 }
 
 // TestTenantIsolation_EveryProcedureIsCovered fails when a new RPC is added without a

@@ -5793,7 +5793,28 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
   Tenant-Isolations- und Step-up-Tabellen.
 - **Abhängig von:** –
 
-#### ☐ M5-30 – Retention pro Org · S · M
+#### ☑ M5-30 – Retention pro Org · S · M
+> Erledigt ([ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md), Nachtrag M5-30; KONZEPT §4.5 und §7;
+> Threat Model T113):
+> - **Einstellung:** `AccessService.GetRetention`/`SetRetention` für Admins aller Gruppen (`manage_retention`), Setzen
+>   mit Step-up und Audit (`org.retention_set` mit vorheriger Frist); Logs 1 bis 14 Tage, Security-Events mit
+>   Alert-Historie 7 bis 365 Tage, leer heißt wie die Instanz; höchstens `retention_cap_days` des Kontingents (eine
+>   gesenkte Obergrenze löscht nichts). Reiter „Aufbewahrung“ im Admin-Bereich, Hilfe `concepts/retention`.
+> - **Löschen:** `orgretention.Service.Run` stündlich: Events und Alert-Historie per `security_events_expire_org`
+>   (Definer, nur im Tenant, nie die letzten 7 Tage nach der Uhr der Datenbank); Logs einmal am Tag je Org über die
+>   Delete-API von Loki (`loki.Eraser.EraseBefore`, vom Anfang der Instanz-Retention bis zur Frist, `logs_erased_at`),
+>   bei einem Ausfall im nächsten Lauf erneut.
+> - **Loki:** Retention pro Tenant gibt es nur über Runtime-Overrides als Datei neben Loki; dafür müsste der Server
+>   Lokis Konfiguration über ein gemeinsames Volume schreiben. Verworfen. **Grenzen:** Logs bleiben bis zu einem Tag
+>   (plus 10 min Wartefrist) länger sichtbar, je Org und Tag bleibt eine Delete-Anfrage in Loki; Metriken, Audit-Log,
+>   Benachrichtigungen und Login-Quellen folgen der Instanz.
+> - **Budget:** Die Popover der ⓘ laden jetzt die vollen Texte statt eigener Zusammenfassungen (−14 KiB im ganzen
+>   Bundle, `check:size` wieder unter 520 KiB auf diesem Stand).
+> - Tests: Domäne (Grenzen, Obergrenze), Use-Case (Rechte, Step-up, Audit, Job: Frist je Org, nicht für Orgs mit
+>   Standard, nur Logs ohne Events, einmal am Tag, Wiederholung nach Ausfall), gegen PostgreSQL (nach der Frist
+>   gelöscht, jüngere bleiben, nie die letzten 7 Tage, andere Org unverändert, Checks der Tabelle), gegen Loki (Löschung
+>   nur im Tenant der Org, Ende = Frist), Web-API mit Tenant-Isolations- und Step-up-Tabellen, Komponenten, E2E mit axe;
+>   Gegenproben 18/19 (übrig: ohne `org_id`-Filter trennt die RLS weiter, äquivalent).
 - **Ziel:** offen aus M3 (M3-10): Aufbewahrung von Logs und Events je Org einstellbar innerhalb der Grenzen der
   Instanz.
 - **Tests zuerst:** Löschung nach der Frist der Org, nicht früher, nicht für andere Orgs.

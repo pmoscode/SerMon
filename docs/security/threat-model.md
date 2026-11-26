@@ -121,6 +121,7 @@ flowchart LR
 
 | # | STRIDE | Bedrohung | Gegenmaßnahme | Aufgabe | Stand |
 |---|---|---|---|---|---|
+| T113 | R/I | Ein übernommenes Admin-Konto verkürzt die Aufbewahrung, um Spuren eines Angriffs (Logins, sudo, Logs) zu verwischen, oder ein Fehler löscht Daten anderer Orgs | Nur Admins aller Gruppen mit Step-up, Eintrag im Audit-Log (mit vorheriger Frist); Events nie unter 7 Tage, auch bei falscher Uhr des Servers (Uhr der Datenbank); Löschen per Definer nur im Tenant der Org (RLS und `org_id`), Loki-Löschung nur im Tenant der Org; Checks der Tabelle begrenzen die Werte (ADR 0029, Nachtrag M5-30) | M5-30 | ✓ (Logs lassen sich auf einen Tag verkürzen) |
 | T13 | S | Brute-Force auf Passwörter und Codes, auch mit parallelen Anfragen | Argon2id, Kontosperre mit Backoff, jeder Versuch wird vor der Prüfung atomar reserviert (Compare-and-swap), IP-Rate-Limit, einheitliche Fehlermeldung | M1-02, M1-35 | ✓ |
 | T14 | S | Phishing/gestohlenes Passwort | TOTP mit Recovery-Codes, Org-Pflicht zur 2FA; Code-Versuche zählen zur selben Sperre | M1-03 | ✓ |
 | T15 | S | Phishing-resistente Anmeldung | Passkeys/WebAuthn an die RP-ID der Instanz gebunden (M3-23, ADR 0034), OIDC mit PKCE (S256, M3-20, ADR 0033); in der UI Anmeldung, zweiter Faktor und Step-up mit Passkey (M3-24) | E3.6, E3.7 | ✓ |

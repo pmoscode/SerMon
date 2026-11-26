@@ -67,6 +67,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/oidcmapping"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
+	"github.com/pmoscode/SerMon/server/internal/app/orgretention"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/rules"
@@ -265,6 +266,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return fmt.Errorf("node lifecycle: %w", err)
 		}
 		servers = append(servers, nodeLife.Run)
+		// Retention per organization (M5-30): events within the hour, logs once a day in Loki.
+		retentionOptions := []orgretention.Option{orgretention.WithLogger(logger)}
+		if logStore != nil {
+			retentionOptions = append(retentionOptions, orgretention.WithLogs(loki.NewEraser(logStore)))
+		}
+		orgRetention := orgretention.NewService(postgres.NewRetentionStore(db), authz.NewPolicy(), time.Now, retentionOptions...)
+		servers = append(servers, orgRetention.Run)
 		// Configuration of the agents (M3-03, ADR 0030): changes reach the connected sessions.
 		agentConfigs := postgres.NewLogSettingsStore(db)
 		logSettings := logsettings.NewService(agentConfigs, authz.NewPolicy(), sessions, time.Now)
@@ -293,7 +301,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		servers = append(servers, releases.Run)
 		observing := observingServices{logSettings: logSettings, modules: moduleSettings, logQueries: logQueries, liveViews: liveViews, releases: agentReleases{releases}}
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, nodeLife, observing, registry, logger); err != nil {
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, dataServices{nodes: nodeLife, retention: orgRetention}, observing, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -543,9 +551,15 @@ func openGeoIP(ctx context.Context, cfg config.Config, logger *slog.Logger) (*ge
 	return db, nil
 }
 
+// dataServices delete the data of nodes and organizations (M5-29, M5-30).
+type dataServices struct {
+	nodes     *nodelife.Service
+	retention *orgretention.Service
+}
+
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
 	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
-	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, nodeLife *nodelife.Service, observing observingServices,
+	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, data dataServices, observing observingServices,
 	registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
@@ -613,8 +627,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: cfg.AllowedOrigins, TrustedProxies: cfg.TrustedProxies}, webapi.Handlers{
 		Auth:   authHandler,
 		System: webapi.NewSystemHandler(version),
-		Access: webapi.NewAccessHandler(access.NewService(accessStore, policy, time.Now, access.NewID), invites, logger),
-		Setup:  webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
+		Access: webapi.NewAccessHandler(access.NewService(accessStore, policy, time.Now, access.NewID), invites, logger).
+			WithRetention(data.retention),
+		Setup: webapi.NewSetupHandler(setupSvc, ratelimit.New(setupAttemptsPerWindow, setupWindow, time.Now), logger),
 		Invitation: webapi.NewInvitationHandler(invites, sessions,
 			ratelimit.New(invitationAttemptsPerWindow, invitationWindow, time.Now), logger),
 		Organization: webapi.NewOrganizationHandler(
@@ -623,7 +638,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
 		Node: webapi.NewNodeHandler(rotator, nodes, logger).WithTagger(fleet.NewTagger(postgres.NewFleetStore(db), policy, time.Now)).
-			WithLifecycle(nodeLife),
+			WithLifecycle(data.nodes),
 		AgentCA: webapi.NewAgentCAHandler(ca, logger),
 		InstanceAudit: webapi.NewInstanceAuditHandler(
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(db), policy), logger),

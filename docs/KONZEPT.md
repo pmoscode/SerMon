@@ -238,6 +238,11 @@ eine Fake-Implementierung für Tests.
 | Logs                                                                                | Loki (Multi-Tenant, Compactor-Retention)                     | 14 Tage                                          |
 | Zustellprotokoll der Benachrichtigungen (mit den Feldern der Alerts)                | PostgreSQL `notification_deliveries`     | 30 Tage                                          |
 
+**Retention pro Org** (M5-30, [ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md), Nachtrag M5-30): Admins einer Org verkürzen die Aufbewahrung ihrer
+**Logs** (1 bis 14 Tage) und ihrer **Security-Events samt Alert-Historie** (7 bis 365 Tage), höchstens bis zur
+Obergrenze ihres Kontingents; mit Step-up und Audit. Events löscht der Server stündlich, für Logs trägt er einmal am Tag
+eine Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Log folgen der Instanz.
+
 **Metrik-Schema in TimescaleDB** (Details in [ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md)):
 
 - **Schmales Schema mit Integer-IDs:**
@@ -457,6 +462,7 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 | Enrollment-Token erzeugen                   |   –    |    ✓    |     ✓      |
 | Tags von Nodes setzen                       |   –    |    –     |     ✓      |
 | Nodes deaktivieren und löschen              |   –    |    –     |     ✓      |
+| Aufbewahrung von Logs und Events (Org)      |   –    |    –     |    ✓³      |
 | Regeln, Kanäle, Policies, Module bearbeiten |   –    |    –     |     ✓      |
 | User, Gruppen, Rollen verwalten             |   –    |    –     |     ✓      |
 | Audit-Log ansehen                           |   –    |    –     |     ✓      |
@@ -464,6 +470,7 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 
 ¹ Pro Org abschaltbar („Viewer dürfen keine Logs sehen“), weil Logs personenbezogene Daten enthalten.
 ² Die Widgets zeigen jedem Betrachter nur Daten seiner Gruppen ([ADR 0040](adr/0040-eigene-dashboards.md)).
+³ Nur Admins aller Gruppen (`*`), wie die übrigen Einstellungen der Org.
 
 Rollen werden **pro Node-Gruppe** vergeben (oder für `*` = alle Gruppen der Org). Die Prüfung erfolgt ausschließlich
 serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar als Tabelle).

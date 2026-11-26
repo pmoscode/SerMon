@@ -52,6 +52,7 @@ const (
 	ManageGroups
 	ViewAuditLog
 	ManageLogSettings // what agents send as logs and how they redact them (M3-03)
+	ManageRetention   // how long logs and security events are kept (M5-30)
 	ManageDashboards  // change and delete the shared dashboards of others (ADR 0040)
 
 	// Instance-level actions (superadmin).
@@ -102,6 +103,7 @@ var rules = map[Action]rule{
 	ManageGroups:           {name: "manage_groups", minimum: role.Admin, scope: orgWide},
 	ViewAuditLog:           {name: "view_audit_log", minimum: role.Admin, scope: orgWide},
 	ManageLogSettings:      {name: "manage_log_settings", minimum: role.Admin, scope: orgWide},
+	ManageRetention:        {name: "manage_retention", minimum: role.Admin, scope: orgWide},
 	UseDashboards:          {name: "use_dashboards", minimum: role.Viewer, scope: anyGroup},
 	ManageDashboards:       {name: "manage_dashboards", minimum: role.Admin, scope: orgWide},
 	ManageOrganizations:    {name: "manage_organizations", scope: instanceLevel},

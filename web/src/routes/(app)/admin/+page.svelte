@@ -79,6 +79,7 @@
 			<Tabs.Trigger value="logs">{m.admin_tab_logs()}</Tabs.Trigger>
 			<Tabs.Trigger value="modules">{m.admin_tab_modules()}</Tabs.Trigger>
 			<Tabs.Trigger value="quotas">{m.admin_tab_quotas()}</Tabs.Trigger>
+			<Tabs.Trigger value="retention">{m.admin_tab_retention()}</Tabs.Trigger>
 			<Tabs.Trigger value="audit">{m.admin_tab_audit()}</Tabs.Trigger>
 		</Tabs.List>
 		<Tabs.Content value="members" class="pt-4"
@@ -121,6 +122,16 @@
 			{/if}
 		</Tabs.Content>
 		<Tabs.Content value="quotas" class="pt-4"><QuotaPanel /></Tabs.Content>
+		<!-- Loaded on demand (budget, M5-30). -->
+		<Tabs.Content value="retention" class="pt-4">
+			{#if tab === 'retention'}
+				{#await import('#lib/components/admin/RetentionPanel.svelte')}
+					<p role="status" class="text-muted-foreground">{m.loading()}</p>
+				{:then { default: RetentionPanel }}
+					<RetentionPanel />
+				{/await}
+			{/if}
+		</Tabs.Content>
 		<Tabs.Content value="audit" class="pt-4"><AuditPanel {members} /></Tabs.Content>
 	</Tabs.Root>
 {/if}

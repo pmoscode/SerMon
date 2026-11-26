@@ -116,3 +116,24 @@ mit vielen Organisationen fehlen Kontingente. Die Fragen hat der Product Owner a
 - **Abweichung – Retention:** Die Obergrenze aus den Kontingenten gilt für Logs genauso wenig wie für Metriken, solange
   Organisationen ihre Retention nicht selbst einstellen. Alle haben die 14 Tage der Instanz. Später bietet Loki dafür
   `retention_period` pro Tenant (Runtime-Overrides).
+
+## Nachtrag M5-30: Retention pro Organisation
+
+- **Was:** Admins aller Gruppen (`manage_retention`, Step-up, Audit `org.retention_set`) verkürzen die Aufbewahrung der
+  **Logs** (1 bis 14 Tage) und der **Security-Events mit der Alert-Historie** (7 bis 365 Tage). Leer heißt: wie die
+  Instanz (14 Tage bzw. ein Jahr). Länger als die Instanz geht nicht: Loki löscht nach 14 Tagen alles, die Partitionen
+  der Events nach einem Jahr. Unter 7 Tage für Events nicht, weil Agents Events so lange puffern.
+- **Obergrenze:** `retention_cap_days` aus den Kontingenten begrenzt, was eingestellt wird. Wie bei allen Kontingenten
+  löscht eine gesenkte Obergrenze nichts: eine bestehende Einstellung und der Standard der Instanz bleiben.
+- **Events:** Der Server löscht stündlich je Org mit eigener Frist die älteren Zeilen (`security_events_expire_org`,
+  Definer; nie etwas der letzten 7 Tage, gemessen an der Uhr der Datenbank). Das Löschen der Monatspartitionen nach
+  einem Jahr bleibt.
+- **Logs:** Loki kennt Retention pro Tenant nur über eine Runtime-Konfiguration (`overrides: <tenant>: retention_period`),
+  die als Datei neben Loki liegt. Der Server müsste sie schreiben, mit einem gemeinsamen Volume zwischen Server und Loki,
+  einer Datei, die beim ersten Start fehlt, und mehreren Server-Instanzen, die dieselbe Datei schreiben. Deshalb
+  stattdessen die Delete-API von M3-10: einmal am Tag je Org eine Löschung `{node_id=~".+"}` vom Anfang der
+  Instanz-Retention bis zur Frist der Org (`logs_erased_at`); Loki führt sie nach seiner Wartefrist (10 min) aus und
+  markiert Anfragen außerhalb seiner Retention selbst als erledigt. **Grenze:** Logs bleiben bis zu einem Tag länger
+  sichtbar als eingestellt; die Delete-Anfragen bleiben in Lokis Speicher (eine je Org und Tag).
+- **Nicht pro Org:** Metriken (Continuous Aggregates mit Policies der Instanz), Audit-Log, Protokoll der
+  Benachrichtigungen (30 Tage) und bekannte Login-Quellen (ein Jahr).

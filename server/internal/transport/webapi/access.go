@@ -11,6 +11,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/orgretention"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/quota"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
@@ -21,9 +22,10 @@ import (
 
 // AccessHandler implements sermon.web.v1.AccessService (mounted behind the Authenticator).
 type AccessHandler struct {
-	svc     *access.Service
-	invites *invitation.Service
-	logger  *slog.Logger
+	svc       *access.Service
+	invites   *invitation.Service
+	retention *orgretention.Service
+	logger    *slog.Logger
 }
 
 var _ webv1connect.AccessServiceHandler = (*AccessHandler)(nil)

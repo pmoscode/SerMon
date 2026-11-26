@@ -28,10 +28,10 @@
 	});
 
 	async function toggle() {
-		// The summary comes with the first opening; the titles name the button (budget, M5-29).
+		// The texts come with the first opening; the titles name the button (budget, M5-29).
 		const [popup] = await Promise.all([
 			import('./HelpTipPopup.svelte'),
-			helpState.loadSummaries(localeState.current)
+			helpState.load(localeState.current)
 		]);
 		Popup ??= popup.default as Popup;
 		open = !open;

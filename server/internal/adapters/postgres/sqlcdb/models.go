@@ -485,6 +485,9 @@ type Organization struct {
 	LiveHideCmdline     bool
 	UpdatesPausedAt     *time.Time
 	UpdatesPausedBy     *uuid.UUID
+	LogRetentionDays    pgtype.Int2
+	EventRetentionDays  pgtype.Int2
+	LogsErasedAt        *time.Time
 }
 
 type PkiAuthority struct {

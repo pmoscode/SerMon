@@ -51,6 +51,7 @@ var matrix = []struct {
 	{authz.ManageGroups, role.Admin, true},
 	{authz.ViewAuditLog, role.Admin, true},
 	{authz.ManageLogSettings, role.Admin, true},
+	{authz.ManageRetention, role.Admin, true},
 	{authz.UseDashboards, role.Viewer, false},
 	{authz.ManageDashboards, role.Admin, true},
 }

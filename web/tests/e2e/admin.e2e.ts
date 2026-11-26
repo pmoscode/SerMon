@@ -184,6 +184,51 @@ test.describe('organization admin (mocked API)', () => {
 		await expect(page.getByTestId('redaction-result')).toHaveText('password=***');
 	});
 
+	// M5-30: the organization's own retention, within the limits and the cap, after the step-up.
+	test('sets the retention after the step-up', async ({ page }) => {
+		let confirmed = false;
+		let saved: unknown;
+		await mockApi(
+			page,
+			adminApi({
+				'AccessService/GetRetention': () => ({
+					json: {
+						eventRetentionDays: 90,
+						logMinDays: 1,
+						logMaxDays: 14,
+						eventMinDays: 7,
+						eventMaxDays: 365,
+						capDays: 180
+					}
+				}),
+				'AccessService/SetRetention': (body) => {
+					if (!confirmed) return stepUp;
+					saved = body;
+					return { json: {} };
+				},
+				'AuthService/ConfirmPassword': () => {
+					confirmed = true;
+					return { json: { session: admin } };
+				}
+			})
+		);
+		await page.goto('/admin');
+		await page.getByRole('tab', { name: 'Retention' }).click();
+		const events = page.getByRole('spinbutton', {
+			name: 'Security events and alert history (days)'
+		});
+		await expect(events).toHaveValue('90');
+		await expect(page.getByText('Cap of this organization: 180 days')).toBeVisible();
+		expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+		await page.getByRole('spinbutton', { name: 'Logs (days)' }).fill('3');
+		await page.getByRole('button', { name: 'Save' }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByLabel('Password').fill('correct horse battery');
+		await dialog.getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText(/^Saved\./)).toBeVisible();
+		expect(saved).toEqual({ logRetentionDays: 3, eventRetentionDays: 90 });
+	});
+
 	test('hides the organization from non-admins', async ({ page }) => {
 		await mockApi(page, installed(true));
 		await page.goto('/admin');

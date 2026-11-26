@@ -830,6 +830,14 @@ var tenantIsolationCases = map[string]isolationCase{
 		}
 		return err
 	}},
+	// M5-30: the retention of the caller's own organization only (Org A keeps its events 77 days).
+	"/sermon.web.v1.AccessService/GetRetention": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.access.GetRetention(ctx, connect.NewRequest(&webv1.GetRetentionRequest{}))
+		if err == nil && (leaks(e, res.Msg.String()) || res.Msg.GetEventRetentionDays() == 77) {
+			return errLeak
+		}
+		return err
+	}},
 	"/sermon.web.v1.AccessService/ListAuditLog": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.access.ListAuditLog(ctx, connect.NewRequest(&webv1.ListAuditLogRequest{}))
 		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), "by-a")) {

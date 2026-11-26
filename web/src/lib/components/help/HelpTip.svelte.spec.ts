@@ -46,24 +46,22 @@ describe('HelpTip and HelpPanel', () => {
 		await expect.element(button).toHaveFocus();
 	});
 
-	// Every page needs only the titles (the names of the ⓘ, M5-29: JavaScript budget); the
-	// summaries load with the first opening, the full texts with the panel.
-	it('loads the titles first, the summaries on opening and the full texts only for the panel', async () => {
+	// Every page needs only the titles (the names of the ⓘ, M5-29: JavaScript budget); the full
+	// texts load with the first opening of a popover or the panel.
+	it('loads the titles first and the full texts on opening', async () => {
 		switchLocale('de');
 		render(HelpTip, { topic: 'pages/alerts' });
 		const button = page.getByRole('button', { name: 'Hilfe: Alerts' });
 		await expect.element(button).toBeVisible();
 		await vi.waitFor(() => expect(helpState.titles).toBe('de'));
-		expect(helpState.summaries).toBeUndefined();
-		expect(helpState.get('pages/alerts')?.summary).toEqual([]);
-		await button.click();
-		await vi.waitFor(() => expect(helpState.summaries).toBe('de'));
-		await expect.element(page.getByText(/Alerts/, { exact: false }).last()).toBeVisible();
-		expect(helpState.get('pages/alerts')?.summary.length).toBeGreaterThan(0);
-		await userEvent.keyboard('{Escape}');
 		expect(helpState.locale).toBeUndefined();
+		expect(helpState.get('pages/alerts')?.summary).toEqual([]);
 		expect(helpState.get('pages/alerts')?.body).toEqual([]);
 		expect(helpState.get('pages/alerts')?.more).toBe(true);
+		await button.click();
+		await vi.waitFor(() => expect(helpState.locale).toBe('de'));
+		expect(helpState.get('pages/alerts')?.summary.length).toBeGreaterThan(0);
+		await userEvent.keyboard('{Escape}');
 		render(HelpPanel);
 		helpState.open('pages/alerts');
 		await expect.element(page.getByRole('heading', { name: 'Quittieren' })).toBeVisible();

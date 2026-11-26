@@ -55,7 +55,48 @@ service AccessService {
   rpc GetOrganizationQuotas(GetOrganizationQuotasRequest) returns (GetOrganizationQuotasResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // GetRetention returns how long the organization keeps its logs and security events, the
+  // instance's limits and the organization's cap (org admin, M5-30).
+  rpc GetRetention(GetRetentionRequest) returns (GetRetentionResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // SetRetention changes it within the limits and the cap (INVALID_ARGUMENT otherwise); org admin
+  // with a recent re-authentication. Older data goes with the next run of the job: events within
+  // an hour, logs within a day.
+  rpc SetRetention(SetRetentionRequest) returns (SetRetentionResponse);
 }
+
+// GetRetentionRequest has no parameters.
+message GetRetentionRequest {}
+
+// GetRetentionResponse is the retention of the organization; 0 days is the instance's default.
+message GetRetentionResponse {
+  // log_retention_days is how long logs are kept (0: the instance's default).
+  uint32 log_retention_days = 1;
+  // event_retention_days is how long security events and the alert history are kept (0: default).
+  uint32 event_retention_days = 2;
+  // log_min_days and log_max_days bound the logs; log_max_days is the instance's default.
+  uint32 log_min_days = 3;
+  // log_max_days is the longest (and default) retention of logs.
+  uint32 log_max_days = 4;
+  // event_min_days is the shortest retention of events.
+  uint32 event_min_days = 5;
+  // event_max_days is the longest (and default) retention of events.
+  uint32 event_max_days = 6;
+  // cap_days is the superadmin's cap of the organization (0: none); settings above it are refused.
+  uint32 cap_days = 7;
+}
+
+// SetRetentionRequest is the new retention; 0 days is the instance's default.
+message SetRetentionRequest {
+  // log_retention_days is 0 or 1 to 14.
+  uint32 log_retention_days = 1 [(buf.validate.field).uint32.lte = 14];
+  // event_retention_days is 0 or 7 to 365.
+  uint32 event_retention_days = 2 [(buf.validate.field).uint32.lte = 365];
+}
+
+// SetRetentionResponse is empty.
+message SetRetentionResponse {}
 
 // GetOrganizationQuotasRequest has no parameters.
 message GetOrganizationQuotasRequest {}

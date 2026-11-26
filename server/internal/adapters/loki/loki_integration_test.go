@@ -272,6 +272,26 @@ func TestLoki_RecordsTheDeletionOfAnOrganizationOrANode(t *testing.T) {
 	}
 }
 
+// M5-30: the retention of an organization asks the real Loki to delete its lines before its period,
+// in its tenant only.
+func TestLoki_EraseBeforeIsRecordedInTheTenant(t *testing.T) {
+	c := loki.New(lokitest.Shared(t))
+	ctx := context.Background()
+	alpha, beta := tenant.OrgID(uuid.New()), tenant.OrgID(uuid.New())
+	before := time.Now().Add(-72 * time.Hour).Truncate(time.Second)
+	if err := loki.NewEraser(c).EraseBefore(ctx, alpha, before); err != nil {
+		t.Fatal(err)
+	}
+	requests, err := c.Deletions(ctx, alpha)
+	if err != nil || len(requests) != 1 || !requests[0].End.Equal(before) || requests[0].Query != logql.Everything().String() ||
+		requests[0].Start.After(before.Add(-11*24*time.Hour)) {
+		t.Errorf("requests of Alpha = %+v, %v", requests, err)
+	}
+	if other, err := c.Deletions(ctx, beta); err != nil || len(other) != 0 {
+		t.Errorf("requests of Beta = %+v, %v", other, err)
+	}
+}
+
 // The compactor runs a recorded request (here every few seconds instead of every 10 minutes).
 func TestLoki_TheCompactorProcessesADeletion(t *testing.T) {
 	c := loki.New(lokitest.Start(t, "-compactor.compaction-interval=2s", "-compactor.delete-request-cancel-period=1s"))

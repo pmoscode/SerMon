@@ -80,6 +80,235 @@ func (Role) EnumDescriptor() ([]byte, []int) {
 	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{0}
 }
 
+// GetRetentionRequest has no parameters.
+type GetRetentionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRetentionRequest) Reset() {
+	*x = GetRetentionRequest{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRetentionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRetentionRequest) ProtoMessage() {}
+
+func (x *GetRetentionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRetentionRequest.ProtoReflect.Descriptor instead.
+func (*GetRetentionRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{0}
+}
+
+// GetRetentionResponse is the retention of the organization; 0 days is the instance's default.
+type GetRetentionResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// log_retention_days is how long logs are kept (0: the instance's default).
+	LogRetentionDays uint32 `protobuf:"varint,1,opt,name=log_retention_days,json=logRetentionDays,proto3" json:"log_retention_days,omitempty"`
+	// event_retention_days is how long security events and the alert history are kept (0: default).
+	EventRetentionDays uint32 `protobuf:"varint,2,opt,name=event_retention_days,json=eventRetentionDays,proto3" json:"event_retention_days,omitempty"`
+	// log_min_days and log_max_days bound the logs; log_max_days is the instance's default.
+	LogMinDays uint32 `protobuf:"varint,3,opt,name=log_min_days,json=logMinDays,proto3" json:"log_min_days,omitempty"`
+	// log_max_days is the longest (and default) retention of logs.
+	LogMaxDays uint32 `protobuf:"varint,4,opt,name=log_max_days,json=logMaxDays,proto3" json:"log_max_days,omitempty"`
+	// event_min_days is the shortest retention of events.
+	EventMinDays uint32 `protobuf:"varint,5,opt,name=event_min_days,json=eventMinDays,proto3" json:"event_min_days,omitempty"`
+	// event_max_days is the longest (and default) retention of events.
+	EventMaxDays uint32 `protobuf:"varint,6,opt,name=event_max_days,json=eventMaxDays,proto3" json:"event_max_days,omitempty"`
+	// cap_days is the superadmin's cap of the organization (0: none); settings above it are refused.
+	CapDays       uint32 `protobuf:"varint,7,opt,name=cap_days,json=capDays,proto3" json:"cap_days,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRetentionResponse) Reset() {
+	*x = GetRetentionResponse{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRetentionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRetentionResponse) ProtoMessage() {}
+
+func (x *GetRetentionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRetentionResponse.ProtoReflect.Descriptor instead.
+func (*GetRetentionResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GetRetentionResponse) GetLogRetentionDays() uint32 {
+	if x != nil {
+		return x.LogRetentionDays
+	}
+	return 0
+}
+
+func (x *GetRetentionResponse) GetEventRetentionDays() uint32 {
+	if x != nil {
+		return x.EventRetentionDays
+	}
+	return 0
+}
+
+func (x *GetRetentionResponse) GetLogMinDays() uint32 {
+	if x != nil {
+		return x.LogMinDays
+	}
+	return 0
+}
+
+func (x *GetRetentionResponse) GetLogMaxDays() uint32 {
+	if x != nil {
+		return x.LogMaxDays
+	}
+	return 0
+}
+
+func (x *GetRetentionResponse) GetEventMinDays() uint32 {
+	if x != nil {
+		return x.EventMinDays
+	}
+	return 0
+}
+
+func (x *GetRetentionResponse) GetEventMaxDays() uint32 {
+	if x != nil {
+		return x.EventMaxDays
+	}
+	return 0
+}
+
+func (x *GetRetentionResponse) GetCapDays() uint32 {
+	if x != nil {
+		return x.CapDays
+	}
+	return 0
+}
+
+// SetRetentionRequest is the new retention; 0 days is the instance's default.
+type SetRetentionRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// log_retention_days is 0 or 1 to 14.
+	LogRetentionDays uint32 `protobuf:"varint,1,opt,name=log_retention_days,json=logRetentionDays,proto3" json:"log_retention_days,omitempty"`
+	// event_retention_days is 0 or 7 to 365.
+	EventRetentionDays uint32 `protobuf:"varint,2,opt,name=event_retention_days,json=eventRetentionDays,proto3" json:"event_retention_days,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SetRetentionRequest) Reset() {
+	*x = SetRetentionRequest{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetRetentionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetRetentionRequest) ProtoMessage() {}
+
+func (x *SetRetentionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetRetentionRequest.ProtoReflect.Descriptor instead.
+func (*SetRetentionRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SetRetentionRequest) GetLogRetentionDays() uint32 {
+	if x != nil {
+		return x.LogRetentionDays
+	}
+	return 0
+}
+
+func (x *SetRetentionRequest) GetEventRetentionDays() uint32 {
+	if x != nil {
+		return x.EventRetentionDays
+	}
+	return 0
+}
+
+// SetRetentionResponse is empty.
+type SetRetentionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetRetentionResponse) Reset() {
+	*x = SetRetentionResponse{}
+	mi := &file_sermon_web_v1_access_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetRetentionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetRetentionResponse) ProtoMessage() {}
+
+func (x *SetRetentionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_access_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetRetentionResponse.ProtoReflect.Descriptor instead.
+func (*SetRetentionResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{3}
+}
+
 // GetOrganizationQuotasRequest has no parameters.
 type GetOrganizationQuotasRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -89,7 +318,7 @@ type GetOrganizationQuotasRequest struct {
 
 func (x *GetOrganizationQuotasRequest) Reset() {
 	*x = GetOrganizationQuotasRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -101,7 +330,7 @@ func (x *GetOrganizationQuotasRequest) String() string {
 func (*GetOrganizationQuotasRequest) ProtoMessage() {}
 
 func (x *GetOrganizationQuotasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[0]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -114,7 +343,7 @@ func (x *GetOrganizationQuotasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrganizationQuotasRequest.ProtoReflect.Descriptor instead.
 func (*GetOrganizationQuotasRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{0}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{4}
 }
 
 // GetOrganizationQuotasResponse is the state of the quotas.
@@ -134,7 +363,7 @@ type GetOrganizationQuotasResponse struct {
 
 func (x *GetOrganizationQuotasResponse) Reset() {
 	*x = GetOrganizationQuotasResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -146,7 +375,7 @@ func (x *GetOrganizationQuotasResponse) String() string {
 func (*GetOrganizationQuotasResponse) ProtoMessage() {}
 
 func (x *GetOrganizationQuotasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[1]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -159,7 +388,7 @@ func (x *GetOrganizationQuotasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrganizationQuotasResponse.ProtoReflect.Descriptor instead.
 func (*GetOrganizationQuotasResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{1}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetOrganizationQuotasResponse) GetQuotas() *OrganizationQuotas {
@@ -205,7 +434,7 @@ type NodeGroup struct {
 
 func (x *NodeGroup) Reset() {
 	*x = NodeGroup{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -217,7 +446,7 @@ func (x *NodeGroup) String() string {
 func (*NodeGroup) ProtoMessage() {}
 
 func (x *NodeGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[2]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +459,7 @@ func (x *NodeGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeGroup.ProtoReflect.Descriptor instead.
 func (*NodeGroup) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{2}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *NodeGroup) GetId() string {
@@ -263,7 +492,7 @@ type ListNodeGroupsRequest struct {
 
 func (x *ListNodeGroupsRequest) Reset() {
 	*x = ListNodeGroupsRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +504,7 @@ func (x *ListNodeGroupsRequest) String() string {
 func (*ListNodeGroupsRequest) ProtoMessage() {}
 
 func (x *ListNodeGroupsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[3]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +517,7 @@ func (x *ListNodeGroupsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodeGroupsRequest.ProtoReflect.Descriptor instead.
 func (*ListNodeGroupsRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{3}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{7}
 }
 
 // ListNodeGroupsResponse lists node groups by name.
@@ -302,7 +531,7 @@ type ListNodeGroupsResponse struct {
 
 func (x *ListNodeGroupsResponse) Reset() {
 	*x = ListNodeGroupsResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -314,7 +543,7 @@ func (x *ListNodeGroupsResponse) String() string {
 func (*ListNodeGroupsResponse) ProtoMessage() {}
 
 func (x *ListNodeGroupsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[4]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -327,7 +556,7 @@ func (x *ListNodeGroupsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodeGroupsResponse.ProtoReflect.Descriptor instead.
 func (*ListNodeGroupsResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{4}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListNodeGroupsResponse) GetGroups() []*NodeGroup {
@@ -348,7 +577,7 @@ type CreateNodeGroupRequest struct {
 
 func (x *CreateNodeGroupRequest) Reset() {
 	*x = CreateNodeGroupRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +589,7 @@ func (x *CreateNodeGroupRequest) String() string {
 func (*CreateNodeGroupRequest) ProtoMessage() {}
 
 func (x *CreateNodeGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[5]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +602,7 @@ func (x *CreateNodeGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNodeGroupRequest.ProtoReflect.Descriptor instead.
 func (*CreateNodeGroupRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{5}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CreateNodeGroupRequest) GetName() string {
@@ -394,7 +623,7 @@ type CreateNodeGroupResponse struct {
 
 func (x *CreateNodeGroupResponse) Reset() {
 	*x = CreateNodeGroupResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -406,7 +635,7 @@ func (x *CreateNodeGroupResponse) String() string {
 func (*CreateNodeGroupResponse) ProtoMessage() {}
 
 func (x *CreateNodeGroupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[6]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -419,7 +648,7 @@ func (x *CreateNodeGroupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateNodeGroupResponse.ProtoReflect.Descriptor instead.
 func (*CreateNodeGroupResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{6}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CreateNodeGroupResponse) GetGroup() *NodeGroup {
@@ -442,7 +671,7 @@ type RenameNodeGroupRequest struct {
 
 func (x *RenameNodeGroupRequest) Reset() {
 	*x = RenameNodeGroupRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -454,7 +683,7 @@ func (x *RenameNodeGroupRequest) String() string {
 func (*RenameNodeGroupRequest) ProtoMessage() {}
 
 func (x *RenameNodeGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -467,7 +696,7 @@ func (x *RenameNodeGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameNodeGroupRequest.ProtoReflect.Descriptor instead.
 func (*RenameNodeGroupRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{7}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *RenameNodeGroupRequest) GetGroupId() string {
@@ -493,7 +722,7 @@ type RenameNodeGroupResponse struct {
 
 func (x *RenameNodeGroupResponse) Reset() {
 	*x = RenameNodeGroupResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -505,7 +734,7 @@ func (x *RenameNodeGroupResponse) String() string {
 func (*RenameNodeGroupResponse) ProtoMessage() {}
 
 func (x *RenameNodeGroupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,7 +747,7 @@ func (x *RenameNodeGroupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameNodeGroupResponse.ProtoReflect.Descriptor instead.
 func (*RenameNodeGroupResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{8}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{12}
 }
 
 // DeleteNodeGroupRequest names the group.
@@ -532,7 +761,7 @@ type DeleteNodeGroupRequest struct {
 
 func (x *DeleteNodeGroupRequest) Reset() {
 	*x = DeleteNodeGroupRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -544,7 +773,7 @@ func (x *DeleteNodeGroupRequest) String() string {
 func (*DeleteNodeGroupRequest) ProtoMessage() {}
 
 func (x *DeleteNodeGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -557,7 +786,7 @@ func (x *DeleteNodeGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNodeGroupRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNodeGroupRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{9}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DeleteNodeGroupRequest) GetGroupId() string {
@@ -576,7 +805,7 @@ type DeleteNodeGroupResponse struct {
 
 func (x *DeleteNodeGroupResponse) Reset() {
 	*x = DeleteNodeGroupResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[10]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -588,7 +817,7 @@ func (x *DeleteNodeGroupResponse) String() string {
 func (*DeleteNodeGroupResponse) ProtoMessage() {}
 
 func (x *DeleteNodeGroupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[10]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -601,7 +830,7 @@ func (x *DeleteNodeGroupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNodeGroupResponse.ProtoReflect.Descriptor instead.
 func (*DeleteNodeGroupResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{10}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{14}
 }
 
 // RoleBinding is a role of a member on one group or on all groups.
@@ -622,7 +851,7 @@ type RoleBinding struct {
 
 func (x *RoleBinding) Reset() {
 	*x = RoleBinding{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[11]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -634,7 +863,7 @@ func (x *RoleBinding) String() string {
 func (*RoleBinding) ProtoMessage() {}
 
 func (x *RoleBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[11]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -647,7 +876,7 @@ func (x *RoleBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleBinding.ProtoReflect.Descriptor instead.
 func (*RoleBinding) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{11}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RoleBinding) GetId() string {
@@ -695,7 +924,7 @@ type Member struct {
 
 func (x *Member) Reset() {
 	*x = Member{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[12]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -707,7 +936,7 @@ func (x *Member) String() string {
 func (*Member) ProtoMessage() {}
 
 func (x *Member) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[12]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -720,7 +949,7 @@ func (x *Member) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Member.ProtoReflect.Descriptor instead.
 func (*Member) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{12}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Member) GetUserId() string {
@@ -760,7 +989,7 @@ type ListMembersRequest struct {
 
 func (x *ListMembersRequest) Reset() {
 	*x = ListMembersRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[13]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -772,7 +1001,7 @@ func (x *ListMembersRequest) String() string {
 func (*ListMembersRequest) ProtoMessage() {}
 
 func (x *ListMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[13]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -785,7 +1014,7 @@ func (x *ListMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembersRequest.ProtoReflect.Descriptor instead.
 func (*ListMembersRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{13}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{17}
 }
 
 // ListMembersResponse lists the members by e-mail address.
@@ -799,7 +1028,7 @@ type ListMembersResponse struct {
 
 func (x *ListMembersResponse) Reset() {
 	*x = ListMembersResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[14]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -811,7 +1040,7 @@ func (x *ListMembersResponse) String() string {
 func (*ListMembersResponse) ProtoMessage() {}
 
 func (x *ListMembersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[14]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -824,7 +1053,7 @@ func (x *ListMembersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembersResponse.ProtoReflect.Descriptor instead.
 func (*ListMembersResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{14}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListMembersResponse) GetMembers() []*Member {
@@ -849,7 +1078,7 @@ type GrantRoleRequest struct {
 
 func (x *GrantRoleRequest) Reset() {
 	*x = GrantRoleRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[15]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -861,7 +1090,7 @@ func (x *GrantRoleRequest) String() string {
 func (*GrantRoleRequest) ProtoMessage() {}
 
 func (x *GrantRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[15]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -874,7 +1103,7 @@ func (x *GrantRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantRoleRequest.ProtoReflect.Descriptor instead.
 func (*GrantRoleRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{15}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GrantRoleRequest) GetUserId() string {
@@ -909,7 +1138,7 @@ type GrantRoleResponse struct {
 
 func (x *GrantRoleResponse) Reset() {
 	*x = GrantRoleResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[16]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -921,7 +1150,7 @@ func (x *GrantRoleResponse) String() string {
 func (*GrantRoleResponse) ProtoMessage() {}
 
 func (x *GrantRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[16]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -934,7 +1163,7 @@ func (x *GrantRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantRoleResponse.ProtoReflect.Descriptor instead.
 func (*GrantRoleResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{16}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GrantRoleResponse) GetBindingId() string {
@@ -955,7 +1184,7 @@ type RevokeRoleRequest struct {
 
 func (x *RevokeRoleRequest) Reset() {
 	*x = RevokeRoleRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[17]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -967,7 +1196,7 @@ func (x *RevokeRoleRequest) String() string {
 func (*RevokeRoleRequest) ProtoMessage() {}
 
 func (x *RevokeRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[17]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -980,7 +1209,7 @@ func (x *RevokeRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeRoleRequest.ProtoReflect.Descriptor instead.
 func (*RevokeRoleRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{17}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RevokeRoleRequest) GetBindingId() string {
@@ -999,7 +1228,7 @@ type RevokeRoleResponse struct {
 
 func (x *RevokeRoleResponse) Reset() {
 	*x = RevokeRoleResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[18]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1011,7 +1240,7 @@ func (x *RevokeRoleResponse) String() string {
 func (*RevokeRoleResponse) ProtoMessage() {}
 
 func (x *RevokeRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[18]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1024,7 +1253,7 @@ func (x *RevokeRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeRoleResponse.ProtoReflect.Descriptor instead.
 func (*RevokeRoleResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{18}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{22}
 }
 
 // RemoveMemberRequest names the member.
@@ -1038,7 +1267,7 @@ type RemoveMemberRequest struct {
 
 func (x *RemoveMemberRequest) Reset() {
 	*x = RemoveMemberRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[19]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1050,7 +1279,7 @@ func (x *RemoveMemberRequest) String() string {
 func (*RemoveMemberRequest) ProtoMessage() {}
 
 func (x *RemoveMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[19]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1063,7 +1292,7 @@ func (x *RemoveMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveMemberRequest.ProtoReflect.Descriptor instead.
 func (*RemoveMemberRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{19}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RemoveMemberRequest) GetUserId() string {
@@ -1082,7 +1311,7 @@ type RemoveMemberResponse struct {
 
 func (x *RemoveMemberResponse) Reset() {
 	*x = RemoveMemberResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[20]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1094,7 +1323,7 @@ func (x *RemoveMemberResponse) String() string {
 func (*RemoveMemberResponse) ProtoMessage() {}
 
 func (x *RemoveMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[20]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1107,7 +1336,7 @@ func (x *RemoveMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveMemberResponse.ProtoReflect.Descriptor instead.
 func (*RemoveMemberResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{20}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{24}
 }
 
 // AuditEntry is an entry of the organization's audit log.
@@ -1131,7 +1360,7 @@ type AuditEntry struct {
 
 func (x *AuditEntry) Reset() {
 	*x = AuditEntry{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[21]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1143,7 +1372,7 @@ func (x *AuditEntry) String() string {
 func (*AuditEntry) ProtoMessage() {}
 
 func (x *AuditEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[21]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1156,7 +1385,7 @@ func (x *AuditEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEntry.ProtoReflect.Descriptor instead.
 func (*AuditEntry) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{21}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *AuditEntry) GetSeq() int64 {
@@ -1214,7 +1443,7 @@ type ListAuditLogRequest struct {
 
 func (x *ListAuditLogRequest) Reset() {
 	*x = ListAuditLogRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[22]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1226,7 +1455,7 @@ func (x *ListAuditLogRequest) String() string {
 func (*ListAuditLogRequest) ProtoMessage() {}
 
 func (x *ListAuditLogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[22]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1239,7 +1468,7 @@ func (x *ListAuditLogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditLogRequest.ProtoReflect.Descriptor instead.
 func (*ListAuditLogRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{22}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListAuditLogRequest) GetBeforeSeq() int64 {
@@ -1267,7 +1496,7 @@ type ListAuditLogResponse struct {
 
 func (x *ListAuditLogResponse) Reset() {
 	*x = ListAuditLogResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[23]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1279,7 +1508,7 @@ func (x *ListAuditLogResponse) String() string {
 func (*ListAuditLogResponse) ProtoMessage() {}
 
 func (x *ListAuditLogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[23]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1292,7 +1521,7 @@ func (x *ListAuditLogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditLogResponse.ProtoReflect.Descriptor instead.
 func (*ListAuditLogResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{23}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListAuditLogResponse) GetEntries() []*AuditEntry {
@@ -1317,7 +1546,7 @@ type InviteMemberRequest struct {
 
 func (x *InviteMemberRequest) Reset() {
 	*x = InviteMemberRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[24]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1329,7 +1558,7 @@ func (x *InviteMemberRequest) String() string {
 func (*InviteMemberRequest) ProtoMessage() {}
 
 func (x *InviteMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[24]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1342,7 +1571,7 @@ func (x *InviteMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteMemberRequest.ProtoReflect.Descriptor instead.
 func (*InviteMemberRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{24}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *InviteMemberRequest) GetEmail() string {
@@ -1381,7 +1610,7 @@ type InviteMemberResponse struct {
 
 func (x *InviteMemberResponse) Reset() {
 	*x = InviteMemberResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[25]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1393,7 +1622,7 @@ func (x *InviteMemberResponse) String() string {
 func (*InviteMemberResponse) ProtoMessage() {}
 
 func (x *InviteMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[25]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1406,7 +1635,7 @@ func (x *InviteMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InviteMemberResponse.ProtoReflect.Descriptor instead.
 func (*InviteMemberResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{25}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *InviteMemberResponse) GetInvitation() *Invitation {
@@ -1453,7 +1682,7 @@ type Invitation struct {
 
 func (x *Invitation) Reset() {
 	*x = Invitation{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[26]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1465,7 +1694,7 @@ func (x *Invitation) String() string {
 func (*Invitation) ProtoMessage() {}
 
 func (x *Invitation) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[26]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1478,7 +1707,7 @@ func (x *Invitation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Invitation.ProtoReflect.Descriptor instead.
 func (*Invitation) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{26}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *Invitation) GetId() string {
@@ -1539,7 +1768,7 @@ type ListInvitationsRequest struct {
 
 func (x *ListInvitationsRequest) Reset() {
 	*x = ListInvitationsRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[27]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1551,7 +1780,7 @@ func (x *ListInvitationsRequest) String() string {
 func (*ListInvitationsRequest) ProtoMessage() {}
 
 func (x *ListInvitationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[27]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1564,7 +1793,7 @@ func (x *ListInvitationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitationsRequest.ProtoReflect.Descriptor instead.
 func (*ListInvitationsRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{27}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{31}
 }
 
 // ListInvitationsResponse lists open invitations, newest first.
@@ -1578,7 +1807,7 @@ type ListInvitationsResponse struct {
 
 func (x *ListInvitationsResponse) Reset() {
 	*x = ListInvitationsResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[28]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1590,7 +1819,7 @@ func (x *ListInvitationsResponse) String() string {
 func (*ListInvitationsResponse) ProtoMessage() {}
 
 func (x *ListInvitationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[28]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1603,7 +1832,7 @@ func (x *ListInvitationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitationsResponse.ProtoReflect.Descriptor instead.
 func (*ListInvitationsResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{28}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ListInvitationsResponse) GetInvitations() []*Invitation {
@@ -1624,7 +1853,7 @@ type RevokeInvitationRequest struct {
 
 func (x *RevokeInvitationRequest) Reset() {
 	*x = RevokeInvitationRequest{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[29]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1636,7 +1865,7 @@ func (x *RevokeInvitationRequest) String() string {
 func (*RevokeInvitationRequest) ProtoMessage() {}
 
 func (x *RevokeInvitationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[29]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1649,7 +1878,7 @@ func (x *RevokeInvitationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeInvitationRequest.ProtoReflect.Descriptor instead.
 func (*RevokeInvitationRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{29}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RevokeInvitationRequest) GetInvitationId() string {
@@ -1668,7 +1897,7 @@ type RevokeInvitationResponse struct {
 
 func (x *RevokeInvitationResponse) Reset() {
 	*x = RevokeInvitationResponse{}
-	mi := &file_sermon_web_v1_access_proto_msgTypes[30]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1680,7 +1909,7 @@ func (x *RevokeInvitationResponse) String() string {
 func (*RevokeInvitationResponse) ProtoMessage() {}
 
 func (x *RevokeInvitationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_access_proto_msgTypes[30]
+	mi := &file_sermon_web_v1_access_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1693,14 +1922,29 @@ func (x *RevokeInvitationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeInvitationResponse.ProtoReflect.Descriptor instead.
 func (*RevokeInvitationResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{30}
+	return file_sermon_web_v1_access_proto_rawDescGZIP(), []int{34}
 }
 
 var File_sermon_web_v1_access_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\n" +
-	"\x1asermon/web/v1/access.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a sermon/web/v1/organization.proto\"\x1e\n" +
+	"\x1asermon/web/v1/access.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a sermon/web/v1/organization.proto\"\x15\n" +
+	"\x13GetRetentionRequest\"\xa1\x02\n" +
+	"\x14GetRetentionResponse\x12,\n" +
+	"\x12log_retention_days\x18\x01 \x01(\rR\x10logRetentionDays\x120\n" +
+	"\x14event_retention_days\x18\x02 \x01(\rR\x12eventRetentionDays\x12 \n" +
+	"\flog_min_days\x18\x03 \x01(\rR\n" +
+	"logMinDays\x12 \n" +
+	"\flog_max_days\x18\x04 \x01(\rR\n" +
+	"logMaxDays\x12$\n" +
+	"\x0eevent_min_days\x18\x05 \x01(\rR\feventMinDays\x12$\n" +
+	"\x0eevent_max_days\x18\x06 \x01(\rR\feventMaxDays\x12\x19\n" +
+	"\bcap_days\x18\a \x01(\rR\acapDays\"\x88\x01\n" +
+	"\x13SetRetentionRequest\x125\n" +
+	"\x12log_retention_days\x18\x01 \x01(\rB\a\xbaH\x04*\x02\x18\x0eR\x10logRetentionDays\x12:\n" +
+	"\x14event_retention_days\x18\x02 \x01(\rB\b\xbaH\x05*\x03\x18\xed\x02R\x12eventRetentionDays\"\x16\n" +
+	"\x14SetRetentionResponse\"\x1e\n" +
 	"\x1cGetOrganizationQuotasRequest\"\xb5\x01\n" +
 	"\x1dGetOrganizationQuotasResponse\x129\n" +
 	"\x06quotas\x18\x01 \x01(\v2!.sermon.web.v1.OrganizationQuotasR\x06quotas\x12\x14\n" +
@@ -1807,7 +2051,7 @@ const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\vROLE_VIEWER\x10\x01\x12\x11\n" +
 	"\rROLE_OPERATOR\x10\x02\x12\x0e\n" +
 	"\n" +
-	"ROLE_ADMIN\x10\x032\xec\t\n" +
+	"ROLE_ADMIN\x10\x032\xa3\v\n" +
 	"\rAccessService\x12b\n" +
 	"\x0eListNodeGroups\x12$.sermon.web.v1.ListNodeGroupsRequest\x1a%.sermon.web.v1.ListNodeGroupsResponse\"\x03\x90\x02\x01\x12`\n" +
 	"\x0fCreateNodeGroup\x12%.sermon.web.v1.CreateNodeGroupRequest\x1a&.sermon.web.v1.CreateNodeGroupResponse\x12`\n" +
@@ -1822,7 +2066,9 @@ const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\x0fListInvitations\x12%.sermon.web.v1.ListInvitationsRequest\x1a&.sermon.web.v1.ListInvitationsResponse\"\x03\x90\x02\x01\x12c\n" +
 	"\x10RevokeInvitation\x12&.sermon.web.v1.RevokeInvitationRequest\x1a'.sermon.web.v1.RevokeInvitationResponse\x12\\\n" +
 	"\fListAuditLog\x12\".sermon.web.v1.ListAuditLogRequest\x1a#.sermon.web.v1.ListAuditLogResponse\"\x03\x90\x02\x01\x12w\n" +
-	"\x15GetOrganizationQuotas\x12+.sermon.web.v1.GetOrganizationQuotasRequest\x1a,.sermon.web.v1.GetOrganizationQuotasResponse\"\x03\x90\x02\x01B\xba\x01\n" +
+	"\x15GetOrganizationQuotas\x12+.sermon.web.v1.GetOrganizationQuotasRequest\x1a,.sermon.web.v1.GetOrganizationQuotasResponse\"\x03\x90\x02\x01\x12\\\n" +
+	"\fGetRetention\x12\".sermon.web.v1.GetRetentionRequest\x1a#.sermon.web.v1.GetRetentionResponse\"\x03\x90\x02\x01\x12W\n" +
+	"\fSetRetention\x12\".sermon.web.v1.SetRetentionRequest\x1a#.sermon.web.v1.SetRetentionResponseB\xba\x01\n" +
 	"\x11com.sermon.web.v1B\vAccessProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -1838,90 +2084,98 @@ func file_sermon_web_v1_access_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_access_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_access_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_sermon_web_v1_access_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_sermon_web_v1_access_proto_goTypes = []any{
 	(Role)(0),                             // 0: sermon.web.v1.Role
-	(*GetOrganizationQuotasRequest)(nil),  // 1: sermon.web.v1.GetOrganizationQuotasRequest
-	(*GetOrganizationQuotasResponse)(nil), // 2: sermon.web.v1.GetOrganizationQuotasResponse
-	(*NodeGroup)(nil),                     // 3: sermon.web.v1.NodeGroup
-	(*ListNodeGroupsRequest)(nil),         // 4: sermon.web.v1.ListNodeGroupsRequest
-	(*ListNodeGroupsResponse)(nil),        // 5: sermon.web.v1.ListNodeGroupsResponse
-	(*CreateNodeGroupRequest)(nil),        // 6: sermon.web.v1.CreateNodeGroupRequest
-	(*CreateNodeGroupResponse)(nil),       // 7: sermon.web.v1.CreateNodeGroupResponse
-	(*RenameNodeGroupRequest)(nil),        // 8: sermon.web.v1.RenameNodeGroupRequest
-	(*RenameNodeGroupResponse)(nil),       // 9: sermon.web.v1.RenameNodeGroupResponse
-	(*DeleteNodeGroupRequest)(nil),        // 10: sermon.web.v1.DeleteNodeGroupRequest
-	(*DeleteNodeGroupResponse)(nil),       // 11: sermon.web.v1.DeleteNodeGroupResponse
-	(*RoleBinding)(nil),                   // 12: sermon.web.v1.RoleBinding
-	(*Member)(nil),                        // 13: sermon.web.v1.Member
-	(*ListMembersRequest)(nil),            // 14: sermon.web.v1.ListMembersRequest
-	(*ListMembersResponse)(nil),           // 15: sermon.web.v1.ListMembersResponse
-	(*GrantRoleRequest)(nil),              // 16: sermon.web.v1.GrantRoleRequest
-	(*GrantRoleResponse)(nil),             // 17: sermon.web.v1.GrantRoleResponse
-	(*RevokeRoleRequest)(nil),             // 18: sermon.web.v1.RevokeRoleRequest
-	(*RevokeRoleResponse)(nil),            // 19: sermon.web.v1.RevokeRoleResponse
-	(*RemoveMemberRequest)(nil),           // 20: sermon.web.v1.RemoveMemberRequest
-	(*RemoveMemberResponse)(nil),          // 21: sermon.web.v1.RemoveMemberResponse
-	(*AuditEntry)(nil),                    // 22: sermon.web.v1.AuditEntry
-	(*ListAuditLogRequest)(nil),           // 23: sermon.web.v1.ListAuditLogRequest
-	(*ListAuditLogResponse)(nil),          // 24: sermon.web.v1.ListAuditLogResponse
-	(*InviteMemberRequest)(nil),           // 25: sermon.web.v1.InviteMemberRequest
-	(*InviteMemberResponse)(nil),          // 26: sermon.web.v1.InviteMemberResponse
-	(*Invitation)(nil),                    // 27: sermon.web.v1.Invitation
-	(*ListInvitationsRequest)(nil),        // 28: sermon.web.v1.ListInvitationsRequest
-	(*ListInvitationsResponse)(nil),       // 29: sermon.web.v1.ListInvitationsResponse
-	(*RevokeInvitationRequest)(nil),       // 30: sermon.web.v1.RevokeInvitationRequest
-	(*RevokeInvitationResponse)(nil),      // 31: sermon.web.v1.RevokeInvitationResponse
-	nil,                                   // 32: sermon.web.v1.AuditEntry.DetailsEntry
-	(*OrganizationQuotas)(nil),            // 33: sermon.web.v1.OrganizationQuotas
-	(*timestamppb.Timestamp)(nil),         // 34: google.protobuf.Timestamp
+	(*GetRetentionRequest)(nil),           // 1: sermon.web.v1.GetRetentionRequest
+	(*GetRetentionResponse)(nil),          // 2: sermon.web.v1.GetRetentionResponse
+	(*SetRetentionRequest)(nil),           // 3: sermon.web.v1.SetRetentionRequest
+	(*SetRetentionResponse)(nil),          // 4: sermon.web.v1.SetRetentionResponse
+	(*GetOrganizationQuotasRequest)(nil),  // 5: sermon.web.v1.GetOrganizationQuotasRequest
+	(*GetOrganizationQuotasResponse)(nil), // 6: sermon.web.v1.GetOrganizationQuotasResponse
+	(*NodeGroup)(nil),                     // 7: sermon.web.v1.NodeGroup
+	(*ListNodeGroupsRequest)(nil),         // 8: sermon.web.v1.ListNodeGroupsRequest
+	(*ListNodeGroupsResponse)(nil),        // 9: sermon.web.v1.ListNodeGroupsResponse
+	(*CreateNodeGroupRequest)(nil),        // 10: sermon.web.v1.CreateNodeGroupRequest
+	(*CreateNodeGroupResponse)(nil),       // 11: sermon.web.v1.CreateNodeGroupResponse
+	(*RenameNodeGroupRequest)(nil),        // 12: sermon.web.v1.RenameNodeGroupRequest
+	(*RenameNodeGroupResponse)(nil),       // 13: sermon.web.v1.RenameNodeGroupResponse
+	(*DeleteNodeGroupRequest)(nil),        // 14: sermon.web.v1.DeleteNodeGroupRequest
+	(*DeleteNodeGroupResponse)(nil),       // 15: sermon.web.v1.DeleteNodeGroupResponse
+	(*RoleBinding)(nil),                   // 16: sermon.web.v1.RoleBinding
+	(*Member)(nil),                        // 17: sermon.web.v1.Member
+	(*ListMembersRequest)(nil),            // 18: sermon.web.v1.ListMembersRequest
+	(*ListMembersResponse)(nil),           // 19: sermon.web.v1.ListMembersResponse
+	(*GrantRoleRequest)(nil),              // 20: sermon.web.v1.GrantRoleRequest
+	(*GrantRoleResponse)(nil),             // 21: sermon.web.v1.GrantRoleResponse
+	(*RevokeRoleRequest)(nil),             // 22: sermon.web.v1.RevokeRoleRequest
+	(*RevokeRoleResponse)(nil),            // 23: sermon.web.v1.RevokeRoleResponse
+	(*RemoveMemberRequest)(nil),           // 24: sermon.web.v1.RemoveMemberRequest
+	(*RemoveMemberResponse)(nil),          // 25: sermon.web.v1.RemoveMemberResponse
+	(*AuditEntry)(nil),                    // 26: sermon.web.v1.AuditEntry
+	(*ListAuditLogRequest)(nil),           // 27: sermon.web.v1.ListAuditLogRequest
+	(*ListAuditLogResponse)(nil),          // 28: sermon.web.v1.ListAuditLogResponse
+	(*InviteMemberRequest)(nil),           // 29: sermon.web.v1.InviteMemberRequest
+	(*InviteMemberResponse)(nil),          // 30: sermon.web.v1.InviteMemberResponse
+	(*Invitation)(nil),                    // 31: sermon.web.v1.Invitation
+	(*ListInvitationsRequest)(nil),        // 32: sermon.web.v1.ListInvitationsRequest
+	(*ListInvitationsResponse)(nil),       // 33: sermon.web.v1.ListInvitationsResponse
+	(*RevokeInvitationRequest)(nil),       // 34: sermon.web.v1.RevokeInvitationRequest
+	(*RevokeInvitationResponse)(nil),      // 35: sermon.web.v1.RevokeInvitationResponse
+	nil,                                   // 36: sermon.web.v1.AuditEntry.DetailsEntry
+	(*OrganizationQuotas)(nil),            // 37: sermon.web.v1.OrganizationQuotas
+	(*timestamppb.Timestamp)(nil),         // 38: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_access_proto_depIdxs = []int32{
-	33, // 0: sermon.web.v1.GetOrganizationQuotasResponse.quotas:type_name -> sermon.web.v1.OrganizationQuotas
-	34, // 1: sermon.web.v1.NodeGroup.create_time:type_name -> google.protobuf.Timestamp
-	3,  // 2: sermon.web.v1.ListNodeGroupsResponse.groups:type_name -> sermon.web.v1.NodeGroup
-	3,  // 3: sermon.web.v1.CreateNodeGroupResponse.group:type_name -> sermon.web.v1.NodeGroup
+	37, // 0: sermon.web.v1.GetOrganizationQuotasResponse.quotas:type_name -> sermon.web.v1.OrganizationQuotas
+	38, // 1: sermon.web.v1.NodeGroup.create_time:type_name -> google.protobuf.Timestamp
+	7,  // 2: sermon.web.v1.ListNodeGroupsResponse.groups:type_name -> sermon.web.v1.NodeGroup
+	7,  // 3: sermon.web.v1.CreateNodeGroupResponse.group:type_name -> sermon.web.v1.NodeGroup
 	0,  // 4: sermon.web.v1.RoleBinding.role:type_name -> sermon.web.v1.Role
-	12, // 5: sermon.web.v1.Member.bindings:type_name -> sermon.web.v1.RoleBinding
-	13, // 6: sermon.web.v1.ListMembersResponse.members:type_name -> sermon.web.v1.Member
+	16, // 5: sermon.web.v1.Member.bindings:type_name -> sermon.web.v1.RoleBinding
+	17, // 6: sermon.web.v1.ListMembersResponse.members:type_name -> sermon.web.v1.Member
 	0,  // 7: sermon.web.v1.GrantRoleRequest.role:type_name -> sermon.web.v1.Role
-	34, // 8: sermon.web.v1.AuditEntry.time:type_name -> google.protobuf.Timestamp
-	32, // 9: sermon.web.v1.AuditEntry.details:type_name -> sermon.web.v1.AuditEntry.DetailsEntry
-	22, // 10: sermon.web.v1.ListAuditLogResponse.entries:type_name -> sermon.web.v1.AuditEntry
+	38, // 8: sermon.web.v1.AuditEntry.time:type_name -> google.protobuf.Timestamp
+	36, // 9: sermon.web.v1.AuditEntry.details:type_name -> sermon.web.v1.AuditEntry.DetailsEntry
+	26, // 10: sermon.web.v1.ListAuditLogResponse.entries:type_name -> sermon.web.v1.AuditEntry
 	0,  // 11: sermon.web.v1.InviteMemberRequest.role:type_name -> sermon.web.v1.Role
-	27, // 12: sermon.web.v1.InviteMemberResponse.invitation:type_name -> sermon.web.v1.Invitation
+	31, // 12: sermon.web.v1.InviteMemberResponse.invitation:type_name -> sermon.web.v1.Invitation
 	0,  // 13: sermon.web.v1.Invitation.role:type_name -> sermon.web.v1.Role
-	34, // 14: sermon.web.v1.Invitation.create_time:type_name -> google.protobuf.Timestamp
-	34, // 15: sermon.web.v1.Invitation.expire_time:type_name -> google.protobuf.Timestamp
-	27, // 16: sermon.web.v1.ListInvitationsResponse.invitations:type_name -> sermon.web.v1.Invitation
-	4,  // 17: sermon.web.v1.AccessService.ListNodeGroups:input_type -> sermon.web.v1.ListNodeGroupsRequest
-	6,  // 18: sermon.web.v1.AccessService.CreateNodeGroup:input_type -> sermon.web.v1.CreateNodeGroupRequest
-	8,  // 19: sermon.web.v1.AccessService.RenameNodeGroup:input_type -> sermon.web.v1.RenameNodeGroupRequest
-	10, // 20: sermon.web.v1.AccessService.DeleteNodeGroup:input_type -> sermon.web.v1.DeleteNodeGroupRequest
-	14, // 21: sermon.web.v1.AccessService.ListMembers:input_type -> sermon.web.v1.ListMembersRequest
-	16, // 22: sermon.web.v1.AccessService.GrantRole:input_type -> sermon.web.v1.GrantRoleRequest
-	18, // 23: sermon.web.v1.AccessService.RevokeRole:input_type -> sermon.web.v1.RevokeRoleRequest
-	20, // 24: sermon.web.v1.AccessService.RemoveMember:input_type -> sermon.web.v1.RemoveMemberRequest
-	25, // 25: sermon.web.v1.AccessService.InviteMember:input_type -> sermon.web.v1.InviteMemberRequest
-	28, // 26: sermon.web.v1.AccessService.ListInvitations:input_type -> sermon.web.v1.ListInvitationsRequest
-	30, // 27: sermon.web.v1.AccessService.RevokeInvitation:input_type -> sermon.web.v1.RevokeInvitationRequest
-	23, // 28: sermon.web.v1.AccessService.ListAuditLog:input_type -> sermon.web.v1.ListAuditLogRequest
-	1,  // 29: sermon.web.v1.AccessService.GetOrganizationQuotas:input_type -> sermon.web.v1.GetOrganizationQuotasRequest
-	5,  // 30: sermon.web.v1.AccessService.ListNodeGroups:output_type -> sermon.web.v1.ListNodeGroupsResponse
-	7,  // 31: sermon.web.v1.AccessService.CreateNodeGroup:output_type -> sermon.web.v1.CreateNodeGroupResponse
-	9,  // 32: sermon.web.v1.AccessService.RenameNodeGroup:output_type -> sermon.web.v1.RenameNodeGroupResponse
-	11, // 33: sermon.web.v1.AccessService.DeleteNodeGroup:output_type -> sermon.web.v1.DeleteNodeGroupResponse
-	15, // 34: sermon.web.v1.AccessService.ListMembers:output_type -> sermon.web.v1.ListMembersResponse
-	17, // 35: sermon.web.v1.AccessService.GrantRole:output_type -> sermon.web.v1.GrantRoleResponse
-	19, // 36: sermon.web.v1.AccessService.RevokeRole:output_type -> sermon.web.v1.RevokeRoleResponse
-	21, // 37: sermon.web.v1.AccessService.RemoveMember:output_type -> sermon.web.v1.RemoveMemberResponse
-	26, // 38: sermon.web.v1.AccessService.InviteMember:output_type -> sermon.web.v1.InviteMemberResponse
-	29, // 39: sermon.web.v1.AccessService.ListInvitations:output_type -> sermon.web.v1.ListInvitationsResponse
-	31, // 40: sermon.web.v1.AccessService.RevokeInvitation:output_type -> sermon.web.v1.RevokeInvitationResponse
-	24, // 41: sermon.web.v1.AccessService.ListAuditLog:output_type -> sermon.web.v1.ListAuditLogResponse
-	2,  // 42: sermon.web.v1.AccessService.GetOrganizationQuotas:output_type -> sermon.web.v1.GetOrganizationQuotasResponse
-	30, // [30:43] is the sub-list for method output_type
-	17, // [17:30] is the sub-list for method input_type
+	38, // 14: sermon.web.v1.Invitation.create_time:type_name -> google.protobuf.Timestamp
+	38, // 15: sermon.web.v1.Invitation.expire_time:type_name -> google.protobuf.Timestamp
+	31, // 16: sermon.web.v1.ListInvitationsResponse.invitations:type_name -> sermon.web.v1.Invitation
+	8,  // 17: sermon.web.v1.AccessService.ListNodeGroups:input_type -> sermon.web.v1.ListNodeGroupsRequest
+	10, // 18: sermon.web.v1.AccessService.CreateNodeGroup:input_type -> sermon.web.v1.CreateNodeGroupRequest
+	12, // 19: sermon.web.v1.AccessService.RenameNodeGroup:input_type -> sermon.web.v1.RenameNodeGroupRequest
+	14, // 20: sermon.web.v1.AccessService.DeleteNodeGroup:input_type -> sermon.web.v1.DeleteNodeGroupRequest
+	18, // 21: sermon.web.v1.AccessService.ListMembers:input_type -> sermon.web.v1.ListMembersRequest
+	20, // 22: sermon.web.v1.AccessService.GrantRole:input_type -> sermon.web.v1.GrantRoleRequest
+	22, // 23: sermon.web.v1.AccessService.RevokeRole:input_type -> sermon.web.v1.RevokeRoleRequest
+	24, // 24: sermon.web.v1.AccessService.RemoveMember:input_type -> sermon.web.v1.RemoveMemberRequest
+	29, // 25: sermon.web.v1.AccessService.InviteMember:input_type -> sermon.web.v1.InviteMemberRequest
+	32, // 26: sermon.web.v1.AccessService.ListInvitations:input_type -> sermon.web.v1.ListInvitationsRequest
+	34, // 27: sermon.web.v1.AccessService.RevokeInvitation:input_type -> sermon.web.v1.RevokeInvitationRequest
+	27, // 28: sermon.web.v1.AccessService.ListAuditLog:input_type -> sermon.web.v1.ListAuditLogRequest
+	5,  // 29: sermon.web.v1.AccessService.GetOrganizationQuotas:input_type -> sermon.web.v1.GetOrganizationQuotasRequest
+	1,  // 30: sermon.web.v1.AccessService.GetRetention:input_type -> sermon.web.v1.GetRetentionRequest
+	3,  // 31: sermon.web.v1.AccessService.SetRetention:input_type -> sermon.web.v1.SetRetentionRequest
+	9,  // 32: sermon.web.v1.AccessService.ListNodeGroups:output_type -> sermon.web.v1.ListNodeGroupsResponse
+	11, // 33: sermon.web.v1.AccessService.CreateNodeGroup:output_type -> sermon.web.v1.CreateNodeGroupResponse
+	13, // 34: sermon.web.v1.AccessService.RenameNodeGroup:output_type -> sermon.web.v1.RenameNodeGroupResponse
+	15, // 35: sermon.web.v1.AccessService.DeleteNodeGroup:output_type -> sermon.web.v1.DeleteNodeGroupResponse
+	19, // 36: sermon.web.v1.AccessService.ListMembers:output_type -> sermon.web.v1.ListMembersResponse
+	21, // 37: sermon.web.v1.AccessService.GrantRole:output_type -> sermon.web.v1.GrantRoleResponse
+	23, // 38: sermon.web.v1.AccessService.RevokeRole:output_type -> sermon.web.v1.RevokeRoleResponse
+	25, // 39: sermon.web.v1.AccessService.RemoveMember:output_type -> sermon.web.v1.RemoveMemberResponse
+	30, // 40: sermon.web.v1.AccessService.InviteMember:output_type -> sermon.web.v1.InviteMemberResponse
+	33, // 41: sermon.web.v1.AccessService.ListInvitations:output_type -> sermon.web.v1.ListInvitationsResponse
+	35, // 42: sermon.web.v1.AccessService.RevokeInvitation:output_type -> sermon.web.v1.RevokeInvitationResponse
+	28, // 43: sermon.web.v1.AccessService.ListAuditLog:output_type -> sermon.web.v1.ListAuditLogResponse
+	6,  // 44: sermon.web.v1.AccessService.GetOrganizationQuotas:output_type -> sermon.web.v1.GetOrganizationQuotasResponse
+	2,  // 45: sermon.web.v1.AccessService.GetRetention:output_type -> sermon.web.v1.GetRetentionResponse
+	4,  // 46: sermon.web.v1.AccessService.SetRetention:output_type -> sermon.web.v1.SetRetentionResponse
+	32, // [32:47] is the sub-list for method output_type
+	17, // [17:32] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name
 	17, // [17:17] is the sub-list for extension extendee
 	0,  // [0:17] is the sub-list for field type_name
@@ -1939,7 +2193,7 @@ func file_sermon_web_v1_access_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_access_proto_rawDesc), len(file_sermon_web_v1_access_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   32,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -134,9 +134,8 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     let updates = UpdateSignals::default();
     // The server's commands for the root helper (M4-12).
     let (inbox, ports) = run_ports(config, &layout, &clock);
-    let (module_runtime, discovery) = module_runtime(config, &outbox, &clock, &agent_config);
-    let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
-        .with_modules(module_runtime.ids())
+    let mods = module_runtime(config, &outbox, &clock, &agent_config);
+    let transport = transport(config, layout, facts, &outbox, &clock, &agent_config, &mods)
         .with_update_refresh(updates.refresh.clone())
         .with_commands(Arc::new(inbox));
 
@@ -194,7 +193,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         ));
         let reports = spawn_updates(config, &outbox, &clock, &updates, &shutdown);
         let runner = spawn_runs(ports, &outbox, &clock, &agent_config, &updates, &shutdown);
-        let integrations = spawn_modules(module_runtime, discovery, &agent_config, &shutdown);
+        let integrations = spawn_modules(mods, &agent_config, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         reports.await.context("update task failed")?;
@@ -211,8 +210,8 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     })
 }
 
-/// The transport with the server's configuration and the live view (M3-13: on demand, its
-/// snapshots never buffered).
+/// The transport with the server's configuration, the live view (M3-13: on demand, its
+/// snapshots never buffered) and the modules with their credentials (in memory only, M5-05).
 fn transport(
     config: &AgentConfig,
     layout: StateLayout,
@@ -220,6 +219,7 @@ fn transport(
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
+    modules: &ModuleParts,
 ) -> Transport {
     let mut transport_config = TransportConfig::new(config.agent_url.uri().clone(), VERSION);
     transport_config.install_method = install_method();
@@ -231,6 +231,8 @@ fn transport(
         clock.clone(),
     )
     .with_config(agent_config.clone())
+    .with_modules(modules.runtime.ids())
+    .with_module_secrets(modules.secrets.clone())
     .with_live(Arc::new(liveview::LiveView::new(
         ProcRoot::new(&config.host_root),
         config.local.allow_live_view,
@@ -239,17 +241,21 @@ fn transport(
     )))
 }
 
+/// The modules of the agent: their runtime, discovery and credentials.
+struct ModuleParts {
+    runtime: sermon_modules::runtime::Runtime,
+    discovery: Option<discovery::Discovery>,
+    secrets: Arc<modules::SecretStore>,
+}
+
 /// The modules built in (ADR 0039), bounded by the veto of `agent.toml`; their reasons redacted
-/// with the organization's rules. With them their discovery.
+/// with the organization's rules. With them their discovery and the store of their credentials.
 fn module_runtime(
     config: &AgentConfig,
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
-) -> (
-    sermon_modules::runtime::Runtime,
-    Option<discovery::Discovery>,
-) {
+) -> ModuleParts {
     let store = agent_config.clone();
     let sink = modules::OutboxSink::new(
         outbox.clone(),
@@ -267,18 +273,31 @@ fn module_runtime(
         systemd: Systemctl::on_host(&config.host_root)
             .map(|s| -> Arc<dyn sermon_modules::Systemd> { Arc::new(modules::Systemd(s)) }),
     });
-    (runtime, discover(config, outbox, clock))
+    ModuleParts {
+        runtime,
+        discovery: discover(config, outbox, clock),
+        secrets: Arc::new(modules::SecretStore::default()),
+    }
 }
 
 /// Starts the modules (ADR 0039): they follow the server's configuration; their discovery
 /// alongside.
 fn spawn_modules(
-    runtime: sermon_modules::runtime::Runtime,
-    discovery: Option<discovery::Discovery>,
+    parts: ModuleParts,
     agent_config: &agent_config::ConfigStore,
     shutdown: &CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
-    let modules = modules::run(runtime, agent_config.subscribe(), shutdown.clone());
+    let ModuleParts {
+        runtime,
+        discovery,
+        secrets,
+    } = parts;
+    let modules = modules::run(
+        runtime,
+        agent_config.subscribe(),
+        secrets.subscribe(),
+        shutdown.clone(),
+    );
     let shutdown = shutdown.clone();
     tokio::spawn(async move {
         let discover = async {

@@ -1,6 +1,7 @@
 package agentapi_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
+	"github.com/pmoscode/SerMon/server/internal/secrets"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
 )
 
@@ -287,6 +289,101 @@ func TestConfig_TheModulesVetoIsStored(t *testing.T) {
 	waitFor(t, func() bool { return len(configs.answers()) == 1 })
 	if got := configs.answers()[0].applied; !got.ModulesVetoed || got.LogsVetoed {
 		t.Errorf("stored answer = %+v", got)
+	}
+	_ = stream.CloseRequest()
+}
+
+// testBox seals like the server's master keys.
+func testBox(t *testing.T) *secrets.Box {
+	t.Helper()
+	key, err := secrets.NewKey(1, bytes.Repeat([]byte{9}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, err := secrets.NewBox(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return box
+}
+
+var groupX = tenant.GroupID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000cc"))
+
+func sealed(t *testing.T, box *secrets.Box, org tenant.OrgID, group tenant.GroupID, mod, field, value string) module.SealedSecret {
+	t.Helper()
+	s, err := box.Seal([]byte(value), module.SecretContext(org, group, mod, field))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return module.SealedSecret{Group: group, Module: mod, Field: field, Sealed: s}
+}
+
+// M5-05: after the Hello – also with the agent's version current – the agent gets the opened
+// credentials of the modules it has built in, before any configuration; a value sealed for
+// another group or organization doesn't open and stays out; every new version brings them again.
+func TestConfig_TheCredentialsOfTheModulesGoToTheAgent(t *testing.T) {
+	box := testBox(t)
+	const value = "pg-value-for-x" // betterleaks:allow
+	config := withModules(nodeConfig(3))
+	config.Secrets = []module.SealedSecret{
+		sealed(t, box, orgX, groupX, "simulate", "token", value),
+		sealed(t, box, orgX, groupX, "simulate", "user_key", "second-value"),
+		sealed(t, box, orgX, groupX, "redis", "password", "not-built-in"),
+		sealed(t, box, tenant.OrgID(uuid.New()), groupX, "simulate", "other", "foreign-org"),
+		{Group: groupX, Module: "simulate", Field: "broken", Sealed: []byte("garbage")},
+	}
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: config}}
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithAgentConfig(configs), agentapi.WithModuleSecrets(box)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	hello := helloWithConfig(3) // current: no ConfigUpdate, but the credentials
+	hello.GetHello().Modules = []string{"simulate"}
+	if err := stream.Send(hello); err != nil {
+		t.Fatal(err)
+	}
+	res, err := receive(stream)
+	got := res.GetModuleSecrets()
+	if err != nil || got == nil {
+		t.Fatalf("Receive() = %v, %v; want ModuleSecrets", res, err)
+	}
+	if len(got.GetSecrets()) != 2 || got.GetSecrets()[0].GetModuleId() != "simulate" || got.GetSecrets()[0].GetField() != "token" ||
+		got.GetSecrets()[0].GetValue() != value || got.GetSecrets()[1].GetField() != "user_key" || got.GetSecrets()[1].GetValue() != "second-value" {
+		t.Fatalf("secrets = %d entries", len(got.GetSecrets()))
+	}
+
+	configs.set(orgX, func() logconfig.NodeConfig { c := config; c.Version = 4; return c }())
+	s.sessions.ConfigChanged(orgX)
+	first, err := stream.Receive()
+	if err != nil || first.GetModuleSecrets() == nil {
+		t.Fatalf("Receive() = %v, %v; want the credentials before the configuration", first, err)
+	}
+	if next, err := stream.Receive(); err != nil || next.GetConfigUpdate().GetVersion() != 4 {
+		t.Fatalf("Receive() = %v, %v; want ConfigUpdate 4", next, err)
+	}
+	_ = stream.CloseRequest()
+}
+
+// Without credentials an empty set goes out once: it clears what an agent still holds.
+func TestConfig_AnEmptySetOfCredentialsGoesOutOnce(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: nodeConfig(1)}}
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithAgentConfig(configs), agentapi.WithModuleSecrets(testBox(t))})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	if err := stream.Send(helloWithConfig(1)); err != nil {
+		t.Fatal(err)
+	}
+	res, err := receive(stream)
+	if err != nil || res.GetModuleSecrets() == nil || len(res.GetModuleSecrets().GetSecrets()) != 0 {
+		t.Fatalf("Receive() = %v, %v", res, err)
+	}
+	s.sessions.ConfigChanged(orgX) // same version: nothing
+	configs.set(orgX, nodeConfig(2))
+	s.sessions.ConfigChanged(orgX)
+	if next, err := stream.Receive(); err != nil || next.GetModuleSecrets() == nil {
+		t.Fatalf("Receive() = %v, %v; want the credentials with version 2", next, err)
+	}
+	if next, err := stream.Receive(); err != nil || next.GetConfigUpdate().GetVersion() != 2 {
+		t.Fatalf("Receive() = %v, %v", next, err)
 	}
 	_ = stream.CloseRequest()
 }

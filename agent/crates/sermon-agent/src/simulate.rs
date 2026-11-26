@@ -619,7 +619,8 @@ fn run_node(
     )
     .with_modules(modules.ids())
     .with_config(agent_config.clone());
-    let integrations = crate::modules::run(modules, agent_config.subscribe(), shutdown.clone());
+    let (transport, integrations) =
+        crate::modules::start(modules, transport, &agent_config, &shutdown);
     // Every other node "runs" the module's process: the UI suggests the module (M5-04).
     let facts = sermon_modules::HostFacts {
         processes: (index % 2 == 0)

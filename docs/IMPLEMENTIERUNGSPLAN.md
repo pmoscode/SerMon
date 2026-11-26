@@ -5332,7 +5332,30 @@ Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
   die Parser von `/proc/net`.
 - **Abhängig von:** M5-03
 
-#### ☐ M5-05 – Zugangsdaten Ende-zu-Ende · X · L 🔒
+#### ☑ M5-05 – Zugangsdaten Ende-zu-Ende · X · L 🔒
+> Erledigt (Nachtrag in ADR 0039; Migration 00058 `module_secrets`):
+> - **Setzen** mit der Einstellung des Moduls (`SetGroupModuleRequest.secrets`, `clear_secrets`; Step-up wie die
+>   Einstellung): nur Felder mit `writeOnly`, geprüft gegen ihr Feld (Länge, Steuerzeichen; der Grund wiederholt nie den
+>   Wert), höchstens 4 KiB; ein Pflicht-Geheimnis muss gesetzt bleiben. Der Server versiegelt mit `secrets.Box`, AAD
+>   `module_secret:<org>:<gruppe>:<modul>:<feld>`; RLS, entfernt mit der Einstellung des Moduls. Audit nennt die Felder
+>   (`secrets_set`, `secrets_cleared`), nie Werte; die UI bekommt nur `secrets_set`.
+> - **Zustellung:** `ModuleSecrets` nach jedem Hello (auch ohne neue Konfiguration, auch leer – das löscht alte) und vor
+>   jeder neuen Konfiguration, nur für Module, die der Agent eingebaut hat, nur die der eigenen Gruppe, geöffnet erst in
+>   der Session; ein Wert, der nicht aufgeht, fehlt und wird ohne Wert geloggt. Neue Nodes der Gruppe und ein Node mit
+>   neuem Schlüssel bekommen sie mit ihrer nächsten Session; jede Änderung erhöht die Version der Org.
+> - **Agent:** `ModuleSecretsSink` im Transport, `SecretStore` im Speicher (Grenzen des Protokolls, erster Wert je Feld),
+>   die Laufzeit startet ein Modul neu, wenn sich seine Zugangsdaten ändern; nie in State, WAL oder Log (nur die Zahl).
+>   `Debug` von `ModuleSecret` in Rust geschwärzt (eigenes `Debug`, `skip_debug` in `buf.gen.yaml`); in Go schwärzt
+>   `String()` `debug_redact` nicht – der Server gibt Nachrichten der Agents nie aus.
+> - **UI:** Passwortfelder, „gesetzt“/„nicht gesetzt“, „Gespeicherten Wert entfernen“, Hinweis auf verschlüsselte
+>   Zustellung und einen Monitoring-User mit wenigen Rechten.
+> - Tests: Dienst (versiegelt, AAD anderer Org, Gruppe, Modul, Feld öffnet nicht, Audit ohne Wert, Pflicht bleibt,
+>   Rotation ersetzt), Store-Integration (nur die Gruppe, entfernen, Kaskade, RLS), Web-API-Integration (nie
+>   zurückgegeben; ein Test liest jede Tabelle als Owner: kein Klartext, auch nicht hex), Session (nur eingebaute
+>   Module, fremde AAD fällt weg, nach jedem Hello, vor der Konfiguration), Agent (Grenzen, im Speicher, Rotation,
+>   leeres Set nimmt sie weg, Dateien im State ohne Wert), Transport (an die Senke, `Debug` ohne Wert);
+>   `just e2e-agent`: ein versiegeltes Token erreicht die virtuellen Nodes (`sermon_simulate_token` = 1) und steht in
+>   keiner Tabelle, keinem Log von Server und Agent und keiner Datei des Agents. Gegenproben 14/14.
 - **Ziel:** die Entscheidung aus M5-01 umsetzen: Zugangsdaten eines Moduls (DB-Passwort) erreichen nur den Agent, der
   sie im Speicher hält – nie im Klartext in Datenbank, Logs, WAL oder Audit-Log; neue Nodes der Gruppe und ein neuer
   Schlüssel des Nodes; Hinweis in der UI auf einen Monitoring-User mit wenigen Rechten.

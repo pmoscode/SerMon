@@ -216,3 +216,17 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
   UI und machten Einheiten zur Vermutung.
 - Grenzen: höchstens 8 Endpunkte, je Endpunkt `max_series` (ab Werk 50), zusammen unter den 256 Samples eines Laufs;
   ausgelassene Serien zählt `sermon_prometheus_dropped_series`.
+
+## Nachtrag M5-05: Zugangsdaten
+
+- **Mit der Einstellung gesetzt:** `SetGroupModule` nimmt neue Werte (`secrets`) und zu entfernende Felder
+  (`clear_secrets`) mit; eine Transaktion, ein Step-up, die Pflichtprüfung sieht gespeicherte und neue Werte. Ein
+  eigener RPC hätte ein Pflicht-Geheimnis vor der Einstellung verlangt.
+- **Versiegelt** in `module_secrets` (RLS, Fremdschlüssel auf die Einstellung: weg mit ihr), AAD
+  `module_secret:<org>:<gruppe>:<modul>:<feld>`. Ein Wechsel des Hauptschlüssels: Werte unter einem früheren Schlüssel
+  gehen auf, solange er in der Schlüsseldatei steht; neu eingegeben werden sie mit dem aktuellen versiegelt.
+- **Zustellung:** nach jedem Hello und vor jeder neuen Konfiguration – auch ein leerer Satz, der alte Werte beim Agent
+  löscht –, nur für eingebaute Module der eigenen Gruppe; geöffnet erst in der Session des Agents.
+- **Ausgabe:** In Rust hat `ModuleSecret` ein eigenes `Debug` ohne Wert. protobuf-go schwärzt `debug_redact` in
+  `String()` nicht; der Server gibt Nachrichten der Agents deshalb nie aus (Logs nennen Modul und Feld), der Test der
+  Agent-Binary liest die Logs von Server und Agent auf den Klartext.

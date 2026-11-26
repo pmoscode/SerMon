@@ -82,7 +82,9 @@ func (h *ModuleHandler) SetGroupModule(ctx context.Context, req *connect.Request
 	if msg.GetInterval() != nil {
 		setting.Interval = msg.GetInterval().AsDuration()
 	}
-	if err := h.svc.SetGroupModule(ctx, c, tenant.GroupID(group), setting); err != nil {
+	// The credentials go on to be sealed; the request is never logged.
+	change := modules.SecretChange{Set: req.Msg.GetSecrets(), Clear: req.Msg.GetClearSecrets()}
+	if err := h.svc.SetGroupModule(ctx, c, tenant.GroupID(group), setting, change); err != nil {
 		return nil, h.fail(ctx, "set module", err)
 	}
 	return connect.NewResponse(&webv1.SetGroupModuleResponse{}), nil
@@ -172,7 +174,7 @@ func (h *ModuleHandler) fail(ctx context.Context, op string, err error) error {
 func settingMessages(settings []module.Setting) []*webv1.ModuleSetting {
 	out := make([]*webv1.ModuleSetting, 0, len(settings))
 	for _, s := range settings {
-		msg := &webv1.ModuleSetting{ModuleId: s.Module, Enabled: s.Enabled, ConfigJson: s.Config}
+		msg := &webv1.ModuleSetting{ModuleId: s.Module, Enabled: s.Enabled, ConfigJson: s.Config, SecretsSet: s.SecretsSet}
 		if s.Interval > 0 {
 			msg.Interval = durationpb.New(s.Interval.Truncate(time.Second))
 		}

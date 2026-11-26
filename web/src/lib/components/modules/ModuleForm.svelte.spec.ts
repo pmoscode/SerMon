@@ -111,7 +111,8 @@ describe('ModuleForm', () => {
 				mode: 'tls',
 				codes: [200, 301]
 			}),
-			secrets: {}
+			secrets: {},
+			clearSecrets: []
 		});
 	});
 
@@ -133,7 +134,6 @@ describe('ModuleForm', () => {
 	it('never shows a credential, only whether one is set', async () => {
 		const { saved } = setup({
 			secretsSet: ['password'],
-			secretsWritable: true,
 			setting: create(ModuleSettingSchema, {
 				moduleId: 'newer',
 				enabled: true,
@@ -152,14 +152,51 @@ describe('ModuleForm', () => {
 		expect(saved[0].configJson).not.toContain(TYPED);
 	});
 
-	it('keeps credentials closed while they can not be saved', async () => {
-		const { saved } = setup({ suggestion: '{"url":"http://x/"}' });
-		await expect.element(page.getByLabelText(/^Password/)).toBeDisabled();
-		await expect.element(page.getByText(/Credentials can't be saved here yet/)).toBeVisible();
-		await expect.element(page.getByTestId('secret-state')).toHaveTextContent('Not set');
+	it('removes a stored credential, and says a required one is then missing', async () => {
+		const required = JSON.stringify({
+			type: 'object',
+			additionalProperties: false,
+			required: ['password'],
+			properties: {
+				password: { type: 'string', title: 'Password', writeOnly: true, maxLength: 64 }
+			}
+		});
+		const saved: Saved[] = [];
+		render(ModuleForm, {
+			moduleId: 'newer',
+			schemaJson: required,
+			secretsSet: ['password'],
+			onSave: async (s: Saved) => {
+				saved.push(s);
+				return '';
+			},
+			onCancel: () => {}
+		});
+		await expect.element(page.getByText(/never shown again/)).toBeVisible();
+		await page.getByRole('checkbox', { name: 'Remove the stored value' }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+		await expect.element(page.getByText('Required.')).toBeVisible();
+		expect(saved).toHaveLength(0);
+		// A new value instead is fine: it replaces the stored one.
+		await page.getByLabelText(/^Password/).fill(TYPED);
 		await page.getByRole('button', { name: 'Save' }).click();
 		await vi.waitFor(() => expect(saved).toHaveLength(1));
-		expect(saved[0].secrets).toEqual({});
+		expect(saved[0]).toMatchObject({ secrets: { password: TYPED }, clearSecrets: [] });
+	});
+
+	it('removes an optional credential', async () => {
+		const { saved } = setup({
+			secretsSet: ['password'],
+			setting: create(ModuleSettingSchema, {
+				moduleId: 'newer',
+				enabled: true,
+				configJson: '{"url":"http://x/"}'
+			})
+		});
+		await page.getByRole('checkbox', { name: 'Remove the stored value' }).click();
+		await page.getByRole('button', { name: 'Save' }).click();
+		await vi.waitFor(() => expect(saved).toHaveLength(1));
+		expect(saved[0]).toMatchObject({ secrets: {}, clearSecrets: ['password'] });
 	});
 
 	it('labels the fields of a known module in the UI language', async () => {

@@ -2,6 +2,7 @@ package agentapi
 
 import (
 	"context"
+	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -33,6 +34,20 @@ func WithAgentConfig(configs AgentConfigs) HandlerOption {
 	return func(h *SessionHandler) { h.configs = configs }
 }
 
+// SecretOpener opens the sealed credentials of the modules (secrets.Box).
+type SecretOpener interface {
+	Open(sealed, associatedData []byte) ([]byte, error)
+}
+
+// WithModuleSecrets sends the credentials of the modules to the agents (M5-05, ADR 0039),
+// opened with opener; without it they get none.
+func WithModuleSecrets(opener SecretOpener) HandlerOption {
+	return func(h *SessionHandler) { h.secrets = opener }
+}
+
+// maxModuleSecrets bounds a ModuleSecrets message (agent.proto).
+const maxModuleSecrets = 64
+
 var _ logsettings.Agents = (*Sessions)(nil)
 
 // ConfigChanged tells the sessions of the organization on this server that its configuration
@@ -56,6 +71,8 @@ type configState struct {
 	agent   uint64   // the version from the Hello
 	sent    uint64   // the version last sent in this session
 	modules []string // the modules the agent has built in (Hello)
+	// secretsSent: the credentials went out in this session (after every Hello once).
+	secretsSent bool
 }
 
 // newConfigState records what the Hello says. An agent with other modules built in than before
@@ -88,7 +105,17 @@ func (h *SessionHandler) sendConfig(ctx context.Context, id Identity, state *con
 		h.logger.WarnContext(ctx, "load agent config failed", "node", id.Node.String(), "error", err)
 		return nil
 	}
-	if config.Version == state.agent || config.Version == state.sent {
+	changed := config.Version != state.agent && config.Version != state.sent
+	// The credentials first, so the modules of the new configuration start with them; once per
+	// session (the agent keeps them in memory only) and with every configuration.
+	if h.secrets != nil && (changed || !state.secretsSent) {
+		msg := h.moduleSecrets(ctx, id, config, state.modules)
+		if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_ModuleSecrets{ModuleSecrets: msg}}); err != nil {
+			return err //nolint:wrapcheck // connect errors must reach the client unchanged
+		}
+		state.secretsSent = true
+	}
+	if !changed {
 		return nil
 	}
 	if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_ConfigUpdate{ConfigUpdate: configUpdate(config, state.modules)}}); err != nil {
@@ -97,6 +124,24 @@ func (h *SessionHandler) sendConfig(ctx context.Context, id Identity, state *con
 	state.sent = config.Version
 	h.logger.InfoContext(ctx, "agent config sent", "node", id.Node.String(), "version", config.Version)
 	return nil
+}
+
+// moduleSecrets opens the credentials of the node's group for the modules its agent has built
+// in. A value that doesn't open (a key gone, a copied record) is left out and logged without it.
+func (h *SessionHandler) moduleSecrets(ctx context.Context, id Identity, config logconfig.NodeConfig, builtin []string) *agentv1.ModuleSecrets {
+	msg := &agentv1.ModuleSecrets{}
+	for _, s := range config.Secrets {
+		if !slices.Contains(builtin, s.Module) || len(msg.GetSecrets()) >= maxModuleSecrets {
+			continue
+		}
+		value, err := h.secrets.Open(s.Sealed, module.SecretContext(id.Org, s.Group, s.Module, s.Field))
+		if err != nil {
+			h.logger.WarnContext(ctx, "a credential of a module does not open, left out", "node", id.Node.String(), "module", s.Module, "field", s.Field)
+			continue
+		}
+		msg.Secrets = append(msg.Secrets, &agentv1.ModuleSecret{ModuleId: s.Module, Field: s.Field, Value: string(value)})
+	}
+	return msg
 }
 
 // recordApplied stores the agent's answer; the error text comes from the host.

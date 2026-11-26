@@ -147,6 +147,7 @@ struct Setup {
     live: Option<Arc<FakeLive>>,
     refresh: Option<Arc<tokio::sync::Notify>>,
     commands: Option<Arc<FakeCommands>>,
+    secrets: Option<Arc<FakeSecrets>>,
 }
 
 impl Setup {
@@ -161,6 +162,7 @@ impl Setup {
             live: None,
             refresh: None,
             commands: None,
+            secrets: None,
         }
     }
 
@@ -211,6 +213,9 @@ impl Setup {
         }
         if let Some(commands) = self.commands {
             transport = transport.with_commands(commands);
+        }
+        if let Some(secrets) = self.secrets {
+            transport = transport.with_module_secrets(secrets);
         }
         let shutdown = CancellationToken::new();
         let token = shutdown.clone();
@@ -903,6 +908,76 @@ async fn ignores_the_commands_it_does_not_handle_yet() {
             .await
     );
     assert_eq!(harness.api.sessions().len(), 1, "the session ended");
+    harness.stop().await;
+}
+
+/// Keeps the credentials it got.
+#[derive(Debug, Default)]
+struct FakeSecrets(Mutex<Vec<sermon_transport::proto::agent::v1::ModuleSecrets>>);
+
+impl sermon_transport::session::ModuleSecretsSink for FakeSecrets {
+    fn replace(&self, secrets: sermon_transport::proto::agent::v1::ModuleSecrets) {
+        self.0.lock().unwrap().push(secrets);
+    }
+}
+
+// M5-05: the credentials of the modules go to their sink, every set as it came; Debug of the
+// message (and of the whole response) never shows a value.
+#[tokio::test(flavor = "multi_thread")]
+async fn hands_the_credentials_of_the_modules_on_without_printing_them() {
+    use sermon_transport::proto::agent::v1::{ModuleSecret, ModuleSecrets, SessionResponse};
+    let sink = Arc::new(FakeSecrets::default());
+    let mut setup = Setup::new();
+    setup.secrets = Some(sink.clone());
+    let harness = setup.start().await;
+    assert!(
+        harness
+            .api
+            .wait_for(WAIT, |s| s.first().is_some_and(|s| s.hello.is_some()))
+            .await
+    );
+    let secrets = ModuleSecrets {
+        secrets: vec![ModuleSecret {
+            module_id: "postgresql".into(),
+            field: "password".into(),
+            value: "s3cr3t-value".into(),
+        }],
+    };
+    for text in [
+        format!("{secrets:?}"),
+        format!(
+            "{:?}",
+            SessionResponse {
+                payload: Some(Payload::ModuleSecrets(secrets.clone()))
+            }
+        ),
+    ] {
+        assert!(!text.contains("s3cr3t-value"), "{text}");
+        assert!(
+            text.contains("password") && text.contains("<redacted>"),
+            "{text}"
+        );
+    }
+    assert!(
+        harness
+            .api
+            .send(Payload::ModuleSecrets(secrets.clone()))
+            .await
+    );
+    assert!(
+        harness
+            .api
+            .send(Payload::ModuleSecrets(ModuleSecrets::default()))
+            .await
+    );
+    assert!(
+        harness
+            .wait_until(|_| sink.0.lock().unwrap().len() == 2)
+            .await
+    );
+    let got = sink.0.lock().unwrap().clone();
+    assert_eq!(got[0], secrets);
+    assert!(got[1].secrets.is_empty(), "an empty set clears them");
     harness.stop().await;
 }
 

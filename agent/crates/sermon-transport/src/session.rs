@@ -22,9 +22,9 @@ use crate::identity::{AgentKey, CertificateOffer, Credentials, IssuedCertificate
 use crate::outbox::{Outbox, batch_for};
 use crate::proto::agent::v1::agent_service_client::AgentServiceClient;
 use crate::proto::agent::v1::{
-    ConfigApplied, ConfigUpdate, Heartbeat, Hello, InstallMethod, LiveViewRefused, ProcessSnapshot,
-    RotateCertificate, SessionRequest, SessionResponse, StartLiveView, session_request,
-    session_response,
+    ConfigApplied, ConfigUpdate, Heartbeat, Hello, InstallMethod, LiveViewRefused, ModuleSecrets,
+    ProcessSnapshot, RotateCertificate, SessionRequest, SessionResponse, StartLiveView,
+    session_request, session_response,
 };
 use crate::tls::agent_api_config;
 
@@ -104,6 +104,14 @@ pub trait ConfigSink: Send + Sync {
     fn apply(&self, update: ConfigUpdate) -> ConfigApplied;
 }
 
+/// Takes the credentials of the modules (ADR 0039, M5-05): the server sends all of them after
+/// every `Hello` and when they change. They live in memory only – never in the state, the WAL or
+/// a log.
+pub trait ModuleSecretsSink: Send + Sync {
+    /// Replaces the credentials with `secrets`.
+    fn replace(&self, secrets: ModuleSecrets);
+}
+
 /// Takes the snapshots of the live view (KONZEPT §9, M3-13).
 pub trait LiveSource: Send + Sync {
     /// Why the live view is refused (e.g. `allow_live_view = false`), or `None`.
@@ -172,6 +180,7 @@ pub struct Transport {
     live: Option<Arc<dyn LiveSource>>,
     update_refresh: Option<Arc<tokio::sync::Notify>>,
     commands: Option<Arc<dyn CommandSink>>,
+    module_secrets: Option<Arc<dyn ModuleSecretsSink>>,
 }
 
 impl std::fmt::Debug for Transport {
@@ -231,7 +240,15 @@ impl Transport {
             live: None,
             update_refresh: None,
             commands: None,
+            module_secrets: None,
         }
+    }
+
+    /// Hands the credentials of the modules to `sink` (M5-05); without one they are dropped.
+    #[must_use]
+    pub fn with_module_secrets(mut self, sink: Arc<dyn ModuleSecretsSink>) -> Self {
+        self.module_secrets = Some(sink);
+        self
     }
 
     /// Takes the live view's snapshots from `source`; without one a start is refused.
@@ -648,10 +665,7 @@ impl Session<'_> {
             session_response::Payload::SelfUpdate(update) => {
                 self.command(HelperCommand::SelfUpdate(update));
             }
-            session_response::Payload::ModuleSecrets(_) => {
-                // Taken by the modules' runtime (M5-05); never logged.
-                tracing::debug!("ignoring the credentials of modules, none run here");
-            }
+            session_response::Payload::ModuleSecrets(secrets) => self.module_secrets(secrets),
             session_response::Payload::CancelRun(cancel) => {
                 if let Some(sink) = &self.transport.commands {
                     sink.cancel(cancel.run_id);
@@ -661,6 +675,19 @@ impl Session<'_> {
             }
         }
         Ok(None)
+    }
+
+    /// Hands the credentials of the modules on; never logged, the count only.
+    fn module_secrets(&self, secrets: ModuleSecrets) {
+        if let Some(sink) = &self.transport.module_secrets {
+            tracing::debug!(
+                count = secrets.secrets.len(),
+                "credentials of modules received"
+            );
+            sink.replace(secrets);
+        } else {
+            tracing::debug!("ignoring the credentials of modules, none run here");
+        }
     }
 
     fn command(&self, command: HelperCommand) {

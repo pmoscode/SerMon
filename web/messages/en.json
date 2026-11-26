@@ -1425,7 +1425,6 @@
 	"modules_secret_set": "Set",
 	"modules_secret_unset": "Not set",
 	"modules_secret_placeholder": "Enter a new value",
-	"modules_secret_unavailable": "Credentials can't be saved here yet.",
 	"modules_problem_required": "Required.",
 	"modules_problem_integer": "A whole number.",
 	"modules_problem_number": "A number.",
@@ -1552,5 +1551,7 @@
 	"module_prometheus_ca_file": "CA file",
 	"module_prometheus_ca_file_help": "PEM file below module_file_prefixes to verify with instead of the system's CAs.",
 	"module_prometheus_bearer": "Bearer token",
-	"module_prometheus_bearer_help": "Sent as Authorization: Bearer to the configured endpoints only, never after a redirect to another host."
+	"module_prometheus_bearer_help": "Sent as Authorization: Bearer to the configured endpoints only, never after a redirect to another host.",
+	"modules_secret_hint": "Credentials are stored encrypted, go only to the group's agents over their encrypted connection and are never shown again. For databases, use a monitoring user of its own with few rights.",
+	"modules_secret_clear": "Remove the stored value"
 }

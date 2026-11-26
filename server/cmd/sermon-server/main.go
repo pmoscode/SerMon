@@ -283,7 +283,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return fmt.Errorf("module catalog: %w", err)
 		}
 		moduleStore := postgres.NewModuleStore(db)
-		moduleSettings := modules.NewService(moduleStore, moduleCatalog, authz.NewPolicy(), sessions, time.Now)
+		moduleSettings := modules.NewService(moduleStore, moduleCatalog, cfg.MasterKeys, authz.NewPolicy(), sessions, time.Now)
 		// The log explorer (M3-08); without Loki every query is UNAVAILABLE.
 		var logReader logs.Store
 		if logStore != nil {
@@ -353,7 +353,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		})
 		if cfg.AgentAddr != "" {
 			agentServer, err := newAgentServer(ctx, cfg, sessions, rotator, ca, logger,
-				agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(agentConfigs), agentapi.WithLiveView(liveHub),
+				agentapi.WithIngest(ingestService), agentapi.WithAgentConfig(agentConfigs), agentapi.WithModuleSecrets(cfg.MasterKeys), agentapi.WithLiveView(liveHub),
 				agentapi.WithCommands(commandStore, agentapi.CommandPoll), agentapi.WithReleases(releases))
 			if err != nil {
 				return err

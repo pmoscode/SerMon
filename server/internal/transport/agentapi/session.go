@@ -310,6 +310,7 @@ type SessionHandler struct {
 	trust    TrustSource
 	ingest   *ingest.Service
 	configs  AgentConfigs
+	secrets  SecretOpener
 	live     LiveViews
 	commands Commands
 	releases Releases

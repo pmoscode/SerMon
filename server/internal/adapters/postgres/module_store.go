@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -85,6 +86,9 @@ func (s *ModuleStore) View(ctx context.Context, scope tenant.Scope) (modules.Vie
 					group.Modules = append(group.Modules, settingFrom(r.ModuleID, r.Enabled, r.IntervalSeconds, r.Config))
 				}
 			}
+			if group.Modules, err = secretsSet(ctx, q, g.ID, group.Modules); err != nil {
+				return err
+			}
 			view.Groups = append(view.Groups, group)
 		}
 		return nil
@@ -94,7 +98,7 @@ func (s *ModuleStore) View(ctx context.Context, scope tenant.Scope) (modules.Vie
 
 // Put stores the setting of a group's module, raises the version and writes the audit entry in
 // one transaction.
-func (s *ModuleStore) Put(ctx context.Context, scope tenant.Scope, group tenant.GroupID, setting module.Setting, by identity.UserID, audit access.AuditEntry) error {
+func (s *ModuleStore) Put(ctx context.Context, scope tenant.Scope, group tenant.GroupID, setting module.Setting, secrets modules.SealedChange, by identity.UserID, audit access.AuditEntry) error {
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		exists, err := q.NodeGroupExists(ctx, uuid.UUID(group))
 		if err != nil {
@@ -127,8 +131,47 @@ func (s *ModuleStore) Put(ctx context.Context, scope tenant.Scope, group tenant.
 		}); err != nil {
 			return fmt.Errorf("store module setting: %w", err)
 		}
+		for _, f := range slices.Sorted(maps.Keys(secrets.Set)) {
+			if err := q.UpsertModuleSecret(ctx, sqlcdb.UpsertModuleSecretParams{
+				GroupID: uuid.UUID(group), ModuleID: setting.Module, Field: f, Sealed: secrets.Set[f], UpdatedBy: optionalUser(by),
+			}); err != nil {
+				return fmt.Errorf("store a credential: %w", err)
+			}
+		}
+		for _, f := range secrets.Clear {
+			if err := q.DeleteModuleSecret(ctx, sqlcdb.DeleteModuleSecretParams{GroupID: uuid.UUID(group), ModuleID: setting.Module, Field: f}); err != nil {
+				return fmt.Errorf("remove a credential: %w", err)
+			}
+		}
 		return bumpAndAudit(ctx, q, audit)
 	})
+}
+
+// SecretFields returns the credentials of a group's module that have a value.
+func (s *ModuleStore) SecretFields(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string) ([]string, error) {
+	var out []string
+	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		var err error
+		out, err = q.ModuleSecretFields(ctx, sqlcdb.ModuleSecretFieldsParams{GroupID: uuid.UUID(group), ModuleID: moduleID})
+		return err //nolint:wrapcheck // wrapped below
+	})
+	return out, wrap(err, "credential fields")
+}
+
+// secretsSet fills in which credentials of the settings have a value (names only).
+func secretsSet(ctx context.Context, q *sqlcdb.Queries, group uuid.UUID, settings []module.Setting) ([]module.Setting, error) {
+	rows, err := q.ListModuleSecretFields(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("credential fields: %w", err)
+	}
+	for i := range settings {
+		for _, r := range rows {
+			if r.GroupID == group && r.ModuleID == settings[i].Module {
+				settings[i].SecretsSet = append(settings[i].SecretsSet, r.Field)
+			}
+		}
+	}
+	return settings, nil
 }
 
 // Remove deletes the setting of a group's module, raises the version and audits it.
@@ -163,6 +206,9 @@ func (s *ModuleStore) Node(ctx context.Context, scope tenant.Scope, node identit
 		}
 		for _, r := range settings {
 			out.Settings = append(out.Settings, settingFrom(r.ModuleID, r.Enabled, r.IntervalSeconds, r.Config))
+		}
+		if out.Settings, err = secretsSet(ctx, q, n.GroupID, out.Settings); err != nil {
+			return err
 		}
 		health, err := q.ModuleHealthOfNode(ctx, n.ID)
 		if err != nil {

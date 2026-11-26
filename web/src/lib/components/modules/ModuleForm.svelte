@@ -28,7 +28,6 @@
 		setting,
 		suggestion = '',
 		secretsSet = [],
-		secretsWritable = false,
 		onSave,
 		onCancel
 	}: {
@@ -37,9 +36,8 @@
 		setting?: ModuleSetting;
 		/** The agent's suggestion while nothing is stored. */
 		suggestion?: string;
+		/** The credentials that have a value (the server never returns one). */
 		secretsSet?: string[];
-		/** Whether credentials can be saved. */
-		secretsWritable?: boolean;
 		/** Returns the message of a failure, empty on success. */
 		onSave: (saved: Saved) => Promise<string>;
 		onCancel: () => void;
@@ -60,8 +58,12 @@
 	let tried = $state(false);
 	let busy = $state(false);
 	let failure = $state('');
+	// Stored credentials to remove.
+	let clearing = $state<string[]>([]);
 
-	const found = $derived(problems(fields, values, secretsSet));
+	const kept = $derived(secretsSet.filter((f) => !clearing.includes(f)));
+	const found = $derived(problems(fields, values, kept));
+	const hasSecrets = fields.some((f) => f.secret);
 	const intervalProblem = $derived.by(() => {
 		const s = interval.trim();
 		if (s === '') return false;
@@ -80,7 +82,8 @@
 			enabled,
 			intervalSeconds: interval.trim() === '' ? undefined : Number(interval),
 			configJson: configOf(fields, values),
-			secrets: secretsWritable ? secretsOf(fields, values) : {}
+			secrets: secretsOf(fields, values),
+			clearSecrets: clearing.filter((f) => values[f] === '')
 		});
 		busy = false;
 	}
@@ -88,6 +91,9 @@
 
 <form class="flex flex-col gap-4 rounded-md border border-border p-4" onsubmit={submit} novalidate>
 	<h3 class="font-medium">{moduleLabel(moduleId)}</h3>
+	{#if hasSecrets}
+		<p class="text-xs text-muted-foreground">{m.modules_secret_hint()}</p>
+	{/if}
 	{#if failure}
 		<p role="alert" class="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
 			{failure}
@@ -153,10 +159,23 @@
 						bind:value={values[field.name] as string}
 						placeholder={m.modules_secret_placeholder()}
 						maxlength={field.maxLength}
-						disabled={!secretsWritable}
 						aria-invalid={problem !== undefined}
 						aria-describedby={described || undefined}
 					/>
+					{#if secretsSet.includes(field.name)}
+						<label class="flex items-center gap-2 text-xs">
+							<input
+								type="checkbox"
+								class="size-4 accent-primary"
+								checked={clearing.includes(field.name)}
+								onchange={(e) =>
+									(clearing = e.currentTarget.checked
+										? [...clearing, field.name]
+										: clearing.filter((f) => f !== field.name))}
+							/>
+							{m.modules_secret_clear()}
+						</label>
+					{/if}
 				{:else if field.values}
 					<select
 						id={fid}
@@ -193,12 +212,9 @@
 					/>
 				{/if}
 			{/if}
-			{#if help || isList(field) || (field.secret && !secretsWritable)}
+			{#if help || isList(field)}
 				<p id="{fid}-help" class="text-xs text-muted-foreground">
-					{help ?? ''}{isList(field) ? ` ${m.modules_list_help()}` : ''}{field.secret &&
-					!secretsWritable
-						? ` ${m.modules_secret_unavailable()}`
-						: ''}
+					{help ?? ''}{isList(field) ? ` ${m.modules_list_help()}` : ''}
 				</p>
 			{/if}
 			{#if problem}

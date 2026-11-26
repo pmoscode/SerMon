@@ -4,12 +4,17 @@ package webapi_test
 
 import (
 	"context"
+	"encoding/hex"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
 
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -110,4 +115,110 @@ func TestModules_AdminsSetGroupsViewersSeeTheirNodes(t *testing.T) {
 	if _, err := ann.modules.RemoveGroupModule(ctx, connect.NewRequest(&webv1.RemoveGroupModuleRequest{GroupId: groupAl, ModuleId: "simulate"})); connect.CodeOf(err) != connect.CodeNotFound {
 		t.Errorf("removing twice: %v", err)
 	}
+}
+
+// M5-05: a credential set with a module is never returned – the settings name the field only –
+// and its value is in no table, the audit log included (the test reads them all).
+func TestModules_CredentialsAreSealedAndNeverReturned(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	seedModulesAlpha(t)
+	ctx := context.Background()
+	ann := login(t, s, "ann@example.org")
+	const plain = "plain-credential-of-alpha" // betterleaks:allow
+	_, err := ann.modules.SetGroupModule(ctx, connect.NewRequest(&webv1.SetGroupModuleRequest{
+		GroupId: groupAl, Setting: &webv1.ModuleSetting{ModuleId: "simulate", Enabled: true}, Secrets: map[string]string{"token": plain},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = ann.modules.RemoveGroupModule(ctx, connect.NewRequest(&webv1.RemoveGroupModuleRequest{GroupId: groupAl, ModuleId: "simulate"}))
+	})
+	settings, err := ann.modules.GetModuleSettings(ctx, connect.NewRequest(&webv1.GetModuleSettingsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, g := range settings.Msg.GetGroups() {
+		for _, m := range g.GetModules() {
+			if g.GetGroupId() == groupAl && m.GetModuleId() == "simulate" {
+				found = strings.Join(m.GetSecretsSet(), ",") == "token"
+			}
+		}
+	}
+	node, _ := ann.modules.GetNodeModules(ctx, connect.NewRequest(&webv1.GetNodeModulesRequest{NodeId: nodeAl}))
+	audit, _ := ann.access.ListAuditLog(ctx, connect.NewRequest(&webv1.ListAuditLogRequest{}))
+	if !found || strings.Contains(settings.Msg.String()+node.Msg.String()+audit.Msg.String(), plain) {
+		t.Fatalf("settings %v", settings.Msg)
+	}
+	if !strings.Contains(audit.Msg.String(), "token") {
+		t.Error("the audit log doesn't name the field")
+	}
+	// The scan finds what is there (a reason of the seeded hint).
+	if hits := tablesContaining(t, "alpha-nginx"); !slices.Contains(hits, "module_hints") {
+		t.Fatalf("the scan found the seeded hint in %v", hits)
+	}
+	for _, hit := range tablesContaining(t, plain) {
+		t.Errorf("the credential is in plain text in %s", hit)
+	}
+
+	// Credentials outside the schema are refused.
+	for name, secrets := range map[string]map[string]string{"no credential": {"value": "1"}, "too long": {"token": strings.Repeat("x", 257)}} {
+		_, err := ann.modules.SetGroupModule(ctx, connect.NewRequest(&webv1.SetGroupModuleRequest{
+			GroupId: groupAl, Setting: &webv1.ModuleSetting{ModuleId: "simulate"}, Secrets: secrets,
+		}))
+		if connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := ann.modules.SetGroupModule(ctx, connect.NewRequest(&webv1.SetGroupModuleRequest{
+		GroupId: groupAl, Setting: &webv1.ModuleSetting{ModuleId: "simulate"}, ClearSecrets: []string{"token"},
+	})); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	ownerQuery(t, "SELECT count(*) FROM module_secrets WHERE group_id = '"+groupAl+"'", &left)
+	if left != 0 {
+		t.Errorf("%d credentials left after removing", left)
+	}
+}
+
+// tablesContaining names the tables of the database whose rows contain s, as text or bytes.
+func tablesContaining(t *testing.T, s string) []string {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	rows, err := conn.Query(ctx, `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		_ = rows.Scan(&name)
+		tables = append(tables, name)
+	}
+	rows.Close()
+	hexed := hex.EncodeToString([]byte(s))
+	var hits []string
+	for _, table := range tables {
+		var n int
+		// The owner is a superuser here: RLS does not apply, every row is read.
+		if err := conn.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()+" t WHERE strpos(t::text, $1) > 0 OR strpos(t::text, $2) > 0", s, hexed).Scan(&n); err != nil {
+			t.Fatalf("%s: %v", table, err)
+		}
+		if n > 0 {
+			hits = append(hits, table)
+		}
+	}
+	if len(tables) < 30 {
+		t.Fatalf("read only %d tables", len(tables))
+	}
+	return hits
 }

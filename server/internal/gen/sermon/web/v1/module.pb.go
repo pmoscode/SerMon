@@ -173,7 +173,10 @@ type ModuleSetting struct {
 	Interval *durationpb.Duration `protobuf:"bytes,3,opt,name=interval,proto3" json:"interval,omitempty"`
 	// config_json is the configuration as a JSON object following the module's schema, without
 	// credentials; empty is {}.
-	ConfigJson    string `protobuf:"bytes,4,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
+	ConfigJson string `protobuf:"bytes,4,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
+	// secrets_set are the credentials (writeOnly properties) that have a value; the values never
+	// leave the server except to the agents. Ignored in SetGroupModule.
+	SecretsSet    []string `protobuf:"bytes,5,rep,name=secrets_set,json=secretsSet,proto3" json:"secrets_set,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -234,6 +237,13 @@ func (x *ModuleSetting) GetConfigJson() string {
 		return x.ConfigJson
 	}
 	return ""
+}
+
+func (x *ModuleSetting) GetSecretsSet() []string {
+	if x != nil {
+		return x.SecretsSet
+	}
+	return nil
 }
 
 // GroupModuleSettings are the module settings of one node group.
@@ -629,7 +639,13 @@ type SetGroupModuleRequest struct {
 	// group_id is the node group.
 	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	// setting is the module's new setting.
-	Setting       *ModuleSetting `protobuf:"bytes,2,opt,name=setting,proto3" json:"setting,omitempty"`
+	Setting *ModuleSetting `protobuf:"bytes,2,opt,name=setting,proto3" json:"setting,omitempty"`
+	// secrets are new values of credentials by property (ADR 0039): sealed by the server, sent only
+	// to the agents of the group over their mTLS stream, never returned. A property not listed
+	// keeps its value.
+	Secrets map[string]string `protobuf:"bytes,3,rep,name=secrets,proto3" json:"secrets,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// clear_secrets are credentials to remove.
+	ClearSecrets  []string `protobuf:"bytes,4,rep,name=clear_secrets,json=clearSecrets,proto3" json:"clear_secrets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -674,6 +690,20 @@ func (x *SetGroupModuleRequest) GetGroupId() string {
 func (x *SetGroupModuleRequest) GetSetting() *ModuleSetting {
 	if x != nil {
 		return x.Setting
+	}
+	return nil
+}
+
+func (x *SetGroupModuleRequest) GetSecrets() map[string]string {
+	if x != nil {
+		return x.Secrets
+	}
+	return nil
+}
+
+func (x *SetGroupModuleRequest) GetClearSecrets() []string {
+	if x != nil {
+		return x.ClearSecrets
 	}
 	return nil
 }
@@ -1127,14 +1157,16 @@ const file_sermon_web_v1_module_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vschema_json\x18\x02 \x01(\tR\n" +
 	"schemaJson\x12#\n" +
-	"\rsecret_fields\x18\x03 \x03(\tR\fsecretFields\"\xd9\x01\n" +
+	"\rsecret_fields\x18\x03 \x03(\tR\fsecretFields\"\x84\x02\n" +
 	"\rModuleSetting\x12:\n" +
 	"\tmodule_id\x18\x01 \x01(\tB\x1d\xbaH\x1ar\x182\x16^[a-z][a-z0-9_]{0,31}$R\bmoduleId\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12F\n" +
 	"\binterval\x18\x03 \x01(\v2\x19.google.protobuf.DurationB\x0f\xbaH\f\xaa\x01\t\"\x03\b\x90\x1c2\x02\b\n" +
 	"R\binterval\x12*\n" +
 	"\vconfig_json\x18\x04 \x01(\tB\t\xbaH\x06r\x04(\x80\x80\x01R\n" +
-	"configJson\"\xa5\x01\n" +
+	"configJson\x12)\n" +
+	"\vsecrets_set\x18\x05 \x03(\tB\b\xbaH\x05\x92\x01\x02\x10@R\n" +
+	"secretsSet\"\xa5\x01\n" +
 	"\x13GroupModuleSettings\x12\x19\n" +
 	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x1d\n" +
 	"\n" +
@@ -1157,10 +1189,15 @@ const file_sermon_web_v1_module_proto_rawDesc = "" +
 	"\x18GetModuleSettingsRequest\"q\n" +
 	"\x19GetModuleSettingsResponse\x12:\n" +
 	"\x06groups\x18\x01 \x03(\v2\".sermon.web.v1.GroupModuleSettingsR\x06groups\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\x04R\aversion\"|\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\"\x84\x03\n" +
 	"\x15SetGroupModuleRequest\x12#\n" +
 	"\bgroup_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\agroupId\x12>\n" +
-	"\asetting\x18\x02 \x01(\v2\x1c.sermon.web.v1.ModuleSettingB\x06\xbaH\x03\xc8\x01\x01R\asetting\"\x18\n" +
+	"\asetting\x18\x02 \x01(\v2\x1c.sermon.web.v1.ModuleSettingB\x06\xbaH\x03\xc8\x01\x01R\asetting\x12}\n" +
+	"\asecrets\x18\x03 \x03(\v21.sermon.web.v1.SetGroupModuleRequest.SecretsEntryB0\xbaH*\x9a\x01'\x10\x10\"\x1ar\x182\x16^[a-z][a-z0-9_]{0,63}$*\ar\x05\x10\x01(\x80 \x80\x01\x01R\asecrets\x12K\n" +
+	"\rclear_secrets\x18\x04 \x03(\tB&\xbaH#\x92\x01 \x10\x10\x18\x01\"\x1ar\x182\x16^[a-z][a-z0-9_]{0,63}$R\fclearSecrets\x1a:\n" +
+	"\fSecretsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x18\n" +
 	"\x16SetGroupModuleResponse\"{\n" +
 	"\x18RemoveGroupModuleRequest\x12#\n" +
 	"\bgroup_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\agroupId\x12:\n" +
@@ -1216,7 +1253,7 @@ func file_sermon_web_v1_module_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_module_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_module_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_sermon_web_v1_module_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_sermon_web_v1_module_proto_goTypes = []any{
 	(ModuleState)(0),                  // 0: sermon.web.v1.ModuleState
 	(*Module)(nil),                    // 1: sermon.web.v1.Module
@@ -1237,41 +1274,43 @@ var file_sermon_web_v1_module_proto_goTypes = []any{
 	(*ListModuleHintsRequest)(nil),    // 16: sermon.web.v1.ListModuleHintsRequest
 	(*ListModuleHintsResponse)(nil),   // 17: sermon.web.v1.ListModuleHintsResponse
 	(*NodeModuleHint)(nil),            // 18: sermon.web.v1.NodeModuleHint
-	(*durationpb.Duration)(nil),       // 19: google.protobuf.Duration
-	(*timestamppb.Timestamp)(nil),     // 20: google.protobuf.Timestamp
+	nil,                               // 19: sermon.web.v1.SetGroupModuleRequest.SecretsEntry
+	(*durationpb.Duration)(nil),       // 20: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil),     // 21: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_module_proto_depIdxs = []int32{
-	19, // 0: sermon.web.v1.ModuleSetting.interval:type_name -> google.protobuf.Duration
+	20, // 0: sermon.web.v1.ModuleSetting.interval:type_name -> google.protobuf.Duration
 	2,  // 1: sermon.web.v1.GroupModuleSettings.modules:type_name -> sermon.web.v1.ModuleSetting
 	0,  // 2: sermon.web.v1.ModuleHealth.state:type_name -> sermon.web.v1.ModuleState
-	20, // 3: sermon.web.v1.ModuleHealth.last_success:type_name -> google.protobuf.Timestamp
+	21, // 3: sermon.web.v1.ModuleHealth.last_success:type_name -> google.protobuf.Timestamp
 	1,  // 4: sermon.web.v1.ListModulesResponse.modules:type_name -> sermon.web.v1.Module
 	3,  // 5: sermon.web.v1.GetModuleSettingsResponse.groups:type_name -> sermon.web.v1.GroupModuleSettings
 	2,  // 6: sermon.web.v1.SetGroupModuleRequest.setting:type_name -> sermon.web.v1.ModuleSetting
-	2,  // 7: sermon.web.v1.GetNodeModulesResponse.settings:type_name -> sermon.web.v1.ModuleSetting
-	4,  // 8: sermon.web.v1.GetNodeModulesResponse.health:type_name -> sermon.web.v1.ModuleHealth
-	20, // 9: sermon.web.v1.GetNodeModulesResponse.health_collected_at:type_name -> google.protobuf.Timestamp
-	5,  // 10: sermon.web.v1.GetNodeModulesResponse.hints:type_name -> sermon.web.v1.ModuleHint
-	20, // 11: sermon.web.v1.GetNodeModulesResponse.hints_collected_at:type_name -> google.protobuf.Timestamp
-	18, // 12: sermon.web.v1.ListModuleHintsResponse.hints:type_name -> sermon.web.v1.NodeModuleHint
-	5,  // 13: sermon.web.v1.NodeModuleHint.hint:type_name -> sermon.web.v1.ModuleHint
-	6,  // 14: sermon.web.v1.ModuleService.ListModules:input_type -> sermon.web.v1.ListModulesRequest
-	8,  // 15: sermon.web.v1.ModuleService.GetModuleSettings:input_type -> sermon.web.v1.GetModuleSettingsRequest
-	10, // 16: sermon.web.v1.ModuleService.SetGroupModule:input_type -> sermon.web.v1.SetGroupModuleRequest
-	12, // 17: sermon.web.v1.ModuleService.RemoveGroupModule:input_type -> sermon.web.v1.RemoveGroupModuleRequest
-	14, // 18: sermon.web.v1.ModuleService.GetNodeModules:input_type -> sermon.web.v1.GetNodeModulesRequest
-	16, // 19: sermon.web.v1.ModuleService.ListModuleHints:input_type -> sermon.web.v1.ListModuleHintsRequest
-	7,  // 20: sermon.web.v1.ModuleService.ListModules:output_type -> sermon.web.v1.ListModulesResponse
-	9,  // 21: sermon.web.v1.ModuleService.GetModuleSettings:output_type -> sermon.web.v1.GetModuleSettingsResponse
-	11, // 22: sermon.web.v1.ModuleService.SetGroupModule:output_type -> sermon.web.v1.SetGroupModuleResponse
-	13, // 23: sermon.web.v1.ModuleService.RemoveGroupModule:output_type -> sermon.web.v1.RemoveGroupModuleResponse
-	15, // 24: sermon.web.v1.ModuleService.GetNodeModules:output_type -> sermon.web.v1.GetNodeModulesResponse
-	17, // 25: sermon.web.v1.ModuleService.ListModuleHints:output_type -> sermon.web.v1.ListModuleHintsResponse
-	20, // [20:26] is the sub-list for method output_type
-	14, // [14:20] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	19, // 7: sermon.web.v1.SetGroupModuleRequest.secrets:type_name -> sermon.web.v1.SetGroupModuleRequest.SecretsEntry
+	2,  // 8: sermon.web.v1.GetNodeModulesResponse.settings:type_name -> sermon.web.v1.ModuleSetting
+	4,  // 9: sermon.web.v1.GetNodeModulesResponse.health:type_name -> sermon.web.v1.ModuleHealth
+	21, // 10: sermon.web.v1.GetNodeModulesResponse.health_collected_at:type_name -> google.protobuf.Timestamp
+	5,  // 11: sermon.web.v1.GetNodeModulesResponse.hints:type_name -> sermon.web.v1.ModuleHint
+	21, // 12: sermon.web.v1.GetNodeModulesResponse.hints_collected_at:type_name -> google.protobuf.Timestamp
+	18, // 13: sermon.web.v1.ListModuleHintsResponse.hints:type_name -> sermon.web.v1.NodeModuleHint
+	5,  // 14: sermon.web.v1.NodeModuleHint.hint:type_name -> sermon.web.v1.ModuleHint
+	6,  // 15: sermon.web.v1.ModuleService.ListModules:input_type -> sermon.web.v1.ListModulesRequest
+	8,  // 16: sermon.web.v1.ModuleService.GetModuleSettings:input_type -> sermon.web.v1.GetModuleSettingsRequest
+	10, // 17: sermon.web.v1.ModuleService.SetGroupModule:input_type -> sermon.web.v1.SetGroupModuleRequest
+	12, // 18: sermon.web.v1.ModuleService.RemoveGroupModule:input_type -> sermon.web.v1.RemoveGroupModuleRequest
+	14, // 19: sermon.web.v1.ModuleService.GetNodeModules:input_type -> sermon.web.v1.GetNodeModulesRequest
+	16, // 20: sermon.web.v1.ModuleService.ListModuleHints:input_type -> sermon.web.v1.ListModuleHintsRequest
+	7,  // 21: sermon.web.v1.ModuleService.ListModules:output_type -> sermon.web.v1.ListModulesResponse
+	9,  // 22: sermon.web.v1.ModuleService.GetModuleSettings:output_type -> sermon.web.v1.GetModuleSettingsResponse
+	11, // 23: sermon.web.v1.ModuleService.SetGroupModule:output_type -> sermon.web.v1.SetGroupModuleResponse
+	13, // 24: sermon.web.v1.ModuleService.RemoveGroupModule:output_type -> sermon.web.v1.RemoveGroupModuleResponse
+	15, // 25: sermon.web.v1.ModuleService.GetNodeModules:output_type -> sermon.web.v1.GetNodeModulesResponse
+	17, // 26: sermon.web.v1.ModuleService.ListModuleHints:output_type -> sermon.web.v1.ListModuleHintsResponse
+	21, // [21:27] is the sub-list for method output_type
+	15, // [15:21] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_module_proto_init() }
@@ -1285,7 +1324,7 @@ func file_sermon_web_v1_module_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_module_proto_rawDesc), len(file_sermon_web_v1_module_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -385,6 +385,22 @@ func (s *Schema) Secrets() []string {
 	return out
 }
 
+// CheckSecret checks the value of a credential against its property (M5-05).
+func (s *Schema) CheckSecret(name, value string) error {
+	p, ok := s.properties[name]
+	if !ok || !p.secret {
+		return fmt.Errorf("%s: not a credential of the module", name)
+	}
+	if value == "" {
+		return fmt.Errorf("%s: empty; remove the credential instead", name)
+	}
+	if err := check(p, value); err != nil {
+		// The reason never repeats the value (an enum's message would).
+		return fmt.Errorf("%s: %s", name, strings.ReplaceAll(err.Error(), strconv.Quote(value), "***"))
+	}
+	return nil
+}
+
 // IsSecret reports whether name is a credential of the module.
 func (s *Schema) IsSecret(name string) bool { return s.properties[name].secret }
 

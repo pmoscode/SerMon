@@ -62,6 +62,9 @@ message ModuleSetting {
   // config_json is the configuration as a JSON object following the module's schema, without
   // credentials; empty is {}.
   string config_json = 4 [(buf.validate.field).string.max_bytes = 16384];
+  // secrets_set are the credentials (writeOnly properties) that have a value; the values never
+  // leave the server except to the agents. Ignored in SetGroupModule.
+  repeated string secrets_set = 5 [(buf.validate.field).repeated.max_items = 64];
 }
 
 // GroupModuleSettings are the module settings of one node group.
@@ -146,6 +149,32 @@ message SetGroupModuleRequest {
   string group_id = 1 [(buf.validate.field).string.uuid = true];
   // setting is the module's new setting.
   ModuleSetting setting = 2 [(buf.validate.field).required = true];
+  // secrets are new values of credentials by property (ADR 0039): sealed by the server, sent only
+  // to the agents of the group over their mTLS stream, never returned. A property not listed
+  // keeps its value.
+  map<string, string> secrets = 3 [
+    debug_redact = true,
+    (buf.validate.field).map = {
+      max_pairs: 16
+      keys: {
+        string: {pattern: "^[a-z][a-z0-9_]{0,63}$"}
+      }
+      values: {
+        string: {
+          min_len: 1
+          max_bytes: 4096
+        }
+      }
+    }
+  ];
+  // clear_secrets are credentials to remove.
+  repeated string clear_secrets = 4 [(buf.validate.field).repeated = {
+    max_items: 16
+    unique: true
+    items: {
+      string: {pattern: "^[a-z][a-z0-9_]{0,63}$"}
+    }
+  }];
 }
 
 // SetGroupModuleResponse has no fields.

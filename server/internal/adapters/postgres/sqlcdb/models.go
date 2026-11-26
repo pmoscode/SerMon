@@ -290,6 +290,16 @@ type ModuleHint struct {
 	ReceivedAt  time.Time
 }
 
+type ModuleSecret struct {
+	OrgID     uuid.UUID
+	GroupID   uuid.UUID
+	ModuleID  string
+	Field     string
+	Sealed    []byte
+	UpdatedAt time.Time
+	UpdatedBy *uuid.UUID
+}
+
 type ModuleSetting struct {
 	OrgID           uuid.UUID
 	GroupID         uuid.UUID

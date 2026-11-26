@@ -6,9 +6,13 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use sermon_core::Sample;
+use sermon_modules::Secrets;
 use sermon_modules::runtime::{Health, Runtime, Sink, State};
 use sermon_transport::outbox::Outbox;
-use sermon_transport::proto::agent::v1::{ModuleHealth, ModuleHealthReport, ModuleState};
+use sermon_transport::proto::agent::v1::{
+    ModuleHealth, ModuleHealthReport, ModuleSecrets, ModuleState,
+};
+use sermon_transport::session::ModuleSecretsSink;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
@@ -108,17 +112,117 @@ impl sermon_modules::Systemd for Systemd {
     }
 }
 
-/// Runs the modules of the configuration until `shutdown`: a change applies at once, the state
-/// goes out again every [`REPORT_EVERY`].
+/// The credentials of the modules by module (ADR 0039).
+pub type SecretMap = BTreeMap<String, Secrets>;
+
+/// Most credentials a set may hold, longest module ID, field and value (agent.proto).
+const MAX_SECRETS: usize = 64;
+const MAX_MODULE_ID: usize = 32;
+const MAX_FIELD: usize = 64;
+const MAX_VALUE: usize = 4096;
+
+/// The credentials of the modules as the server sent them (M5-05): in memory only, never in the
+/// state directory, the WAL or a log; after a restart they come with the next session.
+#[derive(Debug, Clone)]
+pub struct SecretStore {
+    current: watch::Sender<Arc<SecretMap>>,
+}
+
+impl Default for SecretStore {
+    fn default() -> Self {
+        Self {
+            current: watch::Sender::new(Arc::new(SecretMap::new())),
+        }
+    }
+}
+
+impl SecretStore {
+    /// Learns about every new set.
+    #[must_use]
+    pub fn subscribe(&self) -> watch::Receiver<Arc<SecretMap>> {
+        self.current.subscribe()
+    }
+}
+
+/// A name of the protocol: lower case, digits and `_`, a letter first.
+fn valid_name(name: &str, max: usize) -> bool {
+    let mut bytes = name.bytes();
+    name.len() <= max
+        && bytes.next().is_some_and(|b| b.is_ascii_lowercase())
+        && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+}
+
+/// The credentials of `secrets` by module, within the bounds of the protocol; the first value of
+/// a field counts.
+fn to_map(secrets: ModuleSecrets) -> SecretMap {
+    let mut fields: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for s in secrets.secrets.into_iter().take(MAX_SECRETS) {
+        if !valid_name(&s.module_id, MAX_MODULE_ID)
+            || !valid_name(&s.field, MAX_FIELD)
+            || s.value.is_empty()
+            || s.value.len() > MAX_VALUE
+        {
+            continue;
+        }
+        fields
+            .entry(s.module_id)
+            .or_default()
+            .entry(s.field)
+            .or_insert(s.value);
+    }
+    fields
+        .into_iter()
+        .map(|(module, f)| (module, Secrets::new(f)))
+        .collect()
+}
+
+impl ModuleSecretsSink for SecretStore {
+    fn replace(&self, secrets: ModuleSecrets) {
+        let next = to_map(secrets);
+        // Only a change restarts the modules concerned.
+        self.current.send_if_modified(|current| {
+            if **current == next {
+                return false;
+            }
+            *current = Arc::new(next);
+            true
+        });
+    }
+}
+
+/// Hands the credentials of the modules from `transport` to the modules of `runtime`, which then
+/// follow `config` (M5-05); the future runs them until `shutdown`.
+pub fn start(
+    runtime: Runtime,
+    transport: sermon_transport::session::Transport,
+    config: &crate::agent_config::ConfigStore,
+    shutdown: &CancellationToken,
+) -> (
+    sermon_transport::session::Transport,
+    impl Future<Output = ()> + use<>,
+) {
+    let secrets = Arc::new(SecretStore::default());
+    let modules = run(
+        runtime,
+        config.subscribe(),
+        secrets.subscribe(),
+        shutdown.clone(),
+    );
+    (transport.with_module_secrets(secrets), modules)
+}
+
+/// Runs the modules of the configuration with their credentials until `shutdown`: a change of
+/// either applies at once, the state goes out again every [`REPORT_EVERY`].
 pub async fn run(
     mut runtime: Runtime,
     mut config: watch::Receiver<Arc<Active>>,
+    mut secrets: watch::Receiver<Arc<SecretMap>>,
     shutdown: CancellationToken,
 ) {
-    // The credentials come with M5-05.
-    let secrets = BTreeMap::new();
     let first = config.borrow_and_update().clone();
-    runtime.apply(&first.modules, &secrets);
+    let mut current = secrets.borrow_and_update().clone();
+    let mut secrets_open = true;
+    runtime.apply(&first.modules, &current);
     let mut report =
         tokio::time::interval_at(tokio::time::Instant::now() + REPORT_EVERY, REPORT_EVERY);
     loop {
@@ -129,7 +233,17 @@ pub async fn run(
                     break;
                 }
                 let active = config.borrow_and_update().clone();
-                runtime.apply(&active.modules, &secrets);
+                runtime.apply(&active.modules, &current);
+            }
+            changed = secrets.changed(), if secrets_open => {
+                if changed.is_err() {
+                    // No more credentials will come (the transport is gone): keep these.
+                    secrets_open = false;
+                    continue;
+                }
+                current = secrets.borrow_and_update().clone();
+                let active = config.borrow().clone();
+                runtime.apply(&active.modules, &current);
             }
             _ = report.tick() => runtime.report(),
         }
@@ -228,7 +342,13 @@ mod tests {
             Arc::new(SystemClock::new()),
         );
         let shutdown = CancellationToken::new();
-        let task = tokio::spawn(run(runtime, store.subscribe(), shutdown.clone()));
+        let secrets = SecretStore::default();
+        let task = tokio::spawn(run(
+            runtime,
+            store.subscribe(),
+            secrets.subscribe(),
+            shutdown.clone(),
+        ));
         tokio::time::sleep(Duration::from_secs(1)).await;
         assert!(sink.all().is_empty(), "no modules, no report");
 
@@ -270,5 +390,204 @@ mod tests {
 
         shutdown.cancel();
         task.await.unwrap();
+    }
+
+    /// A module that reports the length of its credential `token`.
+    struct Echo;
+
+    struct EchoRun(i64);
+
+    impl sermon_modules::Module for Echo {
+        fn id(&self) -> &'static str {
+            "echo"
+        }
+        fn schema(&self) -> &'static str {
+            r#"{"type":"object","additionalProperties":false,"required":["token"],"properties":{"token":{"type":"string","writeOnly":true,"maxLength":64}}}"#
+        }
+        fn default_interval(&self) -> Duration {
+            Duration::from_secs(10)
+        }
+        fn build(
+            &self,
+            _: &sermon_modules::Config,
+            setup: &sermon_modules::Setup<'_>,
+        ) -> Result<Box<dyn sermon_modules::Instance>, sermon_modules::BuildError> {
+            let len = setup.secrets.get("token").map_or(0, str::len);
+            Ok(Box::new(EchoRun(i64::try_from(len).unwrap_or(0))))
+        }
+    }
+
+    impl sermon_modules::Instance for EchoRun {
+        fn collect<'a>(
+            &'a mut self,
+            _: &'a sermon_modules::Run,
+        ) -> sermon_modules::BoxFuture<'a, Result<Vec<Sample>, sermon_modules::RunError>> {
+            let value = self.0;
+            Box::pin(async move { Ok(vec![Sample::int("sermon_echo_token_len", value)]) })
+        }
+    }
+
+    fn secrets(values: &[(&str, &str, &str)]) -> ModuleSecrets {
+        use sermon_transport::proto::agent::v1::ModuleSecret;
+        ModuleSecrets {
+            secrets: values
+                .iter()
+                .map(|(m, f, v)| ModuleSecret {
+                    module_id: (*m).into(),
+                    field: (*f).into(),
+                    value: (*v).into(),
+                })
+                .collect(),
+        }
+    }
+
+    // The protocol's bounds: names of the protocol only, no empty or huge value, the first value
+    // of a field counts; Debug shows the fields only.
+    #[test]
+    fn a_set_of_credentials_keeps_what_the_protocol_allows() {
+        let long = "x".repeat(MAX_VALUE + 1);
+        let map = to_map(secrets(&[
+            ("postgresql", "password", "first-value"),
+            ("postgresql", "password", "second-value"),
+            ("postgresql", "user_name", "alice"),
+            ("Bad", "password", "x"),
+            ("redis", "Pass", "x"),
+            ("redis", "password", ""),
+            ("redis", "token", &long),
+        ]));
+        assert_eq!(map.keys().collect::<Vec<_>>(), ["postgresql"]);
+        assert_eq!(map["postgresql"].get("password"), Some("first-value"));
+        assert_eq!(map["postgresql"].get("user_name"), Some("alice"));
+        let store = SecretStore::default();
+        store.replace(secrets(&[("postgresql", "password", "first-value")]));
+        let text = format!("{store:?} {:?}", store.subscribe().borrow());
+        assert!(
+            !text.contains("first-value") && text.contains("password"),
+            "{text}"
+        );
+        let many: Vec<(String, String, String)> = (0..100)
+            .map(|i| ("m".to_owned(), format!("f{i}"), "v".to_owned()))
+            .collect();
+        let many: Vec<(&str, &str, &str)> = many
+            .iter()
+            .map(|(a, b, c)| (a.as_str(), b.as_str(), c.as_str()))
+            .collect();
+        assert_eq!(to_map(secrets(&many))["m"].fields().len(), MAX_SECRETS);
+    }
+
+    /// Keeps the samples.
+    #[derive(Default)]
+    struct Samples(std::sync::Mutex<Vec<Sample>>);
+
+    impl Sink for Samples {
+        fn samples(&self, samples: Vec<Sample>, _: SystemTime) {
+            self.0.lock().unwrap().extend(samples);
+        }
+        fn health(&self, _: Vec<Health>, _: SystemTime) {}
+    }
+
+    fn last_len(sink: &Samples) -> Option<sermon_core::Value> {
+        sink.0.lock().unwrap().last().map(|s| s.value)
+    }
+
+    // M5-05: the module gets its credentials from the server's set; a new value (rotation)
+    // restarts it with that one, an empty set takes them away – and none of it lands in the
+    // state directory or the WAL.
+    #[tokio::test(start_paused = true)]
+    async fn the_modules_run_with_the_credentials_in_memory_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ConfigStore::open(dir.path().join("agent-config.pb"), true, true);
+        let (wal, _) = Wal::open(
+            &dir.path().join("wal"),
+            WalConfig::default(),
+            SystemTime::now(),
+        )
+        .unwrap();
+        let outbox = Outbox::new(wal);
+        let samples = Arc::new(Samples::default());
+        let runtime = Runtime::new(
+            vec![Arc::new(Echo)],
+            Veto::default(),
+            samples.clone(),
+            Arc::new(SystemClock::new()),
+        );
+        let credentials = SecretStore::default();
+        let shutdown = CancellationToken::new();
+        let task = tokio::spawn(run(
+            runtime,
+            store.subscribe(),
+            credentials.subscribe(),
+            shutdown.clone(),
+        ));
+        store.apply(ConfigUpdate {
+            version: 2,
+            config: Some(AgentConfig {
+                modules: vec![ModuleConfig {
+                    id: "echo".into(),
+                    enabled: true,
+                    interval: None,
+                    config_json: "{}".into(),
+                }],
+                logs: Some(LogConfig::default()),
+                ..AgentConfig::default()
+            }),
+        });
+        let settle = || async {
+            for _ in 0..3 {
+                tokio::time::sleep(Duration::from_secs(11)).await;
+            }
+        };
+        settle().await;
+        assert_eq!(
+            last_len(&samples),
+            None,
+            "without its credential it doesn't run"
+        );
+
+        credentials.replace(secrets(&[("echo", "token", "old-token-value")]));
+        settle().await;
+        assert_eq!(last_len(&samples), Some(sermon_core::Value::Int(15)));
+        credentials.replace(secrets(&[("echo", "token", "rotated")]));
+        settle().await;
+        assert_eq!(
+            last_len(&samples),
+            Some(sermon_core::Value::Int(7)),
+            "rotated"
+        );
+
+        // What a real agent buffers goes through the outbox: its files hold no credential.
+        let sink = OutboxSink::new(outbox.clone(), Arc::new(|r: &str| r.to_owned()));
+        sink.samples(samples.0.lock().unwrap().clone(), SystemTime::now());
+        outbox.maintain(SystemTime::now()).unwrap();
+        for entry in walk(dir.path()) {
+            let bytes = std::fs::read(&entry).unwrap();
+            for secret in ["old-token-value", "rotated"] {
+                assert!(
+                    !bytes.windows(secret.len()).any(|w| w == secret.as_bytes()),
+                    "{secret} in {}",
+                    entry.display()
+                );
+            }
+        }
+
+        credentials.replace(ModuleSecrets::default());
+        samples.0.lock().unwrap().clear();
+        settle().await;
+        assert_eq!(last_len(&samples), None, "taken away");
+        shutdown.cancel();
+        task.await.unwrap();
+    }
+
+    fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let mut out = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                out.extend(walk(&path));
+            } else {
+                out.push(path);
+            }
+        }
+        out
     }
 }

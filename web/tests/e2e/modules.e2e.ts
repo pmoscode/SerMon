@@ -127,12 +127,16 @@ test('suggests a module in the fleet and sets it up for the group after the step
 		page.getByText('Refused: simulate: value: 2000 is not within 0 to 1000')
 	).toBeVisible();
 	await page.getByLabel('Value').fill('7');
+	await page.getByLabel(/^Token/).fill('typed-token'); // betterleaks:allow
 	await page.getByRole('button', { name: 'Save' }).click();
 	await expect.poll(() => saved.length).toBe(1);
 	expect(saved[0]).toEqual({
 		groupId: group,
-		setting: { moduleId: 'simulate', enabled: true, configJson: '{"value":7}' }
+		setting: { moduleId: 'simulate', enabled: true, configJson: '{"value":7}' },
+		secrets: { token: 'typed-token' }
 	});
+	// The field is empty again and says nothing about the value.
+	await expect(page.getByLabel(/^Token/)).toHaveCount(0);
 });
 
 test('shows the modules of a node with their state and passes axe', async ({ page }) => {

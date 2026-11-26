@@ -726,6 +726,7 @@ pub struct ModuleSecrets {
 }
 /// ModuleSecret is one credential of a module, e.g. the password of the postgresql module.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[prost(skip_debug)]
 pub struct ModuleSecret {
     /// module_id names the module.
     #[prost(string, tag="1")]

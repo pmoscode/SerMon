@@ -7,9 +7,11 @@ package modules
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
@@ -63,13 +65,37 @@ type NodeHint struct {
 // MaxHints bounds the suggestions listed for the fleet.
 const MaxHints = 500
 
+// MaxSecretBytes bounds a credential (agent.proto, ModuleSecret.value).
+const MaxSecretBytes = 4096
+
+// SecretChange are the credentials an admin sets or removes with a module's setting (M5-05).
+type SecretChange struct {
+	// Set are new values by field.
+	Set map[string]string
+	// Clear are fields whose value goes.
+	Clear []string
+}
+
+// SealedChange is a SecretChange with the values sealed (secrets.Box, module.SecretContext).
+type SealedChange struct {
+	Set   map[string][]byte
+	Clear []string
+}
+
+// Sealer seals credentials (secrets.Box).
+type Sealer interface {
+	Seal(plaintext, associatedData []byte) ([]byte, error)
+}
+
 // Store keeps the settings. Every change raises the organization's configuration version and
 // writes the audit entry in the same transaction.
 type Store interface {
 	View(ctx context.Context, scope tenant.Scope) (View, error)
-	// Put stores the setting of a group's module; access.ErrNotFound for a group the scope does
-	// not see, ErrTooMany for a new module beyond the bound.
-	Put(ctx context.Context, scope tenant.Scope, group tenant.GroupID, s module.Setting, by identity.UserID, audit access.AuditEntry) error
+	// Put stores the setting of a group's module and changes its credentials; access.ErrNotFound
+	// for a group the scope does not see, ErrTooMany for a new module beyond the bound.
+	Put(ctx context.Context, scope tenant.Scope, group tenant.GroupID, s module.Setting, secrets SealedChange, by identity.UserID, audit access.AuditEntry) error
+	// SecretFields returns the credentials of a group's module that have a value.
+	SecretFields(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string) ([]string, error)
 	// Remove deletes it; access.ErrNotFound if the group or its setting does not exist.
 	Remove(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string, by identity.UserID, audit access.AuditEntry) error
 	// Node returns a node of the scope's groups; access.ErrNotFound otherwise.
@@ -88,14 +114,15 @@ type Agents interface {
 type Service struct {
 	store   Store
 	catalog *module.Catalog
+	sealer  Sealer
 	policy  authz.Policy
 	agents  Agents
 	now     func() time.Time
 }
 
-// NewService returns the service.
-func NewService(store Store, catalog *module.Catalog, policy authz.Policy, agents Agents, now func() time.Time) *Service {
-	return &Service{store: store, catalog: catalog, policy: policy, agents: agents, now: now}
+// NewService returns the service; sealer seals the modules' credentials.
+func NewService(store Store, catalog *module.Catalog, sealer Sealer, policy authz.Policy, agents Agents, now func() time.Time) *Service {
+	return &Service{store: store, catalog: catalog, sealer: sealer, policy: policy, agents: agents, now: now}
 }
 
 // viewScope is the groups whose nodes the caller sees; none is forbidden.
@@ -128,19 +155,40 @@ func (s *Service) View(ctx context.Context, c access.Caller) (View, error) {
 	return view, nil
 }
 
-// SetGroupModule sets one module of a group after checking it against the module's schema.
-func (s *Service) SetGroupModule(ctx context.Context, c access.Caller, group tenant.GroupID, setting module.Setting) error {
+// SetGroupModule sets one module of a group after checking it against the module's schema, and
+// sets or removes its credentials: sealed here, bound to organization, group, module and field.
+// The audit entry names the fields, never a value.
+func (s *Service) SetGroupModule(ctx context.Context, c access.Caller, group tenant.GroupID, setting module.Setting, change SecretChange) error {
 	scope, err := access.Authorize(s.policy, c, authz.ManageModules, true, s.now())
 	if err != nil {
 		return err //nolint:wrapcheck // see View
 	}
-	// Credentials come with M5-05: none is set yet.
-	checked, err := s.catalog.Check(setting, nil)
-	if errors.Is(err, module.ErrUnknown) {
+	schema, ok := s.catalog.Lookup(setting.Module)
+	if !ok {
 		return access.ErrNotFound
 	}
+	if err := checkChange(schema, setting.Module, change); err != nil {
+		return err
+	}
+	existing, err := s.store.SecretFields(ctx, scope, group, setting.Module)
+	if err != nil {
+		return fmt.Errorf("set module: %w", err)
+	}
+	set := slices.DeleteFunc(slices.Clone(existing), func(f string) bool { return slices.Contains(change.Clear, f) })
+	for f := range change.Set {
+		if !slices.Contains(set, f) {
+			set = append(set, f)
+		}
+	}
+	checked, err := s.catalog.Check(setting, set)
 	if err != nil {
 		return err // the reason goes to the admin
+	}
+	sealed := SealedChange{Set: map[string][]byte{}, Clear: change.Clear}
+	for f, value := range change.Set {
+		if sealed.Set[f], err = s.sealer.Seal([]byte(value), module.SecretContext(c.Principal.Org, group, checked.Module, f)); err != nil {
+			return fmt.Errorf("seal a credential: %w", err)
+		}
 	}
 	audit := access.AuditEntry{
 		Actor: c.Principal.User, Action: "module.update", Target: "group:" + group.String(),
@@ -150,10 +198,38 @@ func (s *Service) SetGroupModule(ctx context.Context, c access.Caller, group ten
 			"interval_seconds": strconv.Itoa(int(checked.Interval / time.Second)),
 		},
 	}
-	if err := s.store.Put(ctx, scope, group, checked, c.Principal.User, audit); err != nil {
+	if len(change.Set) > 0 {
+		audit.Details["secrets_set"] = strings.Join(slices.Sorted(maps.Keys(change.Set)), ",")
+	}
+	if len(change.Clear) > 0 {
+		audit.Details["secrets_cleared"] = strings.Join(slices.Sorted(slices.Values(change.Clear)), ",")
+	}
+	if err := s.store.Put(ctx, scope, group, checked, sealed, c.Principal.User, audit); err != nil {
 		return fmt.Errorf("set module: %w", err)
 	}
 	s.agents.ConfigChanged(c.Principal.Org)
+	return nil
+}
+
+// checkChange checks the credentials of a change against the module's schema and the protocol.
+func checkChange(schema *module.Schema, moduleID string, change SecretChange) error {
+	for _, f := range slices.Sorted(maps.Keys(change.Set)) {
+		value := change.Set[f]
+		if len(value) > MaxSecretBytes {
+			return &module.InvalidError{Module: moduleID, Reason: fmt.Sprintf("%s: more than %d bytes", f, MaxSecretBytes)}
+		}
+		if err := schema.CheckSecret(f, value); err != nil {
+			return &module.InvalidError{Module: moduleID, Reason: err.Error()}
+		}
+		if slices.Contains(change.Clear, f) {
+			return &module.InvalidError{Module: moduleID, Reason: f + ": set and removed at once"}
+		}
+	}
+	for _, f := range change.Clear {
+		if !schema.IsSecret(f) {
+			return &module.InvalidError{Module: moduleID, Reason: f + ": not a credential of the module"}
+		}
+	}
 	return nil
 }
 

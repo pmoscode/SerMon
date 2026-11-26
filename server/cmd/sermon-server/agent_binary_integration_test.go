@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,9 +19,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/secrets"
 )
 
 // agentBinary returns the sermon-agent binary from SERMON_AGENT_BIN (set by `just e2e-agent`);
@@ -449,5 +455,126 @@ func TestAgentBinary_RunsTheModulesOfItsGroup(t *testing.T) {
 	}
 	if strings.Contains(srv.logs.String(), "unknown metric") {
 		t.Errorf("server dropped module metrics:\n%s", srv.logs.String())
+	}
+}
+
+// TestAgentBinary_GetsTheCredentialsOfItsModules (M5-05): a credential sealed for the group
+// reaches the virtual nodes' module (sermon_simulate_token = 1) and is in plain text nowhere –
+// not in the database, the server's or the agent's log, nor the agent's state and buffer.
+func TestAgentBinary_GetsTheCredentialsOfItsModules(t *testing.T) {
+	bin := agentBinary(t)
+	srv := startTestServer(t, nil)
+	defer srv.stop()
+	const nodes = 2
+	const plain = "plain-token-of-the-module" // betterleaks:allow
+	org := seedEnrollmentTokenWithUses(t, nodes)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	var group uuid.UUID
+	if err := conn.QueryRow(ctx, `SELECT id FROM node_groups WHERE org_id = $1`, org).Scan(&group); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := os.ReadFile(sharedKeysFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, err := secrets.ParseKeys(string(keys))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := box.Seal([]byte(plain), module.SecretContext(tenant.OrgID(org), tenant.GroupID(group), "simulate", "token"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		`INSERT INTO module_settings (org_id, group_id, module_id, enabled, config) VALUES ($1, $2, 'simulate', true, '{}')`,
+		`INSERT INTO module_secrets (org_id, group_id, module_id, field, sealed) VALUES ($1, $2, 'simulate', 'token', $3)`,
+	} {
+		args := []any{org, group}
+		if strings.Contains(stmt, "$3") {
+			args = append(args, sealed)
+		}
+		if _, err := conn.Exec(ctx, stmt, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	dir := t.TempDir()
+	_, agentPort, _ := strings.Cut(srv.agent, ":")
+	config := filepath.Join(dir, "agent.toml")
+	toml := "[server]\nurl = \"http://" + srv.web + "\"\nagent_url = \"https://localhost:" + agentPort + "\"\n" +
+		"[paths]\nstate_dir = \"" + filepath.Join(dir, "state") + "\"\n"
+	if err := os.WriteFile(config, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	logs := &syncBuffer{}
+	simulate := exec.CommandContext(ctx, bin, "simulate", "--config", config, "--nodes", strconv.Itoa(nodes), "--seed", "9")
+	simulate.Env = append(os.Environ(), "SERMON_ENROLLMENT_TOKEN="+fixtureToken, "RUST_LOG=debug")
+	simulate.Stdout, simulate.Stderr = logs, logs
+	if err := simulate.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = simulate.Process.Kill() }()
+
+	var delivered int
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := conn.QueryRow(ctx, `SELECT count(DISTINCT s.node_id) FROM series s JOIN metrics_raw r ON r.series_id = s.id
+			WHERE s.org_id = $1 AND s.metric = 'sermon_simulate_token' AND r.max = 1`, org).Scan(&delivered); err != nil {
+			t.Fatal(err)
+		}
+		if delivered == nodes {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if delivered != nodes {
+		t.Fatalf("%d of %d nodes got the credential\nsimulator:\n%s\nserver:\n%s", delivered, nodes, logs.String(), srv.logs.String())
+	}
+	_ = simulate.Process.Signal(syscall.SIGTERM)
+	_ = simulate.Wait()
+
+	if strings.Contains(logs.String(), plain) || strings.Contains(srv.logs.String(), plain) {
+		t.Error("the credential is in a log")
+	}
+	err = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		content, err := os.ReadFile(path)
+		if err == nil && bytes.Contains(content, []byte(plain)) {
+			t.Errorf("the credential is in %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := conn.Query(ctx, `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		_ = rows.Scan(&name)
+		tables = append(tables, name)
+	}
+	rows.Close()
+	for _, table := range tables {
+		var n int
+		if err := conn.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()+" t WHERE strpos(t::text, $1) > 0 OR strpos(t::text, $2) > 0",
+			plain, hex.EncodeToString([]byte(plain))).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n > 0 {
+			t.Errorf("the credential is in plain text in table %s", table)
+		}
 	}
 }

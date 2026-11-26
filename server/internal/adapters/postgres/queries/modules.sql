@@ -85,3 +85,32 @@ WHERE (sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::u
   )
 ORDER BY n.hostname, n.id, h.module_id
 LIMIT sqlc.arg(max_rows);
+
+-- name: ModuleSecretFields :many
+-- The credentials of a group's module that have a value (names only).
+SELECT field FROM module_secrets
+WHERE group_id = sqlc.arg(group_id) AND module_id = sqlc.arg(module_id)
+ORDER BY field;
+
+-- name: ListModuleSecretFields :many
+-- The fields with a value of every module setting of the organization (names only).
+SELECT group_id, module_id, field FROM module_secrets ORDER BY group_id, module_id, field;
+
+-- name: UpsertModuleSecret :exec
+INSERT INTO module_secrets (org_id, group_id, module_id, field, sealed, updated_at, updated_by)
+VALUES (current_org_id(), sqlc.arg(group_id), sqlc.arg(module_id), sqlc.arg(field), sqlc.arg(sealed), now(),
+        sqlc.narg(updated_by))
+ON CONFLICT (org_id, group_id, module_id, field) DO UPDATE
+    SET sealed = EXCLUDED.sealed, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by;
+
+-- name: DeleteModuleSecret :exec
+DELETE FROM module_secrets
+WHERE group_id = sqlc.arg(group_id) AND module_id = sqlc.arg(module_id) AND field = sqlc.arg(field);
+
+-- name: ModuleSecretsForNode :many
+-- The sealed credentials of a node's group (only the agent's session opens them).
+SELECT s.group_id, s.module_id, s.field, s.sealed
+FROM nodes n
+JOIN module_secrets s ON s.org_id = n.org_id AND s.group_id = n.group_id
+WHERE n.id = sqlc.arg(node_id)
+ORDER BY s.module_id, s.field;

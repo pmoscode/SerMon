@@ -16,6 +16,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logconfig"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -180,6 +181,13 @@ func (s *LogSettingsStore) ForNode(ctx context.Context, org tenant.OrgID, node i
 		}
 		for _, m := range modules {
 			config.Modules = append(config.Modules, settingFrom(m.ModuleID, m.Enabled, m.IntervalSeconds, m.Config))
+		}
+		sealed, err := q.ModuleSecretsForNode(ctx, uuid.UUID(node))
+		if err != nil {
+			return fmt.Errorf("module credentials: %w", err)
+		}
+		for _, s := range sealed {
+			config.Secrets = append(config.Secrets, module.SealedSecret{Group: tenant.GroupID(s.GroupID), Module: s.ModuleID, Field: s.Field, Sealed: s.Sealed})
 		}
 		return nil
 	})

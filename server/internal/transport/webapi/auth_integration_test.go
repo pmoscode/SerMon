@@ -293,7 +293,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		LogSettings: webapi.NewLogSettingsHandler(
 			logsettings.NewService(postgres.NewLogSettingsStore(pg), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
 		Modules: webapi.NewModuleHandler(
-			modules.NewService(postgres.NewModuleStore(pg), moduleCatalog(t), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
+			modules.NewService(postgres.NewModuleStore(pg), moduleCatalog(t), masterKeys(t), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
 		Rules: webapi.NewAlertRuleHandler(rules.NewService(rules.Deps{
 			Defaults: mustDefaultRules(t), Store: postgres.NewAlertRuleStore(pg), Policy: authz.NewPolicy(), Now: time.Now,
 		}), slog.New(slog.DiscardHandler)),

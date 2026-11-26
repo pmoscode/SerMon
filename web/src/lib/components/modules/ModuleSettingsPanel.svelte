@@ -76,7 +76,9 @@
 						saved.intervalSeconds === undefined
 							? undefined
 							: { seconds: BigInt(saved.intervalSeconds) }
-				}
+				},
+				secrets: saved.secrets,
+				clearSecrets: saved.clearSecrets
 			})
 		);
 		if (message === '') editing = undefined;
@@ -175,6 +177,7 @@
 										moduleId={id}
 										schemaJson={module.schemaJson}
 										{setting}
+										secretsSet={setting?.secretsSet ?? []}
 										suggestion={editing.suggestion}
 										onSave={(saved) => save(group, id, saved)}
 										onCancel={() => (editing = undefined)}

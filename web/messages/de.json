@@ -1425,7 +1425,6 @@
 	"modules_secret_set": "Gesetzt",
 	"modules_secret_unset": "Nicht gesetzt",
 	"modules_secret_placeholder": "Neuen Wert eingeben",
-	"modules_secret_unavailable": "Zugangsdaten lassen sich hier noch nicht speichern.",
 	"modules_problem_required": "Pflichtfeld.",
 	"modules_problem_integer": "Eine ganze Zahl.",
 	"modules_problem_number": "Eine Zahl.",
@@ -1552,5 +1551,7 @@
 	"module_prometheus_ca_file": "CA-Datei",
 	"module_prometheus_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird.",
 	"module_prometheus_bearer": "Bearer-Token",
-	"module_prometheus_bearer_help": "Geht als Authorization: Bearer nur an die eingestellten Endpunkte, nie nach einer Weiterleitung an einen anderen Host."
+	"module_prometheus_bearer_help": "Geht als Authorization: Bearer nur an die eingestellten Endpunkte, nie nach einer Weiterleitung an einen anderen Host.",
+	"modules_secret_hint": "Zugangsdaten werden verschlüsselt gespeichert, gehen nur über die verschlüsselte Verbindung an die Agents der Gruppe und werden nie wieder angezeigt. Für Datenbanken einen eigenen Monitoring-User mit wenigen Rechten verwenden.",
+	"modules_secret_clear": "Gespeicherten Wert entfernen"
 }

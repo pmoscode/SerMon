@@ -652,7 +652,7 @@ var tenantIsolationCases = map[string]isolationCase{
 	"/sermon.web.v1.ModuleService/SetGroupModule": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.modules.SetGroupModule(ctx, connect.NewRequest(&webv1.SetGroupModuleRequest{GroupId: e.groupA, Setting: &webv1.ModuleSetting{
 			ModuleId: "simulate", Enabled: true, ConfigJson: `{"value":9}`,
-		}}))
+		}, Secrets: map[string]string{"token": "beta-token"}}))
 		return err
 	}},
 	"/sermon.web.v1.ModuleService/RemoveGroupModule": {run: func(ctx context.Context, e isolationEnv) error {

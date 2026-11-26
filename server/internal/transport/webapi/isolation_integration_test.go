@@ -275,7 +275,11 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	if alphaLogSettings != 0 {
 		t.Errorf("Beta wrote %d log settings for Alpha's groups", alphaLogSettings)
 	}
-	var alphaModules, alphaHints int
+	var alphaModules, alphaHints, alphaSecrets int
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM module_secrets WHERE org_id = $1", orgAlpha).Scan(&alphaSecrets)
+	if alphaSecrets != 0 {
+		t.Errorf("Beta wrote %d credentials for Alpha's modules", alphaSecrets)
+	}
 	var alphaConfig string
 	_ = conn.QueryRow(ctx, "SELECT count(*), max(config::text) FROM module_settings WHERE org_id = $1", orgAlpha).Scan(&alphaModules, &alphaConfig)
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM module_hints WHERE org_id = $1", orgAlpha).Scan(&alphaHints)

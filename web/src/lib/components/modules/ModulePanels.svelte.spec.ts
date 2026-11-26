@@ -63,7 +63,8 @@ function settings() {
 						moduleId: 'simulate',
 						enabled: true,
 						interval: { seconds: 20n },
-						configJson: '{"value":3}'
+						configJson: '{"value":3}',
+						secretsSet: ['token']
 					}
 				]
 			},
@@ -110,6 +111,9 @@ describe('ModuleSettingsPanel', () => {
 		render(ModuleSettingsPanel);
 		await page.getByRole('button', { name: 'Set up: Test module (simulate) (web)' }).click();
 		await expect.element(page.getByLabelText('Value')).toHaveValue('3');
+		// The stored credential is named, its value never shown.
+		expect(page.getByTestId('secret-state').element().textContent?.trim()).toBe('Set');
+		await expect.element(page.getByLabelText(/^Token/)).toHaveValue('');
 		await page.getByLabelText('Value').fill('7');
 		await page.getByRole('button', { name: 'Save' }).click();
 		await vi.waitFor(() => expect(stepUpState.open).toBe(true));
@@ -126,7 +130,9 @@ describe('ModuleSettingsPanel', () => {
 				enabled: true,
 				configJson: '{"value":7}',
 				interval: { seconds: 20n }
-			}
+			},
+			secrets: {},
+			clearSecrets: []
 		});
 	});
 

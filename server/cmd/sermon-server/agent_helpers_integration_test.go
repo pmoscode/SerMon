@@ -174,7 +174,8 @@ func (s runningServer) session(t *testing.T, cert tls.Certificate, roots [][]byt
 func receiveSkippingConfig(stream *connect.BidiStreamForClient[agentv1.SessionRequest, agentv1.SessionResponse]) (*agentv1.SessionResponse, error) {
 	for {
 		res, err := stream.Receive()
-		if err != nil || res.GetConfigUpdate() == nil {
+		// The credentials of the modules (M5-05) come with every session as well.
+		if err != nil || (res.GetConfigUpdate() == nil && res.GetModuleSecrets() == nil) {
 			return res, err
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 )
 
@@ -57,6 +58,23 @@ type Setting struct {
 	Interval time.Duration
 	// Config is the configuration as compact JSON without credentials and defaults.
 	Config string
+	// SecretsSet are the credentials that have a value (names only, M5-05).
+	SecretsSet []string
+}
+
+// SealedSecret is a credential of a group's module as stored: sealed with secrets.Box under
+// SecretContext. Only the session of an agent of the group opens it.
+type SealedSecret struct {
+	Group  tenant.GroupID
+	Module string
+	Field  string
+	Sealed []byte
+}
+
+// SecretContext is the associated data of a sealed credential: it binds the ciphertext to its
+// organization, group, module and field, so a copy to another record does not open.
+func SecretContext(org tenant.OrgID, group tenant.GroupID, moduleID, field string) []byte {
+	return []byte("module_secret:" + org.String() + ":" + group.String() + ":" + moduleID + ":" + field)
 }
 
 // ForAgent keeps the settings of the modules an agent has built in: the server offers a node

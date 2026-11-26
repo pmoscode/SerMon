@@ -78,6 +78,9 @@ type NodeConfig struct {
 	// Modules are the module settings of the node's group (ADR 0039); the session keeps those
 	// the agent has built in.
 	Modules []module.Setting
+	// Secrets are the sealed credentials of the group's modules (M5-05); the session opens and
+	// sends those of the modules the agent has built in.
+	Secrets []module.SealedSecret
 }
 
 // Applied is an agent's answer to a configuration.

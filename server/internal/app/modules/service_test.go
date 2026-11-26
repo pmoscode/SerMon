@@ -1,8 +1,10 @@
 package modules_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/secrets"
 )
 
 var (
@@ -33,8 +36,15 @@ const nginx = `{"type":"object","additionalProperties":false,"required":["url"],
 "url":{"type":"string","format":"uri","maxLength":512},
 "password":{"type":"string","writeOnly":true,"maxLength":64}}}`
 
+// postgresql needs its password.
+const postgresql = `{"type":"object","additionalProperties":false,"required":["password"],"properties":{
+"user":{"type":"string","maxLength":63},
+"password":{"type":"string","writeOnly":true,"maxLength":64}}}`
+
 type memStore struct {
-	groups  map[tenant.GroupID][]module.Setting
+	groups map[tenant.GroupID][]module.Setting
+	// sealed are the stored credentials by group, module and field.
+	sealed  map[string][]byte
 	nodes   map[identity.NodeID]modules.Node
 	hints   []modules.NodeHint
 	version uint64
@@ -44,7 +54,7 @@ type memStore struct {
 
 func newStore() *memStore {
 	return &memStore{
-		groups: map[tenant.GroupID][]module.Setting{web: nil, db: nil}, version: 1,
+		groups: map[tenant.GroupID][]module.Setting{web: nil, db: nil}, version: 1, sealed: map[string][]byte{},
 		nodes: map[identity.NodeID]modules.Node{node1: {
 			ID: node1, Group: web, Builtin: []string{"nginx", "simulate"},
 			Settings: []module.Setting{{Module: "nginx", Enabled: true}, {Module: "redis", Enabled: true}},
@@ -62,11 +72,32 @@ func (m *memStore) View(_ context.Context, scope tenant.Scope) (modules.View, er
 	return v, nil
 }
 
-func (m *memStore) Put(_ context.Context, scope tenant.Scope, group tenant.GroupID, s module.Setting, _ identity.UserID, audit access.AuditEntry) error {
+func secretKey(group tenant.GroupID, mod, field string) string {
+	return group.String() + "/" + mod + "/" + field
+}
+
+func (m *memStore) SecretFields(_ context.Context, _ tenant.Scope, group tenant.GroupID, mod string) ([]string, error) {
+	var out []string
+	for k := range m.sealed {
+		if f, ok := strings.CutPrefix(k, group.String()+"/"+mod+"/"); ok {
+			out = append(out, f)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+func (m *memStore) Put(_ context.Context, scope tenant.Scope, group tenant.GroupID, s module.Setting, secrets modules.SealedChange, _ identity.UserID, audit access.AuditEntry) error {
 	m.scopes = append(m.scopes, scope)
 	settings, ok := m.groups[group]
 	if !ok {
 		return access.ErrNotFound
+	}
+	for f, v := range secrets.Set {
+		m.sealed[secretKey(group, s.Module, f)] = v
+	}
+	for _, f := range secrets.Clear {
+		delete(m.sealed, secretKey(group, s.Module, f))
 	}
 	settings = slices.DeleteFunc(settings, func(o module.Setting) bool { return o.Module == s.Module })
 	m.groups[group] = append(settings, s)
@@ -119,21 +150,37 @@ func adminCaller() access.Caller {
 	return caller(admin, now.Add(-time.Minute), authz.Binding{AllGroups: true, Role: role.Admin})
 }
 
-func setup(t *testing.T) (*modules.Service, *memStore, *agents) {
+func testBox(t *testing.T) *secrets.Box {
 	t.Helper()
-	catalog, err := module.NewCatalog(map[string]string{"nginx": nginx})
+	key, err := secrets.NewKey(1, bytes.Repeat([]byte{7}, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
+	box, err := secrets.NewBox(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return box
+}
+
+var box *secrets.Box
+
+func setup(t *testing.T) (*modules.Service, *memStore, *agents) {
+	t.Helper()
+	catalog, err := module.NewCatalog(map[string]string{"nginx": nginx, "postgresql": postgresql})
+	if err != nil {
+		t.Fatal(err)
+	}
+	box = testBox(t)
 	store, a := newStore(), &agents{}
-	return modules.NewService(store, catalog, authz.NewPolicy(), a, func() time.Time { return now }), store, a
+	return modules.NewService(store, catalog, box, authz.NewPolicy(), a, func() time.Time { return now }), store, a
 }
 
 func TestSetGroupModule_StoresAuditsAndTellsTheAgents(t *testing.T) {
 	svc, store, a := setup(t)
 	err := svc.SetGroupModule(context.Background(), adminCaller(), web, module.Setting{
 		Module: "nginx", Enabled: true, Interval: 20 * time.Second, Config: ` {"url": "http://127.0.0.1/status"} `,
-	})
+	}, modules.SecretChange{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +210,7 @@ func TestSetGroupModule_RefusesWhatTheAgentWouldRefuse(t *testing.T) {
 		{module.Setting{Module: "nginx", Config: `{"url":"http://x/"}`, Interval: 5 * time.Second}, module.ErrInvalid, "interval"},
 		{module.Setting{Module: "redis", Config: `{}`}, access.ErrNotFound, ""},
 	} {
-		err := svc.SetGroupModule(context.Background(), adminCaller(), web, tc.setting)
+		err := svc.SetGroupModule(context.Background(), adminCaller(), web, tc.setting, modules.SecretChange{})
 		if !errors.Is(err, tc.want) || !strings.Contains(err.Error(), tc.why) {
 			t.Errorf("%+v: %v, want %v %q", tc.setting, err, tc.want, tc.why)
 		}
@@ -193,7 +240,7 @@ func TestSettings_NeedAnAdminForAllGroupsAndAStepUp(t *testing.T) {
 		} else if _, err := svc.View(ctx, c); !errors.Is(err, access.ErrForbidden) {
 			t.Errorf("%s: View = %v", name, err)
 		}
-		if err := svc.SetGroupModule(ctx, c, web, ok); !errors.Is(err, wantSet) {
+		if err := svc.SetGroupModule(ctx, c, web, ok, modules.SecretChange{}); !errors.Is(err, wantSet) {
 			t.Errorf("%s: Set = %v", name, err)
 		}
 		if err := svc.RemoveGroupModule(ctx, c, web, "nginx"); !errors.Is(err, wantSet) {
@@ -208,7 +255,7 @@ func TestSettings_NeedAnAdminForAllGroupsAndAStepUp(t *testing.T) {
 func TestRemoveGroupModule(t *testing.T) {
 	svc, store, a := setup(t)
 	ctx := context.Background()
-	if err := svc.SetGroupModule(ctx, adminCaller(), db, module.Setting{Module: "nginx", Config: `{"url":"http://x/"}`}); err != nil {
+	if err := svc.SetGroupModule(ctx, adminCaller(), db, module.Setting{Module: "nginx", Config: `{"url":"http://x/"}`}, modules.SecretChange{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.RemoveGroupModule(ctx, adminCaller(), db, "nginx"); err != nil {
@@ -262,7 +309,7 @@ func TestHintsAndModules_ForViewersOfTheirGroups(t *testing.T) {
 		t.Errorf("other group sees %+v", hints)
 	}
 	list, err := svc.Modules(ctx, caller(viewer, time.Time{}, authz.Binding{Group: db, Role: role.Viewer}))
-	if err != nil || len(list) != 1 || list[0].ID != "nginx" {
+	if err != nil || len(list) != 2 || list[0].ID != "nginx" {
 		t.Errorf("%+v %v", list, err)
 	}
 	if _, err := svc.Modules(ctx, caller(viewer, time.Time{})); !errors.Is(err, access.ErrForbidden) {
@@ -270,5 +317,99 @@ func TestHintsAndModules_ForViewersOfTheirGroups(t *testing.T) {
 	}
 	if _, err := svc.Hints(ctx, caller(viewer, time.Time{})); !errors.Is(err, access.ErrForbidden) {
 		t.Errorf("without a role: %v", err)
+	}
+}
+
+// M5-05: a credential is sealed for its organization, group, module and field – the store and
+// the audit log never see its value; another group or organization can't open it.
+func TestSetGroupModule_SealsCredentials(t *testing.T) {
+	svc, store, a := setup(t)
+	ctx := context.Background()
+	const value = "pg-monitor-value" // betterleaks:allow
+	err := svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "postgresql", Enabled: true, Config: `{"user":"pg_monitor"}`},
+		modules.SecretChange{Set: map[string]string{"password": value}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed := store.sealed[secretKey(web, "postgresql", "password")]
+	if len(sealed) == 0 || bytes.Contains(sealed, []byte(value)) {
+		t.Fatalf("stored %q", sealed)
+	}
+	opened, err := box.Open(sealed, module.SecretContext(org, web, "postgresql", "password"))
+	if err != nil || string(opened) != value {
+		t.Fatalf("Open() = %q, %v", opened, err)
+	}
+	for name, aad := range map[string][]byte{
+		"other group":  module.SecretContext(org, db, "postgresql", "password"),
+		"other org":    module.SecretContext(tenant.OrgID(uuid.New()), web, "postgresql", "password"),
+		"other module": module.SecretContext(org, web, "mysql", "password"),
+		"other field":  module.SecretContext(org, web, "postgresql", "user"),
+	} {
+		if _, err := box.Open(sealed, aad); err == nil {
+			t.Errorf("%s opens the credential", name)
+		}
+	}
+	audit := store.audits[0]
+	if audit.Details["secrets_set"] != "password" || strings.Contains(fmt.Sprint(audit), value) {
+		t.Errorf("audit %+v", audit)
+	}
+	if len(a.changed) != 1 {
+		t.Errorf("agents told %d times", len(a.changed))
+	}
+
+	// The required credential stays set when the configuration changes; removing it is refused.
+	if err := svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "postgresql", Config: `{}`}, modules.SecretChange{}); err != nil {
+		t.Errorf("without a new value: %v", err)
+	}
+	err = svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "postgresql", Config: `{}`}, modules.SecretChange{Clear: []string{"password"}})
+	if !errors.Is(err, module.ErrInvalid) || !strings.Contains(err.Error(), "password: required") {
+		t.Errorf("removing the required credential: %v", err)
+	}
+	// Rotation: a new value replaces the old one.
+	const rotated = "rotated-value" // betterleaks:allow
+	if err := svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "postgresql", Config: `{}`},
+		modules.SecretChange{Set: map[string]string{"password": rotated}}); err != nil {
+		t.Fatal(err)
+	}
+	if opened, _ := box.Open(store.sealed[secretKey(web, "postgresql", "password")], module.SecretContext(org, web, "postgresql", "password")); string(opened) != rotated {
+		t.Errorf("after rotation: %q", opened)
+	}
+	// An optional one can go.
+	if err := svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "nginx", Config: `{"url":"http://x/"}`},
+		modules.SecretChange{Set: map[string]string{"password": "x"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "nginx", Config: `{"url":"http://x/"}`},
+		modules.SecretChange{Clear: []string{"password"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.sealed[secretKey(web, "nginx", "password")]; ok || store.audits[len(store.audits)-1].Details["secrets_cleared"] != "password" {
+		t.Errorf("not removed: %+v", store.audits[len(store.audits)-1])
+	}
+}
+
+func TestSetGroupModule_RefusesCredentialsOutsideTheSchema(t *testing.T) {
+	svc, store, _ := setup(t)
+	ctx := context.Background()
+	ok := module.Setting{Module: "postgresql", Config: `{}`}
+	for _, tc := range []struct {
+		change modules.SecretChange
+		why    string
+	}{
+		{modules.SecretChange{}, "password: required"},
+		{modules.SecretChange{Set: map[string]string{"user": "alice"}}, "not a credential"},
+		{modules.SecretChange{Set: map[string]string{"password": ""}}, "empty"},
+		{modules.SecretChange{Set: map[string]string{"password": strings.Repeat("x", 65)}}, "length"},
+		{modules.SecretChange{Set: map[string]string{"password": strings.Repeat("ä", 2049)}}, "bytes"},
+		{modules.SecretChange{Set: map[string]string{"password": "x"}, Clear: []string{"password"}}, "at once"},
+		{modules.SecretChange{Set: map[string]string{"password": "x"}, Clear: []string{"user"}}, "not a credential"},
+	} {
+		err := svc.SetGroupModule(ctx, adminCaller(), web, ok, tc.change)
+		if !errors.Is(err, module.ErrInvalid) || !strings.Contains(err.Error(), tc.why) {
+			t.Errorf("%v: %v, want %q", tc.change.Clear, err, tc.why)
+		}
+	}
+	if len(store.sealed) != 0 || len(store.audits) != 0 {
+		t.Errorf("stored %v", store.sealed)
 	}
 }

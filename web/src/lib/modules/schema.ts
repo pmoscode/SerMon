@@ -29,6 +29,8 @@ export interface Saved {
 	configJson: string;
 	/** Credentials typed in (field → value); empty fields keep what is stored. */
 	secrets: Record<string, string>;
+	/** Credentials whose stored value goes. */
+	clearSecrets: string[];
 }
 
 /** What the form holds: text for inputs and lists (one item per line), a flag for checkboxes. */

@@ -39,6 +39,8 @@ plugins:
     opt:
       - compile_well_known_types
       - extern_path=.google.protobuf=::prost_types
+      # The credentials of the modules (ADR 0039): a Debug of our own, without the value (proto.rs).
+      - skip_debug=.sermon.agent.v1.ModuleSecret
   - local: protoc-gen-tonic
     out: ../agent/crates/sermon-transport/src/gen
     exclude_types: [sermon.web.v1, sermon.helper.v1]

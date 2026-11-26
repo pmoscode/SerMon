@@ -125,6 +125,7 @@ type Querier interface {
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteModuleHealth(ctx context.Context, nodeID uuid.UUID) error
 	DeleteModuleHints(ctx context.Context, nodeID uuid.UUID) error
+	DeleteModuleSecret(ctx context.Context, arg DeleteModuleSecretParams) error
 	DeleteModuleSetting(ctx context.Context, arg DeleteModuleSettingParams) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteNotificationChannel(ctx context.Context, id uuid.UUID) (int64, error)
@@ -308,6 +309,8 @@ type Querier interface {
 	ListKioskTokens(ctx context.Context, dashboardID uuid.UUID) ([]ListKioskTokensRow, error)
 	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
+	// The fields with a value of every module setting of the organization (names only).
+	ListModuleSecretFields(ctx context.Context) ([]ListModuleSecretFieldsRow, error)
 	// The modules of the agents (M5-06, ADR 0039). Every query runs in the organization's tenant
 	// transaction.
 	// The settings of every group of the organization.
@@ -377,6 +380,10 @@ type Querier interface {
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
 	ModuleHealthOfNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleHealthOfNodeRow, error)
 	ModuleHintsOfNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleHintsOfNodeRow, error)
+	// The credentials of a group's module that have a value (names only).
+	ModuleSecretFields(ctx context.Context, arg ModuleSecretFieldsParams) ([]string, error)
+	// The sealed credentials of a node's group (only the agent's session opens them).
+	ModuleSecretsForNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleSecretsForNodeRow, error)
 	// The settings of a node's group (its configuration, ADR 0030).
 	ModuleSettingsForNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleSettingsForNodeRow, error)
 	// The node of a group with this machine-id whose takeover window is open.
@@ -536,6 +543,7 @@ type Querier interface {
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error
+	UpsertModuleSecret(ctx context.Context, arg UpsertModuleSecretParams) error
 	UpsertModuleSetting(ctx context.Context, arg UpsertModuleSettingParams) error
 	// Stores the listed packages; one listed before keeps its first_seen_at.
 	UpsertNodeUpdatePackages(ctx context.Context, arg UpsertNodeUpdatePackagesParams) error

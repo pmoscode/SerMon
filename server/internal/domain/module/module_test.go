@@ -6,7 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/pmoscode/SerMon/server/internal/domain/module"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
 const nginx = `{"type":"object","additionalProperties":false,"required":["url"],"properties":{
@@ -140,5 +143,57 @@ func TestForAgent(t *testing.T) {
 	}
 	if got := module.ForAgent([]module.Setting{{Module: "nginx"}}, nil); len(got) != 0 {
 		t.Errorf("%+v", got)
+	}
+}
+
+// M5-05: a credential is checked against its property; only writeOnly properties take one.
+func TestSchema_CheckSecret(t *testing.T) {
+	s, _ := catalog(t).Lookup("nginx")
+	if err := s.CheckSecret("password", "a-value"); err != nil {
+		t.Error(err)
+	}
+	for _, tc := range []struct{ field, value, why string }{
+		{"url", "http://x/", "not a credential"},
+		{"nope", "x", "not a credential"},
+		{"password", strings.Repeat("x", 65), "length"},
+		{"password", "a\x00b", "control"},
+		{"password", "", "empty"},
+	} {
+		if err := s.CheckSecret(tc.field, tc.value); err == nil || !strings.Contains(err.Error(), tc.why) {
+			t.Errorf("%s=%q: %v, want %q", tc.field, tc.value, err, tc.why)
+		}
+	}
+}
+
+// A refused credential is not repeated in the reason.
+func TestSchema_CheckSecretDoesNotRepeatTheValue(t *testing.T) {
+	c, err := module.NewCatalog(map[string]string{"m": `{"type":"object","additionalProperties":false,"properties":{"key":{"type":"string","writeOnly":true,"maxLength":32,"enum":["a","b"]}}}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := c.Lookup("m")
+	err = s.CheckSecret("key", "wrong-value")
+	if err == nil || strings.Contains(err.Error(), "wrong-value") || !strings.Contains(err.Error(), "is not one of") {
+		t.Errorf("%v", err)
+	}
+}
+
+// The associated data binds a sealed credential to its organization, group, module and field.
+func TestSecretContext_NamesEveryPart(t *testing.T) {
+	org := tenant.OrgID(uuid.MustParse("0193f5a0-0000-7000-8000-00000000000a"))
+	group := tenant.GroupID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000aa"))
+	base := string(module.SecretContext(org, group, "postgresql", "password"))
+	for _, other := range []string{
+		string(module.SecretContext(tenant.OrgID(uuid.New()), group, "postgresql", "password")),
+		string(module.SecretContext(org, tenant.GroupID(uuid.New()), "postgresql", "password")),
+		string(module.SecretContext(org, group, "mysql", "password")),
+		string(module.SecretContext(org, group, "postgresql", "user")),
+	} {
+		if other == base {
+			t.Errorf("same context %q", other)
+		}
+	}
+	if !strings.HasPrefix(base, "module_secret:") {
+		t.Errorf("%q", base)
 	}
 }

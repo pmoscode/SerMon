@@ -31,6 +31,22 @@ func (q *Queries) DeleteModuleHints(ctx context.Context, nodeID uuid.UUID) error
 	return err
 }
 
+const deleteModuleSecret = `-- name: DeleteModuleSecret :exec
+DELETE FROM module_secrets
+WHERE group_id = $1 AND module_id = $2 AND field = $3
+`
+
+type DeleteModuleSecretParams struct {
+	GroupID  uuid.UUID
+	ModuleID string
+	Field    string
+}
+
+func (q *Queries) DeleteModuleSecret(ctx context.Context, arg DeleteModuleSecretParams) error {
+	_, err := q.db.Exec(ctx, deleteModuleSecret, arg.GroupID, arg.ModuleID, arg.Field)
+	return err
+}
+
 const deleteModuleSetting = `-- name: DeleteModuleSetting :execrows
 DELETE FROM module_settings WHERE group_id = $1 AND module_id = $2
 `
@@ -126,6 +142,37 @@ func (q *Queries) ListGroupBuiltinModules(ctx context.Context) ([]ListGroupBuilt
 	for rows.Next() {
 		var i ListGroupBuiltinModulesRow
 		if err := rows.Scan(&i.GroupID, &i.Modules); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listModuleSecretFields = `-- name: ListModuleSecretFields :many
+SELECT group_id, module_id, field FROM module_secrets ORDER BY group_id, module_id, field
+`
+
+type ListModuleSecretFieldsRow struct {
+	GroupID  uuid.UUID
+	ModuleID string
+	Field    string
+}
+
+// The fields with a value of every module setting of the organization (names only).
+func (q *Queries) ListModuleSecretFields(ctx context.Context) ([]ListModuleSecretFieldsRow, error) {
+	rows, err := q.db.Query(ctx, listModuleSecretFields)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListModuleSecretFieldsRow{}
+	for rows.Next() {
+		var i ListModuleSecretFieldsRow
+		if err := rows.Scan(&i.GroupID, &i.ModuleID, &i.Field); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -323,6 +370,79 @@ func (q *Queries) ModuleHintsOfNode(ctx context.Context, nodeID uuid.UUID) ([]Mo
 	return items, nil
 }
 
+const moduleSecretFields = `-- name: ModuleSecretFields :many
+SELECT field FROM module_secrets
+WHERE group_id = $1 AND module_id = $2
+ORDER BY field
+`
+
+type ModuleSecretFieldsParams struct {
+	GroupID  uuid.UUID
+	ModuleID string
+}
+
+// The credentials of a group's module that have a value (names only).
+func (q *Queries) ModuleSecretFields(ctx context.Context, arg ModuleSecretFieldsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, moduleSecretFields, arg.GroupID, arg.ModuleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var field string
+		if err := rows.Scan(&field); err != nil {
+			return nil, err
+		}
+		items = append(items, field)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const moduleSecretsForNode = `-- name: ModuleSecretsForNode :many
+SELECT s.group_id, s.module_id, s.field, s.sealed
+FROM nodes n
+JOIN module_secrets s ON s.org_id = n.org_id AND s.group_id = n.group_id
+WHERE n.id = $1
+ORDER BY s.module_id, s.field
+`
+
+type ModuleSecretsForNodeRow struct {
+	GroupID  uuid.UUID
+	ModuleID string
+	Field    string
+	Sealed   []byte
+}
+
+// The sealed credentials of a node's group (only the agent's session opens them).
+func (q *Queries) ModuleSecretsForNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleSecretsForNodeRow, error) {
+	rows, err := q.db.Query(ctx, moduleSecretsForNode, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleSecretsForNodeRow{}
+	for rows.Next() {
+		var i ModuleSecretsForNodeRow
+		if err := rows.Scan(
+			&i.GroupID,
+			&i.ModuleID,
+			&i.Field,
+			&i.Sealed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const moduleSettingsForNode = `-- name: ModuleSettingsForNode :many
 SELECT s.module_id, s.enabled, s.interval_seconds, s.config::text AS config
 FROM nodes n
@@ -382,6 +502,33 @@ func (q *Queries) SetNodeModules(ctx context.Context, arg SetNodeModulesParams) 
 	var modules []string
 	err := row.Scan(&modules)
 	return modules, err
+}
+
+const upsertModuleSecret = `-- name: UpsertModuleSecret :exec
+INSERT INTO module_secrets (org_id, group_id, module_id, field, sealed, updated_at, updated_by)
+VALUES (current_org_id(), $1, $2, $3, $4, now(),
+        $5)
+ON CONFLICT (org_id, group_id, module_id, field) DO UPDATE
+    SET sealed = EXCLUDED.sealed, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+`
+
+type UpsertModuleSecretParams struct {
+	GroupID   uuid.UUID
+	ModuleID  string
+	Field     string
+	Sealed    []byte
+	UpdatedBy *uuid.UUID
+}
+
+func (q *Queries) UpsertModuleSecret(ctx context.Context, arg UpsertModuleSecretParams) error {
+	_, err := q.db.Exec(ctx, upsertModuleSecret,
+		arg.GroupID,
+		arg.ModuleID,
+		arg.Field,
+		arg.Sealed,
+		arg.UpdatedBy,
+	)
+	return err
 }
 
 const upsertModuleSetting = `-- name: UpsertModuleSetting :exec

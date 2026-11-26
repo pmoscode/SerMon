@@ -254,7 +254,9 @@ func (s *Service) RemoveGroupModule(ctx context.Context, c access.Caller, group 
 }
 
 // Node returns the modules of a node: access.ErrNotFound for one outside the caller's groups.
-// Settings of modules its agent doesn't have built in are left out (it would not run them).
+// Settings of modules its agent doesn't have built in are left out (it would not run them). The
+// configuration, the names of the credentials set and the agent's suggestions only for those who
+// may change them (manage_modules, M5-33): they can name internal hosts, users and paths.
 func (s *Service) Node(ctx context.Context, c access.Caller, node identity.NodeID) (Node, error) {
 	scope, err := s.viewScope(c)
 	if err != nil {
@@ -265,10 +267,38 @@ func (s *Service) Node(ctx context.Context, c access.Caller, node identity.NodeI
 		return Node{}, fmt.Errorf("node modules: %w", err)
 	}
 	n.Settings = module.ForAgent(n.Settings, n.Builtin)
+	if s.manages(c) {
+		return n, nil
+	}
+	settings := make([]module.Setting, 0, len(n.Settings))
+	for _, m := range n.Settings {
+		settings = append(settings, module.Setting{Module: m.Module, Enabled: m.Enabled, Interval: m.Interval})
+	}
+	n.Settings = settings
+	if n.Hints != nil {
+		hints := *n.Hints
+		hints.Hints = withoutSuggestions(hints.Hints)
+		n.Hints = &hints
+	}
 	return n, nil
 }
 
-// Hints returns the open suggestions of the caller's nodes.
+// manages tells whether the caller may change the modules (and so read their configuration).
+func (s *Service) manages(c access.Caller) bool {
+	return s.policy.Allowed(c.Principal, authz.ManageModules, authz.InOrg(c.Principal.Org))
+}
+
+func withoutSuggestions(hints []module.Hint) []module.Hint {
+	out := make([]module.Hint, 0, len(hints))
+	for _, h := range hints {
+		h.Suggested = ""
+		out = append(out, h)
+	}
+	return out
+}
+
+// Hints returns the open suggestions of the caller's nodes; the suggested configuration only for
+// those who manage modules (see Node).
 func (s *Service) Hints(ctx context.Context, c access.Caller) ([]NodeHint, error) {
 	scope, err := s.viewScope(c)
 	if err != nil {
@@ -277,6 +307,11 @@ func (s *Service) Hints(ctx context.Context, c access.Caller) ([]NodeHint, error
 	hints, err := s.store.OpenHints(ctx, scope, MaxHints)
 	if err != nil {
 		return nil, fmt.Errorf("module hints: %w", err)
+	}
+	if !s.manages(c) {
+		for i := range hints {
+			hints[i].Hint.Suggested = ""
+		}
 	}
 	return hints, nil
 }

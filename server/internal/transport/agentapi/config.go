@@ -2,7 +2,6 @@ package agentapi
 
 import (
 	"context"
-	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -127,11 +126,16 @@ func (h *SessionHandler) sendConfig(ctx context.Context, id Identity, state *con
 }
 
 // moduleSecrets opens the credentials of the node's group for the modules its agent has built
-// in. A value that doesn't open (a key gone, a copied record) is left out and logged without it.
+// in and that are on (M5-33): a module turned off takes its credentials off the agents. A value
+// that doesn't open (a key gone, a copied record) is left out and logged without it.
 func (h *SessionHandler) moduleSecrets(ctx context.Context, id Identity, config logconfig.NodeConfig, builtin []string) *agentv1.ModuleSecrets {
+	running := map[string]bool{}
+	for _, m := range module.ForAgent(config.Modules, builtin) {
+		running[m.Module] = m.Enabled
+	}
 	msg := &agentv1.ModuleSecrets{}
 	for _, s := range config.Secrets {
-		if !slices.Contains(builtin, s.Module) || len(msg.GetSecrets()) >= maxModuleSecrets {
+		if !running[s.Module] || len(msg.GetSecrets()) >= maxModuleSecrets {
 			continue
 		}
 		value, err := h.secrets.Open(s.Sealed, module.SecretContext(id.Org, s.Group, s.Module, s.Field))

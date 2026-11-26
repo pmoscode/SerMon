@@ -321,11 +321,14 @@ func sealed(t *testing.T, box *secrets.Box, org tenant.OrgID, group tenant.Group
 // M5-05: after the Hello – also with the agent's version current – the agent gets the opened
 // credentials of the modules it has built in, before any configuration; a value sealed for
 // another group or organization doesn't open and stays out; every new version brings them again.
+// M5-33: only of modules that are on – a module turned off takes its credentials off the agents.
 func TestConfig_TheCredentialsOfTheModulesGoToTheAgent(t *testing.T) {
 	box := testBox(t)
 	const value = "pg-value-for-x" // betterleaks:allow
 	config := withModules(nodeConfig(3))
+	config.Modules = []module.Setting{{Module: "simulate", Enabled: true}, {Module: "nginx", Enabled: false}}
 	config.Secrets = []module.SealedSecret{
+		sealed(t, box, orgX, groupX, "nginx", "password", "module-off"),
 		sealed(t, box, orgX, groupX, "simulate", "token", value),
 		sealed(t, box, orgX, groupX, "simulate", "user_key", "second-value"),
 		sealed(t, box, orgX, groupX, "redis", "password", "not-built-in"),
@@ -337,7 +340,7 @@ func TestConfig_TheCredentialsOfTheModulesGoToTheAgent(t *testing.T) {
 	cert, _ := s.ca.agentCert(t, orgX, nodeX)
 	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
 	hello := helloWithConfig(3) // current: no ConfigUpdate, but the credentials
-	hello.GetHello().Modules = []string{"simulate"}
+	hello.GetHello().Modules = []string{"simulate", "nginx", "redis"}
 	if err := stream.Send(hello); err != nil {
 		t.Fatal(err)
 	}

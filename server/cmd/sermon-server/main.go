@@ -76,6 +76,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/config"
+	"github.com/pmoscode/SerMon/server/internal/platform/logredact"
 	"github.com/pmoscode/SerMon/server/internal/platform/promtext"
 	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 	"github.com/pmoscode/SerMon/server/internal/platform/safehttp"
@@ -819,7 +820,8 @@ func registerUI(mux *http.ServeMux, ui http.Handler) {
 }
 
 func newLogger(cfg config.Config, w io.Writer) *slog.Logger {
-	opts := &slog.HandlerOptions{Level: cfg.LogLevel}
+	// Fields marked debug_redact never reach the log, whatever a call passes (M5-33).
+	opts := &slog.HandlerOptions{Level: cfg.LogLevel, ReplaceAttr: logredact.ReplaceAttr}
 	var handler slog.Handler = slog.NewJSONHandler(w, opts)
 	if cfg.LogFormat == config.LogFormatText {
 		handler = slog.NewTextHandler(w, opts)

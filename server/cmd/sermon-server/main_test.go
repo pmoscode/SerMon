@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/pmoscode/SerMon/server/internal/config"
+	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/transport/webapi"
 )
 
@@ -204,6 +205,19 @@ func TestNewPasskeys_OffWithoutADomainNameInsteadOfFailing(t *testing.T) {
 		}
 		if !tc.on && !strings.Contains(logs.String(), "passkeys are off") {
 			t.Errorf("%v: no warning in %q", tc.origins, logs.String())
+		}
+	}
+}
+
+// M5-33: the server's logger drops fields marked debug_redact, in both formats.
+func TestNewLogger_DropsRedactedFields(t *testing.T) {
+	const value = "value-of-a-credential" // betterleaks:allow
+	for _, format := range []config.LogFormat{config.LogFormatJSON, config.LogFormatText} {
+		var out bytes.Buffer
+		logger := newLogger(config.Config{LogLevel: slog.LevelInfo, LogFormat: format}, &out)
+		logger.Info("x", "secret", &agentv1.ModuleSecret{ModuleId: "redis", Field: "password", Value: value})
+		if strings.Contains(out.String(), value) || !strings.Contains(out.String(), "redis") {
+			t.Errorf("%v: %s", format, out.String())
 		}
 	}
 }

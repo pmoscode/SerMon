@@ -104,6 +104,14 @@ func TestModules_AdminsSetGroupsViewersSeeTheirNodes(t *testing.T) {
 		len(n.GetHints()) != 1 || n.GetHints()[0].GetModuleId() != "nginx" || n.GetHintsCollectedAt() == nil {
 		t.Errorf("GetNodeModules() = %v", n)
 	}
+	// M5-33: the configuration only for those who manage modules.
+	if n.GetSettings()[0].GetConfigJson() != "" || !n.GetSettings()[0].GetEnabled() {
+		t.Errorf("a viewer sees the configuration: %v", n.GetSettings()[0])
+	}
+	if own, err := ann.modules.GetNodeModules(ctx, connect.NewRequest(&webv1.GetNodeModulesRequest{NodeId: nodeAl})); err != nil ||
+		own.Msg.GetSettings()[0].GetConfigJson() != `{"behavior":"fail"}` {
+		t.Errorf("the admin's view: %v, %v", own, err)
+	}
 	hints, err := mia.modules.ListModuleHints(ctx, connect.NewRequest(&webv1.ListModuleHintsRequest{}))
 	if err != nil || len(hints.Msg.GetHints()) != 1 || hints.Msg.GetHints()[0].GetHostname() != "alpha-01" {
 		t.Errorf("ListModuleHints() = %v, %v", hints, err)

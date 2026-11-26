@@ -259,3 +259,13 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
   `agent.toml`, wie geschrieben und aufgelöst.
 - **Laufzeit:** Ein Panic in `Module::build` oder `Instance::timeout` gilt wie einer im Lauf als Absturz: gemeldet und
   nach der Pause neu gebaut.
+- **Zugangsdaten je Gruppe:** Der Server schickt nur die Zugangsdaten eingebauter Module, die in der Gruppe an sind;
+  wer ein Modul abschaltet, nimmt seine Zugangsdaten bei der nächsten Version von den Agents. Gewollt bleibt: Jeder
+  Node einer Gruppe bekommt alle Zugangsdaten ihrer laufenden Module, auch wenn der Dienst nur auf einem Node läuft –
+  ein kompromittierter Node kennt sie also. Wer das trennen will, legt Gruppen je Satz von Zugangsdaten an.
+- **Wer die Konfiguration sieht:** `GetNodeModules` und `ListModuleHints` geben Konfiguration, Namen gesetzter
+  Zugangsdaten und Vorschläge der Discovery nur mit `manage_modules` heraus (sie nennen interne Hosts, User und Pfade);
+  Viewer sehen Modul, an/aus, Intervall, Gesundheit und die Anlässe eines Hinweises.
+- **Logs des Servers:** Ein `ReplaceAttr` der Handler (`internal/platform/logredact`) gibt jede Protobuf-Nachricht als
+  Text ohne die Felder mit `debug_redact` aus, auch verschachtelt; die Regel „Nachrichten der Agents nie loggen“ hängt
+  damit nicht mehr allein an der Disziplin.

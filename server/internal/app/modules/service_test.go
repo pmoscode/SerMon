@@ -295,6 +295,49 @@ func TestNode_ShowsOnlyWhatTheAgentHasBuiltIn(t *testing.T) {
 	}
 }
 
+// M5-33: the configuration of a module can name internal hosts, users and paths: only those
+// who may change it (manage_modules) read it with the node, with the names of the credentials
+// set and the agent's suggestions; a viewer sees module, on/off, health and the reasons of a hint.
+func TestNode_TheConfigurationOnlyForThoseWhoManageModules(t *testing.T) {
+	svc, store, _ := setup(t)
+	n := store.nodes[node1]
+	n.Settings = []module.Setting{{Module: "nginx", Enabled: true, Config: `{"url":"http://db.internal/status"}`, SecretsSet: []string{"password"}}}
+	n.Hints = &module.Hints{Hints: []module.Hint{{Module: "simulate", Reasons: []string{"port:80"}, Suggested: `{"socket":"/run/app.sock"}`}}}
+	store.nodes[node1] = n
+	store.hints[0].Hint.Suggested = `{"url":"http://127.0.0.1:8080/status"}`
+	ctx := context.Background()
+	for name, c := range map[string]access.Caller{
+		"viewer":      caller(viewer, time.Time{}, authz.Binding{Group: web, Role: role.Viewer}),
+		"group admin": caller(viewer, time.Time{}, authz.Binding{Group: web, Role: role.Admin}),
+	} {
+		got, err := svc.Node(ctx, c, node1)
+		if err != nil || len(got.Settings) != 1 || !got.Settings[0].Enabled {
+			t.Fatalf("%s: %+v %v", name, got, err)
+		}
+		if got.Settings[0].Config != "" || len(got.Settings[0].SecretsSet) != 0 || got.Hints.Hints[0].Suggested != "" {
+			t.Errorf("%s sees %+v %+v", name, got.Settings[0], got.Hints.Hints[0])
+		}
+		if !slices.Equal(got.Hints.Hints[0].Reasons, []string{"port:80"}) {
+			t.Errorf("%s: reasons %v", name, got.Hints.Hints[0].Reasons)
+		}
+		hints, err := svc.Hints(ctx, c)
+		if err != nil || len(hints) != 1 || hints[0].Hint.Suggested != "" {
+			t.Errorf("%s: hints %+v %v", name, hints, err)
+		}
+	}
+	got, err := svc.Node(ctx, caller(admin, time.Time{}, authz.Binding{AllGroups: true, Role: role.Admin}), node1)
+	if err != nil || got.Settings[0].Config == "" || len(got.Settings[0].SecretsSet) != 1 || got.Hints.Hints[0].Suggested == "" {
+		t.Errorf("admin: %+v %v", got, err)
+	}
+	if store.nodes[node1].Settings[0].Config == "" || store.nodes[node1].Hints.Hints[0].Suggested == "" {
+		t.Error("the store's node changed")
+	}
+	hints, err := svc.Hints(ctx, caller(admin, time.Time{}, authz.Binding{AllGroups: true, Role: role.Admin}))
+	if err != nil || hints[0].Hint.Suggested == "" {
+		t.Errorf("admin: hints %+v %v", hints, err)
+	}
+}
+
 func TestHintsAndModules_ForViewersOfTheirGroups(t *testing.T) {
 	svc, store, _ := setup(t)
 	ctx := context.Background()

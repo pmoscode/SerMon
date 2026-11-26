@@ -22,7 +22,9 @@ address or path the server didn't send itself.
 ## Credentials
 
 Fields for passwords and tokens never show a value, only "set" or "not set". For databases, create a monitoring user
-with few rights.
+with few rights. Credentials are per group: every node of the group gets them while the module is on. If only some
+hosts should know a password, give them a group of their own. The modules' configuration is shown only to admins who
+may manage modules.
 
 ## Suggestions
 

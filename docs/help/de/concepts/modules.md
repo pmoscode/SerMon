@@ -22,7 +22,9 @@ keine Adressen oder Pfade, die der Server nicht selbst geschickt hat.
 ## Zugangsdaten
 
 Felder für Passwörter und Tokens zeigen nie einen Wert, nur „gesetzt“ oder „nicht gesetzt“. Für Datenbanken einen
-eigenen Monitoring-User mit wenigen Rechten anlegen.
+eigenen Monitoring-User mit wenigen Rechten anlegen. Zugangsdaten gelten je Gruppe: Jeder Node der Gruppe bekommt sie,
+solange das Modul an ist. Sollen nur einzelne Hosts ein Passwort kennen, eine eigene Gruppe für sie anlegen. Die
+Konfiguration der Module sehen nur Admins, die Module verwalten dürfen.
 
 ## Vorschläge
 

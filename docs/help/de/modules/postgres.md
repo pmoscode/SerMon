@@ -35,6 +35,8 @@ Agent heißt (`sermon`).
 
 ## Metriken
 
+- `sermon_postgres_up`: 1, wenn der Server geantwortet hat, 0, wenn nichts die Verbindung annimmt (Standardregel
+  „PostgreSQL nicht erreichbar“ nach 2 Minuten).
 - `sermon_postgres_connections` je Zustand und `sermon_postgres_connections_limit` (`max_connections`).
 - `sermon_postgres_transactions_per_second`, `sermon_postgres_cache_hit_ratio`, `sermon_postgres_database_size_bytes`
   je Datenbank (die 16 größten).

@@ -43,6 +43,8 @@ Replikation. Fehlt ein Recht, meldet das Modul den Fehler mit dem nötigen `GRAN
 
 ## Metriken
 
+- `sermon_mysql_up`: 1, wenn der Server geantwortet hat, 0, wenn nichts die Verbindung annimmt (Standardregel
+  „MySQL/MariaDB nicht erreichbar“ nach 2 Minuten).
 - `sermon_mysql_connections`, `sermon_mysql_connections_running`, `sermon_mysql_connections_limit`,
   `sermon_mysql_aborted_connects_per_second`.
 - `sermon_mysql_queries_per_second`, `sermon_mysql_slow_queries_per_second` (über `long_query_time`),

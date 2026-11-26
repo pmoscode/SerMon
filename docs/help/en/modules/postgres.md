@@ -35,6 +35,8 @@ the agent (`sermon`).
 
 ## Metrics
 
+- `sermon_postgres_up`: 1 if the server answered, 0 if nothing accepts the connection (default rule "PostgreSQL down"
+  after 2 minutes).
 - `sermon_postgres_connections` by state and `sermon_postgres_connections_limit` (`max_connections`).
 - `sermon_postgres_transactions_per_second`, `sermon_postgres_cache_hit_ratio`, `sermon_postgres_database_size_bytes`
   per database (the 16 largest).

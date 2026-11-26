@@ -271,6 +271,8 @@ var scenarios = map[alert.RuleID]scenario{
 	"module.nginx.down":                moduleDown("sermon_nginx_up", nil, critical),
 	"module.apache.down":               moduleDown("sermon_apache_up", nil, critical),
 	"module.redis.down":                moduleDown("sermon_redis_up", nil, critical),
+	"module.postgres.down":             moduleDown("sermon_postgres_up", nil, critical),
+	"module.mysql.down":                moduleDown("sermon_mysql_up", nil, critical),
 	"module.redis.replication_broken":  moduleDown("sermon_redis_master_link_up", nil, warning),
 	"module.prometheus.target_down":    moduleDown("sermon_prometheus_up", site, warning),
 	"module.systemd_units.not_active":  moduleDown("sermon_systemd_units_active", backup, warning),

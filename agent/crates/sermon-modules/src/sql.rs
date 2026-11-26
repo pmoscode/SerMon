@@ -16,6 +16,9 @@ use tokio::net::{TcpStream, UnixStream};
 use crate::http::Options;
 use crate::{BuildError, Config, RunError, Veto, schema};
 
+/// How long a database may take to accept the connection before it counts as down.
+pub const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// Where a database listens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
@@ -145,6 +148,20 @@ impl Target {
             Self::Tcp { host, port } if host.contains(':') => format!("[{host}]:{port}"),
             Self::Tcp { host, port } => format!("{host}:{port}"),
             Self::Unix(path) => path.display().to_string(),
+        }
+    }
+
+    /// Connects like [`Self::connect`]; `None` if nothing answers within [`CONNECT_TIMEOUT`]:
+    /// the database is down (`sermon_<module>_up` 0), not the module broken.
+    ///
+    /// # Errors
+    ///
+    /// [`RunError::Vetoed`] for a target outside the veto.
+    pub async fn reach(&self, veto: &Veto) -> Result<Option<Connection>, RunError> {
+        match tokio::time::timeout(CONNECT_TIMEOUT, self.connect(veto)).await {
+            Ok(Ok(connection)) => Ok(Some(connection)),
+            Ok(Err(RunError::Failed(_))) | Err(_) => Ok(None),
+            Ok(Err(e)) => Err(e),
         }
     }
 

@@ -373,3 +373,44 @@ async fn the_full_login_only_over_the_socket_or_verified_tls() {
         }
     }
 }
+
+// M5-20: a server that doesn't answer is down (`sermon_mysql_up` 0), not a failed module; one
+// that answers is up.
+#[tokio::test]
+async fn a_server_that_does_not_answer_is_down() {
+    let dir = crate::TestDir::new();
+    let veto = Veto {
+        sockets: vec![dir.path().to_path_buf()],
+        ..Veto::default().any_port()
+    };
+    let host = crate::Host::default();
+    let secrets = Secrets::default();
+    let setup = Setup {
+        veto: &veto,
+        secrets: &secrets,
+        host: &host,
+    };
+    let schema = Schema::parse(SCHEMA).unwrap();
+    let closed = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = closed.local_addr().unwrap().port();
+    drop(closed);
+    let socket = dir.path().join("mysqld.sock");
+    for config in [
+        format!(r#"{{"address":"127.0.0.1:{port}"}}"#),
+        format!(r#"{{"socket":"{}"}}"#, socket.display()),
+    ] {
+        let mut reader = Mysql
+            .build(&schema.validate(&config, &[]).unwrap(), &setup)
+            .unwrap();
+        let samples = reader.collect(&Run::default()).await.unwrap();
+        assert_eq!(samples.len(), 1, "{config}");
+        assert_eq!(
+            value(&samples, "sermon_mysql_up"),
+            Some(V::Int(0)),
+            "{config}"
+        );
+        crate::assert_in_catalog("mysql", &samples);
+    }
+    let up = samples(&read("mysql-8.4"), None);
+    assert_eq!(value(&up, "sermon_mysql_up"), Some(V::Int(1)));
+}

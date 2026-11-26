@@ -1,0 +1,17 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.postgres.down
+  name: { de: "PostgreSQL nicht erreichbar", en: "PostgreSQL down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_postgres_up
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: postgres }
+  help:
+    de: >-
+      Seit 2 Minuten nimmt nichts die Verbindung des Moduls an (Adresse oder Socket). Typische Ursachen: PostgreSQL gestoppt oder abgestürzt (Speicher, Platte voll), ein anderer Port oder Socket nach einem Upgrade, listen_addresses ohne die Adresse. Prüfe systemctl status postgresql, pg_isready und die Logs des Servers. Eine abgelehnte Anmeldung meldet stattdessen die Gesundheit des Moduls.
+    en: >-
+      For 2 minutes nothing has accepted the module's connection (address or socket). Typical causes: PostgreSQL stopped or crashed (memory, disk full), another port or socket after an upgrade, listen_addresses without the address. Check systemctl status postgresql, pg_isready and the server's logs. A refused login shows in the module's health instead.

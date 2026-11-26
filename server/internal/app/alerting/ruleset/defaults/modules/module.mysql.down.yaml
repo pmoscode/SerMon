@@ -1,0 +1,17 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.mysql.down
+  name: { de: "MySQL/MariaDB nicht erreichbar", en: "MySQL/MariaDB down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_mysql_up
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: mysql }
+  help:
+    de: >-
+      Seit 2 Minuten nimmt nichts die Verbindung des Moduls an (Adresse oder Socket). Typische Ursachen: MySQL oder MariaDB gestoppt oder abgestürzt (Speicher, Platte voll), ein anderer Port oder Socket, bind-address ohne die Adresse. Prüfe systemctl status mysql bzw. mariadb, mysqladmin ping und das Error-Log. Eine abgelehnte Anmeldung meldet stattdessen die Gesundheit des Moduls.
+    en: >-
+      For 2 minutes nothing has accepted the module's connection (address or socket). Typical causes: MySQL or MariaDB stopped or crashed (memory, disk full), another port or socket, bind-address without the address. Check systemctl status mysql or mariadb, mysqladmin ping and the error log. A refused login shows in the module's health instead.

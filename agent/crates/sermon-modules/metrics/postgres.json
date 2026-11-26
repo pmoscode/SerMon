@@ -1,6 +1,11 @@
 {
   "metrics": [
     {
+      "name": "sermon_postgres_up",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
       "name": "sermon_postgres_connections",
       "unit": "count",
       "aggregation": "avg",

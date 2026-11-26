@@ -8,6 +8,7 @@
 //!
 //! | Metric | Labels | Meaning |
 //! |---|---|---|
+//! | `sermon_mysql_up` | – | 1 if the server answered, 0 if nothing accepts the connection |
 //! | `sermon_mysql_connections` | – | `Threads_connected` |
 //! | `sermon_mysql_connections_running` | – | `Threads_running` |
 //! | `sermon_mysql_connections_limit` | – | `max_connections` |
@@ -201,6 +202,7 @@ pub fn samples(now: &Stats, before: Option<(&Stats, Duration)>) -> Vec<Sample> {
     let get = |name: &str| now.status.get(name).copied();
     let int = |m, v: Option<u64>| Some(Sample::int(m, i64::try_from(v?).ok()?));
     let mut out: Vec<Sample> = [
+        Some(Sample::int("sermon_mysql_up", 1)),
         int("sermon_mysql_connections", get("Threads_connected")),
         int("sermon_mysql_connections_running", get("Threads_running")),
         int("sermon_mysql_connections_limit", now.max_connections),
@@ -286,8 +288,10 @@ fn failed(e: Error) -> RunError {
 }
 
 impl Reader {
-    async fn session(&self) -> Result<Packets<Box<dyn sql::Io>>, RunError> {
-        let connection = self.target.connect(&self.veto).await?;
+    async fn session(
+        &self,
+        connection: sql::Connection,
+    ) -> Result<Packets<Box<dyn sql::Io>>, RunError> {
         // The full login of caching_sha2_password sends the password itself: only to a peer
         // known to be the server (socket, verified TLS), not to whoever answers no_verify.
         let secure = self.security.secure(&connection);
@@ -327,8 +331,8 @@ impl Reader {
         Ok(packets)
     }
 
-    async fn read(&self) -> Result<Stats, RunError> {
-        let mut s = self.session().await?;
+    async fn read(&self, connection: sql::Connection) -> Result<Stats, RunError> {
+        let mut s = self.session(connection).await?;
         check_rights(&s.query(PRIVILEGES).await.map_err(failed)?, &self.user)?;
         let replicating = match s.query(REPLICA).await {
             // 1064: a syntax error – a version before SHOW REPLICA STATUS.
@@ -357,7 +361,11 @@ impl Instance for Reader {
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             let at = run.monotonic();
-            let now = self.read().await?;
+            let Some(connection) = self.target.reach(&self.veto).await? else {
+                self.last = None;
+                return Ok(vec![Sample::int("sermon_mysql_up", 0)]);
+            };
+            let now = self.read(connection).await?;
             let before = self
                 .last
                 .as_ref()

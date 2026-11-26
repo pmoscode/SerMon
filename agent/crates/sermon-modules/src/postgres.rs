@@ -8,6 +8,7 @@
 //!
 //! | Metric | Labels | Meaning |
 //! |---|---|---|
+//! | `sermon_postgres_up` | – | 1 if the server answered, 0 if nothing accepts the connection |
 //! | `sermon_postgres_connections` | `state` (`active`, `idle`, `idle_in_transaction`, `other`) | client connections |
 //! | `sermon_postgres_connections_limit` | – | `max_connections` |
 //! | `sermon_postgres_database_size_bytes` | `database` | size, the 16 largest |
@@ -258,11 +259,12 @@ fn label(name: &str) -> String {
 /// The samples of `now`; rates against `before` (taken `elapsed` earlier).
 #[must_use]
 pub fn samples(now: &Stats, before: Option<(&Stats, Duration)>) -> Vec<Sample> {
-    let mut out: Vec<Sample> = now
-        .connections
-        .iter()
-        .map(|(state, n)| Sample::int("sermon_postgres_connections", *n).label("state", *state))
-        .collect();
+    let mut out = vec![Sample::int("sermon_postgres_up", 1)];
+    out.extend(
+        now.connections.iter().map(|(state, n)| {
+            Sample::int("sermon_postgres_connections", *n).label("state", *state)
+        }),
+    );
     out.extend(
         now.max_connections
             .map(|n| Sample::int("sermon_postgres_connections_limit", n)),
@@ -328,8 +330,7 @@ fn failed(e: Error) -> RunError {
 }
 
 impl Reader {
-    async fn read(&self) -> Result<Stats, RunError> {
-        let connection = self.target.connect(&self.veto).await?;
+    async fn read(&self, connection: sql::Connection) -> Result<Stats, RunError> {
         let secure = self.security.secure(&connection);
         let io = match (connection, self.security.tls) {
             (sql::Connection::Tcp(mut tcp, host), Tls::Verify | Tls::NoVerify) => {
@@ -360,7 +361,11 @@ impl Instance for Reader {
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             let at = run.monotonic();
-            let now = self.read().await?;
+            let Some(connection) = self.target.reach(&self.veto).await? else {
+                self.last = None;
+                return Ok(vec![Sample::int("sermon_postgres_up", 0)]);
+            };
+            let now = self.read(connection).await?;
             let before = self
                 .last
                 .as_ref()

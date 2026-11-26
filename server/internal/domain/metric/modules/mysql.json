@@ -1,6 +1,11 @@
 {
   "metrics": [
     {
+      "name": "sermon_mysql_up",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
       "name": "sermon_mysql_connections",
       "unit": "count",
       "aggregation": "avg"

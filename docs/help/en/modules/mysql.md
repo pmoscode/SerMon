@@ -42,6 +42,8 @@ replication. If a right is missing, the module reports the error with the `GRANT
 
 ## Metrics
 
+- `sermon_mysql_up`: 1 if the server answered, 0 if nothing accepts the connection (default rule "MySQL/MariaDB
+  down" after 2 minutes).
 - `sermon_mysql_connections`, `sermon_mysql_connections_running`, `sermon_mysql_connections_limit`,
   `sermon_mysql_aborted_connects_per_second`.
 - `sermon_mysql_queries_per_second`, `sermon_mysql_slow_queries_per_second` (over `long_query_time`),

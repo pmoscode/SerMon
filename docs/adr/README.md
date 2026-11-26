@@ -46,6 +46,7 @@ KONZEPT §2 mit angepasst.
 | [0036](0036-self-update-und-paket-repos.md) | Self-Update des Agents und signierte Paket-Repos | accepted | D8, D15 |
 | [0037](0037-anomalie-erkennung.md) | Anomalie-Erkennung: Baselines, Ergebnisse und Worker | accepted | D16, D13 |
 | [0038](0038-allocator-des-agents.md) | Allocator des Agents: jemalloc statt musls mallocng | accepted | D1 |
+| [0039](0039-modul-framework.md) | Modul-Framework: Laufzeit, Konfiguration, Veto und Zugangsdaten | accepted | D18 |
 
 ## Entscheidungslog → ADR
 
@@ -68,7 +69,7 @@ KONZEPT §2 mit angepasst.
 | D15 Updates | 0020, 0035, 0036 |
 | D16 Anomalien | 0019, 0037 |
 | D17 Logs | 0020, 0013 |
-| D18 Module | 0020 |
+| D18 Module | 0020, 0039 |
 | D19 Live-Ansicht nur lesend | 0016 |
 | D20 DE + EN | 0021 |
 | D21 AGPL-3.0 | 0021 |

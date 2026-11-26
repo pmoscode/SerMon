@@ -1234,6 +1234,17 @@ spec:
   isoliert, jedes Modul hat ein eigenes Zeit- und Ressourcenbudget.
 - Zugangsdaten für Module (z. B. DB-Passwort) werden Ende-zu-Ende verschlüsselt an den Agent übertragen und dort nur im
   Speicher gehalten. **Empfehlung in der UI:** einen read-only-Monitoring-User verwenden.
+- **Umsetzung ([ADR 0039](adr/0039-modul-framework.md)):**
+  - Ein Task je Modul mit Zeitbudget (Standard 5 s, höchstens 30 s), höchstens 256 Samples je Lauf und 1 MiB je
+    Antwort, Intervall mindestens 10 s; Panics und Hänger meldet das Modul als Gesundheit (`ModuleHealth`), der Agent
+    läuft weiter.
+  - Konfiguration je Gruppe in `AgentConfig` (ADR 0030): je Modul an/aus und JSON nach dem Schema des Agents, einer
+    festen Teilmenge von JSON Schema; ein ungültiges Modul läuft nicht, der Rest schon.
+  - **Lokales Veto** in `agent.toml`: `allow_modules`, `module_targets` (ab Werk nur Loopback), `module_sockets`,
+    `module_file_prefixes`, `allow_docker_socket` (ab Werk aus). Der Server kann den Agent nicht zur Sonde im Netz des
+    Hosts machen.
+  - „Ende-zu-Ende“ heißt: über den mTLS-Stream des direkt veröffentlichten Agent-Ports in einer eigenen Nachricht
+    `ModuleSecrets`, im Server mit `secrets.Box` versiegelt, beim Agent nur im Speicher; die UI sieht nur „gesetzt“.
 
 | Modul (v1)                    | Inhalt                                                                 | Hinweis                                                                                                                         |
 |-------------------------------|------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|

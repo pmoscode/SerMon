@@ -22,7 +22,7 @@ Legende Stand: ✓ umgesetzt und getestet · ◐ teilweise · ☐ geplant (Aufga
 | A7 Mandantendaten: Metriken, Logs, Security-Events, Inventar | PostgreSQL/TimescaleDB, Loki | hoch, personenbezogen (IP-Adressen, Usernamen, §18.7) |
 | A8 Audit-Logs (Org und Instanz) | PostgreSQL, Hash-Kette | hoch (Nachvollziehbarkeit) |
 | A9 Einmal-Geheimnisse: Setup-Token, Enrollment-Token, Einladungslinks | nur als Hash in PostgreSQL | mittel bis hoch (kurzlebig) |
-| A10 Zugangsdaten für Kanäle und Module | PostgreSQL, versiegelt | hoch (Zugang zu Drittsystemen) |
+| A10 Zugangsdaten für Kanäle und Module | PostgreSQL, versiegelt; Modul-Zugangsdaten zusätzlich im Speicher des Agents (ADR 0039) | hoch (Zugang zu Drittsystemen) |
 | A11 Verfügbarkeit des Servers | Server, Datenbank | mittel (Monitoring fällt aus, Agents puffern 24 h) |
 
 ## 2. Akteure
@@ -50,6 +50,8 @@ flowchart LR
     Journal --> Agent
     Agent <--> WAL
     Agent -- "TB4: Unix-Socket,<br/>SO_PEERCRED, festes Op-Enum" --> Helper
+    Services[("Dienste des Hosts<br/>(nginx, PostgreSQL …, ab M5)")]
+    Agent -- "TB7: Module, nur Ziele<br/>des lokalen Vetos" --> Services
   end
   subgraph ServerHost["Server-Host (docker-compose)"]
     Caddy["Caddy<br/>TLS, ACME"]
@@ -78,6 +80,7 @@ flowchart LR
 | TB4 | Agent ↔ Helper | root auf dem Node |
 | TB5 | Server ↔ externe Ziele (Kanäle, Webhooks, Versionsprüfung) | internes Netz (SSRF), Zugangsdaten |
 | TB6 | Release ↔ Server ↔ Node (Lieferkette der Agent-Binaries) | Integrität des Codes auf den Nodes |
+| TB7 | Agent ↔ Dienste des Hosts (Module, ab M5) | internes Netz des Hosts, Zugangsdaten der Dienste, Budget des Agents |
 
 ## 4. Bedrohungen (STRIDE) nach Grenze
 
@@ -195,7 +198,7 @@ flowchart LR
 | T44 | S | Gefälschte Webhooks beim Empfänger | HMAC-SHA256-Signatur über Zeitstempel und Body (`X-SerMon-Signature: t=…,v1=…`), Geheimnis mindestens 16 Zeichen und versiegelt; die Hilfe beschreibt Prüfung in konstanter Zeit und das Ablehnen alter Zeitstempel | M2-11 | ✓ |
 | T45 | I | Mail-Zugangsdaten im Klartext übertragen; Header-Injection über Alert-Werte | SMTP mit TLS-Pflicht (STARTTLS oder TLS, Klartext nur im Entwicklungsmodus); Betreff und Empfänger mit Zeilenumbruch abgelehnt; HTML über `html/template` | M1-39, M2-11 | ✓ |
 | T46 | I | „Phone-Home“ | keine Telemetrie, Versionsprüfung abschaltbar; GeoIP nur aus einer lokalen Datei des Betreibers, kein Download und kein Dienst, Adressen verlassen den Server nicht (M3-18) | M0-07, M3-18, v1.0 | ◐ |
-| T47 | I | Prometheus-Scraper oder Module als SSRF | Scraper nur localhost/Allowlist, Serien-Limit; Modul-Zugangsdaten nur im Speicher des Agents | E5.1, E5.2 | ☐ |
+| T47 | I | Prometheus-Scraper oder Module als SSRF | Ziele der Module nur unter dem lokalen Veto (`module_targets`, ab Werk Loopback), siehe TB7 (T107); Serien-Limit des Scrapers; Modul-Zugangsdaten nur im Speicher des Agents (ADR 0039) | M5-01, M5-03, M5-19 | ◐ |
 | T80 | D/I | Eine Org verzögert Alerting und Zustellung aller Orgs (viele eigene Regeln mit langen Fenstern, langsame oder tote Ziele) oder verschickt über viele E-Mail-Kanäle Spam vom Mailserver des Betreibers; bei mehreren Instanzen kommen Benachrichtigungen doppelt | Engine mit Zeitbudget pro Org, Regeln lädt nur der Lease-Halter, `Save` nur mit gültigem Lease (Fencing); Dispatcher mit Orgs nebeneinander, begrenzt parallelen Zustellungen pro Org, Claim so lang wie ein Batch und `Finish` nur mit dem eigenen Claim; höchstens 50 Kanäle, 200 eigene Regeln und 100 Mails pro Stunde pro Org (ADR 0019, Nachtrag M2-38) | M2-38 | ✓ |
 
 ### TB6 – Lieferkette der Agent-Binaries
@@ -216,6 +219,16 @@ flowchart LR
 | T74 | T/E | Tags (M2-29) als Hebel: ein Admin einer Gruppe nimmt einem Node `env=prod` weg, damit eine Rufbereitschafts-Policy oder Regel nicht mehr passt; Tags als Rechte missverstanden; Markup oder Steuerzeichen in Tags in UI und Kanälen | Tags setzt nur der Admin der Gruppe des Nodes (`TagNodes`, Rollen-Matrix) mit frischem Step-up; jede Änderung im Audit-Log mit altem und neuem Stand; Tags geben keine Rechte (Scopes nur aus Gruppen); Schlüssel und Werte streng geprüft (Server und Proto: Muster, ≤ 16 Paare), Anzeige nur als Text; Isolation (`SetNodeTags` im Tenant-Test, RLS auf `nodes`); eine Silence nur auf Tags gilt für alle Gruppen und braucht Operator auf allen | M2-29 | ✓ |
 | T73 | E/I | Ein kompromittierter Container der Installation (Proxy, Server, Datenbank) breitet sich aus; die Datenbank ist aus dem Netz erreichbar; Secrets stehen in Umgebungsvariablen; ein Host-Prozess fälscht `X-Forwarded-For`; der Proxy verschleiert die Adressen der Agents | `deploy/compose`: jeder Container `read_only`, `cap_drop: ALL` (nur `NET_BIND_SERVICE` bzw. die Benutzerwechsel von PostgreSQL zurück), `no-new-privileges`, kein Docker-Socket, kein Host-Netz (`check-compose.sh --hardened` in `just lint-compose`, mit Tests); Server in `distroless` als `nonroot`; Datenbank nur im Netz `internal`; Secrets als Dateien (`secrets.sh`, überschreibt nie); nur die feste Adresse von Caddy ist Trusted Proxy; Agent-Port direkt veröffentlicht, der Server sieht die echte Adresse (ADR 0028); Images per Digest; die E2E-Demo läuft gegen diese Datei; die Datenbank-Rollen getrennt: Superuser nur im Datenbank-Container, die Owner-Rolle `sermon_owner` (ohne Superuser) nur im einmaligen Service `migrate`, der Server nur `sermon_app` – `check-compose --hardened` prüft beides (ADR 0028, Nachtrag M2-36); `check-compose --hardened` prüft auch `cap_add` (nur Benutzerwechsel und Port-Bindung), Host-Namespaces, `seccomp`/`apparmor:unconfined`, Geräte und Mounts von `/run` und Sockets | M2-26, M2-36, M2-39 | ✓ |
 | T72 | E/D | Zustands-Collectors (M2-22) als Einfallstor: der Agent startet `systemctl`, ruft `adjtimex` über `unsafe` auf; ein hängender systemctl blockiert die Collectors; gefälschte Unit-Namen sprengen die Kardinalität | `systemctl` mit festen Argumenten, leerer Umgebung, ohne Shell, 10 s Zeitlimit mit `kill`, ≤ 256 KiB Ausgabe; Unit-Namen geprüft, ≤ 50 Serien; `adjtimex` nur mit `modes = 0`, gekapselt mit `SAFETY`-Begründung; die Unit erlaubt nur `adjtimex`/`clock_adjtime` zusätzlich, ohne `CAP_SYS_TIME` kann der Agent die Uhr nicht stellen; Parser von mdstat und systemctl gefuzzt (ADR 0026) | M2-22 | ✓ |
+
+### TB7 – Agent ↔ Dienste des Hosts (Module, ab M5)
+
+| # | STRIDE | Bedrohung | Gegenmaßnahme | Aufgabe | Stand |
+|---|---|---|---|---|---|
+| T107 | I/E | Ein kompromittierter Server macht jeden Agent zur Sonde im Netz seines Hosts: interne Dienste abfragen, Ports abtasten, Metadaten der Cloud lesen, über Weiterleitungen oder DNS-Rebinding hinaus | Ziele nur unter dem lokalen Veto in `agent.toml` (`module_targets`, ab Werk `127.0.0.0/8` und `::1`; Unix-Sockets unter `module_sockets`); jede aufgelöste Adresse geprüft, Verbindung zur geprüften Adresse; Weiterleitungen nur innerhalb, höchstens drei; `allow_modules = false` schaltet alles ab (ADR 0039) | M5-01, M5-03, M5-08 | ☐ |
+| T108 | I | Module lesen über Pfade fremde Dateien (private Schlüssel, `/etc/shadow`, Identität des Agents) | Dateien nur unter `module_file_prefixes`, segmentweise, Symlinks aufgelöst und erneut geprüft; State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys`, `/dev` immer gesperrt; nur Metadaten (Ablauf eines Zertifikats) verlassen den Host | M5-01, M5-09 | ☐ |
+| T109 | I | Zugangsdaten der Module (DB-Passwörter) im Klartext in Datenbank, Backups, Logs, WAL, Audit-Log, UI oder auf der Disk des Hosts | `secrets.Box` mit AAD (Org, Gruppe, Modul, Feld); eigene Nachricht `ModuleSecrets` über den mTLS-Stream, `Debug` geschwärzt; beim Agent nur im Speicher; die UI sieht nur „gesetzt“; Audit ohne Wert; Gesundheitsmeldungen durch die Redaction; Empfehlung eines Monitoring-Users | M5-01, M5-05 | ☐ |
+| T110 | D | Ein Modul hängt, panickt, liefert riesige Antworten oder viele Serien und legt Agent, Collectors oder den Server lahm | Task je Modul, Zeitbudget je Lauf, hängende Läufe starten nicht neu, Panic im `JoinHandle` mit Pause; höchstens 256 Samples je Lauf, 1 MiB je Antwort, Labels begrenzt; Intervall mindestens 10 s; Budget in der Demo | M5-01, M5-03, M5-31 | ☐ |
+| T111 | T/I | Fremde Dienste liefern bösartige Antworten (Statusseiten, `INFO`, SQL-Ergebnisse, `/metrics`, Docker-API), die Parser oder Darstellung angreifen | Parser im Agent ohne Rechte, auf begrenzten Eingaben, gefuzzt; Werte und Labels nur als Text angezeigt (`textsafe`); kein Modul startet Programme, SMART nur über eine feste Helper-Operation | M5-01, E5.2 | ☐ |
 
 ## 5. Restrisiken und bewusste Entscheidungen
 

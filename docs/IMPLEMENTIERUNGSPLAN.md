@@ -5220,7 +5220,20 @@ und M5-05 (Zugangsdaten, für M5-13 und M5-14). Parallel: M5-22 → M5-23 → M5
 
 ### 8.1 Modul-Framework (E5.1)
 
-#### ☐ M5-01 – ADR Modul-Framework · X · S 🔒
+#### ☑ M5-01 – ADR Modul-Framework · X · S 🔒
+> Erledigt ([ADR 0039](adr/0039-modul-framework.md); KONZEPT §15; Threat Model neu TB7 mit T107 bis T111, T47):
+> - **Laufzeit:** ein Task je Modul im async-Thread (ein Prozess je Modul sprengte das Budget), Zeitbudget 5 s bis
+>   30 s, hängende Läufe starten nicht neu, Panics im `JoinHandle` mit Pause bis 30 min; 256 Samples je Lauf, 1 MiB je
+>   Antwort, Intervall ≥ 10 s; Gesundheit `ok`, `error`, `timeout`, `hung`, `crashed`, `invalid_config`, `vetoed`.
+> - **Konfiguration** in `AgentConfig` (ADR 0030, derselbe Zähler der Org), je Modul JSON nach dem Schema des Agents;
+>   ungültig heißt nur dieses Modul aus. Schema: feste Teilmenge von JSON Schema 2020-12 (Pflicht-Grenzen,
+>   `writeOnly` für Geheimnisse), beim Agent, vom Build in den Server kopiert.
+> - **Veto** in `agent.toml`: `allow_modules`, `module_targets` (ab Werk Loopback), `module_sockets`,
+>   `module_file_prefixes`, `allow_docker_socket`; jede aufgelöste Adresse geprüft, Weiterleitungen nur innerhalb.
+> - **Discovery:** Ports, Prozessnamen, Units als einzelne Anlässe, höchstens 32 Hinweise, alle 10 min, bei Änderung.
+> - **Zugangsdaten:** `secrets.Box` mit AAD, eigene Nachricht `ModuleSecrets` je Session über mTLS, beim Agent nur im
+>   Speicher; HPKE zusätzlich und Verschlüsselung im Browser verworfen (schützen nicht gegen den Server, der die UI
+>   ausliefert).
 - **Ziel:** ADR (Skill `sermon-adr`), bevor Code entsteht:
   - **Vertrag:** Trait `Module` (Skill `sermon-add-module`): Schema, Validierung, Discovery, `collect`; Namen und
     Labels der Metriken mit festen Grenzen je Modul.

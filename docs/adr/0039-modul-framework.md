@@ -289,3 +289,9 @@ Benutzer seinen Port auf Loopback belegen (über 1024 ohne Rechte). Daraus folgt
   an den Protokollen. Die Hilfe empfiehlt den Socket, lange Zufallspasswörter und User mit den kleinsten Rechten. Eine
   Prüfung des Eigentümers des lauschenden Sockets (`/proc/net/tcp` → `/proc/<pid>/fd`) braucht Rechte, die der Agent
   nicht hat, und wurde nicht gebaut.
+- **Fremde Daten in Labels und Logs:** Die Laufzeit ersetzt unsichtbare Zeichen (Unicode Cf, Zl, Zp) in Label-Werten
+  durch U+FFFD, der Ingest des Servers ebenso. Der Prometheus-Scraper hat je Endpunkt feste Plätze für seine Serien.
+  Die Ausgabe der Container nimmt höchstens die halbe Log-Rate des Nodes und je Container und Lauf 312 Zeilen, ohne
+  Zeilen stillschweigend zu überspringen (`sermon_docker_socket_log_gaps`). Eine Nachricht, die an ihrer Grenze
+  gekürzt wird, verliert das angeschnittene Wort ganz (bis 1 KiB zurück): Die Redaction läuft danach und erkennt einen
+  halben Schlüssel nicht.

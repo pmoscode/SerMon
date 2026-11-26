@@ -185,8 +185,9 @@ pub fn parse_line(line: &[u8]) -> Result<Entry, LineError> {
             .or_else(|| Seqnum::from_cursor(&cursor)),
         _ => Seqnum::from_cursor(&cursor),
     };
-    let (message, message_truncated) =
-        truncate(field("MESSAGE").unwrap_or_default(), MAX_MESSAGE_BYTES);
+    let message = field("MESSAGE").unwrap_or_default();
+    let message_truncated = message.len() > MAX_MESSAGE_BYTES;
+    let message = crate::cut::message(&message, MAX_MESSAGE_BYTES).to_owned();
     let short = |name: &str| field(name).map(|value| truncate(value, MAX_FIELD_BYTES).0);
     Ok(Entry {
         cursor,
@@ -404,7 +405,11 @@ mod tests {
             "u".repeat(1000)
         );
         let entry = parse_line(line.as_bytes()).unwrap();
-        assert!(entry.message_truncated && entry.message.len() == MAX_MESSAGE_BYTES);
+        // The cut goes through a token: its kept part goes too (M5-33).
+        assert!(
+            entry.message_truncated
+                && entry.message.len() == MAX_MESSAGE_BYTES - crate::cut::TOKEN_BACK
+        );
         assert_eq!(entry.unit.unwrap().len(), MAX_FIELD_BYTES);
     }
 

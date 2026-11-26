@@ -153,7 +153,7 @@ impl LogRecord {
             unit: identifier.clone(),
             identifier,
             severity: record.priority.and_then(Severity::from_priority),
-            message: cut(record.message, MAX_MESSAGE_BYTES).to_owned(),
+            message: crate::cut::message(record.message, MAX_MESSAGE_BYTES).to_owned(),
             truncated: truncated || record.message.len() > MAX_MESSAGE_BYTES,
             pid: record.pid,
             process: None,
@@ -180,7 +180,7 @@ impl LogRecord {
             unit,
             identifier: None,
             severity: None,
-            message: cut(message, MAX_MESSAGE_BYTES).to_owned(),
+            message: crate::cut::message(message, MAX_MESSAGE_BYTES).to_owned(),
             truncated: truncated || message.len() > MAX_MESSAGE_BYTES,
             pid: None,
             process: None,
@@ -202,7 +202,7 @@ impl LogRecord {
             unit: Some(name.clone()),
             identifier: Some(name),
             severity: None,
-            message: cut(message, MAX_MESSAGE_BYTES).to_owned(),
+            message: crate::cut::message(message, MAX_MESSAGE_BYTES).to_owned(),
             truncated: message.len() > MAX_MESSAGE_BYTES,
             pid: None,
             process: None,
@@ -490,9 +490,32 @@ mod tests {
         assert_eq!(record.identifier, None);
         assert_eq!(record.severity, None);
         assert_eq!(record.at_us, 7);
-        assert!(record.truncated && record.message.len() == MAX_MESSAGE_BYTES);
+        assert!(
+            record.truncated && record.message.len() == MAX_MESSAGE_BYTES - crate::cut::TOKEN_BACK
+        );
         assert_eq!(record.origin, origin);
         assert!(!LogRecord::from_plain_file(origin, 7, "short", false).truncated);
+    }
+
+    // M5-33: a token the cut goes through doesn't stay half: the redaction wouldn't know it.
+    #[test]
+    fn a_cut_leaves_no_half_token() {
+        let secret = "AKIAIOSFODNN7EXAMPLE";
+        let filler = "a ".repeat(MAX_MESSAGE_BYTES / 2 - 4);
+        let text = format!("{filler}{secret} tail");
+        assert!(text.find(secret).unwrap() < MAX_MESSAGE_BYTES);
+        let origin = Origin::file(Path::new("/var/log/app.log")).unwrap();
+        for record in [
+            LogRecord::from_container(1, "web", false, &text),
+            LogRecord::from_plain_file(origin, 1, &text, false),
+        ] {
+            assert!(record.truncated);
+            assert!(
+                !record.message.contains("AKIA"),
+                "{:?}",
+                &record.message[record.message.len() - 20..]
+            );
+        }
     }
 
     #[test]

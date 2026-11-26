@@ -57,7 +57,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use sermon_core::{Clock, ProcRoot, Sample, SystemClock};
-use sermon_helper_proto::v1::{HelperRequest, HelperResponse};
+use sermon_helper_proto::v1::HelperResponse;
 
 pub use discovery::{Discovered, HostFacts, Reason};
 pub use schema::{Config, Schema};
@@ -185,15 +185,17 @@ impl fmt::Debug for Host {
     }
 }
 
-/// The root helper (ADR 0035): one of its fixed operations, blocking – call it in
-/// [`Run::blocking`].
+/// The root helper (ADR 0035) as the modules may use it: only `ReadSmart` (M5-33). The port has
+/// no other operation, so no module (and no bug in one) can reach updates, reboot or the
+/// self-update, which need the server's command path with step-up and audit. Blocking – call it
+/// in [`Run::blocking`].
 pub trait Helper: Send + Sync + 'static {
-    /// Sends `request` and returns the answer.
+    /// Asks the helper for the SMART data of the host's disks (`ReadSmart`).
     ///
     /// # Errors
     ///
     /// Why there is no answer (no helper, no right to its socket, a broken answer).
-    fn call(&self, request: &HelperRequest) -> Result<HelperResponse, String>;
+    fn read_smart(&self) -> Result<HelperResponse, String>;
 }
 
 /// systemd as the agent asks it (M5-10): `systemctl show` with fixed properties and checked

@@ -135,7 +135,9 @@ in `/etc/sermon/helper.toml`; der Server kann es nicht ändern:
 | `allow_smart` | an | `--no-smart` |
 
 `allow_smart` erlaubt dem Modul `smart`, über den Helper die SMART-Daten der Disks zu lesen (`smartctl`, nur lesend;
-das Paket `smartmontools` installiert der Admin). `allow_prerelease` lässt ein Self-Update auf eine Vorabversion
+das Paket `smartmontools` installiert der Admin). Fehlt der Schlüssel in einer älteren `helper.toml`, gilt nach dem
+Update von Agent und Helper ebenfalls „an“; wer das nicht will, setzt `allow_smart = false` vor dem Update (oder ruft
+`install.sh --no-smart` auf). `allow_prerelease` lässt ein Self-Update auf eine Vorabversion
 (Kanal `beta`) zu, solange der Host noch keine hat. Ein Helper, den `install.sh` eingerichtet hat, erneuert sich mit
 dem Agent; ein Helper aus der Zeit davor nicht – die Updates-Seite des Nodes sagt dann, dass `install.sh` einmal
 erneut laufen sollte.

@@ -28,9 +28,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 use sermon_core::Sample;
-use sermon_helper_proto::v1::{
-    HelperRequest, ReadSmart, Status, helper_request::Operation, helper_response::Result as Answer,
-};
+use sermon_helper_proto::v1::{Status, helper_response::Result as Answer};
 
 use crate::discovery::{Discovered, HostFacts};
 use crate::{
@@ -104,11 +102,8 @@ impl Instance for Reader {
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             let helper = self.helper.clone();
-            let request = HelperRequest {
-                operation: Some(Operation::ReadSmart(ReadSmart {})),
-            };
             let response = run
-                .blocking(move || helper.call(&request))
+                .blocking(move || helper.read_smart())
                 .await?
                 .map_err(RunError::Failed)?;
             let smart = match (response.status(), response.result) {

@@ -264,12 +264,12 @@ fn samples_of(d: &Disk) -> BTreeMap<&'static str, V> {
 /// A helper that answers every request with `answer`.
 struct Fake {
     answer: Mutex<Result<HelperResponse, String>>,
-    asked: Mutex<Vec<HelperRequest>>,
+    asked: Mutex<usize>,
 }
 
 impl Helper for Fake {
-    fn call(&self, request: &HelperRequest) -> Result<HelperResponse, String> {
-        self.asked.lock().unwrap().push(request.clone());
+    fn read_smart(&self) -> Result<HelperResponse, String> {
+        *self.asked.lock().unwrap() += 1;
         self.answer.lock().unwrap().clone()
     }
 }
@@ -331,10 +331,7 @@ async fn asks_the_helper_and_reports_its_refusals() {
     let samples = ok.collect(&Run::default()).await.unwrap();
     assert_eq!(samples[0].value, V::Int(1), "sdb left out");
     assert!(samples.iter().skip(2).all(|s| s.labels[0].1 == "sda"));
-    assert!(matches!(
-        fake.asked.lock().unwrap()[0].operation,
-        Some(Operation::ReadSmart(_))
-    ));
+    assert_eq!(*fake.asked.lock().unwrap(), 1);
     let (mut vetoed, _) = instance(
         Ok(answer(
             Status::Refused,

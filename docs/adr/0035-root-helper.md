@@ -347,8 +347,9 @@ Operation (ADR 0039, Laufzeit).
   Hinweis auf das Paket `smartmontools`, ein älterer Helper `UNSUPPORTED` („unknown operation“).
 - **Sandbox der Unit:** `ProtectClock=yes` fügt `DeviceAllow=char-rtc r` hinzu; vor systemd 252 schloss das jede
   andere Disk aus, ab 252 nur, wenn die Unit selbst eine Geräteliste hat. Die Unit hat jetzt eine:
-  `DeviceAllow=block-sd r` und `DeviceAllow=block-blkext r` – nur die Disks, nur lesend (smartctl öffnet sie mit
-  `O_RDONLY`; die Befehle erlaubt `CAP_SYS_RAWIO`), dazu die Pseudo-Geräte wie `/dev/null`. Vorher sah der Dienst
+  `DeviceAllow=block-sd r` und `DeviceAllow=block-blkext r` – nur die Disks, nur lesend geöffnet (smartctl öffnet sie
+  mit `O_RDONLY`; die Befehle erlaubt `CAP_SYS_RAWIO` bzw. `CAP_SYS_ADMIN`, und die begrenzen nicht, was ein Befehl
+  tut – siehe Nachtrag M5-33), dazu die Pseudo-Geräte wie `/dev/null`. Vorher sah der Dienst
   ab systemd 252 alle Geräte; die Geräteliste ist also eine Verschärfung. `PrivateDevices=` bliebe falsch: Es versteckt
   die Disks. Die Läufe (`systemd-run`) sind eigene Units und davon nicht betroffen. `systemd-analyze security` bleibt
   bei 5,8. Unter OpenRC gibt es keine Sandbox; dort schützt allein die feste Operation.
@@ -356,3 +357,31 @@ Operation (ADR 0039, Laufzeit).
   Prüfung der Signaturen von Agent und Helper ist eine Funktion (`verified`), die beiden Wege des Reboots sind einer,
   das Veto eines Laufs ein `match`, Verzeichnisse und Zeitstempel je eine kleine Funktion. **1 795 von 1 800 Zeilen.**
   Die nächste Operation braucht wieder Platz oder einen begründeten Nachtrag.
+
+## Nachtrag M5-33 (Security-Review B): Geräte, Port der Module
+
+- **Geräteliste ehrlich beschrieben:** `DeviceAllow=block-sd r` und `block-blkext r` regeln nur, mit welchem Modus
+  `open(2)` ein Gerät öffnen darf. Mit `CAP_SYS_RAWIO` (SATA/SAS: `SG_IO`, ATA-Pass-Through) und `CAP_SYS_ADMIN`
+  (NVMe-Admin-Befehle) nimmt der Kernel auch auf einem nur lesend geöffneten Deskriptor jeden Befehl an, auch
+  schreibende wie WRITE, SECURITY ERASE, Format NVM, Sanitize oder ein Firmware-Download; `block-blkext` umfasst auch
+  NVMe-Partitionen. „Nur lesend“ heißt also: nur lesend geöffnet. Welche Befehle die Disks bekommen, begrenzen allein
+  die feste Operation und die festen Argumente von `smartctl`. Der Gewinn der Liste bleibt: Alle anderen Block- und
+  Zeichengeräte außer den Pseudo-Geräten sind zu. Kommentar der Unit und Abschnitt M5-18 sagen das jetzt so.
+- **Keine eigene Unit für `smartctl`** (geprüft, verworfen): `smartctl` braucht genau die Rechte, die auch die
+  zerstörerischen Befehle erlauben – ATA PASS-THROUGH steht nicht in der Liste der SCSI-Befehle, die der Kernel ohne
+  `CAP_SYS_RAWIO` durchlässt, und das SMART-Log von NVMe (Get Log Page) ist ein Admin-Befehl, für den der Kernel ohne
+  `CAP_SYS_ADMIN` nur einige Identify-Befehle erlaubt. Eine Unit mit `CapabilityBoundingSet=CAP_SYS_RAWIO
+  CAP_SYS_ADMIN` und den Disks begrenzt `smartctl` also nicht in dem, worauf es ankommt. Und ein kompromittierter Helper
+  ist root und startet ohnehin jede Unit (`systemd-run`, wie für die Läufe der Updates); die Trennung schützte nur vor
+  einer Lücke in `smartctl` selbst, das nur die Antworten der Disks liest. Dafür bräuchte der Helper rund 30 Zeilen
+  mehr (1 795 von 1 800) und unter OpenRC einen zweiten Weg. Die Grenze bleibt die feste Operation.
+- **Port der Module:** Der Port `Helper` von `sermon-modules` hat nur noch `read_smart()`; ein Modul kann den Helper
+  gar nicht um `ApplyUpdates`, `Reboot` oder `SelfUpdate` bitten – die bleiben beim Befehlsweg des Servers mit
+  Step-up und Audit. Ein Test prüft, dass `ModuleHelper` genau `ReadSmart` schickt.
+- **Ein Lesen blockiert den Helper:** Der Helper bedient eine Anfrage nach der anderen; `ReadSmart` braucht bis zu
+  20 s. In der Zeit warten `GetStatus` und die Listen der Updates. Die Updates fragen beim nächsten Durchlauf wieder
+  (Test `a_busy_helper_is_asked_again_later`); `sermon-agent helper status` (10 s) kann in dieser Zeit ablaufen und
+  wird einfach wiederholt. Die Grenzen bleiben, damit 24 Disks hinter langsamen Controllern noch lesbar sind.
+- **`allow_smart` nach einem Update:** Eine ältere `helper.toml` ohne den Schlüssel bekommt mit dem Update „an“ – so
+  entschieden (nur lesend, wie `ListUpdates`). Die Installationsanleitung sagt es; wer es nicht will, setzt den
+  Schlüssel vor dem Update auf `false`.

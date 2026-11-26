@@ -111,8 +111,11 @@ impl ModuleHelper {
 }
 
 impl sermon_modules::Helper for ModuleHelper {
-    fn call(&self, request: &HelperRequest) -> Result<HelperResponse, String> {
-        call(&self.socket, request, Duration::from_secs(25)).map_err(|e| e.to_string())
+    fn read_smart(&self) -> Result<HelperResponse, String> {
+        let request = HelperRequest {
+            operation: Some(Operation::ReadSmart(sermon_helper_proto::v1::ReadSmart {})),
+        };
+        call(&self.socket, &request, Duration::from_secs(25)).map_err(|e| e.to_string())
     }
 }
 
@@ -221,7 +224,8 @@ mod tests {
         assert!(matches!(request.operation, Some(Operation::GetStatus(_))));
     }
 
-    // M5-18: the modules reach the helper through the same client.
+    // M5-18: the modules reach the helper through the same client, and only for ReadSmart
+    // (M5-33): updates, reboot and self-update stay on the server's command path.
     #[test]
     fn the_modules_call_the_helper() {
         use sermon_modules::Helper;
@@ -231,15 +235,17 @@ mod tests {
             ..HelperResponse::default()
         };
         let (_dir, path, server) = fake(framed(&response));
-        let request = HelperRequest {
-            operation: Some(Operation::ReadSmart(sermon_helper_proto::v1::ReadSmart {})),
-        };
-        let answer = ModuleHelper::new(&path).call(&request).unwrap();
+        let answer = ModuleHelper::new(&path).read_smart().unwrap();
         assert_eq!(answer.reason, "allow_smart = false");
         let sent = HelperRequest::decode(server.join().unwrap().as_slice()).unwrap();
-        assert_eq!(sent, request);
+        assert_eq!(
+            sent,
+            HelperRequest {
+                operation: Some(Operation::ReadSmart(sermon_helper_proto::v1::ReadSmart {})),
+            }
+        );
         let dir = tempfile::tempdir().unwrap();
-        let missing = ModuleHelper::new(dir.path().join("none.sock")).call(&request);
+        let missing = ModuleHelper::new(dir.path().join("none.sock")).read_smart();
         assert!(missing.unwrap_err().contains("no root helper"));
     }
 

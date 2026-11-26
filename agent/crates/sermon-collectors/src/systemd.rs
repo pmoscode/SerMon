@@ -57,6 +57,13 @@ const SUFFIXES: [&str; 11] = [
 /// [`MAX_UNITS`]; lines that name no valid unit are skipped.
 #[must_use]
 pub fn parse_failed(text: &str) -> Vec<String> {
+    parse_units(text, MAX_UNITS)
+}
+
+/// The unit names in the output of `systemctl list-units --plain --no-legend`, at most `max`,
+/// instances as their template; lines that name no valid unit are skipped.
+#[must_use]
+pub fn parse_units(text: &str, max: usize) -> Vec<String> {
     let mut out = Vec::new();
     for line in text.lines() {
         let mut words = line.split_whitespace();
@@ -67,7 +74,7 @@ pub fn parse_failed(text: &str) -> Vec<String> {
         };
         if let Some(name) = name.filter(|n| valid_unit(n)).map(template)
             && !out.contains(&name)
-            && out.len() < MAX_UNITS
+            && out.len() < max
         {
             out.push(name);
         }
@@ -127,17 +134,33 @@ impl Systemctl {
     }
 }
 
-impl FailedUnits for Systemctl {
-    fn list(&self) -> io::Result<String> {
+impl Systemctl {
+    /// systemctl if systemd runs below `root` (`/run/systemd/system`).
+    #[must_use]
+    pub fn on_host(root: &Path) -> Option<Self> {
+        root.join("run/systemd/system")
+            .is_dir()
+            .then(|| Self::find(root))
+            .flatten()
+    }
+
+    /// The output of `systemctl list-units --type=service --state=running`: what the discovery
+    /// of the modules looks for (M5-04).
+    ///
+    /// # Errors
+    ///
+    /// systemctl fails or takes too long.
+    pub fn running_services(&self) -> io::Result<String> {
+        self.list_units(&["--type=service", "--state=running"])
+    }
+
+    /// `systemctl list-units` with `filter` and fixed arguments otherwise: no shell, an empty
+    /// environment, the output bounded, a timeout.
+    fn list_units(&self, filter: &[&str]) -> io::Result<String> {
         let mut child = Command::new(&self.program)
-            .args([
-                "list-units",
-                "--state=failed",
-                "--plain",
-                "--no-legend",
-                "--no-pager",
-                "--full",
-            ])
+            .arg("list-units")
+            .args(filter)
+            .args(["--plain", "--no-legend", "--no-pager", "--full"])
             .env_clear()
             .env("LC_ALL", "C")
             .env("SYSTEMD_COLORS", "0")
@@ -166,6 +189,12 @@ impl FailedUnits for Systemctl {
             return Err(io::Error::other(format!("systemctl: {status}")));
         }
         text
+    }
+}
+
+impl FailedUnits for Systemctl {
+    fn list(&self) -> io::Result<String> {
+        self.list_units(&["--state=failed"])
     }
 }
 
@@ -245,12 +274,7 @@ impl SystemdCollector {
     /// For a host: systemctl if systemd runs below `root`, the memory in `file`.
     #[must_use]
     pub fn for_host(root: &Path, clock: Arc<dyn Clock>, file: PathBuf) -> Self {
-        let source = root
-            .join("run/systemd/system")
-            .is_dir()
-            .then(|| Systemctl::find(root))
-            .flatten()
-            .map(|s| -> Box<dyn FailedUnits> { Box::new(s) });
+        let source = Systemctl::on_host(root).map(|s| -> Box<dyn FailedUnits> { Box::new(s) });
         Self::new(source, clock, Some(file))
     }
 }
@@ -428,6 +452,67 @@ mod tests {
         assert_eq!(
             parse_failed("● nginx.service loaded failed failed A high performance web server\n"),
             ["nginx.service"]
+        );
+    }
+
+    // M5-04: the running services of the discovery fixtures, as systemctl lists them.
+    #[test]
+    fn reads_the_running_services_of_every_distro() {
+        for distro in [
+            "debian-13",
+            "ubuntu-24.04",
+            "rockylinux-9",
+            "almalinux-10",
+            "fedora-44",
+        ] {
+            let text = std::fs::read_to_string(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../fixtures/discovery")
+                    .join(distro)
+                    .join("units.txt"),
+            )
+            .unwrap();
+            let units = parse_units(&text, 100);
+            assert!(
+                units.contains(&"nginx.service".to_owned()),
+                "{distro}: {units:?}"
+            );
+            assert!(
+                units.contains(&"systemd-journald.service".to_owned()),
+                "{distro}"
+            );
+            assert!(
+                units
+                    .iter()
+                    .any(|u| u == "ssh.service" || u == "sshd.service"),
+                "{distro}"
+            );
+            assert_eq!(parse_units(&text, 2).len(), 2, "bounded");
+        }
+    }
+
+    // The arguments are fixed: a fake systemctl prints what it got.
+    #[test]
+    fn asks_systemctl_for_the_running_services() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let program = dir.path().join("usr/bin/systemctl");
+        std::fs::create_dir_all(program.parent().unwrap()).unwrap();
+        std::fs::write(&program, "#!/bin/sh\necho \"$@\"\n").unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(
+            Systemctl::on_host(dir.path()).is_none(),
+            "no systemd running"
+        );
+        std::fs::create_dir_all(dir.path().join("run/systemd/system")).unwrap();
+        let systemctl = Systemctl::on_host(dir.path()).unwrap();
+        assert_eq!(
+            systemctl.running_services().unwrap(),
+            "list-units --type=service --state=running --plain --no-legend --no-pager --full\n"
+        );
+        assert_eq!(
+            systemctl.list().unwrap(),
+            "list-units --state=failed --plain --no-legend --no-pager --full\n"
         );
     }
 

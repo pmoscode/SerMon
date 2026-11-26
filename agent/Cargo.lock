@@ -1315,6 +1315,7 @@ dependencies = [
  "sermon-helper",
  "sermon-helper-proto",
  "sermon-logs",
+ "sermon-modules",
  "sermon-security",
  "sermon-updates",
  "tempfile",

@@ -6,6 +6,7 @@
 //! bounded output, panics and hangs kept to the module. What a module reaches is bounded by the
 //! [`veto`].
 
+pub mod discovery;
 pub mod runtime;
 pub mod schema;
 #[cfg(feature = "simulate")]
@@ -22,6 +23,7 @@ use std::time::Duration;
 
 use sermon_core::Sample;
 
+pub use discovery::{Discovered, HostFacts, Reason};
 pub use schema::{Config, Schema};
 pub use veto::{Refused, Veto};
 
@@ -65,6 +67,14 @@ pub trait Module: Send + Sync + 'static {
     ///
     /// [`BuildError`] if the configuration can't be used or the veto refuses it.
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError>;
+
+    /// Whether the host runs what the module watches ([`discovery`]): a suggestion for the UI,
+    /// nothing is activated. Runs every 10 min on facts the agent read; must be quick and must
+    /// not reach anything.
+    fn discover(&self, facts: &HostFacts) -> Option<Discovered> {
+        let _ = facts;
+        None
+    }
 }
 
 /// What a module gets to build itself.

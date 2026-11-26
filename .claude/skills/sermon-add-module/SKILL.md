@@ -19,6 +19,8 @@ pub trait Module: Send + Sync + 'static {
     fn default_interval(&self) -> Duration;            // ≥ 10 s
     // config is already checked against the schema, defaults filled in; secrets in setup.secrets
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError>;
+    // a suggestion for the UI (every 10 min, nothing is activated); default None
+    fn discover(&self, facts: &HostFacts) -> Option<Discovered>;
 }
 pub trait Instance: Send + 'static {
     fn timeout(&self) -> Duration;                     // budget of a run, default 5 s
@@ -36,10 +38,14 @@ pub trait Instance: Send + 'static {
 3. **Parser tests** with recorded real responses from supported versions in `agent/fixtures/modules/<module>/<version>/` (status pages, SQL result sets, Redis INFO, …).
 4. **Collect:** strict timeout and response size limit; no shell-outs (exception: dedicated helper op, e.g. SMART → requires new fixed helper operation + ADR + security review). Errors are reported as module health, not panics; the runtime isolates each module.
 5. **Least privilege guidance:** document the minimal permissions (e.g. PG role `pg_monitor`, MySQL `PROCESS, REPLICATION CLIENT`) in help text; warn loudly in UI when root-equivalent access is required (Docker socket).
-6. **Discovery hint:** detect via listening ports/process names/units → UI suggests enabling. Test with fake `HostFacts`.
-7. **Server:** add metrics to the catalog, a module detail page/tab in the UI, help texts `docs/help/{de,en}/modules/<module>.md`.
-8. **Default alerts** for the module via `sermon-add-alert-rule` (selector: nodes where module enabled).
-9. **E2E:** add the service container to the E2E compose and a test that enables the module and sees metrics.
+6. **Discovery hint:** `discover()` with `Discovered::evidence(facts, &["nginx"], &["nginx.service"], &[80])` (a
+   process or unit is required, ports add reasons), plus `suggested` (a JSON object ≤ 1 KiB for the form, e.g. the URL
+   on `Listener::reach()`). Test with the recorded hosts in `agent/fixtures/discovery/` and fake `HostFacts`.
+7. **Fuzz** every parser of foreign text in `agent/fuzz/fuzz_targets/module_parsers.rs` (first byte picks the parser)
+   and seed it from the fixtures in `agent/fuzz/seed.sh`.
+8. **Server:** add metrics to the catalog, a module detail page/tab in the UI, help texts `docs/help/{de,en}/modules/<module>.md`.
+9. **Default alerts** for the module via `sermon-add-alert-rule` (selector: nodes where module enabled).
+10. **E2E:** add the service container to the E2E compose and a test that enables the module and sees metrics.
 
 ## Checklist
 - [ ] Off by default; discovery only suggests

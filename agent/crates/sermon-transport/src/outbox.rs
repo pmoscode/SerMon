@@ -10,8 +10,8 @@ use sermon_buffer::{Record, Seq, Wal, WalError, WalStats};
 use tokio::sync::Notify;
 
 use crate::proto::agent::v1::{
-    Batch, CommandResult, LogBatch, LogEntry, MetricBatch, ModuleHealthReport, SecurityEvent,
-    SecurityEventBatch, UpdateReport, batch,
+    Batch, CommandResult, DiscoveryHints, LogBatch, LogEntry, MetricBatch, ModuleHealthReport,
+    SecurityEvent, SecurityEventBatch, UpdateReport, batch,
 };
 
 /// Shared handle to the write-ahead log; cheap to clone.
@@ -203,6 +203,27 @@ impl Outbox {
         let payload = Batch {
             seq: 0,
             content: Some(batch::Content::ModuleHealth(report)),
+        }
+        .encode_to_vec();
+        let seq = self.wal().append(&payload, now)?;
+        self.inner.ready.notify_one();
+        Ok(seq)
+    }
+
+    /// Buffers the discovery hints (ADR 0039, M5-04) and wakes the session: sent on change, so
+    /// the last list must reach the server also after a time offline.
+    ///
+    /// # Errors
+    ///
+    /// [`WalError`] if the batch can't be written.
+    pub fn push_discovery_hints(
+        &self,
+        hints: DiscoveryHints,
+        now: SystemTime,
+    ) -> Result<Seq, WalError> {
+        let payload = Batch {
+            seq: 0,
+            content: Some(batch::Content::DiscoveryHints(hints)),
         }
         .encode_to_vec();
         let seq = self.wal().append(&payload, now)?;
@@ -406,6 +427,35 @@ mod tests {
         assert_eq!(records[0].seq, seq);
         match batch_for(&records[0]).unwrap().content {
             Some(batch::Content::ModuleHealth(back)) => assert_eq!(back, report),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    // ADR 0039: the discovery hints are a batch of their own and wake the session.
+    #[tokio::test]
+    async fn discovery_hints_are_buffered_as_one_batch() {
+        use crate::proto::agent::v1::{DiscoveryHint, DiscoveryHints};
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let (wal, _) = Wal::open(dir.path(), WalConfig::default(), now).unwrap();
+        let outbox = Outbox::new(wal);
+        let hints = DiscoveryHints {
+            collected_at: Some(now.into()),
+            hints: vec![DiscoveryHint {
+                module_id: "nginx".into(),
+                reasons: vec!["process:nginx".into(), "port:80".into()],
+                suggested_config_json: String::new(),
+            }],
+        };
+        let seq = outbox.push_discovery_hints(hints.clone(), now).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), outbox.inner.ready.notified())
+            .await
+            .expect("the session is woken");
+        let records = outbox.read_after(Seq::default(), 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].seq, seq);
+        match batch_for(&records[0]).unwrap().content {
+            Some(batch::Content::DiscoveryHints(back)) => assert_eq!(back, hints),
             other => panic!("{other:?}"),
         }
     }

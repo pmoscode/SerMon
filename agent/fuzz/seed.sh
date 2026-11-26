@@ -72,3 +72,13 @@ for file in ../fixtures/updates/*/*.txt; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   cp "$file" "corpus/update_parsers/fixture$name"
 done
+# module_parsers: a parser byte and the recorded files (0 /proc/net/tcp*, 1 /proc/net/unix).
+mkdir -p corpus/module_parsers
+for file in ../fixtures/discovery/*/proc/net/tcp*; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\000'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done
+for file in ../fixtures/discovery/*/proc/net/unix; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\001'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done

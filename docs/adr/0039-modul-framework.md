@@ -142,3 +142,20 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
   Der Docker-Socket bleibt eigens freizugeben (O4).
 - Folgearbeiten: Protokoll (M5-02), Laufzeit und Veto (M5-03), Discovery (M5-04), Zugangsdaten (M5-05), Server
   (M5-06), UI (M5-07).
+
+## Nachtrag M5-04 (Discovery im Agent)
+
+- **Quellen:** `/proc/net/tcp` und `tcp6` (nur `LISTEN`), `/proc/net/unix` (nur lauschende Sockets mit Pfad),
+  `/proc/<pid>/comm` und die laufenden Dienste aus `systemctl list-units --type=service --state=running` – dasselbe
+  `systemctl` mit festen Argumenten, leerer Umgebung und Zeitgrenze wie bei den fehlgeschlagenen Units (M2-22); kein
+  Modul startet dafür etwas. Je Art höchstens 1 024 Einträge, höchstens 32 768 Prozesse. Ohne systemd (Alpine) gibt es
+  keine Units; schlägt `systemctl` fehl, gelten die Units des letzten Laufs.
+- **Unix-Sockets** sind kein Anlass (das Protokoll kennt nur `process:`, `port:`, `unit:`); ein Modul nutzt sie für die
+  Vorgabe im Formular (etwa den Pfad eines Sockets).
+- **Vertrag:** `Module::discover(&HostFacts) -> Option<Discovered>` (ab Werk `None`). `Discovered::evidence` setzt einen
+  Prozess oder eine Unit voraus – ein Port allein ist irgendein Dienst – und nimmt lauschende Ports als weitere Anlässe.
+  Ein Panic in `discover` kostet nur den Hinweis dieses Moduls. Anlässe außerhalb des Zeichensatzes des Protokolls
+  fallen weg, höchstens acht je Hinweis; eine Vorgabe, die kein JSON-Objekt ist oder 1 KiB übersteigt, entfällt.
+- **Senden:** einmal nach dem Start (der Server kennt die letzte Liste nicht), danach nur bei Änderung, auch eine leere
+  Liste; gepuffert im WAL wie die Gesundheit (`Outbox::push_discovery_hints`). Mit `allow_modules = false` läuft keine
+  Discovery.

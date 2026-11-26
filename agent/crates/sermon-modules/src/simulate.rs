@@ -7,7 +7,12 @@ use std::time::Duration;
 use sermon_core::Sample;
 
 use crate::runtime::MAX_SAMPLES;
-use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup};
+use crate::{
+    BoxFuture, BuildError, Config, Discovered, HostFacts, Instance, Module, Run, RunError, Setup,
+};
+
+/// The process a virtual node pretends to run, so the discovery suggests the module.
+pub const PROCESS: &str = "sermon-simulate";
 
 const SCHEMA: &str = include_str!("../schemas/simulate.json");
 
@@ -53,6 +58,10 @@ impl Module for Simulate {
                 .unwrap_or(1),
             token: setup.secrets.get("token").is_some(),
         }))
+    }
+
+    fn discover(&self, facts: &HostFacts) -> Option<Discovered> {
+        Discovered::evidence(facts, &[PROCESS], &[], &[])
     }
 }
 
@@ -125,6 +134,17 @@ mod tests {
         fn health(&self, report: Vec<Health>, _: SystemTime) {
             *self.states.lock().unwrap() = report;
         }
+    }
+
+    #[test]
+    fn it_is_suggested_for_its_process() {
+        let facts = HostFacts {
+            processes: [PROCESS.to_owned()].into(),
+            ..HostFacts::default()
+        };
+        let hints = crate::discovery::hints(&[Arc::new(Simulate)], &facts);
+        assert_eq!(hints[0].reasons, ["process:sermon-simulate"]);
+        assert!(Simulate.discover(&HostFacts::default()).is_none());
     }
 
     #[test]

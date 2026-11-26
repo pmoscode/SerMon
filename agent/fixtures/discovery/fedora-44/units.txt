@@ -1,0 +1,9 @@
+dbus-broker.service      loaded active running D-Bus System Message Bus
+nginx.service            loaded active running The nginx HTTP and reverse proxy server
+sshd.service             loaded active running OpenSSH server daemon
+systemd-homed.service    loaded active running Home Area Manager
+systemd-journald.service loaded active running Journal Service
+systemd-oomd.service     loaded active running Userspace Out-Of-Memory (OOM) Killer
+systemd-resolved.service loaded active running Network Name Resolution
+systemd-udevd.service    loaded active running Rule-based Manager for Device Events and Files
+systemd-userdbd.service  loaded active running User Database Manager

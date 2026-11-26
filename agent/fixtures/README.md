@@ -62,6 +62,15 @@ Hinweise:
 - Hostname und `machine-id` sind ausgedacht (in den Logs `fixture-host` und `0123456789abcdef0123456789abcdef`). Keine echten Hostnamen, IPs, Usernamen oder IDs einchecken
   (Beispiel-IPs: 192.0.2.0/24, 2001:db8::/32; User: `alice`, `bob`).
 
+## Discovery (`discovery/`)
+
+`discovery/capture.sh` (M5-04) startet die E2E-Images mit systemd (`deploy/e2e/agent.Dockerfile`; Debian 13, Ubuntu
+24.04, Rocky 9, Alma 10, Fedora 44) und installiert nginx und sshd aus den Paketquellen der Distribution; Alpine 3.22
+startet nginx ohne OpenRC. Erfasst werden `proc/net/{tcp,tcp6,unix}`, `proc/<pid>/comm` aller Prozesse und
+`units.txt` (`systemctl list-units --type=service --state=running --plain --no-legend --no-pager --full`, nicht bei
+Alpine). Die Verbindungen zu den Paket-Mirrors (`TIME_WAIT`) bleiben drin, ihre Adressen ersetzt das Skript durch
+192.0.2.0/24 bzw. 2001:db8::/32. Erfasst auf arm64 am 2026-11-26.
+
 ## Updates (`updates/`)
 
 `updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in

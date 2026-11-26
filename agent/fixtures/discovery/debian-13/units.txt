@@ -1,0 +1,4 @@
+dbus.service             loaded active running D-Bus System Message Bus
+nginx.service            loaded active running A high performance web server and a reverse proxy server
+ssh.service              loaded active running OpenBSD Secure Shell server
+systemd-journald.service loaded active running Journal Service

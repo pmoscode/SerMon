@@ -620,6 +620,22 @@ fn run_node(
     .with_modules(modules.ids())
     .with_config(agent_config.clone());
     let integrations = crate::modules::run(modules, agent_config.subscribe(), shutdown.clone());
+    // Every other node "runs" the module's process: the UI suggests the module (M5-04).
+    let facts = sermon_modules::HostFacts {
+        processes: (index % 2 == 0)
+            .then(|| sermon_modules::simulate::PROCESS.to_owned())
+            .into_iter()
+            .collect(),
+        ..sermon_modules::HostFacts::default()
+    };
+    let hints = sermon_modules::discovery::hints(&sermon_modules::builtin(), &facts);
+    let now = clock.now();
+    if let Err(error) = outbox.push_discovery_hints(crate::discovery::to_proto(&hints, now), now) {
+        tracing::warn!(
+            host = hostname,
+            "cannot buffer the discovery hints: {error}"
+        );
+    }
     let uptime = Duration::from_secs(3600 * (1 + u64::from(index) % 400));
     let mut generator =
         Generator::new(profile, seed, started, uptime).with_scenarios(scenarios.clone());

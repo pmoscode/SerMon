@@ -5304,7 +5304,28 @@ Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
   Module laufen weiter, die Gesundheit sagt warum; Abschalten über das Veto.
 - **Abhängig von:** M5-02
 
-#### ☐ M5-04 – Discovery im Agent · A · M
+#### ☑ M5-04 – Discovery im Agent · A · M
+> Erledigt (`sermon-modules/src/discovery.rs`, `sermon-agent/src/discovery.rs`; Nachtrag in ADR 0039):
+> - **Fakten:** lauschende Sockets aus `/proc/net/tcp`, `tcp6` (Adressen in Host-Byte-Reihenfolge) und `unix` (nur
+>   mit `__SO_ACCEPTCON` und Pfad), Prozessnamen aus `/proc/<pid>/comm`, alles über `ProcRoot`; die laufenden Dienste
+>   über das `systemctl` des Collectors der fehlgeschlagenen Units (feste Argumente, Zeitgrenze). Je Art höchstens
+>   1 024 Einträge, höchstens 32 768 Prozesse; schlägt `systemctl` fehl, bleiben die Units des letzten Laufs.
+> - **Vertrag:** `Module::discover(&HostFacts)`, ab Werk nichts; `Discovered::evidence` verlangt einen Prozess oder eine
+>   Unit (ein Port allein ist irgendein Dienst) und nimmt die lauschenden Ports als weitere Anlässe. `hints()` hält die
+>   Grenzen des Protokolls (32 Hinweise, 8 Anlässe, Zeichensatz, Vorgabe nur als JSON-Objekt bis 1 KiB), sortiert nach
+>   Modul; ein Panic in `discover` kostet nur diesen Hinweis.
+> - **Agent:** alle 10 min im Task der Module (Lesen über `spawn_blocking`), gesendet einmal nach dem Start und danach
+>   nur bei Änderung, auch leer; gepuffert über `Outbox::push_discovery_hints`. Ohne `allow_modules` keine Discovery.
+>   Der Server bestätigt die Hinweise bis M5-06, ohne sie zu speichern. Die virtuellen Nodes (`just simulate`) melden
+>   jeder zweite das Modul `simulate` (Prozess `sermon-simulate`), damit Server und UI einen Hinweis sehen.
+> - **Kosten:** ein Lauf liest je Prozess eine kleine Datei und ruft einmal `systemctl` – einige Millisekunden alle
+>   10 min; kein Speicher außer der letzten Liste.
+> - **Fixtures** `agent/fixtures/discovery/<distro>/` (Debian 13, Ubuntu 24.04, Rocky 9, Alma 10, Fedora 44 mit
+>   systemd, nginx und sshd; Alpine 3.22), aufgenommen mit `capture.sh`; Fuzz-Ziel `module_parsers` (wächst mit den
+>   Modulen, das erste Byte wählt den Parser).
+> - Tests: 12 in `sermon-modules` (jede Distro, Byte-Reihenfolge, kaputte Zeilen, Grenzen, Fake-Modul mit Hinweis,
+>   Panic, Zeichensatz), 3 im Agent (nur bei Änderung, nicht vor 10 min, `systemctl` fällt aus, leere Liste, Outbox),
+>   Transport (Batch), Collector (Argumente von `systemctl` über ein Fake-Programm); Gegenproben 22/22.
 - **Ziel:** lauschende Ports (`/proc/net/tcp`, `tcp6`, `unix`), Prozessnamen und aktive Units als Eingabe von
   `discover()`; Hinweise gehen bei Änderung an den Server, begrenzt in Zahl und Häufigkeit. Nichts wird aktiviert.
 - **Tests zuerst:** Fixtures von `/proc/net` der Zieldistros (`ProcRoot`), ein Fake-Modul mit Hinweis; Fuzz-Ziel für

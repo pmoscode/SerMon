@@ -1,0 +1,4 @@
+nginx.service            loaded active running The nginx HTTP and reverse proxy server
+sshd.service             loaded active running OpenSSH server daemon
+systemd-journald.service loaded active running Journal Service
+systemd-userdbd.service  loaded active running User Database Manager

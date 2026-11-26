@@ -6,6 +6,7 @@
 pub mod agent_config;
 pub mod cli;
 pub mod config;
+pub mod discovery;
 pub mod enroll;
 pub mod helper;
 pub mod identity;
@@ -33,7 +34,7 @@ use anyhow::{Context, bail};
 use sermon_buffer::{Wal, WalConfig};
 use sermon_collectors::default_collectors;
 use sermon_collectors::host::read_host_facts;
-use sermon_collectors::systemd::SystemdCollector;
+use sermon_collectors::systemd::{Systemctl, SystemdCollector, parse_units};
 use sermon_core::{Clock, ProcRoot, SystemClock};
 use sermon_transport::outbox::Outbox;
 use sermon_transport::session::{FactsSource, Transport, TransportConfig};
@@ -133,7 +134,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     let updates = UpdateSignals::default();
     // The server's commands for the root helper (M4-12).
     let (inbox, ports) = run_ports(config, &layout, &clock);
-    let module_runtime = module_runtime(config, &outbox, &clock, &agent_config);
+    let (module_runtime, discovery) = module_runtime(config, &outbox, &clock, &agent_config);
     let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
         .with_modules(module_runtime.ids())
         .with_update_refresh(updates.refresh.clone())
@@ -193,7 +194,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         ));
         let reports = spawn_updates(config, &outbox, &clock, &updates, &shutdown);
         let runner = spawn_runs(ports, &outbox, &clock, &agent_config, &updates, &shutdown);
-        let integrations = spawn_modules(module_runtime, &agent_config, &shutdown);
+        let integrations = spawn_modules(module_runtime, discovery, &agent_config, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         reports.await.context("update task failed")?;
@@ -239,37 +240,79 @@ fn transport(
 }
 
 /// The modules built in (ADR 0039), bounded by the veto of `agent.toml`; their reasons redacted
-/// with the organization's rules.
+/// with the organization's rules. With them their discovery.
 fn module_runtime(
     config: &AgentConfig,
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
-) -> sermon_modules::runtime::Runtime {
+) -> (
+    sermon_modules::runtime::Runtime,
+    Option<discovery::Discovery>,
+) {
     let store = agent_config.clone();
     let sink = modules::OutboxSink::new(
         outbox.clone(),
         Arc::new(move |text: &str| store.current().redactor.redact(text).into_owned()),
     );
-    sermon_modules::runtime::Runtime::new(
+    let runtime = sermon_modules::runtime::Runtime::new(
         sermon_modules::builtin(),
         config.local.modules.clone(),
         Arc::new(sink),
         clock.clone(),
-    )
+    );
+    (runtime, discover(config, outbox, clock))
 }
 
-/// Starts the modules (ADR 0039): they follow the server's configuration.
+/// Starts the modules (ADR 0039): they follow the server's configuration; their discovery
+/// alongside.
 fn spawn_modules(
     runtime: sermon_modules::runtime::Runtime,
+    discovery: Option<discovery::Discovery>,
     agent_config: &agent_config::ConfigStore,
     shutdown: &CancellationToken,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(modules::run(
-        runtime,
-        agent_config.subscribe(),
-        shutdown.clone(),
-    ))
+    let modules = modules::run(runtime, agent_config.subscribe(), shutdown.clone());
+    let shutdown = shutdown.clone();
+    tokio::spawn(async move {
+        let discover = async {
+            if let Some(d) = discovery {
+                discovery::run(d, shutdown).await;
+            }
+        };
+        tokio::join!(modules, discover);
+    })
+}
+
+/// The discovery of the modules (M5-04); none if `agent.toml` forbids modules.
+fn discover(
+    config: &AgentConfig,
+    outbox: &Outbox,
+    clock: &Arc<dyn Clock>,
+) -> Option<discovery::Discovery> {
+    if !config.local.modules.allow {
+        return None;
+    }
+    let systemctl = Systemctl::on_host(&config.host_root);
+    let units: discovery::Units = Arc::new(move || {
+        let Some(systemctl) = &systemctl else {
+            return Some(Vec::new());
+        };
+        match systemctl.running_services() {
+            Ok(text) => Some(parse_units(&text, sermon_modules::discovery::MAX_FACTS)),
+            Err(error) => {
+                tracing::debug!("cannot list the running services: {error}");
+                None
+            }
+        }
+    });
+    Some(discovery::Discovery {
+        modules: sermon_modules::builtin(),
+        root: ProcRoot::new(&config.host_root),
+        units,
+        sink: Arc::new(outbox.clone()),
+        clock: clock.clone(),
+    })
 }
 
 /// The root helper of the runs, with the release fetcher of the self-update, and the run book of

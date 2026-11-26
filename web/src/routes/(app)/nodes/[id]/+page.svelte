@@ -99,9 +99,16 @@
 			{/if}
 		</div>
 		<div class="flex flex-col items-start gap-2">
-			<Button variant="outline" size="sm" onclick={checkUnusual}>
-				{m.unusual_title()}
-			</Button>
+			<div class="flex flex-wrap gap-2">
+				<Button variant="outline" size="sm" onclick={checkUnusual}>
+					{m.unusual_title()}
+				</Button>
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() with the query of the comparison -->
+				<Button variant="outline" size="sm" href={`${resolve('/(app)/compare')}?node=${id}`}>
+					{m.node_compare()}
+				</Button>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+			</div>
 			{#if Unusual && checked}
 				<Unusual nodeId={id} range={checked} auto />
 			{/if}

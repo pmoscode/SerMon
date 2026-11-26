@@ -1309,7 +1309,10 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
    bis 30 Tage, höchstens 200 Spalten (Schritte, die einen Tag teilen), je Zelle der höchste Mittelwert, IO die
    ausgelastetste Disk; Werte per Zeiger und Pfeiltasten, Legende, Tabelle als Alternative zur Farbe.
 8. **Vergleich:** 2–4 Nodes nebeneinander bzw. übereinandergelegt (z. B. vor und nach einer Änderung, oder
-   Cluster-Mitglieder).
+   Cluster-Mitglieder). Umgesetzt (M5-28) als Ansicht der Fleet `/compare`: Auswahl und Darstellung in der URL
+   (`?node=…&view=overlay`), je Kernmetrik (CPU, Speicher, Last je CPU, höchste Disk-Auslastung, Netz) eine Linie je
+   Node; nebeneinander mit gleicher Skala, übereinander in einem Chart; gemeinsamer Zeitbereich und Crosshair der Seite.
+   Die Daten kommen über `MetricsService.QueryMetrics` (eine Abfrage je Metrik für alle Nodes), ohne neuen RPC.
 9. **Anomalien:** Nodes nach Anomalie-Rate, „Was war ungewöhnlich?“ für einen Zeitraum.
 
 ### Eigene Dashboards und Kiosk (M5, [ADR 0040](docs/adr/0040-eigene-dashboards.md))

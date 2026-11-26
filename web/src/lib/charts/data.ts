@@ -61,9 +61,16 @@ export function summarize(series: ChartSeries[], range: Range): Summary[] {
 /**
  * Value range of the y axis: from zero (or below for negative data) to the maximum. Flat or
  * missing data span one step instead of a meaningless sliver: 100 % for shares, 1 otherwise.
+ * A shared maximum (charts side by side, M5-28) raises the top so they share one scale.
  */
-export function yRange(unit: Unit, min: number | null, max: number | null): [number, number] {
+export function yRange(
+	unit: Unit,
+	min: number | null,
+	max: number | null,
+	shared?: number
+): [number, number] {
 	const low = Math.min(0, min ?? 0);
+	if (shared !== undefined && shared > low) return [low, Math.max(shared, max ?? shared)];
 	if (max !== null && min !== null && max > min) return [low, max];
 	if (unit === 'ratio_ppm') return [low, Math.max(1_000_000, max ?? 0)];
 	return [low, (max ?? 0) + 1];

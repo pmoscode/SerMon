@@ -5483,7 +5483,24 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Komponententests für Rotation und Fehlerzustände.
 - **Abhängig von:** M5-25, M5-26
 
-#### ☐ M5-28 – Vergleichsansicht · W · M
+#### ☑ M5-28 – Vergleichsansicht · W · M
+> Erledigt (`/compare`, `web/src/lib/compare`, `components/compare`; Reiter „Vergleich“ der Fleet, „Vergleichen“ auf
+> der Node-Seite):
+> - **Auswahl in der URL:** `?node=…` (2 bis 4, nur UUIDs, doppelte fallen weg, ab dem fünften abgeschnitten) und
+>   `view=overlay`; Änderungen ersetzen den Eintrag im Verlauf. Abgefragt werden nur Nodes der Fleet-Übersicht, eine
+>   fremde oder gelöschte ID erscheint als „Unbekannter Node“ zum Entfernen.
+> - **Daten:** je Metrik eine `QueryMetrics` für alle Nodes (gleicher Schritt des Servers), kein neuer RPC. CPU aus
+>   `idle` (1 − idle), Speicher, Last je CPU (1 min), die am stärksten ausgelastete Disk (Maximum je Zeitpunkt), Netz
+>   empfangen und gesendet (Summe der Interfaces). Eine fehlgeschlagene Metrik zeigt ihren Fehler, die anderen bleiben.
+> - **Darstellung:** übereinander ein Chart je Metrik mit einer Linie je Node; nebeneinander ein Chart je Node mit
+>   gemeinsamer Skala (`TimeSeries.yMax`, `yRange` mit geteiltem Maximum). Zeitbereich, Zoom und Crosshair über den
+>   globalen Zeitbereich und den Sync-Key der Charts; Nodes ohne Daten im Zeitraum werden über den Charts genannt.
+> - Hilfe `pages/compare` (DE und EN). Budget: Vergleich 176 KiB, die Node-Seite 189,4 KiB (vorher 188,7 KiB, Grenze
+>   190 KiB – kaum noch Luft für weitere Routen).
+> - Tests: Logik (Auswahl, Grenzen, Kombination, Skala), `CompareState` (eine Abfrage je Metrik, auch im Effect – ein
+>   Effect-Loop fiel im Budget-Test auf), Komponenten (Picker mit Grenze 4 und Hinweis unter 2, unbekannte Nodes,
+>   Hostname nur als Text; Charts übereinander und nebeneinander, Nodes ohne Daten, Fehler je Metrik), E2E mit axe und
+>   Budget-Test; Gegenproben 16/16.
 - **Ziel:** 2 bis 4 Nodes nebeneinander oder übereinandergelegt (KONZEPT §16, 8), Auswahl in der URL, gemeinsamer
   Zeitbereich und Crosshair.
 - **Tests zuerst:** Komponententests (Auswahl, Grenzen, Nodes ohne Daten).

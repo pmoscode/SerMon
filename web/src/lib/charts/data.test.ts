@@ -69,4 +69,12 @@ describe('yRange', () => {
 		expect(yRange('count', 3, 3)).toEqual([0, 4]);
 		expect(yRange('bytes', null, null)).toEqual([0, 1]);
 	});
+
+	// M5-28: side by side, every chart of a metric has the same scale.
+	it('reaches up to a shared maximum of other charts', () => {
+		expect(yRange('bytes', 100, 500, 2000)).toEqual([0, 2000]);
+		expect(yRange('bytes', 100, 500, 300)).toEqual([0, 500]);
+		expect(yRange('bytes', null, null, 2000)).toEqual([0, 2000]);
+		expect(yRange('ratio_ppm', 0, 0, 400_000)).toEqual([0, 400_000]);
+	});
 });

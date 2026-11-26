@@ -26,6 +26,8 @@
 		actions?: Snippet;
 		/** Anomalous stretches (M4-25): marked in the chart, named next to the title. */
 		bands?: Band[];
+		/** The top of the y axis at least, so charts side by side share one scale (M5-28). */
+		yMax?: number;
 	}
 
 	let {
@@ -37,7 +39,8 @@
 		loading = false,
 		error = '',
 		actions,
-		bands = []
+		bands = [],
+		yMax
 	}: Props = $props();
 
 	/** All charts with this key share the crosshair. */
@@ -110,7 +113,7 @@
 			height,
 			scales: {
 				x: { time: true, min: range.from / 1000, max: range.to / 1000 },
-				y: { range: (_u, min, max) => yRange(unit, min, max) }
+				y: { range: (_u, min, max) => yRange(unit, min, max, yMax) }
 			},
 			axes: [
 				{ ...axis, values: (_u, splits) => timeAxis(splits) },
@@ -180,6 +183,8 @@
 
 	$effect(() => {
 		const { from, to } = timeRange.range;
+		// Setting the x scale ranges y again, also when only the shared maximum changed.
+		void yMax;
 		chart?.setScale('x', { min: from / 1000, max: to / 1000 });
 	});
 

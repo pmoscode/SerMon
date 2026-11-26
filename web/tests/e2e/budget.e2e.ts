@@ -110,3 +110,18 @@ test('the security dashboard loads less than 200 KiB of JavaScript', async ({ pa
 	expect(size).toBeLessThan(BUDGET);
 	expect(size, 'headroom of the security dashboard (M2-34)').toBeLessThan(HEADROOM);
 });
+
+test('the comparison loads less than 200 KiB of JavaScript', async ({ page }) => {
+	const nodes = ['0193f5a0-0000-7000-8000-000000000001', '0193f5a0-0000-7000-8000-000000000002'];
+	await mockApi(page, {
+		...installed(true),
+		'FleetService/GetFleetSummary': () => ({
+			json: { nodes: nodes.map((nodeId, i) => ({ nodeId, hostname: `web-0${i + 1}` })) }
+		}),
+		'MetricsService/QueryMetrics': () => ({ json: {} })
+	});
+	const size = await firstLoadJs(page, `/compare?node=${nodes[0]}&node=${nodes[1]}`);
+	console.log(`compare: ${(size / 1024).toFixed(1)} KiB gzip`);
+	expect(size).toBeLessThan(BUDGET);
+	expect(size, 'headroom of the comparison (M2-34)').toBeLessThan(HEADROOM);
+});

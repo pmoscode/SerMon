@@ -258,12 +258,13 @@ fn module_runtime(
     shipper: &logship::Shipper,
 ) -> ModuleParts {
     let store = agent_config.clone();
-    // Log lines of modules (containers, M5-21): a source of the log pipeline like the others.
+    // Log lines of modules (containers, M5-21): a source of the log pipeline like the others, with
+    // at most half of the node's rate – the rest stays the host's (M5-33).
     let sink = modules::OutboxSink::new(
         outbox.clone(),
         Arc::new(move |text: &str| store.current().redactor.redact(text).into_owned()),
     )
-    .with_logs(shipper.sibling(logship::into_outbox(outbox.clone())));
+    .with_logs(shipper.share(logship::into_outbox(outbox.clone()), logship::MODULE_SHARE));
     let runtime = sermon_modules::runtime::Runtime::new(
         sermon_modules::builtin(),
         config.local.modules.clone(),

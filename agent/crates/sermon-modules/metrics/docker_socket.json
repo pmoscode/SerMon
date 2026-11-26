@@ -53,6 +53,11 @@
         "container",
         "name"
       ]
+    },
+    {
+      "name": "sermon_docker_socket_log_gaps",
+      "unit": "count",
+      "aggregation": "max"
     }
   ]
 }

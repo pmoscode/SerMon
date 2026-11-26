@@ -6,8 +6,15 @@
 
 /// Most lines asked for per container and run (`tail`).
 pub const TAIL: usize = 1000;
+/// The `tail` of the second try after an answer that couldn't be read (larger than the HTTP
+/// client takes).
+pub const SMALL_TAIL: usize = 100;
 /// Most containers whose logs are followed.
 pub const MAX_FOLLOWED: usize = 16;
+/// Most lines a run takes of one container: its share of the run's [`crate::MAX_LOG_LINES`], so
+/// that one chatty container can't crowd out the others (M5-33). The rest comes with the next
+/// run.
+pub const PER_CONTAINER: usize = crate::MAX_LOG_LINES / MAX_FOLLOWED;
 /// Messages kept at the newest timestamp, to tell a repeated line from a new one.
 const MAX_AT_LAST: usize = 16;
 
@@ -144,10 +151,14 @@ impl Position {
         format!("{}.{:09}", self.secs, self.nanos)
     }
 
-    /// The lines of `got` not taken yet, and moves on.
-    pub fn take(&mut self, got: Vec<Line>) -> Vec<Line> {
+    /// The lines of `got` not taken yet, at most `max`, and moves on to the last one taken: what
+    /// is left over comes with the next request.
+    pub fn take(&mut self, got: Vec<Line>, max: usize) -> Vec<Line> {
         let mut new = Vec::new();
         for line in got {
+            if new.len() >= max {
+                break;
+            }
             let at = (line.secs, line.nanos);
             let last = (self.secs, self.nanos);
             if at < last || (at == last && self.at_last.contains(&line.message)) {
@@ -273,25 +284,49 @@ mod tests {
         };
         let mut p = Position::at(100, 0);
         assert_eq!(p.since(), "100.000000000");
-        let first = p.take(vec![
-            line(99, 9, "old"),
-            line(100, 0, "a"),
-            line(101, 5, "b"),
-            line(101, 5, "c"),
-        ]);
+        let first = p.take(
+            vec![
+                line(99, 9, "old"),
+                line(100, 0, "a"),
+                line(101, 5, "b"),
+                line(101, 5, "c"),
+            ],
+            100,
+        );
         assert_eq!(first.len(), 3, "nothing before the start");
         assert_eq!(p.since(), "101.000000005");
-        let again = p.take(vec![
-            line(101, 5, "b"),
-            line(101, 5, "c"),
-            line(101, 5, "d"),
-            line(102, 0, "e"),
-        ]);
+        let again = p.take(
+            vec![
+                line(101, 5, "b"),
+                line(101, 5, "c"),
+                line(101, 5, "d"),
+                line(102, 0, "e"),
+            ],
+            100,
+        );
         let texts: Vec<&str> = again.iter().map(|l| l.message.as_str()).collect();
         assert_eq!(texts, ["d", "e"]);
         // A new timestamp forgets the texts of the old one.
-        let later = p.take(vec![line(103, 0, "y"), line(103, 0, "e")]);
+        let later = p.take(vec![line(103, 0, "y"), line(103, 0, "e")], 100);
         assert_eq!(later.len(), 2, "e again, but at another time");
+    }
+
+    // M5-33: beyond its bound a run leaves the rest for the next one instead of moving past it.
+    #[test]
+    fn takes_at_most_its_bound_and_the_rest_later() {
+        let line = |secs, m: &str| Line {
+            stderr: false,
+            secs,
+            nanos: 0,
+            message: m.into(),
+        };
+        let answer = vec![line(1, "a"), line(2, "b"), line(2, "c"), line(3, "d")];
+        let mut p = Position::at(0, 0);
+        let texts = |lines: Vec<Line>| lines.into_iter().map(|l| l.message).collect::<Vec<_>>();
+        assert_eq!(texts(p.take(answer.clone(), 2)), ["a", "b"]);
+        assert_eq!(p.since(), "2.000000000");
+        assert_eq!(texts(p.take(answer.clone(), 2)), ["c", "d"]);
+        assert_eq!(texts(p.take(answer, 2)), Vec::<String>::new());
     }
 
     #[test]

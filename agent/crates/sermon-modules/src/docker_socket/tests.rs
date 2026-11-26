@@ -433,3 +433,131 @@ async fn hands_the_output_of_chosen_containers_to_the_logs() {
         "it moved on: {last}"
     );
 }
+
+/// A raw (TTY) answer of `n` lines, a millisecond apart from `start`.
+fn tty_lines(start: u64, n: usize) -> Vec<u8> {
+    let mut out = Vec::new();
+    for i in 0..n {
+        let at = UNIX_EPOCH
+            + Duration::from_secs(start)
+            + Duration::from_millis(u64::try_from(i).unwrap() + 1);
+        let secs = at.duration_since(UNIX_EPOCH).unwrap();
+        let days = i64::try_from(secs.as_secs() / 86_400).unwrap();
+        let (y, m, d) = civil(days);
+        let rest = secs.as_secs() % 86_400;
+        out.extend_from_slice(
+            format!(
+                "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:09}Z line {i}\n",
+                rest / 3600,
+                rest % 3600 / 60,
+                rest % 60,
+                secs.subsec_nanos()
+            )
+            .as_bytes(),
+        );
+    }
+    out
+}
+
+/// The date of a day since the epoch (Howard Hinnant's `civil_from_days`).
+fn civil(z: i64) -> (i64, i64, i64) {
+    let z = z + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+
+// M5-33: a run takes at most its share of lines per container and leaves the rest for the next
+// run; an answer cut by `tail` or one that can't be read counts as a gap
+// (`sermon_docker_socket_log_gaps`) instead of vanishing, and an unreadable one is asked again
+// with a smaller `tail`, then skipped.
+#[tokio::test]
+async fn container_logs_are_bounded_per_container_and_gaps_counted() {
+    let dir = crate::TestDir::new();
+    let fake = Fake::recorded();
+    let socket = serve(dir.path(), fake.clone());
+    let config = format!(r#"{{"socket":"{}","logs":["tty"]}}"#, socket.display());
+    let mut api = build(&config, &allowed(dir.path())).unwrap();
+    let start = 1_790_000_000;
+    let clock = Arc::new(sermon_core::testing::FakeClock::new(
+        UNIX_EPOCH + Duration::from_secs(start),
+    ));
+    let run = Run::new(clock.clone());
+    let s = api.collect(&run).await.unwrap();
+    let gaps = |s: &[Sample]| {
+        s.iter()
+            .find(|x| x.metric == "sermon_docker_socket_log_gaps")
+            .map(|x| x.value)
+    };
+    assert_eq!(gaps(&s), Some(Value::Int(0)));
+    crate::assert_in_catalog("docker_socket", &s);
+    let list = std::fs::read(fixtures().join("containers.json")).unwrap();
+    let tty = parse_list(&list)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.name == "tty")
+        .unwrap();
+    let logs = format!("/containers/{}/logs", tty.id);
+    let answer = |status: u16, body: Vec<u8>| {
+        fake.answers
+            .lock()
+            .unwrap()
+            .insert(logs.clone(), (status, body));
+    };
+
+    // Fewer lines than `tail`, more than a run's share: the rest comes with the next run.
+    answer(200, tty_lines(start, 400));
+    let s = api.collect(&run).await.unwrap();
+    let first = run.take_logs();
+    assert_eq!(first.len(), logs::PER_CONTAINER);
+    assert_eq!(gaps(&s), Some(Value::Int(0)));
+    api.collect(&run).await.unwrap();
+    let second = run.take_logs();
+    assert_eq!(first.len() + second.len(), 400, "every line once");
+    assert_eq!(second.last().unwrap().message, "line 399");
+
+    // As many lines as `tail`: older ones may be cut off.
+    answer(200, tty_lines(start + 10, logs::TAIL));
+    let s = api.collect(&run).await.unwrap();
+    assert_eq!(gaps(&s), Some(Value::Int(1)));
+    let _ = run.take_logs();
+
+    // Unreadable (too large, an error): asked again with a smaller tail, then skipped to now.
+    answer(500, b"{}".to_vec());
+    clock.advance(Duration::from_secs(60));
+    fake.seen.lock().unwrap().clear();
+    let s = api.collect(&run).await.unwrap();
+    assert_eq!(gaps(&s), Some(Value::Int(1)));
+    let asked: Vec<String> = fake
+        .seen
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|l| l.contains("/logs"))
+        .cloned()
+        .collect();
+    assert_eq!(asked.len(), 2, "{asked:?}");
+    assert!(asked[0].contains(&format!("tail={}", logs::TAIL)));
+    assert!(asked[1].contains(&format!("tail={}", logs::SMALL_TAIL)));
+    fake.seen.lock().unwrap().clear();
+    answer(200, Vec::new());
+    let s = api.collect(&run).await.unwrap();
+    assert_eq!(gaps(&s), Some(Value::Int(0)));
+    let next = fake
+        .seen
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|l| l.contains("/logs"))
+        .cloned()
+        .unwrap();
+    assert!(
+        next.contains(&format!("since={}.000000000", start + 60)),
+        "skipped to the run's time: {next}"
+    );
+}

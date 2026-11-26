@@ -3,7 +3,9 @@
 //! 1 000 entries or 256 KiB.
 //!
 //! - **Rate:** a node sends at most [`LINES_PER_SECOND`] entries and [`BYTES_PER_SECOND`] bytes
-//!   (with bursts); beyond it entries are dropped and counted.
+//!   (with bursts); beyond it entries are dropped and counted. The modules' lines (the output of
+//!   containers) take at most [`MODULE_SHARE`] of it, so a chatty or hostile container can't
+//!   crowd out the host's journal.
 //! - **Buffer:** logs take at most half of the WAL (`Outbox::push_logs`); beyond it they are
 //!   dropped and counted, metrics and security events keep their room. Batches the WAL refuses
 //!   for another reason (disk) wait and are tried again, at most [`MAX_READY`] of them.
@@ -32,6 +34,8 @@ use crate::logs;
 
 /// Entries per second a node may send, and the burst.
 pub const LINES_PER_SECOND: f64 = 500.0;
+/// The share of the node's rate the modules' log lines (the output of containers) may take.
+pub const MODULE_SHARE: f64 = 0.5;
 const LINES_BURST: f64 = 5_000.0;
 /// Bytes per second a node may send (counted with `LogRecord::size`), and the burst.
 pub const BYTES_PER_SECOND: f64 = 512.0 * 1024.0;
@@ -109,6 +113,8 @@ pub struct Shipper {
     redactor_version: Option<u64>,
     /// Shared by all sources of the node.
     rate: Arc<Mutex<Rate>>,
+    /// A source's own cap within the node's rate ([`Self::share`]).
+    own: Option<Rate>,
     batcher: Batcher,
     ready: VecDeque<Vec<LogRecord>>,
     deliver: Deliver,
@@ -185,6 +191,7 @@ impl Shipper {
                 lines: Bucket::new(LINES_PER_SECOND, LINES_BURST),
                 bytes: Bucket::new(BYTES_PER_SECOND, BYTES_BURST),
             })),
+            own: None,
             batcher: Batcher::default(),
             ready: VecDeque::new(),
             deliver,
@@ -201,11 +208,26 @@ impl Shipper {
             config: self.config.clone(),
             redactor_version: None,
             rate: self.rate.clone(),
+            own: None,
             batcher: Batcher::default(),
             ready: VecDeque::new(),
             deliver,
             stats: self.stats.clone(),
             keys: KeyBlocks::default(),
+        }
+    }
+
+    /// A sibling that takes at most `share` (0..1) of the node's rate, so that a source others
+    /// control (the output of containers, M5-33) can't use up the rate of the host's journal;
+    /// what it takes counts towards the node's rate as well.
+    #[must_use]
+    pub fn share(&self, deliver: Deliver, share: f64) -> Self {
+        Self {
+            own: Some(Rate {
+                lines: Bucket::new(LINES_PER_SECOND * share, LINES_BURST * share),
+                bytes: Bucket::new(BYTES_PER_SECOND * share, BYTES_BURST * share),
+            }),
+            ..self.sibling(deliver)
         }
     }
 
@@ -241,15 +263,24 @@ impl Shipper {
                 .rate
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            rate.lines.refill(now);
-            rate.bytes.refill(now);
             let size = f64::from(u32::try_from(record.size()).unwrap_or(u32::MAX));
-            if rate.lines.tokens < 1.0 || rate.bytes.tokens < size {
+            let buckets = std::iter::once(&mut *rate).chain(self.own.as_mut());
+            let mut all: Vec<&mut Rate> = buckets.collect();
+            for r in &mut all {
+                r.lines.refill(now);
+                r.bytes.refill(now);
+            }
+            if all
+                .iter()
+                .any(|r| r.lines.tokens < 1.0 || r.bytes.tokens < size)
+            {
                 add(&self.stats.dropped_rate, 1);
                 return;
             }
-            rate.lines.tokens -= 1.0;
-            rate.bytes.tokens -= size;
+            for r in all {
+                r.lines.tokens -= 1.0;
+                r.bytes.tokens -= size;
+            }
         }
         let before = record.message.len();
         let mut changed = false;
@@ -560,6 +591,59 @@ pub(crate) mod tests {
         );
         assert!(files.flush());
         assert_eq!(written.messages(), ["later"]);
+    }
+
+    // M5-33: the containers' output (a followed container under an attacker's control) takes at
+    // most its share of the node's rate; the host's journal keeps the rest.
+    #[tokio::test(start_paused = true)]
+    async fn a_share_leaves_the_rest_of_the_rate_to_the_host() {
+        let (mut journal, _, stats, _config) = shipper(true);
+        let written = Written::new();
+        let mut containers = journal.share(written.deliver(), 0.5);
+        let now = Instant::now();
+        for i in 0..5_000 {
+            containers.offer(record("web", None, &format!("c{i}")), now);
+        }
+        assert!(containers.flush());
+        assert_eq!(written.messages().len(), 2_500, "half the burst");
+        assert_eq!(stats.dropped_rate.load(Ordering::Relaxed), 2_500);
+        for i in 0..2_500 {
+            journal.offer(record("sshd.service", None, &format!("j{i}")), now);
+        }
+        assert_eq!(
+            stats.dropped_rate.load(Ordering::Relaxed),
+            2_500,
+            "the journal still has its half"
+        );
+        // Both draw from the node's buckets: the journal can take all of it.
+        let later = now + Duration::from_secs(10);
+        for i in 0..5_000 {
+            journal.offer(record("sshd.service", None, &format!("k{i}")), later);
+        }
+        containers.offer(record("web", None, "over"), later);
+        assert!(containers.flush());
+        assert_eq!(
+            written.messages().len(),
+            2_500,
+            "nothing left for the containers"
+        );
+        // The share refills at half the rate.
+        let after = later + Duration::from_secs(20);
+        for i in 0..10_000 {
+            containers.offer(record("web", None, &format!("d{i}")), after);
+        }
+        assert!(containers.flush());
+        assert_eq!(written.messages().len(), 2_500 + 2_500);
+        let then = after + Duration::from_secs(2);
+        for i in 0..10_000 {
+            containers.offer(record("web", None, &format!("e{i}")), then);
+        }
+        assert!(containers.flush());
+        assert_eq!(
+            written.messages().len(),
+            2_500 + 2_500 + 500,
+            "two seconds at half the rate"
+        );
     }
 
     #[tokio::test(start_paused = true)]

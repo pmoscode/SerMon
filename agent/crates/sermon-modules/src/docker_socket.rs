@@ -1,7 +1,7 @@
 //! Docker over the socket (M5-17): state, health and restarts of the containers from the Docker
-//! API – also Podman's compatible API. Read only: the module sends two kinds of request, both
-//! `GET` (the client knows no other method): the list of all containers and the inspection of
-//! one by its checked ID.
+//! API – also Podman's compatible API. Read only: the module sends three kinds of request, all
+//! `GET` (the client knows no other method): the list of all containers, the inspection of one
+//! by its checked ID and – only for containers named in `logs` – its output.
 //!
 //! Whoever may use the socket is root on the host (O4). The veto keeps `docker.sock`,
 //! `podman.sock` and `containerd.sock` closed until `allow_docker_socket = true` in `agent.toml`;
@@ -16,6 +16,7 @@
 //! | `sermon_docker_socket_healthy` | `container`, `name` | with a health check: 1 healthy, 0 unhealthy (not while starting) |
 //! | `sermon_docker_socket_restarts` | `container`, `name` | restarts by its restart policy (`RestartCount`) |
 //! | `sermon_docker_socket_oom_killed` | `container`, `name` | 1 if the OOM killer ended it last |
+//! | `sermon_docker_socket_log_gaps` | – | with `logs`: followed containers whose output lost lines this run |
 //!
 //! `container` is the short ID of `docker ps` (as in the module `docker`), `name` its name.
 //!
@@ -226,29 +227,52 @@ impl Api {
 }
 
 impl Api {
-    /// Hands the new output of `followed` (ID, name, TTY) to the run; a container that doesn't
-    /// answer gives none this time. Positions of containers no longer followed are forgotten.
-    async fn read_logs(&mut self, followed: &[(String, String, bool)], run: &Run) {
+    /// Hands the new output of `followed` (ID, name, TTY) to the run, at most
+    /// [`logs::PER_CONTAINER`] lines each; a container that doesn't answer gives none this time.
+    /// Returns the gaps: containers whose output lost lines – an answer cut by `tail`, or one
+    /// that couldn't be read even with [`logs::SMALL_TAIL`] (then skipped to the run's time, so
+    /// it doesn't fail run after run). Positions of containers no longer followed are forgotten.
+    async fn read_logs(&mut self, followed: &[(String, String, bool)], run: &Run) -> usize {
         self.positions
             .retain(|id, _| followed.iter().any(|(f, _, _)| f == id));
         let now = run.now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        let at_now = logs::Position::at(
+            i64::try_from(now.as_secs()).unwrap_or(i64::MAX),
+            now.subsec_nanos(),
+        );
+        let mut gaps = 0;
         for (id, name, tty) in followed {
-            let Some(position) = self.positions.get(id).cloned() else {
-                let secs = i64::try_from(now.as_secs()).unwrap_or(i64::MAX);
-                self.positions
-                    .insert(id.clone(), logs::Position::at(secs, now.subsec_nanos()));
+            let Some(mut position) = self.positions.get(id).cloned() else {
+                self.positions.insert(id.clone(), at_now.clone());
                 continue;
             };
-            let path = format!(
-                "/containers/{id}/logs?stdout=1&stderr=1&timestamps=1&since={}&tail={}",
-                position.since(),
-                logs::TAIL
-            );
-            let Ok(Some(body)) = self.get(&path).await else {
-                continue;
+            let path = |tail: usize| {
+                format!(
+                    "/containers/{id}/logs?stdout=1&stderr=1&timestamps=1&since={}&tail={tail}",
+                    position.since()
+                )
             };
-            let mut position = position;
-            for line in position.take(logs::parse(&body, *tty)) {
+            let body = match self.get(&path(logs::TAIL)).await {
+                Ok(Some(body)) => body,
+                Ok(None) => continue,
+                Err(_) => match self.get(&path(logs::SMALL_TAIL)).await {
+                    Ok(Some(body)) => {
+                        gaps += 1;
+                        body
+                    }
+                    Ok(None) => continue,
+                    Err(_) => {
+                        gaps += 1;
+                        self.positions.insert(id.clone(), at_now.clone());
+                        continue;
+                    }
+                },
+            };
+            let got = logs::parse(&body, *tty);
+            if got.len() >= logs::TAIL {
+                gaps += 1;
+            }
+            for line in position.take(got, logs::PER_CONTAINER) {
                 let at =
                     UNIX_EPOCH + Duration::new(u64::try_from(line.secs).unwrap_or(0), line.nanos);
                 run.log(LogLine {
@@ -260,6 +284,7 @@ impl Api {
             }
             self.positions.insert(id.clone(), position);
         }
+        gaps
     }
 }
 
@@ -328,7 +353,13 @@ impl Instance for Api {
                     followed.push((c.id.clone(), c.name.clone(), i.tty));
                 }
             }
-            self.read_logs(&followed, run).await;
+            let gaps = self.read_logs(&followed, run).await;
+            if !self.follow.is_empty() {
+                samples.push(Sample::int(
+                    "sermon_docker_socket_log_gaps",
+                    i64::try_from(gaps).unwrap_or(i64::MAX),
+                ));
+            }
             Ok(samples)
         })
     }

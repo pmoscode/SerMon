@@ -54,6 +54,11 @@ Root-Helper (Port `Helper`) bekommen Module über `Setup.host`; einzige Helper-O
 Veto `allow_smart` in `helper.toml`). Jedes Modul ist ein Cargo-Feature von `sermon-modules` (ab Werk alle an). Das Testmodul `simulate` gibt es nur mit
 dem Feature `simulate` (`just simulate`, nie im Release). Module erreichen Dienste nur über
 `sermon_modules::http::Client` (Veto, Weiterleitungen, Grenzen; M5-08); Discovery über `Module::discover` (M5-04).
+Jedes Modul hat `schemas/<id>.json` (Formular, Prüfung) und `metrics/<id>.json` (Katalog seiner Metriken); `just gen`
+kopiert beide in den Server (`server/internal/domain/module/schemas`, `server/internal/domain/metric/modules`). Die
+Schema-Prüfung gibt es in Rust und Go (`server/internal/domain/module`) mit gemeinsamen Testfällen
+(`agent/crates/sermon-modules/testdata/schema-vectors.json`). Server: `app/modules` (Einstellungen je Gruppe,
+`ModuleService`), `module_settings`, `module_health`, `module_hints`.
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
 `just e2e-demo` baut den Agent, startet die Produktions-Compose `deploy/compose/compose.yaml` mit dem Overlay

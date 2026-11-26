@@ -29,6 +29,8 @@ var stepUpRequired = map[string]string{
 	"/sermon.web.v1.LogSettingsService/SetRedactionRules":             "redaction of secrets (M3-25)",
 	"/sermon.web.v1.LogSettingsService/SetViewerLogAccess":            "who reads logs and security events (M3-25)",
 	"/sermon.web.v1.LogSettingsService/SetLiveViewCommandLines":       "who sees command lines",
+	"/sermon.web.v1.ModuleService/SetGroupModule":                     "makes agents connect to services of their hosts (ADR 0039)",
+	"/sermon.web.v1.ModuleService/RemoveGroupModule":                  "turns monitoring of services off (ADR 0039)",
 	"/sermon.web.v1.NodeService/RotateNodeKeys":                       "identities of nodes",
 	"/sermon.web.v1.NodeService/UnlockNode":                           "identities of nodes",
 	"/sermon.web.v1.NodeService/AllowNodeTakeover":                    "identities of nodes",

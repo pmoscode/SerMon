@@ -174,3 +174,27 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
 - **IDs:** Ein Modul heißt nicht wie ein Präfix der Collectors (`tcp`, `systemd`, `system`, `network` …), sonst
   mischten sich die Metriken; daher `http_check` und `tcp_check`.
 - **Features:** jedes Modul hinter einem Cargo-Feature seines Namens, alle in `default`; der Client hinter `http`.
+
+## Nachtrag M5-06: Module im Server
+
+- **Einstellungen je Gruppe** in `module_settings` (RLS): an/aus, Intervall in ganzen Sekunden (10 s bis 1 h), die
+  Konfiguration als geprüftes JSON ohne Zugangsdaten und ohne Vorgaben (die setzt der Agent aus seinem Schema ein,
+  ein neuerer Agent darf andere haben). Höchstens 32 Module je Gruppe. Ändern nur Admins für alle Gruppen
+  (`manage_modules`) mit Step-up; jede Änderung erhöht den Zähler der Org in derselben Transaktion und steht im
+  Audit-Log (Modul, an/aus, Intervall – nicht die Konfiguration, sie kann interne Namen nennen).
+- **Prüfung im Server** mit derselben Teilmenge wie der Agent (`server/internal/domain/module`). Beide lesen dieselben
+  Testfälle (`agent/crates/sermon-modules/testdata/schema-vectors.json`) und melden dieselben Gründe, so sieht ein
+  Admin denselben Text wie später der Agent. Ein Modul, das der Server nicht kennt, ist `NOT_FOUND`.
+- **Je Node nur, was sein Agent eingebaut hat:** Der Server speichert `Hello.modules` am Node und schickt nur diese
+  Module. Hat ein Agent nach einem Update andere Module, bekommt er seine Konfiguration erneut, auch in derselben
+  Version: Der Server hatte weggelassen, was der alte Agent nicht ausführen konnte. Das Formular der Gruppe bietet die
+  Module an, die ihre Nodes eingebaut haben (das Testmodul eines Release-Agents gibt es also nicht).
+- **Gesundheit und Hinweise:** Je Node gilt der neueste Bericht und ersetzt den vorigen. Die Ingest schreibt ihn erst
+  beim nächsten Flush (alle 2 s), der neueste gewinnt: Ein Agent kann den Server nicht bei jedem Batch schreiben lassen.
+  Einträge unbekannter Module fallen weg, Gründe laufen durch `textsafe` und bleiben in 256 Byte, ein Vorschlag für das
+  Formular wird gegen das Schema geprüft (ohne Pflichtfelder) und sonst verworfen. Lesen dürfen Viewer der Gruppe des
+  Nodes; die offenen Hinweise der Fleet nennen nur Module, die der Agent eingebaut hat und die Gruppe nicht betreibt.
+- **Katalog der Metriken:** Jedes Modul nennt seine Metriken in `agent/crates/sermon-modules/metrics/<id>.json` (Name
+  `sermon_<id>_…`, Einheit, Aggregation, Labels); `just gen` kopiert die Datei in den Server, der sie in den Katalog
+  aufnimmt (Bereich `module`). So bringt ein neues Modul seine Metriken mit, ohne dass jemand den Katalog im Server
+  ändert; ein Test im Agent prüft, dass die Samples eines Moduls in seiner Datei stehen.

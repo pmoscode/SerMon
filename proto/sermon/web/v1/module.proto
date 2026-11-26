@@ -1,0 +1,210 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// ModuleService manages the agent's modules (KONZEPT §15, ADR 0039): which run on the nodes of
+// a group and how, and what the nodes report about them. Settings are for admins for all groups
+// and need a recent step-up to change (FAILED_PRECONDITION with StepUpRequired otherwise); a
+// change reaches the connected agents at once. What a node reports is for viewers of its group.
+service ModuleService {
+  // ListModules returns the modules the server knows, with the schema of their configuration.
+  rpc ListModules(ListModulesRequest) returns (ListModulesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // GetModuleSettings returns the module settings of every node group of the organization.
+  rpc GetModuleSettings(GetModuleSettingsRequest) returns (GetModuleSettingsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // SetGroupModule sets one module of a node group. NOT_FOUND for an unknown group or module,
+  // INVALID_ARGUMENT for a configuration outside the module's schema (the reason names the
+  // property) or a 33rd module of the group.
+  rpc SetGroupModule(SetGroupModuleRequest) returns (SetGroupModuleResponse);
+  // RemoveGroupModule turns a module of a node group off and forgets its configuration.
+  rpc RemoveGroupModule(RemoveGroupModuleRequest) returns (RemoveGroupModuleResponse);
+  // GetNodeModules returns the modules of a node: what its agent has built in, what its group
+  // runs, their health and the agent's suggestions. Unknown or foreign nodes are NOT_FOUND.
+  rpc GetNodeModules(GetNodeModulesRequest) returns (GetNodeModulesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ListModuleHints returns the suggestions of the visible nodes for modules their group doesn't
+  // run yet ("nginx detected – enable the module?").
+  rpc ListModuleHints(ListModuleHintsRequest) returns (ListModuleHintsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// Module is a module the server knows.
+message Module {
+  // id names the module, e.g. "nginx"; its metrics are sermon_<id>_….
+  string id = 1;
+  // schema_json is the JSON schema of its configuration (the subset of ADR 0039) for the form;
+  // labels come from the i18n texts module_<id>_<property>, the schema's title is the fallback.
+  string schema_json = 2;
+  // secret_fields are the properties marked writeOnly: credentials, never part of config_json.
+  repeated string secret_fields = 3;
+}
+
+// ModuleSetting is how one module runs on the nodes of a group.
+message ModuleSetting {
+  // module_id names the module.
+  string module_id = 1 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+  // enabled runs the module; a module that is off keeps its configuration.
+  bool enabled = 2;
+  // interval is how often the module collects, in whole seconds; unset takes its default.
+  google.protobuf.Duration interval = 3 [(buf.validate.field).duration = {
+    gte: {seconds: 10}
+    lte: {seconds: 3600}
+  }];
+  // config_json is the configuration as a JSON object following the module's schema, without
+  // credentials; empty is {}.
+  string config_json = 4 [(buf.validate.field).string.max_bytes = 16384];
+}
+
+// GroupModuleSettings are the module settings of one node group.
+message GroupModuleSettings {
+  // group_id is the node group.
+  string group_id = 1;
+  // group_name is its name.
+  string group_name = 2;
+  // modules are the modules set for the group, by ID; a module not listed is off.
+  repeated ModuleSetting modules = 3;
+  // available are the modules the agents of the group's nodes have built in: those the form
+  // offers (a release agent has no test module).
+  repeated string available = 4;
+}
+
+// ModuleState is how a module does on a node.
+enum ModuleState {
+  // MODULE_STATE_UNSPECIFIED: unknown.
+  MODULE_STATE_UNSPECIFIED = 0;
+  // MODULE_STATE_OK: the last run succeeded.
+  MODULE_STATE_OK = 1;
+  // MODULE_STATE_ERROR: the last run failed (the service refused, wrong credentials, …).
+  MODULE_STATE_ERROR = 2;
+  // MODULE_STATE_TIMEOUT: the last run took longer than its budget.
+  MODULE_STATE_TIMEOUT = 3;
+  // MODULE_STATE_HUNG: a run doesn't return; no new one starts until it does.
+  MODULE_STATE_HUNG = 4;
+  // MODULE_STATE_CRASHED: the module crashed; it starts again after a pause.
+  MODULE_STATE_CRASHED = 5;
+  // MODULE_STATE_INVALID_CONFIG: the agent refused the configuration (the reason says why).
+  MODULE_STATE_INVALID_CONFIG = 6;
+  // MODULE_STATE_VETOED: the node's agent.toml forbids it.
+  MODULE_STATE_VETOED = 7;
+}
+
+// ModuleHealth is the state of one module on a node, as its agent reported it.
+message ModuleHealth {
+  // module_id names the module.
+  string module_id = 1;
+  // state is how it does.
+  ModuleState state = 2;
+  // reason says why it doesn't run or failed; from the host: show as text only.
+  string reason = 3;
+  // last_success is when a run last succeeded, if ever.
+  google.protobuf.Timestamp last_success = 4;
+}
+
+// ModuleHint is a module the agent suggests for its host.
+message ModuleHint {
+  // module_id names the module.
+  string module_id = 1;
+  // reasons are what the agent saw: process:nginx, port:80, unit:nginx.service.
+  repeated string reasons = 2;
+  // suggested_config_json is a configuration to start the form with (checked against the
+  // schema); empty for none.
+  string suggested_config_json = 3;
+}
+
+// ListModulesRequest has no parameters.
+message ListModulesRequest {}
+
+// ListModulesResponse lists the modules.
+message ListModulesResponse {
+  // modules are the modules, by ID.
+  repeated Module modules = 1;
+}
+
+// GetModuleSettingsRequest has no parameters.
+message GetModuleSettingsRequest {}
+
+// GetModuleSettingsResponse holds the settings of the organization.
+message GetModuleSettingsResponse {
+  // groups are all node groups of the organization, by name.
+  repeated GroupModuleSettings groups = 1;
+  // version is the configuration version the agents get (ADR 0030).
+  uint64 version = 2;
+}
+
+// SetGroupModuleRequest sets a module of a group.
+message SetGroupModuleRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // setting is the module's new setting.
+  ModuleSetting setting = 2 [(buf.validate.field).required = true];
+}
+
+// SetGroupModuleResponse has no fields.
+message SetGroupModuleResponse {}
+
+// RemoveGroupModuleRequest names the group and the module.
+message RemoveGroupModuleRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // module_id names the module.
+  string module_id = 2 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+}
+
+// RemoveGroupModuleResponse has no fields.
+message RemoveGroupModuleResponse {}
+
+// GetNodeModulesRequest names the node.
+message GetNodeModulesRequest {
+  // node_id is the node.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// GetNodeModulesResponse is what a node has and reports.
+message GetNodeModulesResponse {
+  // group_id is the node's group, whose settings apply.
+  string group_id = 1;
+  // builtin are the modules its agent has built in (empty before its first connection).
+  repeated string builtin = 2;
+  // vetoed is set while the node's agent.toml forbids modules (allow_modules = false).
+  bool vetoed = 3;
+  // settings are the group's settings of the modules the agent has built in.
+  repeated ModuleSetting settings = 4;
+  // health is the state of each enabled module, by ID.
+  repeated ModuleHealth health = 5;
+  // health_collected_at is the agent's time of the health report; unset before the first.
+  google.protobuf.Timestamp health_collected_at = 6;
+  // hints are the agent's suggestions, by module.
+  repeated ModuleHint hints = 7;
+  // hints_collected_at is the agent's time of the suggestions; unset before the first.
+  google.protobuf.Timestamp hints_collected_at = 8;
+}
+
+// ListModuleHintsRequest has no parameters.
+message ListModuleHintsRequest {}
+
+// ListModuleHintsResponse lists the open suggestions.
+message ListModuleHintsResponse {
+  // hints are the suggestions by host name, at most 500.
+  repeated NodeModuleHint hints = 1;
+}
+
+// NodeModuleHint is a suggestion for one node.
+message NodeModuleHint {
+  // node_id is the node.
+  string node_id = 1;
+  // hostname is the node's name.
+  string hostname = 2;
+  // group_id is the node's group.
+  string group_id = 3;
+  // hint is the suggestion.
+  ModuleHint hint = 4;
+}

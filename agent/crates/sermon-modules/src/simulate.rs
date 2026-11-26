@@ -195,6 +195,7 @@ mod tests {
             assert_eq!(states[0].state, state, "{behavior}: {}", states[0].reason);
             let samples = out.samples.lock().unwrap().clone();
             if behavior == "ok" {
+                crate::assert_in_catalog("simulate", &samples);
                 assert_eq!(samples[0].value, Value::Int(7));
                 assert_eq!(samples[1].value, Value::Int(1), "the token arrived");
             } else {

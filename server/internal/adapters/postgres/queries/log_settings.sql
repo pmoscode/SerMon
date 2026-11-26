@@ -58,5 +58,5 @@ WHERE n.id = sqlc.arg(node_id);
 -- name: RecordAgentConfigApplied :execrows
 UPDATE nodes
 SET config_version = sqlc.arg(version), config_error = sqlc.narg(error), logs_vetoed = sqlc.arg(logs_vetoed),
-    config_reported_at = sqlc.arg(reported_at)
+    modules_vetoed = sqlc.arg(modules_vetoed), config_reported_at = sqlc.arg(reported_at)
 WHERE id = sqlc.arg(node_id);

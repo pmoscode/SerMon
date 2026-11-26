@@ -43,12 +43,16 @@ message MetricDefinition {
   repeated string labels = 3;
   // aggregation is what charts show for downsampled data: avg, max or last.
   string aggregation = 4;
-  // area groups the metric for the detail views: cpu, memory, disk, filesystem, network, system, agent.
+  // area groups the metric for the detail views: cpu, memory, disk, filesystem, network, system,
+  // agent, module.
   string area = 5;
   // display_key is the i18n message key of the display name.
   string display_key = 6;
   // help_key names the help text (docs/help/<lang>/<help_key>.md).
   string help_key = 7;
+  // module is the module that sends the metric (area module, ADR 0039); empty for the agent's
+  // own metrics.
+  string module = 8;
 }
 
 // MetricSelector selects series of one metric.

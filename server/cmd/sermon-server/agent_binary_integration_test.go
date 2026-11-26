@@ -391,3 +391,63 @@ func TestAgentBinary_SimulatesNodes(t *testing.T) {
 		t.Errorf("restart without token: %v\n%s", err, logs.String())
 	}
 }
+
+// TestAgentBinary_RunsTheModulesOfItsGroup (M5-06): the virtual nodes announce the module
+// simulate, take the group's setting from the server and run it: its health is stored and its
+// metric arrives.
+func TestAgentBinary_RunsTheModulesOfItsGroup(t *testing.T) {
+	bin := agentBinary(t)
+	srv := startTestServer(t, nil)
+	defer srv.stop()
+	const nodes = 2
+	org := seedEnrollmentTokenWithUses(t, nodes)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(context.Background()) }()
+	if _, err := conn.Exec(ctx, `INSERT INTO module_settings (org_id, group_id, module_id, enabled, config)
+		SELECT org_id, id, 'simulate', true, '{"value": 42}' FROM node_groups WHERE org_id = $1`, org); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	_, agentPort, _ := strings.Cut(srv.agent, ":")
+	config := filepath.Join(dir, "agent.toml")
+	toml := "[server]\nurl = \"http://" + srv.web + "\"\nagent_url = \"https://localhost:" + agentPort + "\"\n" +
+		"[paths]\nstate_dir = \"" + filepath.Join(dir, "state") + "\"\n"
+	if err := os.WriteFile(config, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	logs := &syncBuffer{}
+	simulate := exec.CommandContext(ctx, bin, "simulate", "--config", config, "--nodes", strconv.Itoa(nodes), "--seed", "7")
+	simulate.Env = append(os.Environ(), "SERMON_ENROLLMENT_TOKEN="+fixtureToken)
+	simulate.Stdout, simulate.Stderr = logs, logs
+	if err := simulate.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = simulate.Process.Kill() }()
+
+	var healthy, values, announced int
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := conn.QueryRow(ctx, `SELECT
+			(SELECT count(*) FROM module_health h JOIN nodes n ON n.id = h.node_id WHERE n.org_id = $1 AND h.module_id = 'simulate' AND h.state = 1),
+			(SELECT count(DISTINCT s.node_id) FROM series s JOIN metrics_raw r ON r.series_id = s.id WHERE s.org_id = $1 AND s.metric = 'sermon_simulate_value' AND r.max = 42),
+			(SELECT count(*) FROM nodes WHERE org_id = $1 AND 'simulate' = ANY (modules))`, org).Scan(&healthy, &values, &announced); err != nil {
+			t.Fatal(err)
+		}
+		if healthy == nodes && values == nodes {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if healthy != nodes || values != nodes || announced != nodes {
+		t.Fatalf("%d healthy, %d with the value, %d announced of %d nodes\nsimulator:\n%s\nserver:\n%s", healthy, values, announced, nodes, logs.String(), srv.logs.String())
+	}
+	if strings.Contains(srv.logs.String(), "unknown metric") {
+		t.Errorf("server dropped module metrics:\n%s", srv.logs.String())
+	}
+}

@@ -47,7 +47,7 @@ func (h *MetricsHandler) ListMetrics(context.Context, *connect.Request[webv1.Lis
 	for _, d := range metric.All() {
 		res.Metrics = append(res.Metrics, &webv1.MetricDefinition{
 			Name: d.Name, Unit: string(d.Unit), Labels: d.Labels, Aggregation: string(d.Aggregation), Area: string(d.Area),
-			DisplayKey: d.DisplayKey(), HelpKey: d.HelpKey(),
+			DisplayKey: d.DisplayKey(), HelpKey: d.HelpKey(), Module: d.Module,
 		})
 	}
 	return connect.NewResponse(res), nil

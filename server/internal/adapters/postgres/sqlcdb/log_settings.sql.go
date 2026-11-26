@@ -188,16 +188,17 @@ func (q *Queries) OrganizationAgentConfig(ctx context.Context) (OrganizationAgen
 const recordAgentConfigApplied = `-- name: RecordAgentConfigApplied :execrows
 UPDATE nodes
 SET config_version = $1, config_error = $2, logs_vetoed = $3,
-    config_reported_at = $4
-WHERE id = $5
+    modules_vetoed = $4, config_reported_at = $5
+WHERE id = $6
 `
 
 type RecordAgentConfigAppliedParams struct {
-	Version    int64
-	Error      pgtype.Text
-	LogsVetoed bool
-	ReportedAt *time.Time
-	NodeID     uuid.UUID
+	Version       int64
+	Error         pgtype.Text
+	LogsVetoed    bool
+	ModulesVetoed bool
+	ReportedAt    *time.Time
+	NodeID        uuid.UUID
 }
 
 func (q *Queries) RecordAgentConfigApplied(ctx context.Context, arg RecordAgentConfigAppliedParams) (int64, error) {
@@ -205,6 +206,7 @@ func (q *Queries) RecordAgentConfigApplied(ctx context.Context, arg RecordAgentC
 		arg.Version,
 		arg.Error,
 		arg.LogsVetoed,
+		arg.ModulesVetoed,
 		arg.ReportedAt,
 		arg.NodeID,
 	)

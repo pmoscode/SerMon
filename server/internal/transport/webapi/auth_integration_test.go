@@ -48,6 +48,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/app/modules"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/oidcmapping"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
@@ -58,6 +59,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/selfmonitor"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
 	"github.com/pmoscode/SerMon/server/internal/domain/alert"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
@@ -272,6 +274,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		OIDCMappings: webapi.NewOIDCMappingHandler(mappings, true, true, slog.New(slog.DiscardHandler)),
 		LogSettings: webapi.NewLogSettingsHandler(
 			logsettings.NewService(postgres.NewLogSettingsStore(pg), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
+		Modules: webapi.NewModuleHandler(
+			modules.NewService(postgres.NewModuleStore(pg), moduleCatalog(t), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
 		Rules: webapi.NewAlertRuleHandler(rules.NewService(rules.Deps{
 			Defaults: mustDefaultRules(t), Store: postgres.NewAlertRuleStore(pg), Policy: authz.NewPolicy(), Now: time.Now,
 		}), slog.New(slog.DiscardHandler)),
@@ -554,6 +558,15 @@ type noRules struct{}
 
 func (noRules) RuleInfos(context.Context, tenant.OrgID) (map[alert.RuleID]routing.RuleInfo, error) {
 	return nil, nil
+}
+
+func moduleCatalog(t *testing.T) *module.Catalog {
+	t.Helper()
+	c, err := module.Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func mustDefaultRules(t *testing.T) []ruleset.Definition {

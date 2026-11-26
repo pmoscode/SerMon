@@ -1,0 +1,6 @@
+{
+  "metrics": [
+    { "name": "sermon_simulate_value", "unit": "count", "aggregation": "last" },
+    { "name": "sermon_simulate_token", "unit": "boolean", "aggregation": "last" }
+  ]
+}

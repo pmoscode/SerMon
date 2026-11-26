@@ -119,12 +119,16 @@ type MetricDefinition struct {
 	Labels []string `protobuf:"bytes,3,rep,name=labels,proto3" json:"labels,omitempty"`
 	// aggregation is what charts show for downsampled data: avg, max or last.
 	Aggregation string `protobuf:"bytes,4,opt,name=aggregation,proto3" json:"aggregation,omitempty"`
-	// area groups the metric for the detail views: cpu, memory, disk, filesystem, network, system, agent.
+	// area groups the metric for the detail views: cpu, memory, disk, filesystem, network, system,
+	// agent, module.
 	Area string `protobuf:"bytes,5,opt,name=area,proto3" json:"area,omitempty"`
 	// display_key is the i18n message key of the display name.
 	DisplayKey string `protobuf:"bytes,6,opt,name=display_key,json=displayKey,proto3" json:"display_key,omitempty"`
 	// help_key names the help text (docs/help/<lang>/<help_key>.md).
-	HelpKey       string `protobuf:"bytes,7,opt,name=help_key,json=helpKey,proto3" json:"help_key,omitempty"`
+	HelpKey string `protobuf:"bytes,7,opt,name=help_key,json=helpKey,proto3" json:"help_key,omitempty"`
+	// module is the module that sends the metric (area module, ADR 0039); empty for the agent's
+	// own metrics.
+	Module        string `protobuf:"bytes,8,opt,name=module,proto3" json:"module,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -204,6 +208,13 @@ func (x *MetricDefinition) GetDisplayKey() string {
 func (x *MetricDefinition) GetHelpKey() string {
 	if x != nil {
 		return x.HelpKey
+	}
+	return ""
+}
+
+func (x *MetricDefinition) GetModule() string {
+	if x != nil {
+		return x.Module
 	}
 	return ""
 }
@@ -636,7 +647,7 @@ const file_sermon_web_v1_metrics_proto_rawDesc = "" +
 	"\x1bsermon/web/v1/metrics.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x14\n" +
 	"\x12ListMetricsRequest\"P\n" +
 	"\x13ListMetricsResponse\x129\n" +
-	"\ametrics\x18\x01 \x03(\v2\x1f.sermon.web.v1.MetricDefinitionR\ametrics\"\xc4\x01\n" +
+	"\ametrics\x18\x01 \x03(\v2\x1f.sermon.web.v1.MetricDefinitionR\ametrics\"\xdc\x01\n" +
 	"\x10MetricDefinition\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04unit\x18\x02 \x01(\tR\x04unit\x12\x16\n" +
@@ -645,7 +656,8 @@ const file_sermon_web_v1_metrics_proto_rawDesc = "" +
 	"\x04area\x18\x05 \x01(\tR\x04area\x12\x1f\n" +
 	"\vdisplay_key\x18\x06 \x01(\tR\n" +
 	"displayKey\x12\x19\n" +
-	"\bhelp_key\x18\a \x01(\tR\ahelpKey\"\xa5\x02\n" +
+	"\bhelp_key\x18\a \x01(\tR\ahelpKey\x12\x16\n" +
+	"\x06module\x18\b \x01(\tR\x06module\"\xa5\x02\n" +
 	"\x0eMetricSelector\x128\n" +
 	"\x06metric\x18\x01 \x01(\tB \xbaH\x1dr\x1b2\x19^sermon_[a-z0-9_]{1,120}$R\x06metric\x12.\n" +
 	"\bnode_ids\x18\x02 \x03(\tB\x13\xbaH\x10\x92\x01\r\b\x01\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\x12n\n" +

@@ -43,7 +43,18 @@ pub trait Instance: Send + 'static {
    on `Listener::reach()`). Test with the recorded hosts in `agent/fixtures/discovery/` and fake `HostFacts`.
 7. **Fuzz** every parser of foreign text in `agent/fuzz/fuzz_targets/module_parsers.rs` (first byte picks the parser)
    and seed it from the fixtures in `agent/fuzz/seed.sh`.
-8. **Server:** add metrics to the catalog, a module detail page/tab in the UI, help texts `docs/help/{de,en}/modules/<module>.md`.
+8. **Server:** the server knows a module from two files next to its code, copied by `just gen` (`gen-modules`) and
+   checked by `just check-gen` – never edit the copies:
+   - `schemas/<id>.json` → `server/internal/domain/module/schemas/`: the form, the server's check of a group's
+     configuration (`module.Schema`, the same subset as `src/schema.rs`; both run `testdata/schema-vectors.json` –
+     a new rule of the subset gets cases there) and the modules offered for a node (`Hello.modules`).
+   - `metrics/<id>.json` → `server/internal/domain/metric/modules/`: the module's metrics, which the ingest drops
+     otherwise: `{"metrics": [{"name": "sermon_<id>_…", "unit": "count", "aggregation": "last", "labels": ["…"]}]}`
+     (units and aggregations of `metric.Unit`/`metric.Aggregation`, at most 8 labels, area `module`). In the module's
+     tests call `crate::assert_in_catalog("<id>", &samples)`; `TestCatalog_ModuleMetrics` checks the file.
+   - Help texts `docs/help/{de,en}/metrics/<metric>.md` for every metric (`TestCatalog_EveryMetricHasHelpTexts`) and
+     `docs/help/{de,en}/modules/<module>.md`, labels of the form fields `module_<id>_<field>` (DE + EN), the module's
+     tab in the UI shows its health and metrics.
 9. **Default alerts** for the module via `sermon-add-alert-rule` (selector: nodes where module enabled).
 10. **E2E:** add the service container to the E2E compose and a test that enables the module and sees metrics.
 

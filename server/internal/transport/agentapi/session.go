@@ -23,6 +23,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/ingest"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
@@ -412,7 +413,7 @@ func (h *SessionHandler) Session(ctx context.Context, stream *connect.BidiStream
 		return err //nolint:wrapcheck // connect errors must reach the client unchanged
 	}
 	defer h.logger.InfoContext(ctx, "agent disconnected", "org", id.Org.String(), "node", id.Node.String())
-	config := &configState{agent: hello.GetConfigVersion()}
+	config := h.newConfigState(ctx, id, hello)
 	if err := h.sendConfig(ctx, id, config, stream); err != nil {
 		return err
 	}
@@ -652,9 +653,11 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		}
 		return batch
 	}
-	// The modules' batches are stored from M5-06 on; until then acknowledged, not metrics.
-	if b.GetModuleHealth() != nil || b.GetDiscoveryHints() != nil {
-		return ingest.Batch{Seq: b.GetSeq(), Unhandled: true}
+	if r := b.GetModuleHealth(); r != nil {
+		return ingest.Batch{Seq: b.GetSeq(), ModuleHealth: toHealth(r)}
+	}
+	if h := b.GetDiscoveryHints(); h != nil {
+		return ingest.Batch{Seq: b.GetSeq(), ModuleHints: toHints(h)}
 	}
 	if logs := b.GetLogs(); logs != nil {
 		batch := ingest.Batch{Seq: b.GetSeq(), Logs: make([]ingest.LogEntry, 0, len(logs.GetEntries()))}
@@ -673,6 +676,30 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		batch.Samples = append(batch.Samples, ingest.Sample{Metric: sample.GetMetric(), Labels: sample.GetLabels(), Value: value})
 	}
 	return batch
+}
+
+// toHealth converts a validated health report of the modules (ADR 0039); the ingest normalizes
+// it.
+func toHealth(r *agentv1.ModuleHealthReport) *module.HealthReport {
+	out := &module.HealthReport{CollectedAt: r.GetCollectedAt().AsTime()}
+	for _, m := range r.GetModules() {
+		h := module.Health{Module: m.GetModuleId(), State: module.State(min(max(m.GetState(), 0), 255)), Reason: m.GetReason()} // the schema allows the defined states only
+		if m.GetLastSuccess() != nil {
+			at := m.GetLastSuccess().AsTime()
+			h.LastSuccess = &at
+		}
+		out.Modules = append(out.Modules, h)
+	}
+	return out
+}
+
+// toHints converts validated discovery hints; the ingest checks the suggestions.
+func toHints(h *agentv1.DiscoveryHints) *module.Hints {
+	out := &module.Hints{CollectedAt: h.GetCollectedAt().AsTime()}
+	for _, hint := range h.GetHints() {
+		out.Hints = append(out.Hints, module.Hint{Module: hint.GetModuleId(), Reasons: hint.GetReasons(), Suggested: hint.GetSuggestedConfigJson()})
+	}
+	return out
 }
 
 // toReport converts a validated update report (M4-09); the ingest normalizes it.

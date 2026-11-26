@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 )
 
 // Severity is the syslog priority as in the protocol: 1 emergency … 8 debug; 0 is unspecified
@@ -73,6 +75,9 @@ type NodeConfig struct {
 	Version  uint64
 	Settings Settings
 	Rules    []Rule
+	// Modules are the module settings of the node's group (ADR 0039); the session keeps those
+	// the agent has built in.
+	Modules []module.Setting
 }
 
 // Applied is an agent's answer to a configuration.
@@ -81,7 +86,9 @@ type Applied struct {
 	// Error says why the agent kept its previous configuration; empty if it took the new one.
 	Error      string
 	LogsVetoed bool
-	At         time.Time
+	// ModulesVetoed: agent.toml forbids modules (ADR 0039).
+	ModulesVetoed bool
+	At            time.Time
 }
 
 // ErrInvalid marks settings or rules the server does not accept.

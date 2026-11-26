@@ -6,10 +6,12 @@ import (
 	"unicode/utf8"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logconfig"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
@@ -20,6 +22,9 @@ import (
 type AgentConfigs interface {
 	ForNode(ctx context.Context, org tenant.OrgID, node identity.NodeID) (logconfig.NodeConfig, error)
 	Applied(ctx context.Context, org tenant.OrgID, node identity.NodeID, applied logconfig.Applied) error
+	// Announced stores the modules the agent has built in (Hello.modules, ADR 0039) and reports
+	// whether they differ from the stored ones.
+	Announced(ctx context.Context, org tenant.OrgID, node identity.NodeID, modules []string) (bool, error)
 }
 
 // WithAgentConfig sends the server's configuration to the agents (M3-03); without it they keep
@@ -48,8 +53,27 @@ func (s *Sessions) ConfigChanged(org tenant.OrgID) {
 
 // configState is what a session knows about the agent's configuration.
 type configState struct {
-	agent uint64 // the version from the Hello
-	sent  uint64 // the version last sent in this session
+	agent   uint64   // the version from the Hello
+	sent    uint64   // the version last sent in this session
+	modules []string // the modules the agent has built in (Hello)
+}
+
+// newConfigState records what the Hello says. An agent with other modules built in than before
+// (an update) gets its configuration again, of the same version too: the server left out what
+// it couldn't run (ADR 0039).
+func (h *SessionHandler) newConfigState(ctx context.Context, id Identity, hello *agentv1.Hello) *configState {
+	state := &configState{agent: hello.GetConfigVersion(), modules: hello.GetModules()}
+	if h.configs == nil {
+		return state
+	}
+	changed, err := h.configs.Announced(ctx, id.Org, id.Node, state.modules)
+	if err != nil {
+		h.logger.WarnContext(ctx, "record built-in modules failed", "node", id.Node.String(), "error", err)
+	}
+	if changed {
+		state.agent = 0
+	}
+	return state
 }
 
 // sendConfig sends the node's configuration if its version is neither the agent's nor the one
@@ -67,7 +91,7 @@ func (h *SessionHandler) sendConfig(ctx context.Context, id Identity, state *con
 	if config.Version == state.agent || config.Version == state.sent {
 		return nil
 	}
-	if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_ConfigUpdate{ConfigUpdate: configUpdate(config)}}); err != nil {
+	if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_ConfigUpdate{ConfigUpdate: configUpdate(config, state.modules)}}); err != nil {
 		return err //nolint:wrapcheck // connect errors must reach the client unchanged
 	}
 	state.sent = config.Version
@@ -82,7 +106,7 @@ func (h *SessionHandler) recordApplied(ctx context.Context, id Identity, applied
 	}
 	answer := logconfig.Applied{
 		Version: applied.GetVersion(), Error: cutUTF8(textsafe.Visible(applied.GetError()), logconfig.MaxErrorBytes),
-		LogsVetoed: applied.GetLogsVetoed(), At: time.Now(),
+		LogsVetoed: applied.GetLogsVetoed(), ModulesVetoed: applied.GetModulesVetoed(), At: time.Now(),
 	}
 	if answer.Error != "" {
 		h.logger.WarnContext(ctx, "agent rejected its config", "node", id.Node.String(), "version", answer.Version, "error", answer.Error)
@@ -92,7 +116,7 @@ func (h *SessionHandler) recordApplied(ctx context.Context, id Identity, applied
 	}
 }
 
-func configUpdate(c logconfig.NodeConfig) *agentv1.ConfigUpdate {
+func configUpdate(c logconfig.NodeConfig, builtin []string) *agentv1.ConfigUpdate {
 	logs := &agentv1.LogConfig{
 		Enabled:      c.Settings.Enabled,
 		MinSeverity:  agentv1.LogSeverity(c.Settings.MinSeverity), // same codes (logconfig.Severity)
@@ -104,6 +128,13 @@ func configUpdate(c logconfig.NodeConfig) *agentv1.ConfigUpdate {
 	config := &agentv1.AgentConfig{Logs: logs}
 	for _, r := range c.Rules {
 		config.RedactionRules = append(config.RedactionRules, &agentv1.RedactionRule{Pattern: r.Pattern})
+	}
+	for _, m := range module.ForAgent(c.Modules, builtin) {
+		mc := &agentv1.ModuleConfig{Id: m.Module, Enabled: m.Enabled, ConfigJson: m.Config}
+		if m.Interval > 0 {
+			mc.Interval = durationpb.New(m.Interval)
+		}
+		config.Modules = append(config.Modules, mc)
 	}
 	return &agentv1.ConfigUpdate{Version: c.Version, Config: config}
 }

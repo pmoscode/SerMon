@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
@@ -110,5 +111,49 @@ func TestCatalog_AnomalyCandidates(t *testing.T) {
 	}
 	if rate, ok := metric.Lookup("sermon_anomaly_rate_ratio"); !ok || !rate.Server || rate.Anomaly != nil {
 		t.Errorf("rate = %+v", rate)
+	}
+}
+
+// ADR 0039: the modules' metrics come from their catalog files (agent/crates/sermon-modules/metrics,
+// copied by just gen), named after the module, in the area of the modules.
+func TestCatalog_ModuleMetrics(t *testing.T) {
+	if errs := metric.ModuleErrors(); len(errs) > 0 {
+		t.Fatalf("module catalogs: %v", errs)
+	}
+	for _, name := range []string{"sermon_simulate_value", "sermon_simulate_token"} {
+		d, ok := metric.Lookup(name)
+		if !ok || d.Module != "simulate" || d.Area != metric.AreaModule || len(d.Labels) != 0 || d.Server {
+			t.Errorf("%s = %+v, %v", name, d, ok)
+		}
+	}
+	for _, d := range metric.All() {
+		if (d.Module != "") != (d.Area == metric.AreaModule) {
+			t.Errorf("%s: module %q in area %q", d.Name, d.Module, d.Area)
+		}
+		if d.Module != "" && !strings.HasPrefix(d.Name, "sermon_"+d.Module+"_") {
+			t.Errorf("%s: not named after module %s", d.Name, d.Module)
+		}
+	}
+}
+
+func TestCatalog_ModuleFilesAreChecked(t *testing.T) {
+	for _, tc := range []struct{ file, content, why string }{
+		{"nginx.json", `{"metrics":[{"name":"sermon_other_x","unit":"count","aggregation":"last"}]}`, "named"},
+		{"nginx.json", `{"metrics":[{"name":"sermon_nginx_x","unit":"furlongs","aggregation":"last"}]}`, "unit"},
+		{"nginx.json", `{"metrics":[{"name":"sermon_nginx_x","unit":"count","aggregation":"sum"}]}`, "aggregation"},
+		{"nginx.json", `{"metrics":[{"name":"sermon_nginx_x","unit":"count","aggregation":"last","labels":["Bad"]}]}`, "label"},
+		{"nginx.json", `{"metrics":[{"name":"sermon_nginx_x","unit":"count","aggregation":"last","extra":1}]}`, "unknown field"},
+		{"nginx.json", `{"metrics":[{"name":"sermon_cpu_logical_count","unit":"count","aggregation":"last"}]}`, "named"},
+		{"Nginx.json", `{"metrics":[]}`, "module id"},
+		{"nginx.json", `{"metrics":[{"name":"sermon_nginx_x","unit":"count","aggregation":"last"},{"name":"sermon_nginx_x","unit":"count","aggregation":"last"}]}`, "twice"},
+	} {
+		_, err := metric.ParseModuleCatalog(tc.file, []byte(tc.content))
+		if err == nil || !strings.Contains(err.Error(), tc.why) {
+			t.Errorf("%s %s: %v, want %q", tc.file, tc.content, err, tc.why)
+		}
+	}
+	defs, err := metric.ParseModuleCatalog("nginx.json", []byte(`{"metrics":[{"name":"sermon_nginx_requests_per_second","unit":"per_second","aggregation":"avg","labels":["zone","host"]}]}`))
+	if err != nil || len(defs) != 1 || defs[0].Labels[0] != "host" || defs[0].Module != "nginx" {
+		t.Errorf("%+v, %v", defs, err)
 	}
 }

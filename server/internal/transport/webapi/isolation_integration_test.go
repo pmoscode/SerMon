@@ -120,6 +120,7 @@ type loggedIn struct {
 	windows        webv1connect.MaintenanceWindowServiceClient
 	policy         webv1connect.SecurityPolicyServiceClient
 	logSettings    webv1connect.LogSettingsServiceClient
+	modules        webv1connect.ModuleServiceClient
 	logs           webv1connect.LogServiceClient
 	liveView       webv1connect.LiveViewServiceClient
 	oidcMappings   webv1connect.OidcMappingServiceClient
@@ -157,6 +158,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		windows:        webv1connect.NewMaintenanceWindowServiceClient(hc, s.server.URL),
 		policy:         webv1connect.NewSecurityPolicyServiceClient(hc, s.server.URL),
 		logSettings:    webv1connect.NewLogSettingsServiceClient(hc, s.server.URL),
+		modules:        webv1connect.NewModuleServiceClient(hc, s.server.URL),
 		logs:           webv1connect.NewLogServiceClient(hc, s.server.URL),
 		liveView:       webv1connect.NewLiveViewServiceClient(hc, s.server.URL),
 		oidcMappings:   webv1connect.NewOidcMappingServiceClient(hc, s.server.URL),
@@ -174,12 +176,13 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	seedAccessFixtures(t)
 	seedChannelAlpha(t)
 	seedLogAlpha(t)
+	seedModulesAlpha(t)
 	bea := login(t, s, "bea@example.org")
 	env := isolationEnv{
 		auth: bea.auth, access: bea.access, invitation: bea.invitation, organization: bea.organization, enrollment: bea.enrollment, node: bea.node, agentCA: bea.agentCA,
 		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, updates: bea.updates, anomalies: bea.anomalies, capacity: bea.capacity, heatmap: bea.heatmap, updatePolicies: bea.updatePolicies, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
-		logSettings: bea.logSettings, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
+		logSettings: bea.logSettings, modules: bea.modules, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
 		dashboards: bea.dashboards, dashboardA: dashAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl, runA: runAl,
@@ -261,6 +264,13 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM log_settings WHERE org_id = $1", orgAlpha).Scan(&alphaLogSettings)
 	if alphaLogSettings != 0 {
 		t.Errorf("Beta wrote %d log settings for Alpha's groups", alphaLogSettings)
+	}
+	var alphaModules, alphaHints int
+	var alphaConfig string
+	_ = conn.QueryRow(ctx, "SELECT count(*), max(config::text) FROM module_settings WHERE org_id = $1", orgAlpha).Scan(&alphaModules, &alphaConfig)
+	_ = conn.QueryRow(ctx, "SELECT count(*) FROM module_hints WHERE org_id = $1", orgAlpha).Scan(&alphaHints)
+	if alphaModules != 1 || alphaConfig != `{"value": 3}` || alphaHints != 1 {
+		t.Errorf("Alpha's modules changed: %d settings (%s), %d hints", alphaModules, alphaConfig, alphaHints)
 	}
 	var alphaAcked int
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM alert_instances WHERE org_id = $1 AND ack_by IS NOT NULL", orgAlpha).Scan(&alphaAcked)
@@ -389,6 +399,21 @@ func TestAccessAPI_SwitchOrganizationChangesTheActiveOrganization(t *testing.T) 
 }
 
 // seedLogAlpha writes a log line of Alpha's node to Loki (M3-08): a leaking query would find it.
+// seedModulesAlpha gives Alpha's group a module and its node a health report and a hint.
+func seedModulesAlpha(t *testing.T) {
+	t.Helper()
+	ownerSQL(t,
+		"SELECT set_config('sermon.org_id', '"+orgAlpha+"', false)",
+		"DELETE FROM module_settings WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO module_settings (org_id, group_id, module_id, enabled, config) VALUES ('"+orgAlpha+"', '"+groupAl+"', 'simulate', true, '{\"value\": 3}')",
+		"UPDATE nodes SET modules = '{simulate,nginx}' WHERE id = '"+nodeAl+"'",
+		"DELETE FROM module_hints WHERE node_id = '"+nodeAl+"'",
+		"INSERT INTO module_hints (org_id, node_id, module_id, reasons, collected_at, received_at) VALUES ('"+orgAlpha+"', '"+nodeAl+"', 'nginx', '{process:alpha-nginx}', now(), now())",
+		"DELETE FROM module_health WHERE node_id = '"+nodeAl+"'",
+		"INSERT INTO module_health (org_id, node_id, module_id, state, reason, collected_at, received_at) VALUES ('"+orgAlpha+"', '"+nodeAl+"', 'simulate', 2, 'alpha reason', now(), now())",
+	)
+}
+
 func seedLogAlpha(t *testing.T) {
 	t.Helper()
 	writeLogAlpha(t, ingest.LogEntry{At: time.Now().Add(-time.Minute), Source: ingest.LogSourceJournal, Unit: "nginx.service", Severity: 4, Message: "alpha secret line"})

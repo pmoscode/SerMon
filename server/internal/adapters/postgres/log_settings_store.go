@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -170,10 +171,42 @@ func (s *LogSettingsStore) ForNode(ctx context.Context, org tenant.OrgID, node i
 		if config.Rules, err = decodeRules(row.RedactionRules); err != nil {
 			return err
 		}
-		config.Settings, _, err = decodeSettings(row.Settings)
-		return err
+		if config.Settings, _, err = decodeSettings(row.Settings); err != nil {
+			return err
+		}
+		modules, err := q.ModuleSettingsForNode(ctx, uuid.UUID(node))
+		if err != nil {
+			return fmt.Errorf("module settings: %w", err)
+		}
+		for _, m := range modules {
+			config.Modules = append(config.Modules, settingFrom(m.ModuleID, m.Enabled, m.IntervalSeconds, m.Config))
+		}
+		return nil
 	})
 	return config, wrap(err, "agent config")
+}
+
+// Announced stores the modules the node's agent has built in (Hello.modules, ADR 0039) and
+// reports whether they differ from those stored before (as a set).
+func (s *LogSettingsStore) Announced(ctx context.Context, org tenant.OrgID, node identity.NodeID, builtin []string) (bool, error) {
+	scope, err := tenant.ForAllGroups(org)
+	if err != nil {
+		return false, fmt.Errorf("record modules: %w", err)
+	}
+	sorted := slices.Sorted(slices.Values(builtin))
+	var changed bool
+	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		before, err := q.SetNodeModules(ctx, sqlcdb.SetNodeModulesParams{Modules: sorted, NodeID: uuid.UUID(node)})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return access.ErrNotFound
+		}
+		if err != nil {
+			return err //nolint:wrapcheck // wrapped below
+		}
+		changed = !slices.Equal(slices.Sorted(slices.Values(before)), sorted)
+		return nil
+	})
+	return changed, wrap(err, "record modules")
 }
 
 // Applied records an agent's answer to a configuration.
@@ -185,11 +218,12 @@ func (s *LogSettingsStore) Applied(ctx context.Context, org tenant.OrgID, node i
 	return wrap(s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		at := applied.At
 		_, err := q.RecordAgentConfigApplied(ctx, sqlcdb.RecordAgentConfigAppliedParams{
-			Version:    int64(min(applied.Version, 1<<62)),
-			Error:      pgtype.Text{String: applied.Error, Valid: applied.Error != ""},
-			LogsVetoed: applied.LogsVetoed,
-			ReportedAt: &at,
-			NodeID:     uuid.UUID(node),
+			Version:       int64(min(applied.Version, 1<<62)),
+			Error:         pgtype.Text{String: applied.Error, Valid: applied.Error != ""},
+			LogsVetoed:    applied.LogsVetoed,
+			ModulesVetoed: applied.ModulesVetoed,
+			ReportedAt:    &at,
+			NodeID:        uuid.UUID(node),
 		})
 		return err //nolint:wrapcheck // wrapped below
 	}), "record config applied")

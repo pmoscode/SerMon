@@ -5340,7 +5340,35 @@ Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
   Node oder eine andere Org kann nicht entschlüsseln; Rotation.
 - **Abhängig von:** M5-02
 
-#### ☐ M5-06 – Module im Server · S · L 🔒
+#### ☑ M5-06 – Module im Server · S · L 🔒
+> Erledigt (`server/internal/domain/module`, `app/modules`, `ModuleService`; Nachtrag in ADR 0039):
+> - **Einstellungen je Gruppe** in `module_settings` (RLS, Migration 00057): an/aus, Intervall 10 s bis 1 h in ganzen
+>   Sekunden, Konfiguration als geprüftes JSON ohne Zugangsdaten und Vorgaben, höchstens 32 Module je Gruppe. Ändern
+>   nur Admins für alle Gruppen (`manage_modules`) mit Step-up und Audit (Modul, an/aus, Intervall); jede Änderung
+>   erhöht den Zähler der Org (ADR 0030) und erreicht die verbundenen Agents sofort.
+> - **Prüfung:** die Teilmenge des Agents in Go, beide mit denselben Testfällen
+>   (`agent/crates/sermon-modules/testdata/schema-vectors.json`, 35 Schema- und 41 Konfigurationsfälle, dieselben
+>   Gründe); ein Geheimnis in der Konfiguration abgelehnt (M5-05 bringt die Zugangsdaten). Die Schemas kopiert
+>   `just gen` aus dem Agent (`gen-modules`, von `just check-gen` geprüft).
+> - **Zustellung:** `Hello.modules` wird am Node gespeichert; ein Node bekommt nur die Module seiner Gruppe, die sein
+>   Agent eingebaut hat, bei anderen eingebauten Modulen (Update) dieselbe Version erneut. `ConfigApplied.modules_vetoed`
+>   steht am Node.
+> - **Gesundheit und Discovery-Hinweise** (`module_health`, `module_hints`, RLS): der neueste Bericht je Node ersetzt den
+>   vorigen, geschrieben beim Flush (kein Schreiben je Batch), quittiert in Reihenfolge; unbekannte Module fallen weg,
+>   Gründe durch `textsafe` (256 Byte), Vorschläge gegen das Schema geprüft, falsche Uhrzeit verworfen.
+> - **RPCs** (`sermon.web.v1.ModuleService`): Module mit Schema und Geheimnis-Feldern; Einstellungen aller Gruppen mit
+>   den dort eingebauten Modulen (Admins); setzen und entfernen (Step-up); Module eines Nodes (eingebaut, Einstellung,
+>   Gesundheit, Hinweise) und offene Hinweise der Fleet für Viewer ihrer Gruppen. In den Tabellen für Mandantentrennung
+>   und Step-up.
+> - **Katalog der Modulmetriken:** `agent/crates/sermon-modules/metrics/<id>.json`, von `just gen` in den Server
+>   kopiert und in den Katalog aufgenommen (Bereich `module`, `MetricDefinition.module`); ein Agent-Test prüft die
+>   Samples gegen die Datei (`assert_in_catalog`). `simulate` bringt `sermon_simulate_value` und
+>   `sermon_simulate_token` mit Hilfetexten; der Weg steht im Skill `sermon-add-module` (Schritt 8).
+> - Tests: Schema-Fälle in Rust und Go, Fuzz-Ziel; Dienst (Rechte, Step-up, Prüfung, nur Eingebautes), Ingest
+>   (neuester Bericht, Flush, Zeitfenster, Fehler), Session (nur eingebaute Module, erneute Zustellung, Veto),
+>   Store-Integration (eine Gruppe erreicht nur ihre Nodes, 32 Module, RLS: Isolation, Schreibschutz, ohne Tenant
+>   nichts), Web-API-Integration; `just e2e-agent`: virtuelle Nodes übernehmen die Einstellung, melden `ok` und liefern
+>   `sermon_simulate_value`. Gegenproben 22/22.
 - **Ziel:** Konfiguration je Gruppe (Tabelle mit RLS, Audit), Prüfung gegen das Schema, Zustellung über `ConfigUpdate`;
   Gesundheit und Discovery-Hinweise der Nodes speichern; RPCs (Liste der Module mit Schema, Konfiguration lesen und
   setzen, Hinweise und Gesundheit eines Nodes) mit Rechten und Step-up für Änderungen; Katalog der Modulmetriken.

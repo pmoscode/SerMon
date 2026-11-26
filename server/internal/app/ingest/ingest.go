@@ -30,6 +30,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/update"
@@ -181,6 +182,8 @@ type Stats struct {
 	UpdateReports, UpdateReportsDropped, UpdateReportsRejected, UpdateReportsStale atomic.Uint64
 	// Command results (M4-11): stored, and those of no run of the node or after its final phase.
 	CommandResults, CommandResultsIgnored atomic.Uint64
+	// Module health reports and discovery hints (M5-06): stored, and rejected (time, no store).
+	ModuleReports, ModuleReportsRejected atomic.Uint64
 	// LagMillis is the delay of the latest batch (server time − collection time).
 	LagMillis atomic.Int64
 	// droppedKinds counts the events dropped by the buckets per kind (index in secevent.Kinds).
@@ -250,6 +253,8 @@ type Service struct {
 
 	updates          UpdateWriter
 	results          ResultWriter
+	modules          ModuleWriter
+	catalog          *module.Catalog
 	nodeUpdateBucket map[identity.NodeID]*bucket
 	orgUpdateBucket  map[tenant.OrgID]*bucket
 
@@ -302,6 +307,19 @@ func (s *Service) SetResultWriter(w ResultWriter) { s.results = w }
 // SetUpdateWriter stores update reports through w (M4-09); without one they are acknowledged and
 // dropped.
 func (s *Service) SetUpdateWriter(w UpdateWriter) { s.updates = w }
+
+// ModuleWriter stores what the agents report about their modules (M5-06, ADR 0039): the newest
+// report replaces the node's previous one.
+type ModuleWriter interface {
+	WriteModuleHealth(ctx context.Context, org tenant.OrgID, node identity.NodeID, r module.HealthReport, receivedAt time.Time) error
+	WriteModuleHints(ctx context.Context, org tenant.OrgID, node identity.NodeID, h module.Hints, receivedAt time.Time) error
+}
+
+// SetModuleWriter stores module health and discovery hints through w, keeping the entries of
+// the modules in catalog; without one they are acknowledged and dropped.
+func (s *Service) SetModuleWriter(w ModuleWriter, catalog *module.Catalog) {
+	s.modules, s.catalog = w, catalog
+}
 
 // admitUpdate spends a report of the node's and the organization's buckets; false if either is
 // empty (then neither is charged).
@@ -436,6 +454,9 @@ type Batch struct {
 	Update *update.Report
 	// Result is the agent's phase of a command's run (M4-11).
 	Result *Result
+	// ModuleHealth and ModuleHints are the agent's reports about its modules (M5-06).
+	ModuleHealth *module.HealthReport
+	ModuleHints  *module.Hints
 	// Unhandled is a batch the server takes but doesn't use: acknowledged in order, nothing stored.
 	Unhandled bool
 }
@@ -500,7 +521,10 @@ type Session struct {
 	// the latest window they were written for (M4-16).
 	gauge       *update.Gauge
 	gaugeWindow time.Time
-	results     []Result   // waiting for the next flush
+	results     []Result // waiting for the next flush
+	// health and hints are the newest module reports waiting for the next flush (M5-06).
+	health      *module.HealthReport
+	hints       *module.Hints
 	logs        []logBatch // waiting for the next flush
 	logsFailing time.Time  // since when the store fails for the waiting logs
 }
@@ -632,6 +656,11 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
 		return Response{}
 	}
+	if batch.ModuleHealth != nil || batch.ModuleHints != nil {
+		s.acceptModules(batch, now)
+		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
+		return Response{}
+	}
 	if batch.Unhandled {
 		s.pending = append(s.pending, pendingBatch{seq: batch.Seq, end: s.written})
 		return Response{}
@@ -759,6 +788,54 @@ func (s *Session) acceptUpdate(r update.Report, now time.Time) {
 	s.update = &normalized
 }
 
+// acceptModules keeps a report within the time window for the next flush, the newest one if
+// several arrive in between: the flush writes it, an agent can't make the server write on every
+// batch.
+func (s *Session) acceptModules(batch Batch, now time.Time) {
+	stats := &s.service.stats
+	config := s.service.config
+	inWindow := func(at time.Time) bool {
+		return s.service.modules != nil && !at.After(now.Add(config.MaxFuture)) && !at.Before(now.Add(-config.MaxAge))
+	}
+	if r := batch.ModuleHealth; r != nil {
+		if !inWindow(r.CollectedAt) {
+			stats.ModuleReportsRejected.Add(1)
+		} else {
+			normalized := r.Normalized(s.service.catalog)
+			s.health = &normalized
+		}
+	}
+	if h := batch.ModuleHints; h != nil {
+		if !inWindow(h.CollectedAt) {
+			stats.ModuleReportsRejected.Add(1)
+		} else {
+			normalized := h.Normalized(s.service.catalog)
+			s.hints = &normalized
+		}
+	}
+}
+
+// flushModules writes the waiting module reports; a failed one stays for the next flush.
+func (s *Session) flushModules(ctx context.Context) error {
+	if s.health != nil {
+		if err := s.service.modules.WriteModuleHealth(ctx, s.org, s.node, *s.health, s.service.now()); err != nil {
+			s.service.stats.WriteErrors.Add(1)
+			return fmt.Errorf("flush module health: %w", err)
+		}
+		s.service.stats.ModuleReports.Add(1)
+		s.health = nil
+	}
+	if s.hints != nil {
+		if err := s.service.modules.WriteModuleHints(ctx, s.org, s.node, *s.hints, s.service.now()); err != nil {
+			s.service.stats.WriteErrors.Add(1)
+			return fmt.Errorf("flush module hints: %w", err)
+		}
+		s.service.stats.ModuleReports.Add(1)
+		s.hints = nil
+	}
+	return nil
+}
+
 // Flush writes the complete windows and returns the sequence number to acknowledge (0: none).
 // On a write error nothing is acknowledged and everything is kept for the next attempt.
 func (s *Session) Flush(ctx context.Context) (uint64, error) {
@@ -805,6 +882,10 @@ func (s *Session) Flush(ctx context.Context) (uint64, error) {
 			s.service.stats.CommandResultsIgnored.Add(1)
 		}
 		s.results = s.results[1:]
+	}
+	// Module reports like the update report.
+	if err := s.flushModules(ctx); err != nil {
+		return 0, err
 	}
 	// Logs next: while the store fails they wait, and so does the acknowledgement of the batches
 	// from theirs on – at most LogRetryFor (ADR 0031).

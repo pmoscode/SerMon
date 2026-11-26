@@ -256,6 +256,38 @@ type MetricsRaw struct {
 	Max      float64
 }
 
+type ModuleHealth struct {
+	OrgID       uuid.UUID
+	NodeID      uuid.UUID
+	ModuleID    string
+	State       int16
+	Reason      string
+	LastSuccess *time.Time
+	CollectedAt time.Time
+	ReceivedAt  time.Time
+}
+
+type ModuleHint struct {
+	OrgID       uuid.UUID
+	NodeID      uuid.UUID
+	ModuleID    string
+	Reasons     []string
+	Suggested   []byte
+	CollectedAt time.Time
+	ReceivedAt  time.Time
+}
+
+type ModuleSetting struct {
+	OrgID           uuid.UUID
+	GroupID         uuid.UUID
+	ModuleID        string
+	Enabled         bool
+	IntervalSeconds pgtype.Int4
+	Config          []byte
+	UpdatedAt       time.Time
+	UpdatedBy       *uuid.UUID
+}
+
 type Node struct {
 	ID               uuid.UUID
 	OrgID            uuid.UUID
@@ -287,6 +319,8 @@ type Node struct {
 	LearningSince    time.Time
 	ConnectedAt      *time.Time
 	InstallMethod    int16
+	Modules          []string
+	ModulesVetoed    bool
 }
 
 type NodeCommand struct {

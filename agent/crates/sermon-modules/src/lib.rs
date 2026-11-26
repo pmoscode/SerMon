@@ -283,9 +283,65 @@ impl fmt::Debug for Secrets {
     }
 }
 
+/// Checks that `samples` of the module `id` are in its metric catalog
+/// (`metrics/<id>.json`, which the server takes over with `just gen`): the server drops what is
+/// not there. For the tests of the modules.
+///
+/// # Panics
+///
+/// If a sample is not in the catalog or has other labels.
+#[cfg(test)]
+// Used by the tests of the modules; without the feature `simulate` there may be none.
+#[allow(dead_code)]
+pub(crate) fn assert_in_catalog(id: &str, samples: &[Sample]) {
+    let catalog = tests::catalog(id);
+    for s in samples {
+        let def = catalog
+            .iter()
+            .find(|d| d["name"] == s.metric)
+            .unwrap_or_else(|| panic!("{}: not in metrics/{id}.json", s.metric));
+        let mut want: Vec<&str> = def
+            .get("labels")
+            .and_then(serde_json::Value::as_array)
+            .map_or_else(Vec::new, |l| {
+                l.iter().filter_map(serde_json::Value::as_str).collect()
+            });
+        let mut have: Vec<&str> = s.labels.iter().map(|(k, _)| *k).collect();
+        want.sort_unstable();
+        have.sort_unstable();
+        assert_eq!(have, want, "{}: labels", s.metric);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The metric definitions of a module's catalog file.
+    pub(crate) fn catalog(id: &str) -> Vec<serde_json::Value> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("metrics")
+            .join(format!("{id}.json"));
+        let text =
+            std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let file: serde_json::Value = serde_json::from_str(&text).unwrap();
+        file["metrics"].as_array().cloned().unwrap_or_default()
+    }
+
+    // ADR 0039: every module built in has a metric catalog, its metrics named after it; the
+    // server's test checks units and aggregations.
+    #[test]
+    fn every_module_has_a_metric_catalog() {
+        for module in builtin() {
+            let catalog = catalog(module.id());
+            assert!(!catalog.is_empty(), "{}: no metrics", module.id());
+            let prefix = format!("sermon_{}_", module.id());
+            for def in catalog {
+                let name = def["name"].as_str().unwrap();
+                assert!(name.starts_with(&prefix), "{name}");
+            }
+        }
+    }
 
     // ADR 0039: every schema in `schemas/` (the server's copy, `just gen`) is in the subset and
     // named after its module; every module built in has one there.

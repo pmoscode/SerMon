@@ -49,6 +49,8 @@ const (
 	AreaNetwork    Area = "network"
 	AreaSystem     Area = "system"
 	AreaAgent      Area = "agent"
+	// AreaModule holds the metrics of the agent's modules (ADR 0039).
+	AreaModule Area = "module"
 )
 
 // Definition describes one metric.
@@ -62,6 +64,8 @@ type Definition struct {
 	Server bool
 	// Anomaly makes the metric a candidate of the anomaly detection (ADR 0037); nil: none.
 	Anomaly *AnomalySpec
+	// Module is the module that sends the metric (ADR 0039); empty for the agent's own.
+	Module string
 }
 
 // AnomalySpec says how the anomaly detection scores a metric (ADR 0037).
@@ -253,6 +257,7 @@ func server(d Definition) Definition {
 }
 
 var byName = func() map[string]Definition {
+	definitions = append(definitions, moduleDefinitions...)
 	m := make(map[string]Definition, len(definitions))
 	for _, d := range definitions {
 		m[d.Name] = d

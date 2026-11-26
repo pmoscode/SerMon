@@ -1,0 +1,87 @@
+-- The modules of the agents (M5-06, ADR 0039). Every query runs in the organization's tenant
+-- transaction.
+
+-- name: ListModuleSettings :many
+-- The settings of every group of the organization.
+SELECT group_id, module_id, enabled, interval_seconds, config::text AS config
+FROM module_settings
+ORDER BY group_id, module_id;
+
+-- name: ListGroupBuiltinModules :many
+-- The modules the agents of each group's nodes have built in.
+SELECT n.group_id, array_agg(DISTINCT m ORDER BY m)::text[] AS modules
+FROM nodes n, unnest(n.modules) AS m
+GROUP BY n.group_id;
+
+-- name: UpsertModuleSetting :exec
+INSERT INTO module_settings (org_id, group_id, module_id, enabled, interval_seconds, config, updated_at, updated_by)
+VALUES (current_org_id(), sqlc.arg(group_id), sqlc.arg(module_id), sqlc.arg(enabled), sqlc.narg(interval_seconds),
+        sqlc.arg(config)::jsonb, now(), sqlc.narg(updated_by))
+ON CONFLICT (org_id, group_id, module_id) DO UPDATE
+    SET enabled = EXCLUDED.enabled, interval_seconds = EXCLUDED.interval_seconds, config = EXCLUDED.config,
+        updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by;
+
+-- name: DeleteModuleSetting :execrows
+DELETE FROM module_settings WHERE group_id = sqlc.arg(group_id) AND module_id = sqlc.arg(module_id);
+
+-- name: ModuleSettingsForNode :many
+-- The settings of a node's group (its configuration, ADR 0030).
+SELECT s.module_id, s.enabled, s.interval_seconds, s.config::text AS config
+FROM nodes n
+JOIN module_settings s ON s.org_id = n.org_id AND s.group_id = n.group_id
+WHERE n.id = sqlc.arg(node_id)
+ORDER BY s.module_id;
+
+-- name: SetNodeModules :one
+-- Stores the modules the agent has built in; returns the list stored before.
+UPDATE nodes n SET modules = sqlc.arg(modules)::text[]
+FROM nodes old
+WHERE n.id = sqlc.arg(node_id) AND old.id = n.id
+RETURNING old.modules;
+
+-- name: VisibleNodeModules :one
+-- A node of the scope's groups with what it has built in.
+SELECT id, group_id, modules, modules_vetoed FROM nodes
+WHERE id = sqlc.arg(id) AND (sqlc.arg(all_groups)::boolean OR group_id = ANY (sqlc.arg(group_ids)::uuid[]));
+
+-- name: DeleteModuleHealth :exec
+DELETE FROM module_health WHERE node_id = sqlc.arg(node_id);
+
+-- name: InsertModuleHealth :exec
+INSERT INTO module_health (org_id, node_id, module_id, state, reason, last_success, collected_at, received_at)
+VALUES (current_org_id(), sqlc.arg(node_id), sqlc.arg(module_id), sqlc.arg(state), sqlc.arg(reason),
+        sqlc.narg(last_success), sqlc.arg(collected_at), sqlc.arg(received_at));
+
+-- name: ModuleHealthOfNode :many
+SELECT module_id, state, reason, last_success, collected_at, received_at
+FROM module_health WHERE node_id = sqlc.arg(node_id)
+ORDER BY module_id;
+
+-- name: DeleteModuleHints :exec
+DELETE FROM module_hints WHERE node_id = sqlc.arg(node_id);
+
+-- name: InsertModuleHint :exec
+INSERT INTO module_hints (org_id, node_id, module_id, reasons, suggested, collected_at, received_at)
+VALUES (current_org_id(), sqlc.arg(node_id), sqlc.arg(module_id), sqlc.arg(reasons)::text[], sqlc.narg(suggested)::jsonb,
+        sqlc.arg(collected_at), sqlc.arg(received_at));
+
+-- name: ModuleHintsOfNode :many
+SELECT module_id, reasons, coalesce(suggested::text, '')::text AS suggested, collected_at, received_at
+FROM module_hints WHERE node_id = sqlc.arg(node_id)
+ORDER BY module_id;
+
+-- name: ListOpenModuleHints :many
+-- The hints of the scope's nodes for modules their agent has built in and their group doesn't
+-- have enabled ("nginx detected – enable the module?").
+SELECT h.node_id, n.hostname, n.group_id, h.module_id, h.reasons, coalesce(h.suggested::text, '')::text AS suggested,
+       h.collected_at
+FROM module_hints h
+JOIN nodes n ON n.org_id = h.org_id AND n.id = h.node_id
+WHERE (sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[]))
+  AND h.module_id = ANY (n.modules)
+  AND NOT EXISTS (
+      SELECT 1 FROM module_settings s
+      WHERE s.org_id = n.org_id AND s.group_id = n.group_id AND s.module_id = h.module_id AND s.enabled
+  )
+ORDER BY n.hostname, n.id, h.module_id
+LIMIT sqlc.arg(max_rows);

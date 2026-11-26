@@ -49,6 +49,7 @@ type Handlers struct {
 	Rules           *AlertRuleHandler
 	Windows         *MaintenanceWindowHandler
 	LogSettings     *LogSettingsHandler
+	Modules         *ModuleHandler
 	OIDCMappings    *OIDCMappingHandler
 	Passkeys        *PasskeyHandler
 	Logs            *LogHandler
@@ -93,6 +94,7 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewUpdatePolicyServiceHandler(h.UpdatePolicies, authenticated))
 	mount(webv1connect.NewSecurityPolicyServiceHandler(h.TwoFactor, authenticated))
 	mount(webv1connect.NewLogSettingsServiceHandler(h.LogSettings, authenticated))
+	mount(webv1connect.NewModuleServiceHandler(h.Modules, authenticated))
 	mount(webv1connect.NewOidcMappingServiceHandler(h.OIDCMappings, authenticated))
 	mount(webv1connect.NewNotificationChannelServiceHandler(h.Notifications, authenticated))
 	mount(webv1connect.NewNotificationPolicyServiceHandler(h.Policies, authenticated))

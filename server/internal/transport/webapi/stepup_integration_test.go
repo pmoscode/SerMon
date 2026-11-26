@@ -51,7 +51,7 @@ func TestStepUp_SensitiveActionsNeedAFreshStepUp(t *testing.T) {
 			node: ann.node, agentCA: sam.agentCA, metrics: ann.metrics, fleet: ann.fleet, events: ann.events, channels: ann.channels,
 			updatePolicies: ann.updatePolicies, updates: ann.updates,
 			policies: ann.policies, silences: ann.silences, alerts: ann.alerts, rules: ann.rules, windows: ann.windows,
-			logSettings: ann.logSettings, logs: ann.logs, liveView: ann.liveView, oidcMappings: ann.oidcMappings,
+			logSettings: ann.logSettings, modules: ann.modules, logs: ann.logs, liveView: ann.liveView, oidcMappings: ann.oidcMappings,
 			orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 			enrollmentTokenA: tokenAl, nodeA: nodeAl, runA: runAl, channelA: channelAl, policyA: policyAl, silenceA: silenceAl, windowA: windowAl,
 			mappingA: mappingAl, dashboards: ann.dashboards, dashboardA: dashAl,

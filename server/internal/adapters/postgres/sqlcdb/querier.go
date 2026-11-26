@@ -116,6 +116,9 @@ type Querier interface {
 	DeleteInvitation(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMaintenanceWindow(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
+	DeleteModuleHealth(ctx context.Context, nodeID uuid.UUID) error
+	DeleteModuleHints(ctx context.Context, nodeID uuid.UUID) error
+	DeleteModuleSetting(ctx context.Context, arg DeleteModuleSettingParams) (int64, error)
 	DeleteNodeGroup(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteNotificationChannel(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteNotificationPolicy(ctx context.Context, id uuid.UUID) (int64, error)
@@ -218,6 +221,8 @@ type Querier interface {
 	InsertIdentity(ctx context.Context, arg InsertIdentityParams) (int64, error)
 	InsertIssuingAuthority(ctx context.Context, arg InsertIssuingAuthorityParams) (int32, error)
 	InsertMaintenanceWindow(ctx context.Context, arg InsertMaintenanceWindowParams) error
+	InsertModuleHealth(ctx context.Context, arg InsertModuleHealthParams) error
+	InsertModuleHint(ctx context.Context, arg InsertModuleHintParams) error
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
 	// Commands of the server to the agents (M4-11), always in the tenant of the node's organization.
@@ -281,6 +286,8 @@ type Querier interface {
 	ListEnrollmentTokens(ctx context.Context, arg ListEnrollmentTokensParams) ([]ListEnrollmentTokensRow, error)
 	// The nodes of the scope with their reports, without packages.
 	ListFleetUpdates(ctx context.Context, arg ListFleetUpdatesParams) ([]ListFleetUpdatesRow, error)
+	// The modules the agents of each group's nodes have built in.
+	ListGroupBuiltinModules(ctx context.Context) ([]ListGroupBuiltinModulesRow, error)
 	// Log settings and redaction rules (M3-03, ADR 0030). Every query runs in the organization's
 	// tenant transaction.
 	ListGroupLogSettings(ctx context.Context) ([]ListGroupLogSettingsRow, error)
@@ -288,6 +295,10 @@ type Querier interface {
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
 	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
+	// The modules of the agents (M5-06, ADR 0039). Every query runs in the organization's tenant
+	// transaction.
+	// The settings of every group of the organization.
+	ListModuleSettings(ctx context.Context) ([]ListModuleSettingsRow, error)
 	ListNodeCommandsByID(ctx context.Context, ids []uuid.UUID) ([]ListNodeCommandsByIDRow, error)
 	// What every agent reported about its configuration (M3-12).
 	ListNodeConfigStatus(ctx context.Context) ([]ListNodeConfigStatusRow, error)
@@ -303,6 +314,9 @@ type Querier interface {
 	ListNotificationPolicyChannels(ctx context.Context) ([]ListNotificationPolicyChannelsRow, error)
 	// OIDC group mappings (M3-21). All but OIDCMappedOrganizations run inside InTenant.
 	ListOIDCMappings(ctx context.Context) ([]ListOIDCMappingsRow, error)
+	// The hints of the scope's nodes for modules their agent has built in and their group doesn't
+	// have enabled ("nginx detected – enable the module?").
+	ListOpenModuleHints(ctx context.Context, arg ListOpenModuleHintsParams) ([]ListOpenModuleHintsRow, error)
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	// Passkeys (M3-23, ADR 0034): instance-level, like the credentials.
 	ListPasskeys(ctx context.Context, userID uuid.UUID) ([]WebauthnCredential, error)
@@ -345,6 +359,10 @@ type Querier interface {
 	MarkNodeCommandsSent(ctx context.Context, arg MarkNodeCommandsSentParams) error
 	// Moves seen_at forward to the newest data time of a write (never back).
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
+	ModuleHealthOfNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleHealthOfNodeRow, error)
+	ModuleHintsOfNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleHintsOfNodeRow, error)
+	// The settings of a node's group (its configuration, ADR 0030).
+	ModuleSettingsForNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleSettingsForNodeRow, error)
 	// The node of a group with this machine-id whose takeover window is open.
 	NodeForTakeover(ctx context.Context, arg NodeForTakeoverParams) (uuid.UUID, error)
 	NodeGroupExists(ctx context.Context, groupID uuid.UUID) (bool, error)
@@ -431,6 +449,8 @@ type Querier interface {
 	SecurityEventTotals(ctx context.Context, arg SecurityEventTotalsParams) (SecurityEventTotalsRow, error)
 	SetLiveHideCmdline(ctx context.Context, hide bool) error
 	SetNodeEventSeq(ctx context.Context, arg SetNodeEventSeqParams) error
+	// Stores the modules the agent has built in; returns the list stored before.
+	SetNodeModules(ctx context.Context, arg SetNodeModulesParams) ([]string, error)
 	SetNodeTags(ctx context.Context, arg SetNodeTagsParams) error
 	SetOldestSecurityUpdate(ctx context.Context, nodeID uuid.UUID) error
 	SetOrganizationLock(ctx context.Context, arg SetOrganizationLockParams) (int64, error)
@@ -486,6 +506,7 @@ type Querier interface {
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).
 	UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) error
+	UpsertModuleSetting(ctx context.Context, arg UpsertModuleSettingParams) error
 	// Stores the listed packages; one listed before keeps its first_seen_at.
 	UpsertNodeUpdatePackages(ctx context.Context, arg UpsertNodeUpdatePackagesParams) error
 	// Makes the report the node's current one unless the stored one was collected at the same time or
@@ -506,6 +527,8 @@ type Querier interface {
 	// The group of one node of the scope's groups (the live view, M3-29).
 	VisibleNodeGroup(ctx context.Context, arg VisibleNodeGroupParams) (uuid.UUID, error)
 	VisibleNodeIDs(ctx context.Context, arg VisibleNodeIDsParams) ([]uuid.UUID, error)
+	// A node of the scope's groups with what it has built in.
+	VisibleNodeModules(ctx context.Context, arg VisibleNodeModulesParams) (VisibleNodeModulesRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

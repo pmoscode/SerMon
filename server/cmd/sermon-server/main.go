@@ -23,6 +23,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
 	"github.com/pmoscode/SerMon/server/internal/app/anomalies"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/update"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/geoip"
@@ -61,6 +62,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
+	"github.com/pmoscode/SerMon/server/internal/app/modules"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/oidcmapping"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
@@ -253,6 +255,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// Configuration of the agents (M3-03, ADR 0030): changes reach the connected sessions.
 		agentConfigs := postgres.NewLogSettingsStore(db)
 		logSettings := logsettings.NewService(agentConfigs, authz.NewPolicy(), sessions, time.Now)
+		// The agent's modules (M5-06, ADR 0039): their schemas come from the agent's build.
+		moduleCatalog, err := module.Builtin()
+		if err != nil {
+			return fmt.Errorf("module catalog: %w", err)
+		}
+		moduleStore := postgres.NewModuleStore(db)
+		moduleSettings := modules.NewService(moduleStore, moduleCatalog, authz.NewPolicy(), sessions, time.Now)
 		// The log explorer (M3-08); without Loki every query is UNAVAILABLE.
 		var logReader logs.Store
 		if logStore != nil {
@@ -270,7 +279,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return fmt.Errorf("agent releases: %w", err)
 		}
 		servers = append(servers, releases.Run)
-		observing := observingServices{logSettings: logSettings, logQueries: logQueries, liveViews: liveViews, releases: agentReleases{releases}}
+		observing := observingServices{logSettings: logSettings, modules: moduleSettings, logQueries: logQueries, liveViews: liveViews, releases: agentReleases{releases}}
 		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, observing, registry, logger); err != nil {
 			return err
 		}
@@ -280,6 +289,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		ingestService.SetEventWriter(eventStore)
 		// Update reports (M4-09): the latest of each node with its packages.
 		ingestService.SetUpdateWriter(postgres.NewUpdateStore(db, 0))
+		// Health and discovery hints of the modules (M5-06).
+		ingestService.SetModuleWriter(moduleStore, moduleCatalog)
 		// Commands to the agents (M4-11): the instance with the node's session delivers them, a
 		// NOTIFY of any instance wakes it, a poll catches what got lost.
 		commandStore := postgres.NewCommandStore(db)
@@ -479,6 +490,7 @@ const (
 // observingServices are the use cases of logs and the live view behind the web API.
 type observingServices struct {
 	logSettings *logsettings.Service
+	modules     *modules.Service
 	logQueries  *logs.Service
 	liveViews   *liveview.Service
 	releases    updates.Releases
@@ -616,6 +628,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),
 		LogSettings:  webapi.NewLogSettingsHandler(observing.logSettings, logger),
+		Modules:      webapi.NewModuleHandler(observing.modules, logger),
 		Passkeys:     webapi.NewPasskeyHandler(passkeys, logger),
 		OIDCMappings: webapi.NewOIDCMappingHandler(mappings, cfg.OIDC != nil, cfg.OIDC != nil && cfg.OIDC.JIT, logger),
 		Logs:         webapi.NewLogHandler(observing.logQueries, live, logger),

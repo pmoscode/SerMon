@@ -13,6 +13,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logconfig"
+	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/transport/agentapi"
@@ -24,6 +25,9 @@ type fakeConfigs struct {
 	configs  map[tenant.OrgID]logconfig.NodeConfig
 	asked    []identity.NodeID
 	answered []answer
+	// announced are the modules of each Hello; changed is what Announced reports.
+	announced [][]string
+	changed   bool
 }
 
 type answer struct {
@@ -50,6 +54,13 @@ func (f *fakeConfigs) Applied(_ context.Context, org tenant.OrgID, node identity
 	defer f.mu.Unlock()
 	f.answered = append(f.answered, answer{org, node, a})
 	return nil
+}
+
+func (f *fakeConfigs) Announced(_ context.Context, _ tenant.OrgID, _ identity.NodeID, modules []string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.announced = append(f.announced, modules)
+	return f.changed, nil
 }
 
 func (f *fakeConfigs) answers() []answer {
@@ -192,6 +203,90 @@ func TestConfig_TheAgentsErrorIsMadeVisibleAndBounded(t *testing.T) {
 	got := configs.answers()[0].applied.Error
 	if len(got) > logconfig.MaxErrorBytes || !utf8.ValidString(got) || strings.Contains(got, "\x1b") || got == "" {
 		t.Errorf("stored error has %d bytes: %q", len(got), got[:min(len(got), 30)])
+	}
+	_ = stream.CloseRequest()
+}
+
+func withModules(c logconfig.NodeConfig) logconfig.NodeConfig {
+	c.Modules = []module.Setting{
+		{Module: "nginx", Enabled: true, Interval: 20 * time.Second, Config: `{"url":"http://127.0.0.1/status"}`},
+		{Module: "redis", Enabled: true},
+		{Module: "simulate", Enabled: false, Config: `{"value":7}`},
+	}
+	return c
+}
+
+// ADR 0039: the node gets its group's modules that its agent has built in (Hello.modules), each
+// with its setting; the others it couldn't run.
+func TestConfig_ModulesAreThoseOfTheGroupTheAgentHasBuiltIn(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: withModules(nodeConfig(3))}}
+	s := startConfigServer(t, configs)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	hello := helloWithConfig(2)
+	hello.GetHello().Modules = []string{"simulate", "nginx"}
+	if err := stream.Send(hello); err != nil {
+		t.Fatal(err)
+	}
+	res, err := receive(stream)
+	if err != nil || res.GetConfigUpdate() == nil {
+		t.Fatalf("Receive() = %v, %v; want ConfigUpdate", res, err)
+	}
+	mods := res.GetConfigUpdate().GetConfig().GetModules()
+	if len(mods) != 2 {
+		t.Fatalf("modules = %v; want nginx and simulate", mods)
+	}
+	nginx, simulate := mods[0], mods[1]
+	if nginx.GetId() != "nginx" || !nginx.GetEnabled() || nginx.GetInterval().AsDuration() != 20*time.Second ||
+		nginx.GetConfigJson() != `{"url":"http://127.0.0.1/status"}` {
+		t.Errorf("nginx = %v", nginx)
+	}
+	if simulate.GetId() != "simulate" || simulate.GetEnabled() || simulate.GetInterval() != nil || simulate.GetConfigJson() != `{"value":7}` {
+		t.Errorf("simulate = %v", simulate)
+	}
+	configs.mu.Lock()
+	announced := configs.announced
+	configs.mu.Unlock()
+	if len(announced) != 1 || strings.Join(announced[0], ",") != "simulate,nginx" {
+		t.Errorf("announced %v", announced)
+	}
+	_ = stream.CloseRequest()
+}
+
+// An agent with other modules built in than before (an update) gets its configuration again,
+// even of the same version: the server left out what it couldn't run.
+func TestConfig_OtherBuiltInModulesGetTheSameVersionAgain(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: withModules(nodeConfig(3))}, changed: true}
+	s := startConfigServer(t, configs)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	hello := helloWithConfig(3)
+	hello.GetHello().Modules = []string{"nginx"}
+	if err := stream.Send(hello); err != nil {
+		t.Fatal(err)
+	}
+	res, err := receive(stream)
+	if err != nil || res.GetConfigUpdate().GetVersion() != 3 || len(res.GetConfigUpdate().GetConfig().GetModules()) != 1 {
+		t.Fatalf("Receive() = %v, %v; want ConfigUpdate 3 with nginx", res, err)
+	}
+	_ = stream.CloseRequest()
+}
+
+func TestConfig_TheModulesVetoIsStored(t *testing.T) {
+	configs := &fakeConfigs{configs: map[tenant.OrgID]logconfig.NodeConfig{orgX: nodeConfig(1)}}
+	s := startConfigServer(t, configs)
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	stream := s.client(t, &cert, tls.VersionTLS13).Session(within(t))
+	if err := stream.Send(helloWithConfig(1)); err != nil {
+		t.Fatal(err)
+	}
+	applied := &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_ConfigApplied{ConfigApplied: &agentv1.ConfigApplied{Version: 1, ModulesVetoed: true}}}
+	if err := stream.Send(applied); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return len(configs.answers()) == 1 })
+	if got := configs.answers()[0].applied; !got.ModulesVetoed || got.LogsVetoed {
+		t.Errorf("stored answer = %+v", got)
 	}
 	_ = stream.CloseRequest()
 }

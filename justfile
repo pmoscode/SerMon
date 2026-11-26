@@ -56,7 +56,7 @@ dev-logs:
     docker compose -f deploy/dev/compose.yaml logs -f
 
 # Generate all code: protocol (buf), typed SQL (sqlc) and the copies the server embeds
-gen: gen-proto gen-sql gen-packaging gen-rules
+gen: gen-proto gen-sql gen-packaging gen-rules gen-modules
 
 # Generate code from proto/ for Rust, Go and TypeScript (local plugins only)
 [working-directory: 'proto']
@@ -88,10 +88,17 @@ gen-rules:
     cp -R rules server/internal/app/alerting/ruleset/defaults
     @echo "✓ copied: server/internal/app/alerting/ruleset/defaults"
 
+# Copy the modules' schemas and metric catalogs into the server, which embeds them (ADR 0039)
+gen-modules:
+    rm -rf server/internal/domain/module/schemas server/internal/domain/metric/modules
+    cp -R agent/crates/sermon-modules/schemas server/internal/domain/module/schemas
+    cp -R agent/crates/sermon-modules/metrics server/internal/domain/metric/modules
+    @echo "✓ copied: server/internal/domain/module/schemas, server/internal/domain/metric/modules"
+
 # Fail if the committed generated code is not up to date with proto/ (used in CI)
 check-gen: gen
-    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen agent/crates/sermon-helper-proto/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults
-    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen agent/crates/sermon-helper-proto/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
+    git diff --exit-code -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen agent/crates/sermon-helper-proto/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults server/internal/domain/module/schemas server/internal/domain/metric/modules
+    @test -z "$(git ls-files --others --exclude-standard -- server/internal/gen web/src/lib/api/gen agent/crates/sermon-transport/src/gen agent/crates/sermon-testserver/src/gen agent/crates/sermon-helper-proto/src/gen server/internal/adapters/postgres/sqlcdb server/internal/transport/download/assets server/internal/app/alerting/ruleset/defaults server/internal/domain/module/schemas server/internal/domain/metric/modules)" || { echo "✗ untracked generated files – run just gen and commit" >&2; exit 1; }
 
 # Install the pinned Rust protoc plugins used by `just gen`
 install-proto-plugins:

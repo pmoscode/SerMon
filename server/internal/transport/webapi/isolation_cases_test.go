@@ -40,6 +40,7 @@ type isolationEnv struct {
 	rules                           webv1connect.AlertRuleServiceClient
 	windows                         webv1connect.MaintenanceWindowServiceClient
 	logSettings                     webv1connect.LogSettingsServiceClient
+	modules                         webv1connect.ModuleServiceClient
 	logs                            webv1connect.LogServiceClient
 	liveView                        webv1connect.LiveViewServiceClient
 	oidcMappings                    webv1connect.OidcMappingServiceClient
@@ -629,6 +630,34 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.LogSettingsService/ResetGroupLogSettings": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.logSettings.ResetGroupLogSettings(ctx, connect.NewRequest(&webv1.ResetGroupLogSettingsRequest{GroupId: e.groupA}))
+		return err
+	}},
+	"/sermon.web.v1.ModuleService/SetGroupModule": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.modules.SetGroupModule(ctx, connect.NewRequest(&webv1.SetGroupModuleRequest{GroupId: e.groupA, Setting: &webv1.ModuleSetting{
+			ModuleId: "simulate", Enabled: true, ConfigJson: `{"value":9}`,
+		}}))
+		return err
+	}},
+	"/sermon.web.v1.ModuleService/RemoveGroupModule": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.modules.RemoveGroupModule(ctx, connect.NewRequest(&webv1.RemoveGroupModuleRequest{GroupId: e.groupA, ModuleId: "simulate"}))
+		return err
+	}},
+	"/sermon.web.v1.ModuleService/GetNodeModules": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.modules.GetNodeModules(ctx, connect.NewRequest(&webv1.GetNodeModulesRequest{NodeId: e.nodeA}))
+		return err
+	}},
+	"/sermon.web.v1.ModuleService/ListModuleHints": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.modules.ListModuleHints(ctx, connect.NewRequest(&webv1.ListModuleHintsRequest{}))
+		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), e.nodeA) || strings.Contains(res.Msg.String(), "alpha-nginx")) {
+			return errLeak
+		}
+		return err
+	}},
+	"/sermon.web.v1.ModuleService/GetModuleSettings": {list: true, run: func(ctx context.Context, e isolationEnv) error {
+		res, err := e.modules.GetModuleSettings(ctx, connect.NewRequest(&webv1.GetModuleSettingsRequest{}))
+		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), `"value":3`)) {
+			return errLeak
+		}
 		return err
 	}},
 	"/sermon.web.v1.AccessService/ListNodeGroups": {list: true, run: func(ctx context.Context, e isolationEnv) error {

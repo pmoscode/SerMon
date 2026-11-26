@@ -143,7 +143,7 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh deploy/e2e/repos/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/updates/capture.sh agent/fixtures/discovery/capture.sh agent/fixtures/modules/tls/generate.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
+    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh deploy/e2e/repos/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/updates/capture.sh agent/fixtures/discovery/capture.sh agent/fixtures/modules/docker/capture.sh agent/fixtures/modules/tls/generate.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:
@@ -258,6 +258,7 @@ fuzz-agent seconds="60":
     {{ fuzz_profile }} cargo fuzz run helper_parsers -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run module_parsers -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run smart_parser -- -max_total_time={{ seconds }} -max_len=131072
+    {{ fuzz_profile }} cargo fuzz run cgroup_parsers -- -max_total_time={{ seconds }} -max_len=65536
 
 # Fuzz the server's LogQL builder (no input may break the structure of a query, M3-08) and its copy of the redaction (M3-12) (Go fuzzing)
 [working-directory: 'server']

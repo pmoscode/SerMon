@@ -110,3 +110,10 @@ path = "fuzz_targets/smart_parser.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "cgroup_parsers"
+path = "fuzz_targets/cgroup_parsers.rs"
+test = false
+doc = false
+bench = false

@@ -13,7 +13,9 @@ workspace = true
 
 [features]
 # Every module is a feature of its name (ADR 0039); the release builds them all.
-default = ["http_check", "smart", "tcp_check", "tls"]
+default = ["docker", "http_check", "smart", "tcp_check", "tls"]
+# Containers of Docker and Podman from cgroup v2 (M5-16).
+docker = ["dep:sermon-collectors"]
 # SMART of the disks through the root helper (M5-18).
 smart = []
 # The module `simulate` for tests and demos (ADR 0039); `sermon-agent`'s feature `simulate`.
@@ -44,6 +46,7 @@ pem = { workspace = true, optional = true }
 regex.workspace = true
 rustls = { workspace = true, optional = true }
 rustls-native-certs = { workspace = true, optional = true }
+sermon-collectors = { workspace = true, optional = true }
 sermon-core.workspace = true
 sermon-helper-proto.workspace = true
 serde_json.workspace = true

@@ -7,6 +7,8 @@
 //! [`veto`].
 
 pub mod discovery;
+#[cfg(feature = "docker")]
+pub mod docker;
 pub mod fields;
 #[cfg(feature = "http")]
 pub mod http;
@@ -45,6 +47,8 @@ pub use veto::{Refused, Veto};
 pub fn builtin() -> Vec<Arc<dyn Module>> {
     // Every module is a feature (ADR 0039).
     let modules: Vec<Arc<dyn Module>> = vec![
+        #[cfg(feature = "docker")]
+        Arc::new(docker::Docker),
         #[cfg(feature = "http_check")]
         Arc::new(http_check::HttpCheck),
         #[cfg(feature = "smart")]

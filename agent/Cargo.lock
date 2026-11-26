@@ -1372,6 +1372,7 @@ dependencies = [
  "rustls",
  "rustls-native-certs",
  "serde_json",
+ "sermon-collectors",
  "sermon-core",
  "sermon-helper-proto",
  "tempfile",

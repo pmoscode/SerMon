@@ -1,0 +1,104 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_docker_containers",
+      "unit": "count",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_docker_truncated",
+      "unit": "boolean",
+      "aggregation": "max"
+    },
+    {
+      "name": "sermon_docker_cpu_utilization_ratio",
+      "unit": "ratio_ppm",
+      "aggregation": "avg",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_memory_used_bytes",
+      "unit": "bytes",
+      "aggregation": "avg",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_memory_limit_bytes",
+      "unit": "bytes",
+      "aggregation": "last",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_oom_kills",
+      "unit": "count",
+      "aggregation": "max",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_read_bytes_per_second",
+      "unit": "bytes_per_second",
+      "aggregation": "avg",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_write_bytes_per_second",
+      "unit": "bytes_per_second",
+      "aggregation": "avg",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_receive_bytes_per_second",
+      "unit": "bytes_per_second",
+      "aggregation": "avg",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_transmit_bytes_per_second",
+      "unit": "bytes_per_second",
+      "aggregation": "avg",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    },
+    {
+      "name": "sermon_docker_processes",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "container",
+        "name",
+        "runtime"
+      ]
+    }
+  ]
+}

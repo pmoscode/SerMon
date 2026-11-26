@@ -5478,7 +5478,28 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures je Version, Fuzz-Ziel für den Parser von `INFO`.
 - **Abhängig von:** M5-03
 
-#### ☐ M5-16 – Docker über cgroups · A · M
+#### ☑ M5-16 – Docker über cgroups · A · M
+> Erledigt (Modul `docker`, `sermon-modules/src/docker.rs`, `docker/cgroups.rs`):
+> - **Quelle:** nur cgroup v2 über `ProcRoot`, ohne Socket und ohne Zusatzrechte. Gefunden werden Docker (`docker/<id>`,
+>   `system.slice/docker-<id>.scope`) und Podman (`libpod_parent/libpod-<id>`, `machine.slice/libpod-<id>.scope` mit
+>   Unter-cgroup `container`, ohne die cgroups von conmon), rootless beider unter dem User-Manager (höchstens 64 User);
+>   nur IDs aus 64 Hex-Zeichen, höchstens 512 Container je Lauf. Ohne cgroup v2 `error` mit Grund.
+> - **Werte je Container:** CPU (ppm aller CPUs), Speicher wie `docker stats` (ohne inaktiven Page-Cache) und Grenze,
+>   OOM-Kills, Disk-IO aus `io.stat`, Prozesse, Netz aus `/proc/<pid>/net/dev` des ersten Prozesses ohne `lo` – ein
+>   Container mit denselben Interfaces wie der Agent nutzt das Netz des Hosts und meldet keinen Verkehr. Raten ab dem
+>   zweiten Lauf, gemerkt nur für Container, die noch laufen.
+> - **Namen** ohne Socket: der Name des ersten Prozesses (`comm`, ohne Steuerzeichen, ≤ 64 Byte), Labels `container`
+>   (kurze ID wie `docker ps`), `name`, `runtime`. M5-17 kann bessere Namen und Restarts über den Socket ergänzen
+>   (`cgroups::scan`/`read` sind öffentlich).
+> - **Grenzen:** höchstens 9 Samples je Container, `max_containers` 1 bis 28 (ab Werk 20), die größten nach Speicher;
+>   `sermon_docker_truncated` sagt, dass es mehr gibt. Discovery über `dockerd`, `conmon`, `docker.service`.
+> - Metriken (für M5-20): `sermon_docker_containers`, `_truncated`, `_cpu_utilization_ratio`, `_memory_used_bytes`,
+>   `_memory_limit_bytes`, `_oom_kills`, `_read_bytes_per_second`, `_write_bytes_per_second`,
+>   `_receive_bytes_per_second`, `_transmit_bytes_per_second`, `_processes`; Katalog `metrics/docker.json`, Hilfen je
+>   Metrik und `docs/help/{de,en}/modules/docker.md`.
+> - Fixtures echter cgroup-v2-Bäume von Docker und Podman (je zwei Aufnahmen, `capture.sh`), daraus die Pfade der
+>   systemd-Treiber und rootless; Container, die kommen und gehen; 600 Container; Fuzz-Ziel `cgroup_parsers` (60 s
+>   ohne Befund). Gegenproben 18/18.
 - **Ziel:** CPU, Speicher, Netz und IO je Container aus den cgroups, ohne Socket und ohne Zusatzrechte; Namen soweit
   ohne Socket bekannt; Grenzen der Zahl der Container.
 - **Tests zuerst:** Fixtures von cgroup v2 (Docker, Podman), Container, die kommen und gehen.

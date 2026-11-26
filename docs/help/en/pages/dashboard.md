@@ -34,10 +34,13 @@ At most 30 widgets, 20 nodes per widget and 4 variables.
 
 Admins of all groups create a **kiosk token** at a shared dashboard (*Kiosk displays*, with a fresh confirmation of
 their identity). The address it gives – `/kiosk#t=…` – shows the dashboard on a display without signing in: full
-screen, without controls, read-only, with the rights of the admin who created it. The page refreshes every 30 seconds,
+screen, without controls, read-only. It shows only what both the admin who created the token **and** the dashboard's
+owner may see – also after the owner changed it; log widgets show the lines of the last day. The page refreshes every 30 seconds,
 reconnects by itself after an outage and says since when its data is not current. Several tokens separated by commas
 (`#t=…,…`) take turns, every 60 seconds or as set with `&rotate=` (seconds). For a real full screen start the
 browser in its kiosk mode (e.g. `chromium --kiosk`).
 
 The address is the key: whoever has it sees the dashboard. A token expires after 1 to 365 days; revoking it, deleting
-the dashboard or no longer sharing it ends it at once – the display then shows nothing.
+the dashboard or no longer sharing it ends it at once – the display then shows nothing. When the admin loses the role
+for all groups or leaves the organization, their tokens are revoked; getting the role back needs new ones. When the
+owner leaves the organization, the display shows nothing any more; their private dashboards are deleted.

@@ -24,10 +24,10 @@ var _ nodelife.Store = (*NodeLifecycleStore)(nil)
 // NewNodeLifecycleStore returns the store.
 func NewNodeLifecycleStore(db *DB) *NodeLifecycleStore { return &NodeLifecycleStore{db: db} }
 
-// State returns the node within the scope's groups.
-func (s *NodeLifecycleStore) State(ctx context.Context, scope tenant.Scope, node identity.NodeID) (nodelife.State, error) {
-	var st nodelife.State
-	err := s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+// Change locks the node within the scope's groups, lets decide choose the change and makes it
+// with its audit entry, in one transaction: a node moved to another group meanwhile is not found.
+func (s *NodeLifecycleStore) Change(ctx context.Context, scope tenant.Scope, node identity.NodeID, decide func(nodelife.State) (nodelife.Change, error)) error {
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		row, err := q.NodeLifecycleState(ctx, sqlcdb.NodeLifecycleStateParams{
 			ID: uuid.UUID(node), AllGroups: scope.AllGroups(), GroupIds: groupIDs(scope),
 		})
@@ -37,50 +37,69 @@ func (s *NodeLifecycleStore) State(ctx context.Context, scope tenant.Scope, node
 		if err != nil {
 			return fmt.Errorf("load node: %w", err)
 		}
-		st = nodelife.State{Group: tenant.GroupID(row.GroupID), Hostname: row.Hostname, DeactivatedAt: row.DeactivatedAt, DeletionDueAt: row.DeletionDueAt}
+		ch, err := decide(nodelife.State{
+			Group: tenant.GroupID(row.GroupID), Hostname: row.Hostname, DeactivatedAt: row.DeactivatedAt,
+			DeletionDueAt: row.DeletionDueAt, PurgeStartedAt: row.PurgeStartedAt,
+		})
+		if err != nil {
+			return err
+		}
+		switch ch.Op {
+		case nodelife.OpNone:
+			return nil
+		case nodelife.OpDeactivate:
+			err = deactivate(ctx, q, node, ch.At, nil)
+		case nodelife.OpScheduleDeletion:
+			err = deactivate(ctx, q, node, ch.At, &ch.Due)
+		case nodelife.OpCancelDeletion:
+			err = cancelDeletion(ctx, q, node)
+		default:
+			err = fmt.Errorf("unknown node change %d", ch.Op)
+		}
+		if err != nil {
+			return err
+		}
+		return appendAudit(ctx, q, ch.Audit)
+	})
+}
+
+func deactivate(ctx context.Context, q *sqlcdb.Queries, node identity.NodeID, at time.Time, due *time.Time) error {
+	n, err := q.DeactivateNode(ctx, sqlcdb.DeactivateNodeParams{At: &at, Due: due, ID: uuid.UUID(node)})
+	if err != nil {
+		return fmt.Errorf("deactivate node: %w", err)
+	}
+	if n != 1 {
+		return access.ErrNotFound
+	}
+	if err := q.RevokeNodeCertificates(ctx, sqlcdb.RevokeNodeCertificatesParams{At: &at, NodeID: uuid.UUID(node)}); err != nil {
+		return fmt.Errorf("revoke certificates: %w", err)
+	}
+	return nil
+}
+
+func cancelDeletion(ctx context.Context, q *sqlcdb.Queries, node identity.NodeID) error {
+	n, err := q.CancelNodeDeletion(ctx, uuid.UUID(node))
+	if err != nil {
+		return fmt.Errorf("cancel deletion: %w", err)
+	}
+	if n != 1 {
+		return nodelife.ErrNotScheduled
+	}
+	return nil
+}
+
+// StartPurge marks the node as being deleted if it is deactivated and due.
+func (s *NodeLifecycleStore) StartPurge(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time) (bool, error) {
+	var marked bool
+	err := s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
+		n, err := q.StartNodePurge(ctx, sqlcdb.StartNodePurgeParams{At: &at, ID: uuid.UUID(node)})
+		if err != nil {
+			return fmt.Errorf("mark node: %w", err)
+		}
+		marked = n == 1
 		return nil
 	})
-	return st, err
-}
-
-// Deactivate marks the node deactivated and revokes all its certificates.
-func (s *NodeLifecycleStore) Deactivate(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time, audit access.AuditEntry) error {
-	return s.deactivate(ctx, org, node, at, nil, audit)
-}
-
-// ScheduleDeletion deactivates the node and sets its deadline.
-func (s *NodeLifecycleStore) ScheduleDeletion(ctx context.Context, org tenant.OrgID, node identity.NodeID, at, due time.Time, audit access.AuditEntry) error {
-	return s.deactivate(ctx, org, node, at, &due, audit)
-}
-
-func (s *NodeLifecycleStore) deactivate(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time, due *time.Time, audit access.AuditEntry) error {
-	return s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
-		n, err := q.DeactivateNode(ctx, sqlcdb.DeactivateNodeParams{At: &at, Due: due, ID: uuid.UUID(node)})
-		if err != nil {
-			return fmt.Errorf("deactivate node: %w", err)
-		}
-		if n != 1 {
-			return access.ErrNotFound
-		}
-		if err := q.RevokeNodeCertificates(ctx, sqlcdb.RevokeNodeCertificatesParams{At: &at, NodeID: uuid.UUID(node)}); err != nil {
-			return fmt.Errorf("revoke certificates: %w", err)
-		}
-		return appendAudit(ctx, q, audit)
-	})
-}
-
-// CancelDeletion lifts the deadline.
-func (s *NodeLifecycleStore) CancelDeletion(ctx context.Context, org tenant.OrgID, node identity.NodeID, audit access.AuditEntry) error {
-	return s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
-		n, err := q.CancelNodeDeletion(ctx, uuid.UUID(node))
-		if err != nil {
-			return fmt.Errorf("cancel deletion: %w", err)
-		}
-		if n != 1 {
-			return nodelife.ErrNotScheduled
-		}
-		return appendAudit(ctx, q, audit)
-	})
+	return marked, err
 }
 
 // DueForDeletion returns deactivated nodes of all organizations that are due.

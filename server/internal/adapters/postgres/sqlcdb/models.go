@@ -346,6 +346,7 @@ type Node struct {
 	ModulesVetoed    bool
 	DeactivatedAt    *time.Time
 	DeletionDueAt    *time.Time
+	PurgeStartedAt   *time.Time
 }
 
 type NodeCommand struct {

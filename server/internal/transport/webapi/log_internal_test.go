@@ -22,7 +22,7 @@ import (
 // M3-28: log queries hold Loki's answers in memory; a session, user, organization and the
 // instance run only a few at once.
 func TestLogQueries_AreBoundedPerSessionAndUser(t *testing.T) {
-	h := NewLogHandler(nil, nil, slog.New(slog.DiscardHandler))
+	h := NewLogHandler(nil, nil, nil, slog.New(slog.DiscardHandler))
 	org := tenant.OrgID(uuid.New())
 	caller := func(user identity.UserID, sessionID string) (context.Context, access.Caller) {
 		ctx := context.WithValue(context.Background(), sessionKey{}, session.Session{ID: sessionID, User: user})
@@ -69,7 +69,7 @@ func TestLogQueries_AreBoundedPerSessionAndUser(t *testing.T) {
 // M3-29: a query too broad for the store is the user's to narrow (FAILED_PRECONDITION), not an
 // invalid filter or an internal error.
 func TestLogErrors_TooBroadIsAPrecondition(t *testing.T) {
-	h := NewLogHandler(nil, nil, slog.New(slog.DiscardHandler))
+	h := NewLogHandler(nil, nil, nil, slog.New(slog.DiscardHandler))
 	err := h.fail(context.Background(), "query logs", fmt.Errorf("query: %w", logs.ErrTooBroad))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Errorf("fail(ErrTooBroad) = %v", err)

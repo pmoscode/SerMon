@@ -102,6 +102,8 @@ func kioskFail(ctx context.Context, logger *slog.Logger, op string, err error) e
 		return connect.NewError(connect.CodeFailedPrecondition, kiosk.ErrNotShared)
 	case errors.Is(err, kiosk.ErrTooMany):
 		return connect.NewError(connect.CodeResourceExhausted, kiosk.ErrTooMany)
+	case errors.Is(err, kiosk.ErrBusy):
+		return connect.NewError(connect.CodeResourceExhausted, kiosk.ErrBusy)
 	case errors.Is(err, kiosk.ErrInvalid):
 		return connect.NewError(connect.CodeInvalidArgument, unwrapTo(err, kiosk.ErrInvalid))
 	}

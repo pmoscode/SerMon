@@ -13,7 +13,7 @@ import (
 )
 
 const cancelNodeDeletion = `-- name: CancelNodeDeletion :execrows
-UPDATE nodes SET deletion_due_at = NULL WHERE id = $1 AND deletion_due_at IS NOT NULL
+UPDATE nodes SET deletion_due_at = NULL WHERE id = $1 AND deletion_due_at IS NOT NULL AND purge_started_at IS NULL
 `
 
 func (q *Queries) CancelNodeDeletion(ctx context.Context, id uuid.UUID) (int64, error) {
@@ -48,7 +48,7 @@ func (q *Queries) DeactivateNode(ctx context.Context, arg DeactivateNodeParams) 
 
 const nodeLifecycleState = `-- name: NodeLifecycleState :one
 
-SELECT group_id, hostname, deactivated_at, deletion_due_at FROM nodes
+SELECT group_id, hostname, deactivated_at, deletion_due_at, purge_started_at FROM nodes
 WHERE id = $1 AND ($2::boolean OR group_id = ANY ($3::uuid[]))
 FOR UPDATE
 `
@@ -60,10 +60,11 @@ type NodeLifecycleStateParams struct {
 }
 
 type NodeLifecycleStateRow struct {
-	GroupID       uuid.UUID
-	Hostname      string
-	DeactivatedAt *time.Time
-	DeletionDueAt *time.Time
+	GroupID        uuid.UUID
+	Hostname       string
+	DeactivatedAt  *time.Time
+	DeletionDueAt  *time.Time
+	PurgeStartedAt *time.Time
 }
 
 // Deactivating and deleting nodes (M5-29, ADR 0041). All queries run inside InTenant, except
@@ -77,6 +78,7 @@ func (q *Queries) NodeLifecycleState(ctx context.Context, arg NodeLifecycleState
 		&i.Hostname,
 		&i.DeactivatedAt,
 		&i.DeletionDueAt,
+		&i.PurgeStartedAt,
 	)
 	return i, err
 }
@@ -130,4 +132,23 @@ func (q *Queries) PurgeNode(ctx context.Context, arg PurgeNodeParams) (string, e
 	var hostname string
 	err := row.Scan(&hostname)
 	return hostname, err
+}
+
+const startNodePurge = `-- name: StartNodePurge :execrows
+UPDATE nodes SET purge_started_at = COALESCE(purge_started_at, $1)
+WHERE id = $2 AND deactivated_at IS NOT NULL AND deletion_due_at <= $1
+`
+
+type StartNodePurgeParams struct {
+	At *time.Time
+	ID uuid.UUID
+}
+
+// Marks a deactivated node that is due as being deleted, under its lock (M5-33).
+func (q *Queries) StartNodePurge(ctx context.Context, arg StartNodePurgeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, startNodePurge, arg.At, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

@@ -10,6 +10,6 @@ Zurück kommt der Node über **Übernahme erlauben** (Reiter Identität, Operato
 
 ## Löschen
 
-Zum Bestätigen wird der Hostname eingegeben. Der Node wird sofort deaktiviert und nach der Frist – Standard 7 Tage, eingestellt vom Betreiber – mit seinen Metriken, Anomalien, Security-Events, Alerts und Logs gelöscht. Bis dahin hebt **Löschen abbrechen** das Löschen auf; der Node bleibt deaktiviert. Eine Übernahme ist während der Frist nicht möglich.
+Zum Bestätigen wird der Hostname eingegeben. Der Node wird sofort deaktiviert und nach der Frist – Standard 7 Tage, eingestellt vom Betreiber – mit seinen Metriken, Anomalien, Security-Events, Alerts und Logs gelöscht. Bis dahin hebt **Löschen abbrechen** das Löschen auf; der Node bleibt deaktiviert. Hat das Löschen nach der Frist begonnen, geht das nicht mehr. Eine Übernahme ist während der Frist nicht möglich.
 
 Was bleibt: die Einträge im Audit-Log, das Protokoll der Benachrichtigungen bis zu seiner eigenen Aufbewahrung und Silences, die den Node nennen. Bis zum Löschen zählt der Node zum Kontingent der Organisation und belegt seine `machine-id`.

@@ -1,8 +1,9 @@
 // Package kiosk keeps the kiosk tokens of shared dashboards and serves the displays that use them
 // (KONZEPT §16, ADR 0040, M5-26). A token is a read-only credential without a session: it opens
 // one shared dashboard of one organization, and its widgets are read with the current rights of
-// the admin who created it, through the same readers as the UI. The display names a widget, the
-// query comes from the stored document.
+// the admin who created it and of the dashboard's owner together (who may change it at any time,
+// M5-33), through the same readers as the UI and within the limits of their concurrent reads. The
+// display names a widget, the query comes from the stored document.
 package kiosk
 
 import (
@@ -37,14 +38,15 @@ import (
 // Limits of the tokens.
 const (
 	// Prefix starts every secret, so that scanners and people recognize it.
-	Prefix          = "smk_"
-	secretBytes     = 32
-	MaxOpen         = 10
-	MinValidity     = 24 * time.Hour
-	MaxValidity     = 365 * 24 * time.Hour
-	maxName         = 100
-	logLines        = 50
-	maxLogSpan      = 14 * 24 * time.Hour
+	Prefix      = "smk_"
+	secretBytes = 32
+	MaxOpen     = 10
+	MinValidity = 24 * time.Hour
+	MaxValidity = 365 * 24 * time.Hour
+	maxName     = 100
+	logLines    = 50
+	// maxLogSpan bounds a display's log queries: it shows the latest lines, not a search (T115).
+	maxLogSpan      = 24 * time.Hour
 	maxQueryNodes   = 100
 	secretTextBytes = len(Prefix) + 43 // base64url of 32 bytes without padding
 )
@@ -57,6 +59,8 @@ var (
 	ErrNotShared = errors.New("share the dashboard first: kiosk tokens open shared dashboards only")
 	// ErrTooMany means the dashboard has MaxOpen open tokens.
 	ErrTooMany = fmt.Errorf("at most %d open kiosk tokens per dashboard", MaxOpen)
+	// ErrBusy means the display reads too much at once (Admission); it tries again later.
+	ErrBusy = errors.New("too many reads of the display at once, wait a moment")
 	// ErrInvalid means a request the service doesn't take.
 	ErrInvalid = errors.New("invalid kiosk token request")
 )
@@ -85,6 +89,7 @@ type Display struct {
 	Token     TokenID
 	Org       tenant.OrgID
 	Dashboard dashboards.ID
+	Creator   identity.UserID
 	caller    access.Caller
 }
 
@@ -135,11 +140,19 @@ type Readers struct {
 	}
 }
 
-// Deps are the dependencies of the service.
+// Admission bounds the reads of the displays running at once (T115): Admit takes a slot for one
+// widget's read – logs also one of the log queries, which the UI's readers share – or fails;
+// release frees it.
+type Admission interface {
+	Admit(ctx context.Context, d Display, logs bool) (release func(), err error)
+}
+
+// Deps are the dependencies of the service (all required).
 type Deps struct {
 	Store      Store
 	Dashboards Dashboards
 	Principals Principals
+	Admission  Admission
 	Readers    Readers
 	Policy     authz.Policy
 	Now        func() time.Time
@@ -267,7 +280,7 @@ func (s *Service) Authenticate(ctx context.Context, secret string) (Display, err
 		return Display{}, fmt.Errorf("note kiosk token use: %w", err)
 	}
 	// The display is no session: no step-up, ever.
-	return Display{Token: found.Token, Org: found.Org, Dashboard: found.Dashboard, caller: access.Caller{Principal: p}}, nil
+	return Display{Token: found.Token, Org: found.Org, Dashboard: found.Dashboard, Creator: found.Creator, caller: access.Caller{Principal: p}}, nil
 }
 
 // Dashboard returns the token's dashboard while it is shared.
@@ -297,6 +310,19 @@ type Result struct {
 	Kind      dashboard.Kind
 }
 
+// reader returns the caller the widgets read with: the creator's rights and the dashboard owner's
+// together, acting as the creator. An owner who left reads nothing (ErrInvalidToken).
+func (s *Service) reader(ctx context.Context, d Display, b dashboards.Dashboard) (access.Caller, error) {
+	owner, err := s.d.Principals.ForUser(ctx, d.Org, b.Owner)
+	switch {
+	case errors.Is(err, access.ErrNoMembership):
+		return access.Caller{}, ErrInvalidToken
+	case err != nil:
+		return access.Caller{}, fmt.Errorf("rights of the dashboard owner: %w", err)
+	}
+	return access.Caller{Principal: authz.Intersect(d.caller.Principal, owner)}, nil
+}
+
 // Widget reads one widget of the token's dashboard for its default range ending now; the
 // variables take their defaults (or the first visible node or group).
 func (s *Service) Widget(ctx context.Context, d Display, widgetID string) (Result, error) {
@@ -308,6 +334,16 @@ func (s *Service) Widget(ctx context.Context, d Display, widgetID string) (Resul
 	if !ok {
 		return Result{}, access.ErrNotFound
 	}
+	c, err := s.reader(ctx, d, b)
+	if err != nil {
+		return Result{}, err
+	}
+	release, err := s.d.Admission.Admit(ctx, d, w.Kind == dashboard.KindLogStream)
+	if err != nil {
+		return Result{}, fmt.Errorf("kiosk widget: %w", err)
+	}
+	defer release()
+	d.caller = c
 	summary, err := s.d.Readers.Fleet.Summary(ctx, d.caller, nil)
 	if err != nil {
 		return Result{}, fmt.Errorf("kiosk fleet: %w", err)

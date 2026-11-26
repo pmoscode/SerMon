@@ -60,3 +60,17 @@ Gewählt: Option 2.
 - Security: Ein gestohlener Schlüssel eines deaktivierten Nodes ist wertlos (widerrufen und Node abgelehnt). Ein
   Admin einer Gruppe kann nur Nodes seiner Gruppen löschen; der Löschjob löscht nur, was deaktiviert und fällig ist,
   und prüft das unter der Zeilensperre.
+
+## Nachtrag M5-33: Prüfen und Ändern in einer Transaktion, Löschjob (Security-Review)
+
+- **Eine Transaktion:** Deaktivieren, Löschen und Abbrechen sperren den Node mit dem Filter auf die Gruppen des
+  Aufrufers (`FOR UPDATE`), prüfen Zustand und Hostnamen und schreiben Änderung und Audit-Eintrag in derselben
+  Transaktion (`nodelife.Store.Change`). Ein Node, der inzwischen in eine fremde Gruppe verschoben wurde, ist
+  `NOT_FOUND`; vorher lagen Prüfung und Schreiben in zwei Transaktionen, und das Schreiben filterte nur nach der ID.
+- **Löschjob:** Vor der Loki-Löschung markiert der Job den Node unter seiner Zeilensperre (`purge_started_at`, nur
+  wenn er deaktiviert und fällig ist). Ein Abbruch, der vorher kam, lässt den Node unmarkiert – seine Logs bleiben;
+  einer danach wird abgelehnt (`FAILED_PRECONDITION`, „wird schon gelöscht“), denn die Logs können schon weg sein.
+  `node_purge` löscht nur markierte Nodes; scheitert Loki, bleibt der Node markiert und fällig und der nächste Lauf
+  macht weiter.
+- **Nur im eigenen Tenant:** `node_purge` setzt die Org nicht mehr selbst, sondern verlangt, dass die Transaktion im
+  Tenant der übergebenen Org läuft (`sermon.org_id`); `sermon_app` kann sie nicht für eine andere Org aufrufen.

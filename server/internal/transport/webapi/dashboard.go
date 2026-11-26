@@ -338,6 +338,8 @@ func dashboardFail(ctx context.Context, logger *slog.Logger, op string, err erro
 		return connect.NewError(connect.CodeAborted, dashboards.ErrConflict)
 	case errors.Is(err, dashboards.ErrTooMany):
 		return connect.NewError(connect.CodeResourceExhausted, dashboards.ErrTooMany)
+	case errors.Is(err, dashboards.ErrTooManyWrites):
+		return connect.NewError(connect.CodeResourceExhausted, dashboards.ErrTooManyWrites)
 	}
 	return internalError(ctx, logger, op, err)
 }

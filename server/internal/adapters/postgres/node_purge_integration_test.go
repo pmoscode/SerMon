@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -153,18 +154,24 @@ func TestNodePurge_RemovesTheNodesDataAndNothingElse(t *testing.T) {
 	if err := purge(gone); err == nil || !strings.Contains(err.Error(), "not deactivated and due") {
 		t.Fatalf("purge of an active node: %v", err)
 	}
-	audit := access.AuditEntry{Action: "node.schedule_deletion", Target: "node:" + gone.String()}
-	if err := store.ScheduleDeletion(ctx, tenant.OrgID(p.org), identity.NodeID(gone), now, now.Add(time.Hour), audit); err != nil {
+	if err := changeNode(ctx, store, p.org, gone, nodelife.OpScheduleDeletion, now, now.Add(time.Hour)); err != nil {
 		t.Fatal(err)
+	}
+	if marked, err := store.StartPurge(ctx, tenant.OrgID(p.org), identity.NodeID(gone), now); err != nil || marked {
+		t.Fatalf("marked before the deadline: %v, %v", marked, err)
 	}
 	if err := purge(gone); err == nil {
 		t.Fatal("purge before the deadline succeeded")
 	}
-	// The same node ID through another organization's purge: refused.
-	if err := store.Purge(ctx, tenant.OrgID(other.org), identity.NodeID(gone), now.Add(2*time.Hour)); err == nil {
-		t.Fatal("another organization purged the node")
+	// Due, but not marked by the job: refused (its logs may still be there).
+	if err := store.Purge(ctx, tenant.OrgID(p.org), identity.NodeID(gone), now.Add(2*time.Hour)); err == nil {
+		t.Fatal("purge of an unmarked node succeeded")
 	}
-	if err := store.Deactivate(ctx, tenant.OrgID(p.org), identity.NodeID(sibling), now, audit); err != nil {
+	// The same node ID through another organization: neither marked nor purged.
+	if marked, err := store.StartPurge(ctx, tenant.OrgID(other.org), identity.NodeID(gone), now.Add(2*time.Hour)); err != nil || marked {
+		t.Fatalf("another organization marked the node: %v, %v", marked, err)
+	}
+	if err := changeNode(ctx, store, p.org, sibling, nodelife.OpDeactivate, now, time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	due, err := store.DueForDeletion(ctx, now.Add(2*time.Hour), nodelife.PurgeBatch)
@@ -173,6 +180,12 @@ func TestNodePurge_RemovesTheNodesDataAndNothingElse(t *testing.T) {
 	}
 	if len(due) != 1 || due[0] != (nodelife.Due{Org: tenant.OrgID(p.org), Node: identity.NodeID(gone)}) {
 		t.Fatalf("due = %v, want only the scheduled node", due)
+	}
+	if marked, err := store.StartPurge(ctx, due[0].Org, due[0].Node, now.Add(2*time.Hour)); err != nil || !marked {
+		t.Fatalf("mark the due node: %v, %v", marked, err)
+	}
+	if err := store.Purge(ctx, tenant.OrgID(other.org), identity.NodeID(gone), now.Add(2*time.Hour)); err == nil {
+		t.Fatal("another organization purged the node")
 	}
 	if err := store.Purge(ctx, due[0].Org, due[0].Node, now.Add(2*time.Hour)); err != nil {
 		t.Fatal(err)
@@ -224,8 +237,7 @@ func TestNodeLifecycle_DeactivationRefusesTheAgent(t *testing.T) {
 		t.Fatal("the certificate is not usable before")
 	}
 	ownerExec(t, f.db.OwnerDSN, "UPDATE nodes SET takeover_until = now() + interval '1 hour' WHERE id = $1", node)
-	if err := postgres.NewNodeLifecycleStore(open(t, f.appDSN)).Deactivate(ctx, tenant.OrgID(p.org), identity.NodeID(node), time.Now(),
-		access.AuditEntry{Action: "node.deactivate", Target: "node:" + node.String()}); err != nil {
+	if err := changeNode(ctx, postgres.NewNodeLifecycleStore(open(t, f.appDSN)), p.org, node, nodelife.OpDeactivate, time.Now(), time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	if usable() {
@@ -244,8 +256,8 @@ func TestNodeLifecycle_DeactivationRefusesTheAgent(t *testing.T) {
 	}
 }
 
-// Cancelling while the job starts: node_purge locks the row before it checks, so it sees the
-// cancellation or the cancellation waits and finds nothing.
+// Cancelling while the job starts: the job marks the node under its row lock, so it sees the
+// cancellation (and leaves the node and its logs) or the cancellation waits and is refused.
 func TestNodePurge_WaitsForAConcurrentCancel(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
@@ -265,20 +277,28 @@ func TestNodePurge_WaitsForAConcurrentCancel(t *testing.T) {
 	if _, err := tx.Exec(ctx, "UPDATE nodes SET deletion_due_at = NULL WHERE id = $1", node); err != nil {
 		t.Fatal(err)
 	}
-	purged := make(chan error, 1)
+	type result struct {
+		marked bool
+		err    error
+	}
+	started := make(chan result, 1)
 	store := postgres.NewNodeLifecycleStore(open(t, f.appDSN))
 	go func() {
-		purged <- store.Purge(ctx, tenant.OrgID(p.org), identity.NodeID(node), time.Now())
+		marked, err := store.StartPurge(ctx, tenant.OrgID(p.org), identity.NodeID(node), time.Now())
+		started <- result{marked, err}
 	}()
 	select {
-	case err := <-purged:
-		t.Fatalf("node_purge did not wait for the cancel: %v", err)
+	case r := <-started:
+		t.Fatalf("marking did not wait for the cancel: %+v", r)
 	case <-time.After(300 * time.Millisecond):
 	}
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := <-purged; err == nil {
+	if r := <-started; r.err != nil || r.marked {
+		t.Errorf("after the cancel: %+v, want not marked", r)
+	}
+	if err := store.Purge(ctx, tenant.OrgID(p.org), identity.NodeID(node), time.Now()); err == nil {
 		t.Error("node_purge deleted a node whose deletion was just cancelled")
 	}
 	var left int
@@ -286,4 +306,114 @@ func TestNodePurge_WaitsForAConcurrentCancel(t *testing.T) {
 	if left != 1 {
 		t.Error("the node is gone")
 	}
+}
+
+// M5-33: once marked, the deletion can't be cancelled; node_purge only works in the caller's
+// tenant, whatever organization it is given.
+func TestNodePurge_MarkedNodesStayDueAndPurgeStaysInTheTenant(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	p := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	other := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	node := uuid.New()
+	seedNodeData(t, f.db.OwnerDSN, p.org, node)
+	store := postgres.NewNodeLifecycleStore(open(t, f.appDSN))
+	now := time.Now()
+	if err := changeNode(ctx, store, p.org, node, nodelife.OpScheduleDeletion, now.Add(-2*time.Hour), now.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if marked, err := store.StartPurge(ctx, tenant.OrgID(p.org), identity.NodeID(node), now); err != nil || !marked {
+		t.Fatalf("mark: %v, %v", marked, err)
+	}
+	var seen *time.Time
+	err := store.Change(ctx, scopeFor(t, p.org), identity.NodeID(node), func(st nodelife.State) (nodelife.Change, error) {
+		seen = st.PurgeStartedAt
+		return nodelife.Change{Op: nodelife.OpCancelDeletion, Audit: access.AuditEntry{Action: "node.cancel_deletion", Target: "node:" + node.String()}}, nil
+	})
+	if seen == nil || !errors.Is(err, nodelife.ErrNotScheduled) {
+		t.Errorf("cancel of a marked node: state marked %v, %v; want refused", seen, err)
+	}
+	app, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = app.Close(ctx) }()
+	tx, err := app.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SELECT set_config('sermon.org_id', $1, true)", other.org.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT node_purge($1, $2, now())", p.org, node); err == nil || !strings.Contains(err.Error(), "outside the tenant") {
+		t.Errorf("node_purge from another tenant: %v", err)
+	}
+}
+
+// M5-33: check and change happen in one transaction: a node moved out of the admin's groups
+// while the change waits for its lock is not found, and nothing changes.
+func TestNodeLifecycle_ChangeSeesAConcurrentGroupMove(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	p := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	node := uuid.New()
+	seedNodeData(t, f.db.OwnerDSN, p.org, node)
+	var group uuid.UUID
+	ownerQueryRowPurge(t, f.db.OwnerDSN, "SELECT group_id FROM nodes WHERE id = '"+node.String()+"'", &group)
+	elsewhere := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO node_groups (id, org_id, name) VALUES ($1, $2, 'db')", elsewhere, p.org)
+	owner, err := pgx.Connect(ctx, f.db.OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = owner.Close(ctx) }()
+	move, err := owner.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := move.Exec(ctx, "SELECT set_config('sermon.org_id', $1, true)", p.org.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := move.Exec(ctx, "UPDATE nodes SET group_id = $1 WHERE id = $2", elsewhere, node); err != nil {
+		t.Fatal(err)
+	}
+	scope, err := tenant.ForGroups(tenant.OrgID(p.org), tenant.GroupID(group))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := postgres.NewNodeLifecycleStore(open(t, f.appDSN))
+	done := make(chan error, 1)
+	go func() {
+		done <- store.Change(ctx, scope, identity.NodeID(node), func(nodelife.State) (nodelife.Change, error) {
+			return nodelife.Change{Op: nodelife.OpDeactivate, At: time.Now(), Audit: access.AuditEntry{Action: "node.deactivate", Target: "node:" + node.String()}}, nil
+		})
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("the change did not wait for the move: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := move.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("change after the node moved away: %v, want NOT_FOUND", err)
+	}
+	var deactivated bool
+	ownerQueryRowPurge(t, f.db.OwnerDSN, "SELECT deactivated_at IS NOT NULL FROM nodes WHERE id = '"+node.String()+"'", &deactivated)
+	if deactivated {
+		t.Error("the node of another group was deactivated")
+	}
+}
+
+// changeNode makes a lifecycle change as an admin of all groups would.
+func changeNode(ctx context.Context, store *postgres.NodeLifecycleStore, org, node uuid.UUID, op nodelife.Op, at, due time.Time) error {
+	scope, err := tenant.ForAllGroups(tenant.OrgID(org))
+	if err != nil {
+		return err
+	}
+	return store.Change(ctx, scope, identity.NodeID(node), func(nodelife.State) (nodelife.Change, error) {
+		return nodelife.Change{Op: op, At: at, Due: due, Audit: access.AuditEntry{Action: "node.change", Target: "node:" + node.String()}}, nil
+	})
 }

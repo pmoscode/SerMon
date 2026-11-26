@@ -1357,7 +1357,8 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
 - **Kiosk-/TV-Modus:** Vollbild, Auto-Rotation, ohne Bedienelemente; Zugriff über einen **schreibgeschützten,
   widerrufbaren Kiosk-Token**, der an Dashboard und Org gebunden ist (256 Bit, nur als SHA-256 gespeichert, Ablauf,
   Audit; im URL-Fragment, nie in der Query). Er öffnet nur den `KioskService` mit dem Dokument und den Widgets seines
-  Dashboards; die Abfragen stellt der Server aus dem gespeicherten Widget zusammen.
+  Dashboards; die Abfragen stellt der Server aus dem gespeicherten Widget zusammen, mit den Rechten, die der Admin des
+  Tokens und der Eigentümer des Dashboards beide haben (M5-33).
     - Anzeige (M5-27): `/kiosk#t=<token>,…&rotate=60` ohne Session und ohne Bedienelemente; alle 30 s neu gelesen
       (auch die Wiederverbindung nach Ausfällen), mehrere Tokens wechseln sich ab, veraltete Daten bleiben mit
       Hinweis „nicht aktuell seit …“ stehen, ein ungültiger Token zeigt nichts mehr. Tokens verwalten Admins aller

@@ -35,6 +35,8 @@ var (
 	ErrNotScheduled = errors.New("the node is not scheduled for deletion")
 	// ErrGraceTooShort means the configured deletion grace is below MinDeletionGrace.
 	ErrGraceTooShort = fmt.Errorf("the node deletion grace must be at least %v", MinDeletionGrace)
+	// ErrPurging means the job has started to delete the node (its logs may be gone already).
+	ErrPurging = errors.New("the node is being deleted already")
 	// ErrDeactivated ends the session of a node that was deactivated or deleted.
 	ErrDeactivated = errors.New("node deactivated by an admin; re-enroll it after a takeover is allowed")
 )
@@ -45,6 +47,29 @@ type State struct {
 	Hostname      string
 	DeactivatedAt *time.Time
 	DeletionDueAt *time.Time
+	// PurgeStartedAt is set once the job deletes the node: from then on no cancellation.
+	PurgeStartedAt *time.Time
+}
+
+// Op is what a change does to a node.
+type Op uint8
+
+// Ops of a change.
+const (
+	OpNone Op = iota
+	// OpDeactivate marks the node deactivated (if it is not) and revokes all its certificates.
+	OpDeactivate
+	// OpScheduleDeletion deactivates as OpDeactivate and sets the deadline Due.
+	OpScheduleDeletion
+	// OpCancelDeletion lifts the deadline; the node stays deactivated.
+	OpCancelDeletion
+)
+
+// Change is what a decision on a node's state does, with its audit entry.
+type Change struct {
+	Op      Op
+	At, Due time.Time
+	Audit   access.AuditEntry
 }
 
 // Due is a node whose deletion is due.
@@ -55,18 +80,17 @@ type Due struct {
 
 // Store persists the lifecycle. Every change writes its audit entry in the same transaction.
 type Store interface {
-	// State returns the node if it lies within the scope's groups, access.ErrNotFound otherwise.
-	State(ctx context.Context, scope tenant.Scope, node identity.NodeID) (State, error)
-	// Deactivate marks the node deactivated (if it is not) and revokes all its certificates at.
-	Deactivate(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time, audit access.AuditEntry) error
-	// ScheduleDeletion deactivates the node as Deactivate (if it is not) and sets its deadline.
-	ScheduleDeletion(ctx context.Context, org tenant.OrgID, node identity.NodeID, at, due time.Time, audit access.AuditEntry) error
-	// CancelDeletion lifts the deadline; the node stays deactivated.
-	CancelDeletion(ctx context.Context, org tenant.OrgID, node identity.NodeID, audit access.AuditEntry) error
+	// Change locks the node if it lies within the scope's groups (access.ErrNotFound otherwise),
+	// lets decide choose the change from its state and makes it with its audit entry, all in one
+	// transaction; an error of decide is returned as is.
+	Change(ctx context.Context, scope tenant.Scope, node identity.NodeID, decide func(State) (Change, error)) error
 	// DueForDeletion returns at most limit deactivated nodes of all organizations that are due.
 	DueForDeletion(ctx context.Context, at time.Time, limit int) ([]Due, error)
-	// Purge deletes a deactivated node that is due with its data and writes node.purge into the
-	// organization's audit log; it refuses anything else.
+	// StartPurge marks a deactivated node that is due as being deleted (checked under its lock)
+	// and reports whether it is; a node no longer due is left alone.
+	StartPurge(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time) (bool, error)
+	// Purge deletes a deactivated node that is due and marked with its data and writes node.purge
+	// into the organization's audit log; it refuses anything else.
 	Purge(ctx context.Context, org tenant.OrgID, node identity.NodeID, at time.Time) error
 }
 
@@ -120,20 +144,37 @@ func NewService(store Store, policy authz.Policy, now func() time.Time, grace ti
 // Grace is the configured deletion grace.
 func (s *Service) Grace() time.Duration { return s.grace }
 
-// target authorizes the caller (admin on the node's group, fresh step-up) and loads the node.
-func (s *Service) target(ctx context.Context, c access.Caller, node identity.NodeID) (State, error) {
+// authorize checks the caller (admin on a group, fresh step-up) and returns the groups it may
+// change nodes in.
+func (s *Service) authorize(c access.Caller) (tenant.Scope, error) {
 	scope, err := s.policy.ScopeForAction(c.Principal, authz.ManageNodeLifecycle)
 	if err != nil || (!scope.AllGroups() && len(scope.Groups()) == 0) {
-		return State{}, access.ErrForbidden
+		return tenant.Scope{}, access.ErrForbidden
 	}
 	if s.now().Sub(c.StepUpAt) > access.StepUpMaxAge {
-		return State{}, access.ErrStepUpRequired
+		return tenant.Scope{}, access.ErrStepUpRequired
 	}
-	st, err := s.store.State(ctx, scope, node)
+	return scope, nil
+}
+
+// change authorizes the caller and lets decide choose the change from the node's state, checked
+// and made in one transaction within the caller's groups (M5-33). It reports whether anything
+// changed.
+func (s *Service) change(ctx context.Context, c access.Caller, node identity.NodeID, decide func(State) (Change, error)) (bool, error) {
+	scope, err := s.authorize(c)
 	if err != nil {
-		return State{}, fmt.Errorf("load node: %w", err)
+		return false, err
 	}
-	return st, nil
+	changed := false
+	err = s.store.Change(ctx, scope, node, func(st State) (Change, error) {
+		ch, err := decide(st)
+		changed = err == nil && ch.Op != OpNone
+		return ch, err
+	})
+	if err != nil {
+		return false, err //nolint:wrapcheck // the callers wrap
+	}
+	return changed, nil
 }
 
 func entry(c access.Caller, action string, node identity.NodeID, st State, extra map[string]string) access.AuditEntry {
@@ -147,53 +188,60 @@ func entry(c access.Caller, action string, node identity.NodeID, st State, extra
 // Deactivate revokes the node's certificates and ends its session; its data stays. A node
 // deactivated already is left as it is.
 func (s *Service) Deactivate(ctx context.Context, c access.Caller, node identity.NodeID) error {
-	st, err := s.target(ctx, c, node)
+	changed, err := s.change(ctx, c, node, func(st State) (Change, error) {
+		if st.DeactivatedAt != nil {
+			return Change{Op: OpNone}, nil
+		}
+		return Change{Op: OpDeactivate, At: s.now(), Audit: entry(c, "node.deactivate", node, st, nil)}, nil
+	})
 	if err != nil {
-		return err
-	}
-	if st.DeactivatedAt != nil {
-		return nil
-	}
-	if err := s.store.Deactivate(ctx, c.Principal.Org, node, s.now(), entry(c, "node.deactivate", node, st, nil)); err != nil {
 		return fmt.Errorf("deactivate node: %w", err)
 	}
-	s.terminate(node)
+	if changed {
+		s.terminate(node)
+	}
 	return nil
 }
 
 // Delete deactivates the node and schedules its deletion after the grace; typed must be its host
 // name. A node scheduled already keeps its deadline.
 func (s *Service) Delete(ctx context.Context, c access.Caller, node identity.NodeID, typed string) (time.Time, error) {
-	st, err := s.target(ctx, c, node)
+	var due time.Time
+	changed, err := s.change(ctx, c, node, func(st State) (Change, error) {
+		if strings.TrimSpace(typed) != st.Hostname {
+			return Change{}, ErrHostnameMismatch
+		}
+		if st.DeletionDueAt != nil {
+			due = *st.DeletionDueAt
+			return Change{Op: OpNone}, nil
+		}
+		now := s.now()
+		due = now.Add(s.grace)
+		audit := entry(c, "node.schedule_deletion", node, st, map[string]string{"deletion_due_at": due.UTC().Format(time.RFC3339)})
+		return Change{Op: OpScheduleDeletion, At: now, Due: due, Audit: audit}, nil
+	})
 	if err != nil {
-		return time.Time{}, err
-	}
-	if strings.TrimSpace(typed) != st.Hostname {
-		return time.Time{}, ErrHostnameMismatch
-	}
-	if st.DeletionDueAt != nil {
-		return *st.DeletionDueAt, nil
-	}
-	now := s.now()
-	due := now.Add(s.grace)
-	audit := entry(c, "node.schedule_deletion", node, st, map[string]string{"deletion_due_at": due.UTC().Format(time.RFC3339)})
-	if err := s.store.ScheduleDeletion(ctx, c.Principal.Org, node, now, due, audit); err != nil {
 		return time.Time{}, fmt.Errorf("schedule deletion: %w", err)
 	}
-	s.terminate(node)
+	if changed {
+		s.terminate(node)
+	}
 	return due, nil
 }
 
-// CancelDeletion lifts a scheduled deletion; the node stays deactivated.
+// CancelDeletion lifts a scheduled deletion; the node stays deactivated. Once the job has started
+// to delete the node, it is too late (ErrPurging).
 func (s *Service) CancelDeletion(ctx context.Context, c access.Caller, node identity.NodeID) error {
-	st, err := s.target(ctx, c, node)
+	_, err := s.change(ctx, c, node, func(st State) (Change, error) {
+		switch {
+		case st.DeletionDueAt == nil:
+			return Change{}, ErrNotScheduled
+		case st.PurgeStartedAt != nil:
+			return Change{}, ErrPurging
+		}
+		return Change{Op: OpCancelDeletion, Audit: entry(c, "node.cancel_deletion", node, st, nil)}, nil
+	})
 	if err != nil {
-		return err
-	}
-	if st.DeletionDueAt == nil {
-		return ErrNotScheduled
-	}
-	if err := s.store.CancelDeletion(ctx, c.Principal.Org, node, entry(c, "node.cancel_deletion", node, st, nil)); err != nil {
 		return fmt.Errorf("cancel deletion: %w", err)
 	}
 	return nil
@@ -215,9 +263,11 @@ func (s *Service) Maintain(ctx context.Context) error {
 	}
 	var first error
 	for _, d := range due {
-		err := s.purge(ctx, d, now)
+		purged, err := s.purge(ctx, d, now)
 		if err == nil {
-			s.logger.InfoContext(ctx, "node deleted after its grace", "org", d.Org.String(), "node", d.Node.String())
+			if purged {
+				s.logger.InfoContext(ctx, "node deleted after its grace", "org", d.Org.String(), "node", d.Node.String())
+			}
 			continue
 		}
 		s.logger.ErrorContext(ctx, "node deletion failed", "org", d.Org.String(), "node", d.Node.String(), "error", err)
@@ -228,16 +278,25 @@ func (s *Service) Maintain(ctx context.Context) error {
 	return first
 }
 
-func (s *Service) purge(ctx context.Context, d Due, now time.Time) error {
+// purge marks the node under its lock before it erases the logs, so that a cancellation that
+// came first keeps them and one that comes later is refused (M5-33).
+func (s *Service) purge(ctx context.Context, d Due, now time.Time) (bool, error) {
+	due, err := s.store.StartPurge(ctx, d.Org, d.Node, now)
+	if err != nil {
+		return false, fmt.Errorf("mark the node: %w", err)
+	}
+	if !due {
+		return false, nil
+	}
 	if s.logs != nil {
 		if err := s.logs.EraseNode(ctx, d.Org, d.Node); err != nil {
-			return fmt.Errorf("delete the logs: %w", err)
+			return false, fmt.Errorf("delete the logs: %w", err)
 		}
 	}
 	if err := s.store.Purge(ctx, d.Org, d.Node, now); err != nil {
-		return fmt.Errorf("delete the data: %w", err)
+		return false, fmt.Errorf("delete the data: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // Run calls Maintain every MaintainInterval until ctx ends.

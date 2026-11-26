@@ -4,7 +4,9 @@ package postgres_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +22,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/platform/ratelimit"
 )
 
 type dashboardEnv struct {
@@ -32,7 +35,7 @@ func newDashboardEnv(t *testing.T) dashboardEnv {
 	t.Helper()
 	f := setup(t)
 	store := postgres.NewDashboardStore(open(t, f.appDSN))
-	return dashboardEnv{f: f, store: store, svc: dashboards.NewService(store, authz.NewPolicy(), time.Now, uuid.New)}
+	return dashboardEnv{f: f, store: store, svc: dashboards.NewService(store, authz.NewPolicy(), ratelimit.New(1000, time.Minute, time.Now), time.Now, uuid.New)}
 }
 
 func dashboardNode(t *testing.T, f fixture, org tenant.OrgID, group tenant.GroupID) identity.NodeID {
@@ -225,5 +228,47 @@ func TestDashboardStore_LimitOfTheOrganization(t *testing.T) {
 	other := newMgmtOrg(t, e.f)
 	if _, err := e.svc.Create(ctx, member(other, other.admin, allAdmin), alerts); err != nil {
 		t.Errorf("another organization is not limited by it: %v", err)
+	}
+}
+
+// M5-33: a document Validate takes fits the table's check, also at MaxDocumentBytes with a blank
+// in the stored text after every ':' and ','.
+func TestDashboardStore_KeepsTheLargestValidDocument(t *testing.T) {
+	e := newDashboardEnv(t)
+	o := newMgmtOrg(t, e.f)
+	nodes := make([]identity.NodeID, dashboard.MaxNodes)
+	for i := range nodes {
+		nodes[i] = identity.NodeID(uuid.New())
+	}
+	wide := strings.Repeat("𝄞", dashboard.MaxTitle)
+	spec := dashboard.Spec{Version: 1, Title: wide, Description: strings.Repeat("𝄞", dashboard.MaxDescription), TimeRange: dashboard.Preset1h}
+	for i := range dashboard.MaxWidgets {
+		spec.Widgets = append(spec.Widgets, dashboard.Widget{
+			ID: fmt.Sprintf("w%031d", i), Kind: dashboard.KindLogStream, Title: "x",
+			Position: dashboard.Position{X: i % dashboard.Columns, Y: i / dashboard.Columns, W: 1, H: 1},
+			Query:    dashboard.Query{Target: dashboard.Target{Nodes: nodes}, Text: "a"},
+		})
+	}
+	// Grow the titles until the document is at the limit.
+	for i := range spec.Widgets {
+		for {
+			spec.Widgets[i].Title += "𝄞"
+			raw, _ := json.Marshal(spec)
+			if len(raw) > dashboard.MaxDocumentBytes || len([]rune(spec.Widgets[i].Title)) > dashboard.MaxTitle {
+				spec.Widgets[i].Title = string([]rune(spec.Widgets[i].Title)[:len([]rune(spec.Widgets[i].Title))-1])
+				break
+			}
+		}
+	}
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	raw, _ := json.Marshal(spec)
+	if len(raw) < dashboard.MaxDocumentBytes-1024 {
+		t.Fatalf("fixture of %d bytes: want it at the limit", len(raw))
+	}
+	d := dashboards.Dashboard{ID: dashboards.ID(uuid.New()), Owner: o.admin, Revision: 1, Spec: spec, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := e.store.Create(context.Background(), o.scope, d, access.AuditEntry{Action: "dashboard.create", Target: "dashboard:" + d.ID.String()}); err != nil {
+		t.Errorf("Create of a valid document of %d bytes: %v", len(raw), err)
 	}
 }

@@ -29,9 +29,12 @@ import (
 var (
 	orgA   = tenant.OrgID(uuid.MustParse("0193f5a0-0000-7000-8000-00000000000a"))
 	groupX = tenant.GroupID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000aa"))
+	groupY = tenant.GroupID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000bb"))
 	alice  = identity.UserID(uuid.MustParse("0193f5a0-0000-7000-8000-000000000001"))
+	bob    = identity.UserID(uuid.MustParse("0193f5a0-0000-7000-8000-000000000002"))
 	web1   = identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000a1"))
 	db1    = identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000a2"))
+	app1   = identity.NodeID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000b1"))
 	board  = dashboards.ID(uuid.MustParse("0193f5a0-0000-7000-8000-0000000000d1"))
 	now    = time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
 )
@@ -103,46 +106,114 @@ func (f *fakeDashboards) Get(_ context.Context, _ tenant.Scope, user identity.Us
 	return f.d, nil
 }
 
+// fakePrincipals returns the rights of each user (admin by default for alice); a user without
+// rights left the organization.
 type fakePrincipals struct {
-	p   authz.Principal
-	err error
+	p      authz.Principal
+	others map[identity.UserID]authz.Principal
+	err    error
 }
 
-func (f *fakePrincipals) ForUser(context.Context, tenant.OrgID, identity.UserID) (authz.Principal, error) {
-	return f.p, f.err
+func (f *fakePrincipals) ForUser(_ context.Context, _ tenant.OrgID, user identity.UserID) (authz.Principal, error) {
+	if f.err != nil {
+		return authz.Principal{}, f.err
+	}
+	if user == f.p.User {
+		return f.p, nil
+	}
+	if p, ok := f.others[user]; ok {
+		return p, nil
+	}
+	return authz.Principal{}, access.ErrNoMembership
 }
 
+// fakeReaders behave like the readers of the UI: they answer only within the caller's rights.
 type fakeReaders struct {
 	queries []metrics.Query
 	filters []logs.Filter
 	callers []access.Caller
 }
 
-func (f *fakeReaders) Summary(_ context.Context, c access.Caller, _ *tenant.GroupID) (fleet.Summary, error) {
-	f.callers = append(f.callers, c)
-	return fleet.Summary{Nodes: []fleet.NodeStatus{
-		{Node: fleet.Node{ID: web1, Hostname: "web-01", Group: groupX, GroupName: "web"}},
-		{Node: fleet.Node{ID: db1, Hostname: "db-01", Group: groupX, GroupName: "web"}},
-	}}, nil
+var fleetNodes = []fleet.NodeStatus{
+	{Node: fleet.Node{ID: web1, Hostname: "web-01", Group: groupX, GroupName: "web"}},
+	{Node: fleet.Node{ID: db1, Hostname: "db-01", Group: groupX, GroupName: "web"}},
+	{Node: fleet.Node{ID: app1, Hostname: "app-01", Group: groupY, GroupName: "api"}},
 }
 
-func (f *fakeReaders) Query(_ context.Context, _ access.Caller, q metrics.Query) ([]metrics.Series, time.Duration, error) {
+func allowed(c access.Caller, action authz.Action, group tenant.GroupID) bool {
+	return authz.NewPolicy().Allowed(c.Principal, action, authz.InGroup(orgA, group))
+}
+
+func groupOf(n identity.NodeID) tenant.GroupID {
+	for _, s := range fleetNodes {
+		if s.ID == n {
+			return s.Group
+		}
+	}
+	return tenant.GroupID{}
+}
+
+func (f *fakeReaders) Summary(_ context.Context, c access.Caller, _ *tenant.GroupID) (fleet.Summary, error) {
+	f.callers = append(f.callers, c)
+	var out fleet.Summary
+	for _, n := range fleetNodes {
+		if allowed(c, authz.ViewNodes, n.Group) {
+			out.Nodes = append(out.Nodes, n)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeReaders) Query(_ context.Context, c access.Caller, q metrics.Query) ([]metrics.Series, time.Duration, error) {
 	f.queries = append(f.queries, q)
+	for _, n := range q.Nodes {
+		if !allowed(c, authz.ViewNodes, groupOf(n)) {
+			return nil, 0, access.ErrNotFound
+		}
+	}
 	return []metrics.Series{{Node: q.Nodes[0]}}, time.Minute, nil
 }
 
-func (f *fakeReaders) List(context.Context, access.Caller) ([]alerts.Alert, error) {
-	return []alerts.Alert{
-		{Instance: alert.Instance{Key: alert.Key{Node: web1}}},
-		{Instance: alert.Instance{Key: alert.Key{Node: db1}}},
-	}, nil
+func (f *fakeReaders) List(_ context.Context, c access.Caller) ([]alerts.Alert, error) {
+	var out []alerts.Alert
+	for _, n := range []identity.NodeID{web1, db1, app1} {
+		if allowed(c, authz.ViewNodes, groupOf(n)) {
+			out = append(out, alerts.Alert{Instance: alert.Instance{Key: alert.Key{Node: n}}})
+		}
+	}
+	return out, nil
 }
 
 type fakeLogs struct{ r *fakeReaders }
 
-func (f fakeLogs) Query(_ context.Context, _ access.Caller, filter logs.Filter, limit int, _ bool) (logs.Page, error) {
+func (f fakeLogs) Query(_ context.Context, c access.Caller, filter logs.Filter, limit int, _ bool) (logs.Page, error) {
 	f.r.filters = append(f.r.filters, filter)
+	if filter.Group != nil && !allowed(c, authz.ViewLogs, *filter.Group) {
+		return logs.Page{}, access.ErrForbidden
+	}
+	for _, n := range filter.Nodes {
+		if !allowed(c, authz.ViewLogs, groupOf(n)) {
+			return logs.Page{}, access.ErrForbidden
+		}
+	}
 	return logs.Page{More: limit == 50}, nil
+}
+
+// fakeAdmission counts the slots of the displays' reads.
+type fakeAdmission struct {
+	admitted, released, logs int
+	refuse                   error
+}
+
+func (f *fakeAdmission) Admit(_ context.Context, _ kiosk.Display, logs bool) (func(), error) {
+	if f.refuse != nil {
+		return nil, f.refuse
+	}
+	f.admitted++
+	if logs {
+		f.logs++
+	}
+	return func() { f.released++ }, nil
 }
 
 type env struct {
@@ -151,6 +222,7 @@ type env struct {
 	dashboards *fakeDashboards
 	principals *fakePrincipals
 	readers    *fakeReaders
+	admission  *fakeAdmission
 }
 
 var admin = authz.Principal{User: alice, Org: orgA, Bindings: []authz.Binding{{AllGroups: true, Role: role.Admin}}}
@@ -174,9 +246,10 @@ func newEnv() env {
 		dashboards: &fakeDashboards{d: dashboards.Dashboard{ID: board, Owner: alice, Shared: true, Spec: spec()}},
 		principals: &fakePrincipals{p: admin},
 		readers:    r,
+		admission:  &fakeAdmission{},
 	}
 	e.svc = kiosk.NewService(kiosk.Deps{
-		Store: e.store, Dashboards: e.dashboards, Principals: e.principals,
+		Store: e.store, Dashboards: e.dashboards, Principals: e.principals, Admission: e.admission,
 		Readers: kiosk.Readers{Fleet: r, Logs: fakeLogs{r}, Alerts: r},
 		Policy:  authz.NewPolicy(), Now: func() time.Time { return now }, NewID: uuid.New,
 	})
@@ -373,5 +446,146 @@ func TestAuthenticate_ComparesTheHashOfTheFoundToken(t *testing.T) {
 	e.store.wrongHash = true
 	if _, err := e.svc.Authenticate(context.Background(), secret); !errors.Is(err, kiosk.ErrInvalidToken) {
 		t.Errorf("Authenticate() = %v, want ErrInvalidToken", err)
+	}
+}
+
+// A shared dashboard of a viewer, with a token of an admin: the owner may change it at any time,
+// so the display reads with the rights of both together (M5-33): what the widgets resolve
+// without a fixed target stays within the owner's groups, and the org's switch for logs holds.
+func TestWidget_ReadsWithTheRightsOfCreatorAndOwnerTogether(t *testing.T) {
+	e := newEnv()
+	ctx := context.Background()
+	viewerX := authz.Principal{User: bob, Org: orgA, Bindings: []authz.Binding{{Group: groupX, Role: role.Viewer}}}
+	e.principals.others = map[identity.UserID]authz.Principal{bob: viewerX}
+	e.dashboards.d.Owner = bob
+	d, err := e.svc.Authenticate(ctx, e.token(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The owner edits the board after the token exists: no defaults, no targets.
+	e.dashboards.d.Spec = dashboard.Spec{
+		Version: 1, Title: "Board", TimeRange: dashboard.Preset6h,
+		Variables: []dashboard.Variable{{Name: "host", Kind: dashboard.VariableNode}, {Name: "team", Kind: dashboard.VariableGroup}},
+		Widgets: []dashboard.Widget{
+			{ID: "cpu", Kind: dashboard.KindStat, Title: "CPU", Query: dashboard.Query{Metric: "sermon_cpu_utilization_ratio", Target: dashboard.Target{Variable: "host"}}},
+			{ID: "team", Kind: dashboard.KindStat, Title: "Team", Query: dashboard.Query{Metric: "sermon_cpu_utilization_ratio", Target: dashboard.Target{Variable: "team"}}},
+			{ID: "alerts", Kind: dashboard.KindAlertList, Title: "Alerts"},
+			{ID: "logs", Kind: dashboard.KindLogStream, Title: "Logs", Query: dashboard.Query{Target: dashboard.Target{Nodes: []identity.NodeID{web1}}}},
+			{ID: "foreign", Kind: dashboard.KindStat, Title: "Y", Query: dashboard.Query{Metric: "sermon_cpu_utilization_ratio", Target: dashboard.Target{Nodes: []identity.NodeID{app1}}}},
+		},
+	}
+	cpu, err := e.svc.Widget(ctx, d, "cpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := e.readers.queries[0]; len(q.Nodes) != 1 || q.Nodes[0] != db1 {
+		t.Errorf("node variable without default = %v; want db-01, the first node the owner sees (not app-01 of group Y)", q.Nodes)
+	}
+	if _, ok := cpu.Hostnames[app1]; ok {
+		t.Errorf("host names %v name a node of a group the owner can't see", cpu.Hostnames)
+	}
+	if _, err := e.svc.Widget(ctx, d, "team"); err != nil {
+		t.Fatal(err)
+	}
+	if q := e.readers.queries[1]; len(q.Nodes) != 2 || groupOf(q.Nodes[0]) != groupX {
+		t.Errorf("group variable without default = %v; want group X (not api, the first of the org)", q.Nodes)
+	}
+	list, err := e.svc.Widget(ctx, d, "alerts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range list.Alerts {
+		if a.Key.Node == app1 {
+			t.Errorf("alert list without a target shows %v of group Y", a.Key.Node)
+		}
+	}
+	if len(list.Alerts) != 2 {
+		t.Errorf("alerts = %v; want the two of group X", list.Alerts)
+	}
+	if _, err := e.svc.Widget(ctx, d, "foreign"); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("a node of group Y: %v; want NOT_FOUND as for the owner", err)
+	}
+	for _, c := range e.readers.callers {
+		if c.Principal.User != alice || !c.StepUpAt.IsZero() {
+			t.Errorf("caller = %+v; want the creator's identity without a step-up", c)
+		}
+	}
+	// Viewers see no logs while the organization says so; the admin's token doesn't change that.
+	e.principals.p.ViewersWithoutLogs = true
+	viewerX.ViewersWithoutLogs = true
+	e.principals.others[bob] = viewerX
+	if _, err := e.svc.Widget(ctx, d, "logs"); !errors.Is(err, access.ErrForbidden) {
+		t.Errorf("logs of a viewer's board with the switch off: %v, want forbidden", err)
+	}
+}
+
+// When the owner left, the display reads nothing (the token stays for the admin to revoke).
+func TestWidget_NothingOnceTheOwnerLeft(t *testing.T) {
+	e := newEnv()
+	ctx := context.Background()
+	e.dashboards.d.Owner = bob
+	e.principals.others = map[identity.UserID]authz.Principal{bob: {User: bob, Org: orgA, Bindings: []authz.Binding{{AllGroups: true, Role: role.Viewer}}}}
+	d, err := e.svc.Authenticate(ctx, e.token(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Widget(ctx, d, "cpu"); err != nil {
+		t.Fatalf("owner still a member: %v", err)
+	}
+	delete(e.principals.others, bob)
+	calls := len(e.readers.callers)
+	if _, err := e.svc.Widget(ctx, d, "cpu"); !errors.Is(err, kiosk.ErrInvalidToken) {
+		t.Errorf("owner left: %v, want ErrInvalidToken", err)
+	}
+	if len(e.readers.callers) != calls {
+		t.Error("nothing must be read once the owner left")
+	}
+}
+
+// Every read of a display takes a slot (logs one of the log queries' too) and frees it; a full
+// limit reads nothing (M5-33, T115).
+func TestWidget_ReadsOnlyWithASlot(t *testing.T) {
+	e := newEnv()
+	ctx := context.Background()
+	d, err := e.svc.Authenticate(ctx, e.token(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Creator != alice {
+		t.Errorf("display creator = %v, want alice (the limits count per creator)", d.Creator)
+	}
+	for _, w := range []string{"cpu", "logs", "alerts"} {
+		if _, err := e.svc.Widget(ctx, d, w); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if a := e.admission; a.admitted != 3 || a.released != 3 || a.logs != 1 {
+		t.Errorf("admission = %+v; want 3 slots, all freed, one for logs", a)
+	}
+	busy := errors.New("busy")
+	e.admission.refuse = busy
+	calls := len(e.readers.callers) + len(e.readers.filters)
+	if _, err := e.svc.Widget(ctx, d, "logs"); !errors.Is(err, busy) {
+		t.Errorf("full: %v, want the admission's error", err)
+	}
+	if len(e.readers.callers)+len(e.readers.filters) != calls {
+		t.Error("nothing must be read without a slot")
+	}
+}
+
+// A display shows the latest lines: its log queries span at most a day, whatever the board's range.
+func TestWidget_LogsSpanAtMostADay(t *testing.T) {
+	e := newEnv()
+	ctx := context.Background()
+	e.dashboards.d.Spec.TimeRange = dashboard.Preset7d
+	d, err := e.svc.Authenticate(ctx, e.token(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Widget(ctx, d, "logs"); err != nil {
+		t.Fatal(err)
+	}
+	if f := e.readers.filters[0]; !f.To.Equal(now) || f.To.Sub(f.From) != 24*time.Hour {
+		t.Errorf("log span %v – %v, want the last 24 h", f.From, f.To)
 	}
 }

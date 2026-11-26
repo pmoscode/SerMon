@@ -236,8 +236,9 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Policy: authz.NewPolicy(), Now: time.Now, Box: masterKeys(t),
 	})
 	logQueries := logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy())
+	sharedLogQueries := webapi.NewLogQueries()
 	displays := kiosk.NewService(kiosk.Deps{
-		Store: postgres.NewKioskStore(pg), Dashboards: postgres.NewDashboardStore(pg),
+		Store: postgres.NewKioskStore(pg), Dashboards: postgres.NewDashboardStore(pg), Admission: webapi.NewKioskReads(sharedLogQueries),
 		Principals: access.NewLoader(postgres.NewAccessStore(pg), secondFactor),
 		Readers:    kiosk.Readers{Fleet: nodes, Logs: logQueries, Alerts: alertList},
 		Policy:     authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
@@ -288,7 +289,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Policies: webapi.NewNotificationPolicyHandler(policies, slog.New(slog.DiscardHandler)),
 		Windows:  webapi.NewMaintenanceWindowHandler(policies, slog.New(slog.DiscardHandler)),
 		Logs: webapi.NewLogHandler(
-			logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy()), nil, slog.New(slog.DiscardHandler)),
+			logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy()), nil, sharedLogQueries, slog.New(slog.DiscardHandler)),
 		OIDCMappings: webapi.NewOIDCMappingHandler(mappings, true, true, slog.New(slog.DiscardHandler)),
 		LogSettings: webapi.NewLogSettingsHandler(
 			logsettings.NewService(postgres.NewLogSettingsStore(pg), authz.NewPolicy(), agentapi.NewSessions(0), time.Now), slog.New(slog.DiscardHandler)),
@@ -308,7 +309,7 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Silences: webapi.NewAlertSilenceHandler(routing.NewSilenceService(routing.SilenceDeps{
 			Store: postgres.NewRoutingStore(pg), Nodes: postgres.NewFleetStore(pg), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 		}), slog.New(slog.DiscardHandler)),
-		Dashboards:         webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
+		Dashboards:         webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(pg), authz.NewPolicy(), ratelimit.New(1000, time.Minute, time.Now), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		KioskTokens:        webapi.NewKioskTokenHandler(displays, slog.New(slog.DiscardHandler)),
 		Kiosk:              webapi.NewKioskHandler(displays, slog.New(slog.DiscardHandler)),
 		KioskAuthenticator: webapi.NewKioskAuthenticator(displays, ratelimit.New(1000, time.Minute, time.Now), ratelimit.New(kioskTestCalls, time.Minute, time.Now), slog.New(slog.DiscardHandler)),

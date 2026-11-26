@@ -38,6 +38,9 @@ const (
 	MaxText        = 256
 	maxLabelValue  = 256
 	maxLogSeverity = 8
+	// MaxDocumentBytes bounds the document as JSON: the table keeps 64 KiB of its text, which
+	// writes a blank after every ':' and ',' (M5-33).
+	MaxDocumentBytes = 48 << 10
 )
 
 // ErrInvalid means a document breaks the model.
@@ -259,6 +262,13 @@ func (s *Spec) Validate() error {
 				return invalid("widget %q overlaps %q", w.ID, other.ID)
 			}
 		}
+	}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		return invalid("not representable as JSON")
+	}
+	if len(raw) > MaxDocumentBytes {
+		return invalid("the document is too large: at most %d KiB as JSON", MaxDocumentBytes>>10)
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package dashboard_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -197,4 +198,47 @@ func TestSpec_JSONRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(back, s) {
 		t.Errorf("round trip = %+v, want %+v", back, s)
 	}
+}
+
+// M5-33: a document within every other limit may still be too large to store (the table keeps
+// 64 KiB of JSON); Validate says so as an invalid document, not the database as an error.
+func TestSpec_ValidateBoundsTheSizeOfTheDocument(t *testing.T) {
+	big := largestSpec()
+	raw, err := json.Marshal(big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) <= dashboard.MaxDocumentBytes {
+		t.Fatalf("fixture of %d bytes: want more than MaxDocumentBytes", len(raw))
+	}
+	if err := big.Validate(); !errors.Is(err, dashboard.ErrInvalid) || !strings.Contains(err.Error(), "large") {
+		t.Errorf("Validate() = %v, want ErrInvalid: too large", err)
+	}
+	small := big
+	small.Widgets = big.Widgets[:10]
+	if err := small.Validate(); err != nil {
+		t.Errorf("a third of it: %v", err)
+	}
+}
+
+// largestSpec is a document at every limit but its size.
+func largestSpec() dashboard.Spec {
+	nodes := make([]identity.NodeID, dashboard.MaxNodes)
+	for i := range nodes {
+		nodes[i] = identity.NodeID(uuid.New())
+	}
+	wide := strings.Repeat("𝄞", dashboard.MaxTitle)
+	big := dashboard.Spec{Version: 1, Title: wide, Description: strings.Repeat("𝄞", dashboard.MaxDescription), TimeRange: dashboard.Preset1h}
+	for i := range dashboard.MaxWidgets {
+		w := dashboard.Widget{
+			ID: fmt.Sprintf("w%031d", i), Kind: dashboard.KindTimeseries, Title: wide,
+			Position: dashboard.Position{X: i % dashboard.Columns, Y: i / dashboard.Columns, W: 1, H: 1},
+			Query:    dashboard.Query{Metric: "sermon_cpu_utilization_ratio", Target: dashboard.Target{Nodes: nodes}},
+		}
+		if i%2 == 1 {
+			w.Kind, w.Query = dashboard.KindLogStream, dashboard.Query{Target: dashboard.Target{Nodes: nodes}, Text: strings.Repeat("𝄞", dashboard.MaxText/4)}
+		}
+		big.Widgets = append(big.Widgets, w)
+	}
+	return big
 }

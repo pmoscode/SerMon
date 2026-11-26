@@ -151,7 +151,7 @@ func (h *NodeHandler) identityFailure(ctx context.Context, op string, err error)
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	case errors.Is(err, access.ErrStepUpRequired):
 		return stepUpRequired()
-	case errors.Is(err, rotation.ErrScheduledForDeletion), errors.Is(err, nodelife.ErrNotScheduled):
+	case errors.Is(err, rotation.ErrScheduledForDeletion), errors.Is(err, nodelife.ErrNotScheduled), errors.Is(err, nodelife.ErrPurging):
 		return connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, nodelife.ErrHostnameMismatch):
 		return connect.NewError(connect.CodeInvalidArgument, err)

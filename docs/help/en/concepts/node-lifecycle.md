@@ -10,6 +10,6 @@ The node comes back by **Allow takeover** (Identity tab, operator rights) and a 
 
 ## Delete
 
-The host name confirms it. The node is deactivated at once and deleted after the grace – 7 days by default, set by the operator – with its metrics, anomalies, security events, alerts and logs. Until then **Cancel deletion** lifts the deletion; the node stays deactivated. A takeover is not possible during the grace.
+The host name confirms it. The node is deactivated at once and deleted after the grace – 7 days by default, set by the operator – with its metrics, anomalies, security events, alerts and logs. Until then **Cancel deletion** lifts the deletion; the node stays deactivated. Once the deletion has started after the grace, it can no longer be cancelled. A takeover is not possible during the grace.
 
 What stays: the entries in the audit log, the notification log until its own retention, and silences naming the node. Until it is deleted the node counts against the organization's quota and keeps its `machine-id`.

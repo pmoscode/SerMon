@@ -34,17 +34,22 @@ type node struct {
 	hostname    string
 	deactivated *time.Time
 	due         *time.Time
+	purging     *time.Time
 	revokedAt   *time.Time
 	purged      bool
 }
 
-// store behaves like the Postgres store: scope checks, one audit entry per change, purge only
-// of deactivated nodes that are due.
+// store behaves like the Postgres store: the node locked within the scope's groups, the decision
+// and the change in one step, one audit entry per change, purge only of deactivated nodes that
+// are due and marked.
 type store struct {
 	nodes   map[identity.NodeID]*node
 	audits  []access.AuditEntry
+	scopes  []tenant.Scope
 	purges  []identity.NodeID
 	failDue error
+	// stale is what DueForDeletion returns instead, as another instance's list of before.
+	stale []nodelife.Due
 }
 
 func newStore() *store {
@@ -55,54 +60,43 @@ func newStore() *store {
 	}}
 }
 
-func (s *store) State(_ context.Context, scope tenant.Scope, id identity.NodeID) (nodelife.State, error) {
+func (s *store) Change(_ context.Context, scope tenant.Scope, id identity.NodeID, decide func(nodelife.State) (nodelife.Change, error)) error {
+	s.scopes = append(s.scopes, scope)
 	n, ok := s.nodes[id]
 	if !ok || n.purged || n.org != scope.OrgID() || !scope.AllowsGroup(n.group) {
-		return nodelife.State{}, access.ErrNotFound
+		return access.ErrNotFound
 	}
-	return nodelife.State{Group: n.group, Hostname: n.hostname, DeactivatedAt: n.deactivated, DeletionDueAt: n.due}, nil
-}
-
-func (s *store) Deactivate(_ context.Context, org tenant.OrgID, id identity.NodeID, at time.Time, audit access.AuditEntry) error {
-	n := s.nodes[id]
-	if n.org != org {
-		return errors.New("wrong org")
+	ch, err := decide(nodelife.State{Group: n.group, Hostname: n.hostname, DeactivatedAt: n.deactivated, DeletionDueAt: n.due, PurgeStartedAt: n.purging})
+	if err != nil {
+		return err
 	}
-	if n.deactivated == nil {
-		n.deactivated = &at
+	switch ch.Op {
+	case nodelife.OpNone:
+		return nil
+	case nodelife.OpDeactivate, nodelife.OpScheduleDeletion:
+		if n.deactivated == nil {
+			n.deactivated = &ch.At
+		}
+		n.revokedAt = &ch.At
+		if ch.Op == nodelife.OpScheduleDeletion {
+			n.due = &ch.Due
+		}
+	case nodelife.OpCancelDeletion:
+		if n.due == nil || n.purging != nil {
+			return errors.New("cancel refused by the store")
+		}
+		n.due = nil
 	}
-	n.revokedAt = &at
-	s.audits = append(s.audits, audit)
-	return nil
-}
-
-func (s *store) ScheduleDeletion(_ context.Context, org tenant.OrgID, id identity.NodeID, at, due time.Time, audit access.AuditEntry) error {
-	n := s.nodes[id]
-	if n.org != org {
-		return errors.New("wrong org")
-	}
-	if n.deactivated == nil {
-		n.deactivated = &at
-		n.revokedAt = &at
-	}
-	n.due = &due
-	s.audits = append(s.audits, audit)
-	return nil
-}
-
-func (s *store) CancelDeletion(_ context.Context, org tenant.OrgID, id identity.NodeID, audit access.AuditEntry) error {
-	n := s.nodes[id]
-	if n.org != org {
-		return errors.New("wrong org")
-	}
-	n.due = nil
-	s.audits = append(s.audits, audit)
+	s.audits = append(s.audits, ch.Audit)
 	return nil
 }
 
 func (s *store) DueForDeletion(_ context.Context, at time.Time, limit int) ([]nodelife.Due, error) {
 	if s.failDue != nil {
 		return nil, s.failDue
+	}
+	if s.stale != nil {
+		return s.stale, nil
 	}
 	var out []nodelife.Due
 	for id, n := range s.nodes {
@@ -113,10 +107,21 @@ func (s *store) DueForDeletion(_ context.Context, at time.Time, limit int) ([]no
 	return out, nil
 }
 
+func (s *store) StartPurge(_ context.Context, org tenant.OrgID, id identity.NodeID, at time.Time) (bool, error) {
+	n, ok := s.nodes[id]
+	if !ok || n.purged || n.org != org || n.deactivated == nil || n.due == nil || n.due.After(at) {
+		return false, nil
+	}
+	if n.purging == nil {
+		n.purging = &at
+	}
+	return true, nil
+}
+
 func (s *store) Purge(_ context.Context, org tenant.OrgID, id identity.NodeID, at time.Time) error {
 	n, ok := s.nodes[id]
-	if !ok || n.org != org || n.deactivated == nil || n.due == nil || n.due.After(at) {
-		return errors.New("not deactivated and due")
+	if !ok || n.org != org || n.deactivated == nil || n.due == nil || n.due.After(at) || n.purging == nil {
+		return errors.New("not deactivated, due and marked")
 	}
 	n.purged = true
 	s.purges = append(s.purges, id)
@@ -339,5 +344,76 @@ func TestNewService_RefusesAShortGrace(t *testing.T) {
 	}
 	if _, err := nodelife.NewService(newStore(), authz.NewPolicy(), time.Now, nodelife.MinDeletionGrace); err != nil {
 		t.Errorf("minimum grace: %v", err)
+	}
+}
+
+// M5-33: the node is checked and changed in one step within the caller's groups – a group admin
+// never acts on a node outside them, also not one moved meanwhile.
+func TestService_ChangesOnlyWithinTheCallersGroups(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if err := f.svc.Deactivate(ctx, adminWeb, webN); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Delete(ctx, adminWeb, webN, "web-01"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.CancelDeletion(ctx, adminWeb, webN); err != nil {
+		t.Fatal(err)
+	}
+	for i, scope := range f.store.scopes {
+		if scope.AllGroups() || !scope.AllowsGroup(web) || scope.AllowsGroup(db) {
+			t.Errorf("change %d in scope %+v; want the admin's group only", i, scope)
+		}
+	}
+	// Moved to another group: the next change finds nothing and does nothing.
+	f.store.nodes[webN].group = db
+	if _, err := f.svc.Delete(ctx, adminWeb, webN, "web-01"); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("node moved out of the admin's groups: %v", err)
+	}
+	if len(f.store.audits) != 3 {
+		t.Errorf("audits = %d, want 3", len(f.store.audits))
+	}
+}
+
+// M5-29/M5-33: the job marks a node before it erases its logs; a node whose deletion was
+// cancelled meanwhile (a list of before) keeps its logs, and a marked one can't be cancelled
+// any more – its logs may be gone already.
+func TestService_MaintainChecksTheNodeBeforeItsLogs(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if _, err := f.svc.Delete(ctx, adminAll, webN, "web-01"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Delete(ctx, adminAll, dbN, "db-01"); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := f.store.DueForDeletion(ctx, now.Add(nodelife.DefaultDeletionGrace), nodelife.PurgeBatch)
+	if err != nil || len(stale) != 2 {
+		t.Fatalf("due = %v, %v", stale, err)
+	}
+	if err := f.svc.CancelDeletion(ctx, adminAll, dbN); err != nil {
+		t.Fatal(err)
+	}
+	f.store.stale = stale
+	f.clock.t = now.Add(nodelife.DefaultDeletionGrace)
+	f.eraser.fail = errors.New("loki down")
+	if err := f.svc.Maintain(ctx); err == nil {
+		t.Fatal("with Loki down: no error")
+	}
+	if f.store.nodes[dbN].purging != nil {
+		t.Error("the cancelled node must not be marked")
+	}
+	later := adminAll
+	later.StepUpAt = f.clock.t
+	if err := f.svc.CancelDeletion(ctx, later, webN); !errors.Is(err, nodelife.ErrPurging) {
+		t.Errorf("cancel after the job started: %v, want ErrPurging", err)
+	}
+	f.eraser.fail = nil
+	if err := f.svc.Maintain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.eraser.erased) != 1 || f.eraser.erased[0] != webN || len(f.store.purges) != 1 || f.store.purges[0] != webN {
+		t.Errorf("erased %v, purged %v; want web-01 only, db-01 was cancelled", f.eraser.erased, f.store.purges)
 	}
 }

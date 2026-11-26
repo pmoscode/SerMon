@@ -69,9 +69,16 @@ func TestAgentAPI_DeactivatedAndDeletedNodesCannotConnect(t *testing.T) {
 	defer pg.Close()
 	store := postgres.NewNodeLifecycleStore(pg)
 	audit := access.AuditEntry{Action: "node.deactivate", Target: "node:" + node.String()}
+	scope, err := tenant.ForAllGroups(org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	change := func(ch nodelife.Change) error {
+		return store.Change(ctx, scope, node, func(nodelife.State) (nodelife.Change, error) { return ch, nil })
+	}
 
 	// Deactivated: refused.
-	if err := store.Deactivate(ctx, org, node, time.Now(), audit); err != nil {
+	if err := change(nodelife.Change{Op: nodelife.OpDeactivate, At: time.Now(), Audit: audit}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := srv.session(t, agent.cert, agent.roots, false); err == nil {
@@ -90,7 +97,7 @@ func TestAgentAPI_DeactivatedAndDeletedNodesCannotConnect(t *testing.T) {
 	}
 
 	// Scheduled for deletion: refused, no takeover, and after the grace it is gone.
-	if err := store.ScheduleDeletion(ctx, org, node, time.Now(), time.Now().Add(time.Hour), audit); err != nil {
+	if err := change(nodelife.Change{Op: nodelife.OpScheduleDeletion, At: time.Now(), Due: time.Now().Add(time.Hour), Audit: audit}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := srv.session(t, again.cert, again.roots, false); err == nil {

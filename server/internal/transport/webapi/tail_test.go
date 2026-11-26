@@ -43,7 +43,7 @@ func tailServer(t *testing.T, perSession int) (webv1connect.LogServiceClient, we
 	metricsHandler := NewMetricsHandler(fleet.NewService(oneNode{}, metrics.NewReader(store, metrics.NewRing(), time.Now), time.Now), live, slog.New(slog.DiscardHandler))
 	auth := &fakeAuth{principal: viewer}
 	mux := http.NewServeMux()
-	mux.Handle(webv1connect.NewLogServiceHandler(NewLogHandler(svc, live, slog.New(slog.DiscardHandler)), connect.WithInterceptors(auth)))
+	mux.Handle(webv1connect.NewLogServiceHandler(NewLogHandler(svc, live, nil, slog.New(slog.DiscardHandler)), connect.WithInterceptors(auth)))
 	mux.Handle(webv1connect.NewMetricsServiceHandler(metricsHandler, connect.WithInterceptors(auth)))
 	srv := httptest.NewUnstartedServer(mux)
 	srv.EnableHTTP2 = true

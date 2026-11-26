@@ -24,6 +24,9 @@ import (
 // MaxPerOrganization bounds the dashboards of an organization.
 const MaxPerOrganization = 200
 
+// WritesPerMinute bounds a member's writes of dashboards (each one is an audit entry, M5-33).
+const WritesPerMinute = 60
+
 var (
 	// ErrTooMany means the organization has MaxPerOrganization dashboards.
 	ErrTooMany = fmt.Errorf("at most %d dashboards per organization", MaxPerOrganization)
@@ -32,7 +35,12 @@ var (
 	// ErrUnknownReference means the document names a node or group the caller can't view: of
 	// another group, another organization or nobody (the same answer for all, NOT_FOUND).
 	ErrUnknownReference = errors.New("not found")
+	// ErrTooManyWrites means the member changed dashboards WritesPerMinute times within a minute.
+	ErrTooManyWrites = errors.New("too many changes of dashboards, wait a moment")
 )
+
+// Limiter allows a number of calls per key and window (ratelimit.Limiter).
+type Limiter interface{ Allow(key string) bool }
 
 // ID identifies a dashboard.
 type ID uuid.UUID
@@ -82,13 +90,14 @@ type Store interface {
 type Service struct {
 	store  Store
 	policy authz.Policy
+	writes Limiter
 	now    func() time.Time
 	newID  func() uuid.UUID
 }
 
-// NewService returns the service.
-func NewService(store Store, policy authz.Policy, now func() time.Time, newID func() uuid.UUID) *Service {
-	return &Service{store: store, policy: policy, now: now, newID: newID}
+// NewService returns the service; writes limits each member's writes (WritesPerMinute).
+func NewService(store Store, policy authz.Policy, writes Limiter, now func() time.Time, newID func() uuid.UUID) *Service {
+	return &Service{store: store, policy: policy, writes: writes, now: now, newID: newID}
 }
 
 // authorize lets members with a role on any group use dashboards; the scope is the whole
@@ -101,6 +110,18 @@ func (s *Service) authorize(c access.Caller) (tenant.Scope, error) {
 	scope, err := tenant.ForAllGroups(p.Org)
 	if err != nil {
 		return tenant.Scope{}, access.ErrForbidden
+	}
+	return scope, nil
+}
+
+// authorizeWrite authorizes as authorize and counts the write against the member's limit.
+func (s *Service) authorizeWrite(c access.Caller) (tenant.Scope, error) {
+	scope, err := s.authorize(c)
+	if err != nil {
+		return tenant.Scope{}, err
+	}
+	if !s.writes.Allow(c.Principal.Org.String() + "/" + c.Principal.User.String()) {
+		return tenant.Scope{}, ErrTooManyWrites
 	}
 	return scope, nil
 }
@@ -155,7 +176,7 @@ func (s *Service) Import(ctx context.Context, c access.Caller, spec dashboard.Sp
 }
 
 func (s *Service) create(ctx context.Context, c access.Caller, spec dashboard.Spec, action string) (Dashboard, error) {
-	scope, err := s.authorize(c)
+	scope, err := s.authorizeWrite(c)
 	if err != nil {
 		return Dashboard{}, err
 	}
@@ -172,7 +193,7 @@ func (s *Service) create(ctx context.Context, c access.Caller, spec dashboard.Sp
 
 // Update replaces the document of a dashboard the caller may edit, based on revision.
 func (s *Service) Update(ctx context.Context, c access.Caller, id ID, revision int64, spec dashboard.Spec) (Dashboard, error) {
-	scope, err := s.authorize(c)
+	scope, err := s.authorizeWrite(c)
 	if err != nil {
 		return Dashboard{}, err
 	}
@@ -197,7 +218,7 @@ func (s *Service) Update(ctx context.Context, c access.Caller, id ID, revision i
 
 // SetShared shares a dashboard the caller may edit with the organization, or makes it private.
 func (s *Service) SetShared(ctx context.Context, c access.Caller, id ID, shared bool) (Dashboard, error) {
-	scope, err := s.authorize(c)
+	scope, err := s.authorizeWrite(c)
 	if err != nil {
 		return Dashboard{}, err
 	}
@@ -218,7 +239,7 @@ func (s *Service) SetShared(ctx context.Context, c access.Caller, id ID, shared 
 
 // Delete removes a dashboard the caller may edit.
 func (s *Service) Delete(ctx context.Context, c access.Caller, id ID) error {
-	scope, err := s.authorize(c)
+	scope, err := s.authorizeWrite(c)
 	if err != nil {
 		return err
 	}

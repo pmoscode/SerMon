@@ -4,6 +4,7 @@ package postgres_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -122,18 +123,53 @@ func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 	if got := ages(t, owner, "alert_history", "at", a.org); !equal(got, []int{25, 3}) {
 		t.Errorf("alert history of A after 30 days: %v, want [25 3]", got)
 	}
-	// Whatever the caller asks, the last 7 days stay.
-	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), time.Now()); err != nil {
+	// Whatever the caller's clock says, the database keeps the organization's period (M5-33).
+	future := time.Now().Add(100 * 365 * day)
+	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), future); err != nil {
+		t.Fatal(err)
+	}
+	if got := ages(t, owner, "security_events", "occurred_at", a.org); !equal(got, []int{25, 3, 0}) {
+		t.Errorf("events of A after expiring with a clock far ahead: %v, want [25 3 0]", got)
+	}
+	if got := ages(t, owner, "alert_history", "at", a.org); !equal(got, []int{25, 3}) {
+		t.Errorf("alert history of A after expiring with a clock far ahead: %v, want [25 3]", got)
+	}
+	// The shortest period: the last 7 days stay.
+	if err := store.Set(ctx, scopeA, retention.Settings{LogDays: 3, EventDays: 7}, access.AuditEntry{Action: "org.retention_set", Target: "org:" + a.org.String()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), future); err != nil {
 		t.Fatal(err)
 	}
 	if got := ages(t, owner, "security_events", "occurred_at", a.org); !equal(got, []int{3, 0}) {
-		t.Errorf("events of A after expiring now: %v, want [3 0]", got)
+		t.Errorf("events of A after 7 days: %v, want [3 0]", got)
+	}
+	// An organization with the instance's default: nothing, whatever is asked.
+	if n, err := store.ExpireEvents(ctx, tenant.OrgID(b.org), future); err != nil || n != 0 {
+		t.Errorf("expire B with the defaults: %d, %v; want nothing", n, err)
 	}
 	if got := ages(t, owner, "security_events", "occurred_at", b.org); !equal(got, before) {
 		t.Errorf("events of B: %v, had %v", got, before)
 	}
 	if got := ages(t, owner, "alert_history", "at", b.org); !equal(got, []int{45}) {
 		t.Errorf("alert history of B: %v, want [45]", got)
+	}
+	// Only within the caller's tenant: A's function called in B's transaction fails.
+	app, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = app.Close(ctx) }()
+	tx, err := app.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SELECT set_config('sermon.org_id', $1, true)", b.org.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT security_events_expire_org($1, 'infinity')", a.org); err == nil || !strings.Contains(err.Error(), "outside the tenant") {
+		t.Errorf("expire A from B's tenant: %v", err)
 	}
 
 	at := time.Now().Truncate(time.Second)

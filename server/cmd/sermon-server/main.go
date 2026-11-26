@@ -511,9 +511,11 @@ const (
 
 // newKiosk assembles the kiosk displays (M5-26): tokens in the database, the dashboards and the
 // readers of the UI with the rights of the token's creator.
-func newKiosk(db *postgres.DB, principals *access.Loader, nodes *fleet.Service, logQueries *logs.Service, alertList *alerts.Service, policy authz.Policy) *kiosk.Service {
+func newKiosk(db *postgres.DB, principals *access.Loader, nodes *fleet.Service, logQueries *logs.Service, alertList *alerts.Service,
+	reads *webapi.KioskReads, policy authz.Policy,
+) *kiosk.Service {
 	return kiosk.NewService(kiosk.Deps{
-		Store: postgres.NewKioskStore(db), Dashboards: postgres.NewDashboardStore(db), Principals: principals,
+		Store: postgres.NewKioskStore(db), Dashboards: postgres.NewDashboardStore(db), Principals: principals, Admission: reads,
 		Readers: kiosk.Readers{Fleet: nodes, Logs: logQueries, Alerts: alertList},
 		Policy:  policy, Now: time.Now, NewID: access.NewID,
 	})
@@ -608,7 +610,9 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	secondFactor.WithPasskeys(passkeys)
 	accessStore := postgres.NewAccessStore(db)
 	principals := access.NewLoader(accessStore, secondFactor)
-	displays := newKiosk(db, principals, nodes, observing.logQueries, alertingAPI.alerts, policy)
+	// The displays' log widgets count against the log queries of the UI (M5-33).
+	logLimits := webapi.NewLogQueries()
+	displays := newKiosk(db, principals, nodes, observing.logQueries, alertingAPI.alerts, webapi.NewKioskReads(logLimits), policy)
 	live := webapi.NewLiveStreams()
 	// The dashboards' reads of a fleet share half of the database pool (T106, M4-31).
 	heavyReads := webapi.NewHeavyReads(db.PoolSize())
@@ -672,7 +676,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Modules:      webapi.NewModuleHandler(observing.modules, logger),
 		Passkeys:     webapi.NewPasskeyHandler(passkeys, logger),
 		OIDCMappings: webapi.NewOIDCMappingHandler(mappings, cfg.OIDC != nil, cfg.OIDC != nil && cfg.OIDC.JIT, logger),
-		Logs:         webapi.NewLogHandler(observing.logQueries, live, logger),
+		Logs:         webapi.NewLogHandler(observing.logQueries, live, logLimits, logger),
 		LiveView:     webapi.NewLiveViewHandler(observing.liveViews, live, logger),
 		TwoFactor: webapi.NewTwoFactorHandler(secondFactor, credentials,
 			ratelimit.New(totpSetupAttemptsPerWindow, totpSetupWindow, time.Now), logger),
@@ -682,7 +686,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Windows:       webapi.NewMaintenanceWindowHandler(alertingAPI.policies, logger),
 		Alerts:        webapi.NewAlertHandler(alertingAPI.alerts, logger),
 		Rules:         webapi.NewAlertRuleHandler(alertingAPI.rules, logger),
-		Dashboards:    webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(db), policy, time.Now, access.NewID), logger),
+		Dashboards:    webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(db), policy, ratelimit.New(dashboards.WritesPerMinute, time.Minute, time.Now), time.Now, access.NewID), logger),
 		KioskTokens:   webapi.NewKioskTokenHandler(displays, logger),
 		Kiosk:         webapi.NewKioskHandler(displays, logger),
 		KioskAuthenticator: webapi.NewKioskAuthenticator(displays, ratelimit.New(webapi.KioskCallsPerIP, time.Minute, time.Now),

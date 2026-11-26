@@ -19,6 +19,20 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
 
+// LogQueries counts the log queries running at once against logQueryLimits: those of the
+// LogService and the log widgets of the kiosk displays together (M3-28, M5-33).
+type LogQueries struct{ limiter *streamLimiter }
+
+// NewLogQueries returns the counter.
+func NewLogQueries() *LogQueries { return &LogQueries{limiter: newStreamLimiter(logQueryLimits)} }
+
+func (q *LogQueries) orNew() *streamLimiter {
+	if q == nil {
+		return newStreamLimiter(logQueryLimits)
+	}
+	return q.limiter
+}
+
 // LogHandler implements sermon.web.v1.LogService (M3-08, M3-09).
 type LogHandler struct {
 	svc     *logs.Service
@@ -45,9 +59,10 @@ func (h *LogHandler) admit(ctx context.Context, c access.Caller) (func(), error)
 
 var _ webv1connect.LogServiceHandler = (*LogHandler)(nil)
 
-// NewLogHandler returns the handler; live are the limits shared with WatchMetrics (nil: its own).
-func NewLogHandler(svc *logs.Service, live *LiveStreams, logger *slog.Logger) *LogHandler {
-	return &LogHandler{svc: svc, streams: live.orNew(), queries: newStreamLimiter(logQueryLimits), logger: logger}
+// NewLogHandler returns the handler; live are the limits shared with WatchMetrics, queries those
+// shared with the kiosk displays (nil: its own).
+func NewLogHandler(svc *logs.Service, live *LiveStreams, queries *LogQueries, logger *slog.Logger) *LogHandler {
+	return &LogHandler{svc: svc, streams: live.orNew(), queries: queries.orNew(), logger: logger}
 }
 
 // QueryLogs returns the lines of the filter.

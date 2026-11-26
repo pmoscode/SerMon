@@ -35,10 +35,15 @@ Höchstens 30 Widgets, 20 Nodes je Widget und 4 Variablen.
 
 Admins aller Gruppen legen an einem geteilten Dashboard einen **Kiosk-Token** an (*Kiosk-Anzeigen*, mit erneuter
 Bestätigung der Identität). Die Adresse dazu – `/kiosk#t=…` – zeigt das Dashboard auf einer Anzeige ohne Anmeldung:
-Vollbild, ohne Bedienelemente, nur lesend, mit den Rechten des Admins, der ihn angelegt hat. Die Seite aktualisiert
+Vollbild, ohne Bedienelemente, nur lesend. Sie zeigt nur, was der Admin, der den Token angelegt hat, **und** der
+Eigentümer des Dashboards beide sehen dürfen – auch nachdem der Eigentümer es geändert hat; Log-Widgets zeigen die
+Zeilen des letzten Tages. Die Seite aktualisiert
 sich alle 30 Sekunden, verbindet sich nach einem Ausfall selbst neu und sagt, seit wann ihre Daten nicht aktuell sind.
 Mehrere Tokens mit Komma (`#t=…,…`) wechseln sich ab, alle 60 Sekunden oder wie mit `&rotate=` (Sekunden) gesetzt.
 Für echtes Vollbild den Browser im Kiosk-Modus starten (z. B. `chromium --kiosk`).
 
 Die Adresse ist der Schlüssel: Wer sie hat, sieht das Dashboard. Ein Token läuft nach 1 bis 365 Tagen ab; Widerrufen,
-das Dashboard löschen oder nicht mehr teilen beendet ihn sofort – die Anzeige zeigt dann nichts mehr.
+das Dashboard löschen oder nicht mehr teilen beendet ihn sofort – die Anzeige zeigt dann nichts mehr. Verliert der Admin
+die Rolle für alle Gruppen oder verlässt er die Organisation, werden seine Tokens widerrufen; bekommt er die Rolle
+zurück, braucht es neue. Verlässt der Eigentümer die Organisation, zeigt die Anzeige nichts mehr; seine privaten
+Dashboards werden gelöscht.

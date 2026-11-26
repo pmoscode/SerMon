@@ -137,3 +137,14 @@ mit vielen Organisationen fehlen Kontingente. Die Fragen hat der Product Owner a
   sichtbar als eingestellt; die Delete-Anfragen bleiben in Lokis Speicher (eine je Org und Tag).
 - **Nicht pro Org:** Metriken (Continuous Aggregates mit Policies der Instanz), Audit-Log, Protokoll der
   Benachrichtigungen (30 Tage) und bekannte Login-Quellen (ein Jahr).
+
+## Nachtrag M5-33: Untergrenze in der Datenbank (Security-Review)
+
+- `security_events_expire_org` liest die Frist der Org selbst (`event_retention_days`) und löscht nur, was älter ist,
+  gemessen an der Uhr der Datenbank – egal welche Zeit der Aufrufer übergibt (falsche Uhr, Fehler). Eine Org ohne
+  eigene Frist bleibt unberührt (die Partitionen der Instanz löschen nach einem Jahr). Vorher galt nur die Untergrenze
+  von 7 Tagen, auch für Orgs mit längerer oder ohne eigene Frist (die Alert-Historie hat für den Definer nicht den
+  Schutz von 365 Tagen, den `sermon_app` hat; die Frist der Org ersetzt ihn).
+- Die Funktion läuft nur im Tenant der übergebenen Org (`sermon.org_id`), sie setzt ihn nicht mehr selbst.
+- **Obergrenze:** Eine gesenkte `retention_cap_days` löscht weiterhin nichts (wie oben): Eine bestehende längere
+  Einstellung bleibt, bis ein Admin sie ändert. Die Obergrenze begrenzt das Einstellen, nicht das Behalten.

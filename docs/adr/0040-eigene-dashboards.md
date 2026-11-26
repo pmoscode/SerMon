@@ -91,7 +91,7 @@ Alle Fremdpakete erfüllen die 3-Tage-Regel; entscheidend sind CSP, Tastatur und
 - **Widgets:** `TIMESERIES`, `GAUGE`, `STAT`, `TABLE` (eine Metrik, eine Zeile je Node und Serie), `LOG_STREAM`,
   `ALERT_LIST`. Je Widget eine ID (`^[a-z0-9_-]{1,32}$`, eindeutig), ein Titel und genau eine Abfrage:
   Metrik-Widgets eine Metrik aus dem Katalog mit Label-Filter (wie `MetricSelector`), Log-Stream ein Suchtext
-  (höchstens 200 Zeichen, wie im Log-Explorer), Alert-Liste optional Schweregrade.
+  (höchstens 256 Byte auf einer Zeile, wie im Log-Explorer), Alert-Liste optional Schweregrade.
 - **Ziel jeder Abfrage:** genau eines von festen Nodes (höchstens 20), einer Gruppe oder einer Variablen.
 - **Variablen:** höchstens 4, Art `NODE` oder `GROUP`, Name `^[a-z][a-z0-9_]{0,31}$`, optional ein Vorgabewert; die
   Auswahl steht in der URL (`?var-node=…`) und wird nicht gespeichert.
@@ -108,6 +108,7 @@ Alle Fremdpakete erfüllen die 3-Tage-Regel; entscheidend sind CSP, Tastatur und
 | Nodes je Widget (fest) | 20 | `QueryMetrics` erlaubt 100, eine Gruppe ist auf 100 begrenzt |
 | Variablen | 4 | |
 | Dokument (JSON beim Import) | 32 KiB | unter der Grenze von 64 KiB je Request |
+| Dokument (JSON beim Speichern) | 48 KiB | die Tabelle hält 64 KiB Text (`jsonb` mit Leerzeichen), Nachtrag M5-33 |
 | Titel / Beschreibung | 200 / 2000 Zeichen, ohne Steuerzeichen | wie andere Namen (`naming.Clean`) |
 | Dashboards je Org | 200 | |
 | Kiosk-Tokens je Dashboard | 10 offene | |
@@ -199,3 +200,36 @@ Ein eigenes Grid auf CSS Grid (`grid-column`/`grid-row` über die `style:`-Direk
   anderen Dienst etwas öffnet.
 - **Folgearbeiten:** M5-23 (Server), M5-24 (Editor), M5-25 (Widgets und Variablen), M5-26 (Kiosk-Token), M5-27
   (Kiosk-Modus); die Vergleichsansicht (M5-28) bleibt eine feste Ansicht.
+
+## Nachtrag M5-33: Rechte des Kiosk, Grenzen, Schreib-Limit (Security-Review)
+
+- **Rechte beim Lesen (ändert „Rechte beim Lesen“ oben):** Ein Kiosk liest mit der **Schnittmenge** der aktuellen
+  Rechte des Anlegenden und des **Eigentümers des Dashboards** (`authz.Intersect`: je Gruppe die niedrigere Rolle, der
+  Viewer-Logs-Schalter, keine Instanzrechte; es handelt als Anlegender). Grund: Der Eigentümer – oft ein Viewer einer
+  Gruppe – darf ein geteiltes Dashboard jederzeit ändern, ohne dass der Admin es sieht. Mit den Rechten des Admins allein
+  zeigten eine Alert-Liste ohne Ziel alle Alerts der Org, eine Variable ohne Vorgabe den ersten Node der ganzen Flotte
+  und Log-Widgets Logs trotz „Viewer sehen keine Logs“. Jetzt löst der Server Ziele ohne festen Wert nur im Bereich
+  beider auf, und Logs eines Viewer-Dashboards bleiben bei ausgeschaltetem Schalter gesperrt. Verlässt der Eigentümer
+  die Org, liest die Anzeige nichts mehr (wie ein ungültiger Token). Verworfen: die Ziele beim Anlegen einfrieren oder
+  die Revision im Token speichern – beides macht jede harmlose Änderung zum Ausfall der Anzeige, und das Problem
+  „fremde Rechte“ bliebe für Ziele ohne festen Wert.
+- **Gleichzeitige Abfragen:** Je Token lesen höchstens 4 Widgets gleichzeitig, weitere warten bis zu 10 s und
+  scheitern dann mit `RESOURCE_EXHAUSTED` (`webapi.KioskReads`). Log-Widgets belegen zusätzlich einen Platz der
+  Log-Abfragen der UI (M3-28, Token als Session, Anlegender als Nutzer, Org), sodass Anzeigen und UI zusammen Lokis
+  Grenzen einhalten; ist er voll, scheitert das Widget wie in der UI und zeigt seine letzten Daten als veraltet. Ein
+  Log-Widget der Anzeige liest höchstens den letzten Tag (statt 14 Tage).
+- **Tokens ohne Admin-Rolle:** Verliert der Anlegende die Rolle Admin aller Gruppen – herabgestuft, entzogen, mit der
+  Mitgliedschaft, mit dem Nutzer, von Hand oder über OIDC –, widerruft die Datenbank seine offenen Tokens in derselben
+  Transaktion (verzögerter Constraint-Trigger auf `role_bindings`, Definer; endet die Transaktion mit der Rolle, bleibt
+  alles). Bekommt er die Rolle zurück, lebt kein alter Token wieder auf; die Liste zeigt sie als widerrufen. Den Anlass
+  zeigt der Eintrag der Rechteänderung im Audit-Log.
+- **Private Dashboards** eines Mitglieds, das die Org verlässt, löscht die Datenbank mit der Mitgliedschaft (Trigger,
+  Definer); niemand sonst könnte sie sehen oder löschen. Geteilte bleiben bei der Org (Admins mit `manage_dashboards`
+  ändern oder löschen sie).
+- **Schreib-Limit:** Jedes Mitglied darf Dashboards anlegen, ändern, teilen und löschen, und jeder Schreibzugriff ist
+  ein Eintrag im Audit-Log. Deshalb höchstens 60 Schreibzugriffe je Mitglied und Minute (`RESOURCE_EXHAUSTED`).
+- **Größe:** `Spec.Validate` begrenzt das Dokument auf 48 KiB JSON, damit ein Dokument innerhalb aller anderen
+  Grenzen nicht erst am `CHECK` der Tabelle (64 KiB Text) mit einem internen Fehler scheitert.
+- **Nicht umgesetzt:** Die Anzeige liest die Übersicht der Flotte für jedes Widget neu (Hostnamen, Ziele ohne festen
+  Wert). Ein Cache je Token müsste Rechteänderungen sofort sehen; die Grenze gleichzeitiger Abfragen je Token begrenzt
+  die Last schon.

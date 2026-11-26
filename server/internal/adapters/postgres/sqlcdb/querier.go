@@ -499,6 +499,8 @@ type Querier interface {
 	// Read-only pre-check (sermon_app may only read instance_setup); CompleteInstanceSetup consumes.
 	SetupTokenValid(ctx context.Context, arg SetupTokenValidParams) (bool, error)
 	SkipWaitingRolloutNodes(ctx context.Context, arg SkipWaitingRolloutNodesParams) error
+	// Marks a deactivated node that is due as being deleted, under its lock (M5-33).
+	StartNodePurge(ctx context.Context, arg StartNodePurgeParams) (int64, error)
 	// Self-monitoring of the server (M2-24). Instance level, no tenant.
 	SuperadminEmails(ctx context.Context) ([]string, error)
 	// Certificate rotation (M1-11). All queries run inside InTenant.

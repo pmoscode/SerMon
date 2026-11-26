@@ -8,6 +8,7 @@ package authz
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
@@ -292,3 +293,37 @@ func ScopeFor(p Principal, minimum role.Role) (tenant.Scope, error) {
 }
 
 func isZeroOrg(org tenant.OrgID) bool { return org == tenant.OrgID{} }
+
+// Intersect returns a principal that may do on every group only what both a and b may: the
+// lower role of the two on each group, the organization's viewer-logs switch if either has it,
+// never instance rights. It acts as a.User. A kiosk display reads with its creator's and its
+// dashboard owner's rights together (ADR 0040, M5-33).
+func Intersect(a, b Principal) Principal {
+	out := Principal{User: a.User, Org: a.Org, ViewersWithoutLogs: a.ViewersWithoutLogs || b.ViewersWithoutLogs}
+	if a.Org != b.Org {
+		return out
+	}
+	all := lower(a.roleOnAllGroups(), b.roleOnAllGroups())
+	if all.Valid() {
+		out.Bindings = append(out.Bindings, Binding{AllGroups: true, Role: all})
+	}
+	seen := map[tenant.GroupID]bool{}
+	for _, binding := range append(slices.Clone(a.Bindings), b.Bindings...) {
+		if binding.AllGroups || seen[binding.Group] {
+			continue
+		}
+		seen[binding.Group] = true
+		if r := lower(a.roleFor(binding.Group), b.roleFor(binding.Group)); r.Valid() && r > all {
+			out.Bindings = append(out.Bindings, Binding{Group: binding.Group, Role: r})
+		}
+	}
+	return out
+}
+
+// lower returns the lower of two roles, none if either is none.
+func lower(a, b role.Role) role.Role {
+	if !a.Valid() || !b.Valid() {
+		return 0
+	}
+	return min(a, b)
+}

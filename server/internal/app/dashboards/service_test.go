@@ -142,7 +142,22 @@ func (f *fakeStore) lastAudit() access.AuditEntry { return f.audits[len(f.audits
 var now = time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
 
 func newService(store *fakeStore) *dashboards.Service {
-	return dashboards.NewService(store, authz.NewPolicy(), func() time.Time { return now }, uuid.New)
+	return dashboards.NewService(store, authz.NewPolicy(), allowAll{}, func() time.Time { return now }, uuid.New)
+}
+
+type allowAll struct{}
+
+func (allowAll) Allow(string) bool { return true }
+
+// countingLimiter allows limit writes per key, as ratelimit.Limiter within its window.
+type countingLimiter struct {
+	limit int
+	seen  map[string]int
+}
+
+func (l *countingLimiter) Allow(key string) bool {
+	l.seen[key]++
+	return l.seen[key] <= l.limit
 }
 
 func caller(user identity.UserID, bindings ...authz.Binding) access.Caller {
@@ -388,5 +403,52 @@ func TestCreate_AtTheLimitOfTheOrganization(t *testing.T) {
 	}
 	if _, err := svc.Create(context.Background(), caller(alice, viewerX), spec(nodeX)); !errors.Is(err, dashboards.ErrTooMany) {
 		t.Errorf("Create() = %v, want ErrTooMany", err)
+	}
+}
+
+// M5-33: every member may write dashboards, and each write is an audit entry: writes are limited
+// per member of the organization; a refused one stores and audits nothing.
+func TestWrites_AreLimitedPerMember(t *testing.T) {
+	store := newStore()
+	limiter := &countingLimiter{limit: 3, seen: map[string]int{}}
+	svc := dashboards.NewService(store, authz.NewPolicy(), limiter, func() time.Time { return now }, uuid.New)
+	ctx := context.Background()
+	c := caller(alice, viewerX)
+	d, err := svc.Create(ctx, c, spec(nodeX))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d, err = svc.Update(ctx, c, d.ID, d.Revision, spec(nodeX)); err != nil {
+		t.Fatal(err)
+	}
+	if d, err = svc.SetShared(ctx, c, d.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	audits := len(store.audits)
+	writes := map[string]func() error{
+		"create": func() error { _, err := svc.Create(ctx, c, spec(nodeX)); return err },
+		"import": func() error { _, err := svc.Import(ctx, c, spec(nodeX)); return err },
+		"update": func() error { _, err := svc.Update(ctx, c, d.ID, d.Revision, spec(nodeX)); return err },
+		"share":  func() error { _, err := svc.SetShared(ctx, c, d.ID, false); return err },
+		"delete": func() error { return svc.Delete(ctx, c, d.ID) },
+	}
+	for name, write := range writes {
+		if err := write(); !errors.Is(err, dashboards.ErrTooManyWrites) {
+			t.Errorf("%s over the limit: %v, want ErrTooManyWrites", name, err)
+		}
+	}
+	if len(store.audits) != audits || len(store.byID) != 1 {
+		t.Errorf("refused writes changed something: %d audits (had %d), %d dashboards", len(store.audits), audits, len(store.byID))
+	}
+	if _, err := svc.Create(ctx, caller(bob, viewerX), spec(nodeX)); err != nil {
+		t.Errorf("another member: %v", err)
+	}
+	if _, err := svc.List(ctx, c); err != nil {
+		t.Errorf("reading is not limited: %v", err)
+	}
+	for key := range limiter.seen {
+		if !strings.Contains(key, orgA.String()) {
+			t.Errorf("limiter key %q: want it per organization and member", key)
+		}
 	}
 }

@@ -68,6 +68,8 @@ message GetCapacityResponse {
   repeated FleetFilesystem filesystems = 1;
   // truncated is set when there were more.
   bool truncated = 2;
-  // trends are the nodes with data, by host name.
+  // trends are the nodes with data, by host name: of at most the first 1000 nodes.
   repeated NodeTrend trends = 3;
+  // trends_truncated is set when there were more nodes (M4-31).
+  bool trends_truncated = 4;
 }

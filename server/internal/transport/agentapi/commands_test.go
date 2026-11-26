@@ -187,6 +187,9 @@ func TestSession_DeliversTheNodesCommands(t *testing.T) {
 	if !seen[update.ID.String()] || !seen[reboot.ID.String()] {
 		t.Errorf("after the reconnect: %v", seen)
 	}
+	// The session marks what it sent meanwhile: read under the fake's lock.
+	commands.mu.Lock()
+	defer commands.mu.Unlock()
 	for _, c := range commands.commands {
 		if c.ID == expired.ID && c.State != command.Pending || c.ID == foreign.ID && c.State != command.Pending {
 			t.Errorf("%v went out: %+v", c.ID, c)

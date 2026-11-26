@@ -20,6 +20,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/metric"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1/webv1connect"
 )
@@ -193,12 +194,18 @@ func (h *NodeHandler) ListFilesystems(ctx context.Context, req *connect.Request[
 	}
 	res := &webv1.ListFilesystemsResponse{}
 	for _, fs := range filesystems {
-		res.Filesystems = append(res.Filesystems, &webv1.Filesystem{
-			Mountpoint: fs.Mountpoint, SizeBytes: fs.Size, UsedBytes: fs.Used, AvailBytes: fs.Avail, UsedRatio: fs.UsedRatio,
-			Readonly: fs.Readonly, InodesTotal: fs.InodesTotal, InodesUsed: fs.InodesUsed, FullAt: optionalTime(fs.FullAt),
-		})
+		res.Filesystems = append(res.Filesystems, filesystemView(fs))
 	}
 	return connect.NewResponse(res), nil
+}
+
+// filesystemView makes a file system of a node an answer; the mount point comes from the host and
+// is shown as visible text only (M4-31, like the labels).
+func filesystemView(fs fleet.Filesystem) *webv1.Filesystem {
+	return &webv1.Filesystem{
+		Mountpoint: textsafe.Visible(fs.Mountpoint), SizeBytes: fs.Size, UsedBytes: fs.Used, AvailBytes: fs.Avail, UsedRatio: fs.UsedRatio,
+		Readonly: fs.Readonly, InodesTotal: fs.InodesTotal, InodesUsed: fs.InodesUsed, FullAt: optionalTime(fs.FullAt),
+	}
 }
 
 func queryFrom(selector *webv1.MetricSelector) (metrics.Query, error) {
@@ -240,7 +247,6 @@ func optionalTime(t *time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(*t)
 }
 
-// readFailure maps read-side errors to Connect codes; unexpected errors are logged and generic.
 // heavyReadTimeout bounds the reads of a fleet's dashboards (anomalies, capacity, heatmap): a
 // viewer can't hold the database connections every organization shares (review M4-30).
 const heavyReadTimeout = 15 * time.Second
@@ -248,10 +254,7 @@ const heavyReadTimeout = 15 * time.Second
 // errReadTooLong answers a read that ran out of its time.
 var errReadTooLong = errors.New("the query took too long: choose a shorter range or fewer nodes")
 
-func heavyRead(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(ctx, heavyReadTimeout)
-}
-
+// readFailure maps read-side errors to Connect codes; unexpected errors are logged and generic.
 func readFailure(ctx context.Context, logger *slog.Logger, op string, err error) error {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):

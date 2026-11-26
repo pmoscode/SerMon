@@ -36,7 +36,9 @@ type Querier interface {
 	// When each hour of the week was last computed (hours without a row are missing).
 	AnomalyBaselineAges(ctx context.Context) ([]AnomalyBaselineAgesRow, error)
 	AnomalyBaselinesOfHour(ctx context.Context, hour int16) ([]AnomalyBaselinesOfHourRow, error)
-	// The series of the candidate metrics with data since `since`, with when their node began to learn.
+	// The series of the candidate metrics with data since `since`, with when their node began to learn:
+	// at most per_node of a node (the metrics' order first), so a node with many disks or interfaces
+	// can't crowd the others out (M4-31).
 	AnomalyCandidateSeries(ctx context.Context, arg AnomalyCandidateSeriesParams) ([]AnomalyCandidateSeriesRow, error)
 	AnomalyPointsRange(ctx context.Context, arg AnomalyPointsRangeParams) ([]AnomalyPointsRangeRow, error)
 	AnomalyTop(ctx context.Context, arg AnomalyTopParams) ([]AnomalyTopRow, error)
@@ -172,6 +174,9 @@ type Querier interface {
 	// Fencing (M2-38): the engine saves only while it holds the lease; the row lock makes a takeover
 	// wait for the save to end.
 	HoldAlertLease(ctx context.Context, arg HoldAlertLeaseParams) (int64, error)
+	// The holder's lease, if still valid; locked until the transaction ends, so no takeover comes
+	// between this check and the writes after it (M4-31).
+	HoldAnomalyLease(ctx context.Context, holder string) ([]string, error)
 	// Fencing: the orchestrator saves only while it holds the lease; the row lock makes a takeover
 	// wait for the save to end.
 	HoldUpdateLease(ctx context.Context, arg HoldUpdateLeaseParams) (int64, error)
@@ -181,9 +186,9 @@ type Querier interface {
 	// One row per transition (COPY doesn't work with row-level security; a round has few).
 	InsertAlertHistory(ctx context.Context, arg InsertAlertHistoryParams) error
 	InsertAlertSilence(ctx context.Context, arg InsertAlertSilenceParams) error
-	// The notable minutes; a minute already stored (a second attempt) stays. Only series of the
-	// current organization (the hypertable has no RLS).
-	InsertAnomalyPoints(ctx context.Context, arg InsertAnomalyPointsParams) error
+	// The notable minutes; a minute already stored (a second attempt) stays. Only through the
+	// function (the hypertable has no RLS, M4-31): series of the current organization, finite scores.
+	InsertAnomalyPoints(ctx context.Context, arg InsertAnomalyPointsParams) (int64, error)
 	InsertAuthority(ctx context.Context, arg InsertAuthorityParams) (int32, error)
 	// Enrollment tokens (M1-08). Management runs inside InTenant; redemption looks the token up by
 	// hash through the SECURITY DEFINER function and consumes it inside the token's tenant.
@@ -233,7 +238,8 @@ type Querier interface {
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
 	LeaseAlertOrganization(ctx context.Context, arg LeaseAlertOrganizationParams) (int64, error)
 	// The anomaly detection (M4-23, ADR 0037), always in the tenant of one organization.
-	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease. With the
+	// database's time (M4-31): the instances' clocks may differ.
 	LeaseAnomalyOrganization(ctx context.Context, arg LeaseAnomalyOrganizationParams) (int64, error)
 	// The update orchestrator (M4-13), always in the tenant of one organization.
 	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
@@ -354,6 +360,8 @@ type Querier interface {
 	// The agent's phase of a run of this node: a start only before any phase, a final phase once.
 	RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int16, error)
 	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
+	// The holder gives the organization up: another instance takes it in its next round.
+	ReleaseAnomalyOrganization(ctx context.Context, holder string) error
 	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)

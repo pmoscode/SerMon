@@ -157,6 +157,23 @@ func TestRobust_NeedsBothBaselines(t *testing.T) {
 	}
 }
 
+// M4-31: a score has an upper bound – a host's extreme values make no score of 1e300 or +Inf (a
+// real column holds at most 3.4e38) – and stays anomalous.
+func TestRobust_ScoreHasAnUpperBound(t *testing.T) {
+	var s anomaly.State
+	r := anomaly.Robust{}
+	b := anomaly.Baseline{Median: 1, MAD: 1, Low: 0, High: 2, N: 60}
+	for i := range 60 {
+		r.Score(&s, t0.Add(time.Duration(i)*time.Minute), float64(i%3), b, true)
+	}
+	for i, x := range []float64{1e300, math.MaxFloat64, 1e40} {
+		v := r.Score(&s, t0.Add(time.Duration(60+i)*time.Minute), x, b, true)
+		if v.Score != anomaly.MaxScore || !v.Raw {
+			t.Errorf("%g: %+v", x, v)
+		}
+	}
+}
+
 // replayed scores the week after four of learning.
 func replayed(t *testing.T, seed uint64, spec anomaly.Spec) (anomaly.Synthetic, []anomaly.Verdict, time.Time) {
 	t.Helper()

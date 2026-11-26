@@ -39,18 +39,42 @@ func (s *AnomalyStore) Organizations(ctx context.Context) ([]tenant.OrgID, error
 }
 
 // Lease implements anomalies.Store.
-func (s *AnomalyStore) Lease(ctx context.Context, org tenant.OrgID, holder string, now, until time.Time) (bool, error) {
+func (s *AnomalyStore) Lease(ctx context.Context, org tenant.OrgID, holder string, leaseFor time.Duration) (bool, error) {
 	scope, err := orgScope(org)
 	if err != nil {
 		return false, err
 	}
 	var n int64
 	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		rows, leaseErr := q.LeaseAnomalyOrganization(ctx, sqlcdb.LeaseAnomalyOrganizationParams{Holder: holder, Until: until, Now: now})
+		rows, leaseErr := q.LeaseAnomalyOrganization(ctx, sqlcdb.LeaseAnomalyOrganizationParams{Holder: holder, LeaseSeconds: leaseFor.Seconds()})
 		n = rows
 		return wrap(leaseErr, "lease anomalies")
 	})
 	return n == 1, err
+}
+
+// Release implements anomalies.Store.
+func (s *AnomalyStore) Release(ctx context.Context, org tenant.OrgID, holder string) error {
+	scope, err := orgScope(org)
+	if err != nil {
+		return err
+	}
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		return wrap(q.ReleaseAnomalyOrganization(ctx, holder), "release anomalies")
+	})
+}
+
+// holdLease locks holder's lease for the rest of the transaction; anomalies.ErrLeaseLost if it is
+// gone.
+func holdLease(ctx context.Context, q *sqlcdb.Queries, holder string) error {
+	held, err := q.HoldAnomalyLease(ctx, holder)
+	if err != nil {
+		return wrap(err, "check the anomaly lease")
+	}
+	if len(held) == 0 {
+		return anomalies.ErrLeaseLost
+	}
+	return nil
 }
 
 func labelsOf(raw []byte) (map[string]string, error) {
@@ -62,14 +86,16 @@ func labelsOf(raw []byte) (map[string]string, error) {
 }
 
 // Series implements anomalies.Store.
-func (s *AnomalyStore) Series(ctx context.Context, org tenant.OrgID, metrics []string, since time.Time, limit int) ([]anomalies.Series, error) {
+func (s *AnomalyStore) Series(ctx context.Context, org tenant.OrgID, metrics []string, since time.Time, perNode, limit int) ([]anomalies.Series, error) {
 	scope, err := orgScope(org)
 	if err != nil {
 		return nil, err
 	}
 	var out []anomalies.Series
 	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		rows, err := q.AnomalyCandidateSeries(ctx, sqlcdb.AnomalyCandidateSeriesParams{Metrics: metrics, Since: since, MaxSeries: int32(min(limit, 1<<30))}) //nolint:gosec // bounded
+		rows, err := q.AnomalyCandidateSeries(ctx, sqlcdb.AnomalyCandidateSeriesParams{
+			Metrics: metrics, Since: since, PerNode: int64(perNode), MaxSeries: int32(min(limit, 1<<30)), //nolint:gosec // bounded
+		})
 		if err != nil {
 			return wrap(err, "list anomaly series")
 		}
@@ -132,7 +158,7 @@ func (s *AnomalyStore) Baselines(ctx context.Context, org tenant.OrgID, hour int
 }
 
 // SaveBaselines implements anomalies.Store.
-func (s *AnomalyStore) SaveBaselines(ctx context.Context, org tenant.OrgID, hour int, at time.Time, baselines map[int64]anomaly.Baseline) error {
+func (s *AnomalyStore) SaveBaselines(ctx context.Context, org tenant.OrgID, holder string, hour int, at time.Time, baselines map[int64]anomaly.Baseline) error {
 	scope, err := orgScope(org)
 	if err != nil {
 		return err
@@ -144,6 +170,9 @@ func (s *AnomalyStore) SaveBaselines(ctx context.Context, org tenant.OrgID, hour
 		p.Counts = append(p.Counts, int32(min(b.N, 1<<30))) //nolint:gosec // bounded
 	}
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := holdLease(ctx, q, holder); err != nil {
+			return err
+		}
 		if err := q.DeleteOtherAnomalyBaselines(ctx, sqlcdb.DeleteOtherAnomalyBaselinesParams{Hour: p.Hour, SeriesIds: p.SeriesIds}); err != nil {
 			return wrap(err, "delete old baselines")
 		}
@@ -172,7 +201,7 @@ func (s *AnomalyStore) BaselineAges(ctx context.Context, org tenant.OrgID) (map[
 }
 
 // SaveNotable implements anomalies.Store.
-func (s *AnomalyStore) SaveNotable(ctx context.Context, org tenant.OrgID, notable []anomalies.Notable) error {
+func (s *AnomalyStore) SaveNotable(ctx context.Context, org tenant.OrgID, holder string, notable []anomalies.Notable) error {
 	scope, err := orgScope(org)
 	if err != nil {
 		return err
@@ -180,10 +209,17 @@ func (s *AnomalyStore) SaveNotable(ctx context.Context, org tenant.OrgID, notabl
 	var p sqlcdb.InsertAnomalyPointsParams
 	for _, n := range notable {
 		p.Times, p.SeriesIds = append(p.Times, n.T), append(p.SeriesIds, n.Series)
-		p.Scores, p.Anomalous = append(p.Scores, float32(min(n.Score, 1e30))), append(p.Anomalous, n.Anomalous)
+		p.Scores, p.Anomalous = append(p.Scores, float32(n.Score)), append(p.Anomalous, n.Anomalous)
 	}
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		return wrap(q.InsertAnomalyPoints(ctx, p), "save notable minutes")
+		if err := holdLease(ctx, q, holder); err != nil {
+			return err
+		}
+		if len(notable) == 0 {
+			return nil
+		}
+		_, err := q.InsertAnomalyPoints(ctx, p)
+		return wrap(err, "save notable minutes")
 	})
 }
 

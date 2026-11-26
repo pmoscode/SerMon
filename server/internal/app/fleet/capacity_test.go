@@ -168,3 +168,30 @@ func TestCapacity_BoundsTheFilesystems(t *testing.T) {
 		t.Errorf("trends without data: %+v", got.Trends)
 	}
 }
+
+// M4-31: the trends are read of at most MaxCapacityTrends nodes, the first by host name; the
+// answer says when there were more.
+func TestCapacity_BoundsTheTrends(t *testing.T) {
+	store := memstore.New()
+	var dir directory
+	nodes := map[int]identity.NodeID{}
+	for n := range fleet.MaxCapacityTrends + 1 {
+		node := identity.NodeID(uuid.New())
+		nodes[n] = node
+		store.AddNode(orgA, web, node)
+		// In reverse: the directory's order is not the host names'.
+		dir = append(directory{record{orgA, fleet.Node{ID: node, Group: web, GroupName: "web", Hostname: fmt.Sprintf("node-%04d", n)}}}, dir...)
+	}
+	w := world{store: store, ring: metrics.NewRing()}
+	w.daily(t, orgA, nodes[0], "sermon_memory_utilization_ratio", nil, 500_000, 500_000)
+	w.daily(t, orgA, nodes[fleet.MaxCapacityTrends], "sermon_memory_utilization_ratio", nil, 500_000, 500_000)
+	clock := func() time.Time { return now }
+	svc := fleet.NewService(dir, metrics.NewReader(store, w.ring, clock), clock)
+	got, err := svc.Capacity(context.Background(), viewerAW)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.TrendsTruncated || len(got.Trends) != 1 || got.Trends[0].Hostname != "node-0000" {
+		t.Errorf("trends truncated %v, %d trends: %+v", got.TrendsTruncated, len(got.Trends), got.Trends)
+	}
+}

@@ -5014,6 +5014,13 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Abhängig von:** alle M4-Aufgaben
 
 #### ☐ M4-31 – Übrige Befunde der Security-Review M4 · X · M 🔒
+> Stand (Teilschritte mit eigenem Commit):
+> - **Leser und Anomalie-Worker (T105, T106):** Grenzen der Gleichzeitigkeit für Anomalien, Kapazität und Heatmap
+>   (höchstens die Hälfte des Pools), `anomaly_top` ohne `array_agg`, Trends höchstens von 1 000 Nodes, Mountpoints
+>   durch `textsafe`; Kandidaten je Node in SQL, faire Kapazität der Instanz, Lease nicht ohne Serien, Leases mit der
+>   Zeit der Datenbank, Schreiben mit Lease-Prüfung, NaN und extreme Scores, `anomaly_points` nur über eine Funktion,
+>   Grenzen der Definer-Funktionen. Gegenproben 15 von 15 erkannt. Nebenbei ein Datenrennen im Test der
+>   Befehlszustellung behoben.
 - **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
   - **Mittel:**
     - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys

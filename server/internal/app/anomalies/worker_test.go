@@ -47,6 +47,11 @@ type fake struct {
 	// onPoints runs at each read of an organization's points (a slow database for one).
 	onPoints func(tenant.OrgID)
 	readsOf  map[tenant.OrgID]int
+	// released are the organizations given up; checks counts the lease checks of the writes,
+	// onSave runs before each (the caller holds f.mu).
+	released []tenant.OrgID
+	checks   int
+	onSave   func(tenant.OrgID)
 }
 
 func newFake() *fake {
@@ -72,7 +77,7 @@ func (f *fake) Organizations(context.Context) ([]tenant.OrgID, error) {
 	return out, f.fail
 }
 
-func (f *fake) Lease(_ context.Context, org tenant.OrgID, holder string, _, _ time.Time) (bool, error) {
+func (f *fake) Lease(_ context.Context, org tenant.OrgID, holder string, _ time.Duration) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if h, ok := f.holders[org]; ok && h != holder {
@@ -82,12 +87,32 @@ func (f *fake) Lease(_ context.Context, org tenant.OrgID, holder string, _, _ ti
 	return true, nil
 }
 
-func (f *fake) Series(_ context.Context, org tenant.OrgID, names []string, _ time.Time, limit int) ([]anomalies.Series, error) {
+func (f *fake) Release(_ context.Context, org tenant.OrgID, holder string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.holders[org] == holder {
+		delete(f.holders, org)
+		f.released = append(f.released, org)
+	}
+	return nil
+}
+
+// held is the lease check of the writes (the caller holds f.mu).
+func (f *fake) held(org tenant.OrgID, holder string) error {
+	if f.holders[org] != holder {
+		return anomalies.ErrLeaseLost
+	}
+	return nil
+}
+
+func (f *fake) Series(_ context.Context, org tenant.OrgID, names []string, _ time.Time, perNode, limit int) ([]anomalies.Series, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []anomalies.Series
+	of := map[identity.NodeID]int{}
 	for _, s := range f.series[org] {
-		if slices.Contains(names, s.Metric) && len(out) < limit {
+		if slices.Contains(names, s.Metric) && len(out) < limit && of[s.Node] < perNode {
+			of[s.Node]++
 			out = append(out, s)
 		}
 	}
@@ -127,9 +152,12 @@ func (f *fake) Baselines(_ context.Context, org tenant.OrgID, hour int) (map[int
 	return f.baselines[org][hour], nil
 }
 
-func (f *fake) SaveBaselines(_ context.Context, org tenant.OrgID, hour int, at time.Time, b map[int64]anomaly.Baseline) error {
+func (f *fake) SaveBaselines(_ context.Context, org tenant.OrgID, holder string, hour int, at time.Time, b map[int64]anomaly.Baseline) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.held(org, holder); err != nil {
+		return err
+	}
 	if f.baselines[org] == nil {
 		f.baselines[org], f.ages[org] = map[int]map[int64]anomaly.Baseline{}, map[int]time.Time{}
 	}
@@ -154,9 +182,16 @@ func (f *fake) BaselineAges(_ context.Context, org tenant.OrgID) (map[int]time.T
 	return f.ages[org], nil
 }
 
-func (f *fake) SaveNotable(_ context.Context, org tenant.OrgID, n []anomalies.Notable) error {
+func (f *fake) SaveNotable(_ context.Context, org tenant.OrgID, holder string, n []anomalies.Notable) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.checks++
+	if f.onSave != nil {
+		f.onSave(org)
+	}
+	if err := f.held(org, holder); err != nil {
+		return err
+	}
 	f.notable[org] = append(f.notable[org], n...)
 	return nil
 }
@@ -666,5 +701,95 @@ func TestWorker_ScoresWhateverTheLocationOfTheClock(t *testing.T) {
 	}
 	if n := len(lastRates(f, orgA, node1, "sermon_anomaly_rate_ratio")); n != 5 {
 		t.Errorf("%d rates written", n)
+	}
+}
+
+// M4-31: an organization that comes later still gets its share of the instance: a first one took
+// it all, the second gets half at once, and the first gives its surplus back at its next listing.
+func TestWorker_SharesTheInstanceFairly(t *testing.T) {
+	f := newFake()
+	for i := range 6 {
+		f.series[orgA] = append(f.series[orgA], cpu(int64(1+i), identity.NodeID(uuid.New()), "user"))
+	}
+	c := &clock{t: now0}
+	w := worker(t, f, c, func(cfg *anomalies.Config) { cfg.PerInstance, cfg.Backfill = 4, 0 })
+	w.Round(context.Background())
+	scored := func(org tenant.OrgID) float64 {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		last := map[identity.NodeID]float64{}
+		var at time.Time
+		for _, a := range f.rates[org] {
+			if a.Metric == "sermon_anomaly_series_scored" && !a.Start.Before(at) {
+				if a.Start.After(at) {
+					last, at = map[identity.NodeID]float64{}, a.Start
+				}
+				last[a.Node] = a.Avg
+			}
+		}
+		total := 0.0
+		for _, v := range last {
+			total += v
+		}
+		return total
+	}
+	if got := scored(orgA); got != 4 {
+		t.Fatalf("alone, A scores %v series, want the instance's 4", got)
+	}
+	f.mu.Lock()
+	f.series[orgB] = []anomalies.Series{cpu(11, node1, "user"), cpu(12, node1, "system"), cpu(13, node2, "user")}
+	f.mu.Unlock()
+	c.set(now0.Add(time.Minute))
+	w.Round(context.Background())
+	if got := scored(orgB); got != 2 {
+		t.Errorf("B scores %v series, want its share of 2 (before: none, A held all)", got)
+	}
+	c.set(now0.Add(12 * time.Minute))
+	w.Round(context.Background())
+	if a, b := scored(orgA), scored(orgB); a != 2 || b != 2 {
+		t.Errorf("after A listed again: A %v, B %v, want 2 and 2", a, b)
+	}
+}
+
+// M4-31: an instance with no series of an organization doesn't hold its lease – another one with
+// room takes it.
+func TestWorker_GivesUpAnOrganizationWithoutSeries(t *testing.T) {
+	f := newFake()
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	f.series[orgB] = []anomalies.Series{}
+	w := worker(t, f, &clock{t: now0}, func(cfg *anomalies.Config) { cfg.Backfill = 0 })
+	w.Round(context.Background())
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !slices.Equal(f.released, []tenant.OrgID{orgB}) || f.holders[orgA] != "a" {
+		t.Errorf("released %v, holders %v", f.released, f.holders)
+	}
+}
+
+// M4-31: the writes check the lease in their transaction: after a takeover (a round longer than
+// the lease) the old holder writes nothing more and starts anew.
+func TestWorker_WritesNothingAfterItsLeaseWasTaken(t *testing.T) {
+	f := newFake()
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	c := &clock{t: now0}
+	w := worker(t, f, c, func(cfg *anomalies.Config) { cfg.Backfill = 0 })
+	w.Round(context.Background())
+	f.mu.Lock()
+	before := len(f.rates[orgA])
+	checks := f.checks
+	f.onSave = func(org tenant.OrgID) { f.holders[org] = "b" }
+	f.mu.Unlock()
+	c.set(now0.Add(time.Minute))
+	w.Round(context.Background())
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.checks == checks {
+		t.Fatal("a chunk without notable minutes wrote its rates without a lease check")
+	}
+	if len(f.rates[orgA]) != before {
+		t.Errorf("%d rates written after the lease was taken", len(f.rates[orgA])-before)
+	}
+	if w.Stats().LeasesLost.Load() != 1 || w.Stats().Errors.Load() != 0 {
+		t.Errorf("leases lost %d, errors %d", w.Stats().LeasesLost.Load(), w.Stats().Errors.Load())
 	}
 }

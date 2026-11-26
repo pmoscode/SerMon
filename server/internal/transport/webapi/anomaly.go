@@ -19,14 +19,16 @@ import (
 // AnomalyHandler serves AnomalyService (M4-23, ADR 0037).
 type AnomalyHandler struct {
 	anomalies *anomalies.Service
+	reads     *HeavyReads
 	logger    *slog.Logger
 }
 
 var _ webv1connect.AnomalyServiceHandler = (*AnomalyHandler)(nil)
 
-// NewAnomalyHandler returns the handler.
-func NewAnomalyHandler(svc *anomalies.Service, logger *slog.Logger) *AnomalyHandler {
-	return &AnomalyHandler{anomalies: svc, logger: logger}
+// NewAnomalyHandler returns the handler; reads are the limits shared with the other dashboards
+// (nil: its own).
+func NewAnomalyHandler(svc *anomalies.Service, reads *HeavyReads, logger *slog.Logger) *AnomalyHandler {
+	return &AnomalyHandler{anomalies: svc, reads: reads.orNew(), logger: logger}
 }
 
 func (h *AnomalyHandler) failure(ctx context.Context, what string, err error) error {
@@ -62,8 +64,11 @@ func (h *AnomalyHandler) GetNodeAnomalies(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := heavyRead(ctx)
-	defer cancel()
+	ctx, release, err := h.reads.admit(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	band, err := h.anomalies.Node(ctx, c, identity.NodeID(id), req.Msg.GetFrom().AsTime(), req.Msg.GetTo().AsTime())
 	if err != nil {
 		return nil, h.failure(ctx, "get node anomalies", err)
@@ -98,8 +103,11 @@ func (h *AnomalyHandler) ListUnusual(ctx context.Context, req *connect.Request[w
 	if limit == 0 {
 		limit = 20
 	}
-	ctx, cancel := heavyRead(ctx)
-	defer cancel()
+	ctx, release, err := h.reads.admit(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	found, err := h.anomalies.Unusual(ctx, c, node, req.Msg.GetFrom().AsTime(), req.Msg.GetTo().AsTime(), limit)
 	if err != nil {
 		return nil, h.failure(ctx, "list unusual series", err)

@@ -21,6 +21,8 @@ const (
 	TrendStep  = 24 * time.Hour
 	// MaxCapacityFilesystems bounds the file systems of one answer (those running full first).
 	MaxCapacityFilesystems = 500
+	// MaxCapacityTrends bounds the nodes whose trends are read, the first by host name (M4-31).
+	MaxCapacityTrends = 1000
 	// maxMounts is the most file systems an agent reports (sermon-collectors, MAX_MOUNTS);
 	// filesystemChunk nodes have at most metrics.MaxSeries of them, the limit of one query.
 	maxMounts       = 64
@@ -57,6 +59,8 @@ type Capacity struct {
 	// Truncated: more file systems than MaxCapacityFilesystems.
 	Truncated bool
 	Trends    []NodeTrend
+	// TrendsTruncated: more nodes than MaxCapacityTrends.
+	TrendsTruncated bool
 }
 
 // Capacity returns the capacity dashboard of the nodes the caller may view.
@@ -73,8 +77,13 @@ func (s *Service) Capacity(ctx context.Context, c access.Caller) (Capacity, erro
 		}
 		out.Filesystems = append(out.Filesystems, fs...)
 	}
-	// One series per node and metric.
-	for chunk := range slices.Chunk(nodes, metrics.MaxSeries) {
+	// One series per node and metric, of the first nodes by host name.
+	byName := slices.Clone(nodes)
+	slices.SortStableFunc(byName, func(a, b Node) int { return cmp.Compare(a.Hostname, b.Hostname) })
+	if len(byName) > MaxCapacityTrends {
+		byName, out.TrendsTruncated = byName[:MaxCapacityTrends], true
+	}
+	for chunk := range slices.Chunk(byName, metrics.MaxSeries) {
 		trends, err := s.trends(ctx, scope, chunk)
 		if err != nil {
 			return Capacity{}, err

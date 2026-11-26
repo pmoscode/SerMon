@@ -80,6 +80,9 @@ func Open(ctx context.Context, appDSN string) (*DB, error) {
 	return &DB{pool: pool}, nil
 }
 
+// PoolSize returns the most connections the pool opens.
+func (db *DB) PoolSize() int { return int(db.pool.Config().MaxConns) }
+
 // verifyUnprivileged rejects roles for which RLS does not apply or could be switched off.
 func verifyUnprivileged(ctx context.Context, pool *pgxpool.Pool) error {
 	var superuser, bypassRLS, ownsTables bool

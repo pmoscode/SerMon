@@ -18,14 +18,16 @@ import (
 // HeatmapHandler implements sermon.web.v1.HeatmapService (behind the Authenticator, M4-27).
 type HeatmapHandler struct {
 	fleet  *fleet.Service
+	reads  *HeavyReads
 	logger *slog.Logger
 }
 
 var _ webv1connect.HeatmapServiceHandler = (*HeatmapHandler)(nil)
 
-// NewHeatmapHandler returns the HeatmapService handler.
-func NewHeatmapHandler(svc *fleet.Service, logger *slog.Logger) *HeatmapHandler {
-	return &HeatmapHandler{fleet: svc, logger: logger}
+// NewHeatmapHandler returns the HeatmapService handler; reads are the limits shared with the other
+// dashboards (nil: its own).
+func NewHeatmapHandler(svc *fleet.Service, reads *HeavyReads, logger *slog.Logger) *HeatmapHandler {
+	return &HeatmapHandler{fleet: svc, reads: reads.orNew(), logger: logger}
 }
 
 var heatmapKinds = map[webv1.HeatmapKind]fleet.HeatmapKind{
@@ -41,8 +43,11 @@ func (h *HeatmapHandler) GetHeatmap(ctx context.Context, req *connect.Request[we
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := heavyRead(ctx)
-	defer cancel()
+	ctx, release, err := h.reads.admit(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	heatmap, err := h.fleet.Heatmap(ctx, c, heatmapKinds[req.Msg.GetKind()], req.Msg.GetFrom().AsTime(), req.Msg.GetTo().AsTime())
 	if errors.Is(err, fleet.ErrInvalidHeatmap) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)

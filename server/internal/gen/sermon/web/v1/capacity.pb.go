@@ -321,10 +321,12 @@ type GetCapacityResponse struct {
 	Filesystems []*FleetFilesystem `protobuf:"bytes,1,rep,name=filesystems,proto3" json:"filesystems,omitempty"`
 	// truncated is set when there were more.
 	Truncated bool `protobuf:"varint,2,opt,name=truncated,proto3" json:"truncated,omitempty"`
-	// trends are the nodes with data, by host name.
-	Trends        []*NodeTrend `protobuf:"bytes,3,rep,name=trends,proto3" json:"trends,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// trends are the nodes with data, by host name: of at most the first 1000 nodes.
+	Trends []*NodeTrend `protobuf:"bytes,3,rep,name=trends,proto3" json:"trends,omitempty"`
+	// trends_truncated is set when there were more nodes (M4-31).
+	TrendsTruncated bool `protobuf:"varint,4,opt,name=trends_truncated,json=trendsTruncated,proto3" json:"trends_truncated,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GetCapacityResponse) Reset() {
@@ -378,6 +380,13 @@ func (x *GetCapacityResponse) GetTrends() []*NodeTrend {
 	return nil
 }
 
+func (x *GetCapacityResponse) GetTrendsTruncated() bool {
+	if x != nil {
+		return x.TrendsTruncated
+	}
+	return false
+}
+
 var File_sermon_web_v1_capacity_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_capacity_proto_rawDesc = "" +
@@ -410,11 +419,12 @@ const file_sermon_web_v1_capacity_proto_rawDesc = "" +
 	"\n" +
 	"group_name\x18\x03 \x01(\tR\tgroupName\x12+\n" +
 	"\x03cpu\x18\x04 \x03(\v2\x19.sermon.web.v1.DailyValueR\x03cpu\x121\n" +
-	"\x06memory\x18\x05 \x03(\v2\x19.sermon.web.v1.DailyValueR\x06memory\"\xa7\x01\n" +
+	"\x06memory\x18\x05 \x03(\v2\x19.sermon.web.v1.DailyValueR\x06memory\"\xd2\x01\n" +
 	"\x13GetCapacityResponse\x12@\n" +
 	"\vfilesystems\x18\x01 \x03(\v2\x1e.sermon.web.v1.FleetFilesystemR\vfilesystems\x12\x1c\n" +
 	"\ttruncated\x18\x02 \x01(\bR\ttruncated\x120\n" +
-	"\x06trends\x18\x03 \x03(\v2\x18.sermon.web.v1.NodeTrendR\x06trends2l\n" +
+	"\x06trends\x18\x03 \x03(\v2\x18.sermon.web.v1.NodeTrendR\x06trends\x12)\n" +
+	"\x10trends_truncated\x18\x04 \x01(\bR\x0ftrendsTruncated2l\n" +
 	"\x0fCapacityService\x12Y\n" +
 	"\vGetCapacity\x12!.sermon.web.v1.GetCapacityRequest\x1a\".sermon.web.v1.GetCapacityResponse\"\x03\x90\x02\x01B\xbc\x01\n" +
 	"\x11com.sermon.web.v1B\rCapacityProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"

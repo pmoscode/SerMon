@@ -50,22 +50,31 @@ type Notable struct {
 type Store interface {
 	// Organizations returns the organizations to look after (not locked).
 	Organizations(ctx context.Context) ([]tenant.OrgID, error)
-	// Lease takes or renews the organization's lease until until; false if another holds it.
-	Lease(ctx context.Context, org tenant.OrgID, holder string, now, until time.Time) (bool, error)
-	// Series returns the series of the metrics with data since since, at most limit.
-	Series(ctx context.Context, org tenant.OrgID, metrics []string, since time.Time, limit int) ([]Series, error)
+	// Lease takes or renews the organization's lease for leaseFor from the database's time; false
+	// if another holds it.
+	Lease(ctx context.Context, org tenant.OrgID, holder string, leaseFor time.Duration) (bool, error)
+	// Release gives the holder's lease up.
+	Release(ctx context.Context, org tenant.OrgID, holder string) error
+	// Series returns the series of the metrics with data since since, at most perNode of a node
+	// (the metrics' order first) and limit in all.
+	Series(ctx context.Context, org tenant.OrgID, metrics []string, since time.Time, perNode, limit int) ([]Series, error)
 	// Points returns the 1-min values of the series in [from, to).
 	Points(ctx context.Context, org tenant.OrgID, ids []int64, from, to time.Time) ([]Point, error)
 	// Baselines returns the stored baselines of an hour of the week.
 	Baselines(ctx context.Context, org tenant.OrgID, hour int) (map[int64]anomaly.Baseline, error)
 	// SaveBaselines stores the baselines of an hour of the week, computed at at, in place of all
-	// it had: the hour's age is that of its oldest row.
-	SaveBaselines(ctx context.Context, org tenant.OrgID, hour int, at time.Time, baselines map[int64]anomaly.Baseline) error
+	// it had: the hour's age is that of its oldest row. ErrLeaseLost if holder's lease is gone.
+	SaveBaselines(ctx context.Context, org tenant.OrgID, holder string, hour int, at time.Time, baselines map[int64]anomaly.Baseline) error
 	// BaselineAges returns when each stored hour of the week was computed.
 	BaselineAges(ctx context.Context, org tenant.OrgID) (map[int]time.Time, error)
-	// SaveNotable stores notable minutes (a minute stored before stays).
-	SaveNotable(ctx context.Context, org tenant.OrgID, notable []Notable) error
+	// SaveNotable stores notable minutes (a minute stored before stays), none at all only checks
+	// the lease: ErrLeaseLost if holder's lease is gone.
+	SaveNotable(ctx context.Context, org tenant.OrgID, holder string, notable []Notable) error
 }
+
+// ErrLeaseLost means another instance took the organization over: the old holder writes nothing
+// more (M4-31).
+var ErrLeaseLost = errors.New("the lease of the organization was lost")
 
 // RateWriter stores the derived series of the nodes (the metric store).
 type RateWriter interface {
@@ -209,6 +218,10 @@ func (w *Worker) Round(ctx context.Context) {
 		org := orgs[(w.turn+i)%len(orgs)]
 		err := w.step(ctx, org, deadline)
 		switch {
+		case errors.Is(err, ErrLeaseLost):
+			// Taken over meanwhile (a step longer than the lease): a takeover later warms up anew.
+			w.stats.LeasesLost.Add(1)
+			delete(w.orgs, org)
 		case errors.Is(err, errBudget):
 			w.stats.Overruns.Add(1)
 			w.cut, w.cutOff = org, true
@@ -236,7 +249,7 @@ func (w *Worker) step(ctx context.Context, org tenant.OrgID, deadline time.Time)
 	if !now.Before(deadline) {
 		return errBudget
 	}
-	held, err := w.store.Lease(ctx, org, w.config.Holder, now, now.Add(w.config.LeaseFor))
+	held, err := w.store.Lease(ctx, org, w.config.Holder, w.config.LeaseFor)
 	if err != nil {
 		return fmt.Errorf("lease: %w", err)
 	}
@@ -262,6 +275,11 @@ func (w *Worker) step(ctx context.Context, org tenant.OrgID, deadline time.Time)
 		}
 	}
 	if len(st.series) == 0 {
+		// Nothing of it to score here (none or no room left): another instance may take it.
+		delete(w.orgs, org)
+		if err := w.store.Release(ctx, org, w.config.Holder); err != nil {
+			return fmt.Errorf("release: %w", err)
+		}
 		return nil
 	}
 	// Missing hours first: the warm-up after a takeover scores against them at once (a
@@ -292,11 +310,15 @@ func (w *Worker) step(ctx context.Context, org tenant.OrgID, deadline time.Time)
 }
 
 // list chooses the scored series: candidates whose labels count, the catalog's order first, at
-// most PerNode per node, PerOrg per organization and PerInstance in all.
+// most PerNode per node, PerOrg per organization and PerInstance in all. Of the instance an
+// organization gets what the others left, at least an equal share of it (M4-31): one that came
+// first can't keep the others out; it gives its surplus back at its next listing.
 func (w *Worker) list(ctx context.Context, org tenant.OrgID, st *orgState, now time.Time) error {
-	limit := min(w.config.PerOrg, max(w.config.PerInstance-w.instanceSeries(org), 0))
-	// seen_at moves only every SeenResolution: an hour more than that finds every live series.
-	found, err := w.store.Series(ctx, org, w.names, now.Add(-metrics.SeenResolution-time.Hour), w.config.PerOrg*4)
+	share := w.config.PerInstance / max(len(w.orgs), 1)
+	limit := min(w.config.PerOrg, max(w.config.PerInstance-w.instanceSeries(org), share))
+	// seen_at moves only every SeenResolution: an hour more than that finds every live series. Four
+	// times the limits: the labels sort some out.
+	found, err := w.store.Series(ctx, org, w.names, now.Add(-metrics.SeenResolution-time.Hour), w.config.PerNode*4, w.config.PerOrg*4)
 	if err != nil {
 		return fmt.Errorf("list series: %w", err)
 	}
@@ -412,12 +434,11 @@ func (w *Worker) score(ctx context.Context, org tenant.OrgID, st *orgState, from
 				metrics.Aggregate{Node: node, Metric: "sermon_anomaly_series_scored", Labels: metrics.Labels{}, Start: m, Avg: float64(n), Min: float64(n), Max: float64(n)})
 		}
 	}
-	if len(notable) > 0 {
-		if err := w.store.SaveNotable(ctx, org, notable); err != nil {
-			return fmt.Errorf("save notable minutes: %w", err)
-		}
-		w.stats.Notable.Add(uint64(len(notable)))
+	// Also without notable minutes: it checks the lease before the rates are written.
+	if err := w.store.SaveNotable(ctx, org, w.config.Holder, notable); err != nil {
+		return fmt.Errorf("save notable minutes: %w", err)
 	}
+	w.stats.Notable.Add(uint64(len(notable)))
 	if len(aggregates) > 0 {
 		if err := w.rates.Write(ctx, org, aggregates, nil); err != nil {
 			return fmt.Errorf("write anomaly rates: %w", err)
@@ -473,7 +494,7 @@ func (w *Worker) recompute(ctx context.Context, org tenant.OrgID, st *orgState, 
 		}
 	}
 	bucket := anomaly.HourOfWeek(hour)
-	if err := w.store.SaveBaselines(ctx, org, bucket, now, baselines); err != nil {
+	if err := w.store.SaveBaselines(ctx, org, w.config.Holder, bucket, now, baselines); err != nil {
 		return fmt.Errorf("save baselines: %w", err)
 	}
 	w.stats.Baselines.Add(1)

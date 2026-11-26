@@ -277,6 +277,11 @@
 					</Button>
 				{/if}
 			{/if}
+			{#if capacity?.trendsTruncated}
+				<p class="text-sm text-muted-foreground">
+					{m.capacity_trends_truncated({ count: new Intl.NumberFormat(locale).format(1000) })}
+				</p>
+			{/if}
 		</section>
 	{/if}
 </div>

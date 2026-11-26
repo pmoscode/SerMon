@@ -245,15 +245,15 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),
 		Metrics:  webapi.NewMetricsHandler(nodes, nil, slog.New(slog.DiscardHandler)),
 		Fleet:    webapi.NewFleetHandler(nodes, slog.New(slog.DiscardHandler)),
-		Capacity: webapi.NewCapacityHandler(nodes, slog.New(slog.DiscardHandler)),
-		Heatmap:  webapi.NewHeatmapHandler(nodes, slog.New(slog.DiscardHandler)),
+		Capacity: webapi.NewCapacityHandler(nodes, nil, slog.New(slog.DiscardHandler)),
+		Heatmap:  webapi.NewHeatmapHandler(nodes, nil, slog.New(slog.DiscardHandler)),
 		SecurityEvents: webapi.NewSecurityEventHandler(withGeo(
 			secevents.NewService(postgres.NewSecurityEventStore(pg), authz.NewPolicy())), slog.New(slog.DiscardHandler)),
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(pg, 0), authz.NewPolicy()).
 			WithRefresher(postgres.NewCommandStore(pg), time.Now).
 			WithManual(postgres.NewRolloutStore(pg), postgres.NewUpdatePolicyStore(pg), uuid.New).
 			WithHistory(postgres.NewHistoryStore(pg)).WithReleases(testReleases{}), slog.New(slog.DiscardHandler)),
-		Anomalies: webapi.NewAnomalyHandler(anomalies.NewService(postgres.NewAnomalyStore(pg), authz.NewPolicy(), time.Now), slog.New(slog.DiscardHandler)),
+		Anomalies: webapi.NewAnomalyHandler(anomalies.NewService(postgres.NewAnomalyStore(pg), authz.NewPolicy(), time.Now), nil, slog.New(slog.DiscardHandler)),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(
 			updates.NewPolicyService(postgres.NewUpdatePolicyStore(pg), authz.NewPolicy(), time.Now), slog.New(slog.DiscardHandler)),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(

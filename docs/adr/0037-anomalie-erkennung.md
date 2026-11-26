@@ -171,4 +171,24 @@ Der Benchmark (13 synthetische Szenarien) hat drei Änderungen am Verfahren von 
 - **Ausgabe:** Die letzten 5 min gelten nur für die erste Runde nach einer Übernahme (`writeFrom`); danach schreibt der
   Worker jede bewertete Minute. Bisher gingen Minuten verloren, wenn eine Organisation länger als 5 Runden wartete.
 - **Leser** der Anomalien (wie Kapazität und Heatmap) enden nach 15 s mit `DEADLINE_EXCEEDED`. Grenzen der
-  Gleichzeitigkeit und ein günstigeres `anomaly_top` folgen in M4-31.
+  Gleichzeitigkeit und ein günstigeres `anomaly_top` folgen in M4-31 (siehe unten).
+
+## Nachtrag M4-31 (übrige Befunde der Review)
+
+- **Schreiben nur über eine Funktion:** `sermon_app` hat kein `INSERT` mehr auf `anomaly_points` (Hypertable ohne RLS,
+  O8). `anomaly_points_write` (SECURITY DEFINER) nimmt nur Serien der aktuellen Organisation und Scores von 0 bis 1 000;
+  NaN liegt in PostgreSQL über jeder Zahl und fällt damit heraus. Der Score selbst ist auf `anomaly.MaxScore` = 1 000
+  begrenzt.
+- **Leases:** Laufzeit mit `now()` der Datenbank statt der Uhr der Instanz. Baselines und Minuten werden in derselben
+  Transaktion geschrieben, die die Lease mit `FOR SHARE` prüft (`ErrLeaseLost`, keine Übernahme dazwischen); auch ein
+  Abschnitt ohne auffällige Minuten prüft sie, bevor die Raten geschrieben werden. Nach einer Übernahme verwirft der alte
+  Halter seinen Stand. Eine Instanz, die von einer Organisation keine Serie bewertet, gibt deren Lease frei.
+- **Kapazität der Instanz:** Jede Organisation bekommt, was die anderen übrig lassen, mindestens `PerInstance` geteilt
+  durch die Zahl der gehaltenen Organisationen; wer mehr hatte, gibt es beim nächsten Auflisten (alle 10 min) zurück.
+  Bis dahin kann die Instanz kurz über `PerInstance` liegen.
+- **Kandidaten je Node in SQL:** höchstens das Vierfache von `PerNode` je Node (Reihenfolge des Katalogs), damit ein Node
+  mit vielen Platten oder Interfaces die anderen nicht aus der Liste drängt.
+- **Leser:** `anomaly_top` zählt je Serie und sucht die Spitze nur für die gezeigten (LATERAL statt `array_agg` über
+  alle Minuten). Die Definer-Funktionen nehmen höchstens 20 000 Serien und geben höchstens 1 000 Serien bzw.
+  100 000 Minuten zurück. Anomalien, Kapazität und Heatmap teilen sich höchstens die Hälfte des Pools der Datenbank
+  (`HeavyReads`; je Session 2, je User 3, je Org die Hälfte davon).

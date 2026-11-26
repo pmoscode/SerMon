@@ -7,10 +7,12 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
@@ -155,7 +157,10 @@ func TestAnomalies_FindASpikeInFourWeeksOfHistory(t *testing.T) {
 	if got, err := store.Minutes(ctx, scopeFor(t, orgB), ids, end.Add(-time.Hour), now, 100); err != nil || len(got) != 0 {
 		t.Errorf("org B reads A's minutes through the function: %d, %v", len(got), err)
 	}
-	if err := store.SaveNotable(ctx, tenant.OrgID(orgB), []anomalies.Notable{{Series: ids[0], T: end.Add(-30 * time.Minute), Score: 99, Anomalous: true}}); err != nil {
+	if held, err := store.Lease(ctx, tenant.OrgID(orgB), "forger", time.Minute); err != nil || !held {
+		t.Fatalf("lease of B: %v, %v", held, err)
+	}
+	if err := store.SaveNotable(ctx, tenant.OrgID(orgB), "forger", []anomalies.Notable{{Series: ids[0], T: end.Add(-30 * time.Minute), Score: 99, Anomalous: true}}); err != nil {
 		t.Fatal(err)
 	}
 	var forged int
@@ -211,12 +216,15 @@ func TestAnomalies_BaselinesReplaceTheHour(t *testing.T) {
 		t.Fatalf("series = %v, %v", ids, err)
 	}
 	store := postgres.NewAnomalyStore(db)
+	if held, err := store.Lease(ctx, tenant.OrgID(org), "a", time.Minute); err != nil || !held {
+		t.Fatalf("lease: %v, %v", held, err)
+	}
 	b := anomaly.Baseline{Median: 1, MAD: 0.1, Low: 0.5, High: 1.5, N: 60}
 	old, later := at.Add(-9*24*time.Hour), at
-	if err := store.SaveBaselines(ctx, tenant.OrgID(org), 5, old, map[int64]anomaly.Baseline{ids[0]: b, ids[1]: b}); err != nil {
+	if err := store.SaveBaselines(ctx, tenant.OrgID(org), "a", 5, old, map[int64]anomaly.Baseline{ids[0]: b, ids[1]: b}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveBaselines(ctx, tenant.OrgID(org), 5, later, map[int64]anomaly.Baseline{ids[0]: b}); err != nil {
+	if err := store.SaveBaselines(ctx, tenant.OrgID(org), "a", 5, later, map[int64]anomaly.Baseline{ids[0]: b}); err != nil {
 		t.Fatal(err)
 	}
 	ages, err := store.BaselineAges(ctx, tenant.OrgID(org))
@@ -227,10 +235,102 @@ func TestAnomalies_BaselinesReplaceTheHour(t *testing.T) {
 	if _, kept := loaded[ids[1]]; err != nil || kept || len(loaded) != 1 {
 		t.Errorf("baselines = %v, %v", loaded, err)
 	}
-	if err := store.SaveBaselines(ctx, tenant.OrgID(org), 5, later, nil); err != nil {
+	if err := store.SaveBaselines(ctx, tenant.OrgID(org), "a", 5, later, nil); err != nil {
 		t.Fatal(err)
 	}
 	if ages, _ := store.BaselineAges(ctx, tenant.OrgID(org)); !ages[5].IsZero() {
 		t.Errorf("an hour without baselines has the age %v", ages[5])
+	}
+}
+
+// M4-31: the notable minutes go only through anomaly_points_write – finite scores up to
+// anomaly.MaxScore, never without the writer's lease, which runs on the database's time and can be
+// given up; the candidates are bounded per node; "what was unusual?" finds the first peak.
+func TestAnomalies_WritesWithTheLeaseOnlyThroughTheFunction(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	org := uuid.New()
+	ownerExec(t, f.db.OwnerDSN, "INSERT INTO organizations (id, name) VALUES ($1, 'Writes ' || $1::uuid::text)", org)
+	busy, quiet := uuid.New(), uuid.New()
+	createNode(t, f.db.OwnerDSN, org, busy)
+	createNode(t, f.db.OwnerDSN, org, quiet)
+	at := time.Now().UTC().Truncate(time.Minute).Add(-time.Hour)
+	var points []metrics.Aggregate
+	for _, mode := range []string{"user", "system", "iowait", "steal", "irq"} {
+		points = append(points, metrics.Aggregate{Node: identity.NodeID(busy), Metric: "sermon_cpu_utilization_ratio", Labels: metrics.Labels{"mode": mode}, Start: at, Avg: 1, Min: 1, Max: 1})
+	}
+	points = append(points, metrics.Aggregate{Node: identity.NodeID(quiet), Metric: "sermon_cpu_utilization_ratio", Labels: metrics.Labels{"mode": "user"}, Start: at, Avg: 1, Min: 1, Max: 1})
+	if err := timescale.New(db).Write(ctx, tenant.OrgID(org), points, nil); err != nil {
+		t.Fatal(err)
+	}
+	store := postgres.NewAnomalyStore(db)
+	found, err := store.Series(ctx, tenant.OrgID(org), []string{"sermon_cpu_utilization_ratio"}, at.Add(-time.Hour), 2, 100)
+	perNode := map[identity.NodeID]int{}
+	for _, s := range found {
+		perNode[s.Node]++
+	}
+	if err != nil || perNode[identity.NodeID(busy)] != 2 || perNode[identity.NodeID(quiet)] != 1 {
+		t.Fatalf("candidates per node = %v, %v", perNode, err)
+	}
+	ids := []int64{found[0].ID, found[1].ID}
+
+	notable := []anomalies.Notable{
+		{Series: ids[0], T: at, Score: 5, Anomalous: false},
+		{Series: ids[0], T: at.Add(time.Minute), Score: 9, Anomalous: true},
+		{Series: ids[0], T: at.Add(2 * time.Minute), Score: 9, Anomalous: true},
+		{Series: ids[1], T: at, Score: math.NaN(), Anomalous: true},
+		{Series: ids[1], T: at.Add(time.Minute), Score: 5000, Anomalous: true},
+		{Series: ids[1], T: at.Add(2 * time.Minute), Score: math.Inf(1), Anomalous: true},
+	}
+	if err := store.SaveNotable(ctx, tenant.OrgID(org), "a", notable); !errors.Is(err, anomalies.ErrLeaseLost) {
+		t.Errorf("without a lease: %v", err)
+	}
+	if held, err := store.Lease(ctx, tenant.OrgID(org), "a", time.Minute); err != nil || !held {
+		t.Fatalf("lease: %v, %v", held, err)
+	}
+	var left float64
+	queryOwner(t, f.db.OwnerDSN, "SELECT extract(epoch FROM expires_at - now()) FROM anomaly_leases WHERE org_id = $1", []any{org}, &left)
+	if left < 55 || left > 60 {
+		t.Errorf("the lease runs %v s from the database's time, want 60", left)
+	}
+	if held, err := store.Lease(ctx, tenant.OrgID(org), "b", time.Minute); err != nil || held {
+		t.Fatalf("b took a running lease: %v, %v", held, err)
+	}
+	if err := store.SaveNotable(ctx, tenant.OrgID(org), "a", notable); err != nil {
+		t.Fatal(err)
+	}
+	var stored, bad int
+	queryOwner(t, f.db.OwnerDSN, "SELECT count(*), count(*) FILTER (WHERE score > 1000 OR score = 'NaN') FROM anomaly_points WHERE series_id = ANY ($1)", []any{ids}, &stored, &bad)
+	if stored != 3 || bad != 0 {
+		t.Errorf("%d minutes stored, %d of them not finite or above the bound; want the 3 finite ones", stored, bad)
+	}
+	top, err := store.Top(ctx, scopeFor(t, org), ids, at.Add(-time.Minute), at.Add(time.Hour), 10)
+	if err != nil || len(top) != 1 || top[0].Series != ids[0] || top[0].MaxScore != 9 || !top[0].Peak.Equal(at.Add(time.Minute)) || top[0].Anomalous != 2 {
+		t.Errorf("top = %+v, %v; want series %d, 9 at its first peak, 2 anomalous minutes", top, err, ids[0])
+	}
+
+	// sermon_app has no direct way into the hypertable.
+	conn, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := conn.Exec(ctx, "INSERT INTO anomaly_points (ts, series_id, score, anomalous) VALUES (now(), $1, 1, true)", ids[0]); err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("INSERT as sermon_app: %v, want permission denied", err)
+	}
+
+	// Given up, the lease goes to b at once; a's writes fail from then on.
+	if err := store.Release(ctx, tenant.OrgID(org), "a"); err != nil {
+		t.Fatal(err)
+	}
+	if held, err := store.Lease(ctx, tenant.OrgID(org), "b", time.Minute); err != nil || !held {
+		t.Fatalf("b after the release: %v, %v", held, err)
+	}
+	if err := store.SaveNotable(ctx, tenant.OrgID(org), "a", nil); !errors.Is(err, anomalies.ErrLeaseLost) {
+		t.Errorf("a's lease check after the takeover: %v", err)
+	}
+	if err := store.SaveBaselines(ctx, tenant.OrgID(org), "a", 3, at, map[int64]anomaly.Baseline{ids[0]: {Median: 1, MAD: 1, Low: 0, High: 2, N: 60}}); !errors.Is(err, anomalies.ErrLeaseLost) {
+		t.Errorf("a's baselines after the takeover: %v", err)
 	}
 }

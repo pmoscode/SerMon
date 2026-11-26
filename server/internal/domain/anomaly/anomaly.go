@@ -16,6 +16,9 @@ const (
 	Threshold = 4.0
 	// Notable is the score from which a minute is stored for "what was unusual?" (ADR 0037).
 	Notable = 3.0
+	// MaxScore bounds a score: above it a deviation says nothing more (M4-31; the store takes
+	// scores up to it only).
+	MaxScore = 1000.0
 	// HalfLife is the EWMA's half-life.
 	HalfLife = time.Hour
 	// MinPoints is how many values a seasonal bucket needs before it votes.
@@ -225,6 +228,12 @@ func (r Robust) Score(s *State, at time.Time, x float64, seasonal Baseline, hasS
 		v.Short = s.EWMA.Z(basis, floor)
 	}
 	v.Score = math.Min(v.Seasonal, v.Short)
+	switch {
+	case math.IsNaN(v.Score):
+		v.Score = 0
+	case v.Score > MaxScore:
+		v.Score = MaxScore
+	}
 	v.Raw = v.Seasonal > Threshold && v.Short > Threshold
 	v.Anomalous = s.Debouncer.Push(v.Raw)
 	s.EWMA.Update(at, basis, floor)

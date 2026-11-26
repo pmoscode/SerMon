@@ -1187,6 +1187,7 @@
 	"capacity_by_cpu": "Nach CPU",
 	"capacity_by_memory": "Nach Speicher",
 	"capacity_no_trends": "Noch keine Tageswerte.",
+	"capacity_trends_truncated": "Trends gibt es für die ersten {count} Nodes nach Hostname; die Fleet hat mehr.",
 	"capacity_trends_hint": "Mittel der letzten 7 Tage und die Änderung gegenüber den ersten 7 der 30 Tage (in Prozentpunkten).",
 	"capacity_since": "Daten seit {day}.",
 	"capacity_top": "Größte Verbraucher",

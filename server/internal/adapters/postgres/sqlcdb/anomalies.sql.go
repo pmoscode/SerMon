@@ -84,16 +84,22 @@ func (q *Queries) AnomalyBaselinesOfHour(ctx context.Context, hour int16) ([]Ano
 }
 
 const anomalyCandidateSeries = `-- name: AnomalyCandidateSeries :many
-SELECT s.id, s.node_id, s.metric, s.labels, s.created_at, n.learning_since
-FROM series s JOIN nodes n ON n.org_id = s.org_id AND n.id = s.node_id
-WHERE s.metric = ANY ($1::text[]) AND s.seen_at >= $2
-ORDER BY s.node_id, s.id
-LIMIT $3
+SELECT c.id, c.node_id, c.metric, c.labels, c.created_at, c.learning_since
+FROM (
+    SELECT s.id, s.node_id, s.metric, s.labels, s.created_at, n.learning_since,
+           row_number() OVER (PARTITION BY s.node_id ORDER BY array_position($1::text[], s.metric), s.id) AS nth
+    FROM series s JOIN nodes n ON n.org_id = s.org_id AND n.id = s.node_id
+    WHERE s.metric = ANY ($1::text[]) AND s.seen_at >= $2
+) c
+WHERE c.nth <= $3::bigint
+ORDER BY c.node_id, c.id
+LIMIT $4
 `
 
 type AnomalyCandidateSeriesParams struct {
 	Metrics   []string
 	Since     time.Time
+	PerNode   int64
 	MaxSeries int32
 }
 
@@ -106,9 +112,16 @@ type AnomalyCandidateSeriesRow struct {
 	LearningSince time.Time
 }
 
-// The series of the candidate metrics with data since `since`, with when their node began to learn.
+// The series of the candidate metrics with data since `since`, with when their node began to learn:
+// at most per_node of a node (the metrics' order first), so a node with many disks or interfaces
+// can't crowd the others out (M4-31).
 func (q *Queries) AnomalyCandidateSeries(ctx context.Context, arg AnomalyCandidateSeriesParams) ([]AnomalyCandidateSeriesRow, error) {
-	rows, err := q.db.Query(ctx, anomalyCandidateSeries, arg.Metrics, arg.Since, arg.MaxSeries)
+	rows, err := q.db.Query(ctx, anomalyCandidateSeries,
+		arg.Metrics,
+		arg.Since,
+		arg.PerNode,
+		arg.MaxSeries,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -248,15 +261,36 @@ func (q *Queries) DeleteOtherAnomalyBaselines(ctx context.Context, arg DeleteOth
 	return err
 }
 
-const insertAnomalyPoints = `-- name: InsertAnomalyPoints :exec
-INSERT INTO anomaly_points (ts, series_id, score, anomalous)
-SELECT t.v, id.v, sc.v, an.v
-FROM unnest($1::timestamptz[]) WITH ORDINALITY AS t(v, i)
-JOIN unnest($2::bigint[]) WITH ORDINALITY AS id(v, i) ON id.i = t.i
-JOIN unnest($3::float4[]) WITH ORDINALITY AS sc(v, i) ON sc.i = t.i
-JOIN unnest($4::bool[]) WITH ORDINALITY AS an(v, i) ON an.i = t.i
-WHERE id.v IN (SELECT s.id FROM series s)
-ON CONFLICT DO NOTHING
+const holdAnomalyLease = `-- name: HoldAnomalyLease :many
+SELECT holder FROM anomaly_leases
+WHERE org_id = current_org_id() AND holder = $1 AND expires_at > now()
+FOR SHARE
+`
+
+// The holder's lease, if still valid; locked until the transaction ends, so no takeover comes
+// between this check and the writes after it (M4-31).
+func (q *Queries) HoldAnomalyLease(ctx context.Context, holder string) ([]string, error) {
+	rows, err := q.db.Query(ctx, holdAnomalyLease, holder)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var holder string
+		if err := rows.Scan(&holder); err != nil {
+			return nil, err
+		}
+		items = append(items, holder)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertAnomalyPoints = `-- name: InsertAnomalyPoints :one
+SELECT anomaly_points_write($1::timestamptz[], $2::bigint[], $3::float4[], $4::bool[])::bigint AS written
 `
 
 type InsertAnomalyPointsParams struct {
@@ -266,36 +300,38 @@ type InsertAnomalyPointsParams struct {
 	Anomalous []bool
 }
 
-// The notable minutes; a minute already stored (a second attempt) stays. Only series of the
-// current organization (the hypertable has no RLS).
-func (q *Queries) InsertAnomalyPoints(ctx context.Context, arg InsertAnomalyPointsParams) error {
-	_, err := q.db.Exec(ctx, insertAnomalyPoints,
+// The notable minutes; a minute already stored (a second attempt) stays. Only through the
+// function (the hypertable has no RLS, M4-31): series of the current organization, finite scores.
+func (q *Queries) InsertAnomalyPoints(ctx context.Context, arg InsertAnomalyPointsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertAnomalyPoints,
 		arg.Times,
 		arg.SeriesIds,
 		arg.Scores,
 		arg.Anomalous,
 	)
-	return err
+	var written int64
+	err := row.Scan(&written)
+	return written, err
 }
 
 const leaseAnomalyOrganization = `-- name: LeaseAnomalyOrganization :execrows
 
 INSERT INTO anomaly_leases (org_id, holder, expires_at)
-VALUES (current_org_id(), $1, $2)
+VALUES (current_org_id(), $1, now() + make_interval(secs => $2::float8))
 ON CONFLICT (org_id) DO UPDATE SET holder = EXCLUDED.holder, expires_at = EXCLUDED.expires_at
-WHERE anomaly_leases.holder = EXCLUDED.holder OR anomaly_leases.expires_at <= $3
+WHERE anomaly_leases.holder = EXCLUDED.holder OR anomaly_leases.expires_at <= now()
 `
 
 type LeaseAnomalyOrganizationParams struct {
-	Holder string
-	Until  time.Time
-	Now    time.Time
+	Holder       string
+	LeaseSeconds float64
 }
 
 // The anomaly detection (M4-23, ADR 0037), always in the tenant of one organization.
-// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+// Compare-and-swap: the holder renews, anybody else only takes over an expired lease. With the
+// database's time (M4-31): the instances' clocks may differ.
 func (q *Queries) LeaseAnomalyOrganization(ctx context.Context, arg LeaseAnomalyOrganizationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, leaseAnomalyOrganization, arg.Holder, arg.Until, arg.Now)
+	result, err := q.db.Exec(ctx, leaseAnomalyOrganization, arg.Holder, arg.LeaseSeconds)
 	if err != nil {
 		return 0, err
 	}
@@ -320,6 +356,17 @@ func (q *Queries) NodeLearning(ctx context.Context, arg NodeLearningParams) (tim
 	var learning_since time.Time
 	err := row.Scan(&learning_since)
 	return learning_since, err
+}
+
+const releaseAnomalyOrganization = `-- name: ReleaseAnomalyOrganization :exec
+UPDATE anomaly_leases SET expires_at = now()
+WHERE org_id = current_org_id() AND holder = $1 AND expires_at > now()
+`
+
+// The holder gives the organization up: another instance takes it in its next round.
+func (q *Queries) ReleaseAnomalyOrganization(ctx context.Context, holder string) error {
+	_, err := q.db.Exec(ctx, releaseAnomalyOrganization, holder)
+	return err
 }
 
 const scopedAnomalySeries = `-- name: ScopedAnomalySeries :many

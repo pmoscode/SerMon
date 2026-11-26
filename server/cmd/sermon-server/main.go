@@ -558,6 +558,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 	accessStore := postgres.NewAccessStore(db)
 	principals := access.NewLoader(accessStore, secondFactor)
 	live := webapi.NewLiveStreams()
+	// The dashboards' reads of a fleet share half of the database pool (T106, M4-31).
+	heavyReads := webapi.NewHeavyReads(db.PoolSize())
 	metricsHandler := webapi.NewMetricsHandler(nodes, live, logger)
 	registry.Gauge("sermon_server_live_streams", "Open live streams of the web UI (metrics, log tails and live views).",
 		func() float64 { return float64(live.Open()) })
@@ -600,15 +602,15 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(db), policy), logger),
 		Metrics:        metricsHandler,
 		Fleet:          webapi.NewFleetHandler(nodes, logger),
-		Capacity:       webapi.NewCapacityHandler(nodes, logger),
-		Heatmap:        webapi.NewHeatmapHandler(nodes, logger),
+		Capacity:       webapi.NewCapacityHandler(nodes, heavyReads, logger),
+		Heatmap:        webapi.NewHeatmapHandler(nodes, heavyReads, logger),
 		SecurityEvents: webapi.NewSecurityEventHandler(securityEvents, logger),
 		Updates: webapi.NewUpdateHandler(updates.NewService(postgres.NewUpdateStore(db, 0), policy).
 			WithRefresher(postgres.NewCommandStore(db), time.Now).
 			WithManual(postgres.NewRolloutStore(db), postgres.NewUpdatePolicyStore(db), func() uuid.UUID { return uuid.Must(uuid.NewV7()) }).
 			WithHistory(postgres.NewHistoryStore(db)).WithReleases(observing.releases), logger),
 		UpdatePolicies: webapi.NewUpdatePolicyHandler(updates.NewPolicyService(postgres.NewUpdatePolicyStore(db), policy, time.Now), logger),
-		Anomalies:      webapi.NewAnomalyHandler(anomalies.NewService(postgres.NewAnomalyStore(db), policy, time.Now), logger),
+		Anomalies:      webapi.NewAnomalyHandler(anomalies.NewService(postgres.NewAnomalyStore(db), policy, time.Now), heavyReads, logger),
 		AgentEnrollment: webapi.NewAgentEnrollmentHandler(
 			enrollment.NewEnroller(postgres.NewEnrollmentTokenStore(db), postgres.NewNodeRegistry(db), ca, time.Now, access.NewID),
 			ratelimit.New(enrollmentsPerWindow, enrollmentWindow, time.Now), logger),

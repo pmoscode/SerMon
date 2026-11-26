@@ -194,6 +194,28 @@ impl fmt::Debug for Secrets {
 mod tests {
     use super::*;
 
+    // ADR 0039: every schema in `schemas/` (the server's copy, `just gen`) is in the subset and
+    // named after its module; every module built in has one there.
+    #[test]
+    fn every_schema_is_in_the_subset() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("schemas");
+        let mut ids = Vec::new();
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let text = std::fs::read_to_string(&path).unwrap();
+            Schema::parse(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            ids.push(path.file_stem().unwrap().to_string_lossy().into_owned());
+        }
+        for module in builtin() {
+            assert!(
+                ids.iter().any(|id| id == module.id()),
+                "{}: no schema file",
+                module.id()
+            );
+            Schema::parse(module.schema()).unwrap();
+        }
+    }
+
     #[test]
     fn secrets_print_their_fields_only() {
         let s = Secrets::new([("password".to_owned(), "hunter2".to_owned())]);

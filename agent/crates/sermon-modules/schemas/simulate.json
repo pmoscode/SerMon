@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "simulate",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "behavior": {
+      "type": "string",
+      "title": "Behavior",
+      "enum": ["ok", "fail", "hang", "panic", "flood"],
+      "maxLength": 8,
+      "default": "ok"
+    },
+    "value": {
+      "type": "integer",
+      "title": "Value",
+      "minimum": 0,
+      "maximum": 1000000,
+      "default": 1
+    },
+    "token": {
+      "type": "string",
+      "title": "Token",
+      "description": "Only says whether a credential arrived.",
+      "writeOnly": true,
+      "maxLength": 256
+    }
+  }
+}

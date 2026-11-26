@@ -9,35 +9,7 @@ use sermon_core::Sample;
 use crate::runtime::MAX_SAMPLES;
 use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup};
 
-const SCHEMA: &str = r#"{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "simulate",
-  "type": "object",
-  "additionalProperties": false,
-  "properties": {
-    "behavior": {
-      "type": "string",
-      "title": "Behavior",
-      "enum": ["ok", "fail", "hang", "panic", "flood"],
-      "maxLength": 8,
-      "default": "ok"
-    },
-    "value": {
-      "type": "integer",
-      "title": "Value",
-      "minimum": 0,
-      "maximum": 1000000,
-      "default": 1
-    },
-    "token": {
-      "type": "string",
-      "title": "Token",
-      "description": "Only says whether a credential arrived.",
-      "writeOnly": true,
-      "maxLength": 256
-    }
-  }
-}"#;
+const SCHEMA: &str = include_str!("../schemas/simulate.json");
 
 /// How long a hanging run blocks its thread: longer than any budget (in tests real time, while
 /// the test's clock runs virtually).

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Docker over the socket",
+  "description": "State, health and restarts of the containers from the Docker API (read only). Whoever may use the socket is root: the host has to allow it with allow_docker_socket = true in agent.toml.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "socket": {
+      "type": "string",
+      "title": "Socket",
+      "description": "The API socket of Docker or Podman, below module_sockets.",
+      "format": "path",
+      "maxLength": 108,
+      "default": "/var/run/docker.sock"
+    },
+    "max_containers": {
+      "type": "integer",
+      "title": "Most containers",
+      "description": "Containers reported, the running ones first.",
+      "minimum": 1,
+      "maximum": 60,
+      "default": 30
+    },
+    "timeout": {
+      "type": "string",
+      "title": "Timeout",
+      "description": "Per request to the API, at most 25s.",
+      "format": "duration",
+      "maxLength": 8,
+      "default": "5s"
+    }
+  }
+}

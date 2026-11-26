@@ -1,0 +1,58 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_docker_socket_up",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_docker_socket_containers",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "state"
+      ]
+    },
+    {
+      "name": "sermon_docker_socket_truncated",
+      "unit": "boolean",
+      "aggregation": "max"
+    },
+    {
+      "name": "sermon_docker_socket_running",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "container",
+        "name"
+      ]
+    },
+    {
+      "name": "sermon_docker_socket_healthy",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "container",
+        "name"
+      ]
+    },
+    {
+      "name": "sermon_docker_socket_restarts",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "container",
+        "name"
+      ]
+    },
+    {
+      "name": "sermon_docker_socket_oom_killed",
+      "unit": "boolean",
+      "aggregation": "max",
+      "labels": [
+        "container",
+        "name"
+      ]
+    }
+  ]
+}

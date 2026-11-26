@@ -5666,7 +5666,23 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures von cgroup v2 (Docker, Podman), Container, die kommen und gehen.
 - **Abhängig von:** M5-03
 
-#### ☐ M5-17 – Docker über den Socket · A · M 🔒
+#### ☑ M5-17 – Docker über den Socket · A · M 🔒
+> Erledigt (`sermon-modules/src/docker_socket.rs`, Modul `docker_socket`, getrennt von der cgroup-Variante `docker`):
+> - **Zugriff** über den HTTP-Client der Module auf den Unix-Socket (ab Werk `/var/run/docker.sock`, auch Podman); das
+>   Veto lässt `docker.sock`/`podman.sock`/`containerd.sock` nur mit `allow_docker_socket = true` zu, beim Bauen und bei
+>   jeder Anfrage. Nur Lesen: der Client kennt nur `GET`, das Modul fragt `/containers/json?all=1` und
+>   `/containers/<ID>/json`, die ID vorher als 64 Hex-Zeichen geprüft; ohne Versionspfad (Docker 29 kennt keine alten
+>   API-Versionen mehr). 1 MiB je Antwort, Timeout je Anfrage.
+> - **Metriken:** `sermon_docker_socket_up`, `…_containers{state}` (alle, sieben feste Zustände), `…_truncated` und je
+>   Container (Labels `container` = kurze ID wie beim Modul `docker`, `name`) `…_running`, `…_healthy` (nur mit
+>   Health-Check, nicht beim Start), `…_restarts` (`RestartCount`), `…_oom_killed`; laufende zuerst, höchstens 60.
+> - **UI:** Warnung über dem Formular (root-äquivalent, `allow_docker_socket`, Hinweis auf das Modul `docker`), Test der
+>   Komponente; keine Discovery, damit nichts zum Socket drängt. Threat Model (O4) nachgezogen.
+> - **Fixtures** `agent/fixtures/modules/docker_socket/docker-28.3/` aus `capture.sh` (Docker in Docker: gesund,
+>   ungesund, Neustart-Schleife, beendet, ohne Health-Check); Katalog, Hilfetexte DE + EN, Fuzz-Ziel erweitert.
+> - Tests: Fake-API über einen Unix-Socket, nur die Lese-Pfade (jede Anfrage geprüft), zu große, kaputte und
+>   500-Antworten, ungültige IDs nie angefragt, verschwundener Container, Grenzen, Veto ohne `allow_docker_socket`,
+>   Daemon aus; Gegenproben 9/9 (zwei gleichwertige Mutanten durch Vereinfachen des Codes entfernt).
 - **Ziel:** Status, Health und Restarts über `docker.sock` (nur Lesen der API); deutliche Warnung in der UI, dass der
   Zugriff root entspricht (O4); nur mit lokalem Veto erlaubt.
 - **Tests zuerst:** Fake-API über einen Unix-Socket, zu große und kaputte Antworten, kein Aufruf außer den Lese-Pfaden.

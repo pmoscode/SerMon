@@ -1564,5 +1564,13 @@
 	"module_prometheus_bearer": "Bearer-Token",
 	"module_prometheus_bearer_help": "Geht als Authorization: Bearer nur an die eingestellten Endpunkte, nie nach einer Weiterleitung an einen anderen Host.",
 	"modules_secret_hint": "Zugangsdaten werden verschlüsselt gespeichert, gehen nur über die verschlüsselte Verbindung an die Agents der Gruppe und werden nie wieder angezeigt. Für Datenbanken einen eigenen Monitoring-User mit wenigen Rechten verwenden.",
-	"modules_secret_clear": "Gespeicherten Wert entfernen"
+	"modules_secret_clear": "Gespeicherten Wert entfernen",
+	"module_docker_socket": "Docker über den Socket",
+	"module_docker_socket_warning": "Wer den Docker-Socket benutzen darf, ist root auf dem Host. Das Modul liest nur, aber ein kompromittierter Agent oder Server könnte über den Socket alles. Der Host muss es eigens erlauben (allow_docker_socket = true in /etc/sermon/agent.toml); ohne Socket liefert das Modul docker CPU, Speicher, IO und Netz der Container.",
+	"module_docker_socket_socket": "Socket",
+	"module_docker_socket_socket_help": "Der API-Socket von Docker oder Podman unter module_sockets, z. B. /var/run/docker.sock oder /run/podman/podman.sock.",
+	"module_docker_socket_max_containers": "Höchstens Container",
+	"module_docker_socket_max_containers_help": "So viele Container werden gemeldet, laufende zuerst.",
+	"module_docker_socket_timeout": "Zeitgrenze",
+	"module_docker_socket_timeout_help": "Je Anfrage an die API, höchstens 25 s."
 }

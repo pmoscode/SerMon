@@ -147,7 +147,7 @@ security: security-secrets security-agent security-server security-web
 
 # Lint shell scripts
 lint-shell:
-    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh deploy/e2e/repos/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/updates/capture.sh agent/fixtures/discovery/capture.sh agent/fixtures/modules/docker/capture.sh agent/fixtures/modules/tls/generate.sh agent/fixtures/modules/systemd_units/capture.sh agent/fixtures/modules/nginx/capture.sh agent/fixtures/modules/apache/capture.sh agent/fixtures/modules/redis/capture.sh agent/fixtures/modules/prometheus/capture.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
+    shellcheck scripts/*.sh deploy/compose/*.sh deploy/compose/initdb/*.sh deploy/e2e/repos/*.sh .devcontainer/*.sh packaging/install.sh packaging/nfpm/*.sh agent/fixtures/capture-host.sh agent/fixtures/updates/capture.sh agent/fixtures/discovery/capture.sh agent/fixtures/modules/docker/capture.sh agent/fixtures/modules/tls/generate.sh agent/fixtures/modules/systemd_units/capture.sh agent/fixtures/modules/nginx/capture.sh agent/fixtures/modules/apache/capture.sh agent/fixtures/modules/redis/capture.sh agent/fixtures/modules/prometheus/capture.sh agent/fixtures/modules/docker_socket/capture.sh agent/fixtures/logs/capture/capture.sh packaging/openrc/sermon-agent agent/fuzz/seed.sh agent/crates/sermon-logs/tests/fake-journalctl
 
 # Lint GitHub Actions workflows: syntax (actionlint) and security (zizmor, strictest persona)
 lint-ci:

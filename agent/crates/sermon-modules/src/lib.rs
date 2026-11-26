@@ -11,6 +11,8 @@ pub mod apache;
 pub mod discovery;
 #[cfg(feature = "docker")]
 pub mod docker;
+#[cfg(feature = "docker_socket")]
+pub mod docker_socket;
 pub mod fields;
 #[cfg(feature = "http")]
 pub mod http;
@@ -70,6 +72,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(apache::Apache),
         #[cfg(feature = "docker")]
         Arc::new(docker::Docker),
+        #[cfg(feature = "docker_socket")]
+        Arc::new(docker_socket::DockerSocket),
         #[cfg(feature = "http_check")]
         Arc::new(http_check::HttpCheck),
         #[cfg(feature = "mysql")]

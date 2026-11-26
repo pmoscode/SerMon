@@ -3,7 +3,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import { fieldHelp, fieldLabel, moduleLabel } from '#lib/modules/labels.js';
+	import { fieldHelp, fieldLabel, moduleLabel, moduleWarning } from '#lib/modules/labels.js';
 	import {
 		configOf,
 		fieldsOf,
@@ -91,6 +91,15 @@
 
 <form class="flex flex-col gap-4 rounded-md border border-border p-4" onsubmit={submit} novalidate>
 	<h3 class="font-medium">{moduleLabel(moduleId)}</h3>
+	{#if moduleWarning(moduleId)}
+		<p
+			role="note"
+			data-testid="module-warning"
+			class="rounded-md border border-amber-500/60 bg-amber-500/10 p-3 text-sm"
+		>
+			{moduleWarning(moduleId)}
+		</p>
+	{/if}
 	{#if hasSecrets}
 		<p class="text-xs text-muted-foreground">{m.modules_secret_hint()}</p>
 	{/if}

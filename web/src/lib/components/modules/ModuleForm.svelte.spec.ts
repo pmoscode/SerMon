@@ -212,3 +212,22 @@ describe('ModuleForm', () => {
 		await expect.element(page.getByRole('heading', { name: 'Testmodul (simulate)' })).toBeVisible();
 	});
 });
+
+// M5-17 (O4): the Docker socket is root-equivalent – the form says so before anything else.
+describe('a root-equivalent module', () => {
+	beforeEach(() => switchLocale('en'));
+
+	it('warns above its form', async () => {
+		setup({ moduleId: 'docker_socket' });
+		const note = page.getByTestId('module-warning');
+		await expect.element(note).toBeVisible();
+		expect(note.element().textContent).toContain('root on the host');
+		expect(note.element().textContent).toContain('allow_docker_socket');
+	});
+
+	it('leaves other modules without a warning', async () => {
+		setup({ moduleId: 'nginx' });
+		await expect.element(page.getByRole('heading')).toBeVisible();
+		expect(page.getByTestId('module-warning').elements()).toHaveLength(0);
+	});
+});

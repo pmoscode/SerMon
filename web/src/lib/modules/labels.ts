@@ -22,7 +22,8 @@ const names: Record<string, Text> = {
 	nginx: m.module_nginx,
 	apache: m.module_apache,
 	redis: m.module_redis,
-	prometheus: m.module_prometheus
+	prometheus: m.module_prometheus,
+	docker_socket: m.module_docker_socket
 };
 
 const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
@@ -106,8 +107,26 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 		tls_verify: [m.module_prometheus_tls_verify, m.module_prometheus_tls_verify_help],
 		ca_file: [m.module_prometheus_ca_file, m.module_prometheus_ca_file_help],
 		bearer: [m.module_prometheus_bearer, m.module_prometheus_bearer_help]
+	},
+	docker_socket: {
+		socket: [m.module_docker_socket_socket, m.module_docker_socket_socket_help],
+		max_containers: [
+			m.module_docker_socket_max_containers,
+			m.module_docker_socket_max_containers_help
+		],
+		timeout: [m.module_docker_socket_timeout, m.module_docker_socket_timeout_help]
 	}
 };
+
+/** Modules whose access weighs more than their form shows (O4: root-equivalent sockets). */
+const warnings: Record<string, Text> = {
+	docker_socket: m.module_docker_socket_warning
+};
+
+/** The warning of a module, shown above its form. */
+export function moduleWarning(id: string): string | undefined {
+	return warnings[id]?.();
+}
 
 /** The display name of a module. */
 export function moduleLabel(id: string, title?: string): string {

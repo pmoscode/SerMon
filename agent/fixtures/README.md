@@ -96,6 +96,9 @@ Docker-Netzes sind durch 192.0.2.0/24 ersetzt.
 `modules/prometheus/capture.sh` (M5-19) holt `/metrics` von Prometheus 3.5 und dem node exporter 1.9 (beide antworten
 auch auf den OpenMetrics-Header im Textformat) und vom Python-Client 0.21 in beiden Formaten aus derselben Registry.
 
+`modules/docker_socket/capture.sh` (M5-17) startet Docker in Docker (`docker:28.3-dind`) mit fünf Containern
+(gesund, ungesund, Neustart-Schleife, beendet, ohne Health-Check) und holt die Liste und jede Auskunft über die API.
+
 ## Updates (`updates/`)
 
 `updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in

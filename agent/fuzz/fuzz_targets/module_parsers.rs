@@ -10,14 +10,14 @@ use sermon_modules::discovery::{self, MAX_FACTS};
 use sermon_modules::http::Url;
 use sermon_modules::prometheus::expo;
 use sermon_modules::x509;
-use sermon_modules::{apache, nginx, redis, systemd_units};
+use sermon_modules::{apache, docker_socket, nginx, redis, systemd_units};
 
 fuzz_target!(|data: &[u8]| {
     let Some((&pick, rest)) = data.split_first() else {
         return;
     };
     let text = String::from_utf8_lossy(rest);
-    match pick % 9 {
+    match pick % 10 {
         0 => {
             let listeners = discovery::parse_tcp(&text);
             assert!(listeners.len() <= MAX_FACTS);
@@ -54,6 +54,15 @@ fuzz_target!(|data: &[u8]| {
                 let series = expo::canonical(&s.labels);
                 assert!(!series.chars().any(char::is_control), "escaped");
             }
+        }
+        9 => {
+            if let Ok(list) = docker_socket::parse_list(rest) {
+                for c in &list {
+                    assert!(c.id.len() == 64 && c.id.bytes().all(|b| b.is_ascii_hexdigit()));
+                    assert!(c.name.len() <= 256 && !c.name.chars().any(char::is_control));
+                }
+            }
+            let _ = docker_socket::parse_inspect(rest);
         }
         2 => {
             if let Some(v) = x509::validity(rest) {

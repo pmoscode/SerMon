@@ -173,3 +173,8 @@ for f in glob.glob("../fixtures/modules/mysql/*/*.json"):
     name = f.replace("/", "_").replace(".", "_")
     open(os.path.join("corpus/mysql_wire", "fixture" + name), "wb").write(out)
 PY
+# 9: answers of the Docker API (M5-17).
+for file in ../fixtures/modules/docker_socket/*/*.json; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\011'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done

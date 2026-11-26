@@ -247,7 +247,11 @@ Geheimnis ohne zweiten Faktor; er liegt im URL-Fragment des Browsers der Anzeige
 
 - **`curl | sh`** (T50): Wer den Server kontrolliert, kann ein anderes Skript ausliefern. Akzeptiert für den
   Einzeiler; abgemildert durch Signaturprüfung, Ansicht vor der Ausführung und das Paket-Repo (O5).
-- **Docker-Socket** ist root-äquivalent: Modul standardmäßig aus, Warnung, cgroup-Variante bevorzugt (O4).
+- **Docker-Socket** ist root-äquivalent: Modul standardmäßig aus, Warnung, cgroup-Variante bevorzugt (O4). Umgesetzt in
+  M5-17: eigenes Modul `docker_socket` (die cgroup-Variante `docker` braucht keinen Socket), nur mit
+  `allow_docker_socket = true` in `agent.toml` (auch über Symlinks, bei jeder Anfrage geprüft), nur `GET` auf die Liste
+  der Container und auf `/containers/<ID>/json` mit geprüfter ID; die UI warnt über dem Formular, das Modul schlägt
+  sich nicht selbst vor.
 - **Prozessdetails** ohne `CAP_SYS_PTRACE` bleiben unvollständig (O3).
 - **Kein HA** in v1 (O11): Ausfall des Servers kostet bis zu 24 h keine Daten (WAL), aber Alerts.
 - **Recovery-Codes mit 80 Bit** (M1-03, bestätigt in M1-35): Sie werden abgeschrieben, deshalb kürzer als die

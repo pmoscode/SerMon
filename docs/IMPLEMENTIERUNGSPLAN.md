@@ -5193,7 +5193,7 @@ Es fehlt kein ADR. Erkenntnisse für M5:
   - Release-Pipeline mit echten Schlüsseln (`release.yml`) mit dem ersten Release
   - Nodes löschen, Retention pro Org einstellen (aus M3): noch nicht eingeplant
 
-**3. M5 ist noch nicht in Aufgaben zerlegt.**
+**3. M5 ist in Aufgaben zerlegt** (§8.1 bis §8.6, M5-01 bis M5-33; M5-29 und M5-30 sind offen aus M3).
 
 ---
 
@@ -5208,6 +5208,270 @@ Es fehlt kein ADR. Erkenntnisse für M5:
 | **E5.3 Docker-Logs** | Container-Logs über das Docker-Modul | `sermon-security-review` | E5.2, E3.1 |
 | **E5.4 Eigene Dashboards** | Grid-Editor, Widgets, Variablen, Teilen, JSON-Import und -Export | `sermon-ui-component` | M1-29 |
 | **E5.5 Kiosk und Vergleich** | Kiosk-Token (schreibgeschützt, widerrufbar), Auto-Rotation; Vergleichsansicht für 2–4 Nodes | `sermon-ui-component`, `sermon-security-review` | E5.4 |
+
+**Aufgaben** (Zerlegung im Review M4, §7.9). Reihenfolge nach dem Demo-Pfad: ADR und Protokoll → Laufzeit der Module
+im Agent → Konfiguration und Discovery im Server → UI → nginx als erstes Modul mit Standardregeln → Demo. Die eigenen
+Dashboards (§8.4) und der Kiosk (§8.5) hängen nicht an den Modulen und laufen parallel. Kürzbar sind die Wellen ③ und ④
+(Docker über den Socket, Docker-Logs, SMART, Prometheus-Scraper) und die Vergleichsansicht (M5-28), sonst in v1.x
+(§10).
+
+**Kritischer Pfad:** M5-01 → M5-02 → M5-03 → M5-06 → M5-07 → M5-11 → M5-20 → M5-32. Dazu fließen M5-04 (Discovery)
+und M5-05 (Zugangsdaten, für M5-13 und M5-14). Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
+
+### 8.1 Modul-Framework (E5.1)
+
+#### ☐ M5-01 – ADR Modul-Framework · X · S 🔒
+- **Ziel:** ADR (Skill `sermon-adr`), bevor Code entsteht:
+  - **Vertrag:** Trait `Module` (Skill `sermon-add-module`): Schema, Validierung, Discovery, `collect`; Namen und
+    Labels der Metriken mit festen Grenzen je Modul.
+  - **Laufzeit:** eigener Task je Modul, Zeit- und Größenbudget je Lauf, ein Panic oder Hänger trifft nur das Modul;
+    Gesundheit des Moduls (läuft, Fehler, abgeschaltet) als eigener Bericht.
+  - **Konfiguration:** je Node-Gruppe über `ConfigUpdate` (ADR 0030) – wie die Version wechselt, wenn sich eine Gruppe
+    ändert, und was ein Node beim Wechsel der Gruppe tut. Typisiert, keine freien Felder außer der
+    Modulkonfiguration, die das Schema des Agents prüft.
+  - **Lokales Veto:** `allow_modules` und Grenzen der Ziele in `agent.toml` (wie `allow_logs`, ADR 0030). Ein Server
+    darf den Agent nicht zur Sonde ins Netz des Hosts machen: Ziele nur `localhost` oder lokal erlaubte Adressen,
+    keine Weiterleitungen dorthin, Unix-Sockets nur unter erlaubten Pfaden.
+  - **JSON-Schema:** die Teilmenge, aus der die UI ein Formular baut; das Schema liegt beim Agent, der Server bekommt
+    eine Kopie aus dem Build (wie die Standardregeln).
+  - **Discovery:** Quellen (lauschende Ports, Prozessnamen, Units), was als Hinweis zum Server geht (Modul-ID und
+    Anlass, keine Rohdaten), wie oft.
+  - **Zugangsdaten:** Ende-zu-Ende (KONZEPT §15) – Optionen bewerten, die Umsetzung folgt in M5-05.
+- Threat Model: neue Vertrauensgrenze „Module“ (Server → Agent → Dienste des Hosts), Zugangsdaten als Asset.
+- **Abhängig von:** –
+
+#### ☐ M5-02 – Protokoll der Module · X · M
+- **Ziel:** Proto nach M5-01 (Skill `sermon-proto-change`): Modulkonfiguration in `AgentConfig` (je Modul an/aus,
+  Konfiguration, verschlüsselte Zugangsdaten), `ModuleHealth` und `DiscoveryHints` als Batches; Grenzen in den
+  Validierungsregeln; Server und Agent ignorieren Unbekanntes.
+- **Tests zuerst:** Schema-Tests (Grenzen, gültige und ungültige Nachrichten), `buf breaking`.
+- **Abhängig von:** M5-01
+
+#### ☐ M5-03 – Laufzeit der Module im Agent · A · L 🔒
+- **Ziel:** `sermon-modules` mit Trait, Register und Planer: Intervall je Modul, Zeitbudget mit Abbruch, Größengrenze
+  der Ausgabe, Panic isoliert, Gesundheit; angebunden an Konfiguration (`agent_config`), Outbox und Uhr. Ein Modul zum
+  Testen (`simulate`) für Tests und Demo. Lokales Veto aus `agent.toml`.
+- **Tests zuerst:** ein Modul, das hängt, eines, das panickt, eines mit zu viel Ausgabe: der Agent und die anderen
+  Module laufen weiter, die Gesundheit sagt warum; Abschalten über das Veto.
+- **Abhängig von:** M5-02
+
+#### ☐ M5-04 – Discovery im Agent · A · M
+- **Ziel:** lauschende Ports (`/proc/net/tcp`, `tcp6`, `unix`), Prozessnamen und aktive Units als Eingabe von
+  `discover()`; Hinweise gehen bei Änderung an den Server, begrenzt in Zahl und Häufigkeit. Nichts wird aktiviert.
+- **Tests zuerst:** Fixtures von `/proc/net` der Zieldistros (`ProcRoot`), ein Fake-Modul mit Hinweis; Fuzz-Ziel für
+  die Parser von `/proc/net`.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-05 – Zugangsdaten Ende-zu-Ende · X · L 🔒
+- **Ziel:** die Entscheidung aus M5-01 umsetzen: Zugangsdaten eines Moduls (DB-Passwort) erreichen nur den Agent, der
+  sie im Speicher hält – nie im Klartext in Datenbank, Logs, WAL oder Audit-Log; neue Nodes der Gruppe und ein neuer
+  Schlüssel des Nodes; Hinweis in der UI auf einen Monitoring-User mit wenigen Rechten.
+- **Tests zuerst:** Klartext taucht in keiner Tabelle, keinem Log und keinem Puffer auf (Test liest sie); ein anderer
+  Node oder eine andere Org kann nicht entschlüsseln; Rotation.
+- **Abhängig von:** M5-02
+
+#### ☐ M5-06 – Module im Server · S · L 🔒
+- **Ziel:** Konfiguration je Gruppe (Tabelle mit RLS, Audit), Prüfung gegen das Schema, Zustellung über `ConfigUpdate`;
+  Gesundheit und Discovery-Hinweise der Nodes speichern; RPCs (Liste der Module mit Schema, Konfiguration lesen und
+  setzen, Hinweise und Gesundheit eines Nodes) mit Rechten und Step-up für Änderungen; Katalog der Modulmetriken.
+- **Tests zuerst:** Tenant-Isolations- und Step-up-Tabellen, ungültige Konfiguration abgelehnt, eine Änderung der
+  Gruppe erreicht ihre Nodes und nur sie.
+- **Abhängig von:** M5-02
+
+#### ☐ M5-07 – Module in der UI · W · L
+- **Ziel:** Reiter „Module“ am Node (Gesundheit, Metriken) und Einstellungen je Gruppe; Formular aus dem JSON-Schema
+  (Teilmenge aus M5-01, Geheimnisse als Passwortfeld); Hinweis „nginx erkannt – Modul aktivieren?“ an Node und
+  Fleet; Hilfetexte DE und EN (Skill `sermon-ui-component`).
+- **Tests zuerst:** Komponententests für das Formular (jede Feldart, Validierung, Geheimnis nie angezeigt) und den
+  Hinweis; axe.
+- **Abhängig von:** M5-06
+
+### 8.2 Module (E5.2)
+
+Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterstützter Version unter
+`agent/fixtures/modules/`, Zeit- und Größengrenzen, Discovery, Katalog, Hilfetext, Standardregeln (M5-20).
+
+#### ☐ M5-08 – HTTP- und TCP-Check · A · M 🔒
+- **Ziel:** Erreichbarkeit, Latenz, Statuscode und Ablauf des Zertifikats lokaler Endpunkte; nur Ziele, die das
+  lokale Veto erlaubt, Weiterleitungen nur innerhalb davon, TLS mit Prüfung (abschaltbar nur ausdrücklich).
+- **Tests zuerst:** Testserver für Status, Zeitüberschreitung, Weiterleitung nach außen (abgelehnt), zu große Antwort.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-09 – TLS-Zertifikate · A · M
+- **Ziel:** Ablaufdatum lokaler Zertifikatsdateien (unter erlaubten Pfaden) und von Endpunkten; Kette, Name, Tage bis
+  zum Ablauf.
+- **Tests zuerst:** Fixtures (PEM, Kette, abgelaufen, fremder Name), ein Pfad außerhalb der erlaubten abgelehnt.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-10 – systemd-Units (erweitert) · A · S
+- **Ziel:** Zustand und Restarts ausgewählter Units, aufbauend auf dem Collector der fehlgeschlagenen Units (M2-22),
+  ohne Zusatzrechte.
+- **Tests zuerst:** Fixtures von `systemctl show` der Zieldistros, Grenzen der Zahl der Units.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-11 – nginx · A · S
+- **Ziel:** `stub_status` (Verbindungen, Anfragen); Discovery über Port und Prozess; nginx im E2E-Compose.
+- **Tests zuerst:** Fixtures je Version, kaputte und zu große Antworten.
+- **Abhängig von:** M5-03, M5-04
+
+#### ☐ M5-12 – Apache httpd · A · S
+- **Ziel:** `server-status?auto` (Worker, Anfragen, Bytes); Discovery.
+- **Tests zuerst:** Fixtures je Version (Debian, RHEL-Familie), kaputte Antworten.
+- **Abhängig von:** M5-03, M5-04
+
+#### ☐ M5-13 – PostgreSQL · A · M 🔒
+- **Ziel:** Verbindungen, TPS, Cache-Hit, Replikations-Lag, Datenbankgrößen, Locks mit der Rolle `pg_monitor`;
+  Client ohne OpenSSL (`cargo deny`), Abfragen mit Zeitgrenze; PostgreSQL im E2E-Compose.
+- **Tests zuerst:** Ergebnisse je Version als Fixtures, Integrationstest gegen einen Container, falsches Passwort und
+  fehlende Rechte als Gesundheit statt Fehler.
+- **Abhängig von:** M5-03, M5-05
+
+#### ☐ M5-14 – MySQL/MariaDB · A · M 🔒
+- **Ziel:** Verbindungen, Queries, Slow Queries, Replikation, InnoDB-Buffer; Rechte `PROCESS, REPLICATION CLIENT`.
+- **Tests zuerst:** Fixtures von MySQL und MariaDB, Integrationstest gegen Container.
+- **Abhängig von:** M5-03, M5-05
+
+#### ☐ M5-15 – Redis · A · S
+- **Ziel:** Speicher, Clients, Ops/s, Hit-Rate, Evictions aus `INFO`; optional mit Passwort (M5-05).
+- **Tests zuerst:** Fixtures je Version, Fuzz-Ziel für den Parser von `INFO`.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-16 – Docker über cgroups · A · M
+- **Ziel:** CPU, Speicher, Netz und IO je Container aus den cgroups, ohne Socket und ohne Zusatzrechte; Namen soweit
+  ohne Socket bekannt; Grenzen der Zahl der Container.
+- **Tests zuerst:** Fixtures von cgroup v2 (Docker, Podman), Container, die kommen und gehen.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-17 – Docker über den Socket · A · M 🔒
+- **Ziel:** Status, Health und Restarts über `docker.sock` (nur Lesen der API); deutliche Warnung in der UI, dass der
+  Zugriff root entspricht (O4); nur mit lokalem Veto erlaubt.
+- **Tests zuerst:** Fake-API über einen Unix-Socket, zu große und kaputte Antworten, kein Aufruf außer den Lese-Pfaden.
+- **Abhängig von:** M5-16
+
+#### ☐ M5-18 – SMART über den Helper · X · M 🔒
+- **Ziel:** neue feste Helper-Operation für `smartctl --json` (ADR-Nachtrag zu ADR 0035, Review des Helpers), geparst
+  im Agent; Gesundheit und Temperatur der Disks. Der Helper hat 1 761 von 1 800 Zeilen: zuerst Platz schaffen oder die
+  Grenze per ADR begründet anheben.
+- **Tests zuerst:** Fixtures von `smartctl --json` (SATA, NVMe), Fuzz-Ziel für den Parser, Veto in `helper.toml`.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-19 – Prometheus-Scraper · A · M 🔒
+- **Ziel:** beliebige `/metrics`-Endpunkte unter dem lokalen Veto, Grenze der Serien und Labels je Endpunkt, Namen mit
+  Präfix gegen Kollisionen mit den eigenen Metriken.
+- **Tests zuerst:** Fixtures des Textformats (und OpenMetrics), Fuzz-Ziel für den Parser, zu viele Serien.
+- **Abhängig von:** M5-03
+
+#### ☐ M5-20 – Standardregeln der Module · S · M
+- **Ziel:** Regeln je Modul (Skill `sermon-add-alert-rule`): Dienst nicht erreichbar, Zertifikat läuft in 21 bzw.
+  7 Tagen ab, Replikations-Lag, Container startet ständig neu, SMART meldet Fehler; Selektor „Nodes mit aktivem
+  Modul“; Hilfetexte und Felder für Benachrichtigungen.
+- **Tests zuerst:** Engine-Tests je Regel, ein Node ohne das Modul bekommt keinen Alert.
+- **Abhängig von:** M5-06, M5-11
+
+### 8.3 Docker-Logs (E5.3)
+
+#### ☐ M5-21 – Container-Logs über das Docker-Modul · A · M 🔒
+- **Ziel:** Logs der Container über die Docker-API (M5-17) in die Log-Pipeline (Redaction, Grenzen, Labels mit
+  Container-Name, begrenzte Zahl der Streams in Loki); Auswahl je Gruppe wie die Datei-Globs (ADR 0030).
+- **Tests zuerst:** Fake-API mit Multiplex-Format, Redaction greift, Container, die neu starten, Grenzen.
+- **Abhängig von:** M5-17, M3-04
+
+### 8.4 Eigene Dashboards (E5.4)
+
+#### ☐ M5-22 – ADR Eigene Dashboards · X · S
+- **Ziel:** ADR: JSON-Modell (Layout, Widgets, Variablen, Version), Grenzen (Widgets, Abfragen, Größe), Rechte (privat
+  oder in der Org geteilt, wer ändern darf), Import und Export, Wahl des Grid-Editors mit Blick auf Bundle-Budget,
+  Bedienung per Tastatur und Lizenz.
+- **Abhängig von:** –
+
+#### ☐ M5-23 – Dashboards im Server · S · M 🔒
+- **Ziel:** Tabelle mit RLS, CRUD-RPCs, Teilen in der Org, Import und Export als JSON mit Prüfung des Modells, Audit;
+  die Abfragen der Widgets laufen über die vorhandenen Leser mit ihren Grenzen.
+- **Tests zuerst:** Tenant-Isolations- und Step-up-Tabellen, ungültige und zu große Dokumente, fremde Node-IDs im
+  Import.
+- **Abhängig von:** M5-22
+
+#### ☐ M5-24 – Dashboard-Editor · W · L
+- **Ziel:** Grid mit Drag & Drop und Tastatur, Widgets anlegen, verschieben, in der Größe ändern; Speichern, Teilen,
+  Import und Export; Bundle-Budget eingehalten.
+- **Tests zuerst:** Komponententests für Layout und Tastaturbedienung, axe; Budget-Test des Bundles.
+- **Abhängig von:** M5-23
+
+#### ☐ M5-25 – Widgets und Variablen · W · M
+- **Ziel:** Zeitreihe, Gauge, Stat, Tabelle, Log-Stream, Alert-Liste; Variablen Node und Gruppe; synchronisierter
+  Zeitbereich (KONZEPT §17).
+- **Tests zuerst:** Komponententests je Widget mit leeren, großen und fehlerhaften Antworten.
+- **Abhängig von:** M5-24
+
+### 8.5 Kiosk und Vergleich (E5.5)
+
+#### ☐ M5-26 – Kiosk-Token · X · M 🔒
+- **Ziel:** schreibgeschützter, widerrufbarer Token, an ein Dashboard und die Org gebunden (nur als Hash gespeichert,
+  Ablauf, Audit); er öffnet nur die Leser dieses Dashboards, keine anderen RPCs, keine Session.
+- **Tests zuerst:** jeder RPC außer denen des Dashboards abgelehnt, widerrufener und abgelaufener Token, fremde Org;
+  Rate-Limits.
+- **Abhängig von:** M5-23
+
+#### ☐ M5-27 – Kiosk-Modus · W · M
+- **Ziel:** Vollbild ohne Bedienelemente, Auto-Rotation zwischen Dashboards, Auto-Refresh, Wiederverbindung nach
+  Ausfällen, sichtbarer Hinweis bei veralteten Daten.
+- **Tests zuerst:** Komponententests für Rotation und Fehlerzustände.
+- **Abhängig von:** M5-25, M5-26
+
+#### ☐ M5-28 – Vergleichsansicht · W · M
+- **Ziel:** 2 bis 4 Nodes nebeneinander oder übereinandergelegt (KONZEPT §16, 8), Auswahl in der URL, gemeinsamer
+  Zeitbereich und Crosshair.
+- **Tests zuerst:** Komponententests (Auswahl, Grenzen, Nodes ohne Daten).
+- **Abhängig von:** –
+
+### 8.6 Querschnitt
+
+#### ☐ M5-29 – Nodes löschen und deaktivieren · X · M 🔒
+- **Ziel:** offen aus M3: Node deaktivieren und löschen (KONZEPT §6, „Widerruf und Lebenszyklus“): Serial auf die
+  Denylist, Daten nach Frist löschen, Audit; Step-up.
+- **Tests zuerst:** ein gelöschter Node verbindet sich nicht mehr, seine Daten verschwinden, andere bleiben;
+  Tenant-Isolations- und Step-up-Tabellen.
+- **Abhängig von:** –
+
+#### ☐ M5-30 – Retention pro Org · S · M
+- **Ziel:** offen aus M3 (M3-10): Aufbewahrung von Logs und Events je Org einstellbar innerhalb der Grenzen der
+  Instanz.
+- **Tests zuerst:** Löschung nach der Frist der Org, nicht früher, nicht für andere Orgs.
+- **Abhängig von:** –
+
+#### ☐ M5-31 – Ressourcen-Budget mit Modulen · A · S
+- **Ziel:** `agent-budget.sh` in der Demo mit den Modulen der Wellen ① und ② aktiv: unter 1 % eines Kerns und 30 MiB
+  (KONZEPT §4.1), auch am Ende des Laufs; Kosten je Modul dokumentiert.
+- **Tests zuerst:** Gegenprobe mit gesenkter Grenze.
+- **Abhängig von:** M5-11
+
+#### ☐ M5-32 – Demo-Test M5 · X · M
+- **Ziel:** Projekt `modules` in der Demo: nginx läuft auf einem Host, die UI schlägt das Modul vor, nach dem
+  Aktivieren kommen Metriken und ein Alert, wenn nginx steht; Projekt `kiosk`: ein eigenes Dashboard läuft mit einem
+  Kiosk-Token, ein widerrufener Token zeigt nichts mehr.
+- **Tests zuerst:** der Demo-Test selbst.
+- **Abhängig von:** M5-20, M5-27
+
+#### ☐ M5-33 – Security-Review M5 · X · S 🔒
+- **Ziel:** Skill `sermon-security-review` über alle M5-Änderungen, in Teil-Reviews ohne Kontext der Umsetzung:
+  Modul-Laufzeit und Veto (Sonde ins Netz des Hosts?), Zugangsdaten, Module mit fremden Daten (Parser, Docker-Socket,
+  Prometheus), Helper-Operation SMART, Dashboards und Kiosk-Token, Nodes löschen. Danach Threat Model aktualisieren
+  und Befunde als Aufgaben anlegen.
+- **Abhängig von:** alle M5-Aufgaben
+
+**M5 fertig, wenn:**
+
+- Der Demo-Test M5-32 ist grün.
+- Jedes Modul ist ab Werk aus, hat Fixtures je unterstützter Version und Zeit- und Größengrenzen; Parser von Text
+  fremder Dienste sind gefuzzt.
+- Ein hängendes oder abstürzendes Modul stört weder den Agent noch andere Module (Test).
+- Zugangsdaten stehen nie im Klartext in Datenbank, Logs, WAL oder Audit-Log (Test).
+- Ein Kiosk-Token liest nur sein Dashboard und ist widerrufbar (Test).
+- Alle neuen RPCs stehen in den Tenant-Isolations- und Step-up-Tabellen.
+- Das Ressourcen-Budget ist mit aktiven Modulen eingehalten, auch am Ende eines vollen Demo-Laufs.
+- Der Helper bleibt in seiner Zeilengrenze (oder sie ist per ADR angehoben), SMART ist reviewt.
+- Die Security-Review hat keine offenen kritischen Findings; die neue Vertrauensgrenze „Module“ im Threat Model ist
+  erledigt.
 
 ---
 
@@ -5237,3 +5501,7 @@ Es fehlt kein ADR. Erkenntnisse für M5:
 | Root-Helper wächst über 1 500 Zeilen oder wird zum Einfallstor | A1: root auf allen Nodes | Parsen im Agent, festes Op-Enum, LoC-Prüfung in CI, eigene Review vor der Nutzung (M4-04) |
 | Anomalie-Erkennung meldet zu viel oder zu wenig | Vertrauen in die Alerts sinkt | beide Verfahren müssen übereinstimmen, Debounce, Lernphase; Benchmark in CI (M4-22); die Regel ist pro Org abschaltbar |
 | Umfang von M4 wächst | Verzögerung | Paket-Repos (M4-20) mit dem Release in v1.0, Kapazität und Heatmap (M4-26, M4-27) nach M5, Kanal `beta` später |
+| Umfang von M5 wächst | Verzögerung | Wellen ③ und ④ (Docker über den Socket, Docker-Logs, SMART, Prometheus-Scraper) und die Vergleichsansicht nach v1.x; nginx als erstes Modul trägt die Demo |
+| Module machen den Agent zur Sonde ins Netz des Hosts | Ein kompromittierter Server erreicht interne Dienste über alle Agents | Ziele nur unter dem lokalen Veto (`agent.toml`), keine Weiterleitungen nach außen, eigene Teil-Review (M5-01, M5-33) |
+| SMART sprengt die Zeilengrenze des Helpers (1 761 von 1 800) | Die Grenze verliert ihren Sinn | Erst Platz schaffen, sonst die Grenze per ADR begründet anheben; Review des Helpers (M5-18) |
+| Ein Grid-Editor sprengt das Bundle-Budget | Ladezeit und Budget-Test | Wahl im ADR M5-22 mit Blick auf Größe und Tastaturbedienung; notfalls ein eigener schlanker Editor |

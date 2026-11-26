@@ -1,0 +1,44 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_apache_up",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_apache_workers_busy",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_apache_workers_idle",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_apache_workers_max",
+      "unit": "count",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_apache_processes",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_apache_connections",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_apache_requests_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_apache_sent_bytes_per_second",
+      "unit": "bytes_per_second",
+      "aggregation": "avg"
+    }
+  ]
+}

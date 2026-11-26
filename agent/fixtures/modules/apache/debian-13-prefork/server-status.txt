@@ -1,0 +1,29 @@
+fixture-host
+ServerVersion: Apache/2.4.71 (Debian)
+ServerMPM: prefork
+Server Built: 2026-11-11T12:54:19
+CurrentTime: Thursday, 26-Nov-2026 18:57:11 UTC
+RestartTime: Thursday, 26-Nov-2026 18:57:09 UTC
+ParentServerConfigGeneration: 1
+ParentServerMPMGeneration: 0
+ServerUptimeSeconds: 2
+ServerUptime: 2 seconds
+Load1: 0.23
+Load5: 0.98
+Load15: 1.23
+Total Accesses: 10
+Total kBytes: 107
+Total Duration: 2
+CPUUser: 0
+CPUSystem: 0
+CPUChildrenUser: 0
+CPUChildrenSystem: 0
+Uptime: 2
+ReqPerSec: 5
+BytesPerSec: 54784
+BytesPerReq: 10956.8
+DurationPerReq: .2
+BusyWorkers: 1
+GracefulWorkers: 0
+IdleWorkers: 4
+Scoreboard: W____.................................................................................................................................................

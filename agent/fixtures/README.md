@@ -85,6 +85,10 @@ Unit. Auf Rocky und Alma ist `dbus.service` ein Alias von `dbus-broker.service`.
 `modules/nginx/capture.sh` (M5-11) holt die `stub_status`-Seite aus den offiziellen Images `nginx:<version>-alpine`
 (1.22 bis 1.29), nach zehn Anfragen und mit je einer Verbindung, die liest, schreibt und wartet.
 
+`modules/apache/capture.sh` (M5-12) holt `server-status?auto` aus den Apache-Paketen von Debian 13 (MPM event und
+prefork), Rocky 9, Alma 10 und Fedora 44 (dort mit eigener `<Location>`), nach zehn Anfragen; der Hostname der ersten
+Zeile ist ersetzt.
+
 ## Updates (`updates/`)
 
 `updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in

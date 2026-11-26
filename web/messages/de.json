@@ -1504,5 +1504,14 @@
 	"module_nginx_tls_verify": "TLS-Zertifikate prüfen",
 	"module_nginx_tls_verify_help": "Für eine https-URL; nur für selbstsignierte Zertifikate ausschalten, die sich nicht als CA-Datei angeben lassen.",
 	"module_nginx_ca_file": "CA-Datei",
-	"module_nginx_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird."
+	"module_nginx_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird.",
+	"module_apache": "Apache httpd",
+	"module_apache_url": "Status-URL",
+	"module_apache_url_help": "Die Adresse von server-status mit ?auto, z. B. http://127.0.0.1/server-status?auto.",
+	"module_apache_timeout": "Zeitgrenze",
+	"module_apache_timeout_help": "Höchstens 25 s.",
+	"module_apache_tls_verify": "TLS-Zertifikate prüfen",
+	"module_apache_tls_verify_help": "Für eine https-URL; nur für selbstsignierte Zertifikate ausschalten, die sich nicht als CA-Datei angeben lassen.",
+	"module_apache_ca_file": "CA-Datei",
+	"module_apache_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird."
 }

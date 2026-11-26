@@ -1,0 +1,36 @@
+fixture-host
+ServerVersion: Apache/2.4.63 (AlmaLinux)
+ServerMPM: event
+Server Built: Oct 14 2026 00:00:00
+CurrentTime: Thursday, 26-Nov-2026 18:57:31 UTC
+RestartTime: Thursday, 26-Nov-2026 18:57:29 UTC
+ParentServerConfigGeneration: 1
+ParentServerMPMGeneration: 0
+ServerUptimeSeconds: 2
+ServerUptime: 2 seconds
+Load1: 0.36
+Load5: 0.97
+Load15: 1.22
+Total Accesses: 10
+Total kBytes: 59
+Total Duration: 1
+CPUUser: 0
+CPUSystem: 0
+CPUChildrenUser: 0
+CPUChildrenSystem: 0
+Uptime: 2
+ReqPerSec: 5
+BytesPerSec: 30208
+BytesPerReq: 6041.6
+DurationPerReq: .1
+BusyWorkers: 1
+GracefulWorkers: 0
+IdleWorkers: 74
+Processes: 3
+Stopping: 0
+ConnsTotal: 0
+ConnsAsyncWaitIO: 0
+ConnsAsyncWriting: 0
+ConnsAsyncKeepAlive: 0
+ConnsAsyncClosing: 0
+Scoreboard: ________________________________________________________________W__________.....................................................................................................................................................................................................................................................................................................................................

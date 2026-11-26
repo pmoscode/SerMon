@@ -56,6 +56,20 @@ impl Listener {
             ip => ip,
         }
     }
+
+    /// `http://` on it with `path`, the port left out if it is 80 (a suggestion for a form).
+    #[must_use]
+    pub fn http_url(&self, path: &str) -> String {
+        let host = match self.reach() {
+            IpAddr::V6(v6) => format!("[{v6}]"),
+            IpAddr::V4(v4) => v4.to_string(),
+        };
+        if self.port == 80 {
+            format!("http://{host}{path}")
+        } else {
+            format!("http://{host}:{}{path}", self.port)
+        }
+    }
 }
 
 /// What the agent saw on the host.

@@ -6,6 +6,8 @@
 //! bounded output, panics and hangs kept to the module. What a module reaches is bounded by the
 //! [`veto`].
 
+#[cfg(feature = "apache")]
+pub mod apache;
 pub mod discovery;
 #[cfg(feature = "docker")]
 pub mod docker;
@@ -16,6 +18,8 @@ pub mod http;
 pub mod http_check;
 #[cfg(feature = "nginx")]
 pub mod nginx;
+#[cfg(feature = "http")]
+pub mod page;
 pub mod rate;
 pub mod runtime;
 pub mod schema;
@@ -52,6 +56,8 @@ pub use veto::{Refused, Veto};
 pub fn builtin() -> Vec<Arc<dyn Module>> {
     // Every module is a feature (ADR 0039).
     let modules: Vec<Arc<dyn Module>> = vec![
+        #[cfg(feature = "apache")]
+        Arc::new(apache::Apache),
         #[cfg(feature = "docker")]
         Arc::new(docker::Docker),
         #[cfg(feature = "http_check")]

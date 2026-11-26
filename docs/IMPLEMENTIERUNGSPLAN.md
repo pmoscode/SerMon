@@ -5516,7 +5516,24 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures je Version, kaputte und zu große Antworten.
 - **Abhängig von:** M5-03, M5-04, M5-08
 
-#### ☐ M5-12 – Apache httpd · A · S
+#### ☑ M5-12 – Apache httpd · A · S
+> Erledigt (`sermon-modules/src/apache.rs`, Modul `apache`; gemeinsam mit nginx `page.rs` für Client und Abruf
+> einer Statusseite):
+> - **Abfrage** von `server-status?auto` (Vorgabe `http://127.0.0.1/server-status?auto`), Parser für `Key: Value`
+>   mit Pflichtfeldern `BusyWorkers`, `IdleWorkers` und einem gültigen `Scoreboard`, höchstens 64 KiB; die HTML-Seite
+>   ohne `?auto` wird mit diesem Hinweis abgelehnt. Apache aus heißt `sermon_apache_up` 0, 403/404 ein Fehler mit
+>   Hinweis auf `mod_status`.
+> - **Metriken** ohne Labels: `sermon_apache_up`, `…_workers_busy`, `…_workers_idle`, `…_workers_max` (Plätze des
+>   Scoreboards), `…_processes` und `…_connections` (nicht bei prefork), `…_requests_per_second` und
+>   `…_sent_bytes_per_second` (mit `ExtendedStatus`, Vorgabe seit 2.4); Raten wie bei nginx.
+> - **Discovery:** Prozess `apache2` oder `httpd`, Units `apache2.service`/`httpd.service`, Ports 80/443; Vorgabe der
+>   URL auf dem Listener von Port 80 (`Listener::http_url`). nginx auf Port 80 ist kein Apache.
+> - **Fixtures** `agent/fixtures/modules/apache/<distro>/server-status.txt` aus den Paketen (`capture.sh`): Debian 13
+>   mit MPM event und prefork (2.4.71), Rocky 9 (2.4.62), Alma 10 (2.4.63), Fedora 44 (2.4.71); Hostname ersetzt.
+>   Katalog, Hilfetexte DE + EN (Einrichtung für die RHEL-Familie mit `Require local`), Texte des Formulars,
+>   Fuzz-Ziel erweitert.
+> - Tests: jede Distro und jedes MPM, kaputte Seiten, HTML ohne `?auto`, ohne `ExtendedStatus`, Raten, Rücksprung,
+>   Ausfall, 403, Veto, Discovery; Gegenproben 9/9.
 - **Ziel:** `server-status?auto` (Worker, Anfragen, Bytes); Discovery.
 - **Tests zuerst:** Fixtures je Version (Debian, RHEL-Familie), kaputte Antworten.
 - **Abhängig von:** M5-03, M5-04, M5-08

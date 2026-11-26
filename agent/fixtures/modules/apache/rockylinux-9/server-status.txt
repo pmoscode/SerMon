@@ -1,0 +1,35 @@
+fixture-host
+ServerVersion: Apache/2.4.62 (Rocky Linux)
+ServerMPM: event
+Server Built: Oct 14 2026 00:00:00
+CurrentTime: Thursday, 26-Nov-2026 18:57:20 UTC
+RestartTime: Thursday, 26-Nov-2026 18:57:18 UTC
+ParentServerConfigGeneration: 1
+ParentServerMPMGeneration: 0
+ServerUptimeSeconds: 2
+ServerUptime: 2 seconds
+Load1: 0.43
+Load5: 1.00
+Load15: 1.24
+Total Accesses: 10
+Total kBytes: 77
+Total Duration: 1
+CPUUser: 0
+CPUSystem: 0
+CPUChildrenUser: 0
+CPUChildrenSystem: 0
+Uptime: 2
+ReqPerSec: 5
+BytesPerSec: 39424
+BytesPerReq: 7884.8
+DurationPerReq: .1
+BusyWorkers: 1
+GracefulWorkers: 0
+IdleWorkers: 74
+Processes: 3
+Stopping: 0
+ConnsTotal: 0
+ConnsAsyncWriting: 0
+ConnsAsyncKeepAlive: 0
+ConnsAsyncClosing: 0
+Scoreboard: ______________________________________________________________W____________.....................................................................................................................................................................................................................................................................................................................................

@@ -1,0 +1,36 @@
+fixture-host
+ServerVersion: Apache/2.4.71 (Fedora Linux)
+ServerMPM: event
+Server Built: Nov 11 2026 00:00:00
+CurrentTime: Thursday, 26-Nov-2026 18:57:45 UTC
+RestartTime: Thursday, 26-Nov-2026 18:57:43 UTC
+ParentServerConfigGeneration: 1
+ParentServerMPMGeneration: 0
+ServerUptimeSeconds: 2
+ServerUptime: 2 seconds
+Load1: 0.44
+Load5: 0.95
+Load15: 1.21
+Total Accesses: 10
+Total kBytes: 86
+Total Duration: 1
+CPUUser: 0
+CPUSystem: 0
+CPUChildrenUser: 0
+CPUChildrenSystem: 0
+Uptime: 2
+ReqPerSec: 5
+BytesPerSec: 44032
+BytesPerReq: 8806.4
+DurationPerReq: .1
+BusyWorkers: 1
+GracefulWorkers: 0
+IdleWorkers: 74
+Processes: 3
+Stopping: 0
+ConnsTotal: 0
+ConnsAsyncWaitIO: 0
+ConnsAsyncWriting: 0
+ConnsAsyncKeepAlive: 0
+ConnsAsyncClosing: 0
+Scoreboard: ______________________________________________________________W____________.....................................................................................................................................................................................................................................................................................................................................

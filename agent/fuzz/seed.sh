@@ -113,3 +113,8 @@ for file in ../fixtures/modules/nginx/*/stub_status.txt; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\005'; cat "$file"; } >"corpus/module_parsers/fixture$name"
 done
+# 6: server-status?auto of Apache (M5-12).
+for file in ../fixtures/modules/apache/*/server-status.txt; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\006'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done

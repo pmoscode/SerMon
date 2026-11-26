@@ -9,14 +9,14 @@ use libfuzzer_sys::fuzz_target;
 use sermon_modules::discovery::{self, MAX_FACTS};
 use sermon_modules::http::Url;
 use sermon_modules::x509;
-use sermon_modules::{nginx, systemd_units};
+use sermon_modules::{apache, nginx, systemd_units};
 
 fuzz_target!(|data: &[u8]| {
     let Some((&pick, rest)) = data.split_first() else {
         return;
     };
     let text = String::from_utf8_lossy(rest);
-    match pick % 6 {
+    match pick % 7 {
         0 => {
             let listeners = discovery::parse_tcp(&text);
             assert!(listeners.len() <= MAX_FACTS);
@@ -33,6 +33,11 @@ fuzz_target!(|data: &[u8]| {
         5 => {
             if let Ok(s) = nginx::parse_stub_status(&text) {
                 assert!(text.len() <= 4096 && s.active < u64::MAX);
+            }
+        }
+        6 => {
+            if let Ok(s) = apache::parse_server_status(&text) {
+                assert!(text.len() <= 64 * 1024 && s.slots > 0);
             }
         }
         2 => {

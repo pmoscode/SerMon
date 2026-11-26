@@ -18,12 +18,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::Value;
 use sermon_core::Sample;
 
 use crate::discovery::{Discovered, HostFacts};
-use crate::fields::timeout;
-use crate::http::{Client, HttpError, Options, Url};
+use crate::http::{Client, Url};
+use crate::page;
 use crate::rate::Counter;
 use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup};
 
@@ -46,28 +45,8 @@ impl Module for Nginx {
     }
 
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
-        let text = config
-            .get("url")
-            .and_then(Value::as_str)
-            .unwrap_or("http://127.0.0.1/nginx_status");
-        let url = Url::parse(text).map_err(|e| BuildError::Invalid(format!("url: {e}")))?;
-        let timeout = timeout(config, "timeout", Duration::from_secs(5))?;
-        let client = Client::new(
-            setup.veto,
-            Options {
-                timeout,
-                tls_verify: config
-                    .get("tls_verify")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(true),
-                ca_file: config
-                    .get("ca_file")
-                    .and_then(Value::as_str)
-                    .map(Into::into),
-                accept: "text/plain",
-                ..Options::default()
-            },
-        )?;
+        let (client, url, timeout) =
+            page::client(config, setup, "http://127.0.0.1/nginx_status", "text/plain")?;
         Ok(Box::new(Status {
             client: Arc::new(client),
             url,
@@ -78,13 +57,9 @@ impl Module for Nginx {
 
     fn discover(&self, facts: &HostFacts) -> Option<Discovered> {
         let mut found = Discovered::evidence(facts, &["nginx"], &["nginx.service"], &[80, 443])?;
-        found.suggested = facts.listener(80).map(|l| {
-            let host = match l.reach() {
-                std::net::IpAddr::V6(v6) => format!("[{v6}]"),
-                std::net::IpAddr::V4(v4) => v4.to_string(),
-            };
-            serde_json::json!({ "url": format!("http://{host}/nginx_status") })
-        });
+        found.suggested = facts
+            .listener(80)
+            .map(|l| serde_json::json!({ "url": l.http_url("/nginx_status") }));
         Some(found)
     }
 }
@@ -178,26 +153,13 @@ impl Instance for Status {
 
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
-            let response = match self.client.get(&self.url, true).await {
-                Ok(response) => response,
-                Err(HttpError::Vetoed(r)) => return Err(RunError::Vetoed(r)),
-                Err(HttpError::Failed(why)) => return Err(RunError::Failed(why)),
+            let hint = "is stub_status enabled there?";
+            let Some(text) = page::read(&self.client, &self.url, hint).await? else {
                 // nginx doesn't answer: it is down (or the URL points nowhere).
-                Err(HttpError::Unreachable(_)) => {
-                    self.counters = Counters::default();
-                    return Ok(vec![Sample::int("sermon_nginx_up", 0)]);
-                }
+                self.counters = Counters::default();
+                return Ok(vec![Sample::int("sermon_nginx_up", 0)]);
             };
-            if response.status != 200 {
-                return Err(RunError::Failed(format!(
-                    "{}: status {} – is stub_status enabled there?",
-                    self.url.label(),
-                    response.status
-                )));
-            }
-            let text = std::str::from_utf8(&response.body)
-                .map_err(|_| RunError::Failed("not a stub_status page".into()))?;
-            let s = parse_stub_status(text)
+            let s = parse_stub_status(&text)
                 .map_err(|e| RunError::Failed(format!("{}: {e}", self.url.label())))?;
             let now = run.monotonic();
             let gauge = |metric, n: u64| Sample::int(metric, i64::try_from(n).unwrap_or(i64::MAX));

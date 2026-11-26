@@ -191,6 +191,12 @@ fn only_numeric_entries_are_processes() {
 }
 
 #[test]
+fn suggests_urls_on_a_listener() {
+    assert_eq!(listener("0.0.0.0:80").http_url("/x"), "http://127.0.0.1/x");
+    assert_eq!(listener("[::]:8080").http_url("/x"), "http://[::1]:8080/x");
+}
+
+#[test]
 fn a_listener_on_all_addresses_is_reached_on_loopback() {
     assert_eq!(
         listener("0.0.0.0:80").reach(),

@@ -1,0 +1,75 @@
+[
+  {
+    "columns": [
+      "coalesce",
+      "count"
+    ],
+    "rows": [
+      [
+        "active",
+        "4"
+      ]
+    ]
+  },
+  {
+    "columns": [
+      "datname",
+      "?column?",
+      "blks_hit",
+      "blks_read",
+      "pg_database_size"
+    ],
+    "rows": [
+      [
+        "app",
+        "20172",
+        "452062",
+        "2865",
+        "40761011"
+      ],
+      [
+        "postgres",
+        "11",
+        "3393",
+        "217",
+        "7771827"
+      ]
+    ]
+  },
+  {
+    "columns": [
+      "count",
+      "count"
+    ],
+    "rows": [
+      [
+        "41",
+        "1"
+      ]
+    ]
+  },
+  {
+    "columns": [
+      "coalesce",
+      "coalesce",
+      "coalesce"
+    ],
+    "rows": [
+      [
+        "walreceiver",
+        "192.0.2.7",
+        "0.000921"
+      ]
+    ]
+  },
+  {
+    "columns": [
+      "greatest"
+    ],
+    "rows": [
+      [
+        "0"
+      ]
+    ]
+  }
+]

@@ -62,6 +62,9 @@ Schema-Prüfung gibt es in Rust und Go (`server/internal/domain/module`) mit gem
 `ModuleService`), `module_settings`, `module_health`, `module_hints`.
 UI der Module (M5-07): Formular aus dem Schema (`web/src/lib/modules/schema.ts`), Texte je Feld in
 `web/src/lib/modules/labels.ts` (`module_<id>_<feld>`, DE + EN; ein Test verlangt sie für jedes Schema).
+Datenbank-Module (`postgres`, `mysql`) sprechen ihr Protokoll mit eigenen kleinen Clients (`src/<id>/wire.rs`, gefuzzt,
+ohne Treiber-Crates); `just test-db-modules` prüft sie gegen echte Server in Containern (`FIXTURES=1` nimmt die
+Fixtures neu auf).
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
 `just e2e-demo` baut den Agent, startet die Produktions-Compose `deploy/compose/compose.yaml` mit dem Overlay

@@ -5538,7 +5538,29 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures je Version (Debian, RHEL-Familie), kaputte Antworten.
 - **Abhängig von:** M5-03, M5-04, M5-08
 
-#### ☐ M5-13 – PostgreSQL · A · M 🔒
+#### ☑ M5-13 – PostgreSQL · A · M 🔒
+> Erledigt (Modul `postgres`, `sermon-modules/src/postgres.rs`, Client `postgres/wire.rs`, gemeinsam `sql.rs`):
+> - **Client:** eigener, kleiner Client statt `tokio-postgres`. Geprüft: `tokio-postgres` (MIT/Apache, gepflegt, ohne
+>   OpenSSL mit `NoTls`) brächte rund 58 Crates mehr (u. a. `phf`, `whoami`, `parking_lot`, `rand`, RustCrypto) und
+>   ~450 KiB Binary, `sqlx` noch mehr. Gebraucht wird nur Startup, Anmeldung und das einfache Abfrageprotokoll mit
+>   Text: rund 400 Zeilen auf `ring` (HMAC, PBKDF2, SHA-256) und `base64` (beides schon im Agent), MD5 selbst nach
+>   RFC 1321 (nur für die Methode md5). Anmeldung trust, Passwort, md5 und SCRAM-SHA-256 mit Prüfung der Signatur des
+>   Servers (RFC-7677-Testvektor), höchstens 100 000 Iterationen; TLS mit rustls auf Wunsch (`SSLRequest` liest genau
+>   ein Byte, CVE-2021-23222). Grenzen: Nachricht ≤ 1 MiB, Antwort ≤ 1 MiB und 4 096 Zeilen; der Decoder ist synchron
+>   und gefuzzt (`postgres_wire`).
+> - **Abfragen:** eine Sitzung je Lauf mit `statement_timeout=3000`, `lock_timeout`, nur lesend; erst die Prüfung der
+>   Rolle `pg_monitor` (oder Superuser), dann ein Abfragepaket. Falsches Passwort (28P01) und fehlende Rolle sind
+>   `error` mit dem Grund des Servers bzw. dem nötigen `GRANT`, nie mit dem Passwort.
+> - **Ziel:** Adresse (ab Werk `127.0.0.1:5432`, durch das Veto aufgelöst) oder Unix-Socket unter `module_sockets`;
+>   Login-Rolle `role`, Passwort als Geheimnis `secret` (`writeOnly`, Zustellung M5-05; nicht `password`: Der Secret-Scan
+>   hielte den i18n-Schlüssel `module_postgres_password` mit seinem Text für ein Leck). Discovery über Prozess, Unit, Port 5432 und Socket.
+> - **Metriken** (für M5-20): `sermon_postgres_connections` (`state`), `_connections_limit`,
+>   `_database_size_bytes`, `_transactions_per_second`, `_cache_hit_ratio` (je `database`, die 16 größten), `_locks`,
+>   `_locks_waiting`, `_standby`, `_replication_lag_seconds` (`replica`, höchstens 8), `_replay_lag_seconds`.
+> - **Tests:** Fixtures echter Antworten von PostgreSQL 13 bis 17 und eines Standbys von 17 unter Last (pgbench),
+>   `just test-db-modules` (`scripts/test-db-modules.sh`) startet die Server in Containern samt Standby und prüft das
+>   Modul dagegen: md5 (13) und SCRAM (14+), falsches Passwort, User ohne `pg_monitor`, Replikation. Kein PostgreSQL im
+>   E2E-Compose: Die Demo zeigt nginx (M5-32), die Container-Tests decken das Modul ab. Gegenproben 21/21.
 - **Ziel:** Verbindungen, TPS, Cache-Hit, Replikations-Lag, Datenbankgrößen, Locks mit der Rolle `pg_monitor`;
   Client ohne OpenSSL (`cargo deny`), Abfragen mit Zeitgrenze; PostgreSQL im E2E-Compose.
 - **Tests zuerst:** Ergebnisse je Version als Fixtures, Integrationstest gegen einen Container, falsches Passwort und

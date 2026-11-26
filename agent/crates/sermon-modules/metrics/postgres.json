@@ -1,0 +1,69 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_postgres_connections",
+      "unit": "count",
+      "aggregation": "avg",
+      "labels": [
+        "state"
+      ]
+    },
+    {
+      "name": "sermon_postgres_connections_limit",
+      "unit": "count",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_postgres_database_size_bytes",
+      "unit": "bytes",
+      "aggregation": "last",
+      "labels": [
+        "database"
+      ]
+    },
+    {
+      "name": "sermon_postgres_transactions_per_second",
+      "unit": "per_second",
+      "aggregation": "avg",
+      "labels": [
+        "database"
+      ]
+    },
+    {
+      "name": "sermon_postgres_cache_hit_ratio",
+      "unit": "ratio_ppm",
+      "aggregation": "avg",
+      "labels": [
+        "database"
+      ]
+    },
+    {
+      "name": "sermon_postgres_locks",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_postgres_locks_waiting",
+      "unit": "count",
+      "aggregation": "max"
+    },
+    {
+      "name": "sermon_postgres_standby",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_postgres_replication_lag_seconds",
+      "unit": "seconds",
+      "aggregation": "max",
+      "labels": [
+        "replica"
+      ]
+    },
+    {
+      "name": "sermon_postgres_replay_lag_seconds",
+      "unit": "seconds",
+      "aggregation": "max"
+    }
+  ]
+}

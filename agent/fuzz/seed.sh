@@ -101,7 +101,7 @@ done
 mkdir -p corpus/cgroup_parsers
 find ../fixtures/modules/docker -type f ! -name '*.sh' ! -name '*.md' | while IFS= read -r file; do
   name=$(printf '%s' "$file" | tr '/.' '__')
-  cp "$file" "corpus/cgroup_parsers/fixture$name"
+  cp -f "$file" "corpus/cgroup_parsers/fixture$name"
 done
 # 4: systemctl show of the module systemd_units (M5-10).
 for file in ../fixtures/modules/systemd_units/*/show.txt; do
@@ -123,3 +123,25 @@ for file in ../fixtures/modules/redis/*/info-*.txt; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\007'; cat "$file"; } >"corpus/module_parsers/fixture$name"
 done
+# postgres_wire: answers as the server frames them, from the recorded result sets (M5-13).
+mkdir -p corpus/postgres_wire
+python3 - <<'PY'
+import json, glob, struct, os
+def msg(tag, body):
+    return tag + struct.pack(">I", len(body) + 4) + body
+for f in glob.glob("../fixtures/modules/postgres/*/*.json"):
+    out = b""
+    for s in json.load(open(f)):
+        cols = s["columns"]
+        out += msg(b"T", struct.pack(">h", len(cols)) + b"".join(c.encode() + b"\0" + bytes(18) for c in cols))
+        for r in s["rows"]:
+            body = struct.pack(">h", len(r))
+            for v in r:
+                body += struct.pack(">i", -1) if v is None else struct.pack(">i", len(v.encode())) + v.encode()
+            out += msg(b"D", body)
+        out += msg(b"C", b"SELECT\0")
+    out += msg(b"Z", b"I")
+    name = f.replace("/", "_").replace(".", "_")
+    open(os.path.join("corpus/postgres_wire", "fixture" + name), "wb").write(out)
+open("corpus/postgres_wire/scram", "wb").write(b"r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096")
+PY

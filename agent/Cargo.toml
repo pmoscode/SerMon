@@ -45,6 +45,8 @@ http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", default-features = false, features = ["client", "http1"] }
 hyper-util = { version = "=0.1.21", default-features = false, features = ["tokio"] }
 pem = { version = "=4.0.0", default-features = false, features = ["std"] }
+# SCRAM of the database modules (M5-13); the version pem already brings.
+base64 = { version = "=0.23.1", default-features = false, features = ["alloc"] }
 rcgen = { version = "=0.14.10", default-features = false, features = ["crypto", "pem", "ring"] }
 ring = "=0.17.14"
 rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }

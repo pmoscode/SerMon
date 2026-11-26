@@ -1360,6 +1360,7 @@ dependencies = [
 name = "sermon-modules"
 version = "0.0.0"
 dependencies = [
+ "base64 0.23.1",
  "bytes",
  "http",
  "http-body-util",
@@ -1369,6 +1370,7 @@ dependencies = [
  "proptest",
  "rcgen",
  "regex",
+ "ring",
  "rustls",
  "rustls-native-certs",
  "serde_json",

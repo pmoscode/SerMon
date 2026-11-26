@@ -1,0 +1,73 @@
+[
+  {
+    "columns": [
+      "coalesce",
+      "count"
+    ],
+    "rows": [
+      [
+        "active",
+        "1"
+      ],
+      [
+        "idle in transaction",
+        "2"
+      ]
+    ]
+  },
+  {
+    "columns": [
+      "datname",
+      "?column?",
+      "blks_hit",
+      "blks_read",
+      "pg_database_size"
+    ],
+    "rows": [
+      [
+        "app",
+        "15731",
+        "334677",
+        "7954",
+        "41766235"
+      ],
+      [
+        "postgres",
+        "7",
+        "3087",
+        "170",
+        "8867163"
+      ]
+    ]
+  },
+  {
+    "columns": [
+      "count",
+      "count"
+    ],
+    "rows": [
+      [
+        "29",
+        "0"
+      ]
+    ]
+  },
+  {
+    "columns": [
+      "coalesce",
+      "coalesce",
+      "coalesce"
+    ],
+    "rows": []
+  },
+  {
+    "columns": [
+      "greatest"
+    ],
+    "rows": [
+      [
+        "0"
+      ]
+    ]
+  }
+]

@@ -113,6 +113,10 @@ lint: lint-shell lint-ci lint-compose lint-proto lint-agent lint-server lint-web
 # Run all unit tests
 test: test-scripts test-agent test-server test-web
 
+# The database modules against real servers in containers: PostgreSQL 13 to 17 with a standby (M5-13), MySQL and MariaDB (M5-14); FIXTURES=1 records their answers
+test-db-modules:
+    scripts/test-db-modules.sh
+
 # Run integration tests against real containers (Testcontainers; Docker required)
 [working-directory: 'server']
 test-integration:
@@ -259,6 +263,7 @@ fuzz-agent seconds="60":
     {{ fuzz_profile }} cargo fuzz run module_parsers -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run smart_parser -- -max_total_time={{ seconds }} -max_len=131072
     {{ fuzz_profile }} cargo fuzz run cgroup_parsers -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run postgres_wire -- -max_total_time={{ seconds }} -max_len=65536
 
 # Fuzz the server's LogQL builder (no input may break the structure of a query, M3-08) and its copy of the redaction (M3-12) (Go fuzzing)
 [working-directory: 'server']

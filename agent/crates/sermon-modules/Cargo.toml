@@ -13,9 +13,13 @@ workspace = true
 
 [features]
 # Every module is a feature of its name (ADR 0039); the release builds them all.
-default = ["apache", "docker", "http_check", "nginx", "redis", "smart", "systemd_units", "tcp_check", "tls"]
+default = ["apache", "docker", "http_check", "nginx", "postgres", "redis", "smart", "systemd_units", "tcp_check", "tls"]
 # Containers of Docker and Podman from cgroup v2 (M5-16).
 docker = ["dep:sermon-collectors"]
+# PostgreSQL over its own small client (M5-13).
+postgres = ["sql"]
+# What the database modules share: connection, TLS, SCRAM (M5-13, M5-14).
+sql = ["http", "dep:base64", "dep:ring", "dep:sermon-collectors"]
 # SMART of the disks through the root helper (M5-18).
 smart = []
 # The module `simulate` for tests and demos (ADR 0039); `sermon-agent`'s feature `simulate`.
@@ -41,6 +45,7 @@ tcp_check = []
 tls = ["http"]
 
 [dependencies]
+base64 = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
@@ -48,6 +53,7 @@ hyper = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
 regex.workspace = true
+ring = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-native-certs = { workspace = true, optional = true }
 sermon-collectors = { workspace = true, optional = true }

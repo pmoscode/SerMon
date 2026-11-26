@@ -20,6 +20,8 @@ pub mod http_check;
 pub mod nginx;
 #[cfg(feature = "http")]
 pub mod page;
+#[cfg(feature = "postgres")]
+pub mod postgres;
 pub mod rate;
 #[cfg(feature = "redis")]
 pub mod redis;
@@ -29,6 +31,8 @@ pub mod schema;
 pub mod simulate;
 #[cfg(feature = "smart")]
 pub mod smart;
+#[cfg(feature = "sql")]
+pub mod sql;
 #[cfg(feature = "systemd_units")]
 pub mod systemd_units;
 #[cfg(feature = "tcp_check")]
@@ -66,6 +70,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(http_check::HttpCheck),
         #[cfg(feature = "nginx")]
         Arc::new(nginx::Nginx),
+        #[cfg(feature = "postgres")]
+        Arc::new(postgres::Postgres),
         #[cfg(feature = "redis")]
         Arc::new(redis::Redis),
         #[cfg(feature = "smart")]

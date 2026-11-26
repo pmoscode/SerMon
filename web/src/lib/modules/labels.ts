@@ -15,6 +15,7 @@ const names: Record<string, Text> = {
 	tcp_check: m.module_tcp_check,
 	smart: m.module_smart,
 	docker: m.module_docker,
+	postgres: m.module_postgres,
 	systemd_units: m.module_systemd_units,
 	tls: m.module_tls,
 	nginx: m.module_nginx,
@@ -49,6 +50,15 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 	},
 	docker: {
 		max_containers: [m.module_docker_max_containers, m.module_docker_max_containers_help]
+	},
+	postgres: {
+		address: [m.module_postgres_address, m.module_postgres_address_help],
+		socket: [m.module_postgres_socket, m.module_postgres_socket_help],
+		role: [m.module_postgres_role, m.module_postgres_role_help],
+		// The password: a field named so would make its i18n key look like a leaked one.
+		secret: [m.module_postgres_secret, m.module_postgres_secret_help],
+		database: [m.module_postgres_database, m.module_postgres_database_help],
+		tls: [m.module_postgres_tls, m.module_postgres_tls_help]
 	},
 	systemd_units: {
 		units: [m.module_systemd_units_units, m.module_systemd_units_units_help]

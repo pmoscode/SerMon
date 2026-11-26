@@ -1,0 +1,18 @@
+[
+  {
+    "columns": [
+      "current_setting",
+      "pg_is_in_recovery",
+      "current_setting",
+      "?column?"
+    ],
+    "rows": [
+      [
+        "140025",
+        "f",
+        "100",
+        "t"
+      ]
+    ]
+  }
+]

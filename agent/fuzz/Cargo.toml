@@ -117,3 +117,10 @@ path = "fuzz_targets/cgroup_parsers.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "postgres_wire"
+path = "fuzz_targets/postgres_wire.rs"
+test = false
+doc = false
+bench = false

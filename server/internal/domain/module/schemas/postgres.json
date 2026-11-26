@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PostgreSQL",
+  "description": "Connections, transactions, cache hits, sizes, locks and replication, with a user of the role pg_monitor.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "address": {
+      "type": "string",
+      "title": "Address",
+      "description": "host:port of the server (loopback unless module_targets of agent.toml allows more).",
+      "format": "host-port",
+      "maxLength": 255,
+      "default": "127.0.0.1:5432"
+    },
+    "socket": {
+      "type": "string",
+      "title": "Unix socket",
+      "description": "Instead of the address, e.g. /run/postgresql/.s.PGSQL.5432.",
+      "format": "path",
+      "maxLength": 255
+    },
+    "role": {
+      "type": "string",
+      "title": "Role",
+      "description": "A login role (user) with the role pg_monitor and nothing more.",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_$.-]*$",
+      "default": "sermon"
+    },
+    "secret": {
+      "type": "string",
+      "title": "Password",
+      "description": "Not needed with peer authentication over the socket.",
+      "writeOnly": true,
+      "maxLength": 256
+    },
+    "database": {
+      "type": "string",
+      "title": "Database",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_$.-]*$",
+      "default": "postgres"
+    },
+    "tls": {
+      "type": "string",
+      "title": "TLS",
+      "description": "off (loopback, socket), verify (the certificate against the system's CAs), no_verify (any certificate).",
+      "enum": ["off", "verify", "no_verify"],
+      "maxLength": 9,
+      "default": "off"
+    }
+  }
+}

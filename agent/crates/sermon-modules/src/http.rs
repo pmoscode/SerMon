@@ -727,7 +727,7 @@ pub(crate) fn read_ca_file(path: &Path) -> Result<RootCertStore, BuildError> {
 }
 
 /// The TLS configuration of `options`; ALPN `http/1.1` with `http`, none for any TLS service.
-fn tls_config(
+pub(crate) fn tls_config(
     options: &Options,
     roots: Option<Arc<RootCertStore>>,
     http: bool,

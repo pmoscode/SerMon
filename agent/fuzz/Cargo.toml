@@ -103,3 +103,10 @@ path = "fuzz_targets/module_parsers.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "smart_parser"
+path = "fuzz_targets/smart_parser.rs"
+test = false
+doc = false
+bench = false

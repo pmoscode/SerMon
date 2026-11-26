@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use prost::Message;
 use sermon_helper_proto::v1::{
-    Command as Output, Distribution, RunPhase, RunState, Scope, StatusInfo, Updates,
+    Command as Output, Distribution, RunPhase, RunState, Scope, Smart, StatusInfo, Updates,
 };
 
 use crate::minisign::{self, PublicKey};
@@ -48,6 +48,14 @@ const HELPER: &str = "usr/local/bin/sermon-helper";
 const STAGED: [&str; 4] = ["var", "lib", "sermon-agent", "self-update"];
 const MAX_BINARY: u64 = 64 << 20;
 const MAX_SIGNATURE: u64 = 4 << 10;
+/// smartctl, read-only (M5-18): identity, health, attributes, compact JSON; a disk in standby
+/// stays asleep.
+const SMARTCTL: &str = "usr/sbin/smartctl";
+const SMART_ARGS: [&str; 6] = ["--json=c", "-i", "-H", "-A", "-n", "standby"];
+/// SMART is read at most this often: every read wakes the disks' controllers.
+pub const SMART_EVERY: Duration = Duration::from_mins(1);
+const MAX_DISKS: usize = 24;
+const SMART_OUTPUT: usize = 128 << 10;
 
 /// A fixed command: the program below the host's root and its arguments.
 type Fixed = (&'static str, &'static [&'static str]);
@@ -117,6 +125,8 @@ pub struct Host {
     answer_wait: Duration,
     /// This helper's version: only a newer one replaces it.
     version: String,
+    /// How long a read of SMART may take, all disks together (each 10 s at most).
+    smart_limit: Duration,
 }
 
 impl Host {
@@ -142,6 +152,7 @@ impl Host {
             config_owner: 0,
             answer_wait: Duration::from_secs(2),
             version: crate::VERSION.into(),
+            smart_limit: Duration::from_secs(20),
         }
     }
 
@@ -152,15 +163,11 @@ impl Host {
             Ok(c) => c,
             Err(e) => return Some(format!("helper.toml: {e}")),
         };
-        let first = request.lines().next().unwrap_or_default();
-        let (allowed, key) = if first.starts_with("updates ") {
-            (c.allow_remote_updates, "allow_remote_updates")
-        } else if first == "reboot" {
-            (c.allow_remote_reboot, "allow_remote_reboot")
-        } else if first.starts_with("self-update ") {
-            (c.allow_self_update, "allow_self_update")
-        } else {
-            return None;
+        let (allowed, key) = match request.split([' ', '\n']).next().unwrap_or_default() {
+            "updates" => (c.allow_remote_updates, "allow_remote_updates"),
+            "reboot" => (c.allow_remote_reboot, "allow_remote_reboot"),
+            "self-update" => (c.allow_self_update, "allow_self_update"),
+            _ => return None,
         };
         (!allowed).then(|| format!("{key} = false in helper.toml since the request"))
     }
@@ -186,10 +193,7 @@ impl Host {
 
     /// The lock of runs and refreshes, taken without waiting; `None` if held.
     fn lock(&self) -> io::Result<Option<File>> {
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&self.state)?;
+        private_dir(&self.state)?;
         let mut open = OpenOptions::new();
         let file = open
             .read(true)
@@ -319,51 +323,31 @@ impl Host {
             ("updates security", _) => self.updates(d, true),
             ("updates all", _) => self.updates(d, false),
             (first, _) if first.starts_with("self-update ") => self.self_update(&dir),
-            ("reboot", _) if self.launch == Launch::Detached => {
-                // busybox reboots after the delay and never returns: the result comes first.
+            // busybox reboots after its delay and never returns; without logind systemd's
+            // shutdown reboots at once instead of in a minute (M4-28): the result comes first,
+            // and the helper's answer reaches the agent before. "--" ends the options and the
+            // prefix keeps a reason from being one (review M4-04).
+            ("reboot", reason) => {
+                let message = format!("SerMon: {reason}");
+                let command: (&str, &[&str]) = if self.launch == Launch::Detached {
+                    ("sbin/reboot", &["-d", "60"])
+                } else {
+                    ("usr/sbin/shutdown", &["-r", "--", "+1", &message])
+                };
+                let name = format!("/{}", command.0);
                 store(
                     &dir,
                     &done(
                         id,
                         started,
                         Output {
-                            name: "reboot -d 60".into(),
+                            name,
                             ..Output::default()
                         },
                     ),
                 )?;
-                let _ = self.run(
-                    ("sbin/reboot", &["-d", "60"]),
-                    Duration::from_mins(2),
-                    1024,
-                    true,
-                );
-                return Ok(());
-            }
-            // "--" ends the options and the prefix keeps a reason from being one (review M4-04).
-            // Without logind systemd's shutdown reboots at once instead of in a minute (M4-28):
-            // the result comes first, and the helper's answer reaches the agent before.
-            ("reboot", reason) => {
-                let requested = Output {
-                    name: "shutdown -r +1".into(),
-                    ..Output::default()
-                };
-                store(&dir, &done(id, started, requested))?;
                 std::thread::sleep(self.answer_wait);
-                let result = self.run(
-                    (
-                        "usr/sbin/shutdown",
-                        &["-r", "--", "+1", &format!("SerMon: {reason}")],
-                    ),
-                    Duration::from_mins(1),
-                    4096,
-                    true,
-                );
-                crate::log(&format!(
-                    "sermon-helper: run {id} ended with exit code {}",
-                    result.exit_code
-                ));
-                return store(&dir, &done(id, started, result));
+                self.run(command, Duration::from_mins(2), 4096, true)
             }
             _ => failed("unknown request"),
         };
@@ -461,10 +445,7 @@ impl Host {
             ));
         }
         let refused = self.state.join("self-update-refused");
-        if fs::metadata(&refused)
-            .and_then(|m| m.modified())
-            .is_ok_and(|t| !older(t, REFRESH_EVERY))
-        {
+        if recent(&refused, REFRESH_EVERY) {
             return Err(Failure::Later(
                 "a self-update was refused less than 5 minutes ago".into(),
             ));
@@ -498,24 +479,30 @@ impl Host {
                 "{version} is a prerelease: allow_prerelease = true in helper.toml takes one"
             )));
         }
-        let binary = self
-            .staged("sermon-agent", MAX_BINARY)
-            .map_err(Failure::Refused)?;
+        let (binary, signature) = self.verified("sermon-agent", version)?;
+        write_atomically(&dir.join("agent"), &binary).map_err(fail)?;
+        write_atomically(&dir.join("agent.minisig"), signature.as_bytes()).map_err(fail)?;
+        self.check_helper(dir, version)
+    }
+
+    /// The staged binary `name` and its signature, signed by a release key as `name` of this
+    /// architecture in `version`.
+    fn verified(&self, name: &str, version: &str) -> Result<(Vec<u8>, String), Failure> {
+        let binary = self.staged(name, MAX_BINARY).map_err(Failure::Refused)?;
         let signature = self
-            .staged("sermon-agent.minisig", MAX_SIGNATURE)
+            .staged(&format!("{name}.minisig"), MAX_SIGNATURE)
             .map_err(Failure::Refused)?;
         let signature = String::from_utf8(signature)
-            .map_err(|_| Failure::Refused("malformed signature file".into()))?;
+            .map_err(|_| Failure::Refused(format!("malformed signature file of {name}")))?;
         let signed = minisign::verify(&self.keys, &signature, &binary).map_err(Failure::Refused)?;
+        let file = format!("{name}-linux-{}", arch());
         if signed.file != file || signed.version != version {
             return Err(Failure::Refused(format!(
                 "the signature is for {} {}, not {file} {version}",
                 signed.file, signed.version
             )));
         }
-        write_atomically(&dir.join("agent"), &binary).map_err(fail)?;
-        write_atomically(&dir.join("agent.minisig"), signature.as_bytes()).map_err(fail)?;
-        self.check_helper(dir, version)
+        Ok((binary, signature))
     }
 
     fn prereleases(&self) -> bool {
@@ -527,25 +514,13 @@ impl Host {
     /// self-update; without one staged (an older server or release) the helper stays.
     fn check_helper(&self, dir: &Path, version: &str) -> Result<(), Failure> {
         let installed = fs::symlink_metadata(self.root.join(HELPER)).is_ok_and(|m| m.is_file());
-        let Ok(binary) = self.staged("sermon-helper", MAX_BINARY) else {
-            return Ok(());
-        };
-        if !installed || !minisign::newer(version, &self.version) {
+        if !installed
+            || !minisign::newer(version, &self.version)
+            || self.staged("sermon-helper", MAX_BINARY).is_err()
+        {
             return Ok(());
         }
-        let signature = self
-            .staged("sermon-helper.minisig", MAX_SIGNATURE)
-            .map_err(Failure::Refused)?;
-        let signature = String::from_utf8(signature)
-            .map_err(|_| Failure::Refused("malformed signature file of the helper".into()))?;
-        let signed = minisign::verify(&self.keys, &signature, &binary).map_err(Failure::Refused)?;
-        let file = format!("sermon-helper-linux-{}", arch());
-        if signed.file != file || signed.version != version {
-            return Err(Failure::Refused(format!(
-                "the helper's signature is for {} {}, not {file} {version}",
-                signed.file, signed.version
-            )));
-        }
+        let (binary, _) = self.verified("sermon-helper", version)?;
         let helper = dir.join("helper");
         write_atomically(&helper, &binary).map_err(fail)?;
         fs::set_permissions(&helper, std::os::unix::fs::PermissionsExt::from_mode(0o700))
@@ -560,11 +535,10 @@ impl Host {
 
     /// Restarts the agent's service.
     fn restart_agent(&self) -> Output {
-        let command: Fixed = match self.launch {
-            Launch::Detached => ("sbin/rc-service", &["sermon-agent", "restart"]),
-            #[cfg(test)]
-            Launch::Inline => ("usr/bin/systemctl", &["restart", "sermon-agent"]),
-            Launch::Systemd => ("usr/bin/systemctl", &["restart", "sermon-agent"]),
+        let command: Fixed = if self.launch == Launch::Detached {
+            ("sbin/rc-service", &["sermon-agent", "restart"])
+        } else {
+            ("usr/bin/systemctl", &["restart", "sermon-agent"])
         };
         self.run(command, Duration::from_mins(1), 4096, true)
     }
@@ -573,10 +547,7 @@ impl Host {
     /// connect; without its confirmation the previous binary comes back (ADR 0036).
     fn self_update(&self, dir: &Path) -> Output {
         let keep = self.state.join("self-update");
-        let saved = fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&keep)
+        let saved = private_dir(&keep)
             .and_then(|()| fs::copy(self.root.join(AGENT), keep.join("previous")))
             .and_then(|_| {
                 fs::copy(
@@ -761,11 +732,7 @@ impl Executor for Host {
         if self.lock().map_err(fail)?.is_none() {
             return Err(Failure::Busy);
         }
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&dir)
-            .map_err(fail)?;
+        private_dir(&dir).map_err(fail)?;
         if let Run::SelfUpdate { version, .. } = run
             && let Err(e) = self.prepare(&dir, version)
         {
@@ -774,6 +741,46 @@ impl Executor for Host {
         }
         write_atomically(&dir.join("request"), request.as_bytes()).map_err(fail)?;
         self.spawn(id)
+    }
+
+    fn read_smart(&mut self) -> Result<Smart, Failure> {
+        if !self.root.join(SMARTCTL).is_file() {
+            return Err(Failure::Unsupported(
+                "no /usr/sbin/smartctl: install smartmontools".into(),
+            ));
+        }
+        let stamp = self.state.join("smart");
+        if recent(&stamp, SMART_EVERY) {
+            return Err(Failure::Later(
+                "SMART was read less than a minute ago".into(),
+            ));
+        }
+        private_dir(&self.state)
+            .and_then(|()| fs::write(&stamp, b""))
+            .map_err(fail)?;
+        let mut names: Vec<String> = fs::read_dir(self.root.join("sys/block"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| disk(n))
+            .collect();
+        names.sort();
+        let mut truncated = names.len() > MAX_DISKS;
+        let deadline = std::time::Instant::now() + self.smart_limit;
+        let mut disks = Vec::new();
+        for name in names.iter().take(MAX_DISKS) {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                truncated = true;
+                break;
+            }
+            let device = format!("/dev/{name}");
+            let args = [&SMART_ARGS[..], &[device.as_str()]].concat();
+            let limit = left.min(Duration::from_secs(10));
+            disks.push(self.run((SMARTCTL, &args), limit, SMART_OUTPUT, false));
+        }
+        Ok(Smart { disks, truncated })
     }
 
     fn confirm(&mut self, id: &str) -> Result<(), Failure> {
@@ -851,6 +858,20 @@ fn replace(target: &Path, binary: &Path) -> io::Result<()> {
     File::open(target.parent().unwrap_or(Path::new("/")))?.sync_all()
 }
 
+/// A whole disk of `/sys/block` smartctl reads: `sd` and 1 to 4 letters (SATA, SAS, USB),
+/// `nvme<n>n<n>` (NVMe namespaces); the name becomes an argument of smartctl.
+#[must_use]
+pub fn disk(name: &str) -> bool {
+    let digits = |s: &str| (1..=3).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_digit());
+    match (name.strip_prefix("sd"), name.strip_prefix("nvme")) {
+        (Some(l), _) => (1..=4).contains(&l.len()) && l.bytes().all(|b| b.is_ascii_lowercase()),
+        (_, Some(n)) => n
+            .split_once('n')
+            .is_some_and(|(c, n)| digits(c) && digits(n)),
+        _ => false,
+    }
+}
+
 /// The package manager family of `/etc/os-release`.
 #[must_use]
 pub fn distribution(os_release: &str) -> Distribution {
@@ -909,6 +930,21 @@ fn fail(e: impl std::fmt::Display) -> Failure {
 
 fn older(t: SystemTime, age: Duration) -> bool {
     t.elapsed().map_or(true, |a| a >= age)
+}
+
+/// Whether the file at `path` changed within `age`.
+fn recent(path: &Path, age: Duration) -> bool {
+    fs::metadata(path)
+        .and_then(|m| m.modified())
+        .is_ok_and(|t| !older(t, age))
+}
+
+/// Creates `path` and its parents for root alone.
+fn private_dir(path: &Path) -> io::Result<()> {
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
 }
 
 fn now() -> i64 {
@@ -997,6 +1033,7 @@ mod tests {
                 config: dir.path().join("etc/helper.toml"),
                 config_owner: rustix::process::getuid().as_raw(),
                 answer_wait: Duration::ZERO,
+                smart_limit: Duration::from_secs(5),
                 version: crate::VERSION.into(),
             };
             // A host that allows everything; tests of the veto write their own.
@@ -1057,6 +1094,118 @@ mod tests {
             id: ID.into(),
             scope,
         }
+    }
+
+    /// A fake host with the disks `names` in /sys/block and a smartctl that answers with `body`.
+    fn smart_host(names: &[&str], body: &str) -> Fake {
+        let fake = Fake::new("ID=debian\n");
+        for name in names {
+            fs::create_dir_all(fake.host.root.join("sys/block").join(name)).unwrap();
+        }
+        fake.program("usr/sbin/smartctl", body);
+        fake
+    }
+
+    // M5-18: whole SATA, SAS and NVMe disks only, in the order of their names, each with the
+    // same fixed, read-only smartctl; its standard output is the answer.
+    #[test]
+    fn reads_smart_of_whole_disks_with_fixed_arguments() {
+        let fake = smart_host(
+            &[
+                "sdb",
+                "sda",
+                "nvme0n1",
+                "loop0",
+                "dm-0",
+                "sr0",
+                "zram0",
+                "vda",
+                "nvme0c0n1",
+                "md127",
+                "sdaaaaa",
+                "nvme1n1p1",
+            ],
+            r#"for a; do d=$a; done; printf '{"device":"%s"}' "$d"; echo warning >&2; exit 4"#,
+        );
+        let smart = fake.host.clone().read_smart().unwrap();
+        assert!(!smart.truncated);
+        let disks: Vec<_> = smart
+            .disks
+            .iter()
+            .map(|c| (c.name.rsplit(' ').next().unwrap(), c.exit_code))
+            .collect();
+        assert_eq!(
+            disks,
+            [("/dev/nvme0n1", 4), ("/dev/sda", 4), ("/dev/sdb", 4)]
+        );
+        assert_eq!(smart.disks[1].output, br#"{"device":"/dev/sda"}"#);
+        assert_eq!(
+            fake.calls().lines().next(),
+            Some("smartctl --json=c -i -H -A -n standby /dev/nvme0n1")
+        );
+        for name in ["sda", "sdz", "sdabc", "nvme0n1", "nvme12n3"] {
+            assert!(disk(name), "{name}");
+        }
+        for name in [
+            "sd",
+            "sdA",
+            "sda1",
+            "sdabcde",
+            "nvme0",
+            "nvme0n",
+            "nvme0c0n1",
+            "nvme1n1p1",
+            "nvmeXn1",
+            "hda",
+            "../sda",
+            "sda;x",
+        ] {
+            assert!(!disk(name), "{name}");
+        }
+    }
+
+    // At most once a minute (each read wakes the controllers), only with smartctl installed,
+    // at most 24 disks and 20 s.
+    #[test]
+    fn reads_smart_within_bounds() {
+        let fake = smart_host(&["sda"], "echo '{}'");
+        let mut host = fake.host.clone();
+        host.read_smart().unwrap();
+        assert!(matches!(host.read_smart(), Err(Failure::Later(_))));
+        assert_eq!(fake.calls().lines().count(), 1);
+        let stamp = fake.host.state.join("smart");
+        File::open(&stamp)
+            .unwrap()
+            .set_modified(SystemTime::now() - SMART_EVERY)
+            .unwrap();
+        host.read_smart().unwrap();
+
+        let none = Fake::new("ID=debian\n");
+        assert!(matches!(
+            none.host.clone().read_smart(),
+            Err(Failure::Unsupported(why)) if why.contains("smartmontools")
+        ));
+
+        let names: Vec<String> = (b'a'..=b'z')
+            .map(|c| format!("sd{}", char::from(c)))
+            .collect();
+        let many = smart_host(&names.iter().map(String::as_str).collect::<Vec<_>>(), "");
+        let smart = many.host.clone().read_smart().unwrap();
+        assert_eq!(smart.disks.len(), MAX_DISKS);
+        assert!(smart.truncated);
+
+        // Each disk within what is left, and no more than 10 s.
+        let slow = smart_host(&["sda", "sdb", "sdc"], "sleep 2");
+        let mut host = slow.host.clone();
+        host.smart_limit = Duration::from_secs(1);
+        let started = std::time::Instant::now();
+        let smart = host.read_smart().unwrap();
+        assert!(
+            started.elapsed() < Duration::from_millis(1800),
+            "{:?}",
+            started.elapsed()
+        );
+        assert!(smart.truncated && smart.disks.len() < 3, "{smart:?}");
     }
 
     #[test]
@@ -1814,6 +1963,17 @@ mod tests {
         fs::remove_file(package.host.root.join(HELPER)).unwrap();
         assert_eq!(confirmed(&package).exit_code, 0);
         assert!(!package.host.root.join(HELPER).exists());
+
+        // A release without a helper (an older server): the installed one stays.
+        let without = with_helper(&signer, "1.1.0");
+        let staged = without.host.root.join("var/lib/sermon-agent/self-update");
+        fs::remove_file(staged.join("sermon-helper")).unwrap();
+        fs::remove_file(staged.join("sermon-helper.minisig")).unwrap();
+        assert_eq!(confirmed(&without).exit_code, 0);
+        assert_eq!(
+            fs::read(without.host.root.join(HELPER)).unwrap(),
+            b"helper 1.0.0"
+        );
 
         // A staged helper of another key or file refuses the whole self-update.
         let forged = with_helper(&signer, "1.1.0");

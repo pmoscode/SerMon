@@ -62,9 +62,10 @@ ops = {
     "reboot": field(4, 2, field(1, 2, run_id) + field(2, 2, b"kernel 6.1.0-28")),
     "self_update": field(5, 2, field(1, 2, run_id)),
     "run_result": field(6, 2, field(1, 2, run_id)),
+    "read_smart": field(8, 2, b""),
 }
 for name, body in ops.items():
-    open(f"corpus/helper_request/{name}", "wb").write(b"\x07" + body)
+    open(f"corpus/helper_request/{name}", "wb").write(b"\x1f" + body)
 PY
 # update_parsers: the captured outputs of apt, dnf and apk (M4-06).
 mkdir -p corpus/update_parsers
@@ -81,4 +82,10 @@ done
 for file in ../fixtures/discovery/*/proc/net/unix; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\001'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done
+# smart_parser: the outputs of smartctl (M5-18).
+mkdir -p corpus/smart_parser
+for file in ../fixtures/modules/smart/*/*.json; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  cp "$file" "corpus/smart_parser/fixture$name"
 done

@@ -3,4 +3,4 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 # Product and tool names that are not code (keeps the defaults via "..").
-doc-valid-idents = ["OpenRC", "SerMon", ".."]
+doc-valid-idents = ["OpenRC", "SerMon", "NVMe", "MariaDB", "InnoDB", "PostgreSQL", "MySQL", ".."]

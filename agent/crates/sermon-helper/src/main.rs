@@ -71,8 +71,7 @@ fn serve() -> Result<(), String> {
         .ok_or_else(|| format!("no user {} in /etc/passwd", peer::USER))?;
     let (listener, activated) = listen(gid).map_err(|e| format!("socket {SOCKET}: {e}"))?;
     sermon_helper::log(&format!(
-        "{NAME}: serving {SOCKET} for uid {uid}; allow_remote_updates={} allow_remote_reboot={} allow_self_update={}",
-        config.allow_remote_updates, config.allow_remote_reboot, config.allow_self_update
+        "{NAME}: serving {SOCKET} for uid {uid}; {config:?}"
     ));
     let host = Host::system();
     host.prune();
@@ -325,6 +324,9 @@ mod tests {
             sermon_helper_proto::v1::RunState::default()
         }
         fn confirm(&mut self, _: &str) -> Result<(), request::Failure> {
+            Err(request::Failure::Busy)
+        }
+        fn read_smart(&mut self) -> Result<sermon_helper_proto::v1::Smart, request::Failure> {
             Err(request::Failure::Busy)
         }
     }

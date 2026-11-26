@@ -324,3 +324,35 @@ fehl.
 - **Fuzzing:** `helper_parsers` prüft minisign (nichts verifiziert ohne den Schlüssel), die Security-Liste von apt (nur
   Debian-Namen als Argumente) und den Versionsvergleich.
 
+
+## Nachtrag M5-18: `ReadSmart`
+
+Das Modul `smart` (ADR 0039) braucht `smartctl`, und `smartctl` braucht root: Die SMART-Befehle an SATA- und NVMe-Disks
+verlangen `CAP_SYS_RAWIO` bzw. `CAP_SYS_ADMIN`. Module starten keine Programme; die Ausnahme ist diese eine feste
+Operation (ADR 0039, Laufzeit).
+
+- **Operation `ReadSmart`** ohne Parameter (Feld 8 der Anfrage, Antwort `Smart`): Der Agent nennt weder Disks noch
+  Optionen. Der Helper wählt die Disks selbst aus `/sys/block` – nur ganze Disks mit Namen `sd` und 1 bis 4
+  Kleinbuchstaben (SATA, SAS, USB) oder `nvme<n>n<n>` (NVMe-Namensräume), keine Partitionen, Loop-, DM-, MD- oder
+  optischen Geräte – und ruft für jede `/usr/sbin/smartctl --json=c -i -H -A -n standby /dev/<disk>` auf: nur lesende
+  Abfragen (Identität, Gesundheit, Attribute), eine schlafende Disk bleibt schlafen (`-n standby`). Kein Selbsttest,
+  kein Schreiben von Einstellungen.
+- **Grenzen:** höchstens 24 Disks in Namensreihenfolge, je Disk 10 s und 128 KiB (nur stdout), alle zusammen 20 s; was
+  darüber liegt, fehlt und `truncated` sagt es. Höchstens ein Lesen je Minute (Zeitstempel im State-Verzeichnis,
+  sonst `BUSY`): Jedes Lesen weckt die Controller, ein kompromittierter Agent soll die Disks nicht dauernd abfragen.
+- **Geparst im Agent** (`sermon-modules/src/smart.rs`) ohne Rechte, gefuzzt (`smart_parser`), Fixtures je Version von
+  smartmontools (7.2, 7.4, 7.5) unter `agent/fixtures/modules/smart/`.
+- **Veto:** `allow_smart` in `helper.toml`, ab Werk **an** – die Operation liest nur, wie `ListUpdates` –, abschaltbar
+  mit `install.sh --no-smart`. `GetStatus` meldet den Wert; ohne `smartctl` antwortet der Helper `UNSUPPORTED` mit dem
+  Hinweis auf das Paket `smartmontools`, ein älterer Helper `UNSUPPORTED` („unknown operation“).
+- **Sandbox der Unit:** `ProtectClock=yes` fügt `DeviceAllow=char-rtc r` hinzu; vor systemd 252 schloss das jede
+  andere Disk aus, ab 252 nur, wenn die Unit selbst eine Geräteliste hat. Die Unit hat jetzt eine:
+  `DeviceAllow=block-sd r` und `DeviceAllow=block-blkext r` – nur die Disks, nur lesend (smartctl öffnet sie mit
+  `O_RDONLY`; die Befehle erlaubt `CAP_SYS_RAWIO`), dazu die Pseudo-Geräte wie `/dev/null`. Vorher sah der Dienst
+  ab systemd 252 alle Geräte; die Geräteliste ist also eine Verschärfung. `PrivateDevices=` bliebe falsch: Es versteckt
+  die Disks. Die Läufe (`systemd-run`) sind eigene Units und davon nicht betroffen. `systemd-analyze security` bleibt
+  bei 5,8. Unter OpenRC gibt es keine Sandbox; dort schützt allein die feste Operation.
+- **Umfang:** Für die Operation (rund 45 Zeilen) wurde vorher Platz geschaffen, statt die Grenze anzuheben: Die
+  Prüfung der Signaturen von Agent und Helper ist eine Funktion (`verified`), die beiden Wege des Reboots sind einer,
+  das Veto eines Laufs ein `match`, Verzeichnisse und Zeitstempel je eine kleine Funktion. **1 795 von 1 800 Zeilen.**
+  Die nächste Operation braucht wieder Platz oder einen begründeten Nachtrag.

@@ -49,7 +49,9 @@ Agent bauen: `just build-agent` (statische musl-Binaries für amd64 und arm64), 
 Agent-Konfiguration: `/etc/sermon/agent.toml` (Schema und Beispiel in `agent/crates/sermon-agent/src/config.rs`);
 Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur über `ProcRoot` (`sermon-core`).
 Module (ADR 0039): `agent/crates/sermon-modules` (Vertrag `Module`/`Instance`, Laufzeit, Schema-Teilmenge, Veto aus
-`[local]` in `agent.toml`); neue Module über den Skill `sermon-add-module`. Das Testmodul `simulate` gibt es nur mit
+`[local]` in `agent.toml`); neue Module über den Skill `sermon-add-module`. Dateien des Hosts (`ProcRoot`) und den
+Root-Helper (Port `Helper`) bekommen Module über `Setup.host`; einzige Helper-Op eines Moduls ist `ReadSmart` (M5-18,
+Veto `allow_smart` in `helper.toml`). Jedes Modul ist ein Cargo-Feature von `sermon-modules` (ab Werk alle an). Das Testmodul `simulate` gibt es nur mit
 dem Feature `simulate` (`just simulate`, nie im Release).
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).

@@ -22,6 +22,13 @@ ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
+# Devices (M5-18, ADR 0035): only the whole disks smartctl reads, read-only – SATA/SAS (sd) and
+# NVMe namespaces (blkext) – besides /dev/null and the like; with a list ProtectClock= adds char-rtc
+# read-only (before systemd 252 it closed all devices on its own). smartctl's commands need
+# CAP_SYS_RAWIO and CAP_SYS_ADMIN, which the helper keeps as root; PrivateDevices= would hide the
+# disks. The runs are units of their own and see every device.
+DeviceAllow=block-sd r
+DeviceAllow=block-blkext r
 ProtectHostname=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes

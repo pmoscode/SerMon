@@ -12,3 +12,6 @@ allow_self_update = true
 # A self-update to a prerelease (the beta channel) on a host that runs none yet; the root helper
 # of the release replaces this one with the agent.
 allow_prerelease = false
+# Read the SMART data of the disks with a fixed, read-only smartctl (module smart; needs
+# smartmontools). A disk in standby stays asleep.
+allow_smart = true

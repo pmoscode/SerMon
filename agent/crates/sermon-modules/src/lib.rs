@@ -11,6 +11,8 @@ pub mod runtime;
 pub mod schema;
 #[cfg(feature = "simulate")]
 pub mod simulate;
+#[cfg(feature = "smart")]
+pub mod smart;
 pub mod veto;
 
 use std::collections::BTreeMap;
@@ -21,7 +23,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use sermon_core::Sample;
+use sermon_core::{ProcRoot, Sample};
+use sermon_helper_proto::v1::{HelperRequest, HelperResponse};
 
 pub use discovery::{Discovered, HostFacts, Reason};
 pub use schema::{Config, Schema};
@@ -30,7 +33,11 @@ pub use veto::{Refused, Veto};
 /// The modules built into this agent.
 #[must_use]
 pub fn builtin() -> Vec<Arc<dyn Module>> {
-    let modules: Vec<Arc<dyn Module>> = Vec::new();
+    // Every module is a feature (ADR 0039).
+    let modules: Vec<Arc<dyn Module>> = vec![
+        #[cfg(feature = "smart")]
+        Arc::new(smart::Smart),
+    ];
     with_simulate(modules)
 }
 
@@ -84,6 +91,48 @@ pub struct Setup<'a> {
     pub veto: &'a Veto,
     /// The module's credentials.
     pub secrets: &'a Secrets,
+    /// The host's files and its root helper.
+    pub host: &'a Host,
+}
+
+/// What modules use of the host besides the network: its files below `/proc`, `/sys` and
+/// `/etc` (only through [`ProcRoot`]) and the root helper's fixed operations.
+#[derive(Clone)]
+pub struct Host {
+    /// The host's root (`/`, or a fixture in tests).
+    pub root: ProcRoot,
+    /// The root helper; `None`: the agent has none (tests, virtual nodes).
+    pub helper: Option<Arc<dyn Helper>>,
+}
+
+impl Default for Host {
+    /// This host without a helper.
+    fn default() -> Self {
+        Self {
+            root: ProcRoot::host(),
+            helper: None,
+        }
+    }
+}
+
+impl fmt::Debug for Host {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Host")
+            .field("root", &self.root)
+            .field("helper", &self.helper.is_some())
+            .finish()
+    }
+}
+
+/// The root helper (ADR 0035): one of its fixed operations, blocking – call it in
+/// [`Run::blocking`].
+pub trait Helper: Send + Sync + 'static {
+    /// Sends `request` and returns the answer.
+    ///
+    /// # Errors
+    ///
+    /// Why there is no answer (no helper, no right to its socket, a broken answer).
+    fn call(&self, request: &HelperRequest) -> Result<HelperResponse, String>;
 }
 
 /// Why a module can't be built.

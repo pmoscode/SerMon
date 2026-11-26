@@ -5420,7 +5420,31 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fake-API über einen Unix-Socket, zu große und kaputte Antworten, kein Aufruf außer den Lese-Pfaden.
 - **Abhängig von:** M5-16
 
-#### ☐ M5-18 – SMART über den Helper · X · M 🔒
+#### ☑ M5-18 – SMART über den Helper · X · M 🔒
+> Erledigt ([ADR 0035, Nachtrag M5-18](adr/0035-root-helper.md); Modul `sermon-modules/src/smart.rs`):
+> - **Helper-Operation `ReadSmart`** ohne Parameter: Der Helper wählt die Disks selbst aus `/sys/block` (nur `sd` mit
+>   1 bis 4 Buchstaben und `nvme<n>n<n>`), je Disk `smartctl --json=c -i -H -A -n standby` (nur lesend, eine
+>   schlafende Disk bleibt schlafen); höchstens 24 Disks, je 10 s und 128 KiB, zusammen 20 s, einmal je Minute.
+>   Veto `allow_smart` in `helper.toml` (ab Werk an, `install.sh --no-smart`), `GetStatus` und
+>   `sermon-agent helper status` nennen es; ohne `smartctl` `UNSUPPORTED` mit Hinweis auf `smartmontools`.
+> - **Platz im Helper** durch Refactoring statt höherer Grenze (eine Prüfung der Signaturen für Agent und Helper,
+>   ein Weg für Reboots, Veto als `match`): **1 795 von 1 800 Zeilen**.
+> - **Sandbox:** smartctl braucht die Disks roh (`CAP_SYS_RAWIO`/`CAP_SYS_ADMIN`, die der Helper als root hat). Die
+>   Unit bekommt eine Geräteliste `DeviceAllow=block-sd r`, `block-blkext r` – vorher sah sie ab systemd 252 alle
+>   Geräte, davor wegen `ProtectClock=` keine Disk. Score bleibt 5,8; `just test-packaging` prüft die Liste.
+> - **Modul `smart`** (ab Werk aus, Standard alle 10 min, Ausschluss einzelner Disks, Discovery über `smartd`): parst im Agent ohne Rechte,
+>   nimmt je Protokoll nur dessen Werte (höchstens 10 Samples je Disk, 24 Disks), Werte außerhalb ihrer Grenzen fallen
+>   weg, Modell als druckbares ASCII ≤ 64 Byte, keine Seriennummer. Metriken (für M5-20): `sermon_smart_passed`
+>   (0 = Disk meldet Fehler), `_temperature_celsius`, `_reallocated_sectors`, `_pending_sectors`,
+>   `_uncorrectable_sectors`, `_crc_errors`, `_media_errors`, `_critical_warning`, `_spare_ratio`,
+>   `_endurance_used_ratio`, `_power_on_seconds`, `_power_cycles`, `_readable`, `_standby` (Label `device`), dazu
+>   `sermon_smart_disks` und `_truncated`. Ablehnung im Helper wird `vetoed`, sonst `error` mit Grund.
+> - **Modul-Vertrag:** `Setup.host` (`sermon_modules::Host`: `ProcRoot` und der Port `Helper`), `Runtime::with_host`;
+>   jedes Modul ist ein Cargo-Feature von `sermon-modules` (ab Werk alle an).
+> - Fixtures je Version von smartmontools (7.2, 7.4, 7.5: SATA, NVMe, SAS, HDD gesund und fehlerhaft, NVMe
+>   abgenutzt, Standby, echtes „open failed“) unter `agent/fixtures/modules/smart/`; Fuzz-Ziel `smart_parser`
+>   (60 s ohne Befund), `helper_request` kennt `ReadSmart`. Hilfetext `docs/help/{de,en}/modules/smart.md`;
+>   Katalog und Hilfen je Metrik folgen mit M5-06. Gegenproben 24/24.
 - **Ziel:** neue feste Helper-Operation für `smartctl --json` (ADR-Nachtrag zu ADR 0035, Review des Helpers), geparst
   im Agent; Gesundheit und Temperatur der Disks. Der Helper hat 1 761 von 1 800 Zeilen: zuerst Platz schaffen oder die
   Grenze per ADR begründet anheben.
@@ -5626,5 +5650,5 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 | Umfang von M4 wächst | Verzögerung | Paket-Repos (M4-20) mit dem Release in v1.0, Kapazität und Heatmap (M4-26, M4-27) nach M5, Kanal `beta` später |
 | Umfang von M5 wächst | Verzögerung | Wellen ③ und ④ (Docker über den Socket, Docker-Logs, SMART, Prometheus-Scraper) und die Vergleichsansicht nach v1.x; nginx als erstes Modul trägt die Demo |
 | Module machen den Agent zur Sonde ins Netz des Hosts | Ein kompromittierter Server erreicht interne Dienste über alle Agents | Ziele nur unter dem lokalen Veto (`agent.toml`), keine Weiterleitungen nach außen, eigene Teil-Review (M5-01, M5-33) |
-| SMART sprengt die Zeilengrenze des Helpers (1 761 von 1 800) | Die Grenze verliert ihren Sinn | Erst Platz schaffen, sonst die Grenze per ADR begründet anheben; Review des Helpers (M5-18) |
+| SMART sprengt die Zeilengrenze des Helpers (1 761 von 1 800) | Die Grenze verliert ihren Sinn | Erst Platz schaffen, sonst die Grenze per ADR begründet anheben; Review des Helpers (M5-18) – erledigt: Platz durch Refactoring, 1 795 Zeilen |
 | Ein Grid-Editor sprengt das Bundle-Budget | Ladezeit und Budget-Test | Wahl im ADR M5-22 mit Blick auf Größe und Tastaturbedienung; notfalls ein eigener schlanker Editor |

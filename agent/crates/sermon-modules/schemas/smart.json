@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SMART",
+  "description": "Health and temperature of the disks, read by the root helper (smartctl).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "exclude": {
+      "type": "array",
+      "title": "Excluded disks",
+      "description": "Disks left out, e.g. sdb for a USB stick without SMART.",
+      "maxItems": 24,
+      "items": {
+        "type": "string",
+        "maxLength": 12,
+        "pattern": "^(sd[a-z]{1,4}|nvme[0-9]{1,3}n[0-9]{1,3})$"
+      },
+      "default": []
+    }
+  }
+}

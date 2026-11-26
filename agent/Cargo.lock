@@ -1364,6 +1364,7 @@ dependencies = [
  "regex",
  "serde_json",
  "sermon-core",
+ "sermon-helper-proto",
  "tempfile",
  "thiserror",
  "tokio",

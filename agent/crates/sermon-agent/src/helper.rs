@@ -5,7 +5,7 @@
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use prost::Message;
@@ -94,6 +94,28 @@ pub fn call(
     HelperResponse::decode(body.as_slice()).map_err(|e| HelperError::Malformed(e.to_string()))
 }
 
+/// The helper for the modules (M5-18): SMART takes the helper up to 20 s.
+#[derive(Debug, Clone)]
+pub struct ModuleHelper {
+    socket: PathBuf,
+}
+
+impl ModuleHelper {
+    /// The helper at `socket`.
+    #[must_use]
+    pub fn new(socket: impl Into<PathBuf>) -> Self {
+        Self {
+            socket: socket.into(),
+        }
+    }
+}
+
+impl sermon_modules::Helper for ModuleHelper {
+    fn call(&self, request: &HelperRequest) -> Result<HelperResponse, String> {
+        call(&self.socket, request, Duration::from_secs(25)).map_err(|e| e.to_string())
+    }
+}
+
 /// What `sermon-agent helper status` prints: version, distribution and what the host allows.
 ///
 /// # Errors
@@ -126,12 +148,13 @@ pub fn status(socket: &Path) -> anyhow::Result<String> {
         &info.running_run_id
     };
     Ok(format!(
-        "sermon-helper {} at {}\npackage manager: {distribution}\nallow_remote_updates = {}\nallow_remote_reboot = {}\nallow_self_update = {}\nrunning: {running}\n",
+        "sermon-helper {} at {}\npackage manager: {distribution}\nallow_remote_updates = {}\nallow_remote_reboot = {}\nallow_self_update = {}\nallow_smart = {}\nrunning: {running}\n",
         response.helper_version,
         socket.display(),
         info.allow_remote_updates,
         info.allow_remote_reboot,
         info.allow_self_update,
+        info.allow_smart,
     ))
 }
 
@@ -145,13 +168,7 @@ mod tests {
     use super::*;
 
     /// A helper that answers one connection with `answer` (raw bytes after reading the request).
-    fn fake(
-        answer: Vec<u8>,
-    ) -> (
-        tempfile::TempDir,
-        std::path::PathBuf,
-        thread::JoinHandle<Vec<u8>>,
-    ) {
+    fn fake(answer: Vec<u8>) -> (tempfile::TempDir, PathBuf, thread::JoinHandle<Vec<u8>>) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("helper.sock");
         let listener = UnixListener::bind(&path).unwrap();
@@ -185,6 +202,7 @@ mod tests {
                 distribution: Distribution::Apt.into(),
                 allow_remote_updates: true,
                 allow_self_update: true,
+                allow_smart: true,
                 ..StatusInfo::default()
             })),
             ..HelperResponse::default()
@@ -198,8 +216,31 @@ mod tests {
             ),
             "{printed}"
         );
+        assert!(printed.contains("allow_smart = true\n"), "{printed}");
         let request = HelperRequest::decode(server.join().unwrap().as_slice()).unwrap();
         assert!(matches!(request.operation, Some(Operation::GetStatus(_))));
+    }
+
+    // M5-18: the modules reach the helper through the same client.
+    #[test]
+    fn the_modules_call_the_helper() {
+        use sermon_modules::Helper;
+        let response = HelperResponse {
+            status: Status::Refused.into(),
+            reason: "allow_smart = false".into(),
+            ..HelperResponse::default()
+        };
+        let (_dir, path, server) = fake(framed(&response));
+        let request = HelperRequest {
+            operation: Some(Operation::ReadSmart(sermon_helper_proto::v1::ReadSmart {})),
+        };
+        let answer = ModuleHelper::new(&path).call(&request).unwrap();
+        assert_eq!(answer.reason, "allow_smart = false");
+        let sent = HelperRequest::decode(server.join().unwrap().as_slice()).unwrap();
+        assert_eq!(sent, request);
+        let dir = tempfile::tempdir().unwrap();
+        let missing = ModuleHelper::new(dir.path().join("none.sock")).call(&request);
+        assert!(missing.unwrap_err().contains("no root helper"));
     }
 
     #[test]

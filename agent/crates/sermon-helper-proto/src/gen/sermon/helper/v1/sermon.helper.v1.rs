@@ -4,7 +4,7 @@
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct HelperRequest {
     /// operation is what the agent asks for; none at all is refused.
-    #[prost(oneof="helper_request::Operation", tags="1, 2, 3, 4, 5, 6, 7")]
+    #[prost(oneof="helper_request::Operation", tags="1, 2, 3, 4, 5, 6, 7, 8")]
     pub operation: ::core::option::Option<helper_request::Operation>,
 }
 /// Nested message and enum types in `HelperRequest`.
@@ -33,6 +33,9 @@ pub mod helper_request {
         /// confirm_self_update says the new agent of a self-update connected to its server (ADR 0036).
         #[prost(message, tag="7")]
         ConfirmSelfUpdate(super::ConfirmSelfUpdate),
+        /// read_smart asks for the raw SMART data of the host's disks (veto: allow_smart, M5-18).
+        #[prost(message, tag="8")]
+        ReadSmart(super::ReadSmart),
     }
 }
 /// GetStatus has no parameters.
@@ -97,6 +100,13 @@ pub struct RunResult {
     #[prost(string, tag="1")]
     pub run_id: ::prost::alloc::string::String,
 }
+/// ReadSmart reads the SMART data of the host's disks with smartctl (ADR 0035, addendum M5-18). It
+/// takes no parameters: the helper chooses the disks itself (whole SATA, SAS and NVMe disks of
+/// /sys/block) and runs a fixed, read-only smartctl for each; a disk in standby stays asleep. At
+/// most once a minute; the agent parses the output.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReadSmart {
+}
 /// HelperResponse is the answer to one request.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct HelperResponse {
@@ -110,7 +120,7 @@ pub struct HelperResponse {
     #[prost(string, tag="3")]
     pub helper_version: ::prost::alloc::string::String,
     /// result belongs to the operation, if it succeeded.
-    #[prost(oneof="helper_response::Result", tags="4, 5, 6")]
+    #[prost(oneof="helper_response::Result", tags="4, 5, 6, 7")]
     pub result: ::core::option::Option<helper_response::Result>,
 }
 /// Nested message and enum types in `HelperResponse`.
@@ -127,6 +137,9 @@ pub mod helper_response {
         /// run answers RunResult.
         #[prost(message, tag="6")]
         Run(super::RunState),
+        /// smart answers ReadSmart.
+        #[prost(message, tag="7")]
+        Smart(super::Smart),
     }
 }
 /// StatusInfo describes the helper and what the host allows (/etc/sermon/helper.toml).
@@ -147,6 +160,9 @@ pub struct StatusInfo {
     /// running_run_id is the run in progress, if any.
     #[prost(string, tag="5")]
     pub running_run_id: ::prost::alloc::string::String,
+    /// allow_smart: ReadSmart is allowed.
+    #[prost(bool, tag="6")]
+    pub allow_smart: bool,
 }
 /// Command is the output of one command the helper ran.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -202,6 +218,18 @@ pub struct RunState {
     /// ended_unix is when the run ended, in seconds since the epoch (0: not yet).
     #[prost(int64, tag="5")]
     pub ended_unix: i64,
+}
+/// Smart is the raw output of smartctl for the host's disks.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Smart {
+    /// disks are the outputs, one per disk in the order of their names, at most 24: the name of a
+    /// command ends with the disk (e.g. "/usr/sbin/smartctl --json=c ... /dev/sda"); the output is
+    /// smartctl's JSON, at most 128 KiB, never trusted (parsed in the agent).
+    #[prost(message, repeated, tag="1")]
+    pub disks: ::prost::alloc::vec::Vec<Command>,
+    /// truncated: more disks than 24, or the time of the read (20 s) ran out; the rest are missing.
+    #[prost(bool, tag="2")]
+    pub truncated: bool,
 }
 /// Scope says which updates a run installs (KONZEPT §14.2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

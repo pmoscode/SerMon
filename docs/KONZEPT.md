@@ -184,20 +184,21 @@ eine Fake-Implementierung für Tests.
 
 ### 4.2 Root-Helper (`sermon-helper`, Rust)
 
-- Ein eigener, **kleiner** Prozess (höchstens 1 500 eigene Zeilen, in CI geprüft; Ziel war < 1 000) mit eigener
+- Ein eigener, **kleiner** Prozess (höchstens 1 800 eigene Zeilen, in CI geprüft; Ziel war < 1 000) mit eigener
   systemd-Unit, der als root läuft;
   eigenes Paket `sermon-helper` ([ADR 0035](adr/0035-root-helper.md)).
 - Er lauscht auf `/run/sermon/helper.sock` (Rechte `root:sermon 0660`, unter systemd per Socket-Aktivierung) und prüft
   per `SO_PEERCRED`, dass der Aufrufer die UID `sermon` hat. Eine Anfrage pro Verbindung, Protobuf mit vorangestellter
   Länge (`sermon.helper.v1`).
 - Er nimmt **nur ein festes Enum an Operationen** an: `GetStatus`, `ListUpdates{refresh}`,
-  `ApplyUpdates{run_id, scope: security|all}`, `Reboot{run_id, reason}`, `SelfUpdate` (ADR 0036) und
-  `RunResult{run_id}`. Freie Kommandos, Paketnamen oder Pfade gibt es nicht.
+  `ApplyUpdates{run_id, scope: security|all}`, `Reboot{run_id, reason}`, `SelfUpdate` (ADR 0036),
+  `RunResult{run_id}` und `ReadSmart` (ohne Parameter: der Helper wählt die Disks selbst, M5-18). Freie Kommandos,
+  Paketnamen, Geräte oder Pfade gibt es nicht.
 - Er führt nur feste Befehle aus und gibt ihre Ausgabe begrenzt zurück; **geparst wird im Agent** ohne Rechte.
 - Ein Lauf ist eine eigene Unit (`systemd-run`, unter OpenRC eine eigene Prozessgruppe): Er übersteht den Neustart von
   Agent und Helper, wenn ein Update deren Pakete erneuert. Das Ergebnis holt der Agent mit `RunResult` ab.
-- **Lokale Hoheit:** `/etc/sermon/helper.toml` mit `allow_remote_updates` (ab Werk an), `allow_remote_reboot` (aus)
-  und `allow_self_update` (an). Diese Werte kann der Server **nicht** überschreiben; ohne Helper gibt es keine
+- **Lokale Hoheit:** `/etc/sermon/helper.toml` mit `allow_remote_updates` (ab Werk an), `allow_remote_reboot` (aus),
+  `allow_self_update` (an) und `allow_smart` (an, nur lesend). Diese Werte kann der Server **nicht** überschreiben; ohne Helper gibt es keine
   Fernsteuerung.
 - Jede Operation wird lokal (journald) und zentral (Audit-Log) protokolliert, auch abgelehnte.
 
@@ -1261,7 +1262,7 @@ spec:
 | **Redis**                     | Speicher, Clients, Ops/s, Hit-Rate, Evictions                          |                                                                                                                                 |
 | **TLS-Zertifikate**           | Ablaufdatum lokaler Dateien und Endpunkte                              | Alert 21 / 7 Tage                                                                                                               |
 | **HTTP-/TCP-Check**           | Erreichbarkeit, Latenz und Statuscode lokaler Endpunkte                |                                                                                                                                 |
-| **SMART**                     | Gesundheit und Temperatur von Disks                                    | benötigt `smartctl` über den Helper (neue feste Op)                                                                             |
+| **SMART**                     | Gesundheit und Temperatur von Disks                                    | `smartctl` über die Helper-Op `ReadSmart` (ADR 0035, M5-18), Veto `allow_smart`                                                 |
 | **Prometheus-Scraper**        | beliebige `/metrics`-Endpunkte (nur localhost bzw. Allowlist)          | deckt den „Rest der Welt“ ab; Serien-Limit                                                                                      |
 
 Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level), RabbitMQ, Elasticsearch.

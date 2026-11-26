@@ -46,7 +46,7 @@ usage() {
 	cat >&2 <<'USAGE'
 usage: install.sh --server URL [--token-file FILE] [--ca-fingerprint sha256:…] [--agent-url URL] [--force]
                   [--repo] [--grant-log-access]
-                  [--no-helper | --no-remote-updates --allow-remote-reboot --no-self-update]
+                  [--no-helper | --no-remote-updates --allow-remote-reboot --no-self-update --no-smart]
 
   --server URL           public HTTPS address of sermon-server (as in the browser)
   --token-file FILE      file with the enrollment token from the UI (or SERMON_ENROLLMENT_TOKEN)
@@ -61,6 +61,7 @@ usage: install.sh --server URL [--token-file FILE] [--ca-fingerprint sha256:…]
   --no-remote-updates    the helper installs no updates on request (helper.toml)
   --allow-remote-reboot  the helper reboots on request, e.g. after updates (off by default)
   --no-self-update       the helper doesn't replace the agent with a new signed version
+  --no-smart             the helper reads no SMART data of the disks (module smart)
                          Without these flags an existing /etc/sermon/helper.toml stays as it is.
 USAGE
 }
@@ -308,6 +309,7 @@ TOML
 	[ -z "$REMOTE_UPDATES" ] || set_option allow_remote_updates "$REMOTE_UPDATES"
 	[ -z "$REMOTE_REBOOT" ] || set_option allow_remote_reboot "$REMOTE_REBOOT"
 	[ -z "$SELF_UPDATE" ] || set_option allow_self_update "$SELF_UPDATE"
+	[ -z "$SMART" ] || set_option allow_smart "$SMART"
 	[ -n "$ROOT" ] || chown root:root "$conf"
 	chmod 0644 "$conf"
 }
@@ -553,7 +555,8 @@ CONF
 }
 
 # parse_args ARG… sets SERVER, TOKEN, FINGERPRINT, AGENT_URL, FORCE, GRANT_LOG_ACCESS and the
-# helper's NO_HELPER, REMOTE_UPDATES, REMOTE_REBOOT, SELF_UPDATE and HELPER_FLAGS and checks them.
+# helper's NO_HELPER, REMOTE_UPDATES, REMOTE_REBOOT, SELF_UPDATE, SMART and HELPER_FLAGS and checks
+# them.
 parse_args() {
 	SERVER=''
 	TOKEN=${SERMON_ENROLLMENT_TOKEN:-}
@@ -564,7 +567,7 @@ parse_args() {
 	GRANT_LOG_ACCESS=''
 	NO_HELPER=''
 	# Empty: not given, helper.toml keeps its value (or the default of a new file).
-	REMOTE_UPDATES='' REMOTE_REBOOT='' SELF_UPDATE='' HELPER_FLAGS=''
+	REMOTE_UPDATES='' REMOTE_REBOOT='' SELF_UPDATE='' SMART='' HELPER_FLAGS=''
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--server) SERVER=${2:-} && shift ;;
@@ -585,6 +588,7 @@ parse_args() {
 		--no-remote-updates) REMOTE_UPDATES=false HELPER_FLAGS=1 ;;
 		--allow-remote-reboot) REMOTE_REBOOT=true HELPER_FLAGS=1 ;;
 		--no-self-update) SELF_UPDATE=false HELPER_FLAGS=1 ;;
+		--no-smart) SMART=false HELPER_FLAGS=1 ;;
 		-h | --help) usage && exit 0 ;;
 		*) usage && die "unknown argument $1" ;;
 		esac

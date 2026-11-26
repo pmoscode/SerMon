@@ -2,8 +2,8 @@
 //! answer an operation gets. Pure: the work itself is behind [`Executor`].
 
 use sermon_helper_proto::v1::{
-    ApplyUpdates, HelperRequest, HelperResponse, Reboot, RunState, Scope, SelfUpdate, Status,
-    StatusInfo, Updates, helper_request::Operation, helper_response::Result as Answer,
+    ApplyUpdates, HelperRequest, HelperResponse, Reboot, RunState, Scope, SelfUpdate, Smart,
+    Status, StatusInfo, Updates, helper_request::Operation, helper_response::Result as Answer,
 };
 
 use crate::config::Config;
@@ -61,6 +61,12 @@ pub trait Executor {
     ///
     /// [`Failure`] if no self-update of this run waits for it.
     fn confirm(&mut self, id: &str) -> Result<(), Failure>;
+    /// The raw SMART data of the host's disks (M5-18).
+    ///
+    /// # Errors
+    ///
+    /// [`Failure`] without smartctl, or if read a moment ago.
+    fn read_smart(&mut self) -> Result<Smart, Failure>;
 }
 
 /// One line for the journal: what was asked and how it ended.
@@ -93,6 +99,7 @@ pub fn handle(
             info.allow_remote_updates = config.allow_remote_updates;
             info.allow_remote_reboot = config.allow_remote_reboot;
             info.allow_self_update = config.allow_self_update;
+            info.allow_smart = config.allow_smart;
             ("get_status", "", Ok(Some(Answer::StatusInfo(info))))
         }
         Some(Operation::ListUpdates(l)) => (
@@ -121,21 +128,31 @@ pub fn handle(
         Some(Operation::RunResult(r)) => (
             "run_result",
             r.run_id.as_str(),
-            if valid_run_id(&r.run_id) {
-                Ok(Some(Answer::Run(exec.result(&r.run_id))))
-            } else {
-                Err(refused("run_id must be a lowercase UUID"))
-            },
+            run_id(&r.run_id).map(|id| Some(Answer::Run(exec.result(&id)))),
+        ),
+        Some(Operation::ReadSmart(_)) if !config.allow_smart => (
+            "read_smart",
+            "",
+            Err(refused(&format!(
+                "allow_smart = false in {}",
+                crate::config::PATH
+            ))),
+        ),
+        Some(Operation::ReadSmart(_)) => (
+            "read_smart",
+            "",
+            exec.read_smart()
+                .map(|s| Some(Answer::Smart(s)))
+                .map_err(answer),
         ),
     };
     let params = match &request.operation {
         Some(Operation::ApplyUpdates(a)) => format!(
             "scope={}",
-            Scope::try_from(a.scope).map_or("invalid", |s| match s {
-                Scope::Security => "security",
-                Scope::All => "all",
-                Scope::Unspecified => "invalid",
-            })
+            Scope::try_from(a.scope).map_or("invalid".into(), |s| s
+                .as_str_name()
+                .trim_start_matches("SCOPE_")
+                .to_lowercase())
         ),
         Some(Operation::Reboot(r)) => format!("reason={:?}", truncated(&r.reason)),
         Some(Operation::SelfUpdate(s)) => format!("version={:?}", truncated(&s.version)),
@@ -284,7 +301,9 @@ pub fn valid_reason(reason: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use sermon_helper_proto::v1::{ConfirmSelfUpdate, GetStatus, ListUpdates, RunPhase, RunResult};
+    use sermon_helper_proto::v1::{
+        Command, ConfirmSelfUpdate, GetStatus, ListUpdates, ReadSmart, RunPhase, RunResult,
+    };
 
     use super::*;
 
@@ -296,6 +315,7 @@ mod tests {
         started: Vec<Run>,
         busy: bool,
         confirmed: Vec<String>,
+        smart_reads: usize,
     }
 
     impl Executor for Recorder {
@@ -333,6 +353,16 @@ mod tests {
             self.confirmed.push(id.to_owned());
             Ok(())
         }
+        fn read_smart(&mut self) -> Result<Smart, Failure> {
+            self.smart_reads += 1;
+            if self.busy {
+                return Err(Failure::Later("read a minute ago".into()));
+            }
+            Ok(Smart {
+                disks: vec![Command::default()],
+                truncated: false,
+            })
+        }
     }
 
     fn ask(op: Operation, config: Config, exec: &mut Recorder) -> (HelperResponse, Audit) {
@@ -351,6 +381,7 @@ mod tests {
             allow_remote_reboot: true,
             allow_self_update: true,
             allow_prerelease: true,
+            allow_smart: true,
         }
     }
 
@@ -418,6 +449,7 @@ mod tests {
             allow_remote_reboot: false,
             allow_self_update: false,
             allow_prerelease: false,
+            allow_smart: false,
         };
         for (op, key) in [
             (apply(ID, Scope::Security), "allow_remote_updates"),
@@ -623,5 +655,35 @@ mod tests {
             ask(confirm(), config, &mut exec).0.status(),
             Status::Refused
         );
+    }
+
+    // M5-18: SMART is read only if helper.toml allows it; the helper asks the executor, which
+    // bounds how often.
+    #[test]
+    fn reads_smart_only_if_the_host_allows_it() {
+        let mut exec = Recorder::default();
+        let read = || Operation::ReadSmart(ReadSmart {});
+        let (r, audit) = ask(read(), all_allowed(), &mut exec);
+        assert_eq!((r.status(), audit.operation), (Status::Ok, "read_smart"));
+        assert!(matches!(r.result, Some(Answer::Smart(s)) if s.disks.len() == 1));
+        let vetoed = Config {
+            allow_smart: false,
+            ..all_allowed()
+        };
+        let (r, audit) = ask(read(), vetoed, &mut exec);
+        assert_eq!(r.status(), Status::Refused);
+        assert!(r.reason.contains("allow_smart = false") && audit.reason == r.reason);
+        assert_eq!(exec.smart_reads, 1, "asked although vetoed");
+        exec.busy = true;
+        assert_eq!(
+            ask(read(), all_allowed(), &mut exec).0.status(),
+            Status::Busy
+        );
+        let (r, _) = ask(Operation::GetStatus(GetStatus {}), vetoed, &mut exec);
+        assert!(
+            matches!(r.result, Some(Answer::StatusInfo(i)) if !i.allow_smart && i.allow_remote_updates)
+        );
+        let (r, _) = ask(Operation::GetStatus(GetStatus {}), all_allowed(), &mut exec);
+        assert!(matches!(r.result, Some(Answer::StatusInfo(i)) if i.allow_smart));
     }
 }

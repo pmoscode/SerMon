@@ -260,7 +260,11 @@ fn module_runtime(
         config.local.modules.clone(),
         Arc::new(sink),
         clock.clone(),
-    );
+    )
+    .with_host(sermon_modules::Host {
+        root: ProcRoot::new(&config.host_root),
+        helper: Some(Arc::new(helper::ModuleHelper::new(helper::SOCKET))),
+    });
     (runtime, discover(config, outbox, clock))
 }
 

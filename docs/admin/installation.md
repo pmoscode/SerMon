@@ -132,10 +132,13 @@ in `/etc/sermon/helper.toml`; der Server kann es nicht ändern:
 | `allow_remote_reboot` | **aus** | `--allow-remote-reboot` |
 | `allow_self_update` | an | `--no-self-update` |
 | `allow_prerelease` | aus | – (von Hand in der Datei) |
+| `allow_smart` | an | `--no-smart` |
 
-`allow_prerelease` lässt ein Self-Update auf eine Vorabversion (Kanal `beta`) zu, solange der Host noch keine hat. Ein
-Helper, den `install.sh` eingerichtet hat, erneuert sich mit dem Agent; ein Helper aus der Zeit davor nicht – die
-Updates-Seite des Nodes sagt dann, dass `install.sh` einmal erneut laufen sollte.
+`allow_smart` erlaubt dem Modul `smart`, über den Helper die SMART-Daten der Disks zu lesen (`smartctl`, nur lesend;
+das Paket `smartmontools` installiert der Admin). `allow_prerelease` lässt ein Self-Update auf eine Vorabversion
+(Kanal `beta`) zu, solange der Host noch keine hat. Ein Helper, den `install.sh` eingerichtet hat, erneuert sich mit
+dem Agent; ein Helper aus der Zeit davor nicht – die Updates-Seite des Nodes sagt dann, dass `install.sh` einmal
+erneut laufen sollte.
 
 Ohne Schalter bleibt eine vorhandene `helper.toml` unverändert. `--no-helper` installiert keinen Helper bzw. schaltet
 einen vorhandenen ab; dann gibt es keine Fernsteuerung. Ein abgeschalteter Helper (`systemctl disable --now

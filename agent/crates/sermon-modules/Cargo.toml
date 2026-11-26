@@ -12,12 +12,17 @@ publish.workspace = true
 workspace = true
 
 [features]
+# Every module is a feature (ADR 0039); the release builds them all.
+default = ["smart"]
+# SMART of the disks through the root helper (M5-18).
+smart = []
 # The module `simulate` for tests and demos (ADR 0039); `sermon-agent`'s feature `simulate`.
 simulate = []
 
 [dependencies]
 regex.workspace = true
 sermon-core.workspace = true
+sermon-helper-proto.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "rt"] }

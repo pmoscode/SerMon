@@ -29,6 +29,8 @@ message HelperRequest {
     RunResult run_result = 6;
     // confirm_self_update says the new agent of a self-update connected to its server (ADR 0036).
     ConfirmSelfUpdate confirm_self_update = 7;
+    // read_smart asks for the raw SMART data of the host's disks (veto: allow_smart, M5-18).
+    ReadSmart read_smart = 8;
   }
 }
 
@@ -94,6 +96,12 @@ message RunResult {
   string run_id = 1;
 }
 
+// ReadSmart reads the SMART data of the host's disks with smartctl (ADR 0035, addendum M5-18). It
+// takes no parameters: the helper chooses the disks itself (whole SATA, SAS and NVMe disks of
+// /sys/block) and runs a fixed, read-only smartctl for each; a disk in standby stays asleep. At
+// most once a minute; the agent parses the output.
+message ReadSmart {}
+
 // Status is how the helper took a request.
 enum Status {
   // STATUS_UNSPECIFIED never comes from a helper.
@@ -126,6 +134,8 @@ message HelperResponse {
     Updates updates = 5;
     // run answers RunResult.
     RunState run = 6;
+    // smart answers ReadSmart.
+    Smart smart = 7;
   }
 }
 
@@ -153,6 +163,8 @@ message StatusInfo {
   bool allow_self_update = 4;
   // running_run_id is the run in progress, if any.
   string running_run_id = 5;
+  // allow_smart: ReadSmart is allowed.
+  bool allow_smart = 6;
 }
 
 // Command is the output of one command the helper ran.
@@ -204,4 +216,14 @@ message RunState {
   int64 started_unix = 4;
   // ended_unix is when the run ended, in seconds since the epoch (0: not yet).
   int64 ended_unix = 5;
+}
+
+// Smart is the raw output of smartctl for the host's disks.
+message Smart {
+  // disks are the outputs, one per disk in the order of their names, at most 24: the name of a
+  // command ends with the disk (e.g. "/usr/sbin/smartctl --json=c ... /dev/sda"); the output is
+  // smartctl's JSON, at most 128 KiB, never trusted (parsed in the agent).
+  repeated Command disks = 1;
+  // truncated: more disks than 24, or the time of the read (20 s) ran out; the rest are missing.
+  bool truncated = 2;
 }

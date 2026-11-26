@@ -27,6 +27,8 @@ pub struct Config {
     pub allow_self_update: bool,
     /// `SelfUpdate` to a prerelease (beta) on a host without one (M4-31): off.
     pub allow_prerelease: bool,
+    /// `ReadSmart` (M5-18): a fixed, read-only smartctl of the host's disks.
+    pub allow_smart: bool,
 }
 
 impl Default for Config {
@@ -36,6 +38,7 @@ impl Default for Config {
             allow_remote_reboot: false,
             allow_self_update: true,
             allow_prerelease: false,
+            allow_smart: true,
         }
     }
 }
@@ -121,18 +124,22 @@ mod tests {
                 allow_remote_updates: true,
                 allow_remote_reboot: false,
                 allow_self_update: true,
-                allow_prerelease: false
+                allow_prerelease: false,
+                allow_smart: true
             }
         );
-        let c: Config =
-            toml::from_str("allow_remote_reboot = true\nallow_self_update = false").unwrap();
+        let c: Config = toml::from_str(
+            "allow_remote_reboot = true\nallow_self_update = false\nallow_smart = false",
+        )
+        .unwrap();
         assert_eq!(
             c,
             Config {
                 allow_remote_updates: true,
                 allow_remote_reboot: true,
                 allow_self_update: false,
-                allow_prerelease: false
+                allow_prerelease: false,
+                allow_smart: false
             }
         );
         // A typo must not silently leave the default in place.

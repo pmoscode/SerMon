@@ -12,7 +12,7 @@ use sermon_core::{Clock, Sample};
 use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 
-use crate::{BuildError, Module, Run, RunError, Schema, Secrets, Setup, Veto};
+use crate::{BuildError, Host, Module, Run, RunError, Schema, Secrets, Setup, Veto};
 
 /// Most samples of one run.
 pub const MAX_SAMPLES: usize = 256;
@@ -169,6 +169,7 @@ struct Task {
 pub struct Runtime {
     modules: BTreeMap<&'static str, Arc<dyn Module>>,
     veto: Arc<Veto>,
+    host: Arc<Host>,
     shared: Arc<Shared>,
     pauses: Pauses,
     tasks: BTreeMap<String, Task>,
@@ -195,6 +196,7 @@ impl Runtime {
         Self {
             modules: modules.into_iter().map(|m| (m.id(), m)).collect(),
             veto: Arc::new(veto),
+            host: Arc::new(Host::default()),
             shared: Arc::new(Shared {
                 sink,
                 clock,
@@ -203,6 +205,13 @@ impl Runtime {
             pauses: Pauses::default(),
             tasks: BTreeMap::new(),
         }
+    }
+
+    /// The host's files and root helper the modules use (default: `/` without a helper).
+    #[must_use]
+    pub fn with_host(mut self, host: Host) -> Self {
+        self.host = Arc::new(host);
+        self
     }
 
     /// Other pauses after a crash (tests).
@@ -271,6 +280,7 @@ impl Runtime {
                 spec: spec.clone(),
                 secrets: module_secrets.clone(),
                 veto: self.veto.clone(),
+                host: self.host.clone(),
                 shared: self.shared.clone(),
                 pauses: self.pauses,
                 cancel: cancel.clone(),
@@ -316,6 +326,7 @@ struct Supervised {
     spec: Spec,
     secrets: Secrets,
     veto: Arc<Veto>,
+    host: Arc<Host>,
     shared: Arc<Shared>,
     pauses: Pauses,
     cancel: CancellationToken,
@@ -337,6 +348,7 @@ fn build(s: &Supervised) -> Result<Box<dyn crate::Instance>, (State, String)> {
                     &Setup {
                         veto: &s.veto,
                         secrets: &s.secrets,
+                        host: &s.host,
                     },
                 )
                 .map_err(|e| match e {

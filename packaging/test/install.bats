@@ -342,8 +342,9 @@ without_minisign() {
 	grep -q '^allow_remote_reboot = false$' "$conf"
 	grep -q '^allow_self_update = true$' "$conf"
 	grep -q '^allow_prerelease = false$' "$conf"
+	grep -q '^allow_smart = true$' "$conf"
 	[ "$(stat -c %a "$conf")" = 644 ]
-	[ "$(grep -c '^allow_' "$conf")" = 4 ]
+	[ "$(grep -c '^allow_' "$conf")" = 5 ]
 	# The admin allows reboots; a second run without flags keeps that.
 	sed -i 's/^allow_remote_reboot = false$/allow_remote_reboot = true/' "$conf"
 	echo '# own note' >>"$conf"
@@ -351,10 +352,11 @@ without_minisign() {
 	grep -q '^allow_remote_reboot = true$' "$conf"
 	grep -q '^# own note$' "$conf"
 	# A flag changes only its value.
-	parse_args --server https://sermon.example.com --token-file <(echo sme_x) --no-remote-updates --no-self-update 2>/dev/null
+	parse_args --server https://sermon.example.com --token-file <(echo sme_x) --no-remote-updates --no-self-update --no-smart 2>/dev/null
 	write_helper_config
 	grep -q '^allow_remote_updates = false$' "$conf"
 	grep -q '^allow_self_update = false$' "$conf"
+	grep -q '^allow_smart = false$' "$conf"
 	grep -q '^allow_remote_reboot = true$' "$conf"
 	grep -q '^# own note$' "$conf"
 	[ "$(grep -c '^allow_remote_updates' "$conf")" = 1 ]
@@ -416,7 +418,7 @@ without_minisign() {
 	download() { cp "$BIN" "$2"; }
 	verify() { :; }
 	SERVER=https://sermon.example.com CONFIG_DIR=/etc/sermon BIN_DIR=/usr/local/bin
-	REMOTE_UPDATES='' REMOTE_REBOOT='' SELF_UPDATE='' HELPER_FLAGS=''
+	REMOTE_UPDATES='' REMOTE_REBOOT='' SELF_UPDATE='' SMART='' HELPER_FLAGS=''
 	PATH="$TMP/fake:$PATH" install_helper "$TMP/work" amd64 systemd 2>/dev/null || true
 	grep -q 'systemctl enable --now sermon-helper.socket' "$TMP/calls"
 	# Installed before: a rerun restarts but doesn't enable.
@@ -601,4 +603,14 @@ repo_server() {
 	grep -q '^TasksMax=' packaging/systemd/sermon-helper.service
 	grep -q '^memory.max ' packaging/openrc/sermon-helper
 	grep -q '^pids.max ' packaging/openrc/sermon-helper
+}
+
+# M5-18: a device list closes every device not on it; smartctl reads the whole disks the helper
+# chooses, read-only, and nothing else.
+@test "the helper's unit lets smartctl read the disks and nothing more" {
+	grep -q '^ProtectClock=yes$' packaging/systemd/sermon-helper.service
+	[ "$(grep -c '^DeviceAllow=' packaging/systemd/sermon-helper.service)" = 2 ]
+	grep -q '^DeviceAllow=block-sd r$' packaging/systemd/sermon-helper.service
+	grep -q '^DeviceAllow=block-blkext r$' packaging/systemd/sermon-helper.service
+	! grep -q '^PrivateDevices=yes' packaging/systemd/sermon-helper.service
 }

@@ -8,7 +8,7 @@ use libfuzzer_sys::fuzz_target;
 use prost::Message;
 use sermon_helper::config::Config;
 use sermon_helper::request::{self, Executor, Failure, Run, valid_reason, valid_run_id};
-use sermon_helper_proto::v1::{HelperRequest, RunState, StatusInfo, Updates};
+use sermon_helper_proto::v1::{HelperRequest, RunState, Smart, StatusInfo, Updates};
 
 /// Accepts every run and checks it.
 struct Checker {
@@ -48,6 +48,10 @@ impl Executor for Checker {
         assert!(valid_run_id(id));
         Ok(())
     }
+    fn read_smart(&mut self) -> Result<Smart, Failure> {
+        assert!(self.config.allow_smart);
+        Ok(Smart::default())
+    }
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -59,6 +63,7 @@ fuzz_target!(|data: &[u8]| {
         allow_remote_reboot: switches & 2 != 0,
         allow_self_update: switches & 4 != 0,
         allow_prerelease: switches & 8 != 0,
+        allow_smart: switches & 16 != 0,
     };
     let Ok(req) = HelperRequest::decode(body) else {
         return;

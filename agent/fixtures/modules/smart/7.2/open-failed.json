@@ -1,0 +1,1 @@
+{"json_format_version":[1,0],"smartctl":{"version":[7,2],"svn_revision":"5155","platform_info":"aarch64-linux-7.0.12-linuxkit","build_info":"(local build)","argv":["smartctl","--json=c","--info","--health","--attributes","--nocheck=standby","/dev/sda"],"messages":[{"string":"Smartctl open device: /dev/sda failed: No such device","severity":"error"}],"exit_status":2}}

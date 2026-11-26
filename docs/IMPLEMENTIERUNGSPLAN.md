@@ -5678,7 +5678,26 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Komponententests für Layout und Tastaturbedienung, axe; Budget-Test des Bundles.
 - **Abhängig von:** M5-23
 
-#### ☐ M5-25 – Widgets und Variablen · W · M
+#### ☑ M5-25 – Widgets und Variablen · W · M
+> Erledigt (`components/dashboards/widgets`, `WidgetView`, `lib/dashboards/{source,session,variables}.ts`):
+> - **Quelle:** Widgets rendern nur ein `WidgetResult` (Serien mit Einheit, Log-Zeilen, Alerts); die UI holt es über
+>   die vorhandenen Leser mit der Session (`QueryMetrics` mit höchstens 100 Nodes, `QueryLogs` mit 50 Zeilen und
+>   höchstens 14 Tagen, `ListAlerts` gefiltert auf die Nodes des Widgets), der Kiosk bekommt eine eigene Quelle
+>   (M5-26). Nur der Alert-Client wird geladen, nicht die Deskriptoren von Regeln und Kanälen.
+> - **Widgets** (je Art bei Bedarf geladen): Zeitreihe mit `TimeSeries` (uPlot, synchronisierter Zeitbereich und
+>   Crosshair, höchstens 40 Linien), Gauge (Anteile gegen 100 %, sonst gegen das Maximum des Zeitraums; mehrere
+>   Serien: die höchste, benannt), Kennzahl mit Sparkline (bis 4 Serien), Tabelle (aktuell, Min, Max je Node und
+>   Serie, bis 200 Zeilen), Log-Stream (50 Zeilen, Text über `LogText`), Alert-Liste (feuernde und wartende, die
+>   schwersten zuerst, bis 100). Leere, gekappte („n weitere“) und kaputte Werte (NaN, ohne Zeit) haben eigene
+>   Zustände; eine fehlgeschlagene Aktualisierung behält die letzten Daten mit Hinweis.
+> - **Variablen:** Editor (Name, Node oder Gruppe, Vorgabe, höchstens 4); Auswahl über den Widgets, in der URL
+>   (`?var-<name>=<id>`), nur sichtbare Nodes und Gruppen zählen, sonst Vorgabe, sonst der erste.
+> - Laufende Zeiträume aktualisieren alle 30 s; der Inhalt eines Widgets ist fokussierbar und scrollt per Tastatur.
+> - Budget: `/dashboards/[id]` mit Zeitreihe und Alert-Liste 188,5 KiB. `check:size` 580 → 600 KiB: main liegt mit
+>   den Modulen schon bei 553 KiB, die Widgets bringen 13 KiB.
+> - Tests: Komponententests je Widget mit leerer, großer und kaputter Antwort (feindliche Namen nur als Text),
+>   `WidgetView` (Fehler, veraltete Daten), Quelle und Variablen als Unit-Tests, E2E mit jeder Widget-Art, Wechsel
+>   der Variablen über die URL und dem Variablen-Editor, axe; Gegenproben 14/14.
 - **Ziel:** Zeitreihe, Gauge, Stat, Tabelle, Log-Stream, Alert-Liste; Variablen Node und Gruppe; synchronisierter
   Zeitbereich (KONZEPT §17).
 - **Tests zuerst:** Komponententests je Widget mit leeren, großen und fehlerhaften Antworten.

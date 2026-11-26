@@ -228,4 +228,168 @@ test.describe('dashboards (mocked API)', () => {
 		await expect(page).toHaveURL(new RegExp(`/dashboards/${boardId}$`));
 		expect(seen.import?.[0]).toEqual({ json });
 	});
+
+	test('shows every kind of widget with the chosen node of a variable', async ({ page }) => {
+		const seen: Record<string, unknown[]> = {};
+		const handlers = dashboardApi(seen);
+		const now = Date.now();
+		const board = {
+			id: boardId,
+			ownerId: me,
+			revision: '4',
+			canEdit: true,
+			spec: {
+				version: 1,
+				title: 'Everything',
+				variables: [{ name: 'host', kind: 'VARIABLE_KIND_NODE', defaultId: web01 }],
+				widgets: [
+					{
+						id: 'chart',
+						kind: 'WIDGET_KIND_TIMESERIES',
+						title: 'CPU chart',
+						position: { w: 6, h: 4 },
+						query: { metric: 'sermon_cpu_utilization_ratio', target: { variable: 'host' } }
+					},
+					{
+						id: 'gauge',
+						kind: 'WIDGET_KIND_GAUGE',
+						title: 'CPU gauge',
+						position: { x: 6, w: 3, h: 4 },
+						query: { metric: 'sermon_cpu_utilization_ratio', target: { variable: 'host' } }
+					},
+					{
+						id: 'stat',
+						kind: 'WIDGET_KIND_STAT',
+						title: 'CPU stat',
+						position: { x: 9, w: 3, h: 4 },
+						query: { metric: 'sermon_cpu_utilization_ratio', target: { variable: 'host' } }
+					},
+					{
+						id: 'table',
+						kind: 'WIDGET_KIND_TABLE',
+						title: 'CPU table',
+						position: { y: 4, w: 6, h: 4 },
+						query: { metric: 'sermon_cpu_utilization_ratio', target: { groupId: group } }
+					},
+					{
+						id: 'logs',
+						kind: 'WIDGET_KIND_LOG_STREAM',
+						title: 'Errors',
+						position: { x: 6, y: 4, w: 6, h: 4 },
+						query: { target: { groupId: group }, text: 'error' }
+					},
+					{
+						id: 'alerts',
+						kind: 'WIDGET_KIND_ALERT_LIST',
+						title: 'Alerts',
+						position: { y: 8, w: 12, h: 3 },
+						query: {}
+					}
+				]
+			}
+		};
+		await mockApi(page, {
+			...handlers,
+			'DashboardService/GetDashboard': () => ({ json: { dashboard: board } }),
+			'MetricsService/QueryMetrics': (body) => {
+				(seen.query ??= []).push(body);
+				const ids = (body as { selector: { nodeIds: string[] } }).selector.nodeIds;
+				return {
+					json: {
+						series: ids.map((nodeId) => ({
+							nodeId,
+							labels: { mode: 'user' },
+							points: [
+								{
+									time: new Date(now - 120_000).toISOString(),
+									avg: 200_000,
+									min: 100_000,
+									max: 300_000
+								},
+								{
+									time: new Date(now - 60_000).toISOString(),
+									avg: 420_000,
+									min: 400_000,
+									max: 450_000
+								}
+							]
+						}))
+					}
+				};
+			},
+			'LogService/QueryLogs': (body) => {
+				(seen.logs ??= []).push(body);
+				return {
+					json: {
+						lines: [
+							{
+								nodeId: web01,
+								hostname: 'web-01',
+								at: new Date(now).toISOString(),
+								severity: 'LOG_SEVERITY_ERROR',
+								message: hostile
+							}
+						]
+					}
+				};
+			},
+			'AlertService/ListAlerts': () => ({
+				json: {
+					alerts: [
+						{
+							key: { ruleId: 'system.cpu.usage_high', nodeId: db01 },
+							state: 'ALERT_STATE_CRITICAL',
+							hostname: hostile,
+							ruleName: { en: 'CPU usage high' }
+						}
+					]
+				}
+			})
+		});
+		await page.goto(`/dashboards/${boardId}`);
+		const grid = page.getByRole('list', { name: 'Widgets of Everything' });
+		await expect(grid.getByRole('figure', { name: 'CPU chart' })).toBeVisible();
+		await expect(grid.getByRole('img', { name: '42%' })).toBeVisible();
+		await expect(grid.getByRole('listitem', { name: 'CPU stat' }).getByText('42%')).toBeVisible();
+		await expect(grid.getByRole('table', { name: 'CPU table' }).getByRole('row')).toHaveCount(3);
+		await expect(grid.getByRole('list', { name: 'Errors' })).toContainText(hostile);
+		await expect(grid.getByRole('list', { name: 'Alerts' })).toContainText('CPU usage high');
+		expect(await page.locator('img[src="x"]').count()).toBe(0);
+		expect(seen.logs?.[0]).toMatchObject({ limit: 50, filter: { groupId: group, text: 'error' } });
+		const forHost = (seen.query as { selector: { nodeIds: string[] } }[]).filter(
+			(q) => q.selector.nodeIds.length === 1
+		);
+		expect(forHost.every((q) => q.selector.nodeIds[0] === web01)).toBe(true);
+		expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+
+		// The variable: another node, kept in the URL.
+		seen.query = [];
+		await page.getByLabel('host').selectOption({ label: hostile });
+		await expect(page).toHaveURL(new RegExp(`var-host=${db01}`));
+		await expect
+			.poll(() =>
+				(seen.query as { selector: { nodeIds: string[] } }[]).some(
+					(q) => q.selector.nodeIds[0] === db01
+				)
+			)
+			.toBe(true);
+		await page.reload();
+		await expect(page.getByLabel('host')).toHaveValue(db01);
+	});
+
+	test('adds a variable in the editor and saves it', async ({ page }) => {
+		const seen: Record<string, unknown[]> = {};
+		await mockApi(page, dashboardApi(seen));
+		await page.goto(`/dashboards/${boardId}?edit=1`);
+		await page.getByRole('button', { name: 'Add variable' }).click();
+		await page.getByLabel('Name', { exact: true }).fill('Bad Name');
+		await expect(page.getByText(/Names start with a–z/)).toBeVisible();
+		await page.getByLabel('Name', { exact: true }).fill('host');
+		await page.getByLabel('First').selectOption({ label: 'web-01' });
+		await page.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByRole('heading', { level: 1, name: 'Web servers' })).toBeVisible();
+		expect((seen.update?.[0] as { spec: Spec }).spec.variables).toEqual([
+			{ name: 'host', kind: 'VARIABLE_KIND_NODE', defaultId: web01 }
+		]);
+	});
 });

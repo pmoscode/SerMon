@@ -11,7 +11,14 @@ all of them.
 - **Log stream** – the newest log lines, optionally only with a text or a severity.
 - **Alert list** – the active alerts of the nodes.
 
-Every widget reads with your rights: nodes you may not see stay empty.
+Every widget reads with your rights: nodes you may not see stay empty. Live ranges refresh every 30 seconds; a widget
+whose refresh failed keeps its last data and says that it is not up to date.
+
+## Variables
+
+A variable lets you pick a node or a group above the widgets; widgets that refer to it follow the choice. The choice
+is part of the address, so a link opens the same view. Without a choice the default applies, else the first node or
+group you see. Widgets with variables instead of fixed nodes also work after an import into another organization.
 
 ## Editing
 

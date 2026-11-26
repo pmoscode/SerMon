@@ -13,17 +13,15 @@
 	import { dashboardsApi } from '#lib/api/dashboards.js';
 	import {
 		DashboardSpecSchema,
+		VariableKind,
 		WidgetKind,
 		type Dashboard,
 		type DashboardSpec,
 		type Widget
 	} from '#lib/api/gen/sermon/web/v1/dashboard_pb.js';
 	import DashboardGrid from '#lib/components/dashboards/DashboardGrid.svelte';
-	import {
-		kindLabel,
-		type CatalogMetric,
-		type NodeChoice
-	} from '#lib/components/dashboards/labels.js';
+	import WidgetView from '#lib/components/dashboards/WidgetView.svelte';
+	import { kindLabel, type CatalogMetric } from '#lib/components/dashboards/labels.js';
 	import FleetNav from '#lib/components/fleet/FleetNav.svelte';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import TimeRangePicker from '#lib/components/time/TimeRangePicker.svelte';
@@ -41,6 +39,8 @@
 		timePresetOf,
 		withLayout
 	} from '#lib/dashboards/model.js';
+	import { sessionSource } from '#lib/dashboards/session.js';
+	import { resolveVariables, withVariable, type FleetNode } from '#lib/dashboards/variables.js';
 	import { displayText } from '#lib/logs/text.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { presets, timeRange, type Preset } from '#lib/stores/timerange.svelte.js';
@@ -58,13 +58,19 @@
 	/** The widget in the form: a new one or a copy of one of the draft. */
 	let editing = $state.raw<{ widget: Widget; box: Box; isNew: boolean } | undefined>();
 	let catalog = $state.raw<CatalogMetric[]>([]);
-	let nodes = $state.raw<NodeChoice[]>([]);
+	/** The nodes the viewer sees: variables, groups and host names. */
+	let fleet = $state.raw<FleetNode[]>([]);
+	/** Live ranges move on this often (KONZEPT §17). */
+	const REFRESH = 30_000;
 
 	async function load() {
 		status = 'loading';
 		conflict = false;
 		try {
-			const res = await dashboardsApi.getDashboard({ dashboardId: id });
+			const [res] = await Promise.all([
+				dashboardsApi.getDashboard({ dashboardId: id }),
+				loadFleet()
+			]);
 			dashboard = res.dashboard;
 			if (dashboard?.spec) timeRange.setPreset(presetOf(dashboard.spec.timeRange));
 			status = 'ready';
@@ -78,9 +84,49 @@
 		if (id) void load();
 	});
 
+	/** Without the fleet the widgets of groups and variables stay empty; the page still works. */
+	async function loadFleet() {
+		try {
+			fleet = (await api.fleet.getFleetSummary({})).nodes.map((n) => ({
+				id: n.nodeId,
+				hostname: n.hostname,
+				groupId: n.groupId,
+				groupName: n.groupName
+			}));
+		} catch {
+			fleet = [];
+		}
+	}
+
+	$effect(() => {
+		const timer = setInterval(() => timeRange.refresh(), REFRESH);
+		return () => clearInterval(timer);
+	});
+
 	const spec = $derived(draft ?? dashboard?.spec);
 	const layout = $derived(spec ? layoutOf(spec) : []);
 	const titles = $derived(Object.fromEntries((spec?.widgets ?? []).map((w) => [w.id, w.title])));
+	const values = $derived(spec ? resolveVariables(spec, page.url.searchParams, fleet) : {});
+	const source = sessionSource({ fleet: () => fleet, values: () => values });
+	const groupsOf = $derived(
+		[...new Map(fleet.map((n) => [n.groupId, n.groupName])).entries()].sort((a, b) =>
+			a[1].localeCompare(b[1])
+		)
+	);
+	const nodesByName = $derived([...fleet].sort((a, b) => a.hostname.localeCompare(b.hostname)));
+
+	function choose(name: string, value: string) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the same page with the choice in its query
+		void goto(withVariable(page.url, name, value), {
+			replace: true,
+			reset: false
+		});
+	}
+
+	/** The pixels a widget's content may use: its rows minus header and padding. */
+	function contentHeight(rows: number): number {
+		return rows * 64 + (rows - 1) * 12 - 46;
+	}
 
 	function startEdit() {
 		if (!dashboard?.spec) return;
@@ -94,24 +140,15 @@
 		editing = undefined;
 		failure = '';
 		conflict = false;
-		void goto(resolve('/(app)/dashboards/[id]', { id }), { replaceState: true });
+		void goto(resolve('/(app)/dashboards/[id]', { id }), { replace: true, reset: false });
 	}
 
 	/** The metric catalog and the nodes for the widget form, once. */
 	async function loadChoices() {
 		if (catalog.length > 0) return;
 		try {
-			const [metrics, fleet] = await Promise.all([
-				api.metrics.listMetrics({}),
-				api.fleet.getFleetSummary({})
-			]);
+			const metrics = await api.metrics.listMetrics({});
 			catalog = metrics.metrics.map((d) => ({ name: d.name, labels: d.labels, area: d.area }));
-			nodes = fleet.nodes.map((n) => ({
-				id: n.nodeId,
-				hostname: n.hostname,
-				groupId: n.groupId,
-				groupName: n.groupName
-			}));
 		} catch {
 			failure = m.dashboard_choices_failed();
 		}
@@ -170,7 +207,7 @@
 			});
 			dashboard = res.dashboard;
 			draft = undefined;
-			void goto(resolve('/(app)/dashboards/[id]', { id }), { replaceState: true });
+			void goto(resolve('/(app)/dashboards/[id]', { id }), { replace: true, reset: false });
 		} catch (error) {
 			if (ConnectError.from(error).code === Code.Aborted) conflict = true;
 			else failure = m.dashboard_save_failed({ reason: explain(error) });
@@ -390,7 +427,40 @@
 			<p role="alert" class="text-sm text-destructive">{failure}</p>
 		{/if}
 
-		<TimeRangePicker />
+		<div class="flex flex-wrap items-end gap-3">
+			<TimeRangePicker />
+			{#if !draft}
+				{#each spec.variables as v (v.name)}
+					<div class="flex flex-col gap-1">
+						<Label for="var-{v.name}">{v.name}</Label>
+						<select
+							id="var-{v.name}"
+							class={selectClass}
+							value={values[v.name] ?? ''}
+							onchange={(e) => choose(v.name, e.currentTarget.value)}
+						>
+							{#if v.kind === VariableKind.GROUP}
+								{#each groupsOf as [gid, name] (gid)}<option value={gid}>{displayText(name)}</option
+									>{/each}
+							{:else}
+								{#each nodesByName as n (n.id)}<option value={n.id}
+										>{displayText(n.hostname)}</option
+									>{/each}
+							{/if}
+						</select>
+					</div>
+				{/each}
+			{/if}
+		</div>
+		{#if draft}
+			{#await import('#lib/components/dashboards/VariablesEditor.svelte') then { default: VariablesEditor }}
+				<VariablesEditor
+					variables={draft.variables}
+					{fleet}
+					onchange={(variables) => setDraft({ variables })}
+				/>
+			{/await}
+		{/if}
 
 		{#if spec.widgets.length === 0}
 			<div class="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
@@ -408,10 +478,17 @@
 			>
 				{#snippet widget(widgetId)}
 					{@const w = spec.widgets.find((x) => x.id === widgetId)}
-					{#if w}
+					{#if w && draft}
 						<p class="text-xs text-muted-foreground">
 							{kindLabel(w.kind)}{w.query?.metric ? ` · ${w.query.metric}` : ''}
 						</p>
+					{:else if w}
+						<WidgetView
+							widget={w}
+							{source}
+							range={timeRange.range}
+							height={contentHeight(w.position?.h ?? 1)}
+						/>
 					{/if}
 				{/snippet}
 			</DashboardGrid>
@@ -425,7 +502,7 @@
 				box={editing.box}
 				variables={draft.variables}
 				metrics={catalog}
-				{nodes}
+				nodes={fleet}
 				onsave={applyWidget}
 				oncancel={() => (editing = undefined)}
 			/>

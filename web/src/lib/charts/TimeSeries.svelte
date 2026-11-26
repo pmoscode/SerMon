@@ -28,6 +28,8 @@
 		bands?: Band[];
 		/** The top of the y axis at least, so charts side by side share one scale (M5-28). */
 		yMax?: number;
+		/** The title only for screen readers (a dashboard widget shows it above, M5-25). */
+		quietTitle?: boolean;
 	}
 
 	let {
@@ -40,7 +42,8 @@
 		error = '',
 		actions,
 		bands = [],
-		yMax
+		yMax,
+		quietTitle = false
 	}: Props = $props();
 
 	/** All charts with this key share the crosshair. */
@@ -194,7 +197,7 @@
 </script>
 
 <figure class="flex flex-col gap-2" aria-labelledby="{id}-title">
-	<figcaption class="flex items-center gap-1 text-sm font-medium">
+	<figcaption class={quietTitle ? 'sr-only' : 'flex items-center gap-1 text-sm font-medium'}>
 		<span id="{id}-title">{title}</span>
 		{@render actions?.()}
 		{#if bands.length > 0}

@@ -180,7 +180,16 @@
 					</button>
 				{/if}
 			</header>
-			<div class="min-h-0 flex-1 overflow-auto p-2">{@render widget(item.id)}</div>
+			<!-- Focusable so that long content (tables, log lines) scrolls by keyboard (axe: scrollable-region-focusable). -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div
+				role="region"
+				aria-label={m.dashboard_widget_content({ title })}
+				tabindex="0"
+				class="min-h-0 flex-1 overflow-auto p-2 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+			>
+				{@render widget(item.id)}
+			</div>
 			{#if editable}
 				<!-- The pointer's way to resize; the keyboard uses Shift + arrow keys on the handle. -->
 				<span

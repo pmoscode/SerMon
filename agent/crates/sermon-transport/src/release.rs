@@ -119,7 +119,13 @@ impl ReleaseFetcher {
             Err(s) if s.code() == tonic::Code::NotFound => return Ok(None),
             Err(s) => return Err(format!("the server refused the release: {}", s.message())),
         };
-        let first = stream.message().await.map_err(|s| s.message().to_owned())?;
+        // The server may answer NOT_FOUND only on the stream (connect-go).
+        let first = match stream.message().await {
+            Err(s) if s.code() == tonic::Code::NotFound => return Ok(None),
+            first => {
+                first.map_err(|s| format!("the server refused the release: {}", s.message()))?
+            }
+        };
         let Some(Part::Header(header)) = first.and_then(|m| m.part) else {
             return Err("the server sent no header".into());
         };

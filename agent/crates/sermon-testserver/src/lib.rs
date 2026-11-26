@@ -803,7 +803,10 @@ impl proto::agent_service_server::AgentService for FakeAgentApi {
         let Some((binary, signature, size)) =
             self.state.lock().unwrap().releases.get(&key).cloned()
         else {
-            return Err(Status::not_found("no such release"));
+            // Like the server (connect-go): a stream that ends with the error at once.
+            return Ok(Response::new(tokio_stream::iter(vec![Err(
+                Status::not_found("no such signed release"),
+            )])));
         };
         let mut parts = vec![Ok(
             sermon_transport::proto::agent::v1::FetchAgentReleaseResponse {

@@ -6042,7 +6042,23 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Löschung nach der Frist der Org, nicht früher, nicht für andere Orgs.
 - **Abhängig von:** –
 
-#### ☐ M5-31 – Ressourcen-Budget mit Modulen · A · S
+#### ☑ M5-31 – Ressourcen-Budget mit Modulen · A · S
+> Erledigt (`modules.demo.ts`, `budget.demo.ts`; Dienste auf web-01 in `deploy/e2e/compose.yaml`):
+> - **Module:** auf web-01 alle neun der Wellen ① und ② gegen Dienste, die dort laufen – `nginx`, `http_check`
+>   (Apache-Status), `tcp_check` (8080, 6379, 5432, 3306; Port 22 ist nicht in `module_ports`), `tls` (Zertifikat
+>   unter `/etc/ssl` mit eigener CA-Datei), `systemd_units` (fünf Dienste), `apache` (127.0.0.1:8080), `redis`,
+>   `postgres` und `mysql` (MariaDB 10.11) mit Monitoring-Usern (`pg_monitor` bzw. `PROCESS, REPLICA MONITOR`), das
+>   Passwort als Zugangsdatum des Moduls. Das Veto bleibt ab Werk (Loopback), das Overlay ändert `agent.toml` nicht.
+> - **Messung** in der Demo, während „nginx down“ wartet (60 s): **0,37 % eines Kerns, 7,4 MiB privat, 21,3 MiB RSS**;
+>   am Ende des Laufs (`budget-end`, prüft vorher, dass alle neun zuletzt `ok` gemeldet haben) **0,37 %, 9,5 MiB
+>   privat, 23,3 MiB RSS** (Budget < 1 %, < 30 MiB). Gegenprobe mit gesenkter Grenze (`3 0 1`): beide Grenzen
+>   gemeldet, Exit 1.
+> - **Kosten je Modul** (von Hand gegen eine Umgebung mit `KEEP=1`: alle aus, dann jedes allein mit 10 s Intervall,
+>   je 120 s mit `agent-budget.sh`): ohne Module 0,32 %; `systemd_units` +0,13 % (ein `systemctl` je Lauf, ~13 ms),
+>   `tcp_check` +0,07 % (vier Ziele, ~7 ms), `tls` +0,06 % (~6 ms), `postgres` +0,03 % (SCRAM, ~3 ms); `apache`,
+>   `redis`, `mysql`, `http_check` und `nginx` unter der Messgenauigkeit (±0,03 %). Alle neun mit 10 s: 0,47 %. Mit den
+>   Standardintervallen (30 s, `tls` 5 min) kosten alle zusammen rund 0,05 % eines Kerns; Speicher nicht messbar
+>   (privat 9,5 → 9,6 MiB).
 - **Ziel:** `agent-budget.sh` in der Demo mit den Modulen der Wellen ① und ② aktiv: unter 1 % eines Kerns und 30 MiB
   (KONZEPT §4.1), auch am Ende des Laufs; Kosten je Modul dokumentiert.
 - **Tests zuerst:** Gegenprobe mit gesenkter Grenze.

@@ -20,6 +20,8 @@ enum Act {
     Foreign,
     /// Log lines, then a failure (logs of a failed run go out too).
     Logs(usize),
+    /// A label value with a bidi control.
+    Bidi,
 }
 
 struct Fake {
@@ -102,6 +104,7 @@ impl Instance for FakeRun {
                 }
                 Act::Refused => Err(Refused("10.0.0.1 is not in module_targets".into()).into()),
                 Act::Foreign => Ok(vec![Sample::int("sermon_cpu_hijack", 1)]),
+                Act::Bidi => Ok(vec![Sample::int(metric, 1).label("n", "x\u{202e}y")]),
                 Act::Logs(n) => {
                     for i in 0..n {
                         run.log(crate::LogLine {
@@ -501,4 +504,47 @@ fn samples_are_checked_against_the_protocol() {
     }
     let nine = (0..9).fold(Sample::int("sermon_nginx_up", 1), |s, _| s.label("l", "x"));
     assert!(check("nginx", &[nine]).is_err());
+}
+
+// M5-33: bidi controls, zero-width and other invisible characters in label values (a database
+// name, a Prometheus label, a container's comm) could disguise one series as another; they become
+// U+FFFD, visible, as the server's textsafe does.
+#[test]
+fn label_values_lose_invisible_characters() {
+    let mut samples = vec![
+        Sample::int("sermon_nginx_up", 1).label("port", "post\u{202e}gres"),
+        Sample::int("sermon_nginx_up", 1).label("port", "a\u{200b}b\u{2066}c\u{2069}"),
+        Sample::int("sermon_nginx_up", 1).label("port", "l\u{2028}m\u{2029}n\u{feff}"),
+        Sample::int("sermon_nginx_up", 1).label("port", "\u{00ad}\u{180e}\u{3164}\u{e0041}"),
+        Sample::int("sermon_nginx_up", 1).label("port", "Grüße 🐘 ü"),
+    ];
+    visible(&mut samples);
+    let values: Vec<&str> = samples.iter().map(|s| s.labels[0].1.as_str()).collect();
+    assert_eq!(
+        values,
+        [
+            "post\u{fffd}gres",
+            "a\u{fffd}b\u{fffd}c\u{fffd}",
+            "l\u{fffd}m\u{fffd}n\u{fffd}",
+            "\u{fffd}\u{fffd}\u{fffd}\u{fffd}",
+            "Grüße 🐘 ü",
+        ]
+    );
+    assert!(check("nginx", &samples).is_ok());
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_runtime_sends_label_values_visible() {
+    let mut w = world(Veto::default().any_port());
+    w.set("a", Act::Bidi);
+    w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
+    settle(Duration::from_secs(1)).await;
+    let samples = w.out.samples.lock().unwrap();
+    assert!(!samples.is_empty());
+    assert!(
+        samples
+            .iter()
+            .all(|s| s.labels == [("n", "x\u{fffd}y".to_owned())]),
+        "{samples:?}"
+    );
 }

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/module"
 	"github.com/pmoscode/SerMon/server/internal/domain/secevent"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	"github.com/pmoscode/SerMon/server/internal/domain/textsafe"
 	"github.com/pmoscode/SerMon/server/internal/domain/update"
 )
 
@@ -694,6 +696,7 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		s.watermark = at
 	}
 	for _, sample := range batch.Samples {
+		sample.Labels = visibleLabels(sample.Labels)
 		if math.IsNaN(sample.Value) || math.IsInf(sample.Value, 0) || !s.known(sample) || !s.admitSeries(sample) {
 			continue
 		}
@@ -710,6 +713,22 @@ func (s *Session) Accept(ctx context.Context, batch Batch) Response {
 		}
 	}
 	return response
+}
+
+// visibleLabels replaces the invisible characters of label values with U+FFFD (M5-33): values
+// come from foreign services through the modules, and bidi controls or zero-width characters
+// would let one series pose as another. The agent does the same; this holds without it.
+func visibleLabels(labels metrics.Labels) metrics.Labels {
+	for _, v := range labels {
+		if strings.ContainsFunc(v, textsafe.Invisible) {
+			out := make(metrics.Labels, len(labels))
+			for k, v := range labels {
+				out[k] = textsafe.Visible(v)
+			}
+			return out
+		}
+	}
+	return labels
 }
 
 // add puts an admitted sample into the ring and its window.

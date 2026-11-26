@@ -462,6 +462,25 @@ func TestIngest_DropsUnknownMetricsAndUnexpectedLabels(t *testing.T) {
 	}
 }
 
+// M5-33: invisible characters in label values (bidi controls, zero-width, separators) would let
+// one series pose as another in charts, alerts and kiosks; they arrive visible as U+FFFD.
+func TestIngest_LabelValuesLoseInvisibleCharacters(t *testing.T) {
+	w := newWorld(t, ingest.DefaultConfig())
+	s := w.open(t)
+	samples := []ingest.Sample{
+		{Metric: "sermon_load_average", Labels: metrics.Labels{"period": "1\u202em\u200b\u2028"}, Value: 1},
+	}
+	s.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: samples})
+	s.Accept(context.Background(), batch(2, t0.Add(10*time.Second), 1))
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	a := w.store.Aggregates()
+	if len(a) != 1 || a[0].Labels["period"] != "1\ufffdm\ufffd\ufffd" {
+		t.Errorf("stored %+v, want the label visible", a)
+	}
+}
+
 // An agent that ignores Throttle (compromised or broken) must not keep writing at full speed:
 // beyond the slack for batches in flight its samples are dropped, the batches are still
 // acknowledged.

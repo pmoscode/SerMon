@@ -467,7 +467,8 @@ async fn supervise(s: Supervised) {
                 Ok(Err(_)) => return,
                 Ok(Ok(Err(RunError::Vetoed(r)))) => s.shared.set(id, State::Vetoed, &r.0),
                 Ok(Ok(Err(RunError::Failed(why)))) => s.shared.set(id, State::Error, &why),
-                Ok(Ok(Ok(samples))) => {
+                Ok(Ok(Ok(mut samples))) => {
+                    visible(&mut samples);
                     if let Err(why) = check(id, &samples) {
                         s.shared.set(id, State::Error, &why);
                     } else {
@@ -480,6 +481,36 @@ async fn supervise(s: Supervised) {
             }
         }
     }
+}
+
+/// Replaces the invisible characters of label values with U+FFFD (M5-33): bidi controls,
+/// zero-width characters, line and paragraph separators and the other format characters (Unicode
+/// Cf, Zl, Zp) and the Hangul fillers – the set of the server's `textsafe.Invisible` besides the
+/// control characters, which [`check`] refuses. Label values come from foreign services; such
+/// characters would let one series pose as another in charts, alerts and kiosks.
+fn visible(samples: &mut [Sample]) {
+    for s in samples {
+        for (_, value) in &mut s.labels {
+            if value.chars().any(invisible) {
+                *value = value
+                    .chars()
+                    .map(|c| if invisible(c) { '\u{fffd}' } else { c })
+                    .collect();
+            }
+        }
+    }
+}
+
+/// A format character (Unicode 16, category Cf), a line or paragraph separator, or a Hangul
+/// filler.
+fn invisible(c: char) -> bool {
+    matches!(c,
+        '\u{00ad}' | '\u{0600}'..='\u{0605}' | '\u{061c}' | '\u{06dd}' | '\u{070f}'
+        | '\u{0890}'..='\u{0891}' | '\u{08e2}' | '\u{115f}' | '\u{1160}' | '\u{180e}'
+        | '\u{200b}'..='\u{200f}' | '\u{2028}'..='\u{202e}' | '\u{2060}'..='\u{2064}'
+        | '\u{2066}'..='\u{206f}' | '\u{3164}' | '\u{feff}' | '\u{ffa0}' | '\u{fff9}'..='\u{fffb}'
+        | '\u{110bd}' | '\u{110cd}' | '\u{13430}'..='\u{1343f}' | '\u{1bca0}'..='\u{1bca3}'
+        | '\u{1d173}'..='\u{1d17a}' | '\u{e0001}' | '\u{e0020}'..='\u{e007f}')
 }
 
 /// Checks what a run returned against the protocol's bounds: a batch the server refuses would

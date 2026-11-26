@@ -1537,5 +1537,20 @@
 	"module_redis_auth": "Passwort",
 	"module_redis_auth_help": "requirepass oder das Passwort des ACL-Users; ein User mit nur +info genügt.",
 	"module_redis_timeout": "Zeitgrenze",
-	"module_redis_timeout_help": "Höchstens 25 s."
+	"module_redis_timeout_help": "Höchstens 25 s.",
+	"module_prometheus": "Prometheus-Scraper",
+	"module_prometheus_urls": "Endpunkte",
+	"module_prometheus_urls_help": "http:// oder https://-URLs von /metrics, z. B. http://127.0.0.1:9100/metrics.",
+	"module_prometheus_metrics": "Metriken",
+	"module_prometheus_metrics_help": "Namen, die übernommen werden, mit * am Ende für einen Anfang (z. B. http_requests_total, process_*); leer: alle bis zur Grenze.",
+	"module_prometheus_max_series": "Serien je Endpunkt",
+	"module_prometheus_max_series_help": "Höchstens so viele Serien eines Endpunkts, die ersten der Seite; alle Endpunkte zusammen höchstens 250.",
+	"module_prometheus_timeout": "Zeitgrenze",
+	"module_prometheus_timeout_help": "Je Endpunkt, höchstens 25 s.",
+	"module_prometheus_tls_verify": "TLS-Zertifikate prüfen",
+	"module_prometheus_tls_verify_help": "Für https-URLs; nur für selbstsignierte Zertifikate ausschalten, die sich nicht als CA-Datei angeben lassen.",
+	"module_prometheus_ca_file": "CA-Datei",
+	"module_prometheus_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird.",
+	"module_prometheus_bearer": "Bearer-Token",
+	"module_prometheus_bearer_help": "Geht als Authorization: Bearer nur an die eingestellten Endpunkte, nie nach einer Weiterleitung an einen anderen Host."
 }

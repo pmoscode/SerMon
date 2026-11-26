@@ -206,3 +206,13 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
   feste Argumente, leere Umgebung, Zeitgrenze, begrenzte Ausgabe). Erlaubt ist nur `systemctl show` mit festen
   Eigenschaften (`Id`, `LoadState`, `ActiveState`, `SubState`, `NRestarts`) für höchstens 32 geprüfte Unit-Namen nach
   `--`. Ein eigener D-Bus-Client wäre eine schwere neue Abhängigkeit für dieselbe Auskunft.
+
+## Nachtrag M5-19 (Prometheus-Scraper)
+
+- Der Katalog bleibt geschlossen (KONZEPT §8): Fremde Metriken werden **keine eigenen Namen**. Jede Serie landet in
+  `sermon_prometheus_gauge` oder `sermon_prometheus_rate` (Counter je Sekunde) mit den Labels `target` (Endpunkt),
+  `name` (fremder Name) und `series` (fremde Labels, sortiert und escaped, höchstens 256 Byte). Verworfen: Namen
+  `sermon_prometheus_<fremd>` – sie brauchten einen offenen Katalog im Server, eine Liste der Namen je Node für die
+  UI und machten Einheiten zur Vermutung.
+- Grenzen: höchstens 8 Endpunkte, je Endpunkt `max_series` (ab Werk 50), zusammen unter den 256 Samples eines Laufs;
+  ausgelassene Serien zählt `sermon_prometheus_dropped_series`.

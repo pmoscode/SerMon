@@ -20,7 +20,8 @@ const names: Record<string, Text> = {
 	tls: m.module_tls,
 	nginx: m.module_nginx,
 	apache: m.module_apache,
-	redis: m.module_redis
+	redis: m.module_redis,
+	prometheus: m.module_prometheus
 };
 
 const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
@@ -88,6 +89,15 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 		username: [m.module_redis_username, m.module_redis_username_help],
 		auth: [m.module_redis_auth, m.module_redis_auth_help],
 		timeout: [m.module_redis_timeout, m.module_redis_timeout_help]
+	},
+	prometheus: {
+		urls: [m.module_prometheus_urls, m.module_prometheus_urls_help],
+		metrics: [m.module_prometheus_metrics, m.module_prometheus_metrics_help],
+		max_series: [m.module_prometheus_max_series, m.module_prometheus_max_series_help],
+		timeout: [m.module_prometheus_timeout, m.module_prometheus_timeout_help],
+		tls_verify: [m.module_prometheus_tls_verify, m.module_prometheus_tls_verify_help],
+		ca_file: [m.module_prometheus_ca_file, m.module_prometheus_ca_file_help],
+		bearer: [m.module_prometheus_bearer, m.module_prometheus_bearer_help]
 	}
 };
 

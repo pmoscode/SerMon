@@ -1,0 +1,48 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_prometheus_up",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_prometheus_series",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_prometheus_dropped_series",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_prometheus_gauge",
+      "unit": "count",
+      "aggregation": "avg",
+      "labels": [
+        "name",
+        "series",
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_prometheus_rate",
+      "unit": "per_second",
+      "aggregation": "avg",
+      "labels": [
+        "name",
+        "series",
+        "target"
+      ]
+    }
+  ]
+}

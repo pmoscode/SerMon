@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Prometheus scraper",
+  "description": "Series of /metrics endpoints inside module_targets (by default loopback only), mapped onto sermon_prometheus_gauge and sermon_prometheus_rate with the labels name and series.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["urls"],
+  "properties": {
+    "urls": {
+      "type": "array",
+      "title": "Endpoints",
+      "description": "http:// or https:// URLs of /metrics, e.g. http://127.0.0.1:9100/metrics.",
+      "maxItems": 8,
+      "items": { "type": "string", "format": "uri", "minLength": 8, "maxLength": 256 }
+    },
+    "metrics": {
+      "type": "array",
+      "title": "Metrics",
+      "description": "Names to take, a trailing * for a prefix (e.g. http_requests_total, process_*); empty: all, up to the limit.",
+      "maxItems": 64,
+      "items": { "type": "string", "pattern": "^[a-zA-Z_:][a-zA-Z0-9_:]*\\*?$", "maxLength": 128 }
+    },
+    "max_series": {
+      "type": "integer",
+      "title": "Series per endpoint",
+      "description": "At most so many series of an endpoint, the first of the page; all endpoints together at most 250.",
+      "minimum": 1,
+      "maximum": 250,
+      "default": 50
+    },
+    "timeout": {
+      "type": "string",
+      "title": "Timeout",
+      "description": "Per endpoint, at most 25s.",
+      "format": "duration",
+      "maxLength": 8,
+      "default": "5s"
+    },
+    "tls_verify": {
+      "type": "boolean",
+      "title": "Verify TLS certificates",
+      "description": "For https URLs; off only for self-signed certificates you can't give as a CA file.",
+      "default": true
+    },
+    "ca_file": {
+      "type": "string",
+      "title": "CA file",
+      "description": "PEM file below module_file_prefixes to verify with instead of the system's CAs.",
+      "format": "path",
+      "maxLength": 4096
+    },
+    "bearer": {
+      "type": "string",
+      "title": "Bearer token",
+      "description": "Sent as Authorization: Bearer to the configured endpoints only, never after a redirect to another host.",
+      "writeOnly": true,
+      "maxLength": 4096
+    }
+  }
+}

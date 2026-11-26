@@ -1,0 +1,33 @@
+# HELP http_requests Requests.
+# TYPE http_requests counter
+http_requests_total{code="200",method="GET"} 42.0
+http_requests_created{code="200",method="GET"} 1.7957221016409283e+09
+http_requests_total{code="500",method="POST"} 3.0
+http_requests_created{code="500",method="POST"} 1.7957221016409361e+09
+# HELP queue_depth Jobs waiting.
+# TYPE queue_depth gauge
+queue_depth 7.0
+# HELP request_seconds Latency.
+# TYPE request_seconds histogram
+request_seconds_bucket{le="0.1"} 1.0 # {trace_id="abc123"} 0.05 1795722101.6410062
+request_seconds_bucket{le="1.0"} 2.0
+request_seconds_bucket{le="+Inf"} 2.0
+request_seconds_count 2.0
+request_seconds_sum 0.55
+request_seconds_created 1.7957221016409535e+09
+# HELP payload_bytes Payload.
+# TYPE payload_bytes summary
+payload_bytes_count 1.0
+payload_bytes_sum 512.0
+payload_bytes_created 1.7957221016410182e+09
+# HELP build Build.
+# TYPE build info
+build_info{version="1.2.3"} 1.0
+# HELP state State.
+# TYPE state stateset
+state{state="up"} 1.0
+state{state="down"} 0.0
+# HELP odd_values Specials.
+# TYPE odd_values gauge
+odd_values{kind="quote\"back\\slash\nline"} NaN
+# EOF

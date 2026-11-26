@@ -1537,5 +1537,20 @@
 	"module_redis_auth": "Password",
 	"module_redis_auth_help": "requirepass or the ACL user's password; a user with +info only is enough.",
 	"module_redis_timeout": "Timeout",
-	"module_redis_timeout_help": "At most 25 s."
+	"module_redis_timeout_help": "At most 25 s.",
+	"module_prometheus": "Prometheus scraper",
+	"module_prometheus_urls": "Endpoints",
+	"module_prometheus_urls_help": "http:// or https:// URLs of /metrics, e.g. http://127.0.0.1:9100/metrics.",
+	"module_prometheus_metrics": "Metrics",
+	"module_prometheus_metrics_help": "Names to take, a trailing * for a prefix (e.g. http_requests_total, process_*); empty: all, up to the limit.",
+	"module_prometheus_max_series": "Series per endpoint",
+	"module_prometheus_max_series_help": "At most so many series of an endpoint, the first of the page; all endpoints together at most 250.",
+	"module_prometheus_timeout": "Timeout",
+	"module_prometheus_timeout_help": "Per endpoint, at most 25 s.",
+	"module_prometheus_tls_verify": "Verify TLS certificates",
+	"module_prometheus_tls_verify_help": "For https URLs; turn off only for self-signed certificates you can't give as a CA file.",
+	"module_prometheus_ca_file": "CA file",
+	"module_prometheus_ca_file_help": "PEM file below module_file_prefixes to verify with instead of the system's CAs.",
+	"module_prometheus_bearer": "Bearer token",
+	"module_prometheus_bearer_help": "Sent as Authorization: Bearer to the configured endpoints only, never after a redirect to another host."
 }

@@ -145,3 +145,8 @@ for f in glob.glob("../fixtures/modules/postgres/*/*.json"):
     open(os.path.join("corpus/postgres_wire", "fixture" + name), "wb").write(out)
 open("corpus/postgres_wire/scram", "wb").write(b"r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096")
 PY
+# 8: /metrics pages for the Prometheus scraper (M5-19).
+for file in ../fixtures/modules/prometheus/*/metrics-*.txt; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\010'; head -c 60000 "$file"; } >"corpus/module_parsers/fixture$name"
+done

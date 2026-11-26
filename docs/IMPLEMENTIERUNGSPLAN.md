@@ -5659,7 +5659,27 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures von `smartctl --json` (SATA, NVMe), Fuzz-Ziel für den Parser, Veto in `helper.toml`.
 - **Abhängig von:** M5-03
 
-#### ☐ M5-19 – Prometheus-Scraper · A · M 🔒
+#### ☑ M5-19 – Prometheus-Scraper · A · M 🔒
+> Erledigt (`sermon-modules/src/prometheus.rs`, `prometheus/expo.rs`, Modul `prometheus`; Nachtrag in ADR 0039):
+> - **Abruf** von bis zu 8 Endpunkten gleichzeitig über den HTTP-Client der Module (Veto, Weiterleitungen, 1 MiB),
+>   `Accept` OpenMetrics vor Text 0.0.4; Bearer-Token als Geheimnis (`writeOnly`), nur an Schema, Host und Port der
+>   Konfiguration.
+> - **Parser** für Text 0.0.4 und OpenMetrics 1.0: streng je Zeile (Namen, Labels mit Escapes, Werte, Zeitstempel und
+>   Exemplare übergangen), nachsichtig je Seite (kaputte Zeilen gezählt), `# EOF`, höchstens 16 KiB je Zeile, 16 Labels,
+>   4 096 Typen; rohe Steuerzeichen in Labels verwerfen die Zeile (der Fuzzer fand, dass sie sonst den ganzen Lauf des
+>   Moduls an der Label-Prüfung der Laufzeit scheitern ließen). Buckets, `_created`, NaN und Unendlich fallen weg.
+> - **Abbildung auf den geschlossenen Katalog** (KONZEPT §8): keine fremden Metriknamen, sondern
+>   `sermon_prometheus_gauge` und `sermon_prometheus_rate` (Counter, `_count`/`_sum`, je Sekunde, ab dem zweiten
+>   Lauf, ausgesetzt nach Rücksprung und Ausfall) mit den Labels `target`, `name` (fremder Name) und `series`
+>   (Labels sortiert und escaped, höchstens 256 Byte); dazu je Endpunkt `sermon_prometheus_up`, `…_series`,
+>   `…_dropped_series`. So kollidiert nichts mit eigenen Metriken und der Server braucht keinen neuen Katalog.
+> - **Grenzen:** Liste der Metriken (Namen, `prefix*`), `max_series` je Endpunkt (ab Werk 50), Endpunkte × (Serien + 3)
+>   höchstens 256 Samples je Lauf – sonst lehnt das Modul die Konfiguration mit Grund ab.
+> - **Fixtures** `agent/fixtures/modules/prometheus/` aus `capture.sh`: Prometheus 3.5 und node exporter 1.9 (Text, mit
+>   über 2 000 Serien) und der Python-Client 0.21 in beiden Formaten (Counter mit `_created`, Histogramm mit Exemplar,
+>   Summary, Info, Stateset, Escapes, NaN). Katalog, Hilfetexte DE + EN, Texte des Formulars, Fuzz-Ziel erweitert.
+> - Tests: beide Formate gleich, jede Fixture, Escapes, kaputte Zeilen, zu viele Serien, Filter, zu lange Labels,
+>   Raten, Rücksprung, Ausfall, Token nur zum Endpunkt, kein Prometheus-Format, Veto; Gegenproben 17/17.
 - **Ziel:** beliebige `/metrics`-Endpunkte unter dem lokalen Veto, Grenze der Serien und Labels je Endpunkt, Namen mit
   Präfix gegen Kollisionen mit den eigenen Metriken.
 - **Tests zuerst:** Fixtures des Textformats (und OpenMetrics), Fuzz-Ziel für den Parser, zu viele Serien.

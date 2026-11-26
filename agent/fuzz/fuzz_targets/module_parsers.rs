@@ -8,6 +8,7 @@
 use libfuzzer_sys::fuzz_target;
 use sermon_modules::discovery::{self, MAX_FACTS};
 use sermon_modules::http::Url;
+use sermon_modules::prometheus::expo;
 use sermon_modules::x509;
 use sermon_modules::{apache, nginx, redis, systemd_units};
 
@@ -16,7 +17,7 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
     let text = String::from_utf8_lossy(rest);
-    match pick % 8 {
+    match pick % 9 {
         0 => {
             let listeners = discovery::parse_tcp(&text);
             assert!(listeners.len() <= MAX_FACTS);
@@ -43,6 +44,15 @@ fuzz_target!(|data: &[u8]| {
         7 => {
             if let Ok(info) = redis::parse_info(&text) {
                 assert!(text.len() <= redis::MAX_INFO && info.used_memory.is_some());
+            }
+        }
+        8 => {
+            let page = expo::parse(&text);
+            for s in &page.series {
+                assert!(s.value.is_finite() && s.labels.len() <= expo::MAX_LABELS);
+                assert!(!s.name.is_empty() && !s.name.ends_with("_created"));
+                let series = expo::canonical(&s.labels);
+                assert!(!series.chars().any(char::is_control), "escaped");
             }
         }
         2 => {

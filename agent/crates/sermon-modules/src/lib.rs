@@ -22,6 +22,8 @@ pub mod nginx;
 pub mod page;
 #[cfg(feature = "postgres")]
 pub mod postgres;
+#[cfg(feature = "prometheus")]
+pub mod prometheus;
 pub mod rate;
 #[cfg(feature = "redis")]
 pub mod redis;
@@ -72,6 +74,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(nginx::Nginx),
         #[cfg(feature = "postgres")]
         Arc::new(postgres::Postgres),
+        #[cfg(feature = "prometheus")]
+        Arc::new(prometheus::Prometheus),
         #[cfg(feature = "redis")]
         Arc::new(redis::Redis),
         #[cfg(feature = "smart")]

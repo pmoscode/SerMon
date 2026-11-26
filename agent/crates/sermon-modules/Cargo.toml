@@ -13,7 +13,7 @@ workspace = true
 
 [features]
 # Every module is a feature of its name (ADR 0039); the release builds them all.
-default = ["apache", "docker", "http_check", "nginx", "postgres", "redis", "smart", "systemd_units", "tcp_check", "tls"]
+default = ["apache", "docker", "http_check", "nginx", "postgres", "prometheus", "redis", "smart", "systemd_units", "tcp_check", "tls"]
 # Containers of Docker and Podman from cgroup v2 (M5-16).
 docker = ["dep:sermon-collectors"]
 # PostgreSQL over its own small client (M5-13).
@@ -39,6 +39,7 @@ http = [
 apache = ["http"]
 http_check = ["http"]
 nginx = ["http"]
+prometheus = ["http"]
 redis = []
 systemd_units = []
 tcp_check = []

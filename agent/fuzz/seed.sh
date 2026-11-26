@@ -92,3 +92,8 @@ for file in ../fixtures/modules/smart/*/*.json; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   cp "$file" "corpus/smart_parser/fixture$name"
 done
+# 2 again: the DER of the TLS fixtures (M5-09).
+for file in ../fixtures/modules/tls/certs/*.crt; do
+  name=$(basename "$file" .crt)
+  python3 -c 'import base64,sys; t=open(sys.argv[1]).read().split("-----")[2]; sys.stdout.buffer.write(b"\002"+base64.b64decode(t))' "$file" >"corpus/module_parsers/cert-$name"
+done

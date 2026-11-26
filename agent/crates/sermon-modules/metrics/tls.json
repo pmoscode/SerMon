@@ -1,0 +1,44 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_tls_up",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_tls_cert_expires_in_seconds",
+      "unit": "seconds",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_tls_chain_expires_in_seconds",
+      "unit": "seconds",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_tls_chain_valid",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_tls_name_valid",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    }
+  ]
+}

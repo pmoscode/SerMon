@@ -13,7 +13,7 @@ workspace = true
 
 [features]
 # Every module is a feature of its name (ADR 0039); the release builds them all.
-default = ["http_check", "smart", "tcp_check"]
+default = ["http_check", "smart", "tcp_check", "tls"]
 # SMART of the disks through the root helper (M5-18).
 smart = []
 # The module `simulate` for tests and demos (ADR 0039); `sermon-agent`'s feature `simulate`.
@@ -32,6 +32,7 @@ http = [
 ]
 http_check = ["http"]
 tcp_check = []
+tls = ["http"]
 
 [dependencies]
 bytes = { workspace = true, optional = true }

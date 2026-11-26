@@ -20,6 +20,8 @@ pub mod simulate;
 pub mod smart;
 #[cfg(feature = "tcp_check")]
 pub mod tcp_check;
+#[cfg(feature = "tls")]
+pub mod tls;
 pub mod veto;
 pub mod x509;
 
@@ -49,6 +51,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(smart::Smart),
         #[cfg(feature = "tcp_check")]
         Arc::new(tcp_check::TcpCheck),
+        #[cfg(feature = "tls")]
+        Arc::new(tls::Tls),
     ];
     with_simulate(modules)
 }

@@ -5421,7 +5421,25 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Testserver für Status, Zeitüberschreitung, Weiterleitung nach außen (abgelehnt), zu große Antwort.
 - **Abhängig von:** M5-03
 
-#### ☐ M5-09 – TLS-Zertifikate · A · M
+#### ☑ M5-09 – TLS-Zertifikate · A · M
+> Erledigt (`sermon-modules/src/tls.rs`, Modul `tls`, Intervall 5 min):
+> - **Quellen:** bis 32 PEM-Dateien unter `module_file_prefixes` (beim Bauen und bei jedem Lauf über das Veto, Symlinks
+>   aufgelöst; höchstens 1 MiB, nur `CERTIFICATE`-Blöcke – ein mitgespeicherter Schlüssel wird übergangen) und bis 16
+>   Endpunkte `host:port` unter `module_targets` (Handshake über das Veto, Kette ungeprüft geholt, dann selbst
+>   geprüft; optional `server_name` für SNI und Namensprüfung).
+> - **Prüfung** mit rustls/webpki (keine neue Crate): Kette gegen die CAs des Systems oder `ca_file`, und zwar zur
+>   letzten gültigen Sekunde des Zertifikats, wenn es abgelaufen ist – ein Ablauf zeigt sich in der Restlaufzeit, nicht
+>   als kaputte Kette; Name nur bei Endpunkten (DNS oder IP im Zertifikat).
+> - **Metriken** (Label `target` = Pfad bzw. `host:port`): `sermon_tls_up`, `sermon_tls_cert_expires_in_seconds`,
+>   `sermon_tls_chain_expires_in_seconds` (frühestes Ende der Kette), `sermon_tls_chain_valid`,
+>   `sermon_tls_name_valid`; Katalog `metrics/tls.json`, Hilfetexte DE + EN je Metrik und Modul (dazu die
+>   Modulseiten von `http_check` und `tcp_check` nachgeholt).
+> - **Fixtures** `agent/fixtures/modules/tls/certs/` aus `generate.sh` (OpenSSL ≥ 3.4, Schlüssel werden verworfen):
+>   Root, Zwischen-CA, Kette, Zertifikat ohne Zwischen-CA, abgelaufen, fremder Name, selbst signiert; Fuzz-Seeds der
+>   DER-Daten für `module_parsers`.
+> - Tests: jede Fixture gegen die Root, Datei außerhalb der Präfixe (auch die CA-Datei, auch `/etc/sermon`), ein
+>   Symlink nach außen nach dem Start, kombinierte Datei mit Schlüssel, zu große Datei, Endpunkte mit Name, IP,
+>   Servername und außerhalb des Vetos; Gegenproben 13/13.
 - **Ziel:** Ablaufdatum lokaler Zertifikatsdateien (unter erlaubten Pfaden) und von Endpunkten; Kette, Name, Tage bis
   zum Ablauf.
 - **Tests zuerst:** Fixtures (PEM, Kette, abgelaufen, fremder Name), ein Pfad außerhalb der erlaubten abgelehnt.

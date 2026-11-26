@@ -71,6 +71,12 @@ startet nginx ohne OpenRC. Erfasst werden `proc/net/{tcp,tcp6,unix}`, `proc/<pid
 Alpine). Die Verbindungen zu den Paket-Mirrors (`TIME_WAIT`) bleiben drin, ihre Adressen ersetzt das Skript durch
 192.0.2.0/24 bzw. 2001:db8::/32. Erfasst auf arm64 am 2026-11-26.
 
+## Module (`modules/`)
+
+`modules/tls/generate.sh` (M5-09) schreibt mit OpenSSL ≥ 3.4 die Zertifikate unter `modules/tls/certs/`: eine Root- und
+eine Zwischen-CA, ein Zertifikat für `localhost` und `127.0.0.1` als Kette und allein, ein abgelaufenes, eines für
+`other.example` und ein selbst signiertes, mit festen Daten (2025 bis 2045). Die Schlüssel verwirft das Skript.
+
 ## Updates (`updates/`)
 
 `updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in

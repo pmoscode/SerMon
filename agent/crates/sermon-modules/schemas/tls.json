@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TLS certificates",
+  "description": "Days left, chain and name of certificate files below module_file_prefixes and of TLS endpoints inside module_targets.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "type": "array",
+      "title": "Certificate files",
+      "description": "PEM files, the leaf first (e.g. /etc/letsencrypt/live/example.org/fullchain.pem).",
+      "maxItems": 32,
+      "items": { "type": "string", "format": "path", "minLength": 2, "maxLength": 256 }
+    },
+    "endpoints": {
+      "type": "array",
+      "title": "Endpoints",
+      "description": "host:port of TLS services, e.g. localhost:443.",
+      "maxItems": 16,
+      "items": { "type": "string", "format": "host-port", "minLength": 3, "maxLength": 256 }
+    },
+    "server_name": {
+      "type": "string",
+      "title": "Server name",
+      "description": "The name sent to the endpoints and checked in their certificates; empty: the host of each endpoint.",
+      "pattern": "^[A-Za-z0-9.-]+$",
+      "maxLength": 253
+    },
+    "ca_file": {
+      "type": "string",
+      "title": "CA file",
+      "description": "PEM file below module_file_prefixes to check the chains with instead of the system's CAs.",
+      "format": "path",
+      "maxLength": 4096
+    },
+    "timeout": {
+      "type": "string",
+      "title": "Timeout",
+      "description": "Per endpoint, at most 25s.",
+      "format": "duration",
+      "maxLength": 8,
+      "default": "5s"
+    }
+  }
+}

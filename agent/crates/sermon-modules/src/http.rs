@@ -497,7 +497,7 @@ impl Client {
 
     fn tls_config(&self) -> Result<Arc<ClientConfig>, HttpError> {
         self.tls
-            .get_or_init(|| tls_config(&self.options, self.roots.clone()))
+            .get_or_init(|| tls_config(&self.options, self.roots.clone(), true))
             .clone()
             .map_err(HttpError::Failed)
     }
@@ -618,8 +618,64 @@ async fn connect(addresses: &[SocketAddr]) -> std::io::Result<TcpStream> {
     Err(last)
 }
 
+/// The certificates a TLS server at `host:port` presents (leaf first), whoever signed them: the
+/// module `tls` verifies them itself. The host is resolved and checked through the veto; the
+/// name sent (SNI) is `server_name`, none for an IP address.
+///
+/// # Errors
+///
+/// [`HttpError::Vetoed`] if the veto refuses an address, otherwise [`HttpError::Failed`].
+pub async fn peer_chain(
+    veto: &Veto,
+    host: &str,
+    port: u16,
+    server_name: &str,
+    timeout: Duration,
+) -> Result<Vec<CertificateDer<'static>>, HttpError> {
+    static CONFIG: OnceLock<Result<Arc<ClientConfig>, String>> = OnceLock::new();
+    let target = format!("{host}:{port}");
+    let handshake = async {
+        let addresses = veto.resolve(host, port).await?;
+        let stream = connect(&addresses)
+            .await
+            .map_err(|e| failed(format!("{target}: {e}")))?;
+        let options = Options {
+            tls_verify: false,
+            ..Options::default()
+        };
+        let config = CONFIG
+            .get_or_init(|| tls_config(&options, None, false))
+            .clone()
+            .map_err(HttpError::Failed)?;
+        let name = match server_name.parse::<IpAddr>() {
+            Ok(ip) => ServerName::IpAddress(ip.into()),
+            Err(_) => ServerName::try_from(server_name.to_owned())
+                .map_err(|_| failed(format!("{server_name}: not a host name")))?,
+        };
+        let tls = tokio_rustls::TlsConnector::from(config)
+            .connect(name, stream)
+            .await
+            .map_err(|e| failed(format!("{target}: TLS: {e}")))?;
+        Ok(tls
+            .get_ref()
+            .1
+            .peer_certificates()
+            .map_or_else(Vec::new, |chain| {
+                chain.iter().map(|c| c.clone().into_owned()).collect()
+            }))
+    };
+    tokio::time::timeout(timeout, handshake)
+        .await
+        .map_err(|_| {
+            failed(format!(
+                "{target}: no answer within {} ms",
+                timeout.as_millis()
+            ))
+        })?
+}
+
 /// The system's CA certificates, read once for all modules.
-fn system_roots() -> Result<Arc<RootCertStore>, String> {
+pub(crate) fn system_roots() -> Result<Arc<RootCertStore>, String> {
     static ROOTS: OnceLock<Result<Arc<RootCertStore>, String>> = OnceLock::new();
     ROOTS
         .get_or_init(|| {
@@ -637,7 +693,7 @@ fn system_roots() -> Result<Arc<RootCertStore>, String> {
         .clone()
 }
 
-fn read_ca_file(path: &Path) -> Result<RootCertStore, BuildError> {
+pub(crate) fn read_ca_file(path: &Path) -> Result<RootCertStore, BuildError> {
     use std::io::Read;
     let invalid = |why: String| BuildError::Invalid(format!("{}: {why}", path.display()));
     let mut text = Vec::new();
@@ -661,9 +717,11 @@ fn read_ca_file(path: &Path) -> Result<RootCertStore, BuildError> {
     Ok(roots)
 }
 
+/// The TLS configuration of `options`; ALPN `http/1.1` with `http`, none for any TLS service.
 fn tls_config(
     options: &Options,
     roots: Option<Arc<RootCertStore>>,
+    http: bool,
 ) -> Result<Arc<ClientConfig>, String> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let builder = ClientConfig::builder_with_provider(provider.clone())
@@ -681,7 +739,9 @@ fn tls_config(
             .with_custom_certificate_verifier(Arc::new(Unverified(provider)))
             .with_no_client_auth()
     };
-    config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    if http {
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+    }
     Ok(Arc::new(config))
 }
 

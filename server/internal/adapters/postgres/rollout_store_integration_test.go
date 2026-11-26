@@ -216,10 +216,10 @@ func TestRolloutStore_ReadsCriticalAlertsAndFencesTheSave(t *testing.T) {
 		}
 	}
 	now := time.Now()
-	if ok, err := store.Lease(ctx, f.org, "holder-a", now, now.Add(time.Minute)); err != nil || !ok {
+	if ok, err := store.Lease(ctx, f.org, "holder-a", time.Minute); err != nil || !ok {
 		t.Fatalf("lease = %v, %v", ok, err)
 	}
-	if ok, _ := store.Lease(ctx, f.org, "holder-b", now, now.Add(time.Minute)); ok {
+	if ok, _ := store.Lease(ctx, f.org, "holder-b", time.Minute); ok {
 		t.Fatal("a second holder got the lease")
 	}
 	change := updates.Change{Rollout: updates.RolloutRun{

@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"sync"
 	"time"
 
 	"connectrpc.com/connect"
 
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/transport/download"
 )
@@ -25,50 +27,60 @@ func WithReleases(releases Releases) HandlerOption {
 	return func(h *SessionHandler) { h.releases = releases }
 }
 
-// Limits of FetchAgentRelease per node.
+// Limits of FetchAgentRelease: per node, and at once per organization and on the instance
+// (M4-31) – a release is some MiB the server reads and sends.
 const (
-	FetchesPerHour = 10
-	chunkSize      = 256 << 10
+	FetchesPerHour      = 10
+	FetchesAtOncePerOrg = 20
+	FetchesAtOnce       = 100
+	chunkSize           = 256 << 10
 )
 
 var (
 	errNoRelease    = errors.New("no such signed release")
-	errFetchLimited = errors.New("one release at a time and 10 an hour per node")
+	errFetchLimited = errors.New("one release at a time and 10 an hour per node, a few at once per organization and server")
 )
 
-// fetchLimits counts the fetches per node.
+// fetchLimits counts the fetches per node, organization and in all.
 type fetchLimits struct {
 	mu     sync.Mutex
 	active map[identity.NodeID]bool
+	orgs   map[tenant.OrgID]int
+	total  int
 	recent map[identity.NodeID][]time.Time
 }
 
-func (l *fetchLimits) take(node identity.NodeID, now time.Time) bool {
+func (l *fetchLimits) take(org tenant.OrgID, node identity.NodeID, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.active == nil {
-		l.active, l.recent = map[identity.NodeID]bool{}, map[identity.NodeID][]time.Time{}
+		l.active, l.orgs, l.recent = map[identity.NodeID]bool{}, map[tenant.OrgID]int{}, map[identity.NodeID][]time.Time{}
 	}
-	var kept []time.Time
-	for _, t := range l.recent[node] {
-		if now.Sub(t) < time.Hour {
-			kept = append(kept, t)
+	// The hour's fetches only: a node that stopped fetching is forgotten.
+	for n, times := range l.recent {
+		kept := slices.DeleteFunc(times, func(t time.Time) bool { return now.Sub(t) >= time.Hour })
+		if len(kept) == 0 {
+			delete(l.recent, n)
+		} else {
+			l.recent[n] = kept
 		}
 	}
-	if l.active[node] || len(kept) >= FetchesPerHour {
-		l.recent[node] = kept
+	if l.active[node] || len(l.recent[node]) >= FetchesPerHour || l.orgs[org] >= FetchesAtOncePerOrg || l.total >= FetchesAtOnce {
 		return false
 	}
-	l.active[node], l.recent[node] = true, append(kept, now)
+	l.active[node], l.recent[node] = true, append(l.recent[node], now)
+	l.orgs[org]++
+	l.total++
 	return true
 }
 
-func (l *fetchLimits) done(node identity.NodeID) {
+func (l *fetchLimits) done(org tenant.OrgID, node identity.NodeID) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.active, node)
-	if len(l.recent[node]) == 0 {
-		delete(l.recent, node)
+	l.total--
+	if l.orgs[org]--; l.orgs[org] <= 0 {
+		delete(l.orgs, org)
 	}
 }
 
@@ -88,10 +100,10 @@ func (h *SessionHandler) FetchAgentRelease(ctx context.Context, req *connect.Req
 	if !found {
 		return connect.NewError(connect.CodeNotFound, errNoRelease)
 	}
-	if !h.fetches.take(id.Node, time.Now()) {
+	if !h.fetches.take(id.Org, id.Node, time.Now()) {
 		return connect.NewError(connect.CodeResourceExhausted, errFetchLimited)
 	}
-	defer h.fetches.done(id.Node)
+	defer h.fetches.done(id.Org, id.Node)
 	file, err := h.releases.Open(rel)
 	if err != nil {
 		h.logger.WarnContext(ctx, "open agent release failed", "version", rel.Version, "error", err)

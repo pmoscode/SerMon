@@ -29,7 +29,7 @@ type rolloutStore struct {
 
 func (s *rolloutStore) Organizations(context.Context) ([]tenant.OrgID, error) { return s.orgs, nil }
 
-func (s *rolloutStore) Lease(_ context.Context, _ tenant.OrgID, holder string, _, _ time.Time) (bool, error) {
+func (s *rolloutStore) Lease(_ context.Context, _ tenant.OrgID, holder string, _ time.Duration) (bool, error) {
 	return holder == s.holder, nil
 }
 

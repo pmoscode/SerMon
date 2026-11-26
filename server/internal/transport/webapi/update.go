@@ -41,8 +41,45 @@ func (h *UpdateHandler) failure(ctx context.Context, what string, err error) err
 		return connect.NewError(connect.CodePermissionDenied, access.ErrForbidden)
 	case errors.Is(err, access.ErrNotFound):
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
+	case errors.Is(err, updates.ErrTooManyRuns):
+		return connect.NewError(connect.CodeResourceExhausted, err)
+	case errors.Is(err, updates.ErrNotCancellable), errors.Is(err, updates.ErrRolloutEnded),
+		errors.Is(err, updates.ErrPaused), errors.Is(err, updates.ErrUnderWay):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 	return internalError(ctx, h.logger, what, err)
+}
+
+// CancelRollout stops a running rollout by hand (M4-31).
+func (h *UpdateHandler) CancelRollout(ctx context.Context, req *connect.Request[webv1.CancelRolloutRequest]) (*connect.Response[webv1.CancelRolloutResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetRolloutId())
+	if err != nil {
+		return nil, err
+	}
+	if err := h.updates.CancelRollout(ctx, c, id); err != nil {
+		return nil, h.failure(ctx, "cancel rollout", err)
+	}
+	return connect.NewResponse(&webv1.CancelRolloutResponse{}), nil
+}
+
+// CancelRun cancels a run the node hasn't started (M4-31).
+func (h *UpdateHandler) CancelRun(ctx context.Context, req *connect.Request[webv1.CancelRunRequest]) (*connect.Response[webv1.CancelRunResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := parseID(req.Msg.GetRunId())
+	if err != nil {
+		return nil, err
+	}
+	if err := h.updates.CancelRun(ctx, c, id); err != nil {
+		return nil, h.failure(ctx, "cancel run", err)
+	}
+	return connect.NewResponse(&webv1.CancelRunResponse{}), nil
 }
 
 // GetNodeUpdates returns a visible node's report with its packages.
@@ -215,8 +252,12 @@ var runKinds = map[command.Kind]webv1.UpdateRunKind{
 	command.SelfUpdate: webv1.UpdateRunKind_UPDATE_RUN_KIND_SELF_UPDATE,
 }
 
-// runState is the state a person reads: the agent's final phase, else where the server is.
+// runState is the state a person reads: cancelled (M4-31), the agent's final phase, else where
+// the server is.
 func runState(c command.Command) webv1.UpdateRunState {
+	if c.State == command.Cancelled {
+		return webv1.UpdateRunState_UPDATE_RUN_STATE_CANCELLED
+	}
 	if r := c.Result; r != nil && r.Phase.Final() {
 		return map[command.Phase]webv1.UpdateRunState{
 			command.Succeeded:   webv1.UpdateRunState_UPDATE_RUN_STATE_SUCCEEDED,
@@ -235,7 +276,7 @@ func runState(c command.Command) webv1.UpdateRunState {
 		return webv1.UpdateRunState_UPDATE_RUN_STATE_RUNNING
 	case command.Expired:
 		return webv1.UpdateRunState_UPDATE_RUN_STATE_EXPIRED
-	case command.Done:
+	case command.Done, command.Cancelled:
 	}
 	return webv1.UpdateRunState_UPDATE_RUN_STATE_UNSPECIFIED
 }

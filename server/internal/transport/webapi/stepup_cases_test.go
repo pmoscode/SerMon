@@ -37,6 +37,9 @@ var stepUpRequired = map[string]string{
 	"/sermon.web.v1.UpdateService/StartUpdates":                       "installs updates and reboots nodes (M4-14)",
 	"/sermon.web.v1.UpdateService/RebootNodes":                        "reboots nodes (M4-14)",
 	"/sermon.web.v1.UpdateService/UpdateAgents":                       "replaces the agents of nodes (M4-19)",
+	"/sermon.web.v1.UpdateService/CancelRollout":                      "stops a rollout of a group (M4-31)",
+	"/sermon.web.v1.UpdateService/CancelRun":                          "withdraws a run from a node (M4-31)",
+	"/sermon.web.v1.UpdatePolicyService/SetUpdatesPaused":             "stops or resumes every update of the organization (M4-31)",
 	"/sermon.web.v1.UpdatePolicyService/ImportUpdatePolicy":           "installs updates and reboots nodes on its own (M4-10)",
 	"/sermon.web.v1.UpdatePolicyService/ResetUpdatePolicy":            "stops the automatic updates of a group (M4-10)",
 	"/sermon.web.v1.NotificationChannelService/CreateChannel":         "where alerts go",
@@ -114,6 +117,10 @@ var stepUpOwnCases = map[string]func(ctx context.Context, e stepUpEnv) error{
 	},
 	"/sermon.web.v1.LogSettingsService/SetRedactionRules": func(ctx context.Context, e stepUpEnv) error {
 		_, err := e.logSettings.SetRedactionRules(ctx, connect.NewRequest(&webv1.SetRedactionRulesRequest{}))
+		return err
+	},
+	"/sermon.web.v1.UpdatePolicyService/SetUpdatesPaused": func(ctx context.Context, e stepUpEnv) error {
+		_, err := e.updatePolicies.SetUpdatesPaused(ctx, connect.NewRequest(&webv1.SetUpdatesPausedRequest{Paused: true}))
 		return err
 	},
 	"/sermon.web.v1.LogSettingsService/SetViewerLogAccess": func(ctx context.Context, e stepUpEnv) error {

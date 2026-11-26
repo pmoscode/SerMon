@@ -23,6 +23,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
 	import { withStepUp } from '#lib/stores/stepup.svelte.js';
+	import { actionError, allowedIn } from '#lib/updates/actions.js';
 	import { channelLabel } from '#lib/updates/labels.js';
 	import PackageTable from './PackageTable.svelte';
 	import RunHistory from './RunHistory.svelte';
@@ -35,10 +36,8 @@
 	let { nodeId, groupId, now }: { nodeId: string; groupId: string; now: Date } = $props();
 
 	const locale = $derived(localeState.current);
-	const allowedIn = (groups: string[] | undefined) =>
-		(groups ?? []).includes('*') || (groups ?? []).includes(groupId);
-	const mayUpdate = $derived(allowedIn(sessionState.current?.runUpdatesGroupIds));
-	const mayReboot = $derived(allowedIn(sessionState.current?.rebootGroupIds));
+	const mayUpdate = $derived(allowedIn(sessionState.current?.runUpdatesGroupIds, groupId));
+	const mayReboot = $derived(allowedIn(sessionState.current?.rebootGroupIds, groupId));
 
 	let data = $state<GetNodeUpdatesResponse>();
 	let status = $state<'loading' | 'ready' | 'error'>('loading');
@@ -111,7 +110,7 @@
 			done = await withStepUp(action);
 			confirm = '';
 		} catch (error) {
-			failure = notifyError(error);
+			failure = actionError(error, m.updates_paused_refused());
 		} finally {
 			busy = false;
 		}
@@ -366,7 +365,7 @@
 			</section>
 		{/if}
 
-		<RunHistory {nodeId} {now} />
+		<RunHistory {nodeId} {groupId} {now} />
 
 		{#if done}
 			<p class="text-sm" aria-live="polite">{done}</p>

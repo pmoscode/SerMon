@@ -13,6 +13,75 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelNodeCommand = `-- name: CancelNodeCommand :one
+UPDATE node_commands SET
+    state = CASE WHEN state = 1 THEN 6 ELSE state END, cancelled_at = $1, cancelled_by = $2
+WHERE id = $3 AND kind <> 1 AND cancelled_at IS NULL AND phase IS NULL
+  AND ((state = 1 AND expires_at > $1) OR (state = 2 AND expires_at > $4))
+RETURNING node_id, state
+`
+
+type CancelNodeCommandParams struct {
+	At          *time.Time
+	CancelledBy *uuid.UUID
+	ID          uuid.UUID
+	SentBefore  time.Time
+}
+
+type CancelNodeCommandRow struct {
+	NodeID uuid.UUID
+	State  int16
+}
+
+// Cancels a run the node hasn't started (M4-31): a pending one at once, a sent one is withdrawn
+// from the agent, which answers. Nothing for a run that started, ended or expired.
+func (q *Queries) CancelNodeCommand(ctx context.Context, arg CancelNodeCommandParams) (CancelNodeCommandRow, error) {
+	row := q.db.QueryRow(ctx, cancelNodeCommand,
+		arg.At,
+		arg.CancelledBy,
+		arg.ID,
+		arg.SentBefore,
+	)
+	var i CancelNodeCommandRow
+	err := row.Scan(&i.NodeID, &i.State)
+	return i, err
+}
+
+const cancelsToSend = `-- name: CancelsToSend :many
+SELECT id FROM node_commands
+WHERE node_id = $1 AND state = 2 AND cancelled_at IS NOT NULL AND phase IS NULL
+  AND (cancel_sent_at IS NULL OR $2::boolean)
+ORDER BY created_at, id
+LIMIT 100
+`
+
+type CancelsToSendParams struct {
+	NodeID uuid.UUID
+	Resend bool
+}
+
+// The node's sent runs withdrawn without an answer of the agent: their cancel goes out once per
+// session (M4-31).
+func (q *Queries) CancelsToSend(ctx context.Context, arg CancelsToSendParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, cancelsToSend, arg.NodeID, arg.Resend)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countRecentRefreshes = `-- name: CountRecentRefreshes :one
 SELECT count(*) FILTER (WHERE node_id = $1 AND created_at > $2)::bigint AS node,
        count(*) FILTER (WHERE created_at > $3)::bigint AS org
@@ -39,11 +108,12 @@ func (q *Queries) CountRecentRefreshes(ctx context.Context, arg CountRecentRefre
 }
 
 const deliverableNodeCommands = `-- name: DeliverableNodeCommands :many
-SELECT id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at
-FROM node_commands
-WHERE node_id = $1 AND (state = 1 OR ($2::boolean AND state = 2))
-  AND expires_at > $3
-ORDER BY created_at, id
+SELECT c.id, c.kind, c.scope, c.reason, c.version, c.state, c.created_at, c.expires_at, c.created_by, c.sent_at
+FROM node_commands c
+WHERE c.node_id = $1 AND (c.state = 1 OR ($2::boolean AND c.state = 2))
+  AND c.expires_at > $3 AND c.cancelled_at IS NULL
+  AND (c.kind = 1 OR NOT EXISTS (SELECT 1 FROM organizations o WHERE o.id = c.org_id AND o.updates_paused_at IS NOT NULL))
+ORDER BY c.created_at, c.id
 LIMIT 100
 `
 
@@ -67,7 +137,7 @@ type DeliverableNodeCommandsRow struct {
 }
 
 // What the node's session sends: the pending commands, and after a reconnect the sent ones without
-// result as well.
+// result as well; none cancelled, and while the organization's updates are paused no run (M4-31).
 func (q *Queries) DeliverableNodeCommands(ctx context.Context, arg DeliverableNodeCommandsParams) ([]DeliverableNodeCommandsRow, error) {
 	rows, err := q.db.Query(ctx, deliverableNodeCommands, arg.NodeID, arg.Resend, arg.Now)
 	if err != nil {
@@ -120,7 +190,7 @@ func (q *Queries) ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommands
 
 const getNodeCommand = `-- name: GetNodeCommand :one
 SELECT id, node_id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,
-       phase, exit_code, result_reason, output, output_truncated, started_at, ended_at
+       phase, exit_code, result_reason, output, output_truncated, started_at, ended_at, cancelled_at
 FROM node_commands WHERE id = $1
 `
 
@@ -143,6 +213,7 @@ type GetNodeCommandRow struct {
 	OutputTruncated bool
 	StartedAt       *time.Time
 	EndedAt         *time.Time
+	CancelledAt     *time.Time
 }
 
 func (q *Queries) GetNodeCommand(ctx context.Context, id uuid.UUID) (GetNodeCommandRow, error) {
@@ -167,6 +238,7 @@ func (q *Queries) GetNodeCommand(ctx context.Context, id uuid.UUID) (GetNodeComm
 		&i.OutputTruncated,
 		&i.StartedAt,
 		&i.EndedAt,
+		&i.CancelledAt,
 	)
 	return i, err
 }
@@ -208,7 +280,7 @@ func (q *Queries) InsertNodeCommand(ctx context.Context, arg InsertNodeCommandPa
 
 const listNodeRuns = `-- name: ListNodeRuns :many
 SELECT id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,
-       phase, exit_code, result_reason, output_truncated, started_at, ended_at
+       phase, exit_code, result_reason, output_truncated, started_at, ended_at, cancelled_at
 FROM node_commands WHERE node_id = $1 AND kind <> 1
 ORDER BY created_at DESC, id DESC LIMIT $2
 `
@@ -235,6 +307,7 @@ type ListNodeRunsRow struct {
 	OutputTruncated bool
 	StartedAt       *time.Time
 	EndedAt         *time.Time
+	CancelledAt     *time.Time
 }
 
 // The runs of a node (no refreshes), newest first, without their output (M4-15).
@@ -264,6 +337,7 @@ func (q *Queries) ListNodeRuns(ctx context.Context, arg ListNodeRunsParams) ([]L
 			&i.OutputTruncated,
 			&i.StartedAt,
 			&i.EndedAt,
+			&i.CancelledAt,
 		); err != nil {
 			return nil, err
 		}
@@ -273,6 +347,22 @@ func (q *Queries) ListNodeRuns(ctx context.Context, arg ListNodeRunsParams) ([]L
 		return nil, err
 	}
 	return items, nil
+}
+
+const markCancelsSent = `-- name: MarkCancelsSent :exec
+UPDATE node_commands SET cancel_sent_at = $1
+WHERE node_id = $2 AND id = ANY ($3::uuid[]) AND state = 2
+`
+
+type MarkCancelsSentParams struct {
+	Now    *time.Time
+	NodeID uuid.UUID
+	Ids    []uuid.UUID
+}
+
+func (q *Queries) MarkCancelsSent(ctx context.Context, arg MarkCancelsSentParams) error {
+	_, err := q.db.Exec(ctx, markCancelsSent, arg.Now, arg.NodeID, arg.Ids)
+	return err
 }
 
 const markNodeCommandsSent = `-- name: MarkNodeCommandsSent :exec
@@ -292,6 +382,42 @@ func (q *Queries) MarkNodeCommandsSent(ctx context.Context, arg MarkNodeCommands
 	return err
 }
 
+const nodesUnderWay = `-- name: NodesUnderWay :many
+SELECT DISTINCT c.node_id, 'reboot'::text AS what FROM node_commands c
+WHERE c.node_id = ANY ($1::uuid[]) AND c.kind = 3 AND c.state IN (1, 2, 3)
+  AND c.cancelled_at IS NULL AND c.created_at > now() - interval '1 day'
+UNION
+SELECT DISTINCT n.node_id, 'rollout'::text AS what FROM update_rollout_nodes n
+WHERE n.node_id = ANY ($1::uuid[]) AND n.state IN (2, 3, 4, 8)
+`
+
+type NodesUnderWayRow struct {
+	NodeID uuid.UUID
+	What   string
+}
+
+// Of the nodes those with a reboot under way or a run in a rollout (M4-31): no second reboot or
+// self-update by hand beside it.
+func (q *Queries) NodesUnderWay(ctx context.Context, nodeIds []uuid.UUID) ([]NodesUnderWayRow, error) {
+	rows, err := q.db.Query(ctx, nodesUnderWay, nodeIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NodesUnderWayRow{}
+	for rows.Next() {
+		var i NodesUnderWayRow
+		if err := rows.Scan(&i.NodeID, &i.What); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const notifyNodeCommands = `-- name: NotifyNodeCommands :exec
 SELECT pg_notify('sermon_node_commands', $1::uuid::text)
 `
@@ -302,9 +428,28 @@ func (q *Queries) NotifyNodeCommands(ctx context.Context, nodeID uuid.UUID) erro
 	return err
 }
 
+const openRunsOfOrganization = `-- name: OpenRunsOfOrganization :one
+SELECT count(*)::bigint AS org, open_node_runs()::bigint AS instance
+FROM node_commands WHERE kind <> 1 AND state IN (1, 2, 3) AND created_at > now() - interval '1 day'
+`
+
+type OpenRunsOfOrganizationRow struct {
+	Org      int64
+	Instance int64
+}
+
+// The organization's runs under way (pending, sent, running; a day at most) and the instance's.
+func (q *Queries) OpenRunsOfOrganization(ctx context.Context) (OpenRunsOfOrganizationRow, error) {
+	row := q.db.QueryRow(ctx, openRunsOfOrganization)
+	var i OpenRunsOfOrganizationRow
+	err := row.Scan(&i.Org, &i.Instance)
+	return i, err
+}
+
 const recordNodeCommandResult = `-- name: RecordNodeCommandResult :one
 UPDATE node_commands SET
-    phase = $1, state = CASE WHEN $1::smallint = 1 THEN 3 ELSE 4 END,
+    phase = $1,
+    state = CASE WHEN $1::smallint = 1 THEN 3 WHEN $1::smallint = 4 AND cancelled_at IS NOT NULL THEN 6 ELSE 4 END,
     exit_code = $2, result_reason = $3, output = $4,
     output_truncated = $5, started_at = coalesce($6, started_at),
     ended_at = $7
@@ -326,6 +471,7 @@ type RecordNodeCommandResultParams struct {
 }
 
 // The agent's phase of a run of this node: a start only before any phase, a final phase once.
+// A withdrawn run the agent refused is cancelled (M4-31).
 func (q *Queries) RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int16, error) {
 	row := q.db.QueryRow(ctx, recordNodeCommandResult,
 		arg.Phase,
@@ -341,4 +487,15 @@ func (q *Queries) RecordNodeCommandResult(ctx context.Context, arg RecordNodeCom
 	var kind int16
 	err := row.Scan(&kind)
 	return kind, err
+}
+
+const updatesPausedAt = `-- name: UpdatesPausedAt :one
+SELECT updates_paused_at FROM organizations WHERE id = current_org_id()
+`
+
+func (q *Queries) UpdatesPausedAt(ctx context.Context) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, updatesPausedAt)
+	var updates_paused_at *time.Time
+	err := row.Scan(&updates_paused_at)
+	return updates_paused_at, err
 }

@@ -142,11 +142,28 @@ func (h *UpdatePolicyHandler) ListUpdatePolicies(ctx context.Context, _ *connect
 	if err != nil {
 		return nil, h.fail(ctx, "list update policies", err)
 	}
-	res := &webv1.ListUpdatePoliciesResponse{Policies: make([]*webv1.UpdatePolicy, 0, len(list))}
+	paused, err := h.policies.PausedSince(ctx, c)
+	if err != nil {
+		return nil, h.fail(ctx, "read the pause of the updates", err)
+	}
+	res := &webv1.ListUpdatePoliciesResponse{Policies: make([]*webv1.UpdatePolicy, 0, len(list)), PausedSince: optionalTime(paused)}
 	for _, n := range list {
 		res.Policies = append(res.Policies, updatePolicyView(n.Policy, n.GroupName))
 	}
 	return connect.NewResponse(res), nil
+}
+
+// SetUpdatesPaused pauses or resumes the organization's updates (M4-31).
+func (h *UpdatePolicyHandler) SetUpdatesPaused(ctx context.Context, req *connect.Request[webv1.SetUpdatesPausedRequest]) (*connect.Response[webv1.SetUpdatesPausedResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	since, err := h.policies.SetPaused(ctx, c, req.Msg.GetPaused())
+	if err != nil {
+		return nil, h.fail(ctx, "pause the updates", err)
+	}
+	return connect.NewResponse(&webv1.SetUpdatesPausedResponse{PausedSince: optionalTime(since)}), nil
 }
 
 // SetUpdatePolicy replaces a group's policy.

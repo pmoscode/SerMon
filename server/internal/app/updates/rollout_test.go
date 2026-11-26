@@ -661,3 +661,33 @@ func TestPlan_TheSilenceEndsWithTheNode(t *testing.T) {
 		t.Errorf("silences ended: %v", ended)
 	}
 }
+
+// M4-31: while the organization's updates are paused no rollout begins and a running one starts
+// nothing more – no node, no reboot – but follows its nodes; a run cancelled by hand fails its node.
+func TestPlan_PausedUpdatesStartNothing(t *testing.T) {
+	paused := newWorld(t, policy(updates.ModeAllAuto, 1, false, true), 1)
+	paused.policy.Paused = true
+	if got := paused.at(0).step(); len(got) != 0 || paused.rollout != nil {
+		t.Errorf("a rollout began while paused: %+v", got)
+	}
+	w := newWorld(t, policy(updates.ModeAllAuto, 1, false, true), 2)
+	w.at(0).step()
+	w.policy.Paused = true
+	w.at(time.Minute).finish("web-01", command.Succeeded, true)
+	if got := commands(w.at(time.Minute + time.Second).step()); len(got) != 0 {
+		t.Errorf("started while paused: %v", got)
+	}
+	if n := w.run("web-01"); n.State != updates.NodeHealthCheck {
+		t.Errorf("web-01 = %+v", n)
+	}
+
+	cancelled := newWorld(t, policy(updates.ModeAllAuto, 1, false, false), 1)
+	cancelled.at(0).step()
+	c := cancelled.runs[cancelled.run("web-01").UpdateRun]
+	c.State = command.Cancelled
+	cancelled.runs[c.ID] = c
+	cancelled.at(time.Minute).step()
+	if n := cancelled.run("web-01"); n.State != updates.NodeFailed || !strings.Contains(n.Reason, "cancelled") {
+		t.Errorf("cancelled run: %+v", n)
+	}
+}

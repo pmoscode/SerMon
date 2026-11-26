@@ -8,6 +8,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
@@ -21,6 +22,10 @@ type PolicyStore interface {
 	// PutPolicy stores p (nil: deletes the group's policy) with the audit entry in one
 	// transaction; access.ErrNotFound for an unknown group.
 	PutPolicy(ctx context.Context, scope tenant.Scope, group tenant.GroupID, p *Policy, audit access.AuditEntry) error
+	// PausedSince returns since when the organization's updates are paused, nil while they run.
+	PausedSince(ctx context.Context, org tenant.OrgID) (*time.Time, error)
+	// SetPaused pauses (at) or resumes (nil) the updates with the audit entry in one transaction.
+	SetPaused(ctx context.Context, org tenant.OrgID, at *time.Time, by identity.UserID, audit access.AuditEntry) error
 }
 
 // NamedPolicy is a policy with the name of its group.

@@ -83,7 +83,7 @@ pub mod session_request {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12")]
+    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
@@ -133,6 +133,10 @@ pub mod session_response {
         /// self_update replaces the agent's binary through the root helper (KONZEPT §14.3).
         #[prost(message, tag="12")]
         SelfUpdate(super::SelfUpdate),
+        /// cancel_run withdraws a run sent before (M4-31): one still waiting for the helper is dropped
+        /// and reported refused; one the helper started runs to its end.
+        #[prost(message, tag="13")]
+        CancelRun(super::CancelRun),
     }
 }
 /// Hello is the first message of every stream.
@@ -873,6 +877,13 @@ pub struct SelfUpdate {
     /// older server) leaves the agent's own bound alone.
     #[prost(uint32, tag="3")]
     pub valid_for_seconds: u32,
+}
+/// CancelRun names the run to withdraw.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CancelRun {
+    /// run_id names the run: a lowercase UUID.
+    #[prost(string, tag="1")]
+    pub run_id: ::prost::alloc::string::String,
 }
 /// UpdateReport is what the host could update (KONZEPT §14.1), every 6 hours, after the package
 /// manager ran and on RefreshUpdateInfo. Names, versions and sources come from the host's package

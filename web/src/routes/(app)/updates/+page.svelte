@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
-	import { timestampDate } from '@bufbuild/protobuf/wkt';
+	import { timestampDate, type Timestamp } from '@bufbuild/protobuf/wkt';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import {
@@ -13,19 +13,15 @@
 	import { updatesApi } from '#lib/api/updates.js';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import PolicyEditor from '#lib/components/updates/PolicyEditor.svelte';
+	import RolloutList from '#lib/components/updates/RolloutList.svelte';
+	import UpdatesPause from '#lib/components/updates/UpdatesPause.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { formatAgo } from '#lib/format/format.js';
 	import { localeState } from '#lib/i18n/locale.svelte.js';
 	import { displayText } from '#lib/logs/text.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
-	import {
-		channelLabel,
-		modeLabel,
-		rolloutLabel,
-		rolloutNodeLabel,
-		statusLabel
-	} from '#lib/updates/labels.js';
+	import { channelLabel, modeLabel, statusLabel } from '#lib/updates/labels.js';
 
 	/**
 	 * The updates of the fleet (KONZEPT §16, M4-15): the nodes by status, the age of their oldest
@@ -36,6 +32,7 @@
 	let fleet = $state<ListFleetUpdatesResponse>();
 	let rollouts = $state<Rollout[]>([]);
 	let policies = $state<UpdatePolicy[]>([]);
+	let pausedSince = $state<Timestamp>();
 	let releases = $state('');
 	let status = $state<'loading' | 'ready' | 'error'>('loading');
 	let filter = $state<Filter>('');
@@ -64,6 +61,7 @@
 			fleet = f;
 			rollouts = r.rollouts;
 			policies = p.policies;
+			pausedSince = p.pausedSince;
 			releases = [
 				...new Set(a.releases.map((x) => `${channelLabel(x.channel)} ${x.version}`))
 			].join(' · ');
@@ -138,6 +136,8 @@
 	</div>
 {:else}
 	<div class="flex flex-col gap-8">
+		<UpdatesPause {pausedSince} onchange={load} />
+
 		<section aria-labelledby="updates-nodes" class="flex flex-col gap-3">
 			<h2 id="updates-nodes" class="text-lg font-medium">{m.updatespage_nodes()}</h2>
 			<div class="flex flex-wrap gap-2" role="group" aria-label={m.updatespage_summary()}>
@@ -209,34 +209,7 @@
 
 		<section aria-labelledby="updates-rollouts" class="flex flex-col gap-3">
 			<h2 id="updates-rollouts" class="text-lg font-medium">{m.updatespage_rollouts()}</h2>
-			{#if rollouts.length === 0}
-				<p class="text-sm text-muted-foreground">{m.updatespage_rollouts_none()}</p>
-			{:else}
-				<ul class="divide-y rounded-md border text-sm">
-					{#each rollouts as r (r.rolloutId)}
-						<li class="flex flex-col gap-1 px-3 py-2">
-							<div class="flex flex-wrap gap-x-3">
-								<span class="font-medium">{r.groupName}</span>
-								<span>{r.manual ? m.updatespage_manual() : m.updatespage_scheduled()}</span>
-								<span>{rolloutLabel(r.state)}</span>
-								{#if r.windowStart}<span class="text-muted-foreground"
-										>{dateFormat.format(timestampDate(r.windowStart))}</span
-									>{/if}
-							</div>
-							{#if r.reason}<p class="text-red-700 dark:text-red-400">
-									{displayText(r.reason)}
-								</p>{/if}
-							{#if r.nodes.length > 0}
-								<p class="text-muted-foreground">
-									{#each r.nodes as n, i (n.nodeId)}{i > 0 ? ' · ' : ''}{displayText(n.hostname)}: {rolloutNodeLabel(
-											n.state
-										)}{n.reason ? ` (${displayText(n.reason)})` : ''}{/each}
-								</p>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-			{/if}
+			<RolloutList {rollouts} onchange={load} />
 		</section>
 
 		<section aria-labelledby="updates-policies" class="flex flex-col gap-3">

@@ -501,3 +501,52 @@ async fn a_self_update_fetched_past_its_deadline_does_not_start() {
     assert!(!text.contains(&format!("{ID} running ")), "{text}");
     r.stop().await;
 }
+
+// M4-31: a run withdrawn while it waits for a busy helper is dropped and reported refused; one
+// withdrawn before it arrived (a restart lost it) never starts; one the helper started goes on.
+#[tokio::test(start_paused = true)]
+async fn a_withdrawn_run_starts_no_more() {
+    let dir = tempfile::tempdir().unwrap();
+    let busy = Fake::with(vec![Start::Busy("a run".into()); 40], vec![]);
+    let r = start_runner(busy.clone(), book(&dir));
+    r.inbox.command(update(ID));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    r.inbox.cancel(ID.into());
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(r.phases(), [(ID.into(), CommandPhase::Refused)]);
+    assert!(r.results.lock().unwrap()[0].reason.contains("cancelled"));
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    assert_eq!(
+        busy.starts.lock().unwrap().len(),
+        1,
+        "asked again after the cancel"
+    );
+
+    r.inbox.cancel(OTHER.into());
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    r.inbox.command(update(OTHER));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(
+        r.phases(),
+        [
+            (ID.into(), CommandPhase::Refused),
+            (OTHER.into(), CommandPhase::Refused)
+        ]
+    );
+    assert_eq!(
+        busy.starts.lock().unwrap().len(),
+        1,
+        "a withdrawn run started"
+    );
+    r.stop().await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::with(vec![], vec![]);
+    let r = start_runner(fake.clone(), book(&dir));
+    r.inbox.command(update(ID));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    r.inbox.cancel(ID.into());
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(r.phases(), [(ID.into(), CommandPhase::Started)]);
+    r.stop().await;
+}

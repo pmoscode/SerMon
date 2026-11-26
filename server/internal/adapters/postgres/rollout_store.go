@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,14 +41,14 @@ func (s *RolloutStore) Organizations(ctx context.Context) ([]tenant.OrgID, error
 }
 
 // Lease implements updates.RolloutStore.
-func (s *RolloutStore) Lease(ctx context.Context, org tenant.OrgID, holder string, now, until time.Time) (bool, error) {
+func (s *RolloutStore) Lease(ctx context.Context, org tenant.OrgID, holder string, leaseFor time.Duration) (bool, error) {
 	scope, err := orgScope(org)
 	if err != nil {
 		return false, err
 	}
 	var n int64
 	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		rows, leaseErr := q.LeaseUpdateOrganization(ctx, sqlcdb.LeaseUpdateOrganizationParams{Holder: holder, Until: until, Now: now})
+		rows, leaseErr := q.LeaseUpdateOrganization(ctx, sqlcdb.LeaseUpdateOrganizationParams{Holder: holder, LeaseSeconds: leaseFor.Seconds()})
 		n = rows
 		return wrap(leaseErr, "lease updates")
 	})
@@ -80,6 +81,11 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 		if err != nil {
 			return wrap(err, "list update policies")
 		}
+		pausedAt, err := q.UpdatesPausedAt(ctx)
+		if err != nil {
+			return wrap(err, "read the pause of the updates")
+		}
+		paused := pausedAt != nil
 		latest, err := q.LatestUpdateRollouts(ctx)
 		if err != nil {
 			return wrap(err, "list rollouts")
@@ -89,7 +95,7 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 		for _, r := range latest {
 			rollouts[tenant.GroupID(r.GroupID)] = &updates.RolloutRun{
 				ID: r.ID, Group: tenant.GroupID(r.GroupID), WindowStart: r.WindowStart, WindowEnd: r.WindowEnd,
-				State: updates.RolloutState(r.State), Reason: r.Reason, //nolint:gosec // 1 to 3 by the table's check
+				State: updates.RolloutState(r.State), Reason: r.Reason, Cancelled: r.CancelledAt != nil, //nolint:gosec // 1 to 3 by the table's check
 			}
 			ids = append(ids, r.ID)
 		}
@@ -106,7 +112,7 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 			r := &updates.RolloutRun{
 				ID: m.ID, Group: tenant.GroupID(m.GroupID), WindowStart: m.WindowStart, WindowEnd: m.WindowEnd,
 				State: updates.RolloutState(m.State), Reason: m.Reason, Manual: true, //nolint:gosec // 1 to 3 by the table's check
-				Mode: updates.Mode(m.Mode.Int16), AutoReboot: m.AutoReboot, //nolint:gosec // 2 or 3 by the table's check
+				Mode: updates.Mode(m.Mode.Int16), AutoReboot: m.AutoReboot, Cancelled: m.CancelledAt != nil, //nolint:gosec // 2 or 3 by the table's check
 			}
 			manuals = append(manuals, r)
 			byID[r.ID] = r
@@ -152,6 +158,7 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 		groupPolicy := map[tenant.GroupID]updates.Policy{}
 		for _, row := range policies {
 			p := policyOf(row).Policy
+			p.Paused = paused
 			groupPolicy[p.Group] = p
 			r := rollouts[p.Group]
 			if p.Mode == updates.ModeReport && p.AgentUpdate != updates.AgentAuto && (r == nil || !r.Following()) {
@@ -164,6 +171,7 @@ func (s *RolloutStore) Load(ctx context.Context, org tenant.OrgID, now time.Time
 			p, ok := groupPolicy[r.Group]
 			if !ok {
 				p = updates.DefaultPolicy(r.Group)
+				p.Paused = paused
 			}
 			// By hand only the packages: agents are updated by hand on their own (UpdateAgents).
 			p.Mode, p.AutoReboot, p.Window, p.AgentUpdate = r.Mode, r.AutoReboot, nil, updates.AgentManual
@@ -209,7 +217,7 @@ func commandOf(c sqlcdb.ListNodeCommandsByIDRow) command.Command {
 	out := command.Command{
 		ID: c.ID, Node: identity.NodeID(c.NodeID), Kind: command.Kind(c.Kind), Scope: command.Scope(c.Scope.Int16), //nolint:gosec // checked by the table
 		Reason: c.Reason, Version: c.Version, State: command.State(c.State), //nolint:gosec // checked by the table
-		CreatedAt: c.CreatedAt, ExpiresAt: c.ExpiresAt, CreatedBy: userOf(c.CreatedBy), SentAt: c.SentAt,
+		CreatedAt: c.CreatedAt, ExpiresAt: c.ExpiresAt, CreatedBy: userOf(c.CreatedBy), SentAt: c.SentAt, CancelledAt: c.CancelledAt,
 	}
 	if c.Phase.Valid {
 		out.Result = &command.Result{
@@ -234,14 +242,31 @@ func (s *RolloutStore) Save(ctx context.Context, org tenant.OrgID, holder string
 		return err
 	}
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		held, err := q.HoldUpdateLease(ctx, sqlcdb.HoldUpdateLeaseParams{Holder: holder, Now: now})
+		held, err := q.HoldUpdateLease(ctx, holder)
 		if err != nil {
 			return wrap(err, "hold update lease")
 		}
 		if held == 0 {
 			return updates.ErrLeaseLost
 		}
+		// A cancel or a pause by hand since the load: it took the lease's row before, the plan
+		// didn't know it (M4-31).
+		pausedAt, err := q.UpdatesPausedAt(ctx)
+		if err != nil {
+			return wrap(err, "read the pause of the updates")
+		}
+		ids := make([]uuid.UUID, len(changes))
+		for i, c := range changes {
+			ids[i] = c.Rollout.ID
+		}
+		cancelled, err := q.CancelledRollouts(ctx, ids)
+		if err != nil {
+			return wrap(err, "read cancelled rollouts")
+		}
 		for _, c := range changes {
+			if slices.Contains(cancelled, c.Rollout.ID) && !c.Rollout.Cancelled || pausedAt != nil && sendsCommand(c) {
+				continue
+			}
 			if err := saveRollout(ctx, q, c.Rollout, now); err != nil {
 				return err
 			}
@@ -258,13 +283,17 @@ func (s *RolloutStore) Save(ctx context.Context, org tenant.OrgID, holder string
 	})
 }
 
+func sendsCommand(c updates.Change) bool {
+	return slices.ContainsFunc(c.Actions, func(a updates.Action) bool { return a.Command != nil })
+}
+
 // auditCommand notes a run the rollout sends (T41, review M4-30): which rollout, by policy or
 // by whom; the policy's changes have their own entries.
 func auditCommand(ctx context.Context, q *sqlcdb.Queries, r updates.RolloutRun, a updates.Action) error {
 	if a.Command == nil {
 		return nil
 	}
-	details := map[string]string{"run": a.Command.ID.String(), "kind": kindNames[a.Command.Kind], "rollout": r.ID.String(), "by": "update policy"}
+	details := map[string]string{"run": a.Command.ID.String(), "kind": a.Command.Kind.String(), "rollout": r.ID.String(), "by": "update policy"}
 	if r.Manual {
 		details["by"] = "rollout by hand"
 	}

@@ -60,6 +60,11 @@ const (
 	// UpdateServiceUpdateAgentsProcedure is the fully-qualified name of the UpdateService's
 	// UpdateAgents RPC.
 	UpdateServiceUpdateAgentsProcedure = "/sermon.web.v1.UpdateService/UpdateAgents"
+	// UpdateServiceCancelRolloutProcedure is the fully-qualified name of the UpdateService's
+	// CancelRollout RPC.
+	UpdateServiceCancelRolloutProcedure = "/sermon.web.v1.UpdateService/CancelRollout"
+	// UpdateServiceCancelRunProcedure is the fully-qualified name of the UpdateService's CancelRun RPC.
+	UpdateServiceCancelRunProcedure = "/sermon.web.v1.UpdateService/CancelRun"
 	// UpdateServiceListAgentReleasesProcedure is the fully-qualified name of the UpdateService's
 	// ListAgentReleases RPC.
 	UpdateServiceListAgentReleasesProcedure = "/sermon.web.v1.UpdateService/ListAgentReleases"
@@ -99,6 +104,15 @@ type UpdateServiceClient interface {
 	// installed by a package, without a newer release or whose host forbids it are skipped with
 	// the reason. A node the caller can't view is NOT_FOUND.
 	UpdateAgents(context.Context, *connect.Request[v1.UpdateAgentsRequest]) (*connect.Response[v1.UpdateAgentsResponse], error)
+	// CancelRollout stops a running rollout (M4-31): no node starts any more, its waiting runs are
+	// cancelled, running ones go to their end without a reboot. run_updates on its group and a
+	// fresh step-up, in the audit log; a rollout that ended already is FAILED_PRECONDITION.
+	CancelRollout(context.Context, *connect.Request[v1.CancelRolloutRequest]) (*connect.Response[v1.CancelRolloutResponse], error)
+	// CancelRun cancels a run the node hasn't started (M4-31): a pending one never goes out, a sent
+	// one is withdrawn from the agent if it still waits for the helper. run_updates (reboot_nodes
+	// for a reboot) on the node's group and a fresh step-up, in the audit log; a run that started
+	// or ended is FAILED_PRECONDITION.
+	CancelRun(context.Context, *connect.Request[v1.CancelRunRequest]) (*connect.Response[v1.CancelRunResponse], error)
 	// ListAgentReleases returns the agent releases the server offers per channel (view_nodes).
 	ListAgentReleases(context.Context, *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error)
 }
@@ -173,6 +187,18 @@ func NewUpdateServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(updateServiceMethods.ByName("UpdateAgents")),
 			connect.WithClientOptions(opts...),
 		),
+		cancelRollout: connect.NewClient[v1.CancelRolloutRequest, v1.CancelRolloutResponse](
+			httpClient,
+			baseURL+UpdateServiceCancelRolloutProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("CancelRollout")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelRun: connect.NewClient[v1.CancelRunRequest, v1.CancelRunResponse](
+			httpClient,
+			baseURL+UpdateServiceCancelRunProcedure,
+			connect.WithSchema(updateServiceMethods.ByName("CancelRun")),
+			connect.WithClientOptions(opts...),
+		),
 		listAgentReleases: connect.NewClient[v1.ListAgentReleasesRequest, v1.ListAgentReleasesResponse](
 			httpClient,
 			baseURL+UpdateServiceListAgentReleasesProcedure,
@@ -194,6 +220,8 @@ type updateServiceClient struct {
 	getUpdateRun      *connect.Client[v1.GetUpdateRunRequest, v1.GetUpdateRunResponse]
 	listRollouts      *connect.Client[v1.ListRolloutsRequest, v1.ListRolloutsResponse]
 	updateAgents      *connect.Client[v1.UpdateAgentsRequest, v1.UpdateAgentsResponse]
+	cancelRollout     *connect.Client[v1.CancelRolloutRequest, v1.CancelRolloutResponse]
+	cancelRun         *connect.Client[v1.CancelRunRequest, v1.CancelRunResponse]
 	listAgentReleases *connect.Client[v1.ListAgentReleasesRequest, v1.ListAgentReleasesResponse]
 }
 
@@ -242,6 +270,16 @@ func (c *updateServiceClient) UpdateAgents(ctx context.Context, req *connect.Req
 	return c.updateAgents.CallUnary(ctx, req)
 }
 
+// CancelRollout calls sermon.web.v1.UpdateService.CancelRollout.
+func (c *updateServiceClient) CancelRollout(ctx context.Context, req *connect.Request[v1.CancelRolloutRequest]) (*connect.Response[v1.CancelRolloutResponse], error) {
+	return c.cancelRollout.CallUnary(ctx, req)
+}
+
+// CancelRun calls sermon.web.v1.UpdateService.CancelRun.
+func (c *updateServiceClient) CancelRun(ctx context.Context, req *connect.Request[v1.CancelRunRequest]) (*connect.Response[v1.CancelRunResponse], error) {
+	return c.cancelRun.CallUnary(ctx, req)
+}
+
 // ListAgentReleases calls sermon.web.v1.UpdateService.ListAgentReleases.
 func (c *updateServiceClient) ListAgentReleases(ctx context.Context, req *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error) {
 	return c.listAgentReleases.CallUnary(ctx, req)
@@ -281,6 +319,15 @@ type UpdateServiceHandler interface {
 	// installed by a package, without a newer release or whose host forbids it are skipped with
 	// the reason. A node the caller can't view is NOT_FOUND.
 	UpdateAgents(context.Context, *connect.Request[v1.UpdateAgentsRequest]) (*connect.Response[v1.UpdateAgentsResponse], error)
+	// CancelRollout stops a running rollout (M4-31): no node starts any more, its waiting runs are
+	// cancelled, running ones go to their end without a reboot. run_updates on its group and a
+	// fresh step-up, in the audit log; a rollout that ended already is FAILED_PRECONDITION.
+	CancelRollout(context.Context, *connect.Request[v1.CancelRolloutRequest]) (*connect.Response[v1.CancelRolloutResponse], error)
+	// CancelRun cancels a run the node hasn't started (M4-31): a pending one never goes out, a sent
+	// one is withdrawn from the agent if it still waits for the helper. run_updates (reboot_nodes
+	// for a reboot) on the node's group and a fresh step-up, in the audit log; a run that started
+	// or ended is FAILED_PRECONDITION.
+	CancelRun(context.Context, *connect.Request[v1.CancelRunRequest]) (*connect.Response[v1.CancelRunResponse], error)
 	// ListAgentReleases returns the agent releases the server offers per channel (view_nodes).
 	ListAgentReleases(context.Context, *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error)
 }
@@ -351,6 +398,18 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(updateServiceMethods.ByName("UpdateAgents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	updateServiceCancelRolloutHandler := connect.NewUnaryHandler(
+		UpdateServiceCancelRolloutProcedure,
+		svc.CancelRollout,
+		connect.WithSchema(updateServiceMethods.ByName("CancelRollout")),
+		connect.WithHandlerOptions(opts...),
+	)
+	updateServiceCancelRunHandler := connect.NewUnaryHandler(
+		UpdateServiceCancelRunProcedure,
+		svc.CancelRun,
+		connect.WithSchema(updateServiceMethods.ByName("CancelRun")),
+		connect.WithHandlerOptions(opts...),
+	)
 	updateServiceListAgentReleasesHandler := connect.NewUnaryHandler(
 		UpdateServiceListAgentReleasesProcedure,
 		svc.ListAgentReleases,
@@ -378,6 +437,10 @@ func NewUpdateServiceHandler(svc UpdateServiceHandler, opts ...connect.HandlerOp
 			updateServiceListRolloutsHandler.ServeHTTP(w, r)
 		case UpdateServiceUpdateAgentsProcedure:
 			updateServiceUpdateAgentsHandler.ServeHTTP(w, r)
+		case UpdateServiceCancelRolloutProcedure:
+			updateServiceCancelRolloutHandler.ServeHTTP(w, r)
+		case UpdateServiceCancelRunProcedure:
+			updateServiceCancelRunHandler.ServeHTTP(w, r)
 		case UpdateServiceListAgentReleasesProcedure:
 			updateServiceListAgentReleasesHandler.ServeHTTP(w, r)
 		default:
@@ -423,6 +486,14 @@ func (UnimplementedUpdateServiceHandler) ListRollouts(context.Context, *connect.
 
 func (UnimplementedUpdateServiceHandler) UpdateAgents(context.Context, *connect.Request[v1.UpdateAgentsRequest]) (*connect.Response[v1.UpdateAgentsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.UpdateAgents is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) CancelRollout(context.Context, *connect.Request[v1.CancelRolloutRequest]) (*connect.Response[v1.CancelRolloutResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.CancelRollout is not implemented"))
+}
+
+func (UnimplementedUpdateServiceHandler) CancelRun(context.Context, *connect.Request[v1.CancelRunRequest]) (*connect.Response[v1.CancelRunResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdateService.CancelRun is not implemented"))
 }
 
 func (UnimplementedUpdateServiceHandler) ListAgentReleases(context.Context, *connect.Request[v1.ListAgentReleasesRequest]) (*connect.Response[v1.ListAgentReleasesResponse], error) {

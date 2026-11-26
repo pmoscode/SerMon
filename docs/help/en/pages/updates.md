@@ -15,6 +15,16 @@ A rollout installs the updates of a group – by its policy in a window, or by h
 "updating", "rebooting" and "health check" to "done"; otherwise it says why it failed or was skipped (offline, no root
 helper, forbidden by the host, end of the window).
 
+**Cancel** stops a running rollout (the right to run updates on the group, with a fresh sign-in): waiting nodes are
+skipped, runs the node hasn't begun are withdrawn; nodes updating right now finish without a reboot.
+
+## Pause updates
+
+Admins pause all updates of the organization here, for instance when an account may be taken over: no rollout starts
+another node, waiting runs don't go to the nodes, updates, reboots and agent updates by hand are refused. Runs under
+way go to their end. The notice at the top shows everybody since when; **Resume updates** lifts it. Both are in the
+audit log.
+
 ## Update policies
 
 Every group has a policy; without one of its own it only reports. Admins change it here or as YAML, see

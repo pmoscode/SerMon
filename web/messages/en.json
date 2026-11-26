@@ -1223,5 +1223,21 @@
 	"heatmap_range_24h": "24 h",
 	"heatmap_range_7d": "7 days",
 	"heatmap_range_30d": "30 days",
-	"heatmap_range": "Time range"
+	"heatmap_range": "Time range",
+	"runs_state_cancelled": "cancelled",
+	"runs_cancel": "Cancel",
+	"runs_cancel_too_late": "The node has already started this run; it can't be cancelled any more.",
+	"rollout_cancel": "Cancel",
+	"rollout_cancel_title": "Cancel this rollout?",
+	"rollout_cancel_text": "Nodes still waiting are skipped; nodes updating right now finish without a reboot.",
+	"rollout_cancel_confirm": "Cancel rollout",
+	"rollout_cancel_keep": "Keep running",
+	"rollout_cancel_ended": "This rollout has already ended.",
+	"updates_paused_since": "Updates are paused since {time}.",
+	"updates_paused_text": "No rollout starts a node and no waiting run goes out; updates and reboots by hand are refused. Runs under way go to their end.",
+	"updates_pause": "Pause updates",
+	"updates_resume": "Resume updates",
+	"updates_pause_title": "Pause all updates of the organization?",
+	"updates_pause_text": "Until an admin resumes them, no rollout starts another node, waiting runs stay back and updates and reboots by hand are refused. Runs under way go to their end.",
+	"updates_paused_refused": "The organization's updates are paused; an admin can resume them on the Updates page."
 }

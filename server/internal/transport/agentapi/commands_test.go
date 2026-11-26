@@ -27,6 +27,33 @@ type fakeCommands struct {
 	commands []command.Command
 	looked   []identity.NodeID
 	results  map[uuid.UUID][]command.Result
+	// cancels are the sent runs withdrawn; cancelSent those whose cancel went out (M4-31).
+	cancels    []uuid.UUID
+	cancelSent map[uuid.UUID]bool
+}
+
+func (f *fakeCommands) Cancels(_ context.Context, _ tenant.OrgID, _ identity.NodeID, resend bool) ([]uuid.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []uuid.UUID
+	for _, id := range f.cancels {
+		if resend || !f.cancelSent[id] {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeCommands) MarkCancelsSent(_ context.Context, _ tenant.OrgID, _ identity.NodeID, ids []uuid.UUID, _ time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.cancelSent == nil {
+		f.cancelSent = map[uuid.UUID]bool{}
+	}
+	for _, id := range ids {
+		f.cancelSent[id] = true
+	}
+	return nil
 }
 
 func (f *fakeCommands) add(c command.Command) {
@@ -104,7 +131,7 @@ func nextCommand(t *testing.T, stream interface {
 		}
 		switch res.GetPayload().(type) {
 		case *agentv1.SessionResponse_RunUpdate, *agentv1.SessionResponse_RebootNode, *agentv1.SessionResponse_SelfUpdate,
-			*agentv1.SessionResponse_RefreshUpdateInfo:
+			*agentv1.SessionResponse_RefreshUpdateInfo, *agentv1.SessionResponse_CancelRun:
 			return res
 		}
 	}
@@ -215,5 +242,39 @@ func TestSession_LooksForCommandsWithoutAWakeUp(t *testing.T) {
 	commands.add(refresh)
 	if res := nextCommand(t, stream); res.GetRefreshUpdateInfo() == nil {
 		t.Fatalf("got %v, want the refresh", res)
+	}
+}
+
+// M4-31: a sent run withdrawn on the server goes to the agent as CancelRun after a wake-up, once
+// per session, and again after a reconnect until the agent answers.
+func TestSession_WithdrawsCancelledRuns(t *testing.T) {
+	commands := &fakeCommands{}
+	s := startServerFull(t, newTestCA(t), 0, nil, []agentapi.HandlerOption{agentapi.WithCommands(commands, time.Hour)})
+	cert, _ := s.ca.agentCert(t, orgX, nodeX)
+	client := s.client(t, &cert, tls.VersionTLS13)
+	ctx, cancel := context.WithCancel(context.Background())
+	stream := client.Session(ctx)
+	if err := stream.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Receive(); err != nil {
+		t.Fatal(err)
+	}
+	run := uuid.Must(uuid.NewV7())
+	commands.mu.Lock()
+	commands.cancels = []uuid.UUID{run}
+	commands.mu.Unlock()
+	s.sessions.CommandsWaiting(nodeX)
+	if got := nextCommand(t, stream).GetCancelRun(); got.GetRunId() != run.String() {
+		t.Fatalf("got %v, want the cancel of %v", got, run)
+	}
+	cancel()
+	again := client.Session(context.Background())
+	defer func() { _ = again.CloseRequest() }()
+	if err := again.Send(helloMsg()); err != nil {
+		t.Fatal(err)
+	}
+	if got := nextCommand(t, again).GetCancelRun(); got.GetRunId() != run.String() {
+		t.Fatalf("after the reconnect: %v", got)
 	}
 }

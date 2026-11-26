@@ -28,6 +28,11 @@ service UpdatePolicyService {
   }
   // ResetUpdatePolicy returns the group to the default (report only).
   rpc ResetUpdatePolicy(ResetUpdatePolicyRequest) returns (ResetUpdatePolicyResponse);
+  // SetUpdatesPaused pauses or resumes all updates of the organization (M4-31): while paused no
+  // rollout starts a node, no waiting run goes out and runs by hand are FAILED_PRECONDITION;
+  // runs under way go to their end. manage_policies (admin on all groups) and a fresh step-up,
+  // in the audit log.
+  rpc SetUpdatesPaused(SetUpdatesPausedRequest) returns (SetUpdatesPausedResponse);
 }
 
 // UpdateMode is what a group does with its updates on its own.
@@ -159,6 +164,20 @@ message ListUpdatePoliciesRequest {}
 message ListUpdatePoliciesResponse {
   // policies of the visible groups.
   repeated UpdatePolicy policies = 1;
+  // paused_since is when the organization's updates were paused; unset while they run (M4-31).
+  google.protobuf.Timestamp paused_since = 2;
+}
+
+// SetUpdatesPausedRequest says whether to pause.
+message SetUpdatesPausedRequest {
+  // paused pauses (true) or resumes (false) the updates.
+  bool paused = 1;
+}
+
+// SetUpdatesPausedResponse is the new state.
+message SetUpdatesPausedResponse {
+  // paused_since is when the updates were paused; unset after a resume.
+  google.protobuf.Timestamp paused_since = 1;
 }
 
 // SetUpdatePolicyRequest is the new policy of a group.

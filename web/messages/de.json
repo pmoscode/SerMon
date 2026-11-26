@@ -1223,5 +1223,21 @@
 	"heatmap_range_24h": "24 Std.",
 	"heatmap_range_7d": "7 Tage",
 	"heatmap_range_30d": "30 Tage",
-	"heatmap_range": "Zeitraum"
+	"heatmap_range": "Zeitraum",
+	"runs_state_cancelled": "abgebrochen",
+	"runs_cancel": "Abbrechen",
+	"runs_cancel_too_late": "Der Node hat diesen Lauf schon begonnen; abbrechen geht nicht mehr.",
+	"rollout_cancel": "Abbrechen",
+	"rollout_cancel_title": "Diesen Rollout abbrechen?",
+	"rollout_cancel_text": "Wartende Nodes werden übersprungen; Nodes, die gerade aktualisieren, laufen ohne Neustart zu Ende.",
+	"rollout_cancel_confirm": "Rollout abbrechen",
+	"rollout_cancel_keep": "Weiterlaufen lassen",
+	"rollout_cancel_ended": "Dieser Rollout ist schon beendet.",
+	"updates_paused_since": "Updates sind pausiert seit {time}.",
+	"updates_paused_text": "Kein Rollout startet einen Node, wartende Läufe gehen nicht raus, Updates und Neustarts von Hand werden abgelehnt. Was schon läuft, geht zu Ende.",
+	"updates_pause": "Updates pausieren",
+	"updates_resume": "Updates fortsetzen",
+	"updates_pause_title": "Alle Updates der Organisation pausieren?",
+	"updates_pause_text": "Bis ein Admin sie fortsetzt, startet kein Rollout einen weiteren Node, wartende Läufe bleiben zurück und Updates und Neustarts von Hand werden abgelehnt. Was schon läuft, geht zu Ende.",
+	"updates_paused_refused": "Die Updates der Organisation sind pausiert; ein Admin kann sie auf der Seite „Updates“ fortsetzen."
 }

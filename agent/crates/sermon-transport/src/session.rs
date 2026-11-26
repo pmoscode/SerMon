@@ -48,6 +48,8 @@ pub enum HelperCommand {
 pub trait CommandSink: Send + Sync {
     /// Takes one command; the session goes on at once.
     fn command(&self, command: HelperCommand);
+    /// Withdraws a run sent before (M4-31): dropped if it still waits for the helper.
+    fn cancel(&self, _run_id: String) {}
     /// A session stands: the server answered the `Hello` (a new agent confirms its self-update,
     /// ADR 0036).
     fn connected(&self) {}
@@ -634,6 +636,13 @@ impl Session<'_> {
             }
             session_response::Payload::SelfUpdate(update) => {
                 self.command(HelperCommand::SelfUpdate(update));
+            }
+            session_response::Payload::CancelRun(cancel) => {
+                if let Some(sink) = &self.transport.commands {
+                    sink.cancel(cancel.run_id);
+                } else {
+                    tracing::debug!("ignoring a withdrawn run, none is run here");
+                }
             }
         }
         Ok(None)

@@ -86,6 +86,8 @@ type RolloutRun struct {
 	Mode       Mode
 	AutoReboot bool
 	CreatedBy  identity.UserID
+	// Cancelled by hand (M4-31): stopped, a save planned without knowing it is dropped.
+	Cancelled bool
 }
 
 // NodeView is what the rollout knows of a node of the group now.
@@ -157,7 +159,8 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 	}
 	var actions []Action
 	end := r.windowEnd(p, now)
-	windowOpen := now.Before(end) && (p.Mode != ModeReport || p.AgentUpdate == AgentAuto)
+	// Paused updates start nothing (M4-31): no node, no reboot, no packages.
+	windowOpen := now.Before(end) && (p.Mode != ModeReport || p.AgentUpdate == AgentAuto) && !p.Paused
 	for i := range r.Nodes {
 		n := &r.Nodes[i]
 		if !n.State.Active() {
@@ -298,7 +301,7 @@ func wants(mode Mode, r *update.Report) bool {
 // with something to install, by host name.
 func begin(now time.Time, p Policy, last *RolloutRun, nodes []NodeView, newID func() uuid.UUID) *RolloutRun {
 	agents := p.AgentUpdate == AgentAuto
-	if p.Window == nil || (p.Mode == ModeReport && !agents) {
+	if p.Window == nil || p.Paused || (p.Mode == ModeReport && !agents) {
 		return nil
 	}
 	start, end, ok := p.Window.Current(now)
@@ -425,6 +428,9 @@ func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]
 func finished(run command.Command, known bool, now time.Time) (bool, string) {
 	if !known {
 		return true, "the run is gone"
+	}
+	if run.State == command.Cancelled {
+		return true, "cancelled by hand"
 	}
 	if run.EffectiveState(now) == command.Expired {
 		if run.State == command.Sent {

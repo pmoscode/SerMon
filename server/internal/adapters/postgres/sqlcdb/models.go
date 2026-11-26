@@ -297,6 +297,9 @@ type NodeCommand struct {
 	OutputTruncated bool
 	StartedAt       *time.Time
 	EndedAt         *time.Time
+	CancelledAt     *time.Time
+	CancelledBy     *uuid.UUID
+	CancelSentAt    *time.Time
 }
 
 type NodeGroup struct {
@@ -431,6 +434,8 @@ type Organization struct {
 	RedactionRules      []byte
 	ViewersSeeLogs      bool
 	LiveHideCmdline     bool
+	UpdatesPausedAt     *time.Time
+	UpdatesPausedBy     *uuid.UUID
 }
 
 type PkiAuthority struct {
@@ -536,6 +541,8 @@ type UpdateRollout struct {
 	Mode        pgtype.Int2
 	AutoReboot  bool
 	CreatedBy   *uuid.UUID
+	CancelledAt *time.Time
+	CancelledBy *uuid.UUID
 }
 
 type UpdateRolloutNode struct {

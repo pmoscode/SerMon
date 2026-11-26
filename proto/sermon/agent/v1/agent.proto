@@ -121,6 +121,9 @@ message SessionResponse {
     RebootNode reboot_node = 11;
     // self_update replaces the agent's binary through the root helper (KONZEPT §14.3).
     SelfUpdate self_update = 12;
+    // cancel_run withdraws a run sent before (M4-31): one still waiting for the helper is dropped
+    // and reported refused; one the helper started runs to its end.
+    CancelRun cancel_run = 13;
   }
 }
 
@@ -893,6 +896,12 @@ message SelfUpdate {
   // host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
   // older server) leaves the agent's own bound alone.
   uint32 valid_for_seconds = 3 [(buf.validate.field).uint32.lte = 86400];
+}
+
+// CancelRun names the run to withdraw.
+message CancelRun {
+  // run_id names the run: a lowercase UUID.
+  string run_id = 1 [(buf.validate.field).string.pattern = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"];
 }
 
 // PackageManager is the host's package manager.

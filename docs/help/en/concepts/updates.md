@@ -16,6 +16,10 @@ only. Alpine has no security updates: there is only "all".
 3. After the confirmation (with a fresh sign-in) a rollout runs with the group's `maxParallel`. The node's reboot and
    offline alerts are muted meanwhile.
 
+A run the node hasn't begun can be cancelled under **Runs**; one sent already the agent withdraws while it still waits
+for the root helper. A node gets no second reboot while one runs, and no reboot or agent update by hand while it is in
+a rollout. An organization runs at most 100 runs at once.
+
 ## What the host allows
 
 In `/etc/sermon/helper.toml` the host decides itself: `allow_remote_updates` (on by default) and `allow_remote_reboot`

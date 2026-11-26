@@ -44,12 +44,15 @@ type Change struct {
 type RolloutStore interface {
 	// Organizations returns the organizations to look after (not locked).
 	Organizations(ctx context.Context) ([]tenant.OrgID, error)
-	// Lease takes or renews the organization's lease until until; false if another holds it.
-	Lease(ctx context.Context, org tenant.OrgID, holder string, now, until time.Time) (bool, error)
+	// Lease takes or renews the organization's lease for leaseFor from the database's time; false
+	// if another holds it.
+	Lease(ctx context.Context, org tenant.OrgID, holder string, leaseFor time.Duration) (bool, error)
 	// Load reads the groups with an installing policy (and those with a rollout still followed).
 	Load(ctx context.Context, org tenant.OrgID, now time.Time) (OrgState, error)
 	// Save stores the changes in one transaction while holder holds the lease (else
-	// ErrLeaseLost): rollouts, commands (with their wake-up), silences and server events.
+	// ErrLeaseLost): rollouts, commands (with their wake-up), silences and server events. It drops
+	// the change of a rollout cancelled since the load, and while the updates are paused every
+	// change that sends a command (M4-31).
 	Save(ctx context.Context, org tenant.OrgID, holder string, now time.Time, changes []Change) error
 	// Prune deletes the organization's runs and rollouts created before before.
 	Prune(ctx context.Context, org tenant.OrgID, before time.Time) error
@@ -170,7 +173,7 @@ func (o *Orchestrator) Round(ctx context.Context) {
 // step plans the organization's groups; it returns its runs after the step.
 func (o *Orchestrator) step(ctx context.Context, org tenant.OrgID, instanceActive int) (int, error) {
 	now := o.config.Now()
-	held, err := o.store.Lease(ctx, org, o.config.Holder, now, now.Add(o.config.LeaseFor))
+	held, err := o.store.Lease(ctx, org, o.config.Holder, o.config.LeaseFor)
 	if err != nil {
 		return 0, fmt.Errorf("lease: %w", err)
 	}

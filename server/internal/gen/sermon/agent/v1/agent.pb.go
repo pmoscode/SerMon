@@ -1040,6 +1040,7 @@ type SessionResponse struct {
 	//	*SessionResponse_RunUpdate
 	//	*SessionResponse_RebootNode
 	//	*SessionResponse_SelfUpdate
+	//	*SessionResponse_CancelRun
 	Payload       isSessionResponse_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1190,6 +1191,15 @@ func (x *SessionResponse) GetSelfUpdate() *SelfUpdate {
 	return nil
 }
 
+func (x *SessionResponse) GetCancelRun() *CancelRun {
+	if x != nil {
+		if x, ok := x.Payload.(*SessionResponse_CancelRun); ok {
+			return x.CancelRun
+		}
+	}
+	return nil
+}
+
 type isSessionResponse_Payload interface {
 	isSessionResponse_Payload()
 }
@@ -1260,6 +1270,12 @@ type SessionResponse_SelfUpdate struct {
 	SelfUpdate *SelfUpdate `protobuf:"bytes,12,opt,name=self_update,json=selfUpdate,proto3,oneof"`
 }
 
+type SessionResponse_CancelRun struct {
+	// cancel_run withdraws a run sent before (M4-31): one still waiting for the helper is dropped
+	// and reported refused; one the helper started runs to its end.
+	CancelRun *CancelRun `protobuf:"bytes,13,opt,name=cancel_run,json=cancelRun,proto3,oneof"`
+}
+
 func (*SessionResponse_Ack) isSessionResponse_Payload() {}
 
 func (*SessionResponse_CertificateIssued) isSessionResponse_Payload() {}
@@ -1283,6 +1299,8 @@ func (*SessionResponse_RunUpdate) isSessionResponse_Payload() {}
 func (*SessionResponse_RebootNode) isSessionResponse_Payload() {}
 
 func (*SessionResponse_SelfUpdate) isSessionResponse_Payload() {}
+
+func (*SessionResponse_CancelRun) isSessionResponse_Payload() {}
 
 // Hello is the first message of every stream.
 type Hello struct {
@@ -4652,6 +4670,52 @@ func (x *SelfUpdate) GetValidForSeconds() uint32 {
 	return 0
 }
 
+// CancelRun names the run to withdraw.
+type CancelRun struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// run_id names the run: a lowercase UUID.
+	RunId         string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelRun) Reset() {
+	*x = CancelRun{}
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelRun) ProtoMessage() {}
+
+func (x *CancelRun) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelRun.ProtoReflect.Descriptor instead.
+func (*CancelRun) Descriptor() ([]byte, []int) {
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *CancelRun) GetRunId() string {
+	if x != nil {
+		return x.RunId
+	}
+	return ""
+}
+
 // UpdateReport is what the host could update (KONZEPT §14.1), every 6 hours, after the package
 // manager ran and on RefreshUpdateInfo. Names, versions and sources come from the host's package
 // sources: shown as text only.
@@ -4688,7 +4752,7 @@ type UpdateReport struct {
 
 func (x *UpdateReport) Reset() {
 	*x = UpdateReport{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4700,7 +4764,7 @@ func (x *UpdateReport) String() string {
 func (*UpdateReport) ProtoMessage() {}
 
 func (x *UpdateReport) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[50]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4713,7 +4777,7 @@ func (x *UpdateReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateReport.ProtoReflect.Descriptor instead.
 func (*UpdateReport) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{50}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *UpdateReport) GetCollectedAt() *timestamppb.Timestamp {
@@ -4819,7 +4883,7 @@ type UpdatePackage struct {
 
 func (x *UpdatePackage) Reset() {
 	*x = UpdatePackage{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[51]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4831,7 +4895,7 @@ func (x *UpdatePackage) String() string {
 func (*UpdatePackage) ProtoMessage() {}
 
 func (x *UpdatePackage) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[51]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4844,7 +4908,7 @@ func (x *UpdatePackage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePackage.ProtoReflect.Descriptor instead.
 func (*UpdatePackage) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{51}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *UpdatePackage) GetName() string {
@@ -4897,7 +4961,7 @@ type HelperPermissions struct {
 
 func (x *HelperPermissions) Reset() {
 	*x = HelperPermissions{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[52]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4909,7 +4973,7 @@ func (x *HelperPermissions) String() string {
 func (*HelperPermissions) ProtoMessage() {}
 
 func (x *HelperPermissions) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[52]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4922,7 +4986,7 @@ func (x *HelperPermissions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HelperPermissions.ProtoReflect.Descriptor instead.
 func (*HelperPermissions) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{52}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *HelperPermissions) GetRemoteUpdates() bool {
@@ -4971,7 +5035,7 @@ type CommandResult struct {
 
 func (x *CommandResult) Reset() {
 	*x = CommandResult{}
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[53]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4983,7 +5047,7 @@ func (x *CommandResult) String() string {
 func (*CommandResult) ProtoMessage() {}
 
 func (x *CommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_agent_v1_agent_proto_msgTypes[53]
+	mi := &file_sermon_agent_v1_agent_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4996,7 +5060,7 @@ func (x *CommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
 func (*CommandResult) Descriptor() ([]byte, []int) {
-	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{53}
+	return file_sermon_agent_v1_agent_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *CommandResult) GetRunId() string {
@@ -5079,7 +5143,7 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x0econfig_applied\x18\x05 \x01(\v2\x1e.sermon.agent.v1.ConfigAppliedH\x00R\rconfigApplied\x12M\n" +
 	"\x10process_snapshot\x18\x06 \x01(\v2 .sermon.agent.v1.ProcessSnapshotH\x00R\x0fprocessSnapshot\x12N\n" +
 	"\x11live_view_refused\x18\a \x01(\v2 .sermon.agent.v1.LiveViewRefusedH\x00R\x0fliveViewRefusedB\x10\n" +
-	"\apayload\x12\x05\xbaH\x02\b\x01\"\xc5\x06\n" +
+	"\apayload\x12\x05\xbaH\x02\b\x01\"\x82\a\n" +
 	"\x0fSessionResponse\x12(\n" +
 	"\x03ack\x18\x01 \x01(\v2\x14.sermon.agent.v1.AckH\x00R\x03ack\x12S\n" +
 	"\x12certificate_issued\x18\x02 \x01(\v2\".sermon.agent.v1.CertificateIssuedH\x00R\x11certificateIssued\x12;\n" +
@@ -5097,7 +5161,9 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\vreboot_node\x18\v \x01(\v2\x1b.sermon.agent.v1.RebootNodeH\x00R\n" +
 	"rebootNode\x12>\n" +
 	"\vself_update\x18\f \x01(\v2\x1b.sermon.agent.v1.SelfUpdateH\x00R\n" +
-	"selfUpdateB\x10\n" +
+	"selfUpdate\x12;\n" +
+	"\n" +
+	"cancel_run\x18\r \x01(\v2\x1a.sermon.agent.v1.CancelRunH\x00R\tcancelRunB\x10\n" +
 	"\apayload\x12\x05\xbaH\x02\b\x01\"\xa6\x02\n" +
 	"\x05Hello\x122\n" +
 	"\x10protocol_version\x18\x01 \x01(\rB\a\xbaH\x04*\x02(\x01R\x0fprotocolVersion\x12.\n" +
@@ -5363,7 +5429,9 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"SelfUpdate\x12\\\n" +
 	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x12M\n" +
 	"\aversion\x18\x02 \x01(\tB3\xbaH0r.(@2*^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$R\aversion\x125\n" +
-	"\x11valid_for_seconds\x18\x03 \x01(\rB\t\xbaH\x06*\x04\x18\x80\xa3\x05R\x0fvalidForSeconds\"\xc5\x05\n" +
+	"\x11valid_for_seconds\x18\x03 \x01(\rB\t\xbaH\x06*\x04\x18\x80\xa3\x05R\x0fvalidForSeconds\"i\n" +
+	"\tCancelRun\x12\\\n" +
+	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\"\xc5\x05\n" +
 	"\fUpdateReport\x12E\n" +
 	"\fcollected_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\vcollectedAt\x12S\n" +
 	"\favailability\x18\x02 \x01(\x0e2#.sermon.agent.v1.UpdateAvailabilityB\n" +
@@ -5483,7 +5551,7 @@ func file_sermon_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
-var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
+var file_sermon_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 56)
 var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(InstallMethod)(0),                // 0: sermon.agent.v1.InstallMethod
 	(SecuritySource)(0),               // 1: sermon.agent.v1.SecuritySource
@@ -5545,13 +5613,14 @@ var file_sermon_agent_v1_agent_proto_goTypes = []any{
 	(*RunUpdate)(nil),                 // 57: sermon.agent.v1.RunUpdate
 	(*RebootNode)(nil),                // 58: sermon.agent.v1.RebootNode
 	(*SelfUpdate)(nil),                // 59: sermon.agent.v1.SelfUpdate
-	(*UpdateReport)(nil),              // 60: sermon.agent.v1.UpdateReport
-	(*UpdatePackage)(nil),             // 61: sermon.agent.v1.UpdatePackage
-	(*HelperPermissions)(nil),         // 62: sermon.agent.v1.HelperPermissions
-	(*CommandResult)(nil),             // 63: sermon.agent.v1.CommandResult
-	nil,                               // 64: sermon.agent.v1.Sample.LabelsEntry
-	(*timestamppb.Timestamp)(nil),     // 65: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),       // 66: google.protobuf.Duration
+	(*CancelRun)(nil),                 // 60: sermon.agent.v1.CancelRun
+	(*UpdateReport)(nil),              // 61: sermon.agent.v1.UpdateReport
+	(*UpdatePackage)(nil),             // 62: sermon.agent.v1.UpdatePackage
+	(*HelperPermissions)(nil),         // 63: sermon.agent.v1.HelperPermissions
+	(*CommandResult)(nil),             // 64: sermon.agent.v1.CommandResult
+	nil,                               // 65: sermon.agent.v1.Sample.LabelsEntry
+	(*timestamppb.Timestamp)(nil),     // 66: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),       // 67: google.protobuf.Duration
 }
 var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
 	2,  // 0: sermon.agent.v1.FetchAgentReleaseRequest.architecture:type_name -> sermon.agent.v1.Architecture
@@ -5575,75 +5644,76 @@ var file_sermon_agent_v1_agent_proto_depIdxs = []int32{
 	57, // 18: sermon.agent.v1.SessionResponse.run_update:type_name -> sermon.agent.v1.RunUpdate
 	58, // 19: sermon.agent.v1.SessionResponse.reboot_node:type_name -> sermon.agent.v1.RebootNode
 	59, // 20: sermon.agent.v1.SessionResponse.self_update:type_name -> sermon.agent.v1.SelfUpdate
-	16, // 21: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
-	0,  // 22: sermon.agent.v1.Hello.install_method:type_name -> sermon.agent.v1.InstallMethod
-	2,  // 23: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
-	1,  // 24: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
-	65, // 25: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
-	65, // 26: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
-	65, // 27: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
-	24, // 28: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
-	27, // 29: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
-	41, // 30: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
-	60, // 31: sermon.agent.v1.Batch.update_report:type_name -> sermon.agent.v1.UpdateReport
-	63, // 32: sermon.agent.v1.Batch.command_result:type_name -> sermon.agent.v1.CommandResult
-	65, // 33: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
-	25, // 34: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
-	64, // 35: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
-	66, // 36: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
-	28, // 37: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
-	65, // 38: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	30, // 39: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
-	31, // 40: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
-	32, // 41: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
-	33, // 42: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
-	34, // 43: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
-	35, // 44: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
-	36, // 45: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
-	37, // 46: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
-	38, // 47: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
-	39, // 48: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
-	40, // 49: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
-	29, // 50: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
-	3,  // 51: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
-	29, // 52: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
-	29, // 53: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
-	3,  // 54: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
-	29, // 55: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
-	66, // 56: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
-	42, // 57: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
-	65, // 58: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
-	4,  // 59: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
-	5,  // 60: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
-	44, // 61: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
-	45, // 62: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
-	47, // 63: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
-	5,  // 64: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
-	46, // 65: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
-	66, // 66: sermon.agent.v1.StartLiveView.interval:type_name -> google.protobuf.Duration
-	65, // 67: sermon.agent.v1.ProcessSnapshot.taken_at:type_name -> google.protobuf.Timestamp
-	53, // 68: sermon.agent.v1.ProcessSnapshot.summary:type_name -> sermon.agent.v1.SystemSummary
-	55, // 69: sermon.agent.v1.ProcessSnapshot.processes:type_name -> sermon.agent.v1.ProcessInfo
-	54, // 70: sermon.agent.v1.SystemSummary.tasks:type_name -> sermon.agent.v1.TaskCounts
-	6,  // 71: sermon.agent.v1.RunUpdate.scope:type_name -> sermon.agent.v1.UpdateScope
-	65, // 72: sermon.agent.v1.UpdateReport.collected_at:type_name -> google.protobuf.Timestamp
-	8,  // 73: sermon.agent.v1.UpdateReport.availability:type_name -> sermon.agent.v1.UpdateAvailability
-	7,  // 74: sermon.agent.v1.UpdateReport.package_manager:type_name -> sermon.agent.v1.PackageManager
-	61, // 75: sermon.agent.v1.UpdateReport.packages:type_name -> sermon.agent.v1.UpdatePackage
-	65, // 76: sermon.agent.v1.UpdateReport.last_upgrade_at:type_name -> google.protobuf.Timestamp
-	62, // 77: sermon.agent.v1.UpdateReport.permissions:type_name -> sermon.agent.v1.HelperPermissions
-	9,  // 78: sermon.agent.v1.CommandResult.phase:type_name -> sermon.agent.v1.CommandPhase
-	65, // 79: sermon.agent.v1.CommandResult.started_at:type_name -> google.protobuf.Timestamp
-	65, // 80: sermon.agent.v1.CommandResult.ended_at:type_name -> google.protobuf.Timestamp
-	13, // 81: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
-	10, // 82: sermon.agent.v1.AgentService.FetchAgentRelease:input_type -> sermon.agent.v1.FetchAgentReleaseRequest
-	14, // 83: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
-	11, // 84: sermon.agent.v1.AgentService.FetchAgentRelease:output_type -> sermon.agent.v1.FetchAgentReleaseResponse
-	83, // [83:85] is the sub-list for method output_type
-	81, // [81:83] is the sub-list for method input_type
-	81, // [81:81] is the sub-list for extension type_name
-	81, // [81:81] is the sub-list for extension extendee
-	0,  // [0:81] is the sub-list for field type_name
+	60, // 21: sermon.agent.v1.SessionResponse.cancel_run:type_name -> sermon.agent.v1.CancelRun
+	16, // 22: sermon.agent.v1.Hello.host_facts:type_name -> sermon.agent.v1.HostFacts
+	0,  // 23: sermon.agent.v1.Hello.install_method:type_name -> sermon.agent.v1.InstallMethod
+	2,  // 24: sermon.agent.v1.HostFacts.architecture:type_name -> sermon.agent.v1.Architecture
+	1,  // 25: sermon.agent.v1.HostFacts.security_source:type_name -> sermon.agent.v1.SecuritySource
+	66, // 26: sermon.agent.v1.Heartbeat.sent_at:type_name -> google.protobuf.Timestamp
+	66, // 27: sermon.agent.v1.CertificateIssued.not_after:type_name -> google.protobuf.Timestamp
+	66, // 28: sermon.agent.v1.CertificateIssued.previous_valid_until:type_name -> google.protobuf.Timestamp
+	24, // 29: sermon.agent.v1.Batch.metrics:type_name -> sermon.agent.v1.MetricBatch
+	27, // 30: sermon.agent.v1.Batch.security_events:type_name -> sermon.agent.v1.SecurityEventBatch
+	41, // 31: sermon.agent.v1.Batch.logs:type_name -> sermon.agent.v1.LogBatch
+	61, // 32: sermon.agent.v1.Batch.update_report:type_name -> sermon.agent.v1.UpdateReport
+	64, // 33: sermon.agent.v1.Batch.command_result:type_name -> sermon.agent.v1.CommandResult
+	66, // 34: sermon.agent.v1.MetricBatch.collected_at:type_name -> google.protobuf.Timestamp
+	25, // 35: sermon.agent.v1.MetricBatch.samples:type_name -> sermon.agent.v1.Sample
+	65, // 36: sermon.agent.v1.Sample.labels:type_name -> sermon.agent.v1.Sample.LabelsEntry
+	67, // 37: sermon.agent.v1.Throttle.min_interval:type_name -> google.protobuf.Duration
+	28, // 38: sermon.agent.v1.SecurityEventBatch.events:type_name -> sermon.agent.v1.SecurityEvent
+	66, // 39: sermon.agent.v1.SecurityEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	30, // 40: sermon.agent.v1.SecurityEvent.ssh_login_failed:type_name -> sermon.agent.v1.SshLoginFailed
+	31, // 41: sermon.agent.v1.SecurityEvent.ssh_invalid_user:type_name -> sermon.agent.v1.SshInvalidUser
+	32, // 42: sermon.agent.v1.SecurityEvent.ssh_login_succeeded:type_name -> sermon.agent.v1.SshLoginSucceeded
+	33, // 43: sermon.agent.v1.SecurityEvent.ssh_preauth_disconnect:type_name -> sermon.agent.v1.SshPreauthDisconnect
+	34, // 44: sermon.agent.v1.SecurityEvent.sudo_auth_failed:type_name -> sermon.agent.v1.SudoAuthFailed
+	35, // 45: sermon.agent.v1.SecurityEvent.sudo_not_allowed:type_name -> sermon.agent.v1.SudoNotAllowed
+	36, // 46: sermon.agent.v1.SecurityEvent.sudo_command:type_name -> sermon.agent.v1.SudoCommand
+	37, // 47: sermon.agent.v1.SecurityEvent.account_created:type_name -> sermon.agent.v1.AccountCreated
+	38, // 48: sermon.agent.v1.SecurityEvent.account_deleted:type_name -> sermon.agent.v1.AccountDeleted
+	39, // 49: sermon.agent.v1.SecurityEvent.system_reboot:type_name -> sermon.agent.v1.SystemReboot
+	40, // 50: sermon.agent.v1.SecurityEvent.oom_kill:type_name -> sermon.agent.v1.OomKill
+	29, // 51: sermon.agent.v1.SshLoginFailed.remote:type_name -> sermon.agent.v1.SshRemote
+	3,  // 52: sermon.agent.v1.SshLoginFailed.method:type_name -> sermon.agent.v1.SshAuthMethod
+	29, // 53: sermon.agent.v1.SshInvalidUser.remote:type_name -> sermon.agent.v1.SshRemote
+	29, // 54: sermon.agent.v1.SshLoginSucceeded.remote:type_name -> sermon.agent.v1.SshRemote
+	3,  // 55: sermon.agent.v1.SshLoginSucceeded.method:type_name -> sermon.agent.v1.SshAuthMethod
+	29, // 56: sermon.agent.v1.SshPreauthDisconnect.remote:type_name -> sermon.agent.v1.SshRemote
+	67, // 57: sermon.agent.v1.SystemReboot.uptime_before:type_name -> google.protobuf.Duration
+	42, // 58: sermon.agent.v1.LogBatch.entries:type_name -> sermon.agent.v1.LogEntry
+	66, // 59: sermon.agent.v1.LogEntry.occurred_at:type_name -> google.protobuf.Timestamp
+	4,  // 60: sermon.agent.v1.LogEntry.source:type_name -> sermon.agent.v1.LogSource
+	5,  // 61: sermon.agent.v1.LogEntry.severity:type_name -> sermon.agent.v1.LogSeverity
+	44, // 62: sermon.agent.v1.ConfigUpdate.config:type_name -> sermon.agent.v1.AgentConfig
+	45, // 63: sermon.agent.v1.AgentConfig.logs:type_name -> sermon.agent.v1.LogConfig
+	47, // 64: sermon.agent.v1.AgentConfig.redaction_rules:type_name -> sermon.agent.v1.RedactionRule
+	5,  // 65: sermon.agent.v1.LogConfig.min_severity:type_name -> sermon.agent.v1.LogSeverity
+	46, // 66: sermon.agent.v1.LogConfig.files:type_name -> sermon.agent.v1.LogFileGlob
+	67, // 67: sermon.agent.v1.StartLiveView.interval:type_name -> google.protobuf.Duration
+	66, // 68: sermon.agent.v1.ProcessSnapshot.taken_at:type_name -> google.protobuf.Timestamp
+	53, // 69: sermon.agent.v1.ProcessSnapshot.summary:type_name -> sermon.agent.v1.SystemSummary
+	55, // 70: sermon.agent.v1.ProcessSnapshot.processes:type_name -> sermon.agent.v1.ProcessInfo
+	54, // 71: sermon.agent.v1.SystemSummary.tasks:type_name -> sermon.agent.v1.TaskCounts
+	6,  // 72: sermon.agent.v1.RunUpdate.scope:type_name -> sermon.agent.v1.UpdateScope
+	66, // 73: sermon.agent.v1.UpdateReport.collected_at:type_name -> google.protobuf.Timestamp
+	8,  // 74: sermon.agent.v1.UpdateReport.availability:type_name -> sermon.agent.v1.UpdateAvailability
+	7,  // 75: sermon.agent.v1.UpdateReport.package_manager:type_name -> sermon.agent.v1.PackageManager
+	62, // 76: sermon.agent.v1.UpdateReport.packages:type_name -> sermon.agent.v1.UpdatePackage
+	66, // 77: sermon.agent.v1.UpdateReport.last_upgrade_at:type_name -> google.protobuf.Timestamp
+	63, // 78: sermon.agent.v1.UpdateReport.permissions:type_name -> sermon.agent.v1.HelperPermissions
+	9,  // 79: sermon.agent.v1.CommandResult.phase:type_name -> sermon.agent.v1.CommandPhase
+	66, // 80: sermon.agent.v1.CommandResult.started_at:type_name -> google.protobuf.Timestamp
+	66, // 81: sermon.agent.v1.CommandResult.ended_at:type_name -> google.protobuf.Timestamp
+	13, // 82: sermon.agent.v1.AgentService.Session:input_type -> sermon.agent.v1.SessionRequest
+	10, // 83: sermon.agent.v1.AgentService.FetchAgentRelease:input_type -> sermon.agent.v1.FetchAgentReleaseRequest
+	14, // 84: sermon.agent.v1.AgentService.Session:output_type -> sermon.agent.v1.SessionResponse
+	11, // 85: sermon.agent.v1.AgentService.FetchAgentRelease:output_type -> sermon.agent.v1.FetchAgentReleaseResponse
+	84, // [84:86] is the sub-list for method output_type
+	82, // [82:84] is the sub-list for method input_type
+	82, // [82:82] is the sub-list for extension type_name
+	82, // [82:82] is the sub-list for extension extendee
+	0,  // [0:82] is the sub-list for field type_name
 }
 
 func init() { file_sermon_agent_v1_agent_proto_init() }
@@ -5677,6 +5747,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 		(*SessionResponse_RunUpdate)(nil),
 		(*SessionResponse_RebootNode)(nil),
 		(*SessionResponse_SelfUpdate)(nil),
+		(*SessionResponse_CancelRun)(nil),
 	}
 	file_sermon_agent_v1_agent_proto_msgTypes[13].OneofWrappers = []any{
 		(*Batch_Metrics)(nil),
@@ -5717,7 +5788,7 @@ func file_sermon_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_agent_v1_agent_proto_rawDesc), len(file_sermon_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      10,
-			NumMessages:   55,
+			NumMessages:   56,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

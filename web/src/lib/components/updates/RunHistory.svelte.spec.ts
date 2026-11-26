@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import {
+	CancelRunResponseSchema,
 	GetUpdateRunResponseSchema,
 	ListUpdateRunsResponseSchema,
 	UpdateRunKind,
@@ -13,10 +14,36 @@ import {
 } from '#lib/api/gen/sermon/web/v1/update_pb.js';
 import { updatesApi } from '#lib/api/updates.js';
 import { switchLocale } from '#lib/i18n/locale.svelte.js';
+import { sessionState } from '#lib/stores/session.svelte.js';
+import { stepUpState } from '#lib/stores/stepup.svelte.js';
+import { fakeSession, stepUpError } from '#lib/test/fakes.js';
 import RunHistory from './RunHistory.svelte';
 
 const now = Date.UTC(2026, 10, 22, 12, 0, 0);
 const nodeId = '0193f5a0-0000-7000-8000-0000000000d1';
+const group = '0193f5a0-0000-7000-8000-0000000000c1';
+const r3 = '0193f5a0-0000-7000-8000-0000000000a3';
+const r4 = '0193f5a0-0000-7000-8000-0000000000a4';
+
+// A waiting update, a sent reboot, a running and a cancelled update.
+function waiting(r3State = UpdateRunState.PENDING) {
+	return create(ListUpdateRunsResponseSchema, {
+		runs: [
+			{ runId: r3, nodeId, kind: UpdateRunKind.UPDATE, state: r3State, createdBy: 'u1' },
+			{ runId: r4, nodeId, kind: UpdateRunKind.REBOOT, state: UpdateRunState.SENT, reason: 'k' },
+			{ runId: 'r5', nodeId, kind: UpdateRunKind.UPDATE, state: UpdateRunState.RUNNING },
+			{ runId: 'r6', nodeId, kind: UpdateRunKind.SELF_UPDATE, state: UpdateRunState.CANCELLED }
+		]
+	});
+}
+
+function rights(update: string[], reboot: string[] = update) {
+	sessionState.current = { ...fakeSession(), runUpdatesGroupIds: update, rebootGroupIds: reboot };
+	sessionState.status = 'authenticated';
+}
+
+const item = (state: string) =>
+	page.getByRole('listitem').filter({ hasText: state }).getByRole('button', { name: 'Cancel' });
 
 function runs() {
 	return create(ListUpdateRunsResponseSchema, {
@@ -46,11 +73,16 @@ function runs() {
 
 describe('RunHistory', () => {
 	beforeEach(() => switchLocale('en'));
-	afterEach(() => vi.restoreAllMocks());
+	afterEach(() => {
+		vi.restoreAllMocks();
+		if (stepUpState.open) stepUpState.finish(false);
+		sessionState.current = undefined;
+		sessionState.status = 'unknown';
+	});
 
 	it('lists the runs with state, exit code and who asked', async () => {
 		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockResolvedValue(runs());
-		render(RunHistory, { nodeId, now: new Date(now) });
+		render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
 		await expect.element(page.getByText('Updates (security)')).toBeVisible();
 		await expect.element(page.getByText(/failed · exit code 100/)).toBeVisible();
 		await expect.element(page.getByText('dpkg was interrupted')).toBeVisible();
@@ -70,7 +102,7 @@ describe('RunHistory', () => {
 				}
 			})
 		);
-		render(RunHistory, { nodeId, now: new Date(now) });
+		render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
 		await page.getByRole('button', { name: 'Output' }).first().click();
 		await vi.waitFor(() => expect(get).toHaveBeenCalledWith({ runId: 'r1' }));
 		const output = page.getByLabelText('Output');
@@ -88,7 +120,7 @@ describe('RunHistory', () => {
 		vi.spyOn(updatesApi.updates, 'getUpdateRun').mockRejectedValue(
 			new ConnectError('forbidden', Code.PermissionDenied)
 		);
-		render(RunHistory, { nodeId, now: new Date(now) });
+		render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
 		await page.getByRole('button', { name: 'Output' }).first().click();
 		await expect.element(page.getByRole('alert')).toMatchTextContent(/like a log of the host/);
 	});
@@ -107,7 +139,7 @@ describe('RunHistory', () => {
 				: Promise.resolve(
 						create(GetUpdateRunResponseSchema, { run: { runId: 'r2', output: 'second run' } })
 					)) as never);
-		render(RunHistory, { nodeId, now: new Date(now) });
+		render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
 		await page.getByRole('button', { name: 'Output' }).first().click();
 		await page.getByRole('button', { name: 'Output' }).last().click();
 		await expect.element(page.getByLabelText('Output')).toMatchTextContent(/second run/);
@@ -129,11 +161,79 @@ describe('RunHistory', () => {
 			asked === nodeId
 				? new Promise((resolve) => (answerFirst = resolve))
 				: Promise.resolve(create(ListUpdateRunsResponseSchema, { runs: [] }))) as never);
-		const { rerender } = await render(RunHistory, { nodeId, now: new Date(now) });
+		const { rerender } = await render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
 		await rerender({ nodeId: other });
 		await expect.element(page.getByText('No runs yet.')).toBeVisible();
 		answerFirst(runs());
 		await new Promise((r) => setTimeout(r, 50));
 		expect(document.body.textContent).not.toContain('Updates (security)');
+	});
+
+	it('names a cancelled run', async () => {
+		rights([]);
+		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockResolvedValue(waiting());
+		const first = await render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
+		await expect.element(page.getByText('Agent update')).toBeVisible();
+		const run = page.getByRole('listitem').filter({ hasText: 'Agent update' });
+		expect(run.element().textContent).toContain('cancelled');
+		await first.unmount();
+		switchLocale('de');
+		await render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
+		await expect.element(page.getByText('Agent-Update')).toBeVisible();
+		expect(
+			page.getByRole('listitem').filter({ hasText: 'Agent-Update' }).element().textContent
+		).toContain('abgebrochen');
+	});
+
+	it('offers to cancel only runs the node has not started, with the right of their kind', async () => {
+		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockResolvedValue(waiting());
+		rights([group], []);
+		const first = await render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
+		await expect.element(item('waiting for the node')).toBeVisible();
+		expect(page.getByRole('button', { name: 'Cancel' }).elements()).toHaveLength(1);
+		await first.unmount();
+
+		rights([], ['*']);
+		const second = await render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
+		await expect.element(item('sent')).toBeVisible();
+		expect(page.getByRole('button', { name: 'Cancel' }).elements()).toHaveLength(1);
+		await second.unmount();
+
+		rights(['0193f5a0-0000-7000-8000-0000000000c2']);
+		render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
+		await expect.element(page.getByText('Agent update')).toBeVisible();
+		expect(page.getByRole('button', { name: 'Cancel' }).elements()).toHaveLength(0);
+	});
+
+	it('cancels a waiting run after a step-up and lists the runs again', async () => {
+		rights([group]);
+		const list = vi
+			.spyOn(updatesApi.updates, 'listUpdateRuns')
+			.mockResolvedValueOnce(waiting())
+			.mockResolvedValueOnce(waiting(UpdateRunState.CANCELLED));
+		const cancel = vi
+			.spyOn(updatesApi.updates, 'cancelRun')
+			.mockRejectedValueOnce(stepUpError())
+			.mockResolvedValueOnce(create(CancelRunResponseSchema, {}));
+		render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
+		await item('waiting for the node').click();
+		await vi.waitFor(() => expect(stepUpState.open).toBe(true));
+		stepUpState.finish(true);
+		await vi.waitFor(() => expect(cancel).toHaveBeenCalledTimes(2));
+		expect(cancel.mock.calls[1][0]).toEqual({ runId: r3 });
+		await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+		await expect.element(page.getByText('waiting for the node')).not.toBeInTheDocument();
+		expect(page.getByRole('listitem').first().element().textContent).toContain('cancelled');
+	});
+
+	it('says when the node has started the run already', async () => {
+		rights([group]);
+		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockResolvedValue(waiting());
+		vi.spyOn(updatesApi.updates, 'cancelRun').mockRejectedValue(
+			new ConnectError('started', Code.FailedPrecondition)
+		);
+		render(RunHistory, { nodeId, groupId: group, now: new Date(now) });
+		await item('waiting for the node').click();
+		await expect.element(page.getByRole('alert')).toMatchTextContent(/already started this run/);
 	});
 });

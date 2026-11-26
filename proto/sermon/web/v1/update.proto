@@ -53,6 +53,15 @@ service UpdateService {
   // installed by a package, without a newer release or whose host forbids it are skipped with
   // the reason. A node the caller can't view is NOT_FOUND.
   rpc UpdateAgents(UpdateAgentsRequest) returns (UpdateAgentsResponse);
+  // CancelRollout stops a running rollout (M4-31): no node starts any more, its waiting runs are
+  // cancelled, running ones go to their end without a reboot. run_updates on its group and a
+  // fresh step-up, in the audit log; a rollout that ended already is FAILED_PRECONDITION.
+  rpc CancelRollout(CancelRolloutRequest) returns (CancelRolloutResponse);
+  // CancelRun cancels a run the node hasn't started (M4-31): a pending one never goes out, a sent
+  // one is withdrawn from the agent if it still waits for the helper. run_updates (reboot_nodes
+  // for a reboot) on the node's group and a fresh step-up, in the audit log; a run that started
+  // or ended is FAILED_PRECONDITION.
+  rpc CancelRun(CancelRunRequest) returns (CancelRunResponse);
   // ListAgentReleases returns the agent releases the server offers per channel (view_nodes).
   rpc ListAgentReleases(ListAgentReleasesRequest) returns (ListAgentReleasesResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
@@ -165,6 +174,8 @@ enum UpdateRunState {
   UPDATE_RUN_STATE_LOST = 8;
   // UPDATE_RUN_STATE_EXPIRED: the node didn't take it in time.
   UPDATE_RUN_STATE_EXPIRED = 9;
+  // UPDATE_RUN_STATE_CANCELLED: cancelled before the node started it (M4-31).
+  UPDATE_RUN_STATE_CANCELLED = 10;
 }
 
 // UpdateRun is a run of a node.
@@ -378,6 +389,24 @@ message RebootNodesResponse {
   // run_ids are the reboot runs, in the order of the nodes.
   repeated string run_ids = 1;
 }
+
+// CancelRolloutRequest names the rollout.
+message CancelRolloutRequest {
+  // rollout_id is the rollout UUID.
+  string rollout_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// CancelRolloutResponse has no fields.
+message CancelRolloutResponse {}
+
+// CancelRunRequest names the run.
+message CancelRunRequest {
+  // run_id is the run UUID.
+  string run_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// CancelRunResponse has no fields.
+message CancelRunResponse {}
 
 // RefreshUpdateInfoRequest names the node.
 message RefreshUpdateInfoRequest {

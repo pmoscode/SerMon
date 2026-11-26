@@ -51,6 +51,9 @@ const (
 	// UpdatePolicyServiceResetUpdatePolicyProcedure is the fully-qualified name of the
 	// UpdatePolicyService's ResetUpdatePolicy RPC.
 	UpdatePolicyServiceResetUpdatePolicyProcedure = "/sermon.web.v1.UpdatePolicyService/ResetUpdatePolicy"
+	// UpdatePolicyServiceSetUpdatesPausedProcedure is the fully-qualified name of the
+	// UpdatePolicyService's SetUpdatesPaused RPC.
+	UpdatePolicyServiceSetUpdatesPausedProcedure = "/sermon.web.v1.UpdatePolicyService/SetUpdatesPaused"
 )
 
 // UpdatePolicyServiceClient is a client for the sermon.web.v1.UpdatePolicyService service.
@@ -67,6 +70,11 @@ type UpdatePolicyServiceClient interface {
 	ExportUpdatePolicy(context.Context, *connect.Request[v1.ExportUpdatePolicyRequest]) (*connect.Response[v1.ExportUpdatePolicyResponse], error)
 	// ResetUpdatePolicy returns the group to the default (report only).
 	ResetUpdatePolicy(context.Context, *connect.Request[v1.ResetUpdatePolicyRequest]) (*connect.Response[v1.ResetUpdatePolicyResponse], error)
+	// SetUpdatesPaused pauses or resumes all updates of the organization (M4-31): while paused no
+	// rollout starts a node, no waiting run goes out and runs by hand are FAILED_PRECONDITION;
+	// runs under way go to their end. manage_policies (admin on all groups) and a fresh step-up,
+	// in the audit log.
+	SetUpdatesPaused(context.Context, *connect.Request[v1.SetUpdatesPausedRequest]) (*connect.Response[v1.SetUpdatesPausedResponse], error)
 }
 
 // NewUpdatePolicyServiceClient constructs a client for the sermon.web.v1.UpdatePolicyService
@@ -119,6 +127,12 @@ func NewUpdatePolicyServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(updatePolicyServiceMethods.ByName("ResetUpdatePolicy")),
 			connect.WithClientOptions(opts...),
 		),
+		setUpdatesPaused: connect.NewClient[v1.SetUpdatesPausedRequest, v1.SetUpdatesPausedResponse](
+			httpClient,
+			baseURL+UpdatePolicyServiceSetUpdatesPausedProcedure,
+			connect.WithSchema(updatePolicyServiceMethods.ByName("SetUpdatesPaused")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -130,6 +144,7 @@ type updatePolicyServiceClient struct {
 	importUpdatePolicy *connect.Client[v1.ImportUpdatePolicyRequest, v1.ImportUpdatePolicyResponse]
 	exportUpdatePolicy *connect.Client[v1.ExportUpdatePolicyRequest, v1.ExportUpdatePolicyResponse]
 	resetUpdatePolicy  *connect.Client[v1.ResetUpdatePolicyRequest, v1.ResetUpdatePolicyResponse]
+	setUpdatesPaused   *connect.Client[v1.SetUpdatesPausedRequest, v1.SetUpdatesPausedResponse]
 }
 
 // GetUpdatePolicy calls sermon.web.v1.UpdatePolicyService.GetUpdatePolicy.
@@ -162,6 +177,11 @@ func (c *updatePolicyServiceClient) ResetUpdatePolicy(ctx context.Context, req *
 	return c.resetUpdatePolicy.CallUnary(ctx, req)
 }
 
+// SetUpdatesPaused calls sermon.web.v1.UpdatePolicyService.SetUpdatesPaused.
+func (c *updatePolicyServiceClient) SetUpdatesPaused(ctx context.Context, req *connect.Request[v1.SetUpdatesPausedRequest]) (*connect.Response[v1.SetUpdatesPausedResponse], error) {
+	return c.setUpdatesPaused.CallUnary(ctx, req)
+}
+
 // UpdatePolicyServiceHandler is an implementation of the sermon.web.v1.UpdatePolicyService service.
 type UpdatePolicyServiceHandler interface {
 	// GetUpdatePolicy returns the group's policy; a group the caller can't view is NOT_FOUND.
@@ -176,6 +196,11 @@ type UpdatePolicyServiceHandler interface {
 	ExportUpdatePolicy(context.Context, *connect.Request[v1.ExportUpdatePolicyRequest]) (*connect.Response[v1.ExportUpdatePolicyResponse], error)
 	// ResetUpdatePolicy returns the group to the default (report only).
 	ResetUpdatePolicy(context.Context, *connect.Request[v1.ResetUpdatePolicyRequest]) (*connect.Response[v1.ResetUpdatePolicyResponse], error)
+	// SetUpdatesPaused pauses or resumes all updates of the organization (M4-31): while paused no
+	// rollout starts a node, no waiting run goes out and runs by hand are FAILED_PRECONDITION;
+	// runs under way go to their end. manage_policies (admin on all groups) and a fresh step-up,
+	// in the audit log.
+	SetUpdatesPaused(context.Context, *connect.Request[v1.SetUpdatesPausedRequest]) (*connect.Response[v1.SetUpdatesPausedResponse], error)
 }
 
 // NewUpdatePolicyServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -224,6 +249,12 @@ func NewUpdatePolicyServiceHandler(svc UpdatePolicyServiceHandler, opts ...conne
 		connect.WithSchema(updatePolicyServiceMethods.ByName("ResetUpdatePolicy")),
 		connect.WithHandlerOptions(opts...),
 	)
+	updatePolicyServiceSetUpdatesPausedHandler := connect.NewUnaryHandler(
+		UpdatePolicyServiceSetUpdatesPausedProcedure,
+		svc.SetUpdatesPaused,
+		connect.WithSchema(updatePolicyServiceMethods.ByName("SetUpdatesPaused")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.UpdatePolicyService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case UpdatePolicyServiceGetUpdatePolicyProcedure:
@@ -238,6 +269,8 @@ func NewUpdatePolicyServiceHandler(svc UpdatePolicyServiceHandler, opts ...conne
 			updatePolicyServiceExportUpdatePolicyHandler.ServeHTTP(w, r)
 		case UpdatePolicyServiceResetUpdatePolicyProcedure:
 			updatePolicyServiceResetUpdatePolicyHandler.ServeHTTP(w, r)
+		case UpdatePolicyServiceSetUpdatesPausedProcedure:
+			updatePolicyServiceSetUpdatesPausedHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -269,4 +302,8 @@ func (UnimplementedUpdatePolicyServiceHandler) ExportUpdatePolicy(context.Contex
 
 func (UnimplementedUpdatePolicyServiceHandler) ResetUpdatePolicy(context.Context, *connect.Request[v1.ResetUpdatePolicyRequest]) (*connect.Response[v1.ResetUpdatePolicyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy is not implemented"))
+}
+
+func (UnimplementedUpdatePolicyServiceHandler) SetUpdatesPaused(context.Context, *connect.Request[v1.SetUpdatesPausedRequest]) (*connect.Response[v1.SetUpdatesPausedResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.UpdatePolicyService.SetUpdatesPaused is not implemented"))
 }

@@ -672,16 +672,20 @@ async fn passes_a_refresh_of_the_update_info_on() {
     harness.stop().await;
 }
 
-/// A sink that records the commands of the root helper.
+/// A sink that records the commands of the root helper and the runs withdrawn.
 #[derive(Debug, Default)]
 struct FakeCommands(
     Mutex<Vec<sermon_transport::session::HelperCommand>>,
     std::sync::atomic::AtomicUsize,
+    Mutex<Vec<String>>,
 );
 
 impl sermon_transport::session::CommandSink for FakeCommands {
     fn command(&self, command: sermon_transport::session::HelperCommand) {
         self.0.lock().unwrap().push(command);
+    }
+    fn cancel(&self, run_id: String) {
+        self.2.lock().unwrap().push(run_id);
     }
     fn connected(&self) {
         self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -769,10 +773,13 @@ async fn fetches_a_release_and_says_when_a_session_stands() {
     harness.stop().await;
 }
 
-// M4-12: RunUpdate, RebootNode and SelfUpdate go to the command sink, the session goes on.
+// M4-12: RunUpdate, RebootNode and SelfUpdate go to the command sink, the session goes on; so
+// does CancelRun (M4-31).
 #[tokio::test(flavor = "multi_thread")]
 async fn hands_the_helpers_commands_on() {
-    use sermon_transport::proto::agent::v1::{RebootNode, RunUpdate, SelfUpdate, UpdateScope};
+    use sermon_transport::proto::agent::v1::{
+        CancelRun, RebootNode, RunUpdate, SelfUpdate, UpdateScope,
+    };
     use sermon_transport::session::HelperCommand;
     let sink = Arc::new(FakeCommands::default());
     let mut setup = Setup::new();
@@ -796,7 +803,7 @@ async fn hands_the_helpers_commands_on() {
         valid_for_seconds: 600,
     };
     let self_update = SelfUpdate {
-        run_id,
+        run_id: run_id.clone(),
         version: "0.5.0".into(),
         valid_for_seconds: 600,
     };
@@ -804,13 +811,17 @@ async fn hands_the_helpers_commands_on() {
         Payload::RunUpdate(update.clone()),
         Payload::RebootNode(reboot.clone()),
         Payload::SelfUpdate(self_update.clone()),
+        Payload::CancelRun(CancelRun {
+            run_id: run_id.clone(),
+        }),
     ] {
         assert!(harness.api.send(command).await);
     }
     let deadline = std::time::Instant::now() + WAIT;
-    while sink.0.lock().unwrap().len() < 3 && std::time::Instant::now() < deadline {
+    while sink.2.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+    assert_eq!(*sink.2.lock().unwrap(), [run_id]);
     assert_eq!(
         *sink.0.lock().unwrap(),
         [

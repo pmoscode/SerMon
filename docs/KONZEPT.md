@@ -291,7 +291,8 @@ eine Fake-Implementierung für Tests.
       Redaction-Regeln, [ADR 0030](adr/0030-konfiguration-vom-server.md)),
       `StartLiveView{interval, hide_cmdline}` (eine Lease: ohne Erneuerung endet die Live-Ansicht nach 60 s, ebenso mit
       der Session), `StopLiveView`, `RefreshUpdateInfo`, `RunUpdate{run_id, scope}`, `RebootNode{run_id, reason}` und
-      `SelfUpdate{run_id, version}` (M4-05; der Reboot nach einem Update ist ein eigener Befehl), jeder Lauf mit
+      `SelfUpdate{run_id, version}` (M4-05; der Reboot nach einem Update ist ein eigener Befehl), `CancelRun{run_id}`
+      (M4-31), jeder Lauf mit
       `valid_for_seconds` (M4-31): so lange ab Ankunft darf der Agent ihn starten, bei einem Rollout höchstens bis
       zum Ende des Fensters; danach meldet er ihn als fehlgeschlagen. Agents ohne diese Befehle ignorieren sie wie
       jede unbekannte Nachricht.
@@ -1179,6 +1180,12 @@ spec:
   Umsetzung (M4-14): je Gruppe ein eigener Rollout mit dem gewählten Umfang (Security oder alle) und Reboot, dem
   `maxParallel`, Health-Check und `stopOnFailure` der Gruppe, über die nächsten 2 h; „Neu starten“ mit Grund sendet den
   Reboot sofort (`reboot_nodes`). Beides mit Step-up und im Audit-Log; was der Host verbietet, zeigt die UI an.
+- **Abbrechen und Pausieren (M4-31):** `CancelRollout` stoppt einen laufenden Rollout (wartende Nodes übersprungen,
+  nicht begonnene Läufe storniert, laufende enden ohne Reboot), `CancelRun` einen Lauf, den der Node noch nicht begonnen
+  hat – einen gesendeten zieht der Agent mit `CancelRun{run_id}` zurück, solange er auf den Helper wartet. Beides mit
+  dem Recht zum Starten und Step-up. Admins pausieren alle Updates der Org (`SetUpdatesPaused`): kein Rollout startet,
+  kein wartender Lauf geht raus, nichts startet von Hand. Von Hand höchstens 100 laufende Läufe je Org und 500 je
+  Instanz, kein zweiter Reboot und kein Reboot oder Self-Update eines Nodes, der in einem Rollout läuft.
 - **Ausführung (Helper):**
   `DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade`
   (bzw. nur Security-Pakete); `dnf -y upgrade [--security]`; `apk upgrade`. Ausgabe und Exit-Code gehen an den Server,

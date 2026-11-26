@@ -172,7 +172,7 @@ func (s *CommandStore) Record(ctx context.Context, org tenant.OrgID, node identi
 		recorded = true
 		// The end of every run in the audit log (T41, review M4-30): node, run, kind, outcome.
 		if r.Phase.Final() {
-			details := map[string]string{"run": run.String(), "kind": kindNames[command.Kind(kind)], "phase": phaseNames[r.Phase]} //nolint:gosec // 1 to 4 by the table's check
+			details := map[string]string{"run": run.String(), "kind": command.Kind(kind).String(), "phase": phaseNames[r.Phase]} //nolint:gosec // 1 to 4 by the table's check
 			if params.ExitCode.Valid {
 				details["exit_code"] = strconv.Itoa(int(r.ExitCode))
 			}
@@ -219,7 +219,7 @@ func (s *CommandStore) Get(ctx context.Context, org tenant.OrgID, id uuid.UUID) 
 		out = command.Command{
 			ID: r.ID, Node: identity.NodeID(r.NodeID), Kind: command.Kind(r.Kind), Scope: command.Scope(r.Scope.Int16), //nolint:gosec // checked by the table
 			Reason: r.Reason, Version: r.Version, State: command.State(r.State), //nolint:gosec // checked by the table
-			CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, CreatedBy: userOf(r.CreatedBy), SentAt: r.SentAt,
+			CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, CreatedBy: userOf(r.CreatedBy), SentAt: r.SentAt, CancelledAt: r.CancelledAt,
 		}
 		if r.Phase.Valid {
 			out.Result = &command.Result{
@@ -294,7 +294,7 @@ func (s *HistoryStore) Runs(ctx context.Context, org tenant.OrgID, node identity
 			c := command.Command{
 				ID: r.ID, Node: node, Kind: command.Kind(r.Kind), Scope: command.Scope(r.Scope.Int16), //nolint:gosec // checked by the table
 				Reason: r.Reason, Version: r.Version, State: command.State(r.State), //nolint:gosec // checked by the table
-				CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, CreatedBy: userOf(r.CreatedBy), SentAt: r.SentAt,
+				CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, CreatedBy: userOf(r.CreatedBy), SentAt: r.SentAt, CancelledAt: r.CancelledAt,
 			}
 			if r.Phase.Valid {
 				c.Result = &command.Result{
@@ -363,9 +363,8 @@ func (s *HistoryStore) Rollouts(ctx context.Context, scope tenant.Scope, limit i
 	return out, err
 }
 
-// kindNames and phaseNames are the words of the audit log.
+// phaseNames are the words of the audit log.
 var (
-	kindNames  = map[command.Kind]string{command.Refresh: "refresh", command.Update: "update", command.Reboot: "reboot", command.SelfUpdate: "self-update"}
 	phaseNames = map[command.Phase]string{
 		command.Succeeded: "succeeded", command.Failed: "failed", command.Refused: "refused",
 		command.Unsupported: "unsupported", command.Lost: "lost",

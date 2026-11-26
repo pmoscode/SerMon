@@ -48,6 +48,18 @@ type Querier interface {
 	AuditChain(ctx context.Context) ([]AuditLog, error)
 	AuthorityForRetirement(ctx context.Context, arg AuthorityForRetirementParams) (AuthorityForRetirementRow, error)
 	BumpAgentConfigVersion(ctx context.Context) (int64, error)
+	// Cancels a run the node hasn't started (M4-31): a pending one at once, a sent one is withdrawn
+	// from the agent, which answers. Nothing for a run that started, ended or expired.
+	CancelNodeCommand(ctx context.Context, arg CancelNodeCommandParams) (CancelNodeCommandRow, error)
+	// The runs of the rollout's nodes not started yet: pending ones are cancelled, sent ones withdrawn.
+	CancelRolloutRuns(ctx context.Context, arg CancelRolloutRunsParams) ([]CancelRolloutRunsRow, error)
+	// Stops a running rollout by hand (M4-31).
+	CancelUpdateRollout(ctx context.Context, arg CancelUpdateRolloutParams) (uuid.UUID, error)
+	// Of the rollouts those cancelled by hand.
+	CancelledRollouts(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)
+	// The node's sent runs withdrawn without an answer of the agent: their cancel goes out once per
+	// session (M4-31).
+	CancelsToSend(ctx context.Context, arg CancelsToSendParams) ([]uuid.UUID, error)
 	// Marks the reminder once (across server instances) if the deletion is due before the time.
 	ClaimDeletionReminder(ctx context.Context, arg ClaimDeletionReminderParams) ([]ClaimDeletionReminderRow, error)
 	// Due rows: pending ones whose attempt is due, and sending ones whose claim expired. SKIP LOCKED
@@ -123,7 +135,7 @@ type Querier interface {
 	DeleteUpdateRolloutNodes(ctx context.Context, rolloutID uuid.UUID) error
 	DeleteUserSessions(ctx context.Context, arg DeleteUserSessionsParams) error
 	// What the node's session sends: the pending commands, and after a reconnect the sent ones without
-	// result as well.
+	// result as well; none cancelled, and while the organization's updates are paused no run (M4-31).
 	DeliverableNodeCommands(ctx context.Context, arg DeliverableNodeCommandsParams) ([]DeliverableNodeCommandsRow, error)
 	// The silences a rollout set for the node end at at: its part of the rollout ended (M4-31).
 	EndRolloutSilences(ctx context.Context, arg EndRolloutSilencesParams) (int64, error)
@@ -171,6 +183,7 @@ type Querier interface {
 	// Update policies (M4-10).
 	// A group of the scope with its policy; without one the policy's columns are NULL.
 	GetUpdatePolicy(ctx context.Context, arg GetUpdatePolicyParams) (GetUpdatePolicyRow, error)
+	GetUpdateRollout(ctx context.Context, id uuid.UUID) (GetUpdateRolloutRow, error)
 	// Accepting an invitation never lowers an existing role on the same group (viewer < operator < admin).
 	// The binding counts as given by hand afterwards (M3-21): sign-ins over OIDC leave it.
 	GrantRoleKeepHigher(ctx context.Context, arg GrantRoleKeepHigherParams) error
@@ -183,7 +196,7 @@ type Querier interface {
 	HoldAnomalyLease(ctx context.Context, holder string) ([]string, error)
 	// Fencing: the orchestrator saves only while it holds the lease; the row lock makes a takeover
 	// wait for the save to end.
-	HoldUpdateLease(ctx context.Context, arg HoldUpdateLeaseParams) (int64, error)
+	HoldUpdateLease(ctx context.Context, holder string) (int64, error)
 	IdentitiesOfUser(ctx context.Context, userID uuid.UUID) ([]IdentitiesOfUserRow, error)
 	IdentitySeen(ctx context.Context, arg IdentitySeenParams) error
 	InsertAgentCertificate(ctx context.Context, arg InsertAgentCertificateParams) error
@@ -246,7 +259,8 @@ type Querier interface {
 	// database's time (M4-31): the instances' clocks may differ.
 	LeaseAnomalyOrganization(ctx context.Context, arg LeaseAnomalyOrganizationParams) (int64, error)
 	// The update orchestrator (M4-13), always in the tenant of one organization.
-	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+	// Compare-and-swap: the holder renews, anybody else only takes over an expired lease. With the
+	// database's time (M4-31): the instances' clocks may differ.
 	LeaseUpdateOrganization(ctx context.Context, arg LeaseUpdateOrganizationParams) (int64, error)
 	ListAlertInstances(ctx context.Context) ([]ListAlertInstancesRow, error)
 	ListAlertRoutingStates(ctx context.Context) ([]ListAlertRoutingStatesRow, error)
@@ -311,8 +325,12 @@ type Querier interface {
 	LockNodeEventSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	// Serializes rollover operations of all server instances.
 	LockPKI(ctx context.Context) error
+	// A cancel or a pause by hand waits for a save of the orchestrator in flight, and the next save
+	// sees it (M4-31); without a lease yet no orchestrator plans the organization.
+	LockUpdates(ctx context.Context) error
 	// Serializes adding passkeys of a user (the limit holds under parallel registrations).
 	LockUserPasskeys(ctx context.Context, userID uuid.UUID) error
+	MarkCancelsSent(ctx context.Context, arg MarkCancelsSentParams) error
 	// A refresh has no result: sent is done.
 	MarkNodeCommandsSent(ctx context.Context, arg MarkNodeCommandsSentParams) error
 	// Moves seen_at forward to the newest data time of a write (never back).
@@ -331,9 +349,14 @@ type Querier interface {
 	NodeTagsForUpdate(ctx context.Context, arg NodeTagsForUpdateParams) (NodeTagsForUpdateRow, error)
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
+	// Of the nodes those with a reboot under way or a run in a rollout (M4-31): no second reboot or
+	// self-update by hand beside it.
+	NodesUnderWay(ctx context.Context, nodeIds []uuid.UUID) ([]NodesUnderWayRow, error)
 	// Wakes the instance holding the node's session; the payload is the node's ID only.
 	NotifyNodeCommands(ctx context.Context, nodeID uuid.UUID) error
 	OIDCMappedOrganizations(ctx context.Context, groups []string) ([]uuid.UUID, error)
+	// The organization's runs under way (pending, sent, running; a day at most) and the instance's.
+	OpenRunsOfOrganization(ctx context.Context) (OpenRunsOfOrganizationRow, error)
 	OrgSeriesCount(ctx context.Context, since time.Time) (int64, error)
 	// The admins of all groups, for the mails about lock and deletion.
 	OrganizationAdminEmails(ctx context.Context) ([]string, error)
@@ -365,6 +388,7 @@ type Querier interface {
 	ReceivedSecurityEvents(ctx context.Context, arg ReceivedSecurityEventsParams) ([]ReceivedSecurityEventsRow, error)
 	RecordAgentConfigApplied(ctx context.Context, arg RecordAgentConfigAppliedParams) (int64, error)
 	// The agent's phase of a run of this node: a start only before any phase, a final phase once.
+	// A withdrawn run the agent refused is cancelled (M4-31).
 	RecordNodeCommandResult(ctx context.Context, arg RecordNodeCommandResultParams) (int16, error)
 	RecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
 	// The holder gives the organization up: another instance takes it in its next round.
@@ -404,11 +428,13 @@ type Querier interface {
 	SetPassword(ctx context.Context, arg SetPasswordParams) error
 	SetRedactionRules(ctx context.Context, rules []byte) error
 	SetSessionStepUp(ctx context.Context, arg SetSessionStepUpParams) error
+	SetUpdatesPaused(ctx context.Context, arg SetUpdatesPausedParams) error
 	SetViewersSeeLogs(ctx context.Context, see bool) error
 	// First installation: setup token and superadmins (instance-level tables, no RLS).
 	SetupCompleted(ctx context.Context) (bool, error)
 	// Read-only pre-check (sermon_app may only read instance_setup); CompleteInstanceSetup consumes.
 	SetupTokenValid(ctx context.Context, arg SetupTokenValidParams) (bool, error)
+	SkipWaitingRolloutNodes(ctx context.Context, arg SkipWaitingRolloutNodesParams) error
 	// Self-monitoring of the server (M2-24). Instance level, no tenant.
 	SuperadminEmails(ctx context.Context) ([]string, error)
 	// Certificate rotation (M1-11). All queries run inside InTenant.
@@ -439,6 +465,7 @@ type Querier interface {
 	UpdateOIDCRoleBinding(ctx context.Context, arg UpdateOIDCRoleBindingParams) (int64, error)
 	UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (int64, error)
 	UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHashParams) error
+	UpdatesPausedAt(ctx context.Context) (*time.Time, error)
 	UpsertAlertInstance(ctx context.Context, arg UpsertAlertInstanceParams) error
 	UpsertAlertRoutingState(ctx context.Context, arg UpsertAlertRoutingStateParams) error
 	UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRuleOverrideParams) error

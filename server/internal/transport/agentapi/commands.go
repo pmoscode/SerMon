@@ -26,6 +26,11 @@ type Commands interface {
 	Deliverable(ctx context.Context, org tenant.OrgID, node identity.NodeID, resend bool, now time.Time) ([]command.Command, error)
 	// MarkSent records what went out.
 	MarkSent(ctx context.Context, org tenant.OrgID, node identity.NodeID, ids []uuid.UUID, now time.Time) error
+	// Cancels returns the node's sent runs withdrawn without an answer whose cancel didn't go out,
+	// with resend all of them (M4-31).
+	Cancels(ctx context.Context, org tenant.OrgID, node identity.NodeID, resend bool) ([]uuid.UUID, error)
+	// MarkCancelsSent records the cancels that went out.
+	MarkCancelsSent(ctx context.Context, org tenant.OrgID, node identity.NodeID, ids []uuid.UUID, now time.Time) error
 }
 
 // WithCommands delivers the server's commands to the agents; without it no command goes out.
@@ -77,6 +82,9 @@ func (h *SessionHandler) deliverCommands(ctx context.Context, id Identity, resen
 	if h.commands == nil {
 		return nil
 	}
+	if err := h.deliverCancels(ctx, id, resend, stream); err != nil {
+		return err
+	}
 	waiting, err := h.commands.Deliverable(ctx, id.Org, id.Node, resend, time.Now())
 	if err != nil {
 		h.logger.WarnContext(ctx, "read commands failed", "node", id.Node.String(), "error", err)
@@ -99,6 +107,29 @@ func (h *SessionHandler) deliverCommands(ctx context.Context, id Identity, resen
 	}
 	if err := h.commands.MarkSent(ctx, id.Org, id.Node, sent, time.Now()); err != nil {
 		h.logger.WarnContext(ctx, "record sent commands failed", "node", id.Node.String(), "error", err)
+	}
+	return nil
+}
+
+// deliverCancels tells the agent the runs withdrawn on the server (M4-31); like the commands, a
+// store that fails is logged and the next look tries again.
+func (h *SessionHandler) deliverCancels(ctx context.Context, id Identity, resend bool, stream *connect.BidiStream[agentv1.SessionRequest, agentv1.SessionResponse]) error {
+	runs, err := h.commands.Cancels(ctx, id.Org, id.Node, resend)
+	if err != nil {
+		h.logger.WarnContext(ctx, "read cancels failed", "node", id.Node.String(), "error", err)
+		return nil
+	}
+	if len(runs) == 0 {
+		return nil
+	}
+	for _, run := range runs {
+		if err := stream.Send(&agentv1.SessionResponse{Payload: &agentv1.SessionResponse_CancelRun{CancelRun: &agentv1.CancelRun{RunId: run.String()}}}); err != nil {
+			return err //nolint:wrapcheck // connect errors must reach the client unchanged
+		}
+		h.logger.InfoContext(ctx, "run withdrawn", "node", id.Node.String(), "run_id", run.String())
+	}
+	if err := h.commands.MarkCancelsSent(ctx, id.Org, id.Node, runs, time.Now()); err != nil {
+		h.logger.WarnContext(ctx, "record sent cancels failed", "node", id.Node.String(), "error", err)
 	}
 	return nil
 }

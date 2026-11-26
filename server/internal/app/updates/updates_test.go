@@ -168,6 +168,41 @@ type manualStore struct {
 	rollouts []updates.RolloutRun
 	reboots  []command.Command
 	audit    []access.AuditEntry
+	// under is what UnderWay answers; rollout the one Rollout knows; refuse makes a cancel find
+	// nothing left to cancel (M4-31).
+	under     updates.UnderWay
+	rollout   *updates.RolloutRun
+	refuse    bool
+	cancelled []uuid.UUID
+}
+
+func (m *manualStore) UnderWay(_ context.Context, _ tenant.OrgID, _ []identity.NodeID) (updates.UnderWay, error) {
+	return m.under, nil
+}
+
+func (m *manualStore) Rollout(_ context.Context, scope tenant.Scope, id uuid.UUID) (updates.RolloutRun, bool, error) {
+	if m.rollout == nil || m.rollout.ID != id || !scope.AllowsGroup(m.rollout.Group) {
+		return updates.RolloutRun{}, false, nil
+	}
+	return *m.rollout, true, nil
+}
+
+func (m *manualStore) CancelRollout(_ context.Context, _ tenant.OrgID, id uuid.UUID, _ identity.UserID, _ time.Time, a access.AuditEntry) (bool, error) {
+	if m.refuse {
+		return false, nil
+	}
+	m.cancelled = append(m.cancelled, id)
+	m.audit = append(m.audit, a)
+	return true, nil
+}
+
+func (m *manualStore) CancelRun(_ context.Context, _ tenant.OrgID, id uuid.UUID, _ identity.UserID, _ time.Time, a access.AuditEntry) (bool, error) {
+	if m.refuse {
+		return false, nil
+	}
+	m.cancelled = append(m.cancelled, id)
+	m.audit = append(m.audit, a)
+	return true, nil
 }
 
 func (m *manualStore) StartRollouts(_ context.Context, _ tenant.OrgID, r []updates.RolloutRun, _ time.Time, a access.AuditEntry) error {

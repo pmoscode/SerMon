@@ -273,7 +273,8 @@ func TestUpdates_AgentsByHand(t *testing.T) {
 	s := newStack(t, 1000)
 	seedAccessFixtures(t)
 	ownerSQL(t, "UPDATE nodes SET install_method = 1, agent_version = '1.0.0' WHERE id = '"+nodeAl+"'",
-		"DELETE FROM node_commands WHERE org_id = '"+orgAlpha+"' AND kind = 4")
+		// Without the reboots of the other tests: a node that reboots gets no self-update (M4-31).
+		"DELETE FROM node_commands WHERE org_id = '"+orgAlpha+"' AND kind IN (3, 4)")
 	ctx := context.Background()
 	ann := login(t, s, "ann@example.org")
 	got, err := ann.updates.GetNodeUpdates(ctx, connect.NewRequest(&webv1.GetNodeUpdatesRequest{NodeId: nodeAl}))
@@ -302,5 +303,61 @@ func TestUpdates_AgentsByHand(t *testing.T) {
 	rel, err := mia.updates.ListAgentReleases(ctx, connect.NewRequest(&webv1.ListAgentReleasesRequest{}))
 	if err != nil || len(rel.Msg.GetReleases()) != 4 {
 		t.Errorf("releases = %v, %v", rel, err)
+	}
+}
+
+// M4-31: Ann pauses Alpha's updates – everybody sees since when, nothing starts by hand – and
+// resumes them; she cancels a reboot before the node took it, once; the run shows as cancelled.
+// A second reboot of the node waits for the first; Mia (viewer) may do none of it.
+func TestUpdates_PauseAndCancel(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	ownerSQL(t, "DELETE FROM update_rollouts WHERE org_id = '"+orgAlpha+"'", "DELETE FROM node_commands WHERE org_id = '"+orgAlpha+"'")
+	defer ownerSQL(t, "UPDATE organizations SET updates_paused_at = NULL, updates_paused_by = NULL WHERE id = '"+orgAlpha+"'")
+	ctx := context.Background()
+	ann, mia := login(t, s, "ann@example.org"), login(t, s, "mia@example.org")
+	if _, err := mia.updatePolicies.SetUpdatesPaused(ctx, connect.NewRequest(&webv1.SetUpdatesPausedRequest{Paused: true})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("a viewer pauses: %v", err)
+	}
+	paused, err := ann.updatePolicies.SetUpdatesPaused(ctx, connect.NewRequest(&webv1.SetUpdatesPausedRequest{Paused: true}))
+	if err != nil || paused.Msg.GetPausedSince() == nil {
+		t.Fatalf("pause = %v, %v", paused, err)
+	}
+	if list, err := mia.updatePolicies.ListUpdatePolicies(ctx, connect.NewRequest(&webv1.ListUpdatePoliciesRequest{})); err != nil || list.Msg.GetPausedSince() == nil {
+		t.Errorf("Mia doesn't see the pause: %v, %v", list, err)
+	}
+	if _, err := ann.updates.StartUpdates(ctx, connect.NewRequest(&webv1.StartUpdatesRequest{
+		NodeIds: []string{nodeAl}, Scope: webv1.UpdateScope_UPDATE_SCOPE_ALL,
+	})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("updates while paused: %v", err)
+	}
+	if resumed, err := ann.updatePolicies.SetUpdatesPaused(ctx, connect.NewRequest(&webv1.SetUpdatesPausedRequest{})); err != nil || resumed.Msg.GetPausedSince() != nil {
+		t.Fatalf("resume = %v, %v", resumed, err)
+	}
+
+	reboot, err := ann.updates.RebootNodes(ctx, connect.NewRequest(&webv1.RebootNodesRequest{NodeIds: []string{nodeAl}, Reason: "kernel update"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ann.updates.RebootNodes(ctx, connect.NewRequest(&webv1.RebootNodesRequest{NodeIds: []string{nodeAl}, Reason: "again"})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("a second reboot: %v", err)
+	}
+	run := reboot.Msg.GetRunIds()[0]
+	if _, err := mia.updates.CancelRun(ctx, connect.NewRequest(&webv1.CancelRunRequest{RunId: run})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("a viewer cancels: %v", err)
+	}
+	if _, err := ann.updates.CancelRun(ctx, connect.NewRequest(&webv1.CancelRunRequest{RunId: run})); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ann.updates.CancelRun(ctx, connect.NewRequest(&webv1.CancelRunRequest{RunId: run})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+		t.Errorf("cancelled twice: %v", err)
+	}
+	runs, err := ann.updates.ListUpdateRuns(ctx, connect.NewRequest(&webv1.ListUpdateRunsRequest{NodeId: nodeAl}))
+	if err != nil || len(runs.Msg.GetRuns()) == 0 || runs.Msg.GetRuns()[0].GetState() != webv1.UpdateRunState_UPDATE_RUN_STATE_CANCELLED {
+		t.Errorf("runs = %v, %v", runs, err)
+	}
+	var got string
+	if ownerQuery(t, "SELECT string_agg(action, ',' ORDER BY seq) FROM audit_log WHERE org_id = '"+orgAlpha+"' AND action IN ('updates.pause', 'updates.resume', 'node.run_cancelled')", &got); !strings.HasSuffix(got, "updates.pause,updates.resume,node.run_cancelled") {
+		t.Errorf("audit = %q", got)
 	}
 }

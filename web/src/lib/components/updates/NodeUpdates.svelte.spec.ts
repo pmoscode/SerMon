@@ -13,6 +13,8 @@ import {
 	RebootNodesResponseSchema,
 	StartUpdatesResponseSchema,
 	UpdateAvailability,
+	UpdateRunKind,
+	UpdateRunState,
 	UpdateScope
 } from '#lib/api/gen/sermon/web/v1/update_pb.js';
 import { UpdateStatus } from '#lib/api/gen/sermon/web/v1/update_status_pb.js';
@@ -248,5 +250,30 @@ describe('NodeUpdates', () => {
 		show();
 		await page.getByRole('button', { name: 'List again' }).click();
 		await expect.element(page.getByRole('alert')).toMatchTextContent(/a moment ago/);
+	});
+
+	it('says when the organization has paused its updates', async () => {
+		rights([group]);
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(report());
+		vi.spyOn(updatesApi.updates, 'rebootNodes').mockRejectedValue(
+			new ConnectError('updates are paused', Code.FailedPrecondition)
+		);
+		show();
+		await page.getByRole('button', { name: 'Reboot', exact: true }).click();
+		await page.getByLabelText(/Reason/).fill('kernel');
+		await page.getByRole('button', { name: 'Reboot in a minute' }).click();
+		await expect.element(page.getByRole('alert')).toMatchTextContent(/updates are paused/);
+	});
+
+	it("offers to cancel a waiting run in the node's group", async () => {
+		rights([group]);
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(report());
+		vi.spyOn(updatesApi.updates, 'listUpdateRuns').mockResolvedValue(
+			create(ListUpdateRunsResponseSchema, {
+				runs: [{ runId: 'r1', nodeId, kind: UpdateRunKind.UPDATE, state: UpdateRunState.PENDING }]
+			})
+		);
+		show();
+		await expect.element(page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
 	});
 });

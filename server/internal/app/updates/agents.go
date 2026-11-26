@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -137,6 +138,15 @@ func (s *Service) UpdateAgents(ctx context.Context, c access.Caller, ids []ident
 	}
 	if len(commands) == 0 {
 		return nil, skipped, nil
+	}
+	updating := make([]NodeUpdates, 0, len(commands))
+	for _, n := range nodes {
+		if slices.ContainsFunc(commands, func(c command.Command) bool { return c.Node == n.Node }) {
+			updating = append(updating, n)
+		}
+	}
+	if err := s.mayRunByHand(ctx, c.Principal.Org, updating, len(commands), true); err != nil {
+		return nil, nil, err
 	}
 	audit := access.AuditEntry{
 		Actor: c.Principal.User, Action: "agents.update", Target: "nodes:" + strconv.Itoa(len(commands)),

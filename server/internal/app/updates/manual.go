@@ -32,6 +32,15 @@ var ErrInvalidRequest = errors.New("invalid update request")
 type ManualStore interface {
 	StartRollouts(ctx context.Context, org tenant.OrgID, rollouts []RolloutRun, now time.Time, audit access.AuditEntry) error
 	Enqueue(ctx context.Context, org tenant.OrgID, commands []command.Command, audit access.AuditEntry) error
+	// UnderWay reads the pause, the runs under way and which of the nodes are busy (M4-31).
+	UnderWay(ctx context.Context, org tenant.OrgID, nodes []identity.NodeID) (UnderWay, error)
+	// Rollout returns a rollout of the scope's groups; false if there is none.
+	Rollout(ctx context.Context, scope tenant.Scope, id uuid.UUID) (RolloutRun, bool, error)
+	// CancelRollout stops a running rollout and cancels its runs not started, with the audit
+	// entry; false if it doesn't run any more.
+	CancelRollout(ctx context.Context, org tenant.OrgID, id uuid.UUID, by identity.UserID, now time.Time, audit access.AuditEntry) (bool, error)
+	// CancelRun cancels a run not started, with the audit entry; false if it started or ended.
+	CancelRun(ctx context.Context, org tenant.OrgID, id uuid.UUID, by identity.UserID, now time.Time, audit access.AuditEntry) (bool, error)
 }
 
 // WithManual lets the service start updates and reboots by hand.
@@ -88,6 +97,10 @@ func (s *Service) StartUpdates(ctx context.Context, c access.Caller, ids []ident
 	}
 	if s.manual == nil {
 		return nil, errors.New("no manual store")
+	}
+	// The rollouts count against the orchestrator's limits; only the pause is checked here.
+	if err := s.mayRunByHand(ctx, c.Principal.Org, nodes, len(nodes), false); err != nil {
+		return nil, err
 	}
 	mode := ModeAllAuto
 	if scope == command.ScopeSecurity {
@@ -146,6 +159,9 @@ func (s *Service) RebootNodes(ctx context.Context, c access.Caller, ids []identi
 	}
 	if s.manual == nil {
 		return nil, errors.New("no manual store")
+	}
+	if err := s.mayRunByHand(ctx, c.Principal.Org, nodes, len(nodes), true); err != nil {
+		return nil, err
 	}
 	commands := make([]command.Command, 0, len(nodes))
 	names := make([]string, 0, len(nodes))

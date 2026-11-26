@@ -66,7 +66,7 @@ func (s *Service) Runs(ctx context.Context, c access.Caller, node identity.NodeI
 	}
 	now := s.now()
 	for i := range runs {
-		runs[i].State = runs[i].EffectiveState(now)
+		runs[i].State = runs[i].ShownState(now)
 	}
 	return runs, nil
 }
@@ -92,7 +92,7 @@ func (s *Service) Run(ctx context.Context, c access.Caller, id uuid.UUID) (comma
 	if !s.policy.Allowed(c.Principal, authz.ViewLogs, authz.InGroup(c.Principal.Org, n.Group)) {
 		return command.Command{}, access.ErrForbidden
 	}
-	run.State = run.EffectiveState(s.now())
+	run.State = run.ShownState(s.now())
 	return run, nil
 }
 

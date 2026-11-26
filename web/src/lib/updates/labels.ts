@@ -72,7 +72,8 @@ const runStates: Record<number, () => string> = {
 	[UpdateRunState.REFUSED]: m.runs_state_refused,
 	[UpdateRunState.UNSUPPORTED]: m.runs_state_unsupported,
 	[UpdateRunState.LOST]: m.runs_state_lost,
-	[UpdateRunState.EXPIRED]: m.runs_state_expired
+	[UpdateRunState.EXPIRED]: m.runs_state_expired,
+	[UpdateRunState.CANCELLED]: m.runs_state_cancelled
 };
 
 export function runStateLabel(s: UpdateRunState): string {

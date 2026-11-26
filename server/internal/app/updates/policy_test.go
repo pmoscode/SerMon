@@ -11,6 +11,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/routing"
 	"github.com/pmoscode/SerMon/server/internal/app/updates"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/role"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 	"github.com/pmoscode/SerMon/server/internal/domain/update"
@@ -156,6 +157,17 @@ type policyStore struct {
 	stored *updates.Policy
 	audit  []access.AuditEntry
 	scope  tenant.Scope
+	paused *time.Time
+}
+
+func (s *policyStore) PausedSince(context.Context, tenant.OrgID) (*time.Time, error) {
+	return s.paused, nil
+}
+
+func (s *policyStore) SetPaused(_ context.Context, _ tenant.OrgID, at *time.Time, _ identity.UserID, a access.AuditEntry) error {
+	s.paused = at
+	s.audit = append(s.audit, a)
+	return nil
 }
 
 func (s *policyStore) Policy(_ context.Context, scope tenant.Scope, group tenant.GroupID) (updates.Policy, bool, error) {

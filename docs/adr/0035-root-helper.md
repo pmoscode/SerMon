@@ -296,3 +296,15 @@ fehl.
   Ablauf gemeldet, gepuffert auch über eine Unterbrechung. Der Rollout nennt dann „no answer from the node in time“
   statt „didn't take the command in time“.
 
+## Nachtrag M4-31 (Abbrechen)
+
+- `CancelRun{run_id}` zieht einen gesendeten Lauf zurück. Wartet er noch auf einen beschäftigten Helper, verwirft der
+  Agent ihn und meldet `REFUSED` („cancelled on the server“), der Server führt ihn dann als abgebrochen. Kennt der Agent
+  ihn nicht (etwa nach einem Neustart), trägt er ihn als beendet ins Laufbuch ein: ein später erneut zugestellter
+  Befehl startet nichts. Einen begonnenen Lauf bricht niemand ab – ein Paketmanager mittendrin hinterließe ein halbes
+  Update –, er läuft zu Ende.
+- Der Server schickt den Rückzug einmal je Session und nach jedem Reconnect erneut, bis der Agent antwortet; den Befehl
+  selbst stellt er nicht mehr zu. Ein noch nicht gesendeter Lauf wird sofort storniert (Zustand 6).
+- Abbrechen und Pausieren nehmen die Zeile der Update-Lease (`FOR UPDATE`): Eine Speicherung des Orchestrators wartet,
+  die nächste verwirft, was sie ohne den Abbruch oder während der Pause geplant hatte.
+

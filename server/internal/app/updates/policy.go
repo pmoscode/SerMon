@@ -90,6 +90,8 @@ type Policy struct {
 	// UpdatedAt and UpdatedBy are zero for the default of a group without a policy.
 	UpdatedAt time.Time
 	UpdatedBy identity.UserID
+	// Paused: the organization's updates are paused (M4-31); not part of the group's policy.
+	Paused bool
 }
 
 // DefaultPolicy is the policy of a group nobody set one for: report only.

@@ -13,6 +13,98 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelRolloutRuns = `-- name: CancelRolloutRuns :many
+UPDATE node_commands SET
+    state = CASE WHEN state = 1 THEN 6 ELSE state END, cancelled_at = $1, cancelled_by = $2
+WHERE id IN (SELECT unnest(ARRAY[n.update_run, n.reboot_run, n.agent_run]) FROM update_rollout_nodes n
+             WHERE n.rollout_id = $3)
+  AND cancelled_at IS NULL AND phase IS NULL AND state IN (1, 2)
+RETURNING node_id, state
+`
+
+type CancelRolloutRunsParams struct {
+	At          *time.Time
+	CancelledBy *uuid.UUID
+	RolloutID   uuid.UUID
+}
+
+type CancelRolloutRunsRow struct {
+	NodeID uuid.UUID
+	State  int16
+}
+
+// The runs of the rollout's nodes not started yet: pending ones are cancelled, sent ones withdrawn.
+func (q *Queries) CancelRolloutRuns(ctx context.Context, arg CancelRolloutRunsParams) ([]CancelRolloutRunsRow, error) {
+	rows, err := q.db.Query(ctx, cancelRolloutRuns, arg.At, arg.CancelledBy, arg.RolloutID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CancelRolloutRunsRow{}
+	for rows.Next() {
+		var i CancelRolloutRunsRow
+		if err := rows.Scan(&i.NodeID, &i.State); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cancelUpdateRollout = `-- name: CancelUpdateRollout :one
+UPDATE update_rollouts SET state = 3, reason = $1, cancelled_at = $2, cancelled_by = $3, updated_at = $2
+WHERE id = $4 AND state = 1
+RETURNING group_id
+`
+
+type CancelUpdateRolloutParams struct {
+	Reason      string
+	At          *time.Time
+	CancelledBy *uuid.UUID
+	ID          uuid.UUID
+}
+
+// Stops a running rollout by hand (M4-31).
+func (q *Queries) CancelUpdateRollout(ctx context.Context, arg CancelUpdateRolloutParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, cancelUpdateRollout,
+		arg.Reason,
+		arg.At,
+		arg.CancelledBy,
+		arg.ID,
+	)
+	var group_id uuid.UUID
+	err := row.Scan(&group_id)
+	return group_id, err
+}
+
+const cancelledRollouts = `-- name: CancelledRollouts :many
+SELECT id FROM update_rollouts WHERE id = ANY ($1::uuid[]) AND cancelled_at IS NOT NULL
+`
+
+// Of the rollouts those cancelled by hand.
+func (q *Queries) CancelledRollouts(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, cancelledRollouts, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteUpdateRolloutNodes = `-- name: DeleteUpdateRolloutNodes :exec
 DELETE FROM update_rollout_nodes WHERE rollout_id = $1
 `
@@ -43,19 +135,37 @@ func (q *Queries) EndRolloutSilences(ctx context.Context, arg EndRolloutSilences
 	return result.RowsAffected(), nil
 }
 
-const holdUpdateLease = `-- name: HoldUpdateLease :execrows
-SELECT 1 FROM update_leases WHERE holder = $1 AND expires_at > $2 FOR UPDATE
+const getUpdateRollout = `-- name: GetUpdateRollout :one
+SELECT id, group_id, state, manual FROM update_rollouts WHERE id = $1
 `
 
-type HoldUpdateLeaseParams struct {
-	Holder string
-	Now    time.Time
+type GetUpdateRolloutRow struct {
+	ID      uuid.UUID
+	GroupID uuid.UUID
+	State   int16
+	Manual  bool
 }
+
+func (q *Queries) GetUpdateRollout(ctx context.Context, id uuid.UUID) (GetUpdateRolloutRow, error) {
+	row := q.db.QueryRow(ctx, getUpdateRollout, id)
+	var i GetUpdateRolloutRow
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.State,
+		&i.Manual,
+	)
+	return i, err
+}
+
+const holdUpdateLease = `-- name: HoldUpdateLease :execrows
+SELECT 1 FROM update_leases WHERE holder = $1 AND expires_at > now() FOR UPDATE
+`
 
 // Fencing: the orchestrator saves only while it holds the lease; the row lock makes a takeover
 // wait for the save to end.
-func (q *Queries) HoldUpdateLease(ctx context.Context, arg HoldUpdateLeaseParams) (int64, error) {
-	result, err := q.db.Exec(ctx, holdUpdateLease, arg.Holder, arg.Now)
+func (q *Queries) HoldUpdateLease(ctx context.Context, holder string) (int64, error) {
+	result, err := q.db.Exec(ctx, holdUpdateLease, holder)
 	if err != nil {
 		return 0, err
 	}
@@ -100,7 +210,7 @@ func (q *Queries) InsertUpdateRolloutNode(ctx context.Context, arg InsertUpdateR
 }
 
 const latestUpdateRollouts = `-- name: LatestUpdateRollouts :many
-SELECT DISTINCT ON (group_id) id, group_id, window_start, window_end, state, reason
+SELECT DISTINCT ON (group_id) id, group_id, window_start, window_end, state, reason, cancelled_at
 FROM update_rollouts WHERE NOT manual ORDER BY group_id, window_start DESC
 `
 
@@ -111,6 +221,7 @@ type LatestUpdateRolloutsRow struct {
 	WindowEnd   time.Time
 	State       int16
 	Reason      string
+	CancelledAt *time.Time
 }
 
 // The last scheduled rollout of each group.
@@ -130,6 +241,7 @@ func (q *Queries) LatestUpdateRollouts(ctx context.Context) ([]LatestUpdateRollo
 			&i.WindowEnd,
 			&i.State,
 			&i.Reason,
+			&i.CancelledAt,
 		); err != nil {
 			return nil, err
 		}
@@ -144,21 +256,21 @@ func (q *Queries) LatestUpdateRollouts(ctx context.Context) ([]LatestUpdateRollo
 const leaseUpdateOrganization = `-- name: LeaseUpdateOrganization :execrows
 
 INSERT INTO update_leases (org_id, holder, expires_at)
-VALUES (current_org_id(), $1, $2)
+VALUES (current_org_id(), $1, now() + make_interval(secs => $2::float8))
 ON CONFLICT (org_id) DO UPDATE SET holder = EXCLUDED.holder, expires_at = EXCLUDED.expires_at
-WHERE update_leases.holder = EXCLUDED.holder OR update_leases.expires_at <= $3
+WHERE update_leases.holder = EXCLUDED.holder OR update_leases.expires_at <= now()
 `
 
 type LeaseUpdateOrganizationParams struct {
-	Holder string
-	Until  time.Time
-	Now    time.Time
+	Holder       string
+	LeaseSeconds float64
 }
 
 // The update orchestrator (M4-13), always in the tenant of one organization.
-// Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+// Compare-and-swap: the holder renews, anybody else only takes over an expired lease. With the
+// database's time (M4-31): the instances' clocks may differ.
 func (q *Queries) LeaseUpdateOrganization(ctx context.Context, arg LeaseUpdateOrganizationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, leaseUpdateOrganization, arg.Holder, arg.Until, arg.Now)
+	result, err := q.db.Exec(ctx, leaseUpdateOrganization, arg.Holder, arg.LeaseSeconds)
 	if err != nil {
 		return 0, err
 	}
@@ -167,7 +279,7 @@ func (q *Queries) LeaseUpdateOrganization(ctx context.Context, arg LeaseUpdateOr
 
 const listNodeCommandsByID = `-- name: ListNodeCommandsByID :many
 SELECT id, node_id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,
-       phase, exit_code, result_reason, started_at, ended_at
+       phase, exit_code, result_reason, started_at, ended_at, cancelled_at
 FROM node_commands WHERE id = ANY ($1::uuid[])
 `
 
@@ -188,6 +300,7 @@ type ListNodeCommandsByIDRow struct {
 	ResultReason string
 	StartedAt    *time.Time
 	EndedAt      *time.Time
+	CancelledAt  *time.Time
 }
 
 func (q *Queries) ListNodeCommandsByID(ctx context.Context, ids []uuid.UUID) ([]ListNodeCommandsByIDRow, error) {
@@ -216,6 +329,7 @@ func (q *Queries) ListNodeCommandsByID(ctx context.Context, ids []uuid.UUID) ([]
 			&i.ResultReason,
 			&i.StartedAt,
 			&i.EndedAt,
+			&i.CancelledAt,
 		); err != nil {
 			return nil, err
 		}
@@ -474,6 +588,17 @@ func (q *Queries) ListUpdateRolloutNodes(ctx context.Context, rolloutIds []uuid.
 	return items, nil
 }
 
+const lockUpdates = `-- name: LockUpdates :exec
+SELECT 1 FROM update_leases WHERE org_id = current_org_id() FOR UPDATE
+`
+
+// A cancel or a pause by hand waits for a save of the orchestrator in flight, and the next save
+// sees it (M4-31); without a lease yet no orchestrator plans the organization.
+func (q *Queries) LockUpdates(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockUpdates)
+	return err
+}
+
 const pruneNodeCommands = `-- name: PruneNodeCommands :exec
 DELETE FROM node_commands WHERE created_at < $1
 `
@@ -493,7 +618,7 @@ func (q *Queries) PruneUpdateRollouts(ctx context.Context, before time.Time) err
 }
 
 const runningManualRollouts = `-- name: RunningManualRollouts :many
-SELECT r.id, r.group_id, r.window_start, r.window_end, r.state, r.reason, r.mode, r.auto_reboot
+SELECT r.id, r.group_id, r.window_start, r.window_end, r.state, r.reason, r.mode, r.auto_reboot, r.cancelled_at
 FROM update_rollouts r
 WHERE r.manual AND (r.state = 1 OR (r.state = 3 AND EXISTS (
     SELECT 1 FROM update_rollout_nodes n
@@ -510,6 +635,7 @@ type RunningManualRolloutsRow struct {
 	Reason      string
 	Mode        pgtype.Int2
 	AutoReboot  bool
+	CancelledAt *time.Time
 }
 
 // The rollouts by hand that still run (M4-14), and stopped ones with nodes in a run: they are
@@ -532,6 +658,7 @@ func (q *Queries) RunningManualRollouts(ctx context.Context) ([]RunningManualRol
 			&i.Reason,
 			&i.Mode,
 			&i.AutoReboot,
+			&i.CancelledAt,
 		); err != nil {
 			return nil, err
 		}
@@ -541,6 +668,37 @@ func (q *Queries) RunningManualRollouts(ctx context.Context) ([]RunningManualRol
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUpdatesPaused = `-- name: SetUpdatesPaused :exec
+UPDATE organizations SET updates_paused_at = $1, updates_paused_by = $2
+WHERE id = current_org_id()
+`
+
+type SetUpdatesPausedParams struct {
+	PausedAt *time.Time
+	PausedBy *uuid.UUID
+}
+
+func (q *Queries) SetUpdatesPaused(ctx context.Context, arg SetUpdatesPausedParams) error {
+	_, err := q.db.Exec(ctx, setUpdatesPaused, arg.PausedAt, arg.PausedBy)
+	return err
+}
+
+const skipWaitingRolloutNodes = `-- name: SkipWaitingRolloutNodes :exec
+UPDATE update_rollout_nodes SET state = 7, reason = $1, since = $2
+WHERE rollout_id = $3 AND state = 1
+`
+
+type SkipWaitingRolloutNodesParams struct {
+	Reason    string
+	At        time.Time
+	RolloutID uuid.UUID
+}
+
+func (q *Queries) SkipWaitingRolloutNodes(ctx context.Context, arg SkipWaitingRolloutNodesParams) error {
+	_, err := q.db.Exec(ctx, skipWaitingRolloutNodes, arg.Reason, arg.At, arg.RolloutID)
+	return err
 }
 
 const upsertUpdateRollout = `-- name: UpsertUpdateRollout :exec

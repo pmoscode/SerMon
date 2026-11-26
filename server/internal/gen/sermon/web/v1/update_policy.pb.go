@@ -594,7 +594,9 @@ func (*ListUpdatePoliciesRequest) Descriptor() ([]byte, []int) {
 type ListUpdatePoliciesResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// policies of the visible groups.
-	Policies      []*UpdatePolicy `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
+	Policies []*UpdatePolicy `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
+	// paused_since is when the organization's updates were paused; unset while they run (M4-31).
+	PausedSince   *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=paused_since,json=pausedSince,proto3" json:"paused_since,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -636,6 +638,105 @@ func (x *ListUpdatePoliciesResponse) GetPolicies() []*UpdatePolicy {
 	return nil
 }
 
+func (x *ListUpdatePoliciesResponse) GetPausedSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PausedSince
+	}
+	return nil
+}
+
+// SetUpdatesPausedRequest says whether to pause.
+type SetUpdatesPausedRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// paused pauses (true) or resumes (false) the updates.
+	Paused        bool `protobuf:"varint,1,opt,name=paused,proto3" json:"paused,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetUpdatesPausedRequest) Reset() {
+	*x = SetUpdatesPausedRequest{}
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetUpdatesPausedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetUpdatesPausedRequest) ProtoMessage() {}
+
+func (x *SetUpdatesPausedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetUpdatesPausedRequest.ProtoReflect.Descriptor instead.
+func (*SetUpdatesPausedRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SetUpdatesPausedRequest) GetPaused() bool {
+	if x != nil {
+		return x.Paused
+	}
+	return false
+}
+
+// SetUpdatesPausedResponse is the new state.
+type SetUpdatesPausedResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// paused_since is when the updates were paused; unset after a resume.
+	PausedSince   *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=paused_since,json=pausedSince,proto3" json:"paused_since,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetUpdatesPausedResponse) Reset() {
+	*x = SetUpdatesPausedResponse{}
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetUpdatesPausedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetUpdatesPausedResponse) ProtoMessage() {}
+
+func (x *SetUpdatesPausedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetUpdatesPausedResponse.ProtoReflect.Descriptor instead.
+func (*SetUpdatesPausedResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SetUpdatesPausedResponse) GetPausedSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PausedSince
+	}
+	return nil
+}
+
 // SetUpdatePolicyRequest is the new policy of a group.
 type SetUpdatePolicyRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -649,7 +750,7 @@ type SetUpdatePolicyRequest struct {
 
 func (x *SetUpdatePolicyRequest) Reset() {
 	*x = SetUpdatePolicyRequest{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -661,7 +762,7 @@ func (x *SetUpdatePolicyRequest) String() string {
 func (*SetUpdatePolicyRequest) ProtoMessage() {}
 
 func (x *SetUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[7]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -674,7 +775,7 @@ func (x *SetUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetUpdatePolicyRequest.ProtoReflect.Descriptor instead.
 func (*SetUpdatePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{7}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SetUpdatePolicyRequest) GetGroupId() string {
@@ -702,7 +803,7 @@ type SetUpdatePolicyResponse struct {
 
 func (x *SetUpdatePolicyResponse) Reset() {
 	*x = SetUpdatePolicyResponse{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -714,7 +815,7 @@ func (x *SetUpdatePolicyResponse) String() string {
 func (*SetUpdatePolicyResponse) ProtoMessage() {}
 
 func (x *SetUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[8]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -727,7 +828,7 @@ func (x *SetUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetUpdatePolicyResponse.ProtoReflect.Descriptor instead.
 func (*SetUpdatePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{8}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SetUpdatePolicyResponse) GetPolicy() *UpdatePolicy {
@@ -750,7 +851,7 @@ type ImportUpdatePolicyRequest struct {
 
 func (x *ImportUpdatePolicyRequest) Reset() {
 	*x = ImportUpdatePolicyRequest{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -762,7 +863,7 @@ func (x *ImportUpdatePolicyRequest) String() string {
 func (*ImportUpdatePolicyRequest) ProtoMessage() {}
 
 func (x *ImportUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[9]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -775,7 +876,7 @@ func (x *ImportUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportUpdatePolicyRequest.ProtoReflect.Descriptor instead.
 func (*ImportUpdatePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{9}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ImportUpdatePolicyRequest) GetGroupId() string {
@@ -803,7 +904,7 @@ type ImportUpdatePolicyResponse struct {
 
 func (x *ImportUpdatePolicyResponse) Reset() {
 	*x = ImportUpdatePolicyResponse{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[10]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -815,7 +916,7 @@ func (x *ImportUpdatePolicyResponse) String() string {
 func (*ImportUpdatePolicyResponse) ProtoMessage() {}
 
 func (x *ImportUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[10]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -828,7 +929,7 @@ func (x *ImportUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportUpdatePolicyResponse.ProtoReflect.Descriptor instead.
 func (*ImportUpdatePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{10}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ImportUpdatePolicyResponse) GetPolicy() *UpdatePolicy {
@@ -849,7 +950,7 @@ type ExportUpdatePolicyRequest struct {
 
 func (x *ExportUpdatePolicyRequest) Reset() {
 	*x = ExportUpdatePolicyRequest{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[11]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -861,7 +962,7 @@ func (x *ExportUpdatePolicyRequest) String() string {
 func (*ExportUpdatePolicyRequest) ProtoMessage() {}
 
 func (x *ExportUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[11]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -874,7 +975,7 @@ func (x *ExportUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportUpdatePolicyRequest.ProtoReflect.Descriptor instead.
 func (*ExportUpdatePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{11}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ExportUpdatePolicyRequest) GetGroupId() string {
@@ -895,7 +996,7 @@ type ExportUpdatePolicyResponse struct {
 
 func (x *ExportUpdatePolicyResponse) Reset() {
 	*x = ExportUpdatePolicyResponse{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[12]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +1008,7 @@ func (x *ExportUpdatePolicyResponse) String() string {
 func (*ExportUpdatePolicyResponse) ProtoMessage() {}
 
 func (x *ExportUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[12]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +1021,7 @@ func (x *ExportUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportUpdatePolicyResponse.ProtoReflect.Descriptor instead.
 func (*ExportUpdatePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{12}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ExportUpdatePolicyResponse) GetYaml() string {
@@ -941,7 +1042,7 @@ type ResetUpdatePolicyRequest struct {
 
 func (x *ResetUpdatePolicyRequest) Reset() {
 	*x = ResetUpdatePolicyRequest{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[13]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -953,7 +1054,7 @@ func (x *ResetUpdatePolicyRequest) String() string {
 func (*ResetUpdatePolicyRequest) ProtoMessage() {}
 
 func (x *ResetUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[13]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -966,7 +1067,7 @@ func (x *ResetUpdatePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetUpdatePolicyRequest.ProtoReflect.Descriptor instead.
 func (*ResetUpdatePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{13}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResetUpdatePolicyRequest) GetGroupId() string {
@@ -985,7 +1086,7 @@ type ResetUpdatePolicyResponse struct {
 
 func (x *ResetUpdatePolicyResponse) Reset() {
 	*x = ResetUpdatePolicyResponse{}
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[14]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -997,7 +1098,7 @@ func (x *ResetUpdatePolicyResponse) String() string {
 func (*ResetUpdatePolicyResponse) ProtoMessage() {}
 
 func (x *ResetUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[14]
+	mi := &file_sermon_web_v1_update_policy_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1010,7 +1111,7 @@ func (x *ResetUpdatePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetUpdatePolicyResponse.ProtoReflect.Descriptor instead.
 func (*ResetUpdatePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{14}
+	return file_sermon_web_v1_update_policy_proto_rawDescGZIP(), []int{16}
 }
 
 var File_sermon_web_v1_update_policy_proto protoreflect.FileDescriptor
@@ -1051,9 +1152,14 @@ const file_sermon_web_v1_update_policy_proto_rawDesc = "" +
 	"\bgroup_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\agroupId\"N\n" +
 	"\x17GetUpdatePolicyResponse\x123\n" +
 	"\x06policy\x18\x01 \x01(\v2\x1b.sermon.web.v1.UpdatePolicyR\x06policy\"\x1b\n" +
-	"\x19ListUpdatePoliciesRequest\"U\n" +
+	"\x19ListUpdatePoliciesRequest\"\x94\x01\n" +
 	"\x1aListUpdatePoliciesResponse\x127\n" +
-	"\bpolicies\x18\x01 \x03(\v2\x1b.sermon.web.v1.UpdatePolicyR\bpolicies\"z\n" +
+	"\bpolicies\x18\x01 \x03(\v2\x1b.sermon.web.v1.UpdatePolicyR\bpolicies\x12=\n" +
+	"\fpaused_since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\vpausedSince\"1\n" +
+	"\x17SetUpdatesPausedRequest\x12\x16\n" +
+	"\x06paused\x18\x01 \x01(\bR\x06paused\"Y\n" +
+	"\x18SetUpdatesPausedResponse\x12=\n" +
+	"\fpaused_since\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\vpausedSince\"z\n" +
 	"\x16SetUpdatePolicyRequest\x12#\n" +
 	"\bgroup_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\agroupId\x12;\n" +
 	"\x04spec\x18\x02 \x01(\v2\x1f.sermon.web.v1.UpdatePolicySpecB\x06\xbaH\x03\xc8\x01\x01R\x04spec\"N\n" +
@@ -1085,14 +1191,15 @@ const file_sermon_web_v1_update_policy_proto_rawDesc = "" +
 	"\fAgentChannel\x12\x1d\n" +
 	"\x19AGENT_CHANNEL_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14AGENT_CHANNEL_STABLE\x10\x01\x12\x16\n" +
-	"\x12AGENT_CHANNEL_BETA\x10\x022\x91\x05\n" +
+	"\x12AGENT_CHANNEL_BETA\x10\x022\xf6\x05\n" +
 	"\x13UpdatePolicyService\x12e\n" +
 	"\x0fGetUpdatePolicy\x12%.sermon.web.v1.GetUpdatePolicyRequest\x1a&.sermon.web.v1.GetUpdatePolicyResponse\"\x03\x90\x02\x01\x12n\n" +
 	"\x12ListUpdatePolicies\x12(.sermon.web.v1.ListUpdatePoliciesRequest\x1a).sermon.web.v1.ListUpdatePoliciesResponse\"\x03\x90\x02\x01\x12`\n" +
 	"\x0fSetUpdatePolicy\x12%.sermon.web.v1.SetUpdatePolicyRequest\x1a&.sermon.web.v1.SetUpdatePolicyResponse\x12i\n" +
 	"\x12ImportUpdatePolicy\x12(.sermon.web.v1.ImportUpdatePolicyRequest\x1a).sermon.web.v1.ImportUpdatePolicyResponse\x12n\n" +
 	"\x12ExportUpdatePolicy\x12(.sermon.web.v1.ExportUpdatePolicyRequest\x1a).sermon.web.v1.ExportUpdatePolicyResponse\"\x03\x90\x02\x01\x12f\n" +
-	"\x11ResetUpdatePolicy\x12'.sermon.web.v1.ResetUpdatePolicyRequest\x1a(.sermon.web.v1.ResetUpdatePolicyResponseB\xc0\x01\n" +
+	"\x11ResetUpdatePolicy\x12'.sermon.web.v1.ResetUpdatePolicyRequest\x1a(.sermon.web.v1.ResetUpdatePolicyResponse\x12c\n" +
+	"\x10SetUpdatesPaused\x12&.sermon.web.v1.SetUpdatesPausedRequest\x1a'.sermon.web.v1.SetUpdatesPausedResponseB\xc0\x01\n" +
 	"\x11com.sermon.web.v1B\x11UpdatePolicyProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -1108,7 +1215,7 @@ func file_sermon_web_v1_update_policy_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_update_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_sermon_web_v1_update_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_sermon_web_v1_update_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_sermon_web_v1_update_policy_proto_goTypes = []any{
 	(UpdateMode)(0),                    // 0: sermon.web.v1.UpdateMode
 	(AgentUpdate)(0),                   // 1: sermon.web.v1.AgentUpdate
@@ -1120,48 +1227,54 @@ var file_sermon_web_v1_update_policy_proto_goTypes = []any{
 	(*GetUpdatePolicyResponse)(nil),    // 7: sermon.web.v1.GetUpdatePolicyResponse
 	(*ListUpdatePoliciesRequest)(nil),  // 8: sermon.web.v1.ListUpdatePoliciesRequest
 	(*ListUpdatePoliciesResponse)(nil), // 9: sermon.web.v1.ListUpdatePoliciesResponse
-	(*SetUpdatePolicyRequest)(nil),     // 10: sermon.web.v1.SetUpdatePolicyRequest
-	(*SetUpdatePolicyResponse)(nil),    // 11: sermon.web.v1.SetUpdatePolicyResponse
-	(*ImportUpdatePolicyRequest)(nil),  // 12: sermon.web.v1.ImportUpdatePolicyRequest
-	(*ImportUpdatePolicyResponse)(nil), // 13: sermon.web.v1.ImportUpdatePolicyResponse
-	(*ExportUpdatePolicyRequest)(nil),  // 14: sermon.web.v1.ExportUpdatePolicyRequest
-	(*ExportUpdatePolicyResponse)(nil), // 15: sermon.web.v1.ExportUpdatePolicyResponse
-	(*ResetUpdatePolicyRequest)(nil),   // 16: sermon.web.v1.ResetUpdatePolicyRequest
-	(*ResetUpdatePolicyResponse)(nil),  // 17: sermon.web.v1.ResetUpdatePolicyResponse
-	(Weekday)(0),                       // 18: sermon.web.v1.Weekday
-	(*timestamppb.Timestamp)(nil),      // 19: google.protobuf.Timestamp
+	(*SetUpdatesPausedRequest)(nil),    // 10: sermon.web.v1.SetUpdatesPausedRequest
+	(*SetUpdatesPausedResponse)(nil),   // 11: sermon.web.v1.SetUpdatesPausedResponse
+	(*SetUpdatePolicyRequest)(nil),     // 12: sermon.web.v1.SetUpdatePolicyRequest
+	(*SetUpdatePolicyResponse)(nil),    // 13: sermon.web.v1.SetUpdatePolicyResponse
+	(*ImportUpdatePolicyRequest)(nil),  // 14: sermon.web.v1.ImportUpdatePolicyRequest
+	(*ImportUpdatePolicyResponse)(nil), // 15: sermon.web.v1.ImportUpdatePolicyResponse
+	(*ExportUpdatePolicyRequest)(nil),  // 16: sermon.web.v1.ExportUpdatePolicyRequest
+	(*ExportUpdatePolicyResponse)(nil), // 17: sermon.web.v1.ExportUpdatePolicyResponse
+	(*ResetUpdatePolicyRequest)(nil),   // 18: sermon.web.v1.ResetUpdatePolicyRequest
+	(*ResetUpdatePolicyResponse)(nil),  // 19: sermon.web.v1.ResetUpdatePolicyResponse
+	(Weekday)(0),                       // 20: sermon.web.v1.Weekday
+	(*timestamppb.Timestamp)(nil),      // 21: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_update_policy_proto_depIdxs = []int32{
-	18, // 0: sermon.web.v1.UpdateWindow.days:type_name -> sermon.web.v1.Weekday
+	20, // 0: sermon.web.v1.UpdateWindow.days:type_name -> sermon.web.v1.Weekday
 	0,  // 1: sermon.web.v1.UpdatePolicySpec.mode:type_name -> sermon.web.v1.UpdateMode
 	3,  // 2: sermon.web.v1.UpdatePolicySpec.window:type_name -> sermon.web.v1.UpdateWindow
 	1,  // 3: sermon.web.v1.UpdatePolicySpec.agent_update:type_name -> sermon.web.v1.AgentUpdate
 	2,  // 4: sermon.web.v1.UpdatePolicySpec.channel:type_name -> sermon.web.v1.AgentChannel
 	4,  // 5: sermon.web.v1.UpdatePolicy.spec:type_name -> sermon.web.v1.UpdatePolicySpec
-	19, // 6: sermon.web.v1.UpdatePolicy.update_time:type_name -> google.protobuf.Timestamp
-	19, // 7: sermon.web.v1.UpdatePolicy.next_window:type_name -> google.protobuf.Timestamp
+	21, // 6: sermon.web.v1.UpdatePolicy.update_time:type_name -> google.protobuf.Timestamp
+	21, // 7: sermon.web.v1.UpdatePolicy.next_window:type_name -> google.protobuf.Timestamp
 	5,  // 8: sermon.web.v1.GetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
 	5,  // 9: sermon.web.v1.ListUpdatePoliciesResponse.policies:type_name -> sermon.web.v1.UpdatePolicy
-	4,  // 10: sermon.web.v1.SetUpdatePolicyRequest.spec:type_name -> sermon.web.v1.UpdatePolicySpec
-	5,  // 11: sermon.web.v1.SetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	5,  // 12: sermon.web.v1.ImportUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
-	6,  // 13: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:input_type -> sermon.web.v1.GetUpdatePolicyRequest
-	8,  // 14: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:input_type -> sermon.web.v1.ListUpdatePoliciesRequest
-	10, // 15: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:input_type -> sermon.web.v1.SetUpdatePolicyRequest
-	12, // 16: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:input_type -> sermon.web.v1.ImportUpdatePolicyRequest
-	14, // 17: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:input_type -> sermon.web.v1.ExportUpdatePolicyRequest
-	16, // 18: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:input_type -> sermon.web.v1.ResetUpdatePolicyRequest
-	7,  // 19: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:output_type -> sermon.web.v1.GetUpdatePolicyResponse
-	9,  // 20: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:output_type -> sermon.web.v1.ListUpdatePoliciesResponse
-	11, // 21: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:output_type -> sermon.web.v1.SetUpdatePolicyResponse
-	13, // 22: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:output_type -> sermon.web.v1.ImportUpdatePolicyResponse
-	15, // 23: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:output_type -> sermon.web.v1.ExportUpdatePolicyResponse
-	17, // 24: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:output_type -> sermon.web.v1.ResetUpdatePolicyResponse
-	19, // [19:25] is the sub-list for method output_type
-	13, // [13:19] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	21, // 10: sermon.web.v1.ListUpdatePoliciesResponse.paused_since:type_name -> google.protobuf.Timestamp
+	21, // 11: sermon.web.v1.SetUpdatesPausedResponse.paused_since:type_name -> google.protobuf.Timestamp
+	4,  // 12: sermon.web.v1.SetUpdatePolicyRequest.spec:type_name -> sermon.web.v1.UpdatePolicySpec
+	5,  // 13: sermon.web.v1.SetUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	5,  // 14: sermon.web.v1.ImportUpdatePolicyResponse.policy:type_name -> sermon.web.v1.UpdatePolicy
+	6,  // 15: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:input_type -> sermon.web.v1.GetUpdatePolicyRequest
+	8,  // 16: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:input_type -> sermon.web.v1.ListUpdatePoliciesRequest
+	12, // 17: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:input_type -> sermon.web.v1.SetUpdatePolicyRequest
+	14, // 18: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:input_type -> sermon.web.v1.ImportUpdatePolicyRequest
+	16, // 19: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:input_type -> sermon.web.v1.ExportUpdatePolicyRequest
+	18, // 20: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:input_type -> sermon.web.v1.ResetUpdatePolicyRequest
+	10, // 21: sermon.web.v1.UpdatePolicyService.SetUpdatesPaused:input_type -> sermon.web.v1.SetUpdatesPausedRequest
+	7,  // 22: sermon.web.v1.UpdatePolicyService.GetUpdatePolicy:output_type -> sermon.web.v1.GetUpdatePolicyResponse
+	9,  // 23: sermon.web.v1.UpdatePolicyService.ListUpdatePolicies:output_type -> sermon.web.v1.ListUpdatePoliciesResponse
+	13, // 24: sermon.web.v1.UpdatePolicyService.SetUpdatePolicy:output_type -> sermon.web.v1.SetUpdatePolicyResponse
+	15, // 25: sermon.web.v1.UpdatePolicyService.ImportUpdatePolicy:output_type -> sermon.web.v1.ImportUpdatePolicyResponse
+	17, // 26: sermon.web.v1.UpdatePolicyService.ExportUpdatePolicy:output_type -> sermon.web.v1.ExportUpdatePolicyResponse
+	19, // 27: sermon.web.v1.UpdatePolicyService.ResetUpdatePolicy:output_type -> sermon.web.v1.ResetUpdatePolicyResponse
+	11, // 28: sermon.web.v1.UpdatePolicyService.SetUpdatesPaused:output_type -> sermon.web.v1.SetUpdatesPausedResponse
+	22, // [22:29] is the sub-list for method output_type
+	15, // [15:22] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_update_policy_proto_init() }
@@ -1176,7 +1289,7 @@ func file_sermon_web_v1_update_policy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_update_policy_proto_rawDesc), len(file_sermon_web_v1_update_policy_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

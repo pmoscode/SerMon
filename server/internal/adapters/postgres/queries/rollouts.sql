@@ -1,26 +1,62 @@
 -- The update orchestrator (M4-13), always in the tenant of one organization.
 
 -- name: LeaseUpdateOrganization :execrows
--- Compare-and-swap: the holder renews, anybody else only takes over an expired lease.
+-- Compare-and-swap: the holder renews, anybody else only takes over an expired lease. With the
+-- database's time (M4-31): the instances' clocks may differ.
 INSERT INTO update_leases (org_id, holder, expires_at)
-VALUES (current_org_id(), sqlc.arg(holder), sqlc.arg(until))
+VALUES (current_org_id(), sqlc.arg(holder), now() + make_interval(secs => sqlc.arg(lease_seconds)::float8))
 ON CONFLICT (org_id) DO UPDATE SET holder = EXCLUDED.holder, expires_at = EXCLUDED.expires_at
-WHERE update_leases.holder = EXCLUDED.holder OR update_leases.expires_at <= sqlc.arg(now);
+WHERE update_leases.holder = EXCLUDED.holder OR update_leases.expires_at <= now();
 
 -- name: HoldUpdateLease :execrows
 -- Fencing: the orchestrator saves only while it holds the lease; the row lock makes a takeover
 -- wait for the save to end.
-SELECT 1 FROM update_leases WHERE holder = sqlc.arg(holder) AND expires_at > sqlc.arg(now) FOR UPDATE;
+SELECT 1 FROM update_leases WHERE holder = sqlc.arg(holder) AND expires_at > now() FOR UPDATE;
+
+-- name: LockUpdates :exec
+-- A cancel or a pause by hand waits for a save of the orchestrator in flight, and the next save
+-- sees it (M4-31); without a lease yet no orchestrator plans the organization.
+SELECT 1 FROM update_leases WHERE org_id = current_org_id() FOR UPDATE;
+
+-- name: CancelledRollouts :many
+-- Of the rollouts those cancelled by hand.
+SELECT id FROM update_rollouts WHERE id = ANY (sqlc.arg(ids)::uuid[]) AND cancelled_at IS NOT NULL;
+
+-- name: GetUpdateRollout :one
+SELECT id, group_id, state, manual FROM update_rollouts WHERE id = sqlc.arg(id);
+
+-- name: CancelUpdateRollout :one
+-- Stops a running rollout by hand (M4-31).
+UPDATE update_rollouts SET state = 3, reason = sqlc.arg(reason), cancelled_at = sqlc.arg(at), cancelled_by = sqlc.narg(cancelled_by), updated_at = sqlc.arg(at)
+WHERE id = sqlc.arg(id) AND state = 1
+RETURNING group_id;
+
+-- name: SkipWaitingRolloutNodes :exec
+UPDATE update_rollout_nodes SET state = 7, reason = sqlc.arg(reason), since = sqlc.arg(at)
+WHERE rollout_id = sqlc.arg(rollout_id) AND state = 1;
+
+-- name: CancelRolloutRuns :many
+-- The runs of the rollout's nodes not started yet: pending ones are cancelled, sent ones withdrawn.
+UPDATE node_commands SET
+    state = CASE WHEN state = 1 THEN 6 ELSE state END, cancelled_at = sqlc.arg(at), cancelled_by = sqlc.narg(cancelled_by)
+WHERE id IN (SELECT unnest(ARRAY[n.update_run, n.reboot_run, n.agent_run]) FROM update_rollout_nodes n
+             WHERE n.rollout_id = sqlc.arg(rollout_id))
+  AND cancelled_at IS NULL AND phase IS NULL AND state IN (1, 2)
+RETURNING node_id, state;
+
+-- name: SetUpdatesPaused :exec
+UPDATE organizations SET updates_paused_at = sqlc.narg(paused_at), updates_paused_by = sqlc.narg(paused_by)
+WHERE id = current_org_id();
 
 -- name: LatestUpdateRollouts :many
 -- The last scheduled rollout of each group.
-SELECT DISTINCT ON (group_id) id, group_id, window_start, window_end, state, reason
+SELECT DISTINCT ON (group_id) id, group_id, window_start, window_end, state, reason, cancelled_at
 FROM update_rollouts WHERE NOT manual ORDER BY group_id, window_start DESC;
 
 -- name: RunningManualRollouts :many
 -- The rollouts by hand that still run (M4-14), and stopped ones with nodes in a run: they are
 -- followed to the end of those (M4-31).
-SELECT r.id, r.group_id, r.window_start, r.window_end, r.state, r.reason, r.mode, r.auto_reboot
+SELECT r.id, r.group_id, r.window_start, r.window_end, r.state, r.reason, r.mode, r.auto_reboot, r.cancelled_at
 FROM update_rollouts r
 WHERE r.manual AND (r.state = 1 OR (r.state = 3 AND EXISTS (
     SELECT 1 FROM update_rollout_nodes n
@@ -62,7 +98,7 @@ ORDER BY n.hostname, n.id;
 
 -- name: ListNodeCommandsByID :many
 SELECT id, node_id, kind, scope, reason, version, state, created_at, expires_at, created_by, sent_at,
-       phase, exit_code, result_reason, started_at, ended_at
+       phase, exit_code, result_reason, started_at, ended_at, cancelled_at
 FROM node_commands WHERE id = ANY (sqlc.arg(ids)::uuid[]);
 
 -- name: UpsertUpdateRollout :exec

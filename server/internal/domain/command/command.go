@@ -26,6 +26,21 @@ const (
 	SelfUpdate
 )
 
+// String is the kind's word in the audit log.
+func (k Kind) String() string {
+	switch k {
+	case Refresh:
+		return "refresh"
+	case Update:
+		return "update"
+	case Reboot:
+		return "reboot"
+	case SelfUpdate:
+		return "self-update"
+	}
+	return "unknown"
+}
+
 // Scope is which updates a Kind Update installs.
 type Scope uint8
 
@@ -50,6 +65,8 @@ const (
 	Done
 	// Expired: the node didn't take it in time.
 	Expired
+	// Cancelled before the node started it (M4-31).
+	Cancelled
 )
 
 // Phase is how far the agent says it came (sermon.agent.v1.CommandPhase).
@@ -110,6 +127,8 @@ type Command struct {
 	CreatedBy identity.UserID // zero for the orchestrator
 	SentAt    *time.Time
 	Result    *Result
+	// CancelledAt: cancelled by hand (M4-31); a sent run waits for the agent to withdraw it.
+	CancelledAt *time.Time
 }
 
 // Validate checks what a command needs for its kind.
@@ -159,6 +178,23 @@ func (c Command) EffectiveState(now time.Time) State {
 		return Expired
 	}
 	return c.State
+}
+
+// Cancellable reports whether the run may still be cancelled at now: not started, not over, not
+// cancelled before (M4-31).
+func (c Command) Cancellable(now time.Time) bool {
+	state := c.EffectiveState(now)
+	return c.Kind != Refresh && c.CancelledAt == nil && c.Result == nil && (state == Pending || state == Sent)
+}
+
+// ShownState is the state shown: a sent run withdrawn from the agent is cancelled already, unless
+// the agent answered that it started it.
+func (c Command) ShownState(now time.Time) State {
+	state := c.EffectiveState(now)
+	if c.CancelledAt != nil && (state == Pending || state == Sent) {
+		return Cancelled
+	}
+	return state
 }
 
 // ValidFor is how long the agent may still start the run, in whole seconds (valid_for_seconds).

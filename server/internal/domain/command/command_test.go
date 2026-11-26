@@ -118,3 +118,36 @@ func TestExpiry_EndsWithTheWindow(t *testing.T) {
 		t.Errorf("an hour before the end: %v", got)
 	}
 }
+
+// M4-31: only a run that hasn't started may be cancelled, once; a withdrawn sent run shows as
+// cancelled until the agent says otherwise.
+func TestCancellable_OnlyARunNotStarted(t *testing.T) {
+	c := valid(command.Update)
+	at := c.CreatedAt.Add(time.Minute)
+	for state, want := range map[command.State]bool{
+		command.Pending: true, command.Sent: true, command.Running: false, command.Done: false, command.Expired: false, command.Cancelled: false,
+	} {
+		c.State = state
+		if got := c.Cancellable(at); got != want {
+			t.Errorf("%d: cancellable %v", state, got)
+		}
+	}
+	c.State = command.Pending
+	if c.Cancellable(c.ExpiresAt) {
+		t.Error("an expired run is cancellable")
+	}
+	c.State = command.Sent
+	c.CancelledAt = &at
+	if c.Cancellable(at) || c.ShownState(at) != command.Cancelled {
+		t.Errorf("withdrawn: cancellable %v, shown %d", c.Cancellable(at), c.ShownState(at))
+	}
+	c.State = command.Running
+	if c.ShownState(at) != command.Running {
+		t.Errorf("started after all: shown %d", c.ShownState(at))
+	}
+	refresh := valid(command.Refresh)
+	refresh.State = command.Pending
+	if refresh.Cancellable(at) {
+		t.Error("a refresh is cancellable")
+	}
+}

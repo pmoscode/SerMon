@@ -2,7 +2,12 @@
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import { timestampDate } from '@bufbuild/protobuf/wkt';
 	import { codeOf, Code } from '#lib/api/client.js';
-	import { UpdateScope, type UpdateRun } from '#lib/api/gen/sermon/web/v1/update_pb.js';
+	import {
+		UpdateRunKind,
+		UpdateRunState,
+		UpdateScope,
+		type UpdateRun
+	} from '#lib/api/gen/sermon/web/v1/update_pb.js';
 	import { updatesApi } from '#lib/api/updates.js';
 	import LogText from '#lib/components/logs/LogText.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -11,13 +16,17 @@
 	import { displayText } from '#lib/logs/text.js';
 	import { notifyError } from '#lib/notify/notify.js';
 	import { m } from '#lib/paraglide/messages.js';
+	import { sessionState } from '#lib/stores/session.svelte.js';
+	import { withStepUp } from '#lib/stores/stepup.svelte.js';
+	import { actionError, allowedIn } from '#lib/updates/actions.js';
 	import { runFailed, runKindLabel, runStateLabel } from '#lib/updates/labels.js';
 
 	/**
 	 * The runs of a node (M4-15), newest first; the output of a run on request, as text with
 	 * control characters marked (it comes from the host's package manager, redacted by the agent).
+	 * A run the node hasn't started can be cancelled with the right of its kind (M4-31).
 	 */
-	let { nodeId, now }: { nodeId: string; now: Date } = $props();
+	let { nodeId, groupId, now }: { nodeId: string; groupId: string; now: Date } = $props();
 
 	const locale = $derived(localeState.current);
 	let runs = $state<UpdateRun[]>([]);
@@ -25,18 +34,25 @@
 	let open = $state('');
 	let output = $state<UpdateRun>();
 	let failure = $state('');
+	let cancelling = $state('');
+	let cancelFailure = $state('');
 
 	// Answers count only for the node and the run still shown (M4-31): a slow one of before would
 	// put another node's runs or another run's output in their place.
+	async function fetchRuns(node: string): Promise<boolean> {
+		const list = (await updatesApi.updates.listUpdateRuns({ nodeId: node, pageSize: 20 })).runs;
+		if (node !== nodeId) return false;
+		runs = list;
+		return true;
+	}
+
 	async function load(node: string) {
 		open = '';
 		output = undefined;
+		cancelFailure = '';
 		status = 'loading';
 		try {
-			const list = (await updatesApi.updates.listUpdateRuns({ nodeId: node, pageSize: 20 })).runs;
-			if (node !== nodeId) return;
-			runs = list;
-			status = 'ready';
+			if (await fetchRuns(node)) status = 'ready';
 		} catch {
 			if (node === nodeId) status = 'error';
 		}
@@ -65,6 +81,34 @@
 		}
 	}
 
+	function mayCancel(run: UpdateRun): boolean {
+		if (run.state !== UpdateRunState.PENDING && run.state !== UpdateRunState.SENT) return false;
+		const session = sessionState.current;
+		return allowedIn(
+			run.kind === UpdateRunKind.REBOOT ? session?.rebootGroupIds : session?.runUpdatesGroupIds,
+			groupId
+		);
+	}
+
+	async function cancel(run: UpdateRun) {
+		const node = nodeId;
+		cancelling = run.runId;
+		cancelFailure = '';
+		try {
+			await withStepUp(() => updatesApi.updates.cancelRun({ runId: run.runId }));
+		} catch (error) {
+			if (node === nodeId) cancelFailure = actionError(error, m.runs_cancel_too_late());
+		} finally {
+			cancelling = '';
+		}
+		if (node !== nodeId) return;
+		try {
+			await fetchRuns(node);
+		} catch {
+			// The list stays as it was; the next visit shows the new state.
+		}
+	}
+
 	function scopeText(run: UpdateRun): string {
 		if (run.scope === UpdateScope.SECURITY) return ` (${m.updates_security()})`;
 		return '';
@@ -80,6 +124,9 @@
 	{:else if runs.length === 0}
 		<p class="text-sm text-muted-foreground">{m.runs_none()}</p>
 	{:else}
+		{#if cancelFailure}
+			<p role="alert" class="text-sm text-destructive">{cancelFailure}</p>
+		{/if}
 		<ul class="divide-y rounded-md border text-sm">
 			{#each runs as run (run.runId)}
 				<li class="flex flex-col gap-1 px-3 py-2">
@@ -98,9 +145,19 @@
 							{run.createdBy ? m.runs_by_hand() : m.runs_by_policy()}
 							{#if run.createTime}· {formatAgo(timestampDate(run.createTime), now, locale)}{/if}
 						</span>
-						<Button variant="ghost" size="sm" class="ml-auto" onclick={() => show(run)}>
-							{open === run.runId ? m.runs_output_hide() : m.runs_output()}
-						</Button>
+						<span class="ml-auto flex gap-1">
+							{#if mayCancel(run)}
+								<Button
+									variant="ghost"
+									size="sm"
+									disabled={cancelling !== ''}
+									onclick={() => cancel(run)}>{m.runs_cancel()}</Button
+								>
+							{/if}
+							<Button variant="ghost" size="sm" onclick={() => show(run)}>
+								{open === run.runId ? m.runs_output_hide() : m.runs_output()}
+							</Button>
+						</span>
 					</div>
 					{#if run.reason}<p class="text-muted-foreground">{displayText(run.reason)}</p>{/if}
 					{#if run.resultReason}<p>{displayText(run.resultReason)}</p>{/if}

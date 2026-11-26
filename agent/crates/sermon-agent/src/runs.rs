@@ -269,12 +269,19 @@ fn stage_files(dir: &Path, release: &sermon_transport::release::Release) -> std:
 /// The commands from the session, into the runner (never blocks the session), and the news
 /// that a session stands.
 #[derive(Debug, Clone)]
-pub struct Inbox(mpsc::Sender<HelperCommand>, Arc<Notify>);
+pub struct Inbox(mpsc::Sender<Item>, Arc<Notify>);
+
+/// What the server sends the runner: a command, or a run it withdraws (M4-31).
+#[derive(Debug)]
+enum Item {
+    Command(HelperCommand),
+    Cancel(String),
+}
 
 /// The receiving end of an [`Inbox`], for [`run`].
 #[derive(Debug)]
 pub struct Commands {
-    commands: mpsc::Receiver<HelperCommand>,
+    commands: mpsc::Receiver<Item>,
     connected: Arc<Notify>,
 }
 
@@ -300,9 +307,17 @@ impl CommandSink for Inbox {
     }
 
     fn command(&self, command: HelperCommand) {
-        if self.0.try_send(command).is_err() {
+        if self.0.try_send(Item::Command(command)).is_err() {
             tracing::warn!(
                 "too many commands of the root helper at once, one dropped (the server sends it again)"
+            );
+        }
+    }
+
+    fn cancel(&self, run_id: String) {
+        if self.0.try_send(Item::Cancel(run_id)).is_err() {
+            tracing::warn!(
+                "too many commands of the root helper at once, a cancel dropped (the server sends it again)"
             );
         }
     }
@@ -560,8 +575,15 @@ pub async fn run<H: Helper>(
                     }
                 }
             }
-            command = inbox.recv() => {
-                let Some(command) = command else { return };
+            item = inbox.recv() => {
+                let command = match item {
+                    None => return,
+                    Some(Item::Cancel(id)) => {
+                        withdraw(&id, &mut book, &mut waiting, &mut sink, &now);
+                        continue;
+                    }
+                    Some(Item::Command(command)) => command,
+                };
                 let id = run_id(&command).to_owned();
                 if book.knows(&id) || waiting.iter().any(|w| run_id(&w.command) == id) {
                     tracing::debug!(run_id = %id, "run taken before, not started again");
@@ -611,6 +633,27 @@ pub async fn run<H: Helper>(
             }
         }
     }
+}
+
+/// Withdraws a run (M4-31): one waiting for the helper is dropped, one not taken yet (lost by a
+/// restart, the server sends the cancel again) is booked as ended so it never starts; both are
+/// reported refused. One taken before goes on.
+fn withdraw(
+    id: &str,
+    book: &mut Book,
+    waiting: &mut VecDeque<Waiting>,
+    sink: &mut (impl FnMut(CommandResult) + Send),
+    now: &(impl Fn() -> SystemTime + Send),
+) {
+    let before = waiting.len();
+    waiting.retain(|w| run_id(&w.command) != id);
+    if waiting.len() == before && book.knows(id) {
+        tracing::info!(run_id = %id, "a run withdrawn by the server goes on: it started already");
+        return;
+    }
+    tracing::info!(run_id = %id, "run withdrawn by the server, not started");
+    sink(result(id, CommandPhase::Refused, "cancelled on the server"));
+    book.set(id, Entry::Ended, now());
 }
 
 /// Starts a command; a busy helper puts it back on `waiting` until its `until`.

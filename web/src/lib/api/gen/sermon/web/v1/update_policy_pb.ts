@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/update_policy.proto.
  */
 export const file_sermon_web_v1_update_policy: GenFile = /*@__PURE__*/
-  fileDesc("CiFzZXJtb24vd2ViL3YxL3VwZGF0ZV9wb2xpY3kucHJvdG8SDXNlcm1vbi53ZWIudjEidwoMVXBkYXRlV2luZG93EiQKBGRheXMYASADKA4yFi5zZXJtb24ud2ViLnYxLldlZWtkYXkSFAoMc3RhcnRfbWludXRlGAIgASgFEhgKEGR1cmF0aW9uX21pbnV0ZXMYAyABKAUSEQoJdGltZV96b25lGAQgASgJIqoCChBVcGRhdGVQb2xpY3lTcGVjEicKBG1vZGUYASABKA4yGS5zZXJtb24ud2ViLnYxLlVwZGF0ZU1vZGUSKwoGd2luZG93GAIgASgLMhsuc2VybW9uLndlYi52MS5VcGRhdGVXaW5kb3cSEwoLYXV0b19yZWJvb3QYAyABKAgSFAoMbWF4X3BhcmFsbGVsGAQgASgFEhcKD3N0b3Bfb25fZmFpbHVyZRgFIAEoCBIcChRoZWFsdGhfY2hlY2tfbWludXRlcxgGIAEoBRIwCgxhZ2VudF91cGRhdGUYByABKA4yGi5zZXJtb24ud2ViLnYxLkFnZW50VXBkYXRlEiwKB2NoYW5uZWwYCCABKA4yGy5zZXJtb24ud2ViLnYxLkFnZW50Q2hhbm5lbCLZAQoMVXBkYXRlUG9saWN5EhAKCGdyb3VwX2lkGAEgASgJEhIKCmdyb3VwX25hbWUYAiABKAkSLQoEc3BlYxgDIAEoCzIfLnNlcm1vbi53ZWIudjEuVXBkYXRlUG9saWN5U3BlYxISCgppc19kZWZhdWx0GAQgASgIEi8KC3VwZGF0ZV90aW1lGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCgtuZXh0X3dpbmRvdxgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiKgoWR2V0VXBkYXRlUG9saWN5UmVxdWVzdBIQCghncm91cF9pZBgBIAEoCSJGChdHZXRVcGRhdGVQb2xpY3lSZXNwb25zZRIrCgZwb2xpY3kYASABKAsyGy5zZXJtb24ud2ViLnYxLlVwZGF0ZVBvbGljeSIbChlMaXN0VXBkYXRlUG9saWNpZXNSZXF1ZXN0IksKGkxpc3RVcGRhdGVQb2xpY2llc1Jlc3BvbnNlEi0KCHBvbGljaWVzGAEgAygLMhsuc2VybW9uLndlYi52MS5VcGRhdGVQb2xpY3kiWQoWU2V0VXBkYXRlUG9saWN5UmVxdWVzdBIQCghncm91cF9pZBgBIAEoCRItCgRzcGVjGAIgASgLMh8uc2VybW9uLndlYi52MS5VcGRhdGVQb2xpY3lTcGVjIkYKF1NldFVwZGF0ZVBvbGljeVJlc3BvbnNlEisKBnBvbGljeRgBIAEoCzIbLnNlcm1vbi53ZWIudjEuVXBkYXRlUG9saWN5IjsKGUltcG9ydFVwZGF0ZVBvbGljeVJlcXVlc3QSEAoIZ3JvdXBfaWQYASABKAkSDAoEeWFtbBgCIAEoCSJJChpJbXBvcnRVcGRhdGVQb2xpY3lSZXNwb25zZRIrCgZwb2xpY3kYASABKAsyGy5zZXJtb24ud2ViLnYxLlVwZGF0ZVBvbGljeSItChlFeHBvcnRVcGRhdGVQb2xpY3lSZXF1ZXN0EhAKCGdyb3VwX2lkGAEgASgJIioKGkV4cG9ydFVwZGF0ZVBvbGljeVJlc3BvbnNlEgwKBHlhbWwYASABKAkiLAoYUmVzZXRVcGRhdGVQb2xpY3lSZXF1ZXN0EhAKCGdyb3VwX2lkGAEgASgJIhsKGVJlc2V0VXBkYXRlUG9saWN5UmVzcG9uc2UqegoKVXBkYXRlTW9kZRIbChdVUERBVEVfTU9ERV9VTlNQRUNJRklFRBAAEhYKElVQREFURV9NT0RFX1JFUE9SVBABEh0KGVVQREFURV9NT0RFX1NFQ1VSSVRZX0FVVE8QAhIYChRVUERBVEVfTU9ERV9BTExfQVVUTxADKlsKC0FnZW50VXBkYXRlEhwKGEFHRU5UX1VQREFURV9VTlNQRUNJRklFRBAAEhcKE0FHRU5UX1VQREFURV9NQU5VQUwQARIVChFBR0VOVF9VUERBVEVfQVVUTxACKl8KDEFnZW50Q2hhbm5lbBIdChlBR0VOVF9DSEFOTkVMX1VOU1BFQ0lGSUVEEAASGAoUQUdFTlRfQ0hBTk5FTF9TVEFCTEUQARIWChJBR0VOVF9DSEFOTkVMX0JFVEEQAjKRBQoTVXBkYXRlUG9saWN5U2VydmljZRJlCg9HZXRVcGRhdGVQb2xpY3kSJS5zZXJtb24ud2ViLnYxLkdldFVwZGF0ZVBvbGljeVJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkdldFVwZGF0ZVBvbGljeVJlc3BvbnNlIgOQAgESbgoSTGlzdFVwZGF0ZVBvbGljaWVzEiguc2VybW9uLndlYi52MS5MaXN0VXBkYXRlUG9saWNpZXNSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5MaXN0VXBkYXRlUG9saWNpZXNSZXNwb25zZSIDkAIBEmAKD1NldFVwZGF0ZVBvbGljeRIlLnNlcm1vbi53ZWIudjEuU2V0VXBkYXRlUG9saWN5UmVxdWVzdBomLnNlcm1vbi53ZWIudjEuU2V0VXBkYXRlUG9saWN5UmVzcG9uc2USaQoSSW1wb3J0VXBkYXRlUG9saWN5Eiguc2VybW9uLndlYi52MS5JbXBvcnRVcGRhdGVQb2xpY3lSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5JbXBvcnRVcGRhdGVQb2xpY3lSZXNwb25zZRJuChJFeHBvcnRVcGRhdGVQb2xpY3kSKC5zZXJtb24ud2ViLnYxLkV4cG9ydFVwZGF0ZVBvbGljeVJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLkV4cG9ydFVwZGF0ZVBvbGljeVJlc3BvbnNlIgOQAgESZgoRUmVzZXRVcGRhdGVQb2xpY3kSJy5zZXJtb24ud2ViLnYxLlJlc2V0VXBkYXRlUG9saWN5UmVxdWVzdBooLnNlcm1vbi53ZWIudjEuUmVzZXRVcGRhdGVQb2xpY3lSZXNwb25zZULAAQoRY29tLnNlcm1vbi53ZWIudjFCEVVwZGF0ZVBvbGljeVByb3RvUAFaQmdpdGh1Yi5jb20vcG1vc2NvZGUvU2VyTW9uL3NlcnZlci9pbnRlcm5hbC9nZW4vc2VybW9uL3dlYi92MTt3ZWJ2MaICA1NXWKoCDVNlcm1vbi5XZWIuVjHKAg1TZXJtb25cV2ViXFYx4gIZU2VybW9uXFdlYlxWMVxHUEJNZXRhZGF0YeoCD1Nlcm1vbjo6V2ViOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp, file_sermon_web_v1_silence]);
+  fileDesc("CiFzZXJtb24vd2ViL3YxL3VwZGF0ZV9wb2xpY3kucHJvdG8SDXNlcm1vbi53ZWIudjEidwoMVXBkYXRlV2luZG93EiQKBGRheXMYASADKA4yFi5zZXJtb24ud2ViLnYxLldlZWtkYXkSFAoMc3RhcnRfbWludXRlGAIgASgFEhgKEGR1cmF0aW9uX21pbnV0ZXMYAyABKAUSEQoJdGltZV96b25lGAQgASgJIqoCChBVcGRhdGVQb2xpY3lTcGVjEicKBG1vZGUYASABKA4yGS5zZXJtb24ud2ViLnYxLlVwZGF0ZU1vZGUSKwoGd2luZG93GAIgASgLMhsuc2VybW9uLndlYi52MS5VcGRhdGVXaW5kb3cSEwoLYXV0b19yZWJvb3QYAyABKAgSFAoMbWF4X3BhcmFsbGVsGAQgASgFEhcKD3N0b3Bfb25fZmFpbHVyZRgFIAEoCBIcChRoZWFsdGhfY2hlY2tfbWludXRlcxgGIAEoBRIwCgxhZ2VudF91cGRhdGUYByABKA4yGi5zZXJtb24ud2ViLnYxLkFnZW50VXBkYXRlEiwKB2NoYW5uZWwYCCABKA4yGy5zZXJtb24ud2ViLnYxLkFnZW50Q2hhbm5lbCLZAQoMVXBkYXRlUG9saWN5EhAKCGdyb3VwX2lkGAEgASgJEhIKCmdyb3VwX25hbWUYAiABKAkSLQoEc3BlYxgDIAEoCzIfLnNlcm1vbi53ZWIudjEuVXBkYXRlUG9saWN5U3BlYxISCgppc19kZWZhdWx0GAQgASgIEi8KC3VwZGF0ZV90aW1lGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCgtuZXh0X3dpbmRvdxgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiKgoWR2V0VXBkYXRlUG9saWN5UmVxdWVzdBIQCghncm91cF9pZBgBIAEoCSJGChdHZXRVcGRhdGVQb2xpY3lSZXNwb25zZRIrCgZwb2xpY3kYASABKAsyGy5zZXJtb24ud2ViLnYxLlVwZGF0ZVBvbGljeSIbChlMaXN0VXBkYXRlUG9saWNpZXNSZXF1ZXN0In0KGkxpc3RVcGRhdGVQb2xpY2llc1Jlc3BvbnNlEi0KCHBvbGljaWVzGAEgAygLMhsuc2VybW9uLndlYi52MS5VcGRhdGVQb2xpY3kSMAoMcGF1c2VkX3NpbmNlGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIpChdTZXRVcGRhdGVzUGF1c2VkUmVxdWVzdBIOCgZwYXVzZWQYASABKAgiTAoYU2V0VXBkYXRlc1BhdXNlZFJlc3BvbnNlEjAKDHBhdXNlZF9zaW5jZRgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiWQoWU2V0VXBkYXRlUG9saWN5UmVxdWVzdBIQCghncm91cF9pZBgBIAEoCRItCgRzcGVjGAIgASgLMh8uc2VybW9uLndlYi52MS5VcGRhdGVQb2xpY3lTcGVjIkYKF1NldFVwZGF0ZVBvbGljeVJlc3BvbnNlEisKBnBvbGljeRgBIAEoCzIbLnNlcm1vbi53ZWIudjEuVXBkYXRlUG9saWN5IjsKGUltcG9ydFVwZGF0ZVBvbGljeVJlcXVlc3QSEAoIZ3JvdXBfaWQYASABKAkSDAoEeWFtbBgCIAEoCSJJChpJbXBvcnRVcGRhdGVQb2xpY3lSZXNwb25zZRIrCgZwb2xpY3kYASABKAsyGy5zZXJtb24ud2ViLnYxLlVwZGF0ZVBvbGljeSItChlFeHBvcnRVcGRhdGVQb2xpY3lSZXF1ZXN0EhAKCGdyb3VwX2lkGAEgASgJIioKGkV4cG9ydFVwZGF0ZVBvbGljeVJlc3BvbnNlEgwKBHlhbWwYASABKAkiLAoYUmVzZXRVcGRhdGVQb2xpY3lSZXF1ZXN0EhAKCGdyb3VwX2lkGAEgASgJIhsKGVJlc2V0VXBkYXRlUG9saWN5UmVzcG9uc2UqegoKVXBkYXRlTW9kZRIbChdVUERBVEVfTU9ERV9VTlNQRUNJRklFRBAAEhYKElVQREFURV9NT0RFX1JFUE9SVBABEh0KGVVQREFURV9NT0RFX1NFQ1VSSVRZX0FVVE8QAhIYChRVUERBVEVfTU9ERV9BTExfQVVUTxADKlsKC0FnZW50VXBkYXRlEhwKGEFHRU5UX1VQREFURV9VTlNQRUNJRklFRBAAEhcKE0FHRU5UX1VQREFURV9NQU5VQUwQARIVChFBR0VOVF9VUERBVEVfQVVUTxACKl8KDEFnZW50Q2hhbm5lbBIdChlBR0VOVF9DSEFOTkVMX1VOU1BFQ0lGSUVEEAASGAoUQUdFTlRfQ0hBTk5FTF9TVEFCTEUQARIWChJBR0VOVF9DSEFOTkVMX0JFVEEQAjL2BQoTVXBkYXRlUG9saWN5U2VydmljZRJlCg9HZXRVcGRhdGVQb2xpY3kSJS5zZXJtb24ud2ViLnYxLkdldFVwZGF0ZVBvbGljeVJlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkdldFVwZGF0ZVBvbGljeVJlc3BvbnNlIgOQAgESbgoSTGlzdFVwZGF0ZVBvbGljaWVzEiguc2VybW9uLndlYi52MS5MaXN0VXBkYXRlUG9saWNpZXNSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5MaXN0VXBkYXRlUG9saWNpZXNSZXNwb25zZSIDkAIBEmAKD1NldFVwZGF0ZVBvbGljeRIlLnNlcm1vbi53ZWIudjEuU2V0VXBkYXRlUG9saWN5UmVxdWVzdBomLnNlcm1vbi53ZWIudjEuU2V0VXBkYXRlUG9saWN5UmVzcG9uc2USaQoSSW1wb3J0VXBkYXRlUG9saWN5Eiguc2VybW9uLndlYi52MS5JbXBvcnRVcGRhdGVQb2xpY3lSZXF1ZXN0Gikuc2VybW9uLndlYi52MS5JbXBvcnRVcGRhdGVQb2xpY3lSZXNwb25zZRJuChJFeHBvcnRVcGRhdGVQb2xpY3kSKC5zZXJtb24ud2ViLnYxLkV4cG9ydFVwZGF0ZVBvbGljeVJlcXVlc3QaKS5zZXJtb24ud2ViLnYxLkV4cG9ydFVwZGF0ZVBvbGljeVJlc3BvbnNlIgOQAgESZgoRUmVzZXRVcGRhdGVQb2xpY3kSJy5zZXJtb24ud2ViLnYxLlJlc2V0VXBkYXRlUG9saWN5UmVxdWVzdBooLnNlcm1vbi53ZWIudjEuUmVzZXRVcGRhdGVQb2xpY3lSZXNwb25zZRJjChBTZXRVcGRhdGVzUGF1c2VkEiYuc2VybW9uLndlYi52MS5TZXRVcGRhdGVzUGF1c2VkUmVxdWVzdBonLnNlcm1vbi53ZWIudjEuU2V0VXBkYXRlc1BhdXNlZFJlc3BvbnNlQsABChFjb20uc2VybW9uLndlYi52MUIRVXBkYXRlUG9saWN5UHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_sermon_web_v1_silence]);
 
 /**
  * UpdateWindow is a weekly window in a time zone.
@@ -254,6 +254,13 @@ export type ListUpdatePoliciesResponse = Message<"sermon.web.v1.ListUpdatePolici
    * @generated from field: repeated sermon.web.v1.UpdatePolicy policies = 1;
    */
   policies: UpdatePolicy[];
+
+  /**
+   * paused_since is when the organization's updates were paused; unset while they run (M4-31).
+   *
+   * @generated from field: google.protobuf.Timestamp paused_since = 2;
+   */
+  pausedSince?: Timestamp | undefined;
 };
 
 /**
@@ -262,6 +269,48 @@ export type ListUpdatePoliciesResponse = Message<"sermon.web.v1.ListUpdatePolici
  */
 export const ListUpdatePoliciesResponseSchema: GenMessage<ListUpdatePoliciesResponse> = /*@__PURE__*/
   messageDesc(file_sermon_web_v1_update_policy, 6);
+
+/**
+ * SetUpdatesPausedRequest says whether to pause.
+ *
+ * @generated from message sermon.web.v1.SetUpdatesPausedRequest
+ */
+export type SetUpdatesPausedRequest = Message<"sermon.web.v1.SetUpdatesPausedRequest"> & {
+  /**
+   * paused pauses (true) or resumes (false) the updates.
+   *
+   * @generated from field: bool paused = 1;
+   */
+  paused: boolean;
+};
+
+/**
+ * Describes the message sermon.web.v1.SetUpdatesPausedRequest.
+ * Use `create(SetUpdatesPausedRequestSchema)` to create a new message.
+ */
+export const SetUpdatesPausedRequestSchema: GenMessage<SetUpdatesPausedRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update_policy, 7);
+
+/**
+ * SetUpdatesPausedResponse is the new state.
+ *
+ * @generated from message sermon.web.v1.SetUpdatesPausedResponse
+ */
+export type SetUpdatesPausedResponse = Message<"sermon.web.v1.SetUpdatesPausedResponse"> & {
+  /**
+   * paused_since is when the updates were paused; unset after a resume.
+   *
+   * @generated from field: google.protobuf.Timestamp paused_since = 1;
+   */
+  pausedSince?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.SetUpdatesPausedResponse.
+ * Use `create(SetUpdatesPausedResponseSchema)` to create a new message.
+ */
+export const SetUpdatesPausedResponseSchema: GenMessage<SetUpdatesPausedResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_update_policy, 8);
 
 /**
  * SetUpdatePolicyRequest is the new policy of a group.
@@ -289,7 +338,7 @@ export type SetUpdatePolicyRequest = Message<"sermon.web.v1.SetUpdatePolicyReque
  * Use `create(SetUpdatePolicyRequestSchema)` to create a new message.
  */
 export const SetUpdatePolicyRequestSchema: GenMessage<SetUpdatePolicyRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 7);
+  messageDesc(file_sermon_web_v1_update_policy, 9);
 
 /**
  * SetUpdatePolicyResponse is the stored policy.
@@ -310,7 +359,7 @@ export type SetUpdatePolicyResponse = Message<"sermon.web.v1.SetUpdatePolicyResp
  * Use `create(SetUpdatePolicyResponseSchema)` to create a new message.
  */
 export const SetUpdatePolicyResponseSchema: GenMessage<SetUpdatePolicyResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 8);
+  messageDesc(file_sermon_web_v1_update_policy, 10);
 
 /**
  * ImportUpdatePolicyRequest is a policy as YAML.
@@ -338,7 +387,7 @@ export type ImportUpdatePolicyRequest = Message<"sermon.web.v1.ImportUpdatePolic
  * Use `create(ImportUpdatePolicyRequestSchema)` to create a new message.
  */
 export const ImportUpdatePolicyRequestSchema: GenMessage<ImportUpdatePolicyRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 9);
+  messageDesc(file_sermon_web_v1_update_policy, 11);
 
 /**
  * ImportUpdatePolicyResponse is the stored policy.
@@ -359,7 +408,7 @@ export type ImportUpdatePolicyResponse = Message<"sermon.web.v1.ImportUpdatePoli
  * Use `create(ImportUpdatePolicyResponseSchema)` to create a new message.
  */
 export const ImportUpdatePolicyResponseSchema: GenMessage<ImportUpdatePolicyResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 10);
+  messageDesc(file_sermon_web_v1_update_policy, 12);
 
 /**
  * ExportUpdatePolicyRequest names the group.
@@ -380,7 +429,7 @@ export type ExportUpdatePolicyRequest = Message<"sermon.web.v1.ExportUpdatePolic
  * Use `create(ExportUpdatePolicyRequestSchema)` to create a new message.
  */
 export const ExportUpdatePolicyRequestSchema: GenMessage<ExportUpdatePolicyRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 11);
+  messageDesc(file_sermon_web_v1_update_policy, 13);
 
 /**
  * ExportUpdatePolicyResponse is the YAML.
@@ -401,7 +450,7 @@ export type ExportUpdatePolicyResponse = Message<"sermon.web.v1.ExportUpdatePoli
  * Use `create(ExportUpdatePolicyResponseSchema)` to create a new message.
  */
 export const ExportUpdatePolicyResponseSchema: GenMessage<ExportUpdatePolicyResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 12);
+  messageDesc(file_sermon_web_v1_update_policy, 14);
 
 /**
  * ResetUpdatePolicyRequest names the group.
@@ -422,7 +471,7 @@ export type ResetUpdatePolicyRequest = Message<"sermon.web.v1.ResetUpdatePolicyR
  * Use `create(ResetUpdatePolicyRequestSchema)` to create a new message.
  */
 export const ResetUpdatePolicyRequestSchema: GenMessage<ResetUpdatePolicyRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 13);
+  messageDesc(file_sermon_web_v1_update_policy, 15);
 
 /**
  * ResetUpdatePolicyResponse has no fields.
@@ -437,7 +486,7 @@ export type ResetUpdatePolicyResponse = Message<"sermon.web.v1.ResetUpdatePolicy
  * Use `create(ResetUpdatePolicyResponseSchema)` to create a new message.
  */
 export const ResetUpdatePolicyResponseSchema: GenMessage<ResetUpdatePolicyResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_update_policy, 14);
+  messageDesc(file_sermon_web_v1_update_policy, 16);
 
 /**
  * UpdateMode is what a group does with its updates on its own.
@@ -616,6 +665,19 @@ export const UpdatePolicyService: GenService<{
     methodKind: "unary";
     input: typeof ResetUpdatePolicyRequestSchema;
     output: typeof ResetUpdatePolicyResponseSchema;
+  },
+  /**
+   * SetUpdatesPaused pauses or resumes all updates of the organization (M4-31): while paused no
+   * rollout starts a node, no waiting run goes out and runs by hand are FAILED_PRECONDITION;
+   * runs under way go to their end. manage_policies (admin on all groups) and a fresh step-up,
+   * in the audit log.
+   *
+   * @generated from rpc sermon.web.v1.UpdatePolicyService.SetUpdatesPaused
+   */
+  setUpdatesPaused: {
+    methodKind: "unary";
+    input: typeof SetUpdatesPausedRequestSchema;
+    output: typeof SetUpdatesPausedResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_update_policy, 0);

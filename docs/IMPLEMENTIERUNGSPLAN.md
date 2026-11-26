@@ -5033,6 +5033,15 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 >   Schritte“ geprüft: `Save` schreibt Rollout, Knoten und Aktionen in einer Transaktion hinter der Lease – nur die
 >   Zählung der Plätze war falsch. `RunHistory` zeigt keine Ausgabe und keine Liste einer älteren Anfrage mehr.
 >   Gegenproben 11 von 11 erkannt (eine erst nach einem schärferen Test).
+> - **Abbrechen, Pausieren, Grenzen (T97):** `CancelRollout` und `CancelRun` (Step-up, Audit `updates.cancel` und
+>   `node.run_cancelled`), neuer Zustand „abgebrochen“, `CancelRun{run_id}` an den Agent für gesendete Läufe;
+>   `SetUpdatesPaused` je Organisation (Admins, Step-up, Audit `updates.pause`/`updates.resume`): Orchestrator,
+>   Zustellung und Läufe von Hand halten an; eine Speicherung des Orchestrators verwirft, was sie ohne Abbruch oder
+>   Pause geplant hatte. Reboots und Agent-Updates von Hand zählen gegen 100 je Org und 500 je Instanz, kein zweiter
+>   Reboot, keiner neben einem Rollout; Downloads höchstens 20 je Org und 100 je Instanz gleichzeitig; die Leases des
+>   Orchestrators mit der Zeit der Datenbank (die der Alert-Engine bleiben bei der Uhr der Instanz: ihre Tests spielen
+>   den Ablauf über sie). UI: Abbrechen in Rollout-Liste und Läufen, Hinweis und Schalter „Updates pausieren“,
+>   Hilfetexte. Gegenproben 19 von 19 (Server, Agent) und 21 von 21 (UI) erkannt.
 - **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
   - **Mittel:**
     - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys

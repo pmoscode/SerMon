@@ -20,7 +20,8 @@ the agent suggests it when it finds Apache (process `apache2` or `httpd`, the un
   only.
 
 Without `?auto` the page also shows the current requests and clients; the module reads the counters only and passes
-on no requests, URLs or addresses. The agent only reaches targets within `module_targets` (by default loopback).
+on no requests, URLs or addresses. The agent only reaches targets within `module_targets` (by default loopback), `module_hosts` (by default
+`localhost`) and `module_ports`.
 
 ## Settings
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Apache httpd",
-  "description": "Workers, connections and requests from server-status?auto of Apache httpd (mod_status), inside module_targets (by default loopback only).",
+  "description": "Workers, connections and requests from server-status?auto of Apache httpd (mod_status), inside module_targets, module_hosts and module_ports of agent.toml (by default loopback, localhost and the services' ports).",
   "type": "object",
   "additionalProperties": false,
   "properties": {

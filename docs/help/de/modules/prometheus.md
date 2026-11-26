@@ -12,7 +12,8 @@ seine Labels im Label `series`. So kollidiert nichts mit den Metriken des Agents
 
 ## Voraussetzungen
 
-Nur Endpunkte unter `module_targets` in `[local]` von `/etc/sermon/agent.toml` (ab Werk Loopback). Höchstens 1 MiB je
+Nur Endpunkte unter `module_targets` in `[local]` von `/etc/sermon/agent.toml` (ab Werk Loopback), Namen unter
+`module_hosts` (ab Werk `localhost`) und Ports unter `module_ports` (ab Werk unter anderem 9090–9999, die Exporter). Höchstens 1 MiB je
 Antwort, höchstens drei Weiterleitungen innerhalb der erlaubten Ziele.
 
 ## Einstellungen

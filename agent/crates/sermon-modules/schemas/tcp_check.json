@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "TCP check",
-  "description": "Whether TCP ports the host's veto allows (module_targets, by default loopback only) accept connections, and how fast.",
+  "description": "Whether TCP ports the host's veto allows (module_targets, module_hosts, module_ports; by default loopback, localhost and the services' ports) accept connections, and how fast.",
   "type": "object",
   "additionalProperties": false,
   "required": ["targets"],

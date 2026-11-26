@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Docker over the socket",
-  "description": "State, health and restarts of the containers from the Docker API (read only), optionally their output into the logs. Whoever may use the socket is root: the host has to allow it with allow_docker_socket = true in agent.toml.",
+  "description": "State, health and restarts of the containers from the Docker API (read only), optionally their output into the logs. Whoever may use the socket is root: the host has to allow it with allow_docker_socket = true in agent.toml (also for Podman, containerd, CRI-O and other runtimes).",
   "type": "object",
   "additionalProperties": false,
   "properties": {

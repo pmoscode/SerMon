@@ -19,7 +19,8 @@ Agent schlägt es vor, wenn er Apache findet (Prozess `apache2` oder `httpd`, di
   Danach `apachectl configtest` und `systemctl reload httpd`. `Require local` lässt nur Anfragen vom Host selbst zu.
 
 Die Seite zeigt ohne `?auto` auch die aktuellen Anfragen und Clients; das Modul liest nur die Zähler und schickt
-keine Anfragen, URLs oder Adressen weiter. Der Agent erreicht nur Ziele unter `module_targets` (ab Werk Loopback).
+keine Anfragen, URLs oder Adressen weiter. Der Agent erreicht nur Ziele unter `module_targets` (ab Werk Loopback), `module_hosts` (ab Werk `localhost`)
+und `module_ports`.
 
 ## Einstellungen
 

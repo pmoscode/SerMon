@@ -19,7 +19,8 @@ the agent (`sermon`).
 
 - The **Unix socket** (`/run/postgresql/.s.PGSQL.5432`) is the best way: only PostgreSQL creates that path, and with
   `peer` no password is needed. Otherwise the **address** `host:port` (`127.0.0.1:5432` by default); hosts other than
-  loopback only once `module_targets` in `agent.toml` allows them.
+  loopback only once `module_targets` in `agent.toml` allows them (names other than `localhost` through
+  `module_hosts`, ports other than 5432 through `module_ports`).
 - **TLS:** `off`, `verify` (the certificate against the system's CAs or the **CA file** below `module_file_prefixes`)
   or `no_verify` (encrypted, but to whoever answers). Empty means `off` on loopback and the socket, `verify` for any
   other address.

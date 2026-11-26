@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "TLS certificates",
-  "description": "Days left, chain and name of certificate files below module_file_prefixes and of TLS endpoints inside module_targets.",
+  "description": "Days left, chain and name of certificate files below module_file_prefixes and of TLS endpoints inside module_targets, module_hosts and module_ports.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

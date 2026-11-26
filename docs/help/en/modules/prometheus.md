@@ -12,7 +12,9 @@ histograms and `_created` are left out.
 
 ## Requirements
 
-Only endpoints within `module_targets` in `[local]` of `/etc/sermon/agent.toml` (by default loopback). At most 1 MiB
+Only endpoints within `module_targets` in `[local]` of `/etc/sermon/agent.toml` (by default loopback), names within
+`module_hosts` (by default `localhost`) and ports within `module_ports` (by default among others 9090–9999, the
+exporters). At most 1 MiB
 an answer, at most three redirects within the allowed targets.
 
 ## Settings

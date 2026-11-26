@@ -6,7 +6,7 @@ ist ab Werk aus; der Agent schlägt es vor, wenn er `redis-server` oder `valkey-
 
 ## Voraussetzungen
 
-- Redis unter `module_targets` (ab Werk Loopback) oder ein Unix-Socket unter `module_sockets` (ab Werk `/run`,
+- Redis unter `module_targets` (ab Werk Loopback; Namen über `module_hosts`, Ports über `module_ports`, ab Werk 6379) oder ein Unix-Socket unter `module_sockets` (ab Werk `/run`,
   `/var/run`), auf den der User `sermon` zugreifen darf (Gruppe `redis` oder `unixsocketperm`).
 - Mit Passwort: am besten ein eigener ACL-User, der nur `INFO` darf:
 

@@ -11,7 +11,8 @@ leave the host, never a certificate or key.
   allowed to read the file. Certificates below `/etc/letsencrypt/live/` are mostly readable, the keys next to them
   are not – the module doesn't need them. If a file holds the key too (haproxy), the module reads only the
   certificates.
-- **Endpoints** only within `module_targets` (by default loopback).
+- **Endpoints** only within `module_targets` (by default loopback), names within `module_hosts` (by default
+  `localhost`), ports within `module_ports` (by default 443, 465, 636, 993, 995, 8443 and those of the other modules).
 
 ## Settings
 

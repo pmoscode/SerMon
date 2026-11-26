@@ -8,7 +8,7 @@
     "address": {
       "type": "string",
       "title": "Address",
-      "description": "host:port of the server (loopback unless module_targets of agent.toml allows more).",
+      "description": "host:port of the server (loopback, localhost and port 3306 unless module_targets, module_hosts and module_ports of agent.toml allow more).",
       "format": "host-port",
       "maxLength": 255,
       "default": "127.0.0.1:3306"

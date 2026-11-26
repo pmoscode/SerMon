@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "HTTP check",
-  "description": "Reachability, latency, status code and certificate expiry of HTTP endpoints the host's veto allows (module_targets, by default loopback only).",
+  "description": "Reachability, latency, status code and certificate expiry of HTTP endpoints the host's veto allows (module_targets, module_hosts, module_ports; by default loopback, localhost and the services' ports).",
   "type": "object",
   "additionalProperties": false,
   "required": ["urls"],

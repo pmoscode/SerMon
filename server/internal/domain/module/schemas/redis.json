@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Redis",
-  "description": "Memory, clients, commands, hit rate, evictions and replication from INFO of Redis or Valkey, inside module_targets (by default loopback only) or over a socket below module_sockets.",
+  "description": "Memory, clients, commands, hit rate, evictions and replication from INFO of Redis or Valkey, inside module_targets, module_hosts and module_ports (by default loopback, localhost, 6379 among others) or over a socket below module_sockets.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Prometheus scraper",
-  "description": "Series of /metrics endpoints inside module_targets (by default loopback only), mapped onto sermon_prometheus_gauge and sermon_prometheus_rate with the labels name and series.",
+  "description": "Series of /metrics endpoints inside module_targets, module_hosts and module_ports (by default loopback, localhost, ports 9090-9999 among others), mapped onto sermon_prometheus_gauge and sermon_prometheus_rate with the labels name and series.",
   "type": "object",
   "additionalProperties": false,
   "required": ["urls"],

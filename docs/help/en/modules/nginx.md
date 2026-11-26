@@ -21,7 +21,8 @@ server {
 
 Then `nginx -t` and `systemctl reload nginx`. The block on `127.0.0.1:80` takes only requests to 127.0.0.1, the sites
 facing outside stay as they are. The page shows counters only, no data of visitors. If nginx listens on another port,
-adjust the URL in the module. The agent only reaches targets within `module_targets` (by default loopback).
+adjust the URL in the module. The agent only reaches targets within `module_targets` (by default loopback), `module_hosts` (by default
+`localhost`) and `module_ports`.
 
 ## Settings
 

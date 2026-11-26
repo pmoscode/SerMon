@@ -4,6 +4,6 @@
 
 ## Reading it
 
-From the module `tls`; the label `target` is the configured file or `host:port`. Files only below the host's `module_file_prefixes`, endpoints only within its `module_targets`.
+From the module `tls`; the label `target` is the configured file or `host:port`. Files only below the host's `module_file_prefixes`, endpoints only within its `module_targets`, `module_hosts` and `module_ports`.
 
 Metric: `sermon_tls_up`

@@ -6,7 +6,8 @@ only `AUTH` (with a password) and `INFO`, nothing that changes data.
 
 ## Requirements
 
-- Redis within `module_targets` (by default loopback) or a Unix socket below `module_sockets` (by default `/run`,
+- Redis within `module_targets` (by default loopback; names through `module_hosts`, ports through `module_ports`, by
+  default 6379) or a Unix socket below `module_sockets` (by default `/run`,
   `/var/run`) the user `sermon` may use (group `redis` or `unixsocketperm`).
 - With a password: best an ACL user of its own that may run `INFO` only:
 

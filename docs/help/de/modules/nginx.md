@@ -21,7 +21,8 @@ server {
 
 Danach `nginx -t` und `systemctl reload nginx`. Der Block auf `127.0.0.1:80` nimmt nur Anfragen an 127.0.0.1 an, die
 Seiten nach außen bleiben unberührt. Die Seite zeigt nur Zähler, keine Daten der Besucher. Läuft nginx auf einem
-anderen Port, die URL im Modul anpassen. Der Agent erreicht nur Ziele unter `module_targets` (ab Werk Loopback).
+anderen Port, die URL im Modul anpassen. Der Agent erreicht nur Ziele unter `module_targets` (ab Werk Loopback), `module_hosts` (ab Werk `localhost`)
+und `module_ports`.
 
 ## Einstellungen
 

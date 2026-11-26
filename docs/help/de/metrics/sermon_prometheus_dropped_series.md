@@ -4,6 +4,6 @@ Serien über der Grenze, mit zu langen Namen oder Labels (über 256 Byte) und ka
 
 ## Einordnung
 
-Vom Modul `prometheus`; Label `target` ist der Endpunkt (URL ohne Query). Endpunkte nur unter `module_targets` des Hosts.
+Vom Modul `prometheus`; Label `target` ist der Endpunkt (URL ohne Query). Endpunkte nur unter `module_targets`, `module_hosts` und `module_ports` des Hosts.
 
 Metrik: `sermon_prometheus_dropped_series`

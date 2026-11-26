@@ -11,7 +11,8 @@ verlassen nur diese Angaben, nie ein Zertifikat oder Schlüssel.
   muss die Datei lesen dürfen. Zertifikate unter `/etc/letsencrypt/live/` sind meist lesbar, die Schlüssel daneben
   nicht – sie braucht das Modul auch nicht. Enthält eine Datei auch den Schlüssel (haproxy), liest das Modul nur die
   Zertifikate.
-- **Endpunkte** nur unter `module_targets` (ab Werk Loopback).
+- **Endpunkte** nur unter `module_targets` (ab Werk Loopback), Namen unter `module_hosts` (ab Werk `localhost`), Ports
+  unter `module_ports` (ab Werk 443, 465, 636, 993, 995, 8443 und die der anderen Module).
 
 ## Einstellungen
 

@@ -4,6 +4,8 @@ use std::time::Duration;
 use sermon_core::Value as V;
 
 use super::cgroups::{Runtime, id_of, scan};
+use sermon_core::testing::FakeClock;
+
 use super::*;
 use crate::Schema;
 
@@ -60,8 +62,14 @@ fn total(samples: &[Sample], metric: &str) -> V {
     samples.iter().find(|s| s.metric == metric).unwrap().value
 }
 
-async fn collect(c: &mut Containers) -> Vec<Sample> {
-    c.collect(&Run::default()).await.unwrap()
+async fn collect(c: &mut Containers, run: &Run) -> Vec<Sample> {
+    c.collect(run).await.unwrap()
+}
+
+/// A run on a clock the test moves.
+fn run() -> (Run, std::sync::Arc<FakeClock>) {
+    let clock = std::sync::Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
+    (Run::new(clock.clone()), clock)
 }
 
 #[test]
@@ -100,11 +108,12 @@ fn knows_the_cgroups_of_docker_and_podman() {
 
 // Docker with the cgroupfs driver (as captured): a web server, a client and a container writing
 // to disk; rates from the second run on.
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn reads_dockers_containers_and_their_rates() {
+    let (run, clock) = run();
     let (t0, t1) = (tree("docker/t0", &[]), tree("docker/t1", &[]));
     let mut c = Containers::new(ProcRoot::new(t0.path()), 20);
-    let first = collect(&mut c).await;
+    let first = collect(&mut c, &run).await;
     assert_eq!(total(&first, "sermon_docker_containers"), V::Int(3));
     assert_eq!(total(&first, "sermon_docker_truncated"), V::Int(0));
     assert_eq!(
@@ -118,9 +127,9 @@ async fn reads_dockers_containers_and_their_rates() {
         .unwrap();
     assert!(web.labels.contains(&("runtime", "docker".to_owned())));
 
-    tokio::time::advance(Duration::from_secs(5)).await;
+    clock.advance(Duration::from_secs(5));
     c.root = ProcRoot::new(t1.path());
-    let second = collect(&mut c).await;
+    let second = collect(&mut c, &run).await;
     let names: BTreeSet<String> = second
         .iter()
         .filter(|s| s.metric == "sermon_docker_processes")
@@ -170,14 +179,15 @@ async fn reads_dockers_containers_and_their_rates() {
 
 // Podman (cgroupfs manager, as captured): its containers share the host's network, so they
 // report no traffic of their own.
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn reads_podmans_containers() {
+    let (run, clock) = run();
     let (t0, t1) = (tree("podman/t0", &[]), tree("podman/t1", &[]));
     let mut c = Containers::new(ProcRoot::new(t0.path()), 20);
-    collect(&mut c).await;
-    tokio::time::advance(Duration::from_secs(5)).await;
+    collect(&mut c, &run).await;
+    clock.advance(Duration::from_secs(5));
     c.root = ProcRoot::new(t1.path());
-    let s = collect(&mut c).await;
+    let s = collect(&mut c, &run).await;
     assert_eq!(total(&s, "sermon_docker_containers"), V::Int(2));
     assert_eq!(
         value(&s, "sermon_docker_cpu_utilization_ratio", BUSY),
@@ -257,8 +267,9 @@ fn finds_the_containers_of_every_driver() {
 }
 
 // Containers come and go: a new one has no rate in its first run, a gone one leaves nothing.
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn containers_come_and_go() {
+    let (run, clock) = run();
     let t0 = tree("docker/t0", &[]);
     let t1 = tree("docker/t1", &[]);
     let cg = t1.path().join("sys/fs/cgroup/docker");
@@ -266,10 +277,10 @@ async fn containers_come_and_go() {
     let new = "d0c9000000000000000000000000000000000000000000000000000000000000";
     copy(&cg.join(WEB), &cg.join(new));
     let mut c = Containers::new(ProcRoot::new(t0.path()), 20);
-    collect(&mut c).await;
-    tokio::time::advance(Duration::from_secs(5)).await;
+    collect(&mut c, &run).await;
+    clock.advance(Duration::from_secs(5));
     c.root = ProcRoot::new(t1.path());
-    let s = collect(&mut c).await;
+    let s = collect(&mut c, &run).await;
     assert_eq!(total(&s, "sermon_docker_containers"), V::Int(3));
     assert!(
         value(&s, "sermon_docker_processes", CLIENT).is_none(),
@@ -286,12 +297,13 @@ async fn containers_come_and_go() {
 }
 
 // At most max_containers, the largest by memory; without cgroup v2 a reason.
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn reports_within_bounds() {
+    let (run, clock) = run();
     let t1 = tree("docker/t1", &[]);
     let mut all = Containers::new(ProcRoot::new(t1.path()), 3);
     assert_eq!(
-        total(&collect(&mut all).await, "sermon_docker_truncated"),
+        total(&collect(&mut all, &run).await, "sermon_docker_truncated"),
         V::Int(0),
         "all of them"
     );
@@ -301,7 +313,7 @@ async fn reports_within_bounds() {
     );
     assert_eq!(Containers::new(ProcRoot::new(t1.path()), 0).max, 1);
     let mut c = Containers::new(ProcRoot::new(t1.path()), 1);
-    let s = collect(&mut c).await;
+    let s = collect(&mut c, &run).await;
     assert_eq!(total(&s, "sermon_docker_truncated"), V::Int(1));
     assert!(
         value(&s, "sermon_docker_processes", CLIENT).is_some(),
@@ -323,9 +335,9 @@ async fn reports_within_bounds() {
     let root = ProcRoot::new(many.path());
     assert_eq!(scan(&root).unwrap().len(), cgroups::MAX_SCANNED);
     let mut c = Containers::new(root, MAX_CONTAINERS);
-    collect(&mut c).await;
-    tokio::time::advance(Duration::from_secs(5)).await;
-    let s = collect(&mut c).await;
+    collect(&mut c, &run).await;
+    clock.advance(Duration::from_secs(5));
+    let s = collect(&mut c, &run).await;
     assert!(s.len() <= MAX_SAMPLES, "{}", s.len());
 
     let v1 = tempfile::tempdir().unwrap();

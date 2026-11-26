@@ -24,8 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 use sermon_collectors::rate::{per_second, ppm};
-use sermon_core::{ProcRoot, Sample};
-use tokio::time::Instant;
+use sermon_core::{Monotonic, ProcRoot, Sample};
 
 use crate::discovery::{Discovered, HostFacts};
 use crate::runtime::MAX_SAMPLES;
@@ -74,7 +73,7 @@ impl Module for Docker {
 /// The counters of the last run, for the rates.
 #[derive(Debug)]
 struct Last {
-    at: Instant,
+    at: Monotonic,
     reading: Reading,
 }
 
@@ -99,7 +98,12 @@ impl Containers {
 
     /// The samples of `readings` taken `at`; keeps their counters for the next run (only of
     /// those still there).
-    fn samples(&mut self, readings: Vec<(Found, Reading)>, cpus: u64, at: Instant) -> Vec<Sample> {
+    fn samples(
+        &mut self,
+        readings: Vec<(Found, Reading)>,
+        cpus: u64,
+        at: Monotonic,
+    ) -> Vec<Sample> {
         let total = readings.len();
         let mut shown: Vec<&(Found, Reading)> = readings.iter().collect();
         // The largest by memory: on a host with many containers those matter most.
@@ -212,7 +216,7 @@ impl Instance for Containers {
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             let root = self.root.clone();
-            let at = Instant::now();
+            let at = run.monotonic();
             let (readings, cpus) =
                 run.blocking(move || read_all(&root))
                     .await?

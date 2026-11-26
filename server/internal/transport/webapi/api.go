@@ -55,7 +55,11 @@ type Handlers struct {
 	Logs            *LogHandler
 	LiveView        *LiveViewHandler
 	Dashboards      *DashboardHandler
-	Authenticator   *Authenticator // required for every service except AuthService
+	KioskTokens     *KioskTokenHandler
+	// Kiosk serves the displays (M5-26); KioskAuthenticator is its only authentication.
+	Kiosk              *KioskHandler
+	KioskAuthenticator *KioskAuthenticator
+	Authenticator      *Authenticator // required for every service except AuthService
 }
 
 // MaxRequestBytes bounds every message of the web API and the enrollment endpoint, also after
@@ -103,6 +107,11 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 	mount(webv1connect.NewAlertRuleServiceHandler(h.Rules, authenticated))
 	mount(webv1connect.NewMaintenanceWindowServiceHandler(h.Windows, authenticated))
 	mount(webv1connect.NewDashboardServiceHandler(h.Dashboards, authenticated))
+	mount(webv1connect.NewKioskTokenServiceHandler(h.KioskTokens, authenticated))
+	if h.KioskAuthenticator != nil {
+		// A display has a token, no session: its own interceptor, never the Authenticator (M5-26).
+		mount(webv1connect.NewKioskServiceHandler(h.Kiosk, connect.WithOptions(limit, connect.WithInterceptors(h.KioskAuthenticator, validation))))
+	}
 	if h.Authenticator != nil {
 		// The user's own second factor must be manageable while the organization waits for it.
 		mount(webv1connect.NewTwoFactorServiceHandler(h.TwoFactor, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))

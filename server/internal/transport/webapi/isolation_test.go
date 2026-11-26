@@ -54,6 +54,8 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.ModuleService/ListModules":                     "the static module catalog of the agent's build, no tenant data (requires a role)",
 	"/sermon.web.v1.UpdatePolicyService/SetUpdatesPaused":          "only the caller's own organization, no IDs (update_integration_test.go)",
 	"/sermon.web.v1.AccessService/SetRetention":                    "only the caller's own organization, no IDs (retention_integration_test.go)",
+	"/sermon.web.v1.KioskService/GetKioskDashboard":                "no session: the token names organization and dashboard (kiosk_integration_test.go: every RPC, foreign org)",
+	"/sermon.web.v1.KioskService/QueryKioskWidget":                 "no session: the token names organization and dashboard (kiosk_integration_test.go: every RPC, foreign org)",
 }
 
 // TestTenantIsolation_EveryProcedureIsCovered fails when a new RPC is added without a

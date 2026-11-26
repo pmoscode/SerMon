@@ -529,7 +529,7 @@ serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar al
       (`server/internal/transport/webapi/stepup_cases_test.go`): Rechte und Einladungen, OIDC-Zuordnungen, eigene
       Faktoren (TOTP, Passkeys, OIDC lösen), Org-Pflicht für 2FA, Enrollment-Tokens, Identitäten und Tags von Nodes,
       Agent-CA, Alert-Regeln, Silences und Wartungsfenster, Kanäle und Richtlinien, Log-Einstellungen und Redaction,
-      der Viewer-Logs-Schalter, das Ausblenden von Befehlszeilen, Security-Alerts quittieren, alle Änderungen an
+      der Viewer-Logs-Schalter, das Ausblenden von Befehlszeilen, Security-Alerts quittieren, Kiosk-Tokens anlegen (M5-26), alle Änderungen an
       Organisationen und der Export ihres Audit-Logs. Jede andere schreibende RPC steht mit Grund in `stepUpExempt`
       (z. B. Zugriff entziehen, nur umbenennen, Testnachricht senden); eine neue RPC ohne Eintrag lässt die Tests
       scheitern.

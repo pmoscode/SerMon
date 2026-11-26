@@ -82,3 +82,16 @@ func (l *Loader) Load(ctx context.Context, s session.Session) (authz.Principal, 
 	p.Org, p.Bindings, p.ViewersWithoutLogs = s.Org, membership.Bindings, membership.ViewersWithoutLogs
 	return p, nil
 }
+
+// ForUser returns the principal of a member as it is now, without instance rights and without a
+// session (a kiosk display, M5-26). ErrNoMembership if the user left the organization.
+func (l *Loader) ForUser(ctx context.Context, org tenant.OrgID, user identity.UserID) (authz.Principal, error) {
+	membership, err := l.repo.MembershipAndBindings(ctx, org, user)
+	if err != nil {
+		return authz.Principal{}, fmt.Errorf("load principal: %w", err)
+	}
+	if !membership.Member {
+		return authz.Principal{}, ErrNoMembership
+	}
+	return authz.Principal{User: user, Org: org, Bindings: membership.Bindings, ViewersWithoutLogs: membership.ViewersWithoutLogs}, nil
+}

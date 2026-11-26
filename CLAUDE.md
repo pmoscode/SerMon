@@ -112,7 +112,9 @@ ersten Superadmin an.
 Agent-Enrollment (ADR 0009): `sermon.agent.v1.EnrollmentService` läuft auf dem Web-Listener (gRPC über h2c hinter
 Caddy), ohne Origin-Prüfung und Session, nur mit Enrollment-Token und Rate-Limit.
 Web-API: Connect-Services unter `server/internal/transport/webapi/`, eingehängt über `webapi.Mount`
-(Validierung, Origin-Prüfung, Security-Header). Die UI hängt auf `/` ohne Methode; Routen mit Methode wie `GET /`
+(Validierung, Origin-Prüfung, Security-Header). Der `KioskService` (M5-26) hängt nicht am `Authenticator`, sondern am
+`KioskAuthenticator` (Header `Authorization: Kiosk smk_…`, keine Session); jede neue RPC muss mit einem Kiosk-Token
+dieselbe Antwort geben wie ohne (`kiosk_integration_test.go`). Die UI hängt auf `/` ohne Methode; Routen mit Methode wie `GET /`
 kollidieren mit den Präfixen der API.
 Web: `just build-web` (Build, Größenbudget, Kopie nach `server/web/dist` zum Einbetten), `just e2e` (Playwright gegen
 die echte Server-Binary mit eingebetteter UI), `cd web && pnpm dev` (Vite-Dev-Server).

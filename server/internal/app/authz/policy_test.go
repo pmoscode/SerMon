@@ -54,6 +54,7 @@ var matrix = []struct {
 	{authz.ManageRetention, role.Admin, true},
 	{authz.UseDashboards, role.Viewer, false},
 	{authz.ManageDashboards, role.Admin, true},
+	{authz.ManageKioskTokens, role.Admin, true},
 }
 
 func TestPolicy_RoleMatrix(t *testing.T) {

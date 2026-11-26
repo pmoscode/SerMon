@@ -9,6 +9,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
@@ -45,6 +46,7 @@ type isolationEnv struct {
 	liveView                        webv1connect.LiveViewServiceClient
 	oidcMappings                    webv1connect.OidcMappingServiceClient
 	dashboards                      webv1connect.DashboardServiceClient
+	kioskTokens                     webv1connect.KioskTokenServiceClient
 	orgA, groupA, memberA, bindingA string
 	invitationA, inviteTokenA       string // an open invitation of Org A for another address
 	enrollmentTokenA                string // an open enrollment token of Org A
@@ -55,6 +57,7 @@ type isolationEnv struct {
 	silenceA, windowA               string // a silence and a maintenance window of Org A's group
 	mappingA                        string // an OIDC group mapping of Org A on its group
 	dashboardA                      string // a shared dashboard of Org A with a chart of nodeA
+	kioskTokenA                     string // an open kiosk token of dashboardA
 }
 
 // isolationCase calls one procedure with Org A's objects. Mutating calls must fail with
@@ -276,6 +279,20 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.DashboardService/ImportDashboard": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.dashboards.ImportDashboard(ctx, connect.NewRequest(&webv1.ImportDashboardRequest{Json: `{"version":1,"title":"x","widgets":[{"id":"cpu","kind":"WIDGET_KIND_TIMESERIES","title":"CPU","position":{"w":6,"h":4},"query":{"metric":"sermon_cpu_utilization_ratio","target":{"nodeIds":["` + e.nodeA + `"]}}}]}`}))
+		return err
+	}},
+	"/sermon.web.v1.KioskTokenService/ListKioskTokens": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.kioskTokens.ListKioskTokens(ctx, connect.NewRequest(&webv1.ListKioskTokensRequest{DashboardId: e.dashboardA}))
+		return err
+	}},
+	"/sermon.web.v1.KioskTokenService/CreateKioskToken": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.kioskTokens.CreateKioskToken(ctx, connect.NewRequest(&webv1.CreateKioskTokenRequest{
+			DashboardId: e.dashboardA, Name: "Hall", ValidFor: durationpb.New(24 * time.Hour),
+		}))
+		return err
+	}},
+	"/sermon.web.v1.KioskTokenService/RevokeKioskToken": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.kioskTokens.RevokeKioskToken(ctx, connect.NewRequest(&webv1.RevokeKioskTokenRequest{TokenId: e.kioskTokenA}))
 		return err
 	}},
 	"/sermon.web.v1.DashboardService/ExportDashboard": {run: func(ctx context.Context, e isolationEnv) error {

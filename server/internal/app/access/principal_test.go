@@ -121,3 +121,20 @@ func TestLoad_OrganizationsCanRequireASecondFactor(t *testing.T) {
 		t.Errorf("a session with the provider's second factor: %v", err)
 	}
 }
+
+// A kiosk display acts with the creator's current rights in the organization (M5-26): never as a
+// superadmin, never without membership.
+func TestForUser_LoadsTheCurrentRightsWithoutInstanceRights(t *testing.T) {
+	repo := &fakeRepo{super: true, member: true, bindings: []authz.Binding{{AllGroups: true, Role: role.Admin}}, noLogs: true}
+	p, err := access.NewLoader(repo, nil).ForUser(context.Background(), orgA, alice)
+	if err != nil || p.User != alice || p.Org != orgA || len(p.Bindings) != 1 || p.Superadmin || !p.ViewersWithoutLogs {
+		t.Errorf("principal = %+v, %v", p, err)
+	}
+	if _, err := access.NewLoader(&fakeRepo{member: false}, nil).ForUser(context.Background(), orgA, alice); !errors.Is(err, access.ErrNoMembership) {
+		t.Errorf("ForUser() of a former member = %v, want ErrNoMembership", err)
+	}
+	boom := errors.New("db down")
+	if _, err := access.NewLoader(&fakeRepo{err: boom}, nil).ForUser(context.Background(), orgA, alice); !errors.Is(err, boom) {
+		t.Errorf("ForUser() = %v, want the repository error", err)
+	}
+}

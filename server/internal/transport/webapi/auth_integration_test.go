@@ -44,6 +44,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
 	"github.com/pmoscode/SerMon/server/internal/app/instanceaudit"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
+	"github.com/pmoscode/SerMon/server/internal/app/kiosk"
 	"github.com/pmoscode/SerMon/server/internal/app/liveview"
 	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
@@ -226,6 +227,21 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 	hub := liveview.NewHub(agentapi.NewSessions(0))
 	liveViews := liveview.NewService(hub, postgres.NewFleetStore(pg), postgres.NewLogSettingsStore(pg), authz.NewPolicy(),
 		liveview.WithRecheck(200*time.Millisecond))
+	alertList := alerts.NewService(alerts.Deps{
+		Store: postgres.NewAlertStore(pg), Nodes: postgres.NewFleetStore(pg), Rules: noRules{},
+		Users: routing.UsersOf(postgres.NewAccessStore(pg)), Mutes: postgres.NewRoutingStore(pg),
+		Sink: routing.NewRouter(routing.RouterDeps{
+			Store: postgres.NewRoutingStore(pg), Rules: noRules{}, Users: routing.UsersOf(postgres.NewAccessStore(pg)), Logger: slog.New(slog.DiscardHandler),
+		}),
+		Policy: authz.NewPolicy(), Now: time.Now, Box: masterKeys(t),
+	})
+	logQueries := logs.NewService(loki.NewReader(loki.New(lokitest.Shared(t))), postgres.NewFleetStore(pg), authz.NewPolicy())
+	displays := kiosk.NewService(kiosk.Deps{
+		Store: postgres.NewKioskStore(pg), Dashboards: postgres.NewDashboardStore(pg),
+		Principals: access.NewLoader(postgres.NewAccessStore(pg), secondFactor),
+		Readers:    kiosk.Readers{Fleet: nodes, Logs: logQueries, Alerts: alertList},
+		Policy:     authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
+	})
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
 		LiveView: webapi.NewLiveViewHandler(liveViews, nil, slog.New(slog.DiscardHandler)),
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
@@ -292,8 +308,11 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Silences: webapi.NewAlertSilenceHandler(routing.NewSilenceService(routing.SilenceDeps{
 			Store: postgres.NewRoutingStore(pg), Nodes: postgres.NewFleetStore(pg), Policy: authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 		}), slog.New(slog.DiscardHandler)),
-		Dashboards:    webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
-		Authenticator: webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
+		Dashboards:         webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
+		KioskTokens:        webapi.NewKioskTokenHandler(displays, slog.New(slog.DiscardHandler)),
+		Kiosk:              webapi.NewKioskHandler(displays, slog.New(slog.DiscardHandler)),
+		KioskAuthenticator: webapi.NewKioskAuthenticator(displays, ratelimit.New(1000, time.Minute, time.Now), ratelimit.New(kioskTestCalls, time.Minute, time.Now), slog.New(slog.DiscardHandler)),
+		Authenticator:      webapi.NewAuthenticator(sessions, access.NewLoader(postgres.NewAccessStore(pg), secondFactor), slog.New(slog.DiscardHandler)),
 	})
 	return stack{server: srv, origin: srv.URL, ca: ca, db: pg, ring: ring, metrics: metricStore, hub: hub, idp: idp}
 }

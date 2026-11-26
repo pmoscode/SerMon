@@ -79,6 +79,7 @@ var stepUpRequired = map[string]string{
 	"/sermon.web.v1.AlertRuleService/SetAlertRuleEnabled":             "what alerts at all",
 	"/sermon.web.v1.AlertRuleService/ResetAlertRule":                  "what alerts at all",
 	"/sermon.web.v1.AlertSilenceService/CreateSilence":                "mutes alerts",
+	"/sermon.web.v1.KioskTokenService/CreateKioskToken":               "a new way to read the organization's data without a session (M5-26)",
 }
 
 // stepUpExempt are the procedures that change something without a step-up, and why.
@@ -92,6 +93,7 @@ var stepUpExempt = map[string]string{
 	"/sermon.web.v1.DashboardService/SetDashboardShared":          "shows the layout to members, not data: the readers check every viewer (ADR 0040)",
 	"/sermon.web.v1.DashboardService/DeleteDashboard":             "removes a view, no rights (ADR 0040)",
 	"/sermon.web.v1.DashboardService/ImportDashboard":             "a view of the caller: no rights, the readers check every viewer (ADR 0040)",
+	"/sermon.web.v1.KioskTokenService/RevokeKioskToken":           "takes access away",
 	"/sermon.web.v1.AuthService/BeginOidc":                        "sign-in and step-up are the authentication; linking checks the step-up itself (oidc_integration_test.go)",
 	"/sermon.web.v1.AuthService/BeginPasskey":                     "the authentication or the step-up itself",
 	"/sermon.web.v1.AuthService/ConfirmPassword":                  "is the step-up",

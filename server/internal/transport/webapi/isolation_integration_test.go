@@ -39,6 +39,7 @@ const (
 	inviteAl  = "0193f5a0-0000-7000-8000-0000000001a7"
 	mappingAl = "0193f5a0-0000-7000-8000-0000000001ac" // OIDC group mapping of Alpha
 	dashAl    = "0193f5a0-0000-7000-8000-0000000001ad" // a shared dashboard of Alpha on its node (M5-23)
+	kioskAl   = "0193f5a0-0000-7000-8000-0000000001ae" // a kiosk token of dashAl (M5-26)
 	tokenAl   = "0193f5a0-0000-7000-8000-0000000001a6" // enrollment token of Alpha
 	nodeAl    = "0193f5a0-0000-7000-8000-0000000001a5" // node of Alpha (offline)
 	runAl     = "0193f5a0-0000-7000-8000-0000000001b1" // an update run of Alpha's node (M4-15)
@@ -46,6 +47,9 @@ const (
 	// inviteTokenAl is the link token of inviteAl (fixture, not a secret).
 	inviteTokenAl = "alphaInvitationTokenForCrossTenantTests0001" // betterleaks:allow
 )
+
+// kioskSecretAl is the secret of kioskAl (fixture, not a secret).
+const kioskSecretAl = "smk_alphaKioskFixtureForCrossTenantTests0000000" // betterleaks:allow
 
 // dashboardSpecAl is Alpha's dashboard as the store keeps it: a chart of its node.
 const dashboardSpecAl = `{"version":1,"title":"alpha-board","timeRange":0,"widgets":[{"id":"cpu","kind":1,"title":"CPU","position":{"x":0,"y":0,"w":6,"h":4},"query":{"metric":"sermon_cpu_utilization_ratio","target":{"nodes":["` + nodeAl + `"]}}}]}`
@@ -77,6 +81,7 @@ func seedAccessFixtures(t *testing.T) {
 		"INSERT INTO oidc_group_mappings (id, org_id, oidc_group, group_id, role) VALUES ('"+mappingAl+"', '"+orgAlpha+"', 'alpha-staff', '"+groupAl+"', 'operator')",
 		"DELETE FROM dashboards WHERE org_id = '"+orgAlpha+"'",
 		"INSERT INTO dashboards (org_id, id, owner_id, title, shared, spec, created_at, updated_at) VALUES ('"+orgAlpha+"', '"+dashAl+"', '"+annID+"', 'alpha-board', true, '"+dashboardSpecAl+"', now(), now())",
+		"INSERT INTO kiosk_tokens (org_id, id, dashboard_id, name, token_hash, created_by, created_at, expires_at) VALUES ('"+orgAlpha+"', '"+kioskAl+"', '"+dashAl+"', 'alpha-hall', sha256(convert_to('"+kioskSecretAl+"', 'UTF8')), '"+annID+"', now(), now() + interval '1 day')",
 		"DELETE FROM enrollment_tokens WHERE org_id = '"+orgAlpha+"'",
 		"INSERT INTO nodes (id, org_id, group_id, hostname, machine_id, os_id, os_version, kernel_release, architecture, cpu_count, memory_bytes) VALUES ('"+nodeAl+"', '"+orgAlpha+"', '"+groupAl+"', 'alpha-01', '"+strings.Repeat("a", 32)+"', 'debian', '13', '6.12.0', 'amd64', 2, 1073741824) ON CONFLICT DO NOTHING",
 		"DELETE FROM agent_certificates WHERE node_id = '"+nodeAl+"'",
@@ -128,6 +133,7 @@ type loggedIn struct {
 	liveView       webv1connect.LiveViewServiceClient
 	oidcMappings   webv1connect.OidcMappingServiceClient
 	dashboards     webv1connect.DashboardServiceClient
+	kioskTokens    webv1connect.KioskTokenServiceClient
 	jar            *cookiejar.Jar
 }
 
@@ -166,6 +172,7 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		liveView:       webv1connect.NewLiveViewServiceClient(hc, s.server.URL),
 		oidcMappings:   webv1connect.NewOidcMappingServiceClient(hc, s.server.URL),
 		dashboards:     webv1connect.NewDashboardServiceClient(hc, s.server.URL),
+		kioskTokens:    webv1connect.NewKioskTokenServiceClient(hc, s.server.URL),
 		jar:            jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {
@@ -186,7 +193,7 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 		metrics: bea.metrics, fleet: bea.fleet, events: bea.events, updates: bea.updates, anomalies: bea.anomalies, capacity: bea.capacity, heatmap: bea.heatmap, updatePolicies: bea.updatePolicies, channels: bea.channels, channelA: channelAl, policies: bea.policies, policyA: policyAl,
 		silences: bea.silences, windows: bea.windows, alerts: bea.alerts, rules: bea.rules, silenceA: silenceAl, windowA: windowAl,
 		logSettings: bea.logSettings, modules: bea.modules, logs: bea.logs, liveView: bea.liveView, oidcMappings: bea.oidcMappings, mappingA: mappingAl,
-		dashboards: bea.dashboards, dashboardA: dashAl,
+		dashboards: bea.dashboards, dashboardA: dashAl, kioskTokens: bea.kioskTokens, kioskTokenA: kioskAl,
 		orgA: orgAlpha, groupA: groupAl, memberA: miaID, bindingA: bindingAl, invitationA: inviteAl, inviteTokenA: inviteTokenAl,
 		enrollmentTokenA: tokenAl, nodeA: nodeAl, runA: runAl,
 	}

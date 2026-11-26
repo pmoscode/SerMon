@@ -123,7 +123,7 @@ func lockDashboard(ctx context.Context, q *sqlcdb.Queries, user identity.UserID,
 	return dashboardOf(dashboardRow(r))
 }
 
-// Change implements dashboards.Store.
+// Change implements dashboards.Store; unsharing revokes the dashboard's kiosk tokens.
 func (s *DashboardStore) Change(ctx context.Context, scope tenant.Scope, user identity.UserID, id dashboards.ID,
 	change func(dashboards.Dashboard) (dashboards.Dashboard, access.AuditEntry, error),
 ) (dashboards.Dashboard, error) {
@@ -146,6 +146,13 @@ func (s *DashboardStore) Change(ctx context.Context, scope tenant.Scope, user id
 		})
 		if err != nil {
 			return fmt.Errorf("update dashboard: %w", err)
+		}
+		// Kiosk tokens open shared dashboards only: making one private ends them (ADR 0040).
+		if d.Shared && !next.Shared {
+			at := next.UpdatedAt
+			if _, err := q.RevokeKioskTokensOfDashboard(ctx, sqlcdb.RevokeKioskTokensOfDashboardParams{DashboardID: uuid.UUID(id), At: &at}); err != nil {
+				return fmt.Errorf("revoke kiosk tokens: %w", err)
+			}
 		}
 		out = next
 		return appendAudit(ctx, q, audit)

@@ -191,6 +191,19 @@ type Invitation struct {
 	ExpiresAt time.Time
 }
 
+type KioskToken struct {
+	OrgID       uuid.UUID
+	ID          uuid.UUID
+	DashboardID uuid.UUID
+	Name        string
+	TokenHash   []byte
+	CreatedBy   uuid.UUID
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	LastUsedAt  *time.Time
+	RevokedAt   *time.Time
+}
+
 type KnownLoginSource struct {
 	OrgID     uuid.UUID
 	NodeID    uuid.UUID

@@ -5663,7 +5663,7 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Abhängig von:** –
 
 #### ☑ M5-23 – Dashboards im Server · S · M 🔒
-> Erledigt (`domain/dashboard`, `app/dashboards`, `DashboardService`, Migration 00060; Threat Model T112):
+> Erledigt (`domain/dashboard`, `app/dashboards`, `DashboardService`, Migration 00060; Threat Model T114):
 > - **Modell:** `DashboardSpec` in `proto/sermon/web/v1/dashboard.proto` mit protovalidate-Grenzen; die Domäne prüft
 >   den Rest (Version 1, Titel über `naming.Clean`, 12 Spalten × 100 Zeilen ohne Überlappung, Widget-IDs eindeutig,
 >   Metrik aus dem Katalog mit eigenen Labels, Ziel genau eines von Nodes/Gruppe/Variable, Gauge und Stat nur ein
@@ -5742,7 +5742,27 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 
 ### 8.5 Kiosk und Vergleich (E5.5)
 
-#### ☐ M5-26 – Kiosk-Token · X · M 🔒
+#### ☑ M5-26 – Kiosk-Token · X · M 🔒
+> Erledigt (`app/kiosk`, `KioskTokenService`, `KioskService`, Migration 00061; Threat Model TB8 mit T115):
+> - **Token:** `smk_` + 32 Byte aus `crypto/rand` (Base64url), nur SHA-256 in `kiosk_tokens` (RLS, FK auf das
+>   Dashboard mit `ON DELETE CASCADE`); Suche über `kiosk_token_by_hash` (`SECURITY DEFINER`: nicht widerrufen, nicht
+>   abgelaufen, Dashboard geteilt, Org nicht gesperrt), danach Vergleich in konstanter Zeit. Ablauf 1 bis 365 Tage,
+>   höchstens 10 offene je Dashboard; Nicht-mehr-Teilen widerruft die Tokens im selben Schreibvorgang, Löschen löscht
+>   sie, erneutes Teilen belebt nichts wieder. Letzte Nutzung höchstens einmal je Minute vermerkt.
+> - **Rechte:** neue Aktion `manage_kiosk_tokens` (Admin aller Gruppen); Anlegen mit Step-up und Audit ohne Geheimnis,
+>   Widerruf ohne Step-up; das Geheimnis nur einmal in der Antwort (`debug_redact`).
+> - **Anzeige:** eigener `KioskService` mit `KioskAuthenticator` (Header `Authorization: Kiosk …`, kein Cookie, keine
+>   Session, keine Streams), nur `GetKioskDashboard` und `QueryKioskWidget`; die Abfrage baut der Server aus dem
+>   gespeicherten Widget (Standard-Zeitraum bis jetzt, Vorgaben der Variablen, sonst erster sichtbarer Node bzw.
+>   Gruppe) über die Leser der UI (`fleet`, `logs`, `alerts`) mit den bei jeder Anfrage neu geladenen Rechten des
+>   Erstellers (`access.Loader.ForUser`, ohne Instanzrechte); ist er kein Admin aller Gruppen mehr, ist der Token
+>   wirkungslos. Rate-Limits 600/min je Adresse vor der Prüfung, 240/min je Token danach.
+> - Tests: Service mit Fakes (Format, Hash, Rechte des Erstellers, Ablauf, Widerruf, Abfrage aus dem Dokument,
+>   Alerts nur der Nodes des Widgets), Store-Integration (nur nutzbare Tokens, Sperre, Teilen, Löschen, Grenze, RLS),
+>   Web-API: **jede RPC der Web-API** mit dem Token muss dasselbe antworten wie ohne (nur der `KioskService` öffnet
+>   sich), widerrufen, abgelaufen, privat, Ersteller herabgestuft oder entfernt, Org gesperrt, fremde Node-ID im
+>   Dokument (`NOT_FOUND`), Rate-Limit je Token; neue RPCs in den Tabellen der Tenant-Isolation und des Step-up;
+>   Gegenproben 15/15.
 - **Ziel:** schreibgeschützter, widerrufbarer Token, an ein Dashboard und die Org gebunden (nur als Hash gespeichert,
   Ablauf, Audit); er öffnet nur die Leser dieses Dashboards, keine anderen RPCs, keine Session.
 - **Tests zuerst:** jeder RPC außer denen des Dashboards abgelehnt, widerrufener und abgelaufener Token, fremde Org;

@@ -80,6 +80,7 @@ type Querier interface {
 	CountOpenAlertSilences(ctx context.Context, now time.Time) (int64, error)
 	// Open invitations for other addresses than email (a new invitation replaces the old one).
 	CountOpenInvitations(ctx context.Context, arg CountOpenInvitationsParams) (int64, error)
+	CountOpenKioskTokens(ctx context.Context, arg CountOpenKioskTokensParams) (int64, error)
 	CountOrgAdmins(ctx context.Context) (int64, error)
 	// Updates of the nodes (M4-09). Writes run in the tenant of the node's organization, reads within
 	// a scope: the scope's groups are those of the node now.
@@ -90,6 +91,7 @@ type Querier interface {
 	CountRecentRefreshes(ctx context.Context, arg CountRecentRefreshesParams) (CountRecentRefreshesRow, error)
 	CountTrustedAuthorities(ctx context.Context) (int64, error)
 	CreateDashboard(ctx context.Context, arg CreateDashboardParams) error
+	CreateKioskToken(ctx context.Context, arg CreateKioskTokenParams) error
 	// Node groups, role bindings and audit log. All queries run inside InTenant (RLS on org_id).
 	CreateNodeGroup(ctx context.Context, arg CreateNodeGroupParams) (NodeGroup, error)
 	CreateOIDCMapping(ctx context.Context, arg CreateOIDCMappingParams) error
@@ -261,6 +263,7 @@ type Querier interface {
 	IsSuperadmin(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Replaces a previous token; false once the setup is completed (definer function, M1-40).
 	IssueSetupToken(ctx context.Context, arg IssueSetupTokenParams) (bool, error)
+	KioskTokenByHash(ctx context.Context, arg KioskTokenByHashParams) ([]KioskTokenByHashRow, error)
 	// The last scheduled rollout of each group.
 	LatestUpdateRollouts(ctx context.Context) ([]LatestUpdateRolloutsRow, error)
 	// Known login sources (M3-16).
@@ -301,6 +304,8 @@ type Querier interface {
 	ListGroupLogSettings(ctx context.Context) ([]ListGroupLogSettingsRow, error)
 	ListInstanceAudit(ctx context.Context, arg ListInstanceAuditParams) ([]InstanceAuditLog, error)
 	ListInvitations(ctx context.Context) ([]ListInvitationsRow, error)
+	// Kiosk tokens (M5-26, ADR 0040). All but KioskTokenByHash run inside InTenant.
+	ListKioskTokens(ctx context.Context, dashboardID uuid.UUID) ([]ListKioskTokensRow, error)
 	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
 	// The modules of the agents (M5-06, ADR 0039). Every query runs in the organization's tenant
@@ -357,6 +362,8 @@ type Querier interface {
 	LockNodeEventSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	// Serializes rollover operations of all server instances.
 	LockPKI(ctx context.Context) error
+	// The dashboard of a new token, locked against a concurrent unsharing.
+	LockSharedDashboard(ctx context.Context, id uuid.UUID) (bool, error)
 	// A cancel or a pause by hand waits for a save of the orchestrator in flight, and the next save
 	// sees it (M4-31); without a lease yet no orchestrator plans the organization.
 	LockUpdates(ctx context.Context) error
@@ -452,6 +459,8 @@ type Querier interface {
 	RetireAuthority(ctx context.Context, arg RetireAuthorityParams) error
 	RevokeAgentCertificate(ctx context.Context, arg RevokeAgentCertificateParams) (int64, error)
 	RevokeEnrollmentToken(ctx context.Context, arg RevokeEnrollmentTokenParams) (int64, error)
+	RevokeKioskToken(ctx context.Context, arg RevokeKioskTokenParams) (RevokeKioskTokenRow, error)
+	RevokeKioskTokensOfDashboard(ctx context.Context, arg RevokeKioskTokensOfDashboardParams) (int64, error)
 	RevokeNodeCertificates(ctx context.Context, arg RevokeNodeCertificatesParams) error
 	RoleBindingsOfUser(ctx context.Context, userID uuid.UUID) ([]RoleBindingsOfUserRow, error)
 	RoleBindingsWithOrigin(ctx context.Context, userID uuid.UUID) ([]RoleBindingsWithOriginRow, error)
@@ -501,6 +510,8 @@ type Querier interface {
 	TakeWebAuthnCeremony(ctx context.Context, idHash string) (TakeWebAuthnCeremonyRow, error)
 	TopFailedIPs(ctx context.Context, arg TopFailedIPsParams) ([]TopFailedIPsRow, error)
 	TopFailedUsers(ctx context.Context, arg TopFailedUsersParams) ([]TopFailedUsersRow, error)
+	// At most once a minute: a display asks every few seconds.
+	TouchKioskToken(ctx context.Context, arg TouchKioskTokenParams) error
 	TouchNode(ctx context.Context, arg TouchNodeParams) (int64, error)
 	TouchSession(ctx context.Context, arg TouchSessionParams) error
 	// Agent PKI. pki_authorities is instance-level; agent_certificates is tenant-scoped (RLS).

@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "sermon/web/v1/alert.proto";
+import "sermon/web/v1/dashboard.proto";
+import "sermon/web/v1/log.proto";
+import "sermon/web/v1/metrics.proto";
+
+// KioskTokenService manages the kiosk tokens of shared dashboards (KONZEPT §16, ADR 0040, M5-26).
+// Only admins of all groups (manage_kiosk_tokens) use it; creating a token needs a recent
+// step-up, revoking does not. The secret of a token is returned once, the server keeps only its
+// SHA-256. Making the dashboard private or deleting it ends its tokens. Dashboards and tokens of
+// other organizations are NOT_FOUND.
+service KioskTokenService {
+  // ListKioskTokens returns the tokens of a dashboard, newest first (also revoked and expired).
+  rpc ListKioskTokens(ListKioskTokensRequest) returns (ListKioskTokensResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // CreateKioskToken adds a token for a shared dashboard (at most 10 open per dashboard);
+  // FAILED_PRECONDITION if the dashboard is not shared.
+  rpc CreateKioskToken(CreateKioskTokenRequest) returns (CreateKioskTokenResponse);
+  // RevokeKioskToken ends a token now.
+  rpc RevokeKioskToken(RevokeKioskTokenRequest) returns (RevokeKioskTokenResponse);
+}
+
+// KioskService is what a kiosk display reads with its token (header "Authorization: Kiosk
+// <token>", no session, no cookie): the document of the token's dashboard and the data of its
+// widgets, read with the rights of the admin who created the token. The server builds every query
+// from the stored widget (default time range and variables); nothing else is reachable with the
+// token. A revoked, expired or unknown token, a dashboard no longer shared and a creator who is
+// no admin of all groups any more are UNAUTHENTICATED; calls are rate-limited.
+service KioskService {
+  // GetKioskDashboard returns the dashboard of the token.
+  rpc GetKioskDashboard(GetKioskDashboardRequest) returns (GetKioskDashboardResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // QueryKioskWidget returns the data of one widget of the dashboard; an unknown widget is
+  // NOT_FOUND.
+  rpc QueryKioskWidget(QueryKioskWidgetRequest) returns (QueryKioskWidgetResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// KioskToken is a stored token (without its secret).
+message KioskToken {
+  // id is the token UUID.
+  string id = 1;
+  // dashboard_id is the dashboard it opens.
+  string dashboard_id = 2;
+  // name says where the display hangs.
+  string name = 3;
+  // created_by_name is the display name of who created it.
+  string created_by_name = 4;
+  // create_time is when it was created.
+  google.protobuf.Timestamp create_time = 5;
+  // expire_time is when it stops working.
+  google.protobuf.Timestamp expire_time = 6;
+  // last_use_time is when a display used it last (about to the minute); unset if never.
+  google.protobuf.Timestamp last_use_time = 7;
+  // revoke_time is when it was revoked; unset if not.
+  google.protobuf.Timestamp revoke_time = 8;
+}
+
+// ListKioskTokensRequest names the dashboard.
+message ListKioskTokensRequest {
+  // dashboard_id is the UUID of the dashboard.
+  string dashboard_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// ListKioskTokensResponse lists the tokens.
+message ListKioskTokensResponse {
+  // tokens of the dashboard.
+  repeated KioskToken tokens = 1;
+}
+
+// CreateKioskTokenRequest describes the new token.
+message CreateKioskTokenRequest {
+  // dashboard_id is the UUID of the shared dashboard.
+  string dashboard_id = 1 [(buf.validate.field).string.uuid = true];
+  // name says where the display hangs.
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 100
+  }];
+  // valid_for is how long the token works (1 to 365 days).
+  google.protobuf.Duration valid_for = 3 [(buf.validate.field).duration = {
+    gte: {seconds: 86400}
+    lte: {seconds: 31536000}
+  }];
+}
+
+// CreateKioskTokenResponse returns the token and, once, its secret.
+message CreateKioskTokenResponse {
+  // token as stored.
+  KioskToken token = 1;
+  // secret is the token for the display; it is not shown again.
+  string secret = 2 [debug_redact = true];
+}
+
+// RevokeKioskTokenRequest names the token.
+message RevokeKioskTokenRequest {
+  // token_id is the UUID of the token.
+  string token_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// RevokeKioskTokenResponse has no fields.
+message RevokeKioskTokenResponse {}
+
+// GetKioskDashboardRequest has no fields: the token names the dashboard.
+message GetKioskDashboardRequest {}
+
+// GetKioskDashboardResponse holds the dashboard.
+message GetKioskDashboardResponse {
+  // dashboard_id is the dashboard's UUID.
+  string dashboard_id = 1;
+  // spec is its document.
+  DashboardSpec spec = 2;
+  // revision changes when the dashboard is changed: the display reloads it.
+  int64 revision = 3;
+}
+
+// QueryKioskWidgetRequest names a widget of the token's dashboard.
+message QueryKioskWidgetRequest {
+  // widget_id is the ID of the widget in the document.
+  string widget_id = 1 [(buf.validate.field).string.pattern = "^[a-z0-9_-]{1,32}$"];
+}
+
+// KioskMetrics are the series of a metric widget.
+message KioskMetrics {
+  // unit is the metric's unit (as in MetricDefinition).
+  string unit = 1;
+  // series of the widget's nodes.
+  repeated MetricSeries series = 2;
+  // hostnames by node UUID; host data, shown as text.
+  map<string, string> hostnames = 3;
+}
+
+// KioskLogs are the lines of a log stream.
+message KioskLogs {
+  // lines, newest first.
+  repeated LogLine lines = 1;
+  // more is set if the range holds more lines.
+  bool more = 2;
+}
+
+// KioskAlerts are the alerts of an alert list.
+message KioskAlerts {
+  // alerts of the widget's nodes.
+  repeated Alert alerts = 1;
+}
+
+// QueryKioskWidgetResponse holds the data of the widget.
+message QueryKioskWidgetResponse {
+  // from and to are the range the server read.
+  google.protobuf.Timestamp from = 1;
+  // to is the end of the range.
+  google.protobuf.Timestamp to = 2;
+  // data by the kind of the widget.
+  oneof data {
+    // metrics of a time series, gauge, stat or table.
+    KioskMetrics metrics = 3;
+    // logs of a log stream.
+    KioskLogs logs = 4;
+    // alerts of an alert list.
+    KioskAlerts alerts = 5;
+  }
+}

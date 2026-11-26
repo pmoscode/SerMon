@@ -54,6 +54,7 @@ const (
 	ManageLogSettings // what agents send as logs and how they redact them (M3-03)
 	ManageRetention   // how long logs and security events are kept (M5-30)
 	ManageDashboards  // change and delete the shared dashboards of others (ADR 0040)
+	ManageKioskTokens // read-only tokens of shared dashboards for displays, no session (ADR 0040, M5-26)
 
 	// Instance-level actions (superadmin).
 	ManageOrganizations
@@ -106,6 +107,7 @@ var rules = map[Action]rule{
 	ManageRetention:        {name: "manage_retention", minimum: role.Admin, scope: orgWide},
 	UseDashboards:          {name: "use_dashboards", minimum: role.Viewer, scope: anyGroup},
 	ManageDashboards:       {name: "manage_dashboards", minimum: role.Admin, scope: orgWide},
+	ManageKioskTokens:      {name: "manage_kiosk_tokens", minimum: role.Admin, scope: orgWide},
 	ManageOrganizations:    {name: "manage_organizations", scope: instanceLevel},
 	ManageAgentCA:          {name: "manage_agent_ca", scope: instanceLevel},
 	ViewInstanceAudit:      {name: "view_instance_audit", scope: instanceLevel},

@@ -5139,6 +5139,62 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - Das Ressourcen-Budget ist mit Update-Erfassung eingehalten, auch am Ende eines vollen Demo-Laufs (M4-32).
 - Die Security-Review hat keine offenen kritischen Findings; TB4 im Threat Model ist erledigt.
 
+### 7.9 Review M4 (2026-11-26)
+
+**1. Ziel erreicht: ja.** `just e2e-demo-full` mit den Projekten `install`, `alerts`, `sso`, `troubleshoot`,
+`anomaly`, `patch`, `passkeys` und `budget-end` (lokal auf arm64 grün in 32,2 min, nach M4-31 und M4-32);
+`just e2e-demo` ohne `anomaly` und `patch` für jeden Push:
+
+- Das Updates-Dashboard zeigt die Nodes mit offenen Security-Updates; eine Policy `security-auto` mit Fenster
+  aktualisiert eine Gruppe einen Node nach dem anderen, startet Debian neu ohne Benachrichtigung und überspringt ein
+  Veto des Hosts.
+- Ein Lastsprung gegen vier Wochen Verlauf erscheint als Anomalie-Band und oben in „Was war ungewöhnlich?“.
+- Ein per Skript installierter Agent aktualisiert sich selbst, ein kaputtes Release rollt zurück; Pakete kommen aus
+  signierten Repos, ein gefälschtes Repo lehnen die Hosts ab.
+
+| Kriterium | Stand |
+|---|---|
+| Demo-Test M4-28 grün | ✓ 8/8 Projekte (2026-11-26, nach M4-31 und M4-32) |
+| Helper ≤ 1 800 Zeilen, Decoder gefuzzt, Aufrufer und Veto getestet | ✓ 1 761 Zeilen; Fuzz-Ziele `helper_request` und `helper_parsers`; `SO_PEERCRED` und `helper.toml` mit Tests |
+| Parser mit Fixtures aller Zieldistros, gefuzzt | ✓ Fixtures von Debian 12 und 13, Ubuntu 24.04, Rocky 9, AlmaLinux 10, Fedora 44 und Alpine 3.22; Fuzz-Ziel `update_parsers` |
+| Orchestrator mit Zeitzonen, Sommerzeit, `stopOnFailure`, Health-Check getestet | ✓ `rollout_test.go`, `orchestrator_test.go` und Integrationstests über die Datenbank |
+| Benchmark der Anomalie-Erkennung in CI, nicht schlechter als die Referenz | ✓ `TestBenchmark_` läuft mit `go test ./...`; Recall 1,0 in allen Mustern, Precision ≥ 0,91 |
+| Neue RPCs in den Tabellen | ✓ Abdeckungstests für Tenant-Isolation und Step-up, auch für `CancelRollout`, `CancelRun`, `SetUpdatesPaused` |
+| Ressourcen-Budget mit Update-Erfassung, auch am Ende | ✓ 0,20–0,69 % eines Kerns; am Ende eines vollen Laufs 8,0–8,4 MiB eigener Speicher des Agents, RSS 21–22 MiB (M4-32) |
+| Security-Review ohne offene kritische Findings, TB4 erledigt | ✓ M4-30 ohne kritischen und hohen Befund; alle Befunde in M4-30 und M4-31 abgearbeitet |
+
+Abweichungen vom Ziel des Meilensteins:
+
+- Bewusst nicht umgesetzt (ADR 0036): der Kanal im signierten Kommentar, `Valid-Until` für apt. `release.yml` und
+  echte Release-Schlüssel entstehen mit dem ersten Release.
+- Die Leases der Alert-Engine laufen weiter mit der Uhr der Instanz (die anderen Worker seit M4-31 mit der der
+  Datenbank).
+- Dass der Helper sich selbst ersetzt, prüfen Unit-Tests, nicht die Demo (sie bräuchte einen zweiten Helper-Build mit
+  anderer Version). `O_EXCL` beim Ersetzen allein ist ohne eingebautes Rennen nicht prüfbar.
+- dnf behält einen widerrufenen Repo-Schlüssel bis `rpm -e` und `dnf clean all` auf dem Host.
+
+**2. Erkenntnisse und ADRs.** In M4 entstanden die ADRs 0035 bis 0038 sowie Nachträge zu 0002, 0035, 0036 und 0037.
+Es fehlt kein ADR. Erkenntnisse für M5:
+
+- **Lange Läufe messen, nicht nur Momentaufnahmen.** Das Budget aus M4-29 bestand früh im Lauf; erst am Ende einer
+  langen Demo lag der Agent darüber. Ursache war nicht der Agent, sondern musls Allocator (ADR 0038). Die Demo misst
+  seitdem auch am Ende.
+- **Test-Doubles müssen sich wie die echte Gegenseite verhalten.** Der Test-Server antwortete beim Aufruf mit
+  `NOT_FOUND`, connect-go erst im Stream; erst die Demo fand das (Korrektur nach M4-31).
+- **Bearbeitungsskripte und Commits prüfen.** Ein Skript öffnete eine Datei zum Schreiben, bevor es sie las; das
+  Threat Model war einen Commit lang leer. Vor jedem Commit `git diff --stat` auf unerwartete Löschungen ansehen.
+- **Unabhängige Teile parallel.** Repo-Schlüssel (Worktree), Oberfläche und Server liefen als eigene Teilaufgaben neben
+  Agent und Helper; das klappt, wenn die Dateigrenzen vorher klar sind und nur einer committet.
+- **Gegenproben bleiben nötig:** In M4-31 überlebte zuerst eine Mutante (das gekürzte, noch offene Fenster), der Test
+  wurde geschärft; eine weitere (`O_EXCL` allein) ist ohne eingebautes Rennen nicht prüfbar.
+- **Die volle Demo dauert 32 min**, die schnelle 16 min; Wartezeiten überlappen, statt Grenzen zu senken.
+- **Offen aus M4:**
+  - M2-35 (Kanäle gegen die echten Dienste) ohne Konten
+  - Release-Pipeline mit echten Schlüsseln (`release.yml`) mit dem ersten Release
+  - Nodes löschen, Retention pro Org einstellen (aus M3): noch nicht eingeplant
+
+**3. M5 ist noch nicht in Aufgaben zerlegt.**
+
 ---
 
 ## 8. M5 – Module und Ausbau

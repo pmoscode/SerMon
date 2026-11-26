@@ -220,7 +220,7 @@ pub fn parse_info(text: &str) -> Result<InfoFields, String> {
 
 /// A reply of Redis.
 #[derive(Debug, PartialEq, Eq)]
-enum Reply {
+pub enum Reply {
     Simple(String),
     Error(String),
     Bulk(Vec<u8>),
@@ -238,8 +238,13 @@ async fn send<S: AsyncWrite + Unpin>(stream: &mut S, args: &[&[u8]]) -> std::io:
     stream.write_all(&out).await
 }
 
-/// Reads one reply: a simple string, an error or a bulk string of at most [`MAX_INFO`] bytes.
-async fn reply<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Result<Reply, String> {
+/// Reads one reply: a simple string, an error or a bulk string of at most [`MAX_INFO`] bytes;
+/// the head at most 1 KiB. Public for the fuzz target `module_clients`.
+///
+/// # Errors
+///
+/// Why the answer is no reply of Redis, or too large.
+pub async fn reply<S: AsyncRead + Unpin>(stream: &mut BufReader<S>) -> Result<Reply, String> {
     let mut head = Vec::new();
     (&mut *stream)
         .take(MAX_HEAD)

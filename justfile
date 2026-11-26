@@ -266,6 +266,7 @@ fuzz-agent seconds="60":
     {{ fuzz_profile }} cargo fuzz run postgres_wire -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run mysql_wire -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run db_logins -- -max_total_time={{ seconds }} -max_len=65536
+    {{ fuzz_profile }} cargo fuzz run module_clients -- -max_total_time={{ seconds }} -max_len=65536
 
 # Fuzz the server's LogQL builder (no input may break the structure of a query, M3-08) and its copy of the redaction (M3-12) (Go fuzzing)
 [working-directory: 'server']

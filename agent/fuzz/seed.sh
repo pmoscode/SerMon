@@ -209,3 +209,24 @@ seeds["my_switch"] = b"\x40" + packet(2, b"\xfemysql_native_password\0" + bytes(
 for name, data in seeds.items():
     open("corpus/db_logins/" + name, "wb").write(data)
 PY
+# module_clients (M5-33): 0 a Redis reply (INFO as a bulk string), 1 four bytes of time and a PEM
+# chain, 2 a container's output (bit 7: TTY), 3 a name pattern, NUL, a name.
+mkdir -p corpus/module_clients
+for file in ../fixtures/modules/redis/*/info-*.txt; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\000$%s\r\n' "$(wc -c <"$file" | tr -d ' ')"; cat "$file"; printf '\r\n'; } >"corpus/module_clients/info$name"
+done
+for file in ../fixtures/modules/tls/certs/*.crt ../fixtures/modules/tls/certs/*.pem; do
+  [ -f "$file" ] || continue
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\001\152\000\000\000'; cat "$file"; } >"corpus/module_clients/pem$name"
+done
+for file in ../fixtures/modules/docker_socket/*/logs-talker.bin; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\002'; cat "$file"; } >"corpus/module_clients/logs$name"
+done
+for file in ../fixtures/modules/docker_socket/*/logs-tty.bin; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\202'; cat "$file"; } >"corpus/module_clients/tty$name"
+done
+printf '\003app-*-db\000app-1-db' >corpus/module_clients/pattern

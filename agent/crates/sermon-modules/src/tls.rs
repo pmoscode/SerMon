@@ -212,6 +212,33 @@ fn judge(
     }
 }
 
+/// What [`judge`] says about the certificates of a PEM text (a file or what an endpoint sent),
+/// with its last certificate as the root and `name` for the name: seconds until the leaf and
+/// the chain end, whether the chain and the name are valid. For the fuzz target
+/// `module_clients`.
+#[must_use]
+pub fn judge_pem(text: &[u8], now: i64, name: &str) -> Option<(i64, i64, bool, bool)> {
+    let chain: Vec<CertificateDer<'static>> = pem::parse_many(text)
+        .ok()?
+        .into_iter()
+        .filter(|b| b.tag() == "CERTIFICATE")
+        .take(MAX_CHAIN)
+        .map(|b| CertificateDer::from(b.into_contents()))
+        .collect();
+    let mut roots = RootCertStore::empty();
+    if let Some(last) = chain.last() {
+        let _ = roots.add(last.clone());
+    }
+    let name = ServerName::try_from(name.to_owned()).ok()?;
+    let v = judge(&chain, now, Some(&roots), Some(&name));
+    Some((
+        v.cert_expires_in?,
+        v.chain_expires_in?,
+        v.chain_valid?,
+        v.name_valid?,
+    ))
+}
+
 fn samples(label: &str, verdict: &Verdict, out: &mut Vec<Sample>) {
     let up = verdict.cert_expires_in.is_some();
     out.push(Sample::int("sermon_tls_up", i64::from(up)).label("target", label));

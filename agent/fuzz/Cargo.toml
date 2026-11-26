@@ -139,3 +139,10 @@ path = "fuzz_targets/db_logins.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "module_clients"
+path = "fuzz_targets/module_clients.rs"
+test = false
+doc = false
+bench = false

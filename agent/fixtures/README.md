@@ -89,6 +89,10 @@ Unit. Auf Rocky und Alma ist `dbus.service` ein Alias von `dbus-broker.service`.
 prefork), Rocky 9, Alma 10 und Fedora 44 (dort mit eigener `<Location>`), nach zehn Anfragen; der Hostname der ersten
 Zeile ist ersetzt.
 
+`modules/redis/capture.sh` (M5-15) holt `INFO` aus den offiziellen Images von Redis (6.2 bis 8.0) und Valkey (8.1):
+ein Primary mit `maxmemory` und eine Replika, nach Schreib-, Lese-, Fehl- und Ablaufzugriffen; die Adressen des
+Docker-Netzes sind durch 192.0.2.0/24 ersetzt.
+
 ## Updates (`updates/`)
 
 `updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in

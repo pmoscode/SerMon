@@ -18,7 +18,8 @@ const names: Record<string, Text> = {
 	systemd_units: m.module_systemd_units,
 	tls: m.module_tls,
 	nginx: m.module_nginx,
-	apache: m.module_apache
+	apache: m.module_apache,
+	redis: m.module_redis
 };
 
 const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
@@ -70,6 +71,13 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 		timeout: [m.module_apache_timeout, m.module_apache_timeout_help],
 		tls_verify: [m.module_apache_tls_verify, m.module_apache_tls_verify_help],
 		ca_file: [m.module_apache_ca_file, m.module_apache_ca_file_help]
+	},
+	redis: {
+		address: [m.module_redis_address, m.module_redis_address_help],
+		socket: [m.module_redis_socket, m.module_redis_socket_help],
+		username: [m.module_redis_username, m.module_redis_username_help],
+		auth: [m.module_redis_auth, m.module_redis_auth_help],
+		timeout: [m.module_redis_timeout, m.module_redis_timeout_help]
 	}
 };
 

@@ -13,7 +13,7 @@ workspace = true
 
 [features]
 # Every module is a feature of its name (ADR 0039); the release builds them all.
-default = ["apache", "docker", "http_check", "nginx", "smart", "systemd_units", "tcp_check", "tls"]
+default = ["apache", "docker", "http_check", "nginx", "redis", "smart", "systemd_units", "tcp_check", "tls"]
 # Containers of Docker and Podman from cgroup v2 (M5-16).
 docker = ["dep:sermon-collectors"]
 # SMART of the disks through the root helper (M5-18).
@@ -35,6 +35,7 @@ http = [
 apache = ["http"]
 http_check = ["http"]
 nginx = ["http"]
+redis = []
 systemd_units = []
 tcp_check = []
 tls = ["http"]

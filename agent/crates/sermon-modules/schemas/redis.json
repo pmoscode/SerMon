@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Redis",
+  "description": "Memory, clients, commands, hit rate, evictions and replication from INFO of Redis or Valkey, inside module_targets (by default loopback only) or over a socket below module_sockets.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "address": {
+      "type": "string",
+      "title": "Address",
+      "description": "host:port of Redis.",
+      "format": "host-port",
+      "maxLength": 256,
+      "default": "127.0.0.1:6379"
+    },
+    "socket": {
+      "type": "string",
+      "title": "Unix socket",
+      "description": "Path of Redis' unixsocket instead of the address, e.g. /run/redis/redis-server.sock.",
+      "format": "path",
+      "maxLength": 108
+    },
+    "username": {
+      "type": "string",
+      "title": "User",
+      "description": "ACL user (Redis 6 and later); empty: the default user.",
+      "pattern": "^[A-Za-z0-9._@-]+$",
+      "maxLength": 128
+    },
+    "auth": {
+      "type": "string",
+      "title": "Password",
+      "description": "requirepass or the ACL user's password; a user with +info only is enough.",
+      "writeOnly": true,
+      "maxLength": 512
+    },
+    "timeout": {
+      "type": "string",
+      "title": "Timeout",
+      "description": "At most 25s.",
+      "format": "duration",
+      "maxLength": 8,
+      "default": "5s"
+    }
+  }
+}

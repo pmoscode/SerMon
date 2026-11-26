@@ -5550,7 +5550,25 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures von MySQL und MariaDB, Integrationstest gegen Container.
 - **Abhängig von:** M5-03, M5-05
 
-#### ☐ M5-15 – Redis · A · S
+#### ☑ M5-15 – Redis · A · S
+> Erledigt (`sermon-modules/src/redis.rs`, Modul `redis`, auch Valkey):
+> - **Protokoll:** eigenes RESP ohne neue Crate, nur `AUTH` (optional mit ACL-User) und `INFO`; Kopfzeile höchstens
+>   1 KiB, Bulk höchstens 1 MiB mit geprüftem Abschluss; TCP über `Veto::resolve` oder Unix-Socket unter
+>   `module_sockets` (bei jedem Lauf neu geprüft). Das Passwort (Feld `auth`) ist ein Geheimnis (`writeOnly`, `Setup.secrets`);
+>   bis M5-05 kommt keines an, das Modul läuft dann gegen Redis ohne Passwort. Fehler nennen nie den Text von
+>   `WRONGPASS`; `NOAUTH` mit Hinweis. Redis aus heißt `sermon_redis_up` 0, eine falsche Antwort ein Fehler.
+> - **Metriken** ohne Labels: `up`, Speicher (`used`, `rss`, `max` falls gesetzt), Clients (verbunden, blockiert),
+>   Raten von Befehlen, Treffern, Fehlgriffen, verdrängten und abgelaufenen Schlüsseln, abgewiesenen Verbindungen,
+>   Trefferquote (ppm über das Intervall), Schlüssel aller Datenbanken, Replikas, Verbindung zum Primary,
+>   letzter Snapshot – alle `sermon_redis_…`; Raten wie bei nginx (Rücksprung, Ausfall).
+> - **Discovery:** Prozesse `redis-server`/`valkey-server`, Units von Debian, RHEL und Valkey, Port 6379; Vorgabe
+>   `address` auf dem Listener, sonst ein gefundener `redis.sock`.
+> - **Fixtures** `agent/fixtures/modules/redis/<version>/info-{primary,replica}.txt` (Redis 6.2, 7.2, 7.4, 8.0,
+>   Valkey 8.1 aus den offiziellen Images, `capture.sh`, Primary mit Replika, Adressen ersetzt); Fuzz-Ziel für den
+>   Parser von `INFO`; Katalog, Hilfetexte DE + EN (ACL-User nur mit `+info`), Texte des Formulars.
+> - Tests: jede Version und Rolle, kaputtes `INFO`, Raten und Trefferquote, Passwort richtig, falsch, fehlend,
+>   ACL-User, Grenzen von RESP, kein Redis unter der Adresse, stumm bis zum Timeout, Unix-Socket, Symlink nach außen
+>   nach dem Start, Veto, Ausfall, Discovery; Gegenproben 13/13.
 - **Ziel:** Speicher, Clients, Ops/s, Hit-Rate, Evictions aus `INFO`; optional mit Passwort (M5-05).
 - **Tests zuerst:** Fixtures je Version, Fuzz-Ziel für den Parser von `INFO`.
 - **Abhängig von:** M5-03

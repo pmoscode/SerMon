@@ -21,6 +21,8 @@ pub mod nginx;
 #[cfg(feature = "http")]
 pub mod page;
 pub mod rate;
+#[cfg(feature = "redis")]
+pub mod redis;
 pub mod runtime;
 pub mod schema;
 #[cfg(feature = "simulate")]
@@ -64,6 +66,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(http_check::HttpCheck),
         #[cfg(feature = "nginx")]
         Arc::new(nginx::Nginx),
+        #[cfg(feature = "redis")]
+        Arc::new(redis::Redis),
         #[cfg(feature = "smart")]
         Arc::new(smart::Smart),
         #[cfg(feature = "systemd_units")]

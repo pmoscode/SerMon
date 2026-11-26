@@ -1513,5 +1513,16 @@
 	"module_apache_tls_verify": "TLS-Zertifikate prüfen",
 	"module_apache_tls_verify_help": "Für eine https-URL; nur für selbstsignierte Zertifikate ausschalten, die sich nicht als CA-Datei angeben lassen.",
 	"module_apache_ca_file": "CA-Datei",
-	"module_apache_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird."
+	"module_apache_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird.",
+	"module_redis": "Redis / Valkey",
+	"module_redis_address": "Adresse",
+	"module_redis_address_help": "host:port von Redis.",
+	"module_redis_socket": "Unix-Socket",
+	"module_redis_socket_help": "Pfad des unixsocket von Redis statt der Adresse, z. B. /run/redis/redis-server.sock.",
+	"module_redis_username": "User",
+	"module_redis_username_help": "ACL-User (ab Redis 6); leer: der Standard-User.",
+	"module_redis_auth": "Passwort",
+	"module_redis_auth_help": "requirepass oder das Passwort des ACL-Users; ein User mit nur +info genügt.",
+	"module_redis_timeout": "Zeitgrenze",
+	"module_redis_timeout_help": "Höchstens 25 s."
 }

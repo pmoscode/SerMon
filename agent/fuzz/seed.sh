@@ -118,3 +118,8 @@ for file in ../fixtures/modules/apache/*/server-status.txt; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\006'; cat "$file"; } >"corpus/module_parsers/fixture$name"
 done
+# 7: INFO of Redis and Valkey (M5-15).
+for file in ../fixtures/modules/redis/*/info-*.txt; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\007'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done

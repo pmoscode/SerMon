@@ -1,0 +1,89 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_redis_up",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_redis_memory_used_bytes",
+      "unit": "bytes",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_memory_rss_bytes",
+      "unit": "bytes",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_memory_max_bytes",
+      "unit": "bytes",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_redis_clients_connected",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_clients_blocked",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_commands_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_keyspace_hits_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_keyspace_misses_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_keyspace_hit_ratio",
+      "unit": "ratio_ppm",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_evicted_keys_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_expired_keys_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_rejected_connections_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_redis_keys",
+      "unit": "count",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_redis_connected_replicas",
+      "unit": "count",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_redis_master_link_up",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_redis_rdb_last_save_ok",
+      "unit": "boolean",
+      "aggregation": "last"
+    }
+  ]
+}

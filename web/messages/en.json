@@ -1513,5 +1513,16 @@
 	"module_apache_tls_verify": "Verify TLS certificates",
 	"module_apache_tls_verify_help": "For an https URL; turn off only for self-signed certificates you can't give as a CA file.",
 	"module_apache_ca_file": "CA file",
-	"module_apache_ca_file_help": "PEM file below module_file_prefixes to verify with instead of the system's CAs."
+	"module_apache_ca_file_help": "PEM file below module_file_prefixes to verify with instead of the system's CAs.",
+	"module_redis": "Redis / Valkey",
+	"module_redis_address": "Address",
+	"module_redis_address_help": "host:port of Redis.",
+	"module_redis_socket": "Unix socket",
+	"module_redis_socket_help": "Path of Redis' unixsocket instead of the address, e.g. /run/redis/redis-server.sock.",
+	"module_redis_username": "User",
+	"module_redis_username_help": "ACL user (Redis 6 and later); empty: the default user.",
+	"module_redis_auth": "Password",
+	"module_redis_auth_help": "requirepass or the ACL user's password; a user with +info only is enough.",
+	"module_redis_timeout": "Timeout",
+	"module_redis_timeout_help": "At most 25 s."
 }

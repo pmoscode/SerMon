@@ -1,0 +1,2 @@
+# Recorded protocol answers keep their line ends (RESP uses CRLF).
+agent/fixtures/modules/redis/**/*.txt -text

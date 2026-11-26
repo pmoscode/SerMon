@@ -417,3 +417,29 @@ fn smartd_suggests_the_module() {
         ]
     );
 }
+
+// ADR 0039, M5-06: every metric the module sends is in metrics/smart.json, which the server takes.
+#[test]
+fn every_metric_is_in_the_catalog() {
+    let disk = Disk {
+        device: "nvme0n1".into(),
+        protocol: "nvme",
+        model: "Disk".into(),
+        read: Read::Data,
+        passed: Some(true),
+        temperature: Some(40),
+        power_on_hours: Some(1),
+        power_cycles: Some(1),
+        reallocated: Some(0),
+        pending: Some(0),
+        uncorrectable: Some(0),
+        crc_errors: Some(0),
+        media_errors: Some(0),
+        critical_warning: Some(0),
+        spare_percent: Some(100),
+        used_percent: Some(3),
+    };
+    let samples = samples(&[disk], false);
+    assert_eq!(samples.len(), 16);
+    crate::assert_in_catalog("smart", &samples);
+}

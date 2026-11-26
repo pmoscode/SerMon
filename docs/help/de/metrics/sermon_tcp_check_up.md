@@ -1,0 +1,9 @@
+# Port erreichbar
+
+1, wenn eine Verbindung zustande kam, sonst 0.
+
+## Einordnung
+
+Vom Modul `tcp_check`; Label `target` ist das konfigurierte Ziel (eine URL ohne Query bzw. `host:port`). Ziele nur unter dem lokalen Veto des Hosts (`module_targets`).
+
+Metrik: `sermon_tcp_check_up`

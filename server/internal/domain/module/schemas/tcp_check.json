@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TCP check",
+  "description": "Whether TCP ports the host's veto allows (module_targets, by default loopback only) accept connections, and how fast.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["targets"],
+  "properties": {
+    "targets": {
+      "type": "array",
+      "title": "Targets",
+      "description": "host:port, [address]:port for IPv6.",
+      "maxItems": 16,
+      "items": { "type": "string", "format": "host-port", "minLength": 3, "maxLength": 256 }
+    },
+    "timeout": {
+      "type": "string",
+      "title": "Timeout",
+      "description": "Per connection, at most 25s.",
+      "format": "duration",
+      "maxLength": 8,
+      "default": "3s"
+    }
+  }
+}

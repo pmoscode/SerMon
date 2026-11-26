@@ -1,0 +1,128 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_smart_disks",
+      "unit": "count",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_smart_truncated",
+      "unit": "boolean",
+      "aggregation": "max"
+    },
+    {
+      "name": "sermon_smart_readable",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "device",
+        "model",
+        "protocol"
+      ]
+    },
+    {
+      "name": "sermon_smart_standby",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_passed",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_temperature_celsius",
+      "unit": "celsius",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_power_on_seconds",
+      "unit": "seconds",
+      "aggregation": "last",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_power_cycles",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_reallocated_sectors",
+      "unit": "count",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_pending_sectors",
+      "unit": "count",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_uncorrectable_sectors",
+      "unit": "count",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_crc_errors",
+      "unit": "count",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_media_errors",
+      "unit": "count",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_critical_warning",
+      "unit": "count",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_spare_ratio",
+      "unit": "ratio_ppm",
+      "aggregation": "last",
+      "labels": [
+        "device"
+      ]
+    },
+    {
+      "name": "sermon_smart_endurance_used_ratio",
+      "unit": "ratio_ppm",
+      "aggregation": "max",
+      "labels": [
+        "device"
+      ]
+    }
+  ]
+}

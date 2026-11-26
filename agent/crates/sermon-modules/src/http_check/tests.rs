@@ -72,6 +72,7 @@ async fn reports_up_status_and_latency() {
     .unwrap();
     assert_eq!(check.timeout(), Duration::from_secs(4));
     let samples = check.collect(&Run::default()).await.unwrap();
+    crate::assert_in_catalog("http_check", &samples);
     assert_eq!(
         value(&samples, "sermon_http_check_up", &up),
         Some(Value::Int(1)),
@@ -192,6 +193,7 @@ async fn reports_the_time_a_certificate_has_left() {
         .collect(&Run::new(Arc::new(clock)))
         .await
         .unwrap();
+    crate::assert_in_catalog("http_check", &samples);
     assert_eq!(
         value(&samples, "sermon_http_check_up", &url),
         Some(Value::Int(1))

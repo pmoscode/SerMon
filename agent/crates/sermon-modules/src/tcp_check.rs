@@ -190,6 +190,7 @@ mod tests {
         .unwrap();
         assert_eq!(check.timeout(), Duration::from_secs(3));
         let samples = check.collect(&Run::default()).await.unwrap();
+        crate::assert_in_catalog("tcp_check", &samples);
         assert_eq!(
             value(&samples, "sermon_tcp_check_up", &a),
             Some(Value::Int(1))

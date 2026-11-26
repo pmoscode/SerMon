@@ -1,0 +1,36 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_http_check_up",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_http_check_status_code",
+      "unit": "count",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_http_check_duration_seconds",
+      "unit": "seconds",
+      "aggregation": "avg",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_http_check_cert_expires_in_seconds",
+      "unit": "seconds",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    }
+  ]
+}

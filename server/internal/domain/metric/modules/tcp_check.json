@@ -1,0 +1,20 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_tcp_check_up",
+      "unit": "boolean",
+      "aggregation": "last",
+      "labels": [
+        "target"
+      ]
+    },
+    {
+      "name": "sermon_tcp_check_duration_seconds",
+      "unit": "seconds",
+      "aggregation": "avg",
+      "labels": [
+        "target"
+      ]
+    }
+  ]
+}

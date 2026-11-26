@@ -224,7 +224,7 @@ lint-agent:
 [working-directory: 'agent']
 test-agent:
     cargo test --workspace --locked
-    cargo test -p sermon-agent --features simulate --locked
+    cargo test -p sermon-agent -p sermon-modules --features sermon-agent/simulate --locked
 
 # Check agent dependencies: advisories, licenses, bans, sources
 [working-directory: 'agent']

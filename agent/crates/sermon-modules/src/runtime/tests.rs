@@ -1,0 +1,424 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use sermon_core::SystemClock;
+
+use super::*;
+use crate::{BoxFuture, Config, Instance, Refused};
+
+/// What a fake module does in a run.
+#[derive(Debug, Clone, Copy)]
+enum Act {
+    Samples(usize),
+    Fail,
+    Panic,
+    /// Never returns (an async wait).
+    Pend,
+    /// Blocks a thread for this long.
+    Block(Duration),
+    Refused,
+    /// A sample of another module's name.
+    Foreign,
+}
+
+struct Fake {
+    id: &'static str,
+    act: Arc<Mutex<Act>>,
+    runs: Arc<AtomicUsize>,
+    builds: Arc<AtomicUsize>,
+}
+
+const SCHEMA: &str = r#"{"type":"object","additionalProperties":false,"properties":{
+  "port":{"type":"integer","minimum":1,"maximum":65535,"default":80},
+  "password":{"type":"string","writeOnly":true,"maxLength":64}}}"#;
+
+impl Module for Fake {
+    fn id(&self) -> &'static str {
+        self.id
+    }
+    fn schema(&self) -> &'static str {
+        SCHEMA
+    }
+    fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
+        self.builds.fetch_add(1, Ordering::SeqCst);
+        if config["port"] == 1 {
+            return Err(BuildError::Invalid("port 1 is reserved".into()));
+        }
+        if config["port"] == 2 {
+            return Err(setup
+                .veto
+                .address("192.0.2.1".parse().unwrap())
+                .unwrap_err()
+                .into());
+        }
+        Ok(Box::new(FakeRun {
+            id: self.id,
+            act: self.act.clone(),
+            runs: self.runs.clone(),
+            password: setup.secrets.get("password").map(str::to_owned),
+        }))
+    }
+}
+
+struct FakeRun {
+    id: &'static str,
+    act: Arc<Mutex<Act>>,
+    runs: Arc<AtomicUsize>,
+    password: Option<String>,
+}
+
+impl Instance for FakeRun {
+    fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
+        Box::pin(async move {
+            self.runs.fetch_add(1, Ordering::SeqCst);
+            let act = *self.act.lock().unwrap();
+            let metric = if self.id == "a" {
+                "sermon_a_up"
+            } else {
+                "sermon_b_up"
+            };
+            match act {
+                Act::Samples(n) => {
+                    let value = i64::from(self.password.is_some());
+                    Ok((0..n)
+                        .map(|i| Sample::int(metric, value).label("n", i.to_string()))
+                        .collect())
+                }
+                Act::Fail => Err(RunError::Failed("connection refused".into())),
+                Act::Panic => panic!("a bug in the module"),
+                Act::Pend => std::future::pending().await,
+                Act::Block(d) => {
+                    run.blocking(move || std::thread::sleep(d)).await?;
+                    Ok(Vec::new())
+                }
+                Act::Refused => Err(Refused("10.0.0.1 is not in module_targets".into()).into()),
+                Act::Foreign => Ok(vec![Sample::int("sermon_cpu_hijack", 1)]),
+            }
+        })
+    }
+}
+
+#[derive(Default)]
+struct Out {
+    samples: Mutex<Vec<Sample>>,
+    reports: Mutex<Vec<Vec<Health>>>,
+}
+
+impl Sink for Out {
+    fn samples(&self, samples: Vec<Sample>, _: SystemTime) {
+        self.samples.lock().unwrap().extend(samples);
+    }
+    fn health(&self, report: Vec<Health>, _: SystemTime) {
+        self.reports.lock().unwrap().push(report);
+    }
+}
+
+impl Out {
+    fn state(&self, module: &str) -> Option<(State, String)> {
+        self.reports
+            .lock()
+            .unwrap()
+            .last()?
+            .iter()
+            .find(|h| h.module == module)
+            .map(|h| (h.state, h.reason.clone()))
+    }
+}
+
+struct World {
+    out: Arc<Out>,
+    runtime: Runtime,
+    act: BTreeMap<&'static str, Arc<Mutex<Act>>>,
+    runs: BTreeMap<&'static str, Arc<AtomicUsize>>,
+    builds: BTreeMap<&'static str, Arc<AtomicUsize>>,
+}
+
+fn world(veto: Veto) -> World {
+    let out = Arc::new(Out::default());
+    let (mut act, mut runs, mut builds) = (BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
+    let mut modules: Vec<Arc<dyn Module>> = Vec::new();
+    for id in ["a", "b"] {
+        let fake = Fake {
+            id,
+            act: Arc::new(Mutex::new(Act::Samples(2))),
+            runs: Arc::new(AtomicUsize::new(0)),
+            builds: Arc::new(AtomicUsize::new(0)),
+        };
+        act.insert(id, fake.act.clone());
+        runs.insert(id, fake.runs.clone());
+        builds.insert(id, fake.builds.clone());
+        modules.push(Arc::new(fake));
+    }
+    let runtime = Runtime::new(modules, veto, out.clone(), Arc::new(SystemClock::new()))
+        .with_pauses(Pauses {
+            first: Duration::from_secs(30),
+            max: Duration::from_secs(120),
+        });
+    World {
+        out,
+        runtime,
+        act,
+        runs,
+        builds,
+    }
+}
+
+fn spec(id: &str, config: &str) -> Spec {
+    Spec {
+        id: id.into(),
+        enabled: true,
+        interval: Some(Duration::from_secs(10)),
+        config_json: config.into(),
+    }
+}
+
+impl World {
+    fn set(&self, id: &str, act: Act) {
+        *self.act[id].lock().unwrap() = act;
+    }
+    fn runs(&self, id: &str) -> usize {
+        self.runs[id].load(Ordering::SeqCst)
+    }
+}
+
+/// Moves the paused clock on by hand: with a blocking job running, tokio doesn't do it alone.
+async fn advance(d: Duration) {
+    tokio::time::advance(d).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+}
+
+async fn settle(d: Duration) {
+    tokio::time::sleep(d).await;
+    // Let tasks woken at the end run.
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+}
+
+// ADR 0039: an enabled module runs at its interval and its samples go out; its state is ok.
+#[tokio::test(start_paused = true)]
+async fn an_enabled_module_runs_at_its_interval() {
+    let mut w = world(Veto::default());
+    w.runtime.apply(
+        &[
+            spec("a", "{}"),
+            Spec {
+                enabled: false,
+                ..spec("b", "{}")
+            },
+        ],
+        &BTreeMap::new(),
+    );
+    settle(Duration::from_secs(25)).await;
+    assert_eq!(w.runs("a"), 3, "at 0, 10 and 20 s");
+    assert_eq!(w.runs("b"), 0, "off");
+    assert_eq!(w.out.samples.lock().unwrap().len(), 6);
+    assert_eq!(w.out.state("a"), Some((State::Ok, String::new())));
+    assert_eq!(w.out.state("b"), None);
+    // Unchanged health is not sent again with every run.
+    assert_eq!(w.out.reports.lock().unwrap().len(), 1);
+}
+
+// ADR 0039: a module that hangs, panics or times out stays alone with it: the other module goes
+// on running, the state says why.
+#[tokio::test(start_paused = true)]
+async fn a_failing_module_doesnt_touch_the_others() {
+    for (act, state) in [
+        (Act::Pend, State::Timeout),
+        (Act::Fail, State::Error),
+        (Act::Panic, State::Crashed),
+        (Act::Refused, State::Vetoed),
+        (Act::Foreign, State::Error),
+        (Act::Samples(MAX_SAMPLES + 1), State::Error),
+    ] {
+        let mut w = world(Veto::default());
+        w.set("a", act);
+        w.runtime
+            .apply(&[spec("a", "{}"), spec("b", "{}")], &BTreeMap::new());
+        settle(Duration::from_secs(25)).await;
+        assert_eq!(w.out.state("a").map(|s| s.0), Some(state), "{act:?}");
+        assert_eq!(w.out.state("b").map(|s| s.0), Some(State::Ok), "{act:?}");
+        assert_eq!(w.runs("b"), 3, "{act:?}");
+        assert!(
+            w.out
+                .samples
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|s| s.metric == "sermon_b_up"),
+            "{act:?}: samples of a failed run went out"
+        );
+    }
+}
+
+// A crashed module is built anew after a pause that doubles; a run that succeeds resets it.
+#[tokio::test(start_paused = true)]
+async fn a_crashed_module_starts_again_after_a_pause() {
+    let mut w = world(Veto::default());
+    w.set("a", Act::Panic);
+    w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
+    settle(Duration::from_secs(1)).await;
+    assert_eq!((w.runs("a"), w.builds["a"].load(Ordering::SeqCst)), (1, 1));
+    settle(Duration::from_secs(31)).await;
+    assert_eq!(
+        (w.runs("a"), w.builds["a"].load(Ordering::SeqCst)),
+        (2, 2),
+        "after 30 s"
+    );
+    settle(Duration::from_secs(31)).await;
+    assert_eq!(w.runs("a"), 2, "the second pause is 60 s");
+    settle(Duration::from_secs(30)).await;
+    assert_eq!(w.runs("a"), 3);
+    w.set("a", Act::Samples(1));
+    settle(Duration::from_secs(121)).await;
+    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Ok));
+}
+
+// Blocking work that doesn't return: the run times out, no further run starts while it blocks;
+// once it returns, the module runs again.
+#[tokio::test(start_paused = true)]
+async fn a_hung_module_starts_no_new_run() {
+    let mut w = world(Veto::default());
+    w.set("a", Act::Block(Duration::from_millis(500)));
+    w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
+    advance(Duration::ZERO).await;
+    // Virtual time runs on while the thread blocks for real.
+    advance(Duration::from_secs(6)).await;
+    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Timeout));
+    w.set("a", Act::Samples(1));
+    advance(Duration::from_secs(4)).await;
+    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Hung));
+    assert_eq!(w.runs("a"), 1);
+    std::thread::sleep(Duration::from_millis(700));
+    advance(Duration::from_secs(10)).await;
+    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Ok));
+}
+
+// The configuration is checked against the schema: a module outside it, one the module can't
+// use and an unknown one don't run; the reasons go out.
+#[tokio::test(start_paused = true)]
+async fn an_invalid_configuration_keeps_the_module_off() {
+    let mut w = world(Veto::default());
+    w.runtime.apply(
+        &[
+            spec("a", r#"{"port":"eighty"}"#),
+            spec("b", r#"{"port":1}"#),
+            spec("nginx", "{}"),
+        ],
+        &BTreeMap::new(),
+    );
+    settle(Duration::from_secs(1)).await;
+    let (state, why) = w.out.state("a").unwrap();
+    assert_eq!(state, State::InvalidConfig);
+    assert!(why.contains("port: not an integer"), "{why}");
+    assert_eq!(
+        w.out.state("b"),
+        Some((State::InvalidConfig, "port 1 is reserved".into()))
+    );
+    assert_eq!(
+        w.out.state("nginx").map(|s| s.0),
+        Some(State::InvalidConfig)
+    );
+    assert_eq!(w.runs("a") + w.runs("b"), 0);
+    // A credential doesn't belong in the configuration.
+    w.runtime
+        .apply(&[spec("a", r#"{"password":"x"}"#)], &BTreeMap::new());
+    settle(Duration::from_secs(1)).await;
+    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::InvalidConfig));
+}
+
+// The local veto: allow_modules = false runs nothing, a target outside module_targets is vetoed.
+#[tokio::test(start_paused = true)]
+async fn the_local_veto_wins() {
+    let mut w = world(Veto {
+        allow: false,
+        ..Veto::default()
+    });
+    w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
+    settle(Duration::from_secs(25)).await;
+    assert_eq!(w.runs("a"), 0);
+    let (state, why) = w.out.state("a").unwrap();
+    assert_eq!(state, State::Vetoed);
+    assert!(why.contains("allow_modules"), "{why}");
+    let mut w = world(Veto::default());
+    w.runtime
+        .apply(&[spec("a", r#"{"port":2}"#)], &BTreeMap::new());
+    settle(Duration::from_secs(1)).await;
+    let (state, why) = w.out.state("a").unwrap();
+    assert_eq!(state, State::Vetoed);
+    assert!(why.contains("module_targets"), "{why}");
+}
+
+// A change restarts only the module it touches; credentials count as a change; a module turned
+// off stops and leaves the report.
+#[tokio::test(start_paused = true)]
+async fn a_change_restarts_what_it_touches() {
+    let mut w = world(Veto::default());
+    w.runtime
+        .apply(&[spec("a", "{}"), spec("b", "{}")], &BTreeMap::new());
+    settle(Duration::from_secs(1)).await;
+    w.runtime.apply(
+        &[spec("a", r#"{"port":8080}"#), spec("b", "{}")],
+        &BTreeMap::new(),
+    );
+    settle(Duration::from_secs(1)).await;
+    assert_eq!(w.builds["a"].load(Ordering::SeqCst), 2);
+    assert_eq!(w.builds["b"].load(Ordering::SeqCst), 1, "b unchanged");
+    let secrets = BTreeMap::from([(
+        "a".to_owned(),
+        Secrets::new([("password".to_owned(), "pw".to_owned())]),
+    )]);
+    w.runtime
+        .apply(&[spec("a", r#"{"port":8080}"#), spec("b", "{}")], &secrets);
+    settle(Duration::from_secs(1)).await;
+    assert_eq!(w.builds["a"].load(Ordering::SeqCst), 3);
+    assert!(
+        w.out
+            .samples
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|s| s.metric == "sermon_a_up" && s.value == sermon_core::Value::Int(1))
+    );
+    w.runtime.apply(&[spec("b", "{}")], &BTreeMap::new());
+    settle(Duration::from_secs(30)).await;
+    let runs = w.runs("a");
+    settle(Duration::from_secs(30)).await;
+    assert_eq!(w.runs("a"), runs, "a still runs");
+    assert_eq!(w.out.state("a"), None);
+    assert!(w.out.state("b").is_some());
+}
+
+#[test]
+fn reasons_are_plain_and_bounded() {
+    assert_eq!(bounded("a\nb\u{1b}[31m"), "a b [31m");
+    let long = "ä".repeat(200);
+    let cut = bounded(&long);
+    assert!(cut.len() <= MAX_REASON && cut.chars().all(|c| c == 'ä'));
+}
+
+#[test]
+fn samples_are_checked_against_the_protocol() {
+    assert!(
+        check(
+            "nginx",
+            &[Sample::int("sermon_nginx_up", 1).label("port", "80")]
+        )
+        .is_ok()
+    );
+    for bad in [
+        Sample::int("sermon_cpu_up", 1),
+        Sample::int("sermon_nginx_Up", 1),
+        Sample::int("sermon_nginx_up", 1).label("Port", "80"),
+        Sample::int("sermon_nginx_up", 1).label("port", "x\u{202e}\n"),
+        Sample::int("sermon_nginx_up", 1).label("port", "x".repeat(257)),
+    ] {
+        assert!(
+            check("nginx", std::slice::from_ref(&bad)).is_err(),
+            "{bad:?}"
+        );
+    }
+    let nine = (0..9).fold(Sample::int("sermon_nginx_up", 1), |s, _| s.label("l", "x"));
+    assert!(check("nginx", &[nine]).is_err());
+}

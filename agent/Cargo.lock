@@ -1256,6 +1256,7 @@ dependencies = [
  "sermon-core",
  "sermon-helper-proto",
  "sermon-logs",
+ "sermon-modules",
  "sermon-security",
  "sermon-testserver",
  "sermon-transport",
@@ -1357,6 +1358,16 @@ dependencies = [
 [[package]]
 name = "sermon-modules"
 version = "0.0.0"
+dependencies = [
+ "proptest",
+ "regex",
+ "serde_json",
+ "sermon-core",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
 
 [[package]]
 name = "sermon-security"

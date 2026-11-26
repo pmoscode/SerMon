@@ -10,8 +10,8 @@ use sermon_buffer::{Record, Seq, Wal, WalError, WalStats};
 use tokio::sync::Notify;
 
 use crate::proto::agent::v1::{
-    Batch, CommandResult, LogBatch, LogEntry, MetricBatch, SecurityEvent, SecurityEventBatch,
-    UpdateReport, batch,
+    Batch, CommandResult, LogBatch, LogEntry, MetricBatch, ModuleHealthReport, SecurityEvent,
+    SecurityEventBatch, UpdateReport, batch,
 };
 
 /// Shared handle to the write-ahead log; cheap to clone.
@@ -189,6 +189,27 @@ impl Outbox {
         Ok(seq)
     }
 
+    /// Buffers the state of the modules (ADR 0039) and wakes the session: buffered, so the server
+    /// learns of a module that went wrong while the agent was offline.
+    ///
+    /// # Errors
+    ///
+    /// [`WalError`] if the batch can't be written.
+    pub fn push_module_health(
+        &self,
+        report: ModuleHealthReport,
+        now: SystemTime,
+    ) -> Result<Seq, WalError> {
+        let payload = Batch {
+            seq: 0,
+            content: Some(batch::Content::ModuleHealth(report)),
+        }
+        .encode_to_vec();
+        let seq = self.wal().append(&payload, now)?;
+        self.inner.ready.notify_one();
+        Ok(seq)
+    }
+
     /// Buffers a command result (M4-12) and wakes the session: buffered, so a result survives the
     /// agent's restart by its own package update.
     ///
@@ -355,6 +376,36 @@ mod tests {
         assert_eq!(records[0].seq, seq);
         match batch_for(&records[0]).unwrap().content {
             Some(batch::Content::UpdateReport(back)) => assert_eq!(back, report),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    // ADR 0039: the modules' state is a batch of its own and wakes the session.
+    #[tokio::test]
+    async fn module_health_is_buffered_as_one_batch() {
+        use crate::proto::agent::v1::{ModuleHealth, ModuleState};
+        let dir = tempfile::tempdir().unwrap();
+        let now = UNIX_EPOCH + Duration::from_hours(498_624);
+        let (wal, _) = Wal::open(dir.path(), WalConfig::default(), now).unwrap();
+        let outbox = Outbox::new(wal);
+        let report = ModuleHealthReport {
+            collected_at: Some(now.into()),
+            modules: vec![ModuleHealth {
+                module_id: "nginx".into(),
+                state: ModuleState::Error.into(),
+                reason: "connection refused".into(),
+                last_success: None,
+            }],
+        };
+        let seq = outbox.push_module_health(report.clone(), now).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), outbox.inner.ready.notified())
+            .await
+            .expect("the session is woken");
+        let records = outbox.read_after(Seq::default(), 10).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].seq, seq);
+        match batch_for(&records[0]).unwrap().content {
+            Some(batch::Content::ModuleHealth(back)) => assert_eq!(back, report),
             other => panic!("{other:?}"),
         }
     }

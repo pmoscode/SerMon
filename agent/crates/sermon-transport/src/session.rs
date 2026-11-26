@@ -138,6 +138,8 @@ pub struct TransportConfig {
     pub live_lease: Duration,
     /// How the agent was installed (for `Hello`, ADR 0036).
     pub install_method: InstallMethod,
+    /// The IDs of the modules built in (for `Hello`, ADR 0039).
+    pub modules: Vec<String>,
 }
 
 impl TransportConfig {
@@ -154,6 +156,7 @@ impl TransportConfig {
             expired_retry: Duration::from_mins(5),
             live_lease: Duration::from_mins(1),
             install_method: InstallMethod::Unspecified,
+            modules: Vec::new(),
         }
     }
 }
@@ -254,6 +257,13 @@ impl Transport {
         self
     }
 
+    /// Names the modules built in to the server (`Hello`, ADR 0039).
+    #[must_use]
+    pub fn with_modules(mut self, modules: Vec<String>) -> Self {
+        self.config.modules = modules;
+        self
+    }
+
     /// Hands the server's configurations to `sink`; without one they are ignored.
     #[must_use]
     pub fn with_config(mut self, sink: Arc<dyn ConfigSink>) -> Self {
@@ -327,8 +337,7 @@ impl Transport {
             host_facts: Some((&facts).into()),
             config_version: self.config_sink.as_ref().map_or(0, |sink| sink.version()),
             install_method: self.config.install_method.into(),
-            // The modules built in (ADR 0039) come with their runtime (M5-03).
-            modules: Vec::new(),
+            modules: self.config.modules.clone(),
         }));
         outgoing
             .send(hello)

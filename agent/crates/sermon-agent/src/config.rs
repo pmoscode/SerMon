@@ -18,6 +18,11 @@
 //! allow_live_view = true
 //! allow_logs = true
 //! log_file_prefixes = ["/var/log"]                # where the server's file globs may read
+//! allow_modules = true                            # modules (ADR 0039) at all
+//! module_targets = ["127.0.0.0/8", "::1/128"]     # networks modules may connect to
+//! module_sockets = ["/run", "/var/run"]           # Unix sockets modules may use
+//! module_file_prefixes = ["/etc/ssl", "/etc/pki", "/etc/letsencrypt"]  # files modules may read
+//! allow_docker_socket = false                     # root-equivalent (O4)
 //! ```
 
 use std::fmt;
@@ -85,6 +90,8 @@ pub struct LocalPolicy {
     /// The directories below which the server's log file globs may read (M3-05); the state
     /// directory, `/etc/sermon`, `/proc`, `/sys` and `/dev` never.
     pub log_file_prefixes: Vec<PathBuf>,
+    /// What the modules may reach (ADR 0039).
+    pub modules: sermon_modules::Veto,
 }
 
 /// Where the server's log file globs may read by default.
@@ -96,6 +103,7 @@ impl Default for LocalPolicy {
             allow_live_view: true,
             allow_logs: true,
             log_file_prefixes: vec![PathBuf::from(DEFAULT_LOG_FILE_PREFIX)],
+            modules: sermon_modules::Veto::default(),
         }
     }
 }
@@ -175,6 +183,11 @@ struct RawLocal {
     allow_live_view: Option<bool>,
     allow_logs: Option<bool>,
     log_file_prefixes: Option<Vec<PathBuf>>,
+    allow_modules: Option<bool>,
+    module_targets: Option<Vec<String>>,
+    module_sockets: Option<Vec<PathBuf>>,
+    module_file_prefixes: Option<Vec<PathBuf>>,
+    allow_docker_socket: Option<bool>,
 }
 
 impl RawConfig {
@@ -212,19 +225,10 @@ impl RawConfig {
         let log_file_prefixes = self
             .local
             .log_file_prefixes
+            .clone()
             .unwrap_or_else(|| vec![PathBuf::from(DEFAULT_LOG_FILE_PREFIX)]);
-        for prefix in &log_file_prefixes {
-            // By text: `Path::components` drops `.` in the middle.
-            let normal = prefix
-                .to_str()
-                .is_some_and(|p| p.split('/').skip(1).all(|s| !matches!(s, "." | "..")));
-            if !prefix.is_absolute() || !normal {
-                problems.push(format!(
-                    "local.log_file_prefixes: {} must be an absolute path without . and ..",
-                    prefix.display()
-                ));
-            }
-        }
+        check_prefixes("local.log_file_prefixes", &log_file_prefixes, &mut problems);
+        let modules = module_veto(&self.local, &mut problems);
 
         match (server_url, agent_url) {
             (Some(server_url), Some(agent_url)) if problems.is_empty() => Ok(AgentConfig {
@@ -237,11 +241,58 @@ impl RawConfig {
                     allow_live_view: self.local.allow_live_view.unwrap_or(true),
                     allow_logs: self.local.allow_logs.unwrap_or(true),
                     log_file_prefixes,
+                    modules,
                 },
             }),
             _ => Err(ConfigError::Invalid(problems)),
         }
     }
+}
+
+/// Prefixes are absolute and plain: compared by segment, `.` and `..` would mislead.
+fn check_prefixes(key: &str, prefixes: &[PathBuf], problems: &mut Vec<String>) {
+    for prefix in prefixes {
+        // By text: `Path::components` drops `.` in the middle.
+        let normal = prefix
+            .to_str()
+            .is_some_and(|p| p.split('/').skip(1).all(|s| !matches!(s, "." | "..")));
+        if !prefix.is_absolute() || !normal {
+            problems.push(format!(
+                "{key}: {} must be an absolute path without . and ..",
+                prefix.display()
+            ));
+        }
+    }
+}
+
+/// The modules' veto (ADR 0039); what isn't set keeps the default.
+fn module_veto(local: &RawLocal, problems: &mut Vec<String>) -> sermon_modules::Veto {
+    let mut veto = sermon_modules::Veto::default();
+    if let Some(allow) = local.allow_modules {
+        veto.allow = allow;
+    }
+    if let Some(targets) = &local.module_targets {
+        veto.targets = targets
+            .iter()
+            .filter_map(|t| {
+                sermon_modules::veto::Net::parse(t)
+                    .map_err(|why| problems.push(format!("local.module_targets: {why}")))
+                    .ok()
+            })
+            .collect();
+    }
+    if let Some(sockets) = &local.module_sockets {
+        check_prefixes("local.module_sockets", sockets, problems);
+        veto.sockets.clone_from(sockets);
+    }
+    if let Some(prefixes) = &local.module_file_prefixes {
+        check_prefixes("local.module_file_prefixes", prefixes, problems);
+        veto.file_prefixes.clone_from(prefixes);
+    }
+    if let Some(docker) = local.allow_docker_socket {
+        veto.docker_socket = docker;
+    }
+    veto
 }
 
 fn checked_dir(
@@ -376,6 +427,39 @@ mod tests {
         }
     }
 
+    // ADR 0039: the modules' veto – by default loopback only, the Docker socket off; what the file
+    // sets replaces the default; a bad network or path is refused.
+    #[test]
+    fn the_modules_veto() {
+        let config = AgentConfig::parse(MINIMAL).unwrap();
+        assert_eq!(config.local.modules, sermon_modules::Veto::default());
+        let config = AgentConfig::parse(&format!(
+            "{MINIMAL}[local]\nallow_modules = false\nmodule_targets = [\"192.0.2.0/24\"]\n\
+             module_sockets = [\"/run/postgresql\"]\nmodule_file_prefixes = []\nallow_docker_socket = true\n"
+        ))
+        .unwrap();
+        let veto = &config.local.modules;
+        assert!(!veto.allow && veto.docker_socket && veto.file_prefixes.is_empty());
+        assert!(veto.address("192.0.2.9".parse().unwrap()).is_ok());
+        assert!(
+            veto.address("127.0.0.1".parse().unwrap()).is_err(),
+            "replaced, not added"
+        );
+        assert_eq!(veto.sockets, [PathBuf::from("/run/postgresql")]);
+        for (line, key) in [
+            ("module_targets = [\"localhost\"]", "local.module_targets"),
+            ("module_targets = [\"10.0.0.0/40\"]", "local.module_targets"),
+            ("module_sockets = [\"run\"]", "local.module_sockets"),
+            (
+                "module_file_prefixes = [\"/etc/../root\"]",
+                "local.module_file_prefixes",
+            ),
+        ] {
+            let problems = invalid(&format!("{MINIMAL}[local]\n{line}\n"));
+            assert!(problems[0].starts_with(key), "{line}: {problems:?}");
+        }
+    }
+
     #[test]
     fn minimal_config_uses_defaults() {
         let config = AgentConfig::parse(MINIMAL).unwrap();
@@ -427,6 +511,7 @@ mod tests {
                 allow_live_view: false,
                 allow_logs: false,
                 log_file_prefixes: vec![PathBuf::from("/var/log"), PathBuf::from("/srv/app/logs")],
+                modules: sermon_modules::Veto::default(),
             }
         );
     }

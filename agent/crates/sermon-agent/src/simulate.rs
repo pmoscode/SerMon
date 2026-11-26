@@ -20,6 +20,7 @@ use sermon_collectors::rate::{round_to_i64, to_f64};
 use sermon_core::{
     Architecture, Clock, HostFacts, MachineId, Sample, SecuritySource, SystemClock, Value,
 };
+use sermon_modules::runtime::Runtime;
 use sermon_security::{Address, EventKind, SecurityEvent};
 use sermon_transport::identity::AgentKey;
 use sermon_transport::outbox::Outbox;
@@ -28,9 +29,11 @@ use sermon_transport::tls::{ServerTrust, enrollment_config};
 use sermon_transport::{channel, enrollment};
 use tokio_util::sync::CancellationToken;
 
+use crate::agent_config::ConfigStore;
 use crate::cli::{EnrollmentToken, SimulateArgs};
 use crate::config::AgentConfig;
 use crate::identity::{self, FileIdentity};
+use crate::modules::OutboxSink;
 use crate::security;
 use crate::state::StateLayout;
 use scenario::{Attacker, Busy, Scenarios};
@@ -596,13 +599,27 @@ fn run_node(
         .with_context(|| format!("cannot open the buffer of {hostname}"))?;
     let outbox = Outbox::new(wal);
     let facts_source: FactsSource = Arc::new(move || Ok(facts.clone()));
+    // The server's configuration with the module `simulate` (ADR 0039); no logs.
+    let agent_config = Arc::new(ConfigStore::open(layout.agent_config_file(), false, true));
+    let modules = Runtime::new(
+        sermon_modules::builtin(),
+        sermon_modules::Veto::default(),
+        Arc::new(OutboxSink::new(
+            outbox.clone(),
+            Arc::new(|r: &str| r.to_owned()),
+        )),
+        clock.clone(),
+    );
     let transport = Transport::new(
         TransportConfig::new(agent_url, env!("CARGO_PKG_VERSION")),
         Arc::new(FileIdentity::new(layout)),
         facts_source,
         outbox.clone(),
         clock.clone(),
-    );
+    )
+    .with_modules(modules.ids())
+    .with_config(agent_config.clone());
+    let integrations = crate::modules::run(modules, agent_config.subscribe(), shutdown.clone());
     let uptime = Duration::from_secs(3600 * (1 + u64::from(index) % 400));
     let mut generator =
         Generator::new(profile, seed, started, uptime).with_scenarios(scenarios.clone());
@@ -645,6 +662,7 @@ fn run_node(
         };
         tokio::join!(
             generate,
+            integrations,
             connect(&transport, &scenarios, elapsed, &shutdown, &hostname)
         );
     })

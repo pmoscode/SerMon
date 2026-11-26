@@ -48,6 +48,9 @@ Devcontainer (`.devcontainer/`) mit allen Werkzeugen.
 Agent bauen: `just build-agent` (statische musl-Binaries für amd64 und arm64), `just smoke-agent` (Start im Container).
 Agent-Konfiguration: `/etc/sermon/agent.toml` (Schema und Beispiel in `agent/crates/sermon-agent/src/config.rs`);
 Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur über `ProcRoot` (`sermon-core`).
+Module (ADR 0039): `agent/crates/sermon-modules` (Vertrag `Module`/`Instance`, Laufzeit, Schema-Teilmenge, Veto aus
+`[local]` in `agent.toml`); neue Module über den Skill `sermon-add-module`. Das Testmodul `simulate` gibt es nur mit
+dem Feature `simulate` (`just simulate`, nie im Release).
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
 `just e2e-demo` baut den Agent, startet die Produktions-Compose `deploy/compose/compose.yaml` mit dem Overlay

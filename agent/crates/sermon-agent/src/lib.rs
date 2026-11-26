@@ -16,6 +16,7 @@ pub mod logging;
 pub mod logglob;
 pub mod logs;
 pub mod logship;
+pub mod modules;
 pub mod reboot;
 pub mod runs;
 pub mod scheduler;
@@ -119,6 +120,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     let agent_config = Arc::new(agent_config::ConfigStore::open(
         layout.agent_config_file(),
         config.local.allow_logs,
+        config.local.modules.allow,
     ));
     // Log shipping (M3-04) for the one source that runs.
     let log_stats = Arc::new(logship::ShipStats::default());
@@ -131,7 +133,9 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     let updates = UpdateSignals::default();
     // The server's commands for the root helper (M4-12).
     let (inbox, ports) = run_ports(config, &layout, &clock);
+    let module_runtime = module_runtime(config, &outbox, &clock, &agent_config);
     let transport = transport(config, layout, facts, &outbox, &clock, &agent_config)
+        .with_modules(module_runtime.ids())
         .with_update_refresh(updates.refresh.clone())
         .with_commands(Arc::new(inbox));
 
@@ -189,10 +193,12 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
         ));
         let reports = spawn_updates(config, &outbox, &clock, &updates, &shutdown);
         let runner = spawn_runs(ports, &outbox, &clock, &agent_config, &updates, &shutdown);
+        let integrations = spawn_modules(module_runtime, &agent_config, &shutdown);
         transport.run(shutdown.clone()).await;
         maintenance.await.context("maintenance task failed")?;
         reports.await.context("update task failed")?;
         runner.await.context("run task failed")?;
+        integrations.await.context("module task failed")?;
         collection.await.context("collection task failed")?;
         journal.await.context("journal task failed")?;
         globs.await.context("log file task failed")?;
@@ -230,6 +236,40 @@ fn transport(
         agent_config.subscribe(),
         clock.clone(),
     )))
+}
+
+/// The modules built in (ADR 0039), bounded by the veto of `agent.toml`; their reasons redacted
+/// with the organization's rules.
+fn module_runtime(
+    config: &AgentConfig,
+    outbox: &Outbox,
+    clock: &Arc<dyn Clock>,
+    agent_config: &Arc<agent_config::ConfigStore>,
+) -> sermon_modules::runtime::Runtime {
+    let store = agent_config.clone();
+    let sink = modules::OutboxSink::new(
+        outbox.clone(),
+        Arc::new(move |text: &str| store.current().redactor.redact(text).into_owned()),
+    );
+    sermon_modules::runtime::Runtime::new(
+        sermon_modules::builtin(),
+        config.local.modules.clone(),
+        Arc::new(sink),
+        clock.clone(),
+    )
+}
+
+/// Starts the modules (ADR 0039): they follow the server's configuration.
+fn spawn_modules(
+    runtime: sermon_modules::runtime::Runtime,
+    agent_config: &agent_config::ConfigStore,
+    shutdown: &CancellationToken,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(modules::run(
+        runtime,
+        agent_config.subscribe(),
+        shutdown.clone(),
+    ))
 }
 
 /// The root helper of the runs, with the release fetcher of the self-update, and the run book of

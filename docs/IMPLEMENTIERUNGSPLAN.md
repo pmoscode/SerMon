@@ -5216,7 +5216,8 @@ Dashboards (§8.4) und der Kiosk (§8.5) hängen nicht an den Modulen und laufen
 (§10).
 
 **Kritischer Pfad:** M5-01 → M5-02 → M5-03 → M5-06 → M5-07 → M5-11 → M5-20 → M5-32. Dazu fließen M5-04 (Discovery)
-und M5-05 (Zugangsdaten, für M5-13 und M5-14). Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
+und M5-05 (Zugangsdaten, für M5-13 und M5-14), dazu M5-08 (HTTP-Client der Module, für M5-11, M5-12 und M5-19).
+Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
 
 ### 8.1 Modul-Framework (E5.1)
 
@@ -5267,7 +5268,35 @@ und M5-05 (Zugangsdaten, für M5-13 und M5-14). Parallel: M5-22 → M5-23 → M5
 - **Tests zuerst:** Schema-Tests (Grenzen, gültige und ungültige Nachrichten), `buf breaking`.
 - **Abhängig von:** M5-01
 
-#### ☐ M5-03 – Laufzeit der Module im Agent · A · L 🔒
+#### ☑ M5-03 – Laufzeit der Module im Agent · A · L 🔒
+> Erledigt (`agent/crates/sermon-modules`, `sermon-agent/src/modules.rs`):
+> - **Vertrag:** `Module` (ID, Schema, Intervall, `build` mit geprüfter Konfiguration, Veto und Zugangsdaten) baut eine
+>   `Instance` mit `collect`; blockierende Arbeit nur über `Run::blocking`, damit die Laufzeit einen hängenden Lauf
+>   erkennt. `Secrets` zeigt in `Debug` nur die Felder.
+> - **Schema:** Prüfer der Teilmenge von JSON Schema 2020-12 (ADR 0039) in Rust: Wurzel ohne `additionalProperties`,
+>   Grenzen Pflicht, Muster verankert (`regex`, begrenzte Größe), Formate `uri` (ohne User und Passwort),
+>   `host-port`, `path` (ohne `..`), `duration` (bis 1 h); Vorgaben werden eingesetzt, ein Geheimnis in der
+>   Konfiguration abgelehnt, ein Pflicht-Geheimnis muss unter den Zugangsdaten sein; Proptest gegen Panics.
+> - **Laufzeit:** ein Task je Modul, Zeitbudget je Lauf (höchstens 30 s), hängende blockierende Arbeit startet keinen
+>   neuen Lauf (`hung`), Panic im `JoinHandle` (`crashed`, neu gebaut nach 30 s, verdoppelt bis 30 min, Erfolg setzt
+>   zurück); höchstens 256 Samples je Lauf, Namen nur `sermon_<id>_…`, Labels in den Grenzen des Protokolls – sonst
+>   `error` und nichts geht raus. Eine Änderung startet nur das betroffene Modul neu (Zugangsdaten zählen mit).
+>   Gesundheit bei jeder Änderung und alle 10 min als eigener Batch (`Outbox::push_module_health`), Gründe ohne
+>   Steuerzeichen, mit den Redaction-Regeln der Org, höchstens 256 Bytes.
+> - **Veto** in `[local]` der `agent.toml`: `allow_modules`, `module_targets` (CIDR, ersetzt die Vorgabe),
+>   `module_sockets`, `module_file_prefixes`, `allow_docker_socket` (gilt auch für `podman.sock` und
+>   `containerd.sock`, auch über Symlinks); `Veto::resolve` prüft jede Adresse eines Namens und gibt die geprüften
+>   zurück; Pfade aufgelöst, State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys`, `/dev` und `/run/sermon` (Root-Helper)
+>   immer gesperrt. `ConfigApplied.modules_vetoed` meldet `allow_modules = false`.
+> - **Konfiguration:** `AgentConfig.modules` in den Grenzen des Protokolls (32 Module, IDs eindeutig, Intervall 10 s
+>   bis 1 h, 16 KiB JSON), sonst bleibt die alte Konfiguration; `Hello.modules` nennt die eingebauten Module.
+> - **Testmodul `simulate`** (nur mit Feature `simulate`, nie im Release): `ok`, `fail`, `hang`, `panic`, `flood`, Wert
+>   und ein Geheimnis `token`; die virtuellen Nodes (`just simulate`) übernehmen jetzt die Konfiguration des Servers
+>   und betreiben ihre Module. `just test-agent` testet `sermon-modules` mit dem Feature.
+> - Tests: 24 in `sermon-modules` (hängen, Panic, Timeout, zu viele Samples, fremde Metrik, Veto, Neustart nur des
+>   Betroffenen, Schema), dazu Agent (`agent.toml`, Konfiguration, Sink, Task folgt der Konfiguration) und Transport
+>   (`Hello.modules`, Health-Batch); Gegenproben 22/22; `just e2e-agent` grün. Der HTTP-Client mit Veto,
+>   Weiterleitungen und 1 MiB je Antwort kommt mit M5-08.
 - **Ziel:** `sermon-modules` mit Trait, Register und Planer: Intervall je Modul, Zeitbudget mit Abbruch, Größengrenze
   der Ausgabe, Panic isoliert, Gesundheit; angebunden an Konfiguration (`agent_config`), Outbox und Uhr. Ein Modul zum
   Testen (`simulate`) für Tests und Demo. Lokales Veto aus `agent.toml`.
@@ -5313,7 +5342,9 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 
 #### ☐ M5-08 – HTTP- und TCP-Check · A · M 🔒
 - **Ziel:** Erreichbarkeit, Latenz, Statuscode und Ablauf des Zertifikats lokaler Endpunkte; nur Ziele, die das
-  lokale Veto erlaubt, Weiterleitungen nur innerhalb davon, TLS mit Prüfung (abschaltbar nur ausdrücklich).
+  lokale Veto erlaubt, Weiterleitungen nur innerhalb davon, TLS mit Prüfung (abschaltbar nur ausdrücklich). Dazu der
+  gemeinsame HTTP-Client der Module (Verbindung zur geprüften Adresse, höchstens drei Weiterleitungen, 1 MiB je
+  Antwort), den nginx, Apache und der Prometheus-Scraper nutzen.
 - **Tests zuerst:** Testserver für Status, Zeitüberschreitung, Weiterleitung nach außen (abgelehnt), zu große Antwort.
 - **Abhängig von:** M5-03
 
@@ -5332,12 +5363,12 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 #### ☐ M5-11 – nginx · A · S
 - **Ziel:** `stub_status` (Verbindungen, Anfragen); Discovery über Port und Prozess; nginx im E2E-Compose.
 - **Tests zuerst:** Fixtures je Version, kaputte und zu große Antworten.
-- **Abhängig von:** M5-03, M5-04
+- **Abhängig von:** M5-03, M5-04, M5-08
 
 #### ☐ M5-12 – Apache httpd · A · S
 - **Ziel:** `server-status?auto` (Worker, Anfragen, Bytes); Discovery.
 - **Tests zuerst:** Fixtures je Version (Debian, RHEL-Familie), kaputte Antworten.
-- **Abhängig von:** M5-03, M5-04
+- **Abhängig von:** M5-03, M5-04, M5-08
 
 #### ☐ M5-13 – PostgreSQL · A · M 🔒
 - **Ziel:** Verbindungen, TPS, Cache-Hit, Replikations-Lag, Datenbankgrößen, Locks mit der Rolle `pg_monitor`;
@@ -5379,7 +5410,7 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Ziel:** beliebige `/metrics`-Endpunkte unter dem lokalen Veto, Grenze der Serien und Labels je Endpunkt, Namen mit
   Präfix gegen Kollisionen mit den eigenen Metriken.
 - **Tests zuerst:** Fixtures des Textformats (und OpenMetrics), Fuzz-Ziel für den Parser, zu viele Serien.
-- **Abhängig von:** M5-03
+- **Abhängig von:** M5-03, M5-08
 
 #### ☐ M5-20 – Standardregeln der Module · S · M
 - **Ziel:** Regeln je Modul (Skill `sermon-add-alert-rule`): Dienst nicht erreichbar, Zertifikat läuft in 21 bzw.

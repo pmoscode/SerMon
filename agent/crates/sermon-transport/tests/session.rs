@@ -704,7 +704,10 @@ async fn fetches_a_release_and_says_when_a_session_stands() {
     let sink = Arc::new(FakeCommands::default());
     let mut setup = Setup::new();
     setup.commands = Some(sink.clone());
-    setup.tweak = |c| c.install_method = InstallMethod::Script;
+    setup.tweak = |c| {
+        c.install_method = InstallMethod::Script;
+        c.modules = vec!["nginx".into(), "redis".into()];
+    };
     let harness = setup.start().await;
     assert!(
         harness
@@ -714,6 +717,11 @@ async fn fetches_a_release_and_says_when_a_session_stands() {
     );
     let hello = harness.api.sessions()[0].hello.clone().unwrap();
     assert_eq!(hello.install_method(), InstallMethod::Script);
+    assert_eq!(
+        hello.modules,
+        ["nginx", "redis"],
+        "ADR 0039: the modules built in"
+    );
     let deadline = std::time::Instant::now() + WAIT;
     while sink.1.load(std::sync::atomic::Ordering::SeqCst) == 0
         && std::time::Instant::now() < deadline

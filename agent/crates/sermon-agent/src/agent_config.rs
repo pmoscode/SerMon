@@ -16,8 +16,9 @@ use std::sync::Arc;
 use prost::Message;
 use regex::{Regex, RegexBuilder};
 use sermon_logs::record::Severity;
+use sermon_modules::runtime::{MAX_INTERVAL, MIN_INTERVAL, Spec};
 use sermon_security::{Redactor, RuleSpec};
-use sermon_transport::proto::agent::v1::{ConfigApplied, ConfigUpdate, LogFileGlob};
+use sermon_transport::proto::agent::v1::{ConfigApplied, ConfigUpdate, LogFileGlob, ModuleConfig};
 use sermon_transport::session::ConfigSink;
 use tokio::sync::watch;
 
@@ -32,6 +33,9 @@ const MAX_REGEX_BYTES: usize = 1024;
 const REGEX_SIZE_LIMIT: usize = 256 * 1024;
 /// Longest reason sent back to the server.
 const MAX_ERROR_BYTES: usize = 1024;
+/// Bounds of the protocol's `ModuleConfig` (ADR 0039).
+const MAX_MODULES: usize = 32;
+const MAX_MODULE_JSON: usize = 16384;
 
 /// A file glob of the configuration (M3-05 reads them).
 #[derive(Debug, Clone)]
@@ -84,6 +88,8 @@ pub struct Active {
     pub logs: LogSelection,
     /// The built-in patterns and the rules of the organization.
     pub redactor: Redactor,
+    /// The modules of the node's group (ADR 0039); the runtime checks each against its schema.
+    pub modules: Vec<Spec>,
 }
 
 /// Checks `update` and builds what the agent uses; the error is the reason for the server.
@@ -137,8 +143,10 @@ pub fn compile(update: &ConfigUpdate, allow_logs: bool) -> Result<Active, String
         }
         other => other.to_string(),
     })?;
+    let modules = modules(&config.modules)?;
     Ok(Active {
         version: update.version,
+        modules,
         logs: LogSelection {
             enabled: logs.enabled && allow_logs,
             min_severity,
@@ -147,6 +155,51 @@ pub fn compile(update: &ConfigUpdate, allow_logs: bool) -> Result<Active, String
         },
         redactor,
     })
+}
+
+fn modules(modules: &[ModuleConfig]) -> Result<Vec<Spec>, String> {
+    if modules.len() > MAX_MODULES {
+        return Err(format!("more than {MAX_MODULES} modules"));
+    }
+    let mut seen = BTreeSet::new();
+    modules
+        .iter()
+        .map(|m| {
+            let mut bytes = m.id.bytes();
+            let valid = m.id.len() <= 32
+                && bytes.next().is_some_and(|b| b.is_ascii_lowercase())
+                && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+            if !valid {
+                return Err("not a module ID".to_owned());
+            }
+            if !seen.insert(m.id.as_str()) {
+                return Err(format!("module {}: twice", m.id));
+            }
+            let interval = m
+                .interval
+                .map(|d| {
+                    u64::try_from(d.seconds)
+                        .ok()
+                        .filter(|_| d.nanos == 0)
+                        .map(std::time::Duration::from_secs)
+                        .filter(|d| (MIN_INTERVAL..=MAX_INTERVAL).contains(d))
+                        .ok_or_else(|| format!("module {}: interval of 10 s to 1 h", m.id))
+                })
+                .transpose()?;
+            if m.config_json.len() > MAX_MODULE_JSON {
+                return Err(format!(
+                    "module {}: configuration over {MAX_MODULE_JSON} bytes",
+                    m.id
+                ));
+            }
+            Ok(Spec {
+                id: m.id.clone(),
+                enabled: m.enabled,
+                interval,
+                config_json: m.config_json.clone(),
+            })
+        })
+        .collect()
 }
 
 fn file_spec(glob: &LogFileGlob) -> Result<FileSpec, String> {
@@ -180,6 +233,7 @@ fn file_spec(glob: &LogFileGlob) -> Result<FileSpec, String> {
 pub struct ConfigStore {
     file: PathBuf,
     allow_logs: bool,
+    allow_modules: bool,
     active: watch::Sender<Arc<Active>>,
 }
 
@@ -187,7 +241,7 @@ impl ConfigStore {
     /// The store with the configuration from `file`. A missing, damaged or no longer valid file
     /// starts without one (version 0): the server sends its configuration again.
     #[must_use]
-    pub fn open(file: PathBuf, allow_logs: bool) -> Self {
+    pub fn open(file: PathBuf, allow_logs: bool, allow_modules: bool) -> Self {
         let stored = match fs::read(&file) {
             Ok(bytes) => ConfigUpdate::decode(bytes.as_slice())
                 .map_err(|error| error.to_string())
@@ -206,6 +260,7 @@ impl ConfigStore {
         Self {
             file,
             allow_logs,
+            allow_modules,
             active,
         }
     }
@@ -242,8 +297,7 @@ impl ConfigSink for ConfigStore {
             version: update.version,
             error: cut(error, MAX_ERROR_BYTES),
             logs_vetoed: !self.allow_logs,
-            // The veto of the modules comes with their runtime (M5-03).
-            modules_vetoed: false,
+            modules_vetoed: !self.allow_modules,
         }
     }
 }
@@ -283,7 +337,9 @@ fn cut(mut text: String, max: usize) -> String {
 mod tests {
     use std::os::unix::fs::PermissionsExt;
 
-    use sermon_transport::proto::agent::v1::{AgentConfig, LogConfig, LogSeverity, RedactionRule};
+    use sermon_transport::proto::agent::v1::{
+        AgentConfig, LogConfig, LogSeverity, ModuleConfig, RedactionRule,
+    };
 
     use super::*;
 
@@ -307,6 +363,103 @@ mod tests {
         ConfigUpdate {
             version,
             config: Some(config),
+        }
+    }
+
+    fn module(id: &str) -> ModuleConfig {
+        ModuleConfig {
+            id: id.into(),
+            enabled: true,
+            interval: Some(prost_types::Duration {
+                seconds: 60,
+                nanos: 0,
+            }),
+            config_json: r#"{"url":"http://127.0.0.1/stub_status"}"#.into(),
+        }
+    }
+
+    // ADR 0039: the modules of the group are taken as they come – their schema is the runtime's –
+    // within the protocol's bounds; one outside them refuses the configuration like any other part.
+    #[test]
+    fn takes_the_modules_within_the_protocols_bounds() {
+        let active = compile(
+            &update(1, |c| {
+                c.modules = vec![
+                    module("nginx"),
+                    ModuleConfig {
+                        enabled: false,
+                        interval: None,
+                        ..module("redis")
+                    },
+                ];
+            }),
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            active.modules,
+            [
+                Spec {
+                    id: "nginx".into(),
+                    enabled: true,
+                    interval: Some(std::time::Duration::from_mins(1)),
+                    config_json: r#"{"url":"http://127.0.0.1/stub_status"}"#.into(),
+                },
+                Spec {
+                    id: "redis".into(),
+                    enabled: false,
+                    interval: None,
+                    config_json: r#"{"url":"http://127.0.0.1/stub_status"}"#.into(),
+                }
+            ]
+        );
+        let seconds = |s: i64| prost_types::Duration {
+            seconds: s,
+            nanos: 0,
+        };
+        for (name, modules, why) in [
+            (
+                "twice",
+                vec![module("nginx"), module("nginx")],
+                "module nginx: twice",
+            ),
+            ("id", vec![module("../x")], "not a module ID"),
+            (
+                "interval",
+                vec![ModuleConfig {
+                    interval: Some(seconds(5)),
+                    ..module("nginx")
+                }],
+                "interval",
+            ),
+            (
+                "interval long",
+                vec![ModuleConfig {
+                    interval: Some(seconds(3601)),
+                    ..module("nginx")
+                }],
+                "interval",
+            ),
+            (
+                "json",
+                vec![ModuleConfig {
+                    config_json: "x".repeat(16385),
+                    ..module("nginx")
+                }],
+                "16384",
+            ),
+            (
+                "count",
+                (0..33).map(|i| module(&format!("m{i}"))).collect(),
+                "more than 32",
+            ),
+        ] {
+            let r = compile(&update(1, |c| c.modules = modules), true);
+            assert!(
+                r.as_ref().is_err_and(|e| e.contains(why)),
+                "{name}: {:?}",
+                r.err()
+            );
         }
     }
 
@@ -468,7 +621,7 @@ mod tests {
     fn stores_applies_and_survives_a_restart() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("agent-config.pb");
-        let store = ConfigStore::open(file.clone(), true);
+        let store = ConfigStore::open(file.clone(), true, true);
         assert_eq!(store.version(), 0);
         let mut seen = store.subscribe();
 
@@ -485,7 +638,7 @@ mod tests {
             0o600
         );
 
-        let restarted = ConfigStore::open(file.clone(), true);
+        let restarted = ConfigStore::open(file.clone(), true, true);
         assert_eq!(restarted.version(), 3);
         assert_eq!(
             restarted.current().logs.min_severity,
@@ -497,7 +650,7 @@ mod tests {
     fn a_rejected_configuration_keeps_the_previous_one() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("agent-config.pb");
-        let store = ConfigStore::open(file.clone(), false);
+        let store = ConfigStore::open(file.clone(), false, false);
         store.apply(update(3, |_| {}));
         let stored = fs::read(&file).unwrap();
         let seen = store.subscribe();
@@ -510,6 +663,7 @@ mod tests {
         assert_eq!(answer.version, 4);
         assert!(answer.error.starts_with("rule 1:"), "{}", answer.error);
         assert!(answer.logs_vetoed, "the veto is reported with every answer");
+        assert!(answer.modules_vetoed, "the modules' veto too (ADR 0039)");
         assert_eq!(store.version(), 3);
         assert_eq!(
             fs::read(&file).unwrap(),
@@ -524,10 +678,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("agent-config.pb");
         fs::write(&file, b"\xff\xff\xff not protobuf").unwrap();
-        assert_eq!(ConfigStore::open(file.clone(), true).version(), 0);
+        assert_eq!(ConfigStore::open(file.clone(), true, true).version(), 0);
         // Stored by an older agent but invalid for this one: the same.
         fs::write(&file, update(5, |c| c.logs = None).encode_to_vec()).unwrap();
-        assert_eq!(ConfigStore::open(file, true).version(), 0);
+        assert_eq!(ConfigStore::open(file, true, true).version(), 0);
     }
 
     #[test]

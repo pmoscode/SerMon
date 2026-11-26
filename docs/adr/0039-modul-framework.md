@@ -100,13 +100,13 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
 | `module_targets` | `["127.0.0.0/8", "::1/128"]` | Netze, mit denen sich Module verbinden dürfen |
 | `module_sockets` | `["/run", "/var/run"]` | Präfixe erlaubter Unix-Sockets |
 | `module_file_prefixes` | `["/etc/ssl", "/etc/pki", "/etc/letsencrypt"]` | Präfixe lesbarer Dateien (Zertifikate) |
-| `allow_docker_socket` | `false` | der Docker-Socket ist root-äquivalent (O4), eigens freizugeben |
+| `allow_docker_socket` | `false` | der Docker-Socket ist root-äquivalent (O4), eigens freizugeben; dasselbe gilt für `podman.sock` und `containerd.sock` |
 
 - Ein Hostname wird einmal aufgelöst; **jede** Adresse muss erlaubt sein, verbunden wird mit der geprüften Adresse
   (kein DNS-Rebinding zwischen Prüfung und Verbindung). Weiterleitungen folgen nur innerhalb der erlaubten Ziele,
   höchstens drei.
 - Pfade wie bei den Log-Globs (ADR 0030, M3-05): segmentweise, Symlinks aufgelöst und erneut geprüft; immer gesperrt
-  bleiben State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys`, `/dev`.
+  bleiben State-Verzeichnis, `/etc/sermon`, `/proc`, `/sys`, `/dev` und `/run/sermon` (Socket des Root-Helpers).
 - Der Server erfährt das Veto (`vetoed` bzw. `invalid_config: Ziel nicht erlaubt`) und die UI zeigt es.
 
 ### Discovery

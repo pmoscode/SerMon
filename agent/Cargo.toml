@@ -76,6 +76,7 @@ sermon-collectors = { path = "crates/sermon-collectors" }
 sermon-core = { path = "crates/sermon-core" }
 sermon-helper-proto = { path = "crates/sermon-helper-proto" }
 sermon-logs = { path = "crates/sermon-logs" }
+sermon-modules = { path = "crates/sermon-modules" }
 sermon-security = { path = "crates/sermon-security" }
 sermon-testserver = { path = "crates/sermon-testserver" }
 sermon-transport = { path = "crates/sermon-transport" }

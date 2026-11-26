@@ -11,4 +11,19 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The module `simulate` for tests and demos (ADR 0039); `sermon-agent`'s feature `simulate`.
+simulate = []
+
 [dependencies]
+regex.workspace = true
+sermon-core.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["net", "rt"] }
+tokio-util.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["net", "rt", "test-util"] }

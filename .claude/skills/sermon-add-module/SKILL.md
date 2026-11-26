@@ -5,18 +5,30 @@ description: Add a built-in integration module to the SerMon agent (e.g. nginx, 
 
 # Add an integration module
 
-Reference: KONZEPT.md §15. Crate: `agent/crates/sermon-modules/src/<module>/`, behind a Cargo feature (enabled in release builds), **disabled by default at runtime**.
+Reference: KONZEPT.md §15, ADR 0039. Crate: `agent/crates/sermon-modules/src/<module>.rs` (or `<module>/`),
+registered in `builtin()` (`src/lib.rs`), **disabled by default at runtime**. The runtime (`src/runtime.rs`) runs each
+enabled module in its own task: time budget per run (≤ 30 s), ≤ 256 samples, panics and hangs stay with the module,
+health `ok`/`error`/`timeout`/`hung`/`crashed`/`invalid_config`/`vetoed`. `src/simulate.rs` (feature `simulate`) is
+the smallest complete example.
 
 ## Contract
 ```rust
-pub trait Module: Send + Sync {
-    fn id(&self) -> &'static str;                      // "nginx"
-    fn config_schema(&self) -> &'static str;           // JSON schema → UI form
-    fn validate(&self, cfg: &serde_json::Value) -> Result<ModuleConfig, ConfigError>;
-    fn discover(&self, host: &HostFacts) -> Option<DiscoveryHint>; // suggestion only, never auto-enable
-    async fn collect(&self, ctx: &ModuleCtx) -> Result<ModuleOutput, ModuleError>;
+pub trait Module: Send + Sync + 'static {
+    fn id(&self) -> &'static str;                      // "nginx": metrics are sermon_nginx_…
+    fn schema(&self) -> &'static str;                  // JSON schema, fixed subset (src/schema.rs) → UI form
+    fn default_interval(&self) -> Duration;            // ≥ 10 s
+    // config is already checked against the schema, defaults filled in; secrets in setup.secrets
+    fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError>;
+}
+pub trait Instance: Send + 'static {
+    fn timeout(&self) -> Duration;                     // budget of a run, default 5 s
+    fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>>;
 }
 ```
+- Everything reached goes through the veto (`setup.veto`): `resolve(host, port)` (connect to the returned addresses,
+  not the name), `socket(path)`, `file(path)`. A refusal is `BuildError::Vetoed` / `RunError::Vetoed`.
+- Blocking work only via `run.blocking(...)`, so the runtime sees a hung run.
+- Error texts are plain, without credentials (they are redacted, but don't rely on it).
 
 ## Steps (TDD – `sermon-tdd`)
 1. **Design metrics** with `sermon_<module>_<name>_<unit>` naming and bounded labels (see `sermon-add-collector`).

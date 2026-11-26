@@ -14,7 +14,7 @@ workspace = true
 [features]
 # `sermon-agent simulate`: virtual nodes for development and load tests (`just simulate`,
 # `just e2e-agent`). Never in release builds: it enrolls many identities with one token.
-simulate = ["dep:serde_json"]
+simulate = ["dep:serde_json", "sermon-modules/simulate"]
 
 [dependencies]
 rustix.workspace = true
@@ -27,6 +27,7 @@ sermon-buffer.workspace = true
 sermon-collectors.workspace = true
 sermon-core.workspace = true
 sermon-logs.workspace = true
+sermon-modules.workspace = true
 sermon-security.workspace = true
 sermon-helper-proto.workspace = true
 prost.workspace = true

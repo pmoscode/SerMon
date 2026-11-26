@@ -47,6 +47,7 @@ KONZEPT §2 mit angepasst.
 | [0037](0037-anomalie-erkennung.md) | Anomalie-Erkennung: Baselines, Ergebnisse und Worker | accepted | D16, D13 |
 | [0038](0038-allocator-des-agents.md) | Allocator des Agents: jemalloc statt musls mallocng | accepted | D1 |
 | [0039](0039-modul-framework.md) | Modul-Framework: Laufzeit, Konfiguration, Veto und Zugangsdaten | accepted | D18 |
+| [0040](0040-eigene-dashboards.md) | Eigene Dashboards: Modell, Rechte, Grid-Editor und Kiosk-Token | accepted | D3, D11, D27 |
 
 ## Entscheidungslog → ADR
 
@@ -54,7 +55,7 @@ KONZEPT §2 mit angepasst.
 |---|---|
 | D1 Agent in Rust | 0014, 0002, 0038 |
 | D2 Server in Go | 0014 |
-| D3 SvelteKit-SPA | 0014, 0003 |
+| D3 SvelteKit-SPA | 0014, 0003, 0040 |
 | D4 Push mit Puffer | 0015 |
 | D5 Self-hosted, mandantenfähig | 0015, 0007 |
 | D6 < 50 Nodes | 0015, 0001 |
@@ -62,7 +63,7 @@ KONZEPT §2 mit angepasst.
 | D8 Einzeiler mit Token | 0016, 0012 |
 | D9 Privilegientrennung | 0016, 0012 |
 | D10 Authentifizierung | 0017, 0033, 0034 |
-| D11 Rechte | 0017 |
+| D11 Rechte | 0017, 0040 |
 | D12 Retention | 0018 |
 | D13 Storage | 0001, 0031, 0032, 0037 |
 | D14 Alert-Kanäle | 0019 |

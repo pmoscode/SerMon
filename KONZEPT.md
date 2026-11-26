@@ -442,6 +442,7 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 | Recht                                       | Viewer | Operator | Admin (Org) |
 |---------------------------------------------|:------:|:--------:|:-----------:|
 | Nodes, Metriken, Dashboards ansehen         |   ✓   |    ✓    |     ✓      |
+| Eigene Dashboards anlegen und teilen²       |   ✓   |    ✓    |     ✓      |
 | Logs und Security-Events ansehen            |  ✓¹   |    ✓    |     ✓      |
 | Live-Ansicht                                |   ✓   |    ✓    |     ✓      |
 | Alerts quittieren und stummschalten         |   –    |    ✓    |     ✓      |
@@ -451,8 +452,10 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 | Regeln, Kanäle, Policies, Module bearbeiten |   –    |    –     |     ✓      |
 | User, Gruppen, Rollen verwalten             |   –    |    –     |     ✓      |
 | Audit-Log ansehen                           |   –    |    –     |     ✓      |
+| Geteilte Dashboards anderer ändern, Kiosk-Tokens |   –    |    –     |     ✓      |
 
 ¹ Pro Org abschaltbar („Viewer dürfen keine Logs sehen“), weil Logs personenbezogene Daten enthalten.
+² Die Widgets zeigen jedem Betrachter nur Daten seiner Gruppen ([ADR 0040](docs/adr/0040-eigene-dashboards.md)).
 
 Rollen werden **pro Node-Gruppe** vergeben (oder für `*` = alle Gruppen der Org). Die Prüfung erfolgt ausschließlich
 serverseitig in der `app`-Schicht über eine zentrale `authz.Policy` (testbar als Tabelle).
@@ -1309,12 +1312,25 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
    Cluster-Mitglieder).
 9. **Anomalien:** Nodes nach Anomalie-Rate, „Was war ungewöhnlich?“ für einen Zeitraum.
 
+### Eigene Dashboards und Kiosk (M5, [ADR 0040](docs/adr/0040-eigene-dashboards.md))
+
+- **Eigene Dashboards:** Grid-Layout mit Drag & Drop und Tastatur, Widgets (Zeitreihe, Gauge, Stat, Tabelle,
+  Log-Stream, Alert-Liste), Variablen (Node/Gruppe), Teilen innerhalb der Org, Export/Import als JSON.
+    - Modell: Protobuf-Nachricht `DashboardSpec` (Version 1), ihr JSON ist das Format von Export und Import (streng
+      gelesen); 12 Spalten, höchstens 30 Widgets, 4 Variablen, 20 feste Nodes je Widget, 32 KiB je Dokument, 200
+      Dashboards je Org.
+    - Rechte: privat oder in der Org geteilt; ändern darf der Eigentümer, geteilte zusätzlich Admins für alle Gruppen.
+      Die Widgets lesen über die vorhandenen Leser mit den Rechten des Betrachters; Speichern und Import lehnen
+      fremde oder unsichtbare Node- und Gruppen-IDs ab.
+    - Editor: eigenes Grid auf CSS Grid (kein Fremdpaket, CSP ohne neue Hashes), Pfeiltasten verschieben,
+      Umschalt + Pfeiltasten ändern die Größe.
+- **Kiosk-/TV-Modus:** Vollbild, Auto-Rotation, ohne Bedienelemente; Zugriff über einen **schreibgeschützten,
+  widerrufbaren Kiosk-Token**, der an Dashboard und Org gebunden ist (256 Bit, nur als SHA-256 gespeichert, Ablauf,
+  Audit; im URL-Fragment, nie in der Query). Er öffnet nur den `KioskService` mit dem Dokument und den Widgets seines
+  Dashboards; die Abfragen stellt der Server aus dem gespeicherten Widget zusammen.
+
 ### Ausbau (v1.x)
 
-- **Eigene Dashboards:** Grid-Layout mit Drag & Drop, Widgets (Zeitreihe, Gauge, Stat, Tabelle, Log-Stream,
-  Alert-Liste), Variablen (Node/Gruppe), Teilen innerhalb der Org, Export/Import als JSON.
-- **Kiosk-/TV-Modus:** Vollbild, Auto-Rotation, ohne Bedienelemente; Zugriff über einen **schreibgeschützten,
-  widerrufbaren Kiosk-Token**, der an Dashboard und Org gebunden ist.
 - **SLA-/Uptime-Report:** monatlich als PDF/HTML pro Gruppe.
 
 ---

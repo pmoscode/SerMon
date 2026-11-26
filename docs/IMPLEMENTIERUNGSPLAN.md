@@ -5429,7 +5429,21 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 
 ### 8.4 Eigene Dashboards (E5.4)
 
-#### ☐ M5-22 – ADR Eigene Dashboards · X · S
+#### ☑ M5-22 – ADR Eigene Dashboards · X · S
+> Erledigt ([ADR 0040](adr/0040-eigene-dashboards.md); KONZEPT §7, §16):
+> - **Modell:** Protobuf-Nachricht `DashboardSpec` (Version 1), ihr kanonisches JSON ist das Format von Export und
+>   Import (streng gelesen, unbekannte Felder abgelehnt); 12 Spalten ohne Überlappung, sechs Widget-Arten mit genau
+>   einer Abfrage (Metrik mit Label-Filter, Suchtext, Schweregrade), Ziel feste Nodes, Gruppe oder Variable.
+> - **Grenzen:** 30 Widgets, 4 Variablen, 20 feste Nodes je Widget, 32 KiB je Dokument, 200 Dashboards je Org,
+>   10 offene Kiosk-Tokens je Dashboard; die Leser behalten ihre eigenen Grenzen.
+> - **Rechte:** privat oder geteilt; ändern der Eigentümer, geteilte auch Admins für alle Gruppen
+>   (`manage_dashboards`); Daten immer mit den Rechten des Betrachters über die vorhandenen Leser; Speichern und
+>   Import lehnen fremde oder unsichtbare IDs ab; Revision gegen gleichzeitiges Ändern; Step-up nur für Kiosk-Tokens.
+> - **Editor:** eigenes Grid auf CSS Grid statt `gridstack` (~26 KiB, setzt Styles selbst) oder
+>   `svelte-grid-extended` (nur Svelte 4): kein Fremdpaket, CSP über CSSOM ohne neue Hashes, Tastatur von Anfang an.
+> - **Kiosk:** Token `smk_` mit 256 Bit, nur SHA-256 gespeichert, im URL-Fragment, als Header gesendet; an ein
+>   geteiltes Dashboard gebunden, liest mit den aktuellen Rechten des anlegenden Admins; eigener `KioskService`, der
+>   nur das Dokument und Widgets daraus liefert (Abfrage aus dem gespeicherten Widget).
 - **Ziel:** ADR: JSON-Modell (Layout, Widgets, Variablen, Version), Grenzen (Widgets, Abfragen, Größe), Rechte (privat
   oder in der Org geteilt, wer ändern darf), Import und Export, Wahl des Grid-Editors mit Blick auf Bundle-Budget,
   Bedienung per Tastatur und Lizenz.

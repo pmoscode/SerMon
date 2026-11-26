@@ -69,9 +69,15 @@ export function yRange(
 	max: number | null,
 	shared?: number
 ): [number, number] {
+	if (unit === 'boolean') return [0, 1];
 	const low = Math.min(0, min ?? 0);
 	if (shared !== undefined && shared > low) return [low, Math.max(shared, max ?? shared)];
 	if (max !== null && min !== null && max > min) return [low, max];
 	if (unit === 'ratio_ppm') return [low, Math.max(1_000_000, max ?? 0)];
 	return [low, (max ?? 0) + 1];
+}
+
+/** Fixed ticks of the y axis: a boolean has "no" and "yes" only; otherwise uPlot chooses. */
+export function ySplits(unit: Unit): number[] | undefined {
+	return unit === 'boolean' ? [0, 1] : undefined;
 }

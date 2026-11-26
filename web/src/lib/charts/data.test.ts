@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { align, summarize, yRange } from './data.js';
+import { align, summarize, yRange, ySplits } from './data.js';
 
 describe('align', () => {
 	it('puts series of different nodes on one time axis with gaps', () => {
@@ -68,6 +68,16 @@ describe('yRange', () => {
 		expect(yRange('ratio_ppm', 300_000, 300_000)).toEqual([0, 1_000_000]);
 		expect(yRange('count', 3, 3)).toEqual([0, 4]);
 		expect(yRange('bytes', null, null)).toEqual([0, 1]);
+	});
+
+	// M5-32: up/down values (sermon_nginx_up) read "no" and "yes", nothing between or above.
+	it('spans exactly no to yes for booleans, with a tick at each', () => {
+		expect(yRange('boolean', 1, 1)).toEqual([0, 1]);
+		expect(yRange('boolean', 0, 1)).toEqual([0, 1]);
+		expect(yRange('boolean', null, null)).toEqual([0, 1]);
+		expect(yRange('boolean', 1, 1, 1)).toEqual([0, 1]);
+		expect(ySplits('boolean')).toEqual([0, 1]);
+		expect(ySplits('count')).toBeUndefined();
 	});
 
 	// M5-28: side by side, every chart of a metric has the same scale.

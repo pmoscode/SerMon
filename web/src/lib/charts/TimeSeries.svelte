@@ -9,7 +9,7 @@
 	import { timeRange } from '#lib/stores/timerange.svelte.js';
 	import { isDark, themeState } from '#lib/theme/theme.svelte.js';
 	import type { Band } from '#lib/anomalies/band.js';
-	import { align, summarize, yRange, type ChartSeries } from './data.js';
+	import { align, summarize, yRange, ySplits, type ChartSeries } from './data.js';
 
 	interface Props {
 		/** Visible title, also the accessible name of the chart. */
@@ -125,7 +125,8 @@
 					// Wide enough for the longest label (e.g. durations), about 7 px per character.
 					size: (_u, values) =>
 						Math.max(48, 16 + 7 * Math.max(0, ...(values ?? []).map((v) => String(v).length))),
-					values: (_u, splits) => splits.map(format)
+					values: (_u, splits) => splits.map(format),
+					...(ySplits(unit) ? { splits: () => ySplits(unit) ?? [] } : {})
 				}
 			],
 			series: [

@@ -63,3 +63,16 @@ func TestCommandMessage_CarriesTheTimeLeft(t *testing.T) {
 		t.Errorf("refresh = %v, %v", msg, ok)
 	}
 }
+
+// M5-02: the batches of the modules are acknowledged before the server uses them (M5-06), not
+// taken for metrics.
+func TestToBatch_ModuleBatchesAreUnhandledForNow(t *testing.T) {
+	for name, in := range map[string]*agentv1.Batch{
+		"health": {Seq: 7, Content: &agentv1.Batch_ModuleHealth{ModuleHealth: &agentv1.ModuleHealthReport{CollectedAt: timestamppb.Now()}}},
+		"hints":  {Seq: 7, Content: &agentv1.Batch_DiscoveryHints{DiscoveryHints: &agentv1.DiscoveryHints{CollectedAt: timestamppb.Now()}}},
+	} {
+		if b := toBatch(in); !b.Unhandled || b.Seq != 7 || len(b.Samples) != 0 {
+			t.Errorf("%s: %+v", name, b)
+		}
+	}
+}

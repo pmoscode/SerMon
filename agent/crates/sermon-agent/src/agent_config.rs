@@ -242,6 +242,8 @@ impl ConfigSink for ConfigStore {
             version: update.version,
             error: cut(error, MAX_ERROR_BYTES),
             logs_vetoed: !self.allow_logs,
+            // The veto of the modules comes with their runtime (M5-03).
+            modules_vetoed: false,
         }
     }
 }
@@ -299,6 +301,7 @@ mod tests {
             redaction_rules: vec![RedactionRule {
                 pattern: r"customer-(?P<secret>\d{6})".into(),
             }],
+            modules: Vec::new(),
         };
         change(&mut config);
         ConfigUpdate {

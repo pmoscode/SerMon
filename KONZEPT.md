@@ -282,7 +282,8 @@ eine Fake-Implementierung für Tests.
       Datei verifiziert/unverifiziert oder keine), `Heartbeat`,
       `RotateCertificate{csr}` (neues Schlüsselpaar, §6 „Schlüsselrotation“), `Batch{seq, …}` mit genau einem
       Inhalt: `MetricBatch`, `SecurityEventBatch`, `LogBatch` (M3-01), `UpdateReport` (verfügbare Updates, Reboot nötig,
-      Rechte des Helpers) und `CommandResult{run_id, phase, exit_code, output}` (M4-05); dazu `ConfigApplied` (Antwort
+      Rechte des Helpers), `CommandResult{run_id, phase, exit_code, output}` (M4-05), `ModuleHealthReport` und
+      `DiscoveryHints` (M5-02, ADR 0039); dazu `ConfigApplied` (Antwort
       auf `ConfigUpdate`) und `ProcessSnapshot` bzw. `LiveViewRefused{reason}` (Antwort auf `StartLiveView`, M3-13).
       `CommandResult` ist gepuffert wie alle Batches: Das Ergebnis übersteht den Neustart des Agents, auch den durch
       sein eigenes Update; es kommt einmal je Phase (gestartet, erfolgreich, fehlgeschlagen, abgelehnt …).
@@ -292,7 +293,7 @@ eine Fake-Implementierung für Tests.
       `StartLiveView{interval, hide_cmdline}` (eine Lease: ohne Erneuerung endet die Live-Ansicht nach 60 s, ebenso mit
       der Session), `StopLiveView`, `RefreshUpdateInfo`, `RunUpdate{run_id, scope}`, `RebootNode{run_id, reason}` und
       `SelfUpdate{run_id, version}` (M4-05; der Reboot nach einem Update ist ein eigener Befehl), `CancelRun{run_id}`
-      (M4-31), jeder Lauf mit
+      (M4-31), `ModuleSecrets` (M5-02: Zugangsdaten der Module, nur im Speicher des Agents), jeder Lauf mit
       `valid_for_seconds` (M4-31): so lange ab Ankunft darf der Agent ihn starten, bei einem Rollout höchstens bis
       zum Ende des Fensters; danach meldet er ihn als fehlgeschlagen. Agents ohne diese Befehle ignorieren sie wie
       jede unbekannte Nachricht.

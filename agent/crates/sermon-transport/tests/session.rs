@@ -559,6 +559,7 @@ impl ConfigSink for FakeConfig {
                 version: 13,
                 error: "rule 1: look-around is not supported".into(),
                 logs_vetoed: true,
+                modules_vetoed: false,
             };
         }
         *self.version.lock().unwrap() = update.version;
@@ -566,6 +567,7 @@ impl ConfigSink for FakeConfig {
             version: update.version,
             error: String::new(),
             logs_vetoed: true,
+            modules_vetoed: false,
         }
     }
 }
@@ -579,6 +581,7 @@ fn config_update(version: u64) -> Payload {
                 ..LogConfig::default()
             }),
             redaction_rules: Vec::new(),
+            modules: Vec::new(),
         }),
     })
 }

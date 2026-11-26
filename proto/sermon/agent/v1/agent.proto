@@ -137,6 +137,9 @@ message SessionResponse {
     // cancel_run withdraws a run sent before (M4-31): one still waiting for the helper is dropped
     // and reported refused; one the helper started runs to its end.
     CancelRun cancel_run = 13;
+    // module_secrets are the credentials of the node's modules (ADR 0039): after every Hello and
+    // when they change. The agent keeps them in memory only, never in its state or buffer.
+    ModuleSecrets module_secrets = 14;
   }
 }
 
@@ -159,6 +162,15 @@ message Hello {
   // install_method is how the agent was installed, from the path of its binary (ADR 0036):
   // only script installations update themselves.
   InstallMethod install_method = 5 [(buf.validate.field).enum.defined_only = true];
+  // modules are the IDs of the modules built into the agent (ADR 0039): the server offers only
+  // these for the node.
+  repeated string modules = 6 [(buf.validate.field).repeated = {
+    max_items: 64
+    unique: true
+    items: {
+      string: {pattern: "^[a-z][a-z0-9_]{0,31}$"}
+    }
+  }];
 }
 
 // InstallMethod is how the agent was installed.
@@ -300,6 +312,11 @@ message Batch {
     // self_update): buffered like all batches, so it survives a restart of the agent – also the
     // one its own update causes. Sent more than once for a run: once per phase.
     CommandResult command_result = 6;
+    // module_health is the state of the enabled modules (ADR 0039); the newest one counts.
+    ModuleHealthReport module_health = 7;
+    // discovery_hints are the modules the agent suggests for the host (ADR 0039); the newest
+    // list counts. Nothing is enabled by it.
+    DiscoveryHints discovery_hints = 8;
   }
 }
 
@@ -653,8 +670,33 @@ message ConfigUpdate {
 message AgentConfig {
   // logs selects the log entries to send (KONZEPT §10).
   LogConfig logs = 1 [(buf.validate.field).required = true];
+  option (buf.validate.message).cel = {
+    id: "unique_modules"
+    message: "every module must be configured at most once"
+    expression: "this.modules.all(m, this.modules.filter(n, n.id == m.id).size() == 1)"
+  };
+
   // redaction_rules are the organization's rules on top of the built-in ones (KONZEPT §10.3).
   repeated RedactionRule redaction_rules = 2 [(buf.validate.field).repeated.max_items = 32];
+  // modules are the modules of the node's group (ADR 0039); a module not listed is off. The
+  // agent checks each against its schema and its local veto and runs only those that pass.
+  repeated ModuleConfig modules = 3 [(buf.validate.field).repeated.max_items = 32];
+}
+
+// ModuleConfig configures one module of the agent.
+message ModuleConfig {
+  // id names the module, e.g. "nginx".
+  string id = 1 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+  // enabled runs the module; a module that is configured but off keeps its configuration.
+  bool enabled = 2;
+  // interval is how often the module collects; unset takes the module's default.
+  google.protobuf.Duration interval = 3 [(buf.validate.field).duration = {
+    gte: {seconds: 10}
+    lte: {seconds: 3600}
+  }];
+  // config_json is the module's configuration as a JSON object following its schema, without
+  // credentials (those come in ModuleSecrets).
+  string config_json = 4 [(buf.validate.field).string.max_bytes = 16384];
 }
 
 // LogConfig selects the log entries of a node.
@@ -712,6 +754,100 @@ message ConfigApplied {
   string error = 2 [(buf.validate.field).string.max_bytes = 1024];
   // logs_vetoed is set if agent.toml forbids sending logs (allow_logs = false).
   bool logs_vetoed = 3;
+  // modules_vetoed is set if agent.toml forbids modules (allow_modules = false, ADR 0039).
+  bool modules_vetoed = 4;
+}
+
+// ModuleSecrets are the credentials of the node's modules (ADR 0039), all of them: a field not
+// listed has none.
+message ModuleSecrets {
+  // secrets are the values per module and field.
+  repeated ModuleSecret secrets = 1 [(buf.validate.field).repeated.max_items = 64];
+}
+
+// ModuleSecret is one credential of a module, e.g. the password of the postgresql module.
+message ModuleSecret {
+  // module_id names the module.
+  string module_id = 1 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+  // field is the property of the module's schema marked writeOnly.
+  string field = 2 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,63}$"];
+  // value is the credential; never logged or stored by the agent.
+  string value = 3 [
+    debug_redact = true,
+    (buf.validate.field).string = {
+      min_len: 1
+      max_bytes: 4096
+    }
+  ];
+}
+
+// ModuleHealthReport is the state of the enabled modules.
+message ModuleHealthReport {
+  // collected_at is the agent's time of the report.
+  google.protobuf.Timestamp collected_at = 1 [(buf.validate.field).required = true];
+  // modules are the enabled modules, one entry each.
+  repeated ModuleHealth modules = 2 [(buf.validate.field).repeated.max_items = 32];
+}
+
+// ModuleHealth is the state of one module.
+message ModuleHealth {
+  // module_id names the module.
+  string module_id = 1 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+  // state is how the module does.
+  ModuleState state = 2 [(buf.validate.field).enum = {
+    defined_only: true
+    not_in: [0]
+  }];
+  // reason says why it doesn't run or failed, plain text without credentials, redacted.
+  string reason = 3 [(buf.validate.field).string.max_bytes = 256];
+  // last_success is when a run of the module last succeeded, if ever.
+  google.protobuf.Timestamp last_success = 4;
+}
+
+// ModuleState is how a module does.
+enum ModuleState {
+  // MODULE_STATE_UNSPECIFIED is invalid and must not be sent.
+  MODULE_STATE_UNSPECIFIED = 0;
+  // MODULE_STATE_OK: the last run succeeded.
+  MODULE_STATE_OK = 1;
+  // MODULE_STATE_ERROR: the last run failed (the service refused, wrong credentials, …).
+  MODULE_STATE_ERROR = 2;
+  // MODULE_STATE_TIMEOUT: the last run took longer than its budget.
+  MODULE_STATE_TIMEOUT = 3;
+  // MODULE_STATE_HUNG: a run doesn't return; no new one starts until it does.
+  MODULE_STATE_HUNG = 4;
+  // MODULE_STATE_CRASHED: the module panicked; it starts again after a pause.
+  MODULE_STATE_CRASHED = 5;
+  // MODULE_STATE_INVALID_CONFIG: the configuration doesn't follow the module's schema.
+  MODULE_STATE_INVALID_CONFIG = 6;
+  // MODULE_STATE_VETOED: agent.toml forbids it (allow_modules, a target outside module_targets).
+  MODULE_STATE_VETOED = 7;
+}
+
+// DiscoveryHints are modules the agent suggests for its host.
+message DiscoveryHints {
+  // collected_at is the agent's time of the list.
+  google.protobuf.Timestamp collected_at = 1 [(buf.validate.field).required = true];
+  // hints are the suggestions, one per module.
+  repeated DiscoveryHint hints = 2 [(buf.validate.field).repeated.max_items = 32];
+}
+
+// DiscoveryHint suggests a module and says why.
+message DiscoveryHint {
+  // module_id names the module, e.g. "nginx".
+  string module_id = 1 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+  // reasons are what the agent saw, each as kind:value – process:nginx, port:80,
+  // unit:nginx.service.
+  repeated string reasons = 2 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 8
+    items: {
+      string: {pattern: "^(process|port|unit):[A-Za-z0-9@._:-]{1,128}$"}
+    }
+  }];
+  // suggested_config_json is a configuration to start the form with (e.g. the port found), a
+  // JSON object; empty: the module's defaults.
+  string suggested_config_json = 3 [(buf.validate.field).string.max_bytes = 1024];
 }
 
 // StartLiveView starts the live view ("top", KONZEPT §9, M3-13): a ProcessSnapshot every

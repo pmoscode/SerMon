@@ -87,7 +87,7 @@ pub mod session_request {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionResponse {
     /// payload is the actual message; exactly one must be set.
-    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
+    #[prost(oneof="session_response::Payload", tags="1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14")]
     pub payload: ::core::option::Option<session_response::Payload>,
 }
 /// Nested message and enum types in `SessionResponse`.
@@ -141,6 +141,10 @@ pub mod session_response {
         /// and reported refused; one the helper started runs to its end.
         #[prost(message, tag="13")]
         CancelRun(super::CancelRun),
+        /// module_secrets are the credentials of the node's modules (ADR 0039): after every Hello and
+        /// when they change. The agent keeps them in memory only, never in its state or buffer.
+        #[prost(message, tag="14")]
+        ModuleSecrets(super::ModuleSecrets),
     }
 }
 /// Hello is the first message of every stream.
@@ -164,6 +168,10 @@ pub struct Hello {
     /// only script installations update themselves.
     #[prost(enumeration="InstallMethod", tag="5")]
     pub install_method: i32,
+    /// modules are the IDs of the modules built into the agent (ADR 0039): the server offers only
+    /// these for the node.
+    #[prost(string, repeated, tag="6")]
+    pub modules: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// HostFacts are static properties of the monitored host.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -255,7 +263,7 @@ pub struct Batch {
     #[prost(uint64, tag="1")]
     pub seq: u64,
     /// content is the data; exactly one must be set.
-    #[prost(oneof="batch::Content", tags="2, 3, 4, 5, 6")]
+    #[prost(oneof="batch::Content", tags="2, 3, 4, 5, 6, 7, 8")]
     pub content: ::core::option::Option<batch::Content>,
 }
 /// Nested message and enum types in `Batch`.
@@ -280,6 +288,13 @@ pub mod batch {
         /// one its own update causes. Sent more than once for a run: once per phase.
         #[prost(message, tag="6")]
         CommandResult(super::CommandResult),
+        /// module_health is the state of the enabled modules (ADR 0039); the newest one counts.
+        #[prost(message, tag="7")]
+        ModuleHealth(super::ModuleHealthReport),
+        /// discovery_hints are the modules the agent suggests for the host (ADR 0039); the newest
+        /// list counts. Nothing is enabled by it.
+        #[prost(message, tag="8")]
+        DiscoveryHints(super::DiscoveryHints),
     }
 }
 /// MetricBatch holds the samples of one collection tick (KONZEPT §8). Counters are already
@@ -627,6 +642,27 @@ pub struct AgentConfig {
     /// redaction_rules are the organization's rules on top of the built-in ones (KONZEPT §10.3).
     #[prost(message, repeated, tag="2")]
     pub redaction_rules: ::prost::alloc::vec::Vec<RedactionRule>,
+    /// modules are the modules of the node's group (ADR 0039); a module not listed is off. The
+    /// agent checks each against its schema and its local veto and runs only those that pass.
+    #[prost(message, repeated, tag="3")]
+    pub modules: ::prost::alloc::vec::Vec<ModuleConfig>,
+}
+/// ModuleConfig configures one module of the agent.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleConfig {
+    /// id names the module, e.g. "nginx".
+    #[prost(string, tag="1")]
+    pub id: ::prost::alloc::string::String,
+    /// enabled runs the module; a module that is configured but off keeps its configuration.
+    #[prost(bool, tag="2")]
+    pub enabled: bool,
+    /// interval is how often the module collects; unset takes the module's default.
+    #[prost(message, optional, tag="3")]
+    pub interval: ::core::option::Option<::prost_types::Duration>,
+    /// config_json is the module's configuration as a JSON object following its schema, without
+    /// credentials (those come in ModuleSecrets).
+    #[prost(string, tag="4")]
+    pub config_json: ::prost::alloc::string::String,
 }
 /// LogConfig selects the log entries of a node.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -676,6 +712,81 @@ pub struct ConfigApplied {
     /// logs_vetoed is set if agent.toml forbids sending logs (allow_logs = false).
     #[prost(bool, tag="3")]
     pub logs_vetoed: bool,
+    /// modules_vetoed is set if agent.toml forbids modules (allow_modules = false, ADR 0039).
+    #[prost(bool, tag="4")]
+    pub modules_vetoed: bool,
+}
+/// ModuleSecrets are the credentials of the node's modules (ADR 0039), all of them: a field not
+/// listed has none.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ModuleSecrets {
+    /// secrets are the values per module and field.
+    #[prost(message, repeated, tag="1")]
+    pub secrets: ::prost::alloc::vec::Vec<ModuleSecret>,
+}
+/// ModuleSecret is one credential of a module, e.g. the password of the postgresql module.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleSecret {
+    /// module_id names the module.
+    #[prost(string, tag="1")]
+    pub module_id: ::prost::alloc::string::String,
+    /// field is the property of the module's schema marked writeOnly.
+    #[prost(string, tag="2")]
+    pub field: ::prost::alloc::string::String,
+    /// value is the credential; never logged or stored by the agent.
+    #[prost(string, tag="3")]
+    pub value: ::prost::alloc::string::String,
+}
+/// ModuleHealthReport is the state of the enabled modules.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ModuleHealthReport {
+    /// collected_at is the agent's time of the report.
+    #[prost(message, optional, tag="1")]
+    pub collected_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// modules are the enabled modules, one entry each.
+    #[prost(message, repeated, tag="2")]
+    pub modules: ::prost::alloc::vec::Vec<ModuleHealth>,
+}
+/// ModuleHealth is the state of one module.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleHealth {
+    /// module_id names the module.
+    #[prost(string, tag="1")]
+    pub module_id: ::prost::alloc::string::String,
+    /// state is how the module does.
+    #[prost(enumeration="ModuleState", tag="2")]
+    pub state: i32,
+    /// reason says why it doesn't run or failed, plain text without credentials, redacted.
+    #[prost(string, tag="3")]
+    pub reason: ::prost::alloc::string::String,
+    /// last_success is when a run of the module last succeeded, if ever.
+    #[prost(message, optional, tag="4")]
+    pub last_success: ::core::option::Option<::prost_types::Timestamp>,
+}
+/// DiscoveryHints are modules the agent suggests for its host.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DiscoveryHints {
+    /// collected_at is the agent's time of the list.
+    #[prost(message, optional, tag="1")]
+    pub collected_at: ::core::option::Option<::prost_types::Timestamp>,
+    /// hints are the suggestions, one per module.
+    #[prost(message, repeated, tag="2")]
+    pub hints: ::prost::alloc::vec::Vec<DiscoveryHint>,
+}
+/// DiscoveryHint suggests a module and says why.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DiscoveryHint {
+    /// module_id names the module, e.g. "nginx".
+    #[prost(string, tag="1")]
+    pub module_id: ::prost::alloc::string::String,
+    /// reasons are what the agent saw, each as kind:value – process:nginx, port:80,
+    /// unit:nginx.service.
+    #[prost(string, repeated, tag="2")]
+    pub reasons: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// suggested_config_json is a configuration to start the form with (e.g. the port found), a
+    /// JSON object; empty: the module's defaults.
+    #[prost(string, tag="3")]
+    pub suggested_config_json: ::prost::alloc::string::String,
 }
 /// StartLiveView starts the live view ("top", KONZEPT §9, M3-13): a ProcessSnapshot every
 /// interval. It is a lease: the agent stops 60 s after the last StartLiveView, at a StopLiveView
@@ -1278,6 +1389,59 @@ impl LogSeverity {
             "LOG_SEVERITY_NOTICE" => Some(Self::Notice),
             "LOG_SEVERITY_INFO" => Some(Self::Info),
             "LOG_SEVERITY_DEBUG" => Some(Self::Debug),
+            _ => None,
+        }
+    }
+}
+/// ModuleState is how a module does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ModuleState {
+    /// MODULE_STATE_UNSPECIFIED is invalid and must not be sent.
+    Unspecified = 0,
+    /// MODULE_STATE_OK: the last run succeeded.
+    Ok = 1,
+    /// MODULE_STATE_ERROR: the last run failed (the service refused, wrong credentials, …).
+    Error = 2,
+    /// MODULE_STATE_TIMEOUT: the last run took longer than its budget.
+    Timeout = 3,
+    /// MODULE_STATE_HUNG: a run doesn't return; no new one starts until it does.
+    Hung = 4,
+    /// MODULE_STATE_CRASHED: the module panicked; it starts again after a pause.
+    Crashed = 5,
+    /// MODULE_STATE_INVALID_CONFIG: the configuration doesn't follow the module's schema.
+    InvalidConfig = 6,
+    /// MODULE_STATE_VETOED: agent.toml forbids it (allow_modules, a target outside module_targets).
+    Vetoed = 7,
+}
+impl ModuleState {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MODULE_STATE_UNSPECIFIED",
+            Self::Ok => "MODULE_STATE_OK",
+            Self::Error => "MODULE_STATE_ERROR",
+            Self::Timeout => "MODULE_STATE_TIMEOUT",
+            Self::Hung => "MODULE_STATE_HUNG",
+            Self::Crashed => "MODULE_STATE_CRASHED",
+            Self::InvalidConfig => "MODULE_STATE_INVALID_CONFIG",
+            Self::Vetoed => "MODULE_STATE_VETOED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MODULE_STATE_UNSPECIFIED" => Some(Self::Unspecified),
+            "MODULE_STATE_OK" => Some(Self::Ok),
+            "MODULE_STATE_ERROR" => Some(Self::Error),
+            "MODULE_STATE_TIMEOUT" => Some(Self::Timeout),
+            "MODULE_STATE_HUNG" => Some(Self::Hung),
+            "MODULE_STATE_CRASHED" => Some(Self::Crashed),
+            "MODULE_STATE_INVALID_CONFIG" => Some(Self::InvalidConfig),
+            "MODULE_STATE_VETOED" => Some(Self::Vetoed),
             _ => None,
         }
     }

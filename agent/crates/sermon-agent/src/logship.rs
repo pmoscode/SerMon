@@ -384,6 +384,7 @@ pub(crate) mod tests {
                 redaction_rules: vec![RedactionRule {
                     pattern: r"customer-\d{6}".into(),
                 }],
+                modules: Vec::new(),
             }),
         };
         Arc::new(compile(&update, true).unwrap())

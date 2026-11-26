@@ -488,6 +488,7 @@ mod tests {
                     ..LogConfig::default()
                 }),
                 redaction_rules: Vec::new(),
+                modules: Vec::new(),
             }),
         };
         Arc::new(compile(&update, true).unwrap())

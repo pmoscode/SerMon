@@ -327,6 +327,8 @@ impl Transport {
             host_facts: Some((&facts).into()),
             config_version: self.config_sink.as_ref().map_or(0, |sink| sink.version()),
             install_method: self.config.install_method.into(),
+            // The modules built in (ADR 0039) come with their runtime (M5-03).
+            modules: Vec::new(),
         }));
         outgoing
             .send(hello)
@@ -636,6 +638,10 @@ impl Session<'_> {
             }
             session_response::Payload::SelfUpdate(update) => {
                 self.command(HelperCommand::SelfUpdate(update));
+            }
+            session_response::Payload::ModuleSecrets(_) => {
+                // Taken by the modules' runtime (M5-05); never logged.
+                tracing::debug!("ignoring the credentials of modules, none run here");
             }
             session_response::Payload::CancelRun(cancel) => {
                 if let Some(sink) = &self.transport.commands {

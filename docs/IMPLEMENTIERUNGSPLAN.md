@@ -5253,7 +5253,14 @@ und M5-05 (Zugangsdaten, für M5-13 und M5-14). Parallel: M5-22 → M5-23 → M5
 - Threat Model: neue Vertrauensgrenze „Module“ (Server → Agent → Dienste des Hosts), Zugangsdaten als Asset.
 - **Abhängig von:** –
 
-#### ☐ M5-02 – Protokoll der Module · X · M
+#### ☑ M5-02 – Protokoll der Module · X · M
+> Erledigt: `AgentConfig.modules` (höchstens 32, je ID einmal per CEL, Intervall 10 s bis 1 h, JSON bis 16 KiB),
+> `SessionResponse.module_secrets` (`ModuleSecrets`, Wert `debug_redact`, bis 4 KiB), `Batch.module_health`
+> (`ModuleState` mit sieben Zuständen, Grund bis 256 Byte) und `Batch.discovery_hints` (höchstens 32, Anlässe nur
+> `process:`/`port:`/`unit:` mit festem Zeichensatz), `Hello.modules` (eingebaute Module) und
+> `ConfigApplied.modules_vetoed`. Der Server bestätigt die neuen Batches bis M5-06, ohne sie zu speichern (vorher
+> wären sie als leere Metriken gelaufen); der Agent ignoriert `ModuleSecrets` bis M5-05, ohne es zu loggen.
+> Schema-Tests im Server, Roundtrip im Agent; Gegenproben 4 von 4 erkannt.
 - **Ziel:** Proto nach M5-01 (Skill `sermon-proto-change`): Modulkonfiguration in `AgentConfig` (je Modul an/aus,
   Konfiguration, verschlüsselte Zugangsdaten), `ModuleHealth` und `DiscoveryHints` als Batches; Grenzen in den
   Validierungsregeln; Server und Agent ignorieren Unbekanntes.

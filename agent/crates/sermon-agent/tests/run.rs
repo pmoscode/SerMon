@@ -256,6 +256,7 @@ async fn follows_the_log_files_of_the_servers_globs() {
                 ..LogConfig::default()
             }),
             redaction_rules: Vec::new(),
+            modules: Vec::new(),
         }),
     };
     assert!(

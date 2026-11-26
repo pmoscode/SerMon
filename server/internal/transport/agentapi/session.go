@@ -652,6 +652,10 @@ func toBatch(b *agentv1.Batch) ingest.Batch {
 		}
 		return batch
 	}
+	// The modules' batches are stored from M5-06 on; until then acknowledged, not metrics.
+	if b.GetModuleHealth() != nil || b.GetDiscoveryHints() != nil {
+		return ingest.Batch{Seq: b.GetSeq(), Unhandled: true}
+	}
 	if logs := b.GetLogs(); logs != nil {
 		batch := ingest.Batch{Seq: b.GetSeq(), Logs: make([]ingest.LogEntry, 0, len(logs.GetEntries()))}
 		for _, e := range logs.GetEntries() {

@@ -24,6 +24,7 @@ fn hello() -> SessionRequest {
             }),
             config_version: 0,
             install_method: 0,
+            modules: vec!["nginx".into(), "http_check".into()],
         })),
     }
 }

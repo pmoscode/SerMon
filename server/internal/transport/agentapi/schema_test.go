@@ -598,3 +598,80 @@ func TestSchema_UpdatesAndCommands(t *testing.T) {
 		}
 	}
 }
+
+// M5-02 (ADR 0039): the messages of the modules – configuration, credentials, health and hints –
+// with their bounds.
+func TestSchema_Modules(t *testing.T) {
+	config := func(modules ...*agentv1.ModuleConfig) proto.Message {
+		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_ConfigUpdate{ConfigUpdate: &agentv1.ConfigUpdate{
+			Version: 1, Config: &agentv1.AgentConfig{Logs: &agentv1.LogConfig{}, Modules: modules},
+		}}}
+	}
+	nginx := func(mutate func(*agentv1.ModuleConfig)) *agentv1.ModuleConfig {
+		m := &agentv1.ModuleConfig{Id: "nginx", Enabled: true, Interval: durationpb.New(30 * time.Second), ConfigJson: `{"url":"http://127.0.0.1/stub_status"}`}
+		if mutate != nil {
+			mutate(m)
+		}
+		return m
+	}
+	secrets := func(s ...*agentv1.ModuleSecret) proto.Message {
+		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_ModuleSecrets{ModuleSecrets: &agentv1.ModuleSecrets{Secrets: s}}}
+	}
+	content := func(b *agentv1.Batch) proto.Message {
+		b.Seq = 1
+		return &agentv1.SessionRequest{Payload: &agentv1.SessionRequest_Batch{Batch: b}}
+	}
+	health := func(h ...*agentv1.ModuleHealth) proto.Message {
+		return content(&agentv1.Batch{Content: &agentv1.Batch_ModuleHealth{ModuleHealth: &agentv1.ModuleHealthReport{CollectedAt: timestamppb.Now(), Modules: h}}})
+	}
+	hints := func(h ...*agentv1.DiscoveryHint) proto.Message {
+		return content(&agentv1.Batch{Content: &agentv1.Batch_DiscoveryHints{DiscoveryHints: &agentv1.DiscoveryHints{CollectedAt: timestamppb.Now(), Hints: h}}})
+	}
+	withModules := func(ids ...string) proto.Message {
+		h := hello(validHostFacts())
+		h.GetHello().Modules = ids
+		return h
+	}
+	tooManyHints := make([]*agentv1.DiscoveryHint, 33)
+	for i := range tooManyHints {
+		tooManyHints[i] = &agentv1.DiscoveryHint{ModuleId: "nginx", Reasons: []string{"port:80"}}
+	}
+	valid := map[string]proto.Message{
+		"config":            config(nginx(nil), nginx(func(m *agentv1.ModuleConfig) { m.Id, m.Interval = "postgresql", nil })),
+		"config off":        config(nginx(func(m *agentv1.ModuleConfig) { m.Enabled = false })),
+		"secret":            secrets(&agentv1.ModuleSecret{ModuleId: "postgresql", Field: "password", Value: "s3cret"}),
+		"health":            health(&agentv1.ModuleHealth{ModuleId: "nginx", State: agentv1.ModuleState_MODULE_STATE_OK, LastSuccess: timestamppb.Now()}),
+		"health empty":      health(),
+		"hints":             hints(&agentv1.DiscoveryHint{ModuleId: "nginx", Reasons: []string{"process:nginx", "port:80", "unit:nginx.service"}, SuggestedConfigJson: `{"port":80}`}),
+		"hello with module": withModules("nginx", "http_check"),
+	}
+	for name, msg := range valid {
+		if err := protovalidate.Validate(msg); err != nil {
+			t.Errorf("%s: Validate() = %v, want nil", name, err)
+		}
+	}
+	invalid := map[string]proto.Message{
+		"module twice":       config(nginx(nil), nginx(nil)),
+		"module id upper":    config(nginx(func(m *agentv1.ModuleConfig) { m.Id = "Nginx" })),
+		"module id path":     config(nginx(func(m *agentv1.ModuleConfig) { m.Id = "../x" })),
+		"interval 5 s":       config(nginx(func(m *agentv1.ModuleConfig) { m.Interval = durationpb.New(5 * time.Second) })),
+		"interval 2 h":       config(nginx(func(m *agentv1.ModuleConfig) { m.Interval = durationpb.New(2 * time.Hour) })),
+		"config too large":   config(nginx(func(m *agentv1.ModuleConfig) { m.ConfigJson = strings.Repeat("x", 16385) })),
+		"secret empty":       secrets(&agentv1.ModuleSecret{ModuleId: "postgresql", Field: "password"}),
+		"secret field":       secrets(&agentv1.ModuleSecret{ModuleId: "postgresql", Field: "Pass word", Value: "x"}),
+		"secret too long":    secrets(&agentv1.ModuleSecret{ModuleId: "postgresql", Field: "password", Value: strings.Repeat("x", 4097)}),
+		"health unspecified": health(&agentv1.ModuleHealth{ModuleId: "nginx"}),
+		"health reason long": health(&agentv1.ModuleHealth{ModuleId: "nginx", State: agentv1.ModuleState_MODULE_STATE_ERROR, Reason: strings.Repeat("x", 257)}),
+		"health no time":     content(&agentv1.Batch{Content: &agentv1.Batch_ModuleHealth{ModuleHealth: &agentv1.ModuleHealthReport{}}}),
+		"hint no reason":     hints(&agentv1.DiscoveryHint{ModuleId: "nginx"}),
+		"hint raw data":      hints(&agentv1.DiscoveryHint{ModuleId: "nginx", Reasons: []string{"cmdline:nginx -g daemon off"}}),
+		"hint bidi":          hints(&agentv1.DiscoveryHint{ModuleId: "nginx", Reasons: []string{"process:ngin\u202ex"}}),
+		"too many hints":     hints(tooManyHints...),
+		"hello module twice": withModules("nginx", "nginx"),
+	}
+	for name, msg := range invalid {
+		if err := protovalidate.Validate(msg); err == nil {
+			t.Errorf("%s: Validate() = nil, want validation error", name)
+		}
+	}
+}

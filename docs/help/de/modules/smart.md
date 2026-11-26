@@ -27,7 +27,7 @@ Selbsttest. Virtuelle Disks (`vda`, `xvda`) haben kein SMART und erscheinen nich
 - `sermon_smart_crc_errors` (SATA): Übertragungsfehler, meist Kabel oder Stecker.
 - `sermon_smart_media_errors`, `sermon_smart_critical_warning`, `sermon_smart_spare_ratio`,
   `sermon_smart_endurance_used_ratio` (NVMe): Datenfehler, kritische Warnung (0 ist gut), verbleibende Reserve und
-  Abnutzung (1 = die vom Hersteller zugesagte Schreibmenge ist erreicht).
+  Abnutzung (100 % = die vom Hersteller zugesagte Schreibmenge ist erreicht).
 - `sermon_smart_power_on_seconds`, `sermon_smart_power_cycles`: Betriebszeit und Einschaltvorgänge.
 - `sermon_smart_readable` und `sermon_smart_standby`: ob Daten kamen; eine schlafende Disk liefert nichts außer
   `standby = 1`.

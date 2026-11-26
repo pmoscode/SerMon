@@ -20,8 +20,8 @@
 //! | `sermon_smart_crc_errors` | ATA 199 (cable, connector) |
 //! | `sermon_smart_media_errors` | NVMe media and data integrity errors |
 //! | `sermon_smart_critical_warning` | NVMe critical warning (bit field, 0 is fine) |
-//! | `sermon_smart_spare_ratio` | NVMe available spare (0 to 1) |
-//! | `sermon_smart_endurance_used_ratio` | NVMe percentage used / 100 (may exceed 1) |
+//! | `sermon_smart_spare_ratio` | NVMe available spare, ppm |
+//! | `sermon_smart_endurance_used_ratio` | NVMe percentage used, ppm (may pass 1 000 000) |
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -332,21 +332,20 @@ pub fn samples(disks: &[Disk], truncated: bool) -> Vec<Sample> {
             ("sermon_smart_crc_errors", d.crc_errors),
             ("sermon_smart_media_errors", d.media_errors),
             ("sermon_smart_critical_warning", d.critical_warning),
+            // Ratios in ppm like every ratio (KONZEPT §8); wear may pass 100 %.
+            (
+                "sermon_smart_spare_ratio",
+                d.spare_percent.map(|p| p * 10_000),
+            ),
+            (
+                "sermon_smart_endurance_used_ratio",
+                d.used_percent.map(|p| p * 10_000),
+            ),
         ];
         out.extend(
             ints.into_iter()
                 .filter_map(|(m, v)| Some(dev(Sample::int(m, v?)))),
         );
-        let ratios = [
-            ("sermon_smart_spare_ratio", d.spare_percent),
-            ("sermon_smart_endurance_used_ratio", d.used_percent),
-        ];
-        out.extend(ratios.into_iter().filter_map(|(m, v)| {
-            Some(dev(Sample::float(
-                m,
-                f64::from(i32::try_from(v?).ok()?) / 100.0,
-            )))
-        }));
     }
     out
 }

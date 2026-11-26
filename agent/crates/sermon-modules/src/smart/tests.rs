@@ -235,8 +235,8 @@ fn samples_stay_within_the_runtimes_bounds() {
     assert_eq!(samples[1].value, V::Int(1), "truncated");
     let one = samples_of(&read("7.5", "nvme", "nvme0n1"));
     assert_eq!(one["sermon_smart_power_on_seconds"], V::Int(9213 * 3600));
-    assert_eq!(one["sermon_smart_endurance_used_ratio"], V::Float(0.03));
-    assert_eq!(one["sermon_smart_spare_ratio"], V::Float(1.0));
+    assert_eq!(one["sermon_smart_endurance_used_ratio"], V::Int(30_000));
+    assert_eq!(one["sermon_smart_spare_ratio"], V::Int(1_000_000));
     assert_eq!(one["sermon_smart_readable"], V::Int(1));
     assert_eq!(one.len(), 10);
     let asleep = samples_of(&read("7.4", "standby", "sdc"));

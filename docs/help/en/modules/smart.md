@@ -27,7 +27,7 @@ disks (`vda`, `xvda`) have no SMART and don't appear.
 - `sermon_smart_crc_errors` (SATA): transfer errors, usually cable or connector.
 - `sermon_smart_media_errors`, `sermon_smart_critical_warning`, `sermon_smart_spare_ratio`,
   `sermon_smart_endurance_used_ratio` (NVMe): data errors, critical warning (0 is fine), remaining spare and wear
-  (1 = the amount of writes the vendor promises is reached).
+  (100 % = the amount of writes the vendor promises is reached).
 - `sermon_smart_power_on_seconds`, `sermon_smart_power_cycles`: power-on time and power cycles.
 - `sermon_smart_readable` and `sermon_smart_standby`: whether data came; a sleeping disk gives nothing but
   `standby = 1`.

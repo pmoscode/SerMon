@@ -43,6 +43,10 @@ toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
+# Only the static release builds: musl's allocator keeps freed memory (M4-32, ADR 0038).
+[target.'cfg(all(target_os = "linux", target_env = "musl"))'.dependencies]
+tikv-jemallocator.workspace = true
+
 [dev-dependencies]
 rcgen.workspace = true
 sermon-testserver.workspace = true

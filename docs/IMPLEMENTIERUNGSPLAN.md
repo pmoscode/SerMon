@@ -5041,7 +5041,27 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 - **Tests zuerst:** je Befund ein Test, der ihn vorher zeigt; Gegenproben.
 - **Abhängig von:** M4-30
 
-#### ☐ M4-32 – Speicherwachstum des Agents · A · M
+#### ☑ M4-32 – Speicherwachstum des Agents · A · M
+> Erledigt: **kein Leck, sondern musls Allocator.** Ein Heap-Profil (`dhat`) und ein zählender Allocator über eine ganze
+> Demo zeigen höchstens 1,1–1,7 MiB lebendige Daten; der Agent allokiert rund 1 MiB je Sekunde und gibt sie frei (vor
+> allem Collectors und Log-Pipeline). musls `mallocng` gibt davon nur ganze Gruppen zurück: db-01 wuchs ohne Last um
+> 1,4 MiB je Minute bei konstanten 0,73 MiB lebendigen Daten. Behoben mit **jemalloc** in den statischen musl-Builds
+> (ADR 0038, Nachtrag ADR 0002):
+> - eine Arena, kein Thread-Cache, freie Seiten nach 1 s zurück; beim Bauen eingestellt (`agent/.cargo/config.toml`),
+>   ohne `unsafe` und ohne Umgebung auf dem Host. Der Helper behält mallocng. mimalloc verworfen (19 MiB nach dem Start).
+> - `agent/tools/ar`: jemallocs `configure` archiviert mit `$AR`, das `ar` von macOS legt ELF-Objekte nicht ab.
+> - `scripts/check-agent-allocator.sh` (mit Test in `just test-scripts`) prüft in `just build-agent`,
+>   `just test-packages` und der Demo, dass jemalloc mit diesen Einstellungen in der Binary steckt.
+> - Neues Demo-Projekt `budget-end`: am Ende des Laufs 60 s auf web-01, app-01 und db-01, eigener Speicher und RSS
+>   unter 30 MiB.
+>
+> **Gemessen:** Vergleich auf zwei Hosts über 10 min Log-Last mit Live-Ansichten: musl 8,0 → 11,6 MiB eigener Speicher,
+> jemalloc flach bei 7,8–8,0 MiB (RSS 13,4 MiB). Volle Demo (8 Projekte, 32,8 min) grün; eigener Speicher der Agents auf
+> allen vier Hosts über 27 min zwischen 7,7 und 8,2 MiB (vorher am Ende bis 26,5 MiB, RSS 31,9 MiB); am Ende des Laufs
+> 7,9–8,3 MiB Agent, 8,8–10,4 MiB samt Kindern, RSS 21,0–22,4 MiB, CPU 0,30–0,32 %.
+>
+> **Gegenproben**, 4 von 4 erkannt: Binary ohne `#[global_allocator]` und die musl-Binary des Helpers fallen im Check
+> durch; ohne den `AR`-Wrapper scheitert der Link; die Endmessung mit Grenze 5 MiB schlägt fehl (9,1 MiB).
 - **Ziel:** Der Agent bleibt auch nach langer Laufzeit unter dem Budget von KONZEPT §4.1 (< 30 MB RSS).
   - **Befund aus der Demo M4-28:** Die Messung von M4-29 besteht (früh im Lauf 4–5 MiB eigener Speicher, während einer
     Update-Liste 12–16 MiB), aber am Ende eines vollen Laufs (~75 min) hält der Agent auf web-01 26,5 MiB eigenen

@@ -1,0 +1,9 @@
+# Build settings of the agent's workspace.
+[env]
+# jemalloc of the static release builds (M4-32, ADR 0038): one arena and no thread cache – the
+# agent runs one async thread and a few blocking ones –, freed pages back to the kernel within a
+# second. Compiled into the binary, no environment on the host.
+JEMALLOC_SYS_WITH_MALLOC_CONF = "narenas:1,tcache:false,dirty_decay_ms:1000,muzzy_decay_ms:0"
+# jemalloc's configure archives with $AR: macOS's ar leaves the ELF objects out (an empty
+# library), so Linux targets take zig's (tools/ar).
+AR = { value = "tools/ar", relative = true }

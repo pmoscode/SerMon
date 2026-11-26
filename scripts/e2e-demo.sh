@@ -50,6 +50,7 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 	# The helper takes self-updates signed with this key only, the agent reports the server's
 	# version like a release (ADR 0036).
 	(cd "$root/agent" && SERMON_RELEASE_KEY=$(cat "$build/release.pub") SERMON_VERSION=$version cargo zigbuild --release --locked -q -p sermon-agent -p sermon-helper --target "$target")
+	"$root/scripts/check-agent-allocator.sh" "$root/agent/target/$target/release/sermon-agent" >/dev/null
 	cp "$root/agent/target/$target/release/sermon-agent" "$build/downloads/sermon-agent-linux-$arch"
 	cp "$root/agent/target/$target/release/sermon-helper" "$build/downloads/sermon-helper-linux-$arch"
 	"$root/scripts/release-sign.sh" sign "$build/release.pem" --version "$version" \

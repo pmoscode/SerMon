@@ -1,0 +1,7 @@
+#!/bin/sh
+# The archiver of build scripts (agent/.cargo/config.toml): zig's for Linux targets – cross from
+# macOS the system's ar can't archive ELF objects (jemalloc, M4-32) –, the system's otherwise.
+case ${TARGET:-} in
+*-linux-*) command -v zig >/dev/null 2>&1 && exec zig ar "$@" ;;
+esac
+exec ar "$@"

@@ -45,12 +45,13 @@ KONZEPT §2 mit angepasst.
 | [0035](0035-root-helper.md) | Root-Helper: Protokoll, Operationen und Läufe | accepted | D9, D15 |
 | [0036](0036-self-update-und-paket-repos.md) | Self-Update des Agents und signierte Paket-Repos | accepted | D8, D15 |
 | [0037](0037-anomalie-erkennung.md) | Anomalie-Erkennung: Baselines, Ergebnisse und Worker | accepted | D16, D13 |
+| [0038](0038-allocator-des-agents.md) | Allocator des Agents: jemalloc statt musls mallocng | accepted | D1 |
 
 ## Entscheidungslog → ADR
 
 | Entscheidung | ADR |
 |---|---|
-| D1 Agent in Rust | 0014, 0002 |
+| D1 Agent in Rust | 0014, 0002, 0038 |
 | D2 Server in Go | 0014 |
 | D3 SvelteKit-SPA | 0014, 0003 |
 | D4 Push mit Puffer | 0015 |

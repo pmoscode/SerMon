@@ -75,6 +75,13 @@ export default defineConfig({
 			testMatch: 'passkeys.demo.ts',
 			dependencies: ['alerts', 'sso', 'troubleshoot', ...(full ? ['patch'] : [])],
 			use: { ...devices['Desktop Chrome'] }
+		},
+		// The budget once more at the very end, after every scene (M4-32).
+		{
+			name: 'budget-end',
+			testMatch: 'budget.demo.ts',
+			dependencies: ['passkeys'],
+			use: { ...devices['Desktop Chrome'] }
 		}
 	]
 });

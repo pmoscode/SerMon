@@ -98,3 +98,12 @@ Die Prüfung ist reproduzierbar mit `just build-agent` und `just smoke-agent`.
 - **Folgearbeiten:**
   - CI-Job mit gepinnten Versionen und Smoke-Tests unter QEMU (M0-06).
   - Gegenprobe mit `aws-lc-rs` bzw. `ring` beim ersten rustls-Einsatz.
+
+## Nachtrag 2026-11-26 (M4-32): jemalloc und `agent/tools/ar`
+
+Der Agent allokiert in den musl-Builds über jemalloc ([ADR 0038](0038-allocator-des-agents.md)). Dessen C-Teil baut
+`tikv-jemalloc-sys` mit `configure` und archiviert mit `$AR`; das `ar` von macOS legt beim Cross-Build die ELF-Objekte
+nicht ab, die Bibliothek bleibt leer und der Link scheitert. `agent/.cargo/config.toml` setzt daher `AR` auf
+`agent/tools/ar`: für Linux-Ziele `zig ar` (zig ist ohnehin da), sonst das `ar` des Systems. Unter Linux und in der CI
+ändert sich dadurch nichts Sichtbares. `scripts/check-agent-allocator.sh` prüft nach jedem Release-Build, dass jemalloc
+mit den Einstellungen in der Binary steckt.

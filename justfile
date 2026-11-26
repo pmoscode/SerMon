@@ -156,6 +156,7 @@ test-scripts:
     sh scripts/check-compose_test.sh
     sh scripts/helper-loc_test.sh
     sh scripts/agent-budget_test.sh
+    sh scripts/check-agent-allocator_test.sh
 
 # Build the package sources of the E2E environment and check them on five distros (M4-08; Docker required)
 test-e2e-repos:
@@ -262,6 +263,7 @@ test-packages:
     *) target=aarch64-unknown-linux-musl ;;
     esac
     (cd agent && cargo zigbuild --release --locked -q -p sermon-agent -p sermon-helper --target "$target")
+    scripts/check-agent-allocator.sh "agent/target/$target/release/sermon-agent"
     scripts/test-packages.sh "agent/target/$target/release/sermon-agent" "agent/target/$target/release/sermon-helper"
 
 # Signed packages of agent and helper of VERSION (amd64, arm64) into dist/packages/; keys: see scripts/package-agent.sh (M2-21, M4-04)
@@ -297,6 +299,7 @@ build-agent:
             file -b "$f" | grep -q "statically linked" || { echo "✗ $f is not statically linked" >&2; exit 1; }; \
             echo "✓ $f ($(du -h "$f" | cut -f1), static)"; \
         done; \
+        sh ../scripts/check-agent-allocator.sh "target/$t/release/sermon-agent"; \
     done
 
 # Run the release binaries in amd64 (Debian) and arm64 (Alpine) containers

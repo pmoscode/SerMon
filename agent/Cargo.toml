@@ -30,6 +30,8 @@ publish = false
 # Shared dependency versions – crates reference them with `workspace = true`.
 # Generated protocol code (crates/sermon-transport/src/gen) must match these versions (just gen).
 [workspace.dependencies]
+# The agent's allocator on musl (M4-32, ADR 0038): musl's keeps memory the agent freed.
+tikv-jemallocator = { version = "=0.6.1", default-features = false }
 prost = "=0.14.6"
 prost-types = "=0.14.6"
 tonic = { version = "=0.14.9", default-features = false, features = ["codegen", "channel", "gzip"] }

@@ -168,7 +168,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/ad
 
 | Aspekt         | Festlegung                                                                                                                                                  |
 |----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Build          | `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`; statisch gelinkt                                                                                 |
+| Build          | `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`; statisch gelinkt; Allocator jemalloc statt musls mallocng, das freigegebenen Speicher behält ([ADR 0038](adr/0038-allocator-des-agents.md)) |
 | Runtime        | `tokio`; gRPC-Client mit `tonic` + `rustls` (kein OpenSSL)                                                                                                  |
 | Collectors     | Eigene Parser für `/proc` und `/sys`. Das Wurzelverzeichnis ist injizierbar (`ProcRoot`), dadurch sind Tests mit Fixtures möglich                           |
 | Journal        | Kindprozess `journalctl -o json --all -f --after-cursor=…`; den Cursor speichert der Agent selbst, sobald der Eintrag im WAL liegt ([ADR 0013](adr/0013-log-quelle-journald.md)). Kein Linken gegen libsystemd, damit die musl-Binary statisch bleibt |

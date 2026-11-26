@@ -1,0 +1,17 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.apache.down
+  name: { de: "Apache nicht erreichbar", en: "Apache down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_apache_up
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: apache }
+  help:
+    de: >-
+      Die Statusseite von Apache (server-status) antwortet seit 2 Minuten nicht. Typische Ursachen: Apache gestoppt oder abgestürzt, mod_status nicht aktiv oder nicht für localhost freigegeben, falsche URL im Modul. Prüfe systemctl status apache2 bzw. httpd und apachectl configtest.
+    en: >-
+      The Apache status page (server-status) has not answered for 2 minutes. Typical causes: Apache stopped or crashed, mod_status not enabled or not allowed for localhost, a wrong URL in the module. Check systemctl status apache2 or httpd and apachectl configtest.

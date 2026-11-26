@@ -77,18 +77,21 @@ type Rule struct {
 	// Groups limits the rule to nodes of these groups; empty: all nodes of the organization.
 	Groups []tenant.GroupID
 	// Tags limits it to nodes that carry all of them (M2-29); empty: no limit.
-	Tags      tag.Tags
+	Tags tag.Tags
+	// Module limits it to nodes running the module (M5-20, ADR 0039); empty: no limit.
+	Module    string
 	Evaluator Evaluator
 }
 
-// nodes returns the nodes the rule applies to.
-func (r Rule) nodes(all []fleet.Node) []fleet.Node {
-	if len(r.Groups) == 0 && len(r.Tags) == 0 {
+// Nodes returns the nodes the rule applies to.
+func (r Rule) Nodes(all []fleet.Node) []fleet.Node {
+	if len(r.Groups) == 0 && len(r.Tags) == 0 && r.Module == "" {
 		return all
 	}
 	var out []fleet.Node
 	for _, n := range all {
-		if (len(r.Groups) == 0 || slices.Contains(r.Groups, n.Group)) && r.Tags.Selects(n.Tags) {
+		if (len(r.Groups) == 0 || slices.Contains(r.Groups, n.Group)) && r.Tags.Selects(n.Tags) &&
+			(r.Module == "" || slices.Contains(n.Modules, r.Module)) {
 			out = append(out, n)
 		}
 	}
@@ -274,7 +277,7 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 	applies := make(map[alert.RuleID]map[identity.NodeID]bool, len(rules))
 	for _, rule := range rules {
 		ruleEnv := env
-		ruleEnv.Nodes = rule.nodes(nodes)
+		ruleEnv.Nodes = rule.Nodes(nodes)
 		ruleEnv.Open = open[rule.ID]
 		applies[rule.ID] = make(map[identity.NodeID]bool, len(ruleEnv.Nodes))
 		for _, n := range ruleEnv.Nodes {

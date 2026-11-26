@@ -5730,6 +5730,17 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Abhängig von:** M5-03, M5-08
 
 #### ☐ M5-20 – Standardregeln der Module · S · M
+> Stand (teilweise, `rules/modules/`): Regeln für die Module, die es gibt – nicht erreichbar (`http_check`,
+> `tcp_check`, `nginx`, `apache`, `redis` kritisch; `prometheus`-Ziel und überwachte `systemd_units` als Warnung, je
+> 2 min), Zertifikat läuft ab (`tls`, `http_check`: < 21 Tage Warnung, < 7 Tage kritisch, Ende ab 22 Tagen),
+> Replikations-Lag von PostgreSQL und MySQL (> 60 s / > 300 s), MySQL-Replikation steht (kritisch), Redis-Replikation
+> unterbrochen, SMART meldet Fehler (kritisch). Neu
+> ist der Selektor `selector: { module: <id> }` (`AlertSelector.module`): Die Regel gilt nur für Nodes, deren Gruppe das
+> Modul eingeschaltet hat und deren Agent es eingebaut hat (`fleet.Node.Modules`); eine Regel auf einer Metrik eines
+> Moduls muss es nennen, der Loader prüft das. Wird ein Modul ausgeschaltet, enden seine Alerts wie bei einem Node,
+> für den eine Regel nicht mehr gilt. Tests: Szenario je Regel, Engine (ein Node ohne das Modul bekommt keinen Alert),
+> Loader (Selektor fehlt, falsches Modul), Fleet-Store (eingeschaltet und eingebaut); Gegenproben 12/12.
+> **Offen:** „Container startet ständig neu“ – braucht den Docker-Socket (M5-17), das Modul ist noch nicht da.
 - **Ziel:** Regeln je Modul (Skill `sermon-add-alert-rule`): Dienst nicht erreichbar, Zertifikat läuft in 21 bzw.
   7 Tagen ab, Replikations-Lag, Container startet ständig neu, SMART meldet Fehler; Selektor „Nodes mit aktivem
   Modul“; Hilfetexte und Felder für Benachrichtigungen.

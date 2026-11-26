@@ -1,0 +1,28 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.postgres.replication_lag
+  name: { de: "PostgreSQL-Replikation hängt hinterher", en: "PostgreSQL replication lagging" }
+  labels: { category: modules }
+spec:
+  type: threshold
+  metric: sermon_postgres_replication_lag_seconds
+  dimensions: [ replica ]
+  aggregate: max
+  window: 5m
+  warning: { op: ">", value: 60 }
+  critical: { op: ">", value: 300 }
+  clear: { op: "<", value: 30 }
+  for: 5m
+  selector: { module: postgres }
+  help:
+    de: >-
+      Ein Replikat liegt mehr als eine Minute hinter dem Primary (kritisch: 5 Minuten). Bei einem Ausfall gingen
+      die Änderungen dieser Zeit verloren, Lesezugriffe auf dem Replikat sehen alte Daten. Typische Ursachen: Netz,
+      I/O oder CPU des Replikats am Limit, lange Transaktionen, ein hängender Replikations-Slot. Prüfe
+      pg_stat_replication auf dem Primary und die Logs des Replikats.
+    en: >-
+      A replica is more than a minute behind the primary (critical: 5 minutes). On a failover the changes of that
+      time would be lost, reads on the replica see old data. Typical causes: network, I/O or CPU of the replica at
+      their limit, long transactions, a stuck replication slot. Check pg_stat_replication on the primary and the
+      replica's logs.

@@ -1,0 +1,17 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.nginx.down
+  name: { de: "nginx nicht erreichbar", en: "nginx down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_nginx_up
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: nginx }
+  help:
+    de: >-
+      Die Statusseite von nginx (stub_status) antwortet seit 2 Minuten nicht. Typische Ursachen: nginx gestoppt oder abgestürzt, eine Änderung der Konfiguration ohne stub_status, falsche URL im Modul. Prüfe systemctl status nginx und nginx -t; die Gesundheit des Moduls am Node nennt einen Grund.
+    en: >-
+      The nginx status page (stub_status) has not answered for 2 minutes. Typical causes: nginx stopped or crashed, a configuration change without stub_status, a wrong URL in the module. Check systemctl status nginx and nginx -t; the module health on the node gives a reason.

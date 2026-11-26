@@ -418,6 +418,22 @@ func TestEngine_LimitsRulesToTheirGroups(t *testing.T) {
 	}
 }
 
+// M5-20: a rule of a module sees only the nodes whose group runs it (and whose agent has it);
+// web-01 runs none.
+func TestEngine_LimitsModuleRulesToNodesRunningTheModule(t *testing.T) {
+	store, c := newMemStore(orgA), &clock{now: t0}
+	v := &valueRule{value: 0.9}
+	source := rules{orgA: {{ID: cpuRule, Module: "nginx", Timing: alert.Timing{Flapping: alert.DefaultFlapping}, Evaluator: v}}}
+	rounds(t, engine(store, source, c, "a"), c, 1)
+	if _, ok := store.instance(orgA, cpuKey); ok {
+		t.Error("a rule of the module nginx evaluated web-01, which doesn't run it")
+	}
+	running := alerting.Rule{Module: "nginx"}
+	if got := running.Nodes([]fleet.Node{webNode, {ID: db01, Group: group, Modules: []string{"redis", "nginx"}}}); len(got) != 1 || got[0].ID != db01 {
+		t.Errorf("Nodes() = %+v", got)
+	}
+}
+
 // A state without a current value (agent stopped sending it) yields nothing instead of the last
 // known state.
 func TestState_IgnoresStaleValues(t *testing.T) {

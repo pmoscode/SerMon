@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.prometheus.target_down
+  name: { de: "Prometheus-Ziel nicht erreichbar", en: "Prometheus target down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_prometheus_up
+  dimensions: [ target ]
+  warning: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: prometheus }
+  help:
+    de: >-
+      Ein /metrics-Endpunkt, den das Modul abfragt, antwortet seit 2 Minuten nicht oder nicht im Textformat. Prüfe den Exporter auf dem Host und seine URL im Modul.
+    en: >-
+      A /metrics endpoint the module scrapes has not answered, or not in the text format, for 2 minutes. Check the exporter on the host and its URL in the module.

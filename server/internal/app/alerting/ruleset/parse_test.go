@@ -364,3 +364,45 @@ func TestParse_AnomalyRule(t *testing.T) {
 		}
 	}
 }
+
+// A rule of a module (M5-20): on the module's metric, limited to the nodes running it.
+const moduleRule = `apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.simulate.value_high
+  name: { de: "Wert hoch", en: "Value high" }
+  labels: { category: modules }
+spec:
+  type: threshold
+  metric: sermon_simulate_value
+  aggregate: last
+  window: 5m
+  warning: { op: ">", value: 10 }
+  clear: { op: "<", value: 5 }
+  for: 1m
+  selector: { module: simulate }
+  help:
+    de: "Der simulierte Wert ist hoch."
+    en: "The simulated value is high."
+`
+
+func TestParse_ModuleRules(t *testing.T) {
+	def, err := ruleset.Parse([]byte(moduleRule))
+	if err != nil || def.Rule.Module != "simulate" {
+		t.Fatalf("Parse() = %+v, %v", def.Rule, err)
+	}
+	for name, tc := range map[string]struct{ old, new, hint string }{
+		"no module":      {"  selector: { module: simulate }\n", "", "selector.module"},
+		"another module": {"module: simulate", "module: nginx", "selector.module"},
+		"unknown module": {"module: simulate", "module: nosuch", "selector.module"},
+		"bad module":     {"module: simulate", "module: Simulate", "module"},
+		"base metric":    {"metric: sermon_simulate_value", "metric: sermon_system_zombies", "selector.module"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := ruleset.Parse([]byte(strings.Replace(moduleRule, tc.old, tc.new, 1)))
+			if !errors.Is(err, alert.ErrInvalidRule) || !strings.Contains(err.Error(), tc.hint) {
+				t.Errorf("Parse() = %v, want %q", err, tc.hint)
+			}
+		})
+	}
+}

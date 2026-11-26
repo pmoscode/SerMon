@@ -352,3 +352,33 @@ func TestModuleStore_Credentials(t *testing.T) {
 		t.Errorf("without tenant: %d, %v", n, err)
 	}
 }
+
+// M5-20: the fleet lists the modules a node runs – enabled for its group and built into its
+// agent – for the rules of the modules.
+func TestModuleStore_TheFleetKnowsTheModulesANodeRuns(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	store, configs, fleetStore := postgres.NewModuleStore(db), postgres.NewLogSettingsStore(db), postgres.NewFleetStore(db)
+	node := uuid.New()
+	createNode(t, f.db.OwnerDSN, orgA, node)
+	group := tenant.GroupID(groupOf(t, f.db.OwnerDSN, node))
+	if _, err := configs.Announced(ctx, tenant.OrgID(orgA), identity.NodeID(node), []string{"nginx", "simulate"}); err != nil {
+		t.Fatal(err)
+	}
+	audit := access.AuditEntry{Action: "module.update", Target: "g"}
+	for _, s := range []module.Setting{{Module: "simulate", Enabled: true, Config: "{}"}, {Module: "nginx", Enabled: false, Config: "{}"}, {Module: "redis", Enabled: true, Config: "{}"}} {
+		if err := store.Put(ctx, scopeFor(t, orgA), group, s, modules.SealedChange{}, identity.UserID{}, audit); err != nil {
+			t.Fatal(err)
+		}
+	}
+	nodes, err := fleetStore.List(ctx, scopeFor(t, orgA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range nodes {
+		if n.ID == identity.NodeID(node) && !slices.Equal(n.Modules, []string{"simulate"}) {
+			t.Errorf("Modules = %v; want simulate only (nginx off, redis not built in)", n.Modules)
+		}
+	}
+}

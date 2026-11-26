@@ -285,6 +285,9 @@ message AlertSelector {
       string: {max_len: 36}
     }
   }];
+  // module limits the rule to nodes running the module (enabled for their group, built into their
+  // agent; ADR 0039, M5-20); a rule on a module's metric must name it.
+  string module = 3 [(buf.validate.field).string.pattern = "^([a-z][a-z0-9_]{0,31})?$"];
   // tags must all be on the node (e.g. env: prod; M2-29); empty: every node of the groups.
   map<string, string> tags = 2 [(buf.validate.field).map = {
     max_pairs: 16

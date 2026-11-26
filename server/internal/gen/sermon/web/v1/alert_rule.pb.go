@@ -759,6 +759,9 @@ type AlertSelector struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// groups are "*" (all) or node group UUIDs.
 	Groups []string `protobuf:"bytes,1,rep,name=groups,proto3" json:"groups,omitempty"`
+	// module limits the rule to nodes running the module (enabled for their group, built into their
+	// agent; ADR 0039, M5-20); a rule on a module's metric must name it.
+	Module string `protobuf:"bytes,3,opt,name=module,proto3" json:"module,omitempty"`
 	// tags must all be on the node (e.g. env: prod; M2-29); empty: every node of the groups.
 	Tags          map[string]string `protobuf:"bytes,2,rep,name=tags,proto3" json:"tags,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
@@ -800,6 +803,13 @@ func (x *AlertSelector) GetGroups() []string {
 		return x.Groups
 	}
 	return nil
+}
+
+func (x *AlertSelector) GetModule() string {
+	if x != nil {
+		return x.Module
+	}
+	return ""
 }
 
 func (x *AlertSelector) GetTags() map[string]string {
@@ -897,10 +907,11 @@ const file_sermon_web_v1_alert_rule_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x01B\a\xbaH\x04\x12\x02@\x01R\x05value\"U\n" +
 	"\rAlertFlapping\x12#\n" +
 	"\achanges\x18\x01 \x01(\x05B\t\xbaH\x06\x1a\x04\x18d(\x01R\achanges\x12\x1f\n" +
-	"\x06window\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18\x10R\x06window\"\xff\x01\n" +
+	"\x06window\x18\x02 \x01(\tB\a\xbaH\x04r\x02\x18\x10R\x06window\"\xb9\x02\n" +
 	"\rAlertSelector\x12(\n" +
 	"\x06groups\x18\x01 \x03(\tB\x10\xbaH\r\x92\x01\n" +
-	"\x10d\x18\x01\"\x04r\x02\x18$R\x06groups\x12\x8a\x01\n" +
+	"\x10d\x18\x01\"\x04r\x02\x18$R\x06groups\x128\n" +
+	"\x06module\x18\x03 \x01(\tB \xbaH\x1dr\x1b2\x19^([a-z][a-z0-9_]{0,31})?$R\x06module\x12\x8a\x01\n" +
 	"\x04tags\x18\x02 \x03(\v2&.sermon.web.v1.AlertSelector.TagsEntryBN\xbaHK\x9a\x01H\x10\x10\"\x1br\x192\x17^[a-z][a-z0-9_-]{0,31}$*'r%2#^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,62}$R\x04tags\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +

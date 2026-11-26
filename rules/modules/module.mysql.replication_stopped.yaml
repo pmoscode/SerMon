@@ -1,0 +1,22 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.mysql.replication_stopped
+  name: { de: "MySQL-Replikation steht", en: "MySQL replication stopped" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_mysql_replication_running
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: mysql }
+  help:
+    de: >-
+      Auf diesem Replikat laufen die Threads der Replikation (I/O oder SQL) seit 2 Minuten nicht. Es bekommt keine
+      Änderungen mehr. Typische Ursachen: ein Fehler beim Anwenden (Duplicate Key), die Quelle nicht erreichbar,
+      falsche Zugangsdaten der Replikation. SHOW REPLICA STATUS nennt den letzten Fehler; behebe ihn und starte mit
+      START REPLICA.
+    en: >-
+      The replication threads (I/O or SQL) of this replica have not run for 2 minutes. It gets no more changes.
+      Typical causes: an error applying a change (duplicate key), the source unreachable, wrong replication
+      credentials. SHOW REPLICA STATUS names the last error; fix it and start with START REPLICA.

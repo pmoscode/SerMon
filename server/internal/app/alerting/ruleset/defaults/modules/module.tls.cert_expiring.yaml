@@ -1,0 +1,27 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.tls.cert_expiring
+  name: { de: "Zertifikat läuft bald ab", en: "Certificate expires soon" }
+  labels: { category: modules }
+spec:
+  type: threshold
+  metric: sermon_tls_cert_expires_in_seconds
+  dimensions: [ target ]
+  aggregate: last
+  window: 30m
+  # 21 and 7 days; it ends one day after a renewal beyond 21 days.
+  warning: { op: "<", value: 1814400 }
+  critical: { op: "<", value: 604800 }
+  clear: { op: ">", value: 1900800 }
+  for: 10m
+  selector: { module: tls }
+  help:
+    de: >-
+      Ein überwachtes Zertifikat (Datei oder Endpunkt) läuft in weniger als 21 Tagen ab (kritisch: 7 Tage, negativ: abgelaufen). Clients lehnen es danach
+      ab. Erneuere es (certbot renew, ACME oder die eigene CA) und lade den Dienst neu; der Alert endet, sobald das
+      neue Zertifikat mehr als 22 Tage gilt. Läuft die automatische Erneuerung, prüfe ihren Timer und ihr Log.
+    en: >-
+      A watched certificate (file or endpoint) expires in less than 21 days (critical: 7 days, negative: expired). Clients refuse it then. Renew it
+      (certbot renew, ACME or your own CA) and reload the service; the alert ends once the new certificate is valid
+      for more than 22 days. With an automatic renewal, check its timer and its log.

@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.systemd_units.not_active
+  name: { de: "Überwachte Unit läuft nicht", en: "Watched unit not active" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_systemd_units_active
+  dimensions: [ unit ]
+  warning: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: systemd_units }
+  help:
+    de: >-
+      Eine Unit, die das Modul überwachen soll, ist seit 2 Minuten nicht aktiv. Typische Ursachen: gestoppt, fehlgeschlagen oder nie gestartet. Prüfe systemctl status <unit> und journalctl -u <unit>; ein Timer zählt als aktiv, solange er geplant ist.
+    en: >-
+      A unit the module watches has not been active for 2 minutes. Typical causes: stopped, failed or never started. Check systemctl status <unit> and journalctl -u <unit>; a timer counts as active while it is scheduled.

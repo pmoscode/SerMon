@@ -50,7 +50,7 @@ func (s *FleetStore) List(ctx context.Context, scope tenant.Scope) ([]fleet.Node
 				CPUCount: uint32(max(r.CpuCount, 0)), MemoryBytes: uint64(max(r.MemoryBytes, 0)),
 				AgentVersion: r.AgentVersion, EnrolledAt: r.CreatedAt, LastSeenAt: r.LastSeenAt,
 				LockedAt: r.LockedAt, LockReason: r.LockReason, LastIP: r.LastIp, TakeoverUntil: r.TakeoverUntil,
-				Tags: tags, SecuritySource: secevent.Source(r.SecuritySource), LogsVetoed: r.LogsVetoed,
+				Tags: tags, Modules: r.ActiveModules, SecuritySource: secevent.Source(r.SecuritySource), LogsVetoed: r.LogsVetoed,
 				LearningSince: r.LearningSince, DeactivatedAt: r.DeactivatedAt, DeletionDueAt: r.DeletionDueAt,
 			}
 			if r.UpdateAvailability.Valid {

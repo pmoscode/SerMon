@@ -960,6 +960,14 @@ einen **Dry-Run-Diff**.
 |                   | Rollout gestoppt                                               | event             | – / ✓                               |
 |                   | Agent-Update fehlgeschlagen                                    | event             | ✓ / –                               |
 | **Anomalien**     | Anomalie-Rate des Nodes hoch                                   | anomaly           | 10 % / 25 % der Metriken             |
+| **Module**        | Dienst nicht erreichbar (HTTP, TCP, nginx, Apache, Redis)      | state             | – / 2 min                            |
+|                   | Prometheus-Ziel / überwachte Unit nicht aktiv                  | state             | 2 min / –                            |
+|                   | Zertifikat läuft ab (TLS, HTTPS-Check)                         | threshold         | < 21 Tage / < 7 Tage                 |
+|                   | PostgreSQL-Replikations-Lag                                    | threshold         | > 60 s / > 300 s                     |
+|                   | Redis-Replikation unterbrochen                                 | state             | 2 min / –                            |
+|                   | SMART meldet Fehler                                            | state             | – / ✓                                |
+|                   | Container startet ständig neu (Docker-Socket, M5-17)           | –                 | folgt                                |
+|                   | MySQL-Replikations-Lag / Replikation steht                     | threshold / state | > 60 s / > 300 s; – / 2 min          |
 
 Seit M2-04 mitgeliefert sind die Regeln für Verfügbarkeit, CPU, Memory, Disk, Netzwerk und System, soweit ihre Daten
 vorliegen, seit M2-08 die Event-Regeln. Abweichungen und offene Punkte:

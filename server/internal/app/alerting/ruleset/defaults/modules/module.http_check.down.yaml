@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.http_check.down
+  name: { de: "Endpunkt nicht erreichbar", en: "Endpoint down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_http_check_up
+  dimensions: [ target ]
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: http_check }
+  help:
+    de: >-
+      Ein überwachter HTTP-Endpunkt antwortet seit 2 Minuten nicht oder nicht mit einem erwarteten Status. Typische Ursachen: Dienst gestoppt oder abgestürzt, falscher Port, Fehlerseite (5xx), Zeitüberschreitung. Prüfe den Dienst auf dem Host (systemctl status, Logs) und den Statuscode in der Metrik sermon_http_check_status_code; die Gesundheit des Moduls am Node nennt einen Grund.
+    en: >-
+      A monitored HTTP endpoint has not answered, or not with an expected status, for 2 minutes. Typical causes: the service stopped or crashed, a wrong port, an error page (5xx), a timeout. Check the service on the host (systemctl status, logs) and the status code in the metric sermon_http_check_status_code; the module health on the node gives a reason.

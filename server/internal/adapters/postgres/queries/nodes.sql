@@ -36,7 +36,11 @@ SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
        coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags, n.security_source, n.logs_vetoed,
        n.learning_since, n.deactivated_at, n.deletion_due_at, u.availability AS update_availability, u.total_count AS update_total,
-       u.security_count AS update_security, u.reboot_required AS update_reboot_required
+       u.security_count AS update_security, u.reboot_required AS update_reboot_required,
+       -- The modules it runs (M5-20): enabled for its group and built into its agent.
+       ARRAY(SELECT s.module_id FROM module_settings s
+             WHERE s.org_id = n.org_id AND s.group_id = n.group_id AND s.enabled AND s.module_id = ANY (n.modules)
+             ORDER BY s.module_id)::text[] AS active_modules
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 LEFT JOIN node_update_state u ON u.org_id = n.org_id AND u.node_id = n.id
 WHERE sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[])

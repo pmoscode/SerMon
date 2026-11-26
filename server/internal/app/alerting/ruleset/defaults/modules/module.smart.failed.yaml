@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.smart.failed
+  name: { de: "SMART meldet Fehler", en: "SMART reports a failure" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_smart_passed
+  dimensions: [ device ]
+  critical: { op: "<", value: 1 }
+  for: 1m
+  selector: { module: smart }
+  help:
+    de: >-
+      Die Selbstauskunft einer Disk (SMART overall-health) ist fehlgeschlagen: Die Disk erwartet ihren Ausfall. Sichere die Daten jetzt und tausche die Disk; smartctl -a /dev/<disk> zeigt die Attribute, die es auslösten.
+    en: >-
+      The self-assessment of a disk (SMART overall-health) failed: the disk expects to fail. Back up the data now and replace the disk; smartctl -a /dev/<disk> shows the attributes that triggered it.

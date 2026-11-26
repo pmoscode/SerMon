@@ -55,6 +55,9 @@ Rules for good defaults:
   `server/internal/domain/metric/catalog.go`). Exclude irrelevant dimension values with `exclude` (glob lists); the agent
   already leaves out tmpfs, squashfs, overlay, loop devices and container interfaces.
 - Ratios are 0..1 (`0.85`, not `85`) – the loader rejects anything else. Fields of another rule type are errors.
+- A rule on a module's metric (`rules/modules/module.<id>.<condition>.yaml`, category `modules`) names the module:
+  `selector: { module: <id> }` – it then applies only to nodes whose group runs the module (M5-20); the loader
+  refuses a module metric without it.
 - `help` is mandatory in DE and EN: meaning, typical causes, concrete next steps (link to Live view / Logs where useful).
 - For security events specify `notifyFields` (e.g. `[ts, user, ip, port]`) so notifications contain them.
 

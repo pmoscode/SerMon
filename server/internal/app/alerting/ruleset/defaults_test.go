@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,6 +158,18 @@ var (
 	warning  = alert.LevelWarning
 )
 
+var (
+	site     = metrics.Labels{"target": "https://127.0.0.1/health"}
+	port5432 = metrics.Labels{"target": "127.0.0.1:5432"}
+	replica  = metrics.Labels{"replica": "standby-1"}
+	day      = 86400.0
+)
+
+// moduleDown is a module's "up" going from 1 to 0.
+func moduleDown(metric string, labels metrics.Labels, level alert.Level) scenario {
+	return scenario{fire: labeled(metric, labels, was(1, 0)), calm: labeled(metric, labels, was(1, 1)), want: level}
+}
+
 func networkRate(direction, kind string) scenario {
 	m, packets := "sermon_network_"+direction+"_"+kind+"_per_second", "sermon_network_"+direction+"_packets_per_second"
 	return scenario{fire: share(m, packets, eth0, 5), calm: share(m, packets, eth0, 0), want: warning}
@@ -249,6 +262,34 @@ var scenarios = map[alert.RuleID]scenario{
 	"system.raid.degraded":       {fire: labeled("sermon_raid_degraded", md0, was(0, 1)), calm: labeled("sermon_raid_degraded", md0, was(0, 0)), want: critical},
 	"system.time.unsynchronized": {fire: one("sermon_time_synchronized", steady(0)), calm: one("sermon_time_synchronized", steady(1)), want: warning},
 	"system.systemd.unit_failed": {fire: labeled("sermon_systemd_unit_failed", backup, was(0, 1)), calm: labeled("sermon_systemd_unit_failed", backup, was(1, 0)), want: warning},
+
+	// M5-20: the modules' rules, in the units the modules send (seconds, 0 or 1).
+	"module.http_check.down":           moduleDown("sermon_http_check_up", site, critical),
+	"module.tcp_check.down":            moduleDown("sermon_tcp_check_up", port5432, critical),
+	"module.nginx.down":                moduleDown("sermon_nginx_up", nil, critical),
+	"module.apache.down":               moduleDown("sermon_apache_up", nil, critical),
+	"module.redis.down":                moduleDown("sermon_redis_up", nil, critical),
+	"module.redis.replication_broken":  moduleDown("sermon_redis_master_link_up", nil, warning),
+	"module.prometheus.target_down":    moduleDown("sermon_prometheus_up", site, warning),
+	"module.systemd_units.not_active":  moduleDown("sermon_systemd_units_active", backup, warning),
+	"module.smart.failed":              moduleDown("sermon_smart_passed", sda, critical),
+	"module.mysql.replication_stopped": moduleDown("sermon_mysql_replication_running", nil, critical),
+	"module.mysql.replication_lag": {
+		fire: one("sermon_mysql_replication_lag_seconds", steady(400)),
+		calm: one("sermon_mysql_replication_lag_seconds", steady(1)), want: critical,
+	},
+	"module.tls.cert_expiring": {
+		fire: labeled("sermon_tls_cert_expires_in_seconds", site, steady(5*day)),
+		calm: labeled("sermon_tls_cert_expires_in_seconds", site, steady(60*day)), want: critical,
+	},
+	"module.http_check.cert_expiring": {
+		fire: labeled("sermon_http_check_cert_expires_in_seconds", site, steady(14*day)),
+		calm: labeled("sermon_http_check_cert_expires_in_seconds", site, steady(60*day)), want: warning,
+	},
+	"module.postgres.replication_lag": {
+		fire: labeled("sermon_postgres_replication_lag_seconds", replica, steady(120)),
+		calm: labeled("sermon_postgres_replication_lag_seconds", replica, steady(2)), want: warning,
+	},
 
 	"system.node.rebooted":   {fireEvents: []secevent.Event{event(secevent.SystemReboot, web, time.Minute, "", "")}, calmEvents: []secevent.Event{event(secevent.SystemReboot, web, 20*time.Minute, "", "")}, want: warning},
 	"system.memory.oom_kill": {fireEvents: []secevent.Event{event(secevent.OOMKill, web, time.Minute, "", "")}, calmEvents: []secevent.Event{event(secevent.OOMKill, web, 20*time.Minute, "", "")}, want: critical},
@@ -441,5 +482,33 @@ func TestDefaults_HaveHysteresisOrDuration(t *testing.T) {
 		if def.Doc.GetMetadata().GetLabels()["category"] == "" {
 			t.Errorf("%s has no category", def.Rule.ID)
 		}
+	}
+}
+
+// M5-20: every rule on a module's metric names the module and applies to no node that doesn't
+// run it – a node without the module gets no alert.
+func TestDefaults_ModuleRulesOnlyForNodesRunningTheModule(t *testing.T) {
+	defs, err := ruleset.Defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, def := range defs {
+		if def.Doc.GetMetadata().GetLabels()["category"] != "modules" {
+			continue
+		}
+		count++
+		mod := def.Rule.Module
+		if mod == "" || !strings.HasPrefix(string(def.Rule.ID), "module."+mod+".") {
+			t.Errorf("%s: module %q", def.Rule.ID, mod)
+		}
+		without := fleet.Node{ID: web, Group: group, Modules: []string{"other"}}
+		with := fleet.Node{ID: db, Group: group, Modules: []string{"other", mod}}
+		if got := def.Rule.Nodes([]fleet.Node{without, with}); len(got) != 1 || got[0].ID != db {
+			t.Errorf("%s applies to %+v", def.Rule.ID, got)
+		}
+	}
+	if count < 10 {
+		t.Errorf("%d module rules", count)
 	}
 }

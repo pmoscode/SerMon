@@ -1,0 +1,17 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.redis.down
+  name: { de: "Redis nicht erreichbar", en: "Redis down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_redis_up
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: redis }
+  help:
+    de: >-
+      Redis antwortet seit 2 Minuten nicht auf INFO. Typische Ursachen: Redis gestoppt oder abgestürzt, falsches Passwort (die Gesundheit des Moduls nennt es), Speicher voll ohne Eviction. Prüfe systemctl status redis und redis-cli ping.
+    en: >-
+      Redis has not answered INFO for 2 minutes. Typical causes: Redis stopped or crashed, a wrong password (the module health says so), memory full without eviction. Check systemctl status redis and redis-cli ping.

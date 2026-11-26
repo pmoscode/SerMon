@@ -1,0 +1,17 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.redis.replication_broken
+  name: { de: "Redis-Replikation unterbrochen", en: "Redis replication broken" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_redis_master_link_up
+  warning: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: redis }
+  help:
+    de: >-
+      Ein Redis-Replikat hat seit 2 Minuten keine Verbindung zu seinem Master. Prüfe den Master, das Netz dazwischen und masterauth; redis-cli info replication zeigt den Zustand.
+    en: >-
+      A Redis replica has had no link to its master for 2 minutes. Check the master, the network in between and masterauth; redis-cli info replication shows the state.

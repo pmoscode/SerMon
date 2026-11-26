@@ -1,0 +1,26 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.mysql.replication_lag
+  name: { de: "MySQL-Replikation hängt hinterher", en: "MySQL replication lagging" }
+  labels: { category: modules }
+spec:
+  type: threshold
+  metric: sermon_mysql_replication_lag_seconds
+  aggregate: max
+  window: 5m
+  warning: { op: ">", value: 60 }
+  critical: { op: ">", value: 300 }
+  clear: { op: "<", value: 30 }
+  for: 5m
+  selector: { module: mysql }
+  help:
+    de: >-
+      Dieses Replikat liegt mehr als eine Minute hinter seiner Quelle (Seconds_Behind_Source; kritisch: 5 Minuten).
+      Lesezugriffe sehen alte Daten, bei einem Ausfall der Quelle gingen Änderungen verloren. Typische Ursachen: I/O
+      oder CPU des Replikats am Limit, große Transaktionen, ein einzelner SQL-Thread. Prüfe SHOW REPLICA STATUS und
+      das Log des Replikats.
+    en: >-
+      This replica is more than a minute behind its source (Seconds_Behind_Source; critical: 5 minutes). Reads see
+      old data, and on a failure of the source changes would be lost. Typical causes: I/O or CPU of the replica at
+      their limit, large transactions, a single SQL thread. Check SHOW REPLICA STATUS and the replica's log.

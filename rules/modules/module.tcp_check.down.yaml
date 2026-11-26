@@ -1,0 +1,18 @@
+apiVersion: sermon/v1
+kind: AlertRule
+metadata:
+  id: module.tcp_check.down
+  name: { de: "Port nicht erreichbar", en: "Port down" }
+  labels: { category: modules }
+spec:
+  type: state
+  metric: sermon_tcp_check_up
+  dimensions: [ target ]
+  critical: { op: "<", value: 1 }
+  for: 2m
+  selector: { module: tcp_check }
+  help:
+    de: >-
+      Ein überwachter TCP-Port nimmt seit 2 Minuten keine Verbindung an. Typische Ursachen: Dienst gestoppt, er lauscht auf einer anderen Adresse, eine Firewall auf dem Host. Prüfe mit ss -ltnp, ob der Dienst lauscht, und seine Logs.
+    en: >-
+      A monitored TCP port has not accepted a connection for 2 minutes. Typical causes: the service stopped, it listens on another address, a firewall on the host. Check with ss -ltnp whether the service listens, and its logs.

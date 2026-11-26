@@ -188,6 +188,10 @@ func FromDocument(doc *webv1.AlertRule) (Definition, error) {
 		}
 		return Definition{}, err
 	}
+	moduleID, err := moduleOf(spec)
+	if err != nil {
+		return Definition{}, err
+	}
 	tags := tag.Tags(spec.GetSelector().GetTags())
 	if err := tags.Validate(); err != nil {
 		return Definition{}, invalid("selector.tags: %v", err)
@@ -195,7 +199,7 @@ func FromDocument(doc *webv1.AlertRule) (Definition, error) {
 	if len(tags) == 0 {
 		tags = nil
 	}
-	return Definition{Doc: doc, Rule: alerting.Rule{ID: id, Timing: timing, Groups: groups, Tags: tags, Evaluator: evaluator}}, nil
+	return Definition{Doc: doc, Rule: alerting.Rule{ID: id, Timing: timing, Groups: groups, Tags: tags, Module: moduleID, Evaluator: evaluator}}, nil
 }
 
 // Fields of the spec by rule type (YAML names in the errors). Event rules count instead of
@@ -275,6 +279,26 @@ func timingOf(spec *webv1.AlertRuleSpec) (alert.Timing, error) {
 		return alert.Timing{}, err
 	}
 	return timing, nil
+}
+
+// moduleOf reads the module of the selector (M5-20): a rule on a module's metric names that
+// module, and only a known one; it then applies only to the nodes running it.
+func moduleOf(spec *webv1.AlertRuleSpec) (string, error) {
+	id := spec.GetSelector().GetModule()
+	owner := ""
+	if def, ok := metric.Lookup(spec.GetMetric()); ok {
+		owner = def.Module
+	}
+	switch {
+	case id == "" && owner == "":
+		return "", nil
+	case id != owner && owner != "":
+		return "", invalid("selector.module: %s is a metric of the module %s; name it", spec.GetMetric(), owner)
+	case owner == "":
+		return "", invalid("selector.module: %s is no metric of the module %s", spec.GetMetric(), id)
+	}
+	// The metric's catalog names the module: a module of the build.
+	return id, nil
 }
 
 // groupsOf reads the selector: "*" (or nothing) for all groups, otherwise group IDs.

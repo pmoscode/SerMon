@@ -5379,8 +5379,9 @@ Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
 #### ☑ M5-07 – Module in der UI · W · L
 > Erledigt (`web/src/lib/modules`, `web/src/lib/components/modules`):
 > - **Formular aus dem Schema** (`ModuleForm`): Text, Zahl, Ganzzahl, Auswahl (`enum`), Schalter, Listen (eine Zeile je
->   Eintrag); prüft vor wie der Agent (Länge, Muster, Bereich, Formate `uri`, `host-port`, `path`, `duration`,
->   Steuerzeichen, Pflicht) und schickt Werte in den Typen des Schemas, leere Felder und Schalter in der Vorgabe nicht
+>   Eintrag); prüft selbst nur, was das Senden verhindert (Pflicht, Zahl), den Rest prüft der Server mit den Regeln des
+>   Agents und nennt das Feld (keine dritte Kopie des Prüfers, spart Bundle) und schickt Werte in den Typen des
+>   Schemas, leere Felder und Schalter in der Vorgabe nicht
 >   (die Vorgabe steht als Platzhalter). Geheimnisse sind Passwortfelder, die immer leer beginnen und nur „gesetzt“/
 >   „nicht gesetzt“ zeigen; speichern lassen sie sich mit M5-05.
 > - **Beschriftungen** `module_<id>` und `module_<id>_<feld>` (mit Hilfezeile `…_help`) in DE und EN, als feste Tabelle

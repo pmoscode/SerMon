@@ -13,6 +13,10 @@ Everything about one server: a header with host facts and current key figures, b
 - The **Security** tab shows the node's security events with totals, chart, top IPs and top users; "Open in the security dashboard" leads to the [Security](/security) page with the same filter – more in [Security](help:pages/security_events).
 - The Identity tab shows whether the node is locked, its last address and an open takeover window; operators rotate, revoke and unlock the key there or allow the takeover after a reinstallation – more in [Node identity](help:concepts/node-identity).
 
+## Modules
+
+The **Modules** tab shows the modules the node's group runs, how they do and their metrics, and the agent's suggestions such as "nginx detected – enable the module?". More: [Modules](help:concepts/modules).
+
 ## Anomalies
 
 The red band in the charts marks minutes in which a metric deviated both from its usual hour of the week and from the

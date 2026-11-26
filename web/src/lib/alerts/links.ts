@@ -16,6 +16,7 @@ export const nodeTabs = [
 	'logs',
 	'security',
 	'updates',
+	'modules',
 	'identity'
 ] as const;
 export type NodeTab = (typeof nodeTabs)[number];

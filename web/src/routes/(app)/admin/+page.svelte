@@ -10,6 +10,8 @@
 	import SecurityPolicyPanel from '#lib/components/admin/SecurityPolicyPanel.svelte';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { page } from '$app/state';
+	import { openingOf } from '#lib/modules/link.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
 
@@ -17,7 +19,9 @@
 	let members = $state<Member[]>([]);
 	let invitations = $state<Invitation[]>([]);
 	let status = $state<'loading' | 'ready'>('loading');
-	let tab = $state('members');
+	// A suggestion ("nginx detected – enable the module?") opens the module's form (M5-07).
+	const opening = openingOf(page.url.searchParams);
+	let tab = $state(opening ? 'modules' : 'members');
 	let failure = $state('');
 
 	async function load() {
@@ -73,6 +77,7 @@
 			<Tabs.Trigger value="security">{m.admin_tab_security()}</Tabs.Trigger>
 			<Tabs.Trigger value="sso">{m.admin_tab_sso()}</Tabs.Trigger>
 			<Tabs.Trigger value="logs">{m.admin_tab_logs()}</Tabs.Trigger>
+			<Tabs.Trigger value="modules">{m.admin_tab_modules()}</Tabs.Trigger>
 			<Tabs.Trigger value="quotas">{m.admin_tab_quotas()}</Tabs.Trigger>
 			<Tabs.Trigger value="audit">{m.admin_tab_audit()}</Tabs.Trigger>
 		</Tabs.List>
@@ -102,6 +107,16 @@
 					<p role="status" class="text-muted-foreground">{m.loading()}</p>
 				{:then { default: LogSettingsPanel }}
 					<LogSettingsPanel />
+				{/await}
+			{/if}
+		</Tabs.Content>
+		<!-- Loaded on demand like the log settings (budget). -->
+		<Tabs.Content value="modules" class="pt-4">
+			{#if tab === 'modules'}
+				{#await import('#lib/components/modules/ModuleSettingsPanel.svelte')}
+					<p role="status" class="text-muted-foreground">{m.loading()}</p>
+				{:then { default: ModuleSettingsPanel }}
+					<ModuleSettingsPanel {opening} />
 				{/await}
 			{/if}
 		</Tabs.Content>

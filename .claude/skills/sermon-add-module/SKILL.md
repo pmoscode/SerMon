@@ -53,8 +53,9 @@ pub trait Instance: Send + 'static {
      (units and aggregations of `metric.Unit`/`metric.Aggregation`, at most 8 labels, area `module`). In the module's
      tests call `crate::assert_in_catalog("<id>", &samples)`; `TestCatalog_ModuleMetrics` checks the file.
    - Help texts `docs/help/{de,en}/metrics/<metric>.md` for every metric (`TestCatalog_EveryMetricHasHelpTexts`) and
-     `docs/help/{de,en}/modules/<module>.md`, labels of the form fields `module_<id>_<field>` (DE + EN), the module's
-     tab in the UI shows its health and metrics.
+     `docs/help/{de,en}/modules/<module>.md`, labels of the form fields `module_<id>` and `module_<id>_<field>` (+ `_help`, DE + EN in
+     `web/messages/*.json`, registered in `web/src/lib/modules/labels.ts` – a test fails for a field without one); the
+     node tab and the group form come from the schema and the catalog, no module-specific UI code.
 9. **Default alerts** for the module via `sermon-add-alert-rule` (selector: nodes where module enabled).
 10. **E2E:** add the service container to the E2E compose and a test that enables the module and sees metrics.
 

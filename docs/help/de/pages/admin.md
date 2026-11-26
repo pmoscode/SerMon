@@ -14,6 +14,10 @@ Eine Rolle gilt für eine Gruppe oder für alle Gruppen. Mehrere Rollen ergänze
 
 Der Reiter **Logs** legt fest, was die Agents jeder Gruppe senden, ob Viewer Logs sehen und welche eigenen Redaction-Regeln gelten; er zeigt auch, welche Einstellungen jeder Agent angewendet hat. Mehr dazu: [Log-Einstellungen](help:concepts/log_settings).
 
+## Module
+
+Der Reiter **Module** schaltet je Gruppe die Module ein, die die Agents ihrer Nodes kennen, und richtet sie ein. Mehr dazu: [Module](help:concepts/modules).
+
 ## SSO-Gruppen
 
 Hat die Instanz einen OIDC-Provider, ordnet der Reiter **SSO-Gruppen** Gruppen des Providers einer Rolle zu. Bei jeder Anmeldung folgen diese Rollen den Gruppen; in der Mitgliederliste tragen sie das Zeichen „SSO“. Mehr dazu: [SSO-Gruppen](help:concepts/oidc-group-mappings).

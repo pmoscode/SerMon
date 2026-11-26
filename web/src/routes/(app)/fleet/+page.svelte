@@ -68,6 +68,17 @@
 			clearInterval(timer);
 		};
 	});
+	// Suggested modules (M5-07) a little later: they are no part of the first load (budget).
+	type Hints = typeof import('#lib/components/modules/FleetModuleHints.svelte').default;
+	let ModuleHints = $state<Hints | undefined>();
+	$effect(() => {
+		const timer = setTimeout(() => {
+			void import('#lib/components/modules/FleetModuleHints.svelte').then(
+				(mod) => (ModuleHints = mod.default)
+			);
+		}, 2000);
+		return () => clearTimeout(timer);
+	});
 	const percent = $derived(
 		new Intl.NumberFormat(localeState.current, { style: 'percent', maximumFractionDigits: 1 })
 	);
@@ -135,6 +146,9 @@
 {:else}
 	<div class="flex flex-col gap-4">
 		<FleetHeader total={nodes.length} {counts} active={status} onSelect={(s) => (status = s)} />
+		{#if ModuleHints}
+			<ModuleHints />
+		{/if}
 		{#if anomalyRate !== undefined}
 			<a
 				href={resolve('/(app)/anomalies')}

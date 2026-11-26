@@ -13,6 +13,10 @@ Alles zu einem Server: Kopfzeile mit Host-Fakten und aktuellen Kennzahlen, darun
 - Der Reiter **Security** zeigt die Security-Events des Nodes mit Summen, Chart, Top-IPs und Top-Usern; „Im Security-Dashboard öffnen“ führt mit demselben Filter zur Seite [Security](/security) – mehr unter [Security](help:pages/security_events).
 - Der Reiter Identität zeigt, ob der Node gesperrt ist, seine letzte Adresse und ein offenes Übernahmefenster; Operatoren rotieren, widerrufen und entsperren dort den Schlüssel oder erlauben die Übernahme nach einer Neuinstallation – mehr unter [Identität des Nodes](help:concepts/node-identity).
 
+## Module
+
+Der Reiter **Module** zeigt die Module, die die Gruppe des Nodes betreibt, wie es ihnen geht und ihre Metriken, dazu Vorschläge des Agents wie „nginx erkannt – Modul aktivieren?“. Mehr dazu: [Module](help:concepts/modules).
+
 ## Anomalien
 
 Das rote Band in den Charts markiert Minuten, in denen eine Metrik zugleich von ihrer üblichen Stunde der Woche und vom

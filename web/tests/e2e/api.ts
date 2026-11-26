@@ -49,7 +49,9 @@ export function installed(loggedIn: boolean): Record<string, Handler> {
 		'PasskeyService/ListPasskeys': () => ({ json: {} }),
 		'FleetService/GetFleetSummary': () => ({ json: {} }),
 		// The anomaly band of the node pages (M4-25): none, the node learnt.
-		'AnomalyService/GetNodeAnomalies': () => ({ json: {} })
+		'AnomalyService/GetNodeAnomalies': () => ({ json: {} }),
+		// The fleet's suggested modules (M5-07): none.
+		'ModuleService/ListModuleHints': () => ({ json: {} })
 	};
 }
 

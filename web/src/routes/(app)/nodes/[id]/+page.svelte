@@ -6,6 +6,7 @@
 	import MetricChart from '#lib/charts/MetricChart.svelte';
 	import type { Component } from 'svelte';
 	import type { Range } from '#lib/stores/timerange.svelte.js';
+	import type { Unit } from '#lib/format/format.js';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import NodeFacts from '#lib/components/node/NodeFacts.svelte';
 	import NodeTags from '#lib/components/node/NodeTags.svelte';
@@ -124,6 +125,7 @@
 				<Tabs.Trigger value="logs">{m.node_tab_logs()}</Tabs.Trigger>
 				<Tabs.Trigger value="security">{m.node_tab_security()}</Tabs.Trigger>
 				<Tabs.Trigger value="updates">{m.node_tab_updates()}</Tabs.Trigger>
+				<Tabs.Trigger value="modules">{m.node_tab_modules()}</Tabs.Trigger>
 				<Tabs.Trigger value="identity">{m.node_tab_identity()}</Tabs.Trigger>
 			</Tabs.List>
 
@@ -364,6 +366,21 @@
 						<p role="status" class="text-muted-foreground">{m.loading()}</p>
 					{:then { default: NodeUpdates }}
 						<NodeUpdates nodeId={id} groupId={nodeState.node.groupId} {now} />
+					{/await}
+				{/if}
+			</Tabs.Content>
+
+			<!-- Loaded on demand like the other tabs (budget, M4-27). -->
+			<Tabs.Content value="modules" class="pt-4">
+				{#if tab === 'modules'}
+					{#await import('#lib/components/modules/NodeModules.svelte')}
+						<p role="status" class="text-muted-foreground">{m.loading()}</p>
+					{:then { default: NodeModules }}
+						<NodeModules nodeId={id} {now}>
+							{#snippet chart(metric: string, title: string, unit: Unit)}
+								<MetricChart nodeId={id} {title} {unit} height={140} queries={[{ metric }]} />
+							{/snippet}
+						</NodeModules>
 					{/await}
 				{/if}
 			</Tabs.Content>

@@ -5376,7 +5376,32 @@ Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
   Gruppe erreicht ihre Nodes und nur sie.
 - **Abhängig von:** M5-02
 
-#### ☐ M5-07 – Module in der UI · W · L
+#### ☑ M5-07 – Module in der UI · W · L
+> Erledigt (`web/src/lib/modules`, `web/src/lib/components/modules`):
+> - **Formular aus dem Schema** (`ModuleForm`): Text, Zahl, Ganzzahl, Auswahl (`enum`), Schalter, Listen (eine Zeile je
+>   Eintrag); prüft vor wie der Agent (Länge, Muster, Bereich, Formate `uri`, `host-port`, `path`, `duration`,
+>   Steuerzeichen, Pflicht) und schickt Werte in den Typen des Schemas, leere Felder und Schalter in der Vorgabe nicht
+>   (die Vorgabe steht als Platzhalter). Geheimnisse sind Passwortfelder, die immer leer beginnen und nur „gesetzt“/
+>   „nicht gesetzt“ zeigen; speichern lassen sie sich mit M5-05.
+> - **Beschriftungen** `module_<id>` und `module_<id>_<feld>` (mit Hilfezeile `…_help`) in DE und EN, als feste Tabelle
+>   in `labels.ts` (ein dynamischer Zugriff auf alle Texte hätte das Budget gesprengt), der `title` des Schemas als
+>   Rückfall; ein Test verlangt Texte für jedes Feld jedes Schemas des Builds (heute simulate, http_check, tcp_check,
+>   tls, smart, docker, systemd_units).
+> - **Organisation → Module:** je Gruppe die Module, die ihre Agents eingebaut haben, mit Zustand und Intervall;
+>   Einrichten, Speichern mit Step-up, Entfernen; der Grund einer Ablehnung des Servers steht beim Formular.
+> - **Reiter „Module“ am Node:** Zustand je eingeschaltetem Modul (Symbol und Text), Grund als Text (`displayText`),
+>   letzter Erfolg, die Metriken des Moduls aus dem Katalog; Veto der `agent.toml`; Hinweis „nginx erkannt – Modul
+>   aktivieren?“ mit den Anlässen. Admins führt „Aktivieren“ zum Formular der Gruppe mit dem Vorschlag des Agents
+>   (`/admin?tab=modules&group=…&module=…&suggest=…`, geprüft), andere lesen, dass ein Admin es einschalten kann.
+> - **Fleet:** die offenen Vorschläge („… erkannt auf web-01 – Modul aktivieren?“, höchstens fünf), nachgeladen nach
+>   2 s wie die Anomalie-Rate (Budget).
+> - Hilfe `concepts/modules` und Abschnitte in den Seitenhilfen Organisation und Node (DE und EN).
+> - Budget: der Reiter und die Formulare laden bei Bedarf; die Gesamtgrenze aller Bundles (`check:size`, gegen
+>   versehentlich große Abhängigkeiten) steigt von 560 auf 580 KiB (+19 KiB für Formular, drei Ansichten, Texte und
+>   Hilfe). Die Erstlast jeder Seite bleibt unter 200 KiB (Fleet 148, Node 180 KiB).
+> - Tests: Formularlogik (jede Feldart, Prüfungen, Geheimnis nie in der Konfiguration, Link), Komponententests
+>   (Formular, Einstellungen mit Step-up und Ablehnung, Node mit fremdem Text, Hinweis für Admins und Viewer, Fleet),
+>   E2E mit axe (Fleet-Hinweis → Formular → Step-up → gespeichert; Reiter am Node); Gegenproben 12/12.
 - **Ziel:** Reiter „Module“ am Node (Gesundheit, Metriken) und Einstellungen je Gruppe; Formular aus dem JSON-Schema
   (Teilmenge aus M5-01, Geheimnisse als Passwortfeld); Hinweis „nginx erkannt – Modul aktivieren?“ an Node und
   Fleet; Hilfetexte DE und EN (Skill `sermon-ui-component`).

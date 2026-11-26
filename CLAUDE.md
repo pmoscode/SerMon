@@ -153,6 +153,9 @@ Web-Besonderheiten:
 - Imports über `#lib/...` (package.json-Subpath-Imports) brauchen die Endung `.js`, z. B. `#lib/i18n/locale.svelte.js`.
 - npm: Nur Releases, die mindestens 3 Tage alt sind, werden installiert. Schlägt `pnpm add` mit `NO_MATURE_MATCHING_VERSION`
   fehl, eine ältere Version wählen statt die Regel zu lockern.
+- Kiosk-Anzeige `/kiosk` (M5-27) außerhalb von `(app)`, ohne Session: eigener Client (`#lib/kiosk/api.js`,
+  `credentials: 'omit'`); `KioskApp` importiert bewusst die gemeinsamen Module aller Seiten, sonst teilt der Bundler die
+  gemeinsamen Chunks anders auf und jede Seite wird größer.
 - JavaScript-Budget (KONZEPT §17): unter 200 KiB pro Seite, Flotte und Node-Seite mit 10 KiB Luft (`budget.e2e.ts`).
   Was erst beim Öffnen gebraucht wird (Popover wie `HelpTip`, Formulare), mit `{#await import(…)}` bzw. `import()` bei
   Bedarf laden.

@@ -29,3 +29,15 @@ group you see. Widgets with variables instead of fixed nodes also work after an 
 - **Share** shows the dashboard to the organization; **Export** saves it as JSON for an import elsewhere.
 
 At most 30 widgets, 20 nodes per widget and 4 variables.
+
+## Kiosk displays
+
+Admins of all groups create a **kiosk token** at a shared dashboard (*Kiosk displays*, with a fresh confirmation of
+their identity). The address it gives – `/kiosk#t=…` – shows the dashboard on a display without signing in: full
+screen, without controls, read-only, with the rights of the admin who created it. The page refreshes every 30 seconds,
+reconnects by itself after an outage and says since when its data is not current. Several tokens separated by commas
+(`#t=…,…`) take turns, every 60 seconds or as set with `&rotate=` (seconds). For a real full screen start the
+browser in its kiosk mode (e.g. `chromium --kiosk`).
+
+The address is the key: whoever has it sees the dashboard. A token expires after 1 to 365 days; revoking it, deleting
+the dashboard or no longer sharing it ends it at once – the display then shows nothing.

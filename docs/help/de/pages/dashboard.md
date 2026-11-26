@@ -30,3 +30,15 @@ nach einem Import in eine andere Organisation.
 - **Teilen** zeigt das Dashboard der Organisation; **Export** speichert es als JSON für einen Import anderswo.
 
 Höchstens 30 Widgets, 20 Nodes je Widget und 4 Variablen.
+
+## Kiosk-Anzeigen
+
+Admins aller Gruppen legen an einem geteilten Dashboard einen **Kiosk-Token** an (*Kiosk-Anzeigen*, mit erneuter
+Bestätigung der Identität). Die Adresse dazu – `/kiosk#t=…` – zeigt das Dashboard auf einer Anzeige ohne Anmeldung:
+Vollbild, ohne Bedienelemente, nur lesend, mit den Rechten des Admins, der ihn angelegt hat. Die Seite aktualisiert
+sich alle 30 Sekunden, verbindet sich nach einem Ausfall selbst neu und sagt, seit wann ihre Daten nicht aktuell sind.
+Mehrere Tokens mit Komma (`#t=…,…`) wechseln sich ab, alle 60 Sekunden oder wie mit `&rotate=` (Sekunden) gesetzt.
+Für echtes Vollbild den Browser im Kiosk-Modus starten (z. B. `chromium --kiosk`).
+
+Die Adresse ist der Schlüssel: Wer sie hat, sieht das Dashboard. Ein Token läuft nach 1 bis 365 Tagen ab; Widerrufen,
+das Dashboard löschen oder nicht mehr teilen beendet ihn sofort – die Anzeige zeigt dann nichts mehr.

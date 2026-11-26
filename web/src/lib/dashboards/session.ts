@@ -2,16 +2,16 @@
  * The widgets' data in the UI: the existing readers with the viewer's session (ADR 0040) – the
  * server checks every node against the viewer's rights, nodes out of scope stay empty.
  */
-import { timestampFromMs, timestampMs } from '@bufbuild/protobuf/wkt';
+import { timestampFromMs } from '@bufbuild/protobuf/wkt';
 import type { Client } from '@connectrpc/connect';
 import { api, client } from '#lib/api/client.js';
 import type { AlertService } from '#lib/api/gen/sermon/web/v1/alert_pb.js';
 import { WidgetKind, type Widget } from '#lib/api/gen/sermon/web/v1/dashboard_pb.js';
-import type { MetricSeries } from '#lib/api/gen/sermon/web/v1/metrics_pb.js';
 import type { Unit } from '#lib/format/format.js';
 import type { Range } from '#lib/stores/timerange.svelte.js';
 import { isMetricKind } from './model.js';
-import { unitOf, type WidgetResult, type WidgetSeries, type WidgetSource } from './source.js';
+import { seriesOf } from './series.js';
+import { unitOf, type WidgetResult, type WidgetSource } from './source.js';
 import { targetOf, type FleetNode, type VariableValues } from './variables.js';
 
 /** Log queries span at most 14 days (LogFilter). */
@@ -20,21 +20,6 @@ export const MAX_LOG_SPAN = 14 * 86_400_000;
 export const LOG_LINES = 50;
 /** QueryMetrics takes at most 100 nodes. */
 const MAX_QUERY_NODES = 100;
-
-export function seriesOf(series: MetricSeries[], fleet: FleetNode[]): WidgetSeries[] {
-	const names = new Map(fleet.map((n) => [n.id, n.hostname]));
-	return series.map((s) => ({
-		nodeId: s.nodeId,
-		hostname: names.get(s.nodeId) ?? '',
-		labels: { ...s.labels },
-		points: s.points.map((p) => ({
-			time: p.time ? timestampMs(p.time) : 0,
-			value: p.avg,
-			min: p.min,
-			max: p.max
-		}))
-	}));
-}
 
 // Only the alert service: the alerting client would bring the descriptors of rules, channels
 // and policies (JavaScript budget).

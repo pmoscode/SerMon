@@ -3,8 +3,6 @@
 	import { Code, ConnectError } from '@connectrpc/connect';
 	import Download from '@lucide/svelte/icons/download';
 	import Pencil from '@lucide/svelte/icons/pencil';
-	import Plus from '@lucide/svelte/icons/plus';
-	import Save from '@lucide/svelte/icons/save';
 	import Share2 from '@lucide/svelte/icons/share-2';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -26,24 +24,16 @@
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
 	import TimeRangePicker from '#lib/components/time/TimeRangePicker.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { saveFile } from '#lib/download/download.js';
 	import type { Box, Item } from '#lib/dashboards/layout.js';
-	import {
-		kinds,
-		layoutOf,
-		MAX_WIDGETS,
-		newWidget,
-		presetOf,
-		timePresetOf,
-		withLayout
-	} from '#lib/dashboards/model.js';
+	import { layoutOf, MAX_WIDGETS, newWidget, presetOf, withLayout } from '#lib/dashboards/model.js';
 	import { sessionSource } from '#lib/dashboards/session.js';
 	import { resolveVariables, withVariable, type FleetNode } from '#lib/dashboards/variables.js';
 	import { displayText } from '#lib/logs/text.js';
 	import { m } from '#lib/paraglide/messages.js';
-	import { presets, timeRange, type Preset } from '#lib/stores/timerange.svelte.js';
+	import { sessionState } from '#lib/stores/session.svelte.js';
+	import { timeRange } from '#lib/stores/timerange.svelte.js';
 
 	/** A custom dashboard (KONZEPT §16, M5-24): view, and for whoever may edit it the grid editor. */
 	const id = $derived(page.params.id ?? '');
@@ -54,7 +44,7 @@
 	let failure = $state('');
 	let conflict = $state(false);
 	let confirmDelete = $state(false);
-	let addKind = $state(WidgetKind.TIMESERIES);
+	let showKiosk = $state(false);
 	/** The widget in the form: a new one or a copy of one of the draft. */
 	let editing = $state.raw<{ widget: Widget; box: Box; isNew: boolean } | undefined>();
 	let catalog = $state.raw<CatalogMetric[]>([]);
@@ -158,7 +148,7 @@
 		if (draft) draft = { ...draft, ...next };
 	}
 
-	function addWidget() {
+	function addWidget(addKind: WidgetKind) {
 		if (!draft) return;
 		const w = newWidget(draft, addKind, kindLabel(addKind));
 		if (!w) {
@@ -265,14 +255,6 @@
 
 	const selectClass =
 		'h-9 rounded-md border border-input bg-background px-2 text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none';
-	const rangeLabels: Record<Preset, () => string> = {
-		'15m': () => m.range_15m(),
-		'1h': () => m.range_1h(),
-		'6h': () => m.range_6h(),
-		'24h': () => m.range_24h(),
-		'7d': () => m.range_7d(),
-		'30d': () => m.range_30d()
-	};
 </script>
 
 <svelte:head>
@@ -301,69 +283,17 @@
 			>
 		</nav>
 		{#if draft}
-			<h1 class="sr-only">
-				{m.dashboard_editing({ title: displayText(dashboard.spec?.title ?? '') })}
-			</h1>
-			<div class="flex flex-wrap items-end gap-3">
-				<div class="flex min-w-64 flex-1 flex-col gap-1">
-					<Label for="dashboard-name">{m.dashboard_name()}</Label>
-					<Input
-						id="dashboard-name"
-						maxlength={200}
-						value={draft.title}
-						oninput={(e) => setDraft({ title: e.currentTarget.value })}
-					/>
-				</div>
-				<div class="flex flex-col gap-1">
-					<Label for="dashboard-range">{m.dashboard_default_range()}</Label>
-					<select
-						id="dashboard-range"
-						class={selectClass}
-						value={presetOf(draft.timeRange)}
-						onchange={(e) => setDraft({ timeRange: timePresetOf(e.currentTarget.value as Preset) })}
-					>
-						{#each presets as p (p)}<option value={p}>{rangeLabels[p]()}</option>{/each}
-					</select>
-				</div>
-				<div class="flex w-full flex-col gap-1">
-					<Label for="dashboard-description">{m.dashboard_description()}</Label>
-					<textarea
-						id="dashboard-description"
-						class="min-h-16 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-						maxlength={2000}
-						value={draft.description}
-						oninput={(e) => setDraft({ description: e.currentTarget.value })}></textarea>
-				</div>
-			</div>
-			<div
-				class="flex flex-wrap items-end gap-2"
-				role="toolbar"
-				aria-label={m.dashboard_editor_toolbar()}
-			>
-				<div class="flex flex-col gap-1">
-					<Label for="dashboard-add-kind">{m.dashboard_add_kind()}</Label>
-					<select id="dashboard-add-kind" class={selectClass} bind:value={addKind}>
-						{#each kinds as k (k.kind)}<option value={k.kind}>{kindLabel(k.kind)}</option>{/each}
-					</select>
-				</div>
-				<Button
-					variant="outline"
-					onclick={addWidget}
-					disabled={draft.widgets.length >= MAX_WIDGETS}
-				>
-					<Plus aria-hidden="true" />
-					{m.dashboard_add_widget()}
-				</Button>
-				<span class="ml-auto flex gap-2">
-					<Button variant="outline" onclick={cancelEdit} disabled={busy}
-						>{m.dashboard_cancel()}</Button
-					>
-					<Button onclick={save} disabled={busy}>
-						<Save aria-hidden="true" />
-						{m.dashboard_save()}
-					</Button>
-				</span>
-			</div>
+			{#await import('#lib/components/dashboards/editor.js') then { EditorHead }}
+				<EditorHead
+					title={dashboard.spec?.title ?? ''}
+					{draft}
+					{busy}
+					{setDraft}
+					{addWidget}
+					{cancelEdit}
+					{save}
+				/>
+			{/await}
 		{:else}
 			<div class="flex flex-wrap items-baseline gap-x-3 gap-y-2">
 				<h1 class="text-2xl font-semibold tracking-tight">{displayText(spec.title)}</h1>
@@ -453,13 +383,27 @@
 			{/if}
 		</div>
 		{#if draft}
-			{#await import('#lib/components/dashboards/VariablesEditor.svelte') then { default: VariablesEditor }}
+			{#await import('#lib/components/dashboards/editor.js') then { VariablesEditor }}
 				<VariablesEditor
 					variables={draft.variables}
 					{fleet}
 					onchange={(variables) => setDraft({ variables })}
 				/>
 			{/await}
+		{/if}
+
+		{#if !draft && dashboard.shared && sessionState.current?.orgAdmin}
+			{#if showKiosk}
+				{#await import('#lib/components/dashboards/editor.js') then { KioskTokens }}
+					<KioskTokens dashboardId={dashboard.id} />
+				{/await}
+			{:else}
+				<div>
+					<Button variant="outline" size="sm" onclick={() => (showKiosk = true)}>
+						{m.kiosk_tokens()}
+					</Button>
+				</div>
+			{/if}
 		{/if}
 
 		{#if spec.widgets.length === 0}
@@ -496,7 +440,7 @@
 	</div>
 
 	{#if editing && draft}
-		{#await import('#lib/components/dashboards/WidgetForm.svelte') then { default: WidgetForm }}
+		{#await import('#lib/components/dashboards/editor.js') then { WidgetForm }}
 			<WidgetForm
 				widget={editing.widget}
 				box={editing.box}

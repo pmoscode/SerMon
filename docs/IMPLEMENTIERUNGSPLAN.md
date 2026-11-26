@@ -5900,7 +5900,32 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
   Rate-Limits.
 - **Abhängig von:** M5-23
 
-#### ☐ M5-27 – Kiosk-Modus · W · M
+#### ☑ M5-27 – Kiosk-Modus · W · M
+> Erledigt (`/kiosk`, `lib/kiosk`, `components/kiosk`):
+> - **Anzeige:** `/kiosk#t=<token>,…&rotate=60` – die Tokens nur im Fragment (nie in einer URL zum Server), höchstens
+>   10, Rotation 10 s bis 1 h; eigener Client mit `Authorization: Kiosk …` und `credentials: 'omit'` (kein
+>   Session-Cookie, keine Ablauf-Weiterleitung). Vollbild ohne Bedienelemente: Titel, Position („2 von 3“) und das
+>   Grid mit den Widgets aus M5-25 über eine Kiosk-Quelle (`QueryKioskWidget`); Charts im Standard-Zeitraum des
+>   Dashboards.
+> - **Zustand** (`KioskState`): alle 30 s Dashboard und Widgets neu (auch nach `online`), Revision erkennt Änderungen;
+>   `UNAUTHENTICATED` (auch aus einem Widget) macht das Board ungültig und löscht seine Daten – es wird nicht erneut
+>   gefragt, die Adresse braucht einen neuen Token; ein Ausfall behält die letzten Daten mit „Nicht aktuell seit …
+>   – verbinde neu“, bis Dashboard und alle Widgets wieder laden.
+> - **Verwaltung:** „Kiosk-Anzeigen“ am geteilten Dashboard für Admins aller Gruppen (bei Bedarf geladen): anlegen mit
+>   Ort und Tagen (Step-up-Dialog), die Adresse der Anzeige einmal zum Kopieren, Liste mit Ersteller, Ablauf, letzter
+>   Nutzung, widerrufen.
+> - **Budget:** Kiosk 128,8 KiB, `/dashboards/[id]` mit Zeitreihe und Alert-Liste 193,6 KiB (unter 200 KiB; die
+>   10 KiB Luft gelten nach KONZEPT §17 für Flotte und Node-Seite, der Fall im Budget-Test prüft jetzt nur das Budget).
+>   Die neue Route ließ den Bundler erst die gemeinsamen Chunks anders schneiden – jede Seite wurde 7 KiB größer;
+>   `KioskApp` importiert deshalb die gemeinsamen Module aller Seiten. Für die Gesamtgröße (`check:size`, 600 KiB,
+>   nicht angehoben) laden die Teile des Editors und die Kiosk-Tokens als ein Chunk, Gauge/Kennzahl/Tabelle und
+>   Log-Stream/Alert-Liste je als einer: gesamt 598,7 KiB (main 591,7 KiB).
+> - Tests: Fragment, Zustand (Rotation, ungültig, Ausfall und Wiederverbindung, Widget-Fehler, Revision),
+>   Komponententests der Anzeige (ohne Token, Rotation, widerrufen, Ausfall, Widget-Fehler, noch nie erreicht), E2E
+>   mit axe (Header statt Cookie, Token nur im Fragment, feindliche Namen, widerrufen zeigt nichts; Token anlegen),
+>   Budget-Test; Gegenproben 11/11. Für M5-32: Seite `/kiosk#t=…`, Überschrift (`h1`) = Titel des Dashboards, Grid
+>   `list` „Widgets of <Titel>“, ungültig `alert` „…invalid, expired or revoked…“; am Dashboard Knopf „Kiosk
+>   displays“, Feld „Where the display hangs“, Knopf „Create token“, Feld „Address of the display“.
 - **Ziel:** Vollbild ohne Bedienelemente, Auto-Rotation zwischen Dashboards, Auto-Refresh, Wiederverbindung nach
   Ausfällen, sichtbarer Hinweis bei veralteten Daten.
 - **Tests zuerst:** Komponententests für Rotation und Fehlerzustände.

@@ -49,14 +49,10 @@
 	});
 
 	const labels = $derived(widget.query?.labels ?? {});
-	const loaders = {
-		[WidgetKind.TIMESERIES]: () => import('./widgets/TimeseriesWidget.svelte'),
-		[WidgetKind.GAUGE]: () => import('./widgets/GaugeWidget.svelte'),
-		[WidgetKind.STAT]: () => import('./widgets/StatWidget.svelte'),
-		[WidgetKind.TABLE]: () => import('./widgets/TableWidget.svelte'),
-		[WidgetKind.LOG_STREAM]: () => import('./widgets/LogStreamWidget.svelte'),
-		[WidgetKind.ALERT_LIST]: () => import('./widgets/AlertListWidget.svelte')
-	};
+	// The chart (uPlot) on its own, the other kinds in two small groups.
+	const chart = () => import('./widgets/TimeseriesWidget.svelte');
+	const values = () => import('./widgets/values.js');
+	const lists = () => import('./widgets/lists.js');
 </script>
 
 {#if !result}
@@ -71,28 +67,28 @@
 	{/if}
 	{#if result.kind === 'metrics'}
 		{#if widget.kind === WidgetKind.TIMESERIES}
-			{#await loaders[WidgetKind.TIMESERIES]() then { default: C }}
+			{#await chart() then { default: C }}
 				<C title={widget.title} unit={result.unit} series={result.series} {labels} {height} />
 			{/await}
 		{:else if widget.kind === WidgetKind.GAUGE}
-			{#await loaders[WidgetKind.GAUGE]() then { default: C }}
+			{#await values() then { GaugeWidget: C }}
 				<C unit={result.unit} series={result.series} {labels} />
 			{/await}
 		{:else if widget.kind === WidgetKind.STAT}
-			{#await loaders[WidgetKind.STAT]() then { default: C }}
+			{#await values() then { StatWidget: C }}
 				<C unit={result.unit} series={result.series} {labels} />
 			{/await}
 		{:else}
-			{#await loaders[WidgetKind.TABLE]() then { default: C }}
+			{#await values() then { TableWidget: C }}
 				<C title={widget.title} unit={result.unit} series={result.series} {labels} />
 			{/await}
 		{/if}
 	{:else if result.kind === 'logs'}
-		{#await loaders[WidgetKind.LOG_STREAM]() then { default: C }}
+		{#await lists() then { LogStreamWidget: C }}
 			<C title={widget.title} lines={result.lines} more={result.more} />
 		{/await}
 	{:else}
-		{#await loaders[WidgetKind.ALERT_LIST]() then { default: C }}
+		{#await lists() then { AlertListWidget: C }}
 			<C title={widget.title} alerts={result.alerts} />
 		{/await}
 	{/if}

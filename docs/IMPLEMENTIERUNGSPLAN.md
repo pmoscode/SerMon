@@ -4959,7 +4959,22 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
     ungewöhnlich?“.
 - **Abhängig von:** M4-07, M4-14, M4-15, M4-25
 
-#### ☐ M4-29 – Ressourcen-Budget mit Update-Erfassung · X · S
+#### ☑ M4-29 – Ressourcen-Budget mit Update-Erfassung · X · S
+> Erledigt: `agent-budget.sh … helper` misst den Root-Helper getrennt (`sermon-helper serve` samt Kindern; per Socket
+> gestartet, kommt und geht er: jeder Prozess im Fenster zählt, keiner heißt in Ruhe). Die Demo misst am Ende von
+> `install` (nur mit `FULL=1`), wenn die letzte Liste älter als die 5 min des Helpers ist, während einer Liste mit
+> frischen Quellen auf web-01 und app-01 und den Helper von dev-01 ohne Liste:
+> - **Agent:** 0,27–0,31 % eines Kerns, eigener Speicher 13,5–15,4 MiB, RSS 25,3–27,6 MiB (ohne Liste, mit 20
+>   Logzeilen/s und Live-Ansicht: 0,60–0,79 %, 11,5–12,5 MiB, RSS 23,5–24,2 MiB). Budget < 1 % und < 30 MiB.
+> - **Helper:** beim Listen 0,11–0,45 % eines Kerns und 0,2 MiB eigener Speicher (0,9 MiB RSS), ohne Liste läuft er
+>   nicht. Die Grenzen (200 %, 500 MiB) fangen nur Absurdes ab.
+> - **Abweichung:** Das Budget gilt für den eigenen Speicher des Baums (`RssAnon` + `RssShmem`), die Zeile nennt die
+>   RSS dazu. Rund 12 MiB der RSS sind gemappte Dateien (Binaries, die Journal-Dateien von `journalctl`): Page Cache,
+>   den andere Prozesse teilen und den der Kernel freigeben kann. Eine Messung lag mit RSS bei 30,8 MiB.
+>   Der eigene Speicher wächst über lange Läufe – das klärt M4-32.
+> - **Tests:** `agent-budget_test.sh` (in einem Container mit `/proc`, in `just test-scripts`): beschäftigter Agent,
+>   Helper, der kommt und geht, Helper in Ruhe, 20 MiB eines Kindes gegen 10 MiB Grenze; in der Demo die Gegenprobe
+>   mit gesenkten Grenzen.
 - **Ziel:** `agent-budget.sh` misst in der Demo auch während einer Erfassung: Der Agent bleibt unter 1 % eines Kerns
   und 30 MiB. Der Helper wird getrennt gemessen und dokumentiert (in Ruhe, beim Lauf).
 - **Tests zuerst:** Gegenprobe mit gesenkter Grenze schlägt fehl.

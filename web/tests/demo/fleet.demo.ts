@@ -18,6 +18,9 @@ import {
 	watchProcesses
 } from './stack';
 
+/** FULL=1: the whole demo (playwright.demo.config.ts). */
+const full = process.env.FULL === '1';
+
 /**
  * The M1 demo (IMPLEMENTIERUNGSPLAN §4): a fresh installation, seven Linux hosts – Debian, Ubuntu,
  * the RHEL family and Fedora with systemd, Alpine with OpenRC – get
@@ -754,7 +757,7 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	const lowered = await execAsync(budgetHosts[0].service, 'sh -s -- 3 0 1', budget);
 	expect(lowered.status, lowered.output).toBe(1);
 	expect(lowered.output).toContain('CPU over budget');
-	expect(lowered.output).toContain('RSS over budget');
+	expect(lowered.output).toContain('memory over budget');
 
 	// Signed packages (M2-21) from the server's repository (M4-20): install.sh --repo sets up the
 	// source with its key, the package manager installs agent and helper, the script enrolls and
@@ -883,6 +886,62 @@ test('a fresh installation monitors seven hosts within two minutes, packages ins
 	);
 	expect(summary.nodes ?? []).toHaveLength(0);
 	await context.close();
+
+	// With FULL=1 (M4-28): the budget during a listing, last – the helper refreshes at most every
+	// 5 minutes (T89), by now the last refresh is long enough ago.
+	if (full) {
+		// Resource budget during a listing (M4-29): the agent asks its root helper for the updates
+		// with fresh sources while both are measured. The helper refreshes at most every 5 minutes
+		// (T89), so the hosts' last listing must be older. The helper is measured on its own (no
+		// descendant of the agent; apt and dnf count as its children): while it lists on the two
+		// hosts, and on dev-01, which lists nothing. Its numbers are documented, its limits only
+		// guard against the absurd.
+		type Listed = { nodes?: { nodeId: string; hostname: string; collectedAt?: string }[] };
+		const listed = async () =>
+			(
+				(await call<Listed>(page.request, baseURL ?? '', 'UpdateService/ListFleetUpdates', {}))
+					.nodes ?? []
+			).filter((n) => budgetHosts.some((a) => a.host === n.hostname));
+		const lastListing = async () =>
+			Math.max(...(await listed()).map((n) => Date.parse(n.collectedAt ?? '0')));
+		await expect
+			.poll(async () => Date.now() - (await lastListing()), {
+				timeout: 360_000,
+				intervals: [10_000]
+			})
+			.toBeGreaterThan(330_000);
+		const listingStarted = Date.now();
+		const idleHelper = agents.find((a) => a.service === 'agent-fedora-44')!;
+		const listingAgents = budgetHosts.map((a) => execAsync(a.service, 'sh -s -- 60 1 30', budget));
+		const listingHelpers = [...budgetHosts, idleHelper].map((a) =>
+			execAsync(a.service, 'sh -s -- 60 200 500 helper', budget)
+		);
+		for (const n of await listed()) {
+			await call(page.request, baseURL ?? '', 'UpdateService/RefreshUpdateInfo', {
+				nodeId: n.nodeId
+			});
+		}
+		for (const [i, result] of (await Promise.all(listingAgents)).entries()) {
+			console.log(`${budgetHosts[i].host} (listing): ${result.output.trim()}`);
+			expect(result.status, `${budgetHosts[i].host}:\n${result.output}`).toBe(0);
+		}
+		const helperHosts = [
+			...budgetHosts.map((a) => `${a.host} (listing)`),
+			`${idleHelper.host} (no listing)`
+		];
+		for (const [i, result] of (await Promise.all(listingHelpers)).entries()) {
+			console.log(`${helperHosts[i]}: ${result.output.trim()}`);
+			expect(result.status, `${helperHosts[i]}:\n${result.output}`).toBe(0);
+		}
+		// The listing happened in the window: both reports are newer than its start.
+		await expect
+			.poll(
+				async () =>
+					(await listed()).map((n) => Date.parse(n.collectedAt ?? '0') >= listingStarted - 5_000),
+				{ timeout: 60_000, intervals: [5_000] }
+			)
+			.toEqual(budgetHosts.map(() => true));
+	}
 
 	const failed = await selfUpdating;
 	if (failed) throw failed;

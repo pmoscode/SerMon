@@ -155,6 +155,7 @@ test-scripts:
     sh scripts/check-commit-msg_test.sh
     sh scripts/check-compose_test.sh
     sh scripts/helper-loc_test.sh
+    sh scripts/agent-budget_test.sh
 
 # Build the package sources of the E2E environment and check them on five distros (M4-08; Docker required)
 test-e2e-repos:

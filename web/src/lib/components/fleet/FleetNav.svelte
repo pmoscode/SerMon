@@ -3,13 +3,14 @@
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
 
-	/** The fleet's views (KONZEPT §16): the overview and its dashboards, below the top bar's Fleet. */
+	/** The fleet's views (KONZEPT §16): the overview, its dashboards and the custom ones, below the top bar's Fleet. */
 	const views = [
 		{ href: resolve('/(app)/fleet'), label: () => m.fleet_view_overview() },
 		{ href: resolve('/(app)/capacity'), label: () => m.capacity_title() },
 		{ href: resolve('/(app)/heatmap'), label: () => m.heatmap_title() },
 		{ href: resolve('/(app)/compare'), label: () => m.compare_title() },
-		{ href: resolve('/(app)/anomalies'), label: () => m.anomalies_title() }
+		{ href: resolve('/(app)/anomalies'), label: () => m.anomalies_title() },
+		{ href: resolve('/(app)/dashboards'), label: () => m.nav_dashboards() }
 	];
 </script>
 

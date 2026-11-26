@@ -9,6 +9,8 @@ export const pageHelp: Record<string, string> = {
 	'/(app)/capacity': 'pages/capacity',
 	'/(app)/heatmap': 'pages/heatmap',
 	'/(app)/compare': 'pages/compare',
+	'/(app)/dashboards': 'pages/dashboards',
+	'/(app)/dashboards/[id]': 'pages/dashboard',
 	'/(app)/notifications': 'pages/notifications',
 	'/(app)/settings/security': 'pages/security',
 	'/(app)/nodes/[id]': 'pages/node',

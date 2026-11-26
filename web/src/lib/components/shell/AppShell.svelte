@@ -12,13 +12,13 @@
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import StepUpDialog from '#lib/components/auth/StepUpDialog.svelte';
 	import HelpPanel from '#lib/components/help/HelpPanel.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { pageHelp } from '#lib/help/pages.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { helpState } from '#lib/stores/help.svelte.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
+	import { stepUpState } from '#lib/stores/stepup.svelte.js';
 	import OrgSwitcher from './OrgSwitcher.svelte';
 	import AccountMenu from './AccountMenu.svelte';
 	import InstanceHealth from './InstanceHealth.svelte';
@@ -31,7 +31,12 @@
 			href: resolve('/(app)/fleet'),
 			icon: Server,
 			label: () => m.nav_fleet(),
-			also: [resolve('/(app)/capacity'), resolve('/(app)/heatmap'), resolve('/(app)/anomalies')]
+			also: [
+				resolve('/(app)/capacity'),
+				resolve('/(app)/heatmap'),
+				resolve('/(app)/anomalies'),
+				resolve('/(app)/dashboards')
+			]
 		},
 		{ href: resolve('/(app)/alerts'), icon: Bell, label: () => m.nav_alerts() },
 		{ href: resolve('/(app)/logs'), icon: ScrollText, label: () => m.nav_logs() },
@@ -57,6 +62,13 @@
 				]
 			: [])
 	]);
+	// The step-up dialog (passkeys, provider) loads when a sensitive action asks for it first and
+	// stays for the next ones: it is not part of the first load of every page (M5-24).
+	let stepUpWanted = $state(false);
+	$effect(() => {
+		if (stepUpState.open) stepUpWanted = true;
+	});
+
 	const name = $derived(sessionState.current?.displayName || sessionState.current?.email || '');
 	const helpTopic = $derived(page.route.id ? pageHelp[page.route.id] : undefined);
 
@@ -132,4 +144,8 @@
 </div>
 
 <HelpPanel />
-<StepUpDialog />
+{#if stepUpWanted}
+	{#await import('#lib/components/auth/StepUpDialog.svelte') then { default: StepUpDialog }}
+		<StepUpDialog />
+	{/await}
+{/if}

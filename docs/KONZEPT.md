@@ -1334,7 +1334,7 @@ Spätere Kandidaten: Fail2ban, WireGuard, ZFS, Proxmox, Kubernetes (Node-Level),
       Die Widgets lesen über die vorhandenen Leser mit den Rechten des Betrachters; Speichern und Import lehnen
       fremde oder unsichtbare Node- und Gruppen-IDs ab.
     - Editor: eigenes Grid auf CSS Grid (kein Fremdpaket, CSP ohne neue Hashes), Pfeiltasten verschieben,
-      Umschalt + Pfeiltasten ändern die Größe.
+      Umschalt + Pfeiltasten ändern die Größe. In der UI unter den Ansichten der Flotte (`/dashboards`, M5-24).
 - **Kiosk-/TV-Modus:** Vollbild, Auto-Rotation, ohne Bedienelemente; Zugriff über einen **schreibgeschützten,
   widerrufbaren Kiosk-Token**, der an Dashboard und Org gebunden ist (256 Bit, nur als SHA-256 gespeichert, Ablauf,
   Audit; im URL-Fragment, nie in der Query). Er öffnet nur den `KioskService` mit dem Dokument und den Widgets seines

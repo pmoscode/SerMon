@@ -125,3 +125,59 @@ test('the comparison loads less than 200 KiB of JavaScript', async ({ page }) =>
 	expect(size).toBeLessThan(BUDGET);
 	expect(size, 'headroom of the comparison (M2-34)').toBeLessThan(HEADROOM);
 });
+
+test('the dashboards load less than 200 KiB of JavaScript', async ({ page }) => {
+	await mockApi(page, {
+		...installed(true),
+		'DashboardService/ListDashboards': () => ({ json: {} })
+	});
+	const size = await firstLoadJs(page, '/dashboards');
+	console.log(`dashboards: ${(size / 1024).toFixed(1)} KiB gzip`);
+	expect(size).toBeLessThan(BUDGET);
+	expect(size, 'headroom of the dashboards (M5-24)').toBeLessThan(HEADROOM);
+});
+
+test('a dashboard with its widgets loads less than 200 KiB of JavaScript', async ({ page }) => {
+	await mockApi(page, {
+		...installed(true),
+		'DashboardService/GetDashboard': () => ({
+			json: {
+				dashboard: {
+					id: 'd1',
+					canEdit: true,
+					revision: '1',
+					spec: {
+						version: 1,
+						title: 'Budget',
+						widgets: [
+							{
+								id: 'cpu',
+								kind: 'WIDGET_KIND_TIMESERIES',
+								title: 'CPU',
+								position: { w: 6, h: 4 },
+								query: {
+									metric: 'sermon_cpu_utilization_ratio',
+									target: { nodeIds: ['0193f5a0-0000-7000-8000-000000000001'] }
+								}
+							},
+							{
+								id: 'alerts',
+								kind: 'WIDGET_KIND_ALERT_LIST',
+								title: 'Alerts',
+								position: { x: 6, w: 6, h: 4 },
+								query: {}
+							}
+						]
+					}
+				}
+			}
+		}),
+		'MetricsService/ListMetrics': () => ({ json: {} }),
+		'MetricsService/QueryMetrics': () => ({ json: {} }),
+		'AlertService/ListAlerts': () => ({ json: {} })
+	});
+	const size = await firstLoadJs(page, '/dashboards/0193f5a0-0000-7000-8000-0000000000d1');
+	console.log(`dashboard: ${(size / 1024).toFixed(1)} KiB gzip`);
+	expect(size).toBeLessThan(BUDGET);
+	expect(size, 'headroom of a dashboard (M5-24)').toBeLessThan(HEADROOM);
+});

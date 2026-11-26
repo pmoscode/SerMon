@@ -5612,7 +5612,27 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
   Import.
 - **Abhängig von:** M5-22
 
-#### ☐ M5-24 – Dashboard-Editor · W · L
+#### ☑ M5-24 – Dashboard-Editor · W · L
+> Erledigt (`/dashboards`, `/dashboards/[id]`, `lib/dashboards`, `components/dashboards`):
+> - **Grid:** eigenes Grid auf CSS Grid (12 Spalten, Zeilen zu 4 rem), Positionen über die `style:`-Direktive
+>   (CSSOM, keine neuen CSP-Hashes). Layout als reine Funktionen (`layout.ts`): `place` schiebt verdeckte Widgets
+>   kaskadierend nach unten und lehnt ab, was über Zeile 100 hinausginge; nichts rutscht von selbst nach oben.
+> - **Bedienung:** Griff je Widget – Ziehen verschiebt, die Ecke ändert die Größe (ganze Zellen, Abbruch verwirft);
+>   Pfeiltasten verschieben, Umschalt + Pfeiltasten ändern die Größe, Entf entfernt; jede Änderung und jeder
+>   Anschlag am Rand wird über eine Live-Region angesagt, der Fokus bleibt am Griff.
+> - **Editor:** Titel, Beschreibung, Standard-Zeitraum; Widgets hinzufügen (erste freie Stelle, Größe je Art),
+>   Formular bei Bedarf geladen (Art, Titel, Metrik aus dem Katalog mit Label-Filtern, Ziel Nodes/Gruppe/Variable/
+>   alle, Text und Schweregrad für Log-Streams) mit denselben Regeln wie der Server; Speichern mit Revision
+>   (`ABORTED` zeigt „inzwischen geändert“ mit Neu laden), Teilen, Export als Datei, Import (bis 32 KiB), Löschen mit
+>   Rückfrage. Die Seiten stehen unter den Ansichten der Flotte (ein eigener Menüpunkt brach die Kopfzeile bei
+>   1280 px um).
+> - **Budget:** Seiten `/dashboards` 147 KiB und `/dashboards/[id]` 155 KiB (neue Fälle in `budget.e2e.ts`). Der
+>   Step-up-Dialog lädt jetzt erst beim ersten Step-up: −7 KiB auf jeder Seite (Node-Seite 190,6 → 183,3 KiB).
+>   Die Gesamtgröße aller Bundles (`check:size`) steigt mit dem neuen Bereich wie bei früheren Dashboards von 520
+>   auf 560 KiB (main 508 KiB, mit dem Editor 523 KiB).
+> - Tests: Layout (Kaskade, Rand, erste freie Stelle), Modell, Formular (jede Fehlerart), Grid im Browser (Tastatur,
+>   Ziehen, Ecke, Abbruch, Ansage), E2E mit axe (Liste mit feindlichen Namen, Anlegen und Bauen per Tastatur bis
+>   zum gespeicherten Dokument, Teilen, Export, Konflikt, Import); Gegenproben 14/14.
 - **Ziel:** Grid mit Drag & Drop und Tastatur, Widgets anlegen, verschieben, in der Größe ändern; Speichern, Teilen,
   Import und Export; Bundle-Budget eingehalten.
 - **Tests zuerst:** Komponententests für Layout und Tastaturbedienung, axe; Budget-Test des Bundles.

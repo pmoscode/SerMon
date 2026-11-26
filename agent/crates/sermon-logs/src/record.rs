@@ -70,6 +70,8 @@ pub enum Origin {
     Journal,
     /// A log file, by its absolute path.
     File(String),
+    /// The output of a container (module `docker_socket`, M5-21).
+    Container,
 }
 
 impl Origin {
@@ -170,7 +172,7 @@ impl LogRecord {
             Origin::File(path) => Path::new(path)
                 .file_name()
                 .map(|n| cut(&n.to_string_lossy(), MAX_FIELD_BYTES).to_owned()),
-            Origin::Journal => None,
+            Origin::Journal | Origin::Container => None,
         };
         Self {
             at_us,
@@ -185,6 +187,28 @@ impl LogRecord {
             uid: None,
             boot_id: None,
             transport: None,
+            facility: None,
+        }
+    }
+
+    /// A line a container wrote (M5-21): its name as unit and identifier, `stdout` or `stderr`
+    /// as transport; containers name no severity.
+    #[must_use]
+    pub fn from_container(at_us: u64, name: &str, stderr: bool, message: &str) -> Self {
+        let name = cut(name, MAX_FIELD_BYTES).to_owned();
+        Self {
+            at_us,
+            origin: Origin::Container,
+            unit: Some(name.clone()),
+            identifier: Some(name),
+            severity: None,
+            message: cut(message, MAX_MESSAGE_BYTES).to_owned(),
+            truncated: message.len() > MAX_MESSAGE_BYTES,
+            pid: None,
+            process: None,
+            uid: None,
+            boot_id: None,
+            transport: Some(if stderr { "stderr" } else { "stdout" }.to_owned()),
             facility: None,
         }
     }
@@ -211,7 +235,7 @@ impl LogRecord {
     pub fn size(&self) -> usize {
         let text = |value: &Option<String>| value.as_ref().map_or(0, String::len);
         let file = match &self.origin {
-            Origin::Journal => 0,
+            Origin::Journal | Origin::Container => 0,
             Origin::File(path) => path.len(),
         };
         FIELDS_SHARE

@@ -18,17 +18,23 @@
 //! | `sermon_docker_socket_oom_killed` | `container`, `name` | 1 if the OOM killer ended it last |
 //!
 //! `container` is the short ID of `docker ps` (as in the module `docker`), `name` its name.
+//!
+//! With `logs` (name patterns), the output of up to 16 of the reported containers goes to the
+//! agent's log pipeline (M5-21, [`logs`]): a third read path, `/containers/<id>/logs`.
 
+pub mod logs;
+
+use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::Value;
 use sermon_core::Sample;
 
-use crate::fields::timeout;
+use crate::fields::{strings, timeout};
 use crate::http::{Client, HttpError, Options};
 use crate::runtime::{MAX_BUDGET, MAX_SAMPLES};
-use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup};
+use crate::{BoxFuture, BuildError, Config, Instance, LogLine, Module, Run, RunError, Setup};
 
 const SCHEMA: &str = include_str!("../schemas/docker_socket.json");
 
@@ -92,6 +98,8 @@ impl Module for DockerSocket {
             socket,
             max,
             timeout,
+            follow: strings(config, "logs").map(str::to_owned).collect(),
+            positions: BTreeMap::new(),
         }))
     }
 }
@@ -118,6 +126,8 @@ pub struct Inspected {
     pub restarts: u64,
     /// `State.OOMKilled`.
     pub oom_killed: bool,
+    /// `Config.Tty`: its output is a raw stream.
+    pub tty: bool,
 }
 
 fn valid_id(id: &str) -> bool {
@@ -184,6 +194,11 @@ pub fn parse_inspect(body: &[u8]) -> Result<Inspected, String> {
             .get("OOMKilled")
             .and_then(Value::as_bool)
             .unwrap_or(false),
+        tty: value
+            .get("Config")
+            .and_then(|c| c.get("Tty"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -192,6 +207,10 @@ struct Api {
     socket: PathBuf,
     max: usize,
     timeout: Duration,
+    /// Name patterns of the containers whose output goes to the logs.
+    follow: Vec<String>,
+    /// Where each followed container's output was taken up to, by ID.
+    positions: BTreeMap<String, logs::Position>,
 }
 
 impl Api {
@@ -206,12 +225,50 @@ impl Api {
     }
 }
 
+impl Api {
+    /// Hands the new output of `followed` (ID, name, TTY) to the run; a container that doesn't
+    /// answer gives none this time. Positions of containers no longer followed are forgotten.
+    async fn read_logs(&mut self, followed: &[(String, String, bool)], run: &Run) {
+        self.positions
+            .retain(|id, _| followed.iter().any(|(f, _, _)| f == id));
+        let now = run.now().duration_since(UNIX_EPOCH).unwrap_or_default();
+        for (id, name, tty) in followed {
+            let Some(position) = self.positions.get(id).cloned() else {
+                let secs = i64::try_from(now.as_secs()).unwrap_or(i64::MAX);
+                self.positions
+                    .insert(id.clone(), logs::Position::at(secs, now.subsec_nanos()));
+                continue;
+            };
+            let path = format!(
+                "/containers/{id}/logs?stdout=1&stderr=1&timestamps=1&since={}&tail={}",
+                position.since(),
+                logs::TAIL
+            );
+            let Ok(Some(body)) = self.get(&path).await else {
+                continue;
+            };
+            let mut position = position;
+            for line in position.take(logs::parse(&body, *tty)) {
+                let at =
+                    UNIX_EPOCH + Duration::new(u64::try_from(line.secs).unwrap_or(0), line.nanos);
+                run.log(LogLine {
+                    at,
+                    name: name.clone(),
+                    stderr: line.stderr,
+                    message: line.message,
+                });
+            }
+            self.positions.insert(id.clone(), position);
+        }
+    }
+}
+
 impl Instance for Api {
     fn timeout(&self) -> Duration {
         (self.timeout + Duration::from_secs(5)).min(MAX_BUDGET)
     }
 
-    fn collect<'a>(&'a mut self, _: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
+    fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             let Some(body) = self.get("/containers/json?all=1").await? else {
                 return Ok(vec![Sample::int("sermon_docker_socket_up", 0)]);
@@ -236,6 +293,7 @@ impl Instance for Api {
                 "sermon_docker_socket_truncated",
                 i64::from(list.len() > self.max),
             ));
+            let mut followed = Vec::new();
             for c in list.iter().take(self.max) {
                 // Gone since the list: nothing to report.
                 let Ok(Some(body)) = self.get(&format!("/containers/{}/json", c.id)).await else {
@@ -264,7 +322,13 @@ impl Instance for Api {
                     "sermon_docker_socket_oom_killed",
                     i64::from(i.oom_killed),
                 )));
+                if followed.len() < logs::MAX_FOLLOWED
+                    && self.follow.iter().any(|p| logs::matches(p, &c.name))
+                {
+                    followed.push((c.id.clone(), c.name.clone(), i.tty));
+                }
             }
+            self.read_logs(&followed, run).await;
             Ok(samples)
         })
     }

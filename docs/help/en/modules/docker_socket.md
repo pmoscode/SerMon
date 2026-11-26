@@ -1,6 +1,6 @@
 # Docker over the socket
 
-State, health checks and restarts of the containers from the Docker API (also Podman's compatible API). The module is
+State, health checks and restarts of the containers from the Docker API, on request their output as logs (also Podman's compatible API). The module is
 off by default and doesn't suggest itself.
 
 > **Warning:** whoever may use the Docker socket is root on the host. The module only reads (two kinds of `GET`
@@ -19,6 +19,11 @@ off by default and doesn't suggest itself.
 - **Socket:** by default `/var/run/docker.sock`; Podman (root): `/run/podman/podman.sock`.
 - **Most containers:** by default 30, running ones first.
 - **Timeout** per request.
+- **Container logs:** names of the containers whose output (stdout and stderr) goes to the logs, `*` as a wildcard
+  (e.g. `web`, `app-*`); at most 16 containers. Empty means no logs. The lines pass the same redaction, selection
+  (logs on, excluded units, minimum severity) and limits as the journal and files; in the log explorer under the
+  source **Container**, the unit is the container's name. A container starts with the run that first sees it – the
+  module fetches no older lines.
 
 ## Metrics
 

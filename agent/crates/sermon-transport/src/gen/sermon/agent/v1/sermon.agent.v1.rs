@@ -1314,6 +1314,10 @@ pub enum LogSource {
     Journal = 1,
     /// LOG_SOURCE_FILE is a log file (classic syslog files, configured globs).
     File = 2,
+    /// LOG_SOURCE_CONTAINER is the output of a container, read through the Docker API by the module
+    /// docker_socket (M5-21): unit and identifier are the container's name, transport is stdout or
+    /// stderr.
+    Container = 3,
 }
 impl LogSource {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1325,6 +1329,7 @@ impl LogSource {
             Self::Unspecified => "LOG_SOURCE_UNSPECIFIED",
             Self::Journal => "LOG_SOURCE_JOURNAL",
             Self::File => "LOG_SOURCE_FILE",
+            Self::Container => "LOG_SOURCE_CONTAINER",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1333,6 +1338,7 @@ impl LogSource {
             "LOG_SOURCE_UNSPECIFIED" => Some(Self::Unspecified),
             "LOG_SOURCE_JOURNAL" => Some(Self::Journal),
             "LOG_SOURCE_FILE" => Some(Self::File),
+            "LOG_SOURCE_CONTAINER" => Some(Self::Container),
             _ => None,
         }
     }

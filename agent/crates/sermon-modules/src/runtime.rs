@@ -66,6 +66,10 @@ pub trait Sink: Send + Sync + 'static {
     fn samples(&self, samples: Vec<Sample>, at: SystemTime);
     /// The state of all enabled modules, after a change.
     fn health(&self, report: Vec<Health>, at: SystemTime);
+    /// The log lines a run of `module` read (M5-21); dropped by sinks without a log pipeline.
+    fn logs(&self, module: &str, lines: Vec<crate::LogLine>) {
+        let _ = (module, lines);
+    }
 }
 
 /// A module as the configuration names it.
@@ -404,6 +408,10 @@ async fn supervise(s: Supervised) {
                 }
                 outcome = tokio::time::timeout(budget, handle) => outcome,
             };
+            let lines = run.take_logs();
+            if !lines.is_empty() {
+                s.shared.sink.logs(id, lines);
+            }
             match outcome {
                 Err(_) => {
                     abort.abort();

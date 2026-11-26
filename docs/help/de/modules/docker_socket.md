@@ -1,6 +1,6 @@
 # Docker über den Socket
 
-Zustand, Health-Checks und Neustarts der Container aus der Docker-API (auch der kompatiblen API von Podman). Das Modul
+Zustand, Health-Checks und Neustarts der Container aus der Docker-API, auf Wunsch ihre Ausgabe als Logs (auch der kompatiblen API von Podman). Das Modul
 ist ab Werk aus und schlägt sich nicht selbst vor.
 
 > **Warnung:** Wer den Docker-Socket benutzen darf, ist root auf dem Host. Das Modul liest nur (zwei Arten von
@@ -19,6 +19,11 @@ ist ab Werk aus und schlägt sich nicht selbst vor.
 - **Socket:** ab Werk `/var/run/docker.sock`; Podman (root): `/run/podman/podman.sock`.
 - **Höchstens Container:** ab Werk 30, laufende zuerst.
 - **Timeout** je Anfrage.
+- **Container-Logs:** Namen der Container, deren Ausgabe (stdout und stderr) in die Logs geht, `*` als Platzhalter
+  (etwa `web`, `app-*`); höchstens 16 Container. Leer heißt keine Logs. Die Zeilen laufen durch dieselbe Redaction,
+  Auswahl (Logs an, ausgeschlossene Units, Mindest-Schweregrad) und Grenzen wie Journal und Dateien; im Log-Explorer
+  unter der Quelle **Container**, Unit ist der Name des Containers. Ein Container beginnt mit dem Lauf, in dem er
+  zuerst gesehen wird – ältere Zeilen holt das Modul nicht.
 
 ## Metriken
 

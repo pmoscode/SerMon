@@ -14,7 +14,9 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/authz"
 	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/logql"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+	webv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1"
 )
 
 // M3-28: log queries hold Loki's answers in memory; a session, user, organization and the
@@ -71,5 +73,21 @@ func TestLogErrors_TooBroadIsAPrecondition(t *testing.T) {
 	err := h.fail(context.Background(), "query logs", fmt.Errorf("query: %w", logs.ErrTooBroad))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Errorf("fail(ErrTooBroad) = %v", err)
+	}
+}
+
+// M5-21: the sources of the API and of Loki map onto each other, the containers' included.
+func TestLogSources_MapBothWays(t *testing.T) {
+	for api, label := range map[webv1.LogSource]logql.Source{
+		webv1.LogSource_LOG_SOURCE_JOURNAL:   logql.SourceJournal,
+		webv1.LogSource_LOG_SOURCE_FILE:      logql.SourceFile,
+		webv1.LogSource_LOG_SOURCE_CONTAINER: logql.SourceContainer,
+	} {
+		if got := sourceFrom(api); got != label {
+			t.Errorf("sourceFrom(%v) = %v", api, got)
+		}
+		if got := logLineMessage(logs.Line{Source: label}).GetSource(); got != api {
+			t.Errorf("logLineMessage(%v) = %v", label, got)
+		}
 	}
 }

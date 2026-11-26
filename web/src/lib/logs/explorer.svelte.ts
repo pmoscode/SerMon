@@ -31,7 +31,9 @@ export function selection(f: LogFilter, fixedNode?: string) {
 	return {
 		nodeIds: fixedNode ? [fixedNode] : f.nodes,
 		groupId: fixedNode ? undefined : f.group,
-		sources: f.sources.map((s) => (s === 'file' ? LogSource.FILE : LogSource.JOURNAL)),
+		sources: f.sources.map((s) =>
+			s === 'file' ? LogSource.FILE : s === 'container' ? LogSource.CONTAINER : LogSource.JOURNAL
+		),
 		units: f.units,
 		minSeverity: f.severity
 			? ((severities.indexOf(f.severity) + 1) as LogSeverity)

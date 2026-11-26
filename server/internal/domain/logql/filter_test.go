@@ -119,6 +119,17 @@ func TestLines_BuildsTheSelectorAndTheLineFilter(t *testing.T) {
 	}
 }
 
+// M5-21: the containers' output is a source of its own.
+func TestLines_SelectsTheContainers(t *testing.T) {
+	q, err := logql.Lines(logql.Filter{Nodes: []identity.NodeID{nodeA}, Sources: []logql.Source{logql.SourceContainer, logql.SourceFile}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parse(t, q.String()).matchers["source"]; got != "container|file" {
+		t.Errorf("source = %q", got)
+	}
+}
+
 func TestLines_RejectsWhatIsNotAllowed(t *testing.T) {
 	for name, f := range map[string]logql.Filter{
 		"no nodes":         {},

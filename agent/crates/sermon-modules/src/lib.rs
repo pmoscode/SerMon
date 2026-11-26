@@ -247,6 +247,24 @@ pub enum RunError {
 pub struct Run {
     blocking: Arc<AtomicUsize>,
     clock: Arc<dyn Clock>,
+    logs: Arc<std::sync::Mutex<Vec<LogLine>>>,
+}
+
+/// Most log lines of a run (the rest is dropped; the log pipeline has its own rate on top).
+pub const MAX_LOG_LINES: usize = 5000;
+
+/// A log line a module read (M5-21: a container's output), for the agent's log pipeline: redacted,
+/// rate-limited and selected there like every other log entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogLine {
+    /// When the service wrote it.
+    pub at: std::time::SystemTime,
+    /// Who wrote it, e.g. the container's name.
+    pub name: String,
+    /// Written to stderr.
+    pub stderr: bool,
+    /// The text, without the line end.
+    pub message: String,
 }
 
 impl Default for Run {
@@ -262,7 +280,33 @@ impl Run {
         Self {
             blocking: Arc::new(AtomicUsize::new(0)),
             clock,
+            logs: Arc::default(),
         }
+    }
+
+    /// Hands a log line to the agent after the run; beyond [`MAX_LOG_LINES`] a run's lines are
+    /// dropped. Returns whether it was taken.
+    pub fn log(&self, line: LogLine) -> bool {
+        let mut logs = self
+            .logs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if logs.len() >= MAX_LOG_LINES {
+            return false;
+        }
+        logs.push(line);
+        true
+    }
+
+    /// The log lines handed over since the last call.
+    #[must_use]
+    pub fn take_logs(&self) -> Vec<LogLine> {
+        std::mem::take(
+            &mut *self
+                .logs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
     }
 
     /// The agent's wall-clock time (e.g. for the days a certificate has left).

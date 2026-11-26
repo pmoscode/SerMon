@@ -49,6 +49,12 @@ describe('filter ↔ URL', () => {
 		expect(roundTrip(f)).toEqual(f);
 	});
 
+	// M5-21: the output of containers is a source of its own.
+	it('takes the containers as a source', () => {
+		const f = parseFilter(new URLSearchParams('source=container&source=file'));
+		expect(f.sources).toEqual(['container', 'file']);
+	});
+
 	it('drops what is not valid', () => {
 		const f = parseFilter(
 			new URLSearchParams(

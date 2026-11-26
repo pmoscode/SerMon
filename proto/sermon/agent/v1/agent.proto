@@ -633,6 +633,10 @@ enum LogSource {
   LOG_SOURCE_JOURNAL = 1;
   // LOG_SOURCE_FILE is a log file (classic syslog files, configured globs).
   LOG_SOURCE_FILE = 2;
+  // LOG_SOURCE_CONTAINER is the output of a container, read through the Docker API by the module
+  // docker_socket (M5-21): unit and identifier are the container's name, transport is stdout or
+  // stderr.
+  LOG_SOURCE_CONTAINER = 3;
 }
 
 // LogSeverity is the syslog priority of an entry, from the most to the least severe.

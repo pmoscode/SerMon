@@ -134,7 +134,7 @@ pub fn run(config: &AgentConfig) -> anyhow::Result<()> {
     let updates = UpdateSignals::default();
     // The server's commands for the root helper (M4-12).
     let (inbox, ports) = run_ports(config, &layout, &clock);
-    let mods = module_runtime(config, &outbox, &clock, &agent_config);
+    let mods = module_runtime(config, &outbox, &clock, &agent_config, &shipper);
     let transport = transport(config, layout, facts, &outbox, &clock, &agent_config, &mods)
         .with_update_refresh(updates.refresh.clone())
         .with_commands(Arc::new(inbox));
@@ -255,12 +255,15 @@ fn module_runtime(
     outbox: &Outbox,
     clock: &Arc<dyn Clock>,
     agent_config: &Arc<agent_config::ConfigStore>,
+    shipper: &logship::Shipper,
 ) -> ModuleParts {
     let store = agent_config.clone();
+    // Log lines of modules (containers, M5-21): a source of the log pipeline like the others.
     let sink = modules::OutboxSink::new(
         outbox.clone(),
         Arc::new(move |text: &str| store.current().redactor.redact(text).into_owned()),
-    );
+    )
+    .with_logs(shipper.sibling(logship::into_outbox(outbox.clone())));
     let runtime = sermon_modules::runtime::Runtime::new(
         sermon_modules::builtin(),
         config.local.modules.clone(),

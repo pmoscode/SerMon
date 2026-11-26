@@ -24,11 +24,13 @@ pub const REPORT_EVERY: Duration = Duration::from_mins(10);
 /// Redacts a reason before it leaves the host.
 pub type Redact = Arc<dyn Fn(&str) -> String + Send + Sync>;
 
-/// The runtime's output into the outbox; reasons redacted like logs.
+/// The runtime's output into the outbox; reasons redacted like logs, log lines of modules
+/// (M5-21) through a shipper of the log pipeline.
 #[derive(Clone)]
 pub struct OutboxSink {
     outbox: Outbox,
     redact: Redact,
+    logs: Option<Arc<std::sync::Mutex<crate::logship::Shipper>>>,
 }
 
 impl std::fmt::Debug for OutboxSink {
@@ -41,8 +43,29 @@ impl OutboxSink {
     /// A sink into `outbox`.
     #[must_use]
     pub fn new(outbox: Outbox, redact: Redact) -> Self {
-        Self { outbox, redact }
+        Self {
+            outbox,
+            redact,
+            logs: None,
+        }
     }
+
+    /// Log lines of modules go through `shipper` (selection, rate, redaction of the log
+    /// pipeline); without one they are dropped.
+    #[must_use]
+    pub fn with_logs(mut self, shipper: crate::logship::Shipper) -> Self {
+        self.logs = Some(Arc::new(std::sync::Mutex::new(shipper)));
+        self
+    }
+}
+
+/// A module's log line as a record: a container's output (the only kind so far).
+fn record(line: &sermon_modules::LogLine) -> sermon_logs::record::LogRecord {
+    let at_us = line
+        .at
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX));
+    sermon_logs::record::LogRecord::from_container(at_us, &line.name, line.stderr, &line.message)
 }
 
 impl Sink for OutboxSink {
@@ -57,6 +80,21 @@ impl Sink for OutboxSink {
         if let Err(error) = self.outbox.push_module_health(report, at) {
             tracing::warn!("cannot buffer the state of the modules: {error}");
         }
+    }
+
+    fn logs(&self, _: &str, lines: Vec<sermon_modules::LogLine>) {
+        let Some(shipper) = &self.logs else {
+            return;
+        };
+        let mut shipper = shipper
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let now = tokio::time::Instant::now();
+        for line in &lines {
+            shipper.offer(record(line), now);
+        }
+        // What the buffer refuses now waits in the shipper for the next lines.
+        let _ = shipper.flush();
     }
 }
 
@@ -313,6 +351,64 @@ mod tests {
         fn all(&self) -> Vec<Vec<Health>> {
             self.0.lock().unwrap().clone()
         }
+    }
+
+    // M5-21: log lines of modules go through the log pipeline – selected, redacted, buffered –
+    // and nowhere without it or with logs off.
+    #[tokio::test]
+    async fn the_sink_ships_log_lines_of_modules() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = SystemTime::now();
+        let (wal, _) = Wal::open(dir.path(), WalConfig::default(), now).unwrap();
+        let outbox = Outbox::new(wal);
+        let store = ConfigStore::open(dir.path().join("agent-config.pb"), true, true);
+        let line = sermon_modules::LogLine {
+            at: now,
+            name: "web".into(),
+            stderr: true,
+            message: "login password=hunter2".into(),
+        };
+        let shipper = |store: &ConfigStore| {
+            crate::logship::Shipper::new(
+                store.subscribe(),
+                Arc::default(),
+                crate::logship::into_outbox(outbox.clone()),
+            )
+        };
+        let off = OutboxSink::new(outbox.clone(), Arc::new(|r: &str| r.to_owned()))
+            .with_logs(shipper(&store));
+        off.logs("docker_socket", vec![line.clone()]);
+        assert_eq!(
+            outbox.stats().pending_records,
+            0,
+            "logs are off before the server says"
+        );
+
+        store.apply(ConfigUpdate {
+            version: 2,
+            config: Some(AgentConfig {
+                logs: Some(LogConfig {
+                    enabled: true,
+                    ..LogConfig::default()
+                }),
+                ..AgentConfig::default()
+            }),
+        });
+        let on = OutboxSink::new(outbox.clone(), Arc::new(|r: &str| r.to_owned()))
+            .with_logs(shipper(&store));
+        on.logs("docker_socket", vec![line.clone()]);
+        assert_eq!(outbox.stats().pending_records, 1);
+        let plain = OutboxSink::new(outbox.clone(), Arc::new(|r: &str| r.to_owned()));
+        plain.logs("docker_socket", vec![line]);
+        assert_eq!(outbox.stats().pending_records, 1, "no shipper, no logs");
+        let record = record(&sermon_modules::LogLine {
+            at: SystemTime::UNIX_EPOCH + Duration::from_secs(2),
+            name: "web".into(),
+            stderr: true,
+            message: "x".into(),
+        });
+        assert_eq!(record.at_us, 2_000_000);
+        assert_eq!(record.unit.as_deref(), Some("web"));
     }
 
     // The sink buffers both, a batch each.

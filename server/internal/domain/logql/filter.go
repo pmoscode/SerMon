@@ -30,8 +30,9 @@ type Source string
 
 // Sources.
 const (
-	SourceJournal Source = "journal"
-	SourceFile    Source = "file"
+	SourceJournal   Source = "journal"
+	SourceFile      Source = "file"
+	SourceContainer Source = "container"
 )
 
 // Severity is the severity label of a stream.
@@ -81,7 +82,7 @@ func Lines(f Filter) (Query, error) {
 	if len(f.Sources) > 0 {
 		values := make([]string, 0, len(f.Sources))
 		for _, s := range f.Sources {
-			if s != SourceJournal && s != SourceFile {
+			if s != SourceJournal && s != SourceFile && s != SourceContainer {
 				return Query{}, invalid("unknown source %q", s)
 			}
 			values = append(values, string(s))

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Docker over the socket",
-  "description": "State, health and restarts of the containers from the Docker API (read only). Whoever may use the socket is root: the host has to allow it with allow_docker_socket = true in agent.toml.",
+  "description": "State, health and restarts of the containers from the Docker API (read only), optionally their output into the logs. Whoever may use the socket is root: the host has to allow it with allow_docker_socket = true in agent.toml.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -28,6 +28,18 @@
       "format": "duration",
       "maxLength": 8,
       "default": "5s"
+    },
+    "logs": {
+      "type": "array",
+      "title": "Container logs",
+      "description": "Names of containers whose output goes to the logs, * as a wildcard (e.g. web, app-*); at most 16 containers are followed. Empty: no logs.",
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_.*-]+$",
+        "maxLength": 128
+      },
+      "default": []
     }
   }
 }

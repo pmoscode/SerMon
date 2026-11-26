@@ -1,2 +1,3 @@
 # Recorded protocol answers keep their line ends (RESP uses CRLF).
 agent/fixtures/modules/redis/**/*.txt -text
+agent/fixtures/modules/docker_socket/**/*.bin -text

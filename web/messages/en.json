@@ -688,6 +688,7 @@
 	"logs_group_debug": "Debug and none",
 	"logs_source_journal": "Journal",
 	"logs_source_file": "File",
+	"logs_source_container": "Container",
 	"logs_histogram_title": "Lines over time",
 	"logs_histogram_empty": "No lines in this range",
 	"logs_histogram_failed": "The histogram could not be loaded.",
@@ -1595,5 +1596,7 @@
 	"kiosk_token_revoked": "revoked",
 	"kiosk_token_expired": "expired",
 	"kiosk_token_failed": "Could not change the kiosk tokens: {reason}",
-	"kiosk_token_share_first": "Share the dashboard first: kiosk tokens open shared dashboards only."
+	"kiosk_token_share_first": "Share the dashboard first: kiosk tokens open shared dashboards only.",
+	"module_docker_socket_logs": "Container logs",
+	"module_docker_socket_logs_help": "Names of the containers whose output goes to the logs, * as a wildcard (e.g. web, app-*); at most 16 containers. Empty: no logs."
 }

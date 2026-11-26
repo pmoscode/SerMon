@@ -32,6 +32,7 @@ pub fn to_proto(record: &LogRecord) -> proto::LogEntry {
     let (source, file) = match &record.origin {
         Origin::Journal => (proto::LogSource::Journal, String::new()),
         Origin::File(path) => (proto::LogSource::File, path.clone()),
+        Origin::Container => (proto::LogSource::Container, String::new()),
     };
     let text = |value: &Option<String>| value.clone().unwrap_or_default();
     proto::LogEntry {
@@ -126,6 +127,31 @@ mod tests {
         proto::LogBatch {
             entries: records.iter().map(to_proto).collect(),
         }
+    }
+
+    // M5-21: a container's line as the protocol takes it.
+    #[test]
+    fn container_lines_convert() {
+        let record =
+            LogRecord::from_container(1_795_163_620_000_000, "web", true, &"x".repeat(20_000));
+        let entry = to_proto(&record);
+        assert_eq!(entry.source(), proto::LogSource::Container);
+        assert_eq!(
+            (entry.unit.as_str(), entry.identifier.as_str()),
+            ("web", "web")
+        );
+        assert_eq!(
+            (entry.transport.as_str(), entry.file.as_str()),
+            ("stderr", "")
+        );
+        assert!(entry.truncated && entry.message.len() <= 16 * 1024);
+        assert_eq!(entry.severity(), proto::LogSeverity::Unspecified);
+        assert_eq!(
+            LogRecord::from_container(0, "a", false, "hi")
+                .transport
+                .as_deref(),
+            Some("stdout")
+        );
     }
 
     #[test]

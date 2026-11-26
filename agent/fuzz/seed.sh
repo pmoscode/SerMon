@@ -178,3 +178,7 @@ for file in ../fixtures/modules/docker_socket/*/*.json; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\011'; cat "$file"; } >"corpus/module_parsers/fixture$name"
 done
+for file in ../fixtures/modules/docker_socket/*/logs-*.bin; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\011'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done

@@ -161,6 +161,7 @@
 				<option value="">{m.logs_filter_all_sources()}</option>
 				<option value="journal">{sourceLabel('journal')}</option>
 				<option value="file">{sourceLabel('file')}</option>
+				<option value="container">{sourceLabel('container')}</option>
 			</select>
 		</div>
 		<div class="flex flex-col gap-1.5">

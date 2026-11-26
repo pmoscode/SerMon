@@ -311,6 +311,9 @@ func TestSchema_LogEntries(t *testing.T) {
 		"file entry": withEntry(func(e *agentv1.LogEntry) {
 			e.Source, e.File, e.BootId, e.Transport = agentv1.LogSource_LOG_SOURCE_FILE, "/var/log/nginx/error.log", "", ""
 		}),
+		"container entry": withEntry(func(e *agentv1.LogEntry) {
+			e.Source, e.Unit, e.Identifier, e.Transport, e.BootId = agentv1.LogSource_LOG_SOURCE_CONTAINER, "web", "web", "stderr", ""
+		}),
 		"longest message": logs(journalEntry(strings.Repeat("ä", 8192))),
 		"markup and ansi": logs(journalEntry("<script>alert(1)</script> \x1b[31mred\x1b[0m")),
 		"kernel facility": withEntry(func(e *agentv1.LogEntry) { e.Facility = proto.Uint32(0) }),

@@ -18,6 +18,8 @@ enum Act {
     Refused,
     /// A sample of another module's name.
     Foreign,
+    /// Log lines, then a failure (logs of a failed run go out too).
+    Logs(usize),
 }
 
 struct Fake {
@@ -92,6 +94,17 @@ impl Instance for FakeRun {
                 }
                 Act::Refused => Err(Refused("10.0.0.1 is not in module_targets".into()).into()),
                 Act::Foreign => Ok(vec![Sample::int("sermon_cpu_hijack", 1)]),
+                Act::Logs(n) => {
+                    for i in 0..n {
+                        run.log(crate::LogLine {
+                            at: std::time::UNIX_EPOCH,
+                            name: "web".into(),
+                            stderr: false,
+                            message: format!("line {i}"),
+                        });
+                    }
+                    Err(RunError::Failed("after the logs".into()))
+                }
             }
         })
     }
@@ -101,6 +114,7 @@ impl Instance for FakeRun {
 struct Out {
     samples: Mutex<Vec<Sample>>,
     reports: Mutex<Vec<Vec<Health>>>,
+    logs: Mutex<Vec<(String, crate::LogLine)>>,
 }
 
 impl Sink for Out {
@@ -109,6 +123,10 @@ impl Sink for Out {
     }
     fn health(&self, report: Vec<Health>, _: SystemTime) {
         self.reports.lock().unwrap().push(report);
+    }
+    fn logs(&self, module: &str, lines: Vec<crate::LogLine>) {
+        let mut logs = self.logs.lock().unwrap();
+        logs.extend(lines.into_iter().map(|l| (module.to_owned(), l)));
     }
 }
 
@@ -194,6 +212,24 @@ async fn settle(d: Duration) {
     for _ in 0..10 {
         tokio::task::yield_now().await;
     }
+}
+
+// M5-21: the log lines of a run go to the sink, each once, at most MAX_LOG_LINES a run.
+#[tokio::test(start_paused = true)]
+async fn the_log_lines_of_a_run_go_out() {
+    let mut w = world(Veto::default());
+    *w.act["a"].lock().unwrap() = Act::Logs(crate::MAX_LOG_LINES + 7);
+    w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
+    settle(Duration::from_secs(15)).await;
+    let logs = w.out.logs.lock().unwrap().clone();
+    assert_eq!(
+        logs.len(),
+        2 * crate::MAX_LOG_LINES,
+        "two runs, bounded each"
+    );
+    assert_eq!(logs[0].0, "a");
+    assert_eq!(logs[0].1.message, "line 0");
+    assert_eq!(logs[crate::MAX_LOG_LINES].1.message, "line 0", "not again");
 }
 
 // ADR 0039: an enabled module runs at its interval and its samples go out; its state is ok.

@@ -22,7 +22,9 @@ func NewWriter(client *Client) *Writer { return &Writer{client: client} }
 
 var severities = [...]string{"unknown", "emergency", "alert", "critical", "error", "warning", "notice", "info", "debug"}
 
-var sources = map[ingest.LogSource]string{ingest.LogSourceJournal: "journal", ingest.LogSourceFile: "file"}
+var sources = map[ingest.LogSource]string{
+	ingest.LogSourceJournal: "journal", ingest.LogSourceFile: "file", ingest.LogSourceContainer: "container",
+}
 
 // Write pushes the entries of the node; what Loki refuses for good is ingest.ErrLogsRejected.
 func (w *Writer) Write(ctx context.Context, org tenant.OrgID, node identity.NodeID, entries []ingest.LogEntry) error {

@@ -5765,7 +5765,28 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 
 ### 8.3 Docker-Logs (E5.3)
 
-#### ☐ M5-21 – Container-Logs über das Docker-Modul · A · M 🔒
+#### ☑ M5-21 – Container-Logs über das Docker-Modul · A · M 🔒
+> Erledigt (`sermon-modules/src/docker_socket/logs.rs`, `sermon-agent/src/modules.rs`; Protokoll und Server):
+> - **Auswahl je Gruppe** in der Konfiguration des Moduls `docker_socket`: `logs` mit Namensmustern (`*`), höchstens 16
+>   der gemeldeten Container. Dritter Lese-Pfad `GET /containers/<ID>/logs?stdout=1&stderr=1&timestamps=1&since=…&tail=1000`;
+>   gemultiplexter Strom (8-Byte-Köpfe, stdout/stderr getrennt) oder roh bei TTY (Rücklauf entfernt), Zeitstempel
+>   RFC 3339 mit Nanosekunden. Je Container die Position der letzten Zeile (dazu die Zeilen genau dieses Zeitstempels,
+>   damit nichts doppelt kommt); ein neuer Container beginnt mit dem Lauf, der ihn sieht; vergessene Container verlieren
+>   ihre Position. Ein Container, der nicht antwortet, liefert diesmal nichts, der Lauf scheitert nicht.
+> - **Weg in die Log-Pipeline:** `Run::log` (höchstens 5 000 Zeilen je Lauf) → `Sink::logs` → im Agent ein eigener
+>   `Shipper` (Geschwister der übrigen Quellen: dieselbe Rate, Auswahl, Redaction, Schlüssel-Blöcke, Anteil am WAL);
+>   `LogRecord::from_container` mit dem Namen als Unit und Identifier, `stdout`/`stderr` als Transport. Mit
+>   `allow_logs = false` oder Logs aus geht nichts raus.
+> - **Protokoll:** `LOG_SOURCE_CONTAINER` in `agent.v1` und `web.v1` (neuer Enum-Wert, Server vor Agent); Server:
+>   Ingest, Loki-Label `source="container"`, LogQL-Filter, Web-API; UI: Quelle „Container“ im Log-Explorer. Die Zahl
+>   der Streams begrenzt die vorhandene Grenze der Units je Node; Image und Compose-Projekt sind keine Labels
+>   (KONZEPT §10.1 in beiden Kopien angepasst).
+> - **Fixtures:** `logs-talker.bin` (gemultiplext, stdout und stderr, Zeile ohne Zeilenende) und `logs-tty.bin` aus
+>   Docker in Docker; Fuzz-Ziel erweitert. Hilfetext und Formular DE + EN.
+> - Tests: beide Formate, kaputte Frames und Zeitstempel, jede Zeile einmal über Läufe, Namensmuster, Modul gegen die
+>   Fake-API (nur die gewählten Container, Position im `since`), Laufzeit (Zeilen auch eines gescheiterten Laufs,
+>   Grenze je Lauf), Sink (Logs aus, an, ohne Shipper), Umwandlung ins Protokoll, Server (Schema, Session, Loki-Writer,
+>   LogQL, Web-API), Filter der UI; Gegenproben 14/14 (ein gleichwertiger Mutant durch Vereinfachen entfernt).
 - **Ziel:** Logs der Container über die Docker-API (M5-17) in die Log-Pipeline (Redaction, Grenzen, Labels mit
   Container-Name, begrenzte Zahl der Streams in Loki); Auswahl je Gruppe wie die Datei-Globs (ADR 0030).
 - **Tests zuerst:** Fake-API mit Multiplex-Format, Redaction greift, Container, die neu starten, Grenzen.

@@ -1176,7 +1176,11 @@ func TestSession_StoresLogEntries(t *testing.T) {
 		OccurredAt: timestamppb.New(at), Source: agentv1.LogSource_LOG_SOURCE_FILE, File: "/var/log/nginx/error.log",
 		Unit: "nginx", Message: "x", Truncated: true,
 	}
-	if err := stream.Send(logs(journal, file)); err != nil {
+	container := &agentv1.LogEntry{
+		OccurredAt: timestamppb.New(at), Source: agentv1.LogSource_LOG_SOURCE_CONTAINER, Unit: "web", Identifier: "web",
+		Transport: "stderr", Message: "GET / 500",
+	}
+	if err := stream.Send(logs(journal, file, container)); err != nil {
 		t.Fatal(err)
 	}
 	if res, err := stream.Receive(); err != nil || res.GetAck().GetSeq() != 3 {
@@ -1185,7 +1189,7 @@ func TestSession_StoresLogEntries(t *testing.T) {
 	_ = stream.CloseRequest()
 	recorded.mu.Lock()
 	defer recorded.mu.Unlock()
-	if recorded.node != nodeX || len(recorded.entries) != 2 {
+	if recorded.node != nodeX || len(recorded.entries) != 3 {
 		t.Fatalf("stored %d entries for %v", len(recorded.entries), recorded.node)
 	}
 	e := recorded.entries[0]
@@ -1197,5 +1201,8 @@ func TestSession_StoresLogEntries(t *testing.T) {
 	f := recorded.entries[1]
 	if f.Source != ingest.LogSourceFile || f.File != "/var/log/nginx/error.log" || !f.Truncated || f.UID != nil || f.Facility != nil {
 		t.Errorf("file entry = %+v", f)
+	}
+	if c := recorded.entries[2]; c.Source != ingest.LogSourceContainer || c.Unit != "web" || c.Transport != "stderr" {
+		t.Errorf("container entry = %+v", c)
 	}
 }

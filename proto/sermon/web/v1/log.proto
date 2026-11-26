@@ -43,6 +43,8 @@ enum LogSource {
   LOG_SOURCE_JOURNAL = 1;
   // LOG_SOURCE_FILE is a log file.
   LOG_SOURCE_FILE = 2;
+  // LOG_SOURCE_CONTAINER is the output of a container (module docker_socket); unit is its name.
+  LOG_SOURCE_CONTAINER = 3;
 }
 
 // LogFilter selects log lines.

@@ -114,7 +114,8 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 			m.module_docker_socket_max_containers,
 			m.module_docker_socket_max_containers_help
 		],
-		timeout: [m.module_docker_socket_timeout, m.module_docker_socket_timeout_help]
+		timeout: [m.module_docker_socket_timeout, m.module_docker_socket_timeout_help],
+		logs: [m.module_docker_socket_logs, m.module_docker_socket_logs_help]
 	}
 };
 

@@ -34,6 +34,8 @@ const (
 	LogSource_LOG_SOURCE_JOURNAL LogSource = 1
 	// LOG_SOURCE_FILE is a log file.
 	LogSource_LOG_SOURCE_FILE LogSource = 2
+	// LOG_SOURCE_CONTAINER is the output of a container (module docker_socket); unit is its name.
+	LogSource_LOG_SOURCE_CONTAINER LogSource = 3
 )
 
 // Enum value maps for LogSource.
@@ -42,11 +44,13 @@ var (
 		0: "LOG_SOURCE_UNSPECIFIED",
 		1: "LOG_SOURCE_JOURNAL",
 		2: "LOG_SOURCE_FILE",
+		3: "LOG_SOURCE_CONTAINER",
 	}
 	LogSource_value = map[string]int32{
 		"LOG_SOURCE_UNSPECIFIED": 0,
 		"LOG_SOURCE_JOURNAL":     1,
 		"LOG_SOURCE_FILE":        2,
+		"LOG_SOURCE_CONTAINER":   3,
 	}
 )
 
@@ -1007,11 +1011,12 @@ const file_sermon_web_v1_log_proto_rawDesc = "" +
 	"\x10TailLogsResponse\x12,\n" +
 	"\x05lines\x18\x01 \x03(\v2\x16.sermon.web.v1.LogLineR\x05lines\x12\x1c\n" +
 	"\tthrottled\x18\x02 \x01(\bR\tthrottled\x12 \n" +
-	"\vunavailable\x18\x03 \x01(\bR\vunavailable*T\n" +
+	"\vunavailable\x18\x03 \x01(\bR\vunavailable*n\n" +
 	"\tLogSource\x12\x1a\n" +
 	"\x16LOG_SOURCE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12LOG_SOURCE_JOURNAL\x10\x01\x12\x13\n" +
-	"\x0fLOG_SOURCE_FILE\x10\x022\xfd\x02\n" +
+	"\x0fLOG_SOURCE_FILE\x10\x02\x12\x18\n" +
+	"\x14LOG_SOURCE_CONTAINER\x10\x032\xfd\x02\n" +
 	"\n" +
 	"LogService\x12S\n" +
 	"\tQueryLogs\x12\x1f.sermon.web.v1.QueryLogsRequest\x1a .sermon.web.v1.QueryLogsResponse\"\x03\x90\x02\x01\x12e\n" +

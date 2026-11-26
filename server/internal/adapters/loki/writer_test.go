@@ -44,15 +44,19 @@ func TestWriter_GroupsEntriesIntoStreamsWithMetadata(t *testing.T) {
 		},
 		{At: at, Source: ingest.LogSourceJournal, Unit: "ssh.service", Severity: 7, Message: "Disconnected"},
 		{At: at, Source: ingest.LogSourceFile, Unit: "nginx", Severity: 0, Message: "x", File: "/var/log/nginx/error.log", Truncated: true},
+		{At: at, Source: ingest.LogSourceContainer, Unit: "web", Message: "GET / 500", Transport: "stderr"},
 	}
 	if err := w.Write(context.Background(), org, node, entries); err != nil {
 		t.Fatal(err)
 	}
 	body := writtenStreams(t, rec.bodies[0])
-	if len(body.Streams) != 2 {
+	if len(body.Streams) != 3 {
 		t.Fatalf("%d streams, want one per label set", len(body.Streams))
 	}
-	nginx, ssh := body.Streams[0], body.Streams[1]
+	nginx, ssh, web := body.Streams[0], body.Streams[1], body.Streams[2]
+	if web.Stream["source"] != "container" || web.Stream["unit"] != "web" {
+		t.Errorf("container stream = %+v", web.Stream)
+	}
 	if ssh.Stream["source"] != "journal" || ssh.Stream["severity"] != "info" || len(ssh.Values) != 2 || ssh.Stream["node_id"] != node.String() {
 		t.Errorf("ssh stream = %+v", ssh)
 	}

@@ -337,6 +337,10 @@ const (
 	LogSource_LOG_SOURCE_JOURNAL LogSource = 1
 	// LOG_SOURCE_FILE is a log file (classic syslog files, configured globs).
 	LogSource_LOG_SOURCE_FILE LogSource = 2
+	// LOG_SOURCE_CONTAINER is the output of a container, read through the Docker API by the module
+	// docker_socket (M5-21): unit and identifier are the container's name, transport is stdout or
+	// stderr.
+	LogSource_LOG_SOURCE_CONTAINER LogSource = 3
 )
 
 // Enum value maps for LogSource.
@@ -345,11 +349,13 @@ var (
 		0: "LOG_SOURCE_UNSPECIFIED",
 		1: "LOG_SOURCE_JOURNAL",
 		2: "LOG_SOURCE_FILE",
+		3: "LOG_SOURCE_CONTAINER",
 	}
 	LogSource_value = map[string]int32{
 		"LOG_SOURCE_UNSPECIFIED": 0,
 		"LOG_SOURCE_JOURNAL":     1,
 		"LOG_SOURCE_FILE":        2,
+		"LOG_SOURCE_CONTAINER":   3,
 	}
 )
 
@@ -6198,11 +6204,12 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x19SSH_AUTH_METHOD_HOSTBASED\x10\x04\x12\x1a\n" +
 	"\x16SSH_AUTH_METHOD_GSSAPI\x10\x05\x12\x18\n" +
 	"\x14SSH_AUTH_METHOD_NONE\x10\x06\x12\x19\n" +
-	"\x15SSH_AUTH_METHOD_OTHER\x10\a*T\n" +
+	"\x15SSH_AUTH_METHOD_OTHER\x10\a*n\n" +
 	"\tLogSource\x12\x1a\n" +
 	"\x16LOG_SOURCE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12LOG_SOURCE_JOURNAL\x10\x01\x12\x13\n" +
-	"\x0fLOG_SOURCE_FILE\x10\x02*\xf4\x01\n" +
+	"\x0fLOG_SOURCE_FILE\x10\x02\x12\x18\n" +
+	"\x14LOG_SOURCE_CONTAINER\x10\x03*\xf4\x01\n" +
 	"\vLogSeverity\x12\x1c\n" +
 	"\x18LOG_SEVERITY_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16LOG_SEVERITY_EMERGENCY\x10\x01\x12\x16\n" +

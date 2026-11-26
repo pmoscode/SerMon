@@ -57,10 +57,10 @@ export function groupLabel(group: Group): string {
 	}
 }
 
-export function sourceLabel(source: LogSource | 'journal' | 'file'): string {
-	return source === LogSource.FILE || source === 'file'
-		? m.logs_source_file()
-		: m.logs_source_journal();
+export function sourceLabel(source: LogSource | 'journal' | 'file' | 'container'): string {
+	if (source === LogSource.FILE || source === 'file') return m.logs_source_file();
+	if (source === LogSource.CONTAINER || source === 'container') return m.logs_source_container();
+	return m.logs_source_journal();
 }
 
 export const presetLabels: Record<LogPreset, () => string> = {

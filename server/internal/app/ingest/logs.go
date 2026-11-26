@@ -16,6 +16,8 @@ type LogSource uint8
 const (
 	LogSourceJournal LogSource = iota + 1
 	LogSourceFile
+	// LogSourceContainer is a container's output (module docker_socket, M5-21).
+	LogSourceContainer
 )
 
 // LogEntry is one log entry of a node (KONZEPT §10.2, agent.proto LogEntry). Every text comes

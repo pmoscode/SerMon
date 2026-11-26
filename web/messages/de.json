@@ -688,6 +688,7 @@
 	"logs_group_debug": "Debug und ohne",
 	"logs_source_journal": "Journal",
 	"logs_source_file": "Datei",
+	"logs_source_container": "Container",
 	"logs_histogram_title": "Zeilen pro Zeit",
 	"logs_histogram_empty": "Keine Zeilen in diesem Zeitraum",
 	"logs_histogram_failed": "Das Histogramm ließ sich nicht laden.",
@@ -1595,5 +1596,7 @@
 	"kiosk_token_revoked": "widerrufen",
 	"kiosk_token_expired": "abgelaufen",
 	"kiosk_token_failed": "Die Kiosk-Tokens konnten nicht geändert werden: {reason}",
-	"kiosk_token_share_first": "Teile das Dashboard zuerst: Kiosk-Tokens öffnen nur geteilte Dashboards."
+	"kiosk_token_share_first": "Teile das Dashboard zuerst: Kiosk-Tokens öffnen nur geteilte Dashboards.",
+	"module_docker_socket_logs": "Container-Logs",
+	"module_docker_socket_logs_help": "Namen der Container, deren Ausgabe in die Logs geht, * als Platzhalter (z. B. web, app-*); höchstens 16 Container. Leer: keine Logs."
 }

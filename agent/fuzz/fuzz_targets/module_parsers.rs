@@ -63,6 +63,11 @@ fuzz_target!(|data: &[u8]| {
                 }
             }
             let _ = docker_socket::parse_inspect(rest);
+            for tty in [false, true] {
+                for line in docker_socket::logs::parse(rest, tty) {
+                    assert!(line.nanos < 1_000_000_000 && !line.message.contains('\n'));
+                }
+            }
         }
         2 => {
             if let Some(v) = x509::validity(rest) {

@@ -33,6 +33,17 @@ impl Fake {
                 std::fs::read(fixtures().join(format!("inspect-{}.json", &c.id[..12]))).unwrap();
             answers.insert(format!("/containers/{}/json", c.id), (200, inspect));
         }
+        for (name, file) in [("talker", "logs-talker.bin"), ("tty", "logs-tty.bin")] {
+            let c = parse_list(&list)
+                .unwrap()
+                .into_iter()
+                .find(|c| c.name == name)
+                .unwrap();
+            answers.insert(
+                format!("/containers/{}/logs", c.id),
+                (200, std::fs::read(fixtures().join(file)).unwrap()),
+            );
+        }
         answers.insert("/containers/json?all=1".into(), (200, list));
         Arc::new(Self {
             answers: Mutex::new(answers),
@@ -54,7 +65,13 @@ fn serve(dir: &Path, fake: Arc<Fake>) -> PathBuf {
                 let request = String::from_utf8_lossy(&buf[..n]).into_owned();
                 let line = request.lines().next().unwrap_or_default().to_owned();
                 fake.seen.lock().unwrap().push(line.clone());
-                let path = line.split_whitespace().nth(1).unwrap_or_default();
+                let full = line.split_whitespace().nth(1).unwrap_or_default();
+                // The logs by their path alone: the query names the position.
+                let path = if full.contains("/logs?") {
+                    full.split('?').next().unwrap_or_default()
+                } else {
+                    full
+                };
                 let (status, body) = fake
                     .answers
                     .lock()
@@ -115,8 +132,8 @@ fn state(samples: &[Sample], state: &str) -> Option<Value> {
 fn parses_the_recorded_answers() {
     let list = parse_list(&std::fs::read(fixtures().join("containers.json")).unwrap()).unwrap();
     let names: Vec<&str> = list.iter().map(|c| c.name.as_str()).collect();
-    assert_eq!(names.len(), 5);
-    for n in ["web", "sick", "flappy", "done", "plain"] {
+    assert_eq!(names.len(), 7);
+    for n in ["web", "sick", "flappy", "done", "plain", "talker", "tty"] {
         assert!(names.contains(&n), "{names:?}");
     }
     let flappy = list.iter().find(|c| c.name == "flappy").unwrap();
@@ -174,8 +191,8 @@ async fn reports_state_health_and_restarts() {
     let s = api.collect(&Run::default()).await.unwrap();
     crate::assert_in_catalog("docker_socket", &s);
     assert_eq!(s[0].value, Value::Int(1));
-    assert_eq!(state(&s, "running"), Some(Value::Int(3)));
-    assert_eq!(state(&s, "exited"), Some(Value::Int(1)));
+    assert_eq!(state(&s, "running"), Some(Value::Int(4)));
+    assert_eq!(state(&s, "exited"), Some(Value::Int(2)));
     assert_eq!(state(&s, "restarting"), Some(Value::Int(1)));
     assert_eq!(state(&s, "dead"), Some(Value::Int(0)));
     assert_eq!(
@@ -211,7 +228,7 @@ async fn reports_state_health_and_restarts() {
     assert_eq!(label.labels[0].1.len(), 12, "the short ID");
     let seen = fake.seen.lock().unwrap().clone();
     assert_eq!(seen[0], "GET /containers/json?all=1 HTTP/1.1");
-    assert_eq!(seen.len(), 6);
+    assert_eq!(seen.len(), 8);
     for line in &seen[1..] {
         let path = line
             .strip_prefix("GET /containers/")
@@ -250,13 +267,13 @@ async fn bounds_the_containers_and_the_answers() {
             .map(|x| x.value)
     };
     assert_eq!(truncated(&s), Some(Value::Int(1)));
-    let exactly = format!(r#"{{"socket":"{}","max_containers":5}}"#, socket.display());
+    let exactly = format!(r#"{{"socket":"{}","max_containers":7}}"#, socket.display());
     let all = build(&exactly, &veto)
         .unwrap()
         .collect(&Run::default())
         .await
         .unwrap();
-    assert_eq!(truncated(&all), Some(Value::Int(0)), "five of five");
+    assert_eq!(truncated(&all), Some(Value::Int(0)), "seven of seven");
 
     // A container gone between list and inspection is left out.
     let gone: Vec<String> = fake
@@ -277,7 +294,7 @@ async fn bounds_the_containers_and_the_answers() {
         .iter()
         .filter(|x| x.metric == "sermon_docker_socket_running")
         .count();
-    assert_eq!(running, 4);
+    assert_eq!(running, 6);
 
     let list = "/containers/json?all=1".to_owned();
     for (status, body) in [
@@ -341,5 +358,78 @@ fn stays_within_the_samples_of_a_run() {
     assert!(
         usize::try_from(max).unwrap() <= MAX_CONTAINERS,
         "the form's bound fits a run"
+    );
+}
+
+// M5-21: the output of the chosen containers goes to the run's log lines, each line once; a
+// container seen first starts at the run's time.
+#[tokio::test]
+async fn hands_the_output_of_chosen_containers_to_the_logs() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::recorded();
+    let socket = serve(dir.path(), fake.clone());
+    let config = format!(
+        r#"{{"socket":"{}","logs":["talk*","tty"]}}"#,
+        socket.display()
+    );
+    let mut api = build(&config, &allowed(dir.path())).unwrap();
+    // Before the fixtures were written.
+    let clock = Arc::new(sermon_core::testing::FakeClock::new(
+        UNIX_EPOCH + Duration::from_secs(1_790_000_000),
+    ));
+    let run = Run::new(clock.clone());
+    api.collect(&run).await.unwrap();
+    assert_eq!(run.take_logs(), [], "a container seen first starts now");
+    assert!(
+        !fake
+            .seen
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|l| l.contains("/logs"))
+    );
+
+    api.collect(&run).await.unwrap();
+    let lines = run.take_logs();
+    let of = |name: &str| -> Vec<(bool, String)> {
+        lines
+            .iter()
+            .filter(|l| l.name == name)
+            .map(|l| (l.stderr, l.message.clone()))
+            .collect()
+    };
+    assert!(
+        of("talker").contains(&(true, "warning: low disk".into())),
+        "{lines:?}"
+    );
+    assert!(of("talker").contains(&(false, "ready".into())));
+    assert_eq!(of("tty").len(), 2);
+    assert!(
+        lines
+            .iter()
+            .all(|l| l.at > UNIX_EPOCH + Duration::from_secs(1_790_000_000))
+    );
+    let requests: Vec<String> = fake
+        .seen
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|l| l.contains("/logs"))
+        .cloned()
+        .collect();
+    assert_eq!(requests.len(), 2, "talker and tty only");
+    for r in &requests {
+        assert!(
+            r.contains("?stdout=1&stderr=1&timestamps=1&since=1790000000.000000000&tail=1000"),
+            "{r}"
+        );
+    }
+
+    api.collect(&run).await.unwrap();
+    assert_eq!(run.take_logs(), [], "nothing twice");
+    let last = fake.seen.lock().unwrap().last().cloned().unwrap();
+    assert!(
+        !last.contains("since=1790000000.000000000"),
+        "it moved on: {last}"
     );
 }

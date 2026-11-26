@@ -235,10 +235,16 @@ func logSelectorFrom(m logSelector) (logs.Filter, error) {
 }
 
 func sourceFrom(s webv1.LogSource) logql.Source {
-	if s == webv1.LogSource_LOG_SOURCE_FILE {
+	switch s {
+	case webv1.LogSource_LOG_SOURCE_FILE:
 		return logql.SourceFile
+	case webv1.LogSource_LOG_SOURCE_CONTAINER:
+		return logql.SourceContainer
+	case webv1.LogSource_LOG_SOURCE_UNSPECIFIED, webv1.LogSource_LOG_SOURCE_JOURNAL:
+		return logql.SourceJournal
+	default:
+		return logql.SourceJournal
 	}
-	return logql.SourceJournal
 }
 
 // severityMessage: emergency … debug are 1 … 8 as in logql.Severities; unknown is unspecified.
@@ -258,6 +264,8 @@ func logLineMessage(l logs.Line) *webv1.LogLine {
 		source = webv1.LogSource_LOG_SOURCE_JOURNAL
 	case logql.SourceFile:
 		source = webv1.LogSource_LOG_SOURCE_FILE
+	case logql.SourceContainer:
+		source = webv1.LogSource_LOG_SOURCE_CONTAINER
 	}
 	return &webv1.LogLine{
 		NodeId: l.Node.String(), Hostname: l.Hostname, At: timestamppb.New(l.At), Severity: severityMessage(l.Severity),

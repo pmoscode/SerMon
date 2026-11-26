@@ -38,7 +38,7 @@ export const severities = [
 ] as const;
 export type SeverityName = (typeof severities)[number];
 
-export type SourceName = 'journal' | 'file';
+export type SourceName = 'journal' | 'file' | 'container';
 
 export interface LogFilter {
 	/** The relative range, unless from and to are set (zoom, links). */
@@ -95,7 +95,9 @@ export function parseFilter(params: URLSearchParams): LogFilter {
 	if (group && UUID.test(group)) f.group = group;
 	f.sources = [
 		...new Set(
-			params.getAll('source').filter((s): s is SourceName => s === 'journal' || s === 'file')
+			params
+				.getAll('source')
+				.filter((s): s is SourceName => s === 'journal' || s === 'file' || s === 'container')
 		)
 	];
 	f.units = [

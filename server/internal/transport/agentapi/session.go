@@ -734,8 +734,12 @@ func toLogEntry(e *agentv1.LogEntry) ingest.LogEntry {
 		Severity: uint8(min(e.GetSeverity(), 8)), Message: e.GetMessage(), Truncated: e.GetTruncated(), //nolint:gosec // bounded by the schema and min
 		Identifier: e.GetIdentifier(), PID: e.GetPid(), Process: e.GetProcess(), BootID: e.GetBootId(), Transport: e.GetTransport(),
 	}
-	if e.GetSource() == agentv1.LogSource_LOG_SOURCE_FILE {
+	switch e.GetSource() {
+	case agentv1.LogSource_LOG_SOURCE_FILE:
 		entry.Source = ingest.LogSourceFile
+	case agentv1.LogSource_LOG_SOURCE_CONTAINER:
+		entry.Source = ingest.LogSourceContainer
+	case agentv1.LogSource_LOG_SOURCE_UNSPECIFIED, agentv1.LogSource_LOG_SOURCE_JOURNAL:
 	}
 	if e.Uid != nil {
 		uid := e.GetUid()

@@ -342,6 +342,12 @@ fn build(s: &Supervised) -> Result<Box<dyn crate::Instance>, (State, String)> {
     Schema::parse(s.module.schema())
         .map_err(|e| (State::InvalidConfig, format!("the module's schema: {e}")))
         .and_then(|schema| {
+            for name in s.secrets.fields() {
+                let value = s.secrets.get(name).unwrap_or_default();
+                schema
+                    .check_secret(name, value)
+                    .map_err(|e| (State::InvalidConfig, e))?;
+            }
             schema
                 .validate(&s.spec.config_json, &s.secrets.fields())
                 .map_err(|e| (State::InvalidConfig, e))

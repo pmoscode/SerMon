@@ -394,13 +394,6 @@ impl fmt::Debug for Secrets {
     }
 }
 
-/// Checks that `samples` of the module `id` are in its metric catalog
-/// (`metrics/<id>.json`, which the server takes over with `just gen`): the server drops what is
-/// not there. For the tests of the modules.
-///
-/// # Panics
-///
-/// If a sample is not in the catalog or has other labels.
 /// A temporary directory by its resolved path: the veto compares paths as configured with its
 /// prefixes, and the system's temporary directory may lie behind a link (macOS).
 #[cfg(test)]
@@ -423,6 +416,13 @@ impl TestDir {
     }
 }
 
+/// Checks that `samples` of the module `id` are in its metric catalog
+/// (`metrics/<id>.json`, which the server takes over with `just gen`): the server drops what is
+/// not there. For the tests of the modules.
+///
+/// # Panics
+///
+/// If a sample is not in the catalog or has other labels.
 #[cfg(test)]
 // Used by the tests of the modules; without the feature `simulate` there may be none.
 #[allow(dead_code)]

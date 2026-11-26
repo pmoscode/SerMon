@@ -160,6 +160,27 @@ impl Schema {
             .map(|(n, _)| n.as_str())
     }
 
+    /// Checks the value of the credential `name` against its property, as the server does
+    /// (`CheckSecret`, M5-33); the reason never repeats the value.
+    ///
+    /// # Errors
+    ///
+    /// Why the value doesn't fit, or `name` is no credential of the module.
+    pub fn check_secret(&self, name: &str, value: &str) -> Result<(), String> {
+        let p = self
+            .properties
+            .get(name)
+            .filter(|p| p.secret)
+            .ok_or_else(|| format!("{name}: not a credential of the module"))?;
+        if value.is_empty() {
+            return Err(format!("{name}: empty"));
+        }
+        check(&p.kind, &Value::String(value.to_owned())).map_err(|e| {
+            let quoted = format!("{value:?}");
+            format!("{name}: {}", e.replace(&quoted, "***"))
+        })
+    }
+
     /// Checks `json` and fills in the defaults; `secrets` are the names of the credentials the
     /// module has (a required one must be among them).
     ///

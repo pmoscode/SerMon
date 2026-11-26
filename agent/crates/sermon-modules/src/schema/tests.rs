@@ -90,3 +90,32 @@ proptest::proptest! {
         let _ = schema().validate(&json, &["password"]);
     }
 }
+
+// M5-33: the agent checks the values of credentials against their property like the server
+// (`CheckSecret`): length, control characters, pattern; the reason never repeats the value.
+#[test]
+fn credentials_are_checked_against_their_property() {
+    let s = Schema::parse(
+        r#"{"type":"object","additionalProperties":false,"properties":{
+        "user":{"type":"string","maxLength":8},
+        "password":{"type":"string","writeOnly":true,"maxLength":8},
+        "token":{"type":"string","writeOnly":true,"maxLength":16,"pattern":"^[a-z]+$"},
+        "mode":{"type":"string","writeOnly":true,"maxLength":8,"enum":["fast","safe"]}}}"#,
+    )
+    .unwrap();
+    assert!(s.check_secret("password", "s3cret").is_ok());
+    assert!(s.check_secret("token", "abc").is_ok());
+    for (name, value) in [
+        ("password", "123456789"),
+        ("password", ""),
+        ("password", "a\r\nb"),
+        ("token", "ABC"),
+        ("mode", "slow"),
+        ("user", "alice"),
+        ("other", "x"),
+    ] {
+        let why = s.check_secret(name, value).unwrap_err();
+        assert!(why.starts_with(name), "{why}");
+        assert!(value.len() < 3 || !why.contains(value), "{why}");
+    }
+}

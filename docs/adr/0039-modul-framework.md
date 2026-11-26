@@ -259,6 +259,8 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
   `agent.toml`, wie geschrieben und aufgelöst.
 - **Laufzeit:** Ein Panic in `Module::build` oder `Instance::timeout` gilt wie einer im Lauf als Absturz: gemeldet und
   nach der Pause neu gebaut.
+- **Werte der Zugangsdaten** prüft auch der Agent gegen ihr Feld im Schema (Länge, Steuerzeichen, Muster, wie
+  `CheckSecret` im Server); ein Wert außerhalb hält das Modul mit `invalid_config` an, der Grund nennt ihn nie.
 - **Zugangsdaten je Gruppe:** Der Server schickt nur die Zugangsdaten eingebauter Module, die in der Gruppe an sind;
   wer ein Modul abschaltet, nimmt seine Zugangsdaten bei der nächsten Version von den Agents. Gewollt bleibt: Jeder
   Node einer Gruppe bekommt alle Zugangsdaten ihrer laufenden Module, auch wenn der Dienst nur auf einem Node läuft –

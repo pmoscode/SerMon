@@ -395,6 +395,17 @@ async fn an_invalid_configuration_keeps_the_module_off() {
         .apply(&[spec("a", r#"{"password":"x"}"#)], &BTreeMap::new());
     settle(Duration::from_secs(1)).await;
     assert_eq!(w.out.state("a").map(|s| s.0), Some(State::InvalidConfig));
+    // M5-33: nor does a credential outside its property (maxLength 64 in the schema).
+    let long = BTreeMap::from([(
+        "b".to_owned(),
+        Secrets::new([("password".to_owned(), "x".repeat(65))]),
+    )]);
+    w.runtime.apply(&[spec("b", "{}")], &long);
+    settle(Duration::from_secs(1)).await;
+    let (state, why) = w.out.state("b").unwrap();
+    assert_eq!(state, State::InvalidConfig);
+    assert!(why.starts_with("password: length"), "{why}");
+    assert_eq!(w.runs("b"), 0);
 }
 
 // The local veto: allow_modules = false runs nothing, a target outside module_targets is vetoed.

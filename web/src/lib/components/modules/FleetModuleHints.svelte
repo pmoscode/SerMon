@@ -64,7 +64,7 @@
 		</ul>
 		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		{#if hints.length > SHOWN}
-			<p class="text-xs text-muted-foreground">
+			<p class="text-xs">
 				{m.modules_hints_more({ count: hints.length - SHOWN })}
 			</p>
 		{/if}

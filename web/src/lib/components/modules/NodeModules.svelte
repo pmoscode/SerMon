@@ -112,7 +112,8 @@
 					<Lightbulb class="size-4" aria-hidden="true" />
 					{m.modules_hint({ module: moduleLabel(hint.moduleId) })}
 				</p>
-				<p class="text-sm text-muted-foreground">
+				<!-- Not muted: on the tinted background that grey misses 4.5:1. -->
+				<p class="text-sm">
 					{m.modules_hint_reasons({ reasons: hint.reasons.map(displayText).join(', ') })}
 				</p>
 				{#if sessionState.current?.orgAdmin}

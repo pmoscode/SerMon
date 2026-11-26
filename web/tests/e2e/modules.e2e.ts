@@ -173,6 +173,14 @@ test('shows the modules of a node with their state and passes axe', async ({ pag
 						state: 'MODULE_STATE_ERROR',
 						reason: '<script>alert(1)</script> simulated failure'
 					}
+				],
+				// A suggestion next to the running module: its reasons in readable contrast (M5-32).
+				hints: [
+					{
+						moduleId: 'nginx',
+						reasons: ['process:nginx', 'unit:nginx.service', 'port:80'],
+						suggestedConfigJson: '{"url":"http://127.0.0.1/nginx_status"}'
+					}
 				]
 			}
 		})
@@ -180,6 +188,9 @@ test('shows the modules of a node with their state and passes axe', async ({ pag
 	await page.goto(`/nodes/${nodeId}?tab=modules`);
 	await expect(page.getByTestId('module-state')).toHaveText('Error');
 	await expect(page.getByText('<script>alert(1)</script> simulated failure')).toBeVisible();
+	await expect(page.getByTestId('module-hint')).toContainText(
+		'Seen: process:nginx, unit:nginx.service, port:80'
+	);
 	expect(await page.locator('main script').count()).toBe(0);
 	const results = await new AxeBuilder({ page }).analyze();
 	expect(results.violations).toEqual([]);

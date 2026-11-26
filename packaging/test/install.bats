@@ -341,8 +341,9 @@ without_minisign() {
 	grep -q '^allow_remote_updates = true$' "$conf"
 	grep -q '^allow_remote_reboot = false$' "$conf"
 	grep -q '^allow_self_update = true$' "$conf"
+	grep -q '^allow_prerelease = false$' "$conf"
 	[ "$(stat -c %a "$conf")" = 644 ]
-	[ "$(grep -c '^allow_' "$conf")" = 3 ]
+	[ "$(grep -c '^allow_' "$conf")" = 4 ]
 	# The admin allows reboots; a second run without flags keeps that.
 	sed -i 's/^allow_remote_reboot = false$/allow_remote_reboot = true/' "$conf"
 	echo '# own note' >>"$conf"

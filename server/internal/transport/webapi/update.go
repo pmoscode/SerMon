@@ -102,7 +102,7 @@ func (h *UpdateHandler) GetNodeUpdates(ctx context.Context, req *connect.Request
 	}
 	res := &webv1.GetNodeUpdatesResponse{Node: nodeUpdatesView(n), Agent: &webv1.AgentInfo{
 		Version: agent.Version, InstallMethod: webv1.InstallMethod(agent.Method), Channel: apiChannels[agent.Channel],
-		Latest: agent.Latest, Target: agent.Target,
+		Latest: agent.Latest, Target: agent.Target, HelperVersion: agent.Helper, HelperOutdated: agent.HelperOutdated(),
 	}}
 	if n.Report != nil {
 		res.Packages = make([]*webv1.UpdatePackage, 0, len(n.Report.Packages))

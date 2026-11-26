@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/domain/update"
 	"github.com/pmoscode/SerMon/server/internal/platform/minisign"
 )
 
@@ -38,8 +39,10 @@ type Release struct {
 	Channel, Version, Arch string
 	Size                   int64
 	Signature              []byte
-	name                   string // below the root
-	modified               time.Time
+	// Helper is the root helper of the same channel and version (M4-31); nil without one.
+	Helper   *Release
+	name     string // below the root
+	modified time.Time
 }
 
 // Releases knows the signed agent binaries of the downloads directory (ADR 0036): stable is the
@@ -53,13 +56,14 @@ type Releases struct {
 	now           func() time.Time
 
 	mu      sync.Mutex
-	known   map[string]Release // by name
+	known   map[string]Release // the agent releases by name
+	checked map[string]Release // every checked binary by name, without its helper
 	scanned time.Time
 }
 
 // NewReleases returns the catalog of dir; without a directory or key it knows no release.
 func NewReleases(dir, releaseKey, serverVersion string, logger *slog.Logger) (*Releases, error) {
-	r := &Releases{serverVersion: serverVersion, logger: logger, now: time.Now, known: map[string]Release{}}
+	r := &Releases{serverVersion: serverVersion, logger: logger, now: time.Now, known: map[string]Release{}, checked: map[string]Release{}}
 	if dir == "" || releaseKey == "" {
 		return r, nil
 	}
@@ -84,22 +88,12 @@ func (r *Releases) Scan() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.scanned = r.now()
-	found := map[string]Release{}
+	found, checked := map[string]Release{}, map[string]Release{}
 	for _, c := range channels {
 		for _, arch := range architectures {
-			file := "sermon-agent-linux-" + arch
-			name := c.dir + file
-			info, err := r.root.Stat(name)
-			if err != nil || !info.Mode().IsRegular() {
-				continue
-			}
-			if old, ok := r.known[name]; ok && old.Size == info.Size() && old.modified.Equal(info.ModTime()) {
-				found[name] = old
-				continue
-			}
-			rel, err := r.check(name, file, info)
-			if err != nil {
-				r.logger.Warn("agent release ignored", "file", name, "error", err)
+			name := c.dir + "sermon-agent-linux-" + arch
+			rel, ok := r.binary(checked, name, "sermon-agent-linux-"+arch)
+			if !ok {
 				continue
 			}
 			rel.Channel, rel.Arch = c.name, arch
@@ -107,10 +101,39 @@ func (r *Releases) Scan() {
 				r.logger.Warn("agent release ignored: stable is the server's version", "file", name, "version", rel.Version, "server", r.serverVersion)
 				continue
 			}
+			helperName := c.dir + "sermon-helper-linux-" + arch
+			if helper, ok := r.binary(checked, helperName, "sermon-helper-linux-"+arch); ok {
+				if helper.Version == rel.Version {
+					helper.Channel, helper.Arch = c.name, arch
+					rel.Helper = &helper
+				} else {
+					r.logger.Warn("helper release ignored: not the agent's version", "file", helperName, "version", helper.Version, "agent", rel.Version)
+				}
+			}
 			found[name] = rel
 		}
 	}
-	r.known = found
+	r.known, r.checked = found, checked
+}
+
+// binary returns the checked binary name (signed for file), from the last scan if unchanged, and
+// records it in checked; false if it is missing or no release.
+func (r *Releases) binary(checked map[string]Release, name, file string) (Release, bool) {
+	info, err := r.root.Stat(name)
+	if err != nil || !info.Mode().IsRegular() {
+		return Release{}, false
+	}
+	if old, ok := r.checked[name]; ok && old.Size == info.Size() && old.modified.Equal(info.ModTime()) {
+		checked[name] = old
+		return old, true
+	}
+	rel, err := r.check(name, file, info)
+	if err != nil {
+		r.logger.Warn("release binary ignored", "file", name, "error", err)
+		return Release{}, false
+	}
+	checked[name] = rel
+	return rel, true
 }
 
 var errRelease = errors.New("not a release of the release key")
@@ -175,19 +198,34 @@ func (r *Releases) find(version, arch string) (Release, bool) {
 	return Release{}, false
 }
 
-// Latest returns the release of channel for arch.
+// Latest returns the release of channel for arch. Beta is never behind stable: without a newer
+// beta it is the stable release.
 func (r *Releases) Latest(channel, arch string) (Release, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, rel := range r.known {
-		if rel.Channel == channel && rel.Arch == arch {
-			return rel, true
+	latest := func(channel string) (Release, bool) {
+		for _, rel := range r.known {
+			if rel.Channel == channel && rel.Arch == arch {
+				return rel, true
+			}
 		}
+		return Release{}, false
+	}
+	stable, hasStable := latest("stable")
+	switch channel {
+	case "stable":
+		return stable, hasStable
+	case "beta":
+		if beta, ok := latest("beta"); ok && (!hasStable || update.Newer(beta.Version, stable.Version)) {
+			return beta, true
+		}
+		return stable, hasStable
 	}
 	return Release{}, false
 }
 
-// Open opens the binary of rel; the caller closes it. The helper checks the signature again.
+// Open opens the binary of rel (an agent release or its Helper); the caller closes it. The helper
+// checks the signature again.
 func (r *Releases) Open(rel Release) (io.ReadCloser, error) {
 	if r.root == nil {
 		return nil, fs.ErrNotExist

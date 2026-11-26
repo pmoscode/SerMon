@@ -9,6 +9,10 @@ pub struct FetchAgentReleaseRequest {
     /// architecture is the binary's architecture.
     #[prost(enumeration="Architecture", tag="2")]
     pub architecture: i32,
+    /// artifact is which binary of the release: the agent (also unset, as older agents ask) or the
+    /// root helper, which replaces itself with the agent (M4-31).
+    #[prost(enumeration="ReleaseArtifact", tag="3")]
+    pub artifact: i32,
 }
 /// FetchAgentReleaseResponse is one message of the stream: the header first, then the chunks.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -927,6 +931,10 @@ pub struct UpdateReport {
     /// refreshed: the package sources were updated just before listing.
     #[prost(bool, tag="12")]
     pub refreshed: bool,
+    /// helper_version is the root helper's version, empty without helper (M4-31): the server shows a
+    /// helper older than its agent.
+    #[prost(string, tag="13")]
+    pub helper_version: ::prost::alloc::string::String,
 }
 /// UpdatePackage is one available update.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -987,6 +995,39 @@ pub struct CommandResult {
     /// ended_at is when it ended.
     #[prost(message, optional, tag="8")]
     pub ended_at: ::core::option::Option<::prost_types::Timestamp>,
+}
+/// ReleaseArtifact is a binary of an agent release.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ReleaseArtifact {
+    /// RELEASE_ARTIFACT_UNSPECIFIED is the agent.
+    Unspecified = 0,
+    /// RELEASE_ARTIFACT_AGENT is the agent.
+    Agent = 1,
+    /// RELEASE_ARTIFACT_HELPER is the root helper of the same version.
+    Helper = 2,
+}
+impl ReleaseArtifact {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "RELEASE_ARTIFACT_UNSPECIFIED",
+            Self::Agent => "RELEASE_ARTIFACT_AGENT",
+            Self::Helper => "RELEASE_ARTIFACT_HELPER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "RELEASE_ARTIFACT_UNSPECIFIED" => Some(Self::Unspecified),
+            "RELEASE_ARTIFACT_AGENT" => Some(Self::Agent),
+            "RELEASE_ARTIFACT_HELPER" => Some(Self::Helper),
+            _ => None,
+        }
+    }
 }
 /// InstallMethod is how the agent was installed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

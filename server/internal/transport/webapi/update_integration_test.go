@@ -273,13 +273,15 @@ func TestUpdates_AgentsByHand(t *testing.T) {
 	s := newStack(t, 1000)
 	seedAccessFixtures(t)
 	ownerSQL(t, "UPDATE nodes SET install_method = 1, agent_version = '1.0.0' WHERE id = '"+nodeAl+"'",
+		"UPDATE node_update_state SET helper_version = '0.9.0' WHERE node_id = '"+nodeAl+"'",
 		// Without the reboots of the other tests: a node that reboots gets no self-update (M4-31).
 		"DELETE FROM node_commands WHERE org_id = '"+orgAlpha+"' AND kind IN (3, 4)")
 	ctx := context.Background()
 	ann := login(t, s, "ann@example.org")
 	got, err := ann.updates.GetNodeUpdates(ctx, connect.NewRequest(&webv1.GetNodeUpdatesRequest{NodeId: nodeAl}))
 	if a := got.Msg.GetAgent(); err != nil || a.GetVersion() != "1.0.0" || a.GetInstallMethod() != webv1.InstallMethod_INSTALL_METHOD_SCRIPT ||
-		a.GetChannel() != webv1.AgentChannel_AGENT_CHANNEL_STABLE || a.GetLatest() != "9.9.9" || a.GetTarget() != "9.9.9" {
+		a.GetChannel() != webv1.AgentChannel_AGENT_CHANNEL_STABLE || a.GetLatest() != "9.9.9" || a.GetTarget() != "9.9.9" ||
+		a.GetHelperVersion() != "0.9.0" || !a.GetHelperOutdated() {
 		t.Fatalf("agent = %v, %v", got.Msg.GetAgent(), err)
 	}
 	res, err := ann.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{nodeAl}}))
@@ -295,6 +297,11 @@ func TestUpdates_AgentsByHand(t *testing.T) {
 	res, err = ann.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{nodeAl}}))
 	if err != nil || len(res.Msg.GetRunIds()) != 0 || len(res.Msg.GetSkipped()) != 1 || !strings.Contains(res.Msg.GetSkipped()[0].GetReason(), "package") {
 		t.Errorf("a package install: %v, %v", res, err)
+	}
+	// A package updates agent and helper together: an older helper is no hint there.
+	if got, err := ann.updates.GetNodeUpdates(ctx, connect.NewRequest(&webv1.GetNodeUpdatesRequest{NodeId: nodeAl})); err != nil ||
+		got.Msg.GetAgent().GetHelperVersion() != "0.9.0" || got.Msg.GetAgent().GetHelperOutdated() {
+		t.Errorf("agent of a package install = %v, %v", got.Msg.GetAgent(), err)
 	}
 	mia := login(t, s, "mia@example.org")
 	if _, err := mia.updates.UpdateAgents(ctx, connect.NewRequest(&webv1.UpdateAgentsRequest{NodeIds: []string{nodeAl}})); connect.CodeOf(err) != connect.CodePermissionDenied {

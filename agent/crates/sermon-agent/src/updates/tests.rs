@@ -747,3 +747,33 @@ async fn ends_with_the_agent() {
         .unwrap()
         .unwrap();
 }
+
+// M4-31: the report names the helper's version – the server shows a helper older than its
+// agent –, nothing that doesn't read like a release (the server would refuse the report).
+#[test]
+fn the_report_names_the_helpers_version() {
+    let named = |version: &str| {
+        let mut status = ok(Answer::StatusInfo(info(Distribution::Apk))).unwrap();
+        status.helper_version = version.into();
+        let (dir, socket, _) = fake_helper(vec![Some(status), status_answer_busy()]);
+        let r = HelperSource::new(&socket, dir.path()).list_blocking(false);
+        match r {
+            Listing::Report(r) => r.helper_version,
+            Listing::Busy => "busy".into(),
+        }
+    };
+    assert_eq!(named("0.5.0"), "0.5.0");
+    assert_eq!(named("1.2.3-rc.1"), "1.2.3-rc.1");
+    for odd in ["0.5", "dev", "1.2.3-", "1.2.3 x", "1.2.3-\u{202e}"] {
+        assert_eq!(named(odd), "", "{odd:?}");
+    }
+}
+
+#[expect(clippy::unnecessary_wraps, reason = "an answer of fake_helper")]
+fn status_answer_busy() -> Option<HelperResponse> {
+    Some(HelperResponse {
+        status: Status::Failed.into(),
+        reason: "the list failed".into(),
+        ..HelperResponse::default()
+    })
+}

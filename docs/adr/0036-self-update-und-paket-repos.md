@@ -197,7 +197,8 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
   Verzeichnis *neben* der Ausgabe (nie darin), machen nur `apt/ rpm/ apk/ keys/` lesbar und signieren ohne Netz.
 - **Offen (M4-31):** Der Helper aktualisiert sich nicht selbst, ein neuer oder widerrufener Release-Schlüssel erreicht
   per Skript installierte Hosts erst mit `install.sh`; die Schlüssel der Paket-Repos erneuern sich auf eingerichteten
-  Hosts nicht, apk erkennt Schlüssel am Dateinamen; der Kanal steht nicht im signierten Kommentar.
+  Hosts nicht, apk erkennt Schlüssel am Dateinamen; der Kanal steht nicht im signierten Kommentar. Erledigt in M4-31
+  (Nachträge unten).
 
 ## Nachtrag M4-31 (Repo-Schlüssel)
 
@@ -232,4 +233,32 @@ Version, Kanäle aus dem Download-Verzeichnis, Repos vom Server.**
   kein Gegenstück.
 - **Offen:** `apk update` meldet eine falsche Signatur nur als Warnung (Exit 0); erst `apk add` scheitert. Die Demo
   prüft das am gefälschten Repo.
+
+## Nachtrag M4-31 (Helper und Release-Key)
+
+- **Der Helper kommt mit:** Ein Release enthält `sermon-helper-linux-<arch>` derselben Version, signiert wie der Agent.
+  Der Agent holt ihn mit `FetchAgentRelease{artifact: HELPER}` (ein Server oder Release ohne Helper antwortet
+  `NOT_FOUND`: dann bleibt der Helper) und legt ihn neben den Agent; einen früher bereitgelegten entfernt er. Der Helper
+  prüft ihn beim Start des Laufs wie den Agent (Release-Key, Datei, Version) und behält eine Kopie im Laufverzeichnis;
+  ein falsch signierter lehnt das ganze Self-Update ab. Er ersetzt `/usr/local/bin/sermon-helper` erst, nachdem der
+  neue Agent bestätigt hat, nur durch eine neuere Version als die eigene (kein Rückweg zu einem Helper, der einen
+  widerrufenen Schlüssel noch nimmt) und nur, wenn die Kopie mit `--version` genau `sermon-helper <Version>` meldet –
+  sonst gäbe es keinen Helper mehr, der zurückrollt. Paket-Installationen aktualisiert der Paketmanager.
+- **Rotation und Widerruf:** Release N bringt einen Helper mit dem alten und dem neuen Schlüssel
+  (`SERMON_RELEASE_KEY_NEXT`), N+1 ist mit dem neuen signiert, ein Helper ohne den alten widerruft ihn. Ein Helper aus
+  der Zeit vor M4-31 kennt das nicht: Der Agent meldet die Version seines Helpers (`UpdateReport.helper_version`), der
+  Server zeigt einen Helper, der älter als sein Agent ist; dann hilft einmal `install.sh`.
+- **Version und Schlüssel beim Bau:** Der Helper meldet wie der Agent `SERMON_VERSION`. `just sign-agent KEY VERSION`
+  baut mit dem öffentlichen Schlüssel von KEY und der Version und prüft, dass beide in den Binaries stehen; die
+  Release-Pipeline (`release.yml`) entsteht weiter mit dem ersten Release.
+- **Vorabversionen:** Eine Version mit `-…` nimmt nur ein Host, der schon eine Vorabversion hat, oder einer mit
+  `allow_prerelease = true` in `helper.toml` (ab Werk aus). Den Kanal nicht in den signierten Kommentar aufzunehmen
+  ist Absicht: Was den Host schützt, ist die Version, nicht der Name des Kanals. Der Server bietet `beta` nie an, wenn
+  `stable` neuer ist.
+- **Absturz mitten im Self-Update:** Endet ein Lauf nach dem Ersetzen, aber ohne Bestätigung (getötet, Host neu
+  gestartet), legt der Helper beim nächsten Abfragen des Ergebnisses den vorigen Agent zurück und startet ihn neu,
+  einmal.
+- **Kleinere:** Ersetzen über eine Kopie neben dem Ziel, angelegt mit `O_EXCL|O_NOFOLLOW` nach dem Löschen eines alten
+  Namens; die billigen Prüfungen (neuer, Vorabversion) vor dem Lesen der bereitgelegten Dateien; nach einer Ablehnung
+  prüft der Helper 5 min lang kein Self-Update mehr (keine wiederholte Prüfung von 64 MiB auf Wunsch des Servers).
 

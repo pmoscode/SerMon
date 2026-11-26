@@ -347,7 +347,14 @@
 					<dd>{channelLabel(agent.channel)}</dd>
 					<dt class="text-muted-foreground">{m.agent_latest()}</dt>
 					<dd class="font-mono">{agent.latest || m.agent_none()}</dd>
+					{#if agent.helperVersion}
+						<dt class="text-muted-foreground">{m.agent_helper()}</dt>
+						<dd class="font-mono">{displayText(agent.helperVersion)}</dd>
+					{/if}
 				</dl>
+				{#if agent.helperOutdated}
+					<p class="text-sm" role="note">{m.agent_helper_outdated()}</p>
+				{/if}
 				{#if permissions && !permissions.selfUpdate && agent.installMethod === InstallMethod.SCRIPT}
 					<p class="text-sm text-muted-foreground" role="note">{m.agent_veto()}</p>
 				{/if}

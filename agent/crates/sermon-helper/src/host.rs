@@ -42,6 +42,8 @@ const APT_GET: [&str; 6] = [
 const UNSUPPORTED: &str = "no apt, dnf or apk distribution in /etc/os-release";
 /// The agent of a script installation, the only one the self-update replaces (ADR 0036).
 const AGENT: &str = "usr/local/bin/sermon-agent";
+/// The helper of a script installation: the self-update replaces it with the agent (M4-31).
+const HELPER: &str = "usr/local/bin/sermon-helper";
 /// Where the agent puts the new binary and its signature, below the host's root.
 const STAGED: [&str; 4] = ["var", "lib", "sermon-agent", "self-update"];
 const MAX_BINARY: u64 = 64 << 20;
@@ -109,6 +111,8 @@ pub struct Host {
     config_owner: u32,
     /// How long a reboot waits before it acts: the helper answers the agent first (M4-28).
     answer_wait: Duration,
+    /// This helper's version: only a newer one replaces it.
+    version: String,
 }
 
 impl Host {
@@ -133,6 +137,7 @@ impl Host {
             config: config::PATH.into(),
             config_owner: 0,
             answer_wait: Duration::from_secs(2),
+            version: crate::VERSION.into(),
         }
     }
 
@@ -432,7 +437,8 @@ impl Host {
     }
 
     /// Checks the staged agent of a self-update and keeps a copy of exactly the checked bytes in
-    /// the run's directory: what the agent changes afterwards has no effect (ADR 0036).
+    /// the run's directory: what the agent changes afterwards has no effect (ADR 0036). A refusal
+    /// holds the next check off for 5 minutes (M4-31).
     fn prepare(&self, dir: &Path, version: &str) -> Result<(), Failure> {
         if self.keys.is_empty() {
             return Err(Failure::Unsupported(
@@ -445,8 +451,25 @@ impl Host {
                 "no /usr/local/bin/sermon-agent: a package installation is updated by the package manager".into(),
             ));
         }
+        let refused = self.state.join("self-update-refused");
+        if fs::metadata(&refused)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| !older(t, REFRESH_EVERY))
+        {
+            return Err(Failure::Later(
+                "a self-update was refused less than 5 minutes ago".into(),
+            ));
+        }
+        let checked = self.check_release(dir, &agent, version);
+        if matches!(checked, Err(Failure::Refused(_))) {
+            let _ = fs::write(&refused, b"");
+        }
+        checked
+    }
+
+    fn check_release(&self, dir: &Path, agent: &Path, version: &str) -> Result<(), Failure> {
         let file = format!("sermon-agent-linux-{}", arch());
-        let installed = fs::read(&agent)
+        let installed = fs::read(agent)
             .ok()
             .zip(fs::read_to_string(self.state.join("agent.minisig")).ok())
             .and_then(|(bytes, sig)| minisign::verify(&self.keys, &sig, &bytes).ok())
@@ -454,6 +477,18 @@ impl Host {
             .ok_or_else(|| {
                 Failure::Refused("the installed version is unknown: run install.sh again".into())
             })?;
+        // The cheap checks before the staged files are read (M4-31).
+        if !minisign::newer(version, &installed.version) {
+            return Err(Failure::Refused(format!(
+                "{version} is not newer than the installed {}",
+                installed.version
+            )));
+        }
+        if version.contains('-') && !installed.version.contains('-') && !self.prereleases() {
+            return Err(Failure::Refused(format!(
+                "{version} is a prerelease: allow_prerelease = true in helper.toml takes one"
+            )));
+        }
         let binary = self
             .staged("sermon-agent", MAX_BINARY)
             .map_err(Failure::Refused)?;
@@ -469,31 +504,48 @@ impl Host {
                 signed.file, signed.version
             )));
         }
-        if !minisign::newer(version, &installed.version) {
-            return Err(Failure::Refused(format!(
-                "{version} is not newer than the installed {}",
-                installed.version
-            )));
-        }
         write_atomically(&dir.join("agent"), &binary).map_err(fail)?;
-        write_atomically(&dir.join("agent.minisig"), signature.as_bytes()).map_err(fail)
+        write_atomically(&dir.join("agent.minisig"), signature.as_bytes()).map_err(fail)?;
+        self.check_helper(dir, version)
     }
 
-    /// Puts `binary` in place of the agent (`rename` in its directory) and `signature` as the
-    /// record of the installed version.
+    fn prereleases(&self) -> bool {
+        config::load_owned(&self.config, self.config_owner).is_ok_and(|c| c.allow_prerelease)
+    }
+
+    /// Keeps the staged helper of the release as `helper` in the run's directory if it replaces
+    /// this one: a script installation and a newer version. One signed otherwise refuses the
+    /// self-update; without one staged (an older server or release) the helper stays.
+    fn check_helper(&self, dir: &Path, version: &str) -> Result<(), Failure> {
+        let installed = fs::symlink_metadata(self.root.join(HELPER)).is_ok_and(|m| m.is_file());
+        let Ok(binary) = self.staged("sermon-helper", MAX_BINARY) else {
+            return Ok(());
+        };
+        if !installed || !minisign::newer(version, &self.version) {
+            return Ok(());
+        }
+        let signature = self
+            .staged("sermon-helper.minisig", MAX_SIGNATURE)
+            .map_err(Failure::Refused)?;
+        let signature = String::from_utf8(signature)
+            .map_err(|_| Failure::Refused("malformed signature file of the helper".into()))?;
+        let signed = minisign::verify(&self.keys, &signature, &binary).map_err(Failure::Refused)?;
+        let file = format!("sermon-helper-linux-{}", arch());
+        if signed.file != file || signed.version != version {
+            return Err(Failure::Refused(format!(
+                "the helper's signature is for {} {}, not {file} {version}",
+                signed.file, signed.version
+            )));
+        }
+        let helper = dir.join("helper");
+        write_atomically(&helper, &binary).map_err(fail)?;
+        fs::set_permissions(&helper, std::os::unix::fs::PermissionsExt::from_mode(0o700))
+            .map_err(fail)
+    }
+
+    /// Puts `binary` in place of the agent and `signature` as the record of the installed version.
     fn install(&self, binary: &Path, signature: &Path) -> io::Result<()> {
-        let agent = self.root.join(AGENT);
-        let next = agent.with_file_name(".sermon-agent.new");
-        let mut f = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o755)
-            .open(&next)?;
-        io::copy(&mut File::open(binary)?, &mut f)?;
-        f.sync_all()?;
-        fs::rename(&next, &agent)?;
-        File::open(agent.parent().unwrap_or(&self.root))?.sync_all()?;
+        replace(&self.root.join(AGENT), binary)?;
         write_atomically(&self.state.join("agent.minisig"), &fs::read(signature)?)
     }
 
@@ -533,28 +585,57 @@ impl Host {
         let deadline = std::time::Instant::now() + self.confirm_within;
         while std::time::Instant::now() < deadline {
             if dir.join("confirmed").exists() {
+                let helper = self.replace_helper(dir);
                 return Output {
                     name: "self-update".into(),
-                    output: b"the new agent is installed and connected\n".to_vec(),
+                    output: [
+                        b"the new agent is installed and connected\n",
+                        helper.as_bytes(),
+                    ]
+                    .concat(),
                     ..Output::default()
                 };
             }
             std::thread::sleep(self.confirm_within / 60);
         }
+        self.roll_back("the new agent did not connect in time", &restart.output)
+    }
+
+    /// Puts the agent the self-update replaced back and restarts it.
+    fn roll_back(&self, why: &str, log: &[u8]) -> Output {
+        let keep = self.state.join("self-update");
         let back = self.install(&keep.join("previous"), &keep.join("previous.minisig"));
         let again = self.restart_agent();
         let why = match back {
-            Ok(()) => "rolled back: the new agent did not connect in time".to_owned(),
-            Err(e) => {
-                format!("the new agent did not connect in time, and the rollback failed: {e}")
-            }
+            Ok(()) => format!("rolled back: {why}"),
+            Err(e) => format!("{why}, and the rollback failed: {e}"),
         };
-        let log = [restart.output, again.output].concat();
         Output {
             name: "self-update".into(),
             exit_code: 1,
-            output: [why.as_bytes(), b"\n", &log].concat(),
+            output: [why.as_bytes(), b"\n", log, &again.output].concat(),
             ..Output::default()
+        }
+    }
+
+    /// Replaces this helper with the release's (M4-31), once it ran here and named its version: a
+    /// helper that doesn't would leave the host without one that can roll back.
+    fn replace_helper(&self, dir: &Path) -> String {
+        let new = dir.join("helper");
+        if !new.exists() {
+            return String::new();
+        }
+        let request = fs::read_to_string(dir.join("request")).unwrap_or_default();
+        let version = request.strip_prefix("self-update ").unwrap_or_default();
+        let check = command::run(&new, &["--version"], Duration::from_secs(10), 256, false);
+        if check.exit_code != 0
+            || String::from_utf8_lossy(&check.output).trim() != format!("sermon-helper {version}")
+        {
+            return "the release's helper doesn't run here: the installed one is kept\n".into();
+        }
+        match replace(&self.root.join(HELPER), &new) {
+            Ok(()) => format!("the helper {version} is installed\n"),
+            Err(e) => format!("the installed helper is kept, it can't be replaced: {e}\n"),
         }
     }
 
@@ -725,12 +806,41 @@ impl Executor for Host {
                 ..RunState::default()
             };
         }
-        done(
-            id,
-            started.unwrap_or(0),
-            failed("the run ended without a result (killed, or the host restarted)"),
-        )
+        let why = "the run ended without a result (killed, or the host restarted)";
+        let request = fs::read_to_string(dir.join("request")).unwrap_or_default();
+        if request.starts_with("self-update ")
+            && dir.join("replaced").exists()
+            && !dir.join("confirmed").exists()
+        {
+            // Replaced, but nobody waits for the new agent any more (M4-31): the previous one again.
+            let state = done(id, started.unwrap_or(0), self.roll_back(why, &[]));
+            let _ = store(&dir, &state);
+            return state;
+        }
+        done(id, started.unwrap_or(0), failed(why))
     }
+}
+
+/// Puts `binary` in place of `target` (`rename` in its directory), the copy created anew without
+/// following a link at its name (M4-31).
+fn replace(target: &Path, binary: &Path) -> io::Result<()> {
+    let name = target.file_name().unwrap_or_default().to_string_lossy();
+    let next = target.with_file_name(format!(".{name}.new"));
+    match fs::remove_file(&next) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    let nofollow = i32::try_from(rustix::fs::OFlags::NOFOLLOW.bits()).unwrap_or(0);
+    let mut f = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .custom_flags(nofollow)
+        .mode(0o755)
+        .open(&next)?;
+    io::copy(&mut File::open(binary)?, &mut f)?;
+    f.sync_all()?;
+    fs::rename(&next, target)?;
+    File::open(target.parent().unwrap_or(Path::new("/")))?.sync_all()
 }
 
 /// The package manager family of `/etc/os-release`.
@@ -879,6 +989,7 @@ mod tests {
                 config: dir.path().join("etc/helper.toml"),
                 config_owner: rustix::process::getuid().as_raw(),
                 answer_wait: Duration::ZERO,
+                version: crate::VERSION.into(),
             };
             // A host that allows everything; tests of the veto write their own.
             fs::create_dir_all(dir.path().join("etc")).unwrap();
@@ -1600,5 +1711,185 @@ mod tests {
             fake.host.clone().start(&self_update("1.1.0")),
             Err(Failure::Unsupported(_))
         ));
+    }
+
+    /// A script installation of helper 1.0.0 beside the agent, and the release's helper staged:
+    /// a script that answers `--version` like a helper of `prints`.
+    fn with_helper(signer: &minisign::tests::Signer, prints: &str) -> Fake {
+        let mut fake = installed(signer);
+        fake.host.version = "1.0.0".into();
+        fs::write(fake.host.root.join(HELPER), b"helper 1.0.0").unwrap();
+        let script = format!("#!/bin/sh\necho 'sermon-helper {prints}'\n");
+        let file = format!("sermon-helper-linux-{}", arch());
+        let staged = fake.host.root.join("var/lib/sermon-agent/self-update");
+        fs::write(staged.join("sermon-helper"), &script).unwrap();
+        fs::write(
+            staged.join("sermon-helper.minisig"),
+            signer.sign(script.as_bytes(), &file, "1.1.0"),
+        )
+        .unwrap();
+        fake
+    }
+
+    fn confirmed(fake: &Fake) -> sermon_helper_proto::v1::Command {
+        let mut host = fake.host.clone();
+        host.confirm_within = Duration::from_secs(4);
+        host.start(&self_update("1.1.0")).unwrap();
+        for _ in 0..200 {
+            if host.confirm(ID).is_ok() {
+                break;
+            }
+            sleep(Duration::from_millis(20));
+        }
+        fake.wait(ID).result.unwrap()
+    }
+
+    // M4-31: the release's helper replaces a script-installed one once the new agent confirmed –
+    // a newer release key or a revoked one reaches the host so – but only a helper that runs and
+    // names the release's version; a package's helper, and one not newer, stay.
+    #[test]
+    fn a_self_update_replaces_the_helper_too() {
+        let signer = minisign::tests::Signer::new(1);
+        let fake = with_helper(&signer, "1.1.0");
+        let result = confirmed(&fake);
+        assert_eq!(
+            result.exit_code,
+            0,
+            "{}",
+            String::from_utf8_lossy(&result.output)
+        );
+        assert!(
+            fs::read_to_string(fake.host.root.join(HELPER))
+                .unwrap()
+                .contains("sermon-helper 1.1.0")
+        );
+        assert!(String::from_utf8_lossy(&result.output).contains("helper"));
+
+        let broken = with_helper(&signer, "0.9.0");
+        let result = confirmed(&broken);
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            fs::read(broken.host.root.join(HELPER)).unwrap(),
+            b"helper 1.0.0"
+        );
+        assert!(String::from_utf8_lossy(&result.output).contains("kept"));
+
+        let mut current = with_helper(&signer, "1.1.0");
+        current.host.version = "1.1.0".into();
+        confirmed(&current);
+        assert_eq!(
+            fs::read(current.host.root.join(HELPER)).unwrap(),
+            b"helper 1.0.0"
+        );
+
+        let package = with_helper(&signer, "1.1.0");
+        fs::remove_file(package.host.root.join(HELPER)).unwrap();
+        assert_eq!(confirmed(&package).exit_code, 0);
+        assert!(!package.host.root.join(HELPER).exists());
+
+        // A staged helper of another key or file refuses the whole self-update.
+        let forged = with_helper(&signer, "1.1.0");
+        let other = minisign::tests::Signer::new(2);
+        let staged = forged.host.root.join("var/lib/sermon-agent/self-update");
+        let script = fs::read(staged.join("sermon-helper")).unwrap();
+        fs::write(
+            staged.join("sermon-helper.minisig"),
+            other.sign(&script, &format!("sermon-helper-linux-{}", arch()), "1.1.0"),
+        )
+        .unwrap();
+        assert!(matches!(
+            forged.host.clone().start(&self_update("1.1.0")),
+            Err(Failure::Refused(_))
+        ));
+        assert_eq!(forged.agent(), b"agent 1.0.0");
+    }
+
+    // M4-31: a run that ended between the replacement and the confirmation (killed, the host
+    // restarted) puts the previous agent back when its end is noticed.
+    #[test]
+    fn a_self_update_that_crashed_rolls_back() {
+        let signer = minisign::tests::Signer::new(1);
+        let fake = installed(&signer);
+        let keep = fake.host.state.join("self-update");
+        fs::create_dir_all(&keep).unwrap();
+        fs::copy(fake.host.root.join(AGENT), keep.join("previous")).unwrap();
+        fs::copy(
+            fake.host.state.join("agent.minisig"),
+            keep.join("previous.minisig"),
+        )
+        .unwrap();
+        fs::write(fake.host.root.join(AGENT), b"agent 1.1.0").unwrap();
+        let dir = fake.host.run_dir(ID);
+        fs::create_dir_all(&dir).unwrap();
+        for (name, text) in [
+            ("request", "self-update 1.1.0"),
+            ("started", "1"),
+            ("replaced", "1"),
+        ] {
+            fs::write(dir.join(name), text).unwrap();
+        }
+        File::open(dir.join("request"))
+            .unwrap()
+            .set_modified(SystemTime::now() - LAUNCH_TIME - Duration::from_secs(1))
+            .unwrap();
+        let state = fake.host.result(ID);
+        let output = String::from_utf8_lossy(&state.result.as_ref().unwrap().output).into_owned();
+        assert!(output.contains("rolled back"), "{output}");
+        assert_eq!(fake.agent(), b"agent 1.0.0");
+        assert!(fake.calls().contains("systemctl restart sermon-agent"));
+        // Once: the result stays.
+        fake.host.result(ID);
+        assert_eq!(fake.calls().matches("systemctl").count(), 1);
+    }
+
+    // M4-31: a stable host takes no prerelease unless helper.toml allows it; one on a prerelease
+    // already does. A self-update refused just before is not checked again for 5 minutes, and the
+    // cheap checks come first: a version not newer is refused before the staged files are read.
+    #[test]
+    fn a_self_update_to_a_prerelease_needs_the_host() {
+        let signer = minisign::tests::Signer::new(1);
+        let file = format!("sermon-agent-linux-{}", arch());
+        let new = b"agent 1.1.0-rc.1";
+        let fake = installed(&signer);
+        fake.stage(new, &signer.sign(new, &file, "1.1.0-rc.1"));
+        let r = fake.host.clone().start(&self_update("1.1.0-rc.1"));
+        assert!(
+            matches!(&r, Err(Failure::Refused(why)) if why.contains("allow_prerelease")),
+            "{r:?}"
+        );
+        assert!(matches!(
+            fake.host.clone().start(&self_update("1.1.0-rc.1")),
+            Err(Failure::Later(_))
+        ));
+        let fake = installed(&signer);
+        fake.stage(new, &signer.sign(new, &file, "1.1.0-rc.1"));
+        fake_config(&fake.host, "allow_prerelease = true\n");
+        assert!(fake.host.clone().start(&self_update("1.1.0-rc.1")).is_ok());
+
+        let fake = installed(&signer);
+        fs::remove_dir_all(fake.host.root.join("var/lib/sermon-agent/self-update")).unwrap();
+        let r = fake.host.clone().start(&self_update("0.9.0"));
+        assert!(
+            matches!(&r, Err(Failure::Refused(why)) if why.contains("not newer")),
+            "{r:?}"
+        );
+    }
+
+    // M4-31: the new agent goes in with O_EXCL|O_NOFOLLOW: a link planted at its temporary name
+    // writes nowhere.
+    #[test]
+    fn a_self_update_writes_through_no_link() {
+        let signer = minisign::tests::Signer::new(1);
+        let fake = installed(&signer);
+        let elsewhere = fake.host.root.join("etc/elsewhere");
+        fs::write(&elsewhere, b"untouched").unwrap();
+        std::os::unix::fs::symlink(
+            &elsewhere,
+            fake.host.root.join("usr/local/bin/.sermon-agent.new"),
+        )
+        .unwrap();
+        confirmed(&fake);
+        assert_eq!(fs::read(&elsewhere).unwrap(), b"untouched");
+        assert_eq!(fake.agent(), b"agent 1.1.0");
     }
 }

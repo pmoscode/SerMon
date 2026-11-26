@@ -90,6 +90,11 @@ message AgentInfo {
   string latest = 4;
   // target is what an agent update installs (empty: nothing, e.g. not newer or a package).
   string target = 5;
+  // helper_version is the root helper's version as the agent reports it (empty: no helper).
+  string helper_version = 6;
+  // helper_outdated: a script installation whose helper is older than the agent – helpers from
+  // M4-31 on update themselves with the agent, an older one needs install.sh once more.
+  bool helper_outdated = 7;
 }
 
 // UpdateAgentsRequest names the nodes.

@@ -58,6 +58,7 @@ fuzz_target!(|data: &[u8]| {
         allow_remote_updates: switches & 1 != 0,
         allow_remote_reboot: switches & 2 != 0,
         allow_self_update: switches & 4 != 0,
+        allow_prerelease: switches & 8 != 0,
     };
     let Ok(req) = HelperRequest::decode(body) else {
         return;

@@ -90,7 +90,7 @@ const getNodeUpdates = `-- name: GetNodeUpdates :one
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       s.allow_self_update, s.refreshed, s.oldest_security_at, s.helper_version,
        coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE n.id = $1
@@ -123,6 +123,7 @@ type GetNodeUpdatesRow struct {
 	AllowSelfUpdate    pgtype.Bool
 	Refreshed          pgtype.Bool
 	OldestSecurityAt   *time.Time
+	HelperVersion      pgtype.Text
 	AgentVersion       string
 	InstallMethod      int16
 	Architecture       string
@@ -152,6 +153,7 @@ func (q *Queries) GetNodeUpdates(ctx context.Context, arg GetNodeUpdatesParams) 
 		&i.AllowSelfUpdate,
 		&i.Refreshed,
 		&i.OldestSecurityAt,
+		&i.HelperVersion,
 		&i.AgentVersion,
 		&i.InstallMethod,
 		&i.Architecture,
@@ -222,7 +224,7 @@ const listFleetUpdates = `-- name: ListFleetUpdates :many
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       s.allow_self_update, s.refreshed, s.oldest_security_at, s.helper_version,
        coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE $1::boolean OR n.group_id = ANY ($2::uuid[])
@@ -254,6 +256,7 @@ type ListFleetUpdatesRow struct {
 	AllowSelfUpdate    pgtype.Bool
 	Refreshed          pgtype.Bool
 	OldestSecurityAt   *time.Time
+	HelperVersion      pgtype.Text
 	AgentVersion       string
 	InstallMethod      int16
 	Architecture       string
@@ -289,6 +292,7 @@ func (q *Queries) ListFleetUpdates(ctx context.Context, arg ListFleetUpdatesPara
 			&i.AllowSelfUpdate,
 			&i.Refreshed,
 			&i.OldestSecurityAt,
+			&i.HelperVersion,
 			&i.AgentVersion,
 			&i.InstallMethod,
 			&i.Architecture,
@@ -463,13 +467,13 @@ const upsertNodeUpdateState = `-- name: UpsertNodeUpdateState :one
 INSERT INTO node_update_state AS s (
     org_id, node_id, collected_at, received_at, availability, reason, package_manager, total_count,
     security_count, packages_stored, reboot_required, reboot_reason, last_upgrade_at,
-    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed, reboot_required_since)
+    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed, helper_version, reboot_required_since)
 VALUES (
     current_org_id(), $1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, $10, $11, $12,
     $13, $14, $15, $16,
-    CASE WHEN $10::boolean THEN $2::timestamptz END)
+    $17, CASE WHEN $10::boolean THEN $2::timestamptz END)
 ON CONFLICT (org_id, node_id) DO UPDATE SET
     collected_at = excluded.collected_at, received_at = excluded.received_at,
     availability = excluded.availability, reason = excluded.reason,
@@ -478,7 +482,7 @@ ON CONFLICT (org_id, node_id) DO UPDATE SET
     reboot_required = excluded.reboot_required, reboot_reason = excluded.reboot_reason,
     last_upgrade_at = excluded.last_upgrade_at, allow_remote_updates = excluded.allow_remote_updates,
     allow_remote_reboot = excluded.allow_remote_reboot, allow_self_update = excluded.allow_self_update,
-    refreshed = excluded.refreshed,
+    refreshed = excluded.refreshed, helper_version = excluded.helper_version,
     -- Since the first report that needed the reboot (M4-16).
     reboot_required_since = CASE WHEN excluded.reboot_required THEN coalesce(s.reboot_required_since, excluded.collected_at) END
 WHERE s.collected_at < excluded.collected_at
@@ -502,6 +506,7 @@ type UpsertNodeUpdateStateParams struct {
 	AllowRemoteReboot  pgtype.Bool
 	AllowSelfUpdate    pgtype.Bool
 	Refreshed          bool
+	HelperVersion      string
 }
 
 // Makes the report the node's current one unless the stored one was collected at the same time or
@@ -524,6 +529,7 @@ func (q *Queries) UpsertNodeUpdateState(ctx context.Context, arg UpsertNodeUpdat
 		arg.AllowRemoteReboot,
 		arg.AllowSelfUpdate,
 		arg.Refreshed,
+		arg.HelperVersion,
 	)
 	var node_id uuid.UUID
 	err := row.Scan(&node_id)

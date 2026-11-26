@@ -5046,6 +5046,15 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 >   `install.sh` holt alle apk-Schlüssel, die Schlüsselliste `SHA256SUMS` ist vom Release-Key signiert, Pinning für apt
 >   und dnf, bewusst kein `Valid-Until` (ADR 0036). `test-packages` spielt eine Rotation über drei Releases auf Debian,
 >   Rocky und Alpine durch. Gegenproben 13 von 13 erkannt.
+> - **Helper und Release-Key (T40, A4):** Das Release bringt den Helper mit; der Agent lädt ihn
+>   (`FetchAgentRelease{artifact: HELPER}`), der Helper prüft ihn wie den Agent und ersetzt sich nach der Bestätigung –
+>   nur durch eine neuere Version, die bei ihm läuft. Damit erreichen Rotation und Widerruf des Release-Keys auch
+>   Skript-Installationen; der Agent meldet `helper_version`, die Updates-Seite warnt bei einem Helper, der älter als
+>   sein Agent ist. Außerdem: `beta` nie hinter `stable`, Vorabversionen nur mit `allow_prerelease` (oder schon einer),
+>   Rückfall nach einem abgebrochenen Self-Update, Ersetzen mit `O_EXCL|O_NOFOLLOW`, billige Prüfungen zuerst und 5 min
+>   Pause nach einer Ablehnung, Helper mit `SERMON_VERSION`, `just sign-agent` baut mit Schlüssel und Version und prüft
+>   beides. Der Kanal bleibt bewusst aus dem signierten Kommentar (ADR 0036). Helper 1 741 von 1 800 Zeilen.
+>   Gegenproben 12 von 13 (Agent, Helper; `O_EXCL` allein ist ohne Rennen nicht prüfbar) und 17 von 17 (Server, UI).
 - **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
   - **Mittel:**
     - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys

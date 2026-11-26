@@ -16,7 +16,7 @@ pub const PATH: &str = "/etc/sermon/helper.toml";
 #[serde(deny_unknown_fields, default)]
 #[allow(
     clippy::struct_excessive_bools,
-    reason = "three independent switches of helper.toml"
+    reason = "independent switches of helper.toml"
 )]
 pub struct Config {
     /// `ApplyUpdates`: packages only from the distribution's signed sources.
@@ -25,6 +25,8 @@ pub struct Config {
     pub allow_remote_reboot: bool,
     /// `SelfUpdate`: only binaries signed with the release key (ADR 0036).
     pub allow_self_update: bool,
+    /// `SelfUpdate` to a prerelease (beta) on a host without one (M4-31): off.
+    pub allow_prerelease: bool,
 }
 
 impl Default for Config {
@@ -33,6 +35,7 @@ impl Default for Config {
             allow_remote_updates: true,
             allow_remote_reboot: false,
             allow_self_update: true,
+            allow_prerelease: false,
         }
     }
 }
@@ -117,7 +120,8 @@ mod tests {
             Config {
                 allow_remote_updates: true,
                 allow_remote_reboot: false,
-                allow_self_update: true
+                allow_self_update: true,
+                allow_prerelease: false
             }
         );
         let c: Config =
@@ -127,7 +131,8 @@ mod tests {
             Config {
                 allow_remote_updates: true,
                 allow_remote_reboot: true,
-                allow_self_update: false
+                allow_self_update: false,
+                allow_prerelease: false
             }
         );
         // A typo must not silently leave the default in place.

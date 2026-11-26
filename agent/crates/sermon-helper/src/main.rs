@@ -35,7 +35,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [flag] if flag == "--version" || flag == "-V" => {
-            println!("{NAME} {}", env!("CARGO_PKG_VERSION"));
+            println!("{NAME} {}", sermon_helper::VERSION);
             ExitCode::SUCCESS
         }
         [cmd] if cmd == "serve" => match serve() {
@@ -191,7 +191,7 @@ fn refusal(reason: &str) -> HelperResponse {
     HelperResponse {
         status: Status::Refused.into(),
         reason: reason.to_owned(),
-        helper_version: env!("CARGO_PKG_VERSION").to_owned(),
+        helper_version: sermon_helper::VERSION.to_owned(),
         result: None,
     }
 }

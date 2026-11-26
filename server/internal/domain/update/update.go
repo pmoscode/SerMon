@@ -77,6 +77,8 @@ type Report struct {
 	// Permissions are nil without helper.
 	Permissions *Permissions
 	Refreshed   bool
+	// HelperVersion is the root helper's version ("" without helper, M4-31).
+	HelperVersion string
 }
 
 // Valid reports whether the report is complete enough to store.
@@ -89,11 +91,15 @@ func (r Report) Valid() bool {
 }
 
 // Normalized makes a valid report safe to store and show: texts bounded and without invisible
-// characters, each update (name and candidate) once with security updates first, counts no lower
-// than the packages listed. A report that lists nothing has no packages and counts.
+// characters, a helper version only if semantic, each update (name and candidate) once with
+// security updates first, counts no lower than the packages listed. A report that lists nothing
+// has no packages and counts.
 func (r Report) Normalized() Report {
 	r.Reason = safe(r.Reason, MaxReason)
 	r.RebootReason = safe(r.RebootReason, MaxReason)
+	if !ValidVersion(r.HelperVersion) {
+		r.HelperVersion = ""
+	}
 	if r.Availability != Listed {
 		r.Packages, r.Total, r.Security = nil, 0, 0
 		return r

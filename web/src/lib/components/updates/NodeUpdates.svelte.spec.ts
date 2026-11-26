@@ -241,6 +241,55 @@ describe('NodeUpdates', () => {
 		expect(page.getByRole('button', { name: /Update the agent/ }).elements()).toHaveLength(0);
 	});
 
+	it('shows the root helper and warns when it is older than the agent', async () => {
+		rights([]);
+		const r = report();
+		r.agent = create(AgentInfoSchema, {
+			version: '1.1.0',
+			installMethod: InstallMethod.SCRIPT,
+			helperVersion: '1.0.0',
+			helperOutdated: true
+		});
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(r);
+		show();
+		const agent = page.getByRole('region', { name: 'Agent' });
+		await expect.element(agent.getByText('Root helper')).toBeVisible();
+		await expect.element(agent.getByText('1.0.0', { exact: true })).toBeVisible();
+		await expect
+			.element(
+				agent.getByText(
+					'The root helper is older than the agent. Newer helpers update themselves with the agent – this one needs install.sh once more.'
+				)
+			)
+			.toBeVisible();
+	});
+
+	it('shows a root helper as new as the agent without warning', async () => {
+		rights([]);
+		const r = report();
+		r.agent = create(AgentInfoSchema, {
+			version: '1.1.0',
+			installMethod: InstallMethod.SCRIPT,
+			helperVersion: '1.1.0'
+		});
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(r);
+		show();
+		const agent = page.getByRole('region', { name: 'Agent' });
+		await expect.element(agent.getByText('Root helper')).toBeVisible();
+		expect(page.getByText(/root helper is older/).elements()).toHaveLength(0);
+	});
+
+	it('shows no root helper the agent does not report', async () => {
+		rights([]);
+		const r = report();
+		r.agent = create(AgentInfoSchema, { version: '1.1.0', installMethod: InstallMethod.SCRIPT });
+		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(r);
+		show();
+		const agent = page.getByRole('region', { name: 'Agent' });
+		await expect.element(agent.getByText('Version', { exact: true })).toBeVisible();
+		expect(agent.getByText('Root helper').elements()).toHaveLength(0);
+	});
+
 	it('asks for a new list and says when it is too soon', async () => {
 		rights([group]);
 		vi.spyOn(updatesApi.updates, 'getNodeUpdates').mockResolvedValue(report());

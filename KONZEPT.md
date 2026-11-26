@@ -1215,6 +1215,12 @@ spec:
   Angeboten wird nur Skript-Installationen (`install_method` aus dem Hello) mit einer neueren Version im Kanal. Ein
   fehlgeschlagenes Self-Update schreibt das Server-Ereignis `agent.self_update_failed` (Regel
   `system.agent.self_update_failed`, Warnung).
+- **Helper mit dem Agent (M4-31):** Das Release enthält den Helper derselben Version; der Agent lädt ihn mit, der Helper
+  prüft ihn wie den Agent und ersetzt `/usr/local/bin/sermon-helper`, sobald der neue Agent bestätigt hat – nur durch
+  eine neuere Version, die bei ihm mit `--version` läuft. So erreichen ein neuer Release-Key (`SERMON_RELEASE_KEY_NEXT`)
+  und der Widerruf eines alten (ein Helper ohne ihn) auch Skript-Installationen; der Server zeigt einen Helper, der
+  älter als sein Agent ist. Eine Vorabversion nimmt nur ein Host, der schon eine hat oder `allow_prerelease = true`
+  setzt; `beta` liegt nie hinter `stable`.
 
 ---
 

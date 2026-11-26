@@ -1041,6 +1041,7 @@ func TestSession_StoresUpdateReports(t *testing.T) {
 			},
 			RebootRequired: true, RebootReason: "kernel", LastUpgradeAt: timestamppb.New(upgraded),
 			Permissions: &agentv1.HelperPermissions{RemoteUpdates: true, SelfUpdate: true}, Refreshed: true,
+			HelperVersion: "1.0.0-rc.1",
 		}}},
 		{Seq: 5, Content: &agentv1.Batch_UpdateReport{UpdateReport: &agentv1.UpdateReport{
 			CollectedAt: timestamppb.New(at.Add(time.Second)), Availability: agentv1.UpdateAvailability_UPDATE_AVAILABILITY_NO_HELPER,
@@ -1068,7 +1069,8 @@ func TestSession_StoresUpdateReports(t *testing.T) {
 	}
 	r := recorded.reports[0]
 	if !r.CollectedAt.Equal(at) || r.Availability != update.Listed || r.Manager != update.Dnf || r.Total != 3 || r.Security != 1 ||
-		!r.RebootRequired || r.RebootReason != "kernel" || r.LastUpgradeAt == nil || !r.LastUpgradeAt.Equal(upgraded) || !r.Refreshed {
+		!r.RebootRequired || r.RebootReason != "kernel" || r.LastUpgradeAt == nil || !r.LastUpgradeAt.Equal(upgraded) || !r.Refreshed ||
+		r.HelperVersion != "1.0.0-rc.1" {
 		t.Errorf("report = %+v", r)
 	}
 	if r.Permissions == nil || *r.Permissions != (update.Permissions{RemoteUpdates: true, SelfUpdate: true}) {
@@ -1078,7 +1080,7 @@ func TestSession_StoresUpdateReports(t *testing.T) {
 	if len(r.Packages) != 2 || r.Packages[0] != want || r.Packages[1].Name != "vim-minimal" {
 		t.Errorf("packages = %+v, want openssl first", r.Packages)
 	}
-	if n := recorded.reports[1]; n.Availability != update.NoHelper || n.Reason != "no helper" || n.Permissions != nil || n.LastUpgradeAt != nil {
+	if n := recorded.reports[1]; n.Availability != update.NoHelper || n.Reason != "no helper" || n.Permissions != nil || n.LastUpgradeAt != nil || n.HelperVersion != "" {
 		t.Errorf("report without helper = %+v", n)
 	}
 }

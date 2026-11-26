@@ -117,9 +117,18 @@ impl HelperSource {
         }
     }
 
-    /// Asks the helper (blocking: up to [`LIST_TIMEOUT`]).
+    /// Asks the helper (blocking: up to [`LIST_TIMEOUT`]); the report names its version.
     #[must_use]
     pub fn list_blocking(&self, refresh: bool) -> Listing {
+        let mut version = String::new();
+        let mut listing = self.list_naming(refresh, &mut version);
+        if let Listing::Report(report) = &mut listing {
+            report.helper_version = version;
+        }
+        listing
+    }
+
+    fn list_naming(&self, refresh: bool, version: &mut String) -> Listing {
         let now = SystemTime::now();
         let request = |operation| HelperRequest {
             operation: Some(operation),
@@ -129,6 +138,9 @@ impl HelperSource {
             &request(Operation::GetStatus(GetStatus {})),
             STATUS_TIMEOUT,
         );
+        if let Ok(response) = &status {
+            version.clone_from(&release_version(&response.helper_version));
+        }
         let info = match answer(status) {
             Ok(Answer::StatusInfo(info)) => info,
             Ok(_) => return failed("the root helper sent no status", now),
@@ -224,6 +236,27 @@ fn answer(response: Result<HelperResponse, HelperError>) -> Result<Answer, Unava
 
 fn failed(why: &str, now: SystemTime) -> Listing {
     Listing::Report(report_of(UpdateAvailability::Failed, why, now))
+}
+
+/// `v` if it reads like a release version (the server refuses a report with anything else),
+/// else empty (M4-31).
+fn release_version(v: &str) -> String {
+    let (core, pre) = v.split_once('-').unwrap_or((v, ""));
+    let parts: Vec<&str> = core.split('.').collect();
+    let numbers = parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    let suffix = !v.contains('-')
+        || !pre.is_empty()
+            && pre
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-');
+    if numbers && suffix && v.len() <= 64 {
+        v.to_owned()
+    } else {
+        String::new()
+    }
 }
 
 /// A report without packages.
@@ -383,6 +416,7 @@ pub fn from_updates(
         last_upgrade_at: host.last_change.map(Into::into),
         permissions: Some(permissions(info)),
         refreshed,
+        helper_version: String::new(),
     };
     fit(&mut report);
     report

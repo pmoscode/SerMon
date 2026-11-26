@@ -38,6 +38,14 @@ type Agent struct {
 	Version string
 	Method  InstallMethod
 	Arch    string
+	// Helper is the root helper's version from the last update report ("" without one, M4-31).
+	Helper string
+}
+
+// HelperOutdated reports a script installation whose helper is older than the agent: helpers
+// from M4-31 on update themselves with the agent, an older one needs install.sh once more.
+func (a Agent) HelperOutdated() bool {
+	return a.Helper != "" && a.Method == InstallScript && Newer(a.Version, a.Helper)
 }
 
 // Target is the version the agent updates itself to from latest, the newest release of its
@@ -51,11 +59,14 @@ func (a Agent) Target(latest string) string {
 
 var semver = regexp.MustCompile(`^([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$`)
 
+// ValidVersion reports whether v is a semantic version of at most 64 bytes.
+func ValidVersion(v string) bool { return len(v) <= 64 && semver.MatchString(v) }
+
 // Newer reports whether version a is newer than b by SemVer precedence; false if either is no
 // semantic version (as the root helper decides, ADR 0036).
 func Newer(a, b string) bool {
 	ma, mb := semver.FindStringSubmatch(a), semver.FindStringSubmatch(b)
-	if ma == nil || mb == nil || len(a) > 64 || len(b) > 64 {
+	if !ValidVersion(a) || !ValidVersion(b) {
 		return false
 	}
 	for i := 1; i <= 3; i++ {

@@ -9,3 +9,6 @@ allow_remote_updates = true
 allow_remote_reboot = false
 # Replace the agent with a version signed by the release key (installations by install.sh).
 allow_self_update = true
+# A self-update to a prerelease (the beta channel) on a host that runs none yet; the root helper
+# of the release replaces this one with the agent.
+allow_prerelease = false

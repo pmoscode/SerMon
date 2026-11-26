@@ -731,6 +731,16 @@ async fn fetches_a_release_and_says_when_a_session_stands() {
     let release = fetcher.fetch("1.3.0").await.unwrap();
     assert_eq!(release.binary, binary);
     assert_eq!(release.signature, "untrusted comment: x\nsig\n");
+    // M4-31: the root helper of the release, none from a server or release without one.
+    assert_eq!(fetcher.fetch_helper("1.3.0").await.unwrap(), None);
+    harness
+        .api
+        .add_helper_release("1.3.0", vec![7; 1000], "helper sig");
+    let helper = fetcher.fetch_helper("1.3.0").await.unwrap().unwrap();
+    assert_eq!(
+        (helper.binary, helper.signature.as_str()),
+        (vec![7; 1000], "helper sig")
+    );
     assert!(
         fetcher
             .fetch("9.9.9")

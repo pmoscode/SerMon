@@ -1148,6 +1148,8 @@
 	"agent_update_started": "Gestartet – der Agent lädt die neue Version und startet neu.",
 	"agent_update_skipped": "Nicht aktualisiert: {reason}",
 	"agent_veto": "Der Host erlaubt keine Agent-Updates aus der Ferne (allow_self_update in /etc/sermon/helper.toml).",
+	"agent_helper": "Root-Helper",
+	"agent_helper_outdated": "Der Root-Helper ist älter als der Agent. Neuere Helper aktualisieren sich mit dem Agent – dieser braucht noch einmal install.sh.",
 	"channel_stable": "stabil",
 	"channel_beta": "Beta",
 	"policy_agent_auto": "Agent im Fenster aktualisieren (Installationen per install.sh)",

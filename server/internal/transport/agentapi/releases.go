@@ -86,8 +86,9 @@ func (l *fetchLimits) done(org tenant.OrgID, node identity.NodeID) {
 
 var arches = map[agentv1.Architecture]string{agentv1.Architecture_ARCHITECTURE_AMD64: "amd64", agentv1.Architecture_ARCHITECTURE_ARM64: "arm64"}
 
-// FetchAgentRelease streams a signed release: the header with size and signature, then the
-// binary in chunks. Node and organization come from the certificate.
+// FetchAgentRelease streams a signed release – the agent or, for RELEASE_ARTIFACT_HELPER, its root
+// helper (M4-31): the header with size and signature, then the binary in chunks. Node and
+// organization come from the certificate.
 func (h *SessionHandler) FetchAgentRelease(ctx context.Context, req *connect.Request[agentv1.FetchAgentReleaseRequest], stream *connect.ServerStream[agentv1.FetchAgentReleaseResponse]) error {
 	id, ok := IdentityFrom(ctx)
 	if !ok {
@@ -97,6 +98,14 @@ func (h *SessionHandler) FetchAgentRelease(ctx context.Context, req *connect.Req
 		return connect.NewError(connect.CodeNotFound, errNoRelease)
 	}
 	rel, found := h.releases.Find(req.Msg.GetVersion(), arches[req.Msg.GetArchitecture()])
+	artifact := "agent"
+	if req.Msg.GetArtifact() == agentv1.ReleaseArtifact_RELEASE_ARTIFACT_HELPER {
+		if rel.Helper == nil {
+			found = false
+		} else {
+			rel, artifact = *rel.Helper, "helper"
+		}
+	}
 	if !found {
 		return connect.NewError(connect.CodeNotFound, errNoRelease)
 	}
@@ -106,11 +115,11 @@ func (h *SessionHandler) FetchAgentRelease(ctx context.Context, req *connect.Req
 	defer h.fetches.done(id.Org, id.Node)
 	file, err := h.releases.Open(rel)
 	if err != nil {
-		h.logger.WarnContext(ctx, "open agent release failed", "version", rel.Version, "error", err)
+		h.logger.WarnContext(ctx, "open agent release failed", "artifact", artifact, "version", rel.Version, "error", err)
 		return connect.NewError(connect.CodeNotFound, errNoRelease)
 	}
 	defer func() { _ = file.Close() }()
-	h.logger.InfoContext(ctx, "agent release fetched", "node", id.Node.String(), "version", rel.Version, "arch", rel.Arch)
+	h.logger.InfoContext(ctx, "agent release fetched", "node", id.Node.String(), "artifact", artifact, "version", rel.Version, "arch", rel.Arch)
 	if err := stream.Send(&agentv1.FetchAgentReleaseResponse{Part: &agentv1.FetchAgentReleaseResponse_Header{Header: &agentv1.AgentReleaseHeader{
 		Size: uint64(rel.Size), Signature: string(rel.Signature), //nolint:gosec // G115: at most 64 MiB
 	}}}); err != nil {

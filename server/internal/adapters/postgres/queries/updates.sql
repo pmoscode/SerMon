@@ -11,13 +11,13 @@ SELECT count(*) FROM node_update_packages WHERE node_id <> sqlc.arg(node_id);
 INSERT INTO node_update_state AS s (
     org_id, node_id, collected_at, received_at, availability, reason, package_manager, total_count,
     security_count, packages_stored, reboot_required, reboot_reason, last_upgrade_at,
-    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed, reboot_required_since)
+    allow_remote_updates, allow_remote_reboot, allow_self_update, refreshed, helper_version, reboot_required_since)
 VALUES (
     current_org_id(), sqlc.arg(node_id), sqlc.arg(collected_at), sqlc.arg(received_at), sqlc.arg(availability),
     sqlc.arg(reason), sqlc.arg(package_manager), sqlc.arg(total_count), sqlc.arg(security_count),
     sqlc.arg(packages_stored), sqlc.arg(reboot_required), sqlc.arg(reboot_reason), sqlc.narg(last_upgrade_at),
     sqlc.narg(allow_remote_updates), sqlc.narg(allow_remote_reboot), sqlc.narg(allow_self_update), sqlc.arg(refreshed),
-    CASE WHEN sqlc.arg(reboot_required)::boolean THEN sqlc.arg(collected_at)::timestamptz END)
+    sqlc.arg(helper_version), CASE WHEN sqlc.arg(reboot_required)::boolean THEN sqlc.arg(collected_at)::timestamptz END)
 ON CONFLICT (org_id, node_id) DO UPDATE SET
     collected_at = excluded.collected_at, received_at = excluded.received_at,
     availability = excluded.availability, reason = excluded.reason,
@@ -26,7 +26,7 @@ ON CONFLICT (org_id, node_id) DO UPDATE SET
     reboot_required = excluded.reboot_required, reboot_reason = excluded.reboot_reason,
     last_upgrade_at = excluded.last_upgrade_at, allow_remote_updates = excluded.allow_remote_updates,
     allow_remote_reboot = excluded.allow_remote_reboot, allow_self_update = excluded.allow_self_update,
-    refreshed = excluded.refreshed,
+    refreshed = excluded.refreshed, helper_version = excluded.helper_version,
     -- Since the first report that needed the reboot (M4-16).
     reboot_required_since = CASE WHEN excluded.reboot_required THEN coalesce(s.reboot_required_since, excluded.collected_at) END
 WHERE s.collected_at < excluded.collected_at
@@ -61,7 +61,7 @@ WHERE node_id = sqlc.arg(node_id);
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       s.allow_self_update, s.refreshed, s.oldest_security_at, s.helper_version,
        coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE n.id = sqlc.arg(node_id)
@@ -77,7 +77,7 @@ ORDER BY security DESC, name, candidate_version;
 SELECT n.id, n.hostname, n.group_id, s.collected_at, s.received_at, s.availability, s.reason,
        s.package_manager, s.total_count, s.security_count, s.packages_stored, s.reboot_required,
        s.reboot_reason, s.last_upgrade_at, s.allow_remote_updates, s.allow_remote_reboot,
-       s.allow_self_update, s.refreshed, s.oldest_security_at,
+       s.allow_self_update, s.refreshed, s.oldest_security_at, s.helper_version,
        coalesce(n.agent_version, '')::text AS agent_version, n.install_method, n.architecture
 FROM nodes n LEFT JOIN node_update_state s ON s.org_id = n.org_id AND s.node_id = n.id
 WHERE sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::uuid[])

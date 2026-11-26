@@ -84,6 +84,25 @@ func TestNormalized_AReportWithoutListHasNoPackages(t *testing.T) {
 	}
 }
 
+// M4-31: the helper's version stays with any report; anything but a semantic version is none.
+func TestNormalized_KeepsOnlyASemanticHelperVersion(t *testing.T) {
+	r := listed(update.Package{Name: "vim"})
+	r.HelperVersion = "1.2.0-rc.1"
+	if n := r.Normalized(); n.HelperVersion != "1.2.0-rc.1" {
+		t.Errorf("helper version = %q", n.HelperVersion)
+	}
+	r.Availability = update.Failed
+	if n := r.Normalized(); n.HelperVersion != "1.2.0-rc.1" {
+		t.Errorf("helper version of a failed list = %q", n.HelperVersion)
+	}
+	for _, bad := range []string{"dev", "1.0", "1.0.0\u202e", "1.0.0-" + strings.Repeat("a", 60)} {
+		r.HelperVersion = bad
+		if n := r.Normalized(); n.HelperVersion != "" {
+			t.Errorf("%q kept as %q", bad, n.HelperVersion)
+		}
+	}
+}
+
 func TestValid(t *testing.T) {
 	if !listed(update.Package{Name: "vim"}).Valid() {
 		t.Error("a listed report is invalid")

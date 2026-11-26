@@ -539,9 +539,14 @@ type AgentInfo struct {
 	// latest is the channel's newest release for the node's architecture (empty: none).
 	Latest string `protobuf:"bytes,4,opt,name=latest,proto3" json:"latest,omitempty"`
 	// target is what an agent update installs (empty: nothing, e.g. not newer or a package).
-	Target        string `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Target string `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
+	// helper_version is the root helper's version as the agent reports it (empty: no helper).
+	HelperVersion string `protobuf:"bytes,6,opt,name=helper_version,json=helperVersion,proto3" json:"helper_version,omitempty"`
+	// helper_outdated: a script installation whose helper is older than the agent – helpers from
+	// M4-31 on update themselves with the agent, an older one needs install.sh once more.
+	HelperOutdated bool `protobuf:"varint,7,opt,name=helper_outdated,json=helperOutdated,proto3" json:"helper_outdated,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AgentInfo) Reset() {
@@ -607,6 +612,20 @@ func (x *AgentInfo) GetTarget() string {
 		return x.Target
 	}
 	return ""
+}
+
+func (x *AgentInfo) GetHelperVersion() string {
+	if x != nil {
+		return x.HelperVersion
+	}
+	return ""
+}
+
+func (x *AgentInfo) GetHelperOutdated() bool {
+	if x != nil {
+		return x.HelperOutdated
+	}
+	return false
 }
 
 // UpdateAgentsRequest names the nodes.
@@ -2647,13 +2666,15 @@ var File_sermon_web_v1_update_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_update_proto_rawDesc = "" +
 	"\n" +
-	"\x1asermon/web/v1/update.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a!sermon/web/v1/update_policy.proto\x1a!sermon/web/v1/update_status.proto\"\xd1\x01\n" +
+	"\x1asermon/web/v1/update.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a!sermon/web/v1/update_policy.proto\x1a!sermon/web/v1/update_status.proto\"\xa1\x02\n" +
 	"\tAgentInfo\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12C\n" +
 	"\x0einstall_method\x18\x02 \x01(\x0e2\x1c.sermon.web.v1.InstallMethodR\rinstallMethod\x125\n" +
 	"\achannel\x18\x03 \x01(\x0e2\x1b.sermon.web.v1.AgentChannelR\achannel\x12\x16\n" +
 	"\x06latest\x18\x04 \x01(\tR\x06latest\x12\x16\n" +
-	"\x06target\x18\x05 \x01(\tR\x06target\"E\n" +
+	"\x06target\x18\x05 \x01(\tR\x06target\x12%\n" +
+	"\x0ehelper_version\x18\x06 \x01(\tR\rhelperVersion\x12'\n" +
+	"\x0fhelper_outdated\x18\a \x01(\bR\x0ehelperOutdated\"E\n" +
 	"\x13UpdateAgentsRequest\x12.\n" +
 	"\bnode_ids\x18\x01 \x03(\tB\x13\xbaH\x10\x92\x01\r\b\x01\x10d\x18\x01\"\x05r\x03\xb0\x01\x01R\anodeIds\">\n" +
 	"\vSkippedNode\x12\x17\n" +

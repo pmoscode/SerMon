@@ -37,6 +37,19 @@ message FetchAgentReleaseRequest {
     defined_only: true
     not_in: [0]
   }];
+  // artifact is which binary of the release: the agent (also unset, as older agents ask) or the
+  // root helper, which replaces itself with the agent (M4-31).
+  ReleaseArtifact artifact = 3 [(buf.validate.field).enum.defined_only = true];
+}
+
+// ReleaseArtifact is a binary of an agent release.
+enum ReleaseArtifact {
+  // RELEASE_ARTIFACT_UNSPECIFIED is the agent.
+  RELEASE_ARTIFACT_UNSPECIFIED = 0;
+  // RELEASE_ARTIFACT_AGENT is the agent.
+  RELEASE_ARTIFACT_AGENT = 1;
+  // RELEASE_ARTIFACT_HELPER is the root helper of the same version.
+  RELEASE_ARTIFACT_HELPER = 2;
 }
 
 // FetchAgentReleaseResponse is one message of the stream: the header first, then the chunks.
@@ -964,6 +977,12 @@ message UpdateReport {
   HelperPermissions permissions = 11;
   // refreshed: the package sources were updated just before listing.
   bool refreshed = 12;
+  // helper_version is the root helper's version, empty without helper (M4-31): the server shows a
+  // helper older than its agent.
+  string helper_version = 13 [(buf.validate.field).string = {
+    max_bytes: 64
+    pattern: "^([0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?)?$"
+  }];
 }
 
 // UpdatePackage is one available update.

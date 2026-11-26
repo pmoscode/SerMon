@@ -58,3 +58,24 @@ func TestAgent_TargetOnlyForANewerReleaseOfAScriptInstall(t *testing.T) {
 		t.Error("channel names")
 	}
 }
+
+// M4-31: a script installation's helper older than its agent needs install.sh once more; newer
+// helpers update themselves with the agent.
+func TestAgent_HelperOutdatedOnlyForAnOlderHelperOfAScriptInstall(t *testing.T) {
+	if !(update.Agent{Version: "1.1.0", Method: update.InstallScript, Helper: "1.0.0"}).HelperOutdated() {
+		t.Error("an older helper is not outdated")
+	}
+	for name, a := range map[string]update.Agent{
+		"as new":    {Version: "1.1.0", Method: update.InstallScript, Helper: "1.1.0"},
+		"newer":     {Version: "1.1.0", Method: update.InstallScript, Helper: "1.2.0"},
+		"no helper": {Version: "1.1.0", Method: update.InstallScript},
+		"package":   {Version: "1.1.0", Method: update.InstallPackage, Helper: "1.0.0"},
+		"unknown":   {Version: "1.1.0", Helper: "1.0.0"},
+		"no semver": {Version: "dev", Method: update.InstallScript, Helper: "1.0.0"},
+		"rc":        {Version: "1.1.0-rc.1", Method: update.InstallScript, Helper: "1.1.0"},
+	} {
+		if a.HelperOutdated() {
+			t.Errorf("%s: outdated", name)
+		}
+	}
+}

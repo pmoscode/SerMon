@@ -550,3 +550,32 @@ async fn a_withdrawn_run_starts_no_more() {
     assert_eq!(r.phases(), [(ID.into(), CommandPhase::Started)]);
     r.stop().await;
 }
+
+// M4-31: the release's root helper is staged beside the agent; without one a helper staged
+// before is removed, so the helper never pairs an old one with a new agent.
+#[test]
+fn the_helper_is_staged_with_the_agent() {
+    use sermon_transport::release::Release;
+    let dir = tempfile::tempdir().unwrap();
+    let staging = dir.path().join("self-update");
+    let release = |b: &[u8]| Release {
+        binary: b.to_vec(),
+        signature: format!("sig of {}", b.len()),
+    };
+    stage_files(&staging, &release(b"agent"), Some(&release(b"helper!"))).unwrap();
+    assert_eq!(
+        std::fs::read(staging.join("sermon-helper")).unwrap(),
+        b"helper!"
+    );
+    assert_eq!(
+        std::fs::read_to_string(staging.join("sermon-helper.minisig")).unwrap(),
+        "sig of 7"
+    );
+    stage_files(&staging, &release(b"agent 2"), None).unwrap();
+    assert_eq!(
+        std::fs::read(staging.join("sermon-agent")).unwrap(),
+        b"agent 2"
+    );
+    assert!(!staging.join("sermon-helper").exists());
+    assert!(!staging.join("sermon-helper.minisig").exists());
+}

@@ -677,7 +677,8 @@ func toReport(r *agentv1.UpdateReport) update.Report {
 		CollectedAt: r.GetCollectedAt().AsTime(), Availability: update.Availability(r.GetAvailability()), //nolint:gosec // enum values checked by the schema
 		Reason: r.GetReason(), Manager: update.Manager(r.GetPackageManager()), //nolint:gosec // as above
 		Total: r.GetTotalCount(), Security: r.GetSecurityCount(), RebootRequired: r.GetRebootRequired(),
-		RebootReason: r.GetRebootReason(), Refreshed: r.GetRefreshed(), Packages: make([]update.Package, 0, len(r.GetPackages())),
+		RebootReason: r.GetRebootReason(), Refreshed: r.GetRefreshed(), HelperVersion: r.GetHelperVersion(),
+		Packages: make([]update.Package, 0, len(r.GetPackages())),
 	}
 	if r.GetLastUpgradeAt() != nil {
 		at := r.GetLastUpgradeAt().AsTime()

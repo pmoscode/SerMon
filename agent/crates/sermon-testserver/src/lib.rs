@@ -527,6 +527,16 @@ impl FakeAgentApi {
         self.add_release_announcing(version, binary, signature, size);
     }
 
+    /// Offers the root helper of `version` (M4-31).
+    ///
+    /// # Panics
+    ///
+    /// If the state lock is poisoned.
+    pub fn add_helper_release(&self, version: &str, binary: Vec<u8>, signature: &str) {
+        let size = u64::try_from(binary.len()).unwrap_or(u64::MAX);
+        self.add_release_announcing(&format!("helper:{version}"), binary, signature, size);
+    }
+
     /// Offers `version` with a header that announces `size` bytes, whatever follows.
     ///
     /// # Panics
@@ -784,14 +794,14 @@ impl proto::agent_service_server::AgentService for FakeAgentApi {
         &self,
         request: Request<sermon_transport::proto::agent::v1::FetchAgentReleaseRequest>,
     ) -> Result<Response<Self::FetchAgentReleaseStream>, Status> {
+        use sermon_transport::proto::agent::v1::ReleaseArtifact;
         use sermon_transport::proto::agent::v1::fetch_agent_release_response::Part;
-        let Some((binary, signature, size)) = self
-            .state
-            .lock()
-            .unwrap()
-            .releases
-            .get(&request.get_ref().version)
-            .cloned()
+        let key = match request.get_ref().artifact() {
+            ReleaseArtifact::Helper => format!("helper:{}", request.get_ref().version),
+            _ => request.get_ref().version.clone(),
+        };
+        let Some((binary, signature, size)) =
+            self.state.lock().unwrap().releases.get(&key).cloned()
         else {
             return Err(Status::not_found("no such release"));
         };

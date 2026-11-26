@@ -91,6 +91,7 @@ func TestUpdateStore_ANewerReportReplacesTheOld(t *testing.T) {
 	last := updatesNow.Add(-48 * time.Hour)
 	first.LastUpgradeAt = &last
 	first.Permissions = &update.Permissions{RemoteUpdates: true, SelfUpdate: true}
+	first.HelperVersion = "1.0.0-rc.1"
 	if !f.write(t, f.node, first) {
 		t.Fatal("the first report was not stored")
 	}
@@ -101,7 +102,8 @@ func TestUpdateStore_ANewerReportReplacesTheOld(t *testing.T) {
 	r := n.Report
 	if !r.CollectedAt.Equal(first.CollectedAt) || !n.ReceivedAt.Equal(updatesNow) || r.Total != 3 || r.Security != 1 ||
 		!r.RebootRequired || r.RebootReason != "linux-image" || r.LastUpgradeAt == nil || !r.LastUpgradeAt.Equal(last) ||
-		r.Permissions == nil || *r.Permissions != *first.Permissions || n.PackagesOmitted || r.Manager != update.Apt {
+		r.Permissions == nil || *r.Permissions != *first.Permissions || n.PackagesOmitted || r.Manager != update.Apt ||
+		r.HelperVersion != "1.0.0-rc.1" || n.Agent.Helper != "1.0.0-rc.1" {
 		t.Errorf("report = %+v", r)
 	}
 	if n.OldestSecurity == nil || !n.OldestSecurity.Equal(first.CollectedAt) || !r.Packages[0].FirstSeenAt.Equal(first.CollectedAt) {
@@ -122,7 +124,8 @@ func TestUpdateStore_ANewerReportReplacesTheOld(t *testing.T) {
 		t.Fatal("a newer report was not stored")
 	}
 	n, _ = f.get(t, scope, f.node)
-	if names(n) != "openssl=3.1 zlib=1.3 vim=3" || n.Report.RebootRequired || n.Report.Permissions != nil || n.Report.LastUpgradeAt != nil {
+	if names(n) != "openssl=3.1 zlib=1.3 vim=3" || n.Report.RebootRequired || n.Report.Permissions != nil || n.Report.LastUpgradeAt != nil ||
+		n.Report.HelperVersion != "" || n.Agent.Helper != "" {
 		t.Errorf("after the newer report: %s, %+v", names(n), n.Report)
 	}
 	for _, p := range n.Report.Packages {
@@ -256,6 +259,7 @@ func TestUpdateStore_TheTablesCheckTheBounds(t *testing.T) {
 		"long name":        {CollectedAt: updatesNow, Availability: update.Listed, Total: 1, Packages: []update.Package{{Name: strings.Repeat("a", 257)}}},
 		"security > total": {CollectedAt: updatesNow, Availability: update.Listed, Total: 1, Security: 2},
 		"availability":     {CollectedAt: updatesNow, Availability: 9},
+		"helper version":   {CollectedAt: updatesNow, Availability: update.NoHelper, HelperVersion: strings.Repeat("1", 65)},
 	} {
 		if _, err := f.store.Write(ctx, f.org, f.node, r, updatesNow); err == nil {
 			t.Errorf("%s: stored", name)

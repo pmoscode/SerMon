@@ -67,6 +67,7 @@ func (s *UpdateStore) Write(ctx context.Context, org tenant.OrgID, node identity
 			AllowRemoteReboot:  optionalBool(p != nil, p != nil && p.RemoteReboot),
 			AllowSelfUpdate:    optionalBool(p != nil, p != nil && p.SelfUpdate),
 			Refreshed:          r.Refreshed,
+			HelperVersion:      r.HelperVersion,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil // the stored report is as new or newer
@@ -203,7 +204,7 @@ func nodeUpdates(row sqlcdb.GetNodeUpdatesRow) updates.NodeUpdates {
 		Reason: row.Reason.String, Manager: update.Manager(row.PackageManager.Int16), //nolint:gosec // 0 to 3 by the table's check
 		Total: uint32(row.TotalCount.Int32), Security: uint32(row.SecurityCount.Int32), //nolint:gosec // not negative by the table's check
 		RebootRequired: row.RebootRequired.Bool, RebootReason: row.RebootReason.String, LastUpgradeAt: row.LastUpgradeAt,
-		Refreshed: row.Refreshed.Bool,
+		Refreshed: row.Refreshed.Bool, HelperVersion: row.HelperVersion.String,
 	}
 	if row.AllowRemoteUpdates.Valid {
 		r.Permissions = &update.Permissions{
@@ -211,6 +212,7 @@ func nodeUpdates(row sqlcdb.GetNodeUpdatesRow) updates.NodeUpdates {
 		}
 	}
 	n.Report = r
+	n.Agent.Helper = r.HelperVersion
 	if row.ReceivedAt != nil {
 		n.ReceivedAt = *row.ReceivedAt
 	}

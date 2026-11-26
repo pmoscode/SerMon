@@ -160,7 +160,7 @@ pub fn handle(
     let response = HelperResponse {
         status: status.into(),
         reason,
-        helper_version: env!("CARGO_PKG_VERSION").to_owned(),
+        helper_version: crate::VERSION.to_owned(),
         result,
     };
     (response, audit)
@@ -350,6 +350,7 @@ mod tests {
             allow_remote_updates: true,
             allow_remote_reboot: true,
             allow_self_update: true,
+            allow_prerelease: true,
         }
     }
 
@@ -383,7 +384,7 @@ mod tests {
             let (r, audit) = ask(op, config, &mut exec);
             assert_eq!(r.status(), Status::Ok, "{r:?}");
             assert_eq!((audit.run_id.as_str(), audit.status), (ID, Status::Ok));
-            assert_eq!(r.helper_version, env!("CARGO_PKG_VERSION"));
+            assert_eq!(r.helper_version, crate::VERSION);
         }
         assert_eq!(
             exec.started,
@@ -416,6 +417,7 @@ mod tests {
             allow_remote_updates: false,
             allow_remote_reboot: false,
             allow_self_update: false,
+            allow_prerelease: false,
         };
         for (op, key) in [
             (apply(ID, Scope::Security), "allow_remote_updates"),

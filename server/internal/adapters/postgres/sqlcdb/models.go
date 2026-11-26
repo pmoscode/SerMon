@@ -340,6 +340,7 @@ type NodeUpdateState struct {
 	Refreshed           bool
 	OldestSecurityAt    *time.Time
 	RebootRequiredSince *time.Time
+	HelperVersion       string
 }
 
 type NotificationChannel struct {

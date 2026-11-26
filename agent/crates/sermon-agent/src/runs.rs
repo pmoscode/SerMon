@@ -210,8 +210,10 @@ impl Helper for SocketHelper {
             .as_ref()
             .ok_or("no server to fetch the release from")?;
         let release = fetcher.fetch(version).await?;
+        // The root helper of the release replaces itself with the agent (M4-31).
+        let helper = fetcher.fetch_helper(version).await?;
         let dir = self.staging.clone();
-        tokio::task::spawn_blocking(move || stage_files(&dir, &release))
+        tokio::task::spawn_blocking(move || stage_files(&dir, &release, helper.as_ref()))
             .await
             .map_err(|e| e.to_string())?
             .map_err(|e| format!("cannot stage the release: {e}"))
@@ -241,17 +243,37 @@ impl Helper for SocketHelper {
 }
 
 /// Writes the release where the helper reads it: the state directory's `self-update/`, only for
-/// the agent's user (the helper copies and checks it as root).
-fn stage_files(dir: &Path, release: &sermon_transport::release::Release) -> std::io::Result<()> {
+/// the agent's user (the helper copies and checks it as root). Without a helper in the release
+/// one staged before goes.
+fn stage_files(
+    dir: &Path,
+    release: &sermon_transport::release::Release,
+    helper: Option<&sermon_transport::release::Release>,
+) -> std::io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
     std::fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
         .create(dir)?;
-    for (name, bytes) in [
+    let mut files = vec![
         ("sermon-agent", release.binary.as_slice()),
         ("sermon-agent.minisig", release.signature.as_bytes()),
-    ] {
+    ];
+    match helper {
+        Some(h) => files.extend([
+            ("sermon-helper", h.binary.as_slice()),
+            ("sermon-helper.minisig", h.signature.as_bytes()),
+        ]),
+        None => {
+            for name in ["sermon-helper", "sermon-helper.minisig"] {
+                match std::fs::remove_file(dir.join(name)) {
+                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+                    _ => {}
+                }
+            }
+        }
+    }
+    for (name, bytes) in files {
         let tmp = dir.join(format!(".{name}.tmp"));
         let mut file = std::fs::OpenOptions::new()
             .write(true)

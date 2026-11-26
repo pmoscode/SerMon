@@ -35,7 +35,55 @@ service NodeService {
   // matching in rules, notification policies and silences, never for rights. Needs admin on the
   // node's group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
   rpc SetNodeTags(SetNodeTagsRequest) returns (SetNodeTagsResponse);
+
+  // DeactivateNode deactivates a node (M5-29, ADR 0041): all its certificates are revoked and its
+  // session ends, its data stays, alerts no longer evaluate it. It comes back by an allowed
+  // takeover and a new enrollment. Needs admin on the node's group and a recent
+  // re-authentication; unknown or foreign nodes are NOT_FOUND.
+  rpc DeactivateNode(DeactivateNodeRequest) returns (DeactivateNodeResponse);
+  // DeleteNode deactivates a node and deletes it with its metrics, events, alerts and logs after
+  // the grace (default 7 days); the host name confirms it (INVALID_ARGUMENT otherwise). Rights as
+  // DeactivateNode.
+  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse);
+  // CancelNodeDeletion lifts a scheduled deletion; the node stays deactivated
+  // (FAILED_PRECONDITION if none is scheduled). Rights as DeactivateNode.
+  rpc CancelNodeDeletion(CancelNodeDeletionRequest) returns (CancelNodeDeletionResponse);
 }
+
+// DeactivateNodeRequest names the node.
+message DeactivateNodeRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// DeactivateNodeResponse is empty.
+message DeactivateNodeResponse {}
+
+// DeleteNodeRequest names the node and confirms it with its host name.
+message DeleteNodeRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+  // confirm_hostname is the node's host name, typed by the admin.
+  string confirm_hostname = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 300
+  }];
+}
+
+// DeleteNodeResponse says when the node is deleted.
+message DeleteNodeResponse {
+  // deletion_due_at is when the node and its data are deleted.
+  google.protobuf.Timestamp deletion_due_at = 1;
+}
+
+// CancelNodeDeletionRequest names the node.
+message CancelNodeDeletionRequest {
+  // node_id is the node UUID.
+  string node_id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+// CancelNodeDeletionResponse is empty.
+message CancelNodeDeletionResponse {}
 
 // SetNodeTagsRequest names the node and its new tags.
 message SetNodeTagsRequest {
@@ -182,6 +230,11 @@ message Node {
   // logs_vetoed is set if the node's agent.toml forbids sending logs (allow_logs = false), as of
   // its last configuration report (ADR 0030).
   bool logs_vetoed = 22;
+  // deactivated_at is set while the node is deactivated (M5-29): its certificates are revoked,
+  // alerts don't evaluate it.
+  google.protobuf.Timestamp deactivated_at = 23;
+  // deletion_due_at is set while the node is scheduled for deletion: then it and its data go.
+  google.protobuf.Timestamp deletion_due_at = 24;
 }
 
 // SecuritySource is where the agent of a node finds the log lines for security events.

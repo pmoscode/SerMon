@@ -48,6 +48,7 @@ KONZEPT §2 mit angepasst.
 | [0038](0038-allocator-des-agents.md) | Allocator des Agents: jemalloc statt musls mallocng | accepted | D1 |
 | [0039](0039-modul-framework.md) | Modul-Framework: Laufzeit, Konfiguration, Veto und Zugangsdaten | accepted | D18 |
 | [0040](0040-eigene-dashboards.md) | Eigene Dashboards: Modell, Rechte, Grid-Editor und Kiosk-Token | accepted | D3, D11, D27 |
+| [0041](0041-nodes-deaktivieren-loeschen.md) | Nodes deaktivieren und löschen | accepted | D29, D31 |
 
 ## Entscheidungslog → ADR
 
@@ -83,5 +84,6 @@ KONZEPT §2 mit angepasst.
 | D28 Einladungslink | 0008, 0022 |
 | D29 Orgs erst sperren, dann löschen | 0029 |
 | D30 Enrollment über HTTPS | 0009, 0010 |
+| D31 Nodes erst deaktivieren, dann löschen | 0041 |
 
 Die ADRs 0014 bis 0021 dokumentieren Entscheidungen der Konzeptrunde nachträglich (IMPLEMENTIERUNGSPLAN M0-11).

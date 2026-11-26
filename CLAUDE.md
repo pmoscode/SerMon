@@ -91,6 +91,8 @@ Wichtige Variablen:
   Prüfung)
 - `SERMON_ORG_DELETION_GRACE` (Frist zwischen „Zum Löschen vormerken“ und dem Löschen einer Org, ADR 0029; Standard
   `720h`, mindestens `168h`; der Löschjob prüft stündlich)
+- `SERMON_NODE_DELETION_GRACE` (Frist zwischen „Node löschen“ und dem Löschen seiner Daten, ADR 0041; Standard `168h`,
+  mindestens `24h`; der Löschjob prüft stündlich)
 - `SERMON_LOKI_URL` (Loki für Logs, ADR 0031; feste URL ohne Zugangsdaten, eigener Client ohne Proxy und Redirects;
   leer heißt: keine Logs; `deploy/compose`: `http://loki:3100` im internen Netz)
 - `SERMON_OUTBOUND_ALLOWLIST` (CIDRs interner Ziele für Kanäle/Webhooks über `safehttp`, ADR 0024; leer heißt nur

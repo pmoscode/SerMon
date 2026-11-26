@@ -5643,7 +5643,31 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 
 ### 8.6 Querschnitt
 
-#### ☐ M5-29 – Nodes löschen und deaktivieren · X · M 🔒
+#### ☑ M5-29 – Nodes löschen und deaktivieren · X · M 🔒
+> Erledigt ([ADR 0041](adr/0041-nodes-deaktivieren-loeschen.md), D31; KONZEPT §6 und §7; Threat Model T112):
+> - **Rechte:** neue Action `manage_node_lifecycle` (Admin auf der Gruppe des Nodes), Step-up, Audit
+>   (`node.deactivate`, `node.schedule_deletion`, `node.cancel_deletion`, `node.purge`); fremde Nodes `NOT_FOUND`.
+> - **Deaktivieren** (`NodeService.DeactivateNode`): alle Zertifikate widerrufen, Übernahmefenster zu, Session auf
+>   dieser Instanz beendet (andere nach höchstens einer Minute); `agent_certificate_usable` lehnt deaktivierte Nodes
+>   auch mit einem nicht widerrufenen Zertifikat ab. Die Alert-Engine wertet sie nicht aus (offene Alerts enden, kein
+>   „Node offline“); Fleet und Node zeigen „Deaktiviert“. Zurück nur über „Übernahme erlauben“ und ein neues Enrollment,
+>   das die Deaktivierung aufhebt.
+> - **Löschen** (`DeleteNode` mit dem Hostnamen, `CancelNodeDeletion`): deaktiviert und setzt die Frist
+>   (`SERMON_NODE_DELETION_GRACE`, Standard 7 Tage, mindestens 24 h); in der Frist keine Übernahme. Der Löschjob
+>   (`nodelife.Service.Run`, stündlich) trägt erst die Loki-Löschung `{node_id="…"}` ein, dann löscht `node_purge`
+>   (Definer, Zeile zuerst gesperrt) Rohwerte, Aggregate und Anomalie-Punkte der Serien, Security-Events,
+>   Alert-Historie und den Node mit allem, was per Fremdschlüssel an ihm hängt.
+> - **Grenzen:** Audit-Log, Protokoll der Benachrichtigungen und Silences behalten ID bzw. Hostname; in der Frist zählt
+>   der Node zum Kontingent und belegt seine `machine-id`; Loki löscht nach seiner Wartefrist (10 min).
+> - **UI:** Abschnitt „Deaktivieren und löschen“ im Reiter Identität (Warnung, Bestätigung mit Hostname, Abbrechen),
+>   Status „Deaktiviert“ in der Fleet, Frist im Kopf der Node-Seite; Hilfe `concepts/node-lifecycle`. Die ⓘ jeder Seite
+>   laden jetzt nur die Titel, die Zusammenfassungen kommen mit dem ersten Öffnen (−5 KiB je Seite, Node-Seite
+>   185,5 KiB statt 190,8 KiB).
+> - Tests: Use-Case (Rechte-Tabelle, Hostname, Frist, Wiederholung, Löschjob nach Loki und mit Ausfall), Engine,
+>   Konfiguration, Loki-Eraser; gegen PostgreSQL: `node_purge` leert jede Tabelle mit `node_id` und die Punkte der
+>   Serien, andere Nodes und Orgs bleiben, wartet auf ein gleichzeitiges Abbrechen, Deaktivierung lehnt den Agent ab;
+>   echter Server mit mTLS: deaktiviert abgelehnt, nach Übernahme wieder da, gelöscht abgelehnt und weg, danach neues
+>   Enrollment; Web-API mit Tenant-Isolations- und Step-up-Tabellen; Komponenten und E2E mit axe; Gegenproben 34/34.
 - **Ziel:** offen aus M3: Node deaktivieren und löschen (KONZEPT §6, „Widerruf und Lebenszyklus“): Serial auf die
   Denylist, Daten nach Frist löschen, Audit; Step-up.
 - **Tests zuerst:** ein gelöschter Node verbindet sich nicht mehr, seine Daten verschwinden, andere bleiben;

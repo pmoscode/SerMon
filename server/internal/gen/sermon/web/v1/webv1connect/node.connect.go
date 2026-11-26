@@ -48,6 +48,14 @@ const (
 	NodeServiceAllowNodeTakeoverProcedure = "/sermon.web.v1.NodeService/AllowNodeTakeover"
 	// NodeServiceSetNodeTagsProcedure is the fully-qualified name of the NodeService's SetNodeTags RPC.
 	NodeServiceSetNodeTagsProcedure = "/sermon.web.v1.NodeService/SetNodeTags"
+	// NodeServiceDeactivateNodeProcedure is the fully-qualified name of the NodeService's
+	// DeactivateNode RPC.
+	NodeServiceDeactivateNodeProcedure = "/sermon.web.v1.NodeService/DeactivateNode"
+	// NodeServiceDeleteNodeProcedure is the fully-qualified name of the NodeService's DeleteNode RPC.
+	NodeServiceDeleteNodeProcedure = "/sermon.web.v1.NodeService/DeleteNode"
+	// NodeServiceCancelNodeDeletionProcedure is the fully-qualified name of the NodeService's
+	// CancelNodeDeletion RPC.
+	NodeServiceCancelNodeDeletionProcedure = "/sermon.web.v1.NodeService/CancelNodeDeletion"
 )
 
 // NodeServiceClient is a client for the sermon.web.v1.NodeService service.
@@ -77,6 +85,18 @@ type NodeServiceClient interface {
 	// matching in rules, notification policies and silences, never for rights. Needs admin on the
 	// node's group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
 	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
+	// DeactivateNode deactivates a node (M5-29, ADR 0041): all its certificates are revoked and its
+	// session ends, its data stays, alerts no longer evaluate it. It comes back by an allowed
+	// takeover and a new enrollment. Needs admin on the node's group and a recent
+	// re-authentication; unknown or foreign nodes are NOT_FOUND.
+	DeactivateNode(context.Context, *connect.Request[v1.DeactivateNodeRequest]) (*connect.Response[v1.DeactivateNodeResponse], error)
+	// DeleteNode deactivates a node and deletes it with its metrics, events, alerts and logs after
+	// the grace (default 7 days); the host name confirms it (INVALID_ARGUMENT otherwise). Rights as
+	// DeactivateNode.
+	DeleteNode(context.Context, *connect.Request[v1.DeleteNodeRequest]) (*connect.Response[v1.DeleteNodeResponse], error)
+	// CancelNodeDeletion lifts a scheduled deletion; the node stays deactivated
+	// (FAILED_PRECONDITION if none is scheduled). Rights as DeactivateNode.
+	CancelNodeDeletion(context.Context, *connect.Request[v1.CancelNodeDeletionRequest]) (*connect.Response[v1.CancelNodeDeletionResponse], error)
 }
 
 // NewNodeServiceClient constructs a client for the sermon.web.v1.NodeService service. By default,
@@ -126,17 +146,38 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("SetNodeTags")),
 			connect.WithClientOptions(opts...),
 		),
+		deactivateNode: connect.NewClient[v1.DeactivateNodeRequest, v1.DeactivateNodeResponse](
+			httpClient,
+			baseURL+NodeServiceDeactivateNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("DeactivateNode")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNode: connect.NewClient[v1.DeleteNodeRequest, v1.DeleteNodeResponse](
+			httpClient,
+			baseURL+NodeServiceDeleteNodeProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("DeleteNode")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelNodeDeletion: connect.NewClient[v1.CancelNodeDeletionRequest, v1.CancelNodeDeletionResponse](
+			httpClient,
+			baseURL+NodeServiceCancelNodeDeletionProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("CancelNodeDeletion")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // nodeServiceClient implements NodeServiceClient.
 type nodeServiceClient struct {
-	getNode           *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
-	listFilesystems   *connect.Client[v1.ListFilesystemsRequest, v1.ListFilesystemsResponse]
-	rotateNodeKeys    *connect.Client[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse]
-	unlockNode        *connect.Client[v1.UnlockNodeRequest, v1.UnlockNodeResponse]
-	allowNodeTakeover *connect.Client[v1.AllowNodeTakeoverRequest, v1.AllowNodeTakeoverResponse]
-	setNodeTags       *connect.Client[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse]
+	getNode            *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
+	listFilesystems    *connect.Client[v1.ListFilesystemsRequest, v1.ListFilesystemsResponse]
+	rotateNodeKeys     *connect.Client[v1.RotateNodeKeysRequest, v1.RotateNodeKeysResponse]
+	unlockNode         *connect.Client[v1.UnlockNodeRequest, v1.UnlockNodeResponse]
+	allowNodeTakeover  *connect.Client[v1.AllowNodeTakeoverRequest, v1.AllowNodeTakeoverResponse]
+	setNodeTags        *connect.Client[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse]
+	deactivateNode     *connect.Client[v1.DeactivateNodeRequest, v1.DeactivateNodeResponse]
+	deleteNode         *connect.Client[v1.DeleteNodeRequest, v1.DeleteNodeResponse]
+	cancelNodeDeletion *connect.Client[v1.CancelNodeDeletionRequest, v1.CancelNodeDeletionResponse]
 }
 
 // GetNode calls sermon.web.v1.NodeService.GetNode.
@@ -169,6 +210,21 @@ func (c *nodeServiceClient) SetNodeTags(ctx context.Context, req *connect.Reques
 	return c.setNodeTags.CallUnary(ctx, req)
 }
 
+// DeactivateNode calls sermon.web.v1.NodeService.DeactivateNode.
+func (c *nodeServiceClient) DeactivateNode(ctx context.Context, req *connect.Request[v1.DeactivateNodeRequest]) (*connect.Response[v1.DeactivateNodeResponse], error) {
+	return c.deactivateNode.CallUnary(ctx, req)
+}
+
+// DeleteNode calls sermon.web.v1.NodeService.DeleteNode.
+func (c *nodeServiceClient) DeleteNode(ctx context.Context, req *connect.Request[v1.DeleteNodeRequest]) (*connect.Response[v1.DeleteNodeResponse], error) {
+	return c.deleteNode.CallUnary(ctx, req)
+}
+
+// CancelNodeDeletion calls sermon.web.v1.NodeService.CancelNodeDeletion.
+func (c *nodeServiceClient) CancelNodeDeletion(ctx context.Context, req *connect.Request[v1.CancelNodeDeletionRequest]) (*connect.Response[v1.CancelNodeDeletionResponse], error) {
+	return c.cancelNodeDeletion.CallUnary(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the sermon.web.v1.NodeService service.
 type NodeServiceHandler interface {
 	// GetNode returns the details of a node the caller may view; unknown or foreign nodes are
@@ -196,6 +252,18 @@ type NodeServiceHandler interface {
 	// matching in rules, notification policies and silences, never for rights. Needs admin on the
 	// node's group and a recent re-authentication; unknown or foreign nodes are NOT_FOUND.
 	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
+	// DeactivateNode deactivates a node (M5-29, ADR 0041): all its certificates are revoked and its
+	// session ends, its data stays, alerts no longer evaluate it. It comes back by an allowed
+	// takeover and a new enrollment. Needs admin on the node's group and a recent
+	// re-authentication; unknown or foreign nodes are NOT_FOUND.
+	DeactivateNode(context.Context, *connect.Request[v1.DeactivateNodeRequest]) (*connect.Response[v1.DeactivateNodeResponse], error)
+	// DeleteNode deactivates a node and deletes it with its metrics, events, alerts and logs after
+	// the grace (default 7 days); the host name confirms it (INVALID_ARGUMENT otherwise). Rights as
+	// DeactivateNode.
+	DeleteNode(context.Context, *connect.Request[v1.DeleteNodeRequest]) (*connect.Response[v1.DeleteNodeResponse], error)
+	// CancelNodeDeletion lifts a scheduled deletion; the node stays deactivated
+	// (FAILED_PRECONDITION if none is scheduled). Rights as DeactivateNode.
+	CancelNodeDeletion(context.Context, *connect.Request[v1.CancelNodeDeletionRequest]) (*connect.Response[v1.CancelNodeDeletionResponse], error)
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -241,6 +309,24 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("SetNodeTags")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceDeactivateNodeHandler := connect.NewUnaryHandler(
+		NodeServiceDeactivateNodeProcedure,
+		svc.DeactivateNode,
+		connect.WithSchema(nodeServiceMethods.ByName("DeactivateNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceDeleteNodeHandler := connect.NewUnaryHandler(
+		NodeServiceDeleteNodeProcedure,
+		svc.DeleteNode,
+		connect.WithSchema(nodeServiceMethods.ByName("DeleteNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceCancelNodeDeletionHandler := connect.NewUnaryHandler(
+		NodeServiceCancelNodeDeletionProcedure,
+		svc.CancelNodeDeletion,
+		connect.WithSchema(nodeServiceMethods.ByName("CancelNodeDeletion")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceGetNodeProcedure:
@@ -255,6 +341,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceAllowNodeTakeoverHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeTagsProcedure:
 			nodeServiceSetNodeTagsHandler.ServeHTTP(w, r)
+		case NodeServiceDeactivateNodeProcedure:
+			nodeServiceDeactivateNodeHandler.ServeHTTP(w, r)
+		case NodeServiceDeleteNodeProcedure:
+			nodeServiceDeleteNodeHandler.ServeHTTP(w, r)
+		case NodeServiceCancelNodeDeletionProcedure:
+			nodeServiceCancelNodeDeletionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -286,4 +378,16 @@ func (UnimplementedNodeServiceHandler) AllowNodeTakeover(context.Context, *conne
 
 func (UnimplementedNodeServiceHandler) SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.SetNodeTags is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) DeactivateNode(context.Context, *connect.Request[v1.DeactivateNodeRequest]) (*connect.Response[v1.DeactivateNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.DeactivateNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) DeleteNode(context.Context, *connect.Request[v1.DeleteNodeRequest]) (*connect.Response[v1.DeleteNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.DeleteNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) CancelNodeDeletion(context.Context, *connect.Request[v1.CancelNodeDeletionRequest]) (*connect.Response[v1.CancelNodeDeletionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.NodeService.CancelNodeDeletion is not implemented"))
 }

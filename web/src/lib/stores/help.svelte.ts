@@ -15,6 +15,12 @@ const summaryLoaders: Record<Locale, () => Docs> = {
 	en: () => import('virtual:sermon-help/en/summary')
 };
 
+/** Titles only: what names the ⓘ of every page; the summaries follow on opening (M5-29). */
+const titleLoaders: Record<Locale, () => Docs> = {
+	de: () => import('virtual:sermon-help/de/titles'),
+	en: () => import('virtual:sermon-help/en/titles')
+};
+
 class HelpState {
 	/** The topic shown in the help panel, if open. */
 	topic = $state<string | undefined>(undefined);
@@ -24,6 +30,20 @@ class HelpState {
 	locale = $state<Locale | undefined>(undefined);
 	/** The language of the summaries, if loaded. */
 	summaries = $state<Locale | undefined>(undefined);
+	/** The language of the titles, if loaded. */
+	titles = $state<Locale | undefined>(undefined);
+
+	/** Loads the titles of the language (once), to name the ⓘ of a page. */
+	async loadTitles(locale: Locale): Promise<void> {
+		if (this.titles === locale || this.summaries === locale || this.locale === locale) return;
+		const docs = (await titleLoaders[locale]()).default;
+		// Summaries or full texts may have arrived meanwhile.
+		if (this.summaries === locale || this.locale === locale) return;
+		if (this.locale !== undefined) this.locale = undefined;
+		if (this.summaries !== undefined) this.summaries = undefined;
+		this.docs = docs;
+		this.titles = locale;
+	}
 
 	/** Loads the full documents of the language (once), for the help panel. */
 	async load(locale: Locale): Promise<void> {
@@ -32,6 +52,7 @@ class HelpState {
 		this.docs = docs;
 		this.locale = locale;
 		this.summaries = locale;
+		this.titles = locale;
 	}
 
 	/** Loads the summaries of the language (once), for tooltips. */
@@ -43,6 +64,7 @@ class HelpState {
 		if (this.locale !== undefined) this.locale = undefined;
 		this.docs = docs;
 		this.summaries = locale;
+		this.titles = locale;
 	}
 
 	get(topic: string): HelpDoc | undefined {

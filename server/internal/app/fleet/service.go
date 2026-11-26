@@ -72,7 +72,13 @@ type Node struct {
 	LearningSince time.Time
 	// Updates sum its last update report up (M4-15); nil before the first.
 	Updates *Updates
+	// DeactivatedAt is set while the node is deactivated, DeletionDueAt while it is scheduled for
+	// deletion (M5-29, ADR 0041).
+	DeactivatedAt, DeletionDueAt *time.Time
 }
+
+// Deactivated reports whether the node is deactivated (also when scheduled for deletion).
+func (n Node) Deactivated() bool { return n.DeactivatedAt != nil }
 
 // Updates are the counts of a node's last update report.
 type Updates struct {

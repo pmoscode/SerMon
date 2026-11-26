@@ -47,12 +47,13 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 
 	want := config.Config{
-		Mode:             config.ModeProduction,
-		HTTPAddr:         ":8080",
-		LogLevel:         slog.LevelInfo,
-		LogFormat:        config.LogFormatJSON,
-		ShutdownTimeout:  15 * time.Second,
-		OrgDeletionGrace: 30 * 24 * time.Hour,
+		Mode:              config.ModeProduction,
+		HTTPAddr:          ":8080",
+		LogLevel:          slog.LevelInfo,
+		LogFormat:         config.LogFormatJSON,
+		ShutdownTimeout:   15 * time.Second,
+		OrgDeletionGrace:  30 * 24 * time.Hour,
+		NodeDeletionGrace: 7 * 24 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -61,11 +62,12 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 	env := map[string]string{
-		"SERMON_HTTP_ADDR":          "127.0.0.1:9000",
-		"SERMON_LOG_LEVEL":          "debug",
-		"SERMON_LOG_FORMAT":         "text",
-		"SERMON_SHUTDOWN_TIMEOUT":   "3s",
-		"SERMON_ORG_DELETION_GRACE": "240h",
+		"SERMON_HTTP_ADDR":           "127.0.0.1:9000",
+		"SERMON_LOG_LEVEL":           "debug",
+		"SERMON_LOG_FORMAT":          "text",
+		"SERMON_SHUTDOWN_TIMEOUT":    "3s",
+		"SERMON_ORG_DELETION_GRACE":  "240h",
+		"SERMON_NODE_DELETION_GRACE": "48h",
 	}
 
 	cfg, err := config.Load(fakeSource(env, nil))
@@ -74,12 +76,13 @@ func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 	}
 
 	want := config.Config{
-		Mode:             config.ModeProduction,
-		HTTPAddr:         "127.0.0.1:9000",
-		LogLevel:         slog.LevelDebug,
-		LogFormat:        config.LogFormatText,
-		ShutdownTimeout:  3 * time.Second,
-		OrgDeletionGrace: 240 * time.Hour,
+		Mode:              config.ModeProduction,
+		HTTPAddr:          "127.0.0.1:9000",
+		LogLevel:          slog.LevelDebug,
+		LogFormat:         config.LogFormatText,
+		ShutdownTimeout:   3 * time.Second,
+		OrgDeletionGrace:  240 * time.Hour,
+		NodeDeletionGrace: 48 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -576,6 +579,16 @@ func TestLoad_DatabaseSizeLimit(t *testing.T) {
 func TestLoad_DeletionGraceHasAFloor(t *testing.T) {
 	for value, ok := range map[string]bool{"168h": true, "167h": false, "1h": false, "-1h": false, "x": false} {
 		_, err := config.Load(fakeSource(map[string]string{"SERMON_ORG_DELETION_GRACE": value}, nil))
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", value, err)
+		}
+	}
+}
+
+// The deletion grace of nodes is at least 24 hours (ADR 0041, M5-29).
+func TestLoad_NodeDeletionGraceHasAFloor(t *testing.T) {
+	for value, ok := range map[string]bool{"24h": true, "23h59m": false, "1h": false, "-1h": false, "x": false} {
+		_, err := config.Load(fakeSource(map[string]string{"SERMON_NODE_DELETION_GRACE": value}, nil))
 		if (err == nil) != ok {
 			t.Errorf("%s: %v", value, err)
 		}

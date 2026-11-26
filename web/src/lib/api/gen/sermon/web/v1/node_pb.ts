@@ -14,7 +14,128 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sermon/web/v1/node.proto.
  */
 export const file_sermon_web_v1_node: GenFile = /*@__PURE__*/
-  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEijQEKElNldE5vZGVUYWdzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEjkKBHRhZ3MYAiADKAsyKy5zZXJtb24ud2ViLnYxLlNldE5vZGVUYWdzUmVxdWVzdC5UYWdzRW50cnkaKwoJVGFnc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiFQoTU2V0Tm9kZVRhZ3NSZXNwb25zZSIkChFVbmxvY2tOb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIhQKElVubG9ja05vZGVSZXNwb25zZSIrChhBbGxvd05vZGVUYWtlb3ZlclJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSJGChlBbGxvd05vZGVUYWtlb3ZlclJlc3BvbnNlEikKBXVudGlsGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKLAQoVUm90YXRlTm9kZUtleXNSZXF1ZXN0EicKBW5vZGVzGAEgASgLMhYuc2VybW9uLndlYi52MS5Ob2RlSURzSAASEgoIZ3JvdXBfaWQYAiABKAlIABIWCgxvcmdhbml6YXRpb24YAyABKAhIABITCgtyZXZva2Vfb25seRgEIAEoCEIICgZ0YXJnZXQiFgoHTm9kZUlEcxILCgNpZHMYASADKAkiSgoWUm90YXRlTm9kZUtleXNSZXNwb25zZRIOCgZvbmxpbmUYASABKAUSDwoHb2ZmbGluZRgCIAEoBRIPCgdyZXZva2VkGAMgASgFIiEKDkdldE5vZGVSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkiNAoPR2V0Tm9kZVJlc3BvbnNlEiEKBG5vZGUYASABKAsyEy5zZXJtb24ud2ViLnYxLk5vZGUiqgUKBE5vZGUSCgoCaWQYASABKAkSEAoIaG9zdG5hbWUYAiABKAkSEAoIZ3JvdXBfaWQYAyABKAkSEgoKZ3JvdXBfbmFtZRgEIAEoCRINCgVvc19pZBgFIAEoCRISCgpvc192ZXJzaW9uGAYgASgJEhYKDmtlcm5lbF9yZWxlYXNlGAcgASgJEhQKDGFyY2hpdGVjdHVyZRgIIAEoCRIRCgljcHVfY291bnQYCSABKA0SFAoMbWVtb3J5X2J5dGVzGAogASgEEhUKDWFnZW50X3ZlcnNpb24YCyABKAkSLwoLZW5yb2xsZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjAKDGxhc3Rfc2Vlbl9hdBgNIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGb25saW5lGA4gASgIEioKB2ZpZ3VyZXMYDyABKAsyGS5zZXJtb24ud2ViLnYxLktleUZpZ3VyZXMSLQoJbG9ja2VkX2F0GBAgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBITCgtsb2NrX3JlYXNvbhgRIAEoCRIPCgdsYXN0X2lwGBIgASgJEjIKDnRha2VvdmVyX3VudGlsGBMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIrCgR0YWdzGBQgAygLMh0uc2VybW9uLndlYi52MS5Ob2RlLlRhZ3NFbnRyeRI2Cg9zZWN1cml0eV9zb3VyY2UYFSABKA4yHS5zZXJtb24ud2ViLnYxLlNlY3VyaXR5U291cmNlEhMKC2xvZ3NfdmV0b2VkGBYgASgIGisKCVRhZ3NFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIikKFkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSJJChdMaXN0RmlsZXN5c3RlbXNSZXNwb25zZRIuCgtmaWxlc3lzdGVtcxgBIAMoCzIZLnNlcm1vbi53ZWIudjEuRmlsZXN5c3RlbSLbAQoKRmlsZXN5c3RlbRISCgptb3VudHBvaW50GAEgASgJEhIKCnNpemVfYnl0ZXMYAiABKAQSEgoKdXNlZF9ieXRlcxgDIAEoBBITCgthdmFpbF9ieXRlcxgEIAEoBBISCgp1c2VkX3JhdGlvGAUgASgBEhAKCHJlYWRvbmx5GAYgASgIEhQKDGlub2Rlc190b3RhbBgHIAEoBBITCgtpbm9kZXNfdXNlZBgIIAEoBBIrCgdmdWxsX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCqwAQoOU2VjdXJpdHlTb3VyY2USHwobU0VDVVJJVFlfU09VUkNFX1VOU1BFQ0lGSUVEEAASGwoXU0VDVVJJVFlfU09VUkNFX0pPVVJOQUwQARIhCh1TRUNVUklUWV9TT1VSQ0VfRklMRV9WRVJJRklFRBACEiMKH1NFQ1VSSVRZX1NPVVJDRV9GSUxFX1VOVkVSSUZJRUQQAxIYChRTRUNVUklUWV9TT1VSQ0VfTk9ORRAEMqkECgtOb2RlU2VydmljZRJICgdHZXROb2RlEh0uc2VybW9uLndlYi52MS5HZXROb2RlUmVxdWVzdBoeLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVJlc3BvbnNlEmAKD0xpc3RGaWxlc3lzdGVtcxIlLnNlcm1vbi53ZWIudjEuTGlzdEZpbGVzeXN0ZW1zUmVxdWVzdBomLnNlcm1vbi53ZWIudjEuTGlzdEZpbGVzeXN0ZW1zUmVzcG9uc2USXQoOUm90YXRlTm9kZUtleXMSJC5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVxdWVzdBolLnNlcm1vbi53ZWIudjEuUm90YXRlTm9kZUtleXNSZXNwb25zZRJRCgpVbmxvY2tOb2RlEiAuc2VybW9uLndlYi52MS5VbmxvY2tOb2RlUmVxdWVzdBohLnNlcm1vbi53ZWIudjEuVW5sb2NrTm9kZVJlc3BvbnNlEmYKEUFsbG93Tm9kZVRha2VvdmVyEicuc2VybW9uLndlYi52MS5BbGxvd05vZGVUYWtlb3ZlclJlcXVlc3QaKC5zZXJtb24ud2ViLnYxLkFsbG93Tm9kZVRha2VvdmVyUmVzcG9uc2USVAoLU2V0Tm9kZVRhZ3MSIS5zZXJtb24ud2ViLnYxLlNldE5vZGVUYWdzUmVxdWVzdBoiLnNlcm1vbi53ZWIudjEuU2V0Tm9kZVRhZ3NSZXNwb25zZUK4AQoRY29tLnNlcm1vbi53ZWIudjFCCU5vZGVQcm90b1ABWkJnaXRodWIuY29tL3Btb3Njb2RlL1Nlck1vbi9zZXJ2ZXIvaW50ZXJuYWwvZ2VuL3Nlcm1vbi93ZWIvdjE7d2VidjGiAgNTV1iqAg1TZXJtb24uV2ViLlYxygINU2VybW9uXFdlYlxWMeICGVNlcm1vblxXZWJcVjFcR1BCTWV0YWRhdGHqAg9TZXJtb246OldlYjo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_sermon_web_v1_fleet]);
+  fileDesc("ChhzZXJtb24vd2ViL3YxL25vZGUucHJvdG8SDXNlcm1vbi53ZWIudjEiKAoVRGVhY3RpdmF0ZU5vZGVSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkiGAoWRGVhY3RpdmF0ZU5vZGVSZXNwb25zZSI+ChFEZWxldGVOb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhgKEGNvbmZpcm1faG9zdG5hbWUYAiABKAkiSQoSRGVsZXRlTm9kZVJlc3BvbnNlEjMKD2RlbGV0aW9uX2R1ZV9hdBgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiLAoZQ2FuY2VsTm9kZURlbGV0aW9uUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIhwKGkNhbmNlbE5vZGVEZWxldGlvblJlc3BvbnNlIo0BChJTZXROb2RlVGFnc1JlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCRI5CgR0YWdzGAIgAygLMisuc2VybW9uLndlYi52MS5TZXROb2RlVGFnc1JlcXVlc3QuVGFnc0VudHJ5GisKCVRhZ3NFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIhUKE1NldE5vZGVUYWdzUmVzcG9uc2UiJAoRVW5sb2NrTm9kZVJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSIUChJVbmxvY2tOb2RlUmVzcG9uc2UiKwoYQWxsb3dOb2RlVGFrZW92ZXJSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkiRgoZQWxsb3dOb2RlVGFrZW92ZXJSZXNwb25zZRIpCgV1bnRpbBgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiiwEKFVJvdGF0ZU5vZGVLZXlzUmVxdWVzdBInCgVub2RlcxgBIAEoCzIWLnNlcm1vbi53ZWIudjEuTm9kZUlEc0gAEhIKCGdyb3VwX2lkGAIgASgJSAASFgoMb3JnYW5pemF0aW9uGAMgASgISAASEwoLcmV2b2tlX29ubHkYBCABKAhCCAoGdGFyZ2V0IhYKB05vZGVJRHMSCwoDaWRzGAEgAygJIkoKFlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2USDgoGb25saW5lGAEgASgFEg8KB29mZmxpbmUYAiABKAUSDwoHcmV2b2tlZBgDIAEoBSIhCg5HZXROb2RlUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJIjQKD0dldE5vZGVSZXNwb25zZRIhCgRub2RlGAEgASgLMhMuc2VybW9uLndlYi52MS5Ob2RlIpMGCgROb2RlEgoKAmlkGAEgASgJEhAKCGhvc3RuYW1lGAIgASgJEhAKCGdyb3VwX2lkGAMgASgJEhIKCmdyb3VwX25hbWUYBCABKAkSDQoFb3NfaWQYBSABKAkSEgoKb3NfdmVyc2lvbhgGIAEoCRIWCg5rZXJuZWxfcmVsZWFzZRgHIAEoCRIUCgxhcmNoaXRlY3R1cmUYCCABKAkSEQoJY3B1X2NvdW50GAkgASgNEhQKDG1lbW9yeV9ieXRlcxgKIAEoBBIVCg1hZ2VudF92ZXJzaW9uGAsgASgJEi8KC2Vucm9sbGVkX2F0GAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxsYXN0X3NlZW5fYXQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBm9ubGluZRgOIAEoCBIqCgdmaWd1cmVzGA8gASgLMhkuc2VybW9uLndlYi52MS5LZXlGaWd1cmVzEi0KCWxvY2tlZF9hdBgQIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEwoLbG9ja19yZWFzb24YESABKAkSDwoHbGFzdF9pcBgSIAEoCRIyCg50YWtlb3Zlcl91bnRpbBgTIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASKwoEdGFncxgUIAMoCzIdLnNlcm1vbi53ZWIudjEuTm9kZS5UYWdzRW50cnkSNgoPc2VjdXJpdHlfc291cmNlGBUgASgOMh0uc2VybW9uLndlYi52MS5TZWN1cml0eVNvdXJjZRITCgtsb2dzX3ZldG9lZBgWIAEoCBIyCg5kZWFjdGl2YXRlZF9hdBgXIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMwoPZGVsZXRpb25fZHVlX2F0GBggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBorCglUYWdzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASIpChZMaXN0RmlsZXN5c3RlbXNSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkiSQoXTGlzdEZpbGVzeXN0ZW1zUmVzcG9uc2USLgoLZmlsZXN5c3RlbXMYASADKAsyGS5zZXJtb24ud2ViLnYxLkZpbGVzeXN0ZW0i2wEKCkZpbGVzeXN0ZW0SEgoKbW91bnRwb2ludBgBIAEoCRISCgpzaXplX2J5dGVzGAIgASgEEhIKCnVzZWRfYnl0ZXMYAyABKAQSEwoLYXZhaWxfYnl0ZXMYBCABKAQSEgoKdXNlZF9yYXRpbxgFIAEoARIQCghyZWFkb25seRgGIAEoCBIUCgxpbm9kZXNfdG90YWwYByABKAQSEwoLaW5vZGVzX3VzZWQYCCABKAQSKwoHZnVsbF9hdBgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAqsAEKDlNlY3VyaXR5U291cmNlEh8KG1NFQ1VSSVRZX1NPVVJDRV9VTlNQRUNJRklFRBAAEhsKF1NFQ1VSSVRZX1NPVVJDRV9KT1VSTkFMEAESIQodU0VDVVJJVFlfU09VUkNFX0ZJTEVfVkVSSUZJRUQQAhIjCh9TRUNVUklUWV9TT1VSQ0VfRklMRV9VTlZFUklGSUVEEAMSGAoUU0VDVVJJVFlfU09VUkNFX05PTkUQBDLGBgoLTm9kZVNlcnZpY2USSAoHR2V0Tm9kZRIdLnNlcm1vbi53ZWIudjEuR2V0Tm9kZVJlcXVlc3QaHi5zZXJtb24ud2ViLnYxLkdldE5vZGVSZXNwb25zZRJgCg9MaXN0RmlsZXN5c3RlbXMSJS5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1JlcXVlc3QaJi5zZXJtb24ud2ViLnYxLkxpc3RGaWxlc3lzdGVtc1Jlc3BvbnNlEl0KDlJvdGF0ZU5vZGVLZXlzEiQuc2VybW9uLndlYi52MS5Sb3RhdGVOb2RlS2V5c1JlcXVlc3QaJS5zZXJtb24ud2ViLnYxLlJvdGF0ZU5vZGVLZXlzUmVzcG9uc2USUQoKVW5sb2NrTm9kZRIgLnNlcm1vbi53ZWIudjEuVW5sb2NrTm9kZVJlcXVlc3QaIS5zZXJtb24ud2ViLnYxLlVubG9ja05vZGVSZXNwb25zZRJmChFBbGxvd05vZGVUYWtlb3ZlchInLnNlcm1vbi53ZWIudjEuQWxsb3dOb2RlVGFrZW92ZXJSZXF1ZXN0Giguc2VybW9uLndlYi52MS5BbGxvd05vZGVUYWtlb3ZlclJlc3BvbnNlElQKC1NldE5vZGVUYWdzEiEuc2VybW9uLndlYi52MS5TZXROb2RlVGFnc1JlcXVlc3QaIi5zZXJtb24ud2ViLnYxLlNldE5vZGVUYWdzUmVzcG9uc2USXQoORGVhY3RpdmF0ZU5vZGUSJC5zZXJtb24ud2ViLnYxLkRlYWN0aXZhdGVOb2RlUmVxdWVzdBolLnNlcm1vbi53ZWIudjEuRGVhY3RpdmF0ZU5vZGVSZXNwb25zZRJRCgpEZWxldGVOb2RlEiAuc2VybW9uLndlYi52MS5EZWxldGVOb2RlUmVxdWVzdBohLnNlcm1vbi53ZWIudjEuRGVsZXRlTm9kZVJlc3BvbnNlEmkKEkNhbmNlbE5vZGVEZWxldGlvbhIoLnNlcm1vbi53ZWIudjEuQ2FuY2VsTm9kZURlbGV0aW9uUmVxdWVzdBopLnNlcm1vbi53ZWIudjEuQ2FuY2VsTm9kZURlbGV0aW9uUmVzcG9uc2VCuAEKEWNvbS5zZXJtb24ud2ViLnYxQglOb2RlUHJvdG9QAVpCZ2l0aHViLmNvbS9wbW9zY29kZS9TZXJNb24vc2VydmVyL2ludGVybmFsL2dlbi9zZXJtb24vd2ViL3YxO3dlYnYxogIDU1dYqgINU2VybW9uLldlYi5WMcoCDVNlcm1vblxXZWJcVjHiAhlTZXJtb25cV2ViXFYxXEdQQk1ldGFkYXRh6gIPU2VybW9uOjpXZWI6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_sermon_web_v1_fleet]);
+
+/**
+ * DeactivateNodeRequest names the node.
+ *
+ * @generated from message sermon.web.v1.DeactivateNodeRequest
+ */
+export type DeactivateNodeRequest = Message<"sermon.web.v1.DeactivateNodeRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.DeactivateNodeRequest.
+ * Use `create(DeactivateNodeRequestSchema)` to create a new message.
+ */
+export const DeactivateNodeRequestSchema: GenMessage<DeactivateNodeRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 0);
+
+/**
+ * DeactivateNodeResponse is empty.
+ *
+ * @generated from message sermon.web.v1.DeactivateNodeResponse
+ */
+export type DeactivateNodeResponse = Message<"sermon.web.v1.DeactivateNodeResponse"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.DeactivateNodeResponse.
+ * Use `create(DeactivateNodeResponseSchema)` to create a new message.
+ */
+export const DeactivateNodeResponseSchema: GenMessage<DeactivateNodeResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 1);
+
+/**
+ * DeleteNodeRequest names the node and confirms it with its host name.
+ *
+ * @generated from message sermon.web.v1.DeleteNodeRequest
+ */
+export type DeleteNodeRequest = Message<"sermon.web.v1.DeleteNodeRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * confirm_hostname is the node's host name, typed by the admin.
+   *
+   * @generated from field: string confirm_hostname = 2;
+   */
+  confirmHostname: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.DeleteNodeRequest.
+ * Use `create(DeleteNodeRequestSchema)` to create a new message.
+ */
+export const DeleteNodeRequestSchema: GenMessage<DeleteNodeRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 2);
+
+/**
+ * DeleteNodeResponse says when the node is deleted.
+ *
+ * @generated from message sermon.web.v1.DeleteNodeResponse
+ */
+export type DeleteNodeResponse = Message<"sermon.web.v1.DeleteNodeResponse"> & {
+  /**
+   * deletion_due_at is when the node and its data are deleted.
+   *
+   * @generated from field: google.protobuf.Timestamp deletion_due_at = 1;
+   */
+  deletionDueAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message sermon.web.v1.DeleteNodeResponse.
+ * Use `create(DeleteNodeResponseSchema)` to create a new message.
+ */
+export const DeleteNodeResponseSchema: GenMessage<DeleteNodeResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 3);
+
+/**
+ * CancelNodeDeletionRequest names the node.
+ *
+ * @generated from message sermon.web.v1.CancelNodeDeletionRequest
+ */
+export type CancelNodeDeletionRequest = Message<"sermon.web.v1.CancelNodeDeletionRequest"> & {
+  /**
+   * node_id is the node UUID.
+   *
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message sermon.web.v1.CancelNodeDeletionRequest.
+ * Use `create(CancelNodeDeletionRequestSchema)` to create a new message.
+ */
+export const CancelNodeDeletionRequestSchema: GenMessage<CancelNodeDeletionRequest> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 4);
+
+/**
+ * CancelNodeDeletionResponse is empty.
+ *
+ * @generated from message sermon.web.v1.CancelNodeDeletionResponse
+ */
+export type CancelNodeDeletionResponse = Message<"sermon.web.v1.CancelNodeDeletionResponse"> & {
+};
+
+/**
+ * Describes the message sermon.web.v1.CancelNodeDeletionResponse.
+ * Use `create(CancelNodeDeletionResponseSchema)` to create a new message.
+ */
+export const CancelNodeDeletionResponseSchema: GenMessage<CancelNodeDeletionResponse> = /*@__PURE__*/
+  messageDesc(file_sermon_web_v1_node, 5);
 
 /**
  * SetNodeTagsRequest names the node and its new tags.
@@ -43,7 +164,7 @@ export type SetNodeTagsRequest = Message<"sermon.web.v1.SetNodeTagsRequest"> & {
  * Use `create(SetNodeTagsRequestSchema)` to create a new message.
  */
 export const SetNodeTagsRequestSchema: GenMessage<SetNodeTagsRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 0);
+  messageDesc(file_sermon_web_v1_node, 6);
 
 /**
  * SetNodeTagsResponse is empty.
@@ -58,7 +179,7 @@ export type SetNodeTagsResponse = Message<"sermon.web.v1.SetNodeTagsResponse"> &
  * Use `create(SetNodeTagsResponseSchema)` to create a new message.
  */
 export const SetNodeTagsResponseSchema: GenMessage<SetNodeTagsResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 1);
+  messageDesc(file_sermon_web_v1_node, 7);
 
 /**
  * UnlockNodeRequest names the node.
@@ -79,7 +200,7 @@ export type UnlockNodeRequest = Message<"sermon.web.v1.UnlockNodeRequest"> & {
  * Use `create(UnlockNodeRequestSchema)` to create a new message.
  */
 export const UnlockNodeRequestSchema: GenMessage<UnlockNodeRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 2);
+  messageDesc(file_sermon_web_v1_node, 8);
 
 /**
  * UnlockNodeResponse is empty.
@@ -94,7 +215,7 @@ export type UnlockNodeResponse = Message<"sermon.web.v1.UnlockNodeResponse"> & {
  * Use `create(UnlockNodeResponseSchema)` to create a new message.
  */
 export const UnlockNodeResponseSchema: GenMessage<UnlockNodeResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 3);
+  messageDesc(file_sermon_web_v1_node, 9);
 
 /**
  * AllowNodeTakeoverRequest names the node.
@@ -115,7 +236,7 @@ export type AllowNodeTakeoverRequest = Message<"sermon.web.v1.AllowNodeTakeoverR
  * Use `create(AllowNodeTakeoverRequestSchema)` to create a new message.
  */
 export const AllowNodeTakeoverRequestSchema: GenMessage<AllowNodeTakeoverRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 4);
+  messageDesc(file_sermon_web_v1_node, 10);
 
 /**
  * AllowNodeTakeoverResponse says how long the takeover is allowed.
@@ -136,7 +257,7 @@ export type AllowNodeTakeoverResponse = Message<"sermon.web.v1.AllowNodeTakeover
  * Use `create(AllowNodeTakeoverResponseSchema)` to create a new message.
  */
 export const AllowNodeTakeoverResponseSchema: GenMessage<AllowNodeTakeoverResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 5);
+  messageDesc(file_sermon_web_v1_node, 11);
 
 /**
  * RotateNodeKeysRequest selects the nodes.
@@ -189,7 +310,7 @@ export type RotateNodeKeysRequest = Message<"sermon.web.v1.RotateNodeKeysRequest
  * Use `create(RotateNodeKeysRequestSchema)` to create a new message.
  */
 export const RotateNodeKeysRequestSchema: GenMessage<RotateNodeKeysRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 6);
+  messageDesc(file_sermon_web_v1_node, 12);
 
 /**
  * NodeIDs is a list of node UUIDs.
@@ -210,7 +331,7 @@ export type NodeIDs = Message<"sermon.web.v1.NodeIDs"> & {
  * Use `create(NodeIDsSchema)` to create a new message.
  */
 export const NodeIDsSchema: GenMessage<NodeIDs> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 7);
+  messageDesc(file_sermon_web_v1_node, 13);
 
 /**
  * RotateNodeKeysResponse reports what happened.
@@ -246,7 +367,7 @@ export type RotateNodeKeysResponse = Message<"sermon.web.v1.RotateNodeKeysRespon
  * Use `create(RotateNodeKeysResponseSchema)` to create a new message.
  */
 export const RotateNodeKeysResponseSchema: GenMessage<RotateNodeKeysResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 8);
+  messageDesc(file_sermon_web_v1_node, 14);
 
 /**
  * GetNodeRequest names the node.
@@ -267,7 +388,7 @@ export type GetNodeRequest = Message<"sermon.web.v1.GetNodeRequest"> & {
  * Use `create(GetNodeRequestSchema)` to create a new message.
  */
 export const GetNodeRequestSchema: GenMessage<GetNodeRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 9);
+  messageDesc(file_sermon_web_v1_node, 15);
 
 /**
  * GetNodeResponse holds the node.
@@ -288,7 +409,7 @@ export type GetNodeResponse = Message<"sermon.web.v1.GetNodeResponse"> & {
  * Use `create(GetNodeResponseSchema)` to create a new message.
  */
 export const GetNodeResponseSchema: GenMessage<GetNodeResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 10);
+  messageDesc(file_sermon_web_v1_node, 16);
 
 /**
  * Node are the details of a node.
@@ -453,6 +574,21 @@ export type Node = Message<"sermon.web.v1.Node"> & {
    * @generated from field: bool logs_vetoed = 22;
    */
   logsVetoed: boolean;
+
+  /**
+   * deactivated_at is set while the node is deactivated (M5-29): its certificates are revoked,
+   * alerts don't evaluate it.
+   *
+   * @generated from field: google.protobuf.Timestamp deactivated_at = 23;
+   */
+  deactivatedAt?: Timestamp | undefined;
+
+  /**
+   * deletion_due_at is set while the node is scheduled for deletion: then it and its data go.
+   *
+   * @generated from field: google.protobuf.Timestamp deletion_due_at = 24;
+   */
+  deletionDueAt?: Timestamp | undefined;
 };
 
 /**
@@ -460,7 +596,7 @@ export type Node = Message<"sermon.web.v1.Node"> & {
  * Use `create(NodeSchema)` to create a new message.
  */
 export const NodeSchema: GenMessage<Node> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 11);
+  messageDesc(file_sermon_web_v1_node, 17);
 
 /**
  * ListFilesystemsRequest names the node.
@@ -481,7 +617,7 @@ export type ListFilesystemsRequest = Message<"sermon.web.v1.ListFilesystemsReque
  * Use `create(ListFilesystemsRequestSchema)` to create a new message.
  */
 export const ListFilesystemsRequestSchema: GenMessage<ListFilesystemsRequest> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 12);
+  messageDesc(file_sermon_web_v1_node, 18);
 
 /**
  * ListFilesystemsResponse holds the file systems.
@@ -502,7 +638,7 @@ export type ListFilesystemsResponse = Message<"sermon.web.v1.ListFilesystemsResp
  * Use `create(ListFilesystemsResponseSchema)` to create a new message.
  */
 export const ListFilesystemsResponseSchema: GenMessage<ListFilesystemsResponse> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 13);
+  messageDesc(file_sermon_web_v1_node, 19);
 
 /**
  * Filesystem is one mounted file system with current values from the last minute.
@@ -579,7 +715,7 @@ export type Filesystem = Message<"sermon.web.v1.Filesystem"> & {
  * Use `create(FilesystemSchema)` to create a new message.
  */
 export const FilesystemSchema: GenMessage<Filesystem> = /*@__PURE__*/
-  messageDesc(file_sermon_web_v1_node, 14);
+  messageDesc(file_sermon_web_v1_node, 20);
 
 /**
  * SecuritySource is where the agent of a node finds the log lines for security events.
@@ -707,6 +843,42 @@ export const NodeService: GenService<{
     methodKind: "unary";
     input: typeof SetNodeTagsRequestSchema;
     output: typeof SetNodeTagsResponseSchema;
+  },
+  /**
+   * DeactivateNode deactivates a node (M5-29, ADR 0041): all its certificates are revoked and its
+   * session ends, its data stays, alerts no longer evaluate it. It comes back by an allowed
+   * takeover and a new enrollment. Needs admin on the node's group and a recent
+   * re-authentication; unknown or foreign nodes are NOT_FOUND.
+   *
+   * @generated from rpc sermon.web.v1.NodeService.DeactivateNode
+   */
+  deactivateNode: {
+    methodKind: "unary";
+    input: typeof DeactivateNodeRequestSchema;
+    output: typeof DeactivateNodeResponseSchema;
+  },
+  /**
+   * DeleteNode deactivates a node and deletes it with its metrics, events, alerts and logs after
+   * the grace (default 7 days); the host name confirms it (INVALID_ARGUMENT otherwise). Rights as
+   * DeactivateNode.
+   *
+   * @generated from rpc sermon.web.v1.NodeService.DeleteNode
+   */
+  deleteNode: {
+    methodKind: "unary";
+    input: typeof DeleteNodeRequestSchema;
+    output: typeof DeleteNodeResponseSchema;
+  },
+  /**
+   * CancelNodeDeletion lifts a scheduled deletion; the node stays deactivated
+   * (FAILED_PRECONDITION if none is scheduled). Rights as DeactivateNode.
+   *
+   * @generated from rpc sermon.web.v1.NodeService.CancelNodeDeletion
+   */
+  cancelNodeDeletion: {
+    methodKind: "unary";
+    input: typeof CancelNodeDeletionRequestSchema;
+    output: typeof CancelNodeDeletionResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_sermon_web_v1_node, 0);

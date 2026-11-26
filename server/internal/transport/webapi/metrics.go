@@ -144,7 +144,7 @@ func (h *FleetHandler) GetFleetSummary(ctx context.Context, req *connect.Request
 		v := &webv1.NodeSummary{
 			NodeId: n.ID.String(), Hostname: n.Hostname, GroupId: n.Group.String(), GroupName: n.GroupName,
 			OsId: n.OSID, OsVersion: n.OSVersion, Online: n.Online, LastSeenAt: optionalTime(n.LastSeenAt), Figures: figuresView(n.Figures),
-			Tags: n.Tags, LogsVetoed: n.LogsVetoed,
+			Tags: n.Tags, LogsVetoed: n.LogsVetoed, Deactivated: n.Deactivated(),
 		}
 		if u := n.Updates; u != nil {
 			v.UpdateStatus, v.SecurityUpdates, v.Updates, v.RebootRequired = updateStatuses[u.Status], u.Security, u.Total, u.RebootRequired
@@ -175,6 +175,7 @@ func (h *NodeHandler) GetNode(ctx context.Context, req *connect.Request[webv1.Ge
 		EnrolledAt: timestamppb.New(n.EnrolledAt), LastSeenAt: optionalTime(n.LastSeenAt), Online: n.Online, Figures: figuresView(n.Figures),
 		LockedAt: optionalTime(n.LockedAt), LockReason: n.LockReason, LastIp: n.LastIP, TakeoverUntil: optionalTime(n.TakeoverUntil),
 		Tags: n.Tags, SecuritySource: securitySourceView[n.SecuritySource], LogsVetoed: n.LogsVetoed,
+		DeactivatedAt: optionalTime(n.DeactivatedAt), DeletionDueAt: optionalTime(n.DeletionDueAt),
 	}}), nil
 }
 

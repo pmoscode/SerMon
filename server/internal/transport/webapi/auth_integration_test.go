@@ -242,7 +242,8 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(pg), authz.NewPolicy(), time.Now, access.NewID), slog.New(slog.DiscardHandler)),
 		Node: webapi.NewNodeHandler(rotation.NewService(postgres.NewRotationStore(pg), ca, time.Now,
 			rotation.WithOnDemand(postgres.NewRotationStore(pg), agentapi.NewSessions(0), authz.NewPolicy())), nodes, slog.New(slog.DiscardHandler)).
-			WithTagger(fleet.NewTagger(postgres.NewFleetStore(pg), authz.NewPolicy(), time.Now)),
+			WithTagger(fleet.NewTagger(postgres.NewFleetStore(pg), authz.NewPolicy(), time.Now)).
+			WithLifecycle(mustNodeLife(t, pg)),
 		AgentCA: webapi.NewAgentCAHandler(ca, slog.New(slog.DiscardHandler)),
 		InstanceAudit: webapi.NewInstanceAuditHandler(
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(pg), authz.NewPolicy()), slog.New(slog.DiscardHandler)),

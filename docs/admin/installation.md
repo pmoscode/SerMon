@@ -227,6 +227,12 @@ allen Daten (Prüfung stündlich, [ADR 0029](../adr/0029-organisationen-verwalte
 setzt `SERMON_ORG_DELETION_GRACE` (Standard `720h` = 30 Tage, mindestens `168h` = 7 Tage). Wer das Audit-Log einer
 Organisation aufbewahren muss, lädt es während der Sperre auf der Seite „Organisationen“ herunter.
 
+## Nodes löschen
+
+Ein gelöschter Node bleibt deaktiviert, bis seine Frist abläuft; danach löscht der Server ihn mit Metriken, Events,
+Alerts und Logs (Prüfung stündlich, [ADR 0041](../adr/0041-nodes-deaktivieren-loeschen.md)). Die Frist setzt
+`SERMON_NODE_DELETION_GRACE` (Standard `168h` = 7 Tage, mindestens `24h`).
+
 ## Wenn die Standardnetze kollidieren
 
 Das Netz `edge` nutzt `172.30.78.0/24`, Caddy hat darin die feste Adresse `172.30.78.10`, dynamische Adressen kommen

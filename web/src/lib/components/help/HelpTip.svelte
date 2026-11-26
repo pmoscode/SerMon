@@ -24,11 +24,16 @@
 	const doc = $derived(helpState.get(topic));
 
 	$effect(() => {
-		void helpState.loadSummaries(localeState.current);
+		void helpState.loadTitles(localeState.current);
 	});
 
 	async function toggle() {
-		Popup ??= (await import('./HelpTipPopup.svelte')).default as Popup;
+		// The summary comes with the first opening; the titles name the button (budget, M5-29).
+		const [popup] = await Promise.all([
+			import('./HelpTipPopup.svelte'),
+			helpState.loadSummaries(localeState.current)
+		]);
+		Popup ??= popup.default as Popup;
 		open = !open;
 	}
 

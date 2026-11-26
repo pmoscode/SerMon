@@ -16,7 +16,14 @@
 		onSelect: (s: Status | '') => void;
 	} = $props();
 
-	const order: Status[] = ['critical', 'warning', 'offline', 'ok'];
+	// Deactivated nodes (M5-29) only when there are any.
+	const order = $derived<Status[]>([
+		'critical',
+		'warning',
+		'offline',
+		'ok',
+		...(counts.deactivated > 0 ? (['deactivated'] as const) : [])
+	]);
 </script>
 
 <section aria-label={m.fleet_summary()} class="flex flex-wrap gap-2">

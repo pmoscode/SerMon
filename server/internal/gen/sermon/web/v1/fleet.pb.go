@@ -176,8 +176,10 @@ type NodeSummary struct {
 	Updates uint32 `protobuf:"varint,14,opt,name=updates,proto3" json:"updates,omitempty"`
 	// reboot_required: it needs a reboot to use what is installed.
 	RebootRequired bool `protobuf:"varint,15,opt,name=reboot_required,json=rebootRequired,proto3" json:"reboot_required,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// deactivated is set while the node is deactivated or scheduled for deletion (M5-29).
+	Deactivated   bool `protobuf:"varint,16,opt,name=deactivated,proto3" json:"deactivated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeSummary) Reset() {
@@ -315,6 +317,13 @@ func (x *NodeSummary) GetRebootRequired() bool {
 	return false
 }
 
+func (x *NodeSummary) GetDeactivated() bool {
+	if x != nil {
+		return x.Deactivated
+	}
+	return false
+}
+
 // KeyFigures are current values of a node from the last minute. Ratios are 0..1.
 type KeyFigures struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -426,7 +435,7 @@ const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x16\n" +
 	"\x06online\x18\x02 \x01(\x05R\x06online\x12\x18\n" +
 	"\aoffline\x18\x03 \x01(\x05R\aoffline\x120\n" +
-	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xff\x04\n" +
+	"\x05nodes\x18\x04 \x03(\v2\x1a.sermon.web.v1.NodeSummaryR\x05nodes\"\xa1\x05\n" +
 	"\vNodeSummary\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
@@ -447,7 +456,8 @@ const file_sermon_web_v1_fleet_proto_rawDesc = "" +
 	"\rupdate_status\x18\f \x01(\x0e2\x1b.sermon.web.v1.UpdateStatusR\fupdateStatus\x12)\n" +
 	"\x10security_updates\x18\r \x01(\rR\x0fsecurityUpdates\x12\x18\n" +
 	"\aupdates\x18\x0e \x01(\rR\aupdates\x12'\n" +
-	"\x0freboot_required\x18\x0f \x01(\bR\x0erebootRequired\x1a7\n" +
+	"\x0freboot_required\x18\x0f \x01(\bR\x0erebootRequired\x12 \n" +
+	"\vdeactivated\x18\x10 \x01(\bR\vdeactivated\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcd\x04\n" +

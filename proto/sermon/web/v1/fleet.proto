@@ -67,6 +67,8 @@ message NodeSummary {
   uint32 updates = 14;
   // reboot_required: it needs a reboot to use what is installed.
   bool reboot_required = 15;
+  // deactivated is set while the node is deactivated or scheduled for deletion (M5-29).
+  bool deactivated = 16;
 }
 
 // KeyFigures are current values of a node from the last minute. Ratios are 0..1.

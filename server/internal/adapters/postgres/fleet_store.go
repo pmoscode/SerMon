@@ -51,7 +51,7 @@ func (s *FleetStore) List(ctx context.Context, scope tenant.Scope) ([]fleet.Node
 				AgentVersion: r.AgentVersion, EnrolledAt: r.CreatedAt, LastSeenAt: r.LastSeenAt,
 				LockedAt: r.LockedAt, LockReason: r.LockReason, LastIP: r.LastIp, TakeoverUntil: r.TakeoverUntil,
 				Tags: tags, SecuritySource: secevent.Source(r.SecuritySource), LogsVetoed: r.LogsVetoed,
-				LearningSince: r.LearningSince,
+				LearningSince: r.LearningSince, DeactivatedAt: r.DeactivatedAt, DeletionDueAt: r.DeletionDueAt,
 			}
 			if r.UpdateAvailability.Valid {
 				total, security := uint32(max(r.UpdateTotal.Int32, 0)), uint32(max(r.UpdateSecurity.Int32, 0))

@@ -45,7 +45,22 @@
 					{m.node_locked_badge()}
 				</span>
 			{/if}
-			<StatusBadge status={assess(node).status} class="text-sm" />
+			{#if node.deletionDueAt}
+				<!-- M5-29: named in text; the icon stays out of the page's first load (budget). -->
+				<span class="text-sm font-medium text-red-700 dark:text-red-400">
+					{m.node_deletion_badge({
+						date: formatTimestamp(Number(node.deletionDueAt.seconds), locale)
+					})}
+				</span>
+			{/if}
+			<StatusBadge
+				status={assess({
+					online: node.online,
+					figures: node.figures,
+					deactivated: node.deactivatedAt !== undefined
+				}).status}
+				class="text-sm"
+			/>
 		</div>
 	</div>
 	<dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">

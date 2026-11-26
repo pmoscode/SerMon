@@ -32,6 +32,7 @@ type Querier interface {
 	AlertHistorySince(ctx context.Context, arg AlertHistorySinceParams) ([]AlertHistorySinceRow, error)
 	AlertInstanceHistory(ctx context.Context, arg AlertInstanceHistoryParams) ([]AlertInstanceHistoryRow, error)
 	AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error)
+	// A node scheduled for deletion can't be taken over (ADR 0041): no rows.
 	AllowNodeTakeover(ctx context.Context, arg AllowNodeTakeoverParams) (int64, error)
 	// When each hour of the week was last computed (hours without a row are missing).
 	AnomalyBaselineAges(ctx context.Context) ([]AnomalyBaselineAgesRow, error)
@@ -51,6 +52,7 @@ type Querier interface {
 	// Cancels a run the node hasn't started (M4-31): a pending one at once, a sent one is withdrawn
 	// from the agent, which answers. Nothing for a run that started, ended or expired.
 	CancelNodeCommand(ctx context.Context, arg CancelNodeCommandParams) (CancelNodeCommandRow, error)
+	CancelNodeDeletion(ctx context.Context, id uuid.UUID) (int64, error)
 	// The runs of the rollout's nodes not started yet: pending ones are cancelled, sent ones withdrawn.
 	CancelRolloutRuns(ctx context.Context, arg CancelRolloutRunsParams) ([]CancelRolloutRunsRow, error)
 	// Stops a running rollout by hand (M4-31).
@@ -103,6 +105,9 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) error
 	DatabaseSize(ctx context.Context) (int64, error)
 	DeactivateIssuingAuthority(ctx context.Context) error
+	// Deactivates the node (if it is not) and closes its takeover window; with a deadline it is
+	// scheduled for deletion as well.
+	DeactivateNode(ctx context.Context, arg DeactivateNodeParams) (int64, error)
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
@@ -369,12 +374,17 @@ type Querier interface {
 	NodeHostnames(ctx context.Context, arg NodeHostnamesParams) ([]NodeHostnamesRow, error)
 	// When the node of the scope began to learn (no row: not visible).
 	NodeLearning(ctx context.Context, arg NodeLearningParams) (time.Time, error)
+	// Deactivating and deleting nodes (M5-29, ADR 0041). All queries run inside InTenant, except
+	// the due nodes of all organizations (a definer function).
+	// The node within the scope's groups, locked for the change.
+	NodeLifecycleState(ctx context.Context, arg NodeLifecycleStateParams) (NodeLifecycleStateRow, error)
 	// Node identity in the UI (M2-23).
 	NodeLockedAt(ctx context.Context, id uuid.UUID) (*time.Time, error)
 	// Series of the node with data from p_since on (the node lies in the current organization by RLS).
 	NodeSeries(ctx context.Context, arg NodeSeriesParams) ([]NodeSeriesRow, error)
 	// Tags of nodes (M2-29). The node within the scope's groups, locked for the change.
 	NodeTagsForUpdate(ctx context.Context, arg NodeTagsForUpdateParams) (NodeTagsForUpdateRow, error)
+	NodesDueForDeletion(ctx context.Context, arg NodesDueForDeletionParams) ([]NodesDueForDeletionRow, error)
 	// Nodes of an on-demand rotation within the scope's groups.
 	NodesForRotation(ctx context.Context, arg NodesForRotationParams) ([]NodesForRotationRow, error)
 	// Of the nodes those with a reboot under way or a run in a rollout (M4-31): no second reboot or
@@ -408,6 +418,7 @@ type Querier interface {
 	PruneUpdateRollouts(ctx context.Context, before time.Time) error
 	PurgeAlertHistory(ctx context.Context, before time.Time) (int64, error)
 	PurgeAlertSilences(ctx context.Context, before time.Time) error
+	PurgeNode(ctx context.Context, arg PurgeNodeParams) (string, error)
 	PurgeNotificationDeliveries(ctx context.Context, before time.Time) (int64, error)
 	PurgeOrganization(ctx context.Context, arg PurgeOrganizationParams) (int64, error)
 	// The alert engine (M2-08): events of one kind and the given nodes received since a time, newest
@@ -476,7 +487,8 @@ type Querier interface {
 	// Once: the flow is deleted whether it expired or not.
 	TakeOIDCFlow(ctx context.Context, stateHash string) (TakeOIDCFlowRow, error)
 	// Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
-	// closed. No rows: the window closed meanwhile.
+	// closed, a deactivation lifted (ADR 0041). No rows: the window closed meanwhile, or the node is
+	// scheduled for deletion.
 	TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int64, error)
 	// Once: the ceremony is deleted whether it expired or not.
 	TakeWebAuthnCeremony(ctx context.Context, idHash string) (TakeWebAuthnCeremonyRow, error)

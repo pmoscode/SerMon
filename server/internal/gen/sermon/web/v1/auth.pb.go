@@ -1579,8 +1579,11 @@ type Session struct {
 	RunUpdatesGroupIds []string `protobuf:"bytes,21,rep,name=run_updates_group_ids,json=runUpdatesGroupIds,proto3" json:"run_updates_group_ids,omitempty"`
 	// reboot_group_ids are the groups where the caller may reboot nodes (operator or admin).
 	RebootGroupIds []string `protobuf:"bytes,22,rep,name=reboot_group_ids,json=rebootGroupIds,proto3" json:"reboot_group_ids,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// lifecycle_group_ids are the groups where the caller may deactivate and delete nodes (admin,
+	// M5-29); "*" stands for all groups.
+	LifecycleGroupIds []string `protobuf:"bytes,23,rep,name=lifecycle_group_ids,json=lifecycleGroupIds,proto3" json:"lifecycle_group_ids,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -1763,6 +1766,13 @@ func (x *Session) GetRunUpdatesGroupIds() []string {
 func (x *Session) GetRebootGroupIds() []string {
 	if x != nil {
 		return x.RebootGroupIds
+	}
+	return nil
+}
+
+func (x *Session) GetLifecycleGroupIds() []string {
+	if x != nil {
+		return x.LifecycleGroupIds
 	}
 	return nil
 }
@@ -1977,7 +1987,7 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\x17ConfirmPasswordResponse\x120\n" +
 	"\asession\x18\x01 \x01(\v2\x16.sermon.web.v1.SessionR\asession\"\x10\n" +
 	"\x0eStepUpRequired\"\x1b\n" +
-	"\x19SecondFactorSetupRequired\"\xdc\a\n" +
+	"\x19SecondFactorSetupRequired\"\x8c\b\n" +
 	"\aSession\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
@@ -2004,7 +2014,8 @@ const file_sermon_web_v1_auth_proto_rawDesc = "" +
 	"\rpasskey_count\x18\x13 \x01(\rR\fpasskeyCount\x12-\n" +
 	"\x12passkeys_available\x18\x14 \x01(\bR\x11passkeysAvailable\x121\n" +
 	"\x15run_updates_group_ids\x18\x15 \x03(\tR\x12runUpdatesGroupIds\x12(\n" +
-	"\x10reboot_group_ids\x18\x16 \x03(\tR\x0erebootGroupIds\"\x85\x01\n" +
+	"\x10reboot_group_ids\x18\x16 \x03(\tR\x0erebootGroupIds\x12.\n" +
+	"\x13lifecycle_group_ids\x18\x17 \x03(\tR\x11lifecycleGroupIds\"\x85\x01\n" +
 	"\x0fInstanceProblem\x12\x14\n" +
 	"\x05check\x18\x01 \x01(\tR\x05check\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x120\n" +

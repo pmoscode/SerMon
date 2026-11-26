@@ -128,6 +128,9 @@ type Config struct {
 	// OrgDeletionGrace is how long an organization scheduled for deletion stays locked before it
 	// is deleted (M2-33, D29): 30 days by default, at least 7.
 	OrgDeletionGrace time.Duration
+	// NodeDeletionGrace is how long a node scheduled for deletion stays deactivated before it is
+	// deleted with its data (M5-29, ADR 0041): 7 days by default, at least 24 hours.
+	NodeDeletionGrace time.Duration
 	// DatabaseSizeLimit is the size the database may reach (bytes, from e.g. "50GiB"); the
 	// self-monitoring warns superadmins at 80 % and 90 % (M2-24). 0: not checked.
 	DatabaseSizeLimit int64
@@ -176,6 +179,7 @@ const (
 	envOutboundAllow   = "SERMON_OUTBOUND_ALLOWLIST"
 	envDatabaseLimit   = "SERMON_DATABASE_SIZE_LIMIT"
 	envDeletionGrace   = "SERMON_ORG_DELETION_GRACE"
+	envNodeGrace       = "SERMON_NODE_DELETION_GRACE"
 	envMasterKeys      = "SERMON_MASTER_KEYS"
 	envAgentAddr       = "SERMON_AGENT_ADDR"
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
@@ -213,7 +217,10 @@ const (
 	// D29: deleted after 30 days, never before 7 (as organization.MinDeletionGrace).
 	defaultDeletionGrace = 30 * 24 * time.Hour
 	minDeletionGrace     = 7 * 24 * time.Hour
-	maxPort              = 65535
+	// ADR 0041: nodes after 7 days, never before 24 hours (as nodelife.MinDeletionGrace).
+	defaultNodeGrace = 7 * 24 * time.Hour
+	minNodeGrace     = 24 * time.Hour
+	maxPort          = 65535
 )
 
 // Load reads and validates the configuration from src.
@@ -234,6 +241,7 @@ func Load(src Source) (Config, error) {
 		OutboundAllowlist:  parseOutboundAllowlist(&l),
 		DatabaseSizeLimit:  parseSize(&l, envDatabaseLimit),
 		OrgDeletionGrace:   parsePositiveDuration(&l, envDeletionGrace, defaultDeletionGrace),
+		NodeDeletionGrace:  parsePositiveDuration(&l, envNodeGrace, defaultNodeGrace),
 		MasterKeys:         parseMasterKeys(&l),
 		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
 		AgentHostnames:     parseHostnames(&l),
@@ -249,6 +257,9 @@ func Load(src Source) (Config, error) {
 	}
 	if cfg.OrgDeletionGrace < minDeletionGrace {
 		l.fail(envDeletionGrace, "must be at least %s (7 days), got %s", minDeletionGrace, cfg.OrgDeletionGrace)
+	}
+	if cfg.NodeDeletionGrace < minNodeGrace {
+		l.fail(envNodeGrace, "must be at least %s (24 hours), got %s", minNodeGrace, cfg.NodeDeletionGrace)
 	}
 	if cfg.MetricsAddr != "" && !strings.HasSuffix(cfg.MetricsAddr, ":0") &&
 		(cfg.MetricsAddr == cfg.HTTPAddr || cfg.MetricsAddr == cfg.AgentAddr) {

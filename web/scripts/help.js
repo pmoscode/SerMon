@@ -315,7 +315,8 @@ const virtualPrefix = 'virtual:sermon-help/';
 /**
  * Vite plugin: `import docs from 'virtual:sermon-help/<locale>'` gives the help documents of a
  * locale (one chunk per language, loaded on demand); `…/<locale>/summary` only their titles and
- * summaries, for the tooltips of every page (JavaScript budget).
+ * summaries, for the popovers of the tooltips; `…/<locale>/titles` only the titles, which name the
+ * tooltips of every page (JavaScript budget).
  * @param {{ root: string }} options
  * @returns {import('vite').Plugin}
  */
@@ -324,7 +325,11 @@ export function helpPlugin({ root }) {
 		name: 'sermon-help',
 		resolveId(id) {
 			const [locale, part] = id.slice(virtualPrefix.length).split('/');
-			if (id.startsWith(virtualPrefix) && locales.includes(locale) && (!part || part === 'summary'))
+			if (
+				id.startsWith(virtualPrefix) &&
+				locales.includes(locale) &&
+				(!part || part === 'summary' || part === 'titles')
+			)
 				return '\0' + id;
 			return undefined;
 		},
@@ -339,22 +344,28 @@ export function helpPlugin({ root }) {
 			}
 			const [locale, part] = id.slice(1 + virtualPrefix.length).split('/');
 			const all = docs[locale] ?? {};
-			// The summaries are what every page with a ⓘ needs; the full texts load with the panel.
-			const out =
-				part === 'summary'
-					? Object.fromEntries(
-							Object.entries(all).map(([topic, doc]) => [
-								topic,
-								{ title: doc.title, summary: doc.summary, body: [], more: doc.body.length > 0 }
-							])
-						)
-					: all;
+			// The titles are what every page with a ⓘ needs, the summaries what its popover shows; the
+			// full texts load with the panel.
+			/** @type {Record<string, (doc: HelpDoc) => object>} */
+			const picks = {
+				titles: (doc) => ({ title: doc.title, summary: [], body: [], more: true }),
+				summary: (doc) => ({
+					title: doc.title,
+					summary: doc.summary,
+					body: [],
+					more: doc.body.length > 0
+				})
+			};
+			const pick = part ? picks[part] : undefined;
+			const out = pick
+				? Object.fromEntries(Object.entries(all).map(([topic, doc]) => [topic, pick(doc)]))
+				: all;
 			return `export default ${JSON.stringify(out)};`;
 		},
 		handleHotUpdate({ file, server }) {
 			if (!file.startsWith(root) || !file.endsWith('.md')) return undefined;
 			for (const locale of locales) {
-				for (const id of [locale, `${locale}/summary`]) {
+				for (const id of [locale, `${locale}/summary`, `${locale}/titles`]) {
 					const module = server.moduleGraph.getModuleById('\0' + virtualPrefix + id);
 					if (module) server.moduleGraph.invalidateModule(module);
 				}

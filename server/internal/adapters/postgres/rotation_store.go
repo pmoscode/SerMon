@@ -177,7 +177,8 @@ func (s *RotationStore) AllowTakeover(ctx context.Context, org tenant.OrgID, nod
 			return fmt.Errorf("allow takeover: %w", err)
 		}
 		if n != 1 {
-			return fmt.Errorf("allow takeover: node %s not found", node)
+			// The node was found by the use case: it is scheduled for deletion (ADR 0041).
+			return rotation.ErrScheduledForDeletion
 		}
 		return appendAudit(ctx, q, audit)
 	})

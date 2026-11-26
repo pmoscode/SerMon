@@ -809,6 +809,19 @@ var tenantIsolationCases = map[string]isolationCase{
 		_, err := e.node.SetNodeTags(ctx, connect.NewRequest(&webv1.SetNodeTagsRequest{NodeId: e.nodeA, Tags: map[string]string{"env": "prod"}}))
 		return err
 	}},
+	// M5-29: a node of another organization is NOT_FOUND, it stays active and is not deleted.
+	"/sermon.web.v1.NodeService/DeactivateNode": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.DeactivateNode(ctx, connect.NewRequest(&webv1.DeactivateNodeRequest{NodeId: e.nodeA}))
+		return err
+	}},
+	"/sermon.web.v1.NodeService/DeleteNode": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.DeleteNode(ctx, connect.NewRequest(&webv1.DeleteNodeRequest{NodeId: e.nodeA, ConfirmHostname: "alpha-01"}))
+		return err
+	}},
+	"/sermon.web.v1.NodeService/CancelNodeDeletion": {run: func(ctx context.Context, e isolationEnv) error {
+		_, err := e.node.CancelNodeDeletion(ctx, connect.NewRequest(&webv1.CancelNodeDeletionRequest{NodeId: e.nodeA}))
+		return err
+	}},
 	// M2-32: the quotas and counts of the caller's own organization only.
 	"/sermon.web.v1.AccessService/GetOrganizationQuotas": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.access.GetOrganizationQuotas(ctx, connect.NewRequest(&webv1.GetOrganizationQuotasRequest{}))

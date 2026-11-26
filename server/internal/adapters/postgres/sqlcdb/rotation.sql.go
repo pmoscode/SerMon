@@ -14,7 +14,7 @@ import (
 )
 
 const allowNodeTakeover = `-- name: AllowNodeTakeover :execrows
-UPDATE nodes SET takeover_until = $1 WHERE id = $2
+UPDATE nodes SET takeover_until = $1 WHERE id = $2 AND deletion_due_at IS NULL
 `
 
 type AllowNodeTakeoverParams struct {
@@ -22,6 +22,7 @@ type AllowNodeTakeoverParams struct {
 	ID    uuid.UUID
 }
 
+// A node scheduled for deletion can't be taken over (ADR 0041): no rows.
 func (q *Queries) AllowNodeTakeover(ctx context.Context, arg AllowNodeTakeoverParams) (int64, error) {
 	result, err := q.db.Exec(ctx, allowNodeTakeover, arg.Until, arg.ID)
 	if err != nil {
@@ -52,6 +53,7 @@ func (q *Queries) LockNode(ctx context.Context, arg LockNodeParams) (int64, erro
 const nodeForTakeover = `-- name: NodeForTakeover :one
 SELECT id FROM nodes
 WHERE machine_id = $1 AND group_id = $2 AND takeover_until > $3
+  AND deletion_due_at IS NULL
 `
 
 type NodeForTakeoverParams struct {
@@ -210,9 +212,10 @@ const takeOverNode = `-- name: TakeOverNode :execrows
 UPDATE nodes SET hostname = $1, os_id = $2, os_version = $3,
                  kernel_release = $4, architecture = $5,
                  cpu_count = $6, memory_bytes = $7,
-                 enrolled_with = $8, takeover_until = NULL, locked_at = NULL, lock_reason = NULL
+                 enrolled_with = $8, takeover_until = NULL, locked_at = NULL, lock_reason = NULL,
+                 deactivated_at = NULL
 WHERE id = $9 AND group_id = $10 AND machine_id = $11
-  AND takeover_until > $12
+  AND takeover_until > $12 AND deletion_due_at IS NULL
 `
 
 type TakeOverNodeParams struct {
@@ -231,7 +234,8 @@ type TakeOverNodeParams struct {
 }
 
 // Takes the node over (in the enrollment transaction): new host facts, the token, window and lock
-// closed. No rows: the window closed meanwhile.
+// closed, a deactivation lifted (ADR 0041). No rows: the window closed meanwhile, or the node is
+// scheduled for deletion.
 func (q *Queries) TakeOverNode(ctx context.Context, arg TakeOverNodeParams) (int64, error) {
 	result, err := q.db.Exec(ctx, takeOverNode,
 		arg.Hostname,

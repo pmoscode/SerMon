@@ -18,6 +18,9 @@ var (
 	ErrRotationTimeout = errors.New("certificate revoked: the agent did not rotate in time; re-enroll the node")
 	// ErrRevoked ends the session of a node whose certificates an operator revoked.
 	ErrRevoked = errors.New("certificate revoked by an operator; re-enroll the node")
+	// ErrScheduledForDeletion refuses the takeover of a node scheduled for deletion (ADR 0041):
+	// cancel the deletion first.
+	ErrScheduledForDeletion = errors.New("the node is scheduled for deletion: cancel the deletion first")
 )
 
 // Target selects the nodes of an on-demand rotation (exactly one of Nodes, Group and

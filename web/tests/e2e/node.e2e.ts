@@ -198,6 +198,53 @@ test.describe('node detail (mocked API)', () => {
 		expect(results.violations).toEqual([]);
 	});
 
+	// M5-29: an admin deletes a node from the identity tab with its host name; the node then shows
+	// the deadline at the top and as deactivated.
+	test('deletes a node after typing its host name', async ({ page }) => {
+		const due = new Date(Date.now() + 7 * 86400_000).toISOString();
+		let deleted: unknown;
+		await mockApi(page, {
+			...nodeApi,
+			'AuthService/GetSession': () => ({
+				json: { session: { ...session, nodeIdentityGroupIds: ['*'], lifecycleGroupIds: ['*'] } }
+			}),
+			'NodeService/GetNode': () => ({
+				json: {
+					node: deleted
+						? {
+								...node,
+								online: false,
+								deactivatedAt: new Date().toISOString(),
+								deletionDueAt: due
+							}
+						: node
+				}
+			}),
+			'NodeService/DeleteNode': (body) => {
+				deleted = body;
+				return { json: { deletionDueAt: due } };
+			}
+		});
+		await page.goto(`/nodes/${nodeId}?tab=identity`);
+		await page.getByRole('tab', { name: 'Identity' }).click();
+		await page.getByRole('button', { name: 'Delete …' }).click();
+		const confirm = page.getByRole('button', { name: 'Delete node' });
+		await expect(confirm).toBeDisabled();
+		await page
+			.getByRole('textbox', { name: 'Type the host name web-01 to confirm' })
+			.fill('web-01');
+		await page.evaluate(() =>
+			Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)))
+		);
+		expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+		await confirm.click();
+		await expect(page.getByText(/The node will be deleted on/)).toBeVisible();
+		expect(deleted).toEqual({ nodeId, confirmHostname: 'web-01' });
+		await expect(page.getByText(/^Deleted on /)).toBeVisible();
+		await expect(page.getByText('Deactivated', { exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Cancel deletion' })).toBeVisible();
+	});
+
 	// M2-29: tags under the facts; an admin of the group edits them in place (axe in edit mode).
 	test('shows the tags and lets an admin edit them', async ({ page }) => {
 		let sent: unknown;

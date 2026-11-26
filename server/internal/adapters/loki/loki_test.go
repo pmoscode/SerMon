@@ -319,6 +319,24 @@ func TestDelete_AsksTheCompactorInTheTenant(t *testing.T) {
 	}
 }
 
+// M5-29: the eraser deletes the streams of one node in its organization's tenant only.
+func TestEraser_EraseNodeAsksForTheNodesStreams(t *testing.T) {
+	rec := &recorded{}
+	e := loki.NewEraser(client(t, rec.handler(http.StatusNoContent, "")))
+	if err := e.EraseNode(context.Background(), org, node); err != nil {
+		t.Fatal(err)
+	}
+	req := rec.requests[0]
+	if req.Method != http.MethodPost || req.Header.Get("X-Scope-OrgID") != org.String() ||
+		req.URL.Query().Get("query") != `{node_id=~"`+node.String()+`"}` || req.URL.Query().Get("start") != strconv.FormatInt(loki.DeleteFrom.Unix(), 10) {
+		t.Errorf("request = %s %s (tenant %q)", req.Method, req.URL, req.Header.Get("X-Scope-OrgID"))
+	}
+	down := loki.NewEraser(client(t, (&recorded{}).handler(http.StatusServiceUnavailable, "")))
+	if err := down.EraseNode(context.Background(), org, node); !errors.Is(err, loki.ErrUnavailable) {
+		t.Errorf("Loki down: %v", err)
+	}
+}
+
 // M3-29: an answer beyond the bound is ErrTooLarge (the caller asks for fewer lines), not a
 // broken answer.
 func TestQuery_AnAnswerBeyondTheBoundIsTooLarge(t *testing.T) {

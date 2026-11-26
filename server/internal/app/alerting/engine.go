@@ -245,6 +245,8 @@ func (e *Engine) evaluate(ctx context.Context, org tenant.OrgID) error {
 	if err != nil {
 		return fmt.Errorf("list nodes: %w", err)
 	}
+	// Deactivated nodes are not evaluated (ADR 0041): their open alerts end below.
+	nodes = slices.DeleteFunc(nodes, fleet.Node.Deactivated)
 	loaded, err := e.d.Store.Instances(ctx, scope)
 	if err != nil {
 		return fmt.Errorf("load instances: %w", err)

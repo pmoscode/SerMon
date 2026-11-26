@@ -38,6 +38,7 @@ const (
 	UnlockNode             // lift the lock after a second session (M2-23)
 	AllowNodeTakeover      // let the next enrollment with the node's machine-id take it over (M2-23)
 	TagNodes               // set the free tags of nodes (M2-29); they steer rules and notifications
+	ManageNodeLifecycle    // deactivate and delete nodes (M5-29, ADR 0041)
 
 	// Actions that need a role on any group of the organization.
 	UseDashboards // own dashboards and the shared ones (ADR 0040); the widgets read with the viewer's rights
@@ -92,6 +93,7 @@ var rules = map[Action]rule{
 	UnlockNode:             {name: "unlock_node", minimum: role.Operator, scope: groupScoped},
 	AllowNodeTakeover:      {name: "allow_node_takeover", minimum: role.Operator, scope: groupScoped},
 	TagNodes:               {name: "tag_nodes", minimum: role.Admin, scope: groupScoped},
+	ManageNodeLifecycle:    {name: "manage_node_lifecycle", minimum: role.Admin, scope: groupScoped},
 	ManageAlertRules:       {name: "manage_alert_rules", minimum: role.Admin, scope: orgWide},
 	ManageChannels:         {name: "manage_channels", minimum: role.Admin, scope: orgWide},
 	ManagePolicies:         {name: "manage_policies", minimum: role.Admin, scope: orgWide},

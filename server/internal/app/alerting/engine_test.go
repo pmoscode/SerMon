@@ -427,6 +427,52 @@ func TestEngine_RetiresAlertsOfRulesThatNoLongerApply(t *testing.T) {
 	}
 }
 
+// switchable has web-01 deactivated or not (M5-29).
+type switchable struct {
+	directory
+	deactivated *time.Time
+}
+
+func (d *switchable) List(_ context.Context, scope tenant.Scope) ([]fleet.Node, error) {
+	if scope.OrgID() != orgA {
+		return nil, nil
+	}
+	return []fleet.Node{{ID: web, Group: group, Hostname: "web-01", DeactivatedAt: d.deactivated}}, nil
+}
+
+// A deactivated node is not evaluated (no "node offline" after the deactivation, ADR 0041) and
+// its open alerts end; reactivated by a takeover, it is evaluated again.
+func TestEngine_SkipsDeactivatedNodes(t *testing.T) {
+	store, v, c := newMemStore(orgA), &valueRule{value: 0.90}, &clock{now: t0}
+	nodes := &switchable{}
+	e := alerting.NewEngine(alerting.Deps{
+		Store: store, Rules: cpuRules(v, 0), Nodes: nodes, Now: c.Now, Holder: "a", Logger: slog.New(slog.DiscardHandler),
+	})
+	rounds(t, e, c, 1)
+	if i, _ := store.instance(orgA, cpuKey); i.State != alert.StateWarning {
+		t.Fatalf("active node: %v, want warning", i.State)
+	}
+	at := c.Now()
+	nodes.deactivated = &at
+	rounds(t, e, c, 1)
+	if i, ok := store.instance(orgA, cpuKey); ok {
+		t.Errorf("alert of the deactivated node kept: %+v", i)
+	}
+	h := store.history[orgA]
+	if last := h[len(h)-1].Transition; last.To != alert.StateResolved {
+		t.Errorf("last transition %+v, want resolved", last)
+	}
+	rounds(t, e, c, 1)
+	if _, ok := store.instance(orgA, cpuKey); ok {
+		t.Error("the deactivated node was evaluated")
+	}
+	nodes.deactivated = nil
+	rounds(t, e, c, 1)
+	if _, ok := store.instance(orgA, cpuKey); !ok {
+		t.Error("the reactivated node is not evaluated")
+	}
+}
+
 // A rule whose evaluation fails keeps its alerts: an error is no sign that the problem is gone.
 func TestEngine_KeepsAlertsOfAFailingRule(t *testing.T) {
 	store, v, c := newMemStore(orgA), &valueRule{value: 0.90}, &clock{now: t0}

@@ -44,6 +44,38 @@ describe('assess', () => {
 	});
 });
 
+// M5-29: a deactivated node is neither offline nor judged by its figures.
+describe('deactivated nodes', () => {
+	const deactivated = (online: boolean) => {
+		const n = node('old', online, 0.99);
+		n.deactivated = true;
+		return n;
+	};
+
+	it('are deactivated, also with contact or high figures', () => {
+		expect(assess(deactivated(false))).toEqual({ status: 'deactivated', reasons: [] });
+		expect(assess(deactivated(true))).toEqual({ status: 'deactivated', reasons: [] });
+	});
+
+	it('count apart and sort last', () => {
+		const nodes = [deactivated(false), node('a', false), node('b', true, 0.1)];
+		expect(countByStatus(nodes)).toEqual({
+			ok: 1,
+			warning: 0,
+			critical: 0,
+			offline: 1,
+			deactivated: 1
+		});
+		const sorted = filterNodes(nodes, { search: '', group: '', status: '', tag: '' });
+		expect(sorted.at(-1)?.hostname).toBe('old');
+		expect(
+			filterNodes(nodes, { search: '', group: '', status: 'deactivated', tag: '' }).map(
+				(n) => n.hostname
+			)
+		).toEqual(['old']);
+	});
+});
+
 describe('filterNodes', () => {
 	const nodes = [
 		node('web-02', true, 0.1),
@@ -90,7 +122,13 @@ describe('filterNodes', () => {
 	});
 
 	it('counts and lists groups', () => {
-		expect(countByStatus(nodes)).toEqual({ ok: 1, warning: 1, critical: 1, offline: 1 });
+		expect(countByStatus(nodes)).toEqual({
+			ok: 1,
+			warning: 1,
+			critical: 1,
+			offline: 1,
+			deactivated: 0
+		});
 		expect(groupsOf(nodes)).toEqual([
 			{ id: 'g2', name: 'db' },
 			{ id: 'g1', name: 'web' }

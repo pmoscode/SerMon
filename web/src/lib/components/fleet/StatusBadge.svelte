@@ -1,6 +1,7 @@
 <script lang="ts">
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import CircleOff from '@lucide/svelte/icons/circle-off';
+	import PowerOff from '@lucide/svelte/icons/power-off';
 	import OctagonAlert from '@lucide/svelte/icons/octagon-exclamation-point';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-exclamation-point';
 	import type { Status } from '#lib/fleet/status.js';
@@ -27,7 +28,8 @@
 				label: m.status_critical(),
 				tone: 'text-red-700 dark:text-red-400'
 			},
-			offline: { icon: CircleOff, label: m.status_offline(), tone: 'text-muted-foreground' }
+			offline: { icon: CircleOff, label: m.status_offline(), tone: 'text-muted-foreground' },
+			deactivated: { icon: PowerOff, label: m.status_deactivated(), tone: 'text-muted-foreground' }
 		}[status]
 	);
 </script>

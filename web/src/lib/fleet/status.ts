@@ -5,7 +5,7 @@ import { tagPairs } from '#lib/tags/tags.js';
  * Traffic light of a node. Until the alert engine exists (M2), it comes from the key figures:
  * warning from 80 %, critical from 90 % CPU, memory or the fullest file system.
  */
-export type Status = 'ok' | 'warning' | 'critical' | 'offline';
+export type Status = 'ok' | 'warning' | 'critical' | 'offline' | 'deactivated';
 
 export const WARNING = 0.8;
 export const CRITICAL = 0.9;
@@ -19,7 +19,13 @@ export interface Assessment {
 }
 
 /** The status of a node (summary or details) and the figures above the thresholds (highest first). */
-export function assess(node: { online: boolean; figures?: KeyFigures }): Assessment {
+export function assess(node: {
+	online: boolean;
+	figures?: KeyFigures;
+	deactivated?: boolean;
+}): Assessment {
+	// M5-29: refused by the server, its figures are history.
+	if (node.deactivated) return { status: 'deactivated', reasons: [] };
 	if (!node.online) return { status: 'offline', reasons: [] };
 	const figures: [Reason, number | undefined][] = [
 		['cpu', node.figures?.cpuBusyRatio],
@@ -37,11 +43,23 @@ export function assess(node: { online: boolean; figures?: KeyFigures }): Assessm
 }
 
 /** Order for sorting: problems first. */
-export const severity: Record<Status, number> = { critical: 0, warning: 1, offline: 2, ok: 3 };
+export const severity: Record<Status, number> = {
+	critical: 0,
+	warning: 1,
+	offline: 2,
+	ok: 3,
+	deactivated: 4
+};
 
 /** Counts per status for the header. */
 export function countByStatus(nodes: NodeSummary[]): Record<Status, number> {
-	const counts: Record<Status, number> = { ok: 0, warning: 0, critical: 0, offline: 0 };
+	const counts: Record<Status, number> = {
+		ok: 0,
+		warning: 0,
+		critical: 0,
+		offline: 0,
+		deactivated: 0
+	};
 	for (const node of nodes) counts[assess(node).status]++;
 	return counts;
 }

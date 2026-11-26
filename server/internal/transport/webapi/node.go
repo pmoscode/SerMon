@@ -11,6 +11,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/app/access"
 	"github.com/pmoscode/SerMon/server/internal/app/fleet"
+	"github.com/pmoscode/SerMon/server/internal/app/nodelife"
 	"github.com/pmoscode/SerMon/server/internal/app/rotation"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/tag"
@@ -31,12 +32,20 @@ type NodeTagger interface {
 	SetTags(ctx context.Context, c access.Caller, node identity.NodeID, tags tag.Tags) error
 }
 
+// NodeLifecycle deactivates and deletes nodes (nodelife.Service, M5-29).
+type NodeLifecycle interface {
+	Deactivate(ctx context.Context, c access.Caller, node identity.NodeID) error
+	Delete(ctx context.Context, c access.Caller, node identity.NodeID, typed string) (time.Time, error)
+	CancelDeletion(ctx context.Context, c access.Caller, node identity.NodeID) error
+}
+
 // NodeHandler implements sermon.web.v1.NodeService (behind the Authenticator).
 type NodeHandler struct {
-	rotator NodeRotator
-	fleet   *fleet.Service
-	tagger  NodeTagger
-	logger  *slog.Logger
+	rotator   NodeRotator
+	fleet     *fleet.Service
+	tagger    NodeTagger
+	lifecycle NodeLifecycle
+	logger    *slog.Logger
 }
 
 var _ webv1connect.NodeServiceHandler = (*NodeHandler)(nil)
@@ -50,6 +59,65 @@ func NewNodeHandler(rotator NodeRotator, nodes *fleet.Service, logger *slog.Logg
 func (h *NodeHandler) WithTagger(t NodeTagger) *NodeHandler {
 	h.tagger = t
 	return h
+}
+
+// WithLifecycle enables DeactivateNode, DeleteNode and CancelNodeDeletion.
+func (h *NodeHandler) WithLifecycle(l NodeLifecycle) *NodeHandler {
+	h.lifecycle = l
+	return h
+}
+
+// lifecycleTarget checks the lifecycle is configured and returns caller and node.
+func (h *NodeHandler) lifecycleTarget(ctx context.Context, raw string) (access.Caller, identity.NodeID, error) {
+	if h.lifecycle == nil {
+		return access.Caller{}, identity.NodeID{}, connect.NewError(connect.CodeUnimplemented, errors.New("node lifecycle is not configured"))
+	}
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return access.Caller{}, identity.NodeID{}, err
+	}
+	id, err := parseID(raw)
+	if err != nil {
+		return access.Caller{}, identity.NodeID{}, err
+	}
+	return c, identity.NodeID(id), nil
+}
+
+// DeactivateNode deactivates a node.
+func (h *NodeHandler) DeactivateNode(ctx context.Context, req *connect.Request[webv1.DeactivateNodeRequest]) (*connect.Response[webv1.DeactivateNodeResponse], error) {
+	c, node, err := h.lifecycleTarget(ctx, req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	if err := h.lifecycle.Deactivate(ctx, c, node); err != nil {
+		return nil, h.identityFailure(ctx, "deactivate node", err)
+	}
+	return connect.NewResponse(&webv1.DeactivateNodeResponse{}), nil
+}
+
+// DeleteNode schedules the deletion of a node.
+func (h *NodeHandler) DeleteNode(ctx context.Context, req *connect.Request[webv1.DeleteNodeRequest]) (*connect.Response[webv1.DeleteNodeResponse], error) {
+	c, node, err := h.lifecycleTarget(ctx, req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	due, err := h.lifecycle.Delete(ctx, c, node, req.Msg.GetConfirmHostname())
+	if err != nil {
+		return nil, h.identityFailure(ctx, "delete node", err)
+	}
+	return connect.NewResponse(&webv1.DeleteNodeResponse{DeletionDueAt: timestamppb.New(due)}), nil
+}
+
+// CancelNodeDeletion lifts a scheduled deletion.
+func (h *NodeHandler) CancelNodeDeletion(ctx context.Context, req *connect.Request[webv1.CancelNodeDeletionRequest]) (*connect.Response[webv1.CancelNodeDeletionResponse], error) {
+	c, node, err := h.lifecycleTarget(ctx, req.Msg.GetNodeId())
+	if err != nil {
+		return nil, err
+	}
+	if err := h.lifecycle.CancelDeletion(ctx, c, node); err != nil {
+		return nil, h.identityFailure(ctx, "cancel node deletion", err)
+	}
+	return connect.NewResponse(&webv1.CancelNodeDeletionResponse{}), nil
 }
 
 // SetNodeTags replaces the tags of a node.
@@ -83,6 +151,10 @@ func (h *NodeHandler) identityFailure(ctx context.Context, op string, err error)
 		return connect.NewError(connect.CodeNotFound, access.ErrNotFound)
 	case errors.Is(err, access.ErrStepUpRequired):
 		return stepUpRequired()
+	case errors.Is(err, rotation.ErrScheduledForDeletion), errors.Is(err, nodelife.ErrNotScheduled):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, nodelife.ErrHostnameMismatch):
+		return connect.NewError(connect.CodeInvalidArgument, err)
 	default:
 		return internalError(ctx, h.logger, op, err)
 	}

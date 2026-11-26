@@ -321,6 +321,8 @@ type Node struct {
 	InstallMethod    int16
 	Modules          []string
 	ModulesVetoed    bool
+	DeactivatedAt    *time.Time
+	DeletionDueAt    *time.Time
 }
 
 type NodeCommand struct {

@@ -63,6 +63,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/logsettings"
 	"github.com/pmoscode/SerMon/server/internal/app/metrics"
 	"github.com/pmoscode/SerMon/server/internal/app/modules"
+	"github.com/pmoscode/SerMon/server/internal/app/nodelife"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/oidcmapping"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
@@ -252,6 +253,18 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return fmt.Errorf("organization lifecycle: %w", err)
 		}
 		servers = append(servers, lifecycle.Run)
+		// Deactivating and deleting nodes (M5-29, ADR 0041): ends the session here at once,
+		// deletes after the grace, the logs first.
+		nodeLifeOptions := []nodelife.Option{nodelife.WithLive(sessions), nodelife.WithLogger(logger)}
+		if logStore != nil {
+			nodeLifeOptions = append(nodeLifeOptions, nodelife.WithLogs(loki.NewEraser(logStore)))
+		}
+		nodeLife, err := nodelife.NewService(postgres.NewNodeLifecycleStore(db), authz.NewPolicy(), time.Now,
+			cfg.NodeDeletionGrace, nodeLifeOptions...)
+		if err != nil {
+			return fmt.Errorf("node lifecycle: %w", err)
+		}
+		servers = append(servers, nodeLife.Run)
 		// Configuration of the agents (M3-03, ADR 0030): changes reach the connected sessions.
 		agentConfigs := postgres.NewLogSettingsStore(db)
 		logSettings := logsettings.NewService(agentConfigs, authz.NewPolicy(), sessions, time.Now)
@@ -280,7 +293,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		servers = append(servers, releases.Run)
 		observing := observingServices{logSettings: logSettings, modules: moduleSettings, logQueries: logQueries, liveViews: liveViews, releases: agentReleases{releases}}
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, observing, registry, logger); err != nil {
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, nodeLife, observing, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -532,7 +545,7 @@ func openGeoIP(ctx context.Context, cfg config.Config, logger *slog.Logger) (*ge
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
 	rotator *rotation.Service, nodes *fleet.Service, notifications *notify.Service, alertingAPI alertingServices,
-	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, observing observingServices,
+	health webapi.InstanceProblems, lifecycle *organization.Lifecycle, nodeLife *nodelife.Service, observing observingServices,
 	registry *promtext.Registry, logger *slog.Logger,
 ) error {
 	if len(cfg.AllowedOrigins) == 0 {
@@ -609,7 +622,8 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 			WithLifecycle(lifecycle),
 		Enrollment: webapi.NewEnrollmentTokenHandler(
 			enrollment.NewService(postgres.NewEnrollmentTokenStore(db), policy, time.Now, access.NewID), logger),
-		Node:    webapi.NewNodeHandler(rotator, nodes, logger).WithTagger(fleet.NewTagger(postgres.NewFleetStore(db), policy, time.Now)),
+		Node: webapi.NewNodeHandler(rotator, nodes, logger).WithTagger(fleet.NewTagger(postgres.NewFleetStore(db), policy, time.Now)).
+			WithLifecycle(nodeLife),
 		AgentCA: webapi.NewAgentCAHandler(ca, logger),
 		InstanceAudit: webapi.NewInstanceAuditHandler(
 			instanceaudit.NewService(postgres.NewInstanceAuditStore(db), policy), logger),

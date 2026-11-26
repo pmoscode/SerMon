@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pmoscode/SerMon/server/internal/app/nodelife"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logql"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
@@ -13,7 +15,10 @@ import (
 // Eraser deletes an organization's logs when it is purged (M3-10, D29).
 type Eraser struct{ client *Client }
 
-var _ organization.LogEraser = (*Eraser)(nil)
+var (
+	_ organization.LogEraser = (*Eraser)(nil)
+	_ nodelife.LogEraser     = (*Eraser)(nil)
+)
 
 // NewEraser returns the eraser.
 func NewEraser(client *Client) *Eraser { return &Eraser{client: client} }
@@ -23,6 +28,15 @@ func NewEraser(client *Client) *Eraser { return &Eraser{client: client} }
 func (e *Eraser) EraseOrganization(ctx context.Context, org tenant.OrgID) error {
 	if err := e.client.Delete(ctx, org, logql.Everything(), DeleteFrom, time.Now()); err != nil {
 		return fmt.Errorf("erase the logs of %s: %w", org, err)
+	}
+	return nil
+}
+
+// EraseNode records the deletion of every line of the node (M5-29, ADR 0041); the compactor runs
+// it after the cancel period.
+func (e *Eraser) EraseNode(ctx context.Context, org tenant.OrgID, node identity.NodeID) error {
+	if err := e.client.Delete(ctx, org, logql.MustSelect(node), DeleteFrom, time.Now()); err != nil {
+		return fmt.Errorf("erase the logs of node %s: %w", node, err)
 	}
 	return nil
 }

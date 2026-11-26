@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { lintHelp, loadHelp, parseHelp, parseInline } from './help.js';
+import { fileURLToPath } from 'node:url';
+import { helpPlugin, lintHelp, loadHelp, parseHelp, parseInline } from './help.js';
 
 const text = (t) => ({ type: 'text', text: t });
 
@@ -139,5 +140,39 @@ describe('loadHelp and lintHelp', () => {
 			'en/pages/fleet.md: links to unknown topic "figures/load"',
 			'other.ts: uses unknown help topic "figures/memory_used"'
 		]);
+	});
+});
+
+// M5-29: every page loads only the titles, the popover the summaries, the panel the full texts.
+describe('helpPlugin', () => {
+	const plugin = helpPlugin({ root: fileURLToPath(new URL('../../docs/help', import.meta.url)) });
+	const ctx = {
+		addWatchFile() {},
+		warn() {},
+		error(message) {
+			throw new Error(message);
+		},
+		meta: { watchMode: false }
+	};
+	const load = (id) => {
+		const code = plugin.load.call(ctx, plugin.resolveId(id));
+		return JSON.parse(code.replace(/^export default /, '').replace(/;$/, ''));
+	};
+
+	it('serves titles, summaries and full texts', () => {
+		const titles = load('virtual:sermon-help/en/titles');
+		const summaries = load('virtual:sermon-help/en/summary');
+		const full = load('virtual:sermon-help/en');
+		expect(titles['pages/fleet']).toEqual({ title: 'Fleet', summary: [], body: [], more: true });
+		expect(summaries['pages/fleet'].summary.length).toBeGreaterThan(0);
+		expect(summaries['pages/fleet'].body).toEqual([]);
+		expect(full['pages/fleet'].body.length).toBeGreaterThan(0);
+		expect(Object.keys(titles)).toEqual(Object.keys(full));
+		expect(JSON.stringify(titles).length).toBeLessThan(JSON.stringify(summaries).length / 2);
+	});
+
+	it('knows no other parts', () => {
+		expect(plugin.resolveId('virtual:sermon-help/en/other')).toBeUndefined();
+		expect(plugin.resolveId('virtual:sermon-help/xx/titles')).toBeUndefined();
 	});
 });

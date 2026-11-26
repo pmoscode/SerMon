@@ -35,7 +35,7 @@ SELECT n.id, n.group_id, g.name AS group_name, n.hostname, n.os_id, n.os_version
        n.architecture, n.cpu_count, n.memory_bytes, coalesce(n.agent_version, '')::text AS agent_version,
        n.created_at, n.last_seen_at, n.locked_at, coalesce(n.lock_reason, '')::text AS lock_reason,
        coalesce(n.last_ip, '')::text AS last_ip, n.takeover_until, n.tags, n.security_source, n.logs_vetoed,
-       n.learning_since, u.availability AS update_availability, u.total_count AS update_total,
+       n.learning_since, n.deactivated_at, n.deletion_due_at, u.availability AS update_availability, u.total_count AS update_total,
        u.security_count AS update_security, u.reboot_required AS update_reboot_required
 FROM nodes n JOIN node_groups g ON g.org_id = n.org_id AND g.id = n.group_id
 LEFT JOIN node_update_state u ON u.org_id = n.org_id AND u.node_id = n.id

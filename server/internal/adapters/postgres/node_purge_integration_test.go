@@ -1,0 +1,289 @@
+//go:build integration
+
+package postgres_test
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
+	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
+	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/nodelife"
+	"github.com/pmoscode/SerMon/server/internal/domain/identity"
+	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
+)
+
+// seedNodeData gives a node of the organization rows in every table a node's data lives in:
+// series with raw, aggregated and anomalous points, a security event, alert instance and history,
+// a known login source, a certificate.
+func seedNodeData(t *testing.T, ownerDSN string, org, node uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, ownerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := conn.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	var group uuid.UUID
+	if err := conn.QueryRow(ctx, "SELECT id FROM node_groups WHERE org_id = $1 LIMIT 1", org).Scan(&group); err != nil {
+		t.Fatal(err)
+	}
+	exec("SELECT set_config('sermon.org_id', $1, false)", org.String())
+	exec(`INSERT INTO nodes (id, org_id, group_id, hostname, machine_id, os_id, os_version, kernel_release, architecture, cpu_count, memory_bytes)
+	      VALUES ($1, $2, $3, $4, $5, 'debian', '13', '6.12.0', 'amd64', 2, 1073741824)`,
+		node, org, group, "host-"+node.String()[:8], strings.ReplaceAll(node.String(), "-", ""))
+	exec("INSERT INTO series (org_id, node_id, metric) VALUES ($1, $2, 'sermon_purge_test')", org, node)
+	exec(`INSERT INTO metrics_raw (ts, series_id, avg, min, max)
+	      SELECT now() - interval '5 minutes', id, 1, 1, 1 FROM series WHERE node_id = $1`, node)
+	exec(`INSERT INTO anomaly_points (ts, series_id, score, anomalous) SELECT now(), id, 5, true FROM series WHERE node_id = $1`, node)
+	exec(`INSERT INTO anomaly_baselines (org_id, series_id, hour, median, mad, low, high, points, computed_at)
+	      SELECT $1, id, 0, 1, 0, 1, 1, 30, now() FROM series WHERE node_id = $2`, org, node)
+	exec(`INSERT INTO security_events (org_id, node_id, occurred_at, kind, user_name) VALUES ($1, $2, now(), 'ssh.login.failed', 'alice')`, org, node)
+	exec(`INSERT INTO alert_instances (org_id, rule_id, node_id, state, since) VALUES ($1, 'system.cpu.usage_high', $2, 2, now())`, org, node)
+	exec(`INSERT INTO alert_history (org_id, rule_id, node_id, kind, from_state, to_state, at, value)
+	      VALUES ($1, 'system.cpu.usage_high', $2, 1, 0, 2, now(), 0.9)`, org, node)
+	exec(`INSERT INTO known_login_sources (org_id, node_id, user_name, source, first_seen, last_seen)
+	      VALUES ($1, $2, 'alice', '192.0.2.10', now(), now())`, org, node)
+	var authority int32
+	if err := conn.QueryRow(ctx, `INSERT INTO pki_authorities (root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed, active)
+		VALUES ('\x00', '\x00', '\x00', '\x00', false) RETURNING id`).Scan(&authority); err != nil {
+		t.Fatal(err)
+	}
+	exec(`INSERT INTO agent_certificates (serial, org_id, node_id, authority_id, not_before, not_after)
+	      VALUES ($1, $2, $3, $4, now() - interval '1 hour', now() + interval '1 day')`, strings.ReplaceAll(uuid.NewString(), "-", ""), org, node, authority)
+	exec("CALL refresh_continuous_aggregate('metrics_1m', now() - interval '1 hour', now())")
+}
+
+// nodeRows counts the rows of the node in every table with a node_id column and its points in
+// the tables keyed by series.
+func nodeRows(t *testing.T, conn *pgx.Conn, node uuid.UUID, series []int64) map[string]int64 {
+	t.Helper()
+	ctx := context.Background()
+	rows, err := conn.Query(ctx, `SELECT c.table_name FROM information_schema.columns c
+		JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+		WHERE c.table_schema = 'public' AND c.column_name = 'node_id' AND t.table_type = 'BASE TABLE'
+		  AND NOT c.table_name LIKE 'security_events\_%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]int64{}
+	count := func(name, query string, arg any) {
+		var n int64
+		if err := conn.QueryRow(ctx, query, arg).Scan(&n); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		out[name] = n
+	}
+	for _, table := range tables {
+		count(table, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()+" WHERE node_id = $1", node)
+	}
+	count("nodes", "SELECT count(*) FROM nodes WHERE id = $1", node)
+	for _, table := range []string{"metrics_raw", "metrics_1m", "anomaly_points", "anomaly_baselines"} {
+		count(table, "SELECT count(*) FROM "+table+" WHERE series_id = ANY($1)", series)
+	}
+	return out
+}
+
+func nodeSeries(t *testing.T, conn *pgx.Conn, node uuid.UUID) []int64 {
+	t.Helper()
+	rows, err := conn.Query(context.Background(), "SELECT id FROM series WHERE node_id = $1", node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ids
+}
+
+// M5-29 (ADR 0041): the job purges a deactivated node that is due with everything it left in
+// the database, writes node.purge into the organization's audit log, and touches neither the
+// other node of the organization nor the same data of another organization. Nodes that are only
+// deactivated, or not due yet, stay.
+func TestNodePurge_RemovesTheNodesDataAndNothingElse(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	p := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	other := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	gone, sibling, elsewhere := uuid.New(), uuid.New(), uuid.New()
+	seedNodeData(t, f.db.OwnerDSN, p.org, gone)
+	seedNodeData(t, f.db.OwnerDSN, p.org, sibling)
+	seedNodeData(t, f.db.OwnerDSN, other.org, elsewhere)
+	owner, err := pgx.Connect(ctx, pgtest.Shared(t).OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = owner.Close(ctx) }()
+	series := map[uuid.UUID][]int64{}
+	before := map[uuid.UUID]map[string]int64{}
+	for _, n := range []uuid.UUID{gone, sibling, elsewhere} {
+		series[n] = nodeSeries(t, owner, n)
+		before[n] = nodeRows(t, owner, n, series[n])
+	}
+	for _, table := range []string{
+		"nodes", "series", "metrics_raw", "metrics_1m", "anomaly_points", "anomaly_baselines", "security_events",
+		"alert_instances", "alert_history", "known_login_sources", "agent_certificates",
+	} {
+		if before[gone][table] < 1 {
+			t.Fatalf("fixture incomplete: %s = %v", table, before[gone])
+		}
+	}
+
+	pg := open(t, f.appDSN)
+	store := postgres.NewNodeLifecycleStore(pg)
+	now := time.Now()
+	purge := func(node uuid.UUID) error { return store.Purge(ctx, tenant.OrgID(p.org), identity.NodeID(node), now) }
+	if err := purge(gone); err == nil || !strings.Contains(err.Error(), "not deactivated and due") {
+		t.Fatalf("purge of an active node: %v", err)
+	}
+	audit := access.AuditEntry{Action: "node.schedule_deletion", Target: "node:" + gone.String()}
+	if err := store.ScheduleDeletion(ctx, tenant.OrgID(p.org), identity.NodeID(gone), now, now.Add(time.Hour), audit); err != nil {
+		t.Fatal(err)
+	}
+	if err := purge(gone); err == nil {
+		t.Fatal("purge before the deadline succeeded")
+	}
+	// The same node ID through another organization's purge: refused.
+	if err := store.Purge(ctx, tenant.OrgID(other.org), identity.NodeID(gone), now.Add(2*time.Hour)); err == nil {
+		t.Fatal("another organization purged the node")
+	}
+	if err := store.Deactivate(ctx, tenant.OrgID(p.org), identity.NodeID(sibling), now, audit); err != nil {
+		t.Fatal(err)
+	}
+	due, err := store.DueForDeletion(ctx, now.Add(2*time.Hour), nodelife.PurgeBatch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(due) != 1 || due[0] != (nodelife.Due{Org: tenant.OrgID(p.org), Node: identity.NodeID(gone)}) {
+		t.Fatalf("due = %v, want only the scheduled node", due)
+	}
+	if err := store.Purge(ctx, due[0].Org, due[0].Node, now.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	for table, n := range nodeRows(t, owner, gone, series[gone]) {
+		if n != 0 {
+			t.Errorf("%s: %d rows of the deleted node left", table, n)
+		}
+	}
+	for _, n := range []uuid.UUID{sibling, elsewhere} {
+		for table, count := range nodeRows(t, owner, n, series[n]) {
+			if count != before[n][table] {
+				t.Errorf("%s of node %s: %d rows, had %d", table, n, count, before[n][table])
+			}
+		}
+	}
+	var action, details string
+	if err := owner.QueryRow(ctx, "SELECT action, details::text FROM audit_log WHERE org_id = $1 AND target = $2 ORDER BY seq DESC LIMIT 1",
+		p.org, "node:"+gone.String()).Scan(&action, &details); err != nil || action != "node.purge" || !strings.Contains(details, "host-") {
+		t.Errorf("audit = %q %s (%v), want node.purge with the host name", action, details, err)
+	}
+}
+
+// Deactivating revokes every certificate of the node and the definer check refuses it even with
+// a certificate not revoked; the takeover window closes.
+func TestNodeLifecycle_DeactivationRefusesTheAgent(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	p := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	node := uuid.New()
+	seedNodeData(t, f.db.OwnerDSN, p.org, node)
+	app, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = app.Close(ctx) }()
+	var serial string
+	ownerQueryRowPurge(t, f.db.OwnerDSN, "SELECT serial FROM agent_certificates WHERE node_id = '"+node.String()+"'", &serial)
+	usable := func() bool {
+		t.Helper()
+		var ok bool
+		if err := app.QueryRow(ctx, "SELECT agent_certificate_usable($1, $2, $3, now())", serial, p.org, node).Scan(&ok); err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	if !usable() {
+		t.Fatal("the certificate is not usable before")
+	}
+	ownerExec(t, f.db.OwnerDSN, "UPDATE nodes SET takeover_until = now() + interval '1 hour' WHERE id = $1", node)
+	if err := postgres.NewNodeLifecycleStore(open(t, f.appDSN)).Deactivate(ctx, tenant.OrgID(p.org), identity.NodeID(node), time.Now(),
+		access.AuditEntry{Action: "node.deactivate", Target: "node:" + node.String()}); err != nil {
+		t.Fatal(err)
+	}
+	if usable() {
+		t.Error("the certificate of a deactivated node is usable")
+	}
+	var revoked, window bool
+	ownerQueryRowPurge(t, f.db.OwnerDSN, "SELECT revoked_at IS NOT NULL FROM agent_certificates WHERE serial = '"+serial+"'", &revoked)
+	ownerQueryRowPurge(t, f.db.OwnerDSN, "SELECT takeover_until IS NOT NULL FROM nodes WHERE id = '"+node.String()+"'", &window)
+	if !revoked || window {
+		t.Errorf("revoked %v, takeover window open %v", revoked, window)
+	}
+	// Even un-revoked by hand, the deactivation refuses it.
+	ownerExec(t, f.db.OwnerDSN, "UPDATE agent_certificates SET revoked_at = NULL WHERE serial = $1", serial)
+	if usable() {
+		t.Error("deactivated node with an unrevoked certificate is usable")
+	}
+}
+
+// Cancelling while the job starts: node_purge locks the row before it checks, so it sees the
+// cancellation or the cancellation waits and finds nothing.
+func TestNodePurge_WaitsForAConcurrentCancel(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	p := seedPurgeOrg(t, f.db.OwnerDSN, uuid.Nil)
+	node := uuid.New()
+	seedNodeData(t, f.db.OwnerDSN, p.org, node)
+	ownerExec(t, f.db.OwnerDSN, "UPDATE nodes SET deactivated_at = now(), deletion_due_at = now() - interval '1 minute' WHERE id = $1", node)
+	cancel, err := pgx.Connect(ctx, f.db.OwnerDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cancel.Close(ctx) }()
+	tx, err := cancel.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "UPDATE nodes SET deletion_due_at = NULL WHERE id = $1", node); err != nil {
+		t.Fatal(err)
+	}
+	purged := make(chan error, 1)
+	store := postgres.NewNodeLifecycleStore(open(t, f.appDSN))
+	go func() {
+		purged <- store.Purge(ctx, tenant.OrgID(p.org), identity.NodeID(node), time.Now())
+	}()
+	select {
+	case err := <-purged:
+		t.Fatalf("node_purge did not wait for the cancel: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-purged; err == nil {
+		t.Error("node_purge deleted a node whose deletion was just cancelled")
+	}
+	var left int
+	ownerQueryRowPurge(t, f.db.OwnerDSN, "SELECT count(*) FROM nodes WHERE id = '"+node.String()+"'", &left)
+	if left != 1 {
+		t.Error("the node is gone")
+	}
+}

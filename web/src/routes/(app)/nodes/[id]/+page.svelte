@@ -370,10 +370,13 @@
 
 			<Tabs.Content value="identity" class="pt-4">
 				{#if tab === 'identity'}
-					{#await import('#lib/components/node/NodeIdentity.svelte')}
+					{#await Promise.all( [import('#lib/components/node/NodeIdentity.svelte'), import('#lib/components/node/NodeLifecycle.svelte')] )}
 						<p role="status" class="text-muted-foreground">{m.loading()}</p>
-					{:then { default: NodeIdentity }}
-						<NodeIdentity node={nodeState.node} {now} onchange={() => void nodeState.load()} />
+					{:then [{ default: NodeIdentity }, { default: NodeLifecycle }]}
+						<div class="flex flex-col gap-6">
+							<NodeIdentity node={nodeState.node} {now} onchange={() => void nodeState.load()} />
+							<NodeLifecycle node={nodeState.node} {now} onchange={() => void nodeState.load()} />
+						</div>
 					{/await}
 				{/if}
 			</Tabs.Content>

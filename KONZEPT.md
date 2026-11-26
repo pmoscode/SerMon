@@ -108,6 +108,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/ad
 | D28 | Mitglieder     | **Einladungslink:** einmalig, 72 h gültig, nur als Hash gespeichert; **in Produktion nur per Mail** an die Adresse (SMTP Pflicht), im Entwicklungsmodus ohne SMTP zum Kopieren | Adresse bewiesen, kein Konto-Squatting, keine User-Enumeration, Admin kennt keine Passwörter ([ADR 0008](docs/adr/0008-einladungen.md), [ADR 0022](docs/adr/0022-betriebsmodus-und-einladungen-per-mail.md)) |
 | D29 | Orgs löschen   | **Erst sperren, nach Frist endgültig löschen:** Sperre beendet Logins und Ingest sofort; nach der Frist (Standard 30 Tage) werden Stamm-, Event-, Metrik- und Loki-Daten gelöscht; das Audit-Log ist vorher exportierbar; Details in [ADR 0029](docs/adr/0029-organisationen-verwalten-sperren-loeschen.md) | Schutz vor Fehlbedienung und Missbrauch, Daten bleiben bis zum Löschen nachvollziehbar |
 | D30 | Enrollment     | **Über den öffentlichen HTTPS-Endpunkt**, danach mTLS auf dem Agent-Port | Neue Agents kennen die Agent-CA noch nicht; der mTLS-Port bleibt streng ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)) |
+| D31 | Nodes löschen  | **Erst deaktivieren, nach Frist löschen:** Deaktivieren widerruft die Zertifikate sofort; nach der Frist (Standard 7 Tage) werden Metrik-, Event-, Alert- und Loki-Daten des Nodes gelöscht, bis dahin abbrechbar; Details in [ADR 0041](docs/adr/0041-nodes-deaktivieren-loeschen.md) | Schutz vor Fehlbedienung, Daten eines aufgegebenen Hosts bleiben nicht |
 
 ---
 
@@ -366,6 +367,11 @@ eine Fake-Implementierung für Tests.
 
 - Node löschen oder deaktivieren → Zertifikats-Serial auf die **Denylist** (wird bei jedem Verbindungsaufbau geprüft).
   Wegen der kurzen Laufzeiten bleibt die Liste klein.
+  - Umgesetzt (M5-29, [ADR 0041](docs/adr/0041-nodes-deaktivieren-loeschen.md)): **Deaktivieren** widerruft alle
+    Zertifikate, beendet die Session und lehnt den Node ab; die Daten bleiben, Alerts ruhen. Zurück nur über
+    „Übernahme erlauben“ und ein neues Enrollment. **Löschen** deaktiviert und löscht nach einer Frist (Standard 7 Tage,
+    `SERMON_NODE_DELETION_GRACE`, mindestens 24 h) Metriken, Anomalien, Events, Alerts und Loki-Zeilen des Nodes; bis
+    dahin lässt es sich abbrechen. Beides nur für Admins der Gruppe mit Step-up und Audit, Löschen mit dem Hostnamen.
 - Re-Enrollment (z. B. nach Neuinstallation) erkennt die `machine-id` und bietet in der UI „bestehenden Node übernehmen“
   an. Das geschieht nie automatisch.
 - Deinstallation: `sermon-agent uninstall` bzw. Paket entfernen; optional mit Abmeldung beim Server.
@@ -450,6 +456,7 @@ User         1─n Credential (password | totp | webauthn) , Session, ApiToken (
 | Updates manuell auslösen, Reboot            |   –    |    ✓    |     ✓      |
 | Enrollment-Token erzeugen                   |   –    |    ✓    |     ✓      |
 | Tags von Nodes setzen                       |   –    |    –     |     ✓      |
+| Nodes deaktivieren und löschen              |   –    |    –     |     ✓      |
 | Regeln, Kanäle, Policies, Module bearbeiten |   –    |    –     |     ✓      |
 | User, Gruppen, Rollen verwalten             |   –    |    –     |     ✓      |
 | Audit-Log ansehen                           |   –    |    –     |     ✓      |

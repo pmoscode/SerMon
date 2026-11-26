@@ -1360,14 +1360,24 @@ dependencies = [
 name = "sermon-modules"
 version = "0.0.0"
 dependencies = [
+ "bytes",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "pem",
  "proptest",
+ "rcgen",
  "regex",
+ "rustls",
+ "rustls-native-certs",
  "serde_json",
  "sermon-core",
  "sermon-helper-proto",
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-rustls",
  "tokio-util",
 ]
 

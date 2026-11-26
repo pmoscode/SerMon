@@ -52,7 +52,8 @@ Module (ADR 0039): `agent/crates/sermon-modules` (Vertrag `Module`/`Instance`, L
 `[local]` in `agent.toml`); neue Module über den Skill `sermon-add-module`. Dateien des Hosts (`ProcRoot`) und den
 Root-Helper (Port `Helper`) bekommen Module über `Setup.host`; einzige Helper-Op eines Moduls ist `ReadSmart` (M5-18,
 Veto `allow_smart` in `helper.toml`). Jedes Modul ist ein Cargo-Feature von `sermon-modules` (ab Werk alle an). Das Testmodul `simulate` gibt es nur mit
-dem Feature `simulate` (`just simulate`, nie im Release).
+dem Feature `simulate` (`just simulate`, nie im Release). Module erreichen Dienste nur über
+`sermon_modules::http::Client` (Veto, Weiterleitungen, Grenzen; M5-08); Discovery über `Module::discover` (M5-04).
 Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit, PKI, TLS-Server, Fake-Services).
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
 `just e2e-demo` baut den Agent, startet die Produktions-Compose `deploy/compose/compose.yaml` mit dem Overlay

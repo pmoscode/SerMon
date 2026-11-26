@@ -12,23 +12,48 @@ publish.workspace = true
 workspace = true
 
 [features]
-# Every module is a feature (ADR 0039); the release builds them all.
-default = ["smart"]
+# Every module is a feature of its name (ADR 0039); the release builds them all.
+default = ["http_check", "smart", "tcp_check"]
 # SMART of the disks through the root helper (M5-18).
 smart = []
 # The module `simulate` for tests and demos (ADR 0039); `sermon-agent`'s feature `simulate`.
 simulate = []
+# The HTTP client of the modules (M5-08).
+http = [
+  "dep:bytes",
+  "dep:http",
+  "dep:http-body-util",
+  "dep:hyper",
+  "dep:hyper-util",
+  "dep:pem",
+  "dep:rustls",
+  "dep:rustls-native-certs",
+  "dep:tokio-rustls",
+]
+http_check = ["http"]
+tcp_check = []
 
 [dependencies]
+bytes = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true }
+hyper-util = { workspace = true, optional = true }
+pem = { workspace = true, optional = true }
 regex.workspace = true
+rustls = { workspace = true, optional = true }
+rustls-native-certs = { workspace = true, optional = true }
 sermon-core.workspace = true
 sermon-helper-proto.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["net", "rt"] }
+tokio = { workspace = true, features = ["net", "rt", "io-util"] }
+tokio-rustls = { workspace = true, optional = true }
 tokio-util.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+rcgen.workspace = true
+sermon-core = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
-tokio = { workspace = true, features = ["net", "rt", "test-util"] }
+tokio = { workspace = true, features = ["net", "rt", "io-util", "test-util"] }

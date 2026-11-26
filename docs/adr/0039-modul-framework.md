@@ -159,3 +159,18 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
 - **Senden:** einmal nach dem Start (der Server kennt die letzte Liste nicht), danach nur bei Änderung, auch eine leere
   Liste; gepuffert im WAL wie die Gesundheit (`Outbox::push_discovery_hints`). Mit `allow_modules = false` läuft keine
   Discovery.
+
+## Nachtrag M5-08 (HTTP-Client und Checks)
+
+- **Ein Client für alle Module** (`sermon_modules::http::Client`): HTTP/1.1 von hyper (über tonic schon im Baum),
+  rustls mit ring; keine neue Crate. Nur `GET`, eine Anfrage je Verbindung, kein `Accept-Encoding` (nichts zu
+  entpacken). Grenzen: ein Timeout für die Anfrage mit allen Weiterleitungen, 1 MiB Body, 64 KiB und 64 Header.
+- **Weiterleitungen** höchstens drei, jede über `Veto::resolve`; nie von HTTPS zu HTTP; `Authorization` nur an
+  Schema, Host und Port der Konfiguration. Ein Ziel außerhalb des Vetos ist eine Weigerung (`vetoed`), keine
+  ausgefallene Gegenstelle.
+- **TLS:** CAs des Systems oder eine CA-Datei unter `module_file_prefixes`; ohne Prüfung nur ausdrücklich
+  (`tls_verify: false`), die Signaturen des Handshakes prüft rustls dennoch.
+- **Zeit:** `Run::now()` liefert die Uhr der Laufzeit (`Clock`), etwa für die Restlaufzeit eines Zertifikats.
+- **IDs:** Ein Modul heißt nicht wie ein Präfix der Collectors (`tcp`, `systemd`, `system`, `network` …), sonst
+  mischten sich die Metriken; daher `http_check` und `tcp_check`.
+- **Features:** jedes Modul hinter einem Cargo-Feature seines Namens, alle in `default`; der Client hinter `http`.

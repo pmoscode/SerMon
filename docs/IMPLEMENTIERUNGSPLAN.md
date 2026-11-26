@@ -5361,7 +5361,31 @@ Parallel: M5-22 → M5-23 → M5-24 → M5-25 → M5-26 → M5-27.
 Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterstützter Version unter
 `agent/fixtures/modules/`, Zeit- und Größengrenzen, Discovery, Katalog, Hilfetext, Standardregeln (M5-20).
 
-#### ☐ M5-08 – HTTP- und TCP-Check · A · M 🔒
+#### ☑ M5-08 – HTTP- und TCP-Check · A · M 🔒
+> Erledigt (`sermon-modules/src/http.rs`, `http_check.rs`, `tcp_check.rs`, `x509.rs`; Nachtrag in ADR 0039):
+> - **HTTP-Client der Module** (hyper HTTP/1.1, schon über tonic im Baum; rustls mit ring): jeder Host einmal über
+>   `Veto::resolve`, verbunden wird mit den geprüften Adressen; höchstens drei Weiterleitungen, jede erneut geprüft,
+>   nie von HTTPS zu HTTP, `Authorization` nur an den konfigurierten Host und Port; ein Timeout für alles, 1 MiB
+>   Body (auch bei falscher oder fehlender Länge), 64 KiB und 64 Header; nur `GET`, eine Anfrage je Verbindung, kein
+>   `Accept-Encoding`. TLS mit den CAs des Systems (einmal je Prozess geladen) oder einer CA-Datei unter
+>   `module_file_prefixes`; ohne Prüfung nur mit `tls_verify: false`. Unix-Sockets unter `module_sockets` (für die
+>   Docker-API, M5-17). Fehlertexte nennen die URL ohne Query.
+> - **Module** `http_check` (bis 16 URLs gleichzeitig, Body ungelesen; erwartete Statuscodes, ab Werk 200–399) und
+>   `tcp_check` (bis 16 `host:port`), Timeout je Ziel bis 25 s. Metriken mit Label `target` (URL ohne Query bzw.
+>   `host:port`): `sermon_http_check_up`, `…_status_code`, `…_duration_seconds` (bis zu den Headern der letzten
+>   Antwort), `…_cert_expires_in_seconds` (Zertifikat des konfigurierten Hosts, negativ nach Ablauf);
+>   `sermon_tcp_check_up`, `…_duration_seconds`. Ein Ziel außerhalb des Vetos (auch über eine Weiterleitung) macht
+>   das Modul `vetoed`; ein Ziel ohne Antwort ist `up` 0. Die IDs tragen `_check`, weil `sermon_tcp_…` den Collectors
+>   gehört.
+> - **Zeit:** `Run::now()` (die Uhr der Laufzeit) für die Restlaufzeit der Zertifikate; DER-Leser für die Gültigkeit
+>   (`x509.rs`, nur definite Längen bis 4 Byte).
+> - **Kosten:** +0,33 MB Release-Binary (arm64, HTTP-Client, TLS-Verifikation ohne neue Crates, beide Module);
+>   Laufzeit: eine Verbindung je Ziel und Intervall (Standard 30 s), kein Body gelesen.
+> - Tests: Testserver für Status, Zeitüberschreitung, Weiterleitung nach außen (abgelehnt), innerhalb (drei ja, vier
+>   nein), HTTPS → HTTP, Zugangsdaten nur an den Host, zu große Antwort (mit, ohne und mit falscher Länge), zu viele
+>   Header, Unsinn statt HTTP, TLS mit CA-Datei, fremder CA, IP im Zertifikat, ohne Prüfung, Zertifikat der ersten
+>   Station, Unix-Socket; Module mit Restlaufzeit über eine feste Uhr; Fuzz-Ziel `module_parsers` um URLs,
+>   Weiterleitungen und DER erweitert; Gegenproben 24/24.
 - **Ziel:** Erreichbarkeit, Latenz, Statuscode und Ablauf des Zertifikats lokaler Endpunkte; nur Ziele, die das
   lokale Veto erlaubt, Weiterleitungen nur innerhalb davon, TLS mit Prüfung (abschaltbar nur ausdrücklich). Dazu der
   gemeinsame HTTP-Client der Module (Verbindung zur geprüften Adresse, höchstens drei Weiterleitungen, 1 MiB je

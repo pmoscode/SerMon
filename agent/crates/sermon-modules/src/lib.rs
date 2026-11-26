@@ -7,13 +7,21 @@
 //! [`veto`].
 
 pub mod discovery;
+pub mod fields;
+#[cfg(feature = "http")]
+pub mod http;
+#[cfg(feature = "http_check")]
+pub mod http_check;
 pub mod runtime;
 pub mod schema;
 #[cfg(feature = "simulate")]
 pub mod simulate;
 #[cfg(feature = "smart")]
 pub mod smart;
+#[cfg(feature = "tcp_check")]
+pub mod tcp_check;
 pub mod veto;
+pub mod x509;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -23,7 +31,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use sermon_core::{ProcRoot, Sample};
+use sermon_core::{Clock, ProcRoot, Sample, SystemClock};
 use sermon_helper_proto::v1::{HelperRequest, HelperResponse};
 
 pub use discovery::{Discovered, HostFacts, Reason};
@@ -35,8 +43,12 @@ pub use veto::{Refused, Veto};
 pub fn builtin() -> Vec<Arc<dyn Module>> {
     // Every module is a feature (ADR 0039).
     let modules: Vec<Arc<dyn Module>> = vec![
+        #[cfg(feature = "http_check")]
+        Arc::new(http_check::HttpCheck),
         #[cfg(feature = "smart")]
         Arc::new(smart::Smart),
+        #[cfg(feature = "tcp_check")]
+        Arc::new(tcp_check::TcpCheck),
     ];
     with_simulate(modules)
 }
@@ -169,13 +181,35 @@ pub enum RunError {
 }
 
 /// What a run may use: blocking work goes through [`Run::blocking`], so the runtime knows when
-/// a run hangs.
-#[derive(Debug, Clone, Default)]
+/// a run hangs; the time through [`Run::now`].
+#[derive(Debug, Clone)]
 pub struct Run {
     blocking: Arc<AtomicUsize>,
+    clock: Arc<dyn Clock>,
+}
+
+impl Default for Run {
+    fn default() -> Self {
+        Self::new(Arc::new(SystemClock::new()))
+    }
 }
 
 impl Run {
+    /// The runs of a module on `clock`.
+    #[must_use]
+    pub fn new(clock: Arc<dyn Clock>) -> Self {
+        Self {
+            blocking: Arc::new(AtomicUsize::new(0)),
+            clock,
+        }
+    }
+
+    /// The agent's wall-clock time (e.g. for the days a certificate has left).
+    #[must_use]
+    pub fn now(&self) -> std::time::SystemTime {
+        self.clock.now()
+    }
+
     /// Runs `f` on a blocking thread. A run that times out can't stop it; until it returns, the
     /// module counts as hung and starts no new run.
     ///

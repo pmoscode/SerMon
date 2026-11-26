@@ -83,6 +83,9 @@ for file in ../fixtures/discovery/*/proc/net/unix; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\001'; cat "$file"; } >"corpus/module_parsers/fixture$name"
 done
+# 2: certificates, 3: a URL and a redirect target.
+printf '\003http://localhost:8080/nginx_status?auto/server-status' >corpus/module_parsers/url
+printf '\003https://[::1]:8443/a/b//other/x?y' >corpus/module_parsers/url-v6
 # smart_parser: the outputs of smartctl (M5-18).
 mkdir -p corpus/smart_parser
 for file in ../fixtures/modules/smart/*/*.json; do

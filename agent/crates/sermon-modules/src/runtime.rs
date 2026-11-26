@@ -379,7 +379,7 @@ async fn supervise(s: Supervised) {
             .clamp(MIN_INTERVAL, MAX_INTERVAL);
         let mut tick = tokio::time::interval(interval);
         tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
-        let run = Run::default();
+        let run = Run::new(s.shared.clock.clone());
         loop {
             tokio::select! {
                 () = s.cancel.cancelled() => return,

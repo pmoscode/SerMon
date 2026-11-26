@@ -108,3 +108,8 @@ for file in ../fixtures/modules/systemd_units/*/show.txt; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\004'; cat "$file"; } >"corpus/module_parsers/fixture$name"
 done
+# 5: the stub_status pages of nginx (M5-11).
+for file in ../fixtures/modules/nginx/*/stub_status.txt; do
+  name=$(printf '%s' "$file" | tr '/.' '__')
+  { printf '\005'; cat "$file"; } >"corpus/module_parsers/fixture$name"
+done

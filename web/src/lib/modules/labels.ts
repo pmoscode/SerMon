@@ -16,7 +16,8 @@ const names: Record<string, Text> = {
 	smart: m.module_smart,
 	docker: m.module_docker,
 	systemd_units: m.module_systemd_units,
-	tls: m.module_tls
+	tls: m.module_tls,
+	nginx: m.module_nginx
 };
 
 const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
@@ -55,6 +56,12 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 		server_name: [m.module_tls_server_name, m.module_tls_server_name_help],
 		ca_file: [m.module_tls_ca_file, m.module_tls_ca_file_help],
 		timeout: [m.module_tls_timeout, m.module_tls_timeout_help]
+	},
+	nginx: {
+		url: [m.module_nginx_url, m.module_nginx_url_help],
+		timeout: [m.module_nginx_timeout, m.module_nginx_timeout_help],
+		tls_verify: [m.module_nginx_tls_verify, m.module_nginx_tls_verify_help],
+		ca_file: [m.module_nginx_ca_file, m.module_nginx_ca_file_help]
 	}
 };
 

@@ -5491,7 +5491,26 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Fixtures von `systemctl show` der Zieldistros, Grenzen der Zahl der Units.
 - **Abhängig von:** M5-03
 
-#### ☐ M5-11 – nginx · A · S
+#### ☑ M5-11 – nginx · A · S
+> Erledigt (`sermon-modules/src/nginx.rs`, Modul `nginx`):
+> - **Abfrage** der `stub_status`-Seite über den HTTP-Client der Module (Vorgabe `http://127.0.0.1/nginx_status`,
+>   Timeout, TLS-Optionen); strenger Parser (genau vier Zeilen, höchstens 4 KiB, Zahlen als `u64`). Der Client
+>   unterscheidet jetzt `Unreachable` (keine Verbindung, keine Antwort in der Zeit) von `Failed` (falsche Antwort):
+>   nginx aus heißt `sermon_nginx_up` 0, eine Antwort ohne Statusseite (404, fremde Seite, zu groß) ein Fehler des
+>   Moduls mit Grund.
+> - **Metriken** ohne Labels: `sermon_nginx_up`, `…_connections_active`, `…_reading`, `…_writing`, `…_waiting` und die
+>   Raten `…_connections_accepted_per_second`, `…_handled_per_second`, `…_dropped_per_second` (angenommen minus
+>   bearbeitet: `worker_connections` erschöpft), `sermon_nginx_requests_per_second`. Raten über die monotone Uhr
+>   (`Run::monotonic`, `rate.rs`), ab dem zweiten Lauf, ausgesetzt nach einem Rücksprung und nach einem Ausfall.
+> - **Discovery:** Prozess `nginx` oder Unit `nginx.service`, dazu Port 80/443; Vorgabe `url` auf dem Listener von
+>   Port 80 (Loopback für „alle Adressen“). Auf allen aufgenommenen Hosts von M5-04 gefunden.
+> - **E2E:** nginx mit Statusseite auf `web-01` (`deploy/e2e/compose.yaml`, Paket `nginx`,
+>   `deploy/e2e/nginx-status.conf` auf `127.0.0.1:80`) für die Demo M5-32; im Image von Hand geprüft.
+> - **Fixtures** `agent/fixtures/modules/nginx/<version>/stub_status.txt` (1.22, 1.24, 1.26, 1.28, 1.29 aus den
+>   offiziellen Images, `capture.sh`, mit lesender, schreibender und wartender Verbindung); Fuzz-Ziel erweitert;
+>   Katalog, Hilfetexte DE + EN (Einrichtung der Statusseite nur für Loopback).
+> - Tests: jede Version, kaputte und zu große Seiten, Raten, Rücksprung, Ausfall, aus gegen falsch eingerichtet,
+>   Veto, Discovery auf allen Distros und mit IPv6; Gegenproben 11/11.
 - **Ziel:** `stub_status` (Verbindungen, Anfragen); Discovery über Port und Prozess; nginx im E2E-Compose.
 - **Tests zuerst:** Fixtures je Version, kaputte und zu große Antworten.
 - **Abhängig von:** M5-03, M5-04, M5-08

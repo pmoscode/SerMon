@@ -311,7 +311,10 @@ async fn bounds_the_answer() {
         .get(&url(&format!("http://{}/", big.addr)), true)
         .await
         .unwrap_err();
-    assert!(e.to_string().contains("larger than"), "{e}");
+    assert!(
+        matches!(&e, HttpError::Failed(why) if why.contains("larger than")),
+        "{e}"
+    );
     let exact = serve(Arc::new(|_, _| answer("200 OK", "", &"x".repeat(MAX_BODY)))).await;
     let r = c
         .get(&url(&format!("http://{}/", exact.addr)), true)
@@ -349,7 +352,10 @@ async fn bounds_the_answer() {
         .get(&url(&format!("http://{silent}/")), true)
         .await
         .unwrap_err();
-    assert!(e.to_string().contains("no answer within 300 ms"), "{e}");
+    assert!(
+        matches!(&e, HttpError::Unreachable(why) if why.contains("no answer within 300 ms")),
+        "{e}"
+    );
     let announced = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let liar = announced.local_addr().unwrap();
     tokio::spawn(async move {
@@ -372,7 +378,12 @@ async fn bounds_the_answer() {
         e.to_string().contains("larger than"),
         "refused by its length: {e}"
     );
+}
 
+// Too many headers or no HTTP at all is a bad answer; a closed port is no answer.
+#[tokio::test]
+async fn tells_bad_answers_from_none() {
+    let c = client(&Veto::default(), Options::default());
     let headers = serve(Arc::new(|_, _| {
         answer("200 OK", &"X-Filler: a\r\n".repeat(MAX_HEADERS + 1), "")
     }))
@@ -383,21 +394,20 @@ async fn bounds_the_answer() {
             .is_err()
     );
     let garbage = serve(Arc::new(|_, _| b"SSH-2.0-OpenSSH_9.6\r\n".to_vec())).await;
-    assert!(
+    assert!(matches!(
         c.get(&url(&format!("http://{}/", garbage.addr)), true)
-            .await
-            .is_err()
-    );
+            .await,
+        Err(HttpError::Failed(_))
+    ));
     let closed = TcpListener::bind("127.0.0.1:0")
         .await
         .unwrap()
         .local_addr()
         .unwrap();
-    assert!(
-        c.get(&url(&format!("http://{closed}/")), true)
-            .await
-            .is_err()
-    );
+    assert!(matches!(
+        c.get(&url(&format!("http://{closed}/")), true).await,
+        Err(HttpError::Unreachable(_))
+    ));
 }
 
 struct TlsServer {

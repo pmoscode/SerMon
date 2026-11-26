@@ -1,0 +1,49 @@
+{
+  "metrics": [
+    {
+      "name": "sermon_nginx_up",
+      "unit": "boolean",
+      "aggregation": "last"
+    },
+    {
+      "name": "sermon_nginx_connections_active",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_nginx_connections_reading",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_nginx_connections_writing",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_nginx_connections_waiting",
+      "unit": "count",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_nginx_connections_accepted_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_nginx_connections_handled_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_nginx_connections_dropped_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    },
+    {
+      "name": "sermon_nginx_requests_per_second",
+      "unit": "per_second",
+      "aggregation": "avg"
+    }
+  ]
+}

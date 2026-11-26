@@ -129,7 +129,7 @@ impl Instance for Checks {
                 let response = match answer {
                     Ok(response) => response,
                     Err(HttpError::Vetoed(r)) => return Err(RunError::Vetoed(r)),
-                    Err(HttpError::Failed(_)) => {
+                    Err(HttpError::Failed(_) | HttpError::Unreachable(_)) => {
                         samples.push(Sample::int("sermon_http_check_up", 0).label("target", label));
                         continue;
                     }

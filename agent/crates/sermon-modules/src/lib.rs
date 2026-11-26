@@ -14,6 +14,9 @@ pub mod fields;
 pub mod http;
 #[cfg(feature = "http_check")]
 pub mod http_check;
+#[cfg(feature = "nginx")]
+pub mod nginx;
+pub mod rate;
 pub mod runtime;
 pub mod schema;
 #[cfg(feature = "simulate")]
@@ -53,6 +56,8 @@ pub fn builtin() -> Vec<Arc<dyn Module>> {
         Arc::new(docker::Docker),
         #[cfg(feature = "http_check")]
         Arc::new(http_check::HttpCheck),
+        #[cfg(feature = "nginx")]
+        Arc::new(nginx::Nginx),
         #[cfg(feature = "smart")]
         Arc::new(smart::Smart),
         #[cfg(feature = "systemd_units")]
@@ -236,6 +241,12 @@ impl Run {
     #[must_use]
     pub fn now(&self) -> std::time::SystemTime {
         self.clock.now()
+    }
+
+    /// The agent's monotonic time, for rates between runs.
+    #[must_use]
+    pub fn monotonic(&self) -> sermon_core::Monotonic {
+        self.clock.monotonic()
     }
 
     /// Runs `f` on a blocking thread. A run that times out can't stop it; until it returns, the

@@ -82,6 +82,9 @@ E2E-Images mit systemd auf (Debian 13, Ubuntu 24.04, Rocky 9, Alma 10, Fedora 44
 Neustart-Schleife (`Restart=always`), ein fehlgeschlagener Dienst, eine Template-Instanz, ein Timer und eine unbekannte
 Unit. Auf Rocky und Alma ist `dbus.service` ein Alias von `dbus-broker.service`.
 
+`modules/nginx/capture.sh` (M5-11) holt die `stub_status`-Seite aus den offiziellen Images `nginx:<version>-alpine`
+(1.22 bis 1.29), nach zehn Anfragen und mit je einer Verbindung, die liest, schreibt und wartet.
+
 ## Updates (`updates/`)
 
 `updates/capture.sh` (M4-06) führt die Listen-Befehle des Root-Helpers (ADR 0035, Nachtrag M4-03) mit `LC_ALL=C` in

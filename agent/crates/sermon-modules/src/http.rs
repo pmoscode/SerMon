@@ -96,7 +96,10 @@ pub enum HttpError {
     /// The veto refuses an address or socket.
     #[error(transparent)]
     Vetoed(#[from] Refused),
-    /// The service can't be reached, answers nonsense or too much.
+    /// No connection, or no answer within the timeout: the service is down (or not there).
+    #[error("{0}")]
+    Unreachable(String),
+    /// The service answers, but nonsense, too much or with a certificate that doesn't verify.
     #[error("{0}")]
     Failed(String),
 }
@@ -105,13 +108,17 @@ impl From<HttpError> for RunError {
     fn from(e: HttpError) -> Self {
         match e {
             HttpError::Vetoed(r) => Self::Vetoed(r),
-            HttpError::Failed(why) => Self::Failed(why),
+            HttpError::Unreachable(why) | HttpError::Failed(why) => Self::Failed(why),
         }
     }
 }
 
 fn failed(what: impl std::fmt::Display) -> HttpError {
     HttpError::Failed(what.to_string())
+}
+
+fn unreachable(what: impl std::fmt::Display) -> HttpError {
+    HttpError::Unreachable(what.to_string())
 }
 
 /// An `http` or `https` URL without user and password; the fragment dropped.
@@ -341,13 +348,13 @@ impl Client {
     /// # Errors
     ///
     /// [`HttpError::Vetoed`] if the veto refuses an address on the way, otherwise
-    /// [`HttpError::Failed`].
+    /// [`HttpError::Unreachable`] or [`HttpError::Failed`].
     pub async fn get(&self, url: &Url, read_body: bool) -> Result<Response, HttpError> {
         let start = Instant::now();
         tokio::time::timeout(self.options.timeout, self.follow(url, read_body, start))
             .await
             .map_err(|_| {
-                failed(format!(
+                unreachable(format!(
                     "{}: no answer within {} ms",
                     url.label(),
                     self.options.timeout.as_millis()
@@ -359,7 +366,8 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// [`HttpError::Vetoed`] if the veto refuses the socket, otherwise [`HttpError::Failed`].
+    /// [`HttpError::Vetoed`] if the veto refuses the socket, otherwise [`HttpError::Unreachable`]
+    /// or [`HttpError::Failed`].
     pub async fn get_unix(
         &self,
         socket: &Path,
@@ -374,7 +382,7 @@ impl Client {
         let exchange = async {
             let stream = UnixStream::connect(&socket)
                 .await
-                .map_err(|e| failed(format!("{}: {e}", socket.display())))?;
+                .map_err(|e| unreachable(format!("{}: {e}", socket.display())))?;
             let answer = self
                 .send(stream, "localhost", path, None, read_body)
                 .await?;
@@ -390,7 +398,7 @@ impl Client {
         tokio::time::timeout(self.options.timeout, exchange)
             .await
             .map_err(|_| {
-                failed(format!(
+                unreachable(format!(
                     "{}: no answer within {} ms",
                     socket.display(),
                     self.options.timeout.as_millis()
@@ -465,7 +473,7 @@ impl Client {
     ) -> Result<(Answer, Option<CertificateDer<'static>>), HttpError> {
         let stream = connect(addresses)
             .await
-            .map_err(|e| failed(format!("{}: {e}", url.label())))?;
+            .map_err(|e| unreachable(format!("{}: {e}", url.label())))?;
         let authority = url.authority();
         if !url.https {
             let answer = self
@@ -624,7 +632,8 @@ async fn connect(addresses: &[SocketAddr]) -> std::io::Result<TcpStream> {
 ///
 /// # Errors
 ///
-/// [`HttpError::Vetoed`] if the veto refuses an address, otherwise [`HttpError::Failed`].
+/// [`HttpError::Vetoed`] if the veto refuses an address, otherwise [`HttpError::Unreachable`]
+/// or [`HttpError::Failed`].
 pub async fn peer_chain(
     veto: &Veto,
     host: &str,
@@ -638,7 +647,7 @@ pub async fn peer_chain(
         let addresses = veto.resolve(host, port).await?;
         let stream = connect(&addresses)
             .await
-            .map_err(|e| failed(format!("{target}: {e}")))?;
+            .map_err(|e| unreachable(format!("{target}: {e}")))?;
         let options = Options {
             tls_verify: false,
             ..Options::default()
@@ -667,7 +676,7 @@ pub async fn peer_chain(
     tokio::time::timeout(timeout, handshake)
         .await
         .map_err(|_| {
-            failed(format!(
+            unreachable(format!(
                 "{target}: no answer within {} ms",
                 timeout.as_millis()
             ))

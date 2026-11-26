@@ -281,7 +281,7 @@ impl Instance for Certificates {
                 let chain = match chain {
                     Ok(chain) => chain,
                     Err(HttpError::Vetoed(r)) => return Err(RunError::Vetoed(r)),
-                    Err(HttpError::Failed(_)) => Vec::new(),
+                    Err(HttpError::Failed(_) | HttpError::Unreachable(_)) => Vec::new(),
                 };
                 let server_name = match name.parse::<std::net::IpAddr>() {
                     Ok(ip) => Some(ServerName::IpAddress(ip.into())),

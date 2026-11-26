@@ -1497,5 +1497,14 @@
 	"widget_table_max": "Max",
 	"widget_failed": "Die Daten konnten nicht geladen werden.",
 	"widget_stale": "Nicht aktuell: Die letzte Aktualisierung schlug fehl.",
-	"dashboard_widget_content": "Inhalt von {title}"
+	"dashboard_widget_content": "Inhalt von {title}",
+	"module_nginx": "nginx-Webserver",
+	"module_nginx_url": "Status-URL",
+	"module_nginx_url_help": "Die Adresse mit stub_status, z. B. http://127.0.0.1/nginx_status.",
+	"module_nginx_timeout": "Zeitgrenze",
+	"module_nginx_timeout_help": "Höchstens 25 s.",
+	"module_nginx_tls_verify": "TLS-Zertifikate prüfen",
+	"module_nginx_tls_verify_help": "Für eine https-URL; nur für selbstsignierte Zertifikate ausschalten, die sich nicht als CA-Datei angeben lassen.",
+	"module_nginx_ca_file": "CA-Datei",
+	"module_nginx_ca_file_help": "PEM-Datei unter module_file_prefixes, mit der statt der CAs des Systems geprüft wird."
 }

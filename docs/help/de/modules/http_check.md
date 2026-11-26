@@ -7,8 +7,9 @@ gelesen.
 ## Voraussetzungen
 
 Der Agent erreicht nur Ziele, die der Host erlaubt: `module_targets` im Abschnitt `[local]` von
-`/etc/sermon/agent.toml`, ab Werk nur Loopback (`127.0.0.0/8`, `::1`). Wer einen Dienst im Netz prüfen will, ergänzt
-dort dessen Netz. Ein Name wird einmal aufgelöst, jede Adresse muss erlaubt sein.
+`/etc/sermon/agent.toml`, ab Werk nur Loopback (`127.0.0.0/8`, `::1`), als Name nur `localhost` (`module_hosts`) und
+nur die Ports der Dienste der Module (`module_ports`). Wer einen Dienst im Netz prüfen will, ergänzt dort dessen Netz,
+Namen und Port. Ein Name wird einmal aufgelöst, jede Adresse muss erlaubt sein.
 
 ## Einstellungen
 
@@ -28,6 +29,7 @@ dort dessen Netz. Ein Name wird einmal aufgelöst, jede Adresse muss erlaubt sei
 
 ## Wenn es nicht läuft
 
-- „… is not in module_targets of agent.toml“ (Zustand `vetoed`): Das Ziel oder eine Weiterleitung liegt außerhalb
-  der erlaubten Netze.
+- „… is not in module_targets of agent.toml“, „… not allowed by module_hosts and module_targets …“ oder „port … is
+  not in module_ports …“ (Zustand `vetoed`): Das Ziel oder eine Weiterleitung liegt außerhalb dessen, was der Host
+  erlaubt. Einen Namen, den es nicht gibt, meldet der Agent genauso.
 - `up` 0 ohne Statuscode: keine Antwort (Verbindung abgelehnt, Timeout, TLS-Fehler).

@@ -25,7 +25,8 @@ anderen Port, die URL im Modul anpassen. Der Agent erreicht nur Ziele unter `mod
 
 ## Einstellungen
 
-- **Status-URL:** ab Werk `http://127.0.0.1/nginx_status`.
+- **Status-URL:** ab Werk `http://127.0.0.1/nginx_status`, ohne Query (`?…`); der Port muss unter `module_ports` in
+  `agent.toml` liegen (ab Werk etwa 80, 443, 8080, 8443).
 - **Timeout**, für HTTPS **TLS prüfen** und **CA-Datei**.
 
 ## Metriken

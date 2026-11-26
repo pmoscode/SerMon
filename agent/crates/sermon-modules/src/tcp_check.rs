@@ -185,7 +185,7 @@ mod tests {
         );
         let mut check = build(
             &format!(r#"{{"targets":["{a}","{b}","{c}"],"timeout":"1s"}}"#),
-            &Veto::default(),
+            &Veto::default().any_port(),
         )
         .unwrap();
         assert_eq!(check.timeout(), Duration::from_secs(3));
@@ -221,7 +221,7 @@ mod tests {
     async fn refuses_targets_outside_the_veto() {
         let veto = Veto {
             targets: vec![Net::parse("127.0.0.2/32").unwrap()],
-            ..Veto::default()
+            ..Veto::default().any_port()
         };
         let mut check = build(r#"{"targets":["127.0.0.1:22"]}"#, &veto).unwrap();
         assert!(matches!(
@@ -235,7 +235,7 @@ mod tests {
         // 192.0.2.1 (TEST-NET) is routed nowhere: the connection hangs until the timeout.
         let veto = Veto {
             targets: vec![Net::parse("192.0.2.0/24").unwrap()],
-            ..Veto::default()
+            ..Veto::default().any_port()
         };
         let mut check = build(r#"{"targets":["192.0.2.1:9"],"timeout":"2s"}"#, &veto).unwrap();
         let samples = tokio::time::timeout(Duration::from_secs(3), check.collect(&Run::default()))
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn checks_the_configuration() {
-        let veto = Veto::default();
+        let veto = Veto::default().any_port();
         for bad in [
             r#"{"targets":[]}"#,
             r#"{"targets":["localhost:1","localhost:1"]}"#,

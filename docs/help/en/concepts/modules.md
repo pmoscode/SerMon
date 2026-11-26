@@ -12,9 +12,12 @@ refused" with the reason.
 
 ## What the host allows
 
-Where a module may connect is up to the host's `agent.toml` (`[local]`): by default `localhost` only
-(`module_targets`), Unix sockets below `module_sockets`, files below `module_file_prefixes`. With
-`allow_modules = false` no module runs. The server can't change these bounds.
+Where a module may connect is up to the host's `agent.toml` (`[local]`): by default loopback only
+(`module_targets`), `localhost` as the only name (`module_hosts`), only the ports of the modules' services
+(`module_ports`: 80, 443, 465, 636, 993, 995, 3306, 5432, 6379, 8080, 8443, 9090–9999), Unix sockets below
+`module_sockets` (not in directories everyone may write to, such as `/run/lock`), files below `module_file_prefixes`.
+With `allow_modules = false` no module runs. The server can't change these bounds; the reasons of a refusal name no
+address or path the server didn't send itself.
 
 ## Credentials
 

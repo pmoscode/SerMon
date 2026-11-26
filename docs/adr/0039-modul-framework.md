@@ -98,9 +98,11 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
 |---|---|---|
 | `allow_modules` | `true` | `false`: kein Modul läuft, gemeldet als `vetoed` |
 | `module_targets` | `["127.0.0.0/8", "::1/128"]` | Netze, mit denen sich Module verbinden dürfen |
+| `module_hosts` | `["localhost"]` | Namen, die Module auflösen dürfen (`*.name`, `*` für alle; M5-33) |
+| `module_ports` | `[80, 443, 465, 636, 993, 995, 3306, 5432, 6379, 8080, 8443, "9090-9999"]` | TCP-Ports, mit denen sich Module verbinden dürfen (`"1-65535"` für alle; M5-33) |
 | `module_sockets` | `["/run", "/var/run"]` | Präfixe erlaubter Unix-Sockets |
 | `module_file_prefixes` | `["/etc/ssl", "/etc/pki", "/etc/letsencrypt"]` | Präfixe lesbarer Dateien (Zertifikate) |
-| `allow_docker_socket` | `false` | der Docker-Socket ist root-äquivalent (O4), eigens freizugeben; dasselbe gilt für `podman.sock` und `containerd.sock` |
+| `allow_docker_socket` | `false` | Sockets von Container-Runtimes sind root-äquivalent (O4), eigens freizugeben: Docker, Podman, containerd, CRI-O, BuildKit, libvirt, LXD/Incus (nach Name oder Verzeichnis) |
 
 - Ein Hostname wird einmal aufgelöst; **jede** Adresse muss erlaubt sein, verbunden wird mit der geprüften Adresse
   (kein DNS-Rebinding zwischen Prüfung und Verbindung). Weiterleitungen folgen nur innerhalb der erlaubten Ziele,
@@ -122,7 +124,8 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
 - Im Server mit `secrets.Box` versiegelt, gebunden an Org, Gruppe, Modul und Feld (AAD). Die UI bekommt nie einen Wert
   zurück, nur „gesetzt“ oder „nicht gesetzt“; das Audit-Log nennt das Feld, nie den Wert.
 - Zum Agent in einer **eigenen Nachricht `ModuleSecrets`** (nicht in `AgentConfig`): nach jedem Aufbau der Session und
-  bei Änderung. `Debug` der Nachricht ist in Go und Rust geschwärzt.
+  bei Änderung. `Debug` der Nachricht ist in Rust geschwärzt; protobuf-go beachtet `debug_redact` nicht (Nachtrag
+  M5-05 und M5-33).
 - Der Agent speichert die Konfiguration ohne Geheimnisse (ADR 0030); Geheimnisse hält er nur im Speicher, nach einem
   Neustart kommen sie mit der nächsten Session. Ins WAL und in Logs gelangen sie nicht (Tests lesen die Dateien).
 - „Ende-zu-Ende“ in KONZEPT §15 heißt damit: zwischen Server und Agent ohne Stelle dazwischen, die entschlüsselt. Gegen
@@ -230,3 +233,29 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
 - **Ausgabe:** In Rust hat `ModuleSecret` ein eigenes `Debug` ohne Wert. protobuf-go schwärzt `debug_redact` in
   `String()` nicht; der Server gibt Nachrichten der Agents deshalb nie aus (Logs nennen Modul und Feld), der Test der
   Agent-Binary liest die Logs von Server und Agent auf den Klartext.
+
+## Nachtrag M5-33 (Review A: Veto, Laufzeit, Zugangsdaten)
+
+- **Kein DNS außerhalb des Vetos:** Ein Name wird nur aufgelöst, wenn `module_hosts` ihn erlaubt (ab Werk nur
+  `localhost`); Adressen prüft der Agent ohne DNS-Anfrage. Sonst bekäme ein kompromittierter Server über die
+  Gesundheitsgründe heraus, welche internen Namen es gibt und wohin sie zeigen. Eine Weigerung nennt deshalb keine
+  aufgelöste Adresse und keinen Pfad, auf den ein Link zeigt, und klingt bei einem Namen, den es nicht gibt, genauso wie
+  bei einem, der außerhalb von `module_targets` liegt. Wer andere Namen braucht, trägt sie ein (`*.svc.example.org`).
+- **Ports:** `module_ports` begrenzt die TCP-Ports, ab Werk auf die Dienste der Module (Web, Datenbanken, TLS-Dienste,
+  Exporter `9090–9999`). Loopback ist nicht harmlos: Dort lauschen oft Dienste ohne Anmeldung, manche handeln schon bei
+  einem `GET` (Jolokia `8778`, Solr `8983`, Consul `8500`, etcd `2379`, das Kubelet `10255`, Docker `2375`). Ein Server
+  kann ab Werk weder alle Ports von Loopback abtasten noch diese Dienste erreichen. Verworfen: `http_check` und
+  `tcp_check` lokal abschaltbar zu machen – das träfe nur zwei Module, der Scraper und die Statusseiten nehmen ebenfalls
+  freie URLs. Die Statusseiten von nginx und Apache nehmen keine Query (Apache nur `?auto`).
+- **Restrisiko:** Auf erlaubten Ports wählt der Server weiter Pfad und Query (`http_check`, `prometheus`); ein Dienst auf
+  Port 80 oder 8080, der schon bei einem `GET` etwas ändert, bleibt erreichbar. Zurück kommen nur Status, Dauer und die
+  geparsten Metriken. Wer das nicht will, verkleinert `module_ports` oder setzt `allow_modules = false`.
+- **Pfade:** Der Pfad, wie er konfiguriert ist, muss unter einem Präfix liegen, bevor der Agent die Platte anfasst;
+  danach wird er aufgelöst und erneut geprüft. Dateien öffnet der Agent mit `O_NOFOLLOW` und `O_NONBLOCK`, nur reguläre
+  Dateien, und prüft die geöffnete Datei noch einmal (wohin der Deskriptor zeigt, `/proc/self/fd`): Ein Link, der
+  zwischen Prüfung und Öffnen eingesetzt wird, fällt auf. Sockets prüft er vor jeder Verbindung (auch die der
+  Datenbanken) und lehnt sie in Verzeichnissen ab, in die jeder schreiben darf (`/run/lock`, `/tmp`), ebenso Links, die
+  ins Leere zeigen. Gesperrt bleiben zusätzlich das konfigurierte State-Verzeichnis und das Verzeichnis der
+  `agent.toml`, wie geschrieben und aufgelöst.
+- **Laufzeit:** Ein Panic in `Module::build` oder `Instance::timeout` gilt wie einer im Lauf als Absturz: gemeldet und
+  nach der Pause neu gebaut.

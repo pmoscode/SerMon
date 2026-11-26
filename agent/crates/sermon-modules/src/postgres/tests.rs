@@ -240,7 +240,7 @@ fn takes_only_what_holds() {
 fn builds_from_its_configuration() {
     let schema = Schema::parse(SCHEMA).unwrap();
     let host = crate::Host::default();
-    let veto = Veto::default();
+    let veto = Veto::default().any_port();
     let secrets = Secrets::new([("secret".to_owned(), "pencil".to_owned())]);
     let setup = Setup {
         veto: &veto,
@@ -265,7 +265,7 @@ fn builds_from_its_configuration() {
 async fn connects_only_inside_the_veto() {
     let schema = Schema::parse(SCHEMA).unwrap();
     let host = crate::Host::default();
-    let veto = Veto::default();
+    let veto = Veto::default().any_port();
     let secrets = Secrets::default();
     let setup = Setup {
         veto: &veto,

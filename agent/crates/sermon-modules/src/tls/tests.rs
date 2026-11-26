@@ -30,7 +30,7 @@ fn veto_for(dirs: &[&Path]) -> Veto {
             .iter()
             .map(|d| std::fs::canonicalize(d).unwrap())
             .collect(),
-        ..Veto::default()
+        ..Veto::default().any_port()
     }
 }
 
@@ -150,10 +150,13 @@ fn refuses_files_outside_the_prefixes() {
     let dir = fixtures();
     let full = file("fullchain.crt");
     assert!(matches!(
-        build(&format!(r#"{{"files":["{full}"]}}"#), &Veto::default()),
+        build(
+            &format!(r#"{{"files":["{full}"]}}"#),
+            &Veto::default().any_port()
+        ),
         Err(BuildError::Vetoed(_))
     ));
-    let other = tempfile::tempdir().unwrap();
+    let other = crate::TestDir::new();
     std::fs::copy(fixtures().join("root.crt"), other.path().join("root.crt")).unwrap();
     let outside_ca = other.path().join("root.crt");
     assert!(
@@ -185,8 +188,8 @@ fn refuses_files_outside_the_prefixes() {
 // A file that turns into a link out of the prefixes after the start is refused at the run.
 #[tokio::test]
 async fn checks_the_veto_at_every_run() {
-    let allowed = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let allowed = crate::TestDir::new();
+    let outside = crate::TestDir::new();
     let path = allowed.path().join("cert.pem");
     std::fs::copy(fixtures().join("fullchain.crt"), &path).unwrap();
     let mut tls = build(
@@ -211,7 +214,7 @@ async fn checks_the_veto_at_every_run() {
 // A combined file (haproxy): the key is skipped, nothing of it is kept.
 #[tokio::test]
 async fn reads_only_the_certificates_of_a_file() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     let key = rcgen::KeyPair::generate().unwrap();
     let chain = std::fs::read_to_string(fixtures().join("fullchain.crt")).unwrap();
     let path = dir.path().join("combined.pem");
@@ -270,7 +273,7 @@ async fn endpoint(names: &[&str]) -> (u16, String) {
 #[tokio::test]
 async fn judges_endpoints_and_their_names() {
     let (port, ca) = endpoint(&["localhost"]).await;
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     std::fs::write(dir.path().join("ca.pem"), ca).unwrap();
     let ca_file = std::fs::canonicalize(dir.path().join("ca.pem")).unwrap();
     let veto = veto_for(&[dir.path()]);

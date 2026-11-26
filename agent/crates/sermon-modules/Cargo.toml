@@ -58,6 +58,7 @@ hyper = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
 pem = { workspace = true, optional = true }
 regex.workspace = true
+rustix.workspace = true
 ring = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 rustls-native-certs = { workspace = true, optional = true }

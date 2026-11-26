@@ -119,7 +119,7 @@ async fn reports_connections_and_rates() {
     let addr = serve("200 OK", page.clone()).await;
     let mut nginx = build(
         &format!(r#"{{"url":"http://{addr}/nginx_status"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
@@ -179,7 +179,7 @@ async fn no_rate_across_an_outage() {
     let server = tokio::spawn(answer_on(listener, "200 OK", page.clone()));
     let mut nginx = build(
         &format!(r#"{{"url":"http://{addr}/nginx_status"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
@@ -208,7 +208,7 @@ async fn tells_down_from_misconfigured() {
         .unwrap();
     let mut down = build(
         &format!(r#"{{"url":"http://{closed}/nginx_status"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let s = down.collect(&Run::default()).await.unwrap();
@@ -220,7 +220,7 @@ async fn tells_down_from_misconfigured() {
     let not_found = serve("404 Not Found", Arc::new(Mutex::new(fixture("1.26")))).await;
     let mut missing = build(
         &format!(r#"{{"url":"http://{not_found}/nginx_status"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     assert!(matches!(
@@ -228,7 +228,11 @@ async fn tells_down_from_misconfigured() {
         Err(RunError::Failed(why)) if why.contains("status 404")
     ));
     let other = serve("200 OK", Arc::new(Mutex::new("hello".into()))).await;
-    let mut wrong = build(&format!(r#"{{"url":"http://{other}/"}}"#), &Veto::default()).unwrap();
+    let mut wrong = build(
+        &format!(r#"{{"url":"http://{other}/"}}"#),
+        &Veto::default().any_port(),
+    )
+    .unwrap();
     assert!(matches!(
         wrong.collect(&Run::default()).await,
         Err(RunError::Failed(_))
@@ -238,7 +242,11 @@ async fn tells_down_from_misconfigured() {
         Arc::new(Mutex::new("x".repeat(crate::http::MAX_BODY + 1))),
     )
     .await;
-    let mut huge = build(&format!(r#"{{"url":"http://{big}/"}}"#), &Veto::default()).unwrap();
+    let mut huge = build(
+        &format!(r#"{{"url":"http://{big}/"}}"#),
+        &Veto::default().any_port(),
+    )
+    .unwrap();
     assert!(matches!(
         huge.collect(&Run::default()).await,
         Err(RunError::Failed(_))
@@ -246,7 +254,7 @@ async fn tells_down_from_misconfigured() {
 
     let veto = Veto {
         targets: vec![Net::parse("127.0.0.2/32").unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let mut refused = build(&format!(r#"{{"url":"http://{other}/"}}"#), &veto).unwrap();
     assert!(matches!(
@@ -314,9 +322,35 @@ fn checks_the_configuration() {
     let schema = Schema::parse(SCHEMA).unwrap();
     let config = schema.validate("{}", &[]).unwrap();
     assert_eq!(config["url"], "http://127.0.0.1/nginx_status");
-    assert!(build("{}", &Veto::default()).is_ok());
+    assert!(build("{}", &Veto::default().any_port()).is_ok());
     assert!(matches!(
-        build(r#"{"timeout":"26s"}"#, &Veto::default()),
+        build(r#"{"timeout":"26s"}"#, &Veto::default().any_port()),
         Err(BuildError::Invalid(_))
     ));
+}
+
+// M5-33: the URL of a status page has no query: a server can't make it a GET with parameters to
+// another service on loopback.
+#[test]
+fn takes_no_query() {
+    for url in [
+        "http://127.0.0.1/nginx_status?x=1",
+        "http://127.0.0.1/admin?action=reload",
+        "http://127.0.0.1/?",
+    ] {
+        assert!(
+            matches!(
+                build(&format!(r#"{{"url":"{url}"}}"#), &Veto::default()),
+                Err(BuildError::Invalid(why)) if why.contains("query")
+            ),
+            "{url}"
+        );
+    }
+    assert!(
+        build(
+            r#"{"url":"http://127.0.0.1/nginx_status"}"#,
+            &Veto::default()
+        )
+        .is_ok()
+    );
 }

@@ -10,15 +10,18 @@ use crate::fields::timeout;
 use crate::http::{Client, HttpError, Options, Url};
 use crate::{BuildError, Config, RunError, Setup};
 
-/// The client and URL of a status page; `default_url` when the configuration has none.
+/// The client and URL of a status page; `default_url` when the configuration has none. The URL
+/// has no query but `query` (M5-33): a status page needs no parameters, a GET with them to
+/// another service on loopback could change something there.
 ///
 /// # Errors
 ///
-/// [`BuildError`] for a bad URL or timeout, a CA file outside the veto.
+/// [`BuildError`] for a bad URL, another query or timeout, a CA file outside the veto.
 pub fn client(
     config: &Config,
     setup: &Setup<'_>,
     default_url: &str,
+    query: Option<&str>,
     accept: &'static str,
 ) -> Result<(Client, Url, Duration), BuildError> {
     let text = config
@@ -26,6 +29,12 @@ pub fn client(
         .and_then(Value::as_str)
         .unwrap_or(default_url);
     let url = Url::parse(text).map_err(|e| BuildError::Invalid(format!("url: {e}")))?;
+    if url.query().is_some_and(|q| Some(q) != query) {
+        return Err(BuildError::Invalid(match query {
+            Some(q) => format!("url: no query but ?{q}"),
+            None => "url: no query".into(),
+        }));
+    }
     let timeout = timeout(config, "timeout", Duration::from_secs(5))?;
     let client = Client::new(
         setup.veto,

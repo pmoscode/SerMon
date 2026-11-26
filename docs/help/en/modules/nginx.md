@@ -25,7 +25,8 @@ adjust the URL in the module. The agent only reaches targets within `module_targ
 
 ## Settings
 
-- **Status URL:** by default `http://127.0.0.1/nginx_status`.
+- **Status URL:** by default `http://127.0.0.1/nginx_status`, without a query (`?…`); the port has to be within
+  `module_ports` of `agent.toml` (by default e.g. 80, 443, 8080, 8443).
 - **Timeout**, for HTTPS **verify TLS** and a **CA file**.
 
 ## Metrics

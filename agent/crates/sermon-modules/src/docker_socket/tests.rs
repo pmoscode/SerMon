@@ -95,7 +95,7 @@ fn allowed(dir: &Path) -> Veto {
     Veto {
         sockets: vec![std::fs::canonicalize(dir).unwrap()],
         docker_socket: true,
-        ..Veto::default()
+        ..Veto::default().any_port()
     }
 }
 
@@ -172,7 +172,7 @@ fn skips_what_is_no_container() {
 // The plan's tests: the fake API, read paths only.
 #[tokio::test]
 async fn reports_state_health_and_restarts() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     let fake = Fake::recorded();
     // web is still starting its health checks this time: no health value yet.
     let list = parse_list(&std::fs::read(fixtures().join("containers.json")).unwrap()).unwrap();
@@ -240,7 +240,7 @@ async fn reports_state_health_and_restarts() {
 
 #[tokio::test]
 async fn bounds_the_containers_and_the_answers() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     let fake = Fake::recorded();
     let socket = serve(dir.path(), fake.clone());
     let veto = allowed(dir.path());
@@ -317,7 +317,7 @@ async fn bounds_the_containers_and_the_answers() {
 // O4: the socket is root-equivalent – only with allow_docker_socket.
 #[tokio::test]
 async fn needs_the_hosts_permission() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     let socket = dir.path().join("docker.sock");
     let config = format!(r#"{{"socket":"{}"}}"#, socket.display());
     let not_allowed = Veto {
@@ -333,7 +333,7 @@ async fn needs_the_hosts_permission() {
             r#"{"socket":"/run/sermon/helper.sock"}"#,
             &Veto {
                 docker_socket: true,
-                ..Veto::default()
+                ..Veto::default().any_port()
             }
         ),
         Err(BuildError::Vetoed(_))
@@ -365,7 +365,7 @@ fn stays_within_the_samples_of_a_run() {
 // container seen first starts at the run's time.
 #[tokio::test]
 async fn hands_the_output_of_chosen_containers_to_the_logs() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     let fake = Fake::recorded();
     let socket = serve(dir.path(), fake.clone());
     let config = format!(

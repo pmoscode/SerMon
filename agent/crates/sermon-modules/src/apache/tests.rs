@@ -176,7 +176,7 @@ async fn reports_workers_and_rates() {
     let addr = serve("200 OK", page.clone()).await;
     let mut apache = build(
         &format!(r#"{{"url":"http://{addr}/server-status?auto"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
@@ -240,7 +240,7 @@ async fn no_rate_across_an_outage() {
     let server = tokio::spawn(answer_on(listener, "200 OK", page.clone()));
     let mut apache = build(
         &format!(r#"{{"url":"http://{addr}/server-status?auto"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
@@ -273,7 +273,7 @@ async fn tells_down_from_misconfigured() {
         .unwrap();
     let mut down = build(
         &format!(r#"{{"url":"http://{closed}/server-status?auto"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let s = down.collect(&Run::default()).await.unwrap();
@@ -283,7 +283,7 @@ async fn tells_down_from_misconfigured() {
     let forbidden = serve("403 Forbidden", Arc::new(Mutex::new(fixture("fedora-44")))).await;
     let mut refused = build(
         &format!(r#"{{"url":"http://{forbidden}/server-status?auto"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     assert!(matches!(
@@ -293,7 +293,7 @@ async fn tells_down_from_misconfigured() {
     let html = serve("200 OK", Arc::new(Mutex::new("<html>status</html>".into()))).await;
     let mut no_auto = build(
         &format!(r#"{{"url":"http://{html}/server-status"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     assert!(matches!(
@@ -302,7 +302,7 @@ async fn tells_down_from_misconfigured() {
     ));
     let veto = Veto {
         targets: vec![Net::parse("127.0.0.2/32").unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let mut vetoed = build(&format!(r#"{{"url":"http://{html}/"}}"#), &veto).unwrap();
     assert!(matches!(
@@ -351,5 +351,30 @@ fn is_suggested_for_apache2_and_httpd() {
 fn defaults_to_the_local_auto_page() {
     let config = Schema::parse(SCHEMA).unwrap().validate("{}", &[]).unwrap();
     assert_eq!(config["url"], "http://127.0.0.1/server-status?auto");
-    assert!(build("{}", &Veto::default()).is_ok());
+    assert!(build("{}", &Veto::default().any_port()).is_ok());
+}
+
+// M5-33: the URL of the status page takes `?auto` as its only query.
+#[test]
+fn takes_auto_as_its_only_query() {
+    for url in [
+        "http://127.0.0.1/server-status?auto=1",
+        "http://127.0.0.1/server-status?refresh=1",
+        "http://127.0.0.1/server-status?auto&x",
+    ] {
+        let built = build(&format!(r#"{{"url":"{url}"}}"#), &Veto::default());
+        assert!(
+            matches!(&built, Err(BuildError::Invalid(why)) if why.contains("query")),
+            "{url}"
+        );
+    }
+    for url in [
+        "http://127.0.0.1/server-status?auto",
+        "http://127.0.0.1/server-status",
+    ] {
+        assert!(
+            build(&format!(r#"{{"url":"{url}"}}"#), &Veto::default()).is_ok(),
+            "{url}"
+        );
+    }
 }

@@ -45,8 +45,13 @@ impl Module for Nginx {
     }
 
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
-        let (client, url, timeout) =
-            page::client(config, setup, "http://127.0.0.1/nginx_status", "text/plain")?;
+        let (client, url, timeout) = page::client(
+            config,
+            setup,
+            "http://127.0.0.1/nginx_status",
+            None,
+            "text/plain",
+        )?;
         Ok(Box::new(Status {
             client: Arc::new(client),
             url,

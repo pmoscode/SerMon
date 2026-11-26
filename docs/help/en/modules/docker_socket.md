@@ -10,8 +10,8 @@ off by default and doesn't suggest itself.
 
 ## Requirements
 
-- On the host in `[local]` of `/etc/sermon/agent.toml`: `allow_docker_socket = true` (off by default; also covers
-  `podman.sock` and `containerd.sock`) and the socket below `module_sockets` (by default `/run`, `/var/run`).
+- On the host in `[local]` of `/etc/sermon/agent.toml`: `allow_docker_socket = true` (off by default; covers every
+  socket of a container runtime: Podman, containerd, CRI-O, BuildKit, libvirt, LXD/Incus) and the socket below `module_sockets` (by default `/run`, `/var/run`).
 - The user `sermon` needs access to the socket, e.g. through the group `docker` – that too is root-equivalent.
 
 ## Settings

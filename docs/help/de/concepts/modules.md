@@ -12,9 +12,12 @@ ab, zeigt der Node „Konfiguration abgelehnt“ mit dem Grund.
 
 ## Was der Host erlaubt
 
-Wohin ein Modul sich verbinden darf, bestimmt der Host in seiner `agent.toml` (`[local]`): ab Werk nur `localhost`
-(`module_targets`), Unix-Sockets unter `module_sockets`, Dateien unter `module_file_prefixes`. Mit
-`allow_modules = false` läuft kein Modul. Der Server kann diese Grenzen nicht ändern.
+Wohin ein Modul sich verbinden darf, bestimmt der Host in seiner `agent.toml` (`[local]`): ab Werk nur Loopback
+(`module_targets`), als Name nur `localhost` (`module_hosts`), nur die Ports der Dienste der Module (`module_ports`:
+80, 443, 465, 636, 993, 995, 3306, 5432, 6379, 8080, 8443, 9090–9999), Unix-Sockets unter `module_sockets` (nicht in
+Verzeichnissen, in die jeder schreiben darf, wie `/run/lock`), Dateien unter `module_file_prefixes`. Mit
+`allow_modules = false` läuft kein Modul. Der Server kann diese Grenzen nicht ändern; die Gründe einer Weigerung nennen
+keine Adressen oder Pfade, die der Server nicht selbst geschickt hat.
 
 ## Zugangsdaten
 

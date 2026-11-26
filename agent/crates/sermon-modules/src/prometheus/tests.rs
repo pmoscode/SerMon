@@ -91,7 +91,7 @@ async fn maps_series_onto_gauges_and_rates() {
     let mut scraper = build(
         &format!(r#"{{"urls":["http://{addr}/metrics"]}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
@@ -184,7 +184,7 @@ async fn bounds_the_series() {
     let mut scraper = build(
         &format!(r#"{{"urls":["http://{addr}/metrics"],"max_series":20}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let s = scraper.collect(&Run::default()).await.unwrap();
@@ -208,7 +208,7 @@ async fn bounds_the_series() {
             r#"{{"urls":["http://{addr}/metrics"],"metrics":["node_load1","node_memory_Mem*"]}}"#
         ),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let f = filtered.collect(&Run::default()).await.unwrap();
@@ -243,7 +243,7 @@ async fn bounds_the_series() {
     ] {
         assert!(
             matches!(
-                build(bad, None, &Veto::default()),
+                build(bad, None, &Veto::default().any_port()),
                 Err(BuildError::Invalid(_))
             ),
             "{bad}"
@@ -274,7 +274,7 @@ async fn sends_the_token_to_its_endpoint_only() {
     let mut scraper = build(
         &format!(r#"{{"urls":["http://{addr}/metrics"]}}"#),
         Some("t0ken-xyz"),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     scraper.collect(&Run::default()).await.unwrap();
@@ -297,7 +297,7 @@ async fn tells_down_from_wrong() {
     let mut down = build(
         &format!(r#"{{"urls":["http://{closed}/metrics"]}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let s = down.collect(&Run::default()).await.unwrap();
@@ -312,7 +312,7 @@ async fn tells_down_from_wrong() {
     let mut wrong = build(
         &format!(r#"{{"urls":["http://{html}/"]}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     assert!(matches!(
@@ -321,7 +321,7 @@ async fn tells_down_from_wrong() {
     ));
     let veto = Veto {
         targets: vec![Net::parse("127.0.0.2/32").unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let mut vetoed = build(&format!(r#"{{"urls":["http://{html}/"]}}"#), None, &veto).unwrap();
     assert!(matches!(
@@ -340,7 +340,7 @@ async fn no_rate_across_an_outage() {
     let mut scraper = build(
         &format!(r#"{{"urls":["http://{addr}/metrics"]}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));

@@ -21,7 +21,7 @@ use crate::{BuildError, Config, RunError, Veto, schema};
 pub enum Target {
     /// `host:port`; the host is resolved through the veto at every connection.
     Tcp { host: String, port: u16 },
-    /// A Unix socket, checked against the veto when built.
+    /// A Unix socket, checked against the veto when built and at every connection.
     Unix(PathBuf),
 }
 
@@ -48,8 +48,9 @@ impl Target {
     /// [`BuildError`] for no target, or a socket the veto refuses.
     pub fn of(config: &Config, veto: &Veto) -> Result<Self, BuildError> {
         if let Some(path) = config.get("socket").and_then(Value::as_str) {
-            let checked = veto.socket(std::path::Path::new(path))?;
-            return Ok(Self::Unix(checked));
+            let path = PathBuf::from(path);
+            veto.socket(&path)?;
+            return Ok(Self::Unix(path));
         }
         let text = config
             .get("address")
@@ -94,7 +95,7 @@ impl Target {
                 }
                 Err(RunError::Failed(format!("{}: {last}", self.label())))
             }
-            Self::Unix(path) => UnixStream::connect(path)
+            Self::Unix(path) => UnixStream::connect(veto.socket(path)?)
                 .await
                 .map(Connection::Unix)
                 .map_err(|e| RunError::Failed(format!("{}: {e}", path.display()))),
@@ -169,4 +170,36 @@ pub async fn tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
 #[must_use]
 pub fn text<'a>(config: &'a Config, name: &str, default: &'a str) -> &'a str {
     config.get(name).and_then(Value::as_str).unwrap_or(default)
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::net::UnixListener;
+
+    use super::*;
+
+    // M5-33: a socket that turns into a link out of module_sockets after the build is refused at
+    // the connection.
+    #[tokio::test]
+    async fn checks_the_socket_at_every_connection() {
+        let (allowed, outside) = (crate::TestDir::new(), crate::TestDir::new());
+        let real = outside.path().join("real.sock");
+        let _listener = UnixListener::bind(&real).unwrap();
+        let veto = Veto {
+            sockets: vec![allowed.path().to_path_buf()],
+            ..Veto::default()
+        };
+        let path = allowed.path().join("db.sock");
+        let config = serde_json::json!({ "socket": path });
+        let target = Target::of(config.as_object().unwrap(), &veto).unwrap();
+        assert_eq!(target, Target::Unix(path.clone()));
+        std::os::unix::fs::symlink(&real, &path).unwrap();
+        assert!(matches!(
+            target.connect(&veto).await,
+            Err(RunError::Vetoed(_))
+        ));
+        std::fs::remove_file(&path).unwrap();
+        let _inside = UnixListener::bind(&path).unwrap();
+        assert!(target.connect(&veto).await.is_ok());
+    }
 }

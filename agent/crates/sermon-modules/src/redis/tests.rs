@@ -202,7 +202,7 @@ async fn reports_info_and_rates() {
     let mut redis = build(
         &format!(r#"{{"address":"{addr}"}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
@@ -280,7 +280,7 @@ async fn reports_info_and_rates() {
     let mut r = build(
         &format!(r#"{{"address":"{addr}"}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let s = r.collect(&run).await.unwrap();
@@ -300,12 +300,12 @@ async fn logs_in_with_the_password() {
     let fake = Fake::new(Some("s3cret-pw"), fixture("redis-7.2", "primary"));
     let addr = serve(fake.clone()).await;
     let config = format!(r#"{{"address":"{addr}"}}"#);
-    let mut ok = build(&config, Some("s3cret-pw"), &Veto::default()).unwrap();
+    let mut ok = build(&config, Some("s3cret-pw"), &Veto::default().any_port()).unwrap();
     let s = ok.collect(&Run::default()).await.unwrap();
     assert_eq!(value(&s, "sermon_redis_up"), Some(Value::Int(1)));
     assert_eq!(*fake.seen.lock().unwrap(), ["AUTH s3cret-pw", "INFO"]);
 
-    let mut wrong = build(&config, Some("nope"), &Veto::default()).unwrap();
+    let mut wrong = build(&config, Some("nope"), &Veto::default().any_port()).unwrap();
     let e = wrong
         .collect(&Run::default())
         .await
@@ -313,7 +313,7 @@ async fn logs_in_with_the_password() {
         .unwrap()
         .to_string();
     assert!(e.contains("AUTH failed") && !e.contains("nope"), "{e}");
-    let mut none = build(&config, None, &Veto::default()).unwrap();
+    let mut none = build(&config, None, &Veto::default().any_port()).unwrap();
     let e = none
         .collect(&Run::default())
         .await
@@ -325,7 +325,7 @@ async fn logs_in_with_the_password() {
     let acl = build(
         &format!(r#"{{"address":"{addr}","username":"sermon"}}"#),
         Some("s3cret-pw"),
-        &Veto::default(),
+        &Veto::default().any_port(),
     );
     let mut acl = acl.unwrap();
     acl.collect(&Run::default()).await.unwrap();
@@ -340,7 +340,11 @@ async fn logs_in_with_the_password() {
             .contains(&"AUTH sermon s3cret-pw".to_owned())
     );
     assert!(matches!(
-        build(r#"{"username":"sermon"}"#, None, &Veto::default()),
+        build(
+            r#"{"username":"sermon"}"#,
+            None,
+            &Veto::default().any_port()
+        ),
         Err(BuildError::Invalid(_))
     ));
 }
@@ -355,7 +359,7 @@ async fn tells_down_from_wrong() {
     let mut down = build(
         &format!(r#"{{"address":"{closed}"}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let s = down.collect(&Run::default()).await.unwrap();
@@ -383,7 +387,7 @@ async fn tells_down_from_wrong() {
         let mut wrong = build(
             &format!(r#"{{"address":"{addr}"}}"#),
             None,
-            &Veto::default(),
+            &Veto::default().any_port(),
         )
         .unwrap();
         assert!(matches!(
@@ -394,7 +398,7 @@ async fn tells_down_from_wrong() {
 
     let veto = Veto {
         targets: vec![Net::parse("127.0.0.2/32").unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let mut vetoed = build(r#"{"address":"127.0.0.1:6379"}"#, None, &veto).unwrap();
     assert!(matches!(
@@ -416,7 +420,7 @@ async fn a_silent_redis_is_down_within_the_timeout() {
     let mut silent = build(
         &format!(r#"{{"address":"{addr}","timeout":"1s"}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let s = silent.collect(&Run::default()).await.unwrap();
@@ -425,7 +429,7 @@ async fn a_silent_redis_is_down_within_the_timeout() {
 
 #[tokio::test]
 async fn speaks_over_the_unix_socket() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     let path = dir.path().join("redis.sock");
     let listener = UnixListener::bind(&path).unwrap();
     let fake = Fake::new(None, fixture("redis-6.2", "primary"));
@@ -436,14 +440,14 @@ async fn speaks_over_the_unix_socket() {
     });
     let veto = Veto {
         sockets: vec![std::fs::canonicalize(dir.path()).unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let config = format!(r#"{{"socket":"{}"}}"#, path.display());
     let mut redis = build(&config, None, &veto).unwrap();
     let s = redis.collect(&Run::default()).await.unwrap();
     assert_eq!(value(&s, "sermon_redis_up"), Some(Value::Int(1)));
     assert!(matches!(
-        build(&config, None, &Veto::default()),
+        build(&config, None, &Veto::default().any_port()),
         Err(BuildError::Vetoed(_))
     ));
 }
@@ -547,7 +551,7 @@ async fn no_rate_across_an_outage() {
     let mut redis = build(
         &format!(r#"{{"address":"{addr}"}}"#),
         None,
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let clock = Arc::new(FakeClock::new(std::time::SystemTime::UNIX_EPOCH));
@@ -570,8 +574,8 @@ async fn no_rate_across_an_outage() {
 // A socket that turns into a link out of module_sockets after the start is refused at the run.
 #[tokio::test]
 async fn checks_the_socket_at_every_run() {
-    let allowed = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let allowed = crate::TestDir::new();
+    let outside = crate::TestDir::new();
     let real = outside.path().join("real.sock");
     let listener = UnixListener::bind(&real).unwrap();
     let fake = Fake::new(None, fixture("redis-6.2", "primary"));
@@ -582,7 +586,7 @@ async fn checks_the_socket_at_every_run() {
     });
     let veto = Veto {
         sockets: vec![std::fs::canonicalize(allowed.path()).unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let path = allowed.path().join("redis.sock");
     let mut redis = build(

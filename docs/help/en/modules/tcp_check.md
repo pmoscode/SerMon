@@ -5,8 +5,9 @@ once, nothing is sent.
 
 ## Requirements
 
-Only targets within `module_targets` in `[local]` of `/etc/sermon/agent.toml` (by default loopback). A name is
-resolved once and every address must be allowed.
+Only targets within `module_targets` in `[local]` of `/etc/sermon/agent.toml` (by default loopback), names within
+`module_hosts` (by default `localhost`) and ports within `module_ports` (by default those of the modules' services). A
+name is resolved once and every address must be allowed.
 
 ## Settings
 
@@ -20,4 +21,4 @@ resolved once and every address must be allowed.
 
 ## When it doesn't work
 
-- State `vetoed`: the target lies outside `module_targets`.
+- State `vetoed`: the target lies outside `module_targets`, `module_hosts` or `module_ports`.

@@ -5,6 +5,7 @@
 //! whenever it changes.
 
 use std::collections::BTreeMap;
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -362,17 +363,41 @@ fn build(s: &Supervised) -> Result<Box<dyn crate::Instance>, (State, String)> {
         })
 }
 
-/// Builds and runs one module until it is cancelled; a crash builds it anew after a pause.
+/// Reports a crash and waits out the pause; false if cancelled meanwhile.
+async fn crashed(s: &Supervised, pause: &mut Duration) -> bool {
+    s.shared.set(
+        s.module.id(),
+        State::Crashed,
+        &format!(
+            "the module crashed; it starts again in {} s",
+            pause.as_secs()
+        ),
+    );
+    tokio::select! {
+        () = s.cancel.cancelled() => return false,
+        () = tokio::time::sleep(*pause) => {}
+    }
+    *pause = (*pause * 2).min(s.pauses.max);
+    true
+}
+
+/// Builds and runs one module until it is cancelled; a crash – in a run, in `build` or in
+/// `timeout` – builds it anew after a pause.
 async fn supervise(s: Supervised) {
     let id = s.module.id();
     let mut pause = s.pauses.first;
     loop {
-        let built = build(&s);
-        let instance = match built {
-            Ok(instance) => Arc::new(tokio::sync::Mutex::new(instance)),
-            Err((state, why)) => {
+        let instance = match std::panic::catch_unwind(AssertUnwindSafe(|| build(&s))) {
+            Ok(Ok(instance)) => Arc::new(tokio::sync::Mutex::new(instance)),
+            Ok(Err((state, why))) => {
                 s.shared.set(id, state, &why);
                 s.cancel.cancelled().await;
+                return;
+            }
+            Err(_) => {
+                if crashed(&s, &mut pause).await {
+                    continue;
+                }
                 return;
             }
         };
@@ -397,7 +422,16 @@ async fn supervise(s: Supervised) {
                 );
                 continue;
             }
-            let budget = instance.lock().await.timeout().min(MAX_BUDGET);
+            let budget = {
+                let guard = instance.lock().await;
+                std::panic::catch_unwind(AssertUnwindSafe(|| guard.timeout()))
+            };
+            let Ok(budget) = budget.map(|b| b.min(MAX_BUDGET)) else {
+                if crashed(&s, &mut pause).await {
+                    break;
+                }
+                return;
+            };
             let (job, job_run) = (instance.clone(), run.clone());
             let handle = tokio::spawn(async move { job.lock().await.collect(&job_run).await });
             let abort = handle.abort_handle();
@@ -419,20 +453,10 @@ async fn supervise(s: Supervised) {
                     s.shared.set(id, State::Timeout, &why);
                 }
                 Ok(Err(join)) if join.is_panic() => {
-                    s.shared.set(
-                        id,
-                        State::Crashed,
-                        &format!(
-                            "the module crashed; it starts again in {} s",
-                            pause.as_secs()
-                        ),
-                    );
-                    tokio::select! {
-                        () = s.cancel.cancelled() => return,
-                        () = tokio::time::sleep(pause) => {}
+                    if crashed(&s, &mut pause).await {
+                        break;
                     }
-                    pause = (pause * 2).min(s.pauses.max);
-                    break;
+                    return;
                 }
                 Ok(Err(_)) => return,
                 Ok(Ok(Err(RunError::Vetoed(r)))) => s.shared.set(id, State::Vetoed, &r.0),

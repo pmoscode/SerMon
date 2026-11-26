@@ -1371,6 +1371,7 @@ dependencies = [
  "rcgen",
  "regex",
  "ring",
+ "rustix",
  "rustls",
  "rustls-native-certs",
  "serde_json",

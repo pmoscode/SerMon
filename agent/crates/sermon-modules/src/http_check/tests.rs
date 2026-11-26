@@ -67,7 +67,7 @@ async fn reports_up_status_and_latency() {
     let bad_request = format!("http://{bad}/");
     let mut check = build(
         &format!(r#"{{"urls":["{up}?token=x","{down}","{gone}","{bad_request}"],"timeout":"2s"}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     assert_eq!(check.timeout(), Duration::from_secs(4));
@@ -117,7 +117,7 @@ async fn reports_up_status_and_latency() {
 
     let mut expect_503 = build(
         &format!(r#"{{"urls":["{down}"],"expect_status":[503]}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     let samples = expect_503.collect(&Run::default()).await.unwrap();
@@ -133,7 +133,7 @@ async fn refuses_endpoints_outside_the_veto() {
     let ok = serve("200 OK").await;
     let veto = Veto {
         targets: vec![Net::parse("127.0.0.2/32").unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let mut check = build(&format!(r#"{{"urls":["http://{ok}/"]}}"#), &veto).unwrap();
     assert!(matches!(
@@ -181,7 +181,7 @@ async fn reports_the_time_a_certificate_has_left() {
     let url = format!("https://localhost:{port}/");
     let mut unverified = build(
         &format!(r#"{{"urls":["{url}"],"tls_verify":false}}"#),
-        &Veto::default(),
+        &Veto::default().any_port(),
     )
     .unwrap();
     // A run on 2039-12-01: 31 days left of the certificate's 2040-01-01.
@@ -202,7 +202,11 @@ async fn reports_the_time_a_certificate_has_left() {
         value(&samples, "sermon_http_check_cert_expires_in_seconds", &url),
         Some(Value::Int(31 * 86_400))
     );
-    let mut verified = build(&format!(r#"{{"urls":["{url}"]}}"#), &Veto::default()).unwrap();
+    let mut verified = build(
+        &format!(r#"{{"urls":["{url}"]}}"#),
+        &Veto::default().any_port(),
+    )
+    .unwrap();
     let samples = verified.collect(&Run::default()).await.unwrap();
     assert_eq!(
         value(&samples, "sermon_http_check_up", &url),
@@ -213,7 +217,7 @@ async fn reports_the_time_a_certificate_has_left() {
 
 #[test]
 fn checks_the_configuration() {
-    let veto = Veto::default();
+    let veto = Veto::default().any_port();
     for bad in [
         r#"{"urls":[]}"#,
         r#"{"urls":["http://localhost/a","http://localhost/a?b"]}"#,

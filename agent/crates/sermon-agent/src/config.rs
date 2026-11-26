@@ -20,9 +20,12 @@
 //! log_file_prefixes = ["/var/log"]                # where the server's file globs may read
 //! allow_modules = true                            # modules (ADR 0039) at all
 //! module_targets = ["127.0.0.0/8", "::1/128"]     # networks modules may connect to
+//! module_hosts = ["localhost"]                    # names modules may resolve ("*.corp", "*")
+//! module_ports = [80, 443, 465, 636, 993, 995, 3306, 5432, 6379, 8080, 8443, "9090-9999"]
+//!                                                 # TCP ports modules may connect to
 //! module_sockets = ["/run", "/var/run"]           # Unix sockets modules may use
 //! module_file_prefixes = ["/etc/ssl", "/etc/pki", "/etc/letsencrypt"]  # files modules may read
-//! allow_docker_socket = false                     # root-equivalent (O4)
+//! allow_docker_socket = false                     # container runtimes' sockets: root (O4)
 //! ```
 
 use std::fmt;
@@ -136,7 +139,12 @@ impl AgentConfig {
             path: path.to_owned(),
             source,
         })?;
-        Self::parse(&text)
+        let mut config = Self::parse(&text)?;
+        // The modules never read where the configuration lies (M5-33).
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            config.local.modules.block(dir);
+        }
+        Ok(config)
     }
 
     /// Parses and validates the configuration from TOML text.
@@ -185,9 +193,19 @@ struct RawLocal {
     log_file_prefixes: Option<Vec<PathBuf>>,
     allow_modules: Option<bool>,
     module_targets: Option<Vec<String>>,
+    module_hosts: Option<Vec<String>>,
+    module_ports: Option<Vec<RawPorts>>,
     module_sockets: Option<Vec<PathBuf>>,
     module_file_prefixes: Option<Vec<PathBuf>>,
     allow_docker_socket: Option<bool>,
+}
+
+/// A port (`443`) or a range of ports (`"9090-9999"`).
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RawPorts {
+    One(i64),
+    Range(String),
 }
 
 impl RawConfig {
@@ -228,7 +246,8 @@ impl RawConfig {
             .clone()
             .unwrap_or_else(|| vec![PathBuf::from(DEFAULT_LOG_FILE_PREFIX)]);
         check_prefixes("local.log_file_prefixes", &log_file_prefixes, &mut problems);
-        let modules = module_veto(&self.local, &mut problems);
+        let mut modules = module_veto(&self.local, &mut problems);
+        modules.block(&state_dir);
 
         match (server_url, agent_url) {
             (Some(server_url), Some(agent_url)) if problems.is_empty() => Ok(AgentConfig {
@@ -277,6 +296,30 @@ fn module_veto(local: &RawLocal, problems: &mut Vec<String>) -> sermon_modules::
             .filter_map(|t| {
                 sermon_modules::veto::Net::parse(t)
                     .map_err(|why| problems.push(format!("local.module_targets: {why}")))
+                    .ok()
+            })
+            .collect();
+    }
+    if let Some(hosts) = &local.module_hosts {
+        veto.hosts = hosts
+            .iter()
+            .filter_map(|h| {
+                sermon_modules::veto::host_pattern(h)
+                    .map_err(|why| problems.push(format!("local.module_hosts: {why}")))
+                    .ok()
+            })
+            .collect();
+    }
+    if let Some(ports) = &local.module_ports {
+        veto.ports = ports
+            .iter()
+            .filter_map(|p| {
+                let text = match p {
+                    RawPorts::One(n) => n.to_string(),
+                    RawPorts::Range(r) => r.clone(),
+                };
+                sermon_modules::veto::Ports::parse(&text)
+                    .map_err(|why| problems.push(format!("local.module_ports: {why}")))
                     .ok()
             })
             .collect();
@@ -447,6 +490,11 @@ mod tests {
         );
         assert_eq!(veto.sockets, [PathBuf::from("/run/postgresql")]);
         for (line, key) in [
+            ("module_hosts = [\"db host\"]", "local.module_hosts"),
+            ("module_hosts = [\"foo.*\"]", "local.module_hosts"),
+            ("module_ports = [0]", "local.module_ports"),
+            ("module_ports = [\"9-1\"]", "local.module_ports"),
+            ("module_ports = [70000]", "local.module_ports"),
             ("module_targets = [\"localhost\"]", "local.module_targets"),
             ("module_targets = [\"10.0.0.0/40\"]", "local.module_targets"),
             ("module_sockets = [\"run\"]", "local.module_sockets"),
@@ -458,6 +506,71 @@ mod tests {
             let problems = invalid(&format!("{MINIMAL}[local]\n{line}\n"));
             assert!(problems[0].starts_with(key), "{line}: {problems:?}");
         }
+    }
+
+    // M5-33: names and ports of the modules, both bounded by default; `*` and `1-65535` open
+    // them explicitly.
+    #[test]
+    fn the_modules_names_and_ports() {
+        let veto = AgentConfig::parse(MINIMAL).unwrap().local.modules;
+        assert_eq!(veto.hosts, ["localhost"]);
+        assert!(!veto.ports.iter().any(|p| p.contains(22)));
+        assert!(veto.ports.iter().any(|p| p.contains(5432)));
+        let veto = AgentConfig::parse(&format!(
+            "{MINIMAL}[local]\nmodule_hosts = [\"DB.example.org\", \"*.svc.example.org\"]\n\
+             module_ports = [22, \"8000-8100\"]\n"
+        ))
+        .unwrap()
+        .local
+        .modules;
+        assert_eq!(veto.hosts, ["db.example.org", "*.svc.example.org"]);
+        for (port, ok) in [
+            (22, true),
+            (8000, true),
+            (8100, true),
+            (8101, false),
+            (80, false),
+        ] {
+            assert_eq!(veto.ports.iter().any(|p| p.contains(port)), ok, "{port}");
+        }
+        let veto = AgentConfig::parse(&format!(
+            "{MINIMAL}[local]\nmodule_hosts = [\"*\"]\nmodule_ports = [\"1-65535\"]\n"
+        ))
+        .unwrap()
+        .local
+        .modules;
+        assert_eq!(veto.hosts, ["*"]);
+        assert!(
+            veto.ports
+                .iter()
+                .any(|p| p.contains(1) && p.contains(65535))
+        );
+    }
+
+    // M5-33: the modules never read the agent's state directory, wherever it lies, nor the
+    // directory of its configuration file.
+    #[test]
+    fn the_modules_never_read_the_agents_own_files() {
+        let config = AgentConfig::parse(&format!(
+            "{MINIMAL}[paths]\nstate_dir = \"/srv/sermon\"\n[local]\nmodule_file_prefixes = [\"/\"]\n"
+        ))
+        .unwrap();
+        let veto = &config.local.modules;
+        assert!(
+            veto.file(Path::new("/srv/sermon/identity/key.pem"))
+                .is_err()
+        );
+        assert!(veto.file(Path::new("/srv/other.pem")).is_ok());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("agent.toml");
+        std::fs::write(
+            &path,
+            format!("{MINIMAL}[local]\nmodule_file_prefixes = [\"/\"]\n"),
+        )
+        .unwrap();
+        let veto = AgentConfig::load(&path).unwrap().local.modules;
+        assert!(veto.file(&path).is_err());
+        assert!(veto.file(&dir.path().join("other.pem")).is_err());
     }
 
     #[test]
@@ -511,7 +624,11 @@ mod tests {
                 allow_live_view: false,
                 allow_logs: false,
                 log_file_prefixes: vec![PathBuf::from("/var/log"), PathBuf::from("/srv/app/logs")],
-                modules: sermon_modules::Veto::default(),
+                modules: {
+                    let mut veto = sermon_modules::Veto::default();
+                    veto.block(Path::new("/srv/sermon"));
+                    veto
+                },
             }
         );
     }

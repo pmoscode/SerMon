@@ -39,7 +39,7 @@ async fn collect(
     let schema = Schema::parse(module.schema()).unwrap();
     let secrets = Secrets::new([("secret".to_owned(), password.to_owned())]);
     let config = schema.validate(config, &secrets.fields()).unwrap();
-    let (veto, host) = (Veto::default(), Host::default());
+    let (veto, host) = (Veto::default().any_port(), Host::default());
     let setup = Setup {
         veto: &veto,
         secrets: &secrets,

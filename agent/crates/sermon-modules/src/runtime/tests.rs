@@ -52,11 +52,13 @@ impl Module for Fake {
                 .unwrap_err()
                 .into());
         }
+        assert!(config["port"] != 3, "a bug in build");
         Ok(Box::new(FakeRun {
             id: self.id,
             act: self.act.clone(),
             runs: self.runs.clone(),
             password: setup.secrets.get("password").map(str::to_owned),
+            panics_in_timeout: config["port"] == 4,
         }))
     }
 }
@@ -66,9 +68,15 @@ struct FakeRun {
     act: Arc<Mutex<Act>>,
     runs: Arc<AtomicUsize>,
     password: Option<String>,
+    panics_in_timeout: bool,
 }
 
 impl Instance for FakeRun {
+    fn timeout(&self) -> Duration {
+        assert!(!self.panics_in_timeout, "a bug in timeout");
+        Duration::from_secs(5)
+    }
+
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             self.runs.fetch_add(1, Ordering::SeqCst);
@@ -217,7 +225,7 @@ async fn settle(d: Duration) {
 // M5-21: the log lines of a run go to the sink, each once, at most MAX_LOG_LINES a run.
 #[tokio::test(start_paused = true)]
 async fn the_log_lines_of_a_run_go_out() {
-    let mut w = world(Veto::default());
+    let mut w = world(Veto::default().any_port());
     *w.act["a"].lock().unwrap() = Act::Logs(crate::MAX_LOG_LINES + 7);
     w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
     settle(Duration::from_secs(15)).await;
@@ -235,7 +243,7 @@ async fn the_log_lines_of_a_run_go_out() {
 // ADR 0039: an enabled module runs at its interval and its samples go out; its state is ok.
 #[tokio::test(start_paused = true)]
 async fn an_enabled_module_runs_at_its_interval() {
-    let mut w = world(Veto::default());
+    let mut w = world(Veto::default().any_port());
     w.runtime.apply(
         &[
             spec("a", "{}"),
@@ -268,7 +276,7 @@ async fn a_failing_module_doesnt_touch_the_others() {
         (Act::Foreign, State::Error),
         (Act::Samples(MAX_SAMPLES + 1), State::Error),
     ] {
-        let mut w = world(Veto::default());
+        let mut w = world(Veto::default().any_port());
         w.set("a", act);
         w.runtime
             .apply(&[spec("a", "{}"), spec("b", "{}")], &BTreeMap::new());
@@ -291,7 +299,7 @@ async fn a_failing_module_doesnt_touch_the_others() {
 // A crashed module is built anew after a pause that doubles; a run that succeeds resets it.
 #[tokio::test(start_paused = true)]
 async fn a_crashed_module_starts_again_after_a_pause() {
-    let mut w = world(Veto::default());
+    let mut w = world(Veto::default().any_port());
     w.set("a", Act::Panic);
     w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
     settle(Duration::from_secs(1)).await;
@@ -311,11 +319,36 @@ async fn a_crashed_module_starts_again_after_a_pause() {
     assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Ok));
 }
 
+// A panic in `build` or `timeout` is a crash like one in a run: reported, built anew after the
+// pause; the other module runs on (M5-33).
+#[tokio::test(start_paused = true)]
+async fn a_panic_outside_the_run_is_a_crash_too() {
+    for port in [3, 4] {
+        let mut w = world(Veto::default().any_port());
+        let config = format!(r#"{{"port":{port}}}"#);
+        w.runtime
+            .apply(&[spec("a", &config), spec("b", "{}")], &BTreeMap::new());
+        settle(Duration::from_secs(1)).await;
+        let (state, why) = w.out.state("a").expect("a report");
+        assert_eq!(state, State::Crashed, "port {port}");
+        assert!(why.contains("30 s"), "{why}");
+        assert_eq!(w.builds["a"].load(Ordering::SeqCst), 1);
+        settle(Duration::from_secs(31)).await;
+        assert_eq!(
+            w.builds["a"].load(Ordering::SeqCst),
+            2,
+            "port {port}: again"
+        );
+        assert_eq!(w.out.state("b").map(|s| s.0), Some(State::Ok));
+        assert_eq!(w.runs("a"), 0);
+    }
+}
+
 // Blocking work that doesn't return: the run times out, no further run starts while it blocks;
 // once it returns, the module runs again.
 #[tokio::test(start_paused = true)]
 async fn a_hung_module_starts_no_new_run() {
-    let mut w = world(Veto::default());
+    let mut w = world(Veto::default().any_port());
     w.set("a", Act::Block(Duration::from_millis(500)));
     w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
     advance(Duration::ZERO).await;
@@ -335,7 +368,7 @@ async fn a_hung_module_starts_no_new_run() {
 // use and an unknown one don't run; the reasons go out.
 #[tokio::test(start_paused = true)]
 async fn an_invalid_configuration_keeps_the_module_off() {
-    let mut w = world(Veto::default());
+    let mut w = world(Veto::default().any_port());
     w.runtime.apply(
         &[
             spec("a", r#"{"port":"eighty"}"#),
@@ -369,7 +402,7 @@ async fn an_invalid_configuration_keeps_the_module_off() {
 async fn the_local_veto_wins() {
     let mut w = world(Veto {
         allow: false,
-        ..Veto::default()
+        ..Veto::default().any_port()
     });
     w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
     settle(Duration::from_secs(25)).await;
@@ -377,7 +410,7 @@ async fn the_local_veto_wins() {
     let (state, why) = w.out.state("a").unwrap();
     assert_eq!(state, State::Vetoed);
     assert!(why.contains("allow_modules"), "{why}");
-    let mut w = world(Veto::default());
+    let mut w = world(Veto::default().any_port());
     w.runtime
         .apply(&[spec("a", r#"{"port":2}"#)], &BTreeMap::new());
     settle(Duration::from_secs(1)).await;
@@ -390,7 +423,7 @@ async fn the_local_veto_wins() {
 // off stops and leaves the report.
 #[tokio::test(start_paused = true)]
 async fn a_change_restarts_what_it_touches() {
-    let mut w = world(Veto::default());
+    let mut w = world(Veto::default().any_port());
     w.runtime
         .apply(&[spec("a", "{}"), spec("b", "{}")], &BTreeMap::new());
     settle(Duration::from_secs(1)).await;

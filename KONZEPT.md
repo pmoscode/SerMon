@@ -1269,9 +1269,11 @@ spec:
     läuft weiter.
   - Konfiguration je Gruppe in `AgentConfig` (ADR 0030): je Modul an/aus und JSON nach dem Schema des Agents, einer
     festen Teilmenge von JSON Schema; ein ungültiges Modul läuft nicht, der Rest schon.
-  - **Lokales Veto** in `agent.toml`: `allow_modules`, `module_targets` (ab Werk nur Loopback), `module_sockets`,
-    `module_file_prefixes`, `allow_docker_socket` (ab Werk aus). Der Server kann den Agent nicht zur Sonde im Netz des
-    Hosts machen.
+  - **Lokales Veto** in `agent.toml`: `allow_modules`, `module_targets` (ab Werk nur Loopback), `module_hosts` (ab
+    Werk nur `localhost`; andere Namen löst der Agent gar nicht erst auf), `module_ports` (ab Werk die Ports der Dienste
+    der Module), `module_sockets`, `module_file_prefixes`, `allow_docker_socket` (ab Werk aus, gilt für alle
+    Container-Runtimes). Der Server kann den Agent nicht zur Sonde im Netz des Hosts machen, und die Gründe einer
+    Weigerung verraten ihm keine Adressen oder Pfade.
   - „Ende-zu-Ende“ heißt: über den mTLS-Stream des direkt veröffentlichten Agent-Ports in einer eigenen Nachricht
     `ModuleSecrets`, im Server mit `secrets.Box` versiegelt, beim Agent nur im Speicher; die UI sieht nur „gesetzt“.
 

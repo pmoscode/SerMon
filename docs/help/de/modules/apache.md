@@ -23,7 +23,8 @@ keine Anfragen, URLs oder Adressen weiter. Der Agent erreicht nur Ziele unter `m
 
 ## Einstellungen
 
-- **Status-URL:** ab Werk `http://127.0.0.1/server-status?auto` – das `?auto` gehört dazu.
+- **Status-URL:** ab Werk `http://127.0.0.1/server-status?auto` – das `?auto` gehört dazu, eine andere Query nimmt
+  das Modul nicht; der Port muss unter `module_ports` in `agent.toml` liegen (ab Werk etwa 80, 443, 8080, 8443).
 - **Timeout**, für HTTPS **TLS prüfen** und **CA-Datei**.
 
 ## Metriken

@@ -6,8 +6,9 @@ has left. The module is off by default; up to 16 URLs are asked at once, the bod
 ## Requirements
 
 The agent only reaches targets the host allows: `module_targets` in the `[local]` section of
-`/etc/sermon/agent.toml`, by default loopback only (`127.0.0.0/8`, `::1`). To check a service in the network, add its
-network there. A name is resolved once and every address must be allowed.
+`/etc/sermon/agent.toml`, by default loopback only (`127.0.0.0/8`, `::1`), `localhost` as the only name
+(`module_hosts`) and only the ports of the modules' services (`module_ports`). To check a service in the network, add
+its network, name and port there. A name is resolved once and every address must be allowed.
 
 ## Settings
 
@@ -27,6 +28,7 @@ network there. A name is resolved once and every address must be allowed.
 
 ## When it doesn't work
 
-- "… is not in module_targets of agent.toml" (state `vetoed`): the target or a redirect lies outside the allowed
-  networks.
+- "… is not in module_targets of agent.toml", "… not allowed by module_hosts and module_targets …" or "port … is not
+  in module_ports …" (state `vetoed`): the target or a redirect lies outside what the host allows. A name that doesn't
+  exist reads the same.
 - `up` 0 without a status code: no answer (connection refused, timeout, TLS error).

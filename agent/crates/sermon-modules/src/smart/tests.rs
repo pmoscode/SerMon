@@ -291,7 +291,7 @@ fn instance(
         .validate(config, &[])
         .unwrap();
     let setup = Setup {
-        veto: &Veto::default(),
+        veto: &Veto::default().any_port(),
         secrets: &Secrets::default(),
         host: &host,
     };
@@ -389,7 +389,7 @@ async fn asks_the_helper_and_reports_its_refusals() {
 fn needs_a_helper() {
     let config = Schema::parse(SCHEMA).unwrap().validate("{}", &[]).unwrap();
     let setup = Setup {
-        veto: &Veto::default(),
+        veto: &Veto::default().any_port(),
         secrets: &Secrets::default(),
         host: &Host::default(),
     };

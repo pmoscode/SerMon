@@ -154,7 +154,7 @@ async fn gets_status_and_body() {
         "Active connections: 1 \n",
     ))
     .await;
-    let c = client(&Veto::default(), Options::default());
+    let c = client(&Veto::default().any_port(), Options::default());
     let r = c
         .get(&url(&format!("http://{}/nginx_status", server.addr)), true)
         .await
@@ -187,7 +187,7 @@ async fn connects_only_inside_the_veto() {
     let server = serve(fixed("200 OK", "", "")).await;
     let only_other = Veto {
         targets: vec![Net::parse("127.0.0.2/32").unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let c = client(&only_other, Options::default());
     let e = c
@@ -211,7 +211,7 @@ async fn follows_redirects_inside_the_veto_only() {
         "",
     ))
     .await;
-    let c = client(&Veto::default(), Options::default());
+    let c = client(&Veto::default().any_port(), Options::default());
     let e = c
         .get(&url(&format!("http://{}/", outside.addr)), true)
         .await
@@ -254,7 +254,7 @@ async fn follows_redirects_inside_the_veto_only() {
     assert!(e.to_string().contains("more than 3 redirects"), "four: {e}");
 
     let no_follow = client(
-        &Veto::default(),
+        &Veto::default().any_port(),
         Options {
             follow_redirects: false,
             ..Options::default()
@@ -277,7 +277,7 @@ async fn the_credential_goes_to_its_host_only() {
     }))
     .await;
     let c = client(
-        &Veto::default(),
+        &Veto::default().any_port(),
         Options {
             authorization: Some("Bearer t0ken".into()),
             ..Options::default()
@@ -297,7 +297,7 @@ async fn the_credential_goes_to_its_host_only() {
 #[tokio::test]
 async fn bounds_the_answer() {
     let c = client(
-        &Veto::default(),
+        &Veto::default().any_port(),
         Options {
             timeout: Duration::from_millis(300),
             ..Options::default()
@@ -383,7 +383,7 @@ async fn bounds_the_answer() {
 // Too many headers or no HTTP at all is a bad answer; a closed port is no answer.
 #[tokio::test]
 async fn tells_bad_answers_from_none() {
-    let c = client(&Veto::default(), Options::default());
+    let c = client(&Veto::default().any_port(), Options::default());
     let headers = serve(Arc::new(|_, _| {
         answer("200 OK", &"X-Filler: a\r\n".repeat(MAX_HEADERS + 1), "")
     }))
@@ -412,7 +412,7 @@ async fn tells_bad_answers_from_none() {
 
 struct TlsServer {
     acceptor: tokio_rustls::TlsAcceptor,
-    ca: tempfile::TempDir,
+    ca: crate::TestDir,
     ca_file: PathBuf,
 }
 
@@ -427,7 +427,7 @@ fn tls_until(names: &[&str], year: i32) -> TlsServer {
     params.not_after = rcgen::date_time_ymd(year, 1, 1);
     let key = rcgen::KeyPair::generate().unwrap();
     let cert = params.self_signed(&key).unwrap();
-    let ca = tempfile::tempdir().unwrap();
+    let ca = crate::TestDir::new();
     let ca_file = ca.path().join("ca.pem");
     std::fs::write(&ca_file, cert.pem()).unwrap();
     let config = rustls::ServerConfig::builder_with_provider(Arc::new(
@@ -461,7 +461,7 @@ async fn verifies_tls() {
     let https = url(&format!("https://localhost:{}/", server.addr.port()));
     let veto = Veto {
         file_prefixes: vec![std::fs::canonicalize(own.ca.path()).unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let with_ca = client(
         &veto,
@@ -497,7 +497,7 @@ async fn verifies_tls() {
     assert!(e.to_string().contains("TLS"), "an unknown CA: {e}");
 
     let unverified = client(
-        &Veto::default(),
+        &Veto::default().any_port(),
         Options {
             tls_verify: false,
             ..Options::default()
@@ -510,7 +510,7 @@ async fn verifies_tls() {
     );
 
     let refused = Client::new(
-        &Veto::default(),
+        &Veto::default().any_port(),
         Options {
             ca_file: Some(own.ca_file.clone()),
             ..Options::default()
@@ -537,7 +537,7 @@ async fn redirects_of_https() {
     let own = tls(&["localhost"]);
     let veto = Veto {
         file_prefixes: vec![std::fs::canonicalize(own.ca.path()).unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let with_ca = client(
         &veto,
@@ -547,7 +547,7 @@ async fn redirects_of_https() {
         },
     );
     let unverified = client(
-        &Veto::default(),
+        &Veto::default().any_port(),
         Options {
             tls_verify: false,
             ..Options::default()
@@ -592,7 +592,7 @@ async fn redirects_of_https() {
 // The Docker API (M5-17) over a socket below module_sockets.
 #[tokio::test]
 async fn speaks_over_unix_sockets() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::TestDir::new();
     let path = dir.path().join("api.sock");
     let listener = UnixListener::bind(&path).unwrap();
     let requests = Arc::new(Mutex::new(Vec::new()));
@@ -606,7 +606,7 @@ async fn speaks_over_unix_sockets() {
     });
     let veto = Veto {
         sockets: vec![std::fs::canonicalize(dir.path()).unwrap()],
-        ..Veto::default()
+        ..Veto::default().any_port()
     };
     let c = client(&veto, Options::default());
     let r = c
@@ -620,7 +620,7 @@ async fn speaks_over_unix_sockets() {
         "{request}"
     );
     assert!(c.get_unix(&path, "no-slash", true).await.is_err());
-    let outside = client(&Veto::default(), Options::default());
+    let outside = client(&Veto::default().any_port(), Options::default());
     assert!(matches!(
         outside.get_unix(&path, "/", true).await,
         Err(HttpError::Vetoed(_))

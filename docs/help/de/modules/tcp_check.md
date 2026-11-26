@@ -5,8 +5,9 @@ gleichzeitig geprüft, gesendet wird nichts.
 
 ## Voraussetzungen
 
-Nur Ziele unter `module_targets` in `[local]` von `/etc/sermon/agent.toml` (ab Werk Loopback). Ein Name wird einmal
-aufgelöst, jede Adresse muss erlaubt sein.
+Nur Ziele unter `module_targets` in `[local]` von `/etc/sermon/agent.toml` (ab Werk Loopback), Namen unter
+`module_hosts` (ab Werk `localhost`) und Ports unter `module_ports` (ab Werk die der Dienste der Module). Ein Name wird
+einmal aufgelöst, jede Adresse muss erlaubt sein.
 
 ## Einstellungen
 
@@ -20,4 +21,4 @@ aufgelöst, jede Adresse muss erlaubt sein.
 
 ## Wenn es nicht läuft
 
-- Zustand `vetoed`: Das Ziel liegt außerhalb von `module_targets`.
+- Zustand `vetoed`: Das Ziel liegt außerhalb von `module_targets`, `module_hosts` oder `module_ports`.

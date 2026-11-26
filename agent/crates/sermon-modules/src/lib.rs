@@ -401,6 +401,28 @@ impl fmt::Debug for Secrets {
 /// # Panics
 ///
 /// If a sample is not in the catalog or has other labels.
+/// A temporary directory by its resolved path: the veto compares paths as configured with its
+/// prefixes, and the system's temporary directory may lie behind a link (macOS).
+#[cfg(test)]
+pub(crate) struct TestDir {
+    _dir: tempfile::TempDir,
+    path: std::path::PathBuf,
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
+impl TestDir {
+    pub(crate) fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let path = std::fs::canonicalize(dir.path()).unwrap();
+        Self { _dir: dir, path }
+    }
+
+    pub(crate) fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+}
+
 #[cfg(test)]
 // Used by the tests of the modules; without the feature `simulate` there may be none.
 #[allow(dead_code)]

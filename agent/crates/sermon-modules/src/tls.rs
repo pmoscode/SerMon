@@ -32,6 +32,7 @@ use tokio::task::JoinSet;
 
 use crate::fields::{strings, timeout};
 use crate::http::{self, HttpError};
+use crate::veto::OpenError;
 use crate::{
     BoxFuture, BuildError, Config, Instance, Module, Refused, Run, RunError, Setup, Veto, schema,
 };
@@ -89,7 +90,8 @@ impl Module for Tls {
         }
         let roots = match config.get("ca_file").and_then(Value::as_str) {
             Some(path) => Some(Arc::new(http::read_ca_file(
-                &setup.veto.file(std::path::Path::new(path))?,
+                setup.veto,
+                std::path::Path::new(path),
             )?)),
             None => None,
         };
@@ -125,10 +127,13 @@ struct Certificates {
 
 /// The certificates of a PEM file below the veto, at most [`MAX_CHAIN`].
 fn read_file(veto: &Veto, path: &std::path::Path) -> Result<Vec<CertificateDer<'static>>, Unread> {
-    let resolved = veto.file(path).map_err(Unread::Vetoed)?;
+    let file = veto.open(path).map_err(|e| match e {
+        OpenError::Vetoed(r) => Unread::Vetoed(r),
+        OpenError::Io(_) => Unread::Unreadable,
+    })?;
     let mut text = Vec::new();
-    std::fs::File::open(&resolved)
-        .and_then(|f| f.take(MAX_FILE + 1).read_to_end(&mut text))
+    file.take(MAX_FILE + 1)
+        .read_to_end(&mut text)
         .map_err(|_| Unread::Unreadable)?;
     if u64::try_from(text.len()).map_or(true, |n| n > MAX_FILE) {
         return Err(Unread::Unreadable);

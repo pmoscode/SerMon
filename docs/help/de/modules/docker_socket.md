@@ -10,8 +10,8 @@ ist ab Werk aus und schlägt sich nicht selbst vor.
 
 ## Voraussetzungen
 
-- Auf dem Host in `[local]` von `/etc/sermon/agent.toml`: `allow_docker_socket = true` (ab Werk aus; gilt auch für
-  `podman.sock` und `containerd.sock`) und der Socket unter `module_sockets` (ab Werk `/run`, `/var/run`).
+- Auf dem Host in `[local]` von `/etc/sermon/agent.toml`: `allow_docker_socket = true` (ab Werk aus; gilt für alle
+  Sockets von Container-Runtimes: Podman, containerd, CRI-O, BuildKit, libvirt, LXD/Incus) und der Socket unter `module_sockets` (ab Werk `/run`, `/var/run`).
 - Der User `sermon` braucht Zugriff auf den Socket, etwa über die Gruppe `docker` – auch das entspricht root.
 
 ## Einstellungen

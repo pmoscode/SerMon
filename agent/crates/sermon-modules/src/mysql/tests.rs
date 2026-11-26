@@ -232,7 +232,7 @@ fn takes_only_what_holds() {
 #[test]
 fn builds_from_its_configuration() {
     let schema = Schema::parse(SCHEMA).unwrap();
-    let (host, veto) = (crate::Host::default(), Veto::default());
+    let (host, veto) = (crate::Host::default(), Veto::default().any_port());
     let secrets = Secrets::new([("secret".to_owned(), "pencil".to_owned())]);
     let setup = Setup {
         veto: &veto,
@@ -255,7 +255,11 @@ fn builds_from_its_configuration() {
 #[tokio::test]
 async fn connects_only_inside_the_veto() {
     let schema = Schema::parse(SCHEMA).unwrap();
-    let (host, veto, secrets) = (crate::Host::default(), Veto::default(), Secrets::default());
+    let (host, veto, secrets) = (
+        crate::Host::default(),
+        Veto::default().any_port(),
+        Secrets::default(),
+    );
     let setup = Setup {
         veto: &veto,
         secrets: &secrets,

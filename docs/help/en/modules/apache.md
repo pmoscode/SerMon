@@ -24,7 +24,8 @@ on no requests, URLs or addresses. The agent only reaches targets within `module
 
 ## Settings
 
-- **Status URL:** by default `http://127.0.0.1/server-status?auto` – the `?auto` belongs to it.
+- **Status URL:** by default `http://127.0.0.1/server-status?auto` – the `?auto` belongs to it, the module takes no
+  other query; the port has to be within `module_ports` of `agent.toml` (by default e.g. 80, 443, 8080, 8443).
 - **Timeout**, for HTTPS **verify TLS** and a **CA file**.
 
 ## Metrics

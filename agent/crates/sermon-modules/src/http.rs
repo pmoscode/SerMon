@@ -179,6 +179,12 @@ impl Url {
         self.port
     }
 
+    /// The query, if the URL has one (`?` alone gives an empty one).
+    #[must_use]
+    pub fn query(&self) -> Option<&str> {
+        self.path.split_once('?').map(|(_, q)| q)
+    }
+
     /// Whether it is HTTPS.
     #[must_use]
     pub fn https(&self) -> bool {
@@ -333,7 +339,7 @@ impl Client {
     pub fn new(veto: &Veto, options: Options) -> Result<Self, BuildError> {
         let roots = match &options.ca_file {
             None => None,
-            Some(path) => Some(Arc::new(read_ca_file(&veto.file(path)?)?)),
+            Some(path) => Some(Arc::new(read_ca_file(veto, path)?)),
         };
         Ok(Self {
             veto: veto.clone(),
@@ -702,12 +708,17 @@ pub(crate) fn system_roots() -> Result<Arc<RootCertStore>, String> {
         .clone()
 }
 
-pub(crate) fn read_ca_file(path: &Path) -> Result<RootCertStore, BuildError> {
+/// The CA certificates of a PEM file the veto allows.
+pub(crate) fn read_ca_file(veto: &Veto, path: &Path) -> Result<RootCertStore, BuildError> {
     use std::io::Read;
     let invalid = |why: String| BuildError::Invalid(format!("{}: {why}", path.display()));
+    let file = veto.open(path).map_err(|e| match e {
+        crate::veto::OpenError::Vetoed(r) => BuildError::Vetoed(r),
+        crate::veto::OpenError::Io(e) => invalid(e.to_string()),
+    })?;
     let mut text = Vec::new();
-    std::fs::File::open(path)
-        .and_then(|f| f.take(MAX_CA_FILE + 1).read_to_end(&mut text))
+    file.take(MAX_CA_FILE + 1)
+        .read_to_end(&mut text)
         .map_err(|e| invalid(e.to_string()))?;
     if u64::try_from(text.len()).map_or(true, |n| n > MAX_CA_FILE) {
         return Err(invalid(format!("larger than {MAX_CA_FILE} bytes")));

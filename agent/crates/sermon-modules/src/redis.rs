@@ -57,7 +57,9 @@ impl Module for Redis {
 
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
         let target = if let Some(path) = config.get("socket").and_then(Value::as_str) {
-            Target::Socket(setup.veto.socket(std::path::Path::new(path))?)
+            let path = PathBuf::from(path);
+            setup.veto.socket(&path)?;
+            Target::Socket(path)
         } else {
             let text = config
                 .get("address")

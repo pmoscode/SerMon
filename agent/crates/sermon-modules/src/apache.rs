@@ -53,6 +53,7 @@ impl Module for Apache {
             config,
             setup,
             "http://127.0.0.1/server-status?auto",
+            Some("auto"),
             "text/plain",
         )?;
         Ok(Box::new(Status {

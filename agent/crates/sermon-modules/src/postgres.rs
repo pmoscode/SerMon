@@ -28,7 +28,7 @@ use std::time::Duration;
 use sermon_core::{Monotonic, Sample};
 
 use crate::discovery::{Discovered, HostFacts};
-use crate::sql::{self, Target, Tls};
+use crate::sql::{self, Security, Target, Tls};
 use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup, Veto};
 use wire::{Error, ResultSet};
 
@@ -72,17 +72,15 @@ impl Module for Postgres {
 
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
         let target = Target::of(config, setup.veto)?;
-        let tls = sql::tls_of(config);
-        if tls != Tls::Off && matches!(target, Target::Unix(_)) {
-            return Err(BuildError::Invalid("tls: not over a Unix socket".into()));
-        }
+        let security = Security::of(config, &target, setup.veto)?;
         Ok(Box::new(Reader {
             veto: setup.veto.clone(),
             target,
-            tls,
+            security,
             user: sql::text(config, "role", "sermon").to_owned(),
             database: sql::text(config, "database", "postgres").to_owned(),
             password: setup.secrets.get("secret").map(str::to_owned),
+            allow: wire::Allow::of(sql::text(config, "auth", "scram-sha-256")),
             last: None,
         }))
     }
@@ -118,10 +116,11 @@ fn bracket(ip: std::net::IpAddr) -> String {
 struct Reader {
     veto: Veto,
     target: Target,
-    tls: Tls,
+    security: Security,
     user: String,
     database: String,
     password: Option<String>,
+    allow: wire::Allow,
     last: Option<(Monotonic, Stats)>,
 }
 
@@ -331,12 +330,13 @@ fn failed(e: Error) -> RunError {
 impl Reader {
     async fn read(&self) -> Result<Stats, RunError> {
         let connection = self.target.connect(&self.veto).await?;
-        let io = match (connection, self.tls) {
+        let secure = self.security.secure(&connection);
+        let io = match (connection, self.security.tls) {
             (sql::Connection::Tcp(mut tcp, host), Tls::Verify | Tls::NoVerify) => {
                 if !wire::ssl_request(&mut tcp).await.map_err(failed)? {
                     return Err(RunError::Failed("the server offers no TLS".into()));
                 }
-                sql::tls(tcp, &host, self.tls).await?
+                self.security.start(tcp, &host).await?
             }
             (c, _) => c.plain(),
         };
@@ -345,6 +345,8 @@ impl Reader {
             database: &self.database,
             password: self.password.as_deref(),
             options: "-c statement_timeout=3000 -c lock_timeout=1000 -c default_transaction_read_only=on",
+            allow: self.allow,
+            secure,
         };
         let mut session = wire::start(io, startup).await.map_err(failed)?;
         let (standby, max) = check(&session.query(CHECK).await.map_err(failed)?, &self.user)?;

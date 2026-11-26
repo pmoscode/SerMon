@@ -22,6 +22,7 @@ sermon-logs = { path = "../crates/sermon-logs" }
 sermon-modules = { path = "../crates/sermon-modules" }
 sermon-security = { path = "../crates/sermon-security" }
 sermon-updates = { path = "../crates/sermon-updates" }
+tokio = { workspace = true, features = ["io-util"] }
 
 
 [[bin]]
@@ -128,6 +129,13 @@ bench = false
 [[bin]]
 name = "mysql_wire"
 path = "fuzz_targets/mysql_wire.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "db_logins"
+path = "fuzz_targets/db_logins.rs"
 test = false
 doc = false
 bench = false

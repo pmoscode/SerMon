@@ -47,10 +47,24 @@
     "tls": {
       "type": "string",
       "title": "TLS",
-      "description": "off (loopback, socket), verify (the certificate against the system's CAs), no_verify (any certificate).",
+      "description": "off, verify (the certificate against the system's CAs or ca_file), no_verify (any certificate: encrypted, but to whoever answers). Empty: off on loopback and the socket, verify for any other address.",
       "enum": ["off", "verify", "no_verify"],
-      "maxLength": 9,
-      "default": "off"
+      "maxLength": 9
+    },
+    "ca_file": {
+      "type": "string",
+      "title": "CA file",
+      "description": "PEM file below module_file_prefixes to verify the server's certificate with instead of the system's CAs (tls verify).",
+      "format": "path",
+      "maxLength": 4096
+    },
+    "auth": {
+      "type": "string",
+      "title": "Authentication",
+      "description": "The weakest method taken: scram-sha-256 (only SCRAM, the server proves it knows the password), md5 (also md5), password (also the password itself, only over the socket or with tls verify).",
+      "enum": ["scram-sha-256", "md5", "password"],
+      "maxLength": 13,
+      "default": "scram-sha-256"
     }
   }
 }

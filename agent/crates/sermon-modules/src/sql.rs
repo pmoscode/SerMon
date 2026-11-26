@@ -4,11 +4,11 @@
 //! `mysql::wire`): only what monitoring needs, bounded and fuzzed, without OpenSSL or a driver
 //! with dozens of crates.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use rustls::ClientConfig;
 use rustls::pki_types::ServerName;
+use rustls::{ClientConfig, RootCertStore};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpStream, UnixStream};
@@ -30,10 +30,70 @@ pub enum Target {
 pub enum Tls {
     /// None (the default on loopback and for sockets).
     Off,
-    /// Required, the certificate verified with the system's roots.
+    /// Required, the certificate verified with the system's roots or `ca_file` (the default for
+    /// any other address).
     Verify,
     /// Required, any certificate (only explicitly).
     NoVerify,
+}
+
+/// How a module talks to its database: TLS and the roots to verify with.
+#[derive(Debug, Clone)]
+pub struct Security {
+    pub tls: Tls,
+    /// The CAs of `ca_file`, if given; the system's otherwise.
+    roots: Option<Arc<RootCertStore>>,
+}
+
+impl Security {
+    /// The settings `tls` and `ca_file` of `config` for `target`: without `tls`, off for the
+    /// socket and loopback, verify for any other address (M5-33).
+    ///
+    /// # Errors
+    ///
+    /// [`BuildError::Invalid`] for TLS over a socket, or a CA file without `verify` or without
+    /// certificates; [`BuildError::Vetoed`] for a CA file outside `module_file_prefixes`.
+    pub fn of(config: &Config, target: &Target, veto: &Veto) -> Result<Self, BuildError> {
+        let tls = match config.get("tls").and_then(Value::as_str) {
+            Some("verify") => Tls::Verify,
+            Some("no_verify") => Tls::NoVerify,
+            Some(_) => Tls::Off,
+            None if target.is_local() => Tls::Off,
+            None => Tls::Verify,
+        };
+        if tls != Tls::Off && matches!(target, Target::Unix(_)) {
+            return Err(BuildError::Invalid("tls: not over a Unix socket".into()));
+        }
+        let roots = match config.get("ca_file").and_then(Value::as_str) {
+            None => None,
+            Some(_) if tls != Tls::Verify => {
+                return Err(BuildError::Invalid("ca_file: only with tls verify".into()));
+            }
+            Some(path) => Some(Arc::new(crate::http::read_ca_file(veto, Path::new(path))?)),
+        };
+        Ok(Self { tls, roots })
+    }
+
+    /// Whether the peer is known to be the database: over the socket (its path below
+    /// `module_sockets`) or TLS with a verified certificate. Only then may a login send the
+    /// password itself; `no_verify` encrypts, but to whoever answers (M5-33).
+    #[must_use]
+    pub fn secure(&self, connection: &Connection) -> bool {
+        matches!(connection, Connection::Unix(_)) || self.tls == Tls::Verify
+    }
+
+    /// Starts TLS on `io`, a TCP connection to `host`, after the database agreed to.
+    ///
+    /// # Errors
+    ///
+    /// [`RunError::Failed`] if the handshake fails.
+    pub async fn start<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+        &self,
+        io: S,
+        host: &str,
+    ) -> Result<Box<dyn Io>, RunError> {
+        tls(io, host, self.tls, self.roots.clone()).await
+    }
 }
 
 /// A connection, plain or over TLS.
@@ -62,6 +122,20 @@ impl Target {
             host: host.to_owned(),
             port,
         })
+    }
+
+    /// Whether the target is this host: a socket, `localhost` or a loopback address.
+    #[must_use]
+    pub fn is_local(&self) -> bool {
+        match self {
+            Self::Unix(_) => true,
+            Self::Tcp { host, .. } => {
+                host.eq_ignore_ascii_case("localhost")
+                    || host
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|ip| ip.is_loopback())
+            }
+        }
     }
 
     /// The label of the target: the address or the socket's path.
@@ -123,25 +197,17 @@ impl Connection {
     }
 }
 
-/// The TLS setting of `config` (`tls`: `off`, `verify`, `no_verify`).
-#[must_use]
-pub fn tls_of(config: &Config) -> Tls {
-    match config.get("tls").and_then(Value::as_str) {
-        Some("verify") => Tls::Verify,
-        Some("no_verify") => Tls::NoVerify,
-        _ => Tls::Off,
-    }
-}
-
-/// Starts TLS on `io`, a TCP connection to `host`, after the database agreed to.
+/// Starts TLS on `io`, a TCP connection to `host`, after the database agreed to; verified with
+/// `roots` (a CA file) or the system's.
 ///
 /// # Errors
 ///
 /// [`RunError::Failed`] if the handshake fails.
-pub async fn tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
+async fn tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
     io: S,
     host: &str,
     tls: Tls,
+    roots: Option<Arc<RootCertStore>>,
 ) -> Result<Box<dyn Io>, RunError> {
     static VERIFY: OnceLock<Result<Arc<ClientConfig>, String>> = OnceLock::new();
     static ANY: OnceLock<Result<Arc<ClientConfig>, String>> = OnceLock::new();
@@ -150,10 +216,13 @@ pub async fn tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
         tls_verify: verify,
         ..Options::default()
     };
-    let config = if verify { &VERIFY } else { &ANY }
-        .get_or_init(|| crate::http::tls_config(&options, None, false))
-        .clone()
-        .map_err(RunError::Failed)?;
+    let config = match roots {
+        Some(roots) if verify => crate::http::tls_config(&options, Some(roots), false),
+        _ => if verify { &VERIFY } else { &ANY }
+            .get_or_init(|| crate::http::tls_config(&options, None, false))
+            .clone(),
+    }
+    .map_err(RunError::Failed)?;
     let name = match host.parse::<std::net::IpAddr>() {
         Ok(ip) => ServerName::IpAddress(ip.into()),
         Err(_) => ServerName::try_from(host.to_owned())
@@ -173,33 +242,4 @@ pub fn text<'a>(config: &'a Config, name: &str, default: &'a str) -> &'a str {
 }
 
 #[cfg(test)]
-mod tests {
-    use tokio::net::UnixListener;
-
-    use super::*;
-
-    // M5-33: a socket that turns into a link out of module_sockets after the build is refused at
-    // the connection.
-    #[tokio::test]
-    async fn checks_the_socket_at_every_connection() {
-        let (allowed, outside) = (crate::TestDir::new(), crate::TestDir::new());
-        let real = outside.path().join("real.sock");
-        let _listener = UnixListener::bind(&real).unwrap();
-        let veto = Veto {
-            sockets: vec![allowed.path().to_path_buf()],
-            ..Veto::default()
-        };
-        let path = allowed.path().join("db.sock");
-        let config = serde_json::json!({ "socket": path });
-        let target = Target::of(config.as_object().unwrap(), &veto).unwrap();
-        assert_eq!(target, Target::Unix(path.clone()));
-        std::os::unix::fs::symlink(&real, &path).unwrap();
-        assert!(matches!(
-            target.connect(&veto).await,
-            Err(RunError::Vetoed(_))
-        ));
-        std::fs::remove_file(&path).unwrap();
-        let _inside = UnixListener::bind(&path).unwrap();
-        assert!(target.connect(&veto).await.is_ok());
-    }
-}
+mod tests;

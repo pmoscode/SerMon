@@ -59,7 +59,8 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 		socket: [m.module_mysql_socket, m.module_mysql_socket_help],
 		user: [m.module_mysql_user, m.module_mysql_user_help],
 		secret: [m.module_mysql_secret, m.module_mysql_secret_help],
-		tls: [m.module_mysql_tls, m.module_mysql_tls_help]
+		tls: [m.module_mysql_tls, m.module_mysql_tls_help],
+		ca_file: [m.module_mysql_ca_file, m.module_mysql_ca_file_help]
 	},
 	postgres: {
 		address: [m.module_postgres_address, m.module_postgres_address_help],
@@ -68,7 +69,9 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 		// The password: a field named so would make its i18n key look like a leaked one.
 		secret: [m.module_postgres_secret, m.module_postgres_secret_help],
 		database: [m.module_postgres_database, m.module_postgres_database_help],
-		tls: [m.module_postgres_tls, m.module_postgres_tls_help]
+		tls: [m.module_postgres_tls, m.module_postgres_tls_help],
+		ca_file: [m.module_postgres_ca_file, m.module_postgres_ca_file_help],
+		auth: [m.module_postgres_auth, m.module_postgres_auth_help]
 	},
 	systemd_units: {
 		units: [m.module_systemd_units_units, m.module_systemd_units_units_help]

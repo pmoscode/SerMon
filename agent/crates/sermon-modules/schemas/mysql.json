@@ -38,10 +38,16 @@
     "tls": {
       "type": "string",
       "title": "TLS",
-      "description": "off, verify (the certificate against the system's CAs), no_verify (any certificate; MySQL's own certificates). MySQL 8 needs TLS or the socket for the first login of caching_sha2_password.",
+      "description": "off, verify (the certificate against the system's CAs or ca_file), no_verify (any certificate: encrypted, but to whoever answers). Empty: off on loopback and the socket, verify for any other address. The full login of caching_sha2_password (first login, after a restart) sends the password and needs the socket or verify.",
       "enum": ["off", "verify", "no_verify"],
-      "maxLength": 9,
-      "default": "off"
+      "maxLength": 9
+    },
+    "ca_file": {
+      "type": "string",
+      "title": "CA file",
+      "description": "PEM file below module_file_prefixes to verify the server's certificate with instead of the system's CAs (tls verify), e.g. MySQL's own ca.pem copied there.",
+      "format": "path",
+      "maxLength": 4096
     }
   }
 }

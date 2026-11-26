@@ -19,14 +19,29 @@ prefix=sermon-dbtest
 password=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
 [ -z "${KEEP:-}" ] || echo "password: $password"
 admin=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
+# A CA and a certificate for 127.0.0.1 of the MySQL and MariaDB servers: the module verifies them
+# with ca_file (the full login of caching_sha2_password needs verified TLS, M5-33).
+certs=$(mktemp -d)
 
 cleanup() {
 	docker ps -aq --filter "name=^$prefix-" | xargs -r docker rm -f >/dev/null 2>&1 || true
 	docker network rm "$prefix-net" >/dev/null 2>&1 || true
 }
 # KEEP=1 leaves the servers running (debugging); the next run removes them.
-[ -n "${KEEP:-}" ] || trap cleanup EXIT
+[ -n "${KEEP:-}" ] || trap 'cleanup; rm -rf "$certs"' EXIT
 cleanup
+
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=sermon-dbtest-ca \
+	-addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign \
+	-keyout "$certs/ca-key.pem" -out "$certs/ca.pem" 2>/dev/null
+openssl req -newkey rsa:2048 -nodes -subj /CN=localhost -keyout "$certs/server-key.pem" \
+	-out "$certs/server.csr" 2>/dev/null
+printf 'subjectAltName=IP:127.0.0.1,DNS:localhost\nbasicConstraints=CA:FALSE\n' >"$certs/ext"
+openssl x509 -req -in "$certs/server.csr" -CA "$certs/ca.pem" -CAkey "$certs/ca-key.pem" \
+	-CAcreateserial -days 2 -extfile "$certs/ext" -out "$certs/server.pem" 2>/dev/null
+# The servers run as their own user; the key is a throwaway of this run.
+chmod 0644 "$certs/server-key.pem"
+ssl="--ssl-ca=/certs/ca.pem --ssl-cert=/certs/server.pem --ssl-key=/certs/server-key.pem"
 
 docker network create "$prefix-net" >/dev/null
 for v in $postgres; do
@@ -91,11 +106,11 @@ my_wait() {
 }
 for image in $mysql; do
 	name="$prefix-$(my_name "$image")"
-	args="--server-id=1 --log-bin=bin"
+	args="--server-id=1 --log-bin=bin $ssl"
 	case $image in mysql:*) args="$args --gtid-mode=ON --enforce-gtid-consistency=ON" ;; esac
 	# shellcheck disable=SC2086 # the server's arguments are words
 	docker run -d -q --name "$name" --network "$prefix-net" -e MYSQL_ROOT_PASSWORD="$admin" \
-		-e MARIADB_ROOT_PASSWORD="$admin" -p 127.0.0.1::3306 "$image" $args >/dev/null
+		-e MARIADB_ROOT_PASSWORD="$admin" -v "$certs:/certs:ro" -p 127.0.0.1::3306 "$image" $args >/dev/null
 done
 mytargets='' myreplicas=''
 for image in $mysql; do
@@ -119,17 +134,17 @@ for image in $replicated; do
 	name="$source-replica"
 	case $image in
 	mysql:*)
-		args="--server-id=2 --gtid-mode=ON --enforce-gtid-consistency=ON --read-only=ON"
+		args="--server-id=2 --gtid-mode=ON --enforce-gtid-consistency=ON --read-only=ON $ssl"
 		change="CHANGE REPLICATION SOURCE TO SOURCE_HOST='$source', SOURCE_USER='repl', SOURCE_PASSWORD='$password', SOURCE_AUTO_POSITION=1, GET_SOURCE_PUBLIC_KEY=1; START REPLICA;"
 		;;
 	*)
-		args="--server-id=2 --read-only=ON"
+		args="--server-id=2 --read-only=ON $ssl"
 		change="CHANGE MASTER TO MASTER_HOST='$source', MASTER_USER='repl', MASTER_PASSWORD='$password', MASTER_USE_GTID=slave_pos; START SLAVE;"
 		;;
 	esac
 	# shellcheck disable=SC2086
 	docker run -d -q --name "$name" --network "$prefix-net" -e MYSQL_ROOT_PASSWORD="$admin" \
-		-e MARIADB_ROOT_PASSWORD="$admin" -p 127.0.0.1::3306 "$image" $args >/dev/null
+		-e MARIADB_ROOT_PASSWORD="$admin" -v "$certs:/certs:ro" -p 127.0.0.1::3306 "$image" $args >/dev/null
 	my_wait "$name" "$image"
 	my_sql "$name" "$image" "$change"
 	i=0
@@ -146,6 +161,7 @@ out=''
 cd "$root/agent"
 SERMON_TEST_POSTGRES=$targets SERMON_TEST_POSTGRES_STANDBY=$standby SERMON_TEST_MYSQL=$mytargets \
 	SERMON_TEST_MYSQL_REPLICAS=$myreplicas SERMON_TEST_DB_PASSWORD=$password SERMON_FIXTURES_OUT=$out \
+	SERMON_TEST_DB_CA=$certs/ca.pem \
 	cargo test -q --locked -p sermon-modules --test databases -- --ignored --test-threads 1
 if [ -n "$out" ]; then
 	# The containers' addresses (Docker's networks) become documentation addresses.

@@ -300,3 +300,76 @@ fn mysqld_or_mariadbd_suggest_the_module() {
         Some(serde_json::json!({ "socket": "/run/mysqld/mysqld.sock" }))
     );
 }
+
+/// A MySQL 8.4 that asks for the full login of `caching_sha2_password` and refuses whatever
+/// comes; returns the packet after the handshake response, if any.
+async fn asks_for_the_full_login(io: Box<dyn sql::Io>) -> Option<Vec<u8>> {
+    let greeting = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/modules/mysql/mysql-8.4/handshake.bin"),
+    )
+    .unwrap();
+    let mut p = Packets::new(io);
+    p.write(&greeting).await.unwrap();
+    p.read().await.unwrap();
+    p.write(&[1, 4]).await.unwrap();
+    let sent = tokio::time::timeout(Duration::from_secs(2), p.read())
+        .await
+        .ok()
+        .and_then(Result::ok);
+    let denied = [&[0xffu8, 0x15, 0x04][..], b"#28000Access denied"].concat();
+    let _ = p.write(&denied).await;
+    sent
+}
+
+// M5-33: the password of the full login goes over the socket, not over plain TCP.
+#[tokio::test]
+async fn the_full_login_only_over_the_socket_or_verified_tls() {
+    let dir = crate::TestDir::new();
+    let socket = dir.path().join("mysqld.sock");
+    let veto = Veto {
+        sockets: vec![dir.path().to_path_buf()],
+        ..Veto::default().any_port()
+    };
+    let host = crate::Host::default();
+    let secrets = Secrets::new([("secret".to_owned(), "pencil".to_owned())]);
+    let setup = Setup {
+        veto: &veto,
+        secrets: &secrets,
+        host: &host,
+    };
+    let schema = Schema::parse(SCHEMA).unwrap();
+    let unix = tokio::net::UnixListener::bind(&socket).unwrap();
+    let tcp = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = tcp.local_addr().unwrap().port();
+    for over_socket in [true, false] {
+        let config = if over_socket {
+            format!(r#"{{"socket":"{}"}}"#, socket.display())
+        } else {
+            format!(r#"{{"address":"127.0.0.1:{port}"}}"#)
+        };
+        let mut reader = Mysql
+            .build(&schema.validate(&config, &["secret"]).unwrap(), &setup)
+            .unwrap();
+        let server = async {
+            let io: Box<dyn sql::Io> = if over_socket {
+                Box::new(unix.accept().await.unwrap().0)
+            } else {
+                Box::new(tcp.accept().await.unwrap().0)
+            };
+            asks_for_the_full_login(io).await
+        };
+        let run = Run::default();
+        let (sent, result) = tokio::join!(server, reader.collect(&run));
+        let Err(RunError::Failed(why)) = result else {
+            panic!("{config}: {result:?}");
+        };
+        if over_socket {
+            assert_eq!(sent.as_deref(), Some(&b"pencil\0"[..]), "{config}");
+            assert!(why.contains("login refused"), "{why}");
+        } else {
+            assert_eq!(sent, None, "{config}: the password stayed");
+            assert!(why.contains("tls verify"), "{why}");
+        }
+    }
+}

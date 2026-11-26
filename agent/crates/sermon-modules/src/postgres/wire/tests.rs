@@ -197,6 +197,13 @@ const STARTUP: Startup<'static> = Startup {
     database: "postgres",
     password: Some("pencil"),
     options: "-c statement_timeout=3000",
+    allow: Allow::Scram,
+    secure: false,
+};
+
+const MD5: Startup<'static> = Startup {
+    allow: Allow::Md5,
+    ..STARTUP
 };
 
 #[tokio::test]
@@ -210,7 +217,7 @@ async fn starts_with_md5_and_reports_refusals() {
     ]
     .concat();
     let (io, sent) = server(script);
-    let session = start(io, STARTUP).await.unwrap();
+    let session = start(io, MD5).await.unwrap();
     drop(session);
     let sent = sent.await.unwrap();
     let text = String::from_utf8_lossy(&sent);
@@ -237,10 +244,12 @@ async fn starts_with_md5_and_reports_refusals() {
     let (io, _) = server(frame(&tag(b'R', &[0, 0, 0, 3])));
     let without = Startup {
         password: None,
+        allow: Allow::Password,
+        secure: true,
         ..STARTUP
     };
     assert!(
-        matches!(start(io, without).await, Err(Error::Protocol(why)) if why.contains("password"))
+        matches!(start(io, without).await, Err(Error::Protocol(why)) if why.contains("set the module's password"))
     );
     let (io, _) = server(frame(&tag(b'R', b"\0\0\0\x0aSCRAM-SHA-256-PLUS\0\0")));
     assert!(
@@ -274,4 +283,277 @@ async fn asks_for_tls_reading_one_byte() {
     assert!(!answer.await.expect("one byte is the answer").unwrap());
     server.write_all(b"E").await.unwrap();
     assert!(ssl_request(&mut client).await.is_err());
+}
+
+/// What a scripted server does once the client sent its client-final-message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Sasl {
+    /// Its signature, `AuthenticationOk`, ready.
+    Honest,
+    /// `AuthenticationOk` and ready without its signature.
+    SkipsTheSignature,
+    /// A signature of a server that doesn't know the password.
+    WrongSignature,
+    /// Asks for the password in clear text after all.
+    Cleartext,
+    /// Asks for md5 after all.
+    Md5,
+    /// Sends its server-first-message again (another PBKDF2 round).
+    AgainContinue,
+    /// Starts SCRAM again.
+    AgainStart,
+}
+
+async fn read_message(io: &mut tokio::io::DuplexStream) -> Option<Message> {
+    let mut head = [0u8; 5];
+    io.read_exact(&mut head).await.ok()?;
+    let len = usize::try_from(u32::from_be_bytes([head[1], head[2], head[3], head[4]])).ok()?;
+    let mut body = vec![0; len - 4];
+    io.read_exact(&mut body).await.ok()?;
+    Some(Message { tag: head[0], body })
+}
+
+fn auth(method: i32, data: &[u8]) -> Vec<u8> {
+    frame(&tag(b'R', &[&method.to_be_bytes()[..], data].concat()))
+}
+
+/// The server's signature of SCRAM-SHA-256 for `password` (RFC 5802).
+fn server_signature(password: &str, salt: &[u8], auth_message: &str) -> String {
+    let mut salted = [0u8; 32];
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA256,
+        NonZeroU32::new(4096).unwrap(),
+        salt,
+        password.as_bytes(),
+        &mut salted,
+    );
+    let server_key = hmac::sign(&hmac::Key::new(hmac::HMAC_SHA256, &salted), b"Server Key");
+    let sig = hmac::sign(
+        &hmac::Key::new(hmac::HMAC_SHA256, server_key.as_ref()),
+        auth_message.as_bytes(),
+    );
+    B64.encode(sig.as_ref())
+}
+
+/// A server that starts SCRAM-SHA-256 knowing `password` and then does `how`; returns what the
+/// client sent after its startup.
+fn sasl_server(
+    password: &'static str,
+    how: Sasl,
+) -> (tokio::io::DuplexStream, tokio::task::JoinHandle<Vec<u8>>) {
+    let (client, mut io) = tokio::io::duplex(1 << 16);
+    let task = tokio::spawn(async move {
+        let mut len = [0u8; 4];
+        io.read_exact(&mut len).await.unwrap();
+        let mut startup = vec![0; usize::try_from(u32::from_be_bytes(len)).unwrap() - 4];
+        io.read_exact(&mut startup).await.unwrap();
+        let mut sent = Vec::new();
+        io.write_all(&auth(10, b"SCRAM-SHA-256\0\0")).await.unwrap();
+        let first = read_message(&mut io).await.unwrap();
+        sent.extend_from_slice(&first.body);
+        let first_bare = String::from_utf8_lossy(&first.body[18..])
+            .trim_start_matches("n,,")
+            .to_owned();
+        let nonce = first_bare.split("r=").nth(1).unwrap().to_owned();
+        let salt = b"pepper-salt-0123";
+        let server_first = format!("r={nonce}srv,s={},i=4096", B64.encode(salt));
+        io.write_all(&auth(11, server_first.as_bytes()))
+            .await
+            .unwrap();
+        let fin = read_message(&mut io).await.unwrap();
+        sent.extend_from_slice(&fin.body);
+        let fin = String::from_utf8_lossy(&fin.body).into_owned();
+        let without_proof = fin.split(",p=").next().unwrap();
+        let signature = server_signature(
+            password,
+            salt,
+            &format!("{first_bare},{server_first},{without_proof}"),
+        );
+        let ready = [
+            auth(0, &[]),
+            frame(&tag(b'S', b"server_version\x0017.2\0")),
+            frame(&tag(b'K', &[0; 8])),
+            frame(&tag(b'Z', b"I")),
+        ]
+        .concat();
+        let script = match how {
+            Sasl::Honest => [auth(12, format!("v={signature}").as_bytes()), ready].concat(),
+            Sasl::SkipsTheSignature => ready,
+            Sasl::WrongSignature => [
+                auth(12, format!("v={}", B64.encode([7u8; 32])).as_bytes()),
+                ready,
+            ]
+            .concat(),
+            Sasl::Cleartext => auth(3, &[]),
+            Sasl::Md5 => auth(5, &[1, 2, 3, 4]),
+            Sasl::AgainContinue => auth(11, server_first.as_bytes()),
+            Sasl::AgainStart => auth(10, b"SCRAM-SHA-256\0\0"),
+        };
+        let _ = io.write_all(&script).await;
+        let mut more = vec![0u8; 4096];
+        while let Ok(Ok(n)) =
+            tokio::time::timeout(std::time::Duration::from_millis(200), io.read(&mut more)).await
+        {
+            if n == 0 {
+                break;
+            }
+            sent.extend_from_slice(&more[..n]);
+        }
+        sent
+    });
+    (client, task)
+}
+
+// M5-33: a server (or a local impostor on the port) that started SCRAM must prove it knows the
+// password; it can't skip that, and it can't switch to a method that gets the password or a hash
+// of it.
+#[tokio::test]
+async fn scram_can_be_neither_skipped_nor_downgraded() {
+    for allow in [Allow::Scram, Allow::Md5, Allow::Password] {
+        let startup = Startup {
+            allow,
+            secure: true,
+            ..STARTUP
+        };
+        let (io, _) = sasl_server("pencil", Sasl::Honest);
+        assert!(start(io, startup).await.is_ok(), "{allow:?}");
+        for how in [
+            Sasl::SkipsTheSignature,
+            Sasl::WrongSignature,
+            Sasl::Cleartext,
+            Sasl::Md5,
+            Sasl::AgainContinue,
+            Sasl::AgainStart,
+        ] {
+            let (io, sent) = sasl_server("pencil", how);
+            let result = start(io, startup).await;
+            assert!(
+                matches!(result, Err(Error::Protocol(_))),
+                "{allow:?} {how:?}: {result:?}"
+            );
+            let sent = sent.await.unwrap();
+            let text = String::from_utf8_lossy(&sent);
+            assert!(!text.contains("pencil"), "{allow:?} {how:?}: the password");
+            assert!(
+                !text.contains(&md5_password("sermon", "pencil", &[1, 2, 3, 4])),
+                "{allow:?} {how:?}: its md5 hash"
+            );
+        }
+    }
+    let (io, _) = sasl_server("another", Sasl::Honest);
+    assert!(
+        matches!(start(io, STARTUP).await, Err(Error::Protocol(why)) if why.contains("signature")),
+        "a server with another password"
+    );
+}
+
+// Without SCRAM: md5 only when allowed, the password itself only when allowed and over the socket
+// or verified TLS; a session only after AuthenticationOk.
+#[tokio::test]
+async fn weaker_methods_only_when_allowed() {
+    let ready = [frame(&tag(b'Z', b"I"))].concat();
+    let ok = [auth(0, &[]), ready.clone()].concat();
+    let cases = [
+        (STARTUP, 3, false),
+        (MD5, 3, false),
+        (
+            Startup {
+                allow: Allow::Password,
+                ..STARTUP
+            },
+            3,
+            false,
+        ),
+        (
+            Startup {
+                secure: true,
+                ..MD5
+            },
+            3,
+            false,
+        ),
+        (
+            Startup {
+                allow: Allow::Password,
+                secure: true,
+                ..STARTUP
+            },
+            3,
+            true,
+        ),
+        (
+            Startup {
+                secure: true,
+                ..STARTUP
+            },
+            5,
+            false,
+        ),
+        (MD5, 5, true),
+        (
+            Startup {
+                allow: Allow::Password,
+                ..STARTUP
+            },
+            5,
+            true,
+        ),
+    ];
+    for (startup, method, taken) in cases {
+        let data: &[u8] = if method == 5 { &[1, 2, 3, 4] } else { &[] };
+        let (io, sent) = server([auth(method, data), ok.clone()].concat());
+        let result = start(io, startup).await;
+        assert_eq!(result.is_ok(), taken, "{startup:?} {method}: {result:?}");
+        let sent = sent.await.unwrap();
+        let text = String::from_utf8_lossy(&sent);
+        assert_eq!(
+            text.contains("pencil\0"),
+            taken && method == 3,
+            "{startup:?} {method}"
+        );
+        assert_eq!(
+            text.contains(&md5_password("sermon", "pencil", &[1, 2, 3, 4])),
+            taken && method == 5,
+            "{startup:?} {method}"
+        );
+    }
+    // trust: no password asked, none sent.
+    let (io, sent) = server(ok.clone());
+    assert!(start(io, STARTUP).await.is_ok());
+    assert!(!String::from_utf8_lossy(&sent.await.unwrap()).contains("pencil"));
+    // Ready, parameters or a second AuthenticationOk out of place.
+    for script in [
+        ready.clone(),
+        [frame(&tag(b'S', b"a\0b\0")), ok.clone()].concat(),
+        [frame(&tag(b'K', &[0; 8])), ok.clone()].concat(),
+        [auth(0, &[]), auth(0, &[]), ready.clone()].concat(),
+        [auth(5, &[1, 2, 3, 4]), auth(5, &[1, 2, 3, 4]), ok.clone()].concat(),
+    ] {
+        let (io, _) = server(script);
+        assert!(start(io, MD5).await.is_err());
+    }
+}
+
+// The state machine on its own: authenticated only after AuthenticationOk in its place.
+#[test]
+fn the_login_is_authenticated_only_at_its_end() {
+    let mut login = Login::with_nonce(STARTUP, "fixed-nonce");
+    assert!(!login.authenticated());
+    let Step::Send(first) = login
+        .feed(&tag(b'R', b"\0\0\0\x0aSCRAM-SHA-256\0\0"))
+        .unwrap()
+    else {
+        panic!("no client-first-message");
+    };
+    assert!(String::from_utf8_lossy(&first).contains("n,,n=,r=fixed-nonce"));
+    assert!(login.feed(&tag(b'R', &[0, 0, 0, 0])).is_err());
+    assert!(!login.authenticated());
+    let started = login.startup_message().unwrap();
+    assert_eq!(
+        usize::try_from(u32::from_be_bytes([
+            started[0], started[1], started[2], started[3]
+        ]))
+        .unwrap(),
+        started.len()
+    );
 }

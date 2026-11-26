@@ -444,8 +444,8 @@ pub struct Login<'a> {
     pub user: &'a str,
     pub password: &'a str,
     pub database: &'a str,
-    /// Over TLS or a Unix socket: the full login of `caching_sha2_password` may send the
-    /// password itself.
+    /// Over a Unix socket or TLS with a verified certificate: the full login of
+    /// `caching_sha2_password` may send the password itself.
     pub secure: bool,
 }
 
@@ -557,7 +557,7 @@ pub async fn finish_login<S: AsyncRead + AsyncWrite + Unpin>(
                 }
                 Some(4) => {
                     return Err(protocol(
-                        "caching_sha2_password asks for a full login: the password is wrong, or the server has no cached login of the user yet (first login, restart); a full login sends the password and needs TLS or the socket",
+                        "caching_sha2_password asks for a full login: the password is wrong, or the server has no cached login of the user yet (first login, restart); a full login sends the password and needs the socket or tls verify",
                     ));
                 }
                 _ => return Err(protocol("an unknown login step")),

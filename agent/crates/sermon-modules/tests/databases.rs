@@ -4,6 +4,7 @@
 //!
 //! - `SERMON_TEST_POSTGRES`: `version@host:port,…`, users `sermon` (`pg_monitor`) and `plain`
 //! - `SERMON_TEST_DB_PASSWORD`: the password of both
+//! - `SERMON_TEST_DB_CA`: the CA of the MySQL and MariaDB servers' certificates (for 127.0.0.1)
 //! - `SERMON_FIXTURES_OUT`: if set, the answers are written there as fixtures
 //!   (`postgres/<version>/{check,stats}.json`)
 
@@ -31,6 +32,22 @@ fn password() -> String {
     std::env::var("SERMON_TEST_DB_PASSWORD").expect("SERMON_TEST_DB_PASSWORD")
 }
 
+fn ca() -> String {
+    std::env::var("SERMON_TEST_DB_CA").expect("SERMON_TEST_DB_CA")
+}
+
+/// The default veto, and the directory of the servers' CA for `ca_file`.
+fn veto() -> Veto {
+    let mut veto = Veto::default().any_port();
+    if let Ok(ca) = std::env::var("SERMON_TEST_DB_CA") {
+        let dir = std::path::Path::new(&ca).parent().unwrap();
+        // As configured and resolved: the temporary directory may lie behind a link (macOS).
+        veto.file_prefixes.push(dir.to_path_buf());
+        veto.file_prefixes.push(std::fs::canonicalize(dir).unwrap());
+    }
+    veto
+}
+
 async fn collect(
     module: &dyn Module,
     config: &str,
@@ -39,7 +56,7 @@ async fn collect(
     let schema = Schema::parse(module.schema()).unwrap();
     let secrets = Secrets::new([("secret".to_owned(), password.to_owned())]);
     let config = schema.validate(config, &secrets.fields()).unwrap();
-    let (veto, host) = (Veto::default().any_port(), Host::default());
+    let (veto, host) = (veto(), Host::default());
     let setup = Setup {
         veto: &veto,
         secrets: &secrets,
@@ -77,7 +94,21 @@ async fn postgres_against_every_version() {
     let pw = password();
     let standby = servers("SERMON_TEST_POSTGRES_STANDBY");
     for (version, address) in primaries {
-        let config = format!(r#"{{"address":"{address}","database":"app"}}"#);
+        // PostgreSQL 13 stores md5 hashes (password_encryption): taken only when allowed (M5-33).
+        let auth = if version == "13" {
+            r#","auth":"md5""#
+        } else {
+            ""
+        };
+        if !auth.is_empty() {
+            let scram_only = format!(r#"{{"address":"{address}","database":"app"}}"#);
+            let Err(RunError::Failed(why)) = collect(&postgres::Postgres, &scram_only, &pw).await
+            else {
+                panic!("{version}: md5 taken without auth = md5");
+            };
+            assert!(why.contains("md5"), "{version}: {why}");
+        }
+        let config = format!(r#"{{"address":"{address}","database":"app"{auth}}}"#);
         let samples = collect(&postgres::Postgres, &config, &pw)
             .await
             .unwrap_or_else(|e| panic!("{version}: {e}"));
@@ -108,7 +139,7 @@ async fn postgres_against_every_version() {
             why.contains("login refused") && !why.contains(&pw),
             "{version}: {why}"
         );
-        let plain = format!(r#"{{"address":"{address}","role":"plain","database":"app"}}"#);
+        let plain = format!(r#"{{"address":"{address}","role":"plain","database":"app"{auth}}}"#);
         let Err(RunError::Failed(why)) = collect(&postgres::Postgres, &plain, &pw).await else {
             panic!("{version}: a user without pg_monitor");
         };
@@ -159,6 +190,8 @@ async fn write_fixtures(version: &str, address: &str, pw: &str) {
         database: "app",
         password: Some(pw),
         options: "",
+        allow: wire::Allow::Md5,
+        secure: false,
     };
     let mut session = wire::start(io, startup).await.unwrap();
     let check = session.query(postgres::CHECK).await.unwrap();
@@ -185,19 +218,28 @@ async fn mysql_against_every_version() {
     assert!(!primaries.is_empty(), "SERMON_TEST_MYSQL names no server");
     let replicas = servers("SERMON_TEST_MYSQL_REPLICAS");
     let pw = password();
+    let verify = format!(r#""verify","ca_file":"{}""#, ca());
     for (version, address) in primaries {
         let config = |user: &str, tls: &str| {
-            format!(r#"{{"address":"{address}","user":"{user}","tls":"{tls}"}}"#)
+            let tls = if tls == "verify" {
+                verify.clone()
+            } else {
+                format!(r#""{tls}""#)
+            };
+            format!(r#"{{"address":"{address}","user":"{user}","tls":{tls}}}"#)
         };
         if version.starts_with("mysql") {
-            // caching_sha2_password: the first login sends the password, only over TLS.
-            let Err(RunError::Failed(why)) =
-                collect(&mysql::Mysql, &config("fresh", "off"), &pw).await
-            else {
-                panic!("{version}: a full login without TLS");
-            };
-            assert!(why.contains("TLS"), "{version}: {why}");
-            collect(&mysql::Mysql, &config("sermon", "no_verify"), &pw)
+            // caching_sha2_password: the first login sends the password, only over the socket or
+            // verified TLS – not to whoever answers no_verify (M5-33).
+            for tls in ["off", "no_verify"] {
+                let Err(RunError::Failed(why)) =
+                    collect(&mysql::Mysql, &config("fresh", tls), &pw).await
+                else {
+                    panic!("{version}: a full login over {tls}");
+                };
+                assert!(why.contains("tls verify"), "{version} {tls}: {why}");
+            }
+            collect(&mysql::Mysql, &config("sermon", "verify"), &pw)
                 .await
                 .unwrap_or_else(|e| panic!("{version} over TLS: {e}"));
         }
@@ -225,7 +267,7 @@ async fn mysql_against_every_version() {
         // A wrong password: refused over TLS; without, caching_sha2_password asks for the full
         // login, which needs TLS – the reason says both.
         let tls = if version.starts_with("mysql") {
-            "no_verify"
+            "verify"
         } else {
             "off"
         };
@@ -253,7 +295,7 @@ async fn mysql_against_every_version() {
         assert!(why.contains("PROCESS"), "{version}: {why}");
         write_mysql_fixtures(&version, &address, &pw).await;
         if let Some((_, at)) = replicas.iter().find(|(v, _)| *v == version) {
-            let config = format!(r#"{{"address":"{at}","user":"sermon","tls":"no_verify"}}"#);
+            let config = format!(r#"{{"address":"{at}","user":"sermon","tls":{verify}}}"#);
             let on_replica = collect(&mysql::Mysql, &config, &pw)
                 .await
                 .unwrap_or_else(|e| panic!("{version} replica: {e}"));

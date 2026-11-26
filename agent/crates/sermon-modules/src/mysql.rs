@@ -33,7 +33,7 @@ use std::time::Duration;
 use sermon_core::{Monotonic, Sample};
 
 use crate::discovery::{Discovered, HostFacts};
-use crate::sql::{self, Target, Tls};
+use crate::sql::{self, Security, Target, Tls};
 use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup, Veto};
 use wire::{Error, Login, Packets, ResultSet};
 
@@ -75,14 +75,11 @@ impl Module for Mysql {
 
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
         let target = Target::of(config, setup.veto)?;
-        let tls = sql::tls_of(config);
-        if tls != Tls::Off && matches!(target, Target::Unix(_)) {
-            return Err(BuildError::Invalid("tls: not over a Unix socket".into()));
-        }
+        let security = Security::of(config, &target, setup.veto)?;
         Ok(Box::new(Reader {
             veto: setup.veto.clone(),
             target,
-            tls,
+            security,
             user: sql::text(config, "user", "sermon").to_owned(),
             password: setup.secrets.get("secret").unwrap_or("").to_owned(),
             last: None,
@@ -122,7 +119,7 @@ impl Module for Mysql {
 struct Reader {
     veto: Veto,
     target: Target,
-    tls: Tls,
+    security: Security,
     user: String,
     password: String,
     last: Option<(Monotonic, Stats)>,
@@ -291,7 +288,9 @@ fn failed(e: Error) -> RunError {
 impl Reader {
     async fn session(&self) -> Result<Packets<Box<dyn sql::Io>>, RunError> {
         let connection = self.target.connect(&self.veto).await?;
-        let unix = matches!(connection, sql::Connection::Unix(_));
+        // The full login of caching_sha2_password sends the password itself: only to a peer
+        // known to be the server (socket, verified TLS), not to whoever answers no_verify.
+        let secure = self.security.secure(&connection);
         let host = match &connection {
             sql::Connection::Tcp(_, host) => host.clone(),
             sql::Connection::Unix(_) => String::new(),
@@ -300,7 +299,7 @@ impl Reader {
         let mut packets = Packets::new(io);
         let handshake =
             wire::Handshake::parse(&packets.read().await.map_err(failed)?).map_err(failed)?;
-        let tls = self.tls != Tls::Off;
+        let tls = self.security.tls != Tls::Off;
         if tls && !handshake.tls() {
             return Err(RunError::Failed("the server offers no TLS".into()));
         }
@@ -310,7 +309,7 @@ impl Reader {
                 .await
                 .map_err(failed)?;
             let (io, seq) = packets.into_inner();
-            Packets::resume(sql::tls(io, &host, self.tls).await?, seq)
+            Packets::resume(self.security.start(io, &host).await?, seq)
         } else {
             packets
         };
@@ -318,7 +317,7 @@ impl Reader {
             user: &self.user,
             password: &self.password,
             database: "",
-            secure: tls || unix,
+            secure,
         };
         let response = wire::handshake_response(&handshake, &login, tls).map_err(failed)?;
         packets.write(&response).await.map_err(failed)?;

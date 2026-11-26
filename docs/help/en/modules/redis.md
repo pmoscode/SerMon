@@ -19,8 +19,12 @@ only `AUTH` (with a password) and `INFO`, nothing that changes data.
 
 ## Settings
 
-- **Address:** by default `127.0.0.1:6379`; or a **Unix socket** instead of the address.
+- **Address:** by default `127.0.0.1:6379`; or a **Unix socket** instead of the address – the better way with a
+  password.
 - **User** (ACL, Redis 6 and later) and **password**; **timeout**.
+- **Password and strangers on the port:** `AUTH` sends the password in clear text, and the module speaks no TLS. While
+  Redis is stopped, another local user can take port `6379` and then gets the password. So with a password use the
+  Unix socket (only Redis creates its path) and an ACL user that may run `INFO` only (above).
 
 ## Metrics
 

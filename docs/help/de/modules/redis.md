@@ -19,8 +19,11 @@ ist ab Werk aus; der Agent schlägt es vor, wenn er `redis-server` oder `valkey-
 
 ## Einstellungen
 
-- **Adresse:** ab Werk `127.0.0.1:6379`; oder **Unix-Socket** statt der Adresse.
+- **Adresse:** ab Werk `127.0.0.1:6379`; oder **Unix-Socket** statt der Adresse – mit Passwort der bessere Weg.
 - **User** (ACL, ab Redis 6) und **Passwort**; **Timeout**.
+- **Passwort und fremde Ports:** `AUTH` schickt das Passwort im Klartext, und das Modul spricht kein TLS. Ist Redis
+  gestoppt, kann ein anderer lokaler Benutzer den Port `6379` belegen und bekommt dann das Passwort. Deshalb mit
+  Passwort den Unix-Socket nehmen (seinen Pfad legt nur Redis an) und einen ACL-User, der nur `INFO` darf (oben).
 
 ## Metriken
 

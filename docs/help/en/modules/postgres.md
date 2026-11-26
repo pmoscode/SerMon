@@ -17,10 +17,21 @@ the agent (`sermon`).
 
 ## Connection
 
-- **Address** `host:port` (`127.0.0.1:5432` by default) or **Unix socket**. Hosts other than loopback only once
-  `module_targets` in `agent.toml` allows them.
-- **TLS:** `off` (loopback, socket), `verify` (the certificate against the system's CAs) or `no_verify`.
-- Login with SCRAM-SHA-256, md5 or password; the module reports a wrong password as an error with the server's reason.
+- The **Unix socket** (`/run/postgresql/.s.PGSQL.5432`) is the best way: only PostgreSQL creates that path, and with
+  `peer` no password is needed. Otherwise the **address** `host:port` (`127.0.0.1:5432` by default); hosts other than
+  loopback only once `module_targets` in `agent.toml` allows them.
+- **TLS:** `off`, `verify` (the certificate against the system's CAs or the **CA file** below `module_file_prefixes`)
+  or `no_verify` (encrypted, but to whoever answers). Empty means `off` on loopback and the socket, `verify` for any
+  other address.
+- **Authentication** (`auth`): by default only **SCRAM-SHA-256** – the server proves that it knows the password too; a
+  server that skips that or switches to a weaker method gets nothing. `md5` also allows md5 (PostgreSQL 13 and older
+  passwords: better set `password_encryption = scram-sha-256` and set the password again). `password` allows the
+  password itself, but only over the socket or with `verify`. The module reports a wrong password as an error with
+  the server's reason.
+- **Why so strict:** while PostgreSQL is stopped or listens on its socket only, another local user can take port
+  `5432` and pose as the database. They get neither the password nor an md5 hash – at most a SCRAM proof, from which
+  only guessing can recover a weak password. So: prefer the socket, use a long random password and a user with
+  `pg_monitor` only.
 
 ## Metrics
 

@@ -311,3 +311,95 @@ fn postgres_suggests_itself_with_its_socket_or_port() {
         Some(serde_json::json!({ "socket": "/run/postgresql/.s.PGSQL.5432" }))
     );
 }
+
+/// A server on `listener` that asks for `method` (3: the password, 5: md5) and refuses the
+/// answer; returns what the client sent after its startup.
+async fn asks_for<L>(accept: L, method: u8) -> Vec<u8>
+where
+    L: Future<Output = Box<dyn sql::Io>>,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut io = accept.await;
+    let mut len = [0u8; 4];
+    io.read_exact(&mut len).await.unwrap();
+    let mut startup = vec![0; usize::try_from(u32::from_be_bytes(len)).unwrap() - 4];
+    io.read_exact(&mut startup).await.unwrap();
+    let ask = [b'R', 0, 0, 0, 12, 0, 0, 0, method, 1, 2, 3, 4];
+    io.write_all(&ask).await.unwrap();
+    let mut sent = vec![0u8; 4096];
+    let n = tokio::time::timeout(Duration::from_secs(2), io.read(&mut sent))
+        .await
+        .map_or(0, |r| r.unwrap_or(0));
+    sent.truncate(n);
+    let _ = io.write_all(b"E\0\0\0\x16SFATAL\0C28P01\0M-\0\0").await;
+    sent
+}
+
+// M5-33: the module's `auth` and the channel decide what the client sends: md5 only when allowed,
+// the password itself only with `password` and over the socket.
+#[tokio::test]
+async fn auth_and_channel_decide_what_is_sent() {
+    let dir = crate::TestDir::new();
+    let socket = dir.path().join(".s.PGSQL.5432");
+    let veto = Veto {
+        sockets: vec![dir.path().to_path_buf()],
+        ..Veto::default().any_port()
+    };
+    let host = crate::Host::default();
+    let secrets = Secrets::new([("secret".to_owned(), "pencil".to_owned())]);
+    let setup = Setup {
+        veto: &veto,
+        secrets: &secrets,
+        host: &host,
+    };
+    let schema = Schema::parse(SCHEMA).unwrap();
+    let unix = tokio::net::UnixListener::bind(&socket).unwrap();
+    let tcp = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = tcp.local_addr().unwrap().port();
+    let md5 = wire::md5_password("sermon", "pencil", &[1, 2, 3, 4]);
+    let cases = [
+        (r#""auth":"scram-sha-256""#, true, 5, None),
+        ("", true, 5, None),
+        (r#""auth":"md5""#, true, 5, Some(md5.as_str())),
+        (r#""auth":"md5""#, true, 3, None),
+        (r#""auth":"password""#, true, 3, Some("pencil")),
+        (r#""auth":"password""#, false, 3, None),
+        (r#""auth":"password""#, false, 5, Some(md5.as_str())),
+    ];
+    for (auth, over_socket, method, want) in cases {
+        let target = if over_socket {
+            format!(r#""socket":"{}""#, socket.display())
+        } else {
+            format!(r#""address":"127.0.0.1:{port}""#)
+        };
+        let comma = if auth.is_empty() { "" } else { "," };
+        let config = format!("{{{target}{comma}{auth}}}");
+        let mut reader = Postgres
+            .build(&schema.validate(&config, &["secret"]).unwrap(), &setup)
+            .unwrap();
+        let accept = async {
+            let io: Box<dyn sql::Io> = if over_socket {
+                Box::new(unix.accept().await.unwrap().0)
+            } else {
+                Box::new(tcp.accept().await.unwrap().0)
+            };
+            io
+        };
+        let run = Run::default();
+        let (sent, result) = tokio::join!(asks_for(accept, method), reader.collect(&run));
+        let Err(RunError::Failed(why)) = result else {
+            panic!("{config} {method}: {result:?}");
+        };
+        let text = String::from_utf8_lossy(&sent);
+        if let Some(answer) = want {
+            assert!(text.contains(answer), "{config} {method}: {text}");
+            assert!(why.contains("login refused"), "{config} {method}: {why}");
+        } else {
+            assert!(
+                !text.contains("pencil") && !text.contains(&md5),
+                "{config} {method}: {text}"
+            );
+            assert!(why.contains("auth"), "{config} {method}: {why}");
+        }
+    }
+}

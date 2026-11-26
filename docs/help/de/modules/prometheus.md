@@ -22,7 +22,9 @@ Antwort, höchstens drei Weiterleitungen innerhalb der erlaubten Ziele.
   Besser eng fassen: Exporter wie der node exporter liefern Tausende Serien.
 - **Serien je Endpunkt:** ab Werk 50, alle Endpunkte zusammen höchstens 250.
 - **Bearer-Token:** geht als `Authorization: Bearer …` nur an die eingestellten Endpunkte, nie nach einer
-  Weiterleitung an einen anderen Host; es liegt beim Agent nur im Speicher (M5-05).
+  Weiterleitung an einen anderen Host; es liegt beim Agent nur im Speicher (M5-05). Über `http://` geht es im
+  Klartext an jeden, der dort lauscht – bei gestopptem Exporter auch an einen anderen lokalen Benutzer, der den Port
+  belegt. Mit Token deshalb `https://` mit geprüftem Zertifikat und ein Token, das nur `/metrics` lesen darf.
 - **Timeout**, **TLS prüfen**, **CA-Datei**.
 
 ## Metriken

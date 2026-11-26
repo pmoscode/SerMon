@@ -288,6 +288,11 @@ pub struct Startup<'a> {
     pub password: Option<&'a str>,
     /// Command-line options of the session, e.g. `-c statement_timeout=3000`.
     pub options: &'a str,
+    /// The weakest method of authentication taken (`auth` of the module).
+    pub allow: Allow,
+    /// Over the Unix socket or TLS with a verified certificate: only then may the password
+    /// itself (method `password`) go out.
+    pub secure: bool,
 }
 
 impl std::fmt::Debug for Startup<'_> {
@@ -296,7 +301,35 @@ impl std::fmt::Debug for Startup<'_> {
             .field("user", &self.user)
             .field("database", &self.database)
             .field("password", &self.password.map(|_| "…"))
+            .field("allow", &self.allow)
+            .field("secure", &self.secure)
             .finish_non_exhaustive()
+    }
+}
+
+/// The weakest authentication the client takes (like libpq's `require_auth`). Whatever answers
+/// on the module's address – also a local impostor on a free port – must not get the password
+/// or a hash of it just by asking for a weaker method (M5-33).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Allow {
+    /// SCRAM-SHA-256 with the server's signature verified, or none at all (trust, peer).
+    #[default]
+    Scram,
+    /// SCRAM or md5.
+    Md5,
+    /// SCRAM, md5 or the password itself; the latter only over a secure channel.
+    Password,
+}
+
+impl Allow {
+    /// The setting `auth` of the module: `scram-sha-256` (default), `md5`, `password`.
+    #[must_use]
+    pub fn of(text: &str) -> Self {
+        match text {
+            "md5" => Self::Md5,
+            "password" => Self::Password,
+            _ => Self::Scram,
+        }
     }
 }
 
@@ -306,119 +339,231 @@ pub struct Session<S> {
     io: S,
 }
 
-/// Starts a session on `io`: the startup message and the authentication the server asks for.
-///
-/// # Errors
-///
-/// [`Error::Server`] if the server refuses (wrong password: 28P01), [`Error::Protocol`] for a
-/// method this client doesn't speak or a server that can't prove it knows the password.
-pub async fn start<S: AsyncRead + AsyncWrite + Unpin>(
-    mut io: S,
-    s: Startup<'_>,
-) -> Result<Session<S>, Error> {
-    let mut body = Vec::new();
-    body.extend_from_slice(&196_608i32.to_be_bytes());
-    for (k, v) in [
-        ("user", s.user),
-        ("database", s.database),
-        ("application_name", "sermon-agent"),
-        ("options", s.options),
-    ] {
-        for part in [k, v] {
-            if part.contains('\0') {
-                return Err(protocol("a NUL in the startup"));
-            }
-            body.extend_from_slice(part.as_bytes());
-            body.push(0);
+/// Where the authentication stands.
+#[derive(Debug)]
+enum Phase {
+    /// Nothing asked yet.
+    Start,
+    /// The password or its md5 hash went out: only `AuthenticationOk` may follow.
+    Sent,
+    /// SCRAM started (10 answered): only the server-first-message (11) may follow.
+    SaslStarted(Scram),
+    /// The client-final-message went out: only the server's signature (12) may follow.
+    SaslFinal(Scram),
+    /// SCRAM verified: only `AuthenticationOk` may follow.
+    Verified,
+    /// `AuthenticationOk` taken: the parameters and `ReadyForQuery` follow.
+    Done,
+}
+
+/// What the client does after a message of the startup.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Step {
+    /// Sends these bytes and reads on.
+    Send(Vec<u8>),
+    /// Reads on.
+    Wait,
+    /// `ReadyForQuery`: the session is open.
+    Ready,
+}
+
+/// The startup and authentication as a pure state machine: what [`start`] runs over a connection,
+/// fuzzed without one. A session opens only after `AuthenticationOk` in the right place: after
+/// SCRAM only once the server proved it knows the password, never with a method weaker than
+/// [`Startup::allow`], the password itself only over a secure channel.
+pub struct Login<'a> {
+    startup: Startup<'a>,
+    phase: Phase,
+    nonce: Option<String>,
+}
+
+impl std::fmt::Debug for Login<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Login")
+            .field("startup", &self.startup)
+            .field("phase", &self.phase)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'a> Login<'a> {
+    /// The login of `startup` with a random SCRAM nonce.
+    #[must_use]
+    pub fn new(startup: Startup<'a>) -> Self {
+        Self {
+            startup,
+            phase: Phase::Start,
+            nonce: None,
         }
     }
-    body.push(0);
-    let len = u32::try_from(body.len() + 4).unwrap_or(u32::MAX);
-    io.write_all(&[&len.to_be_bytes()[..], &body].concat())
-        .await?;
-    let mut scram: Option<Scram> = None;
-    loop {
-        let m = read(&mut io).await?;
-        match m.tag {
-            b'R' => {
-                if let Some(reply) = authenticate(&m.body, &s, &mut scram)? {
-                    io.write_all(&reply).await?;
+
+    /// The same with a fixed SCRAM nonce (tests, fuzzing).
+    #[must_use]
+    pub fn with_nonce(startup: Startup<'a>, nonce: &str) -> Self {
+        Self {
+            nonce: Some(nonce.to_owned()),
+            ..Self::new(startup)
+        }
+    }
+
+    /// Whether the server proved itself or asked for nothing: `AuthenticationOk` was taken.
+    #[must_use]
+    pub fn authenticated(&self) -> bool {
+        matches!(self.phase, Phase::Done)
+    }
+
+    /// The startup message.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Protocol`] for a NUL in a field.
+    pub fn startup_message(&self) -> Result<Vec<u8>, Error> {
+        let s = &self.startup;
+        let mut body = Vec::new();
+        body.extend_from_slice(&196_608i32.to_be_bytes());
+        for (k, v) in [
+            ("user", s.user),
+            ("database", s.database),
+            ("application_name", "sermon-agent"),
+            ("options", s.options),
+        ] {
+            for part in [k, v] {
+                if part.contains('\0') {
+                    return Err(protocol("a NUL in the startup"));
                 }
+                body.extend_from_slice(part.as_bytes());
+                body.push(0);
             }
+        }
+        body.push(0);
+        let len = u32::try_from(body.len() + 4).unwrap_or(u32::MAX);
+        Ok([&len.to_be_bytes()[..], &body].concat())
+    }
+
+    /// Takes the next message of the server.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Server`] for a refusal, [`Error::Protocol`] for a message out of order, a method
+    /// weaker than allowed, or a server that can't prove it knows the password.
+    pub fn feed(&mut self, m: &Message) -> Result<Step, Error> {
+        match m.tag {
+            b'R' => self.authenticate(&m.body),
             b'E' => {
                 let (code, message) = error_fields(&m.body);
-                return Err(Error::Server { code, message });
+                Err(Error::Server { code, message })
             }
-            b'S' | b'K' | b'N' => {}
-            b'Z' => return Ok(Session { io }),
-            other => {
-                return Err(protocol(format!(
-                    "unexpected message {:?} in the startup",
-                    char::from(other)
-                )));
+            b'S' | b'K' if self.authenticated() => Ok(Step::Wait),
+            b'N' => Ok(Step::Wait),
+            b'Z' if self.authenticated() => Ok(Step::Ready),
+            other => Err(protocol(format!(
+                "unexpected message {:?} in the startup",
+                char::from(other)
+            ))),
+        }
+    }
+
+    fn password(&self) -> Result<&'a str, Error> {
+        self.startup
+            .password
+            .ok_or_else(|| protocol("the server asks for a password: set the module's password"))
+    }
+
+    fn authenticate(&mut self, body: &[u8]) -> Result<Step, Error> {
+        let mut b = Body(body);
+        let method = b.i32()?;
+        let allow = self.startup.allow;
+        match (method, std::mem::replace(&mut self.phase, Phase::Start)) {
+            (0, Phase::Start | Phase::Sent | Phase::Verified) => {
+                self.phase = Phase::Done;
+                Ok(Step::Wait)
             }
+            (0, Phase::SaslStarted(_) | Phase::SaslFinal(_)) => Err(protocol(
+                "SCRAM: the server ends the login without proving it knows the password",
+            )),
+            (3, Phase::Start) if allow == Allow::Password && self.startup.secure => {
+                let reply = message(b'p', &[self.password()?.as_bytes(), b"\0"].concat());
+                self.phase = Phase::Sent;
+                Ok(Step::Send(reply))
+            }
+            (3, Phase::Start) => Err(protocol(
+                "the server asks for the password in clear text (method password): allowed only with auth = password over the socket or tls = verify",
+            )),
+            (5, Phase::Start) if allow != Allow::Scram => {
+                let salt = b.take(4)?;
+                let hash = md5_password(self.startup.user, self.password()?, salt);
+                self.phase = Phase::Sent;
+                Ok(Step::Send(message(
+                    b'p',
+                    &[hash.as_bytes(), b"\0"].concat(),
+                )))
+            }
+            (5, Phase::Start) => Err(protocol(
+                "the server asks for md5: set password_encryption = scram-sha-256 and the role's password again, or allow auth = md5",
+            )),
+            (10, Phase::Start) => {
+                let mut mechanisms = Vec::new();
+                while let Ok(m) = b.cstr() {
+                    if m.is_empty() {
+                        break;
+                    }
+                    mechanisms.push(m);
+                }
+                if !mechanisms.contains(&b"SCRAM-SHA-256".as_slice()) {
+                    return Err(protocol("the server offers no SCRAM-SHA-256"));
+                }
+                let nonce = match &self.nonce {
+                    Some(n) => n.clone(),
+                    None => nonce()?,
+                };
+                let state = Scram::new(self.password()?, &nonce);
+                let first = state.client_first();
+                let mut body = b"SCRAM-SHA-256\0".to_vec();
+                body.extend_from_slice(
+                    &i32::try_from(first.len()).unwrap_or(i32::MAX).to_be_bytes(),
+                );
+                body.extend_from_slice(first.as_bytes());
+                self.phase = Phase::SaslStarted(state);
+                Ok(Step::Send(message(b'p', &body)))
+            }
+            (11, Phase::SaslStarted(mut state)) => {
+                let reply = state.client_final(&String::from_utf8_lossy(b.0))?;
+                self.phase = Phase::SaslFinal(state);
+                Ok(Step::Send(message(b'p', reply.as_bytes())))
+            }
+            (12, Phase::SaslFinal(state)) => {
+                state.verify(&String::from_utf8_lossy(b.0))?;
+                self.phase = Phase::Verified;
+                Ok(Step::Wait)
+            }
+            (0 | 3 | 5 | 10 | 11 | 12, _) => Err(protocol("authentication out of order")),
+            (other, _) => Err(protocol(format!(
+                "authentication method {other} is not supported"
+            ))),
         }
     }
 }
 
-/// The answer to an authentication request, if any.
-fn authenticate(
-    body: &[u8],
-    s: &Startup<'_>,
-    scram: &mut Option<Scram>,
-) -> Result<Option<Vec<u8>>, Error> {
-    let mut b = Body(body);
-    let password = || {
-        s.password
-            .ok_or_else(|| protocol("the server asks for a password: set the module's password"))
-    };
-    match b.i32()? {
-        0 => Ok(None),
-        3 => Ok(Some(message(
-            b'p',
-            &[password()?.as_bytes(), b"\0"].concat(),
-        ))),
-        5 => {
-            let salt = b.take(4)?;
-            Ok(Some(message(
-                b'p',
-                &[md5_password(s.user, password()?, salt).as_bytes(), b"\0"].concat(),
-            )))
+/// Starts a session on `io`: the startup message and the authentication the server asks for
+/// ([`Login`]).
+///
+/// # Errors
+///
+/// [`Error::Server`] if the server refuses (wrong password: 28P01), [`Error::Protocol`] for a
+/// method this client doesn't speak or allow, or a server that can't prove it knows the password.
+pub async fn start<S: AsyncRead + AsyncWrite + Unpin>(
+    mut io: S,
+    s: Startup<'_>,
+) -> Result<Session<S>, Error> {
+    let mut login = Login::new(s);
+    io.write_all(&login.startup_message()?).await?;
+    loop {
+        let m = read(&mut io).await?;
+        match login.feed(&m)? {
+            Step::Send(reply) => io.write_all(&reply).await?,
+            Step::Wait => {}
+            Step::Ready => return Ok(Session { io }),
         }
-        10 => {
-            let mut mechanisms = Vec::new();
-            while let Ok(m) = b.cstr() {
-                if m.is_empty() {
-                    break;
-                }
-                mechanisms.push(m);
-            }
-            if !mechanisms.contains(&b"SCRAM-SHA-256".as_slice()) {
-                return Err(protocol("the server offers no SCRAM-SHA-256"));
-            }
-            let state = Scram::new(password()?, &nonce()?);
-            let first = state.client_first();
-            let mut body = b"SCRAM-SHA-256\0".to_vec();
-            body.extend_from_slice(&i32::try_from(first.len()).unwrap_or(i32::MAX).to_be_bytes());
-            body.extend_from_slice(first.as_bytes());
-            *scram = Some(state);
-            Ok(Some(message(b'p', &body)))
-        }
-        11 => {
-            let state = scram
-                .as_mut()
-                .ok_or_else(|| protocol("SCRAM out of order"))?;
-            let reply = state.client_final(&String::from_utf8_lossy(b.0))?;
-            Ok(Some(message(b'p', reply.as_bytes())))
-        }
-        12 => {
-            let state = scram.take().ok_or_else(|| protocol("SCRAM out of order"))?;
-            state.verify(&String::from_utf8_lossy(b.0))?;
-            Ok(None)
-        }
-        other => Err(protocol(format!(
-            "authentication method {other} is not supported"
-        ))),
     }
 }
 

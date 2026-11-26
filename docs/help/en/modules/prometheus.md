@@ -22,7 +22,9 @@ an answer, at most three redirects within the allowed targets.
   exporters like the node exporter deliver thousands of series.
 - **Series per endpoint:** by default 50, all endpoints together at most 250.
 - **Bearer token:** sent as `Authorization: Bearer …` to the configured endpoints only, never after a redirect to
-  another host; the agent keeps it in memory only (M5-05).
+  another host; the agent keeps it in memory only (M5-05). Over `http://` it goes in clear text to whoever listens
+  there – while the exporter is stopped also to another local user who takes the port. So with a token use
+  `https://` with a verified certificate and a token that may read `/metrics` only.
 - **Timeout**, **verify TLS**, **CA file**.
 
 ## Metrics

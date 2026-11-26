@@ -238,7 +238,7 @@ async fn logs_in_with_every_path() {
     // caching_sha2_password, fast: 0x01 0x03, then OK.
     let (io, _) = server(vec![vec![1, 3], OK.to_vec()]);
     finish_login(&mut Packets::new(io), &LOGIN).await.unwrap();
-    // Full: the password itself, only over TLS or the socket.
+    // Full: the password itself, only over the socket or verified TLS.
     let (io, sent) = server(vec![vec![1, 4], OK.to_vec()]);
     let secure = Login {
         secure: true,
@@ -252,7 +252,7 @@ async fn logs_in_with_every_path() {
     let Err(Error::Protocol(why)) = finish_login(&mut Packets::new(io), &LOGIN).await else {
         panic!("a full login without TLS");
     };
-    assert!(why.contains("TLS"), "{why}");
+    assert!(why.contains("tls verify"), "{why}");
     assert!(sent.await.unwrap().is_empty(), "the password stayed");
 
     let denied = [

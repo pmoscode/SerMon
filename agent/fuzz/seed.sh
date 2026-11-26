@@ -182,3 +182,30 @@ for file in ../fixtures/modules/docker_socket/*/logs-*.bin; do
   name=$(printf '%s' "$file" | tr '/.' '__')
   { printf '\011'; cat "$file"; } >"corpus/module_parsers/fixture$name"
 done
+# db_logins: a switch byte (bit 6: MySQL, bit 7: a secure channel, PostgreSQL's auth by % 3) and
+# what a server sends during the login (M5-33).
+mkdir -p corpus/db_logins
+python3 - <<'PY'
+import struct
+def msg(tag, body):
+    return tag + struct.pack(">I", len(body) + 4) + body
+def auth(method, data=b""):
+    return msg(b"R", struct.pack(">i", method) + data)
+ready = auth(0) + msg(b"S", b"server_version\x0017.2\0") + msg(b"K", bytes(8)) + msg(b"Z", b"I")
+first = b"r=rOprNGfwEbeRWgbNEkqOsrv,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096"
+seeds = {
+    "pg_scram": b"\x00" + auth(10, b"SCRAM-SHA-256\0\0") + auth(11, first) + auth(12, b"v=AAAA") + ready,
+    "pg_scram_skip": b"\x00" + auth(10, b"SCRAM-SHA-256\0\0") + auth(11, first) + ready,
+    "pg_md5": b"\x01" + auth(5, b"\x01\x02\x03\x04") + ready,
+    "pg_password": b"\x82" + auth(3) + ready,
+    "pg_trust": b"\x00" + ready,
+}
+def packet(seq, body):
+    return len(body).to_bytes(3, "little") + bytes([seq]) + body
+ok = b"\x00\x00\x00\x02\x00\x00\x00"
+seeds["my_fast"] = b"\x40" + packet(2, b"\x01\x03") + packet(3, ok)
+seeds["my_full"] = b"\xc0" + packet(2, b"\x01\x04") + packet(4, ok)
+seeds["my_switch"] = b"\x40" + packet(2, b"\xfemysql_native_password\0" + bytes(range(1, 21)) + b"\0") + packet(4, ok)
+for name, data in seeds.items():
+    open("corpus/db_logins/" + name, "wb").write(data)
+PY

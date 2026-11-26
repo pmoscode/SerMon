@@ -25,13 +25,20 @@ replication. If a right is missing, the module reports the error with the `GRANT
 
 ## Connection
 
-- **Address** `host:port` (`127.0.0.1:3306` by default) or **Unix socket** (`/run/mysqld/mysqld.sock`; on RHEL it is
-  below `/var/lib/mysql`, then extend `module_sockets` in `agent.toml`).
+- The **Unix socket** (`/run/mysqld/mysqld.sock`; on RHEL it is below `/var/lib/mysql`, then extend `module_sockets`
+  in `agent.toml`) is the best way. Otherwise the **address** `host:port` (`127.0.0.1:3306` by default).
+- **TLS:** `off`, `verify` (the certificate against the system's CAs or the **CA file** below `module_file_prefixes`)
+  or `no_verify` (encrypted, but to whoever answers). Empty means `off` on loopback and the socket, `verify` for any
+  other address. MySQL's self-generated certificates name neither host nor IP and fail `verify`; set up a certificate
+  with the server's name or IP for it.
 - **MySQL 8 and 9** log in with `caching_sha2_password`: the first login after a restart of the server sends the
-  password itself and therefore works only over TLS (`tls: no_verify` for MySQL's own certificate) or the socket;
-  after that the fast way works without TLS. Without TLS a wrong password looks just like that first login – the
-  message names both.
+  password itself and therefore works only over the socket or with `tls: verify` – not with `no_verify`, where
+  whoever answers would get it. After that the fast way works without TLS. Without TLS a wrong password looks just
+  like that first login – the message names both.
 - **MariaDB** uses `mysql_native_password` and works without TLS too.
+- **Strangers on the port:** while the server is stopped, another local user can take port `3306` and pose as the
+  database. With `mysql_native_password` they get no password, but an answer from which a weak password can be
+  recovered by guessing. So: prefer the socket, use a long random password and a user with the rights above only.
 
 ## Metrics
 

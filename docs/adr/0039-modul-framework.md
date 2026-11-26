@@ -271,3 +271,21 @@ Trait `Module` in `sermon-modules` (Skill `sermon-add-module`): `id`, `schema` (
 - **Logs des Servers:** Ein `ReplaceAttr` der Handler (`internal/platform/logredact`) gibt jede Protobuf-Nachricht als
   Text ohne die Felder mit `debug_redact` aus, auch verschachtelt; die Regel „Nachrichten der Agents nie loggen“ hängt
   damit nicht mehr allein an der Disziplin.
+
+## Nachtrag M5-33 (Review B: Clients der Module)
+
+Das Veto prüft, wohin ein Modul sich verbindet, nicht, wer dort antwortet: Ist ein Dienst gestoppt, kann jeder lokale
+Benutzer seinen Port auf Loopback belegen (über 1024 ohne Rechte). Daraus folgt für die Clients der Module:
+
+- **Datenbanken:** Die Anmeldung von PostgreSQL ist ein reiner Zustandsautomat (`postgres::wire::Login`): nach
+  SCRAM-Start nur Server-First (einmal), dann die geprüfte Signatur, dann `AuthenticationOk`; Parameter und
+  `ReadyForQuery` erst danach. Neue Einstellung `auth` (wie `require_auth` von libpq, ab Werk `scram-sha-256`; `md5`
+  und `password` nur ausdrücklich, Klartext nur über den Socket oder `tls = verify`). Die volle Anmeldung von
+  `caching_sha2_password` schickt das Passwort nur noch über den Socket oder geprüftes TLS, nicht bei `no_verify`.
+  `tls` ohne Wert heißt `off` auf Loopback und am Socket, sonst `verify`; `ca_file` (unter `module_file_prefixes`)
+  für eigene CAs. Gefuzzt: `db_logins`.
+- **Bleibt (dokumentiert):** Redis `AUTH` schickt das Passwort im Klartext, Prometheus das Bearer-Token an jeden
+  Listener, `mysql_native_password` und SCRAM erlauben dem Fremden das Durchprobieren schwacher Passwörter – das liegt
+  an den Protokollen. Die Hilfe empfiehlt den Socket, lange Zufallspasswörter und User mit den kleinsten Rechten. Eine
+  Prüfung des Eigentümers des lauschenden Sockets (`/proc/net/tcp` → `/proc/<pid>/fd`) braucht Rechte, die der Agent
+  nicht hat, und wurde nicht gebaut.

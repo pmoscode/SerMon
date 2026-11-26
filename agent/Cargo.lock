@@ -1319,6 +1319,7 @@ dependencies = [
  "sermon-security",
  "sermon-updates",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

@@ -25,13 +25,21 @@ Replikation. Fehlt ein Recht, meldet das Modul den Fehler mit dem nötigen `GRAN
 
 ## Verbindung
 
-- **Adresse** `host:port` (ab Werk `127.0.0.1:3306`) oder **Unix-Socket** (`/run/mysqld/mysqld.sock`; bei RHEL
-  liegt er unter `/var/lib/mysql`, dann `module_sockets` in `agent.toml` erweitern).
+- **Unix-Socket** (`/run/mysqld/mysqld.sock`; bei RHEL liegt er unter `/var/lib/mysql`, dann `module_sockets` in
+  `agent.toml` erweitern) ist der beste Weg. Sonst **Adresse** `host:port` (ab Werk `127.0.0.1:3306`).
+- **TLS:** `off`, `verify` (Zertifikat gegen die CAs des Systems oder die **CA-Datei** unter `module_file_prefixes`)
+  oder `no_verify` (verschlüsselt, aber an jeden, der antwortet). Leer heißt: `off` auf Loopback und am Socket,
+  `verify` für jede andere Adresse. Die selbst erzeugten Zertifikate von MySQL nennen weder Host noch IP und bestehen
+  `verify` nicht; dafür ein Zertifikat mit dem Namen oder der IP des Servers einrichten.
 - **MySQL 8 und 9** melden mit `caching_sha2_password` an: Die erste Anmeldung nach einem Neustart des Servers
-  schickt das Passwort selbst und geht deshalb nur über TLS (`tls: no_verify` für das eigene Zertifikat von MySQL) oder
-  den Socket; danach reicht der schnelle Weg ohne TLS. Ein falsches Passwort sieht ohne TLS genauso aus wie diese erste
-  Anmeldung – die Meldung nennt beides.
+  schickt das Passwort selbst und geht deshalb nur über den Socket oder mit `tls: verify` – nicht mit `no_verify`, denn
+  dann bekäme es jeder, der antwortet. Danach reicht der schnelle Weg ohne TLS. Ein falsches Passwort sieht ohne TLS
+  genauso aus wie diese erste Anmeldung – die Meldung nennt beides.
 - **MariaDB** nutzt `mysql_native_password` und geht auch ohne TLS.
+- **Fremde am Port:** Ist der Server gestoppt, kann ein anderer lokaler Benutzer den Port `3306` belegen und sich als
+  Datenbank ausgeben. Mit `mysql_native_password` bekommt er kein Passwort, aber eine Antwort, aus der sich ein
+  schwaches Passwort durch Durchprobieren erraten lässt. Deshalb: Socket bevorzugen, ein langes zufälliges Passwort und
+  einen User nur mit den Rechten oben.
 
 ## Metriken
 

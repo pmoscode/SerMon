@@ -3,8 +3,11 @@ import type { Locale } from '#lib/paraglide/runtime.js';
 
 type Docs = Promise<{ default: Record<string, HelpDoc> }>;
 
-/** One chunk per language, loaded when help is first needed. */
-const loaders: Record<Locale, () => Docs> = {
+/**
+ * The full texts of each language, loaded when help is first needed: in a build a JSON file
+ * rather than a chunk – they are data, not code (scripts/help.js).
+ */
+const loaders: Record<Locale, () => Promise<{ default: Promise<Record<string, HelpDoc>> }>> = {
 	de: () => import('virtual:sermon-help/de'),
 	en: () => import('virtual:sermon-help/en')
 };
@@ -42,7 +45,7 @@ class HelpState {
 	/** Loads the full documents of the language (once), for popovers and the help panel. */
 	async load(locale: Locale): Promise<void> {
 		if (this.locale === locale) return;
-		const docs = (await loaders[locale]()).default;
+		const docs = await (await loaders[locale]()).default;
 		this.docs = docs;
 		this.locale = locale;
 		this.titles = locale;

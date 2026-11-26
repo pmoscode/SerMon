@@ -320,8 +320,13 @@ const virtualPrefix = 'virtual:sermon-help/';
  * @returns {import('vite').Plugin}
  */
 export function helpPlugin({ root }) {
+	// Set for `vite build`; the dev server and the tests serve the texts inline.
+	let build = false;
 	return {
 		name: 'sermon-help',
+		configResolved(config) {
+			build = config.command === 'build';
+		},
 		resolveId(id) {
 			const [locale, part] = id.slice(virtualPrefix.length).split('/');
 			if (id.startsWith(virtualPrefix) && locales.includes(locale) && (!part || part === 'titles'))
@@ -340,16 +345,30 @@ export function helpPlugin({ root }) {
 			const [locale, part] = id.slice(1 + virtualPrefix.length).split('/');
 			const all = docs[locale] ?? {};
 			// The titles are what every page with a ⓘ needs; the full texts load with its popover.
-			const out =
-				part === 'titles'
-					? Object.fromEntries(
-							Object.entries(all).map(([topic, doc]) => [
-								topic,
-								{ title: doc.title, summary: [], body: [], more: true }
-							])
-						)
-					: all;
-			return `export default ${JSON.stringify(out)};`;
+			if (part === 'titles') {
+				const titles = Object.fromEntries(
+					Object.entries(all).map(([topic, doc]) => [
+						topic,
+						{ title: doc.title, summary: [], body: [], more: true }
+					])
+				);
+				return `export default ${JSON.stringify(titles)};`;
+			}
+			// In a build the full texts are data, not code: a JSON file next to the chunks, fetched
+			// from the same origin (CSP connect-src 'self'). They grow with every topic and would
+			// otherwise count as JavaScript (check:size).
+			if (build) {
+				const ref = this.emitFile({
+					type: 'asset',
+					name: `help-${locale}.json`,
+					source: JSON.stringify(all)
+				});
+				return `export default fetch(import.meta.ROLLUP_FILE_URL_${ref}).then((r) => {
+	if (!r.ok) throw new Error('help texts: HTTP ' + r.status);
+	return r.json();
+});`;
+			}
+			return `export default Promise.resolve(${JSON.stringify(all)});`;
 		},
 		handleHotUpdate({ file, server }) {
 			if (!file.startsWith(root) || !file.endsWith('.md')) return undefined;

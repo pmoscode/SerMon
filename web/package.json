@@ -13,7 +13,7 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync && pnpm run i18n || echo ''",
 		"check": "pnpm run i18n && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:size": "node scripts/bundle-size.js build 600",
+		"check:size": "node scripts/bundle-size.js build 520",
 		"lint": "prettier --check . && eslint . && pnpm run lint:help",
 		"lint:help": "node scripts/help.js lint ../docs/help src",
 		"format": "prettier --write .",

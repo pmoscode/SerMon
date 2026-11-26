@@ -143,30 +143,58 @@ describe('loadHelp and lintHelp', () => {
 	});
 });
 
-// M5-29: every page loads only the titles, popovers and the panel the full texts.
+// M5-29: every page loads only the titles, popovers and the panel the full texts – in a build as a
+// JSON file, data rather than JavaScript (check:size).
 describe('helpPlugin', () => {
 	const plugin = helpPlugin({ root: fileURLToPath(new URL('../../docs/help', import.meta.url)) });
-	const ctx = {
-		addWatchFile() {},
-		warn() {},
-		error(message) {
-			throw new Error(message);
-		},
-		meta: { watchMode: false }
+	const context = (build) => {
+		plugin.configResolved({ command: build ? 'build' : 'serve' });
+		const emitted = [];
+		return {
+			emitted,
+			addWatchFile() {},
+			warn() {},
+			error(message) {
+				throw new Error(message);
+			},
+			emitFile(file) {
+				emitted.push(file);
+				return `ref${emitted.length}`;
+			},
+			meta: { watchMode: false }
+		};
 	};
-	const load = (id) => {
-		const code = plugin.load.call(ctx, plugin.resolveId(id));
-		return JSON.parse(code.replace(/^export default /, '').replace(/;$/, ''));
-	};
+	const code = (id, ctx = context(true)) => plugin.load.call(ctx, plugin.resolveId(id));
+	const literal = (source, prefix) => JSON.parse(source.slice(prefix.length).replace(/\)?;$/, ''));
 
-	it('serves titles and full texts', () => {
-		const titles = load('virtual:sermon-help/en/titles');
-		const full = load('virtual:sermon-help/en');
+	it('serves titles as code and the full texts of a build as a JSON file it fetches', () => {
+		const titles = literal(code('virtual:sermon-help/en/titles'), 'export default ');
+		const build = context(true);
+		const fetched = code('virtual:sermon-help/en', build);
+		expect(build.emitted).toHaveLength(1);
+		expect(build.emitted[0]).toMatchObject({ type: 'asset', name: 'help-en.json' });
+		expect(fetched).toContain('fetch(import.meta.ROLLUP_FILE_URL_ref1)');
+		expect(fetched).toContain('if (!r.ok) throw');
+		expect(fetched).not.toContain('pages/fleet');
+		const full = JSON.parse(build.emitted[0].source);
 		expect(titles['pages/fleet']).toEqual({ title: 'Fleet', summary: [], body: [], more: true });
 		expect(full['pages/fleet'].summary.length).toBeGreaterThan(0);
 		expect(full['pages/fleet'].body.length).toBeGreaterThan(0);
 		expect(Object.keys(titles)).toEqual(Object.keys(full));
 		expect(JSON.stringify(titles).length).toBeLessThan(JSON.stringify(full).length / 5);
+		// The German texts are their own file.
+		const de = context(true);
+		code('virtual:sermon-help/de', de);
+		expect(de.emitted[0].name).toBe('help-de.json');
+		expect(JSON.parse(de.emitted[0].source)['pages/fleet'].title).toBe('Flotte');
+	});
+
+	it('serves the full texts inline to the dev server and the tests', () => {
+		const dev = context(false);
+		const inline = code('virtual:sermon-help/en', dev);
+		expect(dev.emitted).toHaveLength(0);
+		const full = literal(inline, 'export default Promise.resolve(');
+		expect(full['pages/fleet'].body.length).toBeGreaterThan(0);
 	});
 
 	it('knows no other parts', () => {

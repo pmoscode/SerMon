@@ -11,33 +11,12 @@ export function problemText(p: Problem): string {
 	switch (p.kind) {
 		case 'required':
 			return m.modules_problem_required();
-		case 'length':
-			return m.modules_problem_length({ min: p.min, max: p.max });
-		case 'pattern':
-			return m.modules_problem_pattern();
-		case 'value':
-			return m.modules_problem_value();
 		case 'integer':
 			return m.modules_problem_integer();
 		case 'number':
 			return m.modules_problem_number();
-		case 'range':
-			return m.modules_problem_range({ min: p.min, max: p.max });
-		case 'items':
-			return m.modules_problem_items({ max: p.max });
 		case 'item':
 			return m.modules_problem_item({ index: p.index, problem: problemText(p.problem) });
-		case 'format':
-			switch (p.format) {
-				case 'uri':
-					return m.modules_problem_uri();
-				case 'host-port':
-					return m.modules_problem_host_port();
-				case 'path':
-					return m.modules_problem_path();
-				case 'duration':
-					return m.modules_problem_duration();
-			}
 	}
 }
 

@@ -57,6 +57,14 @@ function moduleApi(saved: unknown[], confirmed: { done: boolean }) {
 		}),
 		'ModuleService/SetGroupModule': (body: unknown) => {
 			if (!confirmed.done) return stepUp;
+			if (JSON.stringify(body).includes('2000'))
+				return {
+					status: 400,
+					json: {
+						code: 'invalid_argument',
+						message: 'simulate: value: 2000 is not within 0 to 1000'
+					}
+				};
 			saved.push(body);
 			return { json: {} };
 		},
@@ -111,12 +119,15 @@ test('suggests a module in the fleet and sets it up for the group after the step
 
 	await page.getByLabel('Value').fill('2000');
 	await page.getByRole('button', { name: 'Save' }).click();
-	await expect(page.getByText('0 to 1000.')).toBeVisible();
-	await page.getByLabel('Value').fill('7');
-	await page.getByRole('button', { name: 'Save' }).click();
 	const dialog = page.getByRole('dialog');
 	await dialog.getByLabel('Password').fill('correct horse battery');
 	await dialog.getByRole('button', { name: 'Confirm' }).click();
+	// The server checks with the agent's rules and names the property.
+	await expect(
+		page.getByText('Refused: simulate: value: 2000 is not within 0 to 1000')
+	).toBeVisible();
+	await page.getByLabel('Value').fill('7');
+	await page.getByRole('button', { name: 'Save' }).click();
 	await expect.poll(() => saved.length).toBe(1);
 	expect(saved[0]).toEqual({
 		groupId: group,

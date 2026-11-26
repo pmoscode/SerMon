@@ -22,9 +22,10 @@ const names: Record<string, Text> = {
 
 const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 	simulate: {
-		behavior: [m.module_simulate_behavior, m.module_simulate_behavior_help],
-		value: [m.module_simulate_value, m.module_simulate_value_help],
-		token: [m.module_simulate_token, m.module_simulate_token_help]
+		// The test module: its schema's descriptions suffice.
+		behavior: [m.module_simulate_behavior],
+		value: [m.module_simulate_value],
+		token: [m.module_simulate_token]
 	},
 	http_check: {
 		urls: [m.module_http_check_urls, m.module_http_check_urls_help],

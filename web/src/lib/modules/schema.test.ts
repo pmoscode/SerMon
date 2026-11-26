@@ -53,8 +53,7 @@ describe('fieldsOf', () => {
 			['codes', 'integers']
 		]);
 		expect(field('password')).toMatchObject({ secret: true, required: true });
-		expect(field('url')).toMatchObject({ required: true, format: 'uri', maxLength: 64 });
-		expect(field('codes')).toMatchObject({ minimum: 100, maximum: 599, maxItems: 3 });
+		expect(field('url')).toMatchObject({ required: true, maxLength: 64 });
 		expect(field('mode').values).toEqual(['plain', 'tls']);
 		expect(field('port').title).toBe('Port');
 	});
@@ -94,18 +93,13 @@ describe('valuesOf', () => {
 });
 
 describe('problemOf', () => {
-	it('accepts what the agent accepts', () => {
+	it('accepts what it can send – the server checks the rest with the agent rules', () => {
 		for (const [name, value] of [
 			['url', 'https://[::1]:8443/x'],
-			['timeout', '500ms'],
-			['timeout', '1h'],
-			['addr', '127.0.0.1:5432'],
-			['addr', '[::1]:6379'],
+			['url', 'ftp://checked-by-the-server/'],
 			['port', '65535'],
+			['port', '0'],
 			['ratio', '0.5'],
-			['mode', 'tls'],
-			['user', 'pg_monitor'],
-			['paths', '/etc/ssl/a.pem\n/etc/ssl/b.pem'],
 			['codes', '200\n 301 \n'],
 			['port', ''],
 			['verify', false]
@@ -113,35 +107,21 @@ describe('problemOf', () => {
 			expect(problemOf(field(name), value), `${name}=${value}`).toBeUndefined();
 	});
 
-	it('names what the agent refuses', () => {
+	it('names what it can not send', () => {
 		for (const [name, value, kind] of [
 			['url', '', 'required'],
-			['url', 'ftp://x/', 'format'],
-			['url', 'http://alice@x/', 'format'],
-			['url', 'http://x/' + 'a'.repeat(64), 'length'],
-			['timeout', '90m', 'format'],
-			['timeout', '5', 'format'],
-			['addr', 'x:0', 'format'],
-			['addr', '127.0.0.1', 'format'],
-			['port', '0', 'range'],
+			['url', '  ', 'required'],
 			['port', '8.5', 'integer'],
 			['port', 'eighty', 'integer'],
-			['ratio', '1.5', 'range'],
 			['ratio', 'x', 'number'],
-			['mode', 'udp', 'value'],
-			['user', 'Root', 'pattern'],
-			['user', 'a', 'length'],
-			['user', 'ab\u0007', 'value'],
-			['paths', '/a\n/b\n/c', 'items'],
-			['paths', '/etc/../shadow', 'item'],
-			['codes', '200\n700', 'item'],
+			['codes', '200\nseven', 'item'],
 			['password', '', 'required']
 		] as const)
 			expect(problemOf(field(name), value)?.kind, `${name}=${value}`).toBe(kind);
-		expect(problemOf(field('codes'), '200\n700')).toEqual({
+		expect(problemOf(field('codes'), '200\nseven')).toEqual({
 			kind: 'item',
 			index: 2,
-			problem: { kind: 'range', min: 100, max: 599 }
+			problem: { kind: 'integer' }
 		});
 	});
 

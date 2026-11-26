@@ -152,6 +152,7 @@
 						autocomplete="new-password"
 						bind:value={values[field.name] as string}
 						placeholder={m.modules_secret_placeholder()}
+						maxlength={field.maxLength}
 						disabled={!secretsWritable}
 						aria-invalid={problem !== undefined}
 						aria-describedby={described || undefined}
@@ -183,6 +184,7 @@
 						id={fid}
 						bind:value={values[field.name] as string}
 						placeholder={placeholderOf(field)}
+						maxlength={field.maxLength}
 						inputmode={field.kind === 'string' ? undefined : 'decimal'}
 						autocomplete="off"
 						spellcheck={false}

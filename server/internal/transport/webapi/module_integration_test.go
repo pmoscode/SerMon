@@ -26,8 +26,18 @@ func TestModules_AdminsSetGroupsViewersSeeTheirNodes(t *testing.T) {
 	mia := login(t, s, "mia@example.org") // viewer of Alpha's group
 
 	list, err := mia.modules.ListModules(ctx, connect.NewRequest(&webv1.ListModulesRequest{}))
-	if err != nil || len(list.Msg.GetModules()) == 0 || !strings.Contains(list.Msg.GetModules()[0].GetSchemaJson(), `"behavior"`) {
-		t.Fatalf("ListModules() = %v, %v", list, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The modules by ID; which come first depends on the build.
+	var simulate *webv1.Module
+	for _, mod := range list.Msg.GetModules() {
+		if mod.GetId() == "simulate" {
+			simulate = mod
+		}
+	}
+	if simulate == nil || !strings.Contains(simulate.GetSchemaJson(), `"behavior"`) || strings.Join(simulate.GetSecretFields(), ",") != "token" {
+		t.Fatalf("ListModules() lacks simulate: %v", list.Msg)
 	}
 	if _, err := mia.modules.GetModuleSettings(ctx, connect.NewRequest(&webv1.GetModuleSettingsRequest{})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Errorf("viewer reads the settings: %v", err)

@@ -76,21 +76,18 @@ describe('ModuleForm', () => {
 		await expect.element(page.getByRole('checkbox', { name: 'Run the module' })).toBeChecked();
 	});
 
-	it("refuses what the agent would refuse and doesn't save", async () => {
+	it("names what it can't send and doesn't save", async () => {
 		const { onSave } = setup();
-		await page.getByLabelText('Port').fill('70000');
 		await page.getByLabelText('Ratio').fill('x');
-		await page.getByLabelText('Paths').fill('/etc/../shadow');
-		await page.getByLabelText('Codes').fill('200\n700');
+		await page.getByLabelText('Codes').fill('200\nseven');
 		await page.getByLabelText('Interval in seconds').fill('5');
 		await page.getByRole('button', { name: 'Save' }).click();
 		await expect.element(page.getByText('Required.')).toBeVisible();
-		await expect.element(page.getByText('1 to 65535.')).toBeVisible();
 		await expect.element(page.getByText('A number.')).toBeVisible();
-		await expect.element(page.getByText(/Entry 1: An absolute path/)).toBeVisible();
-		await expect.element(page.getByText('Entry 2: 100 to 599.')).toBeVisible();
+		await expect.element(page.getByText('Entry 2: A whole number.')).toBeVisible();
 		await expect.element(page.getByText('10 to 3600 seconds.')).toBeVisible();
-		expect(page.getByLabelText('Port').element().getAttribute('aria-invalid')).toBe('true');
+		expect(page.getByLabelText('Ratio').element().getAttribute('aria-invalid')).toBe('true');
+		expect(page.getByLabelText('URL *').element().getAttribute('maxlength')).toBe('64');
 		expect(onSave).not.toHaveBeenCalled();
 	});
 

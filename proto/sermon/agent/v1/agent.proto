@@ -854,6 +854,11 @@ message RunUpdate {
     defined_only: true
     not_in: [0]
   }];
+  // valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+  // server's expiry – for a rollout at most the end of its window – as a duration, so that the
+  // host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+  // older server) leaves the agent's own bound alone.
+  uint32 valid_for_seconds = 3 [(buf.validate.field).uint32.lte = 86400];
 }
 
 // RebootNode reboots the host one minute after the root helper took it.
@@ -866,6 +871,11 @@ message RebootNode {
     max_bytes: 200
     pattern: "^[^\\x00-\\x1f\\x7f]*$"
   }];
+  // valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+  // server's expiry – for a rollout at most the end of its window – as a duration, so that the
+  // host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+  // older server) leaves the agent's own bound alone.
+  uint32 valid_for_seconds = 3 [(buf.validate.field).uint32.lte = 86400];
 }
 
 // SelfUpdate replaces the agent's binary with a signed version (KONZEPT §14.3); how the agent
@@ -878,6 +888,11 @@ message SelfUpdate {
     max_bytes: 64
     pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
   }];
+  // valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+  // server's expiry – for a rollout at most the end of its window – as a duration, so that the
+  // host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+  // older server) leaves the agent's own bound alone.
+  uint32 valid_for_seconds = 3 [(buf.validate.field).uint32.lte = 86400];
 }
 
 // PackageManager is the host's package manager.

@@ -138,7 +138,8 @@ func TestSession_DeliversTheNodesCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := nextCommand(t, stream).GetRunUpdate()
-	if got.GetRunId() != update.ID.String() || got.GetScope() != agentv1.UpdateScope_UPDATE_SCOPE_SECURITY {
+	if got.GetRunId() != update.ID.String() || got.GetScope() != agentv1.UpdateScope_UPDATE_SCOPE_SECURITY ||
+		got.GetValidForSeconds() < 3500 || got.GetValidForSeconds() > 3600 {
 		t.Fatalf("first command = %v", got)
 	}
 	// A new command and a wake-up: it goes out at once (the poll is an hour away).

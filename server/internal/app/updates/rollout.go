@@ -160,7 +160,7 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 		if !n.State.Active() {
 			continue
 		}
-		if failed := follow(now, p, n, views[n.Node], runs, windowOpen, newID, &actions); failed && p.Rollout.StopOnFailure && r.State == RolloutRunning {
+		if failed := follow(now, p, n, views[n.Node], runs, window{open: windowOpen, end: r.WindowEnd}, newID, &actions); failed && p.Rollout.StopOnFailure && r.State == RolloutRunning {
 			r.State, r.Reason = RolloutStopped, n.Hostname+": "+n.Reason
 			actions = append(actions, Action{Event: EventRolloutStopped, Node: n.Node, Reason: r.Reason})
 		}
@@ -204,7 +204,7 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 		case p.AgentUpdate == AgentAuto && v.AgentTarget != "" && v.Report.Permissions.SelfUpdate:
 			c := command.Command{
 				ID: newID(), Node: n.Node, Kind: command.SelfUpdate, Version: v.AgentTarget, CreatedAt: now,
-				ExpiresAt: now.Add(command.DefaultExpiry),
+				ExpiresAt: command.Expiry(now, r.WindowEnd),
 			}
 			n.State, n.AgentRun = NodeAgentUpdating, c.ID
 			active++
@@ -221,7 +221,7 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 		case !wants(mode, v.Report):
 			n.State, n.Reason = NodeDone, "nothing to update any more"
 		default:
-			c := updateCommand(now, n.Node, mode, newID)
+			c := updateCommand(now, r.WindowEnd, n.Node, mode, newID)
 			n.State, n.UpdateRun = NodeUpdating, c.ID
 			active++
 			room--
@@ -235,14 +235,14 @@ func Plan(now time.Time, p Policy, current *RolloutRun, nodes []NodeView, runs m
 	return r, actions
 }
 
-// updateCommand installs the updates of mode on node.
-func updateCommand(now time.Time, node identity.NodeID, mode Mode, newID func() uuid.UUID) command.Command {
+// updateCommand installs the updates of mode on node, within the window.
+func updateCommand(now, windowEnd time.Time, node identity.NodeID, mode Mode, newID func() uuid.UUID) command.Command {
 	scope := command.ScopeAll
 	if mode == ModeSecurityAuto {
 		scope = command.ScopeSecurity
 	}
 	return command.Command{
-		ID: newID(), Node: node, Kind: command.Update, Scope: scope, CreatedAt: now, ExpiresAt: now.Add(command.DefaultExpiry),
+		ID: newID(), Node: node, Kind: command.Update, Scope: scope, CreatedAt: now, ExpiresAt: command.Expiry(now, windowEnd),
 	}
 }
 
@@ -305,7 +305,13 @@ func begin(now time.Time, p Policy, last *RolloutRun, nodes []NodeView, newID fu
 }
 
 // follow moves an active node on; true if it failed now.
-func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]command.Command, windowOpen bool, newID func() uuid.UUID, actions *[]Action) bool {
+// window is the rollout's window as follow sees it: whether runs may start, and its end.
+type window struct {
+	open bool
+	end  time.Time
+}
+
+func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]command.Command, w window, newID func() uuid.UUID, actions *[]Action) bool {
 	fail := func(reason string) bool {
 		n.State, n.Reason, n.Since = NodeFailed, reason, now
 		*actions = append(*actions, Action{Event: EventRunFailed, Node: n.Node, Reason: reason})
@@ -320,9 +326,9 @@ func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]
 			return fail("agent update: " + reason)
 		}
 		// Then the packages, if the policy installs some and the window is still open.
-		if r := v.Report; windowOpen && p.Mode != ModeReport && r != nil && r.Permissions != nil && r.Permissions.RemoteUpdates {
+		if r := v.Report; w.open && p.Mode != ModeReport && r != nil && r.Permissions != nil && r.Permissions.RemoteUpdates {
 			if mode, _ := p.ModeFor(r.Manager); mode != ModeReport && wants(mode, r) {
-				c := updateCommand(now, n.Node, mode, newID)
+				c := updateCommand(now, w.end, n.Node, mode, newID)
 				n.State, n.UpdateRun, n.Since = NodeUpdating, c.ID, now
 				*actions = append(*actions, Action{Command: &c, Node: n.Node})
 				return false
@@ -343,9 +349,9 @@ func follow(now time.Time, p Policy, n *NodeRun, v NodeView, runs map[uuid.UUID]
 		}
 		needs := v.Report != nil && v.Report.RebootRequired
 		allowed := v.Report != nil && v.Report.Permissions != nil && v.Report.Permissions.RemoteReboot
-		if needs && p.AutoReboot && windowOpen && allowed {
+		if needs && p.AutoReboot && w.open && allowed {
 			c := command.Command{
-				ID: newID(), Node: n.Node, Kind: command.Reboot, Reason: RebootReason, CreatedAt: now, ExpiresAt: now.Add(command.DefaultExpiry),
+				ID: newID(), Node: n.Node, Kind: command.Reboot, Reason: RebootReason, CreatedAt: now, ExpiresAt: command.Expiry(now, w.end),
 			}
 			n.State, n.RebootRun, n.Since = NodeRebooting, c.ID, now
 			*actions = append(*actions, Action{Command: &c, Node: n.Node})
@@ -393,6 +399,9 @@ func finished(run command.Command, known bool, now time.Time) (bool, string) {
 		return true, "the run is gone"
 	}
 	if run.EffectiveState(now) == command.Expired {
+		if run.State == command.Sent {
+			return true, "no answer from the node in time"
+		}
 		return true, "the node didn't take the command in time"
 	}
 	if run.Result == nil || !run.Result.Phase.Final() {

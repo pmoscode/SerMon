@@ -461,6 +461,16 @@ fn uuid_like(s: &str) -> bool {
         })
 }
 
+/// How long from its arrival the server lets the run start (M4-31); `None` from an older server.
+fn valid_for(command: &HelperCommand) -> Option<Duration> {
+    let seconds = match command {
+        HelperCommand::Update(c) => c.valid_for_seconds,
+        HelperCommand::Reboot(c) => c.valid_for_seconds,
+        HelperCommand::SelfUpdate(c) => c.valid_for_seconds,
+    };
+    (seconds > 0).then(|| Duration::from_secs(seconds.into()))
+}
+
 fn run_id(command: &HelperCommand) -> &str {
     match command {
         HelperCommand::Update(u) => &u.run_id,
@@ -558,7 +568,8 @@ pub async fn run<H: Helper>(
                     continue;
                 }
                 let first = Instant::now();
-                let job = Waiting { command, next: first, until: first + schedule.busy_for, staged: false };
+                let until = first + valid_for(&command).map_or(schedule.busy_for, |v| v.min(schedule.busy_for));
+                let job = Waiting { command, next: first, until, staged: false };
                 start(&*helper, &mut book, &mut sink, &now, job, &mut waiting, schedule).await;
             }
             () = async { tokio::time::sleep_until(retry_at.unwrap_or_else(Instant::now)).await }, if retry_at.is_some() => {
@@ -619,17 +630,28 @@ async fn start<H: Helper>(
         ..
     } = job;
     let id = run_id(&command).to_owned();
-    if let HelperCommand::SelfUpdate(s) = &command {
-        if !staged && let Err(why) = helper.stage(&s.version).await {
-            tracing::warn!(run_id = %id, "cannot fetch the release for the self-update: {why}");
-            sink(result(
-                &id,
-                CommandPhase::Failed,
-                &format!("cannot fetch the release: {why}"),
-            ));
-            book.set(&id, Entry::Ended, now());
-            return;
-        }
+    if let HelperCommand::SelfUpdate(s) = &command
+        && !staged
+        && let Err(why) = helper.stage(&s.version).await
+    {
+        tracing::warn!(run_id = %id, "cannot fetch the release for the self-update: {why}");
+        sink(result(
+            &id,
+            CommandPhase::Failed,
+            &format!("cannot fetch the release: {why}"),
+        ));
+        book.set(&id, Entry::Ended, now());
+        return;
+    }
+    // Nothing starts after the server's deadline (M4-31): a slow download of the release.
+    if Instant::now() >= until {
+        let reason = "the command's time ran out before the run could start";
+        tracing::warn!(run_id = %id, "run of the root helper not started: {reason}");
+        sink(result(&id, CommandPhase::Failed, reason));
+        book.set(&id, Entry::Ended, now());
+        return;
+    }
+    if let HelperCommand::SelfUpdate(_) = &command {
         // Before the helper replaces this process: the new agent finds the run and confirms it.
         book.self_updates.insert(id.clone(), book.instance.clone());
         book.set(&id, Entry::Running, now());

@@ -97,9 +97,18 @@ func TestCommandStore_DeliversOnceAndAgainAfterAReconnect(t *testing.T) {
 			t.Errorf("state of %v = %+v, %v; want %d", id, c, err, want)
 		}
 	}
-	// Past its expiry it goes no more.
+	// Past its expiry it goes no more; sent, it waits SentGrace for the agent's answer (M4-31).
 	if late, _ := s.Deliverable(ctx, f.org, f.node, true, update.ExpiresAt); len(late) != 0 {
 		t.Errorf("after the expiry = %+v", late)
+	}
+	if c, _, _ := s.Get(ctx, f.org, update.ID); c.State != command.Sent {
+		t.Errorf("sent, at the expiry: %d", c.State)
+	}
+	if _, err := s.Deliverable(ctx, f.org, f.node, false, update.ExpiresAt.Add(command.SentGrace)); err != nil {
+		t.Fatal(err)
+	}
+	if c, _, _ := s.Get(ctx, f.org, update.ID); c.State != command.Expired {
+		t.Errorf("sent, after the grace: %d", c.State)
 	}
 }
 

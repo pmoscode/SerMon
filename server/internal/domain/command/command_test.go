@@ -71,7 +71,7 @@ func TestPhaseFinal(t *testing.T) {
 func TestEffectiveState_AWaitingCommandExpires(t *testing.T) {
 	c := valid(command.Update)
 	for state, want := range map[command.State]command.State{
-		command.Pending: command.Expired, command.Sent: command.Expired, command.Running: command.Running, command.Done: command.Done,
+		command.Pending: command.Expired, command.Running: command.Running, command.Done: command.Done,
 	} {
 		c.State = state
 		if got := c.EffectiveState(c.ExpiresAt); got != want {
@@ -80,5 +80,41 @@ func TestEffectiveState_AWaitingCommandExpires(t *testing.T) {
 		if got := c.EffectiveState(c.ExpiresAt.Add(-time.Nanosecond)); got != state {
 			t.Errorf("%d before expiry = %d", state, got)
 		}
+	}
+}
+
+// M4-31: a sent command doesn't expire silently while the agent may answer: the agent starts
+// nothing after the expiry (valid_for_seconds), but its answer – a start just in time, or that it
+// ran out of time – may still be on its way.
+func TestEffectiveState_ASentCommandWaitsForTheAnswer(t *testing.T) {
+	c := valid(command.Update)
+	c.State = command.Sent
+	if got := c.EffectiveState(c.ExpiresAt.Add(command.SentGrace - time.Nanosecond)); got != command.Sent {
+		t.Errorf("within the grace: %d", got)
+	}
+	if got := c.EffectiveState(c.ExpiresAt.Add(command.SentGrace)); got != command.Expired {
+		t.Errorf("after the grace: %d", got)
+	}
+}
+
+// M4-31: the agent gets the time left until the expiry, in whole seconds; nothing once it passed.
+func TestValidFor_IsTheTimeLeft(t *testing.T) {
+	c := valid(command.Update)
+	if got := c.ValidFor(c.ExpiresAt.Add(-90*time.Second - 500*time.Millisecond)); got != 90 {
+		t.Errorf("90.5 s left: %d", got)
+	}
+	if got := c.ValidFor(c.ExpiresAt.Add(time.Second)); got != 0 {
+		t.Errorf("after the expiry: %d", got)
+	}
+}
+
+// M4-31: a rollout's command expires at the end of its window at the latest.
+func TestExpiry_EndsWithTheWindow(t *testing.T) {
+	now := time.Date(2026, 11, 22, 4, 50, 0, 0, time.UTC)
+	if got := command.Expiry(now, now.Add(10*time.Minute)); !got.Equal(now.Add(10 * time.Minute)) {
+		t.Errorf("10 min before the end: %v", got)
+	}
+	if got := command.Expiry(now, now.Add(time.Hour)); !got.Equal(now.Add(command.DefaultExpiry)) {
+		t.Errorf("an hour before the end: %v", got)
 	}
 }

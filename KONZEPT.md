@@ -291,8 +291,10 @@ eine Fake-Implementierung für Tests.
       Redaction-Regeln, [ADR 0030](docs/adr/0030-konfiguration-vom-server.md)),
       `StartLiveView{interval, hide_cmdline}` (eine Lease: ohne Erneuerung endet die Live-Ansicht nach 60 s, ebenso mit
       der Session), `StopLiveView`, `RefreshUpdateInfo`, `RunUpdate{run_id, scope}`, `RebootNode{run_id, reason}` und
-      `SelfUpdate{run_id, version}` (M4-05; der Reboot nach einem Update ist ein eigener Befehl). Agents ohne diese
-      Befehle ignorieren sie wie jede unbekannte Nachricht.
+      `SelfUpdate{run_id, version}` (M4-05; der Reboot nach einem Update ist ein eigener Befehl), jeder Lauf mit
+      `valid_for_seconds` (M4-31): so lange ab Ankunft darf der Agent ihn starten, bei einem Rollout höchstens bis
+      zum Ende des Fensters; danach meldet er ihn als fehlgeschlagen. Agents ohne diese Befehle ignorieren sie wie
+      jede unbekannte Nachricht.
 - **Enrollment:** `EnrollmentService.Enroll{token, csr, host_facts}` ist ein einzelner Aufruf über den öffentlichen
   HTTPS-Endpunkt, nicht über den mTLS-Port ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)).
 - **Batching:** Metriken werden jede Sekunde gesendet, Logs alle 1 s oder bei 256 KB (je nachdem, was zuerst eintritt).

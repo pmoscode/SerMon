@@ -254,8 +254,8 @@ fehl.
   Server den Befehl beim nächsten Reconnect erneut zu; der Helper nimmt dieselbe `run_id` mit derselben Anfrage als
   schon gestartet an. Das Buch hält höchstens 500 Läufe, beendete höchstens 8 Tage.
 - **Veto und Fehler:** Ein abgelehnter Start (`helper.toml`) wird `REFUSED`, kein oder ein zu alter Helper
-  `UNSUPPORTED`, jeweils mit Grund. Ein beschäftigter Helper wird alle 30 s erneut gefragt, nach 15 min wird der Lauf
-  `FAILED`.
+  `UNSUPPORTED`, jeweils mit Grund. Ein beschäftigter Helper wird alle 30 s erneut gefragt, nach 15 min – oder früher
+  zur Frist des Befehls, `valid_for_seconds`, M4-31 – wird der Lauf `FAILED`.
 - **Ausgabe:** Vor dem Senden läuft sie durch die Redaction der Org (wie Logs und Kommandozeilen) und wird auf ihr Ende
   von höchstens 256 KiB gekürzt.
 
@@ -285,3 +285,14 @@ fehl.
 - **Grund eines Reboots:** abgelehnt werden alle Format- und Trennzeichen (Cf, Zl, Zp) und die Hangul-Füllzeichen,
   wie im Server (`textsafe`) und im Schema.
 - **Umfang:** 1 628 eigene Zeilen (Grenze 1 800, ADR 0036).
+
+## Nachtrag M4-31 (Fristen der Befehle)
+
+- Jeder Lauf kommt mit `valid_for_seconds`: der Zeit bis zum Ablauf des Befehls beim Server, für einen Rollout höchstens
+  bis zum Ende des Fensters. Als Dauer ab Ankunft, damit die Uhr des Hosts nichts zählt. Später startet der Agent nichts
+  mehr – auch nicht nach einem langsamen Download des Releases eines Self-Updates – und meldet `FAILED` mit Grund.
+- Der Server schickt keinen Lauf mit weniger als einer Sekunde Restzeit. Ein gesendeter Befehl gilt erst 15 min nach
+  seinem Ablauf ohne Antwort als abgelaufen (`SentGrace`): Bis dahin hat der Agent einen rechtzeitigen Start oder den
+  Ablauf gemeldet, gepuffert auch über eine Unterbrechung. Der Rollout nennt dann „no answer from the node in time“
+  statt „didn't take the command in time“.
+

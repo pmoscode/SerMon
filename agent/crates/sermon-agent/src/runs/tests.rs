@@ -9,9 +9,14 @@ const ID: &str = "0193f5a0-0000-7000-8000-000000000001";
 const OTHER: &str = "0193f5a0-0000-7000-8000-000000000002";
 
 fn update(id: &str) -> HelperCommand {
+    update_valid_for(id, 0)
+}
+
+fn update_valid_for(id: &str, seconds: u32) -> HelperCommand {
     HelperCommand::Update(RunUpdate {
         run_id: id.into(),
         scope: UpdateScope::All.into(),
+        valid_for_seconds: seconds,
     })
 }
 
@@ -25,6 +30,8 @@ struct Fake {
     /// Versions staged for a self-update; `stage_fails` makes the next one fail.
     staged: Mutex<Vec<String>>,
     stage_fails: Mutex<Option<String>>,
+    /// How long staging takes (a slow download).
+    stage_takes: Mutex<Duration>,
     confirmed: Mutex<Vec<String>>,
 }
 
@@ -69,7 +76,12 @@ impl Helper for Fake {
 
     fn stage(&self, version: &str) -> impl Future<Output = Result<(), String>> + Send {
         self.staged.lock().unwrap().push(version.to_owned());
-        std::future::ready(self.stage_fails.lock().unwrap().take().map_or(Ok(()), Err))
+        let outcome = self.stage_fails.lock().unwrap().take().map_or(Ok(()), Err);
+        let takes = *self.stage_takes.lock().unwrap();
+        async move {
+            tokio::time::sleep(takes).await;
+            outcome
+        }
     }
 
     fn confirm(&self, run_id: &str) -> impl Future<Output = Result<(), String>> + Send {
@@ -248,6 +260,7 @@ async fn a_veto_or_a_busy_helper_ends_the_run_with_a_reason() {
     r.inbox.command(HelperCommand::Reboot(RebootNode {
         run_id: ID.into(),
         reason: "updates".into(),
+        valid_for_seconds: 0,
     }));
     r.inbox.command(update(OTHER));
     let third = "0193f5a0-0000-7000-8000-000000000003";
@@ -344,9 +357,14 @@ fn the_book_survives_broken_lines_and_stays_bounded() {
 }
 
 fn self_update(id: &str) -> HelperCommand {
+    self_update_valid_for(id, 0)
+}
+
+fn self_update_valid_for(id: &str, seconds: u32) -> HelperCommand {
     HelperCommand::SelfUpdate(sermon_transport::proto::agent::v1::SelfUpdate {
         run_id: id.into(),
         version: "1.1.0".into(),
+        valid_for_seconds: seconds,
     })
 }
 
@@ -435,5 +453,51 @@ async fn a_self_update_without_its_release_fails_and_a_busy_one_waits() {
         2,
         "staged again for the retry"
     );
+    r.stop().await;
+}
+
+// M4-31: a run starts no later than the server allows (valid_for_seconds from its arrival, for a
+// rollout the end of its window): a busy helper makes it fail at that time, not 15 min later, and
+// the server hears why.
+#[tokio::test(start_paused = true)]
+async fn a_busy_helper_fails_the_run_at_its_deadline() {
+    let dir = tempfile::tempdir().unwrap();
+    let always = Fake::with(vec![Start::Busy("a run".into()); 40], vec![]);
+    let r = start_runner(always.clone(), book(&dir));
+    r.inbox.command(update_valid_for(ID, 70));
+    tokio::time::sleep(Duration::from_secs(59)).await;
+    assert!(r.phases().is_empty(), "failed before its time");
+    tokio::time::sleep(Duration::from_secs(12)).await;
+    assert_eq!(r.phases(), [(ID.into(), CommandPhase::Failed)]);
+    assert!(r.results.lock().unwrap()[0].reason.contains("stayed busy"));
+    assert_eq!(
+        always.starts.lock().unwrap().len(),
+        3,
+        "asked at 0, 30 and 60 s"
+    );
+    r.stop().await;
+}
+
+// M4-31: a self-update whose release took longer to fetch than its time doesn't start.
+#[tokio::test(start_paused = true)]
+async fn a_self_update_fetched_past_its_deadline_does_not_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::with(vec![], vec![]);
+    *fake.stage_takes.lock().unwrap() = Duration::from_secs(90);
+    let r = start_runner(fake.clone(), book(&dir));
+    r.inbox.command(self_update_valid_for(ID, 60));
+    tokio::time::sleep(Duration::from_secs(91)).await;
+    assert_eq!(r.phases(), [(ID.into(), CommandPhase::Failed)]);
+    assert!(
+        r.results.lock().unwrap()[0].reason.contains("time ran out"),
+        "{:?}",
+        r.results.lock().unwrap()[0].reason
+    );
+    assert!(
+        fake.starts.lock().unwrap().is_empty(),
+        "started after its time"
+    );
+    let text = std::fs::read_to_string(dir.path().join("runs")).unwrap();
+    assert!(!text.contains(&format!("{ID} running ")), "{text}");
     r.stop().await;
 }

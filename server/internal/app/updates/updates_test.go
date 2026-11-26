@@ -289,7 +289,7 @@ func (h *history) Rollouts(_ context.Context, scope tenant.Scope, limit int) ([]
 // so; a refresh is no run.
 func TestService_History(t *testing.T) {
 	h := &history{
-		run:     command.Command{ID: uuid.New(), Node: node, Kind: command.Update, State: command.Sent, CreatedAt: t0.Add(-time.Hour), ExpiresAt: t0.Add(-time.Minute)},
+		run:     command.Command{ID: uuid.New(), Node: node, Kind: command.Update, State: command.Sent, CreatedAt: t0.Add(-time.Hour), ExpiresAt: t0.Add(-command.SentGrace - time.Minute)},
 		refresh: command.Command{ID: uuid.New(), Node: node, Kind: command.Refresh},
 	}
 	svc := updates.NewService(&store{}, authz.NewPolicy()).WithRefresher(&refresher{}, func() time.Time { return t0 }).WithHistory(h)

@@ -834,6 +834,12 @@ pub struct RunUpdate {
     /// scope is which updates to install.
     #[prost(enumeration="UpdateScope", tag="2")]
     pub scope: i32,
+    /// valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+    /// server's expiry – for a rollout at most the end of its window – as a duration, so that the
+    /// host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+    /// older server) leaves the agent's own bound alone.
+    #[prost(uint32, tag="3")]
+    pub valid_for_seconds: u32,
 }
 /// RebootNode reboots the host one minute after the root helper took it.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -844,6 +850,12 @@ pub struct RebootNode {
     /// reason is shown to the host's users and written to its journal, e.g. "updates (SerMon)".
     #[prost(string, tag="2")]
     pub reason: ::prost::alloc::string::String,
+    /// valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+    /// server's expiry – for a rollout at most the end of its window – as a duration, so that the
+    /// host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+    /// older server) leaves the agent's own bound alone.
+    #[prost(uint32, tag="3")]
+    pub valid_for_seconds: u32,
 }
 /// SelfUpdate replaces the agent's binary with a signed version (KONZEPT §14.3); how the agent
 /// fetches and the helper checks it follows ADR 0036.
@@ -855,6 +867,12 @@ pub struct SelfUpdate {
     /// version is the agent version to install, e.g. "0.5.0".
     #[prost(string, tag="2")]
     pub version: ::prost::alloc::string::String,
+    /// valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+    /// server's expiry – for a rollout at most the end of its window – as a duration, so that the
+    /// host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+    /// older server) leaves the agent's own bound alone.
+    #[prost(uint32, tag="3")]
+    pub valid_for_seconds: u32,
 }
 /// UpdateReport is what the host could update (KONZEPT §14.1), every 6 hours, after the package
 /// manager ran and on RefreshUpdateInfo. Names, versions and sources come from the host's package

@@ -16,8 +16,11 @@ SELECT count(*) FILTER (WHERE node_id = sqlc.arg(node_id) AND created_at > sqlc.
 FROM node_commands WHERE kind = 1 AND created_at > least(sqlc.arg(node_since)::timestamptz, sqlc.arg(org_since)::timestamptz);
 
 -- name: ExpireNodeCommands :exec
+-- Pending commands at their expiry, sent ones without an answer only before sent_before – the
+-- expiry plus command.SentGrace (M4-31): the agent's answer may still be on its way.
 UPDATE node_commands SET state = 5
-WHERE node_id = sqlc.arg(node_id) AND state IN (1, 2) AND expires_at <= sqlc.arg(now);
+WHERE node_id = sqlc.arg(node_id)
+  AND ((state = 1 AND expires_at <= sqlc.arg(now)) OR (state = 2 AND expires_at <= sqlc.arg(sent_before)));
 
 -- name: DeliverableNodeCommands :many
 -- What the node's session sends: the pending commands, and after a reconnect the sent ones without

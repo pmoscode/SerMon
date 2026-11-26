@@ -788,14 +788,17 @@ async fn hands_the_helpers_commands_on() {
     let update = RunUpdate {
         run_id: run_id.clone(),
         scope: UpdateScope::All.into(),
+        valid_for_seconds: 600,
     };
     let reboot = RebootNode {
         run_id: run_id.clone(),
         reason: "updates".into(),
+        valid_for_seconds: 600,
     };
     let self_update = SelfUpdate {
         run_id,
         version: "0.5.0".into(),
+        valid_for_seconds: 600,
     };
     for command in [
         Payload::RunUpdate(update.clone()),
@@ -843,14 +846,17 @@ async fn ignores_the_commands_it_does_not_handle_yet() {
         Payload::RunUpdate(RunUpdate {
             run_id: run_id.clone(),
             scope: UpdateScope::Security.into(),
+            valid_for_seconds: 600,
         }),
         Payload::RebootNode(RebootNode {
             run_id: run_id.clone(),
             reason: "updates".into(),
+            valid_for_seconds: 600,
         }),
         Payload::SelfUpdate(SelfUpdate {
             run_id,
             version: "0.5.0".into(),
+            valid_for_seconds: 600,
         }),
     ] {
         assert!(harness.api.send(command).await);

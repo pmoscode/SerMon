@@ -4456,9 +4456,14 @@ type RunUpdate struct {
 	// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
 	RunId string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	// scope is which updates to install.
-	Scope         UpdateScope `protobuf:"varint,2,opt,name=scope,proto3,enum=sermon.agent.v1.UpdateScope" json:"scope,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Scope UpdateScope `protobuf:"varint,2,opt,name=scope,proto3,enum=sermon.agent.v1.UpdateScope" json:"scope,omitempty"`
+	// valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+	// server's expiry – for a rollout at most the end of its window – as a duration, so that the
+	// host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+	// older server) leaves the agent's own bound alone.
+	ValidForSeconds uint32 `protobuf:"varint,3,opt,name=valid_for_seconds,json=validForSeconds,proto3" json:"valid_for_seconds,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RunUpdate) Reset() {
@@ -4505,15 +4510,27 @@ func (x *RunUpdate) GetScope() UpdateScope {
 	return UpdateScope_UPDATE_SCOPE_UNSPECIFIED
 }
 
+func (x *RunUpdate) GetValidForSeconds() uint32 {
+	if x != nil {
+		return x.ValidForSeconds
+	}
+	return 0
+}
+
 // RebootNode reboots the host one minute after the root helper took it.
 type RebootNode struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
 	RunId string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	// reason is shown to the host's users and written to its journal, e.g. "updates (SerMon)".
-	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	// valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+	// server's expiry – for a rollout at most the end of its window – as a duration, so that the
+	// host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+	// older server) leaves the agent's own bound alone.
+	ValidForSeconds uint32 `protobuf:"varint,3,opt,name=valid_for_seconds,json=validForSeconds,proto3" json:"valid_for_seconds,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RebootNode) Reset() {
@@ -4560,6 +4577,13 @@ func (x *RebootNode) GetReason() string {
 	return ""
 }
 
+func (x *RebootNode) GetValidForSeconds() uint32 {
+	if x != nil {
+		return x.ValidForSeconds
+	}
+	return 0
+}
+
 // SelfUpdate replaces the agent's binary with a signed version (KONZEPT §14.3); how the agent
 // fetches and the helper checks it follows ADR 0036.
 type SelfUpdate struct {
@@ -4567,9 +4591,14 @@ type SelfUpdate struct {
 	// run_id names the run, chosen by the server: a lowercase UUID; the agent runs it once.
 	RunId string `protobuf:"bytes,1,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	// version is the agent version to install, e.g. "0.5.0".
-	Version       string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Version string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	// valid_for_seconds is how long from its arrival the agent may start the run (M4-31): the
+	// server's expiry – for a rollout at most the end of its window – as a duration, so that the
+	// host's clock doesn't count. Later the agent reports it failed instead of starting it; 0 (an
+	// older server) leaves the agent's own bound alone.
+	ValidForSeconds uint32 `protobuf:"varint,3,opt,name=valid_for_seconds,json=validForSeconds,proto3" json:"valid_for_seconds,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SelfUpdate) Reset() {
@@ -4614,6 +4643,13 @@ func (x *SelfUpdate) GetVersion() string {
 		return x.Version
 	}
 	return ""
+}
+
+func (x *SelfUpdate) GetValidForSeconds() uint32 {
+	if x != nil {
+		return x.ValidForSeconds
+	}
+	return 0
 }
 
 // UpdateReport is what the host could update (KONZEPT §14.1), every 6 hours, after the package
@@ -5312,19 +5348,22 @@ const file_sermon_agent_v1_agent_proto_rawDesc = "" +
 	"\x10_runtime_secondsB\n" +
 	"\n" +
 	"\b_cmdline\"\x13\n" +
-	"\x11RefreshUpdateInfo\"\xa9\x01\n" +
+	"\x11RefreshUpdateInfo\"\xe0\x01\n" +
 	"\tRunUpdate\x12\\\n" +
 	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x12>\n" +
 	"\x05scope\x18\x02 \x01(\x0e2\x1c.sermon.agent.v1.UpdateScopeB\n" +
-	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x05scope\"\xa3\x01\n" +
+	"\xbaH\a\x82\x01\x04\x10\x01 \x00R\x05scope\x125\n" +
+	"\x11valid_for_seconds\x18\x03 \x01(\rB\t\xbaH\x06*\x04\x18\x80\xa3\x05R\x0fvalidForSeconds\"\xda\x01\n" +
 	"\n" +
 	"RebootNode\x12\\\n" +
 	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x127\n" +
-	"\x06reason\x18\x02 \x01(\tB\x1f\xbaH\x1cr\x1a\x10\x01(\xc8\x012\x13^[^\\x00-\\x1f\\x7f]*$R\x06reason\"\xb9\x01\n" +
+	"\x06reason\x18\x02 \x01(\tB\x1f\xbaH\x1cr\x1a\x10\x01(\xc8\x012\x13^[^\\x00-\\x1f\\x7f]*$R\x06reason\x125\n" +
+	"\x11valid_for_seconds\x18\x03 \x01(\rB\t\xbaH\x06*\x04\x18\x80\xa3\x05R\x0fvalidForSeconds\"\xf0\x01\n" +
 	"\n" +
 	"SelfUpdate\x12\\\n" +
 	"\x06run_id\x18\x01 \x01(\tBE\xbaHBr@2>^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$R\x05runId\x12M\n" +
-	"\aversion\x18\x02 \x01(\tB3\xbaH0r.(@2*^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$R\aversion\"\xc5\x05\n" +
+	"\aversion\x18\x02 \x01(\tB3\xbaH0r.(@2*^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$R\aversion\x125\n" +
+	"\x11valid_for_seconds\x18\x03 \x01(\rB\t\xbaH\x06*\x04\x18\x80\xa3\x05R\x0fvalidForSeconds\"\xc5\x05\n" +
 	"\fUpdateReport\x12E\n" +
 	"\fcollected_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampB\x06\xbaH\x03\xc8\x01\x01R\vcollectedAt\x12S\n" +
 	"\favailability\x18\x02 \x01(\x0e2#.sermon.agent.v1.UpdateAvailabilityB\n" +

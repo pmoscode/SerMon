@@ -4,8 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/pmoscode/SerMon/server/internal/domain/command"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 )
 
@@ -30,5 +32,34 @@ func TestToResult_CapsTheHostsTimes(t *testing.T) {
 	r = toResultAt(result(now.Add(-time.Minute), now.Add(-2*time.Minute)), now)
 	if r.StartedAt.After(*r.EndedAt) {
 		t.Errorf("started after it ended: %v %v", r.StartedAt, r.EndedAt)
+	}
+}
+
+// M4-31: every run goes out with the time the agent may still start it; one with less than a
+// second left doesn't go out at all (it would start after the server gave up on it).
+func TestCommandMessage_CarriesTheTimeLeft(t *testing.T) {
+	now := time.Date(2026, 11, 25, 12, 0, 0, 0, time.UTC)
+	for _, kind := range []command.Kind{command.Update, command.Reboot, command.SelfUpdate} {
+		c := command.Command{ID: uuid.New(), Kind: kind, Scope: command.ScopeAll, Reason: "x", Version: "1.0.0", ExpiresAt: now.Add(10 * time.Minute)}
+		msg, ok := commandMessage(c, now)
+		var valid uint32
+		switch p := msg.GetPayload().(type) {
+		case *agentv1.SessionResponse_RunUpdate:
+			valid = p.RunUpdate.GetValidForSeconds()
+		case *agentv1.SessionResponse_RebootNode:
+			valid = p.RebootNode.GetValidForSeconds()
+		case *agentv1.SessionResponse_SelfUpdate:
+			valid = p.SelfUpdate.GetValidForSeconds()
+		}
+		if !ok || valid != 600 {
+			t.Errorf("kind %d: valid for %d s (%v), want 600", kind, valid, ok)
+		}
+		if _, ok := commandMessage(c, c.ExpiresAt.Add(-500*time.Millisecond)); ok {
+			t.Errorf("kind %d with half a second left went out", kind)
+		}
+	}
+	refresh := command.Command{ID: uuid.New(), Kind: command.Refresh, ExpiresAt: now.Add(time.Minute)}
+	if msg, ok := commandMessage(refresh, now); !ok || msg.GetRefreshUpdateInfo() == nil {
+		t.Errorf("refresh = %v, %v", msg, ok)
 	}
 }

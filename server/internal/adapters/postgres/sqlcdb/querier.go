@@ -133,6 +133,8 @@ type Querier interface {
 	EnsureSeries(ctx context.Context, arg EnsureSeriesParams) ([]EnsureSeriesRow, error)
 	// Ends a silence at at; one that has not begun yet is cancelled.
 	ExpireAlertSilence(ctx context.Context, arg ExpireAlertSilenceParams) (int64, error)
+	// Pending commands at their expiry, sent ones without an answer only before sent_before – the
+	// expiry plus command.SentGrace (M4-31): the agent's answer may still be on its way.
 	ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommandsParams) error
 	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
 	// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.

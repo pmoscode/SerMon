@@ -48,23 +48,27 @@ func (s *Sessions) CommandsWaiting(node identity.NodeID) {
 	}
 }
 
-// commandMessage is the protocol message of a command.
-func commandMessage(c command.Command) *agentv1.SessionResponse {
-	run := c.ID.String()
+// commandMessage is the protocol message of a command at now, with the time the agent may still
+// start a run (M4-31); false for a run with less than a second left.
+func commandMessage(c command.Command, now time.Time) (*agentv1.SessionResponse, bool) {
+	run, valid := c.ID.String(), c.ValidFor(now)
+	if valid == 0 && c.Kind != command.Refresh {
+		return nil, false
+	}
 	switch c.Kind {
 	case command.Update:
 		scope := agentv1.UpdateScope_UPDATE_SCOPE_SECURITY
 		if c.Scope == command.ScopeAll {
 			scope = agentv1.UpdateScope_UPDATE_SCOPE_ALL
 		}
-		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RunUpdate{RunUpdate: &agentv1.RunUpdate{RunId: run, Scope: scope}}}
+		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RunUpdate{RunUpdate: &agentv1.RunUpdate{RunId: run, Scope: scope, ValidForSeconds: valid}}}, true
 	case command.Reboot:
-		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RebootNode{RebootNode: &agentv1.RebootNode{RunId: run, Reason: c.Reason}}}
+		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RebootNode{RebootNode: &agentv1.RebootNode{RunId: run, Reason: c.Reason, ValidForSeconds: valid}}}, true
 	case command.SelfUpdate:
-		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_SelfUpdate{SelfUpdate: &agentv1.SelfUpdate{RunId: run, Version: c.Version}}}
+		return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_SelfUpdate{SelfUpdate: &agentv1.SelfUpdate{RunId: run, Version: c.Version, ValidForSeconds: valid}}}, true
 	case command.Refresh:
 	}
-	return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RefreshUpdateInfo{RefreshUpdateInfo: &agentv1.RefreshUpdateInfo{}}}
+	return &agentv1.SessionResponse{Payload: &agentv1.SessionResponse_RefreshUpdateInfo{RefreshUpdateInfo: &agentv1.RefreshUpdateInfo{}}}, true
 }
 
 // deliverCommands sends the node's waiting commands and records them as sent. A store that fails
@@ -83,7 +87,11 @@ func (h *SessionHandler) deliverCommands(ctx context.Context, id Identity, resen
 	}
 	sent := make([]uuid.UUID, 0, len(waiting))
 	for _, c := range waiting {
-		if err := stream.Send(commandMessage(c)); err != nil {
+		msg, ok := commandMessage(c, time.Now())
+		if !ok {
+			continue
+		}
+		if err := stream.Send(msg); err != nil {
 			return err //nolint:wrapcheck // connect errors must reach the client unchanged
 		}
 		sent = append(sent, c.ID)

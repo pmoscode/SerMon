@@ -101,16 +101,20 @@ func (q *Queries) DeliverableNodeCommands(ctx context.Context, arg DeliverableNo
 
 const expireNodeCommands = `-- name: ExpireNodeCommands :exec
 UPDATE node_commands SET state = 5
-WHERE node_id = $1 AND state IN (1, 2) AND expires_at <= $2
+WHERE node_id = $1
+  AND ((state = 1 AND expires_at <= $2) OR (state = 2 AND expires_at <= $3))
 `
 
 type ExpireNodeCommandsParams struct {
-	NodeID uuid.UUID
-	Now    time.Time
+	NodeID     uuid.UUID
+	Now        time.Time
+	SentBefore time.Time
 }
 
+// Pending commands at their expiry, sent ones without an answer only before sent_before – the
+// expiry plus command.SentGrace (M4-31): the agent's answer may still be on its way.
 func (q *Queries) ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommandsParams) error {
-	_, err := q.db.Exec(ctx, expireNodeCommands, arg.NodeID, arg.Now)
+	_, err := q.db.Exec(ctx, expireNodeCommands, arg.NodeID, arg.Now, arg.SentBefore)
 	return err
 }
 

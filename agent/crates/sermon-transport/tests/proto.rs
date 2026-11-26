@@ -327,10 +327,12 @@ fn update_reports_command_results_and_commands_roundtrip() {
         session_response::Payload::RunUpdate(RunUpdate {
             run_id: "0193f5a0-0000-7000-8000-000000000001".into(),
             scope: UpdateScope::All.into(),
+            valid_for_seconds: 600,
         }),
         session_response::Payload::RebootNode(RebootNode {
             run_id: "0193f5a0-0000-7000-8000-000000000002".into(),
             reason: "updates".into(),
+            valid_for_seconds: 600,
         }),
     ] {
         let message = SessionResponse {

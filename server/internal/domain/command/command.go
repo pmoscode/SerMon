@@ -76,7 +76,20 @@ const (
 	MaxResult = 1024
 	// DefaultExpiry is how long a command waits for its node.
 	DefaultExpiry = 15 * time.Minute
+	// SentGrace is how long a sent command waits past its expiry for the agent's answer (M4-31):
+	// the agent starts no run after the expiry (valid_for_seconds), but a start just in time or
+	// the report that its time ran out may still be on its way, buffered while offline.
+	SentGrace = 15 * time.Minute
 )
+
+// Expiry is when a command made at now expires: after DefaultExpiry, at the end of a rollout's
+// window at the latest (M4-31) – nothing of it starts on the host later.
+func Expiry(now, windowEnd time.Time) time.Time {
+	if at := now.Add(DefaultExpiry); at.Before(windowEnd) {
+		return at
+	}
+	return windowEnd
+}
 
 // ErrInvalid means a command is malformed.
 var ErrInvalid = errors.New("invalid command")
@@ -138,10 +151,21 @@ type Result struct {
 	EndedAt         *time.Time
 }
 
-// EffectiveState is the state at now: a command still waiting after its expiry is expired.
+// EffectiveState is the state at now: a pending command expires at its expiry, a sent one
+// SentGrace later without an answer of the agent.
 func (c Command) EffectiveState(now time.Time) State {
-	if (c.State == Pending || c.State == Sent) && !now.Before(c.ExpiresAt) {
+	switch {
+	case c.State == Pending && !now.Before(c.ExpiresAt), c.State == Sent && !now.Before(c.ExpiresAt.Add(SentGrace)):
 		return Expired
 	}
 	return c.State
+}
+
+// ValidFor is how long the agent may still start the run, in whole seconds (valid_for_seconds).
+func (c Command) ValidFor(now time.Time) uint32 {
+	left := c.ExpiresAt.Sub(now)
+	if left < time.Second {
+		return 0
+	}
+	return uint32(min(left/time.Second, 86400))
 }

@@ -5021,6 +5021,10 @@ Paketquellen). Parallel: M4-21 → M4-22 → M4-23 → M4-25.
 >   Zeit der Datenbank, Schreiben mit Lease-Prüfung, NaN und extreme Scores, `anomaly_points` nur über eine Funktion,
 >   Grenzen der Definer-Funktionen. Gegenproben 15 von 15 erkannt. Nebenbei ein Datenrennen im Test der
 >   Befehlszustellung behoben.
+> - **Fristen der Befehle (T40, T97):** `valid_for_seconds` in `RunUpdate`, `RebootNode` und `SelfUpdate`; Befehle
+>   eines Rollouts laufen spätestens mit dem Fenster ab (auch der Reboot); der Agent startet nichts nach der Frist,
+>   auch nicht nach einem langsamen Download, und meldet es; gesendete Befehle warten 15 min auf die Antwort
+>   (`SentGrace`), bevor sie ablaufen. Gegenproben 10 von 10 erkannt.
 - **Ziel:** die Befunde aus M4-30, die eine eigene Funktion brauchen, und alle niedrigen.
   - **Mittel:**
     - Der Helper aktualisiert sich mit dem Agent (signiert, mit Rückfall); Rotation und Widerruf des Release-Keys

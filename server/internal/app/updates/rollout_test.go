@@ -368,13 +368,55 @@ func TestPlan_RoomBoundsTheStarts(t *testing.T) {
 	}
 }
 
-// A command the node never takes expires: the update failed.
+// A command the node never takes expires: the update failed. One sent waits for the agent's
+// answer a while longer (M4-31).
 func TestPlan_AnExpiredCommandFails(t *testing.T) {
 	w := newWorld(t, policy(updates.ModeAllAuto, 1, false, false), 1)
 	w.at(0).step()
+	c := w.runs[w.run("web-01").UpdateRun]
+	c.State = command.Pending
+	w.runs[c.ID] = c
 	w.at(command.DefaultExpiry).step()
-	if n := w.run("web-01"); n.State != updates.NodeFailed || !strings.Contains(n.Reason, "in time") {
-		t.Errorf("%+v", n)
+	if n := w.run("web-01"); n.State != updates.NodeFailed || !strings.Contains(n.Reason, "didn't take the command in time") {
+		t.Errorf("never taken: %+v", n)
+	}
+
+	sent := newWorld(t, policy(updates.ModeAllAuto, 1, false, false), 1)
+	sent.at(0).step()
+	sent.at(command.DefaultExpiry).step()
+	if n := sent.run("web-01"); n.State != updates.NodeUpdating {
+		t.Errorf("sent, at the expiry: %+v", n)
+	}
+	sent.at(command.DefaultExpiry + command.SentGrace).step()
+	if n := sent.run("web-01"); n.State != updates.NodeFailed || !strings.Contains(n.Reason, "no answer") {
+		t.Errorf("sent, after the grace: %+v", n)
+	}
+}
+
+// M4-31: the commands of a rollout expire at the end of its window at the latest – an update, a
+// self-update and a reboot start no later on the host.
+func TestPlan_CommandsExpireWithTheWindow(t *testing.T) {
+	end := windowStart.Add(2 * time.Hour)
+	w := newWorld(t, policy(updates.ModeAllAuto, 1, false, true), 1)
+	w.at(2*time.Hour - 5*time.Minute).step()
+	update := w.runs[w.run("web-01").UpdateRun]
+	if !update.ExpiresAt.Equal(end) {
+		t.Errorf("the update expires at %v, the window ends at %v", update.ExpiresAt, end)
+	}
+	w.at(2*time.Hour - 3*time.Minute)
+	w.finish("web-01", command.Succeeded, true)
+	w.at(2*time.Hour - 2*time.Minute).step()
+	reboot, ok := w.runs[w.run("web-01").RebootRun]
+	if !ok || !reboot.ExpiresAt.Equal(end) {
+		t.Errorf("the reboot expires at %v (%v), the window ends at %v", reboot.ExpiresAt, ok, end)
+	}
+
+	agent := newWorld(t, agentPolicy(updates.ModeReport), 1)
+	agent.view("web-01").AgentTarget = "0.6.0"
+	agent.view("web-01").Report.Permissions.SelfUpdate = true
+	agent.at(2*time.Hour - time.Minute).step()
+	if self := agent.runs[agent.run("web-01").AgentRun]; !self.ExpiresAt.Equal(end) {
+		t.Errorf("the self-update expires at %v, the window ends at %v", self.ExpiresAt, end)
 	}
 }
 

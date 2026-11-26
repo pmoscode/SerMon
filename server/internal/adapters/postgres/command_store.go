@@ -114,7 +114,7 @@ func (s *CommandStore) Deliverable(ctx context.Context, org tenant.OrgID, node i
 	}
 	var out []command.Command
 	err = s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
-		if err := q.ExpireNodeCommands(ctx, sqlcdb.ExpireNodeCommandsParams{NodeID: uuid.UUID(node), Now: now}); err != nil {
+		if err := q.ExpireNodeCommands(ctx, sqlcdb.ExpireNodeCommandsParams{NodeID: uuid.UUID(node), Now: now, SentBefore: now.Add(-command.SentGrace)}); err != nil {
 			return wrap(err, "expire commands")
 		}
 		rows, err := q.DeliverableNodeCommands(ctx, sqlcdb.DeliverableNodeCommandsParams{NodeID: uuid.UUID(node), Resend: resend, Now: now})

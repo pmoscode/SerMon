@@ -76,9 +76,13 @@ Agent-Tests gegen einen Fake-Server: `sermon-testserver` (nur Dev-Abhängigkeit,
 `just e2e-agent` lässt die Rust-Binary gegen den echten Server laufen (Testcontainers, auch in CI).
 `just e2e-demo` baut den Agent, startet die Produktions-Compose `deploy/compose/compose.yaml` mit dem Overlay
 `deploy/e2e/compose.yaml` (Server-Image aus dem Quellcode, TimescaleDB, Caddy, Mailpit, ntfy, ein Slack-Mock unter
-`hooks.slack.com`, Agent-Hosts mit systemd und OpenRC, einer mit echtem sshd) und spielt die Demo mit Playwright durch
-(`tests/demo`: erst die Installation, dann der SSH-Brute-Force bis zum Quittieren) (`KEEP=1` lässt die Umgebung laufen, `SKIP_BUILD=1` nutzt Agent,
-Pakete und Secrets des letzten Laufs).
+`hooks.slack.com`, Agent-Hosts mit systemd und OpenRC, einer mit echtem sshd, web-01 zusätzlich mit nginx, Apache auf
+127.0.0.1:8080, Redis, PostgreSQL und MariaDB für die Module) und spielt die Demo mit Playwright durch
+(`tests/demo`: erst die Installation, dann der SSH-Brute-Force bis zum Quittieren, die Module ab dem Vorschlag bis zum
+Alert und der Kiosk, M5-32) (`KEEP=1` lässt die Umgebung laufen, `SKIP_BUILD=1` nutzt Agent,
+Pakete und Secrets des letzten Laufs). Einzelne Projekte gegen eine laufende Umgebung: in `web/` mit `E2E_BASE_URL`,
+`E2E_DIR`, `COMPOSE_FILE` und `COMPOSE_ENV_FILES` wie in `scripts/e2e-demo.sh` und
+`pnpm exec playwright test --config playwright.demo.config.ts --project <name> --no-deps`.
 Produktion: `deploy/compose/` (ADR 0028, Anleitung `docs/admin/installation.md`); jeder Container `read_only`, ohne
 Capabilities und neue Privilegien, Agent-Port direkt am Server, die Owner-URL der Datenbank nur im einmaligen Service
 `migrate`; `just lint-compose` prüft das (`check-compose.sh --hardened`). Erstinstallation mit

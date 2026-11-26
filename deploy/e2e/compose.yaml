@@ -124,12 +124,14 @@ services:
       edge: { aliases: [packages.test] }
 
   # web-01 runs a real sshd (journald); web-02 attacks it with sshpass (M2-27). nginx with its
-  # stub_status page on web-01 is what the discovery finds in the demo (M5-11, M5-32).
+  # stub_status page on web-01 is what the discovery finds in the demo (M5-11, M5-32); Apache
+  # (127.0.0.1:8080), Redis, PostgreSQL and MariaDB with their Debian defaults are there for the
+  # budget with the modules of waves ① and ② (M5-31).
   agent-debian-12:
     <<: *agent-host
-    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8", EXTRA_PACKAGES: openssh-server nginx } }
+    build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:12@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8", EXTRA_PACKAGES: openssh-server nginx apache2 redis-server postgresql mariadb-server } }
     hostname: web-01
-    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/repos/use.sh:/e2e/use.sh:ro", "../e2e/.build/repos/keys:/e2e/keys:ro", "../e2e/nginx-status.conf:/etc/nginx/conf.d/sermon-status.conf:ro"]
+    volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw", "../e2e/repos/use.sh:/e2e/use.sh:ro", "../e2e/.build/repos/keys:/e2e/keys:ro", "../e2e/nginx-status.conf:/etc/nginx/conf.d/sermon-status.conf:ro", "../e2e/apache-ports.conf:/etc/apache2/ports.conf:ro"]
   agent-debian-13:
     <<: *agent-host
     build: { context: ../e2e, dockerfile: agent.Dockerfile, args: { BASE: "debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6", EXTRA_PACKAGES: openssh-client sshpass } }

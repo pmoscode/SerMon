@@ -6048,7 +6048,29 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** Gegenprobe mit gesenkter Grenze.
 - **Abhängig von:** M5-11
 
-#### ☐ M5-32 – Demo-Test M5 · X · M
+#### ☑ M5-32 – Demo-Test M5 · X · M
+> Erledigt (`web/tests/demo/modules.demo.ts`, `kiosk.demo.ts`; im schnellen `just e2e-demo`, beide vor den Passkeys,
+> deren Step-up sonst den Passkey verlangt):
+> - **`modules`** (4 min): web-01 bekommt die Gruppe `web` (in der Datenbank wie in `patch.demo.ts`, eine UI zum
+>   Verschieben gibt es nicht) – Module gelten je Gruppe, die anderen Hosts haben kein nginx. Die Fleet schlägt „nginx web
+>   server detected on web-01 – enable the module?“ vor, „Enable“ öffnet das Formular mit der Vorgabe des Agents
+>   (`http://127.0.0.1/nginx_status`), Speichern fragt nach dem Passwort (Step-up gealtert). Nach 30 s kommen
+>   `up`, Verbindungen und Anfragen je Sekunde, der Reiter am Node zeigt „Running“ mit den Charts. Dann laufen alle
+>   Module der Wellen ① und ② (M5-31), nginx wird gestoppt: „nginx down“ ist nach rund 160 s kritisch und der einzige
+>   Alert eines Moduls, nach dem Start endet er in rund 45 s. Die Wartezeit der Regel (2 min) überlappt mit dem
+>   Einrichten der übrigen Module, ihrer Gesundheit und der Budget-Messung.
+> - **`kiosk`** (30 s): ein Dashboard (Zeitreihe der Anfragen, Kennzahl der Verbindungen, Alerts der Gruppe) per
+>   „Import JSON“, geteilt, Kiosk-Token mit Step-up; ein Browser ohne Session zeigt es nur mit dem Token aus dem
+>   Fragment (Header `Kiosk …`, kein Cookie, nur `KioskService`, keine Adresse mit Token; der Token öffnet die Fleet
+>   nicht: 401), axe. Nach dem Widerruf wird die laufende Anzeige mit dem nächsten Abruf (30 s) leer, auch nach dem Neuladen.
+> - **Funde der Demo, behoben:** Die Summe aller Bundles lag unter Linux (Server-Image) bei 602,7 KiB über der Grenze von
+>   600 KiB, unter macOS bei 599,5 KiB (zlib von Node misst anders); die vollen Hilfetexte sind jetzt im Build
+>   JSON-Dateien statt JavaScript (494 KiB, Grenze auf 520 KiB gesenkt). Die Anlässe eines Vorschlags am Node hatten
+>   zu wenig Kontrast (4,35:1, axe), die Charts von Ja/Nein-Werten zeigten „no, yes, yes“ (Bereich 0 bis 2).
+> - **Grenze:** „Last success“ am Node ist der Stand des letzten Gesundheitsberichts (bei Änderung, sonst alle
+>   10 min), nicht des letzten Laufs.
+> - Dauer: schneller Demo-Lauf 21,9 min (vorher rund 16 min), alle acht Projekte grün. Gegenproben der Korrekturen
+>   7/7 (Hilfetexte 4, Ja/Nein-Achse 2, Kontrast 1: der erweiterte Test schlug vor der Korrektur fehl).
 - **Ziel:** Projekt `modules` in der Demo: nginx läuft auf einem Host, die UI schlägt das Modul vor, nach dem
   Aktivieren kommen Metriken und ein Alert, wenn nginx steht; Projekt `kiosk`: ein eigenes Dashboard läuft mit einem
   Kiosk-Token, ein widerrufener Token zeigt nichts mehr.

@@ -241,6 +241,13 @@ export function ownerSQL(sql: string): string {
 	return exec('postgres', 'psql -v ON_ERROR_STOP=1 -qtA -U postgres -d sermon', sql);
 }
 
+/** Ages the last re-authentication of a user's sessions: the next sensitive action asks again. */
+export function ageStepUp(email: string) {
+	ownerSQL(
+		`UPDATE sessions SET step_up_at = now() - interval '1 hour' WHERE user_id = (SELECT id FROM users WHERE email = '${email}');`
+	);
+}
+
 /** What a live view of a node's processes delivered (M3-14). */
 export interface LiveViewResult {
 	status: number;

@@ -8,7 +8,9 @@
 # (scripts/agent-budget.sh, M2-25). Then (M2-27) a host attacks the sshd of another: the alert
 # reaches ntfy and a Slack mock with time, user, address and port, repeats until it is
 # acknowledged in the browser and then stays quiet. The agent hosts take their package updates only
-# from sources of this run (deploy/e2e/repos, M4-08).
+# from sources of this run (deploy/e2e/repos, M4-08). The M5 demo (M5-32): web-01's agent suggests
+# nginx, enabled from the fleet its metrics arrive and an alert fires when it stops, with every
+# module of waves ① and ② running within the budget (M5-31); a dashboard runs on a kiosk display.
 #
 #   scripts/e2e-demo.sh          run and tear down
 #   KEEP=1 scripts/e2e-demo.sh   leave the environment running (https://localhost:18443)

@@ -50,6 +50,21 @@ export default defineConfig({
 			dependencies: ['alerts'],
 			use: { ...devices['Desktop Chrome'] }
 		},
+		// The M5 demo (M5-32): the module nginx from its suggestion to its alert, with every module of
+		// waves ① and ② on web-01 measured against the budget (M5-31); then a dashboard of it on a
+		// kiosk display. Both before the passkeys: their step-ups confirm with the password.
+		{
+			name: 'modules',
+			testMatch: 'modules.demo.ts',
+			dependencies: ['install'],
+			use: { ...devices['Desktop Chrome'] }
+		},
+		{
+			name: 'kiosk',
+			testMatch: 'kiosk.demo.ts',
+			dependencies: ['modules'],
+			use: { ...devices['Desktop Chrome'] }
+		},
 		// The M4 demo (M4-28, FULL=1): anomalies first – they restart the server –, then the rollout
 		// of a policy, whose notification policy needs the channels of the alerts.
 		...(full
@@ -73,10 +88,10 @@ export default defineConfig({
 		{
 			name: 'passkeys',
 			testMatch: 'passkeys.demo.ts',
-			dependencies: ['alerts', 'sso', 'troubleshoot', ...(full ? ['patch'] : [])],
+			dependencies: ['alerts', 'sso', 'troubleshoot', 'kiosk', ...(full ? ['patch'] : [])],
 			use: { ...devices['Desktop Chrome'] }
 		},
-		// The budget once more at the very end, after every scene (M4-32).
+		// The budget once more at the very end, after every scene (M4-32), web-01 with its modules (M5-31).
 		{
 			name: 'budget-end',
 			testMatch: 'budget.demo.ts',

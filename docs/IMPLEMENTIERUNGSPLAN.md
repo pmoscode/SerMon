@@ -6610,7 +6610,10 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 #### ☐ V1-22 – Security-Events bei Dauerangriffen begrenzen · S · M
 - **Ziel:** Aus V1-08: Ein Brute-Force gegen alle Nodes ohne Pause erzeugt rund 30 000 Events pro Stunde, ≈ 140 GiB im
   Jahr. Fehlgeschlagene Logins derselben Quelle bündeln (Zähler je Zeitfenster statt Zeile je Versuch) oder eine
-  kürzere Aufbewahrung für sie; die Erkennung (Brute-Force, Fleet-Korrelation, ADR 0019) bleibt gleich genau.
+  kürzere Aufbewahrung für sie; die Erkennung (Brute-Force, Fleet-Korrelation, ADR 0019) bleibt gleich genau. Dazu
+  (Product Owner, 2026-11-27): eine Vorgabe der Instanz für die Aufbewahrung von Security-Events und Verlauf der
+  Alerts in Orgs ohne eigene Einstellung (`SERMON_EVENT_RETENTION`, ab Werk 90 Tage statt 365, Grenzen 7 bis 365 Tage);
+  Orgs behalten ihre Einstellung von 7 bis 365 Tagen; Release-Notes nennen die kürzere Vorgabe.
 - **Tests zuerst:** Engine-Tests der Brute-Force-Regeln mit gebündelten Events; Lasttest zeigt die Hochrechnung.
 - **Abhängig von:** V1-08
 

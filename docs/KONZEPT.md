@@ -1753,7 +1753,7 @@ Die Aufteilung in Aufgaben mit Abhängigkeiten und Abnahmekriterien steht im
 | **M3 – Logs und Live**         | journald/Datei-Logs → Loki, Redaction, Log-Explorer + Live-Tail, Live-Ansicht (top), Security-Dashboard, OIDC, Passkeys, Step-up-Auth                                                                                                             | Fehlersuche ohne SSH möglich                    |
 | **M4 – Updates und Anomalien** | Helper, Update-Erfassung, Policies + Rollout, Updates-Dashboard, Agent-Self-Update, Paket-Repos, Anomalie-Erkennung + UI, Kapazitäts-Dashboard, Heatmap                                                                                           | Patch-Compliance auf einen Blick                |
 | **M5 – Module und Ausbau**     | Modul-Framework + Docker/nginx/PG/MySQL/Redis/TLS/HTTP-Check/SMART/Prometheus-Scraper, Docker-Logs, eigene Dashboards, Kiosk-Modus, Vergleichsansicht                                                                                             | v1.0-Kandidat                                   |
-| **v1.0**                       | Pentest/Review, Doku komplett, Upgrade-/Restore-Tests, Performance-Nachweis (50 Nodes)                                                                                                                                                            | Release                                         |
+| **v1.0**                       | Pentest/Review, Doku komplett, Upgrade-/Restore-Tests, Performance-Nachweis im Testbetrieb (bis 50 Nodes)                                                                                                                                   | Release                                         |
 
 ---
 

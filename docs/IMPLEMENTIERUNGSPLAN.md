@@ -6210,7 +6210,7 @@ Es fehlt kein ADR. Erkenntnisse für v1.0:
   Im Review erledigt: der Update-Orchestrator gibt seine Leases beim Stoppen frei, `just test-db-modules` in CI.
 - **Offen aus M4:** M2-35 (Kanäle gegen die echten Dienste) ohne Konten; Release-Pipeline mit echten Schlüsseln.
 
-**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16; V1-17 kam mit V1-11 dazu).
+**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16; V1-17 kam mit V1-11 dazu, V1-18 mit dem Testbetrieb statt eines eigenen Hosts).
 
 ---
 
@@ -6224,7 +6224,8 @@ externes Review hat keine offenen kritischen oder hohen Befunde.
 testet gegen veröffentlichte Artefakte), dann Backup, Upgrade und Performance, dann Doku und externes Review.
 Branch-Schutz kommt zuletzt (Wunsch des Product Owners).
 
-**Kritischer Pfad:** V1-01 → V1-03 (mit V1-02) → V1-04 → V1-06 und V1-12 → V1-15 → V1-16. Parallel und ohne
+**Kritischer Pfad:** V1-01 → V1-03 (mit V1-02) → V1-04 → V1-06, V1-12 und V1-18 (eine Woche Testbetrieb) → V1-15
+→ V1-16. Parallel und ohne
 Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 nach V1-04 und V1-05.
 
 #### ☑ V1-01 – CI auf GitHub grün · X · M
@@ -6336,11 +6337,13 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   echte Compose.
 - **Abhängig von:** V1-05
 
-#### ☐ V1-08 – Performance-Nachweis 50 Nodes über 7 Tage · X · M
-- **Ziel:** 50 virtuelle Nodes (`just simulate`, mit Modulen und Szenarien) gegen die Produktions-Compose auf der
-  Richtwert-Hardware (KONZEPT §22: 4 vCPU, 8 GB, 200 GB NVMe) eine Woche lang; Ressourcen von Server, Datenbank und
-  Loki, Ingest-Lag, Abfragezeiten der UI, Wachstum der Datenbank dokumentiert; dazu ein echter Agent im Budget.
-- **Tests zuerst:** Skript mit Grenzen, das den Lauf auswertet (Gegenprobe mit gesenkter Grenze).
+#### ☐ V1-08 – Lasttest vor dem Testbetrieb · X · M
+- **Ziel:** Einen eigenen Host für eine Woche gibt es nicht (Product Owner); der Nachweis kommt aus dem Testbetrieb
+  (V1-18). Vorher ein kurzer Lauf auf der Entwicklungsmaschine: 50 virtuelle Nodes (`just simulate`, mit Modulen und
+  Szenarien) gegen die Produktions-Compose über einige Stunden; Ressourcen von Server, Datenbank und Loki, Ingest-Lag,
+  Abfragezeiten der UI und Wachstum der Datenbank gemessen und auf 7 Tage und die Retention hochgerechnet. Dasselbe
+  Auswerteskript misst später den Testbetrieb (Self-Monitoring und `/metrics` des Servers, `agent-budget.sh`).
+- **Tests zuerst:** das Auswerteskript mit Grenzen (Gegenprobe mit gesenkter Grenze).
 - **Abhängig von:** –
 
 #### ☐ V1-09 – Admin-Doku · X · M
@@ -6441,7 +6444,14 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   gelöscht, Audit-Einträge älter als 2 Jahre beim ersten Lauf (V1-17); `secrets/postgres_backup_password` und die
   Rolle `sermon_backup` für bestehende Volumes (V1-05); die Vorgaben der Module (`module_hosts`, `module_ports`, nur
   SCRAM bei PostgreSQL, MySQL nur über Socket oder geprüftes TLS, M5-33).
-- **Abhängig von:** V1-03 bis V1-12, V1-17
+- **Abhängig von:** V1-03 bis V1-12, V1-17, V1-18
+
+#### ☐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
+- **Ziel:** Der Release-Kandidat läuft im echten Testbetrieb mindestens 7 Tage: echte Hosts, so viele wie da sind,
+  bis 50 mit virtuellen Nodes aufgefüllt; ausgewertet mit dem Skript aus V1-08. Ergebnis in KONZEPT §22 (Richtwert
+  für 50 Nodes bestätigt oder korrigiert, mit der tatsächlichen Hardware) und in der Admin-Doku. Fehler aus dem
+  Testbetrieb werden Aufgaben vor dem Release.
+- **Abhängig von:** V1-04 (Release-Kandidat), V1-08
 
 #### ☐ V1-16 – Branch-Schutz · X · S
 - **Ziel:** `main` nur noch per PR mit grüner CI (erforderliche Status-Checks), kein Force-Push; erst nach der
@@ -6495,7 +6505,8 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 
 - Ein Release ist veröffentlicht: Images, Binaries, Pakete und Repos signiert, mit SBOM und Provenance.
 - Installation nach `docs/admin/` aus dem Release, Upgrade aus der Vorversion und Restore sind in CI getestet.
-- 50 Nodes liefen eine Woche im dokumentierten Budget.
+- Der Release-Kandidat lief eine Woche im Testbetrieb (bis 50 Nodes, aufgefüllt mit virtuellen) im dokumentierten
+  Budget.
 - Das externe Review hat keine offenen kritischen oder hohen Befunde.
 - Hilfetexte und Doku sind vollständig in DE und EN (Test).
 
@@ -6519,5 +6530,5 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 | SMART sprengt die Zeilengrenze des Helpers (1 761 von 1 800) | Die Grenze verliert ihren Sinn | Erst Platz schaffen, sonst die Grenze per ADR begründet anheben; Review des Helpers (M5-18) – erledigt: Platz durch Refactoring, 1 795 Zeilen |
 | Ein Grid-Editor sprengt das Bundle-Budget | Ladezeit und Budget-Test | Wahl im ADR M5-22 mit Blick auf Größe und Tastaturbedienung; notfalls ein eigener schlanker Editor |
 | Externes Review findet spät Grundsätzliches | Release verschiebt sich | Früh beauftragen (V1-12 direkt nach dem Probe-Release), Scope aus dem Threat Model, eigene Reviews je Meilenstein als Vorarbeit |
-| Kein Host für den 7-Tage-Lauf mit der Richtwert-Hardware | Performance-Nachweis fehlt | V1-08 früh starten, notfalls auf kleinerer Hardware mit hochgerechnetem Richtwert und ehrlicher Angabe |
+| Kein Host für den 7-Tage-Lauf mit der Richtwert-Hardware | Performance-Nachweis fehlt | Bestätigt (Product Owner): kein eigener Host. Kurzer Lasttest vorab (V1-08), der Nachweis kommt aus dem Testbetrieb mit dem Release-Kandidaten (V1-18); fehlen dort echte Hosts, füllen virtuelle Nodes auf 50 auf |
 | Erster Lauf der CI auf Linux deckt viel auf | Verzögerung vor dem Release | V1-01 zuerst; alles Weitere baut auf grüner CI auf |

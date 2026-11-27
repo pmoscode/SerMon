@@ -48,6 +48,8 @@ func seedNodeData(t *testing.T, ownerDSN string, org, node uuid.UUID) {
 	exec("INSERT INTO series (org_id, node_id, metric) VALUES ($1, $2, 'sermon_purge_test')", org, node)
 	exec(`INSERT INTO metrics_raw (ts, series_id, avg, min, max)
 	      SELECT now() - interval '5 minutes', id, 1, 1, 1 FROM series WHERE node_id = $1`, node)
+	exec(`INSERT INTO metrics_raw (ts, series_id, avg, min, max)
+	      SELECT now() - interval '3 hours', id, 1, 1, 1 FROM series WHERE node_id = $1`, node)
 	exec(`INSERT INTO anomaly_points (ts, series_id, score, anomalous) SELECT now(), id, 5, true FROM series WHERE node_id = $1`, node)
 	exec(`INSERT INTO anomaly_baselines (org_id, series_id, hour, median, mad, low, high, points, computed_at)
 	      SELECT $1, id, 0, 1, 0, 1, 1, 30, now() FROM series WHERE node_id = $2`, org, node)
@@ -64,7 +66,27 @@ func seedNodeData(t *testing.T, ownerDSN string, org, node uuid.UUID) {
 	}
 	exec(`INSERT INTO agent_certificates (serial, org_id, node_id, authority_id, not_before, not_after)
 	      VALUES ($1, $2, $3, $4, now() - interval '1 hour', now() + interval '1 day')`, strings.ReplaceAll(uuid.NewString(), "-", ""), org, node, authority)
-	exec("CALL refresh_continuous_aggregate('metrics_1m', now() - interval '1 hour', now())")
+	exec("CALL refresh_continuous_aggregate('metrics_1m', now() - interval '4 hours', now())")
+	exec("CALL refresh_continuous_aggregate('metrics_1h', now() - interval '5 hours', now() - interval '1 hour')")
+}
+
+// compressAggregates moves every chunk of the aggregates to the columnstore (V1-21): the purge
+// deletes from compressed chunks as the policies leave them after a few hours.
+func compressAggregates(t *testing.T, conn *pgx.Conn) {
+	t.Helper()
+	ctx := context.Background()
+	for _, view := range []string{"metrics_1m", "metrics_1h"} {
+		if _, err := conn.Exec(ctx, "SELECT compress_chunk(c, recompress => true) FROM show_chunks('"+view+"') c"); err != nil {
+			t.Fatalf("compress %s: %v", view, err)
+		}
+		var open int
+		if err := conn.QueryRow(ctx, `SELECT count(*) FROM timescaledb_information.chunks c
+			JOIN timescaledb_information.continuous_aggregates a
+			  ON a.materialization_hypertable_schema = c.hypertable_schema AND a.materialization_hypertable_name = c.hypertable_name
+			WHERE a.view_name = $1 AND NOT c.is_compressed`, view).Scan(&open); err != nil || open != 0 {
+			t.Fatalf("%s: %d chunks not compressed, %v", view, open, err)
+		}
+	}
 }
 
 // nodeRows counts the rows of the node in every table with a node_id column and its points in
@@ -95,7 +117,7 @@ func nodeRows(t *testing.T, conn *pgx.Conn, node uuid.UUID, series []int64) map[
 		count(table, "SELECT count(*) FROM "+pgx.Identifier{table}.Sanitize()+" WHERE node_id = $1", node)
 	}
 	count("nodes", "SELECT count(*) FROM nodes WHERE id = $1", node)
-	for _, table := range []string{"metrics_raw", "metrics_1m", "anomaly_points", "anomaly_baselines"} {
+	for _, table := range []string{"metrics_raw", "metrics_1m", "metrics_1h", "anomaly_points", "anomaly_baselines"} {
 		count(table, "SELECT count(*) FROM "+table+" WHERE series_id = ANY($1)", series)
 	}
 	return out
@@ -132,6 +154,7 @@ func TestNodePurge_RemovesTheNodesDataAndNothingElse(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = owner.Close(ctx) }()
+	compressAggregates(t, owner)
 	series := map[uuid.UUID][]int64{}
 	before := map[uuid.UUID]map[string]int64{}
 	for _, n := range []uuid.UUID{gone, sibling, elsewhere} {
@@ -139,7 +162,7 @@ func TestNodePurge_RemovesTheNodesDataAndNothingElse(t *testing.T) {
 		before[n] = nodeRows(t, owner, n, series[n])
 	}
 	for _, table := range []string{
-		"nodes", "series", "metrics_raw", "metrics_1m", "anomaly_points", "anomaly_baselines", "security_events",
+		"nodes", "series", "metrics_raw", "metrics_1m", "metrics_1h", "anomaly_points", "anomaly_baselines", "security_events",
 		"alert_instances", "alert_history", "known_login_sources", "agent_certificates",
 	} {
 		if before[gone][table] < 1 {

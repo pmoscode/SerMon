@@ -17,16 +17,21 @@ Der Nachweis für den Richtwert (KONZEPT §22: 50 Nodes auf 4 vCPU, 8 GB RAM, 20
 | Teil | Quelle | Im Bericht |
 |---|---|---|
 | CPU und Speicher von `server`, `postgres`, `loki`, `caddy` (und z. B. dem Simulator) | `docker stats` | Mittel, p95, Maximum; CPU in % eines Kerns |
+| Speicher von Loki aus Sicht von Go: Heap, Ziel des nächsten GC, RSS, Collections pro Minute | `/metrics` von Loki (`LOAD_LOKI_METRICS_URL`; der Lasttest veröffentlicht nur diesen Pfad auf 127.0.0.1:19310) | Mittel, Maximum, neben dem Speicher des Containers |
 | Ingest: Samples, Batches, Logzeilen, Security-Events pro Sekunde, Lag, Verworfenes | `/metrics` des Servers ([ADR 0011](../../adr/0011-server-metriken-endpunkt.md)) | Raten, Lag p50/p95/Max, verworfene Einträge im Zeitraum |
-| Abfragezeiten der UI: Flotte, Sparklines, Node, Charts über 1 h, 24 h und 30 Tage, Logs, Log-Histogramm | Web-API mit echter Session | p50, p95, Maximum, Fehler |
-| Größe der Datenbank je Teil (Rohdaten, 1-min- und 1-h-Werte, Anomalien, Rest, größte Tabellen), WAL, Checkpoints, fehlgeschlagene Jobs, Security-Events | SQL | Wachstum pro Stunde (ganzer Zeitraum und zweite Hälfte) |
+| Abfragezeiten der UI: Flotte, Sparklines, Node, Charts über 1 h, 24 h und 30 Tage, Logs, Log-Histogramm über 1 h und über 14 Tage (`log_histogram_14d`, der längste Zeitraum der UI) | Web-API mit echter Session | p50, p95, Maximum, Fehler |
+| Größe der Datenbank je Teil (Rohdaten, 1-min- und 1-h-Werte samt Kompression, Anomalien, Security-Events, Rest, größte Tabellen), WAL und `pg_wal`, Checkpoints, fehlgeschlagene Jobs | SQL | Wachstum pro Stunde (ganzer Zeitraum und zweite Hälfte) |
 | Volumes von PostgreSQL (mit WAL) und Loki | `du` im Volume | Wachstum pro Stunde |
 
 **Hochrechnung:** Jeder Teil wächst wie in der zweiten Hälfte des Zeitraums (nach dem Anlaufen) bis zu seiner
-Aufbewahrung – Rohdaten 24 h, `metrics_1m` und Anomalien 30 Tage, `metrics_1h` 365 Tage, Loki 14 Tage, der Rest der
-Datenbank ohne Grenze. Die Rohdaten rechnet der Bericht aus den schon komprimierten Chunks (22 h komprimiert, die
-jüngsten 2 h nicht); gibt es noch keinen, nimmt er das Wachstum des Zeitraums über 24 h als obere Grenze. Der WAL
-zählt mit `max_wal_size`. `--horizon TAGE` ändert den zweiten Zeitpunkt (Standard 365).
+Aufbewahrung – Rohdaten 24 h, `metrics_1m` und Anomalien 30 Tage, `metrics_1h` 365 Tage, Security-Events mit dem
+Verlauf der Alerts `--event-days TAGE` (Standard 90 wie `SERMON_EVENT_RETENTION`), Loki 14 Tage, der Rest der
+Datenbank ohne Grenze. Die drei Stufen der Metriken rechnet der Bericht aus den schon komprimierten Chunks: Rohdaten
+die jüngsten 2 h unkomprimiert, `metrics_1m` 16 h (6 h bis zur Kompression und ein Chunk von 10 h), `metrics_1h` 192 h
+(ein Tag und ein Chunk von 7 Tagen), der Rest im Verhältnis der komprimierten Chunks; `metrics_1h` ohne eigenen im
+Verhältnis von `metrics_1m`. Ohne komprimierten Chunk nimmt er das lineare Wachstum als obere Grenze. Der WAL zählt
+mit dem größten gemessenen `pg_wal`, ohne Messung mit `max_wal_size`. `--horizon TAGE` ändert den zweiten Zeitpunkt
+(Standard 365).
 
 **Grenzen:** `load-report.sh limits` zeigt die Standardwerte (Richtwert mit Luft für den Host, die Kriterien des
 Spikes aus [ADR 0001](../../adr/0001-zeitreihen-speicher-timescaledb.md), nichts verworfen). Eigene mit
@@ -40,7 +45,13 @@ Ergebnis; der Exit-Code ist 1, wenn eine Grenze überschritten ist.
 just load-test 3h 50                 # Dauer und Anzahl der Nodes
 SKIP_BUILD=1 just load-test 10m 50   # Builds und Secrets des letzten Laufs wiederverwenden
 KEEP=1 …                             # Umgebung danach weiterlaufen lassen (https://localhost:19443)
+COMPRESS_AGGREGATES=0 …              # metrics_1m am Ende nicht von Hand komprimieren (Standard: 1)
 ```
+
+Die Policy von `metrics_1m` erreicht einen Chunk erst 6 h nach seinem Ende; ein kurzer Lauf hätte nichts
+Komprimiertes. Deshalb komprimiert das Skript nach der Messung alle Chunks von `metrics_1m` von Hand und nimmt eine
+letzte Probe der Datenbank. Ein Chunk eines kurzen Laufs hält weniger Zeilen je Serie als einer von 10 h; das
+Verhältnis ist damit eher zu schlecht als zu gut.
 
 Das Skript baut, was die Demo baut, dazu den Agent mit dem Simulator, und startet die Produktions-Compose mit dem
 Server aus dem Quellcode (`source.yaml`), dem E2E-Overlay und `deploy/load/compose.yaml` als eigenes Projekt `sermon-load` (eigene Ports und eigenes Netz; eine

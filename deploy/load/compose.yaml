@@ -22,6 +22,21 @@ services:
   migrate:
     image: sermon-server:load
 
+  # Loki's /metrics (V1-23) on 127.0.0.1, for the memory of Loki: its Go heap next to the memory of
+  # the container. Only that path (loki-metrics.Caddyfile).
+  loki-metrics:
+    image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    volumes:
+      - ../load/loki-metrics.Caddyfile:/etc/caddy/Caddyfile:ro
+    tmpfs: [/data, /config]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports: ["127.0.0.1:${SERMON_LOAD_LOKI_METRICS_PORT:-19310}:3101"]
+    networks: [edge, internal]
+    depends_on: [loki]
+
   # The virtual nodes: the agent built with the feature simulate (never in a release), its
   # identities in a volume. Enrollment over Caddy (sermon.test, pinned CA), the agent port of the
   # server directly, like the agent hosts of the demo. Started with `docker compose run`

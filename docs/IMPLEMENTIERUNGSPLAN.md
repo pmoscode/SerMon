@@ -6702,7 +6702,26 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - **Tests zuerst:** Smoke-Test auf Alpine: Meldungen des Agents landen im Log; `just test-packages`.
 - **Abhängig von:** –
 
-#### ☐ V1-21 – Kompression der Metrik-Aggregate · S · M
+#### ☑ V1-21 – Kompression der Metrik-Aggregate · S · M
+> Erledigt (2026-11-27, ADR 0001 Nachtrag V1-21): Migration 00082 – Columnstore für `metrics_1m` und `metrics_1h` wie
+> bei den Rohdaten (`segmentby = series_id`, `orderby = bucket`, passend zu `metric_points_1m/1h`: Serien, dann
+> Zeitraum), `metrics_1m` nach 6 h (Chunks 10 h), `metrics_1h` nach einem Tag mit Chunks von 7 Tagen statt 10 h (sonst
+> zehn Zeilen je Segment). Die Fenster der Refresh-Policies bleiben unkomprimiert; Refresh in komprimierte Chunks und
+> das Löschen von Nodes und Orgs dort funktionieren (Tests).
+> - **Lasttest** (`load-report.sh`): Kompression je Stufe (`db.{raw,1m,1h}.compressed_*`), Hochrechnung je Stufe mit
+>   unkomprimiertem Rest (Rohdaten 2 h, `metrics_1m` 16 h, `metrics_1h` 192 h) und dem Verhältnis der komprimierten
+>   Chunks, `metrics_1h` ohne eigenen im Verhältnis von `metrics_1m`. `load-test.sh` komprimiert `metrics_1m` nach der
+>   Messung von Hand (`COMPRESS_AGGREGATES=1`, Standard), weil die Policy einen Chunk erst 6 h nach seinem Ende
+>   erreicht. Dieselben Änderungen am Bericht tragen auch V1-22 (Events bis zu ihrer Aufbewahrung) und V1-23 (Speicher
+>   von Loki, Histogramm über 14 Tage, `pg_wal`).
+> - **Gemessen** (2 h, 50 Nodes, sonst wie V1-08): `metrics_1m` auf 15,9 % (Chunk mit zwei statt zehn Stunden je
+>   Segment, eher zu schlecht); hochgerechnet 5,2 GiB nach 30 Tagen und `metrics_1h` 1,0 GiB nach einem Jahr statt
+>   30,6 und 5,9 GiB. Charts p95 9 bis 16 ms (vorher 7 bis 14). Probe mit 3 000 Serien: 4 Serien über zwei Tage 4 ms
+>   komprimiert wie unkomprimiert, 300 Serien 0,2 statt 0,5 s.
+> - **Tests:** Integrationstest: die Policies selbst (`run_job`) komprimieren genau die Chunks, die vor ihrer Grenze
+>   enden, Abfragen über 1 min und 1 h liefern danach dieselben Punkte, Einstellungen (Segmente, Ordnung, 7-Tage-Chunks,
+>   Grenzen); der Contract (`metricstoretest`) läuft auch über komprimierte Aggregate (`Settle`); Löschen von Nodes und
+>   Orgs aus komprimierten `metrics_1m`/`metrics_1h`; `load-report_test.sh` für das neue Modell. Gegenproben 9/9.
 - **Ziel:** Aus V1-08: `metrics_1m` und `metrics_1h` werden nie komprimiert und sind nach 30 Tagen der größte Teil
   der Datenbank (≈ 30 GiB bei 50 Nodes); Kompression wie bei den Rohdaten spart rund 90 %. Migration mit Policies,
   Abfragen über die komprimierten Chunks unverändert schnell.

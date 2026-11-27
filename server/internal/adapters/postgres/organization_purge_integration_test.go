@@ -148,6 +148,7 @@ func TestOrgPurge_RemovesEverythingOfTheOrganizationAndNothingElse(t *testing.T)
 		t.Fatal(err)
 	}
 	defer func() { _ = owner.Close(ctx) }()
+	compressAggregates(t, owner)
 	series, otherSeries := seriesOf(t, owner, p.org), seriesOf(t, owner, other.org)
 	before := orgRows(t, owner, p.org, series)
 	if before["nodes"] != 1 || before["series"] != 1 || before["metrics_raw"] != 1 || before["metrics_1m"] != 1 ||

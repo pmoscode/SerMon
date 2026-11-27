@@ -53,7 +53,7 @@ has "$out" "| security_events | 40.0 | 0.0 | 0.0 |
 # metrics_raw grows 0.5 GiB per hour up to its 24 h: 12 GiB; metrics_1m 10 MiB per hour up to 30
 # days; the rest stays; Loki up to 14 days; the WAL at most max_wal_size.
 has "$out" "| metrics_raw (24 h) | growth per hour up to 24 h (nothing compressed yet: upper bound) | 12.00 | 12.00 |"
-has "$out" "| metrics_1m (30 d) | linear up to its retention | 1.64 | 7.03 |"
+has "$out" "| metrics_1m (30 d) | linear up to its retention (nothing compressed yet: upper bound) | 1.64 | 7.03 |"
 has "$out" "| rest of the database | linear, without a limit | 0.05 | 0.05 |"
 has "$out" "| Loki (14 d) | linear up to its retention (whole window) | 16.41 | 32.81 |"
 has "$out" "| **Total** | | **40.88** | **95.02** |"
@@ -73,7 +73,7 @@ has "$out" '| `proj.7d_gib.last<=30` | 40.88 | ❌ exceeded |'
 if out=$(report "$work/run" --limit 'cpu.total.p95<=37'); then fail "CPU passed under its p95"; fi
 report "$work/run" --limit 'cpu.total.p95<=38' >/dev/null || fail "CPU at its p95 failed"
 out=$(report "$work/run" --horizon 30) || fail "horizon: $out"
-has "$out" "| metrics_1m (30 d) | linear up to its retention | 1.64 | 7.03 |"
+has "$out" "| metrics_1m (30 d) | linear up to its retention (nothing compressed yet: upper bound) | 1.64 | 7.03 |"
 has "$out" "after 30 days"
 
 # Once chunks are compressed, the raw tier is 2 h uncompressed and 22 h at their ratio. Here 512
@@ -90,6 +90,49 @@ awk -F '\t' -v OFS='\t' -v t0=1795000000 '
 	}' "$work/run/samples.tsv" >"$work/compressed/samples.tsv"
 out=$(report "$work/compressed") || fail "compressed: $out"
 has "$out" "| metrics_raw (24 h) | 512 MiB per hour, compressed to 10.0 %: 2 h + 22 h × 10.0 % | 2.10 | 2.10 |"
+
+# Security events growing 10 MiB per hour: up to their retention (--event-days), the rest
+# without them; pg_wal as measured instead of max_wal_size.
+mkdir "$work/events"
+awk -F '\t' -v OFS='\t' -v t0=1795000000 '
+	$2 == "db.table.security_events" { next }
+	{ print }
+	$2 == "cpu.server" {
+		h = ($1 - t0) / 3600
+		print $1, "db.table.security_events_202611", h * 10485760; print $1, "db.table.alert_history", 1048576
+		print $1, "db.pg_wal_bytes", 268435456 * (1 + h / 2)
+	}' "$work/run/samples.tsv" >"$work/events/samples.tsv"
+out=$(report "$work/events" --event-days 30) || fail "events: $out"
+# 21 MiB + 10 MiB × (7 × 24 − 2) and × (30 × 24 − 2).
+has "$out" "| security events and alert history (30 d) | linear up to their retention (--event-days) | 1.64 | 7.03 |"
+has "$out" "| WAL (pg_wal) | largest measured (max_wal_size 1 GiB) | 0.50 | 0.50 |"
+# The rest (50 MiB) without the events (21 MiB at the end).
+has "$out" "| rest of the database | linear, without a limit | 0.03 | 0.03 |"
+
+# The aggregates (V1-21): metrics_1m 16 h open and the rest of its 30 days at its ratio; metrics_1h
+# without a compressed chunk of its own at the ratio of metrics_1m, 192 h open. Here metrics_1m
+# grows 60 MiB per hour, compressed to 5 %; metrics_1h 6 MiB per hour.
+mkdir "$work/aggregates"
+awk -F '\t' -v OFS='\t' -v t0=1795000000 '
+	$2 == "db.1m" { next }
+	{ print }
+	$2 == "cpu.server" {
+		h = ($1 - t0) / 3600; b = (h > 1 ? (h - 1) * 62914560 : 0); a = b * 0.05
+		print $1, "db.1m", h * 62914560 - b + a; print $1, "db.1m.compressed_chunks", (h > 1 ? 1 : 0)
+		print $1, "db.1m.compressed_bytes", a; print $1, "db.1m.uncompressed_bytes", b
+		print $1, "db.1h", h * 6291456; print $1, "db.1h.compressed_chunks", 0
+		print $1, "db.1h.compressed_bytes", 0; print $1, "db.1h.uncompressed_bytes", 0
+	}' "$work/run/samples.tsv" >"$work/aggregates/samples.tsv"
+out=$(report "$work/aggregates") || fail "aggregates: $out"
+# 60 MiB × (16 + 152 × 0.05) after 7 days, × (16 + 704 × 0.05) after 30; 6 MiB × 168 h and
+# 6 MiB × (192 + 8568 × 0.05).
+has "$out" "| metrics_1m (30 d) | 60 MiB per hour, compressed to 5.0 %: 16 h + 704 h × 5.0 % | 1.38 | 3.00 |"
+has "$out" "| metrics_1h (365 d) | 6 MiB per hour, compressed to 5.0 % (ratio of 1m, none compressed here yet): 192 h + 8568 h × 5.0 % | 0.98 | 3.64 |"
+# Without a compressed chunk anywhere: linear, an upper bound.
+grep -v -e '	db\.1m\.' "$work/aggregates/samples.tsv" >"$work/aggregates/plain.tsv"
+mkdir "$work/plain" && mv "$work/aggregates/plain.tsv" "$work/plain/samples.tsv"
+out=$(report "$work/plain") || fail "plain: $out"
+has "$out" "| metrics_1h (365 d) | linear up to its retention (nothing compressed yet: upper bound) |"
 
 # A real server without docker access: no resources, limits not evaluated, nothing fails.
 mkdir "$work/remote"
@@ -114,6 +157,17 @@ cat >"$work/metrics.txt" <<-'EOF'
 	sermon_server_ingest_lag_seconds 0.25
 	sermon_server_build_info{version="1.0.0",go_version="go1.26"} 1
 EOF
+cat >"$work/loki.txt" <<-'END'
+	# TYPE go_memstats_heap_inuse_bytes gauge
+	go_memstats_heap_inuse_bytes 3.145728e+08
+	go_memstats_next_gc_bytes 4.194304e+08
+	process_resident_memory_bytes 6.291456e+08
+	go_gc_duration_seconds_count 120
+	go_gc_duration_seconds{quantile="0.5"} 0.001
+	loki_ingester_memory_streams{tenant="a"} 30
+	loki_ingester_memory_streams{tenant="b"} 20
+	loki_request_duration_seconds_count{route="push"} 5
+END
 printf 'db.total\t4096\ndb.raw\t1024\n' >"$work/sql.out"
 mkdir "$work/bin"
 cat >"$work/bin/curl" <<-'EOF'
@@ -158,6 +212,7 @@ chmod 0755 "$work/bin/curl"
 printf 'correct "horse"\n' >"$work/password"
 : >"$work/curl.log.expire"
 PATH="$work/bin:$PATH" FAKE_LOG="$work/curl.log" LOAD_DOCKER=0 LOAD_METRICS_URL="file://$work/metrics.txt" \
+	LOAD_LOKI_METRICS_URL="file://$work/loki.txt" \
 	LOAD_PSQL="cat '$work/sql.out'" LOAD_URL=https://sermon.example.com LOAD_EMAIL=alice@example.org \
 	LOAD_PASSWORD_FILE="$work/password" \
 	sh "$dir/load-report.sh" sample "$work/sampled" 1s 1 2>"$work/sample.err" || fail "sampling: $(cat "$work/sample.err")"
@@ -170,6 +225,14 @@ has "$samples" "	db.total	4096"
 has "$samples" "	q.fleet	12.0"
 has "$samples" "	fleet.online	2"
 has "$samples" "	q.chart_1h	40.5"
+has "$samples" "	q.log_histogram_14d	40.5"
+has "$samples" "	loki.go_memstats_heap_inuse_bytes	314572800"
+has "$samples" "	loki.loki_ingester_memory_streams	50"
+has "$samples" "	loki.go_gc_duration_seconds_count	120"
+case $samples in *"loki_request_duration"* | *"loki.go_gc_duration_seconds	"*) fail "Loki: a metric beyond the memory sampled" ;; esac
+out=$(report "$work/sampled" 2>&1) || true
+has "$out" "| Go heap in use | 300 | 300 |"
+has "$out" "| resident memory (RSS) | 600 | 600 |"
 has "$samples" "	q.errors	1"
 has "$(cat "$work/sample.err")" "logs answered 503"
 has "$(cat "$work/curl.log.login")" '"email":"alice@example.org","password":"correct \"horse\""'

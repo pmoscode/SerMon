@@ -17,16 +17,21 @@ The proof of the guideline (KONZEPT §22: 50 nodes on 4 vCPU, 8 GB RAM, 200 GB S
 | Part | Source | In the report |
 |---|---|---|
 | CPU and memory of `server`, `postgres`, `loki`, `caddy` (and e.g. the simulator) | `docker stats` | mean, p95, maximum; CPU in % of one core |
+| Memory of Loki as Go sees it: heap, target of the next GC, RSS, collections per minute | Loki's `/metrics` (`LOAD_LOKI_METRICS_URL`; the load test publishes only that path on 127.0.0.1:19310) | mean, maximum, next to the memory of the container |
 | Ingest: samples, batches, log lines, security events per second, lag, dropped entries | the server's `/metrics` ([ADR 0011](../../adr/0011-server-metriken-endpunkt.md)) | rates, lag p50/p95/max, entries dropped in the window |
-| Read times of the UI: fleet, sparklines, node, charts over 1 h, 24 h and 30 days, logs, log histogram | web API with a real session | p50, p95, maximum, errors |
-| Size of the database per part (raw values, 1-min and 1-h values, anomalies, rest, largest tables), WAL, checkpoints, failed jobs, security events | SQL | growth per hour (whole window and second half) |
+| Read times of the UI: fleet, sparklines, node, charts over 1 h, 24 h and 30 days, logs, log histogram over 1 h and over 14 days (`log_histogram_14d`, the longest range of the UI) | web API with a real session | p50, p95, maximum, errors |
+| Size of the database per part (raw values, 1-min and 1-h values with their compression, anomalies, security events, rest, largest tables), WAL and `pg_wal`, checkpoints, failed jobs | SQL | growth per hour (whole window and second half) |
 | Volumes of PostgreSQL (with the WAL) and Loki | `du` in the volume | growth per hour |
 
 **Extrapolation:** every part grows as in the second half of the window (after the start-up) up to its retention –
-raw values 24 h, `metrics_1m` and anomalies 30 days, `metrics_1h` 365 days, Loki 14 days, the rest of the database
-without a limit. The raw values are computed from the chunks compressed already (22 h compressed, the newest 2 h not);
-without any yet, the report takes the growth of the window over 24 h as an upper bound. The WAL counts with
-`max_wal_size`. `--horizon DAYS` changes the second point in time (default 365).
+raw values 24 h, `metrics_1m` and anomalies 30 days, `metrics_1h` 365 days, security events with the alert history
+`--event-days DAYS` (default 90 like `SERMON_EVENT_RETENTION`), Loki 14 days, the rest of the database without a
+limit. The three tiers of the metrics are computed from the chunks compressed already: raw values with the newest 2 h
+uncompressed, `metrics_1m` 16 h (6 h until the compression and one chunk of 10 h), `metrics_1h` 192 h (a day and one
+chunk of 7 days), the rest at the ratio of the compressed chunks; `metrics_1h` without one of its own at the ratio of
+`metrics_1m`. Without a compressed chunk the report takes the linear growth as an upper bound. The WAL counts with
+the largest `pg_wal` measured, without a measurement with `max_wal_size`. `--horizon DAYS` changes the second point in
+time (default 365).
 
 **Limits:** `load-report.sh limits` shows the defaults (the guideline with room for the host, the criteria of the spike
 in [ADR 0001](../../adr/0001-zeitreihen-speicher-timescaledb.md), nothing dropped). Own ones with
@@ -40,7 +45,12 @@ is exceeded.
 just load-test 3h 50                 # duration and number of nodes
 SKIP_BUILD=1 just load-test 10m 50   # reuse the builds and secrets of the last run
 KEEP=1 …                             # leave the environment running afterwards (https://localhost:19443)
+COMPRESS_AGGREGATES=0 …              # don't compress metrics_1m by hand at the end (default: 1)
 ```
+
+The policy of `metrics_1m` reaches a chunk only 6 h after it ended; a short run would have nothing compressed. So the
+script compresses every chunk of `metrics_1m` by hand after the sampling and takes a last sample of the database. A
+chunk of a short run holds fewer rows per series than one of 10 h; the ratio is rather too poor than too good.
 
 The script builds what the demo builds, and the agent with the simulator, and starts the production compose with the
 server built from source (`source.yaml`), the E2E overlay and `deploy/load/compose.yaml` as its own project `sermon-load` (its own ports and network; a demo can run

@@ -1,0 +1,13 @@
+# Loki's own /metrics for scripts/load-report.sh (V1-23: memory of Loki, heap or page cache), on
+# 127.0.0.1 of the load test only. Nothing else of Loki: it has no login of its own.
+{
+	admin off
+	auto_https off
+}
+
+:3101 {
+	handle /metrics {
+		reverse_proxy loki:3100
+	}
+	respond 404
+}

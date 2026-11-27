@@ -200,3 +200,22 @@ Das reduziert die Last um den Faktor 5–10. Erst danach wäre ein Wechsel auf O
   Daten in den letzten 48 Stunden, eine eingestellte (entfernte Platte) gibt ihren Platz danach frei.
 - **Speicher:** Der Ringpuffer hält höchstens 2 000 Serien pro Node, der Serien-Cache des Adapters höchstens 500 000
   Einträge (danach beginnt er neu, er spart nur Abfragen).
+
+## Nachtrag V1-21: Kompression der Continuous Aggregates
+
+- **Anlass:** Im Lasttest (V1-08) waren `metrics_1m` und `metrics_1h` unkomprimiert, hochgerechnet 30,6 und 5,9 GiB
+  bei voller Aufbewahrung – der größte Teil der Metriken.
+- **Entscheidung (Migration 00082):** Beide bekommen den Columnstore wie die Rohdaten, `segmentby = series_id`,
+  `orderby = bucket`: Die Leser (`metric_points_1m`, `metric_points_1h`) filtern nach Serien und Zeitraum, ein Chart
+  entpackt nur die Segmente seiner Serien (Index auf `series_id` und den Grenzen des Segments). `metrics_1m` wird nach
+  **6 h** komprimiert (Chunks 10 h, unverändert), `metrics_1h` nach **einem Tag**; `metrics_1h` bekommt Chunks von
+  **7 Tagen** statt 10 h, sonst hielte ein Segment nur zehn Zeilen einer Serie. Die Fenster der Refresh-Policies
+  (15 min, 3 h) liegen immer in unkomprimierten Chunks; Nachzügler und das Löschen von Nodes und Orgs schreiben bzw.
+  löschen auch in komprimierten Chunks (TimescaleDB 2.32, getestet).
+- **Gemessen:** Lasttest 2 h mit 50 Nodes, `metrics_1m` danach von Hand komprimiert (`COMPRESS_AGGREGATES=1`): auf
+  15,9 % – mit zwei Stunden je Segment statt zehn, also eher zu schlecht. Hochgerechnet `metrics_1m` 5,2 GiB nach
+  30 Tagen und `metrics_1h` 1,0 GiB nach einem Jahr (im Verhältnis von `metrics_1m`) statt 30,6 und 5,9 GiB. Lesen
+  aus komprimierten Chunks: in einer Probe mit 3 000 Serien 4 ms für 4 Serien über zwei Tage wie unkomprimiert, 0,2 s
+  statt 0,5 s für 300 Serien; Charts im Lasttest p95 9 bis 16 ms.
+- **Grenze:** Die Chunk-Größe von `metrics_1h` gilt nur für neue Chunks; bestehende Installationen komprimieren ihre
+  alten 10-h-Chunks schlechter, bis die Aufbewahrung sie entfernt.

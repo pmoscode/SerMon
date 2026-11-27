@@ -254,6 +254,9 @@ eine Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Lo
 - **Hypertable** mit **1-h-Chunks** und Index **`(series_id, ts DESC)`**: Ohne diesen Index dauert ein Chart unter Last
   720 ms statt 16 ms. **Kompression nach 2 h** (`segmentby = series_id`, `orderby = ts`).
 - **Continuous Aggregates** speichern `avg`, `min`, `max` und `last` je Bucket. Jede Stufe hat eine eigene **Retention-Policy**, die Aktualisierung läuft per Refresh-Policy.
+  Beide werden wie die Rohdaten **komprimiert** (`segmentby = series_id`, `orderby = bucket`): `metrics_1m` nach 6 h
+  (Chunks 10 h), `metrics_1h` nach einem Tag (Chunks 7 Tage); die Fenster der Refresh-Policies bleiben unkomprimiert
+  (V1-21).
 - **Counter rechnet der Agent in Raten pro Sekunde um** (§8), damit in den Aggregaten keine Window-Funktionen nötig sind.
 - **Ingest:** Der Server fasst die 1-s-Werte jedes Nodes zu 10-s-Fenstern zusammen. Ein Fenster ist abgeschlossen,
   sobald Daten eines späteren Fensters eintreffen; abgeschlossene Fenster schreibt er alle 2 s per `COPY`, zusammen
@@ -277,7 +280,8 @@ eine Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Lo
   10 Byte (Gleitkomma) bzw. 3,1 Byte (ganzzahlig) komprimiert, WAL ~13–15 GB/h (~320 GB/Tag).
 - Mit **10 s in der DB** (2 000 Zeilen/s mit avg/min/max): ca. 173 Mio. Zeilen pro Tag, unter 5 GB für 24 h und
   WAL ca. 30–40 GB/Tag. Eine SSD wird empfohlen.
-- `metrics_1m` braucht für 30 Tage ca. 5–15 GB, `metrics_1h` für 1 Jahr < 5 GB.
+- `metrics_1m` braucht für 30 Tage ca. 5 GB, `metrics_1h` für 1 Jahr ca. 1 GB, beide komprimiert (Lasttest mit 110 Serien
+  je Node, V1-21; unkomprimiert waren es 31 und 6 GB).
 - Logs schwanken stark; geschätzt werden 0,5–5 GB/Tag.
 
 ---

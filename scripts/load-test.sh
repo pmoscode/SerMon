@@ -15,7 +15,11 @@
 #   SCENARIOS="cpu-high ssh-bruteforce flapping"   scenarios of the simulator (M2-30)
 #   LIMITS="'q.fleet.p95<=200' …"                  more limits for the report (load-report.sh)
 #   OUT=DIR                  where samples and report go (default deploy/load/.runs/<time>)
-#   SERMON_LOAD_{PORT,MAIL_PORT,METRICS_PORT}      ports on 127.0.0.1 (19443, 19025, 19464)
+#   COMPRESS_AGGREGATES=1    compress the chunks of metrics_1m by hand after the sampling and sample
+#                            the database once more: its policy reaches a chunk only 6 h after the
+#                            chunk ended, a short run would extrapolate it uncompressed (V1-21)
+#   SERMON_LOAD_{PORT,MAIL_PORT,METRICS_PORT,LOKI_METRICS_PORT}   ports on 127.0.0.1 (19443, 19025,
+#                            19464, 19310)
 # Stopping the sampling early (Ctrl-C) still writes the report.
 set -eu
 
@@ -64,6 +68,7 @@ port=${SERMON_LOAD_PORT:-19443}
 export SERMON_E2E_PORT="$port"
 export SERMON_E2E_MAIL_PORT="${SERMON_LOAD_MAIL_PORT:-19025}"
 export SERMON_LOAD_METRICS_PORT="${SERMON_LOAD_METRICS_PORT:-19464}"
+export SERMON_LOAD_LOKI_METRICS_PORT="${SERMON_LOAD_LOKI_METRICS_PORT:-19310}"
 export SERMON_EDGE_SUBNET=172.30.79.0/24 SERMON_EDGE_IP_RANGE=172.30.79.128/25 SERMON_PROXY_IP=172.30.79.10
 export COMPOSE_PROJECT_NAME=sermon-load
 export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$root/deploy/compose/source.yaml:$e2e/compose.yaml:$root/deploy/load/compose.yaml"
@@ -94,7 +99,7 @@ compose --profile load down -v --remove-orphans >/dev/null 2>&1 || true
 compose build --quiet server
 echo "▸ first installation, then the server, PostgreSQL, Loki, Caddy and Mailpit"
 compose run --rm --quiet-pull migrate init --master-keys-file /var/lib/sermon/master_keys >/dev/null
-compose up -d --quiet-pull server caddy mailpit
+compose up -d --quiet-pull server caddy mailpit loki-metrics
 base="https://localhost:$port"
 for _ in $(seq 1 90); do
 	curl -fsSk "$base/readyz" >/dev/null 2>&1 && break
@@ -159,8 +164,18 @@ echo "▸ sampling for $duration into $out (Ctrl-C stops early and still reports
 trap : INT
 LOAD_URL=$base LOAD_CURL_ARGS="--cacert $ca" LOAD_EMAIL=$email LOAD_PASSWORD_FILE="$load/password" \
 	LOAD_METRICS_URL="http://127.0.0.1:$SERMON_LOAD_METRICS_PORT/metrics" LOAD_CONTAINERS="simulator=sermon-load-simulator" \
+	LOAD_LOKI_METRICS_URL="http://127.0.0.1:$SERMON_LOAD_LOKI_METRICS_PORT/metrics" \
 	sh "$root/scripts/load-report.sh" sample "$out" "$duration" "$interval" || true
 trap cleanup INT TERM
+if [ "${COMPRESS_AGGREGATES:-1}" = 1 ]; then
+	echo "▸ compressing the chunks of metrics_1m by hand, then one more sample of the database"
+	compose exec -T postgres psql -qtAX -U postgres -d sermon \
+		-c "SELECT count(compress_chunk(c, recompress => true)) FROM show_chunks('metrics_1m') c" >/dev/null
+	printf 'compressed\tmetrics_1m compressed by hand after the sampling (COMPRESS_AGGREGATES=1)\n' >>"$out/info.tsv"
+	# shellcheck disable=SC2016 # the tab is made by the shell that runs LOAD_PSQL
+	LOAD_DOCKER=0 LOAD_PSQL='docker compose exec -T postgres psql -qtAX -F "$(printf "\t")" -U postgres -d sermon' \
+		sh "$root/scripts/load-report.sh" sample "$out" 1s || true
+fi
 set -f
 set -- --limit "fleet.online.p50>=$nodes"
 for limit in ${LIMITS:-}; do set -- "$@" --limit "$limit"; done

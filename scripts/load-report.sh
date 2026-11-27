@@ -4,7 +4,7 @@
 #
 #   load-report.sh sample DIR DURATION [INTERVAL]   sample every INTERVAL seconds (default 30) for
 #                                                   DURATION (90s, 30m, 3h, 7d) into DIR/samples.tsv
-#   load-report.sh report DIR [--limit 'KEY<=V'|'KEY>=V']... [--horizon DAYS]
+#   load-report.sh report DIR [--limit 'KEY<=V'|'KEY>=V']... [--horizon DAYS] [--event-days DAYS]
 #                                                   the report on stdout; exit 1 if a limit fails
 #   load-report.sh limits                           the default limits
 #
@@ -14,10 +14,13 @@
 #     the volumes of PostgreSQL (with the WAL) and Loki; `docker compose` with the COMPOSE_* of the
 #     environment, LOAD_DOCKER=0 leaves it out;
 #   - the server's /metrics (ADR 0011) from LOAD_METRICS_URL: ingest rate, lag, dropped entries;
+#   - Loki's /metrics from LOAD_LOKI_METRICS_URL (the load test publishes it on 127.0.0.1): its Go
+#     heap, GC and resident memory next to the memory of the container (V1-23);
 #   - SQL through LOAD_PSQL (a command that reads SQL on stdin; default: psql as the superuser in
 #     the postgres service): database size, metric tables, WAL, checkpoints, failing jobs;
 #   - the main reads of the UI through the web API at LOAD_URL with a real session: the fleet,
-#     its sparklines, a node, charts over 1 h, 24 h and 30 days, logs and their histogram. The
+#     its sparklines, a node, charts over 1 h, 24 h and 30 days, logs and their histogram (1 h and
+#     the longest range of the UI, 14 days). The
 #     session comes from LOAD_EMAIL and LOAD_PASSWORD_FILE (a user without a second factor; it
 #     logs in again when the session ends) or LOAD_COOKIE_FILE (the value of the session cookie
 #     from a browser). LOAD_CURL_ARGS adds options such as --cacert FILE.
@@ -151,6 +154,17 @@ sample_metrics() {
 		}' >>"$out" || true
 }
 
+# Loki's memory as Go sees it: heap, GC target, resident memory, collections, chunks in memory.
+sample_loki() {
+	curl -fsS --max-time 10 "$LOAD_LOKI_METRICS_URL" 2>/dev/null | awk -v t="$t" '
+		/^#/ || NF < 2 { next }
+		{ name = $1; sub(/\{.*/, "", name) }
+		name ~ /^(go_memstats_(heap_inuse|heap_alloc|next_gc|sys)_bytes|process_resident_memory_bytes|go_gc_duration_seconds_count|loki_ingester_memory_(chunks|streams))$/ {
+			v[name] += $NF
+		}
+		END { for (name in v) printf "%s\tloki.%s\t%s\n", t, name, v[name] }' >>"$out" || true
+}
+
 sql() {
 	if [ -n "${LOAD_PSQL:-}" ]; then
 		sh -c "$LOAD_PSQL"
@@ -170,24 +184,29 @@ sample_sql() {
 		         (SELECT hypertable_size(ht::regclass) FROM cagg WHERE view_name = 'metrics_1m') AS m1,
 		         (SELECT hypertable_size(ht::regclass) FROM cagg WHERE view_name = 'metrics_1h') AS h1,
 		         hypertable_size('anomaly_points') AS anomaly),
-		raw AS (
-		  SELECT count(*) FILTER (WHERE s.compression_status = 'Compressed') AS chunks,
+		parts AS (
+		  SELECT 'raw' AS part, 'metrics_raw'::regclass AS ht
+		  UNION ALL SELECT '1m', ht::regclass FROM cagg WHERE view_name = 'metrics_1m'
+		  UNION ALL SELECT '1h', ht::regclass FROM cagg WHERE view_name = 'metrics_1h'),
+		comp AS (
+		  SELECT p.part, count(*) FILTER (WHERE s.compression_status = 'Compressed') AS chunks,
 		         coalesce(sum(s.after_compression_total_bytes), 0) AS after,
 		         coalesce(sum(s.before_compression_total_bytes), 0) AS before
-		  FROM chunk_compression_stats('metrics_raw') s)
+		  FROM parts p LEFT JOIN LATERAL chunk_compression_stats(p.ht) s ON true GROUP BY p.part)
 		SELECT 'db.total', total FROM size
 		UNION ALL SELECT 'db.raw', raw FROM size
 		UNION ALL SELECT 'db.1m', m1 FROM size
 		UNION ALL SELECT 'db.1h', h1 FROM size
 		UNION ALL SELECT 'db.anomaly', anomaly FROM size
 		UNION ALL SELECT 'db.rest', total - raw - coalesce(m1, 0) - coalesce(h1, 0) - anomaly FROM size
-		UNION ALL SELECT 'db.raw.compressed_chunks', chunks FROM raw
-		UNION ALL SELECT 'db.raw.compressed_bytes', after FROM raw
-		UNION ALL SELECT 'db.raw.uncompressed_bytes', before FROM raw
+		UNION ALL SELECT 'db.' || part || '.compressed_chunks', chunks FROM comp
+		UNION ALL SELECT 'db.' || part || '.compressed_bytes', after FROM comp
+		UNION ALL SELECT 'db.' || part || '.uncompressed_bytes', before FROM comp
 		UNION ALL SELECT 'db.series', (SELECT count(*) FROM series)
 		UNION ALL SELECT 'db.wal_bytes', (SELECT wal_bytes FROM pg_stat_wal)
 		UNION ALL SELECT 'db.checkpoints_requested', (SELECT num_requested FROM pg_stat_checkpointer)
 		UNION ALL SELECT 'db.max_wal_size_bytes', pg_size_bytes(current_setting('max_wal_size'))
+		UNION ALL SELECT 'db.pg_wal_bytes', (SELECT sum(size) FROM pg_ls_waldir())
 		UNION ALL SELECT 'db.jobs_failed', (SELECT count(*) FROM timescaledb_information.job_stats WHERE last_run_status = 'Failed')
 		UNION ALL SELECT 'db.rows.security_events', (SELECT count(*) FROM security_events)
 		UNION ALL SELECT 'db.table.' || c.relname, pg_total_relation_size(c.oid) FROM pg_class c
@@ -267,6 +286,7 @@ sample_queries() {
 	range="\"from\":\"$(iso $((t - 3600)))\",\"to\":\"$to\""
 	measure logs LogService/QueryLogs "{\"filter\":{$range},\"limit\":200}"
 	measure log_histogram LogService/GetLogHistogram "{\"filter\":{$range}}"
+	measure log_histogram_14d LogService/GetLogHistogram "{\"filter\":{\"from\":\"$(iso $((t - 1209600)))\",\"to\":\"$to\"}}"
 	put q.errors "$errors"
 }
 
@@ -300,6 +320,7 @@ sample() {
 	while :; do
 		t=$(date +%s)
 		[ -z "${LOAD_METRICS_URL:-}" ] || sample_metrics
+		[ -z "${LOAD_LOKI_METRICS_URL:-}" ] || sample_loki
 		[ "$use_docker" = 0 ] || sample_docker
 		if [ -n "${LOAD_PSQL:-}" ] || [ "$use_docker" = 1 ]; then sample_sql; fi
 		[ -z "${LOAD_URL:-}" ] || sample_queries
@@ -360,30 +381,51 @@ linear() {
 		BEGIN { printf "%s\t%s\t%.0f\t%.0f\n", name, model, at(7), at(h) }'
 }
 
+# compressed KEY: true if the tier KEY has compressed chunks and a growth of its logical size.
+compressed() {
+	chunks=$(value "$1.compressed_chunks" last)
+	[ -n "$chunks" ] && [ "$(fmt "$chunks" 1 0)" -gt 0 ] && [ -n "$(value "$1.logical" rate2_h)" ]
+}
+
+# tier NAME KEY DAYS OPEN UPPER [RATIO_KEY]: a metric tier up to its retention (DAYS): the newest
+# OPEN hours uncompressed (the columnstore limit plus one chunk: compressed are only chunks that
+# ended before the limit), the rest at the ratio of the chunks compressed so far (chunks may be
+# partial: their ratio counts, not their size), RATIO_KEY's if the tier has none yet (V1-21). The
+# growth per hour is that of the uncompressed data (KEY.logical: as if nothing were compressed).
+# Without any compressed chunk, linear up to the retention (UPPER: the model, an upper bound).
+tier() {
+	ratio=$2
+	compressed "$ratio" || ratio=${6:-}
+	if [ -z "$ratio" ] || ! compressed "$ratio" || [ -z "$(value "$2.logical" rate2_h)" ]; then
+		linear "$1" "$2" "$3" "$5"
+		return 0
+	fi
+	note=""
+	[ "$ratio" = "$2" ] || note=" (ratio of ${ratio#db.}, none compressed here yet)"
+	awk -v a="$(value "$ratio.compressed_bytes" last)" -v b="$(value "$ratio.uncompressed_bytes" last)" \
+		-v r="$(value "$2.logical" rate2_h)" -v d="$3" -v open="$4" -v h="$horizon" -v name="$1" -v note="$note" '
+		function at(x,   hours) { hours = (x < d ? x : d) * 24; return r * (hours < open ? hours : open + (hours - open) * q) }
+		BEGIN {
+			q = b > 0 ? a / b : 1
+			printf "%s\t%.0f MiB per hour, compressed to %.1f %%%s: %d h + %d h × %.1f %%\t%.0f\t%.0f\n",
+				name, r / 1048576, q * 100, note, open, d * 24 - open, q * 100, at(7), at(h)
+		}'
+}
+
 projection() {
 	{
-		# The raw tier at its 24 h: the newest 2 h uncompressed, 22 h compressed as the chunks
-		# compressed so far (chunks may be partial: their ratio counts, not their size). The growth
-		# per hour is that of the uncompressed data (db.raw.logical: as if nothing were
-		# compressed). Without a compressed chunk yet, the growth of the window over 24 h (an upper
-		# bound).
-		chunks=$(value db.raw.compressed_chunks last)
-		if [ -n "$chunks" ] && [ "$(fmt "$chunks" 1 0)" -gt 0 ] && [ -n "$(value db.raw.logical rate2_h)" ]; then
-			awk -v a="$(value db.raw.compressed_bytes last)" -v b="$(value db.raw.uncompressed_bytes last)" \
-				-v r="$(value db.raw.logical rate2_h)" '
-				BEGIN {
-					q = b > 0 ? a / b : 1; x = r * (2 + 22 * q)
-					printf "metrics_raw (24 h)\t%.0f MiB per hour, compressed to %.1f %%: 2 h + 22 h × %.1f %%\t%.0f\t%.0f\n",
-						r / 1048576, q * 100, q * 100, x, x
-				}'
-		else
-			linear "metrics_raw (24 h)" db.raw 1 "growth per hour up to 24 h (nothing compressed yet: upper bound)"
-		fi
-		linear "metrics_1m (30 d)" db.1m 30 "linear up to its retention"
-		linear "metrics_1h (365 d)" db.1h 365 "linear up to its retention"
+		# metrics_raw: compressed after 2 h (1-h chunks, counted as 2 h open); metrics_1m after 6 h
+		# (10-h chunks); metrics_1h after 1 day (7-day chunks; migrations 00013, 00082).
+		tier "metrics_raw (24 h)" db.raw 1 2 "growth per hour up to 24 h (nothing compressed yet: upper bound)"
+		tier "metrics_1m (30 d)" db.1m 30 16 "linear up to its retention (nothing compressed yet: upper bound)"
+		tier "metrics_1h (365 d)" db.1h 365 192 "linear up to its retention (nothing compressed yet: upper bound)" db.1m
 		linear "anomaly_points (30 d)" db.anomaly 30 "linear up to its retention"
+		linear "security events and alert history ($event_days d)" db.events "$event_days" "linear up to their retention (--event-days)"
 		linear "rest of the database" db.rest 0 "linear, without a limit"
-		if [ -n "$(value db.max_wal_size_bytes last)" ]; then
+		# pg_wal as measured (a checkpoint frees it); without a measurement at most max_wal_size.
+		if [ -n "$(value db.pg_wal_bytes max)" ]; then
+			printf 'WAL (pg_wal)\tlargest measured (max_wal_size %.0f GiB)\t%s\t%s\n' "$(fmt "$(value db.max_wal_size_bytes last)" 1073741824 1)" "$(value db.pg_wal_bytes max)" "$(value db.pg_wal_bytes max)"
+		elif [ -n "$(value db.max_wal_size_bytes last)" ]; then
 			printf 'WAL (pg_wal)\tat most max_wal_size\t%s\t%s\n' "$(value db.max_wal_size_bytes last)" "$(value db.max_wal_size_bytes last)"
 		fi
 		# Loki writes its chunks in steps (flushes, compaction): the whole window counts.
@@ -425,6 +467,8 @@ report() {
 	work=$(mktemp -d)
 	trap 'rm -rf "$work"' EXIT
 	horizon=365
+	# The retention of the security events (SERMON_EVENT_RETENTION, V1-22).
+	event_days=90
 	default_limits >"$work/limits"
 	while [ $# -gt 0 ]; do
 		case $1 in
@@ -442,14 +486,27 @@ report() {
 			horizon=$2
 			shift 2
 			;;
+		--event-days)
+			[ $# -ge 2 ] || usage
+			event_days=$2
+			shift 2
+			;;
 		*) usage ;;
 		esac
 	done
-	# Derived: the raw tier as if nothing were compressed.
+	# Derived: each metric tier as if nothing were compressed.
 	awk -F '\t' -v OFS='\t' '
-		$2 == "db.raw" { r[$1] = $3 } $2 == "db.raw.compressed_bytes" { a[$1] = $3 } $2 == "db.raw.uncompressed_bytes" { b[$1] = $3 }
+		$2 ~ /^db\.(raw|1m|1h)$/ { r[$2, $1] = $3; k[$2, $1] = 1 }
+		$2 ~ /^db\.(raw|1m|1h)\.compressed_bytes$/ { a[substr($2, 1, length($2) - 17), $1] = $3 }
+		$2 ~ /^db\.(raw|1m|1h)\.uncompressed_bytes$/ { b[substr($2, 1, length($2) - 19), $1] = $3 }
+		# The security events (their partitions) and the alert history: kept for their retention.
+		$2 ~ /^db\.table\.(security_events_[0-9][0-9][0-9][0-9][0-9][0-9]|alert_history)$/ { e[$1] += $3 }
+		$2 == "db.rest" { rest[$1] = $3; next }
 		{ print }
-		END { for (t in r) if ((t in a) && (t in b)) print t, "db.raw.logical", r[t] + b[t] - a[t] }' \
+		END {
+			for (x in k) if ((x in a) && (x in b)) { split(x, p, SUBSEP); print p[2], p[1] ".logical", r[x] + b[x] - a[x] }
+			for (t in rest) if (t in e) { print t, "db.rest", rest[t] - e[t]; print t, "db.events", e[t] } else print t, "db.rest", rest[t]
+		}' \
 		"$dir/samples.tsv" >"$work/samples"
 	stats "$work/samples" >"$work/stats"
 	projection
@@ -465,6 +522,7 @@ report() {
 	echo "- **Nodes online:** median $(fmt "$(value fleet.online p50)" 1 0), minimum $(fmt "$(value fleet.online min)" 1 0); agent sessions median $(fmt "$(value m.sermon_server_agent_sessions p50)" 1 0)"
 	[ -z "$(info setup)" ] || echo "- **Load:** $(info setup)"
 	[ -z "$(info machine)" ] || echo "- **Machine:** $(info machine)"
+	[ -z "$(info compressed)" ] || echo "- **Compression:** $(info compressed)"
 	[ -z "$(info host)" ] || echo "- **Sampled on:** $(info host)"
 	[ -z "$(info docker)" ] || echo "- **Docker:** $(info docker)"
 	[ -z "$(info url)" ] || echo "- **Server:** $(info url)"
@@ -479,6 +537,21 @@ report() {
 	done <"$work/containers"
 	[ -n "$(value cpu.total n)" ] || echo "| n/a (no docker) | | | | | |"
 	echo
+	if [ -n "$(value loki.go_memstats_heap_inuse_bytes n)" ]; then
+		echo "## Memory of Loki (its /metrics, MiB)"
+		echo
+		echo "| Measurement | avg | max |"
+		echo "|---|---:|---:|"
+		for row in "go_memstats_heap_inuse_bytes:Go heap in use" "go_memstats_next_gc_bytes:Go heap target of the next GC" \
+			"go_memstats_sys_bytes:memory Go took from the system" "process_resident_memory_bytes:resident memory (RSS)"; do
+			key=loki.${row%%:*}
+			[ -n "$(value "$key" n)" ] || continue
+			echo "| ${row#*:} | $(fmt "$(value "$key" avg)" 1048576 0) | $(fmt "$(value "$key" max)" 1048576 0) |"
+		done
+		[ -z "$(value mem.loki n)" ] || echo "| container (docker stats) | $(fmt "$(value mem.loki avg)" 1 0) | $(fmt "$(value mem.loki max)" 1 0) |"
+		[ -z "$(value loki.go_gc_duration_seconds_count n)" ] || echo "| garbage collections per minute | $(fmt "$(value loki.go_gc_duration_seconds_count rate_h)" 60 1) | |"
+		echo
+	fi
 	echo "## Ingest (server /metrics)"
 	echo
 	m=m.sermon_server_ingest
@@ -500,7 +573,7 @@ report() {
 	echo
 	echo "| Read | p50 | p95 | max | n |"
 	echo "|---|---:|---:|---:|---:|"
-	for q in fleet sparklines node chart_1h chart_24h chart_30d logs log_histogram; do
+	for q in fleet sparklines node chart_1h chart_24h chart_30d logs log_histogram log_histogram_14d; do
 		echo "| $q | $(fmt "$(value "q.$q" p50)" 1 0) | $(fmt "$(value "q.$q" p95)" 1 0) | $(fmt "$(value "q.$q" max)" 1 0) | $(fmt "$(value "q.$q" n)" 1 0) |"
 	done
 	echo "| failed reads | $(fmt "$(value q.errors sum)" 1 0) | | | |"

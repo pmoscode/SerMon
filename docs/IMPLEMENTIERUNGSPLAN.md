@@ -6260,9 +6260,13 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Repos, `install.sh`), Rollback-Hinweise in den Release-Notes.
 - **Abhängig von:** –
 
-#### ◐ V1-03 – Release-Pipeline · X · L 🔒
-> Stand (2026-11-27): Pipeline, Skripte und Tests fertig; der Probe-Release fehlt, bis der Product Owner Schlüssel und
-> Environment angelegt hat ([`docs/release.md`](release.md), [ADR 0043](adr/0043-release-prozess.md), Nachtrag V1-03).
+#### ☑ V1-03 – Release-Pipeline · X · L 🔒
+> Erledigt (2026-11-27; [`docs/release.md`](release.md), [ADR 0043](adr/0043-release-prozess.md), Nachtrag V1-03):
+> Probe-Release [`v1.0.0-rc.1`](https://github.com/pmoscode/SerMon/releases/tag/v1.0.0-rc.1) (Prerelease, 53 Dateien)
+> mit den echten Schlüsseln; alle Jobs von `release.yml` grün bis `verify` (`--require-slsa`), lokal
+> `scripts/verify-release.sh --offline 1.0.0-rc.1` grün. Erst im Lauf gefundene Hindernisse: Tests, die auf den
+> langsameren Runnern wackelten (V1-13), shellcheck 0.9 der Runner (SC2015, SC2317), release-please schreibt den PR
+> bei jedem Push neu (Abschnitt „Upgrade“ zuletzt eintragen).
 > - **Workflows:** `release-please.yml` (Release-PR, Merge = Draft-Release und Tag, startet `release.yml` per
 >   `workflow_dispatch` auf dem Tag – Tags des `GITHUB_TOKEN` starten nichts), `release-pr.yml` (Abschnitt „Upgrade“,
 >   `scripts/check-release-notes.sh`), `release.yml`: Gate (Tag = Manifest, auf `main`, gemergter PR von release-please,
@@ -6293,20 +6297,13 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 >   Repos, Offline-Prüfung, Image mit `/srv/downloads` und `/srv/repo`, die der Server ausliefert), `just
 >   test-packages` (über `0.0.3-rc.1` auf `0.0.3` auf Debian, Rocky und Alpine), `just e2e-demo` mit dem neuen
 >   Dockerfile.
-> - **Offen:** der Probe-Release.
 >
-> **Schon eingerichtet und geprüft (2026-11-27):** Environment `release` (Required reviewer `pmoscode`, nur die
+> **Eingerichtet und geprüft (2026-11-27):** Environment `release` (Required reviewer `pmoscode`, nur die
 > Tag-Regel `v*`), Workflow-Rechte mit „Allow GitHub Actions to create and approve pull requests“, Tag-Ruleset
 > `release tags` (`v*`: kein Verschieben, kein Löschen).
 >
-> **Was der Product Owner noch tun muss** (Einzelheiten in `docs/release.md`, „Einmal einrichten“):
-> 1. `scripts/release-keys.sh generate --recipient … --bundle … --set-secrets pmoscode/SerMon` auf einem
->    vertrauenswürdigen Rechner; die drei Secrets stehen danach in der Environment. Offline-Kopie und age-Identität
->    getrennt sichern und prüfen, dass sie aufgeht.
-> 2. `packaging/release.pub`, `packaging/release-next.pub`, `packaging/keys/` committen und nach `main` pushen.
-> 3. Den Release-PR `1.0.0-rc.1` abwarten, `### Upgrade` eintragen, mergen, den Signier-Job freigeben.
-> 4. Danach das Paket `sermon-server` auf GHCR öffentlich stellen; der Job `verify` (bzw. `just verify-release
->    1.0.0-rc.1`) muss grün sein – dann ☑.
+> Schlüssel erzeugt und die Secrets gesetzt vom Product Owner (`scripts/release-keys.sh`), Public Keys committet
+> (`adaa433d`), das Paket `sermon-server` auf GHCR ist öffentlich (anonymer Pull geht).
 - **Ziel:** `release.yml` nach V1-02: reproduzierbare Builds von Server-Image, Agent und Helper (amd64, arm64),
   signierte Binaries und Repos mit den echten Schlüsseln (`just sign-agent`, `scripts/build-repos.sh`), SBOM, cosign-
   Signaturen und SLSA-Provenance, Release-Notes; Rechte minimal, Actions per SHA (ADR 0006), Schlüssel nur in einer
@@ -6315,9 +6312,10 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   öffentlichen Schlüsseln (Skript in CI); `just lint-ci`.
 - **Abhängig von:** V1-01, V1-02
 
-#### ◐ V1-04 – Veröffentlichte Server-Images in `deploy/compose` · X · S
-> Stand (2026-11-27, [ADR 0043](adr/0043-release-prozess.md), Nachtrag V1-04): fertig bis auf die Demo gegen den
-> Probe-Release (nach V1-03).
+#### ☑ V1-04 – Veröffentlichte Server-Images in `deploy/compose` · X · S
+> Erledigt (2026-11-27, [ADR 0043](adr/0043-release-prozess.md), Nachtrag V1-04): `use-release.sh 1.0.0-rc.1` prüft
+> das veröffentlichte Image mit cosign (Container) und setzt `SERMON_IMAGE_DIGEST=sha256:0dea4824…`; die Demo gegen
+> das Release-Artefakt (Images, Pakete, `install.sh` aus dem Release) gehört zur Abnahme V1-15.
 > - **`compose.yaml`:** `server`, `migrate`, `backup`, `restore` nehmen `ghcr.io/pmoscode/sermon-server@${SERMON_IMAGE_DIGEST}`
 >   – nur per Digest, ohne Wert startet nichts (der Digest eines Tags kann nicht in dessen eigenen Dateien stehen,
 >   deshalb `.env`); kein Build, keine Mounts `./downloads` und `./repo` mehr (das Image bringt sie mit), der Kanal
@@ -6603,7 +6601,7 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   SCRAM bei PostgreSQL, MySQL nur über Socket oder geprüftes TLS, M5-33); Security-Events und Verlauf der Alerts von
   Orgs ohne eigene Einstellung nur noch 90 Tage statt eines Jahres, Älteres geht beim ersten Lauf
   (`SERMON_EVENT_RETENTION`, V1-22).
-- **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-23
+- **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-24 (V1-24 vor dem Release: Product Owner, 2026-11-27)
 
 #### ☐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
 - **Ziel:** Der Release-Kandidat läuft im echten Testbetrieb mindestens 7 Tage: echte Hosts, so viele wie da sind,
@@ -6790,6 +6788,11 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 >   über 1 h) lief einmal in die 30 s von curl.
 > - **Tests:** `load-report_test.sh` (Speicher von Loki nur die gewählten Metriken, Events bis zu ihrer Aufbewahrung,
 >   `pg_wal`), `just lint-compose`. Gegenproben 2/2.
+- **Ziel:** Aus V1-08: KONZEPT §4.5 nennt PostgreSQL-Einstellungen (`max_wal_size` u. a.), die die Compose nie setzt;
+  Loki lag mit 837 MiB nahe an seinem `GOMEMLIMIT` von 900 MiB, das Log-Histogramm über 1 h für alle Nodes braucht fast
+  1 s. Einstellungen setzen oder KONZEPT korrigieren, Speicher von Loki und das Histogramm über 14 Tage messen;
+  „einige hundert Nodes“ in der Admin-Doku belegen oder streichen.
+- **Abhängig von:** V1-08
 
 #### ☐ V1-24 – Log-Histogramm über lange Zeiträume · S · M
 - **Ziel:** Aus V1-23: Das Histogramm zählt jede Abfrage alle Zeilen des Zeitraums in Loki neu (`count_over_time`),
@@ -6799,11 +6802,6 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - **Tests zuerst:** Histogramm über 14 Tage mit Last unter der Zeitgrenze (Lasttest mit älteren Logs), dieselben
   Zahlen wie aus Loki.
 - **Abhängig von:** V1-23
-- **Ziel:** Aus V1-08: KONZEPT §4.5 nennt PostgreSQL-Einstellungen (`max_wal_size` u. a.), die die Compose nie setzt;
-  Loki lag mit 837 MiB nahe an seinem `GOMEMLIMIT` von 900 MiB, das Log-Histogramm über 1 h für alle Nodes braucht fast
-  1 s. Einstellungen setzen oder KONZEPT korrigieren, Speicher von Loki und das Histogramm über 14 Tage messen;
-  „einige hundert Nodes“ in der Admin-Doku belegen oder streichen.
-- **Abhängig von:** V1-08
 
 **v1.0 fertig, wenn:**
 

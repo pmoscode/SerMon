@@ -6051,7 +6051,8 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 >   Passwort als Zugangsdatum des Moduls. Das Veto bleibt ab Werk (Loopback), das Overlay ändert `agent.toml` nicht.
 > - **Messung** in der Demo, während „nginx down“ wartet (60 s): **0,37 % eines Kerns, 7,4 MiB privat, 21,3 MiB RSS**;
 >   am Ende des Laufs (`budget-end`, prüft vorher, dass alle neun zuletzt `ok` gemeldet haben) **0,37 %, 9,5 MiB
->   privat, 23,3 MiB RSS** (Budget < 1 %, < 30 MiB). Gegenprobe mit gesenkter Grenze (`3 0 1`): beide Grenzen
+>   privat, 23,3 MiB RSS**, am Ende des vollen Laufs (`just e2e-demo-full`, nach Anomalien, Rollout und Passkeys)
+>   **0,40 %, 9,5 MiB privat, 23,4 MiB RSS** (Budget < 1 %, < 30 MiB). Gegenprobe mit gesenkter Grenze (`3 0 1`): beide Grenzen
 >   gemeldet, Exit 1.
 > - **Kosten je Modul** (von Hand gegen eine Umgebung mit `KEEP=1`: alle aus, dann jedes allein mit 10 s Intervall,
 >   je 120 s mit `agent-budget.sh`): ohne Module 0,32 %; `systemd_units` +0,13 % (ein `systemctl` je Lauf, ~13 ms),
@@ -6085,7 +6086,10 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 >   zu wenig Kontrast (4,35:1, axe), die Charts von Ja/Nein-Werten zeigten „no, yes, yes“ (Bereich 0 bis 2).
 > - **Grenze:** „Last success“ am Node ist der Stand des letzten Gesundheitsberichts (bei Änderung, sonst alle
 >   10 min), nicht des letzten Laufs.
-> - Dauer: schneller Demo-Lauf 21,9 min (vorher rund 16 min), alle acht Projekte grün. Gegenproben der Korrekturen
+> - Dauer: schneller Demo-Lauf 21,9 min (vorher rund 16 min), alle acht Projekte grün; voller Lauf 34,0 min, alle
+>   zehn grün. Dafür zwei Korrekturen am vollen Lauf: Der Anomalie-Worker gibt seine Leases beim Stoppen ab (nach dem
+>   Neustart wartete die neue Instanz bis zu 3 min auf ihren Ablauf und verpasste die 3 min der Demo um Sekunden), und
+>   die Patch-Demo wartet auf den nächsten erlaubten Refresh von db-01 (höchstens alle 5 min, 429). Gegenproben der Korrekturen
 >   7/7 (Hilfetexte 4, Ja/Nein-Achse 2, Kontrast 1: der erweiterte Test schlug vor der Korrektur fehl).
 - **Ziel:** Projekt `modules` in der Demo: nginx läuft auf einem Host, die UI schlägt das Modul vor, nach dem
   Aktivieren kommen Metriken und ein Alert, wenn nginx steht; Projekt `kiosk`: ein eigenes Dashboard läuft mit einem

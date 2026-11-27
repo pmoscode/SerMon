@@ -45,14 +45,20 @@ package() {
 		"$root/scripts/package-agent.sh" "$arch" "$1" "$binary" "$helper" "$work/out/$1"
 }
 # Two versions with the same key: an upgrade must keep the identity (deb and rpm run the removal
-# scripts then, too). 0.0.2 announces the next keys, 0.0.3 is signed with them only.
+# scripts then, too). The second is a release candidate (V1-03): every package manager must take
+# it as newer than 0.0.1 and older than the release 0.0.3 that follows it. It announces the next
+# keys, 0.0.3 is signed with them only.
 package 0.0.1 "$work/keys" "$work/keys"
-package 0.0.2 "$work/keys" "$work/rotation"
+package 0.0.3-rc.1 "$work/keys" "$work/rotation"
 package 0.0.3 "$work/next" "$work/next"
 for release in 1 2 3; do
-	case $release in 1) keys=$work/keys ;; 2) keys=$work/rotation ;; 3) keys=$work/next ;; esac
-	"$root/scripts/build-repos.sh" "$work/out/0.0.$release" "$keys" "$work/repos/$release" >/dev/null
-	"$root/scripts/release-sign.sh" sign "$work/release.pem" --version "0.0.$release" "$work/repos/$release/keys/SHA256SUMS"
+	case $release in
+	1) keys=$work/keys version=0.0.1 ;;
+	2) keys=$work/rotation version=0.0.3-rc.1 ;;
+	3) keys=$work/next version=0.0.3 ;;
+	esac
+	"$root/scripts/build-repos.sh" "$work/out/$version" "$keys" "$work/repos/$release" >/dev/null
+	"$root/scripts/release-sign.sh" sign "$work/release.pem" --version "$version" "$work/repos/$release/keys/SHA256SUMS"
 done
 # install.sh as the server of release 1 renders it: its release key and version.
 sed -e "s#@SERMON_RELEASE_KEY@#$release_key#" -e "s#@SERMON_AGENT_VERSION@#0.0.1#" "$root/packaging/install.sh" >"$work/install.sh"
@@ -137,7 +143,7 @@ installed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/s
 [ -f /usr/lib/systemd/system/sermon-helper.socket ] || { echo "no socket unit"; exit 1; }
 same /usr/share/keyrings/sermon-archive-keyring.asc /k/sermon.asc
 enroll_fake
-apt-get install -y -qq /p/0.0.2/*.deb >/dev/null 2>&1
+apt-get install -y -qq /p/0.0.3-rc.1/*.deb >/dev/null 2>&1
 kept
 apt-get remove -y -qq sermon-agent >/dev/null 2>&1
 removed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/sermon-helper.service /usr/share/keyrings/sermon-archive-keyring.asc
@@ -152,7 +158,7 @@ dnf install -y -q /p/0.0.1/*.rpm >/dev/null
 installed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/sermon-helper.service
 same /etc/pki/rpm-gpg/RPM-GPG-KEY-sermon /k/sermon.asc
 enroll_fake
-dnf install -y -q /p/0.0.2/*.rpm >/dev/null
+dnf install -y -q /p/0.0.3-rc.1/*.rpm >/dev/null
 kept
 dnf remove -y -q sermon-agent >/dev/null
 removed /usr/lib/systemd/system/sermon-agent.service /usr/lib/systemd/system/sermon-helper.socket /etc/pki/rpm-gpg/RPM-GPG-KEY-sermon'
@@ -176,7 +182,7 @@ tagged=" daemon[.][a-z]* sermon-agent: "
 for _ in $(seq 1 30); do grep -q "$tagged" /var/log/messages 2>/dev/null && break; sleep 1; done
 rc-service sermon-agent stop >/dev/null 2>&1 || true
 grep -q "$tagged" /var/log/messages 2>/dev/null || { echo "no message of the agent in syslog"; cat /var/log/messages 2>/dev/null; exit 1; }
-apk add -q /p/0.0.2/*.apk >/dev/null
+apk add -q /p/0.0.3-rc.1/*.apk >/dev/null
 kept
 apk del -q sermon-agent sermon-helper
 removed /etc/init.d/sermon-agent /etc/init.d/sermon-helper /etc/apk/keys/"$OLD_APK_KEY".rsa.pub'
@@ -203,7 +209,7 @@ apt-get update -qq 2>/dev/null && DEBIAN_FRONTEND=noninteractive apt-get -y -qq 
 [ "$(version)" = 0.0.1-1 ] || { echo "another source replaced the agent: $(version)"; exit 1; }
 rm /etc/apt/sources.list.d/decoy.list
 release 2 && upgrade
-[ "$(version)" = 0.0.2-1 ] || { echo "release 2: $(version)"; exit 1; }
+[ "$(version)" = 0.0.3~rc.1-1 ] || { echo "release 2: $(version)"; exit 1; }
 same /usr/share/keyrings/sermon-archive-keyring.asc /repos/2/keys/sermon.asc
 release 3 && upgrade || { echo "release 3 does not verify"; exit 1; }
 [ "$(version)" = 0.0.3-1 ] || { echo "release 3: $(version)"; exit 1; }
@@ -226,7 +232,7 @@ upgrade
 [ "$(version)" = 0.0.1-1 ] || { echo "another source replaced the agent: $(version)"; exit 1; }
 rm /etc/yum.repos.d/decoy.repo
 release 2 && upgrade
-[ "$(version)" = 0.0.2-1 ] || { echo "release 2: $(version)"; exit 1; }
+[ "$(version)" = 0.0.3~rc.1-1 ] || { echo "release 2: $(version)"; exit 1; }
 same /etc/pki/rpm-gpg/RPM-GPG-KEY-sermon /repos/2/keys/sermon.asc
 release 3 && upgrade || { echo "release 3 does not verify"; exit 1; }
 [ "$(version)" = 0.0.3-1 ] || { echo "release 3: $(version)"; exit 1; }
@@ -240,7 +246,7 @@ version() { apk info -e -v sermon-agent sermon-helper | sed "s/^sermon-[a-z]*-//
 from_repo alpine >/dev/null
 [ "$(version)" = 0.0.1-r1 ] || { echo "release 1: $(version)"; exit 1; }
 release 2 && upgrade
-[ "$(version)" = 0.0.2-r1 ] || { echo "release 2: $(version)"; exit 1; }
+[ "$(version)" = 0.0.3_rc1-r1 ] || { echo "release 2: $(version)"; exit 1; }
 for key in /repos/2/keys/sermon-*.rsa.pub; do same "/etc/apk/keys/${key##*/}" "$key"; done
 release 3 && upgrade || { echo "release 3 does not verify"; exit 1; }
 [ "$(version)" = 0.0.3-r1 ] || { echo "release 3: $(version)"; exit 1; }

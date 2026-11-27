@@ -4,12 +4,20 @@
 # Every base is pinned by digest (scripts/check-compose.sh --hardened); there is deliberately no
 # `# syntax=` line, which would pull an unpinned frontend image.
 #
+# The release (V1-03, ADR 0043 §4) builds the same file for amd64 and arm64 – web UI and server
+# binary on the build platform, the server cross-compiled – and puts the signed binaries of agent
+# and helper and the package repositories of its version into the image: /srv/downloads and
+# /srv/repo, where SERMON_AGENT_DOWNLOADS_DIR and SERMON_REPO_DIR point. They come from the build
+# context "release-files" (docker buildx build --build-context release-files=DIR, DIR/downloads
+# and DIR/repo); a build from source leaves both empty, deploy/compose/source.yaml mounts
+# ./downloads and ./repo there.
+#
 # Build args:
 #   SERMON_RELEASE_KEY  public release key (scripts/release-sign.sh) that install.sh checks the
 #                       agent binaries from /downloads against (ADR 0012); empty: no downloads
 #   SERMON_VERSION      shown in the UI and in logs
 
-FROM node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS web
+FROM --platform=$BUILDPLATFORM node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS web
 WORKDIR /src/web
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
 # pnpm in the version of package.json's packageManager (Renovate keeps that one current, M2-39);
@@ -20,7 +28,7 @@ COPY web/ ./
 COPY docs/help/ /src/docs/help/
 RUN pnpm exec svelte-kit sync && pnpm run i18n && pnpm run build && pnpm run check:size
 
-FROM golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d AS server
+FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d AS server
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS=-mod=readonly
 WORKDIR /src/server
 COPY server/go.mod server/go.sum ./
@@ -29,14 +37,31 @@ COPY server/ ./
 COPY --from=web /src/web/build/ ./web/dist/
 ARG SERMON_VERSION=source
 ARG SERMON_RELEASE_KEY=
-RUN go build -trimpath -ldflags "-s -w -X main.version=${SERMON_VERSION} -X main.releaseKey=${SERMON_RELEASE_KEY}" \
+# Set by BuildKit for each platform of the build; empty without BuildKit (the host's).
+ARG TARGETOS
+ARG TARGETARCH
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
+		-ldflags "-s -w -X main.version=${SERMON_VERSION} -X main.releaseKey=${SERMON_RELEASE_KEY}" \
 		-o /out/sermon-server ./cmd/sermon-server \
-	&& mkdir /out/state
+	&& mkdir -p /out/state /out/srv/downloads /out/srv/repo
+
+# Empty directories unless the release replaces this stage with its signed files
+# (--build-context release-files=DIR).
+FROM scratch AS release-files
+COPY --from=server /out/srv/ /
 
 # Static binary, CA certificates and time zones; runs as nonroot (65532). The state directory
-# belongs to it, so the named volume inherits the ownership.
+# belongs to it, so the named volume inherits the ownership; the release files belong to root and
+# are read-only for the server.
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931
+LABEL org.opencontainers.image.source="https://github.com/pmoscode/SerMon" \
+	org.opencontainers.image.licenses="AGPL-3.0-only" \
+	org.opencontainers.image.title="sermon-server"
 COPY --from=server /out/sermon-server /usr/local/bin/sermon-server
 COPY --from=server --chown=65532:65532 /out/state /var/lib/sermon
+# By directory, not "/": BuildKit reuses a cached copy of the root of another context for "/".
+COPY --from=release-files /downloads/ /srv/downloads/
+COPY --from=release-files /repo/ /srv/repo/
+ENV SERMON_AGENT_DOWNLOADS_DIR=/srv/downloads SERMON_REPO_DIR=/srv/repo
 USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/sermon-server"]

@@ -1,0 +1,577 @@
+# Release (V1-03, ADR 0043): builds agent, helper, packages, repositories and the server image of
+# one version, signs them, publishes the image on GHCR and the files on the draft release that
+# release-please made, then verifies the published release with public keys only.
+#
+# Started by release-please.yml on the tag of a merged release PR (gh workflow run release.yml
+# --ref vX.Y.Z); a tag without its release PR builds nothing (job gate). The build jobs see no
+# secrets and no caches. Only the job "sign" runs in the environment "release" (approval by the
+# product owner, tags v* only) and gets the private keys; it takes the built files with their
+# SHA-256 from the build jobs (scripts/release-artifacts.sh) and uses no actions but GitHub's own
+# checkout and artifact actions. Every job has only the permissions it needs.
+# Actions are pinned by SHA, tools by version and checksum – except the reusable workflows of
+# slsa-github-generator, which must be referenced by tag (ADR 0043 §8, .github/zizmor.yml).
+name: release
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # renovate: datasource=github-releases depName=casey/just
+  JUST_VERSION: 1.59.0
+  # renovate: datasource=github-releases depName=rust-cross/cargo-zigbuild
+  CARGO_ZIGBUILD_VERSION: 0.24.1
+  # Updated manually, together with ci.yml: zig releases are published on ziglang.org.
+  ZIG_VERSION: 0.17.1
+  # SHA-256 of zig-x86_64-linux-<version>.tar.xz (from https://ziglang.org/download/index.json).
+  ZIG_SHA256: 3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
+  # renovate: datasource=github-releases depName=sigstore/cosign
+  COSIGN_VERSION: v3.1.4
+  # SHA-256 of cosign-linux-amd64 (from the release's cosign_checksums.txt).
+  COSIGN_SHA256: 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+  # renovate: datasource=github-releases depName=anchore/syft
+  SYFT_VERSION: 1.57.2
+  # SHA-256 of syft_<version>_linux_amd64.tar.gz (from the release's checksums).
+  SYFT_SHA256: ad92bd3ec1b94a3df01d4d0aec199afa9c42b72e86da436ff5f837914d32706b
+  # renovate: datasource=github-releases depName=slsa-framework/slsa-verifier
+  SLSA_VERIFIER_VERSION: v2.7.1
+  # SHA-256 of slsa-verifier-linux-amd64 (from SHA256SUM.md of the repository).
+  SLSA_VERIFIER_SHA256: 946dbec729094195e88ef78e1734324a27869f03e2c6bd2f61cbc06bd5350339
+  # BuildKit of the image build, pinned by digest (docker buildx create pulls it).
+  BUILDKIT_IMAGE: moby/buildkit:v0.35.1@sha256:baf6138eb8c37644800c7c913fba051e840ebb9ba13eaf92d92ef9a1712d0b4c
+  IMAGE: ghcr.io/pmoscode/sermon-server
+  SYFT_CHECK_FOR_APP_UPDATE: "false"
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Only the tag of a merged release PR of release-please, on main, with the section "Upgrade"
+  # in its notes and the committed public keys.
+  gate:
+    name: release PR and version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # find the merged release PR of the tag's commit
+    outputs:
+      version: ${{ steps.gate.outputs.version }}
+      tag: ${{ steps.gate.outputs.tag }}
+      prerelease: ${{ steps.gate.outputs.prerelease }}
+      minor: ${{ steps.gate.outputs.minor }}
+      epoch: ${{ steps.gate.outputs.epoch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the tag must be on main
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case $GITHUB_REF in
+          refs/tags/v*) ;;
+          *) echo "::error::release.yml runs on a tag v* only (gh workflow run release.yml --ref vX.Y.Z)"; exit 1 ;;
+          esac
+          tag=${GITHUB_REF#refs/tags/}
+          version=${tag#v}
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
+            echo "::error::$tag is no release version (X.Y.Z or X.Y.Z-rc.N)"; exit 1
+          fi
+          manifest=$(jq -r '."."' .release-please-manifest.json)
+          if [ "$manifest" != "$version" ]; then
+            echo "::error::the manifest names $manifest, not $version: a tag without its release PR builds nothing"; exit 1
+          fi
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$tag is not on main"; exit 1; }
+          for f in packaging/release.pub packaging/keys/gpg.pub.asc packaging/keys/apk.rsa.pub; do
+            [ -s "$f" ] || { echo "::error::no $f – scripts/release-keys.sh generate (docs/release.md)"; exit 1; }
+          done
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "main" and (.head.ref | startswith("release-please--")) and .user.login == "github-actions[bot]")][0].body // ""' >"$RUNNER_TEMP/body"
+          [ -s "$RUNNER_TEMP/body" ] || { echo "::error::$GITHUB_SHA is not the merge of a release PR of release-please"; exit 1; }
+          sh scripts/check-release-notes.sh --pr-body <"$RUNNER_TEMP/body"
+          prerelease=false
+          case $version in *-*) prerelease=true ;; esac
+          release=${version%%-*}
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "prerelease=$prerelease"
+            echo "minor=${release%.*}"
+            echo "epoch=$(git log -1 --format=%ct)"
+          } >>"$GITHUB_OUTPUT"
+
+  agent:
+    name: agent and helper (amd64, arm64)
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      seal: ${{ steps.seal.outputs.seal }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain (agent/rust-toolchain.toml)
+        working-directory: agent
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Install zig (pinned version, checksum verified)
+        run: |
+          archive="$RUNNER_TEMP/zig.tar.xz"
+          curl -fsSLo "$archive" "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          echo "${ZIG_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/zig"
+          tar -xJf "$archive" -C "$RUNNER_TEMP/zig" --strip-components=1
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+      - name: Install syft (pinned version, checksum verified)
+        run: |
+          archive="$RUNNER_TEMP/syft.tar.gz"
+          curl -fsSLo "$archive" "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          echo "${SYFT_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/bin" syft
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2.90.4
+        with:
+          tool: just@${{ env.JUST_VERSION }},cargo-zigbuild@${{ env.CARGO_ZIGBUILD_VERSION }}
+      - name: Build with the committed release keys and the version
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: just release-agent "$VERSION"
+      - name: SBOM of agent and helper (CycloneDX, from Cargo.lock)
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: syft scan file:agent/Cargo.lock --quiet -o "cyclonedx-json=dist/agent/sermon-agent-${VERSION}.cdx.json"
+      - id: seal
+        run: echo "seal=$(scripts/release-artifacts.sh seal dist/agent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent
+          path: dist/agent/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The container images of nfpm and the repository tools, so that the signing job neither builds
+  # nor pulls anything.
+  tools:
+    name: package tools (nfpm, apt, rpm, apk)
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      seal: ${{ steps.seal.outputs.seal }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and save the images
+        run: |
+          mkdir -p dist/tools
+          for tool in apt rpm apk; do
+            docker build -q -t "sermon-repo-$tool" -f "packaging/repo/$tool.Dockerfile" packaging/repo
+          done
+          nfpm=$(sed -n 's/^NFPM_IMAGE=//p' scripts/package-agent.sh)
+          docker pull -q "$nfpm"
+          docker tag "$nfpm" sermon-nfpm:release
+          docker save -o dist/tools/tools.tar sermon-repo-apt sermon-repo-rpm sermon-repo-apk sermon-nfpm:release
+      - id: seal
+        run: echo "seal=$(scripts/release-artifacts.sh seal dist/tools)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tools
+          path: dist/tools/
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    name: sign (environment release)
+    needs: [gate, agent, tools]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+    outputs:
+      seal: ${{ steps.seal.outputs.seal }}
+      subjects: ${{ steps.seal.outputs.subjects }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: agent
+          path: dist/agent
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tools
+          path: dist/tools
+      - name: Check the files of the build jobs and load the tools
+        env:
+          AGENT_SEAL: ${{ needs.agent.outputs.seal }}
+          TOOLS_SEAL: ${{ needs.tools.outputs.seal }}
+        run: |
+          scripts/release-artifacts.sh check dist/agent "$AGENT_SEAL"
+          scripts/release-artifacts.sh check dist/tools "$TOOLS_SEAL"
+          rm dist/agent/SEAL.sha256sums
+          docker load -q -i dist/tools/tools.tar
+      - name: Sign binaries, packages and repositories
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ needs.gate.outputs.epoch }}
+          RELEASE_SIGNING_KEY: ${{ secrets.SERMON_RELEASE_SIGNING_KEY }}
+          PKG_GPG_KEY: ${{ secrets.SERMON_PKG_GPG_KEY }}
+          PKG_APK_KEY: ${{ secrets.SERMON_PKG_APK_KEY }}
+          SERMON_NFPM_IMAGE: sermon-nfpm:release
+          SERMON_REPO_TOOLS: loaded
+        run: |
+          keys="$RUNNER_TEMP/keys"
+          (umask 077 && mkdir "$keys" &&
+            printf '%s\n' "$RELEASE_SIGNING_KEY" >"$keys/release.pem" &&
+            printf '%s\n' "$PKG_GPG_KEY" >"$keys/gpg.asc" &&
+            printf '%s\n' "$PKG_APK_KEY" >"$keys/apk.rsa")
+          unset RELEASE_SIGNING_KEY PKG_GPG_KEY PKG_APK_KEY
+          scripts/release-package.sh "$VERSION" dist/agent "$keys" dist/release
+      - name: Remove the keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
+      - id: seal
+        run: |
+          {
+            echo "subjects=$(cd dist/release && sha256sum -- * | base64 -w0)"
+            echo "seal=$(scripts/release-artifacts.sh seal dist/release)"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The server image with the signed binaries and repositories of this version (ADR 0043 §4),
+  # built for amd64 and arm64 into an OCI archive – without permissions; the job "push" publishes
+  # it unchanged.
+  image:
+    name: server image (amd64, arm64)
+    needs: [gate, sign]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      seal: ${{ steps.seal.outputs.seal }}
+      sbom-seal: ${{ steps.seal.outputs.sbom-seal }}
+      sbom-subject: ${{ steps.seal.outputs.sbom-subject }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist/release
+      - name: Check the signed files and lay them out for the image
+        env:
+          SEAL: ${{ needs.sign.outputs.seal }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          scripts/release-artifacts.sh check dist/release "$SEAL"
+          files="$RUNNER_TEMP/release-files"
+          mkdir -p "$files/downloads" "$files/repo"
+          for b in agent helper; do
+            for a in amd64 arm64; do
+              cp "dist/release/sermon-$b-linux-$a" "dist/release/sermon-$b-linux-$a.minisig" "$files/downloads/"
+            done
+          done
+          tar -xzf "dist/release/sermon-repo-$VERSION.tar.gz" -C "$files/repo"
+          chmod -R u=rwX,go=rX "$files"
+      - name: Install syft (pinned version, checksum verified)
+        run: |
+          archive="$RUNNER_TEMP/syft.tar.gz"
+          curl -fsSLo "$archive" "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          echo "${SYFT_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/bin" syft
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Build the image into an OCI archive
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ needs.gate.outputs.epoch }}
+        run: |
+          docker buildx create --name release --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" --use
+          mkdir -p dist/image
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            -f deploy/compose/server.Dockerfile \
+            --build-context "release-files=$RUNNER_TEMP/release-files" \
+            --build-arg "SERMON_VERSION=$VERSION" \
+            --build-arg "SERMON_RELEASE_KEY=$(head -1 packaging/release.pub)" \
+            --build-arg "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH" \
+            --annotation "index:org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --annotation "index:org.opencontainers.image.version=$VERSION" \
+            --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
+            --annotation "index:org.opencontainers.image.licenses=AGPL-3.0-only" \
+            --provenance=false --sbom=false \
+            --output "type=oci,dest=dist/image/sermon-server.oci.tar,rewrite-timestamp=true" .
+      - name: SBOM of the image (CycloneDX)
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          mkdir -p dist/image-sbom
+          syft scan oci-archive:dist/image/sermon-server.oci.tar --platform linux/amd64 --quiet \
+            -o "cyclonedx-json=dist/image-sbom/sermon-server-${VERSION}.cdx.json"
+      - id: seal
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          {
+            echo "seal=$(scripts/release-artifacts.sh seal dist/image)"
+            echo "sbom-subject=$(cd dist/image-sbom && sha256sum -- "sermon-server-${VERSION}.cdx.json" | base64 -w0)"
+            echo "sbom-seal=$(scripts/release-artifacts.sh seal dist/image-sbom)"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image
+          path: dist/image/
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sbom
+          path: dist/image-sbom/
+          if-no-files-found: error
+          retention-days: 7
+
+  push:
+    name: publish and sign the image (ghcr.io)
+    needs: [gate, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write # push the image and its signature to ghcr.io
+      id-token: write # cosign keyless: the certificate from Sigstore for this workflow
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+          path: dist/image
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-sbom
+          path: dist/image-sbom
+      - name: Check the image of the build job
+        env:
+          SEAL: ${{ needs.image.outputs.seal }}
+          SBOM_SEAL: ${{ needs.image.outputs.sbom-seal }}
+        run: |
+          scripts/release-artifacts.sh check dist/image "$SEAL"
+          scripts/release-artifacts.sh check dist/image-sbom "$SBOM_SEAL"
+      - name: Install cosign (pinned version, checksum verified)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSLo "$RUNNER_TEMP/bin/cosign" "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64"
+          echo "${COSIGN_SHA256}  $RUNNER_TEMP/bin/cosign" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/bin/cosign"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - id: push
+        name: Push (a published version is never replaced), sign, attest the SBOM
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          MINOR: ${{ needs.gate.outputs.minor }}
+          PRERELEASE: ${{ needs.gate.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          archive=oci-archive:dist/image/sermon-server.oci.tar
+          skopeo inspect --raw "$archive" >"$RUNNER_TEMP/index.json"
+          digest=sha256:$(sha256sum <"$RUNNER_TEMP/index.json" | cut -d' ' -f1)
+          if skopeo inspect --raw "docker://$IMAGE:$VERSION" >"$RUNNER_TEMP/existing.json" 2>/dev/null; then
+            existing=sha256:$(sha256sum <"$RUNNER_TEMP/existing.json" | cut -d' ' -f1)
+            if [ "$existing" != "$digest" ]; then
+              echo "::error::$IMAGE:$VERSION is published already as $existing – a version is never replaced"; exit 1
+            fi
+          fi
+          skopeo copy -q --all --preserve-digests --digestfile "$RUNNER_TEMP/pushed" "$archive" "docker://$IMAGE:$VERSION"
+          [ "$(cat "$RUNNER_TEMP/pushed")" = "$digest" ] || { echo "::error::pushed $(cat "$RUNNER_TEMP/pushed"), built $digest"; exit 1; }
+          # X.Y only for releases; there is no "latest" (ADR 0043 §2).
+          if [ "$PRERELEASE" = false ]; then
+            skopeo copy -q --all --preserve-digests "docker://$IMAGE@$digest" "docker://$IMAGE:$MINOR"
+          fi
+          cosign sign --yes "$IMAGE@$digest"
+          cosign attest --yes --type cyclonedx --predicate "dist/image-sbom/sermon-server-$VERSION.cdx.json" "$IMAGE@$digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Log out
+        if: always()
+        run: docker logout ghcr.io
+
+  subjects:
+    name: provenance subjects
+    needs: [sign, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      subjects: ${{ steps.subjects.outputs.subjects }}
+    steps:
+      - id: subjects
+        env:
+          FILES: ${{ needs.sign.outputs.subjects }}
+          SBOM: ${{ needs.image.outputs.sbom-subject }}
+        run: |
+          { printf '%s' "$FILES" | base64 -d; printf '%s' "$SBOM" | base64 -d; } >"$RUNNER_TEMP/subjects"
+          echo "subjects=$(base64 -w0 "$RUNNER_TEMP/subjects")" >> "$GITHUB_OUTPUT"
+
+  # SLSA Build Level 3 (ADR 0043 §8). The generator's builder checks its own ref: referenced by
+  # tag, not by SHA – the one exception to pinning by SHA (ADR 0006), see .github/zizmor.yml.
+  provenance-files:
+    name: SLSA provenance of the files
+    needs: [gate, subjects]
+    permissions:
+      actions: read # the generator reads the workflow run
+      id-token: write # the generator signs the provenance (Sigstore)
+      contents: write # requested by the generator's upload job, which does not run (upload-assets: false)
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.subjects.outputs.subjects }}
+      provenance-name: sermon-${{ needs.gate.outputs.version }}.intoto.jsonl
+      upload-assets: false
+
+  provenance-image:
+    name: SLSA provenance of the image
+    needs: [push]
+    permissions:
+      actions: read # the generator reads the workflow run
+      id-token: write # the generator signs the provenance (Sigstore)
+      packages: write # the generator attaches the provenance to the image on ghcr.io
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ghcr.io/pmoscode/sermon-server
+      digest: ${{ needs.push.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: publish the release
+    needs: [gate, sign, image, push, provenance-files, provenance-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write # upload the files to the draft release and publish it
+      id-token: write # cosign keyless for the files
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-sbom
+          path: dist/image-sbom
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.provenance-files.outputs.provenance-name }}
+          path: dist/provenance
+      - name: Install cosign (pinned version, checksum verified)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSLo "$RUNNER_TEMP/bin/cosign" "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64"
+          echo "${COSIGN_SHA256}  $RUNNER_TEMP/bin/cosign" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/bin/cosign"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Collect the files and sign each (Sigstore)
+        env:
+          SEAL: ${{ needs.sign.outputs.seal }}
+          SBOM_SEAL: ${{ needs.image.outputs.sbom-seal }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          DIGEST: ${{ needs.push.outputs.digest }}
+          PROVENANCE: ${{ needs.provenance-files.outputs.provenance-name }}
+        run: |
+          set -euo pipefail
+          scripts/release-artifacts.sh check dist/release "$SEAL"
+          scripts/release-artifacts.sh check dist/image-sbom "$SBOM_SEAL"
+          rm dist/release/SEAL.sha256sums dist/image-sbom/SEAL.sha256sums
+          assets="$RUNNER_TEMP/assets"
+          mkdir "$assets"
+          cp dist/release/* dist/image-sbom/* "$assets/"
+          printf '%s@%s\n' "$IMAGE" "$DIGEST" >"$assets/sermon-server-$VERSION.digest"
+          for f in "$assets"/*; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f" >/dev/null
+          done
+          cp "dist/provenance/$PROVENANCE" "$assets/sermon-$VERSION.intoto.jsonl"
+      - name: Upload to the draft release and publish it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          PRERELEASE: ${{ needs.gate.outputs.prerelease }}
+          DIGEST: ${{ needs.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --json isDraft,body >"$RUNNER_TEMP/release.json"
+          if [ "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" != true ]; then
+            echo "::error::$TAG is published already – a published release is never changed"; exit 1
+          fi
+          jq -r .body "$RUNNER_TEMP/release.json" >"$RUNNER_TEMP/notes.md"
+          sh scripts/check-release-notes.sh <"$RUNNER_TEMP/notes.md"
+          cat >>"$RUNNER_TEMP/notes.md" <<EOF
+
+          ### Prüfen / Verify
+
+          Image: \`$IMAGE@$DIGEST\` (Tag \`$VERSION\`), signiert mit cosign keyless, SBOM und SLSA-Provenance angehängt.
+
+          \`\`\`sh
+          scripts/verify-release.sh $VERSION   # aus einem Checkout von $TAG: Signaturen, Repos, SBOM, Sigstore, SLSA
+          deploy/compose/use-release.sh $VERSION   # prüft das Image und trägt den Digest in .env ein
+          \`\`\`
+          EOF
+          gh release upload "$TAG" "$RUNNER_TEMP/assets"/* --clobber
+          latest=true
+          [ "$PRERELEASE" = false ] || latest=false
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --prerelease="$PRERELEASE" --latest="$latest" --draft=false
+
+  verify:
+    name: verify the published release
+    needs: [gate, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install cosign and slsa-verifier (pinned versions, checksums verified)
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSLo "$RUNNER_TEMP/bin/cosign" "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64"
+          echo "${COSIGN_SHA256}  $RUNNER_TEMP/bin/cosign" | sha256sum --check --strict
+          curl -fsSLo "$RUNNER_TEMP/bin/slsa-verifier" "https://github.com/slsa-framework/slsa-verifier/releases/download/${SLSA_VERIFIER_VERSION}/slsa-verifier-linux-amd64"
+          echo "${SLSA_VERIFIER_SHA256}  $RUNNER_TEMP/bin/slsa-verifier" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/bin/cosign" "$RUNNER_TEMP/bin/slsa-verifier"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - env:
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: scripts/verify-release.sh --require-slsa "$VERSION"

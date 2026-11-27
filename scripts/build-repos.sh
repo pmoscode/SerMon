@@ -16,7 +16,9 @@
 # in a release the secrets of the pipeline). For a key rotation, KEYS/next/ may hold the public keys
 # of the next pair: they are published alongside (ADR 0036). The release signs OUT/keys/SHA256SUMS
 # afterwards (scripts/release-sign.sh), install.sh checks it. The server serves OUT under /repo/
-# (SERMON_REPO_DIR). The tools run as containers (packaging/repo/*.Dockerfile).
+# (SERMON_REPO_DIR). The tools run as containers (packaging/repo/*.Dockerfile); with
+# SERMON_REPO_TOOLS=loaded the images sermon-repo-{apt,rpm,apk} are taken as they are (the release
+# loads them from an artifact of a job without keys, V1-03) and nothing is built or pulled.
 set -eu
 
 die() {
@@ -50,7 +52,11 @@ apk_key=$("$root/scripts/repo-keys.sh" apk-name "$keys/apk.rsa.pub")
 cp "$keys/apk.rsa" "$work/keys/$apk_key.rsa"
 
 for tool in apt rpm apk; do
-	docker build -q -t "sermon-repo-$tool" -f "$root/packaging/repo/$tool.Dockerfile" "$root/packaging/repo" >/dev/null
+	if [ "${SERMON_REPO_TOOLS:-}" = loaded ]; then
+		docker image inspect "sermon-repo-$tool" >/dev/null 2>&1 || die "SERMON_REPO_TOOLS=loaded, but there is no image sermon-repo-$tool"
+	else
+		docker build -q -t "sermon-repo-$tool" -f "$root/packaging/repo/$tool.Dockerfile" "$root/packaging/repo" >/dev/null
+	fi
 done
 
 # apt. No Valid-Until (M4-31): an expired Release fails apt-get update, and with it every update run
@@ -58,7 +64,7 @@ done
 # holds updates back, which whoever serves the repository can do anyway, and apt never downgrades.
 # Origin and label: install.sh pins sermon-agent and sermon-helper to them.
 cp "$packages"/*.deb "$out/apt/pool/main/"
-docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apt:/apt" -v "$work/keys:/keys:ro" -w /apt -e GNUPGHOME=/tmp/gnupg \
+docker run --rm --pull never --network none -u "$(id -u):$(id -g)" -v "$out/apt:/apt" -v "$work/keys:/keys:ro" -w /apt -e GNUPGHOME=/tmp/gnupg \
 	sermon-repo-apt sh -euc '
 		mkdir -m 0700 /tmp/gnupg && gpg --batch -q --import /keys/gpg.asc
 		for arch in amd64 arm64; do
@@ -76,7 +82,7 @@ docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apt:/apt" -v "$wo
 
 # rpm
 for rpm in "$packages"/*.rpm; do [ ! -e "$rpm" ] || cp "$rpm" "$out/rpm/"; done
-docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/rpm:/rpm" -v "$work/keys:/keys:ro" -w /rpm -e GNUPGHOME=/tmp/gnupg \
+docker run --rm --pull never --network none -u "$(id -u):$(id -g)" -v "$out/rpm:/rpm" -v "$work/keys:/keys:ro" -w /rpm -e GNUPGHOME=/tmp/gnupg \
 	sermon-repo-rpm sh -euc '
 		createrepo_c -q .
 		mkdir -m 0700 /tmp/gnupg && gpg --batch -q --import /keys/gpg.asc
@@ -96,7 +102,7 @@ for apk in "$packages"/*.apk; do
 	name=${file%_"$arch"}
 	cp "$apk" "$out/apk/$arch/$(echo "$name" | sed 's/_/-/').apk"
 done
-docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:ro" -e APK_KEY="$apk_key" sermon-repo-apk sh -euc '
+docker run --rm --pull never --network none -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:ro" -e APK_KEY="$apk_key" sermon-repo-apk sh -euc '
 	for arch in x86_64 aarch64; do
 		cd /apk/$arch
 		set -- ./*.apk

@@ -93,3 +93,68 @@ Gewählt (Product Owner, 2026-11-27): GHCR, GitHub-Environment mit Freigabe, cos
   GitHub“ im Threat Model (V1-03).
 - Folgearbeiten: V1-03 (`release.yml`, `release-please-config.json`, Probe-Release), V1-04 (Image per Digest in
   `deploy/compose`, Signaturprüfung in der Anleitung), V1-06 (Upgrade-Test `rc.1` → `rc.2`), V1-09 (Admin-Doku).
+
+## Nachtrag V1-03 (Release-Pipeline)
+
+Umgesetzt in `.github/workflows/release-please.yml`, `release.yml` und `release-pr.yml`; Anleitung für den Product
+Owner in [`docs/release.md`](../release.md).
+
+- **Start auf dem Tag ohne persönlichen Token:** Tags und Releases, die release-please mit dem `GITHUB_TOKEN` anlegt,
+  starten keine Workflows. `release-please.yml` startet deshalb nach dem Merge `release.yml` per `workflow_dispatch`
+  auf dem neuen Tag (`gh workflow run release.yml --ref vX.Y.Z`, Recht `actions: write`). Der Lauf hat so
+  `refs/tags/vX.Y.Z`: Die Environment-Regel „nur Tags `v*`“ greift, und die Identität für cosign bleibt
+  `…/release.yml@refs/tags/vX.Y.Z`.
+- **Draft bis zum Schluss:** release-please legt den Release als Draft an, den Tag sofort (`draft`,
+  `force-tag-creation`); erst der letzte Job lädt die Dateien hoch und veröffentlicht ihn. Ein veröffentlichter Release
+  wird nie geändert, eine veröffentlichte Version im Registry nie durch ein anderes Image ersetzt (ein erneuter Lauf
+  mit gleichem Digest ist erlaubt).
+- **Gate „kein Tag ohne Release-PR“:** Der erste Job verlangt einen Tag `vX.Y.Z` oder `vX.Y.Z-rc.N`, die Version im
+  Manifest, den Commit auf `main`, einen gemergten PR von `github-actions[bot]` aus einem Zweig `release-please--…` zu
+  diesem Commit und den Abschnitt „Upgrade“ in dessen Notes (`scripts/check-release-notes.sh`, auch als Prüfung
+  `release-pr` am PR und noch einmal vor dem Veröffentlichen). release-please überschreibt den Text des PRs bei jedem
+  Push; den Abschnitt trägt der Product Owner deshalb zuletzt ein.
+- **Versionen:** `versioning: prerelease` mit `prerelease-type: rc.1`: Jede Version ist zunächst ein Kandidat
+  (`1.0.0-rc.0` → `1.0.0-rc.1` → …, nach `1.0.0` → `1.0.1-rc.1`); einen Release macht `release-as: X.Y.Z` in einem
+  eigenen Commit, danach wird es wieder entfernt. (`prerelease-type: rc` ergäbe nach einem Release `X.Y.Z-rc` ohne
+  Nummer.) Agent und Helper bekommen die Version beim Bau (`SERMON_VERSION`, `just release-agent`), der Server über
+  `-X main.version`.
+- **Build-Jobs ohne Secrets und ohne Caches** (Cache-Poisoning): `agent` (musl amd64/arm64 mit der gepinnten
+  Toolchain, den committeten Public Keys und der Version, beides in den Binaries geprüft), `tools` (die Images von
+  nfpm und der Repo-Werkzeuge als Artefakt), `image` (Server-Image für beide Architekturen in ein OCI-Archiv, ohne
+  Rechte; Web-UI und Server auf der Build-Plattform, der Server cross-kompiliert, also ohne QEMU).
+- **Übergabe zwischen Jobs:** Jeder Job versiegelt sein Verzeichnis (`scripts/release-artifacts.sh`, SHA-256 aller
+  Dateien), der nächste prüft das Siegel gegen den Job-Output und lehnt geänderte, fehlende und zusätzliche Dateien ab.
+- **Signier-Job** (Environment `release`): außer GitHubs eigenen `checkout`, `download-artifact` und
+  `upload-artifact` keine Actions (das Hochladen braucht er, um die signierten Dateien weiterzugeben). Er lädt die
+  Werkzeuge aus dem Artefakt (`SERMON_NFPM_IMAGE`, `SERMON_REPO_TOOLS=loaded`, `docker run --pull never --network none`),
+  schreibt die Schlüssel nur nach `$RUNNER_TEMP` (0700, danach gelöscht) und prüft sie zuerst gegen die committeten
+  Public Keys (`scripts/release-keys.sh check`: Release-Key, OpenPGP-Fingerprint und Signieren ohne Passphrase,
+  apk-Schlüssel). Die eigentliche Arbeit macht `scripts/release-package.sh`, lokal mit Testschlüsseln ausführbar.
+- **Nachfolger von Anfang an:** `scripts/release-keys.sh generate` erzeugt zu jedem Schlüssel einen Nachfolger. Dessen
+  Public Keys stehen von Beginn an im Repo (`packaging/release-next.pub` im Helper als zweiter Schlüssel,
+  `packaging/keys/next/` in Paketen und Repos); die privaten nur in der Offline-Kopie. Ein Leck der Environment
+  trifft den Nachfolger nicht, und ein Wechsel nach einer Kompromittierung wirkt sofort auf allen Hosts mit einem
+  Release dieser Generation.
+- **Image:** gebaut ohne Rechte, veröffentlicht unverändert von einem eigenen Job (`skopeo copy --all
+  --preserve-digests`, `packages: write`, `id-token: write`), der keinen fremden Code ausführt; danach `cosign sign`
+  und `cosign attest --type cyclonedx`. Es bringt `/srv/downloads` (Agent und Helper, signiert) und `/srv/repo`
+  (apt, rpm, apk, Schlüssel) seiner Version mit; die Variablen zeigen ab Werk dorthin. **Abweichung von ADR 0036:**
+  Das Repo im Image enthält nur die eigene Version, nicht die letzten drei – ein Rollback ist das vorige Image mit
+  seinem Repo, apt stuft ohnehin nicht herab.
+- **Dateien des Releases:** Binaries mit `.minisig`, Pakete als `sermon-{agent,helper}-VERSION-{amd64,arm64}.{deb,rpm,apk}`
+  (nfpm schreibt `~` in die Namen, GitHub ändert es in Namen von Release-Dateien; im Repo bleiben die Namen von
+  nfpm), `sermon-repo-VERSION.tar.gz`, SBOMs `sermon-agent-VERSION.cdx.json` (aus `Cargo.lock`; ohne
+  `cargo-auditable` sieht syft in den Rust-Binaries nichts) und `sermon-server-VERSION.cdx.json` (Image),
+  `SHA256SUMS` mit `.minisig`, `sermon-server-VERSION.digest`, zu jeder Datei ein Sigstore-Bundle `.sigstore.json` und
+  die SLSA-Provenance `sermon-VERSION.intoto.jsonl`.
+- **Kandidaten bei apk:** apk nimmt eine Vorabversion nur mit Ziffern direkt nach dem Suffix; `package-agent.sh`
+  schreibt `1.0.0-rc.1` für apk als `1.0.0_rc1` (deb und rpm `1.0.0~rc.1`). `just test-packages` aktualisiert jetzt
+  über einen Kandidaten auf den Release.
+- **Prüfen:** `scripts/verify-release.sh VERSION` (auch `just verify-release`) prüft einen veröffentlichten Release
+  nur mit den Public Keys des Checkouts: minisign wie `install.sh`, Repos (Schlüsselliste signiert, apt und rpm mit
+  den committeten OpenPGP-Schlüsseln, nur Pakete des Releases), SBOMs, jedes Sigstore-Bundle gegen die Identität des
+  Tags, Image-Signatur, Tag = Digest des Releases, SBOM-Attestation und mit `slsa-verifier` die Provenance; der letzte
+  Job von `release.yml` führt es aus.
+- **Grenzen:** Der Probe-Release steht aus, bis der Product Owner Schlüssel und Environment angelegt hat; bis dahin
+  sind Lint, Skripte und Läufe mit Testschlüsseln (`just release-dry-run`) geprüft, nicht GitHub selbst. Das Paket auf GHCR ist nach dem ersten Push privat
+  und muss einmal öffentlich gestellt werden. Trivy-Scans der Images (ADR 0006) folgen nicht hier.

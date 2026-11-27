@@ -96,7 +96,8 @@
 			"matchPackageNames": [
 				"bufbuild/buf",
 				"rust-cross/cargo-zigbuild",
-				"betterleaks/betterleaks"
+				"betterleaks/betterleaks",
+				"anchore/syft"
 			],
 			"extractVersion": "^v(?<version>.+)$"
 		},
@@ -127,6 +128,16 @@
 			"prBodyNotes": [
 				"⚠️ Update `BETTERLEAKS_SHA256` in `.github/workflows/security.yml` from the release's `checksums.txt` – the secret scan fails on a checksum mismatch."
 			]
+		},
+		{
+			"matchPackageNames": [
+				"sigstore/cosign",
+				"anchore/syft",
+				"slsa-framework/slsa-verifier"
+			],
+			"prBodyNotes": [
+				"⚠️ Update `COSIGN_SHA256`, `SYFT_SHA256` or `SLSA_VERIFIER_SHA256` in `.github/workflows/release.yml` from the release's checksums – the release fails on a mismatch. A new cosign: also `COSIGN_IMAGE` in `deploy/compose/use-release.sh` and the commands in `docs/admin/installation.md`."
+			]
 		}
 	],
 	"customManagers": [
@@ -153,14 +164,16 @@
 			"datasourceTemplate": "crate"
 		},
 		{
-			"description": "Images pinned by digest outside compose files and Dockerfiles (M2-39): nfpm and the test hosts in scripts/, the base images of the E2E agent hosts (build args).",
+			"description": "Images pinned by digest outside compose files and Dockerfiles (M2-39): nfpm and the test hosts in scripts/, the base images of the E2E agent hosts (build args), BuildKit of the release and cosign of use-release.sh (V1-03, V1-04).",
 			"customType": "regex",
 			"managerFilePatterns": [
 				"/^scripts/.+\\.sh$/",
+				"/^deploy/compose/use-release\\.sh$/",
+				"/^\\.github/workflows/release\\.yml$/",
 				"/^deploy/e2e/compose\\.yaml$/"
 			],
 			"matchStrings": [
-				"(?:NFPM_IMAGE=|run \\S+ |BASE: \")(?<depName>[a-z0-9][a-z0-9./-]*):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+				"(?:NFPM_IMAGE=|COSIGN_IMAGE=|BUILDKIT_IMAGE: |run \\S+ |BASE: \")(?<depName>[a-z0-9][a-z0-9./-]*):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
 			],
 			"datasourceTemplate": "docker"
 		}

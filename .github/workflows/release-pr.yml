@@ -1,0 +1,32 @@
+# The release PR of release-please must say what the upgrade means (ADR 0043 §9): a section
+# "Upgrade" in its notes (above the second line "---"), checked whenever the PR changes – also
+# when someone edits its text. A required status check with branch protection (V1-16); for other
+# PRs the job is skipped, which counts as passed.
+name: release-pr
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  upgrade-notes:
+    name: release notes with a section "Upgrade"
+    if: startsWith(github.head_ref, 'release-please--')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n' "$BODY" | sh scripts/check-release-notes.sh --pr-body

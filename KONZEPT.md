@@ -1678,13 +1678,17 @@ SerMon/
 | `security.yml` | PR, nightly               | CodeQL (Go, JS/TS, Rust), `gosec`, `govulncheck`, `cargo-audit`, `cargo-deny` (Lizenzen und Advisories), `pnpm audit`, `betterleaks`, `trivy` (Images), OpenSSF Scorecard                                                                                                       |
 | `e2e.yml`      | PR (Label) und nightly    | Compose-Umgebung mit Agents auf allen Zieldistros (amd64; arm64 über QEMU nightly), Playwright                                                                                                                                                                               |
 | `fuzz.yml`     | nightly, PR (Agent, kurz) | `cargo-fuzz` / `go test -fuzz` mit Zeitbudget, Funde als Artefakt                                                                                                                                                                                                            |
-| `release.yml`  | Tag `v*` (release-please) | Cross-Builds (musl amd64/arm64), Server-Image (multi-arch, distroless/static, non-root), `.deb`/`.rpm`/`.apk` (nfpm), **SBOM** (CycloneDX via syft), **cosign keyless signing** + **SLSA-Provenance** (L3), GitHub Release, Paket-Repos aktualisieren (signiert mit GPG/RSA); Image auf GHCR, Signierschlüssel nur im Job der Environment `release` mit Freigabe ([ADR 0043](docs/adr/0043-release-prozess.md)) |
+| `release.yml`  | Tag `v*` (release-please) | Cross-Builds (musl amd64/arm64), Server-Image (multi-arch, distroless/static, non-root), `.deb`/`.rpm`/`.apk` (nfpm), **SBOM** (CycloneDX via syft), **cosign keyless signing** + **SLSA-Provenance** (L3), GitHub Release, Paket-Repos aktualisieren (signiert mit GPG/RSA); Image auf GHCR, Signierschlüssel nur im Job der Environment `release` mit Freigabe ([ADR 0043](docs/adr/0043-release-prozess.md)); gestartet von `release-please.yml` auf dem Tag des gemergten Release-PRs, zum Schluss `scripts/verify-release.sh` gegen den veröffentlichten Release |
+| `release-please.yml`, `release-pr.yml` | Push auf `main`, Release-PR | Release-PR mit Changelog; Pflichtabschnitt „Upgrade“ in seinen Notes |
 
 - **Actions per Commit-SHA gepinnt**, minimale `permissions:`, OIDC statt langlebiger Secrets.
 - **Renovate** für Abhängigkeiten (gruppiert, Auto-Merge nur für Patch-Releases von Dev-Dependencies).
 - **npm:** nur Releases, die mindestens 3 Tage alt sind (`minimumReleaseAge`), exakte Versionen, committetes Lockfile,
   Install-Skripte nur per Allowlist (ADR 0003).
 - Reproduzierbare Builds anstreben (`SOURCE_DATE_EPOCH`, `--locked`, `-trimpath`).
+- **Release-Schlüssel:** einmal mit `scripts/release-keys.sh` erzeugt (je mit Nachfolger, Offline-Kopie mit age), die
+  Public Keys in `packaging/`; Anleitung [`docs/release.md`](docs/release.md). Jeder Release ist mit
+  `scripts/verify-release.sh VERSION` nur mit diesen Public Keys prüfbar (minisign, Repos, SBOM, Sigstore, SLSA).
 
 ### Versionierung
 

@@ -1,0 +1,8 @@
+# zizmor (just lint-ci, security.yml): every action is pinned by SHA (ADR 0006), with one
+# exception – the reusable workflows of slsa-github-generator in release.yml: their builder checks
+# the ref it was called with and needs the tag (ADR 0043 §8).
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "slsa-framework/slsa-github-generator/*": ref-pin

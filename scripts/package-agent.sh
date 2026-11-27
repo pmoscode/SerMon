@@ -15,6 +15,7 @@
 #                        The agent package installs them for the package manager, so that its
 #                        updates bring new repository keys (M4-31); the .apk are signed under the
 #                        name of apk.rsa.pub (scripts/repo-keys.sh).
+#   SERMON_NFPM_IMAGE    an nfpm image already loaded (the release, V1-03); never pulled
 # nfpm runs as a container image pinned by digest; nothing is installed on the host.
 set -eu
 
@@ -72,12 +73,21 @@ cp "$SERMON_PKG_APK_KEY" "$work/keys/apk.rsa"
 # The passphrase goes by name only: its value would show in docker's command line (ps).
 NFPM_PASSPHRASE="${SERMON_PKG_KEY_PASSPHRASE:-}"
 export NFPM_PASSPHRASE
+# A release candidate (V1-03): nfpm writes 1.0.0-rc.1 as 1.0.0~rc.1 for deb and rpm, but apk
+# takes a suffix only with digits right after it (1.0.0_rc1, not 1.0.0_rc.1). All three sort the
+# candidate before its release.
+apk_version=$(printf '%s' "$version" | sed -E 's/-([a-z]+)\.([0-9]+)$/-\1\2/')
+# The release loads nfpm from an artifact (SERMON_NFPM_IMAGE) instead of pulling it.
+nfpm_image=$NFPM_IMAGE pull=missing
+[ -z "${SERMON_NFPM_IMAGE:-}" ] || nfpm_image=$SERMON_NFPM_IMAGE pull=never
 for config in nfpm helper; do
 	for packager in deb rpm apk; do
-		docker run --rm -q --network none -u "$(id -u):$(id -g)" -v "$work:/work" -w /work \
-			-e PKG_ARCH="$arch" -e PKG_VERSION="$version" \
+		pkg_version=$version
+		[ "$packager" != apk ] || pkg_version=$apk_version
+		docker run --rm -q --pull "$pull" --network none -u "$(id -u):$(id -g)" -v "$work:/work" -w /work \
+			-e PKG_ARCH="$arch" -e PKG_VERSION="$pkg_version" \
 			-e NFPM_PASSPHRASE \
-			"$NFPM_IMAGE" package --config "/work/root/$config.yaml" --packager "$packager" --target /work/ >/dev/null
+			"$nfpm_image" package --config "/work/root/$config.yaml" --packager "$packager" --target /work/ >/dev/null
 	done
 done
 mv "$work"/*.deb "$work"/*.rpm "$work"/*.apk "$out/"

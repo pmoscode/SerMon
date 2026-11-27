@@ -180,6 +180,18 @@ test-scripts:
     sh scripts/load-report_test.sh
     sh scripts/check-agent-allocator_test.sh
     sh scripts/repo-keys_test.sh
+    sh scripts/release-artifacts_test.sh
+    sh scripts/check-release-notes_test.sh
+    sh scripts/release-keys_test.sh
+    sh scripts/verify-release_test.sh
+
+# A release without GitHub, with keys of this run: binaries, signatures, packages, repositories, offline checks; IMAGE=1 also builds the server image of the release (V1-03; Docker required)
+release-dry-run version="0.0.1-rc.1":
+    scripts/release-dry-run.sh "{{ version }}"
+
+# Verify a published release with the public keys of this checkout: signatures, repositories, SBOM, Sigstore and SLSA (V1-03; cosign needed, slsa-verifier if installed)
+verify-release version:
+    scripts/verify-release.sh "{{ version }}"
 
 # Build the package sources of the E2E environment and check them on five distros (M4-08; Docker required)
 test-e2e-repos:
@@ -330,6 +342,30 @@ sign-agent key version:
     cp agent/target/aarch64-unknown-linux-musl/release/sermon-helper dist/agent/sermon-helper-linux-arm64
     scripts/release-sign.sh sign "{{ key }}" --version "{{ version }}" dist/agent/sermon-agent-linux-amd64 dist/agent/sermon-agent-linux-arm64 dist/agent/sermon-helper-linux-amd64 dist/agent/sermon-helper-linux-arm64
     echo "✓ dist/agent: binaries and minisign signatures"
+
+# Release binaries of agent and helper of VERSION into dist/agent/, unsigned (V1-03): with the committed release keys (packaging/release.pub, release-next.pub for a rotation) and VERSION, both checked in the binaries
+release-agent version:
+    #!/usr/bin/env sh
+    set -eu
+    [ -s packaging/release.pub ] || { echo "✗ no packaging/release.pub – scripts/release-keys.sh generate (docs/release.md)" >&2; exit 1; }
+    pub=$(head -1 packaging/release.pub)
+    next=$(head -1 packaging/release-next.pub 2>/dev/null || true)
+    SERMON_RELEASE_KEY="$pub" SERMON_RELEASE_KEY_NEXT="$next" SERMON_VERSION="{{ version }}" just build-agent
+    for t in {{ agent_targets }}; do \
+        for b in sermon-agent sermon-helper; do \
+            LC_ALL=C grep -aqF "{{ version }}" "agent/target/$t/release/$b" || { echo "✗ $t $b doesn't carry the version {{ version }}" >&2; exit 1; }; \
+        done; \
+        for k in "$pub" $next; do \
+            LC_ALL=C grep -aqF "$k" "agent/target/$t/release/sermon-helper" || { echo "✗ the $t helper doesn't carry the release key $k" >&2; exit 1; }; \
+        done; \
+    done
+    rm -rf dist/agent
+    mkdir -p dist/agent
+    cp agent/target/x86_64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-amd64
+    cp agent/target/aarch64-unknown-linux-musl/release/sermon-agent dist/agent/sermon-agent-linux-arm64
+    cp agent/target/x86_64-unknown-linux-musl/release/sermon-helper dist/agent/sermon-helper-linux-amd64
+    cp agent/target/aarch64-unknown-linux-musl/release/sermon-helper dist/agent/sermon-helper-linux-arm64
+    echo "✓ dist/agent: release binaries of {{ version }}, unsigned"
 
 # Build static release binaries for amd64 and arm64 (cargo-zigbuild, see ADR 0002)
 [working-directory: 'agent']

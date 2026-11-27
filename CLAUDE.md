@@ -172,6 +172,17 @@ Actions immer per Commit-SHA pinnen, die Version steht als Kommentar dahinter, u
 3 Tage alt sind. Rechte minimal halten und jede zusätzliche Berechtigung kommentieren. Nach jeder Workflow-Änderung
 `just lint-ci` (actionlint + zizmor) ausführen. Abhängigkeiten aktualisiert Renovate (`renovate.json`).
 
+Releases (V1-03, ADR 0043, Anleitung `docs/release.md`): `release-please.yml` hält den Release-PR (Konfiguration
+`release-please-config.json`, Version in `.release-please-manifest.json`; jede Version erst `X.Y.Z-rc.N`, ein Release
+über `release-as`), sein Merge startet `release.yml` auf dem Tag (`workflow_dispatch`); `release-pr.yml` verlangt den
+Abschnitt „Upgrade“ (`scripts/check-release-notes.sh`). Nur der Job `sign` (Environment `release`) kennt die Schlüssel
+(`SERMON_RELEASE_SIGNING_KEY`, `SERMON_PKG_GPG_KEY`, `SERMON_PKG_APK_KEY`); Dateien zwischen Jobs nur über
+`scripts/release-artifacts.sh` (Siegel). Bausteine, die lokal laufen: `just release-agent VERSION` (Binaries mit den
+Public Keys aus `packaging/`), `scripts/release-package.sh` (Arbeit des Signier-Jobs), `just release-dry-run` (alles
+mit Testschlüsseln, `IMAGE=1` mit Image), `just verify-release VERSION` (`scripts/verify-release.sh`, nur Public Keys).
+Die echten Schlüssel erzeugt `scripts/release-keys.sh generate` (einmal, Product Owner). Einzige Ausnahme vom Pinnen
+per SHA: die Generatoren von `slsa-github-generator` per Tag (`.github/zizmor.yml`).
+
 Datenbank (ADR 0007):
 - Migrationen in `server/migrations/` (goose, eingebettet).
 - Queries in `server/internal/adapters/postgres/queries/`, danach `just gen-sql`.

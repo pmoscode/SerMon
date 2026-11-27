@@ -1,6 +1,6 @@
 # Threat Model v1
 
-- Stand: 2026-11-27 (nach M5-33, V1-05)
+- Stand: 2026-11-27 (nach M5-33, V1-05, V1-03)
 - Bezug: KONZEPT.md §18; IMPLEMENTIERUNGSPLAN M0-12, M1-35; Skill `sermon-security-review`
 - Pflege: Bei jeder Änderung an einer Vertrauensgrenze (Protokoll, Rechte, Helper-Operationen, Secrets, ausgehende
   Verbindungen) wird dieses Dokument im selben Commit angepasst. Das Security-Review M1-35 und jedes spätere Review
@@ -15,8 +15,8 @@ Legende Stand: ✓ umgesetzt und getestet · ◐ teilweise · ☐ geplant (Aufga
 | A1 Kontrolle über die Nodes (Updates, Reboot, künftig Self-Update) | Helper auf jedem Node, Befehle vom Server | sehr hoch: Kompromittierung des Servers darf nicht root auf allen Nodes bedeuten |
 | A2 Agent-CA (Root- und Intermediate-Schlüssel) | PostgreSQL, versiegelt mit dem Master-Key | sehr hoch: erlaubt das Ausstellen beliebiger Node-Identitäten |
 | A3 Master-Keys (`SERMON_MASTER_KEYS_FILE`) | Datei bzw. Docker-Secret auf dem Server-Host | sehr hoch: öffnen alle versiegelten Secrets |
-| A4 Release-Signaturschlüssel | nur in der Release-Pipeline | sehr hoch: Installskript und Self-Update vertrauen nur ihm; der Helper nimmt zwei Schlüssel für die Rotation (ADR 0036) und erneuert sich seit M4-31 mit dem Agent: Rotation und Widerruf erreichen auch Skript-Installationen; die Paket-Repos haben eigene Schlüssel |
-| A12 Paket-Signaturschlüssel (OpenPGP für .deb/.rpm, RSA für .apk) | nur in der Release-Pipeline | hoch: Paketmanager vertrauen ihnen, sobald ein Admin den öffentlichen Schlüssel importiert |
+| A4 Release-Signaturschlüssel | nur in der Release-Pipeline (A15) | sehr hoch: Installskript und Self-Update vertrauen nur ihm; der Helper nimmt zwei Schlüssel für die Rotation (ADR 0036) und erneuert sich seit M4-31 mit dem Agent: Rotation und Widerruf erreichen auch Skript-Installationen; die Paket-Repos haben eigene Schlüssel |
+| A12 Paket-Signaturschlüssel (OpenPGP für .deb/.rpm, RSA für .apk) | nur in der Release-Pipeline (A15) | hoch: Paketmanager vertrauen ihnen, sobald ein Admin den öffentlichen Schlüssel importiert |
 | A5 Node-Identitäten (Agent-Schlüssel, Zertifikate) | `/var/lib/sermon-agent` auf den Nodes | hoch |
 | A6 Konten: Passwort-Hashes, TOTP-Seeds, Recovery-Codes, Sessions | PostgreSQL | hoch |
 | A7 Mandantendaten: Metriken, Logs, Security-Events, Inventar | PostgreSQL/TimescaleDB, Loki | hoch, personenbezogen (IP-Adressen, Usernamen, §18.7) |
@@ -25,6 +25,7 @@ Legende Stand: ✓ umgesetzt und getestet · ◐ teilweise · ☐ geplant (Aufga
 | A10 Zugangsdaten für Kanäle und Module | PostgreSQL, versiegelt; Modul-Zugangsdaten zusätzlich im Speicher des Agents (ADR 0039) | hoch (Zugang zu Drittsystemen) |
 | A11 Verfügbarkeit des Servers | Server, Datenbank | mittel (Monitoring fällt aus, Agents puffern 24 h) |
 | A13 Backup-Dateien (`sermon-server backup`, V1-05) | beim Betreiber, auch außerhalb des Servers, oft jahrelang | sehr hoch: enthalten A2, A6, A8–A10 aller Organisationen (Secrets versiegelt, ohne Master-Keys) und A7 ohne Metriken |
+| A15 Die privaten Schlüssel von A4 und A12 in GitHub (V1-03, ADR 0043) | Secrets der GitHub-Environment `release` (nur `current`), nur im Signier-Job nach Freigabe durch den Product Owner; alle Schlüssel samt Nachfolgern (`next`) als age-verschlüsselte Offline-Kopie beim Product Owner | sehr hoch: wie A4 und A12 – root auf allen Nodes mit Self-Update bzw. Repo; die Offline-Kopie ist der Weg aus einer Kompromittierung |
 | A14 Geheimer Backup-Schlüssel (age) | beim Betreiber, nicht auf dem Server; nur für einen Restore im Container `restore` | sehr hoch: öffnet jedes Backup (mit A3 alles darin) |
 
 ## 2. Akteure
@@ -76,6 +77,8 @@ flowchart LR
   Agent -- "TB1b: mTLS 1.3, Client-Zertifikat<br/>(Agent-Port, direkt veröffentlicht)" --> Server
   Server -- "TB5: ausgehend, SSRF-Schutz" --> Channels
   Release -- "TB6: signierte Binaries,<br/>Key im Server einkompiliert" --> Server
+  GitHub["GitHub (Actions, Environment release,<br/>Releases, GHCR)"]
+  GitHub -- "TB10: Freigabe, Secrets nur<br/>im Signier-Job" --- Release
 ```
 
 | Grenze | Zwischen | Was sie schützt |
@@ -89,6 +92,7 @@ flowchart LR
 | TB7 | Agent ↔ Dienste des Hosts (Module, ab M5) | internes Netz des Hosts, Zugangsdaten der Dienste, Budget des Agents |
 | TB8 | Kiosk-Anzeige ↔ Server (ab M5) | Daten eines geteilten Dashboards ohne Session, Kiosk-Token |
 | TB9 | Backup ↔ Ablage des Betreibers (ab V1-05) | alle Organisationen in einer Datei, Integrität beim Restore |
+| TB10 | Release-Pipeline ↔ GitHub (Actions, Environment `release`, Releases, GHCR; ab V1-03) | A15, Integrität von Image, Binaries, Paketen und Repos jedes Releases |
 
 ## 4. Bedrohungen (STRIDE) nach Grenze
 
@@ -224,7 +228,7 @@ flowchart LR
 | T49 | T | Server liefert Binaries aus einem fremden Verzeichnis (Path-Traversal, Symlink) | nur feste Dateinamen, Lesen über `os.Root` | M1-27 | ✓ |
 | T50 | T | Kompromittierter Server liefert ein manipuliertes `install.sh` | Grenze von `curl | sh` (O5): „Skript erst ansehen“, Paket-Repo als Alternative, Signaturschlüssel nicht auf dem Server | M1-27, E4.5 | ◐ |
 | T64 | T | Bei selbstsigniertem Server-Zertifikat liefert ein Angreifer im Netz ein eigenes `install.sh` (`curl -k`) | die UI holt die SHA-256 des Skripts über die Verbindung des Browsers (`X-Sermon-Script-SHA256`), der Befehl prüft es mit `sha256sum -c`, bevor `sudo` es ausführt (statt SPKI-Pin, ADR 0012) | M1-37 | ✓ |
-| T51 | T | Release-Schlüssel kompromittiert oder fehlt | Schlüssel nur in der Release-Pipeline; ohne einkompilierten Key verweigert das Skript die Installation; `release-sign.sh` nimmt nur Ed25519-Schlüssel | v1.0 (Release-Prozess) | ☐ (Schlüssel erzeugen, `release.yml`) |
+| T51 | T | Release-Schlüssel kompromittiert oder fehlt | Schlüssel nur in der Release-Pipeline (A15, TB10); ohne einkompilierten Key verweigert das Skript die Installation; `release-sign.sh` nimmt nur Ed25519-Schlüssel; `scripts/release-keys.sh` erzeugt die echten Schlüssel samt Nachfolgern nur in einem temporären Verzeichnis, die Nachfolger sind von Anfang an im Helper und in den Repos, ihr privater Teil nur offline – ein Wechsel nach einer Kompromittierung wirkt sofort (V1-03) | v1.0 (Release-Prozess), V1-03 | ◐ (Schlüssel und Environment legt der Product Owner an, `docs/release.md`) |
 | T71 | T | Manipuliertes oder fremdes Agent-Paket (.deb, .rpm, .apk); ein Upgrade löscht die Identität; ein Paket startet einen Agent ohne Server | jedes Paket signiert (`package-agent.sh` baut ohne Schlüssel nicht; .deb als `_gpgorigin`, .rpm mit OpenPGP, .apk mit RSA), Schlüssel getrennt vom minisign-Release-Schlüssel und nur in der Release-Pipeline, Test-Schlüssel nur pro Lauf; Tests: Signatur gut, ohne Schlüssel bzw. verändert abgelehnt (`just test-packages`); Remove-Skripte unterscheiden Upgrade und Entfernen (Test: Upgrade behält die Identität); der Dienst startet erst nach Enrollment durch den Admin, Rechte wie bei `install.sh` | M2-21 | ✓ (Paket-Repos: offen) |
 | T52 | T | Kompromittierte Abhängigkeit oder Action | exakt gepinnte Versionen, Mindestalter 3 Tage, Actions per SHA, cargo-deny, govulncheck, pnpm audit, zizmor, Secret-Scan | M0-06 (ADR 0005, 0006) | ✓ |
 | T53 | T | Fehlerhafte Parser für untrusted Input auf dem Node | cargo-fuzz für `/proc`-Parser, WAL-Recovery, Journal-Zeilen (`journal_line`), Security-Parser (`security_parser`) und Redaction mit Regeln der Org (`redaction`, M3-02), proptest; Logdateien mit E3.1; Mehrzeilen-Assembler der Logdateien (`multiline`, M3-05) | M1-15, M2-05, M2-06, E3.1, M3-05 | ✓ |
@@ -264,6 +268,18 @@ sieht nie mehr als beide (M5-33).
 | T117 | T/S | Jemand mit dem (öffentlichen) Backup-Schlüssel oder Zugriff auf die Ablage baut oder verändert ein Backup (eigener Superadmin, eigene Agent-CA) und lässt es einspielen | Kopf mit versiegelter ID und Siegel über den SHA-256 aller Datensätze, beides mit den Master-Keys: fremde Master-Keys brechen vor der Datenbank ab, ein falsches Siegel rollt die eine Transaktion des Restores zurück; age authentifiziert jeden Block und erkennt Abschneiden; Datensätze höchstens 1 MiB, Namen gegen das Schema geprüft, Leser gefuzzt; Restore nur in eine Datenbank ohne User und Organisationen, Exit-Code 3 und nichts geändert | V1-05 | ✓ |
 | T118 | E/I | Die Rolle `sermon_backup` liest alle Organisationen (BYPASSRLS) – im falschen Container oder für die falsche Aufgabe | Nur `LOGIN BYPASSRLS` mit `pg_read_all_data`, kein Schreibrecht; eigenes Passwort, die URL nur im einmaligen Service `backup` (`check-compose --hardened`); der Server verweigert ohnehin Rollen mit BYPASSRLS (`postgres.Open`); im Snapshot `row_security = off`: eine Rolle, für die RLS gilt, bekommt einen Fehler statt eines stillen Teil-Backups (Test) | V1-05 | ✓ |
 | T119 | E/T | Der Restore hebt `FORCE ROW LEVEL SECURITY` und die Trigger (Hash-Kette des Audit-Logs) auf; bleibt das, ist die zweite Linie der Mandantentrennung weg | Nur als `sermon_owner` in einer Transaktion mit Sperren aller Tabellen; Trigger und `FORCE` vor dem Commit wieder gesetzt, ein Fehler rollt alles zurück; Tests prüfen danach `FORCE` auf jeder Tabelle, aktive Trigger und die unveränderte Hash-Kette | V1-05 | ✓ |
+
+### TB10 – Release-Pipeline ↔ GitHub (ab V1-03)
+
+| # | STRIDE | Bedrohung | Gegenmaßnahme | Aufgabe | Stand |
+|---|---|---|---|---|---|
+| T124 | I/E | Eine kompromittierte Action, Abhängigkeit oder ein vergifteter Cache in einem Build-Job liest die Signierschlüssel oder signiert eigenen Code | Die Schlüssel kennt nur der Job `sign` in der Environment `release` (Freigabe durch den Product Owner, nur Tags `v*`); er nutzt außer GitHubs `checkout`, `download-artifact` und `upload-artifact` keine Actions, baut nichts und zieht keine Images (die Werkzeuge kommen als Artefakt aus einem Job ohne Secrets), die Container mit den Schlüsseln laufen `--network none --pull never`. Build-Jobs ohne Secrets und ohne Caches; Actions per SHA, Werkzeuge mit Prüfsumme, die SLSA-Generatoren per Tag (ADR 0043 §8) | V1-03 | ✓ |
+| T125 | T | Dateien werden zwischen den Jobs getauscht oder ergänzt (jemand mit Schreibrecht auf die Artefakte des Laufs, ein Job, der fremde Artefakte überschreibt), der Signier-Job signiert sie | Jeder Job versiegelt sein Verzeichnis, der nächste prüft das Siegel gegen den SHA-256 aus dem Job-Output und lehnt geänderte, fehlende, zusätzliche Dateien und Links ab (`scripts/release-artifacts.sh`, Tests); das Image baut ein Job ohne Rechte in ein OCI-Archiv, der Push-Job schiebt es unverändert (`--preserve-digests`, Digest geprüft) | V1-03 | ✓ |
+| T126 | S/T | Ein Tag ohne Release-PR (von Hand, auf einem Zweig, auf einem alten Commit) bringt ungeprüften Code in ein signiertes Release | Gate: Tag `vX.Y.Z[-rc.N]` = Version im Manifest, Commit auf `main`, gemergter PR von `github-actions[bot]` aus `release-please--…` zu genau diesem Commit mit Abschnitt „Upgrade“; danach die Freigabe des Product Owners; Tags `v*` gegen Verschieben und Löschen geschützt (Ruleset, `docs/release.md`) | V1-03 | ◐ (Ruleset und Branch-Schutz legt der Product Owner an, V1-16) |
+| T127 | T | Ein falscher Schlüssel in der Environment (vertauscht, der Nachfolger, ein fremder) signiert ein Release, das Hosts ablehnen oder – mit einem fremden Schlüssel – nie hätten annehmen dürfen | Der Signier-Job prüft zuerst jeden privaten Schlüssel gegen die committeten Public Keys (`scripts/release-keys.sh check`: Release-Key, Fingerprint und Signieren ohne Passphrase bei OpenPGP, apk), Agent und Helper tragen geprüft genau diese Public Keys und die Version (`just release-agent`) | V1-03 | ✓ |
+| T128 | T/R | Ein veröffentlichtes Release oder Image wird nachträglich ersetzt (Tag verschoben, Dateien getauscht), Admins ziehen etwas anderes als geprüft | Der Push lehnt einen vorhandenen Tag mit anderem Digest ab, `publish` ändert nur Drafts; cosign keyless mit der Identität `…/release.yml@refs/tags/vX.Y.Z` (Eintrag in Rekor), Sigstore-Bundle für jede Datei, SLSA-Provenance; `scripts/verify-release.sh` prüft Signaturen, Repos, Tag = Digest und Provenance (letzter Job des Releases); `deploy/compose` pinnt per Digest (V1-04) | V1-03, V1-04 | ◐ (`deploy/compose`: V1-04) |
+| T129 | S/E | Ein übernommenes GitHub-Konto des Product Owners oder eine Lücke bei GitHub gibt die Freigabe und damit A15 | Rest: 2FA, Freigabe nur durch den Product Owner; die Offline-Kopie und die vorab verteilten Nachfolger erlauben den Wechsel ohne GitHub (`docs/release.md`: Schlüssel wechseln, Advisory); jede Signatur steht im öffentlichen Rekor-Log | V1-03 | ◐ (Restrisiko, ADR 0043) |
+| T130 | I | Die Schlüssel bleiben auf dem Runner oder in Logs zurück | Dateien nur unter `$RUNNER_TEMP` (0700), ein Schritt mit `if: always()` löscht sie, die Variablen sind vor dem Aufruf der Skripte gelöscht, die Skripte geben nie Schlüssel aus; die Kopien für nfpm und die Repo-Werkzeuge liegen außerhalb der Ausgabe und gehen bei jedem Ausgang (M4-30); GitHub-Runner sind flüchtig; `release-keys.sh` schreibt private Schlüssel nur ins temporäre Verzeichnis und verschlüsselt in die Offline-Kopie (Test: nichts bleibt, nichts Privates in `packaging/` und in der Ausgabe) | V1-03 | ✓ |
 
 ## 5. Restrisiken und bewusste Entscheidungen
 

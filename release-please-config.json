@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.6.0/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "draft": true,
+  "force-tag-creation": true,
+  "prerelease": true,
+  "versioning": "prerelease",
+  "prerelease-type": "rc.1",
+  "pull-request-title-pattern": "chore: release ${version}",
+  "pull-request-header": "Release-PR von release-please (ADR 0043). Merge = Draft-Release und Tag, danach baut `release.yml`; die Signatur braucht die Freigabe der Environment `release`.",
+  "pull-request-footer": "**Vor dem Merge:** oberhalb der Linie `---` einen Abschnitt `### Upgrade` ergänzen (Breaking Changes, neue Secrets oder Einstellungen, Daten, die das Upgrade löscht, Rollback). Ohne ihn schlägt die Prüfung `release-pr` fehl und `release.yml` baut nicht. release-please überschreibt den Text bei jedem Push auf `main` – den Abschnitt zuletzt eintragen (docs/release.md).",
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "revert", "section": "Reverts" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "chore", "section": "Miscellaneous", "hidden": true },
+    { "type": "refactor", "section": "Refactoring", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "package-name": "sermon",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}

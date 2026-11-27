@@ -6260,7 +6260,49 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Repos, `install.sh`), Rollback-Hinweise in den Release-Notes.
 - **Abhängig von:** –
 
-#### ☐ V1-03 – Release-Pipeline · X · L 🔒
+#### ◐ V1-03 – Release-Pipeline · X · L 🔒
+> Stand (2026-11-27): Pipeline, Skripte und Tests fertig; der Probe-Release fehlt, bis der Product Owner Schlüssel und
+> Environment angelegt hat ([`docs/release.md`](release.md), [ADR 0043](adr/0043-release-prozess.md), Nachtrag V1-03).
+> - **Workflows:** `release-please.yml` (Release-PR, Merge = Draft-Release und Tag, startet `release.yml` per
+>   `workflow_dispatch` auf dem Tag – Tags des `GITHUB_TOKEN` starten nichts), `release-pr.yml` (Abschnitt „Upgrade“,
+>   `scripts/check-release-notes.sh`), `release.yml`: Gate (Tag = Manifest, auf `main`, gemergter PR von release-please,
+>   Upgrade, committete Public Keys) → `agent` (`just release-agent`: musl amd64/arm64, Public Keys und Version in den
+>   Binaries geprüft; SBOM per syft) und `tools` (nfpm- und Repo-Images als Artefakt), ohne Secrets und Caches → `sign`
+>   in der Environment `release` (nur `checkout`, `download-artifact`, `upload-artifact`; Siegel geprüft, Schlüssel
+>   gegen die Public Keys, `scripts/release-package.sh` mit Containern `--network none --pull never`) → `image` (beide
+>   Architekturen ohne QEMU in ein OCI-Archiv, ohne Rechte) → `push` (skopeo, Tag nie ersetzt, `X.Y` nur für Releases,
+>   cosign sign und SBOM-Attestation) → SLSA-Provenance (generic und container, per Tag) → `publish` (Sigstore-Bundle
+>   je Datei, Notes mit Digest, Draft veröffentlichen) → `verify` (`scripts/verify-release.sh --require-slsa`).
+> - **Versionen:** `release-please-config.json` mit `versioning: prerelease`, `prerelease-type: rc.1` (jede Version
+>   erst Kandidat, ein Release über `release-as`), Manifest `1.0.0-rc.0`: der erste Release-PR wird `1.0.0-rc.1`.
+> - **Skripte:** `release-artifacts.sh` (Siegel zwischen Jobs), `release-keys.sh` (echte Schlüssel samt Nachfolgern
+>   nur im temporären Verzeichnis, age-Offline-Kopie, Secrets per `gh` ohne Anzeige; `check` für den Signier-Job),
+>   `release-package.sh`, `verify-release.sh`, `release-dry-run.sh` (`just release-dry-run`); `package-agent.sh`
+>   (`SERMON_NFPM_IMAGE`, Kandidaten bei apk als `_rcN`), `build-repos.sh` (`SERMON_REPO_TOOLS=loaded`). Server-Image:
+>   Bühne `release-files` (per `--build-context` ersetzt), Cross-Build, `/srv/downloads` und `/srv/repo`.
+> - **Befunde:** Eine Vorabversion `1.0.0_rc.1` lehnt apk ab (behoben, `just test-packages` geht jetzt über
+>   `0.0.3-rc.1` auf `0.0.3`); BuildKit nimmt für `COPY --from=<Kontext> /` eine zwischengespeicherte Kopie eines
+>   anderen Kontexts (deshalb je Verzeichnis kopiert, gegen den Cache geprüft).
+> - **Tests:** `test-scripts` mit vier neuen Suites (Siegel; Notes 14 Fälle; Schlüssel: Erzeugen, nichts Privates
+>   außerhalb, Bundle öffnet, nur `current` an GitHub, `check` lehnt vertauschte, doppelte, leere und
+>   passphrasegeschützte Schlüssel ab; `verify-release` gegen einen Release mit Testschlüsseln: 23 Arten des
+>   Fälschens offline, 10 Fälle online mit Fakes für cosign und slsa-verifier); `just lint-ci` sauber
+>   (zizmor-Ausnahme nur für die SLSA-Generatoren). Gegenproben 32/32 (nach Nachschärfen der Tests: neun überlebten zunächst, weil spätere
+>   Prüfungen dieselben Fälle fingen).
+> - **Offen:** `just release-dry-run` mit `IMAGE=1`, `just test-packages` und der Bau des Images aus dem Quellcode
+>   laufen erst, wenn Docker frei ist (Lasttest V1-08); der Probe-Release.
+>
+> **Was der Product Owner tun muss** (Einzelheiten in `docs/release.md`, „Einmal einrichten“):
+> 1. Environment `release` anlegen: Required reviewers = Product Owner, nur Tags `v*`.
+> 2. `scripts/release-keys.sh generate --recipient … --bundle … --set-secrets pmoscode/SerMon` auf einem
+>    vertrauenswürdigen Rechner; die drei Secrets stehen danach in der Environment.
+> 3. Offline-Kopie und age-Identität getrennt sichern und prüfen, dass sie aufgeht.
+> 4. `packaging/release.pub`, `packaging/release-next.pub`, `packaging/keys/` committen und nach `main` pushen.
+> 5. Settings → Actions: „Allow GitHub Actions to create and approve pull requests“ an.
+> 6. Ruleset für Tags `v*`: Updates und Löschen verbieten.
+> 7. Den Release-PR `1.0.0-rc.1` abwarten, `### Upgrade` eintragen, mergen, den Signier-Job freigeben.
+> 8. Danach das Paket `sermon-server` auf GHCR öffentlich stellen; der Job `verify` (bzw. `just verify-release
+>    1.0.0-rc.1`) muss grün sein – dann ☑.
 - **Ziel:** `release.yml` nach V1-02: reproduzierbare Builds von Server-Image, Agent und Helper (amd64, arm64),
   signierte Binaries und Repos mit den echten Schlüsseln (`just sign-agent`, `scripts/build-repos.sh`), SBOM, cosign-
   Signaturen und SLSA-Provenance, Release-Notes; Rechte minimal, Actions per SHA (ADR 0006), Schlüssel nur in einer

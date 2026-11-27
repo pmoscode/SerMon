@@ -1,0 +1,53 @@
+# Release PRs (V1-03, ADR 0043 §1): release-please keeps a release PR with the changelog from the
+# Conventional Commits of main. Its merge creates the draft release and the tag vX.Y.Z; then this
+# workflow starts release.yml on that tag. (Tags made with the GITHUB_TOKEN start no workflows,
+# workflow_dispatch is the exception – no personal token needed.)
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # the branch of the release PR, the draft release and its tag
+      pull-requests: write # open and update the release PR
+      issues: write # the labels release-please keeps on the release PR ("autorelease: pending")
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  start-release:
+    name: start release.yml on the tag
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # start release.yml (workflow_dispatch) on the new tag
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
+            echo "::error::release-please made the tag $TAG, which is no release version"; exit 1
+          fi
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"

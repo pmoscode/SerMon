@@ -6145,18 +6145,199 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - Die Security-Review hat keine offenen kritischen Findings; die neue Vertrauensgrenze „Module“ im Threat Model ist
   erledigt.
 
+### 8.7 Review M5 (2026-11-27)
+
+**1. Ziel erreicht: ja.** `just e2e-demo` mit den neuen Projekten `modules` und `kiosk` (lokal auf arm64 grün in
+21,9 min) und `just e2e-demo-full` mit allen zehn Projekten (34,0 min), beide nach M5-33:
+
+- Die Fleet schlägt auf web-01 „nginx erkannt – Modul aktivieren?“ vor; nach dem Aktivieren für die Gruppe (mit
+  Step-up) kommen nach 30 s nginx-Metriken, ein gestopptes nginx löst nach rund 160 s „nginx down“ aus, das nach dem
+  Start wieder endet.
+- Ein eigenes Dashboard, als JSON importiert und geteilt, läuft im Kiosk-Modus mit einem Kiosk-Token in einem Browser
+  ohne Session; nach dem Widerruf zeigt die laufende Anzeige binnen 30 s nichts mehr.
+
+| Kriterium | Stand |
+|---|---|
+| Demo-Test M5-32 grün | ✓ 10/10 Projekte (2026-11-27, nach M5-33) |
+| Module ab Werk aus, Fixtures je Version, Zeit- und Größengrenzen, Parser gefuzzt | ✓ 13 Module (dazu `simulate`, nur mit Feature); Fixtures unter `agent/fixtures/modules/` (u. a. PostgreSQL 13–17, MySQL 8.4/9, MariaDB 10.11–11.8, smartmontools 7.2–7.5, cgroup v2 von Docker und Podman); Fuzz-Ziele `module_parsers`, `module_clients`, `postgres_wire`, `mysql_wire`, `db_logins`, `cgroup_parsers`, `smart_parser` |
+| Hängendes oder abstürzendes Modul stört nichts (Test) | ✓ `runtime/tests.rs`: Hänger, Panic in `build` und `collect`, Timeout, zu viele Samples, fremde Metrik – die anderen Module laufen weiter |
+| Zugangsdaten nie im Klartext in Datenbank, Logs, WAL, Audit-Log (Test) | ✓ M5-05: Tests durchsuchen jede Tabelle, die Logs von Server und Agent und die Dateien des Agents; der Logger lässt `debug_redact`-Felder weg (M5-33) |
+| Kiosk-Token liest nur sein Dashboard, widerrufbar (Test) | ✓ `kiosk_integration_test.go`: jede RPC mit Token wie ohne; widerrufen, abgelaufen, fremde Org; Demo-Projekt `kiosk` |
+| Neue RPCs in den Tabellen | ✓ `ModuleService`, `DashboardService`, `KioskService`, Lebenszyklus der Nodes und Retention in den Tabellen für Tenant-Isolation und Step-up |
+| Ressourcen-Budget mit Modulen, auch am Ende | ✓ alle neun Module der Wellen ① und ② auf web-01: 0,37–0,40 % eines Kerns, 7,4–9,5 MiB eigener Speicher, auch am Ende des vollen Laufs (M5-31) |
+| Helper in seiner Zeilengrenze, SMART reviewt | ✓ 1 795 von 1 800 Zeilen (Platz durch Refactoring); `ReadSmart` in Review B ohne Befund im Helper selbst |
+| Security-Review ohne offene kritische Findings, TB7 erledigt | ✓ M5-33 ohne kritischen und hohen Befund; alle mittleren und niedrigen behoben; TB7 (T107–T111) erledigt, Restrisiken bei T107 und T109 |
+
+Abweichungen vom Ziel des Meilensteins:
+
+- PostgreSQL und MySQL/MariaDB sind nicht in der Demo, nur auf web-01 für das Budget; ihre Protokolle prüft
+  `just test-db-modules` gegen echte Server (seit dem Review in CI).
+- Der Prometheus-Scraper bildet fremde Serien auf zwei feste Metriken ab (Name und Labels in Labels), statt den
+  Katalog zu öffnen (Nachtrag ADR 0039).
+- `DeviceAllow` schützt die Disks nicht vor Schreiben: smartctl braucht genau die Rechte, die das erlauben (Nachtrag
+  ADR 0035).
+- Retention der Logs je Org über die Lösch-API von Loki: Logs bleiben bis zu einen Tag länger sichtbar als
+  eingestellt (Nachtrag ADR 0029).
+- Nach dem Löschen eines Nodes behalten Audit-Log, Protokoll der Benachrichtigungen und Silences seine ID und den
+  Hostnamen (ADR 0041).
+- Verlässt der Besitzer eines geteilten Dashboards die Org, zeigt seine Kiosk-Anzeige nichts mehr (Nachtrag ADR 0040).
+
+**2. Erkenntnisse und ADRs.** In M5 entstanden die ADRs 0039 bis 0041 sowie Nachträge zu 0029, 0035, 0039 und 0040.
+Es fehlt kein ADR. Erkenntnisse für v1.0:
+
+- **Parallele Bahnen in eigenen Worktrees tragen.** Fünf Bahnen (Module im Server, Dashboards, Querschnitt, zwei für
+  Agent-Module) erledigten M5-04 bis M5-30 in gut einem Tag; jede Bahn integrierte nach jeder Aufgabe selbst per
+  `git merge --ff-only` nach `main`, der Haupt-Worktree blieb unberührt. Voraussetzungen: vorher festgelegte Formate
+  (Schema-Dateien, Katalog), reservierte Nummernbereiche (Migrationen, ADRs) und gemeinsame Regeln in einer Datei.
+- **Was dabei schiefging:** Migrationen kamen nicht in Nummernfolge an (`00061` nach `00063`; eine Dev-Datenbank
+  braucht `just dev-reset`) – künftig Nummern erst beim Integrieren vergeben. Zwei Bahnen hoben die Gesamtgrenze der
+  Bundles an (520 → 600 KiB), bis die Demo unter Linux auch die überschritt; erst die Hilfetexte als JSON brachten 494
+  KiB – Grenzen nur zentral ändern. Gesperrte GPG-Schlüssel und ein ausgeschöpftes Budget hielten alle Bahnen
+  zugleich an; unter Last und mit festen Ports (vitest) werden Tests wackliger.
+- **Reviews ohne Kontext finden, was Tests und Fuzzer nicht finden.** Die Herabstufung der PostgreSQL-Anmeldung
+  (Klartext nach begonnenem SCRAM) blieb trotz Fuzzing unentdeckt, weil die Fuzzer die Parser, nicht die
+  Zustandsfolge der Anmeldung trafen; das Fuzz-Ziel `db_logins` fand danach eine wieder eingebaute Lücke in Sekunden.
+  Eigene Protokoll-Clients brauchen Fuzzer für ihre Zustandsautomaten.
+- **Die Demo findet, was lokal grün ist:** Linux zählt Bundles 0,3 % größer als macOS, ein Kontrast verfehlte axe,
+  der Anomalie-Worker hielt seine Leases über einen Neustart. Die Demo bleibt der Abschluss jeder Aufgabe mit
+  Laufzeit-Verhalten.
+- **Eigene kleine Clients statt Treiber-Crates** (PostgreSQL, MySQL, Redis, HTTP über hyper): `tokio-postgres` allein
+  hätte rund 58 Crates und 450 KiB gebracht; der Agent bleibt bei 0,4 % CPU und unter 10 MiB eigenem Speicher. Der
+  Preis ist eigene Sorgfalt bei Anmeldung und TLS (Review B).
+- **Die schnelle Demo dauert jetzt 21,9 min**, die volle 34 min.
+- **Offen aus M5** (Hinweise der Review, für v1.x): Zugangsdaten im Speicher nicht genullt, `canonicalize` im
+  async-Executor, TLS für Redis, Serien-Budget des Scrapers im Server, Fleet-Übersicht des Kiosks je Widget gelesen.
+  Im Review erledigt: der Update-Orchestrator gibt seine Leases beim Stoppen frei, `just test-db-modules` in CI.
+- **Offen aus M4:** M2-35 (Kanäle gegen die echten Dienste) ohne Konten; Release-Pipeline mit echten Schlüsseln.
+
+**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16).
+
 ---
 
 ## 9. v1.0 – Release
 
-| Aufgabe | Inhalt |
-|---|---|
-| Pentest / externes Review | Agent, Helper, Enrollment, Web-API, Mandantentrennung |
-| Performance-Nachweis | 50 simulierte Nodes über 7 Tage, Ressourcen dokumentiert (§22) |
-| Upgrade- und Restore-Tests | Datenbank der Vorversion → Migration → Tests; `sermon-server backup` (KONZEPT §22, gibt es noch nicht; offen aus M2-26) und Restore in CI |
-| Dokumentation | Admin-Doku (Installation, Backup, Upgrade, Härtung), User-Doku, Hilfetexte vollständig DE und EN, Vorlage für die DSGVO-Dokumentation |
-| Release-Prozess | release-please, SBOM, cosign, SLSA-Provenance, signierte Repos, Release-Notes; veröffentlichte Server-Images, auf die `image:` in `deploy/compose` zeigt (bisher Build aus dem Quellcode, M2-26) |
-| Branch-Schutz | `main` nur noch per PR mit grüner CI (erforderliche Status-Checks), kein Force-Push; erst nach der Implementierung (Wunsch des Product Owners) |
+**Ziel:** Ein Admin installiert SerMon aus veröffentlichten, signierten Artefakten nach der Anleitung, sichert es und
+stellt es wieder her, aktualisiert von der Vorversion ohne Datenverlust; 50 Nodes laufen eine Woche im Budget; ein
+externes Review hat keine offenen kritischen oder hohen Befunde.
+
+**Aufgaben** (Zerlegung im Review M5, §8.7). Reihenfolge: erst CI auf GitHub und die Release-Pipeline (alles Weitere
+testet gegen veröffentlichte Artefakte), dann Backup, Upgrade und Performance, dann Doku und externes Review.
+Branch-Schutz kommt zuletzt (Wunsch des Product Owners).
+
+**Kritischer Pfad:** V1-01 → V1-03 (mit V1-02) → V1-04 → V1-06 und V1-12 → V1-15 → V1-16. Parallel und ohne
+Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11, V1-13; V1-09 nach V1-04 und V1-05.
+
+#### ☐ V1-01 – CI auf GitHub grün · X · M
+- **Ziel:** Alles lief bisher lokal (macOS, arm64); nach dem Push laufen `ci.yml`, `security.yml`, `fuzz.yml` und
+  `nightly.yml` erstmals mit den M5-Änderungen auf Linux amd64. Linux-Zweige, die lokal nie liefen (Veto über
+  `/proc/self/fd`, Verhalten von `/tmp`, M5-33), Laufzeiten der Jobs, Caches; wackelige Tests unter Last finden und
+  beheben statt wiederholen.
+- **Tests zuerst:** die Pipelines selbst; jeder Fehlschlag mit reproduzierendem Test lokal oder im Container.
+- **Abhängig von:** – (Push durch den Product Owner)
+
+#### ☐ V1-02 – ADR Release-Prozess · X · S 🔒
+- **Ziel:** ADR: Versionierung (SemVer, ein Versionsstand für Server, Agent und Helper), release-please, Kanäle
+  `stable`/`beta`, Verwaltung der echten Schlüssel (Release-Key der Agents, Repo-Schlüssel, cosign) mit Ablage,
+  Rotation und Widerruf (ADR 0036), SBOM-Format, SLSA-Stufe, was ein Release enthält (Images, Binaries, Pakete,
+  Repos, `install.sh`), Rollback-Hinweise in den Release-Notes.
+- **Abhängig von:** –
+
+#### ☐ V1-03 – Release-Pipeline · X · L 🔒
+- **Ziel:** `release.yml` nach V1-02: reproduzierbare Builds von Server-Image, Agent und Helper (amd64, arm64),
+  signierte Binaries und Repos mit den echten Schlüsseln (`just sign-agent`, `scripts/build-repos.sh`), SBOM, cosign-
+  Signaturen und SLSA-Provenance, Release-Notes; Rechte minimal, Actions per SHA (ADR 0006), Schlüssel nur in einer
+  geschützten Umgebung.
+- **Tests zuerst:** ein Probe-Release auf einen Testkanal; Prüfung der Signaturen und der Provenance mit den
+  öffentlichen Schlüsseln (Skript in CI); `just lint-ci`.
+- **Abhängig von:** V1-01, V1-02
+
+#### ☐ V1-04 – Veröffentlichte Server-Images in `deploy/compose` · X · S
+- **Ziel:** `image:` in `deploy/compose/compose.yaml` zeigt auf das veröffentlichte, per Digest gepinnte Image statt
+  auf den Build aus dem Quellcode (M2-26); Anleitung prüft die Signatur vor dem Start; die Demo kann weiter aus dem
+  Quellcode bauen (Overlay).
+- **Tests zuerst:** `just lint-compose` verlangt Digest und Signaturprüfung; Demo gegen das Probe-Release.
+- **Abhängig von:** V1-03
+
+#### ☐ V1-05 – `sermon-server backup` und Restore · S · M 🔒
+- **Ziel:** KONZEPT §22: `sermon-server backup` sichert Stammdaten, Events, CA und Konfiguration verschlüsselt per
+  `pg_dump` (ohne Metrik-Rohdaten), `restore` spielt es in eine leere Datenbank; Master-Keys getrennt gesichert,
+  Hinweise zu pgBackRest (vollständig, mit Metriken) und zum Loki-Volume.
+- **Tests zuerst:** Integrationstest: Daten anlegen → Backup → leere DB → Restore → Login, Nodes, Zugangsdaten der
+  Module und Kiosk-Tokens funktionieren; ein Backup ohne den passenden Master-Key ist unbrauchbar; nichts im Klartext
+  in der Sicherung.
+- **Abhängig von:** –
+
+#### ☐ V1-06 – Upgrade-Test · X · M
+- **Ziel:** CI installiert die Vorversion (Probe-Release), legt Daten an und Agents verbinden sich, aktualisiert auf
+  den aktuellen Stand per `docker compose pull && up -d`; Migrationen mit Lock, Agents N-1 arbeiten mit Server N
+  (KONZEPT §5); Rollback-Hinweis geprüft. Ab hier gilt: Migrationen nur noch aufsteigend und nie umnummeriert.
+- **Tests zuerst:** Projekt `upgrade` in der Demo (oder eigenes Skript), das nach dem Upgrade Daten, Alerts,
+  Dashboards und Module der Vorversion prüft.
+- **Abhängig von:** V1-03, V1-04
+
+#### ☐ V1-07 – Restore in CI · X · S
+- **Ziel:** Nightly: Backup der Demo-Umgebung, Restore in eine neue Umgebung, dieselben Prüfungen wie V1-05 gegen die
+  echte Compose.
+- **Abhängig von:** V1-05
+
+#### ☐ V1-08 – Performance-Nachweis 50 Nodes über 7 Tage · X · M
+- **Ziel:** 50 virtuelle Nodes (`just simulate`, mit Modulen und Szenarien) gegen die Produktions-Compose auf der
+  Richtwert-Hardware (KONZEPT §22: 4 vCPU, 8 GB, 200 GB NVMe) eine Woche lang; Ressourcen von Server, Datenbank und
+  Loki, Ingest-Lag, Abfragezeiten der UI, Wachstum der Datenbank dokumentiert; dazu ein echter Agent im Budget.
+- **Tests zuerst:** Skript mit Grenzen, das den Lauf auswertet (Gegenprobe mit gesenkter Grenze).
+- **Abhängig von:** –
+
+#### ☐ V1-09 – Admin-Doku · X · M
+- **Ziel:** `docs/admin/`: Installation (vorhanden, auf veröffentlichte Artefakte umstellen), Backup und Restore,
+  Upgrade und Rollback, Härtung (Veto in `agent.toml` und `helper.toml`, `module_*`, Netze, Caddy, Secrets),
+  Betrieb (Self-Monitoring, Retention, Löschen von Nodes und Orgs), Fehlersuche.
+- **Abhängig von:** V1-04, V1-05
+
+#### ☐ V1-10 – User-Doku und Hilfetexte vollständig · X · M
+- **Ziel:** `docs/user/`: Fleet, Node, Alerts, Logs, Updates, Module, Dashboards, Kiosk, Rollen; ein Test verlangt
+  für jeden Hilfe-Schlüssel der UI, jede Metrik des Katalogs und jede Standardregel einen Text in DE und EN.
+- **Abhängig von:** –
+
+#### ☐ V1-11 – Vorlage für die DSGVO-Dokumentation · X · S
+- **Ziel:** Verzeichnis der Verarbeitungstätigkeiten, technische und organisatorische Maßnahmen, Löschfristen
+  (Retention je Org, Löschen von Nodes), Auftragsverarbeitung bei Mandanten; welche personenbezogenen Daten SerMon
+  hält (Usernamen, IPs, Logs).
+- **Abhängig von:** –
+
+#### ☐ V1-12 – Externes Review / Pentest · X · M 🔒
+- **Ziel:** Vorbereitung: Scope (Agent, Helper, Enrollment, Web-API, Mandantentrennung, Module, Kiosk), Testumgebung
+  aus dem Probe-Release, aktuelles Threat Model; Durchführung extern; Befunde als Aufgaben, kritische und hohe vor dem
+  Release behoben.
+- **Abhängig von:** V1-04
+
+#### ☐ V1-13 – Offene Hinweise aus M5-33 · X · M
+- **Ziel:** Zugangsdaten im Speicher des Agents nullen (Abhängigkeit prüfen), `canonicalize` nicht auf dem
+  async-Executor, TLS für Redis, Serien-Budget des Prometheus-Scrapers auch im Server, Fleet-Übersicht des Kiosks je
+  Token zwischenspeichern; jeweils bewerten und umsetzen oder begründet als Restrisiko führen.
+- **Abhängig von:** –
+
+#### ☐ V1-14 – Kanäle gegen die echten Dienste (M2-35) · X · S
+- **Ziel:** M2-35 nachholen, sobald Konten für Slack, Teams, Discord, Mattermost, Telegram, Pushover und Gotify da
+  sind; sonst die nicht geprüften Kanäle in den Release-Notes nennen.
+- **Abhängig von:** Konten des Product Owners
+
+#### ☐ V1-15 – Release-Abnahme · X · S
+- **Ziel:** Demo gegen das Release-Kandidat-Artefakt (Images, Pakete, `install.sh` aus dem Release), Upgrade aus der
+  Vorversion, Restore; Security-Review des Release-Prozesses (Skill `sermon-security-review`); Release.
+- **Abhängig von:** V1-03 bis V1-12
+
+#### ☐ V1-16 – Branch-Schutz · X · S
+- **Ziel:** `main` nur noch per PR mit grüner CI (erforderliche Status-Checks), kein Force-Push; erst nach der
+  Implementierung (Wunsch des Product Owners).
+- **Abhängig von:** V1-15
+
+**v1.0 fertig, wenn:**
+
+- Ein Release ist veröffentlicht: Images, Binaries, Pakete und Repos signiert, mit SBOM und Provenance.
+- Installation nach `docs/admin/` aus dem Release, Upgrade aus der Vorversion und Restore sind in CI getestet.
+- 50 Nodes liefen eine Woche im dokumentierten Budget.
+- Das externe Review hat keine offenen kritischen oder hohen Befunde.
+- Hilfetexte und Doku sind vollständig in DE und EN (Test).
 
 ---
 
@@ -6177,3 +6358,6 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 | Module machen den Agent zur Sonde ins Netz des Hosts | Ein kompromittierter Server erreicht interne Dienste über alle Agents | Ziele nur unter dem lokalen Veto (`agent.toml`), keine Weiterleitungen nach außen, eigene Teil-Review (M5-01, M5-33) |
 | SMART sprengt die Zeilengrenze des Helpers (1 761 von 1 800) | Die Grenze verliert ihren Sinn | Erst Platz schaffen, sonst die Grenze per ADR begründet anheben; Review des Helpers (M5-18) – erledigt: Platz durch Refactoring, 1 795 Zeilen |
 | Ein Grid-Editor sprengt das Bundle-Budget | Ladezeit und Budget-Test | Wahl im ADR M5-22 mit Blick auf Größe und Tastaturbedienung; notfalls ein eigener schlanker Editor |
+| Externes Review findet spät Grundsätzliches | Release verschiebt sich | Früh beauftragen (V1-12 direkt nach dem Probe-Release), Scope aus dem Threat Model, eigene Reviews je Meilenstein als Vorarbeit |
+| Kein Host für den 7-Tage-Lauf mit der Richtwert-Hardware | Performance-Nachweis fehlt | V1-08 früh starten, notfalls auf kleinerer Hardware mit hochgerechnetem Richtwert und ehrlicher Angabe |
+| Erster Lauf der CI auf Linux deckt viel auf | Verzögerung vor dem Release | V1-01 zuerst; alles Weitere baut auf grüner CI auf |

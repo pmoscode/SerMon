@@ -87,9 +87,13 @@ docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/rpm:/rpm" -v "$wo
 for apk in "$packages"/*.apk; do
 	[ -e "$apk" ] || continue
 	file=$(basename "$apk" .apk)
-	arch=${file##*_}
-	case $arch in x86_64 | aarch64) ;; *) die "unknown apk architecture in $apk" ;; esac
-	name=${file%_*}
+	# By suffix: x86_64 holds an underscore itself.
+	case $file in
+	*_x86_64) arch=x86_64 ;;
+	*_aarch64) arch=aarch64 ;;
+	*) die "unknown apk architecture in $apk" ;;
+	esac
+	name=${file%_"$arch"}
 	cp "$apk" "$out/apk/$arch/$(echo "$name" | sed 's/_/-/').apk"
 done
 docker run --rm --network none -u "$(id -u):$(id -g)" -v "$out/apk:/apk" -v "$work/keys:/keys:ro" -e APK_KEY="$apk_key" sermon-repo-apk sh -euc '

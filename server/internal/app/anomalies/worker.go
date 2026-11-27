@@ -181,9 +181,26 @@ func (w *Worker) Run(ctx context.Context) error {
 		w.Round(ctx)
 		select {
 		case <-ctx.Done():
+			w.releaseAll(context.WithoutCancel(ctx))
 			return nil
 		case <-tick.C:
 		}
+	}
+}
+
+// releaseTimeout bounds giving the leases up when the server stops.
+const releaseTimeout = 5 * time.Second
+
+// releaseAll gives up the leases this instance holds: after a restart or an upgrade the next
+// instance takes the organizations over at once, not only once the leases ran out.
+func (w *Worker) releaseAll(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, releaseTimeout)
+	defer cancel()
+	for org := range w.orgs {
+		if err := w.store.Release(ctx, org, w.config.Holder); err != nil {
+			w.config.Logger.WarnContext(ctx, "anomalies: release lease failed", "org", org.String(), "error", err)
+		}
+		delete(w.orgs, org)
 	}
 }
 

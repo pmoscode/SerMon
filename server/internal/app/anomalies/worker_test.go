@@ -793,3 +793,45 @@ func TestWorker_WritesNothingAfterItsLeaseWasTaken(t *testing.T) {
 		t.Errorf("leases lost %d, errors %d", w.Stats().LeasesLost.Load(), w.Stats().Errors.Load())
 	}
 }
+
+// M5-32: a server that stops gives its leases up, so the instance after a restart or an upgrade
+// takes over at once instead of after the lease ran out (up to 3 minutes without scores).
+func TestWorker_ReleasesItsLeasesWhenStopped(t *testing.T) {
+	f := newFake()
+	f.series[orgA] = []anomalies.Series{cpu(1, node1, "user")}
+	f.series[orgB] = []anomalies.Series{cpu(2, node2, "user")}
+	w := worker(t, f, &clock{t: now0}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- w.Run(ctx) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		f.mu.Lock()
+		held := len(f.holders)
+		f.mu.Unlock()
+		if held == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the worker holds %d leases", held)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.holders) != 0 {
+		t.Errorf("leases still held after stopping: %v", f.holders)
+	}
+	// The next instance takes over at once.
+	next := worker(t, f, &clock{t: now0}, func(c *anomalies.Config) { c.Holder = "b" })
+	f.mu.Unlock()
+	next.Round(context.Background())
+	f.mu.Lock()
+	if f.holders[orgA] != "b" || f.holders[orgB] != "b" {
+		t.Errorf("the next instance holds %v", f.holders)
+	}
+}

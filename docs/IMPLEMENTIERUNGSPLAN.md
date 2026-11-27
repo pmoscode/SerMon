@@ -6246,7 +6246,14 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - **Tests zuerst:** die Pipelines selbst; jeder Fehlschlag mit reproduzierendem Test lokal oder im Container.
 - **Abhängig von:** – (Push durch den Product Owner)
 
-#### ☐ V1-02 – ADR Release-Prozess · X · S 🔒
+#### ☑ V1-02 – ADR Release-Prozess · X · S 🔒
+> Erledigt ([ADR 0043](adr/0043-release-prozess.md), KONZEPT D33; Entscheidungen des Product Owners vom 2026-11-27):
+> release-please mit einer SemVer-Version für Server, Agent und Helper, Release-Kandidaten `vX.Y.Z-rc.N` im Kanal
+> `beta`; Image auf GHCR (`ghcr.io/pmoscode/sermon-server`, kein `latest`), das die signierten Agents und Repos seiner
+> Version mitbringt; Release-Key und Repo-Schlüssel nur als Secrets der GitHub-Environment `release` (Freigabe durch
+> den Product Owner, nur Tags `v*`, Signier-Job ohne Actions Dritter), verschlüsselte Offline-Kopie beim Product Owner;
+> cosign keyless (Sigstore), SBOM CycloneDX über syft, SLSA L3 über `slsa-github-generator` (einzige Ausnahme vom
+> Pinnen per SHA); Abschnitt „Upgrade“ in jedem Release-PR.
 - **Ziel:** ADR: Versionierung (SemVer, ein Versionsstand für Server, Agent und Helper), release-please, Kanäle
   `stable`/`beta`, Verwaltung der echten Schlüssel (Release-Key der Agents, Repo-Schlüssel, cosign) mit Ablage,
   Rotation und Widerruf (ADR 0036), SBOM-Format, SLSA-Stufe, was ein Release enthält (Images, Binaries, Pakete,

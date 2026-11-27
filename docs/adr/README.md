@@ -50,6 +50,7 @@ KONZEPT §2 mit angepasst.
 | [0040](0040-eigene-dashboards.md) | Eigene Dashboards: Modell, Rechte, Grid-Editor und Kiosk-Token | accepted | D3, D11, D27 |
 | [0041](0041-nodes-deaktivieren-loeschen.md) | Nodes deaktivieren und löschen | accepted | D29, D31 |
 | [0042](0042-logisches-backup-und-restore.md) | Logisches Backup und Restore | accepted | D32 |
+| [0043](0043-release-prozess.md) | Release-Prozess: Versionen, Kanäle, Schlüssel und Supply Chain | accepted | D33 |
 
 ## Entscheidungslog → ADR
 
@@ -87,5 +88,6 @@ KONZEPT §2 mit angepasst.
 | D30 Enrollment über HTTPS | 0009, 0010 |
 | D31 Nodes erst deaktivieren, dann löschen | 0041 |
 | D32 Logisches Backup, verschlüsselt mit age | 0042 |
+| D33 Release über GHCR, Schlüssel in GitHub-Environment | 0043 |
 
 Die ADRs 0014 bis 0021 dokumentieren Entscheidungen der Konzeptrunde nachträglich (IMPLEMENTIERUNGSPLAN M0-11).

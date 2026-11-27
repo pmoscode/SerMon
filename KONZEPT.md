@@ -1539,7 +1539,9 @@ statt `yes`, damit der Dateisystem-Collector auch `/home` sieht. Unter OpenRC wi
 
 - **Security-Review-Checkliste** pro PR (siehe Agent-Skill `sermon-security-review`), SAST in CI (CodeQL, gosec, clippy,
   semgrep), Dependency-Scans, Fuzzing der Parser.
-- Vor v1.0 ein **externer Pentest** bzw. ein Review durch eine zweite Person.
+- Vor v1.0 ein **Pentest gegen die erste reale Installation** (Testbetrieb, IMPLEMENTIERUNGSPLAN V1-12): kein
+  externer Pentest (Open Source ohne Budget), sondern ein eigener mit Scope aus dem Threat Model, dazu Teil-Reviews ohne
+  Kontext der Umsetzung und Meldungen der Community über `SECURITY.md`.
 - `SECURITY.md` mit Responsible-Disclosure-Prozess und GitHub Private Vulnerability Reporting.
 
 ---

@@ -6217,14 +6217,14 @@ Es fehlt kein ADR. Erkenntnisse für v1.0:
 ## 9. v1.0 – Release
 
 **Ziel:** Ein Admin installiert SerMon aus veröffentlichten, signierten Artefakten nach der Anleitung, sichert es und
-stellt es wieder her, aktualisiert von der Vorversion ohne Datenverlust; 50 Nodes laufen eine Woche im Budget; ein
-externes Review hat keine offenen kritischen oder hohen Befunde.
+stellt es wieder her, aktualisiert von der Vorversion ohne Datenverlust; 50 Nodes laufen eine Woche im Budget; der
+Pentest gegen die erste reale Installation hat keine offenen kritischen oder hohen Befunde.
 
 **Aufgaben** (Zerlegung im Review M5, §8.7). Reihenfolge: erst CI auf GitHub und die Release-Pipeline (alles Weitere
-testet gegen veröffentlichte Artefakte), dann Backup, Upgrade und Performance, dann Doku und externes Review.
+testet gegen veröffentlichte Artefakte), dann Backup, Upgrade und Performance, dann Doku und Pentest.
 Branch-Schutz kommt zuletzt (Wunsch des Product Owners).
 
-**Kritischer Pfad:** V1-01 → V1-03 (mit V1-02) → V1-04 → V1-06, V1-12 und V1-18 (eine Woche Testbetrieb) → V1-15
+**Kritischer Pfad:** V1-01 → V1-03 (mit V1-02) → V1-04 → V1-06 und V1-18 (eine Woche Testbetrieb, darin V1-12) → V1-15
 → V1-16. Parallel und ohne
 Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 nach V1-04 und V1-05.
 
@@ -6480,11 +6480,17 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   hält (Usernamen, IPs, Logs).
 - **Abhängig von:** –
 
-#### ☐ V1-12 – Externes Review / Pentest · X · M 🔒
-- **Ziel:** Vorbereitung: Scope (Agent, Helper, Enrollment, Web-API, Mandantentrennung, Module, Kiosk), Testumgebung
-  aus dem Probe-Release, aktuelles Threat Model; Durchführung extern; Befunde als Aufgaben, kritische und hohe vor dem
-  Release behoben.
-- **Abhängig von:** V1-04
+#### ☐ V1-12 – Pentest gegen die erste reale Installation · X · L 🔒
+- **Ziel:** Kein externer Pentest (Open Source, die Kosten trägt niemand; Product Owner, 2026-11-27). Stattdessen ein
+  eigener Pentest durch Claude gegen die Installation des Testbetriebs (V1-18), sobald sie steht: Scope aus dem
+  Threat Model (Agent, Helper, Enrollment, Web-API, Mandantentrennung, Module, Kiosk, Backup, Release-Artefakte),
+  Black-Box von außen (TLS, Header, CSP, Rate-Limits, Anmeldung, Step-up, IDOR über Orgs und Gruppen mit eigenen
+  Test-Konten), Grey-Box mit Agent-Identität (manipulierte Batches, fremde IDs, Grenzen, Flut), auf einem eigenen
+  Test-Host Angriffe auf Agent und Helper (Veto, Socket, Konfiguration, Self-Update mit gefälschten Releases);
+  Werkzeuge nur lokal und nur gegen die eigene Installation, Regeln und Zeitfenster vorher mit dem Product Owner
+  abgestimmt. Dazu wie bisher Teil-Reviews ohne Kontext der Umsetzung. Befunde als Aufgaben, kritische und hohe vor
+  dem Release behoben; Bericht in `docs/security/`. `SECURITY.md` lädt die Community zu Meldungen ein.
+- **Abhängig von:** V1-18 (Installation des Testbetriebs)
 
 #### ☑ V1-13 – Offene Hinweise aus M5-33 · X · M
 > Erledigt (2026-11-27): Hinweise aus M5-33 bewertet (Review A I2–I8, die optionalen Punkte aus B, C I5); A I1 und
@@ -6658,7 +6664,7 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - Installation nach `docs/admin/` aus dem Release, Upgrade aus der Vorversion und Restore sind in CI getestet.
 - Der Release-Kandidat lief eine Woche im Testbetrieb (bis 50 Nodes, aufgefüllt mit virtuellen) im dokumentierten
   Budget.
-- Das externe Review hat keine offenen kritischen oder hohen Befunde.
+- Der Pentest gegen die erste reale Installation hat keine offenen kritischen oder hohen Befunde.
 - Hilfetexte und Doku sind vollständig in DE und EN (Test).
 
 ---
@@ -6680,6 +6686,6 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 | Module machen den Agent zur Sonde ins Netz des Hosts | Ein kompromittierter Server erreicht interne Dienste über alle Agents | Ziele nur unter dem lokalen Veto (`agent.toml`), keine Weiterleitungen nach außen, eigene Teil-Review (M5-01, M5-33) |
 | SMART sprengt die Zeilengrenze des Helpers (1 761 von 1 800) | Die Grenze verliert ihren Sinn | Erst Platz schaffen, sonst die Grenze per ADR begründet anheben; Review des Helpers (M5-18) – erledigt: Platz durch Refactoring, 1 795 Zeilen |
 | Ein Grid-Editor sprengt das Bundle-Budget | Ladezeit und Budget-Test | Wahl im ADR M5-22 mit Blick auf Größe und Tastaturbedienung; notfalls ein eigener schlanker Editor |
-| Externes Review findet spät Grundsätzliches | Release verschiebt sich | Früh beauftragen (V1-12 direkt nach dem Probe-Release), Scope aus dem Threat Model, eigene Reviews je Meilenstein als Vorarbeit |
+| Der Pentest findet spät Grundsätzliches | Release verschiebt sich | Kein externer Pentest (Kosten); eigener Pentest gegen die erste reale Installation (V1-12), sobald der Testbetrieb steht; Teil-Reviews ohne Kontext je Meilenstein als Vorarbeit; Meldungen der Community über `SECURITY.md` |
 | Kein Host für den 7-Tage-Lauf mit der Richtwert-Hardware | Performance-Nachweis fehlt | Bestätigt (Product Owner): kein eigener Host. Kurzer Lasttest vorab (V1-08), der Nachweis kommt aus dem Testbetrieb mit dem Release-Kandidaten (V1-18); fehlen dort echte Hosts, füllen virtuelle Nodes auf 50 auf |
 | Erster Lauf der CI auf Linux deckt viel auf | Verzögerung vor dem Release | V1-01 zuerst; alles Weitere baut auf grüner CI auf |

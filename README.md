@@ -5,7 +5,7 @@ Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Geb
 
 > ⚠️ **Status: auf dem Weg zu v1.0.** Die Meilensteine M0 bis M5 sind abgeschlossen (bis auf die Prüfung der
 > Kanäle gegen die echten Dienste, jetzt V1-14); offen sind Release-Pipeline,
-> Testbetrieb, externes Review und Release (Stand: [Implementierungsplan §9](docs/IMPLEMENTIERUNGSPLAN.md#9-v10--release)).
+> Testbetrieb mit Pentest und Release (Stand: [Implementierungsplan §9](docs/IMPLEMENTIERUNGSPLAN.md#9-v10--release)).
 > Bis zum ersten Release baut die Installation das Server-Image aus dem Quellcode. Noch nicht für den produktiven
 > Einsatz geeignet.
 

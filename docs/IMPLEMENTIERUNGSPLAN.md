@@ -6227,7 +6227,17 @@ Branch-Schutz kommt zuletzt (Wunsch des Product Owners).
 **Kritischer Pfad:** V1-01 → V1-03 (mit V1-02) → V1-04 → V1-06 und V1-12 → V1-15 → V1-16. Parallel und ohne
 Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11, V1-13; V1-09 nach V1-04 und V1-05.
 
-#### ☐ V1-01 – CI auf GitHub grün · X · M
+#### ☑ V1-01 – CI auf GitHub grün · X · M
+> Erledigt (2026-11-27): Der erste Lauf mit M5 auf Linux amd64 fand fünf Fehler, die lokal (macOS, arm64) nie
+> auftraten; danach `ci` mit allen 17 Jobs, `security`, `fuzz` und `nightly` (Demo auf arm64 mit systemd und OpenRC)
+> grün:
+> - `build-repos.sh` schnitt die apk-Architektur am letzten Unterstrich ab (`x86_64` → „64“).
+> - Das shellcheck der CI meldet `A && B || C` (SC2015) – drei Prüfungen als einfache Bedingungen.
+> - Der Smoke-Test des Helpers setzte die Container ohne `/etc/sermon` auf; seit M4-30 startet der Helper dann
+>   bewusst nicht.
+> - `test-db-modules`: `mktemp -d` legt 0700 an, MariaDB im Container konnte die CA unter Linux nicht lesen.
+> - Ein Timing-Test der Logs (M3) war auf den langsameren Runnern wackelig; er vergleicht jetzt mit der angehaltenen
+>   Uhr.
 - **Ziel:** Alles lief bisher lokal (macOS, arm64); nach dem Push laufen `ci.yml`, `security.yml`, `fuzz.yml` und
   `nightly.yml` erstmals mit den M5-Änderungen auf Linux amd64. Linux-Zweige, die lokal nie liefen (Veto über
   `/proc/self/fd`, Verhalten von `/tmp`, M5-33), Laufzeiten der Jobs, Caches; wackelige Tests unter Last finden und

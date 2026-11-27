@@ -156,6 +156,45 @@ zwei Netze:
 - **Firewall:** Docker veröffentlicht Ports an Host-Firewalls wie `ufw` vorbei. Wollen Sie den Agent-Port auf die Netze
   Ihrer Hosts beschränken, tun Sie das in der Kette `DOCKER-USER` oder in der Firewall des Providers.
 
+### Hinter einem anderen Reverse-Proxy
+
+Läuft auf dem Host schon ein Reverse-Proxy (Traefik, nginx …), kann er statt Caddy TLS für die Web-UI übernehmen. Die
+übrige Compose bleibt, wie sie ist (Netz `internal`, `migrate`, `backup`, `restore`). Darauf kommt es an:
+
+- **HTTP/2 zum Server:** Der Web-Listener (`SERMON_HTTP_ADDR`, `:8080`) nimmt HTTP/1.1 und HTTP/2 ohne TLS (h2c)
+  an. Das Enrollment der Agents ist gRPC über denselben Listener – der Proxy gibt es mit HTTP/2 weiter. Bei Traefik
+  genügt `scheme=h2c` für den ganzen Dienst; die UI spricht Connect über `fetch`, das geht über h2c genauso.
+- **Agent-Port am Proxy vorbei:** 8443 veröffentlicht Docker weiter direkt am Server. Über einen Proxy (auch als
+  TCP-Passthrough) sähe der Server nur dessen Adresse statt der der Agents (T4).
+- **Nur der Proxy setzt `X-Forwarded-For`:** In `SERMON_TRUSTED_PROXIES` steht nur seine Adresse als `/32`. Ein Netz,
+  an dem alle Apps des Proxys hängen, ist dafür zu weit: Jeder Container darin erreicht den Server direkt und wählt
+  seine Adresse für Rate-Limits und Audit-Log selbst. Besser ein eigenes Netz nur für Proxy und Server mit festem
+  Subnetz und fester Adresse des Proxys – wie `edge` in der Compose; der Server hängt dann nicht am Netz des Proxys.
+- **Eigene CA:** Beim Enrollment prüft der Agent das Zertifikat gegen die CAs des Systems. Mit einem Zertifikat einer
+  eigenen CA entweder deren Root auf den Hosts installieren oder `install.sh --ca-fingerprint` mit dem Fingerabdruck
+  einer CA, die der Proxy mit dem Zertifikat schickt (meist die Zwischen-CA,
+  `openssl x509 -in intermediate.crt -noout -fingerprint -sha256`); Kette und Name prüft der Agent dann gegen sie.
+  `install.sh --repo` braucht die CA im System. Danach spricht der Agent nur noch mit dem Agent-Port und der Agent-CA
+  von SerMon.
+- `SERMON_ALLOWED_ORIGINS` ist die Adresse der UI beim Proxy, `SERMON_AGENT_HOSTNAMES` der Name, unter dem die Agents
+  Port 8443 erreichen.
+
+Mit Traefik (Docker-Provider; Netz `sermon_edge` mit `172.30.78.0/24`, Traefik darin fest auf `172.30.78.10`, also
+`SERMON_TRUSTED_PROXIES=172.30.78.10/32`; mit Traefik 3.8 geprüft, auch das Enrollment mit `--ca-fingerprint` der Zwischen-CA):
+
+```yaml
+services:
+  server:
+    networks: [sermon_edge, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=sermon_edge
+      - traefik.http.routers.sermon.rule=Host(`sermon.example.org`)
+      - traefik.http.routers.sermon.entrypoints=websecure
+      - traefik.http.services.sermon.loadbalancer.server.port=8080
+      - traefik.http.services.sermon.loadbalancer.server.scheme=h2c
+```
+
 ### Variablen, die die Sicherheit betreffen
 
 Alle Variablen mit Voreinstellung stehen in der [Referenz](configuration.md). Für die Sicherheit entscheidend:

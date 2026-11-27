@@ -156,6 +156,45 @@ separates two networks:
 - **Firewall:** Docker publishes ports past host firewalls such as `ufw`. To restrict the agent port to your hosts'
   networks, do it in the chain `DOCKER-USER` or in the provider's firewall.
 
+### Behind another reverse proxy
+
+If the host runs a reverse proxy already (Traefik, nginx …), it can take over TLS for the web UI instead of Caddy. The
+rest of the compose stays as it is (network `internal`, `migrate`, `backup`, `restore`). What matters:
+
+- **HTTP/2 to the server:** the web listener (`SERMON_HTTP_ADDR`, `:8080`) accepts HTTP/1.1 and HTTP/2 without TLS
+  (h2c). The agents' enrollment is gRPC over the same listener – the proxy passes it on with HTTP/2. With Traefik,
+  `scheme=h2c` for the whole service is enough; the UI speaks Connect over `fetch`, which works over h2c as well.
+- **Agent port past the proxy:** Docker keeps publishing 8443 directly at the server. Through a proxy (even as TCP
+  passthrough) the server would see the proxy's address instead of the agents' (T4).
+- **Only the proxy sets `X-Forwarded-For`:** `SERMON_TRUSTED_PROXIES` holds just its address as `/32`. A network
+  shared by all of the proxy's apps is too wide for that: every container on it reaches the server directly and picks
+  its own address for rate limits and the audit log. Better a network of its own for proxy and server, with a fixed
+  subnet and a fixed address of the proxy – like `edge` in the compose; the server then is not on the proxy's network.
+- **Own CA:** at enrollment the agent checks the certificate against the system's CAs. With a certificate from an own
+  CA, either install its root on the hosts or use `install.sh --ca-fingerprint` with the fingerprint of a CA the
+  proxy sends along with the certificate (usually the intermediate,
+  `openssl x509 -in intermediate.crt -noout -fingerprint -sha256`); the agent then checks chain and name against it.
+  `install.sh --repo` needs the CA in the system. Afterwards the agent only talks to the agent port and SerMon's agent
+  CA.
+- `SERMON_ALLOWED_ORIGINS` is the address of the UI at the proxy, `SERMON_AGENT_HOSTNAMES` the name the agents reach
+  port 8443 under.
+
+With Traefik (Docker provider; network `sermon_edge` with `172.30.78.0/24`, Traefik fixed at `172.30.78.10` in it, so
+`SERMON_TRUSTED_PROXIES=172.30.78.10/32`; checked with Traefik 3.8, including the enrollment with `--ca-fingerprint` of the intermediate):
+
+```yaml
+services:
+  server:
+    networks: [sermon_edge, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=sermon_edge
+      - traefik.http.routers.sermon.rule=Host(`sermon.example.org`)
+      - traefik.http.routers.sermon.entrypoints=websecure
+      - traefik.http.services.sermon.loadbalancer.server.port=8080
+      - traefik.http.services.sermon.loadbalancer.server.scheme=h2c
+```
+
 ### Variables that affect security
 
 All variables with their defaults are in the [reference](configuration.md). Decisive for security:

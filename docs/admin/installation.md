@@ -307,6 +307,9 @@ aus `172.30.78.128/25`. Kollidiert das mit einem vorhandenen Netz, setzen Sie in
 `SERMON_EDGE_IP_RANGE` und `SERMON_PROXY_IP` passend; die Adresse von Caddy muss außerhalb des dynamischen Bereichs
 liegen. Nur sie darf dem Server die Adresse des Browsers nennen (`X-Forwarded-For`).
 
+Läuft auf dem Host schon ein anderer Reverse-Proxy (Traefik, nginx), ersetzt er Caddy, siehe
+[Härtung: hinter einem anderen Reverse-Proxy](de/hardening.md#hinter-einem-anderen-reverse-proxy).
+
 ## Installationen vor M2-36
 
 Bis M2-36 migrierte der Server selbst, als Superuser `sermon`. Solche Installationen (vor dem ersten Release, nur zum

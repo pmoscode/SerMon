@@ -6603,7 +6603,31 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   (`SERMON_EVENT_RETENTION`, V1-22).
 - **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-24 (V1-24 vor dem Release: Product Owner, 2026-11-27)
 
-#### ☐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
+#### ◐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
+> Stand (2026-11-27): Die Installation im Homelab des Product Owners ist vorbereitet, noch nicht deployt (Repos
+> `pmoscode/homelab-stacks` und `pmoscode/homelab-komodo`, Anleitung dort in README „SerMon (Testbetrieb)“).
+> - **Server:** `1.0.0-rc.1` per Tag und Digest (mit `use-release.sh` geprüft) auf `apps-node-1` (Lenovo M920q,
+>   Debian 13, 15,5 GB RAM, geteilt mit den übrigen Apps), nur im LAN unter `https://sermon.apps.lan`. Stack aus der
+>   Produktions-Compose mit derselben Härtung, eigene TimescaleDB (beim ersten Start auf 2 GB getunt) und Loki;
+>   Traefik 3.8 statt Caddy (`h2c` zum Server, eigenes Netz `sermon_edge` mit fester Adresse von Traefik als
+>   einzigem Trusted Proxy), Zertifikat aus der eigenen CA, Agent-Port 8443 direkt (nftables: LAN). Secrets als
+>   Dateien aus Ansible Vault, je Datei nur für den User des Containers. Neuer Abschnitt in der Härtung (DE/EN):
+>   hinter einem anderen Reverse-Proxy.
+> - **Lokal geprüft** (Traefik 3.8 mit Zertifikatskette einer Test-CA): erster Deploy (`migrate` bricht ohne
+>   Master-Keys ab), `init` im Service `migrate`, `/readyz` über Traefik, `install.sh` und `/downloads`, Enrollment
+>   des echten Agents über h2c mit `--ca-fingerprint` der Zwischen-CA (falsches Token abgelehnt, falscher Pin
+>   abgelehnt, `client_ip` aus `X-Forwarded-For`), `backup` nach stdout (age).
+> - **Agents** per `install.sh` aus Ansible (Token aus dem Vault, übersprungen bei vorhandener Identität):
+>   `apps-node-1` mit Helper (Vorgaben), UGreen-NAS (UGOS) mit `--no-remote-updates`. Ob `install.sh` auf UGOS
+>   durchläuft und ein Firmware-Update den Agent behält, ist offen.
+> - **Backup:** nachts `backup` in das restic-Backup des Homelabs, Master-Keys als Datei darin, der geheime
+>   Backup-Schlüssel nur im Passwortmanager; Gatus prüft `/readyz` und TCP 8443.
+> - **Befund:** `SERMON_METRICS_ADDR` leer gesetzt (statt nicht gesetzt) bricht den Start ab („invalid address“),
+>   die Referenz sagt „Leer: aus“; im Homelab deshalb `:9464` ohne veröffentlichten Port.
+> - **Product Owner:** Vault-Werte, `task sermon`, Deploy von `traefik` und `sermon`, `task sermon-init`, erster
+>   Superadmin, Enrollment-Token in den Vault, `task sermon-agents`; danach 7 Tage Betrieb. Auswertung mit
+>   `scripts/load-report.sh` (`LOAD_METRICS_URL` über die Adresse des Containers in `sermon_edge`); virtuelle Nodes
+>   zum Auffüllen auf 50 braucht einen Agent mit Feature `simulate` (nicht im Release) – noch offen.
 - **Ziel:** Der Release-Kandidat läuft im echten Testbetrieb mindestens 7 Tage: echte Hosts, so viele wie da sind,
   bis 50 mit virtuellen Nodes aufgefüllt; ausgewertet mit dem Skript aus V1-08. Ergebnis in KONZEPT §22 (Richtwert
   für 50 Nodes bestätigt oder korrigiert, mit der tatsächlichen Hardware) und in der Admin-Doku. Fehler aus dem

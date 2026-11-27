@@ -60,7 +60,7 @@ func superDSNOf(f fixture, database string) string {
 	return strings.Replace(f.db.OwnerDSN, "/sermon?", "/"+database+"?", 1)
 }
 
-func countRows(t *testing.T, superDSN, table string) int {
+func countTableRows(t *testing.T, superDSN, table string) int {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, superDSN)
@@ -199,11 +199,11 @@ func TestBackup_RoundTripBetweenTwoDatabases(t *testing.T) {
 		if tb.Name == "instance_audit_log" {
 			want++ // the restore itself
 		}
-		if n := countRows(t, dst, tb.Name); int64(n) != want {
+		if n := countTableRows(t, dst, tb.Name); int64(n) != want {
 			t.Errorf("%s: %d rows after the restore, want %d", tb.Name, n, want)
 		}
 	}
-	if n := countRows(t, dst, "sessions"); n != 0 {
+	if n := countTableRows(t, dst, "sessions"); n != 0 {
 		t.Errorf("%d sessions restored, want none", n)
 	}
 	chain := "SELECT string_agg(encode(hash, 'hex'), ',' ORDER BY org_id, seq) FROM audit_log"

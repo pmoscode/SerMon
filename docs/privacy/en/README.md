@@ -211,8 +211,12 @@ access, staff, backups, patching the host).
 - Agents buffer while the server is down (events up to 7 days); ingest acknowledges only after writing.
 - Self-monitoring of the instance (among others database size, dropped data) with a warning to superadmins.
 - Containers read-only, without capabilities; database and Loki without a route to the outside.
-- Backups: [procedure, encryption, retention, location of the backups and of the master keys; admin documentation
-  "backup and restore"]. Deleted data remains in older backups until they expire.
+- Backups: `sermon-server backup` saves master data, events, audit logs and settings without metrics and without
+  sessions, encrypted with age to keys of the operator that are not on the server; credentials and TOTP seeds stay
+  encrypted inside, the master keys are backed up separately. The restore is checked (keys, seal of the file) and
+  tested nightly (admin documentation "backup and restore"). [Schedule, retention, location of the backups and of the
+  master keys]. Deleted data remains in older backups until they expire; a restore brings it back – repeat deletions
+  made since the backup afterwards.
 - Restore: [regularly tested on …].
 
 ### 4.4 Review, assessment and evaluation

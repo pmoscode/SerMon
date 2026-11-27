@@ -108,6 +108,8 @@ Danach:
   muss unter demselben Namen erreichbar sein (`SERMON_DOMAIN`).
 - Diagramme beginnen leer (keine Metriken im Backup), die Anomalie-Erkennung lernt neu, die Logs der letzten 14 Tage
   fehlen, wenn das Loki-Volume verloren ist.
+- Was seit dem Backup gelöscht wurde (Konten, Nodes, Organisationen), ist wieder da: Löschungen aus dieser Zeit
+  wiederholen (Datenschutz, `docs/privacy/`).
 
 ### Exit-Codes
 

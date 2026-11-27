@@ -214,8 +214,12 @@ Patchen des Hosts) ergänzt der Betreiber.
 - Agents puffern bei Ausfall des Servers (Events bis zu 7 Tage); Ingest bestätigt erst nach dem Schreiben.
 - Self-Monitoring der Instanz (u. a. Datenbankgröße, verworfene Daten) mit Warnung an Superadmins.
 - Container schreibgeschützt, ohne Capabilities; Datenbank und Loki ohne Route nach außen.
-- Sicherungen: [Verfahren, Verschlüsselung, Aufbewahrung, Ort der Sicherungen und der Master-Keys; Admin-Doku
-  „Backup und Restore“]. Gelöschte Daten bleiben in älteren Sicherungen bis zu deren Ablauf.
+- Sicherungen: `sermon-server backup` sichert Stammdaten, Events, Audit-Logs und Einstellungen ohne Metriken und ohne
+  Sitzungen, verschlüsselt mit age an Schlüssel des Betreibers, die nicht auf dem Server liegen; Zugangsdaten und
+  TOTP-Seeds bleiben darin verschlüsselt, die Master-Keys werden getrennt gesichert. Der Restore ist geprüft (Schlüssel,
+  Siegel der Datei) und wird nightly getestet (Admin-Doku „Backup und Restore“). [Zeitplan, Aufbewahrung, Ort der
+  Sicherungen und der Master-Keys]. Gelöschte Daten bleiben in älteren Sicherungen bis zu deren Ablauf; ein Restore
+  bringt sie zurück – Löschungen seit der Sicherung danach wiederholen.
 - Wiederherstellung: [regelmäßig geprüft am …].
 
 ### 4.4 Überprüfung, Bewertung und Evaluierung

@@ -31,6 +31,6 @@ If the instance has an identity provider, link your account with it here (“Lin
 ## Good to know
 
 - Every code from the app works only once. If a code doesn't match, check the device's clock.
-- For actions such as changing rights, SerMon asks for a code again; the confirmation lasts 15 minutes.
+- For actions such as changing rights, SerMon asks for a code again; the confirmation lasts 15 minutes ([confirmation](help:concepts/step-up)).
 - If your organization requires two-factor authentication, its pages are available only after the setup.
 - Five wrong codes lock the account for a while, just like wrong passwords.

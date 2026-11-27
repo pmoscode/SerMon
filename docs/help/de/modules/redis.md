@@ -14,8 +14,8 @@ ist ab Werk aus; der Agent schlägt es vor, wenn er `redis-server` oder `valkey-
   ACL SETUSER sermon on >langes-passwort -@all +info
   ```
 
-  Das Passwort ist eine Zugangsangabe: Es geht verschlüsselt an den Agent und liegt dort nur im Speicher. Bis die
-  Zugangsdaten zugestellt werden (M5-05), läuft das Modul nur gegen Redis ohne Passwort.
+  Das Passwort ist eine Zugangsangabe: SerMon speichert es verschlüsselt, zeigt es nie wieder an, und der Agent hält
+  es nur im Speicher.
 
 ## Einstellungen
 

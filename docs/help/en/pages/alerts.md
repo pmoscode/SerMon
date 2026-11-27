@@ -8,7 +8,7 @@ The active alerts of the nodes you may see: what fires, what waits for its durat
 - **Muted** means a silence or maintenance window holds back the notifications; the alert itself goes on and stays visible here.
 - **Flapping** alerts change too often; their notifications are throttled until they are stable again.
 - Values of the hosts (host names, user names, addresses) are shown as text. User and address of security alerts appear only for members who may see the security events.
-- **History** shows the changes of an alert, newest first; it is kept for a year.
+- **History** shows the changes of an alert, newest first; it is kept for a year unless the organization sets it shorter ([retention](help:concepts/retention)).
 - **Charts around the time** opens the node page an hour before to an hour after the alert fired, in the area of its rule (CPU, memory, disks, network, security); **Logs** shows the node's logs around the time, for an alert of a systemd unit only that unit's lines.
 
 ## Acknowledging

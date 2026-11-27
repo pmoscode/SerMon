@@ -150,7 +150,9 @@
 							<li class="flex flex-col gap-2 p-3">
 								<div class="flex flex-wrap items-center justify-between gap-2">
 									<div class="flex flex-col">
-										<span class="font-medium">{moduleLabel(id)}</span>
+										<span class="flex items-center gap-1 font-medium"
+											>{moduleLabel(id)}<HelpTip topic={`modules/${id}`} /></span
+										>
 										<span class="text-sm text-muted-foreground">{summary(setting)}</span>
 									</div>
 									<div class="flex gap-2">

@@ -5,10 +5,10 @@ Administration of the organization for admins of all groups: members and their r
 ## Roles
 
 - **Viewers** see nodes, metrics and (if allowed) logs.
-- **Operators** may also add nodes and later acknowledge alerts and trigger updates and reboots.
+- **Operators** may also add nodes, acknowledge and silence alerts, trigger updates and reboots and unlock locked nodes.
 - **Admins** of a group manage that group; admins of **all groups** the whole organization.
 
-A role applies to one group or to all groups. Several roles add up.
+A role applies to one group or to all groups. Several roles add up. Details: [roles and rights](help:concepts/roles).
 
 ## Logs
 

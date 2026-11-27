@@ -1,6 +1,6 @@
 # Logs
 
-The log lines of the nodes you may see – from the systemd journal and from log files – with filters, histogram, context and a live view. Logs are kept for 14 days.
+The log lines of the nodes you may see – from the systemd journal and from log files – with filters, histogram, context and a live view. Logs are kept for up to 14 days, as the organization sets it ([retention](help:concepts/retention)).
 
 ## Filtering
 

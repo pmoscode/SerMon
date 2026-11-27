@@ -3,7 +3,15 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
-import { helpPlugin, lintHelp, loadHelp, parseHelp, parseInline } from './help.js';
+import {
+	helpPlugin,
+	lintGuide,
+	lintHelp,
+	lintMessages,
+	loadHelp,
+	parseHelp,
+	parseInline
+} from './help.js';
 
 const text = (t) => ({ type: 'text', text: t });
 
@@ -139,6 +147,155 @@ describe('loadHelp and lintHelp', () => {
 		expect(lintHelp(join(root, 'help'), join(root, 'src'))).toEqual([
 			'en/pages/fleet.md: links to unknown topic "figures/load"',
 			'other.ts: uses unknown help topic "figures/memory_used"'
+		]);
+	});
+
+	// V1-10: a text nobody can open is a gap in the UI, not documentation.
+	it('fails for topics shown nowhere', () => {
+		fixture();
+		write('help/de/modules/redis.md', '# Redis\n\nModul.');
+		write('help/en/modules/redis.md', '# Redis\n\nModule. See [itself](help:modules/redis).');
+		write('help/de/channels/slack.md', '# Slack\n\nKanal.');
+		write('help/en/channels/slack.md', '# Slack\n\nChannel.');
+
+		expect(lintHelp(join(root, 'help'), join(root, 'src'))).toEqual([
+			'channels/slack: shown nowhere (not used by the UI nor linked from another topic)',
+			'modules/redis: shown nowhere (not used by the UI nor linked from another topic)'
+		]);
+		// Without the source only the texts themselves are checked.
+		expect(lintHelp(join(root, 'help'))).toEqual([]);
+	});
+
+	it('counts topics the UI builds from names of the server and links', () => {
+		fixture();
+		write('help/de/modules/redis.md', '# Redis\n\nModul.');
+		write('help/en/modules/redis.md', '# Redis\n\nModule.');
+		write('help/de/channels/slack.md', '# Slack\n\nKanal.');
+		write('help/en/channels/slack.md', '# Slack\n\nChannel.');
+		write('help/de/metrics/sermon_x.md', '# X\n\nX.');
+		write('help/en/metrics/sermon_x.md', '# X\n\nX.');
+		write('help/de/concepts/a.md', '# A\n\nSiehe [B](help:concepts/b).');
+		write('help/en/concepts/a.md', '# A\n\nSee B.');
+		write('help/de/concepts/b.md', '# B\n\nB.');
+		write('help/en/concepts/b.md', '# B\n\nB.');
+		write(
+			'src/modules.svelte',
+			'<HelpTip topic={`modules/${id}`} /><HelpTip topic={`channels/${type}`} />'
+		);
+		write('src/chart.svelte', `<HelpTip topic={'metrics/' + metric} /><x t="concepts/a" />`);
+
+		expect(lintHelp(join(root, 'help'), join(root, 'src'))).toEqual([]);
+
+		rmSync(join(root, 'src/modules.svelte'));
+		write('src/modules.svelte', '<HelpTip topic={`modules/${id}`} />');
+		expect(lintHelp(join(root, 'help'), join(root, 'src'))).toEqual([
+			'channels/slack: shown nowhere (not used by the UI nor linked from another topic)'
+		]);
+	});
+});
+
+describe('lintGuide', () => {
+	/** @type {string} */
+	let root;
+	const write = (path, content) => {
+		mkdirSync(dirname(join(root, path)), { recursive: true });
+		writeFileSync(join(root, path), content);
+	};
+	afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+	function fixture() {
+		root = mkdtempSync(join(tmpdir(), 'sermon-guide-'));
+		for (const [locale, title] of [
+			['de', 'Flotte'],
+			['en', 'Fleet']
+		]) {
+			write(`help/${locale}/pages/fleet.md`, `# ${title}\n\nText.`);
+			write(`help/${locale}/concepts/tags.md`, `# Tags\n\nText.`);
+		}
+		write(
+			'user/de/README.md',
+			'# Handbuch\n\n1. [Flotte](#1-flotte-und-tags)\n\n## 1. Flotte und Tags\n\n' +
+				'[Flotte](../../help/de/pages/fleet.md), [Tags](../../help/de/concepts/tags.md#tags), ' +
+				'[EN](../en/README.md), [Web](https://example.org/x)'
+		);
+		write(
+			'user/en/README.md',
+			'# Guide\n\n## Fleet\n\n[Fleet](../../help/en/pages/fleet.md), [Tags](../../help/en/concepts/tags.md)'
+		);
+	}
+	const lint = () => lintGuide(join(root, 'user'), join(root, 'help'));
+
+	it('passes for a complete guide', () => {
+		fixture();
+		expect(lint()).toEqual([]);
+	});
+
+	it('fails for broken links and anchors and help of the other language', () => {
+		fixture();
+		write(
+			'user/en/README.md',
+			'# Guide\n\n[Contents](#fleet) [Fleet](../../help/de/pages/fleet.md) ' +
+				'[Tags](../../help/en/concepts/tags.md) [Gone](../../help/en/pages/gone.md)'
+		);
+		expect(lint()).toEqual([
+			'en/README.md: no heading for "#fleet"',
+			'en/README.md: links a help text in "de"',
+			'en/README.md: link "../../help/en/pages/gone.md" does not resolve',
+			'en: the guide doesn\'t link "pages/fleet"'
+		]);
+	});
+
+	it('fails when a language or a page of the UI is missing', () => {
+		fixture();
+		write('help/de/pages/logs.md', '# Logs\n\nText.');
+		write('help/en/pages/logs.md', '# Logs\n\nText.');
+		write('user/en/README.md', '# Guide\n\n[Fleet](../../help/en/pages/fleet.md)');
+		expect(lint()).toEqual([
+			'en: the guide doesn\'t link "concepts/tags"',
+			'de: the guide doesn\'t link "pages/logs"',
+			'en: the guide doesn\'t link "pages/logs"'
+		]);
+		rmSync(join(root, 'user/en'), { recursive: true });
+		expect(lint()).toContain('en: no guide');
+	});
+
+	it('passes for the real guide', () => {
+		const docs = fileURLToPath(new URL('../../docs', import.meta.url));
+		expect(lintGuide(join(docs, 'user'), join(docs, 'help'))).toEqual([]);
+	});
+});
+
+describe('lintMessages', () => {
+	/** @type {string} */
+	let dir;
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+	const messages = (de, en) => {
+		dir = mkdtempSync(join(tmpdir(), 'sermon-messages-'));
+		writeFileSync(join(dir, 'de.json'), JSON.stringify(de));
+		writeFileSync(join(dir, 'en.json'), JSON.stringify(en));
+		return lintMessages(dir);
+	};
+
+	it('passes for complete texts', () => {
+		expect(
+			messages(
+				{ $schema: 'x', save: 'Speichern', hello: 'Hallo {name}' },
+				{ $schema: 'x', save: 'Save', hello: 'Hello {name}' }
+			)
+		).toEqual([]);
+	});
+
+	it('fails for missing, empty and differently parametrized texts', () => {
+		expect(
+			messages(
+				{ save: 'Speichern', hello: 'Hallo {user}', help: ' ' },
+				{ save: 'Save', hello: 'Hello {name}', help: 'Help', only: 'Only' }
+			)
+		).toEqual([
+			'en.json: "hello" has other placeholders than de.json',
+			'de.json: "help" missing',
+			'de.json: "only" missing'
 		]);
 	});
 });

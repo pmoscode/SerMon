@@ -15,8 +15,8 @@ only `AUTH` (with a password) and `INFO`, nothing that changes data.
   ACL SETUSER sermon on >long-password -@all +info
   ```
 
-  The password is a credential: it reaches the agent encrypted and stays in its memory only. Until credentials are
-  delivered (M5-05), the module only works against Redis without a password.
+  The password is a credential: SerMon stores it encrypted, never shows it again, and the agent keeps it in memory
+  only.
 
 ## Settings
 

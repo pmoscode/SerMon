@@ -15,7 +15,7 @@
 		"check": "pnpm run i18n && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:size": "node scripts/bundle-size.js build 520",
 		"lint": "prettier --check . && eslint . && pnpm run lint:help",
-		"lint:help": "node scripts/help.js lint ../docs/help src",
+		"lint:help": "node scripts/help.js lint ../docs/help src messages ../docs/user",
 		"format": "prettier --write .",
 		"test": "vitest --run",
 		"test:watch": "vitest",

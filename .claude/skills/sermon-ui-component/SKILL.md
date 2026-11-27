@@ -16,7 +16,7 @@ Reference: KONZEPT.md §4.4, §16 (dashboards), §17 (UX & help), §18.3 (web se
 
 ## i18n & help (mandatory)
 - No hard-coded user-visible strings. Paraglide messages in `web/messages/de.json` and `web/messages/en.json` – add **both**.
-- Every metric/KPI shows an ⓘ `<HelpTip topic="metrics/sermon_cpu_utilization_ratio" />` (`$lib/components/help`) whose content comes from `docs/help/{de,en}/<topic>.md` (format: `docs/help/README.md`). New page → add `docs/help/{de,en}/pages/<page>.md` and register it in `$lib/help/pages.ts` for the `?` panel. `pnpm run lint:help` fails on missing translations and unknown topics.
+- Every metric/KPI shows an ⓘ `<HelpTip topic="metrics/sermon_cpu_utilization_ratio" />` (`$lib/components/help`) whose content comes from `docs/help/{de,en}/<topic>.md` (format: `docs/help/README.md`). New page → add `docs/help/{de,en}/pages/<page>.md` and register it in `$lib/help/pages.ts` for the `?` panel. `pnpm run lint:help` fails on missing translations, unknown topics, topics nothing shows (UI, a link from another topic, or a name the server sends: `metrics/`, `modules/`, `channels/`), messages missing in one language and on the user guide (`docs/user/{de,en}`) not linking a page. A new page also gets a paragraph in the user guide with a link to its help text.
 - Empty states explain what to do next (e.g. link to "Add node").
 
 ## Security

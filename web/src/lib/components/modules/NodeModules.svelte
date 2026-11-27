@@ -141,6 +141,7 @@
 					<h2 id="module-{setting.moduleId}" class="text-lg font-medium">
 						{moduleLabel(setting.moduleId)}
 					</h2>
+					<HelpTip topic={`modules/${setting.moduleId}`} />
 					<span
 						class="inline-flex items-center gap-1 text-sm {failing(state)
 							? 'text-destructive'

@@ -5,10 +5,10 @@ Verwaltung der Organisation für Admins aller Gruppen: Mitglieder und ihre Rolle
 ## Rollen
 
 - **Betrachter** sehen Nodes, Metriken und (sofern erlaubt) Logs.
-- **Operatoren** dürfen zusätzlich Nodes hinzufügen und später Alerts quittieren, Updates und Reboots auslösen.
+- **Operatoren** dürfen zusätzlich Nodes hinzufügen, Alerts quittieren und stummschalten, Updates und Reboots auslösen und gesperrte Nodes freigeben.
 - **Admins** einer Gruppe verwalten diese Gruppe; Admins für **alle Gruppen** die ganze Organisation.
 
-Eine Rolle gilt für eine Gruppe oder für alle Gruppen. Mehrere Rollen ergänzen sich.
+Eine Rolle gilt für eine Gruppe oder für alle Gruppen. Mehrere Rollen ergänzen sich. Im Einzelnen: [Rollen und Rechte](help:concepts/roles).
 
 ## Logs
 

@@ -31,6 +31,6 @@ Hat die Instanz einen Identity Provider, verknüpfst du hier dein Konto damit (�
 ## Gut zu wissen
 
 - Jeder Code aus der App gilt nur einmal. Passt ein Code nicht, die Uhrzeit des Geräts prüfen.
-- Bei Aktionen wie Rechteänderungen fragt SerMon den Code erneut ab; die Bestätigung gilt 15 Minuten.
+- Bei Aktionen wie Rechteänderungen fragt SerMon den Code erneut ab; die Bestätigung gilt 15 Minuten ([Erneute Bestätigung](help:concepts/step-up)).
 - Verlangt deine Organisation die Zwei-Faktor-Anmeldung, sind ihre Seiten erst nach der Einrichtung erreichbar.
 - Fünf falsche Codes sperren das Konto vorübergehend, genau wie falsche Passwörter.

@@ -26,7 +26,7 @@ Antwort, höchstens drei Weiterleitungen innerhalb der erlaubten Ziele.
   ein Exporter, dessen Labels sich mit jeder Anfrage ändern (Pfade, User-IDs), nicht das Serien-Budget des Nodes; die
   übrigen zählt `sermon_prometheus_dropped_series`.
 - **Bearer-Token:** geht als `Authorization: Bearer …` nur an die eingestellten Endpunkte, nie nach einer
-  Weiterleitung an einen anderen Host; es liegt beim Agent nur im Speicher (M5-05). Über `http://` geht es im
+  Weiterleitung an einen anderen Host; es liegt beim Agent nur im Speicher. Über `http://` geht es im
   Klartext an jeden, der dort lauscht – bei gestopptem Exporter auch an einen anderen lokalen Benutzer, der den Port
   belegt. Mit Token deshalb `https://` mit geprüftem Zertifikat und ein Token, das nur `/metrics` lesen darf.
 - **Timeout**, **TLS prüfen**, **CA-Datei**.

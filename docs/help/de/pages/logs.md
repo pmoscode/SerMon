@@ -1,6 +1,6 @@
 # Logs
 
-Die Log-Zeilen der Nodes, die du sehen darfst – aus dem systemd-Journal und aus Logdateien – mit Filtern, Histogramm, Kontext und Live-Ansicht. Die Logs bleiben 14 Tage gespeichert.
+Die Log-Zeilen der Nodes, die du sehen darfst – aus dem systemd-Journal und aus Logdateien – mit Filtern, Histogramm, Kontext und Live-Ansicht. Die Logs bleiben bis zu 14 Tage gespeichert, je nach Einstellung der Organisation ([Aufbewahrung](help:concepts/retention)).
 
 ## Filtern
 

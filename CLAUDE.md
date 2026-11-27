@@ -170,6 +170,11 @@ Web-Besonderheiten:
   Was erst beim Öffnen gebraucht wird (Popover wie `HelpTip`, Formulare), mit `{#await import(…)}` bzw. `import()` bei
   Bedarf laden. Die vollen Hilfetexte sind im Build JSON-Dateien (`scripts/help.js`), kein JavaScript; die Summe aller
   Bundles prüft `pnpm run check:size` (520 KiB, gemessen unter Linux ~0,3 % mehr als unter macOS).
+- Hilfetexte und Handbuch (V1-10): `docs/help/{de,en}/…` (Format und Prüfungen in `docs/help/README.md`),
+  Benutzerhandbuch `docs/user/{de,en}/README.md` verlinkt sie statt sie zu wiederholen. `pnpm run lint:help` verlangt,
+  dass jedes Thema auch gezeigt wird (UI, Link oder ein vom Server gebildeter Name `metrics/`, `modules/`,
+  `channels/`), gleiche Schlüssel in `web/messages/{de,en}.json` und ein Handbuch ohne tote Links, das jede Seite
+  nennt; `server/cmd/sermon-server/help_test.go` verlangt Texte für alle Metriken, Module, Kanaltypen und Regeln.
 - shadcn-svelte-Komponenten mit `pnpm dlx shadcn-svelte@1.8.1 add <name> --yes --no-deps-install` hinzufügen und
   danach die Abhängigkeiten exakt gepinnt per `pnpm add` installieren.
 

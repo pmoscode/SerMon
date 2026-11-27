@@ -27,3 +27,17 @@ Nicht unterstützt: Tabellen, HTML, Überschriften ab `####`. Alles wird als Tex
 | `figures/`  | Kennzahlen der Übersichten                                    |
 | `metrics/`  | Metriken des Katalogs, Dateiname = Metrikname                 |
 | `concepts/` | Übergreifendes, z. B. Charts und Zeitraum                     |
+| `modules/`  | Module des Agents, Dateiname = Modul-ID                       |
+| `channels/` | Kanaltypen der Benachrichtigungen, Dateiname = Typ            |
+
+Regeln haben ihren Hilfetext in ihrer YAML-Datei (`spec.help` in `rules/`), nicht hier.
+
+## Prüfungen (V1-10)
+
+- `pnpm run lint:help` (`web/scripts/help.js`): jedes Thema in beiden Sprachen und lesbar; jedes Thema, das die UI
+  als Text nennt, existiert; jedes Thema wird **gezeigt** – von der UI genannt, aus einem Namen des Servers gebildet
+  (`metrics/`, `modules/`, `channels/`) oder von einem anderen Thema verlinkt; die UI-Texte (`web/messages/`) haben
+  in beiden Sprachen dieselben Schlüssel und Platzhalter; das [Benutzerhandbuch](../user/README.md) verlinkt nur
+  vorhandene Texte, in beiden Sprachen dieselben, und jede Seite (`pages/`).
+- `server/cmd/sermon-server/help_test.go`: ein Text in beiden Sprachen für jede Metrik des Katalogs (auch die der
+  Module), jedes Modul, jeden Kanaltyp, und Name und Hilfe jeder Standardregel in beiden Sprachen.

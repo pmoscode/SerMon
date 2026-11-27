@@ -6303,7 +6303,26 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11, V1-13; V1-09 nach V1-04 
   Betrieb (Self-Monitoring, Retention, Löschen von Nodes und Orgs), Fehlersuche.
 - **Abhängig von:** V1-04, V1-05
 
-#### ☐ V1-10 – User-Doku und Hilfetexte vollständig · X · M
+#### ☑ V1-10 – User-Doku und Hilfetexte vollständig · X · M
+> Erledigt (2026-11-27): Benutzerhandbuch `docs/user/{de,en}/README.md` (Anmeldung und Konto, Rollen, Flotte, Node,
+> Nodes hinzufügen und löschen, Alerts und Silences, Benachrichtigungen, Logs und Live, Security, Updates und
+> Policies, Module, Dashboards, Kiosk, Vergleich/Heatmap/Kapazität/Anomalien, Organisation); es beschreibt die Abläufe
+> und verlinkt für Einzelheiten die Hilfetexte, statt sie zu wiederholen. Prüfungen:
+> - `pnpm run lint:help`: Neu verlangt es, dass jedes Thema auch **gezeigt** wird – von der UI genannt, von einem
+>   anderen Thema verlinkt oder aus einem Namen des Servers gebildet (`'metrics/' + …`, `` `modules/${…}` ``,
+>   `` `channels/${…}` `` im Quelltext). Das fand die 13 Modul-Texte, die keine Seite öffnete: ⓘ jetzt neben jedem
+>   Modul in den Einstellungen der Organisation und auf der Node-Seite. Dazu gleiche Schlüssel und Platzhalter in
+>   `web/messages/{de,en}.json` (sonst fiele ein Text still auf Englisch zurück) und das Handbuch: keine toten Links
+>   und Anker, je Sprache nur Texte dieser Sprache, beide Sprachen dieselben Themen, jede Seite (`pages/`) verlinkt.
+> - `server/cmd/sermon-server/help_test.go`: Texte in DE und EN mit Titel und Zusammenfassung für jede Metrik des
+>   Katalogs (mit denen der Module), jedes Modul (`module.Builtin`), jeden Kanaltyp (aus `newNotifyDeps` mit SMTP,
+>   also auch E-Mail) und Name und Hilfe jeder Standardregel in beiden Sprachen, keine Hilfe als unübersetzte Kopie.
+>
+> Inhalt: neu `modules/simulate`, `concepts/roles` (Rechte je Rolle aus `authz`) und `concepts/step-up` (wann SerMon
+> nachfragt, aus der Liste der RPCs mit Step-up), verlinkt aus Organisation und Kontosicherheit; veraltete Stellen
+> korrigiert (Zugangsdaten von Redis und Prometheus kommen längst an, Operatoren quittieren und stummschalten schon,
+> Logs, Events und Verlauf folgen der Aufbewahrung der Organisation). Budget unverändert eingehalten (Hilfetexte
+> bleiben JSON, Summe 494,9 KiB). Gegenproben 18/18.
 - **Ziel:** `docs/user/`: Fleet, Node, Alerts, Logs, Updates, Module, Dashboards, Kiosk, Rollen; ein Test verlangt
   für jeden Hilfe-Schlüssel der UI, jede Metrik des Katalogs und jede Standardregel einen Text in DE und EN.
 - **Abhängig von:** –

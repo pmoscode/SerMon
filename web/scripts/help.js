@@ -11,10 +11,11 @@
 //   ## Further sections, paragraphs, lists (- or 1.), ``` code blocks, **bold**, *italic*,
 //   `code` and links to other topics [text](help:metrics/…), app paths [text](/fleet) or https.
 //
-// Usage: node scripts/help.js lint <helpDir> <srcDir> – fails on missing translations, broken
-// files and topics used in the source that don't exist.
+// Usage: node scripts/help.js lint <helpDir> [srcDir] [messagesDir] [guideDir] – fails on missing
+// translations, broken files, topics used in the source that don't exist or that nothing shows,
+// and broken links of the user guide.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { argv, exit } from 'node:process';
 import { fileURLToPath } from 'node:url';
 
@@ -257,6 +258,13 @@ function linkedTopics(doc) {
 const usedTopic =
 	/['"`]((?:pages|figures|metrics|concepts|modules|channels|rules)\/[a-z0-9_/-]+)['"`]/g;
 
+/**
+ * Topics the UI builds from names the server sends: 'metrics/' + name or `channels/${type}`. The
+ * server's tests demand a text for every such name (server/cmd/sermon-server/help_test.go).
+ */
+const builtTopic =
+	/(?:['"`]((?:metrics|modules|channels)\/)['"`]\s*\+|`((?:metrics|modules|channels)\/)\$\{)/g;
+
 /** @param {string} dir @returns {string[]} */
 function sourceFiles(dir) {
 	/** @type {string[]} */
@@ -277,7 +285,8 @@ function sourceFiles(dir) {
 
 /**
  * Checks the help texts: every topic in every locale, no broken files, every linked or used
- * topic exists.
+ * topic exists, and – with the source – every topic is reachable: used by the UI, built from a
+ * name of the server, or linked from another topic.
  * @param {string} root the docs/help directory
  * @param {string} [src] the UI source directory to check used topics
  * @returns {string[]} problems
@@ -291,20 +300,133 @@ export function lintHelp(root, src) {
 				problems.push(`${locale}/${topic}.md: missing (exists in another language)`);
 		}
 	}
+	/** @type {Set<string>} */
+	const reached = new Set();
 	for (const locale of locales) {
 		for (const [topic, doc] of Object.entries(docs[locale])) {
 			for (const linked of linkedTopics(doc)) {
 				if (!topics.has(linked))
 					problems.push(`${locale}/${topic}.md: links to unknown topic "${linked}"`);
+				if (linked !== topic) reached.add(linked);
 			}
 		}
 	}
 	if (src) {
+		/** @type {string[]} */
+		const built = [];
 		for (const file of sourceFiles(src)) {
-			for (const [, topic] of readFileSync(file, 'utf8').matchAll(usedTopic)) {
+			const source = readFileSync(file, 'utf8');
+			for (const [, topic] of source.matchAll(usedTopic)) {
 				if (!topics.has(topic))
 					problems.push(`${relative(src, file)}: uses unknown help topic "${topic}"`);
+				reached.add(topic);
 			}
+			for (const [, plus, template] of source.matchAll(builtTopic)) built.push(plus ?? template);
+		}
+		for (const topic of [...topics].sort()) {
+			if (!reached.has(topic) && !built.some((prefix) => topic.startsWith(prefix)))
+				problems.push(`${topic}: shown nowhere (not used by the UI nor linked from another topic)`);
+		}
+	}
+	return problems;
+}
+
+/**
+ * Checks the UI texts (Paraglide, messages/<locale>.json): every key in every locale, none empty,
+ * the same placeholders – a missing translation would silently fall back to English.
+ * @param {string} dir the messages directory
+ * @returns {string[]} problems
+ */
+export function lintMessages(dir) {
+	/** @type {string[]} */
+	const problems = [];
+	/** @type {Record<string, Record<string, unknown>>} */
+	const messages = {};
+	for (const locale of locales) {
+		messages[locale] = JSON.parse(readFileSync(join(dir, `${locale}.json`), 'utf8'));
+	}
+	const keys = new Set(
+		locales.flatMap((locale) => Object.keys(messages[locale])).filter((k) => !k.startsWith('$'))
+	);
+	/** @param {string} text */
+	const placeholders = (text) => [...text.matchAll(/\{(\w+)\}/g)].map((p) => p[1]).sort();
+	for (const key of [...keys].sort()) {
+		/** @type {Record<string, string>} */
+		const texts = {};
+		for (const locale of locales) {
+			const text = messages[locale][key];
+			if (typeof text !== 'string' || !text.trim())
+				problems.push(`${locale}.json: "${key}" missing`);
+			else texts[locale] = text;
+		}
+		const [first, ...others] = locales.filter((locale) => texts[locale]);
+		for (const other of others) {
+			if (placeholders(texts[first]).join() !== placeholders(texts[other]).join())
+				problems.push(`${other}.json: "${key}" has other placeholders than ${first}.json`);
+		}
+	}
+	return problems;
+}
+
+/** GitHub's anchor of a heading: lower case, without punctuation, spaces as hyphens. */
+const anchorOf = (/** @type {string} */ heading) =>
+	heading
+		.trim()
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}\s_-]/gu, '')
+		.replace(/\s/g, '-');
+
+/**
+ * Checks the user guide (docs/user/<locale>/*.md, V1-10): every relative link and anchor resolves,
+ * a guide links the help texts of its own language, every language links the same topics, and
+ * together they cover every page of the UI (pages/…).
+ * @param {string} dir the docs/user directory
+ * @param {string} helpRoot the docs/help directory
+ * @returns {string[]} problems
+ */
+export function lintGuide(dir, helpRoot) {
+	/** @type {string[]} */
+	const problems = [];
+	/** @type {Record<string, Set<string>>} */
+	const linked = {};
+	for (const locale of locales) {
+		linked[locale] = new Set();
+		const files = markdownFiles(join(dir, locale));
+		if (!files.length) problems.push(`${locale}: no guide`);
+		for (const file of files) {
+			const name = relative(dir, file).split(sep).join('/');
+			const text = readFileSync(file, 'utf8');
+			const anchors = new Set(
+				[...text.matchAll(/^#{1,6}\s+(.+)$/gm)].map((heading) => anchorOf(heading[1]))
+			);
+			for (const [, href] of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+				if (/^(?:https:|mailto:)/.test(href)) continue;
+				const [path, anchor] = href.split('#');
+				if (!path) {
+					if (!anchors.has(anchor)) problems.push(`${name}: no heading for "${href}"`);
+					continue;
+				}
+				const target = resolve(dirname(file), path);
+				if (!statSync(target, { throwIfNoEntry: false })) {
+					problems.push(`${name}: link "${href}" does not resolve`);
+					continue;
+				}
+				const help = relative(helpRoot, target).split(sep);
+				if (help[0] === '..' || !target.endsWith('.md')) continue;
+				if (help[0] !== locale) {
+					problems.push(`${name}: links a help text in "${help[0]}"`);
+					continue;
+				}
+				linked[locale].add(help.slice(1).join('/').slice(0, -'.md'.length));
+			}
+		}
+	}
+	const all = new Set(locales.flatMap((locale) => [...linked[locale]]));
+	const { docs } = loadHelp(helpRoot);
+	for (const topic of Object.keys(docs[locales[0]])) if (topic.startsWith('pages/')) all.add(topic);
+	for (const topic of [...all].sort()) {
+		for (const locale of locales) {
+			if (!linked[locale].has(topic)) problems.push(`${locale}: the guide doesn't link "${topic}"`);
 		}
 	}
 	return problems;
@@ -385,12 +507,16 @@ export function helpPlugin({ root }) {
 }
 
 if (argv[1] === fileURLToPath(import.meta.url)) {
-	const [command, root = '../docs/help', src] = argv.slice(2);
+	const [command, root = '../docs/help', src, messages, guide] = argv.slice(2);
 	if (command !== 'lint' || !statSync(root, { throwIfNoEntry: false })?.isDirectory()) {
-		console.error('usage: node scripts/help.js lint <helpDir> [srcDir]');
+		console.error('usage: node scripts/help.js lint <helpDir> [srcDir] [messagesDir] [guideDir]');
 		exit(2);
 	}
-	const problems = lintHelp(root, src);
+	const problems = [
+		...lintHelp(root, src),
+		...(messages ? lintMessages(messages) : []),
+		...(guide ? lintGuide(guide, resolve(root)) : [])
+	];
 	if (problems.length) {
 		for (const problem of problems) console.error(`✗ ${problem}`);
 		exit(1);

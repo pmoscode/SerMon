@@ -90,6 +90,8 @@ describe('ModuleSettingsPanel', () => {
 		render(ModuleSettingsPanel);
 		await expect.element(page.getByRole('heading', { name: 'web' })).toBeVisible();
 		await expect.element(page.getByText('Test module (simulate)')).toBeVisible();
+		// The help text of the module (V1-10).
+		await expect.element(page.getByRole('button', { name: 'Help: Simulation' })).toBeVisible();
 		await expect.element(page.getByText('On · every 20 s')).toBeVisible();
 		await expect
 			.element(page.getByText("The nodes of this group haven't reported any modules yet."))
@@ -199,6 +201,7 @@ describe('NodeModules', () => {
 		await expect
 			.element(page.getByRole('heading', { name: 'Test module (simulate)' }))
 			.toBeVisible();
+		await expect.element(page.getByRole('button', { name: 'Help: Simulation' })).toBeVisible();
 		await expect.element(page.getByTestId('module-state')).toHaveTextContent('Error');
 		await expect.element(page.getByText('Last success 2 minutes ago')).toBeVisible();
 		await expect.element(page.getByText(/⟨U\+202E⟩/)).toBeVisible();

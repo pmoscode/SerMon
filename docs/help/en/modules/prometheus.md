@@ -27,7 +27,7 @@ an answer, at most three redirects within the allowed targets.
   change with every request (paths, user IDs) can't fill the node's series budget; the others count in
   `sermon_prometheus_dropped_series`.
 - **Bearer token:** sent as `Authorization: Bearer …` to the configured endpoints only, never after a redirect to
-  another host; the agent keeps it in memory only (M5-05). Over `http://` it goes in clear text to whoever listens
+  another host; the agent keeps it in memory only. Over `http://` it goes in clear text to whoever listens
   there – while the exporter is stopped also to another local user who takes the port. So with a token use
   `https://` with a verified certificate and a token that may read `/metrics` only.
 - **Timeout**, **verify TLS**, **CA file**.

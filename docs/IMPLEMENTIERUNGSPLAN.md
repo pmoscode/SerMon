@@ -6353,7 +6353,36 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - **Tests zuerst:** das Auswerteskript mit Grenzen (Gegenprobe mit gesenkter Grenze).
 - **Abhängig von:** –
 
-#### ☐ V1-09 – Admin-Doku · X · M
+#### ◐ V1-09 – Admin-Doku · X · M
+> Stand (2026-11-27): Fertig bis auf die Teile, die am Release hängen. Index `docs/admin/README.md` (DE/EN) und je
+> Sprache `docs/admin/{de,en}/`:
+> - **Härtung:** Vetos in `[local]` der `agent.toml` und in `helper.toml` mit Voreinstellungen und Wirkung aus dem Code
+>   (Listen ersetzen die Voreinstellung, Symlinks samt Ziel im Präfix, immer gesperrte Pfade, Neustart nötig), Optionen
+>   von `install.sh`, Units von Agent und Helper, OpenRC, Netze `edge`/`internal`, Caddy und direkter Agent-Port,
+>   Firewall (`DOCKER-USER`), Variablen für die Sicherheit, Secrets und Dateirechte, Anmeldung (Superadmins, 2FA-Pflicht,
+>   Passkeys, OIDC), Monitoring-User für Module und was ein übernommener Server kann und nicht kann (mit T-Nummern,
+>   ehrlich: er liest alle Daten der Instanz, RLS schützt vor Fehlern, nicht vor ihm).
+> - **Betrieb:** Self-Monitoring mit Stufen, `/readyz`, `/metrics` per Override nur auf Loopback, Aufbewahrung (fest,
+>   je Org, Loki), Löschen von Nodes, Orgs und Konten, Enrollment-Tokens, Updates und Kanäle von Agents und Hosts,
+>   Zertifikate, CA-Wechsel und Master-Keys, Kapazität (Richtwert KONZEPT §22, Bestätigung durch V1-18), Backup und
+>   DSGVO-Vorlage.
+> - **Fehlersuche:** mit Befehlen und den echten Meldungen von Agent, `install.sh` und Server – Agent verbindet sich
+>   nicht (Denylist, Ablauf, Name, Uhr, Fingerprint), Enrollment, fehlende Metriken und Logs, Zustände der Module,
+>   Helper und Updates, Alerts und SSRF-Schutz, Step-up (auch über OIDC), Migrationen außer der Reihe, OpenRC.
+> - **Referenz** `configuration.md`: jede Variable des Servers mit Voreinstellung, Wert in `deploy/compose` und Prüfung.
+>
+> `installation.md` und `backup.md` (deutsch) sind verlinkt, nicht geändert; das Benutzerhandbuch verlinkt den Index.
+> Test `server/cmd/sermon-server/admin_docs_test.go`: jede Variable, die der Server liest (Literale in
+> `internal/config` und `cmd/sermon-server`), jeder Schlüssel von `[local]` und `helper.toml` (aus den Structs in Rust)
+> und jede Option der Usage von `install.sh` in beiden Sprachen; die Voreinstellungen aus `config.Load` in der Referenz;
+> Fristen und Grenzen (Tokens, Zertifikate, Self-Monitoring, Aufbewahrung, Step-up, Sitzungen) aus den Konstanten, an
+> jeder Fundstelle mit dem Wert des Codes; alle Links und Anker; dieselben Seiten in beiden Sprachen. Gegenproben 19/19.
+> - **Befunde** (offen, als Aufgaben vorgeschlagen): Die Intermediate-CA der Agents gilt 2 Jahre ab `init`; nichts
+>   erneuert sie oder warnt davor, und den CA-Wechsel gibt es nur über die Web-API (`AgentCAService`), ohne Seite in
+>   der UI – die Doku verlangt den Wechsel nach spätestens 22 Monaten. Unter OpenRC sammelt kein Logger die Ausgabe
+>   des Agents (`packaging/openrc/sermon-agent` ohne `output_logger`).
+> - **Offen:** Installation und Upgrade aus den veröffentlichten Images, Rollback und der Link auf `docs/release.md`,
+>   sobald Lane `release` (V1-03, V1-04) gemergt ist; Kapazität mit den Messungen aus V1-08 und V1-18.
 - **Ziel:** `docs/admin/`: Installation (vorhanden, auf veröffentlichte Artefakte umstellen), Backup und Restore,
   Upgrade und Rollback, Härtung (Veto in `agent.toml` und `helper.toml`, `module_*`, Netze, Caddy, Secrets),
   Betrieb (Self-Monitoring, Retention, Löschen von Nodes und Orgs), Fehlersuche.

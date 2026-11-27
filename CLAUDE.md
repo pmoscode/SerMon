@@ -223,6 +223,11 @@ Web-Besonderheiten:
 - Datenschutz (V1-11): `docs/privacy/{de,en}/README.md` ist die Vorlage für Betreiber (Verarbeitungsverzeichnis,
   TOMs, Löschfristen, Auftragsverarbeitung). Wer gespeicherte personenbezogene Daten, Fristen oder Schutzmaßnahmen
   ändert, passt sie im selben PR an; die Fristen prüft `server/cmd/sermon-server/privacy_test.go` gegen die Konstanten.
+- Admin-Doku (V1-09): Index `docs/admin/README.md`, je Sprache `docs/admin/{de,en}/` (`hardening.md`,
+  `operations.md`, `troubleshooting.md`, Referenz `configuration.md`). Wer eine `SERMON_*`-Variable des Servers, einen
+  Schlüssel in `[local]` der `agent.toml` oder in `helper.toml` oder eine Option von `install.sh` hinzufügt, dokumentiert
+  sie im selben PR in beiden Sprachen; `server/cmd/sermon-server/admin_docs_test.go` verlangt das und prüft
+  Voreinstellungen, Fristen und Links gegen den Code.
 
 ## Security-Leitplanken (nie verletzen)
 

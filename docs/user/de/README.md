@@ -5,7 +5,7 @@ eigenen Dashboards. Es beschreibt die Abläufe; die Einzelheiten jeder Seite und
 Hilfetexten, die SerMon auch selbst anzeigt (ⓘ neben einer Kennzahl, `?` oder das Hilfe-Symbol oben für die Seite).
 Die Links unten führen zu genau diesen Texten.
 
-Für Betreiber der Instanz gibt es die [Admin-Doku](../../admin/installation.md) und die
+Für Betreiber der Instanz gibt es die [Admin-Doku](../../admin/README.md) und die
 [Vorlage zur DSGVO-Dokumentation](../../privacy/de/README.md).
 
 English version: [User guide](../en/README.md).

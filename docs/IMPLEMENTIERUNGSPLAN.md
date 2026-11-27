@@ -6448,7 +6448,7 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 >   8 GB); 200 GB reichen bei üblichem Event-Aufkommen, bei dauerhaftem Brute Force auf allen Nodes nicht (die Grenze
 >   `proj.horizon_gib` von 160 GiB scheitert). Vorbehalte: eine schnellere CPU als ein typischer vServer, die SSD des
 >   Macs, nur 4 h (die Aufbewahrung ist hochgerechnet, nicht gemessen), keine Module außer `simulate`.
-> - **Befunde** (keine kleinen Fixes, Aufgaben für v1.x bzw. V1-18): (1) `metrics_1m` und `metrics_1h` haben keine
+> - **Befunde** (keine kleinen Fixes; erledigt in V1-21 bis V1-23, das Histogramm über 14 Tage offen in V1-24): (1) `metrics_1m` und `metrics_1h` haben keine
 >   Columnstore-Policy – nach 30 Tagen der größte Teil; komprimiert wie die Rohdaten sparte das rund 90 % (Migration).
 >   (2) Security-Events bei dauerhaftem Brute Force rund 140 GiB im Jahr – fehlgeschlagene Anmeldungen bündeln oder je
 >   Art kürzer aufbewahren. (3) Das Log-Histogramm über 1 h aller Nodes braucht knapp 1 s; über 14 Tage im Testbetrieb
@@ -6767,7 +6767,38 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - **Tests zuerst:** Engine-Tests der Brute-Force-Regeln mit gebündelten Events; Lasttest zeigt die Hochrechnung.
 - **Abhängig von:** V1-08
 
-#### ☐ V1-23 – PostgreSQL- und Loki-Einstellungen nach Messung · X · S
+#### ☑ V1-23 – PostgreSQL- und Loki-Einstellungen nach Messung · X · S
+> Erledigt (2026-11-27):
+> - **PostgreSQL:** `deploy/compose` setzt die Werte aus KONZEPT §4.5 als Parameter von `postgres`:
+>   `wal_compression=lz4`, `max_wal_size=8GB`, `checkpoint_timeout=15min` (den Speicher stellt `timescaledb-tune` des
+>   Images ein). Gemessen: WAL 583 bis 620 MiB/h statt 1,0 bis 1,1 GiB/h (V1-08), `pg_wal` 480 MB, kein Checkpoint
+>   durch die WAL-Größe; PostgreSQL im Mittel 5 % eines Kerns. `load-report.sh` misst `pg_wal` (`pg_ls_waldir`) und
+>   rechnet mit dem größten Wert statt mit `max_wal_size`.
+> - **Loki:** Seine `/metrics` (im Lasttest nur dieser Pfad auf 127.0.0.1:19310, `deploy/load/loki-metrics.Caddyfile`)
+>   zeigen: Go-Heap höchstens 418 MiB, Ziel des GC 440 MiB, RSS 599 MiB, 17,5 GC pro Minute; der Container lag bei
+>   793 MiB mit dem Page-Cache der Chunks. Die 837 MiB aus V1-08 waren also kein Bedarf des Heaps; `GOMEMLIMIT`
+>   (900 MiB) und 1 GiB bleiben.
+> - **Log-Histogramm:** neu gemessen auch über 14 Tage (`log_histogram_14d`). Die Zeit wächst linear mit den Zeilen
+>   im Zeitraum: rund 11 ms je Minute Logs (50 Nodes, 143 Zeilen/s), nach 2 h 1,36 s; über 14 Tage hochgerechnet
+>   rund 220 s, weit über der Zeitgrenze von Loki (1 min). Nicht in dieser Aufgabe behoben (die Zeilen zählt Loki für
+>   jede Abfrage neu, das braucht einen anderen Weg): Befund für V1-24, dokumentiert in der Admin-Doku (Betrieb).
+> - **„Einige hundert Nodes“** in der Betriebs-Doku gestrichen: gemessen sind 50; dort stehen jetzt die Messwerte und
+>   der Rat, Speicher von Loki beim Wachsen zu beobachten.
+> - **Gesamt** (2 h, 50 Nodes): CPU aller Dienste im Mittel 23 % eines Kerns (p95 37 %), Speicher höchstens 2,0 GiB,
+>   Lag 0; Hochrechnung 66 GiB nach einem Jahr, mit dem Verhältnis der Rohdaten aus V1-08 (statt der oberen Grenze
+>   ohne komprimierten Chunk) und dem gemessenen `pg_wal` rund 55 GiB (V1-08: 201 GiB). Ein Lesezugriff (Log-Histogramm
+>   über 1 h) lief einmal in die 30 s von curl.
+> - **Tests:** `load-report_test.sh` (Speicher von Loki nur die gewählten Metriken, Events bis zu ihrer Aufbewahrung,
+>   `pg_wal`), `just lint-compose`. Gegenproben 2/2.
+
+#### ☐ V1-24 – Log-Histogramm über lange Zeiträume · S · M
+- **Ziel:** Aus V1-23: Das Histogramm zählt jede Abfrage alle Zeilen des Zeitraums in Loki neu (`count_over_time`),
+  rund 0,7 s je Stunde Logs bei 50 Nodes; über 14 Tage scheitert es an der Zeitgrenze von Loki. Zählungen je Node,
+  Quelle und Schweregrad schon beim Ingest (wie eine Metrik) oder Lokis Ergebnis-Cache mit an den Schritt
+  ausgerichteten Zeiträumen; Text- und Unit-Filter brauchen weiter Loki (dann kürzere Zeiträume oder klare Meldung).
+- **Tests zuerst:** Histogramm über 14 Tage mit Last unter der Zeitgrenze (Lasttest mit älteren Logs), dieselben
+  Zahlen wie aus Loki.
+- **Abhängig von:** V1-23
 - **Ziel:** Aus V1-08: KONZEPT §4.5 nennt PostgreSQL-Einstellungen (`max_wal_size` u. a.), die die Compose nie setzt;
   Loki lag mit 837 MiB nahe an seinem `GOMEMLIMIT` von 900 MiB, das Log-Histogramm über 1 h für alle Nodes braucht fast
   1 s. Einstellungen setzen oder KONZEPT korrigieren, Speicher von Loki und das Histogramm über 14 Tage messen;

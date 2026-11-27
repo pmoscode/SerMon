@@ -150,16 +150,21 @@ Agents. Agents werden nie neuer als ihr Server (außer im Kanal `beta`).
 
 - **Richtwert für 50 Nodes:** 4 vCPU, 8 GB RAM, 200 GB NVMe-SSD (KONZEPT §22). Der Testbetrieb mit dem
   Release-Kandidaten (V1-18) bestätigt oder korrigiert ihn; das Ergebnis kommt hierher.
-- **Lasttest vorab (V1-08,** [Lasttest](load-test.md)**):** 50 virtuelle Nodes mit rund 110 Serien und 2 Logzeilen pro
-  Sekunde brauchten im Mittel ein Fünftel eines Kerns und höchstens 2,5 GiB Speicher, ohne Lag. Den Platz bestimmen
-  bei voller Aufbewahrung die 1-Minuten-Werte (rund 30 GiB nach 30 Tagen) und die Security-Events: bei dauerhaftem
-  Brute Force auf allen Nodes rund 140 GiB im Jahr, sonst wenige GiB. Messen Sie die eigene Instanz mit
+- **Lasttest vorab (V1-08, V1-21 bis V1-23,** [Lasttest](load-test.md)**):** 50 virtuelle Nodes mit rund 110 Serien
+  und 2 Logzeilen pro Sekunde brauchten im Mittel knapp ein Viertel eines Kerns und höchstens 2,0 GiB Speicher, ohne Lag.
+  Hochgerechnet auf ein Jahr rund 55 GiB: Security-Events bei Brute Force auf allen Nodes ein Drittel der Zeit rund
+  33 GiB (90 Tage), Loki 11 GiB, die komprimierten Metriken rund 7 GiB. Messen Sie die eigene Instanz mit
   `scripts/load-report.sh`.
 - Je Node höchstens 2 000 aktive Serien, je Organisation 250 000 (T9); darüber verwirft der Ingest neue Serien
   (Self-Monitoring „verworfene Samples“). Kontingente je Organisation (Nodes, Mitglieder, Samples pro Sekunde, Serien)
   setzen Superadmins auf der Seite „Organisationen“.
-- Loki ist auf 1 GiB Speicher begrenzt (`SERMON_LOKI_MEMORY`, `SERMON_LOKI_GOMEMLIMIT`); das reicht für einige hundert
-  Nodes. Größere Instanzen heben beide gemeinsam an ([Installation](../installation.md)).
+- Loki ist auf 1 GiB Speicher begrenzt (`SERMON_LOKI_MEMORY`, `SERMON_LOKI_GOMEMLIMIT`). Gemessen mit 50 Nodes und
+  143 Logzeilen pro Sekunde: Go-Heap höchstens 418 MiB, RSS 599 MiB; der Container zählt mit dem Page-Cache bis
+  793 MiB. Für mehr Nodes oder Logs ist das nicht gemessen: Heben Sie beide gemeinsam an
+  ([Installation](../installation.md)) und beobachten Sie den Speicher von Loki.
+- Das **Log-Histogramm** braucht für jede Stunde Logs im Zeitraum etwa 0,7 s (50 Nodes, 143 Zeilen pro Sekunde). Über
+  einen Tag ist das noch tragbar, über 14 Tage scheitert es an der Zeitgrenze von Loki (1 min); die Zeilen selbst
+  laden schnell. Grenzen Sie lange Zeiträume mit Filtern ein (Nodes, Units, Schweregrad).
 - Der Agent selbst bleibt unter `MemoryMax=128M` und `CPUQuota=20%` seiner Unit.
 
 ## Sichern und Datenschutz

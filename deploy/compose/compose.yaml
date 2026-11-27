@@ -87,6 +87,18 @@ services:
   postgres:
     <<: *hardened
     image: timescale/timescaledb:2.32.0-pg17@sha256:6a6b7d7a346d7c6be03a310c240706f3bbc6d7adbdf3fbc07823570b34337f5e
+    # The write load of the metrics (KONZEPT §4.5, V1-23): compressed full-page images, a checkpoint
+    # every 15 minutes instead of 5 (fewer full-page images) and room for bursts (compression jobs,
+    # purges, a restore) without checkpoints forced by the WAL size. Memory is tuned by the image
+    # (timescaledb-tune at the first start, from the host's memory).
+    command:
+      - postgres
+      - -c
+      - wal_compression=lz4
+      - -c
+      - max_wal_size=8GB
+      - -c
+      - checkpoint_timeout=15min
     # The entrypoint prepares the data directory as root and then drops to postgres.
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     environment:

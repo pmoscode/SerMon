@@ -273,7 +273,8 @@ Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Log fol
   `SECURITY DEFINER`-Funktion, deren Eigentümer keine Sonderrechte hat und die nur Serien zurückgibt, die über die
   RLS-geschützte Tabelle `series` sichtbar sind (ADR 0001, 0007).
 - **PostgreSQL-Einstellungen** für die Schreiblast: `wal_compression = lz4`, `max_wal_size = 8GB`,
-  `checkpoint_timeout = 15min`.
+  `checkpoint_timeout = 15min` (in `deploy/compose` als Parameter von `postgres`, V1-23); den Speicher stellt das
+  Image beim ersten Start mit `timescaledb-tune` nach dem Speicher des Hosts ein.
 - **Spike M0-09:** Ergebnisse und Messwerte in ADR 0001.
 
 **Mengengerüst (50 Nodes):**

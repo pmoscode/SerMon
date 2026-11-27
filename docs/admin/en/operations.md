@@ -147,16 +147,21 @@ never become newer than their server (except in the channel `beta`).
 
 - **Guideline for 50 nodes:** 4 vCPU, 8 GB RAM, 200 GB NVMe SSD (KONZEPT §22). The test operation with the release
   candidate (V1-18) confirms or corrects it; the result will be added here.
-- **Load test before it (V1-08,** [load test](load-test.md)**):** 50 virtual nodes with about 110 series and 2 log
-  lines per second used a fifth of a core on average and at most 2.5 GiB of memory, without lag. At full retention
-  the disk is taken by the 1-minute values (about 30 GiB after 30 days) and the security events: about 140 GiB a
-  year with a permanent brute force on every node, a few GiB otherwise. Measure your own instance with
+- **Load test before it (V1-08, V1-21 to V1-23,** [load test](load-test.md)**):** 50 virtual nodes with about 110
+  series and 2 log lines per second used just under a quarter of a core on average and at most 2.0 GiB of memory, without lag.
+  Extrapolated to a year about 55 GiB: security events with a brute force on every node a third of the time about
+  33 GiB (90 days), Loki 11 GiB, the compressed metrics about 7 GiB. Measure your own instance with
   `scripts/load-report.sh`.
 - At most 2,000 active series per node and 250,000 per organization (T9); beyond that the ingest drops new series
   (self-monitoring "dropped samples"). Superadmins set quotas per organization (nodes, members, samples per second,
   series) on the page "Organizations".
-- Loki is limited to 1 GiB of memory (`SERMON_LOKI_MEMORY`, `SERMON_LOKI_GOMEMLIMIT`); that serves a few hundred nodes.
-  Larger instances raise both together ([installation](../installation.md)).
+- Loki is limited to 1 GiB of memory (`SERMON_LOKI_MEMORY`, `SERMON_LOKI_GOMEMLIMIT`). Measured with 50 nodes and 143
+  log lines per second: Go heap at most 418 MiB, RSS 599 MiB; the container counts up to 793 MiB with the page cache.
+  More nodes or logs are not measured: raise both together ([installation](../installation.md)) and watch Loki's
+  memory.
+- The **log histogram** takes about 0.7 s for every hour of logs in its range (50 nodes, 143 lines per second). Over
+  a day that is still bearable, over 14 days it fails at Loki's time limit (1 min); the lines themselves load fast.
+  Narrow long ranges with filters (nodes, units, severity).
 - The agent itself stays below its unit's `MemoryMax=128M` and `CPUQuota=20%`.
 
 ## Backups and data protection

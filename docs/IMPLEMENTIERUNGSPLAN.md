@@ -6123,8 +6123,8 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 >   erlaubten Ports) und T109 (lokaler Dienst auf dem Port des Ziels bekommt Redis-Passwort und Bearer-Token).
 > - **Bewusst offen (Hinweise, für v1.x):** `canonicalize` im async-Executor; Zugangsdaten im Speicher nicht genullt
 >   (bräuchte `zeroize`); Fleet-Übersicht des Kiosks je Widget gelesen; TLS für Redis; Serien-Budget des Scrapers auch
->   im Server; der Update-Orchestrator behält seine Leases über einen Neustart (bis 3 min Wartezeit);
->   `just test-db-modules` läuft nicht in CI.
+>   im Server. Im Review M5 erledigt: der Update-Orchestrator gibt seine Leases beim Stoppen frei, `just
+>   test-db-modules` läuft als eigener Job in CI.
 - **Ziel:** Skill `sermon-security-review` über alle M5-Änderungen, in Teil-Reviews ohne Kontext der Umsetzung:
   Modul-Laufzeit und Veto (Sonde ins Netz des Hosts?), Zugangsdaten, Module mit fremden Daten (Parser, Docker-Socket,
   Prometheus), Helper-Operation SMART, Dashboards und Kiosk-Token, Nodes löschen. Danach Threat Model aktualisieren

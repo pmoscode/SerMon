@@ -3,51 +3,58 @@
 **Schlankes, selbst gehostetes und mandantenfähiges Server-Monitoring für Linux.**
 Inspiriert von Netdata, aber bewusst kleiner – mit **Security als oberstem Gebot**.
 
-> ⚠️ **Status: in früher Entwicklung (Meilenstein M2).** Die Server-Seite für Anmeldung, Mandanten, Enrollment und die
-> mTLS-Agent-API steht. Der Agent enrollt sich, sammelt die Basis-Metriken und liefert sie über Puffer, Reconnect und
-> Zertifikatsrotation an den Server, der sie in TimescaleDB speichert; die Abfrage-API für die UI steht.
-> Die UI hat Login, Setup-Assistent und App-Shell; Charts und Flottenübersicht folgen.
-> Die Alert-Engine wertet Standardregeln für Metriken und Security-Events aus (SSH-Brute-Force, Fleet-Korrelation,
-> Root-Login, sudo, OOM, Reboot). Benachrichtigungen per E-Mail, Webhook, ntfy, Slack, Teams,
-> Discord, Mattermost, Telegram, Gotify und Pushover sind angebunden (Slack, Teams, Discord, Mattermost,
-> Telegram, Gotify und Pushover bisher nur gegen Test-Server geprüft); Notification-Policies leiten die Alerts mit
-> Wiederholung und Eskalation an die Kanäle; Silences und Wartungsfenster schalten sie stumm. Die Alert-Seite zeigt
-> die aktiven Alerts mit Verlauf, Quittieren, Silences und dem Regel-Editor (YAML-Import und -Export); Kanäle,
-> Policies und Wartungsfenster verwalten Admins in der UI; Tags wie `env=prod` an Nodes dienen als Filter und für das
-> Matching von Regeln, Policies und Silences. Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und
-> Alpine (OpenRC; ohne journald liest der Agent Logdateien und markiert Events daraus als nicht verifiziert, Neustarts
-> erkennt er an der Boot-ID, und die Node-Seite warnt, wenn ein Host gar keine Security-Quelle hat), jeweils
-> amd64 und arm64; neben dem Einzeiler gibt es signierte Pakete (.deb, .rpm, .apk). Für eine Installation gibt es
-> eine gehärtete Compose-Datei ([Anleitung](docs/admin/installation.md)). Superadmins verwalten die Organisationen der
-> Instanz mit Kontingenten für Nodes, Mitglieder und Ingest, sperren sie und löschen sie nach einer Frist. Zum Ausprobieren der Alerts spielt der
-> Simulator Szenarien durch: CPU-Last, volle Platte, SSH-Brute-Force, Flattern und Ausfall (`just simulate`).
-> Noch nicht für den produktiven Einsatz geeignet.
-> Stand der Aufgaben: [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md).
+> ⚠️ **Status: auf dem Weg zu v1.0.** Die Meilensteine M0 bis M5 sind abgeschlossen (bis auf die Prüfung der
+> Kanäle gegen die echten Dienste, jetzt V1-14); offen sind Release-Pipeline,
+> Testbetrieb, externes Review und Release (Stand: [Implementierungsplan §9](docs/IMPLEMENTIERUNGSPLAN.md#9-v10--release)).
+> Bis zum ersten Release baut die Installation das Server-Image aus dem Quellcode. Noch nicht für den produktiven
+> Einsatz geeignet.
 
-*A lean, self-hosted, multi-tenant monitoring for Linux servers – security first. Documentation is in German.*
+*A lean, self-hosted, multi-tenant monitoring for Linux servers – security first. Documentation is mostly in German;
+help texts, user guide and privacy template are also in English.*
 
-## Geplante Features
+## Was SerMon kann
 
-- **Zero-Config-Agent** (Rust, eine statische Binary): Installation per Einzeiler mit Enrollment-Token, mTLS zum Server
-- **Metriken** im Sekundentakt: CPU, Memory, Disk-IO, Netzwerk, Load, Uptime – mit Detailansichten und Live-Ansicht („top“)
-- **Logs**: systemd-journal, klassische Log-Dateien, Docker
-- **Alerting** mit Standardregeln (CPU, RAM, Disk, Netz, Reboot, Updates) und **Security-Events** wie fehlgeschlagenen SSH-Logins;
-  Benachrichtigung per E-Mail, Webhook, Slack, Teams, Discord, Mattermost, Telegram, ntfy, Gotify, Pushover
-- **Anomalie-Erkennung** (statistisch, erklärbar)
-- **Paket-Updates** per Policy (apt, dnf, apk) mit Wartungsfenstern
-- **Mandanten, Gruppen und Rollen**; Anmeldung lokal mit TOTP/Passkeys oder per OIDC
-- Moderne Web-UI (SvelteKit) auf Deutsch und Englisch, mit Kontexthilfe
+- **Agent** in Rust, eine statische Binary (amd64, arm64) mit einem Root-Helper für die wenigen privilegierten
+  Aufgaben: Installation per Einzeiler oder aus signierten Paket-Repos (.deb, .rpm, .apk), Enrollment mit Token,
+  danach mTLS mit Zertifikatsrotation; Puffer auf der Platte, Self-Update mit Rollback. Unter 1 % eines Kerns und
+  rund 10 MiB eigener Speicher, auch mit allen Modulen.
+- **Metriken** im Sekundentakt (CPU, Speicher, Disk, Netz, Load, Prozesse, systemd-Units, Zeit), Live-Ansicht („top“),
+  Flottenübersicht, Node-Seite, Kapazität und Heatmap, Vergleich von 2 bis 4 Nodes.
+- **Logs** aus dem systemd-Journal, Logdateien und Containern, mit Redaction vor dem Versand, Log-Explorer und
+  Live-Tail (Loki).
+- **Alerting** mit Standardregeln, Security-Events (SSH-Brute-Force mit Fleet-Korrelation, Root-Login, sudo, OOM,
+  Reboot), Vorhersagen und erklärbarer **Anomalie-Erkennung**; Benachrichtigung per E-Mail, Webhook, ntfy, Slack,
+  Teams, Discord, Mattermost, Telegram, Gotify und Pushover mit Policies, Eskalation, Silences und Wartungsfenstern;
+  Regeln in der UI und als YAML. Slack, Teams, Discord, Mattermost, Telegram, Gotify und Pushover sind bisher nur
+  gegen Test-Server geprüft.
+- **Paket-Updates** (apt, dnf, apk): Übersicht der offenen Security-Updates und Rollouts per Policy mit
+  Wartungsfenstern, Reboot und Health-Check.
+- **Module** für Dienste, ab Werk aus, mit Vorschlag aus der Discovery: HTTP- und TCP-Check, TLS-Zertifikate,
+  systemd-Units, nginx, Apache, PostgreSQL, MySQL/MariaDB, Redis, Docker (cgroups und Socket), SMART,
+  Prometheus-Scraper – begrenzt durch das lokale Veto des Hosts.
+- **Eigene Dashboards** mit Widgets und Variablen, geteilt in der Organisation, **Kiosk-Modus** mit widerrufbaren
+  Tokens.
+- **Mandanten, Gruppen und Rollen**; Anmeldung lokal mit TOTP und Passkeys oder per OIDC, Step-up für kritische
+  Aktionen, Audit-Log mit Hash-Kette; Retention je Organisation, Löschen von Nodes, Organisationen und Konten,
+  Export der eigenen Daten.
+- **Betrieb:** gehärtete Compose-Datei, verschlüsseltes Backup und Restore, Self-Monitoring.
+- Web-UI (SvelteKit) auf Deutsch und Englisch mit Kontexthilfe, ohne externe Ressourcen.
 
-Unterstützte Systeme: Debian, Ubuntu, RHEL/Rocky/Alma/Fedora, Alpine – jeweils amd64 und arm64.
+Getestet auf Debian, Ubuntu, Rocky, AlmaLinux, Fedora und Alpine (OpenRC), jeweils amd64 und arm64.
 
 ## Dokumentation
 
 | Dokument | Inhalt |
 |---|---|
+| [Installation](docs/admin/installation.md) | Einrichtung mit docker compose (`deploy/compose/`) |
+| [Admin-Doku](docs/admin/) | Installation, Backup und Restore, Betrieb |
+| [Backup und Restore](docs/admin/backup.md) | `sermon-server backup` und `restore`, pgBackRest, Loki |
+| [Benutzerhandbuch](docs/user/de/README.md) ([English](docs/user/en/README.md)) | Flotte, Alerts, Logs, Updates, Module, Dashboards, Rollen |
+| [Datenschutz-Vorlage](docs/privacy/de/README.md) ([English](docs/privacy/en/README.md)) | Verarbeitungsverzeichnis, TOMs, Löschfristen – Vorlage, keine Rechtsberatung |
 | [Konzept](docs/KONZEPT.md) | Architektur, Entscheidungen, Security-Konzept, Qualitätsregeln |
 | [Implementierungsplan](docs/IMPLEMENTIERUNGSPLAN.md) | Meilensteine, Aufgaben, Abnahmekriterien |
 | [ADRs](docs/adr/) | Architekturentscheidungen |
-| [Installation](docs/admin/installation.md) | Einrichtung mit docker compose (`deploy/compose/`) |
+| [Threat Model](docs/security/threat-model.md) | Vertrauensgrenzen, Bedrohungen, Gegenmaßnahmen |
 | [Security Policy](SECURITY.md) | Schwachstellen melden |
 
 ## Entwicklung
@@ -55,18 +62,21 @@ Unterstützte Systeme: Debian, Ubuntu, RHEL/Rocky/Alma/Fedora, Alpine – jeweil
 Alternativ: Devcontainer (`.devcontainer/`), dann sind alle Werkzeuge installiert.
 
 Voraussetzungen: [`just`](https://github.com/casey/just), [`lefthook`](https://github.com/evilmartians/lefthook),
-[`betterleaks`](https://github.com/betterleaks/betterleaks), `shellcheck` – später zusätzlich Rust, Go, Node + pnpm, `buf`, Docker.
+[`betterleaks`](https://github.com/betterleaks/betterleaks), Rust (rustup, Version aus `agent/rust-toolchain.toml`),
+`zig` und `cargo-zigbuild`, `cargo-deny`, Go, `golangci-lint`, `govulncheck`, Node und pnpm, `buf`, `shellcheck`,
+Docker. `just setup` prüft, was fehlt.
 
 ```bash
-just setup   # prüft Voraussetzungen und installiert die Git-Hooks
-just dev     # Entwicklungsumgebung: Datenbank, Loki, Mailpit, ntfy, Server (Hot-Reload) und UI → http://127.0.0.1:5173
-just --list  # alle Befehle
-just lint    # Lint
-just test    # Tests
+just setup     # prüft Voraussetzungen und installiert die Git-Hooks
+just dev       # Entwicklungsumgebung: Datenbank, Loki, Mailpit, ntfy, Server (Hot-Reload) und UI → http://127.0.0.1:5173
+just simulate  # virtuelle Nodes gegen `just dev`, mit Szenarien für die Alerts
+just lint      # Lint aller Teile
+just test      # Unit-Tests; just test-integration, just e2e und just e2e-demo für die größeren Tests
+just --list    # alle Befehle
 ```
 
 Beiträge: Commits folgen [Conventional Commits](https://www.conventionalcommits.org/), Arbeit erfolgt testgetrieben (TDD).
-Details in [KONZEPT §19](docs/KONZEPT.md#19-qualität-clean-code-tdd-und-prozess).
+Details in [KONZEPT §19](docs/KONZEPT.md#19-qualität-clean-code-tdd-und-prozess) und in [CLAUDE.md](CLAUDE.md).
 
 ## Lizenz
 

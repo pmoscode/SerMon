@@ -294,7 +294,9 @@ Alerts und Logs (Prüfung stündlich, [ADR 0041](../adr/0041-nodes-deaktivieren-
 
 Konten ohne Mitgliedschaft löscht der Server nach `SERMON_ACCOUNT_DELETION_GRACE` (Standard `720h` = 30 Tage,
 mindestens `24h`; Superadmins nie), abgelaufene Einladungen sofort; beide Audit-Logs behalten Einträge
-`SERMON_AUDIT_RETENTION` lang (Standard `17520h` = 2 Jahre, `2160h` bis `87600h`). Prüfung stündlich. Auf Antrag
+`SERMON_AUDIT_RETENTION` lang (Standard `17520h` = 2 Jahre, `2160h` bis `87600h`). Security-Events und Verlauf der
+Alerts behalten Organisationen ohne eigene Einstellung `SERMON_EVENT_RETENTION` lang (Standard `2160h` = 90 Tage,
+ganze Tage von `168h` bis `8760h`). Prüfung stündlich. Auf Antrag
 löscht ein Superadmin ein Konto auf der Seite „Organisationen“. Mehr in der
 [Vorlage zur DSGVO-Dokumentation](../privacy/de/README.md).
 

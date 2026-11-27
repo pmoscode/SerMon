@@ -81,10 +81,13 @@ message GetRetentionResponse {
   uint32 log_max_days = 4;
   // event_min_days is the shortest retention of events.
   uint32 event_min_days = 5;
-  // event_max_days is the longest (and default) retention of events.
+  // event_max_days is the longest retention of events.
   uint32 event_max_days = 6;
   // cap_days is the superadmin's cap of the organization (0: none); settings above it are refused.
   uint32 cap_days = 7;
+  // event_default_days is the instance's default for events (SERMON_EVENT_RETENTION): what 0 in
+  // event_retention_days means.
+  uint32 event_default_days = 8;
 }
 
 // SetRetentionRequest is the new retention; 0 days is the instance's default.

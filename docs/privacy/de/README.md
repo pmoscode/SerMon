@@ -116,7 +116,7 @@ Die Maßnahmen stehen gesammelt in Abschnitt 4, die Fristen in Abschnitt 5.
 | Daten | Security-Events, bekannte Anmeldequellen, Alerts mit ihren Feldern (Abschnitt 2) |
 | Rechtsgrundlage | [z. B. Art. 6 Abs. 1 lit. f DSGVO; Art. 32 DSGVO] |
 | Empfänger | Mitglieder der Gruppe (Betrachter nur, wenn erlaubt); Empfänger der Benachrichtigungen (3.5) |
-| Frist | je Organisation 7 bis 365 Tage (ab Werk 365); bekannte Quellen 1 Jahr nach der letzten Anmeldung |
+| Frist | je Organisation 7 bis 365 Tage (ab Werk 90, `SERMON_EVENT_RETENTION`); bekannte Quellen 1 Jahr nach der letzten Anmeldung |
 
 ### 3.5 Alarmierung und Benachrichtigungen
 
@@ -234,7 +234,7 @@ Patchen des Hosts) ergänzt der Betreiber.
 | Daten | Frist | Einstellbar |
 |---|---|---|
 | Logs | 1–14 Tage, ab Werk 14; Loki löscht spätestens nach 14 Tagen | je Organisation (Admins); Obergrenze durch den Superadmin |
-| Security-Events und Verlauf der Alerts | 7–365 Tage, ab Werk 365 | je Organisation (Admins); Obergrenze durch den Superadmin |
+| Security-Events und Verlauf der Alerts | 7–365 Tage, ab Werk 90 | Vorgabe der Instanz (`SERMON_EVENT_RETENTION`, Betreiber); je Organisation (Admins); Obergrenze durch den Superadmin |
 | Metriken | 10-s-Werte 24 h, Minutenwerte 30 Tage, Stundenwerte 1 Jahr | nein |
 | Anomalie-Werte | 30 Tage | nein |
 | Bekannte Anmeldequellen | 1 Jahr nach der letzten Anmeldung | nein |

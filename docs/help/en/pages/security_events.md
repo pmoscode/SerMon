@@ -4,7 +4,7 @@ What happens at the logins of the nodes: failed and successful SSH logins, root 
 
 ## Reading this page
 
-- The **time range** applies to everything on the page. Dragging in the chart zooms in; the events are kept for a year unless the organization sets it shorter ([retention](help:concepts/retention)).
+- The **time range** applies to everything on the page. Dragging in the chart zooms in; the events are kept for 90 days by default unless the organization sets another period ([retention](help:concepts/retention)).
 - The **totals** at the top count the range. A click on "Show …" filters the table to exactly these events.
 - The **chart** stacks the failed logins by node; the six nodes with the most get a colour of their own, the others share one. The legend names every colour with its count.
 - **Top IPs and top users** are the addresses and user names with the most failed logins. A click filters the table to one. "(empty)" is an empty user name an attacker tried.

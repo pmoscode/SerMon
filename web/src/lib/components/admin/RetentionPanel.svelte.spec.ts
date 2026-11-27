@@ -20,6 +20,7 @@ function current(over: { logs?: number; events?: number; cap?: number } = {}) {
 		logMaxDays: 14,
 		eventMinDays: 7,
 		eventMaxDays: 365,
+		eventDefaultDays: 90,
 		capDays: over.cap ?? 0
 	});
 }
@@ -31,7 +32,7 @@ describe('RetentionPanel', () => {
 		if (stepUpState.open) stepUpState.finish(false);
 	});
 
-	it('shows the current retention, the limits and the cap', async () => {
+	it('shows the current retention, the limits, the defaults and the cap', async () => {
 		vi.spyOn(adminApi.access, 'getRetention').mockResolvedValue(current({ cap: 60 }));
 		render(RetentionPanel);
 		await expect.element(page.getByRole('spinbutton', { name: 'Logs (days)' })).toHaveValue(null);
@@ -39,6 +40,8 @@ describe('RetentionPanel', () => {
 			.element(page.getByRole('spinbutton', { name: 'Security events and alert history (days)' }))
 			.toHaveValue(90);
 		await expect.element(page.getByText('1 to 14 days; empty: 14 days')).toBeVisible();
+		// The instance's default for events (SERMON_EVENT_RETENTION, V1-22), not the longest.
+		await expect.element(page.getByText('7 to 365 days; empty: 90 days')).toBeVisible();
 		await expect.element(page.getByText('Cap of this organization: 60 days')).toBeVisible();
 	});
 

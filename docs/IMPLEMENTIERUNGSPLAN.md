@@ -6600,7 +6600,9 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Release-Notes nennen, was das Upgrade auf v1.0 ändert: Konten ohne Mitgliedschaft werden 30 Tage nach der Migration
   gelöscht, Audit-Einträge älter als 2 Jahre beim ersten Lauf (V1-17); `secrets/postgres_backup_password` und die
   Rolle `sermon_backup` für bestehende Volumes (V1-05); die Vorgaben der Module (`module_hosts`, `module_ports`, nur
-  SCRAM bei PostgreSQL, MySQL nur über Socket oder geprüftes TLS, M5-33).
+  SCRAM bei PostgreSQL, MySQL nur über Socket oder geprüftes TLS, M5-33); Security-Events und Verlauf der Alerts von
+  Orgs ohne eigene Einstellung nur noch 90 Tage statt eines Jahres, Älteres geht beim ersten Lauf
+  (`SERMON_EVENT_RETENTION`, V1-22).
 - **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-23
 
 #### ☐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
@@ -6729,7 +6731,33 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Lasttest (V1-08) zeigt die neue Hochrechnung.
 - **Abhängig von:** V1-08
 
-#### ☐ V1-22 – Security-Events bei Dauerangriffen begrenzen · S · M
+#### ☑ V1-22 – Security-Events bei Dauerangriffen begrenzen · S · M
+> Erledigt (2026-11-27, ADR 0018 Nachtrag V1-22, ADR 0029 Nachtrag V1-22): **`SERMON_EVENT_RETENTION`** (ab Werk
+> `2160h` = 90 Tage, ganze Tage von 7 bis 365) für Security-Events und Verlauf der Alerts von Orgs ohne eigene
+> Einstellung; Orgs behalten ihre 7 bis 365 Tage und dürfen damit auch länger behalten als die Vorgabe.
+> - **Kein Bündeln:** Die Regeln zählen gleitend über die genauen Zeitpunkte, `login_after_failures` vergleicht jeden
+>   Versuch, Liste, CSV und Übersicht zeigen jeden Versuch mit Port. Beim Ingest gebündelt wären die Regeln ungenauer,
+>   nach ihren Fenstern gebündelt bekämen Liste, Export und Übersicht ein zweites Format und ältere Charts würden
+>   gröber; eine eigene kurze Frist nur für fehlgeschlagene Anmeldungen hätte die Einstellung der Orgs unterlaufen. Die
+>   Engine bleibt unverändert, daher keine neuen Engine-Tests.
+> - **Umsetzung:** Der Job (`orgretention`, stündlich) löscht jetzt für jede Org: vor ihrer Frist, ohne eine vor der
+>   Vorgabe. Migration 00083: `security_events_expire_org(org, before, default_days)` nimmt die Frist der Org, sonst
+>   die Vorgabe, nie unter 7 Tagen, an der Uhr der Datenbank; `security_events_expire(before, default_days)` gibt einen
+>   Monat erst frei, wenn er vor der Vorgabe und vor der längsten Frist aller Orgs endet; `organization_retentions`
+>   liefert alle Orgs. `GetRetentionResponse.event_default_days` (additiv), die UI zeigt „leer: 90 Tage“.
+> - **Gemessen** (Lasttest wie V1-21): 24 000 bis 27 000 Events und 14,2 MiB je Stunde; bis zur Aufbewahrung
+>   hochgerechnet 33 GiB bei 90 Tagen (vorher 140 GiB bei einem Jahr). `load-report.sh` rechnet Events und Verlauf
+>   bis `--event-days` (Standard 90) hoch, nicht mehr im „Rest ohne Grenze“; die Hochrechnung fiel damit von 159 auf
+>   66 GiB (mit den Grenzen der Rohdaten und von `max_wal_size`, siehe V1-23).
+> - **Doku:** Admin-Doku (Referenz, Betrieb, Installation), DSGVO-Vorlage, Hilfe `concepts/retention`,
+>   `pages/security_events`, `pages/alerts`, KONZEPT §2 (D12), §4.5, §11, `CLAUDE.md`, `env.example`; Release-Notes
+>   in V1-15 ergänzt (Älteres als 90 Tage geht beim ersten Lauf).
+> - **Tests:** Config (Vorgabe, Grenzen, ganze Tage), Dienst (alle Orgs, Vorgabe, eigene Frist gewinnt, Logs nur mit
+>   eigener Frist), Wartung der Partitionen, Integrationstests der Funktionen (Vorgabe, eigene Frist, 7 Tage als
+>   Untergrenze, Uhr weit voraus, längste Frist hält Monate, fremder Tenant), API, Komponente; Drift-Tests der
+>   Admin-Doku und DSGVO-Vorlage gegen die Konstante. Zwei Gegenproben (obere Grenze von 365 Tagen in der Datenbank)
+>   waren nicht zu töten – die Grenze ist entfernt, sie hätte nur länger behalten (`config.Load` prüft sie).
+>   Gegenproben 27/27.
 - **Ziel:** Aus V1-08: Ein Brute-Force gegen alle Nodes ohne Pause erzeugt rund 30 000 Events pro Stunde, ≈ 140 GiB im
   Jahr. Fehlgeschlagene Logins derselben Quelle bündeln (Zähler je Zeitfenster statt Zeile je Versuch) oder eine
   kürzere Aufbewahrung für sie; die Erkennung (Brute-Force, Fleet-Korrelation, ADR 0019) bleibt gleich genau. Dazu

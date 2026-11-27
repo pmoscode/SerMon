@@ -51,6 +51,9 @@ func retentionDays(v pgtype.Int2) uint32 {
 	return uint32(max(v.Int16, 0))
 }
 
+// days32 passes a number of days (config.Load keeps it within 7 to 365; the database within 7 days).
+func days32(v uint32) int32 { return int32(min(v, retention.MaxEventDays)) }
+
 func retentionDaysArg(v uint32) pgtype.Int2 {
 	if v == 0 {
 		return pgtype.Int2{}
@@ -72,8 +75,8 @@ func (s *RetentionStore) Set(ctx context.Context, scope tenant.Scope, set retent
 	})
 }
 
-// Configured returns the organizations with a retention of their own.
-func (s *RetentionStore) Configured(ctx context.Context) ([]orgretention.OrgSettings, error) {
+// Organizations returns every organization with its retention (zero: the defaults).
+func (s *RetentionStore) Organizations(ctx context.Context) ([]orgretention.OrgSettings, error) {
 	rows, err := s.db.withoutTenant().OrganizationRetentions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("organization retentions: %w", err)
@@ -92,13 +95,16 @@ func (s *RetentionStore) Configured(ctx context.Context) ([]orgretention.OrgSett
 	return out, nil
 }
 
-// ExpireEvents deletes the organization's security events and alert history before before (never
-// of the last 7 days: the database checks that against its own clock).
-func (s *RetentionStore) ExpireEvents(ctx context.Context, org tenant.OrgID, before time.Time) (int64, error) {
+// ExpireEvents deletes the organization's security events and alert history before before: never
+// within its own period, or defaultDays without one (the database checks both against its own
+// clock and never deletes anything of the last 7 days).
+func (s *RetentionStore) ExpireEvents(ctx context.Context, org tenant.OrgID, before time.Time, defaultDays uint32) (int64, error) {
 	var n int64
 	err := s.inOrg(ctx, org, func(q *sqlcdb.Queries) error {
 		var err error
-		n, err = q.ExpireOrganizationEvents(ctx, sqlcdb.ExpireOrganizationEventsParams{OrgID: uuid.UUID(org), Before: before})
+		n, err = q.ExpireOrganizationEvents(ctx, sqlcdb.ExpireOrganizationEventsParams{
+			OrgID: uuid.UUID(org), Before: before, DefaultDays: days32(defaultDays),
+		})
 		return wrap(err, "expire events")
 	})
 	return n, err

@@ -308,10 +308,11 @@ func unmappedBits(ip netip.Addr) int {
 // HorizonWarning is how far ahead the partitions must reach before the maintenance complains.
 const HorizonWarning = 365 * 24 * time.Hour
 
-// Maintenance drops the partitions older than the retention (a year, ADR 0018) and warns when the
-// partitions created by the migrations end within HorizonWarning. It runs at once and then every
-// interval until ctx ends.
-func Maintenance(ctx context.Context, p Partitions, now func() time.Time, interval time.Duration, logger *slog.Logger) error {
+// Maintenance drops the partitions older than the retention (the instance's default of
+// defaultDays, SERMON_EVENT_RETENTION; the database keeps longer periods of organizations, ADR 0018)
+// and warns when the partitions created by the migrations end within HorizonWarning. It runs at
+// once and then every interval until ctx ends.
+func Maintenance(ctx context.Context, p Partitions, now func() time.Time, interval time.Duration, defaultDays uint32, logger *slog.Logger) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -322,7 +323,7 @@ func Maintenance(ctx context.Context, p Partitions, now func() time.Time, interv
 			logger.ErrorContext(ctx, "security event partitions end soon – update sermon-server (its migrations add more)",
 				"horizon", horizon.Format(time.DateOnly))
 		}
-		if dropped, err := p.Expire(ctx, at.AddDate(-1, 0, 0)); err != nil {
+		if dropped, err := p.Expire(ctx, at.Add(-time.Duration(defaultDays)*24*time.Hour), defaultDays); err != nil {
 			logger.ErrorContext(ctx, "security event partitions: retention failed", "error", err.Error())
 		} else if dropped > 0 {
 			logger.InfoContext(ctx, "security event partitions dropped (retention)", "count", dropped)

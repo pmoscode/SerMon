@@ -40,3 +40,35 @@ Speicher und Schema regelt ADR 0001 (D13).
 - Security/Datenschutz: Logs können personenbezogene Daten enthalten; 14 Tage sind Standard und kürzer einstellbar
   (§18.7).
 - Folgearbeiten: Retention-Jobs für Events und Audit-Log (M2/M3); Einstellungen pro Org.
+
+## Nachtrag V1-22 (2026-11-27): Vorgabe der Instanz für Events, kein Bündeln
+
+**Anlass:** Der Lasttest (V1-08) erzeugte mit dem Brute-Force-Szenario (50 Nodes, ein Drittel der Zeit angegriffen)
+30 000 Security-Events und 16,6 MiB je Stunde; bei einem Jahr Aufbewahrung rund 140 GiB, mehr als alle Metriken.
+
+**Entscheidung:**
+
+- **`SERMON_EVENT_RETENTION`** (Product Owner): Security-Events und Verlauf der Alerts von Orgs ohne eigene Einstellung
+  bleiben ab Werk **90 Tage** statt eines Jahres; erlaubt sind ganze Tage von 7 bis 365 (die Grenzen der Orgs). Orgs
+  mit eigener Einstellung behalten sie (7 bis 365 Tage, ADR 0029). Bei 90 Tagen kostet dasselbe Szenario rund 35 GiB.
+- **Kein Bündeln** fehlgeschlagener Anmeldungen (Zähler je Quelle und Zeitfenster statt einer Zeile je Versuch).
+  Die Regeln zählen gleitend über die genauen Zeitpunkte (`maxInWindow`, `maxNodesInWindow`), `login_after_failures`
+  vergleicht jeden Versuch mit der Anmeldung danach, die UI und der CSV-Export zeigen Port und Zeit jedes Versuchs, die
+  Übersicht zählt in Schritten bis zu einer Minute. Beim Ingest gebündelt wären die Regeln nicht mehr gleich genau;
+  erst nach den Fenstern der Regeln (48 h) gebündelt, bliebe die Engine genau, aber Liste, Export, Übersicht und
+  Protokoll bekämen ein zweites Format, ältere Charts würden gröber, und die Ersparnis hinge davon ab, wie viele
+  Benutzernamen ein Angreifer durchprobiert. Eine eigene kürzere Frist nur für fehlgeschlagene Anmeldungen hätte die
+  Einstellung der Orgs unterlaufen. Die kürzere Vorgabe für alle Events löst das Problem ohne beides.
+
+**Umsetzung:** Der Job der Aufbewahrung (stündlich, `orgretention`) löscht jetzt für **jede** Org: vor ihrer eigenen
+Frist oder vor der Vorgabe. Die Datenbank prüft beides gegen ihre eigene Uhr: `security_events_expire_org` nimmt die
+Frist der Org, ohne eine die übergebene Vorgabe, nie unter 7 Tagen (die Grenzen von 7 bis 365 Tagen prüft der Server
+beim Start). Ganze Monate (`security_events_expire`)
+gehen erst, wenn sie vor der Vorgabe **und** vor der längsten Frist aller Orgs enden; ein Sprung der Uhr oder eine
+kleine Vorgabe löscht so nichts, was eine Org noch behält (Migration 00083). `alerting.HistoryRetention` (ein Jahr)
+bleibt als Grenze für `sermon_app`.
+
+**Konsequenzen:** Bestehende Installationen verlieren beim ersten Lauf nach dem Upgrade Events und Verlauf, die älter
+als 90 Tage sind, wenn weder der Betreiber die Vorgabe noch die Org eine eigene Frist gesetzt hat – die Release-Notes
+nennen das (V1-15). Wer ein Jahr behalten will, setzt `SERMON_EVENT_RETENTION=8760h` und plant den Platz ein
+(Admin-Doku, Betrieb).

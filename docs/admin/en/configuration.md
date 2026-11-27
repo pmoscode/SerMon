@@ -67,6 +67,7 @@ Durations in Go's format (`720h`, `90m`); there are no days. The jobs run hourly
 | `SERMON_NODE_DELETION_GRACE` | `168h` | from `.env` | Between "delete node" and the deletion of its data; at least `24h`. |
 | `SERMON_ACCOUNT_DELETION_GRACE` | `720h` | from `.env` | Accounts without a membership are deleted after it (superadmins never); at least `24h`. |
 | `SERMON_AUDIT_RETENTION` | `17520h` | from `.env` | How long the audit logs of the organizations and of the instance keep an entry; `2160h` to `87600h`. |
+| `SERMON_EVENT_RETENTION` | `2160h` | from `.env` | How long organizations without a setting of their own keep their security events and alert history; whole days from `168h` to `8760h`. Organizations with a setting of their own (7 to 365 days) keep theirs. |
 
 ## Mail (SMTP)
 

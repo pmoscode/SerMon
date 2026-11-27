@@ -353,9 +353,12 @@ func (s *SecurityEventStore) Horizon(ctx context.Context) (time.Time, error) {
 	return t, nil
 }
 
-// Expire drops the partitions that end at or before before.
-func (s *SecurityEventStore) Expire(ctx context.Context, before time.Time) (int, error) {
-	n, err := s.db.withoutTenant().ExpireSecurityEventPartitions(ctx, before)
+// Expire drops the partitions that end at or before before; the database keeps those of the
+// longest period of any organization and of defaultDays (V1-22).
+func (s *SecurityEventStore) Expire(ctx context.Context, before time.Time, defaultDays uint32) (int, error) {
+	n, err := s.db.withoutTenant().ExpireSecurityEventPartitions(ctx, sqlcdb.ExpireSecurityEventPartitionsParams{
+		Before: before, DefaultDays: days32(defaultDays),
+	})
 	if err != nil {
 		return 0, fmt.Errorf("expire security event partitions: %w", err)
 	}

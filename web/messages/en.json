@@ -633,7 +633,7 @@
 	"retention_intro": "How long this organization keeps its logs and security events. Empty means: as the instance.",
 	"retention_logs": "Logs (days)",
 	"retention_events": "Security events and alert history (days)",
-	"retention_range": "{min} to {max} days; empty: {max} days",
+	"retention_range": "{min} to {max} days; empty: {fallback} days",
 	"retention_cap": "Cap of this organization: {cap} days",
 	"retention_invalid_logs": "Logs: whole days within the range, or empty.",
 	"retention_invalid_events": "Events: whole days within the range, or empty.",

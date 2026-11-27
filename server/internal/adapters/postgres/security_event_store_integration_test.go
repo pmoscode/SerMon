@@ -268,43 +268,67 @@ func TestSecurityEventStore_IsAppendOnlyAndPartitionsAreNotTouchable(t *testing.
 	}
 }
 
-// One year of retention (ADR 0018): whole months are dropped, and never one of the last 365 days –
-// the database's clock bounds it, so a clock jumping ahead can't wipe the events (M2-28). A month
-// of 2025, created by the owner, stands in for an expired one.
+// Retention by whole months (ADR 0018, V1-22): a month goes once it ended before the instance's
+// default and before the longest period of any organization. The database's clock and the
+// organizations' settings bound it, so neither a clock jumping ahead (M2-28) nor a short default
+// drops a month an organization still keeps. Months of the past, created by the owner, stand in
+// for expired ones: January 2025 and the month five months ago (older than 90 days, younger than
+// a year).
 func TestSecurityEventStore_RetentionDropsOldPartitions(t *testing.T) {
 	f := newEventFixture(t)
 	ctx := context.Background()
 	owner := setup(t).db.OwnerDSN
-	ownerExec(t, owner, `DO $$
-	BEGIN
-		IF to_regclass('public.security_events_202501') IS NULL THEN
-			GRANT CREATE ON SCHEMA public TO sermon_definer;
-			CREATE TABLE security_events_202501 PARTITION OF security_events
-				FOR VALUES FROM ('2025-01-01 00:00+00') TO ('2025-02-01 00:00+00');
-			ALTER TABLE security_events_202501 ENABLE ROW LEVEL SECURITY;
-			ALTER TABLE security_events_202501 FORCE ROW LEVEL SECURITY;
-			ALTER TABLE security_events_202501 OWNER TO sermon_definer;
-			REVOKE CREATE ON SCHEMA public FROM sermon_definer;
-		END IF;
-	END $$`)
-	t.Cleanup(func() { ownerExec(t, owner, "DROP TABLE IF EXISTS security_events_202501") })
+	recent := time.Date(eventsNow.Year(), eventsNow.Month()-5, 1, 0, 0, 0, 0, time.UTC)
+	months := []time.Time{time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), recent}
+	name := func(m time.Time) string { return "security_events_" + m.Format("200601") }
+	for _, m := range months {
+		ownerExec(t, owner, fmt.Sprintf(`DO $$
+		BEGIN
+			IF to_regclass('public.%[1]s') IS NULL THEN
+				GRANT CREATE ON SCHEMA public TO sermon_definer;
+				CREATE TABLE %[1]s PARTITION OF security_events FOR VALUES FROM ('%[2]s') TO ('%[3]s');
+				ALTER TABLE %[1]s ENABLE ROW LEVEL SECURITY;
+				ALTER TABLE %[1]s FORCE ROW LEVEL SECURITY;
+				ALTER TABLE %[1]s OWNER TO sermon_definer;
+				REVOKE CREATE ON SCHEMA public FROM sermon_definer;
+			END IF;
+		END $$`, name(m), m.Format(time.RFC3339), m.AddDate(0, 1, 0).Format(time.RFC3339)))
+		t.Cleanup(func() { ownerExec(t, owner, "DROP TABLE IF EXISTS "+name(m)) })
+	}
 	exists := func(name string) bool {
 		var found bool
 		ownerQueryRowPurge(t, owner, "SELECT to_regclass('public."+name+"') IS NOT NULL", &found)
 		return found
 	}
+	var longest int
+	ownerQueryRowPurge(t, owner, "SELECT coalesce(max(event_retention_days), 0) FROM organizations", &longest)
+	if longest > 90 {
+		t.Fatalf("an organization of another test keeps events %d days", longest)
+	}
 	old := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
-	if dropped, err := f.store.Expire(ctx, time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)); err != nil || dropped != 0 {
+	if dropped, err := f.store.Expire(ctx, time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second), 90); err != nil || dropped != 0 {
 		t.Fatalf("Expire() before the end of the month = %d, %v; whole months only", dropped, err)
 	}
-	// Far in the future, as after a clock jump: only the old month goes.
-	dropped, err := f.store.Expire(ctx, time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC))
-	if err != nil || dropped != 1 || exists("security_events_202501") {
-		t.Fatalf("Expire() = %d, %v; want the month of 2025 only", dropped, err)
+	// An organization that keeps a year: far in the future, as after a clock jump, and with a
+	// default of 90 days only January 2025 goes; a default beyond a year keeps the rest.
+	far := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	ownerExec(t, owner, "UPDATE organizations SET event_retention_days = 365 WHERE id = $1", f.org)
+	dropped, err := f.store.Expire(ctx, far, 90)
+	if err != nil || dropped < 1 || exists(name(months[0])) || !exists(name(recent)) {
+		t.Fatalf("Expire() with an organization of a year = %d, %v; want January 2025 only", dropped, err)
 	}
-	for _, month := range []string{"security_events_202610", "security_events_" + eventsNow.UTC().Format("200601")} {
-		if !exists(month) {
-			t.Errorf("%s was dropped although it is within the last year", month)
+	ownerExec(t, owner, "UPDATE organizations SET event_retention_days = NULL WHERE id = $1", f.org)
+	if dropped, err := f.store.Expire(ctx, far, 1000); err != nil || dropped != 0 || !exists(name(recent)) {
+		t.Fatalf("Expire() with a default beyond a year = %d, %v; want nothing", dropped, err)
+	}
+	// Without it the default: the month five months ago goes, the last 90 days stay.
+	dropped, err = f.store.Expire(ctx, far, 90)
+	if err != nil || dropped < 1 || exists(name(recent)) {
+		t.Fatalf("Expire() with the default of 90 days = %d, %v; want the month five months ago", dropped, err)
+	}
+	for _, back := range []time.Duration{0, 89 * 24 * time.Hour} {
+		if month := name(eventsNow.Add(-back)); month >= "security_events_202610" && !exists(month) {
+			t.Errorf("%s was dropped although it is within the default", month)
 		}
 	}
 	// Writing into the dropped month fails instead of landing somewhere else; ingest keeps

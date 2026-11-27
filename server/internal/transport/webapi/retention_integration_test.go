@@ -27,7 +27,8 @@ func TestAccessAPI_RetentionPerOrganization(t *testing.T) {
 
 	got, err := ann.access.GetRetention(ctx, connect.NewRequest(&webv1.GetRetentionRequest{}))
 	if err != nil || got.Msg.GetEventRetentionDays() != 77 || got.Msg.GetLogRetentionDays() != 0 || got.Msg.GetLogMaxDays() != 14 ||
-		got.Msg.GetEventMinDays() != 7 || got.Msg.GetEventMaxDays() != 365 || got.Msg.GetCapDays() != 0 {
+		got.Msg.GetEventMinDays() != 7 || got.Msg.GetEventMaxDays() != 365 || got.Msg.GetCapDays() != 0 ||
+		got.Msg.GetEventDefaultDays() != 90 {
 		t.Fatalf("GetRetention = %v, %v", got, err)
 	}
 	if _, err := mia.access.GetRetention(ctx, connect.NewRequest(&webv1.GetRetentionRequest{})); connect.CodeOf(err) != connect.CodePermissionDenied {

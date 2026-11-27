@@ -15,11 +15,16 @@ import (
 )
 
 const expireSecurityEventPartitions = `-- name: ExpireSecurityEventPartitions :one
-SELECT security_events_expire($1::timestamptz)::integer AS dropped
+SELECT security_events_expire($1::timestamptz, $2::integer)::integer AS dropped
 `
 
-func (q *Queries) ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error) {
-	row := q.db.QueryRow(ctx, expireSecurityEventPartitions, before)
+type ExpireSecurityEventPartitionsParams struct {
+	Before      time.Time
+	DefaultDays int32
+}
+
+func (q *Queries) ExpireSecurityEventPartitions(ctx context.Context, arg ExpireSecurityEventPartitionsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, expireSecurityEventPartitions, arg.Before, arg.DefaultDays)
 	var dropped int32
 	err := row.Scan(&dropped)
 	return dropped, err

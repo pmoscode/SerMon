@@ -34,6 +34,7 @@ func (h *AccessHandler) GetRetention(ctx context.Context, _ *connect.Request[web
 		LogRetentionDays: view.Settings.LogDays, EventRetentionDays: view.Settings.EventDays,
 		LogMinDays: retention.MinLogDays, LogMaxDays: retention.MaxLogDays,
 		EventMinDays: retention.MinEventDays, EventMaxDays: retention.MaxEventDays, CapDays: view.CapDays,
+		EventDefaultDays: view.EventDefaultDays,
 	}), nil
 }
 

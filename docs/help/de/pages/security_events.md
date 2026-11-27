@@ -4,7 +4,7 @@ Was auf den Nodes an der Anmeldung passiert: fehlgeschlagene und erfolgreiche SS
 
 ## So liest du die Seite
 
-- Der **Zeitraum** gilt für alles auf der Seite. Im Chart ziehen zoomt hinein; die Events werden ein Jahr aufbewahrt, wenn die Organisation nichts Kürzeres einstellt ([Aufbewahrung](help:concepts/retention)).
+- Der **Zeitraum** gilt für alles auf der Seite. Im Chart ziehen zoomt hinein; die Events werden ab Werk 90 Tage aufbewahrt, wenn die Organisation nichts anderes einstellt ([Aufbewahrung](help:concepts/retention)).
 - Die **Summen** oben zählen den Zeitraum. Ein Klick auf „… zeigen“ filtert die Tabelle auf genau diese Events.
 - Der **Chart** stapelt die fehlgeschlagenen Logins nach Node; die sechs Nodes mit den meisten haben eine eigene Farbe, die übrigen teilen sich eine. Die Legende nennt jede Farbe mit ihrer Zahl.
 - **Top-IPs und Top-User** sind die Adressen und User-Namen mit den meisten Fehlversuchen. Ein Klick filtert die Tabelle darauf. „(leer)“ ist ein leerer User-Name, den ein Angreifer probiert hat.

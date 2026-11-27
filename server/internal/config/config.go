@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/pmoscode/SerMon/server/internal/domain/retention"
 	"github.com/pmoscode/SerMon/server/internal/platform/safehttp"
 	"github.com/pmoscode/SerMon/server/internal/secrets"
 )
@@ -137,6 +138,10 @@ type Config struct {
 	// AuditRetention is how long the audit logs of the organizations and of the instance keep an
 	// entry (V1-17): 2 years by default, 90 days to 10 years.
 	AuditRetention time.Duration
+	// EventRetention is how long the security events and the alert history of organizations
+	// without a setting of their own are kept (V1-22): 90 days by default, 7 to 365 whole days
+	// (the bounds of the organizations' setting, retention.MinEventDays/MaxEventDays).
+	EventRetention time.Duration
 	// DatabaseSizeLimit is the size the database may reach (bytes, from e.g. "50GiB"); the
 	// self-monitoring warns superadmins at 80 % and 90 % (M2-24). 0: not checked.
 	DatabaseSizeLimit int64
@@ -188,6 +193,7 @@ const (
 	envNodeGrace       = "SERMON_NODE_DELETION_GRACE"
 	envAccountGrace    = "SERMON_ACCOUNT_DELETION_GRACE"
 	envAuditRetention  = "SERMON_AUDIT_RETENTION"
+	envEventRetention  = "SERMON_EVENT_RETENTION"
 	envMasterKeys      = "SERMON_MASTER_KEYS"
 	envAgentAddr       = "SERMON_AGENT_ADDR"
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
@@ -235,8 +241,18 @@ const (
 	defaultAuditRetention = 730 * 24 * time.Hour
 	minAuditRetention     = 90 * 24 * time.Hour
 	maxAuditRetention     = 3650 * 24 * time.Hour
+	// V1-22: events of organizations without a setting of their own 90 days, 7 to 365 days.
+	defaultEventRetention = 90 * day
+	minEventRetention     = retention.MinEventDays * day
+	maxEventRetention     = retention.MaxEventDays * day
+	day                   = 24 * time.Hour
 	maxPort               = 65535
 )
+
+// EventRetentionDays is EventRetention in days (whole days, checked by Load).
+func (c Config) EventRetentionDays() uint32 {
+	return uint32(min(max(c.EventRetention/day, 0), retention.MaxEventDays))
+}
 
 // Load reads and validates the configuration from src.
 func Load(src Source) (Config, error) {
@@ -259,6 +275,7 @@ func Load(src Source) (Config, error) {
 		NodeDeletionGrace:  parsePositiveDuration(&l, envNodeGrace, defaultNodeGrace),
 		AccountGrace:       parsePositiveDuration(&l, envAccountGrace, defaultAccountGrace),
 		AuditRetention:     parsePositiveDuration(&l, envAuditRetention, defaultAuditRetention),
+		EventRetention:     parsePositiveDuration(&l, envEventRetention, defaultEventRetention),
 		MasterKeys:         parseMasterKeys(&l),
 		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
 		AgentHostnames:     parseHostnames(&l),
@@ -283,6 +300,9 @@ func Load(src Source) (Config, error) {
 	}
 	if cfg.AuditRetention < minAuditRetention || cfg.AuditRetention > maxAuditRetention {
 		l.fail(envAuditRetention, "must be %s (90 days) to %s (10 years), got %s", minAuditRetention, maxAuditRetention, cfg.AuditRetention)
+	}
+	if cfg.EventRetention < minEventRetention || cfg.EventRetention > maxEventRetention || cfg.EventRetention%day != 0 {
+		l.fail(envEventRetention, "must be whole days from %s (7 days) to %s (365 days), got %s", minEventRetention, maxEventRetention, cfg.EventRetention)
 	}
 	if cfg.MetricsAddr != "" && !strings.HasSuffix(cfg.MetricsAddr, ":0") &&
 		(cfg.MetricsAddr == cfg.HTTPAddr || cfg.MetricsAddr == cfg.AgentAddr) {

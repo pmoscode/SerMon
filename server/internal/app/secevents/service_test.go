@@ -166,29 +166,33 @@ func TestParseNetwork(t *testing.T) {
 }
 
 type partitions struct {
-	horizon time.Time
-	expired []time.Time
-	cancel  context.CancelFunc
+	horizon  time.Time
+	expired  []time.Time
+	defaults []uint32
+	cancel   context.CancelFunc
 }
 
 func (p *partitions) Horizon(context.Context) (time.Time, error) { return p.horizon, nil }
 
-func (p *partitions) Expire(_ context.Context, before time.Time) (int, error) {
+func (p *partitions) Expire(_ context.Context, before time.Time, defaultDays uint32) (int, error) {
 	p.expired = append(p.expired, before)
+	p.defaults = append(p.defaults, defaultDays)
 	p.cancel()
 	return 0, errors.New("database down") // logged, the loop goes on until ctx ends
 }
 
-func TestMaintenance_KeepsAYearAndWarnsBeforeTheHorizon(t *testing.T) {
+// The partitions go after the instance's default (V1-22; the database keeps them for the longest
+// period of any organization).
+func TestMaintenance_KeepsTheDefaultAndWarnsBeforeTheHorizon(t *testing.T) {
 	for horizon, warn := range map[time.Time]bool{t0.AddDate(10, 0, 0): false, t0.AddDate(0, 11, 0): true} {
 		ctx, cancel := context.WithCancel(context.Background())
 		p := &partitions{horizon: horizon, cancel: cancel}
 		var log strings.Builder
-		if err := secevents.Maintenance(ctx, p, func() time.Time { return t0 }, time.Hour, slog.New(slog.NewTextHandler(&log, nil))); err != nil {
+		if err := secevents.Maintenance(ctx, p, func() time.Time { return t0 }, time.Hour, 90, slog.New(slog.NewTextHandler(&log, nil))); err != nil {
 			t.Fatal(err)
 		}
-		if len(p.expired) != 1 || !p.expired[0].Equal(t0.AddDate(-1, 0, 0)) {
-			t.Errorf("expired %v", p.expired)
+		if len(p.expired) != 1 || !p.expired[0].Equal(t0.Add(-90*24*time.Hour)) || p.defaults[0] != 90 {
+			t.Errorf("expired %v with the default %v", p.expired, p.defaults)
 		}
 		if got := strings.Contains(log.String(), "end soon"); got != warn {
 			t.Errorf("horizon %v: warning %v, want %v\n%s", horizon, got, warn, log.String())

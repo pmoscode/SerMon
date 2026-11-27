@@ -56,6 +56,7 @@ func TestLoad_Defaults(t *testing.T) {
 		NodeDeletionGrace: 7 * 24 * time.Hour,
 		AccountGrace:      30 * 24 * time.Hour,
 		AuditRetention:    730 * 24 * time.Hour,
+		EventRetention:    90 * 24 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -72,6 +73,7 @@ func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 		"SERMON_NODE_DELETION_GRACE":    "48h",
 		"SERMON_ACCOUNT_DELETION_GRACE": "72h",
 		"SERMON_AUDIT_RETENTION":        "4380h",
+		"SERMON_EVENT_RETENTION":        "720h",
 	}
 
 	cfg, err := config.Load(fakeSource(env, nil))
@@ -89,6 +91,7 @@ func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 		NodeDeletionGrace: 48 * time.Hour,
 		AccountGrace:      72 * time.Hour,
 		AuditRetention:    4380 * time.Hour,
+		EventRetention:    720 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -617,6 +620,22 @@ func TestLoad_AuditRetentionIsBounded(t *testing.T) {
 		_, err := config.Load(fakeSource(map[string]string{"SERMON_AUDIT_RETENTION": value}, nil))
 		if (err == nil) != ok {
 			t.Errorf("%s: %v", value, err)
+		}
+	}
+}
+
+// V1-22: security events and the alert history of organizations without a setting of their own
+// are kept 7 to 365 whole days (the organizations' bounds; the database works in days).
+func TestLoad_EventRetentionIsBoundedInWholeDays(t *testing.T) {
+	for value, ok := range map[string]bool{
+		"168h": true, "8760h": true, "2160h": true, "167h": false, "144h": false, "8784h": false, "180h": false, "0s": false, "x": false,
+	} {
+		cfg, err := config.Load(fakeSource(map[string]string{"SERMON_EVENT_RETENTION": value}, nil))
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", value, err)
+		}
+		if ok && cfg.EventRetentionDays() != uint32(cfg.EventRetention/(24*time.Hour)) {
+			t.Errorf("%s: %d days", value, cfg.EventRetentionDays())
 		}
 	}
 }

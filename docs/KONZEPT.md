@@ -89,7 +89,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/ad
 | D9  | Agent-Rechte   | **Privilegien getrennt:** Agent als User `sermon`, minimaler root-Helper nur für Updates     | Least Privilege                                                                                       |
 | D10 | Auth           | **Lokal (Argon2id) + TOTP + Passkeys/WebAuthn, OIDC/SSO**                                    |                                                                                                       |
 | D11 | Rechte         | **Org → Node-Gruppen → Rollen** (Viewer / Operator / Admin)                                  |                                                                                                       |
-| D12 | Retention      | **Gestaffelt:** 1 s / 15 min (Ringpuffer im Server), 10 s / 24 h, 1 min / 30 Tage, 1 h / 1 Jahr; Logs 14 Tage; Events 1 Jahr | konfigurierbar; DB-Auflösung 10 s nach Spike M0-09 (ADR 0001) |
+| D12 | Retention      | **Gestaffelt:** 1 s / 15 min (Ringpuffer im Server), 10 s / 24 h, 1 min / 30 Tage, 1 h / 1 Jahr; Logs 14 Tage; Events ab Werk 90 Tage (7–365, `SERMON_EVENT_RETENTION`, V1-22) | konfigurierbar; DB-Auflösung 10 s nach Spike M0-09 (ADR 0001) |
 | D13 | Storage        | **PostgreSQL 17 + TimescaleDB** (Stamm-, Event- und Metrikdaten), **Loki** (Logs)            | Eine DB statt fünf Komponenten; Downsampling und Retention nativ; Metrik-Speicher austauschbar ([ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md)) |
 | D14 | Alert-Kanäle   | E-Mail, Webhook, Slack/Teams/Discord/Mattermost, Telegram/ntfy/Gotify/Pushover               |                                                                                                       |
 | D15 | Updates        | **Policy-basiert** pro Gruppe (report / security-auto / all-auto), Wartungsfenster           |                                                                                                       |
@@ -232,7 +232,7 @@ eine Fake-Implementierung für Tests.
 | Daten                                                                               | System                                   | Retention                                        |
 |-------------------------------------------------------------------------------------|------------------------------------------|--------------------------------------------------|
 | Orgs, User, Gruppen, Rollen, Nodes, Zertifikate, Regeln, Policies, Kanäle, Sessions | PostgreSQL                               | dauerhaft                                        |
-| Alert-Instanzen und -Historie, Security-Events, Update-Läufe, Audit-Log             | PostgreSQL (partitioniert nach Monat)    | 1 Jahr (Audit: konfigurierbar, Standard 2 Jahre) |
+| Alert-Instanzen und -Historie, Security-Events, Update-Läufe, Audit-Log             | PostgreSQL (partitioniert nach Monat)    | Events und Alert-Historie ab Werk 90 Tage (`SERMON_EVENT_RETENTION`, 7–365 Tage), Update-Läufe 1 Jahr (Audit: konfigurierbar, Standard 2 Jahre) |
 | Metriken 1 s                                                                        | Ringpuffer im Server-Speicher (nicht persistent)             | 15 min                                           |
 | Metriken 10 s (avg/min/max je Fenster)                                              | TimescaleDB-Hypertable `metrics_raw`                         | 24 h                                             |
 | Metriken 1 min                                                                      | Continuous Aggregate `metrics_1m`                            | 30 Tage                                          |
@@ -240,10 +240,12 @@ eine Fake-Implementierung für Tests.
 | Logs                                                                                | Loki (Multi-Tenant, Compactor-Retention)                     | 14 Tage                                          |
 | Zustellprotokoll der Benachrichtigungen (mit den Feldern der Alerts)                | PostgreSQL `notification_deliveries`     | 30 Tage                                          |
 
-**Retention pro Org** (M5-30, [ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md), Nachtrag M5-30): Admins einer Org verkürzen die Aufbewahrung ihrer
-**Logs** (1 bis 14 Tage) und ihrer **Security-Events samt Alert-Historie** (7 bis 365 Tage), höchstens bis zur
-Obergrenze ihres Kontingents; mit Step-up und Audit. Events löscht der Server stündlich, für Logs trägt er einmal am Tag
-eine Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Log folgen der Instanz.
+**Retention pro Org** (M5-30, [ADR 0029](adr/0029-organisationen-verwalten-sperren-loeschen.md), Nachtrag M5-30): Admins einer Org stellen die Aufbewahrung ihrer
+**Logs** (1 bis 14 Tage) und ihrer **Security-Events samt Alert-Historie** (7 bis 365 Tage) ein, höchstens bis zur
+Obergrenze ihres Kontingents; mit Step-up und Audit. Ohne eigene Einstellung gilt für Events die Vorgabe der Instanz
+`SERMON_EVENT_RETENTION` (ab Werk 90 Tage, 7 bis 365; V1-22, [ADR 0018](adr/0018-retention.md), Nachtrag V1-22). Events löscht der Server
+stündlich je Org, ganze Monate gibt er frei, sobald keine Org sie mehr behält; für Logs trägt er einmal am Tag eine
+Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Log folgen der Instanz.
 
 **Metrik-Schema in TimescaleDB** (Details in [ADR 0001](adr/0001-zeitreihen-speicher-timescaledb.md)):
 
@@ -716,7 +718,7 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 
 Security-relevante Ereignisse werden **im Agent** aus Journal- bzw. Auth-Log geparst und als **strukturierte Events**
 übertragen. Das funktioniert auch, wenn der Log-Versand ansonsten abgeschaltet ist. Gespeichert werden sie in PostgreSQL
-(abfragbar und für 1 Jahr aufbewahrt).
+(abfragbar und ab Werk 90 Tage aufbewahrt, je Org 7 bis 365 Tage; §4.5).
 
 Übertragung und Speicherung (M2-07):
 

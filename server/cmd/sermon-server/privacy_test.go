@@ -42,8 +42,12 @@ func TestPrivacyTemplate_PeriodsMatchTheCode(t *testing.T) {
 			fmt.Sprintf("Logs | %d–%d days, default %d", retention.MinLogDays, retention.MaxLogDays, retention.MaxLogDays),
 		},
 		{
-			fmt.Sprintf("Verlauf der Alerts | %d–%d Tage, ab Werk %d", retention.MinEventDays, retention.MaxEventDays, retention.MaxEventDays),
-			fmt.Sprintf("alert history | %d–%d days, default %d", retention.MinEventDays, retention.MaxEventDays, retention.MaxEventDays),
+			fmt.Sprintf("Verlauf der Alerts | %d–%d Tage, ab Werk %d", retention.MinEventDays, retention.MaxEventDays, days(defaults.EventRetention)),
+			fmt.Sprintf("alert history | %d–%d days, default %d", retention.MinEventDays, retention.MaxEventDays, days(defaults.EventRetention)),
+		},
+		{
+			fmt.Sprintf("je Organisation %d bis %d Tage (ab Werk %d, `SERMON_EVENT_RETENTION`)", retention.MinEventDays, retention.MaxEventDays, days(defaults.EventRetention)),
+			fmt.Sprintf("per organization %d to %d days (default %d, `SERMON_EVENT_RETENTION`)", retention.MinEventDays, retention.MaxEventDays, days(defaults.EventRetention)),
 		},
 		{
 			fmt.Sprintf("Sitzungen | %d Minuten ohne Aktivität, höchstens %d Stunden", minutes(session.IdleTimeout), hours(session.AbsoluteTimeout)),

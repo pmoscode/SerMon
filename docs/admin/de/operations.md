@@ -49,12 +49,18 @@ Der Server prüft sich jede Minute selbst ([ADR 0027](../../adr/0027-server-erei
 | Metriken, 1 s | 15 Minuten im Speicher des Servers | nein |
 | Metriken, 10 s / 1 min / 1 h | 24 Stunden / 30 Tage / 1 Jahr | nein |
 | Logs (Loki) | ab Werk 14 Tage | je Organisation |
-| Security-Events, Verlauf der Alerts | ab Werk 1 Jahr | je Organisation |
+| Security-Events, Verlauf der Alerts | `SERMON_EVENT_RETENTION`, ab Werk 90 Tage | Betreiber und je Organisation |
 | Audit-Logs | `SERMON_AUDIT_RETENTION`, ab Werk 2 Jahre | Betreiber |
 
 - **Je Organisation** stellen Admins unter „Organisation“ die Aufbewahrung ein: Logs 1 bis 14 Tage, Security-Events
   und Verlauf der Alerts 7 bis 365 Tage ([Aufbewahrung](../../help/de/concepts/retention.md)). Als Superadmin begrenzen
   Sie das je Organisation mit dem Kontingent „Obergrenze der Retention“; ein gesenktes Kontingent löscht nichts.
+- **Ohne eigene Einstellung** behalten Organisationen Security-Events und Verlauf der Alerts ab Werk 90 Tage
+  (`SERMON_EVENT_RETENTION`, 7 bis 365 Tage). Ein Brute-Force gegen viele Nodes erzeugt eine Zeile je Versuch: Beim
+  Lasttest mit 50 Nodes, ein Drittel der Zeit angegriffen, waren das 30 000 Events und 16,6 MiB je Stunde, also rund
+  35 GiB bei 90 Tagen und 140 GiB bei einem Jahr. Wer länger aufbewahrt, plant den Platz dafür ein. Der Server
+  löscht stündlich je Organisation, was älter ist, und gibt ganze Monate frei, sobald keine Organisation sie mehr
+  behält.
 - **Loki** behält Logs höchstens `retention_period: 336h` (`deploy/compose/loki.yaml`); das ist die Grenze der Instanz.
   Heben Sie sie nicht an: Die Einstellungen der Organisationen gehen nicht darüber hinaus. Loki löscht etwa einmal am
   Tag, Logs sind also bis zu einem Tag länger sichtbar.

@@ -276,8 +276,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return fmt.Errorf("node lifecycle: %w", err)
 		}
 		servers = append(servers, nodeLife.Run)
-		// Retention per organization (M5-30): events within the hour, logs once a day in Loki.
-		retentionOptions := []orgretention.Option{orgretention.WithLogger(logger)}
+		// Retention per organization (M5-30): events within the hour, logs once a day in Loki; the
+		// events of organizations without a period of their own after SERMON_EVENT_RETENTION (V1-22).
+		retentionOptions := []orgretention.Option{orgretention.WithLogger(logger), orgretention.WithEventDefault(cfg.EventRetentionDays())}
 		if logStore != nil {
 			retentionOptions = append(retentionOptions, orgretention.WithLogs(loki.NewEraser(logStore)))
 		}
@@ -342,7 +343,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			return nil
 		})
 		servers = append(servers, func(ctx context.Context) error {
-			return secevents.Maintenance(ctx, eventStore, time.Now, 6*time.Hour, logger)
+			return secevents.Maintenance(ctx, eventStore, time.Now, 6*time.Hour, cfg.EventRetentionDays(), logger)
 		})
 		registerIngestMetrics(registry, ingestService.Stats(), sessions)
 		servers = append(servers, pruneRing(ring))

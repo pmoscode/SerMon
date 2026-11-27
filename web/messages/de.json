@@ -633,7 +633,7 @@
 	"retention_intro": "Wie lange diese Organisation ihre Logs und Security-Events aufbewahrt. Leer heißt: wie die Instanz.",
 	"retention_logs": "Logs (Tage)",
 	"retention_events": "Security-Events und Alert-Historie (Tage)",
-	"retention_range": "{min} bis {max} Tage; leer: {max} Tage",
+	"retention_range": "{min} bis {max} Tage; leer: {fallback} Tage",
 	"retention_cap": "Obergrenze dieser Organisation: {cap} Tage",
 	"retention_invalid_logs": "Logs: ganze Tage im erlaubten Bereich oder leer.",
 	"retention_invalid_events": "Events: ganze Tage im erlaubten Bereich oder leer.",

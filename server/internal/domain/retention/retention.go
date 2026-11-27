@@ -1,6 +1,7 @@
 // Package retention holds how long an organization keeps its logs and security events (M5-30):
 // within the instance's limits (KONZEPT D12: logs 14 days, events a year) and the superadmin's
-// retention cap of the organization (ADR 0029). 0 means the instance's default.
+// retention cap of the organization (ADR 0029). 0 means the instance's default (logs 14 days,
+// events SERMON_EVENT_RETENTION, 90 days unless set: V1-22).
 package retention
 
 import (
@@ -52,8 +53,9 @@ func (s Settings) Validate(capDays uint32) error {
 // Logs is how long logs are kept.
 func (s Settings) Logs() time.Duration { return days(s.LogDays, MaxLogDays) }
 
-// Events is how long security events (and the alert history) are kept.
-func (s Settings) Events() time.Duration { return days(s.EventDays, MaxEventDays) }
+// EventsOr is how long security events (and the alert history) are kept: the organization's
+// period, or defaultDays (the instance's, SERMON_EVENT_RETENTION) without one.
+func (s Settings) EventsOr(defaultDays uint32) time.Duration { return days(s.EventDays, defaultDays) }
 
 func days(v, def uint32) time.Duration {
 	if v == 0 {

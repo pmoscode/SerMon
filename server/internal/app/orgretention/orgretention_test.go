@@ -32,9 +32,10 @@ type org struct {
 
 // store behaves like the Postgres store: one organization per scope, the audit entry with the change.
 type store struct {
-	orgs    map[tenant.OrgID]*org
-	audits  []access.AuditEntry
-	expired map[tenant.OrgID][]time.Time
+	orgs     map[tenant.OrgID]*org
+	audits   []access.AuditEntry
+	expired  map[tenant.OrgID][]time.Time
+	defaults []uint32
 }
 
 func newStore() *store {
@@ -52,18 +53,17 @@ func (s *store) Set(_ context.Context, scope tenant.Scope, set retention.Setting
 	return nil
 }
 
-func (s *store) Configured(context.Context) ([]orgretention.OrgSettings, error) {
+func (s *store) Organizations(context.Context) ([]orgretention.OrgSettings, error) {
 	var out []orgretention.OrgSettings
 	for id, o := range s.orgs {
-		if o.settings != (retention.Settings{}) {
-			out = append(out, orgretention.OrgSettings{Org: id, Settings: o.settings, LogsErasedAt: o.erasedAt})
-		}
+		out = append(out, orgretention.OrgSettings{Org: id, Settings: o.settings, LogsErasedAt: o.erasedAt})
 	}
 	return out, nil
 }
 
-func (s *store) ExpireEvents(_ context.Context, id tenant.OrgID, before time.Time) (int64, error) {
+func (s *store) ExpireEvents(_ context.Context, id tenant.OrgID, before time.Time, defaultDays uint32) (int64, error) {
 	s.expired[id] = append(s.expired[id], before)
+	s.defaults = append(s.defaults, defaultDays)
 	return 1, nil
 }
 
@@ -103,8 +103,11 @@ func caller(stepUp time.Duration, bindings ...authz.Binding) access.Caller {
 
 var admin = caller(time.Minute, authz.Binding{AllGroups: true, Role: role.Admin})
 
+// eventDefault is the instance's default of the tests (SERMON_EVENT_RETENTION).
+const eventDefault = 60
+
 func newService(s *store, e *eraser, c *clock) *orgretention.Service {
-	return orgretention.NewService(s, authz.NewPolicy(), c.now, orgretention.WithLogs(e))
+	return orgretention.NewService(s, authz.NewPolicy(), c.now, orgretention.WithLogs(e), orgretention.WithEventDefault(eventDefault))
 }
 
 // Only admins of the whole organization read and set it; setting needs a fresh step-up and stays
@@ -154,7 +157,7 @@ func TestService_SetValidatesAndAudits(t *testing.T) {
 		t.Errorf("audit = %+v", a)
 	}
 	view, err := svc.Get(ctx, admin)
-	if err != nil || view.Settings != (retention.Settings{LogDays: 3, EventDays: 30}) || view.CapDays != 30 {
+	if err != nil || view.Settings != (retention.Settings{LogDays: 3, EventDays: 30}) || view.CapDays != 30 || view.EventDefaultDays != eventDefault {
 		t.Errorf("Get = %+v, %v", view, err)
 	}
 	if s.orgs[orgB].settings != (retention.Settings{}) {
@@ -162,9 +165,10 @@ func TestService_SetValidatesAndAudits(t *testing.T) {
 	}
 }
 
-// The job deletes each organization's events before its own period, and asks Loki once a day per
-// organization to delete its logs before its period; organizations with the defaults are left to
-// the instance's retention, a failing Loki is tried again in the next run.
+// The job deletes each organization's events before its own period – those of organizations without
+// one before the instance's default (V1-22) – and asks Loki once a day per organization with a
+// period of its own to delete its logs before it (Loki's retention is the default); a failing Loki
+// is tried again in the next run.
 func TestService_MaintainKeepsEachOrganizationsPeriod(t *testing.T) {
 	s, e, c := newStore(), &eraser{}, &clock{t: now}
 	s.orgs[orgA].settings = retention.Settings{LogDays: 3, EventDays: 30}
@@ -188,8 +192,13 @@ func TestService_MaintainKeepsEachOrganizationsPeriod(t *testing.T) {
 	if len(e.calls) != 1 || e.calls[0] != (erasure{orgA, now.Add(-3 * 24 * time.Hour)}) {
 		t.Errorf("log erasures = %v, want A before 3 days", e.calls)
 	}
-	if len(s.expired[orgB]) != 0 {
-		t.Errorf("B with the defaults was expired: %v", s.expired[orgB])
+	if got := s.expired[orgB]; len(got) != 2 || !got[1].Equal(now.Add(-eventDefault*24*time.Hour)) {
+		t.Errorf("events of B with the defaults expired before %v, want %d days back", got, eventDefault)
+	}
+	for _, d := range s.defaults {
+		if d != eventDefault {
+			t.Fatalf("the database got the default %d, want %d", d, eventDefault)
+		}
 	}
 	c.t = now.Add(23 * time.Hour)
 	if err := svc.Maintain(ctx); err != nil || len(e.calls) != 1 {
@@ -201,19 +210,36 @@ func TestService_MaintainKeepsEachOrganizationsPeriod(t *testing.T) {
 	}
 	// Only events set: no logs asked for.
 	s.orgs[orgB].settings = retention.Settings{EventDays: 7}
-	if err := svc.Maintain(ctx); err != nil || len(e.calls) != 2 || len(s.expired[orgB]) != 1 {
+	if err := svc.Maintain(ctx); err != nil || len(e.calls) != 2 || len(s.expired[orgB]) != 5 ||
+		!s.expired[orgB][4].Equal(c.t.Add(-7*24*time.Hour)) {
 		t.Errorf("B with events only: %v, erasures %v, expired %v", err, e.calls, s.expired[orgB])
 	}
 }
 
 // An organization that only shortens its logs keeps its events as long as the instance.
-func TestService_MaintainLeavesEventsOfLogsOnlySettings(t *testing.T) {
+// Logs only set: the events follow the instance's default.
+func TestService_MaintainKeepsTheDefaultForEventsOfLogsOnlySettings(t *testing.T) {
 	s, e := newStore(), &eraser{}
 	s.orgs[orgA].settings = retention.Settings{LogDays: 5}
 	if err := newService(s, e, &clock{t: now}).Maintain(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.expired[orgA]) != 0 || len(e.calls) != 1 {
-		t.Errorf("expired %v, erasures %v; want logs only", s.expired[orgA], e.calls)
+	if got := s.expired[orgA]; len(got) != 1 || !got[0].Equal(now.Add(-eventDefault*24*time.Hour)) || len(e.calls) != 1 {
+		t.Errorf("expired %v, erasures %v; want the default for events", got, e.calls)
+	}
+}
+
+// Without WithEventDefault the default is the longest period (as before V1-22), never nothing.
+func TestService_WithoutAnEventDefaultKeepsTheLongest(t *testing.T) {
+	s := newStore()
+	svc := orgretention.NewService(s, authz.NewPolicy(), func() time.Time { return now })
+	if err := svc.Maintain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.expired[orgA]; len(got) != 1 || !got[0].Equal(now.Add(-retention.MaxEventDays*24*time.Hour)) {
+		t.Errorf("expired %v, want %d days back", got, retention.MaxEventDays)
+	}
+	if view, err := svc.Get(context.Background(), admin); err != nil || view.EventDefaultDays != retention.MaxEventDays {
+		t.Errorf("Get = %+v, %v", view, err)
 	}
 }

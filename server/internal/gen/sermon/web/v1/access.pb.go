@@ -130,12 +130,15 @@ type GetRetentionResponse struct {
 	LogMaxDays uint32 `protobuf:"varint,4,opt,name=log_max_days,json=logMaxDays,proto3" json:"log_max_days,omitempty"`
 	// event_min_days is the shortest retention of events.
 	EventMinDays uint32 `protobuf:"varint,5,opt,name=event_min_days,json=eventMinDays,proto3" json:"event_min_days,omitempty"`
-	// event_max_days is the longest (and default) retention of events.
+	// event_max_days is the longest retention of events.
 	EventMaxDays uint32 `protobuf:"varint,6,opt,name=event_max_days,json=eventMaxDays,proto3" json:"event_max_days,omitempty"`
 	// cap_days is the superadmin's cap of the organization (0: none); settings above it are refused.
-	CapDays       uint32 `protobuf:"varint,7,opt,name=cap_days,json=capDays,proto3" json:"cap_days,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	CapDays uint32 `protobuf:"varint,7,opt,name=cap_days,json=capDays,proto3" json:"cap_days,omitempty"`
+	// event_default_days is the instance's default for events (SERMON_EVENT_RETENTION): what 0 in
+	// event_retention_days means.
+	EventDefaultDays uint32 `protobuf:"varint,8,opt,name=event_default_days,json=eventDefaultDays,proto3" json:"event_default_days,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetRetentionResponse) Reset() {
@@ -213,6 +216,13 @@ func (x *GetRetentionResponse) GetEventMaxDays() uint32 {
 func (x *GetRetentionResponse) GetCapDays() uint32 {
 	if x != nil {
 		return x.CapDays
+	}
+	return 0
+}
+
+func (x *GetRetentionResponse) GetEventDefaultDays() uint32 {
+	if x != nil {
+		return x.EventDefaultDays
 	}
 	return 0
 }
@@ -1930,7 +1940,7 @@ var File_sermon_web_v1_access_proto protoreflect.FileDescriptor
 const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"\n" +
 	"\x1asermon/web/v1/access.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a sermon/web/v1/organization.proto\"\x15\n" +
-	"\x13GetRetentionRequest\"\xa1\x02\n" +
+	"\x13GetRetentionRequest\"\xcf\x02\n" +
 	"\x14GetRetentionResponse\x12,\n" +
 	"\x12log_retention_days\x18\x01 \x01(\rR\x10logRetentionDays\x120\n" +
 	"\x14event_retention_days\x18\x02 \x01(\rR\x12eventRetentionDays\x12 \n" +
@@ -1940,7 +1950,8 @@ const file_sermon_web_v1_access_proto_rawDesc = "" +
 	"logMaxDays\x12$\n" +
 	"\x0eevent_min_days\x18\x05 \x01(\rR\feventMinDays\x12$\n" +
 	"\x0eevent_max_days\x18\x06 \x01(\rR\feventMaxDays\x12\x19\n" +
-	"\bcap_days\x18\a \x01(\rR\acapDays\"\x88\x01\n" +
+	"\bcap_days\x18\a \x01(\rR\acapDays\x12,\n" +
+	"\x12event_default_days\x18\b \x01(\rR\x10eventDefaultDays\"\x88\x01\n" +
 	"\x13SetRetentionRequest\x125\n" +
 	"\x12log_retention_days\x18\x01 \x01(\rB\a\xbaH\x04*\x02\x18\x0eR\x10logRetentionDays\x12:\n" +
 	"\x14event_retention_days\x18\x02 \x01(\rB\b\xbaH\x05*\x03\x18\xed\x02R\x12eventRetentionDays\"\x16\n" +

@@ -209,6 +209,7 @@ func TestAdminDocs_DefaultsMatchTheCode(t *testing.T) {
 		"| `SERMON_NODE_DELETION_GRACE` | " + h(defaults.NodeDeletionGrace) + " |",
 		"| `SERMON_ACCOUNT_DELETION_GRACE` | " + h(defaults.AccountGrace) + " |",
 		"| `SERMON_AUDIT_RETENTION` | " + h(defaults.AuditRetention) + " |",
+		"| `SERMON_EVENT_RETENTION` | " + h(defaults.EventRetention) + " |",
 	}
 	// Each fact in both languages: the value from the code, and every occurrence of the phrase on
 	// any page with that value (a stale copy elsewhere fails too).
@@ -248,6 +249,10 @@ func TestAdminDocs_DefaultsMatchTheCode(t *testing.T) {
 			"Logs %d bis %d Tage, Security-Events und Verlauf der Alerts %d bis %d Tage",
 			"logs %d to %d days, security events and alert history %d to %d days",
 			[]int{retention.MinLogDays, retention.MaxLogDays, retention.MinEventDays, retention.MaxEventDays},
+		},
+		{
+			"Security-Events und Verlauf der Alerts ab Werk %d Tage", "security events and alert history %d days by default",
+			[]int{days(defaults.EventRetention)},
 		},
 		{"gilt %d Minuten", "holds for %d minutes", []int{minutes(access.StepUpMaxAge)}},
 		{

@@ -10,8 +10,10 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
 )
 
-// HistoryRetention is how long the alert history (with the fields of security alerts) is kept:
-// as long as the security events (KONZEPT §3, M2-16).
+// HistoryRetention is the longest the alert history (with the fields of security alerts) is kept:
+// the longest period of the security events (KONZEPT §3, M2-16). Shorter periods – the
+// organization's own or the instance's default, SERMON_EVENT_RETENTION – are deleted by
+// orgretention together with the events (V1-22); this is the backstop of sermon_app.
 const HistoryRetention = 365 * 24 * time.Hour
 
 // HistoryPurger deletes old history per organization.

@@ -37,11 +37,11 @@ func TestSettings_Effective(t *testing.T) {
 	if got := (retention.Settings{}).Logs(); got != 14*24*time.Hour {
 		t.Errorf("default logs = %v", got)
 	}
-	if got := (retention.Settings{}).Events(); got != 365*24*time.Hour {
+	if got := (retention.Settings{}).EventsOr(90); got != 90*24*time.Hour {
 		t.Errorf("default events = %v", got)
 	}
-	if got := (retention.Settings{LogDays: 3, EventDays: 30}); got.Logs() != 72*time.Hour || got.Events() != 30*24*time.Hour {
-		t.Errorf("set = %v, %v", got.Logs(), got.Events())
+	if got := (retention.Settings{LogDays: 3, EventDays: 30}); got.Logs() != 72*time.Hour || got.EventsOr(90) != 30*24*time.Hour {
+		t.Errorf("set = %v, %v", got.Logs(), got.EventsOr(90))
 	}
 }
 

@@ -148,3 +148,15 @@ mit vielen Organisationen fehlen Kontingente. Die Fragen hat der Product Owner a
 - Die Funktion läuft nur im Tenant der übergebenen Org (`sermon.org_id`), sie setzt ihn nicht mehr selbst.
 - **Obergrenze:** Eine gesenkte `retention_cap_days` löscht weiterhin nichts (wie oben): Eine bestehende längere
   Einstellung bleibt, bis ein Admin sie ändert. Die Obergrenze begrenzt das Einstellen, nicht das Behalten.
+
+## Nachtrag V1-22: Vorgabe der Instanz für Events
+
+- Ohne eigene Frist gilt für Security-Events und Alert-Historie nicht mehr ein Jahr, sondern `SERMON_EVENT_RETENTION`
+  (ab Werk 90 Tage, ganze Tage von 7 bis 365; [ADR 0018](0018-retention.md), Nachtrag V1-22). Eine Org darf damit auch
+  **länger** behalten als die Vorgabe, bis 365 Tage (und bis zu ihrer Obergrenze).
+- Der Job löscht stündlich für jede Org, auch ohne eigene Frist: `security_events_expire_org(p_org, p_before,
+  p_default_days)` nimmt die Frist der Org, sonst die Vorgabe, nie unter 7 Tagen, gemessen an der Uhr der
+  Datenbank. Die Monatspartitionen gehen erst, wenn keine Org sie mehr behält (die längste Frist aller Orgs und die
+  Vorgabe).
+- Die Obergrenze bleibt eine Grenze für das Einstellen: Eine Org mit `retention_cap_days` unter der Vorgabe behält
+  ohne eigene Frist die Vorgabe.

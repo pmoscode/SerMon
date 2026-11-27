@@ -57,7 +57,7 @@ LIMIT sqlc.arg(max_rows);
 SELECT coalesce(security_events_horizon(), '-infinity'::timestamptz)::timestamptz AS horizon;
 
 -- name: ExpireSecurityEventPartitions :one
-SELECT security_events_expire(sqlc.arg(before)::timestamptz)::integer AS dropped;
+SELECT security_events_expire(sqlc.arg(before)::timestamptz, sqlc.arg(default_days)::integer)::integer AS dropped;
 
 -- Known login sources (M3-16).
 

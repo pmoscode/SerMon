@@ -11,7 +11,8 @@
 
 	/**
 	 * How long the organization keeps its logs and security events (M5-30): within the instance's
-	 * limits and the superadmin's cap; empty is the instance's default. Saving needs a step-up.
+	 * limits and the superadmin's cap; empty is the instance's default (for events
+	 * SERMON_EVENT_RETENTION, sent along). Saving needs a step-up.
 	 */
 	const id = $props.id();
 	let current = $state<GetRetentionResponse | undefined>();
@@ -93,7 +94,7 @@
 					aria-describedby="{id}-logs-range"
 				/>
 				<p id="{id}-logs-range" class="text-xs text-muted-foreground">
-					{m.retention_range({ min: limits.logMin, max: limits.logMax })}
+					{m.retention_range({ min: limits.logMin, max: limits.logMax, fallback: limits.logMax })}
 				</p>
 			</div>
 			<div class="flex flex-col gap-1">
@@ -108,7 +109,11 @@
 					aria-describedby="{id}-events-range"
 				/>
 				<p id="{id}-events-range" class="text-xs text-muted-foreground">
-					{m.retention_range({ min: limits.eventMin, max: limits.eventMax })}
+					{m.retention_range({
+						min: limits.eventMin,
+						max: limits.eventMax,
+						fallback: current.eventDefaultDays || limits.eventMax
+					})}
 				</p>
 			</div>
 			{#if limits.cap > 0}

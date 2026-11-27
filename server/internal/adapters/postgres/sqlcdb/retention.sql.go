@@ -14,16 +14,17 @@ import (
 )
 
 const expireOrganizationEvents = `-- name: ExpireOrganizationEvents :one
-SELECT security_events_expire_org($1::uuid, $2::timestamptz)::bigint AS deleted
+SELECT security_events_expire_org($1::uuid, $2::timestamptz, $3::integer)::bigint AS deleted
 `
 
 type ExpireOrganizationEventsParams struct {
-	OrgID  uuid.UUID
-	Before time.Time
+	OrgID       uuid.UUID
+	Before      time.Time
+	DefaultDays int32
 }
 
 func (q *Queries) ExpireOrganizationEvents(ctx context.Context, arg ExpireOrganizationEventsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, expireOrganizationEvents, arg.OrgID, arg.Before)
+	row := q.db.QueryRow(ctx, expireOrganizationEvents, arg.OrgID, arg.Before, arg.DefaultDays)
 	var deleted int64
 	err := row.Scan(&deleted)
 	return deleted, err

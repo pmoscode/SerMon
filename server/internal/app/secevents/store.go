@@ -113,8 +113,9 @@ type Store interface {
 // Partitions are the monthly partitions (instance level). They are created ahead by migrations;
 // the application only drops expired ones.
 type Partitions interface {
-	// Expire drops the partitions that end at or before before.
-	Expire(ctx context.Context, before time.Time) (int, error)
+	// Expire drops the partitions that end at or before before – the database keeps them for the
+	// longest period of any organization, defaultDays for those without one (V1-22).
+	Expire(ctx context.Context, before time.Time, defaultDays uint32) (int, error)
 	// Horizon is the end of the last partition: events after it can't be stored.
 	Horizon(ctx context.Context) (time.Time, error)
 }

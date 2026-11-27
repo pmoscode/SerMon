@@ -114,7 +114,7 @@ section 4, the periods in section 5.
 | Data | security events, known login sources, alerts with their fields (section 2) |
 | Legal basis | [e.g. Art. 6(1)(f) GDPR; Art. 32 GDPR] |
 | Recipients | members of the group (viewers only if allowed); recipients of the notifications (3.5) |
-| Period | per organization 7 to 365 days (default 365); known sources 1 year after the last sign-in |
+| Period | per organization 7 to 365 days (default 90, `SERMON_EVENT_RETENTION`); known sources 1 year after the last sign-in |
 
 ### 3.5 Alerting and notifications
 
@@ -230,7 +230,7 @@ access, staff, backups, patching the host).
 | Data | Period | Adjustable |
 |---|---|---|
 | Logs | 1–14 days, default 14; Loki deletes after 14 days at the latest | per organization (admins); cap by the superadmin |
-| Security events and alert history | 7–365 days, default 365 | per organization (admins); cap by the superadmin |
+| Security events and alert history | 7–365 days, default 90 | instance default (`SERMON_EVENT_RETENTION`, operator); per organization (admins); cap by the superadmin |
 | Metrics | 10-s values 24 h, minute values 30 days, hourly values 1 year | no |
 | Anomaly values | 30 days | no |
 | Known login sources | 1 year after the last sign-in | no |

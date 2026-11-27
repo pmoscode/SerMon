@@ -175,7 +175,7 @@ type Querier interface {
 	// expiry plus command.SentGrace (M4-31): the agent's answer may still be on its way.
 	ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommandsParams) error
 	ExpireOrganizationEvents(ctx context.Context, arg ExpireOrganizationEventsParams) (int64, error)
-	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
+	ExpireSecurityEventPartitions(ctx context.Context, arg ExpireSecurityEventPartitionsParams) (int32, error)
 	ExportAuditEntries(ctx context.Context, arg ExportAuditEntriesParams) ([]ExportAuditEntriesRow, error)
 	ExportDashboards(ctx context.Context, userID uuid.UUID) ([]ExportDashboardsRow, error)
 	ExportIdentities(ctx context.Context, userID uuid.UUID) ([]ExportIdentitiesRow, error)

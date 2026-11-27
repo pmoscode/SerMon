@@ -18,4 +18,4 @@ SELECT r.id::uuid AS org_id, COALESCE(r.log_retention_days, 0)::smallint AS log_
 FROM organization_retentions() r;
 
 -- name: ExpireOrganizationEvents :one
-SELECT security_events_expire_org(sqlc.arg(org_id)::uuid, sqlc.arg(before)::timestamptz)::bigint AS deleted;
+SELECT security_events_expire_org(sqlc.arg(org_id)::uuid, sqlc.arg(before)::timestamptz, sqlc.arg(default_days)::integer)::bigint AS deleted;

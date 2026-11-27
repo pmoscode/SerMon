@@ -67,6 +67,7 @@ Dauern im Format von Go (`720h`, `90m`); Tage gibt es nicht. Die Jobs laufen st�
 | `SERMON_NODE_DELETION_GRACE` | `168h` | aus `.env` | Zwischen „Node löschen“ und dem Löschen seiner Daten; mindestens `24h`. |
 | `SERMON_ACCOUNT_DELETION_GRACE` | `720h` | aus `.env` | Konten ohne Mitgliedschaft werden danach gelöscht (Superadmins nie); mindestens `24h`. |
 | `SERMON_AUDIT_RETENTION` | `17520h` | aus `.env` | So lange behalten die Audit-Logs der Organisationen und der Instanz einen Eintrag; `2160h` bis `87600h`. |
+| `SERMON_EVENT_RETENTION` | `2160h` | aus `.env` | So lange behalten Organisationen ohne eigene Einstellung ihre Security-Events und den Verlauf der Alerts; ganze Tage von `168h` bis `8760h`. Organisationen mit eigener Einstellung (7 bis 365 Tage) behalten ihre. |
 
 ## Mail (SMTP)
 

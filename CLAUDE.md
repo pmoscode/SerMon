@@ -137,6 +137,8 @@ Wichtige Variablen:
   mindestens `24h`, Superadmins nie; stündlich, `app/account`)
 - `SERMON_AUDIT_RETENTION` (Aufbewahrung der Audit-Logs der Orgs und der Instanz, V1-17; Standard `17520h`, `2160h` bis
   `87600h`; gekürzte Ketten bleiben über einen Eintrag `audit.prune` prüfbar)
+- `SERMON_EVENT_RETENTION` (Security-Events und Verlauf der Alerts von Orgs ohne eigene Einstellung, V1-22; Standard
+  `2160h`, ganze Tage von `168h` bis `8760h`; die Datenbank hält Monate, solange eine Org sie behält)
 - `SERMON_LOKI_URL` (Loki für Logs, ADR 0031; feste URL ohne Zugangsdaten, eigener Client ohne Proxy und Redirects;
   leer heißt: keine Logs; `deploy/compose`: `http://loki:3100` im internen Netz)
 - `SERMON_OUTBOUND_ALLOWLIST` (CIDRs interner Ziele für Kanäle/Webhooks über `safehttp`, ADR 0024; leer heißt nur

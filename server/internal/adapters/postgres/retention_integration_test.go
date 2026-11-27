@@ -68,7 +68,9 @@ func equal(a, b []int) bool {
 
 // M5-30: an organization's own retention deletes its events and alert history after its period,
 // not earlier and never those of the last 7 days, and nothing of other organizations; the
-// settings round-trip with their audit entry and the job finds them.
+// settings round-trip with their audit entry and the job finds them. V1-22: an organization
+// without a period of its own follows the instance's default the server passes, never under the
+// 7 days of the shortest period.
 func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
@@ -82,7 +84,6 @@ func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = owner.Close(ctx) }()
-	before := ages(t, owner, "security_events", "occurred_at", b.org)
 
 	store := postgres.NewRetentionStore(open(t, f.appDSN))
 	scopeA, _ := tenant.ForAllGroups(tenant.OrgID(a.org))
@@ -95,25 +96,26 @@ func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 	if set, _, err := store.Get(ctx, scopeA); err != nil || set != (retention.Settings{LogDays: 3, EventDays: 30}) {
 		t.Fatalf("after Set: %v, %v", set, err)
 	}
-	configured, err := store.Configured(ctx)
+	configured, err := store.Organizations(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	foundA, foundB := false, false
 	for _, o := range configured {
 		if o.Org == tenant.OrgID(b.org) {
-			t.Error("an organization with the defaults is listed")
+			foundB = o.Settings == (retention.Settings{}) && o.LogsErasedAt == nil
 		}
 		if o.Org == tenant.OrgID(a.org) {
-			found = o.Settings == (retention.Settings{LogDays: 3, EventDays: 30}) && o.LogsErasedAt == nil
+			foundA = o.Settings == (retention.Settings{LogDays: 3, EventDays: 30}) && o.LogsErasedAt == nil
 		}
 	}
-	if !found {
-		t.Fatalf("configured = %+v, want A", configured)
+	if !foundA || !foundB {
+		t.Fatalf("organizations = %+v, want A with its settings and B with the defaults", configured)
 	}
 
-	// 30 days: the event of 45 days goes, those of 25 and 3 days stay.
-	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), time.Now().Add(-30*day)); err != nil {
+	// 30 days: the event of 45 days goes, those of 25 and 3 days stay – the default passed
+	// doesn't count for an organization with a period of its own.
+	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), time.Now().Add(-30*day), 7); err != nil {
 		t.Fatal(err)
 	}
 	// seedPurgeOrg adds an event of now.
@@ -125,7 +127,7 @@ func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 	}
 	// Whatever the caller's clock says, the database keeps the organization's period (M5-33).
 	future := time.Now().Add(100 * 365 * day)
-	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), future); err != nil {
+	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), future, 7); err != nil {
 		t.Fatal(err)
 	}
 	if got := ages(t, owner, "security_events", "occurred_at", a.org); !equal(got, []int{25, 3, 0}) {
@@ -138,21 +140,36 @@ func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 	if err := store.Set(ctx, scopeA, retention.Settings{LogDays: 3, EventDays: 7}, access.AuditEntry{Action: "org.retention_set", Target: "org:" + a.org.String()}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), future); err != nil {
+	if _, err := store.ExpireEvents(ctx, tenant.OrgID(a.org), future, 365); err != nil {
 		t.Fatal(err)
 	}
 	if got := ages(t, owner, "security_events", "occurred_at", a.org); !equal(got, []int{3, 0}) {
 		t.Errorf("events of A after 7 days: %v, want [3 0]", got)
 	}
-	// An organization with the instance's default: nothing, whatever is asked.
-	if n, err := store.ExpireEvents(ctx, tenant.OrgID(b.org), future); err != nil || n != 0 {
-		t.Errorf("expire B with the defaults: %d, %v; want nothing", n, err)
+	// An organization with the instance's default: one beyond a year keeps everything of B, one
+	// of 50 days keeps the event of 45 days.
+	seedAges(t, f.db.OwnerDSN, b.org, b.node, 52*day, 5*day)
+	before := ages(t, owner, "security_events", "occurred_at", b.org)
+	for _, d := range []uint32{1000, 50} {
+		if n, err := store.ExpireEvents(ctx, tenant.OrgID(b.org), future, d); err != nil || n != 0 && d == 1000 {
+			t.Errorf("expire B with the default %d: %d, %v", d, n, err)
+		}
+		if got := ages(t, owner, "security_events", "occurred_at", b.org); d == 1000 && !equal(got, before) {
+			t.Errorf("events of B with the default %d: %v, had %v", d, got, before)
+		}
 	}
-	if got := ages(t, owner, "security_events", "occurred_at", b.org); !equal(got, before) {
-		t.Errorf("events of B: %v, had %v", got, before)
+	if got := ages(t, owner, "security_events", "occurred_at", b.org); !equal(got, []int{45, 5, 0}) {
+		t.Errorf("events of B after the default of 50 days: %v, want [45 5 0]", got)
 	}
-	if got := ages(t, owner, "alert_history", "at", b.org); !equal(got, []int{45}) {
-		t.Errorf("alert history of B: %v, want [45]", got)
+	if got := ages(t, owner, "alert_history", "at", b.org); !equal(got, []int{45, 5}) {
+		t.Errorf("alert history of B after the default of 50 days: %v, want [45 5]", got)
+	}
+	// A default below the shortest period: the last 7 days stay.
+	if _, err := store.ExpireEvents(ctx, tenant.OrgID(b.org), future, 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := ages(t, owner, "security_events", "occurred_at", b.org); !equal(got, []int{5, 0}) {
+		t.Errorf("events of B after a default of 1 day: %v, want [5 0]", got)
 	}
 	// Only within the caller's tenant: A's function called in B's transaction fails.
 	app, err := pgx.Connect(ctx, f.appDSN)
@@ -168,7 +185,7 @@ func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 	if _, err := tx.Exec(ctx, "SELECT set_config('sermon.org_id', $1, true)", b.org.String()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(ctx, "SELECT security_events_expire_org($1, 'infinity')", a.org); err == nil || !strings.Contains(err.Error(), "outside the tenant") {
+	if _, err := tx.Exec(ctx, "SELECT security_events_expire_org($1, 'infinity', 7)", a.org); err == nil || !strings.Contains(err.Error(), "outside the tenant") {
 		t.Errorf("expire A from B's tenant: %v", err)
 	}
 
@@ -176,7 +193,7 @@ func TestRetention_ExpiresEachOrganizationAfterItsPeriod(t *testing.T) {
 	if err := store.MarkLogsErased(ctx, tenant.OrgID(a.org), at); err != nil {
 		t.Fatal(err)
 	}
-	configured, _ = store.Configured(ctx)
+	configured, _ = store.Organizations(ctx)
 	for _, o := range configured {
 		if o.Org == tenant.OrgID(a.org) && (o.LogsErasedAt == nil || !o.LogsErasedAt.Equal(at)) {
 			t.Errorf("logs erased at = %v, want %v", o.LogsErasedAt, at)

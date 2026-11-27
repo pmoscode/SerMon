@@ -48,12 +48,17 @@ The server checks itself every minute ([ADR 0027](../../adr/0027-server-ereignis
 | Metrics, 1 s | 15 minutes in the server's memory | no |
 | Metrics, 10 s / 1 min / 1 h | 24 hours / 30 days / 1 year | no |
 | Logs (Loki) | 14 days by default | per organization |
-| Security events, alert history | 1 year by default | per organization |
+| Security events, alert history | `SERMON_EVENT_RETENTION`, 90 days by default | operator and per organization |
 | Audit logs | `SERMON_AUDIT_RETENTION`, 2 years by default | operator |
 
 - **Per organization** admins set the retention under "Organization": logs 1 to 14 days, security events and alert
   history 7 to 365 days ([retention](../../help/en/concepts/retention.md)). As a superadmin you bound that per
   organization with the quota "retention cap"; a lowered quota deletes nothing.
+- **Without a setting of their own** organizations keep security events and alert history 90 days by default
+  (`SERMON_EVENT_RETENTION`, 7 to 365 days). A brute force against many nodes makes one row per attempt: in the load
+  test with 50 nodes, attacked a third of the time, that was 30,000 events and 16.6 MiB per hour, about 35 GiB at
+  90 days and 140 GiB at a year. Plan the space for a longer retention. The server deletes what is older per
+  organization every hour and frees whole months once no organization keeps them.
 - **Loki** keeps logs at most `retention_period: 336h` (`deploy/compose/loki.yaml`); that is the instance's limit.
   Don't raise it: the organizations' settings don't go beyond it. Loki deletes about once a day, so logs may stay
   visible up to a day longer.

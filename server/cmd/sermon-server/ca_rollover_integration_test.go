@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -77,7 +78,7 @@ func seedSuperadmin(t *testing.T) string {
 func TestAgentCARollover_EndToEnd(t *testing.T) {
 	srv := startTestServer(t, map[string]string{"SERMON_ALLOWED_ORIGINS": "http://sermon.test"}) // migrates
 	defer srv.stop()
-	seedEnrollmentToken(t)
+	seedEnrollmentTokenWithUses(t, 2) // one agent before the rollover, one during it
 	ctx := context.Background()
 
 	// The agent enrolls under the current CA and trusts only its root.
@@ -119,6 +120,21 @@ func TestAgentCARollover_EndToEnd(t *testing.T) {
 		t.Fatalf("session during the rollover: %v, bundle %d roots", err, len(res.bundle))
 	}
 	bundle := res.bundle
+
+	// V1-19: a new host enrolls during the rollover: certificate of the new CA, both roots, and it
+	// connects (the server certificate still comes from the old CA).
+	fresh := srv.enroll(t, fixtureToken)
+	if len(fresh.roots) != 2 || len(fresh.cert.Certificate) < 2 || bytes.Equal(fresh.cert.Certificate[1], agent.cert.Certificate[1]) {
+		t.Fatalf("enrolled during the rollover: %d roots, chain %d, same intermediate as before: %v",
+			len(fresh.roots), len(fresh.cert.Certificate), len(fresh.cert.Certificate) > 1 && bytes.Equal(fresh.cert.Certificate[1], agent.cert.Certificate[1]))
+	}
+	if _, err := srv.session(t, fresh.cert, fresh.roots, false); err != nil {
+		t.Fatalf("session of the agent enrolled during the rollover: %v", err)
+	}
+	// The existing agent keeps connecting with its old certificate until it rotates.
+	if _, err := srv.session(t, agent.cert, bundle, false); err != nil {
+		t.Fatalf("existing agent during the rollover: %v", err)
+	}
 
 	// It rotates and gets a certificate of the new CA.
 	res, err = srv.session(t, agent.cert, bundle, true)
@@ -179,6 +195,9 @@ func TestAgentCARollover_EndToEnd(t *testing.T) {
 	res, err = srv.session(t, rotated, newRoot, false)
 	if err != nil || len(res.bundle) != 1 {
 		t.Errorf("session after the retirement trusting only the new root: %v, bundle %d", err, len(res.bundle))
+	}
+	if _, err := srv.session(t, fresh.cert, newRoot, false); err != nil {
+		t.Errorf("the agent enrolled during the rollover after the retirement: %v", err)
 	}
 	if _, err := srv.session(t, rotated, oldRoots, false); err == nil {
 		t.Error("the retired root must no longer verify the server")

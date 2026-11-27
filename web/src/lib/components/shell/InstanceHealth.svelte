@@ -1,5 +1,6 @@
 <script lang="ts">
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { resolve } from '$app/paths';
 	import type { InstanceProblem } from '#lib/api/gen/sermon/web/v1/auth_pb.js';
 	import { m } from '#lib/paraglide/messages.js';
 	import { sessionState } from '#lib/stores/session.svelte.js';
@@ -25,6 +26,10 @@
 				return m.instance_database_size({ percent: Math.round(p.value * 100) });
 			case 'logs_unavailable':
 				return m.instance_logs_unavailable();
+			case 'agent_ca_expiry':
+				return p.value > 0
+					? m.instance_agent_ca_expiry({ days: Math.floor(p.value) })
+					: m.instance_agent_ca_expired();
 			default:
 				return p.check;
 		}
@@ -44,7 +49,13 @@
 				{critical ? m.instance_critical() : m.instance_warning()}
 			</span>
 			{#each problems as p (p.check)}
-				<span>{text(p)}</span>
+				<span>
+					{text(p)}
+					{#if p.check === 'agent_ca_expiry'}
+						– <a class="underline" href={resolve('/(app)/agent-ca')}>{m.instance_agent_ca_open()}</a
+						>
+					{/if}
+				</span>
 			{/each}
 		</div>
 	</div>

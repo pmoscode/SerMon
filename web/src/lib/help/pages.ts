@@ -17,5 +17,6 @@ export const pageHelp: Record<string, string> = {
 	'/(app)/nodes/[id]': 'pages/node',
 	'/(app)/nodes/add': 'pages/add_node',
 	'/(app)/admin': 'pages/admin',
-	'/(app)/organizations': 'pages/organizations'
+	'/(app)/organizations': 'pages/organizations',
+	'/(app)/agent-ca': 'pages/agent_ca'
 };

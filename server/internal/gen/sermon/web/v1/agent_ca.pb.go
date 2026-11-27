@@ -38,8 +38,12 @@ type AgentCA struct {
 	RootFingerprint string `protobuf:"bytes,5,opt,name=root_fingerprint,json=rootFingerprint,proto3" json:"root_fingerprint,omitempty"`
 	// certificates_in_use is the number of valid agent certificates issued by this CA.
 	CertificatesInUse int64 `protobuf:"varint,6,opt,name=certificates_in_use,json=certificatesInUse,proto3" json:"certificates_in_use,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// expire_time is when the CA stops working: the earlier end of its root and its intermediate
+	// certificate (two years after its creation). Agents and server refuse each other after it,
+	// so a rollover must retire the CA before (V1-19).
+	ExpireTime    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=expire_time,json=expireTime,proto3" json:"expire_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentCA) Reset() {
@@ -112,6 +116,13 @@ func (x *AgentCA) GetCertificatesInUse() int64 {
 		return x.CertificatesInUse
 	}
 	return 0
+}
+
+func (x *AgentCA) GetExpireTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpireTime
+	}
+	return nil
 }
 
 // GetAgentCAStatusRequest has no parameters.
@@ -358,7 +369,7 @@ var File_sermon_web_v1_agent_ca_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_agent_ca_proto_rawDesc = "" +
 	"\n" +
-	"\x1csermon/web/v1/agent_ca.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x88\x02\n" +
+	"\x1csermon/web/v1/agent_ca.proto\x12\rsermon.web.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc5\x02\n" +
 	"\aAgentCA\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\aissuing\x18\x02 \x01(\bR\aissuing\x12;\n" +
@@ -367,7 +378,9 @@ const file_sermon_web_v1_agent_ca_proto_rawDesc = "" +
 	"\vretire_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"retireTime\x12)\n" +
 	"\x10root_fingerprint\x18\x05 \x01(\tR\x0frootFingerprint\x12.\n" +
-	"\x13certificates_in_use\x18\x06 \x01(\x03R\x11certificatesInUse\"\x19\n" +
+	"\x13certificates_in_use\x18\x06 \x01(\x03R\x11certificatesInUse\x12;\n" +
+	"\vexpire_time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"expireTime\"\x19\n" +
 	"\x17GetAgentCAStatusRequest\"T\n" +
 	"\x18GetAgentCAStatusResponse\x128\n" +
 	"\vauthorities\x18\x01 \x03(\v2\x16.sermon.web.v1.AgentCAR\vauthorities\"\x1d\n" +
@@ -408,18 +421,19 @@ var file_sermon_web_v1_agent_ca_proto_goTypes = []any{
 var file_sermon_web_v1_agent_ca_proto_depIdxs = []int32{
 	7, // 0: sermon.web.v1.AgentCA.create_time:type_name -> google.protobuf.Timestamp
 	7, // 1: sermon.web.v1.AgentCA.retire_time:type_name -> google.protobuf.Timestamp
-	0, // 2: sermon.web.v1.GetAgentCAStatusResponse.authorities:type_name -> sermon.web.v1.AgentCA
-	1, // 3: sermon.web.v1.AgentCAService.GetAgentCAStatus:input_type -> sermon.web.v1.GetAgentCAStatusRequest
-	3, // 4: sermon.web.v1.AgentCAService.StartAgentCARollover:input_type -> sermon.web.v1.StartAgentCARolloverRequest
-	5, // 5: sermon.web.v1.AgentCAService.RetireAgentCA:input_type -> sermon.web.v1.RetireAgentCARequest
-	2, // 6: sermon.web.v1.AgentCAService.GetAgentCAStatus:output_type -> sermon.web.v1.GetAgentCAStatusResponse
-	4, // 7: sermon.web.v1.AgentCAService.StartAgentCARollover:output_type -> sermon.web.v1.StartAgentCARolloverResponse
-	6, // 8: sermon.web.v1.AgentCAService.RetireAgentCA:output_type -> sermon.web.v1.RetireAgentCAResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	7, // 2: sermon.web.v1.AgentCA.expire_time:type_name -> google.protobuf.Timestamp
+	0, // 3: sermon.web.v1.GetAgentCAStatusResponse.authorities:type_name -> sermon.web.v1.AgentCA
+	1, // 4: sermon.web.v1.AgentCAService.GetAgentCAStatus:input_type -> sermon.web.v1.GetAgentCAStatusRequest
+	3, // 5: sermon.web.v1.AgentCAService.StartAgentCARollover:input_type -> sermon.web.v1.StartAgentCARolloverRequest
+	5, // 6: sermon.web.v1.AgentCAService.RetireAgentCA:input_type -> sermon.web.v1.RetireAgentCARequest
+	2, // 7: sermon.web.v1.AgentCAService.GetAgentCAStatus:output_type -> sermon.web.v1.GetAgentCAStatusResponse
+	4, // 8: sermon.web.v1.AgentCAService.StartAgentCARollover:output_type -> sermon.web.v1.StartAgentCARolloverResponse
+	6, // 9: sermon.web.v1.AgentCAService.RetireAgentCA:output_type -> sermon.web.v1.RetireAgentCAResponse
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_sermon_web_v1_agent_ca_proto_init() }

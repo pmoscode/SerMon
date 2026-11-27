@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"sync"
 	"time"
@@ -25,10 +26,13 @@ const (
 	DatabaseSize          Check = "database_size"
 	// LogsUnavailable: the log store (Loki) fails, the ingest drops log entries (M3-07).
 	LogsUnavailable Check = "logs_unavailable"
+	// AgentCAExpiry: a trusted agent CA expires soon (V1-19); after that agents and server
+	// refuse each other until the hosts are enrolled again.
+	AgentCAExpiry Check = "agent_ca_expiry"
 )
 
 // checks is the fixed order of the checks.
-var checks = []Check{IngestLag, DroppedSamples, DroppedSecurityEvents, DatabaseSize, LogsUnavailable}
+var checks = []Check{IngestLag, DroppedSamples, DroppedSecurityEvents, DatabaseSize, LogsUnavailable, AgentCAExpiry}
 
 // Level is the state of a check.
 type Level int
@@ -60,10 +64,15 @@ const (
 	DroppedWindow    = 15 * time.Minute
 	SizeWarningPart  = 0.8
 	SizeCriticalPart = 0.9
+	// CAWarning and CACritical: time left before a trusted agent CA expires. A rollover takes up to
+	// 30 days (the agents' certificates of the old CA run out), so 90 days leave room for it.
+	CAWarning  = 90 * 24 * time.Hour
+	CACritical = 30 * 24 * time.Hour
 )
 
 // Problem is a check that is not OK. Value is the lag in seconds, the dropped samples or security
-// events within DroppedWindow or the share of the database limit (0..1).
+// events within DroppedWindow, the share of the database limit (0..1) or the days left before the
+// agent CA expires (0 once it has).
 type Problem struct {
 	Check Check
 	Level Level
@@ -83,6 +92,12 @@ type Sources interface {
 	DatabaseSize(ctx context.Context) (int64, error)
 }
 
+// AgentCA tells when the first of the trusted agent CAs expires: the earlier end of its root and
+// intermediate certificate (agentca.Service). Zero: unknown, not checked.
+type AgentCA interface {
+	AgentCAExpiry() time.Time
+}
+
 // Admins lists the addresses of the superadmins.
 type Admins interface {
 	Superadmins(ctx context.Context) ([]string, error)
@@ -93,9 +108,10 @@ type Mailer interface {
 	SendText(ctx context.Context, to, subject, text string) error
 }
 
-// Deps are the collaborators; Admins and Mailer may be nil (no mail).
+// Deps are the collaborators; AgentCA (no check), Admins and Mailer (no mail) may be nil.
 type Deps struct {
 	Sources       Sources
+	AgentCA       AgentCA
 	Admins        Admins
 	Mailer        Mailer
 	DatabaseLimit int64 // bytes; 0: the size is not checked
@@ -114,6 +130,8 @@ type Monitor struct {
 	mu      sync.Mutex
 	state   map[Check]Problem
 	history []sample
+	// caExpires is the agent CA's expiry the last check saw (for the mail).
+	caExpires time.Time
 }
 
 // New returns a monitor.
@@ -175,6 +193,10 @@ func (m *Monitor) Check(ctx context.Context) {
 		results[LogsUnavailable] = Problem{Check: LogsUnavailable, Level: Warning}
 	}
 
+	if p, ok := m.caExpiry(now); ok {
+		results[AgentCAExpiry] = p
+	}
+
 	keepSize := false
 	if limit := m.d.DatabaseLimit; limit > 0 {
 		size, err := m.d.Sources.DatabaseSize(ctx)
@@ -220,6 +242,26 @@ func (m *Monitor) Check(ctx context.Context) {
 	}
 }
 
+// caExpiry is the problem of the agent CA's expiry, if there is one.
+func (m *Monitor) caExpiry(now time.Time) (Problem, bool) {
+	if m.d.AgentCA == nil {
+		return Problem{}, false
+	}
+	expires := m.d.AgentCA.AgentCAExpiry()
+	left := expires.Sub(now)
+	if expires.IsZero() || left > CAWarning {
+		return Problem{}, false
+	}
+	p := Problem{Check: AgentCAExpiry, Level: Warning, Value: math.Max(0, left.Hours()/24)}
+	if left <= CACritical {
+		p.Level = Critical
+	}
+	m.mu.Lock()
+	m.caExpires = expires
+	m.mu.Unlock()
+	return p, true
+}
+
 // droppedWithin remembers the counters and returns their growth within DroppedWindow (0 after a
 // restart of the server, which resets them): dropped samples and rare security events.
 func (m *Monitor) droppedWithin(now time.Time) (samples, events uint64) {
@@ -247,7 +289,10 @@ func (m *Monitor) mail(ctx context.Context, p Problem) {
 		m.d.Logger.WarnContext(ctx, "self-monitoring: superadmins unknown", "err", err)
 		return
 	}
-	subject, text := message(p)
+	m.mu.Lock()
+	caExpires := m.caExpires
+	m.mu.Unlock()
+	subject, text := message(p, caExpires)
 	for _, addr := range to {
 		if err := m.d.Mailer.SendText(ctx, addr, subject, text); err != nil {
 			m.d.Logger.WarnContext(ctx, "self-monitoring: mail failed", "err", err)
@@ -256,14 +301,15 @@ func (m *Monitor) mail(ctx context.Context, p Problem) {
 }
 
 // message is the mail of a change, in English (superadmins operate the instance; the UI shows the
-// problems in their language).
-func message(p Problem) (string, string) {
+// problems in their language); caExpires is the agent CA's expiry.
+func message(p Problem, caExpires time.Time) (string, string) {
 	what := map[Check]string{
 		IngestLag:             "Agent data arrives late",
 		DroppedSamples:        "The server dropped samples",
 		DroppedSecurityEvents: "The server dropped security events",
 		DatabaseSize:          "The database is filling up",
 		LogsUnavailable:       "The server drops log entries",
+		AgentCAExpiry:         "The agent CA expires soon",
 	}[p.Check]
 	if p.Level == OK {
 		return fmt.Sprintf("SerMon: resolved – %s", what), fmt.Sprintf("%s: back to normal since %s.\n", what, p.Since.UTC().Format(time.RFC3339))
@@ -280,6 +326,9 @@ func message(p Problem) (string, string) {
 		detail = fmt.Sprintf("The database uses %.0f %% of SERMON_DATABASE_SIZE_LIMIT. Shorten the retention or add space.", p.Value*100)
 	case LogsUnavailable:
 		detail = "Loki (SERMON_LOKI_URL) is unreachable or fails: the agents' log entries are dropped, metrics, security events and alerts go on. Check the loki container (docker compose logs loki) and /readyz of the server; see sermon_server_ingest_dropped_log_entries_total in /metrics."
+	case AgentCAExpiry:
+		caDate := caExpires.UTC().Format(time.DateOnly)
+		detail = fmt.Sprintf("A trusted agent CA expires on %s (%.0f days left). After that agents and server refuse each other and every host must be enrolled again. Start a rollover on the page Agent CA, and retire the previous CA there once its certificates are replaced (at most 30 days).", caDate, math.Floor(p.Value))
 	}
 	return fmt.Sprintf("SerMon: %s – %s", p.Level, what), fmt.Sprintf("%s (%s since %s).\n\n%s\n", what, p.Level, p.Since.UTC().Format(time.RFC3339), detail)
 }

@@ -36,19 +36,20 @@ func (q *Queries) AgentCertificateUsable(ctx context.Context, arg AgentCertifica
 }
 
 const allAuthorities = `-- name: AllAuthorities :many
-SELECT id, root_cert, active, created_at, retired_at,
+SELECT id, root_cert, intermediate_cert, active, created_at, retired_at,
        pki_certificates_in_use(id, $1)::bigint AS in_use
 FROM pki_authorities
 ORDER BY id
 `
 
 type AllAuthoritiesRow struct {
-	ID        int32
-	RootCert  []byte
-	Active    bool
-	CreatedAt time.Time
-	RetiredAt *time.Time
-	InUse     int64
+	ID               int32
+	RootCert         []byte
+	IntermediateCert []byte
+	Active           bool
+	CreatedAt        time.Time
+	RetiredAt        *time.Time
+	InUse            int64
 }
 
 func (q *Queries) AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthoritiesRow, error) {
@@ -63,6 +64,7 @@ func (q *Queries) AllAuthorities(ctx context.Context, at time.Time) ([]AllAuthor
 		if err := rows.Scan(
 			&i.ID,
 			&i.RootCert,
+			&i.IntermediateCert,
 			&i.Active,
 			&i.CreatedAt,
 			&i.RetiredAt,

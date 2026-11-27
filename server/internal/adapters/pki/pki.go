@@ -35,8 +35,10 @@ const (
 	// ServerCertificateLifetime is the lifetime of the agent API's server certificate; it is
 	// renewed automatically in memory (KONZEPT §6 "Rotation auf Server-Seite").
 	ServerCertificateLifetime = 7 * 24 * time.Hour
-	intermediateLifetime      = 2 * 365 * 24 * time.Hour
-	rootLifetime              = 10 * 365 * 24 * time.Hour
+	// IntermediateLifetime: the issuing CA; nothing renews it, a rollover replaces root and
+	// intermediate before it ends (V1-19).
+	IntermediateLifetime = 2 * 365 * 24 * time.Hour
+	RootLifetime         = 10 * 365 * 24 * time.Hour
 	// clockSkew backdates NotBefore so agents with a slightly late clock accept new certificates.
 	clockSkew   = 5 * time.Minute
 	serialBytes = 16
@@ -93,7 +95,7 @@ func NewAuthority(now time.Time) (*Authority, error) {
 		SerialNumber:          rootSerial,
 		Subject:               pkix.Name{Organization: []string{"SerMon"}, CommonName: "SerMon Agent Root CA"},
 		NotBefore:             now.Add(-clockSkew),
-		NotAfter:              now.Add(rootLifetime),
+		NotAfter:              now.Add(RootLifetime),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
@@ -116,7 +118,7 @@ func NewAuthority(now time.Time) (*Authority, error) {
 		SerialNumber:          interSerial,
 		Subject:               pkix.Name{Organization: []string{"SerMon"}, CommonName: "SerMon Agent Issuing CA"},
 		NotBefore:             now.Add(-clockSkew),
-		NotAfter:              now.Add(intermediateLifetime),
+		NotAfter:              now.Add(IntermediateLifetime),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -130,6 +132,29 @@ func NewAuthority(now time.Time) (*Authority, error) {
 		return nil, err
 	}
 	return &Authority{root: root, rootKey: rootKey, inter: inter, interKey: interKey}, nil
+}
+
+// Expires is when the CA stops working: the earlier end of its root and intermediate certificate.
+func (a *Authority) Expires() time.Time { return earlier(a.root.NotAfter, a.inter.NotAfter) }
+
+// ExpiresAt is Expires of a stored CA, from its certificates (DER).
+func ExpiresAt(rootDER, intermediateDER []byte) (time.Time, error) {
+	root, err := x509.ParseCertificate(rootDER)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse root certificate: %w", err)
+	}
+	inter, err := x509.ParseCertificate(intermediateDER)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse intermediate certificate: %w", err)
+	}
+	return earlier(root.NotAfter, inter.NotAfter), nil
+}
+
+func earlier(a, b time.Time) time.Time {
+	if b.Before(a) {
+		return b
+	}
+	return a
 }
 
 // Root returns the root certificate (trust anchor for agents and the agent API).

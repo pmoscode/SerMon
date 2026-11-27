@@ -865,8 +865,8 @@ export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
  */
 export type InstanceProblem = Message<"sermon.web.v1.InstanceProblem"> & {
   /**
-   * check is ingest_lag, dropped_samples, dropped_security_events, database_size or
-   * logs_unavailable.
+   * check is ingest_lag, dropped_samples, dropped_security_events, database_size,
+   * logs_unavailable or agent_ca_expiry.
    *
    * @generated from field: string check = 1;
    */
@@ -887,8 +887,8 @@ export type InstanceProblem = Message<"sermon.web.v1.InstanceProblem"> & {
   since?: Timestamp | undefined;
 
   /**
-   * value is the lag in seconds, the samples dropped within 15 minutes or the share of the
-   * database limit (0..1).
+   * value is the lag in seconds, the samples dropped within 15 minutes, the share of the
+   * database limit (0..1) or the days left until the agent CA expires (0 once it has).
    *
    * @generated from field: double value = 4;
    */

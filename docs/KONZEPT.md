@@ -410,7 +410,10 @@ eine Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Lo
   - CA-Wechsel per **Trust-Bundle**: Der Server verteilt über den Stream ein Bundle mit alter **und** neuer CA. Danach
     stellt er Agent-Zertifikate nur noch mit der neuen CA aus.
   - Die alte CA wird erst entfernt, wenn kein gültiges Zertifikat der alten CA mehr existiert.
-  - Fortschritt und Abschluss sind in der UI sichtbar.
+  - Fortschritt und Abschluss sind in der UI sichtbar (Seite „Agent-CA“ für Superadmins, Start und Stilllegen mit
+    Step-up und Audit, V1-19).
+  - Die Zwischen-CA gilt 2 Jahre und wird nicht von selbst erneuert; das Self-Monitoring warnt die Superadmins ab
+    90 Tagen vor dem Ablauf der ersten vertrauten CA (kritisch ab 30 Tagen).
 - **Erkennung paralleler Nutzung derselben Identität:** Ein Angreifer mit gestohlenem Schlüssel könnte zuerst rotieren
   und den echten Agent aussperren. Dagegen helfen:
   - **höchstens eine aktive Session pro Node**;
@@ -1735,7 +1738,7 @@ networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres,
 - **Upgrade:** `docker compose pull && docker compose up -d`; Migrationen laufen automatisch mit Lock; Rollback-Hinweise
   in den Release-Notes.
 - **Self-Monitoring:** Der Server überwacht sich selbst: Ingest-Lag, verworfene Samples und die Größe der Datenbank
-  gegen `SERMON_DATABASE_SIZE_LIMIT`. Superadmins bekommen bei jedem Wechsel eine Mail und sehen offene Probleme in der
+  gegen `SERMON_DATABASE_SIZE_LIMIT`, dazu den Ablauf der Agent-CA (V1-19). Superadmins bekommen bei jedem Wechsel eine Mail und sehen offene Probleme in der
   UI; Organisationen sehen nichts davon ([ADR 0027](adr/0027-server-ereignisse-und-self-monitoring.md)). Den Füllstand der Volumes misst ein Agent auf dem Server-Host.
 - **Ressourcen (Richtwert für 50 Nodes):** 4 vCPU, 8 GB RAM, 200 GB NVMe-SSD. Wird im Spike in M0 bestätigt.
 

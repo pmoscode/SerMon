@@ -6423,7 +6423,7 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 > und jede Option der Usage von `install.sh` in beiden Sprachen; die Voreinstellungen aus `config.Load` in der Referenz;
 > Fristen und Grenzen (Tokens, Zertifikate, Self-Monitoring, Aufbewahrung, Step-up, Sitzungen) aus den Konstanten, an
 > jeder Fundstelle mit dem Wert des Codes; alle Links und Anker; dieselben Seiten in beiden Sprachen. Gegenproben 19/19.
-> - **Befunde** (offen, als Aufgaben vorgeschlagen): Die Intermediate-CA der Agents gilt 2 Jahre ab `init`; nichts
+> - **Befunde** (erledigt in V1-19 und V1-20): Die Intermediate-CA der Agents gilt 2 Jahre ab `init`; nichts
 >   erneuert sie oder warnt davor, und den CA-Wechsel gibt es nur über die Web-API (`AgentCAService`), ohne Seite in
 >   der UI – die Doku verlangt den Wechsel nach spätestens 22 Monaten. Unter OpenRC sammelt kein Logger die Ausgabe
 >   des Agents (`packaging/openrc/sermon-agent` ohne `output_logger`).
@@ -6583,7 +6583,27 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Step-up-Tabellen.
 - **Abhängig von:** V1-11
 
-#### ☐ V1-19 – Rollover der Agent-CA in der UI und Warnung vor dem Ablauf · S+W · M 🔒
+#### ☑ V1-19 – Rollover der Agent-CA in der UI und Warnung vor dem Ablauf · S+W · M 🔒
+> Erledigt (2026-11-27): Die Zwischen-CA gilt 2 Jahre (`pki.IntermediateLifetime`, jetzt exportiert); eine CA endet mit
+> dem früheren Ende von Root und Zwischen-CA (`pki.Authority.Expires`, `pki.ExpiresAt` für gespeicherte).
+> - **Self-Monitoring** (Nachtrag ADR 0027): Check `agent_ca_expiry` auf die erste vertraute CA, die abläuft
+>   (`agentca.Service.AgentCAExpiry` aus dem Speicher, alle 30 s neu geladen) – während eines Rollovers die vorige, die
+>   bis zum Stilllegen das Server-Zertifikat ausstellt. Warnung ab genau 90 Tagen, kritisch ab 30 Tagen (so lange
+>   dauert ein Rollover höchstens), Wert = verbleibende Tage, 0 nach dem Ablauf; Mail nur beim Wechsel der Stufe mit
+>   Datum und Weg zur Seite, Band in der UI mit Link.
+> - **Web-API:** `AgentCA.expire_time` (additiv, `buf breaking` grün), Status aus den gespeicherten Zertifikaten;
+>   keine neue RPC – Rollen-, Isolations- und Step-up-Tabellen enthalten `AgentCAService` schon.
+> - **Seite „Agent-CA“** (Superadmins, als Reiter neben „Organisationen“ unter demselben Menüpunkt – ein eigener
+>   Menüpunkt hätte die Kopfzeile umbrochen): Ablauf mit Stufe wie das Self-Monitoring, Stand des Rollovers (gültige
+>   Zertifikate der vorigen CA, spätestes Ende nach 30 Tagen), Start und Stilllegen mit Erklärung, Step-up und Audit
+>   über den bestehenden `AgentCAService`; Hilfe `pages/agent_ca` DE + EN, Benutzerhandbuch, Admin-Doku (Betrieb,
+>   Fehlersuche, Drift-Test um Schwellen und Laufzeit erweitert), KONZEPT §6 und §22.
+> - **Tests:** Self-Monitoring an beiden Schwellen auf die Sekunde, eine Mail je Wechsel, Entwarnung nach dem
+>   Stilllegen; Service und PKI (Ablauf der ersten vertrauten CA während und nach dem Rollover); Handler; Store mit
+>   echten Zertifikaten (Testcontainers); End-to-End mit mTLS: ein Agent, der während des Rollovers enrollt, bekommt
+>   ein Zertifikat der neuen CA und verbindet sich, ein bestehender verbindet sich weiter, nach dem Stilllegen beide mit
+>   nur der neuen Root; Komponente (Step-up, Stilllegen erst ohne Zertifikate, Fehler) und Playwright mit axe.
+>   Gegenproben 14/14.
 - **Ziel:** Aus V1-09: Die Zwischen-CA der Agents läuft 2 Jahre nach `init` ab; nichts erneuert sie, nichts warnt, und
   der Rollover geht nur über die Web-API (`AgentCAService`). Danach lehnen Agents und Server sich gegenseitig ab.
   Self-Monitoring warnt Superadmins ab 90 Tagen vor dem Ablauf (Mail, UI, ADR 0027), eine Seite für Superadmins zeigt

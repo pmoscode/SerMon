@@ -218,8 +218,10 @@ widerrufen. Die Adresse ist der Schlüssel: Wer sie hat, sieht das Dashboard.
 
 Admins für alle Gruppen verwalten unter **Organisation** Mitglieder und Rollen, Einladungen, Node-Gruppen, die Pflicht
 zur Zwei-Faktor-Anmeldung, SSO-Gruppen, Log-Einstellungen, Module, die Aufbewahrung von Logs und Events und lesen das
-Audit-Log. Die Kontingente setzt der Betreiber der Instanz; er verwaltet als Superadmin auch die Organisationen selbst.
+Audit-Log. Die Kontingente setzt der Betreiber der Instanz; er verwaltet als Superadmin auch die Organisationen selbst und
+stellt unter **Agent-CA** rechtzeitig vor ihrem Ablauf die Zertifizierungsstelle der Agents um.
 
 - [Organisation](../../help/de/pages/admin.md)
 - [Aufbewahrung](../../help/de/concepts/retention.md)
 - [Organisationen der Instanz (Superadmin)](../../help/de/pages/organizations.md)
+- [Agent-CA und ihre Umstellung (Superadmin)](../../help/de/pages/agent_ca.md)

@@ -54,10 +54,12 @@
 			: []),
 		...(sessionState.current?.superadmin
 			? [
+					// The pages of the instance (V1-19): one item, the pages link each other.
 					{
 						href: resolve('/(app)/organizations'),
 						icon: Building2,
-						label: () => m.nav_organizations()
+						label: () => m.nav_organizations(),
+						also: [resolve('/(app)/agent-ca')]
 					}
 				]
 			: [])

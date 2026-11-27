@@ -15,6 +15,7 @@ Der Server prüft sich jede Minute selbst ([ADR 0027](../../adr/0027-server-erei
 | Verworfene seltene Security-Events (Anmeldungen, sudo, Konten, System) durch das Rate-Limit eines Nodes | Warnung |
 | Größe der Datenbank gegen `SERMON_DATABASE_SIZE_LIMIT` | Warnung ab 80 %, kritisch ab 90 % |
 | Loki nicht erreichbar: der Ingest verwirft Logs (Metriken, Events und Alerts laufen weiter) | Warnung |
+| Ablauf der Agent-CA: wann die erste vertraute CA abläuft | Warnung ab 90 Tagen vor dem Ablauf, kritisch ab 30 Tagen |
 
 - Bei jedem Wechsel der Stufe – auch bei der Entwarnung – bekommen alle Superadmins eine Mail (auf Englisch) über das
   SMTP der Instanz. In der UI sehen Superadmins offene Probleme als Band unter der Kopfzeile. Organisationen sehen
@@ -119,14 +120,20 @@ Agents. Agents werden nie neuer als ihr Server (außer im Kanal `beta`).
   nur widerrufen, entsperren ([Identität](../../help/de/concepts/node-identity.md)).
 - **Das Server-Zertifikat der Agent-API gilt 7 Tage** und wird im Speicher automatisch erneuert, für die Namen aus
   `SERMON_AGENT_HOSTNAMES`.
-- **Agent-CA:** Das Root-Zertifikat gilt 10 Jahre, die Intermediate-CA, die alle Zertifikate ausstellt, **2 Jahre** ab
-  ihrer Erzeugung (bei `init` bzw. beim letzten CA-Wechsel). Der Server erneuert sie nicht von selbst und warnt in
-  v1.0 nicht vor dem Ablauf; danach lehnen Agents und Server einander ab. Starten Sie deshalb spätestens nach 22
-  Monaten einen **CA-Wechsel**: Eine neue CA stellt ab dann alle Zertifikate aus, die Agents bekommen ein Trust-Bundle
-  mit beiden Roots, und sobald keine gültigen Zertifikate der alten mehr bestehen (spätestens nach 30 Tagen), legen Sie
-  die alte still. Eine Seite dafür hat die UI in v1.0 noch nicht; der Wechsel geht als Superadmin mit frischer
-  Bestätigung über die Web-API `sermon.web.v1.AgentCAService` (`GetAgentCAStatus` zeigt Erzeugung und
-  `certificates_in_use` je CA, `StartAgentCARollover`, `RetireAgentCA`).
+- **Agent-CA:** Das Root-Zertifikat gilt 10 Jahre, die Intermediate-CA, die alle Zertifikate ausstellt, 2 Jahre ab
+  ihrer Erzeugung (bei `init` bzw. beim letzten CA-Wechsel). Der Server erneuert sie nicht von selbst; nach dem Ablauf
+  lehnen Agents und Server einander ab, und jeder Host muss neu angemeldet werden. Das Self-Monitoring warnt die
+  Superadmins ab 90 Tagen vor dem Ablauf (Mail und Band in der UI, kritisch ab 30 Tagen). Der **CA-Wechsel** auf der
+  Seite **Agent-CA** (Superadmins, unter „Organisationen“, [Hilfe](../../help/de/pages/agent_ca.md)) zeigt Ablauf und
+  Stand und führt ihn mit erneuter Bestätigung durch:
+  1. **Umstellung starten:** Eine neue CA stellt ab dann alle Zertifikate aus; die Agents bekommen beim nächsten
+     Verbinden ein Trust-Bundle mit beiden Roots und holen bei ihrer nächsten Rotation ein Zertifikat der neuen CA.
+     Bestehende Agents verbinden sich weiter, neue melden sich normal an.
+  2. **Vorige CA stilllegen**, sobald sie keine gültigen Zertifikate mehr hat (spätestens 30 Tage nach dem Start).
+     Erst dann kommt auch das Server-Zertifikat der Agent-API von der neuen CA.
+
+  Starten Sie die Umstellung also spätestens 30 Tage vor dem Ablauf, besser bei der ersten Warnung. Beide Schritte
+  stehen im Audit-Log der Instanz (`pki.rollover_started`, `pki.authority_retired`).
 - **Master-Keys:** nie ersetzen, kürzen oder umsortieren. Das Format kennt mehrere Schlüssel (der neueste zuerst), einen
   geprüften Ablauf zum Wechsel mit neuem Versiegeln gibt es in v1.0 nicht.
 - **Release- und Paketschlüssel** und ihr Wechsel: [Installation](../installation.md) und

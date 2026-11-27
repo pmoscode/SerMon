@@ -50,6 +50,9 @@ func (h *AgentCAHandler) GetAgentCAStatus(ctx context.Context, _ *connect.Reques
 			Id: st.ID, Issuing: st.Issuing, CreateTime: timestamppb.New(st.CreatedAt),
 			RootFingerprint: st.RootFingerprint, CertificatesInUse: st.CertificatesInUse,
 		}
+		if !st.ExpiresAt.IsZero() {
+			v.ExpireTime = timestamppb.New(st.ExpiresAt)
+		}
 		if st.RetiredAt != nil {
 			v.RetireTime = timestamppb.New(*st.RetiredAt)
 		}

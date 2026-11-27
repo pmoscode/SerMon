@@ -243,7 +243,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if logStore != nil {
 			ingestService.SetLogWriter(loki.NewWriter(logStore))
 		}
-		monitor := newSelfMonitor(cfg, db, ingestService, logger)
+		monitor := newSelfMonitor(cfg, db, ingestService, ca, logger)
 		servers = append(servers, func(ctx context.Context) error {
 			monitor.Run(ctx, time.Minute)
 			return nil
@@ -915,11 +915,13 @@ func (s selfSources) DatabaseSize(ctx context.Context) (int64, error) {
 	return size, nil
 }
 
-// newSelfMonitor returns the self-monitoring; superadmins get mail only with SMTP.
-func newSelfMonitor(cfg config.Config, db *postgres.DB, ingestService *ingest.Service, logger *slog.Logger) *selfmonitor.Monitor {
+// newSelfMonitor returns the self-monitoring; superadmins get mail only with SMTP. It watches the
+// expiry of the agent CA, too (V1-19).
+func newSelfMonitor(cfg config.Config, db *postgres.DB, ingestService *ingest.Service, ca *agentca.Service, logger *slog.Logger) *selfmonitor.Monitor {
 	store := postgres.NewSelfMonitorStore(db)
 	deps := selfmonitor.Deps{
-		Sources: selfSources{stats: ingestService.Stats(), logs: ingestService, store: store}, DatabaseLimit: cfg.DatabaseSizeLimit, Now: time.Now, Logger: logger,
+		Sources: selfSources{stats: ingestService.Stats(), logs: ingestService, store: store}, AgentCA: ca,
+		DatabaseLimit: cfg.DatabaseSizeLimit, Now: time.Now, Logger: logger,
 	}
 	if cfg.SMTP != nil {
 		deps.Admins, deps.Mailer = store, newMailer(cfg.SMTP)

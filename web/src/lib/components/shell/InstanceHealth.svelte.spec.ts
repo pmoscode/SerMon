@@ -44,6 +44,49 @@ describe('InstanceHealth', () => {
 		await expect.element(bar).toMatchTextContent(/Critical/);
 	});
 
+	// V1-19: the expiry of the agent CA, with the way to the page that rolls it over.
+	it('tells superadmins when the agent CA expires and links its page', async () => {
+		sessionState.current = {
+			...fakeSession(),
+			superadmin: true,
+			instanceProblems: [
+				{
+					check: 'agent_ca_expiry',
+					level: 'warning',
+					since: timestampFromMs(Date.now()),
+					value: 62.7
+				}
+			]
+		} as never;
+		render(InstanceHealth);
+		const bar = page.getByRole('status');
+		await expect
+			.element(bar)
+			.toMatchTextContent(/The agent CA expires in 62 days – a rollover is due/);
+		await expect
+			.element(page.getByRole('link', { name: 'Open Agent CA' }))
+			.toHaveAttribute('href', '/agent-ca');
+	});
+
+	it('says when the agent CA has expired', async () => {
+		sessionState.current = {
+			...fakeSession(),
+			superadmin: true,
+			instanceProblems: [
+				{
+					check: 'agent_ca_expiry',
+					level: 'critical',
+					since: timestampFromMs(Date.now()),
+					value: 0
+				}
+			]
+		} as never;
+		render(InstanceHealth);
+		await expect
+			.element(page.getByRole('status'))
+			.toMatchTextContent(/The agent CA has expired – agents can no longer connect/);
+	});
+
 	it('shows nothing to members of an organization', async () => {
 		sessionState.current = {
 			...fakeSession(),

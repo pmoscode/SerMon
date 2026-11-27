@@ -31,7 +31,7 @@ Das Log des Agents nennt den Grund in einer Zeile `session failed: …`:
 | `the agent certificate has expired` | zu lange offline, die automatische Rotation kam nicht dazu | neu anmelden (unten) |
 | `certificate not valid for name …` | Der Name in `agent_url` fehlt in `SERMON_AGENT_HOSTNAMES` | `SERMON_AGENT_HOSTNAMES` ergänzen, `docker compose up -d` |
 | `UnknownIssuer` | Auf Port 8443 antwortet nicht die Agent-API dieses Servers: ein TLS-Proxy davor, oder eine neu aufgesetzte Instanz mit neuer Agent-CA | Port 8443 muss direkt beim Server ankommen; nach einem neuen `init` die Hosts neu anmelden |
-| `certificate not valid yet`, `certificate expired` | Uhr des Hosts falsch | Zeit synchronisieren (unten) |
+| `certificate not valid yet`, `certificate expired` | Uhr des Hosts falsch – oder die Agent-CA ist abgelaufen | Zeit synchronisieren (unten); Ablauf auf der Seite „Agent-CA“ prüfen ([Betrieb](operations.md#zertifikate-und-schlüssel)) |
 | `connection refused`, Timeout | Firewall, falscher Port | Port 8443 vom Host aus prüfen (unten) |
 
 **Erreichbarkeit und Zertifikat der Agent-API** (es ist von der Agent-CA, nicht öffentlich – das ist richtig so):

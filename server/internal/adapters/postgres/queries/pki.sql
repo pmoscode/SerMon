@@ -7,7 +7,7 @@ WHERE retired_at IS NULL
 ORDER BY id;
 
 -- name: AllAuthorities :many
-SELECT id, root_cert, active, created_at, retired_at,
+SELECT id, root_cert, intermediate_cert, active, created_at, retired_at,
        pki_certificates_in_use(id, sqlc.arg(at))::bigint AS in_use
 FROM pki_authorities
 ORDER BY id;

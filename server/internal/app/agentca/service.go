@@ -60,8 +60,9 @@ type AuthorityState struct {
 	Issuing           bool
 	CreatedAt         time.Time
 	RetiredAt         *time.Time
-	RootFingerprint   string // SHA-256 of the root certificate, hex
-	CertificatesInUse int64  // valid, unrevoked agent certificates issued by this CA
+	RootFingerprint   string    // SHA-256 of the root certificate, hex
+	ExpiresAt         time.Time // the earlier end of root and intermediate (pki.Authority.Expires)
+	CertificatesInUse int64     // valid, unrevoked agent certificates issued by this CA
 }
 
 // CertificateRecord is an issued agent certificate.
@@ -205,6 +206,20 @@ func (s *Service) TrustAnchors() []*x509.Certificate {
 		roots = append(roots, a.ca.Root())
 	}
 	return roots
+}
+
+// AgentCAExpiry is when the first trusted CA expires (V1-19): during a rollover the old one, which
+// still signs the agent API's server certificate; zero without a CA.
+func (s *Service) AgentCAExpiry() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var first time.Time
+	for _, a := range s.trusted {
+		if at := a.ca.Expires(); first.IsZero() || at.Before(first) {
+			first = at
+		}
+	}
+	return first
 }
 
 // Intermediates returns the issuing certificates of all trusted CAs.

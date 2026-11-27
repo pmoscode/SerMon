@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/sqlcdb"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
@@ -129,9 +130,13 @@ func (s *AgentCAStore) Authorities(ctx context.Context, now time.Time) ([]agentc
 	}
 	out := make([]agentca.AuthorityState, 0, len(rows))
 	for _, r := range rows {
+		expires, err := pki.ExpiresAt(r.RootCert, r.IntermediateCert)
+		if err != nil {
+			return nil, fmt.Errorf("authority %d: %w", r.ID, err)
+		}
 		out = append(out, agentca.AuthorityState{
 			ID: r.ID, Issuing: r.Active, CreatedAt: r.CreatedAt, RetiredAt: r.RetiredAt,
-			RootFingerprint: agentca.Fingerprint(r.RootCert), CertificatesInUse: r.InUse,
+			RootFingerprint: agentca.Fingerprint(r.RootCert), ExpiresAt: expires, CertificatesInUse: r.InUse,
 		})
 	}
 	return out, nil

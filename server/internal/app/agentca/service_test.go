@@ -102,7 +102,13 @@ func (f *fakeStore) Retire(_ context.Context, id int32, _ identity.UserID, now t
 func (f *fakeStore) Authorities(_ context.Context, now time.Time) ([]agentca.AuthorityState, error) {
 	var out []agentca.AuthorityState
 	for _, a := range f.auths {
-		out = append(out, agentca.AuthorityState{ID: a.id, Issuing: a.issuing, RetiredAt: a.retired, CertificatesInUse: f.inUse(a.id, now)})
+		expires, err := pki.ExpiresAt(a.rec.RootCert, a.rec.IntermediateCert)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, agentca.AuthorityState{
+			ID: a.id, Issuing: a.issuing, RetiredAt: a.retired, ExpiresAt: expires, CertificatesInUse: f.inUse(a.id, now),
+		})
 	}
 	return out, nil
 }
@@ -570,5 +576,36 @@ func TestRefresh_PicksUpARolloverOfAnotherInstance(t *testing.T) {
 	}
 	if len(b.TrustAnchors()) != 2 || !b.TrustAnchor().Equal(a.TrustAnchor()) {
 		t.Error("the other instance must see the new issuing CA after a refresh")
+	}
+}
+
+// V1-19: the self-monitoring watches the first trusted CA to expire – during a rollover still
+// the old one, which signs the server certificate until it is retired.
+func TestAgentCAExpiry_IsTheEndOfTheFirstTrustedCA(t *testing.T) {
+	store, box, now := newFakeStore(), newBox(t), t0
+	svc, _ := agentca.Bootstrap(context.Background(), store, box, clockAt(&now))
+	first := t0.Add(pki.IntermediateLifetime)
+	if got := svc.AgentCAExpiry(); !got.Equal(first) {
+		t.Fatalf("AgentCAExpiry() = %v, want %v", got, first)
+	}
+
+	now = t0.Add(700 * 24 * time.Hour)
+	caller := superadmin(time.Minute)
+	caller.StepUpAt = now
+	if err := svc.StartRollover(context.Background(), caller); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.AgentCAExpiry(); !got.Equal(first) {
+		t.Errorf("during the rollover AgentCAExpiry() = %v, want the old CA's %v", got, first)
+	}
+	states, err := svc.Status(context.Background(), caller)
+	if err != nil || len(states) != 2 || !states[0].ExpiresAt.Equal(first) || !states[1].ExpiresAt.Equal(now.Add(pki.IntermediateLifetime)) {
+		t.Fatalf("status = %+v, %v", states, err)
+	}
+	if err := svc.Retire(context.Background(), caller, 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := svc.AgentCAExpiry(); !got.Equal(now.Add(pki.IntermediateLifetime)) {
+		t.Errorf("after the retirement AgentCAExpiry() = %v, want the new CA's", got)
 	}
 }

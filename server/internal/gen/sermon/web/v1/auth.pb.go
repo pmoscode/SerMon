@@ -1780,15 +1780,15 @@ func (x *Session) GetLifecycleGroupIds() []string {
 // InstanceProblem is a check of the server's self-monitoring that is not OK.
 type InstanceProblem struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// check is ingest_lag, dropped_samples, dropped_security_events, database_size or
-	// logs_unavailable.
+	// check is ingest_lag, dropped_samples, dropped_security_events, database_size,
+	// logs_unavailable or agent_ca_expiry.
 	Check string `protobuf:"bytes,1,opt,name=check,proto3" json:"check,omitempty"`
 	// level is warning or critical.
 	Level string `protobuf:"bytes,2,opt,name=level,proto3" json:"level,omitempty"`
 	// since is when it reached this level.
 	Since *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=since,proto3" json:"since,omitempty"`
-	// value is the lag in seconds, the samples dropped within 15 minutes or the share of the
-	// database limit (0..1).
+	// value is the lag in seconds, the samples dropped within 15 minutes, the share of the
+	// database limit (0..1) or the days left until the agent CA expires (0 once it has).
 	Value         float64 `protobuf:"fixed64,4,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

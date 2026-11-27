@@ -3,6 +3,7 @@
 package postgres_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/pmoscode/SerMon/server/internal/adapters/pki"
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
@@ -111,9 +113,20 @@ func TestAgentCAStore_RolloverAndRetirement(t *testing.T) {
 	ownerExec(t, f.db.OwnerDSN, "DELETE FROM agent_certificates")
 	ownerExec(t, f.db.OwnerDSN, "DELETE FROM pki_authorities")
 	store := postgres.NewAgentCAStore(open(t, f.appDSN))
+	// Real certificates: the status reads the expiry from them (V1-19).
+	cas := map[string]*pki.Authority{}
 	rec := func(name string) agentca.AuthorityRecord {
-		return agentca.AuthorityRecord{RootCert: []byte(name), RootKeySealed: []byte("k"), IntermediateCert: []byte("i"), IntermediateKeySealed: []byte("k")}
+		ca, ok := cas[name]
+		if !ok {
+			var err error
+			if ca, err = pki.NewAuthority(caTime.Add(time.Duration(len(cas)) * 24 * time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			cas[name] = ca
+		}
+		return agentca.AuthorityRecord{RootCert: ca.Root().Raw, RootKeySealed: []byte("k"), IntermediateCert: ca.Intermediate().Raw, IntermediateKeySealed: []byte("k")}
 	}
+	rec("new") // created before the goroutines below
 	if err := store.InsertAuthority(ctx, rec("old")); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +146,7 @@ func TestAgentCAStore_RolloverAndRetirement(t *testing.T) {
 		t.Fatalf("concurrent rollovers: %v / %v; want exactly one", first, second)
 	}
 	trusted, _ := store.TrustedAuthorities(ctx)
-	if len(trusted) != 2 || trusted[0].Issuing || !trusted[1].Issuing || string(trusted[1].Record.RootCert) != "new" {
+	if len(trusted) != 2 || trusted[0].Issuing || !trusted[1].Issuing || !bytes.Equal(trusted[1].Record.RootCert, cas["new"].Root().Raw) {
 		t.Fatalf("trusted = %+v", trusted)
 	}
 	oldID, newID := trusted[0].ID, trusted[1].ID
@@ -144,9 +157,10 @@ func TestAgentCAStore_RolloverAndRetirement(t *testing.T) {
 	if err := store.Retire(ctx, oldID, super, caTime); !errors.Is(err, agentca.ErrAuthorityInUse) {
 		t.Errorf("retire with a valid certificate: %v, want ErrAuthorityInUse", err)
 	}
-	states, _ := store.Authorities(ctx, caTime)
-	if len(states) != 2 || states[0].CertificatesInUse != 1 || states[0].RootFingerprint == "" {
-		t.Errorf("states = %+v", states)
+	states, err := store.Authorities(ctx, caTime)
+	if err != nil || len(states) != 2 || states[0].CertificatesInUse != 1 || states[0].RootFingerprint == "" ||
+		!states[0].ExpiresAt.Equal(cas["old"].Expires()) || !states[1].ExpiresAt.Equal(cas["new"].Expires()) {
+		t.Errorf("states = %+v, %v", states, err)
 	}
 	// After expiry (or revocation) of the old certificates the old CA can be retired.
 	if err := store.Retire(ctx, oldID, super, cert.NotAfter.Add(time.Second)); err != nil {

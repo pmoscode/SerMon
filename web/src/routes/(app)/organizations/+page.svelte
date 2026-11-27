@@ -9,6 +9,7 @@
 	import { adminApi } from '#lib/api/admin.js';
 	import { adminError } from '#lib/admin/admin.js';
 	import HelpTip from '#lib/components/help/HelpTip.svelte';
+	import InstanceTabs from '#lib/components/shell/InstanceTabs.svelte';
 	import CreateOrganization from '#lib/components/organizations/CreateOrganization.svelte';
 	import OrganizationEditor from '#lib/components/organizations/OrganizationEditor.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -89,6 +90,8 @@
 <svelte:head>
 	<title>{m.orgs_title()} · SerMon</title>
 </svelte:head>
+
+<InstanceTabs />
 
 <div class="mb-6 flex items-center gap-2">
 	<h1 class="text-2xl font-semibold tracking-tight">{m.orgs_title()}</h1>

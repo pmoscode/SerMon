@@ -36,6 +36,10 @@ message AgentCA {
   string root_fingerprint = 5;
   // certificates_in_use is the number of valid agent certificates issued by this CA.
   int64 certificates_in_use = 6;
+  // expire_time is when the CA stops working: the earlier end of its root and its intermediate
+  // certificate (two years after its creation). Agents and server refuse each other after it,
+  // so a rollover must retire the CA before (V1-19).
+  google.protobuf.Timestamp expire_time = 7;
 }
 
 // GetAgentCAStatusRequest has no parameters.

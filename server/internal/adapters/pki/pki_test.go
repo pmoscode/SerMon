@@ -348,3 +348,27 @@ func TestIssueServerCertificate_VerifiesForTheHostsAndOnlyForServerAuth(t *testi
 		t.Error("a server certificate needs at least one host")
 	}
 }
+
+// V1-19: a CA works until the earlier end of its root and its intermediate – the intermediate
+// after two years; nothing renews it, a rollover replaces both.
+func TestAuthority_ExpiresWithItsIntermediate(t *testing.T) {
+	ca := newCA(t)
+	want := now.Add(pki.IntermediateLifetime)
+	if pki.IntermediateLifetime != 2*365*24*time.Hour || pki.RootLifetime <= pki.IntermediateLifetime {
+		t.Fatalf("lifetimes: intermediate %v, root %v", pki.IntermediateLifetime, pki.RootLifetime)
+	}
+	if got := ca.Expires(); !got.Equal(want) {
+		t.Errorf("Expires() = %v, want %v", got, want)
+	}
+	got, err := pki.ExpiresAt(ca.Root().Raw, ca.Intermediate().Raw)
+	if err != nil || !got.Equal(want) {
+		t.Errorf("ExpiresAt() = %v, %v, want %v", got, err, want)
+	}
+	// The root's end counts when it comes first (a CA restored from elsewhere, say).
+	if got, _ := pki.ExpiresAt(ca.Intermediate().Raw, ca.Root().Raw); !got.Equal(want) {
+		t.Errorf("order of the arguments changed the result: %v", got)
+	}
+	if _, err := pki.ExpiresAt([]byte("no certificate"), ca.Intermediate().Raw); err == nil {
+		t.Error("a broken certificate must be an error")
+	}
+}

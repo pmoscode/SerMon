@@ -15,6 +15,7 @@ The server checks itself every minute ([ADR 0027](../../adr/0027-server-ereignis
 | Rare security events (sign-ins, sudo, accounts, system) dropped by a node's rate limit | warning |
 | Size of the database against `SERMON_DATABASE_SIZE_LIMIT` | warning from 80 %, critical from 90 % |
 | Loki unreachable: the ingest drops logs (metrics, events and alerts go on) | warning |
+| Expiry of the agent CA: when the first trusted CA expires | warning from 90 days before the expiry, critical from 30 days |
 
 - On every change of level – the all-clear too – every superadmin gets a mail over the instance's SMTP. In the UI
   superadmins see open problems as a band below the header. Organizations see nothing of it.
@@ -118,13 +119,19 @@ never become newer than their server (except in the channel `beta`).
 - **The server certificate of the agent API is valid for 7 days** and renewed automatically in memory, for the names in
   `SERMON_AGENT_HOSTNAMES`.
 - **Agent CA:** the root certificate is valid for 10 years, the intermediate CA that issues all certificates for
-  **2 years** from its creation (at `init` or the last CA rollover). The server doesn't renew it by itself and in v1.0
-  doesn't warn before it expires; afterwards agents and server refuse each other. So start a **CA rollover** after
-  22 months at the latest: a new CA issues all certificates from then on, the agents get a trust bundle with both
-  roots, and once no valid certificates of the old one remain (after 30 days at the latest), you retire the old one.
-  The UI has no page for it yet in v1.0; the rollover goes as a superadmin with a fresh confirmation through the web
-  API `sermon.web.v1.AgentCAService` (`GetAgentCAStatus` shows creation and `certificates_in_use` per CA,
-  `StartAgentCARollover`, `RetireAgentCA`).
+  2 years from its creation (at `init` or the last CA rollover). The server doesn't renew it by itself; after the
+  expiry agents and server refuse each other, and every host must be enrolled again. The self-monitoring warns the
+  superadmins from 90 days before the expiry (mail and band in the UI, critical from 30 days). The **CA rollover** on
+  the page **Agent CA** (superadmins, next to "Organizations", [help](../../help/en/pages/agent_ca.md)) shows expiry
+  and state and runs it with a renewed confirmation:
+  1. **Start the rollover:** a new CA issues all certificates from then on; the agents receive a trust bundle with
+     both roots when they connect next and fetch a certificate of the new CA at their next rotation. Existing agents
+     keep connecting, new ones enroll as usual.
+  2. **Retire the previous CA** once it has no valid certificates left (30 days after the start at the latest). Only
+     then does the agent API's server certificate come from the new CA, too.
+
+  So start the rollover 30 days before the expiry at the latest, better at the first warning. Both steps are in the
+  instance audit log (`pki.rollover_started`, `pki.authority_retired`).
 - **Master keys:** never replace, shorten or reorder them. The format knows several keys (newest first); a tested
   procedure to change them with resealing doesn't exist in v1.0.
 - **Release and package keys** and their rotation: [installation](../installation.md) and

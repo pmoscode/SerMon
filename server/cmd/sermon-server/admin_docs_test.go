@@ -235,6 +235,14 @@ func TestAdminDocs_DefaultsMatchTheCode(t *testing.T) {
 			"Warnung ab %d %%, kritisch ab %d %%", "warning from %d %%, critical from %d %%",
 			[]int{percent(selfmonitor.SizeWarningPart), percent(selfmonitor.SizeCriticalPart)},
 		},
+		{
+			"Warnung ab %d Tagen vor dem Ablauf, kritisch ab %d Tagen", "warning from %d days before the expiry, critical from %d days",
+			[]int{days(selfmonitor.CAWarning), days(selfmonitor.CACritical)},
+		},
+		{
+			"die Intermediate-CA, die alle Zertifikate ausstellt, %d Jahre", "the intermediate CA that issues all certificates for %d years",
+			[]int{days(pki.IntermediateLifetime) / 365},
+		},
 		{"wenn innerhalb von %d min welche dazukommen", "if any are added within %d min", []int{minutes(selfmonitor.DroppedWindow)}},
 		{
 			"Logs %d bis %d Tage, Security-Events und Verlauf der Alerts %d bis %d Tage",

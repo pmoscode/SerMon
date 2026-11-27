@@ -213,8 +213,10 @@ key: whoever has it sees the dashboard.
 
 Admins of all groups manage, under **Organization**, members and roles, invitations, node groups, required two-factor
 authentication, SSO groups, log settings, modules, the retention of logs and events, and read the audit log. The
-quotas are set by the operator of the instance, who as superadmin also manages the organizations themselves.
+quotas are set by the operator of the instance, who as superadmin also manages the organizations themselves and,
+under **Agent CA**, rolls the agents' certificate authority over in good time before it expires.
 
 - [Organization](../../help/en/pages/admin.md)
 - [Retention](../../help/en/concepts/retention.md)
 - [Organizations of the instance (superadmin)](../../help/en/pages/organizations.md)
+- [Agent CA and its rollover (superadmin)](../../help/en/pages/agent_ca.md)

@@ -51,3 +51,14 @@ freien Platz auf dem Datenträger.
 - Neuer Check **`dropped_security_events`** (Warnung): Zuwachs der verworfenen *seltenen* Security-Events innerhalb von
   15 min (erfolgreiche Logins, sudo, Konten, System; ADR 0023, Nachtrag M2-37). Verworfene Fehlversuche zählen nicht:
   Bei einem Angriff sind sie erwartet, und der Brute-Force-Alert meldet ihn schon.
+
+## Nachtrag V1-19
+
+- Neuer Check **`agent_ca_expiry`**: Die Zwischen-CA der Agents gilt 2 Jahre (`pki.IntermediateLifetime`), nichts
+  erneuert sie, und nach ihrem Ablauf lehnen Agents und Server einander ab. Geprüft wird die erste vertraute CA, die
+  abläuft (das frühere Ende von Root und Zwischen-CA, aus dem Speicher, den jede Instanz alle 30 s neu lädt) – während
+  eines Rollovers also die vorige, die bis zum Stilllegen das Server-Zertifikat der Agent-API ausstellt. Warnung ab
+  90 Tagen vor dem Ablauf, kritisch ab 30 Tagen (ein Rollover dauert bis zu 30 Tage, so lange gelten Agent-Zertifikate);
+  `value` sind die verbleibenden Tage (0 nach dem Ablauf). Mail wie bei allen Checks nur beim Wechsel der Stufe, mit
+  dem Datum und dem Weg zur neuen Seite **Agent-CA** (Superadmins), die Ablauf und Stand zeigt und den Rollover über
+  den bestehenden `AgentCAService` mit Step-up und Audit startet und abschließt.

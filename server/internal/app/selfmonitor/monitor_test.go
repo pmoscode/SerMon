@@ -210,3 +210,71 @@ func TestMonitor_UnavailableLogsWarn(t *testing.T) {
 		t.Errorf("after the recovery: %v, mails %+v", m.Problems(), mailer.sent)
 	}
 }
+
+type fakeCA struct{ expires time.Time }
+
+func (f *fakeCA) AgentCAExpiry() time.Time { return f.expires }
+
+// V1-19: the agent CA (its intermediate, two years after init) warns superadmins from 90 days
+// before it expires and turns critical 30 days before – exactly at each threshold, one mail per
+// change, and the all-clear once a rollover has retired it.
+func TestMonitor_AgentCAExpiryWarnsFrom90Days(t *testing.T) {
+	now := t0
+	ca := &fakeCA{expires: t0.Add(selfmonitor.CAWarning + time.Second)}
+	mailer := &fakeMail{admins: []string{"alice@example.org"}}
+	m := selfmonitor.New(selfmonitor.Deps{
+		Sources: &fakeSources{}, AgentCA: ca, Admins: mailer, Mailer: mailer, Now: func() time.Time { return now },
+	})
+	ctx := context.Background()
+	m.Check(ctx)
+	if len(m.Problems()) != 0 {
+		t.Fatalf("a second before the threshold: %v", m.Problems())
+	}
+	now = now.Add(time.Second) // exactly 90 days left
+	m.Check(ctx)
+	p := m.Problems()
+	if len(p) != 1 || p[0].Check != selfmonitor.AgentCAExpiry || p[0].Level != selfmonitor.Warning || p[0].Value != 90 {
+		t.Fatalf("at 90 days: %+v", p)
+	}
+	if len(mailer.sent) != 1 || !strings.Contains(mailer.sent[0].subject, "agent CA") ||
+		!strings.Contains(mailer.sent[0].text, "2027-02-20") || !strings.Contains(mailer.sent[0].text, "Agent CA") {
+		t.Fatalf("mail = %+v", mailer.sent)
+	}
+	for range 3 { // the days count down, the level stays: no more mail
+		now = now.Add(24 * time.Hour)
+		m.Check(ctx)
+	}
+	if len(mailer.sent) != 1 || m.Problems()[0].Value != 87 {
+		t.Fatalf("while it stays a warning: %d mails, %+v", len(mailer.sent), m.Problems())
+	}
+	now = ca.expires.Add(-selfmonitor.CACritical - time.Second)
+	m.Check(ctx)
+	if levels(m)[selfmonitor.AgentCAExpiry] != selfmonitor.Warning {
+		t.Fatalf("a second before 30 days: %v", m.Problems())
+	}
+	now = ca.expires.Add(-selfmonitor.CACritical)
+	m.Check(ctx)
+	if levels(m)[selfmonitor.AgentCAExpiry] != selfmonitor.Critical || len(mailer.sent) != 2 {
+		t.Fatalf("at 30 days: %v, %d mails", m.Problems(), len(mailer.sent))
+	}
+	now = ca.expires.Add(time.Hour)
+	m.Check(ctx)
+	if p := m.Problems(); len(p) != 1 || p[0].Level != selfmonitor.Critical || p[0].Value != 0 || len(mailer.sent) != 2 {
+		t.Fatalf("expired: %+v, %d mails", p, len(mailer.sent))
+	}
+	ca.expires = now.Add(2 * 365 * 24 * time.Hour) // the old CA is retired, the new one lasts
+	m.Check(ctx)
+	if len(m.Problems()) != 0 || len(mailer.sent) != 3 || !strings.Contains(mailer.sent[2].subject, "resolved") {
+		t.Errorf("after the rollover: %v, %+v", m.Problems(), mailer.sent)
+	}
+}
+
+// Without the agent CA (no database) or before it is loaded, nothing is checked.
+func TestMonitor_AgentCAExpiryUnknownIsNoProblem(t *testing.T) {
+	now := t0
+	m := selfmonitor.New(selfmonitor.Deps{Sources: &fakeSources{}, AgentCA: &fakeCA{}, Now: func() time.Time { return now }})
+	m.Check(context.Background())
+	if len(m.Problems()) != 0 {
+		t.Errorf("zero expiry: %v", m.Problems())
+	}
+}

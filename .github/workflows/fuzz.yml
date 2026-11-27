@@ -1,15 +1,15 @@
 # Fuzzing of the agent's parsers of untrusted input (KONZEPT §18.5): /proc texts, journal lines,
-# security events, redaction, WAL recovery and multi-line log entries with cargo-fuzz; and the server's LogQL builder
-# and redaction copy (Go fuzzing, M3-08, M3-12). A short run on changes catches broken targets, the nightly run fuzzes five
-# minutes per target; crashes are uploaded as artifacts.
+# security events, redaction, WAL recovery and multi-line log entries with cargo-fuzz; and the server's LogQL builder,
+# redaction copy and the reader of backups (Go fuzzing, M3-08, M3-12, V1-05). A short run on changes catches broken
+# targets, the nightly run fuzzes five minutes per target; crashes are uploaded as artifacts.
 name: fuzz
 
 on:
   pull_request:
-    paths: ["agent/**", "server/internal/domain/logql/**", "server/internal/domain/redact/**", ".github/workflows/fuzz.yml", "justfile"]
+    paths: ["agent/**", "server/internal/domain/logql/**", "server/internal/domain/redact/**", "server/internal/platform/backupfile/**", ".github/workflows/fuzz.yml", "justfile"]
   push:
     branches: [main]
-    paths: ["agent/**", "server/internal/domain/logql/**", "server/internal/domain/redact/**", ".github/workflows/fuzz.yml", "justfile"]
+    paths: ["agent/**", "server/internal/domain/logql/**", "server/internal/domain/redact/**", "server/internal/platform/backupfile/**", ".github/workflows/fuzz.yml", "justfile"]
   schedule:
     - cron: "47 2 * * *" # nightly, 02:47 UTC
   workflow_dispatch:
@@ -63,7 +63,7 @@ jobs:
           if-no-files-found: ignore
 
   fuzz-server:
-    name: fuzz server LogQL builder and redaction
+    name: fuzz server LogQL builder, redaction and backups
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -88,4 +88,5 @@ jobs:
           path: |
             server/internal/domain/logql/testdata/fuzz/
             server/internal/domain/redact/testdata/fuzz/
+            server/internal/platform/backupfile/testdata/fuzz/
           if-no-files-found: ignore

@@ -98,7 +98,8 @@ var (
 	releaseKey = ""
 )
 
-const usage = "usage: sermon-server [--version | init [--master-keys-file PATH] | migrate]"
+const usage = "usage: sermon-server [--version | init [--master-keys-file PATH] | migrate | backup --out PATH|- | backup-keygen |\n" +
+	"  restore --in PATH|- [--install-master-keys PATH]]"
 
 // Exit codes.
 const (
@@ -125,6 +126,12 @@ func run(ctx context.Context, args []string, src config.Source, stdout, stderr i
 		return runInit(ctx, args[1:], src, stdout, stderr)
 	case len(args) == 1 && args[0] == "migrate":
 		return runMigrate(ctx, src, stdout, stderr)
+	case len(args) > 0 && args[0] == "backup":
+		return runBackup(ctx, args[1:], src, stdout, stderr)
+	case len(args) > 0 && args[0] == "backup-keygen":
+		return runBackupKeygen(args[1:], stdout, stderr)
+	case len(args) > 0 && args[0] == "restore":
+		return runRestore(ctx, args[1:], src, stderr)
 	case len(args) > 0:
 		_, _ = fmt.Fprintln(stderr, usage)
 		return exitUsage
@@ -855,10 +862,14 @@ func registerUI(mux *http.ServeMux, ui http.Handler) {
 }
 
 func newLogger(cfg config.Config, w io.Writer) *slog.Logger {
+	return toolLogger(cfg.LogLevel, cfg.LogFormat, w)
+}
+
+func toolLogger(level slog.Level, format config.LogFormat, w io.Writer) *slog.Logger {
 	// Fields marked debug_redact never reach the log, whatever a call passes (M5-33).
-	opts := &slog.HandlerOptions{Level: cfg.LogLevel, ReplaceAttr: logredact.ReplaceAttr}
+	opts := &slog.HandlerOptions{Level: level, ReplaceAttr: logredact.ReplaceAttr}
 	var handler slog.Handler = slog.NewJSONHandler(w, opts)
-	if cfg.LogFormat == config.LogFormatText {
+	if format == config.LogFormatText {
 		handler = slog.NewTextHandler(w, opts)
 	}
 	return slog.New(handler).With("service", "sermon-server")

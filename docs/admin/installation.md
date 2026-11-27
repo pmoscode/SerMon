@@ -22,6 +22,7 @@ Diese Anleitung richtet SerMon auf einem Linux-Server mit Docker ein. Grundlage 
 | `caddy` | TLS mit Zertifikat per ACME, Reverse-Proxy für die Web-UI und das Enrollment | 80, 443 |
 | `server` | `sermon-server`, gebaut aus dem Quellcode; Web-API, Ingest, Alerting | 8443 (Agents, mTLS) |
 | `migrate` | dasselbe Image, läuft vor dem Server einmal durch und migriert die Datenbank | – |
+| `backup`, `restore` | dasselbe Image, nur auf Aufruf (`docker compose run`), siehe [Backup und Restore](backup.md) | – |
 | `postgres` | PostgreSQL 17 mit TimescaleDB | nur im internen Netz |
 | `loki` | Logs der Nodes, getrennt pro Organisation, 14 Tage ([ADR 0031](../adr/0031-logs-in-loki.md)) | nur im internen Netz |
 
@@ -65,7 +66,8 @@ Start ein neues ins Log:
 docker compose logs server | grep setup_token
 ```
 
-Nach der Einrichtung verweigert `init` jede weitere Ausführung.
+Nach der Einrichtung verweigert `init` jede weitere Ausführung. Danach gleich die Sicherung einrichten: Backup-Schlüssel
+und eine Kopie der Master-Keys ([Backup und Restore](backup.md#einmal-einrichten)).
 
 ## Agents anbinden
 
@@ -154,7 +156,7 @@ Veröffentlichte Releases mit Schlüssel und Binaries folgen mit v1.0.
 |---|---|---|
 | Einstellungen | `deploy/compose/.env` | keine Geheimnisse |
 | Datenbank-Passwörter, SMTP-Passwort | `deploy/compose/secrets/` | `secrets.sh` überschreibt nie; ein neues Passwort sperrt den Server aus. `postgres_password` (Superuser) braucht nur der Datenbank-Container |
-| Master-Keys, Agent-CA | Volume `sermon_server-state` | **sichern**: ohne Master-Keys sind alle versiegelten Secrets verloren |
+| Master-Keys | Volume `sermon_server-state` | **getrennt sichern** ([Backup](backup.md)): ohne Master-Keys sind alle versiegelten Secrets verloren |
 | Datenbank | Volume `sermon_postgres-data` | |
 | Logs | Volume `sermon_loki-data` | 14 Tage; Konfiguration in `deploy/compose/loki.yaml` |
 | Zertifikate von Caddy | Volume `sermon_caddy-data` | |
@@ -171,8 +173,8 @@ docker compose up -d
 ```
 
 Die Migrationen spielt der Service `migrate` ein, bevor der Server startet; schlägt das fehl, startet der Server nicht
-(`docker compose logs migrate`). Vor einem Update die Volumes sichern (bei gestoppten Containern); ein
-eigener Befehl `sermon-server backup` mit getestetem Restore folgt mit v1.0.
+(`docker compose logs migrate`). Vor einem Update ein Backup machen ([Backup und Restore](backup.md)):
+`docker compose run --rm -T backup > backups/vor-dem-update.backup`.
 
 ## Self-Monitoring
 

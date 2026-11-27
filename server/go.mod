@@ -14,6 +14,7 @@ require (
 	buf.build/go/protovalidate v1.4.1
 	connectrpc.com/connect v1.21.1
 	connectrpc.com/validate v0.7.0
+	filippo.io/age v1.3.2
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/fxamacker/cbor/v2 v2.9.4
 	github.com/go-jose/go-jose/v4 v4.1.9
@@ -35,6 +36,7 @@ require (
 	cel.dev/expr v0.25.3 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4 // indirect
 	github.com/Microsoft/go-winio v0.6.4 // indirect
 	github.com/air-verse/air v1.67.4 // indirect

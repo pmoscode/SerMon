@@ -109,6 +109,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/ad
 | D29 | Orgs löschen   | **Erst sperren, nach Frist endgültig löschen:** Sperre beendet Logins und Ingest sofort; nach der Frist (Standard 30 Tage) werden Stamm-, Event-, Metrik- und Loki-Daten gelöscht; das Audit-Log ist vorher exportierbar; Details in [ADR 0029](docs/adr/0029-organisationen-verwalten-sperren-loeschen.md) | Schutz vor Fehlbedienung und Missbrauch, Daten bleiben bis zum Löschen nachvollziehbar |
 | D30 | Enrollment     | **Über den öffentlichen HTTPS-Endpunkt**, danach mTLS auf dem Agent-Port | Neue Agents kennen die Agent-CA noch nicht; der mTLS-Port bleibt streng ([ADR 0009](docs/adr/0009-enrollment-ueber-web-endpunkt.md)) |
 | D31 | Nodes löschen  | **Erst deaktivieren, nach Frist löschen:** Deaktivieren widerruft die Zertifikate sofort; nach der Frist (Standard 7 Tage) werden Metrik-, Event-, Alert- und Loki-Daten des Nodes gelöscht, bis dahin abbrechbar; Details in [ADR 0041](docs/adr/0041-nodes-deaktivieren-loeschen.md) | Schutz vor Fehlbedienung, Daten eines aufgegebenen Hosts bleiben nicht |
+| D32 | Backup         | **Logisch per `COPY` im Server-Binary, verschlüsselt mit age:** ein Snapshot als `sermon_backup` (read-only, BYPASSRLS) ohne Metrik-Rohdaten, an öffentliche Backup-Schlüssel des Betreibers, gebunden an die Master-Keys (die nicht im Backup sind); Restore als `sermon_owner` in einer Transaktion in eine leere Datenbank; volle Sicherung mit Metriken per pgBackRest; Details in [ADR 0042](docs/adr/0042-logisches-backup-und-restore.md) | Kein `pg_dump` im distroless-Image und keine Versionsfalle; RLS bleibt für alle anderen Rollen; ein gestohlenes Backup ist ohne den geheimen Schlüssel wertlos |
 
 ---
 
@@ -1496,6 +1497,8 @@ statt `yes`, damit der Dateisystem-Collector auch `/home` sieht. Unter OpenRC wi
   Master-Key kommt aus `SERMON_MASTER_KEYS_FILE` (Docker-Secret); Schlüsselrotation ist mit Key-ID im Ciphertext möglich.
 - Passwörter werden nie gespeichert oder geloggt; Tokens sind nur als Hash abgelegt.
 - Secrets werden in der UI nach dem Speichern **nie wieder angezeigt** (nur „gesetzt ✓ / ändern“).
+- Backups (`sermon-server backup`) sind mit age an die öffentlichen Backup-Schlüssel des Betreibers verschlüsselt und
+  an die Master-Keys gebunden; versiegelte Werte bleiben darin versiegelt, die Master-Keys sind nicht enthalten (§22).
 
 ### 18.6 Ausgehende Verbindungen (SSRF)
 
@@ -1694,6 +1697,8 @@ services:
   server           # aus dem Quellcode gebaut (distroless, nonroot); Agent-Port 8443 direkt veröffentlicht (mTLS im Server)
   postgres         # PostgreSQL 17 + TimescaleDB (Image timescale/timescaledb, pg17), Volume, nur internes Netz
   loki             # Logs: auth_enabled: true, Compactor-Retention 14 Tage, kein Port, nur internes Netz (ADR 0031)
+  migrate          # einmalig: Migrationen als sermon_owner (M2-36)
+  backup, restore  # einmalig, Profile: Backup als sermon_backup, Restore als sermon_owner (ADR 0042)
 networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres, loki; internal: true)
 ```
 
@@ -1712,11 +1717,20 @@ networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres,
   - Das Token ist 30 min gültig, wird nur als Hash gespeichert und funktioniert genau einmal. Mit ihm legt der
     Setup-Assistent den ersten Superadmin samt erster Org an.
   - Danach verweigert `init` jede weitere Ausführung.
-- **Backup:**
-  - `sermon-server backup` sichert Stammdaten, Events, CA und Konfiguration verschlüsselt per `pg_dump`, ohne Metrik-Rohdaten.
+- **Backup** ([ADR 0042](docs/adr/0042-logisches-backup-und-restore.md), Anleitung `docs/admin/backup.md`):
+  - `sermon-server backup` sichert Stammdaten, Events, CA und Konfiguration (alles, was in der Datenbank eingestellt
+    wird) logisch per `COPY` in einem Snapshot, ohne Metrik-Rohdaten, Anomalie-Werte, Sessions und Leases. Es liest
+    als `sermon_backup` (read-only, BYPASSRLS, nur im einmaligen Service `backup`) und verschlüsselt mit **age** an die
+    öffentlichen Backup-Schlüssel des Betreibers (`sermon-server backup-keygen`, post-quanten-hybrid); den geheimen
+    Schlüssel kennt der Server nicht.
+  - Das Backup ist an die Master-Keys gebunden (versiegelte ID im Kopf, versiegeltes SHA-256-Siegel am Ende) und enthält
+    sie nicht: Sie werden getrennt gesichert, ohne sie ist das Backup unbrauchbar.
+  - `sermon-server restore` spielt es als `sermon_owner` in **einer Transaktion** in eine leere Datenbank (Migrationen
+    bis zum Stand des Backups, dann auf den des Binaries); falsche Schlüssel, eine veränderte Datei oder eine Datenbank
+    mit Daten lehnt es ab (Exit-Code 3) und ändert nichts.
   - Eine vollständige Sicherung inklusive Metriken läuft physisch per **pgBackRest**.
   - Für Loki gibt es eine Anleitung zur Volume-Sicherung.
-  - Der Restore wird in CI getestet.
+  - Der Restore wird in CI getestet (V1-07: Backup der Demo, Restore in eine neue Umgebung, nightly).
 - **Upgrade:** `docker compose pull && docker compose up -d`; Migrationen laufen automatisch mit Lock; Rollback-Hinweise
   in den Release-Notes.
 - **Self-Monitoring:** Der Server überwacht sich selbst: Ingest-Lag, verworfene Samples und die Größe der Datenbank

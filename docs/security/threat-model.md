@@ -1,6 +1,6 @@
 # Threat Model v1
 
-- Stand: 2026-11-27 (nach M5-33)
+- Stand: 2026-11-27 (nach M5-33, V1-05)
 - Bezug: KONZEPT.md §18; IMPLEMENTIERUNGSPLAN M0-12, M1-35; Skill `sermon-security-review`
 - Pflege: Bei jeder Änderung an einer Vertrauensgrenze (Protokoll, Rechte, Helper-Operationen, Secrets, ausgehende
   Verbindungen) wird dieses Dokument im selben Commit angepasst. Das Security-Review M1-35 und jedes spätere Review
@@ -24,6 +24,8 @@ Legende Stand: ✓ umgesetzt und getestet · ◐ teilweise · ☐ geplant (Aufga
 | A9 Einmal-Geheimnisse: Setup-Token, Enrollment-Token, Einladungslinks | nur als Hash in PostgreSQL | mittel bis hoch (kurzlebig) |
 | A10 Zugangsdaten für Kanäle und Module | PostgreSQL, versiegelt; Modul-Zugangsdaten zusätzlich im Speicher des Agents (ADR 0039) | hoch (Zugang zu Drittsystemen) |
 | A11 Verfügbarkeit des Servers | Server, Datenbank | mittel (Monitoring fällt aus, Agents puffern 24 h) |
+| A13 Backup-Dateien (`sermon-server backup`, V1-05) | beim Betreiber, auch außerhalb des Servers, oft jahrelang | sehr hoch: enthalten A2, A6, A8–A10 aller Organisationen (Secrets versiegelt, ohne Master-Keys) und A7 ohne Metriken |
+| A14 Geheimer Backup-Schlüssel (age) | beim Betreiber, nicht auf dem Server; nur für einen Restore im Container `restore` | sehr hoch: öffnet jedes Backup (mit A3 alles darin) |
 
 ## 2. Akteure
 
@@ -60,7 +62,11 @@ flowchart LR
     Loki[("Loki")]
     Server -- "TB3: Rolle sermon_app,<br/>RLS, Tenant-Scope" --> PG
     Server -- "TB3: X-Scope-OrgID" --> Loki
+    Backup["backup / restore<br/>(einmalig, V1-05)"]
+    PG -- "TB3: sermon_backup (lesen),<br/>sermon_owner (Restore)" --- Backup
   end
+  Store[("Backup-Ablage<br/>des Betreibers")]
+  Backup -- "TB9: age-verschlüsselt,<br/>an Master-Keys gebunden" --- Store
   Browser["Browser<br/>(Mitglieder, Superadmin)"]
   Channels["Kanäle<br/>(SMTP, Webhooks, Chat)"]
   Release["Release-Pipeline<br/>(Signaturschlüssel)"]
@@ -82,6 +88,7 @@ flowchart LR
 | TB6 | Release ↔ Server ↔ Node (Lieferkette der Agent-Binaries) | Integrität des Codes auf den Nodes |
 | TB7 | Agent ↔ Dienste des Hosts (Module, ab M5) | internes Netz des Hosts, Zugangsdaten der Dienste, Budget des Agents |
 | TB8 | Kiosk-Anzeige ↔ Server (ab M5) | Daten eines geteilten Dashboards ohne Session, Kiosk-Token |
+| TB9 | Backup ↔ Ablage des Betreibers (ab V1-05) | alle Organisationen in einer Datei, Integrität beim Restore |
 
 ## 4. Bedrohungen (STRIDE) nach Grenze
 
@@ -248,6 +255,15 @@ sieht nie mehr als beide (M5-33).
 | # | STRIDE | Bedrohung | Gegenmaßnahme | Aufgabe | Stand |
 |---|---|---|---|---|---|
 | T115 | S/I/E | Ein abgeschriebener oder abgefilmter Kiosk-Token öffnet mehr als das Dashboard: andere RPCs, freie Abfragen, Daten anderer Gruppen oder Orgs, oder er wirkt nach Widerruf, Ablauf oder dem Ausscheiden seines Erstellers weiter | 256 Bit aus `crypto/rand` mit Präfix `smk_`, nur SHA-256 gespeichert, Suche über eine `SECURITY DEFINER`-Funktion (nur nicht widerrufen, nicht abgelaufen, Dashboard geteilt, Org nicht gesperrt), danach Vergleich in konstanter Zeit; im URL-Fragment, gesendet nur als Header `Authorization: Kiosk …`, kein Cookie, keine Session, kein Step-up. Nur der `KioskService` kennt ihn (eigener Interceptor); eine Tabelle ruft jede RPC der Web-API mit dem Token und verlangt dieselbe Antwort wie ohne. Er liefert nur das Dokument und Widgets daraus, die Abfrage baut der Server aus dem gespeicherten Widget (Standard-Zeitraum, Vorgaben der Variablen) über dieselben Leser wie die UI, mit der Schnittmenge der aktuellen Rechte des Erstellers und des Eigentümers des Dashboards (`authz.Intersect`): Ändert der Eigentümer das Dashboard nach dem Anlegen, lösen Ziele ohne festen Wert (Alert-Liste ohne Ziel, Variablen ohne Vorgabe) nur in seinem Bereich auf, und der Viewer-Logs-Schalter gilt; verlässt der Eigentümer die Org, liest die Anzeige nichts. Der Ersteller muss Admin aller Gruppen bleiben: verliert er die Rolle (auch mit der Mitgliedschaft oder über OIDC), widerruft die Datenbank seine Tokens in derselben Transaktion, sie leben nicht wieder auf. Anlegen nur `manage_kiosk_tokens` mit Step-up und Audit (ohne Geheimnis), Ablauf 1 bis 365 Tage, höchstens 10 offene je Dashboard; Widerruf, Löschen oder Nicht-mehr-Teilen beenden ihn. Rate-Limits 600/min je Adresse und 240/min je Token; je Token höchstens 4 Widgets gleichzeitig (weitere warten), Log-Widgets zählen gegen die Grenzen der Log-Abfragen der UI (Nutzer und Org) und lesen höchstens den letzten Tag (ADR 0040, Nachtrag M5-33); die Übersicht der Flotte liest eine Anzeige je Token höchstens alle 10 s, und nur, solange die Rechte, mit denen sie gelesen wurde, gleich sind – die Rechte werden bei jedem Aufruf neu geladen, eine Änderung wirkt sofort (V1-13). Rest: Wer den Bildschirm sieht, sieht die Daten – so gewollt | M5-26, M5-33, V1-13 | ✓ |
+
+### TB9 – Backup ↔ Ablage des Betreibers (ab V1-05)
+
+| # | STRIDE | Bedrohung | Gegenmaßnahme | Aufgabe | Stand |
+|---|---|---|---|---|---|
+| T116 | I | Eine gestohlene Backup-Datei (Ablage, Cloud-Speicher, alter Datenträger) verrät Konten und Mandantendaten aller Organisationen | age an öffentliche Backup-Schlüssel (post-quanten-hybrid ab `backup-keygen`); der geheime Schlüssel ist nicht auf dem Server, nur für einen Restore im Container `restore` (`check-compose --hardened` verlangt ihn in einmaligen Containern); Zugangsdaten, TOTP-Seeds und CA-Schlüssel bleiben darin mit `secrets.Box` versiegelt, die Master-Keys sind nicht enthalten; Passwörter nur als Argon2id, Tokens als Hash; ohne Sessions. Tests suchen Klartext in der Datei und im entschlüsselten Inhalt (ADR 0042) | V1-05 | ✓ |
+| T117 | T/S | Jemand mit dem (öffentlichen) Backup-Schlüssel oder Zugriff auf die Ablage baut oder verändert ein Backup (eigener Superadmin, eigene Agent-CA) und lässt es einspielen | Kopf mit versiegelter ID und Siegel über den SHA-256 aller Datensätze, beides mit den Master-Keys: fremde Master-Keys brechen vor der Datenbank ab, ein falsches Siegel rollt die eine Transaktion des Restores zurück; age authentifiziert jeden Block und erkennt Abschneiden; Datensätze höchstens 1 MiB, Namen gegen das Schema geprüft, Leser gefuzzt; Restore nur in eine Datenbank ohne User und Organisationen, Exit-Code 3 und nichts geändert | V1-05 | ✓ |
+| T118 | E/I | Die Rolle `sermon_backup` liest alle Organisationen (BYPASSRLS) – im falschen Container oder für die falsche Aufgabe | Nur `LOGIN BYPASSRLS` mit `pg_read_all_data`, kein Schreibrecht; eigenes Passwort, die URL nur im einmaligen Service `backup` (`check-compose --hardened`); der Server verweigert ohnehin Rollen mit BYPASSRLS (`postgres.Open`); im Snapshot `row_security = off`: eine Rolle, für die RLS gilt, bekommt einen Fehler statt eines stillen Teil-Backups (Test) | V1-05 | ✓ |
+| T119 | E/T | Der Restore hebt `FORCE ROW LEVEL SECURITY` und die Trigger (Hash-Kette des Audit-Logs) auf; bleibt das, ist die zweite Linie der Mandantentrennung weg | Nur als `sermon_owner` in einer Transaktion mit Sperren aller Tabellen; Trigger und `FORCE` vor dem Commit wieder gesetzt, ein Fehler rollt alles zurück; Tests prüfen danach `FORCE` auf jeder Tabelle, aktive Trigger und die unveränderte Hash-Kette | V1-05 | ✓ |
 
 ## 5. Restrisiken und bewusste Entscheidungen
 

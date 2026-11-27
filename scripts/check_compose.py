@@ -80,12 +80,18 @@ def secret_names(svc: dict) -> set[str]:
 
 
 def misplaced_credentials(svc: dict) -> list[str]:
-    """Database credentials beyond what a container needs (M2-36, T73): the schema owner only in a
-    one-shot container, the superuser only in the database."""
+    """Database credentials beyond what a container needs (M2-36, T73): the schema owner, sermon_backup
+    and the secret backup key only in one-shot containers, the superuser only in the database."""
     problems = []
     secrets = secret_names(svc)
-    if "database_migrate_url" in secrets and (str(svc.get("restart", "no")) != "no" or svc.get("ports")):
+    long_running = str(svc.get("restart", "no")) != "no" or svc.get("ports")
+    if "database_migrate_url" in secrets and long_running:
         problems.append("keeps the schema owner's URL in a long-running container (one-shot migrate service only)")
+    # V1-05: the role that reads every organization and the key that opens every backup.
+    if "database_backup_url" in secrets and long_running:
+        problems.append("keeps the URL of sermon_backup in a long-running container (one-shot backup service only)")
+    if "backup_identity" in secrets and long_running:
+        problems.append("keeps the secret backup key in a long-running container (one-shot restore service only)")
     if "postgres_password" in secrets and not svc.get("image", "").startswith(("timescale/timescaledb", "postgres")):
         problems.append("gets the database superuser's password (database container only)")
     return problems

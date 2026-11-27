@@ -1,0 +1,13 @@
+# The URL of sermon_backup in a long-running container (V1-05): a compromised server could read
+# every organization at once.
+services:
+  app:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    secrets: [database_url, database_backup_url]
+secrets:
+  database_backup_url: { file: ./dummy }
+  database_url: { file: ./dummy }

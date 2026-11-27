@@ -49,6 +49,9 @@ expect fail "host network with --hardened" --hardened "$data/hardened-host-netwo
 expect pass "owner URL in a one-shot container, superuser in the database" --hardened "$data/hardened-owner-good.yaml"
 expect fail "owner URL in a long-running container" --hardened "$data/hardened-owner-in-server.yaml"
 expect fail "superuser password outside the database" --hardened "$data/hardened-superuser-in-app.yaml"
+expect fail "backup role in a long-running container" --hardened "$data/hardened-backup-in-server.yaml"
+expect fail "secret backup key in a long-running container" --hardened "$data/hardened-identity-in-server.yaml"
+expect fail "writable root file system behind a profile" --hardened "$data/hardened-profile-writable.yaml"
 # More ways out of a container (M2-39).
 expect fail "SYS_ADMIN added back with --hardened" --hardened "$data/hardened-cap-sys-admin.yaml"
 expect fail "host PID namespace with --hardened" --hardened "$data/hardened-pid-host.yaml"

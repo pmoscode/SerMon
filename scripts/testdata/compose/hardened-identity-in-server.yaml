@@ -1,0 +1,13 @@
+# The secret backup key in a long-running container (V1-05): a compromised server could open
+# every backup.
+services:
+  app:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    secrets: [database_url, backup_identity]
+secrets:
+  backup_identity: { file: ./dummy }
+  database_url: { file: ./dummy }

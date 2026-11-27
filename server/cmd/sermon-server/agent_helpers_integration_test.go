@@ -21,6 +21,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 
+	"github.com/pmoscode/SerMon/server/internal/config"
 	agentv1 "github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1"
 	"github.com/pmoscode/SerMon/server/internal/gen/sermon/agent/v1/agentv1connect"
 )
@@ -42,7 +43,12 @@ func startTestServer(t *testing.T, extra map[string]string) runningServer {
 	for k, v := range extra {
 		env[k] = v
 	}
-	src := dbSource(t, keysFile, env)
+	return startServerWith(t, dbSource(t, keysFile, env))
+}
+
+// startServerWith starts the server with src; its listeners on the addresses src names.
+func startServerWith(t *testing.T, src config.Source) runningServer {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	logs := &syncBuffer{}
 	done := make(chan int, 1)

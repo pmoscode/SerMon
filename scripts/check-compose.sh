@@ -7,7 +7,8 @@
 #   - with --hardened (production, M2-26): every container is read-only, drops all capabilities,
 #     forbids new privileges, is not privileged and sees neither the Docker socket nor the host
 #     network
-# Several files are merged like `docker compose -f a -f b`; the result is checked.
+# Several files are merged like `docker compose -f a -f b`; the result is checked, the services of
+# every profile included (the one-shot backup and restore, V1-05).
 # Usage: check-compose.sh [--loopback-only] [--hardened] <compose-file>...
 set -eu
 
@@ -25,6 +26,6 @@ done
 files=
 for file in "$@"; do files="$files -f $file"; done
 # shellcheck disable=SC2086 # one -f per file; the paths of the repository hold no spaces
-config=$(docker compose $files config --format json)
+config=$(docker compose --profile '*' $files config --format json)
 
 printf '%s' "$config" | python3 -I "$(dirname "$0")/check_compose.py" "$loopback_only" "$hardened" "$1"

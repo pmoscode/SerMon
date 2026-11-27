@@ -6268,7 +6268,35 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - **Tests zuerst:** `just lint-compose` verlangt Digest und Signaturprüfung; Demo gegen das Probe-Release.
 - **Abhängig von:** V1-03
 
-#### ☐ V1-05 – `sermon-server backup` und Restore · S · M 🔒
+#### ☑ V1-05 – `sermon-server backup` und Restore · S · M 🔒
+> Erledigt ([ADR 0042](adr/0042-logisches-backup-und-restore.md), Anleitung `docs/admin/backup.md`):
+> - **Logisch per `COPY` statt `pg_dump`** (`adapters/postgres/backup.go`): ein Snapshot (`REPEATABLE READ READ ONLY`)
+>   als neue Rolle `sermon_backup` (`BYPASSRLS`, `pg_read_all_data`, sonst nichts; `initdb/010-roles.sh`, für ältere
+>   Volumes ein Einmal-Schritt); `row_security = off` macht aus einer Rolle mit RLS einen Fehler statt eines stillen
+>   Teil-Backups. Alle Tabellen von `public` außer `metrics_raw` (mit den Continuous Aggregates: pgBackRest),
+>   `anomaly_points`, `sessions`, `oidc_flows`, `webauthn_ceremonies`, den drei Lease-Tabellen und `goose_db_version`;
+>   neue Tabellen sind automatisch drin. Reihenfolge nach Fremdschlüsseln, Partitionen über die Wurzel, Sequenzen mit
+>   Stand, feste Einstellungen für den `COPY`-Text. „Konfiguration“ ist alles, was in der Datenbank eingestellt wird.
+> - **Format** (`platform/backupfile`): age (`filippo.io/age` 1.3.2, post-quanten-hybride Schlüssel von
+>   `sermon-server backup-keygen`) → gzip → Datensätze ≤ 1 MiB; gebunden an die Master-Keys über eine versiegelte ID
+>   im Kopf und ein versiegeltes SHA-256-Siegel am Ende. Die Master-Keys sind nicht im Backup. Leser gefuzzt
+>   (`FuzzReader` in `just fuzz-server`).
+> - **Restore** (`app/backup`, `RestoreTarget`): Schlüssel vor der Datenbank geprüft; nur ohne User und Organisationen;
+>   migriert genau auf den Stand des Backups, lädt als `sermon_owner` in einer Transaktion (`FORCE` und Trigger
+>   aufgehoben, Hash-Kette bleibt, Zeilenzahl je Tabelle geprüft, beides vor dem Commit zurück), Commit erst nach dem
+>   Siegel, dann Migrationen der neueren Version; `instance.restored` im instanzweiten Audit-Log.
+>   `--install-master-keys` legt die gesicherten Keys ins Volume, eine andere vorhandene Datei wird abgelehnt.
+>   Exit-Code 3 heißt abgelehnt, nichts geändert.
+> - **Compose:** einmalige Services `backup` (stdout, `sermon_backup`, Master-Keys nur lesend) und `restore` (stdin,
+>   `sermon_owner`, geheimer Backup-Schlüssel nur dort) mit Profilen, read-only; `check-compose --hardened` prüft jetzt
+>   die Profile mit und verlangt die URL von `sermon_backup` und den geheimen Schlüssel nur in einmaligen Containern.
+> - **Grenzen:** keine Metriken, Anomalie-Werte und Logs (pgBackRest bzw. Loki-Volume, beschrieben); keine
+>   Größengrenze; der Restore sperrt alle Tabellen bis zum Commit.
+> - **Tests:** Integrationstest mit echtem Server (Passwort+TOTP, Passkey, Agent mit mTLS und Modul-Zugangsdaten,
+>   Kiosk-Token, Dashboard, Events, Regel; kein Klartext in Datei und Inhalt; falscher Schlüssel, fremde Master-Keys,
+>   veränderte Datei, andere Datei, zweiter Restore abgelehnt), Adapter-Test zwischen zwei Datenbanken (alle
+>   Organisationen, gleiche Zeilen, Hash-Kette, Sequenzen, `FORCE` überall), Unit-Tests von Format, Use-Cases,
+>   Konfiguration und CLI. Threat Model A13, A14, TB9, T116–T119. Gegenproben 20/20.
 - **Ziel:** KONZEPT §22: `sermon-server backup` sichert Stammdaten, Events, CA und Konfiguration verschlüsselt per
   `pg_dump` (ohne Metrik-Rohdaten), `restore` spielt es in eine leere Datenbank; Master-Keys getrennt gesichert,
   Hinweise zu pgBackRest (vollständig, mit Metriken) und zum Loki-Volume.

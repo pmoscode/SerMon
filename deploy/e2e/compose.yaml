@@ -181,8 +181,14 @@ secrets: # written by scripts/e2e-demo.sh into .build/, never committed
   postgres_password: { file: ../e2e/.build/secrets/postgres_password }
   postgres_owner_password: { file: ../e2e/.build/secrets/postgres_owner_password }
   postgres_app_password: { file: ../e2e/.build/secrets/postgres_app_password }
+  postgres_backup_password: { file: ../e2e/.build/secrets/postgres_backup_password }
   database_url: { file: ../e2e/.build/secrets/database_url }
   database_migrate_url: { file: ../e2e/.build/secrets/database_migrate_url }
+  # Backup and restore (V1-07, scripts/e2e-restore.sh): the keys of the run.
+  database_backup_url: { file: ../e2e/.build/secrets/database_backup_url }
+  backup_recipients: { file: ../e2e/.build/secrets/backup_recipients }
+  master_keys: { file: ../e2e/.build/secrets/master_keys }
+  backup_identity: { file: ../e2e/.build/secrets/backup_identity }
   smtp_password: { file: ../e2e/.build/secrets/smtp_password }
   oidc_client_secret: { file: ../e2e/.build/secrets/oidc_client_secret }
   mailpit_ca: { file: ../e2e/.build/mailpit/mailpit.crt }

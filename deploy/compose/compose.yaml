@@ -6,9 +6,13 @@
 #   docker compose run --rm migrate init --master-keys-file /var/lib/sermon/master_keys
 #   docker compose up -d
 #
+# Backup and restore (V1-05, docs/admin/backup.md): the one-shot services "backup" and "restore"
+# (profiles, never started by "up").
+#
 # Database roles (ADR 0007, M2-36): the superuser "postgres" stays in the database container; the
 # one-shot service "migrate" applies the migrations as "sermon_owner" (no superuser) before the
-# server starts; the server itself connects as "sermon_app" only.
+# server starts; the server itself connects as "sermon_app" only. The one-shot "backup" reads as
+# "sermon_backup" (read-only, BYPASSRLS), "restore" writes as "sermon_owner".
 #
 # Public: Caddy on 80/443 (web UI, ACME) and the server's mTLS agent port (8443), published directly
 # so the server sees the agents' addresses (ADR 0028). The database and Loki are on an internal
@@ -87,10 +91,10 @@ services:
       POSTGRES_DB: sermon
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       TIMESCALEDB_TELEMETRY: "off"
-    secrets: [postgres_password, postgres_owner_password, postgres_app_password]
+    secrets: [postgres_password, postgres_owner_password, postgres_app_password, postgres_backup_password]
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # The roles of ADR 0007 (sermon_owner, sermon_definer, sermon_app); mounted on its own so
+      # The roles of ADR 0007 (sermon_owner, sermon_definer, sermon_app, sermon_backup); mounted on its own so
       # the image's TimescaleDB init scripts stay in place.
       - ./initdb/010-roles.sh:/docker-entrypoint-initdb.d/010-roles.sh:ro
     tmpfs: [/var/run/postgresql, /tmp]
@@ -142,6 +146,52 @@ services:
       # Distroless, without a health check of its own: the server's /readyz reports it.
       loki: { condition: service_started }
 
+  # The backup (V1-05, ADR 0042) of master data, events, the agent CA and the configuration in the
+  # database, without raw metrics, encrypted to the public backup keys in secrets/backup_recipients,
+  # to stdout:
+  #   docker compose run --rm -T backup > backups/sermon-$(date -u +%Y%m%dT%H%MZ).backup
+  # It reads as sermon_backup in one snapshot; the master keys bind the file to this instance and
+  # are not in it – keep a copy of them apart from the backups.
+  backup:
+    <<: *hardened
+    build: *server-build
+    image: sermon-server:${SERMON_VERSION:-source}
+    command: ["backup", "--out", "-"]
+    restart: "no"
+    profiles: [backup]
+    environment:
+      SERMON_DATABASE_BACKUP_URL_FILE: /run/secrets/database_backup_url
+      SERMON_MASTER_KEYS_FILE: /var/lib/sermon/master_keys
+      SERMON_BACKUP_RECIPIENTS_FILE: /run/secrets/backup_recipients
+      SERMON_LOG_FORMAT: json
+    secrets: [database_backup_url, backup_recipients]
+    volumes: [server-state:/var/lib/sermon:ro]
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # The restore (V1-05) into a new database while the server is stopped, from stdin:
+  #   docker compose run --rm -T restore < backups/….backup
+  # As the schema owner. secrets/master_keys (the saved master keys) are installed into the
+  # server's volume, secrets/backup_identity is the secret backup key: both only for the restore.
+  restore:
+    <<: *hardened
+    build: *server-build
+    image: sermon-server:${SERMON_VERSION:-source}
+    command: ["restore", "--in", "-", "--install-master-keys", "/var/lib/sermon/master_keys"]
+    restart: "no"
+    profiles: [restore]
+    environment:
+      SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
+      SERMON_MASTER_KEYS_FILE: /run/secrets/master_keys
+      SERMON_BACKUP_IDENTITY_FILE: /run/secrets/backup_identity
+      SERMON_LOG_FORMAT: json
+    secrets: [database_migrate_url, master_keys, backup_identity]
+    volumes: [server-state:/var/lib/sermon]
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+
   # Logs (ADR 0031): multi-tenant without a login of its own, so on the internal network only and
   # without a published port; runs as UID 10001 from the image.
   loki:
@@ -192,8 +242,15 @@ secrets:
   postgres_password: { file: ./secrets/postgres_password }
   postgres_owner_password: { file: ./secrets/postgres_owner_password }
   postgres_app_password: { file: ./secrets/postgres_app_password }
+  postgres_backup_password: { file: ./secrets/postgres_backup_password }
   database_url: { file: ./secrets/database_url }
   database_migrate_url: { file: ./secrets/database_migrate_url }
+  # The backup (V1-05): the URL of sermon_backup and the public backup keys (backup-keygen); the
+  # saved master keys and the secret backup key only for a restore.
+  database_backup_url: { file: ./secrets/database_backup_url }
+  backup_recipients: { file: ./secrets/backup_recipients }
+  master_keys: { file: ./secrets/master_keys }
+  backup_identity: { file: ./secrets/backup_identity }
   smtp_password: { file: ./secrets/smtp_password }
   oidc_client_secret: { file: ./secrets/oidc_client_secret }
 

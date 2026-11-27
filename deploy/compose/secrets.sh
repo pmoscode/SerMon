@@ -1,6 +1,7 @@
 #!/bin/sh
-# Creates the secrets of the production compose in ./secrets (M2-26, M2-36): random database
-# passwords (superuser, schema owner, sermon_app) and the two database URLs built from them.
+# Creates the secrets of the production compose in ./secrets (M2-26, M2-36, V1-05): random database
+# passwords (superuser, schema owner, sermon_app, sermon_backup) and the database URLs built from
+# them.
 # Existing files are never overwritten – a new password would lock the server out of its
 # database. smtp_password and oidc_client_secret are created empty; put the password of
 # SERMON_SMTP_USERNAME and the client secret of SERMON_OIDC_CLIENT_ID there.
@@ -29,8 +30,13 @@ random() { openssl rand -hex 24 | tr -d '\n'; }
 create postgres_password "$(random)"
 create postgres_owner_password "$(random)"
 create postgres_app_password "$(random)"
+# sermon_backup: reads everything for "sermon-server backup" (V1-05), nothing else.
+create postgres_backup_password "$(random)"
 create database_url "postgres://sermon_app:$(cat "$dir/postgres_app_password")@postgres:5432/sermon?sslmode=disable"
 create database_migrate_url "postgres://sermon_owner:$(cat "$dir/postgres_owner_password")@postgres:5432/sermon?sslmode=disable"
+create database_backup_url "postgres://sermon_backup:$(cat "$dir/postgres_backup_password")@postgres:5432/sermon?sslmode=disable"
+# The public backup keys, one per line (sermon-server backup-keygen); empty until they are set.
+create backup_recipients ""
 create smtp_password ""
 # oidc_client_secret: empty without OIDC; the client secret of SERMON_OIDC_CLIENT_ID otherwise (M3-20).
 create oidc_client_secret ""

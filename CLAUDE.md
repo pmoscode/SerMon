@@ -86,8 +86,15 @@ Pakete und Secrets des letzten Laufs). Einzelne Projekte gegen eine laufende Umg
 `pnpm exec playwright test --config playwright.demo.config.ts --project <name> --no-deps`.
 Produktion: `deploy/compose/` (ADR 0028, Anleitung `docs/admin/installation.md`); jeder Container `read_only`, ohne
 Capabilities und neue Privilegien, Agent-Port direkt am Server, die Owner-URL der Datenbank nur im einmaligen Service
-`migrate`; `just lint-compose` prüft das (`check-compose.sh --hardened`). Erstinstallation mit
+`migrate`; `just lint-compose` prüft das (`check-compose.sh --hardened`, auch die Services der Profile). Erstinstallation mit
 `docker compose run --rm migrate init …`.
+Backup und Restore (V1-05, ADR 0042, Anleitung `docs/admin/backup.md`): `sermon-server backup --out DATEI|-` liest als
+`sermon_backup` (read-only, BYPASSRLS, angelegt von `initdb/010-roles.sh`) einen Snapshot aller Tabellen außer
+`postgres.BackupExclusions` (Metriken, Anomalie-Werte, Sessions, Leases; neue Tabellen sind automatisch drin) und
+verschlüsselt mit age (`platform/backupfile`, gebunden an die Master-Keys, die nicht drin sind);
+`sermon-server restore --in DATEI|- [--install-master-keys PFAD]` lädt als `sermon_owner` in einer Transaktion in eine
+leere Datenbank; `sermon-server backup-keygen` erzeugt den Schlüssel. Exit-Code 3 = abgelehnt, nichts geändert. In
+`deploy/compose` die einmaligen Services `backup` und `restore` (Profile, `docker compose run --rm -T backup > datei`).
 `just simulate [nodes] [--seed S] [--scenario …]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`,
 M1-34); der erste Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten
 wiederverwendet. Szenarien (M2-30, `simulate/scenario.rs`) für Tests der Alerts von Hand: `cpu-high`, `disk-filling`,
@@ -123,6 +130,10 @@ Wichtige Variablen:
   über `SERMON_RELEASE_KEY` bzw. `packaging/release.pub` einkompiliert)
 - `SERMON_REPO_DIR` (signierte Paket-Repos aus `scripts/build-repos.sh` für `/repo` und `install.sh --repo`,
   ADR 0036)
+- Nur für `backup`/`restore` (ADR 0042; der Server liest sie nie): `SERMON_DATABASE_BACKUP_URL` (Rolle
+  `sermon_backup`), `SERMON_BACKUP_RECIPIENTS` (öffentliche age-Schlüssel, eine Zeile je Schlüssel),
+  `SERMON_BACKUP_IDENTITY` (geheimer age-Schlüssel, nur beim Restore); dazu `SERMON_MASTER_KEYS_FILE` und beim Restore
+  `SERMON_DATABASE_MIGRATE_URL`
 
 Erstinstallation: `sermon-server init` (Schlüssel, Migrationen, Agent-CA, Setup-Token). Solange die Einrichtung offen
 ist, steht ein Setup-Token im Server-Log (`just dev`: Ausgabe von `sermon-server`); damit legt `SetupService` den

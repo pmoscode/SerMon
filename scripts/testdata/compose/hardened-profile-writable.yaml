@@ -1,0 +1,8 @@
+# A one-shot service behind a profile (V1-05) is checked like every other.
+services:
+  backup:
+    image: example/app:1.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    profiles: [backup]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"

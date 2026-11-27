@@ -268,11 +268,12 @@ fuzz-agent seconds="60":
     {{ fuzz_profile }} cargo fuzz run db_logins -- -max_total_time={{ seconds }} -max_len=65536
     {{ fuzz_profile }} cargo fuzz run module_clients -- -max_total_time={{ seconds }} -max_len=65536
 
-# Fuzz the server's LogQL builder (no input may break the structure of a query, M3-08) and its copy of the redaction (M3-12) (Go fuzzing)
+# Fuzz the server's LogQL builder (no input may break the structure of a query, M3-08), its copy of the redaction (M3-12) and the reader of backups (V1-05) (Go fuzzing)
 [working-directory: 'server']
 fuzz-server seconds="60":
     go test ./internal/domain/logql/ -run '^$' -fuzz FuzzLines -fuzztime {{ seconds }}s
     go test ./internal/domain/redact/ -run '^$' -fuzz FuzzRedact -fuzztime {{ seconds }}s
+    go test ./internal/platform/backupfile/ -run '^$' -fuzz FuzzReader -fuzztime {{ seconds }}s
 
 # Test the agent packages (.deb, .rpm, .apk) in containers: signature, install, upgrade, removal (M2-21)
 test-packages:

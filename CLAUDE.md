@@ -101,7 +101,7 @@ leere Datenbank; `sermon-server backup-keygen` erzeugt den Schlüssel. Exit-Code
 `just e2e-restore` (V1-07, nightly mit `FULL=1`): nach der Demo Backup, neue Umgebung (Datenbank, Server-State, Loki),
 Restore und die Prüfungen gegen die echte Compose (`SKIP_DEMO=1` gegen eine mit `KEEP=1` laufende Demo).
 `just load-test [dauer] [nodes]` (V1-08, Anleitung `docs/admin/{de,en}/load-test.md`): baut wie die Demo (`e2e-demo.sh` mit
-`PREPARE_ONLY=1`) und den Agent mit dem Simulator, startet die Produktions-Compose mit E2E-Overlay und
+`PREPARE_ONLY=1`) und den Agent mit dem Simulator, startet die Produktions-Compose mit `source.yaml`, E2E-Overlay und
 `deploy/load/compose.yaml` als Projekt `sermon-load` (eigene Ports 19443/19025/19464 und Netz 172.30.79.0/24, eine Demo
 kann daneben laufen), richtet Admin, Gruppe `load` mit dem Modul `simulate` und ein Enrollment-Token ein, startet die
 virtuellen Nodes in einem Container (Szenarien, `--log-rate` synthetische Journal-Zeilen) und misst mit

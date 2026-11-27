@@ -97,7 +97,8 @@ uses, default 1. The server stores only the hash; a token can be revoked.
 never become newer than their server (except in the channel `beta`).
 
 - **Channels:** `stable` is the server's version – the signed binaries directly in `SERMON_AGENT_DOWNLOADS_DIR`
-  (compose: `deploy/compose/downloads/`); `beta` are the same file names in `downloads/beta/`. The server reads them at
+  (compose: in the release's image, `/srv/downloads`); `beta` are the same file names in `/srv/downloads/beta/`
+  (mounted with `compose.override.yaml`, [installation](../installation.md#kanal-beta)). The server reads them at
   startup and every 5 minutes and checks their signatures ([ADR 0036](../../adr/0036-self-update-und-paket-repos.md)).
 - **Installed by `install.sh`:** operators start "update agent" on the node page, or the group's update policy does it
   in its window (`agentUpdate`). The helper checks the signature, replaces the binary and puts the old one back if the

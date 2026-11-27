@@ -43,7 +43,7 @@ KEEP=1 …                             # leave the environment running afterward
 ```
 
 The script builds what the demo builds, and the agent with the simulator, and starts the production compose with the
-E2E overlay and `deploy/load/compose.yaml` as its own project `sermon-load` (its own ports and network; a demo can run
+server built from source (`source.yaml`), the E2E overlay and `deploy/load/compose.yaml` as its own project `sermon-load` (its own ports and network; a demo can run
 next to it). It creates an admin, a group `load` with the module `simulate` and an enrollment token with enough uses,
 and starts the virtual nodes in one container with the scenarios `cpu-high`, `ssh-bruteforce` and `flapping` and 2
 synthetic journal lines per second and node (`SCENARIOS`, `LOG_RATE`). A virtual node sends about as many series as a

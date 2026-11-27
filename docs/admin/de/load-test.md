@@ -43,7 +43,7 @@ KEEP=1 …                             # Umgebung danach weiterlaufen lassen (ht
 ```
 
 Das Skript baut, was die Demo baut, dazu den Agent mit dem Simulator, und startet die Produktions-Compose mit dem
-E2E-Overlay und `deploy/load/compose.yaml` als eigenes Projekt `sermon-load` (eigene Ports und eigenes Netz; eine
+Server aus dem Quellcode (`source.yaml`), dem E2E-Overlay und `deploy/load/compose.yaml` als eigenes Projekt `sermon-load` (eigene Ports und eigenes Netz; eine
 Demo kann daneben laufen). Es legt einen Admin, eine Gruppe `load` mit dem Modul `simulate` und ein
 Enrollment-Token mit genug Nutzungen an und startet die virtuellen Nodes in einem Container mit den Szenarien
 `cpu-high`, `ssh-bruteforce` und `flapping` und 2 synthetischen Journal-Zeilen pro Sekunde und Node

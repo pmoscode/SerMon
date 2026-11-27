@@ -48,8 +48,8 @@ Related: [hardening](hardening.md) (which values affect security), [operations](
 |---|---|---|---|
 | `SERMON_AGENT_ADDR` | – | `:8443` | Address of the mTLS agent API. Empty: off. Needs `SERMON_DATABASE_URL` (the agent CA lives in the database). |
 | `SERMON_AGENT_HOSTNAMES` | – | `<SERMON_DOMAIN>` | DNS names or IPs agents reach the agent API under (commas); they are in the server certificate. Required with `SERMON_AGENT_ADDR`. A name in the agents' `agent_url` that is missing here fails at TLS. |
-| `SERMON_AGENT_DOWNLOADS_DIR` | – | `/srv/downloads` (`./downloads`) | Signed binaries of agent and helper for `install.sh` and self-updates (channel `stable` directly in it, `beta` in `beta/`). |
-| `SERMON_REPO_DIR` | – | `/srv/repo` (`./repo`) | Signed package repositories for `install.sh --repo` under `/repo/`. |
+| `SERMON_AGENT_DOWNLOADS_DIR` | – (image: `/srv/downloads`) | `/srv/downloads` | Signed binaries of agent and helper for `install.sh` and self-updates (channel `stable` directly in it, `beta` in `beta/`). The image of a release brings those of its version; with `source.yaml` it is `./downloads`. |
+| `SERMON_REPO_DIR` | – (image: `/srv/repo`) | `/srv/repo` | Signed package repositories for `install.sh --repo` under `/repo/`. In the image of a release those of its version; with `source.yaml` `./repo`. |
 
 ## Logs
 
@@ -113,8 +113,11 @@ restore, `SERMON_DATABASE_MIGRATE_URL` come on top.
 ## Values outside the server
 
 - **At build time:** `SERMON_RELEASE_KEY` (public release key that `install.sh` checks) and `SERMON_VERSION` are
-  compiled into the binary; they are no runtime variables.
-- **The compose's `.env`:** `SERMON_DOMAIN`, `SERMON_ACME_EMAIL`, `SERMON_AGENT_PORT`, `SERMON_PROXY_IP`,
+  compiled into the binary; they are no runtime variables. The image of a release has them built in; only a build from
+  source (`source.yaml`) needs them in `.env`.
+- **The compose's `.env`:** `SERMON_IMAGE_DIGEST` (digest of the server image, set by `./use-release.sh VERSION` after
+  checking its signature, [ADR 0043](../../adr/0043-release-prozess.md); without it the compose doesn't start),
+  `SERMON_DOMAIN`, `SERMON_ACME_EMAIL`, `SERMON_AGENT_PORT`, `SERMON_PROXY_IP`,
   `SERMON_EDGE_SUBNET`, `SERMON_EDGE_IP_RANGE`, `SERMON_LOKI_MEMORY`, `SERMON_LOKI_GOMEMLIMIT` steer the compose, not the
   server ([installation](../installation.md), `deploy/compose/env.example`).
 - **On the hosts:** `SERMON_ENROLLMENT_TOKEN` carries the enrollment token to `install.sh` and `sermon-agent enroll`.

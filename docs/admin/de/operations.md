@@ -99,7 +99,8 @@ Stunde, 1 bis 1000 Nutzungen, ab Werk 1. Der Server speichert nur den Hash; ein 
 Agents. Agents werden nie neuer als ihr Server (außer im Kanal `beta`).
 
 - **Kanäle:** `stable` ist die Version des Servers – die signierten Binaries direkt in `SERMON_AGENT_DOWNLOADS_DIR`
-  (Compose: `deploy/compose/downloads/`); `beta` sind dieselben Dateinamen in `downloads/beta/`. Der Server liest sie beim
+  (Compose: im Image des Releases, `/srv/downloads`); `beta` sind dieselben Dateinamen in `/srv/downloads/beta/`
+  (eingehängt per `compose.override.yaml`, [Installation](../installation.md#kanal-beta)). Der Server liest sie beim
   Start und alle 5 Minuten neu und prüft ihre Signaturen ([ADR 0036](../../adr/0036-self-update-und-paket-repos.md)).
 - **Per `install.sh` installiert:** Operatoren starten „Agent aktualisieren“ auf der Node-Seite oder die Update-Policy
   der Gruppe tut es im Fenster (`agentUpdate`). Der Helper prüft die Signatur, ersetzt die Binary und legt die alte

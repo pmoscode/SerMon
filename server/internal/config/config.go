@@ -549,9 +549,11 @@ func (l *loader) raw(key string) (string, bool) {
 	}
 }
 
+// string reads key; an empty value counts as unset, so `${VAR:-}` in a compose file keeps the
+// default (empty means off for the optional listeners and directories).
 func (l *loader) string(key, fallback string, validate func(string) error) string {
 	value, ok := l.raw(key)
-	if !ok {
+	if !ok || value == "" {
 		return fallback
 	}
 	if validate != nil {

@@ -333,6 +333,11 @@ func TestLoad_MetricsEndpoint(t *testing.T) {
 	if cfg, err := config.Load(fakeSource(map[string]string{}, nil)); err != nil || cfg.MetricsAddr != "" {
 		t.Errorf("off by default: %q, %v", cfg.MetricsAddr, err)
 	}
+	// V1-18: compose files pass unset values as empty strings (`${VAR:-}`); empty means off as documented.
+	empty := map[string]string{"SERMON_METRICS_ADDR": "", "SERMON_AGENT_ADDR": "", "SERMON_AGENT_DOWNLOADS_DIR": "", "SERMON_REPO_DIR": "", "SERMON_HTTP_ADDR": ""}
+	if cfg, err := config.Load(fakeSource(empty, nil)); err != nil || cfg.MetricsAddr != "" || cfg.AgentAddr != "" || cfg.AgentDownloadsDir != "" || cfg.RepoDir != "" || cfg.HTTPAddr == "" {
+		t.Errorf("empty values: %+v, %v", cfg, err)
+	}
 	for name, env := range map[string]map[string]string{
 		"bad address":  {"SERMON_METRICS_ADDR": "nope"},
 		"same as http": {"SERMON_METRICS_ADDR": ":8080"},

@@ -6623,7 +6623,8 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 > - **Backup:** nachts `backup` in das restic-Backup des Homelabs, Master-Keys als Datei darin, der geheime
 >   Backup-Schlüssel nur im Passwortmanager; Gatus prüft `/readyz` und TCP 8443.
 > - **Befund:** `SERMON_METRICS_ADDR` leer gesetzt (statt nicht gesetzt) bricht den Start ab („invalid address“),
->   die Referenz sagt „Leer: aus“; im Homelab deshalb `:9464` ohne veröffentlichten Port.
+>   die Referenz sagt „Leer: aus“; im Homelab deshalb `:9464` ohne veröffentlichten Port. Behoben ab `rc.2`: ein
+>   leerer Wert gilt für alle Einstellungen als nicht gesetzt (auch `SERMON_AGENT_ADDR`, die Verzeichnisse).
 > - **Product Owner:** Vault-Werte, `task sermon`, Deploy von `traefik` und `sermon`, `task sermon-init`, erster
 >   Superadmin, Enrollment-Token in den Vault, `task sermon-agents`; danach 7 Tage Betrieb. Auswertung mit
 >   `scripts/load-report.sh` (`LOAD_METRICS_URL` über die Adresse des Containers in `sermon_edge`); virtuelle Nodes

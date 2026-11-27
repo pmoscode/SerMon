@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -25,12 +26,24 @@ type rolloutStore struct {
 	saveErr error
 	pruned  []tenant.OrgID
 	runs    map[uuid.UUID]command.Command
+	// released are the organizations given up, by holder.
+	released map[string][]tenant.OrgID
 }
 
 func (s *rolloutStore) Organizations(context.Context) ([]tenant.OrgID, error) { return s.orgs, nil }
 
 func (s *rolloutStore) Lease(_ context.Context, _ tenant.OrgID, holder string, _ time.Duration) (bool, error) {
 	return holder == s.holder, nil
+}
+
+func (s *rolloutStore) Release(_ context.Context, org tenant.OrgID, holder string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.released == nil {
+		s.released = map[string][]tenant.OrgID{}
+	}
+	s.released[holder] = append(s.released[holder], org)
+	return nil
 }
 
 func (s *rolloutStore) Load(_ context.Context, org tenant.OrgID, _ time.Time) (updates.OrgState, error) {
@@ -164,6 +177,41 @@ func TestOrchestrator_RunEndsWithTheContext(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Run() didn't end")
+	}
+}
+
+// Review M5: a server that stops gives up the leases it holds, so the instance after a restart or
+// an upgrade goes on with the rollouts at once instead of after the lease ran out; leases it
+// doesn't hold it leaves alone.
+func TestOrchestrator_ReleasesItsLeasesWhenStopped(t *testing.T) {
+	store, o := orchestrated(t, 2, 1, func(c *updates.OrchestratorConfig) { c.Interval = time.Hour })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error)
+	go func() { done <- o.Run(ctx) }()
+	for o.Stats().Rounds.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("Run() = %v", err)
+	}
+	store.mu.Lock()
+	got := store.released["me"]
+	store.mu.Unlock()
+	if len(got) != 2 || !slices.Contains(got, store.orgs[0]) || !slices.Contains(got, store.orgs[1]) {
+		t.Errorf("released %v, want both organizations", got)
+	}
+
+	store, o = orchestrated(t, 1, 1, func(c *updates.OrchestratorConfig) { c.Holder, c.Interval = "other", time.Hour })
+	ctx, cancel = context.WithCancel(context.Background())
+	go func() { done <- o.Run(ctx) }()
+	for o.Stats().Rounds.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
+	if len(store.released) != 0 {
+		t.Errorf("released leases it didn't hold: %v", store.released)
 	}
 }
 

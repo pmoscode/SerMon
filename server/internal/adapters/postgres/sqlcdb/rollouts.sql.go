@@ -617,6 +617,17 @@ func (q *Queries) PruneUpdateRollouts(ctx context.Context, before time.Time) err
 	return err
 }
 
+const releaseUpdateOrganization = `-- name: ReleaseUpdateOrganization :exec
+UPDATE update_leases SET expires_at = now()
+WHERE org_id = current_org_id() AND holder = $1 AND expires_at > now()
+`
+
+// The holder gives the organization up: another instance takes it in its next round.
+func (q *Queries) ReleaseUpdateOrganization(ctx context.Context, holder string) error {
+	_, err := q.db.Exec(ctx, releaseUpdateOrganization, holder)
+	return err
+}
+
 const runningManualRollouts = `-- name: RunningManualRollouts :many
 SELECT r.id, r.group_id, r.window_start, r.window_end, r.state, r.reason, r.mode, r.auto_reboot, r.cancelled_at
 FROM update_rollouts r

@@ -55,6 +55,17 @@ func (s *RolloutStore) Lease(ctx context.Context, org tenant.OrgID, holder strin
 	return n == 1, err
 }
 
+// Release implements updates.RolloutStore.
+func (s *RolloutStore) Release(ctx context.Context, org tenant.OrgID, holder string) error {
+	scope, err := orgScope(org)
+	if err != nil {
+		return err
+	}
+	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		return wrap(q.ReleaseUpdateOrganization(ctx, holder), "release updates")
+	})
+}
+
 // Prune implements updates.RolloutStore.
 func (s *RolloutStore) Prune(ctx context.Context, org tenant.OrgID, before time.Time) error {
 	scope, err := orgScope(org)

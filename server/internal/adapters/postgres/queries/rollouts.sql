@@ -8,6 +8,11 @@ VALUES (current_org_id(), sqlc.arg(holder), now() + make_interval(secs => sqlc.a
 ON CONFLICT (org_id) DO UPDATE SET holder = EXCLUDED.holder, expires_at = EXCLUDED.expires_at
 WHERE update_leases.holder = EXCLUDED.holder OR update_leases.expires_at <= now();
 
+-- name: ReleaseUpdateOrganization :exec
+-- The holder gives the organization up: another instance takes it in its next round.
+UPDATE update_leases SET expires_at = now()
+WHERE org_id = current_org_id() AND holder = sqlc.arg(holder) AND expires_at > now();
+
 -- name: HoldUpdateLease :execrows
 -- Fencing: the orchestrator saves only while it holds the lease; the row lock makes a takeover
 -- wait for the save to end.

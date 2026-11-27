@@ -47,6 +47,8 @@ type RolloutStore interface {
 	// Lease takes or renews the organization's lease for leaseFor from the database's time; false
 	// if another holds it.
 	Lease(ctx context.Context, org tenant.OrgID, holder string, leaseFor time.Duration) (bool, error)
+	// Release gives holder's lease of the organization up, if it still holds it.
+	Release(ctx context.Context, org tenant.OrgID, holder string) error
 	// Load reads the groups with an installing policy (and those with a rollout still followed).
 	Load(ctx context.Context, org tenant.OrgID, now time.Time) (OrgState, error)
 	// Save stores the changes in one transaction while holder holds the lease (else
@@ -98,11 +100,13 @@ type Orchestrator struct {
 	active map[tenant.OrgID]int
 	turn   int
 	pruned map[tenant.OrgID]time.Time
+	// held are the organizations whose lease this instance took in its last rounds.
+	held map[tenant.OrgID]struct{}
 }
 
 // NewOrchestrator returns the orchestrator.
 func NewOrchestrator(store RolloutStore, config OrchestratorConfig) *Orchestrator {
-	return &Orchestrator{store: store, config: config, active: map[tenant.OrgID]int{}, pruned: map[tenant.OrgID]time.Time{}}
+	return &Orchestrator{store: store, config: config, active: map[tenant.OrgID]int{}, pruned: map[tenant.OrgID]time.Time{}, held: map[tenant.OrgID]struct{}{}}
 }
 
 // Stats returns the counters.
@@ -116,9 +120,26 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.Round(ctx)
 		select {
 		case <-ctx.Done():
+			o.releaseAll(context.WithoutCancel(ctx))
 			return nil
 		case <-tick.C:
 		}
+	}
+}
+
+// releaseTimeout bounds giving the leases up when the server stops.
+const releaseTimeout = 5 * time.Second
+
+// releaseAll gives up the leases this instance holds: after a restart or an upgrade the next
+// instance goes on with the rollouts at once, not only once the leases ran out.
+func (o *Orchestrator) releaseAll(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, releaseTimeout)
+	defer cancel()
+	for org := range o.held {
+		if err := o.store.Release(ctx, org, o.config.Holder); err != nil {
+			o.config.Logger.WarnContext(ctx, "updates: release lease failed", "org", org.String(), "error", err)
+		}
+		delete(o.held, org)
 	}
 }
 
@@ -140,6 +161,11 @@ func (o *Orchestrator) Round(ctx context.Context) {
 	for org := range o.pruned {
 		if !slices.Contains(orgs, org) {
 			delete(o.pruned, org)
+		}
+	}
+	for org := range o.held {
+		if !slices.Contains(orgs, org) {
+			delete(o.held, org)
 		}
 	}
 	if len(orgs) == 0 {
@@ -178,8 +204,10 @@ func (o *Orchestrator) step(ctx context.Context, org tenant.OrgID, instanceActiv
 		return 0, fmt.Errorf("lease: %w", err)
 	}
 	if !held {
+		delete(o.held, org)
 		return 0, nil
 	}
+	o.held[org] = struct{}{}
 	if last, ok := o.pruned[org]; !ok || now.Sub(last) > 24*time.Hour {
 		if err := o.store.Prune(ctx, org, now.Add(-o.config.Retention)); err != nil {
 			return 0, fmt.Errorf("prune: %w", err)

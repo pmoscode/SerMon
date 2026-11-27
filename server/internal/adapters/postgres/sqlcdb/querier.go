@@ -453,6 +453,8 @@ type Querier interface {
 	// The holder gives the organization up: another instance takes it in its next round.
 	ReleaseAnomalyOrganization(ctx context.Context, holder string) error
 	ReleaseAttempt(ctx context.Context, arg ReleaseAttemptParams) error
+	// The holder gives the organization up: another instance takes it in its next round.
+	ReleaseUpdateOrganization(ctx context.Context, holder string) error
 	RenameNodeGroup(ctx context.Context, arg RenameNodeGroupParams) (int64, error)
 	RenameOrganization(ctx context.Context, name string) (int64, error)
 	RenamePasskey(ctx context.Context, arg RenamePasskeyParams) (int64, error)

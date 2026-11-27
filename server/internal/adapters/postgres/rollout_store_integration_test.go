@@ -234,6 +234,22 @@ func TestRolloutStore_ReadsCriticalAlertsAndFencesTheSave(t *testing.T) {
 	if err := store.Save(ctx, f.org, "holder-a", now, []updates.Change{change}); err != nil {
 		t.Errorf("save with the lease = %v", err)
 	}
+	// Review M5: only the holder gives the lease up; another instance takes it at once after.
+	if err := store.Release(ctx, f.org, "holder-b"); err != nil {
+		t.Fatalf("release by another = %v", err)
+	}
+	if ok, _ := store.Lease(ctx, f.org, "holder-b", time.Minute); ok {
+		t.Fatal("another holder's release freed the lease")
+	}
+	if err := store.Release(ctx, f.org, "holder-a"); err != nil {
+		t.Fatalf("release = %v", err)
+	}
+	if ok, err := store.Lease(ctx, f.org, "holder-b", time.Minute); err != nil || !ok {
+		t.Fatalf("lease after the release = %v, %v", ok, err)
+	}
+	if ok, err := store.Lease(ctx, f.org, "holder-a", time.Minute); err != nil || ok {
+		t.Fatalf("the old holder took it back = %v, %v", ok, err)
+	}
 	ownerExec(t, owner, "UPDATE nodes SET install_method = 1, agent_version = '1.0.0' WHERE id = $1", uuid.UUID(f.node))
 	state, err := store.Load(ctx, f.org, now)
 	if err != nil || len(state.Groups) != 1 || state.Groups[0].Rollout == nil || len(state.Groups[0].Rollout.Nodes) != 1 ||

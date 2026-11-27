@@ -8,6 +8,8 @@ For operators of a SerMon instance: set up, secure and run the server, and find 
 - [Installation mit docker compose](installation.md) – Einrichten, Agents anbinden, Paket-Repos, Root-Helper,
   Aktualisieren, OIDC
 - [Backup und Restore](backup.md) – Sichern mit `sermon-server backup`, Wiederherstellen, pgBackRest, Loki
+- [Releases machen](../release.md) – für den Product Owner: Schlüssel, Environment `release`, Release-PR, Freigabe,
+  Schlüsselwechsel; ein Release prüfen mit `scripts/verify-release.sh`
 - [Härtung](de/hardening.md) – Vetos in `agent.toml` und `helper.toml`, `install.sh`, systemd, Netze, Secrets,
   Anmeldung, Zugangsdaten der Module, was ein übernommener Server kann
 - [Betrieb](de/operations.md) – Self-Monitoring, Aufbewahrung, Löschen, Enrollment-Tokens, Updates, Zertifikate,
@@ -22,7 +24,8 @@ For operators of a SerMon instance: set up, secure and run the server, and find 
 
 ## English
 
-- [Installation with docker compose](installation.md) and [Backup and restore](backup.md) (in German)
+- [Installation with docker compose](installation.md), [Backup and restore](backup.md) and
+  [making releases](../release.md) (in German)
 - [Hardening](en/hardening.md) – vetoes in `agent.toml` and `helper.toml`, `install.sh`, systemd, networks, secrets,
   sign-in, module credentials, what a compromised server can do
 - [Operations](en/operations.md) – self-monitoring, retention, deletion, enrollment tokens, updates, certificates,

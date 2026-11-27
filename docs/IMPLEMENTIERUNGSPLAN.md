@@ -6289,19 +6289,23 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 >   Fälschens offline, 10 Fälle online mit Fakes für cosign und slsa-verifier); `just lint-ci` sauber
 >   (zizmor-Ausnahme nur für die SLSA-Generatoren). Gegenproben 32/32 (nach Nachschärfen der Tests: neun überlebten zunächst, weil spätere
 >   Prüfungen dieselben Fälle fingen).
-> - **Offen:** `just release-dry-run` mit `IMAGE=1`, `just test-packages` und der Bau des Images aus dem Quellcode
->   laufen erst, wenn Docker frei ist (Lasttest V1-08); der Probe-Release.
+> - **Lokal gelaufen (2026-11-27):** `IMAGE=1 just release-dry-run` (Agent und Helper mit Testschlüssel, 12 Pakete,
+>   Repos, Offline-Prüfung, Image mit `/srv/downloads` und `/srv/repo`, die der Server ausliefert), `just
+>   test-packages` (über `0.0.3-rc.1` auf `0.0.3` auf Debian, Rocky und Alpine), `just e2e-demo` mit dem neuen
+>   Dockerfile.
+> - **Offen:** der Probe-Release.
 >
-> **Was der Product Owner tun muss** (Einzelheiten in `docs/release.md`, „Einmal einrichten“):
-> 1. Environment `release` anlegen: Required reviewers = Product Owner, nur Tags `v*`.
-> 2. `scripts/release-keys.sh generate --recipient … --bundle … --set-secrets pmoscode/SerMon` auf einem
->    vertrauenswürdigen Rechner; die drei Secrets stehen danach in der Environment.
-> 3. Offline-Kopie und age-Identität getrennt sichern und prüfen, dass sie aufgeht.
-> 4. `packaging/release.pub`, `packaging/release-next.pub`, `packaging/keys/` committen und nach `main` pushen.
-> 5. Settings → Actions: „Allow GitHub Actions to create and approve pull requests“ an.
-> 6. Ruleset für Tags `v*`: Updates und Löschen verbieten.
-> 7. Den Release-PR `1.0.0-rc.1` abwarten, `### Upgrade` eintragen, mergen, den Signier-Job freigeben.
-> 8. Danach das Paket `sermon-server` auf GHCR öffentlich stellen; der Job `verify` (bzw. `just verify-release
+> **Schon eingerichtet und geprüft (2026-11-27):** Environment `release` (Required reviewer `pmoscode`, nur die
+> Tag-Regel `v*`), Workflow-Rechte mit „Allow GitHub Actions to create and approve pull requests“, Tag-Ruleset
+> `release tags` (`v*`: kein Verschieben, kein Löschen).
+>
+> **Was der Product Owner noch tun muss** (Einzelheiten in `docs/release.md`, „Einmal einrichten“):
+> 1. `scripts/release-keys.sh generate --recipient … --bundle … --set-secrets pmoscode/SerMon` auf einem
+>    vertrauenswürdigen Rechner; die drei Secrets stehen danach in der Environment. Offline-Kopie und age-Identität
+>    getrennt sichern und prüfen, dass sie aufgeht.
+> 2. `packaging/release.pub`, `packaging/release-next.pub`, `packaging/keys/` committen und nach `main` pushen.
+> 3. Den Release-PR `1.0.0-rc.1` abwarten, `### Upgrade` eintragen, mergen, den Signier-Job freigeben.
+> 4. Danach das Paket `sermon-server` auf GHCR öffentlich stellen; der Job `verify` (bzw. `just verify-release
 >    1.0.0-rc.1`) muss grün sein – dann ☑.
 - **Ziel:** `release.yml` nach V1-02: reproduzierbare Builds von Server-Image, Agent und Helper (amd64, arm64),
   signierte Binaries und Repos mit den echten Schlüsseln (`just sign-agent`, `scripts/build-repos.sh`), SBOM, cosign-
@@ -6332,7 +6336,9 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 >   `use-release_test.sh` mit einem cosign, das nur für die Identität des Tags signiert (fremder Tag, zwei Images,
 >   kein oder kaputter Digest, falsche Version, fehlende `.env`: `.env` bleibt unverändert; der cosign-Container ohne
 >   cosign). Gegenproben 13/13 (drei überlebten zunächst, weil spätere Prüfungen dieselben Fälle fingen).
-> - **Offen:** die Demo gegen das Probe-Release; der Bau mit `source.yaml` (E2E-Demo) läuft, wenn Docker frei ist.
+> - **Lokal gelaufen (2026-11-27):** `just e2e-demo` und `just load-test 10m 5` (V1-08, jetzt mit `source.yaml`) mit
+>   dem Server aus `source.yaml`, `just lint-compose` mit Produktion, Quellcode, Demo und Lasttest.
+> - **Offen:** die Demo gegen das Probe-Release.
 - **Ziel:** `image:` in `deploy/compose/compose.yaml` zeigt auf das veröffentlichte, per Digest gepinnte Image statt
   auf den Build aus dem Quellcode (M2-26); Anleitung prüft die Signatur vor dem Start; die Demo kann weiter aus dem
   Quellcode bauen (Overlay).

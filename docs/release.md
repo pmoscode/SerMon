@@ -22,7 +22,8 @@ Ohne Freigabe passiert nichts mit den Schlüsseln; abgelehnt bleibt der Draft oh
 
 ## Einmal einrichten
 
-Reihenfolge einhalten; jeder Schritt mit dem eigenen Konto (2FA).
+Reihenfolge einhalten; jeder Schritt mit dem eigenen Konto (2FA). Erledigt und geprüft am 2026-11-27: Schritte 2
+(ohne die Secrets), 5 und 6.
 
 1. **Schlüssel erzeugen** auf einem vertrauenswürdigen Rechner mit `openssl` (≥ 3.0), `gpg` und `age` (oder Go) im
    Checkout von `main`:

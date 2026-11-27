@@ -7,6 +7,7 @@ package sqlcdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -53,15 +54,22 @@ FROM users
 ORDER BY lower(email)
 `
 
-func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
+type ListUsersRow struct {
+	ID          uuid.UUID
+	Email       string
+	DisplayName string
+	CreatedAt   time.Time
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	rows, err := q.db.Query(ctx, listUsers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []User{}
+	items := []ListUsersRow{}
 	for rows.Next() {
-		var i User
+		var i ListUsersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Email,

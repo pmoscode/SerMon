@@ -134,6 +134,8 @@ type loggedIn struct {
 	oidcMappings   webv1connect.OidcMappingServiceClient
 	dashboards     webv1connect.DashboardServiceClient
 	kioskTokens    webv1connect.KioskTokenServiceClient
+	account        webv1connect.AccountServiceClient
+	accountAdmin   webv1connect.AccountAdminServiceClient
 	jar            *cookiejar.Jar
 }
 
@@ -173,6 +175,8 @@ func login(t *testing.T, s stack, email string) loggedIn {
 		oidcMappings:   webv1connect.NewOidcMappingServiceClient(hc, s.server.URL),
 		dashboards:     webv1connect.NewDashboardServiceClient(hc, s.server.URL),
 		kioskTokens:    webv1connect.NewKioskTokenServiceClient(hc, s.server.URL),
+		account:        webv1connect.NewAccountServiceClient(hc, s.server.URL),
+		accountAdmin:   webv1connect.NewAccountAdminServiceClient(hc, s.server.URL),
 		jar:            jar,
 	}
 	if _, err := l.auth.Login(context.Background(), connect.NewRequest(&webv1.LoginRequest{Email: email, Password: userPassword})); err != nil {

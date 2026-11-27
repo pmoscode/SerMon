@@ -36,8 +36,8 @@ Kiosk-Tokens und das Audit-Log.
 
 ## Superadmin
 
-Der Betreiber der Instanz legt Organisationen an, sperrt und löscht sie, setzt ihre Kontingente und verwaltet die
-Agent-CA. Ohne eigene Mitgliedschaft sieht er keine Daten einer Organisation.
+Der Betreiber der Instanz legt Organisationen an, sperrt und löscht sie, setzt ihre Kontingente, verwaltet die
+Agent-CA und löscht Konten auf Antrag. Ohne eigene Mitgliedschaft sieht er keine Daten einer Organisation.
 
 ## Gut zu wissen
 

@@ -324,7 +324,7 @@ type exportHeader struct {
 
 // HashRule documents the chain in the export: hash = SHA-256(prev_hash || fields), the fields
 // joined by the unit separator U+001F.
-const HashRule = "sha256(prev_hash || org US seq US at US actor US action US target US details), US = U+001F, at in UTC with microseconds, details as the string in the file"
+const HashRule = "sha256(prev_hash || org US seq US at US actor US action US target US details), US = U+001F, at in UTC with microseconds, details as the string in the file; a chain cut by the retention starts after seq 1 with the prev_hash an audit.prune entry names as last_hash"
 
 func auditFile(org tenant.OrgID, name string, now time.Time, entries []ExportedEntry, valid bool) ([]byte, error) {
 	var b strings.Builder

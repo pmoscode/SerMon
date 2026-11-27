@@ -193,7 +193,7 @@ func TestInTenant_SeesOnlyItsOwnOrganizationAndUsers(t *testing.T) {
 	db := open(t, setup(t).appDSN)
 
 	var orgs []sqlcdb.ListOrganizationsRow
-	var users []sqlcdb.User
+	var users []sqlcdb.ListUsersRow
 	err := db.InTenant(context.Background(), scopeFor(t, orgA), func(q *sqlcdb.Queries) error {
 		var err error
 		if orgs, err = q.ListOrganizations(context.Background()); err != nil {

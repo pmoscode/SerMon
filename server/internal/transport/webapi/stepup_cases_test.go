@@ -80,10 +80,16 @@ var stepUpRequired = map[string]string{
 	"/sermon.web.v1.AlertRuleService/ResetAlertRule":                  "what alerts at all",
 	"/sermon.web.v1.AlertSilenceService/CreateSilence":                "mutes alerts",
 	"/sermon.web.v1.KioskTokenService/CreateKioskToken":               "a new way to read the organization's data without a session (M5-26)",
+	"/sermon.web.v1.AccountService/SetDisplayName":                    "the name others see (V1-17)",
+	"/sermon.web.v1.AccountService/RequestEmailChange":                "the login of the account (V1-17)",
+	"/sermon.web.v1.AccountService/ExportAccountData":                 "all personal data of the account at once (V1-17)",
+	"/sermon.web.v1.AccountAdminService/DeleteAccount":                "deletes an account for good (V1-17)",
 }
 
 // stepUpExempt are the procedures that change something without a step-up, and why.
 var stepUpExempt = map[string]string{
+	"/sermon.web.v1.AccountService/ConfirmEmailChange":            "finishes a change begun with a step-up, proven with the code from the new mailbox",
+	"/sermon.web.v1.AccountService/CancelEmailChange":             "drops a pending change: the address stays",
 	"/sermon.web.v1.AccessService/CreateNodeGroup":                "an empty group gives nobody rights",
 	"/sermon.web.v1.AccessService/RenameNodeGroup":                "the name only",
 	"/sermon.web.v1.AccessService/RevokeInvitation":               "takes access away",
@@ -176,6 +182,22 @@ var stepUpOwnCases = map[string]func(ctx context.Context, e stepUpEnv) error{
 		_, err := e.policy.SetSecondFactorRequired(ctx, connect.NewRequest(&webv1.SetSecondFactorRequiredRequest{Required: false}))
 		return err
 	},
+	"/sermon.web.v1.AccountService/SetDisplayName": func(ctx context.Context, e stepUpEnv) error {
+		_, err := e.account.SetDisplayName(ctx, connect.NewRequest(&webv1.SetDisplayNameRequest{DisplayName: "Ann"}))
+		return err
+	},
+	"/sermon.web.v1.AccountService/RequestEmailChange": func(ctx context.Context, e stepUpEnv) error {
+		_, err := e.account.RequestEmailChange(ctx, connect.NewRequest(&webv1.RequestEmailChangeRequest{Email: "ann@example.net"}))
+		return err
+	},
+	"/sermon.web.v1.AccountService/ExportAccountData": func(ctx context.Context, e stepUpEnv) error {
+		_, err := e.account.ExportAccountData(ctx, connect.NewRequest(&webv1.ExportAccountDataRequest{}))
+		return err
+	},
+	"/sermon.web.v1.AccountAdminService/DeleteAccount": func(ctx context.Context, e stepUpEnv) error {
+		_, err := e.accountAdmin.DeleteAccount(ctx, connect.NewRequest(&webv1.DeleteAccountRequest{Email: "mia@example.org"}))
+		return err
+	},
 	"/sermon.web.v1.AuthService/UnlinkOidcIdentity": func(ctx context.Context, e stepUpEnv) error {
 		_, err := e.auth.UnlinkOidcIdentity(ctx, connect.NewRequest(&webv1.UnlinkOidcIdentityRequest{Issuer: "https://idp.example"}))
 		return err
@@ -189,4 +211,7 @@ type stepUpEnv struct {
 	twoFactor webv1connect.TwoFactorServiceClient
 	policy    webv1connect.SecurityPolicyServiceClient
 	passkeys  webv1connect.PasskeyServiceClient
+	// account is Ann's own account, accountAdmin Sam's (superadmin) deletions (V1-17).
+	account      webv1connect.AccountServiceClient
+	accountAdmin webv1connect.AccountAdminServiceClient
 }

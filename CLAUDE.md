@@ -111,6 +111,10 @@ Wichtige Variablen:
   `720h`, mindestens `168h`; der Löschjob prüft stündlich)
 - `SERMON_NODE_DELETION_GRACE` (Frist zwischen „Node löschen“ und dem Löschen seiner Daten, ADR 0041; Standard `168h`,
   mindestens `24h`; der Löschjob prüft stündlich)
+- `SERMON_ACCOUNT_DELETION_GRACE` (Konten ohne Mitgliedschaft werden danach gelöscht, V1-17; Standard `720h`,
+  mindestens `24h`, Superadmins nie; stündlich, `app/account`)
+- `SERMON_AUDIT_RETENTION` (Aufbewahrung der Audit-Logs der Orgs und der Instanz, V1-17; Standard `17520h`, `2160h` bis
+  `87600h`; gekürzte Ketten bleiben über einen Eintrag `audit.prune` prüfbar)
 - `SERMON_LOKI_URL` (Loki für Logs, ADR 0031; feste URL ohne Zugangsdaten, eigener Client ohne Proxy und Redirects;
   leer heißt: keine Logs; `deploy/compose`: `http://loki:3100` im internen Netz)
 - `SERMON_OUTBOUND_ALLOWLIST` (CIDRs interner Ziele für Kanäle/Webhooks über `safehttp`, ADR 0024; leer heißt nur

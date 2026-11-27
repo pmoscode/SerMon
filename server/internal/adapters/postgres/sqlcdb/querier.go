@@ -12,6 +12,13 @@ import (
 )
 
 type Querier interface {
+	// Accounts of their owners (V1-17). The rows of users are reached only through the SECURITY
+	// DEFINER functions of 00075/00076 for the user the server names from the session; the tables
+	// without tenant (sessions, credentials, factors) directly by user_id; the tenant tables of the
+	// export inside InTenant, filtered by the user.
+	AccountProfile(ctx context.Context, userID uuid.UUID) (AccountProfileRow, error)
+	AccountSetDisplayName(ctx context.Context, arg AccountSetDisplayNameParams) (bool, error)
+	AccountSetEmail(ctx context.Context, arg AccountSetEmailParams) (bool, error)
 	// Only a firing alert that nobody acknowledged yet (the engine may have changed it meanwhile).
 	AcknowledgeAlertInstance(ctx context.Context, arg AcknowledgeAlertInstanceParams) (int64, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
@@ -74,6 +81,7 @@ type Querier interface {
 	ConsumeEnrollmentToken(ctx context.Context, arg ConsumeEnrollmentTokenParams) (int64, error)
 	CopyMetricWindows(ctx context.Context, arg []CopyMetricWindowsParams) (int64, error)
 	CountDashboards(ctx context.Context) (int64, error)
+	CountEmailChangeAttempt(ctx context.Context, userID uuid.UUID) (int32, error)
 	CountMembers(ctx context.Context) (int64, error)
 	CountNodes(ctx context.Context) (int64, error)
 	CountOIDCMappings(ctx context.Context) (int64, error)
@@ -110,10 +118,12 @@ type Querier interface {
 	// Deactivates the node (if it is not) and closes its takeover window; with a deadline it is
 	// scheduled for deletion as well.
 	DeactivateNode(ctx context.Context, arg DeactivateNodeParams) (int64, error)
+	DeleteAccount(ctx context.Context, arg DeleteAccountParams) (int32, error)
 	DeleteAlertInstance(ctx context.Context, arg DeleteAlertInstanceParams) error
 	DeleteAlertRoutingState(ctx context.Context, arg DeleteAlertRoutingStateParams) error
 	DeleteAlertRuleOverride(ctx context.Context, ruleID string) (int64, error)
 	DeleteDashboard(ctx context.Context, id uuid.UUID) error
+	DeleteEmailChange(ctx context.Context, userID uuid.UUID) error
 	DeleteExpiredOIDCFlows(ctx context.Context, now time.Time) error
 	DeleteExpiredWebAuthnCeremonies(ctx context.Context, now time.Time) error
 	// Deletes the node's packages the new report doesn't list.
@@ -166,6 +176,18 @@ type Querier interface {
 	ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommandsParams) error
 	ExpireOrganizationEvents(ctx context.Context, arg ExpireOrganizationEventsParams) (int64, error)
 	ExpireSecurityEventPartitions(ctx context.Context, before time.Time) (int32, error)
+	ExportAuditEntries(ctx context.Context, arg ExportAuditEntriesParams) ([]ExportAuditEntriesRow, error)
+	ExportDashboards(ctx context.Context, userID uuid.UUID) ([]ExportDashboardsRow, error)
+	ExportIdentities(ctx context.Context, userID uuid.UUID) ([]ExportIdentitiesRow, error)
+	// Export: inside the tenant of each organization of the account.
+	ExportMembership(ctx context.Context, userID uuid.UUID) ([]time.Time, error)
+	ExportPasskeys(ctx context.Context, userID uuid.UUID) ([]ExportPasskeysRow, error)
+	// Export: the tables of the account without tenant.
+	ExportPassword(ctx context.Context, userID uuid.UUID) ([]time.Time, error)
+	ExportRecoveryCodesLeft(ctx context.Context, userID uuid.UUID) (int64, error)
+	ExportRoles(ctx context.Context, userID uuid.UUID) ([]ExportRolesRow, error)
+	ExportSessions(ctx context.Context, userID uuid.UUID) ([]ExportSessionsRow, error)
+	ExportTOTP(ctx context.Context, userID uuid.UUID) ([]*time.Time, error)
 	// Evaluations (M3-16). The scope's groups are those of the node now, as in ListSecurityEvents.
 	FailedLoginBuckets(ctx context.Context, arg FailedLoginBucketsParams) ([]FailedLoginBucketsRow, error)
 	FindIdentity(ctx context.Context, arg FindIdentityParams) (uuid.UUID, error)
@@ -183,6 +205,7 @@ type Querier interface {
 	GetAlertSilence(ctx context.Context, id uuid.UUID) (GetAlertSilenceRow, error)
 	GetCredentials(ctx context.Context, userID uuid.UUID) (GetCredentialsRow, error)
 	GetDashboard(ctx context.Context, arg GetDashboardParams) (GetDashboardRow, error)
+	GetEmailChange(ctx context.Context, userID uuid.UUID) (GetEmailChangeRow, error)
 	GetIngestSeq(ctx context.Context, nodeID uuid.UUID) (int64, error)
 	GetNode(ctx context.Context, id uuid.UUID) (GetNodeRow, error)
 	GetNodeCommand(ctx context.Context, id uuid.UUID) (GetNodeCommandRow, error)
@@ -350,7 +373,7 @@ type Querier interface {
 	ListSecurityEvents(ctx context.Context, arg ListSecurityEventsParams) ([]ListSecurityEventsRow, error)
 	ListUpdatePolicies(ctx context.Context, arg ListUpdatePoliciesParams) ([]ListUpdatePoliciesRow, error)
 	ListUpdateRolloutNodes(ctx context.Context, rolloutIds []uuid.UUID) ([]ListUpdateRolloutNodesRow, error)
-	ListUsers(ctx context.Context) ([]User, error)
+	ListUsers(ctx context.Context) ([]ListUsersRow, error)
 	// Nodes of the scope's groups with their group name, for the UI (M1-26).
 	ListVisibleNodes(ctx context.Context, arg ListVisibleNodesParams) ([]ListVisibleNodesRow, error)
 	LiveHideCmdline(ctx context.Context) (bool, error)
@@ -437,10 +460,15 @@ type Querier interface {
 	Points1h(ctx context.Context, arg Points1hParams) ([]Points1hRow, error)
 	Points1m(ctx context.Context, arg Points1mParams) ([]Points1mRow, error)
 	PointsRaw(ctx context.Context, arg PointsRawParams) ([]PointsRawRow, error)
+	PruneInstanceAudit(ctx context.Context, before time.Time) ([]PruneInstanceAuditRow, error)
 	PruneNodeCommands(ctx context.Context, before time.Time) error
+	PruneOrgAudit(ctx context.Context, arg PruneOrgAuditParams) ([]PruneOrgAuditRow, error)
 	PruneUpdateRollouts(ctx context.Context, before time.Time) error
+	PurgeAccounts(ctx context.Context, arg PurgeAccountsParams) ([]uuid.UUID, error)
 	PurgeAlertHistory(ctx context.Context, before time.Time) (int64, error)
 	PurgeAlertSilences(ctx context.Context, before time.Time) error
+	PurgeEmailChanges(ctx context.Context, before time.Time) (int64, error)
+	PurgeExpiredInvitations(ctx context.Context, before time.Time) (int64, error)
 	PurgeNode(ctx context.Context, arg PurgeNodeParams) (string, error)
 	PurgeNotificationDeliveries(ctx context.Context, before time.Time) (int64, error)
 	PurgeOrganization(ctx context.Context, arg PurgeOrganizationParams) (int64, error)
@@ -546,6 +574,7 @@ type Querier interface {
 	UpsertAlertRuleOverride(ctx context.Context, arg UpsertAlertRuleOverrideParams) error
 	// One row per position of the arrays.
 	UpsertAnomalyBaselines(ctx context.Context, arg UpsertAnomalyBaselinesParams) error
+	UpsertEmailChange(ctx context.Context, arg UpsertEmailChangeParams) error
 	UpsertGroupLogSettings(ctx context.Context, arg UpsertGroupLogSettingsParams) error
 	// Invitations (ADR 0008). Management runs inside InTenant; the lookup by token uses the
 	// SECURITY DEFINER function invitation_by_token (no tenant known yet).

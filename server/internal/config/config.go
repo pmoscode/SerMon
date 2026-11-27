@@ -131,6 +131,12 @@ type Config struct {
 	// NodeDeletionGrace is how long a node scheduled for deletion stays deactivated before it is
 	// deleted with its data (M5-29, ADR 0041): 7 days by default, at least 24 hours.
 	NodeDeletionGrace time.Duration
+	// AccountGrace is how long an account without a membership is kept before it is deleted
+	// (V1-17): 30 days by default, at least 24 hours.
+	AccountGrace time.Duration
+	// AuditRetention is how long the audit logs of the organizations and of the instance keep an
+	// entry (V1-17): 2 years by default, 90 days to 10 years.
+	AuditRetention time.Duration
 	// DatabaseSizeLimit is the size the database may reach (bytes, from e.g. "50GiB"); the
 	// self-monitoring warns superadmins at 80 % and 90 % (M2-24). 0: not checked.
 	DatabaseSizeLimit int64
@@ -180,6 +186,8 @@ const (
 	envDatabaseLimit   = "SERMON_DATABASE_SIZE_LIMIT"
 	envDeletionGrace   = "SERMON_ORG_DELETION_GRACE"
 	envNodeGrace       = "SERMON_NODE_DELETION_GRACE"
+	envAccountGrace    = "SERMON_ACCOUNT_DELETION_GRACE"
+	envAuditRetention  = "SERMON_AUDIT_RETENTION"
 	envMasterKeys      = "SERMON_MASTER_KEYS"
 	envAgentAddr       = "SERMON_AGENT_ADDR"
 	envAgentHostnames  = "SERMON_AGENT_HOSTNAMES"
@@ -220,7 +228,14 @@ const (
 	// ADR 0041: nodes after 7 days, never before 24 hours (as nodelife.MinDeletionGrace).
 	defaultNodeGrace = 7 * 24 * time.Hour
 	minNodeGrace     = 24 * time.Hour
-	maxPort          = 65535
+	// V1-17: accounts without a membership after 30 days, never before 24 hours (as
+	// account.MinDeletionGrace); audit entries 2 years, 90 days to 10 years.
+	defaultAccountGrace   = 30 * 24 * time.Hour
+	minAccountGrace       = 24 * time.Hour
+	defaultAuditRetention = 730 * 24 * time.Hour
+	minAuditRetention     = 90 * 24 * time.Hour
+	maxAuditRetention     = 3650 * 24 * time.Hour
+	maxPort               = 65535
 )
 
 // Load reads and validates the configuration from src.
@@ -242,6 +257,8 @@ func Load(src Source) (Config, error) {
 		DatabaseSizeLimit:  parseSize(&l, envDatabaseLimit),
 		OrgDeletionGrace:   parsePositiveDuration(&l, envDeletionGrace, defaultDeletionGrace),
 		NodeDeletionGrace:  parsePositiveDuration(&l, envNodeGrace, defaultNodeGrace),
+		AccountGrace:       parsePositiveDuration(&l, envAccountGrace, defaultAccountGrace),
+		AuditRetention:     parsePositiveDuration(&l, envAuditRetention, defaultAuditRetention),
 		MasterKeys:         parseMasterKeys(&l),
 		AgentAddr:          l.string(envAgentAddr, "", validateAddr),
 		AgentHostnames:     parseHostnames(&l),
@@ -260,6 +277,12 @@ func Load(src Source) (Config, error) {
 	}
 	if cfg.NodeDeletionGrace < minNodeGrace {
 		l.fail(envNodeGrace, "must be at least %s (24 hours), got %s", minNodeGrace, cfg.NodeDeletionGrace)
+	}
+	if cfg.AccountGrace < minAccountGrace {
+		l.fail(envAccountGrace, "must be at least %s (24 hours), got %s", minAccountGrace, cfg.AccountGrace)
+	}
+	if cfg.AuditRetention < minAuditRetention || cfg.AuditRetention > maxAuditRetention {
+		l.fail(envAuditRetention, "must be %s (90 days) to %s (10 years), got %s", minAuditRetention, maxAuditRetention, cfg.AuditRetention)
 	}
 	if cfg.MetricsAddr != "" && !strings.HasSuffix(cfg.MetricsAddr, ":0") &&
 		(cfg.MetricsAddr == cfg.HTTPAddr || cfg.MetricsAddr == cfg.AgentAddr) {

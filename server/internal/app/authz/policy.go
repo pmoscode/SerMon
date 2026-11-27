@@ -61,6 +61,7 @@ const (
 	ManageOrganizations
 	ManageAgentCA     // agent CA rollover (KONZEPT §6)
 	ViewInstanceAudit // instance-wide audit log
+	ManageAccounts    // delete an account on request of its owner (V1-17)
 
 	actionEnd
 )
@@ -112,6 +113,7 @@ var rules = map[Action]rule{
 	ManageOrganizations:    {name: "manage_organizations", scope: instanceLevel},
 	ManageAgentCA:          {name: "manage_agent_ca", scope: instanceLevel},
 	ViewInstanceAudit:      {name: "view_instance_audit", scope: instanceLevel},
+	ManageAccounts:         {name: "manage_accounts", scope: instanceLevel},
 }
 
 // AllActions returns all tenant actions (group-scoped and organization-wide).

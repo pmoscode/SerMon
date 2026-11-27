@@ -135,7 +135,7 @@ func TestPolicy_SuperadminSeesNoTenantDataWithoutMembership(t *testing.T) {
 			t.Errorf("superadmin without membership must not be allowed %s", action)
 		}
 	}
-	for _, action := range []authz.Action{authz.ManageOrganizations, authz.ManageAgentCA, authz.ViewInstanceAudit} {
+	for _, action := range []authz.Action{authz.ManageOrganizations, authz.ManageAgentCA, authz.ViewInstanceAudit, authz.ManageAccounts} {
 		if !policy.AllowedInstance(p, action) {
 			t.Errorf("superadmin must be allowed %s", action)
 		}

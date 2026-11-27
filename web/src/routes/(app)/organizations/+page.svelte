@@ -209,5 +209,8 @@
 			</div>
 		{/if}
 		<CreateOrganization onCreated={load} />
+		{#await import('#lib/components/organizations/DeleteAccount.svelte') then { default: DeleteAccount }}
+			<DeleteAccount />
+		{/await}
 	</div>
 {/if}

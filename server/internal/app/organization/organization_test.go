@@ -119,7 +119,7 @@ func TestCreate_InvitesTheFirstAdminAndNeedsAStepUp(t *testing.T) {
 	if store.hash != sha256.Sum256([]byte(token)) || len(token) != 43 {
 		t.Error("token/hash mismatch")
 	}
-	if a := store.audits[0]; a.Action != "org.create" || a.Actor != super || a.Details["admin_email"] != "bea@example.org" {
+	if a := store.audits[0]; a.Action != "org.create" || a.Actor != super || a.Details["admin_email"] != "" || a.Details["invitation"] == "" {
 		t.Errorf("audit = %+v", a)
 	}
 

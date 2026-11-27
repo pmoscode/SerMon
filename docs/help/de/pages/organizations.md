@@ -32,3 +32,14 @@ Unter **Sperren oder löschen** stehen die Schritte, die der Status erlaubt. Jed
 - **Audit-Log herunterladen:** nur bei einer gesperrten Organisation, als JSON-Zeilen mit der Hash-Kette. Die erste Zeile beschreibt, wie sich die Kette nachrechnen lässt; die UI meldet, ob sie intakt ist.
 
 Die Admins der Organisation bekommen eine Mail beim Sperren (mit dem Löschdatum), beim Aufheben und 7 Tage vor der Löschung.
+
+## Konto auf Antrag löschen
+
+Verlangt eine Person die Löschung ihres Kontos, löscht der Superadmin es hier: die Adresse zweimal eingeben, dann
+erneut bestätigen. Sitzungen, Passwort, zweiter Faktor, Passkeys und SSO-Verknüpfungen gehen sofort mit; private
+Dashboards ebenso. Jede Organisation des Kontos bekommt einen Eintrag im Audit-Log, das Instanz-Audit-Log den Antrag;
+dort bleibt nur die Kennung des Kontos, keine Adresse. Konten von Superadmins und der letzte Admin für alle Gruppen
+einer Organisation lassen sich so nicht löschen – dort zuerst einen anderen Admin einsetzen.
+
+Konten ohne Mitgliedschaft löscht SerMon ohnehin nach einer Frist (Standard 30 Tage,
+`SERMON_ACCOUNT_DELETION_GRACE`); mehr unter [Konto](help:pages/account).

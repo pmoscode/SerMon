@@ -35,7 +35,8 @@ tokens and the audit log.
 
 ## Superadmin
 
-The operator of the instance creates, locks and deletes organizations, sets their quotas and manages the agent CA.
+The operator of the instance creates, locks and deletes organizations, sets their quotas, manages the agent CA and
+deletes accounts on request.
 Without a membership of their own they see no data of an organization.
 
 ## Good to know

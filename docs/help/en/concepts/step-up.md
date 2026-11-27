@@ -7,6 +7,7 @@ confirmation then holds for 15 minutes for all actions.
 ## When SerMon asks
 
 - **Rights:** granting and revoking roles, removing members, inviting, deleting groups, mapping SSO groups.
+- **Own account:** changing display name and e-mail address, exporting your own data.
 - **Sign-in:** setting up or turning off a second factor, generating new recovery codes, adding and deleting passkeys,
   unlinking an SSO identity, changing required two-factor authentication.
 - **What alerts:** importing, enabling, disabling or resetting alert rules, creating silences, changing channels,

@@ -6398,7 +6398,40 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Implementierung (Wunsch des Product Owners).
 - **Abhängig von:** V1-15
 
-#### ☐ V1-17 – Löschfunktion und Export personenbezogener Daten · X · M 🔒
+#### ☑ V1-17 – Löschfunktion und Export personenbezogener Daten · X · M 🔒
+> Erledigt (2026-11-27): Neues Paket `app/account` mit `AccountService` (eigenes Konto, Session-only wie die
+> Zwei-Faktor-Dienste) und `AccountAdminService` (Superadmin, Aktion `manage_accounts`), Seite **Konto** im Kontomenü
+> und „Konto auf Antrag löschen“ unter Organisationen; Migrationen 00075/00076, nur über Definer-Funktionen.
+> - **Konten ohne Mitgliedschaft:** ein Trigger auf `memberships` setzt `users.orphaned_since` beim Ende der letzten
+>   Mitgliedschaft und löscht es beim Beitritt; der Job (stündlich) löscht nach `SERMON_ACCOUNT_DELETION_GRACE`
+>   (Standard 30 Tage, mindestens 24 h, Superadmins nie) in Stapeln von 500, je Konto ein Eintrag `account.purge` im
+>   Instanz-Log. Bestehende Konten ohne Mitgliedschaft beginnen ihre Frist mit der Migration. Sessions, Passwort,
+>   TOTP, Recovery-Codes, Passkeys, Identitäten und offene Adressänderung gehen per Kaskade, Audit-Einträge behalten
+>   die UUID.
+> - **Auf Antrag:** `account_delete` lehnt Superadmins und den letzten Admin für alle Gruppen einer Org ab, schreibt
+>   in jede Org des Kontos `member.account_deleted` und in derselben Transaktion `account.delete` ins Instanz-Log.
+> - **Einladungen** werden nach Ablauf mit ihrer Adresse gelöscht; `member.invite` und `org.create` schreiben keine
+>   E-Mail-Adresse mehr ins Audit-Log, nur die Einladung.
+> - **Aufbewahrung der Audit-Logs:** `SERMON_AUDIT_RETENTION` (Standard 2 Jahre, 90 Tage bis 10 Jahre) für die Logs
+>   aller Orgs (auch gesperrter) und der Instanz. Gekürzt wird nur der Anfang, nie der neueste Eintrag; danach
+>   schreibt der Server `audit.prune` mit Sequenz und Hash des letzten gelöschten Eintrags. Prüfung und Export der
+>   Kette beginnen nur an so einem Eintrag, ein von Hand gekürzter Anfang gilt weiter als gebrochen.
+> - **Name und Adresse** ändern User selbst mit Step-up. Mit SMTP gilt eine neue Adresse erst mit einem Code
+>   (8 Zeichen, an das Konto gebunden, nur als Hash, 1 h, 5 Versuche, 5 Codes je Stunde); die alte Adresse wird
+>   benachrichtigt. Eine vergebene Adresse wird erst nach dem Code abgelehnt (keine Abfrage von Adressen). Ohne
+>   SMTP (Entwicklung) gilt die Adresse sofort.
+> - **Export** (Step-up, `account.export` im Instanz-Log): JSON mit Konto, Anmeldewegen ohne Geheimnisse, Sitzungen,
+>   Mitgliedschaften und Rollen, eigenen Dashboards und eigenen Audit-Einträgen (nur Zeit und Aktion; Details
+>   nennen andere).
+>
+> Tests: Store-Integrationstests (Frist erst nach, nicht vor der Grace, Superadmin und Mitglied bleiben, alle
+> Kindzeilen weg, Audit-Eintrag mit UUID; Löschen auf Antrag mit Weigerungen; Einladungen; Adressänderung;
+> Export ohne Daten eines zweiten Mitglieds; Kürzen der Kette, auch „alles alt“ und Kürzung von Hand), Unit-Tests
+> des Dienstes, API-Tests über den echten Stack (Code aus dem Postfach, fremder Code, Login mit der neuen Adresse,
+> Export, Löschen beendet die Session), Tenant-Isolations- und Step-up-Tabellen, Rollen-Matrix, Komponenten- und
+> E2E-Test mit axe, Vorlage `docs/privacy` (Fristen gegen die Konstanten im Test), KONZEPT §18.7, Threat Model
+> T62, T28, T120–T123. Grenzen: Einträge aus Versionen vor 1.0 können noch Adressen enthalten (die Kette lässt
+> sich nicht schwärzen), sie gehen mit der Aufbewahrung; IP-Adressen werden weiter nicht gekürzt. Gegenproben 18/18.
 - **Ziel:** KONZEPT §18.7, Lücken aus V1-11: Konten ohne Mitgliedschaft werden nach einer Frist gelöscht (heute
   bleiben sie für immer), abgelaufene Einladungen verlieren ihre E-Mail-Adresse, das Audit-Log bekommt eine eigene
   Aufbewahrung der Instanz, User ändern E-Mail und Anzeigenamen selbst (mit Step-up) und exportieren ihre Daten;

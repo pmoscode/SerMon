@@ -44,6 +44,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/account"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/auth"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/oidc"
@@ -275,6 +276,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		orgRetention := orgretention.NewService(postgres.NewRetentionStore(db), authz.NewPolicy(), time.Now, retentionOptions...)
 		servers = append(servers, orgRetention.Run)
+		// Personal data past its period (V1-17): accounts without membership, expired invitations
+		// and e-mail changes, old audit entries.
+		accounts, err := newAccounts(cfg, db, logger)
+		if err != nil {
+			return err
+		}
+		servers = append(servers, accounts.Run)
 		// Configuration of the agents (M3-03, ADR 0030): changes reach the connected sessions.
 		agentConfigs := postgres.NewLogSettingsStore(db)
 		logSettings := logsettings.NewService(agentConfigs, authz.NewPolicy(), sessions, time.Now)
@@ -303,7 +311,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		}
 		servers = append(servers, releases.Run)
 		observing := observingServices{logSettings: logSettings, modules: moduleSettings, logQueries: logQueries, liveViews: liveViews, releases: agentReleases{releases}}
-		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, dataServices{nodes: nodeLife, retention: orgRetention}, observing, registry, logger); err != nil {
+		if err := mountAPI(ctx, mux, cfg, db, ca, rotator, nodes, notify.NewService(notifyDeps), alertingAPI, monitor, lifecycle, dataServices{nodes: nodeLife, retention: orgRetention, accounts: accounts}, observing, registry, logger); err != nil {
 			return err
 		}
 		servers = append(servers, refreshCA(ca, logger))
@@ -565,10 +573,36 @@ func openGeoIP(ctx context.Context, cfg config.Config, logger *slog.Logger) (*ge
 	return db, nil
 }
 
-// dataServices delete the data of nodes and organizations (M5-29, M5-30).
+// dataServices delete the data of nodes and organizations (M5-29, M5-30) and keep accounts no
+// longer than needed (V1-17).
 type dataServices struct {
 	nodes     *nodelife.Service
 	retention *orgretention.Service
+	accounts  *account.Service
+}
+
+// Codes for a new e-mail address per user and hour (V1-17): each sends a mail.
+const (
+	emailCodesPerWindow = 5
+	emailCodeWindow     = time.Hour
+)
+
+// newAccounts assembles the own accounts and their maintenance (V1-17): with SMTP a new address
+// needs the code from its mailbox.
+func newAccounts(cfg config.Config, db *postgres.DB, logger *slog.Logger) (*account.Service, error) {
+	d := account.Deps{
+		Store: postgres.NewAccountStore(db), Policy: authz.NewPolicy(),
+		Limiter: ratelimit.New(emailCodesPerWindow, emailCodeWindow, time.Now), Now: time.Now,
+		Grace: cfg.AccountGrace, AuditRetention: cfg.AuditRetention, Logger: logger,
+	}
+	if cfg.SMTP != nil {
+		d.Mailer = newMailer(cfg.SMTP)
+	}
+	svc, err := account.NewService(d)
+	if err != nil {
+		return nil, fmt.Errorf("accounts: %w", err)
+	}
+	return svc, nil
 }
 
 func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *postgres.DB, ca *agentca.Service,
@@ -689,6 +723,7 @@ func mountAPI(ctx context.Context, mux *http.ServeMux, cfg config.Config, db *po
 		Rules:         webapi.NewAlertRuleHandler(alertingAPI.rules, logger),
 		Dashboards:    webapi.NewDashboardHandler(dashboards.NewService(postgres.NewDashboardStore(db), policy, ratelimit.New(dashboards.WritesPerMinute, time.Minute, time.Now), time.Now, access.NewID), logger),
 		KioskTokens:   webapi.NewKioskTokenHandler(displays, logger),
+		Account:       webapi.NewAccountHandler(data.accounts, logger),
 		Kiosk:         webapi.NewKioskHandler(displays, logger),
 		KioskAuthenticator: webapi.NewKioskAuthenticator(displays, ratelimit.New(webapi.KioskCallsPerIP, time.Minute, time.Now),
 			ratelimit.New(webapi.KioskCallsPerToken, time.Minute, time.Now), logger),

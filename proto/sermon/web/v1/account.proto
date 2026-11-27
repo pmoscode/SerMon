@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package sermon.web.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+// AccountService is the caller's own account (V1-17, KONZEPT §18.7): name, e-mail address and
+// the export of the account's data. It works with any full session, also without an organization
+// (superadmins) and while the organization waits for a second factor. Changes and the export need
+// a recent step-up (FAILED_PRECONDITION with StepUpRequired otherwise).
+service AccountService {
+  // GetAccount returns the account and a pending change of the address.
+  rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // SetDisplayName changes the caller's name. INVALID_ARGUMENT for an empty or unprintable name.
+  rpc SetDisplayName(SetDisplayNameRequest) returns (SetDisplayNameResponse);
+  // RequestEmailChange starts a change of the address: with SMTP a code goes to the new address
+  // (code_sent); without (development) the address applies at once. INVALID_ARGUMENT for a
+  // malformed or the current address, RESOURCE_EXHAUSTED after too many requests, ALREADY_EXISTS
+  // without SMTP when another account has the address.
+  rpc RequestEmailChange(RequestEmailChangeRequest) returns (RequestEmailChangeResponse);
+  // ConfirmEmailChange applies the pending address with the code from the mail; the old address
+  // hears of it. PERMISSION_DENIED for a wrong code, FAILED_PRECONDITION without a pending change
+  // (none, expired after an hour or after five wrong codes), ALREADY_EXISTS when another account
+  // has the address.
+  rpc ConfirmEmailChange(ConfirmEmailChangeRequest) returns (ConfirmEmailChangeResponse);
+  // CancelEmailChange drops a pending change.
+  rpc CancelEmailChange(CancelEmailChangeRequest) returns (CancelEmailChangeResponse);
+  // ExportAccountData returns what SerMon holds about the account as JSON: only its own data,
+  // no secrets. The export is recorded in the instance's audit log.
+  rpc ExportAccountData(ExportAccountDataRequest) returns (ExportAccountDataResponse);
+}
+
+// AccountAdminService is for superadmins (V1-17).
+service AccountAdminService {
+  // DeleteAccount deletes the account with the address on request of its owner, with step-up:
+  // its sessions, password, second factors and passkeys go, audit entries keep only its ID; each
+  // of its organizations gets an entry. NOT_FOUND for an unknown address, FAILED_PRECONDITION for
+  // a superadmin or the last admin for all groups of an organization.
+  rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
+}
+
+// GetAccountRequest has no parameters.
+message GetAccountRequest {}
+
+// GetAccountResponse is the caller's account.
+message GetAccountResponse {
+  // email is the address of the account (its login).
+  string email = 1;
+  // display_name is the name others see.
+  string display_name = 2;
+  // create_time is when the account was created.
+  google.protobuf.Timestamp create_time = 3;
+  // pending_email is the address waiting for its code (empty: none).
+  string pending_email = 4;
+  // pending_expire_time is when the code of pending_email stops working.
+  google.protobuf.Timestamp pending_expire_time = 5;
+  // email_verification is true when a new address needs the code from a mail (SMTP configured).
+  bool email_verification = 6;
+}
+
+// SetDisplayNameRequest carries the new name.
+message SetDisplayNameRequest {
+  // display_name is the new name (1 to 200 characters).
+  string display_name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 800
+  }];
+}
+
+// SetDisplayNameResponse is empty.
+message SetDisplayNameResponse {}
+
+// RequestEmailChangeRequest carries the new address.
+message RequestEmailChangeRequest {
+  // email is the new address.
+  string email = 1 [(buf.validate.field).string = {
+    min_len: 3
+    max_len: 320
+  }];
+}
+
+// RequestEmailChangeResponse says how the change goes on.
+message RequestEmailChangeResponse {
+  // code_sent is true when a code went to the new address; false: the address applies already.
+  bool code_sent = 1;
+}
+
+// ConfirmEmailChangeRequest carries the code from the mail.
+message ConfirmEmailChangeRequest {
+  // code is the code from the mail (dashes and spaces allowed).
+  string code = 1 [(buf.validate.field).string = {
+    min_len: 8
+    max_len: 16
+  }];
+}
+
+// ConfirmEmailChangeResponse is empty.
+message ConfirmEmailChangeResponse {}
+
+// CancelEmailChangeRequest has no parameters.
+message CancelEmailChangeRequest {}
+
+// CancelEmailChangeResponse is empty.
+message CancelEmailChangeResponse {}
+
+// ExportAccountDataRequest has no parameters.
+message ExportAccountDataRequest {}
+
+// ExportAccountDataResponse carries the export.
+message ExportAccountDataResponse {
+  // json is the export (format sermon-account-export/1).
+  string json = 1;
+}
+
+// DeleteAccountRequest names the account by its address.
+message DeleteAccountRequest {
+  // email is the address of the account to delete.
+  string email = 1 [(buf.validate.field).string = {
+    min_len: 3
+    max_len: 320
+  }];
+}
+
+// DeleteAccountResponse says what went.
+message DeleteAccountResponse {
+  // memberships is the number of organizations the account was a member of.
+  int32 memberships = 1;
+}

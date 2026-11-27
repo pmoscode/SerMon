@@ -64,9 +64,16 @@ func (s *InstanceAuditStore) Verify(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load instance audit log: %w", err)
 	}
-	prev := []byte{}
+	links := make([]chainLink, len(entries))
 	for i, e := range entries {
-		if e.Seq != int64(i)+1 || !bytes.Equal(e.PrevHash, prev) || !bytes.Equal(e.Hash, instanceAuditHash(e)) {
+		links[i] = chainLink{seq: e.Seq, prev: e.PrevHash, action: e.Action, details: e.Details}
+	}
+	prev, ok := chainStart(links)
+	if !ok {
+		return fmt.Errorf("%w at the start of the instance log", ErrAuditChainBroken)
+	}
+	for i, e := range entries {
+		if e.Seq != entries[0].Seq+int64(i) || !bytes.Equal(e.PrevHash, prev) || !bytes.Equal(e.Hash, instanceAuditHash(e)) {
 			return fmt.Errorf("%w at instance entry %d", ErrAuditChainBroken, e.ID)
 		}
 		prev = e.Hash

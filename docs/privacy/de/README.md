@@ -48,12 +48,12 @@ Angreifer). Auch Hostnamen und IP-Adressen können personenbezogen sein, etwa be
 
 | Kategorie | Daten | Herkunft | Ablage |
 |---|---|---|---|
-| Konto | E-Mail-Adresse, Anzeigename, Passwort-Hash (Argon2id), Zeitpunkt der Passwortänderung, Fehlversuche und Sperre | Einrichtung, Einladung, SSO | Datenbank |
+| Konto | E-Mail-Adresse, Anzeigename, Passwort-Hash (Argon2id), Zeitpunkt der Passwortänderung, Fehlversuche und Sperre, seit wann ohne Mitgliedschaft; eine angefragte neue E-Mail-Adresse mit dem Code nur als Hash (eine Stunde) | Einrichtung, Einladung, SSO, Mitglied | Datenbank |
 | Anmeldefaktoren | TOTP-Seed (verschlüsselt), Recovery-Codes (Hash), Passkeys (öffentlicher Schlüssel, Name, letzte Nutzung), SSO-Identität (Issuer, Subject, E-Mail, letzte Anmeldung) | Mitglied, Identity Provider | Datenbank |
 | Sitzungen | Sitzungs-ID, Beginn, letzte Aktivität, Zeit der letzten Bestätigung (keine IP-Adresse, kein User-Agent) | Anmeldung | Datenbank |
 | Mitgliedschaft | Organisation, Rollen je Gruppe, Herkunft der Rolle (z. B. SSO-Gruppe) | Admins, Identity Provider | Datenbank |
 | Einladungen | E-Mail-Adresse, Rolle, einladende Person, Ablauf (Token nur als Hash) | Admins | Datenbank, E-Mail |
-| Audit-Log | Zeit, handelnde Person (ID), Aktion, Ziel, Details (z. B. eingeladene E-Mail-Adresse, neue IP eines Nodes) | jede Änderung | Datenbank |
+| Audit-Log | Zeit, handelnde Person (ID), Aktion, Ziel, Details (z. B. neue IP eines Nodes; ab v1.0 keine E-Mail-Adressen); im Instanz-Audit-Log zusätzlich Änderungen, Export und Löschung von Konten (nur mit Kennung) | jede Änderung | Datenbank |
 | Nodes | Hostname, `machine-id`, Betriebssystem, Kernel, Hardware, Tags, letzte IP-Adresse des Agents | Agent | Datenbank |
 | Metriken | Messwerte des Hosts und seiner Dienste (CPU, Speicher, Platten, Netzwerk, Module); Labels wie Dateisystem, Netzwerkkarte, Unit- oder Containername | Agent | Datenbank (TimescaleDB) |
 | Logs | Log-Zeilen aus dem systemd-Journal und aus freigegebenen Logdateien – mit allem, was darin steht (Benutzernamen, IP-Adressen, URLs, Inhalte); bekannte Geheimnisse vom Agent vor dem Versand ersetzt | Agent | Loki |
@@ -82,7 +82,7 @@ Die Maßnahmen stehen gesammelt in Abschnitt 4, die Fristen in Abschnitt 5.
 | Rechtsgrundlage | [z. B. Art. 6 Abs. 1 lit. b DSGVO (Vertrag) bzw. § 26 BDSG/Art. 88 DSGVO bei Beschäftigten] |
 | Empfänger | Admins der Organisation; Mailserver für Einladungen; ggf. Identity Provider (SSO) |
 | Drittland | [nein / Mailserver bzw. Identity Provider: …] |
-| Frist | solange das Konto besteht; Sitzungen 30 Minuten ohne Aktivität, höchstens 12 Stunden; Einladungen 72 Stunden gültig |
+| Frist | Konten bis 30 Tage nach dem Ende der letzten Mitgliedschaft (einstellbar) oder bis zum Antrag; Sitzungen 30 Minuten ohne Aktivität, höchstens 12 Stunden; Einladungen 72 Stunden, danach gelöscht |
 
 ### 3.2 Überwachung der Server (Metriken und Host-Daten)
 
@@ -135,11 +135,11 @@ Die Maßnahmen stehen gesammelt in Abschnitt 4, die Fristen in Abschnitt 5.
 | | |
 |---|---|
 | Zweck | Nachweis, wer wann was geändert hat (Rechte, Regeln, Kanäle, Updates, Löschungen …) |
-| Betroffene | Mitglieder; in Details genannte Personen (z. B. eingeladene E-Mail-Adresse) |
+| Betroffene | Mitglieder (nur mit ihrer Kennung); in älteren Einträgen eingeladene E-Mail-Adressen |
 | Daten | Audit-Log (Abschnitt 2); für die Instanz ein eigenes Audit-Log der Superadmins |
 | Rechtsgrundlage | [z. B. Art. 6 Abs. 1 lit. c/f DSGVO, Art. 5 Abs. 2 DSGVO (Rechenschaft)] |
 | Empfänger | Admins der Organisation; Superadmins für das Instanz-Log und den Export einer gesperrten Organisation |
-| Frist | solange die Organisation besteht; [eigene Frist festlegen, siehe Abschnitt 8] |
+| Frist | 2 Jahre (`SERMON_AUDIT_RETENTION`, 90 Tage bis 10 Jahre), längstens bis die Organisation gelöscht wird |
 
 ### 3.7 Live-Ansicht der Prozesse
 
@@ -237,9 +237,10 @@ Patchen des Hosts) ergänzt der Betreiber.
 | Zustellprotokoll der Benachrichtigungen | 30 Tage | nein |
 | Update-Läufe | 1 Jahr | nein |
 | Sitzungen | 30 Minuten ohne Aktivität, höchstens 12 Stunden | nein |
-| Einladungen | 72 Stunden gültig | nein |
-| Audit-Log der Organisation | bis die Organisation gelöscht wird | nein |
-| Konten | mit dem Löschen der letzten Organisation, deren Mitglied das Konto ist | siehe Abschnitt 8 |
+| Einladungen | 72 Stunden gültig, danach mit ihrer Adresse gelöscht (stündlich) | nein |
+| Code einer neuen E-Mail-Adresse | 1 Stunde, höchstens 5 Versuche | nein |
+| Audit-Logs (Organisationen und Instanz) | 2 Jahre, ab Werk 730 Tage | Betreiber: `SERMON_AUDIT_RETENTION`, 90 Tage bis 10 Jahre |
+| Konten ohne Mitgliedschaft | ab Werk 30 Tage nach dem Ende der letzten Mitgliedschaft (Superadmins ausgenommen) | Betreiber: `SERMON_ACCOUNT_DELETION_GRACE`, mindestens 24 Stunden |
 | Container-Logs des Servers | [Rotation des Betreibers; `deploy/compose`: 5 × 10 MB je Container] | Betreiber |
 
 Events löscht der Server stündlich; Logs löscht Loki etwa einmal am Tag – Logs können also bis zu einem Tag länger
@@ -253,6 +254,16 @@ Es bleiben die Einträge im Audit-Log, das Zustellprotokoll bis zu seiner Frist 
 mindestens 7 Tage, `SERMON_ORG_DELETION_GRACE`) mit Logs, Metriken, Events, Audit-Log, Nodes und allen übrigen Daten
 gelöscht; Konten ohne Mitgliedschaft in einer anderen Organisation gehen mit. Vorher lässt sich das Audit-Log der
 gesperrten Organisation exportieren.
+
+**Konto löschen:** Ein Konto ohne Mitgliedschaft löscht der Server nach der Frist von selbst (stündlich), auf Antrag
+löscht es ein Superadmin sofort (Organisationen → „Konto auf Antrag löschen“, mit erneuter Bestätigung). Mit dem
+Konto gehen Sitzungen, Passwort, zweiter Faktor, Recovery-Codes, Passkeys, SSO-Verknüpfungen, eine offene Änderung der
+Adresse und private Dashboards. Im Audit-Log bleibt nur die Kennung (UUID) des Kontos; jede Organisation des Kontos und
+das Instanz-Audit-Log erhalten einen Eintrag ohne Adresse. Superadmins und der letzte Admin für alle Gruppen einer
+Organisation lassen sich so nicht löschen.
+
+**Audit-Logs** verlieren Einträge älter als die Aufbewahrung vom Anfang der Kette her; ein Eintrag `audit.prune` nennt
+den letzten gelöschten Eintrag, damit die Kette ab dort prüfbar bleibt. Der neueste Eintrag bleibt immer.
 
 ## 6. Auftragsverarbeitung bei Mandanten (Art. 28 DSGVO)
 
@@ -273,13 +284,16 @@ folgenden Punkte zeigen, was SerMon dafür bereitstellt; den Vertrag selbst erse
 
 ## 7. Rechte der Betroffenen
 
-- **Auskunft (Art. 15):** Security-Events lassen sich nach Benutzername und IP-Adresse filtern und als CSV
-  exportieren; Logs lassen sich nach Text durchsuchen. Konto-Daten stehen in der Datenbank ([Verfahren: Abfrage durch
-  den Betreiber]).
-- **Berichtigung (Art. 16):** Die UI kennt keine Änderung von E-Mail-Adresse oder Anzeigename; [Verfahren: durch den
-  Betreiber]. Metriken, Logs und Events geben wieder, was auf den Hosts geschah, und werden nicht berichtigt.
-- **Löschung (Art. 17):** über die Fristen (Abschnitt 5), das Löschen eines Nodes oder der Organisation. Einzelne
-  Log-Zeilen oder Events lassen sich nicht gezielt löschen; eine kürzere Aufbewahrung wirkt auf alle.
+- **Auskunft (Art. 15):** Mitglieder laden unter **Konto → Meine Daten** alle Daten ihres Kontos als JSON herunter
+  (Konto, Anmeldewege ohne Geheimnisse, Sitzungen, Mitgliedschaften und Rollen, eigene Dashboards, eigene
+  Audit-Einträge; nichts über andere; mit erneuter Bestätigung, im Instanz-Audit-Log vermerkt). Security-Events lassen
+  sich nach Benutzername und IP-Adresse filtern und als CSV exportieren; Logs lassen sich nach Text durchsuchen.
+- **Berichtigung (Art. 16):** Mitglieder ändern Anzeigenamen und E-Mail-Adresse selbst (Konto, mit erneuter
+  Bestätigung; eine neue Adresse gilt erst mit dem Code, der an sie geht, die alte Adresse wird benachrichtigt).
+  Metriken, Logs und Events geben wieder, was auf den Hosts geschah, und werden nicht berichtigt.
+- **Löschung (Art. 17):** Konten auf Antrag durch einen Superadmin, sonst über die Fristen (Abschnitt 5), das Löschen
+  eines Nodes oder der Organisation. Einzelne Log-Zeilen oder Events lassen sich nicht gezielt löschen; eine kürzere
+  Aufbewahrung wirkt auf alle.
 - **Einschränkung und Widerspruch (Art. 18, 21):** Logs je Gruppe abschalten oder filtern, eigene Redaction-Regeln für
   bestimmte Angaben, Logs und Befehlszeilen für Betrachter sperren.
 - **Datenübertragbarkeit (Art. 20):** für Mitglieder in der Regel nicht einschlägig; Exporte siehe Abschnitt 6.
@@ -288,14 +302,11 @@ folgenden Punkte zeigen, was SerMon dafür bereitstellt; den Vertrag selbst erse
 
 Damit die Dokumentation stimmt, sind diese Punkte im eigenen Konzept zu berücksichtigen (Stand v1.0):
 
-- **Mitglied entfernen** löscht die Mitgliedschaft und beendet die Sitzungen, nicht das Konto. Das Konto ohne
-  Mitgliedschaft (E-Mail, Anzeigename, Faktoren) löscht SerMon nicht von selbst, auch nicht mit der Organisation; das
-  kann nur der Betreiber in der Datenbank. Mit einer Organisation gelöscht werden nur Konten, die dann noch Mitglied
-  sind und keine andere Mitgliedschaft haben.
-- **Abgelaufene Einladungen** behalten die E-Mail-Adresse, bis sie widerrufen, neu gesendet oder mit der Organisation
-  gelöscht werden.
-- Das **Audit-Log** hat keine eigene Frist; es bleibt, solange die Organisation besteht (das Instanz-Audit-Log, solange
-  die Instanz besteht).
+- **Audit-Einträge aus Versionen vor 1.0** können eingeladene E-Mail-Adressen (`member.invite`) und die Adresse des ersten Admins
+  einer Organisation (`org.create`, Instanz-Audit-Log) enthalten; sie verschwinden erst mit der Aufbewahrung der
+  Audit-Logs, nicht mit dem Konto. Die Kette lässt sich nicht nachträglich schwärzen, ohne sie zu brechen.
+- **Mitglieder entfernen** beendet die Mitgliedschaft sofort, das Konto aber erst nach der Frist (ab Werk 30 Tage):
+  So bleibt ein Konto bei einem Wechsel der Organisation erhalten. Auf Antrag löscht ein Superadmin es sofort.
 - **IP-Adressen** werden nicht nach einer Frist gekürzt oder pseudonymisiert; sie verschwinden mit ihren Events.
 - **Benachrichtigungen** enthalten bei Sicherheitsregeln Benutzernamen und IP-Adressen und gehen an die Dienste der
   eingerichteten Kanäle; deren Speicherfristen bestimmt der jeweilige Dienst.

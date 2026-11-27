@@ -57,6 +57,8 @@ func TestStepUp_SensitiveActionsNeedAFreshStepUp(t *testing.T) {
 			mappingA: mappingAl, dashboards: ann.dashboards, dashboardA: dashAl, kioskTokens: ann.kioskTokens, kioskTokenA: kioskAl,
 		},
 		twoFactor: ann.twoFactor, policy: ann.policy, passkeys: webv1connect.NewPasskeyServiceClient(hc, s.server.URL),
+		account:      webv1connect.NewAccountServiceClient(hc, s.server.URL),
+		accountAdmin: webv1connect.NewAccountAdminServiceClient(s.httpClient(sam.jar, s.origin), s.server.URL),
 	}
 	ctx := context.Background()
 	procedures := make([]string, 0, len(stepUpRequired))

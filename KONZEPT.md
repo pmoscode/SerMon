@@ -1519,7 +1519,14 @@ statt `yes`, damit der Dateisystem-Collector auch `/home` sieht. Unter OpenRC wi
 - IP-Adressen, Usernamen und Logs sind **personenbezogene Daten**. Daraus folgen: eine definierte Retention,
   Rollenbeschränkung (Logs für Viewer abschaltbar), Löschfunktion, Export und eine Vorlage für das
   Verarbeitungsverzeichnis mit TOMs und Löschfristen in `docs/privacy/` (V1-11).
-- GeoIP nur lokal. Optional werden IPs nach X Tagen pseudonymisiert (gekürzt).
+- Umgesetzt (V1-17): Konten ohne Mitgliedschaft werden nach einer Frist gelöscht (`SERMON_ACCOUNT_DELETION_GRACE`,
+  Standard 30 Tage, mindestens 24 h; Superadmins ausgenommen), auf Antrag sofort durch einen Superadmin (Step-up);
+  Audit-Einträge behalten nur die Kennung. Abgelaufene Einladungen werden mit ihrer Adresse gelöscht, das Audit-Log
+  nennt keine E-Mail-Adressen mehr. Beide Audit-Logs behalten Einträge `SERMON_AUDIT_RETENTION` lang (Standard
+  2 Jahre, 90 Tage bis 10 Jahre); ein Eintrag `audit.prune` hält die gekürzte Kette prüfbar. User ändern Anzeigenamen
+  und E-Mail-Adresse selbst (Step-up; die neue Adresse mit einem Code an sie, die alte wird benachrichtigt) und
+  exportieren ihre Daten als JSON (nur die eigenen, ohne Geheimnisse).
+- GeoIP nur lokal. Optional werden IPs nach X Tagen pseudonymisiert (gekürzt) – noch nicht umgesetzt.
 
 ### 18.8 Prozess
 

@@ -25,7 +25,8 @@ Hat die Instanz einen OIDC-Provider, ordnet der Reiter **SSO-Gruppen** Gruppen d
 ## Gut zu wissen
 
 - Rechte ändern, Mitglieder entfernen, Gruppen löschen und Einladen verlangen eine erneute Bestätigung (Passwort oder zweiter Faktor).
-- Einladungen gehen per E-Mail an die eingeladene Adresse; nur wer das Postfach hat, kann sie annehmen. Der Link gilt einmal innerhalb von 72 Stunden. „Erneut senden“ schickt einen neuen Link, der alte wird ungültig. Nur auf einem Entwicklungsserver ohne Mail zeigt SerMon den Link einmal zum Weitergeben.
+- Einladungen gehen per E-Mail an die eingeladene Adresse; nur wer das Postfach hat, kann sie annehmen. Der Link gilt einmal innerhalb von 72 Stunden. „Erneut senden“ schickt einen neuen Link, der alte wird ungültig. Nur auf einem Entwicklungsserver ohne Mail zeigt SerMon den Link einmal zum Weitergeben. Abgelaufene Einladungen löscht SerMon mit ihrer Adresse; das Audit-Log nennt nur die Einladung, nicht die Adresse.
+- Ein entferntes Mitglied ohne weitere Organisation verliert sein Konto nach einer Frist der Instanz (Standard 30 Tage); wird es vorher wieder eingeladen, bleibt das Konto.
 - Der letzte Admin für alle Gruppen lässt sich nicht entfernen.
 - Jede Änderung steht mit Zeit und Person im Audit-Log; die Einträge sind verkettet und lassen sich nicht unbemerkt ändern.
 - Der Reiter **Kontingente** zeigt die Grenzen, die der Superadmin der Instanz gesetzt hat, und wie viel davon belegt ist. An der Grenze lehnt SerMon neue Nodes und Einladungen ab; Bestehendes läuft weiter.

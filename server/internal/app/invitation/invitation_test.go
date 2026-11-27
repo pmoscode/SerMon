@@ -123,7 +123,7 @@ func TestInvite_ReturnsATokenAndStoresOnlyItsHash(t *testing.T) {
 		inv.InvitedBy == nil || *inv.InvitedBy != ann {
 		t.Errorf("invitation = %+v", inv)
 	}
-	if a := store.audits[0]; a.Action != "member.invite" || a.Details["email"] != "bob@example.org" || a.Details["group"] != "*" {
+	if a := store.audits[0]; a.Action != "member.invite" || a.Details["email"] != "" || a.Details["group"] != "*" {
 		t.Errorf("audit = %+v", a)
 	}
 }

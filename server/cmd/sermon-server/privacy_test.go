@@ -10,6 +10,7 @@ import (
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/account"
 	"github.com/pmoscode/SerMon/server/internal/app/anomalies"
 	"github.com/pmoscode/SerMon/server/internal/app/auth/session"
 	"github.com/pmoscode/SerMon/server/internal/app/invitation"
@@ -18,6 +19,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/app/nodelife"
 	"github.com/pmoscode/SerMon/server/internal/app/notify"
 	"github.com/pmoscode/SerMon/server/internal/app/organization"
+	"github.com/pmoscode/SerMon/server/internal/config"
 	"github.com/pmoscode/SerMon/server/internal/domain/retention"
 )
 
@@ -27,6 +29,13 @@ func TestPrivacyTemplate_PeriodsMatchTheCode(t *testing.T) {
 	days := func(d time.Duration) int { return int(d / (24 * time.Hour)) }
 	hours := func(d time.Duration) int { return int(d / time.Hour) }
 	minutes := func(d time.Duration) int { return int(d / time.Minute) }
+	defaults, err := config.Load(config.Source{
+		LookupEnv: func(string) (string, bool) { return "", false },
+		ReadFile:  func(string) ([]byte, error) { return nil, os.ErrNotExist },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	facts := []struct{ de, en string }{
 		{
 			fmt.Sprintf("Logs | %d–%d Tage, ab Werk %d", retention.MinLogDays, retention.MaxLogDays, retention.MaxLogDays),
@@ -71,6 +80,22 @@ func TestPrivacyTemplate_PeriodsMatchTheCode(t *testing.T) {
 		{
 			fmt.Sprintf("(höchstens %d Minuten am Stück)", minutes(liveview.MaxDuration)),
 			fmt.Sprintf("(at most %d minutes at a time)", minutes(liveview.MaxDuration)),
+		},
+		{
+			fmt.Sprintf("Konten ohne Mitgliedschaft | ab Werk %d Tage nach dem Ende der letzten Mitgliedschaft", days(defaults.AccountGrace)),
+			fmt.Sprintf("Accounts without membership | default %d days after the last membership ends", days(defaults.AccountGrace)),
+		},
+		{
+			fmt.Sprintf("`SERMON_ACCOUNT_DELETION_GRACE`, mindestens %d Stunden", hours(account.MinDeletionGrace)),
+			fmt.Sprintf("`SERMON_ACCOUNT_DELETION_GRACE`, at least %d hours", hours(account.MinDeletionGrace)),
+		},
+		{
+			fmt.Sprintf("Audit-Logs (Organisationen und Instanz) | 2 Jahre, ab Werk %d Tage", days(defaults.AuditRetention)),
+			fmt.Sprintf("Audit logs (organizations and instance) | 2 years, default %d days", days(defaults.AuditRetention)),
+		},
+		{
+			fmt.Sprintf("Code einer neuen E-Mail-Adresse | %d Stunde, höchstens %d Versuche", hours(account.CodeLifetime), account.MaxCodeAttempts),
+			fmt.Sprintf("Code of a new e-mail address | %d hour, at most %d attempts", hours(account.CodeLifetime), account.MaxCodeAttempts),
 		},
 		{
 			fmt.Sprintf("Tokens laufen ab (%d bis %d Tage)", days(kiosk.MinValidity), days(kiosk.MaxValidity)),

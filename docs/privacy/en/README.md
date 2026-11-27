@@ -46,12 +46,12 @@ names and IP addresses may be personal data as well, e.g. for servers of individ
 
 | Category | Data | Source | Stored in |
 |---|---|---|---|
-| Account | e-mail address, display name, password hash (Argon2id), time of the password change, failed attempts and lock | setup, invitation, SSO | database |
+| Account | e-mail address, display name, password hash (Argon2id), time of the password change, failed attempts and lock, since when without membership; a requested new e-mail address with the code as hash only (one hour) | setup, invitation, SSO, member | database |
 | Sign-in factors | TOTP seed (encrypted), recovery codes (hash), passkeys (public key, name, last use), SSO identity (issuer, subject, e-mail, last sign-in) | member, identity provider | database |
 | Sessions | session ID, start, last activity, time of the last confirmation (no IP address, no user agent) | sign-in | database |
 | Membership | organization, roles per group, origin of the role (e.g. SSO group) | admins, identity provider | database |
 | Invitations | e-mail address, role, inviting person, expiry (token as hash only) | admins | database, e-mail |
-| Audit log | time, acting person (ID), action, target, details (e.g. invited e-mail address, new IP of a node) | every change | database |
+| Audit log | time, acting person (ID), action, target, details (e.g. new IP of a node; from v1.0 no e-mail addresses); the instance audit log also has changes, export and deletion of accounts (by ID only) | every change | database |
 | Nodes | host name, `machine-id`, operating system, kernel, hardware, tags, last IP address of the agent | agent | database |
 | Metrics | measurements of the host and its services (CPU, memory, disks, network, modules); labels such as file system, network interface, unit or container name | agent | database (TimescaleDB) |
 | Logs | log lines from the systemd journal and from allowed log files – with whatever they contain (user names, IP addresses, URLs, content); known secrets replaced by the agent before sending | agent | Loki |
@@ -80,7 +80,7 @@ section 4, the periods in section 5.
 | Legal basis | [e.g. Art. 6(1)(b) GDPR (contract), or Art. 88 GDPR and national law for employees] |
 | Recipients | admins of the organization; mail server for invitations; identity provider (SSO) if used |
 | Third country | [no / mail server or identity provider: …] |
-| Period | as long as the account exists; sessions 30 minutes without activity, at most 12 hours; invitations valid for 72 hours |
+| Period | accounts until 30 days after the last membership ends (adjustable) or until a request; sessions 30 minutes without activity, at most 12 hours; invitations 72 hours, then deleted |
 
 ### 3.2 Monitoring the servers (metrics and host data)
 
@@ -133,11 +133,11 @@ section 4, the periods in section 5.
 | | |
 |---|---|
 | Purpose | proof of who changed what and when (rights, rules, channels, updates, deletions …) |
-| Data subjects | members; people named in details (e.g. an invited e-mail address) |
+| Data subjects | members (by their ID only); invited e-mail addresses in older entries |
 | Data | audit log (section 2); for the instance a separate audit log of the superadmins |
 | Legal basis | [e.g. Art. 6(1)(c)/(f) GDPR, Art. 5(2) GDPR (accountability)] |
 | Recipients | admins of the organization; superadmins for the instance log and the export of a locked organization |
-| Period | as long as the organization exists; [set a period of your own, see section 8] |
+| Period | 2 years (`SERMON_AUDIT_RETENTION`, 90 days to 10 years), at most until the organization is deleted |
 
 ### 3.7 Live view of the processes
 
@@ -233,9 +233,10 @@ access, staff, backups, patching the host).
 | Delivery log of notifications | 30 days | no |
 | Update runs | 1 year | no |
 | Sessions | 30 minutes without activity, at most 12 hours | no |
-| Invitations | valid for 72 hours | no |
-| Audit log of the organization | until the organization is deleted | no |
-| Accounts | with the deletion of the last organization the account is a member of | see section 8 |
+| Invitations | valid for 72 hours, then deleted with their address (hourly) | no |
+| Code of a new e-mail address | 1 hour, at most 5 attempts | no |
+| Audit logs (organizations and instance) | 2 years, default 730 days | operator: `SERMON_AUDIT_RETENTION`, 90 days to 10 years |
+| Accounts without membership | default 30 days after the last membership ends (superadmins excepted) | operator: `SERMON_ACCOUNT_DELETION_GRACE`, at least 24 hours |
 | Server container logs | [the operator's rotation; `deploy/compose`: 5 × 10 MB per container] | operator |
 
 The server deletes events hourly; Loki deletes logs about once a day – logs can therefore stay visible up to a day
@@ -249,6 +250,16 @@ logs. What stays: the entries in the audit log, the delivery log until its perio
 least 7 days, `SERMON_ORG_DELETION_GRACE`), deleted with logs, metrics, events, audit log, nodes and all other data;
 accounts without a membership in another organization go along. Before that, the audit log of the locked
 organization can be exported.
+
+**Deleting an account:** the server deletes an account without membership by itself after the grace period (hourly);
+on request a superadmin deletes it at once (Organizations → "Delete an account on request", with a fresh
+confirmation). Sessions, password, second factor, recovery codes, passkeys, SSO links, a pending change of the address
+and private dashboards go with the account. Only the account's ID (UUID) stays in the audit log; each organization of
+the account and the instance audit log get an entry without address. Superadmins and the last admin for all groups of
+an organization can't be deleted this way.
+
+**Audit logs** lose entries older than the retention from the start of the chain; an `audit.prune` entry names the
+last deleted entry, so the chain stays verifiable from there. The newest entry always stays.
 
 ## 6. Processing on behalf of tenants (Art. 28 GDPR)
 
@@ -269,12 +280,16 @@ what SerMon provides for it; they don't replace the agreement.
 
 ## 7. Rights of data subjects
 
-- **Access (Art. 15):** security events can be filtered by user name and IP address and exported as CSV; logs can be
-  searched by text. Account data is in the database ([procedure: query by the operator]).
-- **Rectification (Art. 16):** the UI has no way to change e-mail address or display name; [procedure: by the
-  operator]. Metrics, logs and events record what happened on the hosts and are not rectified.
-- **Erasure (Art. 17):** through the periods (section 5), deleting a node or the organization. Single log lines or
-  events can't be deleted selectively; a shorter retention applies to all.
+- **Access (Art. 15):** members download all data of their account as JSON under **Account → My data** (account,
+  sign-in methods without secrets, sessions, memberships and roles, own dashboards, own audit entries; nothing about
+  others; with a fresh confirmation, recorded in the instance audit log). Security events can be filtered by user name
+  and IP address and exported as CSV; logs can be searched by text.
+- **Rectification (Art. 16):** members change display name and e-mail address themselves (Account, with a fresh
+  confirmation; a new address applies only with the code sent to it, the old address is notified). Metrics, logs and
+  events record what happened on the hosts and are not rectified.
+- **Erasure (Art. 17):** accounts on request by a superadmin, otherwise through the periods (section 5), deleting a
+  node or the organization. Single log lines or events can't be deleted selectively; a shorter retention applies to
+  all.
 - **Restriction and objection (Art. 18, 21):** turn logs off or filter them per group, own redaction rules for
   certain details, withhold logs and command lines from viewers.
 - **Data portability (Art. 20):** usually not relevant for members; exports see section 6.
@@ -283,14 +298,11 @@ what SerMon provides for it; they don't replace the agreement.
 
 For the documentation to be accurate, take these points into account in your own concept (as of v1.0):
 
-- **Removing a member** deletes the membership and ends the sessions, not the account. SerMon doesn't delete the
-  account without a membership (e-mail, display name, factors) by itself, not even with the organization; only the
-  operator can, in the database. Deleting an organization deletes only the accounts that are still members then and
-  have no other membership.
-- **Expired invitations** keep the e-mail address until they are revoked, sent again or deleted with the
-  organization.
-- The **audit log** has no period of its own; it stays as long as the organization exists (the instance audit log as
-  long as the instance).
+- **Audit entries from versions before 1.0** may contain invited e-mail addresses (`member.invite`) and the address
+  of an organization's first admin (`org.create`, instance audit log); they go only with the retention of the audit
+  logs, not with the account. The chain can't be redacted afterwards without breaking it.
+- **Removing members** ends the membership at once, the account only after the grace period (default 30 days): an
+  account survives a change of organization this way. On request a superadmin deletes it at once.
 - **IP addresses** are not shortened or pseudonymized after a period; they go with their events.
 - **Notifications** of security rules contain user names and IP addresses and go to the services of the configured
   channels; their storage periods are set by each service.

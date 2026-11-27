@@ -163,9 +163,11 @@ func (s *Service) Invite(ctx context.Context, c access.Caller, email string, gro
 	now := s.now()
 	inviter := c.Principal.User
 	inv := Invitation{ID: ID(s.newID()), Email: email, Group: group, Role: r, InvitedBy: &inviter, CreatedAt: now, ExpiresAt: now.Add(Lifetime)}
+	// No address in the log: it stays as long as the log, the invitation only until it expires
+	// (V1-17); the target names the invitation, its join entry the account.
 	audit := access.AuditEntry{
 		Actor: inviter, Action: "member.invite", Target: "invitation:" + inv.ID.String(),
-		Details: map[string]string{"email": email, "role": r.String(), "group": groupName(group)},
+		Details: map[string]string{"role": r.String(), "group": groupName(group)},
 	}
 	if err := s.store.Create(ctx, scope, inv, hash, audit); err != nil {
 		return "", Invitation{}, fmt.Errorf("create invitation: %w", err)

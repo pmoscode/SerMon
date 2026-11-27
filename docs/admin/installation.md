@@ -235,6 +235,14 @@ Ein gelöschter Node bleibt deaktiviert, bis seine Frist abläuft; danach lösch
 Alerts und Logs (Prüfung stündlich, [ADR 0041](../adr/0041-nodes-deaktivieren-loeschen.md)). Die Frist setzt
 `SERMON_NODE_DELETION_GRACE` (Standard `168h` = 7 Tage, mindestens `24h`).
 
+## Konten und Audit-Logs
+
+Konten ohne Mitgliedschaft löscht der Server nach `SERMON_ACCOUNT_DELETION_GRACE` (Standard `720h` = 30 Tage,
+mindestens `24h`; Superadmins nie), abgelaufene Einladungen sofort; beide Audit-Logs behalten Einträge
+`SERMON_AUDIT_RETENTION` lang (Standard `17520h` = 2 Jahre, `2160h` bis `87600h`). Prüfung stündlich. Auf Antrag
+löscht ein Superadmin ein Konto auf der Seite „Organisationen“. Mehr in der
+[Vorlage zur DSGVO-Dokumentation](../privacy/de/README.md).
+
 ## Wenn die Standardnetze kollidieren
 
 Das Netz `edge` nutzt `172.30.78.0/24`, Caddy hat darin die feste Adresse `172.30.78.10`, dynamische Adressen kommen

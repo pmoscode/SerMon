@@ -28,6 +28,7 @@ import (
 	"github.com/pmoscode/SerMon/server/internal/adapters/postgres/pgtest"
 	"github.com/pmoscode/SerMon/server/internal/adapters/timescale"
 	"github.com/pmoscode/SerMon/server/internal/app/access"
+	"github.com/pmoscode/SerMon/server/internal/app/account"
 	"github.com/pmoscode/SerMon/server/internal/app/agentca"
 	"github.com/pmoscode/SerMon/server/internal/app/alerting/ruleset"
 	"github.com/pmoscode/SerMon/server/internal/app/alerts"
@@ -243,7 +244,19 @@ func newStackWithMailer(t *testing.T, loginLimit int, mailer invitation.Mailer) 
 		Readers:    kiosk.Readers{Fleet: nodes, Logs: logQueries, Alerts: alertList},
 		Policy:     authz.NewPolicy(), Now: time.Now, NewID: access.NewID,
 	})
+	var accountMailer account.Mailer
+	if mailer != nil {
+		accountMailer = mailer
+	}
+	accounts, err := account.NewService(account.Deps{
+		Store: postgres.NewAccountStore(pg), Mailer: accountMailer, Policy: authz.NewPolicy(),
+		Limiter: ratelimit.New(1000, time.Minute, time.Now), Now: time.Now, Grace: account.MinDeletionGrace,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	webapi.Mount(mux, webapi.Config{AllowedOrigins: []string{srv.URL}}, webapi.Handlers{
+		Account:  webapi.NewAccountHandler(accounts, slog.New(slog.DiscardHandler)),
 		LiveView: webapi.NewLiveViewHandler(liveViews, nil, slog.New(slog.DiscardHandler)),
 		Auth: webapi.NewAuthHandler(login, sessions, creds, secondFactor, slog.New(slog.DiscardHandler)).
 			WithPrincipals(access.NewLoader(postgres.NewAccessStore(pg), secondFactor)).

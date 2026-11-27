@@ -13,6 +13,7 @@ export const pageHelp: Record<string, string> = {
 	'/(app)/dashboards/[id]': 'pages/dashboard',
 	'/(app)/notifications': 'pages/notifications',
 	'/(app)/settings/security': 'pages/security',
+	'/(app)/settings/account': 'pages/account',
 	'/(app)/nodes/[id]': 'pages/node',
 	'/(app)/nodes/add': 'pages/add_node',
 	'/(app)/admin': 'pages/admin',

@@ -91,15 +91,26 @@ func (s *AccessStore) VerifyAuditChain(ctx context.Context, scope tenant.Scope) 
 		if err != nil {
 			return fmt.Errorf("load audit log: %w", err)
 		}
-		prev := []byte{}
+		prev, ok := chainStart(orgLinks(entries))
+		if !ok {
+			return fmt.Errorf("%w at its start", ErrAuditChainBroken)
+		}
 		for i, e := range entries {
-			if e.Seq != int64(i)+1 || !bytes.Equal(e.PrevHash, prev) || !bytes.Equal(e.Hash, auditHash(e)) {
+			if e.Seq != entries[0].Seq+int64(i) || !bytes.Equal(e.PrevHash, prev) || !bytes.Equal(e.Hash, auditHash(e)) {
 				return fmt.Errorf("%w at entry %d", ErrAuditChainBroken, e.ID)
 			}
 			prev = e.Hash
 		}
 		return nil
 	})
+}
+
+func orgLinks(entries []sqlcdb.AuditLog) []chainLink {
+	links := make([]chainLink, len(entries))
+	for i, e := range entries {
+		links[i] = chainLink{seq: e.Seq, prev: e.PrevHash, action: e.Action, details: e.Details}
+	}
+	return links
 }
 
 // auditHash mirrors the trigger audit_log_chain (migration 00005).

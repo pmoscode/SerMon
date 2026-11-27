@@ -40,6 +40,11 @@ its pages are only reachable afterwards.
 Sensitive actions – changing rights, starting updates, changing channels and many more – ask once more for a code,
 passkey or password. The confirmation holds for 15 minutes.
 
+Under **Account** in the account menu you change display name and e-mail address (the new address applies with the
+code SerMon sends to it) and download all data SerMon holds about you. When your last membership ends, the account is
+deleted after a grace period.
+
+- [Account](../../help/en/pages/account.md)
 - [Security (two-factor, passkeys, SSO)](../../help/en/pages/security.md)
 - [Confirmation (step-up)](../../help/en/concepts/step-up.md)
 

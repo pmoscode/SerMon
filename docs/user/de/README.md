@@ -40,6 +40,11 @@ Faktor, sind ihre Seiten erst danach erreichbar.
 Sensible Aktionen – Rechte ändern, Updates starten, Kanäle ändern und viele mehr – fragen noch einmal nach Code,
 Passkey oder Passwort. Die Bestätigung gilt 15 Minuten.
 
+Unter **Konto** im Kontomenü änderst du Anzeigenamen und E-Mail-Adresse (die neue Adresse gilt mit dem Code, den
+SerMon an sie schickt) und lädst alle Daten herunter, die SerMon über dich hält. Endet deine letzte Mitgliedschaft,
+wird das Konto nach einer Frist gelöscht.
+
+- [Konto](../../help/de/pages/account.md)
 - [Sicherheit (Zwei-Faktor, Passkeys, SSO)](../../help/de/pages/security.md)
 - [Erneute Bestätigung](../../help/de/concepts/step-up.md)
 

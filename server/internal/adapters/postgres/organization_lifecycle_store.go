@@ -103,9 +103,10 @@ func (s *OrganizationLifecycleStore) ExportAudit(ctx context.Context, org tenant
 		if err != nil {
 			return fmt.Errorf("load audit log: %w", err)
 		}
-		prev := []byte{}
+		var prev []byte
+		prev, valid = chainStart(orgLinks(entries))
 		for i, e := range entries {
-			if e.Seq != int64(i)+1 || !bytes.Equal(e.PrevHash, prev) || !bytes.Equal(e.Hash, auditHash(e)) {
+			if e.Seq != entries[0].Seq+int64(i) || !bytes.Equal(e.PrevHash, prev) || !bytes.Equal(e.Hash, auditHash(e)) {
 				valid = false
 			}
 			prev = e.Hash

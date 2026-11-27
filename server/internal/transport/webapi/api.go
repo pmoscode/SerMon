@@ -56,6 +56,8 @@ type Handlers struct {
 	LiveView        *LiveViewHandler
 	Dashboards      *DashboardHandler
 	KioskTokens     *KioskTokenHandler
+	// Account serves the own account (session only) and the superadmins' deletions (V1-17).
+	Account *AccountHandler
 	// Kiosk serves the displays (M5-26); KioskAuthenticator is its only authentication.
 	Kiosk              *KioskHandler
 	KioskAuthenticator *KioskAuthenticator
@@ -117,6 +119,11 @@ func Mount(mux *http.ServeMux, cfg Config, h Handlers) {
 		mount(webv1connect.NewTwoFactorServiceHandler(h.TwoFactor, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))
 		// Passkeys are second factors too (M3-23).
 		mount(webv1connect.NewPasskeyServiceHandler(h.Passkeys, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))
+		if h.Account != nil {
+			// The own account, also for superadmins without organization (V1-17).
+			mount(webv1connect.NewAccountServiceHandler(h.Account, connect.WithOptions(limit, connect.WithInterceptors(h.Authenticator.SessionOnly(), validation))))
+			mount(webv1connect.NewAccountAdminServiceHandler(h.Account, authenticated))
+		}
 	}
 	path, handler := webv1connect.NewMetricsServiceHandler(h.Metrics, authenticated)
 	mount(path, streamingDeadline(handler))

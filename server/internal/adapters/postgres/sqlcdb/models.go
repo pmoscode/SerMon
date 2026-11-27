@@ -147,6 +147,15 @@ type Dashboard struct {
 	UpdatedAt time.Time
 }
 
+type EmailChange struct {
+	UserID    uuid.UUID
+	NewEmail  string
+	CodeHash  []byte
+	Attempts  int32
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
 type EnrollmentToken struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
@@ -637,10 +646,11 @@ type UpdateRolloutNode struct {
 }
 
 type User struct {
-	ID          uuid.UUID
-	Email       string
-	DisplayName string
-	CreatedAt   time.Time
+	ID            uuid.UUID
+	Email         string
+	DisplayName   string
+	CreatedAt     time.Time
+	OrphanedSince *time.Time
 }
 
 type UserCredential struct {

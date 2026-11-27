@@ -121,7 +121,8 @@ func (s *Service) Create(ctx context.Context, c access.Caller, name, adminEmail 
 	}
 	audit := access.AuditEntry{
 		Actor: inviter, Action: "org.create", Target: "org:" + org.ID.String(),
-		Details: map[string]string{"name": name, "admin_email": email},
+		// The invitation, not its address: the log outlives it (V1-17).
+		Details: map[string]string{"name": name, "invitation": inv.ID.String()},
 	}
 	if err := s.store.Create(ctx, org, inv, hash, audit); err != nil {
 		return Organization{}, "", fmt.Errorf("create organization: %w", err)

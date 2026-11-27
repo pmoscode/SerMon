@@ -7,6 +7,7 @@ Bestätigung gilt danach 15 Minuten für alle Aktionen.
 ## Wann SerMon fragt
 
 - **Rechte:** Rollen vergeben und entziehen, Mitglieder entfernen, Einladen, Gruppen löschen, SSO-Gruppen zuordnen.
+- **Eigenes Konto:** Anzeigenamen und E-Mail-Adresse ändern, die eigenen Daten exportieren.
 - **Anmeldung:** zweiten Faktor einrichten oder abschalten, Recovery-Codes neu erzeugen, Passkeys hinzufügen und
   löschen, eine SSO-Identität lösen, die Pflicht zur Zwei-Faktor-Anmeldung ändern.
 - **Was alarmiert:** Alert-Regeln importieren, ein- und ausschalten oder zurücksetzen, Stummschaltungen anlegen,

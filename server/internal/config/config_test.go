@@ -54,6 +54,8 @@ func TestLoad_Defaults(t *testing.T) {
 		ShutdownTimeout:   15 * time.Second,
 		OrgDeletionGrace:  30 * 24 * time.Hour,
 		NodeDeletionGrace: 7 * 24 * time.Hour,
+		AccountGrace:      30 * 24 * time.Hour,
+		AuditRetention:    730 * 24 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -62,12 +64,14 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 	env := map[string]string{
-		"SERMON_HTTP_ADDR":           "127.0.0.1:9000",
-		"SERMON_LOG_LEVEL":           "debug",
-		"SERMON_LOG_FORMAT":          "text",
-		"SERMON_SHUTDOWN_TIMEOUT":    "3s",
-		"SERMON_ORG_DELETION_GRACE":  "240h",
-		"SERMON_NODE_DELETION_GRACE": "48h",
+		"SERMON_HTTP_ADDR":              "127.0.0.1:9000",
+		"SERMON_LOG_LEVEL":              "debug",
+		"SERMON_LOG_FORMAT":             "text",
+		"SERMON_SHUTDOWN_TIMEOUT":       "3s",
+		"SERMON_ORG_DELETION_GRACE":     "240h",
+		"SERMON_NODE_DELETION_GRACE":    "48h",
+		"SERMON_ACCOUNT_DELETION_GRACE": "72h",
+		"SERMON_AUDIT_RETENTION":        "4380h",
 	}
 
 	cfg, err := config.Load(fakeSource(env, nil))
@@ -83,6 +87,8 @@ func TestLoad_EnvironmentOverridesDefaults(t *testing.T) {
 		ShutdownTimeout:   3 * time.Second,
 		OrgDeletionGrace:  240 * time.Hour,
 		NodeDeletionGrace: 48 * time.Hour,
+		AccountGrace:      72 * time.Hour,
+		AuditRetention:    4380 * time.Hour,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("Load() = %+v, want %+v", cfg, want)
@@ -589,6 +595,26 @@ func TestLoad_DeletionGraceHasAFloor(t *testing.T) {
 func TestLoad_NodeDeletionGraceHasAFloor(t *testing.T) {
 	for value, ok := range map[string]bool{"24h": true, "23h59m": false, "1h": false, "-1h": false, "x": false} {
 		_, err := config.Load(fakeSource(map[string]string{"SERMON_NODE_DELETION_GRACE": value}, nil))
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", value, err)
+		}
+	}
+}
+
+// V1-17: accounts without a membership are deleted after at least 24 hours.
+func TestLoad_AccountDeletionGraceHasAFloor(t *testing.T) {
+	for value, ok := range map[string]bool{"24h": true, "720h": true, "23h59m": false, "-1h": false, "x": false} {
+		_, err := config.Load(fakeSource(map[string]string{"SERMON_ACCOUNT_DELETION_GRACE": value}, nil))
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", value, err)
+		}
+	}
+}
+
+// V1-17: the audit logs keep 90 days to 10 years.
+func TestLoad_AuditRetentionIsBounded(t *testing.T) {
+	for value, ok := range map[string]bool{"2160h": true, "87600h": true, "2159h": false, "87601h": false, "0s": false, "x": false} {
+		_, err := config.Load(fakeSource(map[string]string{"SERMON_AUDIT_RETENTION": value}, nil))
 		if (err == nil) != ok {
 			t.Errorf("%s: %v", value, err)
 		}

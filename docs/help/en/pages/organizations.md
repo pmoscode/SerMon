@@ -32,3 +32,14 @@ The storage is an estimate: the size of all metrics of the instance is shared by
 - **Download audit log:** only for a locked organization, as JSON lines with the hash chain. The first line explains how to recompute the chain; the UI says whether it is intact.
 
 The organization's admins get an email when it is locked (with the deletion date), when the lock is lifted and 7 days before the deletion.
+
+## Delete an account on request
+
+When a person asks for their account to be deleted, the superadmin deletes it here: enter the address twice, then
+confirm again. Sessions, password, second factor, passkeys and SSO links go at once, private dashboards as well. Each
+organization of the account gets an entry in its audit log, the instance audit log the request; only the account's ID
+stays there, no address. Accounts of superadmins and the last admin for all groups of an organization can't be
+deleted this way – appoint another admin there first.
+
+SerMon deletes accounts without a membership anyway after a grace period (default 30 days,
+`SERMON_ACCOUNT_DELETION_GRACE`); more under [Account](help:pages/account).

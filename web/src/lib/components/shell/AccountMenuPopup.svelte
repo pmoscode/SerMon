@@ -1,6 +1,7 @@
 <script lang="ts">
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import UserRound from '@lucide/svelte/icons/user-round';
 	import { resolve } from '$app/paths';
 	import LanguageSwitcher from '#lib/components/LanguageSwitcher.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -43,6 +44,16 @@
 			<span class="text-xs text-muted-foreground">{m.account_language()}</span>
 			<LanguageSwitcher />
 		</div>
+		<Button
+			href={resolve('/(app)/settings/account')}
+			variant="ghost"
+			size="sm"
+			class="self-start"
+			onclick={() => (open = false)}
+		>
+			<UserRound aria-hidden="true" />
+			{m.nav_account()}
+		</Button>
 		<Button
 			href={resolve('/(app)/settings/security')}
 			variant="ghost"

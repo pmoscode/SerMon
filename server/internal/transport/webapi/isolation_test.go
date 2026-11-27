@@ -54,6 +54,13 @@ var tenantIsolationExempt = map[string]string{
 	"/sermon.web.v1.ModuleService/ListModules":                     "the static module catalog of the agent's build, no tenant data (requires a role)",
 	"/sermon.web.v1.UpdatePolicyService/SetUpdatesPaused":          "only the caller's own organization, no IDs (update_integration_test.go)",
 	"/sermon.web.v1.AccessService/SetRetention":                    "only the caller's own organization, no IDs (retention_integration_test.go)",
+	"/sermon.web.v1.AccountService/GetAccount":                     "the caller's own account (per user, no tenant data)",
+	"/sermon.web.v1.AccountService/SetDisplayName":                 "the caller's own account (per user, no tenant data)",
+	"/sermon.web.v1.AccountService/RequestEmailChange":             "the caller's own account (per user, no tenant data)",
+	"/sermon.web.v1.AccountService/ConfirmEmailChange":             "the caller's own account (per user, no tenant data)",
+	"/sermon.web.v1.AccountService/CancelEmailChange":              "the caller's own account (per user, no tenant data)",
+	"/sermon.web.v1.AccountService/ExportAccountData":              "only the caller's own rows in their own organizations, no IDs (account_integration_test.go: nothing of another member)",
+	"/sermon.web.v1.AccountAdminService/DeleteAccount":             "instance-level for the superadmin only, by address (role test in app/account, account_integration_test.go)",
 	"/sermon.web.v1.KioskService/GetKioskDashboard":                "no session: the token names organization and dashboard (kiosk_integration_test.go: every RPC, foreign org)",
 	"/sermon.web.v1.KioskService/QueryKioskWidget":                 "no session: the token names organization and dashboard (kiosk_integration_test.go: every RPC, foreign org)",
 }

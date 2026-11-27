@@ -97,6 +97,10 @@ def misplaced_credentials(svc: dict) -> list[str]:
     return problems
 
 
+# The published server image (V1-03, V1-04): production pulls it by digest from GHCR only.
+SERVER_IMAGE = re.compile(r"ghcr\.io/pmoscode/sermon-server@sha256:[0-9a-f]{64}")
+
+
 def check(services: dict, base: str, loopback_only: bool, hardened: bool = False) -> list[str]:
     errors = []
     for name, svc in services.items():
@@ -113,6 +117,9 @@ def check(services: dict, base: str, loopback_only: bool, hardened: bool = False
                 host_ip = port.get("host_ip") if isinstance(port, dict) else str(port).rsplit(":", 2)[0]
                 if host_ip != "127.0.0.1":
                     errors.append(f"{name}: port {port} is not bound to 127.0.0.1")
+
+        if hardened and "sermon-server" in image and "build" not in svc and not SERVER_IMAGE.fullmatch(image):
+            errors.append(f"{name}: the server image must be ghcr.io/pmoscode/sermon-server@sha256:… (or built from source), not {image!r}")
 
         if hardened:
             errors.extend(f"{name}: {problem}" for problem in unhardened(svc))

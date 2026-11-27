@@ -2,9 +2,15 @@
 #
 #   cp env.example .env && $EDITOR .env      domain, ACME and SMTP
 #   ./secrets.sh                             database passwords and URLs (never overwritten)
-#   docker compose build
+#   ./use-release.sh VERSION                 checks the signature of the release's server image
+#                                            and pins its digest in .env (SERMON_IMAGE_DIGEST)
+#   docker compose pull
 #   docker compose run --rm migrate init --master-keys-file /var/lib/sermon/master_keys
 #   docker compose up -d
+#
+# The server image is the published one (V1-03, V1-04), pinned by digest; it brings the signed
+# agent binaries and package repositories of its version (/srv/downloads, /srv/repo). Built from
+# the source of this checkout instead: with the overlay source.yaml.
 #
 # Backup and restore (V1-05, docs/admin/backup.md): the one-shot services "backup" and "restore"
 # (profiles, never started by "up").
@@ -41,8 +47,9 @@ x-server-environment: &server-environment
   SERMON_TRUSTED_PROXIES: ${SERMON_PROXY_IP:-172.30.78.10}/32
   SERMON_AGENT_ADDR: ":8443"
   SERMON_AGENT_HOSTNAMES: ${SERMON_DOMAIN}
+  # The signed agent binaries and package repositories of the image's version (ADR 0043 §4;
+  # install.sh, install.sh --repo, self-update).
   SERMON_AGENT_DOWNLOADS_DIR: /srv/downloads
-  # The signed package repositories of scripts/build-repos.sh (install.sh --repo, M4-20).
   SERMON_REPO_DIR: /srv/repo
   SERMON_DATABASE_SIZE_LIMIT: ${SERMON_DATABASE_SIZE_LIMIT:-}
   SERMON_ORG_DELETION_GRACE: ${SERMON_ORG_DELETION_GRACE:-720h}
@@ -72,12 +79,8 @@ x-server-environment: &server-environment
   SERMON_SMTP_USERNAME: ${SERMON_SMTP_USERNAME:-}
   SERMON_SMTP_PASSWORD_FILE: /run/secrets/smtp_password
 
-x-server-build: &server-build
-  context: ../..
-  dockerfile: deploy/compose/server.Dockerfile
-  args:
-    SERMON_RELEASE_KEY: ${SERMON_RELEASE_KEY:-}
-    SERMON_VERSION: ${SERMON_VERSION:-source}
+# The published image of a release, by digest only: a tag could be moved (ADR 0043).
+x-server-image: &server-image ghcr.io/pmoscode/sermon-server@${SERMON_IMAGE_DIGEST:?set SERMON_IMAGE_DIGEST in .env – ./use-release.sh VERSION checks the image and writes it (any value with source.yaml)}
 
 services:
   postgres:
@@ -111,8 +114,7 @@ services:
   # first installation runs "init" here: docker compose run --rm migrate init --master-keys-file …
   migrate:
     <<: *hardened
-    build: *server-build
-    image: sermon-server:${SERMON_VERSION:-source}
+    image: *server-image
     command: ["migrate"]
     restart: "no"
     environment:
@@ -120,22 +122,21 @@ services:
       SERMON_DATABASE_MIGRATE_URL_FILE: /run/secrets/database_migrate_url
     secrets: [database_url, database_migrate_url, smtp_password, oidc_client_secret]
     # The same view as the server: its configuration is checked as a whole.
-    volumes: [server-state:/var/lib/sermon, ./downloads:/srv/downloads:ro, ./repo:/srv/repo:ro, ./geoip:/srv/geoip:ro]
+    volumes: [server-state:/var/lib/sermon, ./geoip:/srv/geoip:ro]
     networks: [internal]
     depends_on:
       postgres: { condition: service_healthy }
 
   server:
     <<: *hardened
-    build: *server-build
-    image: sermon-server:${SERMON_VERSION:-source}
+    image: *server-image
     environment: *server-environment
     secrets: [database_url, smtp_password, oidc_client_secret]
     volumes:
       - server-state:/var/lib/sermon
-      # Signed agent binaries for install.sh (ADR 0012), optional.
-      - ./downloads:/srv/downloads:ro
-      - ./repo:/srv/repo:ro
+      # The signed agent binaries (ADR 0012) and package repositories (ADR 0036) come with the
+      # image. A beta channel next to them (ADR 0036): ./beta:/srv/downloads/beta:ro in an
+      # override file (docs/admin/installation.md).
       # A country database for the security dashboard (M3-18), optional.
       - ./geoip:/srv/geoip:ro
     ports: ["${SERMON_AGENT_PORT:-8443}:8443"]
@@ -154,8 +155,7 @@ services:
   # are not in it – keep a copy of them apart from the backups.
   backup:
     <<: *hardened
-    build: *server-build
-    image: sermon-server:${SERMON_VERSION:-source}
+    image: *server-image
     command: ["backup", "--out", "-"]
     restart: "no"
     profiles: [backup]
@@ -176,8 +176,7 @@ services:
   # server's volume, secrets/backup_identity is the secret backup key: both only for the restore.
   restore:
     <<: *hardened
-    build: *server-build
-    image: sermon-server:${SERMON_VERSION:-source}
+    image: *server-image
     command: ["restore", "--in", "-", "--install-master-keys", "/var/lib/sermon/master_keys"]
     restart: "no"
     profiles: [restore]

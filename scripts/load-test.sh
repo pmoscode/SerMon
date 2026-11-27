@@ -66,7 +66,7 @@ export SERMON_E2E_MAIL_PORT="${SERMON_LOAD_MAIL_PORT:-19025}"
 export SERMON_LOAD_METRICS_PORT="${SERMON_LOAD_METRICS_PORT:-19464}"
 export SERMON_EDGE_SUBNET=172.30.79.0/24 SERMON_EDGE_IP_RANGE=172.30.79.128/25 SERMON_PROXY_IP=172.30.79.10
 export COMPOSE_PROJECT_NAME=sermon-load
-export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$e2e/compose.yaml:$root/deploy/load/compose.yaml"
+export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$root/deploy/compose/source.yaml:$e2e/compose.yaml:$root/deploy/load/compose.yaml"
 export COMPOSE_ENV_FILES="$e2e/e2e.env"
 SERMON_RELEASE_KEY=$(cat "$build/release.pub")
 export SERMON_RELEASE_KEY

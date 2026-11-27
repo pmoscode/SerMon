@@ -82,8 +82,9 @@ Events und Audit-Logs, nicht an den Metriken.
 ## Wiederherstellen
 
 Der Restore braucht eine Datenbank **ohne** Organisationen und User – nach einem Verlust also ein neues Volume oder einen
-neuen Server. Auf einem neuen Server zuerst die [Installation](installation.md) bis einschließlich `./secrets.sh` und
-`docker compose build`, aber **ohne** `init` und ohne `docker compose up`.
+neuen Server. Auf einem neuen Server zuerst die [Installation](installation.md) bis einschließlich `./secrets.sh`,
+`./use-release.sh VERSION` (die Version des Backups oder neuer) und `docker compose pull`, aber **ohne** `init` und
+ohne `docker compose up`.
 
 ```sh
 docker compose stop server                      # falls er läuft

@@ -27,7 +27,7 @@ build="$e2e/.build"
 port=${SERMON_E2E_PORT:-18443}
 export SERMON_E2E_PORT="$port"
 # The production file plus the overlay; e2e.env instead of a local deploy/compose/.env.
-export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$e2e/compose.yaml"
+export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$root/deploy/compose/source.yaml:$e2e/compose.yaml"
 export COMPOSE_ENV_FILES="$e2e/e2e.env"
 compose() { docker compose "$@"; }
 

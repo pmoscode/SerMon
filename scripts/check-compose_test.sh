@@ -58,6 +58,13 @@ expect fail "host PID namespace with --hardened" --hardened "$data/hardened-pid-
 expect fail "seccomp unconfined with --hardened" --hardened "$data/hardened-seccomp-unconfined.yaml"
 expect fail "host device with --hardened" --hardened "$data/hardened-devices.yaml"
 expect fail "host /run mounted with --hardened" --hardened "$data/hardened-run-mount.yaml"
+# The server image (V1-04): the published one by digest, or built from source.
+expect pass "the published server image by digest" --hardened "$data/hardened-server-release.yaml"
+expect fail "the server image by tag" --hardened "$data/hardened-server-tag.yaml"
+# Docker ignores a tag next to the digest; it would only mislead about the version.
+expect fail "the server image with a tag next to the digest" --hardened "$data/hardened-server-tag-digest.yaml"
+expect fail "a server image from another registry" --hardened "$data/hardened-server-other-registry.yaml"
+expect pass "the server built from source" --hardened "$data/hardened-server-source.yaml"
 # Several files are merged like docker compose -f a -f b; the result is checked.
 expect pass "base and overlay merged" "$data/hardened-good.yaml" "$data/good.yaml"
 expect fail "an overlay that unpins an image" "$data/hardened-good.yaml" "$data/overlay-unpinned.yaml"

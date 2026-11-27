@@ -158,3 +158,21 @@ Owner in [`docs/release.md`](../release.md).
 - **Grenzen:** Der Probe-Release steht aus, bis der Product Owner Schlüssel und Environment angelegt hat; bis dahin
   sind Lint, Skripte und Läufe mit Testschlüsseln (`just release-dry-run`) geprüft, nicht GitHub selbst. Das Paket auf GHCR ist nach dem ersten Push privat
   und muss einmal öffentlich gestellt werden. Trivy-Scans der Images (ADR 0006) folgen nicht hier.
+
+## Nachtrag V1-04 (Image per Digest in `deploy/compose`)
+
+- **Der Digest steht in `.env`, nicht in `compose.yaml`:** Die Compose-Dateien eines Tags können den Digest des
+  Images, das erst nach dem Tag gebaut wird, nicht enthalten. `compose.yaml` nennt
+  `ghcr.io/pmoscode/sermon-server@${SERMON_IMAGE_DIGEST:?…}` – nur ein Digest, kein Tag, ohne Wert startet nichts.
+- **Den Digest setzt `deploy/compose/use-release.sh VERSION`,** nachdem cosign geprüft hat, dass
+  `…/sermon-server:VERSION` vom Release-Workflow auf dem Tag `vVERSION` signiert ist; eingetragen wird genau der Digest,
+  den cosign geprüft hat (nur einer). cosign aus dem `PATH` oder als Container, gepinnt per Digest (Renovate). Der
+  vorige Digest bleibt als Kommentar in `.env`.
+- **Bau aus dem Quellcode** über das Overlay `deploy/compose/source.yaml` (Build, Image `sermon-server:VERSION`,
+  `./downloads` und `./repo` eingehängt, weil ein solches Image keine Release-Dateien hat); `compose.yaml` verlangt dann
+  irgendeinen Wert für `SERMON_IMAGE_DIGEST` (`source`), weil Compose jede Datei vor dem Zusammenführen auflöst. Die
+  E2E-Demo lädt `compose.yaml`, `source.yaml` und `deploy/e2e/compose.yaml`.
+- **`check-compose --hardened`** verlangt für das Server-Image genau `ghcr.io/pmoscode/sermon-server@sha256:<64 hex>`
+  (kein Tag daneben, keine andere Registry) oder einen Build; `just lint-compose` prüft die Produktionsdatei mit einem
+  Test-Digest und mit `source.yaml`.
+- **Kanal `beta`:** ein eigenes Verzeichnis per `compose.override.yaml` nach `/srv/downloads/beta`.

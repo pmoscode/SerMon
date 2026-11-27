@@ -1,0 +1,7 @@
+services:
+  server:
+    image: sermon-server:source
+    build: { context: build, dockerfile: pinned.Dockerfile }
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]

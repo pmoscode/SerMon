@@ -1,0 +1,33 @@
+# The server built from the source of this checkout instead of the published image (M2-26,
+# V1-04): for development, the E2E demo and anyone who wants to build it themselves.
+#
+#   docker compose -f compose.yaml -f source.yaml build      (or COMPOSE_FILE=compose.yaml:source.yaml)
+#
+# SERMON_IMAGE_DIGEST is not used then, but compose.yaml needs a value (e.g. "source"). Without a
+# release, the image has no agent binaries and repositories: ./downloads and ./repo are mounted
+# where the image would have them – signed binaries of the server's version with
+# just sign-agent KEY VERSION, repositories with scripts/build-repos.sh (docs/admin/installation.md).
+# SERMON_RELEASE_KEY is the public release key compiled in (scripts/release-sign.sh pubkey).
+
+x-server-build: &server-build
+  context: ../..
+  dockerfile: deploy/compose/server.Dockerfile
+  args:
+    SERMON_RELEASE_KEY: ${SERMON_RELEASE_KEY:-}
+    SERMON_VERSION: ${SERMON_VERSION:-source}
+
+services:
+  migrate:
+    build: *server-build
+    image: sermon-server:${SERMON_VERSION:-source}
+    volumes: [./downloads:/srv/downloads:ro, ./repo:/srv/repo:ro]
+  server:
+    build: *server-build
+    image: sermon-server:${SERMON_VERSION:-source}
+    volumes: [./downloads:/srv/downloads:ro, ./repo:/srv/repo:ro]
+  backup:
+    build: *server-build
+    image: sermon-server:${SERMON_VERSION:-source}
+  restore:
+    build: *server-build
+    image: sermon-server:${SERMON_VERSION:-source}

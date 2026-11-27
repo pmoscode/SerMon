@@ -1,6 +1,6 @@
-# Load test (V1-08): a third file on top of the production compose and the E2E overlay,
+# Load test (V1-08): a file on top of the production compose, the build from source and the E2E overlay,
 #
-#   docker compose -f deploy/compose/compose.yaml -f deploy/e2e/compose.yaml -f deploy/load/compose.yaml
+#   docker compose -f deploy/compose/compose.yaml -f deploy/compose/source.yaml -f deploy/e2e/compose.yaml -f deploy/load/compose.yaml
 #
 # so the load runs against the real production file with the E2E secrets, Caddy's own CA and
 # Mailpit, but without the agent hosts: virtual nodes (`sermon-agent simulate`, M1-34) in one

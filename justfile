@@ -164,12 +164,16 @@ lint-ci:
     zizmor --offline --persona=pedantic .github/workflows
 
 # Check compose files: images pinned by digest, no telemetry, dev and E2E ports on 127.0.0.1 only,
-# production containers hardened (M2-26); the E2E overlay is checked merged with the production file
+# production containers hardened (M2-26), the server image the published one by digest (V1-04, with a
+# digest of the test); the build from source and the E2E overlay are checked merged with the production file
 lint-compose:
     sh scripts/check-compose.sh --loopback-only deploy/dev/compose.yaml
-    COMPOSE_ENV_FILES=deploy/compose/env.example sh scripts/check-compose.sh --hardened deploy/compose/compose.yaml
-    SERMON_RELEASE_KEY= COMPOSE_ENV_FILES=deploy/e2e/e2e.env sh scripts/check-compose.sh --loopback-only deploy/compose/compose.yaml deploy/e2e/compose.yaml
-    SERMON_RELEASE_KEY= COMPOSE_ENV_FILES=deploy/e2e/e2e.env sh scripts/check-compose.sh --loopback-only deploy/compose/compose.yaml deploy/e2e/compose.yaml deploy/load/compose.yaml
+    SERMON_IMAGE_DIGEST=sha256:{{ test_digest }} COMPOSE_ENV_FILES=deploy/compose/env.example sh scripts/check-compose.sh --hardened deploy/compose/compose.yaml
+    SERMON_IMAGE_DIGEST=source COMPOSE_ENV_FILES=deploy/compose/env.example sh scripts/check-compose.sh --hardened deploy/compose/compose.yaml deploy/compose/source.yaml
+    SERMON_RELEASE_KEY= COMPOSE_ENV_FILES=deploy/e2e/e2e.env sh scripts/check-compose.sh --loopback-only deploy/compose/compose.yaml deploy/compose/source.yaml deploy/e2e/compose.yaml
+    SERMON_RELEASE_KEY= COMPOSE_ENV_FILES=deploy/e2e/e2e.env sh scripts/check-compose.sh --loopback-only deploy/compose/compose.yaml deploy/compose/source.yaml deploy/e2e/compose.yaml deploy/load/compose.yaml
+
+test_digest := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 # Test helper scripts
 test-scripts:
@@ -184,6 +188,7 @@ test-scripts:
     sh scripts/check-release-notes_test.sh
     sh scripts/release-keys_test.sh
     sh scripts/verify-release_test.sh
+    sh scripts/use-release_test.sh
 
 # A release without GitHub, with keys of this run: binaries, signatures, packages, repositories, offline checks; IMAGE=1 also builds the server image of the release (V1-03; Docker required)
 release-dry-run version="0.0.1-rc.1":

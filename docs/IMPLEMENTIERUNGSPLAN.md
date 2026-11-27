@@ -6311,7 +6311,28 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   öffentlichen Schlüsseln (Skript in CI); `just lint-ci`.
 - **Abhängig von:** V1-01, V1-02
 
-#### ☐ V1-04 – Veröffentlichte Server-Images in `deploy/compose` · X · S
+#### ◐ V1-04 – Veröffentlichte Server-Images in `deploy/compose` · X · S
+> Stand (2026-11-27, [ADR 0043](adr/0043-release-prozess.md), Nachtrag V1-04): fertig bis auf die Demo gegen den
+> Probe-Release (nach V1-03).
+> - **`compose.yaml`:** `server`, `migrate`, `backup`, `restore` nehmen `ghcr.io/pmoscode/sermon-server@${SERMON_IMAGE_DIGEST}`
+>   – nur per Digest, ohne Wert startet nichts (der Digest eines Tags kann nicht in dessen eigenen Dateien stehen,
+>   deshalb `.env`); kein Build, keine Mounts `./downloads` und `./repo` mehr (das Image bringt sie mit), der Kanal
+>   `beta` über `compose.override.yaml`.
+> - **`use-release.sh VERSION`** (neben `compose.yaml`): `cosign verify` mit der Identität
+>   `…/release.yml@refs/tags/vVERSION` und dem Aussteller von GitHub, schreibt genau den geprüften Digest in `.env`,
+>   den vorigen als Kommentar; ohne cosign der Container `cosign` (gepinnt per Digest, Renovate).
+> - **`source.yaml`:** der Build aus dem Quellcode als Overlay (Demo, Entwicklung; `SERMON_IMAGE_DIGEST=source`); die
+>   E2E-Demo, `e2e-restore` und `web/tests/demo` laden ihn mit.
+> - **`check-compose --hardened`:** das Server-Image genau `ghcr.io/pmoscode/sermon-server@sha256:<64 hex>` oder ein
+>   Build; `just lint-compose` prüft die Produktionsdatei mit Test-Digest, mit `source.yaml` und die Demo.
+> - **Anleitung** `docs/admin/installation.md`: Installation aus dem Tag mit `use-release.sh`, Prüfen mit cosign und
+>   `scripts/verify-release.sh`, Aktualisieren mit Backup und Rollback, Kanal `beta`, Bau aus dem Quellcode;
+>   `docs/admin/backup.md`, KONZEPT §22 angepasst.
+> - **Tests:** `check-compose_test.sh` (+5: per Digest, per Tag, Tag neben Digest, andere Registry, Build),
+>   `use-release_test.sh` mit einem cosign, das nur für die Identität des Tags signiert (fremder Tag, zwei Images,
+>   kein oder kaputter Digest, falsche Version, fehlende `.env`: `.env` bleibt unverändert; der cosign-Container ohne
+>   cosign). Gegenproben 13/13 (drei überlebten zunächst, weil spätere Prüfungen dieselben Fälle fingen).
+> - **Offen:** die Demo gegen das Probe-Release; der Bau mit `source.yaml` (E2E-Demo) läuft, wenn Docker frei ist.
 - **Ziel:** `image:` in `deploy/compose/compose.yaml` zeigt auf das veröffentlichte, per Digest gepinnte Image statt
   auf den Build aus dem Quellcode (M2-26); Anleitung prüft die Signatur vor dem Start; die Demo kann weiter aus dem
   Quellcode bauen (Overlay).

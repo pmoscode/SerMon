@@ -80,8 +80,8 @@ Reihenfolge einhalten; jeder Schritt mit dem eigenen Konto (2FA).
   - Breaking Changes: …
   - Neue Secrets oder Einstellungen: … (z. B. `./secrets.sh` erneut ausführen)
   - Daten, die das Upgrade löscht oder umbaut: …
-  - Rollback: das vorige Image; Migrationen laufen nur vorwärts, also mit dem Backup von vor dem Upgrade
-    ([Backup](admin/backup.md)).
+  - Rollback: den vorigen Digest in `.env` (`use-release.sh` notiert ihn), Migrationen laufen nur vorwärts, also
+    mit dem Backup von vor dem Upgrade ([Backup](admin/backup.md)).
   ```
 
   Auch „nichts zu tun“ wird hingeschrieben.

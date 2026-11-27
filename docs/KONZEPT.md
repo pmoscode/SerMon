@@ -1704,7 +1704,7 @@ SerMon/
 ```
 services:
   caddy            # TLS (ACME), Reverse-Proxy für Web und Enrollment (80, 443)
-  server           # aus dem Quellcode gebaut (distroless, nonroot); Agent-Port 8443 direkt veröffentlicht (mTLS im Server)
+  server           # veröffentlichtes Image per Digest (distroless, nonroot; source.yaml baut aus dem Quellcode); Agent-Port 8443 direkt (mTLS im Server)
   postgres         # PostgreSQL 17 + TimescaleDB (Image timescale/timescaledb, pg17), Volume, nur internes Netz
   loki             # Logs: auth_enabled: true, Compactor-Retention 14 Tage, kein Port, nur internes Netz (ADR 0031)
   migrate          # einmalig: Migrationen als sermon_owner (M2-36)
@@ -1715,7 +1715,8 @@ networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres,
 - **Dateien:** `deploy/compose/` (Anleitung `docs/admin/installation.md`, [ADR 0028](adr/0028-produktions-compose.md)). Jeder Container ist
   `read_only`, ohne Capabilities und ohne neue Privilegien (`just lint-compose` prüft das); Secrets liegen als Dateien
   in `secrets/`, Einstellungen in `.env`. Der Agent-Port geht nicht über Caddy, damit der Server die echten Adressen der
-  Agents sieht. Die E2E-Demo läuft gegen genau diese Datei (Overlay `deploy/e2e/compose.yaml`).
+  Agents sieht. Die E2E-Demo läuft gegen genau diese Datei (Overlays `deploy/compose/source.yaml` für den Build aus
+  dem Quellcode und `deploy/e2e/compose.yaml`).
 
 - **Erstinstallation:**
   - `sermon-server init --master-keys-file PFAD` legt die Master-Key-Datei an (nie überschrieben), migriert die DB,
@@ -1741,7 +1742,8 @@ networks: edge (caddy, server; Ports und ausgehend), internal (server, postgres,
   - Eine vollständige Sicherung inklusive Metriken läuft physisch per **pgBackRest**.
   - Für Loki gibt es eine Anleitung zur Volume-Sicherung.
   - Der Restore wird in CI getestet (V1-07: Backup der Demo, Restore in eine neue Umgebung, nightly).
-- **Upgrade:** `docker compose pull && docker compose up -d`; Migrationen laufen automatisch mit Lock; Rollback-Hinweise
+- **Upgrade:** `./use-release.sh VERSION` (prüft die Signatur des Images mit cosign, setzt seinen Digest in `.env`),
+  dann `docker compose pull && docker compose up -d`; Migrationen laufen automatisch mit Lock; Rollback-Hinweise
   in den Release-Notes.
 - **Self-Monitoring:** Der Server überwacht sich selbst: Ingest-Lag, verworfene Samples und die Größe der Datenbank
   gegen `SERMON_DATABASE_SIZE_LIMIT`, dazu den Ablauf der Agent-CA (V1-19). Superadmins bekommen bei jedem Wechsel eine Mail und sehen offene Probleme in der

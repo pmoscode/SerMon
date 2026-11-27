@@ -22,7 +22,11 @@ const composeEnv = {
 	...process.env,
 	COMPOSE_FILE:
 		process.env.COMPOSE_FILE ??
-		`${join(e2eDir, '..', 'compose', 'compose.yaml')}:${join(e2eDir, 'compose.yaml')}`,
+		[
+			join(e2eDir, '..', 'compose', 'compose.yaml'),
+			join(e2eDir, '..', 'compose', 'source.yaml'),
+			join(e2eDir, 'compose.yaml')
+		].join(':'),
 	COMPOSE_ENV_FILES: process.env.COMPOSE_ENV_FILES ?? join(e2eDir, 'e2e.env')
 };
 

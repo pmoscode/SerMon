@@ -1,0 +1,6 @@
+services:
+  server:
+    image: ghcr.io/pmoscode/sermon-server:1.0.0@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]

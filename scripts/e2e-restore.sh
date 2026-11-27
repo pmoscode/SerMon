@@ -24,7 +24,7 @@ e2e="$root/deploy/e2e"
 build="$e2e/.build"
 secrets="$build/secrets"
 port=${SERMON_E2E_PORT:-18443}
-export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$e2e/compose.yaml"
+export COMPOSE_FILE="$root/deploy/compose/compose.yaml:$root/deploy/compose/source.yaml:$e2e/compose.yaml"
 export COMPOSE_ENV_FILES="$e2e/e2e.env"
 compose() { docker compose "$@"; }
 sql() { compose exec -T postgres psql -v ON_ERROR_STOP=1 -qtA -U postgres -d sermon "$@"; }

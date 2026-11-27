@@ -1,7 +1,9 @@
 # Installation mit docker compose
 
 Diese Anleitung richtet SerMon auf einem Linux-Server mit Docker ein. Grundlage sind die Dateien in
-[`deploy/compose/`](../../deploy/compose/) (Entscheidungen: [ADR 0028](../adr/0028-produktions-compose.md)).
+[`deploy/compose/`](../../deploy/compose/) (Entscheidungen: [ADR 0028](../adr/0028-produktions-compose.md)) und das
+veröffentlichte, signierte Server-Image eines Releases (`ghcr.io/pmoscode/sermon-server`,
+[ADR 0043](../adr/0043-release-prozess.md)).
 
 ## Voraussetzungen
 
@@ -13,14 +15,15 @@ Diese Anleitung richtet SerMon auf einem Linux-Server mit Docker ein. Grundlage 
 - Offene Ports: **80** und **443** (Web-UI, Zertifikat von Let's Encrypt) sowie **8443** (Agents, mTLS).
 - Ein Mailserver mit STARTTLS (Port 587) oder TLS (Port 465). Ohne Mail geht es in Produktion nicht: Einladungen gehen
   nur per Mail raus, damit die Adresse bewiesen ist.
-- `openssl` für `secrets.sh`, `git` zum Holen des Quellcodes.
+- `openssl` für `secrets.sh`, `git` zum Holen der Compose-Dateien. `cosign` zum Prüfen der Signatur ist optional:
+  Ohne startet `use-release.sh` es als Container (gepinnt per Digest).
 
 ## Was läuft
 
 | Dienst | Aufgabe | Erreichbar |
 |---|---|---|
 | `caddy` | TLS mit Zertifikat per ACME, Reverse-Proxy für die Web-UI und das Enrollment | 80, 443 |
-| `server` | `sermon-server`, gebaut aus dem Quellcode; Web-API, Ingest, Alerting | 8443 (Agents, mTLS) |
+| `server` | `sermon-server` aus dem veröffentlichten Image (per Digest); Web-API, Ingest, Alerting, Agent-Downloads und Paket-Repos seiner Version | 8443 (Agents, mTLS) |
 | `migrate` | dasselbe Image, läuft vor dem Server einmal durch und migriert die Datenbank | – |
 | `backup`, `restore` | dasselbe Image, nur auf Aufruf (`docker compose run`), siehe [Backup und Restore](backup.md) | – |
 | `postgres` | PostgreSQL 17 mit TimescaleDB | nur im internen Netz |
@@ -42,8 +45,12 @@ kommt so weder an die Daten fremder Organisationen ohne RLS noch an das Schema.
 
 ## Einrichten
 
+Die Version wählen (Releases: <https://github.com/pmoscode/SerMon/releases>; `X.Y.Z` ist ein Release,
+`X.Y.Z-rc.N` ein Kandidat für den Testbetrieb) und ihre Compose-Dateien holen:
+
 ```sh
-git clone https://github.com/pmoscode/SerMon.git
+VERSION=1.0.0
+git clone --branch "v$VERSION" --depth 1 https://github.com/pmoscode/SerMon.git
 cd SerMon/deploy/compose
 
 cp env.example .env
@@ -52,10 +59,26 @@ $EDITOR .env          # SERMON_DOMAIN, SERMON_ACME_EMAIL, SMTP
 ./secrets.sh          # Datenbank-Passwörter und -URLs in ./secrets/
 $EDITOR secrets/smtp_password   # nur mit SERMON_SMTP_USERNAME: das Passwort, ohne Zeilenumbruch
 
-docker compose build
+./use-release.sh "$VERSION"     # prüft die Signatur des Images, trägt seinen Digest in .env ein
+docker compose pull
 docker compose run --rm migrate init --master-keys-file /var/lib/sermon/master_keys
 docker compose up -d
 ```
+
+`use-release.sh` lässt cosign prüfen, dass `ghcr.io/pmoscode/sermon-server:VERSION` vom Release-Workflow von SerMon
+auf genau dem Tag `vVERSION` signiert ist (Sigstore, ohne Schlüssel beim Admin), und schreibt nur den so geprüften
+Digest als `SERMON_IMAGE_DIGEST` in `.env`. Compose startet nichts ohne ihn, und ein Tag kann den Digest nicht mehr
+ändern. Wer selbst prüfen will:
+
+```sh
+cosign verify ghcr.io/pmoscode/sermon-server:$VERSION \
+  --certificate-identity "https://github.com/pmoscode/SerMon/.github/workflows/release.yml@refs/tags/v$VERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+Das ganze Release (Binaries, Pakete, Repos, SBOM, Provenance) prüft aus dem Checkout
+`../../scripts/verify-release.sh "$VERSION"` – nur mit den öffentlichen Schlüsseln aus `packaging/` (braucht `openssl`,
+`gpg`, `python3`, `curl`, `cosign`, optional `slsa-verifier`).
 
 `init` läuft im Service `migrate`, legt die Master-Key-Datei an, migriert die Datenbank, erzeugt die Agent-CA und gibt ein **Setup-Token** aus.
 Es ist 30 Minuten gültig und funktioniert genau einmal. Öffnen Sie `https://<SERMON_DOMAIN>`, geben Sie das Token ein und
@@ -72,36 +95,20 @@ und eine Kopie der Master-Keys ([Backup und Restore](backup.md#einmal-einrichten
 ## Agents anbinden
 
 In der UI unter **Nodes → Node hinzufügen** entsteht ein Befehl mit Enrollment-Token. Der Agent meldet sich danach
-über `<SERMON_DOMAIN>:8443`. Für die Installation per `install.sh` braucht der Server signierte Agent-Binaries:
-
-- `SERMON_RELEASE_KEY` in `.env` ist der öffentliche Release-Schlüssel (`scripts/release-sign.sh pubkey KEY.pem`); er
-  wird beim Bauen einkompiliert, also nach einer Änderung `docker compose build`.
-- Die signierten Binaries (`sermon-agent-linux-amd64`, `sermon-agent-linux-arm64` mit ihren Signaturen) liegen in
-  `deploy/compose/downloads/`.
-
-Ohne Release-Schlüssel verweigert `install.sh` die Installation; die Agent-Pakete (.deb, .rpm, .apk) gehen auch ohne.
+über `<SERMON_DOMAIN>:8443`. Das Image eines Releases bringt alles für `install.sh` mit: den öffentlichen
+Release-Schlüssel (einkompiliert) und die signierten Binaries von Agent und Helper seiner Version für amd64 und arm64
+(`/srv/downloads`). Server und Agents haben so nach jedem `pull` dieselbe Version. Wer aus dem Quellcode baut, legt sie
+selbst hin ([Aus dem Quellcode bauen](#aus-dem-quellcode-bauen)).
 
 ### Paket-Repos (`install.sh --repo`)
 
 Statt der Binaries kann `install.sh --repo` die Pakete `sermon-agent` und `sermon-helper` aus einem signierten Repo
 des Servers installieren (apt, dnf, apk); danach aktualisiert der Paketmanager sie, auch über eine Update-Policy. Der
-Server liefert die Repos unter `https://<SERMON_DOMAIN>/repo/` aus `deploy/compose/repo/` aus:
-
-```sh
-scripts/build-repos.sh dist/packages KEYS deploy/compose/repo
-```
-
-`dist/packages` enthält die signierten Pakete aller gewünschten Versionen (`scripts/package-agent.sh`), `KEYS` die
-Paketschlüssel (`gpg.asc`, `gpg.pub.asc`, `apk.rsa`, `apk.rsa.pub`). Die öffentlichen Schlüssel landen unter
-`/repo/keys/` (`sermon.asc` für apt und dnf, `sermon-<id>.rsa.pub` für apk, benannt nach dem Fingerprint des
-Schlüssels) mit der Liste `SHA256SUMS`. Die Liste signiert der Release-Schlüssel:
-
-```sh
-scripts/release-sign.sh sign KEY.pem --version VERSION deploy/compose/repo/keys/SHA256SUMS
-```
-
-`VERSION` ist die Version des Servers. Hat der Server einen Release-Schlüssel, richtet `install.sh --repo` nur
-Schlüssel ein, die in der signierten Liste stehen; ohne Release-Schlüssel bürgt nur TLS für sie. Der Paketmanager
+Server liefert die Repos seiner Version unter `https://<SERMON_DOMAIN>/repo/` aus dem Image aus (`/srv/repo`). Die
+öffentlichen Schlüssel liegen unter `/repo/keys/` (`sermon.asc` für apt und dnf, `sermon-<id>.rsa.pub` für apk,
+benannt nach dem Fingerprint des Schlüssels) mit der Liste `SHA256SUMS`, die der Release-Schlüssel signiert.
+`install.sh --repo` richtet nur Schlüssel ein, die in der signierten Liste stehen; ohne Release-Schlüssel (ein Build
+aus dem Quellcode ohne `SERMON_RELEASE_KEY`) bürgt nur TLS für sie. Der Paketmanager
 muss dem Zertifikat des Servers vertrauen: Mit einem selbstsignierten Zertifikat (`--ca-fingerprint`) geht `--repo`
 nicht, dann die CA des Servers auf dem Host installieren.
 
@@ -124,7 +131,7 @@ Wer `sermon-agent` entfernt, entfernt auch die Schlüssel; die Quelle (`/etc/apt
 ### Root-Helper (Updates und Reboots)
 
 Neben dem Agent installiert `install.sh` den Root-Helper `sermon-helper` (signiert wie der Agent, Binaries
-`sermon-helper-linux-amd64` und `…-arm64` in `deploy/compose/downloads/`; als Paket `sermon-helper`). Er führt für den
+`sermon-helper-linux-amd64` und `…-arm64` im Image; als Paket `sermon-helper`). Er führt für den
 Agent Paket-Updates und Reboots aus, nur feste Operationen und nur für den User `sermon`. Was der Host erlaubt, steht
 in `/etc/sermon/helper.toml`; der Server kann es nicht ändern:
 
@@ -148,13 +155,28 @@ Ohne Schalter bleibt eine vorhandene `helper.toml` unverändert. `--no-helper` i
 einen vorhandenen ab; dann gibt es keine Fernsteuerung. Ein abgeschalteter Helper (`systemctl disable --now
 sermon-helper.socket`) bleibt auch nach Updates aus. `sermon-agent helper status` (als `sermon`) zeigt, was der Helper
 erlaubt.
-Veröffentlichte Releases mit Schlüssel und Binaries folgen mit v1.0.
+
+### Kanal `beta`
+
+Agents in Gruppen mit dem Kanal `beta` ([ADR 0036](../adr/0036-self-update-und-paket-repos.md)) bekommen per
+Self-Update eine neuere Version als der Server, etwa einen Kandidaten. Dafür die signierten Binaries dieses Releases
+(`sermon-agent-linux-*`, `sermon-helper-linux-*` mit `.minisig` von seiner Release-Seite) nach `deploy/compose/beta/`
+legen und in `compose.override.yaml` neben `compose.yaml` einhängen:
+
+```yaml
+services:
+  server:
+    volumes: ["./beta:/srv/downloads/beta:ro"]
+```
+
+Der Server liest das Verzeichnis alle 5 Minuten und bietet nur Dateien mit gültiger Signatur an.
 
 ## Was wo liegt
 
 | Was | Wo | Hinweis |
 |---|---|---|
-| Einstellungen | `deploy/compose/.env` | keine Geheimnisse |
+| Einstellungen | `deploy/compose/.env` | keine Geheimnisse; `SERMON_IMAGE_DIGEST` setzt `use-release.sh` |
+| Server-Image | `ghcr.io/pmoscode/sermon-server@sha256:…` | mit den signierten Agent-Binaries und Paket-Repos seiner Version |
 | Datenbank-Passwörter, SMTP-Passwort | `deploy/compose/secrets/` | `secrets.sh` überschreibt nie; ein neues Passwort sperrt den Server aus. `postgres_password` (Superuser) braucht nur der Datenbank-Container |
 | Master-Keys | Volume `sermon_server-state` | **getrennt sichern** ([Backup](backup.md)): ohne Master-Keys sind alle versiegelten Secrets verloren |
 | Datenbank | Volume `sermon_postgres-data` | |
@@ -165,16 +187,44 @@ Die Logs der Container sind auf 5 × 10 MB begrenzt.
 
 ## Aktualisieren
 
+Erst die Release-Notes der neuen Version lesen (Abschnitt „Upgrade“: Breaking Changes, neue Secrets, Daten, die das
+Upgrade löscht), dann:
+
 ```sh
-git pull
-./secrets.sh          # legt neue Secret-Dateien an (z. B. oidc_client_secret), vorhandene bleiben
-docker compose build
+docker compose run --rm -T backup > backups/vor-dem-update.backup   # Backup und Restore: backup.md
+git fetch --depth 1 origin tag "v$VERSION" && git checkout "v$VERSION"   # die Compose-Dateien der neuen Version
+./secrets.sh                      # legt neue Secret-Dateien an (z. B. oidc_client_secret), vorhandene bleiben
+./use-release.sh "$VERSION"       # prüft die Signatur, setzt den neuen Digest
+docker compose pull
 docker compose up -d
 ```
 
 Die Migrationen spielt der Service `migrate` ein, bevor der Server startet; schlägt das fehl, startet der Server nicht
-(`docker compose logs migrate`). Vor einem Update ein Backup machen ([Backup und Restore](backup.md)):
-`docker compose run --rm -T backup > backups/vor-dem-update.backup`.
+(`docker compose logs migrate`). Agents mit Self-Update ziehen danach nach (Update-Policy der Gruppe), Hosts mit dem
+Paket-Repo über ihren Paketmanager.
+
+**Zurück:** `use-release.sh` notiert in `.env` den vorigen Digest (`before: sha256:…`). Migrationen laufen nur vorwärts:
+Ein Rollback ist das vorige Image mit dem Backup von vor dem Update ([Restore](backup.md)), nicht nur der alte Digest.
+
+## Aus dem Quellcode bauen
+
+Für Entwicklung und Tests kann der Server statt aus dem veröffentlichten Image aus dem Checkout gebaut werden
+(Overlay [`source.yaml`](../../deploy/compose/source.yaml)). In `.env`:
+
+```sh
+COMPOSE_FILE=compose.yaml:source.yaml
+SERMON_IMAGE_DIGEST=source          # wird nicht genutzt, compose.yaml verlangt einen Wert
+SERMON_RELEASE_KEY=…                # öffentlicher Release-Schlüssel (scripts/release-sign.sh pubkey KEY.pem)
+```
+
+dann `docker compose build` statt `use-release.sh` und `pull`. Ein solches Image enthält keine Agent-Binaries und
+Repos; `source.yaml` hängt dafür `deploy/compose/downloads/` und `deploy/compose/repo/` ein:
+
+- Binaries von Agent und Helper in der Version des Servers, signiert mit dem Release-Schlüssel:
+  `just sign-agent KEY.pem VERSION` (nach `dist/agent/`, von dort nach `downloads/`).
+- Repos: `scripts/build-repos.sh dist/packages KEYS deploy/compose/repo` aus den Paketen von
+  `scripts/package-agent.sh` (`KEYS`: `gpg.asc`, `gpg.pub.asc`, `apk.rsa`, `apk.rsa.pub`), danach
+  `scripts/release-sign.sh sign KEY.pem --version VERSION deploy/compose/repo/keys/SHA256SUMS`.
 
 ## Self-Monitoring
 

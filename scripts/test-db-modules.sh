@@ -39,8 +39,10 @@ openssl req -newkey rsa:2048 -nodes -subj /CN=localhost -keyout "$certs/server-k
 printf 'subjectAltName=IP:127.0.0.1,DNS:localhost\nbasicConstraints=CA:FALSE\n' >"$certs/ext"
 openssl x509 -req -in "$certs/server.csr" -CA "$certs/ca.pem" -CAkey "$certs/ca-key.pem" \
 	-CAcreateserial -days 2 -extfile "$certs/ext" -out "$certs/server.pem" 2>/dev/null
-# The servers run as their own user; the key is a throwaway of this run.
-chmod 0644 "$certs/server-key.pem"
+# The servers in the containers run as their own users: mktemp's 0700 would hide the files from
+# them on Linux (Docker Desktop on macOS ignores it). A throwaway CA of this run only.
+chmod 0755 "$certs"
+chmod 0644 "$certs/server-key.pem" "$certs/server.pem" "$certs/ca.pem"
 ssl="--ssl-ca=/certs/ca.pem --ssl-cert=/certs/server.pem --ssl-key=/certs/server-key.pem"
 
 docker network create "$prefix-net" >/dev/null

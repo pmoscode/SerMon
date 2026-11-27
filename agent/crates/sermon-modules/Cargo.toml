@@ -44,7 +44,8 @@ apache = ["http"]
 http_check = ["http"]
 nginx = ["http"]
 prometheus = ["http"]
-redis = []
+# Redis and Valkey (M5-15); TCP, the socket and TLS as the database modules have them (V1-13).
+redis = ["sql"]
 systemd_units = []
 tcp_check = []
 tls = ["http"]
@@ -70,6 +71,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "rt", "io-util"] }
 tokio-rustls = { workspace = true, optional = true }
 tokio-util.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

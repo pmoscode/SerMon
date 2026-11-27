@@ -51,7 +51,8 @@ Zeit nur über den Port `Clock`, Dateien unter `/proc`, `/sys` und `/etc` nur ü
 Module (ADR 0039): `agent/crates/sermon-modules` (Vertrag `Module`/`Instance`, Laufzeit, Schema-Teilmenge, Veto aus
 `[local]` in `agent.toml`: `module_targets`, `module_hosts`, `module_ports`, `module_sockets`, `module_file_prefixes`,
 `allow_docker_socket`); Module verbinden sich nur über `Veto::resolve` (Namen, Ports, Adressen) und `Veto::socket` vor
-jeder Verbindung und lesen Dateien nur über `Veto::open` (M5-33); Tests mit Servern auf freien Ports nehmen
+jeder Verbindung (im Lauf als `Run::socket`, auf einem Thread für blockierende Arbeit; `build` läuft ohnehin dort, V1-13)
+und lesen Dateien nur über `Veto::open` (M5-33); Zugangsdaten behalten sie nur als `sermon_modules::Secret` (genullt); Tests mit Servern auf freien Ports nehmen
 `Veto::default().any_port()`, Pfade in Tests `crate::TestDir`. Neue Module über den Skill `sermon-add-module`. Dateien des Hosts (`ProcRoot`) und den
 Root-Helper (Port `Helper`) und systemd (Port `Systemd`: nur `systemctl show` mit festen Eigenschaften, M5-10) bekommen
 Module über `Setup.host`; einzige Helper-Op eines Moduls ist `ReadSmart` (M5-18,

@@ -232,4 +232,14 @@ Ein eigenes Grid auf CSS Grid (`grid-column`/`grid-row` über die `style:`-Direk
   Grenzen nicht erst am `CHECK` der Tabelle (64 KiB Text) mit einem internen Fehler scheitert.
 - **Nicht umgesetzt:** Die Anzeige liest die Übersicht der Flotte für jedes Widget neu (Hostnamen, Ziele ohne festen
   Wert). Ein Cache je Token müsste Rechteänderungen sofort sehen; die Grenze gleichzeitiger Abfragen je Token begrenzt
-  die Last schon.
+  die Last schon. (Seit V1-13 umgesetzt, siehe unten.)
+
+## Nachtrag V1-13: Übersicht der Flotte je Token
+
+Eine Aktualisierung der Anzeige liest jedes Widget, und jedes braucht die sichtbaren Nodes (Hostnamen, Variablen ohne
+Vorgabe, Gruppen). Der Kiosk hält deshalb je Token die zuletzt gelesene Übersicht der Flotte **10 s** lang
+(`kiosk.SummaryFor`, ein Drittel der Aktualisierung von 30 s) – zusammen mit einem Fingerabdruck der Rechte, mit denen
+sie gelesen wurde (Schnittmenge von Ersteller und Eigentümer: Bindungen sortiert, Org, Viewer-Logs-Schalter). Die
+Rechte lädt jeder Aufruf weiter neu; passen sie nicht mehr, wird neu gelesen, eine Änderung wirkt also sofort, auch
+eine Herabstufung. Gleichzeitige Widgets warten auf eine Lesung; jedes bekommt eine eigene Kopie der Nodes. Ein Fehler
+wird nicht gehalten. Widerruf, Ablauf und Teilen prüft jeder Aufruf wie bisher vor dem Cache.

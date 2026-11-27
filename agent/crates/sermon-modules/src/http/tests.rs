@@ -279,7 +279,7 @@ async fn the_credential_goes_to_its_host_only() {
     let c = client(
         &Veto::default().any_port(),
         Options {
-            authorization: Some("Bearer t0ken".into()),
+            authorization: Some(String::from("Bearer t0ken").into()),
             ..Options::default()
         },
     );
@@ -609,20 +609,26 @@ async fn speaks_over_unix_sockets() {
         ..Veto::default().any_port()
     };
     let c = client(&veto, Options::default());
+    let run = Run::default();
+    crate::forget_socket_checks(&path);
     let r = c
-        .get_unix(&path, "/v1.43/containers/json", true)
+        .get_unix(&run, &path, "/v1.43/containers/json", true)
         .await
         .unwrap();
     assert_eq!((r.status, &r.body[..]), (200, &b"[]"[..]));
+    assert!(
+        crate::checked_off_executor(&path),
+        "V1-13: off the executor"
+    );
     let request = requests.lock().unwrap()[0].clone();
     assert!(
         request.starts_with("GET /v1.43/containers/json HTTP/1.1\r\n"),
         "{request}"
     );
-    assert!(c.get_unix(&path, "no-slash", true).await.is_err());
+    assert!(c.get_unix(&run, &path, "no-slash", true).await.is_err());
     let outside = client(&Veto::default().any_port(), Options::default());
     assert!(matches!(
-        outside.get_unix(&path, "/", true).await,
+        outside.get_unix(&run, &path, "/", true).await,
         Err(HttpError::Vetoed(_))
     ));
 }

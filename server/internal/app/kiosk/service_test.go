@@ -589,3 +589,76 @@ func TestWidget_LogsSpanAtMostADay(t *testing.T) {
 		t.Errorf("log span %v – %v, want the last 24 h", f.From, f.To)
 	}
 }
+
+// V1-13 (review C I5): a display's refresh reads every widget; the fleet's summary is read once
+// per token for SummaryFor and only while the rights it was read with hold – the creator's and
+// the owner's rights are loaded with every call, a change takes effect at once.
+func TestWidget_ReadsTheFleetOncePerTokenAndRights(t *testing.T) {
+	e := newEnv()
+	clock := now
+	e.svc = kiosk.NewService(kiosk.Deps{
+		Store: e.store, Dashboards: e.dashboards, Principals: e.principals, Admission: e.admission,
+		Readers: kiosk.Readers{Fleet: e.readers, Logs: fakeLogs{e.readers}, Alerts: e.readers},
+		Policy:  authz.NewPolicy(), Now: func() time.Time { return clock }, NewID: uuid.New,
+	})
+	ctx := context.Background()
+	viewerX := authz.Principal{User: bob, Org: orgA, Bindings: []authz.Binding{{Group: groupX, Role: role.Viewer}}}
+	e.principals.others = map[identity.UserID]authz.Principal{bob: viewerX}
+	e.dashboards.d.Owner = bob
+	d, err := e.svc.Authenticate(ctx, e.token(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range []string{"cpu", "alerts", "cpu", "alerts"} {
+		res, err := e.svc.Widget(ctx, d, w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Hostnames) != 2 {
+			t.Errorf("%s: host names %v", w, res.Hostnames)
+		}
+	}
+	if len(e.readers.callers) != 1 {
+		t.Errorf("the fleet read %d times for one refresh, want once", len(e.readers.callers))
+	}
+
+	// The owner may now see all groups: read again at once, with the new rights.
+	e.principals.others[bob] = authz.Principal{User: bob, Org: orgA, Bindings: []authz.Binding{{AllGroups: true, Role: role.Viewer}}}
+	res, err := e.svc.Widget(ctx, d, "cpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.readers.callers) != 2 || len(res.Hostnames) != 3 {
+		t.Errorf("after the rights changed: %d reads, host names %v", len(e.readers.callers), res.Hostnames)
+	}
+	// And back: nothing of group Y from the read before.
+	e.principals.others[bob] = viewerX
+	res, err = e.svc.Widget(ctx, d, "cpu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := res.Hostnames[app1]; ok || len(e.readers.callers) != 3 {
+		t.Errorf("rights lowered: %d reads, host names %v", len(e.readers.callers), res.Hostnames)
+	}
+
+	// Another token reads on its own.
+	other, err := e.svc.Authenticate(ctx, e.token(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Widget(ctx, other, "cpu"); err != nil || len(e.readers.callers) != 4 {
+		t.Errorf("another token: %d reads, %v", len(e.readers.callers), err)
+	}
+	// After SummaryFor the fleet is read again (new nodes, other states).
+	clock = clock.Add(kiosk.SummaryFor - time.Second)
+	if _, err := e.svc.Widget(ctx, d, "cpu"); err != nil || len(e.readers.callers) != 4 {
+		t.Errorf("within SummaryFor: %d reads, %v", len(e.readers.callers), err)
+	}
+	clock = clock.Add(time.Second)
+	if _, err := e.svc.Widget(ctx, d, "cpu"); err != nil || len(e.readers.callers) != 5 {
+		t.Errorf("after SummaryFor: %d reads, %v", len(e.readers.callers), err)
+	}
+	if kiosk.SummaryFor > 15*time.Second {
+		t.Errorf("SummaryFor %v: shorter than half the refresh of a display (30 s)", kiosk.SummaryFor)
+	}
+}

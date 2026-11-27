@@ -135,12 +135,17 @@ async fn checks_the_socket_at_every_connection() {
     assert_eq!(target, Target::Unix(path.clone()));
     std::os::unix::fs::symlink(&real, &path).unwrap();
     assert!(matches!(
-        target.connect(&veto).await,
+        target.connect(&veto, &Run::default()).await,
         Err(RunError::Vetoed(_))
     ));
     std::fs::remove_file(&path).unwrap();
     let _inside = UnixListener::bind(&path).unwrap();
-    assert!(target.connect(&veto).await.is_ok());
+    crate::forget_socket_checks(&path);
+    assert!(target.connect(&veto, &Run::default()).await.is_ok());
+    assert!(
+        crate::checked_off_executor(&path),
+        "V1-13: off the executor"
+    );
 }
 
 // The CA file is what the certificate is verified with.

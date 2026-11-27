@@ -745,7 +745,7 @@ fn nonce() -> Result<String, Error> {
 
 /// The client side of SCRAM-SHA-256 (RFC 5802, RFC 7677) without channel binding.
 pub struct Scram {
-    password: String,
+    password: crate::Secret,
     nonce: String,
     user: String,
     expected: Option<[u8; 32]>,
@@ -769,7 +769,7 @@ impl Scram {
     #[must_use]
     pub fn for_user(user: &str, password: &str, nonce: &str) -> Self {
         Self {
-            password: password.to_owned(),
+            password: crate::Secret::new(password.to_owned()),
             nonce: nonce.to_owned(),
             user: user.to_owned(),
             expected: None,

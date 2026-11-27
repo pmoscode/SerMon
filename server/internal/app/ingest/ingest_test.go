@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -641,5 +643,88 @@ func TestIngest_CountsTheSeriesOfAnOrganizationOncePerInterval(t *testing.T) {
 	w.open(t)
 	if n := w.store.counts.Load(); n != 2 {
 		t.Errorf("after the interval: %d calls, want 2", n)
+	}
+}
+
+// scraped returns series of the Prometheus scraper of target, named by series: gauges, rates
+// for a target starting with r.
+func scraped(target string, series ...string) []ingest.Sample {
+	metric := "sermon_prometheus_gauge"
+	if strings.HasPrefix(target, "r") {
+		metric = "sermon_prometheus_rate"
+	}
+	out := make([]ingest.Sample, len(series))
+	for i, s := range series {
+		out[i] = ingest.Sample{Metric: metric, Labels: metrics.Labels{"target": target, "name": "up", "series": s}, Value: 1}
+	}
+	return out
+}
+
+func storedScraped(w *world) map[string]bool {
+	out := map[string]bool{}
+	for _, a := range w.store.Aggregates() {
+		if a.Metric == "sermon_prometheus_gauge" || a.Metric == "sermon_prometheus_rate" {
+			out[a.Labels["target"]+" "+a.Labels["series"]] = true
+		}
+	}
+	return out
+}
+
+// V1-13 (review B B-5): series of a scraped endpoint follow outside input (paths, user IDs). The
+// ingest keeps a budget of its own for them – per endpoint and per node, at most half the node's
+// series limit, across reconnects – so they can't take the places of the node's own series.
+func TestIngest_ScrapedSeriesHaveABudgetOfTheirOwn(t *testing.T) {
+	config := ingest.DefaultConfig()
+	config.SeriesLimit = 10
+	config.ScrapedSeriesPerTarget = 2
+	config.ScrapedSeriesPerNode = 3
+	w := newWorld(t, config)
+	first := w.open(t)
+	samples := append(scraped("a", "1", "2", "3"), scraped("rb", "1", "2")...)
+	samples = append(samples, seriesSamples("sda")...)
+	first.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: samples})
+	first.Accept(context.Background(), batch(2, t0.Add(10*time.Second), 1))
+	if _, err := first.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"a 1": true, "a 2": true, "rb 1": true}
+	if got := storedScraped(w); !maps.Equal(got, want) {
+		t.Errorf("stored %v, want %v (2 per endpoint, 3 per node)", got, want)
+	}
+	if !storedDevices(w, node)["sda"] || w.svc.Stats().DroppedSeries.Load() != 2 {
+		t.Errorf("own series %v, dropped %d", storedDevices(w, node), w.svc.Stats().DroppedSeries.Load())
+	}
+
+	// A reconnect gains nothing; the known series pass.
+	w.clock.Set(t0.Add(time.Minute))
+	second := w.open(t)
+	second.Accept(context.Background(), ingest.Batch{Seq: 3, CollectedAt: t0.Add(time.Minute), Samples: append(scraped("c", "1"), scraped("a", "1")...)})
+	second.Accept(context.Background(), batch(4, t0.Add(80*time.Second), 1))
+	if _, err := second.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedScraped(w); got["c 1"] || len(got) != 3 {
+		t.Errorf("after the reconnect: %v", got)
+	}
+}
+
+// The scraped series take at most half the node's limit, also when the organization's quota
+// lowers it below ScrapedSeriesPerNode.
+func TestIngest_ScrapedSeriesTakeAtMostHalfTheNodesLimit(t *testing.T) {
+	config := ingest.DefaultConfig()
+	config.SeriesLimit = 4
+	w := newWorld(t, config)
+	s := w.open(t)
+	samples := append(scraped("a", "1", "2", "3"), seriesSamples("sda", "sdb")...)
+	s.Accept(context.Background(), ingest.Batch{Seq: 1, CollectedAt: t0, Samples: samples})
+	s.Accept(context.Background(), ingest.Batch{Seq: 2, CollectedAt: t0.Add(10 * time.Second), Samples: seriesSamples("sda")})
+	if _, err := s.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := storedScraped(w); len(got) != 2 {
+		t.Errorf("scraped %v, want 2 of a limit of 4", got)
+	}
+	if got := storedDevices(w, node); !got["sda"] || !got["sdb"] {
+		t.Errorf("own series %v", got)
 	}
 }

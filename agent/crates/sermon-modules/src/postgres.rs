@@ -80,7 +80,7 @@ impl Module for Postgres {
             security,
             user: sql::text(config, "role", "sermon").to_owned(),
             database: sql::text(config, "database", "postgres").to_owned(),
-            password: setup.secrets.get("secret").map(str::to_owned),
+            password: setup.secrets.secret("secret"),
             allow: wire::Allow::of(sql::text(config, "auth", "scram-sha-256")),
             last: None,
         }))
@@ -120,7 +120,7 @@ struct Reader {
     security: Security,
     user: String,
     database: String,
-    password: Option<String>,
+    password: Option<crate::Secret>,
     allow: wire::Allow,
     last: Option<(Monotonic, Stats)>,
 }
@@ -344,7 +344,7 @@ impl Reader {
         let startup = wire::Startup {
             user: &self.user,
             database: &self.database,
-            password: self.password.as_deref(),
+            password: self.password.as_ref().map(|p| p.as_str()),
             options: "-c statement_timeout=3000 -c lock_timeout=1000 -c default_transaction_read_only=on",
             allow: self.allow,
             secure,
@@ -361,7 +361,7 @@ impl Instance for Reader {
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             let at = run.monotonic();
-            let Some(connection) = self.target.reach(&self.veto).await? else {
+            let Some(connection) = self.target.reach(&self.veto, run).await? else {
                 self.last = None;
                 return Ok(vec![Sample::int("sermon_postgres_up", 0)]);
             };

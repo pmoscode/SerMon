@@ -382,3 +382,64 @@ func TestModuleStore_TheFleetKnowsTheModulesANodeRuns(t *testing.T) {
 		}
 	}
 }
+
+// V1-13: Check sees the credentials the module keeps, as stored in Put's transaction; its error
+// ends the change. A removal waits for a change of the same module that holds its lock.
+func TestModuleStore_ChecksInTheTransaction(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	store := postgres.NewModuleStore(open(t, f.appDSN))
+	web := uuid.New()
+	createNode(t, f.db.OwnerDSN, orgA, web)
+	group := tenant.GroupID(groupOf(t, f.db.OwnerDSN, web))
+	audit := access.AuditEntry{Action: "module.update", Target: "group:x"}
+	setting := module.Setting{Module: "simulate", Enabled: true, Config: "{}"}
+	if err := store.Put(ctx, scopeFor(t, orgA), group, setting, modules.SealedChange{Set: map[string][]byte{"token": []byte("sealed-1"), "other": []byte("sealed-2")}}, identity.UserID{}, audit); err != nil {
+		t.Fatal(err)
+	}
+	var kept []string
+	refuse := errors.New("refused")
+	change := modules.SealedChange{
+		Set: map[string][]byte{"third": []byte("sealed-3")}, Clear: []string{"other"},
+		Check: func(k []string) (module.Setting, error) {
+			kept = slices.Sorted(slices.Values(k))
+			return module.Setting{}, refuse
+		},
+	}
+	if err := store.Put(ctx, scopeFor(t, orgA), group, setting, change, identity.UserID{}, audit); !errors.Is(err, refuse) {
+		t.Fatalf("Put() = %v", err)
+	}
+	if !slices.Equal(kept, []string{"third", "token"}) {
+		t.Errorf("Check got %v", kept)
+	}
+	if fields, _ := store.SecretFields(ctx, scopeFor(t, orgA), group, "simulate"); !slices.Equal(fields, []string{"other", "token"}) {
+		t.Errorf("after a refused change: %v", fields)
+	}
+
+	inCheck, release := make(chan struct{}), make(chan struct{})
+	slow := modules.SealedChange{Check: func([]string) (module.Setting, error) {
+		close(inCheck)
+		<-release
+		return module.Setting{Module: "simulate", Config: `{"value":2}`}, nil
+	}}
+	put := make(chan error, 1)
+	go func() { put <- store.Put(ctx, scopeFor(t, orgA), group, setting, slow, identity.UserID{}, audit) }()
+	<-inCheck
+	removed := make(chan error, 1)
+	go func() { removed <- store.Remove(ctx, scopeFor(t, orgA), group, "simulate", identity.UserID{}, audit) }()
+	select {
+	case err := <-removed:
+		t.Fatalf("the removal didn't wait for the change: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(release)
+	if err := <-put; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-removed; err != nil {
+		t.Fatal(err)
+	}
+	if fields, _ := store.SecretFields(ctx, scopeFor(t, orgA), group, "simulate"); len(fields) != 0 {
+		t.Errorf("after the removal: %v", fields)
+	}
+}

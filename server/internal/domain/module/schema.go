@@ -333,6 +333,9 @@ func parseText(m map[string]any) (text, error) {
 		if !ok || !strings.HasPrefix(s, "^") || !strings.HasSuffix(s, "$") {
 			return text{}, errors.New("a pattern is anchored with ^ and $")
 		}
+		if err := sameInRust(s); err != nil {
+			return text{}, err
+		}
 		if t.pattern, err = regexp.Compile(s); err != nil {
 			return text{}, fmt.Errorf("pattern: %w", err)
 		}
@@ -664,6 +667,22 @@ func duration(s string) error {
 	}
 	if n > maxDurationMS/factor {
 		return errors.New("at most an hour")
+	}
+	return nil
+}
+
+// sameInRust refuses a pattern with a class that RE2 reads as ASCII and Rust's regex as Unicode
+// (\d, \w, \s, \b and their negations) or a Unicode class (\p, \P, V1-13): the server and
+// the agent must accept the same values.
+func sameInRust(pattern string) error {
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] != '\\' {
+			continue
+		}
+		i++
+		if i < len(pattern) && strings.IndexByte("dDwWsSbBpP", pattern[i]) >= 0 {
+			return errors.New(`pattern: \d, \w, \s, \b and \p differ between Rust and Go: spell the class out, e.g. [0-9]`)
+		}
 	}
 	return nil
 }

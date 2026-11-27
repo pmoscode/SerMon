@@ -211,6 +211,11 @@ pub fn host_pattern(s: &str) -> Result<String, String> {
     }
 }
 
+/// The socket checks of the tests: path and thread ([`crate::checked_off_executor`]).
+#[cfg(test)]
+pub(crate) static SOCKET_CHECKS: std::sync::Mutex<Vec<(PathBuf, std::thread::ThreadId)>> =
+    std::sync::Mutex::new(Vec::new());
+
 /// What the host allows the modules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Veto {
@@ -351,9 +356,12 @@ impl Veto {
         if !self.name_allowed(host) {
             return Err(refused());
         }
-        let found: Vec<SocketAddr> = tokio::net::lookup_host((host, port))
-            .await
-            .map_or_else(|_| Vec::new(), Iterator::collect);
+        let name = host.to_owned();
+        let found = bounded(&LOOKUPS, move || {
+            std::net::ToSocketAddrs::to_socket_addrs(&(name.as_str(), port))
+                .map_or_else(|_| Vec::new(), Iterator::collect)
+        })
+        .await;
         if found.is_empty() || found.iter().any(|a| self.address(a.ip()).is_err()) {
             return Err(refused());
         }
@@ -369,6 +377,11 @@ impl Veto {
     ///
     /// [`Refused`] if the socket lies outside `module_sockets` or in a blocked place.
     pub fn socket(&self, path: &Path) -> Result<PathBuf, Refused> {
+        #[cfg(test)]
+        SOCKET_CHECKS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((path.to_path_buf(), std::thread::current().id()));
         plain(path)?;
         let shown = path.display();
         let runtime = |p: &Path| {
@@ -532,6 +545,31 @@ impl Veto {
             .find(|p| resolved.starts_with(p))
             .ok_or_else(outside)
     }
+}
+
+/// Most name lookups at once, for all modules (V1-13).
+const MAX_LOOKUPS: usize = 8;
+
+/// The places for name lookups.
+static LOOKUPS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(MAX_LOOKUPS);
+
+/// Runs the lookup `f` on a blocking thread once a place of `places` is free; the place stays
+/// taken until `f` returns. A lookup (`getaddrinfo`) can't be cancelled: a run that times out
+/// leaves it running, and a server could otherwise tie up ever more threads with names that take
+/// long to resolve. Nothing found if the lookup failed.
+async fn bounded<F>(places: &'static tokio::sync::Semaphore, f: F) -> Vec<SocketAddr>
+where
+    F: FnOnce() -> Vec<SocketAddr> + Send + 'static,
+{
+    let Ok(place) = places.acquire().await else {
+        return Vec::new();
+    };
+    tokio::task::spawn_blocking(move || {
+        let _place = place;
+        f()
+    })
+    .await
+    .unwrap_or_default()
 }
 
 /// An absolute path without `.` and `..`.

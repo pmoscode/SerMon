@@ -21,9 +21,14 @@ ist ab Werk aus; der Agent schlägt es vor, wenn er `redis-server` oder `valkey-
 
 - **Adresse:** ab Werk `127.0.0.1:6379`; oder **Unix-Socket** statt der Adresse – mit Passwort der bessere Weg.
 - **User** (ACL, ab Redis 6) und **Passwort**; **Timeout**.
-- **Passwort und fremde Ports:** `AUTH` schickt das Passwort im Klartext, und das Modul spricht kein TLS. Ist Redis
-  gestoppt, kann ein anderer lokaler Benutzer den Port `6379` belegen und bekommt dann das Passwort. Deshalb mit
-  Passwort den Unix-Socket nehmen (seinen Pfad legt nur Redis an) und einen ACL-User, der nur `INFO` darf (oben).
+- **TLS** (für den `tls-port` ab Redis 6): `off`, `verify` (das Zertifikat gegen die CAs des Systems oder die
+  **CA-Datei**, eine PEM-Datei unter `module_file_prefixes`) oder `no_verify` (jedes Zertifikat: verschlüsselt, aber an
+  jeden, der antwortet). Leer heißt: aus auf Loopback und am Socket, `verify` für jede andere Adresse – wie bei
+  PostgreSQL und MySQL. Über den Socket gibt es kein TLS.
+- **Passwort und fremde Ports:** `AUTH` schickt das Passwort im Klartext; ohne TLS mit `verify` geht es an den, der
+  auf dem Port antwortet. Ist Redis gestoppt, kann ein anderer lokaler Benutzer den Port `6379` belegen und bekommt
+  dann das Passwort. Deshalb mit Passwort den Unix-Socket nehmen (seinen Pfad legt nur Redis an) oder TLS mit
+  `verify`, und einen ACL-User, der nur `INFO` darf (oben).
 
 ## Metriken
 
@@ -39,4 +44,6 @@ ist ab Werk aus; der Agent schlägt es vor, wenn er `redis-server` oder `valkey-
 - „Redis wants a password (NOAUTH)“: Passwort im Modul setzen.
 - „AUTH failed: wrong user or password“: User oder Passwort falsch (oder Redis hat gar kein Passwort).
 - „no RESP reply (is it Redis?)“: Unter der Adresse antwortet kein Redis.
+- „TLS: …“: Redis spricht unter der Adresse kein TLS (dann `tls` auf `off` oder den `tls-port` nehmen), oder sein
+  Zertifikat passt nicht zum Namen oder zur CA.
 - `sermon_redis_up` 0: Redis antwortet nicht.

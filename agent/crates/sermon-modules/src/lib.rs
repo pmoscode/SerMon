@@ -343,6 +343,23 @@ impl Run {
         .map_err(|e| RunError::Failed(format!("a blocking part failed: {e}")))
     }
 
+    /// Checks a Unix socket with [`Veto::socket`] on a blocking thread (V1-13): the check
+    /// resolves links and reads metadata, which a hung mount below `module_sockets` (FUSE in
+    /// `/run/user`) can block for good – on the executor that would stop the whole agent. Until
+    /// it returns, the module counts as hung. Returns where the socket leads.
+    ///
+    /// # Errors
+    ///
+    /// [`RunError::Vetoed`] if the veto refuses the socket.
+    pub async fn socket(
+        &self,
+        veto: &Veto,
+        path: &std::path::Path,
+    ) -> Result<std::path::PathBuf, RunError> {
+        let (veto, path) = (veto.clone(), path.to_path_buf());
+        Ok(self.blocking(move || veto.socket(&path)).await??)
+    }
+
     /// Whether blocking work of an earlier run still runs.
     #[must_use]
     pub fn busy(&self) -> bool {
@@ -366,21 +383,31 @@ impl Drop for Busy {
     }
 }
 
-/// The credentials of a module by field; never printed.
+/// The value of a credential: wiped from memory when dropped (V1-13). Every copy a module keeps
+/// is one of these.
+pub type Secret = zeroize::Zeroizing<String>;
+
+/// The credentials of a module by field; never printed, wiped when dropped.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub struct Secrets(BTreeMap<String, String>);
+pub struct Secrets(BTreeMap<String, Secret>);
 
 impl Secrets {
-    /// The credentials `fields` (field, value).
+    /// The credentials `fields` (field, value); a `String` is taken over, not copied.
     #[must_use]
-    pub fn new(fields: impl IntoIterator<Item = (String, String)>) -> Self {
-        Self(fields.into_iter().collect())
+    pub fn new<V: Into<Secret>>(fields: impl IntoIterator<Item = (String, V)>) -> Self {
+        Self(fields.into_iter().map(|(f, v)| (f, v.into())).collect())
     }
 
     /// The value of `field`.
     #[must_use]
     pub fn get(&self, field: &str) -> Option<&str> {
-        self.0.get(field).map(String::as_str)
+        self.0.get(field).map(|v| v.as_str())
+    }
+
+    /// A copy of the value of `field` for a module to keep, wiped when dropped.
+    #[must_use]
+    pub fn secret(&self, field: &str) -> Option<Secret> {
+        self.0.get(field).cloned()
     }
 
     /// The fields that have a value.
@@ -416,6 +443,31 @@ impl TestDir {
     pub(crate) fn path(&self) -> &std::path::Path {
         &self.path
     }
+}
+
+/// Forgets the socket checks of `path` the veto noted so far (see [`checked_off_executor`]).
+#[cfg(test)]
+pub(crate) fn forget_socket_checks(path: &std::path::Path) {
+    veto::SOCKET_CHECKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .retain(|(p, _)| p != path);
+}
+
+/// Whether the veto checked the socket `path` since [`forget_socket_checks`], and never on the
+/// calling thread – the executor of a `#[tokio::test]` (V1-13: no blocking file system calls
+/// there).
+#[cfg(test)]
+pub(crate) fn checked_off_executor(path: &std::path::Path) -> bool {
+    let here = std::thread::current().id();
+    let checks: Vec<_> = veto::SOCKET_CHECKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .filter(|(p, _)| p == path)
+        .map(|(_, t)| *t)
+        .collect();
+    !checks.is_empty() && checks.iter().all(|t| *t != here)
 }
 
 /// Checks that `samples` of the module `id` are in its metric catalog
@@ -498,6 +550,17 @@ mod tests {
             );
             Schema::parse(module.schema()).unwrap();
         }
+    }
+
+    // V1-13: what holds a credential wipes it when dropped – the type says so.
+    #[test]
+    fn credentials_are_wiped_when_dropped() {
+        fn wiped<T: zeroize::ZeroizeOnDrop>(_: &T) {}
+        let s = Secrets::new([("password".to_owned(), "hunter2".to_owned())]);
+        let kept = s.secret("password").unwrap();
+        wiped(&kept);
+        assert_eq!(kept.as_str(), "hunter2");
+        assert_eq!(s.secret("other"), None);
     }
 
     #[test]

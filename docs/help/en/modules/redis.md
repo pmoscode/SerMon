@@ -23,9 +23,14 @@ only `AUTH` (with a password) and `INFO`, nothing that changes data.
 - **Address:** by default `127.0.0.1:6379`; or a **Unix socket** instead of the address – the better way with a
   password.
 - **User** (ACL, Redis 6 and later) and **password**; **timeout**.
-- **Password and strangers on the port:** `AUTH` sends the password in clear text, and the module speaks no TLS. While
-  Redis is stopped, another local user can take port `6379` and then gets the password. So with a password use the
-  Unix socket (only Redis creates its path) and an ACL user that may run `INFO` only (above).
+- **TLS** (for the `tls-port` of Redis 6 and later): `off`, `verify` (the certificate against the system's CAs or the
+  **CA file**, a PEM file below `module_file_prefixes`) or `no_verify` (any certificate: encrypted, but to whoever
+  answers). Empty means: off on loopback and the socket, `verify` for any other address – as for PostgreSQL and MySQL.
+  There is no TLS over the socket.
+- **Password and strangers on the port:** `AUTH` sends the password in clear text; without TLS with `verify` it goes
+  to whoever answers on the port. While Redis is stopped, another local user can take port `6379` and then gets the
+  password. So with a password use the Unix socket (only Redis creates its path) or TLS with `verify`, and an ACL user
+  that may run `INFO` only (above).
 
 ## Metrics
 
@@ -41,4 +46,6 @@ only `AUTH` (with a password) and `INFO`, nothing that changes data.
 - "Redis wants a password (NOAUTH)": set the password in the module.
 - "AUTH failed: wrong user or password": user or password wrong (or Redis has no password at all).
 - "no RESP reply (is it Redis?)": no Redis answers at the address.
+- "TLS: …": Redis speaks no TLS at the address (set `tls` to `off` or use the `tls-port`), or its certificate doesn't
+  match the name or the CA.
 - `sermon_redis_up` 0: Redis doesn't answer.

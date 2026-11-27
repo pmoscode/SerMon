@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use sermon_core::Sample;
-use sermon_modules::Secrets;
 use sermon_modules::runtime::{Health, Runtime, Sink, State};
+use sermon_modules::{Secret, Secrets};
 use sermon_transport::outbox::Outbox;
 use sermon_transport::proto::agent::v1::{
     ModuleHealth, ModuleHealthReport, ModuleSecrets, ModuleState,
@@ -191,14 +191,17 @@ fn valid_name(name: &str, max: usize) -> bool {
 }
 
 /// The credentials of `secrets` by module, within the bounds of the protocol; the first value of
-/// a field counts.
+/// a field counts. Every value is taken over as a [`Secret`] at once, so also those left out are
+/// wiped (V1-13).
 fn to_map(secrets: ModuleSecrets) -> SecretMap {
-    let mut fields: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
-    for s in secrets.secrets.into_iter().take(MAX_SECRETS) {
-        if !valid_name(&s.module_id, MAX_MODULE_ID)
+    let mut fields: BTreeMap<String, BTreeMap<String, Secret>> = BTreeMap::new();
+    for (i, s) in secrets.secrets.into_iter().enumerate() {
+        let value = Secret::new(s.value);
+        if i >= MAX_SECRETS
+            || !valid_name(&s.module_id, MAX_MODULE_ID)
             || !valid_name(&s.field, MAX_FIELD)
-            || s.value.is_empty()
-            || s.value.len() > MAX_VALUE
+            || value.is_empty()
+            || value.len() > MAX_VALUE
         {
             continue;
         }
@@ -206,7 +209,7 @@ fn to_map(secrets: ModuleSecrets) -> SecretMap {
             .entry(s.module_id)
             .or_default()
             .entry(s.field)
-            .or_insert(s.value);
+            .or_insert(value);
     }
     fields
         .into_iter()

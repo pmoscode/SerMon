@@ -50,6 +50,8 @@ type memStore struct {
 	version uint64
 	audits  []access.AuditEntry
 	scopes  []tenant.Scope
+	// beforePut runs when Put starts: a change of another request that commits first.
+	beforePut func()
 }
 
 func newStore() *memStore {
@@ -76,7 +78,7 @@ func secretKey(group tenant.GroupID, mod, field string) string {
 	return group.String() + "/" + mod + "/" + field
 }
 
-func (m *memStore) SecretFields(_ context.Context, _ tenant.Scope, group tenant.GroupID, mod string) ([]string, error) {
+func (m *memStore) secretFields(group tenant.GroupID, mod string) []string {
 	var out []string
 	for k := range m.sealed {
 		if f, ok := strings.CutPrefix(k, group.String()+"/"+mod+"/"); ok {
@@ -84,14 +86,29 @@ func (m *memStore) SecretFields(_ context.Context, _ tenant.Scope, group tenant.
 		}
 	}
 	slices.Sort(out)
-	return out, nil
+	return out
 }
 
 func (m *memStore) Put(_ context.Context, scope tenant.Scope, group tenant.GroupID, s module.Setting, secrets modules.SealedChange, _ identity.UserID, audit access.AuditEntry) error {
+	if m.beforePut != nil {
+		m.beforePut()
+	}
 	m.scopes = append(m.scopes, scope)
 	settings, ok := m.groups[group]
 	if !ok {
 		return access.ErrNotFound
+	}
+	if secrets.Check != nil {
+		kept := slices.DeleteFunc(m.secretFields(group, s.Module), func(f string) bool { return slices.Contains(secrets.Clear, f) })
+		for f := range secrets.Set {
+			if !slices.Contains(kept, f) {
+				kept = append(kept, f)
+			}
+		}
+		var err error
+		if s, err = secrets.Check(kept); err != nil {
+			return err
+		}
 	}
 	for f, v := range secrets.Set {
 		m.sealed[secretKey(group, s.Module, f)] = v
@@ -454,5 +471,26 @@ func TestSetGroupModule_RefusesCredentialsOutsideTheSchema(t *testing.T) {
 	}
 	if len(store.sealed) != 0 || len(store.audits) != 0 {
 		t.Errorf("stored %v", store.sealed)
+	}
+}
+
+// V1-13 (review A I5): the credentials a change keeps are read in the store's transaction, not
+// before it. A removal that commits in between (it takes the module's credentials along) makes
+// the change fail the check instead of storing a module without its required password.
+func TestSetGroupModule_ChecksTheCredentialsInTheTransaction(t *testing.T) {
+	svc, store, _ := setup(t)
+	ctx := context.Background()
+	if err := svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "postgresql", Config: `{}`},
+		modules.SecretChange{Set: map[string]string{"password": "x"}}); err != nil {
+		t.Fatal(err)
+	}
+	store.beforePut = func() { delete(store.sealed, secretKey(web, "postgresql", "password")) }
+	err := svc.SetGroupModule(ctx, adminCaller(), web, module.Setting{Module: "postgresql", Enabled: true, Config: `{"user":"bob"}`},
+		modules.SecretChange{})
+	if !errors.Is(err, module.ErrInvalid) || !strings.Contains(err.Error(), "password: required") {
+		t.Fatalf("SetGroupModule() = %v, want password: required", err)
+	}
+	if got := store.groups[web]; len(got) != 1 || got[0].Enabled {
+		t.Errorf("stored %+v", got)
 	}
 }

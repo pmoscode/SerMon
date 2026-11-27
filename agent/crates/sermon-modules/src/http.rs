@@ -31,7 +31,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpStream, UnixStream};
 use tokio::time::Instant;
 
-use crate::{BuildError, Refused, RunError, Veto};
+use crate::{BuildError, Refused, Run, RunError, Veto};
 
 /// Most bytes of a response body (ADR 0039).
 pub const MAX_BODY: usize = 1024 * 1024;
@@ -60,7 +60,7 @@ pub struct Options {
     /// CA certificates (PEM) to verify with instead of the system's.
     pub ca_file: Option<PathBuf>,
     /// The value of `Authorization`, sent only to the configured host and port.
-    pub authorization: Option<String>,
+    pub authorization: Option<crate::Secret>,
     /// The value of `Accept`.
     pub accept: &'static str,
 }
@@ -368,7 +368,8 @@ impl Client {
             })?
     }
 
-    /// `GET path` over the Unix socket `socket` (below `module_sockets`); no redirects.
+    /// `GET path` over the Unix socket `socket` (below `module_sockets`, checked on a blocking
+    /// thread of `run`, [`Run::socket`]); no redirects.
     ///
     /// # Errors
     ///
@@ -376,6 +377,7 @@ impl Client {
     /// or [`HttpError::Failed`].
     pub async fn get_unix(
         &self,
+        run: &Run,
         socket: &Path,
         path: &str,
         read_body: bool,
@@ -383,7 +385,10 @@ impl Client {
         if !path.starts_with('/') || !path.bytes().all(|b| b.is_ascii_graphic()) {
             return Err(failed("the path starts with / and holds no spaces"));
         }
-        let socket = self.veto.socket(socket)?;
+        let socket = run.socket(&self.veto, socket).await.map_err(|e| match e {
+            RunError::Vetoed(r) => HttpError::Vetoed(r),
+            RunError::Failed(why) => HttpError::Failed(why),
+        })?;
         let start = Instant::now();
         let exchange = async {
             let stream = UnixStream::connect(&socket)
@@ -424,7 +429,7 @@ impl Client {
         loop {
             let addresses = self.veto.resolve(&current.host, current.port).await?;
             let authorization = if current.same_origin(url) {
-                self.options.authorization.as_deref()
+                self.options.authorization.as_ref().map(|a| a.as_str())
             } else {
                 None
             };

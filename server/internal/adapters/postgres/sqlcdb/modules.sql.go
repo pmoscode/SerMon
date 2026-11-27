@@ -288,6 +288,23 @@ func (q *Queries) ListOpenModuleHints(ctx context.Context, arg ListOpenModuleHin
 	return items, nil
 }
 
+const lockModuleSetting = `-- name: LockModuleSetting :exec
+SELECT pg_advisory_xact_lock(hashtextextended('modules:' || current_org_id()::text || ':' ||
+                                              $1::uuid::text || ':' || $2::text, 0))
+`
+
+type LockModuleSettingParams struct {
+	GroupID  uuid.UUID
+	ModuleID string
+}
+
+// Serializes the changes of a group's module (V1-13): a change checks the credentials it keeps
+// in its transaction, and a removal in between takes them along.
+func (q *Queries) LockModuleSetting(ctx context.Context, arg LockModuleSettingParams) error {
+	_, err := q.db.Exec(ctx, lockModuleSetting, arg.GroupID, arg.ModuleID)
+	return err
+}
+
 const moduleHealthOfNode = `-- name: ModuleHealthOfNode :many
 SELECT module_id, state, reason, last_success, collected_at, received_at
 FROM module_health WHERE node_id = $1

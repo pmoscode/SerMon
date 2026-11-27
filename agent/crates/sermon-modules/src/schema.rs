@@ -389,7 +389,7 @@ fn text(p: &Map<String, Value>) -> Result<Text, String> {
     let pattern = match p.get("pattern") {
         None => None,
         Some(Value::String(s)) if s.starts_with('^') && s.ends_with('$') => Some(
-            RegexBuilder::new(s)
+            RegexBuilder::new(same_in_go(s)?)
                 .size_limit(PATTERN_SIZE)
                 .dfa_size_limit(PATTERN_SIZE)
                 .build()
@@ -575,6 +575,26 @@ pub fn duration(s: &str) -> Result<Duration, String> {
         return Err("at most an hour".into());
     }
     Ok(d)
+}
+
+/// `pattern` unless it uses a class that Rust's `regex` reads as Unicode and Go's RE2 as ASCII
+/// (`\d`, `\w`, `\s`, `\b` and their negations) or a Unicode class (`\p`, `\P`, V1-13):
+/// the agent and the server must accept the same values.
+///
+/// # Errors
+///
+/// If it uses one of them.
+fn same_in_go(pattern: &str) -> Result<&str, String> {
+    let mut chars = pattern.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' && chars.next().is_some_and(|e| "dDwWsSbBpP".contains(e)) {
+            return Err(
+                "pattern: \\d, \\w, \\s, \\b and \\p differ between Rust and Go: spell the class out, e.g. [0-9]"
+                    .into(),
+            );
+        }
+    }
+    Ok(pattern)
 }
 
 #[cfg(test)]

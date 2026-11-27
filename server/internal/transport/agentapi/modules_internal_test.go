@@ -40,3 +40,20 @@ func TestToBatch_ModuleReports(t *testing.T) {
 		t.Fatalf("hints batch = %+v", hints)
 	}
 }
+
+// V1-13 (review A I4): a node gets the credentials of its group, at most maxModuleSecrets; all
+// credential fields of all modules together fit, so none is left out silently. A module with
+// more fields must raise the bound (agent.proto) or bound the group's credentials.
+func TestModuleSecrets_AllCredentialFieldsFit(t *testing.T) {
+	catalog, err := module.Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0
+	for _, m := range catalog.All() {
+		total += len(m.Schema.Secrets())
+	}
+	if total == 0 || total > maxModuleSecrets {
+		t.Errorf("%d credential fields, a node gets at most %d", total, maxModuleSecrets)
+	}
+}

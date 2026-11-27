@@ -1,7 +1,9 @@
 //! Redis and Valkey (M5-15): memory, clients, commands, hit rate, evictions and replication
-//! from `INFO`, over TCP inside `module_targets` or a Unix socket below `module_sockets`. The
-//! module speaks RESP itself: `AUTH` if a password is set, then `INFO` – nothing that changes
-//! data. The password (`auth`) is a credential (`writeOnly`), kept in memory only (M5-05).
+//! from `INFO`, over TCP inside `module_targets` or a Unix socket below `module_sockets`, over
+//! TCP also with TLS (`tls`, `ca_file`; the `tls-port` of Redis 6 and later, V1-13) as the
+//! database modules have it ([`crate::sql::Security`]). The module speaks RESP itself: `AUTH` if
+//! a password is set, then `INFO` – nothing that changes data. The password (`auth`) is a
+//! credential (`writeOnly`), kept in memory only (M5-05) and wiped when dropped.
 //!
 //! | Metric | Unit |
 //! |---|---|
@@ -20,18 +22,17 @@
 //! No labels: one Redis per module. Rates from the second run, paused after a restart (the
 //! counters start at 0) and an outage.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use serde_json::Value;
 use sermon_core::Sample;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::net::{TcpStream, UnixStream};
 
 use crate::discovery::{Discovered, HostFacts};
 use crate::fields::timeout;
 use crate::rate::Counter;
-use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup, Veto, schema};
+use crate::sql::{Connection, Security, Target, Tls};
+use crate::{BoxFuture, BuildError, Config, Instance, Module, Run, RunError, Setup, Veto};
 
 const SCHEMA: &str = include_str!("../schemas/redis.json");
 
@@ -56,20 +57,9 @@ impl Module for Redis {
     }
 
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
-        let target = if let Some(path) = config.get("socket").and_then(Value::as_str) {
-            let path = PathBuf::from(path);
-            setup.veto.socket(&path)?;
-            Target::Socket(path)
-        } else {
-            let text = config
-                .get("address")
-                .and_then(Value::as_str)
-                .unwrap_or("127.0.0.1:6379");
-            let (host, port) = schema::host_port(text)
-                .map_err(|e| BuildError::Invalid(format!("address: {e}")))?;
-            Target::Tcp(host.to_owned(), port)
-        };
-        let password = setup.secrets.get("auth").map(str::to_owned);
+        let target = Target::of(config, setup.veto)?;
+        let security = Security::of(config, &target, setup.veto)?;
+        let password = setup.secrets.secret("auth");
         let username = config
             .get("username")
             .and_then(Value::as_str)
@@ -80,6 +70,7 @@ impl Module for Redis {
         Ok(Box::new(Info {
             veto: setup.veto.clone(),
             target,
+            security,
             login: password.map(|p| Login {
                 user: username,
                 password: p,
@@ -119,15 +110,9 @@ impl Module for Redis {
     }
 }
 
-#[derive(Debug, Clone)]
-enum Target {
-    Tcp(String, u16),
-    Socket(PathBuf),
-}
-
 struct Login {
     user: Option<String>,
-    password: String,
+    password: crate::Secret,
 }
 
 /// What a module needs of `INFO`.
@@ -227,9 +212,9 @@ pub enum Reply {
     Nil,
 }
 
-/// Sends `args` as a RESP array.
+/// Sends `args` as a RESP array; the frame (with `AUTH` the password) is wiped afterwards.
 async fn send<S: AsyncWrite + Unpin>(stream: &mut S, args: &[&[u8]]) -> std::io::Result<()> {
-    let mut out = format!("*{}\r\n", args.len()).into_bytes();
+    let mut out = zeroize::Zeroizing::new(format!("*{}\r\n", args.len()).into_bytes());
     for a in args {
         out.extend_from_slice(format!("${}\r\n", a.len()).as_bytes());
         out.extend_from_slice(a);
@@ -348,38 +333,28 @@ struct Counters {
 struct Info {
     veto: Veto,
     target: Target,
+    security: Security,
     login: Option<Login>,
     timeout: Duration,
     counters: Counters,
 }
 
 impl Info {
-    async fn ask(&self) -> Result<String, Result<Miss, RunError>> {
-        match &self.target {
-            Target::Tcp(host, port) => {
-                let addresses = self
-                    .veto
-                    .resolve(host, *port)
-                    .await
-                    .map_err(|r| Err(RunError::Vetoed(r)))?;
-                for address in addresses {
-                    if let Ok(stream) = TcpStream::connect(address).await {
-                        return exchange(stream, self.login.as_ref()).await.map_err(Ok);
-                    }
-                }
-                Err(Ok(Miss::Down))
-            }
-            Target::Socket(path) => {
-                let path = self
-                    .veto
-                    .socket(path)
-                    .map_err(|r| Err(RunError::Vetoed(r)))?;
-                let Ok(stream) = UnixStream::connect(&path).await else {
-                    return Err(Ok(Miss::Down));
-                };
-                exchange(stream, self.login.as_ref()).await.map_err(Ok)
-            }
-        }
+    async fn ask(&self, run: &Run) -> Result<String, Result<Miss, RunError>> {
+        let connection = match self.target.reach(&self.veto, run).await {
+            Ok(Some(connection)) => connection,
+            Ok(None) => return Err(Ok(Miss::Down)),
+            Err(e) => return Err(Err(e)),
+        };
+        let stream = match connection {
+            Connection::Tcp(stream, host) if self.security.tls != Tls::Off => self
+                .security
+                .start(stream, &host)
+                .await
+                .map_err(|e| Ok(Miss::Failed(e.to_string())))?,
+            plain => plain.plain(),
+        };
+        exchange(stream, self.login.as_ref()).await.map_err(Ok)
     }
 }
 
@@ -394,7 +369,7 @@ impl Instance for Info {
 
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
-            let asked = tokio::time::timeout(self.timeout, self.ask())
+            let asked = tokio::time::timeout(self.timeout, self.ask(run))
                 .await
                 .unwrap_or(Err(Ok(Miss::Down)));
             let text = match asked {

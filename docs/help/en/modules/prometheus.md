@@ -25,7 +25,10 @@ an answer, at most three redirects within the allowed targets.
 - **Series per endpoint:** by default 50, all endpoints together at most 250. The places are fixed: a series that has
   a place keeps it; a new one gets one only once a known one has been absent for an hour. So an exporter whose labels
   change with every request (paths, user IDs) can't fill the node's series budget; the others count in
-  `sermon_prometheus_dropped_series`.
+  `sermon_prometheus_dropped_series`. On top, within 48 hours the server takes at most 250 distinct series of the
+  scraper per endpoint and 1,000 per node, never more than half the node's series limit; it drops the rest
+  (`sermon_server_ingest_dropped_series_total` in the server's `/metrics`). If you change endpoints often, old series
+  may have to go 48 hours without data first.
 - **Bearer token:** sent as `Authorization: Bearer …` to the configured endpoints only, never after a redirect to
   another host; the agent keeps it in memory only. Over `http://` it goes in clear text to whoever listens
   there – while the exporter is stopped also to another local user who takes the port. So with a token use

@@ -29,10 +29,13 @@ pub trait Instance: Send + 'static {
 ```
 - Everything reached goes through the veto (`setup.veto`): `resolve(host, port)` (connect to the returned addresses,
   not the name; it checks `module_ports` and `module_hosts` before any DNS query), `socket(path)` again before every
-  connection (store the configured path, not the resolved one), `open(path)` to read a file (`file(path)` only checks).
+  connection – in a run `run.socket(&veto, path)`, which checks on a blocking thread (store the configured path, not
+  the resolved one) –, `open(path)` to read a file (`file(path)` only checks). `build` runs on a blocking thread.
   A refusal is `BuildError::Vetoed` / `RunError::Vetoed`; never put a resolved address or a link's target into a reason
   (M5-33). Tests with a server on a free port use `Veto::default().any_port()`, temporary paths `crate::TestDir`.
-- Blocking work only via `run.blocking(...)`, so the runtime sees a hung run.
+- Blocking work only via `run.blocking(...)`, so the runtime sees a hung run: the agent has one async thread, whatever
+  blocks there stops the whole agent.
+- Credentials a module keeps are `crate::Secret` (`setup.secrets.secret(field)`), wiped when dropped (V1-13).
 - Error texts are plain, without credentials (they are redacted, but don't rely on it).
 
 ## Steps (TDD – `sermon-tdd`)

@@ -34,6 +34,20 @@
       "writeOnly": true,
       "maxLength": 512
     },
+    "tls": {
+      "type": "string",
+      "title": "TLS",
+      "description": "off, verify (the certificate against the system's CAs or ca_file), no_verify (any certificate: encrypted, but to whoever answers). Empty: off on loopback and the socket, verify for any other address. For the tls-port of Redis 6 and later.",
+      "enum": ["off", "verify", "no_verify"],
+      "maxLength": 9
+    },
+    "ca_file": {
+      "type": "string",
+      "title": "CA file",
+      "description": "PEM file below module_file_prefixes to verify the certificate of Redis with instead of the system's CAs (tls verify).",
+      "format": "path",
+      "maxLength": 4096
+    },
     "timeout": {
       "type": "string",
       "title": "Timeout",

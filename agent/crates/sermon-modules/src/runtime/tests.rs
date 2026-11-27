@@ -29,6 +29,7 @@ struct Fake {
     act: Arc<Mutex<Act>>,
     runs: Arc<AtomicUsize>,
     builds: Arc<AtomicUsize>,
+    built_on: Arc<Mutex<Vec<std::thread::ThreadId>>>,
 }
 
 const SCHEMA: &str = r#"{"type":"object","additionalProperties":false,"properties":{
@@ -44,6 +45,13 @@ impl Module for Fake {
     }
     fn build(&self, config: &Config, setup: &Setup<'_>) -> Result<Box<dyn Instance>, BuildError> {
         self.builds.fetch_add(1, Ordering::SeqCst);
+        self.built_on
+            .lock()
+            .unwrap()
+            .push(std::thread::current().id());
+        if config["port"] == 5 {
+            std::thread::sleep(Duration::from_millis(500));
+        }
         if config["port"] == 1 {
             return Err(BuildError::Invalid("port 1 is reserved".into()));
         }
@@ -159,11 +167,13 @@ struct World {
     act: BTreeMap<&'static str, Arc<Mutex<Act>>>,
     runs: BTreeMap<&'static str, Arc<AtomicUsize>>,
     builds: BTreeMap<&'static str, Arc<AtomicUsize>>,
+    built_on: BTreeMap<&'static str, Arc<Mutex<Vec<std::thread::ThreadId>>>>,
 }
 
 fn world(veto: Veto) -> World {
     let out = Arc::new(Out::default());
     let (mut act, mut runs, mut builds) = (BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
+    let mut built_on = BTreeMap::new();
     let mut modules: Vec<Arc<dyn Module>> = Vec::new();
     for id in ["a", "b"] {
         let fake = Fake {
@@ -171,7 +181,9 @@ fn world(veto: Veto) -> World {
             act: Arc::new(Mutex::new(Act::Samples(2))),
             runs: Arc::new(AtomicUsize::new(0)),
             builds: Arc::new(AtomicUsize::new(0)),
+            built_on: Arc::default(),
         };
+        built_on.insert(id, fake.built_on.clone());
         act.insert(id, fake.act.clone());
         runs.insert(id, fake.runs.clone());
         builds.insert(id, fake.builds.clone());
@@ -188,6 +200,7 @@ fn world(veto: Veto) -> World {
         act,
         runs,
         builds,
+        built_on,
     }
 }
 
@@ -345,6 +358,39 @@ async fn a_panic_outside_the_run_is_a_crash_too() {
         assert_eq!(w.out.state("b").map(|s| s.0), Some(State::Ok));
         assert_eq!(w.runs("a"), 0);
     }
+}
+
+// V1-13: `build` checks paths of the veto (canonicalize, metadata) and reads CA files: it runs on
+// a blocking thread, not on the executor.
+#[tokio::test(start_paused = true)]
+async fn the_build_runs_off_the_executor() {
+    let mut w = world(Veto::default().any_port());
+    w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
+    settle(Duration::from_secs(1)).await;
+    let threads = w.built_on["a"].lock().unwrap().clone();
+    assert_eq!(threads.len(), 1);
+    assert_ne!(threads[0], std::thread::current().id(), "on the executor");
+    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Ok));
+}
+
+// V1-13: a build that doesn't return (a path on a hung mount) is reported hung after the
+// longest budget; once it returns, the module runs.
+#[tokio::test(start_paused = true)]
+async fn a_build_that_doesnt_return_is_hung() {
+    let mut w = world(Veto::default().any_port());
+    w.runtime
+        .apply(&[spec("a", r#"{"port":5}"#)], &BTreeMap::new());
+    advance(Duration::ZERO).await;
+    advance(Duration::from_secs(29)).await;
+    assert_eq!(w.out.state("a"), None, "not yet");
+    advance(Duration::from_secs(2)).await;
+    let (state, why) = w.out.state("a").expect("a report");
+    assert_eq!(state, State::Hung);
+    assert!(why.contains("build"), "{why}");
+    std::thread::sleep(Duration::from_millis(700));
+    advance(Duration::from_secs(1)).await;
+    assert_eq!(w.runs("a"), 1);
+    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Ok));
 }
 
 // Blocking work that doesn't return: the run times out, no further run starts while it blocks;

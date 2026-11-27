@@ -100,6 +100,8 @@ const fields: Record<string, Record<string, [label: Text, help?: Text]>> = {
 		socket: [m.module_redis_socket, m.module_redis_socket_help],
 		username: [m.module_redis_username, m.module_redis_username_help],
 		auth: [m.module_redis_auth, m.module_redis_auth_help],
+		tls: [m.module_redis_tls, m.module_redis_tls_help],
+		ca_file: [m.module_redis_ca_file, m.module_redis_ca_file_help],
 		timeout: [m.module_redis_timeout, m.module_redis_timeout_help]
 	},
 	prometheus: {

@@ -49,6 +49,8 @@ StateDirectory=sermon-agent
 StateDirectoryMode=0750
 ReadWritePaths=/var/lib/sermon-agent
 ReadOnlyPaths=/etc/sermon
+# No core dumps: the memory holds the modules' credentials (V1-13).
+LimitCORE=0
 MemoryMax=128M
 CPUQuota=20%
 TasksMax=64

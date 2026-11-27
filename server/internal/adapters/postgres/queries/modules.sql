@@ -86,6 +86,12 @@ WHERE (sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::u
 ORDER BY n.hostname, n.id, h.module_id
 LIMIT sqlc.arg(max_rows);
 
+-- name: LockModuleSetting :exec
+-- Serializes the changes of a group's module (V1-13): a change checks the credentials it keeps
+-- in its transaction, and a removal in between takes them along.
+SELECT pg_advisory_xact_lock(hashtextextended('modules:' || current_org_id()::text || ':' ||
+                                              sqlc.arg(group_id)::uuid::text || ':' || sqlc.arg(module_id)::text, 0));
+
 -- name: ModuleSecretFields :many
 -- The credentials of a group's module that have a value (names only).
 SELECT field FROM module_secrets

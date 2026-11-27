@@ -82,7 +82,7 @@ impl Module for Mysql {
             target,
             security,
             user: sql::text(config, "user", "sermon").to_owned(),
-            password: setup.secrets.get("secret").unwrap_or("").to_owned(),
+            password: setup.secrets.secret("secret").unwrap_or_default(),
             last: None,
         }))
     }
@@ -122,7 +122,7 @@ struct Reader {
     target: Target,
     security: Security,
     user: String,
-    password: String,
+    password: crate::Secret,
     last: Option<(Monotonic, Stats)>,
 }
 
@@ -361,7 +361,7 @@ impl Instance for Reader {
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
             let at = run.monotonic();
-            let Some(connection) = self.target.reach(&self.veto).await? else {
+            let Some(connection) = self.target.reach(&self.veto, run).await? else {
                 self.last = None;
                 return Ok(vec![Sample::int("sermon_mysql_up", 0)]);
             };

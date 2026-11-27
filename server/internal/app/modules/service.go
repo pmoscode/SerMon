@@ -7,6 +7,7 @@ package modules
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -80,6 +81,10 @@ type SecretChange struct {
 type SealedChange struct {
 	Set   map[string][]byte
 	Clear []string
+	// Check, if set, checks the setting against the credentials the module keeps after the change
+	// (V1-13): the store reads them in its transaction, under a lock of the group's module, and
+	// stores the setting Check returns; its error ends the change.
+	Check func(kept []string) (module.Setting, error)
 }
 
 // Sealer seals credentials (secrets.Box).
@@ -91,11 +96,10 @@ type Sealer interface {
 // writes the audit entry in the same transaction.
 type Store interface {
 	View(ctx context.Context, scope tenant.Scope) (View, error)
-	// Put stores the setting of a group's module and changes its credentials; access.ErrNotFound
-	// for a group the scope does not see, ErrTooMany for a new module beyond the bound.
+	// Put stores the setting of a group's module (the one secrets.Check returns, if set) and
+	// changes its credentials; access.ErrNotFound for a group the scope does not see, ErrTooMany
+	// for a new module beyond the bound.
 	Put(ctx context.Context, scope tenant.Scope, group tenant.GroupID, s module.Setting, secrets SealedChange, by identity.UserID, audit access.AuditEntry) error
-	// SecretFields returns the credentials of a group's module that have a value.
-	SecretFields(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string) ([]string, error)
 	// Remove deletes it; access.ErrNotFound if the group or its setting does not exist.
 	Remove(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string, by identity.UserID, audit access.AuditEntry) error
 	// Node returns a node of the scope's groups; access.ErrNotFound otherwise.
@@ -170,32 +174,25 @@ func (s *Service) SetGroupModule(ctx context.Context, c access.Caller, group ten
 	if err := checkChange(schema, setting.Module, change); err != nil {
 		return err
 	}
-	existing, err := s.store.SecretFields(ctx, scope, group, setting.Module)
-	if err != nil {
-		return fmt.Errorf("set module: %w", err)
-	}
-	set := slices.DeleteFunc(slices.Clone(existing), func(f string) bool { return slices.Contains(change.Clear, f) })
-	for f := range change.Set {
-		if !slices.Contains(set, f) {
-			set = append(set, f)
-		}
-	}
-	checked, err := s.catalog.Check(setting, set)
-	if err != nil {
+	// Which credentials the module keeps is only known in the store's transaction (V1-13); what
+	// is wrong whatever it keeps is refused before.
+	check := func(kept []string) (module.Setting, error) { return s.catalog.Check(setting, kept) }
+	if _, err := check(schema.Secrets()); err != nil {
 		return err // the reason goes to the admin
 	}
-	sealed := SealedChange{Set: map[string][]byte{}, Clear: change.Clear}
+	sealed := SealedChange{Set: map[string][]byte{}, Clear: change.Clear, Check: check}
 	for f, value := range change.Set {
-		if sealed.Set[f], err = s.sealer.Seal([]byte(value), module.SecretContext(c.Principal.Org, group, checked.Module, f)); err != nil {
+		var err error
+		if sealed.Set[f], err = s.sealer.Seal([]byte(value), module.SecretContext(c.Principal.Org, group, setting.Module, f)); err != nil {
 			return fmt.Errorf("seal a credential: %w", err)
 		}
 	}
 	audit := access.AuditEntry{
 		Actor: c.Principal.User, Action: "module.update", Target: "group:" + group.String(),
 		Details: map[string]string{
-			"module":           checked.Module,
-			"enabled":          strconv.FormatBool(checked.Enabled),
-			"interval_seconds": strconv.Itoa(int(checked.Interval / time.Second)),
+			"module":           setting.Module,
+			"enabled":          strconv.FormatBool(setting.Enabled),
+			"interval_seconds": strconv.Itoa(int(setting.Interval / time.Second)),
 		},
 	}
 	if len(change.Set) > 0 {
@@ -204,7 +201,10 @@ func (s *Service) SetGroupModule(ctx context.Context, c access.Caller, group ten
 	if len(change.Clear) > 0 {
 		audit.Details["secrets_cleared"] = strings.Join(slices.Sorted(slices.Values(change.Clear)), ",")
 	}
-	if err := s.store.Put(ctx, scope, group, checked, sealed, c.Principal.User, audit); err != nil {
+	if err := s.store.Put(ctx, scope, group, setting, sealed, c.Principal.User, audit); err != nil {
+		if errors.Is(err, module.ErrInvalid) {
+			return err //nolint:wrapcheck // the reason goes to the admin
+		}
 		return fmt.Errorf("set module: %w", err)
 	}
 	s.agents.ConfigChanged(c.Principal.Org)

@@ -359,6 +359,9 @@ type Querier interface {
 	LockDashboard(ctx context.Context, arg LockDashboardParams) (LockDashboardRow, error)
 	// Serializes the creations of an organization against its limit.
 	LockDashboardCount(ctx context.Context) error
+	// Serializes the changes of a group's module (V1-13): a change checks the credentials it keeps
+	// in its transaction, and a removal in between takes them along.
+	LockModuleSetting(ctx context.Context, arg LockModuleSettingParams) error
 	LockNode(ctx context.Context, arg LockNodeParams) (int64, error)
 	// Security events (M2-07, ADR 0007). Tenant queries run in the organization's tenant transaction.
 	// The node's stored event sequence, locked until the batches of this transaction are written.

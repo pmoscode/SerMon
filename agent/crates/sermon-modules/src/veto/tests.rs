@@ -1,4 +1,5 @@
 use std::os::unix::fs::PermissionsExt;
+use std::time::Duration;
 
 use super::*;
 
@@ -410,4 +411,54 @@ fn open_checks_the_file_it_opened() {
         v.opened(&certs.join("a.pem"), &inside, &certs.join("a.pem"))
             .is_ok()
     );
+}
+
+// V1-13: name lookups (getaddrinfo) can't be cancelled; a run that times out leaves its lookup
+// running. At most a few run at once for all modules: a lookup waits for a place, and keeps it
+// until it returns, also after the run gave up on it.
+#[tokio::test]
+async fn name_lookups_are_bounded() {
+    static FEW: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+    let (release, wait) = std::sync::mpsc::channel::<()>();
+    let first = bounded(&FEW, move || {
+        let _ = wait.recv();
+        vec![SocketAddr::from(([127, 0, 0, 1], 80))]
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), first)
+            .await
+            .is_err(),
+        "the lookup blocks"
+    );
+    assert_eq!(FEW.available_permits(), 0, "its place is still taken");
+    let second = bounded(&FEW, Vec::new);
+    tokio::pin!(second);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), &mut second)
+            .await
+            .is_err(),
+        "waits for a place"
+    );
+    release.send(()).unwrap();
+    assert_eq!(second.await, Vec::<SocketAddr>::new());
+    assert_eq!(FEW.available_permits(), 1);
+}
+
+// V1-13: resolve takes its place among the lookups of all modules.
+#[tokio::test]
+async fn resolve_waits_for_a_place() {
+    let all = LOOKUPS
+        .acquire_many(u32::try_from(MAX_LOOKUPS).unwrap())
+        .await
+        .unwrap();
+    let v = Veto::default();
+    let lookup = v.resolve("localhost", 80);
+    tokio::pin!(lookup);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), &mut lookup)
+            .await
+            .is_err()
+    );
+    drop(all);
+    assert!(lookup.await.is_ok());
 }

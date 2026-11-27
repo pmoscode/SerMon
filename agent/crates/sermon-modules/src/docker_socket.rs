@@ -216,8 +216,8 @@ struct Api {
 
 impl Api {
     /// `GET path`; `None` if the API doesn't answer.
-    async fn get(&self, path: &str) -> Result<Option<Vec<u8>>, RunError> {
-        match self.client.get_unix(&self.socket, path, true).await {
+    async fn get(&self, run: &Run, path: &str) -> Result<Option<Vec<u8>>, RunError> {
+        match self.client.get_unix(run, &self.socket, path, true).await {
             Ok(r) if r.status == 200 => Ok(Some(r.body.to_vec())),
             Ok(r) => Err(RunError::Failed(format!("{path}: status {}", r.status))),
             Err(HttpError::Unreachable(_)) => Ok(None),
@@ -252,10 +252,10 @@ impl Api {
                     position.since()
                 )
             };
-            let body = match self.get(&path(logs::TAIL)).await {
+            let body = match self.get(run, &path(logs::TAIL)).await {
                 Ok(Some(body)) => body,
                 Ok(None) => continue,
-                Err(_) => match self.get(&path(logs::SMALL_TAIL)).await {
+                Err(_) => match self.get(run, &path(logs::SMALL_TAIL)).await {
                     Ok(Some(body)) => {
                         gaps += 1;
                         body
@@ -295,7 +295,7 @@ impl Instance for Api {
 
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
-            let Some(body) = self.get("/containers/json?all=1").await? else {
+            let Some(body) = self.get(run, "/containers/json?all=1").await? else {
                 return Ok(vec![Sample::int("sermon_docker_socket_up", 0)]);
             };
             let mut list = parse_list(&body).map_err(RunError::Failed)?;
@@ -321,7 +321,8 @@ impl Instance for Api {
             let mut followed = Vec::new();
             for c in list.iter().take(self.max) {
                 // Gone since the list: nothing to report.
-                let Ok(Some(body)) = self.get(&format!("/containers/{}/json", c.id)).await else {
+                let Ok(Some(body)) = self.get(run, &format!("/containers/{}/json", c.id)).await
+                else {
                     continue;
                 };
                 let Ok(i) = parse_inspect(&body) else {

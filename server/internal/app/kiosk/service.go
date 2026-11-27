@@ -160,7 +160,10 @@ type Deps struct {
 }
 
 // Service manages the tokens and serves the displays.
-type Service struct{ d Deps }
+type Service struct {
+	d         Deps
+	summaries summaries
+}
 
 // NewService returns the service.
 func NewService(d Deps) *Service { return &Service{d: d} }
@@ -344,7 +347,9 @@ func (s *Service) Widget(ctx context.Context, d Display, widgetID string) (Resul
 	}
 	defer release()
 	d.caller = c
-	summary, err := s.d.Readers.Fleet.Summary(ctx, d.caller, nil)
+	summary, err := s.summaries.get(ctx, d.Token, d.caller, s.d.Now(), func() (fleet.Summary, error) {
+		return s.d.Readers.Fleet.Summary(ctx, d.caller, nil)
+	})
 	if err != nil {
 		return Result{}, fmt.Errorf("kiosk fleet: %w", err)
 	}

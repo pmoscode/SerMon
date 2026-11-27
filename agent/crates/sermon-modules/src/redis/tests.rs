@@ -444,8 +444,13 @@ async fn speaks_over_the_unix_socket() {
     };
     let config = format!(r#"{{"socket":"{}"}}"#, path.display());
     let mut redis = build(&config, None, &veto).unwrap();
+    crate::forget_socket_checks(&path);
     let s = redis.collect(&Run::default()).await.unwrap();
     assert_eq!(value(&s, "sermon_redis_up"), Some(Value::Int(1)));
+    assert!(
+        crate::checked_off_executor(&path),
+        "V1-13: off the executor"
+    );
     assert!(matches!(
         build(&config, None, &Veto::default().any_port()),
         Err(BuildError::Vetoed(_))
@@ -599,5 +604,169 @@ async fn checks_the_socket_at_every_run() {
     assert!(matches!(
         redis.collect(&Run::default()).await,
         Err(RunError::Vetoed(_))
+    ));
+}
+
+/// A certificate for `localhost` in a PEM file below a directory the veto lets modules read,
+/// and a TLS acceptor with it.
+fn tls_setup() -> (
+    crate::TestDir,
+    std::path::PathBuf,
+    tokio_rustls::TlsAcceptor,
+) {
+    let key = rcgen::KeyPair::generate().unwrap();
+    let cert = rcgen::CertificateParams::new(vec!["localhost".to_owned()])
+        .unwrap()
+        .self_signed(&key)
+        .unwrap();
+    let dir = crate::TestDir::new();
+    let pem = dir.path().join("ca.pem");
+    std::fs::write(&pem, cert.pem()).unwrap();
+    let server = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .unwrap()
+    .with_no_client_auth()
+    .with_single_cert(
+        vec![cert.der().clone()],
+        rustls::pki_types::PrivateKeyDer::Pkcs8(key.serialize_der().into()),
+    )
+    .unwrap();
+    (dir, pem, tokio_rustls::TlsAcceptor::from(Arc::new(server)))
+}
+
+async fn serve_tls(fake: Arc<Fake>, acceptor: tokio_rustls::TlsAcceptor) -> SocketAddr {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((s, _)) = listener.accept().await {
+            let (fake, acceptor) = (fake.clone(), acceptor.clone());
+            tokio::spawn(async move {
+                if let Ok(tls) = acceptor.accept(s).await {
+                    talk(tls, fake).await;
+                }
+            });
+        }
+    });
+    addr
+}
+
+// V1-13: Redis over TLS (tls-port), the certificate verified with ca_file; the password goes
+// only through the encrypted connection.
+#[tokio::test]
+async fn speaks_tls_with_a_verified_certificate() {
+    let (dir, pem, acceptor) = tls_setup();
+    let fake = Fake::new(Some("s3cret-pw"), fixture("redis-7.4", "primary"));
+    let addr = serve_tls(fake.clone(), acceptor).await;
+    let veto = Veto {
+        file_prefixes: vec![dir.path().to_path_buf()],
+        ..Veto::default().any_port()
+    };
+    let config = format!(
+        r#"{{"address":"localhost:{}","tls":"verify","ca_file":"{}"}}"#,
+        addr.port(),
+        pem.display()
+    );
+    let mut redis = build(&config, Some("s3cret-pw"), &veto).unwrap();
+    let s = redis.collect(&Run::default()).await.unwrap();
+    assert_eq!(value(&s, "sermon_redis_up"), Some(Value::Int(1)));
+    assert_eq!(*fake.seen.lock().unwrap(), ["AUTH s3cret-pw", "INFO"]);
+
+    // Not verified by the system's CAs: an error, not "down"; nothing reached Redis.
+    let fake = Fake::new(Some("s3cret-pw"), fixture("redis-7.4", "primary"));
+    let (_, _, other) = tls_setup();
+    let addr = serve_tls(fake.clone(), other).await;
+    let config = format!(
+        r#"{{"address":"localhost:{}","tls":"verify","ca_file":"{}"}}"#,
+        addr.port(),
+        pem.display()
+    );
+    let mut wrong = build(&config, Some("s3cret-pw"), &veto).unwrap();
+    let e = wrong.collect(&Run::default()).await.err().unwrap();
+    assert!(
+        matches!(&e, RunError::Failed(why) if why.contains("TLS")),
+        "{e}"
+    );
+    assert!(
+        fake.seen.lock().unwrap().is_empty(),
+        "no AUTH to an impostor"
+    );
+
+    // no_verify takes any certificate.
+    let mut any = build(
+        &format!(
+            r#"{{"address":"localhost:{}","tls":"no_verify"}}"#,
+            addr.port()
+        ),
+        Some("s3cret-pw"),
+        &veto,
+    )
+    .unwrap();
+    let s = any.collect(&Run::default()).await.unwrap();
+    assert_eq!(value(&s, "sermon_redis_up"), Some(Value::Int(1)));
+}
+
+// V1-13: TLS as the database modules have it (sql::Security: off on loopback and the socket
+// unless set, verify for any other address); a plain Redis doesn't speak TLS; no TLS over the socket, ca_file only
+// with verify and below module_file_prefixes.
+#[tokio::test]
+async fn tls_follows_the_settings_of_the_database_modules() {
+    let fake = Fake::new(None, fixture("redis-7.4", "primary"));
+    let addr = serve(fake.clone()).await;
+    let veto = Veto::default().any_port();
+    let mut plain = build(&format!(r#"{{"address":"{addr}"}}"#), None, &veto).unwrap();
+    assert_eq!(
+        value(
+            &plain.collect(&Run::default()).await.unwrap(),
+            "sermon_redis_up"
+        ),
+        Some(Value::Int(1)),
+        "loopback: off"
+    );
+    // A Redis without TLS answers the hello with an error and closes.
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let no_tls = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        if let Ok((mut s, _)) = listener.accept().await {
+            let mut buf = [0u8; 512];
+            let _ = s.read(&mut buf).await;
+            let _ = s.write_all(b"-ERR Protocol error\r\n").await;
+            let _ = s.shutdown().await;
+        }
+    });
+    let mut tls = build(
+        &format!(r#"{{"address":"{no_tls}","tls":"verify"}}"#),
+        None,
+        &veto,
+    )
+    .unwrap();
+    assert!(matches!(
+        tls.collect(&Run::default()).await,
+        Err(RunError::Failed(why)) if why.contains("TLS")
+    ));
+    assert!(matches!(
+        build(
+            r#"{"socket":"/run/redis/redis.sock","tls":"verify"}"#,
+            None,
+            &Veto::default()
+        ),
+        Err(BuildError::Invalid(_))
+    ));
+    assert!(matches!(
+        build(
+            r#"{"address":"127.0.0.1:6379","tls":"off","ca_file":"/etc/ssl/ca.pem"}"#,
+            None,
+            &veto
+        ),
+        Err(BuildError::Invalid(_))
+    ));
+    assert!(matches!(
+        build(
+            r#"{"address":"127.0.0.1:6379","tls":"verify","ca_file":"/srv/ca.pem"}"#,
+            None,
+            &veto
+        ),
+        Err(BuildError::Vetoed(_))
     ));
 }

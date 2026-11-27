@@ -97,7 +97,8 @@ func (s *ModuleStore) View(ctx context.Context, scope tenant.Scope) (modules.Vie
 }
 
 // Put stores the setting of a group's module, raises the version and writes the audit entry in
-// one transaction.
+// one transaction; with secrets.Check under a lock of the group's module, which a removal takes
+// too, and against the credentials stored then (V1-13).
 func (s *ModuleStore) Put(ctx context.Context, scope tenant.Scope, group tenant.GroupID, setting module.Setting, secrets modules.SealedChange, by identity.UserID, audit access.AuditEntry) error {
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
 		exists, err := q.NodeGroupExists(ctx, uuid.UUID(group))
@@ -106,6 +107,14 @@ func (s *ModuleStore) Put(ctx context.Context, scope tenant.Scope, group tenant.
 		}
 		if !exists {
 			return access.ErrNotFound
+		}
+		if err := q.LockModuleSetting(ctx, sqlcdb.LockModuleSettingParams{GroupID: uuid.UUID(group), ModuleID: setting.Module}); err != nil {
+			return fmt.Errorf("lock module setting: %w", err)
+		}
+		if secrets.Check != nil {
+			if setting, err = checked(ctx, q, group, setting.Module, secrets); err != nil {
+				return err
+			}
 		}
 		view, err := q.ListModuleSettings(ctx)
 		if err != nil {
@@ -147,6 +156,22 @@ func (s *ModuleStore) Put(ctx context.Context, scope tenant.Scope, group tenant.
 	})
 }
 
+// checked returns the setting change.Check gives for the credentials the module keeps: those
+// stored now without the cleared ones, and the new ones.
+func checked(ctx context.Context, q *sqlcdb.Queries, group tenant.GroupID, moduleID string, change modules.SealedChange) (module.Setting, error) {
+	stored, err := q.ModuleSecretFields(ctx, sqlcdb.ModuleSecretFieldsParams{GroupID: uuid.UUID(group), ModuleID: moduleID})
+	if err != nil {
+		return module.Setting{}, fmt.Errorf("credential fields: %w", err)
+	}
+	kept := slices.DeleteFunc(stored, func(f string) bool { return slices.Contains(change.Clear, f) })
+	for f := range change.Set {
+		if !slices.Contains(kept, f) {
+			kept = append(kept, f)
+		}
+	}
+	return change.Check(kept) //nolint:wrapcheck // the reason goes to the admin
+}
+
 // SecretFields returns the credentials of a group's module that have a value.
 func (s *ModuleStore) SecretFields(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string) ([]string, error) {
 	var out []string
@@ -177,6 +202,9 @@ func secretsSet(ctx context.Context, q *sqlcdb.Queries, group uuid.UUID, setting
 // Remove deletes the setting of a group's module, raises the version and audits it.
 func (s *ModuleStore) Remove(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string, _ identity.UserID, audit access.AuditEntry) error {
 	return s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		if err := q.LockModuleSetting(ctx, sqlcdb.LockModuleSettingParams{GroupID: uuid.UUID(group), ModuleID: moduleID}); err != nil {
+			return fmt.Errorf("lock module setting: %w", err)
+		}
 		n, err := q.DeleteModuleSetting(ctx, sqlcdb.DeleteModuleSettingParams{GroupID: uuid.UUID(group), ModuleID: moduleID})
 		if err != nil {
 			return fmt.Errorf("remove module setting: %w", err)

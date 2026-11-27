@@ -101,6 +101,11 @@ type Config struct {
 	SeriesLimit int
 	// ActiveSeriesWindow is how long a series without data still counts towards the limits.
 	ActiveSeriesWindow time.Duration
+	// ScrapedSeriesPerTarget and ScrapedSeriesPerNode bound the series of the Prometheus scraper
+	// (V1-13), whose labels follow outside input: per endpoint (label target) and per node, the
+	// latter at most half the node's series limit, so they can't take the places of the node's
+	// own series. They count towards SeriesLimit too.
+	ScrapedSeriesPerTarget, ScrapedSeriesPerNode int
 	// OrgSeriesLimit bounds the active series of an organization. The count comes from the store
 	// at most once per OrgCountInterval (after a server restart all agents reconnect at once) and
 	// grows with every new series admitted in between; other server instances count on their own.
@@ -151,6 +156,9 @@ func DefaultConfig() Config {
 		SampleRate: 10_000, SampleBurst: 50_000, ThrottleInterval: 5 * time.Second,
 		ThrottleSlack: 64 * 2000,
 		SeriesLimit:   2000, ActiveSeriesWindow: 48 * time.Hour, OrgSeriesLimit: 250_000, OrgCountInterval: time.Minute,
+		// The agent keeps at most 250 places per endpoint at a time; the window sees more if
+		// they turn over.
+		ScrapedSeriesPerTarget: 250, ScrapedSeriesPerNode: 1000,
 		SeenInterval: 30 * time.Second,
 		MaxFuture:    5 * time.Minute, MaxAge: 24 * time.Hour,
 		// A busy brute force is a few attempts per second with three events each.
@@ -508,6 +516,10 @@ type Session struct {
 	watermark time.Time // latest collection time seen
 	written   time.Time // windows ending at or before this are written
 	series    map[string]struct{}
+	// scraped counts the known series of the Prometheus scraper by endpoint, scrapedTotal all of
+	// them (V1-13).
+	scraped      map[string]int
+	scrapedTotal int
 	// rate, burst and seriesLimit are the instance's limits or the organization's quotas.
 	rate, burst float64
 	seriesLimit int
@@ -554,8 +566,13 @@ func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.Node
 		return nil, fmt.Errorf("%w: %w", ErrOpen, err)
 	}
 	series := make(map[string]struct{}, len(known))
+	scraped, scrapedTotal := map[string]int{}, 0
 	for _, k := range known {
 		series[seriesID(k.Metric, k.Labels)] = struct{}{}
+		if isScraped(k.Metric) {
+			scraped[k.Labels["target"]]++
+			scrapedTotal++
+		}
 	}
 	var gauge *update.Gauge
 	if s.updates != nil {
@@ -577,7 +594,8 @@ func (s *Service) Open(ctx context.Context, org tenant.OrgID, node identity.Node
 	}
 	return &Session{
 		service: s, org: org, group: conn.Group, node: node, persisted: persisted, received: persisted,
-		windows: map[windowKey]*window{}, series: series, rate: rate, burst: burst, seriesLimit: seriesLimit,
+		windows: map[windowKey]*window{}, series: series, scraped: scraped, scrapedTotal: scrapedTotal,
+		rate: rate, burst: burst, seriesLimit: seriesLimit,
 		tokens: burst, refilled: now, lastSeen: now, gauge: gauge,
 	}, nil
 }
@@ -1009,6 +1027,15 @@ func (s *Session) admitSeries(sample Sample) bool {
 		return true
 	}
 	config := s.service.config
+	scraped := isScraped(sample.Metric)
+	target := sample.Labels["target"]
+	if scraped && (s.scraped[target] >= config.ScrapedSeriesPerTarget || s.scrapedTotal >= min(config.ScrapedSeriesPerNode, s.seriesLimit/2)) {
+		if s.service.stats.DroppedSeries.Add(1) == 1 {
+			s.service.logger.Warn("scraped series limit reached, dropping new series", "node", s.node.String(),
+				"per_target", config.ScrapedSeriesPerTarget, "per_node", min(config.ScrapedSeriesPerNode, s.seriesLimit/2))
+		}
+		return false
+	}
 	if len(s.series) >= s.seriesLimit || !s.service.admitOrgSeries(s.org) {
 		if s.service.stats.DroppedSeries.Add(1) == 1 {
 			s.service.logger.Warn("series limit reached, dropping new series", "node", s.node.String(),
@@ -1017,7 +1044,17 @@ func (s *Session) admitSeries(sample Sample) bool {
 		return false
 	}
 	s.series[key] = struct{}{}
+	if scraped {
+		s.scraped[target]++
+		s.scrapedTotal++
+	}
 	return true
+}
+
+// isScraped reports whether metric holds the series of the Prometheus scraper (M5-19): their
+// names and labels come from a foreign endpoint.
+func isScraped(metric string) bool {
+	return metric == "sermon_prometheus_gauge" || metric == "sermon_prometheus_rate"
 }
 
 // quota charges the samples to the token bucket and returns a throttle change, if any.

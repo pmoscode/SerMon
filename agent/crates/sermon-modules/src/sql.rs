@@ -14,7 +14,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpStream, UnixStream};
 
 use crate::http::Options;
-use crate::{BuildError, Config, RunError, Veto, schema};
+use crate::{BuildError, Config, Run, RunError, Veto, schema};
 
 /// How long a database may take to accept the connection before it counts as down.
 pub const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
@@ -157,21 +157,22 @@ impl Target {
     /// # Errors
     ///
     /// [`RunError::Vetoed`] for a target outside the veto.
-    pub async fn reach(&self, veto: &Veto) -> Result<Option<Connection>, RunError> {
-        match tokio::time::timeout(CONNECT_TIMEOUT, self.connect(veto)).await {
+    pub async fn reach(&self, veto: &Veto, run: &Run) -> Result<Option<Connection>, RunError> {
+        match tokio::time::timeout(CONNECT_TIMEOUT, self.connect(veto, run)).await {
             Ok(Ok(connection)) => Ok(Some(connection)),
             Ok(Err(RunError::Failed(_))) | Err(_) => Ok(None),
             Ok(Err(e)) => Err(e),
         }
     }
 
-    /// Connects; a TCP address only if the veto allows every address of the name.
+    /// Connects; a TCP address only if the veto allows every address of the name, a socket
+    /// checked on a blocking thread ([`Run::socket`]).
     ///
     /// # Errors
     ///
     /// [`RunError::Vetoed`] for an address outside the veto, [`RunError::Failed`] if nothing
     /// answers.
-    pub async fn connect(&self, veto: &Veto) -> Result<Connection, RunError> {
+    pub async fn connect(&self, veto: &Veto, run: &Run) -> Result<Connection, RunError> {
         match self {
             Self::Tcp { host, port } => {
                 let mut last = String::from("no address");
@@ -186,7 +187,7 @@ impl Target {
                 }
                 Err(RunError::Failed(format!("{}: {last}", self.label())))
             }
-            Self::Unix(path) => UnixStream::connect(veto.socket(path)?)
+            Self::Unix(path) => UnixStream::connect(run.socket(veto, path).await?)
                 .await
                 .map(Connection::Unix)
                 .map_err(|e| RunError::Failed(format!("{}: {e}", path.display()))),

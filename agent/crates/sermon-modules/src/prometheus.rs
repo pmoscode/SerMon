@@ -93,7 +93,10 @@ impl Module for Prometheus {
                     .get("ca_file")
                     .and_then(Value::as_str)
                     .map(Into::into),
-                authorization: setup.secrets.get("bearer").map(|t| format!("Bearer {t}")),
+                authorization: setup
+                    .secrets
+                    .get("bearer")
+                    .map(|t| crate::Secret::new(format!("Bearer {t}"))),
                 accept: ACCEPT,
                 ..Options::default()
             },

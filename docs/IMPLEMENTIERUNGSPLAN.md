@@ -6121,7 +6121,7 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 >   60 Dashboard-Änderungen je Mitglied und Minute; der Löschjob markiert den Node vor den Loki-Logs.
 > - Threat Model: TB7 (T107–T111) und T47 erledigt, TB8 mit T112–T115; Restrisiken stehen bei T107 (Pfad und Query auf
 >   erlaubten Ports) und T109 (lokaler Dienst auf dem Port des Ziels bekommt Redis-Passwort und Bearer-Token).
-> - **Bewusst offen (Hinweise, für v1.x):** `canonicalize` im async-Executor; Zugangsdaten im Speicher nicht genullt
+> - **Bewusst offen (Hinweise, erledigt in V1-13):** `canonicalize` im async-Executor; Zugangsdaten im Speicher nicht genullt
 >   (bräuchte `zeroize`); Fleet-Übersicht des Kiosks je Widget gelesen; TLS für Redis; Serien-Budget des Scrapers auch
 >   im Server. Im Review M5 erledigt: der Update-Orchestrator gibt seine Leases beim Stoppen frei, `just
 >   test-db-modules` läuft als eigener Job in CI.
@@ -6355,7 +6355,29 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Release behoben.
 - **Abhängig von:** V1-04
 
-#### ☐ V1-13 – Offene Hinweise aus M5-33 · X · M
+#### ☑ V1-13 – Offene Hinweise aus M5-33 · X · M
+> Erledigt (2026-11-27): Hinweise aus M5-33 bewertet (Review A I2–I8, die optionalen Punkte aus B, C I5); A I1 und
+> B I-9 waren schon in M5-33 erledigt. Der Agent läuft auf einem Thread – was dort blockiert, hält den ganzen Agent an:
+> - **Blockierende Aufrufe:** `Module::build` (Prüfungen des Vetos, CA-Dateien) läuft auf einem Thread für blockierende
+>   Arbeit und gilt nach 30 s als `hung`; Sockets prüft ein Lauf über `Run::socket` (Redis, PostgreSQL, MySQL,
+>   Docker-Socket), die Erkennung hängender Läufe zählt das mit. Namensauflösungen (nicht abbrechbar) höchstens acht
+>   zugleich für alle Module, jede behält ihren Platz bis zum Ende (A I3).
+> - **Zugangsdaten nullen (A I6):** Crate `zeroize` 1.9.2 (RustCrypto, Apache-2.0/MIT; über rustls schon im Build,
+>   `cargo deny` ohne Befund) statt eines eigenen Wrappers; `sermon_modules::Secret` in `Secrets`, in den Kopien der
+>   Module, im `AUTH`-Rahmen von Redis, für verworfene Werte. Keine Core-Dumps (`LimitCORE=0`, `rc_ulimit`). Rest:
+>   Puffer von TLS/HTTP/Protobuf, `HeaderValue`, Nachrichten der DB-Anmeldungen (T109).
+> - **TLS für Redis:** über `sql::Target`/`sql::Security` (`tls`, `ca_file`, ab Werk `verify` außer Loopback/Socket),
+>   Schema, Formular und Hilfe DE + EN.
+> - **Serien-Budget des Scrapers im Server:** je Endpunkt 250, je Node 1 000 und höchstens die Hälfte des
+>   Serien-Limits, über 48 h und Reconnects; zählt weiter auch gegen das Limit des Nodes.
+> - **Kiosk (C I5):** Übersicht der Flotte je Token 10 s mit Fingerabdruck der Rechte; neue Rechte lesen sofort neu,
+>   gleichzeitige Widgets warten auf eine Lesung (ADR 0040).
+> - **Kleineres aus A:** I5 – `SetGroupModule` prüft die Zugangsdaten in der Transaktion unter einer Sperre, die auch
+>   das Entfernen nimmt; I4 – Test, dass alle Felder aller Module in `ModuleSecrets` (64) passen; I7 – Muster ohne
+>   `\d \w \s \b \p` (Rust/Go, gemeinsame Testfälle). I8 bleibt Restrisiko: Ein Future ohne `await` hält den
+>   einzigen Thread an, keine Laufzeit kann das erkennen (ADR 0039, T110).
+> - Threat Model T107–T111, T115, ADR-Nachträge 0039 und 0040. Tests vorneweg (Laufzeit, Veto, Redis, SQL, HTTP,
+>   Schema, Ingest, Kiosk, Store mit Testcontainers); Gegenproben 34/34.
 - **Ziel:** Zugangsdaten im Speicher des Agents nullen (Abhängigkeit prüfen), `canonicalize` nicht auf dem
   async-Executor, TLS für Redis, Serien-Budget des Prometheus-Scrapers auch im Server, Fleet-Übersicht des Kiosks je
   Token zwischenspeichern; jeweils bewerten und umsetzen oder begründet als Restrisiko führen.

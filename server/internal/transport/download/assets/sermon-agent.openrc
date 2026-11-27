@@ -11,6 +11,8 @@ command_user="sermon:sermon"
 supervisor="supervise-daemon"
 respawn_delay=5
 respawn_max=0
+# No core dumps: the memory holds the modules' credentials (V1-13).
+rc_ulimit="-c 0"
 
 depend() {
 	need net

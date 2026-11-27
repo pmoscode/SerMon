@@ -295,3 +295,43 @@ Benutzer seinen Port auf Loopback belegen (über 1024 ohne Rechte). Daraus folgt
   Zeilen stillschweigend zu überspringen (`sermon_docker_socket_log_gaps`). Eine Nachricht, die an ihrer Grenze
   gekürzt wird, verliert das angeschnittene Wort ganz (bis 1 KiB zurück): Die Redaction läuft danach und erkennt einen
   halben Schlüssel nicht.
+
+## Nachtrag V1-13 (offene Hinweise aus M5-33)
+
+Der Agent läuft auf **einem** Thread (`current_thread`, Speicherbudget); was dort blockiert, hält nicht nur das Modul,
+sondern den ganzen Agent an. Deshalb:
+
+- **Blockierende Dateisystem-Aufrufe** des Vetos (`canonicalize`, Metadaten) und das Lesen von CA-Dateien laufen nicht
+  mehr auf dem Executor: `Module::build` läuft als Ganzes auf einem Thread für blockierende Arbeit (`spawn_blocking`);
+  dauert es länger als 30 s (ein Pfad auf einem hängenden Mount, FUSE unter `/run/user`), meldet die Laufzeit das Modul
+  als `hung` und wartet weiter – abbrechen lässt sich ein solcher Thread nicht. Sockets prüft ein Lauf über
+  `Run::socket` (Redis, PostgreSQL, MySQL, Docker-Socket); bis die Prüfung zurückkommt, gilt das Modul wie bei
+  `Run::blocking` als hängend und startet keinen weiteren Lauf, es bindet also höchstens einen Thread.
+- **Namensauflösung** (`getaddrinfo`) lässt sich nicht abbrechen; ein Lauf, der abläuft, lässt sie weiterlaufen. Für alle
+  Module laufen höchstens acht zugleich auf eigenen Threads, jede behält ihren Platz, bis sie zurückkommt; weitere
+  warten im Budget ihres Laufs. Mit `module_hosts` (ab Werk `localhost`) ist der Fall ohnehin klein.
+- **Ein Future, das nie abgibt**, bleibt Restrisiko (Konsequenzen oben): Auf dem einen Thread kann es keine Laufzeit
+  erkennen, auch kein `hung`. Gegenmaßnahme bleiben begrenzte Parser, Fuzzing und die Review jedes Moduls.
+- **Zugangsdaten im Speicher:** Der Agent hält jede Zugangsangabe als `sermon_modules::Secret` (`Zeroizing<String>`
+  aus dem Crate `zeroize`, RustCrypto, Apache-2.0/MIT, gepflegt; rustls bringt dieselbe Version ohnehin in den Build,
+  `cargo deny` ohne Befund) und nullt sie beim Verwerfen: im Satz der Zugangsdaten (`Secrets`), in den Kopien, die
+  Module behalten (Passwörter von PostgreSQL, MySQL und Redis, SCRAM, der Header des Bearer-Tokens), im `AUTH`-Rahmen von
+  Redis und für Werte, die der Agent beim Empfang verwirft. Ein eigener Wrapper wäre derselbe Code ohne die Barrieren
+  gegen das Wegoptimieren. Nicht erreicht werden Kopien in fremden Puffern: TLS, HTTP/2 und Protobuf beim Empfang,
+  `HeaderValue` in hyper, die Nachrichten der Datenbank-Anmeldungen und der Kernel. Core-Dumps des Agents sind aus
+  (`LimitCORE=0`, OpenRC `rc_ulimit="-c 0"`).
+- **TLS für Redis:** Redis nutzt `sql::Target` und `sql::Security` der Datenbank-Module: `tls` (`off`, `verify`,
+  `no_verify`; ohne Wert `off` auf Loopback und am Socket, sonst `verify`), `ca_file` unter `module_file_prefixes`, kein
+  TLS über den Socket. Mit `verify` geht `AUTH` nur an den Dienst mit dem passenden Zertifikat.
+- **Serien des Scrapers im Server:** Der Ingest zählt die Serien von `sermon_prometheus_gauge` und `…_rate` eigens,
+  über das aktive Fenster (48 h) und über Reconnects: je Endpunkt (`target`) höchstens 250, je Node höchstens 1 000 und
+  höchstens die Hälfte seines Serien-Limits (auch bei einer kleineren Quote der Org). Sie zählen weiter auch gegen das
+  Limit des Nodes; so bleibt dessen andere Hälfte immer den eigenen Serien. Der Agent hält je Endpunkt feste Plätze,
+  die nach einer Stunde Abwesenheit frei werden – über 48 h könnten sich sonst Tausende Serien ansammeln.
+- **Muster im Schema:** `\d`, `\w`, `\s`, `\b` (und ihre Gegenteile) liest Rust als Unicode, Go als ASCII; `\p` gibt es
+  nur mit Unicode-Tabellen. Beide Prüfungen lehnen sie in Schemas ab (gemeinsame Testfälle), damit Agent und Server
+  dieselben Werte annehmen; Klassen schreibt man aus (`[0-9]`).
+- **Server:** Ob eine Änderung ihre Pflicht-Zugangsdaten behält, prüft `SetGroupModule` in der Transaktion des Stores
+  unter einer Sperre des Moduls der Gruppe (`pg_advisory_xact_lock`), die auch das Entfernen nimmt; vorher wird nur
+  geprüft, was ohnehin falsch wäre. Alle Felder für Zugangsdaten aller Module passen in eine `ModuleSecrets`-Nachricht
+  (64, Test), keins fällt still weg.

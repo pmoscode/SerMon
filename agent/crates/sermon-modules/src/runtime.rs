@@ -337,29 +337,39 @@ struct Supervised {
     cancel: CancellationToken,
 }
 
+/// What a module is built from, owned: the build runs on a blocking thread.
+#[derive(Clone)]
+struct Recipe {
+    module: Arc<dyn Module>,
+    config_json: String,
+    secrets: Secrets,
+    veto: Arc<Veto>,
+    host: Arc<Host>,
+}
+
 /// Checks the configuration against the schema and builds the module.
-fn build(s: &Supervised) -> Result<Box<dyn crate::Instance>, (State, String)> {
-    Schema::parse(s.module.schema())
+fn build(r: &Recipe) -> Result<Box<dyn crate::Instance>, (State, String)> {
+    Schema::parse(r.module.schema())
         .map_err(|e| (State::InvalidConfig, format!("the module's schema: {e}")))
         .and_then(|schema| {
-            for name in s.secrets.fields() {
-                let value = s.secrets.get(name).unwrap_or_default();
+            for name in r.secrets.fields() {
+                let value = r.secrets.get(name).unwrap_or_default();
                 schema
                     .check_secret(name, value)
                     .map_err(|e| (State::InvalidConfig, e))?;
             }
             schema
-                .validate(&s.spec.config_json, &s.secrets.fields())
+                .validate(&r.config_json, &r.secrets.fields())
                 .map_err(|e| (State::InvalidConfig, e))
         })
         .and_then(|config| {
-            s.module
+            r.module
                 .build(
                     &config,
                     &Setup {
-                        veto: &s.veto,
-                        secrets: &s.secrets,
-                        host: &s.host,
+                        veto: &r.veto,
+                        secrets: &r.secrets,
+                        host: &r.host,
                     },
                 )
                 .map_err(|e| match e {
@@ -367,6 +377,51 @@ fn build(s: &Supervised) -> Result<Box<dyn crate::Instance>, (State, String)> {
                     BuildError::Vetoed(r) => (State::Vetoed, r.0),
                 })
         })
+}
+
+/// How a build ended.
+enum Built {
+    Instance(Box<dyn crate::Instance>),
+    Refused(State, String),
+    Panicked,
+    Cancelled,
+}
+
+/// Builds the module on a blocking thread (V1-13): the veto checks paths (`canonicalize`,
+/// metadata) and modules read CA files, which a hung mount can block for good – on the
+/// executor that would stop the whole agent. A build that takes longer than [`MAX_BUDGET`]
+/// is reported hung; it can't be stopped, the module waits for it.
+async fn build_blocking(s: &Supervised) -> Built {
+    let recipe = Recipe {
+        module: s.module.clone(),
+        config_json: s.spec.config_json.clone(),
+        secrets: s.secrets.clone(),
+        veto: s.veto.clone(),
+        host: s.host.clone(),
+    };
+    let job = tokio::task::spawn_blocking(move || build(&recipe));
+    tokio::pin!(job);
+    let slow = tokio::time::sleep(MAX_BUDGET);
+    tokio::pin!(slow);
+    let mut reported = false;
+    loop {
+        tokio::select! {
+            () = s.cancel.cancelled() => return Built::Cancelled,
+            built = &mut job => return match built {
+                Ok(Ok(instance)) => Built::Instance(instance),
+                Ok(Err((state, why))) => Built::Refused(state, why),
+                Err(_) => Built::Panicked,
+            },
+            () = &mut slow, if !reported => {
+                reported = true;
+                s.shared.set(
+                    s.module.id(),
+                    State::Hung,
+                    "the build doesn't return (a path on a hung mount?); the module waits for it",
+                );
+            }
+        }
+    }
 }
 
 /// Reports a crash and waits out the pause; false if cancelled meanwhile.
@@ -393,19 +448,20 @@ async fn supervise(s: Supervised) {
     let id = s.module.id();
     let mut pause = s.pauses.first;
     loop {
-        let instance = match std::panic::catch_unwind(AssertUnwindSafe(|| build(&s))) {
-            Ok(Ok(instance)) => Arc::new(tokio::sync::Mutex::new(instance)),
-            Ok(Err((state, why))) => {
+        let instance = match build_blocking(&s).await {
+            Built::Instance(instance) => Arc::new(tokio::sync::Mutex::new(instance)),
+            Built::Refused(state, why) => {
                 s.shared.set(id, state, &why);
                 s.cancel.cancelled().await;
                 return;
             }
-            Err(_) => {
+            Built::Panicked => {
                 if crashed(&s, &mut pause).await {
                     continue;
                 }
                 return;
             }
+            Built::Cancelled => return,
         };
         let interval = s
             .spec

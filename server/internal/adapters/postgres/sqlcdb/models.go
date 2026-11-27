@@ -223,6 +223,30 @@ type KnownLoginSource struct {
 	Logins    int64
 }
 
+type LogCountMark struct {
+	OrgID  uuid.UUID
+	NodeID uuid.UUID
+	Seq    int64
+}
+
+type LogCounts1h struct {
+	Bucket   time.Time
+	OrgID    uuid.UUID
+	NodeID   uuid.UUID
+	Source   int16
+	Severity int16
+	Lines    int64
+}
+
+type LogCounts1m struct {
+	Bucket   time.Time
+	OrgID    uuid.UUID
+	NodeID   uuid.UUID
+	Source   int16
+	Severity int16
+	Lines    int64
+}
+
 type LogSetting struct {
 	OrgID     uuid.UUID
 	GroupID   uuid.UUID

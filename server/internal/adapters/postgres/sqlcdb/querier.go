@@ -21,6 +21,9 @@ type Querier interface {
 	AccountSetEmail(ctx context.Context, arg AccountSetEmailParams) (bool, error)
 	// Only a firing alert that nobody acknowledged yet (the engine may have changed it meanwhile).
 	AcknowledgeAlertInstance(ctx context.Context, arg AcknowledgeAlertInstanceParams) (int64, error)
+	// The counts of the log lines (V1-24, ADR 0044), only through the SECURITY DEFINER functions and
+	// always in the tenant of one organization.
+	AddLogCounts(ctx context.Context, arg AddLogCountsParams) (int64, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AddMembershipIfMissing(ctx context.Context, userID uuid.UUID) error
 	AddMembershipOfCurrentOrg(ctx context.Context, userID uuid.UUID) error
@@ -171,6 +174,7 @@ type Querier interface {
 	EnsureSeries(ctx context.Context, arg EnsureSeriesParams) ([]EnsureSeriesRow, error)
 	// Ends a silence at at; one that has not begun yet is cancelled.
 	ExpireAlertSilence(ctx context.Context, arg ExpireAlertSilenceParams) (int64, error)
+	ExpireLogCounts(ctx context.Context, before time.Time) (int64, error)
 	// Pending commands at their expiry, sent ones without an answer only before sent_before – the
 	// expiry plus command.SentGrace (M4-31): the agent's answer may still be on its way.
 	ExpireNodeCommands(ctx context.Context, arg ExpireNodeCommandsParams) error
@@ -398,6 +402,7 @@ type Querier interface {
 	LockUpdates(ctx context.Context) error
 	// Serializes adding passkeys of a user (the limit holds under parallel registrations).
 	LockUserPasskeys(ctx context.Context, userID uuid.UUID) error
+	LogCountsRange(ctx context.Context, arg LogCountsRangeParams) ([]LogCountsRangeRow, error)
 	MarkCancelsSent(ctx context.Context, arg MarkCancelsSentParams) error
 	MarkLogsErased(ctx context.Context, at *time.Time) error
 	// A refresh has no result: sent is done.

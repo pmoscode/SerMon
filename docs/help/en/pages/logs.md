@@ -9,6 +9,11 @@ The log lines of the nodes you may see – from the systemd journal and from log
 - **Text** looks for part of the line exactly as typed, optionally ignoring case. There are deliberately no regular expressions or query languages.
 - All filters are part of the page's address: a link shows others exactly this view, as far as they may see the nodes.
 
+## The histogram
+
+- The bars count the lines of the filter per step, about 100 over the range, from a range of 100 minutes on in whole minutes, from 2 days on in whole hours. The first and the last bar may reach a little beyond the range.
+- Without a text or units the histogram comes from counts the server keeps while storing the lines – over 14 days too, in a moment. With a text or units the log store has to read every line of the range; over long ranges that takes too long, and the histogram asks to shorten the range. The lines themselves still load.
+
 ## Reading the list
 
 - The newest lines are at the top. **Load older lines** fetches the next 200; the list shows at most 2,000 lines.

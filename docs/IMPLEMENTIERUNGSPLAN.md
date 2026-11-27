@@ -6210,7 +6210,7 @@ Es fehlt kein ADR. Erkenntnisse für v1.0:
   Im Review erledigt: der Update-Orchestrator gibt seine Leases beim Stoppen frei, `just test-db-modules` in CI.
 - **Offen aus M4:** M2-35 (Kanäle gegen die echten Dienste) ohne Konten; Release-Pipeline mit echten Schlüsseln.
 
-**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16; V1-17 kam mit V1-11 dazu, V1-18 mit dem Testbetrieb statt eines eigenen Hosts, V1-19 und V1-20 aus der Admin-Doku, V1-21 bis V1-23 aus dem Lasttest).
+**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16; V1-17 kam mit V1-11 dazu, V1-18 mit dem Testbetrieb statt eines eigenen Hosts, V1-19 und V1-20 aus der Admin-Doku, V1-21 bis V1-23 aus dem Lasttest, V1-24 aus V1-23).
 
 ---
 
@@ -6446,7 +6446,7 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 >   8 GB); 200 GB reichen bei üblichem Event-Aufkommen, bei dauerhaftem Brute Force auf allen Nodes nicht (die Grenze
 >   `proj.horizon_gib` von 160 GiB scheitert). Vorbehalte: eine schnellere CPU als ein typischer vServer, die SSD des
 >   Macs, nur 4 h (die Aufbewahrung ist hochgerechnet, nicht gemessen), keine Module außer `simulate`.
-> - **Befunde** (keine kleinen Fixes; erledigt in V1-21 bis V1-23, das Histogramm über 14 Tage offen in V1-24): (1) `metrics_1m` und `metrics_1h` haben keine
+> - **Befunde** (keine kleinen Fixes; erledigt in V1-21 bis V1-24): (1) `metrics_1m` und `metrics_1h` haben keine
 >   Columnstore-Policy – nach 30 Tagen der größte Teil; komprimiert wie die Rohdaten sparte das rund 90 % (Migration).
 >   (2) Security-Events bei dauerhaftem Brute Force rund 140 GiB im Jahr – fehlgeschlagene Anmeldungen bündeln oder je
 >   Art kürzer aufbewahren. (3) Das Log-Histogramm über 1 h aller Nodes braucht knapp 1 s; über 14 Tage im Testbetrieb
@@ -6600,7 +6600,8 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Rolle `sermon_backup` für bestehende Volumes (V1-05); die Vorgaben der Module (`module_hosts`, `module_ports`, nur
   SCRAM bei PostgreSQL, MySQL nur über Socket oder geprüftes TLS, M5-33); Security-Events und Verlauf der Alerts von
   Orgs ohne eigene Einstellung nur noch 90 Tage statt eines Jahres, Älteres geht beim ersten Lauf
-  (`SERMON_EVENT_RETENTION`, V1-22).
+  (`SERMON_EVENT_RETENTION`, V1-22); das Log-Histogramm über lange Zeiträume zählt erst ab dem Update, über die Tage
+  davor zeigt es bis zu 14 Tage lang weniger Zeilen, als Loki hat (V1-24).
 - **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-24 (V1-24 vor dem Release: Product Owner, 2026-11-27)
 
 #### ◐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
@@ -6819,7 +6820,43 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   „einige hundert Nodes“ in der Admin-Doku belegen oder streichen.
 - **Abhängig von:** V1-08
 
-#### ☐ V1-24 – Log-Histogramm über lange Zeiträume · S · M
+#### ☑ V1-24 – Log-Histogramm über lange Zeiträume · S · M
+> Erledigt (2026-11-27, [ADR 0044](adr/0044-log-zaehlungen-fuer-das-histogramm.md), ADR 0031 Nachtrag V1-24; KONZEPT
+> D13, §4.5, §10.4; Threat Model T131):
+> - **Entscheidung:** Zählen beim Ingest statt Lokis Ergebnis-Cache – der Cache hängt am LogQL-Text (der jeden Node
+>   nennt), die erste Abfrage zählte weiter alle Zeilen (220 s), im Single-Binary liegt er im Speicher von Loki.
+> - **Ablage:** Migration 00084: Hypertables `log_counts_1m`/`log_counts_1h` (Org, Node, Quelle, Schweregrad, Bucket
+>   `(k − 1 min, k]` wie Lokis `count_over_time`), Columnstore nach einem Tag, Aufbewahrung 14 Tage; ohne RLS wie die
+>   Metriken: `sermon_app` nur über `log_counts_add` (prüft den Node in `current_org_id()`, `log_count_marks` mit RLS
+>   zählt jeden Batch einmal), `log_counts_range`, `log_counts_expire`. Fremdschlüssel auf `nodes`: `node_purge` und
+>   `org_purge` nehmen sie mit (auch komprimiert); die Retention je Org löscht sie im selben Lauf und bis zur selben
+>   Grenze wie Loki; nicht im Backup (wie Loki).
+> - **Ingest:** zählt nach jedem erfolgreichen Push (nicht, was Loki ablehnt oder was verworfen wird); scheitert die
+>   Datenbank, wartet die Bestätigung höchstens `LogRetryFor`, ohne die Zeilen erneut an Loki zu geben, danach
+>   `sermon_server_ingest_uncounted_log_entries_total`.
+> - **Histogramm:** Schritte ab 1 min in ganzen Minuten, ab 30 min in ganzen Stunden, an Vielfachen seit der Epoche;
+>   ohne Text und Units ab 100 min aus den Zählungen, sonst Loki an denselben Punkten. **Gefunden:** Loki 3.7 lässt bei
+>   Metrik-Abfragen manchmal Zeilen des ersten ausgewerteten Punkts weg – der Server fragt ab einem Punkt vor dem
+>   Zeitraum und verwirft ihn. Zeitüberschreitung von Loki (30 s oder 504) ist `FAILED_PRECONDITION`; die UI bittet am
+>   Histogramm um einen kürzeren Zeitraum. `max_query_length` von Loki 360 h (14 Tage und zwei Schritte von 4 h).
+> - **Gemessen** (Lasttest 1 h, 50 Nodes, `BACKFILL_DAYS=14`: Loki nimmt nichts älter als 7 Tage, daher füllt
+>   `load-test.sh` per SQL 14 Tage Zählungen vor – je Node Zeilen pro Minute und Schweregrad der ersten 10 min in allen
+>   drei Quellen, 6,05 Mio. Minuten- und 101 100 Stunden-Zeilen, 167 MiB komprimiert; die Zeilen in Loki sind nur die
+>   des Laufs): Histogramm über **14 Tage p50 38 ms, p95 42 ms** (V1-23: hochgerechnet 220 s), über 2 Tage
+>   (Minuten-Tabelle) p95 0,51 s, über 1 h (Loki) p95 0,29 s, mit Text über 1 h (Loki) p95 0,13 s; Zählungen wachsen um
+>   1,2 MiB/h. Alle Grenzen gehalten, Hochrechnung 62 GiB nach einem Jahr. Text oder Units über 14 Tage sind nicht
+>   gemessen (Loki unverändert, ~0,7 s je Stunde Logs).
+> - **Grenzen:** gezählt wird ab der Migration (Release-Notes V1-15); lehnt Loki einen Push ganz ab, kann er einen Teil
+>   gespeichert haben, gezählt wird nichts; Zählungen bis zu einem Tag länger als die Zeilen (ganze Chunks).
+> - **Tests:** Domäne/Use-Case (Schritte, Ausrichtung, Quelle je Filter, Punkt vor dem Bereich, Timeout), Ingest
+>   (Minute und Schweregrad wie der Writer, nur Gespeichertes, Wiederholung ohne zweiten Push, erste wartende Seq,
+>   Resend einmal), Retention, Loki-Reader; gegen PostgreSQL (Schritte aus Minuten und Stunden, Grenzen, Resend auch in
+>   komprimierte Chunks, Mandanten, ohne Tenant, keine Rechte für `sermon_app`, Retention je Org, Policies, Purge von
+>   Node und Org, Backup ohne die Tabellen) und **gleiche Zahlen wie das echte Loki** für dieselben Zeilen (sechs
+>   Schritte und Filter, Zeilen auf Minuten- und Stundengrenzen); Loki mit 14 Tagen und zwei Schritten;
+>   `load-report_test.sh`; Komponente (ausgerichtete Schritte über 14 Tage, Meldung bei zu breitem Histogramm).
+>   Gegenproben 35/35 (drei zuerst überlebt: Minimum der wartenden Seqs, Filter der Quellen, Ausschluss im Backup –
+>   Tests ergänzt).
 - **Ziel:** Aus V1-23: Das Histogramm zählt jede Abfrage alle Zeilen des Zeitraums in Loki neu (`count_over_time`),
   rund 0,7 s je Stunde Logs bei 50 Nodes; über 14 Tage scheitert es an der Zeitgrenze von Loki. Zählungen je Node,
   Quelle und Schweregrad schon beim Ingest (wie eine Metrik) oder Lokis Ergebnis-Cache mit an den Schritt

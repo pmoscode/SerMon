@@ -19,12 +19,13 @@ Der Nachweis für den Richtwert (KONZEPT §22: 50 Nodes auf 4 vCPU, 8 GB RAM, 20
 | CPU und Speicher von `server`, `postgres`, `loki`, `caddy` (und z. B. dem Simulator) | `docker stats` | Mittel, p95, Maximum; CPU in % eines Kerns |
 | Speicher von Loki aus Sicht von Go: Heap, Ziel des nächsten GC, RSS, Collections pro Minute | `/metrics` von Loki (`LOAD_LOKI_METRICS_URL`; der Lasttest veröffentlicht nur diesen Pfad auf 127.0.0.1:19310) | Mittel, Maximum, neben dem Speicher des Containers |
 | Ingest: Samples, Batches, Logzeilen, Security-Events pro Sekunde, Lag, Verworfenes | `/metrics` des Servers ([ADR 0011](../../adr/0011-server-metriken-endpunkt.md)) | Raten, Lag p50/p95/Max, verworfene Einträge im Zeitraum |
-| Abfragezeiten der UI: Flotte, Sparklines, Node, Charts über 1 h, 24 h und 30 Tage, Logs, Log-Histogramm über 1 h und über 14 Tage (`log_histogram_14d`, der längste Zeitraum der UI) | Web-API mit echter Session | p50, p95, Maximum, Fehler |
-| Größe der Datenbank je Teil (Rohdaten, 1-min- und 1-h-Werte samt Kompression, Anomalien, Security-Events, Rest, größte Tabellen), WAL und `pg_wal`, Checkpoints, fehlgeschlagene Jobs | SQL | Wachstum pro Stunde (ganzer Zeitraum und zweite Hälfte) |
+| Abfragezeiten der UI: Flotte, Sparklines, Node, Charts über 1 h, 24 h und 30 Tage, Logs, Log-Histogramm über 1 h, über 1 h mit Text (`log_histogram_text`, aus Loki), über 2 Tage (`log_histogram_2d`) und über 14 Tage (`log_histogram_14d`, der längste Zeitraum der UI; beide aus den Zählungen, ADR 0044) | Web-API mit echter Session | p50, p95, Maximum, Fehler |
+| Größe der Datenbank je Teil (Rohdaten, 1-min- und 1-h-Werte samt Kompression, Anomalien, Zählungen der Log-Zeilen, Security-Events, Rest, größte Tabellen), WAL und `pg_wal`, Checkpoints, fehlgeschlagene Jobs | SQL | Wachstum pro Stunde (ganzer Zeitraum und zweite Hälfte) |
 | Volumes von PostgreSQL (mit WAL) und Loki | `du` im Volume | Wachstum pro Stunde |
 
 **Hochrechnung:** Jeder Teil wächst wie in der zweiten Hälfte des Zeitraums (nach dem Anlaufen) bis zu seiner
-Aufbewahrung – Rohdaten 24 h, `metrics_1m` und Anomalien 30 Tage, `metrics_1h` 365 Tage, Security-Events mit dem
+Aufbewahrung – Rohdaten 24 h, `metrics_1m` und Anomalien 30 Tage, die Zählungen der Log-Zeilen 14 Tage (nach einem
+Backfill wie gemessen), `metrics_1h` 365 Tage, Security-Events mit dem
 Verlauf der Alerts `--event-days TAGE` (Standard 90 wie `SERMON_EVENT_RETENTION`), Loki 14 Tage, der Rest der
 Datenbank ohne Grenze. Die drei Stufen der Metriken rechnet der Bericht aus den schon komprimierten Chunks: Rohdaten
 die jüngsten 2 h unkomprimiert, `metrics_1m` 16 h (6 h bis zur Kompression und ein Chunk von 10 h), `metrics_1h` 192 h
@@ -46,7 +47,16 @@ just load-test 3h 50                 # Dauer und Anzahl der Nodes
 SKIP_BUILD=1 just load-test 10m 50   # Builds und Secrets des letzten Laufs wiederverwenden
 KEEP=1 …                             # Umgebung danach weiterlaufen lassen (https://localhost:19443)
 COMPRESS_AGGREGATES=0 …              # metrics_1m am Ende nicht von Hand komprimieren (Standard: 1)
+BACKFILL_DAYS=0 …                    # keine Log-Zählungen vorab auffüllen (Standard: 14 Tage)
 ```
+
+Loki nimmt keine Zeilen an, die älter als 7 Tage sind, und 14 Tage Logs zu schreiben dauerte so lange wie 14 Tage
+Betrieb. Damit das Histogramm über 14 Tage trotzdem 14 Tage liest, wartet das Skript nach dem Start 11 min
+(`BACKFILL_WARMUP` in Sekunden) und füllt dann per SQL `BACKFILL_DAYS` Tage Zählungen vor die erste gemessene Minute:
+je Node die Zeilen pro Minute und Schweregrad der letzten 10 min, in allen drei Quellen (dreimal so viele Zeilen wie
+der Simulator, der nur das Journal hat), die Stunden-Tabelle daraus, ältere Chunks komprimiert wie ihre Policy. Der
+Bericht nennt das unter „Backfill“ und rechnet die Zählungen dann wie gemessen statt linear. Die Zeilen in Loki
+bleiben die des Laufs; die Abfragen mit Text (`log_histogram_text`) messen Loki deshalb nur über eine Stunde.
 
 Die Policy von `metrics_1m` erreicht einen Chunk erst 6 h nach seinem Ende; ein kurzer Lauf hätte nichts
 Komprimiertes. Deshalb komprimiert das Skript nach der Messung alle Chunks von `metrics_1m` von Hand und nimmt eine

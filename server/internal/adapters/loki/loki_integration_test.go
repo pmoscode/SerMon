@@ -235,6 +235,18 @@ func TestLoki_TheBuildersQueriesSelectWhatTheySay(t *testing.T) {
 	}
 }
 
+// V1-24: a histogram over 14 days asks Loki from a step before the range to a step after it (4 h
+// each); Loki's max_query_length allows it.
+func TestLoki_AHistogramOverTheRetentionFitsTheQueryLength(t *testing.T) {
+	c := loki.New(lokitest.Shared(t))
+	q, _ := logql.CountBySeverity(logql.Filter{Nodes: []identity.NodeID{identity.NodeID(uuid.New())}, Text: "x"}, 4*time.Hour)
+	end := time.Now().Truncate(4 * time.Hour).Add(4 * time.Hour)
+	start := end.Add(-14*24*time.Hour - 8*time.Hour)
+	if _, err := c.Counts(context.Background(), tenant.OrgID(uuid.New()), q, start, end, 4*time.Hour); err != nil {
+		t.Errorf("14 days and two steps: %v", err)
+	}
+}
+
 // Deleting (M3-10, D29): the request is recorded for the organization's tenant only, a retry is
 // no error. Loki filters the lines from queries once its querier reloads the requests (every 5
 // min) and removes them in the compactor after the cancel period.

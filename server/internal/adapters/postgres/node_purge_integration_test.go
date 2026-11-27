@@ -59,6 +59,12 @@ func seedNodeData(t *testing.T, ownerDSN string, org, node uuid.UUID) {
 	      VALUES ($1, 'system.cpu.usage_high', $2, 1, 0, 2, now(), 0.9)`, org, node)
 	exec(`INSERT INTO known_login_sources (org_id, node_id, user_name, source, first_seen, last_seen)
 	      VALUES ($1, $2, 'alice', '192.0.2.10', now(), now())`, org, node)
+	// The counts of the log histogram (V1-24), one of them days old.
+	for _, table := range []string{"log_counts_1m", "log_counts_1h"} {
+		exec(`INSERT INTO `+table+` (bucket, org_id, node_id, source, severity, lines)
+		      VALUES (date_trunc('hour', now()) - interval '3 days', $1, $2, 1, 7, 5), (date_trunc('hour', now()), $1, $2, 3, 4, 2)`, org, node)
+	}
+	exec(`INSERT INTO log_count_marks (org_id, node_id, seq) VALUES ($1, $2, 7)`, org, node)
 	var authority int32
 	if err := conn.QueryRow(ctx, `INSERT INTO pki_authorities (root_cert, root_key_sealed, intermediate_cert, intermediate_key_sealed, active)
 		VALUES ('\x00', '\x00', '\x00', '\x00', false) RETURNING id`).Scan(&authority); err != nil {
@@ -85,6 +91,12 @@ func compressAggregates(t *testing.T, conn *pgx.Conn) {
 			  ON a.materialization_hypertable_schema = c.hypertable_schema AND a.materialization_hypertable_name = c.hypertable_name
 			WHERE a.view_name = $1 AND NOT c.is_compressed`, view).Scan(&open); err != nil || open != 0 {
 			t.Fatalf("%s: %d chunks not compressed, %v", view, open, err)
+		}
+	}
+	// The counts of the log histogram (V1-24) as their policies leave them.
+	for _, table := range []string{"log_counts_1m", "log_counts_1h"} {
+		if _, err := conn.Exec(ctx, "SELECT compress_chunk(c, recompress => true) FROM show_chunks('"+table+"') c"); err != nil {
+			t.Fatalf("compress %s: %v", table, err)
 		}
 	}
 }
@@ -164,6 +176,7 @@ func TestNodePurge_RemovesTheNodesDataAndNothingElse(t *testing.T) {
 	for _, table := range []string{
 		"nodes", "series", "metrics_raw", "metrics_1m", "metrics_1h", "anomaly_points", "anomaly_baselines", "security_events",
 		"alert_instances", "alert_history", "known_login_sources", "agent_certificates",
+		"log_counts_1m", "log_counts_1h", "log_count_marks",
 	} {
 		if before[gone][table] < 1 {
 			t.Fatalf("fixture incomplete: %s = %v", table, before[gone])

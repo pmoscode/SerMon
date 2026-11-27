@@ -15,11 +15,14 @@
 		data,
 		loading = false,
 		failed = false,
+		tooBroad = false,
 		onZoom
 	}: {
 		data: HistogramData | undefined;
 		loading?: boolean;
 		failed?: boolean;
+		/** Loki gave up counting a text or units over the range: shorten it (V1-24). */
+		tooBroad?: boolean;
 		onZoom: (from: number, to: number) => void;
 	} = $props();
 
@@ -143,6 +146,12 @@
 			<p class="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
 				{m.loading()}
 			</p>
+		{:else if tooBroad}
+			<p
+				class="absolute inset-0 grid place-items-center px-4 text-center text-sm text-muted-foreground"
+			>
+				{m.logs_histogram_too_broad()}
+			</p>
 		{:else if failed}
 			<p class="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
 				{m.logs_histogram_failed()}
@@ -162,6 +171,8 @@
 	<div class="sr-only" role="status">
 		{#if loading}
 			<p>{m.loading()}</p>
+		{:else if tooBroad}
+			<p>{m.logs_histogram_too_broad()}</p>
 		{:else if failed}
 			<p>{m.logs_histogram_failed()}</p>
 		{:else if data}

@@ -9,6 +9,11 @@ Die Log-Zeilen der Nodes, die du sehen darfst – aus dem systemd-Journal und au
 - **Text** sucht einen Teil der Zeile genau wie eingegeben, auf Wunsch ohne Rücksicht auf Groß- und Kleinschreibung. Reguläre Ausdrücke und Abfragesprachen gibt es bewusst nicht.
 - Alle Filter stehen in der Adresse der Seite: Ein Link zeigt anderen genau diese Ansicht, soweit sie die Nodes sehen dürfen.
 
+## Das Histogramm
+
+- Die Balken zählen die Zeilen des Filters je Schritt, etwa 100 über den Zeitraum, ab 100 Minuten Zeitraum in ganzen Minuten, ab 2 Tagen in ganzen Stunden. Der erste und der letzte Balken können ein wenig über den Zeitraum hinausreichen.
+- Ohne Text und Units kommt das Histogramm aus Zählungen, die der Server beim Speichern der Zeilen anlegt – auch über 14 Tage in einem Augenblick. Mit Text oder Units muss die Log-Ablage jede Zeile des Zeitraums lesen; über lange Zeiträume dauert das zu lange, dann bittet das Histogramm, den Zeitraum zu verkürzen. Die Zeilen selbst laden trotzdem.
+
 ## Die Liste lesen
 
 - Die neuesten Zeilen stehen oben. **Ältere Zeilen laden** holt die nächsten 200; die Liste zeigt höchstens 2 000 Zeilen.

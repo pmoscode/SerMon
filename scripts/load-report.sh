@@ -19,8 +19,8 @@
 #   - SQL through LOAD_PSQL (a command that reads SQL on stdin; default: psql as the superuser in
 #     the postgres service): database size, metric tables, WAL, checkpoints, failing jobs;
 #   - the main reads of the UI through the web API at LOAD_URL with a real session: the fleet,
-#     its sparklines, a node, charts over 1 h, 24 h and 30 days, logs and their histogram (1 h and
-#     the longest range of the UI, 14 days). The
+#     its sparklines, a node, charts over 1 h, 24 h and 30 days, logs and their histogram (1 h, 1 h
+#     with a text, 2 days and the longest range of the UI, 14 days; V1-24). The
 #     session comes from LOAD_EMAIL and LOAD_PASSWORD_FILE (a user without a second factor; it
 #     logs in again when the session ends) or LOAD_COOKIE_FILE (the value of the session cookie
 #     from a browser). LOAD_CURL_ARGS adds options such as --cacert FILE.
@@ -57,6 +57,8 @@ default_limits() {
 		q.chart_30d.p95<=300
 		q.logs.p95<=1000
 		q.log_histogram.p95<=1000
+		q.log_histogram_2d.p95<=1000
+		q.log_histogram_14d.p95<=1000
 		db.jobs_failed.max<=0
 		proj.7d_gib.last<=160
 		proj.horizon_gib.last<=160
@@ -183,7 +185,10 @@ sample_sql() {
 		         hypertable_size('metrics_raw') AS raw,
 		         (SELECT hypertable_size(ht::regclass) FROM cagg WHERE view_name = 'metrics_1m') AS m1,
 		         (SELECT hypertable_size(ht::regclass) FROM cagg WHERE view_name = 'metrics_1h') AS h1,
-		         hypertable_size('anomaly_points') AS anomaly),
+		         hypertable_size('anomaly_points') AS anomaly,
+		         -- The counts of the log histogram (V1-24); older versions have none.
+		         (SELECT coalesce(sum(hypertable_size(h)), 0) FROM (VALUES (to_regclass('log_counts_1m')), (to_regclass('log_counts_1h'))) v (h)
+		          WHERE h IS NOT NULL) AS logcounts),
 		parts AS (
 		  SELECT 'raw' AS part, 'metrics_raw'::regclass AS ht
 		  UNION ALL SELECT '1m', ht::regclass FROM cagg WHERE view_name = 'metrics_1m'
@@ -198,7 +203,8 @@ sample_sql() {
 		UNION ALL SELECT 'db.1m', m1 FROM size
 		UNION ALL SELECT 'db.1h', h1 FROM size
 		UNION ALL SELECT 'db.anomaly', anomaly FROM size
-		UNION ALL SELECT 'db.rest', total - raw - coalesce(m1, 0) - coalesce(h1, 0) - anomaly FROM size
+		UNION ALL SELECT 'db.logcounts', logcounts FROM size
+		UNION ALL SELECT 'db.rest', total - raw - coalesce(m1, 0) - coalesce(h1, 0) - anomaly - logcounts FROM size
 		UNION ALL SELECT 'db.' || part || '.compressed_chunks', chunks FROM comp
 		UNION ALL SELECT 'db.' || part || '.compressed_bytes', after FROM comp
 		UNION ALL SELECT 'db.' || part || '.uncompressed_bytes', before FROM comp
@@ -286,6 +292,8 @@ sample_queries() {
 	range="\"from\":\"$(iso $((t - 3600)))\",\"to\":\"$to\""
 	measure logs LogService/QueryLogs "{\"filter\":{$range},\"limit\":200}"
 	measure log_histogram LogService/GetLogHistogram "{\"filter\":{$range}}"
+	measure log_histogram_text LogService/GetLogHistogram "{\"filter\":{$range,\"text\":\"nginx\"}}"
+	measure log_histogram_2d LogService/GetLogHistogram "{\"filter\":{\"from\":\"$(iso $((t - 172800)))\",\"to\":\"$to\"}}"
 	measure log_histogram_14d LogService/GetLogHistogram "{\"filter\":{\"from\":\"$(iso $((t - 1209600)))\",\"to\":\"$to\"}}"
 	put q.errors "$errors"
 }
@@ -420,6 +428,13 @@ projection() {
 		tier "metrics_1m (30 d)" db.1m 30 16 "linear up to its retention (nothing compressed yet: upper bound)"
 		tier "metrics_1h (365 d)" db.1h 365 192 "linear up to its retention (nothing compressed yet: upper bound)" db.1m
 		linear "anomaly_points (30 d)" db.anomaly 30 "linear up to its retention"
+		# The counts of the log histogram (V1-24): 14 days, as measured if the run backfilled them.
+		backfill=$(awk -F '\t' '$1 == "backfill" { v = $2 } END { print v }' "$dir/info.tsv" 2>/dev/null || true)
+		if [ -n "$backfill" ] && [ -n "$(value db.logcounts last)" ]; then
+			printf 'log counts (14 d)\tas measured, 14 days backfilled\t%s\t%s\n' "$(value db.logcounts last)" "$(value db.logcounts last)"
+		else
+			linear "log counts (14 d)" db.logcounts 14 "linear up to its retention"
+		fi
 		linear "security events and alert history ($event_days d)" db.events "$event_days" "linear up to their retention (--event-days)"
 		linear "rest of the database" db.rest 0 "linear, without a limit"
 		# pg_wal as measured (a checkpoint frees it); without a measurement at most max_wal_size.
@@ -523,6 +538,7 @@ report() {
 	[ -z "$(info setup)" ] || echo "- **Load:** $(info setup)"
 	[ -z "$(info machine)" ] || echo "- **Machine:** $(info machine)"
 	[ -z "$(info compressed)" ] || echo "- **Compression:** $(info compressed)"
+	[ -z "$(info backfill)" ] || echo "- **Backfill:** $(info backfill)"
 	[ -z "$(info host)" ] || echo "- **Sampled on:** $(info host)"
 	[ -z "$(info docker)" ] || echo "- **Docker:** $(info docker)"
 	[ -z "$(info url)" ] || echo "- **Server:** $(info url)"
@@ -573,7 +589,7 @@ report() {
 	echo
 	echo "| Read | p50 | p95 | max | n |"
 	echo "|---|---:|---:|---:|---:|"
-	for q in fleet sparklines node chart_1h chart_24h chart_30d logs log_histogram log_histogram_14d; do
+	for q in fleet sparklines node chart_1h chart_24h chart_30d logs log_histogram log_histogram_text log_histogram_2d log_histogram_14d; do
 		echo "| $q | $(fmt "$(value "q.$q" p50)" 1 0) | $(fmt "$(value "q.$q" p95)" 1 0) | $(fmt "$(value "q.$q" max)" 1 0) | $(fmt "$(value "q.$q" n)" 1 0) |"
 	done
 	echo "| failed reads | $(fmt "$(value q.errors sum)" 1 0) | | | |"
@@ -583,6 +599,7 @@ report() {
 	echo "| Part | Start | End | Growth per hour | 2nd half per hour |"
 	echo "|---|---:|---:|---:|---:|"
 	for row in "db.total:Database" "db.raw:metrics_raw" "db.1m:metrics_1m" "db.1h:metrics_1h" "db.anomaly:anomaly_points" \
+		"db.logcounts:log counts (log_counts_1m, log_counts_1h)" \
 		"disk.postgres:PostgreSQL volume (with WAL)" "disk.loki:Loki volume"; do
 		key=${row%%:*}
 		[ -n "$(value "$key" n)" ] || continue

@@ -134,6 +134,20 @@ mkdir "$work/plain" && mv "$work/aggregates/plain.tsv" "$work/plain/samples.tsv"
 out=$(report "$work/plain") || fail "plain: $out"
 has "$out" "| metrics_1h (365 d) | linear up to its retention (nothing compressed yet: upper bound) |"
 
+# The counts of the log histogram (V1-24): growing 2 MiB per hour up to their 14 days; after a
+# backfill of 14 days as measured.
+mkdir "$work/counts"
+awk -F '\t' -v OFS='\t' -v t0=1795000000 '{ print } $2 == "cpu.server" { print $1, "db.logcounts", ($1 - t0) / 3600 * 2097152 }' \
+	"$work/run/samples.tsv" >"$work/counts/samples.tsv"
+out=$(report "$work/counts") || fail "counts: $out"
+# 4 MiB + 2 MiB × (7 × 24 − 2) and × (14 × 24 − 2).
+has "$out" "| log counts (14 d) | linear up to its retention | 0.33 | 0.66 |"
+has "$out" "| log counts (log_counts_1m, log_counts_1h) | 0.0 | 4.0 | 2.0 | 2.0 |"
+printf 'backfill\t14 days of log counts\n' >"$work/counts/info.tsv"
+out=$(report "$work/counts") || fail "backfilled counts: $out"
+has "$out" "| log counts (14 d) | as measured, 14 days backfilled | 0.00 | 0.00 |"
+has "$out" "- **Backfill:** 14 days of log counts"
+
 # A real server without docker access: no resources, limits not evaluated, nothing fails.
 mkdir "$work/remote"
 grep -v -e '	cpu\.' -e '	mem\.' -e '	disk\.' "$work/run/samples.tsv" >"$work/remote/samples.tsv"
@@ -226,6 +240,8 @@ has "$samples" "	q.fleet	12.0"
 has "$samples" "	fleet.online	2"
 has "$samples" "	q.chart_1h	40.5"
 has "$samples" "	q.log_histogram_14d	40.5"
+has "$samples" "	q.log_histogram_2d	40.5"
+has "$samples" "	q.log_histogram_text	40.5"
 has "$samples" "	loki.go_memstats_heap_inuse_bytes	314572800"
 has "$samples" "	loki.loki_ingester_memory_streams	50"
 has "$samples" "	loki.go_gc_duration_seconds_count	120"
@@ -240,6 +256,7 @@ bodies=$(cat "$work/curl.log.bodies")
 has "$bodies" '{"selector":{"metric":"sermon_cpu_utilization_ratio","nodeIds":["0b0e8b6c-0000-4000-8000-000000000001","0b0e8b6c-0000-4000-8000-000000000002"],"labels":{"mode":"idle"}},"from":"'
 has "$bodies" '{"nodeId":"0b0e8b6c-0000-4000-8000-000000000001"}'
 has "$bodies" '{"filter":{"from":"'
+has "$bodies" '"text":"nginx"}}'
 case $samples in *"	q.logs	"*) fail "a failed read counted as a latency" ;; esac
 case $samples in *"	cpu."*) fail "docker sampled with LOAD_DOCKER=0" ;; esac
 [ "$(grep -c 'AuthService/Login' "$work/curl.log")" = 2 ] || fail "logins: $(cat "$work/curl.log")"

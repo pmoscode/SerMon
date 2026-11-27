@@ -291,6 +291,70 @@ describe('LogExplorer', () => {
 		void userEvent;
 	});
 
+	// V1-24: over 14 days the counts answer in steps of 4 h at whole hours: the first step reaches
+	// before the range, the last one past now; every count lands in a bar.
+	it('shows the counts of a long range in aligned steps', async () => {
+		stubFleet();
+		stubMetrics();
+		stubQuery([]);
+		const hour = 3_600_000;
+		const from = now - 14 * 24 * hour;
+		const first = Math.ceil(from / (4 * hour)) * 4 * hour;
+		const last = Math.ceil(now / (4 * hour)) * 4 * hour;
+		vi.spyOn(logsApi.logs, 'getLogHistogram').mockResolvedValue(
+			create(GetLogHistogramResponseSchema, {
+				step: durationFromMs(4 * hour),
+				series: [
+					{
+						severity: LogSeverity.ERROR,
+						points: [
+							{ at: timestampFromMs(first), count: 2 },
+							{ at: timestampFromMs(last), count: 7 }
+						]
+					},
+					{
+						severity: LogSeverity.WARNING,
+						points: [{ at: timestampFromMs(first + 8 * hour), count: 1 }]
+					}
+				]
+			})
+		);
+		show({ ...emptyFilter(), preset: '14d' });
+		const figure = page.getByRole('figure');
+		await expect.element(figure).toMatchTextContent(/Error and worse\s*9/);
+		await expect.element(figure).toMatchTextContent(/Warning\s*1/);
+		const bars = page.getByTestId('log-histogram').element().querySelectorAll('rect');
+		expect(bars).toHaveLength(3);
+		const xs = [...bars].map((r) => Number(r.getAttribute('x')));
+		expect(Math.min(...xs)).toBeLessThan(10);
+		expect(Math.max(...xs)).toBeGreaterThan(980);
+	});
+
+	// A text or units over a long range: Loki counts every line and gives up; the histogram asks
+	// for a shorter range instead of failing without a reason.
+	it('asks for a shorter range when the histogram is too broad', async () => {
+		stubFleet();
+		stubMetrics();
+		stubQuery([]);
+		vi.spyOn(logsApi.logs, 'getLogHistogram').mockRejectedValue(rpcError(Code.FailedPrecondition));
+		show({ ...emptyFilter(), preset: '14d', text: 'timed out' });
+		await expect
+			.element(
+				page
+					.getByRole('figure')
+					.getByText(/shorten the range/)
+					.first()
+			)
+			.toBeVisible();
+		expect(
+			page
+				.getByRole('status')
+				.getByText(/shorten the range/)
+				.elements()
+		).toHaveLength(1);
+		expect(page.getByText('The histogram could not be loaded.').elements()).toHaveLength(0);
+	});
+
 	it('hides the node and group choice on a node page and asks for that node only', async () => {
 		stubFleet();
 		stubMetrics();

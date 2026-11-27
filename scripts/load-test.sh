@@ -15,6 +15,11 @@
 #   SCENARIOS="cpu-high ssh-bruteforce flapping"   scenarios of the simulator (M2-30)
 #   LIMITS="'q.fleet.p95<=200' …"                  more limits for the report (load-report.sh)
 #   OUT=DIR                  where samples and report go (default deploy/load/.runs/<time>)
+#   BACKFILL_DAYS=14         before the sampling, fill that many days of log counts (V1-24) in front
+#                            of the first measured minute, by SQL: Loki takes no lines that old, so
+#                            the 14-day histogram reads 14 days of counts (0: none). Each node gets
+#                            its per-minute lines and severities of the first BACKFILL_WARMUP seconds
+#                            (default 660, of them the last 10 minutes) in all three sources
 #   COMPRESS_AGGREGATES=1    compress the chunks of metrics_1m by hand after the sampling and sample
 #                            the database once more: its policy reaches a chunk only 6 h after the
 #                            chunk ended, a short run would extrapolate it uncompressed (V1-21)
@@ -159,6 +164,35 @@ done
 		printf 'machine\t%s, %s cores, %s\n' "$(uname -m)" "$(nproc 2>/dev/null || echo '?')" "$(awk '/MemTotal/ { printf "%d GiB RAM", $2 / 1048576 }' /proc/meminfo 2>/dev/null)"
 	fi
 } >>"$out/info.tsv"
+backfill_days=${BACKFILL_DAYS:-14}
+case $backfill_days in '' | *[!0-9]*) echo "load-test: BACKFILL_DAYS must be a number" >&2 && exit 2 ;; esac
+if [ "$backfill_days" -gt 0 ]; then
+	warmup=${BACKFILL_WARMUP:-660}
+	echo "▸ waiting ${warmup} s for the log counts of the nodes, then $backfill_days days of them in front (V1-24)"
+	sleep "$warmup"
+	rows=$(compose exec -T postgres psql -qtAX -v ON_ERROR_STOP=1 -v days="$backfill_days" -U postgres -d sermon <<-'EOF'
+		CREATE TEMP TABLE live AS
+		  SELECT org_id, node_id, severity, sum(lines)::float8 / 10 AS per_minute FROM log_counts_1m
+		  WHERE bucket > date_trunc('minute', now()) - interval '10 minutes' AND bucket <= date_trunc('minute', now())
+		  GROUP BY 1, 2, 3;
+		SELECT min(bucket) AS first FROM log_counts_1m \gset
+		INSERT INTO log_counts_1m (bucket, org_id, node_id, source, severity, lines)
+		SELECT m, l.org_id, l.node_id, s, l.severity, greatest(1, round(l.per_minute))::bigint
+		FROM live l, generate_series(:'first'::timestamptz - (:'days' || ' days')::interval, :'first'::timestamptz - interval '1 minute', interval '1 minute') m,
+		     generate_series(1, 3) s;
+		INSERT INTO log_counts_1h AS c (bucket, org_id, node_id, source, severity, lines)
+		SELECT time_bucket('1 hour', bucket - interval '1 microsecond', timestamptz '1970-01-01 00:00:00+00') + interval '1 hour',
+		       org_id, node_id, source, severity, sum(lines)
+		FROM log_counts_1m WHERE bucket < :'first'::timestamptz GROUP BY 1, 2, 3, 4, 5
+		ON CONFLICT (node_id, source, severity, bucket) DO UPDATE SET lines = c.lines + EXCLUDED.lines;
+		SELECT count(compress_chunk(c, if_not_compressed => true)) FROM show_chunks('log_counts_1m', older_than => interval '1 day') c \g /dev/null
+		SELECT count(compress_chunk(c, if_not_compressed => true)) FROM show_chunks('log_counts_1h', older_than => interval '1 day') c \g /dev/null
+		SELECT (SELECT count(*) FROM live) || ' node severities, ' || (SELECT count(*) FROM log_counts_1m) || ' rows per minute, ' ||
+		       (SELECT count(*) FROM log_counts_1h) || ' per hour';
+	EOF
+	)
+	printf 'backfill\t%s days of log counts in front by SQL, each node with its lines per minute and severity of the 10 minutes after the start in all 3 sources (%s); older chunks compressed as their policy would\n' "$backfill_days" "$rows" >>"$out/info.tsv"
+fi
 echo "▸ sampling for $duration into $out (Ctrl-C stops early and still reports)"
 # Ctrl-C ends the sampling (it exits cleanly), then the report follows.
 trap : INT

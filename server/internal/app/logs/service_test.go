@@ -59,6 +59,10 @@ type fakeStore struct {
 	calls []call
 	lines []logs.StoredLine
 	err   error
+	// points are the times of the counts (default: from).
+	points []time.Time
+	// countErr fails the metric queries.
+	countErr error
 	// tooLarge answers ErrTooLarge above this limit (M3-29).
 	tooLarge int
 }
@@ -76,9 +80,21 @@ func (f *fakeStore) Lines(_ context.Context, o tenant.OrgID, q logql.Query, from
 
 func (f *fakeStore) Counts(_ context.Context, o tenant.OrgID, q logql.Query, from, to time.Time, step time.Duration) ([]logs.CountSeries, error) {
 	f.calls = append(f.calls, call{org: o, query: q.String(), from: from, to: to, step: step})
+	if f.countErr != nil {
+		return nil, f.countErr
+	}
+	at := f.points
+	if at == nil {
+		at = []time.Time{from}
+	}
+	var errors, weird []logs.CountPoint
+	for _, t := range at {
+		errors = append(errors, logs.CountPoint{At: t, Value: 3})
+		weird = append(weird, logs.CountPoint{At: t, Value: 1})
+	}
 	return []logs.CountSeries{
-		{Labels: map[string]string{"severity": "error"}, Points: []logs.CountPoint{{At: from, Value: 3}}},
-		{Labels: map[string]string{"severity": "weird"}, Points: []logs.CountPoint{{At: from, Value: 1}}},
+		{Labels: map[string]string{"severity": "error"}, Points: errors},
+		{Labels: map[string]string{"severity": "weird"}, Points: weird},
 	}, nil
 }
 
@@ -276,7 +292,7 @@ func TestQuery_WithoutAStore(t *testing.T) {
 }
 
 func TestHistogram_CountsPerSeverityInAboutAHundredSteps(t *testing.T) {
-	store := &fakeStore{}
+	store := &fakeStore{points: []time.Time{now}}
 	h, err := service(store).Histogram(context.Background(), viewerOf(web), filter())
 	if err != nil {
 		t.Fatal(err)

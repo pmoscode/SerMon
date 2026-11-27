@@ -113,6 +113,7 @@
 		data={explorer.histogram}
 		loading={explorer.status === 'loading' && !explorer.histogram}
 		failed={explorer.histogramFailed}
+		tooBroad={explorer.histogramTooBroad}
 		onZoom={(from, to) => onFilter({ ...filter, from, to })}
 	/>
 

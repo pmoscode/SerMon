@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/SerMon/server/internal/adapters/loki"
+	"github.com/pmoscode/SerMon/server/internal/app/logs"
 	"github.com/pmoscode/SerMon/server/internal/domain/identity"
 	"github.com/pmoscode/SerMon/server/internal/domain/logql"
 	"github.com/pmoscode/SerMon/server/internal/domain/tenant"
@@ -266,6 +267,29 @@ func TestCounts_ReadsTheMatrixOfAMetricQuery(t *testing.T) {
 	bad := client(t, (&recorded{}).handler(http.StatusOK, `{"status":"success","data":{"resultType":"streams","result":[]}}`))
 	if _, err := bad.Counts(context.Background(), org, q, at.Add(-time.Hour), at, time.Minute); !errors.Is(err, loki.ErrRejected) {
 		t.Errorf("streams instead of a matrix: %v", err)
+	}
+}
+
+// Loki too slow for a metric query (V1-24: a text over a long range counts every line): our
+// timeout or Loki's own (504) is logs.ErrTooBroad, the caller narrows the range.
+func TestReader_ATimeoutOfACountIsTooBroad(t *testing.T) {
+	slow := client(t, http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+		_, _ = io.Copy(io.Discard, req.Body) // the server notices a gone client only after the body
+		<-req.Context().Done()
+	}))
+	q, _ := logql.CountBySeverity(logql.Filter{Nodes: []identity.NodeID{node}, Text: "x"}, time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := loki.NewReader(slow).Counts(ctx, org, q, at.Add(-time.Hour), at, time.Minute); !errors.Is(err, logs.ErrTooBroad) {
+		t.Errorf("our timeout: %v, want ErrTooBroad", err)
+	}
+	gateway := client(t, (&recorded{}).handler(http.StatusGatewayTimeout, "context deadline exceeded"))
+	if _, err := loki.NewReader(gateway).Counts(context.Background(), org, q, at.Add(-time.Hour), at, time.Minute); !errors.Is(err, logs.ErrTooBroad) {
+		t.Errorf("Loki's timeout: %v, want ErrTooBroad", err)
+	}
+	down := client(t, (&recorded{}).handler(http.StatusServiceUnavailable, "not ready"))
+	if _, err := loki.NewReader(down).Counts(context.Background(), org, q, at.Add(-time.Hour), at, time.Minute); !errors.Is(err, logs.ErrUnavailable) || errors.Is(err, logs.ErrTooBroad) {
+		t.Errorf("Loki down: %v, want ErrUnavailable", err)
 	}
 }
 

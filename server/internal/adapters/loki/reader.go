@@ -39,6 +39,10 @@ func (r *Reader) Lines(ctx context.Context, org tenant.OrgID, q logql.Query, fro
 // Counts runs a metric query.
 func (r *Reader) Counts(ctx context.Context, org tenant.OrgID, q logql.Query, from, to time.Time, step time.Duration) ([]logs.CountSeries, error) {
 	series, err := r.client.Counts(ctx, org, q, from, to, step)
+	if errors.Is(err, ErrTimeout) {
+		// Loki counts every line of the range; a shorter one answers (V1-24).
+		return nil, fmt.Errorf("%w: %w", logs.ErrTooBroad, err)
+	}
 	if err != nil {
 		return nil, readError(err)
 	}

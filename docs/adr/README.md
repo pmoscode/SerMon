@@ -51,6 +51,7 @@ KONZEPT §2 mit angepasst.
 | [0041](0041-nodes-deaktivieren-loeschen.md) | Nodes deaktivieren und löschen | accepted | D29, D31 |
 | [0042](0042-logisches-backup-und-restore.md) | Logisches Backup und Restore | accepted | D32 |
 | [0043](0043-release-prozess.md) | Release-Prozess: Versionen, Kanäle, Schlüssel und Supply Chain | accepted | D33 |
+| [0044](0044-log-zaehlungen-fuer-das-histogramm.md) | Zählungen der Log-Zeilen für das Histogramm | accepted | D13, D12 |
 
 ## Entscheidungslog → ADR
 
@@ -68,7 +69,7 @@ KONZEPT §2 mit angepasst.
 | D10 Authentifizierung | 0017, 0033, 0034 |
 | D11 Rechte | 0017, 0040 |
 | D12 Retention | 0018 |
-| D13 Storage | 0001, 0031, 0032, 0037 |
+| D13 Storage | 0001, 0031, 0032, 0037, 0044 |
 | D14 Alert-Kanäle | 0019 |
 | D15 Updates | 0020, 0035, 0036 |
 | D16 Anomalien | 0019, 0037 |

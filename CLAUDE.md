@@ -108,7 +108,8 @@ virtuellen Nodes in einem Container (Szenarien, `--log-rate` synthetische Journa
 `scripts/load-report.sh` (`sample DIR DAUER [INTERVALL]`, `report DIR [--limit 'KEY.STAT<=V']… [--horizon TAGE]`:
 `docker stats`, `/metrics`, SQL, Lesezugriffe der UI über die Web-API, Hochrechnung auf 7 Tage und die Aufbewahrung,
 Grenzen mit Exit-Code 1). Ergebnis unter `deploy/load/.runs/<zeit>/report.md`; `KEEP=1`, `SKIP_BUILD=1` wie bei der
-Demo. Dasselbe Skript misst den Testbetrieb gegen eine echte Installation (V1-18, `LOAD_URL`, `LOAD_METRICS_URL`,
+Demo; `BACKFILL_DAYS` (Standard 14) füllt vor der Messung so viele Tage Log-Zählungen per SQL vor (V1-24). Dasselbe
+Skript misst den Testbetrieb gegen eine echte Installation (V1-18, `LOAD_URL`, `LOAD_METRICS_URL`,
 `LOAD_EMAIL`/`LOAD_PASSWORD_FILE` oder `LOAD_COOKIE_FILE`, `LOAD_PSQL`, `LOAD_DOCKER=0`).
 `just simulate [nodes] [--seed S] [--scenario …]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`,
 M1-34); der erste Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten
@@ -199,6 +200,10 @@ Datenbank (ADR 0007):
 - Metriken (ADR 0001): Port `app/metrics.Store` mit Contract-Tests (`metricstoretest`), Implementierungen
   `adapters/timescale` und `app/metrics/memstore` (Fake). `sermon_app` darf Metrik-Tabellen nicht lesen; gelesen wird
   über `metric_points_*` (`SECURITY DEFINER`). Ingest: `app/ingest` (10-s-Fenster, Ack erst nach dem Schreiben).
+- Log-Zählungen (V1-24, ADR 0044): Der Ingest zählt nach jedem Push zu Loki je Node, Quelle, Schweregrad und Minute in
+  `log_counts_1m`/`log_counts_1h` (Columnstore ohne RLS; `sermon_app` nur über `log_counts_add`, `log_counts_range`,
+  `log_counts_expire`; je Batch einmal über `log_count_marks`); das Log-Histogramm liest sie ohne Text- und Unit-Filter
+  ab 100 min Zeitraum (`logs.WithCounts`), sonst Loki an denselben Punkten (ein Punkt früher, verworfen).
 
 Web-Besonderheiten:
 - SvelteKit 3: Die Konfiguration steht in `web/vite.config.ts` (es gibt keine `svelte.config.js`).

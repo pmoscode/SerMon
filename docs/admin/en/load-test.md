@@ -19,12 +19,13 @@ The proof of the guideline (KONZEPT §22: 50 nodes on 4 vCPU, 8 GB RAM, 200 GB S
 | CPU and memory of `server`, `postgres`, `loki`, `caddy` (and e.g. the simulator) | `docker stats` | mean, p95, maximum; CPU in % of one core |
 | Memory of Loki as Go sees it: heap, target of the next GC, RSS, collections per minute | Loki's `/metrics` (`LOAD_LOKI_METRICS_URL`; the load test publishes only that path on 127.0.0.1:19310) | mean, maximum, next to the memory of the container |
 | Ingest: samples, batches, log lines, security events per second, lag, dropped entries | the server's `/metrics` ([ADR 0011](../../adr/0011-server-metriken-endpunkt.md)) | rates, lag p50/p95/max, entries dropped in the window |
-| Read times of the UI: fleet, sparklines, node, charts over 1 h, 24 h and 30 days, logs, log histogram over 1 h and over 14 days (`log_histogram_14d`, the longest range of the UI) | web API with a real session | p50, p95, maximum, errors |
-| Size of the database per part (raw values, 1-min and 1-h values with their compression, anomalies, security events, rest, largest tables), WAL and `pg_wal`, checkpoints, failed jobs | SQL | growth per hour (whole window and second half) |
+| Read times of the UI: fleet, sparklines, node, charts over 1 h, 24 h and 30 days, logs, log histogram over 1 h, over 1 h with a text (`log_histogram_text`, from Loki), over 2 days (`log_histogram_2d`) and over 14 days (`log_histogram_14d`, the longest range of the UI; both from the counts, ADR 0044) | web API with a real session | p50, p95, maximum, errors |
+| Size of the database per part (raw values, 1-min and 1-h values with their compression, anomalies, counts of the log lines, security events, rest, largest tables), WAL and `pg_wal`, checkpoints, failed jobs | SQL | growth per hour (whole window and second half) |
 | Volumes of PostgreSQL (with the WAL) and Loki | `du` in the volume | growth per hour |
 
 **Extrapolation:** every part grows as in the second half of the window (after the start-up) up to its retention –
-raw values 24 h, `metrics_1m` and anomalies 30 days, `metrics_1h` 365 days, security events with the alert history
+raw values 24 h, `metrics_1m` and anomalies 30 days, the counts of the log lines 14 days (as measured after a
+backfill), `metrics_1h` 365 days, security events with the alert history
 `--event-days DAYS` (default 90 like `SERMON_EVENT_RETENTION`), Loki 14 days, the rest of the database without a
 limit. The three tiers of the metrics are computed from the chunks compressed already: raw values with the newest 2 h
 uncompressed, `metrics_1m` 16 h (6 h until the compression and one chunk of 10 h), `metrics_1h` 192 h (a day and one
@@ -46,7 +47,16 @@ just load-test 3h 50                 # duration and number of nodes
 SKIP_BUILD=1 just load-test 10m 50   # reuse the builds and secrets of the last run
 KEEP=1 …                             # leave the environment running afterwards (https://localhost:19443)
 COMPRESS_AGGREGATES=0 …              # don't compress metrics_1m by hand at the end (default: 1)
+BACKFILL_DAYS=0 …                    # don't fill in log counts in advance (default: 14 days)
 ```
+
+Loki takes no lines older than 7 days, and writing 14 days of logs would take as long as 14 days of operation. So that
+the 14-day histogram still reads 14 days, the script waits 11 min after the start (`BACKFILL_WARMUP` in seconds) and
+then fills `BACKFILL_DAYS` days of counts in front of the first measured minute by SQL: per node the lines per minute
+and severity of the last 10 min, in all three sources (three times the rows of the simulator, which has the journal
+only), the hourly table from them, older chunks compressed as their policy would. The report names it under
+"Backfill" and takes the counts as measured instead of linear then. The lines in Loki stay those of the run; the
+queries with a text (`log_histogram_text`) therefore measure Loki over one hour only.
 
 The policy of `metrics_1m` reaches a chunk only 6 h after it ended; a short run would have nothing compressed. So the
 script compresses every chunk of `metrics_1m` by hand after the sampling and takes a last sample of the database. A

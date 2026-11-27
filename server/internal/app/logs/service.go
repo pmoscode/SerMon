@@ -119,9 +119,64 @@ type Histogram struct {
 	Series map[logql.Severity][]CountPoint
 }
 
+// CountStore reads the lines counted at the ingest per node, source, severity and minute (V1-24,
+// ADR 0044): the histogram over long ranges without counting every line in Loki again.
+type CountStore interface {
+	// Counts returns the lines of the query per severity: a point at t holds the lines with
+	// t − Step < at ≤ t, as Loki's count_over_time over Step.
+	Counts(ctx context.Context, org tenant.OrgID, q CountQuery) ([]CountSeries, error)
+}
+
+// CountQuery asks the counts of visible nodes for the points After < t ≤ Until, multiples of
+// Step since the Unix epoch; Step is whole minutes. Empty Sources and Severities mean all.
+type CountQuery struct {
+	Nodes        []identity.NodeID
+	Sources      []logql.Source
+	Severities   []logql.Severity
+	After, Until time.Time
+	Step         time.Duration
+}
+
+// HistogramStep is the step of a histogram over span: about HistogramSteps buckets, from a
+// minute on in whole minutes and from half an hour on in whole hours (the buckets of the counts).
+func HistogramStep(span time.Duration) time.Duration {
+	raw := span / HistogramSteps
+	switch {
+	case raw >= 30*time.Minute:
+		return ceilDuration(raw, time.Hour)
+	case raw >= time.Minute:
+		return ceilDuration(raw, time.Minute)
+	}
+	return max(raw.Truncate(time.Second), time.Second)
+}
+
+func ceilDuration(d, unit time.Duration) time.Duration {
+	return (d + unit - 1) / unit * unit
+}
+
+// alignDown and alignUp round to a multiple of step since the Unix epoch (Loki's and the
+// counts' points; time.Truncate counts from year 1).
+func alignDown(t time.Time, step time.Duration) time.Time {
+	ns, s := t.UnixNano(), int64(step)
+	q := ns / s
+	if ns%s < 0 {
+		q--
+	}
+	return time.Unix(0, q*s).UTC()
+}
+
+func alignUp(t time.Time, step time.Duration) time.Time {
+	down := alignDown(t, step)
+	if down.Before(t) {
+		return down.Add(step)
+	}
+	return down
+}
+
 // Service is the use case.
 type Service struct {
 	store     Store
+	counts    CountStore
 	directory Directory
 	policy    authz.Policy
 	now       func() time.Time
@@ -134,6 +189,9 @@ type Option func(*Service)
 
 // WithClock sets the clock (tests).
 func WithClock(now func() time.Time) Option { return func(s *Service) { s.now = now } }
+
+// WithCounts answers histograms from the counts of the ingest where the filter allows (V1-24).
+func WithCounts(c CountStore) Option { return func(s *Service) { s.counts = c } }
 
 // WithTailTiming sets the interval of the tail's rounds and of its rechecks (tests).
 func WithTailTiming(interval, recheck time.Duration) Option {
@@ -188,23 +246,37 @@ func (s *Service) Query(ctx context.Context, c access.Caller, f Filter, limit in
 	return page, nil
 }
 
-// Histogram counts the lines of the filter per severity in about HistogramSteps buckets.
+// Histogram counts the lines of the filter per severity in about HistogramSteps buckets at points
+// aligned to the step: from the counts of the ingest if the filter allows (no text, no units, a
+// step of whole minutes), otherwise from Loki (V1-24).
 func (s *Service) Histogram(ctx context.Context, c access.Caller, f Filter) (Histogram, error) {
 	if err := checkRange(f); err != nil {
 		return Histogram{}, err
 	}
-	step := max(f.To.Sub(f.From)/HistogramSteps, time.Second).Truncate(time.Second)
+	step := HistogramStep(f.To.Sub(f.From))
+	after, until := alignDown(f.From, step), alignUp(f.To, step)
 	q, org, hosts, err := s.prepare(ctx, c, f)
 	if err != nil || hosts == nil {
 		return Histogram{Step: step}, err
 	}
 	filter, _ := toFilter(f, nil)
 	filter.Nodes = q.nodes
-	counts, err := logql.CountBySeverity(filter, step)
-	if err != nil {
-		return Histogram{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+	var series []CountSeries
+	if s.counts != nil && filter.Text == "" && len(filter.Units) == 0 && step%time.Minute == 0 {
+		series, err = s.counts.Counts(ctx, org, CountQuery{
+			Nodes: q.nodes, Sources: filter.Sources, Severities: filter.Severities, After: after, Until: until, Step: step,
+		})
+	} else {
+		var counts logql.Query
+		counts, err = logql.CountBySeverity(filter, step)
+		if err != nil {
+			return Histogram{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+		}
+		// From one point earlier: Loki 3.7 sometimes leaves out lines of the first point it
+		// evaluates (V1-24); that point lies before the range and is dropped.
+		series, err = s.store.Counts(ctx, org, counts, after, until, step)
+		series = pointsAfter(series, after)
 	}
-	series, err := s.store.Counts(ctx, org, counts, f.From, f.To, step)
 	if err != nil {
 		return Histogram{}, fmt.Errorf("count logs: %w", err)
 	}
@@ -323,6 +395,14 @@ func toFilter(f Filter, nodes []identity.NodeID) (logql.Filter, error) {
 		return logql.Filter{}, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	return filter, nil
+}
+
+// pointsAfter keeps the points after t.
+func pointsAfter(series []CountSeries, t time.Time) []CountSeries {
+	for i := range series {
+		series[i].Points = slices.DeleteFunc(series[i].Points, func(p CountPoint) bool { return !p.At.After(t) })
+	}
+	return series
 }
 
 func severityOf(label string) logql.Severity {

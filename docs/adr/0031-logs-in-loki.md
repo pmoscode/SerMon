@@ -119,3 +119,11 @@ dahinter, und damit die Alerts.
   einzugrenzen. Abfragen nennen ihre Nodes weiter immer selbst (kein Selektor über den ganzen Tenant).
 - Eine Antwort über 32 MiB (lange Zeilen, Steuerzeichen in JSON maskiert) ist `ErrTooLarge`: Die Liste fragt dann
   20 Zeilen und meldet „mehr“; ist auch das zu groß, `FAILED_PRECONDITION`.
+
+## Nachtrag V1-24: Histogramm über lange Zeiträume
+
+Das Histogramm zählte jede Abfrage alle Zeilen des Zeitraums in Loki neu; über 14 Tage scheiterte es an der
+Zeitgrenze. Ohne Text- und Unit-Filter und ab 100 min Zeitraum liest es jetzt Zählungen, die der Ingest nach jedem
+Push zu Loki in TimescaleDB schreibt ([ADR 0044](0044-log-zaehlungen-fuer-das-histogramm.md)); sonst fragt es Loki
+wie bisher, an denselben Punkten. Eine Zeitüberschreitung von Loki (Client oder 504) ist bei Metrik-Abfragen
+`logs.ErrTooBroad`, nicht mehr „nicht erreichbar“.

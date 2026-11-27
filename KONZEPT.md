@@ -90,7 +90,7 @@ Ergebnis der Konzeptrunde. Für jede Entscheidung gibt es ein ADR unter `docs/ad
 | D10 | Auth           | **Lokal (Argon2id) + TOTP + Passkeys/WebAuthn, OIDC/SSO**                                    |                                                                                                       |
 | D11 | Rechte         | **Org → Node-Gruppen → Rollen** (Viewer / Operator / Admin)                                  |                                                                                                       |
 | D12 | Retention      | **Gestaffelt:** 1 s / 15 min (Ringpuffer im Server), 10 s / 24 h, 1 min / 30 Tage, 1 h / 1 Jahr; Logs 14 Tage; Events ab Werk 90 Tage (7–365, `SERMON_EVENT_RETENTION`, V1-22) | konfigurierbar; DB-Auflösung 10 s nach Spike M0-09 (ADR 0001) |
-| D13 | Storage        | **PostgreSQL 17 + TimescaleDB** (Stamm-, Event- und Metrikdaten), **Loki** (Logs)            | Eine DB statt fünf Komponenten; Downsampling und Retention nativ; Metrik-Speicher austauschbar ([ADR 0001](docs/adr/0001-zeitreihen-speicher-timescaledb.md)) |
+| D13 | Storage        | **PostgreSQL 17 + TimescaleDB** (Stamm-, Event- und Metrikdaten, Zählungen der Log-Zeilen für das Histogramm, [ADR 0044](docs/adr/0044-log-zaehlungen-fuer-das-histogramm.md)), **Loki** (Logs) | Eine DB statt fünf Komponenten; Downsampling und Retention nativ; Metrik-Speicher austauschbar ([ADR 0001](docs/adr/0001-zeitreihen-speicher-timescaledb.md)) |
 | D14 | Alert-Kanäle   | E-Mail, Webhook, Slack/Teams/Discord/Mattermost, Telegram/ntfy/Gotify/Pushover               |                                                                                                       |
 | D15 | Updates        | **Policy-basiert** pro Gruppe (report / security-auto / all-auto), Wartungsfenster           |                                                                                                       |
 | D16 | Anomalien      | **Statistisch, serverseitig** (robuster Z-Score, saisonale Baselines)                        | Erklärbar, ohne Training, gut testbar                                                                 |
@@ -238,6 +238,7 @@ eine Fake-Implementierung für Tests.
 | Metriken 1 min                                                                      | Continuous Aggregate `metrics_1m`                            | 30 Tage                                          |
 | Metriken 1 h                                                                        | Continuous Aggregate `metrics_1h` (hierarchisch auf `metrics_1m`) | 1 Jahr                                      |
 | Logs                                                                                | Loki (Multi-Tenant, Compactor-Retention)                     | 14 Tage                                          |
+| Zählungen der Log-Zeilen je Node, Quelle, Schweregrad und Minute bzw. Stunde (Histogramm, [ADR 0044](docs/adr/0044-log-zaehlungen-fuer-das-histogramm.md)) | Hypertables `log_counts_1m`, `log_counts_1h` (ohne RLS, nur über Definer-Funktionen) | 14 Tage, mit den Logs der Org gelöscht |
 | Zustellprotokoll der Benachrichtigungen (mit den Feldern der Alerts)                | PostgreSQL `notification_deliveries`     | 30 Tage                                          |
 
 **Retention pro Org** (M5-30, [ADR 0029](docs/adr/0029-organisationen-verwalten-sperren-loeschen.md), Nachtrag M5-30): Admins einer Org stellen die Aufbewahrung ihrer
@@ -245,7 +246,8 @@ eine Fake-Implementierung für Tests.
 Obergrenze ihres Kontingents; mit Step-up und Audit. Ohne eigene Einstellung gilt für Events die Vorgabe der Instanz
 `SERMON_EVENT_RETENTION` (ab Werk 90 Tage, 7 bis 365; V1-22, [ADR 0018](docs/adr/0018-retention.md), Nachtrag V1-22). Events löscht der Server
 stündlich je Org, ganze Monate gibt er frei, sobald keine Org sie mehr behält; für Logs trägt er einmal am Tag eine
-Löschung bei Loki ein (bis zu einem Tag Verzug). Metriken und das Audit-Log folgen der Instanz.
+Löschung bei Loki ein (bis zu einem Tag Verzug) und löscht im selben Lauf die Zählungen der Log-Zeilen bis zur selben
+Grenze. Metriken und das Audit-Log folgen der Instanz.
 
 **Metrik-Schema in TimescaleDB** (Details in [ADR 0001](docs/adr/0001-zeitreihen-speicher-timescaledb.md)):
 
@@ -708,7 +710,10 @@ Crosshair-Sync, Zoom per Drag). Jede Kennzahl hat ein ⓘ mit Erklärung.
 - Explorer mit Zeitbereich, Node/Gruppe, Quelle/Unit, Severity und Volltextsuche. Die LogQL-Abfrage wird
   **serverseitig** aus strukturierten Filtern gebaut; User schreiben kein LogQL.
 - Live-Tail (Server-Streaming), Kontext-Ansicht („± 50 Zeilen um diesen Eintrag“), Histogramm der Log-Rate nach
-  Severity.
+  Severity. Das Histogramm liest ab 100 min Zeitraum ohne Text- und Unit-Filter die Zählungen, die der Ingest nach
+  jedem Push zu Loki schreibt (je Node, Quelle, Schweregrad und Minute; dieselben Zahlen wie Lokis `count_over_time`);
+  mit Text oder Units und für kürzere Zeiträume fragt es Loki, ist Loki zu langsam, bittet es um einen kürzeren
+  Zeitraum ([ADR 0044](docs/adr/0044-log-zaehlungen-fuer-das-histogramm.md)).
 - Darstellung **immer als Text** (kein HTML), ANSI-Codes werden entfernt oder sicher gerendert. Lange Zeilen werden
   umbrochen.
 - Absprung aus Charts und Alerts: „Logs dieses Nodes um diesen Zeitpunkt“.

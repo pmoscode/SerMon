@@ -692,6 +692,7 @@
 	"logs_histogram_title": "Zeilen pro Zeit",
 	"logs_histogram_empty": "Keine Zeilen in diesem Zeitraum",
 	"logs_histogram_failed": "Das Histogramm ließ sich nicht laden.",
+	"logs_histogram_too_broad": "Für Text oder Units müsste Loki in diesem Zeitraum zu viele Zeilen zählen. Bitte den Zeitraum verkürzen.",
 	"logs_histogram_summary": "{count} Zeilen von {from} bis {to}. Zum Vergrößern einen Bereich mit der Maus markieren oder einen Zeitraum wählen.",
 	"logs_lines_title": "Zeilen",
 	"logs_lines_count": "{count} Zeilen",

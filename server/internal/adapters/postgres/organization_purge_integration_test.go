@@ -78,6 +78,12 @@ func seedPurgeOrg(t *testing.T, ownerDSN string, other uuid.UUID) purgeOrg {
 	}
 	exec("INSERT INTO superadmins (user_id) VALUES ($1)", p.super)
 	exec(`INSERT INTO audit_log (org_id, seq, action, target, prev_hash, hash) VALUES ($1, 0, 'group.create', 'group:x', '\x00', '\x00')`, p.org)
+	// The counts of the log histogram (V1-24).
+	for _, table := range []string{"log_counts_1m", "log_counts_1h"} {
+		exec(`INSERT INTO `+table+` (bucket, org_id, node_id, source, severity, lines)
+		      VALUES (date_trunc('hour', now()) - interval '3 days', $1, $2, 1, 7, 5)`, p.org, p.node)
+	}
+	exec(`INSERT INTO log_count_marks (org_id, node_id, seq) VALUES ($1, $2, 3)`, p.org, p.node)
 	exec("CALL refresh_continuous_aggregate('metrics_1m', now() - interval '1 hour', now())")
 	return p
 }
@@ -154,7 +160,8 @@ func TestOrgPurge_RemovesEverythingOfTheOrganizationAndNothingElse(t *testing.T)
 	if before["nodes"] != 1 || before["series"] != 1 || before["metrics_raw"] != 1 || before["metrics_1m"] != 1 ||
 		before["security_events"] != 1 || before["audit_log"] != 1 || before["invitations"] != 1 || before["memberships"] != 3 ||
 		before["node_commands"] != 1 || before["update_rollouts"] != 1 || before["update_rollout_nodes"] != 1 || before["update_policies"] != 1 ||
-		before["node_update_state"] != 1 || before["anomaly_baselines"] != 1 || before["anomaly_points"] != 1 || before["anomaly_leases"] != 1 {
+		before["node_update_state"] != 1 || before["anomaly_baselines"] != 1 || before["anomaly_points"] != 1 || before["anomaly_leases"] != 1 ||
+		before["log_counts_1m"] != 1 || before["log_counts_1h"] != 1 || before["log_count_marks"] != 1 {
 		t.Fatalf("fixture incomplete: %v", before)
 	}
 	otherBefore := orgRows(t, owner, other.org, otherSeries)

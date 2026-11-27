@@ -105,6 +105,11 @@ func TestOpen_RefusesRolesThatBypassRowLevelSecurity(t *testing.T) {
 	}
 }
 
+// withoutAppAccess are tables with org_id in the columnstore, which has no row-level security:
+// sermon_app has no right on them, the SECURITY DEFINER functions act in the current organization
+// (V1-24, ADR 0044; like the metrics, ADR 0001).
+var withoutAppAccess = map[string]bool{"log_counts_1m": true, "log_counts_1h": true}
+
 func TestRLS_WithoutTenantNothingIsVisible(t *testing.T) {
 	f := setup(t)
 	ctx := context.Background()
@@ -125,11 +130,17 @@ func TestRLS_WithoutTenantNothingIsVisible(t *testing.T) {
 		if err := rows.Scan(&name); err != nil {
 			t.Fatal(err)
 		}
-		if name != "sessions" { // instance-level, no RLS (ADR 0007)
+		if name != "sessions" && !withoutAppAccess[name] { // sessions: instance-level, no RLS (ADR 0007)
 			tables = append(tables, name)
 		}
 	}
 	rows.Close()
+	for name := range withoutAppAccess {
+		var n int
+		if err := conn.QueryRow(ctx, "SELECT count(*) FROM "+name).Scan(&n); err == nil || !strings.Contains(err.Error(), "permission denied") {
+			t.Errorf("%s: sermon_app reads it (%d rows, %v), want permission denied", name, n, err)
+		}
+	}
 	if len(tables) < 6 {
 		t.Fatalf("found only %v – tenant tables not visible to the test", tables)
 	}
@@ -177,7 +188,7 @@ func TestRLS_EveryTenantTableIsForced(t *testing.T) {
 			t.Fatal(err)
 		}
 		n++
-		if _, ok := exempt[name]; ok {
+		if _, ok := exempt[name]; ok || withoutAppAccess[name] {
 			continue
 		}
 		if !enabled || !forced {

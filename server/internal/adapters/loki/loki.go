@@ -55,6 +55,9 @@ var (
 	// ErrTooLarge: the answer is larger than MaxQueryBody (long lines, control characters
 	// escaped in JSON); ask for fewer lines (M3-29).
 	ErrTooLarge = errors.New("loki: answer too large")
+	// ErrTimeout: Loki did not answer in time (our timeout or its own, 504); it is unavailable
+	// too. A metric query over many lines takes long (V1-24).
+	ErrTimeout = errors.New("loki: timeout")
 )
 
 // Labels are the labels of a stream.
@@ -415,7 +418,11 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 	res, err := c.http.Do(req)
 	if err != nil {
 		// The URL is the operator's and holds no credentials (config); the cause stays generic.
-		return nil, fmt.Errorf("%w: %s", ErrUnavailable, errorCause(err))
+		cause := errorCause(err)
+		if cause == "timeout" {
+			return nil, fmt.Errorf("%w: %w", ErrUnavailable, ErrTimeout)
+		}
+		return nil, fmt.Errorf("%w: %s", ErrUnavailable, cause)
 	}
 	return res, nil
 }
@@ -442,6 +449,8 @@ func check(res *http.Response) error {
 	switch {
 	case res.StatusCode == http.StatusTooManyRequests:
 		kind = ErrRateLimited
+	case res.StatusCode == http.StatusGatewayTimeout:
+		kind = fmt.Errorf("%w: %w", ErrUnavailable, ErrTimeout)
 	case res.StatusCode >= 500:
 		kind = ErrUnavailable
 	default:

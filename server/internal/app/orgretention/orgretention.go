@@ -52,6 +52,11 @@ type LogEraser interface {
 	EraseBefore(ctx context.Context, org tenant.OrgID, before time.Time) error
 }
 
+// LogCountEraser deletes an organization's counts of log lines before a time (V1-24).
+type LogCountEraser interface {
+	ExpireLogCounts(ctx context.Context, org tenant.OrgID, before time.Time) (int64, error)
+}
+
 // View is what admins see.
 type View struct {
 	Settings retention.Settings
@@ -66,6 +71,7 @@ type Service struct {
 	policy       authz.Policy
 	now          func() time.Time
 	logs         LogEraser
+	counts       LogCountEraser
 	logger       *slog.Logger
 	eventDefault uint32
 }
@@ -75,6 +81,9 @@ type Option func(*Service)
 
 // WithLogs deletes old logs in Loki.
 func WithLogs(e LogEraser) Option { return func(s *Service) { s.logs = e } }
+
+// WithLogCounts deletes the counts of the log histogram with the logs (V1-24).
+func WithLogCounts(c LogCountEraser) Option { return func(s *Service) { s.counts = c } }
 
 // WithEventDefault sets the instance's default for the events of organizations without a period
 // of their own (days within retention.MinEventDays and MaxEventDays; config.Load checks it).
@@ -147,9 +156,16 @@ func (s *Service) Maintain(ctx context.Context) error {
 			s.logger.InfoContext(ctx, "security events deleted (retention)", "org", o.Org.String(), "count", n)
 		}
 		if o.Settings.LogDays > 0 && s.logs != nil && (o.LogsErasedAt == nil || now.Sub(*o.LogsErasedAt) >= LogEraseEvery) {
-			if err := s.logs.EraseBefore(ctx, o.Org, now.Add(-o.Settings.Logs())); err != nil {
+			before := now.Add(-o.Settings.Logs())
+			if err := s.logs.EraseBefore(ctx, o.Org, before); err != nil {
 				errs = append(errs, fmt.Errorf("logs of %s: %w", o.Org, err))
 				continue
+			}
+			if s.counts != nil {
+				if _, err := s.counts.ExpireLogCounts(ctx, o.Org, before); err != nil {
+					errs = append(errs, fmt.Errorf("log counts of %s: %w", o.Org, err))
+					continue
+				}
 			}
 			if err := s.store.MarkLogsErased(ctx, o.Org, now); err != nil {
 				errs = append(errs, fmt.Errorf("logs of %s: %w", o.Org, err))

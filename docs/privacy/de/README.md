@@ -56,7 +56,7 @@ Angreifer). Auch Hostnamen und IP-Adressen können personenbezogen sein, etwa be
 | Audit-Log | Zeit, handelnde Person (ID), Aktion, Ziel, Details (z. B. neue IP eines Nodes; ab v1.0 keine E-Mail-Adressen); im Instanz-Audit-Log zusätzlich Änderungen, Export und Löschung von Konten (nur mit Kennung) | jede Änderung | Datenbank |
 | Nodes | Hostname, `machine-id`, Betriebssystem, Kernel, Hardware, Tags, letzte IP-Adresse des Agents | Agent | Datenbank |
 | Metriken | Messwerte des Hosts und seiner Dienste (CPU, Speicher, Platten, Netzwerk, Module); Labels wie Dateisystem, Netzwerkkarte, Unit- oder Containername | Agent | Datenbank (TimescaleDB) |
-| Logs | Log-Zeilen aus dem systemd-Journal und aus freigegebenen Logdateien – mit allem, was darin steht (Benutzernamen, IP-Adressen, URLs, Inhalte); bekannte Geheimnisse vom Agent vor dem Versand ersetzt | Agent | Loki |
+| Logs | Log-Zeilen aus dem systemd-Journal und aus freigegebenen Logdateien – mit allem, was darin steht (Benutzernamen, IP-Adressen, URLs, Inhalte); bekannte Geheimnisse vom Agent vor dem Versand ersetzt; für das Histogramm die Anzahl der Zeilen je Node, Quelle, Schweregrad und Minute (ohne Inhalte) | Agent | Loki; die Anzahlen in der Datenbank |
 | Security-Events | SSH-Anmeldungen (Benutzername, Quell-IP oder -Host, Port, Methode, Schlüsseltyp und Fingerprint), sudo (Benutzer, Befehlszeile redigiert), angelegte und gelöschte Konten, Reboots, OOM-Kills, Enrollments und Adresswechsel der Agents (IP-Adresse); optional das Land der IP aus einer lokalen GeoIP-Datei | Agent | Datenbank |
 | Bekannte Anmeldequellen | je Node: Benutzername, Quelle, erste und letzte Anmeldung, Zahl | aus den Security-Events | Datenbank |
 | Alerts | aktive Alerts und Verlauf mit den Feldern der Regel – bei Sicherheitsregeln z. B. Benutzername und IP-Adresse | Alerting | Datenbank |
@@ -233,7 +233,7 @@ Patchen des Hosts) ergänzt der Betreiber.
 
 | Daten | Frist | Einstellbar |
 |---|---|---|
-| Logs | 1–14 Tage, ab Werk 14; Loki löscht spätestens nach 14 Tagen | je Organisation (Admins); Obergrenze durch den Superadmin |
+| Logs | 1–14 Tage, ab Werk 14; Loki löscht spätestens nach 14 Tagen, die Anzahlen der Zeilen gehen mit ihnen | je Organisation (Admins); Obergrenze durch den Superadmin |
 | Security-Events und Verlauf der Alerts | 7–365 Tage, ab Werk 90 | Vorgabe der Instanz (`SERMON_EVENT_RETENTION`, Betreiber); je Organisation (Admins); Obergrenze durch den Superadmin |
 | Metriken | 10-s-Werte 24 h, Minutenwerte 30 Tage, Stundenwerte 1 Jahr | nein |
 | Anomalie-Werte | 30 Tage | nein |

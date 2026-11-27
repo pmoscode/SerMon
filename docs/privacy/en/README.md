@@ -54,7 +54,7 @@ names and IP addresses may be personal data as well, e.g. for servers of individ
 | Audit log | time, acting person (ID), action, target, details (e.g. new IP of a node; from v1.0 no e-mail addresses); the instance audit log also has changes, export and deletion of accounts (by ID only) | every change | database |
 | Nodes | host name, `machine-id`, operating system, kernel, hardware, tags, last IP address of the agent | agent | database |
 | Metrics | measurements of the host and its services (CPU, memory, disks, network, modules); labels such as file system, network interface, unit or container name | agent | database (TimescaleDB) |
-| Logs | log lines from the systemd journal and from allowed log files – with whatever they contain (user names, IP addresses, URLs, content); known secrets replaced by the agent before sending | agent | Loki |
+| Logs | log lines from the systemd journal and from allowed log files – with whatever they contain (user names, IP addresses, URLs, content); known secrets replaced by the agent before sending; for the histogram the number of lines per node, source, severity and minute (no content) | agent | Loki; the numbers in the database |
 | Security events | SSH sign-ins (user name, source IP or host, port, method, key type and fingerprint), sudo (user, command line redacted), created and deleted accounts, reboots, OOM kills, enrollments and address changes of agents (IP address); optionally the country of the IP from a local GeoIP file | agent | database |
 | Known login sources | per node: user name, source, first and last sign-in, count | from the security events | database |
 | Alerts | active alerts and history with the rule's fields – for security rules e.g. user name and IP address | alerting | database |
@@ -229,7 +229,7 @@ access, staff, backups, patching the host).
 
 | Data | Period | Adjustable |
 |---|---|---|
-| Logs | 1–14 days, default 14; Loki deletes after 14 days at the latest | per organization (admins); cap by the superadmin |
+| Logs | 1–14 days, default 14; Loki deletes after 14 days at the latest, the numbers of lines go with them | per organization (admins); cap by the superadmin |
 | Security events and alert history | 7–365 days, default 90 | instance default (`SERMON_EVENT_RETENTION`, operator); per organization (admins); cap by the superadmin |
 | Metrics | 10-s values 24 h, minute values 30 days, hourly values 1 year | no |
 | Anomaly values | 30 days | no |

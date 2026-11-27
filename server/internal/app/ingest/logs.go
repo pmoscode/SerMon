@@ -44,6 +44,105 @@ type LogWriter interface {
 	Write(ctx context.Context, org tenant.OrgID, node identity.NodeID, entries []LogEntry) error
 }
 
+// LogCount is how many lines of a batch Loki stored in a minute with a source and severity
+// (V1-24, ADR 0044): the lines at Minute − 1 min < at ≤ Minute, as Loki counts a step.
+type LogCount struct {
+	Seq      uint64
+	Minute   time.Time
+	Source   LogSource
+	Severity uint8 // as LogEntry, MaxSeverity at most; beyond it 0 (unknown) as in Loki
+	Lines    uint64
+}
+
+// MaxSeverity is the highest severity of an entry (debug); the store calls higher ones unknown.
+const MaxSeverity = 8
+
+// LogCounter stores the counts of the lines Loki stored, for the log histogram over long ranges
+// (V1-24). Counts of a batch whose sequence number the node's counts already reached are skipped:
+// a batch resent after a lost acknowledgement is counted once, as Loki keeps it once.
+type LogCounter interface {
+	CountLogs(ctx context.Context, org tenant.OrgID, node identity.NodeID, counts []LogCount) error
+}
+
+// SetLogCounter counts the lines stored in Loki through c (V1-24); without one nothing is counted.
+func (s *Service) SetLogCounter(c LogCounter) { s.counter = c }
+
+// countsOf counts the entries of the batches per batch, minute, source and severity.
+func countsOf(batches []logBatch) []LogCount {
+	var out []LogCount
+	for _, b := range batches {
+		out = append(out, Counts(b.seq, b.entries)...)
+	}
+	return out
+}
+
+// Counts counts the entries of the batch seq per minute, source and severity: the minute ends at
+// or after the entry (Loki counts a step (t − step, t]), severities beyond MaxSeverity are unknown
+// as in Loki's labels.
+func Counts(seq uint64, entries []LogEntry) []LogCount {
+	type key struct {
+		minute   int64
+		source   LogSource
+		severity uint8
+	}
+	index := map[key]int{}
+	var out []LogCount
+	for _, e := range entries {
+		severity := e.Severity
+		if severity > MaxSeverity {
+			severity = 0
+		}
+		minute := e.At.Truncate(time.Minute)
+		if minute.Before(e.At) {
+			minute = minute.Add(time.Minute)
+		}
+		k := key{minute.UnixNano(), e.Source, severity}
+		i, ok := index[k]
+		if !ok {
+			i = len(out)
+			index[k] = i
+			out = append(out, LogCount{Seq: seq, Minute: minute.UTC(), Source: e.Source, Severity: severity})
+		}
+		out[i].Lines++
+	}
+	return out
+}
+
+// flushCounts writes the waiting counts. It returns the sequence number of the first batch whose
+// counts still wait (0: none): while the store fails the acknowledgement waits for at most
+// LogRetryFor, then the counts are given up. The lines stay in Loki either way.
+func (s *Session) flushCounts(ctx context.Context) uint64 {
+	if len(s.counts) == 0 {
+		return 0
+	}
+	svc := s.service
+	now := svc.now()
+	err := svc.counter.CountLogs(ctx, s.org, s.node, s.counts)
+	if err == nil {
+		s.counts, s.countsFailing = nil, time.Time{}
+		return 0
+	}
+	svc.stats.WriteErrors.Add(1)
+	if s.countsFailing.IsZero() {
+		s.countsFailing = now
+	}
+	if now.Sub(s.countsFailing) < svc.config.LogRetryFor {
+		first := s.counts[0].Seq
+		for _, c := range s.counts {
+			first = min(first, c.Seq)
+		}
+		return first
+	}
+	var lines uint64
+	for _, c := range s.counts {
+		lines += c.Lines
+	}
+	svc.stats.LogCountsDropped.Add(lines)
+	svc.logger.WarnContext(ctx, "log counts could not be stored, the histogram misses them", "node", s.node.String(), "lines", lines, "error", err)
+	s.counts, s.countsFailing = nil, time.Time{}
+	return 0
+}
+
 // ErrLogsRejected marks entries the store refuses for good; they are dropped, not retried. Any
 // other error counts as an outage, except ErrLogsThrottled.
 var ErrLogsRejected = errors.New("log entries rejected")
@@ -207,6 +306,9 @@ func (s *Session) flushLogs(ctx context.Context) uint64 {
 	switch {
 	case err == nil:
 		stats.LogEntries.Add(count)
+		if svc.counter != nil {
+			s.counts = append(s.counts, countsOf(s.logs)...)
+		}
 		s.logs, s.logsFailing = nil, time.Time{}
 		return 0
 	case errors.Is(err, ErrLogsRejected):

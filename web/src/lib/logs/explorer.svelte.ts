@@ -108,6 +108,8 @@ export class LogExplorerState {
 	loadingMore = $state(false);
 	histogram = $state.raw<HistogramData | undefined>(undefined);
 	histogramFailed = $state(false);
+	/** Loki gave up counting a text or units over the range (V1-24): shorten it. */
+	histogramTooBroad = $state(false);
 
 	live = $state<LiveState>('off');
 	paused = $state(false);
@@ -143,6 +145,7 @@ export class LogExplorerState {
 		this.status = 'loading';
 		this.error = '';
 		this.histogramFailed = false;
+		this.histogramTooBroad = false;
 		if (this.live !== 'off') this.#restartTail();
 		const lines = logsApi.logs
 			.queryLogs({ filter: request, limit: PAGE }, { signal: ctrl.signal })
@@ -164,10 +167,11 @@ export class LogExplorerState {
 			.then((res) => {
 				if (!ctrl.signal.aborted) this.histogram = histogramData(res, range);
 			})
-			.catch(() => {
+			.catch((error: unknown) => {
 				if (ctrl.signal.aborted) return;
 				this.histogram = undefined;
-				this.histogramFailed = true;
+				if (codeOf(error) === Code.FailedPrecondition) this.histogramTooBroad = true;
+				else this.histogramFailed = true;
 			});
 		await Promise.all([lines, histogram]);
 	}

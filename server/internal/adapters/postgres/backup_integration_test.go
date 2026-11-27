@@ -171,6 +171,12 @@ func TestBackup_RoundTripBetweenTwoDatabases(t *testing.T) {
 			t.Errorf("excluded table %s is in the backup", name)
 		}
 	}
+	// The counts of the log lines go with the logs in Loki, which the backup doesn't hold (V1-24).
+	for _, name := range []string{"metrics_raw", "log_counts_1m", "log_counts_1h", "log_count_marks"} {
+		if slices.Contains(names, name) {
+			t.Errorf("table %s is in the backup", name)
+		}
+	}
 	for _, want := range []string{"organizations", "users", "audit_log", "security_events", "pki_authorities", "module_secrets", "kiosk_tokens", "dashboards", "instance_setup", "series"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("table %s is missing from the backup", want)

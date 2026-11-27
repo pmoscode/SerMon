@@ -90,6 +90,39 @@ func (e *eraser) EraseBefore(_ context.Context, id tenant.OrgID, before time.Tim
 	return nil
 }
 
+// V1-24: the counts of the histogram go with the logs, at the same time and the same boundary; if
+// they fail, the next run tries both again.
+func TestService_MaintainExpiresTheLogCountsWithTheLogs(t *testing.T) {
+	s, e, c := newStore(), &eraser{}, &clock{t: now}
+	s.orgs[orgA].settings = retention.Settings{LogDays: 3}
+	counts := &countEraser{fail: errors.New("database down")}
+	svc := orgretention.NewService(s, authz.NewPolicy(), c.now, orgretention.WithLogs(e), orgretention.WithLogCounts(counts))
+	if err := svc.Maintain(context.Background()); err == nil || s.orgs[orgA].erasedAt != nil {
+		t.Fatalf("failing counts: %v, marked %v", err, s.orgs[orgA].erasedAt)
+	}
+	counts.fail = nil
+	if err := svc.Maintain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	want := erasure{orgA, now.Add(-3 * 24 * time.Hour)}
+	if len(counts.calls) != 1 || counts.calls[0] != want || len(e.calls) != 2 || s.orgs[orgA].erasedAt == nil {
+		t.Errorf("counts %v, logs %v, want both before %v", counts.calls, e.calls, want.before)
+	}
+}
+
+type countEraser struct {
+	calls []erasure
+	fail  error
+}
+
+func (e *countEraser) ExpireLogCounts(_ context.Context, id tenant.OrgID, before time.Time) (int64, error) {
+	if e.fail != nil {
+		return 0, e.fail
+	}
+	e.calls = append(e.calls, erasure{id, before})
+	return 1, nil
+}
+
 type clock struct{ t time.Time }
 
 func (c *clock) now() time.Time { return c.t }

@@ -40,6 +40,7 @@ Der Server prüft sich jede Minute selbst ([ADR 0027](../../adr/0027-server-erei
   Loopback ist – erreichbar ist sie nur über den Port auf `127.0.0.1` des Hosts. Wichtige Zähler:
   `sermon_server_ingest_lag_seconds`, `sermon_server_agent_sessions`, `sermon_server_ingest_rejected_samples_total`,
   `sermon_server_ingest_dropped_series_total`, `sermon_server_ingest_dropped_log_entries_total`,
+  `sermon_server_ingest_uncounted_log_entries_total` (Zeilen in Loki, die dem Log-Histogramm fehlen),
   `sermon_server_notify_failed_total`, `sermon_server_notify_blocked_total`.
 
 ## Aufbewahrung
@@ -49,6 +50,7 @@ Der Server prüft sich jede Minute selbst ([ADR 0027](../../adr/0027-server-erei
 | Metriken, 1 s | 15 Minuten im Speicher des Servers | nein |
 | Metriken, 10 s / 1 min / 1 h | 24 Stunden / 30 Tage / 1 Jahr | nein |
 | Logs (Loki) | ab Werk 14 Tage | je Organisation |
+| Zählungen der Log-Zeilen für das Histogramm (Datenbank) | wie die Logs, höchstens 14 Tage | mit den Logs |
 | Security-Events, Verlauf der Alerts | `SERMON_EVENT_RETENTION`, ab Werk 90 Tage | Betreiber und je Organisation |
 | Audit-Logs | `SERMON_AUDIT_RETENTION`, ab Werk 2 Jahre | Betreiber |
 
@@ -63,7 +65,9 @@ Der Server prüft sich jede Minute selbst ([ADR 0027](../../adr/0027-server-erei
   behält.
 - **Loki** behält Logs höchstens `retention_period: 336h` (`deploy/compose/loki.yaml`); das ist die Grenze der Instanz.
   Heben Sie sie nicht an: Die Einstellungen der Organisationen gehen nicht darüber hinaus. Loki löscht etwa einmal am
-  Tag, Logs sind also bis zu einem Tag länger sichtbar.
+  Tag, Logs sind also bis zu einem Tag länger sichtbar. Die Zählungen der Log-Zeilen, aus denen das Histogramm lange
+  Zeiträume liest ([ADR 0044](../../adr/0044-log-zaehlungen-fuer-das-histogramm.md)), löscht die Datenbank nach
+  14 Tagen (ganze Tage) und der Server mit den Logs einer Organisation bis zu deren Frist.
 - Audit-Logs verlieren alte Einträge vom Anfang der Kette her; ein Eintrag `audit.prune` hält die Kette prüfbar.
 - Die vollständige Liste mit allen Fristen (Sitzungen, Einladungen, Zustellprotokoll, Anomalien …) steht in der
   [Vorlage zur DSGVO-Dokumentation](../../privacy/de/README.md).
@@ -162,9 +166,12 @@ Agents. Agents werden nie neuer als ihr Server (außer im Kanal `beta`).
   143 Logzeilen pro Sekunde: Go-Heap höchstens 418 MiB, RSS 599 MiB; der Container zählt mit dem Page-Cache bis
   793 MiB. Für mehr Nodes oder Logs ist das nicht gemessen: Heben Sie beide gemeinsam an
   ([Installation](../installation.md)) und beobachten Sie den Speicher von Loki.
-- Das **Log-Histogramm** braucht für jede Stunde Logs im Zeitraum etwa 0,7 s (50 Nodes, 143 Zeilen pro Sekunde). Über
-  einen Tag ist das noch tragbar, über 14 Tage scheitert es an der Zeitgrenze von Loki (1 min); die Zeilen selbst
-  laden schnell. Grenzen Sie lange Zeiträume mit Filtern ein (Nodes, Units, Schweregrad).
+- Das **Log-Histogramm** liest ab 100 Minuten Zeitraum ohne Text und Units die Zählungen der Datenbank
+  ([ADR 0044](../../adr/0044-log-zaehlungen-fuer-das-histogramm.md)): gemessen mit 50 Nodes und 14 Tagen Zählungen
+  (6 Kombinationen aus Quelle und Schweregrad je Node und Minute, 6 Mio. Zeilen, 167 MiB) über 14 Tage p95 42 ms, über
+  2 Tage (Minuten-Tabelle) p95 0,5 s; die Zeit wächst mit Nodes × Kombinationen. Mit Text oder Units zählt Loki jede
+  Zeile, etwa 0,7 s je Stunde Logs bei 50 Nodes und 143 Zeilen pro Sekunde; über 30 s bricht der Server ab und die UI
+  bittet um einen kürzeren Zeitraum. Nach dem Update auf v1.0 zählt das Histogramm erst ab dem Update.
 - Der Agent selbst bleibt unter `MemoryMax=128M` und `CPUQuota=20%` seiner Unit.
 
 ## Sichern und Datenschutz

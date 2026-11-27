@@ -39,6 +39,7 @@ The server checks itself every minute ([ADR 0027](../../adr/0027-server-ereignis
   the container – it is reachable only through the port on the host's `127.0.0.1`. Important counters:
   `sermon_server_ingest_lag_seconds`, `sermon_server_agent_sessions`, `sermon_server_ingest_rejected_samples_total`,
   `sermon_server_ingest_dropped_series_total`, `sermon_server_ingest_dropped_log_entries_total`,
+  `sermon_server_ingest_uncounted_log_entries_total` (lines in Loki the log histogram misses),
   `sermon_server_notify_failed_total`, `sermon_server_notify_blocked_total`.
 
 ## Retention
@@ -48,6 +49,7 @@ The server checks itself every minute ([ADR 0027](../../adr/0027-server-ereignis
 | Metrics, 1 s | 15 minutes in the server's memory | no |
 | Metrics, 10 s / 1 min / 1 h | 24 hours / 30 days / 1 year | no |
 | Logs (Loki) | 14 days by default | per organization |
+| Counts of the log lines for the histogram (database) | as the logs, at most 14 days | with the logs |
 | Security events, alert history | `SERMON_EVENT_RETENTION`, 90 days by default | operator and per organization |
 | Audit logs | `SERMON_AUDIT_RETENTION`, 2 years by default | operator |
 
@@ -61,7 +63,9 @@ The server checks itself every minute ([ADR 0027](../../adr/0027-server-ereignis
   organization every hour and frees whole months once no organization keeps them.
 - **Loki** keeps logs at most `retention_period: 336h` (`deploy/compose/loki.yaml`); that is the instance's limit.
   Don't raise it: the organizations' settings don't go beyond it. Loki deletes about once a day, so logs may stay
-  visible up to a day longer.
+  visible up to a day longer. The counts of the log lines the histogram reads long ranges from
+  ([ADR 0044](../../adr/0044-log-zaehlungen-fuer-das-histogramm.md), in German) go after 14 days (whole days) in the
+  database and with an organization's logs up to its period.
 - Audit logs lose old entries from the start of the chain; an entry `audit.prune` keeps the chain verifiable.
 - The full list with every period (sessions, invitations, delivery log, anomalies …) is in the
   [GDPR documentation template](../../privacy/en/README.md).
@@ -159,9 +163,12 @@ never become newer than their server (except in the channel `beta`).
   log lines per second: Go heap at most 418 MiB, RSS 599 MiB; the container counts up to 793 MiB with the page cache.
   More nodes or logs are not measured: raise both together ([installation](../installation.md)) and watch Loki's
   memory.
-- The **log histogram** takes about 0.7 s for every hour of logs in its range (50 nodes, 143 lines per second). Over
-  a day that is still bearable, over 14 days it fails at Loki's time limit (1 min); the lines themselves load fast.
-  Narrow long ranges with filters (nodes, units, severity).
+- The **log histogram** reads the counts of the database for ranges from 100 minutes on without a text or units
+  ([ADR 0044](../../adr/0044-log-zaehlungen-fuer-das-histogramm.md), in German): measured with 50 nodes and 14 days of
+  counts (6 combinations of source and severity per node and minute, 6 million rows, 167 MiB), over 14 days p95 42 ms,
+  over 2 days (minute table) p95 0.5 s; the time grows with nodes × combinations. With a text or units Loki counts
+  every line, about 0.7 s per hour of logs at 50 nodes and 143 lines per second; beyond 30 s the server gives up and
+  the UI asks for a shorter range. After the update to v1.0 the histogram counts from the update on only.
 - The agent itself stays below its unit's `MemoryMax=128M` and `CPUQuota=20%`.
 
 ## Backups and data protection

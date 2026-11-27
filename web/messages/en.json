@@ -692,6 +692,7 @@
 	"logs_histogram_title": "Lines over time",
 	"logs_histogram_empty": "No lines in this range",
 	"logs_histogram_failed": "The histogram could not be loaded.",
+	"logs_histogram_too_broad": "For a text or units, Loki would have to count too many lines in this range. Please shorten the range.",
 	"logs_histogram_summary": "{count} lines from {from} to {to}. To zoom, drag across a part with the mouse or choose a range.",
 	"logs_lines_title": "Lines",
 	"logs_lines_count": "{count} lines",

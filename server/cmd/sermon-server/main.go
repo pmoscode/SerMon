@@ -240,8 +240,11 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		alertingAPI := alertingServices{policies: policies, silences: silences, alerts: alertPage, rules: ruleEditor}
 		ingestService := ingest.NewService(metricStore, ring, postgres.NewIngestNodeStore(db), ingest.DefaultConfig(), time.Now, logger)
 		// Self-monitoring (M2-24): ingest lag, dropped samples and database size, for superadmins only.
+		// Counts of the stored lines for the log histogram over long ranges (V1-24, ADR 0044).
+		logCounts := postgres.NewLogCountStore(db)
 		if logStore != nil {
 			ingestService.SetLogWriter(loki.NewWriter(logStore))
+			ingestService.SetLogCounter(logCounts)
 		}
 		monitor := newSelfMonitor(cfg, db, ingestService, ca, logger)
 		servers = append(servers, func(ctx context.Context) error {
@@ -280,7 +283,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		// events of organizations without a period of their own after SERMON_EVENT_RETENTION (V1-22).
 		retentionOptions := []orgretention.Option{orgretention.WithLogger(logger), orgretention.WithEventDefault(cfg.EventRetentionDays())}
 		if logStore != nil {
-			retentionOptions = append(retentionOptions, orgretention.WithLogs(loki.NewEraser(logStore)))
+			retentionOptions = append(retentionOptions, orgretention.WithLogs(loki.NewEraser(logStore)), orgretention.WithLogCounts(logCounts))
 		}
 		orgRetention := orgretention.NewService(postgres.NewRetentionStore(db), authz.NewPolicy(), time.Now, retentionOptions...)
 		servers = append(servers, orgRetention.Run)
@@ -306,7 +309,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		if logStore != nil {
 			logReader = loki.NewReader(logStore)
 		}
-		logQueries := logs.NewService(logReader, postgres.NewFleetStore(db), authz.NewPolicy())
+		logQueries := logs.NewService(logReader, postgres.NewFleetStore(db), authz.NewPolicy(), logs.WithCounts(logCounts))
 		// The live view of processes (M3-14): one agent stream per node shared by its viewers on
 		// this instance; only the instance holding the agent's session reaches it (ADR 0015).
 		liveHub := liveview.NewHub(sessions)

@@ -187,6 +187,8 @@ type Stats struct {
 	Events, EventsDropped, EventsRejected, EventDuplicates atomic.Uint64
 	// Log entries: stored, and dropped by reason (M3-07).
 	LogEntries, LogsDroppedRate, LogsDroppedAge, LogsDroppedRejected, LogsDroppedUnavailable, LogsDroppedNoStore atomic.Uint64
+	// LogCountsDropped counts the lines stored in Loki whose counts were given up (V1-24).
+	LogCountsDropped atomic.Uint64
 	// Update reports (M4-09): stored, dropped by the buckets, rejected (time, validation, no
 	// store), and older than the stored one.
 	UpdateReports, UpdateReportsDropped, UpdateReportsRejected, UpdateReportsStale atomic.Uint64
@@ -269,6 +271,7 @@ type Service struct {
 	orgUpdateBucket  map[tenant.OrgID]*bucket
 
 	logs           LogWriter
+	counter        LogCounter
 	logMu          sync.Mutex
 	nodeLogBuckets map[identity.NodeID]*bucket
 	orgLogBuckets  map[tenant.OrgID]*bucket
@@ -541,6 +544,9 @@ type Session struct {
 	hints       *module.Hints
 	logs        []logBatch // waiting for the next flush
 	logsFailing time.Time  // since when the store fails for the waiting logs
+	// counts are the counts of lines Loki stored, waiting for the next flush (V1-24).
+	counts        []LogCount
+	countsFailing time.Time
 }
 
 // ErrOpen means the session could not be prepared (database unavailable); the agent retries.
@@ -798,7 +804,7 @@ func (s *Session) acceptEvents(batch Batch, now time.Time) {
 
 // Due reports whether enough batches wait for an early flush; security events flush at once.
 func (s *Session) Due() bool {
-	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0 || len(s.logs) > 0 || s.update != nil || len(s.results) > 0
+	return len(s.pending) >= s.service.config.FlushPending || len(s.events) > 0 || len(s.logs) > 0 || len(s.counts) > 0 || s.update != nil || len(s.results) > 0
 }
 
 // acceptUpdate keeps a valid report within the time window and the buckets for the next flush,
@@ -927,6 +933,9 @@ func (s *Session) Flush(ctx context.Context) (uint64, error) {
 	// Logs next: while the store fails they wait, and so does the acknowledgement of the batches
 	// from theirs on – at most LogRetryFor (ADR 0031).
 	holdFrom := s.flushLogs(ctx)
+	if held := s.flushCounts(ctx); held != 0 && (holdFrom == 0 || held < holdFrom) {
+		holdFrom = held
+	}
 	complete := s.watermark.Truncate(metrics.Window)
 	ack := s.persisted
 	ackable := 0

@@ -56,6 +56,7 @@ func registerIngestMetrics(r *promtext.Registry, stats *ingest.Stats, sessions *
 		{"sermon_server_ingest_rejected_security_events_total", "Security events dropped for implausible times or invalid fields.", stats.EventsRejected.Load},
 		{"sermon_server_ingest_duplicate_security_event_batches_total", "Security event batches stored before (resent after a reconnect).", stats.EventDuplicates.Load},
 		{"sermon_server_ingest_log_entries_total", "Log entries stored in Loki.", stats.LogEntries.Load},
+		{"sermon_server_ingest_uncounted_log_entries_total", "Log entries stored in Loki whose counts for the histogram were given up (V1-24).", stats.LogCountsDropped.Load},
 		{"sermon_server_ingest_update_reports_total", "Stored update reports (M4-09).", stats.UpdateReports.Load},
 		{"sermon_server_ingest_dropped_update_reports_total", "Update reports dropped by the limits per node and organization.", stats.UpdateReportsDropped.Load},
 		{"sermon_server_ingest_rejected_update_reports_total", "Update reports dropped for implausible times, invalid fields or without a store.", stats.UpdateReportsRejected.Load},

@@ -6313,7 +6313,25 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Dashboards und Module der Vorversion prüft.
 - **Abhängig von:** V1-03, V1-04
 
-#### ☐ V1-07 – Restore in CI · X · S
+#### ☑ V1-07 – Restore in CI · X · S
+> Erledigt (`scripts/e2e-restore.sh`, `just e2e-restore`, nightly mit `FULL=1` statt `e2e-demo-full`):
+> - **Ablauf:** nach der Demo (oder mit `SKIP_DEMO=1` gegen eine laufende) Backup-Schlüssel per
+>   `backup-keygen`, ein Kiosk-Token des Laufs auf einem geteilten Dashboard, Backup per
+>   `docker compose run --rm -T backup`, Master-Keys per `docker compose cp` beiseite; dann werden Datenbank,
+>   Server-State und Loki weggeworfen und neu angelegt, die Agent-Container laufen weiter. Ein falscher
+>   Backup-Schlüssel wird abgelehnt (Exit 3), der Restore über stdin mit `--install-master-keys`, ein zweiter abgelehnt
+>   (Exit 3, „not empty“), dann `docker compose up`. Für ältere Datenbank-Volumes legt das Skript `sermon_backup` mit
+>   dem dokumentierten Einmal-Schritt an (so ist er mitgetestet).
+> - **Prüfungen:** dieselben Zeilen in 30 Tabellen, keine Sessions, das instanzweite Audit-Log mit `instance.restored`
+>   am Ende, `FORCE ROW LEVEL SECURITY` überall; das Passwort des Admins angenommen, ein falsches nicht; das Kiosk-Token
+>   öffnet sein Dashboard; jeder Node, der vor dem Backup lebte, meldet sich mit seinem Zertifikat wieder; der Agent von
+>   web-01 startet neu (Zugangsdaten nur im Speicher), PostgreSQL und MariaDB melden danach gesund – die Zugangsdaten
+>   kommen also aus dem wiederhergestellten Server; kein „does not open“ im Log; kein Klartext in der Datei.
+> - **Lokal gelaufen:** Demo 21,9 min, Restore mit Prüfungen gut 2 min (7 Nodes, 2 Module mit Zugangsdaten, Backup
+>   37 KiB, 47 Tabellen, 1 753 Zeilen), auch als zweite Generation auf einer schon wiederhergestellten Umgebung. Die
+>   ersten Läufe fanden zwei echte Lücken: Gesundheitsberichte der Module kommen nur bei Änderungen (daher der
+>   Neustart des Agents) und die Zählung übersah den Audit-Eintrag des Restores.
+> - **Gegenproben:** versiegelte Zugangsdaten nach dem Restore verdorben → der Lauf scheitert an MariaDB (1/1).
 - **Ziel:** Nightly: Backup der Demo-Umgebung, Restore in eine neue Umgebung, dieselben Prüfungen wie V1-05 gegen die
   echte Compose.
 - **Abhängig von:** V1-05

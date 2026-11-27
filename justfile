@@ -135,6 +135,10 @@ e2e-demo:
 e2e-demo-full:
     FULL=1 scripts/e2e-demo.sh
 
+# The demo, then its backup restored into a new environment with the checks of V1-05 (V1-07); nightly with FULL=1
+e2e-restore:
+    scripts/e2e-restore.sh
+
 # Run the Rust agent binary against the real server (Testcontainers; Docker and Rust required)
 e2e-agent:
     cd agent && cargo build --locked -p sermon-agent --features simulate

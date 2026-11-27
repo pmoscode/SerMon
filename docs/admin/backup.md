@@ -157,3 +157,5 @@ neu zu beginnen – sie sind nach 14 Tagen ohnehin gelöscht.
   Anmeldung mit Passwort und TOTP und mit dem Passkey, der Agent verbindet sich mit seinem Zertifikat und bekommt die
   Zugangsdaten, das Kiosk-Token öffnet sein Dashboard; kein Geheimnis im Klartext in der Datei; falscher
   Backup-Schlüssel, fremde Master-Keys, eine veränderte Datei und eine Datenbank mit Daten werden abgelehnt.
+- Nightly (`just e2e-restore`, V1-07): Backup der Demo-Umgebung, Restore in eine neue Umgebung derselben Compose, die
+  Agent-Container kommen mit ihren Zertifikaten zurück.

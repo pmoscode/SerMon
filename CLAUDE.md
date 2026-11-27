@@ -95,6 +95,8 @@ verschlüsselt mit age (`platform/backupfile`, gebunden an die Master-Keys, die 
 `sermon-server restore --in DATEI|- [--install-master-keys PFAD]` lädt als `sermon_owner` in einer Transaktion in eine
 leere Datenbank; `sermon-server backup-keygen` erzeugt den Schlüssel. Exit-Code 3 = abgelehnt, nichts geändert. In
 `deploy/compose` die einmaligen Services `backup` und `restore` (Profile, `docker compose run --rm -T backup > datei`).
+`just e2e-restore` (V1-07, nightly mit `FULL=1`): nach der Demo Backup, neue Umgebung (Datenbank, Server-State, Loki),
+Restore und die Prüfungen gegen die echte Compose (`SKIP_DEMO=1` gegen eine mit `KEEP=1` laufende Demo).
 `just simulate [nodes] [--seed S] [--scenario …]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`,
 M1-34); der erste Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten
 wiederverwendet. Szenarien (M2-30, `simulate/scenario.rs`) für Tests der Alerts von Hand: `cpu-high`, `disk-filling`,

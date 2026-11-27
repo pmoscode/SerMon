@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0-rc.2](https://github.com/pmoscode/SerMon/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2026-11-27)
+
+
+### Features
+
+* **deploy:** PostgreSQL write settings, Loki and log histogram measured ([2d4d42f](https://github.com/pmoscode/SerMon/commit/2d4d42fc6ac2f325a7ec220788521b335242eb31))
+* **server:** compress the metric aggregates ([4e5bb5e](https://github.com/pmoscode/SerMon/commit/4e5bb5eb73a8aafa203e5096cff8691145c6a9c6))
+* **server:** instance default for the retention of security events ([f9d9d5a](https://github.com/pmoscode/SerMon/commit/f9d9d5aad07b804b1f6161e60caa40ec32c4c4c5))
+* **server:** log histogram over long ranges from counts of the ingest ([d0e0609](https://github.com/pmoscode/SerMon/commit/d0e060987f806f12109be46bf105fc56ca3df4f5))
+
+
+### Bug Fixes
+
+* **server:** an empty setting counts as unset ([7ad8aab](https://github.com/pmoscode/SerMon/commit/7ad8aaba8fd17ef352e0d77ff0629fa6112e1446))
+* **web:** the log histogram puts aligned points into the right bucket ([ccb9088](https://github.com/pmoscode/SerMon/commit/ccb908804ba7b80ccae611b7e39686f8800e112f))
+
 ## [1.0.0-rc.1](https://github.com/pmoscode/SerMon/compare/v1.0.0-rc.0...v1.0.0-rc.1) (2026-11-27)
 
 

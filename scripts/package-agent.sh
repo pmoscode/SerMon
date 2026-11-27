@@ -33,8 +33,9 @@ case $version in [0-9]*) ;; *) die "the version must start with a digit: $versio
 [ -x "$helper" ] || die "no helper binary at $helper"
 [ -r "${SERMON_PKG_GPG_KEY:-}" ] || die "SERMON_PKG_GPG_KEY must name the OpenPGP key file (packages are always signed)"
 [ -r "${SERMON_PKG_APK_KEY:-}" ] || die "SERMON_PKG_APK_KEY must name the RSA key file for .apk"
-[ -r "${SERMON_PKG_PUBLIC_KEYS:-}/gpg.pub.asc" ] && [ -r "$SERMON_PKG_PUBLIC_KEYS/apk.rsa.pub" ] ||
+if [ ! -r "${SERMON_PKG_PUBLIC_KEYS:-}/gpg.pub.asc" ] || [ ! -r "$SERMON_PKG_PUBLIC_KEYS/apk.rsa.pub" ]; then
 	die "SERMON_PKG_PUBLIC_KEYS must name the directory of the public keys (gpg.pub.asc, apk.rsa.pub)"
+fi
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$out"

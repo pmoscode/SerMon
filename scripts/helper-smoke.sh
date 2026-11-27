@@ -7,10 +7,10 @@
 #   sh scripts/helper-smoke.sh HELPER    HELPER: the static binary for Docker's architecture
 set -eu
 
-[ $# -eq 1 ] && [ -x "$1" ] || {
+if [ $# -ne 1 ] || [ ! -x "$1" ]; then
 	echo "usage: $0 HELPER" >&2
 	exit 1
-}
+fi
 helper=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 root=$(cd "$(dirname "$0")/.." && pwd)
 run=sermon-helper-smoke-$$
@@ -39,6 +39,9 @@ smoke() {
 	docker run --rm --network "$run" -v "$root/deploy/e2e/repos/use.sh:/use.sh:ro" -v "$work/repos/keys:/keys:ro" \
 		-v "$helper:/usr/bin/sermon-helper:ro" "$(image "$1")" sh -c "
 			sh /use.sh http://packages.test:8080 /keys >/dev/null 2>&1 || { echo USE-FAILED; exit 0; }
+			# As installed: the helper refuses to start without /etc/sermon (M4-30); no helper.toml
+			# there means its defaults.
+			mkdir -p -m 0755 /etc/sermon
 			mkdir -p -m 0700 /var/lib/sermon-helper/runs/$id
 			printf 'updates $2' >/var/lib/sermon-helper/runs/$id/request
 			/usr/bin/sermon-helper run $id || echo RUN-FAILED

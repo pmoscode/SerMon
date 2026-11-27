@@ -39,7 +39,7 @@ cmp -s "$work/expected" "$work/out/SHA256SUMS" || fail "SHA256SUMS: $(cat "$work
 mkdir "$work/keys/next"
 cp "$work/next/gpg.pub.asc" "$work/next/apk.rsa.pub" "$work/keys/next/"
 sh "$dir/repo-keys.sh" publish "$work/keys" "$work/out" >/dev/null
-[ -r "$work/out/$name.rsa.pub" ] && [ -r "$work/out/$next.rsa.pub" ] || fail "with next/: $(files)"
+if [ ! -r "$work/out/$name.rsa.pub" ] || [ ! -r "$work/out/$next.rsa.pub" ]; then fail "with next/: $(files)"; fi
 cmp -s "$work/out/$next.rsa.pub" "$work/next/apk.rsa.pub" || fail "the next apk key changed on the way"
 [ "$(keys_in "$work/out/sermon.asc")" = 2 ] || fail "sermon.asc does not hold both OpenPGP keys"
 [ "$(grep -c 'BEGIN PGP PUBLIC KEY BLOCK' "$work/out/sermon.asc")" = 1 ] || fail "sermon.asc has more than one armored block"

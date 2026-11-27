@@ -6210,7 +6210,7 @@ Es fehlt kein ADR. Erkenntnisse für v1.0:
   Im Review erledigt: der Update-Orchestrator gibt seine Leases beim Stoppen frei, `just test-db-modules` in CI.
 - **Offen aus M4:** M2-35 (Kanäle gegen die echten Dienste) ohne Konten; Release-Pipeline mit echten Schlüsseln.
 
-**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16; V1-17 kam mit V1-11 dazu, V1-18 mit dem Testbetrieb statt eines eigenen Hosts).
+**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16; V1-17 kam mit V1-11 dazu, V1-18 mit dem Testbetrieb statt eines eigenen Hosts, V1-19 und V1-20 aus der Admin-Doku).
 
 ---
 
@@ -6480,7 +6480,7 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   gelöscht, Audit-Einträge älter als 2 Jahre beim ersten Lauf (V1-17); `secrets/postgres_backup_password` und die
   Rolle `sermon_backup` für bestehende Volumes (V1-05); die Vorgaben der Module (`module_hosts`, `module_ports`, nur
   SCRAM bei PostgreSQL, MySQL nur über Socket oder geprüftes TLS, M5-33).
-- **Abhängig von:** V1-03 bis V1-12, V1-17, V1-18
+- **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-20
 
 #### ☐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
 - **Ziel:** Der Release-Kandidat läuft im echten Testbetrieb mindestens 7 Tage: echte Hosts, so viele wie da sind,
@@ -6536,6 +6536,22 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Audit-Einträge behalten nur eine Kennung; Export enthält die eigenen Daten und nichts Fremdes; Tenant-Isolations- und
   Step-up-Tabellen.
 - **Abhängig von:** V1-11
+
+#### ☐ V1-19 – Rollover der Agent-CA in der UI und Warnung vor dem Ablauf · S+W · M 🔒
+- **Ziel:** Aus V1-09: Die Zwischen-CA der Agents läuft 2 Jahre nach `init` ab; nichts erneuert sie, nichts warnt, und
+  der Rollover geht nur über die Web-API (`AgentCAService`). Danach lehnen Agents und Server sich gegenseitig ab.
+  Self-Monitoring warnt Superadmins ab 90 Tagen vor dem Ablauf (Mail, UI, ADR 0027), eine Seite für Superadmins zeigt
+  Ablauf und Stand des Rollovers und führt ihn mit Step-up und Audit durch; die Admin-Doku beschreibt beides.
+- **Tests zuerst:** Warnung genau ab der Schwelle, einmal je Wechsel; Rollover in der UI mit Step-up; nach dem Rollover
+  verbinden sich bestehende Agents weiter und neue enrollen (Integrationstest mit mTLS); Tenant-Isolations- und
+  Step-up-Tabellen.
+- **Abhängig von:** –
+
+#### ☐ V1-20 – Logs des Agents unter OpenRC · A · S
+- **Ziel:** Aus V1-09: Unter OpenRC sammelt nichts die Ausgabe des Agents (`packaging/openrc/sermon-agent` ohne
+  `output_logger`/`error_logger`); sie geht an syslog bzw. eine Datei mit Rotation, wie unter systemd ins Journal.
+- **Tests zuerst:** Smoke-Test auf Alpine: Meldungen des Agents landen im Log; `just test-packages`.
+- **Abhängig von:** –
 
 **v1.0 fertig, wenn:**
 

@@ -49,6 +49,36 @@ describe('buckets', () => {
 		expect(b.reduce((sum, x) => sum + x.counts.debug, 0)).toBe(0);
 	});
 
+	// V1-24: long ranges come from the counts of the ingest at points aligned to the step, not to
+	// the start of the range. The first point lies less than a step after the start – its lines
+	// are in the range and belong in the first bucket; the last may lie after the end.
+	it('places points aligned to the step in the bucket around their time', () => {
+		const hour = 3_600_000;
+		const start = Date.parse('2026-11-13T22:16:00Z');
+		const end = start + 14 * 24 * hour;
+		const firstAligned = Date.parse('2026-11-14T00:00:00Z');
+		const b = buckets(
+			[
+				{
+					severity: LogSeverity.ERROR,
+					points: [
+						{ at: start, count: 9 }, // the step before the range
+						{ at: firstAligned, count: 2 },
+						{ at: firstAligned + 4 * hour, count: 3 },
+						{ at: Date.parse('2026-11-28T00:00:00Z'), count: 7 }
+					]
+				}
+			],
+			4 * hour,
+			{ from: start, to: end }
+		);
+		expect(b).toHaveLength(84);
+		expect(b[0].counts.error).toBe(2);
+		expect(b[1].counts.error).toBe(3);
+		expect(b[83].counts.error).toBe(7);
+		expect(b.reduce((sum, x) => sum + x.total, 0)).toBe(12);
+	});
+
 	it('stays bounded for odd steps', () => {
 		expect(buckets([], 0, { from, to })).toEqual([]);
 		expect(buckets([], 1, { from, to: from + 86400_000 }).length).toBeLessThanOrEqual(1000);

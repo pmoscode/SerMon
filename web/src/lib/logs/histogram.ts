@@ -48,7 +48,10 @@ export function buckets(
 	for (const s of series) {
 		const group = groupOf(s.severity);
 		for (const p of s.points) {
-			const i = Math.round((p.at - range.from) / width) - 1;
+			// A point counts the lines of the step that ends at it, so it belongs to the bucket that
+			// holds its time (end included): points aligned to the range or to the step (the counts of
+			// the ingest, V1-24) land the same; the tolerance absorbs rounding of the division.
+			const i = Math.ceil((p.at - range.from) / width - 1e-9) - 1;
 			if (i < 0 || !Number.isFinite(p.count)) continue;
 			const bucket = out[Math.min(i, n - 1)];
 			bucket.counts[group] += p.count;

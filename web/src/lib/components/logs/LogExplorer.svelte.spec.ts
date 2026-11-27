@@ -299,7 +299,8 @@ describe('LogExplorer', () => {
 		stubQuery([]);
 		const hour = 3_600_000;
 		const from = now - 14 * 24 * hour;
-		const first = Math.ceil(from / (4 * hour)) * 4 * hour;
+		// The component takes its own clock, a little after `now`: the first point stays in its range.
+		const first = Math.ceil((from + 60_000) / (4 * hour)) * 4 * hour;
 		const last = Math.ceil(now / (4 * hour)) * 4 * hour;
 		vi.spyOn(logsApi.logs, 'getLogHistogram').mockResolvedValue(
 			create(GetLogHistogramResponseSchema, {

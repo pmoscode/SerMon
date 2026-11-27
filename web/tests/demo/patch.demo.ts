@@ -271,7 +271,19 @@ test('a security-auto policy updates a group one node at a time, reboots Debian 
 	expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 	await page.screenshot({ path: 'test-results/demo-rollout.png', fullPage: true });
 
-	// db-01 lifts its veto: its admin updates it by hand in the passkeys demo.
+	// db-01 lifts its veto: its admin updates it by hand in the passkeys demo. A node refreshes at
+	// most every 5 minutes (429 before): a fast rollout ends sooner after the first refresh above.
 	helperSetting(vetoing.service, 'allow_remote_updates', true);
-	await call(page.request, base, 'UpdateService/RefreshUpdateInfo', { nodeId: id(vetoing.host) });
+	await expect
+		.poll(
+			async () =>
+				(
+					await page.request.post('/sermon.web.v1.UpdateService/RefreshUpdateInfo', {
+						data: { nodeId: id(vetoing.host) },
+						headers: { Origin: new URL(base).origin, 'Content-Type': 'application/json' }
+					})
+				).status(),
+			{ timeout: 330_000, intervals: [15_000] }
+		)
+		.toBe(200);
 });

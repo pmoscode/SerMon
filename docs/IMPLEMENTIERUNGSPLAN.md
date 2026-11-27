@@ -6436,7 +6436,11 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 
 #### ☐ V1-15 – Release-Abnahme · X · S
 - **Ziel:** Demo gegen das Release-Kandidat-Artefakt (Images, Pakete, `install.sh` aus dem Release), Upgrade aus der
-  Vorversion, Restore; Security-Review des Release-Prozesses (Skill `sermon-security-review`); Release.
+  Vorversion, Restore; Security-Review des Release-Prozesses (Skill `sermon-security-review`); Release. Die
+  Release-Notes nennen, was das Upgrade auf v1.0 ändert: Konten ohne Mitgliedschaft werden 30 Tage nach der Migration
+  gelöscht, Audit-Einträge älter als 2 Jahre beim ersten Lauf (V1-17); `secrets/postgres_backup_password` und die
+  Rolle `sermon_backup` für bestehende Volumes (V1-05); die Vorgaben der Module (`module_hosts`, `module_ports`, nur
+  SCRAM bei PostgreSQL, MySQL nur über Socket oder geprüftes TLS, M5-33).
 - **Abhängig von:** V1-03 bis V1-12, V1-17
 
 #### ☐ V1-16 – Branch-Schutz · X · S

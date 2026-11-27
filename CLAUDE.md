@@ -202,6 +202,9 @@ Web-Besonderheiten:
 - **Fehler explizit:** Go mit `fmt.Errorf("…: %w", err)` und `errors.Is/As`; Rust mit `thiserror` in Libraries und
   `anyhow` nur in Binaries; kein `unwrap()`/`expect()` in Produktionscode ohne begründenden Kommentar.
 - **UI:** alle Texte über i18n (DE + EN); kein `{@html}` mit API-Daten.
+- Datenschutz (V1-11): `docs/privacy/{de,en}/README.md` ist die Vorlage für Betreiber (Verarbeitungsverzeichnis,
+  TOMs, Löschfristen, Auftragsverarbeitung). Wer gespeicherte personenbezogene Daten, Fristen oder Schutzmaßnahmen
+  ändert, passt sie im selben PR an; die Fristen prüft `server/cmd/sermon-server/privacy_test.go` gegen die Konstanten.
 
 ## Security-Leitplanken (nie verletzen)
 

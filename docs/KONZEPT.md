@@ -1518,7 +1518,7 @@ statt `yes`, damit der Dateisystem-Collector auch `/home` sieht. Unter OpenRC wi
 
 - IP-Adressen, Usernamen und Logs sind **personenbezogene Daten**. Daraus folgen: eine definierte Retention,
   Rollenbeschränkung (Logs für Viewer abschaltbar), Löschfunktion, Export und eine Vorlage für das
-  Verarbeitungsverzeichnis in `docs/`.
+  Verarbeitungsverzeichnis mit TOMs und Löschfristen in `docs/privacy/` (V1-11).
 - GeoIP nur lokal. Optional werden IPs nach X Tagen pseudonymisiert (gekürzt).
 
 ### 18.8 Prozess

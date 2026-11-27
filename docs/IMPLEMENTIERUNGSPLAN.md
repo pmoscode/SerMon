@@ -6327,7 +6327,23 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11, V1-13; V1-09 nach V1-04 
   für jeden Hilfe-Schlüssel der UI, jede Metrik des Katalogs und jede Standardregel einen Text in DE und EN.
 - **Abhängig von:** –
 
-#### ☐ V1-11 – Vorlage für die DSGVO-Dokumentation · X · S
+#### ☑ V1-11 – Vorlage für die DSGVO-Dokumentation · X · S
+> Erledigt (2026-11-27): Vorlage `docs/privacy/{de,en}/README.md` für Betreiber, deutlich als Vorlage ohne
+> Rechtsberatung markiert, Platzhalter in eckigen Klammern: Rollen (eigener Betrieb oder Auftragsverarbeitung für
+> Organisationen), alle personenbezogenen Daten, die SerMon hält (aus den Tabellen und Datenflüssen geprüft: Konten
+> und Faktoren, Sitzungen ohne IP, Audit-Log mit Details, Nodes mit letzter IP, Logs, Security-Events mit
+> Benutzer, IP und redigierten sudo-Befehlen, bekannte Quellen, Alerts, Benachrichtigungen, nicht gespeicherte
+> Live-Ansicht, Server-Log), das Verzeichnis der Verarbeitungstätigkeiten mit sieben Tätigkeiten, die TOMs aus den
+> tatsächlichen Funktionen (Argon2id, Sperre, 2FA/Passkeys/OIDC, Step-up, Rollen, RLS, Trennung in Loki,
+> AES-256-GCM, Hashes der Tokens, mTLS, Redaction auf dem Host, Veto, signierte Agents, keine Telemetrie,
+> Hash-Kette im Audit-Log), Löschfristen und das Löschen von Nodes und Organisationen, eine Tabelle zu Art. 28 und
+> die Betroffenenrechte. Sicherungen nur als Platzhalter mit Verweis auf die Admin-Doku (V1-05, V1-09).
+> `privacy_test.go` nimmt jede genannte Frist aus der Konstante im Code (Aufbewahrung, Sitzungen, Step-up,
+> Einladungen, Zustellprotokoll, Anomalien, bekannte Quellen, Löschfristen, Live-Ansicht, Kiosk) und verlangt sie in
+> beiden Sprachen. Gefundene Grenzen stehen offen in der Vorlage: Ein entferntes Mitglied behält sein Konto (SerMon
+> löscht es nie, auch nicht mit der Organisation), abgelaufene Einladungen behalten die E-Mail, das Audit-Log hat
+> keine eigene Frist, IP-Adressen werden nicht gekürzt (KONZEPT §18.7 „optional“), die UI ändert weder E-Mail noch
+> Anzeigename. Gegenproben 12/12.
 - **Ziel:** Verzeichnis der Verarbeitungstätigkeiten, technische und organisatorische Maßnahmen, Löschfristen
   (Retention je Org, Löschen von Nodes), Auftragsverarbeitung bei Mandanten; welche personenbezogenen Daten SerMon
   hält (Usernamen, IPs, Logs).

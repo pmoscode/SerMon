@@ -5,7 +5,8 @@ your own. It describes the workflows; the details of every page and every figure
 itself (ⓘ next to a figure, `?` or the help button at the top for the page). The links below lead to exactly these
 texts.
 
-For operators of the instance there is the [admin documentation](../../admin/installation.md).
+For operators of the instance there is the [admin documentation](../../admin/installation.md) and the
+[GDPR documentation template](../../privacy/en/README.md).
 
 Deutsche Fassung: [Benutzerhandbuch](../de/README.md).
 

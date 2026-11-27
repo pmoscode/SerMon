@@ -57,6 +57,7 @@ Security is the top priority (KONZEPT.md §18). Walk through every section relev
 
 ## 10. Privacy & audit
 - [ ] New personal data (IPs, usernames, log content) has retention and role restrictions.
+- [ ] The GDPR template `docs/privacy/{de,en}/README.md` still matches (data held, periods, measures, known limits).
 - [ ] Privileged actions write an audit log entry (who, what, when, result).
 
 ## 11. Threat model

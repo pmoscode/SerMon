@@ -30,10 +30,10 @@ log_rate=${LOG_RATE:-2}
 scenarios=${SCENARIOS:-cpu-high ssh-bruteforce flapping}
 out=${OUT:-$root/deploy/load/.runs/$(date -u +%Y%m%dT%H%MZ)}
 case $nodes in '' | *[!0-9]*) echo "load-test: NODES must be a number" >&2 && exit 2 ;; esac
-[ "$nodes" -ge 1 ] && [ "$nodes" -le 1000 ] || {
+if [ "$nodes" -lt 1 ] || [ "$nodes" -gt 1000 ]; then
 	echo "load-test: 1 to 1000 nodes (the uses of one enrollment token)" >&2
 	exit 2
-}
+fi
 
 case $(docker info --format '{{.Architecture}}') in
 x86_64 | amd64) target=x86_64-unknown-linux-musl ;;
@@ -72,7 +72,7 @@ SERMON_RELEASE_KEY=$(cat "$build/release.pub")
 export SERMON_RELEASE_KEY
 compose() { docker compose "$@"; }
 
-# shellcheck disable=SC2329 # run by the traps
+# shellcheck disable=SC2317,SC2329 # run by the traps (SC2317 before shellcheck 0.10)
 cleanup() {
 	status=$?
 	compose logs --no-color --tail 2000 server >"$out/server.log" 2>&1 || true

@@ -21,7 +21,7 @@ die() {
 	exit 1
 }
 
-[ $# -ge 1 ] && [ $# -le 2 ] || die "usage: $0 VERSION [ENV_FILE]"
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then die "usage: $0 VERSION [ENV_FILE]"; fi
 version=$1
 env_file=${2:-$(cd "$(dirname "$0")" && pwd)/.env}
 echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' || die "not a release version: $version (X.Y.Z or X.Y.Z-rc.N)"

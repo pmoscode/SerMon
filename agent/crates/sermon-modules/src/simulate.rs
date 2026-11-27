@@ -83,6 +83,8 @@ struct Simulated {
 impl Instance for Simulated {
     fn collect<'a>(&'a mut self, run: &'a Run) -> BoxFuture<'a, Result<Vec<Sample>, RunError>> {
         Box::pin(async move {
+            #[cfg(test)]
+            tests::RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let samples = || {
                 vec![
                     Sample::int("sermon_simulate_value", self.value),
@@ -111,6 +113,11 @@ impl Instance for Simulated {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Runs started by the module in this test binary.
+    pub(super) static RUNS: AtomicUsize = AtomicUsize::new(0);
+
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
@@ -183,12 +190,21 @@ mod tests {
                 }],
                 &secrets,
             );
-            // The first run starts, then virtual time passes its budget.
-            for d in [Duration::ZERO, Duration::from_secs(6)] {
-                tokio::time::advance(d).await;
-                for _ in 0..10 {
-                    tokio::task::yield_now().await;
-                }
+            // The module is built on a blocking thread, which the paused clock doesn't wait for:
+            // wait in real time until its first run started, then virtual time passes the budget.
+            let before = RUNS.load(Ordering::SeqCst);
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while RUNS.load(Ordering::SeqCst) == before {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "{behavior}: no run started"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+                tokio::task::yield_now().await;
+            }
+            tokio::time::advance(Duration::from_secs(6)).await;
+            for _ in 0..10 {
+                tokio::task::yield_now().await;
             }
             let states = out.states.lock().unwrap().clone();
             assert_eq!(states.len(), 1, "{behavior}");

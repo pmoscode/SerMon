@@ -400,8 +400,9 @@ async fn a_build_that_doesnt_return_is_hung() {
     assert!(why.contains("build"), "{why}");
     std::thread::sleep(Duration::from_millis(700));
     advance(Duration::from_secs(1)).await;
+    // The build returns on its thread; the first run follows on the executor.
+    until(|| w.out.state("a").map(|s| s.0) == Some(State::Ok)).await;
     assert_eq!(w.runs("a"), 1);
-    assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Ok));
 }
 
 // Blocking work that doesn't return: the run times out, no further run starts while it blocks;

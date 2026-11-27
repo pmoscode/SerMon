@@ -614,3 +614,11 @@ repo_server() {
 	grep -q '^DeviceAllow=block-blkext r$' packaging/systemd/sermon-helper.service
 	! grep -q '^PrivateDevices=yes' packaging/systemd/sermon-helper.service
 }
+
+# V1-20: under OpenRC the agent's output (stdout: its log, stderr: what it prints on a failed
+# start) goes to syslog, which rotates – as it goes into the journal under systemd.
+@test "the agent's output goes to syslog under OpenRC" {
+	grep -q '^output_logger="logger -t sermon-agent -p daemon.info"$' packaging/openrc/sermon-agent
+	grep -q '^error_logger="logger -t sermon-agent -p daemon.err"$' packaging/openrc/sermon-agent
+	grep -q '^supervisor="supervise-daemon"$' packaging/openrc/sermon-agent
+}

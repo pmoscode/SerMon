@@ -13,6 +13,10 @@ respawn_delay=5
 respawn_max=0
 # No core dumps: the memory holds the modules' credentials (V1-13).
 rc_ulimit="-c 0"
+# The agent's log (stdout) and failures at the start (stderr) to syslog, which rotates (busybox
+# syslogd, rsyslog with logrotate) – as under systemd into the journal (V1-20).
+output_logger="logger -t sermon-agent -p daemon.info"
+error_logger="logger -t sermon-agent -p daemon.err"
 
 depend() {
 	need net

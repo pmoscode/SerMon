@@ -174,14 +174,16 @@ journalctl -u 'sermon-helper-run-*' --since -1d     # the runs (package manager,
 
 ## OpenRC
 
-Under OpenRC (Alpine) no logger collects the agent's output. To look, stop the service and start the agent in the
-foreground:
+Under OpenRC (Alpine) agent and helper write to syslog through `logger` (facility `daemon`); busybox syslogd and
+rsyslog rotate the file:
 
 ```sh
 rc-service sermon-agent status
-rc-service sermon-agent stop
-su -s /bin/sh -c '/usr/local/bin/sermon-agent run --config /etc/sermon/agent.toml' sermon   # package: /usr/bin/
-rc-service sermon-agent start
+grep sermon-agent /var/log/messages | tail -50      # rsyslog: /var/log/daemon.log or /var/log/messages
+grep sermon-helper /var/log/messages | tail -50
 ```
 
-The helper writes to syslog through `logger` (`grep sermon-helper /var/log/messages`).
+Without a running syslog daemon (`rc-service syslog status`) the messages are lost; then stop the service and start the
+agent in the foreground: `rc-service sermon-agent stop`,
+`su -s /bin/sh -c '/usr/local/bin/sermon-agent run --config /etc/sermon/agent.toml' sermon` (package: `/usr/bin/`),
+then `rc-service sermon-agent start`.

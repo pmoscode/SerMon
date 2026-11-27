@@ -9,6 +9,7 @@
 # Then a rotation of the repository keys through three releases (M4-31): install.sh --repo sets a
 # host up from the first, the second announces the next keys, the third is signed with them only –
 # the package manager updates the host through all three, and the old keys go.
+# Under OpenRC the agent runs as a service once and its output must reach syslog (V1-20).
 # Running as a service against a server: the E2E demo (web/tests/demo).
 #
 #   scripts/test-packages.sh AGENT HELPER   (static binaries of the Docker architecture)
@@ -165,6 +166,16 @@ apk add -q /p/0.0.1/*.apk >/dev/null
 installed /etc/init.d/sermon-agent /etc/init.d/sermon-helper
 rc-update show default 2>/dev/null | grep -q sermon-helper || { echo "the helper is not in the default runlevel"; exit 1; }
 enroll_fake
+# V1-20: what the agent prints lands in syslog (busybox syslogd, /var/log/messages), as under
+# systemd in the journal. Its configuration points nowhere: it logs why it cannot connect.
+syslogd
+mkdir -p /run/openrc && touch /run/openrc/softlevel
+rc-service sermon-agent start >/dev/null 2>&1 || true
+# The tag of the line, after facility and priority (busybox syslogd), not text of the message.
+tagged=" daemon[.][a-z]* sermon-agent: "
+for _ in $(seq 1 30); do grep -q "$tagged" /var/log/messages 2>/dev/null && break; sleep 1; done
+rc-service sermon-agent stop >/dev/null 2>&1 || true
+grep -q "$tagged" /var/log/messages 2>/dev/null || { echo "no message of the agent in syslog"; cat /var/log/messages 2>/dev/null; exit 1; }
 apk add -q /p/0.0.2/*.apk >/dev/null
 kept
 apk del -q sermon-agent sermon-helper

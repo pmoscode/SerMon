@@ -6613,7 +6613,15 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Step-up-Tabellen.
 - **Abhängig von:** –
 
-#### ☐ V1-20 – Logs des Agents unter OpenRC · A · S
+#### ☑ V1-20 – Logs des Agents unter OpenRC · A · S
+> Erledigt (2026-11-27): `packaging/openrc/sermon-agent` leitet stdout (das Log des Agents) mit `output_logger` und
+> stderr (Fehler beim Start) mit `error_logger` an `logger -t sermon-agent` (Facility `daemon`) – wie der Helper; die
+> Rotation übernimmt der Syslog-Daemon (busybox syslogd, rsyslog mit logrotate), eine eigene Logdatei gibt es nicht.
+> Tests: bats prüft die Zeilen, `just test-packages` startet den Agent auf Alpine 3.22 unter OpenRC mit busybox syslogd
+> und verlangt eine Zeile mit dem Tag `sermon-agent` in `/var/log/messages` (der nicht angemeldete Agent meldet das über
+> stderr). Die erste Fassung der Prüfung suchte nur den Text und hätte einen falschen Tag übersehen – die Meldung des
+> Agents beginnt selbst mit `sermon-agent:`; jetzt zählt das Tag nach Facility und Priorität. Admin-Doku (Fehlersuche,
+> OpenRC) angepasst. Gegenproben 5/5.
 - **Ziel:** Aus V1-09: Unter OpenRC sammelt nichts die Ausgabe des Agents (`packaging/openrc/sermon-agent` ohne
   `output_logger`/`error_logger`); sie geht an syslog bzw. eine Datei mit Rotation, wie unter systemd ins Journal.
 - **Tests zuerst:** Smoke-Test auf Alpine: Meldungen des Agents landen im Log; `just test-packages`.

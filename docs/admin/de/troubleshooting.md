@@ -172,14 +172,16 @@ journalctl -u 'sermon-helper-run-*' --since -1d     # die Läufe (Paketmanager, 
 
 ## OpenRC
 
-Unter OpenRC (Alpine) sammelt kein Logger die Ausgabe des Agents. Zum Nachsehen den Dienst anhalten und den Agent im
-Vordergrund starten:
+Unter OpenRC (Alpine) schreiben Agent und Helper über `logger` ins Syslog (Facility `daemon`); busybox syslogd und
+rsyslog rotieren die Datei:
 
 ```sh
 rc-service sermon-agent status
-rc-service sermon-agent stop
-su -s /bin/sh -c '/usr/local/bin/sermon-agent run --config /etc/sermon/agent.toml' sermon   # Paket: /usr/bin/
-rc-service sermon-agent start
+grep sermon-agent /var/log/messages | tail -50      # rsyslog: /var/log/daemon.log bzw. /var/log/messages
+grep sermon-helper /var/log/messages | tail -50
 ```
 
-Der Helper schreibt über `logger` ins Syslog (`grep sermon-helper /var/log/messages`).
+Läuft kein Syslog-Daemon (`rc-service syslog status`), gehen die Meldungen verloren; dann den Dienst anhalten und den
+Agent im Vordergrund starten:
+`rc-service sermon-agent stop`, `su -s /bin/sh -c '/usr/local/bin/sermon-agent run --config /etc/sermon/agent.toml' sermon`
+(Paket: `/usr/bin/`), danach `rc-service sermon-agent start`.

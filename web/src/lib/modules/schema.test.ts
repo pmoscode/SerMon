@@ -199,5 +199,7 @@ describe('the modules of the build', () => {
 			for (const f of fieldsOf(readFileSync(join(dir, `${id}.json`), 'utf8')))
 				expect(fieldLabel(id, f), `${id}.${f.name}`).not.toBe(f.name);
 		}
-	});
+		// The first import of labels.js compiles the messages of every module: on CI's runners that
+		// took longer than the default 5 s.
+	}, 30_000);
 });

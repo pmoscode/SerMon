@@ -230,6 +230,17 @@ async fn advance(d: Duration) {
     }
 }
 
+/// Yields until `done` holds, in real time (at most 10 s): `build` and blocking work run on real
+/// threads, which the paused clock doesn't wait for – on a slow runner they take a while.
+async fn until(mut done: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !done() {
+        assert!(std::time::Instant::now() < deadline, "timed out waiting");
+        std::thread::sleep(Duration::from_millis(5));
+        tokio::task::yield_now().await;
+    }
+}
+
 async fn settle(d: Duration) {
     tokio::time::sleep(d).await;
     // Let tasks woken at the end run.
@@ -401,6 +412,8 @@ async fn a_hung_module_starts_no_new_run() {
     w.set("a", Act::Block(Duration::from_millis(500)));
     w.runtime.apply(&[spec("a", "{}")], &BTreeMap::new());
     advance(Duration::ZERO).await;
+    // The module is built on a blocking thread; its first run starts once that returns.
+    until(|| w.runs("a") == 1).await;
     // Virtual time runs on while the thread blocks for real.
     advance(Duration::from_secs(6)).await;
     assert_eq!(w.out.state("a").map(|s| s.0), Some(State::Timeout));

@@ -6210,7 +6210,7 @@ Es fehlt kein ADR. Erkenntnisse für v1.0:
   Im Review erledigt: der Update-Orchestrator gibt seine Leases beim Stoppen frei, `just test-db-modules` in CI.
 - **Offen aus M4:** M2-35 (Kanäle gegen die echten Dienste) ohne Konten; Release-Pipeline mit echten Schlüsseln.
 
-**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16).
+**3. v1.0 ist in Aufgaben zerlegt** (§9, V1-01 bis V1-16; V1-17 kam mit V1-11 dazu).
 
 ---
 
@@ -6225,7 +6225,7 @@ testet gegen veröffentlichte Artefakte), dann Backup, Upgrade und Performance, 
 Branch-Schutz kommt zuletzt (Wunsch des Product Owners).
 
 **Kritischer Pfad:** V1-01 → V1-03 (mit V1-02) → V1-04 → V1-06 und V1-12 → V1-15 → V1-16. Parallel und ohne
-Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11, V1-13; V1-09 nach V1-04 und V1-05.
+Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 nach V1-04 und V1-05.
 
 #### ☑ V1-01 – CI auf GitHub grün · X · M
 > Erledigt (2026-11-27): Der erste Lauf mit M5 auf Linux amd64 fand fünf Fehler, die lokal (macOS, arm64) nie
@@ -6369,12 +6369,22 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11, V1-13; V1-09 nach V1-04 
 #### ☐ V1-15 – Release-Abnahme · X · S
 - **Ziel:** Demo gegen das Release-Kandidat-Artefakt (Images, Pakete, `install.sh` aus dem Release), Upgrade aus der
   Vorversion, Restore; Security-Review des Release-Prozesses (Skill `sermon-security-review`); Release.
-- **Abhängig von:** V1-03 bis V1-12
+- **Abhängig von:** V1-03 bis V1-12, V1-17
 
 #### ☐ V1-16 – Branch-Schutz · X · S
 - **Ziel:** `main` nur noch per PR mit grüner CI (erforderliche Status-Checks), kein Force-Push; erst nach der
   Implementierung (Wunsch des Product Owners).
 - **Abhängig von:** V1-15
+
+#### ☐ V1-17 – Löschfunktion und Export personenbezogener Daten · X · M 🔒
+- **Ziel:** KONZEPT §18.7, Lücken aus V1-11: Konten ohne Mitgliedschaft werden nach einer Frist gelöscht (heute
+  bleiben sie für immer), abgelaufene Einladungen verlieren ihre E-Mail-Adresse, das Audit-Log bekommt eine eigene
+  Aufbewahrung der Instanz, User ändern E-Mail und Anzeigenamen selbst (mit Step-up) und exportieren ihre Daten;
+  Superadmins löschen ein Konto auf Antrag. Die Vorlage in `docs/privacy/` wird nachgezogen.
+- **Tests zuerst:** Konto nach Austritt aus der letzten Org gelöscht, nicht früher, Sessions und Passkeys weg,
+  Audit-Einträge behalten nur eine Kennung; Export enthält die eigenen Daten und nichts Fremdes; Tenant-Isolations- und
+  Step-up-Tabellen.
+- **Abhängig von:** V1-11
 
 **v1.0 fertig, wenn:**
 

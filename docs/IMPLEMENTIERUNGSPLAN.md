@@ -6097,7 +6097,34 @@ Jedes Modul nach dem Skill `sermon-add-module`: ab Werk aus, Fixtures je unterst
 - **Tests zuerst:** der Demo-Test selbst.
 - **Abhängig von:** M5-20, M5-27
 
-#### ☐ M5-33 – Security-Review M5 · X · S 🔒
+#### ☑ M5-33 – Security-Review M5 · X · S 🔒
+> Erledigt: drei Teil-Reviews nach `sermon-security-review`, je ohne Kontext der Umsetzung, gegen den Stand nach
+> M5-30: **A** Laufzeit, Veto, Zugangsdaten, Einstellungen im Server (0 kritisch, 0 hoch, 3 mittel, 8 niedrig,
+> 8 Hinweise); **B** Parser und Clients fremder Dienste, Docker-Socket, Container-Logs, SMART im Helper (0/0/2/6/9);
+> **C** Dashboards, Kiosk, Nodes löschen, Retention (0/0/2/5/6). Alle mittleren und niedrigen Befunde sind behoben,
+> jeweils mit Test vorneweg und Gegenproben (A 45/45, B 55/55, C 26/26):
+> - **Veto (A):** Namen nur aus `module_hosts` (ab Werk `localhost`) werden aufgelöst, Gründe nennen keine aufgelösten
+>   Adressen; Ports nur aus `module_ports`; Dateien nur über `Veto::open` (geöffnete Datei erneut geprüft), Sockets vor
+>   jeder Verbindung, keine in für alle beschreibbaren Verzeichnissen; State-Verzeichnis und Verzeichnis der
+>   `agent.toml` immer gesperrt; alle Container-Runtimes hinter `allow_docker_socket`; Panic in `build` wie in
+>   `collect`. Server: Zugangsdaten nur für eingeschaltete Module, Konfiguration nur mit `manage_modules`, Logger lässt
+>   `debug_redact`-Felder weg.
+> - **Fremde Dienste (B):** PostgreSQL-Anmeldung als Zustandsautomat ohne Herabstufung (`auth`, ab Werk SCRAM), MySQL
+>   schickt das Passwort nur über Socket oder geprüftes TLS, TLS ab Werk `verify` außer auf Loopback; unsichtbare
+>   Zeichen in Labels sichtbar ersetzt (Agent und Ingest); feste Serienmenge je Prometheus-Endpunkt; Container-Logs mit
+>   eigenem Anteil und Zähler für Lücken; Module erreichen am Helper nur `ReadSmart`; neue Fuzz-Ziele `db_logins`,
+>   `module_clients`. `DeviceAllow` schützt die Disks nicht vor Schreiben (smartctl braucht die Rechte dafür) – ADR 0035
+>   sagt das jetzt ehrlich. Dazu `sermon_postgres_up`/`sermon_mysql_up` mit Regeln „nicht erreichbar“.
+> - **Dashboards und Kiosk (C):** Kiosk liest nur die Schnittmenge der Rechte von Ersteller und Besitzer, höchstens
+>   4 Widgets je Token gleichzeitig, Logs über dieselben Grenzen; Tokens eines Erstellers ohne Admin-Rolle werden
+>   widerrufen (Trigger); Löschfunktionen halten die Frist der Org; Lebenszyklus eines Nodes in einer Transaktion;
+>   60 Dashboard-Änderungen je Mitglied und Minute; der Löschjob markiert den Node vor den Loki-Logs.
+> - Threat Model: TB7 (T107–T111) und T47 erledigt, TB8 mit T112–T115; Restrisiken stehen bei T107 (Pfad und Query auf
+>   erlaubten Ports) und T109 (lokaler Dienst auf dem Port des Ziels bekommt Redis-Passwort und Bearer-Token).
+> - **Bewusst offen (Hinweise, für v1.x):** `canonicalize` im async-Executor; Zugangsdaten im Speicher nicht genullt
+>   (bräuchte `zeroize`); Fleet-Übersicht des Kiosks je Widget gelesen; TLS für Redis; Serien-Budget des Scrapers auch
+>   im Server; der Update-Orchestrator behält seine Leases über einen Neustart (bis 3 min Wartezeit);
+>   `just test-db-modules` läuft nicht in CI.
 - **Ziel:** Skill `sermon-security-review` über alle M5-Änderungen, in Teil-Reviews ohne Kontext der Umsetzung:
   Modul-Laufzeit und Veto (Sonde ins Netz des Hosts?), Zugangsdaten, Module mit fremden Daten (Parser, Docker-Socket,
   Prometheus), Helper-Operation SMART, Dashboards und Kiosk-Token, Nodes löschen. Danach Threat Model aktualisieren

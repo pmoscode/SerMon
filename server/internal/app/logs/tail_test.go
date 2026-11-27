@@ -219,8 +219,10 @@ func TestTail_TheWindowSlides(t *testing.T) {
 	for _, b := range batches {
 		sent += len(b.Lines)
 	}
+	// The clock stops with the script; a call that still slips in after the cancel reads the same
+	// window (a race only CI's slower runners hit).
 	last := store.calls[len(store.calls)-1]
-	if sent != 1 || !last.from.Equal(clk0(len(store.calls)-1).Add(-logs.TailLookback)) {
+	if sent != 1 || !last.from.Equal(clk.now().Add(-logs.TailLookback)) {
 		t.Errorf("sent %d lines, last window from %v", sent, last.from)
 	}
 }

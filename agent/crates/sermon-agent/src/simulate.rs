@@ -20,6 +20,7 @@ use sermon_collectors::rate::{round_to_i64, to_f64};
 use sermon_core::{
     Architecture, Clock, HostFacts, MachineId, Sample, SecuritySource, SystemClock, Value,
 };
+use sermon_logs::record::{LogRecord, Origin, Severity};
 use sermon_modules::runtime::Runtime;
 use sermon_security::{Address, EventKind, SecurityEvent};
 use sermon_transport::identity::AgentKey;
@@ -186,6 +187,11 @@ pub struct Generator {
     spike_left: u32,
     scenarios: Scenarios,
     attacker: Attacker,
+    /// Synthetic journal lines per second on average (0: none).
+    log_rate: f64,
+    /// Its own generator, so the samples are the same with or without logs.
+    log_rng: Rng,
+    boot_id: String,
 }
 
 fn ppm(share: f64) -> i64 {
@@ -201,6 +207,8 @@ impl Generator {
     #[must_use]
     pub fn new(profile: Profile, seed: u64, now: SystemTime, uptime: Duration) -> Self {
         let rng = Rng(seed.rotate_left(17) ^ u64::from(profile.index));
+        let mut log_rng = Rng(seed.rotate_left(29) ^ u64::from(profile.index));
+        let boot_id = format!("{:016x}{:016x}", log_rng.next_u64(), log_rng.next_u64());
         Self {
             profile,
             rng,
@@ -210,6 +218,134 @@ impl Generator {
             spike_left: 0,
             scenarios: Scenarios::default(),
             attacker: Attacker::default(),
+            log_rate: 0.0,
+            log_rng,
+            boot_id,
+        }
+    }
+
+    /// The generator with synthetic journal lines, `rate` per second on average.
+    #[must_use]
+    pub fn with_log_rate(mut self, rate: f64) -> Self {
+        self.log_rate = rate.max(0.0);
+        self
+    }
+
+    /// The synthetic journal lines of the second at `now`: on average the log rate, twice as
+    /// many at the daily peak as on average and none at the deepest night, as one batch.
+    pub fn logs(&mut self, now: SystemTime) -> Vec<LogRecord> {
+        if self.log_rate <= 0.0 {
+            return Vec::new();
+        }
+        let expected = self.log_rate * 2.0 * daily(now, self.profile.phase);
+        let count = (expected + self.log_rng.unit()).floor().clamp(0.0, 1000.0);
+        let at_us = u64::try_from(
+            now.duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_micros(),
+        )
+        .unwrap_or(u64::MAX);
+        (0..round(count))
+            .map(|i| self.log_line(at_us + u64::try_from(i).unwrap_or(0)))
+            .collect()
+    }
+
+    /// One line of a typical server: logins, cron, web requests, sessions, a slow app, rarely
+    /// the kernel. Addresses from the documentation range, users `alice` and `bob`.
+    fn log_line(&mut self, at_us: u64) -> LogRecord {
+        let rng = &mut self.log_rng;
+        let n = rng.next_u64();
+        let host = 10 + n % 200;
+        let port = 30_000 + n % 30_000;
+        let user = if n.is_multiple_of(2) { "alice" } else { "bob" };
+        let pick = rng.unit();
+        let (unit, identifier, severity, pid, message) = if pick < 0.45 {
+            let paths = [
+                "/",
+                "/api/items",
+                "/api/orders",
+                "/static/app.js",
+                "/health",
+            ];
+            let status = if rng.unit() < 0.03 { 502 } else { 200 };
+            (
+                "nginx.service",
+                "nginx",
+                Severity::Info,
+                812,
+                format!(
+                    "192.0.2.{host} - - \"GET {}/{} HTTP/1.1\" {status} {} \"-\" \"Mozilla/5.0\"",
+                    paths[rng.index(paths.len())],
+                    n % 10_000,
+                    200 + n % 50_000
+                ),
+            )
+        } else if pick < 0.65 {
+            (
+                "app.service",
+                "app",
+                if rng.unit() < 0.1 {
+                    Severity::Warning
+                } else {
+                    Severity::Info
+                },
+                1544,
+                format!(
+                    "request id={:08x} user={user} took {} ms",
+                    n >> 32,
+                    5 + n % 900
+                ),
+            )
+        } else if pick < 0.80 {
+            (
+                "cron.service",
+                "CRON",
+                Severity::Info,
+                u32::try_from(20_000 + n % 10_000).unwrap_or(0),
+                "pam_unix(cron:session): session opened for user root(uid=0) by root(uid=0)"
+                    .to_owned(),
+            )
+        } else if pick < 0.92 {
+            (
+                "systemd-logind.service",
+                "systemd-logind",
+                Severity::Info,
+                402,
+                format!("New session {} of user {user}.", n % 5000),
+            )
+        } else if pick < 0.995 {
+            (
+                "ssh.service",
+                "sshd-session",
+                Severity::Info,
+                u32::try_from(30_000 + n % 10_000).unwrap_or(0),
+                format!("Accepted publickey for {user} from 192.0.2.{host} port {port} ssh2"),
+            )
+        } else {
+            (
+                "kernel",
+                "kernel",
+                Severity::Warning,
+                0,
+                format!(
+                    "TCP: request_sock_TCP: Possible SYN flooding on port {port}. Sending cookies."
+                ),
+            )
+        };
+        LogRecord {
+            at_us,
+            origin: Origin::Journal,
+            unit: Some(unit.to_owned()),
+            identifier: Some(identifier.to_owned()),
+            severity: Some(severity),
+            message,
+            truncated: false,
+            pid: (pid > 0).then_some(pid),
+            process: Some(identifier.to_owned()),
+            uid: Some(0),
+            boot_id: Some(self.boot_id.clone()),
+            transport: Some(if unit == "kernel" { "kernel" } else { "syslog" }.to_owned()),
+            facility: None,
         }
     }
 
@@ -277,6 +413,7 @@ impl Generator {
         self.cpu(busy, &mut out);
         self.memory(day, &mut out);
         self.network(day, busy, &mut out);
+        self.kernel(day, busy, &mut out);
         let uptime = now.duration_since(self.boot).unwrap_or_default().as_secs();
         out.push(Sample::int(
             "sermon_system_uptime_seconds",
@@ -399,14 +536,104 @@ impl Generator {
             "sermon_tcp_established",
             round(20.0 + 400.0 * day * self.rng.range(0.8, 1.2)),
         ));
-        let disk_rate = busy * 40_000_000.0 * self.rng.range(0.5, 1.5);
-        for (metric, value) in [
-            ("sermon_disk_read_bytes_per_second", disk_rate * 0.6),
-            ("sermon_disk_write_bytes_per_second", disk_rate * 0.4),
-        ] {
-            out.push(Sample::float(metric, value).label("device", "sda"));
+        // The system disk and a data disk with a tenth of the traffic.
+        for (device, share) in [("sda", 1.0), ("sdb", 0.1)] {
+            let rate = share * busy * 40_000_000.0 * self.rng.range(0.5, 1.5);
+            let iops = rate / 16_384.0;
+            for (metric, value) in [
+                ("sermon_disk_read_bytes_per_second", rate * 0.6),
+                ("sermon_disk_write_bytes_per_second", rate * 0.4),
+                ("sermon_disk_reads_per_second", iops * 0.6),
+                ("sermon_disk_writes_per_second", iops * 0.4),
+                ("sermon_disk_await_seconds", 0.0005 + 0.004 * busy * share),
+                ("sermon_disk_queue_length", iops * 0.0005),
+            ] {
+                out.push(Sample::float(metric, value).label("device", device));
+            }
+            out.push(
+                Sample::int("sermon_disk_busy_ratio", ppm(busy * 0.5 * share))
+                    .label("device", device),
+            );
         }
-        out.push(Sample::int("sermon_disk_busy_ratio", ppm(busy * 0.5)).label("device", "sda"));
+        for metric in [
+            "sermon_network_receive_errors_per_second",
+            "sermon_network_receive_drops_per_second",
+            "sermon_network_transmit_errors_per_second",
+            "sermon_network_transmit_drops_per_second",
+        ] {
+            let value = if self.rng.unit() < 0.01 { 1.0 } else { 0.0 };
+            out.push(Sample::float(metric, value).label("interface", "eth0"));
+        }
+    }
+
+    /// What the kernel reports besides CPU, memory and network: memory details, pressure,
+    /// scheduler, TCP and conntrack.
+    fn kernel(&mut self, day: f64, busy: f64, out: &mut Vec<Sample>) {
+        let total = to_f64(self.profile.memory_bytes);
+        let used = (self.profile.memory_base + 0.25 * day).clamp(0.05, 0.98);
+        for (metric, share) in [
+            ("sermon_memory_free_bytes", (1.0 - used) * 0.3),
+            ("sermon_memory_cached_bytes", (1.0 - used) * 0.6),
+            ("sermon_memory_buffers_bytes", 0.02),
+            ("sermon_memory_shared_bytes", 0.01),
+            ("sermon_memory_slab_bytes", 0.03),
+        ] {
+            out.push(Sample::int(metric, round(total * share)));
+        }
+        let cpus = f64::from(self.profile.cpus);
+        for (metric, value) in [
+            (
+                "sermon_memory_major_faults_per_second",
+                busy * 5.0 * self.rng.unit(),
+            ),
+            ("sermon_memory_oom_kills_per_second", 0.0),
+            ("sermon_swap_in_pages_per_second", 0.0),
+            ("sermon_swap_out_pages_per_second", 0.0),
+            (
+                "sermon_cpu_context_switches_per_second",
+                cpus * (500.0 + 4000.0 * busy),
+            ),
+            (
+                "sermon_cpu_interrupts_per_second",
+                cpus * (300.0 + 2500.0 * busy),
+            ),
+            (
+                "sermon_cpu_forks_per_second",
+                2.0 + 40.0 * busy * self.rng.unit(),
+            ),
+            (
+                "sermon_tcp_retransmits_per_second",
+                busy * 3.0 * self.rng.unit(),
+            ),
+            ("sermon_tcp_listen_overflows_per_second", 0.0),
+            ("sermon_tcp_listen_drops_per_second", 0.0),
+        ] {
+            out.push(Sample::float(metric, value));
+        }
+        for (resource, some) in [("cpu", busy * 0.3), ("memory", 0.0), ("io", busy * 0.05)] {
+            for (kind, share) in [("some", some), ("full", some * 0.3)] {
+                out.push(
+                    Sample::int("sermon_pressure_stall_ratio", ppm(share))
+                        .label("resource", resource)
+                        .label("kind", kind),
+                );
+            }
+        }
+        let running = round(1.0 + busy * cpus);
+        out.push(Sample::int("sermon_processes_running", running));
+        out.push(Sample::int("sermon_processes_blocked", round(busy * 2.0)));
+        out.push(Sample::int(
+            "sermon_tcp_time_wait",
+            round(10.0 + 100.0 * day * self.rng.range(0.8, 1.2)),
+        ));
+        let limit = 262_144.0;
+        let entries = 200.0 + 5_000.0 * day * self.rng.range(0.9, 1.1);
+        out.push(Sample::int("sermon_conntrack_entries", round(entries)));
+        out.push(Sample::int("sermon_conntrack_limit", round(limit)));
+        out.push(Sample::int(
+            "sermon_conntrack_utilization_ratio",
+            ppm(entries / limit),
+        ));
     }
 
     fn filesystem(&self, now: SystemTime, out: &mut Vec<Sample>) {
@@ -424,29 +651,32 @@ impl Generator {
             (start + p.disk_growth * elapsed.as_secs_f64()).min(capacity)
         };
         let avail = size - reserved - used;
-        let mountpoint = |sample: Sample| sample.label("mountpoint", "/");
-        out.push(mountpoint(Sample::int(
-            "sermon_filesystem_size_bytes",
-            round(size),
-        )));
-        out.push(mountpoint(Sample::int(
-            "sermon_filesystem_used_bytes",
-            round(used),
-        )));
-        out.push(mountpoint(Sample::int(
+        Self::mount(out, "/", size, used, avail);
+        // A small boot partition and a data volume, steady.
+        let boot = 1024.0 * 1024.0 * 1024.0;
+        Self::mount(out, "/boot", boot, boot * 0.2, boot * 0.75);
+        let data = 4.0 * size;
+        Self::mount(out, "/srv", data, data * 0.4, data * 0.55);
+    }
+
+    fn mount(out: &mut Vec<Sample>, mountpoint: &str, size: f64, used: f64, avail: f64) {
+        let at = |sample: Sample| sample.label("mountpoint", mountpoint);
+        out.push(at(Sample::int("sermon_filesystem_size_bytes", round(size))));
+        out.push(at(Sample::int("sermon_filesystem_used_bytes", round(used))));
+        out.push(at(Sample::int(
             "sermon_filesystem_avail_bytes",
             round(avail),
         )));
-        out.push(mountpoint(Sample::int(
+        out.push(at(Sample::int(
             "sermon_filesystem_utilization_ratio",
             ppm(used / (used + avail)),
         )));
-        out.push(mountpoint(Sample::int("sermon_filesystem_readonly", 0)));
-        out.push(mountpoint(Sample::int(
+        out.push(at(Sample::int("sermon_filesystem_readonly", 0)));
+        out.push(at(Sample::int(
             "sermon_filesystem_inodes_total",
             round(size / 16_384.0),
         )));
-        out.push(mountpoint(Sample::int(
+        out.push(at(Sample::int(
             "sermon_filesystem_inodes_used",
             round(used / 65_536.0),
         )));
@@ -496,13 +726,14 @@ pub fn simulate(config: &AgentConfig, args: &SimulateArgs) -> anyhow::Result<()>
                     index,
                     scenarios: scenarios.clone(),
                     started,
+                    log_rate: args.log_rate,
                 },
                 layout,
                 clock.clone(),
                 shutdown.clone(),
             )?));
         }
-        tracing::info!(nodes = args.nodes, seed = args.seed, scenarios = ?args.scenario, server = %config.agent_url, "simulation started");
+        tracing::info!(nodes = args.nodes, seed = args.seed, scenarios = ?args.scenario, log_rate = args.log_rate, server = %config.agent_url, "simulation started");
         for task in tasks {
             task.await.context("simulated node failed")?;
         }
@@ -576,6 +807,8 @@ struct NodeRun {
     index: u32,
     scenarios: Scenarios,
     started: SystemTime,
+    /// Synthetic journal lines per second (0: none).
+    log_rate: f64,
 }
 
 /// Starts one virtual node: its transport and its sample generator.
@@ -591,6 +824,7 @@ fn run_node(
         index,
         scenarios,
         started,
+        log_rate,
     } = node;
     let profile = Profile::new(seed, index);
     let facts = profile.facts(seed);
@@ -599,7 +833,8 @@ fn run_node(
         .with_context(|| format!("cannot open the buffer of {hostname}"))?;
     let outbox = Outbox::new(wal);
     let facts_source: FactsSource = Arc::new(move || Ok(facts.clone()));
-    // The server's configuration with the module `simulate` (ADR 0039); no logs.
+    // The server's configuration with the module `simulate` (ADR 0039); its log selection doesn't
+    // matter, the synthetic lines go to the buffer directly.
     let agent_config = Arc::new(ConfigStore::open(layout.agent_config_file(), false, true));
     let modules = Runtime::new(
         sermon_modules::builtin(),
@@ -638,8 +873,9 @@ fn run_node(
         );
     }
     let uptime = Duration::from_secs(3600 * (1 + u64::from(index) % 400));
-    let mut generator =
-        Generator::new(profile, seed, started, uptime).with_scenarios(scenarios.clone());
+    let mut generator = Generator::new(profile, seed, started, uptime)
+        .with_scenarios(scenarios.clone())
+        .with_log_rate(log_rate);
     let elapsed = {
         let clock = clock.clone();
         move || clock.now().duration_since(started).unwrap_or_default()
@@ -655,26 +891,7 @@ fn run_node(
                     () = shutdown.cancelled() => break,
                     _ = interval.tick() => {}
                 }
-                let now = clock.now();
-                if let Err(error) = outbox.push_samples(&generator.samples(now, tick), now) {
-                    tracing::warn!(host = hostname, "cannot buffer the samples: {error}");
-                }
-                let events: Vec<_> = generator
-                    .events(now)
-                    .iter()
-                    .map(security::to_proto)
-                    .collect();
-                if let Err(error) = outbox.push_security_events(events, now) {
-                    tracing::warn!(
-                        host = hostname,
-                        "cannot buffer the security events: {error}"
-                    );
-                }
-                if tick.is_multiple_of(5)
-                    && let Err(error) = outbox.maintain(now)
-                {
-                    tracing::warn!(host = hostname, "buffer housekeeping failed: {error}");
-                }
+                buffer_tick(&outbox, &mut generator, clock.now(), tick, &hostname);
             }
         };
         tokio::join!(
@@ -683,6 +900,46 @@ fn run_node(
             connect(&transport, &scenarios, elapsed, &shutdown, &hostname)
         );
     })
+}
+
+/// Buffers what a virtual node produced in one tick: samples, security events and log lines.
+fn buffer_tick(
+    outbox: &Outbox,
+    generator: &mut Generator,
+    now: SystemTime,
+    tick: u64,
+    hostname: &str,
+) {
+    if let Err(error) = outbox.push_samples(&generator.samples(now, tick), now) {
+        tracing::warn!(host = hostname, "cannot buffer the samples: {error}");
+    }
+    let events: Vec<_> = generator
+        .events(now)
+        .iter()
+        .map(security::to_proto)
+        .collect();
+    if let Err(error) = outbox.push_security_events(events, now) {
+        tracing::warn!(
+            host = hostname,
+            "cannot buffer the security events: {error}"
+        );
+    }
+    let lines: Vec<_> = generator
+        .logs(now)
+        .iter()
+        .map(crate::logs::to_proto)
+        .collect();
+    // Beyond the buffer's share for logs they are dropped, like the real shipper does.
+    if !lines.is_empty()
+        && let Err(error) = outbox.push_logs(lines, now)
+    {
+        tracing::debug!(host = hostname, "cannot buffer the log lines: {error}");
+    }
+    if tick.is_multiple_of(5)
+        && let Err(error) = outbox.maintain(now)
+    {
+        tracing::warn!(host = hostname, "buffer housekeeping failed: {error}");
+    }
 }
 
 /// Runs the transport while the node is online; scenario `offline` ends the session for its
@@ -1054,6 +1311,7 @@ mod tests {
             ca_fingerprint: None,
             scenario: vec![Scenario::SshBruteforce, Scenario::Offline],
             dump: None,
+            log_rate: 0.0,
         };
         let mut out = Vec::new();
         dump(&args, Duration::from_secs(40), &mut out).unwrap();
@@ -1108,6 +1366,96 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    // Synthetic logs (V1-08): the rate on average, busier in the afternoon, valid entries, and
+    // the samples stay the same with or without them.
+    #[test]
+    fn logs_follow_the_rate_and_keep_the_bounds() {
+        use sermon_logs::record::{MAX_BATCH_BYTES, MAX_BATCH_RECORDS, Origin};
+        let count = |rate: f64, hour: u64| {
+            let mut generator =
+                Generator::new(Profile::new(1, 3), 1, at(0), Duration::from_secs(60))
+                    .with_log_rate(rate);
+            (0..3600)
+                .map(|s| generator.logs(at(hour) + Duration::from_secs(s)))
+                .map(|lines| {
+                    assert!(lines.len() <= MAX_BATCH_RECORDS);
+                    assert!(lines.iter().map(LogRecord::size).sum::<usize>() <= MAX_BATCH_BYTES);
+                    for line in &lines {
+                        assert_eq!(line.origin, Origin::Journal);
+                        assert!(!line.message.is_empty() && line.unit.is_some());
+                        assert!(line.severity.is_some() && line.identifier.is_some());
+                        assert_eq!(line.boot_id.as_deref().map(str::len), Some(32));
+                        let entry = crate::logs::to_proto(line);
+                        assert!(entry.occurred_at.is_some());
+                    }
+                    lines.len()
+                })
+                .sum::<usize>() as f64
+        };
+        assert_eq!(count(0.0, 14), 0.0);
+        // The node's afternoon (its phase shifts the peak by at most 3 hours) and night.
+        let peak = (11..=17).map(|h| count(2.0, h)).fold(0.0, f64::max);
+        let night = (23..=29).map(|h| count(2.0, h)).fold(f64::MAX, f64::min);
+        assert!(peak > night * 2.0, "peak {peak}, night {night}");
+        let day: f64 = (0..24).map(|h| count(2.0, h)).sum();
+        let mean = day / 86_400.0;
+        assert!((1.8..=2.2).contains(&mean), "mean {mean} lines/s");
+    }
+
+    #[test]
+    fn logs_are_deterministic_and_leave_the_samples_alone() {
+        let lines = |seed: u64| {
+            let mut generator =
+                Generator::new(Profile::new(seed, 2), seed, at(0), Duration::from_secs(60))
+                    .with_log_rate(5.0);
+            (0..60)
+                .flat_map(|s| generator.logs(at(14) + Duration::from_secs(s)))
+                .map(|l| l.message)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(lines(1), lines(1));
+        assert_ne!(lines(1), lines(2));
+        let units: std::collections::BTreeSet<_> = {
+            let mut generator =
+                Generator::new(Profile::new(1, 2), 1, at(0), Duration::from_secs(60))
+                    .with_log_rate(5.0);
+            (0..600)
+                .flat_map(|s| generator.logs(at(14) + Duration::from_secs(s)))
+                .filter_map(|l| l.unit)
+                .collect()
+        };
+        assert!(units.len() >= 4, "{units:?}");
+        let mut plain = Generator::new(Profile::new(1, 4), 1, at(0), Duration::from_secs(60));
+        let mut logging = Generator::new(Profile::new(1, 4), 1, at(0), Duration::from_secs(60))
+            .with_log_rate(50.0);
+        for tick in 0..100 {
+            let now = at(14) + Duration::from_secs(tick);
+            let _ = logging.logs(now);
+            assert_eq!(plain.samples(now, tick), logging.samples(now, tick));
+        }
+    }
+
+    // A real host sends about 90 to 130 series (`sermon-agent collect` in a container: 90 with
+    // 16 CPUs and no file systems); the virtual nodes come close, so the load test is honest.
+    #[test]
+    fn nodes_send_about_as_many_series_as_a_real_host() {
+        for index in 0..50 {
+            let profile = Profile::new(1, index);
+            let cpus = usize::try_from(profile.cpus).unwrap();
+            let mut generator = Generator::new(profile, 1, at(0), Duration::from_secs(60));
+            let samples = generator.samples(at(14), 0);
+            let series: std::collections::BTreeSet<_> = samples
+                .iter()
+                .map(|s| (s.metric, format!("{:?}", s.labels)))
+                .collect();
+            assert_eq!(series.len(), samples.len(), "a series twice");
+            // 99 besides one per core: CPU and load 15, memory and swap 7, network and TCP 11,
+            // two disks 14, kernel 27, uptime and processes 3, three file systems and boot time 22.
+            assert_eq!(series.len() - cpus, 99, "{} series", series.len());
+            assert!(generator.samples(at(14), 1).len() < samples.len());
+        }
     }
 
     #[test]

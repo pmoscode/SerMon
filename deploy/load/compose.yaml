@@ -1,0 +1,46 @@
+# Load test (V1-08): a third file on top of the production compose and the E2E overlay,
+#
+#   docker compose -f deploy/compose/compose.yaml -f deploy/e2e/compose.yaml -f deploy/load/compose.yaml
+#
+# so the load runs against the real production file with the E2E secrets, Caddy's own CA and
+# Mailpit, but without the agent hosts: virtual nodes (`sermon-agent simulate`, M1-34) in one
+# container instead. Started by scripts/load-test.sh (`just load-test`), which sets COMPOSE_FILE,
+# COMPOSE_ENV_FILES, the project name sermon-load, its own ports and its own network, so a demo
+# of another worktree can run at the same time.
+#
+# Paths are relative to deploy/compose, like in the E2E overlay.
+
+services:
+  server:
+    # Its own tag: a demo building sermon-server:0.0.1-e2e meanwhile doesn't change this one.
+    image: sermon-server:load
+    environment:
+      # The server's own metrics (ADR 0011) for scripts/load-report.sh, published on 127.0.0.1.
+      SERMON_METRICS_ADDR: ":9464"
+    ports: !override ["127.0.0.1:${SERMON_LOAD_METRICS_PORT:-19464}:9464"]
+
+  migrate:
+    image: sermon-server:load
+
+  # The virtual nodes: the agent built with the feature simulate (never in a release), its
+  # identities in a volume. Enrollment over Caddy (sermon.test, pinned CA), the agent port of the
+  # server directly, like the agent hosts of the demo. Started with `docker compose run`
+  # (scripts/load-test.sh), which passes the arguments.
+  simulator:
+    image: debian:13@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6
+    profiles: [load]
+    entrypoint: ["/sim/sermon-agent"]
+    volumes:
+      - ../e2e/.build/load/sermon-agent:/sim/sermon-agent:ro
+      - ../e2e/.build/load/agent.toml:/sim/agent.toml:ro
+      - simulator-state:/var/lib/sermon-sim
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+    networks: [edge]
+
+volumes:
+  simulator-state:

@@ -97,6 +97,16 @@ leere Datenbank; `sermon-server backup-keygen` erzeugt den Schlüssel. Exit-Code
 `deploy/compose` die einmaligen Services `backup` und `restore` (Profile, `docker compose run --rm -T backup > datei`).
 `just e2e-restore` (V1-07, nightly mit `FULL=1`): nach der Demo Backup, neue Umgebung (Datenbank, Server-State, Loki),
 Restore und die Prüfungen gegen die echte Compose (`SKIP_DEMO=1` gegen eine mit `KEEP=1` laufende Demo).
+`just load-test [dauer] [nodes]` (V1-08, Anleitung `docs/admin/{de,en}/load-test.md`): baut wie die Demo (`e2e-demo.sh` mit
+`PREPARE_ONLY=1`) und den Agent mit dem Simulator, startet die Produktions-Compose mit E2E-Overlay und
+`deploy/load/compose.yaml` als Projekt `sermon-load` (eigene Ports 19443/19025/19464 und Netz 172.30.79.0/24, eine Demo
+kann daneben laufen), richtet Admin, Gruppe `load` mit dem Modul `simulate` und ein Enrollment-Token ein, startet die
+virtuellen Nodes in einem Container (Szenarien, `--log-rate` synthetische Journal-Zeilen) und misst mit
+`scripts/load-report.sh` (`sample DIR DAUER [INTERVALL]`, `report DIR [--limit 'KEY.STAT<=V']… [--horizon TAGE]`:
+`docker stats`, `/metrics`, SQL, Lesezugriffe der UI über die Web-API, Hochrechnung auf 7 Tage und die Aufbewahrung,
+Grenzen mit Exit-Code 1). Ergebnis unter `deploy/load/.runs/<zeit>/report.md`; `KEEP=1`, `SKIP_BUILD=1` wie bei der
+Demo. Dasselbe Skript misst den Testbetrieb gegen eine echte Installation (V1-18, `LOAD_URL`, `LOAD_METRICS_URL`,
+`LOAD_EMAIL`/`LOAD_PASSWORD_FILE` oder `LOAD_COOKIE_FILE`, `LOAD_PSQL`, `LOAD_DOCKER=0`).
 `just simulate [nodes] [--seed S] [--scenario …]` startet virtuelle Nodes gegen `just dev` (`sermon-agent simulate`,
 M1-34); der erste Lauf braucht `SERMON_ENROLLMENT_TOKEN` mit genug Nutzungen, danach werden die Identitäten
 wiederverwendet. Szenarien (M2-30, `simulate/scenario.rs`) für Tests der Alerts von Hand: `cpu-high`, `disk-filling`,

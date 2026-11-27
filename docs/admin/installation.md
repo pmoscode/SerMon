@@ -183,6 +183,9 @@ Datenbank 80 % davon erreicht ([ADR 0027](../adr/0027-server-ereignisse-und-self
 die Größe der Datenbank, nicht den freien Platz: Setzen Sie die Grenze unter den Platz des Datenträgers. Den Füllstand
 der Volumes misst ein Agent auf dem Server-Host.
 
+Wie viel CPU, Speicher und Platz eine Installation unter Last braucht, misst `scripts/load-report.sh` – auch im
+laufenden Betrieb, siehe [Lasttest und Performance-Nachweis](de/load-test.md).
+
 ## Länder im Security-Dashboard (optional)
 
 Der Server kann zu den Adressen im Security-Dashboard das Land zeigen. Er lädt dafür nichts herunter: Legen Sie eine

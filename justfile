@@ -139,6 +139,11 @@ e2e-demo-full:
 e2e-restore:
     scripts/e2e-restore.sh
 
+# Load test (V1-08): virtual nodes with modules, scenarios and logs against the production compose,
+# sampled by scripts/load-report.sh into a Markdown report with limits (KEEP=1, SKIP_BUILD=1 as for the demo)
+load-test duration="3h" nodes="50":
+    scripts/load-test.sh {{ duration }} {{ nodes }}
+
 # Run the Rust agent binary against the real server (Testcontainers; Docker and Rust required)
 e2e-agent:
     cd agent && cargo build --locked -p sermon-agent --features simulate
@@ -164,6 +169,7 @@ lint-compose:
     sh scripts/check-compose.sh --loopback-only deploy/dev/compose.yaml
     COMPOSE_ENV_FILES=deploy/compose/env.example sh scripts/check-compose.sh --hardened deploy/compose/compose.yaml
     SERMON_RELEASE_KEY= COMPOSE_ENV_FILES=deploy/e2e/e2e.env sh scripts/check-compose.sh --loopback-only deploy/compose/compose.yaml deploy/e2e/compose.yaml
+    SERMON_RELEASE_KEY= COMPOSE_ENV_FILES=deploy/e2e/e2e.env sh scripts/check-compose.sh --loopback-only deploy/compose/compose.yaml deploy/e2e/compose.yaml deploy/load/compose.yaml
 
 # Test helper scripts
 test-scripts:
@@ -171,6 +177,7 @@ test-scripts:
     sh scripts/check-compose_test.sh
     sh scripts/helper-loc_test.sh
     sh scripts/agent-budget_test.sh
+    sh scripts/load-report_test.sh
     sh scripts/check-agent-allocator_test.sh
     sh scripts/repo-keys_test.sh
 

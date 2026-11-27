@@ -17,6 +17,7 @@
 #   FULL=1 …                     the whole demo, with what takes long (M4-28: anomalies, the rollout
 #                                of a policy, the budget during a listing); without it the fast one
 #   SKIP_BUILD=1 …               reuse the agent, packages and secrets of the last run (deploy/e2e/.build)
+#   PREPARE_ONLY=1 …             only build them and stop: the load test reuses them (V1-08)
 #   SERMON_E2E_{PORT,MAIL_PORT,NTFY_PORT,SLACK_PORT}  ports on 127.0.0.1 (18443, 18025, 18090, 18026)
 set -eu
 
@@ -125,6 +126,7 @@ if [ "${SKIP_BUILD:-}" != 1 ] || [ ! -f "$build/release.pub" ] || [ ! -f "$build
 	cat "$build/slack-mock/slack-mock.crt" "$build/dex/dex.crt" >"$build/outbound-ca.pem"
 	chmod 0644 "$build/outbound-ca.pem"
 fi
+[ "${PREPARE_ONLY:-}" != 1 ] || exit 0
 
 cleanup() {
 	status=$?

@@ -6344,7 +6344,53 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   echte Compose.
 - **Abhängig von:** V1-05
 
-#### ☐ V1-08 – Lasttest vor dem Testbetrieb · X · M
+#### ☑ V1-08 – Lasttest vor dem Testbetrieb · X · M
+> Erledigt (2026-11-27, Anleitung `docs/admin/{de,en}/load-test.md`):
+> - **Last** (`scripts/load-test.sh`, `just load-test [dauer] [nodes]`): baut wie die Demo (`e2e-demo.sh` mit neuem
+>   `PREPARE_ONLY=1`; `KEEP`, `SKIP_BUILD` wie dort) und den Agent mit dem Simulator, startet die Produktions-Compose
+>   mit E2E-Overlay und `deploy/load/compose.yaml` als eigenes Projekt `sermon-load` (eigene Ports, Netz
+>   172.30.79.0/24, Image `sermon-server:load`; eine Demo kann daneben laufen), richtet über die Web-API Admin, Gruppe
+>   `load` mit dem Modul `simulate` und ein Enrollment-Token mit N Nutzungen ein und startet die Nodes in einem
+>   gehärteten Container im Edge-Netz (Enrollment über Caddy mit gepinnter CA, mTLS direkt zum Server).
+> - **Simulator näher an echten Hosts:** rund 110 Serien je Node statt rund 50 (zweite Platte, drei Dateisysteme,
+>   Speicher-Details, Pressure, Kernel, TCP, Conntrack; `sermon-agent collect` in einem Container lieferte 90) und
+>   `--log-rate` synthetische Journal-Zeilen (nginx, App, cron, logind, sshd, selten Kernel; im Tagesgang, mit eigenem
+>   Zufallsgenerator, die Samples bleiben gleich; ab Werk 0).
+> - **Auswertung** (`scripts/load-report.sh sample|report|limits`; nur sh, awk, curl, Docker optional): `docker stats`,
+>   `/metrics`, SQL (Größe je Teil, größte Tabellen, WAL, Checkpoints, Jobs, Security-Events), Volumes, die
+>   Lesezugriffe der UI mit echter Session (neue Anmeldung, wenn sie endet). Bericht in Markdown mit Hochrechnung
+>   (Rohdaten über das Kompressionsverhältnis, sonst linear bis zur Aufbewahrung, Loki über den ganzen Zeitraum),
+>   Grenzen `<=`/`>=`, Exit-Code 1 und Gegenprobe; was nicht erreichbar ist, steht als „n/a“ (Testbetrieb V1-18).
+> - **Gemessen** (Apple M3 Max, 16 Kerne, 48 GiB; Docker Desktop mit 16 CPUs und 7,75 GiB; 4 h, 50 Nodes, Szenarien
+>   `cpu-high`, `ssh-bruteforce`, `flapping` auf allen Nodes, 2 Logzeilen/s je Node, eine Probe alle 30 s):
+>   4 278 Samples/s, 113 Batches/s, 181 Logzeilen/s, 8,3 Security-Events/s; Lag p95 0 s, max 0,01 s; nichts
+>   verworfen, keine Schreibfehler, keine fehlgeschlagenen Jobs. CPU aller Dienste im Mittel 19 % eines Kerns (p95
+>   28 %, max 74 % während der Kompression): Server 10 %, Loki 7 %, PostgreSQL 2,4 % (max 54 %). Speicher zusammen
+>   höchstens 2,5 GiB (PostgreSQL 1,4 GiB mit Page-Cache, Loki 837 MiB, Server 322 MiB). Lesezugriffe p95: Flotte
+>   11 ms, Sparklines 17 ms, Node 6 ms, Charts über 1 h, 24 h und 30 Tage 14, 10 und 7 ms, Logs 511 ms,
+>   Log-Histogramm 968 ms (max 1 052 ms).
+> - **Wachstum:** Datenbank 219 MiB/h (zweite Hälfte 161): `metrics_raw` 227 MiB/h unkomprimiert, komprimiert auf
+>   9,1 %; `metrics_1m` 43 MiB/h (ohne Kompression); Security-Events 16,6 MiB/h (30 000 je Stunde, rund 580 B je
+>   Event); WAL 1,0–1,1 GiB/h (rund 26 GB/Tag), kein Checkpoint durch die WAL-Größe; Loki 21 MiB/h.
+> - **Hochrechnung:** nach 7 Tagen 15,5 GiB; bei voller Aufbewahrung (365 Tage) 201 GiB: `metrics_1m` 30,6,
+>   `metrics_1h` 5,9, Rohdaten 0,9, Loki 6,8, WAL 1 und der Rest 156 GiB – fast nur die Security-Events des
+>   Brute-Force-Szenarios (alle 50 Nodes ein Drittel der Zeit). Ohne das Szenario rund 60 GiB.
+> - **Richtwert (KONZEPT §22, bleibt für V1-18):** CPU und RAM sind klar gedeckt (unter einer von 4 vCPU, 2,5 von
+>   8 GB); 200 GB reichen bei üblichem Event-Aufkommen, bei dauerhaftem Brute Force auf allen Nodes nicht (die Grenze
+>   `proj.horizon_gib` von 160 GiB scheitert). Vorbehalte: eine schnellere CPU als ein typischer vServer, die SSD des
+>   Macs, nur 4 h (die Aufbewahrung ist hochgerechnet, nicht gemessen), keine Module außer `simulate`.
+> - **Befunde** (keine kleinen Fixes, Aufgaben für v1.x bzw. V1-18): (1) `metrics_1m` und `metrics_1h` haben keine
+>   Columnstore-Policy – nach 30 Tagen der größte Teil; komprimiert wie die Rohdaten sparte das rund 90 % (Migration).
+>   (2) Security-Events bei dauerhaftem Brute Force rund 140 GiB im Jahr – fehlgeschlagene Anmeldungen bündeln oder je
+>   Art kürzer aufbewahren. (3) Das Log-Histogramm über 1 h aller Nodes braucht knapp 1 s; über 14 Tage im Testbetrieb
+>   messen. (4) Loki steht mit 837 MiB nahe an `GOMEMLIMIT` (900 MiB) – ob Bedarf oder nur spätes GC, zeigt V1-18;
+>   „einige hundert Nodes“ in der Betriebs-Doku ist bis dahin offen. (5) KONZEPT §4.5 nennt `max_wal_size = 8GB`,
+>   `wal_compression = lz4` und `checkpoint_timeout = 15min`, die Compose setzt sie nicht (das Image: 1 GB); bei
+>   1 GiB/h WAL ohne Folgen.
+> - **Tests:** `load-report_test.sh` (synthetische Fenster: Statistik, Hochrechnung mit und ohne komprimierte Chunks,
+>   Grenzen, eine gesenkte Grenze scheitert; Sampling mit gefälschtem curl und docker, neue Anmeldung), Rust-Tests für
+>   Logzeilen und Serienzahl, `just e2e-agent`. Gegenprobe am echten Lauf: `--limit 'q.log_histogram.p95<=900'` lässt
+>   den Bericht scheitern. Gegenproben 28/28.
 - **Ziel:** Einen eigenen Host für eine Woche gibt es nicht (Product Owner); der Nachweis kommt aus dem Testbetrieb
   (V1-18). Vorher ein kurzer Lauf auf der Entwicklungsmaschine: 50 virtuelle Nodes (`just simulate`, mit Modulen und
   Szenarien) gegen die Produktions-Compose über einige Stunden; Ressourcen von Server, Datenbank und Loki, Ingest-Lag,

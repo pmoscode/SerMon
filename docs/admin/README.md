@@ -15,6 +15,8 @@ For operators of a SerMon instance: set up, secure and run the server, and find 
 - [Fehlersuche](de/troubleshooting.md) – Agent verbindet sich nicht, fehlende Metriken und Logs, Module, Helper und
   Updates, Alerts, Step-up, Migrationen
 - [Konfiguration des Servers](de/configuration.md) – jede Variable `SERMON_*` mit Voreinstellung
+- [Lasttest und Performance-Nachweis](de/load-test.md) – `just load-test`, Messung einer laufenden Installation mit
+  `scripts/load-report.sh`, Testbetrieb
 - [Vorlage zur DSGVO-Dokumentation](../privacy/de/README.md)
 - [Benutzerhandbuch](../user/de/README.md) und [Threat Model](../security/threat-model.md)
 
@@ -28,6 +30,8 @@ For operators of a SerMon instance: set up, secure and run the server, and find 
 - [Troubleshooting](en/troubleshooting.md) – agent doesn't connect, missing metrics and logs, modules, helper and
   updates, alerts, step-up, migrations
 - [Server configuration](en/configuration.md) – every `SERMON_*` variable with its default
+- [Load test and proof of performance](en/load-test.md) – `just load-test`, measuring a running installation with
+  `scripts/load-report.sh`, test operation
 - [GDPR documentation template](../privacy/en/README.md)
 - [User guide](../user/en/README.md) and [threat model](../security/threat-model.md) (in German)
 

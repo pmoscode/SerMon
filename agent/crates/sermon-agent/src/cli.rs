@@ -120,6 +120,26 @@ pub struct SimulateArgs {
     /// a server, and exit: for tests of the scenarios in fast motion.
     #[arg(long, value_name = "SPAN", value_parser = parse_span)]
     pub dump: Option<std::time::Duration>,
+
+    /// Synthetic journal lines per second and node on average (busier in the afternoon), for
+    /// load tests of the log store (V1-08); 0 sends none.
+    #[arg(long, default_value_t = 0.0, value_name = "LINES", value_parser = parse_log_rate)]
+    pub log_rate: f64,
+}
+
+/// A log rate from 0 up to the agent's own limit of lines per second.
+#[cfg(feature = "simulate")]
+fn parse_log_rate(value: &str) -> Result<f64, String> {
+    value
+        .parse::<f64>()
+        .ok()
+        .filter(|rate| (0.0..=crate::logship::LINES_PER_SECOND).contains(rate))
+        .ok_or_else(|| {
+            format!(
+                "use a number from 0 to {}",
+                crate::logship::LINES_PER_SECOND
+            )
+        })
 }
 
 /// A span like `90s`, `30m` or `2h`, at most a week.
@@ -381,6 +401,20 @@ mod tests {
             assert!(parse(&["simulate", "--dump", bad]).is_err(), "{bad}");
         }
         assert!(parse(&["simulate", "--scenario", "meltdown"]).is_err());
+        assert_eq!(args.log_rate, 0.0, "no logs unless asked for");
+    }
+
+    #[cfg(feature = "simulate")]
+    #[test]
+    fn simulate_takes_a_log_rate_within_the_agents_limit() {
+        let Command::Simulate(args) = parse(&["simulate", "--log-rate", "2.5"]).unwrap().command
+        else {
+            panic!("expected simulate");
+        };
+        assert!((args.log_rate - 2.5).abs() < f64::EPSILON);
+        for bad in ["-1", "501", "NaN", "inf", "x"] {
+            assert!(parse(&["simulate", "--log-rate", bad]).is_err(), "{bad}");
+        }
     }
 
     /// The simulator enrolls many identities with one token: release builds don't contain it.

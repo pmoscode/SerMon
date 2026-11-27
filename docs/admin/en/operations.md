@@ -133,7 +133,12 @@ never become newer than their server (except in the channel `beta`).
 ## Capacity
 
 - **Guideline for 50 nodes:** 4 vCPU, 8 GB RAM, 200 GB NVMe SSD (KONZEPT §22). The test operation with the release
-  candidate (V1-18) confirms or corrects it; the result and the load test before it (V1-08) will be added here.
+  candidate (V1-18) confirms or corrects it; the result will be added here.
+- **Load test before it (V1-08,** [load test](load-test.md)**):** 50 virtual nodes with about 110 series and 2 log
+  lines per second used a fifth of a core on average and at most 2.5 GiB of memory, without lag. At full retention
+  the disk is taken by the 1-minute values (about 30 GiB after 30 days) and the security events: about 140 GiB a
+  year with a permanent brute force on every node, a few GiB otherwise. Measure your own instance with
+  `scripts/load-report.sh`.
 - At most 2,000 active series per node and 250,000 per organization (T9); beyond that the ingest drops new series
   (self-monitoring "dropped samples"). Superadmins set quotas per organization (nodes, members, samples per second,
   series) on the page "Organizations".

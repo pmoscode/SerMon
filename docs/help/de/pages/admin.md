@@ -16,7 +16,7 @@ Der Reiter **Logs** legt fest, was die Agents jeder Gruppe senden, ob Viewer Log
 
 ## Module
 
-Der Reiter **Module** schaltet je Gruppe die Module ein, die die Agents ihrer Nodes kennen, und richtet sie ein. Mehr dazu: [Module](help:concepts/modules).
+Der Reiter **Module** schaltet je Gruppe die Module ein, die die Agents ihrer Nodes kennen, und richtet sie ein; darunter stehen die ausgeblendeten Vorschläge der Gruppe mit **Wieder anzeigen**. Mehr dazu: [Module](help:concepts/modules).
 
 ## SSO-Gruppen
 

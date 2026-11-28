@@ -147,6 +147,26 @@ describe('ModuleSettingsPanel', () => {
 		expect(page.getByRole('button', { name: 'Save' }).elements()).toHaveLength(0);
 	});
 
+	it('lists the dismissed suggestions of a group and shows them again (V1-25)', async () => {
+		catalog();
+		const data = settings();
+		data.groups[0].dismissedHints = ['smart'];
+		const get = vi.spyOn(modulesApi.modules, 'getModuleSettings').mockResolvedValue(data);
+		const show = vi
+			.spyOn(modulesApi.modules, 'setModuleHintDismissed')
+			.mockResolvedValue({} as never);
+		render(ModuleSettingsPanel);
+		const list = page.getByTestId('dismissed-hints');
+		await expect.element(list).toBeVisible();
+		expect(list.elements()).toHaveLength(1);
+		expect(list.element().textContent).toContain('Dismissed suggestions');
+		await page.getByRole('button', { name: 'Show again: SMART (web)' }).click();
+		await vi.waitFor(() =>
+			expect(show).toHaveBeenCalledWith({ groupId: web, moduleId: 'smart', dismissed: false })
+		);
+		await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+	});
+
 	it('removes a module', async () => {
 		catalog();
 		vi.spyOn(modulesApi.modules, 'getModuleSettings').mockResolvedValue(settings());
@@ -229,6 +249,26 @@ describe('NodeModules', () => {
 		]);
 	});
 
+	it('lets admins dismiss a suggestion for the group (V1-25)', async () => {
+		asAdmin(true);
+		const get = vi
+			.spyOn(modulesApi.modules, 'getNodeModules')
+			.mockResolvedValueOnce(nodeModules())
+			.mockResolvedValue(nodeModules({ hints: [] }));
+		const dismiss = vi
+			.spyOn(modulesApi.modules, 'setModuleHintDismissed')
+			.mockResolvedValue({} as never);
+		render(NodeModules, { nodeId: node, now: new Date() });
+		await page
+			.getByRole('button', { name: 'Dismiss the SMART suggestion for all nodes of the group' })
+			.click();
+		await vi.waitFor(() =>
+			expect(dismiss).toHaveBeenCalledWith({ groupId: web, moduleId: 'smart', dismissed: true })
+		);
+		await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(page.getByTestId('module-hint').elements()).toHaveLength(0));
+	});
+
 	it('asks viewers to see an admin, and says when the host forbids modules', async () => {
 		asAdmin(false);
 		vi.spyOn(modulesApi.modules, 'getNodeModules').mockResolvedValue(nodeModules({ vetoed: true }));
@@ -236,6 +276,7 @@ describe('NodeModules', () => {
 		await expect.element(page.getByText('An admin can turn it on for the group.')).toBeVisible();
 		await expect.element(page.getByText(/allow_modules = false/)).toBeVisible();
 		expect(page.getByRole('link', { name: 'Enable' }).elements()).toHaveLength(0);
+		expect(page.getByRole('button', { name: /^Dismiss/ }).elements()).toHaveLength(0);
 	});
 
 	it('says when nothing runs', async () => {
@@ -273,6 +314,60 @@ describe('FleetModuleHints', () => {
 			'SMART detected on web-01⟨U+202E⟩ – enable the module?'
 		);
 		await expect.element(page.getByRole('link', { name: 'Enable' })).toBeVisible();
+	});
+
+	it('lets admins dismiss a suggestion for the group of a node (V1-25)', async () => {
+		asAdmin(true);
+		const other = '0193f5a0-0000-7000-8000-000000000002';
+		const third = '0193f5a0-0000-7000-8000-000000000003';
+		vi.spyOn(modulesApi.modules, 'listModuleHints').mockResolvedValue(
+			create(ListModuleHintsResponseSchema, {
+				hints: [
+					{ nodeId: node, hostname: 'web-01', groupId: web, hint: { moduleId: 'smart' } },
+					{ nodeId: other, hostname: 'web-02', groupId: web, hint: { moduleId: 'smart' } },
+					{ nodeId: other, hostname: 'web-02', groupId: web, hint: { moduleId: 'simulate' } },
+					{ nodeId: third, hostname: 'db-01', groupId: db, hint: { moduleId: 'smart' } }
+				]
+			})
+		);
+		const dismiss = vi
+			.spyOn(modulesApi.modules, 'setModuleHintDismissed')
+			.mockRejectedValueOnce(new ConnectError('down', Code.Unavailable))
+			.mockResolvedValue({} as never);
+		render(FleetModuleHints);
+		const button = page.getByRole('button', {
+			name: 'Dismiss the SMART suggestion for the group of web-01'
+		});
+		await button.click();
+		await expect.element(page.getByRole('alert')).toBeVisible();
+		expect(page.getByTestId('fleet-module-hint').elements()).toHaveLength(4);
+		await button.click();
+		await vi.waitFor(() =>
+			expect(dismiss).toHaveBeenLastCalledWith({ groupId: web, moduleId: 'smart', dismissed: true })
+		);
+		// Every node of the group loses it; other modules and groups keep theirs.
+		await vi.waitFor(() =>
+			expect(page.getByTestId('fleet-module-hint').elements()).toHaveLength(2)
+		);
+		const left = page
+			.getByTestId('fleet-module-hint')
+			.elements()
+			.map((e) => e.textContent ?? '');
+		expect(left[0]).toContain('Test module (simulate) detected on web-02');
+		expect(left[1]).toContain('SMART detected on db-01');
+		expect(page.getByRole('alert').elements()).toHaveLength(0);
+	});
+
+	it('offers viewers no dismissing', async () => {
+		asAdmin(false);
+		vi.spyOn(modulesApi.modules, 'listModuleHints').mockResolvedValue(
+			create(ListModuleHintsResponseSchema, {
+				hints: [{ nodeId: node, hostname: 'web-01', groupId: web, hint: { moduleId: 'smart' } }]
+			})
+		);
+		render(FleetModuleHints);
+		await expect.element(page.getByTestId('fleet-module-hint')).toBeVisible();
+		expect(page.getByRole('button', { name: /^Dismiss/ }).elements()).toHaveLength(0);
 	});
 
 	it('shows nothing without suggestions or when they fail', async () => {

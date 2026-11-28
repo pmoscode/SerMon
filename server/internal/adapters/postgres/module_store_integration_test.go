@@ -443,3 +443,183 @@ func TestModuleStore_ChecksInTheTransaction(t *testing.T) {
 		t.Errorf("after the removal: %v", fields)
 	}
 }
+
+// V1-25: a suggestion dismissed for a group is gone for every node of the group – in the fleet
+// and at the node – also after new reports of the agents, until shown again; other groups and
+// modules keep theirs. Only a change is audited; another organization neither reads nor writes
+// the dismissals, without a tenant nothing is visible.
+func TestModuleStore_DismissedHints(t *testing.T) {
+	f := setup(t)
+	ctx := context.Background()
+	db := open(t, f.appDSN)
+	store, configs := postgres.NewModuleStore(db), postgres.NewLogSettingsStore(db)
+	web1, web2, other := uuid.New(), uuid.New(), uuid.New()
+	for _, n := range []uuid.UUID{web1, web2, other} {
+		createNode(t, f.db.OwnerDSN, orgA, n)
+	}
+	group, otherGroup := groupOf(t, f.db.OwnerDSN, web1), groupOf(t, f.db.OwnerDSN, other)
+	ownerExec(t, f.db.OwnerDSN, `UPDATE nodes SET group_id = $1 WHERE id = $2`, group, web2)
+	at := time.Now().Truncate(time.Second)
+	report := func(node uuid.UUID, hints ...module.Hint) {
+		t.Helper()
+		if _, err := configs.Announced(ctx, tenant.OrgID(orgA), identity.NodeID(node), []string{"nginx", "redis"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.WriteModuleHints(ctx, tenant.OrgID(orgA), identity.NodeID(node), module.Hints{CollectedAt: at, Hints: hints}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	nginx := module.Hint{Module: "nginx", Reasons: []string{"process:nginx"}}
+	redis := module.Hint{Module: "redis", Reasons: []string{"port:6379"}}
+	report(web1, nginx, redis)
+	report(web2, nginx)
+	report(other, nginx)
+	open := func() map[uuid.UUID][]string {
+		t.Helper()
+		hints, err := store.OpenHints(ctx, scopeFor(t, orgA), 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[uuid.UUID][]string{}
+		for _, h := range hints {
+			out[uuid.UUID(h.Node)] = append(out[uuid.UUID(h.Node)], h.Hint.Module)
+		}
+		return out
+	}
+	atNode := func(node uuid.UUID) []string {
+		t.Helper()
+		n, err := store.Node(ctx, scopeFor(t, orgA), identity.NodeID(node))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		if n.Hints != nil {
+			for _, h := range n.Hints.Hints {
+				out = append(out, h.Module)
+			}
+		}
+		return out
+	}
+	audits := func(action string) int {
+		t.Helper()
+		var n int
+		queryOwner(t, f.db.OwnerDSN, `SELECT count(*) FROM audit_log WHERE org_id = $1 AND action = $2 AND target = $3`, []any{orgA, action, "group:" + group.String()}, &n)
+		return n
+	}
+	version := func() int64 {
+		t.Helper()
+		var v int64
+		queryOwner(t, f.db.OwnerDSN, `SELECT agent_config_version FROM organizations WHERE id = $1`, []any{orgA}, &v)
+		return v
+	}
+	before := version()
+	dismiss := func(scope tenant.Scope, g uuid.UUID, mod string, dismissed bool) error {
+		action := "module.hint_show"
+		if dismissed {
+			action = "module.hint_dismiss"
+		}
+		return store.SetHintDismissed(ctx, scope, tenant.GroupID(g), mod, dismissed, access.AuditEntry{Action: action, Target: "group:" + g.String()})
+	}
+	for range 2 {
+		if err := dismiss(scopeFor(t, orgA), group, "nginx", true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := open()
+	if !slices.Equal(got[web1], []string{"redis"}) || len(got[web2]) != 0 || !slices.Equal(got[other], []string{"nginx"}) {
+		t.Errorf("open hints %v: nginx dismissed for the group of web1 and web2 only", got)
+	}
+	if h := atNode(web1); !slices.Equal(h, []string{"redis"}) {
+		t.Errorf("hints at web1 %v", h)
+	}
+	if h := atNode(other); !slices.Equal(h, []string{"nginx"}) {
+		t.Errorf("hints at the other group's node %v", h)
+	}
+	if n := audits("module.hint_dismiss"); n != 1 {
+		t.Errorf("%d audit entries for dismissing twice, want 1", n)
+	}
+	if v := version(); v != before {
+		t.Errorf("version %d → %d: the agents get nothing new", before, v)
+	}
+	view, err := store.View(ctx, scopeFor(t, orgA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range view.Groups {
+		switch uuid.UUID(g.ID) {
+		case group:
+			if !slices.Equal(g.Dismissed, []string{"nginx"}) {
+				t.Errorf("View(group).Dismissed = %v", g.Dismissed)
+			}
+		case otherGroup:
+			if len(g.Dismissed) != 0 {
+				t.Errorf("View(other).Dismissed = %v", g.Dismissed)
+			}
+		}
+	}
+	// New reasons of the agent don't bring it back.
+	report(web2, module.Hint{Module: "nginx", Reasons: []string{"process:nginx", "port:443", "unit:nginx.service"}})
+	if got := open(); len(got[web2]) != 0 {
+		t.Errorf("a new report brought it back: %v", got[web2])
+	}
+
+	// Another organization, an unknown group, no tenant.
+	if err := dismiss(scopeFor(t, orgB), group, "redis", true); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("org B dismissed in org A's group: %v", err)
+	}
+	if err := dismiss(scopeFor(t, orgB), group, "nginx", false); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("org B showed in org A's group: %v", err)
+	}
+	if err := dismiss(scopeFor(t, orgA), uuid.New(), "nginx", true); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("unknown group: %v", err)
+	}
+	if view, _ := store.View(ctx, scopeFor(t, orgB)); slices.ContainsFunc(view.Groups, func(g modules.Group) bool { return len(g.Dismissed) > 0 }) {
+		t.Errorf("org B sees %+v", view.Groups)
+	}
+	var rows int
+	queryOwner(t, f.db.OwnerDSN, `SELECT count(*) FROM module_hint_dismissals WHERE group_id = $1`, []any{group}, &rows)
+	if rows != 1 {
+		t.Errorf("%d dismissals in org A's group", rows)
+	}
+	var enabled, forced bool
+	queryOwner(t, f.db.OwnerDSN, "SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'module_hint_dismissals'", nil, &enabled, &forced)
+	if !enabled || !forced {
+		t.Errorf("module_hint_dismissals: RLS %v %v", enabled, forced)
+	}
+	conn, err := pgx.Connect(ctx, f.appDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var n int
+	if err := conn.QueryRow(ctx, "SELECT count(*) FROM module_hint_dismissals").Scan(&n); err != nil || n != 0 {
+		t.Errorf("without tenant: %d, %v", n, err)
+	}
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT set_config('sermon.org_id', $1, true)", orgB.String()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO module_hint_dismissals (org_id, group_id, module_id) VALUES ($1, $2, 'redis')`, orgA, group); err == nil {
+		t.Error("a row for another organization must be rejected")
+	}
+	_ = tx.Rollback(ctx)
+
+	// Shown again: back for both nodes; showing twice is audited once.
+	for range 2 {
+		if err := dismiss(scopeFor(t, orgA), group, "nginx", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := open(); !slices.Equal(got[web1], []string{"nginx", "redis"}) || !slices.Equal(got[web2], []string{"nginx"}) {
+		t.Errorf("after showing again: %v", got)
+	}
+	if h := atNode(web2); !slices.Equal(h, []string{"nginx"}) {
+		t.Errorf("hints at web2 %v", h)
+	}
+	if n := audits("module.hint_show"); n != 1 {
+		t.Errorf("%d audit entries for showing twice, want 1", n)
+	}
+}

@@ -6865,7 +6865,29 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Zahlen wie aus Loki.
 - **Abhängig von:** V1-23
 
-#### ☐ V1-25 – Vorschläge der Module ausblenden · S+W · S
+#### ☑ V1-25 – Vorschläge der Module ausblenden · S+W · S
+> Erledigt (2026-11-28, ADR 0039 Nachtrag V1-25, KONZEPT §15):
+> - **Ablage:** Migration 00085: `module_hint_dismissals` (Org, Gruppe, Modul, Zeitpunkt; ENABLE + FORCE RLS auf
+>   `current_org_id()`, mit der Gruppe gelöscht, im Backup). Wer ausgeblendet hat, steht nur im Audit-Log.
+> - **Server:** `ModuleService.SetModuleHintDismissed` (Gruppe, Modul, an/aus; additiv, `dismissed_hints` an den
+>   Einstellungen der Gruppe). Die Abfragen der Fleet (`ListModuleHints`) und des Nodes (`GetNodeModules`) lassen
+>   ausgeblendete Vorschläge der Gruppe weg, die Grenze von 500 zählt nur offene. Unbekannte Gruppe oder ein Modul,
+>   das der Server nicht kennt: `NOT_FOUND`.
+> - **Entscheidungen:** Recht wie die Einstellungen `manage_modules` (Admins für alle Gruppen, keine neue Action, die
+>   Rollen-Matrix deckt sie ab). **Ohne Step-up** (in `stepUpExempt` begründet): ändert keine Einstellung und nichts an
+>   den Agents, die Version bleibt. Audit `module.hint_dismiss`/`module.hint_show` nur bei einer Änderung. Ein
+>   Vorschlag **bleibt ausgeblendet**, bis ein Admin ihn wieder anzeigt – auch bei anderen Gründen des Agents (Ports
+>   und Units wechseln, ein Vergleich brächte ihn ungefragt zurück).
+> - **UI:** „Ausblenden“ für Admins im Kästchen der Fleet (entfernt den Vorschlag aller Nodes der Gruppe) und am Reiter
+>   Module des Nodes; unter Organisation → Module je Gruppe „Ausgeblendete Vorschläge“ mit „Wieder anzeigen“. Texte DE +
+>   EN, Hilfe `concepts/modules`, Seiten `node` und `admin`, Benutzerhandbuch §11.
+> - **Tests:** Use-Case (Admin ohne frischen Step-up, Audit beider Richtungen, Version bleibt; Viewer, Operator,
+>   Gruppen-Admin, ohne Principal verweigert; unbekanntes Modul und Gruppe); gegen PostgreSQL (alle Nodes der Gruppe,
+>   andere Gruppe und anderes Modul bleiben, neuer Bericht bringt ihn nicht zurück, Einstellungen listen ihn, Audit nur
+>   bei Änderung, fremde Org, ohne Tenant, Schreibschutz, RLS forciert, wieder einblenden); API (Viewer verweigert,
+>   Fleet und Node, Audit-Log, wieder einblenden); Tenant-Isolation (ausblenden und einblenden in Alphas Gruppe,
+>   Alphas Einträge unverändert, keine Daten in den Einstellungen); Step-up-Tabelle; Komponenten (Fleet, Node,
+>   Einstellungen, Viewer ohne Knopf, Fehler); E2E mit axe. Gegenproben 22/22.
 - **Ziel:** Aus dem Testbetrieb (V1-18): Das Kästchen „Vorschläge für Module“ in der Fleet lässt sich nicht
   wegklicken; ein Vorschlag verschwindet nur, wenn das Modul eingeschaltet wird oder der Agent den Dienst nicht mehr
   sieht. Admins blenden einen Vorschlag je Modul und Gruppe aus (Product Owner, 2026-11-28): im Server gespeichert, für

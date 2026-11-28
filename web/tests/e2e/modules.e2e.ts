@@ -139,6 +139,50 @@ test('suggests a module in the fleet and sets it up for the group after the step
 	await expect(page.getByLabel(/^Token/)).toHaveCount(0);
 });
 
+// V1-25: an admin dismisses a suggestion in the fleet for its group and shows it again in the
+// settings of the group's modules.
+test('dismisses a suggestion for the group and shows it again', async ({ page }) => {
+	const calls: unknown[] = [];
+	await mockApi(page, {
+		...moduleApi([], { done: true }),
+		'ModuleService/SetModuleHintDismissed': (body: unknown) => {
+			calls.push(body);
+			return { json: {} };
+		},
+		'ModuleService/GetModuleSettings': () => ({
+			json: {
+				version: '3',
+				groups: [
+					{
+						groupId: group,
+						groupName: 'web',
+						available: ['simulate'],
+						dismissedHints: calls.length === 1 ? ['simulate'] : []
+					}
+				]
+			}
+		})
+	});
+	await page.goto('/fleet');
+	await page
+		.getByRole('button', {
+			name: 'Dismiss the Test module (simulate) suggestion for the group of web-01'
+		})
+		.click();
+	await expect(page.getByTestId('fleet-module-hint')).toHaveCount(0);
+	expect(calls).toEqual([{ groupId: group, moduleId: 'simulate', dismissed: true }]);
+
+	await page.goto('/admin');
+	await page.getByRole('tab', { name: 'Modules' }).click();
+	const dismissed = page.getByTestId('dismissed-hints');
+	await expect(dismissed).toContainText('Dismissed suggestions');
+	const results = await new AxeBuilder({ page }).analyze();
+	expect(results.violations, 'dismissed suggestions').toEqual([]);
+	await dismissed.getByRole('button', { name: 'Show again: Test module (simulate) (web)' }).click();
+	await expect(dismissed).toHaveCount(0);
+	expect(calls[1]).toEqual({ groupId: group, moduleId: 'simulate' });
+});
+
 test('shows the modules of a node with their state and passes axe', async ({ page }) => {
 	await mockApi(page, {
 		...moduleApi([], { done: true }),

@@ -51,6 +51,9 @@ const (
 	// ModuleServiceListModuleHintsProcedure is the fully-qualified name of the ModuleService's
 	// ListModuleHints RPC.
 	ModuleServiceListModuleHintsProcedure = "/sermon.web.v1.ModuleService/ListModuleHints"
+	// ModuleServiceSetModuleHintDismissedProcedure is the fully-qualified name of the ModuleService's
+	// SetModuleHintDismissed RPC.
+	ModuleServiceSetModuleHintDismissedProcedure = "/sermon.web.v1.ModuleService/SetModuleHintDismissed"
 )
 
 // ModuleServiceClient is a client for the sermon.web.v1.ModuleService service.
@@ -71,6 +74,12 @@ type ModuleServiceClient interface {
 	// ListModuleHints returns the suggestions of the visible nodes for modules their group doesn't
 	// run yet ("nginx detected – enable the module?").
 	ListModuleHints(context.Context, *connect.Request[v1.ListModuleHintsRequest]) (*connect.Response[v1.ListModuleHintsResponse], error)
+	// SetModuleHintDismissed hides the suggestions of a module for the nodes of a group, for every
+	// member, or shows them again (V1-25). For admins for all groups like the settings, but without
+	// a step-up: it changes no setting and nothing on the agents. A dismissed suggestion stays
+	// hidden, whatever the agents report later, until shown again. NOT_FOUND for an unknown group
+	// or module.
+	SetModuleHintDismissed(context.Context, *connect.Request[v1.SetModuleHintDismissedRequest]) (*connect.Response[v1.SetModuleHintDismissedResponse], error)
 }
 
 // NewModuleServiceClient constructs a client for the sermon.web.v1.ModuleService service. By
@@ -124,17 +133,24 @@ func NewModuleServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 			connect.WithClientOptions(opts...),
 		),
+		setModuleHintDismissed: connect.NewClient[v1.SetModuleHintDismissedRequest, v1.SetModuleHintDismissedResponse](
+			httpClient,
+			baseURL+ModuleServiceSetModuleHintDismissedProcedure,
+			connect.WithSchema(moduleServiceMethods.ByName("SetModuleHintDismissed")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // moduleServiceClient implements ModuleServiceClient.
 type moduleServiceClient struct {
-	listModules       *connect.Client[v1.ListModulesRequest, v1.ListModulesResponse]
-	getModuleSettings *connect.Client[v1.GetModuleSettingsRequest, v1.GetModuleSettingsResponse]
-	setGroupModule    *connect.Client[v1.SetGroupModuleRequest, v1.SetGroupModuleResponse]
-	removeGroupModule *connect.Client[v1.RemoveGroupModuleRequest, v1.RemoveGroupModuleResponse]
-	getNodeModules    *connect.Client[v1.GetNodeModulesRequest, v1.GetNodeModulesResponse]
-	listModuleHints   *connect.Client[v1.ListModuleHintsRequest, v1.ListModuleHintsResponse]
+	listModules            *connect.Client[v1.ListModulesRequest, v1.ListModulesResponse]
+	getModuleSettings      *connect.Client[v1.GetModuleSettingsRequest, v1.GetModuleSettingsResponse]
+	setGroupModule         *connect.Client[v1.SetGroupModuleRequest, v1.SetGroupModuleResponse]
+	removeGroupModule      *connect.Client[v1.RemoveGroupModuleRequest, v1.RemoveGroupModuleResponse]
+	getNodeModules         *connect.Client[v1.GetNodeModulesRequest, v1.GetNodeModulesResponse]
+	listModuleHints        *connect.Client[v1.ListModuleHintsRequest, v1.ListModuleHintsResponse]
+	setModuleHintDismissed *connect.Client[v1.SetModuleHintDismissedRequest, v1.SetModuleHintDismissedResponse]
 }
 
 // ListModules calls sermon.web.v1.ModuleService.ListModules.
@@ -167,6 +183,11 @@ func (c *moduleServiceClient) ListModuleHints(ctx context.Context, req *connect.
 	return c.listModuleHints.CallUnary(ctx, req)
 }
 
+// SetModuleHintDismissed calls sermon.web.v1.ModuleService.SetModuleHintDismissed.
+func (c *moduleServiceClient) SetModuleHintDismissed(ctx context.Context, req *connect.Request[v1.SetModuleHintDismissedRequest]) (*connect.Response[v1.SetModuleHintDismissedResponse], error) {
+	return c.setModuleHintDismissed.CallUnary(ctx, req)
+}
+
 // ModuleServiceHandler is an implementation of the sermon.web.v1.ModuleService service.
 type ModuleServiceHandler interface {
 	// ListModules returns the modules the server knows, with the schema of their configuration.
@@ -185,6 +206,12 @@ type ModuleServiceHandler interface {
 	// ListModuleHints returns the suggestions of the visible nodes for modules their group doesn't
 	// run yet ("nginx detected – enable the module?").
 	ListModuleHints(context.Context, *connect.Request[v1.ListModuleHintsRequest]) (*connect.Response[v1.ListModuleHintsResponse], error)
+	// SetModuleHintDismissed hides the suggestions of a module for the nodes of a group, for every
+	// member, or shows them again (V1-25). For admins for all groups like the settings, but without
+	// a step-up: it changes no setting and nothing on the agents. A dismissed suggestion stays
+	// hidden, whatever the agents report later, until shown again. NOT_FOUND for an unknown group
+	// or module.
+	SetModuleHintDismissed(context.Context, *connect.Request[v1.SetModuleHintDismissedRequest]) (*connect.Response[v1.SetModuleHintDismissedResponse], error)
 }
 
 // NewModuleServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -234,6 +261,12 @@ func NewModuleServiceHandler(svc ModuleServiceHandler, opts ...connect.HandlerOp
 		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
 		connect.WithHandlerOptions(opts...),
 	)
+	moduleServiceSetModuleHintDismissedHandler := connect.NewUnaryHandler(
+		ModuleServiceSetModuleHintDismissedProcedure,
+		svc.SetModuleHintDismissed,
+		connect.WithSchema(moduleServiceMethods.ByName("SetModuleHintDismissed")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/sermon.web.v1.ModuleService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ModuleServiceListModulesProcedure:
@@ -248,6 +281,8 @@ func NewModuleServiceHandler(svc ModuleServiceHandler, opts ...connect.HandlerOp
 			moduleServiceGetNodeModulesHandler.ServeHTTP(w, r)
 		case ModuleServiceListModuleHintsProcedure:
 			moduleServiceListModuleHintsHandler.ServeHTTP(w, r)
+		case ModuleServiceSetModuleHintDismissedProcedure:
+			moduleServiceSetModuleHintDismissedHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -279,4 +314,8 @@ func (UnimplementedModuleServiceHandler) GetNodeModules(context.Context, *connec
 
 func (UnimplementedModuleServiceHandler) ListModuleHints(context.Context, *connect.Request[v1.ListModuleHintsRequest]) (*connect.Response[v1.ListModuleHintsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.ModuleService.ListModuleHints is not implemented"))
+}
+
+func (UnimplementedModuleServiceHandler) SetModuleHintDismissed(context.Context, *connect.Request[v1.SetModuleHintDismissedRequest]) (*connect.Response[v1.SetModuleHintDismissedResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("sermon.web.v1.ModuleService.SetModuleHintDismissed is not implemented"))
 }

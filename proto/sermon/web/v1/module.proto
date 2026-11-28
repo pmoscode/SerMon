@@ -35,6 +35,12 @@ service ModuleService {
   rpc ListModuleHints(ListModuleHintsRequest) returns (ListModuleHintsResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // SetModuleHintDismissed hides the suggestions of a module for the nodes of a group, for every
+  // member, or shows them again (V1-25). For admins for all groups like the settings, but without
+  // a step-up: it changes no setting and nothing on the agents. A dismissed suggestion stays
+  // hidden, whatever the agents report later, until shown again. NOT_FOUND for an unknown group
+  // or module.
+  rpc SetModuleHintDismissed(SetModuleHintDismissedRequest) returns (SetModuleHintDismissedResponse);
 }
 
 // Module is a module the server knows.
@@ -78,6 +84,8 @@ message GroupModuleSettings {
   // available are the modules the agents of the group's nodes have built in: those the form
   // offers (a release agent has no test module).
   repeated string available = 4;
+  // dismissed_hints are the modules whose suggestions are hidden for the group (V1-25), by ID.
+  repeated string dismissed_hints = 5;
 }
 
 // ModuleState is how a module does on a node.
@@ -237,3 +245,17 @@ message NodeModuleHint {
   // hint is the suggestion.
   ModuleHint hint = 4;
 }
+
+// SetModuleHintDismissedRequest names the group, the module and whether its suggestions are
+// hidden.
+message SetModuleHintDismissedRequest {
+  // group_id is the node group.
+  string group_id = 1 [(buf.validate.field).string.uuid = true];
+  // module_id names the module.
+  string module_id = 2 [(buf.validate.field).string.pattern = "^[a-z][a-z0-9_]{0,31}$"];
+  // dismissed hides the suggestions; false shows them again.
+  bool dismissed = 3;
+}
+
+// SetModuleHintDismissedResponse has no fields.
+message SetModuleHintDismissedResponse {}

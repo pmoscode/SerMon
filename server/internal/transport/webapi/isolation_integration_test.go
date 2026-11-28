@@ -290,6 +290,11 @@ func TestTenantIsolation_AdminOfAnotherOrganizationCannotTouchForeignData(t *tes
 	if alphaModules != 1 || alphaConfig != `{"value": 3}` || alphaHints != 1 {
 		t.Errorf("Alpha's modules changed: %d settings (%s), %d hints", alphaModules, alphaConfig, alphaHints)
 	}
+	var alphaDismissed string
+	_ = conn.QueryRow(ctx, "SELECT coalesce(string_agg(module_id, ',' ORDER BY module_id), '') FROM module_hint_dismissals WHERE org_id = $1", orgAlpha).Scan(&alphaDismissed)
+	if alphaDismissed != "redis" {
+		t.Errorf("Alpha's dismissed suggestions changed: %q", alphaDismissed)
+	}
 	var alphaAcked int
 	_ = conn.QueryRow(ctx, "SELECT count(*) FROM alert_instances WHERE org_id = $1 AND ack_by IS NOT NULL", orgAlpha).Scan(&alphaAcked)
 	if alphaAcked != 0 {
@@ -427,6 +432,8 @@ func seedModulesAlpha(t *testing.T) {
 		"UPDATE nodes SET modules = '{simulate,nginx}' WHERE id = '"+nodeAl+"'",
 		"DELETE FROM module_hints WHERE node_id = '"+nodeAl+"'",
 		"INSERT INTO module_hints (org_id, node_id, module_id, reasons, collected_at, received_at) VALUES ('"+orgAlpha+"', '"+nodeAl+"', 'nginx', '{process:alpha-nginx}', now(), now())",
+		"DELETE FROM module_hint_dismissals WHERE org_id = '"+orgAlpha+"'",
+		"INSERT INTO module_hint_dismissals (org_id, group_id, module_id) VALUES ('"+orgAlpha+"', '"+groupAl+"', 'redis')",
 		"DELETE FROM module_health WHERE node_id = '"+nodeAl+"'",
 		"INSERT INTO module_health (org_id, node_id, module_id, state, reason, collected_at, received_at) VALUES ('"+orgAlpha+"', '"+nodeAl+"', 'simulate', 2, 'alpha reason', now(), now())",
 	)

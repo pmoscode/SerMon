@@ -16,7 +16,7 @@ The **Logs** tab sets what each group's agents send, whether viewers see logs an
 
 ## Modules
 
-The **Modules** tab turns on, per group, the modules its nodes' agents have, and sets them up. More: [Modules](help:concepts/modules).
+The **Modules** tab turns on, per group, the modules its nodes' agents have, and sets them up; below are the group's dismissed suggestions with **Show again**. More: [Modules](help:concepts/modules).
 
 ## SSO groups
 

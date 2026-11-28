@@ -335,3 +335,15 @@ sondern den ganzen Agent an. Deshalb:
   unter einer Sperre des Moduls der Gruppe (`pg_advisory_xact_lock`), die auch das Entfernen nimmt; vorher wird nur
   geprüft, was ohnehin falsch wäre. Alle Felder für Zugangsdaten aller Module passen in eine `ModuleSecrets`-Nachricht
   (64, Test), keins fällt still weg.
+
+## Nachtrag V1-25 (Vorschläge ausblenden)
+
+- **Je Modul und Gruppe** in `module_hint_dismissals` (RLS, mit der Gruppe gelöscht, im Backup): Ein ausgeblendeter
+  Vorschlag fehlt für alle Mitglieder in der Fleet und am Node; die Einstellungen der Gruppe listen ihn mit „Wieder
+  anzeigen“. Gefiltert wird in der Abfrage, die Grenze von 500 Hinweisen der Fleet zählt nur offene.
+- **Wer:** wie die Einstellungen `manage_modules` (Admins für alle Gruppen), keine neue Action; Audit `module.hint_dismiss`
+  bzw. `module.hint_show` nur, wenn sich etwas ändert. **Ohne Step-up:** Ausblenden ändert keine Einstellung und nichts
+  an den Agents, die Version der Konfiguration bleibt.
+- **Bleibt ausgeblendet,** bis ein Admin den Vorschlag wieder anzeigt – auch wenn der Agent andere Gründe meldet oder
+  das Modul ein- und wieder ausgeschaltet wird. Gründe zu vergleichen wäre unscharf (Ports und Units wechseln mit jedem
+  Bericht) und brächte den Vorschlag ungefragt zurück.

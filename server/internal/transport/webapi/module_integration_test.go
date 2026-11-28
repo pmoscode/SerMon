@@ -125,6 +125,83 @@ func TestModules_AdminsSetGroupsViewersSeeTheirNodes(t *testing.T) {
 	}
 }
 
+// V1-25: an admin dismisses a suggestion for the group: gone for every member in the fleet and at
+// the node, listed in the settings, audited; shown again, it is back. Viewers can't do either.
+func TestModules_AdminsDismissSuggestions(t *testing.T) {
+	s := newStack(t, 1000)
+	seedAccessFixtures(t)
+	seedModulesAlpha(t)
+	ctx := context.Background()
+	ann := login(t, s, "ann@example.org") // admin of Alpha
+	mia := login(t, s, "mia@example.org") // viewer of Alpha's group
+	dismiss := func(c webv1connect.ModuleServiceClient, module string, dismissed bool) error {
+		_, err := c.SetModuleHintDismissed(ctx, connect.NewRequest(&webv1.SetModuleHintDismissedRequest{GroupId: groupAl, ModuleId: module, Dismissed: dismissed}))
+		return err
+	}
+	open := func() (fleet, node int) {
+		t.Helper()
+		hints, err := mia.modules.ListModuleHints(ctx, connect.NewRequest(&webv1.ListModuleHintsRequest{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, err := mia.modules.GetNodeModules(ctx, connect.NewRequest(&webv1.GetNodeModulesRequest{NodeId: nodeAl}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(hints.Msg.GetHints()), len(n.Msg.GetHints())
+	}
+	dismissedOf := func() []string {
+		t.Helper()
+		res, err := ann.modules.GetModuleSettings(ctx, connect.NewRequest(&webv1.GetModuleSettingsRequest{}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range res.Msg.GetGroups() {
+			if g.GetGroupId() == groupAl {
+				return g.GetDismissedHints()
+			}
+		}
+		t.Fatal("no group")
+		return nil
+	}
+	if f, n := open(); f != 1 || n != 1 {
+		t.Fatalf("before: %d in the fleet, %d at the node", f, n)
+	}
+	if err := dismiss(mia.modules, "nginx", true); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("viewer dismisses: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		module string
+		code   connect.Code
+	}{"unknown module": {"nosuch", connect.CodeNotFound}, "invalid module": {"Nginx", connect.CodeInvalidArgument}} {
+		if err := dismiss(ann.modules, tc.module, true); connect.CodeOf(err) != tc.code {
+			t.Errorf("%s: %v, want %s", name, err, tc.code)
+		}
+	}
+	if err := dismiss(ann.modules, "nginx", true); err != nil {
+		t.Fatal(err)
+	}
+	if f, n := open(); f != 0 || n != 0 {
+		t.Errorf("dismissed: %d in the fleet, %d at the node", f, n)
+	}
+	if got := strings.Join(dismissedOf(), ","); got != "nginx,redis" {
+		t.Errorf("settings list %q as dismissed", got)
+	}
+	audit, err := ann.access.ListAuditLog(ctx, connect.NewRequest(&webv1.ListAuditLogRequest{}))
+	if err != nil || !strings.Contains(audit.Msg.String(), "module.hint_dismiss") {
+		t.Errorf("audit log lacks module.hint_dismiss: %v", err)
+	}
+	if err := dismiss(ann.modules, "nginx", false); err != nil {
+		t.Fatal(err)
+	}
+	if f, n := open(); f != 1 || n != 1 {
+		t.Errorf("shown again: %d in the fleet, %d at the node", f, n)
+	}
+	if got := strings.Join(dismissedOf(), ","); got != "redis" {
+		t.Errorf("settings list %q as dismissed", got)
+	}
+}
+
 // M5-05: a credential set with a module is never returned – the settings name the field only –
 // and its value is in no table, the audit log included (the test reads them all).
 func TestModules_CredentialsAreSealedAndNeverReturned(t *testing.T) {

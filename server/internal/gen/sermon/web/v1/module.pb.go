@@ -257,9 +257,11 @@ type GroupModuleSettings struct {
 	Modules []*ModuleSetting `protobuf:"bytes,3,rep,name=modules,proto3" json:"modules,omitempty"`
 	// available are the modules the agents of the group's nodes have built in: those the form
 	// offers (a release agent has no test module).
-	Available     []string `protobuf:"bytes,4,rep,name=available,proto3" json:"available,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Available []string `protobuf:"bytes,4,rep,name=available,proto3" json:"available,omitempty"`
+	// dismissed_hints are the modules whose suggestions are hidden for the group (V1-25), by ID.
+	DismissedHints []string `protobuf:"bytes,5,rep,name=dismissed_hints,json=dismissedHints,proto3" json:"dismissed_hints,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GroupModuleSettings) Reset() {
@@ -316,6 +318,13 @@ func (x *GroupModuleSettings) GetModules() []*ModuleSetting {
 func (x *GroupModuleSettings) GetAvailable() []string {
 	if x != nil {
 		return x.Available
+	}
+	return nil
+}
+
+func (x *GroupModuleSettings) GetDismissedHints() []string {
+	if x != nil {
+		return x.DismissedHints
 	}
 	return nil
 }
@@ -1148,6 +1157,108 @@ func (x *NodeModuleHint) GetHint() *ModuleHint {
 	return nil
 }
 
+// SetModuleHintDismissedRequest names the group, the module and whether its suggestions are
+// hidden.
+type SetModuleHintDismissedRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// group_id is the node group.
+	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// module_id names the module.
+	ModuleId string `protobuf:"bytes,2,opt,name=module_id,json=moduleId,proto3" json:"module_id,omitempty"`
+	// dismissed hides the suggestions; false shows them again.
+	Dismissed     bool `protobuf:"varint,3,opt,name=dismissed,proto3" json:"dismissed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetModuleHintDismissedRequest) Reset() {
+	*x = SetModuleHintDismissedRequest{}
+	mi := &file_sermon_web_v1_module_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetModuleHintDismissedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetModuleHintDismissedRequest) ProtoMessage() {}
+
+func (x *SetModuleHintDismissedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_module_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetModuleHintDismissedRequest.ProtoReflect.Descriptor instead.
+func (*SetModuleHintDismissedRequest) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_module_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *SetModuleHintDismissedRequest) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
+func (x *SetModuleHintDismissedRequest) GetModuleId() string {
+	if x != nil {
+		return x.ModuleId
+	}
+	return ""
+}
+
+func (x *SetModuleHintDismissedRequest) GetDismissed() bool {
+	if x != nil {
+		return x.Dismissed
+	}
+	return false
+}
+
+// SetModuleHintDismissedResponse has no fields.
+type SetModuleHintDismissedResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetModuleHintDismissedResponse) Reset() {
+	*x = SetModuleHintDismissedResponse{}
+	mi := &file_sermon_web_v1_module_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetModuleHintDismissedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetModuleHintDismissedResponse) ProtoMessage() {}
+
+func (x *SetModuleHintDismissedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_sermon_web_v1_module_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetModuleHintDismissedResponse.ProtoReflect.Descriptor instead.
+func (*SetModuleHintDismissedResponse) Descriptor() ([]byte, []int) {
+	return file_sermon_web_v1_module_proto_rawDescGZIP(), []int{19}
+}
+
 var File_sermon_web_v1_module_proto protoreflect.FileDescriptor
 
 const file_sermon_web_v1_module_proto_rawDesc = "" +
@@ -1166,13 +1277,14 @@ const file_sermon_web_v1_module_proto_rawDesc = "" +
 	"\vconfig_json\x18\x04 \x01(\tB\t\xbaH\x06r\x04(\x80\x80\x01R\n" +
 	"configJson\x12)\n" +
 	"\vsecrets_set\x18\x05 \x03(\tB\b\xbaH\x05\x92\x01\x02\x10@R\n" +
-	"secretsSet\"\xa5\x01\n" +
+	"secretsSet\"\xce\x01\n" +
 	"\x13GroupModuleSettings\x12\x19\n" +
 	"\bgroup_id\x18\x01 \x01(\tR\agroupId\x12\x1d\n" +
 	"\n" +
 	"group_name\x18\x02 \x01(\tR\tgroupName\x126\n" +
 	"\amodules\x18\x03 \x03(\v2\x1c.sermon.web.v1.ModuleSettingR\amodules\x12\x1c\n" +
-	"\tavailable\x18\x04 \x03(\tR\tavailable\"\xb4\x01\n" +
+	"\tavailable\x18\x04 \x03(\tR\tavailable\x12'\n" +
+	"\x0fdismissed_hints\x18\x05 \x03(\tR\x0edismissedHints\"\xb4\x01\n" +
 	"\fModuleHealth\x12\x1b\n" +
 	"\tmodule_id\x18\x01 \x01(\tR\bmoduleId\x120\n" +
 	"\x05state\x18\x02 \x01(\x0e2\x1a.sermon.web.v1.ModuleStateR\x05state\x12\x16\n" +
@@ -1221,7 +1333,12 @@ const file_sermon_web_v1_module_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x19\n" +
 	"\bgroup_id\x18\x03 \x01(\tR\agroupId\x12-\n" +
-	"\x04hint\x18\x04 \x01(\v2\x19.sermon.web.v1.ModuleHintR\x04hint*\xdd\x01\n" +
+	"\x04hint\x18\x04 \x01(\v2\x19.sermon.web.v1.ModuleHintR\x04hint\"\x9e\x01\n" +
+	"\x1dSetModuleHintDismissedRequest\x12#\n" +
+	"\bgroup_id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\agroupId\x12:\n" +
+	"\tmodule_id\x18\x02 \x01(\tB\x1d\xbaH\x1ar\x182\x16^[a-z][a-z0-9_]{0,31}$R\bmoduleId\x12\x1c\n" +
+	"\tdismissed\x18\x03 \x01(\bR\tdismissed\" \n" +
+	"\x1eSetModuleHintDismissedResponse*\xdd\x01\n" +
 	"\vModuleState\x12\x1c\n" +
 	"\x18MODULE_STATE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fMODULE_STATE_OK\x10\x01\x12\x16\n" +
@@ -1230,14 +1347,15 @@ const file_sermon_web_v1_module_proto_rawDesc = "" +
 	"\x11MODULE_STATE_HUNG\x10\x04\x12\x18\n" +
 	"\x14MODULE_STATE_CRASHED\x10\x05\x12\x1f\n" +
 	"\x1bMODULE_STATE_INVALID_CONFIG\x10\x06\x12\x17\n" +
-	"\x13MODULE_STATE_VETOED\x10\a2\xe9\x04\n" +
+	"\x13MODULE_STATE_VETOED\x10\a2\xe0\x05\n" +
 	"\rModuleService\x12Y\n" +
 	"\vListModules\x12!.sermon.web.v1.ListModulesRequest\x1a\".sermon.web.v1.ListModulesResponse\"\x03\x90\x02\x01\x12k\n" +
 	"\x11GetModuleSettings\x12'.sermon.web.v1.GetModuleSettingsRequest\x1a(.sermon.web.v1.GetModuleSettingsResponse\"\x03\x90\x02\x01\x12]\n" +
 	"\x0eSetGroupModule\x12$.sermon.web.v1.SetGroupModuleRequest\x1a%.sermon.web.v1.SetGroupModuleResponse\x12f\n" +
 	"\x11RemoveGroupModule\x12'.sermon.web.v1.RemoveGroupModuleRequest\x1a(.sermon.web.v1.RemoveGroupModuleResponse\x12b\n" +
 	"\x0eGetNodeModules\x12$.sermon.web.v1.GetNodeModulesRequest\x1a%.sermon.web.v1.GetNodeModulesResponse\"\x03\x90\x02\x01\x12e\n" +
-	"\x0fListModuleHints\x12%.sermon.web.v1.ListModuleHintsRequest\x1a&.sermon.web.v1.ListModuleHintsResponse\"\x03\x90\x02\x01B\xba\x01\n" +
+	"\x0fListModuleHints\x12%.sermon.web.v1.ListModuleHintsRequest\x1a&.sermon.web.v1.ListModuleHintsResponse\"\x03\x90\x02\x01\x12u\n" +
+	"\x16SetModuleHintDismissed\x12,.sermon.web.v1.SetModuleHintDismissedRequest\x1a-.sermon.web.v1.SetModuleHintDismissedResponseB\xba\x01\n" +
 	"\x11com.sermon.web.v1B\vModuleProtoP\x01ZBgithub.com/pmoscode/SerMon/server/internal/gen/sermon/web/v1;webv1\xa2\x02\x03SWX\xaa\x02\rSermon.Web.V1\xca\x02\rSermon\\Web\\V1\xe2\x02\x19Sermon\\Web\\V1\\GPBMetadata\xea\x02\x0fSermon::Web::V1b\x06proto3"
 
 var (
@@ -1253,45 +1371,47 @@ func file_sermon_web_v1_module_proto_rawDescGZIP() []byte {
 }
 
 var file_sermon_web_v1_module_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sermon_web_v1_module_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_sermon_web_v1_module_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_sermon_web_v1_module_proto_goTypes = []any{
-	(ModuleState)(0),                  // 0: sermon.web.v1.ModuleState
-	(*Module)(nil),                    // 1: sermon.web.v1.Module
-	(*ModuleSetting)(nil),             // 2: sermon.web.v1.ModuleSetting
-	(*GroupModuleSettings)(nil),       // 3: sermon.web.v1.GroupModuleSettings
-	(*ModuleHealth)(nil),              // 4: sermon.web.v1.ModuleHealth
-	(*ModuleHint)(nil),                // 5: sermon.web.v1.ModuleHint
-	(*ListModulesRequest)(nil),        // 6: sermon.web.v1.ListModulesRequest
-	(*ListModulesResponse)(nil),       // 7: sermon.web.v1.ListModulesResponse
-	(*GetModuleSettingsRequest)(nil),  // 8: sermon.web.v1.GetModuleSettingsRequest
-	(*GetModuleSettingsResponse)(nil), // 9: sermon.web.v1.GetModuleSettingsResponse
-	(*SetGroupModuleRequest)(nil),     // 10: sermon.web.v1.SetGroupModuleRequest
-	(*SetGroupModuleResponse)(nil),    // 11: sermon.web.v1.SetGroupModuleResponse
-	(*RemoveGroupModuleRequest)(nil),  // 12: sermon.web.v1.RemoveGroupModuleRequest
-	(*RemoveGroupModuleResponse)(nil), // 13: sermon.web.v1.RemoveGroupModuleResponse
-	(*GetNodeModulesRequest)(nil),     // 14: sermon.web.v1.GetNodeModulesRequest
-	(*GetNodeModulesResponse)(nil),    // 15: sermon.web.v1.GetNodeModulesResponse
-	(*ListModuleHintsRequest)(nil),    // 16: sermon.web.v1.ListModuleHintsRequest
-	(*ListModuleHintsResponse)(nil),   // 17: sermon.web.v1.ListModuleHintsResponse
-	(*NodeModuleHint)(nil),            // 18: sermon.web.v1.NodeModuleHint
-	nil,                               // 19: sermon.web.v1.SetGroupModuleRequest.SecretsEntry
-	(*durationpb.Duration)(nil),       // 20: google.protobuf.Duration
-	(*timestamppb.Timestamp)(nil),     // 21: google.protobuf.Timestamp
+	(ModuleState)(0),                       // 0: sermon.web.v1.ModuleState
+	(*Module)(nil),                         // 1: sermon.web.v1.Module
+	(*ModuleSetting)(nil),                  // 2: sermon.web.v1.ModuleSetting
+	(*GroupModuleSettings)(nil),            // 3: sermon.web.v1.GroupModuleSettings
+	(*ModuleHealth)(nil),                   // 4: sermon.web.v1.ModuleHealth
+	(*ModuleHint)(nil),                     // 5: sermon.web.v1.ModuleHint
+	(*ListModulesRequest)(nil),             // 6: sermon.web.v1.ListModulesRequest
+	(*ListModulesResponse)(nil),            // 7: sermon.web.v1.ListModulesResponse
+	(*GetModuleSettingsRequest)(nil),       // 8: sermon.web.v1.GetModuleSettingsRequest
+	(*GetModuleSettingsResponse)(nil),      // 9: sermon.web.v1.GetModuleSettingsResponse
+	(*SetGroupModuleRequest)(nil),          // 10: sermon.web.v1.SetGroupModuleRequest
+	(*SetGroupModuleResponse)(nil),         // 11: sermon.web.v1.SetGroupModuleResponse
+	(*RemoveGroupModuleRequest)(nil),       // 12: sermon.web.v1.RemoveGroupModuleRequest
+	(*RemoveGroupModuleResponse)(nil),      // 13: sermon.web.v1.RemoveGroupModuleResponse
+	(*GetNodeModulesRequest)(nil),          // 14: sermon.web.v1.GetNodeModulesRequest
+	(*GetNodeModulesResponse)(nil),         // 15: sermon.web.v1.GetNodeModulesResponse
+	(*ListModuleHintsRequest)(nil),         // 16: sermon.web.v1.ListModuleHintsRequest
+	(*ListModuleHintsResponse)(nil),        // 17: sermon.web.v1.ListModuleHintsResponse
+	(*NodeModuleHint)(nil),                 // 18: sermon.web.v1.NodeModuleHint
+	(*SetModuleHintDismissedRequest)(nil),  // 19: sermon.web.v1.SetModuleHintDismissedRequest
+	(*SetModuleHintDismissedResponse)(nil), // 20: sermon.web.v1.SetModuleHintDismissedResponse
+	nil,                                    // 21: sermon.web.v1.SetGroupModuleRequest.SecretsEntry
+	(*durationpb.Duration)(nil),            // 22: google.protobuf.Duration
+	(*timestamppb.Timestamp)(nil),          // 23: google.protobuf.Timestamp
 }
 var file_sermon_web_v1_module_proto_depIdxs = []int32{
-	20, // 0: sermon.web.v1.ModuleSetting.interval:type_name -> google.protobuf.Duration
+	22, // 0: sermon.web.v1.ModuleSetting.interval:type_name -> google.protobuf.Duration
 	2,  // 1: sermon.web.v1.GroupModuleSettings.modules:type_name -> sermon.web.v1.ModuleSetting
 	0,  // 2: sermon.web.v1.ModuleHealth.state:type_name -> sermon.web.v1.ModuleState
-	21, // 3: sermon.web.v1.ModuleHealth.last_success:type_name -> google.protobuf.Timestamp
+	23, // 3: sermon.web.v1.ModuleHealth.last_success:type_name -> google.protobuf.Timestamp
 	1,  // 4: sermon.web.v1.ListModulesResponse.modules:type_name -> sermon.web.v1.Module
 	3,  // 5: sermon.web.v1.GetModuleSettingsResponse.groups:type_name -> sermon.web.v1.GroupModuleSettings
 	2,  // 6: sermon.web.v1.SetGroupModuleRequest.setting:type_name -> sermon.web.v1.ModuleSetting
-	19, // 7: sermon.web.v1.SetGroupModuleRequest.secrets:type_name -> sermon.web.v1.SetGroupModuleRequest.SecretsEntry
+	21, // 7: sermon.web.v1.SetGroupModuleRequest.secrets:type_name -> sermon.web.v1.SetGroupModuleRequest.SecretsEntry
 	2,  // 8: sermon.web.v1.GetNodeModulesResponse.settings:type_name -> sermon.web.v1.ModuleSetting
 	4,  // 9: sermon.web.v1.GetNodeModulesResponse.health:type_name -> sermon.web.v1.ModuleHealth
-	21, // 10: sermon.web.v1.GetNodeModulesResponse.health_collected_at:type_name -> google.protobuf.Timestamp
+	23, // 10: sermon.web.v1.GetNodeModulesResponse.health_collected_at:type_name -> google.protobuf.Timestamp
 	5,  // 11: sermon.web.v1.GetNodeModulesResponse.hints:type_name -> sermon.web.v1.ModuleHint
-	21, // 12: sermon.web.v1.GetNodeModulesResponse.hints_collected_at:type_name -> google.protobuf.Timestamp
+	23, // 12: sermon.web.v1.GetNodeModulesResponse.hints_collected_at:type_name -> google.protobuf.Timestamp
 	18, // 13: sermon.web.v1.ListModuleHintsResponse.hints:type_name -> sermon.web.v1.NodeModuleHint
 	5,  // 14: sermon.web.v1.NodeModuleHint.hint:type_name -> sermon.web.v1.ModuleHint
 	6,  // 15: sermon.web.v1.ModuleService.ListModules:input_type -> sermon.web.v1.ListModulesRequest
@@ -1300,14 +1420,16 @@ var file_sermon_web_v1_module_proto_depIdxs = []int32{
 	12, // 18: sermon.web.v1.ModuleService.RemoveGroupModule:input_type -> sermon.web.v1.RemoveGroupModuleRequest
 	14, // 19: sermon.web.v1.ModuleService.GetNodeModules:input_type -> sermon.web.v1.GetNodeModulesRequest
 	16, // 20: sermon.web.v1.ModuleService.ListModuleHints:input_type -> sermon.web.v1.ListModuleHintsRequest
-	7,  // 21: sermon.web.v1.ModuleService.ListModules:output_type -> sermon.web.v1.ListModulesResponse
-	9,  // 22: sermon.web.v1.ModuleService.GetModuleSettings:output_type -> sermon.web.v1.GetModuleSettingsResponse
-	11, // 23: sermon.web.v1.ModuleService.SetGroupModule:output_type -> sermon.web.v1.SetGroupModuleResponse
-	13, // 24: sermon.web.v1.ModuleService.RemoveGroupModule:output_type -> sermon.web.v1.RemoveGroupModuleResponse
-	15, // 25: sermon.web.v1.ModuleService.GetNodeModules:output_type -> sermon.web.v1.GetNodeModulesResponse
-	17, // 26: sermon.web.v1.ModuleService.ListModuleHints:output_type -> sermon.web.v1.ListModuleHintsResponse
-	21, // [21:27] is the sub-list for method output_type
-	15, // [15:21] is the sub-list for method input_type
+	19, // 21: sermon.web.v1.ModuleService.SetModuleHintDismissed:input_type -> sermon.web.v1.SetModuleHintDismissedRequest
+	7,  // 22: sermon.web.v1.ModuleService.ListModules:output_type -> sermon.web.v1.ListModulesResponse
+	9,  // 23: sermon.web.v1.ModuleService.GetModuleSettings:output_type -> sermon.web.v1.GetModuleSettingsResponse
+	11, // 24: sermon.web.v1.ModuleService.SetGroupModule:output_type -> sermon.web.v1.SetGroupModuleResponse
+	13, // 25: sermon.web.v1.ModuleService.RemoveGroupModule:output_type -> sermon.web.v1.RemoveGroupModuleResponse
+	15, // 26: sermon.web.v1.ModuleService.GetNodeModules:output_type -> sermon.web.v1.GetNodeModulesResponse
+	17, // 27: sermon.web.v1.ModuleService.ListModuleHints:output_type -> sermon.web.v1.ListModuleHintsResponse
+	20, // 28: sermon.web.v1.ModuleService.SetModuleHintDismissed:output_type -> sermon.web.v1.SetModuleHintDismissedResponse
+	22, // [22:29] is the sub-list for method output_type
+	15, // [15:22] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name
 	15, // [15:15] is the sub-list for extension extendee
 	0,  // [0:15] is the sub-list for field type_name
@@ -1324,7 +1446,7 @@ func file_sermon_web_v1_module_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sermon_web_v1_module_proto_rawDesc), len(file_sermon_web_v1_module_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

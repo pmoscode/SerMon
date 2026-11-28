@@ -1275,7 +1275,8 @@ spec:
 - Module werden **in den Agent kompiliert** (Cargo-Features, alle im Release-Build enthalten), sind **standardmäßig
   deaktiviert** und werden **zentral** pro Node-Gruppe aktiviert und konfiguriert (UI-Formular aus einem JSON-Schema).
 - **Auto-Discovery als Vorschlag:** Der Agent erkennt laufende Dienste (Port, Prozessname, Unit) und die UI zeigt „nginx
-  erkannt – Modul aktivieren?“. Er aktiviert **nichts** automatisch.
+  erkannt – Modul aktivieren?“. Er aktiviert **nichts** automatisch. Admins blenden einen Vorschlag je Modul und Gruppe
+  für alle Mitglieder aus, bis sie ihn wieder anzeigen (V1-25).
 - Einheitliches Trait `Module { fn schema(); fn validate(cfg); async fn collect(ctx) -> Metrics/Events }`. Panics werden
   isoliert, jedes Modul hat ein eigenes Zeit- und Ressourcenbudget.
 - Zugangsdaten für Module (z. B. DB-Passwort) werden Ende-zu-Ende verschlüsselt an den Agent übertragen und dort nur im

@@ -74,6 +74,10 @@ func (s *ModuleStore) View(ctx context.Context, scope tenant.Scope) (modules.Vie
 		if err != nil {
 			return fmt.Errorf("list built-in modules: %w", err)
 		}
+		dismissed, err := q.ListModuleHintDismissals(ctx)
+		if err != nil {
+			return fmt.Errorf("list dismissed hints: %w", err)
+		}
 		for _, g := range groups {
 			group := modules.Group{ID: tenant.GroupID(g.ID), Name: g.Name}
 			for _, b := range builtin {
@@ -84,6 +88,11 @@ func (s *ModuleStore) View(ctx context.Context, scope tenant.Scope) (modules.Vie
 			for _, r := range rows {
 				if r.GroupID == g.ID {
 					group.Modules = append(group.Modules, settingFrom(r.ModuleID, r.Enabled, r.IntervalSeconds, r.Config))
+				}
+			}
+			for _, d := range dismissed {
+				if d.GroupID == g.ID {
+					group.Dismissed = append(group.Dismissed, d.ModuleID)
 				}
 			}
 			if group.Modules, err = secretsSet(ctx, q, g.ID, group.Modules); err != nil {
@@ -263,6 +272,33 @@ func (s *ModuleStore) Node(ctx context.Context, scope tenant.Scope, node identit
 		return nil
 	})
 	return out, wrap(err, "node modules")
+}
+
+// SetHintDismissed dismisses the suggestions of a group's module or shows them again; the audit
+// entry only if that changes something.
+func (s *ModuleStore) SetHintDismissed(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string, dismissed bool, audit access.AuditEntry) error {
+	return wrap(s.db.InTenant(ctx, scope, func(q *sqlcdb.Queries) error {
+		exists, err := q.NodeGroupExists(ctx, uuid.UUID(group))
+		if err != nil {
+			return fmt.Errorf("find group: %w", err)
+		}
+		if !exists {
+			return access.ErrNotFound
+		}
+		var n int64
+		if dismissed {
+			n, err = q.InsertModuleHintDismissal(ctx, sqlcdb.InsertModuleHintDismissalParams{GroupID: uuid.UUID(group), ModuleID: moduleID})
+		} else {
+			n, err = q.DeleteModuleHintDismissal(ctx, sqlcdb.DeleteModuleHintDismissalParams{GroupID: uuid.UUID(group), ModuleID: moduleID})
+		}
+		if err != nil {
+			return fmt.Errorf("store dismissed hint: %w", err)
+		}
+		if n == 0 {
+			return nil
+		}
+		return appendAudit(ctx, q, audit)
+	}), "dismiss module hint")
 }
 
 // OpenHints returns the suggestions of the scope's nodes for modules their group doesn't run.

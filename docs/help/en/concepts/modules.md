@@ -31,6 +31,10 @@ may manage modules.
 The agent looks at what runs on the host (processes, listening ports, units) and suggests fitting modules – e.g.
 "nginx detected – enable the module?" at the node and in the fleet. Nothing is turned on by itself.
 
+If a suggestion doesn't fit, an admin hides it with **Dismiss** – for all nodes of the group and every member, with an
+entry in the audit log. It stays hidden, even if the agent keeps seeing the service or sees it differently.
+**Organization → Modules** lists the dismissed suggestions per group; **Show again** brings one back.
+
 ## States
 
 - **Running:** the last run succeeded.

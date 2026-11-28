@@ -22,6 +22,23 @@ func (q *Queries) DeleteModuleHealth(ctx context.Context, nodeID uuid.UUID) erro
 	return err
 }
 
+const deleteModuleHintDismissal = `-- name: DeleteModuleHintDismissal :execrows
+DELETE FROM module_hint_dismissals WHERE group_id = $1 AND module_id = $2
+`
+
+type DeleteModuleHintDismissalParams struct {
+	GroupID  uuid.UUID
+	ModuleID string
+}
+
+func (q *Queries) DeleteModuleHintDismissal(ctx context.Context, arg DeleteModuleHintDismissalParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteModuleHintDismissal, arg.GroupID, arg.ModuleID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteModuleHints = `-- name: DeleteModuleHints :exec
 DELETE FROM module_hints WHERE node_id = $1
 `
@@ -120,6 +137,25 @@ func (q *Queries) InsertModuleHint(ctx context.Context, arg InsertModuleHintPara
 	return err
 }
 
+const insertModuleHintDismissal = `-- name: InsertModuleHintDismissal :execrows
+INSERT INTO module_hint_dismissals (org_id, group_id, module_id)
+VALUES (current_org_id(), $1, $2)
+ON CONFLICT (org_id, group_id, module_id) DO NOTHING
+`
+
+type InsertModuleHintDismissalParams struct {
+	GroupID  uuid.UUID
+	ModuleID string
+}
+
+func (q *Queries) InsertModuleHintDismissal(ctx context.Context, arg InsertModuleHintDismissalParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertModuleHintDismissal, arg.GroupID, arg.ModuleID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listGroupBuiltinModules = `-- name: ListGroupBuiltinModules :many
 SELECT n.group_id, array_agg(DISTINCT m ORDER BY m)::text[] AS modules
 FROM nodes n, unnest(n.modules) AS m
@@ -142,6 +178,36 @@ func (q *Queries) ListGroupBuiltinModules(ctx context.Context) ([]ListGroupBuilt
 	for rows.Next() {
 		var i ListGroupBuiltinModulesRow
 		if err := rows.Scan(&i.GroupID, &i.Modules); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listModuleHintDismissals = `-- name: ListModuleHintDismissals :many
+SELECT group_id, module_id FROM module_hint_dismissals ORDER BY group_id, module_id
+`
+
+type ListModuleHintDismissalsRow struct {
+	GroupID  uuid.UUID
+	ModuleID string
+}
+
+// The dismissed suggestions of every group of the organization (V1-25).
+func (q *Queries) ListModuleHintDismissals(ctx context.Context) ([]ListModuleHintDismissalsRow, error) {
+	rows, err := q.db.Query(ctx, listModuleHintDismissals)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListModuleHintDismissalsRow{}
+	for rows.Next() {
+		var i ListModuleHintDismissalsRow
+		if err := rows.Scan(&i.GroupID, &i.ModuleID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -238,6 +304,10 @@ WHERE ($1::boolean OR n.group_id = ANY ($2::uuid[]))
       SELECT 1 FROM module_settings s
       WHERE s.org_id = n.org_id AND s.group_id = n.group_id AND s.module_id = h.module_id AND s.enabled
   )
+  AND NOT EXISTS (
+      SELECT 1 FROM module_hint_dismissals d
+      WHERE d.org_id = n.org_id AND d.group_id = n.group_id AND d.module_id = h.module_id
+  )
 ORDER BY n.hostname, n.id, h.module_id
 LIMIT $3
 `
@@ -259,7 +329,8 @@ type ListOpenModuleHintsRow struct {
 }
 
 // The hints of the scope's nodes for modules their agent has built in and their group doesn't
-// have enabled ("nginx detected – enable the module?").
+// have enabled ("nginx detected – enable the module?"), without those dismissed for the group
+// (V1-25).
 func (q *Queries) ListOpenModuleHints(ctx context.Context, arg ListOpenModuleHintsParams) ([]ListOpenModuleHintsRow, error) {
 	rows, err := q.db.Query(ctx, listOpenModuleHints, arg.AllGroups, arg.GroupIds, arg.MaxRows)
 	if err != nil {
@@ -348,9 +419,15 @@ func (q *Queries) ModuleHealthOfNode(ctx context.Context, nodeID uuid.UUID) ([]M
 }
 
 const moduleHintsOfNode = `-- name: ModuleHintsOfNode :many
-SELECT module_id, reasons, coalesce(suggested::text, '')::text AS suggested, collected_at, received_at
-FROM module_hints WHERE node_id = $1
-ORDER BY module_id
+SELECT h.module_id, h.reasons, coalesce(h.suggested::text, '')::text AS suggested, h.collected_at, h.received_at
+FROM module_hints h
+JOIN nodes n ON n.org_id = h.org_id AND n.id = h.node_id
+WHERE h.node_id = $1
+  AND NOT EXISTS (
+      SELECT 1 FROM module_hint_dismissals d
+      WHERE d.org_id = n.org_id AND d.group_id = n.group_id AND d.module_id = h.module_id
+  )
+ORDER BY h.module_id
 `
 
 type ModuleHintsOfNodeRow struct {
@@ -361,6 +438,7 @@ type ModuleHintsOfNodeRow struct {
 	ReceivedAt  time.Time
 }
 
+// The hints of a node without those dismissed for its group (V1-25).
 func (q *Queries) ModuleHintsOfNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleHintsOfNodeRow, error) {
 	rows, err := q.db.Query(ctx, moduleHintsOfNode, nodeID)
 	if err != nil {

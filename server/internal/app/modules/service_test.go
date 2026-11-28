@@ -52,6 +52,8 @@ type memStore struct {
 	scopes  []tenant.Scope
 	// beforePut runs when Put starts: a change of another request that commits first.
 	beforePut func()
+	// dismissed are the dismissed suggestions by group and module.
+	dismissed map[tenant.GroupID][]string
 }
 
 func newStore() *memStore {
@@ -61,8 +63,26 @@ func newStore() *memStore {
 			ID: node1, Group: web, Builtin: []string{"nginx", "simulate"},
 			Settings: []module.Setting{{Module: "nginx", Enabled: true}, {Module: "redis", Enabled: true}},
 		}},
-		hints: []modules.NodeHint{{Node: node1, Group: web, Hint: module.Hint{Module: "nginx"}}},
+		hints:     []modules.NodeHint{{Node: node1, Group: web, Hint: module.Hint{Module: "nginx"}}},
+		dismissed: map[tenant.GroupID][]string{},
 	}
+}
+
+func (m *memStore) SetHintDismissed(_ context.Context, scope tenant.Scope, group tenant.GroupID, id string, dismissed bool, audit access.AuditEntry) error {
+	m.scopes = append(m.scopes, scope)
+	if _, ok := m.groups[group]; !ok {
+		return access.ErrNotFound
+	}
+	if slices.Contains(m.dismissed[group], id) == dismissed {
+		return nil
+	}
+	if dismissed {
+		m.dismissed[group] = append(m.dismissed[group], id)
+	} else {
+		m.dismissed[group] = slices.DeleteFunc(m.dismissed[group], func(o string) bool { return o == id })
+	}
+	m.audits = append(m.audits, audit)
+	return nil
 }
 
 func (m *memStore) View(_ context.Context, scope tenant.Scope) (modules.View, error) {
@@ -492,5 +512,61 @@ func TestSetGroupModule_ChecksTheCredentialsInTheTransaction(t *testing.T) {
 	}
 	if got := store.groups[web]; len(got) != 1 || got[0].Enabled {
 		t.Errorf("stored %+v", got)
+	}
+}
+
+// V1-25: admins dismiss the suggestions of a module for a group and show them again, audited,
+// without a step-up (nothing changes on the agents); the version stays.
+func TestSetHintDismissed_ByAdminsAuditedWithoutStepUp(t *testing.T) {
+	svc, store, a := setup(t)
+	ctx := context.Background()
+	stale := caller(admin, now.Add(-access.StepUpMaxAge-time.Hour), authz.Binding{AllGroups: true, Role: role.Admin})
+	if err := svc.SetHintDismissed(ctx, stale, web, "nginx", true); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+	if !slices.Equal(store.dismissed[web], []string{"nginx"}) || len(store.dismissed[db]) != 0 {
+		t.Fatalf("dismissed %v", store.dismissed)
+	}
+	if len(store.audits) != 1 || store.audits[0].Action != "module.hint_dismiss" || store.audits[0].Target != "group:"+web.String() ||
+		store.audits[0].Details["module"] != "nginx" || store.audits[0].Actor != admin {
+		t.Errorf("audit %+v", store.audits)
+	}
+	if last := store.scopes[len(store.scopes)-1]; !last.AllGroups() || last.OrgID() != org {
+		t.Errorf("scope %+v", last)
+	}
+	if err := svc.SetHintDismissed(ctx, stale, web, "nginx", false); err != nil {
+		t.Fatalf("show again: %v", err)
+	}
+	if len(store.dismissed[web]) != 0 || len(store.audits) != 2 || store.audits[1].Action != "module.hint_show" || store.audits[1].Details["module"] != "nginx" {
+		t.Errorf("shown again: %v, audit %+v", store.dismissed, store.audits)
+	}
+	if len(a.changed) != 0 || store.version != 1 {
+		t.Errorf("the agents were told %v, version %d", a.changed, store.version)
+	}
+}
+
+func TestSetHintDismissed_RefusesOthersAndUnknownModules(t *testing.T) {
+	svc, store, _ := setup(t)
+	ctx := context.Background()
+	for name, c := range map[string]access.Caller{
+		"viewer":       caller(viewer, now, authz.Binding{AllGroups: true, Role: role.Viewer}),
+		"operator":     caller(viewer, now, authz.Binding{AllGroups: true, Role: role.Operator}),
+		"group admin":  caller(viewer, now, authz.Binding{Group: web, Role: role.Admin}),
+		"no principal": {},
+	} {
+		if err := svc.SetHintDismissed(ctx, c, web, "nginx", true); !errors.Is(err, access.ErrForbidden) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for _, id := range []string{"redis", "Bad", ""} {
+		if err := svc.SetHintDismissed(ctx, adminCaller(), web, id, true); !errors.Is(err, access.ErrNotFound) {
+			t.Errorf("%q: %v", id, err)
+		}
+	}
+	if err := svc.SetHintDismissed(ctx, adminCaller(), tenant.GroupID(uuid.New()), "nginx", true); !errors.Is(err, access.ErrNotFound) {
+		t.Errorf("unknown group: %v", err)
+	}
+	if len(store.audits) != 0 || len(store.dismissed[web]) != 0 {
+		t.Errorf("changed: %+v %v", store.audits, store.dismissed)
 	}
 }

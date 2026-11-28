@@ -63,7 +63,8 @@ Jedes Modul hat `schemas/<id>.json` (Formular, Prüfung) und `metrics/<id>.json`
 kopiert beide in den Server (`server/internal/domain/module/schemas`, `server/internal/domain/metric/modules`). Die
 Schema-Prüfung gibt es in Rust und Go (`server/internal/domain/module`) mit gemeinsamen Testfällen
 (`agent/crates/sermon-modules/testdata/schema-vectors.json`). Server: `app/modules` (Einstellungen je Gruppe,
-`ModuleService`), `module_settings`, `module_health`, `module_hints`, `module_secrets` (Zugangsdaten mit `secrets.Box`,
+`ModuleService`), `module_settings`, `module_health`, `module_hints`, `module_hint_dismissals` (ausgeblendete Vorschläge
+je Gruppe, ohne Step-up, V1-25), `module_secrets` (Zugangsdaten mit `secrets.Box`,
 AAD `module.SecretContext`; zum Agent nur als `ModuleSecrets`, dort nur im Speicher, M5-05).
 UI der Module (M5-07): Formular aus dem Schema (`web/src/lib/modules/schema.ts`), Texte je Feld in
 `web/src/lib/modules/labels.ts` (`module_<id>_<feld>`, DE + EN; ein Test verlangt sie für jedes Schema).

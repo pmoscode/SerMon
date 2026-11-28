@@ -137,6 +137,7 @@ type Querier interface {
 	DeleteMaintenanceWindow(ctx context.Context, id uuid.UUID) (int64, error)
 	DeleteMembership(ctx context.Context, userID uuid.UUID) (int64, error)
 	DeleteModuleHealth(ctx context.Context, nodeID uuid.UUID) error
+	DeleteModuleHintDismissal(ctx context.Context, arg DeleteModuleHintDismissalParams) (int64, error)
 	DeleteModuleHints(ctx context.Context, nodeID uuid.UUID) error
 	DeleteModuleSecret(ctx context.Context, arg DeleteModuleSecretParams) error
 	DeleteModuleSetting(ctx context.Context, arg DeleteModuleSettingParams) (int64, error)
@@ -261,6 +262,7 @@ type Querier interface {
 	InsertMaintenanceWindow(ctx context.Context, arg InsertMaintenanceWindowParams) error
 	InsertModuleHealth(ctx context.Context, arg InsertModuleHealthParams) error
 	InsertModuleHint(ctx context.Context, arg InsertModuleHintParams) error
+	InsertModuleHintDismissal(ctx context.Context, arg InsertModuleHintDismissalParams) (int64, error)
 	// Nodes. All queries run inside InTenant (RLS on org_id).
 	InsertNode(ctx context.Context, arg InsertNodeParams) error
 	// Commands of the server to the agents (M4-11), always in the tenant of the node's organization.
@@ -336,6 +338,8 @@ type Querier interface {
 	ListKioskTokens(ctx context.Context, dashboardID uuid.UUID) ([]ListKioskTokensRow, error)
 	ListMaintenanceWindows(ctx context.Context) ([]ListMaintenanceWindowsRow, error)
 	ListMembers(ctx context.Context) ([]ListMembersRow, error)
+	// The dismissed suggestions of every group of the organization (V1-25).
+	ListModuleHintDismissals(ctx context.Context) ([]ListModuleHintDismissalsRow, error)
 	// The fields with a value of every module setting of the organization (names only).
 	ListModuleSecretFields(ctx context.Context) ([]ListModuleSecretFieldsRow, error)
 	// The modules of the agents (M5-06, ADR 0039). Every query runs in the organization's tenant
@@ -358,7 +362,8 @@ type Querier interface {
 	// OIDC group mappings (M3-21). All but OIDCMappedOrganizations run inside InTenant.
 	ListOIDCMappings(ctx context.Context) ([]ListOIDCMappingsRow, error)
 	// The hints of the scope's nodes for modules their agent has built in and their group doesn't
-	// have enabled ("nginx detected – enable the module?").
+	// have enabled ("nginx detected – enable the module?"), without those dismissed for the group
+	// (V1-25).
 	ListOpenModuleHints(ctx context.Context, arg ListOpenModuleHintsParams) ([]ListOpenModuleHintsRow, error)
 	ListOrganizations(ctx context.Context) ([]ListOrganizationsRow, error)
 	// Passkeys (M3-23, ADR 0034): instance-level, like the credentials.
@@ -410,6 +415,7 @@ type Querier interface {
 	// Moves seen_at forward to the newest data time of a write (never back).
 	MarkSeriesSeen(ctx context.Context, arg MarkSeriesSeenParams) error
 	ModuleHealthOfNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleHealthOfNodeRow, error)
+	// The hints of a node without those dismissed for its group (V1-25).
 	ModuleHintsOfNode(ctx context.Context, nodeID uuid.UUID) ([]ModuleHintsOfNodeRow, error)
 	// The credentials of a group's module that have a value (names only).
 	ModuleSecretFields(ctx context.Context, arg ModuleSecretFieldsParams) ([]string, error)

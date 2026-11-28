@@ -32,6 +32,8 @@ type Group struct {
 	Modules []module.Setting
 	// Available are the modules the agents of the group's nodes have built in.
 	Available []string
+	// Dismissed are the modules whose suggestions admins hid for the group (V1-25).
+	Dismissed []string
 }
 
 // View is the module settings of the organization.
@@ -102,11 +104,16 @@ type Store interface {
 	Put(ctx context.Context, scope tenant.Scope, group tenant.GroupID, s module.Setting, secrets SealedChange, by identity.UserID, audit access.AuditEntry) error
 	// Remove deletes it; access.ErrNotFound if the group or its setting does not exist.
 	Remove(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string, by identity.UserID, audit access.AuditEntry) error
-	// Node returns a node of the scope's groups; access.ErrNotFound otherwise.
+	// Node returns a node of the scope's groups, without the suggestions dismissed for its group;
+	// access.ErrNotFound otherwise.
 	Node(ctx context.Context, scope tenant.Scope, node identity.NodeID) (Node, error)
-	// OpenHints returns the suggestions of the scope's nodes for modules their agent has built in
-	// and their group doesn't run, at most limit.
+	// OpenHints returns the suggestions of the scope's nodes for modules their agent has built in,
+	// their group doesn't run and nobody dismissed for it, at most limit.
 	OpenHints(ctx context.Context, scope tenant.Scope, limit int) ([]NodeHint, error)
+	// SetHintDismissed dismisses the suggestions of a module for a group or shows them again, and
+	// writes the audit entry in the same transaction if that changes something;
+	// access.ErrNotFound for a group the scope does not see.
+	SetHintDismissed(ctx context.Context, scope tenant.Scope, group tenant.GroupID, moduleID string, dismissed bool, audit access.AuditEntry) error
 }
 
 // Agents learn about a changed configuration (the connected agent sessions).
@@ -250,6 +257,32 @@ func (s *Service) RemoveGroupModule(ctx context.Context, c access.Caller, group 
 		return fmt.Errorf("remove module: %w", err)
 	}
 	s.agents.ConfigChanged(c.Principal.Org)
+	return nil
+}
+
+// SetHintDismissed hides the suggestions of a module for the nodes of a group, for every member,
+// or shows them again (V1-25). For those who manage modules, without a step-up: it changes no
+// setting and nothing on the agents. A dismissed suggestion stays hidden, whatever the agents
+// report later, until an admin shows it again.
+func (s *Service) SetHintDismissed(ctx context.Context, c access.Caller, group tenant.GroupID, moduleID string, dismissed bool) error {
+	scope, err := access.Authorize(s.policy, c, authz.ManageModules, false, s.now())
+	if err != nil {
+		return err //nolint:wrapcheck // see View
+	}
+	if _, ok := s.catalog.Lookup(moduleID); !ok {
+		return access.ErrNotFound
+	}
+	action := "module.hint_show"
+	if dismissed {
+		action = "module.hint_dismiss"
+	}
+	audit := access.AuditEntry{
+		Actor: c.Principal.User, Action: action, Target: "group:" + group.String(),
+		Details: map[string]string{"module": moduleID},
+	}
+	if err := s.store.SetHintDismissed(ctx, scope, group, moduleID, dismissed, audit); err != nil {
+		return fmt.Errorf("dismiss module hint: %w", err)
+	}
 	return nil
 }
 

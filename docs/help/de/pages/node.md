@@ -15,7 +15,7 @@ Alles zu einem Server: Kopfzeile mit Host-Fakten und aktuellen Kennzahlen, darun
 
 ## Module
 
-Der Reiter **Module** zeigt die Module, die die Gruppe des Nodes betreibt, wie es ihnen geht und ihre Metriken, dazu Vorschläge des Agents wie „nginx erkannt – Modul aktivieren?“. Mehr dazu: [Module](help:concepts/modules).
+Der Reiter **Module** zeigt die Module, die die Gruppe des Nodes betreibt, wie es ihnen geht und ihre Metriken, dazu Vorschläge des Agents wie „nginx erkannt – Modul aktivieren?“ (Admins können sie für die Gruppe ausblenden). Mehr dazu: [Module](help:concepts/modules).
 
 ## Anomalien
 

@@ -174,7 +174,8 @@ Module überwachen Dienste eines Hosts: nginx, Apache, PostgreSQL, MySQL/MariaDB
 TLS-Zertifikate, HTTP- und TCP-Checks, SMART und Prometheus-Exporter. Sie sind in den Agent eingebaut und ab Werk aus.
 Findet ein Agent einen Dienst, schlägt SerMon das passende Modul vor; Admins schalten es je Gruppe ein und tragen
 Zugangsdaten ein (verschlüsselt gespeichert, nie wieder angezeigt). Was ein Modul erreichen darf, legt der Betreiber
-auf dem Host fest. Die Node-Seite zeigt im Reiter **Module**, wie es jedem Modul geht.
+auf dem Host fest. Die Node-Seite zeigt im Reiter **Module**, wie es jedem Modul geht. Einen unpassenden Vorschlag
+blenden Admins für die ganze Gruppe aus; unter **Organisation → Module** lässt er sich wieder anzeigen.
 
 - [Module](../../help/de/concepts/modules.md)
 - Einzelne Module: [nginx](../../help/de/modules/nginx.md), [Apache](../../help/de/modules/apache.md),

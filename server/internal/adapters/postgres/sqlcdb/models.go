@@ -323,6 +323,13 @@ type ModuleHint struct {
 	ReceivedAt  time.Time
 }
 
+type ModuleHintDismissal struct {
+	OrgID       uuid.UUID
+	GroupID     uuid.UUID
+	ModuleID    string
+	DismissedAt time.Time
+}
+
 type ModuleSecret struct {
 	OrgID     uuid.UUID
 	GroupID   uuid.UUID

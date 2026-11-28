@@ -85,6 +85,18 @@
 		return message;
 	}
 
+	async function showAgain(group: GroupModuleSettings, module: string) {
+		busy = true;
+		failure = await change(() =>
+			modulesApi.modules.setModuleHintDismissed({
+				groupId: group.groupId,
+				moduleId: module,
+				dismissed: false
+			})
+		);
+		busy = false;
+	}
+
 	async function remove(group: GroupModuleSettings, module: string) {
 		busy = true;
 		failure = await change(() =>
@@ -188,6 +200,26 @@
 							</li>
 						{/each}
 					</ul>
+				{/if}
+				{#if group.dismissedHints.length > 0}
+					<div class="flex flex-col gap-1" data-testid="dismissed-hints">
+						<h3 class="text-sm font-medium">{m.modules_dismissed_title()}</h3>
+						<p class="text-sm text-muted-foreground">{m.modules_dismissed_help()}</p>
+						<ul class="flex flex-col gap-1">
+							{#each group.dismissedHints as id (id)}
+								<li class="flex flex-wrap items-center gap-2 text-sm">
+									<span>{moduleLabel(id)}</span>
+									<Button
+										variant="outline"
+										size="sm"
+										disabled={busy}
+										aria-label="{m.modules_dismissed_show()}: {moduleLabel(id)} ({group.groupName})"
+										onclick={() => showAgain(group, id)}>{m.modules_dismissed_show()}</Button
+									>
+								</li>
+							{/each}
+						</ul>
+					</div>
 				{/if}
 			</section>
 		{/each}

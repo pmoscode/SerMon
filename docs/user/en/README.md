@@ -169,7 +169,8 @@ Modules monitor services of a host: nginx, Apache, PostgreSQL, MySQL/MariaDB, Re
 certificates, HTTP and TCP checks, SMART and Prometheus exporters. They are built into the agent and off by default.
 When an agent finds a service, SerMon suggests the matching module; admins turn it on per group and enter credentials
 (stored encrypted, never shown again). What a module may reach is set by the operator on the host. The **Modules** tab
-of the node page shows how every module is doing.
+of the node page shows how every module is doing. Admins dismiss a suggestion that doesn't fit for the whole group;
+**Organization → Modules** shows it again.
 
 - [Modules](../../help/en/concepts/modules.md)
 - Single modules: [nginx](../../help/en/modules/nginx.md), [Apache](../../help/en/modules/apache.md),

@@ -28,7 +28,8 @@
 
 	/**
 	 * The modules of a node (ADR 0039, M5-07): what its group runs, how each does (from the agent's
-	 * reports) with its metrics, and the agent's suggestions for modules the group doesn't run.
+	 * reports) with its metrics, and the agent's suggestions for modules the group doesn't run;
+	 * admins dismiss one for the group (V1-25).
 	 */
 	let {
 		nodeId,
@@ -65,6 +66,26 @@
 	$effect(() => {
 		void load();
 	});
+
+	let busy = $state(false);
+	let dismissFailure = $state('');
+
+	async function dismiss(moduleId: string) {
+		if (!data) return;
+		busy = true;
+		try {
+			await modulesApi.modules.setModuleHintDismissed({
+				groupId: data.groupId,
+				moduleId,
+				dismissed: true
+			});
+			dismissFailure = '';
+			await load();
+		} catch (error) {
+			dismissFailure = modulesError(error);
+		}
+		busy = false;
+	}
 
 	const enabled = $derived((data?.settings ?? []).filter((s) => s.enabled));
 	const open = $derived(
@@ -103,6 +124,9 @@
 			<p class="text-sm text-muted-foreground">{m.modules_node_unknown()}</p>
 		{/if}
 
+		{#if dismissFailure}
+			<p role="alert" class="text-sm text-destructive">{dismissFailure}</p>
+		{/if}
 		{#each open as hint (hint.moduleId)}
 			<div
 				class="flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/5 p-3"
@@ -117,12 +141,20 @@
 					{m.modules_hint_reasons({ reasons: hint.reasons.map(displayText).join(', ') })}
 				</p>
 				{#if sessionState.current?.orgAdmin}
-					<Button
-						class="self-start"
-						size="sm"
-						href={`${resolve('/(app)/admin')}?${enableQuery(data.groupId, hint.moduleId, hint.suggestedConfigJson)}`}
-						>{m.modules_hint_enable()}</Button
-					>
+					<div class="flex flex-wrap gap-2">
+						<Button
+							size="sm"
+							href={`${resolve('/(app)/admin')}?${enableQuery(data.groupId, hint.moduleId, hint.suggestedConfigJson)}`}
+							>{m.modules_hint_enable()}</Button
+						>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={busy}
+							aria-label={m.modules_hint_dismiss_group({ module: moduleLabel(hint.moduleId) })}
+							onclick={() => dismiss(hint.moduleId)}>{m.modules_hint_dismiss()}</Button
+						>
+					</div>
 				{:else}
 					<p class="text-sm">{m.modules_hint_ask_admin()}</p>
 				{/if}

@@ -62,7 +62,7 @@ func (h *ModuleHandler) GetModuleSettings(ctx context.Context, _ *connect.Reques
 	}
 	res := &webv1.GetModuleSettingsResponse{Version: view.Version}
 	for _, g := range view.Groups {
-		res.Groups = append(res.Groups, &webv1.GroupModuleSettings{GroupId: g.ID.String(), GroupName: g.Name, Modules: settingMessages(g.Modules), Available: g.Available})
+		res.Groups = append(res.Groups, &webv1.GroupModuleSettings{GroupId: g.ID.String(), GroupName: g.Name, Modules: settingMessages(g.Modules), Available: g.Available, DismissedHints: g.Dismissed})
 	}
 	return connect.NewResponse(res), nil
 }
@@ -153,6 +153,22 @@ func (h *ModuleHandler) ListModuleHints(ctx context.Context, _ *connect.Request[
 		res.Hints = append(res.Hints, &webv1.NodeModuleHint{NodeId: nh.Node.String(), Hostname: nh.Hostname, GroupId: nh.Group.String(), Hint: hintMessage(nh.Hint)})
 	}
 	return connect.NewResponse(res), nil
+}
+
+// SetModuleHintDismissed hides the suggestions of a module for a group or shows them again.
+func (h *ModuleHandler) SetModuleHintDismissed(ctx context.Context, req *connect.Request[webv1.SetModuleHintDismissedRequest]) (*connect.Response[webv1.SetModuleHintDismissedResponse], error) {
+	c, err := callerFrom(ctx)
+	if err != nil {
+		return nil, err
+	}
+	group, err := uuid.Parse(req.Msg.GetGroupId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid group id"))
+	}
+	if err := h.svc.SetHintDismissed(ctx, c, tenant.GroupID(group), req.Msg.GetModuleId(), req.Msg.GetDismissed()); err != nil {
+		return nil, h.fail(ctx, "dismiss module hint", err)
+	}
+	return connect.NewResponse(&webv1.SetModuleHintDismissedResponse{}), nil
 }
 
 func (h *ModuleHandler) fail(ctx context.Context, op string, err error) error {

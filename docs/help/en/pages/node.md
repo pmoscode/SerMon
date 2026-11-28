@@ -15,7 +15,7 @@ Everything about one server: a header with host facts and current key figures, b
 
 ## Modules
 
-The **Modules** tab shows the modules the node's group runs, how they do and their metrics, and the agent's suggestions such as "nginx detected – enable the module?". More: [Modules](help:concepts/modules).
+The **Modules** tab shows the modules the node's group runs, how they do and their metrics, and the agent's suggestions such as "nginx detected – enable the module?" (admins can dismiss them for the group). More: [Modules](help:concepts/modules).
 
 ## Anomalies
 

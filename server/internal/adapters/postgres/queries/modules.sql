@@ -66,13 +66,21 @@ VALUES (current_org_id(), sqlc.arg(node_id), sqlc.arg(module_id), sqlc.arg(reaso
         sqlc.arg(collected_at), sqlc.arg(received_at));
 
 -- name: ModuleHintsOfNode :many
-SELECT module_id, reasons, coalesce(suggested::text, '')::text AS suggested, collected_at, received_at
-FROM module_hints WHERE node_id = sqlc.arg(node_id)
-ORDER BY module_id;
+-- The hints of a node without those dismissed for its group (V1-25).
+SELECT h.module_id, h.reasons, coalesce(h.suggested::text, '')::text AS suggested, h.collected_at, h.received_at
+FROM module_hints h
+JOIN nodes n ON n.org_id = h.org_id AND n.id = h.node_id
+WHERE h.node_id = sqlc.arg(node_id)
+  AND NOT EXISTS (
+      SELECT 1 FROM module_hint_dismissals d
+      WHERE d.org_id = n.org_id AND d.group_id = n.group_id AND d.module_id = h.module_id
+  )
+ORDER BY h.module_id;
 
 -- name: ListOpenModuleHints :many
 -- The hints of the scope's nodes for modules their agent has built in and their group doesn't
--- have enabled ("nginx detected – enable the module?").
+-- have enabled ("nginx detected – enable the module?"), without those dismissed for the group
+-- (V1-25).
 SELECT h.node_id, n.hostname, n.group_id, h.module_id, h.reasons, coalesce(h.suggested::text, '')::text AS suggested,
        h.collected_at
 FROM module_hints h
@@ -82,6 +90,10 @@ WHERE (sqlc.arg(all_groups)::boolean OR n.group_id = ANY (sqlc.arg(group_ids)::u
   AND NOT EXISTS (
       SELECT 1 FROM module_settings s
       WHERE s.org_id = n.org_id AND s.group_id = n.group_id AND s.module_id = h.module_id AND s.enabled
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM module_hint_dismissals d
+      WHERE d.org_id = n.org_id AND d.group_id = n.group_id AND d.module_id = h.module_id
   )
 ORDER BY n.hostname, n.id, h.module_id
 LIMIT sqlc.arg(max_rows);
@@ -120,3 +132,15 @@ FROM nodes n
 JOIN module_secrets s ON s.org_id = n.org_id AND s.group_id = n.group_id
 WHERE n.id = sqlc.arg(node_id)
 ORDER BY s.module_id, s.field;
+
+-- name: ListModuleHintDismissals :many
+-- The dismissed suggestions of every group of the organization (V1-25).
+SELECT group_id, module_id FROM module_hint_dismissals ORDER BY group_id, module_id;
+
+-- name: InsertModuleHintDismissal :execrows
+INSERT INTO module_hint_dismissals (org_id, group_id, module_id)
+VALUES (current_org_id(), sqlc.arg(group_id), sqlc.arg(module_id))
+ON CONFLICT (org_id, group_id, module_id) DO NOTHING;
+
+-- name: DeleteModuleHintDismissal :execrows
+DELETE FROM module_hint_dismissals WHERE group_id = sqlc.arg(group_id) AND module_id = sqlc.arg(module_id);

@@ -31,6 +31,10 @@ Konfiguration der Module sehen nur Admins, die Module verwalten dürfen.
 Der Agent sieht nach, welche Dienste auf dem Host laufen (Prozesse, lauschende Ports, Units), und schlägt passende
 Module vor – etwa „nginx erkannt – Modul aktivieren?“ am Node und in der Fleet. Eingeschaltet wird nichts von selbst.
 
+Passt ein Vorschlag nicht, blendet ein Admin ihn mit **Ausblenden** aus – für alle Nodes der Gruppe und für alle
+Mitglieder, mit Eintrag im Audit-Log. Er bleibt ausgeblendet, auch wenn der Agent den Dienst weiter oder anders sieht.
+Unter **Organisation → Module** stehen die ausgeblendeten Vorschläge je Gruppe; **Wieder anzeigen** holt einen zurück.
+
 ## Zustände
 
 - **Läuft:** der letzte Lauf war erfolgreich.

@@ -113,6 +113,7 @@ var stepUpExempt = map[string]string{
 	"/sermon.web.v1.FleetService/GetFleetSummary":                 "reads only (no idempotency option)",
 	"/sermon.web.v1.InvitationService/AcceptInvitation":           "by the invitee, proven by the link of the invitation",
 	"/sermon.web.v1.InvitationService/JoinOrganization":           "by the invitee, proven by the link of the invitation",
+	"/sermon.web.v1.ModuleService/SetModuleHintDismissed":         "hides or shows a suggestion for every member: changes no setting and nothing on the agents (V1-25)",
 	"/sermon.web.v1.MetricsService/ListMetrics":                   "reads only (no idempotency option)",
 	"/sermon.web.v1.MetricsService/QueryMetrics":                  "reads only (no idempotency option)",
 	"/sermon.web.v1.MetricsService/WatchMetrics":                  "reads only (a stream)",

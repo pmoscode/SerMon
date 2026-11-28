@@ -659,6 +659,15 @@ var tenantIsolationCases = map[string]isolationCase{
 		_, err := e.modules.RemoveGroupModule(ctx, connect.NewRequest(&webv1.RemoveGroupModuleRequest{GroupId: e.groupA, ModuleId: "simulate"}))
 		return err
 	}},
+	"/sermon.web.v1.ModuleService/SetModuleHintDismissed": {run: func(ctx context.Context, e isolationEnv) error {
+		// Hiding Alpha's open suggestion and showing its dismissed one: neither may reach Alpha.
+		_, err := e.modules.SetModuleHintDismissed(ctx, connect.NewRequest(&webv1.SetModuleHintDismissedRequest{GroupId: e.groupA, ModuleId: "nginx", Dismissed: true}))
+		if connect.CodeOf(err) != connect.CodeNotFound {
+			return err
+		}
+		_, err = e.modules.SetModuleHintDismissed(ctx, connect.NewRequest(&webv1.SetModuleHintDismissedRequest{GroupId: e.groupA, ModuleId: "redis"}))
+		return err
+	}},
 	"/sermon.web.v1.ModuleService/GetNodeModules": {run: func(ctx context.Context, e isolationEnv) error {
 		_, err := e.modules.GetNodeModules(ctx, connect.NewRequest(&webv1.GetNodeModulesRequest{NodeId: e.nodeA}))
 		return err
@@ -672,7 +681,7 @@ var tenantIsolationCases = map[string]isolationCase{
 	}},
 	"/sermon.web.v1.ModuleService/GetModuleSettings": {list: true, run: func(ctx context.Context, e isolationEnv) error {
 		res, err := e.modules.GetModuleSettings(ctx, connect.NewRequest(&webv1.GetModuleSettingsRequest{}))
-		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), `"value":3`)) {
+		if err == nil && (leaks(e, res.Msg.String()) || strings.Contains(res.Msg.String(), `"value":3`) || strings.Contains(res.Msg.String(), "redis")) {
 			return errLeak
 		}
 		return err

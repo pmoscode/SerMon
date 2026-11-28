@@ -280,6 +280,7 @@
 	"addnode_metrics": "First metrics received",
 	"addnode_open": "Open node",
 	"addnode_forbidden": "Operators and admins of a group may add nodes.",
+	"invitations_mail_failed": "The invitation could not be sent by mail. The server's mail delivery (SERMON_SMTP_*) is not set up or failing; the reason is in the server log.",
 	"invite_title": "Invitation",
 	"invite_subtitle": "Join an organization in SerMon",
 	"invite_text": "{org} invites {email} as {role}.",

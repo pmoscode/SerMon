@@ -1,3 +1,4 @@
+import { Code, ConnectError } from '@connectrpc/connect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
@@ -76,6 +77,20 @@ describe('InvitationsPanel', () => {
 		await expect
 			.element(page.getByText('Invitation sent to late@example.org', { exact: false }))
 			.toBeVisible();
+	});
+
+	// V1-18: without a working mail server the invitation can't go out (ADR 0022); the admin
+	// learns that, not that the server is unreachable.
+	it('says when the invitation mail could not be sent', async () => {
+		vi.spyOn(adminApi.access, 'inviteMember').mockRejectedValue(
+			new ConnectError('mail', Code.Unavailable)
+		);
+		render(InvitationsPanel, { invitations: [], groups: [], onChange: vi.fn() });
+		await page.getByLabelText('Email address').fill('new@example.org');
+		await page.getByRole('button', { name: 'Invite' }).click();
+		const alert = page.getByRole('alert');
+		await expect.element(alert).toBeVisible();
+		expect(alert.element().textContent).toContain('could not be sent by mail');
 	});
 
 	it('withdraws an open invitation', async () => {

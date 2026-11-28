@@ -280,6 +280,7 @@
 	"addnode_metrics": "Erste Metriken empfangen",
 	"addnode_open": "Node öffnen",
 	"addnode_forbidden": "Nodes hinzufügen dürfen Operatoren und Admins einer Gruppe.",
+	"invitations_mail_failed": "Die Einladung konnte nicht per Mail verschickt werden. Der Mailversand des Servers (SERMON_SMTP_*) ist nicht eingerichtet oder gestört; der Grund steht im Server-Log.",
 	"invite_title": "Einladung",
 	"invite_subtitle": "Einer Organisation in SerMon beitreten",
 	"invite_text": "{org} lädt {email} als {role} ein.",

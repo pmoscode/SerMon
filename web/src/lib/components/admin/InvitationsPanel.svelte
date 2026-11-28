@@ -4,6 +4,7 @@
 	import type { Invitation, NodeGroup } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import { Role } from '#lib/api/gen/sermon/web/v1/access_pb.js';
 	import { adminApi } from '#lib/api/admin.js';
+	import { Code, codeOf } from '#lib/api/client.js';
 	import { adminError, copyText, roleName } from '#lib/admin/admin.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -51,7 +52,9 @@
 			await onChange();
 			return true;
 		} catch (error) {
-			failure = adminError(error);
+			// The server answers UNAVAILABLE when the mail can't be sent (ADR 0022).
+			failure =
+				codeOf(error) === Code.Unavailable ? m.invitations_mail_failed() : adminError(error);
 			return false;
 		} finally {
 			busy = false;

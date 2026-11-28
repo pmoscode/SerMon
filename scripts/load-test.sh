@@ -27,6 +27,9 @@
 #                            19464, 19310)
 # Stopping the sampling early (Ctrl-C) still writes the report.
 set -eu
+# Numbers with a decimal point whatever the host speaks: awk writes 8,0 under de_DE and printf
+# can't read it back (seen in the test operation, V1-18).
+export LC_ALL=C
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 e2e="$root/deploy/e2e"

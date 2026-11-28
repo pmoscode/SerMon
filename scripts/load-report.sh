@@ -26,6 +26,9 @@
 #     from a browser). LOAD_CURL_ARGS adds options such as --cacert FILE.
 # Only POSIX sh, awk, curl and (optionally) docker; nothing is installed on the server.
 set -eu
+# Numbers with a decimal point whatever the host speaks: awk writes 8,0 under de_DE and printf
+# can't read it back (seen in the test operation, V1-18).
+export LC_ALL=C
 
 tab=$(printf '\t')
 self=$0

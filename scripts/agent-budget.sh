@@ -19,6 +19,9 @@
 # reads /proc only (systemd and OpenRC alike) and needs nothing but a POSIX shell and awk. The E2E
 # demo feeds it over stdin (`sh -s -- 60 1 30`).
 set -eu
+# Numbers with a decimal point whatever the host speaks: awk writes 8,0 under de_DE and printf
+# can't read it back (seen in the test operation, V1-18).
+export LC_ALL=C
 
 usage() {
 	echo "usage: agent-budget.sh SECONDS MAX_CPU_PERCENT MAX_RSS_MIB [agent|helper]" >&2

@@ -239,13 +239,25 @@ rpc() {
 
 login() {
 	[ -n "${LOAD_EMAIL:-}" ] && [ -r "${LOAD_PASSWORD_FILE:-}" ] || return 0
+	# After a refusal wait LOAD_LOGIN_BACKOFF s (default 30 min): the fifth failure in a row locks
+	# the account, and an attempt every sample would keep it locked (V1-18).
+	if [ -n "${refused_at:-}" ] && [ $(($(date +%s) - refused_at)) -lt "${LOAD_LOGIN_BACKOFF:-1800}" ]; then
+		return 1
+	fi
 	email=$(json_string "$LOAD_EMAIL")
 	password=$(json_string "$(cat "$LOAD_PASSWORD_FILE")")
 	credentials="{\"email\":$email,\"password\":$password}"
 	set -- "$(rpc AuthService/Login "$credentials")"
 	credentials='' password=''
 	rm -f "$work/body"
-	case $1 in 200\ *) ;; *) echo "load-report: login refused (${1%% *})" >&2 ;; esac
+	case $1 in
+	200\ *) refused_at='' ;;
+	*)
+		refused_at=$(date +%s)
+		echo "load-report: login refused (${1%% *}), next try in ${LOAD_LOGIN_BACKOFF:-1800} s (five failures in a row lock the account)" >&2
+		return 1
+		;;
+	esac
 }
 
 # measure NAME METHOD BODY: the latency in ms, or an error.
@@ -326,7 +338,7 @@ sample() {
 		[ "$use_docker" = 0 ] || printf 'docker\t%s\n' "$(docker info --format '{{.NCPU}} CPUs, {{.MemTotal}} bytes, {{.OperatingSystem}}' 2>/dev/null)"
 		printf 'url\t%s\n' "${LOAD_URL:-}"
 	} >>"$dir/info.tsv"
-	[ -z "${LOAD_URL:-}" ] || login
+	[ -z "${LOAD_URL:-}" ] || login || true
 	start=$(date +%s)
 	while :; do
 		t=$(date +%s)

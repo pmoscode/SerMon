@@ -204,6 +204,7 @@ cat >"$work/bin/curl" <<-'EOF'
 	[ -z "$body" ] || { cat "$body"; echo; } >>"$FAKE_LOG.bodies"
 	case $url in
 	*.AuthService/Login)
+		if [ -n "${FAKE_REFUSE:-}" ]; then echo '{"code":"unauthenticated"}' >"$out"; printf '401 0.001'; exit; fi
 		cp "$body" "$FAKE_LOG.login"
 		echo session >"$jar"
 		echo '{}' >"$out"
@@ -260,6 +261,14 @@ has "$bodies" '"text":"nginx"}}'
 case $samples in *"	q.logs	"*) fail "a failed read counted as a latency" ;; esac
 case $samples in *"	cpu."*) fail "docker sampled with LOAD_DOCKER=0" ;; esac
 [ "$(grep -c 'AuthService/Login' "$work/curl.log")" = 2 ] || fail "logins: $(cat "$work/curl.log")"
+# A refused login (V1-18): no new attempt every sample – five failures in a row lock the account,
+# and a sampler trying every minute keeps it locked. It waits LOAD_LOGIN_BACKOFF.
+: >"$work/curl.log"
+PATH="$work/bin:$PATH" FAKE_LOG="$work/curl.log" FAKE_REFUSE=1 LOAD_DOCKER=0 LOAD_URL=https://sermon.example.com \
+	LOAD_EMAIL=alice@example.org LOAD_PASSWORD_FILE="$work/password" \
+	sh "$dir/load-report.sh" sample "$work/refused" 3s 1 2>"$work/refused.err" || fail "sampling with a refused login: $(cat "$work/refused.err")"
+[ "$(grep -c 'AuthService/Login' "$work/curl.log")" = 1 ] || fail "a refused login tried again: $(grep -c AuthService/Login "$work/curl.log")"
+has "$(cat "$work/refused.err")" "next try in 1800 s"
 # Docker on the server host: docker stats of the services and of a named container, the volumes
 # measured with du in the image of PostgreSQL (fake docker).
 cat >"$work/bin/docker" <<-'EOF'

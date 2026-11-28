@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0-rc.3](https://github.com/pmoscode/SerMon/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2026-11-28)
+
+
+### Features
+
+* **modules:** let admins dismiss module suggestions per group ([bed59ae](https://github.com/pmoscode/SerMon/commit/bed59ae6587c547d23831ba3d2222e123721b4ed))
+
+
+### Bug Fixes
+
+* **helper:** a replaced helper ends so the new one answers ([07313a0](https://github.com/pmoscode/SerMon/commit/07313a0a88571e4c922e9156df86098bac54d62a))
+* **release:** verify the published release with the workflow's token ([8262ed1](https://github.com/pmoscode/SerMon/commit/8262ed183e7a6dbb679153fcdf939a446f43193c))
+* **scripts:** a refused login of the sampler waits before the next ([4768a29](https://github.com/pmoscode/SerMon/commit/4768a2900bb297e3776fb7fadaca2e5ee9eb5fd8))
+* **scripts:** numbers with a decimal point under any locale ([15e83a3](https://github.com/pmoscode/SerMon/commit/15e83a351600fb42d44c4c3c53bfd9ce8240f8b3))
+* **web:** say when an invitation mail could not be sent ([c51748f](https://github.com/pmoscode/SerMon/commit/c51748f6422af8ba451afe9aedf3d9a4effbda6c))
+
 ## [1.0.0-rc.2](https://github.com/pmoscode/SerMon/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2026-11-27)
 
 

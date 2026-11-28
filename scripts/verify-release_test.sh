@@ -291,4 +291,41 @@ if ! command -v cosign >/dev/null 2>&1; then
 	refused "the online checks without cosign" --dir "$work/r" "$V"
 fi
 
+# Downloading from GitHub (a fake curl): the API call carries the token on stdin, never on the
+# command line; without one the fake answers like the rate limit of shared runners (403).
+mkdir -p "$work/fakecurl"
+cat >"$work/fakecurl/curl" <<'FAKE'
+#!/bin/sh
+out= url= config=
+while [ $# -gt 0 ]; do
+	case $1 in
+	-o) out=$2; shift ;;
+	-K) [ "$2" = - ] && config=$(cat); shift ;;
+	-*) ;;
+	*) url=$1 ;;
+	esac
+	shift
+done
+case "$*$url" in *fake-token*) echo "token on the command line" >&2; exit 2 ;; esac
+case $url in
+https://api.github.com/*)
+	printf '%s' "$config" | grep -q 'Authorization: Bearer fake-token' || exit 22
+	(cd "$FAKE_RELEASE" && for f in *; do printf '%s\n' "$f"; done) | python3 -c '
+import json, sys
+print(json.dumps({"assets": [{"name": n.strip(), "browser_download_url": "https://example.invalid/" + n.strip()} for n in sys.stdin]}))' ;;
+https://example.invalid/*) cp "$FAKE_RELEASE/${url##*/}" "$out" ;;
+*) exit 22 ;;
+esac
+FAKE
+chmod +x "$work/fakecurl/curl"
+# download TOKEN_VAR VALUE runs the online download (then the offline checks) with the fake curl.
+download() {
+	env PATH="$work/fakecurl:$PATH" FAKE_RELEASE="$work/good" GITHUB_TOKEN='' GH_TOKEN='' "$1=$2" \
+		sh "$dir/verify-release.sh" --keys "$work/keys" --offline "$V" >"$work/log" 2>&1
+}
+download GITHUB_TOKEN fake-token || fail "a release downloaded with a token: $(cat "$work/log")"
+download GH_TOKEN fake-token || fail "a release downloaded with GH_TOKEN: $(cat "$work/log")"
+if download GITHUB_TOKEN ''; then fail "a download without a token at the rate limit: passed"; fi
+grep -q "rate limit" "$work/log" || fail "without a token: refused for another reason: $(tail -1 "$work/log")"
+
 echo "✓ verify-release: a good release passes, offline and online; changed, re-signed, foreign and incomplete ones are refused"

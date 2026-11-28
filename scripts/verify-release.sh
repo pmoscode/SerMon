@@ -62,8 +62,15 @@ if [ -z "$dir" ]; then
 	dir=$work/release
 	mkdir "$dir"
 	command -v curl >/dev/null 2>&1 || die "curl is needed to download the release"
-	curl -fsSL "https://api.github.com/repos/$repo/releases/tags/$tag" >"$work/release.json" ||
-		die "no published release $tag in $repo"
+	# With GITHUB_TOKEN or GH_TOKEN the API call is authenticated: shared runners share the
+	# anonymous rate limit (403). The token goes to curl on stdin, not on its command line.
+	token=${GITHUB_TOKEN:-${GH_TOKEN:-}}
+	url="https://api.github.com/repos/$repo/releases/tags/$tag"
+	if [ -n "$token" ]; then
+		printf 'header = "Authorization: Bearer %s"\n' "$token" | curl -fsSL -K - "$url" >"$work/release.json"
+	else
+		curl -fsSL "$url" >"$work/release.json"
+	fi || die "no published release $tag in $repo (rate limit? set GITHUB_TOKEN)"
 	python3 -I -c '
 import json, re, sys
 for a in json.load(open(sys.argv[1]))["assets"]:

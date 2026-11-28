@@ -574,4 +574,6 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - env:
           VERSION: ${{ needs.gate.outputs.version }}
+          # Authenticated API call: anonymous ones share the rate limit of the runners (403 in rc.2).
+          GITHUB_TOKEN: ${{ github.token }}
         run: scripts/verify-release.sh --require-slsa "$VERSION"

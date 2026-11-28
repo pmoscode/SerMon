@@ -81,7 +81,8 @@ fn serve() -> Result<(), String> {
         exec: Box::new(host),
     };
     loop {
-        if activated && !readable_within(&listener, IDLE) {
+        // A self-update replaced the binary (V1-06): end, systemd or supervise-daemon starts the new.
+        if activated && !readable_within(&listener, IDLE) || replaced(Path::new("/proc/self/exe")) {
             return Ok(());
         }
         match listener.accept() {
@@ -285,6 +286,11 @@ fn bind(path: &Path, gid: u32) -> io::Result<UnixListener> {
     Ok(listener)
 }
 
+/// Whether the binary of this process was replaced on disk (Linux marks the old one deleted).
+fn replaced(exe: &Path) -> bool {
+    fs::read_link(exe).is_ok_and(|p| p.to_string_lossy().ends_with(" (deleted)"))
+}
+
 /// Whether a connection waits within `idle`.
 fn readable_within(listener: &UnixListener, idle: Duration) -> bool {
     use rustix::event::{PollFd, PollFlags, Timespec};
@@ -298,6 +304,23 @@ fn readable_within(listener: &UnixListener, idle: Duration) -> bool {
 
 #[cfg(test)]
 mod tests {
+    // V1-06: a self-update replaces the binary under a running helper; the old process must end so
+    // the next connection starts the new one (it answered the agent's status with the old version).
+    #[test]
+    fn notices_that_its_binary_was_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let link = dir.path().join("exe");
+        std::os::unix::fs::symlink("/usr/local/bin/sermon-helper", &link).unwrap();
+        assert!(!replaced(&link));
+        fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("/usr/local/bin/sermon-helper (deleted)", &link).unwrap();
+        assert!(replaced(&link));
+        assert!(
+            !replaced(&dir.path().join("none")),
+            "no /proc: keep serving"
+        );
+    }
+
     use sermon_helper_proto::v1::{ApplyUpdates, GetStatus, Scope, helper_request::Operation};
 
     use super::*;

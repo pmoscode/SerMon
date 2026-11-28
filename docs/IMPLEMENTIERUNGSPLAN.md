@@ -6602,7 +6602,7 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
   Orgs ohne eigene Einstellung nur noch 90 Tage statt eines Jahres, Älteres geht beim ersten Lauf
   (`SERMON_EVENT_RETENTION`, V1-22); das Log-Histogramm über lange Zeiträume zählt erst ab dem Update, über die Tage
   davor zeigt es bis zu 14 Tage lang weniger Zeilen, als Loki hat (V1-24).
-- **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-24 (V1-24 vor dem Release: Product Owner, 2026-11-27)
+- **Abhängig von:** V1-03 bis V1-12, V1-17 bis V1-25 (V1-24 vor dem Release: Product Owner, 2026-11-27)
 
 #### ◐ V1-18 – Performance-Nachweis im Testbetrieb · X · M
 > Stand (2026-11-27): Die Installation im Homelab des Product Owners ist vorbereitet, noch nicht deployt (Repos
@@ -6864,6 +6864,15 @@ Release möglich: V1-05 → V1-07, V1-08, V1-10, V1-11 → V1-17, V1-13; V1-09 n
 - **Tests zuerst:** Histogramm über 14 Tage mit Last unter der Zeitgrenze (Lasttest mit älteren Logs), dieselben
   Zahlen wie aus Loki.
 - **Abhängig von:** V1-23
+
+#### ☐ V1-25 – Vorschläge der Module ausblenden · S+W · S
+- **Ziel:** Aus dem Testbetrieb (V1-18): Das Kästchen „Vorschläge für Module“ in der Fleet lässt sich nicht
+  wegklicken; ein Vorschlag verschwindet nur, wenn das Modul eingeschaltet wird oder der Agent den Dienst nicht mehr
+  sieht. Admins blenden einen Vorschlag je Modul und Gruppe aus (Product Owner, 2026-11-28): im Server gespeichert, für
+  alle Mitglieder, mit Audit, in den Einstellungen der Module wieder einblendbar.
+- **Tests zuerst:** ausgeblendet erscheint der Vorschlag weder in der Fleet noch am Node, andere Gruppen und Module
+  bleiben; wieder einblenden; Tenant-Isolations- und Step-up-Tabellen, Rollen-Matrix.
+- **Abhängig von:** M5-07
 
 **v1.0 fertig, wenn:**
 
